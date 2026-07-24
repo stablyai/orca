@@ -1,6 +1,4 @@
 import AsyncStorage from '@react-native-async-storage/async-storage'
-import { measureUtf8ByteLength } from '../../../src/shared/utf8-byte-limits'
-import { MOBILE_NOTIFICATION_ID_MAX_BYTES } from './mobile-notification-retention'
 
 // Why: the reconnect catch-up watermark + dedup helpers for #8129, extracted
 // from mobile-notifications.ts so that file stays under its max-lines budget.
@@ -86,23 +84,14 @@ export function seenKeyForEvent(event: {
   notificationSeq?: number
 }): string | null {
   const id = event.notificationId
-  const seq =
-    typeof event.notificationSeq === 'number' && Number.isSafeInteger(event.notificationSeq)
-      ? event.notificationSeq
-      : null
-  const retainedId =
-    typeof id === 'string' &&
-    !measureUtf8ByteLength(id, { stopAfterBytes: MOBILE_NOTIFICATION_ID_MAX_BYTES }).exceededLimit
-      ? id
-      : null
-  if (retainedId !== null && seq !== null) {
-    return `id:${retainedId}#${seq}`
+  if (id != null && event.notificationSeq != null) {
+    return `id:${id}#${event.notificationSeq}`
   }
-  if (retainedId !== null) {
-    return `id:${retainedId}`
+  if (id != null) {
+    return `id:${id}`
   }
-  if (seq !== null) {
-    return `seq:${seq}`
+  if (event.notificationSeq != null) {
+    return `seq:${event.notificationSeq}`
   }
   return null
 }

@@ -37,7 +37,6 @@ import {
   captureRuntimeEnvironmentRequestRevision,
   getRuntimeEnvironmentRevision
 } from './runtime-environment-revision'
-import { assertMarkdownDocumentsWithinLimit } from '../../../shared/markdown-document-listing-limits'
 
 export type RuntimeReadableFileContent = {
   content: string
@@ -970,20 +969,18 @@ export async function listRuntimeMarkdownDocuments(
   rootPath: string
 ): Promise<MarkdownDocument[]> {
   const target = getActiveRuntimeTarget(context.settings)
-  const documents =
-    target.kind !== 'environment' || !context.worktreeId
-      ? await window.api.fs.listMarkdownDocuments({
-          rootPath,
-          connectionId: context.connectionId
-        })
-      : await callRuntimeRpc<MarkdownDocument[]>(
-          target,
-          'files.listMarkdownDocuments',
-          { worktree: toRuntimeWorktreeSelector(context.worktreeId) },
-          { timeoutMs: 15_000 }
-        )
-  assertMarkdownDocumentsWithinLimit(documents)
-  return documents
+  if (target.kind !== 'environment' || !context.worktreeId) {
+    return window.api.fs.listMarkdownDocuments({
+      rootPath,
+      connectionId: context.connectionId
+    })
+  }
+  return callRuntimeRpc<MarkdownDocument[]>(
+    target,
+    'files.listMarkdownDocuments',
+    { worktree: toRuntimeWorktreeSelector(context.worktreeId) },
+    { timeoutMs: 15_000 }
+  )
 }
 
 export async function statRuntimePath(

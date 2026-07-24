@@ -134,7 +134,7 @@ function createWslRunner(
       }
       return ''
     }
-    if (command.includes('head -c ')) {
+    if (command.includes('cat ')) {
       if (command.includes(commandPath)) {
         return files.get(commandPath) ?? '__ORCA_MISSING__'
       }
@@ -267,10 +267,7 @@ describe('WslCliInstaller', () => {
       distro: 'Ubuntu',
       hostInstaller: { getStatus: async () => makeHostStatus('C:\\Orca\\orca.cmd') },
       wslRunner: async (distro, command) => {
-        if (
-          command.includes('head -c ') &&
-          command.includes('/home/alice/.local/share/orca/orca-wsl-bridge.ps1')
-        ) {
+        if (command.includes('cat /home/alice/.local/share/orca/orca-wsl-bridge.ps1')) {
           return `${_internals.buildWslBridgeScript()}\n`
         }
         return wsl.runner(distro, command)
@@ -831,6 +828,9 @@ describe('WslCliInstaller', () => {
       distro: 'Ubuntu',
       hostInstaller: { getStatus: async () => makeHostStatus('C:\\Orca\\orca.cmd') },
       wslRunner: async (distro, command) => {
+        if (command.includes('cat /home/alice/.local/share/orca/orca-wsl-bridge.ps1')) {
+          return 'user bridge'
+        }
         if (command.includes('rm -f')) {
           throw new Error('__ORCA_CONFLICT__')
         }

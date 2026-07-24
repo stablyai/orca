@@ -10,12 +10,9 @@ import {
 import { BrowserError } from './cdp-bridge'
 import { acquireElectronDebugger, type ElectronDebuggerLease } from './electron-debugger-lease'
 import { readBrowserScreencastImageSize } from './browser-screencast-image-size'
-import { REMOTE_RUNTIME_MAX_OUTBOUND_BINARY_FRAME_BYTES } from '../../shared/remote-runtime-memory-limits'
 
 const DEBUGGER_COMMAND_TIMEOUT_MS = 8_000
 const BACKPRESSURE_RETRY_MS = 50
-export const MAX_BROWSER_SCREENCAST_BASE64_CHARACTERS =
-  Math.ceil(REMOTE_RUNTIME_MAX_OUTBOUND_BINARY_FRAME_BYTES / 3) * 4
 
 export type BrowserScreencastOptions = {
   format: BrowserScreencastFormat
@@ -455,10 +452,7 @@ export async function startBrowserScreencast(
     }
 
     try {
-      const image = decodeBrowserScreencastImage(data)
-      if (!image) {
-        throw new Error('Browser screencast frame is too large')
-      }
+      const image = new Uint8Array(Buffer.from(data, 'base64'))
       // Why: image dimension parsing happens for every live frame; share the
       // result between stale-frame rejection and metadata enrichment.
       const imageSize = readBrowserScreencastImageSize(image, options.format)
@@ -564,10 +558,7 @@ export async function startBrowserScreencast(
         if (!data) {
           return
         }
-        image = decodeBrowserScreencastImage(data)
-        if (!image) {
-          return
-        }
+        image = new Uint8Array(Buffer.from(data, 'base64'))
       }
       if (isSnapshotStale(initialOnly, generation)) {
         return
@@ -640,12 +631,4 @@ export async function startBrowserScreencast(
     },
     done
   }
-}
-
-export function decodeBrowserScreencastImage(data: string): Uint8Array | null {
-  if (data.length > MAX_BROWSER_SCREENCAST_BASE64_CHARACTERS) {
-    return null
-  }
-  const image = new Uint8Array(Buffer.from(data, 'base64'))
-  return image.byteLength <= REMOTE_RUNTIME_MAX_OUTBOUND_BINARY_FRAME_BYTES ? image : null
 }

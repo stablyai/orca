@@ -78,7 +78,7 @@ describe('Linear agent issue context client', () => {
     })
     expect(console.warn).toHaveBeenCalledWith(
       '[linear] agent issue read failed:',
-      expect.stringContaining('fetch failed')
+      expect.any(Error)
     )
   })
 

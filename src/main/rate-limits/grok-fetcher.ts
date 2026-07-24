@@ -10,7 +10,6 @@ import {
   type GrokAuthReadResult,
   type GrokAuthSession
 } from './grok-auth'
-import { readFetchResponseJsonWithinLimit } from '../lib/fetch-response-body'
 
 // Why: billing URL and headers must match Grok CLI or xAI rejects the request.
 const GROK_CLI_PROXY_BASE =
@@ -212,7 +211,7 @@ async function fetchBillingData(
       result: result('error', `Grok usage request failed (HTTP ${res.status})`)
     }
   }
-  const data = await readFetchResponseJsonWithinLimit<unknown>(res)
+  const data: unknown = await res.json()
   return {
     kind: 'data',
     data: typeof data === 'object' && data !== null ? (data as GrokBillingResponse) : {}

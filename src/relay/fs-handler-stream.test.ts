@@ -5,25 +5,19 @@ import type { RelayDispatcher } from './dispatcher'
 import { STREAM_CHUNK_SIZE } from './protocol'
 import * as fs from 'node:fs/promises'
 import * as path from 'node:path'
-import { mkdtempSync, truncateSync, writeFileSync } from 'node:fs'
+import { mkdtempSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 
 vi.mock('@parcel/watcher', () => ({ subscribe: vi.fn() }))
 
-type Notification = { method: string; params?: Record<string, unknown>; clientId?: number }
+type Notification = { method: string; params?: Record<string, unknown> }
 
 function createMockDispatcher() {
   const requestHandlers = new Map<
     string,
-    (
-      params: Record<string, unknown>,
-      context?: { clientId: number; isStale: () => boolean }
-    ) => Promise<unknown>
+    (params: Record<string, unknown>, context?: { isStale: () => boolean }) => Promise<unknown>
   >()
-  const notificationHandlers = new Map<
-    string,
-    (params: Record<string, unknown>, context: { clientId: number; isStale: () => boolean }) => void
-  >()
+  const notificationHandlers = new Map<string, (params: Record<string, unknown>) => void>()
   const notifications: Notification[] = []
   return {
     onRequest: vi.fn(
@@ -34,55 +28,33 @@ function createMockDispatcher() {
         requestHandlers.set(method, handler as never)
       }
     ),
-    onNotification: vi.fn(
-      (
-        method: string,
-        handler: (
-          params: Record<string, unknown>,
-          context: { clientId: number; isStale: () => boolean }
-        ) => void
-      ) => {
-        notificationHandlers.set(method, handler)
-      }
-    ),
+    onNotification: vi.fn((method: string, handler: (params: Record<string, unknown>) => void) => {
+      notificationHandlers.set(method, handler)
+    }),
     notify: vi.fn((method: string, params?: Record<string, unknown>) => {
       notifications.push({ method, params })
     }),
-    notifyClient: vi.fn(
-      (clientId: number, method: string, params?: Record<string, unknown>): void => {
-        notifications.push({ method, params, clientId })
-      }
-    ),
-    notifyBulk: vi.fn(
-      async (
-        method: string,
-        params?: Record<string, unknown>,
-        options?: { clientId?: number }
-      ): Promise<void> => {
-        notifications.push({ method, params, clientId: options?.clientId })
-      }
-    ),
+    notifyBulk: vi.fn(async (method: string, params?: Record<string, unknown>): Promise<void> => {
+      notifications.push({ method, params })
+    }),
     _notifications: notifications,
     callRequest(
       method: string,
       params: Record<string, unknown> = {},
-      context?: { clientId?: number; isStale: () => boolean }
+      context?: { isStale: () => boolean }
     ) {
       const handler = requestHandlers.get(method)
       if (!handler) {
         throw new Error(`No handler for ${method}`)
       }
-      return handler(
-        params,
-        context ? { clientId: context.clientId ?? 1, isStale: context.isStale } : undefined
-      )
+      return handler(params, context)
     },
-    callNotification(method: string, params: Record<string, unknown> = {}, clientId = 1) {
+    callNotification(method: string, params: Record<string, unknown> = {}) {
       const handler = notificationHandlers.get(method)
       if (!handler) {
         throw new Error(`No handler for ${method}`)
       }
-      handler(params, { clientId, isStale: () => false })
+      handler(params)
     }
   }
 }
@@ -128,16 +100,6 @@ async function waitFor(predicate: () => boolean, timeoutMs = 5000): Promise<void
   }
 }
 
-function pngContent(size: number, width = 1, height = 1): Buffer {
-  const content = Buffer.alloc(size, 0x42)
-  Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]).copy(content)
-  content.writeUInt32BE(13, 8)
-  content.write('IHDR', 12, 'ascii')
-  content.writeUInt32BE(width, 16)
-  content.writeUInt32BE(height, 20)
-  return content
-}
-
 describe('FsHandler readFileStream', () => {
   let dispatcher: ReturnType<typeof createMockDispatcher>
   let handler: FsHandler
@@ -154,39 +116,19 @@ describe('FsHandler readFileStream', () => {
     await fs.rm(tmpDir, { recursive: true, force: true })
   })
 
-  it('rejects a terminal-artifact raster dimension bomb', async () => {
-    const filePath = path.join(tmpDir, 'artifact-bomb.png')
-    writeFileSync(filePath, pngContent(24, 32_769, 1))
-
-    await expect(
-      dispatcher.callRequest('fs.readTerminalArtifact', {
-        filePath,
-        expectedRealPath: await fs.realpath(filePath),
-        maxBytes: 512 * 1024
-      })
-    ).rejects.toThrow('Image dimensions exceed the preview safety limit')
-  })
-
   it('streams a binary file in chunked notifications', async () => {
     const filePath = path.join(tmpDir, 'image.png')
-    const content = pngContent(300 * 1024)
-    const ownerClientId = 7
+    const content = Buffer.alloc(300 * 1024, 0x42)
     writeFileSync(filePath, content)
 
     const meta = (await dispatcher.callRequest(
       'fs.readFileStream',
       { filePath },
-      { clientId: ownerClientId, isStale: () => false }
-    )) as {
-      streamId: number
-      totalSize: number
-      resultEncoding: string
-      imageDimensions: { width: number; height: number }
-    }
+      { isStale: () => false }
+    )) as { streamId: number; totalSize: number; resultEncoding: string }
     expect(meta.streamId).toBeDefined()
     expect(meta.totalSize).toBe(content.length)
     expect(meta.resultEncoding).toBe('base64')
-    expect(meta.imageDimensions).toEqual({ width: 1, height: 1 })
 
     await waitFor(() => collectStream(dispatcher).end !== null)
     const { chunks, end, err } = collectStream(dispatcher)
@@ -194,48 +136,11 @@ describe('FsHandler readFileStream', () => {
     expect(end).toEqual({ streamId: meta.streamId })
     const reassembled = Buffer.concat(chunks.map((c) => Buffer.from(c.data, 'base64')))
     expect(reassembled.equals(content)).toBe(true)
-    expect(
-      dispatcher._notifications.filter((notification) => notification.method === 'fs.streamEnd')
-    ).toEqual([
-      {
-        method: 'fs.streamEnd',
-        params: { streamId: meta.streamId },
-        clientId: ownerClientId
-      }
-    ])
-  })
-
-  it('sends a stream error only to the requesting relay client', async () => {
-    const filePath = path.join(tmpDir, 'truncated.png')
-    const ownerClientId = 9
-    writeFileSync(filePath, pngContent(STREAM_CHUNK_SIZE))
-
-    const meta = (await dispatcher.callRequest(
-      'fs.readFileStream',
-      { filePath },
-      { clientId: ownerClientId, isStale: () => false }
-    )) as { streamId: number }
-    truncateSync(filePath, 0)
-
-    await waitFor(() => collectStream(dispatcher).err !== null)
-    expect(
-      dispatcher._notifications.filter((notification) => notification.method === 'fs.streamError')
-    ).toEqual([
-      {
-        method: 'fs.streamError',
-        params: {
-          streamId: meta.streamId,
-          code: 'ESTREAMTRUNCATED',
-          message: `File truncated mid-stream: expected ${STREAM_CHUNK_SIZE}, got 0`
-        },
-        clientId: ownerClientId
-      }
-    ])
   })
 
   it('fills protocol chunks when fs.read returns short before EOF', async () => {
     const filePath = path.join(tmpDir, 'short-read.png')
-    const content = pngContent(STREAM_CHUNK_SIZE + 17)
+    const content = Buffer.alloc(STREAM_CHUNK_SIZE + 17, 0x42)
     writeFileSync(filePath, content)
 
     const sampleHandle = await fs.open(filePath, 'r')
@@ -337,7 +242,7 @@ describe('FsHandler readFileStream', () => {
 
   it('exits the pump and emits no further chunks when isStale flips', async () => {
     const filePath = path.join(tmpDir, 'big.png')
-    const content = pngContent(800 * 1024)
+    const content = Buffer.alloc(800 * 1024, 0x42)
     writeFileSync(filePath, content)
 
     let stale = false
@@ -359,7 +264,7 @@ describe('FsHandler readFileStream', () => {
 
   it('honors fs.cancelStream by stopping the pump and emitting no end frame', async () => {
     const filePath = path.join(tmpDir, 'cancel.png')
-    writeFileSync(filePath, pngContent(2 * 1024 * 1024))
+    writeFileSync(filePath, Buffer.alloc(2 * 1024 * 1024, 0x42))
 
     const meta = (await dispatcher.callRequest(
       'fs.readFileStream',
@@ -378,7 +283,7 @@ describe('FsHandler readFileStream', () => {
 
   it('parks the pump at the ack credit window and resumes on fs.streamAck', async () => {
     const filePath = path.join(tmpDir, 'paced.png')
-    const content = pngContent(1536 * 1024) // 6 chunks
+    const content = Buffer.alloc(1536 * 1024, 0x42) // 6 chunks
     writeFileSync(filePath, content)
 
     const meta = (await dispatcher.callRequest(
@@ -392,11 +297,6 @@ describe('FsHandler readFileStream', () => {
     await flush(10)
     expect(collectStream(dispatcher).chunks.length).toBe(4)
     expect(collectStream(dispatcher).end).toBeNull()
-
-    // A future ACK must not mint credit for chunks the relay has not sent.
-    dispatcher.callNotification('fs.streamAck', { streamId: meta.streamId, seq: 10_000 })
-    await flush(10)
-    expect(collectStream(dispatcher).chunks.length).toBe(4)
 
     // Ack one chunk → exactly one more is admitted.
     dispatcher.callNotification('fs.streamAck', { streamId: meta.streamId, seq: 0 })
@@ -415,38 +315,9 @@ describe('FsHandler readFileStream', () => {
     expect(reassembled.equals(content)).toBe(true)
   })
 
-  it('ignores stream credit and cancellation from a different relay client', async () => {
-    const filePath = path.join(tmpDir, 'owned-paced.png')
-    writeFileSync(filePath, pngContent(4 * 1024 * 1024))
-    const ownerClientId = 7
-    const meta = (await dispatcher.callRequest(
-      'fs.readFileStream',
-      { filePath, flowControl: 'ack' },
-      { clientId: ownerClientId, isStale: () => false }
-    )) as { streamId: number }
-
-    await waitFor(() => collectStream(dispatcher).chunks.length === 4)
-    dispatcher.callNotification('fs.streamAck', { streamId: meta.streamId, seq: 10_000 }, 8)
-    dispatcher.callNotification('fs.cancelStream', { streamId: meta.streamId }, 8)
-    await flush(10)
-    expect(collectStream(dispatcher).chunks).toHaveLength(4)
-
-    dispatcher.callNotification('fs.streamAck', { streamId: meta.streamId, seq: 0 }, ownerClientId)
-    await waitFor(() => collectStream(dispatcher).chunks.length === 5)
-    dispatcher.callNotification('fs.cancelStream', { streamId: meta.streamId }, ownerClientId)
-
-    const registry = (handler as unknown as { streamRegistry: { size(): number } }).streamRegistry
-    await waitFor(() => registry.size() === 0)
-    expect(
-      dispatcher._notifications
-        .filter((notification) => notification.method.startsWith('fs.stream'))
-        .every((notification) => notification.clientId === ownerClientId)
-    ).toBe(true)
-  })
-
   it('releases a pump parked on the ack window when the stream is cancelled', async () => {
     const filePath = path.join(tmpDir, 'parked-cancel.png')
-    writeFileSync(filePath, pngContent(4 * 1024 * 1024)) // 16 chunks
+    writeFileSync(filePath, Buffer.alloc(4 * 1024 * 1024, 0x42)) // 16 chunks
 
     const meta = (await dispatcher.callRequest(
       'fs.readFileStream',
@@ -469,7 +340,7 @@ describe('FsHandler readFileStream', () => {
     const paths: string[] = []
     for (let i = 0; i < 17; i++) {
       const p = path.join(tmpDir, `s${i}.png`)
-      writeFileSync(p, pngContent(8 * 1024 * 1024))
+      writeFileSync(p, Buffer.alloc(8 * 1024 * 1024, 0x42))
       paths.push(p)
     }
 
@@ -499,15 +370,4 @@ describe('FsHandler readFileStream', () => {
     }
     await flush(50)
   }, 20_000)
-
-  it('rejects an oversized raster before registering or pumping a stream', async () => {
-    const filePath = path.join(tmpDir, 'bomb.png')
-    writeFileSync(filePath, pngContent(24, 32_769, 1))
-
-    await expect(
-      dispatcher.callRequest('fs.readFileStream', { filePath }, { isStale: () => false })
-    ).rejects.toThrow('Image dimensions exceed the preview safety limit')
-    await flush()
-    expect(collectStream(dispatcher).chunks).toHaveLength(0)
-  })
 })

@@ -22,7 +22,6 @@ import {
   registerGhRateLimitResetProbe,
   type GhRateLimitBucket
 } from '../git/gh-rate-limit-breaker'
-import { cacheIdentityDigest } from '../cache-identity-digest'
 
 // Why: GET /rate_limit is exempt from limits, so caching only avoids a gh subprocess per render; 30s stays live while absorbing 1/s polling.
 const RATE_LIMIT_CACHE_TTL_MS = 30_000
@@ -197,21 +196,15 @@ const DEFAULT_BREAKER_SCOPE = ghRateLimitScopeKey('native', 'github.com')
 const scopeRefinementInFlight = new Map<string, Promise<void>>()
 const scopeProbeFailureAtMs = new Map<string, number>()
 const SCOPE_PROBE_FAILURE_MAX_ENTRIES = 512
-const SCOPE_REFINEMENT_MAX_IN_FLIGHT = 16
-
-function scopeRetentionKey(scope: string): string {
-  return cacheIdentityDigest([scope])
-}
 
 function rememberScopeProbeFailure(scope: string, failedAt: number): void {
-  const retentionKey = scopeRetentionKey(scope)
   for (const [key, at] of scopeProbeFailureAtMs) {
     if (failedAt - at >= RATE_LIMIT_CACHE_TTL_MS) {
       scopeProbeFailureAtMs.delete(key)
     }
   }
-  scopeProbeFailureAtMs.delete(retentionKey)
-  scopeProbeFailureAtMs.set(retentionKey, failedAt)
+  scopeProbeFailureAtMs.delete(scope)
+  scopeProbeFailureAtMs.set(scope, failedAt)
   while (scopeProbeFailureAtMs.size > SCOPE_PROBE_FAILURE_MAX_ENTRIES) {
     const oldestKey = scopeProbeFailureAtMs.keys().next().value
     if (oldestKey === undefined) {
@@ -228,18 +221,14 @@ function refineBreakerForScope(scope: string): void {
     return
   }
   const parts = parseGhRateLimitScopeKey(scope)
-  const retentionKey = scopeRetentionKey(scope)
-  if (!parts || scopeRefinementInFlight.has(retentionKey)) {
+  if (!parts || scopeRefinementInFlight.has(scope)) {
     return
   }
   // Why: GHES with rate limiting disabled 404s every probe. Fail open (the
   // fallback block stands) and don't re-probe in a tight loop while the
   // breaker keeps tripping.
-  const failedAt = scopeProbeFailureAtMs.get(retentionKey)
+  const failedAt = scopeProbeFailureAtMs.get(scope)
   if (failedAt !== undefined && Date.now() - failedAt < RATE_LIMIT_CACHE_TTL_MS) {
-    return
-  }
-  if (scopeRefinementInFlight.size >= SCOPE_REFINEMENT_MAX_IN_FLIGHT) {
     return
   }
   const probe = (async () => {
@@ -254,7 +243,7 @@ function refineBreakerForScope(scope: string): void {
           ...(parts.runtime === 'wsl' ? { wslDistro: parts.wslDistro } : {})
         })
         const parsed = JSON.parse(stdout) as GhRateLimitPayload
-        scopeProbeFailureAtMs.delete(retentionKey)
+        scopeProbeFailureAtMs.delete(scope)
         // Why: mirrors the default-scope refinement, but records into the
         // per-scope breaker only — the shared snapshot must keep describing
         // native github.com exclusively.
@@ -274,10 +263,10 @@ function refineBreakerForScope(scope: string): void {
       // negative cache so repeated failing hosts cannot accumulate forever.
       rememberScopeProbeFailure(scope, Date.now())
     } finally {
-      scopeRefinementInFlight.delete(retentionKey)
+      scopeRefinementInFlight.delete(scope)
     }
   })()
-  scopeRefinementInFlight.set(retentionKey, probe)
+  scopeRefinementInFlight.set(scope, probe)
 }
 
 registerGhRateLimitResetProbe((_bucket, scope) => refineBreakerForScope(scope))

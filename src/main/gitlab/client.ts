@@ -46,8 +46,6 @@ import {
   type HostedReviewExecutionOptions
 } from '../source-control/hosted-review-git-options'
 import { shouldHideNonOpenReviewOnDefaultBranch } from '../source-control/repo-default-branch'
-import { measureUtf8ByteLength } from '../../shared/utf8-byte-limits'
-import { cacheIdentityDigest } from '../cache-identity-digest'
 
 // Why: glab REST addresses projects by URL-encoded path; escapes slashes for nested groups.
 function encodedProject(projectPath: string): string {
@@ -56,7 +54,6 @@ function encodedProject(projectPath: string): string {
 
 const GITLAB_RATE_LIMIT_CACHE_TTL_MS = 30_000
 const GITLAB_RATE_LIMIT_CACHE_MAX_ENTRIES = 64
-export const GITLAB_RATE_LIMIT_CACHE_HOST_MAX_BYTES = 1024
 const gitLabRateLimitCache = new Map<string, GitLabRateLimitSnapshot>()
 
 type HostedReviewLocalGitOptions = ReturnType<typeof getHostedReviewLocalGitOptions>
@@ -213,14 +210,9 @@ export async function getRateLimit(options?: {
   host?: string | null
 }): Promise<GetGitLabRateLimitResult> {
   const host = options?.host?.trim() || null
-  const retainableHost =
-    host === null ||
-    !measureUtf8ByteLength(host, {
-      stopAfterBytes: GITLAB_RATE_LIMIT_CACHE_HOST_MAX_BYTES
-    }).exceededLimit
-  const cacheKey = cacheIdentityDigest([host ?? 'default'])
+  const cacheKey = host ?? 'default'
   pruneGitLabRateLimitCache()
-  const cached = retainableHost ? gitLabRateLimitCache.get(cacheKey) : undefined
+  const cached = gitLabRateLimitCache.get(cacheKey)
   if (!options?.force && cached && Date.now() - cached.fetchedAt < GITLAB_RATE_LIMIT_CACHE_TTL_MS) {
     return { ok: true, snapshot: cached }
   }
@@ -231,9 +223,7 @@ export async function getRateLimit(options?: {
     const args = host ? ['--hostname', host, 'user'] : ['user']
     const { headers } = await glabApiWithHeaders(args)
     const snapshot = parseGitLabRateLimitSnapshot(headers, host)
-    if (retainableHost) {
-      rememberGitLabRateLimitSnapshot(cacheKey, snapshot)
-    }
+    rememberGitLabRateLimitSnapshot(cacheKey, snapshot)
     return { ok: true, snapshot }
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err)

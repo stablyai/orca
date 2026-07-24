@@ -1,17 +1,8 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 
-import {
-  getCachedRepos,
-  MOBILE_REPO_CACHE_MAX_ITEMS_PER_HOST,
-  resetRepoCacheForTests,
-  setCachedRepos
-} from './repo-cache'
+import { getCachedRepos, setCachedRepos } from './repo-cache'
 
 describe('repo cache', () => {
-  beforeEach(() => {
-    resetRepoCacheForTests()
-  })
-
   it('returns recent host-scoped repos', () => {
     const repos = [{ id: 'repo-1' }]
 
@@ -31,14 +22,5 @@ describe('repo cache', () => {
     } finally {
       vi.useRealTimers()
     }
-  })
-
-  it('retains the exact per-host item cap and rejects one over', () => {
-    const exact = Array.from({ length: MOBILE_REPO_CACHE_MAX_ITEMS_PER_HOST }, () => null)
-    setCachedRepos('host', exact)
-    expect(getCachedRepos('host')).toBe(exact)
-
-    setCachedRepos('host', [...exact, null])
-    expect(getCachedRepos('host')).toBeNull()
   })
 })

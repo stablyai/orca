@@ -1,6 +1,5 @@
 import type { ChildProcess } from 'node:child_process'
 import type { SystemSshCommandChannel } from './system-ssh-command'
-import { SystemSshOutputTail } from './system-ssh-output-tail'
 
 export type ProcessResult = { label: string; stderr: string }
 
@@ -9,7 +8,7 @@ export function waitForChannelClose(
   label: string
 ): Promise<void> {
   return new Promise((resolve, reject) => {
-    const stderr = new SystemSshOutputTail()
+    let stderr = ''
     const cleanup = (): void => {
       channel.stderr.off('data', onStderrData)
       channel.off('error', onError)
@@ -20,7 +19,7 @@ export function waitForChannelClose(
       fn(val as never)
     }
     const onStderrData = (data: Buffer): void => {
-      stderr.push(data)
+      stderr += data.toString('utf-8')
     }
     const onError = (err: Error): void => {
       settle(reject, err)
@@ -28,7 +27,7 @@ export function waitForChannelClose(
     const onClose = (code: number | null, signal?: NodeJS.Signals | null): void => {
       if (code !== 0) {
         const detail = code === null ? `signal ${signal ?? 'unknown'}` : `exit ${code}`
-        settle(reject, new Error(`${label} failed (${detail}): ${stderr.toString().trim()}`))
+        settle(reject, new Error(`${label} failed (${detail}): ${stderr.trim()}`))
         return
       }
       settle(resolve)
@@ -42,7 +41,7 @@ export function waitForChannelClose(
 
 export function waitForProcess(proc: ChildProcess, label: string): Promise<ProcessResult> {
   return new Promise((resolve, reject) => {
-    const stderr = new SystemSshOutputTail()
+    let stderr = ''
     const cleanup = (): void => {
       proc.stderr?.off('data', onStderrData)
       proc.off('error', onError)
@@ -53,17 +52,17 @@ export function waitForProcess(proc: ChildProcess, label: string): Promise<Proce
       fn(val as never)
     }
     const onStderrData = (data: Buffer): void => {
-      stderr.push(data)
+      stderr += data.toString('utf-8')
     }
     const onError = (err: Error): void => {
       settle(reject, err)
     }
     const onClose = (code: number | null): void => {
       if (code !== 0) {
-        settle(reject, new Error(`${label} failed (exit ${code}): ${stderr.toString().trim()}`))
+        settle(reject, new Error(`${label} failed (exit ${code}): ${stderr.trim()}`))
         return
       }
-      settle(resolve, { label, stderr: stderr.toString() })
+      settle(resolve, { label, stderr })
     }
 
     proc.stderr?.on('data', onStderrData)

@@ -5,8 +5,6 @@
 // split on empty columns to get one frame per sprite. The result drives the
 // canvas-based animation in the overlay.
 
-import { MAX_CUSTOM_PET_DETECTED_FRAMES } from '../../../../shared/custom-pet-media-limits'
-
 export type DetectedFrame = { x: number; y: number; w: number; h: number }
 export type DetectedSprite = { frames: DetectedFrame[] }
 
@@ -54,7 +52,7 @@ function framesInBand(
   data: Uint8ClampedArray,
   width: number,
   band: { y0: number; y1: number }
-): DetectedFrame[] | null {
+): DetectedFrame[] {
   const colEmpty = new Uint8Array(width)
   for (let x = 0; x < width; x++) {
     let empty = 1
@@ -72,23 +70,14 @@ function framesInBand(
     if (!colEmpty[x] && start < 0) {
       start = x
     } else if (colEmpty[x] && start >= 0) {
-      const frame = { x: start, y: band.y0, w: x - start, h: band.y1 - band.y0 + 1 }
-      if (frame.w >= MIN_DIM && frame.h >= MIN_DIM) {
-        frames.push(frame)
-        if (frames.length > MAX_CUSTOM_PET_DETECTED_FRAMES) {
-          return null
-        }
-      }
+      frames.push({ x: start, y: band.y0, w: x - start, h: band.y1 - band.y0 + 1 })
       start = -1
     }
   }
   if (start >= 0) {
-    const frame = { x: start, y: band.y0, w: width - start, h: band.y1 - band.y0 + 1 }
-    if (frame.w >= MIN_DIM && frame.h >= MIN_DIM) {
-      frames.push(frame)
-    }
+    frames.push({ x: start, y: band.y0, w: width - start, h: band.y1 - band.y0 + 1 })
   }
-  return frames.length <= MAX_CUSTOM_PET_DETECTED_FRAMES ? frames : null
+  return frames.filter((f) => f.w >= MIN_DIM && f.h >= MIN_DIM)
 }
 
 export function detectFramesFromImageData(image: ImageData): DetectedSprite | null {
@@ -104,9 +93,6 @@ export function detectFramesFromImageData(image: ImageData): DetectedSprite | nu
   let best: DetectedFrame[] = []
   for (const band of bands) {
     const candidate = framesInBand(data, width, band)
-    if (!candidate) {
-      return null
-    }
     if (candidate.length > best.length) {
       best = candidate
     }

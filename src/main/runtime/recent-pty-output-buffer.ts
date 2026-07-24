@@ -1,69 +1,31 @@
 export const RECENT_PTY_OUTPUT_LIMIT = 64 * 1024
 
-const RETAINED_CONTENT_CHUNK_LIMIT = 1024
-const DROPPED_CONTENT_CHUNK_LIMIT = 1024
-const INITIAL_BOUNDARY_CAPACITY = 16
+// Compact the backing array once this many fully-dropped head slots accumulate,
+// so the array itself stays bounded under long chunk floods.
+const DROPPED_HEAD_COMPACT_THRESHOLD = 1024
 
-class RetainedChunkLengthQueue {
-  private values = new Uint32Array(INITIAL_BOUNDARY_CAPACITY)
-  private head = 0
-  private count = 0
-
-  get length(): number {
-    return this.count
-  }
-
-  get capacity(): number {
-    return this.values.length
-  }
-
-  push(value: number): void {
-    if (this.count === this.values.length) {
-      const grown = new Uint32Array(this.values.length * 2)
-      for (let index = 0; index < this.count; index += 1) {
-        grown[index] = this.at(index)
-      }
-      this.values = grown
-      this.head = 0
-    }
-    this.values[(this.head + this.count) % this.values.length] = value
-    this.count += 1
-  }
-
-  shift(): number {
-    if (this.count === 0) {
-      return 0
-    }
-    const value = this.values[this.head]!
-    this.head = (this.head + 1) % this.values.length
-    this.count -= 1
-    if (this.count === 0) {
-      this.head = 0
-    }
-    return value
-  }
-
-  at(index: number): number {
-    return this.values[(this.head + index) % this.values.length]!
-  }
-
-  reset(): void {
-    this.values = new Uint32Array(INITIAL_BOUNDARY_CAPACITY)
-    this.head = 0
-    this.count = 0
-  }
-}
-
-/** Bounded raw PTY tail that temporarily preserves source chunk boundaries for path backfill. */
+/**
+ * Bounded deque of raw PTY output chunks retaining exactly the last
+ * RECENT_PTY_OUTPUT_LIMIT UTF-16 code units.
+ *
+ * Why: eagerly rebuilding a rolling 64KB string per PTY chunk flattened a
+ * ~128KB rope on every write; keep chunks and defer the join to rare readers.
+ */
 export class RecentPtyOutputBuffer {
   private chunks: string[] = []
-  private contentHeadIndex = 0
-  private contentHeadOffset = 0
-  private totalLen = 0
+  private headIndex = 0
+  // Code units already trimmed off the front of the head chunk. Deferred so
+  // repeated small trims never allocate a substring per append, and so the
+  // head chunk's original text stays available for candidate backfill.
   private headOffset = 0
+  private totalLen = 0
+  // True when the stored head chunk is not the full original PTY chunk (a
+  // single over-limit append is stored pre-sliced), so backfill replay knows
+  // the original line context of its leading text is gone.
   private headChunkIsPartial = false
+  // Original chunk boundaries are owed only to the one-time path-candidate
+  // backfill; compact() ends that obligation and lets read() collapse.
   private preserveChunkBoundaries: boolean
-  private readonly originalChunkLengths = new RetainedChunkLengthQueue()
 
   constructor(options?: { preserveChunkBoundaries?: boolean }) {
     this.preserveChunkBoundaries = options?.preserveChunkBoundaries ?? true
@@ -74,145 +36,88 @@ export class RecentPtyOutputBuffer {
       return
     }
     if (data.length >= RECENT_PTY_OUTPUT_LIMIT) {
-      this.replaceContent(data.slice(-RECENT_PTY_OUTPUT_LIMIT))
-      this.totalLen = RECENT_PTY_OUTPUT_LIMIT
+      this.chunks = [data.slice(-RECENT_PTY_OUTPUT_LIMIT)]
+      this.headIndex = 0
       this.headOffset = 0
+      this.totalLen = RECENT_PTY_OUTPUT_LIMIT
       this.headChunkIsPartial = data.length > RECENT_PTY_OUTPUT_LIMIT
-      this.originalChunkLengths.reset()
-      if (this.preserveChunkBoundaries) {
-        this.originalChunkLengths.push(RECENT_PTY_OUTPUT_LIMIT)
-      }
       return
     }
-
-    this.appendContent(data)
-    this.totalLen += data.length
-    if (this.preserveChunkBoundaries) {
-      this.trimPreservingBoundaries()
-      this.originalChunkLengths.push(data.length)
-    } else {
-      this.trimContentToWindow()
-    }
-  }
-
-  read(): string {
-    const stored = this.storedContent()
-    const value = this.headOffset > 0 ? stored.slice(this.headOffset) : stored
-    if (!this.preserveChunkBoundaries) {
-      this.replaceContent(value)
-    }
-    return value
-  }
-
-  /** Original PTY chunks retained for the one-time path-candidate backfill. */
-  retainedChunks(): { chunks: string[]; headChunkIsPartial: boolean } {
-    const chunks: string[] = []
-    const state = this.forEachRetainedChunk((chunk) => chunks.push(chunk))
-    return { chunks, headChunkIsPartial: state.headChunkIsPartial }
-  }
-
-  /** Streams boundaries so activation does not allocate one string object per tiny write. */
-  forEachRetainedChunk(
-    visit: (chunk: string, index: number, headChunkIsPartial: boolean) => void
-  ): {
-    headChunkIsPartial: boolean
-  } {
-    if (!this.preserveChunkBoundaries) {
-      const value = this.read()
-      if (value) {
-        visit(value, 0, false)
-      }
-      return { headChunkIsPartial: false }
-    }
-    const stored = this.storedContent()
-    let offset = 0
-    for (let index = 0; index < this.originalChunkLengths.length; index += 1) {
-      const length = this.originalChunkLengths.at(index)
-      visit(stored.slice(offset, offset + length), index, this.headChunkIsPartial)
-      offset += length
-    }
-    return { headChunkIsPartial: this.headChunkIsPartial }
-  }
-
-  /** Ends the boundary obligation and returns to compact steady-state storage. */
-  compact(): void {
-    const value = this.read()
-    this.preserveChunkBoundaries = false
-    this.replaceContent(value)
-    this.headOffset = 0
-    this.headChunkIsPartial = false
-    this.originalChunkLengths.reset()
-  }
-
-  private appendContent(data: string): void {
     this.chunks.push(data)
-    if (this.chunks.length - this.contentHeadIndex > RETAINED_CONTENT_CHUNK_LIMIT) {
-      this.replaceContent(this.storedContent())
-    }
-  }
-
-  private trimPreservingBoundaries(): void {
+    this.totalLen += data.length
     while (this.totalLen > RECENT_PTY_OUTPUT_LIMIT) {
-      const originalHeadLength = this.originalChunkLengths.at(0)
-      const headRemaining = originalHeadLength - this.headOffset
+      const headRemaining = this.chunks[this.headIndex].length - this.headOffset
       const excess = this.totalLen - RECENT_PTY_OUTPUT_LIMIT
       if (headRemaining <= excess) {
-        this.totalLen -= headRemaining
+        // Release the dropped chunk's reference; the slot is reclaimed on compaction.
+        this.chunks[this.headIndex] = ''
+        this.headIndex += 1
         this.headOffset = 0
         this.headChunkIsPartial = false
-        this.originalChunkLengths.shift()
-        this.dropContentPrefix(originalHeadLength)
+        this.totalLen -= headRemaining
       } else {
         this.headOffset += excess
         this.totalLen -= excess
       }
     }
-  }
-
-  private trimContentToWindow(): void {
-    const excess = this.totalLen - RECENT_PTY_OUTPUT_LIMIT
-    if (excess <= 0) {
-      return
+    if (this.headIndex >= DROPPED_HEAD_COMPACT_THRESHOLD) {
+      this.chunks = this.chunks.slice(this.headIndex)
+      this.headIndex = 0
     }
-    this.dropContentPrefix(excess)
-    this.totalLen -= excess
   }
 
-  private dropContentPrefix(length: number): void {
-    let remaining = length
-    while (remaining > 0) {
-      const chunk = this.chunks[this.contentHeadIndex] ?? ''
-      const available = chunk.length - this.contentHeadOffset
-      if (available <= remaining) {
-        this.chunks[this.contentHeadIndex] = ''
-        this.contentHeadIndex += 1
-        this.contentHeadOffset = 0
-        remaining -= available
-      } else {
-        this.contentHeadOffset += remaining
-        remaining = 0
+  read(): string {
+    if (this.preserveChunkBoundaries) {
+      // Join without mutating: boundaries and the original head chunk are
+      // still owed to retainedChunks(); reads are rare before compact().
+      if (this.chunks.length - this.headIndex > 1) {
+        const retained = this.chunks.slice(this.headIndex)
+        if (this.headOffset > 0) {
+          retained[0] = retained[0].slice(this.headOffset)
+        }
+        return retained.join('')
       }
+      const head = this.chunks[this.headIndex] ?? ''
+      return this.headOffset > 0 ? head.slice(this.headOffset) : head
     }
-    if (this.contentHeadIndex >= DROPPED_CONTENT_CHUNK_LIMIT) {
-      this.chunks = this.chunks.slice(this.contentHeadIndex)
-      this.contentHeadIndex = 0
+    if (this.chunks.length - this.headIndex > 1) {
+      // Collapse to the joined tail so repeated reads stay O(1).
+      const retained = this.chunks.slice(this.headIndex)
+      if (this.headOffset > 0) {
+        retained[0] = retained[0].slice(this.headOffset)
+        this.headOffset = 0
+      }
+      this.chunks = [retained.join('')]
+      this.headIndex = 0
+    } else if (this.headOffset > 0) {
+      // Single retained chunk: apply the deferred head trim once, here.
+      this.chunks[this.headIndex] = this.chunks[this.headIndex].slice(this.headOffset)
+      this.headOffset = 0
+    }
+    return this.chunks[this.headIndex] ?? ''
+  }
+
+  /**
+   * Retained chunks with original PTY boundaries. The head chunk is its full
+   * original text (any window-trimmed prefix included) unless
+   * headChunkIsPartial. Why: path-candidate backfill must replay the eager
+   * per-chunk extraction exactly — trimming or joining chunks changes the
+   * candidate set. Only meaningful before compact().
+   */
+  retainedChunks(): { chunks: string[]; headChunkIsPartial: boolean } {
+    return {
+      chunks: this.chunks.slice(this.headIndex),
+      headChunkIsPartial: this.headChunkIsPartial
     }
   }
 
-  private storedContent(): string {
-    const retained = this.chunks.slice(this.contentHeadIndex)
-    if (retained.length === 0) {
-      return ''
-    }
-    if (this.contentHeadOffset > 0) {
-      retained[0] = retained[0]!.slice(this.contentHeadOffset)
-    }
-    return retained.length === 1 ? retained[0]! : retained.join('')
-  }
-
-  private replaceContent(value: string): void {
-    this.chunks = value ? [value] : []
-    this.contentHeadIndex = 0
-    this.contentHeadOffset = 0
+  /**
+   * Ends the chunk-boundary obligation after the one-time backfill and
+   * collapses immediately, so the append/read hot path returns to the
+   * compact single-chunk steady state.
+   */
+  compact(): void {
+    this.preserveChunkBoundaries = false
+    this.read()
   }
 }

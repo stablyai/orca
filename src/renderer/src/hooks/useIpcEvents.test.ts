@@ -1704,14 +1704,14 @@ describe('useIpcEvents updater integration', () => {
       state: errorState
     })
 
-    expect(pendingListTargets).toHaveLength(1)
-    const resolveFirstTargets = pendingListTargets.shift()!.resolve
+    expect(pendingListTargets).toHaveLength(2)
+    const resolveConnectingTargets = pendingListTargets.shift()!.resolve
+    const resolveErrorTargets = pendingListTargets.shift()!.resolve
     const targets = [{ id: 'conn-new', label: 'New remote' }]
-    resolveFirstTargets(targets)
+    resolveErrorTargets(targets)
     await Promise.resolve()
     await Promise.resolve()
-    expect(pendingListTargets).toHaveLength(1)
-    pendingListTargets.shift()!.resolve(targets)
+    resolveConnectingTargets(targets)
     await Promise.resolve()
     await Promise.resolve()
 

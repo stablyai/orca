@@ -4,13 +4,12 @@ import { execFile, execFileSync } from 'node:child_process'
 import { existsSync, readFileSync, unlinkSync } from 'node:fs'
 import { connect, type Socket } from 'node:net'
 import { promisify } from 'node:util'
-import { StringDecoder } from 'node:string_decoder'
 import {
   getProcessOutputFields,
   iterateProcessOutputLines
 } from '../../shared/process-output-field-scanner'
 import { isStartupDiagnosticsEnabled, logStartupDiagnostic } from '../startup/startup-diagnostics'
-import { DAEMON_HANDSHAKE_MAX_LINE_BYTES, createNdjsonParser, encodeNdjson } from './ndjson'
+import { encodeNdjson } from './ndjson'
 import { getDaemonPidPath } from './daemon-spawner'
 import {
   PROTOCOL_VERSION,
@@ -19,7 +18,6 @@ import {
   type SystemResolverHealth,
   type SystemResolverHealthResult
 } from './types'
-import { readDaemonControlFileText } from './daemon-control-file-reader'
 
 const HEALTH_CHECK_TIMEOUT_MS = 3_000
 const RESOLVER_HEALTH_CHECK_TIMEOUT_MS = 3_000
@@ -91,7 +89,7 @@ export function checkDaemonHealth(socketPath: string, tokenPath: string): Promis
 
     let token: string
     try {
-      token = readDaemonControlFileText(tokenPath).trim()
+      token = readFileSync(tokenPath, 'utf8').trim()
     } catch {
       resolve('unreachable')
       return
@@ -125,42 +123,55 @@ export function checkDaemonHealth(socketPath: string, tokenPath: string): Promis
       }
       sock?.write(encodeNdjson(hello))
     }
-    const onMessage = (rawMessage: unknown): void => {
+    const onData = (chunk: Buffer): void => {
       if (settled) {
         return
       }
-      if (!rawMessage || typeof rawMessage !== 'object') {
-        settle('rejected')
-        return
-      }
-      const message = rawMessage as Record<string, unknown>
-      if (message.type === 'hello') {
-        if (!(message as HelloResponse).ok) {
+      buffer += chunk.toString()
+      for (;;) {
+        const newlineIdx = buffer.indexOf('\n')
+        if (newlineIdx === -1) {
+          break
+        }
+        const line = buffer.slice(0, newlineIdx)
+        buffer = buffer.slice(newlineIdx + 1)
+        if (!line) {
+          continue
+        }
+
+        let message: Record<string, unknown>
+        try {
+          message = JSON.parse(line) as Record<string, unknown>
+        } catch {
           settle('rejected')
           return
         }
-        // Why: a protocol-live daemon with a stale cwd or node-pty helper
-        // will answer ping but cannot create terminals, so reuse must check
-        // the PTY spawn prerequisites too.
-        sock?.write(encodeNdjson({ id: 'health-1', type: 'ptySpawnHealth' }))
-        return
-      }
 
-      if (message.id === 'health-1') {
-        settle(message.ok === true ? 'healthy' : 'pty-spawn-unhealthy')
+        if (message.type === 'hello') {
+          if (!(message as HelloResponse).ok) {
+            settle('rejected')
+            return
+          }
+          // Why: a protocol-live daemon with a stale cwd or node-pty helper
+          // will answer ping but cannot create terminals, so reuse must check
+          // the PTY spawn prerequisites too.
+          sock?.write(encodeNdjson({ id: 'health-1', type: 'ptySpawnHealth' }))
+          continue
+        }
+
+        if (message.id === 'health-1') {
+          settle(message.ok === true ? 'healthy' : 'pty-spawn-unhealthy')
+          return
+        }
       }
     }
-    const decoder = new StringDecoder('utf8')
-    const parser = createNdjsonParser(onMessage, () => settle('rejected'), {
-      maxLineBytes: DAEMON_HANDSHAKE_MAX_LINE_BYTES
-    })
-    const onData = (chunk: Buffer): void => parser.feed(decoder.write(chunk))
     const timer = setTimeout(() => settle('unreachable'), HEALTH_CHECK_TIMEOUT_MS)
 
     sock = connect({ path: socketPath })
     sock.on('error', onError)
     sock.on('connect', onConnect)
 
+    let buffer = ''
     sock.on('data', onData)
   })
 }
@@ -190,7 +201,7 @@ export function getMacDaemonSystemResolverHealth(
 
     let token: string
     try {
-      token = readDaemonControlFileText(tokenPath).trim()
+      token = readFileSync(tokenPath, 'utf8').trim()
     } catch {
       resolve('unknown')
       return
@@ -224,46 +235,59 @@ export function getMacDaemonSystemResolverHealth(
       }
       sock?.write(encodeNdjson(hello))
     }
-    const onMessage = (rawMessage: unknown): void => {
+    const onData = (chunk: Buffer): void => {
       if (settled) {
         return
       }
-      if (!rawMessage || typeof rawMessage !== 'object') {
-        settle('unknown')
-        return
-      }
-      const message = rawMessage as Record<string, unknown>
-      if (message.type === 'hello') {
-        if (!(message as HelloResponse).ok) {
-          settle('unknown')
-          return
+      buffer += chunk.toString()
+      for (;;) {
+        const newlineIdx = buffer.indexOf('\n')
+        if (newlineIdx === -1) {
+          break
         }
-        // Why: the daemon must report health from inside its own process;
-        // external launchctl bsexec probes can misclassify healthy PTYs.
-        sock?.write(encodeNdjson({ id: 'resolver-health-1', type: 'systemResolverHealth' }))
-        return
-      }
+        const line = buffer.slice(0, newlineIdx)
+        buffer = buffer.slice(newlineIdx + 1)
+        if (!line) {
+          continue
+        }
 
-      if (message.id === 'resolver-health-1') {
-        if (!message.ok || typeof message.payload !== 'object' || message.payload === null) {
+        let message: Record<string, unknown>
+        try {
+          message = JSON.parse(line) as Record<string, unknown>
+        } catch {
           settle('unknown')
           return
         }
-        const payload = message.payload as Partial<SystemResolverHealthResult>
-        settle(isSystemResolverHealth(payload.health) ? payload.health : 'unknown')
+
+        if (message.type === 'hello') {
+          if (!(message as HelloResponse).ok) {
+            settle('unknown')
+            return
+          }
+          // Why: the daemon must report health from inside its own process;
+          // external launchctl bsexec probes can misclassify healthy PTYs.
+          sock?.write(encodeNdjson({ id: 'resolver-health-1', type: 'systemResolverHealth' }))
+          continue
+        }
+
+        if (message.id === 'resolver-health-1') {
+          if (!message.ok || typeof message.payload !== 'object' || message.payload === null) {
+            settle('unknown')
+            return
+          }
+          const payload = message.payload as Partial<SystemResolverHealthResult>
+          settle(isSystemResolverHealth(payload.health) ? payload.health : 'unknown')
+          return
+        }
       }
     }
-    const decoder = new StringDecoder('utf8')
-    const parser = createNdjsonParser(onMessage, () => settle('unknown'), {
-      maxLineBytes: DAEMON_HANDSHAKE_MAX_LINE_BYTES
-    })
-    const onData = (chunk: Buffer): void => parser.feed(decoder.write(chunk))
     const timer = setTimeout(() => settle('unknown'), RESOLVER_HEALTH_CHECK_TIMEOUT_MS)
 
     sock = connect({ path: socketPath })
     sock.on('error', onError)
     sock.on('connect', onConnect)
 
+    let buffer = ''
     sock.on('data', onData)
   })
 }
@@ -567,7 +591,7 @@ async function readVerifiedDaemonPid(
   let parsedPid: ParsedDaemonPid | null
   try {
     parsedPid = parseDaemonPidFile(
-      readDaemonControlFileText(getDaemonPidPath(runtimeDir, protocolVersion))
+      readFileSync(getDaemonPidPath(runtimeDir, protocolVersion), 'utf8')
     )
   } catch {
     return null
@@ -614,7 +638,7 @@ export async function killStaleDaemon(
   const pidPath = getDaemonPidPath(runtimeDir, protocolVersion)
   let killedDaemon = false
   try {
-    const parsedPid = parseDaemonPidFile(readDaemonControlFileText(pidPath))
+    const parsedPid = parseDaemonPidFile(readFileSync(pidPath, 'utf8'))
     if (
       parsedPid &&
       (await isDaemonProcess(parsedPid.pid, socketPath, tokenPath, parsedPid.startedAtMs))

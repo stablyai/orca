@@ -1,8 +1,4 @@
 import { describe, expect, it } from 'vitest'
-import {
-  MARKDOWN_DOCUMENT_LISTING_ERROR_CODE,
-  MarkdownDocumentListingCapacityError
-} from '../../../shared/markdown-document-listing-limits'
 import { mapRuntimeError } from './errors'
 
 class LineageError extends Error {
@@ -147,21 +143,6 @@ describe('mapRuntimeError', () => {
         }
       },
       _meta: { runtimeId: 'runtime-1' }
-    })
-  })
-
-  it('preserves the Markdown listing capacity code across runtime RPC', () => {
-    expect(
-      mapRuntimeError(
-        'req_1',
-        { runtimeId: 'runtime-1' },
-        new MarkdownDocumentListingCapacityError()
-      )
-    ).toMatchObject({
-      ok: false,
-      error: {
-        code: MARKDOWN_DOCUMENT_LISTING_ERROR_CODE
-      }
     })
   })
 })

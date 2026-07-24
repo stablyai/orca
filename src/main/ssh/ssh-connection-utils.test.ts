@@ -24,11 +24,8 @@ function testHomePath(...parts: string[]): string {
 }
 
 vi.mock('fs', () => ({
-  existsSync: (...args: unknown[]) => mockExistsSync(...args)
-}))
-
-vi.mock('./ssh-key-file', () => ({
-  readSshKeyFile: (...args: unknown[]) => mockReadFileSync(...args)
+  existsSync: (...args: unknown[]) => mockExistsSync(...args),
+  readFileSync: (...args: unknown[]) => mockReadFileSync(...args)
 }))
 
 import {
@@ -54,10 +51,7 @@ import type { SshResolvedConfig } from './ssh-config-parser'
 
 type MockProxyProcess = EventEmitter & {
   stdin: EventEmitter & { write: ReturnType<typeof vi.fn> }
-  stdout: EventEmitter & {
-    pause: ReturnType<typeof vi.fn>
-    resume: ReturnType<typeof vi.fn>
-  }
+  stdout: EventEmitter
   stderr: EventEmitter
 }
 
@@ -66,10 +60,7 @@ function createMockProxyProcess(): MockProxyProcess {
   proc.stdin = Object.assign(new EventEmitter(), {
     write: vi.fn((_chunk, cb?: (error?: Error | null) => void) => cb?.())
   })
-  proc.stdout = Object.assign(new EventEmitter(), {
-    pause: vi.fn(),
-    resume: vi.fn()
-  })
+  proc.stdout = new EventEmitter()
   proc.stderr = new EventEmitter()
   return proc
 }
@@ -731,24 +722,5 @@ describe('spawnProxyCommand', () => {
     expect(proc.stdout.listenerCount('end')).toBe(0)
     expect(proc.stdin.listenerCount('error')).toBe(0)
     expect(proc.listenerCount('error')).toBe(0)
-  })
-
-  it('pauses proxy stdout at the socket high-water mark and resumes on demand', async () => {
-    const proc = createMockProxyProcess()
-    spawnMock.mockReturnValue(proc)
-    const { sock } = spawnProxyCommand(
-      { kind: 'jump-host', jumpHost: 'bastion.example.com' },
-      'target.example.com',
-      22,
-      'deploy'
-    )
-
-    proc.stdout.emit('data', Buffer.alloc(64 * 1024))
-
-    expect(proc.stdout.pause).toHaveBeenCalledOnce()
-    sock.on('data', () => {})
-    await new Promise<void>((resolve) => setImmediate(resolve))
-    expect(proc.stdout.resume).toHaveBeenCalled()
-    sock.destroy()
   })
 })

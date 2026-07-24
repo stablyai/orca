@@ -1,35 +1,17 @@
-import { createHash } from 'node:crypto'
-
 // Why: suppress a known-missing RPC surface without pinning it forever — an
 // in-place codex upgrade during a long Orca session self-heals after the
 // interval, mirroring GitCapabilityCache's rationale.
 export const CODEX_APP_SERVER_CAPABILITY_RETRY_INTERVAL_MS = 30 * 60_000
-export const MAX_CODEX_APP_SERVER_CAPABILITY_HOSTS = 64
-export const MAX_CODEX_APP_SERVER_HOST_KEY_CODE_UNITS = 4 * 1024
 
 /** Execution host that runs the codex binary. WSL distros are isolated from
  *  the native host and from each other — each can carry a different codex. */
 export type CodexAppServerHostKey = 'native' | `wsl:${string}`
 
-function boundHostKey(hostKey: CodexAppServerHostKey): CodexAppServerHostKey {
-  if (hostKey.length <= MAX_CODEX_APP_SERVER_HOST_KEY_CODE_UNITS) {
-    return hostKey
-  }
-  return `wsl:sha256:${createHash('sha256').update(hostKey.slice('wsl:'.length)).digest('hex')}`
-}
-
 export function getCodexAppServerHostKey(
   host: { kind: 'native' } | { kind: 'wsl'; distro: string }
 ): CodexAppServerHostKey {
-  if (host.kind === 'native') {
-    return 'native'
-  }
-  return boundHostKey(`wsl:${host.distro}`)
+  return host.kind === 'wsl' ? `wsl:${host.distro}` : 'native'
 }
-
-type CodexAppServerCapabilityState =
-  | { kind: 'supported' }
-  | { kind: 'unsupported'; retryAfterMs: number }
 
 /**
  * Capability cache for the codex app-server trust-grant RPC pair, modeled on
@@ -38,56 +20,33 @@ type CodexAppServerCapabilityState =
  * unsupported mark alone is what keeps later installs off the dead probe.
  */
 export class CodexAppServerCapabilityCache {
-  private readonly stateByHost = new Map<CodexAppServerHostKey, CodexAppServerCapabilityState>()
-
-  private getState(hostKey: CodexAppServerHostKey): CodexAppServerCapabilityState | undefined {
-    const retainedHostKey = boundHostKey(hostKey)
-    const state = this.stateByHost.get(retainedHostKey)
-    if (state) {
-      this.stateByHost.delete(retainedHostKey)
-      this.stateByHost.set(retainedHostKey, state)
-    }
-    return state
-  }
-
-  private remember(hostKey: CodexAppServerHostKey, state: CodexAppServerCapabilityState): void {
-    const retainedHostKey = boundHostKey(hostKey)
-    this.stateByHost.delete(retainedHostKey)
-    this.stateByHost.set(retainedHostKey, state)
-    while (this.stateByHost.size > MAX_CODEX_APP_SERVER_CAPABILITY_HOSTS) {
-      const oldestHost = this.stateByHost.keys().next().value
-      if (oldestHost === undefined) {
-        return
-      }
-      this.stateByHost.delete(oldestHost)
-    }
-  }
+  private readonly retryAfterByHost = new Map<CodexAppServerHostKey, number>()
+  private readonly supportedHosts = new Set<CodexAppServerHostKey>()
 
   shouldTry(hostKey: CodexAppServerHostKey, nowMs = Date.now()): boolean {
-    const state = this.getState(hostKey)
-    if (!state || state.kind === 'supported') {
+    const retryAfterMs = this.retryAfterByHost.get(hostKey)
+    if (retryAfterMs === undefined) {
       return true
     }
-    if (nowMs < state.retryAfterMs) {
+    if (nowMs < retryAfterMs) {
       return false
     }
-    this.stateByHost.delete(boundHostKey(hostKey))
+    this.retryAfterByHost.delete(hostKey)
     return true
   }
 
   isKnownSupported(hostKey: CodexAppServerHostKey): boolean {
-    return this.getState(hostKey)?.kind === 'supported'
+    return this.supportedHosts.has(hostKey)
   }
 
   rememberUnsupported(hostKey: CodexAppServerHostKey, nowMs = Date.now()): void {
-    this.remember(hostKey, {
-      kind: 'unsupported',
-      retryAfterMs: nowMs + CODEX_APP_SERVER_CAPABILITY_RETRY_INTERVAL_MS
-    })
+    this.supportedHosts.delete(hostKey)
+    this.retryAfterByHost.set(hostKey, nowMs + CODEX_APP_SERVER_CAPABILITY_RETRY_INTERVAL_MS)
   }
 
   rememberSupported(hostKey: CodexAppServerHostKey): void {
-    this.remember(hostKey, { kind: 'supported' })
+    this.retryAfterByHost.delete(hostKey)
+    this.supportedHosts.add(hostKey)
   }
 
   runWithFallbackSync<T>(
@@ -97,7 +56,7 @@ export class CodexAppServerCapabilityCache {
     isUnsupportedError: (error: unknown) => boolean,
     nowMs = Date.now()
   ): T {
-    if (!this.shouldTry(hostKey, nowMs)) {
+    if (!this.supportedHosts.has(hostKey) && !this.shouldTry(hostKey, nowMs)) {
       return runFallback()
     }
     try {
@@ -117,7 +76,8 @@ export class CodexAppServerCapabilityCache {
   }
 
   clear(): void {
-    this.stateByHost.clear()
+    this.retryAfterByHost.clear()
+    this.supportedHosts.clear()
   }
 }
 

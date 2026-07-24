@@ -11,7 +11,7 @@ export class DictationSetupPollController {
   private timer: ReturnType<typeof setTimeout> | null = null
   private inFlight = false
   private immediateRefreshPending = false
-  private refreshCompletion: { promise: Promise<void>; resolve: () => void } | null = null
+  private refreshWaiters: Array<() => void> = []
   private disposed = false
   // Why: an explicit setPolling is a newer lifecycle intent than a read that was already on the wire.
   // Bumped on every setPolling so an in-flight refresh resolving after an explicit stop/start can be
@@ -40,22 +40,17 @@ export class DictationSetupPollController {
     if (this.disposed || !this.isEligible()) {
       return Promise.resolve()
     }
-    if (!this.refreshCompletion) {
-      let resolve!: () => void
-      const promise = new Promise<void>((nextResolve) => {
-        resolve = nextResolve
-      })
-      this.refreshCompletion = { promise, resolve }
-    }
-    this.requestRefresh(true)
-    return this.refreshCompletion.promise
+    return new Promise((resolve) => {
+      this.refreshWaiters.push(resolve)
+      this.requestRefresh(true)
+    })
   }
 
   dispose(): void {
     this.disposed = true
     this.immediateRefreshPending = false
     this.clearTimer()
-    this.resolveRefreshCompletion()
+    this.resolveRefreshWaiters()
   }
 
   private update(next: Partial<PollState>): void {
@@ -118,7 +113,7 @@ export class DictationSetupPollController {
       this.state.polling = shouldContinue
     }
     if (this.disposed || !this.isEligible()) {
-      this.resolveRefreshCompletion()
+      this.resolveRefreshWaiters()
       return
     }
     if (this.immediateRefreshPending) {
@@ -126,7 +121,7 @@ export class DictationSetupPollController {
       this.requestRefresh(true)
       return
     }
-    this.resolveRefreshCompletion()
+    this.resolveRefreshWaiters()
     if (this.state.polling) {
       this.scheduleRefresh()
     }
@@ -149,9 +144,10 @@ export class DictationSetupPollController {
     }
   }
 
-  private resolveRefreshCompletion(): void {
-    const completion = this.refreshCompletion
-    this.refreshCompletion = null
-    completion?.resolve()
+  private resolveRefreshWaiters(): void {
+    const waiters = this.refreshWaiters.splice(0)
+    for (const resolve of waiters) {
+      resolve()
+    }
   }
 }

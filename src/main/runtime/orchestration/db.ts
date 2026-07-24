@@ -16,80 +16,6 @@ import type {
 } from './types'
 import { buildOrchestrationTaskDisplayMetadata } from '../../../shared/orchestration-task-display'
 import { parsePaneKey } from '../../../shared/stable-pane-id'
-import {
-  assertOrchestrationStringListFits,
-  assertOrchestrationWriteFits,
-  clampOrchestrationQueryLimit,
-  ORCHESTRATION_QUERY_MAX_ROW_UTF8_BYTES,
-  ORCHESTRATION_QUERY_MAX_ROWS,
-  ORCHESTRATION_WRITE_MAX_ITEMS,
-  parseOrchestrationJson,
-  retainOrchestrationQueryRows,
-  truncateOrchestrationDiagnostic
-} from './query-retention'
-
-function retainedTextBytesSql(columns: string[]): string {
-  return columns.map((column) => `length(CAST(COALESCE(${column}, '') AS BLOB))`).join(' + ')
-}
-
-const MESSAGE_ROW_BYTES_SQL = retainedTextBytesSql([
-  'messages.id',
-  'messages.from_handle',
-  'messages.to_handle',
-  'messages.subject',
-  'messages.body',
-  'messages.type',
-  'messages.priority',
-  'messages.thread_id',
-  'messages.payload',
-  'messages.created_at',
-  'messages.delivered_at',
-  'messages.sender_pane_key'
-])
-const TASK_ROW_BYTES_SQL = retainedTextBytesSql([
-  'tasks.id',
-  'tasks.parent_id',
-  'tasks.created_by_terminal_handle',
-  'tasks.task_title',
-  'tasks.display_name',
-  'tasks.spec',
-  'tasks.status',
-  'tasks.deps',
-  'tasks.result',
-  'tasks.created_at',
-  'tasks.completed_at'
-])
-const DISPATCH_ROW_BYTES_SQL = retainedTextBytesSql([
-  'dispatch_contexts.id',
-  'dispatch_contexts.task_id',
-  'dispatch_contexts.assignee_handle',
-  'dispatch_contexts.assignee_pane_key',
-  'dispatch_contexts.status',
-  'dispatch_contexts.last_failure',
-  'dispatch_contexts.dispatched_at',
-  'dispatch_contexts.completed_at',
-  'dispatch_contexts.created_at',
-  'dispatch_contexts.last_heartbeat_at'
-])
-const GATE_ROW_BYTES_SQL = retainedTextBytesSql([
-  'decision_gates.id',
-  'decision_gates.task_id',
-  'decision_gates.question',
-  'decision_gates.options',
-  'decision_gates.status',
-  'decision_gates.resolution',
-  'decision_gates.created_at',
-  'decision_gates.resolved_at'
-])
-const COORDINATOR_RUN_ROW_BYTES_SQL = retainedTextBytesSql([
-  'coordinator_runs.id',
-  'coordinator_runs.spec',
-  'coordinator_runs.status',
-  'coordinator_runs.coordinator_handle',
-  'coordinator_runs.created_at',
-  'coordinator_runs.completed_at'
-])
-const INTERNAL_SCAN_BATCH_ROWS = 64
 
 // Why: leaf UUID is the remint-stable pane identity (tab half changes on break-out); exact match covers legacy/unparseable keys.
 function isEquivalentPaneKey(a: string, b: string): boolean {
@@ -115,29 +41,14 @@ export type {
   CoordinatorRun
 }
 
-export type TaskStatusCounts = Record<TaskStatus, number> & { total: number }
-
 function generateId(prefix: string): string {
   return `${prefix}_${randomBytes(6).toString('hex')}`
-}
-
-function uniqueMessageTypes(types: MessageType[] | undefined): MessageType[] {
-  const unique: MessageType[] = []
-  for (const type of types ?? []) {
-    if (!unique.includes(type)) {
-      unique.push(type)
-      if (unique.length === 8) {
-        break
-      }
-    }
-  }
-  return unique
 }
 
 function addLifecycleRejectionMarker(payload: string | null, reason: string): string {
   let parsed: Record<string, unknown> = {}
   try {
-    const value: unknown = payload ? parseOrchestrationJson(payload) : {}
+    const value: unknown = payload ? JSON.parse(payload) : {}
     if (value && typeof value === 'object' && !Array.isArray(value)) {
       parsed = value as Record<string, unknown>
     }
@@ -193,24 +104,6 @@ export class OrchestrationDb {
     this.db.pragma('busy_timeout = 5000')
     this.createTables()
     this.migrate()
-  }
-
-  private readRows<T extends object>(
-    sql: string,
-    params: Database.BindValue[] = [],
-    requestedLimit?: number
-  ): T[] {
-    const limit = clampOrchestrationQueryLimit(requestedLimit)
-    if (limit === 0) {
-      return []
-    }
-    const rows = this.db.prepare(`${sql} LIMIT ?`).iterate(...params, limit) as Iterable<T>
-    return retainOrchestrationQueryRows(rows, limit)
-  }
-
-  private countRows(sql: string, params: Database.BindValue[] = []): number {
-    const row = this.db.prepare(sql).get(...params) as { count: number }
-    return row.count
   }
 
   private createTables(): void {
@@ -440,17 +333,6 @@ export class OrchestrationDb {
     payload?: string
     senderPaneKey?: string
   }): MessageRow {
-    assertOrchestrationWriteFits('Message', [
-      msg.from,
-      msg.to,
-      msg.subject,
-      msg.body,
-      msg.type,
-      msg.priority,
-      msg.threadId,
-      msg.payload,
-      msg.senderPaneKey
-    ])
     const id = generateId('msg')
     const stmt = this.db.prepare(`
       INSERT INTO messages (id, from_handle, to_handle, subject, body, type, priority, thread_id, payload, sender_pane_key)
@@ -468,37 +350,26 @@ export class OrchestrationDb {
       msg.payload ?? null,
       msg.senderPaneKey ?? null
     )
-    return this.getMessageById(id)!
-  }
-
-  getUnreadMessages(toHandle: string, types?: MessageType[]): MessageRow[] {
-    const params: Database.BindValue[] = [toHandle]
-    let typeFilter = ''
-    const retainedTypes = uniqueMessageTypes(types)
-    if (retainedTypes.length > 0) {
-      const placeholders = retainedTypes.map(() => '?').join(',')
-      typeFilter = ` AND type IN (${placeholders})`
-      params.push(...retainedTypes)
-    }
-    return exposeMessageListTimestamps(
-      this.readRows<MessageRow>(
-        `SELECT * FROM messages
-         WHERE to_handle = ? AND read = 0${typeFilter}
-           AND (${MESSAGE_ROW_BYTES_SQL}) <= ${ORCHESTRATION_QUERY_MAX_ROW_UTF8_BYTES}
-         ORDER BY sequence`,
-        params
-      )
+    return exposeMessageTimestamps(
+      this.db.prepare('SELECT * FROM messages WHERE id = ?').get(id) as MessageRow
     )
   }
 
-  countUnreadMessages(toHandle: string, types?: MessageType[]): number {
-    const retainedTypes = uniqueMessageTypes(types)
-    const placeholders = retainedTypes.map(() => '?').join(',')
-    const typeFilter = retainedTypes.length > 0 ? ` AND type IN (${placeholders})` : ''
-    return this.countRows(
-      `SELECT COUNT(*) AS count FROM messages
-       WHERE to_handle = ? AND read = 0${typeFilter}`,
-      [toHandle, ...retainedTypes]
+  getUnreadMessages(toHandle: string, types?: MessageType[]): MessageRow[] {
+    if (types && types.length > 0) {
+      const placeholders = types.map(() => '?').join(',')
+      return exposeMessageListTimestamps(
+        this.db
+          .prepare(
+            `SELECT * FROM messages WHERE to_handle = ? AND read = 0 AND type IN (${placeholders}) ORDER BY sequence`
+          )
+          .all(toHandle, ...types) as MessageRow[]
+      )
+    }
+    return exposeMessageListTimestamps(
+      this.db
+        .prepare('SELECT * FROM messages WHERE to_handle = ? AND read = 0 ORDER BY sequence')
+        .all(toHandle) as MessageRow[]
     )
   }
 
@@ -509,11 +380,8 @@ export class OrchestrationDb {
     }
 
     const originalBody = message.body ? `\n\nOriginal body:\n${message.body}` : ''
-    const boundedReason = truncateOrchestrationDiagnostic(reason)
-    const body = truncateOrchestrationDiagnostic(
-      `Orca rejected this ${message.type}: ${boundedReason}${originalBody}`
-    )
-    const payload = addLifecycleRejectionMarker(message.payload, boundedReason)
+    const body = `Orca rejected this ${message.type}: ${reason}${originalBody}`
+    const payload = addLifecycleRejectionMarker(message.payload, reason)
     // Why: rejected lifecycle signals stay auditable but must not reach read paths as actionable completion/liveness events.
     this.db
       .prepare(
@@ -527,133 +395,116 @@ export class OrchestrationDb {
 
   // Why: delivered_at IS NULL filter — push-on-idle delivers each row at most once; read (set only by check) wouldn't prevent replay.
   getUndeliveredUnreadMessages(toHandle: string, types?: MessageType[]): MessageRow[] {
-    const params: Database.BindValue[] = [toHandle]
-    let typeFilter = ''
-    const retainedTypes = uniqueMessageTypes(types)
-    if (retainedTypes.length > 0) {
-      const placeholders = retainedTypes.map(() => '?').join(',')
-      typeFilter = ` AND type IN (${placeholders})`
-      params.push(...retainedTypes)
+    if (types && types.length > 0) {
+      const placeholders = types.map(() => '?').join(',')
+      return exposeMessageListTimestamps(
+        this.db
+          .prepare(
+            `SELECT * FROM messages WHERE to_handle = ? AND read = 0 AND delivered_at IS NULL AND type IN (${placeholders}) ORDER BY sequence`
+          )
+          .all(toHandle, ...types) as MessageRow[]
+      )
     }
     return exposeMessageListTimestamps(
-      this.readRows<MessageRow>(
-        `SELECT * FROM messages
-         WHERE to_handle = ? AND read = 0 AND delivered_at IS NULL${typeFilter}
-           AND (${MESSAGE_ROW_BYTES_SQL}) <= ${ORCHESTRATION_QUERY_MAX_ROW_UTF8_BYTES}
-         ORDER BY sequence`,
-        params
-      )
+      this.db
+        .prepare(
+          'SELECT * FROM messages WHERE to_handle = ? AND read = 0 AND delivered_at IS NULL ORDER BY sequence'
+        )
+        .all(toHandle) as MessageRow[]
     )
   }
 
   getAllMessages(toHandle: string, limit = 20): MessageRow[] {
     return exposeMessageListTimestamps(
-      this.readRows<MessageRow>(
-        `SELECT * FROM messages
-         WHERE to_handle = ?
-           AND (${MESSAGE_ROW_BYTES_SQL}) <= ${ORCHESTRATION_QUERY_MAX_ROW_UTF8_BYTES}
-         ORDER BY sequence DESC`,
-        [toHandle],
-        limit
-      )
+      this.db
+        .prepare('SELECT * FROM messages WHERE to_handle = ? ORDER BY sequence DESC LIMIT ?')
+        .all(toHandle, limit) as MessageRow[]
     )
   }
 
   getMessageById(id: string): MessageRow | undefined {
-    const message = this.db
-      .prepare(
-        `SELECT * FROM messages
-         WHERE id = ? AND (${MESSAGE_ROW_BYTES_SQL}) <= ${ORCHESTRATION_QUERY_MAX_ROW_UTF8_BYTES}`
-      )
-      .get(id) as MessageRow | undefined
+    const message = this.db.prepare('SELECT * FROM messages WHERE id = ?').get(id) as
+      | MessageRow
+      | undefined
     return message ? exposeMessageTimestamps(message) : undefined
   }
 
   markAsRead(ids: string[]): void {
-    this.updateMessageIds(ids, 'read = 1')
+    if (ids.length === 0) {
+      return
+    }
+    const placeholders = ids.map(() => '?').join(',')
+    this.db.prepare(`UPDATE messages SET read = 1 WHERE id IN (${placeholders})`).run(...ids)
   }
 
   // Why: use datetime('now') so delivered_at matches the space-format UTC shape of the table's other timestamps for correct ordering (§3.2).
   markAsDelivered(ids: string[]): void {
-    this.updateMessageIds(ids, "delivered_at = datetime('now')")
+    if (ids.length === 0) {
+      return
+    }
+    const placeholders = ids.map(() => '?').join(',')
+    this.db
+      .prepare(`UPDATE messages SET delivered_at = datetime('now') WHERE id IN (${placeholders})`)
+      .run(...ids)
   }
 
   markAsReadAndDelivered(ids: string[]): void {
-    // Why: superseded lifecycle messages stay in history but must not be consumed or injected after their dispatch finished.
-    this.updateMessageIds(ids, "read = 1, delivered_at = COALESCE(delivered_at, datetime('now'))")
-  }
-
-  private updateMessageIds(ids: string[], assignments: string): void {
-    for (let start = 0; start < ids.length; start += ORCHESTRATION_QUERY_MAX_ROWS) {
-      const batch = ids.slice(start, start + ORCHESTRATION_QUERY_MAX_ROWS)
-      const placeholders = batch.map(() => '?').join(',')
-      this.db
-        .prepare(`UPDATE messages SET ${assignments} WHERE id IN (${placeholders})`)
-        .run(...batch)
+    if (ids.length === 0) {
+      return
     }
+    const placeholders = ids.map(() => '?').join(',')
+    // Why: superseded lifecycle messages stay in history but must not be consumed or injected after their dispatch finished.
+    this.db
+      .prepare(
+        `UPDATE messages SET read = 1, delivered_at = COALESCE(delivered_at, datetime('now')) WHERE id IN (${placeholders})`
+      )
+      .run(...ids)
   }
 
   getInbox(limit = 20): MessageRow[] {
     return exposeMessageListTimestamps(
-      this.readRows<MessageRow>(
-        `SELECT * FROM messages
-         WHERE (${MESSAGE_ROW_BYTES_SQL}) <= ${ORCHESTRATION_QUERY_MAX_ROW_UTF8_BYTES}
-         ORDER BY sequence DESC`,
-        [],
-        limit
-      )
+      this.db
+        .prepare('SELECT * FROM messages ORDER BY sequence DESC LIMIT ?')
+        .all(limit) as MessageRow[]
     )
-  }
-
-  countInbox(): number {
-    return this.countRows('SELECT COUNT(*) AS count FROM messages')
   }
 
   // Why: read-only history for a handle — returns every message regardless of read/delivered state, never flips the read bit (§3.3).
   getAllMessagesForHandle(toHandle: string, limit = 100, types?: MessageType[]): MessageRow[] {
-    const params: Database.BindValue[] = [toHandle]
-    let typeFilter = ''
-    const retainedTypes = uniqueMessageTypes(types)
-    if (retainedTypes.length > 0) {
-      const placeholders = retainedTypes.map(() => '?').join(',')
-      typeFilter = ` AND type IN (${placeholders})`
-      params.push(...retainedTypes)
+    if (types && types.length > 0) {
+      const placeholders = types.map(() => '?').join(',')
+      return exposeMessageListTimestamps(
+        this.db
+          .prepare(
+            `SELECT * FROM messages WHERE to_handle = ? AND type IN (${placeholders}) ORDER BY sequence DESC LIMIT ?`
+          )
+          .all(toHandle, ...types, limit) as MessageRow[]
+      )
     }
     return exposeMessageListTimestamps(
-      this.readRows<MessageRow>(
-        `SELECT * FROM messages
-         WHERE to_handle = ?${typeFilter}
-           AND (${MESSAGE_ROW_BYTES_SQL}) <= ${ORCHESTRATION_QUERY_MAX_ROW_UTF8_BYTES}
-         ORDER BY sequence DESC`,
-        params,
-        limit
-      )
-    )
-  }
-
-  countAllMessagesForHandle(toHandle: string, types?: MessageType[]): number {
-    const retainedTypes = uniqueMessageTypes(types)
-    const placeholders = retainedTypes.map(() => '?').join(',')
-    const typeFilter = retainedTypes.length > 0 ? ` AND type IN (${placeholders})` : ''
-    return this.countRows(
-      `SELECT COUNT(*) AS count FROM messages WHERE to_handle = ?${typeFilter}`,
-      [toHandle, ...retainedTypes]
+      this.db
+        .prepare('SELECT * FROM messages WHERE to_handle = ? ORDER BY sequence DESC LIMIT ?')
+        .all(toHandle, limit) as MessageRow[]
     )
   }
 
   // Why: ask wait-loop read — to_handle filter shows only replies to the worker; afterSequence resumes past its own outbound ask.
   getThreadMessagesFor(threadId: string, toHandle: string, afterSequence?: number): MessageRow[] {
-    const sequenceFilter = afterSequence === undefined ? '' : ' AND sequence > ?'
-    const params: Database.BindValue[] =
-      afterSequence === undefined ? [threadId, toHandle] : [threadId, toHandle, afterSequence]
-    return exposeMessageListTimestamps(
-      this.readRows<MessageRow>(
-        `SELECT * FROM messages
-         WHERE thread_id = ? AND to_handle = ?${sequenceFilter}
-           AND (${MESSAGE_ROW_BYTES_SQL}) <= ${ORCHESTRATION_QUERY_MAX_ROW_UTF8_BYTES}
-         ORDER BY sequence ASC`,
-        params
+    if (afterSequence !== undefined) {
+      return exposeMessageListTimestamps(
+        this.db
+          .prepare(
+            'SELECT * FROM messages WHERE thread_id = ? AND to_handle = ? AND sequence > ? ORDER BY sequence ASC'
+          )
+          .all(threadId, toHandle, afterSequence) as MessageRow[]
       )
+    }
+    return exposeMessageListTimestamps(
+      this.db
+        .prepare(
+          'SELECT * FROM messages WHERE thread_id = ? AND to_handle = ? ORDER BY sequence ASC'
+        )
+        .all(threadId, toHandle) as MessageRow[]
     )
   }
 
@@ -668,32 +519,14 @@ export class OrchestrationDb {
     createdByTerminalHandle?: string
   }): TaskRow {
     const id = generateId('task')
-    const deps = task.deps ?? []
-    assertOrchestrationStringListFits('Task dependencies', deps)
-    assertOrchestrationWriteFits('Task', [
-      task.spec,
-      task.taskTitle,
-      task.displayName,
-      task.parentId,
-      task.createdByTerminalHandle,
-      ...deps
-    ])
-    const depsJson = JSON.stringify(deps)
-    const hasDeps = deps.length > 0
+    const depsJson = JSON.stringify(task.deps ?? [])
+    const hasDeps = (task.deps ?? []).length > 0
     const status: TaskStatus = hasDeps ? 'pending' : 'ready'
     const display = buildOrchestrationTaskDisplayMetadata({
       spec: task.spec,
       taskTitle: task.taskTitle,
       displayName: task.displayName
     })
-    assertOrchestrationWriteFits('Task', [
-      task.spec,
-      display.taskTitle,
-      display.displayName,
-      depsJson,
-      task.parentId,
-      task.createdByTerminalHandle
-    ])
     this.db
       .prepare(
         'INSERT INTO tasks (id, parent_id, created_by_terminal_handle, task_title, display_name, spec, status, deps) VALUES (?, ?, ?, ?, ?, ?, ?, ?)'
@@ -708,35 +541,25 @@ export class OrchestrationDb {
         status,
         depsJson
       )
-    return this.getTask(id)!
+    return this.db.prepare('SELECT * FROM tasks WHERE id = ?').get(id) as TaskRow
   }
 
   getTask(id: string): TaskRow | undefined {
-    return this.db
-      .prepare(
-        `SELECT * FROM tasks
-         WHERE id = ? AND (${TASK_ROW_BYTES_SQL}) <= ${ORCHESTRATION_QUERY_MAX_ROW_UTF8_BYTES}`
-      )
-      .get(id) as TaskRow | undefined
+    return this.db.prepare('SELECT * FROM tasks WHERE id = ?').get(id) as TaskRow | undefined
   }
 
   listTasks(filter?: { status?: TaskStatus; ready?: boolean }): TaskRow[] {
-    const status = filter?.ready ? 'ready' : filter?.status
-    const statusFilter = status ? 'status = ? AND ' : ''
-    return this.readRows<TaskRow>(
-      `SELECT * FROM tasks
-       WHERE ${statusFilter}(${TASK_ROW_BYTES_SQL}) <= ${ORCHESTRATION_QUERY_MAX_ROW_UTF8_BYTES}
-       ORDER BY created_at, rowid`,
-      status ? [status] : []
-    )
-  }
-
-  countTasks(filter?: { status?: TaskStatus; ready?: boolean }): number {
-    const status = filter?.ready ? 'ready' : filter?.status
-    return this.countRows(
-      `SELECT COUNT(*) AS count FROM tasks${status ? ' WHERE status = ?' : ''}`,
-      status ? [status] : []
-    )
+    if (filter?.ready) {
+      return this.db
+        .prepare("SELECT * FROM tasks WHERE status = 'ready' ORDER BY created_at")
+        .all() as TaskRow[]
+    }
+    if (filter?.status) {
+      return this.db
+        .prepare('SELECT * FROM tasks WHERE status = ? ORDER BY created_at')
+        .all(filter.status) as TaskRow[]
+    }
+    return this.db.prepare('SELECT * FROM tasks ORDER BY created_at').all() as TaskRow[]
   }
 
   // Why: LEFT JOIN keeps non-dispatched tasks (NULL assignee); the MAX(rowid) subquery matches getDispatchContext's most-recent-active-dispatch semantics.
@@ -747,25 +570,20 @@ export class OrchestrationDb {
     const whereClauses: string[] = []
     const params: Database.BindValue[] = []
     if (filter?.ready) {
-      whereClauses.push("tasks.status = 'ready'")
+      whereClauses.push("t.status = 'ready'")
     } else if (filter?.status) {
-      whereClauses.push('tasks.status = ?')
+      whereClauses.push('t.status = ?')
       params.push(filter.status)
     }
-    whereClauses.push(
-      `(${TASK_ROW_BYTES_SQL}
-        + length(CAST(COALESCE(d.assignee_handle, '') AS BLOB))
-        + length(CAST(COALESCE(d.id, '') AS BLOB))) <= ${ORCHESTRATION_QUERY_MAX_ROW_UTF8_BYTES}`
-    )
     const where = whereClauses.length > 0 ? `WHERE ${whereClauses.join(' AND ')}` : ''
     const sql = `
       SELECT
-        tasks.*,
+        t.*,
         d.assignee_handle AS assignee_handle,
         d.id              AS dispatch_id
-      FROM tasks
+      FROM tasks t
       LEFT JOIN (
-        SELECT dc.id, dc.task_id, dc.assignee_handle
+        SELECT dc.*
         FROM dispatch_contexts dc
         INNER JOIN (
           SELECT task_id, MAX(rowid) AS max_rowid
@@ -773,23 +591,17 @@ export class OrchestrationDb {
           WHERE status IN ('pending', 'dispatched')
           GROUP BY task_id
         ) latest ON latest.task_id = dc.task_id AND latest.max_rowid = dc.rowid
-      ) d ON d.task_id = tasks.id
+      ) d ON d.task_id = t.id
       ${where}
-      ORDER BY tasks.created_at, tasks.rowid
+      ORDER BY t.created_at
     `
-    return this.readRows<
-      TaskRow & {
-        assignee_handle: string | null
-        dispatch_id: string | null
-      }
-    >(sql, params) as (TaskRow & {
+    return this.db.prepare(sql).all(...params) as (TaskRow & {
       assignee_handle: string | null
       dispatch_id: string | null
     })[]
   }
 
   updateTaskStatus(id: string, status: TaskStatus, result?: string): TaskRow | undefined {
-    assertOrchestrationWriteFits('Task result', [result])
     const completedAt =
       status === 'completed' || status === 'failed' ? new Date().toISOString() : null
     this.db
@@ -808,79 +620,24 @@ export class OrchestrationDb {
 
   // Why: runs in the status-update transaction, so a completed task never leaves its ready children unpromoted.
   private promoteReadyTasks(completedTaskId: string): void {
-    let afterRowId = 0
-    while (true) {
-      const candidates = this.readRows<{ rowid: number; id: string; deps: string }>(
-        `SELECT rowid, id, deps FROM tasks
-         WHERE status = 'pending' AND rowid > ?
-           AND (${retainedTextBytesSql(['tasks.id', 'tasks.deps'])})
-             <= ${ORCHESTRATION_QUERY_MAX_ROW_UTF8_BYTES}
-           AND CASE WHEN json_valid(deps)
-             THEN json_type(deps) = 'array'
-               AND json_array_length(deps) <= ${ORCHESTRATION_WRITE_MAX_ITEMS}
-             ELSE 0
-           END
-         ORDER BY rowid`,
-        [afterRowId],
-        INTERNAL_SCAN_BATCH_ROWS
-      )
-      if (candidates.length === 0) {
-        return
-      }
-      afterRowId = candidates.at(-1)!.rowid
+    const candidates = this.db
+      .prepare("SELECT * FROM tasks WHERE status = 'pending'")
+      .all() as TaskRow[]
 
-      for (const task of candidates) {
-        let parsedDeps: unknown
-        try {
-          parsedDeps = parseOrchestrationJson(task.deps)
-        } catch {
-          continue
-        }
-        if (
-          !Array.isArray(parsedDeps) ||
-          parsedDeps.length > ORCHESTRATION_WRITE_MAX_ITEMS ||
-          !parsedDeps.every((dependency) => typeof dependency === 'string')
-        ) {
-          continue
-        }
-        const deps = parsedDeps
-        if (!deps.includes(completedTaskId)) {
-          continue
-        }
-        const allDepsCompleted = deps.every((depId) => this.getTask(depId)?.status === 'completed')
-        if (allDepsCompleted) {
-          this.db.prepare("UPDATE tasks SET status = 'ready' WHERE id = ?").run(task.id)
-        }
+    for (const task of candidates) {
+      const deps: string[] = JSON.parse(task.deps)
+      if (!deps.includes(completedTaskId)) {
+        continue
+      }
+
+      const allDepsCompleted = deps.every((depId) => {
+        const dep = this.getTask(depId)
+        return dep?.status === 'completed'
+      })
+      if (allDepsCompleted) {
+        this.db.prepare("UPDATE tasks SET status = 'ready' WHERE id = ?").run(task.id)
       }
     }
-  }
-
-  getTaskStatusCounts(): TaskStatusCounts {
-    const row = this.db
-      .prepare(
-        `SELECT
-           COUNT(*) AS total,
-           COALESCE(SUM(status = 'pending'), 0) AS pending,
-           COALESCE(SUM(status = 'ready'), 0) AS ready,
-           COALESCE(SUM(status = 'dispatched'), 0) AS dispatched,
-           COALESCE(SUM(status = 'completed'), 0) AS completed,
-           COALESCE(SUM(status = 'failed'), 0) AS failed,
-           COALESCE(SUM(status = 'blocked'), 0) AS blocked
-         FROM tasks`
-      )
-      .get() as TaskStatusCounts
-    return row
-  }
-
-  listTaskIdsByStatus(status: TaskStatus): string[] {
-    const rows = this.readRows<{ id: string }>(
-      `SELECT id FROM tasks
-       WHERE status = ?
-         AND length(CAST(id AS BLOB)) <= ${ORCHESTRATION_QUERY_MAX_ROW_UTF8_BYTES}
-       ORDER BY created_at, rowid`,
-      [status]
-    )
-    return rows.map((row) => row.id)
   }
 
   // ── Dispatch Contexts ──
@@ -891,7 +648,6 @@ export class OrchestrationDb {
     // Why: pane key is the remint-stable identity behind the handle — lets worker_done ownership survive handle reissue.
     assigneePaneKey?: string
   ): DispatchContextRow {
-    assertOrchestrationWriteFits('Dispatch context', [taskId, assigneeHandle, assigneePaneKey])
     const task = this.getTask(taskId)
     if (!task) {
       throw new Error(`Task not found: ${taskId}`)
@@ -926,28 +682,21 @@ export class OrchestrationDb {
 
     this.db.prepare("UPDATE tasks SET status = 'dispatched' WHERE id = ?").run(taskId)
 
-    return this.getDispatchContextById(id)!
+    return this.db
+      .prepare('SELECT * FROM dispatch_contexts WHERE id = ?')
+      .get(id) as DispatchContextRow
   }
 
   getDispatchContext(taskId: string): DispatchContextRow | undefined {
     return this.db
-      .prepare(
-        `SELECT * FROM dispatch_contexts
-         WHERE task_id = ?
-           AND (${DISPATCH_ROW_BYTES_SQL}) <= ${ORCHESTRATION_QUERY_MAX_ROW_UTF8_BYTES}
-         ORDER BY rowid DESC LIMIT 1`
-      )
+      .prepare('SELECT * FROM dispatch_contexts WHERE task_id = ? ORDER BY rowid DESC LIMIT 1')
       .get(taskId) as DispatchContextRow | undefined
   }
 
   getDispatchContextById(dispatchId: string): DispatchContextRow | undefined {
-    return this.db
-      .prepare(
-        `SELECT * FROM dispatch_contexts
-         WHERE id = ?
-           AND (${DISPATCH_ROW_BYTES_SQL}) <= ${ORCHESTRATION_QUERY_MAX_ROW_UTF8_BYTES}`
-      )
-      .get(dispatchId) as DispatchContextRow | undefined
+    return this.db.prepare('SELECT * FROM dispatch_contexts WHERE id = ?').get(dispatchId) as
+      | DispatchContextRow
+      | undefined
   }
 
   getActiveDispatchForTerminal(handle: string): DispatchContextRow | undefined {
@@ -974,10 +723,7 @@ export class OrchestrationDb {
   ): DispatchContextRow | undefined {
     const byHandle = this.db
       .prepare(
-        `SELECT * FROM dispatch_contexts
-         WHERE assignee_handle = ? AND status IN ('pending', 'dispatched')
-           AND (${DISPATCH_ROW_BYTES_SQL}) <= ${ORCHESTRATION_QUERY_MAX_ROW_UTF8_BYTES}
-         LIMIT 1`
+        "SELECT * FROM dispatch_contexts WHERE assignee_handle = ? AND status IN ('pending', 'dispatched') LIMIT 1"
       )
       .get(assigneeHandle) as DispatchContextRow | undefined
     if (byHandle) {
@@ -990,33 +736,22 @@ export class OrchestrationDb {
 
     const actives = this.db
       .prepare(
-        `SELECT id, assignee_pane_key FROM dispatch_contexts
-         WHERE assignee_pane_key IS NOT NULL AND status IN ('pending', 'dispatched')
-           AND (${retainedTextBytesSql([
-             'dispatch_contexts.id',
-             'dispatch_contexts.assignee_pane_key'
-           ])}) <= ${ORCHESTRATION_QUERY_MAX_ROW_UTF8_BYTES}
-         ORDER BY rowid`
+        "SELECT * FROM dispatch_contexts WHERE assignee_pane_key IS NOT NULL AND status IN ('pending', 'dispatched')"
       )
-      .iterate() as Iterable<{ id: string; assignee_pane_key: string }>
+      .all() as DispatchContextRow[]
 
-    let matchingId: string | undefined
     for (const row of actives) {
-      if (isEquivalentPaneKey(row.assignee_pane_key, assigneePaneKey)) {
-        matchingId = row.id
-        break
+      if (row.assignee_pane_key && isEquivalentPaneKey(row.assignee_pane_key, assigneePaneKey)) {
+        return row
       }
     }
-    return matchingId ? this.getDispatchContextById(matchingId) : undefined
+    return undefined
   }
 
   getLatestDispatchForTerminal(handle: string): DispatchContextRow | undefined {
     return this.db
       .prepare(
-        `SELECT * FROM dispatch_contexts
-         WHERE assignee_handle = ?
-           AND (${DISPATCH_ROW_BYTES_SQL}) <= ${ORCHESTRATION_QUERY_MAX_ROW_UTF8_BYTES}
-         ORDER BY rowid DESC LIMIT 1`
+        'SELECT * FROM dispatch_contexts WHERE assignee_handle = ? ORDER BY rowid DESC LIMIT 1'
       )
       .get(handle) as DispatchContextRow | undefined
   }
@@ -1032,9 +767,9 @@ export class OrchestrationDb {
   completeActiveDispatchForTask(taskId: string): void {
     const active = this.db
       .prepare(
-        "SELECT id FROM dispatch_contexts WHERE task_id = ? AND status IN ('pending', 'dispatched') ORDER BY rowid DESC LIMIT 1"
+        "SELECT * FROM dispatch_contexts WHERE task_id = ? AND status IN ('pending', 'dispatched') ORDER BY rowid DESC LIMIT 1"
       )
-      .get(taskId) as { id: string } | undefined
+      .get(taskId) as DispatchContextRow | undefined
     if (active) {
       this.completeDispatch(active.id)
     }
@@ -1043,15 +778,14 @@ export class OrchestrationDb {
   failActiveDispatchForTask(taskId: string, error: string): DispatchContextRow | undefined {
     const active = this.db
       .prepare(
-        "SELECT id FROM dispatch_contexts WHERE task_id = ? AND status IN ('pending', 'dispatched') ORDER BY rowid DESC LIMIT 1"
+        "SELECT * FROM dispatch_contexts WHERE task_id = ? AND status IN ('pending', 'dispatched') ORDER BY rowid DESC LIMIT 1"
       )
-      .get(taskId) as { id: string } | undefined
+      .get(taskId) as DispatchContextRow | undefined
     return active ? this.failDispatch(active.id, error) : undefined
   }
 
   // Why: only bump status='dispatched' — a zombie heartbeat from a finished dispatch would mask a hung retry from the stale detector (§5.3.4).
   recordHeartbeat(dispatchId: string, at: string): void {
-    assertOrchestrationWriteFits('Dispatch heartbeat', [dispatchId, at])
     this.db
       .prepare(
         "UPDATE dispatch_contexts SET last_heartbeat_at = ? WHERE id = ? AND status = 'dispatched'"
@@ -1061,37 +795,21 @@ export class OrchestrationDb {
 
   // Why: dispatched_at grace skips workers still within their first heartbeat interval; julianday() vs raw-TEXT compare avoids misflagging space-format timestamps as stale (#8452).
   getStaleDispatches(thresholdIso: string): DispatchContextRow[] {
-    return this.readRows<DispatchContextRow>(
-      `SELECT * FROM dispatch_contexts
-       WHERE status = 'dispatched'
-         AND dispatched_at IS NOT NULL
-         AND julianday(dispatched_at) < julianday(?)
-         AND (last_heartbeat_at IS NULL OR julianday(last_heartbeat_at) < julianday(?))
-         AND (${DISPATCH_ROW_BYTES_SQL}) <= ${ORCHESTRATION_QUERY_MAX_ROW_UTF8_BYTES}
-       ORDER BY rowid`,
-      [thresholdIso, thresholdIso]
-    )
-  }
-
-  forEachStaleDispatch(thresholdIso: string, visit: (row: DispatchContextRow) => void): void {
-    const rows = this.db
+    return this.db
       .prepare(
         `SELECT * FROM dispatch_contexts
          WHERE status = 'dispatched'
            AND dispatched_at IS NOT NULL
            AND julianday(dispatched_at) < julianday(?)
-           AND (last_heartbeat_at IS NULL OR julianday(last_heartbeat_at) < julianday(?))
-           AND (${DISPATCH_ROW_BYTES_SQL}) <= ${ORCHESTRATION_QUERY_MAX_ROW_UTF8_BYTES}
-         ORDER BY rowid`
+           AND (last_heartbeat_at IS NULL OR julianday(last_heartbeat_at) < julianday(?))`
       )
-      .iterate(thresholdIso, thresholdIso) as Iterable<DispatchContextRow>
-    for (const row of rows) {
-      visit(row)
-    }
+      .all(thresholdIso, thresholdIso) as DispatchContextRow[]
   }
 
   failDispatch(ctxId: string, error: string): DispatchContextRow | undefined {
-    const ctx = this.getDispatchContextById(ctxId)
+    const ctx = this.db.prepare('SELECT * FROM dispatch_contexts WHERE id = ?').get(ctxId) as
+      | DispatchContextRow
+      | undefined
     if (!ctx) {
       return undefined
     }
@@ -1103,24 +821,22 @@ export class OrchestrationDb {
       .prepare(
         'UPDATE dispatch_contexts SET status = ?, failure_count = ?, last_failure = ? WHERE id = ?'
       )
-      .run(newStatus, newFailureCount, truncateOrchestrationDiagnostic(error), ctxId)
+      .run(newStatus, newFailureCount, error, ctxId)
 
     // Why: back to 'ready' not 'pending' — 'pending' would strand it since promoteReadyTasks only runs when a dep completes.
     const taskStatus: TaskStatus = newStatus === 'circuit_broken' ? 'failed' : 'ready'
     this.db.prepare('UPDATE tasks SET status = ? WHERE id = ?').run(taskStatus, ctx.task_id)
 
-    return this.getDispatchContextById(ctxId)
+    return this.db.prepare('SELECT * FROM dispatch_contexts WHERE id = ?').get(ctxId) as
+      | DispatchContextRow
+      | undefined
   }
 
   // ── Decision Gates ──
 
   createGate(gate: { taskId: string; question: string; options?: string[] }): DecisionGateRow {
     const id = generateId('gate')
-    const options = gate.options ?? []
-    assertOrchestrationStringListFits('Decision gate options', options)
-    assertOrchestrationWriteFits('Decision gate', [gate.taskId, gate.question, ...options])
-    const optionsJson = JSON.stringify(options)
-    assertOrchestrationWriteFits('Decision gate', [gate.taskId, gate.question, optionsJson])
+    const optionsJson = JSON.stringify(gate.options ?? [])
     this.db
       .prepare('INSERT INTO decision_gates (id, task_id, question, options) VALUES (?, ?, ?, ?)')
       .run(id, gate.taskId, gate.question, optionsJson)
@@ -1128,12 +844,13 @@ export class OrchestrationDb {
     this.completeActiveDispatchForTask(gate.taskId)
     this.db.prepare("UPDATE tasks SET status = 'blocked' WHERE id = ?").run(gate.taskId)
 
-    return this.getGate(id)!
+    return this.db.prepare('SELECT * FROM decision_gates WHERE id = ?').get(id) as DecisionGateRow
   }
 
   resolveGate(gateId: string, resolution: string): DecisionGateRow | undefined {
-    assertOrchestrationWriteFits('Decision gate resolution', [gateId, resolution])
-    const gate = this.getGate(gateId)
+    const gate = this.db.prepare('SELECT * FROM decision_gates WHERE id = ?').get(gateId) as
+      | DecisionGateRow
+      | undefined
     if (!gate) {
       return undefined
     }
@@ -1147,7 +864,9 @@ export class OrchestrationDb {
     // Why: set to 'ready' (not the previous status) so the coordinator re-dispatches the worker with the resolution context.
     this.db.prepare("UPDATE tasks SET status = 'ready' WHERE id = ?").run(gate.task_id)
 
-    return this.getGate(gateId)
+    return this.db.prepare('SELECT * FROM decision_gates WHERE id = ?').get(gateId) as
+      | DecisionGateRow
+      | undefined
   }
 
   timeoutGate(gateId: string): DecisionGateRow | undefined {
@@ -1156,81 +875,38 @@ export class OrchestrationDb {
         "UPDATE decision_gates SET status = 'timeout', resolved_at = datetime('now') WHERE id = ?"
       )
       .run(gateId)
-    return this.getGate(gateId)
+    return this.db.prepare('SELECT * FROM decision_gates WHERE id = ?').get(gateId) as
+      | DecisionGateRow
+      | undefined
   }
 
   listGates(filter?: { taskId?: string; status?: GateStatus }): DecisionGateRow[] {
-    const clauses = [`(${GATE_ROW_BYTES_SQL}) <= ${ORCHESTRATION_QUERY_MAX_ROW_UTF8_BYTES}`]
-    const params: Database.BindValue[] = []
     if (filter?.taskId && filter?.status) {
-      clauses.push('task_id = ?', 'status = ?')
-      params.push(filter.taskId, filter.status)
-    } else if (filter?.taskId) {
-      clauses.push('task_id = ?')
-      params.push(filter.taskId)
-    } else if (filter?.status) {
-      clauses.push('status = ?')
-      params.push(filter.status)
+      return this.db
+        .prepare(
+          'SELECT * FROM decision_gates WHERE task_id = ? AND status = ? ORDER BY created_at'
+        )
+        .all(filter.taskId, filter.status) as DecisionGateRow[]
     }
-    return this.readRows<DecisionGateRow>(
-      `SELECT * FROM decision_gates
-       WHERE ${clauses.join(' AND ')}
-       ORDER BY created_at, rowid`,
-      params
-    )
-  }
-
-  countGates(filter?: { taskId?: string; status?: GateStatus }): number {
-    const clauses: string[] = []
-    const params: Database.BindValue[] = []
     if (filter?.taskId) {
-      clauses.push('task_id = ?')
-      params.push(filter.taskId)
+      return this.db
+        .prepare('SELECT * FROM decision_gates WHERE task_id = ? ORDER BY created_at')
+        .all(filter.taskId) as DecisionGateRow[]
     }
     if (filter?.status) {
-      clauses.push('status = ?')
-      params.push(filter.status)
+      return this.db
+        .prepare('SELECT * FROM decision_gates WHERE status = ? ORDER BY created_at')
+        .all(filter.status) as DecisionGateRow[]
     }
-    return this.countRows(
-      `SELECT COUNT(*) AS count FROM decision_gates${
-        clauses.length > 0 ? ` WHERE ${clauses.join(' AND ')}` : ''
-      }`,
-      params
-    )
+    return this.db
+      .prepare('SELECT * FROM decision_gates ORDER BY created_at')
+      .all() as DecisionGateRow[]
   }
 
   getGate(id: string): DecisionGateRow | undefined {
-    return this.db
-      .prepare(
-        `SELECT * FROM decision_gates
-         WHERE id = ? AND (${GATE_ROW_BYTES_SQL}) <= ${ORCHESTRATION_QUERY_MAX_ROW_UTF8_BYTES}`
-      )
-      .get(id) as DecisionGateRow | undefined
-  }
-
-  getLatestGate(filter: { taskId: string; status: GateStatus }): DecisionGateRow | undefined {
-    return this.db
-      .prepare(
-        `SELECT * FROM decision_gates
-         WHERE task_id = ? AND status = ?
-           AND (${GATE_ROW_BYTES_SQL}) <= ${ORCHESTRATION_QUERY_MAX_ROW_UTF8_BYTES}
-         ORDER BY created_at DESC, rowid DESC LIMIT 1`
-      )
-      .get(filter.taskId, filter.status) as DecisionGateRow | undefined
-  }
-
-  restorePendingGateTaskStatuses(): void {
-    this.db
-      .prepare(
-        `UPDATE tasks SET status = 'blocked'
-         WHERE status <> 'blocked'
-           AND EXISTS (
-             SELECT 1 FROM decision_gates
-             WHERE decision_gates.task_id = tasks.id
-               AND decision_gates.status = 'pending'
-           )`
-      )
-      .run()
+    return this.db.prepare('SELECT * FROM decision_gates WHERE id = ?').get(id) as
+      | DecisionGateRow
+      | undefined
   }
 
   // ── Coordinator Runs ──
@@ -1240,24 +916,19 @@ export class OrchestrationDb {
     coordinatorHandle: string
     pollIntervalMs?: number
   }): CoordinatorRun {
-    assertOrchestrationWriteFits('Coordinator run', [run.spec, run.coordinatorHandle])
     const id = generateId('run')
     this.db
       .prepare(
         "INSERT INTO coordinator_runs (id, spec, status, coordinator_handle, poll_interval_ms) VALUES (?, ?, 'running', ?, ?)"
       )
       .run(id, run.spec, run.coordinatorHandle, run.pollIntervalMs ?? 2000)
-    return this.getCoordinatorRun(id)!
+    return this.db.prepare('SELECT * FROM coordinator_runs WHERE id = ?').get(id) as CoordinatorRun
   }
 
   getCoordinatorRun(id: string): CoordinatorRun | undefined {
-    return this.db
-      .prepare(
-        `SELECT * FROM coordinator_runs
-         WHERE id = ?
-           AND (${COORDINATOR_RUN_ROW_BYTES_SQL}) <= ${ORCHESTRATION_QUERY_MAX_ROW_UTF8_BYTES}`
-      )
-      .get(id) as CoordinatorRun | undefined
+    return this.db.prepare('SELECT * FROM coordinator_runs WHERE id = ?').get(id) as
+      | CoordinatorRun
+      | undefined
   }
 
   updateCoordinatorRun(id: string, status: CoordinatorStatus): CoordinatorRun | undefined {
@@ -1274,10 +945,7 @@ export class OrchestrationDb {
   getActiveCoordinatorRun(): CoordinatorRun | undefined {
     return this.db
       .prepare(
-        `SELECT * FROM coordinator_runs
-         WHERE status = 'running'
-           AND (${COORDINATOR_RUN_ROW_BYTES_SQL}) <= ${ORCHESTRATION_QUERY_MAX_ROW_UTF8_BYTES}
-         ORDER BY created_at DESC, rowid DESC LIMIT 1`
+        "SELECT * FROM coordinator_runs WHERE status = 'running' ORDER BY created_at DESC LIMIT 1"
       )
       .get() as CoordinatorRun | undefined
   }
@@ -1285,31 +953,22 @@ export class OrchestrationDb {
   // ── Queries for Coordinator ──
 
   getIdleTerminals(excludeHandles: string[] = []): string[] {
-    const rows = this.db
+    const active = this.db
       .prepare(
-        `WITH handles(handle) AS (
-           SELECT to_handle FROM messages
-           UNION
-           SELECT from_handle FROM messages
-         )
-         SELECT handle FROM handles
-         WHERE length(CAST(handle AS BLOB)) <= ${ORCHESTRATION_QUERY_MAX_ROW_UTF8_BYTES}
-           AND NOT EXISTS (
-             SELECT 1 FROM dispatch_contexts
-             WHERE dispatch_contexts.assignee_handle = handles.handle
-               AND dispatch_contexts.status IN ('pending', 'dispatched')
-           )
-         ORDER BY handle`
+        "SELECT DISTINCT assignee_handle FROM dispatch_contexts WHERE status IN ('pending', 'dispatched')"
       )
-      .iterate() as Iterable<{ handle: string }>
-    const filtered = (function* (): Iterable<{ handle: string }> {
-      for (const row of rows) {
-        if (!excludeHandles.includes(row.handle)) {
-          yield row
-        }
-      }
-    })()
-    return retainOrchestrationQueryRows(filtered).map((row) => row.handle)
+      .all() as { assignee_handle: string }[]
+    const busyHandles = new Set(active.map((r) => r.assignee_handle))
+    for (const h of excludeHandles) {
+      busyHandles.add(h)
+    }
+    // Return handles from message history that aren't busy
+    const allHandles = this.db
+      .prepare(
+        'SELECT DISTINCT to_handle FROM messages UNION SELECT DISTINCT from_handle FROM messages'
+      )
+      .all() as { to_handle: string }[]
+    return [...new Set(allHandles.map((r) => r.to_handle))].filter((h) => !busyHandles.has(h))
   }
 
   // ── Lifecycle ──

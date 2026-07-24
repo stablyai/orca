@@ -17,7 +17,6 @@ function makeSubscriptions(): {
     requestId: 'req-1',
     method: 'runtime.clientEvents.subscribe',
     params: null,
-    retainedParamsBytes: 0,
     callbacks: { onResponse: vi.fn(), onError: vi.fn() }
   })
   subscriptions.set(subscription.requestId, subscription)

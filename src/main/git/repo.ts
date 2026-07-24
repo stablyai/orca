@@ -1,5 +1,5 @@
 /* oxlint-disable max-lines */
-import { existsSync, realpathSync, statSync } from 'node:fs'
+import { existsSync, readFileSync, realpathSync, statSync } from 'node:fs'
 import { basename, dirname, isAbsolute, join, relative, resolve } from 'node:path'
 import { gitExecFileSync, gitExecFileAsync } from './runner'
 import type { BaseRefSearchResult } from '../../shared/types'
@@ -10,7 +10,6 @@ import { parseWslUncPath } from '../../shared/wsl-paths'
 import { toWindowsWslPath } from '../wsl'
 import { buildHostedRemoteCommitUrl, buildHostedRemoteFileUrl } from './hosted-remote-url'
 import { getLocalGitCapabilityCache } from './git-capability-state'
-import { readNodeFileSyncWithinLimit } from '../../shared/node-bounded-file-reader'
 
 type LocalGitExecOptions = {
   wslDistro?: string
@@ -22,7 +21,6 @@ type LocalDefaultBaseRefGitOptions = {
 }
 
 const DEFAULT_BASE_REF_PROBE_TIMEOUT_MS = 15_000
-export const MAX_GIT_MARKER_FILE_BYTES = 64 * 1024
 
 type GitRepoProbeResult = 'repo' | 'not-repo' | 'indeterminate'
 type GitMarkerScanResult = { status: 'valid'; rootPath: string } | { status: 'absent' | 'invalid' }
@@ -278,10 +276,7 @@ function scanWorktreeMarkerSync(worktreePath: string): GitMarkerScanResult {
   if (marker.isFile()) {
     let gitDir: string | null
     try {
-      gitDir = parseGitdirFile(
-        worktreePath,
-        readNodeFileSyncWithinLimit(dotGit, MAX_GIT_MARKER_FILE_BYTES).buffer.toString('utf8')
-      )
+      gitDir = parseGitdirFile(worktreePath, readFileSync(dotGit, 'utf8'))
     } catch {
       return { status: 'invalid' }
     }
@@ -336,10 +331,7 @@ function hasValidLinkedWorktreeGitDirectorySync(gitDir: string): boolean {
     }
     const commonDir = resolveGitMetadataPath(
       gitDir,
-      readNodeFileSyncWithinLimit(
-        join(gitDir, 'commondir'),
-        MAX_GIT_MARKER_FILE_BYTES
-      ).buffer.toString('utf8')
+      readFileSync(join(gitDir, 'commondir'), 'utf8')
     )
     return commonDir !== null && hasValidCommonGitDirectorySync(commonDir)
   } catch {
@@ -353,10 +345,7 @@ function hasValidBareRepoMarkerSync(path: string): boolean {
 
 function gitConfigDeclaresNonBare(gitDir: string): boolean {
   try {
-    const config = readNodeFileSyncWithinLimit(
-      join(gitDir, 'config'),
-      MAX_GIT_MARKER_FILE_BYTES
-    ).buffer.toString('utf8')
+    const config = readFileSync(join(gitDir, 'config'), 'utf8')
     let inCoreSection = false
     for (const line of config.split(/\r?\n/)) {
       const section = line.match(/^\s*\[([^\]]+)\]/)

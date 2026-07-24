@@ -43,11 +43,12 @@ describe.skipIf(process.platform === 'win32')(
     let child: ChildProcessWithoutNullStreams | null
 
     beforeAll(() => {
-      // Why: a prior build can exist while its embedded fs bridge is stale relative to this checkout.
-      execFileSync(process.execPath, [join('config', 'scripts', 'build-relay.mjs')], {
-        cwd: process.cwd(),
-        stdio: 'ignore'
-      })
+      if (!existsSync(BUNDLE_JS)) {
+        execFileSync(process.execPath, [join('config', 'scripts', 'build-relay.mjs')], {
+          cwd: process.cwd(),
+          stdio: 'ignore'
+        })
+      }
     }, 120_000)
 
     afterEach(() => {

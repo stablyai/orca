@@ -2,14 +2,6 @@ import { ipcMain } from 'electron'
 import type { SshConnectionManager } from '../ssh/ssh-connection'
 import type { SshExecOptions } from '../ssh/ssh-connection-utils'
 import { powerShellCommand, powerShellLiteral } from '../ssh/ssh-remote-powershell'
-import {
-  createFilesystemDirectoryLimitState,
-  FILESYSTEM_DIRECTORY_LIMIT_MESSAGE,
-  FILESYSTEM_DIRECTORY_MAX_RETAINED_BYTES,
-  trackFilesystemDirectoryEntry
-} from '../../shared/filesystem-directory-listing-limit'
-import { GrowingByteBuffer } from '../../shared/growing-byte-buffer'
-import { SystemSshOutputTail } from '../ssh/system-ssh-output-tail'
 
 export type RemoteDirEntry = {
   name: string
@@ -110,8 +102,8 @@ async function runBrowseCommand(
   const channel = options ? await conn.exec(command, options) : await conn.exec(command)
 
   return new Promise((resolve, reject) => {
-    const stdout = new GrowingByteBuffer()
-    const stderr = new SystemSshOutputTail()
+    let stdout = ''
+    let stderr = ''
     let exitCode: number | null = null
     let settled = false
     let timeout: ReturnType<typeof setTimeout> | null = null
@@ -163,16 +155,10 @@ async function runBrowseCommand(
     }
 
     const onStdoutData = (data: Buffer): void => {
-      if (data.byteLength > FILESYSTEM_DIRECTORY_MAX_RETAINED_BYTES - stdout.byteLength) {
-        stdout.clear()
-        rejectOnce(new Error(FILESYSTEM_DIRECTORY_LIMIT_MESSAGE))
-        closeChannel()
-        return
-      }
-      stdout.append(data)
+      stdout += data.toString()
     }
     const onStderrData = (data: Buffer): void => {
-      stderr.push(data)
+      stderr += data.toString()
     }
     // `exit` fires before `close`; capture the code to tell a failed `ls` (that still printed `pwd`) from an empty listing.
     const onExit = (code: number | null): void => {
@@ -184,24 +170,21 @@ async function runBrowseCommand(
     const onClose = (): void => {
       // Why: a null exitCode (channel closed without exit status) isn't success; don't treat empty stdout as an empty dir.
       if (exitCode !== 0) {
-        const stderrText = stderr.toString()
         const msg =
-          stderrText.trim() ||
+          stderr.trim() ||
           (exitCode === null
             ? 'Remote listing failed (channel closed without exit status)'
             : `Remote listing failed (exit ${exitCode})`)
         rejectOnce(new RemoteBrowseError(msg, exitCode))
         return
       }
-      const stderrText = stderr.toString()
-      const stdoutText = stdout.toString('utf8')
-      if (stderrText.trim() && !stdoutText.trim()) {
-        rejectOnce(new Error(stderrText.trim()))
+      if (stderr.trim() && !stdout.trim()) {
+        rejectOnce(new Error(stderr.trim()))
         return
       }
 
       // Why: Windows OpenSSH exec emits CRLF; split on \r?\n so a trailing \r doesn't defeat the endsWith('/') dir check or leave a stray CR in names.
-      const lines = stdoutText.trim().split(/\r?\n/)
+      const lines = stdout.trim().split(/\r?\n/)
       if (lines.length === 0) {
         rejectOnce(new Error('Empty response from remote'))
         return
@@ -209,24 +192,16 @@ async function runBrowseCommand(
 
       const resolvedPath = lines[0]
       const entries: RemoteDirEntry[] = []
-      const listingLimit = createFilesystemDirectoryLimitState()
 
       for (let i = 1; i < lines.length; i++) {
         const line = lines[i]
         if (!line || line === './' || line === '../') {
           continue
         }
-        const name = line.endsWith('/') ? line.slice(0, -1) : line
-        try {
-          trackFilesystemDirectoryEntry(listingLimit, { name })
-        } catch (error) {
-          rejectOnce(error instanceof Error ? error : new Error(String(error)))
-          return
-        }
         if (line.endsWith('/')) {
-          entries.push({ name, isDirectory: true })
+          entries.push({ name: line.slice(0, -1), isDirectory: true })
         } else {
-          entries.push({ name, isDirectory: false })
+          entries.push({ name: line, isDirectory: false })
         }
       }
 

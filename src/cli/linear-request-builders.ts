@@ -1,3 +1,4 @@
+import { readFile } from 'node:fs/promises'
 import { isAbsolute, join } from 'node:path'
 import type {
   LinearIssueInclude,
@@ -20,16 +21,6 @@ import {
   getRequiredStringFlagAllowingEmpty
 } from './flags'
 import { RuntimeClientError } from './runtime-client'
-import {
-  NodeReadableTextTooLargeError,
-  readNodeReadableTextWithinLimit
-} from '../shared/node-readable-text'
-import {
-  NodeFileReadTooLargeError,
-  readNodeFileWithinLimit
-} from '../shared/node-bounded-file-reader'
-
-const LINEAR_WRITE_BODY_MAX_BYTES = LINEAR_WRITE_BODY_CAP * 4
 
 const LINEAR_PRIORITY_VALUES = new Map([
   ['none', 0],
@@ -271,35 +262,14 @@ export async function readLinearBody(
 
 async function readLinearBodyFile(path: string, cwd: string): Promise<string> {
   if (path !== '-') {
-    try {
-      const { buffer } = await readNodeFileWithinLimit(
-        isAbsolute(path) ? path : join(cwd, path),
-        LINEAR_WRITE_BODY_MAX_BYTES
-      )
-      return buffer.toString('utf8')
-    } catch (error) {
-      if (error instanceof NodeFileReadTooLargeError) {
-        throw linearBodyTooLargeError()
-      }
-      throw error
-    }
+    return await readFile(isAbsolute(path) ? path : join(cwd, path), 'utf8')
   }
   if (process.stdin.isTTY) {
     throw new RuntimeClientError('invalid_argument', 'stdin body requested but stdin is a TTY')
   }
-  try {
-    return await readNodeReadableTextWithinLimit(process.stdin, LINEAR_WRITE_BODY_MAX_BYTES)
-  } catch (error) {
-    if (error instanceof NodeReadableTextTooLargeError) {
-      throw linearBodyTooLargeError()
-    }
-    throw error
+  const chunks: Buffer[] = []
+  for await (const chunk of process.stdin) {
+    chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(String(chunk)))
   }
-}
-
-function linearBodyTooLargeError(): RuntimeClientError {
-  return new RuntimeClientError(
-    'linear_body_too_large',
-    `Linear body must be at most ${LINEAR_WRITE_BODY_CAP} characters`
-  )
+  return Buffer.concat(chunks).toString('utf8')
 }

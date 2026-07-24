@@ -1,7 +1,6 @@
 import { net } from 'electron'
 import { parse } from 'yaml'
 import { compareVersions, isPrereleaseVersion, isValidVersion } from './updater-fallback'
-import { readFetchResponseTextWithinLimit } from './lib/fetch-response-body'
 
 const ATOM_FEED_URL = 'https://github.com/stablyai/orca/releases.atom'
 const RELEASES_DOWNLOAD_BASE = 'https://github.com/stablyai/orca/releases/download'
@@ -62,7 +61,7 @@ async function fetchReleaseFeedTags(): Promise<ReleaseFeedTag[] | null> {
     if (!res.ok) {
       return null
     }
-    const body = await readFetchResponseTextWithinLimit(res)
+    const body = await res.text()
     const tags: ReleaseFeedTag[] = []
 
     for (const match of body.matchAll(TAG_HREF_RE)) {
@@ -129,7 +128,7 @@ async function hasReadyPlatformManifest(tag: string): Promise<boolean> {
     if (!res.ok) {
       return false
     }
-    const assetNames = getManifestAssetNames(await readFetchResponseTextWithinLimit(res))
+    const assetNames = getManifestAssetNames(await res.text())
     if (assetNames.length === 0) {
       return false
     }

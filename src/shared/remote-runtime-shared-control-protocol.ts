@@ -2,7 +2,6 @@ import { decrypt } from './e2ee-crypto'
 import { encrypt } from './e2ee-crypto'
 import type WebSocket from 'ws'
 import { RemoteRuntimeClientError } from './remote-runtime-client'
-import { serializeRemoteRuntimePayload } from './remote-runtime-memory-limits'
 import {
   invalidRemoteRuntimeResponseError,
   parseRemoteRuntimeRpcFrame
@@ -122,35 +121,8 @@ export function sendSharedControlEncrypted(args: {
   if (!args.ws || args.ws.readyState !== 1 || !args.sharedKey) {
     return false
   }
-  let serialized: string
-  try {
-    serialized = serializeRemoteRuntimePayload(args.payload)
-  } catch {
-    return false
-  }
-  return sendSharedControlEncryptedSerialized({ ...args, serialized })
-}
-
-export function sendSharedControlEncryptedSerialized(args: {
-  state: SharedControlConnectionState
-  ws: WebSocket | null
-  sharedKey: Uint8Array | null
-  serialized: string
-}): boolean {
-  if (
-    (args.state !== 'ready' && args.state !== 'awaiting_authenticated') ||
-    !args.ws ||
-    args.ws.readyState !== 1 ||
-    !args.sharedKey
-  ) {
-    return false
-  }
-  try {
-    args.ws.send(encrypt(args.serialized, args.sharedKey))
-    return true
-  } catch {
-    return false
-  }
+  args.ws.send(encrypt(JSON.stringify(args.payload), args.sharedKey))
+  return true
 }
 
 export function toRemoteRuntimeClientError(error: unknown): RemoteRuntimeClientError {

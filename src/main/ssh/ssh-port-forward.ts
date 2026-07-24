@@ -7,9 +7,6 @@ import type {
   SshPortForwardProvider,
   StartedPortForward
 } from './ssh-port-forward-provider'
-import { mapSettledWithConcurrency } from '../../shared/map-with-concurrency'
-
-export const SSH_FORWARD_CLOSE_CONCURRENCY = 8
 
 export type { PortForwardEntry }
 export type { PortForwardCloseReason }
@@ -182,15 +179,7 @@ export class SshPortForwardManager {
     const toRemove = [...this.forwards.entries()]
       .filter(([, { entry }]) => entry.connectionId === connectionId)
       .map(([id]) => id)
-    const results = await mapSettledWithConcurrency(toRemove, SSH_FORWARD_CLOSE_CONCURRENCY, (id) =>
-      this.removeForwardAsync(id)
-    )
-    const failedClose = results.find(
-      (result): result is PromiseRejectedResult => result.status === 'rejected'
-    )
-    if (failedClose) {
-      throw failedClose.reason
-    }
+    await Promise.all(toRemove.map((id) => this.removeForwardAsync(id)))
   }
 
   dispose(): void {

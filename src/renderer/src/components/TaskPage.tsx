@@ -124,7 +124,6 @@ import {
   getLinearStatePillStyle
 } from '@/components/linear-state-pill-style'
 import { parseTaskQuery, stripRepoQualifiers, withQualifier } from '../../../shared/task-query'
-import { mapSettledWithConcurrency } from '../../../shared/map-with-concurrency'
 import { githubProjectHost } from '../../../shared/github-project-identity'
 import {
   buildLinearTeamUrl,
@@ -385,7 +384,6 @@ const TASK_SEARCH_DEBOUNCE_MS = 300
 const LINEAR_ITEM_LIMIT = 36
 const JIRA_ITEM_LIMIT = 50
 const PR_CHECKS_EAGER_PREFETCH_LIMIT = 20
-const GITLAB_REPO_FETCH_CONCURRENCY = 8
 
 const GITHUB_TASK_GRID_CLASS =
   'min-w-[790px] grid-cols-[72px_minmax(320px,1fr)_84px_100px_92px_122px]'
@@ -4911,12 +4909,7 @@ export default function TaskPage(): React.JSX.Element {
                 return { repoId: repo.id, items: typed.items, error }
               })
 
-    void mapSettledWithConcurrency(eligibleRepos, GITLAB_REPO_FETCH_CONCURRENCY, async (repo) => {
-      if (stale) {
-        return { repoId: repo.id, items: [] as GitLabWorkItem[], error: undefined }
-      }
-      return fetchItems(repo)
-    })
+    void Promise.allSettled(eligibleRepos.map(fetchItems))
       .then((results) => {
         if (stale) {
           return

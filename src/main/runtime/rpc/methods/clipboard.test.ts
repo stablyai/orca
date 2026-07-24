@@ -4,7 +4,6 @@ import type { RpcRequest } from '../core'
 import type { OrcaRuntimeService } from '../../orca-runtime'
 import {
   CLIPBOARD_IMAGE_MAX_BASE64_CHARS,
-  CLIPBOARD_IMAGE_MAX_SOURCE_BYTES,
   CLIPBOARD_IMAGE_TOO_LARGE_ERROR
 } from '../../../../shared/clipboard-image'
 
@@ -19,9 +18,7 @@ vi.mock('../../../window/clipboard-image-temp-file', () => ({
 import {
   CLIPBOARD_IMAGE_UPLOAD_CHUNK_BASE64_CHARS,
   CLIPBOARD_IMAGE_UPLOAD_MAX_CONCURRENT,
-  CLIPBOARD_IMAGE_UPLOAD_MAX_RETAINED_BASE64_CHARS,
   CLIPBOARD_METHODS,
-  getRetainedClipboardImageUploadBase64CharsForTest,
   resetClipboardImageUploadsForTest
 } from './clipboard'
 
@@ -103,7 +100,7 @@ describe('clipboard RPC methods', () => {
   it('accepts chunked uploads and forwards the recorded connectionId on commit', async () => {
     saveClipboardImageBufferAsTempFile.mockResolvedValue('/tmp/orca-paste-image.png')
     const dispatcher = makeDispatcher()
-    const contentBase64 = Buffer.from('png-byte').toString('base64')
+    const contentBase64 = Buffer.from('png-bytes').toString('base64')
 
     const start = await dispatcher.dispatch(
       makeRequest('clipboard.startImageUpload', {
@@ -114,8 +111,8 @@ describe('clipboard RPC methods', () => {
     expect(start.ok).toBe(true)
     const uploadId = (start.ok ? start.result : null) as { uploadId: string }
 
-    const firstChunk = contentBase64.slice(0, 2)
-    const secondChunk = contentBase64.slice(2)
+    const firstChunk = contentBase64.slice(0, 4)
+    const secondChunk = contentBase64.slice(4)
     await expect(
       dispatcher.dispatch(
         makeRequest('clipboard.appendImageUploadChunk', {
@@ -124,7 +121,7 @@ describe('clipboard RPC methods', () => {
           contentBase64: firstChunk
         })
       )
-    ).resolves.toMatchObject({ ok: true, result: { receivedBase64Length: 2 } })
+    ).resolves.toMatchObject({ ok: true, result: { receivedBase64Length: 4 } })
     await expect(
       dispatcher.dispatch(
         makeRequest('clipboard.appendImageUploadChunk', {
@@ -134,15 +131,13 @@ describe('clipboard RPC methods', () => {
         })
       )
     ).resolves.toMatchObject({ ok: true, result: { receivedBase64Length: contentBase64.length } })
-    expect(getRetainedClipboardImageUploadBase64CharsForTest()).toBe(contentBase64.length)
 
     await expect(
       dispatcher.dispatch(
         makeRequest('clipboard.commitImageUpload', { uploadId: uploadId.uploadId })
       )
     ).resolves.toMatchObject({ ok: true, result: '/tmp/orca-paste-image.png' })
-    expect(getRetainedClipboardImageUploadBase64CharsForTest()).toBe(0)
-    expect(saveClipboardImageBufferAsTempFile).toHaveBeenCalledWith(Buffer.from('png-byte'), {
+    expect(saveClipboardImageBufferAsTempFile).toHaveBeenCalledWith(Buffer.from('png-bytes'), {
       connectionId: 'ssh-1'
     })
   })
@@ -166,7 +161,6 @@ describe('clipboard RPC methods', () => {
     )
 
     expect(response.ok).toBe(false)
-    expect(getRetainedClipboardImageUploadBase64CharsForTest()).toBe(0)
     expect(saveClipboardImageBufferAsTempFile).not.toHaveBeenCalled()
   })
 
@@ -189,7 +183,6 @@ describe('clipboard RPC methods', () => {
         })
       )
     ).resolves.toMatchObject({ ok: false })
-    expect(getRetainedClipboardImageUploadBase64CharsForTest()).toBe(0)
     await expect(
       dispatcher.dispatch(
         makeRequest('clipboard.appendImageUploadChunk', {
@@ -265,7 +258,6 @@ describe('clipboard RPC methods', () => {
     )
 
     expect(response.ok).toBe(false)
-    expect(getRetainedClipboardImageUploadBase64CharsForTest()).toBe(0)
     expect(saveClipboardImageBufferAsTempFile).not.toHaveBeenCalled()
   })
 
@@ -298,7 +290,6 @@ describe('clipboard RPC methods', () => {
     )
 
     expect(response.ok).toBe(false)
-    expect(getRetainedClipboardImageUploadBase64CharsForTest()).toBe(0)
     expect(saveClipboardImageBufferAsTempFile).not.toHaveBeenCalled()
   })
 
@@ -311,21 +302,12 @@ describe('clipboard RPC methods', () => {
       })
     )
     const uploadId = (start.ok ? start.result : null) as { uploadId: string }
-    await dispatcher.dispatch(
-      makeRequest('clipboard.appendImageUploadChunk', {
-        uploadId: uploadId.uploadId,
-        offset: 0,
-        contentBase64: 'AAAA'
-      })
-    )
-    expect(getRetainedClipboardImageUploadBase64CharsForTest()).toBe(4)
 
     await expect(
       dispatcher.dispatch(
         makeRequest('clipboard.abortImageUpload', { uploadId: uploadId.uploadId })
       )
     ).resolves.toMatchObject({ ok: true, result: { aborted: true } })
-    expect(getRetainedClipboardImageUploadBase64CharsForTest()).toBe(0)
     await expect(
       dispatcher.dispatch(
         makeRequest('clipboard.abortImageUpload', { uploadId: uploadId.uploadId })
@@ -367,137 +349,22 @@ describe('clipboard RPC methods', () => {
         makeRequest('clipboard.commitImageUpload', { uploadId: uploadId.uploadId })
       )
     ).resolves.toMatchObject({ ok: false })
-    expect(getRetainedClipboardImageUploadBase64CharsForTest()).toBe(0)
     expect(saveClipboardImageBufferAsTempFile).toHaveBeenCalledTimes(1)
-  })
-
-  it('caps retained chunks process-wide and keeps commit memory charged until save completes', async () => {
-    let releaseSave!: () => void
-    const saveGate = new Promise<void>((resolve) => {
-      releaseSave = resolve
-    })
-    saveClipboardImageBufferAsTempFile.mockImplementation(async (content: Buffer) => {
-      expect(content).toHaveLength(CLIPBOARD_IMAGE_MAX_SOURCE_BYTES)
-      await saveGate
-      return '/tmp/orca-paste-image.png'
-    })
-    const dispatcher = makeDispatcher()
-    const firstStart = await dispatcher.dispatch(
-      makeRequest('clipboard.startImageUpload', {
-        expectedBase64Length: CLIPBOARD_IMAGE_UPLOAD_MAX_RETAINED_BASE64_CHARS,
-        connectionId: 'ssh-1'
-      })
-    )
-    const secondStart = await dispatcher.dispatch(
-      makeRequest('clipboard.startImageUpload', {
-        expectedBase64Length: 4,
-        connectionId: 'ssh-2'
-      })
-    )
-    const firstUpload = (firstStart.ok ? firstStart.result : null) as { uploadId: string }
-    const secondUpload = (secondStart.ok ? secondStart.result : null) as { uploadId: string }
-    const fullChunk = 'A'.repeat(CLIPBOARD_IMAGE_UPLOAD_CHUNK_BASE64_CHARS)
-
-    for (
-      let offset = 0;
-      offset < CLIPBOARD_IMAGE_UPLOAD_MAX_RETAINED_BASE64_CHARS;
-      offset += fullChunk.length
-    ) {
-      await expect(
-        dispatcher.dispatch(
-          makeRequest('clipboard.appendImageUploadChunk', {
-            uploadId: firstUpload.uploadId,
-            offset,
-            contentBase64: fullChunk
-          })
-        )
-      ).resolves.toMatchObject({ ok: true })
-    }
-    expect(getRetainedClipboardImageUploadBase64CharsForTest()).toBe(
-      CLIPBOARD_IMAGE_UPLOAD_MAX_RETAINED_BASE64_CHARS
-    )
-
-    await expect(
-      dispatcher.dispatch(
-        makeRequest('clipboard.appendImageUploadChunk', {
-          uploadId: secondUpload.uploadId,
-          offset: 0,
-          contentBase64: 'AAAA'
-        })
-      )
-    ).resolves.toMatchObject({ ok: false })
-    expect(getRetainedClipboardImageUploadBase64CharsForTest()).toBe(
-      CLIPBOARD_IMAGE_UPLOAD_MAX_RETAINED_BASE64_CHARS
-    )
-
-    const commit = dispatcher.dispatch(
-      makeRequest('clipboard.commitImageUpload', { uploadId: firstUpload.uploadId })
-    )
-    await vi.waitFor(() => expect(saveClipboardImageBufferAsTempFile).toHaveBeenCalledTimes(1))
-    expect(getRetainedClipboardImageUploadBase64CharsForTest()).toBe(
-      CLIPBOARD_IMAGE_UPLOAD_MAX_RETAINED_BASE64_CHARS
-    )
-    releaseSave()
-    await expect(commit).resolves.toMatchObject({ ok: true })
-    expect(getRetainedClipboardImageUploadBase64CharsForTest()).toBe(0)
-
-    await expect(
-      dispatcher.dispatch(
-        makeRequest('clipboard.appendImageUploadChunk', {
-          uploadId: secondUpload.uploadId,
-          offset: 0,
-          contentBase64: 'AAAA'
-        })
-      )
-    ).resolves.toMatchObject({ ok: true, result: { receivedBase64Length: 4 } })
-  })
-
-  it('releases retained chunks when test state is reset', async () => {
-    const dispatcher = makeDispatcher()
-    const start = await dispatcher.dispatch(
-      makeRequest('clipboard.startImageUpload', {
-        expectedBase64Length: 4,
-        connectionId: null
-      })
-    )
-    const uploadId = (start.ok ? start.result : null) as { uploadId: string }
-    await dispatcher.dispatch(
-      makeRequest('clipboard.appendImageUploadChunk', {
-        uploadId: uploadId.uploadId,
-        offset: 0,
-        contentBase64: 'AAAA'
-      })
-    )
-    expect(getRetainedClipboardImageUploadBase64CharsForTest()).toBe(4)
-
-    resetClipboardImageUploadsForTest()
-
-    expect(getRetainedClipboardImageUploadBase64CharsForTest()).toBe(0)
   })
 
   it('bounds concurrent uploads and releases slots through TTL cleanup', async () => {
     vi.useFakeTimers()
     const dispatcher = makeDispatcher()
     for (let index = 0; index < CLIPBOARD_IMAGE_UPLOAD_MAX_CONCURRENT; index++) {
-      const start = await dispatcher.dispatch(
-        makeRequest('clipboard.startImageUpload', {
-          expectedBase64Length: 4,
-          connectionId: null
-        })
-      )
-      expect(start).toMatchObject({ ok: true })
-      const uploadId = (start.ok ? start.result : null) as { uploadId: string }
-      await dispatcher.dispatch(
-        makeRequest('clipboard.appendImageUploadChunk', {
-          uploadId: uploadId.uploadId,
-          offset: 0,
-          contentBase64: 'AAAA'
-        })
-      )
+      await expect(
+        dispatcher.dispatch(
+          makeRequest('clipboard.startImageUpload', {
+            expectedBase64Length: 4,
+            connectionId: null
+          })
+        )
+      ).resolves.toMatchObject({ ok: true })
     }
-    expect(getRetainedClipboardImageUploadBase64CharsForTest()).toBe(
-      CLIPBOARD_IMAGE_UPLOAD_MAX_CONCURRENT * 4
-    )
     await expect(
       dispatcher.dispatch(
         makeRequest('clipboard.startImageUpload', {
@@ -508,7 +375,6 @@ describe('clipboard RPC methods', () => {
     ).resolves.toMatchObject({ ok: false })
 
     vi.advanceTimersByTime(5 * 60 * 1000 + 1)
-    expect(getRetainedClipboardImageUploadBase64CharsForTest()).toBe(0)
 
     await expect(
       dispatcher.dispatch(

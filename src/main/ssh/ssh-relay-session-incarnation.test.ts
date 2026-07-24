@@ -51,11 +51,6 @@ vi.mock('../ipc/pty', () => ({
   isCurrentPtyExit: vi.fn(() => true),
   answerStartupTerminalColorQueriesForPty: vi.fn((_id: string, data: string) => data)
 }))
-vi.mock('../ipc/pty-renderer-delivery-router', () => ({
-  routeExternalPtyData: vi.fn(),
-  routeExternalPtyReplay: vi.fn(),
-  routeExternalPtyExit: vi.fn()
-}))
 vi.mock('../providers/ssh-filesystem-dispatch', () => ({
   registerSshFilesystemProvider: vi.fn(),
   unregisterSshFilesystemProvider: vi.fn(),
@@ -68,7 +63,6 @@ vi.mock('../providers/ssh-git-dispatch', () => ({
 
 const { registerSshPtyProvider, clearProviderPtyState, deletePtyOwnership, isCurrentPtyExit } =
   await import('../ipc/pty')
-const { routeExternalPtyExit } = await import('../ipc/pty-renderer-delivery-router')
 
 describe('SSH relay PTY incarnation exits', () => {
   beforeEach(() => {
@@ -79,7 +73,7 @@ describe('SSH relay PTY incarnation exits', () => {
   })
 
   it('drops a stale exit before ownership cleanup and propagates a current incarnation', async () => {
-    const { mockConn, mockStore, mockPortForward, getMainWindow } = createMockDeps()
+    const { mockConn, mockStore, mockPortForward, getMainWindow, mockWindow } = createMockDeps()
     const runtime = { onPtyData: vi.fn(), onPtyExit: vi.fn() }
     const session = new SshRelaySession(
       'target-1',
@@ -105,19 +99,13 @@ describe('SSH relay PTY incarnation exits', () => {
     expect(deletePtyOwnership).not.toHaveBeenCalled()
     expect(mockStore.markSshRemotePtyLease).not.toHaveBeenCalled()
     expect(runtime.onPtyExit).not.toHaveBeenCalled()
-    expect(routeExternalPtyExit).not.toHaveBeenCalled()
+    expect(mockWindow.webContents.send).not.toHaveBeenCalledWith('pty:exit', expect.anything())
 
-    const currentExit = {
-      id: 'ssh:target-1@@pty-reused',
-      code: 7,
-      incarnationId: 'current-incarnation'
-    }
-    onExit(currentExit)
+    onExit({ id: 'ssh:target-1@@pty-reused', code: 7, incarnationId: 'current-incarnation' })
     expect(runtime.onPtyExit).toHaveBeenCalledWith(
       'ssh:target-1@@pty-reused',
       7,
       'current-incarnation'
     )
-    expect(routeExternalPtyExit).toHaveBeenCalledWith(currentExit)
   })
 })

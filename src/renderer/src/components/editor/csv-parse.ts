@@ -1,37 +1,9 @@
 export type CsvParseResult = {
   rows: string[][]
   maxColumns: number
-  limitExceeded: CsvParseLimitExceeded | null
 }
 
 export const CSV_DELIMITER_SNIFF_SCAN_CODE_UNITS = 64 * 1024
-export const CSV_PARSE_LIMITS = {
-  sourceCodeUnits: 50 * 1024 * 1024,
-  rows: 250_000,
-  columnsPerRow: 1024,
-  cells: 1_000_000,
-  retainedCellCodeUnits: 50 * 1024 * 1024
-} as const
-
-export type CsvParseLimitReason =
-  | 'source-code-units'
-  | 'rows'
-  | 'columns-per-row'
-  | 'cells'
-  | 'retained-cell-code-units'
-
-export type CsvParseLimitExceeded = {
-  reason: CsvParseLimitReason
-  limit: number
-}
-
-export type CsvParseLimits = Readonly<{
-  sourceCodeUnits: number
-  rows: number
-  columnsPerRow: number
-  cells: number
-  retainedCellCodeUnits: number
-}>
 
 const LINE_FEED_CODE_UNIT = 10
 const CARRIAGE_RETURN_CODE_UNIT = 13
@@ -40,21 +12,7 @@ const CARRIAGE_RETURN_CODE_UNIT = 13
 // A hand-rolled parser avoids pulling a new dependency (papaparse) for what is
 // a small, well-specified grammar. Inline state machine keeps the hot path
 // allocation-light for large files.
-export function parseCsv(
-  source: string,
-  delimiter: string = ',',
-  limits: CsvParseLimits = CSV_PARSE_LIMITS
-): CsvParseResult {
-  const limited = (reason: CsvParseLimitReason, limit: number): CsvParseResult => ({
-    rows: [],
-    maxColumns: 0,
-    limitExceeded: { reason, limit }
-  })
-
-  if (source.length > limits.sourceCodeUnits) {
-    return limited('source-code-units', limits.sourceCodeUnits)
-  }
-
+export function parseCsv(source: string, delimiter: string = ','): CsvParseResult {
   // Why: strip a leading UTF-8 BOM (U+FEFF). Excel and other spreadsheet tools
   // prepend a BOM to exported CSVs; without this, the BOM contaminates the
   // first header cell and breaks column-name lookups for downstream consumers.
@@ -67,8 +25,6 @@ export function parseCsv(
   let field = ''
   let inQuotes = false
   let maxColumns = 0
-  let cellCount = 0
-  let retainedCellCodeUnits = 0
   // Why: track whether the current record has produced any content — including
   // a quoted-but-empty field like `""`. Without this flag, the EOF flush
   // condition `field.length > 0 || row.length > 0` would drop a record whose
@@ -76,41 +32,18 @@ export function parseCsv(
   // delimiter/newline ever pushed it onto the row.
   let recordHasContent = false
 
-  const pushField = (): CsvParseResult | null => {
-    if (row.length >= limits.columnsPerRow) {
-      return limited('columns-per-row', limits.columnsPerRow)
-    }
-    if (cellCount >= limits.cells) {
-      return limited('cells', limits.cells)
-    }
+  const pushField = (): void => {
     row.push(field)
-    cellCount += 1
     field = ''
-    return null
   }
-  const pushRow = (): CsvParseResult | null => {
-    if (rows.length >= limits.rows) {
-      return limited('rows', limits.rows)
-    }
-    const fieldLimit = pushField()
-    if (fieldLimit) {
-      return fieldLimit
-    }
+  const pushRow = (): void => {
+    pushField()
     if (row.length > maxColumns) {
       maxColumns = row.length
     }
     rows.push(row)
     row = []
     recordHasContent = false
-    return null
-  }
-  const appendToField = (value: string): CsvParseResult | null => {
-    if (retainedCellCodeUnits + value.length > limits.retainedCellCodeUnits) {
-      return limited('retained-cell-code-units', limits.retainedCellCodeUnits)
-    }
-    field += value
-    retainedCellCodeUnits += value.length
-    return null
   }
 
   for (let i = 0; i < source.length; i += 1) {
@@ -119,19 +52,13 @@ export function parseCsv(
     if (inQuotes) {
       if (ch === '"') {
         if (source[i + 1] === '"') {
-          const retainedLimit = appendToField('"')
-          if (retainedLimit) {
-            return retainedLimit
-          }
+          field += '"'
           i += 1
         } else {
           inQuotes = false
         }
       } else {
-        const retainedLimit = appendToField(ch)
-        if (retainedLimit) {
-          return retainedLimit
-        }
+        field += ch
       }
       continue
     }
@@ -144,10 +71,7 @@ export function parseCsv(
       continue
     }
     if (ch === delimiter) {
-      const fieldLimit = pushField()
-      if (fieldLimit) {
-        return fieldLimit
-      }
+      pushField()
       recordHasContent = true
       continue
     }
@@ -155,23 +79,14 @@ export function parseCsv(
       if (source[i + 1] === '\n') {
         i += 1
       }
-      const rowLimit = pushRow()
-      if (rowLimit) {
-        return rowLimit
-      }
+      pushRow()
       continue
     }
     if (ch === '\n') {
-      const rowLimit = pushRow()
-      if (rowLimit) {
-        return rowLimit
-      }
+      pushRow()
       continue
     }
-    const retainedLimit = appendToField(ch)
-    if (retainedLimit) {
-      return retainedLimit
-    }
+    field += ch
     recordHasContent = true
   }
 
@@ -182,13 +97,10 @@ export function parseCsv(
   // empty and nothing has been pushed to `row`, but the record is real and
   // must not be dropped.
   if (field.length > 0 || row.length > 0 || recordHasContent) {
-    const rowLimit = pushRow()
-    if (rowLimit) {
-      return rowLimit
-    }
+    pushRow()
   }
 
-  return { rows, maxColumns, limitExceeded: null }
+  return { rows, maxColumns }
 }
 
 export function detectCsvDelimiter(filePath: string, content: string): string {

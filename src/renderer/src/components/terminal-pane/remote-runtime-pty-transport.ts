@@ -49,7 +49,6 @@ import {
   createRemoteRuntimePtyTextBatcher,
   createRemoteRuntimeViewportBatcher
 } from './remote-runtime-pty-batching'
-import { createRemoteRuntimeViewportClaimInput } from './remote-runtime-viewport-claim-input'
 import {
   REMOTE_RUNTIME_AUTO_RECOVERY_TIMEOUT_MS,
   RemoteRuntimePtyRecoveryState
@@ -174,7 +173,7 @@ export function createRemoteRuntimePtyTransport(
   })
   let lastRecoveryStateKey = ''
   let pendingViewportClaim = false
-  const pendingClaimInput = createRemoteRuntimeViewportClaimInput()
+  let pendingClaimInput = ''
   let terminalCreateRetryWait: {
     timer: ReturnType<typeof setTimeout>
     resolve: (continueRetrying: boolean) => void
@@ -197,7 +196,7 @@ export function createRemoteRuntimePtyTransport(
   const viewportClaimReadyWaiters = new Set<(ready: boolean) => void>()
   const clearPendingViewportClaim = (): void => {
     pendingViewportClaim = false
-    pendingClaimInput.clear()
+    pendingClaimInput = ''
     for (const resolve of viewportClaimReadyWaiters) {
       resolve(false)
     }
@@ -976,7 +975,7 @@ export function createRemoteRuntimePtyTransport(
     }
     if (pendingViewportClaim) {
       // Why: a claim during subscribe/reconnect has no stream record yet; hold its input so the stream emits claim+input in one order.
-      pendingClaimInput.append(text)
+      pendingClaimInput += text
       return
     }
     void callRuntime('terminal.send', {
@@ -1457,7 +1456,8 @@ export function createRemoteRuntimePtyTransport(
     if (pendingViewportClaim && desiredViewport) {
       nextStream.claimViewport(desiredViewport.cols, desiredViewport.rows)
       pendingViewportClaim = false
-      const queuedInput = pendingClaimInput.take()
+      const queuedInput = pendingClaimInput
+      pendingClaimInput = ''
       if (queuedInput) {
         nextStream.sendInput(queuedInput)
       }
@@ -1862,7 +1862,8 @@ export function createRemoteRuntimePtyTransport(
         return true
       }
       if (pendingViewportClaim) {
-        return pendingClaimInput.append(text)
+        pendingClaimInput += text
+        return true
       }
       void callRuntime('terminal.send', {
         terminal: targetHandle,

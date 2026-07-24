@@ -3,14 +3,12 @@ import { existsSync } from 'node:fs'
 import { delimiter, join } from 'node:path'
 import type { RelayDispatcher, RequestContext } from './dispatcher'
 import { applyTerminalGitCredentialPromptGuard } from '../shared/terminal-git-credential-guard'
-import { GrowingByteBuffer } from '../shared/growing-byte-buffer'
 import { mergeGitConfigEnvProtocol } from '../shared/git-credential-prompt-env'
 import { terminateRelaySubprocessTree } from './subprocess-tree-termination'
 
 const DEFAULT_TIMEOUT_MS = 60_000
 const MAX_TIMEOUT_MS = 5 * 60 * 1000
 const MAX_OUTPUT_BYTES = 4 * 1024 * 1024
-export const MAX_CONCURRENT_AGENT_EXECS = 8
 const WINDOWS_BATCH_UNSAFE_ARGUMENTS_ERROR = 'UNSAFE_WINDOWS_BATCH_ARGUMENTS'
 
 function getCmdExePath(): string {
@@ -113,7 +111,6 @@ export class AgentExecHandler {
   // Why: commit-message and PR-field generation can run together for one cwd;
   // operation lanes let cancel target only the user-visible job that stopped.
   private inFlightByLane = new Map<string, InFlightExec>()
-  private activeChildren = new Set<ChildProcess>()
 
   private laneKey(cwd: string, operation: unknown): string {
     return laneKeyFor(cwd, operation)
@@ -162,16 +159,6 @@ export class AgentExecHandler {
       platform: process.platform
     })
 
-    if (this.activeChildren.size >= MAX_CONCURRENT_AGENT_EXECS) {
-      return {
-        stdout: '',
-        stderr: '',
-        exitCode: null,
-        timedOut: false,
-        spawnError: 'Remote agent execution capacity reached'
-      }
-    }
-
     return new Promise<ExecResult>((resolve) => {
       let child
       try {
@@ -192,13 +179,11 @@ export class AgentExecHandler {
         })
         return
       }
-      this.activeChildren.add(child)
-      child.once('close', () => {
-        this.activeChildren.delete(child)
-      })
 
-      const stdout = new GrowingByteBuffer()
-      const stderr = new GrowingByteBuffer()
+      let stdout = ''
+      let stderr = ''
+      let stdoutBytes = 0
+      let stderrBytes = 0
       let timedOut = false
       let canceled = false
       let settled = false
@@ -221,8 +206,6 @@ export class AgentExecHandler {
         if (laneKey && entry && this.inFlightByLane.get(laneKey) === entry) {
           this.inFlightByLane.delete(laneKey)
         }
-        stdout.clear()
-        stderr.clear()
         resolve(result)
       }
       const cancelCurrent = (): void => {
@@ -248,46 +231,36 @@ export class AgentExecHandler {
         // also Windows wraps `.cmd` shims in cmd.exe, so the immediate child
         // is not the real node.exe process.
         terminateRelaySubprocessTree(child)
-        finish({
-          stdout: stdout.toString(),
-          stderr: stderr.toString(),
-          exitCode: null,
-          timedOut,
-          canceled
-        })
+        finish({ stdout, stderr, exitCode: null, timedOut, canceled })
       }, timeoutMs)
 
       const onStdoutData = (chunk: Buffer): void => {
-        if (stdout.byteLength + chunk.byteLength > MAX_OUTPUT_BYTES) {
+        stdoutBytes += chunk.byteLength
+        if (stdoutBytes > MAX_OUTPUT_BYTES) {
           terminateRelaySubprocessTree(child)
           return
         }
-        stdout.append(chunk)
+        stdout += chunk.toString('utf-8')
       }
       const onStderrData = (chunk: Buffer): void => {
-        if (stderr.byteLength + chunk.byteLength > MAX_OUTPUT_BYTES) {
+        stderrBytes += chunk.byteLength
+        if (stderrBytes > MAX_OUTPUT_BYTES) {
           terminateRelaySubprocessTree(child)
           return
         }
-        stderr.append(chunk)
+        stderr += chunk.toString('utf-8')
       }
       const onError = (error: Error): void => {
         finish({
-          stdout: stdout.toString(),
-          stderr: stderr.toString(),
+          stdout,
+          stderr,
           exitCode: null,
           timedOut,
           spawnError: error.message
         })
       }
       const onClose = (code: number | null): void => {
-        finish({
-          stdout: stdout.toString(),
-          stderr: stderr.toString(),
-          exitCode: code,
-          timedOut,
-          canceled
-        })
+        finish({ stdout, stderr, exitCode: code, timedOut, canceled })
       }
       child.stdout?.on('data', onStdoutData)
       child.stderr?.on('data', onStderrData)

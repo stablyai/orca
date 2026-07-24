@@ -47,14 +47,6 @@ describe('verifyPackageCliBin', () => {
     })
   })
 
-  it('rejects a compiled CLI with a missing runtime dependency', () => {
-    const { projectDir } = makeProjectWithCli(
-      '#!/usr/bin/env node\nrequire("./missing-runtime-dependency")\n'
-    )
-
-    expect(() => verifyPackageCliBin({ projectDir, runHelp: true })).toThrow()
-  })
-
   it('rejects an empty package bin target', () => {
     const { projectDir } = makeProjectWithCli('')
 

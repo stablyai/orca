@@ -4,12 +4,6 @@ import { toast } from 'sonner'
 import type { AppState } from '../types'
 import { githubRepoIdentityKey } from '../../../../shared/github-repository-identity-key'
 import { githubProjectIdentityKey } from '../../../../shared/github-project-identity'
-import { mapWithConcurrency } from '../../../../shared/map-with-concurrency'
-import { PR_REFRESH_VISIBLE_CANDIDATE_LIMIT } from '../../../../shared/pr-refresh-memory-limits'
-import {
-  GITHUB_WORK_ITEM_FETCH_CONCURRENCY,
-  GitHubWorkItemRequestSlots
-} from './github-work-item-request-slots'
 import type {
   ClassifiedError,
   GitHubOwnerRepo,
@@ -704,15 +698,28 @@ export function _clearGitHubPRRefreshStartedEntriesForTest(): void {
   prRefreshStartedHostedReviewEntries.clear()
 }
 
-// Why: the main-side gate is behind IPC, so renderer fan-out must be bounded before promises retain every request.
-const workItemRequestSlots = new GitHubWorkItemRequestSlots()
+// Why: cap fan-out at the renderer boundary (main-side gate is behind IPC, can't stop a stampede in time); 8 balances responsiveness vs gh rate limits.
+const WORK_ITEM_FETCH_CONCURRENCY = 8
+let workItemFetchInFlight = 0
+const workItemFetchWaiters: (() => void)[] = []
 
-function acquireWorkItemSlot(): Promise<void> {
-  return workItemRequestSlots.acquire()
+async function acquireWorkItemSlot(): Promise<void> {
+  if (workItemFetchInFlight < WORK_ITEM_FETCH_CONCURRENCY) {
+    workItemFetchInFlight += 1
+    return
+  }
+  await new Promise<void>((resolve) => workItemFetchWaiters.push(resolve))
+  // Why: the resolver already claimed the slot on our behalf, so don't re-increment here.
 }
 
 function releaseWorkItemSlot(): void {
-  workItemRequestSlots.release()
+  const next = workItemFetchWaiters.shift()
+  if (next) {
+    // Hand the slot off directly (net count unchanged) so a third caller can't race into the cap between decrement and resolve.
+    next()
+    return
+  }
+  workItemFetchInFlight -= 1
 }
 
 export function workItemsCacheKey(
@@ -2653,10 +2660,8 @@ export const createGitHubSlice: StateCreator<AppState, [], [], GitHubSlice> = (s
     }
 
     const request = (async () => {
-      let acquiredSlot = false
+      await acquireWorkItemSlot()
       try {
-        await acquireWorkItemSlot()
-        acquiredSlot = true
         const envelope = await listGitHubWorkItemsForRepo(requestContext, {
           limit,
           query: query || undefined,
@@ -2708,9 +2713,7 @@ export const createGitHubSlice: StateCreator<AppState, [], [], GitHubSlice> = (s
         }
         throw err
       } finally {
-        if (acquiredSlot) {
-          releaseWorkItemSlot()
-        }
+        releaseWorkItemSlot()
         inflightWorkItemsRequests.delete(inflightKey)
       }
     })()
@@ -2732,10 +2735,8 @@ export const createGitHubSlice: StateCreator<AppState, [], [], GitHubSlice> = (s
     let requestFailureCount = 0
     let unavailableFailureCount = 0
     let skippedSourceCount = 0
-    const perProjectResults = await mapWithConcurrency(
-      repos,
-      GITHUB_WORK_ITEM_FETCH_CONCURRENCY,
-      async (r) => {
+    const perProjectResults = await Promise.all(
+      repos.map(async (r) => {
         try {
           return await state.fetchWorkItems(r.repoId, r.path, perRepoLimit, query, {
             ...options,
@@ -2770,7 +2771,7 @@ export const createGitHubSlice: StateCreator<AppState, [], [], GitHubSlice> = (s
           failedCount += 1
           return [] as GitHubWorkItem[]
         }
-      }
+      })
     )
     const merged = sortWorkItemsByNumber(perProjectResults.flat()).slice(0, displayLimit)
     // Why: only claim global unavailability when every eligible source failed for a reachability reason; skipped SSH repos aren't GitHub sources here.
@@ -2786,28 +2787,24 @@ export const createGitHubSlice: StateCreator<AppState, [], [], GitHubSlice> = (s
       return { items: [], failedCount: 0 }
     }
     let failedCount = 0
-    const perProjectResults = await mapWithConcurrency(
-      repos,
-      GITHUB_WORK_ITEM_FETCH_CONCURRENCY,
-      async (r) => {
-        let acquiredSlot = false
+    const perProjectResults = await Promise.all(
+      repos.map(async (r) => {
+        const requestState = get()
+        const repo = findRepoForGitHubOwner(requestState, r.repoId, r.path)
+        const requestSettings = getGitHubWorkItemSourceSettings(
+          requestState.settings,
+          repo,
+          r.sourceContext
+        )
+        const requestContext = getGitHubWorkItemRequestContext(
+          requestState,
+          requestSettings,
+          r.repoId,
+          r.path,
+          r.sourceContext
+        )
+        await acquireWorkItemSlot()
         try {
-          await acquireWorkItemSlot()
-          acquiredSlot = true
-          const requestState = get()
-          const repo = findRepoForGitHubOwner(requestState, r.repoId, r.path)
-          const requestSettings = getGitHubWorkItemSourceSettings(
-            requestState.settings,
-            repo,
-            r.sourceContext
-          )
-          const requestContext = getGitHubWorkItemRequestContext(
-            requestState,
-            requestSettings,
-            r.repoId,
-            r.path,
-            r.sourceContext
-          )
           const envelope = await listGitHubWorkItemsForRepo(requestContext, {
             limit: perRepoLimit,
             query: query || undefined,
@@ -2829,11 +2826,9 @@ export const createGitHubSlice: StateCreator<AppState, [], [], GitHubSlice> = (s
           failedCount += 1
           return [] as GitHubWorkItem[]
         } finally {
-          if (acquiredSlot) {
-            releaseWorkItemSlot()
-          }
+          releaseWorkItemSlot()
         }
-      }
+      })
     )
     const merged = sortWorkItemsByNumber(perProjectResults.flat()).slice(0, displayLimit)
     return { items: merged, failedCount }
@@ -2844,15 +2839,11 @@ export const createGitHubSlice: StateCreator<AppState, [], [], GitHubSlice> = (s
       return { totalCount: 0, totalPages: 0 }
     }
     const normalizedLimit = Math.max(1, Math.floor(perRepoLimit))
-    const counts = await mapWithConcurrency(
-      repos,
-      GITHUB_WORK_ITEM_FETCH_CONCURRENCY,
-      async (r) => {
+    const counts = await Promise.all(
+      repos.map(async (r) => {
         // Why: same stampede cap as item-fetch — without a slot a 90-repo selection fires 90 concurrent count IPCs before the main-side rate-limit guard sees the first 403.
-        let acquiredSlot = false
+        await acquireWorkItemSlot()
         try {
-          await acquireWorkItemSlot()
-          acquiredSlot = true
           const requestState = get()
           const repo = findRepoForGitHubOwner(requestState, r.repoId, r.path)
           const requestSettings = getGitHubWorkItemSourceSettings(
@@ -2871,11 +2862,9 @@ export const createGitHubSlice: StateCreator<AppState, [], [], GitHubSlice> = (s
         } catch {
           return 0
         } finally {
-          if (acquiredSlot) {
-            releaseWorkItemSlot()
-          }
+          releaseWorkItemSlot()
         }
-      }
+      })
     )
     return {
       totalCount: counts.reduce((sum, count) => sum + count, 0),
@@ -3916,18 +3905,14 @@ export const createGitHubSlice: StateCreator<AppState, [], [], GitHubSlice> = (s
 
   reportVisibleGitHubPRRefreshCandidates: (worktreeIds, generation) => {
     const state = get()
+    const candidates = worktreeIds
+      .map((id) => {
+        const worktree = findWorktreeById(state, id)
+        return worktree ? buildPRRefreshCandidate(state, worktree) : null
+      })
+      .filter((candidate): candidate is GitHubPRRefreshCandidate => candidate !== null)
     const localCandidates: GitHubPRRefreshCandidate[] = []
-    let candidateCount = 0
-    for (const id of worktreeIds) {
-      const worktree = findWorktreeById(state, id)
-      if (!worktree) {
-        continue
-      }
-      const candidate = buildPRRefreshCandidate(state, worktree)
-      if (!candidate) {
-        continue
-      }
-      candidateCount += 1
+    for (const candidate of candidates) {
       if (getPRRefreshRuntimeRepoTarget(state, candidate)) {
         void get().fetchPRForBranch(candidate.repoPath, candidate.branch, {
           repoId: candidate.repoId,
@@ -3936,11 +3921,10 @@ export const createGitHubSlice: StateCreator<AppState, [], [], GitHubSlice> = (s
           fallbackPRNumber: candidate.fallbackPRNumber ?? null,
           fallbackPRSource: candidate.fallbackPRSource ?? null
         })
-      } else if (shouldEnqueueLocalPRRefresh(candidate)) {
-        localCandidates.push(candidate)
+        continue
       }
-      if (candidateCount >= PR_REFRESH_VISIBLE_CANDIDATE_LIMIT) {
-        break
+      if (shouldEnqueueLocalPRRefresh(candidate)) {
+        localCandidates.push(candidate)
       }
     }
     const reportVisible = window.api.gh.reportVisiblePRRefreshCandidates

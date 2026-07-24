@@ -3,7 +3,6 @@ import {
   listRuntimeMarkdownDocuments,
   type RuntimeFileOperationArgs
 } from '@/runtime/runtime-file-client'
-import { MarkdownDocumentListingCapacityError } from '../../../../shared/markdown-document-listing-limits'
 
 type MarkdownDocumentListLoader = (
   context: RuntimeFileOperationArgs,
@@ -20,9 +19,7 @@ type InFlightMarkdownDocumentList = {
 }
 
 const MARKDOWN_DOCUMENT_LIST_JOIN_WINDOW_MS = 30_000
-export const MARKDOWN_DOCUMENT_LIST_MAX_IN_FLIGHT = 16
 const inFlightMarkdownDocumentLists = new Map<string, InFlightMarkdownDocumentList>()
-let activeMarkdownDocumentListLoads = 0
 
 export function getMarkdownDocumentListRequestKey(
   context: RuntimeFileOperationArgs,
@@ -57,22 +54,10 @@ export function requestSharedMarkdownDocumentList(
   if (existing && !options.requireFresh) {
     return existing.request
   }
-  if (activeMarkdownDocumentListLoads >= MARKDOWN_DOCUMENT_LIST_MAX_IN_FLIGHT) {
-    return Promise.reject(new MarkdownDocumentListingCapacityError())
-  }
 
   // Why: split Markdown panes mount together and otherwise launch identical
   // whole-worktree local/SSH scans; mutation refreshes bypass older snapshots.
-  activeMarkdownDocumentListLoads += 1
-  let loaded: Promise<MarkdownDocument[]>
-  try {
-    loaded = load(context, rootPath)
-  } catch (error) {
-    activeMarkdownDocumentListLoads -= 1
-    return Promise.reject(error)
-  }
-  const request = loaded.finally(() => {
-    activeMarkdownDocumentListLoads -= 1
+  const request = load(context, rootPath).finally(() => {
     if (inFlightMarkdownDocumentLists.get(key)?.request === request) {
       inFlightMarkdownDocumentLists.delete(key)
     }

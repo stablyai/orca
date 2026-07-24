@@ -25,18 +25,6 @@ import {
 // (and mobile's typecheck) don't compile this file's Node-only deps.
 import { RemoteRuntimeClientError } from './remote-runtime-client-error'
 import {
-  isRemoteRuntimeBinaryFrameWithinLimit,
-  REMOTE_RUNTIME_MAX_WEBSOCKET_FRAME_BYTES,
-  serializeRemoteRuntimePayload,
-  serializeRemoteRuntimeRpcRequest
-} from './remote-runtime-memory-limits'
-import {
-  prepareRemoteRuntimeRequest,
-  releaseRemoteRuntimePreparedRequest,
-  takeRemoteRuntimePreparedRequest
-} from './remote-runtime-prepared-request-admission'
-import { parseRemoteRuntimeJsonText } from './remote-runtime-request-frames'
-import {
   startRemoteRuntimeSocketLiveness,
   type RemoteRuntimeSocketLivenessMonitor,
   type RemoteRuntimeSocketLivenessOptions
@@ -82,23 +70,8 @@ export async function sendRemoteRuntimeRequest<TResult>(
   params: unknown,
   timeoutMs: number
 ): Promise<RuntimeRpcResponse<TResult>> {
-  const requestId = randomUUID()
-  const serializedAuth = serializeRemoteRuntimePayload({
-    type: 'e2ee_auth',
-    deviceToken: pairing.deviceToken
-  })
-  const pendingRequest = {
-    preparedRequest: prepareRemoteRuntimeRequest(new Map(), () =>
-      serializeRemoteRuntimeRpcRequest({
-        requestId,
-        deviceToken: pairing.deviceToken,
-        method,
-        params
-      })
-    )
-  }
-  let serializedRequest = takeRemoteRuntimePreparedRequest(pendingRequest)
-  return await new Promise<RuntimeRpcResponse<TResult>>((resolve, reject) => {
+  return await new Promise((resolve, reject) => {
+    const requestId = randomUUID()
     const keyPair = generateKeyPair()
     const serverPublicKey = publicKeyFromBase64(pairing.publicKeyB64)
     const sharedKey = deriveSharedKey(keyPair.secretKey, serverPublicKey)
@@ -168,7 +141,7 @@ export async function sendRemoteRuntimeRequest<TResult>(
     }
 
     try {
-      ws = new WebSocket(pairing.endpoint, { maxPayload: REMOTE_RUNTIME_MAX_WEBSOCKET_FRAME_BYTES })
+      ws = new WebSocket(pairing.endpoint)
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error)
       finish({
@@ -261,7 +234,7 @@ export async function sendRemoteRuntimeRequest<TResult>(
     function handleReadyFrame(frame: string): void {
       let ready: unknown
       try {
-        ready = parseRemoteRuntimeJsonText(frame)
+        ready = JSON.parse(frame)
       } catch {
         finish({
           ok: false,
@@ -287,13 +260,15 @@ export async function sendRemoteRuntimeRequest<TResult>(
         return
       }
       state = 'awaiting_authenticated'
-      ws?.send(encrypt(serializedAuth, sharedKey))
+      ws?.send(
+        encrypt(JSON.stringify({ type: 'e2ee_auth', deviceToken: pairing.deviceToken }), sharedKey)
+      )
     }
 
     function handleAuthenticatedFrame(plaintext: string): void {
       let authenticated: unknown
       try {
-        authenticated = parseRemoteRuntimeJsonText(plaintext)
+        authenticated = JSON.parse(plaintext)
       } catch {
         finish({
           ok: false,
@@ -322,25 +297,23 @@ export async function sendRemoteRuntimeRequest<TResult>(
         return
       }
       state = 'ready'
-      const request = serializedRequest
-      serializedRequest = null
-      if (request === null) {
-        finish({
-          ok: false,
-          error: new RemoteRuntimeClientError(
-            'remote_runtime_unavailable',
-            'Remote Orca runtime request was released before it could be sent.'
-          )
-        })
-        return
-      }
-      ws?.send(encrypt(request, sharedKey))
+      ws?.send(
+        encrypt(
+          JSON.stringify({
+            id: requestId,
+            deviceToken: pairing.deviceToken,
+            method,
+            params
+          }),
+          sharedKey
+        )
+      )
     }
 
     function handleRpcFrame(plaintext: string): void {
       let raw: unknown
       try {
-        raw = parseRemoteRuntimeJsonText(plaintext)
+        raw = JSON.parse(plaintext)
       } catch {
         finish({
           ok: false,
@@ -379,7 +352,7 @@ export async function sendRemoteRuntimeRequest<TResult>(
       }
       finish({ ok: true, response })
     }
-  }).finally(() => releaseRemoteRuntimePreparedRequest(pendingRequest))
+  })
 }
 
 export async function subscribeRemoteRuntimeRequest<TResult>(
@@ -390,18 +363,8 @@ export async function subscribeRemoteRuntimeRequest<TResult>(
   callbacks: RemoteRuntimeSubscriptionCallbacks<TResult>,
   livenessOptions?: RemoteRuntimeSocketLivenessOptions
 ): Promise<RemoteRuntimeSubscription> {
-  const requestId = randomUUID()
-  const serializedRequest = serializeRemoteRuntimeRpcRequest({
-    requestId,
-    deviceToken: pairing.deviceToken,
-    method,
-    params
-  })
-  const serializedAuth = serializeRemoteRuntimePayload({
-    type: 'e2ee_auth',
-    deviceToken: pairing.deviceToken
-  })
   return await new Promise((resolve, reject) => {
+    const requestId = randomUUID()
     const keyPair = generateKeyPair()
     const serverPublicKey = publicKeyFromBase64(pairing.publicKeyB64)
     const sharedKey = deriveSharedKey(keyPair.secretKey, serverPublicKey)
@@ -487,12 +450,7 @@ export async function subscribeRemoteRuntimeRequest<TResult>(
     }
 
     const sendBinary = (bytes: Uint8Array<ArrayBufferLike>): boolean => {
-      if (
-        !isRemoteRuntimeBinaryFrameWithinLimit(bytes) ||
-        state !== 'ready' ||
-        !ws ||
-        ws.readyState !== WebSocket.OPEN
-      ) {
+      if (state !== 'ready' || !ws || ws.readyState !== WebSocket.OPEN) {
         return false
       }
       ensureSendQueue(ws).enqueue(Buffer.from(encryptBytes(bytes, sharedKey)))
@@ -525,7 +483,7 @@ export async function subscribeRemoteRuntimeRequest<TResult>(
     }
 
     try {
-      ws = new WebSocket(pairing.endpoint, { maxPayload: REMOTE_RUNTIME_MAX_WEBSOCKET_FRAME_BYTES })
+      ws = new WebSocket(pairing.endpoint)
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error)
       fail(new RemoteRuntimeClientError('invalid_argument', `Invalid remote endpoint: ${message}`))
@@ -642,7 +600,7 @@ export async function subscribeRemoteRuntimeRequest<TResult>(
     function handleReadyFrame(frame: string): void {
       let ready: unknown
       try {
-        ready = parseRemoteRuntimeJsonText(frame)
+        ready = JSON.parse(frame)
       } catch {
         fail(
           new RemoteRuntimeClientError(
@@ -666,13 +624,15 @@ export async function subscribeRemoteRuntimeRequest<TResult>(
         return
       }
       state = 'awaiting_authenticated'
-      ws?.send(encrypt(serializedAuth, sharedKey))
+      ws?.send(
+        encrypt(JSON.stringify({ type: 'e2ee_auth', deviceToken: pairing.deviceToken }), sharedKey)
+      )
     }
 
     function handleAuthenticatedFrame(plaintext: string): void {
       let authenticated: unknown
       try {
-        authenticated = parseRemoteRuntimeJsonText(plaintext)
+        authenticated = JSON.parse(plaintext)
       } catch {
         fail(
           new RemoteRuntimeClientError(
@@ -694,14 +654,24 @@ export async function subscribeRemoteRuntimeRequest<TResult>(
         return
       }
       state = 'ready'
-      ws?.send(encrypt(serializedRequest, sharedKey))
+      ws?.send(
+        encrypt(
+          JSON.stringify({
+            id: requestId,
+            deviceToken: pairing.deviceToken,
+            method,
+            params
+          }),
+          sharedKey
+        )
+      )
       succeed()
     }
 
     function handleRpcFrame(plaintext: string): void {
       let raw: unknown
       try {
-        raw = parseRemoteRuntimeJsonText(plaintext)
+        raw = JSON.parse(plaintext)
       } catch {
         fail(
           new RemoteRuntimeClientError(

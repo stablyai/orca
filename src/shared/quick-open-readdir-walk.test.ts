@@ -1,18 +1,18 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
-const { lstatMock, opendirMock } = vi.hoisted(() => ({
+const { lstatMock, readdirMock } = vi.hoisted(() => ({
   lstatMock: vi.fn(),
-  opendirMock: vi.fn()
+  readdirMock: vi.fn()
 }))
 
 vi.mock('fs/promises', async () => {
   const actual = await vi.importActual<typeof import('fs/promises')>('fs/promises') // eslint-disable-line @typescript-eslint/consistent-type-imports -- vi.importActual requires inline import()
   lstatMock.mockImplementation(actual.lstat)
-  opendirMock.mockImplementation(actual.opendir)
+  readdirMock.mockImplementation(actual.readdir)
   return {
     ...actual,
     lstat: lstatMock,
-    opendir: opendirMock
+    readdir: readdirMock
   }
 })
 
@@ -238,7 +238,7 @@ describe('quick-open readdir walk', () => {
       })
     ).resolves.toEqual(['.local/config.toml', 'dist/generated.js'])
 
-    const walkedPaths = opendirMock.mock.calls.map(([path]) => path)
+    const walkedPaths = readdirMock.mock.calls.map(([path]) => path)
     expect(walkedPaths).toContain(join(root, 'dist'))
     expect(walkedPaths).toContain(join(root, '.local'))
     expect(walkedPaths).not.toContain(join(root, '.local', 'share'))
@@ -256,12 +256,12 @@ describe('quick-open readdir walk', () => {
     const actual = await vi.importActual<typeof import('node:fs/promises')>('node:fs/promises') // eslint-disable-line @typescript-eslint/consistent-type-imports -- vi.importActual requires inline import()
     let activeReads = 0
     let maxActiveReads = 0
-    opendirMock.mockImplementation(async (...args: Parameters<typeof actual.opendir>) => {
+    readdirMock.mockImplementation(async (...args: Parameters<typeof actual.readdir>) => {
       activeReads++
       maxActiveReads = Math.max(maxActiveReads, activeReads)
       await new Promise((resolve) => setTimeout(resolve, 5))
       try {
-        return await actual.opendir(...args)
+        return await actual.readdir(...args)
       } finally {
         activeReads--
       }
@@ -277,7 +277,7 @@ describe('quick-open readdir walk', () => {
       expect(maxActiveReads).toBeGreaterThan(1)
       expect(maxActiveReads).toBeLessThanOrEqual(32)
     } finally {
-      opendirMock.mockImplementation(actual.opendir)
+      readdirMock.mockImplementation(actual.readdir)
     }
   })
 
@@ -328,7 +328,7 @@ describe('quick-open readdir walk', () => {
     ).resolves.toEqual([])
   })
 
-  it('discards entries when a collapsed directory changes during opendir', async () => {
+  it('discards entries when a collapsed directory changes during readdir', async () => {
     const root = await makeTempRoot()
     const outsideRoot = await makeTempRoot()
     await mkdirRel(root, 'dist')
@@ -336,13 +336,13 @@ describe('quick-open readdir walk', () => {
     const actual = await vi.importActual<typeof import('node:fs/promises')>('node:fs/promises') // eslint-disable-line @typescript-eslint/consistent-type-imports -- vi.importActual requires inline import()
     const distPath = join(root, 'dist')
     let swapped = false
-    opendirMock.mockImplementation(async (...args: Parameters<typeof actual.opendir>) => {
+    readdirMock.mockImplementation(async (...args: Parameters<typeof actual.readdir>) => {
       if (!swapped && args[0] === distPath) {
         swapped = true
         await rename(distPath, join(root, 'old-dist'))
         await symlink(outsideRoot, distPath, 'dir')
       }
-      return actual.opendir(...args)
+      return actual.readdir(...args)
     })
 
     try {
@@ -354,7 +354,7 @@ describe('quick-open readdir walk', () => {
         })
       ).resolves.toEqual([])
     } finally {
-      opendirMock.mockImplementation(actual.opendir)
+      readdirMock.mockImplementation(actual.readdir)
     }
   })
 
@@ -373,7 +373,7 @@ describe('quick-open readdir walk', () => {
     ).resolves.toEqual(['foo/a.ts', 'foo/bar/b.ts'])
 
     expect(
-      opendirMock.mock.calls.filter(([path]) => path === join(root, 'foo', 'bar'))
+      readdirMock.mock.calls.filter(([path]) => path === join(root, 'foo', 'bar'))
     ).toHaveLength(1)
   })
 
@@ -395,18 +395,14 @@ describe('quick-open readdir walk', () => {
   it('keeps the default safety cap for a very large collapsed directory', async () => {
     const root = await makeTempRoot()
     await mkdirRel(root, 'dist')
-    opendirMock.mockResolvedValueOnce({
-      async *[Symbol.asyncIterator]() {
-        for (let index = 0; index <= QUICK_OPEN_READDIR_MAX_FILES; index += 1) {
-          yield {
-            name: `file-${index}.ts`,
-            isDirectory: () => false,
-            isFile: () => true,
-            isSymbolicLink: () => false
-          }
-        }
-      }
-    })
+    readdirMock.mockResolvedValueOnce(
+      Array.from({ length: QUICK_OPEN_READDIR_MAX_FILES + 1 }, (_, index) => ({
+        name: `file-${index}.ts`,
+        isDirectory: () => false,
+        isFile: () => true,
+        isSymbolicLink: () => false
+      }))
+    )
 
     // Why: directory collapse prevents generated trees from flooding the relay;
     // the Git fallback must reject rather than silently return a partial list.
@@ -433,7 +429,7 @@ describe('quick-open readdir walk', () => {
 
     await expect(
       listQuickOpenFilesWithReaddir(root, {
-        budget: createQuickOpenReaddirBudget({ nowMs: Date.now() - 2_000, timeoutMs: 1_000 })
+        budget: { remainingFiles: 10, deadlineMs: Date.now() - 1_000 }
       })
     ).rejects.toThrow('File listing timed out')
   })
@@ -533,12 +529,12 @@ describe('quick-open readdir walk', () => {
     ).rejects.toSatisfy(isFileListingCancellation)
   })
 
-  it('rejects when cancellation lands during an empty opendir batch', async () => {
+  it('rejects when cancellation lands during an empty readdir batch', async () => {
     const root = await makeTempRoot()
     const controller = new AbortController()
     const actual = await vi.importActual<typeof import('node:fs/promises')>('node:fs/promises') // eslint-disable-line @typescript-eslint/consistent-type-imports -- vi.importActual requires inline import()
-    opendirMock.mockImplementationOnce(async (...args: Parameters<typeof actual.opendir>) => {
-      const entries = await actual.opendir(...args)
+    readdirMock.mockImplementationOnce(async (...args: Parameters<typeof actual.readdir>) => {
+      const entries = await actual.readdir(...args)
       controller.abort()
       return entries
     })

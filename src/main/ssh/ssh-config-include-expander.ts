@@ -1,20 +1,11 @@
-import { existsSync, realpathSync } from 'node:fs'
+import { existsSync, globSync, readFileSync, realpathSync, statSync } from 'node:fs'
 import { homedir, hostname, userInfo } from 'node:os'
 import { posix, win32 } from 'node:path'
-import { resolveBoundedSshConfigGlob, type SshConfigPathApi } from './ssh-config-bounded-glob'
-import {
-  admitSshConfigIncludeDepth,
-  appendSshConfigExpandedLine,
-  createSshConfigExpansionBudget,
-  readSshConfigSourceFile,
-  SSH_CONFIG_INCLUDE_LIMITS,
-  type SshConfigExpansionBudget
-} from './ssh-config-expansion-budget'
 
-type PathApi = SshConfigPathApi
+type PathApi = typeof posix | typeof win32
 
 type IncludeExpansionContext = {
-  budget: SshConfigExpansionBudget
+  cache: Map<string, string>
   home: string
   pathApi: PathApi
   rootDir: string
@@ -23,6 +14,8 @@ type IncludeExpansionContext = {
   username: string
 }
 
+const MAX_INCLUDE_GLOB_MATCHES = 256
+const MAX_INCLUDE_FILE_BYTES = 1024 * 1024
 const TARGET_DEPENDENT_INCLUDE_TOKENS = new Set(['h', 'n', 'p', 'r', 'j', 'k', 'C'])
 
 export function expandSshConfigIncludes(configPath: string): string {
@@ -32,7 +25,7 @@ export function expandSshConfigIncludes(configPath: string): string {
   const localHostname = hostname()
 
   const context: IncludeExpansionContext = {
-    budget: createSshConfigExpansionBudget(),
+    cache: new Map(),
     home,
     pathApi,
     rootDir: pathApi.dirname(configPath),
@@ -41,50 +34,68 @@ export function expandSshConfigIncludes(configPath: string): string {
     username: currentUser
   }
 
-  const expandedLines: string[] = []
-  expandSshConfigFile(configPath, context, [], expandedLines)
-  return expandedLines.join('\n')
+  return expandSshConfigFile(configPath, context, []).join('\n')
 }
 
 function expandSshConfigFile(
   filePath: string,
   context: IncludeExpansionContext,
-  activeStack: string[],
-  expandedLines: string[]
-): void {
+  activeStack: string[]
+): string[] {
   const canonicalPath = getCanonicalPath(filePath)
   if (!canonicalPath || activeStack.includes(canonicalPath)) {
-    return
-  }
-  if (!admitSshConfigIncludeDepth(context.budget, activeStack.length)) {
-    return
+    return []
   }
 
-  const rawContent = readSshConfigSourceFile(canonicalPath, context.budget)
+  const rawContent = readCachedFile(canonicalPath, context)
   if (rawContent === null) {
-    return
+    return []
   }
 
+  const expandedLines: string[] = []
   const nextStack = [...activeStack, canonicalPath]
 
   for (const line of rawContent.split(/\r?\n/)) {
-    if (context.budget.outputTruncated) {
-      return
-    }
     const includeArgs = parseIncludeDirective(line)
     if (!includeArgs) {
-      appendSshConfigExpandedLine(expandedLines, line, context.budget)
+      expandedLines.push(line)
       continue
     }
 
     for (const includeArg of includeArgs) {
       for (const matchedPath of resolveIncludePaths(includeArg, context)) {
-        expandSshConfigFile(matchedPath, context, nextStack, expandedLines)
-        if (context.budget.outputTruncated) {
-          return
-        }
+        appendExpandedLines(expandedLines, expandSshConfigFile(matchedPath, context, nextStack))
       }
     }
+  }
+
+  return expandedLines
+}
+
+function appendExpandedLines(target: string[], lines: readonly string[]): void {
+  // Why: SSH config includes are user-controlled files, and a large included
+  // file can exceed the JavaScript call argument limit when spread into push.
+  for (const line of lines) {
+    target.push(line)
+  }
+}
+
+function readCachedFile(filePath: string, context: IncludeExpansionContext): string | null {
+  const cached = context.cache.get(filePath)
+  if (cached !== undefined) {
+    return cached
+  }
+
+  if (!isReadableRegularFile(filePath)) {
+    return null
+  }
+
+  try {
+    const content = readFileSync(filePath, 'utf-8')
+    context.cache.set(filePath, content)
+    return content
+  } catch {
+    return null
   }
 }
 
@@ -157,23 +168,18 @@ function resolveIncludePaths(pattern: string, context: IncludeExpansionContext):
 
   const absolutePattern = resolveIncludePatternPath(withTokens, context)
   if (hasGlobPattern(absolutePattern)) {
-    const result = resolveBoundedSshConfigGlob(
-      absolutePattern,
-      context.pathApi,
-      SSH_CONFIG_INCLUDE_LIMITS.globMatches
-    )
-    if (result.patternTooDeep) {
-      console.warn(
-        `[ssh] Include pattern "${absolutePattern}" has too many path segments; skipping`
-      )
+    try {
+      const matches = globSync(absolutePattern).sort((left, right) => left.localeCompare(right))
+      if (matches.length > MAX_INCLUDE_GLOB_MATCHES) {
+        console.warn(
+          `[ssh] Include pattern "${absolutePattern}" matched ${matches.length} files; processing first ${MAX_INCLUDE_GLOB_MATCHES}`
+        )
+        return matches.slice(0, MAX_INCLUDE_GLOB_MATCHES)
+      }
+      return matches
+    } catch {
       return []
     }
-    if (result.truncated) {
-      console.warn(
-        `[ssh] Include pattern "${absolutePattern}" matched ${result.totalMatches} files; processing first ${SSH_CONFIG_INCLUDE_LIMITS.globMatches}`
-      )
-    }
-    return result.matches
   }
 
   return existsSync(absolutePattern) ? [absolutePattern] : []
@@ -284,6 +290,25 @@ function getCanonicalPath(filePath: string): string | null {
     return realpathSync.native(filePath)
   } catch {
     return null
+  }
+}
+
+function isReadableRegularFile(filePath: string): boolean {
+  try {
+    const stats = statSync(filePath)
+    if (!stats.isFile()) {
+      console.warn(`[ssh] Skipping SSH config include "${filePath}": not a regular file`)
+      return false
+    }
+    if (stats.size > MAX_INCLUDE_FILE_BYTES) {
+      console.warn(
+        `[ssh] Skipping SSH config include "${filePath}": size ${stats.size} exceeds ${MAX_INCLUDE_FILE_BYTES} bytes`
+      )
+      return false
+    }
+    return true
+  } catch {
+    return false
   }
 }
 

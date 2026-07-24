@@ -9,7 +9,6 @@ import {
 } from './github-remote-identity-parsing'
 import { isStableMissingGitRemoteError } from './stable-missing-git-remote-error'
 import { githubRepoIdentityKey } from '../../shared/github-repository-identity-key'
-import { cacheIdentityDigest } from '../cache-identity-digest'
 
 export type OwnerRepo = GitHubOwnerRepo
 
@@ -54,7 +53,6 @@ export function ghRepoExecOptions(context: GitHubRepoContext): {
 const OWNER_REPO_POSITIVE_CACHE_TTL_MS = 30_000
 const OWNER_REPO_NEGATIVE_CACHE_TTL_MS = 5 * 60_000
 const OWNER_REPO_CACHE_MAX_ENTRIES = 512
-const OWNER_REPO_MAX_IN_FLIGHT = 32
 
 type OwnerRepoCacheEntry = {
   value: OwnerRepo | null
@@ -125,7 +123,7 @@ export async function getOwnerRepoForRemote(
 ): Promise<OwnerRepo | null> {
   const context = githubRepoContext(repoPath, connectionId, localGitOptions)
   const runtimeKey = context.connectionId ?? `local:${context.wslDistro ?? 'host'}`
-  const cacheKey = cacheIdentityDigest([runtimeKey, context.repoPath, remoteName])
+  const cacheKey = `${runtimeKey}\0${context.repoPath}\0${remoteName}`
   const now = Date.now()
   pruneOwnerRepoCache(now)
   const cached = ownerRepoCache.get(cacheKey)
@@ -160,9 +158,6 @@ export async function getOwnerRepoForRemote(
   // Why: startup can resolve issue sources, PR candidates, and repo metadata
   // for the same repo concurrently. Coalesce missing-remote probes.
   const probe = resolveOwnerRepoForRemote(context, remoteName, cacheKey, nextConfigSignature)
-  if (ownerRepoInFlight.size >= OWNER_REPO_MAX_IN_FLIGHT) {
-    return probe
-  }
   ownerRepoInFlight.set(cacheKey, probe)
   try {
     return await probe

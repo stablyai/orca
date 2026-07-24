@@ -6,95 +6,42 @@
 import type { RelayDispatcher, RequestContext } from './dispatcher'
 import {
   GIT_RESPONSE_CHUNK_SIZE,
-  MAX_GIT_RESPONSE_STREAM_BYTES,
-  MAX_GIT_RESPONSE_STREAM_CHUNKS,
-  MAX_CONCURRENT_STREAMS,
-  RelayErrorCode,
   STREAM_ACK_WINDOW_CHUNKS,
   STREAM_ACK_STALL_RECHECK_MS,
   type GitResponseStreamMarker
 } from './protocol'
-import {
-  encodeUtf8StringChunk,
-  planUtf8StringChunks,
-  type Utf8StringChunk
-} from './git-response-utf8-chunks'
 
 type GitResponseStreamEntry = {
   ownerClientId: number
-  retainedBytes: number
   aborted: boolean
-  /** Highest chunk seq admitted to the outbound bulk lane. */
-  sentThroughSeq: number
   /** Highest chunk seq the client acknowledged (in-order; -1 = none yet). */
   ackedThroughSeq: number
   ackWaiters: Set<() => void>
 }
 
-type PreparedGitResponse =
-  | { kind: 'buffer'; value: Buffer; byteLength: number; chunkCount: number }
-  | {
-      kind: 'string'
-      value: string
-      byteLength: number
-      chunks: Utf8StringChunk[]
-      chunkCount: number
-    }
-
-export const MAX_CONCURRENT_GIT_RESPONSE_STREAMS = MAX_CONCURRENT_STREAMS
-export const MAX_ACTIVE_GIT_RESPONSE_STREAM_BYTES = 128 * 1024 * 1024
+/** Serialized git responses are chunked as base64 so multi-byte UTF-8
+ * sequences never split across a chunk boundary (the client concatenates the
+ * decoded bytes and parses once). */
+function encodeChunks(payload: Buffer): string[] {
+  const chunks: string[] = []
+  for (let offset = 0; offset < payload.length; offset += GIT_RESPONSE_CHUNK_SIZE) {
+    chunks.push(payload.subarray(offset, offset + GIT_RESPONSE_CHUNK_SIZE).toString('base64'))
+  }
+  return chunks
+}
 
 export class GitResponseStreamRegistry {
   private streams = new Map<number, GitResponseStreamEntry>()
   private nextId = 1
-  private retainedBytes = 0
 
-  constructor(private readonly maxRetainedBytes: number = MAX_ACTIVE_GIT_RESPONSE_STREAM_BYTES) {}
-
-  private preparePayload(payload: Buffer | string): PreparedGitResponse {
-    if (Buffer.isBuffer(payload)) {
-      return {
-        kind: 'buffer',
-        value: payload,
-        byteLength: payload.length,
-        chunkCount: Math.ceil(payload.length / GIT_RESPONSE_CHUNK_SIZE)
-      }
-    }
-    const chunks = planUtf8StringChunks(payload, GIT_RESPONSE_CHUNK_SIZE)
-    return {
-      kind: 'string',
-      value: payload,
-      byteLength: Buffer.byteLength(payload, 'utf8'),
-      chunks,
-      chunkCount: chunks.length
-    }
-  }
-
-  private register(ownerClientId: number, retainedBytes: number): number {
-    if (this.streams.size >= MAX_CONCURRENT_GIT_RESPONSE_STREAMS) {
-      const error = new Error(
-        `Too many concurrent git response streams (max ${MAX_CONCURRENT_GIT_RESPONSE_STREAMS})`
-      ) as Error & { code: number }
-      error.code = RelayErrorCode.TooManyStreams
-      throw error
-    }
-    if (retainedBytes > this.maxRetainedBytes - this.retainedBytes) {
-      const error = new Error(
-        `Concurrent git responses exceed retained-byte limit (${this.maxRetainedBytes} bytes)`
-      ) as Error & { code: number }
-      error.code = RelayErrorCode.TooManyStreams
-      throw error
-    }
+  private register(ownerClientId: number): number {
     const streamId = this.nextId++
     this.streams.set(streamId, {
       ownerClientId,
-      retainedBytes,
       aborted: false,
-      sentThroughSeq: -1,
       ackedThroughSeq: -1,
       ackWaiters: new Set()
     })
-    this.retainedBytes += retainedBytes
     return streamId
   }
 
@@ -103,9 +50,8 @@ export class GitResponseStreamRegistry {
     if (
       !entry ||
       entry.ownerClientId !== clientId ||
-      !Number.isSafeInteger(seq) ||
-      seq < 0 ||
-      seq > entry.sentThroughSeq
+      typeof seq !== 'number' ||
+      !Number.isFinite(seq)
     ) {
       return
     }
@@ -165,39 +111,25 @@ export class GitResponseStreamRegistry {
    * sentinel marker to send as the RPC result.
    */
   startStream(
-    payload: Buffer | string,
+    payload: Buffer,
     dispatcher: RelayDispatcher,
     context: RequestContext
   ): GitResponseStreamMarker {
-    const prepared = this.preparePayload(payload)
-    if (
-      prepared.byteLength > MAX_GIT_RESPONSE_STREAM_BYTES ||
-      prepared.chunkCount > MAX_GIT_RESPONSE_STREAM_CHUNKS
-    ) {
-      const error = new Error(
-        `Git response exceeds stream limit (${prepared.byteLength} bytes, ${prepared.chunkCount} chunks)`
-      ) as Error & { code: number }
-      error.code = RelayErrorCode.StreamProtocolError
-      throw error
-    }
-    const streamId = this.register(context.clientId, prepared.byteLength)
+    const streamId = this.register(context.clientId)
+    const chunks = encodeChunks(payload)
     // Why: kick the pump off the response task so the client sees the sentinel
     // (and can subscribe/reassemble) before the first chunk frame arrives.
     setImmediate(() => {
-      void this.pump(streamId, prepared, dispatcher, context)
+      void this.pump(streamId, chunks, dispatcher, context)
     })
     return {
-      __orcaGitResponseStream: {
-        streamId,
-        totalBytes: prepared.byteLength,
-        chunkCount: prepared.chunkCount
-      }
+      __orcaGitResponseStream: { streamId, totalBytes: payload.length, chunkCount: chunks.length }
     }
   }
 
   private async pump(
     streamId: number,
-    payload: PreparedGitResponse,
+    chunks: string[],
     dispatcher: RelayDispatcher,
     context: RequestContext
   ): Promise<void> {
@@ -209,7 +141,7 @@ export class GitResponseStreamRegistry {
     let seq = 0
     let endReason: 'end' | 'aborted' | 'stale' = 'end'
     try {
-      for (seq = 0; seq < payload.chunkCount; seq += 1) {
+      for (seq = 0; seq < chunks.length; seq += 1) {
         if (context.isStale()) {
           endReason = 'stale'
           break
@@ -235,20 +167,11 @@ export class GitResponseStreamRegistry {
           endReason = 'aborted'
           break
         }
-        const chunk =
-          payload.kind === 'buffer'
-            ? payload.value.subarray(
-                seq * GIT_RESPONSE_CHUNK_SIZE,
-                (seq + 1) * GIT_RESPONSE_CHUNK_SIZE
-              )
-            : encodeUtf8StringChunk(payload.value, payload.chunks[seq])
-        // Why: encode only the current chunk; eager base64 retained a second,
-        // 4/3-expanded copy of every parked response until its final ACK.
-        const data = chunk.toString('base64')
-        entry.sentThroughSeq = seq
+        // Why: notifyBulk waits out sink saturation so chunk frames never pile
+        // up in the outbound pipe ahead of interactive pty.data frames.
         await dispatcher.notifyBulk(
           'git.responseChunk',
-          { streamId, seq, data },
+          { streamId, seq, data: chunks[seq] },
           {
             clientId
           }
@@ -274,17 +197,8 @@ export class GitResponseStreamRegistry {
         }
       }
     } finally {
-      this.deleteStream(streamId)
+      this.streams.delete(streamId)
     }
-  }
-
-  private deleteStream(streamId: number): void {
-    const entry = this.streams.get(streamId)
-    if (!entry) {
-      return
-    }
-    this.streams.delete(streamId)
-    this.retainedBytes -= entry.retainedBytes
   }
 
   disposeAll(): void {
@@ -293,6 +207,5 @@ export class GitResponseStreamRegistry {
       this.wake(entry)
     }
     this.streams.clear()
-    this.retainedBytes = 0
   }
 }

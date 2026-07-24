@@ -18,7 +18,6 @@ import { isSubmoduleWorktreeRemovalRefusal } from '../../shared/worktree-submodu
 import { decodeGitCQuotedPath } from '../../shared/git-cquoted-path'
 import { parseGitRevListAheadBehindCounts } from '../../shared/git-rev-list-output'
 import { parseWslUncPath } from '../../shared/wsl-paths'
-import { iterateNulDelimitedFields } from '../../shared/nul-delimited-fields'
 import {
   hasUnsupportedRevParsePathFormatEcho,
   isUnsupportedRevParsePathFormatError,
@@ -549,7 +548,7 @@ function splitNulWorktreeList(output: string): string[][] {
   const blocks: string[][] = []
   let currentBlock: string[] = []
 
-  for (const field of iterateNulDelimitedFields(output)) {
+  for (const field of output.split('\0')) {
     if (field) {
       currentBlock.push(field)
       continue
@@ -1377,12 +1376,10 @@ function hasOnlyIgnoredUntrackedStatus(
       )
       .filter((entry) => entry && !entry.split('/').includes('..'))
   )
-  for (const entry of iterateNulDelimitedFields(status)) {
-    if (entry && (!entry.startsWith('?? ') || !ignored.has(entry.slice(3).replace(/\\/g, '/')))) {
-      return false
-    }
-  }
-  return true
+  return status
+    .split('\0')
+    .filter(Boolean)
+    .every((entry) => entry.startsWith('?? ') && ignored.has(entry.slice(3).replace(/\\/g, '/')))
 }
 
 function translateWorktreePath(

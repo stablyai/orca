@@ -91,8 +91,7 @@ describe('TerminalWebView text zoom', () => {
     expect(terminalHtmlSource).toContain(
       'data.replace(CLAUDE_STATUS_DOT_PATTERN, CLAUDE_STATUS_DOT + TEXT_PRESENTATION_SELECTOR)'
     )
-    expect(terminalHtmlSource).toContain('var normalized = normalizeStatusDotPresentation(data)')
-    expect(terminalHtmlSource).toContain('writeQueue.push(normalized)')
+    expect(terminalHtmlSource).toContain('writeQueue.push(normalizeStatusDotPresentation(data))')
   })
 
   it('normalizes Claude status dots idempotently across write chunks', () => {

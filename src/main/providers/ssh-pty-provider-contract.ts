@@ -1,5 +1,4 @@
 import type { PtyIncarnationId } from '../../shared/pty-incarnation'
-import type { PtyDataEvent } from './pty-provider-events'
 
 export type RemoteCliBridgeEnv = {
   binDir: string
@@ -9,7 +8,13 @@ export type RemoteCliBridgeEnv = {
   pathDelimiter?: ':' | ';'
 }
 
-export type SshPtyDataCallback = (payload: PtyDataEvent) => void
+export type SshPtyDataCallback = (payload: {
+  id: string
+  data: string
+  sequenceChars?: number
+  transformed?: boolean
+  seq?: number
+}) => void
 export type SshPtyReplayCallback = (payload: { id: string; data: string }) => void
 export type SshPtyExitCallback = (payload: {
   id: string

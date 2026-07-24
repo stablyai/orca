@@ -6,6 +6,7 @@
  * Signals readiness to parent via IPC: { type: 'ready' }
  * Shuts down cleanly on SIGTERM.
  */
+import { readFileSync } from 'node:fs'
 import { startDaemon, type DaemonHandle } from './daemon-main'
 import { createPtySubprocess } from './pty-subprocess'
 import { warmWindowsConptyOnce } from './windows-conpty-warmup'
@@ -16,7 +17,6 @@ import {
   prepareMacosTccLoginShell,
   probeMacosLoginSessionAlive
 } from '../providers/macos-tcc-login-shell'
-import { readDaemonLoginSessionProbeVerdict } from './daemon-login-session-probe-verdict'
 import { MacosLoginSessionDeathWatch } from './macos-login-session-death-watch'
 import { readCurrentProcessMacSystemResolverHealth } from '../network/macos-system-resolver-health'
 
@@ -176,7 +176,13 @@ async function main(): Promise<void> {
   // 'alive' → accepted/healthy, 'dead' → rejected/unhealthy, 'hang' →
   // timeout-inconclusive/unhealthy (the fail-safe path), else inconclusive.
   const e2eProbeFile = process.env.ORCA_E2E_LOGIN_SESSION_PROBE_FILE
-  const readE2eVerdict = (): string => readDaemonLoginSessionProbeVerdict(e2eProbeFile as string)
+  const readE2eVerdict = (): string => {
+    try {
+      return readFileSync(e2eProbeFile as string, 'utf8').trim()
+    } catch {
+      return ''
+    }
+  }
   deathWatch =
     loginSessionWatch && process.platform === 'darwin'
       ? new MacosLoginSessionDeathWatch({

@@ -1,9 +1,13 @@
-import { isValidTerminalSize, normalizeTerminalSize } from '../../shared/terminal-size-limits'
+const DEFAULT_COLS = 80
+const DEFAULT_ROWS = 24
 
 export function isValidPtySize(cols: number, rows: number): boolean {
-  return isValidTerminalSize(cols, rows)
+  return Number.isFinite(cols) && Number.isFinite(rows) && cols >= 1 && rows >= 1
 }
 
 export function normalizePtySize(cols: number, rows: number): { cols: number; rows: number } {
-  return normalizeTerminalSize(cols, rows)
+  if (isValidPtySize(cols, rows)) {
+    return { cols, rows }
+  }
+  return { cols: DEFAULT_COLS, rows: DEFAULT_ROWS }
 }

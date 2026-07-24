@@ -1,7 +1,6 @@
 import { createHash } from 'node:crypto'
 import { resolve } from 'node:path'
 import { recordCoalescedCrashBreadcrumb } from '../crash-reporting/crash-breadcrumb-store'
-import { cacheIdentityDigest } from '../cache-identity-digest'
 
 const VALIDATION_BACKOFF_TTL_MS = 5 * 60_000
 const MAX_VALIDATION_BACKOFF_ENTRIES = 256
@@ -36,7 +35,7 @@ const counters: ValidationBackoffCounters = {
 }
 
 function validationIdentityKey(identity: ValidationBackoffIdentity): string {
-  return cacheIdentityDigest([identity.repoId ?? '', resolve(identity.repoPath), identity.reason])
+  return [identity.repoId ?? '', resolve(identity.repoPath), identity.reason].join('\0')
 }
 
 function validationIdentityToken(key: string): string {

@@ -1,8 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import {
-  MOBILE_RELAY_DIRECTOR_MAX_FRAME_BYTES,
-  resolvePairingInviteThroughDirector
-} from './mobile-relay-invite-director'
+import { resolvePairingInviteThroughDirector } from './mobile-relay-invite-director'
 
 class FakeSocket {
   sent: string[] = []
@@ -79,25 +76,5 @@ describe('pairing invite director resolution', () => {
     })
 
     await expect(resolving).rejects.toThrow(/not strictly newer/)
-  })
-
-  it('rejects over-deep and oversized moves before materializing them', async () => {
-    const deepSocket = new FakeSocket()
-    const deep = resolvePairingInviteThroughDirector({
-      relay,
-      createSocket: () => deepSocket as unknown as WebSocket
-    })
-    deepSocket.onmessage?.({ data: `${'['.repeat(129)}0${']'.repeat(129)}` })
-    await expect(deep).rejects.toThrow('invalid relay director move')
-
-    const oversizedSocket = new FakeSocket()
-    const oversized = resolvePairingInviteThroughDirector({
-      relay,
-      createSocket: () => oversizedSocket as unknown as WebSocket
-    })
-    oversizedSocket.onmessage?.({
-      data: 'x'.repeat(MOBILE_RELAY_DIRECTOR_MAX_FRAME_BYTES / 2 + 1)
-    })
-    await expect(oversized).rejects.toThrow('invalid relay director move')
   })
 })

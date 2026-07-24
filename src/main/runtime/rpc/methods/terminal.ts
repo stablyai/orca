@@ -53,7 +53,6 @@ import {
   TERMINAL_STREAM_CHUNK_BYTES
 } from '../../../../shared/terminal-multiplex-flow-control'
 import { drainTerminalMultiplexRoundRobin } from '../terminal-multiplex-round-robin'
-import { appendCompactedStringChunk } from '../../../../shared/string-chunk-compaction'
 
 const REQUESTED_SNAPSHOT_BYTE_BUDGET = 2 * 1024 * 1024
 const TERMINAL_OUTPUT_FLUSH_MS = 5
@@ -209,7 +208,7 @@ function createTerminalOutputBatcher(onFlush: (data: string, meta?: TerminalOutp
         flush()
         pendingCwd = meta.cwd
       }
-      appendCompactedStringChunk(chunks, data)
+      chunks.push(data)
       pendingRawLength += rawLength
       const remainingBudget = Math.max(1, TERMINAL_OUTPUT_BATCH_MAX_BYTES - bytes)
       const measurement = measureTerminalStreamByteLength(data, {

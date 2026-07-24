@@ -1,9 +1,5 @@
-import { mkdir } from 'node:fs/promises'
+import { mkdir, readFile } from 'node:fs/promises'
 import { join } from 'node:path'
-import {
-  NodeFileReadTooLargeError,
-  readNodeFileWithinLimit
-} from '../../shared/node-bounded-file-reader'
 import { writeFileAtomically } from '../codex-accounts/fs-utils'
 import { getKeyedSerializedQueueTail, runKeyedSerializedOperation } from './keyed-promise-queue'
 import { normalizeWslDistroKey } from './wsl-cli-registration-operation'
@@ -11,7 +7,6 @@ import { normalizeWslDistroKey } from './wsl-cli-registration-operation'
 const REGISTRY_FILE_NAME = 'wsl-cli-registrations.json'
 const REGISTRY_SCHEMA_VERSION = 2
 const DEFAULT_NEGATIVE_INSPECTION_TTL_MS = 7 * 24 * 60 * 60 * 1_000
-export const WSL_CLI_REGISTRY_MAX_BYTES = 1024 * 1024
 // Why: the registry is advisory; cap per-distro bookkeeping so hosts that
 // cycle many uniquely named distros cannot grow the file without bound.
 const MAX_INSPECTION_ENTRIES = 64
@@ -131,16 +126,9 @@ function getRegistryPath(userDataPath: string): string {
 
 async function readState(userDataPath: string): Promise<WslCliRegistrationRegistryState> {
   try {
-    const { buffer } = await readNodeFileWithinLimit(
-      getRegistryPath(userDataPath),
-      WSL_CLI_REGISTRY_MAX_BYTES
-    )
-    return parseState(buffer.toString('utf8'))
+    return parseState(await readFile(getRegistryPath(userDataPath), 'utf8'))
   } catch (error) {
     if (isMissingError(error)) {
-      return emptyState()
-    }
-    if (error instanceof NodeFileReadTooLargeError) {
       return emptyState()
     }
     throw error

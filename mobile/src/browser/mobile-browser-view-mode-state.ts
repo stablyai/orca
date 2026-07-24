@@ -1,7 +1,6 @@
 import type { MobileBrowserViewMode } from './browser-screencast-request'
 
-export const BROWSER_VIEW_MODE_STATE_LIMIT = 40
-export const BROWSER_VIEW_MODE_PAGE_KEY_MAX_CHARACTERS = 4_096
+const BROWSER_VIEW_MODE_STATE_LIMIT = 40
 const browserViewModeByPageKey = new Map<string, MobileBrowserViewMode>()
 
 export function getInitialMobileBrowserViewMode(
@@ -43,9 +42,5 @@ function makeBrowserViewModePageKey(
   worktreeId: string,
   browserPageId: string | null
 ): string | null {
-  if (!browserPageId) {
-    return null
-  }
-  const key = `${worktreeId}:${browserPageId}`
-  return key.length <= BROWSER_VIEW_MODE_PAGE_KEY_MAX_CHARACTERS ? key : null
+  return browserPageId ? `${worktreeId}:${browserPageId}` : null
 }

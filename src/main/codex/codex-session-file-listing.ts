@@ -1,25 +1,10 @@
-import { opendirSync } from 'node:fs'
+import { readdirSync } from 'node:fs'
 import { opendir } from 'node:fs/promises'
 import { join } from 'node:path'
-import {
-  CodexSessionListingBudget,
-  CodexSessionListingCapacityError,
-  type CodexSessionListingLimits
-} from './codex-session-listing-budget'
-
-export {
-  CODEX_SESSION_LISTING_MAX_DEPTH,
-  CODEX_SESSION_LISTING_MAX_ENTRIES,
-  CODEX_SESSION_LISTING_MAX_FILES,
-  CODEX_SESSION_LISTING_MAX_PATH_CODE_UNITS,
-  CodexSessionListingCapacityError
-} from './codex-session-listing-budget'
 
 export type CodexSessionBridgeIncrementalOptions = {
   /** Directory entries to process before yielding back to the event loop. */
   batchSize?: number
-  /** Optional lower limits for tests or constrained callers. */
-  limits?: Partial<CodexSessionListingLimits>
   /** Delay after each processed batch; zero still yields on a timer turn. */
   yieldMs?: number
 }
@@ -34,59 +19,32 @@ const INCREMENTAL_BRIDGE_YIELD_MS = 10
  * that run outside the CLI launch path.
  */
 export function listCodexSessionJsonlFiles(rootPath: string): string[] {
-  return listCodexSessionJsonlFilesWithinLimits(rootPath)
-}
-
-export function listCodexSessionJsonlFilesWithinLimits(
-  rootPath: string,
-  limits: Partial<CodexSessionListingLimits> = {}
-): string[] {
-  const budget = new CodexSessionListingBudget(limits)
-  budget.claimDepth(0)
-  budget.claimPath(rootPath)
   const files: string[] = []
-  const pendingDirectories = [{ depth: 0, path: rootPath }]
-
-  while (pendingDirectories.length > 0) {
-    const current = pendingDirectories.pop()!
-    let directory: ReturnType<typeof opendirSync>
-    try {
-      directory = opendirSync(current.path)
-    } catch (error) {
-      warnAboutCodexSessionListingError(error)
-      continue
-    }
-    try {
-      for (let entry = directory.readSync(); entry !== null; entry = directory.readSync()) {
-        budget.claimEntry()
-        const childPath = join(current.path, entry.name)
-        budget.claimPath(childPath)
-        if (entry.isDirectory()) {
-          const depth = current.depth + 1
-          budget.claimDepth(depth)
-          pendingDirectories.push({ depth, path: childPath })
-        } else if (entry.isFile() && entry.name.endsWith('.jsonl')) {
-          budget.claimFile()
-          files.push(childPath)
-        }
+  try {
+    for (const entry of readdirSync(rootPath, { withFileTypes: true })) {
+      const childPath = join(rootPath, entry.name)
+      if (entry.isDirectory()) {
+        appendSessionFilePaths(files, listCodexSessionJsonlFiles(childPath))
+        continue
       }
-    } catch (error) {
-      if (error instanceof CodexSessionListingCapacityError) {
-        throw error
+      if (entry.isFile() && entry.name.endsWith('.jsonl')) {
+        files.push(childPath)
       }
-      warnAboutCodexSessionListingError(error)
-    } finally {
-      closeCodexSessionDirectory(directory)
     }
+  } catch (error) {
+    console.warn('[codex-session-bridge] Failed to list system Codex sessions:', error)
   }
   return files.sort()
 }
 
-function closeCodexSessionDirectory(directory: ReturnType<typeof opendirSync>): void {
-  try {
-    directory.closeSync()
-  } catch {
-    // The OS may have already closed a failed directory stream.
+/**
+ * Appends session paths without spreading large arrays into a single call.
+ */
+function appendSessionFilePaths(target: string[], source: readonly string[]): void {
+  // Why: existing Codex homes can accumulate enough nested sessions to exceed
+  // V8's argument limit if child arrays are spread into push().
+  for (const filePath of source) {
+    target.push(filePath)
   }
 }
 
@@ -131,26 +89,21 @@ async function* listCodexSessionFilesIncrementally(
 ): AsyncGenerator<string> {
   const batchSize = Math.max(1, options.batchSize ?? INCREMENTAL_BRIDGE_BATCH_SIZE)
   const yieldMs = Math.max(0, options.yieldMs ?? INCREMENTAL_BRIDGE_YIELD_MS)
-  const budget = new CodexSessionListingBudget(options.limits)
-  budget.claimDepth(0)
-  budget.claimPath(rootPath)
-  const pendingDirectories = [{ depth: 0, path: rootPath }]
+  const pendingDirectories = [rootPath]
   let entriesSinceYield = 0
 
   while (pendingDirectories.length > 0) {
-    const currentDirectory = pendingDirectories.pop()!
+    const currentDirectory = pendingDirectories.pop()
+    if (!currentDirectory) {
+      continue
+    }
     try {
-      const directory = await opendir(currentDirectory.path)
+      const directory = await opendir(currentDirectory)
       for await (const entry of directory) {
-        budget.claimEntry()
-        const childPath = join(currentDirectory.path, entry.name)
-        budget.claimPath(childPath)
+        const childPath = join(currentDirectory, entry.name)
         if (entry.isDirectory()) {
-          const depth = currentDirectory.depth + 1
-          budget.claimDepth(depth)
-          pendingDirectories.push({ depth, path: childPath })
+          pendingDirectories.push(childPath)
         } else if (entry.isFile() && isSessionFile(entry.name)) {
-          budget.claimFile()
           yield childPath
         }
         entriesSinceYield += 1
@@ -160,17 +113,10 @@ async function* listCodexSessionFilesIncrementally(
         }
       }
     } catch (error) {
-      await onDirectoryError?.(currentDirectory.path, error)
-      warnAboutCodexSessionListingError(error)
-      if (error instanceof CodexSessionListingCapacityError) {
-        return
-      }
+      await onDirectoryError?.(currentDirectory, error)
+      console.warn('[codex-session-bridge] Failed to list system Codex sessions:', error)
     }
   }
-}
-
-function warnAboutCodexSessionListingError(error: unknown): void {
-  console.warn('[codex-session-bridge] Failed to list system Codex sessions:', error)
 }
 
 /**

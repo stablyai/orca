@@ -1,5 +1,4 @@
 import type { RemoteRuntimeClientError } from './remote-runtime-client-error'
-import { releaseRemoteRuntimePreparedRequest } from './remote-runtime-prepared-request-admission'
 import { remoteRuntimeUnavailableError } from './remote-runtime-request-frames'
 import type { RuntimeRpcResponse } from './runtime-rpc-envelope'
 import type {
@@ -44,7 +43,6 @@ export function rejectSharedControlPendingRequest(
   }
   pendingRequests.delete(requestId)
   clearTimeout(pending.timeout)
-  releaseRemoteRuntimePreparedRequest(pending)
   pending.reject(error)
 }
 
@@ -59,7 +57,6 @@ export function resolveSharedControlPendingResponse(
   }
   pendingRequests.delete(requestId)
   clearTimeout(pending.timeout)
-  releaseRemoteRuntimePreparedRequest(pending)
   pending.resolve(response)
 }
 
@@ -101,7 +98,6 @@ export function rejectAllSharedControlPendingRequests(
   for (const [requestId, pending] of pendingRequests) {
     clearTimeout(pending.timeout)
     pendingRequests.delete(requestId)
-    releaseRemoteRuntimePreparedRequest(pending)
     pending.reject(closeError)
   }
 }

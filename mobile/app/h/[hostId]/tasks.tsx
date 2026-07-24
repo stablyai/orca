@@ -137,15 +137,9 @@ import {
   clearMobileTaskCopyFeedbackTimer,
   scheduleMobileTaskCopyFeedbackReset
 } from '../../../src/tasks/mobile-task-copy-feedback-timer'
-import {
-  createMobileItemPrFileContentScope,
-  createMobileProjectPrFileContentScope,
-  useMobilePrFileContentCache
-} from '../../../src/tasks/use-mobile-pr-file-content-cache'
 import type {
   BaseRefSearchResult,
   GitHubOwnerRepo,
-  GitHubPRFileContents,
   PersistedTrustedOrcaHooks,
   SparsePreset,
   TuiAgent
@@ -362,6 +356,13 @@ type GitHubDetailCheck = {
   status: string
   conclusion?: string | null
   url?: string | null
+}
+
+type GitHubPRFileContents = {
+  original: string
+  modified: string
+  originalIsBinary: boolean
+  modifiedIsBinary: boolean
 }
 
 type DetailPayload =
@@ -2262,6 +2263,8 @@ export default function MobileTasksScreen() {
   const [itemReviewersDraft, setItemReviewersDraft] = useState('')
   const [itemReplyDrafts, setItemReplyDrafts] = useState<Record<string, string>>({})
   const [expandedPrFilePath, setExpandedPrFilePath] = useState<string | null>(null)
+  const [prFileContents, setPrFileContents] = useState<Record<string, GitHubPRFileContents>>({})
+  const [prFileLoadingPath, setPrFileLoadingPath] = useState<string | null>(null)
   const [prFileCommentDrafts, setPrFileCommentDrafts] = useState<Record<string, string>>({})
   const [copiedLinkKey, setCopiedLinkKey] = useState<string | null>(null)
   const copiedLinkResetTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
@@ -2599,23 +2602,6 @@ export default function MobileTasksScreen() {
     () => (projectRowItem ? findProjectRowRepo(projectRowItem) : null),
     [findProjectRowRepo, projectRowItem]
   )
-  const itemPrFileContentScope = createMobileItemPrFileContentScope(actionItem, detailPayload)
-  const projectPrFileContentScope = createMobileProjectPrFileContentScope(
-    projectRowItem,
-    projectRowHostedRepo,
-    projectRowDetail,
-    projectRowItem ? projectRowGitHubRepository(projectRowItem, activeGitHubProjectHost) : null
-  )
-  const activePrFileContentScope = projectRowItem
-    ? projectPrFileContentScope
-    : itemPrFileContentScope
-  const {
-    clear: clearPrFileContents,
-    contents: prFileContents,
-    load: loadPrFileContent,
-    loadingPath: prFileLoadingPath
-  } = useMobilePrFileContentCache(activePrFileContentScope)
-
   const itemReviewerCandidates = useMemo(() => {
     if (!actionItem || actionItem.provider !== 'github' || actionItem.source.type !== 'pr') {
       return []
@@ -4155,7 +4141,8 @@ export default function MobileTasksScreen() {
       setItemReviewersDraft('')
       setItemReplyDrafts({})
       setExpandedPrFilePath(null)
-      clearPrFileContents()
+      setPrFileContents({})
+      setPrFileLoadingPath(null)
       setPrFileCommentDrafts({})
       setExpandedResolvedCommentGroups(new Set())
       return
@@ -4170,10 +4157,11 @@ export default function MobileTasksScreen() {
     setItemReviewersDraft('')
     setItemReplyDrafts({})
     setExpandedPrFilePath(null)
-    clearPrFileContents()
+    setPrFileContents({})
+    setPrFileLoadingPath(null)
     setPrFileCommentDrafts({})
     setExpandedResolvedCommentGroups(new Set())
-  }, [actionItem, clearPrFileContents])
+  }, [actionItem])
 
   useEffect(() => {
     if (!detailPayload) {
@@ -4470,7 +4458,8 @@ export default function MobileTasksScreen() {
       setProjectEditingCommentDraft('')
       setProjectReviewersDraft('')
       setExpandedPrFilePath(null)
-      clearPrFileContents()
+      setPrFileContents({})
+      setPrFileLoadingPath(null)
       setPrFileCommentDrafts({})
       setProjectFieldDrafts({})
       return
@@ -4485,7 +4474,8 @@ export default function MobileTasksScreen() {
     setProjectEditingCommentDraft('')
     setProjectReviewersDraft('')
     setExpandedPrFilePath(null)
-    clearPrFileContents()
+    setPrFileContents({})
+    setPrFileLoadingPath(null)
     setPrFileCommentDrafts({})
     setProjectFieldDrafts(
       Object.fromEntries(
@@ -4589,7 +4579,6 @@ export default function MobileTasksScreen() {
     }
   }, [
     activeGitHubProjectHost,
-    clearPrFileContents,
     client,
     githubProjectTable,
     projectRowDetailRefreshSeq,
@@ -6560,6 +6549,9 @@ export default function MobileTasksScreen() {
         return
       }
       setExpandedPrFilePath(file.path)
+      if (prFileContents[file.path]) {
+        return
+      }
       const repo = findProjectRowRepo(row)
       if (
         !client ||
@@ -6568,45 +6560,49 @@ export default function MobileTasksScreen() {
         !row.content.number ||
         projectRowDetail?.provider !== 'github' ||
         !projectRowDetail.headSha ||
-        !projectRowDetail.baseSha ||
-        !projectPrFileContentScope
+        !projectRowDetail.baseSha
       ) {
         setProjectRowDetailError('Unable to load file contents for this pull request.')
         return
       }
-      await loadPrFileContent(
-        projectPrFileContentScope,
-        file,
-        async () => {
-          const response = await client.sendRequest(
-            'github.prFileContents',
-            {
-              repo: `id:${repo.id}`,
-              prNumber: row.content.number,
-              prRepo: projectRowGitHubRepository(row, activeGitHubProjectHost),
-              path: file.path,
-              oldPath: file.oldPath,
-              status: file.status ?? 'modified',
-              headSha: projectRowDetail.headSha,
-              baseSha: projectRowDetail.baseSha
-            },
-            { timeoutMs: 30_000 }
-          )
-          if (!isSuccess(response)) {
-            throw new Error(response.error.message)
-          }
-          return response.result
-        },
-        setProjectRowDetailError
-      )
+      setPrFileLoadingPath(file.path)
+      setProjectRowDetailError('')
+      try {
+        const response = await client.sendRequest(
+          'github.prFileContents',
+          {
+            repo: `id:${repo.id}`,
+            prNumber: row.content.number,
+            prRepo: projectRowGitHubRepository(row, activeGitHubProjectHost),
+            path: file.path,
+            oldPath: file.oldPath,
+            status: file.status ?? 'modified',
+            headSha: projectRowDetail.headSha,
+            baseSha: projectRowDetail.baseSha
+          },
+          { timeoutMs: 30_000 }
+        )
+        if (!isSuccess(response)) {
+          throw new Error(response.error.message)
+        }
+        setPrFileContents((current) => ({
+          ...current,
+          [file.path]: response.result as GitHubPRFileContents
+        }))
+      } catch (err) {
+        setProjectRowDetailError(
+          err instanceof Error ? err.message : 'Failed to load file contents'
+        )
+      } finally {
+        setPrFileLoadingPath(null)
+      }
     },
     [
       activeGitHubProjectHost,
       client,
       expandedPrFilePath,
       findProjectRowRepo,
-      loadPrFileContent,
-      projectPrFileContentScope,
+      prFileContents,
       projectRowDetail
     ]
   )
@@ -7530,43 +7526,49 @@ export default function MobileTasksScreen() {
         return
       }
       setExpandedPrFilePath(file.path)
+      if (prFileContents[file.path]) {
+        return
+      }
       if (
         !client ||
         item.source.type !== 'pr' ||
         detailPayload?.provider !== 'github' ||
         !detailPayload.headSha ||
-        !detailPayload.baseSha ||
-        !itemPrFileContentScope
+        !detailPayload.baseSha
       ) {
         setError('Unable to load file contents for this pull request.')
         return
       }
-      await loadPrFileContent(
-        itemPrFileContentScope,
-        file,
-        async () => {
-          const response = await client.sendRequest(
-            'github.prFileContents',
-            {
-              repo: `id:${item.source.repoId}`,
-              prNumber: item.source.number,
-              path: file.path,
-              oldPath: file.oldPath,
-              status: file.status ?? 'modified',
-              headSha: detailPayload.headSha,
-              baseSha: detailPayload.baseSha
-            },
-            { timeoutMs: 30_000 }
-          )
-          if (!isSuccess(response)) {
-            throw new Error(response.error.message)
-          }
-          return response.result
-        },
-        setError
-      )
+      setPrFileLoadingPath(file.path)
+      setError('')
+      try {
+        const response = await client.sendRequest(
+          'github.prFileContents',
+          {
+            repo: `id:${item.source.repoId}`,
+            prNumber: item.source.number,
+            path: file.path,
+            oldPath: file.oldPath,
+            status: file.status ?? 'modified',
+            headSha: detailPayload.headSha,
+            baseSha: detailPayload.baseSha
+          },
+          { timeoutMs: 30_000 }
+        )
+        if (!isSuccess(response)) {
+          throw new Error(response.error.message)
+        }
+        setPrFileContents((current) => ({
+          ...current,
+          [file.path]: response.result as GitHubPRFileContents
+        }))
+      } catch (err) {
+        setError(err instanceof Error ? err.message : 'Failed to load file contents')
+      } finally {
+        setPrFileLoadingPath(null)
+      }
     },
-    [client, detailPayload, expandedPrFilePath, itemPrFileContentScope, loadPrFileContent]
+    [client, detailPayload, expandedPrFilePath, prFileContents]
   )
 
   const addGitHubFileReviewComment = useCallback(
@@ -12320,7 +12322,7 @@ export default function MobileTasksScreen() {
                                   ) : prFileContents[file.path] ? (
                                     <GitHubPrFileDiff
                                       filePath={file.path}
-                                      contents={prFileContents[file.path]!}
+                                      contents={prFileContents[file.path]}
                                       commentDrafts={prFileCommentDrafts}
                                       disabled={projectMutating}
                                       onCommentDraftChange={(draftKey, next) =>
@@ -13266,7 +13268,7 @@ export default function MobileTasksScreen() {
                                 ) : prFileContents[file.path] ? (
                                   <GitHubPrFileDiff
                                     filePath={file.path}
-                                    contents={prFileContents[file.path]!}
+                                    contents={prFileContents[file.path]}
                                     commentDrafts={prFileCommentDrafts}
                                     disabled={mutatingStatus}
                                     onCommentDraftChange={(draftKey, next) =>

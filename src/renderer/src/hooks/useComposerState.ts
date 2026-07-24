@@ -144,13 +144,11 @@ import {
   type ExecutionHostId
 } from '../../../shared/execution-host'
 import { getHostDisplayLabelOverrides } from '../../../shared/host-setting-overrides'
-import { mapWithConcurrency } from '../../../shared/map-with-concurrency'
 import { queueNewWorkspaceTerminalFocus } from '@/lib/new-workspace-terminal-focus'
 import { getSettingsForRepoRuntimeOwner } from '@/lib/repo-runtime-owner'
 import { getSuggestedCreatureName } from '@/components/sidebar/worktree-name-suggestions'
 import type { SmartWorkspaceNameSelection } from '@/components/new-workspace/SmartWorkspaceNameField'
 import type { SmartNameMode } from '@/components/new-workspace/smart-workspace-source-results'
-
 import { getForkPushWarning } from './fork-push-warning'
 import {
   buildWorkspaceSourceSelection,
@@ -186,8 +184,6 @@ import {
   shouldReportComposerDropUploadFailure
 } from './composer-drop-upload-result'
 import { translate } from '@/i18n/i18n'
-
-export const COMPOSER_PROJECT_LOOKUP_CONCURRENCY = 4
 
 export function canResolveFolderSmartGitHubSubmit({
   hasFolderSourceRepos
@@ -2070,10 +2066,8 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
 
       const item = isProjectGroupTarget
         ? (
-            await mapWithConcurrency(
-              folderSourceRepos.filter(isGitRepoKind),
-              COMPOSER_PROJECT_LOOKUP_CONCURRENCY,
-              (repo) =>
+            await Promise.all(
+              folderSourceRepos.filter(isGitRepoKind).map((repo) =>
                 lookupSmartGitHubSubmitItem({
                   repoPath: repo.path,
                   repoId: repo.id,
@@ -2086,6 +2080,7 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
                   workItem: lookupGitHubWorkItemForSource,
                   workItemByOwnerRepo: lookupGitHubWorkItemByOwnerRepoForSource
                 }).catch(() => null)
+              )
             )
           )
             .filter((candidate): candidate is GitHubWorkItem => candidate !== null)

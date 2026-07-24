@@ -27,14 +27,6 @@ import {
   SEARCH_TIMEOUT_MS
 } from '../shared/text-search'
 import { buildRelayGitEnv } from './relay-command-env'
-import { SearchSubprocessLineAccumulator } from '../shared/search-subprocess-lines'
-import {
-  createQuickOpenListingBudget,
-  QUICK_OPEN_LISTING_MAX_PATH_BYTES,
-  QuickOpenSubprocessPathAccumulator,
-  resolveQuickOpenResultLimit,
-  retainQuickOpenPath
-} from '../shared/quick-open-listing-limits'
 
 /**
  * List files using `git ls-files`. Fallback when rg is not installed.
@@ -54,14 +46,9 @@ export function listFilesWithGit(
   if (signal?.aborted) {
     return Promise.reject(fileListingCancellationError(signal))
   }
-  const resultLimit = resolveQuickOpenResultLimit(maxResults)
-  if (resultLimit === 0) {
-    return Promise.resolve([])
-  }
   const gitPaths = new Set<string>()
   const directoryPaths = new Set<string>()
   const directFileCandidates = new Set<string>()
-  const listingBudget = createQuickOpenListingBudget()
   const { primary, ignoredPass } = buildGitLsFilesArgsForQuickOpen(excludePathPrefixes)
   const children: {
     child: ReturnType<typeof spawn>
@@ -72,7 +59,7 @@ export function listFilesWithGit(
 
   const runGitLsFiles = (args: string[]): Promise<void> => {
     return new Promise((resolve, reject) => {
-      const paths = new QuickOpenSubprocessPathAccumulator(0)
+      let buf = ''
       let done = false
 
       const processPath = (path: string): boolean => {
@@ -80,23 +67,27 @@ export function listFilesWithGit(
           return false
         }
         if (path.endsWith('/')) {
-          retainQuickOpenPath(directoryPaths, path, listingBudget)
+          directoryPaths.add(path)
         } else {
-          retainQuickOpenPath(gitPaths, path, listingBudget)
-          const parsed = parseQuickOpenGitLsFilesEntry(path)
-          const relPath = parsed.path.replace(/\/+$/, '')
-          if (
-            !parsed.isGitlink &&
-            !parsed.isUntrackedDir &&
-            shouldIncludeQuickOpenPath(relPath) &&
-            !shouldExcludeQuickOpenRelPath(relPath, excludePathPrefixes)
-          ) {
-            retainQuickOpenPath(directFileCandidates, relPath, listingBudget)
+          gitPaths.add(path)
+          if (maxResults !== undefined) {
+            // Why: this duplicate classification exists only to stop bounded
+            // scans; unbounded SSH scans must not retain another full listing.
+            const parsed = parseQuickOpenGitLsFilesEntry(path)
+            const relPath = parsed.path.replace(/\/+$/, '')
+            if (
+              !parsed.isGitlink &&
+              !parsed.isUntrackedDir &&
+              shouldIncludeQuickOpenPath(relPath) &&
+              !shouldExcludeQuickOpenRelPath(relPath, excludePathPrefixes)
+            ) {
+              directFileCandidates.add(relPath)
+            }
           }
         }
         // Why: placeholders need IO classification and can disappear; only
         // guaranteed final files are allowed to stop the remote Git processes.
-        return directFileCandidates.size >= resultLimit
+        return maxResults !== undefined && directFileCandidates.size >= maxResults
       }
 
       const child = spawn('git', ['ls-files', ...args], {
@@ -120,7 +111,7 @@ export function listFilesWithGit(
           return
         }
         done = true
-        paths.clear()
+        buf = ''
         cleanup()
         reject(error)
       }
@@ -129,7 +120,6 @@ export function listFilesWithGit(
           return
         }
         done = true
-        paths.clear()
         cleanup()
         resolve()
       }
@@ -140,23 +130,20 @@ export function listFilesWithGit(
         resolve: resolvePass
       })
 
-      function failForOutput(error: unknown): void {
-        child.kill()
-        rejectPass(error instanceof Error ? error : new Error(String(error)))
-      }
-      function handleStdoutData(chunk: Buffer | string): void {
-        try {
-          const outcome = paths.push(chunk, (path) => !processPath(path))
-          if (outcome === 'stopped') {
+      function handleStdoutData(chunk: string): void {
+        buf += chunk
+        let start = 0
+        let idx = buf.indexOf('\0', start)
+        while (idx !== -1) {
+          if (processPath(buf.substring(start, idx))) {
+            buf = ''
             finishAtLimit()
-          } else if (outcome === 'path-too-large') {
-            failForOutput(
-              new Error(`Quick Open file path exceeded ${QUICK_OPEN_LISTING_MAX_PATH_BYTES} bytes`)
-            )
+            return
           }
-        } catch (error) {
-          failForOutput(error)
+          start = idx + 1
+          idx = buf.indexOf('\0', start)
         }
+        buf = start < buf.length ? buf.substring(start) : ''
       }
       function handleStderrData(): void {
         /* drain */
@@ -175,14 +162,9 @@ export function listFilesWithGit(
           rejectPass(new Error(`git ls-files killed by ${signal}`))
           return
         }
-        try {
-          const trailingPath = paths.finish()
-          if (trailingPath && processPath(trailingPath)) {
-            finishAtLimit()
-            return
-          }
-        } catch (error) {
-          failForOutput(error)
+        if (buf && processPath(buf)) {
+          buf = ''
+          finishAtLimit()
           return
         }
         if (code === 0) {
@@ -195,6 +177,7 @@ export function listFilesWithGit(
         rejectPass(new Error(`git ls-files exited with code ${code}`))
       }
 
+      child.stdout!.setEncoding('utf-8')
       child.stdout!.on('data', handleStdoutData)
       child.stderr!.on('data', handleStderrData)
       child.once('error', handleError)
@@ -249,9 +232,12 @@ export function listFilesWithGit(
         )
       }
     })
-  const passes = runGitLsFiles(primary).then(() =>
-    directFileCandidates.size < resultLimit ? runIgnoredPass() : Promise.resolve()
-  )
+  const passes =
+    maxResults === undefined
+      ? Promise.all([runGitLsFiles(primary), runIgnoredPass()])
+      : runGitLsFiles(primary).then(() =>
+          directFileCandidates.size < maxResults ? runIgnoredPass() : Promise.resolve()
+        )
 
   return passes
     .then(async () => {
@@ -261,11 +247,11 @@ export function listFilesWithGit(
         directoryPaths,
         excludePathPrefixes,
         signal,
-        maxResults: resultLimit
+        maxResults
       })
       // Why: directory placeholders are expanded after Git exits; restore
       // Git's path order for empty queries and fuzzy-score ties over SSH.
-      return files.sort().slice(0, resultLimit)
+      return files.sort().slice(0, maxResults)
     })
     .catch((err) => {
       killSurvivors('git ls-files canceled after sibling failure')
@@ -291,7 +277,7 @@ export function searchWithGitGrep(
     const gitArgs = buildGitGrepArgs(query, opts)
     const matchRegex = buildSubmatchRegex(query, opts)
     const acc = createAccumulator()
-    const stdoutLines = new SearchSubprocessLineAccumulator()
+    let stdoutBuffer = ''
     let done = false
 
     const child = spawn('git', gitArgs, {
@@ -323,11 +309,12 @@ export function searchWithGitGrep(
       }
     }
 
-    function handleStdoutData(chunk: Buffer): void {
-      if (!stdoutLines.push(chunk, processLine)) {
-        acc.truncated = true
-        child.kill()
-        resolveOnce()
+    function handleStdoutData(chunk: string): void {
+      stdoutBuffer += chunk
+      const lines = stdoutBuffer.split('\n')
+      stdoutBuffer = lines.pop() ?? ''
+      for (const l of lines) {
+        processLine(l)
       }
     }
 
@@ -340,13 +327,13 @@ export function searchWithGitGrep(
     }
 
     function handleClose(): void {
-      const trailingLine = stdoutLines.finish()
-      if (trailingLine !== null) {
-        processLine(trailingLine)
+      if (stdoutBuffer) {
+        processLine(stdoutBuffer)
       }
       resolveOnce()
     }
 
+    child.stdout!.setEncoding('utf-8')
     child.stdout!.on('data', handleStdoutData)
     child.stderr!.on('data', handleStderrData)
     child.once('error', handleError)

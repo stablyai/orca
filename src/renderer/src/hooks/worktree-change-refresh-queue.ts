@@ -25,13 +25,7 @@ type QueuedWorktreeChange = {
 type RepoRefreshState = {
   running: boolean
   queue: QueuedWorktreeChange[]
-  overflowedDefault: boolean
-  overflowedLocal: boolean
 }
-
-export const WORKTREE_REFRESH_MAX_REPO_STATES = 1024
-export const WORKTREE_REFRESH_MAX_QUEUED_PER_REPO = 4096
-export const WORKTREE_REFRESH_MAX_QUEUED_TOTAL = 16_384
 
 export type WorktreeChangeRefreshQueue = {
   dispose: () => void
@@ -39,42 +33,18 @@ export type WorktreeChangeRefreshQueue = {
 }
 
 export function createWorktreeChangeRefreshQueue(
-  handler: WorktreeChangeRefreshHandler,
-  options?: {
-    maxRepoStates?: number
-    maxQueuedPerRepo?: number
-    maxQueuedTotal?: number
-  }
+  handler: WorktreeChangeRefreshHandler
 ): WorktreeChangeRefreshQueue {
   const states = new Map<string, RepoRefreshState>()
-  const maxRepoStates = options?.maxRepoStates ?? WORKTREE_REFRESH_MAX_REPO_STATES
-  const maxQueuedPerRepo = options?.maxQueuedPerRepo ?? WORKTREE_REFRESH_MAX_QUEUED_PER_REPO
-  const maxQueuedTotal = options?.maxQueuedTotal ?? WORKTREE_REFRESH_MAX_QUEUED_TOTAL
-  let queuedCount = 0
   let disposed = false
 
   const drain = async (repoId: string, state: RepoRefreshState): Promise<void> => {
     state.running = true
     try {
-      while (
-        !disposed &&
-        (state.queue.length > 0 || state.overflowedDefault || state.overflowedLocal)
-      ) {
+      while (!disposed && state.queue.length > 0) {
         const next = state.queue.shift()
-        let overflowForceLocalOwner: boolean | undefined
-        if (next) {
-          queuedCount = Math.max(0, queuedCount - 1)
-        } else if (state.overflowedDefault) {
-          state.overflowedDefault = false
-        } else {
-          state.overflowedLocal = false
-          overflowForceLocalOwner = true
-        }
         try {
-          // Why: one full refresh per owner route converges changes shed during extreme bursts.
-          await handler(repoId, next?.renamed, {
-            forceLocalOwner: next?.forceLocalOwner ?? overflowForceLocalOwner
-          })
+          await handler(repoId, next?.renamed, { forceLocalOwner: next?.forceLocalOwner })
         } catch (error) {
           console.error('Failed to refresh changed worktrees:', error)
         }
@@ -93,7 +63,6 @@ export function createWorktreeChangeRefreshQueue(
     dispose() {
       disposed = true
       states.clear()
-      queuedCount = 0
     },
 
     enqueue(event) {
@@ -102,33 +71,12 @@ export function createWorktreeChangeRefreshQueue(
       }
       let state = states.get(event.repoId)
       if (!state) {
-        if (states.size >= maxRepoStates) {
-          return
-        }
-        state = {
-          running: false,
-          queue: [],
-          overflowedDefault: false,
-          overflowedLocal: false
-        }
+        state = { running: false, queue: [] }
         states.set(event.repoId, state)
-      }
-
-      if (state.queue.length >= maxQueuedPerRepo || queuedCount >= maxQueuedTotal) {
-        if (event.forceLocalOwner) {
-          state.overflowedLocal = true
-        } else {
-          state.overflowedDefault = true
-        }
-        if (!state.running) {
-          void drain(event.repoId, state)
-        }
-        return
       }
 
       if (event.renamed) {
         state.queue.push({ renamed: event.renamed, forceLocalOwner: event.forceLocalOwner })
-        queuedCount += 1
       } else {
         const lastQueued = state.queue.at(-1)
         // Why: Windows/OneDrive can emit a burst for one checkout change. Keep a
@@ -141,7 +89,6 @@ export function createWorktreeChangeRefreshQueue(
           Boolean(lastQueued.forceLocalOwner) !== Boolean(event.forceLocalOwner)
         ) {
           state.queue.push({ forceLocalOwner: event.forceLocalOwner })
-          queuedCount += 1
         }
       }
 

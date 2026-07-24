@@ -22,16 +22,11 @@ import {
   MobileE2EEV2PhysicalChannel,
   type MobileE2EEV2Socket
 } from './mobile-e2ee-v2-physical-channel'
-import { createMobileOutboundMemoryBudget } from './mobile-outbound-memory-budget'
-import { MOBILE_OUTBOUND_MAX_JSON_BYTES } from './mobile-outbound-json'
 
 const desktop = nacl.box.keyPair.fromSecretKey(new Uint8Array(32).fill(1))
 const client = nacl.box.keyPair.fromSecretKey(new Uint8Array(32).fill(2))
 
-function setup(
-  decodeBinary: (raw: unknown) => Promise<Uint8Array | null>,
-  deviceToken = 'valid-token'
-) {
+function setup(decodeBinary: (raw: unknown) => Promise<Uint8Array | null>) {
   const session = MobileE2EEV2ClientSession.create({
     desktopPublicKeyB64: Buffer.from(desktop.publicKey).toString('base64'),
     transport: 'relay',
@@ -49,17 +44,15 @@ function setup(
   const events: string[] = []
   const onAuthenticated = vi.fn(() => events.push('authenticated'))
   const onError = vi.fn()
-  const outboundMemoryBudget = createMobileOutboundMemoryBudget()
   const channel = new MobileE2EEV2PhysicalChannel({
     session,
     socket,
-    deviceToken,
+    deviceToken: 'valid-token',
     decodeBinary,
     onAuthenticated,
     onText: (plaintext) => events.push(`text:${plaintext}`),
     onBinary: (plaintext) => events.push(`binary:${plaintext[0]}`),
-    onError,
-    outboundMemoryBudget
+    onError
   })
   channel.start()
 
@@ -79,18 +72,7 @@ function setup(
     clientNonce: handshake.clientNonce,
     desktopNonce: handshake.desktopNonce
   })
-  return {
-    channel,
-    session,
-    socket,
-    sent,
-    events,
-    onAuthenticated,
-    onError,
-    outboundMemoryBudget,
-    ready,
-    schedule
-  }
+  return { channel, session, socket, sent, events, onAuthenticated, onError, ready, schedule }
 }
 
 function serverFrame(
@@ -140,17 +122,6 @@ describe('mobile E2EE v2 physical channel', () => {
     expect(ctx.onError).not.toHaveBeenCalled()
   })
 
-  it('rejects ready JSON above the nesting cap before object materialization', async () => {
-    const ctx = setup(async () => null)
-
-    await ctx.channel.handleMessage(`${'['.repeat(129)}0${']'.repeat(129)}`)
-
-    expect(ctx.onError).toHaveBeenCalledWith(
-      expect.objectContaining({ message: 'Invalid E2EE v2 ready JSON' })
-    )
-    expect(ctx.sent).toHaveLength(1)
-  })
-
   it('classifies the encrypted desktop device-token rejection as global auth failure', async () => {
     const ctx = setup(async () => null)
     await ctx.channel.handleMessage(JSON.stringify(ctx.ready))
@@ -167,18 +138,6 @@ describe('mobile E2EE v2 physical channel', () => {
 
     expect(ctx.onError.mock.calls[0]![0]).toBeInstanceOf(MobileE2EEAuthenticationError)
     expect(ctx.onAuthenticated).not.toHaveBeenCalled()
-  })
-
-  it('rejects oversized authentication JSON before sealing or sending it', async () => {
-    const ctx = setup(async () => null, 'x'.repeat(MOBILE_OUTBOUND_MAX_JSON_BYTES))
-
-    await ctx.channel.handleMessage(JSON.stringify(ctx.ready))
-
-    expect(ctx.sent).toHaveLength(1)
-    expect(ctx.onError).toHaveBeenCalledWith(
-      expect.objectContaining({ message: expect.stringContaining('Mobile outbound JSON exceeds') })
-    )
-    ctx.channel.socketClosed()
   })
 
   it('serializes delayed binary conversion before a later text counter', async () => {
@@ -199,27 +158,6 @@ describe('mobile E2EE v2 physical channel', () => {
     await Promise.all([first, second])
     expect(ctx.events).toEqual(['binary:7', 'text:later'])
     expect(ctx.onError).not.toHaveBeenCalled()
-  })
-
-  it('fails closed when delayed inbound conversion lets frames exceed the backlog bound', async () => {
-    let releaseBinary!: (bytes: Uint8Array) => void
-    const pendingBinary = new Promise<Uint8Array>((resolve) => (releaseBinary = resolve))
-    const ctx = setup(async () => pendingBinary)
-    await authenticate(ctx)
-    const binary = serverFrame(new Uint8Array([7]), 'binary', 1n, ctx.schedule)
-    const pending = Array.from({ length: 65 }, () =>
-      ctx.channel.handleMessage({ delayedBlob: true })
-    )
-
-    await Promise.resolve()
-    try {
-      expect(ctx.onError).toHaveBeenCalledOnce()
-      expect(ctx.onError.mock.calls[0]![0].message).toBe('E2EE v2 inbound buffer overflow')
-    } finally {
-      ctx.channel.dispose()
-      releaseBinary(binary)
-      await Promise.all(pending)
-    }
   })
 
   it('queues outbound text and binary in one counter order', async () => {
@@ -256,61 +194,15 @@ describe('mobile E2EE v2 physical channel', () => {
     ).toEqual(new Uint8Array([2]))
   })
 
-  it('releases sent-frame reservations only after the matching response arrives', async () => {
-    const ctx = setup(async () => null)
-    await authenticate(ctx)
-    expect(ctx.outboundMemoryBudget.evidence().inFlightBytes).toBe(0)
-
-    expect(ctx.channel.sendText(JSON.stringify({ id: 'rpc-1', method: 'status.get' }))).toBe(true)
-    expect(ctx.outboundMemoryBudget.evidence().inFlightClaimCount).toBe(1)
-
-    const response = serverFrame(
-      new TextEncoder().encode(JSON.stringify({ id: 'rpc-1', ok: true, result: {} })),
-      'text',
-      1n,
-      ctx.schedule
-    )
-    await ctx.channel.handleMessage(Buffer.from(response).toString('base64'))
-
-    expect(ctx.outboundMemoryBudget.evidence()).toMatchObject({
-      inFlightBytes: 0,
-      inFlightClaimCount: 0
-    })
-    ctx.channel.socketClosed()
-  })
-
-  it('reports synchronous native send failure to relay callers', async () => {
-    const ctx = setup(async () => null)
-    await authenticate(ctx)
-    ctx.socket.send = () => {
-      throw new Error('native send failed')
-    }
-
-    expect(ctx.channel.sendText(JSON.stringify({ id: 'rpc-1' }))).toBe(false)
-    expect(ctx.onError).toHaveBeenCalledWith(
-      expect.objectContaining({ message: 'E2EE v2 outbound buffer overflow' })
-    )
-    expect(ctx.outboundMemoryBudget.evidence()).toMatchObject({
-      inFlightBytes: 0,
-      inFlightClaimCount: 0
-    })
-    ctx.channel.socketClosed()
-  })
-
   it('bounds the unified outbound queue and reports a wedged link', async () => {
     const ctx = setup(async () => null)
     await authenticate(ctx)
     ctx.socket.bufferedAmount = 9 * 1024 * 1024
     const megabyte = new Uint8Array(1024 * 1024)
     for (let index = 0; index < 65; index++) {
-      ctx.channel.sendBinary(megabyte)
+      expect(ctx.channel.sendBinary(megabyte)).toBe(true)
     }
     expect(ctx.onError).toHaveBeenCalledOnce()
     expect(ctx.onError.mock.calls[0]![0].message).toBe('E2EE v2 outbound buffer overflow')
-    expect(ctx.outboundMemoryBudget.evidence().bufferedSourceCount).toBe(1)
-    ctx.channel.dispose()
-    expect(ctx.outboundMemoryBudget.evidence().bufferedSourceCount).toBe(1)
-    ctx.channel.socketClosed()
-    expect(ctx.outboundMemoryBudget.evidence().bufferedSourceCount).toBe(0)
   })
 })

@@ -1,12 +1,6 @@
 import type { ClientChannel } from 'ssh2'
 import { createSshOperationAbortError } from './ssh-connection-utils'
-import {
-  HEADER_LENGTH,
-  MAX_BUFFERED_FRAME_CHUNKS,
-  MAX_MESSAGE_SIZE,
-  RELAY_SENTINEL,
-  RELAY_SENTINEL_TIMEOUT_MS
-} from './relay-protocol'
+import { RELAY_SENTINEL, RELAY_SENTINEL_TIMEOUT_MS } from './relay-protocol'
 import type { MultiplexerTransport } from './ssh-channel-multiplexer'
 import { buildRelayVersionMismatchError } from './ssh-relay-handshake-mismatch'
 
@@ -16,8 +10,6 @@ export { execCommand, isUnconfirmedSshCommandTermination } from './ssh-relay-exe
 // ── Sentinel detection ────────────────────────────────────────────────
 
 const MAX_RELAY_STARTUP_BUFFER_BYTES = 64 * 1024
-// One maximum frame may be coalesced with the start of the next.
-const MAX_PENDING_RELAY_BYTES = (MAX_MESSAGE_SIZE + HEADER_LENGTH) * 2
 const RELAY_SENTINEL_BUFFER = Buffer.from(RELAY_SENTINEL, 'utf-8')
 
 export function waitForSentinel(
@@ -170,35 +162,19 @@ export function waitForSentinel(
       notifyClosed()
     })
 
-    // The caller cannot subscribe until the resolved promise resumes.
-    let pendingAfterSentinel: Buffer[] = []
-    let pendingAfterSentinelBytes = 0
-
-    const bufferAfterSentinel = (data: Buffer): void => {
-      if (closedAfterSentinel) {
-        return
-      }
-      if (
-        data.length > MAX_PENDING_RELAY_BYTES - pendingAfterSentinelBytes ||
-        pendingAfterSentinel.length >= MAX_BUFFERED_FRAME_CHUNKS
-      ) {
-        pendingAfterSentinel = []
-        pendingAfterSentinelBytes = 0
-        notifyClosed()
-        channel.close()
-        return
-      }
-      pendingAfterSentinel.push(data)
-      pendingAfterSentinelBytes += data.length
-    }
+    // Why: data arriving in the same TCP chunk as the sentinel is buffered
+    // here. It's delivered on the first onData registration rather than
+    // immediately after resolve, because resolve schedules a microtask —
+    // the caller's `await` hasn't resumed yet, so no callbacks are
+    // registered when the synchronous code after resolve runs.
+    let pendingAfterSentinel: Buffer | null = null
 
     channel.on('data', (data: Buffer) => {
       if (sentinelReceived) {
-        if (closedAfterSentinel) {
-          return
-        }
         if (dataCallbacks.length === 0) {
-          bufferAfterSentinel(data)
+          pendingAfterSentinel = pendingAfterSentinel
+            ? Buffer.concat([pendingAfterSentinel, data])
+            : data
         } else {
           for (const cb of dataCallbacks) {
             cb(data)
@@ -235,16 +211,19 @@ export function waitForSentinel(
         const afterSentinel = data.subarray(Math.max(0, afterSentinelOffset))
 
         if (afterSentinel.length > 0) {
-          bufferAfterSentinel(afterSentinel)
+          pendingAfterSentinel = afterSentinel
         }
         const transport: MultiplexerTransport = {
           write: (buf: Buffer) => channel.stdin.write(buf),
           onData: (cb) => {
             dataCallbacks.push(cb)
-            if (pendingAfterSentinel.length > 0) {
-              const buf = Buffer.concat(pendingAfterSentinel, pendingAfterSentinelBytes)
-              pendingAfterSentinel = []
-              pendingAfterSentinelBytes = 0
+            // Why: deliver buffered post-sentinel data to the first
+            // subscriber. This is the multiplexer constructor, which
+            // registers onData synchronously — the data is guaranteed
+            // to reach the decoder before any other frames arrive.
+            if (pendingAfterSentinel) {
+              const buf = pendingAfterSentinel
+              pendingAfterSentinel = null
               cb(buf)
             }
           },

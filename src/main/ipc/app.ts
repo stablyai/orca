@@ -6,7 +6,6 @@ import { app, BrowserWindow, dialog, ipcMain, type IpcMainInvokeEvent } from 'el
 import { is } from '@electron-toolkit/utils'
 import type { AppIdentity } from '../../shared/app-identity'
 import type { FloatingTerminalCwdRequest, MarkdownDocument } from '../../shared/types'
-import { GrowingByteBuffer } from '../../shared/growing-byte-buffer'
 import { relaunchApp } from '../app-relaunch'
 import type { Store } from '../persistence'
 import { getDevInstanceIdentity } from '../startup/dev-instance-identity'
@@ -25,7 +24,6 @@ import { isMarkdownDocumentName, markdownDocumentFromFilePath } from './markdown
 import { registerRendererShutdownCheckpointHandler } from './renderer-shutdown-checkpoint'
 
 const KEYBOARD_INPUT_SOURCE_TIMEOUT_MS = 500
-const KEYBOARD_INPUT_SOURCE_MAX_OUTPUT_BYTES = 1024 * 1024
 const MAC_HITOOLBOX_DOMAIN = 'com.apple.HIToolbox'
 // Why: defaults export reads live prefs (on-disk plist lags cfprefsd); xml1 dodges plutil's json abort on macOS 15 input-source arrays; absolute paths so a minimal PATH can't shadow the tools.
 const MAC_SELECTED_INPUT_SOURCES_JSON_COMMAND = [
@@ -118,7 +116,6 @@ function readCommandStdout(
   return new Promise((resolve, reject) => {
     let settled = false
     let child: ReturnType<typeof spawn> | undefined
-    const stdout = new GrowingByteBuffer()
 
     // Why: killing only the shell orphans pipeline stages; detached spawn lets one negative-pid SIGKILL reap the whole group.
     const killTree = (): void => {
@@ -149,19 +146,14 @@ function readCommandStdout(
       settled = true
       clearTimeout(timer)
       callback()
-      stdout.clear()
     }
 
     try {
       child = spawn(command, args, { detached: true, stdio: ['ignore', 'pipe', 'ignore'] })
+      let stdout = ''
       child.stdout?.setEncoding('utf8')
       child.stdout?.on('data', (chunk: string) => {
-        const bytes = Buffer.from(chunk)
-        if (stdout.byteLength + bytes.byteLength > KEYBOARD_INPUT_SOURCE_MAX_OUTPUT_BYTES) {
-          failWith(new Error(`${command} exceeded its output limit`))
-          return
-        }
-        stdout.append(bytes)
+        stdout += chunk
       })
       const failWith = (error: Error): void => {
         killTree()
@@ -173,7 +165,7 @@ function readCommandStdout(
       child.on('close', (code, signal) => {
         settle(() =>
           code === 0
-            ? resolve(stdout.takeString())
+            ? resolve(stdout)
             : reject(
                 new Error(
                   `${command} exited with ${signal ? `signal ${signal}` : `code ${code ?? 'unknown'}`}`

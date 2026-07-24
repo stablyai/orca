@@ -1,5 +1,4 @@
 import { remoteRuntimeUnavailableError } from './remote-runtime-request-frames'
-import { takeRemoteRuntimePreparedRequest } from './remote-runtime-prepared-request-admission'
 import { finishSharedControlSubscription } from './remote-runtime-shared-control-state'
 import type {
   SharedControlLogicalSubscription,
@@ -9,15 +8,23 @@ import type {
 export function sendSharedControlRequest(args: {
   pendingRequests: Map<string, SharedControlPendingRequest<unknown>>
   requestId: string
-  send: (serializedRequest: string) => boolean
+  deviceToken: string
+  method: string
+  params: unknown
+  send: (payload: unknown) => boolean
   reject: (requestId: string, error: Error) => void
 }): void {
-  const pending = args.pendingRequests.get(args.requestId)
-  if (!pending) {
+  if (!args.pendingRequests.has(args.requestId)) {
     return
   }
-  const serializedRequest = takeRemoteRuntimePreparedRequest(pending)
-  if (serializedRequest === null || !args.send(serializedRequest)) {
+  if (
+    !args.send({
+      id: args.requestId,
+      deviceToken: args.deviceToken,
+      method: args.method,
+      params: args.params
+    })
+  ) {
     args.reject(args.requestId, remoteRuntimeUnavailableError())
   }
 }

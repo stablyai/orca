@@ -13,7 +13,6 @@ import {
   normalizeRuntimePathForComparison
 } from '../../../../shared/cross-platform-path'
 import type { Worktree } from '../../../../shared/types'
-import { mapWithConcurrency } from '../../../../shared/map-with-concurrency'
 import { translate } from '@/i18n/i18n'
 
 type WorktreeBatchDeleteOptions = {
@@ -27,8 +26,6 @@ type WorktreeDeleteWithToastOptions = {
   // Why: batch deletes suppress the per-delete focus handoff to focus one survivor after the batch (see runWorktreeDeletesInParallel).
   focusSuccessorOnDelete?: boolean
 }
-
-export const CROSS_REPO_DELETE_CONCURRENCY = 4
 
 // Why: a failed delete usually means unresolved changes, so land on the diff panel, not just focus the worktree.
 function viewWorktreeDiff(worktreeId: string): void {
@@ -70,10 +67,8 @@ export async function runWorktreeDeletesInParallel(
     // Why: delete nested children first — else the parent delete is rejected while it still contains a registered worktree.
     group.sort((a, b) => b.path.length - a.path.length)
   }
-  const groupResults = await mapWithConcurrency(
-    Array.from(groups.values()),
-    CROSS_REPO_DELETE_CONCURRENCY,
-    async (group) => {
+  const groupResults = await Promise.all(
+    Array.from(groups.values()).map(async (group) => {
       const deletedInGroup: string[] = []
       const failedInGroup: (typeof group)[number][] = []
       for (const target of group) {
@@ -93,7 +88,7 @@ export async function runWorktreeDeletesInParallel(
         }
       }
       return deletedInGroup
-    }
+    })
   )
   const deletedSet = new Set(groupResults.flat())
   // Why: focus a survivor once after the batch settles — an intermediate focus could spawn a terminal in a to-be-deleted workspace.

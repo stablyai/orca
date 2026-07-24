@@ -63,9 +63,7 @@ export default function ImageViewer({
     () => buildImageDataUri(mimeType, cleanedContent),
     [cleanedContent, mimeType]
   )
-  const imageError =
-    (previewSrc === null && cleanedContent.length > 0) ||
-    (previewSrc !== null && failedPreviewSrc === previewSrc)
+  const imageError = previewSrc !== null && failedPreviewSrc === previewSrc
   const estimatedSize = useMemo(() => {
     const bytes = Math.floor((cleanedContent.length * 3) / 4)
     if (bytes < 1024) {

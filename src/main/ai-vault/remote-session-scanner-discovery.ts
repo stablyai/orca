@@ -6,7 +6,6 @@ import { isMissingRemoteSessionPathError, statRemoteSessionFile } from './remote
 import { partitionSubagentTranscriptPaths } from './session-scanner-subagent-transcripts'
 import type { FileWithMtime } from './session-scanner-types'
 import { errorMessage } from './session-scanner-values'
-import { AiVaultSessionDiscoveryCapacityError } from './session-discovery-budget'
 import type {
   RemoteScannerContext,
   RemoteSessionCandidate,
@@ -14,31 +13,15 @@ import type {
 } from './remote-session-scanner-types'
 
 const REMOTE_DISCOVERY_CONCURRENCY = 8
-const REMOTE_DISCOVERY_ISSUE_MAX = 256
 
 export async function discoverRemoteSourceCandidates(args: {
   source: RemoteSessionSource
   context: RemoteScannerContext
   issues: AiVaultScanIssue[]
 }): Promise<RemoteSessionCandidate[]> {
-  const walked: string[] = []
-  try {
-    await (args.source.fixedChildFileSegments
-      ? collectRemoteFixedChildFiles(args.source, args.context, args.issues, walked)
-      : collectRemoteSessionFiles(args.source, args.context, args.issues, walked))
-  } catch (error) {
-    if (error instanceof AiVaultSessionDiscoveryCapacityError) {
-      recordRemoteDirectoryIssue(
-        args.source,
-        args.context.executionHostId,
-        args.issues,
-        args.source.rootDir,
-        error
-      )
-    } else {
-      throw error
-    }
-  }
+  const walked = args.source.fixedChildFileSegments
+    ? await listRemoteFixedChildFiles(args.source, args.context, args.issues)
+    : await walkRemoteSessionFiles(args.source, args.context, args.issues)
   const partition = args.source.collectSubagentSiblingCounts
     ? partitionSubagentTranscriptPaths(walked)
     : null
@@ -62,63 +45,52 @@ export async function discoverRemoteSourceCandidates(args: {
     }))
 }
 
-async function collectRemoteFixedChildFiles(
+async function listRemoteFixedChildFiles(
   source: RemoteSessionSource,
   context: RemoteScannerContext,
-  issues: AiVaultScanIssue[],
-  paths: string[]
-): Promise<void> {
-  context.discoveryBudget.enterDirectory(0)
+  issues: AiVaultScanIssue[]
+): Promise<string[]> {
   let entries
   try {
     entries = await context.provider.readDir(source.rootDir)
   } catch (err) {
     recordRemoteDirectoryIssue(source, context.executionHostId, issues, source.rootDir, err)
-    return
+    return []
   }
   const segments = source.fixedChildFileSegments ?? []
   // Why: Antigravity's transcript path is fixed. Constructing it avoids three
   // serialized SSH readDir round trips for every conversation directory.
-  for (const entry of entries) {
-    const entryPath = joinRemotePath(context.hostPlatform, source.rootDir, entry.name)
-    context.discoveryBudget.visitEntry(entryPath)
-    if (!entry.isDirectory || entry.isSymlink) {
-      continue
-    }
-    const path = joinRemotePath(context.hostPlatform, entryPath, ...segments)
-    if (source.filePredicate?.(path) ?? true) {
-      paths.push(path)
-    }
-  }
+  return entries
+    .filter((entry) => entry.isDirectory && !entry.isSymlink)
+    .map((entry) => joinRemotePath(context.hostPlatform, source.rootDir, entry.name, ...segments))
+    .filter((path) => source.filePredicate?.(path) ?? true)
 }
 
-async function collectRemoteSessionFiles(
+async function walkRemoteSessionFiles(
   source: RemoteSessionSource,
   context: RemoteScannerContext,
   issues: AiVaultScanIssue[],
-  files: string[],
   dirPath = source.rootDir,
   depth = 0
-): Promise<void> {
-  context.discoveryBudget.enterDirectory(depth)
+): Promise<string[]> {
   let entries
   try {
     entries = await context.provider.readDir(dirPath)
   } catch (err) {
     recordRemoteDirectoryIssue(source, context.executionHostId, issues, dirPath, err)
-    return
+    return []
   }
 
   const extensions = new Set(source.extensions)
+  const files: string[] = []
   for (const entry of entries) {
     const fullPath = joinRemotePath(context.hostPlatform, dirPath, entry.name)
-    context.discoveryBudget.visitEntry(fullPath)
     if (
       entry.isDirectory &&
       !entry.isSymlink &&
       (source.directoryPredicate?.(entry.name, depth) ?? true)
     ) {
-      await collectRemoteSessionFiles(source, context, issues, files, fullPath, depth + 1)
+      files.push(...(await walkRemoteSessionFiles(source, context, issues, fullPath, depth + 1)))
       continue
     }
     if (
@@ -129,6 +101,7 @@ async function collectRemoteSessionFiles(
       files.push(fullPath)
     }
   }
+  return files
 }
 
 function recordRemoteDirectoryIssue(
@@ -138,7 +111,7 @@ function recordRemoteDirectoryIssue(
   path: string,
   err: unknown
 ): void {
-  if (!isMissingRemoteSessionPathError(err) && issues.length < REMOTE_DISCOVERY_ISSUE_MAX) {
+  if (!isMissingRemoteSessionPathError(err)) {
     issues.push({ executionHostId, agent: source.agent, path, message: errorMessage(err) })
   }
 }

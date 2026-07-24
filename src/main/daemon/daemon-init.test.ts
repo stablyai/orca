@@ -235,10 +235,6 @@ vi.mock('fs', () => ({
   writeFileSync: writeFileSyncMock
 }))
 
-vi.mock('./daemon-control-file-reader', () => ({
-  readDaemonControlFileText: readFileSyncMock
-}))
-
 vi.mock('child_process', () => ({ fork: forkMock }))
 
 vi.mock('net', () => ({ connect: netConnectMock }))

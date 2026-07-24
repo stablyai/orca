@@ -3,10 +3,6 @@ import { defineMethod, type RpcMethod } from '../core'
 import { OptionalFiniteNumber, OptionalString, requiredString } from '../schemas'
 import type { GateStatus } from '../../orchestration/db'
 import { Coordinator } from '../../orchestration/coordinator'
-import {
-  assertOrchestrationStringListFits,
-  assertOrchestrationWriteFits
-} from '../../orchestration/query-retention'
 
 // Why: the coordinator instance is stored at module scope so orchestration.runStop
 // can signal it to halt. Only one coordinator can run at a time (enforced by
@@ -112,12 +108,10 @@ export const ORCHESTRATION_GATE_METHODS: RpcMethod[] = [
       let options: string[] | undefined
       if (params.options) {
         try {
-          assertOrchestrationWriteFits('Decision gate options', [params.options])
           const parsed = JSON.parse(params.options)
           if (!Array.isArray(parsed) || !parsed.every((option) => typeof option === 'string')) {
             throw new Error('not an array of strings')
           }
-          assertOrchestrationStringListFits('Decision gate options', parsed)
           options = parsed
         } catch {
           throw new Error('Invalid --options: must be a JSON array of strings')
@@ -150,17 +144,11 @@ export const ORCHESTRATION_GATE_METHODS: RpcMethod[] = [
     params: GateListParams,
     handler: (params, { runtime }) => {
       const db = runtime.getOrchestrationDb()
-      const filter = {
+      const gates = db.listGates({
         taskId: params.task,
         status: params.status as GateStatus
-      }
-      const gates = db.listGates(filter)
-      const total = db.countGates(filter)
-      return {
-        gates,
-        count: gates.length,
-        ...(total > gates.length ? { total, truncated: true as const } : {})
-      }
+      })
+      return { gates, count: gates.length }
     }
   })
 ]

@@ -1,4 +1,5 @@
-import { open, opendir, realpath, stat } from 'node:fs/promises'
+import type { Dirent } from 'node:fs'
+import { open, readdir, realpath, stat } from 'node:fs/promises'
 import { homedir } from 'node:os'
 import { basename, dirname, isAbsolute, join, relative, sep } from 'node:path'
 import { summarizeSkillMarkdown } from '../../shared/skill-metadata'
@@ -17,15 +18,6 @@ import {
   type SkillScanRoot
 } from './skill-discovery-sources'
 import { discoverClaudePluginSkillSources } from './claude-plugin-skill-sources'
-import { mapWithConcurrency } from '../../shared/map-with-concurrency'
-import {
-  MAX_CONCURRENT_SKILL_DISCOVERY_CANDIDATES,
-  MAX_CONCURRENT_SKILL_DISCOVERY_ROOTS,
-  MAX_SKILL_PACKAGE_DIRECTORIES,
-  MAX_SKILL_PACKAGE_ENTRIES,
-  SkillDiscoveryBudget,
-  SkillDiscoveryLimitError
-} from './skill-discovery-limits'
 
 export { buildSkillDiscoverySources } from './skill-discovery-sources'
 
@@ -54,18 +46,13 @@ function isWithinDepth(rootPath: string, childPath: string, maxDepth: number): b
   return rel.split(sep).length <= maxDepth
 }
 
-async function findSkillFiles(
-  rootPath: string,
-  maxDepth: number,
-  budget: SkillDiscoveryBudget
-): Promise<string[]> {
+async function findSkillFiles(rootPath: string, maxDepth: number): Promise<string[]> {
   const out: string[] = []
   const visitedDirectoryPaths = new Set<string>()
   async function visit(dirPath: string): Promise<void> {
     if (!isWithinDepth(rootPath, dirPath, maxDepth)) {
       return
     }
-    budget.visitDirectory()
     let resolvedDirPath: string
     try {
       resolvedDirPath = await realpath(dirPath)
@@ -77,45 +64,44 @@ async function findSkillFiles(
     }
     visitedDirectoryPaths.add(resolvedDirPath)
 
-    const directory = await opendir(dirPath).catch(() => null)
-    if (!directory) {
+    let entries: Dirent[]
+    try {
+      entries = await readdir(dirPath, { withFileTypes: true })
+    } catch {
       return
     }
-    try {
-      for await (const entry of directory) {
-        budget.visitEntry()
-        const entryPath = join(dirPath, entry.name)
-        if (entry.name === SKILL_FILE_NAME) {
-          if (entry.isFile()) {
-            budget.admitCandidate()
-            out.push(entryPath)
-            continue
-          }
-          if (entry.isSymbolicLink()) {
-            const linkedStat = await stat(entryPath).catch(() => null)
-            if (linkedStat?.isFile()) {
-              budget.admitCandidate()
-              out.push(entryPath)
-            }
-          }
-          continue
-        }
-        if (entry.isDirectory()) {
-          await visit(entryPath)
+    for (const entry of entries) {
+      const entryPath = join(dirPath, entry.name)
+      if (entry.name === SKILL_FILE_NAME) {
+        if (entry.isFile()) {
+          out.push(entryPath)
           continue
         }
         if (entry.isSymbolicLink()) {
-          // Why: users commonly symlink agent skill dirs across providers; follow
-          // directory links but guard by realpath so recursive links cannot loop.
-          const linkedStat = await stat(entryPath).catch(() => null)
-          if (linkedStat?.isDirectory()) {
-            await visit(entryPath)
+          try {
+            if ((await stat(entryPath)).isFile()) {
+              out.push(entryPath)
+            }
+          } catch {
+            // Broken links are not valid skill files.
           }
         }
+        continue
       }
-    } catch (error) {
-      if (error instanceof SkillDiscoveryLimitError) {
-        throw error
+      if (entry.isDirectory()) {
+        await visit(entryPath)
+        continue
+      }
+      if (entry.isSymbolicLink()) {
+        // Why: users commonly symlink agent skill dirs across providers; follow
+        // directory links but guard by realpath so recursive links cannot loop.
+        try {
+          if ((await stat(entryPath)).isDirectory()) {
+            await visit(entryPath)
+          }
+        } catch {
+          // Broken links are not valid skill directories.
+        }
       }
     }
   }
@@ -125,16 +111,9 @@ async function findSkillFiles(
 
 async function countFiles(dirPath: string): Promise<number> {
   let count = 0
-  let entriesVisited = 0
-  let stoppedEarly = false
   const visitedDirectoryPaths = new Set<string>()
   async function visit(currentPath: string): Promise<void> {
-    if (
-      stoppedEarly ||
-      count >= MAX_SKILL_FILES ||
-      visitedDirectoryPaths.size >= MAX_SKILL_PACKAGE_DIRECTORIES
-    ) {
-      stoppedEarly = true
+    if (count >= MAX_SKILL_FILES) {
       return
     }
     let resolvedPath: string
@@ -148,34 +127,30 @@ async function countFiles(dirPath: string): Promise<number> {
     }
     visitedDirectoryPaths.add(resolvedPath)
 
-    const directory = await opendir(currentPath).catch(() => null)
-    if (!directory) {
+    let entries: Dirent[]
+    try {
+      entries = await readdir(currentPath, { withFileTypes: true })
+    } catch {
       return
     }
-    try {
-      for await (const entry of directory) {
-        entriesVisited += 1
-        if (count >= MAX_SKILL_FILES || entriesVisited > MAX_SKILL_PACKAGE_ENTRIES) {
-          stoppedEarly = true
-          return
-        }
-        const entryPath = join(currentPath, entry.name)
-        if (entry.isFile()) {
-          count += 1
-        } else if (entry.isDirectory()) {
-          await visit(entryPath)
-        } else if (entry.isSymbolicLink()) {
-          try {
-            if ((await stat(entryPath)).isFile()) {
-              count += 1
-            }
-          } catch {
-            // Broken links do not contribute to the skill package file count.
+    for (const entry of entries) {
+      if (count >= MAX_SKILL_FILES) {
+        return
+      }
+      const entryPath = join(currentPath, entry.name)
+      if (entry.isFile()) {
+        count += 1
+      } else if (entry.isDirectory()) {
+        await visit(entryPath)
+      } else if (entry.isSymbolicLink()) {
+        try {
+          if ((await stat(entryPath)).isFile()) {
+            count += 1
           }
+        } catch {
+          // Broken links do not contribute to the skill package file count.
         }
       }
-    } catch {
-      // Preserve the partial count when a directory changes during enumeration.
     }
   }
   await visit(dirPath)
@@ -209,16 +184,11 @@ async function readSkillSummary(skillFilePath: string): Promise<{
 
 type ScannedSkill = DiscoveredSkill & { canonicalSkillFilePath: string }
 
-async function scanRoot(
-  root: SkillScanRoot,
-  budget: SkillDiscoveryBudget
-): Promise<ScannedSkill[]> {
+async function scanRoot(root: SkillScanRoot): Promise<ScannedSkill[]> {
   const maxDepth = root.sourceKind === 'plugin' ? 9 : 4
-  const skillFiles = await findSkillFiles(root.path, maxDepth, budget)
-  const skills = await mapWithConcurrency(
-    skillFiles,
-    MAX_CONCURRENT_SKILL_DISCOVERY_CANDIDATES,
-    async (skillFilePath): Promise<ScannedSkill | null> => {
+  const skillFiles = await findSkillFiles(root.path, maxDepth)
+  const skills = await Promise.all(
+    skillFiles.map(async (skillFilePath): Promise<ScannedSkill | null> => {
       // Why: path identity belongs to the scanning host; canonicalizing before
       // returning prevents symlinked roots from becoming duplicate picker rows.
       const canonicalSkillFilePath = await realpath(skillFilePath).catch(() => skillFilePath)
@@ -228,7 +198,7 @@ async function scanRoot(
         return null
       }
       const sourceKind = sourceKindForSkill(root, skillFilePath, { relative, sep })
-      const skill = {
+      return {
         id: stablePathId(canonicalSkillFilePath),
         name: summary.name ?? basename(directoryPath),
         description: summary.description,
@@ -245,9 +215,7 @@ async function scanRoot(
         updatedAt: summary.updatedAt,
         canonicalSkillFilePath
       } satisfies ScannedSkill
-      budget.retainSkill(skill)
-      return skill
-    }
+    })
   )
   return skills.filter((skill): skill is ScannedSkill => skill !== null)
 }
@@ -267,58 +235,54 @@ export async function discoverSkills(args: {
       ? await discoverClaudePluginSkillSources({ homeDir, cwd: args.cwd })
       : [])
   ]
-  const budget = new SkillDiscoveryBudget(roots)
-  const scannedRoots = await mapWithConcurrency(
-    roots,
-    MAX_CONCURRENT_SKILL_DISCOVERY_ROOTS,
-    async (root) => {
+  const sources: SkillDiscoverySource[] = []
+  const skillGroups = await Promise.all(
+    roots.map(async (root) => {
       const exists = await pathExists(root.path)
-      const source: SkillDiscoverySource = {
+      sources.push({
         ...root,
         providers: [...root.providers],
         exists,
         skippedReason: exists ? undefined : 'missing'
-      }
+      })
       if (!exists) {
-        return { source, skills: [] }
+        return []
       }
-      return { source, skills: await scanRoot(root, budget) }
-    }
+      return scanRoot(root)
+    })
   )
   const seen = new Map<string, DiscoveredSkill>()
-  for (const group of scannedRoots) {
-    for (const skill of group.skills) {
-      // Why: overlapping repo/cwd roots and symlinked provider homes can reach
-      // the same file. Keep the first source's higher-level scope identity, but
-      // record every contributing root so per-agent visibility survives dedup.
-      const existing = seen.get(skill.canonicalSkillFilePath)
-      if (existing) {
-        if (existing.rootPaths && !existing.rootPaths.includes(skill.rootPath)) {
-          existing.rootPaths.push(skill.rootPath)
-        }
-        // Why: providers is per-agent visibility just like rootPaths; keeping only
-        // the first root's tags makes a shared/symlinked skill under-report which
-        // agents can see it on the Settings provider badges/filter. Reassign a
-        // fresh array — `providers` aliases the scan root's array, so pushing in
-        // place would mutate the root and every sibling skill/source sharing it.
-        const mergedProviders = [...existing.providers]
-        for (const provider of skill.providers) {
-          if (!mergedProviders.includes(provider)) {
-            mergedProviders.push(provider)
-          }
-        }
-        existing.providers = mergedProviders
-        continue
+  for (const skill of skillGroups.flat()) {
+    // Why: overlapping repo/cwd roots and symlinked provider homes can reach
+    // the same file. Keep the first source's higher-level scope identity, but
+    // record every contributing root so per-agent visibility survives dedup.
+    const existing = seen.get(skill.canonicalSkillFilePath)
+    if (existing) {
+      if (existing.rootPaths && !existing.rootPaths.includes(skill.rootPath)) {
+        existing.rootPaths.push(skill.rootPath)
       }
-      const { canonicalSkillFilePath, ...publicSkill } = skill
-      seen.set(canonicalSkillFilePath, { ...publicSkill, rootPaths: [skill.rootPath] })
+      // Why: providers is per-agent visibility just like rootPaths; keeping only
+      // the first root's tags makes a shared/symlinked skill under-report which
+      // agents can see it on the Settings provider badges/filter. Reassign a
+      // fresh array — `providers` aliases the scan root's array, so pushing in
+      // place would mutate the root and every sibling skill/source sharing it.
+      const mergedProviders = [...existing.providers]
+      for (const provider of skill.providers) {
+        if (!mergedProviders.includes(provider)) {
+          mergedProviders.push(provider)
+        }
+      }
+      existing.providers = mergedProviders
+      continue
     }
+    const { canonicalSkillFilePath, ...publicSkill } = skill
+    seen.set(canonicalSkillFilePath, { ...publicSkill, rootPaths: [skill.rootPath] })
   }
   return {
     skills: Array.from(seen.values()).sort(compareSkills),
-    sources: scannedRoots
-      .map(({ source }) => source)
-      .sort((a, b) => a.label.localeCompare(b.label, undefined, { sensitivity: 'base' })),
+    sources: sources.sort((a, b) =>
+      a.label.localeCompare(b.label, undefined, { sensitivity: 'base' })
+    ),
     scannedAt: Date.now()
   }
 }

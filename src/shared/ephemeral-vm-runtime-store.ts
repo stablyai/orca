@@ -1,9 +1,6 @@
-import { existsSync } from 'node:fs'
+import { existsSync, readFileSync } from 'node:fs'
 import { join } from 'node:path'
-import { JsonStringifyByteLimitError } from './node-bounded-json-stringify'
-import { readNodeFileSyncWithinLimit } from './node-bounded-file-reader'
-import { writeSecureJsonFileWithinLimit } from './bounded-secure-json-file'
-import { hardenExistingSecureFile } from './secure-file'
+import { hardenExistingSecureFile, writeSecureJsonFile } from './secure-file'
 import {
   EphemeralVmRuntimeRecordSchema,
   EphemeralVmRuntimeStoreSchema,
@@ -14,7 +11,6 @@ import {
 } from './ephemeral-vm-runtimes'
 
 const EPHEMERAL_VM_RUNTIMES_FILE = 'orca-ephemeral-vm-runtimes.json'
-export const MAX_EPHEMERAL_VM_RUNTIME_STORE_FILE_BYTES = 1024 * 1024
 
 export type EphemeralVmRuntimeStoreErrorCode = 'invalid_argument' | 'runtime_error'
 
@@ -140,14 +136,7 @@ function readEphemeralVmRuntimeStore(userDataPath: string): EphemeralVmRuntimeSt
   }
   try {
     hardenExistingSecureFile(path)
-    const parsed = EphemeralVmRuntimeStoreSchema.parse(
-      JSON.parse(
-        readNodeFileSyncWithinLimit(
-          path,
-          MAX_EPHEMERAL_VM_RUNTIME_STORE_FILE_BYTES
-        ).buffer.toString('utf8')
-      )
-    )
+    const parsed = EphemeralVmRuntimeStoreSchema.parse(JSON.parse(readFileSync(path, 'utf8')))
     return {
       version: 1,
       runtimes: parsed.runtimes
@@ -164,21 +153,7 @@ function readEphemeralVmRuntimeStore(userDataPath: string): EphemeralVmRuntimeSt
 
 function writeEphemeralVmRuntimeStore(userDataPath: string, store: EphemeralVmRuntimeStore): void {
   const path = getEphemeralVmRuntimeStorePath(userDataPath)
-  try {
-    writeSecureJsonFileWithinLimit(
-      path,
-      EphemeralVmRuntimeStoreSchema.parse(store),
-      MAX_EPHEMERAL_VM_RUNTIME_STORE_FILE_BYTES
-    )
-  } catch (error) {
-    if (error instanceof JsonStringifyByteLimitError) {
-      throw new EphemeralVmRuntimeStoreError(
-        'runtime_error',
-        `Could not write Orca ephemeral VM runtimes at ${path}; the store exceeds its durable capacity.`
-      )
-    }
-    throw error
-  }
+  writeSecureJsonFile(path, EphemeralVmRuntimeStoreSchema.parse(store))
 }
 
 function compareRuntimeRecords(a: EphemeralVmRuntimeRecord, b: EphemeralVmRuntimeRecord): number {

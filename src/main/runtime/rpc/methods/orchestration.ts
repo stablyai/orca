@@ -7,11 +7,6 @@ import { buildDispatchPreamble } from '../../orchestration/preamble'
 import { formatMessageBanner } from '../../orchestration/formatter'
 import { isGroupAddress, resolveGroupAddress } from '../../orchestration/groups'
 import { reconcileLifecycleMessage } from '../../orchestration/lifecycle-reconciliation'
-import {
-  assertOrchestrationStringListFits,
-  assertOrchestrationWaitTypeFilterFits,
-  assertOrchestrationWriteFits
-} from '../../orchestration/query-retention'
 import { abbreviateOrchestrationTasks } from '../../../../shared/orchestration-task-summary'
 import { ORCHESTRATION_GATE_METHODS } from './orchestration-gates'
 
@@ -25,21 +20,6 @@ const MESSAGE_TYPES: MessageType[] = [
   'decision_gate',
   'heartbeat'
 ]
-
-function parseMessageTypeFilter(types: string | undefined): MessageType[] | undefined {
-  if (!types) {
-    return undefined
-  }
-  const parsed = types
-    .split(',')
-    .map((type) => type.trim())
-    .filter(Boolean) as MessageType[]
-  const invalidTypes = parsed.filter((type) => !MESSAGE_TYPES.includes(type))
-  if (invalidTypes.length > 0) {
-    throw new Error(`Invalid --types: ${invalidTypes.join(',')}`)
-  }
-  return Array.from(new Set(parsed))
-}
 
 const TASK_STATUSES: TaskStatus[] = [
   'pending',
@@ -292,20 +272,22 @@ export const ORCHESTRATION_METHODS: RpcMethod[] = [
     handler: async (params, { runtime, signal }) => {
       const db = runtime.getOrchestrationDb()
       const handle = params.terminal ?? 'unknown'
-      if (params.wait) {
-        assertOrchestrationWaitTypeFilterFits(params.types)
+      const typeFilter = params.types
+        ? (params.types
+            .split(',')
+            .map((t) => t.trim())
+            .filter(Boolean) as MessageType[])
+        : undefined
+      const invalidTypes = typeFilter?.filter((t) => !MESSAGE_TYPES.includes(t))
+      if (invalidTypes && invalidTypes.length > 0) {
+        throw new Error(`Invalid --types: ${invalidTypes.join(',')}`)
       }
-      assertOrchestrationWriteFits('Message type filter', [params.types])
-      const typeFilter = parseMessageTypeFilter(params.types)
 
       // Why: unread:false is honored for one release as a compat shim so in-flight callers don't break (design doc §5).
       const showAll = params.all === true || (params.unread === false && params.peek !== true)
       const consumeUnread = !showAll && params.peek !== true
 
       const readAndReturn = () => {
-        const totalBeforeRead = showAll
-          ? db.countAllMessagesForHandle(handle, typeFilter)
-          : db.countUnreadMessages(handle, typeFilter)
         const messages = showAll
           ? db.getAllMessagesForHandle(handle, undefined, typeFilter)
           : db.getUnreadMessages(handle, typeFilter)
@@ -322,28 +304,19 @@ export const ORCHESTRATION_METHODS: RpcMethod[] = [
           db.markAsRead(messages.map((m) => m.id))
         }
 
-        const remaining = consumeUnread
-          ? db.countUnreadMessages(handle, typeFilter)
-          : Math.max(0, totalBeforeRead - messages.length)
-        const saturation = remaining > 0 ? { truncated: true as const, remaining } : {}
         if (params.inject) {
           const formatted = visibleMessages.map(formatMessageBanner).join('\n\n')
-          return {
-            messages: visibleMessages,
-            formatted,
-            count: visibleMessages.length,
-            ...saturation
-          }
+          return { messages: visibleMessages, formatted, count: visibleMessages.length }
         }
 
-        return { messages: visibleMessages, count: visibleMessages.length, ...saturation }
+        return { messages: visibleMessages, count: visibleMessages.length }
       }
 
       if (signal?.aborted) {
         return { messages: [], count: 0 }
       }
       const result = readAndReturn()
-      if (result.count > 0 || result.truncated || !params.wait) {
+      if (result.count > 0 || !params.wait) {
         return result
       }
 
@@ -394,14 +367,7 @@ export const ORCHESTRATION_METHODS: RpcMethod[] = [
       const messages = params.terminal
         ? db.getAllMessagesForHandle(params.terminal, params.limit)
         : db.getInbox(params.limit)
-      const total = params.terminal
-        ? db.countAllMessagesForHandle(params.terminal)
-        : db.countInbox()
-      return {
-        messages,
-        count: messages.length,
-        ...(total > messages.length ? { total, truncated: true as const } : {})
-      }
+      return { messages, count: messages.length }
     }
   }),
 
@@ -413,12 +379,10 @@ export const ORCHESTRATION_METHODS: RpcMethod[] = [
       let deps: string[] | undefined
       if (params.deps) {
         try {
-          assertOrchestrationWriteFits('Task dependencies', [params.deps])
           const parsed = JSON.parse(params.deps)
           if (!Array.isArray(parsed) || !parsed.every((d) => typeof d === 'string')) {
             throw new Error('not an array of strings')
           }
-          assertOrchestrationStringListFits('Task dependencies', parsed)
           deps = parsed
         } catch {
           throw new Error('Invalid --deps: must be a JSON array of task IDs')
@@ -441,12 +405,11 @@ export const ORCHESTRATION_METHODS: RpcMethod[] = [
     params: TaskListParams,
     handler: (params, { runtime }) => {
       const db = runtime.getOrchestrationDb()
-      const filter = {
+      // Why: listTasksWithDispatch adds assignee_handle + dispatch_id (NULL for non-dispatched), so legacy-shape consumers are unaffected.
+      const joined = db.listTasksWithDispatch({
         status: params.status as TaskStatus,
         ready: params.ready
-      }
-      // Why: listTasksWithDispatch adds assignee_handle + dispatch_id (NULL for non-dispatched), so legacy-shape consumers are unaffected.
-      const joined = db.listTasksWithDispatch(filter)
+      })
       const tasks = joined.map((row) => {
         const { assignee_handle, dispatch_id, ...base } = row
         if (base.status === 'dispatched') {
@@ -454,11 +417,9 @@ export const ORCHESTRATION_METHODS: RpcMethod[] = [
         }
         return base
       })
-      const total = db.countTasks(filter)
       return {
         tasks: params.brief ? abbreviateOrchestrationTasks(tasks) : tasks,
-        count: tasks.length,
-        ...(total > tasks.length ? { total, truncated: true as const } : {})
+        count: tasks.length
       }
     }
   }),
@@ -607,13 +568,11 @@ export const ORCHESTRATION_METHODS: RpcMethod[] = [
       const db = runtime.getOrchestrationDb()
       const from = params.from ?? 'unknown'
       const timeoutMs = params.timeoutMs ?? 600_000
-      assertOrchestrationWriteFits('Decision gate options', [params.options])
       const options =
         params.options
           ?.split(',')
           .map((s) => s.trim())
           .filter(Boolean) ?? []
-      assertOrchestrationStringListFits('Decision gate options', options)
 
       const payload = JSON.stringify({ question: params.question, options })
       const outbound = db.insertMessage({

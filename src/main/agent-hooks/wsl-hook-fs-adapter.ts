@@ -5,20 +5,10 @@
 // `installer-utils-remote.ts` touches are implemented.
 import type { SFTPWrapper } from 'ssh2'
 
-import { assertFilesystemDirectoryWithinLimit } from '../../shared/filesystem-directory-listing-limit'
-import { NodeFileReadTooLargeError } from '../../shared/node-bounded-file-reader'
 import type { installRemoteManagedAgentHooks } from './remote-managed-hook-installers'
 import type { SshChannelMultiplexer } from '../ssh/ssh-channel-multiplexer'
 import { wslCodexRuntimeHomeForGuestHome } from '../pty/codex-home-wsl-env'
-import {
-  WSL_HOOK_FS_METHODS,
-  WSL_HOOK_FS_MAX_DIRECTORY_ENTRIES,
-  WSL_HOOK_FS_MAX_DIRECTORY_RETAINED_BYTES,
-  WSL_HOOK_FS_MAX_READ_BYTES,
-  type WslFsFailure,
-  type WslFsResult,
-  type WslHookFsDirectoryLimits
-} from '../../shared/wsl-hook-relay-contract'
+import { WSL_HOOK_FS_METHODS, type WslFsResult } from '../../shared/wsl-hook-relay-contract'
 
 /** Run the shared remote hook installers against a WSL guest over the relay's
  *  fs bridge. Codex is the one agent whose home Orca redirects for WSL
@@ -54,23 +44,7 @@ const ERRNO_TO_SFTP_CODE: Record<string, number> = {
   EEXIST: 4
 }
 
-function toSftpError(failure: {
-  errno?: string
-  message?: string
-  fileCapacity?: { observedBytes: number; maxBytes: number }
-}): Error {
-  if (
-    failure.errno === 'EFBIG' &&
-    Number.isSafeInteger(failure.fileCapacity?.observedBytes) &&
-    Number.isSafeInteger(failure.fileCapacity?.maxBytes) &&
-    failure.fileCapacity!.observedBytes >= 0 &&
-    failure.fileCapacity!.maxBytes >= 0
-  ) {
-    return new NodeFileReadTooLargeError(
-      failure.fileCapacity!.observedBytes,
-      failure.fileCapacity!.maxBytes
-    )
-  }
+function toSftpError(failure: { errno?: string; message?: string }): Error {
   const err = new Error(failure.message ?? 'wsl fs bridge failure') as Error & { code?: number }
   err.code = ERRNO_TO_SFTP_CODE[failure.errno ?? ''] ?? 5
   return err
@@ -88,7 +62,7 @@ export function createWslHookSftpAdapter(mux: SshChannelMultiplexer): SFTPWrappe
       .then((raw) => {
         const result = raw as WslFsResult<Wire>
         if (!result || typeof result !== 'object' || result.ok !== true) {
-          callback(toSftpError((result ?? {}) as WslFsFailure))
+          callback(toSftpError((result ?? {}) as { errno?: string; message?: string }))
           return
         }
         callback(null, pick(result))
@@ -107,15 +81,7 @@ export function createWslHookSftpAdapter(mux: SshChannelMultiplexer): SFTPWrappe
     readFile(path: string, _encoding: unknown, callback: SftpCallback<string>): void {
       call<{ content: string }, string>(
         WSL_HOOK_FS_METHODS.readFile,
-        { path, maxBytes: WSL_HOOK_FS_MAX_READ_BYTES },
-        callback,
-        (r) => r.content
-      )
-    },
-    orcaReadFileWithinLimit(path: string, maxBytes: number, callback: SftpCallback<string>): void {
-      call<{ content: string }, string>(
-        WSL_HOOK_FS_METHODS.readFile,
-        { path, maxBytes },
+        { path },
         callback,
         (r) => r.content
       )
@@ -156,45 +122,9 @@ export function createWslHookSftpAdapter(mux: SshChannelMultiplexer): SFTPWrappe
     readdir(path: string, callback: SftpCallback<{ filename: string }[]>): void {
       call<{ entries: { filename: string }[] }, { filename: string }[]>(
         WSL_HOOK_FS_METHODS.readdir,
-        {
-          path,
-          maxEntries: WSL_HOOK_FS_MAX_DIRECTORY_ENTRIES,
-          maxRetainedBytes: WSL_HOOK_FS_MAX_DIRECTORY_RETAINED_BYTES
-        },
+        { path },
         callback,
-        (r) => {
-          const limits = {
-            maxEntries: WSL_HOOK_FS_MAX_DIRECTORY_ENTRIES,
-            maxRetainedBytes: WSL_HOOK_FS_MAX_DIRECTORY_RETAINED_BYTES
-          }
-          assertFilesystemDirectoryWithinLimit(
-            r.entries.map((entry) => ({ name: entry.filename })),
-            limits
-          )
-          return r.entries
-        }
-      )
-    },
-    orcaReaddirWithinLimit(
-      path: string,
-      limits: WslHookFsDirectoryLimits,
-      callback: SftpCallback<{ filename: string }[]>
-    ): void {
-      call<{ entries: { filename: string }[] }, { filename: string }[]>(
-        WSL_HOOK_FS_METHODS.readdir,
-        {
-          path,
-          maxEntries: limits.maxEntries,
-          maxRetainedBytes: limits.maxRetainedBytes
-        },
-        callback,
-        (r) => {
-          assertFilesystemDirectoryWithinLimit(
-            r.entries.map((entry) => ({ name: entry.filename })),
-            limits
-          )
-          return r.entries
-        }
+        (r) => r.entries
       )
     },
     mkdir(path: string, callback: SftpCallback): void {

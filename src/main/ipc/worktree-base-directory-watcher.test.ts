@@ -73,7 +73,6 @@ function makeRepo(overrides: Partial<Repo> = {}): Repo {
 function makeStore(repos: Repo[]) {
   return {
     getSettings: () => settings,
-    getRepoCount: () => repos.length,
     getRepos: () => repos
   }
 }

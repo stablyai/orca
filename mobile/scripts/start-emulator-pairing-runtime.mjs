@@ -3,10 +3,7 @@ import { mkdirSync, mkdtempSync } from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
 import process from 'node:process'
-import {
-  appendProcessOutputTail,
-  attachBoundedProcessLineReader
-} from './bounded-process-line-reader.mjs'
+import readline from 'node:readline'
 
 function primaryLanIp(lanIpCandidates) {
   return lanIpCandidates()[0] || '127.0.0.1'
@@ -69,15 +66,15 @@ async function waitForPairingRuntime({ child, userData, pairingAddress, logSucce
   let stderr = ''
   let resolved = false
   let exited = false
-  let closeStdout = () => {}
-  let closeStderr = () => {}
+  let rl = null
+  let rlErr = null
 
   const stop = () => {
     if (!exited) {
       child.kill('SIGTERM')
     }
-    closeStdout()
-    closeStderr()
+    rl?.close()
+    rlErr?.close()
     child.stdout?.destroy()
     child.stderr?.destroy()
   }
@@ -122,17 +119,15 @@ async function waitForPairingRuntime({ child, userData, pairingAddress, logSucce
       reject(error)
     }
 
-    closeStdout = attachBoundedProcessLineReader(child.stdout, (line) => {
-      if (!resolved) {
-        output = appendProcessOutputTail(output, line)
-      }
+    rl = readline.createInterface({ input: child.stdout })
+    rl.on('line', (line) => {
+      output += line + '\n'
       handleRuntimeLine(line, finishResolve)
     })
 
-    closeStderr = attachBoundedProcessLineReader(child.stderr, (line) => {
-      if (!resolved) {
-        stderr = appendProcessOutputTail(stderr, line)
-      }
+    rlErr = readline.createInterface({ input: child.stderr })
+    rlErr.on('line', (line) => {
+      stderr += line + '\n'
     })
 
     child.on('error', (error) => {

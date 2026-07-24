@@ -16,10 +16,7 @@ import {
   type RelayWatcherTeardownState
 } from './relay-watcher-teardown-tracker'
 import { emitRelayWatcherTerminalFailure } from './relay-watcher-terminal-notifier'
-import {
-  assertRelayWatcherRootCapacity,
-  assertRelayWatcherRootKeyCapacity
-} from './relay-watcher-root-capacity'
+import { assertRelayWatcherRootCapacity } from './relay-watcher-root-capacity'
 import { normalizeRuntimePathForComparison } from '../shared/cross-platform-path'
 import {
   trackRelayWatcherSetup,
@@ -88,7 +85,6 @@ export class RelayFilesystemWatchRegistry {
     context?: RequestContext,
     watchId?: number
   ): Promise<void> {
-    assertRelayWatcherRootKeyCapacity(rootKey, rootPath)
     const staleTeardown = releaseStaleRelayWatches(this.watches.values(), (state) =>
       this.closeWatch(state)
     )

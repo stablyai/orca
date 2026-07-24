@@ -4,10 +4,6 @@ import { inspectPtyProviderProcess } from '../providers/pty-process-inspection'
 import type { IPtyProvider, PtyBackgroundStreamEvent } from '../providers/types'
 import type { PtyDataEvent, PtyProviderBufferSnapshot } from '../providers/types'
 import type { PtyProcessInfo, PtySpawnOptions, PtySpawnResult } from '../providers/types'
-import {
-  collectPtyProcessListings,
-  PtyProcessListAdmission
-} from '../providers/pty-process-list-admission'
 
 export class DegradedDaemonPtyProvider implements IPtyProvider {
   readonly routesFreshSpawnsToLocalProvider = true
@@ -49,12 +45,11 @@ export class DegradedDaemonPtyProvider implements IPtyProvider {
   }
 
   async discoverDaemonSessions(): Promise<void> {
-    const admission = new PtyProcessListAdmission()
     for (const adapter of this.allDaemonAdapters()) {
       try {
         const sessions = await adapter.listProcesses()
         for (const session of sessions) {
-          this.sessionProviders.set(admission.admit(session).id, adapter)
+          this.sessionProviders.set(session.id, adapter)
         }
       } catch (error) {
         console.warn('[daemon] Failed to discover degraded daemon sessions', error)
@@ -175,8 +170,12 @@ export class DegradedDaemonPtyProvider implements IPtyProvider {
     await this.fallback.revive(state)
   }
 
-  listProcesses = (opts?: { deadlineMs?: number }): Promise<PtyProcessInfo[]> =>
-    collectPtyProcessListings(this.allProviders(), (provider) => provider.listProcesses(opts))
+  async listProcesses(opts?: { deadlineMs?: number }): Promise<PtyProcessInfo[]> {
+    const results = await Promise.all(
+      this.allProviders().map((provider) => provider.listProcesses(opts))
+    )
+    return results.flat()
+  }
 
   async getDefaultShell(): Promise<string> {
     return this.fallback.getDefaultShell()

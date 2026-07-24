@@ -1,6 +1,5 @@
 import { randomUUID } from 'node:crypto'
 import { remoteRuntimeUnavailableError } from './remote-runtime-request-frames'
-import { admitSharedControlSubscription } from './remote-runtime-shared-control-admission'
 import { createSharedControlSubscription } from './remote-runtime-shared-control-subscriptions'
 import { finishSharedControlSubscription } from './remote-runtime-shared-control-state'
 import type {
@@ -11,7 +10,6 @@ import type {
 
 export async function startSharedControlSubscription<TResult>(args: {
   subscriptions: Map<string, SharedControlLogicalSubscription<unknown>>
-  deviceToken: string
   method: string
   params: unknown
   callbacks: SharedControlSubscriptionCallbacks<TResult>
@@ -19,18 +17,11 @@ export async function startSharedControlSubscription<TResult>(args: {
   sendSubscription: (subscription: SharedControlLogicalSubscription<unknown>) => void
   closeSubscription: (requestId: string) => void
 }): Promise<RemoteRuntimeSharedSubscription> {
-  const retainedParamsBytes = admitSharedControlSubscription({
-    subscriptions: args.subscriptions,
-    deviceToken: args.deviceToken,
-    method: args.method,
-    params: args.params
-  })
   const requestId = randomUUID()
   const subscription = createSharedControlSubscription({
     requestId,
     method: args.method,
     params: args.params,
-    retainedParamsBytes,
     callbacks: args.callbacks
   })
   args.subscriptions.set(requestId, subscription as SharedControlLogicalSubscription<unknown>)

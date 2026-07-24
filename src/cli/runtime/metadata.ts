@@ -1,11 +1,9 @@
 import { homedir } from 'node:os'
 import { join } from 'node:path'
-import { readNodeFileSyncWithinLimit } from '../../shared/node-bounded-file-reader'
+import { readFileSync } from 'node:fs'
 import {
   findTransport,
   getRuntimeMetadataPath,
-  MAX_RUNTIME_METADATA_FILE_BYTES,
-  parseRuntimeMetadataJson,
   type RuntimeMetadata
 } from '../../shared/runtime-bootstrap'
 import { RuntimeClientError } from './types'
@@ -13,11 +11,7 @@ import { RuntimeClientError } from './types'
 export function readMetadata(userDataPath: string): RuntimeMetadata {
   const metadataPath = getRuntimeMetadataPath(userDataPath)
   try {
-    const metadata = parseRuntimeMetadataJson(
-      readNodeFileSyncWithinLimit(metadataPath, MAX_RUNTIME_METADATA_FILE_BYTES).buffer.toString(
-        'utf8'
-      )
-    )
+    const metadata = JSON.parse(readFileSync(metadataPath, 'utf8')) as RuntimeMetadata | null
     if (!metadata || !findTransport(metadata, 'unix', 'named-pipe') || !metadata.authToken) {
       throw new RuntimeClientError(
         'runtime_unavailable',
@@ -39,11 +33,7 @@ export function readMetadata(userDataPath: string): RuntimeMetadata {
 export function tryReadMetadata(userDataPath: string): RuntimeMetadata | null {
   const metadataPath = getRuntimeMetadataPath(userDataPath)
   try {
-    return parseRuntimeMetadataJson(
-      readNodeFileSyncWithinLimit(metadataPath, MAX_RUNTIME_METADATA_FILE_BYTES).buffer.toString(
-        'utf8'
-      )
-    )
+    return JSON.parse(readFileSync(metadataPath, 'utf8')) as RuntimeMetadata | null
   } catch {
     return null
   }

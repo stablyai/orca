@@ -1,6 +1,7 @@
 /* eslint-disable max-lines -- Why: this store owns Codex analytics persistence, scan policy, and renderer query semantics. Keeping them together prevents the Codex range/scope rules from drifting away from the scanner’s event model. */
 import { app } from 'electron'
-import { join } from 'node:path'
+import { dirname, join } from 'node:path'
+import { existsSync, mkdirSync, readFileSync, renameSync, writeFileSync } from 'node:fs'
 import type {
   CodexUsageBreakdownKind,
   CodexUsageBreakdownRow,
@@ -14,10 +15,6 @@ import type {
 } from '../../shared/codex-usage-types'
 import type { AutomationRunUsage } from '../../shared/automations-types'
 import type { Store } from '../persistence'
-import {
-  readUsageProjectionStateFile,
-  writeUsageProjectionStateFileWithRecovery
-} from '../usage-projection-state-file'
 import { loadKnownUsageWorktreesByRepo, type UsageWorktreeRef } from '../usage-worktree-metadata'
 import type { CodexUsagePersistedState } from './types'
 import { createWorktreeRefs, scanCodexUsageFiles } from './scanner'
@@ -339,11 +336,10 @@ export class CodexUsageStore {
   private load(): CodexUsagePersistedState {
     try {
       const usageFile = getCodexUsageFile()
-      const raw = readUsageProjectionStateFile(usageFile)
-      if (raw === null) {
+      if (!existsSync(usageFile)) {
         return getDefaultState()
       }
-      const parsed = JSON.parse(raw) as CodexUsagePersistedState
+      const parsed = JSON.parse(readFileSync(usageFile, 'utf-8')) as CodexUsagePersistedState
       return normalizePersistedState({
         ...getDefaultState(),
         ...parsed,
@@ -360,12 +356,13 @@ export class CodexUsageStore {
 
   private writeToDisk(): void {
     const usageFile = getCodexUsageFile()
-    this.state = writeUsageProjectionStateFileWithRecovery(usageFile, this.state, (error) => {
-      const reset = getDefaultState()
-      reset.scanState.enabled = this.state.scanState.enabled
-      reset.scanState.lastScanError = error.message
-      return reset
-    })
+    const dir = dirname(usageFile)
+    if (!existsSync(dir)) {
+      mkdirSync(dir, { recursive: true })
+    }
+    const tmpFile = `${usageFile}.${process.pid}.${Date.now()}.${Math.random().toString(16).slice(2)}.tmp`
+    writeFileSync(tmpFile, JSON.stringify(this.state), 'utf-8')
+    renameSync(tmpFile, usageFile)
   }
 
   async setEnabled(enabled: boolean): Promise<CodexUsageScanState> {

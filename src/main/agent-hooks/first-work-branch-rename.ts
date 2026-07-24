@@ -1,5 +1,4 @@
 // On first agent work in a fresh workspace, replace the auto-generated creature branch (e.g. `you/Nautilus`) with a short work-derived name.
-import { createHash } from 'node:crypto'
 import type { GlobalSettings, Repo } from '../../shared/types'
 import { getRepoIdFromWorktreeId, splitWorktreeIdForFilesystem } from '../../shared/worktree-id'
 import { parseWorkspaceKey } from '../../shared/workspace-scope'
@@ -72,7 +71,6 @@ export type FirstWorkBranchRenameDeps = {
 const inFlightWorktreeIds = new Set<string>()
 const settledWorktreeIds = new Set<string>()
 export const FIRST_WORK_BRANCH_RENAME_SETTLED_CACHE_LIMIT = 500
-export const FIRST_WORK_BRANCH_RENAME_IN_FLIGHT_LIMIT = 32
 
 /** Test seam: clear the per-process dedupe sets. */
 export function resetFirstWorkBranchRenameState(): void {
@@ -93,20 +91,6 @@ function rememberSettledWorktreeId(worktreeId: string): void {
   }
 }
 
-function worktreeStateKey(worktreeId: string): string {
-  return createHash('sha256').update(worktreeId).digest('base64url')
-}
-
-export function getFirstWorkBranchRenameStateForTests(): {
-  inFlight: number
-  settled: number
-} {
-  return {
-    inFlight: inFlightWorktreeIds.size,
-    settled: settledWorktreeIds.size
-  }
-}
-
 export async function maybeAutoRenameBranchOnFirstWork(
   event: FirstWorkBranchRenameEvent,
   deps: FirstWorkBranchRenameDeps
@@ -124,30 +108,26 @@ export async function maybeAutoRenameBranchOnFirstWork(
   if (!worktreeId) {
     return
   }
-  const stateKey = worktreeStateKey(worktreeId)
   // Short-circuit settled/in-flight worktrees before any logging or work.
-  if (settledWorktreeIds.has(stateKey) || inFlightWorktreeIds.has(stateKey)) {
+  if (settledWorktreeIds.has(worktreeId) || inFlightWorktreeIds.has(worktreeId)) {
     return
   }
   const prompt = event.prompt?.trim()
   if (!prompt) {
     return
   }
-  if (inFlightWorktreeIds.size >= FIRST_WORK_BRANCH_RENAME_IN_FLIGHT_LIMIT) {
-    return
-  }
-  inFlightWorktreeIds.add(stateKey)
+  inFlightWorktreeIds.add(worktreeId)
   try {
     // settled = definitive verdict (renamed/ineligible); false = transient bail to retry later.
     const settled = await runAutoRename(worktreeId, prompt, event.assistantMessage, deps)
     if (settled) {
-      rememberSettledWorktreeId(stateKey)
+      rememberSettledWorktreeId(worktreeId)
     }
   } catch (error) {
     // Why: best-effort convenience; a failure must never disrupt the user's agent, so swallow after logging.
     console.warn('[auto-branch-rename] rename attempt failed:', error)
   } finally {
-    inFlightWorktreeIds.delete(stateKey)
+    inFlightWorktreeIds.delete(worktreeId)
   }
 }
 

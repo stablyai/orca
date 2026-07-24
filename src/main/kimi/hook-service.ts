@@ -1,14 +1,17 @@
-import { copyFileSync, existsSync, mkdirSync, renameSync, unlinkSync, writeFileSync } from 'node:fs'
+import {
+  copyFileSync,
+  existsSync,
+  mkdirSync,
+  readFileSync,
+  renameSync,
+  unlinkSync,
+  writeFileSync
+} from 'node:fs'
 import { homedir } from 'node:os'
 import { dirname, join, posix as pathPosix } from 'node:path'
 import { randomUUID } from 'node:crypto'
 import type { SFTPWrapper } from 'ssh2'
 import type { AgentHookInstallState, AgentHookInstallStatus } from '../../shared/agent-hook-types'
-import {
-  NodeFileReadTooLargeError,
-  readNodeFileSyncWithinLimit
-} from '../../shared/node-bounded-file-reader'
-import { AGENT_HOOK_CONFIG_MAX_BYTES } from '../agent-hooks/agent-hook-file-limits'
 import {
   createManagedCommandMatcher,
   getSharedManagedScriptPath,
@@ -96,9 +99,7 @@ function readConfigToml(configPath: string): string | null {
     return ''
   }
   try {
-    return readNodeFileSyncWithinLimit(configPath, AGENT_HOOK_CONFIG_MAX_BYTES).buffer.toString(
-      'utf8'
-    )
+    return readFileSync(configPath, 'utf-8')
   } catch {
     return null
   }
@@ -111,17 +112,10 @@ function writeConfigToml(configPath: string, text: string): void {
   mkdirSync(dir, { recursive: true })
   if (existsSync(configPath)) {
     try {
-      const existing = readNodeFileSyncWithinLimit(
-        configPath,
-        AGENT_HOOK_CONFIG_MAX_BYTES
-      ).buffer.toString('utf8')
-      if (existing === text) {
+      if (readFileSync(configPath, 'utf-8') === text) {
         return
       }
-    } catch (error) {
-      if (error instanceof NodeFileReadTooLargeError) {
-        throw error
-      }
+    } catch {
       // Fall through to the atomic write path.
     }
   }

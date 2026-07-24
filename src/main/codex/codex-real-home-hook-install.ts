@@ -1,11 +1,10 @@
-import { existsSync, mkdirSync, statSync, unlinkSync } from 'node:fs'
+import { existsSync, mkdirSync, readFileSync, statSync, unlinkSync } from 'node:fs'
 import { join } from 'node:path'
 import { writeFileAtomically } from '../codex-accounts/fs-utils'
 import {
   buildManagedCommandHook,
   createManagedCommandMatcher,
   MANAGED_HOOK_TIMEOUT_SECONDS,
-  readHooksJsonRawForGenerationCheck,
   readHooksJsonWithRaw,
   removeManagedCommands,
   writeHooksJson,
@@ -75,9 +74,7 @@ function assertHooksJsonGeneration(
   hooksWritePath: string,
   expectedRaw: string | null
 ): void {
-  const currentRaw = existsSync(hooksJsonPath)
-    ? readHooksJsonRawForGenerationCheck(hooksJsonPath)
-    : null
+  const currentRaw = existsSync(hooksJsonPath) ? readFileSync(hooksJsonPath, 'utf-8') : null
   if (currentRaw !== expectedRaw || resolveHooksJsonWritePath(hooksJsonPath) !== hooksWritePath) {
     // Why: the pre-mutation RPC can overlap a user's editor save. Abort rather
     // than atomically replacing a newer file with the stale parsed snapshot.

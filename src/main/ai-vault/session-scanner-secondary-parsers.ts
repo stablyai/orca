@@ -1,12 +1,12 @@
-import { opendir } from 'node:fs/promises'
+import { createReadStream } from 'node:fs'
+import { readFile, readdir } from 'node:fs/promises'
 import { join } from 'node:path'
+import { createInterface } from 'node:readline'
 import type { AiVaultSession } from '../../shared/ai-vault-types'
-import { iterateAiVaultJsonlLines } from './session-jsonl-line-reader'
-import { withAiVaultWholeJsonFile } from './session-whole-json-reader'
+import type { ExecutionHostId } from '../../shared/execution-host'
 import type {
   FileWithMtime,
   ResumableSessionParseState,
-  ResumableParseFinalizeOptions,
   SessionAccumulator
 } from './session-scanner-types'
 import {
@@ -35,11 +35,19 @@ import {
   tokenTotal
 } from './session-scanner-values'
 
+type ParserSessionOptions = {
+  executionHostId?: ExecutionHostId
+  executionHostPlatform?: NodeJS.Platform | null
+}
+
 export async function parseCopilotSessionFile(
   file: FileWithMtime,
   platform: NodeJS.Platform = process.platform
 ): Promise<AiVaultSession | null> {
-  const lines = iterateAiVaultJsonlLines(file.path)
+  const lines = createInterface({
+    input: createReadStream(file.path, { encoding: 'utf-8' }),
+    crlfDelay: Infinity
+  })
   return parseCopilotSessionLines({ file, lines, platform })
 }
 
@@ -47,7 +55,7 @@ export async function parseCopilotSessionContent(
   file: FileWithMtime,
   content: string,
   platform: NodeJS.Platform = process.platform,
-  options: ResumableParseFinalizeOptions = {}
+  options: ParserSessionOptions = {}
 ): Promise<AiVaultSession | null> {
   return parseCopilotSessionLines({
     file,
@@ -119,7 +127,7 @@ async function parseCopilotSessionLines(args: {
   file: FileWithMtime
   lines: AsyncIterable<string> | Iterable<string>
   platform: NodeJS.Platform
-  options?: ResumableParseFinalizeOptions
+  options?: ParserSessionOptions
 }): Promise<AiVaultSession | null> {
   const state = createCopilotSessionResumeState(args.file)
   for await (const line of args.lines) {
@@ -132,7 +140,10 @@ export async function parseCursorSessionFile(
   file: FileWithMtime,
   platform: NodeJS.Platform = process.platform
 ): Promise<AiVaultSession | null> {
-  const lines = iterateAiVaultJsonlLines(file.path)
+  const lines = createInterface({
+    input: createReadStream(file.path, { encoding: 'utf-8' }),
+    crlfDelay: Infinity
+  })
   return parseCursorSessionLines({ file, lines, platform })
 }
 
@@ -140,7 +151,7 @@ export async function parseCursorSessionContent(
   file: FileWithMtime,
   content: string,
   platform: NodeJS.Platform = process.platform,
-  options: ResumableParseFinalizeOptions = {}
+  options: ParserSessionOptions = {}
 ): Promise<AiVaultSession | null> {
   return parseCursorSessionLines({
     file,
@@ -182,7 +193,7 @@ async function parseCursorSessionLines(args: {
   file: FileWithMtime
   lines: AsyncIterable<string> | Iterable<string>
   platform: NodeJS.Platform
-  options?: ResumableParseFinalizeOptions
+  options?: ParserSessionOptions
 }): Promise<AiVaultSession | null> {
   const state = createCursorSessionResumeState(args.file)
   for await (const line of args.lines) {
@@ -195,28 +206,18 @@ export async function parseOpenCodeSessionFile(
   file: FileWithMtime,
   platform: NodeJS.Platform = process.platform
 ): Promise<AiVaultSession | null> {
-  const parsed = await withAiVaultWholeJsonFile(file.path, (content) => {
-    const record = parseJsonObject(content)
-    if (!record) {
-      return null
-    }
-    const sessionId = extractString(record.id) ?? sessionIdFromFileName(file.path)
-    const accumulator = createAccumulator({ agent: 'opencode', file, sessionId })
-    accumulator.title = normalizeTitleText(extractString(record.title) ?? '')
-    accumulator.cwd = extractString(record.directory)
-    updateTimeline(accumulator, timeObjectValue(record.time, 'created'))
-    updateTimeline(accumulator, timeObjectValue(record.time, 'updated'))
-    return { accumulator, sessionId }
-  })
-  if (!parsed) {
+  const record = asRecord(JSON.parse(await readFile(file.path, 'utf-8')) as unknown)
+  if (!record) {
     return null
   }
-  await consumeOpenCodeMessages(
-    parsed.accumulator,
-    findOpenCodeStorageRoot(file.path),
-    parsed.sessionId
-  )
-  return finalizeSession(parsed.accumulator, platform)
+  const sessionId = extractString(record.id) ?? sessionIdFromFileName(file.path)
+  const accumulator = createAccumulator({ agent: 'opencode', file, sessionId })
+  accumulator.title = normalizeTitleText(extractString(record.title) ?? '')
+  accumulator.cwd = extractString(record.directory)
+  updateTimeline(accumulator, timeObjectValue(record.time, 'created'))
+  updateTimeline(accumulator, timeObjectValue(record.time, 'updated'))
+  await consumeOpenCodeMessages(accumulator, findOpenCodeStorageRoot(file.path), sessionId)
+  return finalizeSession(accumulator, platform)
 }
 
 export async function consumeOpenCodeMessages(
@@ -228,43 +229,44 @@ export async function consumeOpenCodeMessages(
     return
   }
   const messageDir = join(storageRoot, 'message', sessionId)
+  let entries
   try {
-    const directory = await opendir(messageDir)
-    for await (const entry of directory) {
-      if (!entry.isFile() || !entry.name.endsWith('.json')) {
-        continue
-      }
-      await withAiVaultWholeJsonFile(join(messageDir, entry.name), (content) => {
-        const message = parseJsonObject(content)
-        if (!message) {
-          return
-        }
-        const role = extractString(message.role)
-        if (role === 'user' || role === 'assistant') {
-          accumulator.messageCount++
-          updateTimeline(accumulator, timeObjectValue(message.time, 'created'))
-          if (role === 'user') {
-            accumulator.title ??= extractString(asRecord(message.summary)?.title)
-            accumulator.title ??= extractString(asRecord(message.summary)?.body)
-          }
-          addPreviewMessage(accumulator, {
-            role,
-            text:
-              extractPreviewContentText(message.content) ??
-              extractString(asRecord(message.summary)?.body) ??
-              extractString(asRecord(message.summary)?.title),
-            timestamp: timeObjectValue(message.time, 'created')
-          })
-          accumulator.model =
-            extractString(asRecord(message.model)?.modelID) ||
-            extractString(message.modelID) ||
-            accumulator.model
-          accumulator.totalTokens += tokenTotal(message.tokens)
-        }
-      })
-    }
+    entries = await readdir(messageDir, { withFileTypes: true })
   } catch {
-    // Missing or unreadable message directories contribute no messages.
+    return
+  }
+  for (const entry of entries) {
+    if (!entry.isFile() || !entry.name.endsWith('.json')) {
+      continue
+    }
+    const message = asRecord(
+      JSON.parse(await readFile(join(messageDir, entry.name), 'utf-8')) as unknown
+    )
+    if (!message) {
+      continue
+    }
+    const role = extractString(message.role)
+    if (role === 'user' || role === 'assistant') {
+      accumulator.messageCount++
+      updateTimeline(accumulator, timeObjectValue(message.time, 'created'))
+      if (role === 'user') {
+        accumulator.title ??= extractString(asRecord(message.summary)?.title)
+        accumulator.title ??= extractString(asRecord(message.summary)?.body)
+      }
+      addPreviewMessage(accumulator, {
+        role,
+        text:
+          extractPreviewContentText(message.content) ??
+          extractString(asRecord(message.summary)?.body) ??
+          extractString(asRecord(message.summary)?.title),
+        timestamp: timeObjectValue(message.time, 'created')
+      })
+      accumulator.model =
+        extractString(asRecord(message.model)?.modelID) ||
+        extractString(message.modelID) ||
+        accumulator.model
+      accumulator.totalTokens += tokenTotal(message.tokens)
+    }
   }
 }
 
@@ -272,18 +274,16 @@ export async function parseHermesSessionFile(
   file: FileWithMtime,
   platform: NodeJS.Platform = process.platform
 ): Promise<AiVaultSession | null> {
-  return withAiVaultWholeJsonFile(file.path, (content) =>
-    parseHermesSessionContent(file, content, platform)
-  )
+  return parseHermesSessionContent(file, await readFile(file.path, 'utf-8'), platform)
 }
 
 export async function parseHermesSessionContent(
   file: FileWithMtime,
   content: string,
   platform: NodeJS.Platform = process.platform,
-  options: ResumableParseFinalizeOptions = {}
+  options: ParserSessionOptions = {}
 ): Promise<AiVaultSession | null> {
-  const record = parseJsonObject(content)
+  const record = asRecord(JSON.parse(content) as unknown)
   if (!record) {
     return null
   }

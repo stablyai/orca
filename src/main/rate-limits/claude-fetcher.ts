@@ -1,5 +1,6 @@
 /* eslint-disable max-lines -- Why: keep Claude credential ordering, OAuth usage fetch, and PTY fallback together so usage state can't drift across paths. */
-import { existsSync, lstatSync } from 'node:fs'
+import { existsSync, lstatSync, readFileSync } from 'node:fs'
+import { readFile } from 'node:fs/promises'
 import { homedir } from 'node:os'
 import path from 'node:path'
 import { net, session } from 'electron'
@@ -41,11 +42,6 @@ import {
   classifyClaudeOAuthUsageError,
   type ClaudeUsageErrorClassification
 } from './claude-usage-error-classification'
-import { readFetchResponseJsonWithinLimit } from '../lib/fetch-response-body'
-import {
-  readIntegrationCredentialFileSyncText,
-  readIntegrationCredentialFileText
-} from '../integration-credential-file'
 
 const OAUTH_USAGE_URL = 'https://api.anthropic.com/api/oauth/usage'
 const OAUTH_BETA_HEADER = 'oauth-2025-04-20'
@@ -197,7 +193,7 @@ async function readCredentialsFromStrictKeychain(
 async function readFromCredentialsFile(configDir?: string): Promise<OAuthCredentialReadResult> {
   const credPath = path.join(configDir ?? path.join(homedir(), '.claude'), '.credentials.json')
   try {
-    const raw = await readIntegrationCredentialFileText(credPath)
+    const raw = await readFile(credPath, 'utf-8')
     return parseOAuthCredentialsJson(raw, 'credentials-file')
   } catch {
     return emptyOAuthCredentialReadResult()
@@ -370,7 +366,7 @@ async function fetchViaOAuth(token: string, signal?: AbortSignal): Promise<Provi
       throw await createOAuthUsageError(res)
     }
 
-    const data = await readFetchResponseJsonWithinLimit<OAuthUsageResponse>(res)
+    const data = (await res.json()) as OAuthUsageResponse
     if (signal?.aborted) {
       return abortedClaudeRateLimitResult()
     }
@@ -1046,7 +1042,7 @@ function resolveOwnedWslClaudeManagedAuthPath(account: InactiveClaudeAccountInfo
     if (
       !existsSync(markerPath) ||
       lstatSync(markerPath).isSymbolicLink() ||
-      readIntegrationCredentialFileSyncText(markerPath).trim() !== account.id
+      readFileSync(markerPath, 'utf-8').trim() !== account.id
     ) {
       return null
     }

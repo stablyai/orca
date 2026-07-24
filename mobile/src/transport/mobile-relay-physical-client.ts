@@ -2,15 +2,9 @@ import type { PairingRelay } from '../../../src/shared/mobile-relay-pairing-offe
 import { RelayPhoneHelloSchema } from '../../../src/shared/mobile-relay-phone-protocol'
 import { MobileE2EEV2ClientSession } from './mobile-e2ee-v2-client-session'
 import { MobileE2EEV2PhysicalChannel } from './mobile-e2ee-v2-physical-channel'
-import { assertMobileInboundFrameSize } from './mobile-inbound-frame-queue'
-import { stringifyMobileOutboundJson } from './mobile-outbound-json'
 import { isRpcResponse } from './rpc-response-shape'
 import type { RpcResponse } from './types'
 import { websocketPayloadToUint8 } from './websocket-payload-bytes'
-import {
-  isMobileJsonStructureCapacityError,
-  parseMobileJsonTextWithinLimits
-} from './mobile-json-text-admission'
 export { RelayOuterError } from './mobile-relay-e2ee-link'
 import { RelayOuterError } from './mobile-relay-e2ee-link'
 
@@ -53,44 +47,35 @@ export function connectMobileRelayForPairing(args: {
     resolveAuthenticated = resolve
     rejectAuthenticated = reject
   })
-  let channel: MobileE2EEV2PhysicalChannel
-  try {
-    channel = new MobileE2EEV2PhysicalChannel({
-      session,
-      socket,
-      deviceToken: args.deviceToken,
-      decodeBinary: websocketPayloadToUint8,
-      onAuthenticated: () => {
-        authenticated = true
-        resolveAuthenticated()
-      },
-      onText: (plaintext) => {
-        let value: unknown
-        try {
-          value = parseMobileJsonTextWithinLimits(plaintext)
-        } catch (error) {
-          if (isMobileJsonStructureCapacityError(error)) {
-            throw error
-          }
-          return
-        }
-        if (!isRpcResponse(value)) {
-          return
-        }
-        const request = pending.get(value.id)
-        if (request) {
-          clearTimeout(request.timer)
-          pending.delete(value.id)
-          request.resolve(value)
-        }
-      },
-      onBinary: () => {},
-      onError: fail
-    })
-  } catch (error) {
-    socket.close()
-    throw error
-  }
+  const channel = new MobileE2EEV2PhysicalChannel({
+    session,
+    socket,
+    deviceToken: args.deviceToken,
+    decodeBinary: websocketPayloadToUint8,
+    onAuthenticated: () => {
+      authenticated = true
+      resolveAuthenticated()
+    },
+    onText: (plaintext) => {
+      let value: unknown
+      try {
+        value = JSON.parse(plaintext)
+      } catch {
+        return
+      }
+      if (!isRpcResponse(value)) {
+        return
+      }
+      const request = pending.get(value.id)
+      if (request) {
+        clearTimeout(request.timer)
+        pending.delete(value.id)
+        request.resolve(value)
+      }
+    },
+    onBinary: () => {},
+    onError: fail
+  })
 
   socket.onopen = () => {
     socket.send(
@@ -102,26 +87,23 @@ export function connectMobileRelayForPairing(args: {
       })
     )
   }
+  let inboundChain: Promise<void> = Promise.resolve()
   socket.onmessage = (event) => {
-    if (closed) {
-      return
-    }
-    try {
-      if (!outerReady) {
-        assertMobileInboundFrameSize(event.data, 'relay hello frame too large')
-        acceptRelayHello(event.data)
-        return
-      }
-      void channel.handleMessage(event.data)
-    } catch (error) {
-      fail(asError(error))
-    }
+    inboundChain = inboundChain
+      .then(async () => {
+        if (closed) {
+          return
+        }
+        if (!outerReady) {
+          acceptRelayHello(event.data)
+          return
+        }
+        await channel.handleMessage(event.data)
+      })
+      .catch((error: unknown) => fail(asError(error)))
   }
   socket.onerror = () => fail(new Error('relay transport error'))
-  socket.onclose = (event) => {
-    channel.socketClosed()
-    fail(new RelayOuterError(event.code || 1006))
-  }
+  socket.onclose = (event) => fail(new RelayOuterError(event.code || 1006))
 
   function acceptRelayHello(raw: unknown): void {
     if (typeof raw !== 'string') {
@@ -129,7 +111,7 @@ export function connectMobileRelayForPairing(args: {
     }
     let value: unknown
     try {
-      value = parseMobileJsonTextWithinLimits(raw)
+      value = JSON.parse(raw)
     } catch {
       throw new Error('invalid relay hello JSON')
     }
@@ -175,21 +157,9 @@ export function connectMobileRelayForPairing(args: {
           reject(new Error(`relay pairing RPC timed out: ${method}`))
         }, requestTimeoutMs)
         pending.set(id, { resolve, reject, timer })
-        let serialized: string
-        try {
-          serialized = stringifyMobileOutboundJson({
-            id,
-            deviceToken: args.deviceToken,
-            method,
-            params
-          })
-        } catch {
-          clearTimeout(timer)
-          pending.delete(id)
-          reject(new Error('relay RPC request is too large'))
-          return
-        }
-        if (!channel.sendText(serialized)) {
+        if (
+          !channel.sendText(JSON.stringify({ id, deviceToken: args.deviceToken, method, params }))
+        ) {
           clearTimeout(timer)
           pending.delete(id)
           reject(new Error('relay E2EE channel not ready'))

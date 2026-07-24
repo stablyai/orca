@@ -2,8 +2,6 @@
    spawn failure handling, and output normalization; keeping them together
    prevents those paths from drifting. */
 import { exec, spawn, type ChildProcess } from 'node:child_process'
-import { createHash } from 'node:crypto'
-import { GrowingByteBuffer } from '../../shared/growing-byte-buffer'
 import type { GlobalSettings, Repo, TuiAgent } from '../../shared/types'
 import {
   buildCommitMessagePrompt,
@@ -55,10 +53,6 @@ import {
 } from '../win32-utils'
 import { withMacTailscaleDnsHint } from '../network/macos-tailscale-dns-diagnostic'
 import { wslAwareSpawn } from '../git/runner'
-import {
-  MAX_CONCURRENT_LOCAL_TEXT_GENERATIONS,
-  reserveLocalAiProcess
-} from './local-ai-process-budget'
 
 const GENERATION_TIMEOUT_MS = 60_000
 const MAX_AGENT_OUTPUT_BYTES = 4 * 1024 * 1024
@@ -302,29 +296,6 @@ function planModelDiscovery(
   }
 }
 
-const inFlightLocalModelDiscoveries = new Map<string, Promise<DiscoverCommitMessageModelsResult>>()
-
-function localModelDiscoveryKey(
-  agentId: TuiAgent,
-  plan: CommitMessagePlan,
-  env: NodeJS.ProcessEnv,
-  options: CommitMessageModelDiscoveryLocalOptions
-): string {
-  // Hash the full identity so environment and command secrets never remain in map keys.
-  return createHash('sha256')
-    .update(
-      JSON.stringify([
-        agentId,
-        plan.binary,
-        plan.args,
-        options.cwd ?? null,
-        options.wslDistro ?? null,
-        Object.entries(env).sort(([leftKey], [rightKey]) => leftKey.localeCompare(rightKey))
-      ])
-    )
-    .digest('hex')
-}
-
 export async function discoverCommitMessageModelsLocal(
   agentId: TuiAgent,
   env: NodeJS.ProcessEnv | undefined,
@@ -340,49 +311,19 @@ export async function discoverCommitMessageModelsLocal(
     return toModelDiscoveryCapability(spec)
   }
 
-  const planned = planModelDiscovery(spec, agentCommandOverride)
-  if (!planned.ok) {
-    return { success: false, error: planned.error }
-  }
-  const spawnEnv = env ?? process.env
-  const discoveryKey = localModelDiscoveryKey(spec.id, planned.plan, spawnEnv, options)
-  const inFlight = inFlightLocalModelDiscoveries.get(discoveryKey)
-  if (inFlight) {
-    return inFlight
-  }
-  const pending = runLocalModelDiscovery(spec, planned.plan, env, spawnEnv, options)
-  inFlightLocalModelDiscoveries.set(discoveryKey, pending)
-  const clearPending = (): void => {
-    if (inFlightLocalModelDiscoveries.get(discoveryKey) === pending) {
-      inFlightLocalModelDiscoveries.delete(discoveryKey)
-    }
-  }
-  void pending.then(clearPending, clearPending)
-  return pending
-}
-
-function runLocalModelDiscovery(
-  spec: NonNullable<ReturnType<typeof getCommitMessageAgentSpec>>,
-  plan: CommitMessagePlan,
-  explicitEnv: NodeJS.ProcessEnv | undefined,
-  spawnEnv: NodeJS.ProcessEnv,
-  options: CommitMessageModelDiscoveryLocalOptions
-): Promise<DiscoverCommitMessageModelsResult> {
-  const reservation = reserveLocalAiProcess()
-  if (!reservation) {
-    return Promise.resolve({
-      success: false,
-      error:
-        'Too many local AI generations are already running. Wait for one to finish and try again.'
-    })
-  }
   return new Promise((resolve) => {
     let child: ChildProcess
+    const spawnEnv = env ?? process.env
     try {
+      const planned = planModelDiscovery(spec, agentCommandOverride)
+      if (!planned.ok) {
+        resolve({ success: false, error: planned.error })
+        return
+      }
       if (process.platform === 'win32' && options.wslDistro) {
-        child = wslAwareSpawn(plan.binary, plan.args, {
+        child = wslAwareSpawn(planned.plan.binary, planned.plan.args, {
           cwd: options.cwd,
-          env: buildWslLauncherEnv(explicitEnv),
+          env: buildWslLauncherEnv(env),
           stdio: ['ignore', 'pipe', 'pipe'],
           windowsHide: true,
           wslDistro: options.wslDistro,
@@ -391,11 +332,11 @@ function runLocalModelDiscovery(
       } else {
         const resolvedBinary =
           process.platform === 'win32'
-            ? resolveCliCommand(plan.binary, {
+            ? resolveCliCommand(planned.plan.binary, {
                 pathEnv: spawnEnv.PATH ?? spawnEnv.Path ?? null
               })
-            : plan.binary
-        const { spawnCmd, spawnArgs } = getSpawnArgsForWindows(resolvedBinary, plan.args)
+            : planned.plan.binary
+        const { spawnCmd, spawnArgs } = getSpawnArgsForWindows(resolvedBinary, planned.plan.args)
         child = spawn(spawnCmd, spawnArgs, {
           env: spawnEnv,
           stdio: ['ignore', 'pipe', 'pipe'],
@@ -403,7 +344,6 @@ function runLocalModelDiscovery(
         })
       }
     } catch (error) {
-      reservation.release()
       console.error('[commit-message] Failed to spawn model discovery:', error)
       resolve({
         success: false,
@@ -411,10 +351,9 @@ function runLocalModelDiscovery(
       })
       return
     }
-    const owner = reservation.register(child)
 
-    const stdout = new GrowingByteBuffer()
-    const stderr = new GrowingByteBuffer()
+    let stdout = ''
+    let stderr = ''
     let outputLimitExceeded = false
     let settled = false
     let timer: ReturnType<typeof setTimeout> | null = null
@@ -429,8 +368,6 @@ function runLocalModelDiscovery(
         timer = null
       }
       detachChildListeners()
-      stdout.clear()
-      stderr.clear()
       resolve(result)
     }
     timer = setTimeout(() => {
@@ -441,18 +378,18 @@ function runLocalModelDiscovery(
       })
     }, GENERATION_TIMEOUT_MS)
 
-    const onData = (chunk: Buffer, append: (value: Buffer) => void): void => {
-      if (stdout.byteLength + stderr.byteLength + chunk.byteLength > MAX_AGENT_OUTPUT_BYTES) {
+    const onData = (chunk: Buffer, append: (text: string) => void): void => {
+      if (stdout.length + stderr.length + chunk.byteLength > MAX_AGENT_OUTPUT_BYTES) {
         outputLimitExceeded = true
         killProcessTree(child)
         finish({ success: false, error: `${spec.label} returned too much model data.` })
         return
       }
-      append(chunk)
+      append(chunk.toString('utf-8'))
     }
 
-    const onStdoutData = (chunk: Buffer): void => onData(chunk, (value) => stdout.append(value))
-    const onStderrData = (chunk: Buffer): void => onData(chunk, (value) => stderr.append(value))
+    const onStdoutData = (chunk: Buffer): void => onData(chunk, (text) => (stdout += text))
+    const onStderrData = (chunk: Buffer): void => onData(chunk, (text) => (stderr += text))
     const onError = (error: Error): void => {
       if ((error as NodeJS.ErrnoException).code === 'ENOENT') {
         finish({
@@ -467,17 +404,15 @@ function runLocalModelDiscovery(
       })
     }
     const onClose = (code: number | null): void => {
-      child.off?.('close', onClose)
-      owner.release()
       if (outputLimitExceeded) {
         finish({ success: false, error: `${spec.label} returned too much model data.` })
         return
       }
       if (code !== 0) {
-        finish(finalizeModelDiscoveryOutput(spec, stdout.toString(), stderr.toString(), code))
+        finish(finalizeModelDiscoveryOutput(spec, stdout, stderr, code))
         return
       }
-      finish(finalizeModelDiscoveryOutput(spec, stdout.toString(), stderr.toString(), code))
+      finish(finalizeModelDiscoveryOutput(spec, stdout, stderr, code))
     }
 
     child.stdout?.on('data', onStdoutData)
@@ -488,6 +423,7 @@ function runLocalModelDiscovery(
       child.stdout?.off?.('data', onStdoutData)
       child.stderr?.off?.('data', onStderrData)
       child.off?.('error', onError)
+      child.off?.('close', onClose)
     }
   })
 }
@@ -578,8 +514,6 @@ function killProcessTree(child: ChildProcess): void {
 // Keying by operation plus `local:${cwd}` keeps local cancellation independent
 // from SSH worktrees and from other generation features in the same worktree.
 const cancelTokensByLane = new Map<string, () => void>()
-const pendingReservationCancelTokensByLane = new Map<string, () => void>()
-export { MAX_CONCURRENT_LOCAL_TEXT_GENERATIONS }
 const WSL_LAUNCHER_ENV_KEYS = [
   'ComSpec',
   'COMSPEC',
@@ -596,17 +530,8 @@ function localLaneKey(operation: TextGenerationOperation, cwd: string): string {
   return `${operation}:local:${cwd}`
 }
 
-function cancelLocalGenerationLane(laneKey: string): void {
-  const cancelPendingReservation = pendingReservationCancelTokensByLane.get(laneKey)
-  if (cancelPendingReservation) {
-    cancelPendingReservation()
-    return
-  }
-  cancelTokensByLane.get(laneKey)?.()
-}
-
 export function cancelGenerateCommitMessageLocal(cwd: string): void {
-  cancelLocalGenerationLane(localLaneKey('commit-message', cwd))
+  cancelTokensByLane.get(localLaneKey('commit-message', cwd))?.()
 }
 
 function buildWslLauncherEnv(explicitEnv: NodeJS.ProcessEnv | undefined): NodeJS.ProcessEnv {
@@ -634,46 +559,6 @@ async function runLocalPlan(
   wslDistro?: string
 ): Promise<InternalTextGenerationResult> {
   const { binary, args, stdinPayload, label } = plan
-  const laneKey = localLaneKey(operation, cwd)
-  pendingReservationCancelTokensByLane.get(laneKey)?.()
-  const reservation = reserveLocalAiProcess(laneKey)
-  if (!reservation) {
-    return {
-      success: false,
-      error:
-        'Too many local AI generations are already running. Wait for one to finish and try again.'
-    }
-  }
-  const previousCancelToken = cancelTokensByLane.get(laneKey)
-  if (reservation.waitForClose) {
-    let canceledWhileWaiting = false
-    let resolvePendingCancellation = (): void => {}
-    const pendingCancellation = new Promise<void>((resolve) => {
-      resolvePendingCancellation = resolve
-    })
-    const cancelPendingReservation = (): void => {
-      if (canceledWhileWaiting) {
-        return
-      }
-      canceledWhileWaiting = true
-      reservation.release()
-      if (pendingReservationCancelTokensByLane.get(laneKey) === cancelPendingReservation) {
-        pendingReservationCancelTokensByLane.delete(laneKey)
-      }
-      resolvePendingCancellation()
-    }
-    pendingReservationCancelTokensByLane.set(laneKey, cancelPendingReservation)
-    previousCancelToken?.()
-    await Promise.race([reservation.waitForClose, pendingCancellation])
-    if (pendingReservationCancelTokensByLane.get(laneKey) === cancelPendingReservation) {
-      pendingReservationCancelTokensByLane.delete(laneKey)
-    }
-    if (canceledWhileWaiting) {
-      return { success: false, error: 'Generation canceled.', canceled: true }
-    }
-  } else {
-    previousCancelToken?.()
-  }
   return new Promise((resolve) => {
     let child: ChildProcess
     try {
@@ -701,7 +586,6 @@ async function runLocalPlan(
         })
       }
     } catch (error) {
-      reservation.release()
       if (error instanceof UnsafeWindowsBatchArgumentsError) {
         resolve({
           success: false,
@@ -716,13 +600,15 @@ async function runLocalPlan(
       })
       return
     }
-    const owner = reservation.register(child, laneKey)
 
-    const stdout = new GrowingByteBuffer()
-    const stderr = new GrowingByteBuffer()
+    let stdout = ''
+    let stderr = ''
+    let stdoutBytes = 0
+    let stderrBytes = 0
     let outputLimitExceeded = false
     let settled = false
     let canceledByUser = false
+    const laneKey = localLaneKey(operation, cwd)
     let cancelToken: (() => void) | null = null
     let timer: ReturnType<typeof setTimeout> | null = null
     let detachChildListeners = (): void => {}
@@ -739,8 +625,6 @@ async function runLocalPlan(
       if (cancelToken && cancelTokensByLane.get(laneKey) === cancelToken) {
         cancelTokensByLane.delete(laneKey)
       }
-      stdout.clear()
-      stderr.clear()
       resolve(result)
     }
 
@@ -762,20 +646,22 @@ async function runLocalPlan(
     }, GENERATION_TIMEOUT_MS)
 
     const onStdoutData = (chunk: Buffer): void => {
-      if (stdout.byteLength + chunk.byteLength > MAX_AGENT_OUTPUT_BYTES) {
+      stdoutBytes += chunk.byteLength
+      if (stdoutBytes > MAX_AGENT_OUTPUT_BYTES) {
         outputLimitExceeded = true
         killProcessTree(child)
         return
       }
-      stdout.append(chunk)
+      stdout += chunk.toString('utf-8')
     }
     const onStderrData = (chunk: Buffer): void => {
-      if (stderr.byteLength + chunk.byteLength > MAX_AGENT_OUTPUT_BYTES) {
+      stderrBytes += chunk.byteLength
+      if (stderrBytes > MAX_AGENT_OUTPUT_BYTES) {
         outputLimitExceeded = true
         killProcessTree(child)
         return
       }
-      stderr.append(chunk)
+      stderr += chunk.toString('utf-8')
     }
     const onError = (error: Error): void => {
       const code = (error as NodeJS.ErrnoException).code
@@ -793,8 +679,6 @@ async function runLocalPlan(
       })
     }
     const onClose = (code: number | null): void => {
-      child.off?.('close', onClose)
-      owner.release()
       if (canceledByUser) {
         finalize({ success: false, error: 'Generation canceled.', canceled: true })
         return
@@ -808,8 +692,8 @@ async function runLocalPlan(
       }
       finalizeFromAgentOutput({
         code,
-        stdout: stdout.toString(),
-        stderr: stderr.toString(),
+        stdout,
+        stderr,
         label,
         emptyResultName,
         finalize,
@@ -824,6 +708,7 @@ async function runLocalPlan(
       child.stdout?.off?.('data', onStdoutData)
       child.stderr?.off?.('data', onStderrData)
       child.off?.('error', onError)
+      child.off?.('close', onClose)
     }
 
     child.stdin?.end(stdinPayload ?? undefined)
@@ -1014,7 +899,7 @@ export async function generateCommitMessageFromContext(
 }
 
 export function cancelGeneratePullRequestFieldsLocal(cwd: string): void {
-  cancelLocalGenerationLane(localLaneKey('pull-request-fields', cwd))
+  cancelTokensByLane.get(localLaneKey('pull-request-fields', cwd))?.()
 }
 
 function formatPullRequestFieldsGenerationResult(

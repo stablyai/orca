@@ -3,7 +3,7 @@ import { homedir } from 'node:os'
 import { basename, extname, join } from 'node:path'
 import type { AgentType } from '../../shared/native-chat-types'
 import { resolveNativeChatTranscriptAgent } from '../../shared/native-chat-agent-support'
-import { findFirstSessionFile } from '../ai-vault/session-scanner-discovery'
+import { walkSessionFiles } from '../ai-vault/session-scanner-discovery'
 import { getOrcaManagedCodexHomePath } from '../codex/codex-home-paths'
 import {
   findGrokChatHistoryBySessionId,
@@ -102,10 +102,11 @@ async function resolveClaudeSessionFile(
   projectsDir: string
 ): Promise<string | null> {
   const targetName = `${sessionId}.jsonl`
-  return findFirstSessionFile(projectsDir, {
+  const files = await walkSessionFiles(projectsDir, 'claude', [], {
     extensions: new Set(['.jsonl']),
     filePredicate: (path) => basename(path) === targetName
   })
+  return files[0] ?? null
 }
 
 async function resolveCodexSessionFile(
@@ -119,15 +120,15 @@ async function resolveCodexSessionFile(
     if (!existsSync(sessionsDir)) {
       continue
     }
-    const file = await findFirstSessionFile(sessionsDir, {
+    const files = await walkSessionFiles(sessionsDir, 'codex', [], {
       extensions: new Set(['.jsonl']),
       filePredicate: (path) => {
         const name = basename(path, extname(path))
         return name === sessionId || name.endsWith(`-${sessionId}`)
       }
     })
-    if (file) {
-      return file
+    if (files[0]) {
+      return files[0]
     }
   }
   return null

@@ -1,15 +1,9 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
-const { removeHostMock, deleteConnectionLogMock } = vi.hoisted(() => ({
-  removeHostMock: vi.fn(),
-  deleteConnectionLogMock: vi.fn()
-}))
+const removeHostMock = vi.hoisted(() => vi.fn())
 
 vi.mock('./host-store', () => ({
   removeHost: (hostId: string) => removeHostMock(hostId)
-}))
-vi.mock('./connection-log-buffer', () => ({
-  connectionLogStore: { delete: deleteConnectionLogMock }
 }))
 
 import { removeHostAndCloseClient } from './host-removal-lifecycle'
@@ -17,7 +11,6 @@ import { removeHostAndCloseClient } from './host-removal-lifecycle'
 describe('host removal lifecycle', () => {
   beforeEach(() => {
     removeHostMock.mockReset()
-    deleteConnectionLogMock.mockReset()
   })
 
   it('closes the client only after metadata removal commits', async () => {
@@ -35,7 +28,6 @@ describe('host removal lifecycle', () => {
     await removal
 
     expect(closeHostClient).toHaveBeenCalledWith('host-1')
-    expect(deleteConnectionLogMock).toHaveBeenCalledWith('host-1')
   })
 
   it('keeps the client open when metadata removal fails', async () => {
@@ -46,18 +38,5 @@ describe('host removal lifecycle', () => {
       'storage unavailable'
     )
     expect(closeHostClient).not.toHaveBeenCalled()
-    expect(deleteConnectionLogMock).not.toHaveBeenCalled()
-  })
-
-  it('forgets removed-host logs even when client teardown throws', async () => {
-    removeHostMock.mockResolvedValue(undefined)
-    const closeHostClient = vi.fn(() => {
-      throw new Error('close failed')
-    })
-
-    await expect(removeHostAndCloseClient('host-1', closeHostClient)).rejects.toThrow(
-      'close failed'
-    )
-    expect(deleteConnectionLogMock).toHaveBeenCalledWith('host-1')
   })
 })

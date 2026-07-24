@@ -15,25 +15,18 @@ import {
 } from '../claude-accounts/keychain'
 import type { ClaudeRuntimeAuthPreparation } from '../claude-accounts/runtime-auth-service'
 
-const {
-  netFetchMock,
-  readFileMock,
-  readFileSyncMock,
-  resolveProxyMock,
-  setProxyMock,
-  appGetPathMock
-} = vi.hoisted(() => ({
-  netFetchMock: vi.fn(),
-  readFileMock: vi.fn(),
-  readFileSyncMock: vi.fn(),
-  resolveProxyMock: vi.fn(),
-  setProxyMock: vi.fn(),
-  appGetPathMock: vi.fn()
-}))
+const { netFetchMock, readFileMock, resolveProxyMock, setProxyMock, appGetPathMock } = vi.hoisted(
+  () => ({
+    netFetchMock: vi.fn(),
+    readFileMock: vi.fn(),
+    resolveProxyMock: vi.fn(),
+    setProxyMock: vi.fn(),
+    appGetPathMock: vi.fn()
+  })
+)
 
-vi.mock('../integration-credential-file', () => ({
-  readIntegrationCredentialFileSyncText: readFileSyncMock,
-  readIntegrationCredentialFileText: readFileMock
+vi.mock('node:fs/promises', () => ({
+  readFile: readFileMock
 }))
 
 vi.mock('electron', () => ({
@@ -81,7 +74,6 @@ describe('fetchClaudeRateLimits', () => {
     tempDir = null
     vi.clearAllMocks()
     readFileMock.mockRejectedValue(new Error('missing file'))
-    readFileSyncMock.mockImplementation((filePath: string) => readFileSync(filePath, 'utf8'))
     vi.mocked(readActiveClaudeKeychainCredentials).mockResolvedValue(null)
     vi.mocked(readActiveClaudeKeychainCredentialsStrict).mockResolvedValue(null)
     vi.mocked(readManagedClaudeKeychainCredentials).mockResolvedValue(null)
@@ -752,7 +744,10 @@ describe('fetchClaudeRateLimits', () => {
       status: 'ok'
     })
 
-    expect(readFileMock).toHaveBeenCalledWith(join('/Users/test/.claude', '.credentials.json'))
+    expect(readFileMock).toHaveBeenCalledWith(
+      join('/Users/test/.claude', '.credentials.json'),
+      'utf-8'
+    )
     expect(netFetchMock).toHaveBeenCalledWith(
       'https://api.anthropic.com/api/oauth/usage',
       expect.objectContaining({

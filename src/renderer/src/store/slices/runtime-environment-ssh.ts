@@ -6,7 +6,6 @@ import type {
   SshTargetSummary
 } from '../../../../shared/ssh-types'
 import { sshConnectionStatesEqual, sshTargetLabelsEqual } from './ssh-target-cleanup'
-import { OperationGenerationRegistry } from '@/lib/operation-generation-registry'
 
 /**
  * SSH state of one remote Orca server's own SSH targets, mirrored on this
@@ -65,8 +64,8 @@ const EMPTY_BUCKET: RuntimeEnvironmentSshBucket = {
   targetsHydrated: false
 }
 
-const stateGenerations = new OperationGenerationRegistry()
-const targetConnectionGenerations = new OperationGenerationRegistry()
+const stateGenerationByEnvironment = new Map<string, number>()
+const targetConnectionGenerationByEnvironment = new Map<string, number>()
 
 function targetGenerationKey(environmentId: string, targetId: string): string {
   return `${environmentId}\0${targetId}`
@@ -76,22 +75,31 @@ export function getEnvironmentSshTargetConnectionGeneration(
   environmentId: string,
   targetId: string
 ): number {
-  return targetConnectionGenerations.get(targetGenerationKey(environmentId, targetId))
+  return (
+    targetConnectionGenerationByEnvironment.get(targetGenerationKey(environmentId, targetId)) ?? 0
+  )
 }
 
 function advanceEnvironmentSshTargetConnectionGeneration(
   environmentId: string,
   targetId: string
 ): void {
-  targetConnectionGenerations.advance(targetGenerationKey(environmentId, targetId))
+  const key = targetGenerationKey(environmentId, targetId)
+  targetConnectionGenerationByEnvironment.set(
+    key,
+    getEnvironmentSshTargetConnectionGeneration(environmentId, targetId) + 1
+  )
 }
 
 export function getEnvironmentSshStateGeneration(environmentId: string): number {
-  return stateGenerations.get(environmentId)
+  return stateGenerationByEnvironment.get(environmentId) ?? 0
 }
 
 function advanceEnvironmentSshStateGeneration(environmentId: string): void {
-  stateGenerations.advance(environmentId)
+  stateGenerationByEnvironment.set(
+    environmentId,
+    getEnvironmentSshStateGeneration(environmentId) + 1
+  )
 }
 
 function generationIsCurrent(environmentId: string, generation: number | undefined): boolean {

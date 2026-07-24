@@ -1,7 +1,5 @@
 import { type posix, win32 } from 'node:path'
 
-export const MAX_WORKTREE_GIT_POINTER_BYTES = 64 * 1024
-
 type PathOps = typeof posix
 export type StatPath = (path: string) => Promise<unknown>
 export type ReadPath = (path: string) => Promise<unknown>
@@ -43,15 +41,13 @@ function isGitFileStat(stat: unknown): boolean {
 
 function readFileResultToText(result: unknown): string | null {
   if (typeof result === 'string') {
-    return Buffer.byteLength(result, 'utf8') <= MAX_WORKTREE_GIT_POINTER_BYTES ? result : null
+    return result
   }
   if (Buffer.isBuffer(result)) {
-    return result.byteLength <= MAX_WORKTREE_GIT_POINTER_BYTES ? result.toString('utf8') : null
+    return result.toString('utf8')
   }
   if (result instanceof Uint8Array) {
-    return result.byteLength <= MAX_WORKTREE_GIT_POINTER_BYTES
-      ? Buffer.from(result).toString('utf8')
-      : null
+    return Buffer.from(result).toString('utf8')
   }
   if (!result || typeof result !== 'object') {
     return null
@@ -60,9 +56,7 @@ function readFileResultToText(result: unknown): string | null {
   if (remoteRead.isBinary === true || typeof remoteRead.content !== 'string') {
     return null
   }
-  return Buffer.byteLength(remoteRead.content, 'utf8') <= MAX_WORKTREE_GIT_POINTER_BYTES
-    ? remoteRead.content
-    : null
+  return remoteRead.content
 }
 
 function resolveGitdirPath(gitdirPath: string, basePath: string, pathOps: PathOps): string {

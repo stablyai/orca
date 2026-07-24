@@ -1,7 +1,7 @@
 /* eslint-disable max-lines -- Why: filesystem, editor-file, and search commands share the same local/SSH path authorization rules. Keeping that IO adapter together prevents separate command paths from drifting on safety checks. */
 import type { ChildProcess } from 'node:child_process'
 import { randomUUID } from 'node:crypto'
-import { watch as watchFs, type Dirent } from 'node:fs'
+import { watch as watchFs } from 'node:fs'
 import type { FileHandle } from 'node:fs/promises'
 import {
   chmod,
@@ -10,7 +10,8 @@ import {
   lstat,
   mkdir,
   open,
-  opendir,
+  readFile,
+  readdir,
   rename,
   realpath,
   rm,
@@ -37,13 +38,6 @@ import {
   resolveRuntimePath
 } from '../../shared/cross-platform-path'
 import { PhysicalExitTracker } from '../../shared/physical-exit-tracker'
-import {
-  assertMobileFileDirectoryWithinLimit,
-  createMobileFileDirectoryLimitState,
-  MOBILE_FILE_DIRECTORY_MAX_ENTRIES,
-  MOBILE_FILE_DIRECTORY_MAX_RETAINED_BYTES,
-  trackMobileFileDirectoryEntry
-} from '../../shared/mobile-file-directory-limit'
 import type {
   RuntimeFileListResult,
   RuntimeFileOpenResult,
@@ -86,10 +80,6 @@ import {
   WatcherProcessFailure
 } from '../ipc/parcel-watcher-process-failure'
 import { assertNoClobberRenameDestinationAvailable } from '../../shared/filesystem-rename-collision'
-import {
-  NodeFileReadTooLargeError,
-  readNodeFileWithinLimit
-} from '../../shared/node-bounded-file-reader'
 import { joinWorktreeRelativePath, normalizeRuntimeRelativePath } from './runtime-relative-paths'
 import {
   rankRuntimeMobileFilePaths,
@@ -98,18 +88,12 @@ import {
 import { beginWatcherInstall } from '../ipc/watcher-removal-gate'
 import { assertSshMutationExpectation } from '../ssh/ssh-connection-generation'
 import { toSshExecutionHostId } from '../../shared/execution-host'
-import { assertRasterImagePreviewWithinLimits } from '../../shared/raster-image-preview-limits'
-import { SearchSubprocessLineAccumulator } from '../../shared/search-subprocess-lines'
-import { retainRuntimeTerminalFileGrant } from './runtime-terminal-file-grant-retention'
-import { assertRuntimeTextSearchAdmission } from './runtime-text-search-admission'
-import { RuntimeFileWatcherAdmission } from './runtime-file-watcher-admission'
 
 const MOBILE_FILE_LIST_LIMIT = 5000
 const MOBILE_FILE_PATH_SEARCH_CACHE_LIMIT = 20_000
 const MOBILE_FILE_PATH_SEARCH_CACHE_ENTRIES = 8
 const MOBILE_FILE_PATH_SEARCH_CACHE_TTL_MS = 30_000
 const MOBILE_FILE_READ_MAX_BYTES = 512 * 1024
-const RUNTIME_MOBILE_DIRECTORY_CLASSIFICATION_CONCURRENCY = 32
 const RUNTIME_PREVIEWABLE_BINARY_MAX_BYTES = 10 * 1024 * 1024
 const WINDOWS_RUNTIME_FILE_WATCH_DEBOUNCE_MS = 150
 export const WINDOWS_RUNTIME_FILE_WATCH_CLOSE_DEADLINE_MS = 10_000
@@ -142,7 +126,6 @@ type RuntimeFileWatcherLease = {
   forget(): void
 }
 const runtimeFileWatcherLeasesByOwnerAndRoot = new Map<string, Set<RuntimeFileWatcherLease>>()
-const runtimeFileWatcherAdmission = new RuntimeFileWatcherAdmission()
 const MOBILE_BINARY_EXTENSIONS = new Set([
   '.avif',
   '.bmp',
@@ -248,8 +231,7 @@ function registerRuntimeFileWatcherRelease(
   rootPaths: string[],
   unsubscribe: () => Promise<void>,
   restart: () => Promise<() => Promise<void>>,
-  onRestoreError: (error: Error) => void,
-  releaseAdmission: () => void
+  onRestoreError: (error: Error) => void
 ): () => Promise<void> {
   const keys = Array.from(
     new Set(
@@ -270,7 +252,6 @@ function registerRuntimeFileWatcherRelease(
         runtimeFileWatcherLeasesByOwnerAndRoot.delete(key)
       }
     }
-    releaseAdmission()
   }
   const suspend = (): Promise<void> => {
     if (releasePromise) {
@@ -849,10 +830,7 @@ export class RuntimeFileCommands {
       expiresAt: Date.now() + TERMINAL_FILE_GRANT_TTL_MS,
       statIdentity: terminalFileStatIdentity(args.stats)
     }
-    this.pruneExpiredTerminalFileGrants()
-    retainRuntimeTerminalFileGrant(this.terminalFileGrants, grant, (id, retained) =>
-      this.releaseTerminalFileGrant(id, retained)
-    )
+    this.terminalFileGrants.set(grant.id, grant)
     this.scheduleTerminalFileGrantExpiry(grant)
     return grant
   }
@@ -1184,23 +1162,21 @@ export class RuntimeFileCommands {
       if (!provider) {
         throw new Error(SSH_FILESYSTEM_PROVIDER_UNAVAILABLE_MESSAGE)
       }
-      const entries = await provider.readDir(target.path, {
-        maxEntries: MOBILE_FILE_DIRECTORY_MAX_ENTRIES,
-        maxRetainedBytes: MOBILE_FILE_DIRECTORY_MAX_RETAINED_BYTES
-      })
-      assertMobileFileDirectoryWithinLimit(entries)
-      return entries
+      return provider.readDir(target.path)
     }
 
     const dirPath = await resolveAuthorizedPath(target.path, this.host.requireStore())
-    const limit = createMobileFileDirectoryLimitState()
-    const directory = await opendir(dirPath)
-    const entries: Dirent[] = []
-    for await (const entry of directory) {
-      trackMobileFileDirectoryEntry(limit, entry)
-      entries.push(entry)
-    }
-    const mapped = await classifyRuntimeMobileDirectoryEntries(dirPath, entries)
+    const entries = await readdir(dirPath, { withFileTypes: true })
+    const mapped = await Promise.all(
+      entries.map(async (entry) => {
+        const entryPath = join(dirPath, entry.name)
+        return {
+          name: entry.name,
+          isDirectory: await isRuntimeDirectoryEntry(entry, entryPath),
+          isSymlink: entry.isSymbolicLink()
+        }
+      })
+    )
     return mapped.sort((a, b) => {
       if (a.isDirectory !== b.isDirectory) {
         return a.isDirectory ? -1 : 1
@@ -1216,11 +1192,6 @@ export class RuntimeFileCommands {
     signal?: AbortSignal
   ): Promise<() => void> {
     const target = await this.resolveFileExplorerPath(worktreeSelector, '')
-    const releaseAdmission = runtimeFileWatcherAdmission.claim(
-      this.host.getRuntimeId(),
-      target.connectionId,
-      target.path
-    )
     const open = async (): Promise<{
       unsubscribe: () => Promise<void>
       rootPaths: string[]
@@ -1258,30 +1229,15 @@ export class RuntimeFileCommands {
         finishInstall()
       }
     }
-    let initial: Awaited<ReturnType<typeof open>>
-    try {
-      initial = await open()
-    } catch (error) {
-      releaseAdmission()
-      throw error
-    }
-    try {
-      return registerRuntimeFileWatcherRelease(
-        this.host.getRuntimeId(),
-        target.connectionId,
-        initial.rootPaths,
-        initial.unsubscribe,
-        async () => (await open()).unsubscribe,
-        onTerminalError,
-        releaseAdmission
-      )
-    } catch (error) {
-      releaseAdmission()
-      await trackRuntimeFileWatcherUnsubscribe(initial.rootPaths[0], initial.unsubscribe).catch(
-        () => undefined
-      )
-      throw error
-    }
+    const initial = await open()
+    return registerRuntimeFileWatcherRelease(
+      this.host.getRuntimeId(),
+      target.connectionId,
+      initial.rootPaths,
+      initial.unsubscribe,
+      async () => (await open()).unsubscribe,
+      onTerminalError
+    )
   }
 
   async closeFileExplorerWatchersForPath(rootPath: string, connectionId?: string): Promise<void> {
@@ -1339,30 +1295,23 @@ export class RuntimeFileCommands {
     const filePath = await resolveAuthorizedPath(target.path, this.host.requireStore())
     const fileStats = await stat(filePath)
     const mimeType = RUNTIME_PREVIEWABLE_BINARY_MIME_TYPES[extname(filePath).toLowerCase()]
-    const sizeLimit = mimeType ? RUNTIME_PREVIEWABLE_BINARY_MAX_BYTES : MOBILE_FILE_READ_MAX_BYTES
-    if (fileStats.size > sizeLimit) {
-      throw new Error('file_too_large')
-    }
-    let buffer: Buffer
-    try {
-      buffer = (await readNodeFileWithinLimit(filePath, sizeLimit)).buffer
-    } catch (error) {
-      if (error instanceof NodeFileReadTooLargeError) {
+    if (mimeType) {
+      if (fileStats.size > RUNTIME_PREVIEWABLE_BINARY_MAX_BYTES) {
         throw new Error('file_too_large')
       }
-      throw error
-    }
-    if (mimeType) {
-      const imageDimensions = assertRasterImagePreviewWithinLimits(buffer, mimeType)
+      const buffer = await readFile(filePath)
       return {
         content: buffer.toString('base64'),
         isBinary: true,
         isImage: true,
-        mimeType,
-        ...(imageDimensions ? { imageDimensions } : {})
+        mimeType
       }
     }
 
+    if (fileStats.size > MOBILE_FILE_READ_MAX_BYTES) {
+      throw new Error('file_too_large')
+    }
+    const buffer = await readFile(filePath)
     if (isBinaryBuffer(buffer)) {
       return { content: '', isBinary: true }
     }
@@ -1789,12 +1738,7 @@ export class RuntimeFileCommands {
       if (!provider) {
         throw new Error(SSH_FILESYSTEM_PROVIDER_UNAVAILABLE_MESSAGE)
       }
-      if (!provider.listMarkdownDocuments) {
-        throw new Error(
-          'Remote Markdown link discovery is unavailable. Reconnect the SSH target and retry.'
-        )
-      }
-      const relativePaths = await provider.listMarkdownDocuments(target.worktree.path)
+      const relativePaths = await provider.listFiles(target.worktree.path)
       return markdownDocumentsFromRelativePaths(target.worktree.path, relativePaths)
     }
     return listMarkdownDocuments(target.worktree.path)
@@ -1844,12 +1788,11 @@ export class RuntimeFileCommands {
 
     return new Promise((resolvePromise) => {
       const searchKey = `${this.host.getRuntimeId()}:${authorizedRootPath}`
-      assertRuntimeTextSearchAdmission(this.activeRuntimeTextSearches, searchKey)
       const rgArgs = buildRgArgs(options.query, authorizedRootPath, options)
       this.activeRuntimeTextSearches.get(searchKey)?.kill()
 
       const acc = createAccumulator()
-      const stdoutLines = new SearchSubprocessLineAccumulator()
+      let stdoutBuffer = ''
       let resolved = false
       let child: ChildProcess | null = null
       const wslInfo = parseWslPath(authorizedRootPath)
@@ -1902,11 +1845,13 @@ export class RuntimeFileCommands {
       child = nextChild
       this.activeRuntimeTextSearches.set(searchKey, nextChild)
 
-      const onStdoutData = (chunk: Buffer): void => {
-        if (!stdoutLines.push(chunk, processLine)) {
-          acc.truncated = true
-          child?.kill()
-          resolveOnce()
+      nextChild.stdout!.setEncoding('utf-8')
+      const onStdoutData = (chunk: string): void => {
+        stdoutBuffer += chunk
+        const lines = stdoutBuffer.split('\n')
+        stdoutBuffer = lines.pop() ?? ''
+        for (const line of lines) {
+          processLine(line)
         }
       }
       const onStderrData = (): void => {
@@ -1914,9 +1859,8 @@ export class RuntimeFileCommands {
       }
       const onError = (): void => resolveOnce()
       const onClose = (): void => {
-        const trailingLine = stdoutLines.finish()
-        if (trailingLine !== null) {
-          processLine(trailingLine)
+        if (stdoutBuffer) {
+          processLine(stdoutBuffer)
         }
         resolveOnce()
       }
@@ -2115,45 +2059,6 @@ async function isRuntimeDirectoryEntry(
   return false
 }
 
-type RuntimeDirectorySourceEntry = {
-  name: string
-  isDirectory(): boolean
-  isSymbolicLink(): boolean
-}
-
-type RuntimeDirectoryClassifier = (
-  entry: RuntimeDirectorySourceEntry,
-  entryPath: string
-) => Promise<boolean>
-
-export async function classifyRuntimeMobileDirectoryEntries(
-  dirPath: string,
-  entries: readonly RuntimeDirectorySourceEntry[],
-  classify: RuntimeDirectoryClassifier = isRuntimeDirectoryEntry
-): Promise<DirEntry[]> {
-  const mapped: DirEntry[] = []
-  for (
-    let offset = 0;
-    offset < entries.length;
-    offset += RUNTIME_MOBILE_DIRECTORY_CLASSIFICATION_CONCURRENCY
-  ) {
-    const batch = entries.slice(
-      offset,
-      offset + RUNTIME_MOBILE_DIRECTORY_CLASSIFICATION_CONCURRENCY
-    )
-    mapped.push(
-      ...(await Promise.all(
-        batch.map(async (entry) => ({
-          name: entry.name,
-          isDirectory: await classify(entry, join(dirPath, entry.name)),
-          isSymlink: entry.isSymbolicLink()
-        }))
-      ))
-    )
-  }
-  return mapped
-}
-
 function isBinaryBuffer(buffer: Buffer): boolean {
   const len = Math.min(buffer.length, 8192)
   for (let i = 0; i < len; i += 1) {
@@ -2243,13 +2148,11 @@ async function readLocalTerminalArtifactPreviewFromHandle(
       handle,
       RUNTIME_PREVIEWABLE_BINARY_MAX_BYTES + 1
     )
-    const imageDimensions = assertRasterImagePreviewWithinLimits(buffer, mimeType)
     return {
       content: buffer.toString('base64'),
       isBinary: true,
       isImage: true,
-      mimeType,
-      ...(imageDimensions ? { imageDimensions } : {})
+      mimeType
     }
   }
 

@@ -56,9 +56,6 @@ export class MjpegFrameStream {
   }
 
   start(): void {
-    if (this.stopped || this.request || this.reconnectTimer) {
-      return
-    }
     this.openRequest()
   }
 
@@ -73,12 +70,10 @@ export class MjpegFrameStream {
     this.pending = Buffer.alloc(0)
   }
 
-  private scheduleReconnect(request: ClientRequest): void {
-    if (this.stopped || this.request !== request || this.reconnectTimer) {
+  private scheduleReconnect(): void {
+    if (this.stopped || this.reconnectTimer) {
       return
     }
-    this.request = null
-    request.destroy()
     this.reconnectTimer = setTimeout(() => {
       this.reconnectTimer = null
       this.openRequest()
@@ -86,45 +81,34 @@ export class MjpegFrameStream {
   }
 
   private openRequest(): void {
-    if (this.stopped || this.request) {
+    if (this.stopped) {
       return
     }
 
     const req = requestForUrl(this.streamUrl, (res) => {
-      if (this.stopped || this.request !== req) {
-        res.destroy()
-        return
-      }
       if (res.statusCode && res.statusCode >= 400) {
-        this.scheduleReconnect(req)
-        res.destroy()
         this.callbacks.onError(`Simulator stream returned HTTP ${res.statusCode}.`)
+        res.resume()
+        this.scheduleReconnect()
         return
       }
 
-      res.on('data', (chunk: Buffer) => {
-        if (!this.stopped && this.request === req) {
-          this.handleChunk(chunk)
-        }
-      })
-      res.on('end', () => this.scheduleReconnect(req))
+      res.on('data', (chunk: Buffer) => this.handleChunk(chunk))
+      res.on('end', () => this.scheduleReconnect())
       res.on('error', (error) => {
-        if (this.stopped || this.request !== req) {
-          return
-        }
-        this.scheduleReconnect(req)
         this.callbacks.onError(error.message)
+        this.scheduleReconnect()
       })
     })
 
     this.request = req
     req.on('timeout', () => req.destroy(new Error('Simulator stream timed out.')))
     req.on('error', (error) => {
-      if (this.stopped || this.request !== req) {
+      if (this.stopped) {
         return
       }
-      this.scheduleReconnect(req)
       this.callbacks.onError(error.message)
+      this.scheduleReconnect()
     })
     req.end()
   }

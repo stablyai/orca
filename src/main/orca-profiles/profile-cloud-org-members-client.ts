@@ -7,7 +7,6 @@ import type {
 import type { OrcaCloudAuthConfig } from './profile-cloud-auth-config'
 import type { OrcaCloudSession } from './profile-cloud-session-store'
 import { OrcaCloudRequestError } from './profile-cloud-client'
-import { readFetchResponseJsonWithinLimit } from '../lib/fetch-response-body'
 
 const CLOUD_REQUEST_TIMEOUT_MS = 30_000
 const ORG_ROLES: readonly OrcaOrgRole[] = ['owner', 'admin', 'member']
@@ -107,7 +106,7 @@ function orgMembersUrl(config: OrcaCloudAuthConfig, orgId: string, path: string)
 
 async function extractErrorCode(response: Response): Promise<string | undefined> {
   try {
-    const body = await readFetchResponseJsonWithinLimit<unknown>(response)
+    const body = (await response.json()) as unknown
     if (
       body &&
       typeof body === 'object' &&
@@ -146,7 +145,7 @@ async function requestOrgMembers<T>(
   if (!response.ok) {
     throw new OrcaCloudRequestError(response.status, await extractErrorCode(response))
   }
-  return parse(await readFetchResponseJsonWithinLimit<unknown>(response))
+  return parse((await response.json()) as unknown)
 }
 
 export async function listOrcaCloudOrgMembers(

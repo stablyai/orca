@@ -5,15 +5,9 @@ import {
   finalizeSession,
   updateTimeline
 } from './session-scanner-accumulator'
-import { normalizeTitleText, parseAiVaultJsonText } from './session-scanner-values'
+import { normalizeTitleText } from './session-scanner-values'
 import SyncDatabase from '../sqlite/sync-database'
 import { columnExists, tableExists } from '../opencode-usage/schema-helpers'
-import {
-  OPENCODE_SQLITE_MESSAGE_JSON_MAX_BYTES,
-  OPENCODE_SQLITE_MODEL_JSON_MAX_BYTES,
-  OPENCODE_SQLITE_PART_JSON_MAX_BYTES,
-  OPENCODE_SQLITE_SESSION_TEXT_MAX_BYTES
-} from './session-scanner-opencode-sqlite-limits'
 
 // Why: OpenCode 1.17.x migrated session storage from per-session JSON files
 // to a single SQLite DB at ~/.local/share/opencode/opencode.db. This module
@@ -69,16 +63,8 @@ function canReadOpenCodeSessions(db: SyncDatabase): boolean {
   )
 }
 
-function boundedSessionTextColumnSelect(
-  db: SyncDatabase,
-  columnName: string,
-  maxBytes: number
-): string {
-  return columnExists(db, 'session', columnName)
-    ? `CASE WHEN typeof(s.${columnName}) = 'text'
-         AND length(CAST(s.${columnName} AS BLOB)) <= ${maxBytes}
-       THEN s.${columnName} ELSE NULL END`
-    : 'NULL'
+function sessionColumnSelect(db: SyncDatabase, columnName: string): string {
+  return columnExists(db, 'session', columnName) ? `s.${columnName}` : 'NULL'
 }
 
 function sessionNumberColumnSelect(db: SyncDatabase, columnName: string): string {
@@ -97,20 +83,15 @@ function buildSessionQuery(db: SyncDatabase): string {
   const messageCountSubquery = canCountOpenCodeMessages(db)
     ? `(SELECT COUNT(*) FROM message m
         WHERE m.session_id = s.id
-          AND CASE
-            WHEN typeof(m.data) = 'text'
-              AND length(CAST(m.data AS BLOB)) <= ${OPENCODE_SQLITE_MESSAGE_JSON_MAX_BYTES}
-            THEN json_extract(m.data, '$.role') IN ('user','assistant')
-            ELSE 0
-          END)`
+          AND json_extract(m.data, '$.role') IN ('user','assistant'))`
     : '0'
   return `SELECT s.id,
-                 ${boundedSessionTextColumnSelect(db, 'title', OPENCODE_SQLITE_SESSION_TEXT_MAX_BYTES)} AS title,
-                 ${boundedSessionTextColumnSelect(db, 'directory', OPENCODE_SQLITE_SESSION_TEXT_MAX_BYTES)} AS directory,
+                 ${sessionColumnSelect(db, 'title')} AS title,
+                 ${sessionColumnSelect(db, 'directory')} AS directory,
                  s.time_created,
                  s.time_updated,
-                 ${boundedSessionTextColumnSelect(db, 'model', OPENCODE_SQLITE_MODEL_JSON_MAX_BYTES)} AS model_json,
-                 ${boundedSessionTextColumnSelect(db, 'agent', OPENCODE_SQLITE_SESSION_TEXT_MAX_BYTES)} AS agent,
+                 ${sessionColumnSelect(db, 'model')} AS model_json,
+                 ${sessionColumnSelect(db, 'agent')} AS agent,
                  ${sessionNumberColumnSelect(db, 'tokens_input')} AS tokens_input,
                  ${sessionNumberColumnSelect(db, 'tokens_output')} AS tokens_output,
                  ${sessionNumberColumnSelect(db, 'tokens_reasoning')} AS tokens_reasoning,
@@ -127,7 +108,7 @@ function extractModelId(modelJson: string | null): string | null {
     return null
   }
   try {
-    const parsed = parseAiVaultJsonText(modelJson)
+    const parsed = JSON.parse(modelJson) as unknown
     const record =
       parsed && typeof parsed === 'object' && !Array.isArray(parsed)
         ? (parsed as Record<string, unknown>)
@@ -156,7 +137,7 @@ function mapPreviewRole(role: string | null): AiVaultSessionPreviewMessage['role
 
 function extractPartText(partData: string): string | null {
   try {
-    const parsed = parseAiVaultJsonText(partData)
+    const parsed = JSON.parse(partData) as unknown
     const record =
       parsed && typeof parsed === 'object' && !Array.isArray(parsed)
         ? (parsed as Record<string, unknown>)
@@ -191,18 +172,11 @@ function buildPreviewQuery(db: SyncDatabase): string | null {
                  json_extract(m.data, '$.summary.body') AS summary_body
           FROM (SELECT id, data FROM message
                 WHERE session_id = ?
-                  AND typeof(data) = 'text'
-                  AND length(CAST(data AS BLOB)) <= ${OPENCODE_SQLITE_MESSAGE_JSON_MAX_BYTES}
                 ORDER BY time_created DESC, id DESC
                 LIMIT ${OPENCODE_SQLITE_PREVIEW_MESSAGE_WINDOW}) m
           JOIN part p ON p.message_id = m.id
           WHERE json_extract(m.data, '$.role') IN ('user','assistant')
-            AND CASE
-              WHEN typeof(p.data) = 'text'
-                AND length(CAST(p.data AS BLOB)) <= ${OPENCODE_SQLITE_PART_JSON_MAX_BYTES}
-              THEN json_extract(p.data, '$.type') = 'text'
-              ELSE 0
-            END
+            AND json_extract(p.data, '$.type') = 'text'
           ORDER BY p.time_created DESC
           LIMIT ?`
 }

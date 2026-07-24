@@ -8,9 +8,6 @@ export const MAIN_THREAD_DIAGNOSTICS_ENV = 'ORCA_MAIN_THREAD_DIAGNOSTICS'
 // reported in issue #7576.
 const TICK_MS = 25
 const REPORT_EVERY_MS = 5_000
-const SUBPROCESS_BINARY_NAME_MAX_CHARS = 64
-export const SUBPROCESS_SPAWN_STATS_MAX_ENTRIES = 128
-const SUBPROCESS_SPAWN_STATS_OVERFLOW_KEY = 'other'
 
 export function isMainThreadDiagnosticsEnabled(env: NodeJS.ProcessEnv = process.env): boolean {
   return env[MAIN_THREAD_DIAGNOSTICS_ENV] === '1'
@@ -33,39 +30,32 @@ const SUBCOMMAND_BINARIES = new Set(['git', 'gh', 'glab'])
 // Split on both separators so Windows-style paths classify correctly even
 // when the classifier itself runs in a posix test environment.
 function binaryName(command: string): string {
-  const slash = command.lastIndexOf('/')
-  const backslash = command.lastIndexOf('\\')
-  const leaf = command.slice(
-    Math.max(slash, backslash) + 1,
-    Math.max(slash, backslash) + 1 + SUBPROCESS_BINARY_NAME_MAX_CHARS
-  )
-  return leaf
-    .replace(/\.exe$/i, '')
-    .toLowerCase()
-    .replace(/$/u, '')
+  const leaf = command.split(/[\\/]/).pop() ?? command
+  return leaf.replace(/\.exe$/i, '').toLowerCase()
 }
 
 export function classifySubprocessCommand(command: string, args: readonly string[]): string {
   let binary = binaryName(command)
-  let firstArgIndex = 0
+  const rest = [...args]
   if (binary === 'wsl') {
-    const separatorIndex = args.indexOf('--')
-    if (separatorIndex < 0) {
-      return 'wsl'
+    while (rest.length > 0) {
+      const arg = rest.shift()
+      if (arg === '--') {
+        break
+      }
     }
-    const unwrapped = args[separatorIndex + 1]
+    const unwrapped = rest.shift()
     if (!unwrapped) {
       return 'wsl'
     }
     binary = binaryName(unwrapped)
-    firstArgIndex = separatorIndex + 2
   }
   if (!SUBCOMMAND_BINARIES.has(binary)) {
     return binary
   }
   let subcommand: string | null = null
-  for (let i = firstArgIndex; i < args.length; i++) {
-    const arg = args[i]
+  for (let i = 0; i < rest.length; i++) {
+    const arg = rest[i]
     if (!arg.startsWith('-')) {
       subcommand = arg
       break
@@ -79,7 +69,7 @@ export function classifySubprocessCommand(command: string, args: readonly string
   if (!subcommand) {
     return binary
   }
-  return `${binary} ${subcommand.slice(0, 40).replace(/$/u, '')}`
+  return `${binary} ${subcommand.slice(0, 40)}`
 }
 
 export type SubprocessSpawnStats = {
@@ -105,12 +95,7 @@ export function recordSubprocessSpawn(
   if (!isMainThreadDiagnosticsEnabled()) {
     return
   }
-  const classifiedKey = classifySubprocessCommand(command, args)
-  const key =
-    spawnStatsByCommand.has(classifiedKey) ||
-    spawnStatsByCommand.size < SUBPROCESS_SPAWN_STATS_MAX_ENTRIES - 1
-      ? classifiedKey
-      : SUBPROCESS_SPAWN_STATS_OVERFLOW_KEY
+  const key = classifySubprocessCommand(command, args)
   const stats = spawnStatsByCommand.get(key)
   if (stats) {
     stats.count++

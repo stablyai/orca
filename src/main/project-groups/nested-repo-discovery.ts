@@ -1,6 +1,6 @@
 /* eslint-disable max-lines -- Why: scanner traversal, ignore matching, and filesystem
 abstraction stay together so local, SSH, and runtime scans cannot drift. */
-import { opendir, stat } from 'node:fs/promises'
+import { readFile, readdir, stat } from 'node:fs/promises'
 import { basename, join } from 'node:path'
 import type {
   NestedRepoCandidate,
@@ -8,8 +8,6 @@ import type {
   NestedRepoScanResult
 } from '../../shared/types'
 import { isGitRepo } from '../git/repo'
-import { NestedRepoScanBudget, type NestedRepoScanLimits } from './nested-repo-scan-budget'
-import { readNodeFileWithinLimit } from '../../shared/node-bounded-file-reader'
 
 type NestedRepoDirectoryEntry = {
   name: string
@@ -18,12 +16,7 @@ type NestedRepoDirectoryEntry = {
 }
 
 type NestedRepoScanFilesystem = {
-  readDirectory: (
-    dirPath: string
-  ) =>
-    | AsyncIterable<NestedRepoDirectoryEntry>
-    | Iterable<NestedRepoDirectoryEntry>
-    | Promise<AsyncIterable<NestedRepoDirectoryEntry> | Iterable<NestedRepoDirectoryEntry>>
+  readDirectory: (dirPath: string) => Promise<NestedRepoDirectoryEntry[]>
   readTextFile?: (filePath: string) => Promise<string>
   joinPath: (parentPath: string, childName: string) => string
   basename: (path: string) => string
@@ -53,7 +46,6 @@ type NormalizedNestedRepoScanOptions = {
 
 const DEFAULT_MAX_DEPTH = 3
 const DEFAULT_MAX_REPOS = 100
-export const NESTED_REPO_GITIGNORE_MAX_BYTES = 1024 * 1024
 
 const SKIPPED_DIRS = new Set([
   'node_modules',
@@ -129,35 +121,24 @@ function pathSegmentsMatch(patternSegments: string[], candidateSegments: string[
   return matchFrom(0, 0)
 }
 
-function parseGitignoreRules(
-  content: string,
-  baseSegments: string[],
-  budget: NestedRepoScanBudget
-): IgnoreRule[] {
-  const rules: IgnoreRule[] = []
-  for (const match of content.matchAll(/[^\r\n]+/g)) {
-    const line = match[0].trim()
-    if (!line || line.startsWith('#')) {
-      continue
-    }
-    const negate = line.startsWith('!')
-    const unprefixed = negate ? line.slice(1) : line
-    const anchored = unprefixed.startsWith('/')
-    const pattern = unprefixed.replace(/^\/+/, '').replace(/\/+$/, '')
-    if (!pattern) {
-      continue
-    }
-    if (!budget.tryRetainIgnoreRule(pattern)) {
-      break
-    }
-    rules.push({
-      pattern,
-      negate,
-      basenameOnly: !anchored && !pattern.includes('/'),
-      baseSegments
+function parseGitignoreRules(content: string, baseSegments: string[]): IgnoreRule[] {
+  return content
+    .split(/\r?\n/)
+    .map((rawLine) => rawLine.trim())
+    .filter((line) => line.length > 0 && !line.startsWith('#'))
+    .map((line) => {
+      const negate = line.startsWith('!')
+      const unprefixed = negate ? line.slice(1) : line
+      const anchored = unprefixed.startsWith('/')
+      const pattern = unprefixed.replace(/^\/+/, '').replace(/\/+$/, '')
+      return {
+        pattern,
+        negate,
+        basenameOnly: !anchored && !pattern.includes('/'),
+        baseSegments
+      }
     })
-  }
-  return rules
+    .filter((rule) => rule.pattern.length > 0)
 }
 
 function isIgnoredByRules(name: string, segments: string[], rules: IgnoreRule[]): boolean {
@@ -183,7 +164,6 @@ async function readGitignoreRules(args: {
   entries: NestedRepoDirectoryEntry[]
   filesystem: NestedRepoScanFilesystem
   baseSegments: string[]
-  budget: NestedRepoScanBudget
 }): Promise<IgnoreRule[]> {
   if (!args.filesystem.readTextFile || !args.entries.some((entry) => entry.name === '.gitignore')) {
     return []
@@ -192,10 +172,7 @@ async function readGitignoreRules(args: {
     const content = await args.filesystem.readTextFile(
       args.filesystem.joinPath(args.folderPath, '.gitignore')
     )
-    if (Buffer.byteLength(content, 'utf8') > NESTED_REPO_GITIGNORE_MAX_BYTES) {
-      return []
-    }
-    return parseGitignoreRules(content, args.baseSegments, args.budget)
+    return parseGitignoreRules(content, args.baseSegments)
   } catch {
     return []
   }
@@ -218,15 +195,15 @@ async function hasGitMarker(dirPath: string): Promise<boolean> {
   return head?.isFile() === true && objects?.isDirectory() === true && refs?.isDirectory() === true
 }
 
-async function* readLocalDirectory(dirPath: string): AsyncGenerator<NestedRepoDirectoryEntry> {
-  const directory = await opendir(dirPath)
-  for await (const entry of directory) {
-    yield {
-      name: entry.name,
-      isDirectory: entry.isDirectory(),
-      isSymlink: entry.isSymbolicLink()
-    }
-  }
+async function readLocalDirectory(dirPath: string): Promise<NestedRepoDirectoryEntry[]> {
+  // Why: Dirent data avoids one stat per child and keeps symlinked directories
+  // from expanding the scan outside the selected folder.
+  const entries = await readdir(dirPath, { withFileTypes: true })
+  return entries.map((entry) => ({
+    name: entry.name,
+    isDirectory: entry.isDirectory(),
+    isSymlink: entry.isSymbolicLink()
+  }))
 }
 
 export async function scanNestedRepos(args: {
@@ -235,7 +212,6 @@ export async function scanNestedRepos(args: {
   filesystem?: NestedRepoScanFilesystem
   signal?: AbortSignal
   onProgress?: (scan: NestedRepoScanResult) => void
-  limits?: Partial<NestedRepoScanLimits>
 }): Promise<NestedRepoScanResult> {
   const startedAt = Date.now()
   const options = normalizeScanOptions(args.options)
@@ -243,13 +219,9 @@ export async function scanNestedRepos(args: {
   let truncated = false
   let timedOut = false
   let stopped = false
-  const scanBudget = new NestedRepoScanBudget(args.limits)
   const filesystem = args.filesystem ?? {
     readDirectory: readLocalDirectory,
-    readTextFile: async (path: string) =>
-      (await readNodeFileWithinLimit(path, NESTED_REPO_GITIGNORE_MAX_BYTES)).buffer.toString(
-        'utf8'
-      ),
+    readTextFile: (path: string) => readFile(path, 'utf8'),
     joinPath: join,
     basename,
     hasGitMarker,
@@ -309,12 +281,7 @@ export async function scanNestedRepos(args: {
 
     let entries: NestedRepoDirectoryEntry[]
     try {
-      entries = await collectNestedRepoDirectoryEntries(
-        await filesystem.readDirectory(currentFolder.path),
-        currentFolder.path,
-        filesystem,
-        scanBudget
-      )
+      entries = await filesystem.readDirectory(currentFolder.path)
     } catch {
       continue
     }
@@ -327,8 +294,7 @@ export async function scanNestedRepos(args: {
         folderPath: currentFolder.path,
         entries,
         filesystem,
-        baseSegments: currentFolder.segments,
-        budget: scanBudget
+        baseSegments: currentFolder.segments
       }))
     ]
 
@@ -381,28 +347,7 @@ export async function scanNestedRepos(args: {
         })
       }
     }
-    if (scanBudget.capacityReached) {
-      truncated = true
-      break
-    }
   }
 
   return buildResult('non_git_folder')
-}
-
-async function collectNestedRepoDirectoryEntries(
-  source: AsyncIterable<NestedRepoDirectoryEntry> | Iterable<NestedRepoDirectoryEntry>,
-  directoryPath: string,
-  filesystem: NestedRepoScanFilesystem,
-  budget: NestedRepoScanBudget
-): Promise<NestedRepoDirectoryEntry[]> {
-  const entries: NestedRepoDirectoryEntry[] = []
-  for await (const entry of source) {
-    const entryPath = filesystem.joinPath(directoryPath, entry.name)
-    if (!budget.tryVisitEntry(entryPath)) {
-      break
-    }
-    entries.push(entry)
-  }
-  return entries
 }

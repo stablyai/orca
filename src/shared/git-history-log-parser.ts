@@ -1,5 +1,4 @@
 import type { GitHistoryItem, GitHistoryItemRef } from './git-history-types'
-import { iterateNulDelimitedFields } from './nul-delimited-fields'
 
 const GIT_HISTORY_DECORATION_SEPARATOR = '\x1f'
 
@@ -99,7 +98,7 @@ export function compareGitHistoryItemRefsByCategory(
 
 export function parseGitHistoryLog(stdout: string): GitHistoryItem[] {
   const items: GitHistoryItem[] = []
-  for (const rawRecord of iterateNulDelimitedFields(stdout)) {
+  for (const rawRecord of stdout.split('\0')) {
     const record = rawRecord.replace(/^\n+/, '')
     if (!record.trim()) {
       continue

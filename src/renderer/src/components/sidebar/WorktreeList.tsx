@@ -232,7 +232,6 @@ import { ProjectGroupNameDialog } from './ProjectGroupNameDialog'
 import { ProjectGroupDeleteDialog } from './ProjectGroupDeleteDialog'
 import { selectProjectGroupRemovalTargets } from '@/store/slices/project-group-removal-targets'
 import { isGitRepoKind } from '../../../../shared/repo-kind'
-import { mapSettledWithConcurrency } from '../../../../shared/map-with-concurrency'
 import {
   effectiveExternalWorktreeVisibility,
   isLegacyRepoForExternalWorktreeVisibility
@@ -338,7 +337,6 @@ const EMPTY_TERMINAL_LAYOUTS_BY_TAB_ID: AppState['terminalLayoutsByTabId'] = {}
 const EMPTY_PTY_IDS_BY_TAB_ID: AppState['ptyIdsByTabId'] = {}
 const EMPTY_RUNTIME_PANE_TITLES_BY_TAB_ID: AppState['runtimePaneTitlesByTabId'] = {}
 const EXPANDING_CARD_MEASUREMENT_ADJUSTMENT_SUPPRESS_MS = 300
-const WORKTREE_LINEAGE_MUTATION_CONCURRENCY = 8
 const NOOP_WORKSPACE_BOARD_DRAG_PREVIEW_CALLBACK = (): void => {}
 const WORKTREE_SIDEBAR_SCROLL_STYLE: React.CSSProperties = {
   // Why: TanStack Virtual owns scroll correction; native overflow anchoring fights it and causes jumps.
@@ -346,15 +344,6 @@ const WORKTREE_SIDEBAR_SCROLL_STYLE: React.CSSProperties = {
 }
 
 const recordKeyCountCache = new WeakMap<Record<string, unknown>, number>()
-
-function rethrowFirstLineageFailure(results: readonly PromiseSettledResult<unknown>[]): void {
-  const failure = results.find(
-    (result): result is PromiseRejectedResult => result.status === 'rejected'
-  )
-  if (failure) {
-    throw failure.reason
-  }
-}
 
 export function countRecordKeysByReference(record: Record<string, unknown>): number {
   const cached = recordKeyCountCache.get(record)
@@ -2731,19 +2720,17 @@ const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktreeViewp
       if (!target.lineageParentId) {
         return false
       }
-      void mapSettledWithConcurrency(draggedIds, WORKTREE_LINEAGE_MUTATION_CONCURRENCY, (id) =>
-        assignWorktreeParent(id, { parentWorktreeId: parentId })
-      )
-        .then(rethrowFirstLineageFailure)
-        .catch((err) => {
-          console.error('Failed to nest workspace:', err)
-          toast.error(
-            translate(
-              'auto.components.sidebar.WorktreeList.failedNestWorkspace',
-              'Failed to nest workspace'
-            )
+      void Promise.all(
+        draggedIds.map((id) => assignWorktreeParent(id, { parentWorktreeId: parentId }))
+      ).catch((err) => {
+        console.error('Failed to nest workspace:', err)
+        toast.error(
+          translate(
+            'auto.components.sidebar.WorktreeList.failedNestWorkspace',
+            'Failed to nest workspace'
           )
-        })
+        )
+      })
       return true
     },
     [assignWorktreeParent, getEligibleLineageDropTarget]
@@ -2766,11 +2753,8 @@ const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktreeViewp
         return
       }
       // Why: dropping a nested card on a reorder line is the un-nest escape hatch; clear only the dragged children.
-      void mapSettledWithConcurrency(ids, WORKTREE_LINEAGE_MUTATION_CONCURRENCY, (id) =>
-        updateWorktreeLineage(id, { noParent: true })
-      )
-        .then(rethrowFirstLineageFailure)
-        .catch((err) => {
+      void Promise.all(ids.map((id) => updateWorktreeLineage(id, { noParent: true }))).catch(
+        (err) => {
           console.error('Failed to unnest workspace:', err)
           toast.error(
             translate(
@@ -2778,7 +2762,8 @@ const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktreeViewp
               'Failed to unnest workspace'
             )
           )
-        })
+        }
+      )
     },
     [cyclicLineageIds, updateWorktreeLineage, worktreeDragGroups, worktreeLineageById, worktreeMap]
   )

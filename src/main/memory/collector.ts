@@ -126,7 +126,6 @@ function emptySnapshot(): MemorySnapshot {
 const APP_HISTORY_KEY = '__app__'
 const HISTORY_CAPACITY = 60
 const HISTORY_STALE_MS = 10 * 60 * 1000
-export const MEMORY_HISTORY_MAX_WORKTREES = 1024
 
 type HistoryRing = {
   samples: number[]
@@ -139,39 +138,18 @@ function pushHistorySample(key: string, memoryBytes: number, now: number): void 
   let ring = historyByKey.get(key)
   if (!ring) {
     ring = { samples: [], touchedAt: now }
+    historyByKey.set(key, ring)
   }
   ring.samples.push(memoryBytes)
   if (ring.samples.length > HISTORY_CAPACITY) {
     ring.samples.shift()
   }
   ring.touchedAt = now
-  // Why: worktree ids can churn faster than the stale TTL in a long-lived
-  // main process; recency ordering gives the history cache a hard ceiling.
-  historyByKey.delete(key)
-  historyByKey.set(key, ring)
-  trimWorktreeHistory()
 }
 
-function trimWorktreeHistory(): void {
-  const appEntryCount = historyByKey.has(APP_HISTORY_KEY) ? 1 : 0
-  while (historyByKey.size - appEntryCount > MEMORY_HISTORY_MAX_WORKTREES) {
-    let oldestWorktreeKey: string | undefined
-    for (const key of historyByKey.keys()) {
-      if (key !== APP_HISTORY_KEY) {
-        oldestWorktreeKey = key
-        break
-      }
-    }
-    if (oldestWorktreeKey === undefined) {
-      break
-    }
-    historyByKey.delete(oldestWorktreeKey)
-  }
-}
-
-function readHistory(key: string, currentSample?: number): number[] {
+function readHistory(key: string): number[] {
   const ring = historyByKey.get(key)
-  return ring ? [...ring.samples] : currentSample === undefined ? [] : [currentSample]
+  return ring ? [...ring.samples] : []
 }
 
 function sweepStaleHistory(now: number): void {
@@ -180,11 +158,6 @@ function sweepStaleHistory(now: number): void {
       historyByKey.delete(key)
     }
   }
-}
-
-/** @internal — test-only */
-export function getMemoryHistoryWorktreeCountForTests(): number {
-  return historyByKey.size - (historyByKey.has(APP_HISTORY_KEY) ? 1 : 0)
 }
 
 // ─── Host process enumeration ───────────────────────────────────────
@@ -460,9 +433,7 @@ async function runSnapshot(store: MemorySnapshotStore): Promise<MemorySnapshot> 
 
   const worktrees: WorktreeMemory[] = bucketList.map((b) => ({
     ...b,
-    // Why: an over-cap active worktree still gets its current point even when
-    // an older retained ring had to be evicted during this same snapshot.
-    history: readHistory(b.worktreeId, b.memory)
+    history: readHistory(b.worktreeId)
   }))
 
   let sessionCpuTotal = 0

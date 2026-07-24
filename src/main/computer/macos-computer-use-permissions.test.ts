@@ -1,8 +1,7 @@
 import { execFileSync, spawn, spawnSync } from 'node:child_process'
-import { mkdtemp, rm, stat } from 'node:fs/promises'
+import { mkdtemp, readFile, rm, stat } from 'node:fs/promises'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import type * as nodeBoundedFileReader from '../../shared/node-bounded-file-reader'
 import {
   openComputerUsePermissions,
   resetComputerUsePermissions
@@ -13,9 +12,6 @@ const resolveHelperExecutablePathMock = vi.hoisted(() => vi.fn())
 const permissionStatusTempDir = '/tmp/orca-computer-use-permissions-test'
 const helperAppPath = '/Applications/Orca Computer Use.app'
 const helperInfoPlistPath = join(helperAppPath, 'Contents', 'Info.plist')
-const { readNodeFileWithinLimitMock } = vi.hoisted(() => ({
-  readNodeFileWithinLimitMock: vi.fn()
-}))
 
 vi.mock('child_process', () => ({
   execFileSync: vi.fn(),
@@ -39,14 +35,10 @@ vi.mock('child_process', () => ({
 
 vi.mock('fs/promises', () => ({
   mkdtemp: vi.fn(),
+  readFile: vi.fn(),
   rm: vi.fn(),
   stat: vi.fn()
 }))
-
-vi.mock('../../shared/node-bounded-file-reader', async (importOriginal) => {
-  const actual = await importOriginal<typeof nodeBoundedFileReader>()
-  return { ...actual, readNodeFileWithinLimit: readNodeFileWithinLimitMock }
-})
 
 vi.mock('./macos-native-provider-paths', () => ({
   resolveMacOSComputerUseAppPath: resolveHelperAppPathMock,
@@ -61,7 +53,7 @@ describe('openComputerUsePermissions', () => {
     vi.mocked(spawnSync).mockClear()
     vi.mocked(execFileSync).mockReset()
     vi.mocked(mkdtemp).mockReset()
-    readNodeFileWithinLimitMock.mockReset()
+    vi.mocked(readFile).mockReset()
     vi.mocked(rm).mockReset()
     vi.mocked(stat).mockReset()
     resolveHelperAppPathMock.mockReset()
@@ -218,13 +210,9 @@ describe('openComputerUsePermissions', () => {
 
   it('resets stale macOS TCC grants for the helper bundle id', async () => {
     resolveHelperAppPathMock.mockReturnValue('/Applications/Orca Computer Use.app')
-    readNodeFileWithinLimitMock
-      .mockResolvedValueOnce(
-        boundedPermissionStatus('{"accessibility":"granted","screenshots":"granted"}')
-      )
-      .mockResolvedValueOnce(
-        boundedPermissionStatus('{"accessibility":"not-granted","screenshots":"not-granted"}')
-      )
+    vi.mocked(readFile)
+      .mockResolvedValueOnce('{"accessibility":"granted","screenshots":"granted"}')
+      .mockResolvedValueOnce('{"accessibility":"not-granted","screenshots":"not-granted"}')
     vi.mocked(execFileSync).mockReturnValueOnce('com.example.orca.computer-use\n')
     vi.mocked(spawnSync).mockReturnValue({ status: 0 } as ReturnType<typeof spawnSync>)
 
@@ -258,14 +246,7 @@ describe('openComputerUsePermissions', () => {
 
 function mockPermissionStatus(json: string): void {
   vi.mocked(spawnSync).mockReturnValue({ status: 0 } as ReturnType<typeof spawnSync>)
-  readNodeFileWithinLimitMock.mockResolvedValue(boundedPermissionStatus(json))
-}
-
-function boundedPermissionStatus(json: string) {
-  return {
-    buffer: Buffer.from(json),
-    stats: { size: Buffer.byteLength(json) }
-  }
+  vi.mocked(readFile).mockResolvedValue(json)
 }
 
 function setPlatform(platform: NodeJS.Platform): void {

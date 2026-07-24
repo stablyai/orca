@@ -3,11 +3,7 @@ import type {
   SessionOptionValue,
   SessionOptionValueSource
 } from '../../../../shared/native-chat-session-options'
-import {
-  clearBoundedScopeCache,
-  getBoundedScopeCacheEntry,
-  setBoundedScopeCacheEntry
-} from './native-chat-composer-scope-cache'
+import { setBoundedScopeCacheEntry } from './native-chat-composer-scope-cache'
 
 export type TrackedNativeChatSessionOption = {
   value: SessionOptionValue
@@ -47,9 +43,7 @@ export function readNativeChatSessionOptionCache(
   scopeKey: string,
   fallbackScopeKey?: string
 ): NativeChatSessionOptionRecord | null {
-  const record =
-    getBoundedScopeCacheEntry(sessionOptionCache, scopeKey) ??
-    getBoundedScopeCacheEntry(sessionOptionCache, fallbackScopeKey ?? '')
+  const record = sessionOptionCache.get(scopeKey) ?? sessionOptionCache.get(fallbackScopeKey ?? '')
   return record ? cloneNativeChatSessionOptionRecord(record) : null
 }
 
@@ -86,5 +80,5 @@ export function seedNativeChatAppliedSessionOptions(
 }
 
 export function clearNativeChatSessionOptionCacheForTests(): void {
-  clearBoundedScopeCache(sessionOptionCache)
+  sessionOptionCache.clear()
 }

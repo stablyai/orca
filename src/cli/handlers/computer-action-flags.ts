@@ -2,11 +2,6 @@ import {
   computerUseHotkeyValidationMessage,
   computerUsePressKeyValidationMessage
 } from '../../shared/computer-use-key-spec'
-import { CLIPBOARD_TEXT_WRITE_MAX_BYTES } from '../../shared/clipboard-text'
-import {
-  NodeReadableTextTooLargeError,
-  readNodeReadableTextWithinLimit
-} from '../../shared/node-readable-text'
 import {
   getOptionalNonNegativeIntegerFlag,
   getOptionalNumberFlag,
@@ -194,17 +189,11 @@ async function readStdin(): Promise<string> {
   if (process.stdin.isTTY) {
     throw new RuntimeClientError('invalid_argument', 'stdin payload requested but stdin is a TTY')
   }
-  try {
-    return await readNodeReadableTextWithinLimit(process.stdin, CLIPBOARD_TEXT_WRITE_MAX_BYTES)
-  } catch (error) {
-    if (error instanceof NodeReadableTextTooLargeError) {
-      throw new RuntimeClientError(
-        'invalid_argument',
-        `stdin payload must be at most ${CLIPBOARD_TEXT_WRITE_MAX_BYTES} bytes`
-      )
-    }
-    throw error
+  const chunks: Buffer[] = []
+  for await (const chunk of process.stdin) {
+    chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(String(chunk)))
   }
+  return Buffer.concat(chunks).toString('utf8')
 }
 
 function getOptionalPositiveNumberFlag(

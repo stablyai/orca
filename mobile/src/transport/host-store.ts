@@ -3,7 +3,7 @@ import * as SecureStore from 'expo-secure-store'
 import { Platform } from 'react-native'
 import {
   HostProfileSchema,
-  PAIRING_DEVICE_TOKEN_MAX_CHARACTERS,
+  StoredHostProfileSchema,
   type HostProfile,
   type StoredHostProfile
 } from './types'
@@ -21,10 +21,6 @@ import {
 import { deleteMobileRelayCredentialBundle } from './mobile-relay-credential-bundle'
 import { deleteMobileRelayDirectUpgradeJournal } from './mobile-relay-direct-upgrade-journal'
 import { scheduleOrphanedMobileRelayCleanup } from './mobile-relay-orphan-cleanup'
-import {
-  parseMobileStoredHostList,
-  serializeMobileStoredHostList
-} from './mobile-host-list-storage'
 
 const STORAGE_KEY = 'orca:hosts'
 // Why: SecureStore keys must match [A-Za-z0-9._-] (colons rejected), so use dots as the separator.
@@ -47,11 +43,10 @@ function webTokenKey(hostId: string): string {
 
 async function readDeviceToken(hostId: string): Promise<string | null> {
   // Why: Expo SecureStore has no working web backend; fall back to AsyncStorage only on web so native still uses the keychain.
-  const token =
-    Platform.OS === 'web'
-      ? await AsyncStorage.getItem(webTokenKey(hostId))
-      : await SecureStore.getItemAsync(tokenKey(hostId), KEYCHAIN_OPTIONS)
-  return token !== null && token.length <= PAIRING_DEVICE_TOKEN_MAX_CHARACTERS ? token : null
+  if (Platform.OS === 'web') {
+    return AsyncStorage.getItem(webTokenKey(hostId))
+  }
+  return SecureStore.getItemAsync(tokenKey(hostId), KEYCHAIN_OPTIONS)
 }
 
 async function writeDeviceToken(hostId: string, token: string): Promise<void> {
@@ -77,30 +72,31 @@ async function deleteHostCredentials(hostId: string): Promise<void> {
 }
 
 // Why: Keychain reads are slow (50-200ms) and loadHosts() runs on every screen mount; cache per-hostId in memory, invalidate on save/remove.
-export const HOST_TOKEN_CACHE_MAX_ENTRIES = 64
-export const HOST_TOKEN_CACHE_MAX_ENTRY_CODE_UNITS = 64 * 1024
 const tokenCache = new Map<string, string>()
 let inflightLoad: Promise<HostProfile[]> | null = null
 // Why: serialize RMW of the shared hosts JSON; without a queue concurrent writers drop writes (resurrect a removed host, drop a rename).
 let hostListMutation: Promise<void> = Promise.resolve()
 
-function rememberHostToken(hostId: string, token: string, allowEviction: boolean): void {
-  if (hostId.length + token.length > HOST_TOKEN_CACHE_MAX_ENTRY_CODE_UNITS) {
-    tokenCache.delete(hostId)
-    return
+function parseStoredHosts(raw: string | null): StoredHostProfile[] | null {
+  if (!raw) {
+    return []
   }
-  if (tokenCache.has(hostId)) {
-    tokenCache.delete(hostId)
-  } else if (tokenCache.size >= HOST_TOKEN_CACHE_MAX_ENTRIES) {
-    if (!allowEviction) {
-      return
+  try {
+    const parsed = JSON.parse(raw) as unknown
+    if (!Array.isArray(parsed)) {
+      return null
     }
-    const oldestHostId = tokenCache.keys().next().value
-    if (oldestHostId !== undefined) {
-      tokenCache.delete(oldestHostId)
-    }
+    return parsed.flatMap((item) => {
+      // Why: pre-v0.0.3 records stored deviceToken in AsyncStorage; drop them (users re-pair) rather than carry a migration shim.
+      if (item && typeof item === 'object' && 'deviceToken' in item) {
+        return []
+      }
+      const result = StoredHostProfileSchema.safeParse(item)
+      return result.success ? [result.data] : []
+    })
+  } catch {
+    return null
   }
-  tokenCache.set(hostId, token)
 }
 
 export async function loadHosts(): Promise<HostProfile[]> {
@@ -118,7 +114,7 @@ export async function loadHosts(): Promise<HostProfile[]> {
 
 async function doLoadHosts(): Promise<HostProfile[]> {
   const raw = await AsyncStorage.getItem(STORAGE_KEY)
-  const storedHosts = parseMobileStoredHostList(raw)
+  const storedHosts = parseStoredHosts(raw)
   if (!storedHosts) {
     return []
   }
@@ -147,7 +143,7 @@ async function doLoadHosts(): Promise<HostProfile[]> {
         continue
       }
       token = fetched
-      rememberHostToken(stored.id, token, false)
+      tokenCache.set(stored.id, token)
     }
     const overlay = overlays.get(stored.id)
     out.push({
@@ -180,7 +176,7 @@ export async function resolvePairingHostIdentity(
 
 async function readStoredHostsForMutation(): Promise<StoredHostProfile[]> {
   try {
-    const parsed = parseMobileStoredHostList(await AsyncStorage.getItem(STORAGE_KEY))
+    const parsed = parseStoredHosts(await AsyncStorage.getItem(STORAGE_KEY))
     if (!parsed) {
       // Why: refuse to RMW over unreadable payload — treating it as [] would wipe the durable host list on the next write.
       throw new Error('host list storage unreadable')
@@ -200,7 +196,7 @@ async function mutateStoredHosts(
   const mutation = hostListMutation.then(async () => {
     const current = await readStoredHostsForMutation()
     const next = update(current)
-    await AsyncStorage.setItem(STORAGE_KEY, serializeMobileStoredHostList(next))
+    await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(next))
   })
   hostListMutation = mutation.catch(() => {})
   return mutation
@@ -253,7 +249,7 @@ async function persistHost(host: HostProfile, requireExisting: boolean): Promise
   })
   // Why: write metadata before the keychain token so a crash leaves recoverable orphaned metadata, not an orphaned token that persists forever.
   await writeDeviceToken(stored.id, validated.deviceToken)
-  rememberHostToken(stored.id, validated.deviceToken, true)
+  tokenCache.set(stored.id, validated.deviceToken)
   if (validated.endpoints) {
     await saveMobileRelayHostOverlay({
       v: 2,

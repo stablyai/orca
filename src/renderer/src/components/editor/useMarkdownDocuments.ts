@@ -1,10 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { toast } from 'sonner'
 import type { MarkdownDocument } from '../../../../shared/types'
-import {
-  isMarkdownDocumentListingCapacityError,
-  MARKDOWN_DOCUMENT_LISTING_ERROR_MESSAGE
-} from '../../../../shared/markdown-document-listing-limits'
 import { useAppStore } from '@/store'
 import { getConnectionId } from '@/lib/connection-context'
 import { statRuntimePath } from '@/runtime/runtime-file-client'
@@ -17,10 +12,6 @@ import {
 } from './markdown-doc-links'
 import { selectMarkdownDocumentWorktreePath } from './markdown-document-worktree-path-selector'
 import { requestSharedMarkdownDocumentList } from './markdown-document-list-request'
-import {
-  retainMarkdownDocumentWorktreeSnapshot,
-  type MarkdownDocumentWorktreeSnapshot
-} from './markdown-document-worktree-retention'
 
 type OpenMarkdownDocumentOptions = {
   anchor?: string | null
@@ -69,8 +60,8 @@ export function useMarkdownDocuments(
   const openFile = useAppStore((s) => s.openFile)
   const openMarkdownPreview = useAppStore((s) => s.openMarkdownPreview)
   const [markdownDocumentsByWorktree, setMarkdownDocumentsByWorktree] = useState<
-    Map<string, MarkdownDocumentWorktreeSnapshot>
-  >(() => new Map())
+    Record<string, MarkdownDocument[]>
+  >({})
   const requestRef = useRef(0)
 
   const connectionId = getConnectionId(worktreeId)
@@ -100,20 +91,17 @@ export function useMarkdownDocuments(
         if (requestRef.current !== requestId) {
           return
         }
-        setMarkdownDocumentsByWorktree((prev) =>
-          retainMarkdownDocumentWorktreeSnapshot(prev, worktreeId, documents)
-        )
+        setMarkdownDocumentsByWorktree((prev) => ({
+          ...prev,
+          [worktreeId]: documents
+        }))
       } catch (err) {
         console.error('Failed to list markdown documents:', err)
         if (requestRef.current === requestId) {
-          if (isMarkdownDocumentListingCapacityError(err)) {
-            toast.error(MARKDOWN_DOCUMENT_LISTING_ERROR_MESSAGE, {
-              id: `markdown-document-listing-capacity:${worktreeId}`
-            })
-          }
-          setMarkdownDocumentsByWorktree((prev) =>
-            retainMarkdownDocumentWorktreeSnapshot(prev, worktreeId, [])
-          )
+          setMarkdownDocumentsByWorktree((prev) => ({
+            ...prev,
+            [worktreeId]: []
+          }))
         }
       }
     },
@@ -194,7 +182,7 @@ export function useMarkdownDocuments(
   }, [activeFile.id, isMarkdown, viewMode, refreshMarkdownDocuments])
 
   const markdownDocuments = useMemo(
-    () => (worktreeId ? (markdownDocumentsByWorktree.get(worktreeId)?.documents ?? []) : []),
+    () => (worktreeId ? (markdownDocumentsByWorktree[worktreeId] ?? []) : []),
     [worktreeId, markdownDocumentsByWorktree]
   )
 

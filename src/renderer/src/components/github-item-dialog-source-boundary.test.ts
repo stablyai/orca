@@ -81,25 +81,24 @@ describe('GitHubItemDialog source host boundaries', () => {
 
   it('uses source-aware details routing and cache identity', () => {
     const source = componentSource('GitHubItemDialog.tsx')
-    const cacheSource = componentSource('../lib/github-work-item-details-cache.ts')
     const cacheKeySection = sourceBetween(
-      cacheSource,
-      'export function getWorkItemDetailsCacheKey',
-      'export function getWorkItemDetailsCacheEntry'
+      source,
+      'function getWorkItemDetailsCacheKey',
+      'function touchWorkItemDetailsCache'
     )
     const matchInvalidationSection = sourceBetween(
-      cacheSource,
-      'export function invalidateWorkItemDetailsCacheByMatch',
-      'export function clearWorkItemDetailsCacheForTests'
+      source,
+      'function invalidateWorkItemDetailsCacheByMatch',
+      'function patchCachedPRFileViewedState'
     )
 
     expect(source).toContain('lookupGitHubWorkItemDetailsForSource({')
     expect(source).toContain('sourceContext,')
     expect(cacheKeySection).toContain('sourceCacheScope')
     expect(source).toContain('getTaskSourceCacheScope(sourceContext)')
-    expect(source).toContain('useWorkItemDetailsCacheEntry(detailsCacheKey)')
-    expect(source).not.toContain('new Map<string, WorkItemDetailsCacheEntry>')
-    expect(matchInvalidationSection).toContain('cacheGeneration += 1')
+    expect(matchInvalidationSection).toContain(
+      'if (removed) {\n    workItemDetailsCacheGeneration += 1'
+    )
   })
 
   it('treats null details as unavailable while preserving empty detail payloads', () => {
@@ -116,8 +115,6 @@ describe('GitHubItemDialog source host boundaries', () => {
     expect(resultSection).toContain('} else if (result === null) {')
     expect(resultSection).toContain('error: WORK_ITEM_DETAILS_UNAVAILABLE_MESSAGE')
     expect(resultSection).toContain('details: result')
-    expect(resultSection).toContain('getWorkItemDetailsCacheGeneration() !== launchedAtGeneration')
-    expect(resultSection).toContain('prev?.pending !== inflight')
   })
 
   it('routes PR file viewed mutations through the task source context', () => {
@@ -163,7 +160,6 @@ describe('GitHubItemDialog source host boundaries', () => {
 
   it('routes PR file contents and runtime viewed invalidations through the task source context', () => {
     const source = componentSource('GitHubItemDialog.tsx')
-    const cacheSource = componentSource('../lib/github-work-item-details-cache.ts')
     const fileContentsSection = sourceBetween(
       source,
       'function loadPRFileContents',
@@ -174,11 +170,7 @@ describe('GitHubItemDialog source host boundaries', () => {
       'function getPRFileContentCacheKey',
       'function loadPRFileContents'
     )
-    const listenerSection = sourceBetween(
-      cacheSource,
-      'let workItemMutatedUnsub',
-      "if (typeof import.meta !== 'undefined'"
-    )
+    const listenerSection = sourceBetween(source, 'let workItemMutatedUnsub', '// Why: bounded LRU')
 
     expect(fileContentsCacheKeySection).toContain(
       'source:${getTaskSourceCacheScope(args.sourceContext)}'
@@ -190,7 +182,6 @@ describe('GitHubItemDialog source host boundaries', () => {
     expect(fileContentsSection).toContain('sourceContext: args.sourceContext')
     expect(fileContentsSection).toContain('sourceContext,')
     expect(listenerSection).toContain('onGitHubWorkItemDetailsCacheMutation')
-    expect(listenerSection).toContain('invalidateWorkItemDetailsCacheByMatch')
     expect(source).toContain('emitGitHubWorkItemDetailsCacheMutation(args)')
     expect(source).toContain('options.local !== false')
     expect(source).toContain('notifyWorkItemMutated({')

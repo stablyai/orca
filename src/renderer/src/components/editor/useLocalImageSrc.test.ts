@@ -31,17 +31,7 @@ function deferred<T>(): {
   return { promise, reject, resolve }
 }
 
-function pngBase64(width = 1, height = 1): string {
-  const bytes = Buffer.alloc(24)
-  Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]).copy(bytes)
-  bytes.writeUInt32BE(13, 8)
-  bytes.write('IHDR', 12, 'ascii')
-  bytes.writeUInt32BE(width, 16)
-  bytes.writeUInt32BE(height, 20)
-  return bytes.toString('base64')
-}
-
-function binaryPreview(content = pngBase64()): PreviewResult {
+function binaryPreview(content = 'AA=='): PreviewResult {
   return { content, isBinary: true, mimeType: 'image/png' }
 }
 
@@ -161,13 +151,6 @@ describe('loadLocalImageSrc', () => {
     ).resolves.toBeNull()
   })
 
-  it('rejects an inline raster dimension bomb before assigning it to an image', async () => {
-    const src = `data:image/png;base64,${pngBase64(32_769, 1)}`
-
-    await expect(loadLocalImageSrc(src, '/repo/docs/readme.md')).resolves.toBeNull()
-    expect(URL.createObjectURL).not.toHaveBeenCalled()
-  })
-
   it('suppresses a stale pending completion after cache invalidation', async () => {
     const firstRead = deferred<PreviewResult>()
     const readFile = vi
@@ -203,23 +186,15 @@ describe('loadLocalImageSrc', () => {
     invalidateLocalImageSrcCacheForTests()
     const newerLoad = loadLocalImageSrc('diagram.png', '/repo/docs/readme.md')
 
-    secondRead.resolve(binaryPreview(pngBase64(2, 1)))
+    secondRead.resolve(binaryPreview('AQ=='))
     await expect(newerLoad).resolves.toBe('blob:newer')
-    firstRead.resolve(binaryPreview(pngBase64(3, 1)))
+    firstRead.resolve(binaryPreview('Ag=='))
     await expect(staleLoad).resolves.toBeNull()
     await expect(loadLocalImageSrc('diagram.png', '/repo/docs/readme.md')).resolves.toBe(
       'blob:newer'
     )
     expect(readFile).toHaveBeenCalledTimes(2)
     expect(URL.revokeObjectURL).not.toHaveBeenCalledWith('blob:newer')
-  })
-
-  it('rejects an oversized raster header before creating a blob URL', async () => {
-    const readFile = vi.fn().mockResolvedValue(binaryPreview(pngBase64(32_769, 1)))
-    setReadFile(readFile)
-
-    await expect(loadLocalImageSrc('bomb.png', '/repo/docs/readme.md')).resolves.toBeNull()
-    expect(URL.createObjectURL).not.toHaveBeenCalled()
   })
 
   it('keeps runtime owners in separate image cache entries', async () => {

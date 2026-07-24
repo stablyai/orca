@@ -1,5 +1,6 @@
 /* eslint-disable max-lines */
 import { existsSync } from 'node:fs'
+import { readFile, stat } from 'node:fs/promises'
 import * as path from 'node:path'
 import type {
   GitBranchChangeEntry,
@@ -30,8 +31,6 @@ import {
   type GitLineStats
 } from '../../shared/git-uncommitted-line-stats'
 import { decodeGitCQuotedPath } from '../../shared/git-cquoted-path'
-import { iterateNulDelimitedFields } from '../../shared/nul-delimited-fields'
-import { iterateProcessOutputLines } from '../../shared/process-output-field-scanner'
 import {
   gitExecFileAsync,
   gitExecFileAsyncBuffer,
@@ -58,18 +57,12 @@ import {
   clearGitStatusLineStatsCacheKey,
   reuseOrRecomputeGitStatusLineStats
 } from '../../shared/git-status-line-stats-cache'
-import {
-  NodeFileReadTooLargeError,
-  readNodeFileWithinLimit
-} from '../../shared/node-bounded-file-reader'
 
 const MAX_GIT_SHOW_BYTES = 10 * 1024 * 1024
-const MAX_GIT_POINTER_FILE_BYTES = 64 * 1024
 const MAX_STAGED_COMMIT_CONTEXT_BYTES = MAX_GIT_SHOW_BYTES
 const BULK_CHUNK_SIZE = 100
 const EFFECTIVE_UPSTREAM_NEGATIVE_CACHE_TTL_MS = 5 * 60_000
 const MAX_EFFECTIVE_UPSTREAM_NEGATIVE_CACHE_ENTRIES = 512
-export const MAX_EFFECTIVE_UPSTREAM_CACHE_KEY_BYTES = 64 * 1024
 
 type EffectiveUpstreamStatusCacheEntry = {
   expiresAt: number
@@ -78,19 +71,9 @@ type EffectiveUpstreamStatusCacheEntry = {
 
 const SUBMODULE_PATHS_CACHE_TTL_MS = 5_000
 export const MAX_SUBMODULE_PATHS_CACHE_ENTRIES = 512
-export const MAX_SUBMODULE_PATHS_PER_REPO = 10_000
-export const MAX_SUBMODULE_PATH_CODE_UNITS = 64 * 1024
-export const MAX_SUBMODULE_PATHS_PER_REPO_CODE_UNITS = 4 * 1024 * 1024
-export const MAX_SUBMODULE_PATHS_CACHE_CODE_UNITS = 16 * 1024 * 1024
-const MAX_SUBMODULE_PATHS_CACHE_KEY_BYTES = 64 * 1024
-type SubmodulePathsCacheEntry = {
-  paths: string[]
-  expiresAt: number
-  retainedCodeUnits: number
-}
+type SubmodulePathsCacheEntry = { paths: string[]; expiresAt: number }
 const submodulePathsCache = new Map<string, SubmodulePathsCacheEntry>()
 let submodulePathsCacheGeneration = 0
-let submodulePathsCacheCodeUnits = 0
 
 // Why: cache the upstream name to skip its 4-5-spawn resolution chain each poll; revalidate via one rev-list (issue #7576).
 const RESOLVED_UPSTREAM_NAME_CACHE_TTL_MS = 60_000
@@ -134,17 +117,12 @@ export function clearSubmodulePathsCacheForTests(): void {
 
 function clearSubmodulePathsCache(): void {
   submodulePathsCache.clear()
-  submodulePathsCacheCodeUnits = 0
   // Why: bump the generation so a pre-mutation read can't repopulate the invalidated cache.
   submodulePathsCacheGeneration += 1
 }
 
 export function getSubmodulePathsCacheCountForTests(): number {
   return submodulePathsCache.size
-}
-
-export function getSubmodulePathsCacheCodeUnitsForTests(): number {
-  return submodulePathsCacheCodeUnits
 }
 
 function gitRuntimeOptionsKey(options: GitRuntimeOptions): readonly unknown[] {
@@ -159,30 +137,18 @@ function getSubmodulePathsCacheKey(worktreePath: string, options: GitRuntimeOpti
 function pruneExpiredSubmodulePathsCache(now: number): void {
   for (const [cacheKey, entry] of submodulePathsCache) {
     if (entry.expiresAt <= now) {
-      deleteSubmodulePathsCacheEntry(cacheKey)
+      submodulePathsCache.delete(cacheKey)
     }
   }
 }
 
-function deleteSubmodulePathsCacheEntry(cacheKey: string): void {
-  const entry = submodulePathsCache.get(cacheKey)
-  if (!entry) {
-    return
-  }
-  submodulePathsCache.delete(cacheKey)
-  submodulePathsCacheCodeUnits -= entry.retainedCodeUnits
-}
-
 function trimSubmodulePathsCache(): void {
-  while (
-    submodulePathsCache.size > MAX_SUBMODULE_PATHS_CACHE_ENTRIES ||
-    submodulePathsCacheCodeUnits > MAX_SUBMODULE_PATHS_CACHE_CODE_UNITS
-  ) {
+  while (submodulePathsCache.size > MAX_SUBMODULE_PATHS_CACHE_ENTRIES) {
     const oldestKey = submodulePathsCache.keys().next().value
     if (oldestKey === undefined) {
       break
     }
-    deleteSubmodulePathsCacheEntry(oldestKey)
+    submodulePathsCache.delete(oldestKey)
   }
 }
 
@@ -192,7 +158,7 @@ function getCachedSubmodulePaths(cacheKey: string, now: number): string[] | null
     return null
   }
   if (cached.expiresAt <= now) {
-    deleteSubmodulePathsCacheEntry(cacheKey)
+    submodulePathsCache.delete(cacheKey)
     return null
   }
   submodulePathsCache.delete(cacheKey)
@@ -201,23 +167,8 @@ function getCachedSubmodulePaths(cacheKey: string, now: number): string[] | null
 }
 
 function rememberSubmodulePaths(cacheKey: string, paths: string[], now: number): void {
-  if (Buffer.byteLength(cacheKey, 'utf8') > MAX_SUBMODULE_PATHS_CACHE_KEY_BYTES) {
-    deleteSubmodulePathsCacheEntry(cacheKey)
-    return
-  }
-  const retainedCodeUnits =
-    cacheKey.length + paths.reduce((total, submodulePath) => total + submodulePath.length, 0)
-  if (retainedCodeUnits > MAX_SUBMODULE_PATHS_CACHE_CODE_UNITS) {
-    deleteSubmodulePathsCacheEntry(cacheKey)
-    return
-  }
-  deleteSubmodulePathsCacheEntry(cacheKey)
-  submodulePathsCache.set(cacheKey, {
-    paths,
-    expiresAt: now + SUBMODULE_PATHS_CACHE_TTL_MS,
-    retainedCodeUnits
-  })
-  submodulePathsCacheCodeUnits += retainedCodeUnits
+  submodulePathsCache.delete(cacheKey)
+  submodulePathsCache.set(cacheKey, { paths, expiresAt: now + SUBMODULE_PATHS_CACHE_TTL_MS })
   trimSubmodulePathsCache()
 }
 
@@ -634,10 +585,6 @@ function getEffectiveUpstreamStatusCacheKey(
   return [worktreePath, options.wslDistro ?? 'host', branchName, upstreamName ?? ''].join('\0')
 }
 
-function canRetainEffectiveUpstreamCacheKey(cacheKey: string): boolean {
-  return Buffer.byteLength(cacheKey, 'utf8') <= MAX_EFFECTIVE_UPSTREAM_CACHE_KEY_BYTES
-}
-
 export function clearEffectiveUpstreamNegativeStatusCache(identity: {
   worktreePath: string
   branchName: string
@@ -654,9 +601,6 @@ export function clearEffectiveUpstreamNegativeStatusCache(identity: {
   effectiveUpstreamStatusCache.delete(cacheKey)
   effectiveUpstreamStatusInFlight.delete(cacheKey)
   resolvedUpstreamNameCache.delete(cacheKey)
-  if (!canRetainEffectiveUpstreamCacheKey(cacheKey)) {
-    return
-  }
   effectiveUpstreamStatusWriteGeneration.set(
     cacheKey,
     (effectiveUpstreamStatusWriteGeneration.get(cacheKey) ?? 0) + 1
@@ -722,11 +666,6 @@ function rememberEffectiveUpstreamStatus(
   probedSameNameOriginRef: boolean,
   writeGeneration: number
 ): void {
-  if (!canRetainEffectiveUpstreamCacheKey(cacheKey)) {
-    effectiveUpstreamStatusCache.delete(cacheKey)
-    effectiveUpstreamStatusWriteGeneration.delete(cacheKey)
-    return
-  }
   // Why: hasConfiguredPushTarget gates a write action; re-probe each poll rather than cache a stale positive.
   if (status.hasUpstream || status.hasConfiguredPushTarget) {
     effectiveUpstreamStatusCache.delete(cacheKey)
@@ -763,8 +702,7 @@ async function readOrProbeEffectiveUpstreamStatus(
   options: GitRuntimeOptions = {},
   bypassCache = false
 ): Promise<GitUpstreamStatus> {
-  const cacheable = !bypassCache && canRetainEffectiveUpstreamCacheKey(cacheKey)
-  if (cacheable) {
+  if (!bypassCache) {
     const cached = readCachedEffectiveUpstreamStatus(cacheKey, Date.now())
     if (cached) {
       return cached
@@ -783,7 +721,7 @@ async function readOrProbeEffectiveUpstreamStatus(
     worktreePath,
     branchName,
     options,
-    !cacheable
+    bypassCache
   ).then((result) => {
     rememberEffectiveUpstreamStatus(
       cacheKey,
@@ -794,7 +732,7 @@ async function readOrProbeEffectiveUpstreamStatus(
     )
     return result.status
   })
-  if (cacheable) {
+  if (!bypassCache) {
     effectiveUpstreamStatusInFlight.set(cacheKey, probe)
   }
   try {
@@ -835,11 +773,7 @@ async function probeOrRevalidateEffectiveUpstreamStatus(
     }
   }
   const result = await probeEffectiveUpstreamStatus(worktreePath, branchName, options)
-  if (
-    canRetainEffectiveUpstreamCacheKey(cacheKey) &&
-    result.status.hasUpstream &&
-    result.status.upstreamName
-  ) {
+  if (result.status.hasUpstream && result.status.upstreamName) {
     resolvedUpstreamNameCache.set(cacheKey, {
       upstreamName: result.status.upstreamName,
       expiresAt: Date.now() + RESOLVED_UPSTREAM_NAME_CACHE_TTL_MS
@@ -1039,9 +973,7 @@ export async function resolveGitDir(worktreePath: string): Promise<string> {
   const dotGitPath = path.join(worktreePath, '.git')
 
   try {
-    const dotGitContents = (
-      await readNodeFileWithinLimit(dotGitPath, MAX_GIT_POINTER_FILE_BYTES)
-    ).buffer.toString('utf-8')
+    const dotGitContents = await readFile(dotGitPath, 'utf-8')
     const match = dotGitContents.match(/^gitdir:\s*(.+)\s*$/m)
     if (match) {
       return path.resolve(worktreePath, match[1])
@@ -1057,37 +989,6 @@ export async function resolveGitDir(worktreePath: string): Promise<string> {
  * List configured submodule paths (relative, forward-slash) for a worktree, cached
  * briefly. Read from `.gitmodules` to avoid an index-wide `ls-files` scan.
  */
-function parseSubmodulePaths(stdout: string): string[] | null {
-  const paths: string[] = []
-  let retainedCodeUnits = 0
-  for (const line of iterateProcessOutputLines(stdout)) {
-    if (line.length > MAX_SUBMODULE_PATH_CODE_UNITS + 4_096) {
-      return null
-    }
-    const spaceIndex = line.indexOf(' ')
-    const submodulePath =
-      spaceIndex === -1
-        ? ''
-        : line
-            .slice(spaceIndex + 1)
-            .trim()
-            .replace(/\/+$/, '')
-    if (!submodulePath) {
-      continue
-    }
-    if (
-      paths.length >= MAX_SUBMODULE_PATHS_PER_REPO ||
-      submodulePath.length > MAX_SUBMODULE_PATH_CODE_UNITS ||
-      submodulePath.length > MAX_SUBMODULE_PATHS_PER_REPO_CODE_UNITS - retainedCodeUnits
-    ) {
-      return null
-    }
-    paths.push(submodulePath)
-    retainedCodeUnits += submodulePath.length
-  }
-  return paths
-}
-
 export async function listSubmodulePaths(
   worktreePath: string,
   options: GitRuntimeOptions = {}
@@ -1107,7 +1008,18 @@ export async function listSubmodulePaths(
       ['config', '--file', '.gitmodules', '--get-regexp', '^submodule\\..*\\.path$'],
       { ...gitOptionsForWorktree(worktreePath, options), env: gitOptionalLocksDisabledEnv() }
     )
-    paths = parseSubmodulePaths(stdout) ?? []
+    paths = stdout
+      .split(/\r?\n/)
+      .map((line) => {
+        const spaceIndex = line.indexOf(' ')
+        return spaceIndex === -1
+          ? ''
+          : line
+              .slice(spaceIndex + 1)
+              .trim()
+              .replace(/\/+$/, '')
+      })
+      .filter((value) => value.length > 0)
   } catch {
     // No .gitmodules (or git config failure) — treat as a repo without submodules.
     paths = []
@@ -1858,22 +1770,30 @@ async function readGitBlobAtOidPath(
 }
 
 async function readWorkingTreeFile(filePath: string): Promise<GitBlobReadResult> {
+  let fileStat
   try {
-    const { buffer, stats: fileStat } = await readNodeFileWithinLimit(filePath, MAX_GIT_SHOW_BYTES)
-    if (!fileStat.isFile()) {
-      return { content: '', isBinary: false, exists: false }
-    }
-    return bufferToBlob(buffer, filePath)
+    fileStat = await stat(filePath)
   } catch (error) {
-    if (error instanceof NodeFileReadTooLargeError) {
-      return { content: '', isBinary: true, exists: true }
-    }
-    // Why: only ENOENT is a real deletion; other read errors are failures, not absence.
+    // Why: only ENOENT is a real deletion; other stat errors are read failures, not absence.
     return {
       content: '',
       isBinary: false,
       exists: (error as NodeJS.ErrnoException)?.code !== 'ENOENT'
     }
+  }
+  if (!fileStat.isFile()) {
+    return { content: '', isBinary: false, exists: false }
+  }
+  if (fileStat.size > MAX_GIT_SHOW_BYTES) {
+    // Why: mirror git's maxBuffer cap for working-tree reads so readFile can't pull in huge assets.
+    return { content: '', isBinary: true, exists: true }
+  }
+  try {
+    const buffer = await readFile(filePath)
+    return bufferToBlob(buffer, filePath)
+  } catch {
+    // Why: the file exists but could not be read — a read failure, not a deletion.
+    return { content: '', isBinary: false, exists: true }
   }
 }
 
@@ -2149,7 +2069,7 @@ async function listTrackedPathSpecs(
       }
     )
     // Why: a tracked directory can hold enough paths to exceed the JS argument limit.
-    for (const trackedPath of iterateNulDelimitedFields(stdout)) {
+    for (const trackedPath of stdout.split('\0')) {
       if (trackedPath) {
         trackedPaths.push(trackedPath)
       }

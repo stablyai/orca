@@ -9,7 +9,7 @@ import {
   rmSync,
   statSync
 } from 'node:fs'
-import { rm } from 'node:fs/promises'
+import { readdir, rm } from 'node:fs/promises'
 import { createHash } from 'node:crypto'
 import { pipeline } from 'node:stream/promises'
 import { spawn } from 'node:child_process'
@@ -26,8 +26,6 @@ import {
   migrateSpeechModelCacheIfNeeded,
   type SpeechModelCacheDir
 } from './model-cache-path'
-import { findNestedSpeechModelDirectory } from './speech-model-directory-scanner'
-import { SpeechModelExtractionStderr } from './speech-model-extraction-stderr'
 
 type DownloadHandle = {
   abort: () => void
@@ -837,7 +835,7 @@ export class ModelManager {
         }
       )
 
-      const stderr = new SpeechModelExtractionStderr()
+      let stderr = ''
       let settled = false
       let timeout: ReturnType<typeof setTimeout> | null = null
       let abortPoll: ReturnType<typeof setInterval> | null = null
@@ -866,7 +864,7 @@ export class ModelManager {
         reject(error)
       }
       const onStderrData = (chunk: Buffer): void => {
-        stderr.append(chunk)
+        stderr += chunk.toString()
       }
       const onClose = (code: number | null): void => {
         if (settled) {
@@ -877,7 +875,7 @@ export class ModelManager {
         if (code === 0) {
           resolve()
         } else {
-          reject(new Error(`tar exited with code ${code}: ${stderr.errorEvidence()}`))
+          reject(new Error(`tar exited with code ${code}: ${stderr.slice(0, 500)}`))
         }
       }
       const onError = (err: Error): void => {
@@ -904,15 +902,22 @@ export class ModelManager {
     if (!manifest.files) {
       return
     }
-    const nested = await findNestedSpeechModelDirectory(modelDir, manifest.files)
-    if (!nested) {
-      return
+    const entries = await readdir(modelDir, { withFileTypes: true })
+    for (const entry of entries) {
+      if (entry.isDirectory()) {
+        const nestedDir = join(modelDir, entry.name)
+        const nestedFiles = await readdir(nestedDir)
+        const hasExpected = manifest.files.some((f) => nestedFiles.includes(f))
+        if (hasExpected) {
+          const { rename: fsRename } = await import('node:fs/promises')
+          for (const file of nestedFiles) {
+            await fsRename(join(nestedDir, file), join(modelDir, file))
+          }
+          await rm(nestedDir, { recursive: true, force: true })
+          return
+        }
+      }
     }
-    const { rename: fsRename } = await import('node:fs/promises')
-    for (const file of nested.entryNames) {
-      await fsRename(join(nested.directoryPath, file), join(modelDir, file))
-    }
-    await rm(nested.directoryPath, { recursive: true, force: true })
   }
 
   private cleanup(modelId: string, archivePath: string): void {

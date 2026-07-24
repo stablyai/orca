@@ -1,16 +1,10 @@
 /* eslint-disable max-lines -- Why: transcript discovery, parsing, attribution, and aggregation share one data shape pipeline. Keeping them co-located makes it easier to audit correctness when Claude usage numbers look surprising. */
 import { homedir } from 'node:os'
 import { join, basename } from 'node:path'
-import { realpath, stat } from 'node:fs/promises'
+import { realpath, readdir, stat } from 'node:fs/promises'
+import { createReadStream } from 'node:fs'
+import { createInterface } from 'node:readline'
 import type { Repo } from '../../shared/types'
-import { walkUsageHistoryJsonlFiles } from '../usage-history-file-discovery'
-import { readUsageHistoryJsonlLines } from '../usage-history-jsonl-reader'
-import {
-  MAX_USAGE_HISTORY_FILES,
-  UsageHistoryScanBudget,
-  UsageHistoryScanCapacityError,
-  getUsageHistoryRetainedBytes
-} from '../usage-history-scan-budget'
 import type {
   ClaudeUsageAttributedTurn,
   ClaudeUsageDailyAggregate,
@@ -134,29 +128,54 @@ async function yieldToEventLoop(): Promise<void> {
   await new Promise((resolve) => setTimeout(resolve, 0))
 }
 
-export async function listClaudeTranscriptFiles(
-  budget = new UsageHistoryScanBudget()
-): Promise<string[]> {
-  const roots = [CLAUDE_PROJECTS_DIR, CLAUDE_TRANSCRIPTS_DIR]
+async function walkJsonlFiles(dirPath: string): Promise<string[]> {
+  const entries = await readdir(dirPath, { withFileTypes: true })
   const files: string[] = []
-  for (const root of roots) {
-    try {
-      for (const filePath of await walkUsageHistoryJsonlFiles(root, budget)) {
-        files.push(filePath)
-      }
-    } catch (error) {
-      if (error instanceof UsageHistoryScanCapacityError) {
-        throw error
-      }
+
+  for (const entry of entries) {
+    const fullPath = join(dirPath, entry.name)
+    if (entry.isDirectory()) {
+      appendDiscoveredFiles(files, await walkJsonlFiles(fullPath))
+      continue
+    }
+    if (entry.isFile() && entry.name.endsWith('.jsonl')) {
+      files.push(fullPath)
     }
   }
-  return [...new Set(files)].sort()
+
+  return files
+}
+
+function appendDiscoveredFiles(target: string[], source: readonly string[]): void {
+  // Why: long-lived transcript directories can exceed V8's argument limit if
+  // child file arrays are spread into push().
+  for (const filePath of source) {
+    target.push(filePath)
+  }
+}
+
+export async function listClaudeTranscriptFiles(): Promise<string[]> {
+  const roots = [CLAUDE_PROJECTS_DIR, CLAUDE_TRANSCRIPTS_DIR]
+  const files = await Promise.all(
+    roots.map(async (root) => {
+      try {
+        return await walkJsonlFiles(root)
+      } catch {
+        return []
+      }
+    })
+  )
+  return [...new Set(files.flat())].sort()
 }
 
 export async function getProcessedFileInfo(filePath: string): Promise<ClaudeUsageProcessedFile> {
   const fileStat = await stat(filePath)
   let lineCount = 0
-  for await (const _line of readUsageHistoryJsonlLines(filePath)) {
+  const lines = createInterface({
+    input: createReadStream(filePath, { encoding: 'utf-8' }),
+    crlfDelay: Infinity
+  })
+  for await (const _line of lines) {
     lineCount++
   }
   return {
@@ -289,17 +308,17 @@ export function parseClaudeUsageRecord(line: string): ClaudeUsageParsedTurn | nu
   return parsed ? stripClaudeSourceMetadata(parsed) : null
 }
 
-export async function parseClaudeUsageFile(
-  filePath: string,
-  budget = new UsageHistoryScanBudget()
-): Promise<ClaudeUsageParsedTurn[]> {
+export async function parseClaudeUsageFile(filePath: string): Promise<ClaudeUsageParsedTurn[]> {
   const turns: ClaudeUsageParsedSourceTurn[] = []
   const fallbackSessionId = basename(filePath, '.jsonl')
+  const lines = createInterface({
+    input: createReadStream(filePath, { encoding: 'utf-8' }),
+    crlfDelay: Infinity
+  })
 
-  for await (const line of readUsageHistoryJsonlLines(filePath)) {
+  for await (const line of lines) {
     const parsed = parseClaudeUsageSourceRecord(line, fallbackSessionId)
     if (parsed) {
-      claimClaudeTurn(budget, parsed)
       turns.push(parsed)
     }
   }
@@ -307,10 +326,7 @@ export async function parseClaudeUsageFile(
   return dedupeClaudeUsageTurns(turns).map(stripClaudeSourceMetadata)
 }
 
-async function readClaudeUsageScanFile(
-  filePath: string,
-  budget: UsageHistoryScanBudget
-): Promise<{
+async function readClaudeUsageScanFile(filePath: string): Promise<{
   processedFile: ClaudeUsageProcessedFile
   turns: ClaudeUsageParsedSourceTurn[]
 }> {
@@ -318,12 +334,15 @@ async function readClaudeUsageScanFile(
   let lineCount = 0
   const turns: ClaudeUsageParsedSourceTurn[] = []
   const fallbackSessionId = basename(filePath, '.jsonl')
+  const lines = createInterface({
+    input: createReadStream(filePath, { encoding: 'utf-8' }),
+    crlfDelay: Infinity
+  })
 
-  for await (const line of readUsageHistoryJsonlLines(filePath)) {
+  for await (const line of lines) {
     lineCount++
     const parsed = parseClaudeUsageSourceRecord(line, fallbackSessionId)
     if (parsed) {
-      claimClaudeTurn(budget, parsed)
       turns.push(parsed)
     }
   }
@@ -337,19 +356,6 @@ async function readClaudeUsageScanFile(
     },
     turns: dedupeClaudeUsageTurns(turns)
   }
-}
-
-function claimClaudeTurn(budget: UsageHistoryScanBudget, turn: ClaudeUsageParsedSourceTurn): void {
-  budget.claimRecord(
-    getUsageHistoryRetainedBytes([
-      turn.sessionId,
-      turn.timestamp,
-      turn.model,
-      turn.cwd,
-      turn.gitBranch,
-      turn.dedupeKey
-    ])
-  )
 }
 
 function localDayFromTimestamp(timestamp: string): string | null {
@@ -483,49 +489,6 @@ function mergeClaudeDailyAggregates(
     existing.outputTokens += aggregate.outputTokens
     existing.cacheReadTokens += aggregate.cacheReadTokens
     existing.cacheWriteTokens += aggregate.cacheWriteTokens
-  }
-}
-
-function claimClaudeUsageProjection(
-  budget: UsageHistoryScanBudget,
-  sessions: readonly ClaudeUsageSession[],
-  dailyAggregates: readonly ClaudeUsageDailyAggregate[]
-): void {
-  for (const session of sessions) {
-    budget.claimProjection(
-      getUsageHistoryRetainedBytes([
-        session.sessionId,
-        session.firstTimestamp,
-        session.lastTimestamp,
-        session.model,
-        session.lastCwd,
-        session.lastGitBranch,
-        session.primaryWorktreeId,
-        session.primaryRepoId
-      ])
-    )
-    for (const location of session.locationBreakdown) {
-      budget.claimProjection(
-        getUsageHistoryRetainedBytes([
-          location.locationKey,
-          location.projectLabel,
-          location.repoId,
-          location.worktreeId
-        ])
-      )
-    }
-  }
-  for (const daily of dailyAggregates) {
-    budget.claimProjection(
-      getUsageHistoryRetainedBytes([
-        daily.day,
-        daily.model,
-        daily.projectKey,
-        daily.projectLabel,
-        daily.repoId,
-        daily.worktreeId
-      ])
-    )
   }
 }
 
@@ -663,14 +626,7 @@ export async function scanClaudeUsageFiles(
   sessions: ClaudeUsageSession[]
   dailyAggregates: ClaudeUsageDailyAggregate[]
 }> {
-  if (previousProcessedFiles.length > MAX_USAGE_HISTORY_FILES) {
-    throw new UsageHistoryScanCapacityError('files', MAX_USAGE_HISTORY_FILES)
-  }
-  const budget = new UsageHistoryScanBudget()
-  const files = await listClaudeTranscriptFiles(budget)
-  for (const previous of previousProcessedFiles) {
-    budget.claimPath(previous.path)
-  }
+  const files = await listClaudeTranscriptFiles()
   const previousByPath = new Map(previousProcessedFiles.map((file) => [file.path, file]))
   const worktreeLookup = await buildWorktreeLookup(worktrees)
 
@@ -729,12 +685,7 @@ export async function scanClaudeUsageFiles(
   // turn for exactly one file; cached files keep the claims they persisted.
   const turnOwnerByDedupeKey = new Map<string, string>()
   for (const [filePath, previous] of reusedByPath) {
-    for (const session of previous.sessions) {
-      budget.claimRecords(session.turnCount)
-    }
-    claimClaudeUsageProjection(budget, previous.sessions, previous.dailyAggregates)
     for (const dedupeKey of previous.ownedDedupeKeys) {
-      budget.claimOwnershipKey(dedupeKey)
       // First cached claim wins so conflicting projections stay deterministic.
       if (!turnOwnerByDedupeKey.has(dedupeKey)) {
         turnOwnerByDedupeKey.set(dedupeKey, filePath)
@@ -747,9 +698,7 @@ export async function scanClaudeUsageFiles(
     const batch = pathsToParse.slice(index, index + FILE_SCAN_BATCH_SIZE)
     // Why: transcript scans run in Electron's main process. Small parallel
     // batches cut independent file I/O without letting Settings stay blocked.
-    const reads = await Promise.all(
-      batch.map((filePath) => readClaudeUsageScanFile(filePath, budget))
-    )
+    const reads = await Promise.all(batch.map((filePath) => readClaudeUsageScanFile(filePath)))
     for (const [batchIndex, filePath] of batch.entries()) {
       const { processedFile, turns } = reads[batchIndex]
       // Why: ownership claims must be sequential in sorted-path order so
@@ -764,20 +713,15 @@ export async function scanClaudeUsageFiles(
             hasDeferredClaims = true
             continue
           }
-          if (owner === undefined) {
-            budget.claimOwnershipKey(turn.dedupeKey)
-          }
           turnOwnerByDedupeKey.set(turn.dedupeKey, filePath)
           ownedDedupeKeys.push(turn.dedupeKey)
         }
         ownedTurns.push(stripClaudeSourceMetadata(turn))
       }
       const attributed = await attributeClaudeUsageTurns(ownedTurns, worktreeLookup)
-      const aggregates = aggregateClaudeUsage(attributed)
-      claimClaudeUsageProjection(budget, aggregates.sessions, aggregates.dailyAggregates)
       parsedByPath.set(filePath, {
         ...processedFile,
-        ...aggregates,
+        ...aggregateClaudeUsage(attributed),
         ownedDedupeKeys,
         hasDeferredClaims
       })
@@ -800,17 +744,14 @@ export async function scanClaudeUsageFiles(
     mergeClaudeDailyAggregates(dailyByKey, processed.dailyAggregates)
   }
 
-  const sessions = finalizeClaudeSessions(sessionsById)
-  const dailyAggregates = [...dailyByKey.values()].sort((left, right) =>
-    left.day === right.day
-      ? left.projectLabel.localeCompare(right.projectLabel)
-      : left.day.localeCompare(right.day)
-  )
-  claimClaudeUsageProjection(budget, sessions, dailyAggregates)
   return {
     processedFiles,
-    sessions,
-    dailyAggregates
+    sessions: finalizeClaudeSessions(sessionsById),
+    dailyAggregates: [...dailyByKey.values()].sort((left, right) =>
+      left.day === right.day
+        ? left.projectLabel.localeCompare(right.projectLabel)
+        : left.day.localeCompare(right.day)
+    )
   }
 }
 

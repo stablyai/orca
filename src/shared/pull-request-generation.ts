@@ -1,10 +1,4 @@
 import { truncateDiffForPrompt } from './commit-message-prompt'
-import { assertJsonTextStructureWithinLimits } from './json-text-structure-limit'
-
-export const GENERATED_PULL_REQUEST_JSON_STRUCTURE_LIMITS = {
-  structuralTokens: 64,
-  nestingDepth: 8
-} as const
 
 export type PullRequestDraftContext = {
   branch: string | null
@@ -158,9 +152,7 @@ export function parseGeneratedPullRequestFields(
   raw: string,
   fallback: Pick<PullRequestDraftContext, 'base' | 'currentTitle' | 'currentBody' | 'currentDraft'>
 ): GeneratedPullRequestFields {
-  const content = stripJsonFence(raw)
-  assertJsonTextStructureWithinLimits(content, GENERATED_PULL_REQUEST_JSON_STRUCTURE_LIMITS)
-  const parsed = JSON.parse(content) as unknown
+  const parsed = JSON.parse(stripJsonFence(raw)) as unknown
   if (!parsed || typeof parsed !== 'object') {
     throw new Error('Expected a JSON object.')
   }

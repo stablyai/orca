@@ -3,7 +3,6 @@ import { randomUUID } from 'node:crypto'
 import { link, lstat, mkdir, readFile, readlink, unlink, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { promisify } from 'node:util'
-import { readNodeFileWithinLimit } from '../../shared/node-bounded-file-reader'
 
 const execFileAsync = promisify(execFile)
 const runtimeHostIdentity = `runtime:${randomUUID()}`
@@ -11,7 +10,6 @@ const runtimeProcessIdentity = `runtime:${randomUUID()}`
 let hostIdentityPromise: Promise<string> | undefined
 let bootIdentityPromise: Promise<string | undefined> | undefined
 const HOST_TOKEN_PATTERN = /^[\da-f]{8}-[\da-f]{4}-4[\da-f]{3}-[89ab][\da-f]{3}-[\da-f]{12}$/i
-const HOST_TOKEN_FILE_MAX_BYTES = 1024
 
 function hasCode(error: unknown, code: string): boolean {
   return error instanceof Error && 'code' in error && error.code === code
@@ -45,8 +43,7 @@ async function readPublishedHostToken(path: string, uid: number): Promise<string
     if (!stats.isFile() || stats.uid !== uid || (stats.mode & 0o077) !== 0) {
       return undefined
     }
-    const { buffer } = await readNodeFileWithinLimit(path, HOST_TOKEN_FILE_MAX_BYTES)
-    const token = buffer.toString('utf8').trim()
+    const token = (await readFile(path, 'utf8')).trim()
     return HOST_TOKEN_PATTERN.test(token) ? token : undefined
   } catch {
     return undefined

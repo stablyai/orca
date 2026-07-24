@@ -1,6 +1,7 @@
 import { useCallback, useMemo, useState } from 'react'
 import { View, Text, Pressable, TextInput, StyleSheet, Switch } from 'react-native'
 import { ChevronLeft } from 'lucide-react-native'
+import AsyncStorage from '@react-native-async-storage/async-storage'
 import { colors, spacing, radii, typography } from '../theme/mobile-theme'
 import { BottomDrawer } from './BottomDrawer'
 import {
@@ -10,19 +11,15 @@ import {
   type TerminalShortcutModifier,
   type TerminalShortcutSpecialKey
 } from '../terminal/terminal-accessory-keys'
-import {
-  CUSTOM_ACCESSORY_KEY_MAX_BYTES_CHARACTERS,
-  CUSTOM_ACCESSORY_KEY_MAX_LABEL_CHARACTERS,
-  loadCustomKeys,
-  saveCustomKeys,
-  type CustomKey
-} from '../terminal/custom-accessory-key-store'
 
-export {
-  loadCustomKeys,
-  saveCustomKeys,
-  type CustomKey
-} from '../terminal/custom-accessory-key-store'
+const CUSTOM_ACCESSORY_KEYS_STORAGE_KEY = 'orca:custom-accessory-keys'
+
+export type CustomKey = {
+  id: string
+  label: string
+  bytes: string
+  enter: boolean
+}
 
 type Step = 'choose-type' | 'shortcut-combo' | 'special-keys' | 'text-macro'
 
@@ -67,6 +64,19 @@ type Props = {
   onManageShortcuts?: () => void
 }
 
+export async function loadCustomKeys(): Promise<CustomKey[]> {
+  try {
+    const raw = await AsyncStorage.getItem(CUSTOM_ACCESSORY_KEYS_STORAGE_KEY)
+    return raw ? (JSON.parse(raw) as CustomKey[]) : []
+  } catch {
+    return []
+  }
+}
+
+export async function saveCustomKeys(keys: CustomKey[]): Promise<void> {
+  await AsyncStorage.setItem(CUSTOM_ACCESSORY_KEYS_STORAGE_KEY, JSON.stringify(keys))
+}
+
 export function CustomKeyModal({ visible, onClose, onKeysChanged, onManageShortcuts }: Props) {
   const [step, setStep] = useState<Step>('choose-type')
   const [shortcutKey, setShortcutKey] = useState('c')
@@ -94,7 +104,8 @@ export function CustomKeyModal({ visible, onClose, onKeysChanged, onManageShortc
     async (key: Omit<CustomKey, 'id'>) => {
       const existing = await loadCustomKeys()
       const newKey: CustomKey = { ...key, id: `custom-${Date.now()}` }
-      const updated = await saveCustomKeys([...existing, newKey])
+      const updated = [...existing, newKey]
+      await saveCustomKeys(updated)
       onKeysChanged(updated)
       onClose()
     },
@@ -361,7 +372,6 @@ export function CustomKeyModal({ visible, onClose, onKeysChanged, onManageShortc
               placeholderTextColor={colors.textMuted}
               autoCapitalize="none"
               autoCorrect={false}
-              maxLength={CUSTOM_ACCESSORY_KEY_MAX_LABEL_CHARACTERS}
             />
             <Text style={styles.fieldLabel}>Command</Text>
             <TextInput
@@ -372,7 +382,6 @@ export function CustomKeyModal({ visible, onClose, onKeysChanged, onManageShortc
               placeholderTextColor={colors.textMuted}
               autoCapitalize="none"
               autoCorrect={false}
-              maxLength={CUSTOM_ACCESSORY_KEY_MAX_BYTES_CHARACTERS - 1}
             />
             <View style={styles.switchRow}>
               <Text style={styles.switchLabel}>Press Enter</Text>

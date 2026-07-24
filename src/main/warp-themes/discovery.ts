@@ -1,9 +1,7 @@
-import { opendirSync, type Dir, type Dirent } from 'node:fs'
+import { readdirSync } from 'node:fs'
+import type { Dirent } from 'node:fs'
 import { homedir, platform } from 'node:os'
 import path from 'node:path'
-
-const MAX_DYNAMIC_DISCOVERY_MATCHES = 1_024
-const MAX_DYNAMIC_DISCOVERY_SCANNED_ENTRIES = 100_000
 
 const WARP_CHANNELS = [
   { macName: '.warp', linuxName: 'warp-terminal', windowsName: 'Warp' },
@@ -18,39 +16,13 @@ const WARP_CHANNELS = [
   }
 ]
 
-function readDirectoryEntries(
-  directoryPath: string,
-  includeEntry: (entry: Dirent) => boolean
-): Dirent[] {
-  let directory: Dir | undefined
+function readDirectoryEntries(directoryPath: string): Dirent[] {
   try {
-    directory = opendirSync(directoryPath, { bufferSize: 32 })
-    const entries: Dirent[] = []
-    let scannedEntries = 0
-    while (
-      entries.length < MAX_DYNAMIC_DISCOVERY_MATCHES &&
-      scannedEntries < MAX_DYNAMIC_DISCOVERY_SCANNED_ENTRIES
-    ) {
-      const entry = directory.readSync()
-      if (entry === null) {
-        break
-      }
-      scannedEntries += 1
-      if (includeEntry(entry)) {
-        entries.push(entry)
-      }
-    }
-    return entries.sort((left, right) =>
+    return readdirSync(directoryPath, { withFileTypes: true }).sort((left, right) =>
       left.name.localeCompare(right.name, undefined, { sensitivity: 'base' })
     )
   } catch {
     return []
-  } finally {
-    try {
-      directory?.closeSync()
-    } catch {
-      // A failed close cannot make already bounded discovery unsafe.
-    }
   }
 }
 
@@ -85,10 +57,9 @@ function getMacWarpThemeDirectories(home: string): string[] {
   return warpThemeDirectoriesFromDataHomes(
     [
       ...WARP_CHANNELS.map((channel) => pathImpl.join(home, channel.macName)),
-      ...readDirectoryEntries(
-        home,
-        (entry) => entry.isDirectory() && entry.name.startsWith('.warp')
-      ).map((entry) => pathImpl.join(home, entry.name))
+      ...readDirectoryEntries(home)
+        .filter((entry) => entry.isDirectory() && entry.name.startsWith('.warp'))
+        .map((entry) => pathImpl.join(home, entry.name))
     ],
     pathImpl
   )
@@ -106,11 +77,13 @@ function getLinuxWarpThemeDirectories(home: string): string[] {
   return warpThemeDirectoriesFromDataHomes(
     [
       ...WARP_CHANNELS.map((channel) => pathImpl.join(dataHome, channel.linuxName)),
-      ...readDirectoryEntries(
-        dataHome,
-        (entry) =>
-          entry.isDirectory() && (entry.name === 'warp-terminal' || entry.name.startsWith('warp-'))
-      ).map((entry) => pathImpl.join(dataHome, entry.name))
+      ...readDirectoryEntries(dataHome)
+        .filter(
+          (entry) =>
+            entry.isDirectory() &&
+            (entry.name === 'warp-terminal' || entry.name.startsWith('warp-'))
+        )
+        .map((entry) => pathImpl.join(dataHome, entry.name))
     ],
     pathImpl
   )
@@ -129,7 +102,10 @@ function getWindowsWarpThemeDirectories(home: string): string[] {
       path.win32
     )
   }
-  for (const entry of readDirectoryEntries(warpAppData, (candidate) => candidate.isDirectory())) {
+  for (const entry of readDirectoryEntries(warpAppData)) {
+    if (!entry.isDirectory()) {
+      continue
+    }
     addDedupeDirectory(
       directories,
       seenDirectories,

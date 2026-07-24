@@ -23,13 +23,6 @@ import {
   shouldExcludeQuickOpenRelPath,
   shouldIncludeQuickOpenPath
 } from '../shared/quick-open-filter'
-import {
-  createQuickOpenListingBudget,
-  QUICK_OPEN_LISTING_MAX_PATH_BYTES,
-  QuickOpenSubprocessPathAccumulator,
-  resolveQuickOpenResultLimit,
-  retainQuickOpenPath
-} from '../shared/quick-open-listing-limits'
 
 export const LIST_FILES_TIMEOUT_MS = 25_000
 
@@ -42,13 +35,8 @@ export function listFilesWithRg(
   if (signal?.aborted) {
     return Promise.reject(fileListingCancellationError(signal))
   }
-  const resultLimit = resolveQuickOpenResultLimit(maxResults)
-  if (resultLimit === 0) {
-    return Promise.resolve([])
-  }
   return new Promise((resolve, reject) => {
     const files = new Set<string>()
-    const listingBudget = createQuickOpenListingBudget()
     let done = false
     const children: {
       child: ChildProcess
@@ -78,15 +66,16 @@ export function listFilesWithRg(
       if (shouldExcludeQuickOpenRelPath(relPath, excludePathPrefixes)) {
         return true
       }
-      if (files.size < resultLimit) {
-        retainQuickOpenPath(files, relPath, listingBudget)
+      files.add(relPath)
+      if (maxResults !== undefined && files.size >= maxResults) {
+        finishAtLimit()
       }
       return true
     }
 
     const runPass = (args: string[]): Promise<void> =>
       new Promise((passResolve, passReject) => {
-        const paths = new QuickOpenSubprocessPathAccumulator(0x0a)
+        let passBuf = ''
         let passDone = false
         let passFileCount = 0
         // --no-messages: permission-denied noise on the remote (e.g. .ssh,
@@ -115,7 +104,7 @@ export function listFilesWithRg(
             return
           }
           passDone = true
-          paths.clear()
+          passBuf = ''
           cleanup()
           passReject(error)
         }
@@ -124,7 +113,6 @@ export function listFilesWithRg(
             return
           }
           passDone = true
-          paths.clear()
           cleanup()
           passResolve()
         }
@@ -141,30 +129,21 @@ export function listFilesWithRg(
           rejectPass(new Error('rg list timed out'))
         }, LIST_FILES_TIMEOUT_MS)
 
-        function failForOutput(error: unknown): void {
-          child.kill()
-          rejectPass(error instanceof Error ? error : new Error(String(error)))
-        }
-        function handleStdoutData(chunk: Buffer | string): void {
-          try {
-            const outcome = paths.push(chunk, (path) => {
-              if (processLine(path)) {
-                passFileCount++
-              }
-              return files.size < resultLimit
-            })
-            if (outcome === 'stopped') {
-              finishAtLimit()
-            } else if (outcome === 'path-too-large') {
-              failForOutput(
-                new Error(
-                  `Quick Open file path exceeded ${QUICK_OPEN_LISTING_MAX_PATH_BYTES} bytes`
-                )
-              )
+        function handleStdoutData(chunk: string): void {
+          passBuf += chunk
+          let start = 0
+          let idx = passBuf.indexOf('\n', start)
+          while (idx !== -1) {
+            if (processLine(passBuf.substring(start, idx))) {
+              passFileCount++
             }
-          } catch (error) {
-            failForOutput(error)
+            if (done) {
+              return
+            }
+            start = idx + 1
+            idx = passBuf.indexOf('\n', start)
           }
+          passBuf = start < passBuf.length ? passBuf.substring(start) : ''
         }
         function handleStderrData(): void {
           /* drain to prevent backpressure stalls */
@@ -184,18 +163,10 @@ export function listFilesWithRg(
             return
           }
           // Flush residual line only on clean exit.
-          try {
-            const trailingPath = paths.finish()
-            if (trailingPath && processLine(trailingPath)) {
+          if (passBuf) {
+            if (processLine(passBuf)) {
               passFileCount++
             }
-            if (files.size >= resultLimit) {
-              finishAtLimit()
-              return
-            }
-          } catch (error) {
-            failForOutput(error)
-            return
           }
           // exit 0 = matches found, 1 = no files (still success for --files).
           // exit 2 is documented as "a subdirectory could not be searched"
@@ -211,6 +182,7 @@ export function listFilesWithRg(
           }
         }
 
+        child.stdout!.setEncoding('utf-8')
         child.stdout!.on('data', handleStdoutData)
         child.stderr!.on('data', handleStderrData)
         child.once('error', handleError)
@@ -240,7 +212,7 @@ export function listFilesWithRg(
       done = true
       signal?.removeEventListener('abort', onAbort)
       killSurvivors('rg list reached bounded result limit')
-      resolve(Array.from(files).slice(0, resultLimit))
+      resolve(Array.from(files).slice(0, maxResults))
     }
 
     // Why: a cancelled scan (workspace switch, superseded request) must stop
@@ -256,11 +228,14 @@ export function listFilesWithRg(
     }
     signal?.addEventListener('abort', onAbort, { once: true })
 
-    // Why: deterministic primary-first budgeting prevents a large ignored
-    // tree from starving ordinary source paths on a remote host.
-    const passes = runPass(primary).then(() =>
-      files.size < resultLimit ? runPass(ignoredPass) : Promise.resolve()
-    )
+    const passes =
+      maxResults === undefined
+        ? Promise.all([runPass(primary), runPass(ignoredPass)])
+        : // Why: deterministic primary-first budgeting prevents a large ignored
+          // tree from starving ordinary source paths on a remote host.
+          runPass(primary).then(() =>
+            files.size < maxResults ? runPass(ignoredPass) : Promise.resolve()
+          )
 
     passes
       .then(() => {
@@ -269,7 +244,7 @@ export function listFilesWithRg(
         }
         done = true
         signal?.removeEventListener('abort', onAbort)
-        resolve(Array.from(files).slice(0, resultLimit))
+        resolve(Array.from(files))
       })
       .catch((err) => {
         if (done) {

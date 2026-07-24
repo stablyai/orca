@@ -3,18 +3,12 @@
    emitted plugin bytes drift from the installer checks that protect user
    plugin files from being overwritten. */
 import { randomUUID } from 'node:crypto'
-import { existsSync, mkdirSync, renameSync, unlinkSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdirSync, readFileSync, renameSync, unlinkSync, writeFileSync } from 'node:fs'
 import { homedir } from 'node:os'
 import { dirname, join } from 'node:path'
 import type { SFTPWrapper } from 'ssh2'
 
 import type { AgentHookInstallStatus } from '../../shared/agent-hook-types'
-import {
-  NodeFileReadTooLargeError,
-  readNodeFileSyncWithinLimit
-} from '../../shared/node-bounded-file-reader'
-import { getGeneratedNodeBoundedFileReaderSourceLines } from '../generated-node-bounded-file-reader'
-import { AGENT_HOOK_PLUGIN_MAX_BYTES } from '../agent-hooks/agent-hook-file-limits'
 import {
   readTextFileRemote,
   writeTextFileRemoteAtomic
@@ -59,10 +53,7 @@ function readLocalPluginState(pluginPath: string): PluginFileState {
     return { kind: 'absent' }
   }
   try {
-    const content = readNodeFileSyncWithinLimit(
-      pluginPath,
-      AGENT_HOOK_PLUGIN_MAX_BYTES
-    ).buffer.toString('utf8')
+    const content = readFileSync(pluginPath, 'utf-8')
     if (!isManagedPlugin(content)) {
       return { kind: 'unmanaged' }
     }
@@ -114,17 +105,10 @@ function writeTextFileAtomic(filePath: string, content: string): void {
   mkdirSync(dir, { recursive: true })
   if (existsSync(filePath)) {
     try {
-      const existing = readNodeFileSyncWithinLimit(
-        filePath,
-        AGENT_HOOK_PLUGIN_MAX_BYTES
-      ).buffer.toString('utf8')
-      if (existing === content) {
+      if (readFileSync(filePath, 'utf-8') === content) {
         return
       }
-    } catch (error) {
-      if (error instanceof NodeFileReadTooLargeError) {
-        throw error
-      }
+    } catch {
       // Fall through to the atomic write path.
     }
   }
@@ -146,13 +130,11 @@ function writeTextFileAtomic(filePath: string, content: string): void {
 
 function getAmpPluginSource(): string {
   return [
-    "import * as fs from 'fs'",
+    "import { readFileSync, statSync } from 'fs'",
     "import type { PluginAPI } from '@ampcode/plugin'",
     '',
     `// ${AMP_PLUGIN_MARKER}`,
     'type HookCoords = { port?: string; token?: string; env?: string; version?: string }',
-    '',
-    ...getGeneratedNodeBoundedFileReaderSourceLines({ typed: true }),
     '',
     'let warnedBadEndpoint = false',
     "let cachedEndpointKey = ''",
@@ -162,12 +144,12 @@ function getAmpPluginSource(): string {
     '  const endpointPath = process.env.ORCA_AGENT_HOOK_ENDPOINT',
     '  if (!endpointPath) return null',
     '  try {',
-    '    const stat = fs.statSync(endpointPath)',
+    '    const stat = statSync(endpointPath)',
     '    const cacheKey = `${stat.mtimeMs}:${stat.size}:${stat.ino}`',
     '    if (cacheKey === cachedEndpointKey && cachedEndpointValues) {',
     '      return cachedEndpointValues',
     '    }',
-    '    const contents = readOrcaManagedFileWithinLimit(fs, endpointPath)',
+    "    const contents = readFileSync(endpointPath, 'utf8')",
     '    const out: HookCoords = {}',
     '    for (const line of contents.split(/\\r?\\n/)) {',
     '      const match = line.match(/^(?:set\\s+)?([A-Z0-9_]+)=(.*)$/)',
@@ -364,16 +346,11 @@ export class AmpHookService {
   async installRemote(sftp: SFTPWrapper, remoteHome: string): Promise<AgentHookInstallStatus> {
     const remotePluginPath = getRemotePluginPath(remoteHome)
     try {
-      const existing = await readTextFileRemote(sftp, remotePluginPath, AGENT_HOOK_PLUGIN_MAX_BYTES)
+      const existing = await readTextFileRemote(sftp, remotePluginPath)
       if (existing !== null && !isManagedPlugin(existing)) {
         return statusFromState(remotePluginPath, { kind: 'unmanaged' })
       }
-      await writeTextFileRemoteAtomic(
-        sftp,
-        remotePluginPath,
-        getAmpPluginSource(),
-        AGENT_HOOK_PLUGIN_MAX_BYTES
-      )
+      await writeTextFileRemoteAtomic(sftp, remotePluginPath, getAmpPluginSource())
       return {
         agent: 'amp',
         state: 'installed',

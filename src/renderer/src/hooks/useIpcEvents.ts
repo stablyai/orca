@@ -32,7 +32,6 @@ import type {
 } from '../../../shared/remote-workspace-types'
 import type { RateLimitState } from '../../../shared/rate-limit-types'
 import type { SshConnectionState } from '../../../shared/ssh-types'
-import { admitSshConnectionState } from '../../../shared/ssh-retained-payload-admission'
 import { isWslHookRelayConnectionId } from '../../../shared/wsl-hook-relay-contract'
 import type {
   RuntimeBrowserDriverState,
@@ -90,8 +89,6 @@ import {
 import { attachMobileMarkdownBridge } from '@/runtime/mobile-markdown-bridge'
 import { closeMobileSessionTabInStore } from '@/runtime/mobile-session-tab-close'
 import { createWorktreeChangeRefreshQueue } from './worktree-change-refresh-queue'
-import { recentlyRenamedWorktreeGrace } from './worktree-rename-grace-retention'
-import { UnknownSshTargetStateCoordinator } from './unknown-ssh-target-state-coordinator'
 import { subscribeRuntimeClientEvents } from '@/runtime/runtime-client-events'
 import { subscribeToUnpairedDeviceAuthNotification } from './unpaired-device-auth-notification'
 import {
@@ -104,7 +101,6 @@ import { detectLanguage } from '@/lib/language-detect'
 import { makePaneKey, parsePaneKey } from '../../../shared/stable-pane-id'
 import { collectLeafIdsInOrder } from '@/components/terminal-pane/layout-serialization'
 import { track } from '@/lib/telemetry'
-import { TransientAgentStatusClearRegistry } from '@/lib/transient-agent-status-clear-retention'
 import { singlePaneLayoutSnapshot } from '@/store/slices/terminal-helpers'
 import { buildWorkspaceSessionPayload } from '@/lib/workspace-session'
 import { persistWorkspaceSessionByHost } from '@/lib/workspace-session-host-persistence'
@@ -254,6 +250,7 @@ const MAX_PENDING_AGENT_STATUS_EVENTS = 100
 const MAX_PENDING_MOBILE_STATE_EVENTS = 300
 // Why: a rename's event burst lags the on-disk move; shield both ids from the deletion diff for a grace window.
 const WORKTREE_RENAME_PURGE_GRACE_MS = 20_000
+const recentlyRenamedWorktreeIdExpiry = new Map<string, number>()
 let remoteWorkspaceSnapshotApplyDepth = 0
 let remoteWorkspaceSnapshotWriteSuppressUntil = 0
 const REMOTE_WORKSPACE_SNAPSHOT_WRITE_SUPPRESS_MS = 1000
@@ -440,7 +437,7 @@ async function prepareRemoteWorkspaceTarget(targetId: string): Promise<boolean> 
     await store.fetchRepos()
     repos = useAppStore.getState().repos.filter((repo) => repo.connectionId === targetId)
   }
-  await refreshRuntimeProjectWorktrees(repos)
+  await Promise.all(repos.map((repo) => useAppStore.getState().fetchWorktrees(repo.id)))
   await useAppStore.getState().fetchWorktreeLineage()
   return true
 }
@@ -850,7 +847,7 @@ export function useIpcEvents(): void {
     }
     type AgentStatusApplyResult = 'applied' | 'pending' | 'dropped'
     const pendingAgentStatusEvents: PendingAgentStatusEvent[] = []
-    const transientClearWatermarks = new TransientAgentStatusClearRegistry()
+    const transientClearWatermarkByConnectionId = new Map<string, number>()
     let agentStatusEffectDisposed = false
     let pendingAgentStatusRetryTimer: ReturnType<typeof setTimeout> | null = null
     // Why: setAgentStatus notifies synchronously and re-enters this flush mid-drain; guard re-entrancy (crash 9fc89529).
@@ -871,10 +868,8 @@ export function useIpcEvents(): void {
       if (renamed) {
         // Shield both ids from the deletion diff across the rename's event burst — the worktree list lags the on-disk move.
         const expiry = Date.now() + WORKTREE_RENAME_PURGE_GRACE_MS
-        recentlyRenamedWorktreeGrace.remember(
-          [renamed.oldWorktreeId, renamed.newWorktreeId],
-          expiry
-        )
+        recentlyRenamedWorktreeIdExpiry.set(renamed.oldWorktreeId, expiry)
+        recentlyRenamedWorktreeIdExpiry.set(renamed.newWorktreeId, expiry)
         useAppStore.getState().migrateWorktreeIdentity(renamed.oldWorktreeId, renamed.newWorktreeId)
       }
       // Why: diff before/after fetch to catch out-of-band deletions and purge worktree state, else zombie ptyId entries leak (design §2c, §4.4).
@@ -893,7 +888,14 @@ export function useIpcEvents(): void {
       if (renamedWasActive && renamed) {
         useAppStore.getState().setActiveWorktree(renamed.newWorktreeId)
       }
+      // Sweep expired rename-grace entries before any early return, else forced-local
+      // (or non-authoritative) events let the map grow for the session.
       const now = Date.now()
+      for (const [id, expiry] of recentlyRenamedWorktreeIdExpiry) {
+        if (expiry <= now) {
+          recentlyRenamedWorktreeIdExpiry.delete(id)
+        }
+      }
       // Why: the deletion diff below is repo-wide, but a forced-local scan overlapping
       // a runtime cannot prove remote absence (legacy runtime rows may lack hostId).
       // fetchWorktrees still purges removed local rows host-scoped; accepted gap: the
@@ -915,7 +917,8 @@ export function useIpcEvents(): void {
           continue
         }
         // A recently renamed worktree's old/new id isn't a deletion — its state moved to the new id; the list just lags.
-        if (recentlyRenamedWorktreeGrace.protects(id, now)) {
+        const graceExpiry = recentlyRenamedWorktreeIdExpiry.get(id)
+        if (graceExpiry != null && graceExpiry > now) {
           continue
         }
         removed.push(id)
@@ -2745,7 +2748,7 @@ export function useIpcEvents(): void {
       }
 
       if (state.status === 'connected') {
-        void refreshRuntimeProjectWorktrees(remoteRepos).then(async () => {
+        void Promise.all(remoteRepos.map((r) => store.fetchWorktrees(r.id))).then(async () => {
           await useAppStore.getState().fetchWorktreeLineage()
           // Why: panes that never spawned (no PTY provider at cold start) or whose deferred reattach never ran sit inert.
           // Bumping generation remounts TerminalPane so the deferred-connect gate reattaches or spawns fresh now that the provider exists.
@@ -2785,28 +2788,44 @@ export function useIpcEvents(): void {
       }
     }
 
-    const unknownSshTargetStates = new UnknownSshTargetStateCoordinator({
-      listTargets: () => window.api.ssh.listTargets(),
-      setTargetsMetadata: (targets) => useAppStore.getState().setSshTargetsMetadata(targets),
-      applyState: applySshConnectionStateChange,
-      clearRemovedTargetState: (targetId) =>
-        useAppStore.getState().clearRemovedSshTargetState(targetId)
-    })
-    unsubs.push(() => unknownSshTargetStates.dispose())
+    let sshTargetStateEventId = 0
+    const latestSshTargetStateEventByTargetId = new Map<string, number>()
 
     handleSshStateChangedEvent = (data: { targetId: string; state: unknown }): void => {
-      const state = admitSshConnectionState(data.state, data.targetId)
-      if (!state) {
-        return
-      }
       const store = useAppStore.getState()
+      const state = data.state as SshConnectionState
+      const stateEventId = ++sshTargetStateEventId
+      latestSshTargetStateEventByTargetId.set(data.targetId, stateEventId)
       if (!store.sshTargetLabels.has(data.targetId)) {
         // Why: unknown target id could be a post-boot add or a removed target racing disconnect; confirm with main first.
-        unknownSshTargetStates.enqueue(data.targetId, state)
+        window.api.ssh
+          .listTargets()
+          // Why: refresh doubles as a deletion guard; retry once so a transient IPC failure doesn't drop a real added-target event.
+          .catch(() => window.api.ssh.listTargets())
+          .then((targets) => {
+            if (latestSshTargetStateEventByTargetId.get(data.targetId) !== stateEventId) {
+              return
+            }
+            latestSshTargetStateEventByTargetId.delete(data.targetId)
+            const latestStore = useAppStore.getState()
+            if (!targets.some((target) => target.id === data.targetId)) {
+              // Why: state events can race after target removal; absence from main's target list means deletion, not a new target.
+              latestStore.clearRemovedSshTargetState(data.targetId)
+              return
+            }
+            latestStore.setSshTargetsMetadata(targets)
+            applySshConnectionStateChange(data.targetId, state)
+          })
+          .catch(() => {
+            if (latestSshTargetStateEventByTargetId.get(data.targetId) === stateEventId) {
+              latestSshTargetStateEventByTargetId.delete(data.targetId)
+              applySshConnectionStateChange(data.targetId, state)
+            }
+          })
         return
       }
 
-      unknownSshTargetStates.forget(data.targetId)
+      latestSshTargetStateEventByTargetId.delete(data.targetId)
       applySshConnectionStateChange(data.targetId, state)
     }
 
@@ -3020,7 +3039,7 @@ export function useIpcEvents(): void {
         : data.connectionId
       const transientClearWatermark =
         typeof data.connectionId === 'string'
-          ? transientClearWatermarks.get(data.connectionId)
+          ? transientClearWatermarkByConnectionId.get(data.connectionId)
           : undefined
       // Why: delayed snapshots/queued relay events must not resurrect a status cleared by a newer disconnect on this connection.
       if (transientClearWatermark !== undefined && data.receivedAt <= transientClearWatermark) {
@@ -3216,13 +3235,10 @@ export function useIpcEvents(): void {
           ) {
             return
           }
-          const effectiveWatermark = transientClearWatermarks.remember(
-            data.connectionId,
-            data.clearedAt
-          )
-          if (effectiveWatermark === null) {
-            return
-          }
+          const previousWatermark =
+            transientClearWatermarkByConnectionId.get(data.connectionId) ?? -1
+          const effectiveWatermark = Math.max(previousWatermark, data.clearedAt)
+          transientClearWatermarkByConnectionId.set(data.connectionId, effectiveWatermark)
           for (let index = pendingAgentStatusEvents.length - 1; index >= 0; index -= 1) {
             const pending = pendingAgentStatusEvents[index].data
             if (

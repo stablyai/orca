@@ -7,7 +7,6 @@ import {
   isGitHubUserAttachmentUrl,
   isGitHubUserAttachmentVideoLink
 } from './comment-markdown-github-attachment-media'
-import { validateRasterImageDataUri } from '../../../../shared/image-data-uri'
 
 export type CommentMarkdownLinkClickHandler = (
   event: React.MouseEvent<HTMLElement>,
@@ -20,9 +19,7 @@ export function isTrustedCompactImageSrc(src: string | undefined): src is string
   }
   const normalized = src.trim().toLowerCase()
   return (
-    normalized.startsWith('blob:') ||
-    (/^data:image\/(?:png|jpe?g|gif|webp);base64,/.test(normalized) &&
-      validateRasterImageDataUri(src) !== null)
+    normalized.startsWith('blob:') || /^data:image\/(?:png|jpe?g|gif|webp);base64,/.test(normalized)
   )
 }
 
@@ -259,13 +256,6 @@ export function createDocumentCommentMarkdownComponents(
       </blockquote>
     ),
     img: ({ alt, src }) => {
-      if (
-        !src ||
-        (src.trim().toLowerCase().startsWith('data:image/') &&
-          validateRasterImageDataUri(src) === null)
-      ) {
-        return alt ? <span>{alt}</span> : null
-      }
       if (isGitHubUserAttachmentUrl(src)) {
         // Why: private-repo attachment images fail as cross-origin loads; a
         // top-level link opens them in a GitHub-authenticated tab, and falls

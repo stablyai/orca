@@ -13,7 +13,6 @@ const {
   childStdinEndMock,
   resolveAuthorizedPathMock,
   fsMkdirMock,
-  fsOpendirMock,
   fsReaddirMock,
   fsRmMock,
   fsWriteFileMock,
@@ -47,7 +46,6 @@ const {
   }),
   resolveAuthorizedPathMock: vi.fn(),
   fsMkdirMock: vi.fn(),
-  fsOpendirMock: vi.fn(),
   fsReaddirMock: vi.fn(),
   fsRmMock: vi.fn(),
   fsWriteFileMock: vi.fn(),
@@ -71,7 +69,7 @@ vi.mock('node:child_process', () => ({
 
 vi.mock('node:fs/promises', () => ({
   mkdir: fsMkdirMock,
-  opendir: fsOpendirMock,
+  readdir: fsReaddirMock,
   rm: fsRmMock,
   open: fsOpenMock,
   stat: fsStatMock,
@@ -196,13 +194,6 @@ describe('registerClipboardHandlers', () => {
     resolveAuthorizedPathMock.mockImplementation(async (path: string) => path)
     fsMkdirMock.mockReset()
     fsMkdirMock.mockResolvedValue(undefined)
-    fsOpendirMock.mockReset()
-    fsOpendirMock.mockImplementation(async () => ({
-      async *[Symbol.asyncIterator]() {
-        yield* await fsReaddirMock()
-      },
-      close: vi.fn().mockResolvedValue(undefined)
-    }))
     fsReaddirMock.mockReset()
     fsReaddirMock.mockResolvedValue([])
     fsRmMock.mockReset()

@@ -3,7 +3,6 @@ import type {
   SetupScriptImportFileExists,
   SetupScriptImportFileRead
 } from './setup-script-imports'
-import { isSetupScriptImportFieldWithinLimit } from './setup-script-import-limits'
 
 const PACKAGE_JSON_PATH = 'package.json'
 type PackageManagerName = 'pnpm' | 'bun' | 'yarn' | 'npm'
@@ -82,7 +81,7 @@ function parsePackageJson(content: string | null): Record<string, unknown> | nul
 }
 
 function getPackageManagerName(value: unknown): PackageManagerName | null {
-  if (typeof value !== 'string' || !isSetupScriptImportFieldWithinLimit(value)) {
+  if (typeof value !== 'string') {
     return null
   }
   const packageManager = value.trim().toLowerCase()

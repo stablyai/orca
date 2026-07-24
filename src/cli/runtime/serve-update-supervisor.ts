@@ -1,14 +1,9 @@
 import type { ChildProcess, SpawnOptions, spawn } from 'node:child_process'
-import { rename, unlink, writeFile } from 'node:fs/promises'
+import { readFileSync } from 'node:fs'
+import { readFile, rename, unlink, writeFile } from 'node:fs/promises'
 import {
-  readNodeFileSyncWithinLimit,
-  readNodeFileWithinLimit
-} from '../../shared/node-bounded-file-reader'
-import { stringifyJsonWithinByteLimit } from '../../shared/node-bounded-json-stringify'
-import {
-  MAX_SERVE_UPDATE_HANDOFF_FILE_BYTES,
-  parseServeUpdateHandoffJson,
   parseServeSupervisorMessage,
+  parseServeUpdateHandoffState,
   type ServeUpdateHandoffState
 } from '../../shared/serve-update-handoff'
 import { RuntimeClientError } from './types'
@@ -218,11 +213,7 @@ export async function readServeUpdateHandoff(
   handoffPath: string
 ): Promise<ServeUpdateHandoffState | null> {
   try {
-    const { buffer } = await readNodeFileWithinLimit(
-      handoffPath,
-      MAX_SERVE_UPDATE_HANDOFF_FILE_BYTES
-    )
-    return parseServeUpdateHandoffJson(buffer.toString('utf8'))
+    return parseServeUpdateHandoffState(JSON.parse(await readFile(handoffPath, 'utf8')))
   } catch {
     return null
   }
@@ -230,8 +221,7 @@ export async function readServeUpdateHandoff(
 
 export function readServeUpdateHandoffSync(handoffPath: string): ServeUpdateHandoffState | null {
   try {
-    const { buffer } = readNodeFileSyncWithinLimit(handoffPath, MAX_SERVE_UPDATE_HANDOFF_FILE_BYTES)
-    return parseServeUpdateHandoffJson(buffer.toString('utf8'))
+    return parseServeUpdateHandoffState(JSON.parse(readFileSync(handoffPath, 'utf8')))
   } catch {
     return null
   }
@@ -269,12 +259,6 @@ async function writeServeUpdateHandoffState(
   state: ServeUpdateHandoffState
 ): Promise<void> {
   const temporaryPath = `${handoffPath}.${process.pid}.tmp`
-  try {
-    const { serialized } = stringifyJsonWithinByteLimit(state, MAX_SERVE_UPDATE_HANDOFF_FILE_BYTES)
-    await writeFile(temporaryPath, serialized, { mode: 0o600 })
-    await rename(temporaryPath, handoffPath)
-  } catch (error) {
-    await unlink(temporaryPath).catch(() => undefined)
-    throw error
-  }
+  await writeFile(temporaryPath, JSON.stringify(state), { mode: 0o600 })
+  await rename(temporaryPath, handoffPath)
 }

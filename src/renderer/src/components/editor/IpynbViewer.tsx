@@ -75,7 +75,6 @@ import {
   type IpynbOutputItem
 } from './ipynb-parse'
 import { translate } from '@/i18n/i18n'
-import { buildImageDataUri } from '../../../../shared/image-data-uri'
 
 type IpynbViewerProps = {
   content: string
@@ -150,7 +149,7 @@ function dataUriForImage(item: IpynbOutputItem): string | null {
   if (item.mime === 'image/svg+xml') {
     return `data:image/svg+xml;charset=utf-8,${encodeURIComponent(valueToText(item.value))}`
   }
-  return buildImageDataUri(item.mime, value)
+  return `data:${item.mime};base64,${value}`
 }
 
 function NotebookCellHeader({

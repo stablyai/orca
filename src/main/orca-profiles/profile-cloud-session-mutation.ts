@@ -1,15 +1,10 @@
-import { existsSync } from 'node:fs'
+import { existsSync, readFileSync } from 'node:fs'
 import { join } from 'node:path'
-import { readNodeFileSyncWithinLimit } from '../../shared/node-bounded-file-reader'
-import { JsonStringifyByteLimitError } from '../../shared/node-bounded-json-stringify'
-import { writeSecureJsonFileWithinLimit } from '../../shared/bounded-secure-json-file'
+import { writeSecureJsonFile } from '../../shared/secure-file'
 import type { OrcaProfileCloudSummary } from '../../shared/orca-profiles'
 import { getOrcaProfileDirectory } from './profile-storage-paths'
 
 const MUTATION_STATE_VERSION = 1
-export const MAX_CLOUD_SESSION_MUTATION_STATE_FILE_BYTES = 1024 * 1024
-export const MAX_CLOUD_SESSION_IDENTITY_KEY_BYTES = 16 * 1024
-export const MAX_CLOUD_SESSION_TOMBSTONES = 512
 
 export type CloudSessionIdentity = {
   localProfileId: string
@@ -31,11 +26,7 @@ type CloudSessionMutationState = {
 }
 
 function identityKey(identity: CloudSessionIdentity): string {
-  const key = `${identity.localProfileId}\0${identity.cloudUserId}\0${identity.cloudProfileId}\0${identity.organizationId}`
-  if (Buffer.byteLength(key, 'utf8') > MAX_CLOUD_SESSION_IDENTITY_KEY_BYTES) {
-    throw new Error('cloud_session_identity_too_large')
-  }
-  return key
+  return `${identity.localProfileId}\0${identity.cloudUserId}\0${identity.cloudProfileId}\0${identity.organizationId}`
 }
 
 function statePath(profileId: string, userDataPath: string): string {
@@ -63,12 +54,7 @@ function readState(profileId: string, userDataPath: string): CloudSessionMutatio
     return null
   }
   try {
-    const parsed: unknown = JSON.parse(
-      readNodeFileSyncWithinLimit(
-        path,
-        MAX_CLOUD_SESSION_MUTATION_STATE_FILE_BYTES
-      ).buffer.toString('utf8')
-    )
+    const parsed: unknown = JSON.parse(readFileSync(path, 'utf-8'))
     if (!isState(parsed)) {
       throw new Error('invalid_cloud_session_mutation_state')
     }
@@ -83,22 +69,7 @@ function saveState(
   userDataPath: string,
   state: CloudSessionMutationState
 ): void {
-  const tombstonedIdentityKeys = state.tombstonedIdentityKeys.slice(-MAX_CLOUD_SESSION_TOMBSTONES)
-  while (true) {
-    try {
-      writeSecureJsonFileWithinLimit(
-        statePath(profileId, userDataPath),
-        { ...state, tombstonedIdentityKeys },
-        MAX_CLOUD_SESSION_MUTATION_STATE_FILE_BYTES
-      )
-      return
-    } catch (error) {
-      if (!(error instanceof JsonStringifyByteLimitError) || tombstonedIdentityKeys.length === 0) {
-        throw error
-      }
-      tombstonedIdentityKeys.shift()
-    }
-  }
+  writeSecureJsonFile(statePath(profileId, userDataPath), state)
 }
 
 export function cloudSessionIdentity(

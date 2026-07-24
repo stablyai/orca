@@ -2,29 +2,35 @@
 // host-scoped cache lets workspace creation open from the last known list while
 // a fresh repo.list refresh happens in the background.
 
-import { MobileRpcListCache } from './mobile-rpc-list-cache'
+type CachedRepos = {
+  repos: unknown[]
+  at: number
+}
+
+const cache = new Map<string, CachedRepos>()
 
 const MAX_AGE_MS = 60_000
-export const MOBILE_REPO_CACHE_MAX_ENTRIES = 20
-export const MOBILE_REPO_CACHE_MAX_ITEMS_PER_HOST = 10_000
-export const MOBILE_REPO_CACHE_MAX_RETAINED_BYTES = 16 * 1024 * 1024
-
-const cache = new MobileRpcListCache(
-  MAX_AGE_MS,
-  MOBILE_REPO_CACHE_MAX_ENTRIES,
-  MOBILE_REPO_CACHE_MAX_ITEMS_PER_HOST,
-  MOBILE_REPO_CACHE_MAX_RETAINED_BYTES
-)
+const MAX_ENTRIES = 20
 
 export function setCachedRepos(hostId: string, repos: unknown[]): void {
-  cache.set(hostId, repos)
+  cache.delete(hostId)
+  cache.set(hostId, { repos, at: Date.now() })
+  if (cache.size > MAX_ENTRIES) {
+    const oldest = cache.keys().next().value
+    if (oldest) {
+      cache.delete(oldest)
+    }
+  }
 }
 
 export function getCachedRepos(hostId: string): unknown[] | null {
-  return cache.get(hostId)
-}
-
-/** Test-only: clear process-lifetime cache state between cases. */
-export function resetRepoCacheForTests(): void {
-  cache.clear()
+  const entry = cache.get(hostId)
+  if (!entry) {
+    return null
+  }
+  if (Date.now() - entry.at > MAX_AGE_MS) {
+    cache.delete(hostId)
+    return null
+  }
+  return entry.repos
 }

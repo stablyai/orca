@@ -7,7 +7,6 @@ import {
   readFile,
   readlink,
   symlink,
-  truncate,
   writeFile
 } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
@@ -28,7 +27,7 @@ vi.mock('node:child_process', () => ({
   execFile: execFileMock
 }))
 
-import { CLI_LAUNCHER_INSPECTION_MAX_BYTES, CliInstaller } from './cli-installer'
+import { CliInstaller } from './cli-installer'
 import { buildAppImageCliWrapper } from './appimage-cli-wrapper'
 import {
   WindowsUserPathRegistryReader,
@@ -704,48 +703,6 @@ describe('CliInstaller', () => {
       })
       await expect(installer.install()).rejects.toThrow('Refusing to replace non-Orca command')
       await expect(readFile(installPath, 'utf8')).resolves.toContain('/tmp/not-orca')
-    }
-  )
-
-  it.skipIf(process.platform === 'win32')(
-    'preserves an oversized regular launcher even when its prefix resembles an Orca launcher',
-    async () => {
-      const fixture = await makeFixture()
-      const commandDir = join(fixture.root, 'bin')
-      const installPath = join(commandDir, 'orca')
-      const resourcesPath = await createPackagedMacLauncher(fixture.root)
-      await mkdir(commandDir, { recursive: true })
-      await writeFile(
-        installPath,
-        [
-          '#!/usr/bin/env bash',
-          'ELECTRON_RUN_AS_NODE=1',
-          'ORCA_NODE_OPTIONS=x',
-          'NODE_REPL_EXTERNAL_MODULE=x',
-          `CLI='${join(fixture.root, 'out', 'cli', 'index.js')}'`,
-          ''
-        ].join('\n'),
-        'utf8'
-      )
-      await truncate(installPath, CLI_LAUNCHER_INSPECTION_MAX_BYTES + 1)
-
-      const installer = new CliInstaller({
-        platform: 'darwin',
-        isPackaged: true,
-        resourcesPath,
-        commandPathOverride: installPath,
-        processPathEnv: commandDir
-      })
-
-      await expect(installer.getStatus()).resolves.toMatchObject({
-        state: 'conflict',
-        currentTarget: null
-      })
-      await expect(installer.install()).rejects.toThrow('Refusing to replace non-Orca command')
-      await expect(lstat(installPath)).resolves.toHaveProperty(
-        'size',
-        CLI_LAUNCHER_INSPECTION_MAX_BYTES + 1
-      )
     }
   )
 

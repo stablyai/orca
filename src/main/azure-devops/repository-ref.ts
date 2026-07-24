@@ -1,9 +1,5 @@
 import { gitExecFileAsync } from '../git/runner'
 import { getSshGitProvider } from '../providers/ssh-git-dispatch'
-import {
-  buildRepositoryRefCacheKey,
-  RepositoryRefCache
-} from '../source-control/repository-ref-cache'
 
 export type AzureDevOpsRepoRef = {
   host: string
@@ -18,7 +14,8 @@ type LocalGitExecOptions = {
   wslDistro?: string
 }
 
-const repoRefCache = new RepositoryRefCache<AzureDevOpsRepoRef>()
+const REPO_REF_CACHE_MAX_ENTRIES = 512
+const repoRefCache = new Map<string, AzureDevOpsRepoRef | null>()
 
 /** @internal - exposed for tests only */
 export function _resetAzureDevOpsRepoRefCache(): void {
@@ -28,6 +25,17 @@ export function _resetAzureDevOpsRepoRefCache(): void {
 /** @internal - exposed for tests only */
 export function _getAzureDevOpsRepoRefCacheSize(): number {
   return repoRefCache.size
+}
+
+function rememberRepoRefCacheEntry(cacheKey: string, value: AzureDevOpsRepoRef | null): void {
+  repoRefCache.set(cacheKey, value)
+  while (repoRefCache.size > REPO_REF_CACHE_MAX_ENTRIES) {
+    const oldestKey = repoRefCache.keys().next().value
+    if (oldestKey === undefined) {
+      return
+    }
+    repoRefCache.delete(oldestKey)
+  }
 }
 
 function decodeSegment(value: string): string {
@@ -204,10 +212,9 @@ export async function getAzureDevOpsRepoRefForRemote(
   localGitOptions: LocalGitExecOptions = {}
 ): Promise<AzureDevOpsRepoRef | null> {
   const runtimeKey = connectionId ?? `local:${localGitOptions.wslDistro ?? 'host'}`
-  const cacheKey = buildRepositoryRefCacheKey([runtimeKey, repoPath, remoteName])
-  const cached = repoRefCache.get(cacheKey)
-  if (cached.found) {
-    return cached.value
+  const cacheKey = `${runtimeKey}\0${repoPath}\0${remoteName}`
+  if (repoRefCache.has(cacheKey)) {
+    return repoRefCache.get(cacheKey)!
   }
   try {
     const sshGitProvider = connectionId ? getSshGitProvider(connectionId) : null
@@ -221,20 +228,7 @@ export async function getAzureDevOpsRepoRefForRemote(
           ...(localGitOptions.wslDistro ? { wslDistro: localGitOptions.wslDistro } : {})
         })
     const result = parseAzureDevOpsRepoRef(stdout)
-    repoRefCache.remember(
-      cacheKey,
-      result,
-      result
-        ? [
-            result.host,
-            result.project,
-            result.repository,
-            result.apiBaseUrl,
-            result.webBaseUrl,
-            result.organization ?? ''
-          ]
-        : []
-    )
+    rememberRepoRefCacheEntry(cacheKey, result)
     return result
   } catch {
     if (connectionId) {
@@ -242,7 +236,7 @@ export async function getAzureDevOpsRepoRefForRemote(
       // caching them as "not Azure DevOps" would poison the repo for the session.
       return null
     }
-    repoRefCache.remember(cacheKey, null, [])
+    rememberRepoRefCacheEntry(cacheKey, null)
     return null
   }
 }

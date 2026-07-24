@@ -53,11 +53,6 @@ vi.mock('../ipc/pty', () => ({
   isCurrentPtyExit: vi.fn(() => true),
   answerStartupTerminalColorQueriesForPty: vi.fn((_id: string, data: string) => data)
 }))
-vi.mock('../ipc/pty-renderer-delivery-router', () => ({
-  routeExternalPtyData: vi.fn(),
-  routeExternalPtyReplay: vi.fn(),
-  routeExternalPtyExit: vi.fn()
-}))
 vi.mock('../providers/ssh-filesystem-dispatch', () => ({
   registerSshFilesystemProvider: vi.fn(),
   unregisterSshFilesystemProvider: vi.fn(),
@@ -75,7 +70,6 @@ const {
   setPtyOwnership,
   restorePtyIncarnation
 } = await import('../ipc/pty')
-const { routeExternalPtyReplay } = await import('../ipc/pty-renderer-delivery-router')
 
 const APP_PTY_ID = 'ssh:target-1@@pty-live'
 const INCARNATION_LEAF_ID = '11111111-1111-4111-8111-111111111111'
@@ -152,7 +146,7 @@ describe('SshRelaySession reconnect incarnation ordering', () => {
   })
 
   it('does not restore a PTY whose matching exit shares the attach reply batch', async () => {
-    const { mockConn, mockStore, mockPortForward, getMainWindow } = createMockDeps()
+    const { mockConn, mockStore, mockPortForward, getMainWindow, mockWindow } = createMockDeps()
     const incarnationId = 'incarnation-exited-during-attach'
     const runtime = {
       acceptPtyIncarnationForExit: vi.fn(),
@@ -192,11 +186,15 @@ describe('SshRelaySession reconnect incarnation ordering', () => {
       'pty-live',
       'terminated'
     )
-    expect(routeExternalPtyReplay).not.toHaveBeenCalled()
+    expect(
+      vi
+        .mocked(mockWindow.webContents.send)
+        .mock.calls.some(([channel]) => channel === 'pty:replay')
+    ).toBe(false)
   })
 
   it('ignores an older incarnation exit while reconnecting a reused PTY id', async () => {
-    const { mockConn, mockStore, mockPortForward, getMainWindow } = createMockDeps()
+    const { mockConn, mockStore, mockPortForward, getMainWindow, mockWindow } = createMockDeps()
     const currentIncarnationId = 'incarnation-current'
     const runtime = {
       acceptPtyIncarnationForExit: vi.fn(),
@@ -239,7 +237,7 @@ describe('SshRelaySession reconnect incarnation ordering', () => {
     expect(mockStore.persistPtyBinding).toHaveBeenCalledWith(
       expect.objectContaining({ ptyId: APP_PTY_ID, incarnationId: currentIncarnationId })
     )
-    expect(routeExternalPtyReplay).toHaveBeenCalledWith({
+    expect(mockWindow.webContents.send).toHaveBeenCalledWith('pty:replay', {
       id: APP_PTY_ID,
       data: 'live-output'
     })

@@ -24,7 +24,6 @@ import {
   writeRuntimeFile
 } from '@/runtime/runtime-file-client'
 import { translate } from '@/i18n/i18n'
-import { measureUtf8ByteLength } from '../../../../shared/utf8-byte-limits'
 
 type UseFileDeletionParams = {
   activeWorktreeId: string | null
@@ -164,7 +163,6 @@ export function useFileDeletion({
 
         if (undoContent !== undefined) {
           commitFileExplorerOp({
-            retainedBytes: measureUtf8ByteLength(undoContent).byteLength,
             undo: async () => {
               const currentRoute = operationGuard.assertCurrent()
               await writeRuntimeFile(

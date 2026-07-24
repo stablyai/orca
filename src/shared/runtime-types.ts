@@ -40,7 +40,6 @@ import type { StartupCommandDelivery } from './codex-startup-delivery'
 import type { RemoteServerUpdateSupport } from './remote-server-update'
 import type { ExecutionHostId } from './execution-host'
 import type { PtyIncarnationId } from './pty-incarnation'
-import type { RasterImageDimensions } from './raster-image-dimensions'
 
 export type { RuntimeMarkdownReadTabResult, RuntimeMarkdownSaveTabResult }
 
@@ -408,7 +407,6 @@ export type RuntimeFilePreviewResult = {
   isBinary: boolean
   isImage?: boolean
   mimeType?: string
-  imageDimensions?: RasterImageDimensions
 }
 
 export type RuntimeFileReadChunkResult = {

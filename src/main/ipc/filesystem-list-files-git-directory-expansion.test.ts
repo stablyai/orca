@@ -62,13 +62,12 @@ describe('main Quick Open git directory expansion', () => {
 
     const promise = listFilesWithGit(root, [], {})
     revParse.emit('close', 0, null)
-    await vi.waitFor(() => expect(gitSpawnMock).toHaveBeenCalledTimes(2))
+    await vi.waitFor(() => expect(gitSpawnMock).toHaveBeenCalledTimes(3))
     ;(primary.stdout as unknown as EventEmitter).emit(
       'data',
       `100644 ${SHA1} 0\tsrc/index.ts\0scratch/\0`
     )
     primary.emit('close', 0, null)
-    await vi.waitFor(() => expect(gitSpawnMock).toHaveBeenCalledTimes(3))
     ;(ignored.stdout as unknown as EventEmitter).emit('data', 'dist/\0')
     ignored.emit('close', 0, null)
 
@@ -80,7 +79,7 @@ describe('main Quick Open git directory expansion', () => {
     expect(gitSpawnMock.mock.calls[2][0]).toContain('--directory')
   })
 
-  it('cancels the active local Git pass when Quick Open abandons the request', async () => {
+  it('cancels both local Git passes when Quick Open abandons the request', async () => {
     const root = await mkdtemp(join(tmpdir(), 'orca-main-git-cancel-'))
     tempDirs.push(root)
     const revParse = createMockProcess()
@@ -94,12 +93,11 @@ describe('main Quick Open git directory expansion', () => {
     const controller = new AbortController()
     const promise = listFilesWithGit(root, [], {}, controller.signal)
     revParse.emit('close', 0, null)
-    await vi.waitFor(() => expect(gitSpawnMock).toHaveBeenCalledTimes(2))
+    await vi.waitFor(() => expect(gitSpawnMock).toHaveBeenCalledTimes(3))
     controller.abort()
 
     await expect(promise).rejects.toSatisfy(isFileListingCancellation)
     expect(primary.kill).toHaveBeenCalled()
-    expect(ignored.kill).not.toHaveBeenCalled()
-    expect(gitSpawnMock).toHaveBeenCalledTimes(2)
+    expect(ignored.kill).toHaveBeenCalled()
   })
 })

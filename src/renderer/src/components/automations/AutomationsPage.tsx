@@ -1926,8 +1926,7 @@ export default function AutomationsPage(): React.JSX.Element {
     async ({ manager, job, page, pageSize }) => {
       const fallbackRunsPage = {
         runs: job.runs.slice(page * pageSize, page * pageSize + pageSize),
-        totalCount: job.runCount,
-        totalCountSaturated: job.runCountSaturated === true
+        totalCount: job.runCount
       }
       const listExternalRuns = (
         window.api.automations as Partial<Pick<typeof window.api.automations, 'listExternalRuns'>>
@@ -1946,8 +1945,7 @@ export default function AutomationsPage(): React.JSX.Element {
         })
         return {
           runs: result.runs,
-          totalCount: result.total,
-          totalCountSaturated: result.totalSaturated === true
+          totalCount: result.total
         }
       } catch (error) {
         if (isMissingExternalRunsApiError(error)) {
@@ -2668,7 +2666,7 @@ export default function AutomationsPage(): React.JSX.Element {
                           <span className="shrink-0">·</span>
                           <span className="truncate">
                             {entry.manager.provider === 'hermes'
-                              ? `${entry.job.runCount}${entry.job.runCountSaturated ? '+' : ''} ${entry.job.runCount === 1 ? 'run' : 'runs'}`
+                              ? `${entry.job.runCount} ${entry.job.runCount === 1 ? 'run' : 'runs'}`
                               : entry.manager.canManage
                                 ? translate(
                                     'auto.components.automations.AutomationsPage.aecdc3681f',

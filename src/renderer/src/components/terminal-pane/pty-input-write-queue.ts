@@ -1,5 +1,4 @@
 import {
-  TERMINAL_INPUT_MAX_BYTES,
   isTerminalInputTooLargeWithDeferredMeasurement,
   iterateTerminalInputChunks
 } from '../../../../shared/terminal-input'
@@ -8,7 +7,6 @@ import {
 // 16KB TERMINAL_INPUT_CHUNK_MAX_BYTES cap without paying byte measurement on
 // the hot input path.
 export const TERMINAL_INPUT_COALESCE_MAX_CODE_UNITS = 4096
-export const PTY_INPUT_WRITE_QUEUE_MAX_PENDING_ITEMS = 4_096
 
 type PendingPtyInputWrite = {
   id: string
@@ -28,8 +26,6 @@ export type PtyInputWriteQueueDeps = {
   isWritable: (id: string) => boolean
   write: (id: string, data: string) => void
   yieldBetweenWrites?: () => Promise<void>
-  maxPendingItems?: number
-  maxPendingCodeUnits?: number
 }
 
 function defaultYieldBetweenWrites(): Promise<void> {
@@ -42,47 +38,28 @@ function isCoalescibleText(text: string): boolean {
 
 export function createPtyInputWriteQueue(deps: PtyInputWriteQueueDeps): PtyInputWriteQueue {
   const yieldBetweenWrites = deps.yieldBetweenWrites ?? defaultYieldBetweenWrites
-  const maxPendingItems = positiveLimit(
-    deps.maxPendingItems,
-    PTY_INPUT_WRITE_QUEUE_MAX_PENDING_ITEMS
-  )
-  const maxPendingCodeUnits = positiveLimit(deps.maxPendingCodeUnits, TERMINAL_INPUT_MAX_BYTES)
   let pending: PendingPtyInputWrite[] = []
-  let pendingCodeUnits = 0
   let drainPromise: Promise<void> | null = null
-  let clearVersion = 0
-
-  function shiftPending(): PendingPtyInputWrite | undefined {
-    const shifted = pending.shift()
-    if (shifted) {
-      pendingCodeUnits -= shifted.text.length
-    }
-    return shifted
-  }
 
   async function drain(): Promise<void> {
     while (pending.length > 0) {
       const next = pending[0]
       if (!next) {
-        shiftPending()
+        pending.shift()
         continue
       }
       if (!deps.isWritable(next.id)) {
-        shiftPending()
+        pending.shift()
         continue
       }
       if (next.tooLarge !== false) {
-        const validationVersion = clearVersion
         next.tooLarge = await Promise.resolve(next.tooLarge).catch(() => true)
-        if (validationVersion !== clearVersion) {
-          continue
-        }
         if (next.tooLarge) {
-          shiftPending()
+          pending.shift()
           continue
         }
         if (!deps.isWritable(next.id)) {
-          shiftPending()
+          pending.shift()
           continue
         }
       }
@@ -95,7 +72,7 @@ export function createPtyInputWriteQueue(deps: PtyInputWriteQueueDeps): PtyInput
       // the PTY byte stream identical while draining the backlog in one turn.
       if (next.chunks === undefined && isCoalescibleText(next.text)) {
         let payload = next.text
-        shiftPending()
+        pending.shift()
         while (pending.length > 0) {
           const peek = pending[0]
           if (
@@ -109,7 +86,7 @@ export function createPtyInputWriteQueue(deps: PtyInputWriteQueueDeps): PtyInput
             break
           }
           payload += peek.text
-          shiftPending()
+          pending.shift()
         }
         deps.write(next.id, payload)
         if (pending.length > 0) {
@@ -122,13 +99,13 @@ export function createPtyInputWriteQueue(deps: PtyInputWriteQueueDeps): PtyInput
         next.nextChunk === undefined ? next.chunks.next() : { done: false, value: next.nextChunk }
       next.nextChunk = undefined
       if (chunk.done) {
-        shiftPending()
+        pending.shift()
         continue
       }
       deps.write(next.id, chunk.value)
       const following = next.chunks.next()
       if (following.done) {
-        shiftPending()
+        pending.shift()
       } else {
         next.nextChunk = following.value
       }
@@ -157,14 +134,7 @@ export function createPtyInputWriteQueue(deps: PtyInputWriteQueueDeps): PtyInput
         if (tooLarge === true) {
           return false
         }
-        if (
-          pending.length >= maxPendingItems ||
-          pendingCodeUnits + data.length > maxPendingCodeUnits
-        ) {
-          return false
-        }
         pending.push({ id, text: data, tooLarge })
-        pendingCodeUnits += data.length
         scheduleDrain()
         return true
       } catch {
@@ -180,12 +150,6 @@ export function createPtyInputWriteQueue(deps: PtyInputWriteQueueDeps): PtyInput
 
     clear(): void {
       pending = []
-      pendingCodeUnits = 0
-      clearVersion += 1
     }
   }
-}
-
-function positiveLimit(value: number | undefined, fallback: number): number {
-  return Number.isFinite(value) && (value ?? 0) > 0 ? Math.floor(value ?? fallback) : fallback
 }

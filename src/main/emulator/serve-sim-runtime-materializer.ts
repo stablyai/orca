@@ -1,5 +1,5 @@
 import { execFileSync } from 'node:child_process'
-import { chmodSync, cpSync, existsSync, mkdirSync, opendirSync, renameSync, rmSync } from 'node:fs'
+import { chmodSync, cpSync, existsSync, mkdirSync, readdirSync, renameSync, rmSync } from 'node:fs'
 import { join } from 'node:path'
 
 export type ServeSimRuntimeMaterializerOptions = {
@@ -13,7 +13,6 @@ const EXECUTABLE_RELATIVE_PATHS = [
   join('bin', 'serve-sim-bin'),
   join('dist', 'simcam', 'serve-sim-camera-helper')
 ]
-export const SERVE_SIM_RUNTIME_MAX_PRUNE_ENTRIES = 4_096
 
 function defaultClearQuarantine(dir: string): void {
   if (process.platform !== 'darwin') {
@@ -29,44 +28,21 @@ function defaultClearQuarantine(dir: string): void {
   execFileSync('/usr/bin/xattr', ['-rd', 'com.apple.quarantine', dir], { timeout: 30_000 })
 }
 
-export function pruneStaleServeSimRuntimes(
-  targetRootDir: string,
-  keepVersion: string,
-  requestedMaxEntries = SERVE_SIM_RUNTIME_MAX_PRUNE_ENTRIES
-): void {
-  const maxEntries =
-    Number.isSafeInteger(requestedMaxEntries) && requestedMaxEntries >= 0
-      ? Math.min(requestedMaxEntries, SERVE_SIM_RUNTIME_MAX_PRUNE_ENTRIES)
-      : SERVE_SIM_RUNTIME_MAX_PRUNE_ENTRIES
-  let directory: ReturnType<typeof opendirSync>
+function pruneStaleServeSimRuntimes(targetRootDir: string, keepVersion: string): void {
+  let entries: string[]
   try {
-    directory = opendirSync(targetRootDir, { bufferSize: 32 })
+    entries = readdirSync(targetRootDir)
   } catch {
     return
   }
-
-  let scannedEntries = 0
-  try {
-    while (scannedEntries < maxEntries) {
-      const entry = directory.readSync()
-      if (entry === null) {
-        return
-      }
-      scannedEntries += 1
-      if (entry.name === keepVersion) {
-        continue
-      }
-      try {
-        rmSync(join(targetRootDir, entry.name), { recursive: true, force: true })
-      } catch {
-        // Old-version cleanup is best-effort; a locked file must not block materialization.
-      }
+  for (const entryName of entries) {
+    if (entryName === keepVersion) {
+      continue
     }
-  } finally {
     try {
-      directory.closeSync()
+      rmSync(join(targetRootDir, entryName), { recursive: true, force: true })
     } catch {
-      // A failed close cannot make already bounded cleanup unsafe.
+      // Old-version cleanup is best-effort; a locked file must not block materialization.
     }
   }
 }

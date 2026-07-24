@@ -18,10 +18,7 @@ const {
   mockPortForwardManager,
   mockPortScannerCallbacks,
   mockNextConnectionManagers,
-  mockNextPortForwardManagers,
-  routeExternalPtyDataMock,
-  routeExternalPtyReplayMock,
-  routeExternalPtyExitMock
+  mockNextPortForwardManagers
 } = vi.hoisted(() => ({
   handleMock: vi.fn(),
   powerMonitorOffMock: vi.fn(),
@@ -84,10 +81,7 @@ const {
   },
   mockPortScannerCallbacks: new Map<string, unknown>(),
   mockNextConnectionManagers: [] as unknown[],
-  mockNextPortForwardManagers: [] as unknown[],
-  routeExternalPtyDataMock: vi.fn(),
-  routeExternalPtyReplayMock: vi.fn(),
-  routeExternalPtyExitMock: vi.fn()
+  mockNextPortForwardManagers: [] as unknown[]
 }))
 
 vi.mock('electron', () => ({
@@ -173,12 +167,6 @@ vi.mock('./pty', () => ({
   isRendererPtyOutputPaused: vi.fn().mockReturnValue(false)
 }))
 
-vi.mock('./pty-renderer-delivery-router', () => ({
-  routeExternalPtyData: routeExternalPtyDataMock,
-  routeExternalPtyReplay: routeExternalPtyReplayMock,
-  routeExternalPtyExit: routeExternalPtyExitMock
-}))
-
 vi.mock('../providers/ssh-filesystem-dispatch', () => ({
   registerSshFilesystemProvider: vi.fn(),
   unregisterSshFilesystemProvider: vi.fn(),
@@ -237,11 +225,7 @@ import {
   getSshPtyProvider,
   getPtyIdsForConnection
 } from './pty'
-import {
-  MAX_TRACKED_SSH_CONNECTION_GENERATIONS,
-  assertSshMutationExpectation,
-  retainSshConnectionGeneration
-} from '../ssh/ssh-connection-generation'
+import { assertSshMutationExpectation } from '../ssh/ssh-connection-generation'
 
 describe('SSH IPC handlers', () => {
   const handlers = new Map<string, (_event: unknown, args: unknown) => unknown>()
@@ -350,9 +334,6 @@ describe('SSH IPC handlers', () => {
     mockPtyProvider.onReplay.mockReset()
     mockPtyProvider.attachForReconnect.mockReset().mockResolvedValue({})
     mockPtyProvider.shutdown.mockReset()
-    routeExternalPtyDataMock.mockReset()
-    routeExternalPtyReplayMock.mockReset()
-    routeExternalPtyExitMock.mockReset()
     mockPortForwardManager.addForward.mockReset()
     mockPortForwardManager.updateForward.mockReset()
     mockPortForwardManager.removeForward.mockReset()
@@ -498,32 +479,6 @@ describe('SSH IPC handlers', () => {
     await expect(handlers.get('ssh:connect')!(null, { targetId: 'unknown' })).rejects.toThrow(
       'SSH target "unknown" not found'
     )
-  })
-
-  it('rejects the 4,097th retained SSH target before starting connection work', async () => {
-    const target: SshTarget = {
-      id: 'ssh-overflow',
-      label: 'Overflow',
-      host: 'example.com',
-      port: 22,
-      username: 'deploy'
-    }
-    const leases = Array.from({ length: MAX_TRACKED_SSH_CONNECTION_GENERATIONS }, (_, index) =>
-      retainSshConnectionGeneration(`ssh-cap-${index}`)
-    )
-    mockSshStore.getTarget.mockReturnValue(target)
-
-    try {
-      await expect(handlers.get('ssh:connect')!(null, { targetId: target.id })).rejects.toThrow(
-        'SSH connection generation target capacity exhausted'
-      )
-      expect(mockConnectionManager.connect).not.toHaveBeenCalled()
-      expect(mockDeployAndLaunchRelay).not.toHaveBeenCalled()
-    } finally {
-      for (const lease of leases) {
-        lease.release()
-      }
-    }
   })
 
   it('ssh:connect calls connection manager', async () => {
@@ -893,7 +848,7 @@ describe('SSH IPC handlers', () => {
     }
   })
 
-  it('forwards remote PTY events through shared renderer delivery', async () => {
+  it('forwards remote PTY events into the runtime', async () => {
     const runtime = {
       onPtyData: vi.fn(),
       onPtyExit: vi.fn()
@@ -926,12 +881,13 @@ describe('SSH IPC handlers', () => {
     onData?.({ id: 'remote-pty', data: 'hello' })
     onExit?.({ id: 'remote-pty', code: 7 })
 
-    expect(routeExternalPtyDataMock).toHaveBeenCalledWith({
-      id: 'remote-pty',
-      data: 'hello'
-    })
-    expect(routeExternalPtyExitMock).toHaveBeenCalledWith({ id: 'remote-pty', code: 7 })
-    expect(runtime.onPtyData).not.toHaveBeenCalled()
+    expect(runtime.onPtyData).toHaveBeenCalledWith(
+      'remote-pty',
+      'hello',
+      expect.any(Number),
+      'hello'.length,
+      undefined
+    )
     expect(runtime.onPtyExit).toHaveBeenCalledWith('remote-pty', 7, undefined)
   })
 
@@ -1294,11 +1250,11 @@ describe('SSH IPC handlers', () => {
         connectionGeneration: 1
       }
     })
-    expect(routeExternalPtyDataMock).toHaveBeenCalledWith({
-      id: 'remote-pty',
-      data: 'hello'
-    })
-    expect(routeExternalPtyExitMock).toHaveBeenCalledWith({
+    expect(secondWindow.webContents.send).toHaveBeenCalledWith(
+      'pty:data',
+      expect.objectContaining({ id: 'remote-pty', data: 'hello' })
+    )
+    expect(secondWindow.webContents.send).toHaveBeenCalledWith('pty:exit', {
       id: 'remote-pty',
       code: 9
     })
@@ -1306,7 +1262,13 @@ describe('SSH IPC handlers', () => {
       targetId: 'ssh-1',
       ports: expect.arrayContaining([expect.objectContaining({ port: 3000 })])
     })
-    expect(secondRuntime.onPtyData).not.toHaveBeenCalled()
+    expect(secondRuntime.onPtyData).toHaveBeenCalledWith(
+      'remote-pty',
+      'hello',
+      expect.any(Number),
+      'hello'.length,
+      undefined
+    )
     expect(secondRuntime.onPtyExit).toHaveBeenCalledWith('remote-pty', 9, undefined)
     expect(firstRuntime.onPtyData).not.toHaveBeenCalled()
     expect(firstRuntime.onPtyExit).not.toHaveBeenCalled()

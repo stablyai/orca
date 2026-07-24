@@ -11,7 +11,6 @@
  * Design doc: docs/design/share-text-search.md.
  */
 import { posix, win32 } from 'node:path'
-import { assertJsonTextStructureWithinLimits } from './json-text-structure-limit'
 import { normalizeSearchResult } from './search-match-count'
 import { escapeRegex } from './string-utils'
 import type { SearchFileResult, SearchMatch, SearchOptions, SearchResult } from './types'
@@ -55,10 +54,6 @@ function joinSearchRoot(rootPath: string, relPath: string): string {
 export const MAX_MATCHES_PER_FILE = 100
 export const DEFAULT_SEARCH_MAX_RESULTS = 2000
 export const SEARCH_TIMEOUT_MS = 15_000
-export const SEARCH_JSON_STRUCTURE_LIMITS = {
-  structuralTokens: 32 * 1024,
-  nestingDepth: 16
-} as const
 
 // Why: keep search cheaper than opening a file; the editor read path has a larger cap (Monaco large-file handling).
 const SEARCH_MAX_FILE_SIZE = 5 * 1024 * 1024
@@ -250,7 +245,6 @@ export function ingestRgJsonLine(
     }
   }
   try {
-    assertJsonTextStructureWithinLimits(line, SEARCH_JSON_STRUCTURE_LIMITS)
     msg = JSON.parse(line)
   } catch {
     return 'continue'

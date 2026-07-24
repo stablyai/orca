@@ -74,12 +74,6 @@ vi.mock('../ipc/pty', () => ({
   isCurrentPtyExit: vi.fn(() => true)
 }))
 
-vi.mock('../ipc/pty-renderer-delivery-router', () => ({
-  routeExternalPtyData: vi.fn(),
-  routeExternalPtyReplay: vi.fn(),
-  routeExternalPtyExit: vi.fn()
-}))
-
 vi.mock('../providers/ssh-filesystem-dispatch', () => ({
   registerSshFilesystemProvider: vi.fn(),
   unregisterSshFilesystemProvider: vi.fn(),
@@ -92,6 +86,12 @@ vi.mock('../providers/ssh-git-dispatch', () => ({
 }))
 
 const { deployAndLaunchRelay } = await import('./ssh-relay-deploy')
+// Why: the hidden-delivery gate module is intentionally real (pure state, no
+// electron deps) so the SSH parity tests exercise the same gate main uses.
+const { markHiddenRendererPty, setRendererPtyDeliveryInterest } =
+  await import('../ipc/pty-hidden-delivery-gate')
+const { _resetHiddenRendererPtyDeliveryGateForTest } =
+  await import('../ipc/pty-hidden-delivery-gate')
 const { execCommand } = await import('./ssh-relay-deploy-helpers')
 const { getRemoteHostPlatform } = await import('./ssh-remote-platform')
 const {
@@ -106,8 +106,6 @@ const { registerSshFilesystemProvider, unregisterSshFilesystemProvider } =
   await import('../providers/ssh-filesystem-dispatch')
 const { registerSshGitProvider, unregisterSshGitProvider } =
   await import('../providers/ssh-git-dispatch')
-const { routeExternalPtyData, routeExternalPtyReplay, routeExternalPtyExit } =
-  await import('../ipc/pty-renderer-delivery-router')
 
 describe('SshRelaySession', () => {
   beforeEach(() => {
@@ -117,10 +115,80 @@ describe('SshRelaySession', () => {
     muxRequestMock.mockResolvedValue([])
     mockDeploySuccess()
     vi.mocked(getPtyIdsForConnection).mockReturnValue([])
+    _resetHiddenRendererPtyDeliveryGateForTest()
   })
 
-  it('routes SSH PTY data and its captured producer credit through bounded delivery', async () => {
-    const { mockConn, mockStore, mockPortForward, getMainWindow } = createMockDeps()
+  it('drops hidden-gated PTY data after runtime ingestion with one restore marker', async () => {
+    const { mockConn, mockStore, mockPortForward, getMainWindow, mockWindow } = createMockDeps()
+    const runtime = {
+      onPtyData: vi.fn(() => 99),
+      onPtyExit: vi.fn()
+    }
+    const session = new SshRelaySession(
+      'target-1',
+      getMainWindow,
+      mockStore,
+      mockPortForward,
+      runtime as never
+    )
+    await session.establish(mockConn)
+    const ptyProvider = vi.mocked(registerSshPtyProvider).mock.calls[0]?.[1] as unknown as {
+      onData: ReturnType<typeof vi.fn>
+    }
+    const onData = ptyProvider.onData.mock.calls[0]?.[0] as (payload: {
+      id: string
+      data: string
+    }) => void
+
+    markHiddenRendererPty('ssh-pty-1')
+    onData({ id: 'ssh-pty-1', data: 'hidden ssh output' })
+
+    // Runtime ingestion still ran; renderer delivery shrank to one marker.
+    expect(runtime.onPtyData).toHaveBeenCalledWith(
+      'ssh-pty-1',
+      'hidden ssh output',
+      expect.any(Number),
+      'hidden ssh output'.length,
+      undefined
+    )
+    expect(mockWindow.webContents.send).toHaveBeenCalledTimes(1)
+    // Why out-of-band: an in-band empty pty:data sentinel is ambiguous with
+    // chunks fully consumed by renderer OSC-9999 stripping.
+    expect(mockWindow.webContents.send).toHaveBeenCalledWith('pty:modelRestoreNeeded', {
+      id: 'ssh-pty-1',
+      reason: 'hidden-drop',
+      markerSeq: 99
+    })
+
+    onData({ id: 'ssh-pty-1', data: 'more hidden ssh output' })
+    expect(mockWindow.webContents.send).toHaveBeenCalledTimes(1)
+
+    // Delivery interest (renderer sidecars) suppresses the gate — parity with
+    // the local path in ipc/pty.ts.
+    setRendererPtyDeliveryInterest('ssh-pty-1', true)
+    onData({ id: 'ssh-pty-1', data: 'sidecar ssh bytes' })
+    expect(mockWindow.webContents.send).toHaveBeenLastCalledWith('pty:data', {
+      id: 'ssh-pty-1',
+      data: 'sidecar ssh bytes',
+      seq: 99,
+      rawLength: 'sidecar ssh bytes'.length
+    })
+
+    // Non-hidden PTYs are unaffected.
+    onData({ id: 'ssh-pty-2', data: 'visible ssh output' })
+    expect(mockWindow.webContents.send).toHaveBeenLastCalledWith('pty:data', {
+      id: 'ssh-pty-2',
+      data: 'visible ssh output',
+      seq: 99,
+      rawLength: 'visible ssh output'.length
+    })
+  })
+
+  it('keeps hidden SSH delivery when the gate kill switch is off', async () => {
+    const { mockConn, mockStore, mockPortForward, getMainWindow, mockWindow } = createMockDeps()
+    ;(mockStore as unknown as { getSettings: () => unknown }).getSettings = vi.fn(() => ({
+      terminalHiddenDeliveryGate: false
+    }))
     const session = new SshRelaySession('target-1', getMainWindow, mockStore, mockPortForward)
     await session.establish(mockConn)
     const ptyProvider = vi.mocked(registerSshPtyProvider).mock.calls[0]?.[1] as unknown as {
@@ -129,16 +197,15 @@ describe('SshRelaySession', () => {
     const onData = ptyProvider.onData.mock.calls[0]?.[0] as (payload: {
       id: string
       data: string
-      upstreamCredit?: { charCount: number; acknowledge(chars: number): void }
     }) => void
-    const upstreamCredit = { charCount: 16, acknowledge: vi.fn() }
 
-    onData({ id: 'ssh-pty-1', data: 'remote PTY bytes', upstreamCredit })
+    markHiddenRendererPty('ssh-pty-1')
+    onData({ id: 'ssh-pty-1', data: 'still delivered' })
 
-    expect(routeExternalPtyData).toHaveBeenCalledWith({
+    expect(mockWindow.webContents.send).toHaveBeenCalledWith('pty:data', {
       id: 'ssh-pty-1',
-      data: 'remote PTY bytes',
-      upstreamCredit
+      data: 'still delivered',
+      rawLength: 'still delivered'.length
     })
   })
 
@@ -412,7 +479,7 @@ describe('SshRelaySession', () => {
   })
 
   it('forwards reconnect replay after the attach attempt is still current', async () => {
-    const { mockConn, mockStore, mockPortForward, getMainWindow } = createMockDeps()
+    const { mockConn, mockStore, mockPortForward, getMainWindow, mockWindow } = createMockDeps()
     const session = new SshRelaySession('target-1', getMainWindow, mockStore, mockPortForward)
     await session.establish(mockConn)
     vi.clearAllMocks()
@@ -428,14 +495,14 @@ describe('SshRelaySession', () => {
 
     await session.reconnect(mockConn)
 
-    expect(routeExternalPtyReplay).toHaveBeenCalledWith({
+    expect(mockWindow.webContents.send).toHaveBeenCalledWith('pty:replay', {
       id: 'ssh:target-1@@pty-1',
       data: 'restored-output'
     })
   })
 
   it('drops identical reconnect replay payloads inside one reconnect burst', async () => {
-    const { mockConn, mockStore, mockPortForward, getMainWindow } = createMockDeps()
+    const { mockConn, mockStore, mockPortForward, getMainWindow, mockWindow } = createMockDeps()
     const session = new SshRelaySession('target-1', getMainWindow, mockStore, mockPortForward)
     await session.establish(mockConn)
     vi.clearAllMocks()
@@ -452,8 +519,11 @@ describe('SshRelaySession', () => {
     await session.reconnect(mockConn)
     await session.reconnect(mockConn)
 
+    const replaySends = vi
+      .mocked(mockWindow.webContents.send)
+      .mock.calls.filter(([channel]) => channel === 'pty:replay')
     expect(mockAttach).toHaveBeenCalledTimes(2)
-    expect(routeExternalPtyReplay).toHaveBeenCalledTimes(1)
+    expect(replaySends).toHaveLength(1)
   })
 
   it('establish re-attaches owned PTYs after explicit disconnect', async () => {
@@ -542,7 +612,7 @@ describe('SshRelaySession', () => {
   })
 
   it('does not expire a live reused relay id when attach rejects identity mismatch', async () => {
-    const { mockConn, mockStore, mockPortForward, getMainWindow } = createMockDeps()
+    const { mockConn, mockStore, mockPortForward, getMainWindow, mockWindow } = createMockDeps()
     const session = new SshRelaySession('target-1', getMainWindow, mockStore, mockPortForward)
     await session.establish(mockConn)
     vi.clearAllMocks()
@@ -577,7 +647,7 @@ describe('SshRelaySession', () => {
     expect(clearProviderPtyState).not.toHaveBeenCalledWith('ssh:target-1@@pty-1')
     expect(deletePtyOwnership).not.toHaveBeenCalledWith('ssh:target-1@@pty-1')
     expect(mockStore.markSshRemotePtyLease).not.toHaveBeenCalledWith('target-1', 'pty-1', 'expired')
-    expect(routeExternalPtyExit).not.toHaveBeenCalledWith({
+    expect(mockWindow.webContents.send).not.toHaveBeenCalledWith('pty:exit', {
       id: 'ssh:target-1@@pty-1',
       code: -1
     })
@@ -648,7 +718,7 @@ describe('SshRelaySession', () => {
   })
 
   it('invalidates and broadcasts remote PTYs that cannot reattach after relay reconnect', async () => {
-    const { mockConn, mockStore, mockPortForward, getMainWindow } = createMockDeps()
+    const { mockConn, mockStore, mockPortForward, getMainWindow, mockWindow } = createMockDeps()
     const session = new SshRelaySession('target-1', getMainWindow, mockStore, mockPortForward)
     await session.establish(mockConn)
     vi.clearAllMocks()
@@ -671,7 +741,7 @@ describe('SshRelaySession', () => {
     expect(mockAttach).toHaveBeenCalledWith('pty-live')
     expect(clearProviderPtyState).toHaveBeenCalledWith('ssh:target-1@@pty-stale')
     expect(deletePtyOwnership).toHaveBeenCalledWith('ssh:target-1@@pty-stale')
-    expect(routeExternalPtyExit).toHaveBeenCalledWith({
+    expect(mockWindow.webContents.send).toHaveBeenCalledWith('pty:exit', {
       id: 'ssh:target-1@@pty-stale',
       code: -1
     })

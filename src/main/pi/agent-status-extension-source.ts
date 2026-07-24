@@ -11,7 +11,6 @@
 // keep the source body in plain JS without TS types and avoid pulling pi or
 // any Orca dep into the pi runtime.
 import type { PiAgentKind } from '../../shared/pi-agent-kind'
-import { getGeneratedNodeBoundedFileReaderSourceLines } from '../generated-node-bounded-file-reader'
 import { getPiAgentStatusHandlerSourceLines } from './agent-status-handler-source'
 
 export const ORCA_PI_AGENT_STATUS_EXTENSION_FILE = 'orca-agent-status.ts'
@@ -66,7 +65,6 @@ export function getPiAgentStatusExtensionSource(kind: PiAgentKind = 'pi'): strin
     '// critical path, and the latest-only pending slot prevents a stalled',
     '// Orca receiver from building an unbounded queue of obsolete snapshots.',
     'const HOOK_POST_TIMEOUT_MS = 1000',
-    ...getGeneratedNodeBoundedFileReaderSourceLines({ typed: true }),
     'let activePost = false',
     'let pendingPost: { hookEventName: string; extra: Record<string, unknown> } | null = null',
     ...sessionMetadataSourceLines,
@@ -88,7 +86,7 @@ export function getPiAgentStatusExtensionSource(kind: PiAgentKind = 'pi'): strin
     '      if (cacheKey === cachedEndpointKey && cachedEndpointValues) {',
     '        return cachedEndpointValues',
     '      }',
-    '      const contents = readOrcaManagedFileWithinLimit(fs, path)',
+    "      const contents: string = fs.readFileSync(path, 'utf8')",
     '      const out: Record<string, string> = {}',
     '      for (const line of contents.split(/\\r?\\n/)) {',
     '        // Why: parse `KEY=VALUE` (POSIX endpoint.env) and `set KEY=VALUE`',
@@ -234,7 +232,7 @@ export function getPiAgentStatusExtensionSource(kind: PiAgentKind = 'pi'): strin
     "    const fs = require('fs')",
     "    for (const path of ['/proc/sys/kernel/osrelease', '/proc/version']) {",
     '      try {',
-    '        const contents = readOrcaManagedFileWithinLimit(fs, path)',
+    "        const contents = String(fs.readFileSync(path, 'utf8'))",
     '        if (/microsoft|wsl/i.test(contents)) return true',
     '      } catch {',
     '        // Why: probe the next runtime hint when a proc file is absent or unreadable.',

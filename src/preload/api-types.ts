@@ -33,7 +33,6 @@ import type {
 import type { MobileRelayStatus } from '../shared/mobile-relay-status'
 import type { MobilePairingConnectionMode } from '../shared/mobile-pairing-connection-mode'
 import type { SshMutationExpectation } from '../shared/ssh-types'
-import type { RasterImageDimensions } from '../shared/raster-image-dimensions'
 import type {
   CreateLocalOrcaProfileArgs,
   CreateLocalOrcaProfileResult,
@@ -2482,7 +2481,6 @@ export type PreloadApi = {
       isBinary: boolean
       isImage?: boolean
       mimeType?: string
-      imageDimensions?: RasterImageDimensions
       fileIdentity?: string
     }>
     readLocalLogTail: (args: LocalLogTailReadArgs) => Promise<LocalLogTailReadResult>

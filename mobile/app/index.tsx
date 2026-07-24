@@ -27,10 +27,6 @@ import AsyncStorage from '@react-native-async-storage/async-storage'
 import { loadHosts } from '../src/transport/host-store'
 import { removeHostAndCloseClient } from '../src/transport/host-removal-lifecycle'
 import { pickResumeWorktree } from '../src/worktree/resume-worktree'
-import {
-  LAST_VISITED_WORKTREE_STORAGE_KEY,
-  readLastVisitedWorktreeRecord
-} from '../src/worktree/last-visited-worktree-repo'
 import type { RpcClient } from '../src/transport/rpc-client'
 import { sendSingleFlightRequest } from '../src/transport/request-single-flight'
 import {
@@ -398,14 +394,13 @@ export default function HomeScreen() {
           router.replace(mobileOnboardingDestination(onboardingSteps))
         }
       })
-      void AsyncStorage.getItem(LAST_VISITED_WORKTREE_STORAGE_KEY).then((raw) => {
+      void AsyncStorage.getItem('orca:last-visited-worktree').then((raw) => {
         if (stale || !raw) {
           return
         }
-        const record = readLastVisitedWorktreeRecord(raw)
-        if (record) {
-          setLastVisited(record)
-        }
+        try {
+          setLastVisited(JSON.parse(raw))
+        } catch {}
       })
       for (const entry of allClientsRef.current) {
         if (entry.client.getState() === 'connected') {
