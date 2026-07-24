@@ -797,6 +797,17 @@ export function createIpcPtyTransport(opts: IpcPtyTransportOptions = {}): PtyTra
         return spawnResult.id
       } catch (err) {
         const msg = extractIpcErrorMessage(err, err instanceof Error ? err.message : String(err))
+        if (msg.startsWith('terminal_lost_worker_archived')) {
+          return options.sessionId
+            ? ({ id: options.sessionId, exitedBeforeAttach: true } satisfies PtyConnectResult)
+            : undefined
+        }
+        if (msg.startsWith('terminal_lost_worker_archive_pending')) {
+          storedCallbacks.onError?.('Terminal recovery is pending archive. Try again shortly.')
+          return options.sessionId
+            ? ({ id: options.sessionId, exitedBeforeAttach: true } satisfies PtyConnectResult)
+            : undefined
+        }
         if (
           connectionId &&
           options.sessionId &&

@@ -3,6 +3,18 @@ import type { TuiAgent } from '../../shared/types'
 import type { AgentSessionClaimedSpawnResult } from '../../shared/agent-session-host-authority'
 import type { PtyIncarnationId } from '../../shared/pty-incarnation'
 
+export type PtyLostWorkerRecovery =
+  | { kind: 'archived'; archiveId: string }
+  | {
+      kind: 'retryable-error'
+      code:
+        | 'not-owned'
+        | 'stale-source'
+        | 'capture-unavailable'
+        | 'contract-invalid'
+        | 'durability-failed'
+    }
+
 export type PtySpawnResult = {
   agentSessionEnsure?: AgentSessionClaimedSpawnResult
   /** App-facing PTY id. Remote providers must return globally routable ids,
@@ -63,4 +75,7 @@ export type PtySpawnResult = {
     rows?: number
     oscLinks?: TerminalOscLinkRange[]
   }
+  /** A daemon found crash history before createOrAttach, so main decided the
+   * archive outcome without creating a replacement PTY. */
+  lostWorkerRecovery?: PtyLostWorkerRecovery
 }

@@ -29,9 +29,11 @@ import {
 } from '@/lib/pane-manager/terminal-delivery-credit'
 import { serializeWithAbsoluteCursor } from '../../../../shared/terminal-serialize-absolute-cursor'
 import { isTerminalQueryReply } from '../../../../shared/terminal-query-reply'
+import type { TerminalLostWorkerRendererReceipt } from '../../../../shared/terminal-archive-types'
 import type { PtyBufferSnapshot, PtyConnectResult } from './pty-transport'
 import type { PtyTransportRecoveryState } from './pty-transport-types'
 import { createIpcPtyTransport } from './pty-transport'
+import { handleLostTerminalCandidate } from '../terminal/terminal-archive-close'
 import { createRemoteRuntimePtyTransport } from './remote-runtime-pty-transport'
 import { toAgentLaunchPreferences } from '@/runtime/agent-session-create-operation'
 import { createUnresolvedOwnerPtyTransport } from './unresolved-owner-pty-transport'
@@ -4619,6 +4621,41 @@ export function connectPanePty(
     // Why: the hibernation wake fires from noteVisibilityResume in the outer
     // connection scope, long after this deferred-connect closure has run.
     wakeHibernatedAgentPane = () => startFreshColdRestoreAgentResume()
+    const handleAutomaticLostWorkerRecovery = async (
+      fallback: () => void,
+      options: { hibernating?: boolean } = {}
+    ): Promise<void> => {
+      if (options.hibernating) {
+        fallback()
+        return
+      }
+      let receipt: TerminalLostWorkerRendererReceipt
+      try {
+        receipt = await handleLostTerminalCandidate({
+          tabId: deps.tabId,
+          worktreeId: deps.worktreeId,
+          leafId: deps.restoredLeafId ?? pane.leafId,
+          reason: connectionId ? 'relay-worker-lost' : 'daemon-worker-lost'
+        })
+      } catch {
+        fallback()
+        return
+      }
+      if (receipt.kind === 'ordinary-shell') {
+        fallback()
+        return
+      }
+      if (receipt.kind === 'archived') {
+        useAppStore.getState().closeTab(deps.tabId, {
+          reason: 'cleanup',
+          captureRecentlyClosed: false,
+          localPtyTeardownOwnedExternally: true,
+          runtimePtyTeardownOwnedExternally: true
+        })
+        return
+      }
+      reportError(`Terminal recovery is pending archive (${receipt.code}).`)
+    }
     const isStartupPasteTargetCurrent = (ptyId: string | null): boolean =>
       !disposed &&
       deps.paneTransportsRef.current.get(pane.id) === transport &&
@@ -7230,17 +7267,20 @@ export function connectPanePty(
           ptyId: staleSessionId ?? null
         })
         // Why: a stale restored session can fail reattach after mount; don't leave xterm alive without a backing PTY.
-        if (staleSessionId) {
-          deps.clearExitedPanePtyLayoutBinding(pane.id, staleSessionId)
-        } else {
-          deps.syncPanePtyLayoutBinding(pane.id, null)
-        }
-        if (staleSessionId) {
-          deps.clearTabPtyId(deps.tabId, staleSessionId)
-        }
-        startFreshColdRestoreAgentResume(coldRestoreStartup, {
-          forceBlankRestoredViewport: true
-        })
+        await handleAutomaticLostWorkerRecovery(
+          () => {
+            if (staleSessionId) {
+              deps.clearExitedPanePtyLayoutBinding(pane.id, staleSessionId)
+              deps.clearTabPtyId(deps.tabId, staleSessionId)
+            } else {
+              deps.syncPanePtyLayoutBinding(pane.id, null)
+            }
+            startFreshColdRestoreAgentResume(coldRestoreStartup, {
+              forceBlankRestoredViewport: true
+            })
+          },
+          { hibernating: coldRestoreStartup?.hasSleepingRecord === true }
+        )
         return false
       }
       registerEffectiveLaunchConfig(connectResult?.launchConfig, {
@@ -7252,18 +7292,21 @@ export function connectPanePty(
             : {})
       })
       if (connectResult?.sessionExpired) {
-        if (staleSessionId) {
-          deps.clearExitedPanePtyLayoutBinding(pane.id, staleSessionId)
-        } else {
-          deps.syncPanePtyLayoutBinding(pane.id, null)
-        }
-        if (staleSessionId) {
-          deps.clearTabPtyId(deps.tabId, staleSessionId)
-        }
-        // Why: SSH sleep/reconnect can invalidate the relay PTY while the tab stays mounted; replace the dead lease in-place, not a stale overlay.
-        startFreshColdRestoreAgentResume(coldRestoreStartup, {
-          forceBlankRestoredViewport: true
-        })
+        await handleAutomaticLostWorkerRecovery(
+          () => {
+            if (staleSessionId) {
+              deps.clearExitedPanePtyLayoutBinding(pane.id, staleSessionId)
+              deps.clearTabPtyId(deps.tabId, staleSessionId)
+            } else {
+              deps.syncPanePtyLayoutBinding(pane.id, null)
+            }
+            // Why: SSH sleep/reconnect can invalidate the relay PTY while the tab stays mounted; replace the dead lease in-place, not a stale overlay.
+            startFreshColdRestoreAgentResume(coldRestoreStartup, {
+              forceBlankRestoredViewport: true
+            })
+          },
+          { hibernating: coldRestoreStartup?.hasSleepingRecord === true }
+        )
         return false
       }
       const isCurrentReattachPayload = (): boolean => {
@@ -7704,11 +7747,16 @@ export function connectPanePty(
                   if (disposed) {
                     return
                   }
-                  deps.clearExitedPanePtyLayoutBinding(pane.id, pendingSessionId)
-                  deps.clearTabPtyId(deps.tabId, pendingSessionId)
-                  startFreshColdRestoreAgentResume(coldRestoreStartup, {
-                    forceBlankRestoredViewport: true
-                  })
+                  await handleAutomaticLostWorkerRecovery(
+                    () => {
+                      deps.clearExitedPanePtyLayoutBinding(pane.id, pendingSessionId)
+                      deps.clearTabPtyId(deps.tabId, pendingSessionId)
+                      startFreshColdRestoreAgentResume(coldRestoreStartup, {
+                        forceBlankRestoredViewport: true
+                      })
+                    },
+                    { hibernating: coldRestoreStartup?.hasSleepingRecord === true }
+                  )
                   return
                 }
                 const accepted = await handleReattachResult(
@@ -7745,17 +7793,18 @@ export function connectPanePty(
                 if (disposed || outputCallbacks.generation !== transportStreamGeneration) {
                   return
                 }
-                if (isSshSessionExpiredError(err)) {
-                  deps.clearExitedPanePtyLayoutBinding(pane.id, pendingSessionId)
-                  deps.clearTabPtyId(deps.tabId, pendingSessionId)
-                  startFreshColdRestoreAgentResume(coldRestoreStartup, {
-                    forceBlankRestoredViewport: true
-                  })
-                  return
-                }
-                startFreshColdRestoreAgentResume(coldRestoreStartup, {
-                  forceBlankRestoredViewport: true
-                })
+                await handleAutomaticLostWorkerRecovery(
+                  () => {
+                    if (isSshSessionExpiredError(err)) {
+                      deps.clearExitedPanePtyLayoutBinding(pane.id, pendingSessionId)
+                      deps.clearTabPtyId(deps.tabId, pendingSessionId)
+                    }
+                    startFreshColdRestoreAgentResume(coldRestoreStartup, {
+                      forceBlankRestoredViewport: true
+                    })
+                  },
+                  { hibernating: coldRestoreStartup?.hasSleepingRecord === true }
+                )
               })
           } else {
             startFreshColdRestoreAgentResume()
@@ -7771,9 +7820,11 @@ export function connectPanePty(
         ? (deps.restoredPtyIdByLeafId[deps.restoredLeafId] ?? null)
         : null
     const storeSnapshot = useAppStore.getState()
-    const existingPtyId = storeSnapshot.tabsByWorktree[deps.worktreeId]?.find(
+    const currentTab = storeSnapshot.tabsByWorktree[deps.worktreeId]?.find(
       (t) => t.id === deps.tabId
-    )?.ptyId
+    )
+    const existingPtyId = currentTab?.ptyId
+    const pendingActivationSpawn = Boolean(currentTab?.pendingActivationSpawn)
     const hasSleepingAgentSession = Boolean(getSleepingRecordForPane(storeSnapshot))
 
     // Why: the tab-level fallback must not steal a PTY a setup sibling already published while the main pane waited for split geometry.
@@ -7915,11 +7966,16 @@ export function connectPanePty(
             if (disposed) {
               return
             }
-            deps.clearExitedPanePtyLayoutBinding(pane.id, deferredReattachSessionId)
-            deps.clearTabPtyId(deps.tabId, deferredReattachSessionId)
-            startFreshColdRestoreAgentResume(coldRestoreStartup, {
-              forceBlankRestoredViewport: true
-            })
+            await handleAutomaticLostWorkerRecovery(
+              () => {
+                deps.clearExitedPanePtyLayoutBinding(pane.id, deferredReattachSessionId)
+                deps.clearTabPtyId(deps.tabId, deferredReattachSessionId)
+                startFreshColdRestoreAgentResume(coldRestoreStartup, {
+                  forceBlankRestoredViewport: true
+                })
+              },
+              { hibernating: coldRestoreStartup?.hasSleepingRecord === true }
+            )
             return
           }
           const accepted = await handleReattachResult(
@@ -7964,18 +8020,17 @@ export function connectPanePty(
             ptyId: deferredReattachSessionId,
             reason: message
           })
-          deps.clearExitedPanePtyLayoutBinding(pane.id, deferredReattachSessionId)
-          deps.clearTabPtyId(deps.tabId, deferredReattachSessionId)
-          if (connectionId && isSshSessionExpiredError(err)) {
-            startFreshColdRestoreAgentResume(coldRestoreStartup, {
-              forceBlankRestoredViewport: true
-            })
-            return
-          }
-          reportError(message)
-          startFreshColdRestoreAgentResume(coldRestoreStartup, {
-            forceBlankRestoredViewport: true
-          })
+          await handleAutomaticLostWorkerRecovery(
+            () => {
+              deps.clearExitedPanePtyLayoutBinding(pane.id, deferredReattachSessionId)
+              deps.clearTabPtyId(deps.tabId, deferredReattachSessionId)
+              reportError(message)
+              startFreshColdRestoreAgentResume(coldRestoreStartup, {
+                forceBlankRestoredViewport: true
+              })
+            },
+            { hibernating: coldRestoreStartup?.hasSleepingRecord === true }
+          )
         })
     } else if (detachedRemoteLeafPtyId || detachedLivePtyId || eagerLivePtyId) {
       // Why: mirrored web-leaf panes must attach to their exact remote PTY, not spawn a replacement host tab.
@@ -8005,8 +8060,10 @@ export function connectPanePty(
         }
       } catch (err) {
         reportError(err instanceof Error ? err.message : String(err))
-        deps.clearTabPtyId(deps.tabId, attachPtyId)
-        startFreshSpawn()
+        void handleAutomaticLostWorkerRecovery(() => {
+          deps.clearTabPtyId(deps.tabId, attachPtyId)
+          startFreshSpawn()
+        })
       }
     } else {
       allowInitialIdleCacheSeed = false
@@ -8059,6 +8116,8 @@ export function connectPanePty(
         recordPtyConnectDiagnostic(`pane=${pane.id} -> FRESH SPAWN`)
         if (sleptRemoteColdRestoreStartup || hasSleepingAgentSession) {
           startFreshColdRestoreAgentResume(sleptRemoteColdRestoreStartup ?? undefined)
+        } else if (pendingActivationSpawn) {
+          void handleAutomaticLostWorkerRecovery(() => startFreshSpawn())
         } else {
           startFreshSpawn()
         }

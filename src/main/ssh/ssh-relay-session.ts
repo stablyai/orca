@@ -68,6 +68,15 @@ import { runRemoteOrcaCli } from './ssh-remote-orca-cli'
 import { toSshExecutionHostId, type ExecutionHostId } from '../../shared/execution-host'
 import { isTerminalLeafId, makePaneKey } from '../../shared/stable-pane-id'
 import { isValidTerminalTabId } from '../../shared/terminal-tab-id'
+import { classifyLostTerminal } from '../../shared/terminal-lost-worker-policy'
+import {
+  captureTerminalArchiveTab,
+  type TerminalArchivePaneSnapshotCapture
+} from '../../shared/workspace-session-terminal-archive'
+import type { ArchivedTerminalPane } from '../../shared/terminal-archive-types'
+import { getUtf8ByteLength } from '../../shared/utf8-byte-limits'
+import { archiveLostTerminalWorker } from '../terminal-lost-worker-archive'
+import type { RelayPtyLostEntry } from '../../shared/pty-revive-protocol'
 
 export type RelaySessionState = 'idle' | 'deploying' | 'ready' | 'reconnecting' | 'disposed'
 
@@ -151,6 +160,7 @@ export class SshRelaySession {
   private remoteCliBridgeEnv: RemoteCliBridgeEnv | null = null
   private forwardedReattachReplayByPty = new Map<string, ForwardedReplayFingerprint>()
   private pendingPtyReattaches = new Map<string, PendingPtyReattach>()
+  private pendingPtyReviveState: string | null = null
 
   constructor(
     readonly targetId: string,
@@ -345,6 +355,7 @@ export class SshRelaySession {
     this.stopPortScanning()
     await this.portForwardManager.removeAllForwards(this.targetId)
     this.broadcastEmptyLists()
+    await this.stagePtyReviveBeforeProviderTeardown()
     this.teardownProviders('connection_lost')
 
     try {
@@ -399,6 +410,8 @@ export class SshRelaySession {
       if (mux.isDisposed()) {
         throw new Error('Relay connection lost during provider registration')
       }
+
+      await this.reviveStagedPtysAfterProviderRegistration()
 
       // Why: dispose() during registration/attach already cleaned up, but this.mux was reassigned above — clean up the new mux so it doesn't leak.
       if (!ownsAttempt()) {
@@ -971,6 +984,122 @@ export class SshRelaySession {
       return
     }
     routeExternalPtyReplay({ id: appPtyId, data })
+  }
+
+  private async stagePtyReviveBeforeProviderTeardown(): Promise<void> {
+    const provider = getSshPtyProvider(this.targetId) as SshPtyProvider | undefined
+    const ptyIds = getPtyIdsForConnection(this.targetId).map((ptyId) =>
+      toRelaySshPtyId(this.targetId, ptyId)
+    )
+    if (!provider || ptyIds.length === 0) {
+      return
+    }
+    try {
+      this.pendingPtyReviveState = await provider.serialize(ptyIds, { formatVersion: 2 })
+    } catch {
+      // The old relay may already be gone; leases and persisted hints remain the only honest fallback.
+      this.pendingPtyReviveState = null
+    }
+  }
+
+  private async reviveStagedPtysAfterProviderRegistration(): Promise<void> {
+    const state = this.pendingPtyReviveState
+    this.pendingPtyReviveState = null
+    if (!state) {
+      return
+    }
+    const provider = getSshPtyProvider(this.targetId) as SshPtyProvider | undefined
+    if (!provider) {
+      return
+    }
+    try {
+      const revived = await provider.revive(state, { formatVersion: 2 })
+      if (revived.mode !== 'typed') {
+        return
+      }
+      for (const lost of revived.outcome.lost) {
+        await this.archiveRelayLostWorker(lost)
+      }
+    } catch {
+      // A malformed capable response is fail-closed in the provider adapter; never retry revive here.
+    }
+  }
+
+  private async archiveRelayLostWorker(lost: RelayPtyLostEntry): Promise<void> {
+    const worktreeId = lost.worktreeId
+    const tabId = lost.tabId
+    const paneKey = lost.paneKey
+    if (!worktreeId || !tabId || !paneKey) {
+      return
+    }
+    const executionHostId = toSshExecutionHostId(this.targetId)
+    const session = this.store.getWorkspaceSession(executionHostId)
+    const hint = session.terminalArchiveHintsByPaneKey?.[paneKey]
+    if (lost.kind !== 'recognized-worker' && classifyLostTerminal(hint).kind !== 'worker') {
+      return
+    }
+    const captured = captureTerminalArchiveTab({ session, worktreeId, tabId })
+    if (!captured) {
+      return
+    }
+    const snapshotSource = {
+      capture: async (pane: ArchivedTerminalPane): Promise<TerminalArchivePaneSnapshotCapture> => {
+        const leafId = pane.archivedLeafId
+        const layout = session.terminalLayoutsByTabId[tabId]
+        const sidecar =
+          layout?.buffersByLeafId?.[leafId] ??
+          (layout?.scrollbackRefsByLeafId?.[leafId]
+            ? this.store.readTerminalScrollbackSnapshot(layout.scrollbackRefsByLeafId[leafId])
+            : null)
+        if (typeof sidecar === 'string') {
+          return sidecar.length === 0
+            ? { kind: 'captured-empty' }
+            : {
+                kind: 'captured-bytes',
+                buffer: sidecar,
+                source: 'session-sidecar',
+                truncated: false,
+                byteLength: getUtf8ByteLength(sidecar)
+              }
+        }
+        if (makePaneKey(tabId, leafId) !== paneKey || !lost.replayTail) {
+          return { kind: 'unavailable' }
+        }
+        return lost.replayTail.data.length === 0
+          ? { kind: 'captured-empty' }
+          : {
+              kind: 'captured-bytes',
+              buffer: lost.replayTail.data,
+              source: 'relay-tail',
+              truncated: lost.replayTail.truncated,
+              byteLength: lost.replayTail.byteLength
+            }
+      }
+    }
+    const result = await archiveLostTerminalWorker({
+      owner: this.store,
+      candidate: {
+        reason: 'relay-worker-lost',
+        executionHostId,
+        worktreeId,
+        tabId,
+        expectedSourcePaneIdentityByLeafId: captured.sourcePaneIdentityByLeafId,
+        relayEvidence: lost
+      },
+      frozenSession: session,
+      snapshotSource
+    })
+    if (result.kind !== 'archived') {
+      return
+    }
+    this.store.markSshRemotePtyLease(
+      this.targetId,
+      toRelaySshPtyId(this.targetId, lost.id),
+      'expired'
+    )
+    for (const ptyId of result.ptyIdsToKill) {
+      routeExternalPtyExit({ id: ptyId, code: -1 })
+    }
   }
 
   private async reattachKnownPtys(shouldContinue: () => boolean): Promise<void> {

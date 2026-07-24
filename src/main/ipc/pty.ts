@@ -21,12 +21,16 @@ import {
 } from '../../shared/workspace-session-terminal-archive'
 import type {
   ArchivedTerminalPane,
-  TerminalArchiveRendererCloseRequest
+  TerminalArchiveRendererCloseRequest,
+  TerminalLostWorkerRendererReceipt,
+  TerminalLostWorkerRendererRequest
 } from '../../shared/terminal-archive-types'
 import { getUtf8ByteLength } from '../../shared/utf8-byte-limits'
+import { classifyLostTerminal } from '../../shared/terminal-lost-worker-policy'
+import { archiveLostTerminalWorker } from '../terminal-lost-worker-archive'
 import { workspaceSessionStateSchema } from '../../shared/workspace-session-schema'
 import { makeTerminalArchiveSourcePaneSignature } from '../terminal-archive-source-pane-signature'
-import { toSshExecutionHostId } from '../../shared/execution-host'
+import { LOCAL_EXECUTION_HOST_ID, toSshExecutionHostId } from '../../shared/execution-host'
 import { normalizeRuntimePathForComparison } from '../../shared/cross-platform-path'
 import { terminalOutputBacklogCapChars } from '../../shared/terminal-scrollback-policy'
 import type {
@@ -75,6 +79,8 @@ import type {
   PtySpawnOptions,
   PtySpawnResult
 } from '../providers/types'
+import type { PtyLostWorkerRecovery } from '../providers/pty-spawn-result'
+import type { PtySpawnOptionsWithLostWorker } from '../providers/pty-lost-worker-recovery'
 import { inspectPtyProviderProcess } from '../providers/pty-process-inspection'
 import {
   PtyProcessListAdmission,
@@ -1648,6 +1654,7 @@ export function registerPtyHandlers(
   ipcMain.removeHandler('pty:spawn')
   ipcMain.removeHandler('pty:kill')
   ipcMain.removeHandler('pty:archiveTerminalTab')
+  ipcMain.removeHandler('pty:handleLostTerminalCandidate')
   ipcMain.removeHandler('pty:listSessions')
   ipcMain.removeHandler('pty:hasPty')
   ipcMain.removeHandler('pty:hasChildProcesses')
@@ -1685,6 +1692,7 @@ export function registerPtyHandlers(
           capture: async (pane) => archiveSnapshotsByPane.get(pane) ?? { kind: 'unavailable' }
         })
       : null
+  const lostWorkerArchiveInFlight = new Map<string, Promise<TerminalLostWorkerRendererReceipt>>()
 
   ipcMain.handle(
     'pty:archiveTerminalTab',
@@ -1826,6 +1834,265 @@ export function registerPtyHandlers(
       return { archiveId: archive.id }
     }
   )
+
+  ipcMain.handle(
+    'pty:handleLostTerminalCandidate',
+    async (_event, raw: unknown): Promise<TerminalLostWorkerRendererReceipt> => {
+      if (!store || !raw || typeof raw !== 'object') {
+        return { kind: 'retryable-error', code: 'contract-invalid' }
+      }
+      const request = raw as Partial<TerminalLostWorkerRendererRequest>
+      if (
+        typeof request.worktreeId !== 'string' ||
+        !request.worktreeId ||
+        typeof request.tabId !== 'string' ||
+        !isValidTerminalTabId(request.tabId) ||
+        typeof request.leafId !== 'string' ||
+        !isTerminalLeafId(request.leafId) ||
+        (request.reason !== 'relay-worker-lost' && request.reason !== 'daemon-worker-lost') ||
+        typeof request.executionHostId !== 'string' ||
+        !request.executionHostId
+      ) {
+        return { kind: 'retryable-error', code: 'contract-invalid' }
+      }
+      const worktreeId = request.worktreeId
+      const tabId = request.tabId
+      const leafId = request.leafId
+      const reason = request.reason
+      const executionHostId = request.executionHostId
+      if (!worktreeId || !tabId || !leafId || !reason || !executionHostId) {
+        return { kind: 'retryable-error', code: 'contract-invalid' }
+      }
+      const persistedSession = store.getWorkspaceSession(executionHostId)
+      const paneKey = makePaneKey(tabId, leafId)
+      if (
+        classifyLostTerminal(persistedSession.terminalArchiveHintsByPaneKey?.[paneKey]).kind !==
+        'worker'
+      ) {
+        return { kind: 'ordinary-shell' }
+      }
+      const session = persistedSession
+      const captured = captureTerminalArchiveTab({
+        session,
+        worktreeId,
+        tabId
+      })
+      if (!captured) {
+        return { kind: 'retryable-error', code: 'capture-unavailable' }
+      }
+      const operationKey = `${reason}:${executionHostId}:${tabId}:${makeTerminalArchiveSourcePaneSignature(
+        captured.panesByLeafId,
+        captured.sourcePaneIdentityByLeafId
+      )}`
+      const existing = lostWorkerArchiveInFlight.get(operationKey)
+      if (existing) {
+        return await existing
+      }
+      const operation = (async (): Promise<TerminalLostWorkerRendererReceipt> => {
+        const snapshotSource = {
+          capture: async (
+            pane: ArchivedTerminalPane
+          ): Promise<TerminalArchivePaneSnapshotCapture> => {
+            const leafId = pane.archivedLeafId
+            const ptyId = session.terminalLayoutsByTabId[tabId]?.ptyIdsByLeafId?.[leafId]
+            const provider = ptyId ? tryGetProviderForPty(ptyId) : undefined
+            const providerSnapshot =
+              ptyId && provider?.canProvideAuthoritativeBufferSnapshot?.(ptyId)
+                ? await provider
+                    .getBufferSnapshot?.(ptyId, { scrollbackRows: 50_000 })
+                    .catch(() => null)
+                : null
+            const fromBuffer = (
+              buffer: string,
+              source: 'renderer' | 'daemon-headless' | 'relay-tail' | 'session-sidecar',
+              truncated = false
+            ): TerminalArchivePaneSnapshotCapture =>
+              buffer.length === 0
+                ? { kind: 'captured-empty' }
+                : {
+                    kind: 'captured-bytes',
+                    buffer,
+                    source,
+                    truncated,
+                    byteLength: getUtf8ByteLength(buffer)
+                  }
+            if (providerSnapshot?.data !== undefined) {
+              return fromBuffer(providerSnapshot.data, 'daemon-headless')
+            }
+            const rendererSnapshot = request.snapshotsByLeafId?.[leafId]
+            if (
+              rendererSnapshot &&
+              typeof rendererSnapshot.buffer === 'string' &&
+              rendererSnapshot.source === 'renderer' &&
+              typeof rendererSnapshot.truncated === 'boolean' &&
+              typeof rendererSnapshot.byteLength === 'number' &&
+              Number.isFinite(rendererSnapshot.byteLength) &&
+              rendererSnapshot.byteLength >= 0
+            ) {
+              return fromBuffer(rendererSnapshot.buffer, 'renderer', rendererSnapshot.truncated)
+            }
+            const persistedLayout = persistedSession.terminalLayoutsByTabId[tabId]
+            const sidecar =
+              persistedLayout?.buffersByLeafId?.[leafId] ??
+              (persistedLayout?.scrollbackRefsByLeafId?.[leafId]
+                ? store.readTerminalScrollbackSnapshot(
+                    persistedLayout.scrollbackRefsByLeafId[leafId]
+                  )
+                : null)
+            return typeof sidecar === 'string'
+              ? fromBuffer(sidecar, 'session-sidecar')
+              : { kind: 'unavailable' }
+          }
+        }
+        const result = await archiveLostTerminalWorker({
+          owner: store,
+          candidate: {
+            reason,
+            executionHostId,
+            worktreeId,
+            tabId,
+            ...(typeof request.runtimeEnvironmentId === 'string' && request.runtimeEnvironmentId
+              ? { runtimeEnvironmentId: request.runtimeEnvironmentId }
+              : {}),
+            expectedSourcePaneIdentityByLeafId: captured.sourcePaneIdentityByLeafId
+          },
+          frozenSession: session,
+          snapshotSource
+        })
+        if (result.kind !== 'archived') {
+          return { kind: 'retryable-error', code: result.code }
+        }
+        for (const ptyId of result.ptyIdsToKill) {
+          const provider = tryGetProviderForPty(ptyId)
+          if (provider) {
+            void shutdownProviderAndDetectExit(provider, ptyId, { immediate: true }).catch(() => {})
+          }
+        }
+        return { kind: 'archived', archiveId: result.archive.id }
+      })()
+      lostWorkerArchiveInFlight.set(operationKey, operation)
+      try {
+        return await operation
+      } finally {
+        if (lostWorkerArchiveInFlight.get(operationKey) === operation) {
+          lostWorkerArchiveInFlight.delete(operationKey)
+        }
+      }
+    }
+  )
+
+  const archiveDaemonColdRestoreBeforeSpawn = async (args: {
+    worktreeId: string
+    tabId: string
+    leafId: string
+    coldRestore: { scrollback: string; cwd: string; cols?: number; rows?: number }
+  }): Promise<PtyLostWorkerRecovery> => {
+    if (!store) {
+      return { kind: 'retryable-error', code: 'durability-failed' }
+    }
+    const executionHostId = LOCAL_EXECUTION_HOST_ID
+    const persistedSession = store.getWorkspaceSession(executionHostId)
+    const paneKey = makePaneKey(args.tabId, args.leafId)
+    if (
+      classifyLostTerminal(persistedSession.terminalArchiveHintsByPaneKey?.[paneKey]).kind !==
+      'worker'
+    ) {
+      return { kind: 'retryable-error', code: 'not-owned' }
+    }
+    const captured = captureTerminalArchiveTab({
+      session: persistedSession,
+      worktreeId: args.worktreeId,
+      tabId: args.tabId
+    })
+    if (!captured) {
+      return { kind: 'retryable-error', code: 'capture-unavailable' }
+    }
+    const operationKey = `daemon-worker-lost:${executionHostId}:${args.tabId}:${makeTerminalArchiveSourcePaneSignature(
+      captured.panesByLeafId,
+      captured.sourcePaneIdentityByLeafId
+    )}`
+    const existing = lostWorkerArchiveInFlight.get(operationKey)
+    if (existing) {
+      const receipt = await existing
+      return receipt.kind === 'archived'
+        ? receipt
+        : {
+            kind: 'retryable-error',
+            code: receipt.kind === 'ordinary-shell' ? 'not-owned' : receipt.code
+          }
+    }
+    const operation = (async (): Promise<TerminalLostWorkerRendererReceipt> => {
+      const snapshotSource = {
+        capture: async (
+          pane: ArchivedTerminalPane
+        ): Promise<TerminalArchivePaneSnapshotCapture> => {
+          const leafId = pane.archivedLeafId
+          const fromBuffer = (
+            buffer: string,
+            source: 'renderer' | 'daemon-headless' | 'relay-tail' | 'session-sidecar',
+            truncated = false
+          ): TerminalArchivePaneSnapshotCapture =>
+            buffer.length === 0
+              ? { kind: 'captured-empty' }
+              : {
+                  kind: 'captured-bytes',
+                  buffer,
+                  source,
+                  truncated,
+                  byteLength: getUtf8ByteLength(buffer)
+                }
+          if (leafId === args.leafId) {
+            return fromBuffer(args.coldRestore.scrollback, 'daemon-headless')
+          }
+          const layout = persistedSession.terminalLayoutsByTabId[args.tabId]
+          const sidecar =
+            layout?.buffersByLeafId?.[leafId] ??
+            (layout?.scrollbackRefsByLeafId?.[leafId]
+              ? store.readTerminalScrollbackSnapshot(layout.scrollbackRefsByLeafId[leafId])
+              : null)
+          return typeof sidecar === 'string'
+            ? fromBuffer(sidecar, 'session-sidecar')
+            : { kind: 'unavailable' }
+        }
+      }
+      const result = await archiveLostTerminalWorker({
+        owner: store,
+        candidate: {
+          reason: 'daemon-worker-lost',
+          executionHostId,
+          worktreeId: args.worktreeId,
+          tabId: args.tabId,
+          expectedSourcePaneIdentityByLeafId: captured.sourcePaneIdentityByLeafId
+        },
+        frozenSession: persistedSession,
+        snapshotSource
+      })
+      if (result.kind !== 'archived') {
+        return { kind: 'retryable-error', code: result.code }
+      }
+      for (const ptyId of result.ptyIdsToKill) {
+        const provider = tryGetProviderForPty(ptyId)
+        if (provider) {
+          void shutdownProviderAndDetectExit(provider, ptyId, { immediate: true }).catch(() => {})
+        }
+      }
+      return { kind: 'archived', archiveId: result.archive.id }
+    })()
+    lostWorkerArchiveInFlight.set(operationKey, operation)
+    try {
+      const receipt = await operation
+      return receipt.kind === 'archived'
+        ? receipt
+        : {
+            kind: 'retryable-error',
+            code: receipt.kind === 'ordinary-shell' ? 'not-owned' : receipt.code
+          }
+    } finally {
+      if (lostWorkerArchiveInFlight.get(operationKey) === operation) {
+        lostWorkerArchiveInFlight.delete(operationKey)
+      }
+    }
+  }
 
   // Why: only LocalPtyProvider needs main-process hook injection; daemon-backed providers spawn subprocesses internally.
   if (localProvider instanceof LocalPtyProvider) {
@@ -4704,7 +4971,7 @@ export function registerPtyHandlers(
       }
       deleteRequestedEnvKeys(spawnEnv, combinedEnvToDelete)
       promoteAgentTeamsShimPath(spawnEnv, requestedAgentTeamsPath)
-      const spawnOptions: PtySpawnOptions = {
+      const spawnOptions: PtySpawnOptionsWithLostWorker = {
         cols: args.cols,
         rows: args.rows,
         cwd,
@@ -4740,6 +5007,33 @@ export function registerPtyHandlers(
       }
       if (effectiveSessionId !== undefined) {
         spawnOptions.sessionId = effectiveSessionId
+      }
+      const daemonColdRestorePaneKey =
+        typeof args.tabId === 'string' && validatedLeafId
+          ? makePaneKey(args.tabId, validatedLeafId)
+          : null
+      const daemonColdRestoreIsRecognizedWorker =
+        isDaemonHostSpawn &&
+        !isMintedSessionId &&
+        !args.launchConfig &&
+        !args.resumeProviderSession &&
+        typeof args.worktreeId === 'string' &&
+        args.worktreeId.length > 0 &&
+        typeof args.tabId === 'string' &&
+        daemonColdRestorePaneKey !== null &&
+        classifyLostTerminal(
+          store?.getWorkspaceSession(LOCAL_EXECUTION_HOST_ID).terminalArchiveHintsByPaneKey?.[
+            daemonColdRestorePaneKey
+          ]
+        ).kind === 'worker'
+      if (daemonColdRestoreIsRecognizedWorker && validatedLeafId) {
+        spawnOptions.preSpawnLostWorker = async (coldRestore) =>
+          await archiveDaemonColdRestoreBeforeSpawn({
+            worktreeId: args.worktreeId!,
+            tabId: args.tabId!,
+            leafId: validatedLeafId,
+            coldRestore
+          })
       }
       // Why: without this, the Windows daemon path ignores the user's Default Shell preference (LocalPtyProvider already honors it via getWindowsShell()).
       if (effectiveShellOverride !== undefined) {
@@ -4819,6 +5113,31 @@ export function registerPtyHandlers(
             ? (runtime?.getPtyOutputSequence?.(expectedPtyId) ?? 0)
             : 0
           result = await provider.spawn(spawnOptions)
+          if (result.lostWorkerRecovery) {
+            if (
+              (isMintedSessionId || preparedProvisionalExecutionContext) &&
+              effectiveSessionAppId
+            ) {
+              runtime?.preparePtyExecutionContext?.(effectiveSessionAppId, null, {
+                resetIncarnation: true
+              })
+            }
+            if (preSpawnHiddenMarkId !== null) {
+              unmarkHiddenRendererPty(preSpawnHiddenMarkId)
+            }
+            if (pendingRegistrationPtyId) {
+              runtime?.cancelPendingPtyRegistration?.(pendingRegistrationPtyId)
+              pendingRegistrationPtyId = null
+            }
+            if (effectiveSessionAppId !== undefined) {
+              ptySizes.delete(effectiveSessionAppId)
+            }
+            throw new Error(
+              result.lostWorkerRecovery.kind === 'archived'
+                ? 'terminal_lost_worker_archived'
+                : 'terminal_lost_worker_archive_pending'
+            )
+          }
           rejectedRegistrationCandidate = result
           if (pendingRegistrationPtyId !== result.id) {
             if (pendingRegistrationPtyId) {

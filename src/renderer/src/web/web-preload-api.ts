@@ -2951,6 +2951,8 @@ function createPtyApi(): NonNullable<Partial<PreloadApi>['pty']> {
     kill: () => Promise.resolve(),
     // A web client must ask its runtime owner to archive; pretending this local shim succeeded would permit data loss.
     archiveTerminalTab: () => Promise.reject(new Error('terminal_archive_unavailable')),
+    handleLostTerminalCandidate: () =>
+      Promise.resolve({ kind: 'retryable-error', code: 'durability-failed' }),
     ackColdRestore: () => {},
     ackData: () => {},
     onDeliveryResyncRequest: () => noopUnsubscribe,

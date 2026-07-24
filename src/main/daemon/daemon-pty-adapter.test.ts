@@ -1633,6 +1633,45 @@ describe('DaemonPtyAdapter (IPtyProvider)', () => {
       })
     })
 
+    it('returns the main archive decision before creating a lost worker cold restore', async () => {
+      const sessionId = 'lost-worker-cold-restore'
+      const sessionDir = join(historyDir, getHistorySessionDirName(sessionId))
+      mkdirSync(sessionDir, { recursive: true })
+      writeFileSync(
+        join(sessionDir, 'meta.json'),
+        JSON.stringify({
+          cwd: '/projects/worker',
+          cols: 120,
+          rows: 40,
+          startedAt: '2026-04-15T10:00:00Z',
+          endedAt: null,
+          exitCode: null
+        })
+      )
+      writeFileSync(join(sessionDir, 'scrollback.bin'), 'worker output\r\n')
+      historyAdapter = new DaemonPtyAdapter({ socketPath, tokenPath, historyPath: historyDir })
+      const preSpawnLostWorker = vi.fn(async () => ({
+        kind: 'archived' as const,
+        archiveId: 'archive-worker'
+      }))
+
+      const result = await historyAdapter.spawn({
+        cols: 80,
+        rows: 24,
+        sessionId,
+        preSpawnLostWorker
+      })
+
+      expect(preSpawnLostWorker).toHaveBeenCalledWith(
+        expect.objectContaining({ scrollback: 'worker output\r\n', cwd: '/projects/worker' })
+      )
+      expect(result).toMatchObject({
+        id: sessionId,
+        lostWorkerRecovery: { kind: 'archived', archiveId: 'archive-worker' }
+      })
+      expect(lastSpawnOpts).toBeNull()
+    })
+
     it('repairs legacy hostname UNC cwd for WSL spawn and cold-restore metadata', async () => {
       const platform = Object.getOwnPropertyDescriptor(process, 'platform')
       Object.defineProperty(process, 'platform', { configurable: true, value: 'win32' })

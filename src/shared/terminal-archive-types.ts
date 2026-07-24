@@ -147,6 +147,30 @@ export type TerminalArchiveRendererCloseRequest = {
   snapshotsByLeafId: Record<string, TerminalArchiveRendererSnapshot>
 }
 
+/** A renderer reports a stale established pane; main owns all durable facts. */
+export type TerminalLostWorkerRendererRequest = {
+  leafId: string
+  worktreeId: string
+  tabId: string
+  executionHostId: ExecutionHostId
+  runtimeEnvironmentId?: string
+  snapshotsByLeafId: Record<string, TerminalArchiveRendererSnapshot>
+  reason: Exclude<TerminalArchiveReason, 'user-close'>
+}
+
+export type TerminalLostWorkerRendererReceipt =
+  | { kind: 'archived'; archiveId: string }
+  | { kind: 'ordinary-shell' }
+  | {
+      kind: 'retryable-error'
+      code:
+        | 'not-owned'
+        | 'stale-source'
+        | 'capture-unavailable'
+        | 'contract-invalid'
+        | 'durability-failed'
+    }
+
 export const archivedTerminalPaneSchema = z
   .object({
     archivedLeafId: z.string().min(1),

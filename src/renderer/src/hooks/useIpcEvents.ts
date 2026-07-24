@@ -2785,7 +2785,15 @@ export function useIpcEvents(): void {
                 tabsByWorktree: {
                   ...s.tabsByWorktree,
                   [worktreeId]: (s.tabsByWorktree[worktreeId] ?? []).map((t) =>
-                    needsRetry(t) ? { ...t, generation: (t.generation ?? 0) + 1 } : t
+                    needsRetry(t)
+                      ? {
+                          ...t,
+                          generation: (t.generation ?? 0) + 1,
+                          // Why: a reconnect remount with no bindable PTY must
+                          // pass the main-owned lost-worker gate before fresh spawn.
+                          pendingActivationSpawn: true
+                        }
+                      : t
                   )
                 }
               }))

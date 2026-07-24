@@ -18,7 +18,11 @@ import type {
   TerminalTabCloseRequest,
   TerminalTabCloseResponse
 } from '../shared/terminal-tab-close'
-import type { TerminalArchiveRendererCloseRequest } from '../shared/terminal-archive-types'
+import type {
+  TerminalArchiveRendererCloseRequest,
+  TerminalLostWorkerRendererReceipt,
+  TerminalLostWorkerRendererRequest
+} from '../shared/terminal-archive-types'
 import type {
   LocalLogTailChangedPayload,
   LocalLogTailReadArgs,
@@ -1347,6 +1351,9 @@ export type PreloadApi = {
     archiveTerminalTab: (
       request: TerminalArchiveRendererCloseRequest
     ) => Promise<{ archiveId: string }>
+    handleLostTerminalCandidate: (
+      request: TerminalLostWorkerRendererRequest
+    ) => Promise<TerminalLostWorkerRendererReceipt>
     ackColdRestore: (id: string) => void
     ackData: (id: string, charCount: number, processedChars?: number) => void
     onDeliveryResyncRequest: (callback: (payload: { requestId: number }) => void) => () => void

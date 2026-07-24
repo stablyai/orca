@@ -5,6 +5,10 @@ import { getExecutionHostIdForWorktree } from '@/lib/worktree-runtime-owner'
 import { resolveWorktreeOperationRouteResult } from '@/lib/worktree-operation-route'
 import { useAppStore } from '@/store'
 import { getUtf8ByteLength } from '../../../../shared/utf8-byte-limits'
+import type {
+  TerminalArchiveReason,
+  TerminalLostWorkerRendererReceipt
+} from '../../../../shared/terminal-archive-types'
 
 export type TerminalArchiveCloseReceipt = {
   archiveId: string
@@ -82,4 +86,51 @@ export async function archiveTerminalTabBeforeRetirement(
     snapshotsByLeafId
   })
   return { archiveId: result.archiveId, topologyFingerprint: expectedTopologyFingerprint }
+}
+
+/** Main decides whether this established terminal was a worker before any fallback clears it. */
+export async function handleLostTerminalCandidate(args: {
+  tabId: string
+  worktreeId: string
+  leafId: string
+  reason: Exclude<TerminalArchiveReason, 'user-close'>
+}): Promise<TerminalLostWorkerRendererReceipt> {
+  shutdownBufferCaptures.get(args.tabId)?.({ includeLocalBuffers: true })
+  const state = useAppStore.getState()
+  const routing = resolveWorktreeOperationRouteResult(state, args.worktreeId)
+  const executionHostId =
+    (routing.kind === 'resolved' ? routing.route.executionHostId : null) ??
+    getExecutionHostIdForWorktree(state, args.worktreeId) ??
+    'local'
+  const layout = state.terminalLayoutsByTabId[args.tabId]
+  const snapshotsByLeafId = Object.fromEntries(
+    Object.entries(layout?.buffersByLeafId ?? {}).map(([leafId, buffer]) => [
+      leafId,
+      {
+        buffer,
+        source: 'renderer' as const,
+        truncated: false,
+        byteLength: getUtf8ByteLength(buffer)
+      }
+    ])
+  )
+  const handler = window.api.pty.handleLostTerminalCandidate
+  if (typeof handler !== 'function') {
+    throw new Error('terminal_lost_worker_handoff_unavailable')
+  }
+  try {
+    return await handler({
+      worktreeId: args.worktreeId,
+      tabId: args.tabId,
+      leafId: args.leafId,
+      reason: args.reason,
+      executionHostId,
+      ...(routing.kind === 'resolved' && routing.route.runtimeEnvironmentId
+        ? { runtimeEnvironmentId: routing.route.runtimeEnvironmentId }
+        : {}),
+      snapshotsByLeafId
+    })
+  } catch {
+    return { kind: 'retryable-error', code: 'durability-failed' }
+  }
 }

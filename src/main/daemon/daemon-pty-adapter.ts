@@ -36,9 +36,9 @@ import type {
   PtyPersistenceProtocolOptions,
   PtyProviderBufferSnapshot,
   PtyProcessInfo,
-  PtySpawnOptions,
   PtySpawnResult
 } from '../providers/types'
+import type { PtySpawnOptionsWithLostWorker } from '../providers/pty-lost-worker-recovery'
 import { isShellProcess } from '../../shared/agent-detection'
 import { resolveWslSessionContext } from './wsl-session-context'
 import { normalizeWslColdRestoreCwd } from './wsl-cold-restore-cwd'
@@ -218,7 +218,7 @@ export class DaemonPtyAdapter implements IPtyProvider {
     return this.protocolVersion >= AGENT_SESSION_CREATE_OPERATION_DAEMON_PROTOCOL_VERSION
   }
 
-  async spawn(opts: PtySpawnOptions): Promise<PtySpawnResult> {
+  async spawn(opts: PtySpawnOptionsWithLostWorker): Promise<PtySpawnResult> {
     const sessionId = opts.sessionId ?? mintPtySessionId(opts.worktreeId)
     const operation = {
       exitsBySessionId: new Map<string, { incarnationId?: string }[]>(),
@@ -243,7 +243,7 @@ export class DaemonPtyAdapter implements IPtyProvider {
   }
 
   private async doSpawn(
-    opts: PtySpawnOptions,
+    opts: PtySpawnOptionsWithLostWorker,
     operation: PendingDaemonSpawnOperation
   ): Promise<PtySpawnResult> {
     if (
@@ -304,6 +304,17 @@ export class DaemonPtyAdapter implements IPtyProvider {
     let effectiveCwd = restoreInfo?.cwd ?? opts.cwd
     let effectiveCols = restoreInfo?.cols ?? opts.cols
     let effectiveRows = restoreInfo?.rows ?? opts.rows
+
+    if (restoreInfo && opts.preSpawnLostWorker) {
+      const coldRestore = this.buildColdRestorePayload(restoreInfo)
+      if (coldRestore) {
+        return {
+          id: sessionId,
+          lostWorkerRecovery: await opts.preSpawnLostWorker(coldRestore),
+          ...(wslDistro ? { wslDistro } : {})
+        }
+      }
+    }
 
     const shellReadySupported = opts.command ? supportsPtyStartupBarrier(opts.env ?? {}) : false
     const isCodexStartupCommand =

@@ -925,6 +925,9 @@ const api = {
 
     archiveTerminalTab: (request) => ipcRenderer.invoke('pty:archiveTerminalTab', request),
 
+    handleLostTerminalCandidate: (request) =>
+      ipcRenderer.invoke('pty:handleLostTerminalCandidate', request),
+
     listSessions: (): Promise<{ id: string; cwd: string; title: string }[]> =>
       ipcRenderer.invoke('pty:listSessions'),
     getAuthoritativeBufferSnapshotCapabilities: (
