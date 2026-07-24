@@ -53,14 +53,29 @@ describe('isNativeChatPastedImagePath', () => {
   })
 
   it('detects mobile Files-picker image uploads (orca-file-… with an image extension)', () => {
-    expect(isNativeChatPastedImagePath('/tmp/orca-file-1784234906335-f54c579b-photo.jpg')).toBe(
-      true
-    )
-    expect(isNativeChatPastedImagePath('C:\\Temp\\orca-file-1-2-photo.png')).toBe(true)
+    expect(
+      isNativeChatPastedImagePath(
+        '/tmp/orca-file-1784234906335-f54c579b-819c-4c33-8bd1-2d34ebf871ab-photo.jpg'
+      )
+    ).toBe(true)
+    expect(
+      isNativeChatPastedImagePath(
+        'C:\\Temp\\orca-file-1-f54c579b-819c-4c33-8bd1-2d34ebf871ab-photo.png'
+      )
+    ).toBe(true)
   })
 
   it('does not treat non-image mobile uploads as pasted images', () => {
-    expect(isNativeChatPastedImagePath('/tmp/orca-file-1784234906335-f54c579b-report.pdf')).toBe(
+    expect(
+      isNativeChatPastedImagePath(
+        '/tmp/orca-file-1784234906335-f54c579b-819c-4c33-8bd1-2d34ebf871ab-report.pdf'
+      )
+    ).toBe(false)
+  })
+
+  it('keeps the real name for files without the structural ts-uuid prefix', () => {
+    expect(isNativeChatPastedImagePath('/tmp/orca-file-mynotes.png')).toBe(false)
+    expect(isNativeChatPastedImagePath('/tmp/orca-file-1784234906335-f54c579b-photo.jpg')).toBe(
       false
     )
   })

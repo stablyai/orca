@@ -216,14 +216,16 @@ function normalizeGrokUserQueryBlock(block: NativeChatBlock): NativeChatBlock[] 
 
 // Mobile Files-picker uploads use `orca-file-<ts>-<uuid>-<name>.<ext>`; only
 // image extensions (from the shared list) are recovered as image attachments.
-// The name segment is restricted to the host sanitizer's allowlist charset and
-// matched greedily, so a multi-dot name (`photo.jpg.backup.png`) resolves to
-// its LAST image extension instead of truncating at the first. A non-image
-// name whose interior contains an image extension (`photo.jpg.tmp`) is still
-// ambiguous — Grok concatenates path and prompt with no delimiter — and will
-// mis-split; that is inherent to the format, not recoverable here.
+// The `<ts>-<uuid>` segment is matched structurally (digits + v4-shaped UUID,
+// mirroring buildAttachmentTempFileName) so prose or user files that merely
+// start with `orca-file-` never convert. The name segment is restricted to the
+// host sanitizer's allowlist charset and matched greedily, so a multi-dot name
+// (`photo.jpg.backup.png`) resolves to its LAST image extension instead of
+// truncating at the first.
 // (Regex is assembled from the static shared extension list, not user input.)
-const GROK_PASTED_IMAGE_NAME = `(?:orca-paste-[^\\\\/\\r\\n]+?\\.png|orca-file-[\\p{L}\\p{N}\\p{M}._-]+\\.(?:${IMAGE_FILE_EXTENSIONS.map((ext) => ext.slice(1)).join('|')}))`
+const GROK_MOBILE_UPLOAD_NAME_PREFIX =
+  'orca-file-\\d+-[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}-'
+const GROK_PASTED_IMAGE_NAME = `(?:orca-paste-[^\\\\/\\r\\n]+?\\.png|${GROK_MOBILE_UPLOAD_NAME_PREFIX}[\\p{L}\\p{N}\\p{M}._-]+\\.(?:${IMAGE_FILE_EXTENSIONS.map((ext) => ext.slice(1)).join('|')}))`
 
 const GROK_PASTED_IMAGE_RE = new RegExp(
   `^((?:[a-z]:[\\\\/]|\\/|[\\\\/]{2}[^\\\\/\\r\\n]+[\\\\/][^\\\\/\\r\\n]+[\\\\/])(?:.*?[\\\\/])?${GROK_PASTED_IMAGE_NAME})([\\s\\S]*)$`,
@@ -237,7 +239,15 @@ function splitGrokPastedImageQuery(text: string): { path: string; query: string 
   if (!match?.[1]) {
     return null
   }
-  return { path: match[1], query: (match[2] ?? '').trim() }
+  const query = match[2] ?? ''
+  // Why: for mobile names the tail is user-controlled, so a remainder that
+  // continues with separator+name characters (`.tmp summarize`) more plausibly
+  // extends a non-image filename than starts a prompt. The delimiter-free
+  // format cannot distinguish — fail safe to plain text rather than mis-split.
+  if (/orca-file-/i.test(match[1]) && /^[._-][\p{L}\p{N}\p{M}]/u.test(query)) {
+    return null
+  }
+  return { path: match[1], query: query.trim() }
 }
 
 function stripGrokUserQueryEnvelope(text: string): string {

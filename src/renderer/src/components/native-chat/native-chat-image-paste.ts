@@ -60,5 +60,10 @@ export function isNativeChatPastedImagePath(path: string): boolean {
   }
   // Mobile Files-picker uploads keep the original (sanitized) name behind an
   // `orca-file-<ts>-<uuid>-` prefix; only image extensions are pasted images.
-  return /^orca-file-/i.test(base) && isImageDropPath(base)
+  // Match the ts-uuid segment structurally so a user's own file that merely
+  // starts with `orca-file-` keeps its real name in the composer.
+  return (
+    /^orca-file-\d+-[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}-/i.test(base) &&
+    isImageDropPath(base)
+  )
 }

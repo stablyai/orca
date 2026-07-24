@@ -78,7 +78,8 @@ describe('decodeGrokTranscriptLine', () => {
   })
 
   it('resolves multi-dot mobile upload names to their last image extension', () => {
-    const imagePath = '/tmp/orca-file-1784234906335-f54c579b-photo.jpg.backup.png'
+    const imagePath =
+      '/tmp/orca-file-1784234906335-f54c579b-819c-4c33-8bd1-2d34ebf871ab-photo.jpg.backup.png'
     const line = JSON.stringify({
       type: 'user',
       content: [
@@ -104,6 +105,64 @@ describe('decodeGrokTranscriptLine', () => {
     })
 
     expect(decodeGrokTranscriptLine(line, 'fb-mobile-pdf')).toMatchObject({
+      role: 'user',
+      blocks: [{ type: 'text', text }]
+    })
+  })
+
+  it('rejects the ambiguous interior-image-extension split instead of truncating the path', () => {
+    // A non-image file (`photo.jpg.tmp`) whose interior contains an image
+    // extension must stay plain text, not become image-ref + garbled prompt.
+    const text =
+      '/tmp/orca-file-1784234906335-f54c579b-819c-4c33-8bd1-2d34ebf871ab-photo.jpg.tmp summarize'
+    const line = JSON.stringify({
+      type: 'user',
+      content: [{ type: 'text', text: `<user_query>${text}</user_query>` }]
+    })
+
+    expect(decodeGrokTranscriptLine(line, 'fb-ambiguous-split')).toMatchObject({
+      role: 'user',
+      blocks: [{ type: 'text', text }]
+    })
+  })
+
+  it('rejects an attachment-only ambiguous name the same way', () => {
+    const text = '/tmp/orca-file-1784234906335-f54c579b-819c-4c33-8bd1-2d34ebf871ab-photo.jpg.tmp'
+    const line = JSON.stringify({
+      type: 'user',
+      content: [{ type: 'text', text: `<user_query>${text}</user_query>` }]
+    })
+
+    expect(decodeGrokTranscriptLine(line, 'fb-ambiguous-only')).toMatchObject({
+      role: 'user',
+      blocks: [{ type: 'text', text }]
+    })
+  })
+
+  it('still splits prompt punctuation that cannot extend a filename', () => {
+    const imagePath = '/tmp/orca-file-1784234906335-f54c579b-819c-4c33-8bd1-2d34ebf871ab-photo.jpg'
+    const line = JSON.stringify({
+      type: 'user',
+      content: [{ type: 'text', text: `<user_query>${imagePath}. What is this?</user_query>` }]
+    })
+
+    expect(decodeGrokTranscriptLine(line, 'fb-punctuation')).toMatchObject({
+      role: 'user',
+      blocks: [
+        { type: 'image-ref', path: imagePath },
+        { type: 'text', text: '. What is this?' }
+      ]
+    })
+  })
+
+  it('never converts names without the structural ts-uuid prefix', () => {
+    const text = '/tmp/orca-file-mynotes.png explain'
+    const line = JSON.stringify({
+      type: 'user',
+      content: [{ type: 'text', text: `<user_query>${text}</user_query>` }]
+    })
+
+    expect(decodeGrokTranscriptLine(line, 'fb-no-structure')).toMatchObject({
       role: 'user',
       blocks: [{ type: 'text', text }]
     })
