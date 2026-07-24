@@ -29,7 +29,8 @@ export function getPiAgentStatusRuntimeDetectionSourceLines(kind: PiAgentKind): 
     '',
     'function resolveHookPath(ompRuntime: boolean): string {',
     '  // Why: runtime detection keeps a bare-shell OMP launch from reporting as Pi.',
-    "  return ompRuntime ? '/hook/omp' : CONFIGURED_HOOK_PATH",
+    "  if (ompRuntime) return '/hook/omp'",
+    '  return CONFIGURED_HOOK_PATH',
     '}'
   ]
 }
