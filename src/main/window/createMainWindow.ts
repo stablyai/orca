@@ -655,7 +655,10 @@ export function createMainWindow(
     const { focusedShortcutContext, isAutoRepeat } = options
     if (
       floatingTerminalInputFocused &&
-      (action.type === 'toggleLeftSidebar' || action.type === 'toggleRightSidebar')
+      (action.type === 'toggleLeftSidebar' ||
+        action.type === 'toggleRightSidebar' ||
+        action.type === 'jumpToWorktreeIndex' ||
+        action.type === 'jumpToTabIndex')
     ) {
       return false
     }
