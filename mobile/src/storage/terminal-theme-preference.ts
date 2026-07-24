@@ -95,16 +95,26 @@ export async function saveMobileTerminalThemeSelection(
     // Why: the tap must not wait for the read, but merging onto the pre-load
     // default would erase the two slots this patch never touches.
     publish({ ...selection, ...patch })
+    // Why: the awaited value is a boot snapshot; `selection` below is the live merge base.
     await loadMobileTerminalThemeSelection()
   }
   const next = { ...selection, ...patch }
   // Why: publish before the write so live panes repaint without awaiting storage.
   publish(next)
-  await Promise.all([
-    writeSlot(DARK_KEY, next.dark),
-    writeSlot(LIGHT_KEY, next.light),
-    AsyncStorage.setItem(SEPARATE_LIGHT_KEY, String(next.useSeparateLightTheme))
-  ])
+  // Why: a failed read leaves `hydrated` false and the merge base at the in-memory
+  // default, so only the patched slots may be written — the rest would overwrite
+  // whatever is really on disk.
+  const writes: Promise<void>[] = []
+  if (hydrated || patch.dark !== undefined) {
+    writes.push(writeSlot(DARK_KEY, next.dark))
+  }
+  if (hydrated || patch.light !== undefined) {
+    writes.push(writeSlot(LIGHT_KEY, next.light))
+  }
+  if (hydrated || patch.useSeparateLightTheme !== undefined) {
+    writes.push(AsyncStorage.setItem(SEPARATE_LIGHT_KEY, String(next.useSeparateLightTheme)))
+  }
+  await Promise.all(writes)
 }
 
 function writeSlot(key: string, name: string | null): Promise<void> {
