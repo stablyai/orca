@@ -1435,6 +1435,8 @@ function createRuntimeTestTerminalArchiveStore() {
         getTerminalArchiveRetentionDays: () => 7,
         isExecutionHostReachable: () => true,
         worktreeExists: () => true,
+        // This fixture models an already-authorized Runtime owner; F8 rejection is covered by Store tests.
+        isTerminalArchiveRequestOwned: () => true,
         isTerminalScrollbackSnapshotLive: () => false
       },
       snapshotSource

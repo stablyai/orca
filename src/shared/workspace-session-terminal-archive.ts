@@ -10,6 +10,7 @@ import type {
 } from './terminal-archive-types'
 import { TERMINAL_ARCHIVE_HINT_FIELDS } from './terminal-archive-types'
 import { makePaneKey } from './stable-pane-id'
+import { isTuiAgent } from './tui-agent-config'
 import type { TerminalLayoutSnapshot, TerminalTab, WorkspaceSessionState } from './types'
 import { closeTerminalTabInWorkspaceSession } from './workspace-session-terminal-tab-close'
 
@@ -140,9 +141,12 @@ function normalizeHint(input: Partial<TerminalArchiveHint>): Partial<TerminalArc
     ...(typeof input.shellOverride === 'string' && input.shellOverride
       ? { shellOverride: input.shellOverride }
       : {}),
-    ...(input.launchAgent ? { launchAgent: input.launchAgent } : {}),
+    ...(isTuiAgent(input.launchAgent) ? { launchAgent: input.launchAgent } : {}),
     ...(providerSession ? { providerSession } : {}),
-    ...(typeof input.orchestrationTaskId === 'string' && input.orchestrationTaskId
+    ...(typeof input.orchestrationTaskId === 'string' &&
+    input.orchestrationTaskId.length > 0 &&
+    input.orchestrationTaskId.length <= 512 &&
+    input.orchestrationTaskId.trim() === input.orchestrationTaskId
       ? { orchestrationTaskId: input.orchestrationTaskId }
       : {}),
     ...(typeof input.startedAt === 'number' && Number.isFinite(input.startedAt)
@@ -222,6 +226,39 @@ export function mergeTerminalArchiveHintIntoSession(args: {
       ...args.session.terminalArchiveHintsByPaneKey,
       [args.paneKey]: mergeTerminalArchiveHint(current, args.hint, args.source)
     }
+  }
+}
+
+/** Moves the two pane-keyed durable facts together when main proves PTY ownership. */
+export function moveTerminalArchivePaneDurableState(args: {
+  session: WorkspaceSessionState
+  fromPaneKey: string
+  toPaneKey: string
+}): WorkspaceSessionState {
+  if (args.fromPaneKey === args.toPaneKey) {
+    return args.session
+  }
+  const hint = args.session.terminalArchiveHintsByPaneKey?.[args.fromPaneKey]
+  const incarnation = args.session.terminalPtyIncarnationsByPaneKey?.[args.fromPaneKey]
+  if (!hint && !incarnation) {
+    return args.session
+  }
+  const hints = { ...args.session.terminalArchiveHintsByPaneKey }
+  const incarnations = { ...args.session.terminalPtyIncarnationsByPaneKey }
+  if (hint) {
+    hints[args.toPaneKey] = hint
+    delete hints[args.fromPaneKey]
+  }
+  if (incarnation) {
+    incarnations[args.toPaneKey] = incarnation
+    delete incarnations[args.fromPaneKey]
+  }
+  return {
+    ...args.session,
+    ...(Object.keys(hints).length > 0 ? { terminalArchiveHintsByPaneKey: hints } : {}),
+    ...(Object.keys(incarnations).length > 0
+      ? { terminalPtyIncarnationsByPaneKey: incarnations }
+      : {})
   }
 }
 

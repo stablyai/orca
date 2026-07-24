@@ -401,6 +401,10 @@ describe('agent pane authority IPC', () => {
   })
 
   it('transfers validated pane authority with its provider PTY', async () => {
+    const { configureAgentPaneAuthorityPersistence } = await import('./agent-pane-authority-ipc')
+    configureAgentPaneAuthorityPersistence({
+      transferPaneDurableState: vi.fn(() => ({ kind: 'transferred' as const }))
+    })
     const { registerAgentHookHandlers } = await import('./agent-hooks')
     registerAgentHookHandlers()
 
@@ -414,6 +418,60 @@ describe('agent pane authority IPC', () => {
     )
 
     expect(transferPaneAuthority).toHaveBeenCalledWith(PANE_KEY, CHILD_PANE_KEY, 'pty-1')
+  })
+
+  it('moves durable pane state before transferring the hook alias', async () => {
+    const { configureAgentPaneAuthorityPersistence } = await import('./agent-pane-authority-ipc')
+    const transferPaneDurableState = vi.fn(() => ({ kind: 'transferred' as const }))
+    configureAgentPaneAuthorityPersistence({ transferPaneDurableState })
+    const { registerAgentHookHandlers } = await import('./agent-hooks')
+    registerAgentHookHandlers()
+
+    onHandlers.get('agentStatus:transferPaneAuthority')!(
+      {},
+      { fromPaneKey: PANE_KEY, toPaneKey: CHILD_PANE_KEY, ptyId: 'pty-1' }
+    )
+
+    expect(transferPaneDurableState).toHaveBeenCalledWith({
+      fromPaneKey: PANE_KEY,
+      toPaneKey: CHILD_PANE_KEY,
+      ptyId: 'pty-1'
+    })
+    expect(transferPaneDurableState.mock.invocationCallOrder[0]).toBeLessThan(
+      transferPaneAuthority.mock.invocationCallOrder[0]!
+    )
+  })
+
+  it('acknowledges a durable transfer for renderer reconciliation', async () => {
+    const { configureAgentPaneAuthorityPersistence } = await import('./agent-pane-authority-ipc')
+    configureAgentPaneAuthorityPersistence({
+      transferPaneDurableState: vi.fn(() => ({ kind: 'transferred' as const }))
+    })
+    const { registerAgentHookHandlers } = await import('./agent-hooks')
+    registerAgentHookHandlers()
+
+    expect(
+      handleHandlers.get('agentStatus:transferPaneAuthority')!(
+        {},
+        { fromPaneKey: PANE_KEY, toPaneKey: CHILD_PANE_KEY, ptyId: 'pty-1' }
+      )
+    ).toEqual({ kind: 'transferred' })
+  })
+
+  it('keeps the hook alias at its source when durable transfer is not acknowledged', async () => {
+    const { configureAgentPaneAuthorityPersistence } = await import('./agent-pane-authority-ipc')
+    configureAgentPaneAuthorityPersistence({
+      transferPaneDurableState: vi.fn(() => ({ kind: 'durability-failed' as const }))
+    })
+    const { registerAgentHookHandlers } = await import('./agent-hooks')
+    registerAgentHookHandlers()
+
+    onHandlers.get('agentStatus:transferPaneAuthority')!(
+      {},
+      { fromPaneKey: PANE_KEY, toPaneKey: CHILD_PANE_KEY, ptyId: 'pty-1' }
+    )
+
+    expect(transferPaneAuthority).not.toHaveBeenCalled()
   })
 
   it('rejects malformed pane authority messages and replaces prior listeners', async () => {

@@ -79,6 +79,7 @@ import type { MigrationUnsupportedPtyEntry } from '../shared/agent-status-types'
 import { MOBILE_PAIRING_USERDATA_FILES } from './runtime/mobile-pairing-files'
 import { normalizePersistedMobileClientTabSelections } from './runtime/client-session-tab-selection-persistence'
 import { sanitizeWorkspaceSessionTerminalRetirements } from './runtime/mobile-session-terminal-persistence-retirement'
+import { advanceTerminalTopologyRevision } from './runtime/workspace-session-terminal-membership-authority'
 import {
   removeRepoFromHostWorkspaceSessions,
   removeRepoFromWorkspaceSession
@@ -245,10 +246,17 @@ import {
 import {
   normalizeTerminalArchiveRetentionDays,
   terminalArchivesByIdSchema,
-  type ArchivedTerminalTab
+  type ArchivedTerminalTab,
+  type TerminalArchiveHint,
+  type TerminalArchiveHintSource
 } from '../shared/terminal-archive-types'
 import { TerminalArchiveStore } from './terminal-archive-store'
-import type { TerminalArchiveSnapshotSource } from '../shared/workspace-session-terminal-archive'
+import {
+  mergeTerminalArchiveHintIntoSession,
+  moveTerminalArchivePaneDurableState,
+  retireArchivedTerminalTab,
+  type TerminalArchiveSnapshotSource
+} from '../shared/workspace-session-terminal-archive'
 import { track } from './telemetry/client'
 import { getCohortAtEmit } from './telemetry/cohort-classifier'
 import { isStartupDiagnosticsEnabled, logStartupDiagnostic } from './startup/startup-diagnostics'
@@ -2601,6 +2609,11 @@ function deleteRemovedTerminalScrollbackSnapshots(
 export type StoreOptions = {
   dataFile?: string
 }
+
+export type TerminalArchivePaneDurableTransferResult =
+  | { kind: 'transferred' }
+  | { kind: 'not-owned' }
+  | { kind: 'durability-failed' }
 
 export class Store {
   private state: PersistedState
@@ -5730,6 +5743,7 @@ export class Store {
         getTerminalArchiveRetentionDays: () => this.getTerminalArchiveRetentionDays(),
         isExecutionHostReachable: (hostId) => this.isArchiveExecutionHostReachable(hostId),
         worktreeExists: (worktreeId, hostId) => this.archiveWorktreeExists(worktreeId, hostId),
+        isTerminalArchiveRequestOwned: (request) => this.isTerminalArchiveRequestOwned(request),
         isTerminalScrollbackSnapshotLive: (ref) => this.isTerminalScrollbackSnapshotLive(ref),
         terminalScrollbackSnapshotStorage: this.terminalScrollbackSnapshotStorage
       },
@@ -5750,6 +5764,53 @@ export class Store {
     return Boolean(
       repo && getRepoExecutionHostId(repo) === hostId && this.state.worktreeMeta[worktreeId]
     )
+  }
+
+  private isTerminalArchiveRequestOwned(request: {
+    executionHostId: ExecutionHostId
+    worktreeId: string
+    sourceTabId: string
+    sourcePaneIdentityByLeafId: Record<string, { paneKey: string; incarnationId: string }>
+  }): boolean {
+    if (!this.archiveWorktreeExists(request.worktreeId, request.executionHostId)) {
+      return false
+    }
+    const session = this.getWorkspaceSession(request.executionHostId)
+    if (
+      !session.tabsByWorktree[request.worktreeId]?.some((tab) => tab.id === request.sourceTabId)
+    ) {
+      return false
+    }
+    const layout = session.terminalLayoutsByTabId[request.sourceTabId]
+    if (!layout) {
+      return false
+    }
+    const requestLeafIds = Object.keys(request.sourcePaneIdentityByLeafId)
+    const persistedLeafIds = this.getTerminalLayoutLeafIds(layout.root)
+    if (
+      requestLeafIds.length !== persistedLeafIds.size ||
+      requestLeafIds.some((leafId) => !persistedLeafIds.has(leafId))
+    ) {
+      return false
+    }
+    return requestLeafIds.every((leafId) => {
+      const identity = request.sourcePaneIdentityByLeafId[leafId]
+      if (!identity) {
+        return false
+      }
+      const paneKey = makePaneKey(request.sourceTabId, leafId)
+      return (
+        identity.paneKey === paneKey &&
+        session.terminalPtyIncarnationsByPaneKey?.[paneKey] === identity.incarnationId &&
+        layout.ptyIdsByLeafId?.[leafId] !== undefined
+      )
+    })
+  }
+
+  /** The repo's execution-host ownership is the only host-selection authority for durable facts. */
+  getWorkspaceSessionHostIdForWorktree(worktreeId: string): ExecutionHostId {
+    const repo = this.getRepo(getRepoIdFromWorktreeId(worktreeId))
+    return repo ? getRepoExecutionHostId(repo) : LOCAL_EXECUTION_HOST_ID
   }
 
   private isTerminalScrollbackSnapshotLive(ref: string): boolean {
@@ -5789,6 +5850,58 @@ export class Store {
       return
     }
     this.setHostWorkspaceSession(resolved, session)
+  }
+
+  /** Retires an already archived tab under the host topology fence, then sync-flushes before kill authority escapes. */
+  retireArchivedTerminalTabAndFlush(args: {
+    worktreeId: string
+    tabId: string
+    executionHostId: ExecutionHostId
+  }): ReturnType<typeof retireArchivedTerminalTab> {
+    const hostId = this.resolveHostId(args.executionHostId)
+    const session = this.getWorkspaceSession(hostId)
+    const retired = retireArchivedTerminalTab(session, args.worktreeId, args.tabId)
+    if (!retired.closed) {
+      return retired
+    }
+    const next = advanceTerminalTopologyRevision(retired.session, args.worktreeId)
+    const tabStillPresent =
+      next.tabsByWorktree[args.worktreeId]?.some((tab) => tab.id === args.tabId) ||
+      next.unifiedTabs?.[args.worktreeId]?.some(
+        (tab) => tab.id === args.tabId || tab.entityId === args.tabId
+      )
+    if (tabStillPresent) {
+      return { ...retired, closed: false, ptyIdsToKill: [] }
+    }
+    const previous = cloneWorkspaceSessionState(session)
+    if (hostId === LOCAL_EXECUTION_HOST_ID) {
+      this.state.workspaceSession = next
+    } else {
+      this.state.workspaceSessionsByHostId = {
+        ...this.state.workspaceSessionsByHostId,
+        [hostId]: next
+      }
+    }
+    try {
+      this.flushOrThrow()
+    } catch (error) {
+      if (hostId === LOCAL_EXECUTION_HOST_ID) {
+        this.state.workspaceSession = previous
+      } else {
+        this.state.workspaceSessionsByHostId = {
+          ...this.state.workspaceSessionsByHostId,
+          [hostId]: previous
+        }
+      }
+      throw error
+    }
+    const persisted = this.getWorkspaceSession(hostId)
+    const persistedTabStillPresent =
+      persisted.tabsByWorktree[args.worktreeId]?.some((tab) => tab.id === args.tabId) ||
+      persisted.unifiedTabs?.[args.worktreeId]?.some(
+        (tab) => tab.id === args.tabId || tab.entityId === args.tabId
+      )
+    return persistedTabStillPresent ? { ...retired, closed: false, ptyIdsToKill: [] } : retired
   }
 
   /** Persist a non-'local' host partition; remote hosts skip setLocalWorkspaceSession's local-daemon PTY-binding race guards. */
@@ -6103,6 +6216,10 @@ export class Store {
       ptyId: string
       incarnationId?: string
       startupCwd?: string
+      archiveHint?: {
+        hint: Partial<TerminalArchiveHint>
+        source: TerminalArchiveHintSource
+      }
     },
     hostId?: string | null
   ): void {
@@ -6226,6 +6343,15 @@ export class Store {
         }
       }
     }
+    if (args.archiveHint) {
+      const merged = mergeTerminalArchiveHintIntoSession({
+        session,
+        paneKey,
+        hint: args.archiveHint.hint,
+        source: args.archiveHint.source
+      })
+      session.terminalArchiveHintsByPaneKey = merged.terminalArchiveHintsByPaneKey
+    }
     advanceTopologyAfterMembershipChange()
     try {
       this.flushOrThrow()
@@ -6233,6 +6359,122 @@ export class Store {
       restoreSession()
       throw err
     }
+  }
+
+  /** Persists main-observed worker evidence without admitting renderer-provided state. */
+  persistTerminalArchiveHint(
+    args: {
+      paneKey: string
+      hint: Partial<TerminalArchiveHint>
+      source: TerminalArchiveHintSource
+    },
+    hostId?: string | null
+  ): void {
+    const resolvedHostId = this.resolveHostId(hostId)
+    const session = this.getWorkspaceSession(resolvedHostId)
+    const previous = cloneWorkspaceSessionState(session)
+    const merged = mergeTerminalArchiveHintIntoSession({
+      session,
+      paneKey: args.paneKey,
+      hint: args.hint,
+      source: args.source
+    })
+    if (resolvedHostId === LOCAL_EXECUTION_HOST_ID) {
+      this.state.workspaceSession = merged
+    } else {
+      this.state.workspaceSessionsByHostId = {
+        ...this.state.workspaceSessionsByHostId,
+        [resolvedHostId]: merged
+      }
+    }
+    try {
+      this.flushOrThrow()
+    } catch (error) {
+      if (resolvedHostId === LOCAL_EXECUTION_HOST_ID) {
+        this.state.workspaceSession = previous
+      } else {
+        this.state.workspaceSessionsByHostId = {
+          ...this.state.workspaceSessionsByHostId,
+          [resolvedHostId]: previous
+        }
+      }
+      throw error
+    }
+  }
+
+  /** Transfers both durable pane facts in one host-scoped, synchronous mutation. */
+  transferTerminalArchivePaneDurableState(
+    args: { fromPaneKey: string; toPaneKey: string },
+    hostId?: string | null
+  ): void {
+    const resolvedHostId = this.resolveHostId(hostId)
+    const session = this.getWorkspaceSession(resolvedHostId)
+    const moved = moveTerminalArchivePaneDurableState({ session, ...args })
+    if (moved === session) {
+      return
+    }
+    const previous = cloneWorkspaceSessionState(session)
+    if (resolvedHostId === LOCAL_EXECUTION_HOST_ID) {
+      this.state.workspaceSession = moved
+    } else {
+      this.state.workspaceSessionsByHostId = {
+        ...this.state.workspaceSessionsByHostId,
+        [resolvedHostId]: moved
+      }
+    }
+    try {
+      this.flushOrThrow()
+    } catch (error) {
+      if (resolvedHostId === LOCAL_EXECUTION_HOST_ID) {
+        this.state.workspaceSession = previous
+      } else {
+        this.state.workspaceSessionsByHostId = {
+          ...this.state.workspaceSessionsByHostId,
+          [resolvedHostId]: previous
+        }
+      }
+      throw error
+    }
+  }
+
+  /** Moves durable pane state only after the persisted layout proves the PTY and execution host. */
+  transferTerminalArchivePaneDurableStateForOwnedPty(args: {
+    fromPaneKey: string
+    toPaneKey: string
+    ptyId: string
+  }): TerminalArchivePaneDurableTransferResult {
+    const parsed = parsePaneKey(args.fromPaneKey)
+    if (!parsed) {
+      return { kind: 'not-owned' }
+    }
+    for (const repo of this.state.repos) {
+      const hostId = getRepoExecutionHostId(repo)
+      const session = this.getWorkspaceSession(hostId)
+      for (const [worktreeId, tabs] of Object.entries(session.tabsByWorktree)) {
+        if (getRepoIdFromWorktreeId(worktreeId) !== repo.id) {
+          continue
+        }
+        if (!tabs.some((tab) => tab.id === parsed.tabId)) {
+          continue
+        }
+        if (
+          session.terminalLayoutsByTabId[parsed.tabId]?.ptyIdsByLeafId?.[parsed.leafId] !==
+          args.ptyId
+        ) {
+          continue
+        }
+        try {
+          this.transferTerminalArchivePaneDurableState(
+            { fromPaneKey: args.fromPaneKey, toPaneKey: args.toPaneKey },
+            hostId
+          )
+          return { kind: 'transferred' }
+        } catch {
+          return { kind: 'durability-failed' }
+        }
+      }
+    }
+    return { kind: 'not-owned' }
   }
 
   // ── SSH Targets ────────────────────────────────────────────────────

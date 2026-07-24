@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import { OrchestrationDb } from './db'
 import { reconcileLifecycleMessage } from './lifecycle-reconciliation'
 import {
@@ -177,6 +177,31 @@ describe('Coordinator', () => {
 
     expect(db.getDispatchContext(task.id)?.assignee_pane_key).toBe('tab_a:leaf_a')
 
+    insertWorkerDone(db, { taskId: task.id })
+    await runPromise
+  })
+
+  it('persists dispatch task evidence before the worker can emit a hook', async () => {
+    db = new OrchestrationDb(':memory:')
+    const runtime = createMockRuntime()
+    const persistTaskEvidence = vi.fn()
+    runtime.terminals = [{ handle: 'term_a', worktreeId: 'wt1', connected: true, writable: true }]
+    const withDurableEvidence = Object.assign(runtime, {
+      persistTerminalOrchestrationTask: persistTaskEvidence
+    })
+    const task = db.createTask({ spec: 'implement feature' })
+    const coordinator = new Coordinator(db, withDurableEvidence, {
+      spec: 'build it',
+      coordinatorHandle: 'coord',
+      pollIntervalMs: 50
+    })
+
+    const runPromise = coordinator.run()
+    await new Promise((resolve) => {
+      setTimeout(resolve, 100)
+    })
+
+    expect(persistTaskEvidence).toHaveBeenCalledWith('term_a', task.id)
     insertWorkerDone(db, { taskId: task.id })
     await runPromise
   })

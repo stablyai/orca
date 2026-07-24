@@ -139,13 +139,16 @@ describe('SshRelaySession reconnect incarnation ordering', () => {
       incarnationId
     })
     expect(runtime.onPtySpawned).not.toHaveBeenCalled()
-    expect(mockStore.persistPtyBinding).toHaveBeenCalledWith({
-      worktreeId: 'worktree-1',
-      tabId: 'tab-1',
-      leafId: INCARNATION_LEAF_ID,
-      ptyId: APP_PTY_ID,
-      incarnationId
-    })
+    expect(mockStore.persistPtyBinding).toHaveBeenCalledWith(
+      {
+        worktreeId: 'worktree-1',
+        tabId: 'tab-1',
+        leafId: INCARNATION_LEAF_ID,
+        ptyId: APP_PTY_ID,
+        incarnationId
+      },
+      'ssh:target-1'
+    )
     expect(vi.mocked(mockStore.persistPtyBinding).mock.invocationCallOrder[0]).toBeLessThan(
       vi.mocked(mockStore.markSshRemotePtyLease).mock.invocationCallOrder[0]!
     )
@@ -237,7 +240,8 @@ describe('SshRelaySession reconnect incarnation ordering', () => {
     })
     expect(setPtyOwnership).toHaveBeenCalledWith(APP_PTY_ID, 'target-1')
     expect(mockStore.persistPtyBinding).toHaveBeenCalledWith(
-      expect.objectContaining({ ptyId: APP_PTY_ID, incarnationId: currentIncarnationId })
+      expect.objectContaining({ ptyId: APP_PTY_ID, incarnationId: currentIncarnationId }),
+      'ssh:target-1'
     )
     expect(routeExternalPtyReplay).toHaveBeenCalledWith({
       id: APP_PTY_ID,

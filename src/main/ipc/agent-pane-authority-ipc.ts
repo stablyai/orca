@@ -8,11 +8,33 @@ export type AgentPaneAuthorityOwnership = {
   ownsPty: (paneKey: string, ptyId: string) => boolean
 }
 
+export type AgentPaneAuthorityTransferResult =
+  | { kind: 'transferred' }
+  | { kind: 'not-owned' }
+  | { kind: 'durability-failed' }
+
+type AgentPaneAuthorityPersistence = {
+  transferPaneDurableState: (args: {
+    fromPaneKey: string
+    toPaneKey: string
+    ptyId: string
+  }) => AgentPaneAuthorityTransferResult
+}
+
+let paneAuthorityPersistence: AgentPaneAuthorityPersistence | null = null
+
+export function configureAgentPaneAuthorityPersistence(
+  persistence: AgentPaneAuthorityPersistence | null
+): void {
+  paneAuthorityPersistence = persistence
+}
+
 export function registerAgentPaneAuthorityIpcHandlers(
   ownership: AgentPaneAuthorityOwnership
 ): void {
   ipcMain.removeAllListeners('agentStatus:retirePaneAuthority')
   ipcMain.removeAllListeners('agentStatus:transferPaneAuthority')
+  ipcMain.removeHandler('agentStatus:transferPaneAuthority')
   ipcMain.on('agentStatus:retirePaneAuthority', (_event, paneKey: unknown) => {
     if (typeof paneKey !== 'string' || !isValidPaneKey(paneKey)) {
       return
@@ -24,9 +46,9 @@ export function registerAgentPaneAuthorityIpcHandlers(
       console.warn('[agent-hooks] retirePaneAuthority failed:', err)
     }
   })
-  ipcMain.on('agentStatus:transferPaneAuthority', (_event, value: unknown) => {
+  const transferPaneAuthority = (value: unknown): AgentPaneAuthorityTransferResult => {
     if (!value || typeof value !== 'object') {
-      return
+      return { kind: 'not-owned' }
     }
     const args = value as Record<string, unknown>
     const ptyId = typeof args.ptyId === 'string' ? args.ptyId : undefined
@@ -43,12 +65,28 @@ export function registerAgentPaneAuthorityIpcHandlers(
           args.ptyId.length === 0)) ||
       !agentHookServer.canTransferPaneAuthority(args.fromPaneKey, ptyId, ownership.ownsPty)
     ) {
-      return
+      return { kind: 'not-owned' }
     }
     try {
+      const durableTransfer = paneAuthorityPersistence?.transferPaneDurableState({
+        fromPaneKey: args.fromPaneKey,
+        toPaneKey: args.toPaneKey,
+        ptyId: ptyId ?? ''
+      })
+      if (!durableTransfer || durableTransfer.kind !== 'transferred') {
+        return durableTransfer ?? { kind: 'not-owned' }
+      }
       agentHookServer.transferPaneAuthority(args.fromPaneKey, args.toPaneKey, ptyId)
+      return { kind: 'transferred' }
     } catch (err) {
       console.warn('[agent-hooks] transferPaneAuthority failed:', err)
+      return { kind: 'durability-failed' }
     }
+  }
+  ipcMain.on('agentStatus:transferPaneAuthority', (_event, value: unknown) => {
+    transferPaneAuthority(value)
   })
+  ipcMain.handle('agentStatus:transferPaneAuthority', (_event, value: unknown) =>
+    transferPaneAuthority(value)
+  )
 }

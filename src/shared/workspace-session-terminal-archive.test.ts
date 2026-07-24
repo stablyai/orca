@@ -4,6 +4,7 @@ import {
   captureTerminalArchiveTab,
   createPrioritizedTerminalArchiveSnapshotSource,
   mergeTerminalArchiveHint,
+  moveTerminalArchivePaneDurableState,
   retireArchivedTerminalTab,
   shouldArchiveTerminalClose
 } from './workspace-session-terminal-archive'
@@ -179,6 +180,34 @@ describe('workspace terminal archive transition', () => {
       startupCommand: 'codex resume',
       launchAgent: 'codex'
     })
+  })
+
+  it('does not persist malformed task or launch-agent evidence', () => {
+    expect(
+      mergeTerminalArchiveHint(
+        undefined,
+        { orchestrationTaskId: ' task-1 ', launchAgent: 'unknown' as never },
+        'hook'
+      )
+    ).toEqual({})
+  })
+
+  it('moves pane hint and incarnation as one authority transfer', () => {
+    const moved = moveTerminalArchivePaneDurableState({
+      session: session(),
+      fromPaneKey: `${TAB_ID}:${RIGHT_LEAF}`,
+      toPaneKey: `${TAB_ID}:${LEFT_LEAF}`
+    })
+
+    expect(moved.terminalArchiveHintsByPaneKey?.[`${TAB_ID}:${RIGHT_LEAF}`]).toBeUndefined()
+    expect(moved.terminalPtyIncarnationsByPaneKey?.[`${TAB_ID}:${RIGHT_LEAF}`]).toBeUndefined()
+    expect(moved.terminalArchiveHintsByPaneKey?.[`${TAB_ID}:${LEFT_LEAF}`]).toMatchObject({
+      launchAgent: 'codex',
+      orchestrationTaskId: 'task-1'
+    })
+    expect(moved.terminalPtyIncarnationsByPaneKey?.[`${TAB_ID}:${LEFT_LEAF}`]).toBe(
+      'right-incarnation'
+    )
   })
 
   it.each([

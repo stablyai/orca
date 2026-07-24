@@ -7114,6 +7114,27 @@ describe('Store', () => {
     const store = await createStore()
     const worktreeId = 'repo-1::/worktree'
     store.addRepo(makeRepo({ id: 'repo-1', connectionId: 'ssh-target-1' }))
+    store.setWorktreeMeta(worktreeId, { displayName: 'worktree' })
+    store.setWorkspaceSession(
+      {
+        ...getDefaultWorkspaceSession(),
+        tabsByWorktree: {
+          [worktreeId]: [makeTerminalTab({ id: 'tab-archive', ptyId: 'archive-pty', worktreeId })]
+        },
+        terminalLayoutsByTabId: {
+          'tab-archive': {
+            root: { type: 'leaf', leafId: TEST_LEAF_1 },
+            activeLeafId: TEST_LEAF_1,
+            expandedLeafId: null,
+            ptyIdsByLeafId: { [TEST_LEAF_1]: 'archive-pty' }
+          }
+        },
+        terminalPtyIncarnationsByPaneKey: {
+          [`tab-archive:${TEST_LEAF_1}`]: 'archive-incarnation'
+        }
+      },
+      'ssh:ssh-target-1'
+    )
     const archiveStore = store.createTerminalArchiveStore({
       capture: async () => ({
         kind: 'captured-bytes' as const,
@@ -7126,7 +7147,7 @@ describe('Store', () => {
     const archive = await archiveStore.archiveTerminalTab({
       operationId: 'close-intent-archive-ref',
       sourceTabId: 'tab-archive',
-      executionHostId: 'local',
+      executionHostId: 'ssh:ssh-target-1',
       worktreeId,
       title: 'Archived terminal',
       layout: {
@@ -10665,6 +10686,31 @@ describe('Store host-partitioned workspace sessions', () => {
     }
   })
 
+  async function archiveBoundTerminal(
+    store: Awaited<ReturnType<typeof createStore>>,
+    executionHostId: 'local' | `ssh:${string}` | `runtime:${string}`,
+    incarnationId = 'incarnation-1',
+    capture = vi.fn(async () => ({ kind: 'captured-empty' as const }))
+  ): Promise<void> {
+    await store.createTerminalArchiveStore({ capture }).archiveTerminalTab({
+      operationId: 'ownership-check',
+      sourceTabId: 'tab-1',
+      executionHostId,
+      worktreeId: 'repo-1::/worktree',
+      title: 'Terminal',
+      layout: {
+        root: { type: 'leaf', leafId: TEST_LEAF_1 },
+        activeLeafId: TEST_LEAF_1,
+        expandedLeafId: null
+      },
+      panesByLeafId: { [TEST_LEAF_1]: { archivedLeafId: TEST_LEAF_1, cwd: '/worktree' } },
+      sourcePaneIdentityByLeafId: {
+        [TEST_LEAF_1]: { paneKey: `tab-1:${TEST_LEAF_1}`, incarnationId }
+      },
+      reason: 'user-close'
+    })
+  }
+
   it('migrates a legacy workspaceSession blob into the local partition', async () => {
     writeDataFile({
       schemaVersion: 1,
@@ -10680,6 +10726,102 @@ describe('Store host-partitioned workspace sessions', () => {
     store.flush()
     const persisted = readDataFile() as { workspaceSession?: { activeRepoId?: string } }
     expect(persisted.workspaceSession?.activeRepoId).toBe('legacy-repo')
+  })
+
+  it.each([
+    ['local worktree from an SSH request', { id: 'repo-1' }, 'local', 'ssh:ssh-a'],
+    [
+      'SSH A worktree from SSH B',
+      { id: 'repo-1', connectionId: 'ssh-a' },
+      'ssh:ssh-a',
+      'ssh:ssh-b'
+    ],
+    [
+      'runtime A worktree from a stale runtime B',
+      { id: 'repo-1', executionHostId: 'runtime:env-a' },
+      'runtime:env-a',
+      'runtime:env-b'
+    ]
+  ])('rejects %s before writing archive sidecars', async (_label, repo, ownerHost, requestHost) => {
+    const store = await createStore()
+    const worktreeId = 'repo-1::/worktree'
+    const paneKey = `tab-1:${TEST_LEAF_1}`
+    const capture = vi.fn(async () => ({ kind: 'captured-empty' as const }))
+    store.addRepo(makeRepo(repo as Partial<Repo>))
+    store.setWorktreeMeta(worktreeId, { displayName: 'worktree' })
+    store.setWorkspaceSession(
+      {
+        ...makeBoundHostSession('pty-1'),
+        terminalPtyIncarnationsByPaneKey: { [paneKey]: 'incarnation-1' }
+      },
+      ownerHost
+    )
+
+    await expect(
+      archiveBoundTerminal(
+        store,
+        requestHost as 'local' | `ssh:${string}` | `runtime:${string}`,
+        'incarnation-1',
+        capture
+      )
+    ).rejects.toMatchObject({ code: 'not-owned' })
+    expect(capture).not.toHaveBeenCalled()
+    expect(store.getTerminalArchives()).toEqual({})
+  })
+
+  it('rejects a stale PTY incarnation before writing archive sidecars', async () => {
+    const store = await createStore()
+    const worktreeId = 'repo-1::/worktree'
+    const capture = vi.fn(async () => ({ kind: 'captured-empty' as const }))
+    store.addRepo(makeRepo({ id: 'repo-1' }))
+    store.setWorktreeMeta(worktreeId, { displayName: 'worktree' })
+    store.setWorkspaceSession({
+      ...makeBoundHostSession('pty-1'),
+      terminalPtyIncarnationsByPaneKey: { [`tab-1:${TEST_LEAF_1}`]: 'current-incarnation' }
+    })
+
+    await expect(
+      archiveBoundTerminal(store, 'local', 'stale-incarnation', capture)
+    ).rejects.toMatchObject({ code: 'not-owned' })
+    expect(capture).not.toHaveBeenCalled()
+    expect(store.getTerminalArchives()).toEqual({})
+  })
+
+  it('rejects a partial frozen split before capture even when every requested leaf is current', async () => {
+    const store = await createStore()
+    const worktreeId = 'repo-1::/worktree'
+    const secondPaneKey = `tab-1:${TEST_LEAF_2}`
+    const capture = vi.fn(async () => ({ kind: 'captured-empty' as const }))
+    store.addRepo(makeRepo({ id: 'repo-1' }))
+    store.setWorktreeMeta(worktreeId, { displayName: 'worktree' })
+    store.setWorkspaceSession({
+      ...makeBoundHostSession('pty-1'),
+      terminalLayoutsByTabId: {
+        'tab-1': {
+          root: {
+            type: 'split',
+            direction: 'vertical',
+            first: { type: 'leaf', leafId: TEST_LEAF_1 },
+            second: { type: 'leaf', leafId: TEST_LEAF_2 }
+          },
+          activeLeafId: TEST_LEAF_1,
+          expandedLeafId: null,
+          ptyIdsByLeafId: { [TEST_LEAF_1]: 'pty-1', [TEST_LEAF_2]: 'pty-2' }
+        }
+      },
+      terminalPtyIncarnationsByPaneKey: {
+        [`tab-1:${TEST_LEAF_1}`]: 'incarnation-1',
+        [secondPaneKey]: 'incarnation-2'
+      }
+    })
+
+    await expect(
+      archiveBoundTerminal(store, 'local', 'incarnation-1', capture)
+    ).rejects.toMatchObject({
+      code: 'not-owned'
+    })
+    expect(capture).not.toHaveBeenCalled()
+    expect(store.getTerminalArchives()).toEqual({})
   })
 
   it('is idempotent: re-loading already-partitioned state preserves all hosts', async () => {
@@ -10829,6 +10971,178 @@ describe('Store host-partitioned workspace sessions', () => {
     ).toBeNull()
   })
 
+  it('flushes spawn evidence with its PTY incarnation only in the execution host session', async () => {
+    const store = await createStore()
+    store.setWorkspaceSession(makeBoundHostSession(null), 'local')
+    store.setWorkspaceSession(makeBoundHostSession(null), 'ssh:ssh-1')
+
+    store.persistPtyBinding(
+      {
+        worktreeId: 'repo-1::/worktree',
+        tabId: 'tab-1',
+        leafId: TEST_LEAF_1,
+        ptyId: 'ssh:ssh-1@@remote-pty',
+        incarnationId: 'remote-incarnation',
+        archiveHint: {
+          source: 'launch',
+          hint: {
+            cwd: '/worktree',
+            launchAgent: 'codex',
+            providerSession: { key: 'session_id', id: 'session-1' },
+            startedAt: 10
+          }
+        }
+      },
+      'ssh:ssh-1'
+    )
+
+    const remote = store.getWorkspaceSession('ssh:ssh-1')
+    expect(remote.terminalPtyIncarnationsByPaneKey?.[`tab-1:${TEST_LEAF_1}`]).toBe(
+      'remote-incarnation'
+    )
+    expect(remote.terminalArchiveHintsByPaneKey?.[`tab-1:${TEST_LEAF_1}`]).toMatchObject({
+      launchAgent: 'codex',
+      providerSession: { id: 'session-1' }
+    })
+    expect(store.getWorkspaceSession('local').terminalArchiveHintsByPaneKey).toEqual({})
+  })
+
+  it('keeps an SSH reconnect incarnation and its hint out of the local partition', async () => {
+    const store = await createStore()
+    const paneKey = `tab-1:${TEST_LEAF_1}`
+    const remote = {
+      ...makeBoundHostSession('ssh:ssh-1@@remote-pty'),
+      terminalPtyIncarnationsByPaneKey: { [paneKey]: 'old-incarnation' },
+      terminalArchiveHintsByPaneKey: {
+        [paneKey]: { launchAgent: 'codex' as const, startedAt: 10 }
+      }
+    }
+    store.setWorkspaceSession(makeBoundHostSession(null), 'local')
+    store.setWorkspaceSession(remote, 'ssh:ssh-1')
+
+    store.persistPtyBinding(
+      {
+        worktreeId: 'repo-1::/worktree',
+        tabId: 'tab-1',
+        leafId: TEST_LEAF_1,
+        ptyId: 'ssh:ssh-1@@remote-pty',
+        incarnationId: 'reconnected-incarnation'
+      },
+      'ssh:ssh-1'
+    )
+
+    expect(store.getWorkspaceSession('ssh:ssh-1').terminalPtyIncarnationsByPaneKey?.[paneKey]).toBe(
+      'reconnected-incarnation'
+    )
+    expect(
+      store.getWorkspaceSession('ssh:ssh-1').terminalArchiveHintsByPaneKey?.[paneKey]
+    ).toMatchObject({
+      launchAgent: 'codex'
+    })
+    expect(
+      store.getWorkspaceSession('local').terminalPtyIncarnationsByPaneKey?.[paneKey]
+    ).toBeUndefined()
+    expect(store.getWorkspaceSession('local').terminalArchiveHintsByPaneKey).toEqual({})
+  })
+
+  it.each([
+    ['local', {}, 'local'],
+    ['SSH', { connectionId: 'ssh-1' }, 'ssh:ssh-1'],
+    ['runtime', { executionHostId: 'runtime:env-a' }, 'runtime:env-a']
+  ] as const)(
+    'writes hook and dispatch evidence only to the authoritative %s partition',
+    async (_label, repoOverrides, hostId) => {
+      const store = await createStore()
+      const worktreeId = 'repo-1::/worktree'
+      const paneKey = `tab-1:${TEST_LEAF_1}`
+      store.addRepo(makeRepo({ id: 'repo-1', ...repoOverrides }))
+      store.setWorktreeMeta(worktreeId, { displayName: 'worktree' })
+      store.setWorkspaceSession(makeBoundHostSession('pty-1'), hostId)
+
+      const resolvedHostId = store.getWorkspaceSessionHostIdForWorktree(worktreeId)
+      store.persistTerminalArchiveHint(
+        { paneKey, hint: { orchestrationTaskId: `task-${hostId}` }, source: 'hook' },
+        resolvedHostId
+      )
+
+      expect(resolvedHostId).toBe(hostId)
+      expect(
+        store.getWorkspaceSession(hostId).terminalArchiveHintsByPaneKey?.[paneKey]
+          ?.orchestrationTaskId
+      ).toBe(`task-${hostId}`)
+      for (const otherHostId of ['local', 'ssh:ssh-1', 'runtime:env-a']) {
+        if (otherHostId !== hostId) {
+          expect(
+            store.getWorkspaceSession(otherHostId).terminalArchiveHintsByPaneKey?.[paneKey]
+          ).toBeUndefined()
+        }
+      }
+    }
+  )
+
+  it('moves runtime pane durable state only after the persisted runtime owner proves the PTY', async () => {
+    const store = await createStore()
+    const sourcePaneKey = `tab-1:${TEST_LEAF_1}`
+    const targetPaneKey = `tab-2:${TEST_LEAF_2}`
+    store.addRepo(makeRepo({ id: 'repo-1', executionHostId: 'runtime:env-a' }))
+    store.setWorkspaceSession(
+      {
+        ...makeBoundHostSession('runtime-pty'),
+        terminalPtyIncarnationsByPaneKey: { [sourcePaneKey]: 'runtime-incarnation' },
+        terminalArchiveHintsByPaneKey: {
+          [sourcePaneKey]: { launchAgent: 'codex' as const, startedAt: 10 }
+        }
+      },
+      'runtime:env-a'
+    )
+
+    expect(
+      store.transferTerminalArchivePaneDurableStateForOwnedPty({
+        fromPaneKey: sourcePaneKey,
+        toPaneKey: targetPaneKey,
+        ptyId: 'runtime-pty'
+      })
+    ).toEqual({ kind: 'transferred' })
+    expect(
+      store.getWorkspaceSession('runtime:env-a').terminalPtyIncarnationsByPaneKey?.[targetPaneKey]
+    ).toBe('runtime-incarnation')
+    expect(
+      store.getWorkspaceSession('runtime:env-a').terminalArchiveHintsByPaneKey?.[targetPaneKey]
+    ).toMatchObject({ launchAgent: 'codex' })
+    expect(
+      store.getWorkspaceSession('runtime:env-a').terminalArchiveHintsByPaneKey?.[sourcePaneKey]
+    ).toBeUndefined()
+    expect(
+      store.getWorkspaceSession('local').terminalArchiveHintsByPaneKey?.[targetPaneKey]
+    ).toBeUndefined()
+  })
+
+  it('sync-flushes archive retirement behind a topology fence that stale session replays cannot rebase', async () => {
+    const store = await createStore()
+    const worktreeId = 'repo-1::/worktree'
+    const initial = {
+      ...makeBoundHostSession('pty-1'),
+      terminalTopologyRevisionByRepoId: { 'repo-1': 3 }
+    }
+    store.setWorkspaceSession(initial)
+    const stale = structuredClone(store.getWorkspaceSession())
+    const flush = vi.spyOn(store, 'flushOrThrow')
+
+    const retired = store.retireArchivedTerminalTabAndFlush({
+      worktreeId,
+      tabId: 'tab-1',
+      executionHostId: 'local'
+    })
+
+    expect(retired.closed).toBe(true)
+    expect(flush).toHaveBeenCalledTimes(1)
+    expect(store.getWorkspaceSession().tabsByWorktree[worktreeId]).toEqual([])
+    expect(store.getWorkspaceSession().terminalTopologyRevisionByRepoId?.['repo-1']).toBe(4)
+    store.setWorkspaceSession(stale)
+    expect(store.getWorkspaceSession().tabsByWorktree[worktreeId]).toEqual([])
+    flush.mockRestore()
+  })
+
   it('rolls back a failed SSH PTY binding flush in the SSH host partition', async () => {
     const store = await createStore()
     store.setWorkspaceSession(makeBoundHostSession(null), 'local')
@@ -10843,7 +11157,12 @@ describe('Store host-partitioned workspace sessions', () => {
           worktreeId: 'repo-1::/worktree',
           tabId: 'tab-1',
           leafId: TEST_LEAF_1,
-          ptyId: 'ssh:ssh-1@@remote-pty'
+          ptyId: 'ssh:ssh-1@@remote-pty',
+          incarnationId: 'remote-incarnation',
+          archiveHint: {
+            source: 'launch',
+            hint: { launchAgent: 'codex', startedAt: 10 }
+          }
         },
         'ssh:ssh-1'
       )
@@ -10856,6 +11175,8 @@ describe('Store host-partitioned workspace sessions', () => {
     expect(
       store.getWorkspaceSession('local').tabsByWorktree['repo-1::/worktree'][0]?.ptyId
     ).toBeNull()
+    expect(store.getWorkspaceSession('ssh:ssh-1').terminalPtyIncarnationsByPaneKey).toBeUndefined()
+    expect(store.getWorkspaceSession('ssh:ssh-1').terminalArchiveHintsByPaneKey).toEqual({})
   })
 
   it('clears expired SSH PTY bindings from the SSH partition and legacy local copy', async () => {

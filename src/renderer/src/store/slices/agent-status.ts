@@ -47,6 +47,19 @@ import {
 import { createFreshnessScheduler } from './agent-status-freshness-scheduler'
 import { retainTransientAgentStatusClearedConnection } from '@/lib/transient-agent-status-clear-retention'
 
+function persistAgentPaneAuthorityTransfer(
+  args: { fromPaneKey: string; toPaneKey: string; ptyId?: string },
+  attempt = 0
+): void {
+  const request = window.api?.agentStatus?.transferPaneAuthority?.(args)
+  void Promise.resolve(request).then((result) => {
+    if (result?.kind === 'durability-failed' && attempt < 2) {
+      // Renderer membership moves first; retry only a confirmed transient durable failure.
+      setTimeout(() => persistAgentPaneAuthorityTransfer(args, attempt + 1), 100 * (attempt + 1))
+    }
+  })
+}
+
 /** Snapshot of a finished/vanished agent status entry, kept so the dashboard and sidebar hover
  *  keep showing the completion until the user clicks the worktree. `worktreeId` is stamped at
  *  retention time so the row's home is known even after its tab/pty is gone. */
@@ -1357,7 +1370,7 @@ export const createAgentStatusSlice: StateCreator<AppState, [], [], AgentStatusS
         retentionSuppressedPaneKeys: movePaneKeyedRecord(s.retentionSuppressedPaneKeys, from, to)
       }))
       if (typeof window !== 'undefined') {
-        window.api?.agentStatus?.transferPaneAuthority?.({
+        persistAgentPaneAuthorityTransfer({
           fromPaneKey: from,
           toPaneKey: to,
           ...(transfer.ptyId ? { ptyId: transfer.ptyId } : {})

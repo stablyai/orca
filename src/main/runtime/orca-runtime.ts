@@ -951,6 +951,7 @@ export type AccountsSnapshot = {
 type RuntimeStore = {
   getRepos: Store['getRepos']
   getRepo: Store['getRepo']
+  getWorkspaceSessionHostIdForWorktree?: Store['getWorkspaceSessionHostIdForWorktree']
   addRepo: Store['addRepo']
   updateRepo: Store['updateRepo']
   getProjects?: Store['getProjects']
@@ -988,6 +989,7 @@ type RuntimeStore = {
   readTerminalScrollbackSnapshot?: Store['readTerminalScrollbackSnapshot']
   flushOrThrow?: Store['flushOrThrow']
   persistPtyBinding?: Store['persistPtyBinding']
+  persistTerminalArchiveHint?: Store['persistTerminalArchiveHint']
   getSshRemotePtyLeases?: Store['getSshRemotePtyLeases']
   getUI?: Store['getUI']
   updateUI?: Store['updateUI']
@@ -3401,6 +3403,10 @@ export class OrcaRuntimeService {
   }
 
   private getWorkspaceSessionHostIdForWorktree(worktreeId: string): ExecutionHostId {
+    const authoritativeHostId = this.store?.getWorkspaceSessionHostIdForWorktree?.(worktreeId)
+    if (authoritativeHostId) {
+      return authoritativeHostId
+    }
     const repo = this.store?.getRepo?.(getRepoIdFromWorktreeId(worktreeId))
     return repo ? getRepoExecutionHostId(repo) : 'local'
   }
@@ -13502,6 +13508,30 @@ export class OrcaRuntimeService {
   // dispatch still works for handles without a resolvable pane.
   getTerminalPaneKey(handle: string): string | null {
     return this.getPaneKeyForTerminalHandle(handle)
+  }
+
+  persistTerminalOrchestrationTask(handle: string, taskId: string): void {
+    if (
+      !this.store?.persistTerminalArchiveHint ||
+      !taskId ||
+      taskId.length > 512 ||
+      taskId.trim() !== taskId
+    ) {
+      return
+    }
+    const paneKey = this.getTerminalPaneKey(handle)
+    const pty = paneKey ? this.getPtyRecordForPaneKey(paneKey) : null
+    if (!paneKey || !pty) {
+      return
+    }
+    this.store.persistTerminalArchiveHint(
+      {
+        paneKey,
+        hint: { orchestrationTaskId: taskId },
+        source: 'hook'
+      },
+      this.getWorkspaceSessionHostIdForWorktree(pty.worktreeId)
+    )
   }
 
   resolveTerminalPane(paneKey: string, expectedWorktreeId?: string): RuntimeTerminalResolvePane {

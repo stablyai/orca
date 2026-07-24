@@ -1043,13 +1043,16 @@ export class SshRelaySession {
             })
             // Why: reconnect may be the first new-relay response that can backfill exact exit fencing.
             try {
-              this.store.persistPtyBinding({
-                worktreeId: lease.worktreeId,
-                tabId: lease.tabId,
-                leafId: lease.leafId,
-                ptyId: appPtyId,
-                incarnationId: attachResult.incarnationId
-              })
+              this.store.persistPtyBinding(
+                {
+                  worktreeId: lease.worktreeId,
+                  tabId: lease.tabId,
+                  leafId: lease.leafId,
+                  ptyId: appPtyId,
+                  incarnationId: attachResult.incarnationId
+                },
+                toSshExecutionHostId(this.targetId)
+              )
             } catch (error) {
               // Why: this backfill improves future fencing but must not disconnect an already-live relay PTY.
               console.error('[ssh-relay-session] Failed to persist reconnect incarnation:', error)

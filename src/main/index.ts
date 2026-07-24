@@ -169,6 +169,7 @@ import { findTrustedCodexSessionResume } from './codex/codex-session-resume-home
 import { getSystemCodexHomePath } from './codex/codex-home-paths'
 import { normalizeRuntimePathForComparison } from '../shared/cross-platform-path'
 import type { AgentProviderSessionMetadata } from '../shared/agent-session-resume'
+import { isTuiAgent } from '../shared/tui-agent-config'
 import { getDefaultWslDistro } from './wsl'
 import { ClaudeAccountService } from './claude-accounts/service'
 import { ClaudeRuntimeAuthService } from './claude-accounts/runtime-auth-service'
@@ -1223,6 +1224,22 @@ function openMainWindow(): BrowserWindow {
       promptInteractionKey,
       isReplay
     }) => {
+      const orchestration = runtime?.getAgentStatusOrchestrationContextForPaneKey(paneKey)
+      const hint = {
+        ...(providerSession ? { providerSession } : {}),
+        ...(isTuiAgent(payload.agentType) ? { launchAgent: payload.agentType } : {}),
+        ...(orchestration?.taskId ? { orchestrationTaskId: orchestration.taskId } : {})
+      }
+      if (store && worktreeId && Object.keys(hint).length > 0) {
+        try {
+          store.persistTerminalArchiveHint(
+            { paneKey, hint, source: 'hook' },
+            store.getWorkspaceSessionHostIdForWorktree(worktreeId)
+          )
+        } catch (error) {
+          console.warn('[agent-hooks] failed to persist terminal archive evidence:', error)
+        }
+      }
       if (mainWindow?.isDestroyed()) {
         return
       }
@@ -1243,7 +1260,6 @@ function openMainWindow(): BrowserWindow {
         return
       }
       maybeAutoRenameBranchOnFirstWorkFromHook({ paneKey, tabId, worktreeId, payload, isReplay })
-      const orchestration = runtime?.getAgentStatusOrchestrationContextForPaneKey(paneKey)
       const terminalHandle = runtime?.getAgentStatusTerminalHandleForPaneKey(paneKey)
       mainWindow?.webContents.send('agentStatus:set', {
         ...payload,

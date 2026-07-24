@@ -818,7 +818,7 @@ function createWebPreloadApi(): Partial<PreloadApi> {
       drop: () => {},
       dropByTabPrefix: () => {},
       retirePaneAuthority: () => {},
-      transferPaneAuthority: () => {}
+      transferPaneAuthority: async () => ({ kind: 'not-owned' as const })
     },
     mobile: {
       listNetworkInterfaces: () => Promise.resolve({ interfaces: [] }),

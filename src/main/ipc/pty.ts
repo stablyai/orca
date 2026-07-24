@@ -62,6 +62,7 @@ import {
   getFirstCommandToken
 } from '../../shared/command-token-scanner'
 import { agentHookServer } from '../agent-hooks/server'
+import { configureAgentPaneAuthorityPersistence } from './agent-pane-authority-ipc'
 import { wslHookRelayManager } from '../agent-hooks/wsl-hook-relay-manager'
 import { isAgentStatusHooksEnabled } from '../agent-hooks/managed-agent-hook-controls'
 import { piTitlebarExtensionService } from '../pi/titlebar-extension-service'
@@ -1605,6 +1606,22 @@ export function registerPtyHandlers(
     isRecoveryReloadInFlight?: (webContentsId: number) => boolean
   }
 ): void {
+  configureAgentPaneAuthorityPersistence(
+    store
+      ? {
+          transferPaneDurableState: ({ fromPaneKey, toPaneKey, ptyId }) => {
+            if (!ptyId) {
+              return { kind: 'not-owned' }
+            }
+            return store.transferTerminalArchivePaneDurableStateForOwnedPty({
+              fromPaneKey,
+              toPaneKey,
+              ptyId
+            })
+          }
+        }
+      : null
+  )
   // Why: a re-registration means a new window owns delivery — cancel the prior closure's watchdog and neutralize its bridged reset so mark-hidden below can't arm a timer against the dead closure.
   clearRendererDispatcherReadyWatchdog()
   resetRendererDeliveryAccountingForLifecycleReset = () => {}
@@ -3297,6 +3314,36 @@ export function registerPtyHandlers(
     })
   }
 
+  const archiveHintForSpawn = (
+    args: {
+      command?: string
+      launchAgent?: TuiAgent
+      resumeProviderSession?: AgentProviderSessionMetadata
+    },
+    cwd: string | undefined,
+    shellOverride: string | undefined,
+    isReattach = false
+  ) => {
+    if (isReattach) {
+      return { source: 'spawn' as const, hint: {} }
+    }
+    const launchAgent = isTuiAgent(args.launchAgent) ? args.launchAgent : undefined
+    const providerSession = normalizeAgentProviderSession(args.resumeProviderSession)
+    return {
+      source: launchAgent ? ('launch' as const) : ('spawn' as const),
+      hint: {
+        ...(cwd ? { cwd } : {}),
+        ...(typeof args.command === 'string' && args.command
+          ? { startupCommand: args.command }
+          : {}),
+        ...(shellOverride ? { shellOverride } : {}),
+        ...(launchAgent ? { launchAgent } : {}),
+        ...(providerSession ? { providerSession } : {}),
+        startedAt: Date.now()
+      }
+    }
+  }
+
   // Why: route through getProviderForPty() so CLI commands work for remote PTYs too; localProvider would silently fail for them.
   runtime?.setPtyController({
     spawn: async (args) => {
@@ -3842,7 +3889,13 @@ export function registerPtyHandlers(
               leafId: hostSessionBinding.leafId,
               ptyId: result.id,
               ...(result.incarnationId ? { incarnationId: result.incarnationId } : {}),
-              ...(cwd ? { startupCwd: cwd } : {})
+              ...(cwd ? { startupCwd: cwd } : {}),
+              archiveHint: archiveHintForSpawn(
+                args,
+                cwd,
+                daemonShellOverride,
+                result.isReattach === true
+              )
             }
             if (args.connectionId) {
               hostSessionBinding.store.persistPtyBinding(
@@ -4923,7 +4976,13 @@ export function registerPtyHandlers(
               leafId: validatedLeafId,
               ptyId: result.id,
               ...(result.incarnationId ? { incarnationId: result.incarnationId } : {}),
-              ...(cwd ? { startupCwd: cwd } : {})
+              ...(cwd ? { startupCwd: cwd } : {}),
+              archiveHint: archiveHintForSpawn(
+                args,
+                cwd,
+                effectiveShellOverride,
+                result.isReattach === true
+              )
             }
             if (args.connectionId) {
               store.persistPtyBinding(binding, toSshExecutionHostId(args.connectionId))

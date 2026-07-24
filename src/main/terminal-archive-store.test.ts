@@ -68,6 +68,11 @@ function repository(options: { failFlush?: boolean } = {}): {
       getTerminalArchiveRetentionDays: () => 7,
       isExecutionHostReachable: (hostId) => hostId === 'local',
       worktreeExists: (worktreeId, hostId) => worktreeId === WORKTREE_ID && hostId === 'local',
+      // This fixture explicitly authorizes only its local test worktree; rejection has dedicated cases below.
+      isTerminalArchiveRequestOwned: (archiveRequest) =>
+        archiveRequest.executionHostId === 'local' &&
+        archiveRequest.worktreeId === WORKTREE_ID &&
+        archiveRequest.sourceTabId === 'tab-1',
       isTerminalScrollbackSnapshotLive: (ref) =>
         Object.values(archives).some((archive) =>
           Object.values(archive.panesByLeafId).some((pane) => pane.snapshot?.ref === ref)
@@ -196,7 +201,7 @@ describe('TerminalArchiveStore', () => {
           }
         })
       )
-    ).rejects.toThrow('different source pane incarnation')
+    ).rejects.toMatchObject({ code: 'stale-source' })
     expect(snapshotSource.capture).toHaveBeenCalledTimes(1)
   })
 
@@ -207,10 +212,45 @@ describe('TerminalArchiveStore', () => {
     }
     const store = new TerminalArchiveStore(repo.value, snapshotSource)
 
-    await expect(store.archiveTerminalTab(request())).rejects.toThrow(
-      'Terminal scrollback capture unavailable'
-    )
+    await expect(store.archiveTerminalTab(request())).rejects.toMatchObject({
+      code: 'capture-unavailable'
+    })
     expect(repo.archives).toEqual({})
+  })
+
+  it('rejects an unowned host/worktree/PTY request before sidecar capture', async () => {
+    const repo = repository()
+    const snapshotSource = source()
+    repo.value.isTerminalArchiveRequestOwned = vi.fn(() => false)
+    const store = new TerminalArchiveStore(repo.value, snapshotSource)
+
+    await expect(store.archiveTerminalTab(request())).rejects.toMatchObject({ code: 'not-owned' })
+
+    expect(snapshotSource.capture).not.toHaveBeenCalled()
+    expect(repo.archives).toEqual({})
+    expect(existsSync(join(testState.root, 'terminal-scrollback'))).toBe(false)
+  })
+
+  it('rechecks ownership after capture and rolls back staged sidecars on a topology CAS loss', async () => {
+    const repo = repository()
+    const ownership = vi
+      .fn<
+        (
+          request: Parameters<TerminalArchiveRepository['isTerminalArchiveRequestOwned']>[0]
+        ) => boolean
+      >()
+      .mockReturnValueOnce(true)
+      .mockReturnValueOnce(false)
+    repo.value.isTerminalArchiveRequestOwned = ownership
+    const snapshotSource = source()
+    const store = new TerminalArchiveStore(repo.value, snapshotSource)
+
+    await expect(store.archiveTerminalTab(request())).rejects.toMatchObject({ code: 'not-owned' })
+
+    expect(ownership).toHaveBeenCalledTimes(2)
+    expect(snapshotSource.capture).toHaveBeenCalledTimes(1)
+    expect(repo.archives).toEqual({})
+    expect(readdirSync(join(testState.root, 'terminal-scrollback'))).toEqual([])
   })
 
   it('archives a known-empty terminal without writing a sidecar', async () => {

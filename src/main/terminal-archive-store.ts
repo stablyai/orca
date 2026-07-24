@@ -25,6 +25,7 @@ import {
   deleteUnreferencedTerminalArchiveSnapshots,
   stageTerminalArchivePaneSnapshot
 } from './terminal-archive-snapshot-staging'
+import { TerminalArchiveError } from './terminal-archive-failure'
 
 export type ArchiveTerminalTabRequest = {
   operationId: string
@@ -65,6 +66,13 @@ export type TerminalArchiveRepository = {
   getTerminalArchiveRetentionDays(): number
   isExecutionHostReachable(hostId: ExecutionHostId): boolean
   worktreeExists(worktreeId: string, hostId: ExecutionHostId): boolean
+  /** Must fail closed before and after snapshot capture. */
+  isTerminalArchiveRequestOwned(request: {
+    executionHostId: ExecutionHostId
+    worktreeId: string
+    sourceTabId: string
+    sourcePaneIdentityByLeafId: Record<string, TerminalArchiveSourcePaneIdentity>
+  }): boolean
   isTerminalScrollbackSnapshotLive(ref: string): boolean
   terminalScrollbackSnapshotStorage?: TerminalScrollbackSnapshotStorage
 }
@@ -86,6 +94,7 @@ export class TerminalArchiveStore {
 
   archiveTerminalTab(request: ArchiveTerminalTabRequest): Promise<ArchivedTerminalTab> {
     return this.runSerial(async () => {
+      this.assertRequestOwned(request)
       const now = this.now()
       this.pruneAt(now)
       const sourcePaneSignature = makeTerminalArchiveSourcePaneSignature(
@@ -104,7 +113,7 @@ export class TerminalArchiveStore {
       if (
         operationArchives.some((archive) => archive.sourcePaneSignature !== sourcePaneSignature)
       ) {
-        throw new Error('Terminal archive operation targets a different source pane incarnation')
+        throw new TerminalArchiveError('stale-source')
       }
 
       const archiveId = existing?.id ?? randomUUID()
@@ -115,7 +124,7 @@ export class TerminalArchiveStore {
         for (const [leafId, pane] of Object.entries(request.panesByLeafId)) {
           const snapshot = await this.snapshotSource.capture(pane)
           if (snapshot.kind === 'unavailable') {
-            throw new Error('Terminal scrollback capture unavailable')
+            throw new TerminalArchiveError('capture-unavailable')
           }
           if (snapshot.kind === 'captured-empty') {
             panesByLeafId[leafId] = pane
@@ -167,6 +176,8 @@ export class TerminalArchiveStore {
             : {}),
           restoreCount: existing?.restoreCount ?? 0
         }) as ArchivedTerminalTab
+        // Capture awaits external sources, so recheck the exact main-owned fence before commit.
+        this.assertRequestOwned(request)
         this.repository.replaceTerminalArchivesAndFlush({
           ...this.repository.getTerminalArchives(),
           [archive.id]: archive
@@ -254,6 +265,19 @@ export class TerminalArchiveStore {
 
   dispose(): void {
     this.expiryScheduler.dispose()
+  }
+
+  private assertRequestOwned(request: ArchiveTerminalTabRequest): void {
+    if (
+      this.repository.isTerminalArchiveRequestOwned({
+        executionHostId: request.executionHostId,
+        worktreeId: request.worktreeId,
+        sourceTabId: request.sourceTabId,
+        sourcePaneIdentityByLeafId: request.sourcePaneIdentityByLeafId
+      }) !== true
+    ) {
+      throw new TerminalArchiveError('not-owned')
+    }
   }
 
   private pruneAt(now: number): PruneResult {

@@ -1,0 +1,260 @@
+import { describe, expect, it, vi } from 'vitest'
+import { getDefaultWorkspaceSession } from '../shared/constants'
+import {
+  captureTerminalArchiveTab,
+  retireArchivedTerminalTab,
+  type TerminalArchiveSnapshotSource
+} from '../shared/workspace-session-terminal-archive'
+import type { WorkspaceSessionState } from '../shared/types'
+import { TerminalArchiveStore, type TerminalArchiveRepository } from './terminal-archive-store'
+import { archiveLostTerminalWorker } from './terminal-lost-worker-archive'
+
+const WORKTREE_ID = 'repo-1::/worktree'
+const TAB_ID = 'tab-1'
+const LEAF_ID = '11111111-1111-4111-8111-111111111111'
+
+function session(): WorkspaceSessionState {
+  return {
+    ...getDefaultWorkspaceSession(),
+    tabsByWorktree: {
+      [WORKTREE_ID]: [
+        {
+          id: TAB_ID,
+          worktreeId: WORKTREE_ID,
+          title: 'Worker',
+          customTitle: null,
+          color: null,
+          sortOrder: 0,
+          createdAt: 10,
+          ptyId: 'pty-1'
+        }
+      ]
+    },
+    terminalLayoutsByTabId: {
+      [TAB_ID]: {
+        root: { type: 'leaf', leafId: LEAF_ID },
+        activeLeafId: LEAF_ID,
+        expandedLeafId: null,
+        ptyIdsByLeafId: { [LEAF_ID]: 'pty-1' }
+      }
+    },
+    terminalPtyIncarnationsByPaneKey: { [`${TAB_ID}:${LEAF_ID}`]: 'incarnation-1' },
+    terminalArchiveHintsByPaneKey: {
+      [`${TAB_ID}:${LEAF_ID}`]: { launchAgent: 'codex', startedAt: 10 }
+    }
+  }
+}
+
+function owner(
+  sessionState: WorkspaceSessionState,
+  beforeArchiveFlush?: () => void,
+  ownership: 'matching' | 'deny' = 'matching'
+) {
+  let archives = {}
+  let persistedSession = sessionState
+  const repository: TerminalArchiveRepository = {
+    getTerminalArchives: () => archives,
+    replaceTerminalArchivesAndFlush: (next) => {
+      beforeArchiveFlush?.()
+      archives = next
+    },
+    getTerminalArchiveRetentionDays: () => 7,
+    isExecutionHostReachable: () => true,
+    worktreeExists: () => true,
+    isTerminalArchiveRequestOwned: (request) => {
+      if (ownership === 'deny') {
+        return false
+      }
+      const captured = captureTerminalArchiveTab({
+        session: persistedSession,
+        worktreeId: request.worktreeId,
+        tabId: request.sourceTabId
+      })
+      return Boolean(
+        captured &&
+        Object.keys(captured.sourcePaneIdentityByLeafId).length ===
+          Object.keys(request.sourcePaneIdentityByLeafId).length &&
+        Object.entries(captured.sourcePaneIdentityByLeafId).every(
+          ([leafId, identity]) =>
+            request.sourcePaneIdentityByLeafId[leafId]?.paneKey === identity.paneKey &&
+            request.sourcePaneIdentityByLeafId[leafId]?.incarnationId === identity.incarnationId
+        )
+      )
+    },
+    isTerminalScrollbackSnapshotLive: () => false
+  }
+  const retireArchivedTerminalTabAndFlush = vi.fn((args: { worktreeId: string; tabId: string }) => {
+    const retired = retireArchivedTerminalTab(persistedSession, args.worktreeId, args.tabId)
+    persistedSession = retired.session
+    return retired
+  })
+  return {
+    archives: () => archives,
+    retireArchivedTerminalTabAndFlush,
+    value: {
+      getWorkspaceSession: () => persistedSession,
+      retireArchivedTerminalTabAndFlush,
+      createTerminalArchiveStore: (snapshotSource: TerminalArchiveSnapshotSource) =>
+        new TerminalArchiveStore(repository, snapshotSource, () => 100)
+    }
+  }
+}
+
+describe('archiveLostTerminalWorker', () => {
+  it('archives before retiring and returns only main-owned kill authority', async () => {
+    const frozenSession = session()
+    const archiveOwner = owner(frozenSession)
+
+    const result = await archiveLostTerminalWorker({
+      owner: archiveOwner.value,
+      candidate: {
+        reason: 'daemon-worker-lost',
+        executionHostId: 'local',
+        worktreeId: WORKTREE_ID,
+        tabId: TAB_ID,
+        expectedSourcePaneIdentityByLeafId: {
+          [LEAF_ID]: { paneKey: `${TAB_ID}:${LEAF_ID}`, incarnationId: 'incarnation-1' }
+        }
+      },
+      frozenSession,
+      snapshotSource: { capture: async () => ({ kind: 'captured-empty' }) }
+    })
+
+    expect(result).toMatchObject({
+      kind: 'archived',
+      operationId: expect.stringMatching(/^daemon-worker-lost:tab-1:[0-9a-f]{64}$/)
+    })
+    expect(Object.keys(archiveOwner.archives())).toHaveLength(1)
+    expect(archiveOwner.retireArchivedTerminalTabAndFlush).toHaveBeenCalledWith({
+      worktreeId: WORKTREE_ID,
+      tabId: TAB_ID,
+      executionHostId: 'local'
+    })
+  })
+
+  it('rejects a stale source incarnation before archive or retirement', async () => {
+    const frozenSession = session()
+    const archiveOwner = owner(frozenSession)
+
+    const result = await archiveLostTerminalWorker({
+      owner: archiveOwner.value,
+      candidate: {
+        reason: 'relay-worker-lost',
+        executionHostId: 'local',
+        worktreeId: WORKTREE_ID,
+        tabId: TAB_ID,
+        expectedSourcePaneIdentityByLeafId: {
+          [LEAF_ID]: { paneKey: `${TAB_ID}:${LEAF_ID}`, incarnationId: 'replacement' }
+        }
+      },
+      frozenSession,
+      snapshotSource: { capture: async () => ({ kind: 'captured-empty' }) }
+    })
+
+    expect(result).toEqual({ kind: 'error', code: 'stale-source' })
+    expect(archiveOwner.archives()).toEqual({})
+    expect(archiveOwner.retireArchivedTerminalTabAndFlush).not.toHaveBeenCalled()
+  })
+
+  it('rejects relay evidence whose source incarnation does not match the required CAS identity', async () => {
+    const frozenSession = session()
+    const archiveOwner = owner(frozenSession)
+
+    const result = await archiveLostTerminalWorker({
+      owner: archiveOwner.value,
+      candidate: {
+        reason: 'relay-worker-lost',
+        executionHostId: 'local',
+        worktreeId: WORKTREE_ID,
+        tabId: TAB_ID,
+        expectedSourcePaneIdentityByLeafId: {
+          [LEAF_ID]: { paneKey: `${TAB_ID}:${LEAF_ID}`, incarnationId: 'incarnation-1' }
+        },
+        relayEvidence: {
+          id: 'relay-pty',
+          paneKey: `${TAB_ID}:${LEAF_ID}`,
+          sourceIncarnationId: 'stale-incarnation'
+        }
+      },
+      frozenSession,
+      snapshotSource: { capture: async () => ({ kind: 'captured-empty' }) }
+    })
+
+    expect(result).toEqual({ kind: 'error', code: 'stale-source' })
+    expect(archiveOwner.archives()).toEqual({})
+    expect(archiveOwner.retireArchivedTerminalTabAndFlush).not.toHaveBeenCalled()
+  })
+
+  it('maps an explicit Store ownership denial to a permanent not-owned result', async () => {
+    const frozenSession = session()
+    const archiveOwner = owner(frozenSession, undefined, 'deny')
+
+    const result = await archiveLostTerminalWorker({
+      owner: archiveOwner.value,
+      candidate: {
+        reason: 'daemon-worker-lost',
+        executionHostId: 'local',
+        worktreeId: WORKTREE_ID,
+        tabId: TAB_ID,
+        expectedSourcePaneIdentityByLeafId: {
+          [LEAF_ID]: { paneKey: `${TAB_ID}:${LEAF_ID}`, incarnationId: 'incarnation-1' }
+        }
+      },
+      frozenSession,
+      snapshotSource: { capture: async () => ({ kind: 'captured-empty' }) }
+    })
+
+    expect(result).toEqual({ kind: 'error', code: 'not-owned' })
+    expect(archiveOwner.retireArchivedTerminalTabAndFlush).not.toHaveBeenCalled()
+  })
+
+  it('keeps the tab live when capture or archive metadata durability fails', async () => {
+    const frozenSession = session()
+    const archiveOwner = owner(frozenSession)
+
+    const result = await archiveLostTerminalWorker({
+      owner: archiveOwner.value,
+      candidate: {
+        reason: 'daemon-worker-lost',
+        executionHostId: 'local',
+        worktreeId: WORKTREE_ID,
+        tabId: TAB_ID,
+        expectedSourcePaneIdentityByLeafId: {
+          [LEAF_ID]: { paneKey: `${TAB_ID}:${LEAF_ID}`, incarnationId: 'incarnation-1' }
+        }
+      },
+      frozenSession,
+      snapshotSource: { capture: async () => ({ kind: 'unavailable' }) }
+    })
+
+    expect(result).toEqual({ kind: 'error', code: 'capture-unavailable' })
+    expect(archiveOwner.archives()).toEqual({})
+    expect(archiveOwner.retireArchivedTerminalTabAndFlush).not.toHaveBeenCalled()
+  })
+
+  it('keeps the tab live when archive metadata flush fails', async () => {
+    const frozenSession = session()
+    const archiveOwner = owner(frozenSession, () => {
+      throw new Error('disk unavailable')
+    })
+
+    const result = await archiveLostTerminalWorker({
+      owner: archiveOwner.value,
+      candidate: {
+        reason: 'daemon-worker-lost',
+        executionHostId: 'local',
+        worktreeId: WORKTREE_ID,
+        tabId: TAB_ID,
+        expectedSourcePaneIdentityByLeafId: {
+          [LEAF_ID]: { paneKey: `${TAB_ID}:${LEAF_ID}`, incarnationId: 'incarnation-1' }
+        }
+      },
+      frozenSession,
+      snapshotSource: { capture: async () => ({ kind: 'captured-empty' }) }
+    })
+
+    expect(result).toEqual({ kind: 'error', code: 'durability-failed' })
+    expect(archiveOwner.archives()).toEqual({})
+    expect(archiveOwner.retireArchivedTerminalTabAndFlush).not.toHaveBeenCalled()
+  })
+})

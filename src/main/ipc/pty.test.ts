@@ -3747,7 +3747,11 @@ describe('registerPtyHandlers', () => {
             worktreeId: 'wt-1',
             tabId: 'tab-1',
             leafId,
-            ptyId: 'ssh-pty'
+            ptyId: 'ssh-pty',
+            archiveHint: {
+              source: 'spawn',
+              hint: { startedAt: expect.any(Number) }
+            }
           },
           'ssh:ssh-1'
         )
@@ -6592,7 +6596,11 @@ describe('registerPtyHandlers', () => {
       tabId: 'tab-headless',
       leafId,
       ptyId: expect.any(String),
-      incarnationId: expect.any(String)
+      incarnationId: expect.any(String),
+      archiveHint: {
+        source: 'spawn',
+        hint: { startedAt: expect.any(Number) }
+      }
     })
   })
 
@@ -6869,7 +6877,11 @@ describe('registerPtyHandlers', () => {
       tabId: 'tab-race',
       leafId,
       ptyId: 'pty-shared',
-      startupCwd: '/tmp'
+      startupCwd: '/tmp',
+      archiveHint: {
+        source: 'spawn',
+        hint: { cwd: '/tmp', startedAt: expect.any(Number) }
+      }
     })
   })
 
@@ -6983,7 +6995,11 @@ describe('registerPtyHandlers', () => {
       tabId: 'tab-race',
       leafId,
       ptyId: 'pty-renderer',
-      startupCwd: '/tmp'
+      startupCwd: '/tmp',
+      archiveHint: {
+        source: 'spawn',
+        hint: { cwd: '/tmp', startedAt: expect.any(Number) }
+      }
     })
   })
 
@@ -7206,7 +7222,11 @@ describe('registerPtyHandlers', () => {
         worktreeId: 'wt-remote',
         tabId: 'tab-remote',
         leafId,
-        ptyId: 'ssh:ssh-1@@relay-pty'
+        ptyId: 'ssh:ssh-1@@relay-pty',
+        archiveHint: {
+          source: 'spawn',
+          hint: { startedAt: expect.any(Number) }
+        }
       },
       'ssh:ssh-1'
     )
@@ -7358,7 +7378,8 @@ describe('registerPtyHandlers', () => {
           worktreeId: 'wt-remote',
           tabId: 'tab-remote',
           leafId,
-          ptyId: 'ssh:ssh-reattach-ok@@relay-pty'
+          ptyId: 'ssh:ssh-reattach-ok@@relay-pty',
+          archiveHint: { source: 'spawn', hint: {} }
         },
         'ssh:ssh-reattach-ok'
       )

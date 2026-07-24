@@ -34,6 +34,8 @@ export type CoordinatorRuntime = {
   } | null>
   // Why: optional so lightweight runtime fakes keep compiling; when present, dispatch records the assignee's remint-stable pane identity.
   getTerminalPaneKey?(handle: string): string | null
+  // Why: durable task evidence must exist before the worker can emit its first hook or die.
+  persistTerminalOrchestrationTask?(handle: string, taskId: string): void
   // Why: Windows can host native and WSL workers at once, so the worker pane (not the coordinator) picks the packaged CLI name.
   getTerminalOrchestrationCliCommand?(handle: string): 'orca' | 'orca-ide'
 }
@@ -456,6 +458,11 @@ export class Coordinator {
       targetHandle,
       this.runtime.getTerminalPaneKey?.(targetHandle) ?? undefined
     )
+    try {
+      this.runtime.persistTerminalOrchestrationTask?.(targetHandle, task.id)
+    } catch (error) {
+      this.opts.onLog(`Failed to persist terminal task evidence for ${task.id}: ${error}`)
+    }
 
     // Why: dispatched agents use orca-dev in dev mode to reach the dev runtime's socket, not production (Section 6.4).
     const preamble = buildDispatchPreamble({

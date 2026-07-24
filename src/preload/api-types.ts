@@ -3269,7 +3269,7 @@ export type PreloadApi = {
       fromPaneKey: string
       toPaneKey: string
       ptyId?: string
-    }) => void
+    }) => Promise<{ kind: 'transferred' | 'not-owned' | 'durability-failed' }>
   }
   mobile: {
     listNetworkInterfaces: () => Promise<{

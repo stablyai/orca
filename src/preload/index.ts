@@ -4456,9 +4456,8 @@ const api = {
       fromPaneKey: string
       toPaneKey: string
       ptyId?: string
-    }): void => {
-      ipcRenderer.send('agentStatus:transferPaneAuthority', args)
-    }
+    }): Promise<{ kind: 'transferred' | 'not-owned' | 'durability-failed' }> =>
+      ipcRenderer.invoke('agentStatus:transferPaneAuthority', args)
   },
 
   speech: {
