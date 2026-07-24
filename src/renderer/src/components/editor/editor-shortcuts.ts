@@ -46,13 +46,9 @@ export function installEditorFindShortcut(target: HTMLElement, onFind: () => voi
   return () => target.removeEventListener('keydown', handleKeyDown, true)
 }
 
-type MonacoDiffNavigationEditor = {
-  getContainerDomNode: () => HTMLElement
-  goToDiff: (target: 'next' | 'previous') => void
-}
-
 export function installMonacoDiffChangeNavigationShortcut(
-  editor: MonacoDiffNavigationEditor
+  target: HTMLElement,
+  onNavigate: (direction: 'next' | 'previous') => void
 ): () => void {
   const handleKeyDown = (event: KeyboardEvent): void => {
     let direction: 'next' | 'previous' | null = null
@@ -70,11 +66,10 @@ export function installMonacoDiffChangeNavigationShortcut(
     event.stopPropagation()
     // Consume matched repeats but navigate once per press (matches find shortcut).
     if (!event.repeat) {
-      editor.goToDiff(direction)
+      onNavigate(direction)
     }
   }
 
-  const target = editor.getContainerDomNode()
   target.addEventListener('keydown', handleKeyDown, true)
   return () => target.removeEventListener('keydown', handleKeyDown, true)
 }

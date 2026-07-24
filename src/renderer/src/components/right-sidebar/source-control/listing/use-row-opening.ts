@@ -1,4 +1,4 @@
-import { useCallback, useMemo } from 'react'
+import { useCallback, useEffect, useEffectEvent, useMemo } from 'react'
 import { detectLanguage } from '@/lib/language-detect'
 import { joinPath } from '@/lib/path'
 import { useAppStore } from '@/store'
@@ -155,6 +155,41 @@ export function useSourceControlRowOpening({
     },
     [activeWorktreeId, branchSummary, openBranchDiff, resolveSplitTargetGroupId, worktreePath]
   )
+
+  // Bridge the editor's F7/Shift+F7 diff-change nav across file edges: when the
+  // cursor is at the file's last/first change, advance to the adjacent changed
+  // file honoring exactly the order/filtering shown in this panel. useEffectEvent
+  // keeps the registered function stable while reading only committed values.
+  const setChangedFileDiffNavigator = useAppStore((s) => s.setChangedFileDiffNavigator)
+  const navigateToAdjacentChangedFile = useEffectEvent(
+    (direction: 'next' | 'previous'): boolean => {
+      // Why: activeOpenRowKeys may hold both unstaged:: and untracked:: keys for
+      // one path, but git makes those row kinds mutually exclusive per path, so
+      // first match is the only match.
+      const currentIndex = visibleSelectionEntries.findIndex((entry) =>
+        activeOpenRowKeys.has(entry.key)
+      )
+      if (currentIndex === -1) {
+        return false
+      }
+      const adjacent =
+        visibleSelectionEntries[direction === 'next' ? currentIndex + 1 : currentIndex - 1]
+      if (!adjacent) {
+        return false
+      }
+      handleOpenDiff(adjacent.entry)
+      return true
+    }
+  )
+  useEffect(() => {
+    setChangedFileDiffNavigator(navigateToAdjacentChangedFile)
+    return () => {
+      // Identity guard: a late unmount must not wipe a newer panel's registration.
+      if (useAppStore.getState().changedFileDiffNavigator === navigateToAdjacentChangedFile) {
+        setChangedFileDiffNavigator(null)
+      }
+    }
+  }, [setChangedFileDiffNavigator])
 
   return { resolveSplitTargetGroupId, activeOpenRowKeys, handleOpenDiff, openCommittedDiff }
 }
