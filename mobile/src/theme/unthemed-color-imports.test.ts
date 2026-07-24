@@ -7,10 +7,6 @@ import { describe, expect, it } from 'vitest'
 // never add one. Empty list == migration complete.
 const UNTHEMED_COLOR_IMPORTERS: readonly string[] = [
   'src/components/CodexResetCreditAction.tsx',
-  'app/h/[hostId]/accounts-screen-styles.ts',
-  'app/h/[hostId]/accounts.tsx',
-  'app/h/[hostId]/edit.tsx',
-  'app/h/[hostId]/index.tsx',
   'app/h/[hostId]/session/QuickCommandsTabButton.tsx',
   'app/h/[hostId]/session/[worktreeId].tsx',
   'app/h/[hostId]/session/mobile-session-command-input-styles.ts',
@@ -18,7 +14,6 @@ const UNTHEMED_COLOR_IMPORTERS: readonly string[] = [
   'app/h/[hostId]/session/mobile-session-reader-styles.ts',
   'app/h/[hostId]/session/mobile-session-review-comment-styles.ts',
   'app/h/[hostId]/tasks.tsx',
-  'app/index.tsx',
   'src/agent-history/MobileAgentSessionHistoryList.tsx',
   'src/agent-history/MobileAgentSessionHistoryPanel.tsx',
   'src/agent-history/agent-history-styles.ts',
@@ -39,7 +34,6 @@ const UNTHEMED_COLOR_IMPORTERS: readonly string[] = [
   'src/components/MobilePrBasePicker.tsx',
   'src/components/MobileRichMarkdownEditor.tsx',
   'src/components/MobileSyntaxSegments.tsx',
-  'src/components/NewWorktreeModal.tsx',
   'src/components/SmartWorkspaceAdvancedFields.tsx',
   'src/components/SmartWorkspaceSourceDrawer.tsx',
   'src/components/SmartWorkspaceSourceField.tsx',

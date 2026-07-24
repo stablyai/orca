@@ -13,8 +13,9 @@ import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router'
 import { ChevronLeft, Check, RefreshCw, User } from 'lucide-react-native'
 import { loadHosts } from '../../../src/transport/host-store'
 import { useHostClient } from '../../../src/transport/client-context'
-import { colors, spacing } from '../../../src/theme/mobile-theme'
-import { styles } from './accounts-screen-styles'
+import { spacing } from '../../../src/theme/mobile-theme'
+import { useTheme, useThemedStyles } from '../../../src/theme/theme-context'
+import { createAccountsScreenStyles } from './accounts-screen-styles'
 import { useNow } from '../../../src/hooks/use-now'
 import { ClaudeIcon, OpenAIIcon } from '../../../src/components/AgentIcons'
 import {
@@ -36,6 +37,8 @@ import { CodexResetCreditAction } from '../../../src/components/CodexResetCredit
 import { useCodexResetCreditAction } from '../../../src/components/use-codex-reset-credit-action'
 
 export default function AccountsScreen() {
+  const { colors } = useTheme()
+  const styles = useThemedStyles(createAccountsScreenStyles)
   const router = useRouter()
   const insets = useSafeAreaInsets()
   const { hostId } = useLocalSearchParams<{ hostId: string }>()

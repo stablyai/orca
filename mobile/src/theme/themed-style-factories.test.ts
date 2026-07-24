@@ -137,7 +137,10 @@ async function loadThemedFactories(): Promise<readonly StyleFactory[]> {
     import('../session/MobileTerminalLiveInputStatus'),
     import('../components/DragReorderList'),
     import('../onboarding/mobile-onboarding-styles'),
-    import('../components/MobileHostCard')
+    import('../components/MobileHostCard'),
+    import('../../app/h/[hostId]/accounts-screen-styles'),
+    import('../../app/h/[hostId]/host-screen-chrome-styles'),
+    import('../../app/h/[hostId]/host-worktree-list-styles')
   ])
   const [
     bottomDrawer,
@@ -167,7 +170,10 @@ async function loadThemedFactories(): Promise<readonly StyleFactory[]> {
     liveInputStatus,
     dragReorderList,
     onboarding,
-    hostCard
+    hostCard,
+    accountsScreen,
+    hostChrome,
+    hostList
   ] = mods
   return [
     { name: 'createBottomDrawerStyles', factory: bottomDrawer.createBottomDrawerStyles },
@@ -215,7 +221,19 @@ async function loadThemedFactories(): Promise<readonly StyleFactory[]> {
     },
     { name: 'createDragReorderListStyles', factory: dragReorderList.createDragReorderListStyles },
     { name: 'createMobileOnboardingStyles', factory: onboarding.createMobileOnboardingStyles },
-    { name: 'createMobileHostCardStyles', factory: hostCard.createMobileHostCardStyles }
+    { name: 'createMobileHostCardStyles', factory: hostCard.createMobileHostCardStyles },
+    {
+      name: 'createAccountsScreenStyles',
+      factory: accountsScreen.createAccountsScreenStyles
+    },
+    {
+      name: 'createHostScreenChromeStyles',
+      factory: hostChrome.createHostScreenChromeStyles
+    },
+    {
+      name: 'createHostWorktreeListStyles',
+      factory: hostList.createHostWorktreeListStyles
+    }
   ]
 }
 
@@ -283,5 +301,22 @@ describe('themed style factories', () => {
     const hostCard = createMobileHostCardStyles(darkColors)
     expect(hostCard.card.backgroundColor).toBe(darkColors.bgPanel)
     expect(hostCard.cardPressed.backgroundColor).toBe(darkColors.bgRaised)
+
+    const { createAccountsScreenStyles } =
+      await import('../../app/h/[hostId]/accounts-screen-styles')
+    const { createHostScreenChromeStyles } =
+      await import('../../app/h/[hostId]/host-screen-chrome-styles')
+    const { createHostWorktreeListStyles } =
+      await import('../../app/h/[hostId]/host-worktree-list-styles')
+    const accounts = createAccountsScreenStyles(darkColors)
+    expect(accounts.container.backgroundColor).toBe(darkColors.bgBase)
+    expect(accounts.rowTitle.color).toBe(darkColors.textPrimary)
+    const chrome = createHostScreenChromeStyles(darkColors)
+    expect(chrome.container.backgroundColor).toBe(darkColors.bgBase)
+    expect(chrome.hostNameText.color).toBe(darkColors.textPrimary)
+    const list = createHostWorktreeListStyles(darkColors)
+    expect(list.sectionTitle.color).toBe(darkColors.textMuted)
+    expect(list.confirmBtnDestructive.backgroundColor).toBe(darkColors.statusRed)
+    expect(list.confirmBtnDestructiveText.color).toBe('#fff')
   })
 })
