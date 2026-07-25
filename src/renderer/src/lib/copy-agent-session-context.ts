@@ -1,13 +1,24 @@
 import { toast } from 'sonner'
 import { translate } from '@/i18n/i18n'
-import { buildBoundedSessionTranscript } from './agent-session-fork-context'
+import {
+  buildBoundedSessionTranscript,
+  buildFullSessionTranscript
+} from './agent-session-fork-context'
+
+type CopyAgentSessionContextOptions = {
+  // Pane Copy Context keeps the cleaned scrollback. Native chat stays on the char budget.
+  readonly full?: boolean
+}
 
 export async function copyAgentSessionContext(
   capturedText: string,
   focusSource: () => void,
-  emptyMessage: string
+  emptyMessage: string,
+  options?: CopyAgentSessionContextOptions
 ): Promise<boolean> {
-  const transcript = buildBoundedSessionTranscript(capturedText)
+  const transcript = options?.full
+    ? buildFullSessionTranscript(capturedText)
+    : buildBoundedSessionTranscript(capturedText)
   if (!transcript) {
     toast.error(emptyMessage)
     focusSource()
