@@ -46,7 +46,7 @@ type InterruptedWorktreeRemovalHost = {
   /** A retry's teardown: terminals opened in the folder before the user removed it. */
   stopPtys?: () => Promise<void>
   /** Drops the worktree's host state (metadata, history, caches), as every removal path does. */
-  purge: (record: WorktreeRemovalRecord) => void
+  purge: (record: WorktreeRemovalRecord) => void | Promise<void>
   onRemoved: (record: WorktreeRemovalRecord) => void
   publish: (repoId: string) => void
 }
@@ -89,7 +89,7 @@ export function interruptedLocalWorktreeRemovalJob(
             fallbackHead,
             removedPushTarget
           )
-          host.purge(record)
+          return host.purge(record)
         }
       })
       host.onRemoved(record)
@@ -242,7 +242,7 @@ async function finishInterruptedLocalWorktreeRemoval(
     await gate.finish(removed)
   }
   await cleanupRemovedWorktreePushTarget(finishArgs)
-  args.finishRemoval(result, true, record.head)
+  await args.finishRemoval(result, true, record.head)
   return result
 }
 
