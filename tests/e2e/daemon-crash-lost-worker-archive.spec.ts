@@ -1,6 +1,5 @@
 import { execFileSync } from 'node:child_process'
-import { existsSync, mkdirSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs'
-import { tmpdir } from 'node:os'
+import { existsSync, readFileSync, readdirSync } from 'node:fs'
 import path from 'node:path'
 
 import type { ElectronApplication, Page } from '@stablyai/playwright-test'
@@ -31,6 +30,21 @@ type PaneIdentity = {
   rows: number
 }
 
+type DaemonCreateTrace = {
+  attachOnly: boolean
+  hasHistorySeed: boolean
+  pid: number
+  sessionId: string
+}
+
+type LostWorkerSpawnReceipt = {
+  lostWorkerRecovery?: {
+    archiveId?: string
+    code?: string
+    kind: 'archived' | 'retryable-error'
+  }
+}
+
 type PersistedArchive = {
   reason?: string
   sourceTabId?: string
@@ -43,56 +57,136 @@ type PersistedData = {
   }
 }
 
-function writeDaemonRpcProbe(root: string): {
-  logPath: string
-  probePath: string
-} {
-  mkdirSync(root, { recursive: true })
-  const logPath = path.join(root, 'daemon-create-or-attach.ndjson')
-  const probePath = path.join(root, 'daemon-rpc-probe.cjs')
+/**
+ * Record every `createOrAttach` request from the process that *sends* it.
+ *
+ * Why installed through `app.evaluate` instead of a `--require` preload:
+ * Playwright deletes `NODE_OPTIONS` before it launches Electron
+ * (`playwright-core/lib/server/electron/electron.js:169`, right before
+ * `launchProcess`), so an env-injected probe never loads in any process —
+ * neither the daemon nor main. Playwright's own main-process channel is the
+ * only injection vector that survives that deletion.
+ *
+ * Why the Electron main process is the right place to watch: this test
+ * force-kills the daemon, so a probe living inside it dies with the incarnation
+ * whose recovery it exists to observe. Main survives every renderer reload and
+ * the daemon respawn, and it is the sole sender of `createOrAttach` —
+ * `DaemonClient.request()` writes the NDJSON request onto its outbound control
+ * socket (`src/main/daemon/client.ts:238`), so the trace spans both daemon
+ * incarnations.
+ */
+async function installCreateOrAttachTrace(app: ElectronApplication): Promise<void> {
+  await app.evaluate(() => {
+    type TraceEntry = {
+      attachOnly: boolean
+      hasHistorySeed: boolean
+      pid: number
+      sessionId: string
+    }
+    const scope = globalThis as typeof globalThis & {
+      __orcaCreateOrAttachTrace?: TraceEntry[]
+    }
+    if (scope.__orcaCreateOrAttachTrace) {
+      return
+    }
+    const trace: TraceEntry[] = []
+    scope.__orcaCreateOrAttachTrace = trace
 
-  writeFileSync(
-    probePath,
-    `const { appendFileSync } = require('node:fs')
-const net = require('node:net')
-
-const logPath = process.env.ORCA_E2E_DAEMON_CREATE_LOG
-if (logPath && process.argv.some((argument) => String(argument).includes('daemon-entry'))) {
-  const bufferedBySocket = new WeakMap()
-  const originalEmit = net.Socket.prototype.emit
-
-  net.Socket.prototype.emit = function emitWithCreateOrAttachTrace(event, ...arguments) {
-    if (event === 'data') {
-      const previous = bufferedBySocket.get(this) || ''
-      const next = previous + Buffer.from(arguments[0]).toString('utf8')
-      const lines = next.split('\\n')
-      bufferedBySocket.set(this, lines.pop() || '')
-
-      for (const line of lines) {
-        try {
-          const message = JSON.parse(line)
-          if (message.type === 'createOrAttach') {
-            appendFileSync(logPath, JSON.stringify({
-              attachOnly: message.payload?.attachOnly === true,
-              hasHistorySeed: typeof message.payload?.historySeed === 'string' && message.payload.historySeed.length > 0,
-              pid: process.pid,
-              sessionId: message.payload?.sessionId,
-            }) + '\\n')
+    // Why via `process.mainModule`: Playwright evaluates this function in a
+    // scope that has no module-level `require`, and a dynamic `import()` would
+    // be rewritten by the test transform. The main entry is CommonJS, so its
+    // module object still carries a working `require`.
+    const mainModule = (
+      process as typeof process & {
+        mainModule?: { require?: (id: string) => unknown }
+      }
+    ).mainModule
+    if (typeof mainModule?.require !== 'function') {
+      throw new Error(
+        `createOrAttach trace cannot reach node:net (process.mainModule=${typeof mainModule})`
+      )
+    }
+    const socketPrototype = (
+      mainModule.require('node:net') as {
+        Socket: { prototype: { write: (this: unknown, ...args: unknown[]) => boolean } }
+      }
+    ).Socket.prototype
+    const originalWrite = socketPrototype.write
+    socketPrototype.write = function writeWithCreateOrAttachTrace(
+      this: unknown,
+      ...args: unknown[]
+    ): boolean {
+      const chunk = args[0]
+      if (typeof chunk === 'string' || Buffer.isBuffer(chunk)) {
+        const text = typeof chunk === 'string' ? chunk : chunk.toString('utf8')
+        // Why the substring test first: this hook sees every main-process socket
+        // write (runtime WebSocket, hook endpoint, PTY keystrokes); parsing all
+        // of them as JSON would burn time on writes that can never be a request.
+        if (text.includes('"createOrAttach"')) {
+          // Why splitting is enough: encodeNdjson/encodeBoundedNdjson emit
+          // exactly one complete line per write() call, so no request message
+          // can span two chunks.
+          for (const line of text.split('\n')) {
+            if (!line) {
+              continue
+            }
+            try {
+              const message = JSON.parse(line) as {
+                type?: string
+                payload?: { attachOnly?: boolean; historySeed?: string; sessionId?: string }
+              }
+              if (message.type === 'createOrAttach') {
+                trace.push({
+                  attachOnly: message.payload?.attachOnly === true,
+                  hasHistorySeed:
+                    typeof message.payload?.historySeed === 'string' &&
+                    message.payload.historySeed.length > 0,
+                  pid: process.pid,
+                  sessionId: message.payload?.sessionId ?? ''
+                })
+              }
+            } catch {
+              // Observability must never alter a daemon request when a chunk is not NDJSON.
+            }
           }
-        } catch {
-          // Observability must never alter a daemon request when a chunk is not NDJSON.
         }
       }
-    }
 
-    return originalEmit.call(this, event, ...arguments)
-  }
+      return originalWrite.apply(this, args)
+    }
+  })
 }
 
-`
-  )
-  writeFileSync(logPath, '')
-  return { logPath, probePath }
+async function readCreateOrAttachTrace(app: ElectronApplication): Promise<DaemonCreateTrace[]> {
+  return await app.evaluate(() => {
+    type TraceEntry = {
+      attachOnly: boolean
+      hasHistorySeed: boolean
+      pid: number
+      sessionId: string
+    }
+    const scope = globalThis as typeof globalThis & {
+      __orcaCreateOrAttachTrace?: TraceEntry[]
+    }
+    return scope.__orcaCreateOrAttachTrace ? [...scope.__orcaCreateOrAttachTrace] : []
+  })
+}
+
+/** Restart the count without detaching the hook, which closes over the array. */
+async function resetCreateOrAttachTrace(app: ElectronApplication): Promise<void> {
+  await app.evaluate(() => {
+    const scope = globalThis as typeof globalThis & {
+      __orcaCreateOrAttachTrace?: unknown[]
+    }
+    scope.__orcaCreateOrAttachTrace?.splice(0)
+  })
+}
+
+function countCreateOrAttach(
+  trace: DaemonCreateTrace[],
+  match: (entry: DaemonCreateTrace) => boolean
+): number {
+  return trace.filter(match).length
 }
 
 function readDaemonPid(userDataDir: string): number | null {
@@ -308,22 +402,16 @@ test.describe('daemon crash lost worker archive', () => {
       return
     }
 
-    const probeRoot = path.join(
-      tmpdir(),
-      `orca-daemon-crash-archive-${testInfo.testId.replaceAll(/[^a-zA-Z0-9]/g, '-')}`
-    )
-    const { logPath, probePath } = writeDaemonRpcProbe(probeRoot)
-    const restartSession = createRestartSession(testInfo, {
-      NODE_OPTIONS: `--require=${probePath}`,
-      ORCA_E2E_DAEMON_CREATE_LOG: logPath
-    })
+    const restartSession = createRestartSession(testInfo)
 
     let firstApp: ElectronApplication | null = null
     let restartedApp: ElectronApplication | null = null
 
     try {
       const firstLaunch = await restartSession.launch()
-      firstApp = firstLaunch.app
+      const tracedApp = firstLaunch.app
+      firstApp = tracedApp
+      await installCreateOrAttachTrace(tracedApp)
       const page = firstLaunch.page
       const worktreeId = await attachRepoAndOpenTerminal(page, repoPath)
       await expect
@@ -392,7 +480,7 @@ test.describe('daemon crash lost worker archive', () => {
         .toBe(true)
 
       // Start the count at the crash boundary; the ordinary restore proves this probe saw real daemon RPC.
-      writeFileSync(logPath, '')
+      await resetCreateOrAttachTrace(tracedApp)
       await expect.poll(() => readDaemonPid(restartSession.userDataDir)).not.toBeNull()
       const daemonPid = readDaemonPid(restartSession.userDataDir)
       if (daemonPid === null) {
@@ -460,6 +548,43 @@ test.describe('daemon crash lost worker archive', () => {
         )
         .toBeUndefined()
 
+      // Why poll the two positive counts before asserting the zero: a negative
+      // assertion over an unwired probe is vacuously true. Requiring the same
+      // run to show the ordinary shell's cold restore and the worker's
+      // attach-only probe proves this trace records real RPC, so the zero below
+      // means "no replacement was requested" rather than "nothing was watching".
+      await expect
+        .poll(
+          async () => {
+            const trace = await readCreateOrAttachTrace(tracedApp)
+            return {
+              ordinaryColdRestores: countCreateOrAttach(
+                trace,
+                (entry) =>
+                  entry.sessionId === ordinaryPane.ptyId &&
+                  !entry.attachOnly &&
+                  entry.hasHistorySeed
+              ),
+              workerAttachOnlyRequests: countCreateOrAttach(
+                trace,
+                (entry) => entry.sessionId === workerPane.ptyId && entry.attachOnly
+              )
+            }
+          },
+          {
+            timeout: 20_000,
+            message:
+              'Main-side createOrAttach trace never observed the post-crash recovery RPC (ordinary cold restore + worker attach-only)'
+          }
+        )
+        .toEqual({ ordinaryColdRestores: 1, workerAttachOnlyRequests: 1 })
+      expect(
+        countCreateOrAttach(
+          await readCreateOrAttachTrace(tracedApp),
+          (entry) => entry.sessionId === workerPane.ptyId && !entry.attachOnly
+        )
+      ).toBe(0)
+
       const sessionsAfterArchive = await listDaemonSessions(restartSession.userDataDir)
       expect(
         sessionsAfterArchive.filter((session) => session.sessionId === workerPane.ptyId)
@@ -512,7 +637,157 @@ test.describe('daemon crash lost worker archive', () => {
         await restartSession.close(firstApp)
       }
       await restartSession.dispose()
-      rmSync(probeRoot, { force: true, recursive: true })
+    }
+  })
+
+  // Why a separate test instead of another beat in the timeline above: the race
+  // needs the recovery window that exists only *before* the archive lands — the
+  // hint is still on disk and the in-flight dedupe entry has not been deleted
+  // yet. After the first test's reload-driven archive both preconditions are
+  // gone, and moving the concurrent spawn earlier would replace that reload with
+  // a hand-rolled spawn and lose the reload path's coverage.
+  test('collapses concurrent lost-worker spawns into one archive without a replacement', async (// oxlint-disable-next-line no-empty-pattern -- The restart fixture owns Electron lifecycle instead of the shared fixtures.
+  {}, testInfo) => {
+    const repoPath = readFileSync(TEST_REPO_PATH_FILE, 'utf8').trim()
+    if (!repoPath || !existsSync(repoPath)) {
+      test.skip(true, 'Global setup did not produce a seeded test repo')
+      return
+    }
+
+    const restartSession = createRestartSession(testInfo)
+
+    let app: ElectronApplication | null = null
+
+    try {
+      const launched = await restartSession.launch()
+      const tracedApp = launched.app
+      app = tracedApp
+      await installCreateOrAttachTrace(tracedApp)
+      const page = launched.page
+      const worktreeId = await attachRepoAndOpenTerminal(page, repoPath)
+      await expect
+        .poll(() => page.evaluate(() => window.__store?.getState().hydrationSucceeded === true), {
+          timeout: 30_000,
+          message: 'Workspace hydration did not complete before recording the worker hint'
+        })
+        .toBe(true)
+
+      const workerTabId = await createTerminalTab(page, worktreeId)
+      await waitForTerminalOnTab(page, workerTabId)
+      const workerPane = await getPaneIdentity(page, workerTabId)
+      const workerMarker = `RACE-WORKER-${testInfo.retry}-${Date.now()}`
+      await page.evaluate(
+        ({ marker, ptyId }) => window.api.pty.write(ptyId, `printf '${marker}\\n'\\n`),
+        { marker: workerMarker, ptyId: workerPane.ptyId }
+      )
+      await waitForTerminalOutput(page, workerMarker)
+
+      const hookEndpoint = await readHookEndpoint(tracedApp)
+      const workerHookDescriptor = await waitForActivePaneHookDescriptor(page)
+      await emitCodexHookStatus(hookEndpoint, {
+        paneKey: workerHookDescriptor.paneKey,
+        prompt: 'daemon crash archive e2e race marker',
+        state: 'working',
+        worktreeId
+      })
+      await expect
+        .poll(
+          () =>
+            readPersistedData(restartSession.userDataDir)?.workspaceSession
+              ?.terminalArchiveHintsByPaneKey?.[workerHookDescriptor.paneKey]?.launchAgent
+        )
+        .toBe('codex')
+
+      // Why wait for durable history: the recovery path can only archive what it
+      // can capture, and the cold-restore payload is rebuilt from the on-disk
+      // terminal history. Killing the daemon before the flush lands turns this
+      // scenario into a `capture-unavailable` receipt that proves nothing.
+      await expect
+        .poll(() => historyContains(restartSession.userDataDir, workerMarker), { timeout: 20_000 })
+        .toBe(true)
+
+      // Start the count at the crash boundary so pre-crash mounts can't be
+      // mistaken for a recovery-time replacement request.
+      await resetCreateOrAttachTrace(tracedApp)
+      await expect.poll(() => readDaemonPid(restartSession.userDataDir)).not.toBeNull()
+      const daemonPid = readDaemonPid(restartSession.userDataDir)
+      if (daemonPid === null) {
+        throw new Error('Daemon PID disappeared before the crash injection')
+      }
+      forceKillDaemon(daemonPid)
+
+      // Why no reload before this: the renderer must stay mounted so both spawn
+      // calls land inside the same recovery window. The dead daemon is respawned
+      // lazily by the first call that hits it (daemon-pty-adapter.ts:1442), which
+      // is exactly the contention this scenario is about.
+      const raceReceipts = (await page.evaluate(
+        async ({ cwd, pane, tabId, requestedWorktreeId }) =>
+          Promise.all(
+            [0, 1].map(() =>
+              window.api.pty.spawn({
+                cols: pane.cols,
+                cwd,
+                leafId: pane.leafId,
+                rows: pane.rows,
+                sessionId: pane.ptyId,
+                tabId,
+                worktreeId: requestedWorktreeId
+              })
+            )
+          ),
+        { cwd: repoPath, pane: workerPane, requestedWorktreeId: worktreeId, tabId: workerTabId }
+      )) as LostWorkerSpawnReceipt[]
+
+      // Why project the receipts instead of asserting `.kind` twice: a failure
+      // then reports the recovery `code` that explains it instead of a bare
+      // "retryable-error".
+      const raceOutcomes = raceReceipts.map((receipt) => ({
+        archiveId: receipt.lostWorkerRecovery?.archiveId ?? null,
+        code: receipt.lostWorkerRecovery?.code ?? null,
+        kind: receipt.lostWorkerRecovery?.kind ?? 'missing'
+      }))
+      expect(raceOutcomes).toEqual([
+        { archiveId: expect.any(String), code: null, kind: 'archived' },
+        { archiveId: expect.any(String), code: null, kind: 'archived' }
+      ])
+      expect(raceOutcomes[1]?.archiveId).toBe(raceOutcomes[0]?.archiveId)
+
+      await expect
+        .poll(() => workerArchives(readPersistedData(restartSession.userDataDir), workerTabId), {
+          timeout: 20_000,
+          message: 'Concurrent lost-worker spawns did not settle on exactly one durable archive'
+        })
+        .toHaveLength(1)
+
+      // Positive control for this run's probe: the recovery path must have sent
+      // at least one attach-only request, otherwise the zero below proves nothing.
+      // Why not an exact count: a spawn that reaches the daemon while it is dying
+      // is retried once after the respawn (daemon-pty-adapter.ts:1442), so one or
+      // two attach-only requests are both correct here.
+      await expect
+        .poll(
+          async () =>
+            countCreateOrAttach(
+              await readCreateOrAttachTrace(tracedApp),
+              (entry) => entry.sessionId === workerPane.ptyId && entry.attachOnly
+            ),
+          {
+            timeout: 20_000,
+            message: 'Main-side probe never observed the attach-only recovery request'
+          }
+        )
+        .toBeGreaterThan(0)
+      expect(
+        countCreateOrAttach(
+          await readCreateOrAttachTrace(tracedApp),
+          (entry) => entry.sessionId === workerPane.ptyId && !entry.attachOnly
+        )
+      ).toBe(0)
+    } finally {
+      if (app) {
+        await restartSession.close(app)
+      }
+      await restartSession.dispose()
     }
   })
 })
