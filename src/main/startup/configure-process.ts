@@ -90,28 +90,6 @@ export function resetDevParentShutdownRequestForTests(): void {
   devParentShutdownRequested = false
 }
 
-export function installUncaughtPipeErrorGuard(): void {
-  const onUncaughtException = (error: unknown): void => {
-    if (
-      error &&
-      typeof error === 'object' &&
-      'code' in error &&
-      ((error as NodeJS.ErrnoException).code === 'EIO' ||
-        (error as NodeJS.ErrnoException).code === 'EPIPE')
-    ) {
-      return
-    }
-
-    process.off('uncaughtException', onUncaughtException)
-    // Why: throwing inside an uncaughtException handler exits with status 7 and hides the fault; re-throw next tick for the real stack.
-    setImmediate(() => {
-      throw error
-    })
-  }
-
-  process.on('uncaughtException', onUncaughtException)
-}
-
 export function patchPackagedProcessPath(): void {
   if (!app.isPackaged) {
     return

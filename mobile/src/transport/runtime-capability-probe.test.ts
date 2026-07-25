@@ -48,6 +48,54 @@ describe('startRuntimeCapabilityProbe', () => {
     cancel()
   })
 
+  it('treats malformed capabilities as unsupported', async () => {
+    const response: RpcResponse = {
+      ok: true,
+      id: '1',
+      result: { capabilities: 'a.v1' },
+      _meta: { runtimeId: 'r1' }
+    }
+    const { client, calls } = makeClient([response])
+    const seen: (readonly string[])[] = []
+    const cancel = startRuntimeCapabilityProbe(client, (capabilities) => seen.push(capabilities))
+    await flushMicrotasks()
+    expect(seen).toEqual([[]])
+    expect(calls()).toBe(1)
+    cancel()
+  })
+
+  it('rejects capability arrays containing non-string values', async () => {
+    const response: RpcResponse = {
+      ok: true,
+      id: '1',
+      result: { capabilities: ['a.v1', 42] },
+      _meta: { runtimeId: 'r1' }
+    }
+    const { client, calls } = makeClient([response])
+    const seen: (readonly string[])[] = []
+    const cancel = startRuntimeCapabilityProbe(client, (capabilities) => seen.push(capabilities))
+    await flushMicrotasks()
+    expect(seen).toEqual([[]])
+    expect(calls()).toBe(1)
+    cancel()
+  })
+
+  it('treats a malformed status result as unsupported', async () => {
+    const response: RpcResponse = {
+      ok: true,
+      id: '1',
+      result: null,
+      _meta: { runtimeId: 'r1' }
+    }
+    const { client, calls } = makeClient([response])
+    const seen: (readonly string[])[] = []
+    const cancel = startRuntimeCapabilityProbe(client, (capabilities) => seen.push(capabilities))
+    await flushMicrotasks()
+    expect(seen).toEqual([[]])
+    expect(calls()).toBe(1)
+    cancel()
+  })
+
   it('retries promptly after a logical-client cutover rejection', async () => {
     const { client, calls } = makeClient([new LogicalClientCutoverError(), ok(['a.v1'])])
     const seen: (readonly string[])[] = []

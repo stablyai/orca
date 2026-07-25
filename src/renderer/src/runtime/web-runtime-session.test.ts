@@ -17,6 +17,10 @@ import {
   splitWebRuntimeTerminal
 } from './web-runtime-session'
 import {
+  peekWebSessionFocusIntent,
+  resetWebSessionFocusIntentForTests
+} from './web-session-focus-intent'
+import {
   isWebSessionCloseIntentPending,
   recordWebSessionCloseIntent,
   resetWebSessionCloseIntentForTests
@@ -73,6 +77,7 @@ vi.mock('@/lib/agent-launch-prompt-delivery', () => ({
 
 const ENVIRONMENT_ID = 'web-env-1'
 const WORKTREE_ID = 'repo::/worktree'
+const FOCUS_LEAF_ID = '11111111-1111-4111-8111-111111111111'
 
 afterEach(() => resetWebSessionCloseIntentForTests())
 
@@ -551,8 +556,88 @@ describe('createWebRuntimeSessionTerminal', () => {
   afterEach(() => {
     vi.unstubAllGlobals()
     clearRuntimeCompatibilityCacheForTests()
+    resetWebSessionFocusIntentForTests()
     vi.clearAllMocks()
   })
+
+  it.each([
+    { sessionKind: 'fresh' as const, activate: true },
+    { sessionKind: 'fresh' as const, activate: false },
+    { sessionKind: 'resume' as const, activate: true },
+    { sessionKind: 'resume' as const, activate: false }
+  ])(
+    'keeps $sessionKind host creation background with activate=$activate while focus stays client-owned',
+    async ({ sessionKind, activate }) => {
+      const hostTabId = `host-${sessionKind}-${activate ? 'active' : 'background'}`
+      const runtimeCall = vi.fn(async (request: { method: string }) => {
+        if (request.method === 'status.get') {
+          return {
+            id: 'status',
+            ok: true,
+            result: {
+              runtimeId: 'runtime-1',
+              graphStatus: 'ready',
+              runtimeProtocolVersion: 3,
+              minCompatibleRuntimeClientVersion: 2,
+              capabilities: ['agent-session.host-authority.v1']
+            }
+          }
+        }
+        if (
+          request.method === 'terminal.createAgentSession' ||
+          request.method === 'terminal.ensureAgentSession'
+        ) {
+          return {
+            id: 'agent-session',
+            ok: true,
+            result: {
+              terminal: {
+                handle: `term-${sessionKind}`,
+                worktreeId: WORKTREE_ID,
+                tabId: hostTabId,
+                paneKey: `${hostTabId}:${FOCUS_LEAF_ID}`
+              },
+              disposition: 'created'
+            }
+          }
+        }
+        return { id: 'list', ok: true, result: makeSnapshot() }
+      })
+      vi.stubGlobal('window', {
+        api: { runtimeEnvironments: { call: runtimeCall } }
+      })
+
+      await expect(
+        createWebRuntimeSessionTerminal({
+          worktreeId: WORKTREE_ID,
+          agentSessionKind: sessionKind,
+          launchAgent: 'codex',
+          ...(sessionKind === 'resume'
+            ? {
+                command: "codex resume 'session-1'",
+                providerSession: { key: 'session_id' as const, id: 'session-1' }
+              }
+            : {}),
+          activate
+        })
+      ).resolves.toEqual({ status: 'created' })
+
+      const authorityMethod =
+        sessionKind === 'resume' ? 'terminal.ensureAgentSession' : 'terminal.createAgentSession'
+      const authorityRequest = runtimeCall.mock.calls.find(
+        ([request]) => request.method === authorityMethod
+      )?.[0]
+      expect(authorityRequest).toMatchObject({
+        selector: ENVIRONMENT_ID,
+        method: authorityMethod,
+        params: { presentation: 'background' }
+      })
+      expect(peekWebSessionFocusIntent({ environmentId: ENVIRONMENT_ID }, WORKTREE_ID)).toEqual(
+        activate ? { hostTabId, leafId: FOCUS_LEAF_ID } : null
+      )
+      expect(mocks.acceptReplayedWebSessionTabsSnapshot).toHaveBeenCalledTimes(activate ? 1 : 0)
+    }
+  )
 
   it('creates paired web agents through host authority so activation is mirrored', async () => {
     const snapshot = {
@@ -597,7 +682,7 @@ describe('createWebRuntimeSessionTerminal', () => {
             cwd: '/repo/packages/app',
             worktreeId: WORKTREE_ID,
             tabId: 'host-tab-2',
-            leafId: 'leaf-1'
+            paneKey: `host-tab-2:${FOCUS_LEAF_ID}`
           },
           disposition: 'created'
         }
@@ -646,6 +731,7 @@ describe('createWebRuntimeSessionTerminal', () => {
 
     expect(runtimeCall).toHaveBeenNthCalledWith(2, {
       selector: ENVIRONMENT_ID,
+      expectedEnvironmentPairingRevision: undefined,
       method: 'terminal.createAgentSession',
       params: {
         clientOperationId: expect.stringMatching(/^\d{13}-[0-9a-f]{32}$/),
@@ -657,7 +743,7 @@ describe('createWebRuntimeSessionTerminal', () => {
         launchPreferences: { model: 'gpt-5', effort: 'high' },
         startupCwd: '/repo/packages/app',
         viewMode: 'chat',
-        presentation: 'focused'
+        presentation: 'background'
       },
       timeoutMs: 15_000
     })
@@ -821,7 +907,7 @@ describe('createWebRuntimeSessionTerminal', () => {
                 cwd: '/repo',
                 worktreeId: WORKTREE_ID,
                 tabId: 'host-tab-created',
-                leafId: 'leaf-created'
+                paneKey: `host-tab-created:${FOCUS_LEAF_ID}`
               },
               disposition: 'created'
             }
@@ -884,7 +970,7 @@ describe('createWebRuntimeSessionTerminal', () => {
               handle: 'term_replayed',
               worktreeId: WORKTREE_ID,
               tabId: 'host-tab-replayed',
-              leafId: 'leaf-replayed'
+              paneKey: `host-tab-replayed:${FOCUS_LEAF_ID}`
             },
             disposition: 'replayed'
           }
@@ -1041,7 +1127,7 @@ describe('createWebRuntimeSessionTerminal', () => {
     })
   })
 
-  it('preserves the exact resume when a new host reports an old execution owner', async () => {
+  it('uses the exact legacy OMP resume when an older host only advertises base authority', async () => {
     const methods: string[] = []
     const runtimeCall = vi.fn(async (request: { method: string }) => {
       methods.push(request.method)
@@ -1063,8 +1149,8 @@ describe('createWebRuntimeSessionTerminal', () => {
           id: 'ensure',
           ok: false,
           error: {
-            code: 'agent_session_legacy_required',
-            message: 'agent_session_legacy_required'
+            code: 'invalid_argument',
+            message: 'old host rejected OMP'
           }
         }
       }
@@ -1080,24 +1166,25 @@ describe('createWebRuntimeSessionTerminal', () => {
       createWebRuntimeSessionTerminal({
         worktreeId: WORKTREE_ID,
         agentSessionKind: 'resume',
-        launchAgent: 'codex',
-        command: "codex resume 'session-1'",
-        env: { CODEX_PROFILE: 'captured' },
+        launchAgent: 'omp',
+        command: "omp --resume '/custom/omp/project/session.jsonl'",
+        env: { PI_CODING_AGENT_DIR: '/custom/omp' },
+        launchConfig: {
+          agentCommand: 'omp',
+          agentArgs: '',
+          agentEnv: { PI_CODING_AGENT_DIR: '/custom/omp' },
+          ompResumeFilePath: '/custom/omp/project/session.jsonl'
+        },
         providerSession: { key: 'session_id', id: 'session-1' }
       })
     ).resolves.toEqual({ status: 'created' })
 
-    expect(methods).toEqual([
-      'status.get',
-      'terminal.ensureAgentSession',
-      'session.tabs.createTerminal',
-      'session.tabs.list'
-    ])
-    expect(runtimeCall.mock.calls[2]?.[0]).toMatchObject({
+    expect(methods).toEqual(['status.get', 'session.tabs.createTerminal', 'session.tabs.list'])
+    expect(runtimeCall.mock.calls[1]?.[0]).toMatchObject({
       params: {
-        command: "codex resume 'session-1'",
-        env: { CODEX_PROFILE: 'captured' },
-        launchAgent: 'codex'
+        command: "omp --resume '/custom/omp/project/session.jsonl'",
+        env: { PI_CODING_AGENT_DIR: '/custom/omp' },
+        launchAgent: 'omp'
       }
     })
   })
@@ -1126,7 +1213,7 @@ describe('createWebRuntimeSessionTerminal', () => {
               handle: 'term_created',
               worktreeId: WORKTREE_ID,
               tabId: 'host-tab-2',
-              leafId: 'leaf-1'
+              paneKey: `host-tab-2:${FOCUS_LEAF_ID}`
             },
             disposition: 'created'
           }

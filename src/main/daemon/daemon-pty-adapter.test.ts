@@ -6,6 +6,7 @@ import { mkdtempSync, mkdirSync, rmSync, existsSync, readFileSync, writeFileSync
 import { DaemonClient } from './client'
 import { DaemonProtocolError } from './daemon-errors'
 import { DaemonPtyAdapter } from './daemon-pty-adapter'
+import { COMPLETION_PROCESS_INSPECTION_PROTOCOL_VERSION } from './daemon-protocol-version'
 import { DaemonServer } from './daemon-server'
 import { HeadlessEmulator } from './headless-emulator'
 import { getHistorySessionDirName } from './history-paths'
@@ -924,6 +925,95 @@ describe('DaemonPtyAdapter (IPtyProvider)', () => {
       const { id } = await adapter.spawn({ cols: 80, rows: 24 })
       vi.mocked(lastSubprocess.getForegroundProcess).mockReturnValue('codex')
       expect(await adapter.getForegroundProcess(id)).toBe('codex')
+    })
+  })
+
+  describe('inspectProcess on pre-inspection daemon protocols', () => {
+    // Why: daemons outlive an in-place app update, so a v26 daemon must still answer inspections
+    // client-side; throwing here leaves agent-completion detection permanently retrying.
+    type ClientInternals = {
+      client: { request: ReturnType<typeof vi.fn>; disconnect: ReturnType<typeof vi.fn> }
+    }
+
+    function createLegacyAdapter(request: ReturnType<typeof vi.fn>): DaemonPtyAdapter {
+      const legacy = new DaemonPtyAdapter({
+        socketPath,
+        tokenPath,
+        protocolVersion: COMPLETION_PROCESS_INSPECTION_PROTOCOL_VERSION - 1
+      })
+      ;(legacy as unknown as ClientInternals).client = { request, disconnect: vi.fn() }
+      return legacy
+    }
+
+    it('composes a real inspection from the foreground call the daemon does support', async () => {
+      const request = vi.fn(async () => ({ foregroundProcess: 'codex' }))
+      const legacy = createLegacyAdapter(request)
+
+      expect(await legacy.inspectProcess('sess-a')).toEqual({
+        foregroundProcess: 'codex',
+        hasChildProcesses: true
+      })
+      // Why: the fallback must not depend on a capability the legacy daemon lacks.
+      expect(request).toHaveBeenCalledWith('getForegroundProcess', { sessionId: 'sess-a' })
+      expect(request).not.toHaveBeenCalledWith('inspectProcess', expect.anything())
+
+      legacy.dispose()
+    })
+
+    it('reports an idle shell as having no child processes', async () => {
+      const legacy = createLegacyAdapter(vi.fn(async () => ({ foregroundProcess: 'bash' })))
+
+      expect(await legacy.inspectProcess('sess-a')).toEqual({
+        foregroundProcess: 'bash',
+        hasChildProcesses: false
+      })
+
+      legacy.dispose()
+    })
+
+    it('reports a null foreground as idle, matching what the legacy daemon can report', async () => {
+      // Why: pins the one response shape whose semantics differ from v27, where inspectProcess goes
+      // through getAliveSession() and throws for a vanished session while getForegroundProcess stays
+      // null-not-throw. Reading it as idle is deliberate — this is also the only shape that reaches a
+      // user-visible completion — so the divergence must not change silently.
+      const legacy = createLegacyAdapter(vi.fn(async () => ({ foregroundProcess: null })))
+
+      expect(await legacy.inspectProcess('sess-a')).toEqual({
+        foregroundProcess: null,
+        hasChildProcesses: false
+      })
+
+      legacy.dispose()
+    })
+
+    it('rejects rather than reading as idle when the daemon call fails', async () => {
+      // Why: getForegroundProcess swallows errors into null; composing through it would turn a dead
+      // socket into a false "agent exited" completion, the mirror of the bug this path fixes.
+      const legacy = createLegacyAdapter(
+        vi.fn(async () => {
+          throw new Error('socket_closed')
+        })
+      )
+
+      await expect(legacy.inspectProcess('sess-a')).rejects.toThrow('socket_closed')
+
+      legacy.dispose()
+    })
+
+    it('still delegates to the daemon once the protocol supports inspectProcess', async () => {
+      const request = vi.fn(async () => ({ foregroundProcess: 'codex', hasChildProcesses: true }))
+      const current = new DaemonPtyAdapter({
+        socketPath,
+        tokenPath,
+        protocolVersion: COMPLETION_PROCESS_INSPECTION_PROTOCOL_VERSION
+      })
+      ;(current as unknown as ClientInternals).client = { request, disconnect: vi.fn() }
+
+      await current.inspectProcess('sess-a')
+
+      expect(request).toHaveBeenCalledWith('inspectProcess', { sessionId: 'sess-a' })
+
+      current.dispose()
     })
   })
 
@@ -2014,9 +2104,13 @@ describe('DaemonPtyAdapter (IPtyProvider)', () => {
       writeFileSync(join(sessionDir, 'scrollback.bin'), 'cached output')
 
       historyAdapter = new DaemonPtyAdapter({ socketPath, tokenPath, historyPath: historyDir })
+      const internals = historyAdapter as unknown as {
+        coldRestoreCache: { byteSize: number }
+      }
 
       const first = await historyAdapter.spawn({ cols: 80, rows: 24, sessionId })
       expect(first.coldRestore).toBeDefined()
+      expect(internals.coldRestoreCache.byteSize).toBeGreaterThan(0)
 
       // Second call (StrictMode remount) should get cached data
       const second = await historyAdapter.spawn({ cols: 80, rows: 24, sessionId })
@@ -2025,6 +2119,7 @@ describe('DaemonPtyAdapter (IPtyProvider)', () => {
 
       // After ack, cold restore should not be returned
       historyAdapter.ackColdRestore(sessionId)
+      expect(internals.coldRestoreCache.byteSize).toBe(0)
       const third = await historyAdapter.spawn({ cols: 80, rows: 24, sessionId })
       expect(third.coldRestore).toBeUndefined()
     })

@@ -20,6 +20,7 @@ import {
 } from '@/components/terminal-pane/terminal-ime-native-text-forwarder'
 import { getMacNativeTextInputSourceTracker } from '@/components/terminal-pane/terminal-ime-input-source'
 import { composeActiveTerminalTheme } from '@/components/terminal-pane/terminal-appearance'
+import { resolveTerminalMinimumContrastRatio } from '@/lib/terminal-contrast-correction'
 import { useSystemPrefersDark } from '@/components/terminal-pane/use-system-prefers-dark'
 import { translate } from '@/i18n/i18n'
 import { getBuiltinTheme, resolveEffectiveTerminalAppearance } from '@/lib/terminal-theme'
@@ -53,15 +54,16 @@ export function AgentTerminalPreview({ ptyId }: { ptyId: string }): React.JSX.El
   const containerRef = useRef<HTMLDivElement>(null)
   const settings = useAppStore((state) => state.settings)
   const systemPrefersDark = useSystemPrefersDark()
-  const terminalTheme = useMemo(() => {
+  const { terminalTheme, terminalMode } = useMemo(() => {
     if (!settings) {
-      return null
+      return { terminalTheme: null, terminalMode: 'dark' as const }
     }
     const appearance = resolveEffectiveTerminalAppearance(settings, systemPrefersDark)
-    return composeActiveTerminalTheme(
+    const theme = composeActiveTerminalTheme(
       appearance.theme ?? getBuiltinTheme(appearance.themeName),
       settings
     )
+    return { terminalTheme: theme, terminalMode: appearance.mode }
   }, [settings, systemPrefersDark])
   // A null snapshot means no serializer knows this pty (it died or was never
   // spawned this session) — say so instead of painting a silent blank terminal.
@@ -271,6 +273,10 @@ export function AgentTerminalPreview({ ptyId }: { ptyId: string }): React.JSX.El
           cols: clamp(snap.cols ?? FALLBACK_COLS, 2, 500),
           rows: clamp(snap.rows ?? FALLBACK_ROWS, 2, 200),
           theme: terminalTheme ?? undefined,
+          minimumContrastRatio: resolveTerminalMinimumContrastRatio(
+            terminalTheme?.background,
+            terminalMode
+          ),
           scrollback: 1000
         })
         try {
@@ -399,7 +405,7 @@ export function AgentTerminalPreview({ ptyId }: { ptyId: string }): React.JSX.El
       void window.api.terminalPreview.unsubscribe(ptyId)
       terminal?.dispose()
     }
-  }, [ptyId, terminalTheme])
+  }, [ptyId, terminalTheme, terminalMode])
 
   return (
     // Why: a size FIXED by the viewport (not shrink-to-fit) + overflow-hidden

@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import {
   ActivityIndicator,
+  Image,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -8,13 +9,14 @@ import {
   TextInput,
   View
 } from 'react-native'
-import { ArrowUp, ImagePlus, Mic, Square } from 'lucide-react-native'
+import { ArrowUp, ImagePlus, Mic, Square, X } from 'lucide-react-native'
 import { colors, radii, spacing, typography } from '../theme/mobile-theme'
 import {
   applyAutocomplete,
   detectAutocompleteTrigger,
   rankSuggestions
 } from './mobile-native-chat-autocomplete'
+import type { PendingNativeChatImage } from './mobile-native-chat-image-attachment'
 
 // Common agent slash commands offered as autocomplete; sending them is just text
 // to the agent's terminal, so the set is intentionally provider-agnostic.
@@ -30,6 +32,7 @@ const SLASH_COMMANDS = [
 ]
 
 const NO_FILE_PATHS: string[] = []
+const NO_ATTACHMENTS: PendingNativeChatImage[] = []
 
 type Props = {
   /** Controlled composer text — owned by the parent so dictation can write to it. */
@@ -37,6 +40,10 @@ type Props = {
   onChangeText: (text: string) => void
   onSend: (text: string) => Promise<boolean>
   onAttachImage?: () => void
+  /** Images picked-and-uploaded but not yet sent — shown as removable thumbnails
+   *  and ridden along on the next send (desktop native-chat parity). */
+  attachments?: PendingNativeChatImage[]
+  onRemoveAttachment?: (id: string) => void
   isAttaching?: boolean
   onMicPress?: () => void
   micActive?: boolean
@@ -55,6 +62,8 @@ export function MobileNativeChatComposer({
   onChangeText,
   onSend,
   onAttachImage,
+  attachments = NO_ATTACHMENTS,
+  onRemoveAttachment,
   isAttaching = false,
   onMicPress,
   micActive = false,
@@ -76,7 +85,10 @@ export function MobileNativeChatComposer({
   const sendingRef = useRef(false)
   const [sending, setSending] = useState(false)
   const trimmed = value.trim()
-  const canSend = trimmed.length > 0 && !disabled && !sending && !isAttaching
+  // An attached image alone is a valid send (desktop parity), so the image rides
+  // along even when the user sends no accompanying text.
+  const canSend =
+    (trimmed.length > 0 || attachments.length > 0) && !disabled && !sending && !isAttaching
 
   const trigger = useMemo(() => detectAutocompleteTrigger(value, cursor), [value, cursor])
   const suggestions = useMemo(() => {
@@ -144,6 +156,35 @@ export function MobileNativeChatComposer({
             ))}
           </ScrollView>
         </View>
+      ) : null}
+      {attachments.length > 0 ? (
+        <ScrollView
+          horizontal
+          keyboardShouldPersistTaps="always"
+          showsHorizontalScrollIndicator={false}
+          style={styles.attachmentStrip}
+          contentContainerStyle={styles.attachmentStripContent}
+        >
+          {attachments.map((attachment) => (
+            <View key={attachment.id} style={styles.attachmentThumb}>
+              <Image
+                source={{ uri: attachment.previewUri }}
+                style={styles.attachmentImage}
+                resizeMode="cover"
+              />
+              {onRemoveAttachment ? (
+                <Pressable
+                  accessibilityLabel="Remove image"
+                  style={styles.attachmentRemove}
+                  onPress={() => onRemoveAttachment(attachment.id)}
+                  hitSlop={8}
+                >
+                  <X size={12} color={colors.textPrimary} strokeWidth={2.6} />
+                </Pressable>
+              ) : null}
+            </View>
+          ))}
+        </ScrollView>
       ) : null}
       <View style={styles.bar}>
         {onAttachImage ? (
@@ -238,6 +279,45 @@ const styles = StyleSheet.create({
     color: colors.textPrimary,
     fontFamily: typography.monoFamily,
     fontSize: typography.metaSize
+  },
+  attachmentStrip: {
+    maxHeight: 76,
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: colors.borderSubtle,
+    backgroundColor: colors.bgPanel
+  },
+  attachmentStripContent: {
+    gap: spacing.sm,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm
+  },
+  attachmentThumb: {
+    width: 60,
+    height: 60,
+    borderRadius: radii.button,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: colors.borderSubtle,
+    backgroundColor: colors.bgRaised
+  },
+  attachmentImage: {
+    width: '100%',
+    height: '100%',
+    borderRadius: radii.button
+  },
+  attachmentRemove: {
+    // Inset inside the thumb: Android drops touches outside the parent's bounds,
+    // so an overhanging badge would lose part of its tap target.
+    position: 'absolute',
+    top: 2,
+    right: 2,
+    width: 20,
+    height: 20,
+    borderRadius: 10,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: colors.bgRaised,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: colors.borderSubtle
   },
   bar: {
     flexDirection: 'row',

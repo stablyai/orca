@@ -143,9 +143,24 @@ function buildRecipeEnv(
 }
 
 function appendBounded(current: string, chunk: string, maxBytes: number): string {
-  const next = current + chunk
-  if (Buffer.byteLength(next, 'utf8') <= maxBytes) {
-    return next
+  if (maxBytes <= 0) {
+    return ''
   }
-  return next.slice(-maxBytes)
+  const chunkBytes = Buffer.byteLength(chunk, 'utf8')
+  if (chunkBytes >= maxBytes) {
+    return utf8Tail(chunk, maxBytes)
+  }
+  return utf8Tail(current, maxBytes - chunkBytes) + chunk
+}
+
+function utf8Tail(value: string, maxBytes: number): string {
+  const bytes = Buffer.from(value, 'utf8')
+  if (bytes.byteLength <= maxBytes) {
+    return value
+  }
+  let start = bytes.byteLength - maxBytes
+  while (start < bytes.byteLength && (bytes[start]! & 0xc0) === 0x80) {
+    start += 1
+  }
+  return bytes.subarray(start).toString('utf8')
 }

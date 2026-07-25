@@ -38,6 +38,7 @@ import {
   isOrcaDispatchPrompt,
   orchestrationLabelsMatchLiveDispatch
 } from '@/lib/agent-row-primary-text'
+import { isCompletedPiCompatibleAgentWithLiveRecoveryRecord } from '@/lib/pi-compatible-live-recovery-record'
 import {
   resolveAgentPaneAuthorityKey,
   retireAgentPaneAuthorityAliases,
@@ -596,22 +597,6 @@ function isValidCompletedAgentHibernationEntry(entry: AgentStatusEntry): boolean
   return entry.state === 'done' && entry.interrupted !== true
 }
 
-function isCompletedPiWithLiveRecoveryRecord(
-  entry: AgentStatusEntry | undefined,
-  record: SleepingAgentSessionRecord | undefined
-): record is SleepingAgentSessionRecord {
-  return Boolean(
-    entry?.state === 'done' &&
-    entry.agentType === 'pi' &&
-    entry.providerSession &&
-    record?.agent === 'pi' &&
-    record.origin === 'live' &&
-    (!entry.worktreeId || entry.worktreeId === record.worktreeId) &&
-    agentProviderSessionsEqual('pi', entry.providerSession, record.providerSession) &&
-    getAgentResumeArgv('pi', record.providerSession)
-  )
-}
-
 export function removeSleepingRecordsReplacedByManualWorktreeSleep(
   records: Record<string, SleepingAgentSessionRecord>,
   worktreeId: string,
@@ -658,7 +643,8 @@ export function collectSleepingAgentSessionRecordsForWorktree(
       if (
         existing.worktreeId !== worktreeId ||
         existing.origin !== 'live' ||
-        (liveEntry !== undefined && !isCompletedPiWithLiveRecoveryRecord(liveEntry, existing)) ||
+        (liveEntry !== undefined &&
+          !isCompletedPiCompatibleAgentWithLiveRecoveryRecord(liveEntry, existing)) ||
         (allowedPaneKeys && !allowedPaneKeys.has(existing.paneKey)) ||
         !getAgentResumeArgv(existing.agent, existing.providerSession)
       ) {
@@ -824,7 +810,8 @@ function copyLaunchConfig(config: SleepingAgentLaunchConfig): SleepingAgentLaunc
   return {
     ...(config.agentCommand ? { agentCommand: config.agentCommand } : {}),
     agentArgs: config.agentArgs,
-    agentEnv: { ...config.agentEnv }
+    agentEnv: { ...config.agentEnv },
+    ...(config.ompResumeFilePath ? { ompResumeFilePath: config.ompResumeFilePath } : {})
   }
 }
 
@@ -835,7 +822,11 @@ function launchConfigsEqual(
   if (a === undefined || b === undefined) {
     return a === b
   }
-  if (a.agentCommand !== b.agentCommand || a.agentArgs !== b.agentArgs) {
+  if (
+    a.agentCommand !== b.agentCommand ||
+    a.agentArgs !== b.agentArgs ||
+    a.ompResumeFilePath !== b.ompResumeFilePath
+  ) {
     return false
   }
   const aKeys = Object.keys(a.agentEnv)
@@ -1800,13 +1791,17 @@ export const createAgentStatusSlice: StateCreator<AppState, [], [], AgentStatusS
           ? registryEntry?.launchConfig
           : undefined
         const existingSleepingRecord = s.sleepingAgentSessionsByPaneKey[paneKey]
-        const retainsPiRecoveryIdentity =
+        // Why: a completed turn leaves the TUI session alive and resumable at its prompt for any
+        // resumable agent (Claude/Codex/Pi/…), not just Pi — so keep its persisted recovery anchor
+        // even when done. Else a cold restore after an abrupt app death (macOS logout, #9454) drops
+        // the pane to a bare shell instead of `--resume`-ing the agent logged in.
+        const retainsResumableRecoveryIdentity =
           payload.state === 'done' &&
-          identity.agentType === 'pi' &&
+          isResumableTuiAgent(identity.agentType) &&
           providerSession !== undefined &&
-          getAgentResumeArgv('pi', providerSession) !== null
+          getAgentResumeArgv(identity.agentType, providerSession) !== null
         const matchedSleepingLaunchConfig =
-          (payload.state !== 'done' || retainsPiRecoveryIdentity) &&
+          (payload.state !== 'done' || retainsResumableRecoveryIdentity) &&
           existingSleepingRecord?.launchConfig &&
           existingSleepingRecord.agent === identity.agentType &&
           providerSession &&
@@ -1934,14 +1929,14 @@ export const createAgentStatusSlice: StateCreator<AppState, [], [], AgentStatusS
           (entry) => entry.paneKey === paneKey
         )
         const liveRecoveryWorktreeId =
-          entry.state === 'done' && !retainsPiRecoveryIdentity
+          entry.state === 'done' && !retainsResumableRecoveryIdentity
             ? null
             : (entry.worktreeId ?? findAgentPaneWorktreeId(s, entry.paneKey))
         const liveRecoveryRecord = liveRecoveryWorktreeId
           ? sleepingRecordFromEntry({
               state: s,
-              // Why: a completed Pi turn leaves the TUI session alive — keep resume identity active without representing done as pending work.
-              entry: retainsPiRecoveryIdentity
+              // Why: a completed resumable-agent turn leaves the TUI session alive — keep resume identity active without representing done as pending work.
+              entry: retainsResumableRecoveryIdentity
                 ? { ...entry, state: 'working', prompt: '', lastAssistantMessage: undefined }
                 : entry,
               worktreeId: liveRecoveryWorktreeId,
@@ -2753,7 +2748,7 @@ export const createAgentStatusSlice: StateCreator<AppState, [], [], AgentStatusS
         for (const entry of Object.values(s.agentStatusByPaneKey)) {
           if (entry.state === 'done') {
             const existing = next[entry.paneKey]
-            if (!isCompletedPiWithLiveRecoveryRecord(entry, existing)) {
+            if (!isCompletedPiCompatibleAgentWithLiveRecoveryRecord(entry, existing)) {
               continue
             }
             if (mode === 'periodic') {

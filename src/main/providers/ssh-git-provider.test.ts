@@ -895,14 +895,86 @@ describe('SshGitProvider', () => {
     })
   })
 
-  it('fetchGitLabMergeRequestHead sends git.fetchGitLabMergeRequestHead request', async () => {
-    await provider.fetchGitLabMergeRequestHead('/home/user/repo', 'origin', 42)
+  it('fetchGitLabMergeRequestHead sends the durable-ref git.fetchGitLabMergeRequestHeadRef request', async () => {
+    mux.request.mockResolvedValueOnce({
+      localRef: 'refs/orca/merge-requests/origin-abc/42'
+    })
 
-    expect(mux.request).toHaveBeenCalledWith('git.fetchGitLabMergeRequestHead', {
+    const localRef = await provider.fetchGitLabMergeRequestHead('/home/user/repo', 'origin', 42)
+
+    expect(mux.request).toHaveBeenCalledWith('git.fetchGitLabMergeRequestHeadRef', {
       worktreePath: '/home/user/repo',
       remote: 'origin',
       mrIid: 42
     })
+    expect(localRef).toBe('refs/orca/merge-requests/origin-abc/42')
+  })
+
+  it('fetchGitLabMergeRequestHead maps old relays to the reconnect message', async () => {
+    const methodNotFound = Object.assign(
+      new Error('Method not found: git.fetchGitLabMergeRequestHeadRef'),
+      { code: -32601 }
+    )
+    mux.request.mockRejectedValueOnce(methodNotFound)
+
+    await expect(
+      provider.fetchGitLabMergeRequestHead('/home/user/repo', 'origin', 42)
+    ).rejects.toThrow(
+      'This SSH host is running an older Orca relay that cannot fetch merge request heads. Reconnect to deploy the latest relay, then try again.'
+    )
+  })
+
+  it('fetchGitLabMergeRequestHead rethrows non-method-not-found errors', async () => {
+    const error = new Error('fatal: could not read from remote repository')
+    mux.request.mockRejectedValueOnce(error)
+
+    await expect(
+      provider.fetchGitLabMergeRequestHead('/home/user/repo', 'origin', 42)
+    ).rejects.toBe(error)
+  })
+
+  it('fetchGitHubPullRequestHead sends git.fetchGitHubPullRequestHead request', async () => {
+    mux.request.mockResolvedValueOnce({ localRef: 'refs/orca/pull/origin-abc/42' })
+
+    const localRef = await provider.fetchGitHubPullRequestHead('/home/user/repo', 'origin', 42)
+
+    expect(mux.request).toHaveBeenCalledWith('git.fetchGitHubPullRequestHead', {
+      worktreePath: '/home/user/repo',
+      remote: 'origin',
+      prNumber: 42
+    })
+    expect(localRef).toBe('refs/orca/pull/origin-abc/42')
+  })
+
+  it('fetchGitHubPullRequestHead rejects relays that omit the durable localRef', async () => {
+    mux.request.mockResolvedValueOnce({})
+
+    await expect(
+      provider.fetchGitHubPullRequestHead('/home/user/repo', 'origin', 42)
+    ).rejects.toThrow('did not return the durable pull request head ref')
+  })
+
+  it('fetchGitHubPullRequestHead maps old relays to the reconnect message', async () => {
+    const methodNotFound = Object.assign(
+      new Error('Method not found: git.fetchGitHubPullRequestHead'),
+      { code: -32601 }
+    )
+    mux.request.mockRejectedValueOnce(methodNotFound)
+
+    await expect(
+      provider.fetchGitHubPullRequestHead('/home/user/repo', 'origin', 42)
+    ).rejects.toThrow(
+      'This SSH host is running an older Orca relay that cannot fetch pull request heads. Reconnect to deploy the latest relay, then try again.'
+    )
+  })
+
+  it('fetchGitHubPullRequestHead rethrows non-method-not-found errors', async () => {
+    const error = new Error('fatal: could not read from remote repository')
+    mux.request.mockRejectedValueOnce(error)
+
+    await expect(provider.fetchGitHubPullRequestHead('/home/user/repo', 'origin', 42)).rejects.toBe(
+      error
+    )
   })
 
   it('getBranchDiff sends git.branchDiff request', async () => {

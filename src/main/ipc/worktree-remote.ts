@@ -70,7 +70,7 @@ type CreateWorktreeArgsWithSystemProvenance = CreateWorktreeArgs & {
 import {
   sanitizeWorktreeName,
   sanitizeWorktreeDisplayName,
-  computeBranchName,
+  computeValidatedBranchName,
   computeWorktreePath,
   computeRemoteWorktreePath,
   computeWorkspaceRoot,
@@ -79,9 +79,10 @@ import {
   getWorktreePathSettings,
   hasRepoWorktreeBasePath,
   shouldSetDisplayName,
-  mergeWorktree,
-  areWorktreePathsEqual
+  mergeWorktree
 } from './worktree-logic'
+import { findCreatedWorktree } from './created-worktree-reconciliation'
+import type { BranchPrefixSettings } from '../../shared/branch-prefix'
 import { getRepoIdFromWorktreeId } from '../../shared/worktree-id'
 import { parseWorkspaceKey, worktreeWorkspaceKey } from '../../shared/workspace-scope'
 import {
@@ -94,7 +95,8 @@ import {
   prepareWorktreePushTargetWithExec
 } from './worktree-push-target-setup'
 import { isENOENT, registerWorktreeRootsForRepo } from './filesystem-auth'
-import { createWorktreeLinkedPaths } from './worktree-symlinks'
+import { createWorktreeCopiedPaths, createWorktreeLinkedPaths } from './worktree-symlinks'
+import { resolveWorktreeIncludePaths } from '../git/worktree-include-file'
 import { normalizeSparseDirectories } from './sparse-checkout-directories'
 import { joinWorktreeRelativePath } from '../runtime/runtime-relative-paths'
 import type { IFilesystemProvider } from '../providers/types'
@@ -518,12 +520,12 @@ async function resolveCreateBranchName(
   repoPath: string,
   branchNameOverride: string | undefined,
   sanitizedName: string,
-  settings: { branchPrefix: string; branchPrefixCustom?: string },
+  settings: BranchPrefixSettings,
   username: string | null,
   gitOptions: { wslDistro?: string } = {}
 ): Promise<string> {
   if (!branchNameOverride) {
-    return computeBranchName(sanitizedName, settings, username)
+    return computeValidatedBranchName(sanitizedName, settings, username)
   }
   if (branchNameOverride.startsWith('-')) {
     throw new Error('Branch name must not start with "-"')
@@ -540,11 +542,11 @@ async function resolveCreateBranchNameSsh(
   repoPath: string,
   branchNameOverride: string | undefined,
   sanitizedName: string,
-  settings: { branchPrefix: string; branchPrefixCustom?: string },
+  settings: BranchPrefixSettings,
   username: string | null
 ): Promise<string> {
   if (!branchNameOverride) {
-    return computeBranchName(sanitizedName, settings, username)
+    return computeValidatedBranchName(sanitizedName, settings, username)
   }
   if (branchNameOverride.startsWith('-')) {
     throw new Error('Branch name must not start with "-"')
@@ -1864,7 +1866,7 @@ export async function createRemoteWorktree(
   })
   const workspaceLineage = recordWorkspaceLineageForCreatedWorktree(store, args, worktree, now)
 
-  // Why: shared/symlink paths are local-only; remote (SSH) support needs a new relay method + auth surface, so configured symlinkPaths are ignored here.
+  // Why: shared/symlink paths and `.worktreeinclude` copies are local-only; remote (SSH) support needs a new relay method + auth surface, so both are skipped here.
 
   let setup: CreateWorktreeResult['setup']
   let defaultTabs: CreateWorktreeResult['defaultTabs']
@@ -2378,7 +2380,8 @@ export async function createLocalWorktree(
       ? listWorktrees(repo.path, localWorktreeGitOptions)
       : listWorktrees(repo.path)
   )
-  const created = gitWorktrees.find((gw) => areWorktreePathsEqual(gw.path, worktreePath))
+  // Why: Git may canonicalize a symlinked create path; its exact branch identifies the listed row.
+  const created = findCreatedWorktree(gitWorktrees, worktreePath, branchName)
   if (!created) {
     throw new Error('Worktree created but not found in listing')
   }
@@ -2455,6 +2458,17 @@ export async function createLocalWorktree(
   if (symlinkPaths.length > 0) {
     await timing.time('create_symlinks', async () => {
       await createWorktreeLinkedPaths(repo.path, created.path, symlinkPaths)
+    })
+  }
+
+  // Why: project-level `.worktreeinclude` travels with the repo (issue #7549); copy semantics
+  // (never symlink) so each worktree owns its files. Paths already linked above are skipped.
+  const includePaths = await timing.time('resolve_worktreeinclude', () =>
+    resolveWorktreeIncludePaths(repo.path, localWorktreeGitOptions)
+  )
+  if (includePaths.length > 0) {
+    await timing.time('copy_worktreeinclude', async () => {
+      await createWorktreeCopiedPaths(repo.path, created.path, includePaths)
     })
   }
 

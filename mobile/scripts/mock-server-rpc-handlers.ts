@@ -10,7 +10,12 @@ import {
 import type { TerminalQuickCommand } from '../../src/shared/types'
 import { handleMockFilePreviewRequest } from './mock-server-file-preview-data'
 import { handleMockGitRequest } from './mock-server-git-state'
-import { FAKE_SCROLLBACK, STREAMING_CHUNKS } from './mock-server-terminal-fixtures'
+import { handleMockAccountRequest } from './mock-server-account-rpc'
+import {
+  createMockTerminals,
+  FAKE_SCROLLBACK,
+  STREAMING_CHUNKS
+} from './mock-server-terminal-fixtures'
 import { createMockRepos, createMockWorktrees, readScenarioNumber } from './mobile-lag-scenario'
 
 const MOCK_REPO_COUNT = readScenarioNumber('MOCK_REPO_COUNT', 2)
@@ -38,23 +43,6 @@ let fakeQuickCommands: TerminalQuickCommand[] = [
     command: 'pnpm dev',
     appendEnter: true,
     scope: { type: 'global' }
-  }
-]
-
-const FAKE_TERMINALS = [
-  {
-    handle: 'term-1',
-    worktreeId: fakeWorktrees[0]?.worktreeId ?? 'repo-1::/tmp/orca-mobile-repro/orca',
-    title: 'Claude — auth refactor',
-    isActive: true,
-    hasRunningProcess: true
-  },
-  {
-    handle: 'term-2',
-    worktreeId: fakeWorktrees[0]?.worktreeId ?? 'repo-1::/tmp/orca-mobile-repro/orca',
-    title: 'zsh',
-    isActive: false,
-    hasRunningProcess: false
   }
 ]
 
@@ -109,6 +97,13 @@ function repoSelectorToId(repoSelector: unknown): string | null {
   return repoSelector.startsWith('id:') ? repoSelector.slice(3) : repoSelector
 }
 
+function terminalListWorktreeId(worktreeSelector: unknown): string | undefined {
+  if (typeof worktreeSelector === 'string' && worktreeSelector.length > 0) {
+    return worktreeSelector.startsWith('id:') ? worktreeSelector.slice(3) : worktreeSelector
+  }
+  return fakeWorktrees.find((worktree) => worktree.isActive)?.worktreeId
+}
+
 export function handleRequest(
   request: RpcRequest,
   send: (response: RpcResponse) => void,
@@ -129,6 +124,9 @@ export function handleRequest(
   if (handleMockFilePreviewRequest(request, respond, success, error)) {
     return
   }
+  if (handleMockAccountRequest(request, respond, success, error)) {
+    return
+  }
 
   switch (request.method) {
     case 'status.get':
@@ -137,6 +135,7 @@ export function handleRequest(
           runtimeId: 'mock-runtime',
           protocolVersion: DESKTOP_PROTOCOL_VERSION,
           minCompatibleMobileVersion: MIN_COMPATIBLE_MOBILE_VERSION,
+          capabilities: ['accounts.codex-reset-credit.v1'],
           graphStatus: 'ready',
           windowCount: 1,
           tabCount: 2,
@@ -277,15 +276,17 @@ export function handleRequest(
       break
     }
 
-    case 'terminal.list':
+    case 'terminal.list': {
+      const terminals = createMockTerminals(terminalListWorktreeId(request.params?.worktree))
       respond(
         success(request.id, {
-          terminals: FAKE_TERMINALS,
-          totalCount: FAKE_TERMINALS.length,
+          terminals,
+          totalCount: terminals.length,
           truncated: false
         })
       )
       break
+    }
 
     case 'terminal.subscribe': {
       respond(success(request.id, { type: 'scrollback', lines: FAKE_SCROLLBACK, truncated: false }))

@@ -113,6 +113,16 @@ function createDaemonAdapter(
   } as unknown as DaemonPtyAdapter & ProviderMock
 }
 
+it('rejects completion inspection instead of borrowing the fallback provider', async () => {
+  const provider = new DegradedDaemonPtyProvider({
+    current: createDaemonAdapter('daemon'),
+    legacy: [],
+    fallback: createProvider('fallback')
+  })
+
+  await expect(provider.inspectProcess('unmapped-session')).rejects.toThrow('terminal_gone')
+})
+
 describe('DegradedDaemonPtyProvider', () => {
   it('only delegates owner-listing authority to the provider that owns the id', async () => {
     const current = createDaemonAdapter('daemon', ['daemon-session'])

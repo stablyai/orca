@@ -313,6 +313,7 @@ import type { BrowserSetAnnotationViewportBridgeArgs } from '../shared/browser-a
 import type { CliInstallStatus } from '../shared/cli-install-types'
 import type { E2EConfig } from '../shared/e2e-config'
 import type { AgentHookInstallStatus } from '../shared/agent-hook-types'
+import type { CodexConfigSyncStatus } from '../shared/codex-config-sync-types'
 import type {
   AgentStatusClearIpcPayload,
   AgentStatusIpcPayload,
@@ -1373,6 +1374,9 @@ export type PreloadApi = {
     publishTerminalViewAttributes: (attributes: TerminalViewAttributes) => void
     hasChildProcesses: (id: string) => Promise<boolean>
     getForegroundProcess: (id: string) => Promise<string | null>
+    inspectProcess: (
+      id: string
+    ) => Promise<{ foregroundProcess: string | null; hasChildProcesses: boolean }>
     confirmForegroundProcess: (id: string) => Promise<string | null>
     getCwd: (id: string) => Promise<string>
     getSize: (id: string) => Promise<{ cols: number; rows: number } | null>
@@ -1454,6 +1458,7 @@ export type PreloadApi = {
     onExit: (
       callback: (data: { id: string; code: number; preserveRendererBinding?: boolean }) => void
     ) => () => void
+    onSpawned: (callback: (data: { id: string }) => void) => () => void
     onSerializeBufferRequest: (
       callback: (data: {
         requestId: string
@@ -2205,6 +2210,9 @@ export type PreloadApi = {
     getWslInstallStatus: (args?: { distro?: string | null }) => Promise<CliInstallStatus>
     installWsl: (args?: { distro?: string | null }) => Promise<CliInstallStatus>
     removeWsl: (args?: { distro?: string | null }) => Promise<CliInstallStatus>
+  }
+  codexConfigSync: {
+    status: () => Promise<CodexConfigSyncStatus>
   }
   agentHooks: {
     claudeStatus: () => Promise<AgentHookInstallStatus>
@@ -3046,6 +3054,7 @@ export type PreloadApi = {
     popupMenu: () => void
     onWindowCloseRequested: (callback: (data: { isQuitting: boolean }) => void) => () => void
     confirmWindowClose: () => void
+    notifyWindowRevealed: () => void
   }
   runtime: {
     syncWindowGraph: (graph: RuntimeSyncWindowGraph) => Promise<RuntimeSyncWindowGraphResult>

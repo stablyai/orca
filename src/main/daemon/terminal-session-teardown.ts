@@ -38,10 +38,32 @@ export class TerminalSessionTeardown {
       return this.killAgentSession(sessionId, session, immediate)
     }
     if (immediate) {
-      return session.forceKillAndWaitForExit()
+      return this.forceKillPlainShellSession(sessionId, session)
     } else {
       session.kill()
     }
+  }
+
+  /**
+   * Immediate teardown of a non-agent shell. On Windows, closing the ConPTY does not
+   * reap orphaned children (node-pty `useConptyDll` skips the console-process reap), so a
+   * live `pnpm i`/`node` survives shell exit, keeps the ConPTY console non-empty, and holds
+   * the worktree cwd — failing destructive worktree removal with "Failed to physically stop
+   * every PTY". taskkill /T /F the tree first so physical exit becomes verifiable. Mirrors
+   * the agent path (#10004/#10100). POSIX shells already reach their child pgroup on
+   * forceKill, so they stay on the plain force-kill path.
+   */
+  private async forceKillPlainShellSession(sessionId: string, session: Session): Promise<void> {
+    if (process.platform === 'win32') {
+      // Why: forceKillAndWaitForExit claims termination synchronously; awaiting the sweep
+      // ahead of it would leave attach open on a doomed session for the taskkill's duration.
+      session.beginTermination()
+      await killWithDescendantSweep(session.pid, () => {}, {
+        // Why: the descendant tree is only ours while this Session still owns the live root PID.
+        ownsRoot: () => this.sessions.get(sessionId) === session && session.isAlive
+      })
+    }
+    await session.forceKillAndWaitForExit()
   }
 
   private killAgentSession(

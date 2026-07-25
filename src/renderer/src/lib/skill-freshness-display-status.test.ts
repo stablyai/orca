@@ -56,14 +56,23 @@ describe('getSkillFreshnessDisplayStatus', () => {
 
   it.each([
     ['before the inventory loads', null],
-    ['when the inventory has no matching placement', inventory([])],
+    ['when the inventory has no matching placement', inventory([])]
+  ])('reports presence only %s', (_scenario, value) => {
+    // Why: with nothing scanned there is no drift to claim, and flashing attention
+    // on every launch before the first scan would train the user to ignore it.
+    expect(getSkillFreshnessDisplayStatus(value, SKILL_NAME)).toBe('installed')
+  })
+
+  it.each([
     [
       'when any placement is unrecognized',
       inventory([placement('current'), placement('unrecognized', 1)])
     ],
     ['when a placement is inaccessible', inventory([placement('inaccessible')])],
     ['when an outdated placement is not eligible', inventory([placement('outdated')])]
-  ])('falls back to installed %s', (_scenario, value) => {
-    expect(getSkillFreshnessDisplayStatus(value, SKILL_NAME)).toBe('installed')
+  ])('reports needs attention %s', (_scenario, value) => {
+    // Why: no eligible update is not proof a copy is fine. Green here would read as
+    // all-clear over drift the update command cannot reach and the user cannot see.
+    expect(getSkillFreshnessDisplayStatus(value, SKILL_NAME)).toBe('needs-attention')
   })
 })

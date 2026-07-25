@@ -46,6 +46,11 @@ on:
         required: false
         type: string
         default: ''
+      version:
+        description: Exact version to cut (e.g. 1.4.155 or 1.4.155-rc.0), bypassing kind-based computation. Use to leapfrog a deleted/rolled-back stable that regressed the release list. Must be greater than the latest published stable.
+        required: false
+        type: string
+        default: ''
 
 permissions:
   contents: write
@@ -202,6 +207,7 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           KIND: ${{ github.event_name == 'schedule' && 'rc' || inputs.kind }}
           VERSION_SUFFIX: ${{ github.event_name == 'schedule' && '' || inputs.version_suffix }}
+          EXPLICIT_VERSION: ${{ github.event_name == 'schedule' && '' || inputs.version }}
         run: |
           set -euo pipefail
 
@@ -340,7 +346,14 @@ jobs:
             # floor for the current ref so the next cut cannot reuse an older
             # stable number just because the public release was nuked.
             if semver_gt "$package_stable" "$latest_stable"; then
-              if [[ "$KIND" != "rc" ]]; then
+              # Skip floor-tag recovery when an explicit version is requested:
+              # recover_unpublished_tag can exit 0, which would recover the
+              # package-floor tag instead of cutting the requested version —
+              # defeating the very rollback scenario the override exists for.
+              # We still raise latest_stable to the floor below so the explicit
+              # version is gated against it; the collision recovery for the
+              # requested tag runs later.
+              if [[ "$KIND" != "rc" && -z "${EXPLICIT_VERSION:-}" ]]; then
                 package_tag="v$package_stable"
                 if git rev-parse "$package_tag" >/dev/null 2>&1; then
                   recover_unpublished_tag "$package_tag" "current ref stable tag is newer than latest published stable" || true
@@ -352,6 +365,37 @@ jobs:
             fi
           fi
 
+          # Explicit version override (manual dispatch only).
+          #
+          # Why: kind-based math derives the next number from the latest
+          # *published* stable. When a shipped stable is deleted (e.g. a
+          # rolled-back 1.4.154), the release list regresses to the prior
+          # stable, so a kind cut recomputes a number at or below the nuked one
+          # and strands every client that already installed the deleted build.
+          # The package.json floor above only recovers this when the deleted
+          # version's bump commit is on the ref being cut, which a hotfix cut
+          # from an older RC ref does not carry. An explicit version lets a
+          # human assert the exact target (e.g. leapfrog to 1.4.155); the
+          # updater-safety gate and tag-collision recovery below still apply.
+          new=""
+          if [[ -n "${EXPLICIT_VERSION:-}" ]]; then
+            explicit="${EXPLICIT_VERSION#v}"
+            if [[ ! "$explicit" =~ ^[0-9]+\.[0-9]+\.[0-9]+(-rc\.[0-9]+)?$ ]]; then
+              echo "::error::version must be X.Y.Z or X.Y.Z-rc.N, got: $EXPLICIT_VERSION" >&2
+              exit 1
+            fi
+            # Same updater-safety gate the kind path enforces: stable line must
+            # strictly increase over the latest published stable (prerelease
+            # identifiers ignored for the comparison).
+            if ! semver_gt "$explicit" "$latest_stable"; then
+              echo "::error::Refusing explicit version $explicit: not greater than latest stable $latest_stable." >&2
+              exit 1
+            fi
+            new="$explicit"
+            echo "Explicit version override: $new"
+          fi
+
+          if [[ -z "$new" ]]; then
           case "$KIND" in
             rc)
               # Why: RCs always stabilize the *next* patch after whatever
@@ -429,6 +473,7 @@ jobs:
               exit 1
               ;;
           esac
+          fi
 
           # Orphan-tag recovery.
           #

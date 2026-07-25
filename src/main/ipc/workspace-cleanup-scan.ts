@@ -32,6 +32,7 @@ import {
   toSafeWorkspaceCleanupRepoScanError,
   withWorkspaceCleanupTimeout
 } from './workspace-cleanup-scan-primitives'
+import { getLocalProjectWorktreeGitOptions } from '../project-runtime-git-options'
 
 const WORKTREE_SCAN_CONCURRENCY = 3
 
@@ -111,7 +112,7 @@ async function scanRepoWorkspaces(
   let gitWorktrees: GitWorktreeInfo[] = []
 
   try {
-    const discovered = await listCleanupGitWorktrees(repo, repoIsFolder)
+    const discovered = await listCleanupGitWorktrees(store, repo, repoIsFolder)
     provider = discovered.provider
     gitWorktrees = discovered.gitWorktrees
   } catch (error) {
@@ -216,6 +217,7 @@ function shouldResolveBroadWorkspaceCleanupActivity(
 }
 
 async function listCleanupGitWorktrees(
+  store: Store,
   repo: Repo,
   repoIsFolder: boolean
 ): Promise<{ provider: IGitProvider | null; gitWorktrees: GitWorktreeInfo[] }> {
@@ -237,10 +239,11 @@ async function listCleanupGitWorktrees(
       )
     }
   }
+  const localGitOptions = getLocalProjectWorktreeGitOptions(store, repo)
   return {
     provider: null,
     gitWorktrees: await withWorkspaceCleanupTimeout(
-      (signal) => listRepoWorktrees(repo, { signal }),
+      (signal) => listRepoWorktrees(repo, { ...localGitOptions, signal }),
       WORKSPACE_CLEANUP_GIT_READ_TIMEOUT_MS,
       'Timed out listing worktrees.'
     )

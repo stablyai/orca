@@ -16,6 +16,7 @@ import { resolveTerminalHostSessionCwd } from './terminal-host-session-cwd'
 import { TerminalHostTombstones } from './terminal-host-tombstones'
 import { listLiveTerminalHostSessions } from './terminal-host-session-listing'
 import { createOrAttachTerminalSession } from './terminal-host-session-create'
+import { isShellProcess } from '../../shared/agent-detection'
 
 export type { CreateOrAttachOptions, CreateOrAttachResult } from './terminal-host-create-contract'
 export type { TerminalHostOptions } from './terminal-host-options'
@@ -144,6 +145,17 @@ export class TerminalHost {
       return null
     }
     return session.getForegroundProcess()
+  }
+
+  inspectProcess(sessionId: string): {
+    foregroundProcess: string | null
+    hasChildProcesses: boolean
+  } {
+    const foregroundProcess = this.getAliveSession(sessionId).getForegroundProcess()
+    return {
+      foregroundProcess,
+      hasChildProcesses: foregroundProcess !== null && !isShellProcess(foregroundProcess)
+    }
   }
 
   async confirmForegroundProcess(sessionId: string): Promise<string | null> {

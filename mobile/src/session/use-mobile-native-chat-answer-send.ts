@@ -10,6 +10,7 @@ import {
   type AskPrompt
 } from './mobile-native-chat-ask'
 import { sendMobileNativeChatMessageWithOutcome } from './mobile-native-chat-send'
+import { healMobileNativeChatStaleInput } from './mobile-native-chat-stale-input'
 import {
   resolveNativeChatTranscriptAgent,
   shouldStepNativeChatAskAnswer
@@ -155,6 +156,29 @@ export function useMobileNativeChatAnswerSend(args: {
       // Grok commits pasted labels; Claude and Codex need their selector-specific
       // keystrokes paced so each step renders before the next lands.
       if (!shouldStepNativeChatAskAnswer(agentRef.current)) {
+        // This shape pastes the label into the composer and commits it, so an
+        // orphaned image paste would be submitted along with the answer (#10228).
+        // The selector shapes below deliberately skip the heal: their keys are
+        // `enter: false` for an active overlay, and a single-select answer is a
+        // bare option digit that cannot submit the line at all, so clearing there
+        // would consume the marker still protecting the next real message.
+        // Desktop splits it identically — use-native-chat-interactive-send.ts
+        // routes only the pasted-label shape through the clearing sender.
+        if (
+          !(await healMobileNativeChatStaleInput({
+            client,
+            terminal: handle,
+            deviceToken: deviceTokenRef.current
+          }))
+        ) {
+          if (generationRef.current === generation) {
+            onSendError('Answer not sent')
+          }
+          return false
+        }
+        if (generationRef.current !== generation) {
+          return false
+        }
         return (await sendTerminal(formatAskAnswer(prompt, selections), true)) || fail()
       }
       const groups =

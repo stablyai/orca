@@ -164,8 +164,15 @@ function resolveHostGitHubCli(command: 'gh', args: string[]): ResolvedCommand {
   }
 }
 
+let defaultWslDistroOverride: string | null = null
+
+// Why: allow host commands fallback to route through the user's pinned WSL distro when host execution fails.
+export function setDefaultWslDistroOverride(distro: string | null): void {
+  defaultWslDistroOverride = distro
+}
+
 function resolveDefaultWslCli(command: 'gh' | 'glab', args: string[]): ResolvedCommand | null {
-  const distro = getDefaultWslDistro()
+  const distro = defaultWslDistroOverride ?? getDefaultWslDistro()
   return distro ? resolveCommand(command, args, undefined, distro) : null
 }
 

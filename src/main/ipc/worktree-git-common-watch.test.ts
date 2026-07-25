@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { appendFile, mkdtemp, mkdir, realpath, rm, writeFile } from 'node:fs/promises'
-import { rmSync, writeFileSync } from 'node:fs'
+import { chmodSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { subscribeViaWatcherProcess } from './parcel-watcher-process'
@@ -349,30 +349,36 @@ describe('worktree git-common polling gate (non-darwin)', () => {
     })
   })
 
-  it('does not fabricate worktree deletions when the readdir fails non-ENOENT (transient)', async () => {
-    // Why: a transient readdir failure (EIO/ESTALE/EMFILE/ENOTDIR, network/SSH hiccup) must not be read
-    // as "every linked worktree removed". Simulate a non-ENOENT failure by replacing the worktrees dir
-    // with a file so readdir throws ENOTDIR; the known entry must NOT be reported deleted. On the old
-    // catch-all (entryPaths = []) this emitted a false delete for every entry.
-    const commonDir = await makePollingCommonDir()
-    const entry = join(commonDir, 'worktrees', 'keep')
-    await mkdir(entry)
-    await writeFile(join(entry, 'HEAD'), 'ref: refs/heads/main')
-    const received: WorktreeBasePollEvent[][] = []
-    await startPollingWatch(commonDir, received)
+  // Why runIf: chmod 0 cannot revoke directory listing on Windows or for root, so the EACCES injection is inert there.
+  it.runIf(process.platform !== 'win32' && process.getuid?.() !== 0)(
+    'does not fabricate worktree deletions when the readdir fails non-ENOENT (transient)',
+    async () => {
+      // Why: a transient readdir failure (EIO/ESTALE/EMFILE/EACCES, network/SSH hiccup) must not be read
+      // as "every linked worktree removed". Revoke dir permissions so readdir throws EACCES; the known
+      // entry must NOT be reported deleted. On the old catch-all (entryPaths = []) this emitted a false
+      // delete for every entry. chmod (not a dir->file swap) because it is one atomic syscall: an
+      // in-flight tick's threadpool readdir sees success or EACCES, never a transient ENOENT window
+      // that would legitimately emit a delete and flake this assertion.
+      const commonDir = await makePollingCommonDir()
+      const entry = join(commonDir, 'worktrees', 'keep')
+      await mkdir(entry)
+      await writeFile(join(entry, 'HEAD'), 'ref: refs/heads/main')
+      const received: WorktreeBasePollEvent[][] = []
+      await startPollingWatch(commonDir, received)
 
-    await new Promise((resolve) => setTimeout(resolve, POLL_MS * 2))
-    const worktreesDir = join(commonDir, 'worktrees')
-    // Swap dir -> file synchronously so no event-loop turn (and thus no poll
-    // tick) observes the transient ENOENT window, which would legitimately emit
-    // a delete and defeat the non-ENOENT assertion below.
-    rmSync(worktreesDir, { recursive: true, force: true })
-    writeFileSync(worktreesDir, 'not-a-dir')
-    await new Promise((resolve) => setTimeout(resolve, POLL_MS * 4))
+      await new Promise((resolve) => setTimeout(resolve, POLL_MS * 2))
+      const worktreesDir = join(commonDir, 'worktrees')
+      chmodSync(worktreesDir, 0o000)
+      try {
+        await new Promise((resolve) => setTimeout(resolve, POLL_MS * 4))
+      } finally {
+        // Why: restore before cleanup so the afterEach recursive rm can traverse the dir.
+        chmodSync(worktreesDir, 0o755)
+      }
 
-    expect(received.flat()).not.toContainEqual({ type: 'delete', path: entry })
-    await rm(worktreesDir, { force: true })
-  })
+      expect(received.flat()).not.toContainEqual({ type: 'delete', path: entry })
+    }
+  )
 
   it('detects an in-place structural (HEAD) write on a known entry every tick, without the index backstop', async () => {
     // Why: a raw HEAD/gitdir/config.worktree rewrite does not bump the entry-dir mtime, so the

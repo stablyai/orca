@@ -2927,7 +2927,8 @@
                   "5a9c83c04b": "Open any file, URL, agent, ...",
                   "90eb94dc48": "Enter an http:// or https:// URL.",
                   "5553b283ce": "Enter a URL or file path.",
-                  "queryTooLarge": "Search text is too large."
+                  "queryTooLarge": "Search text is too large.",
+                  "absolutePathRemoteBlocked": "Absolute paths require a local workspace."
                 }
               },
               "menu": {
@@ -3747,7 +3748,8 @@
           "tipBrokenLink": "A shortcut to something that no longer exists.",
           "tipReadOnly": "This copy is in a read-only location.",
           "tipInRepo": "This copy lives inside a project, not your global skills.",
-          "tipPluginCache": "This copy is managed by a plugin."
+          "tipPluginCache": "This copy is managed by a plugin.",
+          "skippedReasonDuplicate": "This is a separate copy, so the update won’t reach it — the command only refreshes the main copy. Remove this copy, then reinstall the skill so this location follows the main one."
         },
         "SkillFreshnessUpdateDialog": {
           "title": "Update skills",
@@ -3768,7 +3770,9 @@
         "SkillFreshnessStatusPill": {
           "updateAvailable": "Update available",
           "upToDate": "Up to date",
-          "installed": "Installed"
+          "installed": "Installed",
+          "details": "Details",
+          "needsAttention": "Needs attention"
         }
       },
       "sidebar": {
@@ -5066,7 +5070,10 @@
           "remoteEmptyClaudeAccounts": "No managed Claude accounts on {{value0}}. It uses its system default Claude login; add accounts on that server.",
           "remoteEmptyCodexAccounts": "No managed Codex accounts on {{value0}}. It uses its system default Codex login; add accounts on that server.",
           "codexSystemDefaultCustomProvider": "Custom provider — no usage tracked.",
-          "codexSystemDefaultNeedsSignIn": "No Codex sign-in was found for {{value0}}."
+          "codexSystemDefaultNeedsSignIn": "No Codex sign-in was found for {{value0}}.",
+          "codexConfigSyncMissingSource": "Codex is still using the settings it last synced because {{value0}} is missing. Restore that file to resume syncing.",
+          "codexConfigSyncBlankSource": "Codex is still using the settings it last synced because {{value0}} is empty. That is expected while a synced folder finishes downloading.",
+          "codexConfigSyncUnreadableSource": "Codex is still using the settings it last synced because {{value0}} could not be read. Check that file's permissions."
         },
         "AdvancedPane": {
           "40b29e0bf3": "Restart",
@@ -5506,7 +5513,7 @@
           "dfbc12c8c8": "Hardware debugging and device tools that talk to USB devices.",
           "bf51e4a542": "USB Devices",
           "f903bf20b5": "Discovery and access for development servers on your network.",
-          "e7bb06007c": "Local Network",
+          "e7bb06007c": "LAN",
           "4a73f5217a": "Apple Events for scripts that control other local apps.",
           "e119f0d66b": "Automation",
           "7ca17b62c8": "Recommended when projects, worktrees, or symlinked files touch macOS-protected folders.",
@@ -5562,9 +5569,14 @@
           },
           "agentDashboard": {
             "title": "Agent Dashboard",
-            "description": "Pop-out Kanban board for monitoring agents across worktrees.",
-            "copy": "Adds an Agent Dashboard entry to the left sidebar. Open it to monitor attention, working, and idle agents in a separate window and jump into their live terminals.",
-            "toggleLabel": "Toggle Agent Dashboard"
+            "description": "Kanban board for monitoring agents across worktrees, in-window or as a pop-out.",
+            "copy": "Adds an Agent Dashboard entry to the left sidebar. Open it to monitor attention, working, and idle agents and jump into their live terminals.",
+            "toggleLabel": "Toggle Agent Dashboard",
+            "modeLabel": "Open as",
+            "modeCopy": "Show the dashboard as an in-window board beside the sidebar or a separate pop-out window.",
+            "modeAriaLabel": "Agent Dashboard open mode",
+            "modeInWindow": "In-window",
+            "modePopout": "Pop-out"
           }
         },
         "FloatingWorkspacePane": {
@@ -5755,6 +5767,11 @@
         },
         "YamlThemeImportButton": {
           "label": "Import from YAML"
+        },
+        "BranchPrefixFeedback": {
+          "6c40c0908f": "Prefix cannot contain spaces or special characters like ~ ^ : ? * [ \\",
+          "64d70b156a": "Branches will be named {{example}}",
+          "808f9a726e": "No prefix will be applied"
         },
         "GitPane": {
           "d2eede4c54": "Add Orca attribution to commits, PRs, and issues.",
@@ -6014,7 +6031,7 @@
           "668016be7a": "on your computer and phone.",
           "1dc87a7fbc": "Tailscale",
           "51d29927eb": "Install",
-          "9fc5d203ff": "Orca Mobile connects directly to this computer. To use it away from the same local network, put your computer and phone on the same private overlay network, then generate the QR code with that network address selected.",
+          "9fc5d203ff": "Orca Mobile connects directly to this computer. To use it away from the same LAN, put your computer and phone on the same private overlay network, then generate the QR code with that network address selected.",
           "39fad211d9": "Connect outside your Wi-Fi with a tailnet",
           "a9db5d771d": "Refresh network interfaces",
           "b2c384cfd6": "No interfaces found",
@@ -6045,7 +6062,7 @@
           "6436e56546": "QR Code for mobile pairing",
           "1b1b70279a": "No devices paired yet.",
           "1592afcc7a": "No devices paired yet. Scan the QR code with the Orca mobile app.",
-          "relayDegradedNotice": "Relay couldn’t be reached — this code only works on your local network. Regenerate to try again."
+          "relayDegradedNotice": "Relay couldn’t be reached — this code only works on your LAN or Tailscale. Regenerate to try again."
         },
         "MobileSettingsPane": {
           "9a3c280e49": "GitHub Releases",
@@ -6358,6 +6375,7 @@
           "removeSetup": "Remove",
           "hostSetupBlockedVersion": "Orca server version is incompatible",
           "hostSetupMissingCapability": "Update Orca on this host to set up projects",
+          "hostSetupConnectionRequired": "Connect this host before importing or cloning the project",
           "setupProjectOnHost": "Set up on another host",
           "setupProjectOnHostHelp": "Choose a host, then import an existing checkout, clone the repository there, or track a setup that will be provisioned later.",
           "setupExistingFolder": "Import existing folder",
@@ -7678,14 +7696,14 @@
         "developer": {
           "permissions": {
             "search": {
-              "3363889768": "Local Network, USB, and Bluetooth",
+              "3363889768": "LAN, USB, and Bluetooth",
               "6c82846f66": "device",
               "11653d3f42": "mdns",
               "78a10b826f": "bonjour",
               "e3fbc48083": "bluetooth",
               "c4a4a02ea4": "usb",
-              "fa3239cd42": "local network",
-              "acad3d4743": "Allow device and local-network tools used from terminal sessions.",
+              "fa3239cd42": "lan",
+              "acad3d4743": "Allow device tools and LAN access used from terminal sessions.",
               "3e0131e45d": "icloud",
               "ce07159ff5": "desktop",
               "a0c19119fb": "downloads",
@@ -7789,7 +7807,7 @@
             },
             "agentDashboard": {
               "title": "Agent Dashboard",
-              "description": "Pop-out Kanban board for monitoring agents across worktrees."
+              "description": "Kanban board for monitoring agents across worktrees, in-window or as a pop-out."
             }
           }
         },
@@ -9308,10 +9326,10 @@
           "anywhereTitle": "Orca Relay",
           "anywhereDescription": "Phone can be on cellular or any Wi‑Fi. Sign-in required.",
           "signInRequired": "Sign in to use Orca Mobile Relay.",
-          "relayUnavailable": "Orca Relay isn’t available in this build. Use Local network.",
+          "relayUnavailable": "Orca Relay isn’t available in this build. Use LAN.",
           "signIn": "Sign in",
           "signInAgain": "Sign in again",
-          "localTitle": "Local network",
+          "localTitle": "LAN",
           "localDescription": "Phone must be on this Wi‑Fi or your Tailscale. No sign-in."
         },
         "MobilePairingSetupSection": {
@@ -9890,7 +9908,6 @@
             "b715ef615b": "{{value0}} commits ahead of {{value1}}",
             "c1a8f3e204": "1 commit behind {{value0}}",
             "d2b9g4f315": "{{value0}} commits behind {{value1}}",
-            "e9c2a5d416": "Even with {{value0}}",
             "4b4a7de138": "Open review page in browser",
             "createPrIntentCommitBlockedSummary": "Commit blocked: {{value0}} Fix the issue, then retry Create PR.",
             "pushRecovery": {
@@ -9908,7 +9925,11 @@
               "834cb3f23d": "Fix with AI",
               "783a808870": "Close"
             },
-            "97e7124eac": "Could not refresh Source Control. Try again."
+            "97e7124eac": "Could not refresh Source Control. Try again.",
+            "b8c2e1a904": "{{value0}} → {{value1}}",
+            "a4e93c21d7": "Current branch: {{value0}}",
+            "c7d4e2f801": "Change base ref: {{value0}}",
+            "f3a1b8c204": "upstream"
           },
           "SourceControlAgentActionDialog": {
             "8e856842d1": "Could not start the selected agent.",
@@ -11058,7 +11079,7 @@
             "preview": "Preview",
             "stable": "Stable"
           },
-          "relayDegradedNotice": "Relay couldn’t be reached — this code only works on your local network."
+          "relayDegradedNotice": "Relay couldn’t be reached — this code only works on your LAN or Tailscale."
         },
         "MobilePage": {
           "e17393c6a3": "Phone preview",
@@ -13787,6 +13808,9 @@
     },
     "title": "Agents",
     "total": "{{count}} total",
+    "close": "Close dashboard",
+    "settings": "Agent Dashboard settings",
+    "settingsTooltip": "Board settings",
     "card": {
       "you": "You",
       "time": {
