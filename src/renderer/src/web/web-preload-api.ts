@@ -111,6 +111,7 @@ import {
   type StoredWebRuntimeEnvironment
 } from './web-runtime-environment'
 import { parseWebPairingInput } from './web-pairing'
+import { copyClipboardTextViaExecCommand } from './web-clipboard-copy-fallback'
 import { WebRuntimeClient } from './web-runtime-client'
 import { RuntimeRpcCallQueuePool } from '../../../shared/runtime-rpc-call-queue'
 import {
@@ -2490,7 +2491,23 @@ function createWebUiApi(): NonNullable<Partial<PreloadApi>['ui']> {
     },
     writeClipboardText: async (text) => {
       await assertClipboardTextWriteWithinLimitWithYield(text)
-      await (navigator.clipboard?.writeText?.(text) ?? Promise.resolve())
+      const clipboard = navigator.clipboard
+      if (typeof clipboard?.writeText === 'function') {
+        try {
+          await clipboard.writeText(text)
+          return
+        } catch (error) {
+          // Why: secure-context writes can still be permission-gated; retry via
+          // execCommand while the user gesture's transient activation is live.
+          if (copyClipboardTextViaExecCommand(text)) {
+            return
+          }
+          throw error
+        }
+      }
+      if (!copyClipboardTextViaExecCommand(text)) {
+        throw new Error('Clipboard write is unavailable in this browser context')
+      }
     },
     writeSelectionClipboardText: () =>
       Promise.reject(new Error('Selection clipboard is unavailable in the web client')),

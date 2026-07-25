@@ -1231,6 +1231,84 @@ describe('web UI preload API', () => {
     expect(writeText).toHaveBeenCalledWith('copy me')
   })
 
+  it('copies through execCommand when navigator.clipboard is unavailable (insecure context)', async () => {
+    const globals = installBrowserGlobals('Linux')
+    vi.stubGlobal('navigator', { userAgent: 'Linux', hardwareConcurrency: 8 })
+    const textarea = {
+      value: '',
+      readOnly: false,
+      style: {} as Record<string, string>,
+      select: vi.fn(),
+      remove: vi.fn()
+    }
+    const execCommand = vi.fn().mockReturnValue(true)
+    vi.stubGlobal('document', {
+      activeElement: null,
+      createElement: vi.fn(() => textarea),
+      execCommand,
+      body: { appendChild: vi.fn() }
+    })
+    const { installWebPreloadApi } = await import('./web-preload-api')
+    installWebPreloadApi()
+
+    await expect(globals.window.api.ui.writeClipboardText('copy me')).resolves.toBeUndefined()
+    expect(textarea.value).toBe('copy me')
+    expect(execCommand).toHaveBeenCalledWith('copy')
+  })
+
+  it('rejects instead of silently succeeding when no clipboard write path exists', async () => {
+    const globals = installBrowserGlobals('Linux')
+    vi.stubGlobal('navigator', { userAgent: 'Linux', hardwareConcurrency: 8 })
+    vi.stubGlobal('document', {
+      activeElement: null,
+      createElement: vi.fn(() => ({
+        value: '',
+        readOnly: false,
+        style: {} as Record<string, string>,
+        select: vi.fn(),
+        remove: vi.fn()
+      })),
+      execCommand: vi.fn().mockReturnValue(false),
+      body: { appendChild: vi.fn() }
+    })
+    const { installWebPreloadApi } = await import('./web-preload-api')
+    installWebPreloadApi()
+
+    await expect(globals.window.api.ui.writeClipboardText('copy me')).rejects.toThrow(
+      'Clipboard write is unavailable in this browser context'
+    )
+  })
+
+  it('falls back to execCommand when the browser clipboard write is permission-gated', async () => {
+    const globals = installBrowserGlobals('Linux')
+    const writeText = vi.fn().mockRejectedValue(new DOMException('denied', 'NotAllowedError'))
+    vi.stubGlobal('navigator', {
+      userAgent: 'Linux',
+      hardwareConcurrency: 8,
+      clipboard: { writeText }
+    })
+    const textarea = {
+      value: '',
+      readOnly: false,
+      style: {} as Record<string, string>,
+      select: vi.fn(),
+      remove: vi.fn()
+    }
+    const execCommand = vi.fn().mockReturnValue(true)
+    vi.stubGlobal('document', {
+      activeElement: null,
+      createElement: vi.fn(() => textarea),
+      execCommand,
+      body: { appendChild: vi.fn() }
+    })
+    const { installWebPreloadApi } = await import('./web-preload-api')
+    installWebPreloadApi()
+
+    await expect(globals.window.api.ui.writeClipboardText('copy me')).resolves.toBeUndefined()
+    expect(writeText).toHaveBeenCalledWith('copy me')
+    expect(textarea.value).toBe('copy me')
+  })
+
   it('yields while reading accepted large browser clipboard text', async () => {
     vi.useFakeTimers()
     const text = 'é'.repeat(300_000)
