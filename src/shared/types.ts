@@ -792,8 +792,21 @@ export type TabContentType =
   | 'check-details'
   | 'browser'
   | 'simulator'
+  /** A collab whiteboard scoped to this worktree, opened beside the terminal.
+   *  Ephemeral: it dies with the workspace and never enters the User Panels
+   *  tree — that is what separates it from a `PinnedCanvasPanel`. */
+  | 'collab-canvas'
 
-export type WorkspaceVisibleTabType = 'terminal' | 'editor' | 'browser' | 'simulator'
+// Why 'collab-canvas' is present: G1 wires the board tab UI. Tab cycling, the
+// jump palette, and return-focus must treat a board as a first-class surface so
+// it survives activation and does not fall through as a fake editor. The
+// earlier deliberate absence was only until this UI existed.
+export type WorkspaceVisibleTabType =
+  | 'terminal'
+  | 'editor'
+  | 'browser'
+  | 'simulator'
+  | 'collab-canvas'
 export type CtrlTabOrderMode = 'mru' | 'sequential'
 
 export type Tab = {
@@ -2785,6 +2798,11 @@ export type GlobalSettings = {
    *  first-class sidebar entries hosting persistent webviews. Optional for
    *  profiles saved before this setting existed; readers default to none. */
   pinnedWebPanels?: PinnedWebPanel[]
+  /** Collab whiteboard boards pinned under User Panels (G3). Each owns a
+   *  boardId (sync room + omp session-dir). Optional for older profiles. */
+  pinnedCanvasPanels?: PinnedCanvasPanel[]
+  /** Collapsed state of the sidebar "Collab Boards" disclosure. */
+  pinnedCanvasPanelsCollapsed?: boolean
   /** Collapsed state of the sidebar's "User Panels" disclosure that groups
    *  the pinned web panels — in settings (not per-window UI state) so the
    *  fold survives relaunch, matching the terminal-panel group folds. */
@@ -2953,7 +2971,13 @@ export type GlobalSettings = {
   experimentalPet: boolean
   /** Legacy persisted key from before the sidekick -> pet rename; read only during migration, new writes use experimentalPet. */
   experimentalSidekick?: boolean
-  /** Experimental: left-sidebar Agents view — threaded feed of agent completions, blocking/unread state, worktree creation. */
+  /** Whether the pet overlay shows the transient speech bubble on agent-state
+   *  transitions (waiting/failed/waving/running). Nested under the pet
+   *  feature itself; defaults on so the richer pet behaves like Codex's out
+   *  of the box, but is easy to turn off if a user finds the bubble noisy. */
+  petBubbleEnabled: boolean
+  /** Experimental: left-sidebar Agents view with a threaded feed for agent
+   *  completions, blocking states, unread state, and worktree creation events. */
   experimentalActivity: boolean
   /** Experimental: pop-out Kanban dashboard for monitoring and opening agent terminals across worktrees. */
   experimentalAgentDashboardPopout?: boolean
@@ -3235,6 +3259,27 @@ export type ManualRepoOrderEntry = {
   repoId: string
 }
 
+/** A collaborative drawing board pinned to the left sidebar under the User
+ *  Panels root — the operator and one bound omp agent share the surface.
+ *
+ *  Why `boardId` is separate from `id`: `id` identifies the *sidebar entry*
+ *  (rename it, move it between groups, delete it), while `boardId` keys the
+ *  persisted tldraw snapshot and the agent's omp `--session-dir`. Keeping them
+ *  distinct means a re-pinned board keeps its drawing and its conversation.
+ *
+ *  Not to be confused with Orca's `panel-canvas` subsystem, which is the
+ *  *tiling layout* of panels. This is a whiteboard. */
+export type PinnedCanvasPanel = {
+  id: string
+  title: string
+  /** Stable key for the tldraw snapshot + the bound agent's session dir. */
+  boardId: string
+  /** Panel tree group id under the User Panels root; absent = top-level. */
+  groupId?: string
+  /** Sort order within the group (or root). */
+  order?: number
+}
+
 /** A user-configured web page pinned to the left sidebar. */
 export type PinnedWebPanel = {
   id: string
@@ -3306,7 +3351,19 @@ export type PanelLayoutBrowserLeaf = {
   label?: string
 }
 
-export type PanelLayoutLeaf = PanelLayoutPanelLeaf | PanelLayoutShellLeaf | PanelLayoutBrowserLeaf
+/** A collab whiteboard tile referencing a pinned `PinnedCanvasPanel`, so a
+ *  board can sit in a saved layout beside btop and a browser. The board's
+ *  drawing lives in its own snapshot file, so the layout only carries the id. */
+export type PanelLayoutCanvasLeaf = {
+  kind: 'canvas'
+  panelId: string
+}
+
+export type PanelLayoutLeaf =
+  | PanelLayoutPanelLeaf
+  | PanelLayoutShellLeaf
+  | PanelLayoutBrowserLeaf
+  | PanelLayoutCanvasLeaf
 
 /** A resizable split holding two or more tiles or nested splits. `sizes` are
  *  relative flex weights matching `children`; absent means equal shares. */
@@ -3338,6 +3395,7 @@ export type TopLevelView =
   | 'mobile'
   | 'web-panel'
   | 'terminal-panel'
+  | 'canvas-panel'
   | 'panel-canvas'
 
 export type PersistedUIState = {

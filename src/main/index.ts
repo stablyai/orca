@@ -76,6 +76,7 @@ import {
   configureElectronNetworkCompatibility,
   configureDevUserDataPath,
   configureOrcaUserDataPathEnv,
+  enableLinuxComputerUseAccessibility,
   enableMainProcessGpuFeatures,
   installDevParentDisconnectQuit,
   installDevParentSignalQuit,
@@ -477,7 +478,17 @@ configureRemoteServerUpdater({
   install: installRemoteServerUpdate
 })
 patchPackagedProcessPath()
-// Why: the sync seed above covers early IPC (homebrew/nix); the async login-shell probe below (packaged only) then adds the user's rc PATH.
+// Why: computer-use dogfood on Linux needs AT-SPI to list the Orca window.
+// Force Chromium accessibility before ready so Electron registers on the bus.
+enableLinuxComputerUseAccessibility()
+// Why: patchPackagedProcessPath seeds a minimal list of well-known system
+// dirs synchronously so early IPC (e.g. preflight before the shell spawn
+// completes) doesn't miss homebrew/nix. Kick off the login-shell probe in
+// parallel for packaged runs — when it resolves, its PATH is prepended and
+// detectInstalledAgents picks up whatever the user's rc files put on PATH
+// (cargo/pyenv/volta/custom tool install dirs) without hardcoding each one.
+// Dev runs already inherit a complete PATH from the launching terminal, so
+// the spawn cost is only paid where it's needed.
 if (app.isPackaged && process.platform !== 'win32') {
   void hydrateShellPath().then((result) => {
     if (result.ok) {

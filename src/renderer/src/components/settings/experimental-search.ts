@@ -43,6 +43,10 @@ export const getExperimentalPaneSearchEntries = createLocalizedCatalog(
         ...translateSearchKeyword(
           'auto.components.settings.experimental.search.9af7a518db',
           'character'
+        ),
+        ...translateSearchKeyword(
+          'auto.components.settings.experimental.search.petBubbleKeyword',
+          'bubble'
         )
       ]
     },

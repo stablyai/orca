@@ -8,6 +8,8 @@ import * as Linking from 'expo-linking'
 import { colors } from '../src/theme/mobile-theme'
 import { OrcaLogo } from '../src/components/OrcaLogo'
 import { RpcClientProvider } from '../src/transport/client-context'
+import { SpeakBackProvider } from '../src/voice/speak-back-context'
+import { loadKokoroVoice } from '../src/voice/kokoro-voices'
 import { getNotificationNavigationPath } from '../src/notifications/notification-routing'
 import { loadHosts } from '../src/transport/host-store'
 import { extractPairingCodeFromUrl } from '../src/transport/pairing'
@@ -35,6 +37,14 @@ Notifications.setNotificationHandler({
 export default function RootLayout() {
   const router = useRouter()
   const handledNotificationIdsRef = useRef<Set<string>>(new Set())
+
+  // Why prime here: synthesizeViaMesh reads the voice preference synchronously
+  // so the speech path never awaits storage mid-utterance. Without this the very
+  // first reply after launch would speak in the default voice regardless of what
+  // the operator chose.
+  useEffect(() => {
+    void loadKokoroVoice()
+  }, [])
 
   useEffect(() => {
     // Why: pairing publication is journaled across process death; startup must
@@ -152,6 +162,7 @@ export default function RootLayout() {
 
   return (
     <RpcClientProvider>
+      <SpeakBackProvider>
       <View style={styles.root} onLayout={onNavigatorLayout}>
         <StatusBar style="light" />
         <Stack
@@ -194,6 +205,7 @@ export default function RootLayout() {
           <Stack.Screen name="h" options={{ headerShown: false }} />
         </Stack>
       </View>
+      </SpeakBackProvider>
     </RpcClientProvider>
   )
 }

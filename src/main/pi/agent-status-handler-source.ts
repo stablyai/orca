@@ -3,8 +3,11 @@ import type { PiAgentKind } from '../../shared/pi-agent-kind'
 // Why: keep the generated handler registrations separate from hook transport;
 // both are independently sizeable and the installed extension concatenates them.
 export function getPiAgentStatusHandlerSourceLines(kind: PiAgentKind): string[] {
+  // Why omp too: it registers updateSessionMetadata (defined only when session
+  // metadata is reported) on session_start so an omp pane publishes its
+  // session_id/session_file — the prerequisite for native resume.
   const sessionStartHandler =
-    kind === 'pi'
+    kind === 'pi' || kind === 'omp'
       ? [
           "  pi.on('session_start', (event, ctx) => {",
           '    updateSessionMetadata(ctx)',
@@ -89,6 +92,24 @@ export function getPiAgentStatusHandlerSourceLines(kind: PiAgentKind): string[] 
     `  pi.on('tool_execution_end', (event${ctxParam}) => {`,
     ...captureSessionMetadata,
     "    post('tool_execution_end', {",
+    '      tool_name: event.toolName,',
+    '    })',
+    '  })',
+    '',
+    "  // Why: --approval-mode always-ask blocks the turn between tool_call and",
+    '  // tool_execution_start while omp awaits the operator. Without these two',
+    '  // events Orca never leaves the preceding "working" state, so the pane (and',
+    '  // the pet) show a normal spinner instead of an approval prompt — the tool',
+    '  // sits gated with no visible signal. Post a distinct pair so the receiver',
+    '  // can raise a sticky "waiting" and drop it the moment the operator answers.',
+    "  pi.on('tool_approval_requested', (event) => {",
+    "    post('tool_approval_requested', {",
+    '      tool_name: event.toolName,',
+    '    })',
+    '  })',
+    '',
+    "  pi.on('tool_approval_resolved', (event) => {",
+    "    post('tool_approval_resolved', {",
     '      tool_name: event.toolName,',
     '    })',
     '  })',

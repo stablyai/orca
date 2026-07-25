@@ -1878,7 +1878,7 @@
         "ac037cfac2": "手机",
         "75499e01d9": "关闭",
         "66b5a67bee": "Esc键",
-        "45def60329": "打开",
+        "45def60329": "开放",
         "f65d992a11": "进入",
         "c5081f2814": "当前工作树",
         "52404f8096": "当前选项卡",
@@ -2978,7 +2978,12 @@
             "f395c9a685": "导入文件失败",
             "e6234bcc17": "自定义宠物上传需要完全重启应用（不仅是重新加载）。",
             "6d0a8cd179": "显示宠物",
-            "1fbc51cc77": "隐藏宠物"
+            "1fbc51cc77": "隐藏宠物",
+            "seed-needs-restart": "Petdex seed needs a full app restart (not just reload).",
+            "seed-start": "Installing Petdex starter pack…",
+            "seed-done": "Installed {count} Petdex pets",
+            "seed-fail": "Petdex seed failed",
+            "seed-petdex": "Install Petdex starter pack…"
           },
           "PortsStatusSegment": {
             "4ebf90c12e": "未检测到外部端口",
@@ -4259,13 +4264,13 @@
           "ca74db7550": "SSH 主机上的项目",
           "021538e1d1": "SSH 已断开连接",
           "runtimeHostDisconnected": "服务器已断开连接",
-          "runtimeHostDisconnectedNamed": "{{hostName}} 已断开连接",
           "runtimeHostProject": "Orca 服务器上的项目",
-          "runtimeHostProjectNamed": "{{hostName}} 上的项目",
           "automationCreated": "由自动化创建",
           "branchIdentity": "分支",
           "branchFolderPathIdentity": "分支或文件夹路径",
-          "ef18787206": "已排队删除"
+          "ef18787206": "已排队删除",
+          "runtimeHostDisconnectedNamed": "{{hostName}} 已断开连接",
+          "runtimeHostProjectNamed": "{{hostName}} 上的项目"
         },
         "WorktreeCardAgents": {
           "1b0a156717": "智能体"
@@ -4660,6 +4665,7 @@
           "modalDescription": "从终端安装 Linear 技能。",
           "modalPrompt": "允许智能体读取和编辑已附加的 Linear ticket。",
           "dontShowAgain": "不再显示",
+          "notNow": "暂不",
           "missingBoth": "缺少 Orca CLI 和 Linear 智能体技能。",
           "missingCli": "缺少 Orca CLI。",
           "missingSkill": "缺少 Linear 智能体技能。",
@@ -4689,8 +4695,7 @@
           "toastInstallCliDescription": "安装 Orca CLI，让智能体可以读取并编辑 Linear 任务。",
           "toastInstallSkillDescription": "安装 Linear 技能，让智能体可以通过 Orca CLI 读取并编辑 Linear 任务。",
           "toastRemoteDescription": "{{value0}} 远程智能体环境可能仍需要自己的设置。",
-          "toastWslDescription": "{{value0}} 此设置会在所选 WSL 智能体运行时中执行。",
-          "notNow": "暂不"
+          "toastWslDescription": "{{value0}} 此设置会在所选 WSL 智能体运行时中执行。"
         },
         "FolderWorkspaceComposerDialog": {
           "connectFailed": "无法连接到项目。",
@@ -4952,7 +4957,7 @@
           "dbb9626ed1": "取消",
           "854ebbcc45": "Orca 将删除此已保存账户的托管 Claude 身份验证。如果当前处于活动状态，Orca 将回退到系统默认的 Claude 登录名。",
           "63843e37e2": "删除 Claude 账户？",
-          "380a7736cc": "移除此账户会永久删除其托管的 Codex 主目录，包括其中存储的所有 Codex 会话历史记录和 MCP 登录信息。此操作无法撤销。如果该账户当前处于活动状态，Orca 将回退到系统默认的 Codex 登录。",
+          "99c8f9e498": "Orca 将删除此已保存账户的托管 Codex 主目录。如果当前处于活动状态，Orca 将回退到系统默认的 Codex 登录。",
           "0d47394635": "删除 Codex 账户？",
           "ae3b21eb6c": "opencode.ai/workspace/wrk_…/go",
           "51c9104e13": "登录 opencode.ai 后在 URL 中找到此内容（例如",
@@ -5070,12 +5075,12 @@
           "remoteScopeAuthContext": "每个账户在 {{value0}} 上保留自己的登录上下文。",
           "remoteEmptyClaudeAccounts": "{{value0}} 上没有受管理的 Claude 账户。它使用其系统默认的 Claude 登录；请在该服务器上添加账户。",
           "remoteEmptyCodexAccounts": "{{value0}} 上没有受管理的 Codex 账户。它使用其系统默认的 Codex 登录；请在该服务器上添加账户。",
+          "380a7736cc": "移除此账户会永久删除其托管的 Codex 主目录，包括其中存储的所有 Codex 会话历史记录和 MCP 登录信息。此操作无法撤销。如果该账户当前处于活动状态，Orca 将回退到系统默认的 Codex 登录。",
           "codexSystemDefaultCustomProvider": "自定义提供商 — 不跟踪使用情况。",
           "codexSystemDefaultNeedsSignIn": "未找到 {{value0}} 的 Codex 登录信息。",
           "codexConfigSyncMissingSource": "Codex is still using the settings it last synced because {{value0}} is missing. Restore that file to resume syncing.",
           "codexConfigSyncBlankSource": "Codex is still using the settings it last synced because {{value0}} is empty. That is expected while a synced folder finishes downloading.",
-          "codexConfigSyncUnreadableSource": "Codex is still using the settings it last synced because {{value0}} could not be read. Check that file's permissions.",
-          "99c8f9e498": "Orca 将删除此已保存账户的托管 Codex 主目录。如果当前处于活动状态，Orca 将回退到系统默认的 Codex 登录。"
+          "codexConfigSyncUnreadableSource": "Codex is still using the settings it last synced because {{value0}} could not be read. Check that file's permissions."
         },
         "AdvancedPane": {
           "40b29e0bf3": "重新启动",
@@ -5483,7 +5488,7 @@
         "ComputerUsePane": {
           "1735461723": "使智能体能够检查和操作本地桌面应用程序。",
           "93255aaf18": "计算机控制技能",
-          "45f8e22c2e": "打开",
+          "45f8e22c2e": "开放",
           "d95d1cfab8": "刷新",
           "0c29da5805": "就绪",
           "3383ea1aab": "无法重置计算机使用权限",
@@ -5515,7 +5520,7 @@
           "dfbc12c8c8": "与 USB 设备通信的硬件调试和设备工具。",
           "bf51e4a542": "USB 设备",
           "f903bf20b5": "发现和访问网络上的开发服务器。",
-          "e7bb06007c": "局域网",
+          "e7bb06007c": "本地网络",
           "4a73f5217a": "用于控制其他本地应用程序的脚本的 Apple 事件。",
           "e119f0d66b": "自动化",
           "7ca17b62c8": "当项目、worktree 或符号链接文件会访问 macOS 受保护文件夹时推荐启用。",
@@ -5559,16 +5564,18 @@
             "toggleLabel": "切换新卡片样式"
           },
           "nativeChat": {
-            "title": "Chat UI",
+            "title": "原生聊天",
             "description": "预览受支持的智能体终端会话的桌面聊天界面。",
-            "copy": "添加可从受支持的智能体终端窗格切换的 Chat UI 视图。在我们调整记录保真度、流式传输和终端一致性期间，此功能仍处于实验阶段。",
-            "toggleLabel": "切换 Chat UI",
+            "copy": "添加可从受支持的智能体终端窗格切换的原生聊天视图。在我们调整记录保真度、流式传输和终端一致性期间，此功能仍处于实验阶段。",
+            "toggleLabel": "切换原生聊天",
             "defaultTitle": "默认视图",
             "defaultCopy": "选择如何打开受支持智能体的新终端标签页。",
-            "defaultViewLabel": "默认 Chat UI 视图",
+            "defaultViewLabel": "默认原生聊天视图",
             "defaultViewTerminal": "终端聊天",
-            "defaultViewNative": "Chat UI"
+            "defaultViewNative": "原生聊天"
           },
+          "petBubbleLabel": "对话气泡",
+          "petBubbleDescription": "当代理状态变化时（等待、完成、工作中），显示一个简短的气泡说明哪个代理需要你。",
           "agentDashboard": {
             "title": "Agent Dashboard",
             "description": "Kanban board for monitoring agents across worktrees, in-window or as a pop-out.",
@@ -5732,11 +5739,6 @@
           "d2f33670a9": "从Ghostty导入",
           "273e7e81fe": "配置",
           "1f744a72f4": "配置"
-        },
-        "BranchPrefixFeedback": {
-          "6c40c0908f": "前缀不能包含空格或 ~ ^ : ? * [ \\ 等特殊字符",
-          "64d70b156a": "分支将命名为 {{example}}",
-          "808f9a726e": "不会应用前缀"
         },
         "GitPane": {
           "d2eede4c54": "将 Orca 署名添加到 commits、PR 和议题。",
@@ -5996,7 +5998,7 @@
           "668016be7a": "在您的计算机和手机上。",
           "1dc87a7fbc": "Tailscale",
           "51d29927eb": "安装",
-          "9fc5d203ff": "Orca 手机端 直接连接到此计算机。要在远离同一局域网的地方使用它，请将您的计算机和手机置于同一私有覆盖网络上，然后使用所选的网络地址生成二维码。",
+          "9fc5d203ff": "Orca 手机端 直接连接到此计算机。要在远离同一本地网络的地方使用它，请将您的计算机和手机置于同一私有覆盖网络上，然后使用所选的网络地址生成二维码。",
           "39fad211d9": "使用尾网连接 Wi-Fi 外部",
           "a9db5d771d": "刷新网络接口",
           "b2c384cfd6": "没有找到接口",
@@ -6341,7 +6343,6 @@
           "removeSetup": "移除",
           "hostSetupBlockedVersion": "Orca 服务器版本不兼容",
           "hostSetupMissingCapability": "在此主机上更新 Orca 以设置项目",
-          "hostSetupConnectionRequired": "请先连接此主机，再导入或克隆项目",
           "setupProjectOnHost": "在其他主机上设置",
           "setupProjectOnHostHelp": "选择一台主机，然后导入已有检出、在那里克隆仓库，或跟踪稍后才配置的设置。",
           "setupExistingFolder": "导入现有文件夹",
@@ -6377,6 +6378,7 @@
           "addPlannedHostConfirm": "这仅记录项目应在此主机上可用。你可以稍后添加文件夹或克隆。",
           "projectRuntime": "项目运行时",
           "projectRuntimeDescription": "选择此项目运行在 Windows 还是 WSL。",
+          "hostSetupConnectionRequired": "请先连接此主机，再导入或克隆项目",
           "hostStateDisconnected": "Disconnected",
           "hostStateUnknown": "Unknown",
           "nestedHostLabel": "{{value0}} via {{value1}}"
@@ -6469,6 +6471,7 @@
           "b5b5114cb0": "删除了 {{value0}}。",
           "6cb6eae14f": "无法保存运行时环境。",
           "7b5986c8df": "已保存 {{value0}}。准备好后可通过活动服务器进行切换。",
+          "a5b58465b6": "连接到 {{value0}}。",
           "5ef712f407": "名为“{{value0}}”的服务器已存在。",
           "0c55a47480": "需要名称和配对代码。",
           "e6410d72c3": "无法加载运行时环境。",
@@ -6519,8 +6522,7 @@
           "orcaVersion": "Orca v{{value0}}",
           "removeActiveServerBlocked": "Choose another Active Server in Advanced before removing this server.",
           "removeActiveServerDescription": "Choose another Active Server in Advanced before removing this server. Existing host sessions are left alone.",
-          "updatingServers": "Updating servers…",
-          "a5b58465b6": "连接到 {{value0}}。"
+          "updatingServers": "Updating servers…"
         },
         "RuntimePairingGeneratedUrlRows": {
           "0495f68959": "复制 {{value0}}"
@@ -6650,8 +6652,8 @@
           "4e11f87ca6": "显示中",
           "fbb428db98": "已选择：",
           "fac59213fc": "搜索内置主题",
-          "cb330ef7f8": "/{{value0}}",
-          "c822571b2e": " 匹配“{{value0}}”",
+          "cb330ef7f8": "{{value0}} 的",
+          "c822571b2e": "匹配“{{value0}}”",
           "3119c012a5": "字符串",
           "builtin_themes": "内置",
           "imported_from": "从 {{value0}} 导入",
@@ -7108,6 +7110,7 @@
           "cf4437a2f7": "ANSI 黑色",
           "adfdee23cb": "黑色的",
           "68e9f07de0": "ANSI 标准",
+          "fb8c6f1967": "粗体文本的颜色。如果未设置，则返回正常颜色。",
           "862e463f7f": "粗体文字",
           "b2c0857c49": "所选文本的文本颜色",
           "8b450b5305": "选择前景",
@@ -7124,8 +7127,7 @@
           "cf37ff69f6": "根据",
           "8abdab9f7c": "立即重启",
           "907131d741": "正在重新启动...",
-          "605a35d600": "Not applied by the terminal renderer yet — xterm.js has no bold color slot. A saved value is preserved.",
-          "fb8c6f1967": "粗体文本的颜色。如果未设置，则返回正常颜色。"
+          "605a35d600": "Not applied by the terminal renderer yet — xterm.js has no bold color slot. A saved value is preserved."
         },
         "UIZoomControl": {
           "c2c64b24d0": "重置"
@@ -7663,15 +7665,14 @@
         "developer": {
           "permissions": {
             "search": {
-              "3363889768": "局域网、USB 和蓝牙",
+              "3363889768": "本地网络、USB 和蓝牙",
               "6c82846f66": "设备",
               "11653d3f42": "域名服务器",
               "78a10b826f": "你好",
               "e3fbc48083": "蓝牙",
               "c4a4a02ea4": "USB",
               "fa3239cd42": "本地网络",
-              "87620e6416": "局域网",
-              "acad3d4743": "允许从终端会话使用设备工具和局域网访问。",
+              "acad3d4743": "允许从终端会话使用设备和本地网络工具。",
               "3e0131e45d": "云",
               "ce07159ff5": "桌面",
               "a0c19119fb": "下载",
@@ -7702,7 +7703,8 @@
               "2270ccff3f": "隐私",
               "a98aa11a9c": "权限",
               "bc8ac95310": "终端启动的开发者工具的 macOS 权限。",
-              "e92cb0896d": "开发者权限"
+              "e92cb0896d": "开发者权限",
+              "87620e6416": "局域网"
             }
           }
         },
@@ -7769,10 +7771,11 @@
               "worktrees": "工作树"
             },
             "nativeChat": {
-              "title": "Chat UI",
+              "title": "原生聊天",
               "description": "预览受支持的智能体终端会话的桌面聊天界面。",
               "grok": "grok"
             },
+            "petBubbleKeyword": "气泡",
             "agentDashboard": {
               "title": "Agent Dashboard",
               "description": "Kanban board for monitoring agents across worktrees, in-window or as a pop-out."
@@ -8153,7 +8156,7 @@
               "6db86f445f": "移动端",
               "707fc78052": "选择关闭应用程序或切换离开后，您在手机设备上查看的终端会发生什么情况。",
               "1e711aca11": "当您离开手机应用程序时",
-              "126afc5dbd": "远程",
+              "126afc5dbd": "偏僻的",
               "70f505f3c3": "局域网",
               "1802188b5d": "无线上网",
               "dd6e671aa9": "地址",
@@ -8186,7 +8189,7 @@
               "8d4ba0ef09": "Beta",
               "6bfa001752": "应用程序",
               "a7eececc1d": "安卓",
-              "7e801801ac": "远程",
+              "7e801801ac": "偏僻的",
               "0b7e585cb9": "扫描",
               "59b1d75fd1": "代码",
               "87816d1c59": "qr",
@@ -9342,40 +9345,40 @@
           "available": "可用",
           "reconnecting": "正在重新连接",
           "unavailable": "不可用",
+          "title": "新手机应如何连接？",
+          "anywhere": "使用 Orca Relay 连接",
+          "recommended": "推荐",
+          "automaticDescription": "Orca 会优先使用直接连接，否则使用 Orca Relay。",
+          "signInDescription": "请在此桌面端登录以使用 Orca Relay。",
           "signIn": "登录",
-          "localDescription": "手机必须连接此 Wi‑Fi 或您的 Tailscale。无需登录。",
+          "localOnly": "仅限本地网络",
+          "localShort": "局域网或 Tailscale",
+          "localDescription": "使用局域网或 Tailscale，不通过 Orca Relay 连接这部手机。",
           "pathGroup": "手机访问此电脑的方式",
           "anywhereTitle": "Orca Relay",
           "anywhereDescription": "手机可通过蜂窝网络或任意 Wi‑Fi 连接。需要登录。",
           "signInRequired": "请登录以使用 Orca Mobile Relay。",
           "relayUnavailable": "此版本不支持 Orca Relay。请使用局域网。",
           "signInAgain": "重新登录",
-          "localTitle": "局域网",
-          "title": "新手机应如何连接？",
-          "anywhere": "使用 Orca Relay 连接",
-          "recommended": "推荐",
-          "automaticDescription": "Orca 会优先使用直接连接，否则使用 Orca Relay。",
-          "signInDescription": "请在此桌面端登录以使用 Orca Relay。",
-          "localOnly": "仅限本地网络",
-          "localShort": "局域网或 Tailscale"
+          "localTitle": "局域网"
         },
         "MobilePairingSetupSection": {
           "title": "配对手机",
+          "automaticDescription": "配对码包含直接访问方式和加密的 Orca Relay 备用连接。",
+          "localDescription": "配对码仅通过下方的本地网络地址连接。",
           "regenerate": "重新生成",
           "generate": "生成二维码",
+          "localSettings": "本地连接设置",
+          "localAddressDescription": "选择 Orca Mobile 可用于直接访问此电脑的局域网或专用网络地址。",
           "refresh": "刷新网络接口",
+          "tailnet": "使用自己的 tailnet 连接",
+          "tailnetDescription": "在此电脑和手机上安装 Tailscale，登录同一个 tailnet，然后在上方选择其 100.x.y.z 地址。",
+          "getTailscale": "获取 Tailscale",
           "overview": "生成二维码，然后在 Orca Mobile 的 Pair Desktop 中扫描。",
           "step1Title": "连接方式",
           "step2Title": "此电脑的地址",
           "step2RelayDescription": "距离较近时用于快速直接连接。Relay 覆盖远程访问。",
-          "step2LocalDescription": "手机必须能通过 Wi‑Fi 或 Tailscale 访问此地址。",
-          "automaticDescription": "配对码包含直接访问方式和加密的 Orca Relay 备用连接。",
-          "localDescription": "配对码仅通过下方的本地网络地址连接。",
-          "localSettings": "本地连接设置",
-          "localAddressDescription": "选择 Orca Mobile 可用于直接访问此电脑的局域网或专用网络地址。",
-          "tailnet": "使用自己的 tailnet 连接",
-          "tailnetDescription": "在此电脑和手机上安装 Tailscale，登录同一个 tailnet，然后在上方选择其 100.x.y.z 地址。",
-          "getTailscale": "获取 Tailscale"
+          "step2LocalDescription": "手机必须能通过 Wi‑Fi 或 Tailscale 访问此地址。"
         },
         "MobileRelayBetaAvailability": {
           "about": "关于 Orca Relay 测试版",
@@ -9402,6 +9405,37 @@
           "terminalAriaLabel": "Linear skill install terminal",
           "manageConnectionHint": "Review connected Linear workspaces and API keys in",
           "manageConnectionLink": "Integrations settings"
+        },
+        "PinnedTerminalPanelsSetting": {
+          "title": "Pinned terminal panels",
+          "description": "Pin observability commands (nvtop, btop, watch …) to the sidebar as persistent terminals.",
+          "remove": "Remove panel",
+          "titlePlaceholder": "Title",
+          "add": "Add",
+          "hostPlaceholder": "SSH host (optional)",
+          "groupPlaceholder": "Group",
+          "sectionEnabled": "Show panels in the sidebar",
+          "reorder": "Reorder panel",
+          "panelEnabled": "Show this panel",
+          "unresolvedHostTitle": "No configured SSH target matches this host — the panel will refuse to start.",
+          "unresolvedHost": "unresolved host",
+          "edit": "Edit panel",
+          "duplicate": "Duplicate panel",
+          "saveEdit": "Save panel",
+          "cancelEdit": "Cancel edit",
+          "commandPlaceholder": "Command (e.g. btop)"
+        },
+        "PinnedWebPanelsSetting": {
+          "title": "Pinned web panels",
+          "description": "Pin dashboards (Grafana, CI, issue boards) to the sidebar as persistent pages.",
+          "remove": "Remove panel",
+          "titlePlaceholder": "Title",
+          "add": "Add"
+        },
+        "BranchPrefixFeedback": {
+          "6c40c0908f": "前缀不能包含空格或 ~ ^ : ? * [ \\ 等特殊字符",
+          "64d70b156a": "分支将命名为 {{example}}",
+          "808f9a726e": "不会应用前缀"
         },
         "MobileRelayBetaNotice": {
           "notice": "Orca Relay is in beta."
@@ -9461,32 +9495,6 @@
           "serviceManagerHelp": "Update Orca through the service manager that starts this server.",
           "unpackedHelp": "Development builds must be updated from their source checkout.",
           "legacyHelp": "Update this server manually once to enable remote updates."
-        },
-        "PinnedTerminalPanelsSetting": {
-          "title": "Pinned terminal panels",
-          "description": "Pin observability commands (nvtop, btop, watch …) to the sidebar as persistent terminals.",
-          "remove": "Remove panel",
-          "titlePlaceholder": "Title",
-          "add": "Add",
-          "hostPlaceholder": "SSH host (optional)",
-          "groupPlaceholder": "Group",
-          "sectionEnabled": "Show panels in the sidebar",
-          "reorder": "Reorder panel",
-          "panelEnabled": "Show this panel",
-          "unresolvedHostTitle": "No configured SSH target matches this host — the panel will refuse to start.",
-          "unresolvedHost": "unresolved host",
-          "edit": "Edit panel",
-          "duplicate": "Duplicate panel",
-          "saveEdit": "Save panel",
-          "cancelEdit": "Cancel edit",
-          "commandPlaceholder": "Command (e.g. btop)"
-        },
-        "PinnedWebPanelsSetting": {
-          "title": "Pinned web panels",
-          "description": "Pin dashboards (Grafana, CI, issue boards) to the sidebar as persistent pages.",
-          "remove": "Remove panel",
-          "titlePlaceholder": "Title",
-          "add": "Add"
         }
       },
       "right": {
@@ -9596,17 +9604,14 @@
             "d6a25618aa": "折叠文件夹",
             "d87a4c42e1": "打开 Markdown 预览",
             "c2112579f6": "下载",
-            "7ac885bd2f": "下载文件夹",
             "dd112c81d2": "在 Orca 浏览器中打开",
             "1bb9be455c": "添加为项目...",
             "0fec99bfd7": "复制",
             "f61af83316": "新建文件夹",
             "37c875d827": "新文件",
             "b3e288bf41": "无法下载“{{value0}}”。",
-            "f729bcd97d": "无法下载文件夹“{{value0}}”。",
-            "1a3df04ae1": "打开",
+            "1a3df04ae1": "开放",
             "bce4d4e44f": "下载“{{value0}}”",
-            "a4029c996b": "已下载文件夹“{{value0}}”",
             "e26010014a": "被 .gitignore 忽略",
             "a06551beee": "进入",
             "128a99ed5e": "未分配",
@@ -9619,7 +9624,10 @@
             "f9d7ca753d": "复制路径",
             "3161c4e425": "文件夹",
             "e887fa4b2e": "在终端中打开",
-            "1d8e182c32": "查看文件"
+            "1d8e182c32": "查看文件",
+            "7ac885bd2f": "下载文件夹",
+            "f729bcd97d": "无法下载文件夹“{{value0}}”。",
+            "a4029c996b": "已下载文件夹“{{value0}}”"
           },
           "FileExplorerToolbar": {
             "d238264654": "显示 Git 忽略的文件",
@@ -9752,7 +9760,7 @@
           "SearchHeader": {
             "6234a5ef85": "使用正则表达式",
             "4567e6e0b6": "匹配整个单词",
-            "464ae3974f": "区分大小写",
+            "464ae3974f": "火柴盒",
             "693cbeadd0": "搜索"
           },
           "SearchQueryRow": {
@@ -9929,7 +9937,6 @@
             "hugeRepoIgnorePrompt": "此存储库的活动更改过多。是否将 \"{{value0}}\" 添加到 .gitignore？",
             "hugeRepoIgnoreAction": "添加到 .gitignore",
             "tooManyChanges": "检测到过多更改。仅显示前 {{value0}} 项。",
-            "submoduleTruncated": "已省略更多子模块更改",
             "bf5082de46": "已复制{{value0}}",
             "c06193ef57": "无法复制{{value0}}",
             "d172a4f068": "提交哈希",
@@ -9952,7 +9959,6 @@
             "createPrIntentPublishing": "正在发布分支…",
             "createPrIntentForcePushing": "正在使用 lease 强制推送…",
             "createPrIntentPushing": "正在推送提交…",
-            "createPrIntentFastForwarding": "正在更新分支…",
             "createPrIntentRemoteFailed": "无法更新远程分支。请重试创建 PR。",
             "createPrIntentGeneratingDetails": "正在生成审查详情…",
             "createPrIntentBranchChangedDuringDetails": "生成审查详情时分支已更改。请重试创建 PR。",
@@ -9968,6 +9974,7 @@
             "b715ef615b": "领先 {{value1}} {{value0}} 个提交",
             "c1a8f3e204": "落后 {{value0}} 1 个提交",
             "d2b9g4f315": "落后 {{value1}} {{value0}} 个提交",
+            "e9c2a5d416": "与 {{value0}} 同步",
             "4b4a7de138": "在浏览器中打开审查页面",
             "createPrIntentCommitBlockedSummary": "提交被阻止：{{value0}} 修复问题后重试创建 PR。",
             "pushRecovery": {
@@ -9985,14 +9992,15 @@
               "834cb3f23d": "使用 AI 修复",
               "783a808870": "关闭"
             },
+            "createPrIntentSyncConflicts": "同步遇到冲突。请解决后重试创建 PR。",
+            "createPrIntentSyncing": "正在同步分支…",
+            "submoduleTruncated": "已省略更多子模块更改",
+            "createPrIntentFastForwarding": "正在更新分支…",
             "97e7124eac": "无法刷新 Source Control。请重试。",
             "b8c2e1a904": "{{value0}} → {{value1}}",
             "a4e93c21d7": "当前分支：{{value0}}",
             "c7d4e2f801": "更改基引用：{{value0}}",
-            "f3a1b8c204": "upstream",
-            "e9c2a5d416": "与 {{value0}} 同步",
-            "createPrIntentSyncConflicts": "同步遇到冲突。请解决后重试创建 PR。",
-            "createPrIntentSyncing": "正在同步分支…"
+            "f3a1b8c204": "upstream"
           },
           "SourceControlAgentActionDialog": {
             "8e856842d1": "无法启动选定的智能体。",
@@ -10819,6 +10827,35 @@
             "a84d5677ff": "OpenCode",
             "2528586aa7": "克劳迪诺"
           }
+        },
+        "pet-bubble": {
+          "waiting1": "等待中…",
+          "waiting2": "轮到你了",
+          "waiting3": "交给你了",
+          "failed1": "已取消",
+          "failed2": "已停止",
+          "failed3": "已中断",
+          "waving1": "完成！",
+          "waving2": "搞定！",
+          "waving3": "全部完成！",
+          "running1": "工作中…",
+          "running2": "处理中…",
+          "running3": "进行中…",
+          "countSuffix": "+{{value0}}"
+        },
+        "PetAskDialog": {
+          "title": "Ask {{value0}}",
+          "description": "Sends a prompt to the session the pet is watching.",
+          "placeholder": "Ask the agent something…",
+          "cancel": "Cancel",
+          "send": "Send"
+        },
+        "PetOverlay": {
+          "jumpToAgent": "Go to {{value0}}",
+          "askAgent": "Ask {{value0}}…",
+          "noAgentYet": "No agent has reported yet — prompt one first",
+          "spawnOmpAgent": "Give me an assistant…",
+          "noWorktree": "Open a workspace first"
         }
       },
       "onboarding": {
@@ -12572,7 +12609,7 @@
             "109a791e7b": "保存",
             "bb0a55f856": "保存…",
             "0203bed775": "取消",
-            "6978871a3d": "打开",
+            "6978871a3d": "开放",
             "cce596969e": "删除注释",
             "cad3384faa": "编辑备注",
             "508ee678a5": "在浏览器中打开"
@@ -13717,6 +13754,12 @@
         "PanelSplitMenu": {
           "chooseTile": "Choose tile to open"
         }
+      },
+      "voice": {
+        "SpeakBackToggle": {
+          "on": "Speak agent replies: on",
+          "off": "Speak agent replies: off"
+        }
       }
     },
     "i18n": {
@@ -13733,6 +13776,9 @@
         }
       }
     },
+    "common": {
+      "cancel": "Cancel"
+    },
     "runtime": {
       "remoteServerUpdateErrors": {
         "manualRequired": "This server must be updated manually through its service manager.",
@@ -13748,9 +13794,6 @@
       "webRuntimeSession": {
         "remoteHostDisconnected": "The workspace is not connected to a remote Orca host."
       }
-    },
-    "common": {
-      "cancel": "Cancel"
     }
   },
   "components": {
@@ -13915,6 +13958,29 @@
       "launchFailed": "无法启动新的 {{agent}} 会话。"
     }
   },
+  "browser": {
+    "loadFailure": {
+      "connectionNotSecure": "Connection isn't secure",
+      "cantReachHost": "Can't reach {{value0}}",
+      "cantLoadPage": "Can't load this page",
+      "certificateNameMismatch": "The certificate doesn't match {{value0}}.",
+      "certificateDateInvalid": "The certificate for {{value0}} isn't valid at the current date and time.",
+      "certificateAuthorityInvalid": "Orca doesn't trust the authority that issued the certificate for {{value0}}.",
+      "certificateVerificationFailed": "Orca couldn't verify the certificate for {{value0}}.",
+      "trustedCertificateGuidance": "For local development, use a trusted local certificate when possible.",
+      "retry": "Retry",
+      "copyAddress": "Copy Address",
+      "addressCopied": "Copied the current page address.",
+      "openExternally": "Open Externally",
+      "tryHttps": "Try HTTPS",
+      "proceedUnsafe": "Proceed Anyway (Unsafe)",
+      "connecting": "Connecting…",
+      "certificateChallengeExpired": "This certificate approval expired. Retry the page to request a new one.",
+      "certificateChallengeChanged": "The certificate request changed. Retry the page and review the new warning.",
+      "certificateChallengeUnavailable": "This certificate request is no longer available. Retry the page to request a new one.",
+      "certificateProceedFailed": "Orca could not approve this certificate request. Retry the page and try again."
+    }
+  },
   "dashboardPopout": {
     "placeholder": {
       "title": "Agent dashboard",
@@ -13953,29 +14019,6 @@
   "dashboard": {
     "sidebar": {
       "label": "Agent Dashboard"
-    }
-  },
-  "browser": {
-    "loadFailure": {
-      "connectionNotSecure": "Connection isn't secure",
-      "cantReachHost": "Can't reach {{value0}}",
-      "cantLoadPage": "Can't load this page",
-      "certificateNameMismatch": "The certificate doesn't match {{value0}}.",
-      "certificateDateInvalid": "The certificate for {{value0}} isn't valid at the current date and time.",
-      "certificateAuthorityInvalid": "Orca doesn't trust the authority that issued the certificate for {{value0}}.",
-      "certificateVerificationFailed": "Orca couldn't verify the certificate for {{value0}}.",
-      "trustedCertificateGuidance": "For local development, use a trusted local certificate when possible.",
-      "retry": "Retry",
-      "copyAddress": "Copy Address",
-      "addressCopied": "Copied the current page address.",
-      "openExternally": "Open Externally",
-      "tryHttps": "Try HTTPS",
-      "proceedUnsafe": "Proceed Anyway (Unsafe)",
-      "connecting": "Connecting…",
-      "certificateChallengeExpired": "This certificate approval expired. Retry the page to request a new one.",
-      "certificateChallengeChanged": "The certificate request changed. Retry the page and review the new warning.",
-      "certificateChallengeUnavailable": "This certificate request is no longer available. Retry the page to request a new one.",
-      "certificateProceedFailed": "Orca could not approve this certificate request. Retry the page and try again."
     }
   }
 }

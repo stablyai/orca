@@ -84,6 +84,9 @@ export function useTabGroupWorkspaceModel({
   const openNewBrowserTabInActiveWorkspace = useAppStore(
     (state) => state.openNewBrowserTabInActiveWorkspace
   )
+  const openCollabCanvasTabInActiveWorkspace = useAppStore(
+    (state) => state.openCollabCanvasTabInActiveWorkspace
+  )
   const openNewMarkdownInActiveWorkspace = useAppStore(
     (state) => state.openNewMarkdownInActiveWorkspace
   )
@@ -260,7 +263,7 @@ export function useTabGroupWorkspaceModel({
         destroyWorkspaceWebviews(browserState.browserPagesByWorkspace, item.entityId)
         closeBrowserTab(item.entityId)
         closeUnifiedTab(item.id)
-      } else if (item.contentType === 'simulator') {
+      } else if (item.contentType === 'simulator' || item.contentType === 'collab-canvas') {
         closeUnifiedTab(item.id)
       } else {
         const canCloseTab = closeEditorIfUnreferenced(item.entityId, item.id)
@@ -321,7 +324,7 @@ export function useTabGroupWorkspaceModel({
           closeUnifiedTab(item.id)
         } else if (item.contentType === 'terminal') {
           closeTab(item.entityId)
-        } else if (item.contentType === 'simulator') {
+        } else if (item.contentType === 'simulator' || item.contentType === 'collab-canvas') {
           closeUnifiedTab(item.id)
         } else {
           const canCloseTab = closeEditorIfUnreferenced(item.entityId, item.id)
@@ -405,6 +408,8 @@ export function useTabGroupWorkspaceModel({
       if (item.contentType === 'simulator') {
         setActiveTabType('simulator')
         // simulator has no editor file entity
+      } else if (item.contentType === 'collab-canvas') {
+        setActiveTabType('collab-canvas')
       } else {
         setActiveFile(item.entityId)
         setActiveTabType('editor')
@@ -563,6 +568,9 @@ export function useTabGroupWorkspaceModel({
       createSplitGroup,
       newBrowserTab: () => {
         void openNewBrowserTabInActiveWorkspace(groupId)
+      },
+      newCollabCanvasTab: () => {
+        openCollabCanvasTabInActiveWorkspace(groupId)
       },
       newSimulatorTab: worktreeState.mobileEmulatorEnabled
         ? () => {

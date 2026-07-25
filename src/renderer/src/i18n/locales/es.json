@@ -2978,7 +2978,12 @@
             "f395c9a685": "No se pudo importar el archivo",
             "e6234bcc17": "Subir una mascota personalizada requiere reiniciar la app por completo (no solo recargarla).",
             "6d0a8cd179": "Mostrar mascota",
-            "1fbc51cc77": "Ocultar mascota"
+            "1fbc51cc77": "Ocultar mascota",
+            "seed-needs-restart": "Petdex seed needs a full app restart (not just reload).",
+            "seed-start": "Installing Petdex starter pack…",
+            "seed-done": "Installed {count} Petdex pets",
+            "seed-fail": "Petdex seed failed",
+            "seed-petdex": "Install Petdex starter pack…"
           },
           "PortsStatusSegment": {
             "4ebf90c12e": "No se detectaron puertos externos",
@@ -3964,9 +3969,9 @@
           "c494b3ccb1": "en",
           "79afc6772b": "orca.yaml",
           "531689199b": "Confiar siempre",
-          "bf800b7e04": ". Ejecútalo solo si confías en",
+          "bf800b7e04": ". Ejecútalo solo si confías en ",
           "831f2cd9f0": "se ejecuta en tu máquina",
-          "aa3ffb33fb": "El archivo",
+          "aa3ffb33fb": "El archivo ",
           "c55beddbf8": "cambió desde la última vez que lo aprobaste. Revísalo de nuevo antes de que se ejecute",
           "95bf974a1a": "Script {{value0}}",
           "9e52effffd": "Nuevo script {{value0}}",
@@ -4278,13 +4283,13 @@
           "ca74db7550": "Proyecto en host SSH",
           "021538e1d1": "SSH desconectado",
           "runtimeHostDisconnected": "Servidor desconectado",
-          "runtimeHostDisconnectedNamed": "{{hostName}} está desconectado",
           "runtimeHostProject": "Proyecto en servidor de Orca",
-          "runtimeHostProjectNamed": "Proyecto en {{hostName}}",
           "automationCreated": "Creado por automatización",
           "branchIdentity": "Rama",
           "branchFolderPathIdentity": "Rama o ruta de carpeta",
-          "ef18787206": "En cola para eliminación"
+          "ef18787206": "En cola para eliminación",
+          "runtimeHostDisconnectedNamed": "{{hostName}} está desconectado",
+          "runtimeHostProjectNamed": "Proyecto en {{hostName}}"
         },
         "WorktreeCardAgents": {
           "1b0a156717": "Agents"
@@ -4660,6 +4665,7 @@
           "modalDescription": "Instala el skill de Linear desde una terminal.",
           "modalPrompt": "Permite que los Agents lean y editen el issue de Linear adjunto.",
           "dontShowAgain": "No volver a mostrar",
+          "notNow": "Ahora no",
           "missingBoth": "Faltan la CLI de Orca y el skill de Linear para Agents.",
           "missingCli": "Falta la CLI de Orca.",
           "missingSkill": "Falta el skill de Linear para Agents.",
@@ -4689,8 +4695,7 @@
           "toastInstallCliDescription": "Instala la CLI de Orca para permitir que tus Agents lean y editen tareas de Linear.",
           "toastInstallSkillDescription": "Instala el skill de Linear para permitir que tus Agents lean y editen tareas de Linear a través de la CLI de Orca.",
           "toastRemoteDescription": "{{value0}} Los entornos de Agents remotos pueden necesitar setup propio.",
-          "toastWslDescription": "{{value0}} Este setup se ejecuta en el entorno de Agent WSL seleccionado.",
-          "notNow": "Ahora no"
+          "toastWslDescription": "{{value0}} Este setup se ejecuta en el entorno de Agent WSL seleccionado."
         },
         "FolderWorkspaceComposerDialog": {
           "connectFailed": "No se pudo conectar al proyecto.",
@@ -4967,7 +4972,7 @@
           "dbb9626ed1": "Cancelar",
           "854ebbcc45": "Orca eliminará la autenticación de Claude gestionada para esta cuenta guardada. Si está activa actualmente, Orca volverá al login predeterminado de Claude del sistema.",
           "63843e37e2": "¿Eliminar la cuenta de Claude?",
-          "380a7736cc": "Eliminar esta cuenta borra permanentemente su home de Codex gestionado, incluido todo el historial de sesiones de Codex y los inicios de sesión de MCP almacenados dentro. Esto no se puede deshacer. Si la cuenta está activa, Orca vuelve al login predeterminado de Codex del sistema.",
+          "99c8f9e498": "Orca eliminará el home de Codex gestionado para esta cuenta guardada. Si está activo actualmente, Orca volverá al login predeterminado de Codex del sistema.",
           "0d47394635": "¿Eliminar cuenta de Codex?",
           "ae3b21eb6c": "opencode.ai/workspace/wrk__…/go",
           "51c9104e13": "Encuéntralo en la URL después de iniciar sesión en opencode.ai (p. ej.",
@@ -5085,12 +5090,12 @@
           "remoteScopeAuthContext": "Cada cuenta mantiene su propio contexto de inicio de sesión en {{value0}}.",
           "remoteEmptyClaudeAccounts": "No hay cuentas de Claude administradas en {{value0}}. Usa su inicio de sesión de Claude predeterminado del sistema; agrega cuentas en ese servidor.",
           "remoteEmptyCodexAccounts": "No hay cuentas de Codex administradas en {{value0}}. Usa su inicio de sesión de Codex predeterminado del sistema; agrega cuentas en ese servidor.",
+          "380a7736cc": "Eliminar esta cuenta borra permanentemente su home de Codex gestionado, incluido todo el historial de sesiones de Codex y los inicios de sesión de MCP almacenados dentro. Esto no se puede deshacer. Si la cuenta está activa, Orca vuelve al login predeterminado de Codex del sistema.",
           "codexSystemDefaultCustomProvider": "Proveedor personalizado — no se registra el uso.",
           "codexSystemDefaultNeedsSignIn": "No se encontró ningún inicio de sesión de Codex para {{value0}}.",
           "codexConfigSyncMissingSource": "Codex is still using the settings it last synced because {{value0}} is missing. Restore that file to resume syncing.",
           "codexConfigSyncBlankSource": "Codex is still using the settings it last synced because {{value0}} is empty. That is expected while a synced folder finishes downloading.",
-          "codexConfigSyncUnreadableSource": "Codex is still using the settings it last synced because {{value0}} could not be read. Check that file's permissions.",
-          "99c8f9e498": "Orca eliminará el home de Codex gestionado para esta cuenta guardada. Si está activo actualmente, Orca volverá al login predeterminado de Codex del sistema."
+          "codexConfigSyncUnreadableSource": "Codex is still using the settings it last synced because {{value0}} could not be read. Check that file's permissions."
         },
         "AdvancedPane": {
           "40b29e0bf3": "Reiniciar",
@@ -5530,7 +5535,7 @@
           "dfbc12c8c8": "Depuración de hardware y herramientas que se comunican con dispositivos USB.",
           "bf51e4a542": "Dispositivos USB",
           "f903bf20b5": "Descubrimiento y acceso para servidores de desarrollo en tu red.",
-          "e7bb06007c": "LAN",
+          "e7bb06007c": "Red local",
           "4a73f5217a": "Apple Events para scripts que controlan otras apps locales.",
           "e119f0d66b": "Automatización",
           "7ca17b62c8": "Recomendado cuando proyectos, worktrees o archivos symlinked tocan carpetas protegidas de macOS.",
@@ -5574,16 +5579,18 @@
             "toggleLabel": "Alternar nuevo estilo de tarjeta"
           },
           "nativeChat": {
-            "title": "Chat UI",
+            "title": "Chat nativo",
             "description": "Previsualiza la interfaz de chat de escritorio para sesiones de terminal de agentes compatibles.",
-            "copy": "Añade una vista de Chat UI a la que puedes cambiar desde paneles de terminal de agentes compatibles. Es experimental mientras ajustamos la fidelidad de las transcripciones, la transmisión y la paridad con el terminal.",
-            "toggleLabel": "Alternar Chat UI",
+            "copy": "Añade una vista de chat nativo a la que puedes cambiar desde paneles de terminal de agentes compatibles. Es experimental mientras ajustamos la fidelidad de las transcripciones, la transmisión y la paridad con el terminal.",
+            "toggleLabel": "Alternar chat nativo",
             "defaultTitle": "Vista predeterminada",
             "defaultCopy": "Elige cómo se abren las nuevas pestañas de terminal de agentes compatibles.",
-            "defaultViewLabel": "Vista predeterminada de Chat UI",
+            "defaultViewLabel": "Vista predeterminada de chat nativo",
             "defaultViewTerminal": "Chat en terminal",
-            "defaultViewNative": "Chat UI"
+            "defaultViewNative": "Chat nativo"
           },
+          "petBubbleLabel": "Burbuja de diálogo",
+          "petBubbleDescription": "Muestra una breve burbuja indicando qué agente te necesita cuando cambia de estado (esperando, terminado, trabajando).",
           "agentDashboard": {
             "title": "Agent Dashboard",
             "description": "Kanban board for monitoring agents across worktrees, in-window or as a pop-out.",
@@ -5747,11 +5754,6 @@
           "d2f33670a9": "Importar desde Ghostty",
           "273e7e81fe": "Configuraciones",
           "1f744a72f4": "configuración"
-        },
-        "BranchPrefixFeedback": {
-          "6c40c0908f": "El prefijo no puede contener espacios ni caracteres especiales como ~ ^ : ? * [ \\",
-          "64d70b156a": "Las ramas se llamarán {{example}}",
-          "808f9a726e": "No se aplicará ningún prefijo"
         },
         "GitPane": {
           "d2eede4c54": "Agrega la atribución de Orca a commits, PR e issues.",
@@ -6011,7 +6013,7 @@
           "668016be7a": "en su computadora y teléfono.",
           "1dc87a7fbc": "Tailscale",
           "51d29927eb": "Instalar",
-          "9fc5d203ff": "Orca Mobile se conecta directamente a esta computadora. Para usarlo fuera de la misma LAN, coloque su computadora y teléfono en la misma red superpuesta privada, luego genere el código QR con esa dirección de red seleccionada.",
+          "9fc5d203ff": "Orca Mobile se conecta directamente a esta computadora. Para usarlo fuera de la misma red local, coloque su computadora y teléfono en la misma red superpuesta privada, luego genere el código QR con esa dirección de red seleccionada.",
           "39fad211d9": "Conéctate fuera de tu Wi-Fi con una tailnet",
           "a9db5d771d": "Actualizar interfaces de red",
           "b2c384cfd6": "No se encontraron interfaces",
@@ -6356,7 +6358,6 @@
           "removeSetup": "Eliminar",
           "hostSetupBlockedVersion": "La versión del servidor Orca no es compatible",
           "hostSetupMissingCapability": "Actualiza Orca en este host para configurar proyectos",
-          "hostSetupConnectionRequired": "Conecta este host antes de importar o clonar el proyecto",
           "setupProjectOnHost": "Configurar en otro host",
           "setupProjectOnHostHelp": "Elige un host y luego importa un checkout existente, clona el repositorio allí o registra una configuración que se aprovisionará más tarde.",
           "setupExistingFolder": "Importar carpeta existente",
@@ -6392,6 +6393,7 @@
           "addPlannedHostConfirm": "Esto solo registra que el proyecto debería estar disponible en este host. Puedes agregar la carpeta o clonar más tarde.",
           "projectRuntime": "Runtime del proyecto",
           "projectRuntimeDescription": "Elige si este proyecto se ejecuta en Windows o WSL.",
+          "hostSetupConnectionRequired": "Conecta este host antes de importar o clonar el proyecto",
           "hostStateDisconnected": "Disconnected",
           "hostStateUnknown": "Unknown",
           "nestedHostLabel": "{{value0}} via {{value1}}"
@@ -6484,6 +6486,7 @@
           "b5b5114cb0": "Se eliminó {{value0}}.",
           "6cb6eae14f": "No se pudo guardar el runtime.",
           "7b5986c8df": "Se guardó {{value0}}. Usa Servidor activo para cambiar cuando esté listo.",
+          "a5b58465b6": "Conectado a {{value0}}.",
           "5ef712f407": "Ya existe un servidor llamado \"{{value0}}\".",
           "0c55a47480": "Se requieren nombre y código de emparejamiento.",
           "e6410d72c3": "No se pudieron cargar los runtimes.",
@@ -6534,8 +6537,7 @@
           "orcaVersion": "Orca v{{value0}}",
           "removeActiveServerBlocked": "Choose another Active Server in Advanced before removing this server.",
           "removeActiveServerDescription": "Choose another Active Server in Advanced before removing this server. Existing host sessions are left alone.",
-          "updatingServers": "Updating servers…",
-          "a5b58465b6": "Conectado a {{value0}}."
+          "updatingServers": "Updating servers…"
         },
         "RuntimePairingGeneratedUrlRows": {
           "0495f68959": "Copiar {{value0}}"
@@ -7123,6 +7125,7 @@
           "cf4437a2f7": "Color negro ANSI",
           "adfdee23cb": "Negro",
           "68e9f07de0": "ANSI normal",
+          "fb8c6f1967": "Color para texto en negrita. Vuelve al color normal si no se establece.",
           "862e463f7f": "Texto en negrita",
           "b2c0857c49": "Color del texto seleccionado",
           "8b450b5305": "Primer plano de selección",
@@ -7139,8 +7142,7 @@
           "cf37ff69f6": "Base",
           "8abdab9f7c": "Reiniciar ahora",
           "907131d741": "Reiniciando…",
-          "605a35d600": "Not applied by the terminal renderer yet — xterm.js has no bold color slot. A saved value is preserved.",
-          "fb8c6f1967": "Color para texto en negrita. Vuelve al color normal si no se establece."
+          "605a35d600": "Not applied by the terminal renderer yet — xterm.js has no bold color slot. A saved value is preserved."
         },
         "UIZoomControl": {
           "c2c64b24d0": "Restablecer"
@@ -7678,15 +7680,14 @@
         "developer": {
           "permissions": {
             "search": {
-              "3363889768": "LAN, USB y Bluetooth",
+              "3363889768": "Red local, USB y Bluetooth",
               "6c82846f66": "dispositivo",
               "11653d3f42": "mdns",
               "78a10b826f": "bonjour",
               "e3fbc48083": "bluetooth",
               "c4a4a02ea4": "USB",
               "fa3239cd42": "red local",
-              "87620e6416": "LAN",
-              "acad3d4743": "Permitir herramientas de dispositivo y acceso LAN desde sesiones de terminal.",
+              "acad3d4743": "Permitir que las herramientas del dispositivo y de la red local se utilicen desde sesiones de terminal.",
               "3e0131e45d": "iCloud",
               "ce07159ff5": "escritorio",
               "a0c19119fb": "descargas",
@@ -7717,7 +7718,8 @@
               "2270ccff3f": "privacidad",
               "a98aa11a9c": "permisos",
               "bc8ac95310": "Permisos de macOS para herramientas de desarrollador lanzadas en terminal.",
-              "e92cb0896d": "Permisos de desarrollador"
+              "e92cb0896d": "Permisos de desarrollador",
+              "87620e6416": "LAN"
             }
           }
         },
@@ -7784,10 +7786,11 @@
               "worktrees": "worktrees"
             },
             "nativeChat": {
-              "title": "Chat UI",
+              "title": "Chat nativo",
               "description": "Previsualiza la interfaz de chat de escritorio para sesiones de terminal de agentes compatibles.",
               "grok": "grok"
             },
+            "petBubbleKeyword": "burbuja",
             "agentDashboard": {
               "title": "Agent Dashboard",
               "description": "Kanban board for monitoring agents across worktrees, in-window or as a pop-out."
@@ -9342,40 +9345,40 @@
           "available": "Disponible",
           "reconnecting": "Reconectando",
           "unavailable": "No disponible",
+          "title": "¿Cómo debe conectarse el teléfono nuevo?",
+          "anywhere": "Conectar con Orca Relay",
+          "recommended": "Recomendado",
+          "automaticDescription": "Orca usa una conexión directa cuando está disponible y Relay en caso contrario.",
+          "signInDescription": "Inicia sesión en este ordenador para usar Orca Relay.",
           "signIn": "Iniciar sesión",
-          "localDescription": "El teléfono debe estar en esta Wi‑Fi o en tu Tailscale. No requiere inicio de sesión.",
+          "localOnly": "Solo red local",
+          "localShort": "LAN o Tailscale",
+          "localDescription": "Usa LAN o Tailscale sin conectar este teléfono mediante Orca Relay.",
           "pathGroup": "Cómo llega el teléfono a este ordenador",
           "anywhereTitle": "Orca Relay",
           "anywhereDescription": "El teléfono puede estar en datos móviles o cualquier Wi‑Fi. Se requiere inicio de sesión.",
           "signInRequired": "Inicia sesión para usar Orca Mobile Relay.",
           "relayUnavailable": "Orca Relay no está disponible en esta compilación. Usa LAN.",
           "signInAgain": "Iniciar sesión de nuevo",
-          "localTitle": "LAN",
-          "title": "¿Cómo debe conectarse el teléfono nuevo?",
-          "anywhere": "Conectar con Orca Relay",
-          "recommended": "Recomendado",
-          "automaticDescription": "Orca usa una conexión directa cuando está disponible y Relay en caso contrario.",
-          "signInDescription": "Inicia sesión en este ordenador para usar Orca Relay.",
-          "localOnly": "Solo red local",
-          "localShort": "LAN o Tailscale"
+          "localTitle": "LAN"
         },
         "MobilePairingSetupSection": {
           "title": "Vincular un teléfono",
+          "automaticDescription": "El código de vinculación incluye acceso directo y Orca Relay cifrado como respaldo.",
+          "localDescription": "El código de vinculación solo se conecta mediante la dirección de red local indicada abajo.",
           "regenerate": "Regenerar",
           "generate": "Generar código QR",
+          "localSettings": "Configuración de conexión local",
+          "localAddressDescription": "Elige la dirección LAN o de red privada que Orca Mobile puede usar para acceder directamente a este ordenador.",
           "refresh": "Actualizar interfaces de red",
+          "tailnet": "Conectarse con tu propia tailnet",
+          "tailnetDescription": "Instala Tailscale en este ordenador y en tu teléfono, inicia sesión en la misma tailnet y selecciona arriba su dirección 100.x.y.z.",
+          "getTailscale": "Obtener Tailscale",
           "overview": "Genera un código QR, luego escanéalo en Orca Mobile en Pair Desktop.",
           "step1Title": "Método de conexión",
           "step2Title": "Dirección de este ordenador",
           "step2RelayDescription": "Se usa para una ruta directa más rápida cuando está cerca. Relay cubre el acceso remoto.",
-          "step2LocalDescription": "El teléfono debe poder alcanzar esta dirección por Wi‑Fi o Tailscale.",
-          "automaticDescription": "El código de vinculación incluye acceso directo y Orca Relay cifrado como respaldo.",
-          "localDescription": "El código de vinculación solo se conecta mediante la dirección de red local indicada abajo.",
-          "localSettings": "Configuración de conexión local",
-          "localAddressDescription": "Elige la dirección LAN o de red privada que Orca Mobile puede usar para acceder directamente a este ordenador.",
-          "tailnet": "Conectarse con tu propia tailnet",
-          "tailnetDescription": "Instala Tailscale en este ordenador y en tu teléfono, inicia sesión en la misma tailnet y selecciona arriba su dirección 100.x.y.z.",
-          "getTailscale": "Obtener Tailscale"
+          "step2LocalDescription": "El teléfono debe poder alcanzar esta dirección por Wi‑Fi o Tailscale."
         },
         "MobileRelayBetaAvailability": {
           "about": "Acerca de la beta de Orca Relay",
@@ -9402,6 +9405,37 @@
           "terminalAriaLabel": "Linear skill install terminal",
           "manageConnectionHint": "Review connected Linear workspaces and API keys in",
           "manageConnectionLink": "Integrations settings"
+        },
+        "PinnedTerminalPanelsSetting": {
+          "title": "Pinned terminal panels",
+          "description": "Pin observability commands (nvtop, btop, watch …) to the sidebar as persistent terminals.",
+          "remove": "Remove panel",
+          "titlePlaceholder": "Title",
+          "add": "Add",
+          "hostPlaceholder": "SSH host (optional)",
+          "groupPlaceholder": "Group",
+          "sectionEnabled": "Show panels in the sidebar",
+          "reorder": "Reorder panel",
+          "panelEnabled": "Show this panel",
+          "unresolvedHostTitle": "No configured SSH target matches this host — the panel will refuse to start.",
+          "unresolvedHost": "unresolved host",
+          "edit": "Edit panel",
+          "duplicate": "Duplicate panel",
+          "saveEdit": "Save panel",
+          "cancelEdit": "Cancel edit",
+          "commandPlaceholder": "Command (e.g. btop)"
+        },
+        "PinnedWebPanelsSetting": {
+          "title": "Pinned web panels",
+          "description": "Pin dashboards (Grafana, CI, issue boards) to the sidebar as persistent pages.",
+          "remove": "Remove panel",
+          "titlePlaceholder": "Title",
+          "add": "Add"
+        },
+        "BranchPrefixFeedback": {
+          "6c40c0908f": "El prefijo no puede contener espacios ni caracteres especiales como ~ ^ : ? * [ \\",
+          "64d70b156a": "Las ramas se llamarán {{example}}",
+          "808f9a726e": "No se aplicará ningún prefijo"
         },
         "MobileRelayBetaNotice": {
           "notice": "Orca Relay is in beta."
@@ -9461,32 +9495,6 @@
           "serviceManagerHelp": "Update Orca through the service manager that starts this server.",
           "unpackedHelp": "Development builds must be updated from their source checkout.",
           "legacyHelp": "Update this server manually once to enable remote updates."
-        },
-        "PinnedTerminalPanelsSetting": {
-          "title": "Pinned terminal panels",
-          "description": "Pin observability commands (nvtop, btop, watch …) to the sidebar as persistent terminals.",
-          "remove": "Remove panel",
-          "titlePlaceholder": "Title",
-          "add": "Add",
-          "hostPlaceholder": "SSH host (optional)",
-          "groupPlaceholder": "Group",
-          "sectionEnabled": "Show panels in the sidebar",
-          "reorder": "Reorder panel",
-          "panelEnabled": "Show this panel",
-          "unresolvedHostTitle": "No configured SSH target matches this host — the panel will refuse to start.",
-          "unresolvedHost": "unresolved host",
-          "edit": "Edit panel",
-          "duplicate": "Duplicate panel",
-          "saveEdit": "Save panel",
-          "cancelEdit": "Cancel edit",
-          "commandPlaceholder": "Command (e.g. btop)"
-        },
-        "PinnedWebPanelsSetting": {
-          "title": "Pinned web panels",
-          "description": "Pin dashboards (Grafana, CI, issue boards) to the sidebar as persistent pages.",
-          "remove": "Remove panel",
-          "titlePlaceholder": "Title",
-          "add": "Add"
         }
       },
       "right": {
@@ -9596,17 +9604,14 @@
             "d6a25618aa": "Contraer carpeta",
             "d87a4c42e1": "Abrir vista previa de Markdown",
             "c2112579f6": "Descargar",
-            "7ac885bd2f": "Descargar carpeta",
             "dd112c81d2": "Abrir en Orca Browser",
             "1bb9be455c": "Agregar como proyecto…",
             "0fec99bfd7": "Duplicar",
             "f61af83316": "Nueva carpeta",
             "37c875d827": "Nuevo archivo",
             "b3e288bf41": "No se pudo descargar '{{value0}}'.",
-            "f729bcd97d": "No se pudo descargar la carpeta '{{value0}}'.",
             "1a3df04ae1": "Abrir",
             "bce4d4e44f": "Se descargó '{{value0}}'",
-            "a4029c996b": "Se descargó la carpeta '{{value0}}'",
             "e26010014a": "Ignorado por .gitignore",
             "a06551beee": "Intro",
             "128a99ed5e": "No asignado",
@@ -9619,7 +9624,10 @@
             "f9d7ca753d": "Copiar rutas",
             "3161c4e425": "carpeta",
             "e887fa4b2e": "Abrir en terminal",
-            "1d8e182c32": "Ver archivo"
+            "1d8e182c32": "Ver archivo",
+            "7ac885bd2f": "Descargar carpeta",
+            "f729bcd97d": "No se pudo descargar la carpeta '{{value0}}'.",
+            "a4029c996b": "Se descargó la carpeta '{{value0}}'"
           },
           "FileExplorerToolbar": {
             "d238264654": "Mostrar archivos ignorados por Git",
@@ -9929,7 +9937,6 @@
             "hugeRepoIgnorePrompt": "Este repositorio tiene demasiados cambios activos. ¿Agregar \"{{value0}}\" a .gitignore?",
             "hugeRepoIgnoreAction": "Agregar a .gitignore",
             "tooManyChanges": "Se detectaron demasiados cambios. Solo se muestran los primeros {{value0}}.",
-            "submoduleTruncated": "Se omitieron más cambios del submódulo",
             "bf5082de46": "{{value0}} copiado",
             "c06193ef57": "No se pudo copiar {{value0}}",
             "d172a4f068": "Hash del commit",
@@ -9952,7 +9959,6 @@
             "createPrIntentPublishing": "Publicando rama…",
             "createPrIntentForcePushing": "Haciendo force push con lease…",
             "createPrIntentPushing": "Haciendo push de commits…",
-            "createPrIntentFastForwarding": "Actualizando rama…",
             "createPrIntentRemoteFailed": "No se pudo actualizar la rama remota. Vuelve a intentar Crear PR.",
             "createPrIntentGeneratingDetails": "Generando detalles de revisión…",
             "createPrIntentBranchChangedDuringDetails": "La rama cambió mientras se generaban los detalles de la revisión. Vuelve a intentar Crear PR.",
@@ -9968,6 +9974,7 @@
             "b715ef615b": "{{value0}} commits por delante de {{value1}}",
             "c1a8f3e204": "1 commit por detrás de {{value0}}",
             "d2b9g4f315": "{{value0}} commits por detrás de {{value1}}",
+            "e9c2a5d416": "A la par con {{value0}}",
             "4b4a7de138": "Abrir página de revisión en el navegador",
             "createPrIntentCommitBlockedSummary": "Commit bloqueado: {{value0}} Corrige el issue y reintenta crear PR.",
             "pushRecovery": {
@@ -9985,14 +9992,15 @@
               "834cb3f23d": "Corregir con AI",
               "783a808870": "Cerrar"
             },
+            "createPrIntentSyncConflicts": "La sincronización encontró conflictos. Resuélvelos y vuelve a intentar Crear PR.",
+            "createPrIntentSyncing": "Sincronizando rama…",
+            "submoduleTruncated": "Se omitieron más cambios del submódulo",
+            "createPrIntentFastForwarding": "Actualizando rama…",
             "97e7124eac": "No se pudo actualizar Source Control. Vuelve a intentarlo.",
             "b8c2e1a904": "{{value0}} → {{value1}}",
             "a4e93c21d7": "Rama actual: {{value0}}",
             "c7d4e2f801": "Cambiar ref base: {{value0}}",
-            "f3a1b8c204": "upstream",
-            "e9c2a5d416": "A la par con {{value0}}",
-            "createPrIntentSyncConflicts": "La sincronización encontró conflictos. Resuélvelos y vuelve a intentar Crear PR.",
-            "createPrIntentSyncing": "Sincronizando rama…"
+            "f3a1b8c204": "upstream"
           },
           "SourceControlAgentActionDialog": {
             "8e856842d1": "No se pudo iniciar el agente seleccionado.",
@@ -10819,6 +10827,35 @@
             "a84d5677ff": "OpenCode",
             "2528586aa7": "Claudino"
           }
+        },
+        "pet-bubble": {
+          "waiting1": "esperando…",
+          "waiting2": "tu turno",
+          "waiting3": "todo tuyo",
+          "failed1": "cancelado",
+          "failed2": "detenido",
+          "failed3": "interrumpido",
+          "waving1": "¡listo!",
+          "waving2": "¡terminado!",
+          "waving3": "¡todo listo!",
+          "running1": "trabajando…",
+          "running2": "en ello…",
+          "running3": "en progreso…",
+          "countSuffix": "+{{value0}}"
+        },
+        "PetAskDialog": {
+          "title": "Ask {{value0}}",
+          "description": "Sends a prompt to the session the pet is watching.",
+          "placeholder": "Ask the agent something…",
+          "cancel": "Cancel",
+          "send": "Send"
+        },
+        "PetOverlay": {
+          "jumpToAgent": "Go to {{value0}}",
+          "askAgent": "Ask {{value0}}…",
+          "noAgentYet": "No agent has reported yet — prompt one first",
+          "spawnOmpAgent": "Give me an assistant…",
+          "noWorktree": "Open a workspace first"
         }
       },
       "onboarding": {
@@ -13717,6 +13754,12 @@
         "PanelSplitMenu": {
           "chooseTile": "Choose tile to open"
         }
+      },
+      "voice": {
+        "SpeakBackToggle": {
+          "on": "Speak agent replies: on",
+          "off": "Speak agent replies: off"
+        }
       }
     },
     "i18n": {
@@ -13733,6 +13776,9 @@
         }
       }
     },
+    "common": {
+      "cancel": "Cancel"
+    },
     "runtime": {
       "remoteServerUpdateErrors": {
         "manualRequired": "This server must be updated manually through its service manager.",
@@ -13748,9 +13794,6 @@
       "webRuntimeSession": {
         "remoteHostDisconnected": "The workspace is not connected to a remote Orca host."
       }
-    },
-    "common": {
-      "cancel": "Cancel"
     }
   },
   "components": {
@@ -13915,6 +13958,29 @@
       "launchFailed": "No se pudo iniciar una sesión nueva de {{agent}}."
     }
   },
+  "browser": {
+    "loadFailure": {
+      "connectionNotSecure": "Connection isn't secure",
+      "cantReachHost": "Can't reach {{value0}}",
+      "cantLoadPage": "Can't load this page",
+      "certificateNameMismatch": "The certificate doesn't match {{value0}}.",
+      "certificateDateInvalid": "The certificate for {{value0}} isn't valid at the current date and time.",
+      "certificateAuthorityInvalid": "Orca doesn't trust the authority that issued the certificate for {{value0}}.",
+      "certificateVerificationFailed": "Orca couldn't verify the certificate for {{value0}}.",
+      "trustedCertificateGuidance": "For local development, use a trusted local certificate when possible.",
+      "retry": "Retry",
+      "copyAddress": "Copy Address",
+      "addressCopied": "Copied the current page address.",
+      "openExternally": "Open Externally",
+      "tryHttps": "Try HTTPS",
+      "proceedUnsafe": "Proceed Anyway (Unsafe)",
+      "connecting": "Connecting…",
+      "certificateChallengeExpired": "This certificate approval expired. Retry the page to request a new one.",
+      "certificateChallengeChanged": "The certificate request changed. Retry the page and review the new warning.",
+      "certificateChallengeUnavailable": "This certificate request is no longer available. Retry the page to request a new one.",
+      "certificateProceedFailed": "Orca could not approve this certificate request. Retry the page and try again."
+    }
+  },
   "dashboardPopout": {
     "placeholder": {
       "title": "Agent dashboard",
@@ -13953,29 +14019,6 @@
   "dashboard": {
     "sidebar": {
       "label": "Agent Dashboard"
-    }
-  },
-  "browser": {
-    "loadFailure": {
-      "connectionNotSecure": "Connection isn't secure",
-      "cantReachHost": "Can't reach {{value0}}",
-      "cantLoadPage": "Can't load this page",
-      "certificateNameMismatch": "The certificate doesn't match {{value0}}.",
-      "certificateDateInvalid": "The certificate for {{value0}} isn't valid at the current date and time.",
-      "certificateAuthorityInvalid": "Orca doesn't trust the authority that issued the certificate for {{value0}}.",
-      "certificateVerificationFailed": "Orca couldn't verify the certificate for {{value0}}.",
-      "trustedCertificateGuidance": "For local development, use a trusted local certificate when possible.",
-      "retry": "Retry",
-      "copyAddress": "Copy Address",
-      "addressCopied": "Copied the current page address.",
-      "openExternally": "Open Externally",
-      "tryHttps": "Try HTTPS",
-      "proceedUnsafe": "Proceed Anyway (Unsafe)",
-      "connecting": "Connecting…",
-      "certificateChallengeExpired": "This certificate approval expired. Retry the page to request a new one.",
-      "certificateChallengeChanged": "The certificate request changed. Retry the page and review the new warning.",
-      "certificateChallengeUnavailable": "This certificate request is no longer available. Retry the page to request a new one.",
-      "certificateProceedFailed": "Orca could not approve this certificate request. Retry the page and try again."
     }
   }
 }

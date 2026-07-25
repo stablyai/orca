@@ -105,6 +105,18 @@ export type TabsSlice = {
       }
     >
   ) => Tab | null
+  /** Open a session collab board in a right split beside the active group. */
+  openCollabCanvasTabInActiveWorkspace: (groupId: string) => Tab | null
+  /**
+   * Open a User Panel collab board's document as a workspace tab (right split
+   * beside the active group). Same boardId / sync room as the panel page —
+   * binding is session so inject uses the worktree terminal, not a second omp.
+   */
+  openPinnedCanvasBoardBesideSession: (args: {
+    boardId: string
+    title?: string
+    groupId?: string | null
+  }) => Tab | null
   getTab: (tabId: string) => Tab | null
   getActiveTab: (worktreeId: string) => Tab | null
   findTabForEntityInGroup: (
@@ -408,7 +420,12 @@ function collapseGroupLayout(
 }
 
 function toVisibleTabType(contentType: TabContentType): WorkspaceVisibleTabType {
-  if (contentType === 'browser' || contentType === 'terminal' || contentType === 'simulator') {
+  if (
+    contentType === 'browser' ||
+    contentType === 'terminal' ||
+    contentType === 'simulator' ||
+    contentType === 'collab-canvas'
+  ) {
     return contentType
   }
   return 'editor'
@@ -792,6 +809,76 @@ export const createTabsSlice: StateCreator<AppState, [], [], TabsSlice> = (set, 
     }
     if (moved && init?.recordInteraction !== false) {
       get().recordFeatureInteraction?.('tab-splits')
+    }
+    return created
+  },
+
+  openCollabCanvasTabInActiveWorkspace: (groupId) => {
+    const state = get()
+    const worktreeId = state.activeWorktreeId
+    if (!worktreeId) {
+      return null
+    }
+    // Board id becomes the sync-room key and the tab entityId. UUID is valid
+    // against the sidecar's board-id alphabet ([A-Za-z0-9._-]{1,64}).
+    const boardId = createBrowserUuid()
+    const created = get().createUnifiedTabInSplit(
+      worktreeId,
+      'collab-canvas',
+      { sourceGroupId: groupId, splitDirection: 'right' },
+      {
+        entityId: boardId,
+        label: 'Collab Board',
+        activate: true
+      }
+    )
+    if (created && state.activeWorktreeId === worktreeId) {
+      // Surface the board as the active tab type so overlays / cycling do not
+      // treat it as a phantom editor.
+      get().setActiveTabType('collab-canvas')
+    }
+    return created
+  },
+
+  openPinnedCanvasBoardBesideSession: ({ boardId, title, groupId }) => {
+    const state = get()
+    const worktreeId = state.activeWorktreeId
+    if (!worktreeId || !boardId.trim()) {
+      return null
+    }
+    const trimmedBoardId = boardId.trim()
+    // Prefer the caller's group, else the active group, else any existing group.
+    const resolvedGroupId =
+      groupId ??
+      state.activeGroupIdByWorktree[worktreeId] ??
+      (state.groupsByWorktree[worktreeId] ?? [])[0]?.id
+    if (!resolvedGroupId) {
+      return null
+    }
+    // If this board is already open in a workspace tab, activate it instead of
+    // minting a second leaf for the same sync room.
+    const existing = (state.unifiedTabsByWorktree[worktreeId] ?? []).find(
+      (tab) => tab.contentType === 'collab-canvas' && tab.entityId === trimmedBoardId
+    )
+    if (existing) {
+      get().activateTab(existing.id)
+      if (state.activeWorktreeId === worktreeId) {
+        get().setActiveTabType('collab-canvas')
+      }
+      return existing
+    }
+    const created = get().createUnifiedTabInSplit(
+      worktreeId,
+      'collab-canvas',
+      { sourceGroupId: resolvedGroupId, splitDirection: 'right' },
+      {
+        entityId: trimmedBoardId,
+        label: (title?.trim() || 'Collab Board').slice(0, 60),
+        activate: true
+      }
+    )
+    if (created && state.activeWorktreeId === worktreeId) {
+      get().setActiveTabType('collab-canvas')
     }
     return created
   },

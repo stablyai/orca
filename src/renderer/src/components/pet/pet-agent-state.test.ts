@@ -55,14 +55,43 @@ describe('selectPetAnimationName', () => {
     expect(select([entry('working'), entry('blocked')])).toBe('waiting')
   })
 
-  it('maps completed live or retained work to review', () => {
-    expect(select([entry('done')])).toBe('review')
+  it('maps retained work (or a completion whose beat already decayed) to review', () => {
+    expect(select([entry('done', { stateStartedAt: NOW - 2000 })])).toBe('review')
     expect(select([], { retainedCount: 1 })).toBe('review')
   })
 
-  it('maps interrupted completion to review because Orca does not expose failure as a state', () => {
-    expect(select([entry('done', { interrupted: true })])).toBe('review')
-    expect(select([entry('working'), entry('done', { interrupted: true })])).toBe('running')
+  it('fires a waving beat right after a clean, non-interrupted completion', () => {
+    expect(select([entry('done')])).toBe('waving')
+  })
+
+  it('fires a failed beat right after an interrupted (user-cancelled) completion', () => {
+    // Why: Orca has no dedicated "error" state, so an interrupted `done` is
+    // the closest native signal to hermes's transition-to-error beat.
+    expect(select([entry('done', { interrupted: true })])).toBe('failed')
+  })
+
+  it('decays a completion beat back into the steady ladder once it goes stale', () => {
+    const stale = { stateStartedAt: NOW - 2000 }
+    expect(select([entry('done', stale)])).toBe('review')
+    expect(select([entry('done', { interrupted: true, ...stale })])).toBe('review')
+  })
+
+  it('lets a waiting agent outrank an in-progress completion beat', () => {
+    expect(select([entry('done'), entry('blocked')])).toBe('waiting')
+  })
+
+  it('lets a failed beat outrank plain running work', () => {
+    expect(select([entry('working'), entry('done', { interrupted: true })])).toBe('failed')
+  })
+
+  it('lets a waving beat outrank plain running work', () => {
+    expect(select([entry('working'), entry('done')])).toBe('waving')
+  })
+
+  it('a failed beat outranks a simultaneous waving beat from another pane', () => {
+    expect(
+      select([entry('done', { paneKey: 'tab:a' }), entry('done', { interrupted: true, paneKey: 'tab:b' })])
+    ).toBe('failed')
   })
 
   it('keeps the live agent state while grabbed and held still (no drag direction)', () => {

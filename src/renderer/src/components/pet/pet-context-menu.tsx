@@ -1,0 +1,153 @@
+import { useCallback, useState } from 'react'
+import { translate } from '@/i18n/i18n'
+import { formatAgentTypeLabel } from '@/lib/agent-status'
+import type { AgentStatusEntry } from '../../../../shared/agent-status-types'
+import {
+  ContextMenu,
+  ContextMenuContent,
+  ContextMenuItem,
+  ContextMenuTrigger
+} from '@/components/ui/context-menu'
+import { usePetAgentJump } from './pet-agent-jump'
+import { usePetAgentAsk } from './pet-agent-ask'
+import { usePetAgentSpawn } from './pet-agent-spawn'
+import { PetAskDialog } from './PetAskDialog'
+import { useAppStore } from '@/store'
+import {
+  MAX_PINNED_CANVAS_PANELS,
+  normalizePinnedCanvasPanels
+} from '../../../../shared/pinned-canvas-panels'
+import type { PinnedCanvasPanel } from '../../../../shared/types'
+
+/**
+ * Right-click surface for the pet.
+ *
+ * Wraps the pet's own (pointer-events-auto) node via `asChild` so the menu's hit
+ * area is exactly the sprite's grab area — the overlay's outer boxes stay
+ * click-through, and app chrome behind the pet keeps working.
+ */
+export function PetContextMenu({
+  entries,
+  children
+}: {
+  entries: readonly AgentStatusEntry[]
+  children: React.ReactNode
+}): React.JSX.Element {
+  const { agentTarget, jumpToAgent } = usePetAgentJump(entries)
+  const { canAsk, askAgent } = usePetAgentAsk(agentTarget)
+  const { canSpawn, spawnOmpAgent } = usePetAgentSpawn()
+  const [askOpen, setAskOpen] = useState(false)
+  const updateSettings = useAppStore((s) => s.updateSettings)
+  const openPinnedCanvasPanelPage = useAppStore((s) => s.openPinnedCanvasPanelPage)
+
+  const spawnCollabBoard = useCallback((): void => {
+    const panels = useAppStore.getState().settings?.pinnedCanvasPanels ?? []
+    if (panels.length >= MAX_PINNED_CANVAS_PANELS) {
+      return
+    }
+    const id = crypto.randomUUID()
+    const boardId = crypto.randomUUID()
+    const panel: PinnedCanvasPanel = {
+      id,
+      title: 'Collab board',
+      boardId
+    }
+    const next = normalizePinnedCanvasPanels([...panels, panel])
+    void updateSettings({
+      pinnedCanvasPanels: next,
+      pinnedCanvasPanelsCollapsed: false
+    })
+    if (next.some((p) => p.id === id)) {
+      openPinnedCanvasPanelPage(id)
+    }
+  }, [updateSettings, openPinnedCanvasPanelPage])
+
+  // Why the 'omp' fallback: a just-spawned assistant is askable before it has
+  // reported any status, so there is no agentType to read yet. Every session the
+  // pet binds is one it spawned itself, and it only ever spawns omp — so naming
+  // it beats falling back to the generic "Agent".
+  const agentLabel = formatAgentTypeLabel(agentTarget?.agentType ?? (canAsk ? 'omp' : undefined))
+
+  const submitAsk = useCallback(
+    (prompt: string): void => {
+      void askAgent(prompt)
+    },
+    [askAgent]
+  )
+
+  return (
+    <>
+      <ContextMenu>
+        <ContextMenuTrigger asChild>{children}</ContextMenuTrigger>
+        {/* The menu ALWAYS renders. An earlier version omitted it entirely when
+            there was no fresh agent, reasoning that an unusable row is noise on a
+            48px sprite. That was wrong in the field: a pet that silently does
+            nothing on right-click is indistinguishable from a pet whose
+            right-click is broken, and it cost a real "the feature is dead" bug
+            report against a working build. A disabled row that says why is the
+            cheapest possible answer to "is this thing on?". */}
+        <ContextMenuContent>
+          {/* Ask is the FIRST row and the one that survives every state, because
+              typing at the pet is the primary gesture — spawning is just how you
+              get there the first time. It is driven by the pet's bound session
+              rather than agent status, so it appears the moment an assistant is
+              spawned instead of waiting for that assistant's first turn. */}
+          {canAsk ? (
+            <ContextMenuItem
+              onSelect={() => {
+                // Why deferred to a dialog rather than opened inline: onSelect
+                // fires as the menu unmounts, and mounting an input in that
+                // same tick loses the focus race with the menu's restore.
+                setAskOpen(true)
+              }}
+            >
+              {translate('auto.components.pet.PetOverlay.askAgent', 'Ask {{value0}}…', {
+                value0: agentLabel
+              })}
+            </ContextMenuItem>
+          ) : null}
+          {/* "Go to the terminal for greater detail" — the escape hatch out of
+              the bubble's summary and into the real session. */}
+          {agentTarget ? (
+            <ContextMenuItem onSelect={jumpToAgent}>
+              {translate('auto.components.pet.PetOverlay.jumpToAgent', 'Go to {{value0}}', {
+                value0: agentLabel
+              })}
+            </ContextMenuItem>
+          ) : null}
+          {/* The empty state is an offer, not an apology: with no assistant, the
+              useful thing a pet can do is get one. Once bound, this disappears —
+              a second "give me an assistant" would silently orphan the first. */}
+          {!canAsk && !agentTarget ? (
+            canSpawn ? (
+              <ContextMenuItem onSelect={spawnOmpAgent}>
+                {translate('auto.components.pet.PetOverlay.spawnOmpAgent', 'Give me an assistant…')}
+              </ContextMenuItem>
+            ) : (
+              <ContextMenuItem disabled>
+                {translate('auto.components.pet.PetOverlay.noWorktree', 'Open a workspace first')}
+              </ContextMenuItem>
+            )
+          ) : null}
+          {/* G4: panel board with its own omp (not the pet assistant). Always
+              offered so collab does not require Settings; does not orphan the
+              pet-bound assistant. */}
+          <ContextMenuItem onSelect={spawnCollabBoard}>
+            {translate(
+              'auto.components.pet.PetOverlay.spawnCollabBoard',
+              'Spawn a collab board'
+            )}
+          </ContextMenuItem>
+        </ContextMenuContent>
+      </ContextMenu>
+      <PetAskDialog
+        open={askOpen}
+        agentLabel={agentLabel}
+        onOpenChange={setAskOpen}
+        onSubmit={submitAsk}
+      />
+    </>
+  )
+}
+
+export default PetContextMenu

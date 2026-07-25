@@ -93,5 +93,19 @@ export const getVoicePaneSearchEntries = createLocalizedCatalog(() => [
       ...translateSearchKeyword('auto.components.settings.voice.pane.search.2d206de105', 'api key'),
       ...translateSearchKeyword('auto.components.settings.voice.pane.search.f6e0dfa61c', 'cloud')
     ]
+  },
+  {
+    title: translate('auto.components.settings.voice.pane.search.f5b6e0a1c2', 'Mesh Voice'),
+    description: translate(
+      'auto.components.settings.voice.pane.search.0c4a8e7b91',
+      'Voice the mesh speaks replies in. Tap a row to hear it.'
+    ),
+    keywords: [
+      ...translateSearchKeyword('auto.components.settings.voice.pane.search.7640ed9848', 'voice'),
+      ...translateSearchKeyword('auto.components.settings.voice.pane.search.4f7d9a2e58', 'mesh'),
+      ...translateSearchKeyword('auto.components.settings.voice.pane.search.1c8e5b7a30', 'tts'),
+      ...translateSearchKeyword('auto.components.settings.voice.pane.search.d3f62a4819', 'kokoro'),
+      ...translateSearchKeyword('auto.components.settings.voice.pane.search.7e9b1d3f52', 'speaker')
+    ]
   }
 ])

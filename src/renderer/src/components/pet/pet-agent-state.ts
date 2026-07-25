@@ -9,23 +9,29 @@ export type PetAnimationName =
   | 'jumping'
   | 'running-right'
   | 'running-left'
+  | 'waving'
+  | 'failed'
 
-export type PetDragAnimation = 'running-right' | 'running-left' | null
+// Drag direction is a SHARED rule — the phone drags the same pet. Re-exported
+// here so existing renderer imports keep working; the definition lives in
+// shared/pet-drag.ts.
+import type { PetDragAnimation } from '../../../../shared/pet-drag'
+export type { PetDragAnimation }
 
-// Why: direction tracks horizontal travel only; `accepted` (advance the baseline)
-// fires only on a >=4px horizontal move so slow diagonal drags still accumulate.
-export function nextPetDragAnimation(
-  current: PetDragAnimation,
-  deltaX: number
-): { animation: PetDragAnimation; accepted: boolean } {
-  if (deltaX >= 4) {
-    return { animation: 'running-right', accepted: true }
-  }
-  if (deltaX <= -4) {
-    return { animation: 'running-left', accepted: true }
-  }
-  return { animation: current, accepted: false }
-}
+// Why: mirrors hermes-agent's flashPetActivity(ms = 1600) — a completion/
+// cancellation beat reads as "just happened" for this long before decaying
+// back into the steady-state ladder below. Defined in shared because the
+// phone's bubble applies the same beat window to the same agents.
+export { PET_BEAT_MS } from '../../../../shared/pet-bubble-text'
+import { PET_BEAT_MS } from '../../../../shared/pet-bubble-text'
+
+// Why: Orca has no gateway-reported "error" state (AgentStatusEntry only
+// carries working/blocked/waiting/done). We adapt hermes's error->failed beat
+// to the closest Orca-native signal: a `done` state whose `interrupted` flag
+// says the user cancelled the turn rather than the agent finishing it. A
+// clean `done` fires the `waving` celebration beat instead.
+
+export { nextPetDragAnimation } from '../../../../shared/pet-drag'
 
 export type PetAnimationInput = {
   entries: AgentStatusEntry[]
@@ -37,6 +43,18 @@ export type PetAnimationInput = {
   staleAfterMs: number
 }
 
+// Why: `stateStartedAt` already records when the pane transitioned into its
+// current state, so "is this beat still fresh" needs no extra timer/atom —
+// it falls straight out of data already on the entry. This also gives us
+// hermes's "sibling clearing" for free: because the whole ladder is
+// re-derived from the live entry set on every call (nothing mutates a
+// shared flag), a stale beat from one pane can never linger and outrank a
+// fresh beat from another the way hermes's single mutable $petActivity
+// object could without an explicit clear.
+function isBeatFresh(entry: AgentStatusEntry, now: number): boolean {
+  return now - entry.stateStartedAt < PET_BEAT_MS
+}
+
 function agentStateAnimation(
   entries: AgentStatusEntry[],
   retainedCount: number,
@@ -45,21 +63,38 @@ function agentStateAnimation(
 ): PetAnimationName {
   let hasWorking = false
   let hasDone = false
+  let hasFailedBeat = false
+  let hasWavingBeat = false
 
   for (const entry of entries) {
     if (!isExplicitAgentStatusFresh(entry, now, staleAfterMs)) {
       continue
     }
     if (entry.state === 'blocked' || entry.state === 'waiting') {
+      // Why: a blocked/waiting agent means the USER is the bottleneck, so it
+      // outranks everything else including an in-progress completion beat.
       return 'waiting'
     }
     if (entry.state === 'working') {
       hasWorking = true
     } else if (entry.state === 'done') {
       hasDone = true
+      if (isBeatFresh(entry, now)) {
+        if (entry.interrupted) {
+          hasFailedBeat = true
+        } else {
+          hasWavingBeat = true
+        }
+      }
     }
   }
 
+  if (hasFailedBeat) {
+    return 'failed'
+  }
+  if (hasWavingBeat) {
+    return 'waving'
+  }
   if (hasWorking) {
     return 'running'
   }

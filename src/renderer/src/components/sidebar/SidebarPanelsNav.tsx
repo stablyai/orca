@@ -21,8 +21,14 @@ import {
 import { cn } from '@/lib/utils'
 import { translate } from '@/i18n/i18n'
 import { Button } from '@/components/ui/button'
-import { SortableTerminalPanelButton, SortableWebPanelButton } from './SidebarPanelRows'
 import {
+  SortableCanvasPanelButton,
+  SortableTerminalPanelButton,
+  SortableWebPanelButton
+} from './SidebarPanelRows'
+import {
+  QuickAddCanvasForm,
+  QuickAddCanvasPanelButton,
   QuickAddTerminalForm,
   QuickAddTerminalPanelButton,
   QuickAddWebForm,
@@ -46,10 +52,15 @@ const SidebarPanelsNav = React.memo(function SidebarPanelsNav() {
   // Why: forms mount only after + click — rail buttons stay free of
   // useAppStore/Popover (React #185 at packaged boot).
   const [webQuickAddOpen, setWebQuickAddOpen] = React.useState(false)
+  const [canvasQuickAddOpen, setCanvasQuickAddOpen] = React.useState(false)
   const [terminalQuickAddOpen, setTerminalQuickAddOpen] = React.useState(false)
   const openPinnedWebPanelPage = useAppStore((s) => s.openPinnedWebPanelPage)
   const activePinnedWebPanelId = useAppStore((s) => s.activePinnedWebPanelId)
   const pinnedWebPanels = useAppStore((s) => s.settings?.pinnedWebPanels)
+  const openPinnedCanvasPanelPage = useAppStore((s) => s.openPinnedCanvasPanelPage)
+  const activePinnedCanvasPanelId = useAppStore((s) => s.activePinnedCanvasPanelId)
+  const pinnedCanvasPanels = useAppStore((s) => s.settings?.pinnedCanvasPanels)
+  const canvasPanelsCollapsed = useAppStore((s) => s.settings?.pinnedCanvasPanelsCollapsed === true)
   const openPinnedTerminalPanelPage = useAppStore((s) => s.openPinnedTerminalPanelPage)
   const activePinnedTerminalPanelId = useAppStore((s) => s.activePinnedTerminalPanelId)
   const pinnedTerminalPanelsSetting = useAppStore((s) => s.settings?.pinnedTerminalPanels)
@@ -121,6 +132,16 @@ const SidebarPanelsNav = React.memo(function SidebarPanelsNav() {
       if (!overId || activeId === overId) {
         return
       }
+      const canvasPanels = pinnedCanvasPanels ?? []
+      if (canvasPanels.some((panel) => panel.id === activeId)) {
+        const overCanvas = canvasPanels.find((p) => p.id === overId)
+        if (!overCanvas) {
+          return
+        }
+        const next = movePanelInTree(canvasPanels, activeId, overId, overCanvas.groupId ?? null)
+        void updateSettings({ pinnedCanvasPanels: next })
+        return
+      }
       const webPanels = pinnedWebPanels ?? []
       if (webPanels.some((panel) => panel.id === activeId)) {
         const overWeb = webPanels.find((p) => p.id === overId)
@@ -153,7 +174,7 @@ const SidebarPanelsNav = React.memo(function SidebarPanelsNav() {
       const next = movePanelInTree(persisted, activeId, overId, overPanel.groupId ?? null)
       void updateSettings({ pinnedTerminalPanels: next })
     },
-    [pinnedWebPanels, pinnedTerminalPanelsSetting, updateSettings]
+    [pinnedCanvasPanels, pinnedWebPanels, pinnedTerminalPanelsSetting, updateSettings]
   )
 
   const addNodeGroup = React.useCallback(() => {
@@ -167,6 +188,7 @@ const SidebarPanelsNav = React.memo(function SidebarPanelsNav() {
 
   const webPanelsCollapsed = useAppStore((s) => s.settings?.pinnedWebPanelsCollapsed === true)
   const hasWebPanels = (pinnedWebPanels ?? []).length > 0
+  const hasCanvasPanels = (pinnedCanvasPanels ?? []).length > 0
   const hasTerminalPanels = pinnedTerminalPanels.length > 0
   const hasGroupedTerminals = topLevelNodeGroups.length > 0
   // Why: always mount the rails so User Panels / Nodes + buttons exist even
@@ -180,7 +202,8 @@ const SidebarPanelsNav = React.memo(function SidebarPanelsNav() {
       <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={onDragEnd}>
         <div className="flex flex-col gap-0.5">
           <SidebarPanelCanvasSection />
-          <div className="flex w-full items-center gap-0.5">
+          {/* User Panels: web dashboards + nested Collab Boards (not a peer rail). */}
+          <div className="flex w-full items-center gap-0.5" data-user-panels-section>
             <button
               type="button"
               onClick={() => void updateSettings({ pinnedWebPanelsCollapsed: !webPanelsCollapsed })}
@@ -188,9 +211,13 @@ const SidebarPanelsNav = React.memo(function SidebarPanelsNav() {
               className={cn(
                 'flex min-w-0 flex-1 items-center gap-1.5 rounded-md px-2 py-1 text-left text-[11px] font-semibold tracking-wide uppercase transition-colors',
                 webPanelsCollapsed &&
-                  (pinnedWebPanels ?? []).some(
+                  ((pinnedWebPanels ?? []).some(
                     (panel) => activeView === 'web-panel' && activePinnedWebPanelId === panel.id
-                  )
+                  ) ||
+                    (pinnedCanvasPanels ?? []).some(
+                      (panel) =>
+                        activeView === 'canvas-panel' && activePinnedCanvasPanelId === panel.id
+                    ))
                   ? 'text-worktree-sidebar-accent-foreground'
                   : 'text-worktree-sidebar-foreground/50 hover:text-worktree-sidebar-foreground/80'
               )}
@@ -212,27 +239,88 @@ const SidebarPanelsNav = React.memo(function SidebarPanelsNav() {
             <QuickAddWebPanelButton open={webQuickAddOpen} onOpenChange={setWebQuickAddOpen} />
           </div>
           {webQuickAddOpen ? <QuickAddWebForm onDone={() => setWebQuickAddOpen(false)} /> : null}
-          {webPanelsCollapsed ? null : hasWebPanels ? (
-            <SortableContext
-              items={(pinnedWebPanels ?? []).map((panel) => panel.id)}
-              strategy={verticalListSortingStrategy}
-            >
-              {(pinnedWebPanels ?? []).map((panel) => (
-                <SortableWebPanelButton
-                  key={panel.id}
-                  panel={panel}
-                  active={activeView === 'web-panel' && activePinnedWebPanelId === panel.id}
-                  onOpen={openPinnedWebPanelPage}
-                />
-              ))}
-            </SortableContext>
-          ) : (
-            <p className="px-2 py-1 pl-8 text-[11px] text-worktree-sidebar-foreground/35">
-              {translate(
-                'auto.components.sidebar.SidebarPanelsNav.emptyUserPanels',
-                'Pin a dashboard with +'
+          {webPanelsCollapsed ? null : (
+            <>
+              {hasWebPanels ? (
+                <SortableContext
+                  items={(pinnedWebPanels ?? []).map((panel) => panel.id)}
+                  strategy={verticalListSortingStrategy}
+                >
+                  {(pinnedWebPanels ?? []).map((panel) => (
+                    <SortableWebPanelButton
+                      key={panel.id}
+                      panel={panel}
+                      active={activeView === 'web-panel' && activePinnedWebPanelId === panel.id}
+                      onOpen={openPinnedWebPanelPage}
+                    />
+                  ))}
+                </SortableContext>
+              ) : (
+                <p className="px-2 py-1 pl-8 text-[11px] text-worktree-sidebar-foreground/35">
+                  {translate(
+                    'auto.components.sidebar.SidebarPanelsNav.emptyUserPanels',
+                    'Pin a dashboard with +'
+                  )}
+                </p>
               )}
-            </p>
+              {/* Nested subcategory: collab whiteboards under User Panels */}
+              <div className="flex w-full items-center gap-0.5 pl-2" data-collab-boards-subsection>
+                <button
+                  type="button"
+                  onClick={() =>
+                    void updateSettings({ pinnedCanvasPanelsCollapsed: !canvasPanelsCollapsed })
+                  }
+                  aria-expanded={!canvasPanelsCollapsed}
+                  className={cn(
+                    'flex min-w-0 flex-1 items-center gap-1.5 rounded-md px-2 py-1 text-left text-[11px] font-semibold tracking-wide uppercase transition-colors',
+                    canvasPanelsCollapsed &&
+                      (pinnedCanvasPanels ?? []).some(
+                        (panel) =>
+                          activeView === 'canvas-panel' && activePinnedCanvasPanelId === panel.id
+                      )
+                      ? 'text-worktree-sidebar-accent-foreground'
+                      : 'text-worktree-sidebar-foreground/50 hover:text-worktree-sidebar-foreground/80'
+                  )}
+                >
+                  <ChevronRight
+                    className={cn(
+                      'size-3 shrink-0 transition-transform',
+                      !canvasPanelsCollapsed && 'rotate-90'
+                    )}
+                    strokeWidth={2}
+                  />
+                  <span className="min-w-0 flex-1 truncate">Collab Boards</span>
+                </button>
+                <QuickAddCanvasPanelButton
+                  open={canvasQuickAddOpen}
+                  onOpenChange={setCanvasQuickAddOpen}
+                />
+              </div>
+              {canvasQuickAddOpen ? (
+                <QuickAddCanvasForm onDone={() => setCanvasQuickAddOpen(false)} />
+              ) : null}
+              {canvasPanelsCollapsed ? null : hasCanvasPanels ? (
+                <SortableContext
+                  items={(pinnedCanvasPanels ?? []).map((panel) => panel.id)}
+                  strategy={verticalListSortingStrategy}
+                >
+                  {(pinnedCanvasPanels ?? []).map((panel) => (
+                    <SortableCanvasPanelButton
+                      key={panel.id}
+                      panel={panel}
+                      active={
+                        activeView === 'canvas-panel' && activePinnedCanvasPanelId === panel.id
+                      }
+                      onOpen={openPinnedCanvasPanelPage}
+                    />
+                  ))}
+                </SortableContext>
+              ) : (
+                <p className="px-2 py-1 pl-10 text-[11px] text-worktree-sidebar-foreground/35">
+                  Add a whiteboard with +
+                </p>
+              )}
+            </>
           )}
           <div className="flex w-full items-center gap-0.5">
             <button

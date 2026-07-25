@@ -14,6 +14,9 @@ type NewWorkspaceFabProps = {
 
 // Phone-only floating "+" for creating a workspace. Absolutely positioned so it
 // never intercepts list row taps, and lifted above the home indicator.
+// Sits bottom-LEFT: the bottom-right corner is the thumb's hold-to-talk spot
+// (HostVoiceFab), and a destructive-adjacent "create" button must not share the
+// corner your thumb rests on to speak.
 export function NewWorkspaceFab({ onPress, disabled }: NewWorkspaceFabProps): React.JSX.Element {
   const insets = useSafeAreaInsets()
   return (
@@ -38,7 +41,7 @@ export function NewWorkspaceFab({ onPress, disabled }: NewWorkspaceFabProps): Re
 const styles = StyleSheet.create({
   fab: {
     position: 'absolute',
-    right: spacing.lg,
+    left: spacing.lg,
     width: FAB_SIZE,
     height: FAB_SIZE,
     borderRadius: FAB_SIZE / 2,

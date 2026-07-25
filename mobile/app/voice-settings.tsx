@@ -18,6 +18,7 @@ import { useAllHostClients } from '../src/transport/client-context'
 import type { RpcClient } from '../src/transport/rpc-client'
 import { BottomDrawer } from '../src/components/BottomDrawer'
 import { VoiceModelList } from '../src/components/VoiceModelList'
+import { MeshVoicePicker } from '../src/voice/MeshVoicePicker'
 import { useDictationSetupPoller } from '../src/dictation/use-dictation-setup-poller'
 import {
   deleteDictationModel,
@@ -49,10 +50,19 @@ export default function VoiceSettingsScreen(): React.JSX.Element {
   const hostIds = useMemo(() => hosts.map((h) => h.id), [hosts])
   const hostClients = useAllHostClients(hostIds)
   // Voice dictation runs on the paired desktop, so pick the first connected host.
-  const client: RpcClient | null = useMemo(
-    () => hostClients.find((entry) => entry.state === 'connected')?.client ?? null,
+  const connectedEntry = useMemo(
+    () => hostClients.find((entry) => entry.state === 'connected') ?? null,
     [hostClients]
   )
+  const client: RpcClient | null = connectedEntry?.client ?? null
+  // Why: the mesh voice catalogue lives on the same Tailscale host as the
+  // active WebSocket, so derive its endpoint from the same paired host.
+  const meshHostEndpoint = useMemo(() => {
+    if (!connectedEntry) {
+      return null
+    }
+    return hosts.find((h) => h.id === connectedEntry.hostId)?.endpoint ?? null
+  }, [connectedEntry, hosts])
 
   const [setup, setSetup] = useState<MobileSpeechSetup | null>(null)
   const [loading, setLoading] = useState(false)
@@ -291,6 +301,11 @@ export default function VoiceSettingsScreen(): React.JSX.Element {
               </View>
               <ChevronRight size={18} color={colors.textMuted} />
             </Pressable>
+          </View>
+
+          <View style={styles.section}>
+            <Text style={styles.heading}>Mesh Voice</Text>
+            <MeshVoicePicker hostEndpoint={meshHostEndpoint} />
           </View>
 
           {error ? <Text style={styles.error}>{error}</Text> : null}

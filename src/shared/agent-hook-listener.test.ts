@@ -159,6 +159,53 @@ describe('shared agent-hook-listener', () => {
     expect(event?.payload.toolInput).toBe('src/index.ts')
   })
 
+  it('raises omp to waiting on a tool_approval_requested, naming the tool', () => {
+    // Regression cover for the approval bug: --approval-mode always-ask blocks
+    // omp between tool_call and tool_execution_start, and before this the
+    // extension emitted no event there, so the pane stayed 'working' and the
+    // pet showed a spinner instead of an approval prompt.
+    const event = normalizeHookPayload(
+      state,
+      'omp',
+      {
+        paneKey: PANE_KEY,
+        payload: {
+          hook_event_name: 'tool_approval_requested',
+          tool_name: 'bash',
+          tool_input: { command: 'rm -rf build' }
+        }
+      },
+      'production'
+    )
+    expect(event?.payload.state).toBe('waiting')
+    expect(event?.payload.agentType).toBe('omp')
+    expect(event?.payload.toolName).toBe('bash')
+  })
+
+  it('drops back to working once the approval is resolved', () => {
+    normalizeHookPayload(
+      state,
+      'omp',
+      {
+        paneKey: PANE_KEY,
+        payload: { hook_event_name: 'tool_approval_requested', tool_name: 'bash' }
+      },
+      'production'
+    )
+    const resolved = normalizeHookPayload(
+      state,
+      'omp',
+      {
+        paneKey: PANE_KEY,
+        payload: { hook_event_name: 'tool_approval_resolved', tool_name: 'bash' }
+      },
+      'production'
+    )
+    // Approved or denied, the gate is gone — the wait must clear immediately
+    // rather than linger until the next unrelated event.
+    expect(resolved?.payload.state).toBe('working')
+  })
+
   it('captures the full AskUserQuestion tool input as interactivePrompt (untruncated)', () => {
     const questions = {
       questions: Array.from({ length: 4 }, (_, i) => ({

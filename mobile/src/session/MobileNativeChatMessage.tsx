@@ -1,7 +1,7 @@
 import { memo, useEffect, useRef, useState } from 'react'
 import { Image, Pressable, Text, View } from 'react-native'
 import * as Clipboard from 'expo-clipboard'
-import { ArrowUp, ChevronDown, Copy, SquareChevronRight } from 'lucide-react-native'
+import { ArrowUp, ChevronDown, Copy, SquareChevronRight, Volume2 } from 'lucide-react-native'
 import type { NativeChatBlock, NativeChatMessage } from '../../../src/shared/native-chat-types'
 import { MobileMarkdown } from '../components/MobileMarkdown'
 import { colors } from '../theme/mobile-theme'
@@ -248,10 +248,12 @@ function ToolRun({
  *  this message's top aligns to the top of the viewport. */
 function AgentControls({
   onCopy,
-  onScrollToTop
+  onScrollToTop,
+  onSpeak
 }: {
   onCopy: () => void
   onScrollToTop?: () => void
+  onSpeak?: () => void
 }): React.JSX.Element {
   return (
     <View style={styles.controls}>
@@ -263,6 +265,16 @@ function AgentControls({
       >
         <Copy size={14} color={colors.textMuted} strokeWidth={2} />
       </Pressable>
+      {onSpeak ? (
+        <Pressable
+          style={({ pressed }) => [styles.controlButton, pressed && styles.controlPressed]}
+          onPress={onSpeak}
+          hitSlop={8}
+          accessibilityLabel="Speak this reply"
+        >
+          <Volume2 size={14} color={colors.textMuted} strokeWidth={2} />
+        </Pressable>
+      ) : null}
       {onScrollToTop ? (
         <Pressable
           style={({ pressed }) => [styles.controlButton, pressed && styles.controlPressed]}
@@ -284,7 +296,8 @@ function MobileNativeChatMessageImpl({
   fontScale = 1,
   messageIndex,
   onScrollToMessage,
-  onOpenFile
+  onOpenFile,
+  onSpeak
 }: {
   message: NativeChatMessage
   queued?: boolean
@@ -296,6 +309,8 @@ function MobileNativeChatMessageImpl({
   /** Ask the list to align this message's top to the top of the viewport. */
   onScrollToMessage?: (index: number) => void
   onOpenFile?: (relativePath: string) => void
+  /** Speak this message's prose aloud via mesh TTS (agent messages only). */
+  onSpeak?: (text: string) => void
 }): React.JSX.Element {
   const isUser = message.role === 'user'
   const isReasoning = message.role === 'reasoning'
@@ -331,6 +346,13 @@ function MobileNativeChatMessageImpl({
 
   // Copy + scroll-to-top, shown inline with the first tool call (or after the
   // prose when there are no tools).
+  const handleSpeak = (): void => {
+    const text = nativeChatMessageText(message.blocks)
+    if (text) {
+      onSpeak?.(text)
+    }
+  }
+
   const controls =
     isAgent && !queued ? (
       <AgentControls
@@ -340,6 +362,7 @@ function MobileNativeChatMessageImpl({
             ? () => onScrollToMessage(messageIndex)
             : undefined
         }
+        onSpeak={onSpeak ? handleSpeak : undefined}
       />
     ) : null
 

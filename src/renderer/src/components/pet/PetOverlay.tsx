@@ -12,6 +12,12 @@ import {
 } from './pet-agent-state'
 import { usePetPointerInteraction } from './usePetPointerInteraction'
 import { buildSpriteAnimationCss } from './sprite-animation-css'
+import { PetBubble } from './pet-bubble'
+import { clampPositionToViewport, type Position } from '../../../../shared/pet-roam'
+import { usePetRoam } from './usePetRoam'
+import { usePetIdentityReporting, usePetPresence, usePetSurfaceSync } from './use-pet-presence'
+import type { PetSurfaceKind } from '../../../../shared/pet-presence'
+import { PetContextMenu } from './pet-context-menu'
 
 type Sprite = NonNullable<CustomPet['sprite']>
 
@@ -234,20 +240,8 @@ const SIZE = 180
 const POSITION_STORAGE_KEY = 'pet-overlay-position'
 const LEGACY_POSITION_STORAGE_KEY = 'sidekick-overlay-position'
 
-export type Position = { x: number; y: number }
-
-export function clampPositionToViewport(
-  pos: Position,
-  size: number,
-  viewport: { width: number; height: number }
-): Position {
-  const maxX = Math.max(0, viewport.width - size)
-  const maxY = Math.max(0, viewport.height - size)
-  return {
-    x: Math.min(Math.max(0, pos.x), maxX),
-    y: Math.min(Math.max(0, pos.y), maxY)
-  }
-}
+export type { Position }
+export { clampPositionToViewport }
 
 function clampToViewport(pos: Position, size: number = SIZE): Position {
   if (typeof window === 'undefined') {
@@ -310,7 +304,26 @@ function defaultPosition(size: number = SIZE): Position {
 // out of i18n so translated locales cannot invalidate the keyframes.
 const PET_BOB_KEYFRAMES_CSS =
   '@keyframes pet-bob { 0%,100% { transform: translateY(0); } 50% { transform: translateY(-4px); } }'
-export function PetOverlay(): React.JSX.Element {
+export function PetOverlay({
+  surfaceKind = 'desktop-window',
+  reportsPetIdentity = true
+}: {
+  /** Popout windows pass 'popout-window' so they are their own handoff
+   *  destination rather than masquerading as the main window. */
+  surfaceKind?: PetSurfaceKind
+  /**
+   * Whether this surface may publish WHICH pet the operator chose.
+   *
+   * Defaults true for the main window, which owns the selection. A surface
+   * whose store has not been hydrated with `petId`/`customPets` must pass
+   * false: reporting from an unhydrated store publishes the store DEFAULT
+   * (Claudino) to the authority, which overwrites the operator's real pet
+   * everywhere — including on the phone. The earlier "idempotent by design:
+   * every window reports the same value" assumption held only while every
+   * window happened to be hydrated, and a popout is not.
+   */
+  reportsPetIdentity?: boolean
+} = {}): React.JSX.Element | null {
   const documentVisible = useDocumentVisible()
   const reducedMotion = usePrefersReducedMotion()
   const { url, sprite, detected } = usePetUrl()
@@ -354,6 +367,39 @@ export function PetOverlay(): React.JSX.Element {
     (next) => setPosition(clampToViewport(next, size))
   )
 
+  const motionAllowed = documentVisible && !reducedMotion
+  const agentStatusByPaneKey = useAppStore((s) => s.agentStatusByPaneKey)
+  const agentStatusEpoch = useAppStore((s) => s.agentStatusEpoch)
+  void agentStatusEpoch
+  const agentEntries = useMemo(() => Object.values(agentStatusByPaneKey), [agentStatusByPaneKey])
+  // P2 presence: this window is one surface among several (other windows,
+  // popouts, the phone). The authority decides who holds the pet; we only
+  // register, report edges, and draw when told.
+  const presence = usePetPresence(true, surfaceKind)
+
+  // Identity travels with the pet: the desktop owns the operator's choice of
+  // creature, so it publishes it. Without this the phone drew a different pet.
+  const selectedPetId = useAppStore((s) => s.petId)
+  usePetIdentityReporting(reportsPetIdentity ? selectedPetId : null, presence.petId)
+
+  // Why roam is gated on holding the pet: a window that does not hold it must
+  // not be simulating a second pet in the background, or the two would drift
+  // apart and the "one creature" illusion breaks the moment it comes back.
+  // Also unchanged: roam only when the document is visible and motion is
+  // allowed, matching sprite/bob pause rules so a hidden tab does not burn rAF.
+  usePetRoam({
+    enabled: motionAllowed && presence.holdsPet,
+    position,
+    setPosition,
+    size,
+    dragging,
+    entries: agentEntries,
+    now: Date.now,
+    staleAfterMs: AGENT_STATUS_STALE_AFTER_MS
+  })
+
+  usePetSurfaceSync({ presence, position, size, dragging, setPosition })
+
   useEffect(() => {
     const onResize = (): void => setPosition((prev) => clampToViewport(prev, size))
     window.addEventListener('resize', onResize)
@@ -371,12 +417,18 @@ export function PetOverlay(): React.JSX.Element {
     }
   }, [dragging, position])
 
-  const motionAllowed = documentVisible && !reducedMotion
   // Why: a still/vertical grab freezes on frame 0 (Codex grab-and-hold); a
   // horizontal drag keeps animating so the running rows show. Bob always pauses.
   const spriteAnimate = motionAllowed && (!dragging || dragAnimation !== null)
   const bobAnimate = motionAllowed && !dragging
   const animationName = usePetAnimationName(dragging, dragAnimation, hovering)
+
+  // The pet is exclusive: when the authority says another surface holds it,
+  // this window renders nothing. That is what makes it read as one creature
+  // that walked away, rather than a copy that blinked out.
+  if (!presence.holdsPet) {
+    return null
+  }
 
   return (
     // Why: the outer box and middle layer stay pointer-events-none so app chrome
@@ -393,49 +445,52 @@ export function PetOverlay(): React.JSX.Element {
       }}
     >
       <div className="pointer-events-none flex size-full items-center justify-end">
-        <div
-          {...handlers}
-          className="pointer-events-auto flex h-fit w-fit select-none"
-          style={{
-            cursor: dragging ? 'grabbing' : 'grab',
-            animation: 'pet-bob 1.2s ease-in-out infinite',
-            animationPlayState: bobAnimate ? 'running' : 'paused',
-            touchAction: 'none',
-            // Why: floor so the wrapper stays grabbable while w-fit/h-fit would
-            // otherwise collapse to 0×0 during the image-load window.
-            minWidth: 24,
-            minHeight: 24
-          }}
-        >
-          <style>{PET_BOB_KEYFRAMES_CSS}</style>
-          {sprite ? (
-            // Why: remount per pet so a switched-to sprite starts a fresh
-            // animation instead of inheriting the prior pet's currentTime.
-            <SpriteFrame
-              key={url}
-              url={url}
-              sprite={sprite}
-              animate={spriteAnimate}
-              maxSize={size}
-              animationName={animationName}
-              restartKey={dragGeneration}
-            />
-          ) : detected ? (
-            <DetectedSpriteFrame detected={detected} animate={spriteAnimate} maxSize={size} />
-          ) : (
-            // Why: cap explicitly at the pet size — the w-fit/h-fit wrapper is
-            // fit-content, so max-w/h-full has no fixed box to resolve against
-            // and the image would otherwise render at its intrinsic size and
-            // overflow the persisted size box that clamping still assumes.
-            <img
-              src={url}
-              alt=""
-              className="max-h-full max-w-full object-contain"
-              style={{ maxWidth: size, maxHeight: size }}
-              draggable={false}
-            />
-          )}
-        </div>
+        <PetContextMenu entries={agentEntries}>
+          <div
+            {...handlers}
+            className="pointer-events-auto relative flex h-fit w-fit select-none"
+            style={{
+              cursor: dragging ? 'grabbing' : 'grab',
+              animation: 'pet-bob 1.2s ease-in-out infinite',
+              animationPlayState: bobAnimate ? 'running' : 'paused',
+              touchAction: 'none',
+              // Why: floor so the wrapper stays grabbable while w-fit/h-fit would
+              // otherwise collapse to 0×0 during the image-load window.
+              minWidth: 24,
+              minHeight: 24
+            }}
+          >
+            <style>{PET_BOB_KEYFRAMES_CSS}</style>
+            <PetBubble />
+            {sprite ? (
+              // Why: remount per pet so a switched-to sprite starts a fresh
+              // animation instead of inheriting the prior pet's currentTime.
+              <SpriteFrame
+                key={url}
+                url={url}
+                sprite={sprite}
+                animate={spriteAnimate}
+                maxSize={size}
+                animationName={animationName}
+                restartKey={dragGeneration}
+              />
+            ) : detected ? (
+              <DetectedSpriteFrame detected={detected} animate={spriteAnimate} maxSize={size} />
+            ) : (
+              // Why: cap explicitly at the pet size — the w-fit/h-fit wrapper is
+              // fit-content, so max-w/h-full has no fixed box to resolve against
+              // and the image would otherwise render at its intrinsic size and
+              // overflow the persisted size box that clamping still assumes.
+              <img
+                src={url}
+                alt=""
+                className="max-h-full max-w-full object-contain"
+                style={{ maxWidth: size, maxHeight: size }}
+                draggable={false}
+              />
+            )}
+          </div>
+        </PetContextMenu>
       </div>
     </div>
   )

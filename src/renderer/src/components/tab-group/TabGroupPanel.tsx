@@ -19,8 +19,12 @@ import { resolveGroupTabFromVisibleId } from './tab-group-visible-id'
 import { getTabPaneBodyDroppableId, type HoveredTabInsertion } from './useTabDragSplit'
 import { tabGroupBodyAnchorName } from './tab-group-body-anchor'
 import { translate } from '@/i18n/i18n'
+import { sessionCollabCanvasBinding } from '../../../../shared/collab-canvas-binding'
 
 const EditorPanel = lazy(() => import('../editor/EditorPanel'))
+const CollabCanvas = lazy(() =>
+  import('../collab-canvas/CollabCanvas').then((m) => ({ default: m.CollabCanvas }))
+)
 
 export default function TabGroupPanel({
   groupId,
@@ -108,6 +112,7 @@ export default function TabGroupPanel({
       onNewTerminalTab={commands.newTerminalTab}
       onNewTerminalWithShell={commands.newTerminalWithShell}
       onNewBrowserTab={commands.newBrowserTab}
+      onNewCollabCanvasTab={commands.newCollabCanvasTab}
       onNewSimulatorTab={commands.newSimulatorTab}
       onOpenEntry={commands.openEntry}
       onNewFileTab={commands.newFileTab}
@@ -132,7 +137,9 @@ export default function TabGroupPanel({
             ? 'browser'
             : activeTab?.contentType === 'simulator'
               ? 'simulator'
-              : 'editor'
+              : activeTab?.contentType === 'collab-canvas'
+                ? 'collab-canvas'
+                : 'editor'
       }
       onActivateFile={commands.activateEditor}
       onCloseFile={commands.closeItem}
@@ -302,10 +309,32 @@ export default function TabGroupPanel({
             data-contextual-tour-target="workspace-agent-terminal-tip"
           />
         ) : null}
+        {activeTab && activeTab.contentType === 'collab-canvas' && (
+          <div className="absolute inset-0 flex min-h-0 min-w-0">
+            {/* Why: board docs live in the node-a sync room (S1). A remount
+                re-attaches via useSync and loses nothing — unlike terminal
+                (xterm buffer), browser (<webview>), or simulator stream, which
+                are worktree-level overlays for that reason. Keep CollabCanvas
+                inside the group body; do not invent a fourth overlay layer. */}
+            <Suspense
+              fallback={
+                <div className="flex flex-1 items-center justify-center text-sm text-muted-foreground">
+                  Loading collab board...
+                </div>
+              }
+            >
+              <CollabCanvas
+                binding={sessionCollabCanvasBinding(worktreeId, activeTab.entityId)}
+              />
+            </Suspense>
+          </div>
+        )}
+
         {activeTab &&
           activeTab.contentType !== 'terminal' &&
           activeTab.contentType !== 'browser' &&
-          activeTab.contentType !== 'simulator' && (
+          activeTab.contentType !== 'simulator' &&
+          activeTab.contentType !== 'collab-canvas' && (
             <div className="absolute inset-0 flex min-h-0 min-w-0">
               {/* Why: split groups render editor content in a plain relative pane body, not the legacy Terminal.tsx flex column. */}
               <Suspense
@@ -323,7 +352,12 @@ export default function TabGroupPanel({
             </div>
           )}
 
-        {/* Why: terminal/browser/simulator panes render at the worktree level (overlay layers); per-group rendering remounted xterm/webview/simulator on split moves. */}
+        {/* Why: terminal/browser/simulator panes are rendered at the worktree level by
+            overlay layers and absolutely positioned over this body element
+            via the slot registered above. Rendering them per-group caused
+            split moves to remount xterm, reparent Electron `<webview>`, or
+            reload the simulator stream. Boards do NOT use that path — see the
+            collab-canvas branch above. */}
       </div>
     </div>
   )

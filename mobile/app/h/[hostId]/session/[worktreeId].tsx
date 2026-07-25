@@ -76,6 +76,7 @@ import { useMobilePrBranchContext } from '../../../../src/session/use-mobile-pr-
 import { isFloatingWorkspaceWorktreeId } from '../../../../src/session/floating-workspace'
 import { SessionDockColumn } from '../../../../src/session/SessionDockColumn'
 import { MobileSessionHeaderIconButton } from '../../../../src/session/MobileSessionHeaderIconButton'
+import { SessionSpeakRepliesToggle } from '../../../../src/voice/SessionSpeakRepliesToggle'
 import { MobileSessionHeaderMoreActionsSheet } from '../../../../src/session/MobileSessionHeaderMoreActionsSheet'
 import { QuickCommandsSheet } from '../../../../src/session/QuickCommandsSheet'
 import {
@@ -4405,6 +4406,11 @@ export default function SessionScreen() {
                 </Text>
               </Pressable>
             </View>
+            {/* Speak replies: folds this session's finished agent turns into
+                two or three spoken sentences. Off by default, per workspace. */}
+            {worktreeId ? (
+              <SessionSpeakRepliesToggle hostId={hostId} worktreeId={worktreeId} />
+            ) : null}
             {!isFloatingWorkspaceRoute && (
               <MobileSessionHeaderIconButton
                 active={activePanel === 'files'}
@@ -4705,6 +4711,7 @@ export default function SessionScreen() {
                   onMicPressOut={handleDictationPressOut}
                   inputLockReason={nativeChatInputLockReason}
                   keyboardInset={keyboardLift}
+                  hostEndpoint={hostEndpoint}
                 />
                 {toastMessage && (
                   <Animated.View pointerEvents="none" style={[styles.toast, toastAnimatedStyle]}>

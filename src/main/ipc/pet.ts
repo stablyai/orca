@@ -1,7 +1,7 @@
 /* eslint-disable max-lines */
 import { app, BrowserWindow, dialog, ipcMain, nativeImage } from 'electron'
+import { constants as fsConstants, createWriteStream, existsSync } from 'node:fs'
 import { copyFile, mkdir, open, readFile, rename, rm, stat, lstat } from 'node:fs/promises'
-import { constants as fsConstants, createWriteStream } from 'node:fs'
 import { pipeline } from 'node:stream/promises'
 import { randomUUID } from 'node:crypto'
 import { basename, dirname, extname, isAbsolute, join, normalize, resolve, sep } from 'node:path'
@@ -13,6 +13,7 @@ import {
   type PetManifestLike,
   type ResolvedPetManifest
 } from './pet-bundle'
+import { installPetdexStarterPack } from '../pet/petdex-install'
 
 // Why: pets are image-only — render natively via <img> (no 3D engine); main owns this format allowlist.
 const IMAGE_FORMATS: Record<string, string> = {
@@ -229,6 +230,33 @@ export function registerPetHandlers(): void {
       mimeType: classified.mimeType,
       kind: 'image'
     }
+  })
+
+  /**
+   * Install the curated Petdex starter pack into userData/sidekicks/custom.
+   * Returns the new CustomPet index rows — renderer merges into store + UI.
+   */
+  ipcMain.handle('pet:seedPetdexStarter', async (): Promise<CustomPet[]> => {
+    const customPetsDir = getPetsDir()
+    // Packaged: resources live under process.resourcesPath or app path.
+    // Dev: repo `resources/pets/mesh-defaults`.
+    const candidates = [
+      join(process.resourcesPath ?? '', 'pets', 'mesh-defaults'),
+      join(app.getAppPath(), 'resources', 'pets', 'mesh-defaults'),
+      join(app.getAppPath(), '..', 'resources', 'pets', 'mesh-defaults')
+    ]
+    const meshDefaultsDir = candidates.find((p) => !!p && existsSync(p))
+    const result = await installPetdexStarterPack({
+      customPetsDir,
+      meshDefaultsDir,
+      onProgress: (msg) => console.log(`[petdex-seed] ${msg}`)
+    })
+    if (result.installed.length === 0) {
+      throw new Error(
+        `Default pet pack installed 0 pets (${result.skipped.length} skipped). Check network / bundled assets.`
+      )
+    }
+    return result.installed
   })
 
   ipcMain.handle('pet:importPetBundle', async (event): Promise<CustomPet | null> => {

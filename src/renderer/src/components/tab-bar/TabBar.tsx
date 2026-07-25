@@ -8,6 +8,7 @@ import {
   FilePlus,
   FileText,
   Globe,
+  Pencil,
   Plus,
   Smartphone,
   TerminalSquare
@@ -116,6 +117,7 @@ type TabBarProps = {
   /** On Windows, opens a new terminal with a specific shell instead of the default. */
   onNewTerminalWithShell?: (shell: string) => void
   onNewBrowserTab: () => void
+  onNewCollabCanvasTab?: () => void
   onNewSimulatorTab?: () => void
   onOpenEntry?: (args: TabCreateEntryArgs) => Promise<void>
   terminalOnly?: boolean
@@ -175,6 +177,13 @@ type TabItem =
       isPinned: boolean
       data: Tab
     }
+  | {
+      type: 'collab-canvas'
+      id: string
+      unifiedTabId: string
+      isPinned: boolean
+      data: Tab
+    }
 
 function getTabDragLabel(item: TabItem, generatedTitlesEnabled: boolean): string {
   if (item.type === 'terminal') {
@@ -185,6 +194,9 @@ function getTabDragLabel(item: TabItem, generatedTitlesEnabled: boolean): string
   }
   if (item.type === 'simulator') {
     return item.data.label || 'Mobile Emulator'
+  }
+  if (item.type === 'collab-canvas') {
+    return item.data.label || 'Collab Board'
   }
   return getEditorDisplayLabel(item.data)
 }
@@ -241,6 +253,7 @@ function TabBarInner({
   onNewTerminalTab,
   onNewTerminalWithShell,
   onNewBrowserTab,
+  onNewCollabCanvasTab,
   onNewSimulatorTab,
   onOpenEntry,
   terminalOnly = false,
@@ -535,6 +548,7 @@ function TabBarInner({
         terminalOnly,
         windowsShellEntries,
         hasNewBrowser: !terminalOnly,
+        hasNewCollabCanvas: !terminalOnly && Boolean(onNewCollabCanvasTab),
         hasNewMarkdown: !terminalOnly && Boolean(onNewFileTab),
         hasOpenMarkdown: !terminalOnly && Boolean(onOpenFileTab),
         hasSimulator: !terminalOnly && mobileEmulatorEnabled && Boolean(onNewSimulatorTab),
@@ -542,6 +556,7 @@ function TabBarInner({
       }),
     [
       mobileEmulatorEnabled,
+      onNewCollabCanvasTab,
       onNewFileTab,
       onNewSimulatorTab,
       onOpenFileTab,
@@ -571,6 +586,9 @@ function TabBarInner({
         break
       case 'new-browser':
         onNewBrowserTab()
+        break
+      case 'new-collab-canvas':
+        onNewCollabCanvasTab?.()
         break
       case 'new-markdown':
         onNewFileTab?.()
@@ -688,6 +706,16 @@ function TabBarInner({
       <DropdownMenuShortcut>{newBrowserShortcut}</DropdownMenuShortcut>
     </DropdownMenuItem>
   ) : null
+  const newCollabCanvasMenuItem =
+    !terminalOnly && onNewCollabCanvasTab ? (
+      <DropdownMenuItem
+        onSelect={onNewCollabCanvasTab}
+        className="gap-2 rounded-[7px] px-2 py-1.5 text-[12px] leading-5 font-medium"
+      >
+        <Pencil className="size-4 text-muted-foreground" />
+        New Collab Board
+      </DropdownMenuItem>
+    ) : null
   const newSimulatorMenuItem =
     !terminalOnly && mobileEmulatorEnabled && onNewSimulatorTab ? (
       workspaceHasSimulatorTab ? (
@@ -759,6 +787,7 @@ function TabBarInner({
         {openMarkdownMenuItem}
         {defaultTerminalMenuItems}
         {newBrowserMenuItem}
+        {newCollabCanvasMenuItem}
         {newSimulatorMenuItem}
         {mobileEmulatorIntroMenuBlock}
       </>
@@ -766,6 +795,7 @@ function TabBarInner({
       <>
         {defaultTerminalMenuItems}
         {newBrowserMenuItem}
+        {newCollabCanvasMenuItem}
         {newMarkdownMenuItem}
         {openMarkdownMenuItem}
         {newSimulatorMenuItem}
@@ -810,6 +840,13 @@ function TabBarInner({
         .map((t) => t.id),
     [unifiedTabs, resolvedGroupId]
   )
+  const collabCanvasTabIds = useMemo(
+    () =>
+      (unifiedTabs ?? [])
+        .filter((t) => t.groupId === resolvedGroupId && t.contentType === 'collab-canvas')
+        .map((t) => t.id),
+    [unifiedTabs, resolvedGroupId]
+  )
 
   // Build the unified ordered list, reconciling stored order with current items
   const orderedItems = useMemo(() => {
@@ -818,7 +855,8 @@ function TabBarInner({
       terminalIds,
       editorFileIds,
       browserTabIds,
-      simulatorTabIds
+      simulatorTabIds,
+      collabCanvasTabIds
     )
     const items: TabItem[] = []
     for (const id of ids) {
@@ -869,6 +907,17 @@ function TabBarInner({
         })
         continue
       }
+      const collabUnified = unifiedTabByVisibleId.get(id)
+      if (collabUnified && collabUnified.contentType === 'collab-canvas') {
+        items.push({
+          type: 'collab-canvas',
+          id,
+          unifiedTabId: collabUnified.id,
+          isPinned: collabUnified.isPinned === true,
+          data: collabUnified
+        })
+        continue
+      }
     }
     return items
   }, [
@@ -877,6 +926,7 @@ function TabBarInner({
     editorFileIds,
     browserTabIds,
     simulatorTabIds,
+    collabCanvasTabIds,
     terminalMap,
     editorMap,
     browserMap,
@@ -910,6 +960,9 @@ function TabBarInner({
       }
       if (item.type === 'simulator') {
         return activeTabType === 'simulator' && item.id === activeSimulatorTabId
+      }
+      if (item.type === 'collab-canvas') {
+        return activeTabType === 'collab-canvas' && item.id === activeFileId
       }
       return (
         (activeTabType === 'editor' || activeTabType === 'simulator') && activeFileId === item.id
@@ -1128,6 +1181,39 @@ function TabBarInner({
                     key={item.id}
                     file={simFile}
                     isActive={activeTabType === 'simulator' && item.id === activeSimulatorTabId}
+                    isPinned={item.isPinned}
+                    hasTabsToRight={index < orderedItems.length - 1}
+                    statusByRelativePath={statusByRelativePath}
+                    onActivate={() => onActivateFile?.(item.id)}
+                    onClose={() => onCloseFile?.(item.id)}
+                    onCloseToRight={() => onCloseToRight(item.id)}
+                    onCloseAll={() => onCloseAllFiles?.()}
+                    onMakePermanent={() => {}}
+                    onTogglePin={() => togglePinned(item)}
+                    dragData={dragData}
+                    dropIndicator={dropIndicatorByVisibleId.get(item.id) ?? null}
+                    includeTopTabBorder={includeTopTabBorder}
+                  />
+                )
+              }
+              if (item.type === 'collab-canvas') {
+                const boardLabel = item.data.label || 'Collab Board'
+                const boardFile: OpenFile & { tabId: string } = {
+                  id: item.id,
+                  tabId: item.id,
+                  filePath: boardLabel,
+                  relativePath: boardLabel,
+                  worktreeId,
+                  language: 'collab-canvas',
+                  isPreview: false,
+                  isDirty: false,
+                  mode: 'edit'
+                }
+                return (
+                  <EditorFileTab
+                    key={item.id}
+                    file={boardFile}
+                    isActive={activeTabType === 'collab-canvas' && item.id === activeFileId}
                     isPinned={item.isPinned}
                     hasTabsToRight={index < orderedItems.length - 1}
                     statusByRelativePath={statusByRelativePath}

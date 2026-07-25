@@ -38,6 +38,7 @@ import {
   useForceReconnect
 } from '../../../src/transport/client-context'
 import { useWorktreeResync } from '../../../src/transport/use-worktree-resync'
+import { openCollabBoardFromHostPanel } from '../../../src/collab-canvas/open-collab-board'
 import { startHostWorktreeRefresh } from '../../../src/worktree/host-worktree-refresh'
 import {
   useLastConnectedAt,
@@ -50,7 +51,8 @@ import {
 import type { RpcSuccess } from '../../../src/transport/types'
 import { StatusDot } from '../../../src/components/StatusDot'
 import { NewWorktreeModalController } from '../../../src/components/NewWorktreeModalController'
-import { NewWorkspaceFab, FAB_SIZE } from '../../../src/components/NewWorkspaceFab'
+import { FAB_SIZE } from '../../../src/components/NewWorkspaceFab'
+import { HostFabRow } from '../../../src/components/HostFabRow'
 import { MobileRepoIcon } from '../../../src/components/MobileRepoIcon'
 import { WorktreeListRow } from '../../../src/components/WorktreeListRow'
 import { useNow } from '../../../src/hooks/use-now'
@@ -157,6 +159,9 @@ export function HostScreen({
   const [repoColorsByName, setRepoColorsByName] = useState<Map<string, string>>(new Map())
   const [repoIconsByName, setRepoIconsByName] = useState<Map<string, RepoIcon>>(new Map())
   const [hostName, setHostName] = useState('')
+  // Why: the mesh-voice route is keyed off the host's Tailscale endpoint, so the
+  // voice feature needs the same URL the WebSocket connects to.
+  const [hostEndpoint, setHostEndpoint] = useState<string | null>(null)
   const [error, setError] = useState('')
   const [lastKnownWorktrees, setLastKnownWorktrees] = useState<Worktree[]>(initialCache ?? [])
   const [search, setSearch] = useState('')
@@ -345,6 +350,7 @@ export function HostScreen({
         return
       }
       setHostName(host.name)
+      setHostEndpoint(host.endpoint)
       void updateLastConnected(host.id)
     })
     return () => {
@@ -655,6 +661,14 @@ export function HostScreen({
     [client, connState, hostId, navigateFromHostList]
   )
 
+  const openWorktreeCollabBoard = useCallback(
+    (item: Worktree) => {
+      // Session-scoped boardId: stable per worktree so Nord and desktop share a room.
+      const boardId = `wt-${item.worktreeId}`.replace(/[^A-Za-z0-9._-]/g, '-').slice(0, 64)
+      openCollabBoardFromHostPanel(router, { hostId: String(hostId), boardId })
+    },
+    [hostId, router]
+  )
   const openFloatingWorkspace = useCallback(() => {
     // Why: no worktree.activate here — the floating sentinel has no worktree
     // record; session.tabs.list hydrates its host-owned tabs on open.
@@ -1197,9 +1211,15 @@ export function HostScreen({
         />
       )}
 
-      {/* Floating "new workspace" button — phone only; embedded sidebars keep the toolbar +. */}
       {!embedded && (
-        <NewWorkspaceFab onPress={openNewWorktreeModal} disabled={connState !== 'connected'} />
+        <HostFabRow
+          client={client}
+          hostName={hostName}
+          hostEndpoint={hostEndpoint}
+          worktrees={worktrees}
+          connected={connState === 'connected'}
+          onNewWorkspace={openNewWorktreeModal}
+        />
       )}
 
       <PickerModal
@@ -1326,6 +1346,13 @@ export function HostScreen({
                       navigate: navigateFromHostList,
                       onDone: () => setActionTarget(null)
                     }),
+                    {
+                      label: 'Open Collab Board',
+                      onPress: () => {
+                        openWorktreeCollabBoard(actionTarget)
+                        setActionTarget(null)
+                      }
+                    },
                     {
                       label: 'Sleep',
                       icon: Moon,

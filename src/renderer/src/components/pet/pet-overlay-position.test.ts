@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { clampPositionToViewport } from './PetOverlay'
+import { clampPositionToViewport } from '../../../../shared/pet-roam'
 
 describe('clampPositionToViewport', () => {
   it('keeps the overlay inside the viewport bounds', () => {

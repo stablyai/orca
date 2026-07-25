@@ -25,6 +25,7 @@ import { applyPRBotAuthorOverride } from '../../shared/pr-bot-author-overrides'
 import { resolveEnvironment } from '../../shared/runtime-environment-store'
 import { normalizePinnedWebPanels } from '../../shared/pinned-web-panels'
 import { normalizePinnedTerminalPanels } from '../../shared/pinned-terminal-panels'
+import { normalizePinnedCanvasPanels } from '../../shared/pinned-canvas-panels'
 import { normalizePanelTreeGroups } from '../../shared/panel-tree'
 import { normalizePanelLayouts } from '../../shared/panel-layouts'
 // Why: the whitelist is the source-of-truth for which keys we emit on. Casting
@@ -134,6 +135,9 @@ export function registerSettingsHandlers(
     }
     if ('pinnedWebPanels' in args) {
       sanitizedArgs.pinnedWebPanels = normalizePinnedWebPanels(args.pinnedWebPanels)
+    }
+    if ('pinnedCanvasPanels' in args) {
+      sanitizedArgs.pinnedCanvasPanels = normalizePinnedCanvasPanels(args.pinnedCanvasPanels)
     }
     if ('pinnedTerminalPanels' in args) {
       sanitizedArgs.pinnedTerminalPanels = normalizePinnedTerminalPanels(args.pinnedTerminalPanels)

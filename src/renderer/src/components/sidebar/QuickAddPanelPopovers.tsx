@@ -1,11 +1,15 @@
 import React from 'react'
 import { Plus } from 'lucide-react'
 import { useAppStore } from '@/store'
-import type { PinnedWebPanel } from '../../../../shared/types'
+import type { PinnedCanvasPanel, PinnedWebPanel } from '../../../../shared/types'
 import {
   MAX_PINNED_WEB_PANELS,
   normalizePinnedWebPanels
 } from '../../../../shared/pinned-web-panels'
+import {
+  MAX_PINNED_CANVAS_PANELS,
+  normalizePinnedCanvasPanels
+} from '../../../../shared/pinned-canvas-panels'
 import {
   MAX_PINNED_TERMINAL_PANELS,
   normalizePinnedTerminalPanels
@@ -23,6 +27,98 @@ import { emptyDraft, panelFromDraft } from '@/components/settings/pinned-termina
  * click. Packaged boot was React #185 (max update depth / forceStoreRerender)
  * when Popover + useAppStore lived on the rail itself.
  */
+
+export function QuickAddCanvasForm({ onDone }: { onDone: () => void }): React.JSX.Element {
+  const [title, setTitle] = React.useState('')
+  const [atCap, setAtCap] = React.useState(
+    () =>
+      (useAppStore.getState().settings?.pinnedCanvasPanels?.length ?? 0) >= MAX_PINNED_CANVAS_PANELS
+  )
+
+  React.useEffect(() => {
+    setAtCap(
+      (useAppStore.getState().settings?.pinnedCanvasPanels?.length ?? 0) >= MAX_PINNED_CANVAS_PANELS
+    )
+  }, [])
+
+  const submit = (): void => {
+    if (atCap) return
+    const panels = useAppStore.getState().settings?.pinnedCanvasPanels ?? []
+    if (panels.length >= MAX_PINNED_CANVAS_PANELS) return
+    const id = crypto.randomUUID()
+    const boardId = crypto.randomUUID()
+    const panel: PinnedCanvasPanel = {
+      id,
+      title: title.trim() || 'Collab board',
+      boardId
+    }
+    const next = normalizePinnedCanvasPanels([...panels, panel])
+    void useAppStore.getState().updateSettings({
+      pinnedCanvasPanels: next,
+      pinnedCanvasPanelsCollapsed: false
+    })
+    if (next.some((p) => p.id === id)) {
+      useAppStore.getState().openPinnedCanvasPanelPage(id)
+    }
+    onDone()
+  }
+
+  return (
+    <div
+      className="mx-1 mb-1 space-y-2 rounded-md border border-worktree-sidebar-border/40 bg-worktree-sidebar-background p-2"
+      onClick={(event) => event.stopPropagation()}
+      onKeyDown={(e) => {
+        if (e.key === 'Enter') submit()
+        else if (e.key === 'Escape') onDone()
+      }}
+    >
+      <div className="text-[12px] font-medium">New collab board</div>
+      <Input
+        value={title}
+        onChange={(e) => setTitle(e.target.value)}
+        placeholder="Title"
+        className="h-7 text-[12px]"
+        autoFocus
+      />
+      <div className="flex gap-1">
+        <Button
+          variant="secondary"
+          size="sm"
+          className="h-7 flex-1"
+          disabled={atCap}
+          onClick={submit}
+        >
+          Add
+        </Button>
+        <Button variant="ghost" size="sm" className="h-7" onClick={onDone}>
+          Cancel
+        </Button>
+      </div>
+    </div>
+  )
+}
+
+export function QuickAddCanvasPanelButton({
+  open,
+  onOpenChange
+}: {
+  open: boolean
+  onOpenChange: (open: boolean) => void
+}): React.JSX.Element {
+  return (
+    <Button
+      type="button"
+      variant="ghost"
+      size="icon-xs"
+      className="size-5 shrink-0 text-worktree-sidebar-foreground/50 hover:text-worktree-sidebar-foreground/80"
+      aria-label="New collab board"
+      aria-expanded={open}
+      onClick={() => onOpenChange(!open)}
+    >
+      <Plus className="size-3.5" strokeWidth={2.25} />
+    </Button>
+  )
+}
 
 export function QuickAddWebForm({ onDone }: { onDone: () => void }): React.JSX.Element {
   const [title, setTitle] = React.useState('')
