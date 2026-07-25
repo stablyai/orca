@@ -1,9 +1,10 @@
 import { useCallback, useState } from 'react'
-import { AlertTriangle, Cloud, Loader2 } from 'lucide-react'
+import { AlertTriangle, Cloud, Loader2, SquareTerminal, PictureInPicture2 } from 'lucide-react'
 import { toast } from 'sonner'
 import { translate } from '@/i18n/i18n'
 import { useMountedRef } from '@/hooks/useMountedRef'
 import { useAppStore } from '../../store'
+import { detachShellIntoWindow } from '@/lib/panel-canvas-detach'
 import { STATUS_LABELS, statusColor } from '../settings/SshTargetCard'
 import type { SshConnectionStatus } from '../../../../shared/ssh-types'
 import type { RemoteWorkspaceSyncStatus } from '../../store/slices/ssh'
@@ -62,6 +63,7 @@ export function SshTargetStatusRow({
   const [busy, setBusy] = useState(false)
   const mountedRef = useMountedRef()
   const recordFeatureInteraction = useAppStore((s) => s.recordFeatureInteraction)
+  const openShellInCanvas = useAppStore((s) => s.openShellInCanvas)
   const visibleSyncStatusLabel = syncStatusLabel(syncStatus)
 
   const handleConnect = useCallback(async () => {
@@ -130,6 +132,45 @@ export function SshTargetStatusRow({
           ) : null}
         </div>
       </div>
+      {/* Why: an ad-hoc shell on the host, without creating a workspace —
+          in the canvas (splittable alongside panels) or as its own window
+          for a second monitor. */}
+      <button
+        type="button"
+        title={translate(
+          'auto.components.status.bar.SshTargetStatusRow.openShell',
+          'Open shell in canvas'
+        )}
+        aria-label={translate(
+          'auto.components.status.bar.SshTargetStatusRow.openShell',
+          'Open shell in canvas'
+        )}
+        onClick={(event) => {
+          event.stopPropagation()
+          openShellInCanvas(targetId, label)
+        }}
+        className="shrink-0 rounded p-1 text-muted-foreground hover:bg-accent/70 hover:text-foreground"
+      >
+        <SquareTerminal className="size-3" strokeWidth={1.75} />
+      </button>
+      <button
+        type="button"
+        title={translate(
+          'auto.components.status.bar.SshTargetStatusRow.detachShell',
+          'Open shell in new window'
+        )}
+        aria-label={translate(
+          'auto.components.status.bar.SshTargetStatusRow.detachShell',
+          'Open shell in new window'
+        )}
+        onClick={(event) => {
+          event.stopPropagation()
+          detachShellIntoWindow(targetId, label)
+        }}
+        className="shrink-0 rounded p-1 text-muted-foreground hover:bg-accent/70 hover:text-foreground"
+      >
+        <PictureInPicture2 className="size-3" strokeWidth={1.75} />
+      </button>
       {busy ? (
         <Loader2 className="size-3 shrink-0 animate-spin text-muted-foreground" />
       ) : isReconnectable(status) ? (

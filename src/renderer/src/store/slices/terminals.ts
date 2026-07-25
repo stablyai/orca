@@ -20,6 +20,10 @@ import {
   DEFAULT_REPO_BADGE_COLOR,
   FLOATING_TERMINAL_WORKTREE_ID
 } from '../../../../shared/constants'
+import {
+  PINNED_TERMINAL_PANELS_WORKTREE_ID,
+  pinnedTerminalPanelWorktreeId
+} from '../../../../shared/pinned-terminal-panels'
 import { parseExecutionHostId, type ExecutionHostId } from '../../../../shared/execution-host'
 import {
   folderWorkspaceKey,
@@ -3081,6 +3085,10 @@ export const createTerminalSlice: StateCreator<AppState, [], [], TerminalSlice> 
       const knownRepoIds = new Set(runtimeSessionPlaceholders.repos.map((r) => r.id))
       // Why: the Floating Workspace isn't a repo worktree, but its tabs use the normal session pipeline so daemon PTYs survive app restart.
       validWorktreeIds.add(FLOATING_TERMINAL_WORKTREE_ID)
+      validWorktreeIds.add(PINNED_TERMINAL_PANELS_WORKTREE_ID)
+      for (const panel of s.settings?.pinnedTerminalPanels ?? []) {
+        validWorktreeIds.add(pinnedTerminalPanelWorktreeId(panel.id))
+      }
       for (const workspace of s.folderWorkspaces) {
         validWorktreeIds.add(folderWorkspaceKey(workspace.id))
       }

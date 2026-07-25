@@ -4,6 +4,8 @@ import { TooltipProvider } from '@/components/ui/tooltip'
 import { useSidebarResize } from '@/hooks/useSidebarResize'
 import SidebarHeader from './SidebarHeader'
 import SidebarNav from './SidebarNav'
+import SidebarSecondaryNav from './SidebarSecondaryNav'
+import SidebarPanelsNav from './SidebarPanelsNav'
 import SetupScriptPromptCard from './SetupScriptPromptCard'
 import WorktreeList from './WorktreeList'
 import SidebarToolbar from './SidebarToolbar'
@@ -187,6 +189,14 @@ function Sidebar({
               onWorkspaceBoardDragPreviewCommit={solidifyWorkspaceBoardFromDrag}
               onWorkspaceBoardDragPreviewCancel={cancelWorkspaceBoardDragPreview}
             />
+
+            <SidebarSecondaryNav />
+
+            <SidebarPanelsNav />
+
+            {/* Why: WorktreeList sizes to content now, so this spacer absorbs
+                the leftover height and keeps the toolbar pinned to the bottom. */}
+            <div className="min-h-0 flex-1" />
 
             <SetupScriptPromptCard />
 

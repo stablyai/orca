@@ -3,6 +3,12 @@ import type { ExecutionHostId } from '../../../shared/execution-host'
 import type { GlobalSettings, Worktree } from '../../../shared/types'
 import { parseWorkspaceKey } from '../../../shared/workspace-scope'
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../shared/constants'
+import {
+  getPinnedTerminalPanelHostForWorktreeId,
+  isPinnedTerminalPanelWorktreeId,
+  isSentinelWorktreeId,
+  resolvePinnedTerminalPanelSshTargetIdFromLabels
+} from '../../../shared/pinned-terminal-panels'
 import { getRepoIdFromWorktreeId } from '@/store/slices/worktree-helpers'
 import {
   findIndexedRepoOwner as findRepoRecord,
@@ -48,6 +54,10 @@ export function getRuntimeEnvironmentIdForWorktree(
   worktreeId: string | null | undefined
 ): string | null {
   if (!worktreeId) {
+    return null
+  }
+  // Why: pinned panel / sentinel worktrees are not agent sessions — no runtime env.
+  if (isSentinelWorktreeId(worktreeId)) {
     return null
   }
   if (worktreeId === FLOATING_TERMINAL_WORKTREE_ID) {
@@ -100,6 +110,9 @@ export function getExplicitRuntimeEnvironmentIdForWorktree(
   if (!worktreeId) {
     return null
   }
+  if (isSentinelWorktreeId(worktreeId)) {
+    return null
+  }
   const workspaceScope = parseWorkspaceKey(worktreeId)
   if (workspaceScope?.type === 'folder') {
     return getExplicitRuntimeEnvironmentIdForFolderWorkspace(
@@ -148,7 +161,18 @@ export function getExecutionHostIdForWorktree(
   if (!worktreeId) {
     return 'local'
   }
-  if (worktreeId === FLOATING_TERMINAL_WORKTREE_ID) {
+  if (isPinnedTerminalPanelWorktreeId(worktreeId)) {
+    const host = getPinnedTerminalPanelHostForWorktreeId(
+      state.settings?.pinnedTerminalPanels,
+      worktreeId
+    )
+    if (host === null) {
+      return 'local'
+    }
+    const targetId = resolvePinnedTerminalPanelSshTargetIdFromLabels(state.sshTargetLabels, host)
+    return targetId !== null ? `ssh:${encodeURIComponent(targetId)}` : 'local'
+  }
+  if (isSentinelWorktreeId(worktreeId) || worktreeId === FLOATING_TERMINAL_WORKTREE_ID) {
     return 'local'
   }
   const workspaceScope = parseWorkspaceKey(worktreeId)

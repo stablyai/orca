@@ -1,0 +1,237 @@
+import type { PanelLayout, PanelLayoutNode } from './types'
+// Lifespan: saved layouts are L0 config + L1 view only — see panel-lifespan.ts
+// (terminals/browsers respawn; processes are not restored).
+import { PANEL_LAYOUT_RESTORE_HINT } from './panel-lifespan'
+
+// Why: a layout references already-capped pinned panels; these bounds only
+// guard against a corrupted profile smuggling unbounded trees into every
+// settings broadcast.
+export const MAX_PANEL_LAYOUTS = 16
+export const MAX_PANEL_LAYOUT_LEAVES = 12
+const MAX_PANEL_LAYOUT_DEPTH = 5
+const MAX_LAYOUT_TITLE_LENGTH = 60
+
+/** Re-export for UI copy next to Save / Open layout. */
+export { PANEL_LAYOUT_RESTORE_HINT }
+
+function normalizeLayoutNode(
+  value: unknown,
+  depth: number,
+  budget: { leaves: number }
+): PanelLayoutNode | null {
+  if (typeof value !== 'object' || value === null) {
+    return null
+  }
+  const node = value as Record<string, unknown>
+  if (node.kind === 'terminal' || node.kind === 'web') {
+    if (typeof node.panelId !== 'string' || node.panelId.length === 0) {
+      return null
+    }
+    if (budget.leaves <= 0) {
+      return null
+    }
+    budget.leaves -= 1
+    return { kind: node.kind, panelId: node.panelId }
+  }
+  if (node.kind === 'shell') {
+    // Why: host is a target id/label resolved at spawn time (null = local);
+    // an empty string would silently mean "local", so reject it outright.
+    if (node.host !== null && (typeof node.host !== 'string' || node.host.length === 0)) {
+      return null
+    }
+    if (budget.leaves <= 0) {
+      return null
+    }
+    budget.leaves -= 1
+    const label =
+      typeof node.label === 'string' && node.label.trim().length > 0
+        ? node.label.trim().slice(0, MAX_LAYOUT_TITLE_LENGTH)
+        : undefined
+    return { kind: 'shell', host: node.host, ...(label ? { label } : {}) }
+  }
+  if (node.kind === 'browser') {
+    if (budget.leaves <= 0) {
+      return null
+    }
+    let url: string | undefined
+    if (node.url !== undefined) {
+      if (typeof node.url !== 'string') {
+        return null
+      }
+      const trimmed = node.url.trim()
+      if (trimmed.length === 0) {
+        url = undefined
+      } else {
+        try {
+          const parsed = new URL(trimmed)
+          // Why: only web pages — match pinned web panel allowlist.
+          if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') {
+            // about:blank is the blank-browser default and is safe in a guest.
+            if (parsed.protocol === 'about:' && parsed.pathname === 'blank') {
+              url = 'about:blank'
+            } else {
+              return null
+            }
+          } else {
+            url = parsed.toString()
+          }
+        } catch {
+          return null
+        }
+      }
+    }
+    budget.leaves -= 1
+    const label =
+      typeof node.label === 'string' && node.label.trim().length > 0
+        ? node.label.trim().slice(0, MAX_LAYOUT_TITLE_LENGTH)
+        : undefined
+    return {
+      kind: 'browser',
+      ...(url !== undefined ? { url } : {}),
+      ...(label ? { label } : {})
+    }
+  }
+  if (node.direction !== 'row' && node.direction !== 'column') {
+    return null
+  }
+  if (depth >= MAX_PANEL_LAYOUT_DEPTH || !Array.isArray(node.children)) {
+    return null
+  }
+  const children = node.children
+    .map((child) => normalizeLayoutNode(child, depth + 1, budget))
+    .filter((child): child is PanelLayoutNode => child !== null)
+  if (children.length === 0) {
+    return null
+  }
+  if (children.length === 1) {
+    // Why: single-child splits render identically to the child but survive
+    // forever in the profile; collapse them at the write boundary.
+    return children[0]
+  }
+  const sizes =
+    Array.isArray(node.sizes) &&
+    node.sizes.length === children.length &&
+    node.sizes.every((size) => typeof size === 'number' && Number.isFinite(size) && size > 0)
+      ? (node.sizes as number[])
+      : undefined
+  return { direction: node.direction, children, ...(sizes ? { sizes } : {}) }
+}
+
+/** Drops malformed entries instead of failing the whole settings write, so one
+ *  bad layout (hand-edited profile, older build) can't wedge the rest. */
+export function normalizePanelLayouts(value: unknown): PanelLayout[] {
+  if (!Array.isArray(value)) {
+    return []
+  }
+  const layouts: PanelLayout[] = []
+  const seenIds = new Set<string>()
+  for (const entry of value) {
+    if (layouts.length >= MAX_PANEL_LAYOUTS) {
+      break
+    }
+    if (typeof entry !== 'object' || entry === null) {
+      continue
+    }
+    const candidate = entry as Record<string, unknown>
+    if (typeof candidate.id !== 'string' || candidate.id.length === 0) {
+      continue
+    }
+    if (seenIds.has(candidate.id)) {
+      continue
+    }
+    if (typeof candidate.title !== 'string') {
+      continue
+    }
+    const title = candidate.title.trim().slice(0, MAX_LAYOUT_TITLE_LENGTH)
+    if (title.length === 0) {
+      continue
+    }
+    const root = normalizeLayoutNode(candidate.root, 0, { leaves: MAX_PANEL_LAYOUT_LEAVES })
+    if (root === null) {
+      continue
+    }
+    seenIds.add(candidate.id)
+    layouts.push({ id: candidate.id, title, root })
+  }
+  return layouts
+}
+
+/** Drop panel leaves whose panel no longer exists, collapsing the tree around
+ *  them. Shell and browser leaves are self-contained and always survive.
+ *  Returns null when the whole node disappears. */
+function prunePanelLayoutNode(
+  node: PanelLayoutNode,
+  surviving: { terminalIds: ReadonlySet<string>; webIds: ReadonlySet<string> }
+): PanelLayoutNode | null {
+  if ('kind' in node) {
+    if (node.kind === 'terminal') {
+      return surviving.terminalIds.has(node.panelId) ? node : null
+    }
+    if (node.kind === 'web') {
+      return surviving.webIds.has(node.panelId) ? node : null
+    }
+    return node
+  }
+  const children = node.children
+    .map((child) => prunePanelLayoutNode(child, surviving))
+    .filter((child): child is PanelLayoutNode => child !== null)
+  if (children.length === 0) {
+    return null
+  }
+  if (children.length === 1) {
+    // Why: a split with one surviving child renders identically to the child;
+    // collapse it so deleting a panel can't leave a phantom divider behind.
+    return children[0]
+  }
+  if (children.length === node.children.length) {
+    return node
+  }
+  // Sizes are positional — a stale array would mis-weight the survivors.
+  return { direction: node.direction, children }
+}
+
+/**
+ * Remove references to deleted pinned panels from saved layouts. Without this a
+ * layout keeps pointing at a panel id that no longer resolves and the canvas
+ * renders a dead tile. Layouts left with nothing to show are dropped entirely.
+ */
+export function prunePanelLayoutsForPanels(
+  layouts: readonly PanelLayout[] | undefined,
+  surviving: {
+    terminalIds: ReadonlySet<string>
+    webIds: ReadonlySet<string>
+  }
+): PanelLayout[] {
+  if (!layouts || layouts.length === 0) {
+    return []
+  }
+  const next: PanelLayout[] = []
+  for (const layout of layouts) {
+    const root = prunePanelLayoutNode(layout.root, surviving)
+    if (root === null) {
+      continue
+    }
+    next.push(root === layout.root ? layout : { ...layout, root })
+  }
+  return next
+}
+
+/** Convenience wrapper: build the surviving-id sets from the panel lists that
+ *  are about to be written, so callers can't get the two out of sync. */
+export function prunePanelLayoutsForSurvivingPanels(
+  layouts: readonly PanelLayout[] | undefined,
+  terminalPanels: readonly { id: string }[],
+  webPanels: readonly { id: string }[]
+): PanelLayout[] {
+  return prunePanelLayoutsForPanels(layouts, {
+    terminalIds: new Set(terminalPanels.map((p) => p.id)),
+    webIds: new Set(webPanels.map((p) => p.id))
+  })
+}
+
+export function countPanelLayoutLeaves(node: PanelLayoutNode): number {
+  if ('kind' in node) {
+    return 1
+  }
+  return node.children.reduce((total, child) => total + countPanelLayoutLeaves(child), 0)
+}

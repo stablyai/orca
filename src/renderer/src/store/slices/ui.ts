@@ -29,8 +29,20 @@ import type {
   WorkspaceHostOrder,
   WorkspaceHostScope,
   VisibleWorkspaceHostIds,
-  TopLevelView
+  TopLevelView,
+  PanelLayout
 } from '../../../../shared/types'
+import {
+  appendCanvasLeaf,
+  canvasLeafFor,
+  canvasLeafFromSplitChoice,
+  canvasNodeFromLayout,
+  canvasShellLeafFor,
+  countCanvasLeaves,
+  type PanelCanvasNode
+} from '@/lib/panel-canvas'
+import type { PanelSplitChoice } from '@/lib/panel-split-candidates'
+import { MAX_PANEL_LAYOUT_LEAVES } from '../../../../shared/panel-layouts'
 import {
   applyManualRepoOrder,
   normalizeManualRepoOrder
@@ -507,6 +519,11 @@ function sanitizeHydratedActiveView(
   if (value === 'activity' && !experimentalActivityEnabled) {
     return 'terminal'
   }
+  // Why: the active panel id / canvas tree is not persisted, so a restored
+  // panel view would render an empty page; land on the terminal instead.
+  if (value === 'web-panel' || value === 'terminal-panel' || value === 'panel-canvas') {
+    return 'terminal'
+  }
   return value
 }
 
@@ -603,62 +620,52 @@ export type UISlice = {
   acknowledgeAgents: (paneKeys: string[]) => void
   unacknowledgeAgents: (paneKeys: string[]) => void
   activeView: TopLevelView
-  previousViewBeforeTasks:
-    | 'terminal'
-    | 'settings'
-    | 'activity'
-    | 'automations'
-    | 'space'
-    | 'skills'
-    | 'mobile'
-  previousViewBeforeSettings:
-    | 'terminal'
-    | 'tasks'
-    | 'activity'
-    | 'automations'
-    | 'space'
-    | 'skills'
-    | 'mobile'
-  previousViewBeforeActivity:
-    | 'terminal'
-    | 'settings'
-    | 'tasks'
-    | 'automations'
-    | 'space'
-    | 'skills'
-    | 'mobile'
-  previousViewBeforeAutomations:
-    | 'terminal'
-    | 'settings'
-    | 'tasks'
-    | 'activity'
-    | 'space'
-    | 'skills'
-    | 'mobile'
-  previousViewBeforeSpace:
-    | 'terminal'
-    | 'settings'
-    | 'tasks'
-    | 'activity'
-    | 'automations'
-    | 'skills'
-    | 'mobile'
-  previousViewBeforeSkills:
-    | 'terminal'
-    | 'settings'
-    | 'tasks'
-    | 'activity'
-    | 'automations'
-    | 'space'
-    | 'mobile'
-  previousViewBeforeMobile:
-    | 'terminal'
-    | 'settings'
-    | 'tasks'
-    | 'activity'
-    | 'automations'
-    | 'space'
-    | 'skills'
+  previousViewBeforeTasks: Exclude<TopLevelView, 'tasks'>
+  previousViewBeforeSettings: Exclude<TopLevelView, 'settings'>
+  previousViewBeforeActivity: Exclude<TopLevelView, 'activity'>
+  previousViewBeforeAutomations: Exclude<TopLevelView, 'automations'>
+  previousViewBeforeSpace: Exclude<TopLevelView, 'space'>
+  previousViewBeforeSkills: Exclude<TopLevelView, 'skills'>
+  previousViewBeforeMobile: Exclude<TopLevelView, 'mobile'>
+  previousViewBeforeWebPanel: Exclude<TopLevelView, 'web-panel'>
+  /** Which pinned panel the 'web-panel' view is showing. */
+  activePinnedWebPanelId: string | null
+  openPinnedWebPanelPage: (panelId: string) => void
+  closePinnedWebPanelPage: () => void
+  previousViewBeforeTerminalPanel: Exclude<TopLevelView, 'terminal-panel'>
+  /** Which pinned terminal panel the 'terminal-panel' view is showing. */
+  activePinnedTerminalPanelId: string | null
+  openPinnedTerminalPanelPage: (panelId: string) => void
+  closePinnedTerminalPanelPage: () => void
+  previousViewBeforePanelCanvas: Exclude<TopLevelView, 'panel-canvas'>
+  /** Session-transient split-window arrangement shown by the 'panel-canvas'
+   *  view. Leaf `id`s identify tiles (each owns its own PTY/webview); saving
+   *  strips them back down to a persisted PanelLayout tree. */
+  panelCanvasRoot: PanelCanvasNode | null
+  /** Saved layout the canvas was opened from (targets "Save"); null for a
+   *  scratch canvas built from split actions. */
+  activePanelLayoutId: string | null
+  /** Opens the canvas seeded with one tile, or splits the current canvas by
+   *  wrapping its root when it is already open. */
+  openPanelInCanvas: (
+    leaf: { kind: 'terminal' | 'web'; panelId: string },
+    direction: 'row' | 'column'
+  ) => void
+  /** Full-page / sidebar split: seed source panel if canvas empty, then add
+   *  the picker choice (blank or other panel). Never silent-clones alone. */
+  openCanvasSplitFromSource: (
+    source: { kind: 'terminal' | 'web'; panelId: string },
+    direction: 'row' | 'column',
+    choice: PanelSplitChoice
+  ) => void
+  openPanelLayoutInCanvas: (layout: PanelLayout) => void
+  /** Opens an ad-hoc login shell tile on `host` (null = local) in the canvas. */
+  openShellInCanvas: (host: string | null, label: string | null) => void
+  /** A detached popout window handed its canvas back — show it here. */
+  adoptDetachedPanelCanvas: (root: PanelCanvasNode, layoutId: string | null) => void
+  setPanelCanvasRoot: (root: PanelCanvasNode | null) => void
+  setActivePanelLayoutId: (layoutId: string | null) => void
+  closePanelCanvas: () => void
   setActiveView: (view: UISlice['activeView']) => void
   taskPageData: {
     preselectedRepoId?: string
@@ -1218,6 +1225,127 @@ export const createUISlice: StateCreator<AppState, [], [], UISlice> = (set, get)
   previousViewBeforeSpace: 'terminal',
   previousViewBeforeSkills: 'terminal',
   previousViewBeforeMobile: 'terminal',
+  previousViewBeforeWebPanel: 'terminal',
+  activePinnedWebPanelId: null,
+  openPinnedWebPanelPage: (panelId) =>
+    set((state) => ({
+      activeView: 'web-panel',
+      activePinnedWebPanelId: panelId,
+      previousViewBeforeWebPanel:
+        state.activeView === 'web-panel' ? state.previousViewBeforeWebPanel : state.activeView
+    })),
+  closePinnedWebPanelPage: () =>
+    set((state) => ({
+      activeView: state.previousViewBeforeWebPanel,
+      activePinnedWebPanelId: null
+    })),
+  previousViewBeforeTerminalPanel: 'terminal',
+  activePinnedTerminalPanelId: null,
+  openPinnedTerminalPanelPage: (panelId) =>
+    set((state) => ({
+      activeView: 'terminal-panel',
+      activePinnedTerminalPanelId: panelId,
+      previousViewBeforeTerminalPanel:
+        state.activeView === 'terminal-panel'
+          ? state.previousViewBeforeTerminalPanel
+          : state.activeView
+    })),
+  closePinnedTerminalPanelPage: () =>
+    set((state) => ({
+      activeView: state.previousViewBeforeTerminalPanel,
+      activePinnedTerminalPanelId: null
+    })),
+  previousViewBeforePanelCanvas: 'terminal',
+  panelCanvasRoot: null,
+  activePanelLayoutId: null,
+  openPanelInCanvas: (leaf, direction) =>
+    set((state) => ({
+      activeView: 'panel-canvas',
+      panelCanvasRoot:
+        state.panelCanvasRoot === null
+          ? canvasLeafFor(leaf.kind, leaf.panelId)
+          : // Why: the canvas honors the persisted-layout leaf cap live, so a
+            // full canvas can still be revealed but not grown.
+            countCanvasLeaves(state.panelCanvasRoot) >= MAX_PANEL_LAYOUT_LEAVES
+            ? state.panelCanvasRoot
+            : appendCanvasLeaf(
+                state.panelCanvasRoot,
+                canvasLeafFor(leaf.kind, leaf.panelId),
+                direction
+              ),
+      previousViewBeforePanelCanvas:
+        state.activeView === 'panel-canvas' ? state.previousViewBeforePanelCanvas : state.activeView
+    })),
+  openCanvasSplitFromSource: (source, direction, choice) =>
+    set((state) => {
+      const sourceLeaf = canvasLeafFor(source.kind, source.panelId)
+      const newLeaf = canvasLeafFromSplitChoice(choice, sourceLeaf)
+      let root = state.panelCanvasRoot
+      if (root === null) {
+        // Why: first split from a full-page panel should keep the source
+        // visible and place the chosen tile beside it.
+        root = {
+          id: crypto.randomUUID(),
+          direction,
+          children: [sourceLeaf, newLeaf]
+        }
+      } else if (countCanvasLeaves(root) < MAX_PANEL_LAYOUT_LEAVES) {
+        root = appendCanvasLeaf(root, newLeaf, direction)
+      }
+      // Cap hit: keep root unchanged (still reveal canvas).
+      return {
+        activeView: 'panel-canvas' as const,
+        panelCanvasRoot: root,
+        previousViewBeforePanelCanvas:
+          state.activeView === 'panel-canvas'
+            ? state.previousViewBeforePanelCanvas
+            : state.activeView
+      }
+    }),
+  openShellInCanvas: (host: string | null, label: string | null) =>
+    set((state) => ({
+      activeView: 'panel-canvas',
+      panelCanvasRoot:
+        state.panelCanvasRoot === null
+          ? canvasShellLeafFor(host, label ?? undefined)
+          : countCanvasLeaves(state.panelCanvasRoot) >= MAX_PANEL_LAYOUT_LEAVES
+            ? state.panelCanvasRoot
+            : appendCanvasLeaf(
+                state.panelCanvasRoot,
+                canvasShellLeafFor(host, label ?? undefined),
+                'row'
+              ),
+      previousViewBeforePanelCanvas:
+        state.activeView === 'panel-canvas' ? state.previousViewBeforePanelCanvas : state.activeView
+    })),
+  adoptDetachedPanelCanvas: (root: PanelCanvasNode, layoutId: string | null) =>
+    set((state) => ({
+      activeView: 'panel-canvas',
+      panelCanvasRoot: root,
+      activePanelLayoutId: layoutId,
+      previousViewBeforePanelCanvas:
+        state.activeView === 'panel-canvas' ? state.previousViewBeforePanelCanvas : state.activeView
+    })),
+  openPanelLayoutInCanvas: (layout: PanelLayout) =>
+    set((state) => ({
+      activeView: 'panel-canvas',
+      panelCanvasRoot: canvasNodeFromLayout(layout.root),
+      activePanelLayoutId: layout.id,
+      previousViewBeforePanelCanvas:
+        state.activeView === 'panel-canvas' ? state.previousViewBeforePanelCanvas : state.activeView
+    })),
+  setPanelCanvasRoot: (root: PanelCanvasNode | null) =>
+    root === null ? get().closePanelCanvas() : set({ panelCanvasRoot: root }),
+  setActivePanelLayoutId: (layoutId) => set({ activePanelLayoutId: layoutId }),
+  closePanelCanvas: () =>
+    set((state) => ({
+      activeView:
+        state.activeView === 'panel-canvas'
+          ? state.previousViewBeforePanelCanvas
+          : state.activeView,
+      panelCanvasRoot: null,
+      activePanelLayoutId: null
+    })),
   setActiveView: (view) => set({ activeView: view }),
   taskPageData: {},
   taskResumeState: undefined,

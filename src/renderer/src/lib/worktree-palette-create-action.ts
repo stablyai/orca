@@ -38,6 +38,10 @@ type WorktreePaletteSelectableEntryType =
   | 'settings'
   | 'quick-action'
   | 'browser-page'
+  | 'simulator-tab'
+  | 'workspace-tab'
+  | 'project-target'
+  | 'pinned-panel'
 
 export function isSelectableWorktreePaletteEntry(
   entry: WorktreePaletteSelectionCandidateEntry
@@ -49,7 +53,11 @@ export function isSelectableWorktreePaletteEntry(
     entry.type === 'create-worktree' ||
     entry.type === 'settings' ||
     entry.type === 'quick-action' ||
-    entry.type === 'browser-page'
+    entry.type === 'browser-page' ||
+    entry.type === 'simulator-tab' ||
+    entry.type === 'workspace-tab' ||
+    entry.type === 'project-target' ||
+    entry.type === 'pinned-panel'
   )
 }
 

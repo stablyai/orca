@@ -3,7 +3,6 @@
 import { act, type ReactNode } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { TooltipProvider } from '@/components/ui/tooltip'
 import { getDefaultSettings } from '../../../../shared/constants'
 import type { GlobalSettings, Repo } from '../../../../shared/types'
 import { i18n } from '../../i18n/i18n'
@@ -89,6 +88,7 @@ import {
   shouldShowSetupGuideEntry
 } from './SidebarNav'
 import SidebarNav from './SidebarNav'
+import SidebarSecondaryNav from './SidebarSecondaryNav'
 
 function gitRepo(): Repo {
   return {
@@ -152,10 +152,13 @@ async function renderSidebarNav(): Promise<HTMLDivElement> {
   const root = createRoot(container)
   mountedRoots.push(root)
   await act(async () => {
+    // Why: Automations/Agents moved below Projects into SidebarSecondaryNav;
+    // rendering the pair keeps these nav-entry assertions covering both rails.
     root.render(
-      <TooltipProvider>
+      <>
         <SidebarNav />
-      </TooltipProvider>
+        <SidebarSecondaryNav />
+      </>
     )
   })
   return container

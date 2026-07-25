@@ -2,6 +2,7 @@ import type { ExecutionHostId } from '../../../shared/execution-host'
 import type {
   FolderWorkspace,
   GlobalSettings,
+  PinnedTerminalPanel,
   ProjectGroup,
   Repo,
   Worktree
@@ -9,7 +10,13 @@ import type {
 
 export type WorktreeRuntimeOwnerState = {
   repos?: readonly Pick<Repo, 'id' | 'connectionId' | 'executionHostId'>[]
-  settings?: Pick<GlobalSettings, 'activeRuntimeEnvironmentId'> | null
+  settings?:
+    | (Pick<GlobalSettings, 'activeRuntimeEnvironmentId'> & {
+        pinnedTerminalPanels?: readonly PinnedTerminalPanel[]
+      })
+    | null
+  /** Hydrated SSH target id->label map; panel host resolution. */
+  sshTargetLabels?: ReadonlyMap<string, string>
   worktreesByRepo?: Record<
     string,
     readonly Pick<Worktree, 'id' | 'repoId' | 'hostId' | 'runtimeOwnerEnvironmentId'>[]
