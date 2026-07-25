@@ -1633,6 +1633,85 @@ describe('DaemonPtyAdapter (IPtyProvider)', () => {
       })
     })
 
+    it('uses one cold-restore fixture for both ordinary creation and hibernation resume', async () => {
+      const sessionId = 'cold-restore-ordinary-and-hibernation'
+      const sessionDir = join(historyDir, getHistorySessionDirName(sessionId))
+      mkdirSync(sessionDir, { recursive: true })
+      writeFileSync(
+        join(sessionDir, 'meta.json'),
+        JSON.stringify({
+          cwd: '/projects/recovered-shell',
+          cols: 132,
+          rows: 44,
+          startedAt: '2026-04-15T10:00:00Z',
+          endedAt: null,
+          exitCode: null
+        })
+      )
+      writeFileSync(join(sessionDir, 'scrollback.bin'), 'recovered fixture output\r\n')
+      historyAdapter = new DaemonPtyAdapter({ socketPath, tokenPath, historyPath: historyDir })
+      const client = (historyAdapter as unknown as { client: DaemonClient }).client
+      const request = vi.spyOn(client, 'request')
+
+      const ordinary = await historyAdapter.spawn({ cols: 80, rows: 24, sessionId })
+      const ordinaryCreates = request.mock.calls.filter(([type]) => type === 'createOrAttach')
+
+      expect(ordinaryCreates).toHaveLength(1)
+      expect(ordinaryCreates[0]?.[1]).toMatchObject({
+        sessionId,
+        cwd: '/projects/recovered-shell',
+        cols: 132,
+        rows: 44,
+        historySeed: expect.stringContaining('recovered fixture output')
+      })
+      expect(ordinaryCreates[0]?.[1]).not.toHaveProperty('attachOnly')
+      expect(ordinary).toMatchObject({
+        coldRestore: {
+          cwd: '/projects/recovered-shell',
+          cols: 132,
+          rows: 44
+        },
+        providerSequence: { value: 0, generation: 'reset' }
+      })
+      expect(lastSpawnOpts).toMatchObject({
+        sessionId,
+        cwd: '/projects/recovered-shell',
+        cols: 132,
+        rows: 44
+      })
+
+      await historyAdapter.shutdown(sessionId, { immediate: true, keepHistory: true })
+      request.mockClear()
+      lastSpawnOpts = null
+
+      const hibernationResume = await historyAdapter.spawn({ cols: 80, rows: 24, sessionId })
+      const hibernationCreates = request.mock.calls.filter(([type]) => type === 'createOrAttach')
+
+      expect(hibernationCreates).toHaveLength(1)
+      expect(hibernationCreates[0]?.[1]).toMatchObject({
+        sessionId,
+        cwd: '/projects/recovered-shell',
+        cols: 132,
+        rows: 44,
+        historySeed: expect.stringContaining('recovered fixture output')
+      })
+      // Why: hibernation resumes the ordinary cold-restore path; only lost-worker recovery may make an attach-only probe.
+      expect(hibernationCreates[0]?.[1]).not.toHaveProperty('attachOnly')
+      expect(hibernationResume).toMatchObject({
+        coldRestore: {
+          cwd: '/projects/recovered-shell',
+          cols: 132,
+          rows: 44
+        }
+      })
+      expect(lastSpawnOpts).toMatchObject({
+        sessionId,
+        cwd: '/projects/recovered-shell',
+        cols: 132,
+        rows: 44
+      })
+    })
+
     it('returns the main archive decision before creating a lost worker cold restore', async () => {
       const sessionId = 'lost-worker-cold-restore'
       const sessionDir = join(historyDir, getHistorySessionDirName(sessionId))

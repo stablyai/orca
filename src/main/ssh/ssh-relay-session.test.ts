@@ -6,9 +6,15 @@ import {
   AGENT_HOOK_INSTALL_PLUGINS_METHOD
 } from '../../shared/agent-hook-relay'
 import { SSH_RELAY_CONFIGURE_GRACE_TIME_METHOD } from '../../shared/ssh-types'
+import { getDefaultWorkspaceSession } from '../../shared/constants'
+import type { RelayPtyLostEntry } from '../../shared/pty-revive-protocol'
+import type { WorkspaceSessionState } from '../../shared/types'
 import { createMockDeps, mockDeploySuccess } from './ssh-relay-session-test-fixtures'
 
-const { muxRequestMock } = vi.hoisted(() => ({ muxRequestMock: vi.fn() }))
+const { muxRequestMock, archiveLostTerminalWorkerMock } = vi.hoisted(() => ({
+  muxRequestMock: vi.fn(),
+  archiveLostTerminalWorkerMock: vi.fn()
+}))
 
 vi.mock('./ssh-relay-deploy', () => ({
   deployAndLaunchRelay: vi.fn()
@@ -16,6 +22,10 @@ vi.mock('./ssh-relay-deploy', () => ({
 
 vi.mock('./ssh-relay-deploy-helpers', () => ({
   execCommand: vi.fn().mockResolvedValue('')
+}))
+
+vi.mock('../terminal-lost-worker-archive', () => ({
+  archiveLostTerminalWorker: archiveLostTerminalWorkerMock
 }))
 
 vi.mock('./ssh-channel-multiplexer', () => {
@@ -97,6 +107,7 @@ const { getRemoteHostPlatform } = await import('./ssh-remote-platform')
 const {
   registerSshPtyProvider,
   unregisterSshPtyProvider,
+  getSshPtyProvider,
   getPtyIdsForConnection,
   clearProviderPtyState,
   deletePtyOwnership,
@@ -109,12 +120,109 @@ const { registerSshGitProvider, unregisterSshGitProvider } =
 const { routeExternalPtyData, routeExternalPtyReplay, routeExternalPtyExit } =
   await import('../ipc/pty-renderer-delivery-router')
 
+const REVIVE_WORKTREE_ID = 'repo-1::/worktree'
+const REVIVE_TAB_ID = 'tab-1'
+const REVIVE_LEAF_ID = '11111111-1111-4111-8111-111111111111'
+const REVIVE_PANE_KEY = `${REVIVE_TAB_ID}:${REVIVE_LEAF_ID}`
+const RELAY_LOST_WORKER: RelayPtyLostEntry = {
+  id: 'ssh:target-1@@pty-lost',
+  kind: 'recognized-worker',
+  reason: 'process-not-running',
+  pid: 42,
+  cols: 80,
+  rows: 24,
+  cwd: '/repo',
+  worktreeId: REVIVE_WORKTREE_ID,
+  tabId: REVIVE_TAB_ID,
+  paneKey: REVIVE_PANE_KEY
+}
+
+function workspaceSessionForRelayLostWorker(workerHint = false): WorkspaceSessionState {
+  return {
+    ...getDefaultWorkspaceSession(),
+    tabsByWorktree: {
+      [REVIVE_WORKTREE_ID]: [
+        {
+          id: REVIVE_TAB_ID,
+          worktreeId: REVIVE_WORKTREE_ID,
+          title: 'Worker',
+          customTitle: null,
+          color: null,
+          sortOrder: 0,
+          createdAt: 10,
+          ptyId: RELAY_LOST_WORKER.id
+        }
+      ]
+    },
+    terminalLayoutsByTabId: {
+      [REVIVE_TAB_ID]: {
+        root: { type: 'leaf', leafId: REVIVE_LEAF_ID },
+        activeLeafId: REVIVE_LEAF_ID,
+        expandedLeafId: null
+      }
+    },
+    terminalPtyIncarnationsByPaneKey: { [REVIVE_PANE_KEY]: 'incarnation-1' },
+    terminalArchiveHintsByPaneKey: {
+      [REVIVE_PANE_KEY]: workerHint ? { launchAgent: 'codex', startedAt: 10 } : { cwd: '/repo' }
+    }
+  }
+}
+
+function configureStagedPtyRevive(args: {
+  serialize: ReturnType<typeof vi.fn>
+  revive: ReturnType<typeof vi.fn>
+  reattachPtyIds?: string[]
+}): { attachForReconnect: ReturnType<typeof vi.fn> } {
+  const attachForReconnect = vi.fn().mockResolvedValue({})
+  vi.mocked(getSshPtyProvider)
+    .mockReset()
+    .mockReturnValueOnce({
+      serialize: args.serialize,
+      dispose: vi.fn()
+    } as unknown as ReturnType<typeof getSshPtyProvider>)
+    .mockReturnValue({
+      revive: args.revive,
+      attachForReconnect,
+      dispose: vi.fn()
+    } as unknown as ReturnType<typeof getSshPtyProvider>)
+  vi.mocked(getPtyIdsForConnection).mockReturnValueOnce(['ssh:target-1@@pty-lost'])
+  vi.mocked(getPtyIdsForConnection).mockReturnValue(args.reattachPtyIds ?? [])
+  return { attachForReconnect }
+}
+
+function mockReconnectPtyProvider(attachForReconnect: ReturnType<typeof vi.fn>): void {
+  vi.mocked(getSshPtyProvider).mockReturnValue({
+    attachForReconnect,
+    dispose: vi.fn()
+  } as unknown as ReturnType<typeof getSshPtyProvider>)
+}
+
+async function establishRelaySession() {
+  const deps = createMockDeps()
+  const session = new SshRelaySession(
+    'target-1',
+    deps.getMainWindow,
+    deps.mockStore,
+    deps.mockPortForward
+  )
+  await session.establish(deps.mockConn)
+  return { ...deps, session }
+}
+
 describe('SshRelaySession', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     delete process.env.ORCA_FEATURE_REMOTE_AGENT_HOOKS
     muxRequestMock.mockReset()
     muxRequestMock.mockResolvedValue([])
+    archiveLostTerminalWorkerMock.mockReset()
+    vi.mocked(getSshPtyProvider)
+      .mockReset()
+      .mockReturnValue({
+        dispose: vi.fn(),
+        attach: vi.fn().mockResolvedValue(undefined),
+        attachForReconnect: vi.fn().mockResolvedValue({})
+      } as unknown as ReturnType<typeof getSshPtyProvider>)
     mockDeploySuccess()
     vi.mocked(getPtyIdsForConnection).mockReturnValue([])
   })
@@ -397,12 +505,8 @@ describe('SshRelaySession', () => {
     vi.clearAllMocks()
     mockDeploySuccess()
 
-    const { getSshPtyProvider } = await import('../ipc/pty')
     const mockAttach = vi.fn().mockResolvedValue(undefined)
-    vi.mocked(getSshPtyProvider).mockReturnValue({
-      attachForReconnect: mockAttach,
-      dispose: vi.fn()
-    } as unknown as ReturnType<typeof getSshPtyProvider>)
+    mockReconnectPtyProvider(mockAttach)
     vi.mocked(getPtyIdsForConnection).mockReturnValue(['pty-1', 'pty-2'])
 
     await session.reconnect(mockConn)
@@ -411,19 +515,115 @@ describe('SshRelaySession', () => {
     expect(mockAttach).toHaveBeenCalledWith('pty-2')
   })
 
+  it.each([
+    'typed recognized',
+    'typed unclassified worker hint',
+    'typed unclassified',
+    'legacy',
+    'malformed typed',
+    'serialize failure',
+    'archive failure'
+  ])('keeps staged PTY revive %s on its compatible recovery path', async (state) => {
+    const { mockConn, mockStore, session } = await establishRelaySession()
+    vi.clearAllMocks()
+    mockDeploySuccess()
+    const serialize = vi.fn().mockResolvedValue('staged-pty-state')
+    const revive = vi.fn()
+    const lost = state.startsWith('typed unclassified')
+      ? { ...RELAY_LOST_WORKER, kind: 'unclassified' as const }
+      : RELAY_LOST_WORKER
+    if (state === 'serialize failure') {
+      serialize.mockRejectedValue(new Error('old relay stopped before serialize reply'))
+    } else if (state === 'malformed typed') {
+      revive.mockRejectedValue(new Error('typed outcome validation failed'))
+    } else if (state === 'legacy') {
+      revive.mockResolvedValue({
+        mode: 'legacy',
+        diagnosticCode: 'pty-revive-outcome-unavailable',
+        outcome: { outcomeVersion: 1, revived: [], lost: [RELAY_LOST_WORKER], diagnostics: [] }
+      })
+    } else {
+      revive.mockResolvedValue({
+        mode: 'typed',
+        outcome: { outcomeVersion: 1, revived: [], lost: [lost], diagnostics: [] }
+      })
+    }
+    archiveLostTerminalWorkerMock.mockResolvedValue(
+      state === 'archive failure'
+        ? { kind: 'error', code: 'durability-failed' }
+        : {
+            kind: 'archived',
+            archive: {},
+            operationId: 'relay-worker-lost:tab-1',
+            ptyIdsToKill: [RELAY_LOST_WORKER.id]
+          }
+    )
+    mockStore.getWorkspaceSession = vi
+      .fn()
+      .mockReturnValue(
+        workspaceSessionForRelayLostWorker(state === 'typed unclassified worker hint')
+      )
+    const archived = state === 'typed recognized' || state === 'typed unclassified worker hint'
+    const fallbackPtyIds = archived ? [] : ['ssh:target-1@@pty-fallback']
+    const { attachForReconnect } = configureStagedPtyRevive({
+      serialize,
+      revive,
+      reattachPtyIds: fallbackPtyIds
+    })
+
+    await session.reconnect(mockConn)
+
+    expect(serialize).toHaveBeenCalledWith(['pty-lost'], { formatVersion: 2 })
+    expect(revive).toHaveBeenCalledTimes(state === 'serialize failure' ? 0 : 1)
+    expect(archiveLostTerminalWorkerMock).toHaveBeenCalledTimes(
+      archived || state === 'archive failure' ? 1 : 0
+    )
+    expect(mockStore.markSshRemotePtyLease).toHaveBeenCalledTimes(
+      archived ? 1 : fallbackPtyIds.length
+    )
+    expect(mockStore.markSshRemotePtyLease).toHaveBeenCalledWith(
+      'target-1',
+      archived ? 'pty-lost' : 'pty-fallback',
+      archived ? 'expired' : 'attached'
+    )
+    expect(routeExternalPtyExit).toHaveBeenCalledTimes(archived ? 1 : 0)
+    expect(session.getState()).toBe('ready')
+    if (state === 'typed unclassified') {
+      expect(mockStore.getWorkspaceSession).toHaveBeenCalledWith('ssh:target-1')
+    }
+    if (state === 'typed unclassified worker hint') {
+      expect(archiveLostTerminalWorkerMock).toHaveBeenCalledWith(
+        expect.objectContaining({
+          candidate: expect.objectContaining({
+            relayEvidence: expect.objectContaining({ kind: 'unclassified' })
+          })
+        })
+      )
+    }
+    if (fallbackPtyIds.length > 0) {
+      expect(attachForReconnect).toHaveBeenCalledWith('pty-fallback')
+    }
+    if (state === 'archive failure') {
+      expect(archiveLostTerminalWorkerMock).toHaveBeenCalledWith(
+        expect.objectContaining({
+          candidate: expect.objectContaining({ relayEvidence: RELAY_LOST_WORKER })
+        })
+      )
+      expect(mockStore.markSshRemotePtyLease).not.toHaveBeenCalledWith(
+        'target-1',
+        'pty-lost',
+        'expired'
+      )
+    }
+  })
+
   it('forwards reconnect replay after the attach attempt is still current', async () => {
-    const { mockConn, mockStore, mockPortForward, getMainWindow } = createMockDeps()
-    const session = new SshRelaySession('target-1', getMainWindow, mockStore, mockPortForward)
-    await session.establish(mockConn)
+    const { mockConn, session } = await establishRelaySession()
     vi.clearAllMocks()
     mockDeploySuccess()
 
-    const { getSshPtyProvider } = await import('../ipc/pty')
     const mockAttach = vi.fn().mockResolvedValue({ replay: 'restored-output' })
-    vi.mocked(getSshPtyProvider).mockReturnValue({
-      attachForReconnect: mockAttach,
-      dispose: vi.fn()
-    } as unknown as ReturnType<typeof getSshPtyProvider>)
+    mockReconnectPtyProvider(mockAttach)
     vi.mocked(getPtyIdsForConnection).mockReturnValue(['pty-1'])
 
     await session.reconnect(mockConn)
@@ -435,18 +635,12 @@ describe('SshRelaySession', () => {
   })
 
   it('drops identical reconnect replay payloads inside one reconnect burst', async () => {
-    const { mockConn, mockStore, mockPortForward, getMainWindow } = createMockDeps()
-    const session = new SshRelaySession('target-1', getMainWindow, mockStore, mockPortForward)
-    await session.establish(mockConn)
+    const { mockConn, session } = await establishRelaySession()
     vi.clearAllMocks()
     mockDeploySuccess()
 
-    const { getSshPtyProvider } = await import('../ipc/pty')
     const mockAttach = vi.fn().mockResolvedValue({ replay: 'same-output' })
-    vi.mocked(getSshPtyProvider).mockReturnValue({
-      attachForReconnect: mockAttach,
-      dispose: vi.fn()
-    } as unknown as ReturnType<typeof getSshPtyProvider>)
+    mockReconnectPtyProvider(mockAttach)
     vi.mocked(getPtyIdsForConnection).mockReturnValue(['pty-1'])
 
     await session.reconnect(mockConn)
@@ -458,12 +652,8 @@ describe('SshRelaySession', () => {
 
   it('establish re-attaches owned PTYs after explicit disconnect', async () => {
     const { mockConn, mockStore, mockPortForward, getMainWindow } = createMockDeps()
-    const { getSshPtyProvider } = await import('../ipc/pty')
     const mockAttach = vi.fn().mockResolvedValue(undefined)
-    vi.mocked(getSshPtyProvider).mockReturnValue({
-      attachForReconnect: mockAttach,
-      dispose: vi.fn()
-    } as unknown as ReturnType<typeof getSshPtyProvider>)
+    mockReconnectPtyProvider(mockAttach)
     vi.mocked(getPtyIdsForConnection).mockReturnValue(['ssh:target-1@@pty-1'])
 
     const session = new SshRelaySession('target-1', getMainWindow, mockStore, mockPortForward)
@@ -477,12 +667,8 @@ describe('SshRelaySession', () => {
 
   it('establish re-attaches durable leases after app restart', async () => {
     const { mockConn, mockStore, mockPortForward, getMainWindow } = createMockDeps()
-    const { getSshPtyProvider } = await import('../ipc/pty')
     const mockAttach = vi.fn().mockResolvedValue(undefined)
-    vi.mocked(getSshPtyProvider).mockReturnValue({
-      attachForReconnect: mockAttach,
-      dispose: vi.fn()
-    } as unknown as ReturnType<typeof getSshPtyProvider>)
+    mockReconnectPtyProvider(mockAttach)
     vi.mocked(getPtyIdsForConnection).mockReturnValue([])
     vi.mocked(mockStore.getSshRemotePtyLeases).mockReturnValue([
       { targetId: 'target-1', ptyId: 'pty-live', state: 'detached' },
@@ -501,12 +687,8 @@ describe('SshRelaySession', () => {
 
   it('forwards a lease tab identity to reattach so a reset relay cannot cross-wire it', async () => {
     const { mockConn, mockStore, mockPortForward, getMainWindow } = createMockDeps()
-    const { getSshPtyProvider } = await import('../ipc/pty')
     const mockAttach = vi.fn().mockResolvedValue(undefined)
-    vi.mocked(getSshPtyProvider).mockReturnValue({
-      attachForReconnect: mockAttach,
-      dispose: vi.fn()
-    } as unknown as ReturnType<typeof getSshPtyProvider>)
+    mockReconnectPtyProvider(mockAttach)
     vi.mocked(getPtyIdsForConnection).mockReturnValue([])
     vi.mocked(mockStore.getSshRemotePtyLeases).mockReturnValue([
       { targetId: 'target-1', ptyId: 'pty-1', state: 'detached', tabId: 'tab-a' }
@@ -520,12 +702,8 @@ describe('SshRelaySession', () => {
 
   it('forwards a lease pane identity when leaf identity is available', async () => {
     const { mockConn, mockStore, mockPortForward, getMainWindow } = createMockDeps()
-    const { getSshPtyProvider } = await import('../ipc/pty')
     const mockAttach = vi.fn().mockResolvedValue(undefined)
-    vi.mocked(getSshPtyProvider).mockReturnValue({
-      attachForReconnect: mockAttach,
-      dispose: vi.fn()
-    } as unknown as ReturnType<typeof getSshPtyProvider>)
+    mockReconnectPtyProvider(mockAttach)
     vi.mocked(getPtyIdsForConnection).mockReturnValue([])
     const leafId = '11111111-1111-4111-8111-111111111111'
     vi.mocked(mockStore.getSshRemotePtyLeases).mockReturnValue([
@@ -542,20 +720,14 @@ describe('SshRelaySession', () => {
   })
 
   it('does not expire a live reused relay id when attach rejects identity mismatch', async () => {
-    const { mockConn, mockStore, mockPortForward, getMainWindow } = createMockDeps()
-    const session = new SshRelaySession('target-1', getMainWindow, mockStore, mockPortForward)
-    await session.establish(mockConn)
+    const { mockConn, mockStore, session } = await establishRelaySession()
     vi.clearAllMocks()
     mockDeploySuccess()
 
-    const { getSshPtyProvider } = await import('../ipc/pty')
     const mockAttach = vi
       .fn()
       .mockRejectedValueOnce(new Error('PTY "pty-1" not found (identity mismatch)'))
-    vi.mocked(getSshPtyProvider).mockReturnValue({
-      attachForReconnect: mockAttach,
-      dispose: vi.fn()
-    } as unknown as ReturnType<typeof getSshPtyProvider>)
+    mockReconnectPtyProvider(mockAttach)
     vi.mocked(getPtyIdsForConnection).mockReturnValue([])
     const staleLeafId = '11111111-1111-4111-8111-111111111111'
     vi.mocked(mockStore.getSshRemotePtyLeases).mockReturnValue([
@@ -577,25 +749,18 @@ describe('SshRelaySession', () => {
     expect(clearProviderPtyState).not.toHaveBeenCalledWith('ssh:target-1@@pty-1')
     expect(deletePtyOwnership).not.toHaveBeenCalledWith('ssh:target-1@@pty-1')
     expect(mockStore.markSshRemotePtyLease).not.toHaveBeenCalledWith('target-1', 'pty-1', 'expired')
-    expect(routeExternalPtyExit).not.toHaveBeenCalledWith({
-      id: 'ssh:target-1@@pty-1',
-      code: -1
-    })
+    expect(routeExternalPtyExit).not.toHaveBeenCalledWith({ id: 'ssh:target-1@@pty-1', code: -1 })
   })
 
   it('rejects establish if detach wins while reattach is in flight', async () => {
     const { mockConn, mockStore, mockPortForward, getMainWindow } = createMockDeps()
-    const { getSshPtyProvider } = await import('../ipc/pty')
     let resolveAttach!: () => void
     const mockAttach = vi.fn().mockReturnValue(
       new Promise<void>((resolve) => {
         resolveAttach = resolve
       })
     )
-    vi.mocked(getSshPtyProvider).mockReturnValue({
-      attachForReconnect: mockAttach,
-      dispose: vi.fn()
-    } as unknown as ReturnType<typeof getSshPtyProvider>)
+    mockReconnectPtyProvider(mockAttach)
     vi.mocked(getPtyIdsForConnection).mockReturnValue(['pty-1'])
 
     const session = new SshRelaySession('target-1', getMainWindow, mockStore, mockPortForward)
@@ -614,23 +779,17 @@ describe('SshRelaySession', () => {
   })
 
   it('does not mark PTYs attached if detach wins while reattach is in flight', async () => {
-    const { mockConn, mockStore, mockPortForward, getMainWindow } = createMockDeps()
-    const session = new SshRelaySession('target-1', getMainWindow, mockStore, mockPortForward)
-    await session.establish(mockConn)
+    const { mockConn, mockStore, session } = await establishRelaySession()
     vi.clearAllMocks()
     mockDeploySuccess()
 
-    const { getSshPtyProvider } = await import('../ipc/pty')
     let resolveAttach!: () => void
     const mockAttach = vi.fn().mockReturnValue(
       new Promise<void>((resolve) => {
         resolveAttach = resolve
       })
     )
-    vi.mocked(getSshPtyProvider).mockReturnValue({
-      attachForReconnect: mockAttach,
-      dispose: vi.fn()
-    } as unknown as ReturnType<typeof getSshPtyProvider>)
+    mockReconnectPtyProvider(mockAttach)
     vi.mocked(getPtyIdsForConnection).mockReturnValue(['pty-1'])
 
     const reconnect = session.reconnect(mockConn)
@@ -648,21 +807,15 @@ describe('SshRelaySession', () => {
   })
 
   it('invalidates and broadcasts remote PTYs that cannot reattach after relay reconnect', async () => {
-    const { mockConn, mockStore, mockPortForward, getMainWindow } = createMockDeps()
-    const session = new SshRelaySession('target-1', getMainWindow, mockStore, mockPortForward)
-    await session.establish(mockConn)
+    const { mockConn, session } = await establishRelaySession()
     vi.clearAllMocks()
     mockDeploySuccess()
 
-    const { getSshPtyProvider } = await import('../ipc/pty')
     const mockAttach = vi
       .fn()
       .mockRejectedValueOnce(new Error('PTY "pty-stale" not found'))
       .mockResolvedValueOnce(undefined)
-    vi.mocked(getSshPtyProvider).mockReturnValue({
-      attachForReconnect: mockAttach,
-      dispose: vi.fn()
-    } as unknown as ReturnType<typeof getSshPtyProvider>)
+    mockReconnectPtyProvider(mockAttach)
     vi.mocked(getPtyIdsForConnection).mockReturnValue(['pty-stale', 'pty-live'])
 
     await session.reconnect(mockConn)
@@ -678,20 +831,14 @@ describe('SshRelaySession', () => {
   })
 
   it('routes transient reattach failures through relay-lost retry handling', async () => {
-    const { mockConn, mockStore, mockPortForward, getMainWindow } = createMockDeps()
-    const session = new SshRelaySession('target-1', getMainWindow, mockStore, mockPortForward)
+    const { mockConn, mockStore, session } = await establishRelaySession()
     const onRelayLost = vi.fn()
     session.setOnRelayLost(onRelayLost)
-    await session.establish(mockConn)
     vi.clearAllMocks()
     mockDeploySuccess()
 
-    const { getSshPtyProvider } = await import('../ipc/pty')
     const mockAttach = vi.fn().mockRejectedValue(new Error('Multiplexer disposed'))
-    vi.mocked(getSshPtyProvider).mockReturnValue({
-      attachForReconnect: mockAttach,
-      dispose: vi.fn()
-    } as unknown as ReturnType<typeof getSshPtyProvider>)
+    mockReconnectPtyProvider(mockAttach)
     vi.mocked(getPtyIdsForConnection).mockReturnValue(['pty-live'])
 
     await session.reconnect(mockConn)

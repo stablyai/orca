@@ -1446,6 +1446,7 @@ describe('useIpcEvents updater integration', () => {
 
   it('clears stale remote PTYs when an SSH connection fully disconnects', async () => {
     const clearTabPtyId = vi.fn()
+    const persistWorkspaceSessionByHost = vi.fn()
     const setSshConnectionState = vi.fn()
     const setSshTargetsMetadata = vi.fn()
     const clearRemovedSshTargetState = vi.fn()
@@ -1498,16 +1499,23 @@ describe('useIpcEvents updater integration', () => {
       clearRemoteDetectedAgents: vi.fn(),
       clearRemovedSshTargetState,
       clearTabPtyId,
-      repos: [{ id: 'repo-1', connectionId: 'conn-1' }],
+      repos: [
+        { id: 'repo-1', connectionId: 'conn-1' },
+        { id: 'repo-2', connectionId: 'conn-1' }
+      ],
       worktreesByRepo: {
-        'repo-1': [{ id: 'wt-1', repoId: 'repo-1' }]
+        'repo-1': [{ id: 'wt-1', repoId: 'repo-1' }],
+        'repo-2': [{ id: 'wt-2', repoId: 'repo-2' }]
       },
       tabsByWorktree: {
         'wt-1': [
           { id: 'tab-1', ptyId: 'pty-1', worktreeId: 'wt-1', title: 'Terminal 1' },
           { id: 'tab-2', ptyId: null, worktreeId: 'wt-1', title: 'Terminal 2' }
-        ]
+        ],
+        'wt-2': [{ id: 'tab-3', ptyId: 'pty-3', worktreeId: 'wt-2', title: 'Terminal 3' }]
       },
+      terminalArchiveHintsByPaneKey: { 'tab-1:leaf-1': { archiveId: 'archive-1' } },
+      terminalPtyIncarnationsByPaneKey: { 'tab-1:leaf-1': 'incarnation-1' },
       sshTargetLabels: new Map<string, string>([['conn-1', 'Remote']]),
       settings: {
         terminalFontSize: 13,
@@ -1557,6 +1565,9 @@ describe('useIpcEvents updater integration', () => {
     }))
     vi.doMock('@/lib/zoom-events', () => ({
       dispatchZoomLevelChanged: vi.fn()
+    }))
+    vi.doMock('@/lib/workspace-session-host-persistence', () => ({
+      persistWorkspaceSessionByHost
     }))
 
     vi.stubGlobal('window', {
@@ -1683,7 +1694,15 @@ describe('useIpcEvents updater integration', () => {
       expect.objectContaining({ status: 'disconnected' })
     )
     expect(clearTabPtyId).toHaveBeenCalledWith('tab-1')
+    expect(clearTabPtyId).toHaveBeenCalledWith('tab-3')
     expect(clearTabPtyId).not.toHaveBeenCalledWith('tab-2')
+    expect(clearTabPtyId).toHaveBeenCalledTimes(2)
+    // Why: the disconnect event only removes renderer bindings; host durability evidence must survive to classify reconnects.
+    expect(persistWorkspaceSessionByHost).not.toHaveBeenCalled()
+    expect(storeState.terminalArchiveHintsByPaneKey).toEqual({
+      'tab-1:leaf-1': { archiveId: 'archive-1' }
+    })
+    expect(storeState.terminalPtyIncarnationsByPaneKey).toEqual({ 'tab-1:leaf-1': 'incarnation-1' })
     expect(storeState.clearRemoteDetectedAgents).toHaveBeenCalledWith('conn-1')
 
     setSshConnectionState.mockClear()

@@ -116,6 +116,7 @@ type StoreState = {
       title?: string
       launchAgent?: string
       shellOverride?: string
+      pendingActivationSpawn?: true | number
     }[]
   >
   ptyIdsByTabId?: Record<string, string[]>
@@ -764,6 +765,8 @@ describe('connectPanePty', () => {
   beforeEach(() => {
     vi.resetModules()
     vi.clearAllMocks()
+    vi.mocked(getEagerPtyBufferHandle).mockReset()
+    vi.mocked(getEagerPtyBufferHandle).mockReturnValue(undefined)
     transportFactoryQueue = []
     createdTransportOptions = []
     storeSubscribers = []
@@ -1929,12 +1932,14 @@ describe('connectPanePty', () => {
     expect(deps.clearRuntimePaneTitle).not.toHaveBeenCalled()
     expect(deps.clearTabPtyId).not.toHaveBeenCalled()
     expect(manager.closePane).not.toHaveBeenCalled()
+    expect(window.api.pty.handleLostTerminalCandidate).not.toHaveBeenCalled()
 
     pending = false
     settleDeferredPtyShutdownExits(['pty-pane-2'], 'committed')
     expect(deps.consumeSuppressedPtyExit).toHaveBeenCalledWith('pty-pane-2')
     expect(deps.clearRuntimePaneTitle).toHaveBeenCalledWith('tab-1', 2)
     expect(deps.clearTabPtyId).not.toHaveBeenCalled()
+    expect(window.api.pty.handleLostTerminalCandidate).not.toHaveBeenCalled()
   })
 
   it('keeps renderer state intact for an exit deferred through rollback', async () => {
@@ -2032,6 +2037,7 @@ describe('connectPanePty', () => {
     expect(writesAfterExit).toContain('\x1b[?2004l')
     // A hidden pane must not respawn on exit — the wake waits for the reveal.
     expect(transport.connect.mock.calls.length).toBe(connectCallsBeforeExit)
+    expect(window.api.pty.handleLostTerminalCandidate).not.toHaveBeenCalled()
 
     binding.noteVisibilityResume()
     await flushAsyncTicks()
@@ -2042,6 +2048,7 @@ describe('connectPanePty', () => {
       | undefined
     expect(resumeConnectOptions?.command).toContain('--resume')
     expect(resumeConnectOptions?.command).toContain('sess-hibernated-1')
+    expect(window.api.pty.handleLostTerminalCandidate).not.toHaveBeenCalled()
 
     // The wake is one-shot: a second reveal must not spawn again.
     const connectCallsAfterWake = transport.connect.mock.calls.length
@@ -2560,6 +2567,26 @@ describe('connectPanePty', () => {
 
     expect(deps.onPtyExitRef.current).toHaveBeenCalledWith('tab-pty')
     expect(manager.closePane).not.toHaveBeenCalled()
+    expect(window.api.pty.handleLostTerminalCandidate).not.toHaveBeenCalled()
+  })
+
+  it('does not classify a user-disposed pane as a lost worker or spawn a replacement', async () => {
+    const { connectPanePty } = await import('./pty-connection')
+    const transport = createMockTransport('tab-pty')
+    transportFactoryQueue.push(transport)
+    const binding = connectPanePty(
+      createPane(1) as never,
+      createManager(1) as never,
+      createDeps() as never
+    )
+    await flushAsyncTicks(10)
+    const connectCallsBeforeDispose = transport.connect.mock.calls.length
+
+    binding.dispose()
+    await flushAsyncTicks(10)
+
+    expect(window.api.pty.handleLostTerminalCandidate).not.toHaveBeenCalled()
+    expect(transport.connect).toHaveBeenCalledTimes(connectCallsBeforeDispose)
   })
 
   it('tears down the sole terminal when a reattached (not freshly spawned) PTY exits', async () => {
@@ -2579,6 +2606,7 @@ describe('connectPanePty', () => {
 
     expect(deps.onPtyExitRef.current).toHaveBeenCalledWith('tab-pty')
     expect(manager.closePane).not.toHaveBeenCalled()
+    expect(window.api.pty.handleLostTerminalCandidate).not.toHaveBeenCalled()
   })
 
   it('rebinds a provider replacement without granting fresh-spawn exit protection', async () => {
@@ -17536,13 +17564,34 @@ describe('connectPanePty', () => {
     expect(mockStoreState.removeDeferredSshReconnectTarget).not.toHaveBeenCalled()
   })
 
-  it('asks the main-owned gate before no-id deferred SSH recovery and closes an archived tab', async () => {
+  it.each([
+    {
+      name: 'archives a no-hint deferred SSH recovery',
+      receipt: { kind: 'archived' as const, archiveId: 'archive-no-id' },
+      expectedConnectCalls: 0
+    },
+    {
+      name: 'fresh-spawns an ordinary no-hint deferred SSH recovery',
+      receipt: { kind: 'ordinary-shell' as const },
+      expectedConnectCalls: 1
+    },
+    {
+      name: 'keeps a retryable no-hint deferred SSH recovery open',
+      receipt: { kind: 'retryable-error' as const, code: 'capture-unavailable' as const },
+      expectedConnectCalls: 0
+    }
+  ])('$name only after the main-owned recovery gate', async ({ receipt, expectedConnectCalls }) => {
     const { connectPanePty } = await import('./pty-connection')
-    const transport = createMockTransport()
+    const transport = createMockTransport('fresh-no-hint-pty')
     transportFactoryQueue.push(transport)
-    vi.mocked(window.api.pty.handleLostTerminalCandidate).mockResolvedValue({
-      kind: 'archived',
-      archiveId: 'archive-no-id'
+    const recoveryOrder: string[] = []
+    vi.mocked(window.api.ssh.connect).mockImplementation(async () => {
+      recoveryOrder.push('ssh-connected')
+      return { targetId: 'conn-1', status: 'connected', error: null, reconnectAttempt: 0 }
+    })
+    vi.mocked(window.api.pty.handleLostTerminalCandidate).mockImplementation(async () => {
+      recoveryOrder.push('main-gate')
+      return receipt
     })
     mockStoreState = {
       ...mockStoreState,
@@ -17553,15 +17602,32 @@ describe('connectPanePty', () => {
       deferredSshSessionIdsByTabId: {}
     }
 
-    connectPanePty(createPane(1) as never, createManager(1) as never, createDeps() as never)
+    const deps = createDeps()
+    connectPanePty(createPane(1) as never, createManager(1) as never, deps as never)
     await flushAsyncTicks(20)
 
     expect(window.api.pty.handleLostTerminalCandidate).toHaveBeenCalledOnce()
-    expect(transport.connect).not.toHaveBeenCalled()
-    expect(mockStoreState.closeTab).toHaveBeenCalledWith(
-      'tab-1',
-      expect.objectContaining({ localPtyTeardownOwnedExternally: true })
-    )
+    expect(recoveryOrder).toEqual(['ssh-connected', 'main-gate'])
+    expect(transport.connect).toHaveBeenCalledTimes(expectedConnectCalls)
+    if (receipt.kind === 'archived') {
+      expect(mockStoreState.closeTab).toHaveBeenCalledWith(
+        'tab-1',
+        expect.objectContaining({ localPtyTeardownOwnedExternally: true })
+      )
+      expect(deps.onPtyErrorRef.current).not.toHaveBeenCalled()
+    } else if (receipt.kind === 'retryable-error') {
+      expect(mockStoreState.closeTab).not.toHaveBeenCalled()
+      expect(transport.connect).not.toHaveBeenCalled()
+      expect(deps.onPtyErrorRef.current).toHaveBeenCalledWith(
+        1,
+        'Terminal recovery is pending archive (capture-unavailable).'
+      )
+    } else {
+      expect(mockStoreState.closeTab).not.toHaveBeenCalled()
+      expect(transport.connect).toHaveBeenCalledWith(
+        expect.not.objectContaining({ sessionId: expect.any(String) })
+      )
+    }
   })
 
   it('keeps a deferred SSH tab when archive capture throws before the helper returns', async () => {
@@ -17612,6 +17678,64 @@ describe('connectPanePty', () => {
     }
   })
 
+  it.each([
+    { name: 'fresh-spawns an ordinary shell', receipt: { kind: 'ordinary-shell' as const } },
+    {
+      name: 'closes an archived worker tab',
+      receipt: { kind: 'archived' as const, archiveId: 'archive-expired-session' }
+    },
+    {
+      name: 'keeps a retryable worker tab open',
+      receipt: { kind: 'retryable-error' as const, code: 'durability-failed' as const }
+    }
+  ])('handles a deferred SSH sessionExpired result: $name', async ({ receipt }) => {
+    const { connectPanePty } = await import('./pty-connection')
+    const transport = createMockTransport('fresh-after-expired-session')
+    transport.connect.mockImplementation(async (opts: { sessionId?: string }) => {
+      if (opts.sessionId) {
+        return { id: opts.sessionId, sessionExpired: true }
+      }
+      return 'fresh-after-expired-session'
+    })
+    transportFactoryQueue.push(transport)
+    vi.mocked(window.api.pty.handleLostTerminalCandidate).mockResolvedValue(receipt)
+    mockStoreState = {
+      ...mockStoreState,
+      tabsByWorktree: { 'wt-1': [{ id: 'tab-1', ptyId: null }] },
+      ptyIdsByTabId: { 'tab-1': [] },
+      repos: [{ id: 'repo1', connectionId: 'conn-1' }],
+      deferredSshReconnectTargets: ['conn-1'],
+      deferredSshSessionIdsByTabId: { 'tab-1': 'expired-session' }
+    }
+    const deps = createDeps()
+
+    connectPanePty(createPane(1) as never, createManager(1) as never, deps as never)
+    await flushAsyncTicks(20)
+
+    expect(window.api.pty.handleLostTerminalCandidate).toHaveBeenCalledOnce()
+    if (receipt.kind === 'ordinary-shell') {
+      expect(transport.connect).toHaveBeenCalledTimes(2)
+      expect(deps.clearExitedPanePtyLayoutBinding).toHaveBeenCalledWith(1, 'expired-session')
+      expect(deps.clearTabPtyId).toHaveBeenCalledWith('tab-1', 'expired-session')
+      expect(mockStoreState.closeTab).not.toHaveBeenCalled()
+    } else if (receipt.kind === 'archived') {
+      expect(transport.connect).toHaveBeenCalledTimes(1)
+      expect(mockStoreState.closeTab).toHaveBeenCalledWith(
+        'tab-1',
+        expect.objectContaining({ localPtyTeardownOwnedExternally: true })
+      )
+      expect(deps.clearTabPtyId).not.toHaveBeenCalled()
+    } else {
+      expect(transport.connect).toHaveBeenCalledTimes(1)
+      expect(mockStoreState.closeTab).not.toHaveBeenCalled()
+      expect(deps.clearTabPtyId).not.toHaveBeenCalled()
+      expect(deps.onPtyErrorRef.current).toHaveBeenCalledWith(
+        1,
+        'Terminal recovery is pending archive (durability-failed).'
+      )
+    }
+  })
+
   it('spawns a fresh PTY when a deferred SSH session expired', async () => {
     const { connectPanePty } = await import('./pty-connection')
     const transport = createMockTransport()
@@ -17650,6 +17774,257 @@ describe('connectPanePty', () => {
     expect(deps.clearTabPtyId).toHaveBeenCalledWith('tab-1', 'expired-session')
     expect(deps.syncPanePtyLayoutBinding).toHaveBeenCalledWith(1, 'fresh-ssh-pty')
     expect(deps.updateTabPtyId).toHaveBeenCalledWith('tab-1', 'fresh-ssh-pty')
+  })
+
+  it.each([
+    { name: 'fresh-spawns an ordinary shell', receipt: { kind: 'ordinary-shell' as const } },
+    {
+      name: 'closes an archived worker tab',
+      receipt: { kind: 'archived' as const, archiveId: 'archive-attach-failed' }
+    },
+    {
+      name: 'keeps a retryable worker tab open',
+      receipt: { kind: 'retryable-error' as const, code: 'durability-failed' as const }
+    }
+  ])('handles a detached attach throw: $name', async ({ receipt }) => {
+    const { connectPanePty } = await import('./pty-connection')
+    const transport = createMockTransport('fresh-after-attach-throw')
+    transport.attach.mockImplementation(() => {
+      throw new Error('detached attach failed')
+    })
+    transportFactoryQueue.push(transport)
+    vi.mocked(getEagerPtyBufferHandle).mockReturnValue({} as never)
+    vi.mocked(window.api.pty.handleLostTerminalCandidate).mockResolvedValue(receipt)
+    const deps = createDeps()
+
+    connectPanePty(createPane(1) as never, createManager(1) as never, deps as never)
+    await flushAsyncTicks(20)
+
+    expect(transport.attach).toHaveBeenCalledWith(
+      expect.objectContaining({ existingPtyId: 'tab-pty' })
+    )
+    expect(window.api.pty.handleLostTerminalCandidate).toHaveBeenCalledOnce()
+    expect(deps.onPtyErrorRef.current).toHaveBeenCalledWith(1, 'detached attach failed')
+    if (receipt.kind === 'ordinary-shell') {
+      expect(deps.clearTabPtyId).toHaveBeenCalledWith('tab-1', 'tab-pty')
+      expect(transport.connect).toHaveBeenCalledTimes(1)
+      expect(mockStoreState.closeTab).not.toHaveBeenCalled()
+    } else if (receipt.kind === 'archived') {
+      expect(deps.clearTabPtyId).not.toHaveBeenCalled()
+      expect(transport.connect).not.toHaveBeenCalled()
+      expect(mockStoreState.closeTab).toHaveBeenCalledWith(
+        'tab-1',
+        expect.objectContaining({ localPtyTeardownOwnedExternally: true })
+      )
+    } else {
+      expect(deps.clearTabPtyId).not.toHaveBeenCalled()
+      expect(transport.connect).not.toHaveBeenCalled()
+      expect(mockStoreState.closeTab).not.toHaveBeenCalled()
+      expect(deps.onPtyErrorRef.current).toHaveBeenCalledWith(
+        1,
+        'Terminal recovery is pending archive (durability-failed).'
+      )
+    }
+  })
+
+  it('keeps the detached tab when the preload lost-worker handoff is unavailable', async () => {
+    const { connectPanePty } = await import('./pty-connection')
+    const transport = createMockTransport('unexpected-fresh-after-missing-handoff')
+    transport.attach.mockImplementation(() => {
+      throw new Error('detached attach failed')
+    })
+    transportFactoryQueue.push(transport)
+    vi.mocked(getEagerPtyBufferHandle).mockReturnValue({} as never)
+    const api = window.api.pty as { handleLostTerminalCandidate?: unknown }
+    const savedHandler = api.handleLostTerminalCandidate
+    Reflect.deleteProperty(api, 'handleLostTerminalCandidate')
+    const deps = createDeps()
+
+    try {
+      connectPanePty(createPane(1) as never, createManager(1) as never, deps as never)
+      await flushAsyncTicks(20)
+
+      expect(transport.attach).toHaveBeenCalledOnce()
+      expect(transport.connect).not.toHaveBeenCalled()
+      expect(deps.clearTabPtyId).not.toHaveBeenCalled()
+      expect(mockStoreState.closeTab).not.toHaveBeenCalled()
+      expect(deps.onPtyErrorRef.current).toHaveBeenCalledWith(
+        1,
+        'Terminal recovery could not be archived. Try again shortly.'
+      )
+    } finally {
+      api.handleLostTerminalCandidate = savedHandler
+    }
+  })
+
+  it('coalesces simultaneous and repeat all-dead split-pane recovery into one archive operation', async () => {
+    const { connectPanePty } = await import('./pty-connection')
+    const archiveGate = createDeferred<{ kind: 'archived'; archiveId: string }>()
+    let archiveOperations = 0
+    let sharedArchiveResult: Promise<{ kind: 'archived'; archiveId: string }> | null = null
+    vi.mocked(window.api.pty.handleLostTerminalCandidate).mockImplementation(() => {
+      if (!sharedArchiveResult) {
+        archiveOperations += 1
+        sharedArchiveResult = archiveGate.promise
+      }
+      return sharedArchiveResult
+    })
+    const firstTransport = createMockTransport()
+    const secondTransport = createMockTransport()
+    const repeatTransport = createMockTransport()
+    transportFactoryQueue.push(firstTransport, secondTransport, repeatTransport)
+    mockStoreState = {
+      ...mockStoreState,
+      tabsByWorktree: {
+        'wt-1': [{ id: 'tab-1', ptyId: null, pendingActivationSpawn: 2 }]
+      },
+      ptyIdsByTabId: { 'tab-1': [] },
+      terminalLayoutsByTabId: {
+        'tab-1': {
+          root: {
+            type: 'split',
+            direction: 'horizontal',
+            first: { type: 'leaf', leafId: LEAF_1 },
+            second: { type: 'leaf', leafId: LEAF_2 }
+          },
+          activeLeafId: LEAF_1,
+          expandedLeafId: null,
+          ptyIdsByLeafId: {}
+        }
+      }
+    } as StoreState
+    const sharedTransports = { current: new Map() }
+    const firstDeps = createDeps({ paneTransportsRef: sharedTransports })
+    const secondDeps = createDeps({ paneTransportsRef: sharedTransports })
+    let semanticCloseCount = 0
+    let tabClosed = false
+    mockStoreState.closeTab.mockImplementation(() => {
+      if (!tabClosed) {
+        tabClosed = true
+        semanticCloseCount += 1
+      }
+    })
+    const manager = createManager(2)
+
+    connectPanePty(createPane(1) as never, manager as never, firstDeps as never)
+    connectPanePty(createPane(2) as never, manager as never, secondDeps as never)
+    await flushAsyncTicks(10)
+
+    expect(window.api.pty.handleLostTerminalCandidate).toHaveBeenCalledTimes(2)
+    expect(archiveOperations).toBe(1)
+    expect(firstTransport.connect).not.toHaveBeenCalled()
+    expect(secondTransport.connect).not.toHaveBeenCalled()
+
+    archiveGate.resolve({ kind: 'archived', archiveId: 'archive-split-all-dead' })
+    await flushAsyncTicks(20)
+
+    // A later activation can ask again, but the main-owned operation remains idempotently archived.
+    connectPanePty(
+      createPane(1) as never,
+      manager as never,
+      createDeps({ paneTransportsRef: sharedTransports }) as never
+    )
+    await flushAsyncTicks(20)
+
+    expect(window.api.pty.handleLostTerminalCandidate).toHaveBeenCalledTimes(3)
+    expect(archiveOperations).toBe(1)
+    expect(repeatTransport.connect).not.toHaveBeenCalled()
+    expect(semanticCloseCount).toBe(1)
+  })
+
+  it('keeps the all-dead split activation marker for the slow sibling after an ordinary fallback', async () => {
+    const { connectPanePty } = await import('./pty-connection')
+    const firstTransport = createMockTransport('fresh-all-dead-pane-1')
+    const secondTransport = createMockTransport('fresh-all-dead-pane-2')
+    transportFactoryQueue.push(firstTransport, secondTransport)
+    mockStoreState = {
+      ...mockStoreState,
+      tabsByWorktree: {
+        'wt-1': [{ id: 'tab-1', ptyId: null, pendingActivationSpawn: 2 }]
+      },
+      ptyIdsByTabId: { 'tab-1': [] },
+      terminalLayoutsByTabId: {
+        'tab-1': {
+          root: {
+            type: 'split',
+            direction: 'horizontal',
+            first: { type: 'leaf', leafId: LEAF_1 },
+            second: { type: 'leaf', leafId: LEAF_2 }
+          },
+          activeLeafId: LEAF_1,
+          expandedLeafId: null,
+          ptyIdsByLeafId: {}
+        }
+      }
+    } as StoreState
+    const getActivationTab = (): { pendingActivationSpawn?: true | number } => {
+      const tab = mockStoreState.tabsByWorktree['wt-1']?.[0]
+      if (!tab) {
+        throw new Error('Expected all-dead activation tab')
+      }
+      return tab
+    }
+    const consumeActivationMarker = (): void => {
+      const nextMarker = getActivationTab().pendingActivationSpawn === 2 ? true : undefined
+      mockStoreState = {
+        ...mockStoreState,
+        tabsByWorktree: {
+          ...mockStoreState.tabsByWorktree,
+          'wt-1':
+            mockStoreState.tabsByWorktree['wt-1']?.map((candidate) => ({
+              ...candidate,
+              ...(nextMarker === undefined ? {} : { pendingActivationSpawn: nextMarker })
+            })) ?? []
+        }
+      } as StoreState
+      if (nextMarker === undefined) {
+        delete getActivationTab().pendingActivationSpawn
+      }
+    }
+    const sharedTransports = { current: new Map() }
+    const makeDeps = () => {
+      const deps = createDeps({ paneTransportsRef: sharedTransports })
+      const updateTabPtyId = deps.updateTabPtyId
+      deps.updateTabPtyId = vi.fn((...args: [string, string, string?]) => {
+        updateTabPtyId(...args)
+        consumeActivationMarker()
+      })
+      return deps
+    }
+    const firstDeps = makeDeps()
+    const secondDeps = makeDeps()
+    firstTransport.connect.mockImplementation(async () => {
+      const onPtySpawn = createdTransportOptions[0]?.onPtySpawn as
+        | ((ptyId: string) => void)
+        | undefined
+      onPtySpawn?.('fresh-all-dead-pane-1')
+      return 'fresh-all-dead-pane-1'
+    })
+    secondTransport.connect.mockImplementation(async () => {
+      const onPtySpawn = createdTransportOptions[1]?.onPtySpawn as
+        | ((ptyId: string) => void)
+        | undefined
+      onPtySpawn?.('fresh-all-dead-pane-2')
+      return 'fresh-all-dead-pane-2'
+    })
+    const manager = createManager(2)
+
+    connectPanePty(createPane(1) as never, manager as never, firstDeps as never)
+    await flushAsyncTicks(20)
+
+    expect(window.api.pty.handleLostTerminalCandidate).toHaveBeenCalledTimes(1)
+    expect(firstTransport.connect).toHaveBeenCalledOnce()
+    expect(getActivationTab().pendingActivationSpawn).toBe(true)
+
+    connectPanePty(createPane(2) as never, manager as never, secondDeps as never)
+    await flushAsyncTicks(20)
+
+    expect(window.api.pty.handleLostTerminalCandidate).toHaveBeenCalledTimes(2)
+    expect(secondTransport.connect).toHaveBeenCalledOnce()
+    expect(firstDeps.updateTabPtyId).toHaveBeenCalledWith('tab-1', 'fresh-all-dead-pane-1')
+    expect(secondDeps.updateTabPtyId).toHaveBeenCalledWith('tab-1', 'fresh-all-dead-pane-2')
+    expect(mockStoreState.closeTab).not.toHaveBeenCalled()
+    expect(getActivationTab().pendingActivationSpawn).toBeUndefined()
   })
 
   it('clears the pending serializer when disposed before deferred SSH expiry resolves', async () => {

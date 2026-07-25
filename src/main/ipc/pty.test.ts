@@ -649,6 +649,94 @@ describe('registerPtyHandlers', () => {
     expect(daemonSpawn.mock.calls[1]?.[0]).not.toHaveProperty('preSpawnLostWorker')
   })
 
+  it.each([
+    {
+      name: 'an archived receipt',
+      receipt: { kind: 'archived' as const, archiveId: 'archive-existing-worker' }
+    },
+    {
+      name: 'a retryable receipt',
+      receipt: { kind: 'retryable-error' as const, code: 'capture-unavailable' as const }
+    }
+  ])('returns $name before registering or retaining a hidden daemon PTY', async ({ receipt }) => {
+    const sessionId = 'stable-existing-daemon-pty'
+    const spawn = vi.fn(async () => ({ id: sessionId, lostWorkerRecovery: receipt }))
+    const shutdown = vi.fn()
+    const kill = vi.fn()
+    setLocalPtyProvider({
+      spawn,
+      write: vi.fn(),
+      resize: vi.fn(),
+      kill,
+      shutdown,
+      sendSignal: vi.fn(),
+      getCwd: vi.fn(),
+      getInitialCwd: vi.fn(),
+      clearBuffer: vi.fn(),
+      acknowledgeDataEvent: vi.fn(),
+      hasChildProcesses: vi.fn(),
+      getForegroundProcess: vi.fn(),
+      confirmForegroundProcess: vi.fn(),
+      serialize: vi.fn(),
+      revive: vi.fn(),
+      onData: vi.fn(() => () => {}),
+      onReplay: vi.fn(() => () => {}),
+      onExit: vi.fn(() => () => {}),
+      listProcesses: vi.fn(async () => []),
+      attach: vi.fn(),
+      getDefaultShell: vi.fn(),
+      getProfiles: vi.fn()
+    } as never)
+    const runtime = {
+      setPtyController: vi.fn(),
+      createPreAllocatedTerminalHandle: vi.fn(() => 'term-existing-daemon-pty'),
+      registerPreAllocatedHandleForPty: vi.fn(),
+      beginPtyRegistration: vi.fn(),
+      cancelPendingPtyRegistration: vi.fn(),
+      registerPty: vi.fn(),
+      onPtySpawned: vi.fn()
+    }
+    const store = { persistPtyBinding: vi.fn() }
+    const startupCommand = 'echo do-not-log-this-startup-command'
+    const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {})
+
+    try {
+      registerPtyHandlers(
+        mainWindow as never,
+        runtime as never,
+        undefined,
+        undefined,
+        undefined,
+        store as never
+      )
+      const result = (await handlers.get('pty:spawn')!(null, {
+        cols: 80,
+        rows: 24,
+        sessionId,
+        command: startupCommand,
+        initiallyHidden: true
+      })) as { id: string; lostWorkerRecovery?: unknown }
+
+      expect(result).toEqual({ id: sessionId, lostWorkerRecovery: receipt })
+      expect(runtime.beginPtyRegistration).toHaveBeenCalledWith(sessionId)
+      expect(runtime.cancelPendingPtyRegistration).toHaveBeenCalledWith(sessionId)
+      expect(runtime.registerPty).not.toHaveBeenCalled()
+      expect(runtime.onPtySpawned).not.toHaveBeenCalled()
+      expect(registerPtyMock).not.toHaveBeenCalled()
+      expect(store.persistPtyBinding).not.toHaveBeenCalled()
+      expect(shutdown).not.toHaveBeenCalled()
+      expect(kill).not.toHaveBeenCalled()
+      expect(isHiddenRendererPty(sessionId)).toBe(false)
+      expect([...errorSpy.mock.calls, ...warnSpy.mock.calls].flat().join(' ')).not.toContain(
+        startupCommand
+      )
+    } finally {
+      errorSpy.mockRestore()
+      warnSpy.mockRestore()
+    }
+  })
+
   function installObservableDaemonTestProvider() {
     const spawn = vi.fn(async (options: { sessionId?: string }) => ({
       id: options.sessionId ?? 'daemon-pty'
