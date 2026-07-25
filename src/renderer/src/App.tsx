@@ -159,6 +159,10 @@ import {
 } from './components/right-sidebar/file-search-include-pattern'
 import { shouldShowWorktreeHistoryControls } from './lib/titlebar-worktree-history-controls'
 import {
+  isWorktreeSidebarSurfaceTarget,
+  mouseHistoryDirection
+} from './lib/mouse-history-navigation'
+import {
   canGoBackWorktreeHistory,
   canGoForwardWorktreeHistory
 } from '@/store/slices/worktree-nav-history'
@@ -1638,6 +1642,21 @@ function App(): React.JSX.Element {
         return
       }
 
+      // Ctrl+Minus tab history — walks the per-worktree visited-tab stack (VS Code Go Back at tab granularity).
+      if (matchShortcut('tab.history.back') || matchShortcut('tab.history.forward')) {
+        if (creationLayoutActive || activeView !== 'terminal' || !activeWorktreeId) {
+          return
+        }
+        input.preventDefault()
+        const store = useAppStore.getState()
+        if (matchShortcut('tab.history.back')) {
+          store.goBackTabHistory(activeWorktreeId)
+        } else {
+          store.goForwardTabHistory(activeWorktreeId)
+        }
+        return
+      }
+
       // Only short-circuit chords the floating panel itself claims; suppressing others here would silently no-op them when focus is in the panel.
       const floatingWorkspaceFocused = isFloatingWorkspacePanelFocused()
       if (floatingWorkspaceFocused) {
@@ -1844,13 +1863,51 @@ function App(): React.JSX.Element {
     // Why: a window blur mid-gesture must not leave the detector armed.
     const onBlur = (): void => doubleTapDetector.reset()
 
+    // Mouse thumb buttons (X1/X2), routed by surface: the worktree sidebar walks the
+    // worktree stack, the tab content area (browser panes included) walks the
+    // per-worktree visited-tab stack.
+    const onHistoryMouseUp = (e: MouseEvent): void => {
+      const direction = mouseHistoryDirection(e.button)
+      if (direction === null || e.defaultPrevented) {
+        return
+      }
+      const { activeView, activeWorktreeId, creationLayoutActive } = globalShortcutStateRef.current
+      const store = useAppStore.getState()
+      if (
+        !isWorktreeSidebarSurfaceTarget(e.target) &&
+        !creationLayoutActive &&
+        activeView === 'terminal' &&
+        activeWorktreeId
+      ) {
+        e.preventDefault()
+        if (direction === 'back') {
+          store.goBackTabHistory(activeWorktreeId)
+        } else {
+          store.goForwardTabHistory(activeWorktreeId)
+        }
+        return
+      }
+      // Same guard as the keyboard chords: live wherever the titlebar cluster shows, suppressed in Settings.
+      if (creationLayoutActive || !shouldShowWorktreeHistoryControls(activeView)) {
+        return
+      }
+      e.preventDefault()
+      if (direction === 'back') {
+        store.goBackWorktree()
+      } else {
+        store.goForwardWorktree()
+      }
+    }
+
     window.addEventListener('keydown', onKeyDown, { capture: true })
     window.addEventListener('keyup', onKeyUp, { capture: true })
     window.addEventListener('blur', onBlur)
+    window.addEventListener('mouseup', onHistoryMouseUp)
     return () => {
       window.removeEventListener('keydown', onKeyDown, { capture: true })
       window.removeEventListener('keyup', onKeyUp, { capture: true })
       window.removeEventListener('blur', onBlur)
+      window.removeEventListener('mouseup', onHistoryMouseUp)
     }
   }, [])
 

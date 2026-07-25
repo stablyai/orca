@@ -4,6 +4,7 @@ import { createStore, type StoreApi } from 'zustand/vanilla'
 import { describe, expect, it, vi, beforeEach, afterEach } from 'vitest'
 import { createEditorSlice } from './editor'
 import { createTabsSlice } from './tabs'
+import { createTabNavHistorySlice } from './tab-nav-history'
 import type { AppState } from '../types'
 import {
   createCompatibleRuntimeStatusResponseIfNeeded,
@@ -72,6 +73,7 @@ function createEditorTabsStore(): StoreApi<AppState> {
     projectGroups: [],
     recordFeatureInteraction: vi.fn(),
     ...createTabsSlice(...(args as Parameters<typeof createTabsSlice>)),
+    ...createTabNavHistorySlice(...(args as Parameters<typeof createTabNavHistorySlice>)),
     ...createEditorSlice(...(args as Parameters<typeof createEditorSlice>))
   })) as unknown as StoreApi<AppState>
 }

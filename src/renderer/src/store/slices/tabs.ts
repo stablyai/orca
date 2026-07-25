@@ -813,6 +813,13 @@ export const createTabsSlice: StateCreator<AppState, [], [], TabsSlice> = (set, 
     findTabByEntityInGroup(get().unifiedTabsByWorktree, worktreeId, groupId, entityId, contentType),
 
   activateTab: (tabId, opts) => {
+    // Why: record before the set so the seed entry (recordTabVisit) still sees the outgoing active tab.
+    {
+      const found = findTabAndWorktree(get().unifiedTabsByWorktree, tabId)
+      if (found) {
+        get().recordTabVisit(found.worktreeId, tabId)
+      }
+    }
     set((state) => {
       const found = findTabAndWorktree(state.unifiedTabsByWorktree, tabId)
       if (!found) {

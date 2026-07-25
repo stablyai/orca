@@ -32,6 +32,7 @@ import {
   resolveRendererWebContents,
   setupGrabShortcutForwarding,
   setupGuestContextMenu,
+  setupGuestHistoryMouseButtons,
   setupGuestMouseWheelZoomForwarding,
   setupGuestShortcutForwarding
 } from './browser-guest-ui'
@@ -229,6 +230,7 @@ export class BrowserManager {
   private readonly grabShortcutCleanupByTabId = new Map<string, () => void>()
   private readonly shortcutForwardingCleanupByTabId = new Map<string, () => void>()
   private readonly mouseWheelZoomCleanupByTabId = new Map<string, () => void>()
+  private readonly historyMouseButtonCleanupByTabId = new Map<string, () => void>()
   private readonly annotationViewportBridgeOpsByTabId = new Map<string, Promise<unknown>>()
   private readonly worktreeIdByTabId = new Map<string, string>()
   private readonly policyAttachedGuestIds = new Set<number>()
@@ -1024,6 +1026,7 @@ export class BrowserManager {
     this.setupGrabShortcut(browserTabId, guest)
     this.setupShortcutForwarding(browserTabId, guest)
     this.setupMouseWheelZoomForwarding(browserTabId, guest)
+    this.setupHistoryMouseButtons(browserTabId, guest)
     this.flushPendingLoadFailure(browserTabId, webContentsId)
     this.flushPendingPermissionEvents(browserTabId, webContentsId)
     this.flushPendingPopupEvents(browserTabId, webContentsId)
@@ -1060,6 +1063,11 @@ export class BrowserManager {
     if (mouseWheelZoomCleanup) {
       mouseWheelZoomCleanup()
       this.mouseWheelZoomCleanupByTabId.delete(browserTabId)
+    }
+    const historyMouseButtonCleanup = this.historyMouseButtonCleanupByTabId.get(browserTabId)
+    if (historyMouseButtonCleanup) {
+      historyMouseButtonCleanup()
+      this.historyMouseButtonCleanupByTabId.delete(browserTabId)
     }
     // Why: downloads are per-tab chrome; closing the tab must cancel active writes, not orphan them.
     for (const [downloadId, download] of this.downloadsById.entries()) {
@@ -1142,6 +1150,7 @@ export class BrowserManager {
     this.pendingPopupEventsByGuestId.clear()
     this.pendingDownloadIdsByGuestId.clear()
     this.mouseWheelZoomCleanupByTabId.clear()
+    this.historyMouseButtonCleanupByTabId.clear()
     this.annotationViewportBridgeOpsByTabId.clear()
   }
 
@@ -1712,6 +1721,24 @@ export class BrowserManager {
         shouldForwardDictationShortcut: () => this.shouldForwardDictationShortcut?.() ?? false,
         isMobileEmulatorEnabled: () => this.settingsResolver?.().mobileEmulatorEnabled !== false,
         getKeybindings: () => this.settingsResolver?.().keybindings
+      })
+    )
+  }
+
+  private setupHistoryMouseButtons(browserTabId: string, guest: Electron.WebContents): void {
+    const previousCleanup = this.historyMouseButtonCleanupByTabId.get(browserTabId)
+    if (previousCleanup) {
+      previousCleanup()
+      this.historyMouseButtonCleanupByTabId.delete(browserTabId)
+    }
+
+    this.historyMouseButtonCleanupByTabId.set(
+      browserTabId,
+      setupGuestHistoryMouseButtons({
+        browserTabId,
+        guest,
+        resolveRenderer: (tabId) =>
+          resolveRendererWebContents(this.rendererWebContentsIdByTabId, tabId)
       })
     )
   }

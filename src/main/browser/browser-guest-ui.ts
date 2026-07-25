@@ -399,6 +399,13 @@ export function setupGuestShortcutForwarding(args: {
     } else if (keybindingMatchesAction('browser.forward', input, process.platform, keybindings)) {
       // Why: same as browser.back; the focused guest cannot call the renderer-owned webview's goForward() directly.
       renderer.send('ui:browserHistoryNavigate', 'forward')
+    } else if (keybindingMatchesAction('tab.history.back', input, process.platform, keybindings)) {
+      // Why: the visited-tab stack lives in the renderer store; forward so the chord works while the guest owns focus.
+      renderer.send('ui:tabHistoryNavigate', 'back')
+    } else if (
+      keybindingMatchesAction('tab.history.forward', input, process.platform, keybindings)
+    ) {
+      renderer.send('ui:tabHistoryNavigate', 'forward')
     } else if (keybindingMatchesAction('tab.close', input, process.platform, keybindings)) {
       renderer.send('ui:closeActiveTab')
     } else if (keybindingMatchesAction('tab.nextSameType', input, process.platform, keybindings)) {
@@ -544,6 +551,47 @@ export function setupGuestMouseWheelZoomForwarding(args: {
     event.preventDefault()
     markGuestWheelZoom(guest, direction)
     resolveRenderer(browserTabId)?.send('ui:zoomBrowserPage', direction)
+  }
+
+  guest.on('before-mouse-event', handler)
+  return () => {
+    try {
+      guest.off('before-mouse-event', handler)
+    } catch {
+      // Why: best-effort — guest may already be destroyed during teardown.
+    }
+  }
+}
+
+// Why: Electron's MouseInputEvent typing stops at left/middle/right, but blink's ToV8
+// converter emits 'back'/'forward' for the X1/X2 thumb buttons (blink_converter.cc).
+export function resolveGuestHistoryMouseButton(
+  mouse: Electron.MouseInputEvent
+): 'back' | 'forward' | null {
+  if (mouse.type !== 'mouseDown' && mouse.type !== 'mouseUp') {
+    return null
+  }
+  const button = mouse.button as string | undefined
+  return button === 'back' || button === 'forward' ? button : null
+}
+
+export function setupGuestHistoryMouseButtons(args: {
+  browserTabId: string
+  guest: Electron.WebContents
+  resolveRenderer: ResolveRenderer
+}): () => void {
+  const { browserTabId, guest, resolveRenderer } = args
+  const handler = (event: Electron.Event, mouse: Electron.MouseInputEvent): void => {
+    const direction = resolveGuestHistoryMouseButton(mouse)
+    if (!direction) {
+      return
+    }
+    // Why: consume both down and up so pages listening for X-button events can't double-handle the click.
+    event.preventDefault()
+    if (mouse.type === 'mouseUp') {
+      // Why: thumb buttons walk the visited-tab stack everywhere (browser pane included); page history stays on the browser.back/forward chords.
+      resolveRenderer(browserTabId)?.send('ui:tabHistoryNavigate', direction)
+    }
   }
 
   guest.on('before-mouse-event', handler)

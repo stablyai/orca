@@ -10,8 +10,10 @@ vi.mock('electron', () => ({
 }))
 
 import {
+  resolveGuestHistoryMouseButton,
   resolveGuestMouseWheelZoomDirection,
   setupGuestContextMenu,
+  setupGuestHistoryMouseButtons,
   setupGuestMouseWheelZoomForwarding,
   setupGuestShortcutForwarding
 } from './browser-guest-ui'
@@ -385,6 +387,107 @@ describe('guest mouse wheel browser zoom', () => {
 
   it('cleans up the mouse wheel listener on teardown', () => {
     const cleanup = setupGuestMouseWheelZoomForwarding({
+      browserTabId,
+      guest: makeGuest(),
+      resolveRenderer: () => makeRenderer()
+    })
+
+    cleanup()
+
+    expect(guestOffMock).toHaveBeenCalledWith('before-mouse-event', expect.any(Function))
+  })
+})
+
+describe('guest history mouse buttons (X1/X2)', () => {
+  const browserTabId = 'tab-1'
+  let rendererSendMock: ReturnType<typeof vi.fn>
+  let guestOnMock: ReturnType<typeof vi.fn>
+  let guestOffMock: ReturnType<typeof vi.fn>
+
+  function makeGuest() {
+    return {
+      on: guestOnMock,
+      off: guestOffMock
+    } as unknown as Electron.WebContents
+  }
+
+  function makeRenderer() {
+    return { send: rendererSendMock } as unknown as Electron.WebContents
+  }
+
+  // Why: 'back'/'forward' come from blink's ToV8 converter and are absent from Electron's typings.
+  function thumbMouse(type: 'mouseDown' | 'mouseUp', button: string): Electron.MouseInputEvent {
+    return { type, x: 0, y: 0, button: button as Electron.MouseInputEvent['button'] }
+  }
+
+  function triggerBeforeMouse(mouse: Electron.MouseInputEvent): ReturnType<typeof vi.fn> {
+    const handler = guestOnMock.mock.calls.find((call) => call[0] === 'before-mouse-event')?.[1] as
+      | ((event: Electron.Event, mouse: Electron.MouseInputEvent) => void)
+      | undefined
+    expect(handler).toBeTypeOf('function')
+    const preventDefault = vi.fn()
+    handler!({ preventDefault } as unknown as Electron.Event, mouse)
+    return preventDefault
+  }
+
+  beforeEach(() => {
+    rendererSendMock = vi.fn()
+    guestOnMock = vi.fn()
+    guestOffMock = vi.fn()
+  })
+
+  it('resolves back/forward from thumb buttons and ignores standard buttons', () => {
+    expect(resolveGuestHistoryMouseButton(thumbMouse('mouseUp', 'back'))).toBe('back')
+    expect(resolveGuestHistoryMouseButton(thumbMouse('mouseDown', 'forward'))).toBe('forward')
+    expect(resolveGuestHistoryMouseButton(thumbMouse('mouseUp', 'left'))).toBeNull()
+    expect(resolveGuestHistoryMouseButton(thumbMouse('mouseUp', 'middle'))).toBeNull()
+    expect(resolveGuestHistoryMouseButton({ type: 'mouseMove', x: 0, y: 0 })).toBeNull()
+  })
+
+  it('forwards tab-history navigation on mouseUp and consumes the guest event', () => {
+    setupGuestHistoryMouseButtons({
+      browserTabId,
+      guest: makeGuest(),
+      resolveRenderer: () => makeRenderer()
+    })
+
+    const upPreventDefault = triggerBeforeMouse(thumbMouse('mouseUp', 'back'))
+    const forwardPreventDefault = triggerBeforeMouse(thumbMouse('mouseUp', 'forward'))
+
+    expect(upPreventDefault).toHaveBeenCalledTimes(1)
+    expect(forwardPreventDefault).toHaveBeenCalledTimes(1)
+    expect(rendererSendMock).toHaveBeenNthCalledWith(1, 'ui:tabHistoryNavigate', 'back')
+    expect(rendererSendMock).toHaveBeenNthCalledWith(2, 'ui:tabHistoryNavigate', 'forward')
+  })
+
+  it('consumes mouseDown without navigating so pages cannot double-handle the click', () => {
+    setupGuestHistoryMouseButtons({
+      browserTabId,
+      guest: makeGuest(),
+      resolveRenderer: () => makeRenderer()
+    })
+
+    const preventDefault = triggerBeforeMouse(thumbMouse('mouseDown', 'back'))
+
+    expect(preventDefault).toHaveBeenCalledTimes(1)
+    expect(rendererSendMock).not.toHaveBeenCalled()
+  })
+
+  it('leaves standard buttons untouched', () => {
+    setupGuestHistoryMouseButtons({
+      browserTabId,
+      guest: makeGuest(),
+      resolveRenderer: () => makeRenderer()
+    })
+
+    const preventDefault = triggerBeforeMouse(thumbMouse('mouseUp', 'left'))
+
+    expect(preventDefault).not.toHaveBeenCalled()
+    expect(rendererSendMock).not.toHaveBeenCalled()
+  })
+
+  it('cleans up the listener on teardown', () => {
+    const cleanup = setupGuestHistoryMouseButtons({
       browserTabId,
       guest: makeGuest(),
       resolveRenderer: () => makeRenderer()

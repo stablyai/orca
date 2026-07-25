@@ -2614,6 +2614,21 @@ export function useIpcEvents(): void {
     )
     unsubs.push(window.api.ui.onSwitchRecentTab(handleSwitchRecentTab))
     unsubs.push(
+      // Why: forwarded from main when a browser guest owns focus — the chord never reaches the window keydown handler.
+      window.api.ui.onTabHistoryNavigate((direction) => {
+        const store = useAppStore.getState()
+        const worktreeId = store.activeWorktreeId
+        if (!worktreeId) {
+          return
+        }
+        if (direction === 'back') {
+          store.goBackTabHistory(worktreeId)
+        } else {
+          store.goForwardTabHistory(worktreeId)
+        }
+      })
+    )
+    unsubs.push(
       window.api.ui.onSwitchTerminalTab((direction) => {
         const store = useAppStore.getState()
         if (isFloatingWorkspacePanelFocused()) {

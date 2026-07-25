@@ -3431,6 +3431,12 @@ const api = {
       ipcRenderer.on('ui:browserHistoryNavigate', listener)
       return () => ipcRenderer.removeListener('ui:browserHistoryNavigate', listener)
     },
+    onTabHistoryNavigate: (callback: (direction: 'back' | 'forward') => void): (() => void) => {
+      const listener = (_event: Electron.IpcRendererEvent, direction: 'back' | 'forward'): void =>
+        callback(direction)
+      ipcRenderer.on('ui:tabHistoryNavigate', listener)
+      return () => ipcRenderer.removeListener('ui:tabHistoryNavigate', listener)
+    },
     onZoomBrowserPage: (callback: (direction: 'in' | 'out' | 'reset') => void): (() => void) => {
       const listener = (_event: Electron.IpcRendererEvent, direction: 'in' | 'out' | 'reset') =>
         callback(direction)

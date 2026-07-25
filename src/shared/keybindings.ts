@@ -72,6 +72,8 @@ export type KeybindingActionId =
   | 'tab.nextAllTypes'
   | 'tab.previousAllTypes'
   | 'tab.previousRecent'
+  | 'tab.history.back'
+  | 'tab.history.forward'
   | 'tab.nextTerminal'
   | 'tab.previousTerminal'
   | 'tab.selectByIndex'
@@ -658,6 +660,34 @@ export const KEYBINDING_DEFINITIONS: readonly KeybindingDefinition[] = [
     scope: 'tabs',
     searchKeywords: ['shortcut', 'tab', 'recent', 'mru', 'switch', 'last used'],
     defaultBindings: platformBindings(['Ctrl+Tab']),
+    allowInTerminal: true
+  },
+  {
+    id: 'tab.history.back',
+    title: 'Tab History Back',
+    group: 'Tab Navigation',
+    scope: 'tabs',
+    searchKeywords: ['shortcut', 'tab', 'history', 'back', 'recent', 'visited'],
+    // Why: VS Code's Go Back chords; Mod+Minus is zoom-out on win32/linux, so those need the Alt variant.
+    defaultBindings: {
+      darwin: ['Ctrl+Minus'],
+      linux: ['Ctrl+Alt+Minus'],
+      win32: ['Ctrl+Alt+Minus']
+    },
+    allowInTerminal: true
+  },
+  {
+    id: 'tab.history.forward',
+    title: 'Tab History Forward',
+    group: 'Tab Navigation',
+    scope: 'tabs',
+    searchKeywords: ['shortcut', 'tab', 'history', 'forward', 'recent', 'visited'],
+    // Why: Ctrl+Equal pairs with Ctrl+Minus (back); Mod+Equal is zoom-in on win32/linux, so those need the Alt variant.
+    defaultBindings: {
+      darwin: ['Ctrl+Equal', 'Ctrl+Shift+Minus'],
+      linux: ['Ctrl+Alt+Equal', 'Ctrl+Alt+Shift+Minus'],
+      win32: ['Ctrl+Alt+Equal', 'Ctrl+Alt+Shift+Minus']
+    },
     allowInTerminal: true
   },
   {
