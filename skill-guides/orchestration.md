@@ -160,10 +160,12 @@ To run the worker on another connected Orca server, add `--on <saved-environment
 # Mac Run home -> Windows worker (the reverse is identical from a Windows Run home)
 orca orchestration worker-start --task <task_id> --on windows --worktree new-top-level --repo <exact_remote_repo_selector> --name <name> --agent codex --setup run --json
 orca orchestration worker-show --dispatch <dispatch_id> --json
-orca orchestration worker-read --dispatch <dispatch_id> --limit 200 --json
+orca orchestration worker-read --dispatch <dispatch_id> --limit 50 --json
 ```
 
 Remote `current` and `new-child` are intentionally invalid because those words are ambiguous across servers. Use an exact discovered remote worktree selector or `new-top-level` with an explicit remote repo selector.
+
+`worker-read` defaults to `--source auto`: Orca returns the exact hook-reported Codex/Claude transcript when it can prove the worker session, otherwise it returns bounded terminal output with `source: "terminal"` and a typed `fallbackReason`. Continue with the returned top-level `cursor`; it stays pinned to that exact source. If Orca reports `source_changed`, start a fresh read without the old cursor. Never supply or guess a provider session ID or transcript path.
 
 Wait until every expected Dispatch settles, not for a fixed number of batches:
 

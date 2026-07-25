@@ -31,7 +31,8 @@ Status meanings:
 - [x] Phase 3 connected-server federation complete.
 - [x] Revalidate Phase 3 after the 2026-07-24 post-rebase dogfood exposed a renderer-adoption
       process-identity regression.
-- [x] Phase 4 explicitly deferred because its exact-source prerequisite does not exist.
+- [ ] Phase 4 structured worker output is implemented with passing automated coverage; physical
+      Mac/Windows and restart/disconnect dogfood remains.
 
 ## Scope invariants
 
@@ -361,15 +362,30 @@ Explicit non-goals:
 - [x] Windows PowerShell quoting, Windows paths, WSL environment propagation, and SSH bridge
       allowlists pass.
 
-## Phase 4 — Optional structured output adapter (deferred)
+## Phase 4 — Structured worker output
 
-- [x] DEFERRED until Orca exposes an exact terminal-to-provider-session association.
-- [x] Keep terminal-read as the V1 worker-read baseline.
-- [x] DEFERRED: add only provider-specific readers after a proven exact source identity exists.
-- [x] DEFERRED design constraint: never guess the latest session by current working directory.
-- [x] DEFERRED design constraint: pin the selected source for the full cursor chain.
-- [x] DEFERRED design constraint: preserve raw/provider-native entries and parsing warnings.
-- [x] DEFERRED design constraint: label terminal fallback and its reason explicitly.
+- [x] Reuse Orca's exact pane/process-to-provider-session association; do not create a second status
+      system.
+- [x] Keep bounded terminal-read as the universal fallback.
+- [x] Read only Codex/Claude transcripts supported by the existing native-chat decoders.
+- [x] Never guess the latest session by current working directory, terminal title, logo, or agent
+      type.
+- [x] Pin Dispatch, process, source, and provider session for the full opaque cursor chain.
+- [x] Preserve the existing structured native-chat message/block representation and emit bounded
+      parsing/clipping warnings.
+- [x] Label terminal fallback and its reason explicitly.
+- [x] Read transcripts on the worker-owning server and never serialize their filesystem paths.
+- [x] Fall back to the legacy federated terminal-read RPC when a connected server lacks the additive
+      structured-read method.
+- [x] Cover exact selection, sibling-session isolation, source changes, malformed input, limits,
+      path privacy, CLI rendering, and mixed-version fallback with automated tests.
+- [x] Physically verify local Codex, two same-worktree Codex sessions, cursor continuation,
+      provider-session replacement, explicit terminal selection, and safe Run-home restart behavior.
+- [x] Physically verify Mac Run home -> older Windows worker terminal fallback, including an opaque
+      continuation cursor and explicit transcript-required failure.
+- [ ] Physically verify hooks-disabled automatic fallback and disconnect/reconnect.
+- [ ] Physically verify exact structured Mac-to-Windows and Windows-to-Mac reads after both worker
+      servers run the new additive method.
 - [x] Do not add resume, live-stream control, session exclusivity, or a universal transcript ontology.
 
 ## Cross-cutting quality gates
@@ -411,8 +427,9 @@ Explicit non-goals:
 - The existing single durable worker row is the operation stage journal. A pre-effect failure has no
   residuals, possible acceptance before receipt is unknown, and later failure after a durable effect
   lists exact residual resources. No background saga executor or general effect engine was added.
-- Phase 4 is satisfied as an explicit conditional deferral. Orca still lacks an exact
-  terminal-to-provider-session association, so adding an adapter now would violate the design.
+- This earlier Phase 4 deferral was based on an incomplete audit. Orca already retained an exact
+  pane-scoped provider-session association from agent hooks; the narrow implementation now exposes
+  it to the worker-owning runtime and still falls back when that evidence is absent.
 
 ### 2026-07-22 — Final setup/startup review
 
@@ -443,8 +460,9 @@ Explicit non-goals:
 - Phase 3 remains open until the named Mac/Windows, WSL, SSH, relay, restart, disconnect, and quoting
   matrix runs on those actual paths. The in-process federation harness proves protocol behavior but
   is not a substitute for cross-platform acceptance.
-- Phase 4 stays deferred. V1 keeps bounded terminal observation and does not introduce a provider
-  session abstraction merely to make the phase appear complete.
+  - At this point Phase 4 stayed deferred pending proof of an exact association. The later
+    structured-output audit found the existing pane-scoped hook association and superseded this
+    decision without adding a universal provider framework.
 
 ### 2026-07-21 — Simplification decision
 
@@ -1385,6 +1403,80 @@ Append new entries chronologically. Do not rewrite older entries except to corre
 - Next:
   - Re-run the final local quality gates, push this evidence-only checklist update, and reconcile PR
     CI and review state.
+
+### 2026-07-24 — Structured worker-output implementation
+
+- Changes:
+  - Extended `worker-read` with `auto|transcript|terminal` source selection while preserving one
+    Dispatch-only agent command.
+  - Added exact pane/process/session selection from existing hook evidence, bounded Codex/Claude
+    transcript reading, path-free source identities, and opaque source-pinned cursors.
+  - Added a worker-local federated output RPC; mixed-version servers fall back through the existing
+    terminal-read method and still receive an opaque Run-home cursor.
+  - Added readable non-JSON transcript rendering, CLI help, skill guidance, typed errors, and
+    malformed/oversized/clipping warnings.
+- Files:
+  - `src/shared/orchestration-worker-output.ts`
+  - `src/main/runtime/orchestration/worker-output-cursor.ts`
+  - `src/main/runtime/orchestration/worker-provider-session.ts`
+  - `src/main/runtime/orchestration/worker-transcript-payload.ts`
+  - `src/main/runtime/orchestration/worker-transcript-read.ts`
+  - `src/main/runtime/rpc/methods/orchestration-worker-output.ts`
+  - Worker control/federation, runtime status lookup, CLI, skill, design, and focused tests
+- Verification:
+  - Node and CLI typechecks passed.
+  - Nineteen native-chat/structured-output suites passed 142 tests.
+  - Sixteen orchestration CLI/RPC/federation suites passed 289 tests.
+  - Five CLI registry/help/runtime-error suites passed 213 tests.
+  - Mixed-version fallback continuation was additionally verified with an opaque cursor.
+- Findings:
+  - The prior Phase 4 deferral was factually wrong: hook snapshots already bind provider sessions to
+    exact panes. Reusing that evidence avoids directory/title/logo guessing and avoids a second
+    status subsystem.
+  - Method probing is enough for mixed-version compatibility; a generalized provider capability
+    matrix is unnecessary.
+- Next:
+  - Run the remaining full lint/test gates and the physical local plus Mac/Windows dogfood matrix
+    before marking Phase 4 complete.
+
+### 2026-07-24 — Structured-output local and mixed-version dogfood
+
+- Changes:
+  - Ran two simultaneous same-worktree Codex Dispatches with unique markers and verified exact
+    transcript isolation plus opaque continuation.
+  - Made transcript-position fallback IDs opaque after the physical response exposed the local
+    Codex JSONL path.
+  - Redacted pane-bound Dispatch capability tokens from structured prose, tool input, tool output,
+    metadata, and image URLs after continuation exposed the lifecycle send command.
+  - Corrected `worker-read --help` so `--cursor` is described as opaque rather than numeric.
+  - Made forward paging advance safely across a transcript record larger than the bounded scan
+    window, while continuing to discard its unfinished fragments.
+  - Extended Dispatch-capability redaction to tool-input object keys as well as values.
+- Verification:
+  - Both simultaneous local reads selected different exact Codex source identities and contained
+    only their own marker.
+  - Continuation returned newly appended tool/assistant messages, `limited=true`, and the expected
+    completion marker.
+  - A fresh local response contained stable `worker-message-*` IDs, no `.codex/sessions` path, no
+    `dcap_` token, and explicit privacy/redaction warnings.
+  - Starting a new Codex chat in the same pane caused the old cursor to return `source_changed`; a
+    fresh read selected only the new chat marker.
+  - Restarting the Run-home runtime preserved settled state and rejected a read when the exact
+    worker process was no longer present.
+  - Mac Run home -> older Windows worker returned `source=terminal`,
+    `fallbackReason=remote_capability_unavailable`, an opaque cursor that continued successfully,
+    and `transcript_required` when structured output was explicitly required.
+- Findings:
+  - Synthetic path-leak tests need fallback-ID records, not only provider records with explicit IDs.
+  - Structured output must treat lifecycle capability text as secret even though the capability is
+    also pane-bound; redaction is a narrow output boundary, not a generalized secret scanner.
+  - Additive RPC probing works against the physical older Windows server without a capability
+    matrix or server upgrade gate.
+  - A bounded scan must still guarantee cursor progress; otherwise one pathological provider record
+    can trap an agent in a valid-looking continuation loop.
+- Next:
+  - Commit/push the tested implementation, update the physical Windows dev runtime, then run exact
+    Mac-to-Windows and Windows-to-Mac structured reads plus disconnect/reconnect.
 
 ### Entry template
 

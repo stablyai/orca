@@ -417,6 +417,20 @@ describe('orca root help', () => {
     expect(callMock).not.toHaveBeenCalled()
   })
 
+  it('describes worker-read cursors as opaque', async () => {
+    const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {})
+    logSpy.mockClear()
+
+    await main(['orchestration', 'worker-read', '--help'], '/tmp/repo')
+
+    const help = String(logSpy.mock.calls[0][0])
+    expect(help).toContain(
+      '--cursor <cursor>      Opaque cursor returned by a previous worker-read page'
+    )
+    expect(help).not.toContain('Line cursor from a previous read')
+    expect(callMock).not.toHaveBeenCalled()
+  })
+
   it('advertises Linear issue linking on worktree create and set help', async () => {
     const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {})
     logSpy.mockClear()

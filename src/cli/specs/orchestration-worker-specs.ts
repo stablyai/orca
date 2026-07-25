@@ -43,10 +43,14 @@ export const ORCHESTRATION_WORKER_COMMAND_SPECS: CommandSpec[] = [
   },
   {
     path: ['orchestration', 'worker-read'],
-    summary: 'Read bounded output from a supervised worker terminal',
+    summary: 'Read bounded output from one supervised worker',
     usage:
-      'orca orchestration worker-read --dispatch <dispatch_id> [--cursor <n>] [--limit <n>] [--json]',
-    allowedFlags: [...GLOBAL_FLAGS, 'dispatch', 'cursor', 'limit']
+      'orca orchestration worker-read --dispatch <dispatch_id> [--source <auto|transcript|terminal>] [--cursor <cursor>] [--limit <n>] [--json]',
+    allowedFlags: [...GLOBAL_FLAGS, 'dispatch', 'source', 'cursor', 'limit'],
+    notes: [
+      'The default auto source uses an exact hook-reported transcript when available and otherwise returns labeled terminal output.',
+      'A returned cursor is pinned to the exact source; start a fresh read if Orca reports source_changed.'
+    ]
   },
   {
     path: ['orchestration', 'worker-stop'],

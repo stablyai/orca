@@ -126,7 +126,36 @@ describe('orchestration worker-start CLI contract', () => {
     expect(callMock).toHaveBeenCalledWith('orchestration.workerRead', {
       dispatch: 'ctx_1',
       cursor: 0,
-      limit: 100
+      limit: 100,
+      source: undefined
+    })
+  })
+
+  it('passes opaque source-pinned cursors and explicit source selection', async () => {
+    callMock.mockResolvedValue({
+      result: {
+        dispatchId: 'ctx_1',
+        source: 'transcript',
+        transcript: { messages: [], nextCursor: 'owr1_next' }
+      }
+    })
+
+    await ORCHESTRATION_HANDLERS['orchestration worker-read']({
+      flags: new Map<string, string | boolean>([
+        ['dispatch', 'ctx_1'],
+        ['cursor', 'owr1_previous'],
+        ['source', 'transcript']
+      ]),
+      client: { call: callMock },
+      cwd: '/tmp/repo',
+      json: true
+    } as never)
+
+    expect(callMock).toHaveBeenCalledWith('orchestration.workerRead', {
+      dispatch: 'ctx_1',
+      cursor: 'owr1_previous',
+      limit: undefined,
+      source: 'transcript'
     })
   })
 })

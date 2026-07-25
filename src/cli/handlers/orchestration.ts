@@ -3,7 +3,6 @@ import type { CommandHandler } from '../dispatch'
 import type { RuntimeClient } from '../runtime-client'
 import { printResult } from '../format'
 import {
-  getOptionalNonNegativeIntegerFlag,
   getOptionalPositiveIntegerFlag,
   getOptionalStringFlag,
   getRequiredStringFlag
@@ -16,6 +15,12 @@ import {
 } from '../../shared/orchestration-ask-timeout'
 import { abbreviateOrchestrationTasks } from '../../shared/orchestration-task-summary'
 import { parsePositiveSafeIntegerText } from '../../shared/timer-delay'
+import type {
+  OrchestrationWorkerReadResult,
+  OrchestrationWorkerReadSource
+} from '../../shared/orchestration-worker-output'
+import type { NativeChatMessage } from '../../shared/native-chat-types'
+import type { RuntimeTerminalRead } from '../../shared/runtime-types'
 
 // Why: 15 s is well under Claude Code's ~2 min Bash-tool silence budget while keeping log volume low. See design doc §3.4.
 const DEFAULT_KEEPALIVE_INTERVAL_MS = 15_000
@@ -349,6 +354,42 @@ function callMutation<TResult>(
     ...options,
     orchestrationRequestId: requestId
   })
+}
+
+type LegacyWorkerReadResult = {
+  dispatchId: string
+  terminal: RuntimeTerminalRead
+}
+
+function formatWorkerRead(value: OrchestrationWorkerReadResult | LegacyWorkerReadResult): string {
+  if (!('source' in value) || value.source === 'terminal') {
+    return value.terminal.tail.join('\n')
+  }
+  return value.transcript.messages.map(formatWorkerTranscriptMessage).join('\n\n')
+}
+
+function formatWorkerTranscriptMessage(message: NativeChatMessage): string {
+  const blocks = message.blocks.map((block) => {
+    if (block.type === 'text') {
+      return block.text
+    }
+    if (block.type === 'tool-call') {
+      return `[tool ${block.name}] ${safeJson(block.input)}`
+    }
+    if (block.type === 'tool-result') {
+      return `[tool result${block.isError ? ' error' : ''}] ${block.output}`
+    }
+    return block.url ? `[image] ${block.url}` : `[image omitted]`
+  })
+  return `[${message.role}] ${blocks.join('\n')}`.trimEnd()
+}
+
+function safeJson(value: unknown): string {
+  try {
+    return JSON.stringify(value)
+  } catch {
+    return '[unserializable input]'
+  }
 }
 
 export const ORCHESTRATION_HANDLERS: Record<string, CommandHandler> = {
@@ -779,15 +820,28 @@ export const ORCHESTRATION_HANDLERS: Record<string, CommandHandler> = {
   },
 
   'orchestration worker-read': async ({ flags, client, json }) => {
-    const result = await client.call<{
-      dispatchId: string
-      terminal: { tail: string[]; status: string; nextCursor: string | null }
-    }>('orchestration.workerRead', {
-      dispatch: getRequiredStringFlag(flags, 'dispatch'),
-      cursor: getOptionalNonNegativeIntegerFlag(flags, 'cursor'),
-      limit: getOptionalPositiveIntegerFlag(flags, 'limit')
-    })
-    printResult(result, json, (value) => value.terminal.tail.join('\n'))
+    const cursorFlag = getOptionalStringFlag(flags, 'cursor')
+    const cursor =
+      cursorFlag !== undefined && /^\d+$/.test(cursorFlag)
+        ? Number.parseInt(cursorFlag, 10)
+        : cursorFlag
+    const source = getOptionalStringFlag(flags, 'source')
+    if (source && !['auto', 'transcript', 'terminal'].includes(source)) {
+      throw new RuntimeClientError(
+        'invalid_argument',
+        '--source must be auto, transcript, or terminal'
+      )
+    }
+    const result = await client.call<OrchestrationWorkerReadResult | LegacyWorkerReadResult>(
+      'orchestration.workerRead',
+      {
+        dispatch: getRequiredStringFlag(flags, 'dispatch'),
+        cursor,
+        limit: getOptionalPositiveIntegerFlag(flags, 'limit'),
+        source: source as OrchestrationWorkerReadSource | undefined
+      }
+    )
+    printResult(result, json, formatWorkerRead)
   },
 
   'orchestration worker-stop': async ({ flags, client, json }) => {

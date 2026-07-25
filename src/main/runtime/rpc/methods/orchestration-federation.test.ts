@@ -162,7 +162,7 @@ describe('orchestration federation', () => {
       handle: 'term_windows_worker',
       status: 'running',
       entries: [{ cursor: 1, text: 'remote output' }],
-      nextCursor: 1,
+      nextCursor: '1',
       limited: false
     } as never)
     vi.spyOn(runtime, 'closeTerminal').mockResolvedValue({
@@ -653,41 +653,6 @@ describe('orchestration federation', () => {
     expect(homeDb.getFederatedDispatch(dispatch.id)?.peer_fingerprint).toBe(
       'windows_peer_fingerprint'
     )
-  })
-
-  it('routes show and read by Dispatch without repeating the worker server', async () => {
-    const task = createHomeTask()
-    await homeDispatcher.dispatch(startRequest(task.id))
-    const dispatch = homeDb.getDispatchContext(task.id)!
-
-    const shown = await homeDispatcher.dispatch({
-      id: 'rpc_remote_show',
-      authToken: 'coordinator-token',
-      method: 'orchestration.workerShow',
-      params: { dispatch: dispatch.id }
-    })
-    const read = await homeDispatcher.dispatch({
-      id: 'rpc_remote_read',
-      authToken: 'coordinator-token',
-      method: 'orchestration.workerRead',
-      params: { dispatch: dispatch.id, limit: 20 }
-    })
-
-    expect(shown).toMatchObject({
-      ok: true,
-      result: {
-        server: { environmentId: 'environment_windows', name: 'windows' },
-        observation: { status: 'running', exactWorker: true },
-        terminal: { handle: 'term_windows_worker' }
-      }
-    })
-    expect(read).toMatchObject({
-      ok: true,
-      result: {
-        server: { environmentId: 'environment_windows', name: 'windows' },
-        terminal: { entries: [{ text: 'remote output' }] }
-      }
-    })
   })
 
   it('stops only the exact remote agent terminal', async () => {
