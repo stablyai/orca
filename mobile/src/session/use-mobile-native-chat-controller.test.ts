@@ -127,6 +127,18 @@ describe('useMobileNativeChatController handleNativeChatSend', () => {
     expect(holdUnconfirmedSend).toHaveBeenCalledWith(ORIGIN, 'look', expect.any(Function))
   })
 
+  it('preserves the unknown outcome on the WithOutcome surface for paste-first callers', async () => {
+    sendWithOutcome.mockResolvedValue('unknown')
+    let outcome = 'accepted'
+    await act(async () => {
+      outcome = await controller!.handleNativeChatSendWithOutcome('look', ['file:///a.jpg'])
+    })
+    // Image sends heal a possibly-orphaned paste off this — 'unknown' must not
+    // collapse into the boolean 'sent' shape (#10228).
+    expect(outcome).toBe('unknown')
+    expect(holdUnconfirmedSend).toHaveBeenCalledWith(ORIGIN, 'look', expect.any(Function))
+  })
+
   it('reports a rejected send and posts no echo', async () => {
     sendWithOutcome.mockResolvedValue('rejected')
     let accepted = true

@@ -43,6 +43,7 @@ import type {
 import type { UsagePercentageDisplay } from './usage-percentage-display'
 import type { StatusBarUsageMode } from './status-bar-usage-mode'
 import type { PersistedNativeChatSessionOptions } from './native-chat-session-options'
+import type { CodexResetCreditAttemptLedger } from './codex-reset-credit-attempt-ledger'
 
 // Re-exported for backward compat with renderer call sites that import
 // `WorkspaceCreateTelemetrySource` from '../../../shared/types'.
@@ -1066,6 +1067,8 @@ export type PersistedOpenFile = {
   language: string
   isPreview?: boolean
   runtimeEnvironmentId?: string | null
+  /** SSH target that owns an absolute path outside the worktree. */
+  externalSshTargetId?: string
   /** Unsaved editor buffer captured for hot exit; presence restores the tab dirty. */
   dirtyDraftContent?: string
   /** Signature of the disk content the dirty draft is based on; lets restore
@@ -2577,6 +2580,9 @@ export type SourceControlGroupOrder = 'changes-first' | 'staged-first' | 'untrac
 
 export type LeftSidebarAppearanceMode = 'default' | 'match-terminal' | 'tinted'
 
+/** Strategy for the prefix prepended to worktree branch names. */
+export type BranchPrefixStrategy = 'git-username' | 'custom' | 'none'
+
 export type FloatingTerminalCwdRequest = {
   path?: string
   requireTrusted?: boolean
@@ -2593,6 +2599,9 @@ export type HostSettingOverrides = {
   displayLabel?: string
   defaultWorktreeLocation?: string
 }
+
+/** Presentation mode for the experimental Agent Dashboard. */
+export type AgentDashboardMode = 'in-window' | 'popout'
 
 export type GlobalSettings = {
   workspaceDir: string
@@ -2612,7 +2621,7 @@ export type GlobalSettings = {
   /** One-shot migration guard for the default-on rollout. Existing profiles
    *  without the guard are flipped on once; later explicit opt-outs stick. */
   autoRenameBranchFromWorkDefaultedOn?: boolean
-  branchPrefix: 'git-username' | 'custom' | 'none'
+  branchPrefix: BranchPrefixStrategy
   branchPrefixCustom: string
   enableGitHubAttribution: boolean
   theme: 'system' | 'dark' | 'light'
@@ -2909,6 +2918,8 @@ export type GlobalSettings = {
   experimentalActivity: boolean
   /** Experimental: pop-out Kanban dashboard for monitoring and opening agent terminals across worktrees. */
   experimentalAgentDashboardPopout?: boolean
+  /** How the Agent Dashboard opens: an in-window companion board or a separate pop-out window. Defaults to in-window. */
+  experimentalAgentDashboardMode?: AgentDashboardMode
   /** One-shot migration guard for defaulting the Agents view off; later explicit opt-ins persist normally. */
   experimentalActivityDefaultedOffForAllUsers?: boolean
   /** Experimental: persistent terminal-pane attention ring for bell + agent-completion events. Opt-in while tuning signal/noise. */
@@ -3476,6 +3487,8 @@ export type PersistedState = {
   onboarding: OnboardingState
   /** Main-owned telemetry de-dupe marker; never exposed through PersistedUIState. */
   featureInteractionTelemetryBuckets?: FeatureInteractionTelemetryBucketState
+  /** Main-owned reset mutation journal. Never expose this through renderer settings APIs. */
+  codexResetCreditAttemptLedger?: CodexResetCreditAttemptLedger
 }
 
 // ─── Filesystem ─────────────────────────────────────────────

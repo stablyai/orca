@@ -134,8 +134,10 @@ function webClientPathForEndpoint(pathname: string): string {
 
 const MOBILE_RPC_METHOD_ALLOWLIST = new Set([
   'accounts.list',
+  'accounts.consumeCodexResetCredit',
   'accounts.selectClaude',
   'accounts.selectCodex',
+  'accounts.selectCodexForTarget',
   'accounts.subscribe',
   'accounts.unsubscribe',
   'aiVault.listSessions',
@@ -395,6 +397,14 @@ const MOBILE_RPC_METHOD_ALLOWLIST = new Set([
 // Why: single classifier for long-poll requests (handlers that block on an external event), shared by counter/abort/keepalive. See §3.1.
 function isLongPollRequest(request: RpcRequest): boolean {
   if (request.method === 'terminal.wait') {
+    return true
+  }
+  // Why: orchestration.ask blocks unconditionally (default 600 s) holding the
+  // RPC open until a reply lands or the deadline passes, so it needs the same
+  // keepalive as check --wait or the 30 s socket idle timer tears it down. It
+  // also relies on the abort signal (only wired for long-polls) to release the
+  // waiter when the asking client disconnects.
+  if (request.method === 'orchestration.ask') {
     return true
   }
   if (request.method === 'orchestration.check') {

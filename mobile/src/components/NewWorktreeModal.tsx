@@ -28,11 +28,7 @@ import {
   wasSetupHookPreviouslyApproved,
   type SetupHookTrust
 } from '../tasks/setup-hook-trust'
-import {
-  isMobileTuiAgent,
-  isMobileTuiAgentEnabled,
-  MOBILE_TUI_AGENT_LAUNCH_COMMANDS
-} from '../tasks/mobile-tui-agents'
+import { isMobileTuiAgentEnabled } from '../tasks/mobile-tui-agents'
 import type { PersistedTrustedOrcaHooks, TuiAgent } from '../../../src/shared/types'
 import type { SshConnectionState } from '../../../src/shared/ssh-types'
 import {
@@ -84,7 +80,6 @@ type SetupRunPolicy = 'ask' | 'run-by-default' | 'skip-by-default'
 type RuntimeSettings = {
   defaultTuiAgent?: TuiAgent | 'blank' | null
   disabledTuiAgents?: TuiAgent[]
-  agentCmdOverrides?: Record<string, string>
 }
 
 type RepoHooksResponse = {
@@ -600,14 +595,6 @@ function NewWorktreeModalContent({
         return
       }
 
-      const command =
-        selectedAgent.id !== '__blank__'
-          ? (latestRuntimeSettings?.agentCmdOverrides?.[selectedAgent.id] ??
-            (isMobileTuiAgent(selectedAgent.id)
-              ? MOBILE_TUI_AGENT_LAUNCH_COMMANDS[selectedAgent.id]
-              : undefined))
-          : undefined
-
       // Why: blank name field — match desktop behavior by computing the
       // next available marine-creature name at submit time and passing it
       // to the server. The server's worktree.create rejects empty/invalid
@@ -660,10 +647,7 @@ function NewWorktreeModalContent({
             selection: createSelection,
             targetRepoId: selectedRepo.id,
             setupDecision,
-            agent: {
-              choice: normalizeWorkspaceAgent(selectedAgent.id) ?? 'blank',
-              startupCommand: command
-            },
+            agent: { choice: normalizeWorkspaceAgent(selectedAgent.id) ?? 'blank' },
             workspaceName: trimmedName || undefined,
             note: trimmedNote,
             nameIsAutoManaged: composer.isNameAutoManaged,
@@ -673,7 +657,6 @@ function NewWorktreeModalContent({
             client,
             repoId: selectedRepo.id,
             baseName,
-            startupCommand: command,
             createdWithAgentId,
             comment: trimmedNote,
             setupDecision,

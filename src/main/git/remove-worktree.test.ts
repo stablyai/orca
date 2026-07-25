@@ -8,12 +8,14 @@ const {
   gitExecFileSyncMock,
   translateWslOutputPathsMock,
   statMock,
+  readFileMock,
   resolveGitDirMock
 } = vi.hoisted(() => ({
   gitExecFileAsyncMock: vi.fn(),
   gitExecFileSyncMock: vi.fn(),
   translateWslOutputPathsMock: vi.fn((output: string) => output),
   statMock: vi.fn(),
+  readFileMock: vi.fn(),
   resolveGitDirMock: vi.fn()
 }))
 
@@ -30,7 +32,7 @@ vi.mock('./status', () => ({
 
 vi.mock('fs/promises', async () => {
   const actual = await vi.importActual<typeof FsPromises>('fs/promises')
-  return { ...actual, stat: statMock }
+  return { ...actual, stat: statMock, readFile: readFileMock }
 })
 
 import { clearGitCapabilityStateForTests } from './git-capability-state'
@@ -41,12 +43,20 @@ import {
   forceDeleteLocalBranch,
   listWorktrees,
   removeWorktree,
+  _resetWorktreeScanCacheForTests,
   WORKTREE_LIST_TIMEOUT_MS,
   WORKTREE_REMOVAL_PREFLIGHT_TIMEOUT_MS
 } from './worktree'
 
+// Why: detectSparseCheckout on main also requires core.sparseCheckout=true in git
+// config (not just a non-empty pattern file). Unit tests that assert isSparse must
+// present an enabled flag; other paths never reach this read after the pattern-file
+// fast-path ENOENT.
+const ENABLED_SPARSE_CHECKOUT_CONFIG = '[core]\nsparseCheckout = true\n'
+
 beforeEach(() => {
   clearGitCapabilityStateForTests()
+  _resetWorktreeScanCacheForTests()
 })
 
 type MockResult = {
@@ -94,6 +104,21 @@ function expectGitCallOrder(calls: string[], beforeCall: string, afterCall: stri
   expect(calls.indexOf(afterCall)).toBeGreaterThan(calls.indexOf(beforeCall))
 }
 
+function mockSparseCheckoutEnabledConfig(): void {
+  readFileMock.mockImplementation(async (filePath: string) => {
+    const normalized = String(filePath).replaceAll('\\', '/')
+    // Why: linked worktrees may point at a common dir; treat missing commondir as
+    // "this gitdir is the common dir" so the shared config read still runs.
+    if (normalized.endsWith('/commondir')) {
+      throw Object.assign(new Error('ENOENT'), { code: 'ENOENT' })
+    }
+    if (normalized.endsWith('/config') || normalized.endsWith('/config.worktree')) {
+      return ENABLED_SPARSE_CHECKOUT_CONFIG
+    }
+    throw Object.assign(new Error('ENOENT'), { code: 'ENOENT' })
+  })
+}
+
 describe('removeWorktree', () => {
   beforeEach(() => {
     gitExecFileAsyncMock.mockReset()
@@ -104,6 +129,8 @@ describe('removeWorktree', () => {
     // Default: no worktree has a sparse-checkout config file. Tests that need
     // sparse detection override this.
     statMock.mockRejectedValue(Object.assign(new Error('ENOENT'), { code: 'ENOENT' }))
+    readFileMock.mockReset()
+    mockSparseCheckoutEnabledConfig()
     resolveGitDirMock.mockReset()
     resolveGitDirMock.mockImplementation(async (worktreePath: string) => `${worktreePath}/.git`)
   })
@@ -939,6 +966,8 @@ describe('listWorktrees', () => {
     // Default: no worktree has a sparse-checkout config file. Tests that need
     // sparse detection override this.
     statMock.mockRejectedValue(Object.assign(new Error('ENOENT'), { code: 'ENOENT' }))
+    readFileMock.mockReset()
+    mockSparseCheckoutEnabledConfig()
     resolveGitDirMock.mockReset()
     resolveGitDirMock.mockImplementation(async (worktreePath: string) => `${worktreePath}/.git`)
   })
@@ -1151,12 +1180,14 @@ describe('listWorktrees', () => {
       completed = true
     })
 
-    for (let attempt = 0; pendingProbeResolves.length < 8 && attempt < 20; attempt += 1) {
+    for (let attempt = 0; pendingProbeResolves.length < 8 && attempt < 50; attempt += 1) {
       await Promise.resolve()
     }
     expect(pendingProbeResolves).toHaveLength(8)
 
-    for (let attempt = 0; !completed && attempt < 20; attempt += 1) {
+    // Why: each probe may chain extra microtasks after stat (e.g. core.sparseCheckout
+    // config reads). Drain until the list settles, not a fixed microtask budget.
+    for (let attempt = 0; !completed && attempt < 100; attempt += 1) {
       pendingProbeResolves.splice(0).forEach((resolve) => resolve())
       await Promise.resolve()
       await Promise.resolve()

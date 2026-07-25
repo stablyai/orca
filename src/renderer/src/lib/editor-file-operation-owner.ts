@@ -133,6 +133,7 @@ export function getEditorFileOperationContext(
   file: {
     worktreeId: string
     runtimeEnvironmentId?: string | null
+    externalSshTargetId?: string
     operationProvenance?: EditorFileOperationProvenance
   },
   worktreePath: string | null
@@ -166,6 +167,15 @@ export function getEditorFileOperationContext(
         )?.folderPath ?? null)
       : null)
   if (!host) {
+    throw new Error(OWNER_CHANGED_MESSAGE)
+  }
+  const externalSshTargetId = file.externalSshTargetId?.trim()
+  if (
+    externalSshTargetId &&
+    (host.kind !== 'ssh' ||
+      route.runtimeEnvironmentId !== null ||
+      host.targetId !== externalSshTargetId)
+  ) {
     throw new Error(OWNER_CHANGED_MESSAGE)
   }
   if (host?.kind === 'ssh' && provenance.expectedSshConnectionGeneration === undefined) {

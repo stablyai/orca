@@ -844,6 +844,7 @@ export function useIpcEvents(): void {
     type PendingAgentStatusEvent = {
       data: AgentStatusIpcPayload
       firstSeenAt: number
+      replay: boolean
     }
     type AgentStatusApplyResult = 'applied' | 'pending' | 'dropped'
     const pendingAgentStatusEvents: PendingAgentStatusEvent[] = []
@@ -2921,8 +2922,15 @@ export function useIpcEvents(): void {
       }, PENDING_AGENT_STATUS_RETRY_MS)
     }
 
-    function enqueuePendingAgentStatus(data: AgentStatusIpcPayload): void {
-      pendingAgentStatusEvents.push({ data, firstSeenAt: Date.now() })
+    function enqueuePendingAgentStatus(
+      data: AgentStatusIpcPayload,
+      options?: { replay?: boolean }
+    ): void {
+      pendingAgentStatusEvents.push({
+        data,
+        firstSeenAt: Date.now(),
+        replay: options?.replay === true
+      })
       while (pendingAgentStatusEvents.length > MAX_PENDING_AGENT_STATUS_EVENTS) {
         pendingAgentStatusEvents.shift()
       }
@@ -2945,7 +2953,7 @@ export function useIpcEvents(): void {
           if (now - event.firstSeenAt > PENDING_AGENT_STATUS_TTL_MS) {
             continue
           }
-          const result = applyAgentStatus(event.data, { retry: true })
+          const result = applyAgentStatus(event.data, { retry: true, replay: event.replay })
           if (result === 'pending') {
             remaining.push(event)
           }
@@ -3012,17 +3020,27 @@ export function useIpcEvents(): void {
         }
       }
       if (!exists) {
-        // Why: a non-empty paneKey with no matching tab is a routing failure to track.
-        // Skip during replay — main's durable cache legitimately holds closed-tab entries.
-        if (options?.replay !== true) {
-          if (options?.retry !== true) {
-            track('agent_hook_unattributed', { reason: 'unknown_tab_id' })
-            // Why: live hook IPC can beat tab/layout hydration; retry so a transient pane-key miss doesn't drop completion state.
-            enqueuePendingAgentStatus(data)
+        // Why: startup snapshot replay can beat tab/layout hydration too.
+        // Reuse the same bounded retry queue when the row still carries
+        // runtime-backed worktree provenance so the cached status can adopt
+        // once the pane becomes visible.
+        if (options?.replay === true) {
+          if (data.worktreeId && hasRuntimeBackedWorktreeAttribution(data)) {
+            if (options?.retry !== true) {
+              enqueuePendingAgentStatus(data, { replay: true })
+            }
+            return 'pending'
           }
-          return 'pending'
+          return 'dropped'
         }
-        return 'dropped'
+        if (options?.retry !== true) {
+          // Why: empty paneKeys are dropped in main before IPC fanout. Reaching
+          // this branch means a non-empty paneKey escaped without a matching
+          // renderer tab, so track the adoption/routing failure separately.
+          track('agent_hook_unattributed', { reason: 'unknown_tab_id' })
+          enqueuePendingAgentStatus(data)
+        }
+        return 'pending'
       }
       if (options?.replay !== true && options?.retry !== true) {
         for (let index = pendingAgentStatusEvents.length - 1; index >= 0; index -= 1) {

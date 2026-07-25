@@ -168,6 +168,35 @@ describe('editor file operation owner', () => {
     ).toThrow('Reopen the file')
   })
 
+  it('rejects a restored external SSH file after its target changes', () => {
+    useAppStore.setState({
+      repos: [{ id: 'repo', connectionId: 'ssh-replacement' } as never],
+      worktreesByRepo: {
+        repo: [{ id: worktreeId, repoId: 'repo', path: '/remote/repo' } as never]
+      },
+      sshConnectionStates: new Map([
+        [
+          'ssh-replacement',
+          {
+            targetId: 'ssh-replacement',
+            status: 'connected',
+            error: null,
+            reconnectAttempt: 0,
+            connectionGeneration: 1
+          }
+        ]
+      ])
+    })
+
+    expect(() =>
+      getEditorFileOperationContext(
+        useAppStore.getState(),
+        { worktreeId, externalSshTargetId: 'ssh-original' },
+        '/remote/repo'
+      )
+    ).toThrow('Reopen the file')
+  })
+
   describe('folder workspaces', () => {
     const folderWorkspaceId = 'aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee'
     const folderKey = `folder:${folderWorkspaceId}`

@@ -93,6 +93,8 @@ import Sidebar from './index'
 function setSidebarState(settings: GlobalSettings, statusBarVisible = true): void {
   mocks.state = {
     activeModal: null,
+    agentDashboardDrawerOpen: false,
+    setAgentDashboardDrawerOpen: vi.fn(),
     fetchAllWorktrees: vi.fn(),
     repos: [],
     setSidebarWidth: vi.fn(),

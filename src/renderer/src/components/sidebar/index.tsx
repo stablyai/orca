@@ -8,6 +8,7 @@ import SetupScriptPromptCard from './SetupScriptPromptCard'
 import WorktreeList from './WorktreeList'
 import SidebarToolbar from './SidebarToolbar'
 import WorkspaceKanbanDrawer from './WorkspaceKanbanDrawer'
+import { AgentDashboardDrawer } from '@/components/dashboard/AgentDashboardDrawer'
 import type { VirtualizedScrollAnchor } from '@/hooks/useVirtualizedScrollAnchor'
 import { cn } from '@/lib/utils'
 import { FolderPlus, Loader2 } from 'lucide-react'
@@ -131,6 +132,26 @@ function Sidebar({
     }
   }, [closeWorkspaceBoard, sidebarOpen, workspaceBoardRenderedOpen])
 
+  const agentDashboardDrawerOpen = useAppStore((s) => s.agentDashboardDrawerOpen)
+  const setAgentDashboardDrawerOpen = useAppStore((s) => s.setAgentDashboardDrawerOpen)
+  useEffect(() => {
+    if (!sidebarOpen && agentDashboardDrawerOpen) {
+      setAgentDashboardDrawerOpen(false)
+    }
+  }, [agentDashboardDrawerOpen, setAgentDashboardDrawerOpen, sidebarOpen])
+  // Why: both companion boards expand into the same space beside the sidebar,
+  // so the most recently opened one dismisses the other.
+  useEffect(() => {
+    if (agentDashboardDrawerOpen) {
+      closeWorkspaceBoard()
+    }
+  }, [agentDashboardDrawerOpen, closeWorkspaceBoard])
+  useEffect(() => {
+    if (workspaceBoardRenderedOpen) {
+      setAgentDashboardDrawerOpen(false)
+    }
+  }, [setAgentDashboardDrawerOpen, workspaceBoardRenderedOpen])
+
   const { containerRef, onResizeStart, isResizing } = useSidebarResize<HTMLDivElement>({
     isOpen: sidebarOpen,
     width: sidebarWidth,
@@ -230,6 +251,12 @@ function Sidebar({
           preserveOpenForMenu={workspaceBoardMenuOpen}
           onOpenChange={handleWorkspaceBoardOpenChange}
           onMenuOpenChange={setWorkspaceBoardMenuOpen}
+        />
+      ) : null}
+      {sidebarOpen && settings?.experimentalAgentDashboardPopout === true ? (
+        <AgentDashboardDrawer
+          leftSidebarStyle={leftSidebarStyle}
+          statusBarVisible={statusBarVisible}
         />
       ) : null}
     </TooltipProvider>

@@ -47,6 +47,7 @@ import { capGitStatusEntries, resolveGitStatusLimit } from '../shared/git-status
 import { checkIgnoredPathsOp } from './git-handler-check-ignore'
 import { resolveRelayPushTarget } from './git-handler-push-target'
 import {
+  isExecKilledError,
   isNoUpstreamError,
   normalizeGitErrorMessage,
   runPullWithDivergenceFallback
@@ -71,6 +72,14 @@ import { syncForkDefaultBranch, validateGitForkSyncExpectedUpstream } from '../s
 import { InFlightPromiseDedupe, stableInFlightKey } from '../shared/in-flight-promise-dedupe'
 import { GIT_FETCH_SKIP_AUTO_MAINTENANCE_CONFIG_ARGS } from '../shared/git-fetch-auto-maintenance'
 import { GitCapabilityCache } from '../shared/git-capability-cache'
+import {
+  githubPullRequestHeadLocalRef,
+  gitlabMergeRequestHeadLocalRef,
+  isSafeReviewHeadFetchRemote,
+  isValidReviewHeadNumber,
+  reviewHeadRemoteRefComponent,
+  REVIEW_HEAD_FETCH_TIMEOUT_MS
+} from '../shared/review-head-tracking-ref'
 import type { RelayFilesystemWatchRegistry } from './relay-filesystem-watch-registry'
 import {
   hasUnsupportedRevParsePathFormatEcho,
@@ -216,7 +225,18 @@ export class GitHandler {
     this.dispatcher.onRequest('git.fetch', (p) => this.fetch(p))
     this.dispatcher.onRequest('git.forkSync', (p, context) => this.forkSync(p, context))
     this.dispatcher.onRequest('git.fetchRemoteTrackingRef', (p) => this.fetchRemoteTrackingRef(p))
+    this.dispatcher.onRequest('git.fetchGitHubPullRequestHead', (p) =>
+      this.fetchGitHubPullRequestHead(p)
+    )
     this.dispatcher.onRequest('git.fetchGitLabMergeRequestHead', (p) =>
+      this.fetchGitLabMergeRequestHead(p)
+    )
+    // Why: the durable-ref variant is a distinct method name so an old relay
+    // (which only knows FETCH_HEAD-semantics git.fetchGitLabMergeRequestHead)
+    // returns -32601 and the client can prompt a reconnect instead of silently
+    // resolving a stale/missing ref. Both names share the durable handler: a
+    // refspec fetch still writes FETCH_HEAD, so old clients keep their semantics.
+    this.dispatcher.onRequest('git.fetchGitLabMergeRequestHeadRef', (p) =>
       this.fetchGitLabMergeRequestHead(p)
     )
     this.dispatcher.onRequest('git.push', (p) => this.push(p))
@@ -929,38 +949,94 @@ export class GitHandler {
     }
   }
 
+  // Why: the durable review-head ref embeds the remote's identity, and a
+  // missing remote must fail with an actionable message, not a raw fetch error.
+  private async reviewHeadRemoteComponent(worktreePath: string, remote: string): Promise<string> {
+    let remoteUrl: string
+    try {
+      const { stdout } = await this.git(['remote', 'get-url', remote], worktreePath)
+      remoteUrl = stdout.trim()
+    } catch {
+      remoteUrl = ''
+    }
+    if (!remoteUrl) {
+      throw new Error(`Remote "${remote}" is not configured.`)
+    }
+    return reviewHeadRemoteRefComponent(remote, remoteUrl)
+  }
+
   private async fetchGitLabMergeRequestHead(params: Record<string, unknown>) {
     this.clearGitMutationReadCaches()
     const worktreePath = params.worktreePath as string
     const remote = params.remote
     const mrIid = params.mrIid
     try {
-      if (typeof remote !== 'string') {
-        throw new Error('Invalid GitLab merge request fetch request.')
-      }
-      if (typeof mrIid !== 'number' || !Number.isSafeInteger(mrIid) || mrIid <= 0) {
+      if (typeof remote !== 'string' || !isValidReviewHeadNumber(mrIid)) {
         throw new Error('Invalid GitLab merge request fetch request.')
       }
       const mergeRequestIid = mrIid
-      if (remote.startsWith('-')) {
+      if (!isSafeReviewHeadFetchRemote(remote)) {
         throw new Error('GitLab merge request fetch remote must not start with "-".')
       }
 
       try {
-        const { stdout } = await this.git(['remote'], worktreePath)
-        const remotes = stdout
-          .split(/\r?\n/)
-          .map((line) => line.trim())
-          .filter(Boolean)
-        if (!remotes.includes(remote)) {
-          throw new Error(`Remote "${remote}" is not configured.`)
-        }
-        // Why: GitLab MR heads aren't refs/heads/*, so the remote-tracking fetch RPC can't represent fork MRs; keep this write path MR-only.
+        const remoteComponent = await this.reviewHeadRemoteComponent(worktreePath, remote)
+        // Why: GitLab fork heads need a dedicated write RPC and ref outside refs/heads/*.
+        // Return the exact written path so the client does not re-hash a second get-url.
+        const localRef = gitlabMergeRequestHeadLocalRef(remoteComponent, mergeRequestIid)
         await this.git(
-          ['fetch', '--no-tags', remote, `refs/merge-requests/${mergeRequestIid}/head`],
-          worktreePath
+          [
+            'fetch',
+            '--no-tags',
+            remote,
+            `+refs/merge-requests/${mergeRequestIid}/head:${localRef}`
+          ],
+          worktreePath,
+          { timeout: REVIEW_HEAD_FETCH_TIMEOUT_MS }
         )
+        return { localRef }
       } catch (error) {
+        // Why: a timeout kill has no git stderr; name it so the client can classify it as transient.
+        if (isExecKilledError(error)) {
+          throw new Error(
+            `Fetching refs/merge-requests/${mergeRequestIid}/head from "${remote}" timed out.`
+          )
+        }
+        throw new Error(normalizeGitErrorMessage(error, 'fetch'))
+      }
+    } finally {
+      this.clearGitMutationReadCaches()
+    }
+  }
+
+  private async fetchGitHubPullRequestHead(params: Record<string, unknown>) {
+    this.clearGitMutationReadCaches()
+    const worktreePath = params.worktreePath as string
+    const remote = params.remote
+    const prNumber = params.prNumber
+    try {
+      if (typeof remote !== 'string' || !isValidReviewHeadNumber(prNumber)) {
+        throw new Error('Invalid GitHub pull request fetch request.')
+      }
+      if (!isSafeReviewHeadFetchRemote(remote)) {
+        throw new Error('GitHub pull request fetch remote must not start with "-".')
+      }
+
+      try {
+        const remoteComponent = await this.reviewHeadRemoteComponent(worktreePath, remote)
+        // Why: return the written path so resolve can rev-parse the same ref the host wrote.
+        const localRef = githubPullRequestHeadLocalRef(remoteComponent, prNumber)
+        await this.git(
+          ['fetch', '--no-tags', remote, `+refs/pull/${prNumber}/head:${localRef}`],
+          worktreePath,
+          { timeout: REVIEW_HEAD_FETCH_TIMEOUT_MS }
+        )
+        return { localRef }
+      } catch (error) {
+        // Why: a timeout kill has no git stderr; name it so the client can classify it as transient.
+        if (isExecKilledError(error)) {
+          throw new Error(`Fetching refs/pull/${prNumber}/head from "${remote}" timed out.`)
+        }
         throw new Error(normalizeGitErrorMessage(error, 'fetch'))
       }
     } finally {

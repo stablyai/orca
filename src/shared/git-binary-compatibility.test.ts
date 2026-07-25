@@ -14,6 +14,11 @@ import {
   isUnsupportedWorktreeListZError
 } from './git-worktree-command-capabilities'
 import { gitCredentialPromptGuardEnv } from './git-credential-prompt-env'
+import {
+  githubPullRequestHeadLocalRef,
+  gitlabMergeRequestHeadLocalRef,
+  reviewHeadRemoteRefComponent
+} from './review-head-tracking-ref'
 
 const execFileAsync = promisify(execFile)
 const image = process.env.ORCA_GIT_COMPAT_IMAGE
@@ -157,6 +162,29 @@ describeBinaryCompatibility('real Git binary compatibility', () => {
       )
       await expect(runGit([...legacyArgs, head, head])).resolves.toBeDefined()
     }
+  })
+
+  it('fetches hosted review heads into dedicated refs', async () => {
+    const head = (await runGit(['rev-parse', 'HEAD'])).stdout.trim()
+    await runGit(['update-ref', 'refs/pull/42/head', head])
+    await runGit(['update-ref', 'refs/merge-requests/42/head', head])
+
+    // Why: exercise the exact remote-identity-scoped ref shape the app generates.
+    const component = reviewHeadRemoteRefComponent('origin', 'git@github.com:org/repo.git')
+    const pullRef = githubPullRequestHeadLocalRef(component, 42)
+    const mergeRequestRef = gitlabMergeRequestHeadLocalRef(component, 42)
+    await expect(
+      runGit(['fetch', '--no-tags', '.', `+refs/pull/42/head:${pullRef}`])
+    ).resolves.toBeDefined()
+    await expect(
+      runGit(['fetch', '--no-tags', '.', `+refs/merge-requests/42/head:${mergeRequestRef}`])
+    ).resolves.toBeDefined()
+    await expect(runGit(['rev-parse', '--verify', pullRef])).resolves.toMatchObject({
+      stdout: `${head}\n`
+    })
+    await expect(runGit(['rev-parse', '--verify', mergeRequestRef])).resolves.toMatchObject({
+      stdout: `${head}\n`
+    })
   })
 
   it('degrades indexed credential config safely at the Git 2.31 boundary', async () => {

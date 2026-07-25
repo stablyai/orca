@@ -19,10 +19,20 @@ export type NetworkInterface = {
   address: string
 }
 
+// Why: link-local IPv6 addresses (fe80::/10) require a scope/zone id to be
+// connectable and never work as a QR-advertised pairing host, so they are
+// excluded from the pickable list. The regex covers the full /10 range
+// (fe80: through febf:), not just the fe80: prefix the OS usually assigns.
+function isUsableIPv6Address(address: string): boolean {
+  return !/^fe[89ab][0-9a-f]:/i.test(address)
+}
+
 // Why: the WebSocket transport advertises 0.0.0.0 as its endpoint, which isn't
-// connectable from a mobile device. We enumerate all non-internal IPv4
-// addresses so the user can choose which one to advertise in the QR code
-// (e.g. LAN vs Tailscale).
+// connectable from a mobile device. We enumerate all non-internal IPv4 and
+// (non-link-local) IPv6 addresses so the user can choose which one to advertise
+// in the QR code (e.g. LAN vs Tailscale). IPv6 must be included so pairing works
+// on IPv6-only hosts (e.g. a headless `orca serve` reachable only over IPv6),
+// where an IPv4-only scan returns nothing and the UI reports "no interfaces".
 function getNetworkInterfaces(): NetworkInterface[] {
   const result: NetworkInterface[] = []
   const interfaces = networkInterfaces()
@@ -31,14 +41,26 @@ function getNetworkInterfaces(): NetworkInterface[] {
       continue
     }
     for (const addr of addrs) {
-      if (addr.family === 'IPv4' && !addr.internal) {
+      if (addr.internal) {
+        continue
+      }
+      if (addr.family === 'IPv4') {
+        result.push({ name, address: addr.address })
+      } else if (addr.family === 'IPv6' && isUsableIPv6Address(addr.address)) {
         result.push({ name, address: addr.address })
       }
     }
   }
-  return result.sort(
-    (a, b) => Number(isTailnetIPv4Address(b.address)) - Number(isTailnetIPv4Address(a.address))
-  )
+  // Why: prefer tailnet IPv4 first (most portable across networks), then other
+  // IPv4, then IPv6 as a fallback for IPv6-only environments.
+  return result.sort((a, b) => rankAddress(a.address) - rankAddress(b.address))
+}
+
+function rankAddress(address: string): number {
+  if (isTailnetIPv4Address(address)) {
+    return 0
+  }
+  return address.includes(':') ? 2 : 1
 }
 
 function getDefaultPairingAddress(): string | null {

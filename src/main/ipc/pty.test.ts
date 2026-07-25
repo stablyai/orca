@@ -225,26 +225,25 @@ import { OrcaRuntimeService } from '../runtime/orca-runtime'
 import { hasLiveClaudePtys, markClaudePtySpawned } from '../claude-accounts/live-pty-gate'
 import * as livePtyGate from '../claude-accounts/live-pty-gate'
 import {
-  encodePowerShellCommand,
-  getPowerShellOsc133Bootstrap
-} from '../powershell-osc133-bootstrap'
-import {
   SSH_PTY_IDENTITY_MISMATCH_ERROR,
   SSH_SESSION_EXPIRED_ERROR
 } from '../providers/ssh-pty-errors'
+import { resolveWindowsShellLaunchArgs } from '../providers/windows-shell-args'
 import { _resetWslCachesForTests, _setWslCachesForTests } from '../wsl'
 import { wslHookRelayManager } from '../agent-hooks/wsl-hook-relay-manager'
 import { acquireWatcherRemovalGate } from './watcher-removal-gate'
 
-const POWERSHELL_OSC133_ARGS = [
-  '-NoLogo',
-  '-NoExit',
-  '-EncodedCommand',
-  encodePowerShellCommand(getPowerShellOsc133Bootstrap())
-]
 // Why: Windows resolves a bare PowerShell name to an absolute exe before ConPTY, else CreateProcessW fails with error 5 (PR #6537 / #5161).
 const RESOLVED_WINDOWS_POWERSHELL = 'C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\powershell.exe'
 const RESOLVED_PWSH7 = 'C:\\Program Files\\PowerShell\\7\\pwsh.exe'
+// Why: default spawn cwd in the Windows UTF-8 suite is USERPROFILE; derive shell
+// args from the production resolver so expectations stay in lockstep when the
+// PowerShell bootstrap grows (e.g. cwd restore after profiles load).
+const DEFAULT_WINDOWS_PTY_CWD = 'C:\\Users\\test'
+function powerShellOsc133ArgsForCwd(cwd: string = DEFAULT_WINDOWS_PTY_CWD): string[] {
+  return resolveWindowsShellLaunchArgs(RESOLVED_WINDOWS_POWERSHELL, cwd, cwd).shellArgs
+}
+const POWERSHELL_OSC133_ARGS = powerShellOsc133ArgsForCwd()
 const TEST_CODEX_HOME =
   process.platform === 'win32'
     ? 'C:\\Users\\test\\AppData\\Roaming\\orca\\codex-runtime-home\\home'

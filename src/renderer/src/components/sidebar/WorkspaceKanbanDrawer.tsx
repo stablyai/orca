@@ -40,6 +40,7 @@ import {
 } from './worktree-manual-order'
 import type { WorkspaceStatus, WorktreeMeta } from '../../../../shared/types'
 import { makeWorkspaceStatusId } from '../../../../shared/workspace-statuses'
+import { STATUS_BAR_RESERVE_HEIGHT, WORKSPACE_TOP_CHROME_HEIGHT } from './workspace-chrome-metrics'
 import { useContextualTour } from '@/components/contextual-tours/use-contextual-tour'
 import { translate } from '@/i18n/i18n'
 
@@ -52,9 +53,6 @@ type WorkspaceKanbanDrawerProps = {
   onOpenChange: (open: boolean) => void
   onMenuOpenChange: (open: boolean) => void
 }
-
-const WORKSPACE_TOP_CHROME_HEIGHT = 36
-const STATUS_BAR_RESERVE_HEIGHT = 24
 
 function formatTaskStatusSyncMessage(message: WorkspaceBoardTaskStatusSyncMessage): string {
   switch (message.kind) {

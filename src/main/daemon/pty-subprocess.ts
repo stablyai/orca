@@ -592,10 +592,12 @@ export function createPtySubprocess(opts: PtySubprocessOptions): SubprocessHandl
   let windowsFallbackAttempts: WindowsShellSpawnAttempt[] = []
   const startupAgentRecognition = recognizeAgentProcessFromCommandLine(opts.command)
   const isCodexStartupCommand = startupAgentRecognition?.agent === 'codex'
-  if (opts.command && startupAgentRecognition) {
-    assertSafeAgentStartupCwd(opts.cwd, opts.command)
-  }
+  // Why: gate on the effective cwd, not raw opts.cwd — an omitted cwd becomes a safe
+  // default (mirrors LocalPtyProvider). Guarding first treated undefined as root-like (#9578).
   const requestedCwd = opts.cwd || getDefaultCwd()
+  if (opts.command && startupAgentRecognition) {
+    assertSafeAgentStartupCwd(requestedCwd, opts.command)
+  }
   let spawnCwd = requestedCwd
   let validationCwd = spawnCwd
 

@@ -5450,7 +5450,6 @@ function SourceControlInner(): React.JSX.Element {
     <>
       <div ref={setSourceControlRoot} className="relative flex h-full flex-col overflow-hidden">
         <SourceControlHeaderToolbar
-          gitIdentityDisplay={gitIdentityDisplay}
           filterQuery={filterQuery}
           filterExpanded={filterExpanded}
           onFilterQueryChange={setFilterQuery}
@@ -5471,6 +5470,7 @@ function SourceControlInner(): React.JSX.Element {
           onExpandNotes={() => setDiffCommentsExpanded(true)}
           branchSummary={branchSummary}
           compareBaseRef={compareBaseRef}
+          headDisplay={gitIdentityDisplay}
           upstreamStatus={remoteStatus}
           manualReviewUrl={manualReviewUrl}
         />

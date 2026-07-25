@@ -1408,6 +1408,17 @@ describe('OrcaRuntimeRpcServer', () => {
     const pushRuntimeGit = vi.fn().mockResolvedValue({ ok: true })
     const selectClaudeAccount = vi.fn().mockResolvedValue({ ok: true })
     const selectCodexAccount = vi.fn().mockResolvedValue({ ok: true })
+    const expectedCodexResetScope = {
+      target: { runtime: 'host' as const, wslDistro: null },
+      accountId: 'codex-account',
+      accountRevision: 42,
+      offerRevision: 'v1:offer'
+    }
+    const consumeCodexRateLimitResetCredit = vi.fn().mockResolvedValue({
+      outcome: 'reset',
+      scope: expectedCodexResetScope,
+      snapshot: { claude: null, codex: null }
+    })
     const removeClaudeAccount = vi.fn().mockResolvedValue({ ok: true })
     const readTerminal = vi.fn().mockResolvedValue({ tail: ['ok'] })
     const getRuntimeGitStatus = vi
@@ -1496,6 +1507,7 @@ describe('OrcaRuntimeRpcServer', () => {
       pushRuntimeGit,
       selectClaudeAccount,
       selectCodexAccount,
+      consumeCodexRateLimitResetCredit,
       removeClaudeAccount,
       readTerminal,
       getRuntimeGitStatus,
@@ -2131,6 +2143,19 @@ describe('OrcaRuntimeRpcServer', () => {
     )
     await server['handleWebSocketMessage'](
       JSON.stringify({
+        id: 'req_consume_codex_reset',
+        method: 'accounts.consumeCodexResetCredit',
+        deviceToken: mobile.token,
+        params: {
+          idempotencyKey: '11111111-1111-4111-8111-111111111111',
+          expectedScope: expectedCodexResetScope
+        }
+      }),
+      (response) => replies.push(JSON.parse(response) as Record<string, unknown>),
+      () => {}
+    )
+    await server['handleWebSocketMessage'](
+      JSON.stringify({
         id: 'req_remove_claude',
         method: 'accounts.removeClaude',
         deviceToken: mobile.token,
@@ -2334,6 +2359,9 @@ describe('OrcaRuntimeRpcServer', () => {
     )
     expect(replies).toContainEqual(expect.objectContaining({ id: 'req_select_claude', ok: true }))
     expect(replies).toContainEqual(expect.objectContaining({ id: 'req_select_codex', ok: true }))
+    expect(replies).toContainEqual(
+      expect.objectContaining({ id: 'req_consume_codex_reset', ok: true })
+    )
     expect(replies).toContainEqual(expect.objectContaining({ id: 'req_terminal_read', ok: true }))
     expect(replies).toContainEqual(expect.objectContaining({ id: 'req_files_open_diff', ok: true }))
     expect(replies).toContainEqual(expect.objectContaining({ id: 'req_git_diff', ok: true }))
@@ -2365,6 +2393,10 @@ describe('OrcaRuntimeRpcServer', () => {
     )
     expect(selectClaudeAccount).toHaveBeenCalledWith('claude-account')
     expect(selectCodexAccount).toHaveBeenCalledWith(null)
+    expect(consumeCodexRateLimitResetCredit).toHaveBeenCalledWith(
+      '11111111-1111-4111-8111-111111111111',
+      expectedCodexResetScope
+    )
     expect(readTerminal).toHaveBeenCalledWith('term-1', { cursor: undefined })
     expect(getRuntimeGitStatus).toHaveBeenCalledWith('id:wt-1')
     expect(pushRuntimeGit).toHaveBeenCalledWith('id:wt-1', true, undefined, undefined)
@@ -3902,6 +3934,51 @@ describe('OrcaRuntimeRpcServer', () => {
         expect(terminals[0]).toMatchObject({ id: 'req_wait', ok: true })
         // Why: 300ms wait with 50ms keepalive → expect roughly 5 keepalives;
         // assert ≥3 to tolerate scheduler jitter without flaking.
+        expect(keepalives.length).toBeGreaterThanOrEqual(3)
+      } finally {
+        db.close()
+        await server.stop()
+      }
+    })
+
+    it('emits keepalive frames while orchestration.ask blocks for a reply', async () => {
+      const userDataPath = mkdtempSync(join(tmpdir(), 'orca-runtime-rpc-'))
+      const runtime = new OrcaRuntimeService()
+      const db = new OrchestrationDb(':memory:')
+      runtime.setOrchestrationDb(db)
+      const server = new OrcaRuntimeRpcServer({
+        runtime,
+        userDataPath,
+        keepaliveIntervalMs: 50
+      })
+      await server.start()
+
+      try {
+        const metadata = readRuntimeMetadata(userDataPath)
+        // Why: no reply is ever sent, so ask blocks the full window on the same
+        // hold-the-socket path check --wait uses. Without ask in the long-poll
+        // set the 30s idle timer would tear this down before it keepalives.
+        const session = openFramedSession(metadata!.transports[0]!.endpoint, {
+          id: 'req_ask',
+          authToken: metadata!.authToken,
+          method: 'orchestration.ask',
+          params: {
+            to: 'term_nobody',
+            from: 'term_asker',
+            question: 'ping?',
+            timeoutMs: 300
+          }
+        })
+        await session.done
+
+        const keepalives = session.frames.filter((f) => f._keepalive === true)
+        const terminals = session.frames.filter((f) => f.ok !== undefined)
+        expect(terminals).toHaveLength(1)
+        expect(terminals[0]).toMatchObject({
+          id: 'req_ask',
+          ok: true,
+          result: { timedOut: true }
+        })
         expect(keepalives.length).toBeGreaterThanOrEqual(3)
       } finally {
         db.close()
