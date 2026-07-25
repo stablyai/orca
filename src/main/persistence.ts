@@ -2403,6 +2403,28 @@ function cloneWorkspaceSessionState(session: WorkspaceSessionState): WorkspaceSe
   return structuredClone(session)
 }
 
+/**
+ * Re-seed main-owned PTY incarnations that a renderer session replay dropped.
+ *
+ * An absent topology fence marks the replay: renderer payloads omit every main-owned field, while
+ * main retires through this same setter and always carries a fresh fence. Seeding before sanitize
+ * leaves tombstone retirement and membership rebase the final say over what they legitimately drop.
+ */
+function reseedMainOwnedPtyIncarnations(
+  session: WorkspaceSessionState,
+  prior: WorkspaceSessionState | undefined
+): WorkspaceSessionState {
+  const priorIncarnations = prior?.terminalPtyIncarnationsByPaneKey
+  if (
+    !priorIncarnations ||
+    session.terminalTopologyRevisionByRepoId ||
+    Object.keys(session.terminalPtyIncarnationsByPaneKey ?? {}).length > 0
+  ) {
+    return session
+  }
+  return { ...session, terminalPtyIncarnationsByPaneKey: priorIncarnations }
+}
+
 function removeWorkspaceSessionOwner(
   session: WorkspaceSessionState | undefined,
   ownerKey: string,
@@ -5907,6 +5929,7 @@ export class Store {
   /** Persist a non-'local' host partition; remote hosts skip setLocalWorkspaceSession's local-daemon PTY-binding race guards. */
   private setHostWorkspaceSession(hostId: ExecutionHostId, session: WorkspaceSessionState): void {
     const prior = this.state.workspaceSessionsByHostId?.[hostId]
+    session = reseedMainOwnedPtyIncarnations(session, prior)
     // Why: each partition owns its topology fence; renderer writes omit it and must rebase locally.
     session = sanitizeWorkspaceSessionTerminalRetirements(session, prior)
     const incoming = session.terminalArchiveHintsByPaneKey ?? {}
@@ -5927,6 +5950,7 @@ export class Store {
 
   private setLocalWorkspaceSession(session: PersistedState['workspaceSession']): void {
     const prior = this.state.workspaceSession
+    session = reseedMainOwnedPtyIncarnations(session, prior)
     session = sanitizeWorkspaceSessionTerminalRetirements(session, prior)
     session = pruneWorkspaceSessionBrowserHistory(
       pruneLocalTerminalScrollbackBuffers(session, this.state.repos)

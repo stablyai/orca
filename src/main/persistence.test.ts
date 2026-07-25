@@ -43,6 +43,7 @@ import { ORCA_PERSISTED_STATE_MAX_BYTES } from '../shared/persisted-state-file-b
 import { setSourceControlActionDefault } from '../shared/source-control-ai-actions'
 import { LEGACY_DEFAULT_SSH_RELAY_GRACE_PERIOD_SECONDS } from '../shared/ssh-types'
 import { closeTerminalTabInWorkspaceSession } from '../shared/workspace-session-terminal-tab-close'
+import { retireTerminalSurfaceFromPersistence } from './runtime/mobile-session-terminal-persistence-retirement'
 
 // Shared mutable state so the electron mock can reference a per-test directory
 const testState = { dir: '' }
@@ -11117,6 +11118,111 @@ describe('Store host-partitioned workspace sessions', () => {
     expect(
       store.getWorkspaceSession().terminalArchiveHintsByPaneKey?.[retiredPaneKey]
     ).toBeUndefined()
+  })
+
+  it.each(['local', 'ssh:ssh-1'] as const)(
+    'preserves main-owned pty incarnations when an %s renderer replay omits them',
+    async (hostId) => {
+      const store = await createStore()
+      const paneKey = `tab-1:${TEST_LEAF_1}`
+      const incarnations = { [paneKey]: 'incarnation-1' }
+      store.setWorkspaceSession(
+        {
+          ...makeBoundHostSession(hostId === 'local' ? 'local-pty' : 'ssh:ssh-1@@remote-pty'),
+          terminalPtyIncarnationsByPaneKey: incarnations
+        },
+        hostId
+      )
+      const rendererReplay = structuredClone(store.getWorkspaceSession(hostId))
+      // Why: buildWorkspaceSessionPayload emits neither field, so a replay drops both together.
+      delete rendererReplay.terminalPtyIncarnationsByPaneKey
+      delete rendererReplay.terminalTopologyRevisionByRepoId
+
+      store.setWorkspaceSession(rendererReplay, hostId)
+
+      expect(store.getWorkspaceSession(hostId).terminalPtyIncarnationsByPaneKey).toEqual(
+        incarnations
+      )
+    }
+  )
+
+  it('lets a legacy tombstone retire the seeded incarnation on a renderer replay', async () => {
+    const paneKey = `tab-1:${TEST_LEAF_1}`
+    // Why: tombstones only survive on disk from older builds; every setter write clears them.
+    writeDataFile({
+      schemaVersion: 1,
+      repos: [],
+      worktreeMeta: {},
+      settings: {},
+      ui: {},
+      workspaceSession: {
+        ...makeBoundHostSession('pty-1'),
+        terminalPtyIncarnationsByPaneKey: { [paneKey]: 'incarnation-1' },
+        terminalSurfaceTombstonesByPaneKey: {
+          [paneKey]: {
+            worktreeId: 'repo-1::/worktree',
+            parentTabId: 'tab-1',
+            leafId: TEST_LEAF_1,
+            ptyId: 'pty-1',
+            incarnationId: 'incarnation-1',
+            retiredAt: 1
+          }
+        }
+      }
+    })
+    const store = await createStore()
+    const rendererReplay = structuredClone(store.getWorkspaceSession())
+    delete rendererReplay.terminalPtyIncarnationsByPaneKey
+    delete rendererReplay.terminalTopologyRevisionByRepoId
+    delete rendererReplay.terminalSurfaceTombstonesByPaneKey
+
+    store.setWorkspaceSession(rendererReplay)
+
+    // Why: seeding runs before sanitize, so tombstone retirement still gets the final say.
+    expect(store.getWorkspaceSession().terminalPtyIncarnationsByPaneKey?.[paneKey]).toBeUndefined()
+  })
+
+  it('does not resurrect an orphaned incarnation the sanitizer just filtered out', async () => {
+    const store = await createStore()
+    const orphanPaneKey = `ghost-tab:${TEST_LEAF_2}`
+    store.setWorkspaceSession({
+      ...makeBoundHostSession('pty-1'),
+      terminalTopologyRevisionByRepoId: { 'repo-1': 1 },
+      terminalPtyIncarnationsByPaneKey: { [orphanPaneKey]: 'orphan-incarnation' }
+    })
+    const rendererReplay = structuredClone(store.getWorkspaceSession())
+    delete rendererReplay.terminalPtyIncarnationsByPaneKey
+    delete rendererReplay.terminalTopologyRevisionByRepoId
+
+    store.setWorkspaceSession(rendererReplay)
+
+    // Why: membership rebase already dropped this pane; a wholesale restore would undo the sanitizer.
+    expect(
+      store.getWorkspaceSession().terminalPtyIncarnationsByPaneKey?.[orphanPaneKey]
+    ).toBeUndefined()
+  })
+
+  it('lets main retire the last pty incarnation without the replay guard reviving it', async () => {
+    const store = await createStore()
+    const paneKey = `tab-1:${TEST_LEAF_1}`
+    store.setWorkspaceSession({
+      ...makeBoundHostSession('pty-1'),
+      terminalPtyIncarnationsByPaneKey: { [paneKey]: 'incarnation-1' }
+    })
+
+    // Why: this is the runtime's retirement path — it carries the topology fence, so it is not a replay.
+    const retired = retireTerminalSurfaceFromPersistence(store.getWorkspaceSession(), {
+      worktreeId: 'repo-1::/worktree',
+      parentTabId: 'tab-1',
+      leafId: TEST_LEAF_1,
+      ptyId: 'pty-1',
+      incarnationId: 'incarnation-1'
+    })
+    expect(retired.terminalPtyIncarnationsByPaneKey?.[paneKey]).toBeUndefined()
+
+    store.setWorkspaceSession(retired)
+
+    expect(store.getWorkspaceSession().terminalPtyIncarnationsByPaneKey?.[paneKey]).toBeUndefined()
   })
 
   it.each([
