@@ -21,8 +21,12 @@ function createResumeSource() {
     on: vi.fn((event: PowerLifecycleEvent, callback: ResumeListener) => {
       listeners.set(event, callback)
     }),
-    off: vi.fn((event: PowerLifecycleEvent, _callback: ResumeListener) => {
-      listeners.delete(event)
+    // Why: match on identity so detaching a different closure than the one
+    // registered still leaves a live listener, as it would on real powerMonitor.
+    off: vi.fn((event: PowerLifecycleEvent, callback: ResumeListener) => {
+      if (listeners.get(event) === callback) {
+        listeners.delete(event)
+      }
     })
   }
   return {
@@ -73,8 +77,9 @@ describe('registerSystemResumeBroadcast', () => {
     unsubscribe()
     fireResume()
 
-    expect(source.off).toHaveBeenCalledWith('resume', expect.any(Function))
-    expect(source.off).toHaveBeenCalledWith('suspend', expect.any(Function))
+    // Why: detaching a different closure than the one registered leaks a real
+    // powerMonitor listener, and for 'suspend' that leak is otherwise unobservable.
+    expect(source.off.mock.calls).toEqual(source.on.mock.calls)
     expect(window.webContents.send).not.toHaveBeenCalled()
   })
 
