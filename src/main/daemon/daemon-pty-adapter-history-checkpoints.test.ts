@@ -784,5 +784,40 @@ describe('DaemonPtyAdapter (IPtyProvider)', () => {
         rows: 40
       })
     })
+
+    // Why: the pop-out dashboard reads panes this Orca never attached. After a
+    // reboot that is every pane until its worktree is reopened, so history is
+    // the only frame the board can show.
+    it('reads a cold-restore frame for an unattached session, never for one it owns', async () => {
+      const sessionId = 'preview-cold-restore'
+      const sessionDir = join(historyDir, getHistorySessionDirName(sessionId))
+      mkdirSync(sessionDir, { recursive: true })
+      writeFileSync(
+        join(sessionDir, 'meta.json'),
+        JSON.stringify({
+          cwd: '/projects/rebooted',
+          cols: 120,
+          rows: 40,
+          startedAt: '2026-04-15T10:00:00Z',
+          endedAt: null,
+          exitCode: null
+        })
+      )
+      writeFileSync(join(sessionDir, 'scrollback.bin'), 'output from before the reboot\r\n')
+
+      historyAdapter = new DaemonPtyAdapter({ socketPath, tokenPath, historyPath: historyDir })
+      const restore = await historyAdapter.readColdRestoreSnapshot(sessionId)
+      expect(restore).not.toBeNull()
+      expect(restore!.scrollbackAnsi + restore!.snapshotAnsi).toContain(
+        'output from before the reboot'
+      )
+      expect(restore).toMatchObject({ cols: 120, rows: 40 })
+
+      expect(await historyAdapter.readColdRestoreSnapshot('never-existed')).toBeNull()
+
+      // Once this adapter owns the session, its live snapshot supersedes disk.
+      await historyAdapter.spawn({ cols: 80, rows: 24, sessionId })
+      expect(await historyAdapter.readColdRestoreSnapshot(sessionId)).toBeNull()
+    })
   })
 })

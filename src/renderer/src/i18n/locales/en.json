@@ -15689,6 +15689,7 @@
     },
     "terminal": {
       "closed": "No live terminal — this agent's pane has closed.",
+      "historical": "Showing this pane's last saved frame — it isn't attached right now. Open the worktree to resume it.",
       "focusWorktree": "Open worktree",
       "close": "Close"
     },

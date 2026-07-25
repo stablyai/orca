@@ -14563,6 +14563,7 @@
     },
     "terminal": {
       "closed": "没有活动的终端 — 该智能体的窗格已关闭。",
+      "historical": "Showing this pane's last saved frame — it isn't attached right now. Open the worktree to resume it.",
       "focusWorktree": "聚焦工作树",
       "close": "关闭"
     },

@@ -1,4 +1,5 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
+import { History } from 'lucide-react'
 import { Terminal } from '@xterm/xterm'
 import '@xterm/xterm/css/xterm.css'
 import { getShortcutPlatform } from '@/lib/shortcut-platform'
@@ -48,6 +49,11 @@ function clamp(value: number, min: number, max: number): number {
  * phone, a host reclaim) the oversized frame is scaled down to fit and
  * anchored so the cursor stays visible. Keystrokes pass through to the PTY;
  * DOM renderer so it never grabs a WebGL context.
+ *
+ * When no PTY is left to serialize, main falls back to the daemon's on-disk
+ * history and the frame arrives with live === false. That case renders the same
+ * way but claims no grid and accepts no input — after a reboot it is the only
+ * thing the board can show until the worktree is reopened.
  */
 export function AgentTerminalPreview({
   ptyId,
@@ -80,9 +86,12 @@ export function AgentTerminalPreview({
     )
     return { terminalTheme: theme, terminalMode: appearance.mode }
   }, [settings, systemPrefersDark])
-  // A null snapshot means no serializer knows this pty (it died or was never
-  // spawned this session) — say so instead of painting a silent blank terminal.
+  // A null snapshot means no serializer knows this pty AND no history survives
+  // it — say so instead of painting a silent blank terminal.
   const [ptyGone, setPtyGone] = useState(false)
+  // A frame replayed from history: the session is over, so it renders but takes
+  // no input and receives no live bytes.
+  const [historical, setHistorical] = useState(false)
 
   // Why: refs are seeded at first render and refreshed on commit — assigning
   // during render trips react-compiler. Layout, not passive: xterm's keydown is
@@ -96,12 +105,14 @@ export function AgentTerminalPreview({
 
   useEffect(() => {
     setPtyGone(false)
+    setHistorical(false)
     const container = containerRef.current
     if (!container) {
       return
     }
     let disposed = false
     let terminal: Terminal | null = null
+    let terminalReadOnly = false
     let offData: (() => void) | null = null
     let userInputDisposable: { dispose: () => void } | null = null
     let imeBridge: PreviewImeBridge | null = null
@@ -157,6 +168,12 @@ export function AgentTerminalPreview({
         ? null
         : new ResizeObserver(() => {
             scheduleFit()
+            if (terminalReadOnly) {
+              // Why here too, not just in replayConnection: mounting the
+              // history banner resizes the box, so the observer would claim the
+              // grid on its own — resizing a session that may still be running.
+              return
+            }
             gridClaim.schedule()
           })
     if (container.parentElement) {
@@ -202,7 +219,8 @@ export function AgentTerminalPreview({
       container,
       getTerminal: () => terminal,
       getTerminalInput: () => terminalInputRef.current,
-      isDisposed: () => disposed
+      isDisposed: () => disposed,
+      isReadOnly: () => terminalReadOnly
     })
 
     const disposeImeNativeTextBridge = (): void => {
@@ -278,18 +296,39 @@ export function AgentTerminalPreview({
       requestRefresh: () => void
     ): void => {
       const snap = connection.snapshot!
+      const readOnly = snap.live === false
+      // Why: an agent whose pane closes while you watch it downgrades from live
+      // bytes to a history frame. Rebuild rather than reuse — the live
+      // terminal's input wiring must not outlive the PTY it typed into.
+      if (terminal && terminalReadOnly !== readOnly) {
+        userInputDisposable?.dispose()
+        userInputDisposable = null
+        disposeImeNativeTextBridge()
+        disposeTerminalCompatibility?.()
+        disposeTerminalCompatibility = null
+        disposeKeyHandler?.()
+        disposeKeyHandler = null
+        terminal.dispose()
+        terminal = null
+        terminalRef.current = null
+      }
       if (!terminal) {
         terminal = new Terminal(
-          buildPreviewTerminalOptions({
-            settings: settingsRef.current,
-            terminalInput: terminalInputRef.current,
-            macOptionIsMeta: macOptionAsAltRef.current === 'true',
-            theme: terminalTheme,
-            themeMode: terminalMode,
-            cols: clamp(snap.cols ?? FALLBACK_COLS, 2, 500),
-            rows: clamp(snap.rows ?? FALLBACK_ROWS, 2, 200),
-            scrollback: PREVIEW_SCROLLBACK_BUFFER_ROWS
-          })
+          {
+            ...buildPreviewTerminalOptions({
+              settings: settingsRef.current,
+              terminalInput: terminalInputRef.current,
+              macOptionIsMeta: macOptionAsAltRef.current === 'true',
+              theme: terminalTheme,
+              themeMode: terminalMode,
+              cols: clamp(snap.cols ?? FALLBACK_COLS, 2, 500),
+              rows: clamp(snap.rows ?? FALLBACK_ROWS, 2, 200),
+              scrollback: PREVIEW_SCROLLBACK_BUFFER_ROWS
+            }),
+            // Why: a history frame has no input target; this also prevents
+            // xterm from encoding ordinary keystrokes.
+            ...(readOnly ? { disableStdin: true } : {})
+          }
         )
         try {
           terminal.open(container)
@@ -298,10 +337,16 @@ export function AgentTerminalPreview({
           terminal = null
           return
         }
+        terminalReadOnly = readOnly
         terminalRef.current = terminal
         installTerminalCompatibility()
-        installInputRouting()
-        installImeNativeTextBridge()
+        if (!readOnly) {
+          installInputRouting()
+          installImeNativeTextBridge()
+        }
+        // Copy remains useful on a history frame. Paste is rejected inside the
+        // paste helper before clipboard access or IPC, and other input has no
+        // onData route when read-only.
         installKeyHandler()
       } else if (replaceExisting) {
         // Why: keep the old frame visible during capture, then atomically replace it once the authoritative snapshot arrives.
@@ -338,6 +383,10 @@ export function AgentTerminalPreview({
         writeReplayed('', requestRefresh)
       }
       scheduleFit()
+      if (readOnly) {
+        // No PTY to resize into the dialog's box, and no input to catch.
+        return
+      }
       gridClaim.schedule()
       terminal.focus()
     }
@@ -374,6 +423,7 @@ export function AgentTerminalPreview({
         return
       }
       refreshInFlight = false
+      setHistorical(snap.live === false)
       if (!connection.resyncRequired && retryTimer) {
         clearTimeout(retryTimer)
         retryTimer = null
@@ -441,7 +491,7 @@ export function AgentTerminalPreview({
     // clipped to fit; fitToBox anchors whichever end keeps the cursor in view.
     <div
       className={cn(
-        'relative h-[calc(100vh-140px)] w-full overflow-hidden bg-background p-1.5',
+        'relative flex h-[calc(100vh-140px)] w-full flex-col gap-1.5 overflow-hidden bg-background p-1.5',
         className
       )}
       style={terminalTheme?.background ? { backgroundColor: terminalTheme.background } : undefined}
@@ -454,9 +504,26 @@ export function AgentTerminalPreview({
           )}
         </div>
       ) : null}
+      {historical ? (
+        <div
+          role="status"
+          className="flex shrink-0 items-start gap-1 rounded-md border border-amber-500/40 bg-amber-500/10 px-1.5 py-1 text-[11px] text-amber-700 dark:text-amber-300"
+        >
+          <History className="mt-px size-3 shrink-0" aria-hidden />
+          <span>
+            {translate(
+              'dashboardPopout.terminal.historical',
+              "Showing this pane's last saved frame — it isn't attached right now. Open the worktree to resume it."
+            )}
+          </span>
+        </div>
+      ) : null}
       <div
         aria-hidden={ptyGone || undefined}
-        className={cn('flex h-full w-full items-end overflow-hidden', ptyGone && 'invisible')}
+        className={cn(
+          'flex min-h-0 w-full flex-1 items-end overflow-hidden',
+          ptyGone && 'invisible'
+        )}
       >
         <div ref={containerRef} className="origin-bottom-left" />
       </div>

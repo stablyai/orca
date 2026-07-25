@@ -1,18 +1,24 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
-const { handlers, ipcMainMock, isDashboardPopoutRendererMock, isTrustedUIRendererMock } =
-  vi.hoisted(() => {
-    const map = new Map<string, (...args: unknown[]) => unknown>()
-    return {
-      handlers: map,
-      ipcMainMock: {
-        removeHandler: vi.fn(),
-        handle: (channel: string, fn: (...args: unknown[]) => unknown) => map.set(channel, fn)
-      },
-      isDashboardPopoutRendererMock: vi.fn(() => true),
-      isTrustedUIRendererMock: vi.fn(() => false)
-    }
-  })
+const {
+  handlers,
+  ipcMainMock,
+  isDashboardPopoutRendererMock,
+  isTrustedUIRendererMock,
+  readColdRestoreMock
+} = vi.hoisted(() => {
+  const map = new Map<string, (...args: unknown[]) => unknown>()
+  return {
+    handlers: map,
+    ipcMainMock: {
+      removeHandler: vi.fn(),
+      handle: (channel: string, fn: (...args: unknown[]) => unknown) => map.set(channel, fn)
+    },
+    isDashboardPopoutRendererMock: vi.fn(() => true),
+    isTrustedUIRendererMock: vi.fn(() => false),
+    readColdRestoreMock: vi.fn(async (): Promise<unknown> => null)
+  }
+})
 
 vi.mock('electron', () => ({ ipcMain: ipcMainMock }))
 vi.mock('../window/dashboard-popout-window', () => ({
@@ -20,6 +26,9 @@ vi.mock('../window/dashboard-popout-window', () => ({
 }))
 vi.mock('./ui', () => ({
   isTrustedUIRenderer: isTrustedUIRendererMock
+}))
+vi.mock('../daemon/daemon-init', () => ({
+  readColdRestoreTerminalSnapshot: readColdRestoreMock
 }))
 
 import { registerTerminalPreviewHandlers } from './terminal-preview'
@@ -88,6 +97,7 @@ describe('registerTerminalPreviewHandlers', () => {
     handlers.clear()
     isDashboardPopoutRendererMock.mockReturnValue(true)
     isTrustedUIRendererMock.mockReturnValue(false)
+    readColdRestoreMock.mockResolvedValue(null)
   })
   afterEach(() => {
     vi.clearAllMocks()
@@ -314,7 +324,7 @@ describe('registerTerminalPreviewHandlers', () => {
     expect(runtime.releaseRawView).toHaveBeenCalledTimes(2)
   })
 
-  it('releases output and raw-view presence when no snapshot exists', async () => {
+  it('releases output and raw-view presence when neither a serializer nor history has the pty', async () => {
     const runtime = makeRuntime()
     runtime.serializeTerminalBuffer.mockResolvedValueOnce(null)
     registerTerminalPreviewHandlers(runtime as never)
@@ -325,6 +335,74 @@ describe('registerTerminalPreviewHandlers', () => {
     ).resolves.toEqual({ snapshot: null, replay: [] })
     expect(runtime.unsubscribe).toHaveBeenCalledTimes(1)
     expect(runtime.releaseRawView).toHaveBeenCalledTimes(1)
+  })
+
+  // Why: after a reboot the daemon and every PTY are gone, so nothing is
+  // serializable until the worktree is reopened — the board would otherwise
+  // report every agent as closed.
+  it('serves a read-only history frame when no PTY is left to serialize', async () => {
+    const runtime = makeRuntime()
+    runtime.serializeTerminalBuffer.mockResolvedValueOnce(null)
+    // A normal-buffer session as HistoryReader actually reports it: with no
+    // alt-screen split it falls scrollbackAnsi back to snapshotAnsi, so the two
+    // fields are the SAME bytes. Forwarding both would paint the frame twice.
+    readColdRestoreMock.mockResolvedValueOnce({
+      snapshotAnsi: 'last-screen',
+      scrollbackAnsi: 'last-screen',
+      rehydrateSequences: '\x1b[?7h',
+      cwd: '/repo',
+      cols: 120,
+      rows: 40,
+      modes: { alternateScreen: false }
+    })
+    registerTerminalPreviewHandlers(runtime as never)
+    const sender = makeSender()
+
+    await expect(
+      handlers.get('terminalPreview:connect')!(eventFor(sender), { ptyId: 'rebooted' })
+    ).resolves.toEqual({
+      snapshot: {
+        data: '\x1b[?7hlast-screen',
+        scrollbackAnsi: undefined,
+        cols: 120,
+        rows: 40,
+        live: false
+      },
+      replay: []
+    })
+    // The frame is static: no live boundary is held open for it.
+    expect(runtime.unsubscribe).toHaveBeenCalledTimes(1)
+    expect(runtime.releaseRawView).toHaveBeenCalledTimes(1)
+  })
+
+  // The other half of the same branch: an alt-screen snapshot really does keep a
+  // separate normal buffer, which has to survive under the TUI frame.
+  it('keeps the normal buffer under an alt-screen history frame', async () => {
+    const runtime = makeRuntime()
+    runtime.serializeTerminalBuffer.mockResolvedValueOnce(null)
+    readColdRestoreMock.mockResolvedValueOnce({
+      snapshotAnsi: 'tui-frame',
+      scrollbackAnsi: 'shell-output-before-the-tui',
+      rehydrateSequences: '\x1b[?1049h',
+      cwd: '/repo',
+      cols: 120,
+      rows: 40,
+      modes: { alternateScreen: true }
+    })
+    registerTerminalPreviewHandlers(runtime as never)
+
+    await expect(
+      handlers.get('terminalPreview:connect')!(eventFor(makeSender()), { ptyId: 'rebooted-tui' })
+    ).resolves.toEqual({
+      snapshot: {
+        data: '\x1b[?1049htui-frame',
+        scrollbackAnsi: 'shell-output-before-the-tui',
+        cols: 120,
+        rows: 40,
+        live: false
+      },
+      replay: []
+    })
   })
 
   it('rejects non-dashboard senders on every preview channel', async () => {

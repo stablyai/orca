@@ -227,8 +227,11 @@ export function buildDashboardSnapshot(
       const layoutPtyId =
         (leafId ? terminalLayoutsByTabId[tabId]?.ptyIdsByLeafId?.[leafId] : undefined) ?? null
       // Layout entries survive app restarts, but their PTYs may not (parked
-      // tabs keep the pre-restart id). Only advertise a pty the terminal
-      // preview can actually serialize — ptyIdsByTabId is the liveness truth.
+      // tabs keep the pre-restart id). ptyIdsByTabId narrows that to the ids
+      // this session is attached to OR restored on hydration — an optimistic
+      // set, not proof of a live PTY: after a reboot the daemon is gone and
+      // every entry names a dead session. The preview resolves the difference
+      // (live snapshot, else a read-only frame from history, else "closed").
       const ptyId =
         layoutPtyId && (state.ptyIdsByTabId?.[tabId] ?? []).includes(layoutPtyId)
           ? layoutPtyId

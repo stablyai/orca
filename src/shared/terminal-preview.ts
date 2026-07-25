@@ -9,6 +9,11 @@ export type TerminalPreviewSnapshot = {
    *  `seq` boundary. Absent means unknown — Preview then keeps its tracker
    *  unproven and commits raw text rather than guessing zero. */
   kittyKeyboardFlags?: number
+  /** False when the frame was replayed from on-disk history because the session
+   *  is no longer running (the daemon dies with the machine, so after a reboot
+   *  every not-yet-reopened pane lands here). Read-only: there is no PTY to
+   *  type into, and no live bytes will follow. */
+  live?: boolean
 }
 
 /**

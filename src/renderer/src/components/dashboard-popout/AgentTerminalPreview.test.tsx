@@ -18,6 +18,7 @@ const terminalHarness = vi.hoisted(() => ({
     writeCallbacks: (() => void)[]
     onDataListener: ((data: string) => void) | null
     dispose: ReturnType<typeof vi.fn>
+    focus: ReturnType<typeof vi.fn>
     resize: ReturnType<typeof vi.fn>
     reset: ReturnType<typeof vi.fn>
     paste: ReturnType<typeof vi.fn>
@@ -210,6 +211,8 @@ describe('AgentTerminalPreview', () => {
   afterEach(() => {
     cleanup()
     vi.clearAllMocks()
+    // Why: fake timers otherwise leak into the next test, where waitFor never advances.
+    vi.useRealTimers()
   })
 
   it('routes signaled user input while a live write parses and drops parser replies', async () => {
@@ -863,6 +866,69 @@ describe('AgentTerminalPreview', () => {
     await waitFor(() => expect(terminalHarness.instances).toHaveLength(1))
     expect(connect).toHaveBeenLastCalledWith('pty-live', { scrollbackRows: 24 })
     expect(view.queryByText(/No live terminal/)).not.toBeInTheDocument()
+  })
+
+  // Why: after a reboot the PTY is gone for good, so main replays the daemon's
+  // on-disk history. It must render without pretending to be interactive —
+  // claiming a grid or encoding keystrokes for a session that cannot receive
+  // them.
+  it('renders a history frame read-only: no grid claim, no input routing', async () => {
+    vi.useFakeTimers()
+    connect.mockResolvedValueOnce({
+      snapshot: {
+        data: 'last-screen',
+        scrollbackAnsi: 'earlier-output',
+        cols: 80,
+        rows: 24,
+        live: false
+      },
+      replay: []
+    })
+    const view = render(<AgentTerminalPreview ptyId="pty-rebooted" />)
+    await vi.waitFor(() => expect(terminalHarness.instances).toHaveLength(1))
+    const terminal = terminalHarness.instances[0]!
+
+    expect(terminal.write).toHaveBeenCalledWith('earlier-output', expect.any(Function))
+    expect(terminal.write).toHaveBeenCalledWith('last-screen', expect.any(Function))
+    await vi.waitFor(() => expect(view.getByText(/last saved frame/)).toBeInTheDocument())
+    expect(view.queryByText(/No live terminal/)).not.toBeInTheDocument()
+
+    const host = view.container.querySelector<HTMLElement>('.origin-bottom-left')!
+    const box = host.parentElement!
+    Object.defineProperty(box, 'clientWidth', { configurable: true, value: 900 })
+    Object.defineProperty(box, 'clientHeight', { configurable: true, value: 480 })
+    const screen = document.createElement('div')
+    screen.className = 'xterm-screen'
+    Object.defineProperty(screen, 'offsetWidth', { configurable: true, value: 800 })
+    Object.defineProperty(screen, 'offsetHeight', { configurable: true, value: 384 })
+    host.appendChild(screen)
+    await vi.advanceTimersByTimeAsync(400)
+
+    expect(fit).not.toHaveBeenCalled()
+    expect(terminal.focus).not.toHaveBeenCalled()
+    expect(terminal.onDataListener).toBeNull()
+    expect(input).not.toHaveBeenCalled()
+  })
+
+  it('rebuilds read-only when a watched session dies and downgrades to history', async () => {
+    connect
+      .mockResolvedValueOnce({ snapshot: { data: 'live', cols: 80, rows: 24, seq: 1 }, replay: [] })
+      .mockResolvedValueOnce({
+        snapshot: { data: 'last-screen', cols: 80, rows: 24, live: false },
+        replay: []
+      })
+    const view = render(<AgentTerminalPreview ptyId="pty-dying" />)
+    await waitFor(() => expect(terminalHarness.instances).toHaveLength(1))
+    const live = terminalHarness.instances[0]!
+
+    act(() => emitData?.({ type: 'resync', ptyId: 'pty-dying' }))
+
+    await waitFor(() => expect(view.getByText(/last saved frame/)).toBeInTheDocument())
+    // The live terminal is torn down, not reused — its input wiring outlived its PTY.
+    expect(live.dispose).toHaveBeenCalledTimes(1)
+    expect(terminalHarness.userInputDispose).toHaveBeenCalledTimes(1)
+    expect(terminalHarness.instances).toHaveLength(2)
+    expect(terminalHarness.instances[1]!.onDataListener).toBeNull()
   })
 
   it('claims a grid sized to the dialog box and never re-requests an unchanged target', async () => {

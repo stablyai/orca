@@ -1033,6 +1033,20 @@ export class DaemonPtyAdapter implements IPtyProvider {
     return this.activeSessionIds.has(id)
   }
 
+  // Why: surfaces (the pop-out dashboard) that only ever read a pane must be
+  // able to show a session this Orca never attached — after a reboot the daemon
+  // and every PTY are gone, but the on-disk history still holds the last frame.
+  // The hasPty check is only this adapter's attach state, which is why the
+  // authoritative cross-adapter guard lives in readColdRestoreTerminalSnapshot.
+  async readColdRestoreSnapshot(sessionId: string): Promise<ColdRestoreInfo | null> {
+    if (this.hasPty(sessionId) || !this.historyReader?.hasRestorableHistory(sessionId)) {
+      return null
+    }
+    return await this.historyReader.detectColdRestore(sessionId, {
+      wslDistro: this.wslDistrosBySessionId.get(sessionId)
+    })
+  }
+
   async probePtyLiveness(id: string): Promise<boolean | null> {
     try {
       if (!this.getSizeUnsupported && this.protocolVersion >= GET_SIZE_PROTOCOL_VERSION) {

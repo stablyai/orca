@@ -4,6 +4,7 @@ import type {
   TerminalPreviewSnapshot
 } from '../../shared/terminal-preview'
 import type { OrcaRuntimeService } from '../runtime/orca-runtime'
+import { readColdRestoreTerminalSnapshot } from '../daemon/daemon-init'
 import { isDashboardPopoutRenderer } from '../window/dashboard-popout-window'
 import { isTrustedUIRenderer } from './ui'
 import {
@@ -149,7 +150,29 @@ export function registerTerminalPreviewHandlers(runtime: OrcaRuntimeService): vo
       if (!snapshot) {
         // Why: a failed lookup has no future live boundary; release raw presence even if the renderer never invokes unsubscribe.
         subscription.dispose()
-        return { snapshot: null, replay: [] }
+        // Why: nothing serializable does NOT mean nothing to show. A pane the
+        // renderer never mounted has no emulator here, and after a reboot its
+        // PTY is gone for good — but the daemon's history still holds the last
+        // frame, which is what the board is being asked to display.
+        const restored = await readColdRestoreTerminalSnapshot(ptyId)
+        if (!restored) {
+          return { snapshot: null, replay: [] }
+        }
+        return {
+          snapshot: {
+            data: restored.rehydrateSequences + restored.snapshotAnsi,
+            // Why the alt-screen test: for a normal buffer history-reader falls
+            // scrollbackAnsi back to snapshotAnsi, so forwarding both paints the
+            // frame twice. Only an alt-screen snapshot keeps a distinct normal
+            // buffer worth replaying underneath the TUI. Matches how every other
+            // ColdRestoreInfo consumer branches.
+            scrollbackAnsi: restored.modes.alternateScreen ? restored.scrollbackAnsi : undefined,
+            cols: restored.cols,
+            rows: restored.rows,
+            live: false
+          },
+          replay: []
+        }
       }
       previewSize = { cols: snapshot.cols, rows: snapshot.rows }
 
