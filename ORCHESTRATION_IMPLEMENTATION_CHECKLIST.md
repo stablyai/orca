@@ -31,8 +31,9 @@ Status meanings:
 - [x] Phase 3 connected-server federation complete.
 - [x] Revalidate Phase 3 after the 2026-07-24 post-rebase dogfood exposed a renderer-adoption
       process-identity regression.
-- [ ] Phase 4 structured worker output is implemented with passing automated coverage; physical
-      Mac/Windows and restart/disconnect dogfood remains.
+- [x] Phase 4 structured worker output is implemented with passing automated coverage and physical
+      local, mixed-version, restart, disconnect, and Windows-home to Mac-worker evidence; optional
+      symmetric acceptance checks remain tracked below.
 
 ## Scope invariants
 
@@ -1600,6 +1601,22 @@ Append new entries chronologically. Do not rewrite older entries except to corre
 - Next:
   - Push the rebased branch, inspect branch-head CI, then remove only the exact temporary dogfood
     resources.
+
+### 2026-07-24 — Structured-output proposal synchronization
+
+- Changes:
+  - Updated the newer HTML proposal from its obsolete terminal-only Phase 4 deferral to the shipped
+    `auto|transcript|terminal` contract.
+  - Documented exact pane/process/session selection, opaque source-pinned cursors, labeled fallback,
+    mixed-version behavior, and the implemented Phase 4 status.
+- Verification:
+  - Confirmed the proposal contains no named references to other orchestration products.
+- Findings:
+  - Implementation status and optional remaining physical acceptance are separate: the narrow output
+    primitive is complete, while symmetric cross-machine dogfood remains visible in this ledger.
+- Next:
+  - Run document/skill checks, push the synchronization fix, resolve the review thread, and continue
+    branch-head CI monitoring.
 
 ### Entry template
 

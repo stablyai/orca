@@ -694,11 +694,12 @@
               </div>
               <div class="compare-arrow" aria-hidden="true">→</div>
               <div class="card">
-                <p class="eyebrow">Conditional later improvement</p>
-                <h3>Structured output only after exact session association exists</h3>
+                <p class="eyebrow">Implemented</p>
+                <h3>Exact structured output with a truthful fallback</h3>
                 <p>
-                  V1 keeps exact Dispatch-routed terminal output. A later adapter may prefer an exact
-                  provider session log and label any fallback; it must never guess a session.
+                  Orca reuses its pane-scoped hook association to read a supported Codex or Claude
+                  transcript. When it cannot prove that source, it returns labeled bounded terminal
+                  output instead of guessing a session.
                 </p>
               </div>
             </div>
@@ -1828,82 +1829,91 @@ orca orchestration reply --id msg_question_7 --body "Yes; preserve it." --json</
               <p class="eyebrow">Worker observation</p>
               <h2>Read a supervised worker by Dispatch, regardless of server.</h2>
               <p>
-                <code>worker-read --dispatch</code> is a thin routing wrapper over the existing
-                bounded <code>terminal read</code> primitive. It resolves the worker server and exact
-                terminal from the Dispatch receipt, so an agent never combines a runtime-scoped
-                terminal handle with the wrong connected server. Structured session logs remain an
-                optional later adapter, and task authority never comes from transcript prose.
+                <code>worker-read --dispatch</code> resolves the worker server and exact process from
+                the Dispatch receipt. Its default <code>auto</code> source returns the exact
+                hook-reported Codex or Claude transcript when Orca can prove that association;
+                otherwise it returns bounded, explicitly labeled terminal output. Agents never
+                choose a server, provider session ID, or transcript path, and task authority never
+                comes from transcript prose.
               </p>
             </div>
 
             <div class="grid-2">
               <div class="card">
-                <p class="eyebrow">V1 baseline</p>
-                <h3>Terminal output</h3>
+                <p class="eyebrow">Default path</p>
+                <h3>Automatic exact selection</h3>
                 <p>
-                  Route to the existing bounded terminal read on the owning server. Preserve its
-                  status, cursor, limit, and truncation fields, and label the source as a potentially
-                  lossy terminal snapshot.
+                  <code>--source auto</code> uses a proven supported transcript and falls back to
+                  the existing bounded terminal reader with a typed reason such as
+                  <code>session_not_reported</code> or
+                  <code>remote_capability_unavailable</code>.
                 </p>
               </div>
               <div class="card">
-                <p class="eyebrow">Optional later adapter</p>
-                <h3>Exact provider session log</h3>
+                <p class="eyebrow">Explicit policy</p>
+                <h3>Transcript or terminal</h3>
                 <p>
-                  Only when Orca already knows an exact terminal-to-session association, read that
-                  session's native log and preserve a source-pinned cursor. This never blocks V1.
+                  <code>--source transcript</code> requires exact structured output and returns a
+                  typed error rather than falling back. <code>--source terminal</code> always uses
+                  the retained terminal snapshot.
                 </p>
               </div>
             </div>
 
-            <pre style="margin-top: 20px"><code>orca orchestration worker-read --dispatch dispatch_7 --limit 100 --json
+            <pre style="margin-top: 20px"><code>orca orchestration worker-read --dispatch dispatch_7 --source auto --limit 100 --json
 
-# "result" excerpt for a worker on the saved environment named windows
+# Exact transcript result for a worker on the saved environment named windows
 {
   "dispatchId": "dispatch_7",
+  "source": "transcript",
+  "sourceIdentity": "opaque-source-fingerprint",
+  "provider": "codex",
   "server": { "environmentId": "env_windows", "name": "windows" },
   "remoteRuntimeEpoch": "runtime_epoch_2",
-  "terminal": {
-    "handle": "term_12",
-    "status": "running",
-    "tail": [ ... ],
-    "truncated": false,
-    "limited": true,
-    "oldestCursor": "10",
-    "nextCursor": "110",
-    "latestCursor": "500",
-    "returnedLineCount": 100
-  }
+  "transcript": {
+    "messages": [ ... ],
+    "nextCursor": "opaque-next-cursor",
+    "limited": false,
+    "returnedMessageCount": 12
+  },
+  "cursor": "opaque-next-cursor",
+  "status": { "worker": "ready", "terminal": "running" },
+  "fallbackReason": null,
+  "warnings": []
 }
 
-# Continue from the returned terminal cursor.
-orca orchestration worker-read --dispatch dispatch_7 --cursor 110 --limit 100 --json</code></pre>
+# Continue from the returned top-level opaque cursor.
+orca orchestration worker-read --dispatch dispatch_7 \
+  --cursor opaque-next-cursor --limit 100 --json</code></pre>
 
             <div class="grid-2" style="margin-top: 20px">
               <div class="card">
-                <h3>Narrow provider capability</h3>
+                <h3>Source-pinned continuation</h3>
                 <p>
-                  Add a provider-specific session reader only after Orca can identify the exact log
-                  for an attached terminal without cwd guessing. Do not introduce generic resume,
-                  live-stream, or provider control contracts as part of this work.
+                  The returned cursor pins the Dispatch, process, source kind, and opaque source
+                  identity. <code>auto</code> selects only on the first page. If the process or
+                  provider session changes, Orca returns
+                  <code>worker_identity_changed</code> or <code>source_changed</code>.
                 </p>
               </div>
               <div class="card">
-                <h3>V1 has one truthful source</h3>
+                <h3>Narrow provider readers</h3>
                 <p>
-                  <code>worker-read</code> reads only the exact supervised terminal recorded by the
-                  Dispatch. Its numeric cursor pages that retained terminal output; V1 never changes
-                  to a provider session log between pages.
+                  Structured reading reuses the existing bounded native transcript decoders only
+                  for exact Codex and Claude associations. Other providers and mixed-version peers
+                  retain terminal fallback; no resume, live-stream control, or universal transcript
+                  framework is added.
                 </p>
               </div>
             </div>
 
             <p class="principle">
-              Preserve the current bounded terminal-read contract: limit, terminal process status,
-              limited/truncated indication, and oldest/next/latest numeric cursors. Federation adds
-              the saved-environment server receipt around the same terminal result. A later provider
-              adapter must add exact source identity and warnings; it must never guess a provider
-              session from “latest session in this directory.”
+              Every response labels <code>source</code>, <code>sourceIdentity</code>,
+              <code>cursor</code>, status, fallback reason, and bounded warnings. Terminal fallback
+              preserves the existing terminal fields and accepts legacy numeric cursors; new cursors
+              are opaque and never expose a transcript path. The worker-owning server performs the
+              read, and neither local nor federated selection may guess “latest session in this
+              directory.”
             </p>
 
             <div class="table-wrap" style="margin-top: 20px">
@@ -2219,11 +2229,13 @@ orca orchestration worker-read --dispatch dispatch_7 --cursor 110 --limit 100 --
                     </td>
                   </tr>
                   <tr>
-                    <td>Optional output capability</td>
+                    <td>Structured worker output</td>
                     <td>
-                      V1 always uses exact terminal output and does not advertise
-                      <code>sessionReadV1</code>. If a later exact-session adapter is added, missing
-                      support may fall back only with explicit source and fallback labels.
+                      The worker-owning server reads an exact hook-reported Codex or Claude
+                      transcript when supported. If the additive federated read method is absent,
+                      <code>auto</code> returns bounded terminal output labeled with
+                      <code>remote_capability_unavailable</code>;
+                      <code>transcript</code> returns <code>transcript_required</code>.
                     </td>
                   </tr>
                 </tbody>
@@ -2656,8 +2668,9 @@ orca orchestration worker-show --dispatch dispatch_7 --json
 
             <p class="footer-note" style="margin-top: 16px">
               Blocking wait, crash-safe acknowledgment, and connected-server relay require
-              Orca-local implementation and tests. Exact terminal-to-session association and
-              source-pinned provider paging remain explicitly deferred.
+              Orca-local implementation and tests. Structured output reuses Orca's exact
+              pane/process-to-provider-session association and existing bounded transcript decoders;
+              it does not introduce provider-session control or a universal transcript model.
             </p>
           </section>
 
@@ -2735,11 +2748,12 @@ orca orchestration worker-show --dispatch dispatch_7 --json
               <div class="roadmap-item">
                 <div class="roadmap-meta">Phase 4</div>
                 <div>
-                  <h3>Conditional structured output adapter</h3>
+                  <h3>Exact structured worker output</h3>
                   <p>
-                    Only after Orca already exposes an exact terminal-to-session association, extend
-                    <code>terminal read</code> with one provider-specific reader and source-pinned
-                    paging. Otherwise keep the existing bounded terminal output unchanged.
+                    Reuse Orca's existing pane-scoped hook association and bounded Codex/Claude
+                    transcript decoders. Add <code>auto|transcript|terminal</code> selection,
+                    path-free source identity, opaque source-pinned paging, and labeled terminal
+                    fallback without adding provider control or a universal transcript layer.
                   </p>
                 </div>
               </div>
@@ -2860,9 +2874,10 @@ orca orchestration worker-show --dispatch dispatch_7 --json
             </details>
 
             <p class="footer-note" style="margin-top: 28px">
-              Phases 0–3 of this contract are implemented and verified; the provider-session reader
-              remains explicitly deferred until Orca has an exact terminal-to-session association.
-              The proposal makes no Orca product UI changes.
+              Phases 0–4 of this contract are implemented. Structured output is verified locally,
+              through a mixed-version terminal fallback, and across a Windows-home to Mac-worker
+              Dispatch; the remaining physical symmetry checks stay in the acceptance ledger. The
+              proposal makes no Orca product UI changes.
             </p>
           </section>
         </div>
