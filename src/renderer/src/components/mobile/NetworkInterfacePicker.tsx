@@ -8,9 +8,10 @@ import type { MobileNetworkInterface } from '../settings/mobile-network-interfac
 // (Settings → Mobile) both need the same network selector. This wraps the
 // generic AddressPicker with the mobile grammar (IPv4, any RFC 1123
 // hostname — including Tailscale *.ts.net and DDNS domains — optionally
-// with :port) and copy. Discovered interfaces come from the OS; "Add custom
-// address…" opens a dialog for an address the OS didn't surface — the only
-// way to pair across networks.
+// with :port, or a full ws(s):// URL for reverse-proxied endpoints) and
+// copy. Discovered interfaces come from the OS; "Add custom address…"
+// opens a dialog for an address the OS didn't surface — the only way to
+// pair across networks.
 
 export type NetworkInterfacePickerProps = {
   networkInterfaces: readonly MobileNetworkInterface[]
@@ -82,11 +83,11 @@ export function NetworkInterfacePicker({
         inputLabel: translate('auto.components.mobile.CustomNetworkAddressDialog.label', 'Address'),
         placeholder: translate(
           'auto.components.mobile.CustomNetworkAddressDialog.placeholder',
-          'my-mac.ts.net, home.example.com, or 192.168.1.50'
+          'my-mac.ts.net, 192.168.1.50, or wss://home.example.com/orca'
         ),
         hint: translate(
           'auto.components.mobile.CustomNetworkAddressDialog.hint',
-          'Enter an IP address or a hostname — a Tailscale MagicDNS name, a DDNS domain, or a LAN hostname — optionally with :port.'
+          'Enter an IP address or a hostname — a Tailscale MagicDNS name, a DDNS domain, or a LAN hostname — optionally with :port. For a reverse proxy, enter the full wss:// URL (path supported); the proxy must forward WebSocket upgrades.'
         ),
         cancel: translate('auto.components.mobile.CustomNetworkAddressDialog.cancel', 'Cancel'),
         confirm: translate('auto.components.mobile.CustomNetworkAddressDialog.use', 'Use address')

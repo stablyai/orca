@@ -8149,7 +8149,9 @@
               "4a0c826f3d": "código",
               "3c1807a81a": "QR",
               "7fb728fb2b": "Empareje un dispositivo móvil escaneando un código QR.",
-              "d49925710a": "Emparejamiento móvil"
+              "d49925710a": "Emparejamiento móvil",
+              "ebe786534c": "proxy",
+              "08a18534ad": "wss"
             }
           },
           "settings": {

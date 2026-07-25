@@ -73,7 +73,9 @@ export const getMobilePaneSearchEntries = createLocalizedCatalog(() => [
       ),
       ...translateSearchKeyword('auto.components.settings.mobile.pane.search.1802188b5d', 'wifi'),
       ...translateSearchKeyword('auto.components.settings.mobile.pane.search.70f505f3c3', 'lan'),
-      ...translateSearchKeyword('auto.components.settings.mobile.pane.search.126afc5dbd', 'remote')
+      ...translateSearchKeyword('auto.components.settings.mobile.pane.search.126afc5dbd', 'remote'),
+      ...translateSearchKeyword('auto.components.settings.mobile.pane.search.ebe786534c', 'proxy'),
+      ...translateSearchKeyword('auto.components.settings.mobile.pane.search.08a18534ad', 'wss')
     ]
   },
   {

@@ -1,6 +1,6 @@
 // Why: pure shared helper so the same validation runs in renderer
 // today and in any future CLI/main-process caller without duplicating
-// the IPv4 + hostname + optional-port grammar.
+// the IPv4 + hostname + optional-port (or full ws(s):// URL) grammar.
 const IPV4_OCTET = '(?:25[0-5]|2[0-4][0-9]|1[0-9][0-9]|[1-9]?[0-9])'
 const IPV4 = `(?:${IPV4_OCTET}\\.){3}${IPV4_OCTET}`
 const IPV4_REGEX = new RegExp(`^${IPV4}$`)
@@ -16,7 +16,8 @@ const HOSTNAME_REGEX = new RegExp(`^${HOSTNAME}$`, 'i')
 const HOSTNAME_MAX_LENGTH = 253
 const MIN_PORT = 1
 const MAX_PORT = 65535
-const ERROR_MESSAGE = 'Enter an IPv4 address or hostname, optionally with a :port suffix'
+const ERROR_MESSAGE =
+  'Enter an IPv4 address or hostname (optionally with :port), or a full ws:// or wss:// URL'
 
 export type ParseManualAddressResult = { ok: true; address: string } | { ok: false; error: string }
 
@@ -27,6 +28,13 @@ export function parseManualNetworkAddress(input: string): ParseManualAddressResu
   }
   if (/\s/.test(trimmed)) {
     return { ok: false, error: ERROR_MESSAGE }
+  }
+
+  // Why: a reverse-proxied endpoint needs scheme + path (`wss://host/orca`),
+  // which `resolvePairingEndpoint` passes through verbatim (#9760). Only the
+  // ws(s) schemes are accepted because that is the branch it special-cases.
+  if (/^wss?:\/\//i.test(trimmed)) {
+    return parseWebSocketUrlAddress(trimmed)
   }
 
   const { host, port } = splitHostPort(trimmed)
@@ -56,6 +64,26 @@ export function parseManualNetworkAddress(input: string): ParseManualAddressResu
   }
 
   return { ok: false, error: ERROR_MESSAGE }
+}
+
+// Why: WHATWG URL already validates host and caps the port, so this only adds
+// what pairing forbids: credentials, query, and fragment stay out of the QR
+// endpoint (path is meaningful for reverse proxies, the rest are typos), and
+// `:0` — which URL permits but WebSocket cannot dial — is rejected.
+function parseWebSocketUrlAddress(input: string): ParseManualAddressResult {
+  let url: URL
+  try {
+    url = new URL(input)
+  } catch {
+    return { ok: false, error: ERROR_MESSAGE }
+  }
+  if (!url.hostname || url.username || url.password || url.search || url.hash) {
+    return { ok: false, error: ERROR_MESSAGE }
+  }
+  if (url.port !== '' && !isValidPort(url.port)) {
+    return { ok: false, error: ERROR_MESSAGE }
+  }
+  return { ok: true, address: input }
 }
 
 // Why: mirrors `parsePairingAddressOverride` in src/main/runtime/runtime-rpc.ts

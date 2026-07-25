@@ -76,10 +76,12 @@ LIBGL_ALWAYS_SOFTWARE=1 /opt/orca/orca-linux.AppImage serve \
 `--pairing-address` is only the address advertised to clients. It does not
 change the listener bind address. Orca binds its WebSocket listener, then
 combines the actual bound port with the advertised host when the address omits
-a port. Use a reachable LAN/Tailscale hostname or IP, or a complete reverse
-proxy URL such as `https://orca.example.com/runtime` (`http(s)` is normalized
-to `ws(s)`). Wildcard addresses such as `*`, `0.0.0.0`, and `::` cannot be
-advertised.
+a port. Use a reachable LAN/Tailscale hostname or IP, or a full `ws(s)://` /
+`http(s)://` reverse-proxy URL such as `wss://orca.example.com/orca/runtime`
+(`http(s)` is normalized to `ws(s)`); the scheme, port, and path are preserved
+in the pairing offer, so the proxy must forward WebSocket upgrade requests for
+that path to the `--port` the server listens on. Wildcard addresses such as
+`*`, `0.0.0.0`, and `::` cannot be advertised.
 
 The command writes one ready block to stdout after the listener bind and
 pairing initialization complete:
@@ -742,6 +744,10 @@ is resolved.
   `orca` user and that `/opt/orca` is readable by that user.
 - Clients cannot connect: make sure `--pairing-address` is an address reachable
   from the client, and make sure firewalls allow the selected `--port`.
+- Clients cannot connect through a reverse proxy: confirm the proxy forwards
+  WebSocket upgrade requests (`Upgrade`/`Connection` headers) for the pairing
+  path, and that `--pairing-address` is the full `wss://` URL the client dials —
+  not the server's internal address.
 - Service crash-loops right after an upgrade: use [Roll back](#roll-back) with
   the pre-upgrade `.ready` bundle. Do not rerun the upgrade first; doing so would
   make the crashing version the next rollback binary.

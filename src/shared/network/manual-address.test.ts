@@ -30,7 +30,8 @@ describe('parseManualNetworkAddress', () => {
       for (const bad of ['', '   ', '1.2.3', '1.2.3.4.5', '256.0.0.1']) {
         expect(parseManualNetworkAddress(bad)).toEqual({
           ok: false,
-          error: 'Enter an IPv4 address or hostname, optionally with a :port suffix'
+          error:
+            'Enter an IPv4 address or hostname (optionally with :port), or a full ws:// or wss:// URL'
         })
       }
     })
@@ -38,7 +39,8 @@ describe('parseManualNetworkAddress', () => {
     it('rejects leading zeros in octets', () => {
       expect(parseManualNetworkAddress('01.02.03.04')).toEqual({
         ok: false,
-        error: 'Enter an IPv4 address or hostname, optionally with a :port suffix'
+        error:
+          'Enter an IPv4 address or hostname (optionally with :port), or a full ws:// or wss:// URL'
       })
       expect(parseManualNetworkAddress('0.0.0.0').ok).toBe(true)
     })
@@ -164,6 +166,50 @@ describe('parseManualNetworkAddress', () => {
     it('rejects addresses with more than one colon (e.g. IPv6-shaped input)', () => {
       expect(parseManualNetworkAddress('example.com:80:90').ok).toBe(false)
       expect(parseManualNetworkAddress('::1').ok).toBe(false)
+    })
+  })
+
+  describe('ws(s):// URLs (reverse-proxied endpoints)', () => {
+    it('accepts a wss URL with explicit port and path', () => {
+      expect(parseManualNetworkAddress('wss://home.example.com:443/orca/runtime')).toEqual({
+        ok: true,
+        address: 'wss://home.example.com:443/orca/runtime'
+      })
+    })
+
+    it('accepts scheme-default ports and bare hosts', () => {
+      expect(parseManualNetworkAddress('wss://home.example.com').ok).toBe(true)
+      expect(parseManualNetworkAddress('ws://192.168.1.50:6768').ok).toBe(true)
+    })
+
+    it('is case-insensitive on the scheme', () => {
+      expect(parseManualNetworkAddress('WSS://home.example.com/orca').ok).toBe(true)
+    })
+
+    it('rejects non-websocket schemes', () => {
+      expect(parseManualNetworkAddress('https://home.example.com').ok).toBe(false)
+      expect(parseManualNetworkAddress('http://home.example.com').ok).toBe(false)
+    })
+
+    it('rejects credentials, query, and fragment', () => {
+      for (const bad of [
+        'wss://user:pass@home.example.com',
+        'wss://home.example.com/orca?token=abc',
+        'wss://home.example.com/orca#frag'
+      ]) {
+        expect(parseManualNetworkAddress(bad).ok).toBe(false)
+      }
+    })
+
+    it('rejects a missing host or invalid port', () => {
+      expect(parseManualNetworkAddress('wss://').ok).toBe(false)
+      expect(parseManualNetworkAddress('wss://home.example.com:0').ok).toBe(false)
+      expect(parseManualNetworkAddress('wss://home.example.com:99999').ok).toBe(false)
+    })
+
+    it('rejects a malformed IPv4-shaped host via the URL parser', () => {
+      expect(parseManualNetworkAddress('wss://256.0.0.1').ok).toBe(false)
+      expect(parseManualNetworkAddress('wss://foo.123').ok).toBe(false)
     })
   })
 
