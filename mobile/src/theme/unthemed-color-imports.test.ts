@@ -7,6 +7,43 @@ import { describe, expect, it } from 'vitest'
 // never add one. Empty list == migration complete.
 const UNTHEMED_COLOR_IMPORTERS: readonly string[] = []
 
+// Colour literals allowed to stay literal inside a themed factory, keyed
+// `<path>#<factory>#<literal>` with the reason each one is mode-independent. Two fixes in
+// this migration were literals that looked fine in dark and broke in light, and no other
+// guard sees them: the sheets are byte-identical under dark and the both-palettes suite
+// still differs. May only shrink, or grow with a reason.
+const MODE_FIXED_FACTORY_LITERALS: Readonly<Record<string, string>> = {
+  'app/index.tsx#createHomeScreenStyles#rgba(255,255,255,0.04)':
+    'decorative lift on the quick-action icon and step number; light composites it to the surface, losing the lift but nothing readable',
+  'app/pair-scan.tsx#createPairScanStyles#rgba(255,255,255,0.7)':
+    'reticle over the live camera feed, not over an app surface',
+  'src/browser/MobileBrowserPane.tsx#createMobileBrowserPaneStyles#rgba(13, 15, 24, 0.2)':
+    'scrim over rendered web content, which is not our palette in either mode',
+  'src/browser/MobileBrowserPane.tsx#createMobileBrowserPaneStyles#rgba(13, 15, 24, 0.5)':
+    'dialog scrim over rendered web content',
+  'src/components/ConfirmModal.tsx#createConfirmModalStyles##fff':
+    'on-fill text over statusRed, the same red in both palettes',
+  'src/components/DragReorderList.tsx#createDragReorderListStyles##000':
+    'shadowColor — RN shadows are black in both modes',
+  'src/components/MobileHtmlPreview.tsx#createMobileHtmlPreviewStyles##ffffff':
+    'the preview page canvas; arbitrary HTML assumes a white page',
+  'src/components/NewWorkspaceFab.tsx#createNewWorkspaceFabStyles##000': 'shadowColor',
+  'src/components/RightDrawer.tsx#createRightDrawerStyles#rgba(0,0,0,0.5)':
+    'modal scrim — dark in both modes by design',
+  'src/components/RightDrawer.tsx#createRightDrawerStyles##000': 'shadowColor',
+  'src/components/bottom-drawer-styles.ts#createBottomDrawerStyles#rgba(0,0,0,0.5)': 'modal scrim',
+  'src/components/bottom-drawer-styles.ts#createBottomDrawerStyles##000': 'shadowColor',
+  'src/components/terminal-shortcut-settings-styles.ts#createTerminalShortcutSettingsStyles#rgba(239, 68, 68, 0.1)':
+    'statusRed wash; still a legible pink over a light surface',
+  'src/components/terminal-shortcut-settings-styles.ts#createTerminalShortcutSettingsStyles#rgba(239, 68, 68, 0.2)':
+    'statusRed wash',
+  'src/host/host-worktree-list-styles.ts#createHostWorktreeListStyles##fff':
+    'on-fill text over statusRed'
+}
+
+const COLOUR_LITERAL = /#[0-9a-fA-F]{3,8}\b|\brgba?\([^)]*\)/g
+const FACTORY_DECL = /export const (create[A-Za-z0-9]*Styles)\s*=/g
+
 const MOBILE_ROOT = path.resolve(__dirname, '../..')
 // Matches any relative path ending in mobile-theme (…/theme/mobile-theme or ./mobile-theme).
 const BARE_COLORS_IMPORT = /import\s*\{[^}]*\bcolors\b[^}]*\}\s*from\s*['"][^'"]*mobile-theme['"]/
@@ -39,6 +76,48 @@ function listBareColorsImporters(): string[] {
     .sort()
 }
 
+// Only the StyleSheet.create(...) that follows the declaration, so literals in
+// neighbouring component code are not blamed on the sheet.
+function sheetBodyAfter(src: string, from: number): string | null {
+  const open = src.indexOf('StyleSheet.create(', from)
+  if (open === -1) {
+    return null
+  }
+  let depth = 0
+  for (let i = open + 'StyleSheet.create('.length - 1; i < src.length; i++) {
+    if (src[i] === '(') {
+      depth++
+    } else if (src[i] === ')') {
+      depth--
+      if (depth === 0) {
+        return src.slice(open, i)
+      }
+    }
+  }
+  return null
+}
+
+function listFactoryLiterals(): string[] {
+  const roots = ['app', 'src'].map((segment) => path.join(MOBILE_ROOT, segment))
+  const found: string[] = []
+  for (const file of roots.flatMap((root) => walkSourceFiles(root))) {
+    const src = fs.readFileSync(file, 'utf8')
+    const rel = path.relative(MOBILE_ROOT, file).split(path.sep).join('/')
+    FACTORY_DECL.lastIndex = 0
+    let declaration: RegExpExecArray | null
+    while ((declaration = FACTORY_DECL.exec(src))) {
+      const body = sheetBodyAfter(src, declaration.index)
+      if (!body) {
+        continue
+      }
+      for (const literal of new Set(body.match(COLOUR_LITERAL) ?? [])) {
+        found.push(`${rel}#${declaration[1]}#${literal}`)
+      }
+    }
+  }
+  return found.sort()
+}
+
 describe('unthemed color import ratchet', () => {
   it('lists every bare `colors` importer; the baseline may only shrink', () => {
     const actual = listBareColorsImporters()
@@ -47,6 +126,13 @@ describe('unthemed color import ratchet', () => {
     // Why toEqual([]): failures print the exact offending paths.
     expect(unexpected).toEqual([])
     expect(convertedButStillListed).toEqual([])
+  })
+
+  it('keeps colour literals out of themed factories unless they are mode-fixed', () => {
+    const actual = listFactoryLiterals()
+    const allowed = Object.keys(MODE_FIXED_FACTORY_LITERALS)
+    expect(actual.filter((entry) => !allowed.includes(entry))).toEqual([])
+    expect(allowed.filter((entry) => !actual.includes(entry))).toEqual([])
   })
 
   it('forbids inline useThemedStyles(() => …) factories (fresh cache key every render)', () => {

@@ -1,3 +1,5 @@
+import fs from 'node:fs'
+import path from 'node:path'
 import { describe, expect, it, vi } from 'vitest'
 import type { ThemeColors } from './mobile-theme'
 import { darkColors, lightColors } from './mobile-theme'
@@ -174,7 +176,8 @@ async function loadThemedFactories(): Promise<readonly StyleFactory[]> {
     import('../components/pr-sidebar/pr-actions-styles'),
     import('../components/pr-sidebar/pr-create-empty-state-styles'),
     import('../terminal/terminal-webview-frame-styles'),
-    import('../tasks/tasks-screen-styles')
+    import('../tasks/tasks-screen-styles'),
+    import('../host/host-screen-styles')
   ])
   const [
     bottomDrawer,
@@ -241,7 +244,8 @@ async function loadThemedFactories(): Promise<readonly StyleFactory[]> {
     prActions,
     prCreateEmpty,
     terminalFrame,
-    tasksScreen
+    tasksScreen,
+    hostScreen
   ] = mods
   return [
     { name: 'createBottomDrawerStyles', factory: bottomDrawer.createBottomDrawerStyles },
@@ -434,11 +438,119 @@ async function loadThemedFactories(): Promise<readonly StyleFactory[]> {
     {
       name: 'createTasksScreenStyles',
       factory: tasksScreen.createTasksScreenStyles
+    },
+    {
+      name: 'createHostScreenStyles',
+      factory: hostScreen.createHostScreenStyles
     }
   ]
 }
 
+// A factory reached only by spreading it into a registered merge factory is already
+// evaluated under both palettes; listing it again would be noise.
+const COVERED_BY_A_REGISTERED_MERGE: readonly string[] = [
+  'createMobileSourceControlBaseStyles',
+  'createTasksScreenChromeStyles',
+  'createTasksScreenDetailStyles',
+  'createTasksScreenFormStyles',
+  'createTasksScreenListStyles',
+  'createTasksScreenMiscStyles',
+  'createTasksScreenPanelStyles'
+]
+
+// RATCHET — may only shrink. These factories live inside route or component modules
+// that vitest cannot import (expo-router, native modules) without a mock graph larger
+// than the assertion is worth. Extracting one into a pure style module is what removes
+// it from this list; a NEW factory must never land here silently.
+const NOT_EVALUATED_HERE: readonly string[] = [
+  'createAboutStyles',
+  'createBrowserSettingsStyles',
+  'createCommentMarkdownStyles',
+  'createConnectionLogScreenStyles',
+  'createHomeScreenStyles',
+  'createHostEditStyles',
+  'createMermaidDiagramStyles',
+  'createMobileBrowserPaneStyles',
+  'createMobileBrowserPointerModifiersStyles',
+  'createMobileBrowserToolbarIconButtonStyles',
+  'createMobileDiffReviewLineStyles',
+  'createMobileGitHistoryListStyles',
+  'createMobileHtmlPreviewStyles',
+  'createMobileLinkPrFormStyles',
+  'createMobileNativeChatAskStyles',
+  'createMobileNativeChatComposerStyles',
+  'createMobileNativeChatPermissionStyles',
+  'createMobileNativeChatQuestionStyles',
+  'createMobilePrBasePickerStyles',
+  'createMobilePrViewPanelStyles',
+  'createMobileRichMarkdownEditorStyles',
+  'createMobileSessionStyles',
+  'createNativeChatSettingsStyles',
+  'createNewWorktreeModalStyles',
+  'createNotificationsStyles',
+  'createPairConfirmStyles',
+  'createPairRedirectStyles',
+  'createPairScanStyles',
+  'createQuickCommandEditorFormStyles',
+  'createQuickCommandsListStyles',
+  'createQuickCommandsSheetStyles',
+  'createSettingsStyles',
+  'createSmartWorkspaceAdvancedFieldsStyles',
+  'createSmartWorkspaceSourceFieldStyles',
+  'createSmartWorkspaceSourceRowStyles',
+  'createTerminalSettingsStyles',
+  'createTroubleshootStyles'
+]
+
+const MOBILE_ROOT = path.resolve(__dirname, '../..')
+
+function walkSources(dir: string, out: string[] = []): string[] {
+  for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
+    if (entry.name.startsWith('.')) {
+      continue
+    }
+    const full = path.join(dir, entry.name)
+    if (entry.isDirectory()) {
+      walkSources(full, out)
+    } else if (/\.(ts|tsx)$/.test(entry.name) && !/\.test\.(ts|tsx)$/.test(entry.name)) {
+      out.push(full)
+    }
+  }
+  return out
+}
+
+function listDeclaredFactories(): string[] {
+  const roots = ['app', 'src'].map((segment) => path.join(MOBILE_ROOT, segment))
+  const names = roots
+    .flatMap((root) => walkSources(root))
+    .flatMap((file) => [
+      ...fs.readFileSync(file, 'utf8').matchAll(/export const (create[A-Za-z0-9]*Styles)\s*=/g)
+    ])
+    .map((match) => match[1])
+  return [...new Set(names)].sort()
+}
+
 describe('themed style factories', () => {
+  // Without this the registry silently stops covering new factories: the suite below
+  // only proves something about the ones it was told to load.
+  it('accounts for every declared style factory', async () => {
+    const registered = new Set((await loadThemedFactories()).map(({ name }) => name))
+    const declared = listDeclaredFactories()
+    expect(
+      declared.filter(
+        (name) =>
+          !registered.has(name) &&
+          !COVERED_BY_A_REGISTERED_MERGE.includes(name) &&
+          !NOT_EVALUATED_HERE.includes(name)
+      )
+    ).toEqual([])
+    expect(
+      [...COVERED_BY_A_REGISTERED_MERGE, ...NOT_EVALUATED_HERE].filter(
+        (name) => !declared.includes(name)
+      )
+    ).toEqual([])
+  })
+
   it('emits the same keys in both palettes and differs in value', async () => {
     const factories = await loadThemedFactories()
     for (const { name, factory } of factories) {
