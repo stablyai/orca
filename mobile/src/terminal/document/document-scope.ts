@@ -18,6 +18,7 @@ import {
   type TerminalDocumentHostSeams
 } from './document-host-seams'
 import type {
+  TerminalDocumentDecoration,
   TerminalDocumentDisposable,
   TerminalDocumentTerminal,
   TerminalDocumentTheme,
@@ -125,6 +126,9 @@ export type TerminalDocumentState = {
   touchGesture: TerminalTouchState
   scheduledFrames: number[]
   framesStopped: boolean
+  dimDirListingSizesEnabled: boolean
+  sizeDimDecorations: TerminalDocumentDecoration[]
+  sizeDimRefreshScheduled: boolean
 }
 
 export type TerminalDocumentScope = TerminalDocumentState & TerminalDocumentHostSeams
@@ -254,6 +258,9 @@ function createTerminalDocumentState(): TerminalDocumentState {
     },
     scheduledFrames: [],
     framesStopped: false,
+    dimDirListingSizesEnabled: false,
+    sizeDimDecorations: [],
+    sizeDimRefreshScheduled: false,
     touchGesture: {
       active: false,
       lastX: 0,

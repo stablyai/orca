@@ -28,7 +28,9 @@ import { setTerminalSettingsScrollEnabled } from '../src/terminal/terminal-setti
 import { useTerminalTextScaleSetting } from '../src/terminal/use-terminal-text-scale-setting'
 import {
   loadTerminalAutocompleteEnabled,
-  saveTerminalAutocompleteEnabled
+  loadTerminalDimDirListingSizes,
+  saveTerminalAutocompleteEnabled,
+  saveTerminalDimDirListingSizes
 } from '../src/storage/preferences'
 import { MobileSwitch } from '../src/components/MobileSwitch'
 import {
@@ -211,6 +213,25 @@ export default function TerminalSettingsScreen() {
     void saveTerminalAutocompleteEnabled(next)
   }, [])
 
+  const [dimDirListingSizes, setDimDirListingSizes] = useState(false)
+  const userToggledDimSizesRef = useRef(false)
+  useEffect(() => {
+    let stale = false
+    void loadTerminalDimDirListingSizes().then((enabled) => {
+      if (!stale && !userToggledDimSizesRef.current) {
+        setDimDirListingSizes(enabled)
+      }
+    })
+    return () => {
+      stale = true
+    }
+  }, [])
+  const toggleDimDirListingSizes = useCallback((next: boolean) => {
+    userToggledDimSizesRef.current = true
+    setDimDirListingSizes(next)
+    void saveTerminalDimDirListingSizes(next)
+  }, [])
+
   useEffect(() => {
     let cancelled = false
     for (const host of hosts) {
@@ -365,6 +386,31 @@ export default function TerminalSettingsScreen() {
                   )}
                   value={autocompleteEnabled}
                   onValueChange={toggleAutocomplete}
+                />
+              }
+            />
+          </SettingsSection>
+
+          <SettingsSection
+            title={t('app.terminalSettings.directoryListingsHeading', 'DIRECTORY LISTINGS')}
+            footer={t(
+              'app.terminalSettings.directoryListingsDescription',
+              'Dim trailing file-size tokens (1.4K, 738B, …) that coding agents print in directory listings. Visual only — selection and copy still include the original text. Off by default.'
+            )}
+          >
+            <ListRow
+              key="dimDirListingSizes"
+              title={t('app.terminalSettings.dimFileSizes', 'Dim file sizes')}
+              subtitle={
+                dimDirListingSizes
+                  ? t('app.terminalSettings.dimFileSizesOn', 'On')
+                  : t('app.terminalSettings.dimFileSizesOff', 'Off')
+              }
+              accessory={
+                <MobileSwitch
+                  accessibilityLabel={t('app.terminalSettings.dimFileSizes', 'Dim file sizes')}
+                  value={dimDirListingSizes}
+                  onValueChange={toggleDimDirListingSizes}
                 />
               }
             />
