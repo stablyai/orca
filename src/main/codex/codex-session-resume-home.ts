@@ -22,7 +22,8 @@ export type CodexSessionResumePreparation =
   | { outcome: 'resume'; codexHomePath: string }
   | { outcome: 'fresh'; claimedCodexProvenance: boolean }
 
-// Why: provenance may fold Win32's extended drive spelling, never arbitrary device namespaces.
+// Why: fold only Win32's extended drive spelling; \\.\ device namespaces and every other \\?\ form
+// (including \\?\UNC\, which is a network share rather than a device) stay unfolded here.
 function toCodexTrustedPathComparisonCopy(filePath: string): string | null {
   if (filePath.startsWith('\\\\.\\')) {
     return null

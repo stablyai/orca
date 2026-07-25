@@ -94,8 +94,7 @@ describe('resolveTrustedCodexSessionResumeHome', () => {
     ).toBeNull()
   })
 
-  // Why: the extended spelling can appear on the trusted-home side too, so both
-  // sides of the containment comparison must fold, not just the rollout path.
+  // Why: the sessions root is folded too, so the home side must accept the extended spelling.
   it('accepts a normal-form rollout under an extended-length trusted home', () => {
     const homePath = '\\\\?\\C:\\Users\\Example\\.codex'
     expect(
@@ -125,8 +124,7 @@ describe('resolveTrustedCodexSessionResumeHome', () => {
     ).resolves.toEqual({ homePath, transcriptPath: compressedPath })
   })
 
-  // Why: the legacy id scan runs the same namespace check per directory entry,
-  // so extended-length entries must resolve and device namespaces must not.
+  // Why: the id scan is a second call site of the same check, once per directory entry.
   it('accepts extended-length scan entries but not device-namespace entries', async () => {
     const sessionId = '019f81b9-19a9-7651-a8d1-352d9420bd11'
     const homePath = 'C:\\Users\\Example\\.codex'
