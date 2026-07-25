@@ -16,7 +16,7 @@ src/**/*.d.ts
 !src/types/build-constants.d.ts
 
 # Dependencies
-node_modules/
+node_modules
 
 # Build output
 dist/
