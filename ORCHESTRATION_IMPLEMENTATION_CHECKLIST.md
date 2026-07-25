@@ -1359,6 +1359,33 @@ Append new entries chronologically. Do not rewrite older entries except to corre
   - Rebuild both dev runtimes and repeat the physical Mac Run-home to Windows-worker setup-status
     slice, including a failing setup command that returns to a PowerShell prompt.
 
+### 2026-07-24 — Physical Windows setup-completion proof
+
+- Changes:
+  - Rebuilt and restarted the Mac Run-home and physical Windows worker runtimes from `4aba390af`.
+  - Started a fresh Windows Codex worker from the Mac with omitted `--setup`, a new top-level
+    worktree, and the exact Windows repo selector.
+- Verification:
+  - Mac runtime epoch `4a2a1cba-fd8b-41c7-b50b-caeac7415d9c` and Windows runtime epoch
+    `04cecad3-65a9-49a5-90ff-cdf04b09050f` both became ready after restart.
+  - Run `run_0f6b471005af`, Task `task_11e981c692b5`, and Dispatch `ctx_f009a65c6d9d` returned
+    ready with setup `running`, source `orchestration_default`, policy `start-immediately`, the exact
+    setup terminal `term_bdcb2a0b-89c5-429c-8ae6-0fdc2457db15`, and accepted dispatch input.
+  - The real Windows setup command later exited 1 in `windows-native-registry`; `worker-show`
+    changed setup to `failed` while preserving the succeeded worker, settled Dispatch, accepted
+    input effect, and exact setup-terminal effect.
+  - The setup terminal remained running and accepted a follow-up PowerShell command after failure.
+    The Run mailbox contained exactly one high-priority setup-failed notice for the Dispatch.
+- Findings:
+  - The private per-invocation marker carried exit code 1 in raw setup-terminal output and did not
+    appear in orchestration receipts or lifecycle messages.
+  - Windows terminal reads still flatten PowerShell line-editor redraws into noisy repeated input
+    text. The command executed once and orchestration state remained correct, so this pre-existing
+    rendering artifact stays outside this PR.
+- Next:
+  - Re-run the final local quality gates, push this evidence-only checklist update, and reconcile PR
+    CI and review state.
+
 ### Entry template
 
 ```text
