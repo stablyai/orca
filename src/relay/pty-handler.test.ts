@@ -1244,7 +1244,9 @@ describe('PtyHandler', () => {
     }
   })
 
-  it('consumes a color query at a native Windows SSH relay owner', async () => {
+  // Why: bundled ConPTY forwards OSC 10/11 rather than answering it, so a relay owner without
+  // startup colors must forward the query to the client responder instead of consuming it.
+  it('forwards an unanswerable color query at a native Windows SSH relay owner', async () => {
     const originalPlatform = Object.getOwnPropertyDescriptor(process, 'platform')
     Object.defineProperty(process, 'platform', { configurable: true, value: 'win32' })
     try {
@@ -1265,10 +1267,7 @@ describe('PtyHandler', () => {
       expect(term.write).not.toHaveBeenCalled()
       expect(dispatcher.notify).toHaveBeenCalledWith('pty.data', {
         id: 'pty-1',
-        data: '',
-        rawLength: '\x1b]10;?\x07'.length,
-        seq: '\x1b]10;?\x07'.length,
-        transformed: true
+        data: '\x1b]10;?\x07'
       })
     } finally {
       if (originalPlatform) {

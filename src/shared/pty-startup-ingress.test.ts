@@ -133,7 +133,9 @@ describe('PtyStartupIngress', () => {
     ])
   })
 
-  it('consumes a native ConPTY color query before any downstream responder at every split', () => {
+  it('releases an unanswerable native ConPTY color query to the downstream responder at every split', () => {
+    // Why: bundled ConPTY forwards the query instead of answering it. Consuming a query this
+    // transaction cannot answer leaves the agent with the pseudoconsole palette (#0c0c0c).
     const query = '\x1b]11;?\x1b\\'
     for (let split = 0; split <= query.length; split += 1) {
       const writes: string[] = []
@@ -149,14 +151,44 @@ describe('PtyStartupIngress', () => {
       ingress.drainAndClose()
 
       expect(writes, `split ${split}`).toEqual([])
-      expect(visible(emissions), `split ${split}`).toBe('')
-      expect(emissions, `split ${split}`).toEqual([
-        { data: '', rawStartSeq: 0, rawEndSeq: query.length, transformed: true }
-      ])
+      expect(visible(emissions), `split ${split}`).toBe(query)
     }
   })
 
-  it('keeps native ConPTY startup authority until it can answer with owner-supplied colors', () => {
+  it('transfers native ConPTY authority on close and after the startup deadline', () => {
+    vi.useFakeTimers()
+    const closeWrites: string[] = []
+    const closeEmissions: PtyIngressEmission[] = []
+    const closed = new PtyStartupIngress({
+      intent: { colors: COLORS, deadlineMs: 5_000 },
+      ownerBackend: 'windows-conpty',
+      write: (data) => closeWrites.push(data),
+      onEmission: (emission) => closeEmissions.push(emission)
+    })
+
+    closed.accept('\x1b]10;')
+    closed.closeQueryAuthority()
+    closed.accept('?\x07')
+
+    expect(closeWrites).toEqual([])
+    expect(visible(closeEmissions)).toBe('\x1b]10;?\x07')
+
+    const lateWrites: string[] = []
+    const lateEmissions: PtyIngressEmission[] = []
+    const late = new PtyStartupIngress({
+      intent: { colors: COLORS, deadlineMs: 5_000 },
+      ownerBackend: 'windows-conpty',
+      write: (data) => lateWrites.push(data),
+      onEmission: (emission) => lateEmissions.push(emission)
+    })
+    vi.advanceTimersByTime(5_001)
+    late.accept('\x1b]11;?\x1b\\')
+
+    expect(lateWrites).toEqual([])
+    expect(visible(lateEmissions)).toBe('\x1b]11;?\x1b\\')
+  })
+
+  it('releases a native ConPTY query the transaction already answered once', () => {
     const writes: string[] = []
     const emissions: PtyIngressEmission[] = []
     const ingress = new PtyStartupIngress({
@@ -166,15 +198,15 @@ describe('PtyStartupIngress', () => {
       onEmission: (emission) => emissions.push(emission)
     })
 
-    ingress.accept('\x1b]10;')
-    ingress.closeQueryAuthority()
-    ingress.accept('?\x07')
+    ingress.accept('\x1b]10;?\x1b\\\x1b]11;?\x1b\\')
+    emissions.length = 0
+    ingress.accept('\x1b]11;?\x1b\\')
 
-    expect(writes).toEqual(['\x1b]10;rgb:2e2e/3434/3434\x1b\\'])
-    expect(visible(emissions)).toBe('')
+    expect(writes).toEqual(['\x1b]10;rgb:2e2e/3434/3434\x1b\\', '\x1b]11;rgb:ffff/ffff/ffff\x1b\\'])
+    expect(visible(emissions)).toBe('\x1b]11;?\x1b\\')
   })
 
-  it('keeps a split native ConPTY query private across close, expiry, and snapshot barriers', () => {
+  it('releases a split native ConPTY query losslessly across close, expiry, and snapshot barriers', () => {
     vi.useFakeTimers()
     for (const barrier of ['close', 'expire', 'snapshot'] as const) {
       const emissions: PtyIngressEmission[] = []
@@ -192,14 +224,10 @@ describe('PtyStartupIngress', () => {
       } else {
         ingress.snapshotBarrier()
       }
-      expect(emissions, barrier).toEqual([])
 
       ingress.accept('?\x07')
 
-      expect(visible(emissions), barrier).toBe('')
-      expect(emissions, barrier).toEqual([
-        { data: '', rawStartSeq: 0, rawEndSeq: '\x1b]10;?\x07'.length, transformed: true }
-      ])
+      expect(visible(emissions), barrier).toBe('\x1b]10;?\x07')
     }
 
     const malformedEmissions: PtyIngressEmission[] = []
@@ -257,7 +285,7 @@ describe('PtyStartupIngress', () => {
     nativeIngress.accept(`${input}\x1b]10;?\x07`)
 
     expect(writes).toEqual([])
-    expect(visible(emissions)).toBe(input)
+    expect(visible(emissions)).toBe(`${input}\x1b]10;?\x07`)
   })
 
   it('ignores callbacks after teardown without recreating the raw sequence domain', () => {

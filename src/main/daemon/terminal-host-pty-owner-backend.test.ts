@@ -52,7 +52,8 @@ describe('TerminalHost PTY owner backend', () => {
   async function createSession(
     shellPath: string,
     requestedWslDistro?: string,
-    onData = vi.fn()
+    onData = vi.fn(),
+    startupIngress?: { colors: { foreground: string; background: string }; deadlineMs: number }
   ): Promise<TestSubprocess> {
     const subprocess = createSubprocess(shellPath)
     host = new TerminalHost({ spawnSubprocess: () => subprocess })
@@ -63,26 +64,45 @@ describe('TerminalHost PTY owner backend', () => {
       ...(requestedWslDistro
         ? { shellOverride: 'wsl.exe', terminalWindowsWslDistro: requestedWslDistro }
         : { shellOverride: 'powershell.exe' }),
+      ...(startupIngress ? { startupIngress } : {}),
       streamClient: { onData, onExit: vi.fn() }
     })
     return subprocess
   }
 
+  // Why: the backends now differ only in the ConPTY cooked-echo projection, so the stale-metadata
+  // contract is proven by which stream suppresses the ESC-stripped echo of its own reply.
   it('uses the spawned native shell over stale requested WSL metadata', async () => {
-    const replyProducers: string[] = []
-    const onData = vi.fn((data: string) => {
-      if (data === '\x1b]10;?\x07') {
-        replyProducers.push('renderer')
-        host.write('owner-test', '\x1b]10;rgb:ffff/ffff/ffff\x1b\\')
-      }
-    })
-    const subprocess = await createSession('powershell.exe', 'Ubuntu', onData)
+    const intent = {
+      colors: { foreground: '#2e3434', background: '#ffffff' },
+      deadlineMs: 5_000
+    }
+    const delivered: string[] = []
+    const onData = vi.fn((data: string) => delivered.push(data))
+    const subprocess = await createSession('powershell.exe', 'Ubuntu', onData, intent)
 
     subprocess.emitData('\x1b]10;?\x07')
+    subprocess.emitData(']10;rgb:2e2e/3434/3434\\')
+    subprocess.emitData('prompt')
 
-    expect(replyProducers).toEqual([])
-    expect(onData).toHaveBeenCalledWith('', '\x1b]10;?\x07'.length, true, '\x1b]10;?\x07'.length)
-    expect(subprocess.write).not.toHaveBeenCalled()
+    expect(subprocess.write).toHaveBeenCalledWith('\x1b]10;rgb:2e2e/3434/3434\x1b\\')
+    expect(delivered.join('')).toBe('prompt')
+  })
+
+  it('keeps the ConPTY echo projection off an actually spawned WSL shell', async () => {
+    const intent = {
+      colors: { foreground: '#2e3434', background: '#ffffff' },
+      deadlineMs: 5_000
+    }
+    const delivered: string[] = []
+    const onData = vi.fn((data: string) => delivered.push(data))
+    const subprocess = await createSession('wsl.exe', undefined, onData, intent)
+
+    subprocess.emitData('\x1b]10;?\x07')
+    subprocess.emitData(']10;rgb:2e2e/3434/3434\\')
+
+    expect(subprocess.write).toHaveBeenCalledWith('\x1b]10;rgb:2e2e/3434/3434\x1b\\')
+    expect(delivered.join('')).toBe(']10;rgb:2e2e/3434/3434\\')
   })
 
   it('keeps replies for an actually spawned WSL shell', async () => {

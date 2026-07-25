@@ -2,7 +2,35 @@
 
 Date: 2026-07-19
 
-Status: Implemented with the 2026-07-20 ownership amendment below
+Status: Implemented with the 2026-07-20 and 2026-07-25 amendments below
+
+## 2026-07-25 Bundled ConPTY Amendment
+
+The "native ConPTY consumes OSC 10/11 for the life of the PTY" rule was measured against the
+**system** ConPTY. Every Windows spawn now passes `useConptyDll: true`
+([`pty-subprocess.ts`](../../../src/main/daemon/pty-subprocess.ts),
+[`local-pty-utils.ts`](../../../src/main/providers/local-pty-utils.ts)), so the bundled
+OpenConsole binary owns the pseudoconsole instead. A node-pty harness on both backends shows they
+behave in opposite ways:
+
+| backend | forwards `OSC 10/11 ?` to the terminal | reply reaches the client | cooked echo of the reply |
+| --- | --- | --- | --- |
+| system ConPTY (`useConptyDll: false`) | no | no | n/a |
+| bundled ConPTY (`useConptyDll: true`) | yes | yes, byte-for-byte | none observed |
+
+Consuming an unanswerable query on the bundled backend therefore silences the only responder the
+agent can reach. Codex then falls back to `GetConsoleScreenBufferInfoEx`
+(`codex-rs/tui/src/terminal_probe.rs`), reads the pseudoconsole palette — `bgIndex=0`,
+`#0c0c0c` — and renders a dark theme inside a light pane. This reproduced whenever the query
+arrived after the 5 s startup deadline or after both slots had already been answered once.
+
+The startup transaction now transfers OSC 10/11 authority identically on every backend: a query it
+answers is consumed, a query it cannot answer is released to the normal delivered/hidden responder.
+The measured echo projection stays gated on `windows-conpty` so a host that still reaches the system
+ConPTY keeps its cooked-echo protection. Residual risk: on such a host a downstream reply's echo is
+not suppressed, because only source-written replies register an expected projection — accepted
+because a dark-on-light agent is deterministic while that echo is not reproducible on the bundled
+backend.
 
 ## 2026-07-20 Ownership Amendment
 

@@ -1,6 +1,7 @@
 import type { Page } from '@stablyai/playwright-test'
 import { test, expect } from './helpers/orca-app'
 import {
+  execInTerminal,
   waitForActivePaneHookDescriptor,
   waitForActivePanePtyId,
   waitForActiveTerminalManager
@@ -88,4 +89,42 @@ test('answers OSC foreground and background color queries from the active termin
       }
     )
     .toEqual(['\x1b]10;rgb:2e2e/3434/3434\x1b\\', '\x1b]11;rgb:ffff/ffff/ffff\x1b\\'])
+})
+
+// Why: bundled ConPTY forwards OSC 10/11 to Orca instead of answering it. A query the startup
+// transaction cannot answer must still reach this responder, or the program falls back to the
+// pseudoconsole palette (#0c0c0c) and paints a dark UI inside a light pane.
+test('answers a color query a real PTY emits outside the startup window', async ({
+  electronApp,
+  orcaPage
+}) => {
+  await installTerminalPtyWriteSpy(electronApp)
+  await waitForSessionReady(orcaPage)
+  await waitForActiveWorktree(orcaPage)
+  await ensureTerminalVisible(orcaPage)
+  await waitForActiveTerminalManager(orcaPage, 30_000)
+
+  const ptyId = await waitForActivePanePtyId(orcaPage)
+  await setActiveTerminalTheme(orcaPage, {
+    foreground: '#2e3434',
+    background: 'rgba(255, 255, 255, 1)'
+  })
+  await clearTerminalPtyWriteLog(electronApp)
+
+  // Why: BEL terminates the query without a backslash, so the one command line survives both
+  // PowerShell and POSIX shell quoting.
+  await execInTerminal(orcaPage, ptyId, `node -e "process.stdout.write('\\x1b]11;?\\x07')"`)
+
+  await expect
+    .poll(
+      async () =>
+        (await readTerminalPtyWriteEntries(electronApp))
+          .filter((entry) => entry.id === ptyId)
+          .map((entry) => entry.data),
+      {
+        timeout: 20_000,
+        message: 'the PTY-emitted color query was consumed instead of answered'
+      }
+    )
+    .toContain('\x1b]11;rgb:ffff/ffff/ffff\x1b\\')
 })

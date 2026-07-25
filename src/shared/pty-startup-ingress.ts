@@ -119,18 +119,13 @@ export class PtyStartupIngress {
         this.processEchoSpan(operation.chunk)
         return
       case 'close-query':
-        if (this.ownerBackend !== 'windows-conpty') {
-          this.queryOpen = false
-          this.releaseQueryPending()
-        }
-        // Why: ConPTY cannot safely transfer color-query authority to a downstream view.
+        this.queryOpen = false
+        this.releaseQueryPending()
         return
       case 'expire':
         this.queryOpen = false
         this.releaseEchoPending()
-        if (this.ownerBackend !== 'windows-conpty') {
-          this.releaseQueryPending()
-        }
+        this.releaseQueryPending()
         this.expectedEchoes.length = 0
         this.clearDeadline()
         return
@@ -181,8 +176,10 @@ export class PtyStartupIngress {
   private processQuerySpan(span: PtyIngressSourceSpan): void {
     const input = combinePtyIngressSourceSpans(this.queryPending, span)
     this.queryPending = null
-    const suppressConptyQuery = this.ownerBackend === 'windows-conpty'
-    if ((!this.queryOpen || !this.intent) && !suppressConptyQuery) {
+    if (!this.queryOpen || !this.intent) {
+      // Why: bundled ConPTY forwards OSC 10/11 queries instead of answering them, so a query
+      // this transaction cannot answer must reach the normal view/model responder or the agent
+      // falls back to the pseudoconsole palette (always #0c0c0c) and renders a dark theme.
       this.emit(input, false)
       return
     }
@@ -218,7 +215,7 @@ export class PtyStartupIngress {
       }
       const querySpan = slicePtyIngressSourceSpan(input, candidateIndex, query.endIndex)
       const answered = this.queryOpen && this.intent && this.answerQuery(query.slots)
-      if (answered || suppressConptyQuery) {
+      if (answered) {
         this.emit(querySpan, true, '')
       } else {
         this.emit(querySpan, false)
@@ -296,9 +293,7 @@ export class PtyStartupIngress {
       this.expectedEchoes.shift()
       this.releaseEchoPending()
     }
-    if (this.ownerBackend !== 'windows-conpty') {
-      this.releaseQueryPending()
-    }
+    this.releaseQueryPending()
   }
 
   private emit(span: PtyIngressSourceSpan, transformed: boolean, data = span.data): void {

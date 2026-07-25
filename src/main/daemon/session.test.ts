@@ -245,7 +245,10 @@ describe('Session', () => {
       expect(snapshot?.outputSequence).toBe('\x1b]10;?\x07]10;rgb:2e2e/'.length)
     })
 
-    it('reproduces the legacy paired-runtime leak and removes its downstream producer', () => {
+    // Why: after startup authority closes, both backends hand the query to the downstream
+    // responder. Bundled ConPTY forwards OSC 10/11 and produces no cooked echo, so consuming the
+    // query there would leave the agent on the pseudoconsole palette instead of the pane theme.
+    it('hands a post-authority color query to the downstream responder on both backends', () => {
       const query = '\x1b]10;?\x07'
       const reply = '\x1b]10;rgb:2e2e/3434/3434\x1b\\'
       const projectedEcho = ']10;rgb:2e2e/3434/3434\\'
@@ -286,9 +289,9 @@ describe('Session', () => {
       subprocess.simulateData(query)
       subprocess.simulateData('prompt')
 
-      expect(fixedReplyProducers).toEqual([])
-      expect(subprocess.written).toEqual([])
-      expect(fixedOnData.mock.calls).toEqual([['', query.length, true, query.length], ['prompt']])
+      expect(fixedReplyProducers).toEqual(['remote-visible-renderer'])
+      expect(subprocess.written).toEqual([reply])
+      expect(fixedOnData.mock.calls).toEqual([[query], ['prompt']])
       expect(session.getSnapshot()?.snapshotAnsi).not.toContain(']10;rgb')
     })
   })

@@ -1752,7 +1752,9 @@ describe('LocalPtyProvider', () => {
       ])
     })
 
-    it('consumes a native Windows OSC color query before renderer delivery', async () => {
+    // Why: bundled ConPTY forwards OSC 10/11 instead of answering it, so a query this PTY has no
+    // startup colors for must reach the renderer responder rather than being consumed silently.
+    it('delivers an unanswerable native Windows OSC color query to the renderer', async () => {
       Object.defineProperty(process, 'platform', { configurable: true, value: 'win32' })
       const dataHandler = vi.fn()
       provider.onData(dataHandler)
@@ -1766,13 +1768,7 @@ describe('LocalPtyProvider', () => {
 
       onDataCb(query)
 
-      expect(dataHandler).toHaveBeenCalledWith({
-        id,
-        data: '',
-        sequenceChars: query.length,
-        seq: query.length,
-        transformed: true
-      })
+      expect(dataHandler).toHaveBeenCalledWith({ id, data: query })
       expect(mockProc.write).not.toHaveBeenCalled()
     })
 
