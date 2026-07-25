@@ -9,6 +9,8 @@ import { NativeChatComposer, type NativeChatComposerHandle } from './NativeChatC
 import { useNativeChatFontScale } from './use-native-chat-font-scale'
 import { useNativeChatCanSend } from './use-native-chat-can-send'
 import { NativeChatInteractiveCard } from './NativeChatInteractiveCard'
+import { NativeChatAcpApprovalSlot } from './NativeChatAcpApprovalSlot'
+import { useNativeChatSubscriptionId } from './use-native-chat-subscription-id'
 import { NativeChatEmptyState } from './NativeChatEmptyState'
 import { NativeChatSessionGate } from './NativeChatSessionGate'
 import { useNativeChatInteractiveSend } from './use-native-chat-interactive-send'
@@ -130,7 +132,10 @@ function NativeChatResolvedView({
   const runtimeEnvironmentId = useAppStore((s) =>
     selectNativeChatRuntimeEnvironmentId(s, terminalTabId)
   )
+  const { subscriptionId: nativeChatSubscriptionId, acpSubscriptionId } =
+    useNativeChatSubscriptionId(paneKey, agent)
   const session = useNativeChatLiveSession({
+    subscriptionId: nativeChatSubscriptionId,
     paneKey,
     agent,
     sessionId,
@@ -417,6 +422,7 @@ function NativeChatResolvedView({
       {/* Live interactive prompt (question / approval) is the bottom input region
           (mobile parity). A question card supplies its own answer input, so it
           fully replaces the composer while active — no stray "Send a message". */}
+      <NativeChatAcpApprovalSlot subscriptionId={acpSubscriptionId} />
       <NativeChatInteractiveCard
         paneKey={paneKey}
         send={interactiveSend}
@@ -433,6 +439,7 @@ function NativeChatResolvedView({
           terminalTabId={terminalTabId}
           paneKey={paneKey}
           targetPtyId={targetPtyId}
+          acpSubscriptionId={acpSubscriptionId}
           agent={agent}
           canSend={canSend}
           isWorking={isWorking}

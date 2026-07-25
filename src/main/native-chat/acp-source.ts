@@ -38,6 +38,18 @@ export type SubscribeAcpArgs = SubscribeNativeChatTranscriptArgs & {
   createClient?: typeof createAcpStdioClient
 }
 
+/** An ACP-backed subscription also carries the send path: the conversation is a
+ *  live session, so prompts go to the agent over JSON-RPC rather than being typed
+ *  into a PTY. */
+export type AcpChatSubscription = NativeChatTranscriptSubscription & {
+  /** Send operator text as a new prompt turn. Rejects when the session is not
+   *  ready (agent still starting, or already disposed). */
+  sendPrompt: (text: string) => Promise<void>
+  /** Interrupt the in-flight turn. ACP reports the interruption back through
+   *  session/update, so there is no reply to await. */
+  cancelTurn: () => void
+}
+
 export function resolveAcpCommand(
   agent: string | null | undefined
 ): { command: string; args: string[] } | null {
@@ -55,15 +67,24 @@ export function resolveAcpCommand(
  */
 export async function subscribeNativeChatAcpSession(
   args: SubscribeAcpArgs
-): Promise<NativeChatTranscriptSubscription> {
+): Promise<AcpChatSubscription> {
   const command = resolveAcpCommand(args.agent)
   if (command == null) {
     args.onInitialSnapshot?.([], false, 0, 'Agent does not serve ACP')
-    return { unsubscribe: () => {}, watching: false }
+    return {
+      unsubscribe: () => {},
+      watching: false,
+      sendPrompt: () => Promise.reject(new Error('Agent does not serve ACP')),
+      cancelTurn: () => {}
+    }
   }
 
   let disposed = false
   let snapshotDelivered = false
+  /** The agent's own session id — the one prompts must be addressed to. Set
+   *  after load/new succeeds; prompts before that are rejected rather than sent
+   *  to an unaddressable session. */
+  let agentSessionId: string | null = null
   const accumulator = createAcpTurnAccumulator(args.sessionId)
   const spawnClient = args.createClient ?? createAcpStdioClient
 
@@ -130,11 +151,12 @@ export async function subscribeNativeChatAcpSession(
     try {
       await client.loadSession(args.sessionId, { cwd: args.cwd })
       loaded = true
+      agentSessionId = args.sessionId
     } catch (error) {
       args.onLog?.(`acp: session/load failed, opening a new session: ${String(error)}`)
     }
     if (!loaded) {
-      await client.newSession({ cwd: args.cwd })
+      agentSessionId = await client.newSession({ cwd: args.cwd })
     }
 
     flushReplay()
@@ -147,7 +169,12 @@ export async function subscribeNativeChatAcpSession(
       snapshotDelivered = true
       args.onInitialSnapshot?.([], false, 0, `ACP agent unavailable: ${String(error)}`)
     }
-    return { unsubscribe: () => {}, watching: false }
+    return {
+      unsubscribe: () => {},
+      watching: false,
+      sendPrompt: () => Promise.reject(new Error('ACP session unavailable')),
+      cancelTurn: () => {}
+    }
   }
 
   return {
@@ -158,6 +185,31 @@ export async function subscribeNativeChatAcpSession(
       disposed = true
       client.dispose()
     },
-    watching: true
+    watching: true,
+
+    async sendPrompt(text: string): Promise<void> {
+      if (disposed || agentSessionId == null) {
+        throw new Error('ACP session is not ready')
+      }
+      // Echo the operator's own text immediately: ACP agents are not required to
+      // replay a user_message_chunk for a prompt the client just sent, so
+      // without this the message would not appear until (or unless) the agent
+      // chose to echo it.
+      const echo = accumulator.decode(
+        { sessionUpdate: 'user_message_chunk', content: { type: 'text', text } },
+        Date.now()
+      )
+      if (echo.messages.length > 0) {
+        args.onAppend(echo.messages)
+      }
+      await client.prompt(agentSessionId, [{ type: 'text', text }])
+    },
+
+    cancelTurn(): void {
+      if (disposed || agentSessionId == null) {
+        return
+      }
+      client.cancel(agentSessionId)
+    }
   }
 }

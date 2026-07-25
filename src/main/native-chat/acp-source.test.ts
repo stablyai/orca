@@ -1,5 +1,9 @@
 import { describe, expect, it, vi } from 'vitest'
-import { resolveAcpCommand, subscribeNativeChatAcpSession } from './acp-source'
+import {
+  resolveAcpCommand,
+  subscribeNativeChatAcpSession,
+  type AcpChatSubscription
+} from './acp-source'
 import { readNativeChatSessionTail } from './source-dispatch'
 import type { AcpClient } from '../acp/acp-stdio-client'
 
@@ -216,5 +220,114 @@ describe('readNativeChatSessionTail', () => {
     await expect(
       readNativeChatSessionTail({ agent: 'omp', sessionId: 's', limit: 300 })
     ).resolves.toEqual({ messages: [] })
+  })
+})
+
+describe('ACP send path', () => {
+  it('sends operator text as a prompt addressed to the agent session', async () => {
+    const prompts: { sessionId: string; blocks: unknown[] }[] = []
+    const fake = createFakeClient()
+    const onAppend = vi.fn()
+    const subscription = await subscribeNativeChatAcpSession({
+      agent: 'hermes',
+      sessionId: 'sess',
+      onAppend,
+      onInitialSnapshot: () => {},
+      createClient: ((options: {
+        onSessionUpdate: (u: Record<string, unknown>, s: string | null) => void
+      }) => {
+        const build = fake.factory as unknown as (o: unknown) => AcpClient
+        const real = build(options)
+        return {
+          ...real,
+          prompt: async (sessionId: string, blocks: unknown[]) => {
+            prompts.push({ sessionId, blocks })
+            return {}
+          }
+        }
+      }) as never
+    })
+
+    await (subscription as AcpChatSubscription).sendPrompt('do the thing')
+    expect(prompts).toEqual([
+      { sessionId: 'sess', blocks: [{ type: 'text', text: 'do the thing' }] }
+    ])
+  })
+
+  it('echoes the operator message immediately — agents need not replay it', async () => {
+    const fake = createFakeClient()
+    const onAppend = vi.fn()
+    const subscription = await subscribeNativeChatAcpSession({
+      agent: 'hermes',
+      sessionId: 'sess',
+      onAppend,
+      onInitialSnapshot: () => {},
+      createClient: fake.factory
+    })
+
+    await (subscription as AcpChatSubscription).sendPrompt('hello agent')
+    const [messages] = onAppend.mock.calls[0]
+    expect(messages[0].role).toBe('user')
+    expect(messages[0].blocks[0]).toEqual({ type: 'text', text: 'hello agent' })
+    expect(messages[0].source).toBe('acp')
+  })
+
+  it('addresses prompts to the fresh session id when load failed', async () => {
+    const prompts: string[] = []
+    const fake = createFakeClient()
+    fake.failLoad()
+    const subscription = await subscribeNativeChatAcpSession({
+      agent: 'hermes',
+      sessionId: 'stale-id',
+      onAppend: () => {},
+      onInitialSnapshot: () => {},
+      createClient: ((options: {
+        onSessionUpdate: (u: Record<string, unknown>, s: string | null) => void
+      }) => {
+        const build = fake.factory as unknown as (o: unknown) => AcpClient
+        const real = build(options)
+        return {
+          ...real,
+          prompt: async (sessionId: string) => {
+            prompts.push(sessionId)
+            return {}
+          }
+        }
+      }) as never
+    })
+
+    await (subscription as AcpChatSubscription).sendPrompt('x')
+    // Not the stale id the view asked for — the one session/new returned.
+    expect(prompts).toEqual(['fresh-session'])
+  })
+
+  it('rejects a prompt after unsubscribe instead of writing to a dead client', async () => {
+    const fake = createFakeClient()
+    const { subscription } = await subscribe(fake)
+    subscription.unsubscribe()
+    await expect((subscription as AcpChatSubscription).sendPrompt('x')).rejects.toThrow(
+      'not ready'
+    )
+  })
+
+  it('rejects a prompt when the agent never started', async () => {
+    const fake = createFakeClient()
+    fake.failInitialize()
+    const { subscription } = await subscribe(fake)
+    await expect((subscription as AcpChatSubscription).sendPrompt('x')).rejects.toThrow(
+      'unavailable'
+    )
+  })
+
+  it('cancels the in-flight turn, and is inert once disposed', async () => {
+    const fake = createFakeClient()
+    const { subscription } = await subscribe(fake)
+    ;(subscription as AcpChatSubscription).cancelTurn()
+    expect(fake.calls).toContain('cancel')
+
+    subscription.unsubscribe()
+    const before = fake.calls.filter((c) => c === 'cancel').length
+    ;(subscription as AcpChatSubscription).cancelTurn()
+    expect(fake.calls.filter((c) => c === 'cancel')).toHaveLength(before)
   })
 })

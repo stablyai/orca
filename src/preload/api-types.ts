@@ -943,6 +943,12 @@ export type NativeChatApi = {
   /** Answer a pending ACP approval. `optionId: null` cancels — the operator
    *  dismissing the card is an explicit deny, never an implicit allow. */
   respondAcpPermission: (requestId: string, optionId: string | null) => Promise<boolean>
+  /** Send operator text to an ACP agent as a new prompt turn. Rejects when the
+   *  chat view has no live ACP session (transcript agent, or agent still
+   *  starting) so the caller can fall back to the PTY path. */
+  sendAcpPrompt: (subscriptionId: string, text: string) => Promise<boolean>
+  /** Interrupt the ACP agent's in-flight turn. */
+  cancelAcpTurn: (subscriptionId: string) => void
 }
 
 export type AppApi = {

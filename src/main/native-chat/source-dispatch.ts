@@ -13,15 +13,31 @@ import {
   readNativeChatTranscriptTail,
   subscribeNativeChatTranscript
 } from './transcript-watch'
-import { subscribeNativeChatAcpSession, type SubscribeAcpArgs } from './acp-source'
+import {
+  subscribeNativeChatAcpSession,
+  type AcpChatSubscription,
+  type SubscribeAcpArgs
+} from './acp-source'
 import type { NativeChatTranscriptSubscription } from './transcript-watch-contract'
 
 export type SubscribeNativeChatSessionArgs = SubscribeAcpArgs
 
+/** A subscription that may carry ACP's send path. Transcript agents have no
+ *  sendPrompt — their input still goes to the PTY. */
+export type NativeChatSessionSubscription =
+  | NativeChatTranscriptSubscription
+  | AcpChatSubscription
+
+export function isAcpChatSubscription(
+  subscription: NativeChatSessionSubscription
+): subscription is AcpChatSubscription {
+  return typeof (subscription as AcpChatSubscription).sendPrompt === 'function'
+}
+
 /** Subscribe to an agent's conversation over whichever transport it serves. */
 export async function subscribeNativeChatSession(
   args: SubscribeNativeChatSessionArgs
-): Promise<NativeChatTranscriptSubscription> {
+): Promise<NativeChatSessionSubscription> {
   if (resolveNativeChatTransport(args.agent) === 'acp') {
     return subscribeNativeChatAcpSession(args)
   }

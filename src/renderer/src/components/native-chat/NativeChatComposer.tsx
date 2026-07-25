@@ -65,6 +65,7 @@ export const NativeChatComposer = forwardRef<NativeChatComposerHandle, NativeCha
       terminalTabId,
       paneKey,
       targetPtyId,
+      acpSubscriptionId = null,
       agent,
       canSend = true,
       isWorking = false,
@@ -227,6 +228,21 @@ export const NativeChatComposer = forwardRef<NativeChatComposerHandle, NativeCha
       if ((text.trim() === '' && imagePaths.length === 0) || disabled) {
         return
       }
+      // ACP agents have no PTY: a prompt is a JSON-RPC turn, not keystrokes. Take
+      // that path before any of the pty resolution/pacing below, which exists to
+      // drive a terminal UI. Image attachments are not carried yet (both agents
+      // advertise image prompt capability, so this is a follow-up, not a limit of
+      // the protocol) — the text still sends rather than being silently dropped.
+      if (acpSubscriptionId != null) {
+        void window.api.nativeChat
+          .sendAcpPrompt(acpSubscriptionId, text)
+          .catch((error: unknown) => {
+            setNotice(error instanceof Error ? error.message : String(error))
+          })
+        setDraft('')
+        clearImageAttachments()
+        return
+      }
       // Why: block a normal send while a session-option command (e.g. /model) is
       // still writing its body+delayed-Enter to the same pty, so the two write
       // sequences can't interleave on one input line.
@@ -293,6 +309,7 @@ export const NativeChatComposer = forwardRef<NativeChatComposerHandle, NativeCha
       imageAttachments,
       disabled,
       isDispatchingSessionOption,
+      acpSubscriptionId,
       resolveTarget,
       onOptimisticSend,
       onSlashCommand,

@@ -4121,7 +4121,12 @@ const api = {
       }
     },
     respondAcpPermission: (requestId: string, optionId: string | null): Promise<boolean> =>
-      ipcRenderer.invoke('nativeChat:acpPermissionRespond', { requestId, optionId })
+      ipcRenderer.invoke('nativeChat:acpPermissionRespond', { requestId, optionId }),
+    sendAcpPrompt: (subscriptionId: string, text: string): Promise<boolean> =>
+      ipcRenderer.invoke('nativeChat:acpPrompt', { subscriptionId, text }),
+    cancelAcpTurn: (subscriptionId: string): void => {
+      ipcRenderer.send('nativeChat:acpCancelTurn', { subscriptionId })
+    }
   },
 
   runtime: {

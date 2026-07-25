@@ -37,6 +37,8 @@ export type UseNativeChatLiveSessionArgs = {
   transcriptPath?: string | null
   /** Runtime owner (Model B): non-null routes read/subscribe to the remote host; null keeps the local IPC path. */
   runtimeEnvironmentId?: string | null
+  /** Caller-supplied subscription id. ACP panes address prompts and tool approvals by it, so the view mints it. */
+  subscriptionId?: string
 }
 
 /** A live session plus the older-history pagination controls the view needs. */
@@ -104,12 +106,13 @@ type ReadState =
 export function useNativeChatLiveSession(
   args: UseNativeChatLiveSessionArgs
 ): NativeChatLiveSession {
-  const { paneKey, agent, sessionId, transcriptPath, runtimeEnvironmentId } = args
+  const { paneKey, agent, sessionId, transcriptPath, runtimeEnvironmentId, subscriptionId: callerSubscriptionId } = args
   // Stable per owner id so a re-render without an owner flip keeps the same transport and doesn't re-subscribe.
   const transport = useMemo(
     () => getNativeChatSessionTransport(runtimeEnvironmentId ?? null),
     [runtimeEnvironmentId]
   )
+
   const [read, setRead] = useState<ReadState>({ phase: 'loading' })
   const [hasMore, setHasMore] = useState(false)
   const [loadingEarlier, setLoadingEarlier] = useState(false)
@@ -201,7 +204,7 @@ export function useNativeChatLiveSession(
 
     loadSession(0)
 
-    const subscriptionId = nextSubscriptionId()
+    const subscriptionId = callerSubscriptionId ?? nextSubscriptionId()
     const unsubscribe = transport.subscribe(
       {
         subscriptionId,
@@ -254,7 +257,7 @@ export function useNativeChatLiveSession(
       }
     }
     // `transport` identity changes on an owner flip, re-running this effect to re-subscribe against the new host.
-  }, [agent, sessionId, transcriptPath, transport, transcriptLifecycleControl])
+  }, [agent, sessionId, transcriptPath, transport, transcriptLifecycleControl, callerSubscriptionId])
 
   const loadEarlier = useCallback(() => {
     if (!sessionId || loadingEarlier || !hasMore || read.phase !== 'ready') {
