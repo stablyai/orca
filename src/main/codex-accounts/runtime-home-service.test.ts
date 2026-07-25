@@ -3640,7 +3640,7 @@ describe('CodexRuntimeHomeService', () => {
 
     expect(service.prepareForCodexLaunch()).toBe(getRuntimeCodexHomePath())
     expect(readFileSync(join(getRuntimeCodexHomePath(), 'config.toml'), 'utf-8')).toBe(
-      canonicalConfig
+      `cli_auth_credentials_store = "file"\n${canonicalConfig}`
     )
     expect(existsSync(getRuntimeCodexAuthPath())).toBe(false)
     expect(readFileSync(canonicalConfigPath, 'utf-8')).toBe(canonicalConfig)

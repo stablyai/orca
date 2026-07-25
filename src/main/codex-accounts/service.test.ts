@@ -20,6 +20,7 @@ import { buildCodexResetCreditExpectedScope } from '../../shared/codex-reset-cre
 import type { CodexResetCreditAttemptLedger } from '../../shared/codex-reset-credit-attempt-ledger'
 import { buildWslCodexAvailabilityArgs, buildWslCodexLoginArgs } from './wsl-codex-command'
 import type { readHookTrustEntries as ReadHookTrustEntries } from '../codex/config-toml-trust'
+import { forceFileAuthCredentialsStore } from '../codex/codex-config-auth-store'
 
 const testState = {
   userDataDir: '',
@@ -414,7 +415,9 @@ describe('CodexAccountService config sync', () => {
     const { CodexAccountService } = await import('./service')
     new CodexAccountService(store as never, rateLimits as never, runtimeHome as never)
 
-    expect(readFileSync(join(managedHomePath, 'config.toml'), 'utf-8')).toBe(canonicalConfig)
+    expect(readFileSync(join(managedHomePath, 'config.toml'), 'utf-8')).toBe(
+      forceFileAuthCredentialsStore(canonicalConfig)
+    )
     expect(readFileSync(join(managedHomePath, 'auth.json'), 'utf-8')).toBe(
       '{"account":"managed"}\n'
     )
@@ -550,7 +553,11 @@ describe('CodexAccountService config sync', () => {
       createRuntimeHome() as never
     )
 
-    expect(readFileSync(join(managedHomePath, 'config.toml'), 'utf-8')).toBe(fixture.config)
+    // Why: managed homes force file-backed auth so account switch stays deterministic;
+    // the source ~/.codex stays untouched.
+    expect(readFileSync(join(managedHomePath, 'config.toml'), 'utf-8')).toBe(
+      forceFileAuthCredentialsStore(fixture.config)
+    )
     expect(readFileSync(canonicalConfigPath, 'utf-8')).toBe(fixture.config)
   })
 
@@ -609,10 +616,12 @@ describe('CodexAccountService config sync', () => {
       ''
     ].join('\n')
     writeFileSync(canonicalConfigPath, canonicalConfig, 'utf-8')
+    // Pre-seed the forced file-auth form so the sync path's write is a true no-op.
+    const managedConfig = forceFileAuthCredentialsStore(canonicalConfig)
     const managedHomePath = createManagedHome(
       testState.userDataDir,
       'account-1',
-      canonicalConfig,
+      managedConfig,
       '{"account":"managed"}\n'
     )
     const managedConfigPath = join(managedHomePath, 'config.toml')
@@ -737,7 +746,9 @@ describe('CodexAccountService config sync', () => {
 
     await service.selectAccount('account-1')
 
-    expect(readFileSync(join(managedHomePath, 'config.toml'), 'utf-8')).toBe(canonicalConfig)
+    expect(readFileSync(join(managedHomePath, 'config.toml'), 'utf-8')).toBe(
+      forceFileAuthCredentialsStore(canonicalConfig)
+    )
     expect(rateLimits.refreshForCodexAccountChange).toHaveBeenCalledTimes(1)
     expect(runtimeHome.syncForCurrentSelection).toHaveBeenCalledTimes(1)
   })
@@ -801,7 +812,9 @@ describe('CodexAccountService config sync', () => {
 
         const loginHome = options.env.CODEX_HOME
         expect(loginHome).toBeTruthy()
-        expect(readFileSync(join(loginHome!, 'config.toml'), 'utf-8')).toBe(canonicalConfig)
+        expect(readFileSync(join(loginHome!, 'config.toml'), 'utf-8')).toBe(
+          forceFileAuthCredentialsStore(canonicalConfig)
+        )
 
         const payload = Buffer.from(JSON.stringify({ email: 'user@example.com' })).toString(
           'base64url'
@@ -973,7 +986,9 @@ describe('CodexAccountService config sync', () => {
         const loginHome = options.env.CODEX_HOME
         expect(loginHome).toBeTruthy()
         expect(readFileSync(join(loginHome!, '.orca-managed-home'), 'utf-8')).toBe('account-1\n')
-        expect(readFileSync(join(loginHome!, 'config.toml'), 'utf-8')).toBe(canonicalConfig)
+        expect(readFileSync(join(loginHome!, 'config.toml'), 'utf-8')).toBe(
+          forceFileAuthCredentialsStore(canonicalConfig)
+        )
 
         const child = new EventEmitter() as EventEmitter & {
           stdout: PassThrough
@@ -1351,10 +1366,13 @@ describe('CodexAccountService config sync', () => {
       expect(command).toBe('wsl.exe')
       expect(args).toEqual(buildWslCodexLoginArgs('Debian', wslLinuxHomePath))
       // Why: codex login runs inside WSL, so the rewritten path must be the
-      // Linux-side ~/.codex, not a Windows UNC path.
+      // Linux-side ~/.codex, not a Windows UNC path. Managed homes also force
+      // file-backed auth so credentials stay inside the selected CODEX_HOME.
       expect(readFileSync(join(wslManagedHomePath, 'config.toml'), 'utf-8')).toBe(
-        'sandbox_mode = "danger-full-access"\n' +
-          "model_instructions_file = '/home/alice/.codex/instructions.md'\n"
+        forceFileAuthCredentialsStore(
+          'sandbox_mode = "danger-full-access"\n' +
+            "model_instructions_file = '/home/alice/.codex/instructions.md'\n"
+        )
       )
       const child = new EventEmitter() as EventEmitter & {
         stdout: PassThrough
