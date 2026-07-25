@@ -143,8 +143,23 @@ module.exports = {
     // Why: a Linux runner-image glibc bump silently shipped a node-pty pty.node
     // requiring GLIBC_2.34, crashing the app on startup on Ubuntu 20.04 (#9902).
     // Fail packaging if any bundled native binary exceeds the supported floor.
+    //
+    // ORCA_SKIP_GLIBC_FLOOR is for same-machine deploys only: building on a
+    // host with a newer glibc (e.g. NixOS 2.42) and installing the result on
+    // that same host, where the Ubuntu 20.04 floor is not a real constraint.
+    // It must never be set for a build that is distributed — the guard exists
+    // because this failure mode is a startup crash on someone else's machine,
+    // with no signal at package time.
     if (context.electronPlatformName === 'linux') {
-      verifyLinuxGlibcFloor(context.appOutDir)
+      if (process.env.ORCA_SKIP_GLIBC_FLOOR === '1') {
+        console.warn(
+          '[electron-builder] ORCA_SKIP_GLIBC_FLOOR=1 — skipping the Ubuntu 20.04 ' +
+            'glibc floor check. This artifact is only safe on a host whose glibc is ' +
+            'at least as new as this builder. DO NOT DISTRIBUTE IT.'
+        )
+      } else {
+        verifyLinuxGlibcFloor(context.appOutDir)
+      }
     }
     const resourcesDir =
       context.electronPlatformName === 'darwin'
