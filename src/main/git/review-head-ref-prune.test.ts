@@ -23,6 +23,17 @@ function meta(overrides: Partial<WorktreeMeta> = {}): WorktreeMeta {
   }
 }
 
+/** Snapshot-style helper for single-threaded tests. */
+function finalizeFromMap(
+  map: Record<string, WorktreeMeta | undefined>,
+  deletedWorktreeId: string
+): () => Record<string, WorktreeMeta | undefined> {
+  return () => {
+    delete map[deletedWorktreeId]
+    return { ...map }
+  }
+}
+
 describe('otherWorktreesStillLinkReview', () => {
   it('is false when no other worktree shares the PR', () => {
     expect(
@@ -96,15 +107,17 @@ describe('pruneReviewHeadLocalRefsAfterWorktreeDelete', () => {
       return { stdout: '', stderr: '' }
     })
 
+    const map: Record<string, WorktreeMeta | undefined> = {
+      'repo-a::/wt/pr-42': meta({ linkedPR: 42 }),
+      'repo-a::/wt/other': meta({ linkedPR: 7 })
+    }
+
     const deleted = await pruneReviewHeadLocalRefsAfterWorktreeDelete({
       repoPath: '/repo',
       repoId: 'repo-a',
       deletedWorktreeId: 'repo-a::/wt/pr-42',
       meta: meta({ linkedPR: 42 }),
-      worktreeMetaById: {
-        'repo-a::/wt/pr-42': meta({ linkedPR: 42 }),
-        'repo-a::/wt/other': meta({ linkedPR: 7 })
-      },
+      finalizeDeletedMetaAndReadSiblings: finalizeFromMap(map, 'repo-a::/wt/pr-42'),
       gitExec
     })
 
@@ -114,20 +127,25 @@ describe('pruneReviewHeadLocalRefsAfterWorktreeDelete', () => {
   })
 
   it('does not delete when another worktree still links the PR', async () => {
+    const map: Record<string, WorktreeMeta | undefined> = {
+      'repo-a::/wt/pr-42-a': meta({ linkedPR: 42 }),
+      'repo-a::/wt/pr-42-b': meta({ linkedPR: 42 })
+    }
+
     const deleted = await pruneReviewHeadLocalRefsAfterWorktreeDelete({
       repoPath: '/repo',
       repoId: 'repo-a',
       deletedWorktreeId: 'repo-a::/wt/pr-42-a',
       meta: meta({ linkedPR: 42 }),
-      worktreeMetaById: {
-        'repo-a::/wt/pr-42-a': meta({ linkedPR: 42 }),
-        'repo-a::/wt/pr-42-b': meta({ linkedPR: 42 })
-      },
+      finalizeDeletedMetaAndReadSiblings: finalizeFromMap(map, 'repo-a::/wt/pr-42-a'),
       gitExec
     })
 
     expect(deleted).toEqual([])
     expect(gitExec).not.toHaveBeenCalled()
+    // First of two still-linked deletes only drops its own meta entry.
+    expect(map['repo-a::/wt/pr-42-a']).toBeUndefined()
+    expect(map['repo-a::/wt/pr-42-b']).toBeDefined()
   })
 
   it('prunes GitLab MR refs when linkedGitLabMR is set', async () => {
@@ -141,14 +159,16 @@ describe('pruneReviewHeadLocalRefsAfterWorktreeDelete', () => {
       return { stdout: '', stderr: '' }
     })
 
+    const map: Record<string, WorktreeMeta | undefined> = {
+      'repo-a::/wt/mr-15': meta({ linkedGitLabMR: 15 })
+    }
+
     const deleted = await pruneReviewHeadLocalRefsAfterWorktreeDelete({
       repoPath: '/repo',
       repoId: 'repo-a',
       deletedWorktreeId: 'repo-a::/wt/mr-15',
       meta: meta({ linkedGitLabMR: 15 }),
-      worktreeMetaById: {
-        'repo-a::/wt/mr-15': meta({ linkedGitLabMR: 15 })
-      },
+      finalizeDeletedMetaAndReadSiblings: finalizeFromMap(map, 'repo-a::/wt/mr-15'),
       gitExec
     })
 
@@ -161,11 +181,59 @@ describe('pruneReviewHeadLocalRefsAfterWorktreeDelete', () => {
       repoId: 'repo-a',
       deletedWorktreeId: 'repo-a::/wt/plain',
       meta: meta(),
-      worktreeMetaById: {},
+      finalizeDeletedMetaAndReadSiblings: () => ({}),
       gitExec
     })
     expect(deleted).toEqual([])
     expect(gitExec).not.toHaveBeenCalled()
+  })
+
+  it('prunes when two last linked worktrees delete concurrently (shared live meta)', async () => {
+    // Why: snapshot-before-lock would leave each call seeing the other sibling and both skip.
+    gitExec.mockImplementation(async (args: string[]) => {
+      if (args[0] === 'for-each-ref') {
+        return {
+          stdout: 'refs/orca/pull/origin-aaa/42\n',
+          stderr: ''
+        }
+      }
+      return { stdout: '', stderr: '' }
+    })
+
+    const liveMeta: Record<string, WorktreeMeta | undefined> = {
+      'repo-a::/wt/pr-42-a': meta({ linkedPR: 42 }),
+      'repo-a::/wt/pr-42-b': meta({ linkedPR: 42 })
+    }
+
+    const makeFinalize = (id: string) => () => {
+      delete liveMeta[id]
+      return { ...liveMeta }
+    }
+
+    const [deletedA, deletedB] = await Promise.all([
+      pruneReviewHeadLocalRefsAfterWorktreeDelete({
+        repoPath: '/repo',
+        repoId: 'repo-a',
+        deletedWorktreeId: 'repo-a::/wt/pr-42-a',
+        meta: meta({ linkedPR: 42 }),
+        finalizeDeletedMetaAndReadSiblings: makeFinalize('repo-a::/wt/pr-42-a'),
+        gitExec
+      }),
+      pruneReviewHeadLocalRefsAfterWorktreeDelete({
+        repoPath: '/repo',
+        repoId: 'repo-a',
+        deletedWorktreeId: 'repo-a::/wt/pr-42-b',
+        meta: meta({ linkedPR: 42 }),
+        finalizeDeletedMetaAndReadSiblings: makeFinalize('repo-a::/wt/pr-42-b'),
+        gitExec
+      })
+    ])
+
+    const allDeleted = [...deletedA, ...deletedB]
+    expect(allDeleted).toContain('refs/orca/pull/origin-aaa/42')
+    // Exactly one of the two finalizers should have performed the prune.
+    expect(allDeleted.filter((r) => r === 'refs/orca/pull/origin-aaa/42')).toHaveLength(1)
+    expect(liveMeta).toEqual({})
   })
 })
 

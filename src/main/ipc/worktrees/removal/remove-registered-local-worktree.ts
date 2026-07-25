@@ -268,6 +268,7 @@ async function finishLocalWorktreeRemoval({
           repoPath: repo.path,
           repoId,
           worktreeId: args.worktreeId,
+          hostId: removalHostId,
           meta: store.getWorktreeMeta(args.worktreeId),
           localGitOptions: localWorktreeGitOptions
         })
@@ -312,6 +313,7 @@ async function finishLocalWorktreeRemoval({
     repoPath: repo.path,
     repoId,
     worktreeId: args.worktreeId,
+    hostId: removalHostId,
     meta: store.getWorktreeMeta(args.worktreeId),
     localGitOptions: localWorktreeGitOptions
   })

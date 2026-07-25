@@ -1,26 +1,36 @@
+import type { ExecutionHostId } from '../shared/execution-host'
 import type { WorktreeMeta } from '../shared/worktree/meta-types'
+import { removeWorktreeMetaRow } from './persistence/host-qualified-worktree-meta'
 import { pruneReviewHeadLocalRefsAfterWorktreeDelete } from './git/review-head-ref-prune'
 
-type WorktreeMetaById = Record<string, WorktreeMeta | undefined>
+type ReviewHeadPruneStore = Parameters<typeof removeWorktreeMetaRow>[0] & {
+  getAllWorktreeMeta: () => Record<string, WorktreeMeta>
+}
 
 /** Best-effort: drop durable refs/orca/** pins when the last linked worktree is gone (#10431). */
 export async function maybePruneReviewHeadRefsAfterWorktreeDelete(params: {
-  store: { getAllWorktreeMeta: () => Record<string, WorktreeMeta> }
+  store: ReviewHeadPruneStore
   repoPath: string
   repoId: string
   worktreeId: string
+  hostId?: ExecutionHostId
   meta: Pick<WorktreeMeta, 'linkedPR' | 'linkedGitLabMR'> | null | undefined
   localGitOptions?: { cwd?: string; wslDistro?: string }
 }): Promise<void> {
   try {
-    // Snapshot before metadata removal. Sibling detection excludes the deleted id.
-    const worktreeMetaById: WorktreeMetaById = { ...params.store.getAllWorktreeMeta() }
     await pruneReviewHeadLocalRefsAfterWorktreeDelete({
       repoPath: params.repoPath,
       repoId: params.repoId,
       deletedWorktreeId: params.worktreeId,
       meta: params.meta,
-      worktreeMetaById,
+      // Drop the row under the prune lock, then re-read siblings. Transient cleanup still runs after.
+      finalizeDeletedMetaAndReadSiblings: () => {
+        removeWorktreeMetaRow(params.store, params.worktreeId, params.hostId)
+        const remaining: Record<string, WorktreeMeta | undefined> = {
+          ...params.store.getAllWorktreeMeta()
+        }
+        return remaining
+      },
       localGitOptions: {
         ...params.localGitOptions,
         cwd: params.repoPath
