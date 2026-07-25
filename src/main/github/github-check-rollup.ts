@@ -6,6 +6,7 @@ type SelectedContext<T> = {
   entry: T
   index: number
   timestamp: number | null
+  databaseId: number | null
 }
 
 function recordFromUnknown(value: unknown): Record<string, unknown> | null {
@@ -14,6 +15,10 @@ function recordFromUnknown(value: unknown): Record<string, unknown> | null {
 
 function stringFromUnknown(value: unknown): string | null {
   return typeof value === 'string' && value.length > 0 ? value : null
+}
+
+function numberFromUnknown(value: unknown): number | null {
+  return typeof value === 'number' && Number.isFinite(value) ? value : null
 }
 
 function nestedRecord(
@@ -50,8 +55,7 @@ function checkRunIdentity(entry: Record<string, unknown>): string | null {
   const workflow = nestedRecord(workflowRun, 'workflow')
   const appSlug = stringFromUnknown(app?.slug)
   const workflowName = stringFromUnknown(entry.workflowName) ?? stringFromUnknown(workflow?.name)
-  const provider = appSlug ? `app:${appSlug}` : workflowName ? `workflow:${workflowName}` : null
-  return JSON.stringify(['CheckRun', name, provider])
+  return JSON.stringify(['CheckRun', name, appSlug, workflowName])
 }
 
 function checkContextIdentity(entry: Record<string, unknown>): string | null {
@@ -79,7 +83,7 @@ function timestampFromUnknown(value: unknown): number | null {
 
 function checkContextTimestamp(entry: Record<string, unknown>): number | null {
   const kind = checkContextKind(entry)
-  // 原因：运行开始时间能区分同名重跑且不受完成时刻变化影响；旧式状态则以创建时间排序。
+  // Start time identifies reruns without changing at completion; legacy statuses use creation time.
   const candidates =
     kind === 'CheckRun'
       ? [entry.startedAt, entry.createdAt, entry.completedAt]
@@ -94,11 +98,22 @@ function checkContextTimestamp(entry: Record<string, unknown>): number | null {
 }
 
 function shouldReplace<T>(current: SelectedContext<T>, candidate: SelectedContext<T>): boolean {
-  // 原因：GitHub 会省略或复用时间戳；并列时以后返回的条目为准，避免保留旧失败结果。
-  if (candidate.timestamp === null) {
-    return current.timestamp === null
+  if (
+    candidate.timestamp !== null &&
+    current.timestamp !== null &&
+    candidate.timestamp !== current.timestamp
+  ) {
+    return candidate.timestamp > current.timestamp
   }
-  return current.timestamp === null || candidate.timestamp >= current.timestamp
+  // 为什么：queued run 可能没有时间戳，databaseId 仍可在乱序响应中判断新旧。
+  if (
+    candidate.databaseId !== null &&
+    current.databaseId !== null &&
+    candidate.databaseId !== current.databaseId
+  ) {
+    return candidate.databaseId > current.databaseId
+  }
+  return true
 }
 
 export function selectLatestGitHubCheckContexts<T>(entries: readonly T[]): T[] {
@@ -111,7 +126,8 @@ export function selectLatestGitHubCheckContexts<T>(entries: readonly T[]): T[] {
     const candidate = {
       entry,
       index,
-      timestamp: record ? checkContextTimestamp(record) : null
+      timestamp: record ? checkContextTimestamp(record) : null,
+      databaseId: record ? numberFromUnknown(record.databaseId) : null
     }
     if (!identity) {
       ungrouped.push(candidate)
@@ -163,7 +179,7 @@ export function deriveGitHubCheckSummary(value: unknown): GitHubPRCheckSummary {
     ) {
       failed += 1
     } else if (status === 'COMPLETED' && conclusion) {
-      // 原因：GitHub 新增的完成结论不能被误报为成功或仍在运行，未知值保守按失败展示。
+      // Unknown completed conclusions must not be reported as successful or still running.
       failed += 1
     } else {
       pending += 1

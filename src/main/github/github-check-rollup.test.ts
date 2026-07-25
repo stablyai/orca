@@ -42,6 +42,21 @@ describe('selectLatestGitHubCheckContexts', () => {
     ).toEqual([noTimeSuccess, equalTimeSuccess])
   })
 
+  it('uses the check-run id when a queued rerun has no timestamps and arrives first', () => {
+    const queued = checkRun('build', '', undefined, {
+      databaseId: 102,
+      status: 'QUEUED',
+      conclusion: null,
+      startedAt: null,
+      completedAt: null
+    })
+    const completed = checkRun('build', 'SUCCESS', '2026-07-22T03:00:00Z', {
+      databaseId: 101
+    })
+
+    expect(selectLatestGitHubCheckContexts([queued, completed])).toEqual([queued])
+  })
+
   it('keeps check runs from different apps separate', () => {
     const actionsBuild = checkRun('build', 'SUCCESS', '2026-07-22T03:00:00Z', {
       workflowName: 'CI',
@@ -62,6 +77,22 @@ describe('selectLatestGitHubCheckContexts', () => {
     const ciBuild = checkRun('build', 'SUCCESS', '2026-07-22T03:00:00Z')
     const releaseBuild = checkRun('build', 'SUCCESS', '2026-07-22T03:01:00Z', {
       workflowName: 'Release'
+    })
+
+    expect(selectLatestGitHubCheckContexts([ciBuild, releaseBuild])).toEqual([
+      ciBuild,
+      releaseBuild
+    ])
+  })
+
+  it('keeps same-name jobs from different workflows in the same app separate', () => {
+    const ciBuild = checkRun('build', 'SUCCESS', '2026-07-22T03:00:00Z', {
+      workflowName: 'CI',
+      checkSuite: { app: { slug: 'github-actions' } }
+    })
+    const releaseBuild = checkRun('build', 'SUCCESS', '2026-07-22T03:01:00Z', {
+      workflowName: 'Release',
+      checkSuite: { app: { slug: 'github-actions' } }
     })
 
     expect(selectLatestGitHubCheckContexts([ciBuild, releaseBuild])).toEqual([
@@ -92,6 +123,24 @@ describe('selectLatestGitHubCheckContexts', () => {
 })
 
 describe('deriveGitHubCheckSummary', () => {
+  it('reports a newer queued rerun when GitHub omits its timestamps', () => {
+    const completed = checkRun('build', 'SUCCESS', '2026-07-22T03:00:00Z')
+    const queued = checkRun('build', '', undefined, {
+      status: 'QUEUED',
+      conclusion: null,
+      startedAt: null,
+      completedAt: null
+    })
+
+    expect(deriveGitHubCheckSummary([completed, queued])).toEqual({
+      state: 'pending',
+      total: 1,
+      passed: 0,
+      failed: 0,
+      pending: 1
+    })
+  })
+
   it('counts only the latest result after repeated fail and pass cycles', () => {
     const summary = deriveGitHubCheckSummary([
       checkRun('merge-label', 'FAILURE', '2026-07-22T02:08:00Z'),
