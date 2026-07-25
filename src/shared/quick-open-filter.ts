@@ -203,6 +203,16 @@ export type RgArgsOptions = {
   excludePathPrefixes: readonly string[]
   /** On Windows rg emits `\\`-separated paths; pass true to force `/` output. */
   forceSlashSeparator: boolean
+  /**
+   * Opt-in: follow symlinked directories so files reached through an in-root
+   * symlink (e.g. a workspace that links a sibling notes vault into itself)
+   * become discoverable — matching what the file tree already shows. Off by
+   * default: `--follow` lets a symlink target content outside the authorized
+   * root, so enabling it is a deliberate user choice. rg's own symlink-loop
+   * detection guards against traversal cycles, and cwd-relative output keeps
+   * every emitted path rooted under the workspace.
+   */
+  followSymlinks?: boolean
 }
 
 export type RgArgs = {
@@ -215,10 +225,13 @@ export type RgArgs = {
 /**
  * Build the two rg arg arrays for Quick Open. Caller must spawn with `cwd: rootPath` — root-relative
  * globs are evaluated against rg's cwd, so omitting it silently breaks nested-worktree exclusions.
- * Deliberately omits `--follow` so symlinks can't escape the authorized root or cause traversal loops.
+ * Omits `--follow` unless `followSymlinks` is set: following symlinks lets a link's target escape the
+ * authorized root, so it is an explicit opt-in. When enabled, rg's built-in symlink-loop detection
+ * prevents traversal cycles and cwd-relative output keeps every emitted path rooted under the workspace.
  */
 export function buildRgArgsForQuickOpen(opts: RgArgsOptions): RgArgs {
   const sepArgs = opts.forceSlashSeparator ? ['--path-separator', '/'] : []
+  const followArgs = opts.followSymlinks ? ['--follow'] : []
   const hiddenDirGlobs = buildHiddenDirExcludeGlobs()
   const excludeGlobs: string[] = []
   for (const prefix of opts.excludePathPrefixes) {
@@ -230,6 +243,7 @@ export function buildRgArgsForQuickOpen(opts: RgArgsOptions): RgArgs {
   const primary = [
     '--files',
     '--hidden',
+    ...followArgs,
     ...sepArgs,
     ...hiddenDirGlobs,
     ...excludeGlobs,
@@ -241,6 +255,7 @@ export function buildRgArgsForQuickOpen(opts: RgArgsOptions): RgArgs {
     '--files',
     '--hidden',
     '--no-ignore-vcs',
+    ...followArgs,
     ...sepArgs,
     ...hiddenDirGlobs,
     ...excludeGlobs,

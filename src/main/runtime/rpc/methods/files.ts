@@ -203,7 +203,8 @@ const FileSearch = WorktreeSelector.extend({
 })
 
 const FileListAll = WorktreeSelector.extend({
-  excludePaths: z.array(z.string()).optional()
+  excludePaths: z.array(z.string()).optional(),
+  followSymlinks: z.boolean().optional()
 })
 
 const FileUnwatch = z.object({
@@ -443,7 +444,10 @@ export const FILE_METHODS: RpcAnyMethod[] = [
     name: 'files.listAll',
     params: FileListAll,
     handler: async (params, { runtime }) =>
-      runtime.listRuntimeFiles(params.worktree, { excludePaths: params.excludePaths })
+      runtime.listRuntimeFiles(params.worktree, {
+        excludePaths: params.excludePaths,
+        followSymlinks: params.followSymlinks
+      })
   }),
   defineMethod({
     name: 'files.listMarkdownDocuments',

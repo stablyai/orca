@@ -5593,7 +5593,9 @@
           "b82f86d7d2": "Rich Markdown Spellcheck",
           "5195f0b9ef": "Show browser spelling underlines and suggestions while editing rich Markdown.",
           "7ddd66fede": "エディターのワードラップ",
-          "9b18de6eea": "水平スクロールを使わずに、ファイルエディターで長い行を折り返します。"
+          "9b18de6eea": "水平スクロールを使わずに、ファイルエディターで長い行を折り返します。",
+          "quickOpenFollowSymlinksTitle": "Quick Open Follows Symlinks",
+          "quickOpenFollowSymlinksDescription": "Include files inside symlinked directories in Quick Open (Cmd/Ctrl+P). Off by default because following symlinks can reach content outside the workspace."
         },
         "AdvancedNetworkSettingsSection": {
           "3e431564b5": "ローカルホスト、127.0.0.1、*.internal",

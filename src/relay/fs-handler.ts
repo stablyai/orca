@@ -367,14 +367,19 @@ export class FsHandler {
     // normalizes into root-relative prefixes; malformed input yields [] so
     // the request still succeeds (older apps omit the field entirely).
     const excludePathPrefixes = buildExcludePathPrefixes(rootPath, params.excludePaths)
+    // Opt-in (default off): follow in-root symlinked directories so Quick Open
+    // surfaces files reached through a link, matching the file tree. Off keeps
+    // the secure default where a symlink can't pull in content outside the root.
+    const followSymlinks = params.followSymlinks === true
     // Why #7721: full-tree scans are the relay's most expensive request; the
     // coordinator caps them at one per client, coalescing duplicates and
     // aborting a stale scan when the workspace changes or the host cancels.
     return this.listFilesScans.run({
       clientId: context?.clientId ?? 0,
-      key: JSON.stringify([rootPath, excludePathPrefixes, maxResults]),
+      key: JSON.stringify([rootPath, excludePathPrefixes, maxResults, followSymlinks]),
       signal: context?.signal,
-      start: (signal) => this.runListFilesScan(rootPath, excludePathPrefixes, signal, maxResults)
+      start: (signal) =>
+        this.runListFilesScan(rootPath, excludePathPrefixes, signal, maxResults, followSymlinks)
     })
   }
 
@@ -382,12 +387,13 @@ export class FsHandler {
     rootPath: string,
     excludePathPrefixes: string[],
     signal: AbortSignal,
-    maxResults?: number
+    maxResults?: number,
+    followSymlinks?: boolean
   ): Promise<string[]> {
     const rgAvailable = await checkRgAvailable()
     throwIfFileListingCancelled(signal)
     if (rgAvailable) {
-      return listFilesWithRg(rootPath, excludePathPrefixes, { signal, maxResults })
+      return listFilesWithRg(rootPath, excludePathPrefixes, { signal, maxResults, followSymlinks })
     }
     // Why: git ls-files only works inside git repos. Use rev-parse to detect
     // git ancestry — unlike checking for a local .git entry, this works from
@@ -422,7 +428,11 @@ export class FsHandler {
     // problem, so translate the opaque cap error into actionable guidance
     // the user can act on directly from the error toast.
     try {
-      return await listFilesWithReaddir(rootPath, excludePathPrefixes, { signal, maxResults })
+      return await listFilesWithReaddir(rootPath, excludePathPrefixes, {
+        signal,
+        maxResults,
+        followSymlinks
+      })
     } catch (err) {
       // Why: a cancelled scan is not an rg-availability problem; wrapping it
       // in install-rg guidance would surface bogus advice on the client.

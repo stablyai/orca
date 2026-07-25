@@ -23,7 +23,8 @@ export async function listQuickOpenFiles(
   store: Store,
   excludePaths?: string[],
   signal?: AbortSignal,
-  maxResults?: number
+  maxResults?: number,
+  followSymlinks?: boolean
 ): Promise<string[]> {
   const authorizedRootPath = await resolveAuthorizedPath(rootPath, store)
   const localGitOptions = getLocalGitOptionsForRegisteredWorktree(
@@ -78,7 +79,8 @@ export async function listQuickOpenFiles(
     excludePathPrefixes,
     // On Windows, rg outputs '\\'-separated paths; force '/'. Also force on
     // macOS/Linux for idempotence — it's a no-op there.
-    forceSlashSeparator: sep === '\\'
+    forceSlashSeparator: sep === '\\',
+    followSymlinks
   })
 
   const runRg = (args: string[]): Promise<void> => {

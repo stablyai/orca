@@ -29,9 +29,9 @@ export const LIST_FILES_TIMEOUT_MS = 25_000
 export function listFilesWithRg(
   rootPath: string,
   excludePathPrefixes: readonly string[] = [],
-  options: { signal?: AbortSignal; maxResults?: number } = {}
+  options: { signal?: AbortSignal; maxResults?: number; followSymlinks?: boolean } = {}
 ): Promise<string[]> {
-  const { signal, maxResults } = options
+  const { signal, maxResults, followSymlinks } = options
   if (signal?.aborted) {
     return Promise.reject(fileListingCancellationError(signal))
   }
@@ -50,7 +50,8 @@ export function listFilesWithRg(
       // emit root-relative-looking paths for filters, but they do not prune.
       searchRoot: '.',
       excludePathPrefixes,
-      forceSlashSeparator: true
+      forceSlashSeparator: true,
+      followSymlinks
     })
 
     const processLine = (rawLine: string): boolean => {
