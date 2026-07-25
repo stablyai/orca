@@ -1488,6 +1488,8 @@ export class OrchestrationDb {
         threadId: question.message_id,
         runId: params.runId
       })
+      // Why: ask returns thread state directly; leaving its answer unread would deliver it again via check.
+      this.markAsRead([message.id])
       this.db
         .prepare(
           `UPDATE question_threads
@@ -1497,10 +1499,11 @@ export class OrchestrationDb {
         )
         .run(message.id, params.body, params.consumerGeneration, question.message_id)
       const answered = this.getQuestionRaw(question.message_id) as QuestionRow
+      const storedMessage = this.getMessageById(message.id) as MessageRow
       this.db.exec('COMMIT')
       return {
         question: exposeQuestionTimestamps(answered),
-        message,
+        message: storedMessage,
         duplicate: false
       }
     } catch (error) {
@@ -1763,6 +1766,19 @@ export class OrchestrationDb {
       }
 
       const id = generateId('ctx')
+      if (params.mutationReceipt) {
+        this.db
+          .prepare(
+            `UPDATE mutation_receipts
+             SET receipt = ?, updated_at = datetime('now')
+             WHERE caller_fingerprint = ? AND request_id = ? AND state = 'pending'`
+          )
+          .run(
+            JSON.stringify({ accepted: { dispatchId: id } }),
+            params.mutationReceipt.callerFingerprint,
+            params.mutationReceipt.requestId
+          )
+      }
       this.db
         .prepare(
           `INSERT INTO dispatch_contexts (
@@ -1848,6 +1864,35 @@ export class OrchestrationDb {
         params.dispatchId
       )
     return this.getWorkerDispatch(params.dispatchId) as WorkerDispatchRow
+  }
+
+  updateWorkerSetupEvidence(params: {
+    dispatchId: string
+    setupState: string
+    effects: unknown[]
+  }): { worker: WorkerDispatchRow; changed: boolean } {
+    const current = this.getWorkerDispatch(params.dispatchId)
+    if (!current) {
+      throw new OrchestrationError(
+        'dispatch_not_found',
+        `Dispatch ${params.dispatchId} was not found.`
+      )
+    }
+    const effects = JSON.stringify(params.effects)
+    if (current.setup_state === params.setupState && current.effects === effects) {
+      return { worker: current, changed: false }
+    }
+    this.db
+      .prepare(
+        `UPDATE worker_dispatches
+         SET setup_state = ?, effects = ?, updated_at = datetime('now')
+         WHERE dispatch_id = ?`
+      )
+      .run(params.setupState, effects, params.dispatchId)
+    return {
+      worker: this.getWorkerDispatch(params.dispatchId) as WorkerDispatchRow,
+      changed: true
+    }
   }
 
   prepareStartingWorkerAuthority(params: {
@@ -2191,14 +2236,15 @@ export class OrchestrationDb {
       this.db
         .prepare(
           `INSERT INTO mutation_receipts (
-             caller_fingerprint, request_id, method, payload_hash, state
-           ) VALUES (?, ?, ?, ?, 'pending')`
+             caller_fingerprint, request_id, method, payload_hash, state, receipt
+           ) VALUES (?, ?, ?, ?, 'pending', ?)`
         )
         .run(
           params.mutationReceipt.callerFingerprint,
           params.mutationReceipt.requestId,
           params.mutationReceipt.method,
-          params.mutationReceipt.payloadHash
+          params.mutationReceipt.payloadHash,
+          JSON.stringify({ accepted: { dispatchId: params.dispatchId } })
         )
       this.db
         .prepare(
@@ -2266,6 +2312,37 @@ export class OrchestrationDb {
         params.dispatchId
       )
     return this.getRemoteDispatchAttachment(params.dispatchId) as RemoteDispatchAttachmentRow
+  }
+
+  updateRemoteAttachmentSetupEvidence(params: {
+    dispatchId: string
+    setupState: string
+    effects: unknown[]
+  }): { attachment: RemoteDispatchAttachmentRow; changed: boolean } {
+    const current = this.getRemoteDispatchAttachment(params.dispatchId)
+    if (!current) {
+      throw new OrchestrationError(
+        'dispatch_not_found',
+        `Remote Dispatch ${params.dispatchId} was not found.`
+      )
+    }
+    const effects = JSON.stringify(params.effects)
+    if (current.setup_state === params.setupState && current.effects === effects) {
+      return { attachment: current, changed: false }
+    }
+    this.db
+      .prepare(
+        `UPDATE remote_dispatch_attachments
+         SET setup_state = ?, effects = ?, updated_at = datetime('now')
+         WHERE dispatch_id = ?`
+      )
+      .run(params.setupState, effects, params.dispatchId)
+    return {
+      attachment: this.getRemoteDispatchAttachment(
+        params.dispatchId
+      ) as RemoteDispatchAttachmentRow,
+      changed: true
+    }
   }
 
   prepareRemoteAttachmentAuthority(params: {
@@ -2970,6 +3047,51 @@ export class OrchestrationDb {
     }
   }
 
+  reconcileFederatedWorkerStop(dispatchId: string): WorkerDispatchRow {
+    this.db.exec('BEGIN IMMEDIATE')
+    try {
+      const worker = this.getWorkerDispatch(dispatchId)
+      const dispatch = this.getDispatchContextById(dispatchId)
+      if (!worker || !dispatch || !this.getFederatedDispatch(dispatchId)) {
+        throw new OrchestrationError(
+          'dispatch_not_found',
+          `Federated Dispatch ${dispatchId} was not found.`
+        )
+      }
+      if (worker.state === 'stopped') {
+        this.db.exec('COMMIT')
+        return worker
+      }
+      if (!['stopping', 'stop_unknown'].includes(worker.state)) {
+        throw new OrchestrationError(
+          'dispatch_inactive',
+          `Federated Dispatch ${dispatchId} cannot reconcile stop from ${worker.state}.`
+        )
+      }
+      this.db
+        .prepare(
+          `UPDATE worker_dispatches
+           SET state = 'stopped', stage = 'process_stopped', last_error = NULL,
+               updated_at = datetime('now')
+           WHERE dispatch_id = ? AND state IN ('stopping', 'stop_unknown')`
+        )
+        .run(dispatchId)
+      this.db
+        .prepare(
+          `UPDATE dispatch_contexts
+           SET status = 'failed', completed_at = COALESCE(completed_at, datetime('now')),
+               last_failure = 'stopped'
+           WHERE id = ? AND status IN ('pending', 'dispatched')`
+        )
+        .run(dispatchId)
+      this.db.exec('COMMIT')
+      return this.getWorkerDispatch(dispatchId) as WorkerDispatchRow
+    } catch (error) {
+      this.db.exec('ROLLBACK')
+      throw error
+    }
+  }
+
   resumeFederatedWorkerForTerminalRelay(dispatchId: string): WorkerDispatchRow {
     this.db.exec('BEGIN IMMEDIATE')
     try {
@@ -3008,7 +3130,10 @@ export class OrchestrationDb {
     return this.getWorkerDispatch(dispatchId) as WorkerDispatchRow
   }
 
-  abandonWorkerDispatch(dispatchId: string): WorkerDispatchRow {
+  abandonWorkerDispatch(dispatchId: string): {
+    disposition: 'abandoned' | 'already_abandoned' | 'stale'
+    worker: WorkerDispatchRow
+  } {
     this.db.exec('BEGIN IMMEDIATE')
     try {
       const worker = this.getWorkerDispatch(dispatchId)
@@ -3016,34 +3141,43 @@ export class OrchestrationDb {
       if (!worker || !dispatch) {
         throw new OrchestrationError('dispatch_not_found', `Dispatch ${dispatchId} was not found.`)
       }
+      if (worker.state === 'abandoned') {
+        this.db.exec('COMMIT')
+        return { disposition: 'already_abandoned', worker }
+      }
+      if (this.getDispatchContext(dispatch.task_id)?.id !== dispatchId) {
+        this.db.exec('COMMIT')
+        return { disposition: 'stale', worker }
+      }
       if (worker.state === 'succeeded') {
         throw new OrchestrationError(
           'dispatch_inactive',
           `Dispatch ${dispatchId} already succeeded and cannot be abandoned.`
         )
       }
-      if (worker.state !== 'abandoned') {
-        this.db
-          .prepare(
-            `UPDATE worker_dispatches
-             SET state = 'abandoned', stage = 'abandoned', updated_at = datetime('now')
-             WHERE dispatch_id = ?`
-          )
-          .run(dispatchId)
-        this.db
-          .prepare(
-            `UPDATE dispatch_contexts
-             SET status = CASE WHEN status IN ('pending', 'dispatched') THEN 'failed' ELSE status END,
-                 capability_revoked_at = COALESCE(capability_revoked_at, datetime('now')),
-                 completed_at = COALESCE(completed_at, datetime('now'))
-             WHERE id = ?`
-          )
-          .run(dispatchId)
-        this.db.prepare("UPDATE tasks SET status = 'blocked' WHERE id = ?").run(dispatch.task_id)
-        this.closeQuestionsForDispatch(dispatchId)
-      }
+      this.db
+        .prepare(
+          `UPDATE worker_dispatches
+           SET state = 'abandoned', stage = 'abandoned', updated_at = datetime('now')
+           WHERE dispatch_id = ?`
+        )
+        .run(dispatchId)
+      this.db
+        .prepare(
+          `UPDATE dispatch_contexts
+           SET status = CASE WHEN status IN ('pending', 'dispatched') THEN 'failed' ELSE status END,
+               capability_revoked_at = COALESCE(capability_revoked_at, datetime('now')),
+               completed_at = COALESCE(completed_at, datetime('now'))
+           WHERE id = ?`
+        )
+        .run(dispatchId)
+      this.db.prepare("UPDATE tasks SET status = 'blocked' WHERE id = ?").run(dispatch.task_id)
+      this.closeQuestionsForDispatch(dispatchId)
       this.db.exec('COMMIT')
-      return this.getWorkerDispatch(dispatchId) as WorkerDispatchRow
+      return {
+        disposition: 'abandoned',
+        worker: this.getWorkerDispatch(dispatchId) as WorkerDispatchRow
+      }
     } catch (error) {
       this.db.exec('ROLLBACK')
       throw error

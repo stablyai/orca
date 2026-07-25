@@ -38,7 +38,7 @@ export const ORCHESTRATION_WORKER_STOP_METHODS: RpcMethod[] = [
             { orchestrationRequestId: orchestrationMutation.requestId }
           )) as RemoteStopReceipt
           if (remote.state === 'stopped') {
-            const worker = db.settleWorkerStop(params.dispatch)
+            const worker = db.reconcileFederatedWorkerStop(params.dispatch)
             return {
               dispatchId: params.dispatch,
               state: worker.state,

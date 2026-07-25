@@ -1,10 +1,9 @@
-import { z } from 'zod'
 import { isTuiAgent } from '../../../../shared/tui-agent-config'
 import type { TuiAgent } from '../../../../shared/types'
 import { buildDispatchPreamble } from '../../orchestration/preamble'
 import { OrchestrationError } from '../../orchestration/orchestration-error'
 import { defineMethod, type RpcMethod } from '../core'
-import { OptionalFiniteNumber, OptionalString, requiredString } from '../schemas'
+import { assertOrchestrationWorktreeCreationSupported } from './orchestration-folder-worktree-placement'
 import {
   appendFederationSetupEffect,
   appendFederationTerminalEffects,
@@ -12,29 +11,13 @@ import {
 } from './orchestration-federation-effects'
 import type { WorkerSetupReceipt } from './orchestration-worker-topology'
 import {
+  monitorFederatedSetup,
   persistFederatedReadinessStage,
   persistFederatedSetupSpawnFailure,
   persistFederatedSetupWaitOutcome
 } from './orchestration-federation-setup'
+import { FederationAttachStartParams } from './orchestration-federation-start-schema'
 import { failFederatedAttachmentWithReceipt } from './orchestration-federation-start-receipt'
-
-const FederationAttachStartParams = z.object({
-  dispatchId: requiredString('Missing Dispatch ID'),
-  taskId: requiredString('Missing Task ID'),
-  taskSpec: requiredString('Missing Task spec'),
-  protocolVersion: z.literal(1),
-  worktree: requiredString('Missing remote worktree selector'),
-  name: OptionalString,
-  repo: OptionalString,
-  baseBranch: OptionalString,
-  displayName: OptionalString,
-  comment: OptionalString,
-  setup: z.enum(['run', 'skip', 'inherit']).optional(),
-  terminal: OptionalString,
-  agent: OptionalString,
-  timeoutMs: OptionalFiniteNumber,
-  devMode: z.boolean().optional()
-})
 
 export const ORCHESTRATION_FEDERATION_ATTACH_METHODS: RpcMethod[] = [
   defineMethod({
@@ -87,6 +70,13 @@ export const ORCHESTRATION_FEDERATION_ATTACH_METHODS: RpcMethod[] = [
       }
       if (agent) {
         runtime.validateOrchestrationAgentLauncher(agent as TuiAgent)
+      }
+      if (createsWorktree) {
+        await assertOrchestrationWorktreeCreationSupported({
+          runtime,
+          repoSelector: params.repo as string,
+          existingPlacement: 'an exact existing folder workspace'
+        })
       }
 
       const db = runtime.getOrchestrationDb()
@@ -272,6 +262,7 @@ export const ORCHESTRATION_FEDERATION_ATTACH_METHODS: RpcMethod[] = [
           state: 'accepted'
         })
         const attachment = db.markRemoteAttachmentReady(params.dispatchId)
+        monitorFederatedSetup({ ...setupStage, runtime })
         return {
           dispatchId: params.dispatchId,
           state: attachment.state,

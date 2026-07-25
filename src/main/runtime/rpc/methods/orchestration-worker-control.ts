@@ -36,11 +36,21 @@ export const ORCHESTRATION_WORKER_CONTROL_METHODS: RpcMethod[] = [
         runtime.ensureOrchestrationFederationRelay(dispatch.run_id)
         const remote = await callFederatedWorkerShow(runtime, federated)
         const attachment = remote.attachment
+        worker = db.updateWorkerSetupEvidence({
+          dispatchId: params.dispatch,
+          setupState: attachment.setup_state,
+          effects: attachment.effects
+        }).worker
         if (
           attachment.state === 'succeeded' ||
           (attachment.state === 'failed' && attachment.stage === 'worker_report_queued')
         ) {
           await syncFederatedDispatch(runtime, params.dispatch).catch(() => undefined)
+        } else if (
+          attachment.state === 'stopped' &&
+          ['stopping', 'stop_unknown'].includes(worker.state)
+        ) {
+          worker = db.reconcileFederatedWorkerStop(params.dispatch)
         } else if (['ready', 'failed', 'stopped', 'start_unknown'].includes(attachment.state)) {
           worker = db.reconcileFederatedWorkerStart({
             dispatchId: params.dispatch,
@@ -153,13 +163,21 @@ export const ORCHESTRATION_WORKER_CONTROL_METHODS: RpcMethod[] = [
     name: 'orchestration.workerAbandon',
     params: WorkerDispatchParams,
     handler: (params, { runtime }) => {
-      const worker = runtime.getOrchestrationDb().abandonWorkerDispatch(params.dispatch)
-      runtime.notifyMessageArrived(`dispatch:${params.dispatch}`, 'status')
+      const abandoned = runtime.getOrchestrationDb().abandonWorkerDispatch(params.dispatch)
+      const worker = abandoned.worker
+      if (abandoned.disposition === 'abandoned') {
+        runtime.notifyMessageArrived(`dispatch:${params.dispatch}`, 'status')
+      }
       return {
         dispatchId: params.dispatch,
         state: worker.state,
+        alreadySettled: abandoned.disposition !== 'abandoned',
+        stale: abandoned.disposition === 'stale',
         processAction: 'none',
-        warning: 'Possibly-live resources were retained; no process was stopped or deleted.',
+        warning:
+          abandoned.disposition === 'stale'
+            ? 'The Dispatch is no longer current; no state or process changed.'
+            : 'Possibly-live resources were retained; no process was stopped or deleted.',
         residualResources: JSON.parse(worker.residual_resources) as unknown[]
       }
     }

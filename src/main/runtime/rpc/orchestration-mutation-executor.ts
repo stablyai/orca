@@ -61,9 +61,19 @@ export class OrchestrationMutationExecutor {
       if (active) {
         return attachMutationReceipt(await active, requestId, true)
       }
+      const recovery = getPendingWorkerStartRecovery(request.method, begun.row.receipt)
       throw new OrchestrationError(
         'operation_unknown',
-        `Mutation ${requestId} may have been accepted before restart. Retry inspection or recovery with the same request ID.`
+        recovery
+          ? `Worker start ${requestId} was accepted as Dispatch ${recovery.dispatchId} before restart. Inspect that Dispatch; do not start another worker.`
+          : `Mutation ${requestId} may have been accepted before restart. Retry inspection or recovery with the same request ID.`,
+        recovery
+          ? {
+              requestId,
+              dispatchId: recovery.dispatchId,
+              recoveryCommand: `orca orchestration worker-show --dispatch ${recovery.dispatchId} --json`
+            }
+          : { requestId }
       )
     }
 
@@ -158,4 +168,21 @@ function attachMutationReceipt(result: unknown, requestId: string, replayed: boo
     return { result, mutation: { requestId, replayed } }
   }
   return { ...(result as Record<string, unknown>), mutation: { requestId, replayed } }
+}
+
+function getPendingWorkerStartRecovery(
+  method: string,
+  receipt: string | null
+): { dispatchId: string } | undefined {
+  if (method !== 'orchestration.workerStart' || !receipt) {
+    return undefined
+  }
+  try {
+    const parsed = JSON.parse(receipt) as { accepted?: { dispatchId?: unknown } }
+    return typeof parsed.accepted?.dispatchId === 'string'
+      ? { dispatchId: parsed.accepted.dispatchId }
+      : undefined
+  } catch {
+    return undefined
+  }
 }

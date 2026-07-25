@@ -194,6 +194,60 @@ describe('durable orchestration mutation ledger', () => {
     db.close()
   })
 
+  it('returns the accepted Dispatch when worker-start was interrupted by restart', async () => {
+    const db = new OrchestrationDb(':memory:')
+    const runtime = new OrcaRuntimeService()
+    runtime.setOrchestrationDb(db)
+    const params = { from: 'term_coord', task: db.createTask({ spec: 'restart' }).id }
+    const callerFingerprint = createHash('sha256').update('caller-token').digest('hex')
+    const payloadHash = createHash('sha256')
+      .update(JSON.stringify({ method: 'orchestration.workerStart', params }))
+      .digest('hex')
+    const started = db.createStartingWorkerDispatch({
+      taskId: params.task,
+      startOptions: {},
+      mutationReceipt: {
+        callerFingerprint,
+        requestId: 'mutation_worker_start',
+        method: 'orchestration.workerStart',
+        payloadHash
+      }
+    })
+    const effect = vi.fn()
+    const dispatcher = new RpcDispatcher({
+      runtime,
+      methods: [
+        defineMethod({
+          name: 'orchestration.workerStart',
+          params: z.object({ from: z.string(), task: z.string() }),
+          handler: effect
+        })
+      ]
+    })
+
+    const result = await dispatcher.dispatch({
+      id: 'rpc_worker_start_retry',
+      authToken: 'caller-token',
+      method: 'orchestration.workerStart',
+      params,
+      orchestrationRequestId: 'mutation_worker_start'
+    })
+
+    expect(result).toMatchObject({
+      ok: false,
+      error: {
+        code: 'operation_unknown',
+        data: {
+          requestId: 'mutation_worker_start',
+          dispatchId: started.dispatch.id,
+          recoveryCommand: `orca orchestration worker-show --dispatch ${started.dispatch.id} --json`
+        }
+      }
+    })
+    expect(effect).not.toHaveBeenCalled()
+    db.close()
+  })
+
   it('recovers a lost ask acceptance without creating a second question', async () => {
     const db = new OrchestrationDb(':memory:')
     const runtime = new OrcaRuntimeService()

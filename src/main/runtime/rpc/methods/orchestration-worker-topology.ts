@@ -182,14 +182,16 @@ export function monitorWorkerSetup(args: {
     .waitForTerminal(setupTerminal.id, { condition: 'exit' })
     .then((wait) => {
       const setupState = wait.exitCode === 0 ? 'succeeded' : 'failed'
-      args.db.recordWorkerStage({
+      const evidence = args.db.updateWorkerSetupEvidence({
         dispatchId: args.dispatchId,
-        stage: 'input_accepted',
         setupState,
         effects: args.effects.map((effect) =>
           effect.kind === 'setup' ? { ...effect, state: setupState } : effect
         )
       })
+      if (!evidence.changed) {
+        return
+      }
       const message = args.db.insertMessage({
         runId: args.runId,
         from: `dispatch:${args.dispatchId}`,

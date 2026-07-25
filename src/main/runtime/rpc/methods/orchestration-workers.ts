@@ -4,6 +4,7 @@ import { buildDispatchPreamble } from '../../orchestration/preamble'
 import { OrchestrationError } from '../../orchestration/orchestration-error'
 import { defineMethod, type RpcMethod } from '../core'
 import { startFederatedWorker } from './orchestration-federated-worker-start'
+import { assertOrchestrationWorktreeCreationSupported } from './orchestration-folder-worktree-placement'
 import { WorkerStartParams } from './orchestration-worker-start-schema'
 import {
   createWorkerWorktree,
@@ -90,6 +91,13 @@ export const ORCHESTRATION_WORKER_START_METHODS: RpcMethod[] = [
       const coordinatorWorktree = await runtime.showManagedWorktree(
         `id:${coordinatorTerminal.worktreeId}`
       )
+      if (createsWorktree) {
+        await assertOrchestrationWorktreeCreationSupported({
+          runtime,
+          repoSelector: params.repo ?? coordinatorWorktree.repoId,
+          existingPlacement: 'current or an exact existing folder workspace'
+        })
+      }
       let resolvedWorktree = createsWorktree
         ? undefined
         : requestedWorktree === 'current'

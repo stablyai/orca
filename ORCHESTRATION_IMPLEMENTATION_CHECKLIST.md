@@ -2,8 +2,7 @@
 
 This is the durable implementation ledger for the orchestration primitives proposal. Update it in
 the same change that implements, removes, or materially revises an item. The design source is
-`docs/orchestration-primitives.html`; that file is currently ignored by Git, while this checklist is
-tracked.
+`docs/orchestration-primitives.html`; keep it synchronized with this checklist.
 
 ## How to use this file
 
@@ -30,7 +29,7 @@ Status meanings:
 - [x] Phase 1 local Run, mailbox, lifecycle, and idempotency primitives complete.
 - [x] Phase 2 same-server composed worker lifecycle complete.
 - [x] Phase 3 connected-server federation complete.
-- [ ] Revalidate Phase 3 after the 2026-07-24 post-rebase dogfood exposed a renderer-adoption
+- [x] Revalidate Phase 3 after the 2026-07-24 post-rebase dogfood exposed a renderer-adoption
       process-identity regression.
 - [x] Phase 4 explicitly deferred because its exact-source prerequisite does not exist.
 
@@ -112,6 +111,8 @@ Explicit non-goals:
 - [x] Ensure only explicit dispatch injection and terminal-send operations can modify terminal input.
 - [x] Define send success as durable acceptance, not observation or action.
 - [x] Rename or remove `check --inject` if its name implies remote delivery.
+- [x] Reject explicit Run/recipient targets from federated workers when the only valid destination is
+      their authenticated Run home.
 
 ### Crash-safe inbox consumption
 
@@ -191,6 +192,8 @@ Explicit non-goals:
 - [x] Current/existing worktrees do not rerun creation-time setup or configured tabs.
 - [x] New child worktree uses agent-first creation and reuses its returned agent terminal.
 - [x] New top-level worktree uses agent-first creation with independent Orca lineage.
+- [x] Reject child/top-level creation for folder projects before effects; use current/existing folder
+      workspaces instead.
 - [x] Pass the supported exact repo, base, lineage, display/comment metadata, and setup options to
       the existing worktree primitive rather than duplicating policy. `--on` owns connected-server
       placement; project/host convenience selection remains on low-level `worktree create`.
@@ -215,6 +218,8 @@ Explicit non-goals:
 ### Start operation and receipts
 
 - [x] In one transaction, create a starting Dispatch, move the Task, and record the mutation request.
+- [x] Persist the accepted Dispatch ID in a pending start receipt so restart recovery returns an
+      exact `worker-show` command.
 - [x] Persist before/after stage receipts around irreversible effects.
 - [x] Return only `ready`, `failed`, or `outcome_unknown`.
 - [x] Define ready as TUI idle, durable Dispatch attachment, and accepted lifecycle/task input.
@@ -309,6 +314,9 @@ Explicit non-goals:
 - [x] Route show/read/stop/retry by Dispatch receipt; agents do not repeat `--on`.
 - [x] Forward the same application retry request ID across home and worker server.
 - [x] Return typed unknown outcome with last durable stage and exact next commands.
+- [x] Reconcile a lost federated stop response from a later authoritative stopped receipt.
+- [x] Treat abandonment of a superseded Dispatch as a no-op for the replacement Task.
+- [x] Preserve and relay post-return federated setup evidence without changing worker lifecycle.
 - [x] Recreate active relay subscriptions after Run-home restart.
 - [x] Preserve worker attachment and relay state after worker-server restart.
 - [x] Report running only when pane and process incarnation match after restart.
@@ -326,7 +334,7 @@ Explicit non-goals:
 
 ### Federation scenario matrix
 
-- [ ] Post-rebase physical Mac Run home -> Windows worker preserves exact process identity through
+- [x] Post-rebase physical Mac Run home -> Windows worker preserves exact process identity through
       renderer adoption, routed read, heartbeat, question/reply, completion, and stop.
 - [x] Mac Run home -> Windows worker: start, completion, failure, question/reply, read, and stop.
 - [x] Windows Run home -> Mac worker: the same flows through a saved Mac pairing.
@@ -1221,6 +1229,68 @@ Append new entries chronologically. Do not rewrite older entries except to corre
 - Next:
   - Rebuild both branch runtimes, repeat the full physical Mac-to-Windows lifecycle, then run the
     remaining local error/recovery matrix before closing the revalidation rows.
+
+### 2026-07-24 — Post-fix physical federation revalidation
+
+- Changes:
+  - Rebuilt and restarted the physical Windows branch runtime from `b09c635ec`, then repeated the
+    Mac Run-home to Windows-worker flow on a fresh top-level worktree.
+  - Abandoned the controlled stale-build attempt, linked the replacement with `--retry-of`, and
+    exercised exact start-request replay plus exact remote worker stop.
+  - Exercised missing-agent and invalid-remote-repo rejection without adding recovery automation.
+- Verification:
+  - The replacement returned ready while setup was running under `start-immediately`;
+    `worker-show` reported the exact running process, bounded `worker-read` succeeded, and the
+    worker's heartbeat reached the Mac Run home.
+  - An inferred-Run blocking question carried the `blue` reply back to Windows, and the authenticated
+    success report atomically settled the Task and Dispatch.
+  - A transient connection close before acceptance left the second Task ready with no Dispatch.
+    Retrying its exact request ID started one worker, and repeating that request returned the same
+    Dispatch with `replayed=true` and no duplicate worktree or terminal.
+  - `worker-stop` killed only the exact agent PTY. The setup terminal remained present, the Dispatch
+    became stopped/failed, and the Task became blocked for explicit recovery.
+  - An unconfigured agent failed locally. A missing remote repo produced a typed failed Dispatch
+    with `effects=[]` and no residual resources.
+- Findings:
+  - The first repeated failure was a stale Windows build artifact, not a failed fix: the source
+    checkout was at `b09c635ec` while `out/main/index.js` still had the old generation fence.
+    Relaunching the branch dev process produced a new runtime epoch and the fixed behavior.
+  - Omitted setup correctly resolved to Orca's `run` default. Its independent Windows install later
+    failed in `windows-native-registry`, but that did not delay task delivery and remained isolated
+    from exact agent stop.
+  - From an unmanaged shell, a coordinator mailbox check must name `--terminal`; a CLI running
+    inside the bound coordinator terminal continues to infer that identity normally.
+- Next:
+  - Resolve only concrete findings from the independent ergonomics/federation re-review, run the
+    final local verification set, and reconcile PR review threads and CI.
+
+### 2026-07-24 — Post-dogfood recovery and ergonomics hardening
+
+- Changes:
+  - Made lost remote stop responses reconcilable and prevented stale Dispatch abandonment from
+    blocking an active replacement.
+  - Persisted setup completion as evidence only, preserving settled lifecycle state locally and
+    relaying the same outcome from a connected worker server.
+  - Rejected misleading explicit targets from federated workers and consumed `ask` answers exactly
+    once while retaining their durable thread record.
+  - Stored the accepted Dispatch in pending worker-start receipts so a post-restart retry returns the
+    exact inspection command.
+  - Rejected new-worktree placement for folder projects before effects.
+  - Restored the generated skill-history ledgers that the branch had accidentally truncated.
+- Verification:
+  - The full orchestration DB/RPC/CLI/SSH regression selection passed 516 tests; its focused
+    recovery, setup, messaging, and mutation slice passed 239 tests.
+  - The earlier physical Mac-home to Windows-worker lifecycle covered ready/read/heartbeat,
+    ask/reply, completion, exact request replay, and exact stop.
+- Findings:
+  - These were narrow truthfulness and recovery gaps; none required a scheduler, automatic retry,
+    access-control framework, replicated Run database, UI, or provider-session abstraction.
+  - The release-contract test failure is already present on `main`; it is separate from this
+    orchestration change. The skill round-trip failures were branch-caused and are fixed by
+    restoring their committed history.
+- Next:
+  - Run the complete changed-file quality gates, rebuild the physical Windows dev runtime with this
+    final patch, repeat the setup-status slice, then push and recheck PR CI/review state.
 
 ### Entry template
 

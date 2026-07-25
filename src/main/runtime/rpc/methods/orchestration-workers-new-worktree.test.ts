@@ -42,6 +42,10 @@ describe('orchestration new-worktree workers', () => {
       id: 'repo::parent',
       repoId: 'repo'
     } as never)
+    vi.spyOn(runtime, 'showRepo').mockResolvedValue({
+      id: 'repo',
+      kind: 'git'
+    } as never)
     vi.spyOn(runtime, 'createTerminal')
     vi.spyOn(runtime, 'listTerminals').mockResolvedValue({
       terminals: [{ handle: 'term_worker', title: 'Codex' }],
@@ -144,6 +148,41 @@ describe('orchestration new-worktree workers', () => {
     expect(runtime.createTerminal).not.toHaveBeenCalled()
   })
 
+  it('rejects a new worktree for a folder project before creating effects', async () => {
+    vi.mocked(runtime.showRepo).mockResolvedValue({
+      id: 'repo',
+      kind: 'folder'
+    } as never)
+    const createWorktree = vi.spyOn(runtime, 'createManagedWorktree')
+    const task = db.createTask({ spec: 'folder task', runId })
+    const method = ORCHESTRATION_METHODS.find(
+      (candidate) => candidate.name === 'orchestration.workerStart'
+    )
+    if (!method) {
+      throw new Error('workerStart method is not registered')
+    }
+
+    await expect(
+      method.handler(
+        method.params!.parse({
+          task: task.id,
+          from: 'term_coord',
+          worktree: 'new-child',
+          name: 'folder-worker',
+          agent: 'codex'
+        }),
+        { runtime }
+      )
+    ).rejects.toMatchObject({
+      code: 'invalid_argument',
+      message:
+        'Folder projects cannot create orchestration worktrees; use current or an exact existing folder workspace.'
+    })
+    expect(createWorktree).not.toHaveBeenCalled()
+    expect(db.getTask(task.id)?.status).toBe('ready')
+    expect(db.getDispatchContext(task.id)).toBeUndefined()
+  })
+
   it('injects the execution host CLI command and Dispatch capability together', async () => {
     mockCreatedWorktree()
     vi.mocked(runtime.getTerminalOrchestrationCliCommand).mockReturnValue('orca-ide')
@@ -223,30 +262,51 @@ describe('orchestration new-worktree workers', () => {
         { handle: 'term_setup', title: 'Setup' }
       ]
     })
-    vi.mocked(runtime.waitForTerminal).mockImplementation(async (handle, options) =>
+    let finishSetup:
+      | ((result: Awaited<ReturnType<OrcaRuntimeService['waitForTerminal']>>) => void)
+      | undefined
+    const setupExit = new Promise<Awaited<ReturnType<OrcaRuntimeService['waitForTerminal']>>>(
+      (resolve) => {
+        finishSetup = resolve
+      }
+    )
+    vi.mocked(runtime.waitForTerminal).mockImplementation((handle, options) =>
       options?.condition === 'exit'
-        ? {
-            handle,
-            condition: 'exit',
-            satisfied: true,
-            status: 'exited',
-            exitCode: 1
-          }
-        : {
+        ? setupExit
+        : Promise.resolve({
             handle,
             condition: 'tui-idle',
             satisfied: true,
             status: 'running',
             exitCode: null
-          }
+          })
     )
 
-    const { result } = await startWorker()
+    const { result, task } = await startWorker()
     const dispatchId = (result as { dispatchId: string }).dispatchId
 
     expect(result).toMatchObject({ state: 'ready', setup: { state: 'running' } })
+    expect(
+      db.settleWorkerReport({
+        taskId: task.id,
+        dispatchId,
+        outcome: 'succeeded',
+        result: '{}'
+      })
+    ).toMatchObject({ action: 'settled' })
+    finishSetup?.({
+      handle: 'term_setup',
+      condition: 'exit',
+      satisfied: true,
+      status: 'exited',
+      exitCode: 1
+    })
     await vi.waitFor(() => expect(db.getWorkerDispatch(dispatchId)?.setup_state).toBe('failed'))
-    expect(db.getWorkerDispatch(dispatchId)?.state).toBe('ready')
+    expect(db.getWorkerDispatch(dispatchId)).toMatchObject({
+      state: 'succeeded',
+      stage: 'settled',
+      setup_state: 'failed'
+    })
     expect(runtime.sendTerminalAgentPrompt).toHaveBeenCalledOnce()
     expect(db.getInbox(10).filter((message) => message.run_id === runId)).toEqual(
       expect.arrayContaining([expect.objectContaining({ type: 'status', priority: 'high' })])

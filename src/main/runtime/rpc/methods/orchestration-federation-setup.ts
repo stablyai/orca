@@ -1,3 +1,4 @@
+import type { OrcaRuntimeService } from '../../orca-runtime'
 import type { OrchestrationDb } from '../../orchestration/db'
 import { applyWaitForSetupOutcome, type WorkerSetupReceipt } from './orchestration-worker-topology'
 import {
@@ -45,4 +46,57 @@ export function persistFederatedSetupWaitOutcome(
   if (args.setup.startupPolicy === 'wait-for-setup') {
     recordStage(args, args.setup.state === 'failed' ? 'setup_failed' : 'setup_settled')
   }
+}
+
+export function monitorFederatedSetup(
+  args: FederationSetupStageArgs & { runtime: OrcaRuntimeService }
+): void {
+  const setupTerminal = args.effects.find(
+    (effect) => effect.kind === 'terminal' && effect.role === 'setup' && effect.id
+  )
+  if (
+    !setupTerminal?.id ||
+    args.setup.startupPolicy !== 'start-immediately' ||
+    args.setup.state !== 'running'
+  ) {
+    return
+  }
+  void args.runtime
+    .waitForTerminal(setupTerminal.id, { condition: 'exit' })
+    .then((wait) => {
+      if (!wait.satisfied || wait.condition !== 'exit' || wait.status !== 'exited') {
+        return
+      }
+      const setupState = wait.exitCode === 0 ? 'succeeded' : 'failed'
+      const effects = args.effects.map((effect) =>
+        effect.kind === 'setup' ? { ...effect, state: setupState } : effect
+      )
+      const evidence = args.db.updateRemoteAttachmentSetupEvidence({
+        dispatchId: args.dispatchId,
+        setupState,
+        effects
+      })
+      if (!evidence.changed) {
+        return
+      }
+      args.db.enqueueFederationRelay({
+        dispatchId: args.dispatchId,
+        direction: 'to_home',
+        kind: 'status',
+        payload: JSON.stringify({
+          from: `dispatch:${args.dispatchId}`,
+          subject: `Setup ${setupState} for worker ${args.dispatchId}`,
+          body: '',
+          type: 'status',
+          priority: setupState === 'failed' ? 'high' : 'normal',
+          threadId: null,
+          payload: JSON.stringify({
+            dispatchId: args.dispatchId,
+            setupState,
+            terminalHandle: setupTerminal.id
+          })
+        })
+      })
+    })
+    .catch(() => undefined)
 }

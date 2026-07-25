@@ -139,6 +139,44 @@ describe('OrchestrationDb worker Dispatch state', () => {
     ).toBe('starting')
   })
 
+  it('treats abandon of a superseded Dispatch as a no-op', () => {
+    const d = createDb()
+    const task = d.createTask({ spec: 'stale abandon' })
+    const first = d.createStartingWorkerDispatch({ taskId: task.id, startOptions: {} })
+    d.failWorkerStart(first.dispatch.id, 'agent_readiness', 'first failed')
+    const second = d.createStartingWorkerDispatch({
+      taskId: task.id,
+      retryOf: first.dispatch.id,
+      startOptions: {}
+    })
+    d.prepareStartingWorkerAuthority({
+      dispatchId: second.dispatch.id,
+      handle: 'term_replacement',
+      paneKey: 'tab_replacement:leaf_replacement',
+      processIncarnation: 'runtime:pty:2',
+      worktreeId: 'repo::worktree',
+      setupState: 'not_applicable',
+      effects: []
+    })
+    d.markWorkerDispatchReady(second.dispatch.id)
+
+    expect(d.abandonWorkerDispatch(first.dispatch.id)).toMatchObject({
+      disposition: 'stale',
+      worker: { state: 'failed' }
+    })
+    expect(d.getTask(task.id)?.status).toBe('dispatched')
+    expect(d.getWorkerDispatch(second.dispatch.id)?.state).toBe('ready')
+    expect(
+      d.settleWorkerReport({
+        taskId: task.id,
+        dispatchId: second.dispatch.id,
+        outcome: 'succeeded',
+        result: '{}'
+      })
+    ).toMatchObject({ action: 'settled' })
+    expect(d.getTask(task.id)?.status).toBe('completed')
+  })
+
   it('lets the stop fence win before a late worker completion', () => {
     const d = createDb()
     const task = d.createTask({ spec: 'race' })

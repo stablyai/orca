@@ -1114,6 +1114,11 @@ orca orchestration check --wait --timeout-ms 60000</code></pre>
                   agents may use low-level <code>worktree create</code> when that convenience selector
                   is important.
                 </p>
+                <p class="footer-note">
+                  Folder projects have no distinct Git worktree to create. New-child and
+                  new-top-level therefore fail before effects; use current or an exact existing
+                  folder workspace.
+                </p>
               </div>
               <div class="card">
                 <h3>Choose a connected server only when needed</h3>
@@ -1277,8 +1282,11 @@ orca orchestration check --wait --timeout-ms 60000</code></pre>
               Task, and records the retry request before effects. Orca journals each irreversible
               stage and resource receipt before advancing. Restart recovery can therefore prove
               no-effect, return a durable remote result, or remain honestly
-              <code>outcome_unknown</code>. Orca does not resume unfinished orchestration stages in
-              the background; a setup process intentionally launched under
+              <code>outcome_unknown</code>. A pending accepted start retains its Dispatch ID, so
+              repeating the exact request after restart returns that ID and its
+              <code>worker-show</code> command instead of inviting a second start. Orca does not
+              resume unfinished orchestration stages in the background; a setup process
+              intentionally launched under
               <code>start-immediately</code> may continue exactly as its receipt states.
             </p>
 
@@ -1408,7 +1416,9 @@ orca orchestration check --wait --timeout-ms 60000</code></pre>
                       <code>ready</code> or <code>start_unknown</code> Dispatch. The owning server
                       closes a terminal only when its durable attachment still matches the exact
                       pane and process incarnation. Unattached, missing, exited, or identity-changed
-                      workers become <code>stop_unknown</code> with no process action.
+                      workers become <code>stop_unknown</code> with no process action. If the remote
+                      server durably stopped the exact worker but its response was lost, a later
+                      <code>worker-show</code> reconciles that authoritative stopped receipt.
                     </td>
                   </tr>
                   <tr>
@@ -1418,6 +1428,8 @@ orca orchestration check --wait --timeout-ms 60000</code></pre>
                       mutations from that Dispatch and records every possibly-live resource. It sends
                       no remote command, claims no process stopped, deletes nothing, and warns that a
                       concurrent worker may remain. The coordinator may then start a replacement.
+                      Abandoning an older superseded Dispatch is a no-op and cannot block or rewrite
+                      the replacement Task.
                     </td>
                   </tr>
                 </tbody>
@@ -1493,6 +1505,12 @@ orca orchestration check --wait --timeout-ms 60000</code></pre>
               only from the pinned paired peer for that Dispatch. Stop, abandon, or replacement
               revokes it. Other reports remain stale history and cannot change Task state. This is
               lifecycle integrity, not a general permission system.
+            </p>
+
+            <p class="footer-note" style="margin-top: 16px">
+              A federated worker omits <code>--to</code> and <code>--run</code>; its authenticated
+              Dispatch already identifies the only valid Run home. Explicit targets are rejected
+              instead of being silently ignored or redirected.
             </p>
 
             <div class="grid-2" style="margin-top: 20px">
@@ -2542,8 +2560,7 @@ orca orchestration worker-show --dispatch dispatch_7 --json
 
             <p class="principle">
               The skill must say that <code>check --wait</code> returns a batch. Process every message
-              before acknowledging it. Until explicit acknowledgment ships, document today's
-              mark-read-before-response crash window instead of claiming stronger delivery.
+              before acknowledging it.
             </p>
 
             <div class="card" style="margin-top: 20px">
