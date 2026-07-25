@@ -66,8 +66,10 @@ export function writeCodexSettingsBaseline(
 ): void {
   const file: StoredSettingsBaseline = {
     version: 2,
-    settings: Object.fromEntries(baseline.settings),
-    pluginRegistrations: Object.fromEntries(baseline.pluginRegistrations ?? [])
+    settings: Object.fromEntries(baseline.settings)
+  }
+  if (baseline.pluginRegistrations !== null) {
+    file.pluginRegistrations = Object.fromEntries(baseline.pluginRegistrations)
   }
   if (baseline.conflicts.size > 0) {
     file.conflicts = Object.fromEntries(baseline.conflicts)

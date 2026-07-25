@@ -14,6 +14,7 @@ vi.mock('node:os', async (importOriginal) => {
 })
 
 import { syncSystemConfigIntoManagedCodexHome } from './codex-config-mirror'
+import { readCodexSettingsBaseline, writeCodexSettingsBaseline } from './config-settings-baseline'
 
 let tmpHome: string
 let userDataDir: string
@@ -78,6 +79,18 @@ function readBaseline(): {
 }
 
 describe('Codex settings baseline schema upgrade', () => {
+  it('preserves untracked plugin registrations when rewriting a baseline', () => {
+    mkdirSync(runtimeHomePath(), { recursive: true })
+    writeCodexSettingsBaseline(runtimeHomePath(), {
+      settings: new Map([['model', '"gpt-5"']]),
+      conflicts: new Map(),
+      pluginRegistrations: null
+    })
+
+    expect(readCodexSettingsBaseline(runtimeHomePath())?.pluginRegistrations).toBeNull()
+    expect(readBaseline()).not.toHaveProperty('pluginRegistrations')
+  })
+
   it('upgrades an aligned legacy baseline without creating a conflict', () => {
     const config = 'model = "gpt-5"\n\n[tui]\ntheme = "dark"\n'
     prepareLegacyState(config, config)

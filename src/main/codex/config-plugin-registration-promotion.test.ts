@@ -69,13 +69,22 @@ enabled = true
     mirror()
 
     const system = config(systemHomePath)
-    expect(system).toContain('# marketplace note')
-    expect(system).toContain('["marketplaces"."acme"] # source stays documented')
-    expect(system).toContain("[plugins.'formatter@acme']")
-    expect(system).toContain('# user choice')
-    expect(system.indexOf('[features]')).toBeLessThan(system.indexOf('["marketplaces"'))
-    expect(system.indexOf('["marketplaces"')).toBeLessThan(system.indexOf("[plugins.'"))
-    expect(system.replaceAll('\r\n', '')).not.toContain('\n')
+    expect(system).toBe(
+      '# system preamble\r\n' +
+        'model = "gpt-5"\r\n' +
+        '\r\n' +
+        '[features]\r\n' +
+        'hooks = true\r\n' +
+        '\r\n' +
+        '# marketplace note\r\n' +
+        '["marketplaces"."acme"] # source stays documented\r\n' +
+        'source_type = "git"\r\n' +
+        'source = "https://example.invalid/acme/plugins.git"\r\n' +
+        '\r\n' +
+        "[plugins.'formatter@acme']\r\n" +
+        '# user choice\r\n' +
+        'enabled = true\r\n'
+    )
 
     const settledRuntime = config(runtimeHomePath)
     mirror()
