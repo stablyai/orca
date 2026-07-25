@@ -226,7 +226,8 @@ function tryReopenClosedTerminalWithAgentResume(
     showSessionRestoredBanner: true,
     telemetry: {
       agent_kind: tuiAgentToAgentKind(snapshot.agent),
-      launch_source: 'sidebar',
+      // Why: Cmd/Ctrl+Shift+T reopen is a keyboard shortcut path, not a sidebar launch.
+      launch_source: 'shortcut',
       request_kind: 'resume'
     }
   })
