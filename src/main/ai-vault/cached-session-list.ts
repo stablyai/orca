@@ -1,6 +1,6 @@
 import { join } from 'node:path'
 import { scanAiVaultSessions } from './session-scanner'
-import { getWslHomeAsync, listWslDistrosAsync } from '../wsl'
+import { getWslHomeAsync, isWslPath, listRunningWslDistrosAsync } from '../wsl'
 import type { AiVaultListArgs, AiVaultListResult } from '../../shared/ai-vault-types'
 import { LOCAL_EXECUTION_HOST_ID } from '../../shared/execution-host'
 
@@ -34,9 +34,10 @@ export function configureAiVaultSessionSources(next: AiVaultSessionSources): voi
 
 export async function listAiVaultSessions(args?: AiVaultListArgs): Promise<AiVaultListResult> {
   // Scope paths change the result set, so they must be part of the cache key.
+  const scopePaths = args?.scopePaths ?? []
   const key = JSON.stringify({
     limit: args?.limit ?? 'default',
-    scopePaths: args?.scopePaths ?? []
+    scopePaths
   })
   const now = Date.now()
   // Why: opening this panel repeatedly should not re-parse hundreds of JSONL
@@ -51,12 +52,18 @@ export async function listAiVaultSessions(args?: AiVaultListArgs): Promise<AiVau
   inflightKey = key
   const additionalCodexSessionsDirs =
     sources.getAdditionalCodexHomePaths?.().map((homePath) => join(homePath, 'sessions')) ?? []
+  // Why: when scanning a non-WSL project scope (all scopePaths are local Windows paths),
+  // there is no need to query WSL home directories.
+  const hasWslScope = scopePaths.some((p) => isWslPath(p))
+  const isPureLocalScope = scopePaths.length > 0 && !hasWslScope
+  const wslHomeDirs = isPureLocalScope ? [] : await getAiVaultWslHomeDirs()
+
   inflightList = (async () =>
     scanAiVaultSessions({
       limit: args?.limit,
       scopePaths: args?.scopePaths,
       additionalCodexSessionsDirs,
-      wslHomeDirs: await getAiVaultWslHomeDirs(),
+      wslHomeDirs,
       // Why: this scan is always host-local; callers addressing this host by a
       // runtime id get the result restamped at the RPC edge, never rescanned.
       executionHostId: LOCAL_EXECUTION_HOST_ID
@@ -86,8 +93,9 @@ export async function getAiVaultWslHomeDirs(): Promise<string[]> {
   if (process.platform !== 'win32') {
     return []
   }
+  const runningDistros = await listRunningWslDistrosAsync()
   const homes = await Promise.all(
-    (await listWslDistrosAsync()).map((distro) => getWslHomeAsync(distro))
+    runningDistros.map((distro) => getWslHomeAsync(distro, { onlyIfRunning: true }))
   )
   return homes.filter((homeDir): homeDir is string => Boolean(homeDir))
 }

@@ -3,6 +3,7 @@ import { listWslDistrosAsync } from '../wsl'
 import { CliInstaller } from './cli-installer'
 import {
   getWslCliRegistrationCandidates,
+  hasRegisteredWslCliDistros,
   recordWslCliRegistrationObservations,
   type WslCliRegistrationObservation
 } from './wsl-cli-registration-registry'
@@ -63,6 +64,12 @@ export async function reconcileManagedWslCliRegistrations(
 ): Promise<WslCliRegistrationReconciliationResult[]> {
   const platform = options.platform ?? process.platform
   if (platform !== 'win32' || !options.isPackaged) {
+    return []
+  }
+
+  // Why: if no distro has a managed CLI registration, there is nothing to reconcile
+  // on app startup. Skipping this avoids spawning wsl.exe for non-WSL users.
+  if (!options.listDistros && !(await hasRegisteredWslCliDistros(options.userDataPath))) {
     return []
   }
 

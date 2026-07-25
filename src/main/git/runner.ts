@@ -27,7 +27,13 @@ import {
   notifyGhPrimaryRateLimit,
   type GhRateLimitBucket
 } from './gh-rate-limit-breaker'
-import { getDefaultWslDistro, parseWslPath, toWindowsWslPath, type WslPathInfo } from '../wsl'
+import {
+  getDefaultWslDistro,
+  listRunningWslDistros,
+  parseWslPath,
+  toWindowsWslPath,
+  type WslPathInfo
+} from '../wsl'
 import { addWslEnvKeys } from '../wsl-env'
 import {
   appendGitConfigEnv,
@@ -173,7 +179,10 @@ export function setDefaultWslDistroOverride(distro: string | null): void {
 
 function resolveDefaultWslCli(command: 'gh' | 'glab', args: string[]): ResolvedCommand | null {
   const distro = defaultWslDistroOverride ?? getDefaultWslDistro()
-  return distro ? resolveCommand(command, args, undefined, distro) : null
+  if (!distro || !listRunningWslDistros().includes(distro)) {
+    return null
+  }
+  return resolveCommand(command, args, undefined, distro)
 }
 
 function isHostCommandMissing(err: unknown, command: 'gh' | 'glab'): boolean {

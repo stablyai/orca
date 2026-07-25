@@ -1,4 +1,5 @@
 import { execFile, execFileSync } from 'node:child_process'
+import { existsSync } from 'node:fs'
 import { parseWslUncPath, toWindowsWslPath } from '../shared/wsl-paths'
 
 export { toWindowsWslPath } from '../shared/wsl-paths'
@@ -168,6 +169,36 @@ export async function listWslDistrosAsync(): Promise<string[]> {
   }
 }
 
+export function listRunningWslDistros(): string[] {
+  if (process.platform !== 'win32') {
+    return []
+  }
+
+  try {
+    const output = execFileSync('wsl.exe', ['--list', '--running', '--quiet'], {
+      encoding: 'utf-8',
+      stdio: ['pipe', 'pipe', 'pipe'],
+      timeout: 5000
+    })
+    return normalizeWslListOutput(output).filter(isUserWslDistro)
+  } catch {
+    return []
+  }
+}
+
+export async function listRunningWslDistrosAsync(): Promise<string[]> {
+  if (process.platform !== 'win32') {
+    return []
+  }
+
+  try {
+    const output = await execFileUtf8('wsl.exe', ['--list', '--running', '--quiet'])
+    return normalizeWslListOutput(output).filter(isUserWslDistro)
+  } catch {
+    return []
+  }
+}
+
 export function hasCachedWslDistros(): boolean {
   return wslDistroCache !== null
 }
@@ -188,9 +219,22 @@ export function getDefaultWslDistro(): string | null {
  * the WSL filesystem, mirroring the Windows workspace layout. We need the
  * WSL user's $HOME to compute that path.
  */
-export function getWslHome(distro: string): string | null {
+export function getWslHome(
+  distro: string,
+  options?: { allowBoot?: boolean; onlyIfRunning?: boolean }
+): string | null {
   if (wslHomeCache.has(distro)) {
     return wslHomeCache.get(distro)!
+  }
+
+  // Why: background operations (account sync, rate limits, session checks) must NOT
+  // wake up stopped WSL distros when Orca starts up. Only explicit user actions (e.g. launching a terminal
+  // or creating a worktree) should allow booting a stopped WSL VM.
+  if (options?.allowBoot !== true || options?.onlyIfRunning) {
+    const running = listRunningWslDistros()
+    if (!running.includes(distro)) {
+      return null
+    }
   }
 
   try {
@@ -212,9 +256,19 @@ export function getWslHome(distro: string): string | null {
   }
 }
 
-export async function getWslHomeAsync(distro: string): Promise<string | null> {
+export async function getWslHomeAsync(
+  distro: string,
+  options?: { allowBoot?: boolean; onlyIfRunning?: boolean }
+): Promise<string | null> {
   if (wslHomeCache.has(distro)) {
     return wslHomeCache.get(distro)!
+  }
+
+  if (options?.allowBoot !== true || options?.onlyIfRunning) {
+    const running = await listRunningWslDistrosAsync()
+    if (!running.includes(distro)) {
+      return null
+    }
   }
 
   try {
@@ -251,16 +305,13 @@ export function isWslAvailable(): boolean {
     return false
   }
 
-  try {
-    execFileSync('wsl.exe', ['--status'], {
-      stdio: ['pipe', 'pipe', 'pipe'],
-      timeout: 5000
-    })
-    wslAvailableCache = true
-  } catch {
-    wslAvailableCache = false
-  }
-
+  // Why: running `wsl.exe --status` queries LxssManager service which wakes/launches
+  // stopped WSL distros and spawns vmmemwsl. Checking wsl.exe binary existence on disk
+  // verifies whether WSL is installed without launching any WSL processes.
+  const windir = process.env.WINDIR || 'C:\\Windows'
+  const system32Wsl = `${windir}\\System32\\wsl.exe`
+  const sysnativeWsl = `${windir}\\Sysnative\\wsl.exe`
+  wslAvailableCache = existsSync(system32Wsl) || existsSync(sysnativeWsl)
   return wslAvailableCache
 }
 

@@ -187,6 +187,12 @@ function updateState(
   })
 }
 
+export async function hasRegisteredWslCliDistros(userDataPath: string): Promise<boolean> {
+  await getKeyedSerializedQueueTail(writeQueues, getRegistryPath(userDataPath))
+  const state = await readState(userDataPath)
+  return state.registeredDistros.length > 0
+}
+
 export async function getWslCliRegistrationCandidates(
   userDataPath: string,
   availableDistros: string[],

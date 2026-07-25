@@ -17,7 +17,11 @@ vi.mock('child_process', () => ({
 
 vi.mock('../wsl', async (importOriginal) => ({
   ...(await importOriginal<typeof WslModule>()),
-  getDefaultWslDistro: getDefaultWslDistroMock
+  getDefaultWslDistro: getDefaultWslDistroMock,
+  listRunningWslDistros: () => {
+    const d = getDefaultWslDistroMock()
+    return Array.from(new Set([d, 'Ubuntu24', 'Ubuntu', 'Debian'].filter(Boolean) as string[]))
+  }
 }))
 
 import { ghExecFileAsync, glabExecFileAsync, setDefaultWslDistroOverride } from './runner'

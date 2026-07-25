@@ -104,7 +104,7 @@ export function computeWorktreePath(
 export function computeWorkspaceRoot(repoPath: string, settings: { workspaceDir: string }): string {
   const wsl = parseWslPath(repoPath)
   if (wsl && shouldMirrorWorkspaceDirInsideWsl(repoPath, settings.workspaceDir)) {
-    const wslHome = getWslHome(wsl.distro)
+    const wslHome = getWslHome(wsl.distro, { allowBoot: true })
     if (wslHome) {
       // Why: WSL UNC paths are still Windows paths from Node's perspective.
       // Mirror absolute local desktop workspace roots inside the distro so
