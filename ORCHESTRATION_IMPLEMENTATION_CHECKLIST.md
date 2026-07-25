@@ -1579,6 +1579,28 @@ Append new entries chronologically. Do not rewrite older entries except to corre
   - Run the final quality gates and review, push this evidence update, inspect PR CI, and remove only
     the temporary dogfood profile and listener after verification is complete.
 
+### 2026-07-24 — Current-main rebase integration
+
+- Changes:
+  - Rebased the full implementation onto current `origin/main`.
+  - Combined main's bounded one-shot remote-request admission with the orchestration authentication
+    envelope in the same pre-serialized encrypted request.
+  - Added a direct WebSocket regression proving the admitted request retains the orchestration
+    capability and mutation ID.
+- Verification:
+  - The repository-configured orchestration, federation, remote-client, and skill selection passed
+    35 files and 465 tests.
+  - Full Node/CLI/web typecheck, lint/reliability/manifest/localization gates, focused formatting,
+    generated-skill verification, and `git diff --check` passed after the rebase.
+  - Relay, CLI, Electron/Vite, and web production builds passed. The local CLI installer reported
+    only the expected non-fatal lack of permission to replace `/usr/local/bin/orca-dev`.
+- Findings:
+  - The request must be serialized with its authentication envelope before it reserves bounded
+    admission; rebuilding the frame after authentication would bypass the retained-byte contract.
+- Next:
+  - Push the rebased branch, inspect branch-head CI, then remove only the exact temporary dogfood
+    resources.
+
 ### Entry template
 
 ```text
