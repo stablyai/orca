@@ -106,9 +106,16 @@ const CONTRAST_PAIRS: ReadonlyArray<{
 ]
 
 describe('mobile theme palettes', () => {
-  it('keeps dark and light key sets identical (31 keys)', () => {
+  it('keeps dark and light key sets identical (32 keys)', () => {
     expect(Object.keys(lightColors).sort()).toEqual(Object.keys(darkColors).sort())
-    expect(Object.keys(darkColors)).toHaveLength(31)
+    expect(Object.keys(darkColors)).toHaveLength(32)
+  })
+
+  // Why exact: the home stat tiles rendered this literal before the token existed,
+  // so dark must stay pixel-identical while light stops compositing to a mid-grey.
+  it('keeps the stat tile fill byte-identical in dark and re-derived in light', () => {
+    expect(darkColors.statTileSurface).toBe('rgba(26,26,26,0.6)')
+    expect(lightColors.statTileSurface).toBe('rgba(0,0,0,0.04)')
   })
 
   it('uses only 6-digit hex or rgba values, and textMuted is hex in both palettes', () => {

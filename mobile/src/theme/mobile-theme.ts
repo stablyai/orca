@@ -7,6 +7,11 @@ export const darkColors = {
   bgRaised: '#242424',
   borderSubtle: '#2a2a2a',
   editorSurface: '#1e1e1e',
+  // Translucent tile fill for the home stat row. Dark keeps the exact literal the
+  // screen already rendered, so this is a rename; light mirrors the construction
+  // (a few percent of ink over bgBase) instead of the dark hex, which composited
+  // to a mid-grey that made the 11px labels unreadable.
+  statTileSurface: 'rgba(26,26,26,0.6)',
 
   textPrimary: '#e0e0e0',
   textSecondary: '#888888',
@@ -61,6 +66,7 @@ export const lightColors: ThemeColors = {
   bgRaised: '#eaeaea', // --worktree-sidebar-accent :165 (--accent would collapse into bgPanel)
   borderSubtle: '#e5e5e5', // --border :150
   editorSurface: '#ffffff', // --editor-surface :134
+  statTileSurface: 'rgba(0,0,0,0.04)', // composites to bgPanel over bgBase, matching the sibling cards
 
   textPrimary: '#0a0a0a', // --foreground :135 (NOT --primary, which is a surface token)
   textSecondary: '#737373', // --muted-foreground :145

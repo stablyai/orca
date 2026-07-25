@@ -1122,7 +1122,7 @@ export const createHomeScreenStyles = (colors: ThemeColors) =>
     },
     statCard: {
       flex: 1,
-      backgroundColor: 'rgba(26,26,26,0.6)',
+      backgroundColor: colors.statTileSurface,
       borderWidth: 1,
       borderColor: colors.borderSubtle,
       borderRadius: 10,
