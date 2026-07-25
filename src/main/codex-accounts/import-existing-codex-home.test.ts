@@ -53,7 +53,7 @@ describe('import-existing-codex-home', () => {
     )
   })
 
-  it('copies home contents and rewrites the Orca ownership marker', () => {
+  it('copies home contents and rewrites the Orca ownership marker', async () => {
     const root = makeRoot()
     const source = join(root, 'source')
     const managed = join(root, 'managed')
@@ -66,7 +66,7 @@ describe('import-existing-codex-home', () => {
     mkdirSync(join(source, 'sessions'))
     writeFileSync(join(source, 'sessions', 'a.jsonl'), 'session\n', 'utf-8')
 
-    copyExistingCodexHomeIntoManaged({
+    await copyExistingCodexHomeIntoManaged({
       sourceHomePath: source,
       managedHomePath: managed,
       accountId: 'account-import'

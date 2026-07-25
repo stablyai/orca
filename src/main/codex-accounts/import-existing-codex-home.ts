@@ -1,12 +1,12 @@
 import {
-  cpSync,
   existsSync,
-  lstatSync,
   readdirSync,
   readFileSync,
   realpathSync,
+  statSync,
   writeFileSync
 } from 'node:fs'
+import { cp } from 'node:fs/promises'
 import { join, resolve, sep } from 'node:path'
 
 const ORCA_MANAGED_HOME_MARKER = '.orca-managed-home'
@@ -28,7 +28,8 @@ export function resolveImportableCodexHomePath(sourceHomePath: string): string {
 
   let stats
   try {
-    stats = lstatSync(resolved)
+    // Why: follow symlinks so a linked external home / auth.json is importable.
+    stats = statSync(resolved)
   } catch (error) {
     throw new Error(`Could not inspect CODEX_HOME: ${resolved}`, { cause: error })
   }
@@ -37,7 +38,7 @@ export function resolveImportableCodexHomePath(sourceHomePath: string): string {
   }
 
   const authPath = join(resolved, 'auth.json')
-  if (!existsSync(authPath) || !lstatSync(authPath).isFile()) {
+  if (!existsSync(authPath) || !statSync(authPath).isFile()) {
     throw new Error(
       `Not a valid CODEX_HOME (missing auth.json): ${resolved}. Sign in with Codex in that directory first, then import again.`
     )
@@ -68,11 +69,11 @@ export function assertSourceHomeIsNotManagedStorage(
  * Copy an external CODEX_HOME into a freshly created managed home.
  * Preserves auth and credentials; keeps the Orca ownership marker authoritative.
  */
-export function copyExistingCodexHomeIntoManaged(params: {
+export async function copyExistingCodexHomeIntoManaged(params: {
   sourceHomePath: string
   managedHomePath: string
   accountId: string
-}): void {
+}): Promise<void> {
   const { sourceHomePath, managedHomePath, accountId } = params
   const entries = readdirSync(sourceHomePath, { withFileTypes: true })
   for (const entry of entries) {
@@ -81,7 +82,8 @@ export function copyExistingCodexHomeIntoManaged(params: {
     }
     const from = join(sourceHomePath, entry.name)
     const to = join(managedHomePath, entry.name)
-    cpSync(from, to, {
+    // Why: async copy so large CODEX_HOME trees do not freeze the Electron main process.
+    await cp(from, to, {
       recursive: true,
       force: true,
       // Why: CODEX_HOME often holds symlinks (skills, config overlays); copy

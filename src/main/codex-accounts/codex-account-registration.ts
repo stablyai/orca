@@ -137,7 +137,7 @@ export class CodexAccountRegistration {
     try {
       const canonicalConfig = this.dependencies.configMirror.readForManagedHome(managedHomePath)
       this.dependencies.configMirror.assertOAuthAccountAddAllowed(canonicalConfig)
-      copyExistingCodexHomeIntoManaged({
+      await copyExistingCodexHomeIntoManaged({
         sourceHomePath: resolvedSource,
         managedHomePath,
         accountId
