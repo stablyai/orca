@@ -1,7 +1,4 @@
-import type {
-  MarkdownDocState,
-  MobileSessionTab
-} from '../../app/h/[hostId]/session/mobile-session-route-types'
+import type { MarkdownDocState, MobileSessionTab } from './mobile-session-route-types'
 import type { ActionSheetAction } from '../components/ActionSheetModal'
 import {
   BULK_TAB_CLOSE_ACTIONS,

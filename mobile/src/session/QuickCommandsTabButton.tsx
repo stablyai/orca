@@ -1,7 +1,7 @@
 import { Pressable, View } from 'react-native'
 import { SquareChevronRight } from 'lucide-react-native'
 
-import { colors } from '../../../../src/theme/mobile-theme'
+import { colors } from '../theme/mobile-theme'
 import { styles } from './mobile-session-styles'
 
 type Props = {
