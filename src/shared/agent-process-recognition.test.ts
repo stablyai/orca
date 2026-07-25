@@ -256,6 +256,20 @@ describe('agent process recognition', () => {
     expect(isAgentForegroundWrapperProcess('vim.exe')).toBe(false)
   })
 
+  it('recognizes the GJC foreground process without classifying path fragments', () => {
+    expect(recognizeAgentProcess('gjc')).toEqual({
+      agent: 'gjc',
+      processName: 'gjc'
+    })
+    expect(recognizeAgentProcess('/Users/dev/.bun/bin/gjc')).toEqual({
+      agent: 'gjc',
+      processName: 'gjc'
+    })
+    expect(isExpectedAgentProcess('/Users/dev/.bun/bin/gjc', 'gjc')).toBe(true)
+    expect(isRecognizedAgentType('gjc')).toBe(true)
+    expect(recognizeAgentProcess('gjc-fixtures')).toBeNull()
+  })
+
   it('recognizes versioned Grok process names observed from the installed CLI', () => {
     expect(recognizeAgentProcess('grok-0.2.51')).toEqual({
       agent: 'grok',

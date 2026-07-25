@@ -111,6 +111,12 @@ export const getAgentCatalog = createLocalizedCatalog((): AgentCatalogEntry[] =>
     homepageUrl: 'https://pi.dev'
   },
   {
+    id: 'gjc',
+    label: translate('auto.lib.agent.catalog.gjc_label', 'GJC'),
+    cmd: 'gjc',
+    homepageUrl: 'https://github.com/Yeachan-Heo/gajae-code'
+  },
+  {
     id: 'omp',
     label: translate('auto.lib.agent.catalog.09973b4d84', 'OMP'),
     cmd: 'omp',

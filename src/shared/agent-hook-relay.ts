@@ -40,6 +40,7 @@ export type AgentHookSource =
   | 'opencode'
   | 'mimo-code'
   | 'cursor'
+  | 'gjc'
   | 'pi'
   | 'omp'
   | 'droid'

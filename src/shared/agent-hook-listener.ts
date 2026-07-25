@@ -1832,7 +1832,7 @@ function extractCopilotToolFields(
 function extractPiToolFields(
   eventName: unknown,
   hookPayload: Record<string, unknown>,
-  agentKind: 'pi' | 'omp'
+  agentKind: 'pi' | 'omp' | 'gjc'
 ): ToolSnapshot {
   if (
     eventName === 'tool_call' ||
@@ -1842,9 +1842,10 @@ function extractPiToolFields(
     const toolName = readString(hookPayload, 'tool_name')
     const rawToolInput = hookPayload.tool_input
     const toolInput = deriveToolInputPreview(toolName, rawToolInput)
-    // Why: OMP shares this extractor; only derive interactivePrompt for Pi so OMP ask_user_question metadata stays unchanged.
+    // Why: OMP shares this extractor; only derive interactivePrompt for the
+    // pi-protocol agents (Pi, GJC) so OMP ask_user_question metadata stays unchanged.
     const interactivePrompt =
-      agentKind === 'pi' && (eventName === 'tool_call' || eventName === 'tool_execution_start')
+      agentKind !== 'omp' && (eventName === 'tool_call' || eventName === 'tool_execution_start')
         ? deriveInteractivePrompt(toolName, rawToolInput, eventName)
         : undefined
     return toolUpdate(
@@ -2216,6 +2217,7 @@ function isNewTurnEvent(source: AgentHookSource, eventName: unknown): boolean {
       return eventName === 'beforeSubmitPrompt' || eventName === 'sessionStart'
     case 'pi':
     case 'omp':
+    case 'gjc':
       return eventName === 'before_agent_start'
     case 'droid':
       return eventName === 'UserPromptSubmit'
@@ -2309,6 +2311,7 @@ function extractToolFields(
       return extractCursorToolFields(eventName, hookPayload)
     case 'pi':
     case 'omp':
+    case 'gjc':
       return extractPiToolFields(eventName, hookPayload, source)
     case 'droid':
       return extractDroidToolFields(eventName, hookPayload)
@@ -3456,21 +3459,21 @@ function normalizeCopilotEvent(
 
 function normalizePiCompatibleEvent(
   state: HookListenerState,
-  agentType: 'pi' | 'omp',
+  agentType: 'pi' | 'omp' | 'gjc',
   eventName: unknown,
   promptText: string,
   paneKey: string,
   hookPayload: Record<string, unknown>
 ): ParsedAgentStatusPayload | null {
-  if (agentType === 'pi' && eventName === 'session_start') {
-    // Why: Pi's session_start fires on TUI open/resume; discard stale turn details, no working row before user activity.
+  if (agentType !== 'omp' && eventName === 'session_start') {
+    // Why: Pi/GJC session_start fires on TUI open/resume; discard stale turn details, no working row before user activity.
     clearPaneTurnCacheState(state, paneKey)
     return null
   }
 
   // Why: gate on the event's own tool_name (not a merged snapshot) so a stale cached ask_user_question can't re-enter blocked.
   const isPiAskUserQuestion =
-    agentType === 'pi' &&
+    agentType !== 'omp' &&
     isAskUserQuestionTool(readString(hookPayload, 'tool_name')) &&
     (eventName === 'tool_call' || eventName === 'tool_execution_start')
 
@@ -3879,6 +3882,16 @@ export function normalizeHookPayload(
         hookPayloadRecord
       )
       break
+    case 'gjc':
+      payload = normalizePiCompatibleEvent(
+        state,
+        'gjc',
+        eventName,
+        promptText,
+        paneKey,
+        hookPayloadRecord
+      )
+      break
     case 'omp':
       payload = normalizePiCompatibleEvent(
         state,
@@ -3944,12 +3957,14 @@ export function normalizeHookPayload(
       ? null
       : extractAgentProviderSession(source, hookPayloadRecord)
   const providerSessionOnly =
-    source === 'pi' && eventName === 'session_start' && providerSession !== null
-  // Why: Pi session_start carries resume identity while idle; providerSessionOnly makes receivers discard the placeholder row.
+    (source === 'pi' || source === 'gjc') &&
+    eventName === 'session_start' &&
+    providerSession !== null
+  // Why: Pi/GJC session_start carries resume identity while idle; providerSessionOnly makes receivers discard the placeholder row.
   const transportPayload =
     payload ??
     (providerSessionOnly
-      ? normalizeAgentStatusPayload({ state: 'done', prompt: '', agentType: 'pi' })
+      ? normalizeAgentStatusPayload({ state: 'done', prompt: '', agentType: source })
       : null)
   return transportPayload
     ? {
@@ -3994,6 +4009,7 @@ export const HOOK_SOURCE_BY_PATHNAME: Readonly<Record<string, AgentHookSource>> 
   '/hook/mimo-code': 'mimo-code',
   '/hook/cursor': 'cursor',
   '/hook/pi': 'pi',
+  '/hook/gjc': 'gjc',
   '/hook/omp': 'omp',
   '/hook/droid': 'droid',
   '/hook/command-code': 'command-code',

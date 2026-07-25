@@ -35,7 +35,12 @@ describe('agent session resume metadata', () => {
     ['droid', { session_id: 'droid-session' }, { key: 'session_id', id: 'droid-session' }],
     ['grok', { sessionId: 'grok-session' }, { key: 'session_id', id: 'grok-session' }],
     ['devin', { session_id: 'devin-session' }, { key: 'session_id', id: 'devin-session' }],
-    ['omp', { session_id: 'omp-session' }, { key: 'session_id', id: 'omp-session' }]
+    ['omp', { session_id: 'omp-session' }, { key: 'session_id', id: 'omp-session' }],
+    [
+      'gjc',
+      { session_id: 'gjc-session', session_file: '/tmp/gjc-session.jsonl' },
+      { key: 'session_id', id: 'gjc-session', transcriptPath: '/tmp/gjc-session.jsonl' }
+    ]
   ] as const)('extracts %s provider session ids', (source, payload, expected) => {
     expect(extractAgentProviderSession(source, payload)).toEqual(expected)
   })
@@ -55,7 +60,12 @@ describe('agent session resume metadata', () => {
     ['droid', { key: 'session_id', id: 's1' }, ['droid', '--resume', 's1']],
     ['grok', { key: 'session_id', id: 's1' }, ['grok', '--resume', 's1']],
     ['devin', { key: 'session_id', id: 'abc12345' }, ['devin', '--resume', 'abc12345']],
-    ['omp', { key: 'session_id', id: 's1' }, ['omp', '--resume', 's1']]
+    ['omp', { key: 'session_id', id: 's1' }, ['omp', '--resume', 's1']],
+    [
+      'gjc',
+      { key: 'session_id', id: 's1', transcriptPath: '/tmp/gjc-session.jsonl' },
+      ['gjc', '--resume', '/tmp/gjc-session.jsonl']
+    ]
   ] as const)('builds %s resume argv', (agent, providerSession, expected) => {
     expect(getAgentResumeArgv(agent, providerSession)).toEqual(expected)
   })
@@ -78,6 +88,7 @@ describe('agent session resume metadata', () => {
     ).toBeNull()
     expect(extractAgentProviderSession('pi', { session_file: '/tmp/pi-session.jsonl' })).toBeNull()
     expect(getAgentResumeArgv('pi', { key: 'session_id', id: 'pi-session' })).toBeNull()
+    expect(getAgentResumeArgv('gjc', { key: 'session_id', id: 'gjc-session' })).toBeNull()
   })
 
   it('compares the actual provider resume locator for each agent', () => {

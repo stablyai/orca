@@ -768,6 +768,38 @@ describe('tui agent startup plans', () => {
     expect(plan?.launchCommand).toBe("cn '--allow' '*'")
   })
 
+  it('launches GJC with a positional prompt and a Pi-shared draft env var', () => {
+    expect(
+      buildAgentStartupPlan({
+        agent: 'gjc',
+        prompt: 'Trace the failing test',
+        cmdOverrides: {},
+        platform: 'linux'
+      })
+    ).toEqual({
+      agent: 'gjc',
+      launchCommand: "gjc 'Trace the failing test'",
+      expectedProcess: 'gjc',
+      followupPrompt: null,
+      launchConfig: {
+        agentCommand: 'gjc',
+        agentArgs: '',
+        agentEnv: {}
+      }
+    })
+
+    // Why: GJC's bundled Orca status bridge consumes ORCA_PI_PREFILL, so the
+    // draft plan must seed the Pi-shared env var (unlike OMP's scoped one).
+    const draftPlan = buildAgentDraftLaunchPlan({
+      agent: 'gjc',
+      draft: 'prefill text',
+      cmdOverrides: {},
+      platform: 'linux'
+    })
+    expect(draftPlan?.env).toEqual({ ORCA_PI_PREFILL: 'prefill text' })
+    expect(draftPlan?.launchCommand).toBe('gjc; unset ORCA_PI_PREFILL')
+  })
+
   it('clears draft environment variables with the target shell syntax', () => {
     expect(
       buildAgentDraftLaunchPlan({

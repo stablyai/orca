@@ -100,6 +100,7 @@ describe('shared agent-hook-listener', () => {
     expect(resolveHookSource('/hook/grok')).toBe('grok')
     expect(resolveHookSource('/hook/hermes')).toBe('hermes')
     expect(resolveHookSource('/hook/pi')).toBe('pi')
+    expect(resolveHookSource('/hook/gjc')).toBe('gjc')
     expect(resolveHookSource('/hook/omp')).toBe('omp')
     expect(resolveHookSource('/hook/command-code')).toBe('command-code')
     expect(resolveHookSource('/hook/mimo-code')).toBe('mimo-code')
@@ -694,6 +695,90 @@ describe('shared agent-hook-listener', () => {
       toolName: 'ask_user_question'
     })
     expect(tool?.payload.interactivePrompt).toBeUndefined()
+  })
+
+  it('normalizes GJC Pi-compatible hooks with GJC attribution and interactive prompts', () => {
+    const event = normalizeHookPayload(
+      state,
+      'gjc',
+      {
+        paneKey: PANE_KEY,
+        tabId: 'tab-1',
+        worktreeId: 'wt',
+        env: 'production',
+        version: '1',
+        payload: {
+          hook_event_name: 'before_agent_start',
+          prompt: 'wire gjc status'
+        }
+      },
+      'production'
+    )
+    expect(event?.payload).toMatchObject({
+      state: 'working',
+      prompt: 'wire gjc status',
+      agentType: 'gjc'
+    })
+
+    // Why: GJC shares pi's ask-tool semantics, so an ask_user_question tool
+    // call must surface as blocked with the derived interactive prompt.
+    const ask = normalizeHookPayload(
+      state,
+      'gjc',
+      {
+        paneKey: PANE_KEY,
+        tabId: 'tab-1',
+        worktreeId: 'wt',
+        env: 'production',
+        version: '1',
+        payload: {
+          hook_event_name: 'tool_call',
+          tool_name: 'ask_user_question',
+          tool_input: {
+            questions: [
+              {
+                question: 'Choose',
+                options: ['x', 'y']
+              }
+            ]
+          }
+        }
+      },
+      'production'
+    )
+    expect(ask?.payload).toMatchObject({
+      state: 'blocked',
+      agentType: 'gjc',
+      toolName: 'ask_user_question'
+    })
+  })
+
+  it('captures GJC session ids on Pi-compatible status events', () => {
+    const event = normalizeHookPayload(
+      state,
+      'gjc',
+      {
+        paneKey: PANE_KEY,
+        payload: {
+          hook_event_name: 'before_agent_start',
+          prompt: 'resume this task',
+          session_id: 'gjc-session-1',
+          session_file: '/tmp/gjc-session-1.jsonl'
+        }
+      },
+      'production'
+    )
+
+    expect(event?.payload).toMatchObject({
+      state: 'working',
+      prompt: 'resume this task',
+      agentType: 'gjc'
+    })
+    expect(event?.providerSession).toEqual({
+      key: 'session_id',
+      id: 'gjc-session-1',
+      transcriptPath: '/tmp/gjc-session-1.jsonl'
+    })
   })
 
   it('captures Pi session ids on Pi-compatible status events', () => {

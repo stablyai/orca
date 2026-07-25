@@ -9,6 +9,7 @@ export const RESUMABLE_TUI_AGENTS = [
   'antigravity',
   'opencode',
   'pi',
+  'gjc',
   'mimo-code',
   'droid',
   'grok',
@@ -199,7 +200,8 @@ export function extractAgentProviderSession(
       const id = readSessionId(payload, ['sessionID'])
       return id ? { key: 'session_id', id } : null
     }
-    case 'pi': {
+    case 'pi':
+    case 'gjc': {
       const id = readSessionId(payload, ['session_id'])
       const providerSession = id
         ? withTranscriptPath({ key: 'session_id', id }, payload, ['session_file'])
@@ -248,6 +250,12 @@ export function getAgentResumeArgv(
     case 'pi':
       return providerSession.key === 'session_id' && providerSession.transcriptPath
         ? ['pi', '--session', providerSession.transcriptPath]
+        : null
+    case 'gjc':
+      // Why: `gjc --resume` accepts a session file path, which stays valid
+      // across project session-directory scopes (a bare id is scope-relative).
+      return providerSession.key === 'session_id' && providerSession.transcriptPath
+        ? ['gjc', '--resume', providerSession.transcriptPath]
         : null
     case 'mimo-code':
       return providerSession.key === 'session_id' ? ['mimo', '--session', id] : null

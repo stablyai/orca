@@ -120,6 +120,15 @@ export const TUI_AGENT_CONFIG: Record<TuiAgent, TuiAgentConfig> = {
     // Why: pi has no `--prefill` and paste-after-ready races its long startup; the orca-prefill extension seeds this env var instead.
     draftPromptEnvVar: 'ORCA_PI_PREFILL'
   },
+  gjc: {
+    detectCmd: 'gjc',
+    launchCmd: 'gjc',
+    expectedProcess: 'gjc',
+    // Why: GJC accepts a positional initial prompt like pi; its bundled Orca
+    // status bridge consumes the same pi prefill env var for draft delivery.
+    promptInjectionMode: 'argv',
+    draftPromptEnvVar: 'ORCA_PI_PREFILL'
+  },
   omp: {
     detectCmd: 'omp',
     launchCmd: 'omp',

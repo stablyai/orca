@@ -174,6 +174,9 @@ export function getAgentLabel(title: string): string | null {
   if (titleHasAgentName(title, 'devin')) {
     return 'Devin'
   }
+  if (titleHasAgentName(title, 'gjc')) {
+    return 'GJC'
+  }
   if (titleHasAgentName(title, 'antigravity') || AGY_AGENT_NAME_RE.test(title)) {
     return 'Antigravity'
   }
@@ -228,7 +231,8 @@ const TITLE_LABEL_TO_AGENT: Partial<Record<string, TuiAgent>> = {
   Droid: 'droid',
   Hermes: 'hermes',
   Pi: 'pi',
-  OMP: 'omp'
+  OMP: 'omp',
+  GJC: 'gjc'
 }
 
 function hasGenericClaudeStatusPrefix(title: string): boolean {
