@@ -373,13 +373,28 @@ describe('enableMainProcessGpuFeatures', () => {
     expect(app.commandLine.appendSwitch).not.toHaveBeenCalledWith('enable-unsafe-webgpu')
   })
 
-  it('opts hidden pages out of intensive wake-up throttling', async () => {
+  // Why: throttling is unrelated to the GPU; it must not ride the GPU-gated path,
+  // or the win32 GPU fallback silently costs users timely agent-done notifications.
+  it('does not opt out of wake-up throttling from the GPU path', async () => {
     const { app } = await import('electron')
     const { enableMainProcessGpuFeatures } = await import('./configure-process')
 
     delete process.env.ORCA_E2E_USER_DATA_DIR
     vi.mocked(app.commandLine.appendSwitch).mockClear()
     enableMainProcessGpuFeatures()
+
+    expect(app.commandLine.appendSwitch).not.toHaveBeenCalledWith(
+      'disable-features',
+      expect.stringContaining('IntensiveWakeUpThrottling')
+    )
+  })
+
+  it('opts hidden pages out of intensive wake-up throttling independently', async () => {
+    const { app } = await import('electron')
+    const { disableIntensiveWakeUpThrottling } = await import('./configure-process')
+
+    vi.mocked(app.commandLine.appendSwitch).mockClear()
+    disableIntensiveWakeUpThrottling()
 
     expect(app.commandLine.appendSwitch).toHaveBeenCalledWith(
       'disable-features',

@@ -164,6 +164,16 @@ describe('shouldRecordProcessGoneCrash', () => {
     expect(
       shouldRecordProcessGoneCrash({
         source: 'child',
+        processType: 'gpu',
+        reason: 'crashed',
+        exitCode: -2147483645,
+        expectedTeardown: 'none',
+        gpuFallbackActive: false
+      })
+    ).toBe(false)
+    expect(
+      shouldRecordProcessGoneCrash({
+        source: 'child',
         processType: 'Utility',
         serviceName: 'network.mojom.NetworkService',
         reason: 'killed',
@@ -335,6 +345,60 @@ describe('shouldRecordProcessGoneCrash', () => {
         expectedTeardown: 'renderer-reload'
       })
     ).toBe(true)
+  })
+
+  // Why: suppressing these is why an ineffective GPU fallback stayed invisible —
+  // 20 of 21 crashed launches on the reported machine already ran the fallback.
+  it('records GPU child crashes once the GPU fallback is already applied', () => {
+    for (const reason of ['crashed', 'abnormal-exit'] as const) {
+      expect(
+        shouldRecordProcessGoneCrash({
+          source: 'child',
+          processType: 'GPU',
+          reason,
+          exitCode: -2147483645,
+          expectedTeardown: 'none',
+          gpuFallbackActive: true
+        })
+      ).toBe(true)
+    }
+  })
+
+  it('keeps suppressing GPU exits shaped like teardown even under the fallback', () => {
+    expect(
+      shouldRecordProcessGoneCrash({
+        source: 'child',
+        processType: 'gpu',
+        reason: 'killed',
+        exitCode: 15,
+        expectedTeardown: 'none',
+        gpuFallbackActive: true
+      })
+    ).toBe(false)
+    expect(
+      shouldRecordProcessGoneCrash({
+        source: 'child',
+        processType: 'gpu',
+        reason: 'crashed',
+        exitCode: -2147483645,
+        expectedTeardown: 'app-shutdown',
+        gpuFallbackActive: true
+      })
+    ).toBe(false)
+  })
+
+  it('does not widen non-GPU child suppression when the fallback is active', () => {
+    expect(
+      shouldRecordProcessGoneCrash({
+        source: 'child',
+        processType: 'Utility',
+        serviceName: 'network.mojom.NetworkService',
+        reason: 'crashed',
+        exitCode: -1,
+        expectedTeardown: 'none',
+        gpuFallbackActive: true
+      })
+    ).toBe(false)
   })
 })
 

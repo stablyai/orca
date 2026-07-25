@@ -18,6 +18,7 @@ import {
   processGoneDedupe,
   type ProcessGoneDedupe
 } from './process-gone-dedupe'
+import { getGpuInfoSnapshot } from './gpu-info-snapshot'
 import { getMainProcessLifecycleIdentity } from './main-process-lifecycle-identity'
 import { flushActiveSink, startSpan } from '../observability/tracer'
 
@@ -28,9 +29,29 @@ export type ProcessGoneCrashEvent = {
   exitCode: number | null
   expectedTeardown: ExpectedTeardownScope
   details: Record<string, unknown>
+  /** True when this launch already runs a GPU fallback tier, so GPU deaths stop counting as churn. */
+  gpuFallbackActive?: boolean
 }
 
 type CrashReportRecorderStore = Pick<CrashReportStore, 'record'>
+
+// Why: a GPU crash loop under the fallback would rewrite crash-reports.json every
+// dedupe window for the rest of the session; the first few reports carry all the
+// triage signal (driver identity, tier), the rest are pure disk churn.
+const MAX_GPU_FALLBACK_CRASH_REPORTS_PER_LAUNCH = 3
+let gpuFallbackCrashReportsThisLaunch = 0
+
+export function resetGpuFallbackCrashReportBudgetForTesting(): void {
+  gpuFallbackCrashReportsThisLaunch = 0
+}
+
+function countsAgainstGpuFallbackReportBudget(event: ProcessGoneCrashEvent): boolean {
+  return (
+    event.gpuFallbackActive === true &&
+    event.source === 'child' &&
+    event.processType.toLowerCase() === 'gpu'
+  )
+}
 
 function processGoneBreadcrumbData(event: ProcessGoneCrashEvent) {
   return buildSuppressedProcessGoneBreadcrumbData(event)
@@ -65,7 +86,8 @@ export function recordProcessGoneCrash(
         typeof event.details.serviceName === 'string' ? event.details.serviceName : undefined,
       reason: event.reason,
       exitCode: event.exitCode,
-      expectedTeardown: event.expectedTeardown
+      expectedTeardown: event.expectedTeardown,
+      gpuFallbackActive: event.gpuFallbackActive
     })
   ) {
     recordDurableCrashBreadcrumb('process_gone_suppressed', processGoneBreadcrumbData(event))
@@ -80,14 +102,36 @@ export function recordProcessGoneCrash(
     return
   }
 
+  const gpuFallbackBudgeted = countsAgainstGpuFallbackReportBudget(event)
+  if (
+    gpuFallbackBudgeted &&
+    gpuFallbackCrashReportsThisLaunch >= MAX_GPU_FALLBACK_CRASH_REPORTS_PER_LAUNCH
+  ) {
+    recordDurableCrashBreadcrumb('process_gone_suppressed', {
+      ...processGoneBreadcrumbData(event),
+      suppressedBy: 'gpu_fallback_report_budget'
+    })
+    return
+  }
+
   const key = getProcessGoneDedupeKey(event.source, event.processType, event.reason, event.exitCode)
   const claim = dedupe.tryClaim(key)
   if (!claim) {
     return
   }
+  if (gpuFallbackBudgeted) {
+    gpuFallbackCrashReportsThisLaunch += 1
+  }
   const mainProcessLifecycle = getMainProcessLifecycleIdentity()
+  // Why: GPU and renderer deaths are the ones triage needs driver identity for;
+  // every other child type would just pad the report.
+  const gpuIdentity =
+    event.source === 'renderer' || event.processType.toLowerCase() === 'gpu'
+      ? (getGpuInfoSnapshot() ?? {})
+      : {}
   const crashDetails = buildProcessGoneCrashDetails({
     ...event.details,
+    ...gpuIdentity,
     ...mainProcessLifecycle
   })
   const breadcrumbs = getCrashBreadcrumbSnapshot()
@@ -134,6 +178,9 @@ export function recordProcessGoneCrash(
     })
     .catch((error) => {
       dedupe.release(claim)
+      if (gpuFallbackBudgeted) {
+        gpuFallbackCrashReportsThisLaunch -= 1
+      }
       console.error('[crash-reporting] Failed to persist crash report:', error)
       const data = persistFailureData(event, error)
       recordDurableCrashBreadcrumb(

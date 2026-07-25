@@ -9,8 +9,13 @@ vi.mock('electron', () => ({
 
 import { clearCrashBreadcrumbsForTest, getCrashBreadcrumbSnapshot } from './crash-breadcrumb-store'
 import { ProcessGoneDedupe } from './process-gone-dedupe'
-import { recordProcessGoneCrash, type ProcessGoneCrashEvent } from './process-gone-recorder'
+import {
+  recordProcessGoneCrash,
+  resetGpuFallbackCrashReportBudgetForTesting,
+  type ProcessGoneCrashEvent
+} from './process-gone-recorder'
 import { _resetTracerForTests, setActiveSink, type TracerSink } from '../observability/tracer'
+import { setGpuInfoSnapshotForTesting } from './gpu-info-snapshot'
 
 type CapturingSink = TracerSink & { records: unknown[]; flushMock: ReturnType<typeof vi.fn> }
 
@@ -44,12 +49,14 @@ beforeEach(() => {
   sink = capturingSink()
   setActiveSink(sink)
   clearCrashBreadcrumbsForTest()
+  resetGpuFallbackCrashReportBudgetForTesting()
 })
 
 afterEach(() => {
   vi.restoreAllMocks()
   _resetTracerForTests()
   clearCrashBreadcrumbsForTest()
+  setGpuInfoSnapshotForTesting(null)
 })
 
 describe('recordProcessGoneCrash', () => {
@@ -204,6 +211,199 @@ describe('recordProcessGoneCrash', () => {
         ])
       )
     )
+  })
+
+  // Why: a GPU crash loop under the fallback must not rewrite crash-reports.json
+  // every dedupe window for the rest of the session.
+  it('caps GPU-under-fallback reports per launch and durably records the overflow', async () => {
+    const record = vi.fn().mockResolvedValue({ id: 'report' })
+    const dedupe = new ProcessGoneDedupe()
+    const gpuCrash = (exitCode: number): ProcessGoneCrashEvent =>
+      event({
+        source: 'child',
+        processType: 'GPU',
+        reason: 'crashed',
+        exitCode,
+        gpuFallbackActive: true,
+        details: { type: 'GPU' }
+      })
+
+    for (const exitCode of [1, 2, 3]) {
+      recordProcessGoneCrash({ record } as never, gpuCrash(exitCode), dedupe)
+    }
+    await vi.waitFor(() => expect(record).toHaveBeenCalledTimes(3))
+
+    recordProcessGoneCrash({ record } as never, gpuCrash(4), dedupe)
+
+    expect(record).toHaveBeenCalledTimes(3)
+    expect(getCrashBreadcrumbSnapshot()).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          name: 'process_gone_suppressed',
+          data: expect.objectContaining({ suppressedBy: 'gpu_fallback_report_budget' })
+        })
+      ])
+    )
+  })
+
+  it('does not spend GPU-fallback budget on deduped repeats', async () => {
+    const record = vi.fn().mockResolvedValue({ id: 'report' })
+    const dedupe = new ProcessGoneDedupe()
+    const gpuCrash = (exitCode: number): ProcessGoneCrashEvent =>
+      event({
+        source: 'child',
+        processType: 'GPU',
+        reason: 'crashed',
+        exitCode,
+        gpuFallbackActive: true,
+        details: { type: 'GPU' }
+      })
+
+    recordProcessGoneCrash({ record } as never, gpuCrash(1), dedupe)
+    recordProcessGoneCrash({ record } as never, gpuCrash(2), dedupe)
+    recordProcessGoneCrash({ record } as never, gpuCrash(2), dedupe)
+    recordProcessGoneCrash({ record } as never, gpuCrash(3), dedupe)
+
+    await vi.waitFor(() => expect(record).toHaveBeenCalledTimes(3))
+    expect(getCrashBreadcrumbSnapshot()).not.toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          data: expect.objectContaining({ suppressedBy: 'gpu_fallback_report_budget' })
+        })
+      ])
+    )
+  })
+
+  it('releases GPU-fallback budget when persistence fails', async () => {
+    const record = vi
+      .fn()
+      .mockRejectedValueOnce(new Error('disk unavailable'))
+      .mockResolvedValue({ id: 'report' })
+    const dedupe = new ProcessGoneDedupe()
+    vi.spyOn(console, 'error').mockImplementation(() => {})
+    const gpuCrash = (exitCode: number): ProcessGoneCrashEvent =>
+      event({
+        source: 'child',
+        processType: 'GPU',
+        reason: 'crashed',
+        exitCode,
+        gpuFallbackActive: true,
+        details: { type: 'GPU' }
+      })
+
+    recordProcessGoneCrash({ record } as never, gpuCrash(1), dedupe)
+    await vi.waitFor(() =>
+      expect(getCrashBreadcrumbSnapshot()).toEqual(
+        expect.arrayContaining([expect.objectContaining({ name: 'crash_report_persist_failed' })])
+      )
+    )
+
+    for (const exitCode of [2, 3, 4]) {
+      recordProcessGoneCrash({ record } as never, gpuCrash(exitCode), dedupe)
+    }
+    await vi.waitFor(() => expect(record).toHaveBeenCalledTimes(4))
+    expect(getCrashBreadcrumbSnapshot()).not.toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          data: expect.objectContaining({ suppressedBy: 'gpu_fallback_report_budget' })
+        })
+      ])
+    )
+  })
+
+  it('still records renderer crashes after the GPU-fallback budget is spent', async () => {
+    const record = vi.fn().mockResolvedValue({ id: 'report' })
+    const dedupe = new ProcessGoneDedupe()
+
+    for (const exitCode of [1, 2, 3]) {
+      recordProcessGoneCrash(
+        { record } as never,
+        event({
+          source: 'child',
+          processType: 'GPU',
+          reason: 'crashed',
+          exitCode,
+          gpuFallbackActive: true,
+          details: { type: 'GPU' }
+        }),
+        dedupe
+      )
+    }
+    await vi.waitFor(() => expect(record).toHaveBeenCalledTimes(3))
+
+    recordProcessGoneCrash({ record } as never, event({ gpuFallbackActive: true }), dedupe)
+
+    await vi.waitFor(() => expect(record).toHaveBeenCalledTimes(4))
+  })
+
+  // Why: driver identity is the whole point of the GPU snapshot — if it stops reaching
+  // crash details, triage silently loses the vendor/device data it was added for.
+  it('attaches the GPU identity snapshot to GPU-child crash details', async () => {
+    const record = vi.fn().mockResolvedValue({ id: 'report' })
+    setGpuInfoSnapshotForTesting({ gpuInfoAvailable: true, gpuVendorId: '0x10de' })
+
+    recordProcessGoneCrash(
+      { record } as never,
+      event({
+        source: 'child',
+        processType: 'GPU',
+        gpuFallbackActive: true,
+        details: { type: 'GPU', gpuFallbackTier: 2 }
+      }),
+      new ProcessGoneDedupe()
+    )
+
+    await vi.waitFor(() => expect(record).toHaveBeenCalledTimes(1))
+    expect(record.mock.calls[0][0].details).toEqual(
+      expect.objectContaining({ gpuInfoAvailable: true, gpuVendorId: '0x10de' })
+    )
+  })
+
+  it('attaches the GPU identity snapshot to renderer crash details', async () => {
+    const record = vi.fn().mockResolvedValue({ id: 'report' })
+    setGpuInfoSnapshotForTesting({ gpuInfoAvailable: true, gpuVendorId: '0x10de' })
+
+    recordProcessGoneCrash({ record } as never, event(), new ProcessGoneDedupe())
+
+    await vi.waitFor(() => expect(record).toHaveBeenCalledTimes(1))
+    expect(record.mock.calls[0][0].details).toEqual(
+      expect.objectContaining({ gpuInfoAvailable: true, gpuVendorId: '0x10de' })
+    )
+  })
+
+  // Why: every other child type would just pad the report.
+  it('omits the GPU identity snapshot for non-GPU child crashes', async () => {
+    const record = vi.fn().mockResolvedValue({ id: 'report' })
+    setGpuInfoSnapshotForTesting({ gpuInfoAvailable: true, gpuVendorId: '0x10de' })
+
+    recordProcessGoneCrash(
+      { record } as never,
+      event({ source: 'child', processType: 'Utility', details: { type: 'Utility' } }),
+      new ProcessGoneDedupe()
+    )
+
+    await vi.waitFor(() => expect(record).toHaveBeenCalledTimes(1))
+    expect(record.mock.calls[0][0].details).not.toHaveProperty('gpuVendorId')
+  })
+
+  // Why: the reworded crash dialog keys off a numeric gpuFallbackTier; if sanitization
+  // ever dropped or stringified it, isGpuFallbackCrashReport would silently never match.
+  it('preserves gpuFallbackTier as a number through sanitization', async () => {
+    const record = vi.fn().mockResolvedValue({ id: 'report' })
+
+    recordProcessGoneCrash(
+      { record } as never,
+      event({
+        source: 'child',
+        processType: 'GPU',
+        gpuFallbackActive: true,
+        details: { type: 'GPU', gpuFallbackTier: 2 }
+      }),
+      new ProcessGoneDedupe()
+    )
+
+    await vi.waitFor(() => expect(record).toHaveBeenCalledTimes(1))
+    expect(record.mock.calls[0][0].details.gpuFallbackTier).toBe(2)
   })
 
   it('allows the same renderer crash to retry after persistence fails', async () => {

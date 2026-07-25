@@ -293,10 +293,18 @@ export function enableMainProcessGpuFeatures(): void {
   if (features) {
     app.commandLine.appendSwitch('enable-features', features)
   }
+}
 
+/**
+ * Timer behavior, deliberately separate from GPU setup.
+ *
+ * IntensiveWakeUpThrottling clamps hidden-page timers to 1/min after 5min,
+ * delaying agent-done/bell notifications ~60s. This used to live inside
+ * enableMainProcessGpuFeatures(), so machines on the GPU fallback path lost
+ * timely notifications for a reason that has nothing to do with the GPU.
+ */
+export function disableIntensiveWakeUpThrottling(): void {
   const existingDisabledFeatures = app.commandLine.getSwitchValue('disable-features')
-  // Why: IntensiveWakeUpThrottling clamps hidden-page timers to 1/min after 5min, delaying agent-done/bell notifications ~60s.
-  // This opt-out is skipped under GPU fallback (win32-only today); if throttling ever reaches Windows it must move out of this path.
   const disabledFeatures = ['IntensiveWakeUpThrottling', existingDisabledFeatures]
     .filter(Boolean)
     .join(',')

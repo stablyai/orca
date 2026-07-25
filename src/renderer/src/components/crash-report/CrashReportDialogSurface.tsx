@@ -15,6 +15,7 @@ import { Label } from '@/components/ui/label'
 import { useMountedRef } from '@/hooks/useMountedRef'
 import {
   formatCrashReportText,
+  isGpuFallbackCrashReport,
   isReactErrorBoundaryReport,
   type CrashReportDiagnosticBundle,
   type CrashReportRecord
@@ -34,17 +35,23 @@ function formatSummary(report: CrashReportRecord): string {
     const surface = typeof report.details.surface === 'string' ? report.details.surface : null
     return surface ? `React render error in ${surface}` : 'React render error'
   }
-  return `${report.processType} ${report.reason}${
+  const summary = `${report.processType} ${report.reason}${
     report.exitCode === null ? '' : ` (exit ${report.exitCode})`
   }`
+  return isGpuFallbackCrashReport(report)
+    ? `${summary} — graphics fallback tier ${String(report.details.gpuFallbackTier)}`
+    : summary
 }
 
 function getDialogTitle(report: CrashReportRecord | null): string {
   if (!report) {
     return 'Report a crash'
   }
-  return report && isReactErrorBoundaryReport(report)
-    ? 'Orca hit a recoverable UI error'
+  if (isReactErrorBoundaryReport(report)) {
+    return 'Orca hit a recoverable UI error'
+  }
+  return isGpuFallbackCrashReport(report)
+    ? 'Orca is running with reduced graphics acceleration'
     : 'Orca closed unexpectedly'
 }
 
@@ -52,8 +59,11 @@ function getDialogDescription(report: CrashReportRecord | null): string {
   if (!report) {
     return 'Send a privacy-safe crash report. Recent redacted diagnostic logs are included when available.'
   }
-  return report && isReactErrorBoundaryReport(report)
-    ? 'Send a privacy-safe diagnostic report to help us understand the failed UI surface.'
+  if (isReactErrorBoundaryReport(report)) {
+    return 'Send a privacy-safe diagnostic report to help us understand the failed UI surface.'
+  }
+  return isGpuFallbackCrashReport(report)
+    ? "Your graphics driver keeps crashing Orca's GPU process, so Orca disabled hardware acceleration and restarted. Sending this privacy-safe report tells us which driver is affected."
     : 'Send a privacy-safe diagnostic report to help us understand what happened.'
 }
 
@@ -61,8 +71,11 @@ function getNotesPlaceholder(report: CrashReportRecord | null): string {
   if (!report) {
     return 'Optional: what happened?'
   }
-  return report && isReactErrorBoundaryReport(report)
-    ? 'Optional: what were you doing before this UI error?'
+  if (isReactErrorBoundaryReport(report)) {
+    return 'Optional: what were you doing before this UI error?'
+  }
+  return isGpuFallbackCrashReport(report)
+    ? 'Optional: does anything still look wrong after the restart?'
     : 'Optional: what were you doing before Orca closed?'
 }
 

@@ -163,6 +163,21 @@ export function isReactErrorBoundaryReport(report: CrashReportRecord): boolean {
   )
 }
 
+/**
+ * A GPU child crash that happened while a GPU fallback tier was already applied.
+ *
+ * Orca is still running here — it relaunched itself into a degraded GPU path —
+ * so the dialog must not claim the app closed unexpectedly.
+ */
+export function isGpuFallbackCrashReport(report: CrashReportRecord): boolean {
+  return (
+    report.source === 'child' &&
+    report.processType.toLowerCase() === 'gpu' &&
+    typeof report.details.gpuFallbackTier === 'number' &&
+    report.details.gpuFallbackTier > 0
+  )
+}
+
 export function sanitizeCrashReportString(
   value: string,
   maxLength = MAX_STRING_DETAIL_LENGTH

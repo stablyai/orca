@@ -24,12 +24,16 @@ function isRecoverableChromiumChildProcess({
   source,
   processType,
   serviceName,
-  reason
+  reason,
+  expectedTeardown,
+  gpuFallbackActive
 }: {
   source: ProcessGoneSource
   processType?: string
   serviceName?: string
   reason: string
+  expectedTeardown: ExpectedTeardownScope
+  gpuFallbackActive?: boolean
 }): boolean {
   if (source !== 'child') {
     return false
@@ -39,7 +43,14 @@ function isRecoverableChromiumChildProcess({
   }
   const normalizedProcessType = processType?.toLowerCase()
   if (normalizedProcessType && RECOVERABLE_CHILD_PROCESS_TYPES.has(normalizedProcessType)) {
-    return true
+    // Why: a GPU crash while the GPU fallback is already applied is not churn —
+    // the remediation failed, and suppressing it is why this was invisible. Quit
+    // still tears the GPU child down noisily, so app-shutdown stays suppressed.
+    return !(
+      gpuFallbackActive === true &&
+      normalizedProcessType === 'gpu' &&
+      expectedTeardown !== 'app-shutdown'
+    )
   }
   return (
     normalizedProcessType === 'utility' &&
@@ -54,7 +65,8 @@ export function shouldRecordProcessGoneCrash({
   serviceName,
   reason,
   exitCode,
-  expectedTeardown
+  expectedTeardown,
+  gpuFallbackActive
 }: {
   source: ProcessGoneSource
   processType?: string
@@ -62,10 +74,20 @@ export function shouldRecordProcessGoneCrash({
   reason: string
   exitCode: number | null
   expectedTeardown: ExpectedTeardownScope
+  gpuFallbackActive?: boolean
 }): boolean {
   // Why: GPU, Network Service, and Audio Service exits are recoverable Chromium
   // child-process churn; treating them as app crashes creates noisy user prompts.
-  if (isRecoverableChromiumChildProcess({ source, processType, serviceName, reason })) {
+  if (
+    isRecoverableChromiumChildProcess({
+      source,
+      processType,
+      serviceName,
+      reason,
+      expectedTeardown,
+      gpuFallbackActive
+    })
+  ) {
     return false
   }
   // Why: Electron reports intentional reload/update/quit teardown as `killed`.
