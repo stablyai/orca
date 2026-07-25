@@ -57,11 +57,12 @@ export function isGithubPullRequestHeadLocalRefForNumber(
     return false
   }
   const rest = refName.slice(prefix.length)
-  const slash = rest.lastIndexOf('/')
-  if (slash <= 0 || slash === rest.length - 1) {
+  // Why: durable shape is exactly <remoteComponent>/<number> — reject nested paths.
+  const parts = rest.split('/')
+  if (parts.length !== 2 || parts[0].length === 0 || parts[1].length === 0) {
     return false
   }
-  return rest.slice(slash + 1) === String(prNumber)
+  return parts[1] === String(prNumber)
 }
 
 /**
@@ -77,11 +78,12 @@ export function isGitlabMergeRequestHeadLocalRefForNumber(refName: string, mrIid
     return false
   }
   const rest = refName.slice(prefix.length)
-  const slash = rest.lastIndexOf('/')
-  if (slash <= 0 || slash === rest.length - 1) {
+  // Why: durable shape is exactly <remoteComponent>/<number> — reject nested paths.
+  const parts = rest.split('/')
+  if (parts.length !== 2 || parts[0].length === 0 || parts[1].length === 0) {
     return false
   }
-  return rest.slice(slash + 1) === String(mrIid)
+  return parts[1] === String(mrIid)
 }
 
 /** Select refs to delete after the last worktree for a PR/MR is removed (#10431). */
