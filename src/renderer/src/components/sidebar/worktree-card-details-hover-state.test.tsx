@@ -92,6 +92,63 @@ describe('useWorktreeCardDetailsHoverControl', () => {
     expect(control?.hoverOpen).toBe(true)
   })
 
+  function focusInsideWebviewGuest(): void {
+    const webview = document.createElement('webview')
+    document.body.append(webview)
+    act(() => {
+      webview.dispatchEvent(new Event('focusin', { bubbles: true }))
+    })
+    webview.remove()
+  }
+
+  it('closes the hover when focus moves into a webview guest', () => {
+    mountProbe()
+
+    act(() => {
+      control?.handleHoverOpenChange(true)
+    })
+    expect(control?.hoverOpen).toBe(true)
+
+    focusInsideWebviewGuest()
+
+    expect(control?.hoverOpen).toBe(false)
+  })
+
+  it('closes the detail menu layer that would otherwise swallow the close', () => {
+    mountProbe()
+
+    act(() => {
+      control?.handleHoverOpenChange(true)
+      control?.handleReviewMenuOpenChange(true)
+    })
+    expect(control?.hoverOpen).toBe(true)
+
+    focusInsideWebviewGuest()
+
+    expect(control?.hoverOpen).toBe(false)
+    expect(control?.reviewMenuOpen).toBe(false)
+  })
+
+  it('leaves a closed hover alone and ignores focus outside a guest', () => {
+    mountProbe()
+
+    focusInsideWebviewGuest()
+    expect(control?.hoverOpen).toBe(false)
+
+    act(() => {
+      control?.handleHoverOpenChange(true)
+    })
+    const outside = document.createElement('div')
+    document.body.append(outside)
+    act(() => {
+      outside.dispatchEvent(new Event('focusin', { bubbles: true }))
+    })
+    outside.remove()
+
+    // Why: Radix owns dismissal for ordinary host DOM; only guest surfaces need the assist.
+    expect(control?.hoverOpen).toBe(true)
+  })
+
   it('closes both layers from closeHover', () => {
     mountProbe()
     expect(control).not.toBeNull()
