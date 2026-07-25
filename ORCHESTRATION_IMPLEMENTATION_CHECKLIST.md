@@ -1558,6 +1558,13 @@ Append new entries chronologically. Do not rewrite older entries except to corre
     exact worker process was gone.
   - The focused RPC suites passed 163 tests; formatting, diff checks, full typecheck, CLI build, and
     desktop/web builds passed.
+  - After the Windows generated main bundle was verified at `8dd0d1b16`, Delivery
+    `delivery_888f972841d6` was acknowledged by `check --ack ... --peek`; the response echoed the
+    exact acknowledged ID and returned zero unread rows.
+  - With that build running, removing the Mac listener returned
+    `remote_runtime_unavailable` while the Task stayed completed. Reconnect preserved the succeeded
+    Dispatch, produced no duplicate Run mail, and returned `worker_identity_changed` rather than
+    attributing the old transcript to a replacement process.
 - Findings:
   - Delivery acknowledgment must compose with inspection modes explicitly; a successful command may
     not silently ignore the acknowledgment effect.
@@ -1565,9 +1572,12 @@ Append new entries chronologically. Do not rewrite older entries except to corre
     hierarchy or retry engine is needed.
   - Saved peer identity fencing prevented accidental adoption of a server started from a different
     profile. Exact process fencing also prevented stale transcript attribution after restart.
+  - On the Windows dogfood shell, the `pnpm` wrapper returned before its spawned Vite build
+    completed. Verifying the generated bundle before restart exposed the race; invoking the Node
+    build script directly produced the expected branch-head bundle.
 - Next:
-  - Build and restart Windows with these two dogfood fixes, repeat the acknowledgment and typed
-    disconnect checks, then run final quality gates and update this entry with the final branch head.
+  - Run the final quality gates and review, push this evidence update, inspect PR CI, and remove only
+    the temporary dogfood profile and listener after verification is complete.
 
 ### Entry template
 
