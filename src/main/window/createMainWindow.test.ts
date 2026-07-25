@@ -523,8 +523,7 @@ describe('createMainWindow', () => {
     // dvh root — via the emulated viewport, which leaves the deadlock-prone frame untouched.
     expect(webContents.enableDeviceEmulation).toHaveBeenCalledWith({
       screenPosition: 'desktop',
-      screenSize: { width: 1200, height: 800 },
-      viewPosition: { x: 0, y: 0 },
+      screenSize: { width: 0, height: 0 },
       deviceScaleFactor: 2.25,
       viewSize: { width: 1200, height: 800 },
       scale: 1
@@ -642,8 +641,7 @@ describe('createMainWindow', () => {
     expect(browserWindowInstance.setSize).not.toHaveBeenCalled()
     expect(webContents.enableDeviceEmulation).toHaveBeenCalledWith({
       screenPosition: 'desktop',
-      screenSize: { width: 1200, height: 800 },
-      viewPosition: { x: 0, y: 0 },
+      screenSize: { width: 0, height: 0 },
       deviceScaleFactor: 2.25,
       viewSize: { width: 1200, height: 800 },
       scale: 1
