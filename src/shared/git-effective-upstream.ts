@@ -60,11 +60,19 @@ async function splitRemoteBranchNameByKnownRemote(
   }
 }
 
+const HEADS_REF_PREFIX = 'refs/heads/'
+
 async function getCurrentBranchName(runGit: GitCommandRunner): Promise<string | null> {
   try {
-    const { stdout } = await runGit(['symbolic-ref', '--quiet', '--short', 'HEAD'])
-    const branchName = stdout.trim()
-    return branchName || null
+    // Why: git's `--short` ref abbreviation truncates non-ASCII branch names
+    // mid-codepoint past a fixed buffer length, corrupting the branch name.
+    // Read the full ref and strip the prefix ourselves instead.
+    const { stdout } = await runGit(['symbolic-ref', '--quiet', 'HEAD'])
+    const ref = stdout.trim()
+    if (!ref) {
+      return null
+    }
+    return ref.startsWith(HEADS_REF_PREFIX) ? ref.slice(HEADS_REF_PREFIX.length) : ref
   } catch {
     return null
   }
