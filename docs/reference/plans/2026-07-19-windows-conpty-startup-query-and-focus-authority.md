@@ -34,16 +34,19 @@ backend.
 
 ## 2026-07-20 Ownership Amendment
 
+> Its query-consumption rules are superseded by the 2026-07-25 amendment above. Its backend
+> classification rule still stands.
+
 Fresh paired-runtime evidence showed that the display/controller platform is not a safe proxy for
 the PTY backend. A macOS client can attach to a native ConPTY owned by a paired Windows runtime, so
 renderer-side local/SSH/remote heuristics can transfer OSC 10/11 authority to the wrong responder.
 
 The PTY-owning process now classifies the backend from its own platform and the shell that actually
-won spawn: `windows-conpty`, `windows-wsl`, or `posix-pty`. Native ConPTY consumes complete OSC 10/11
-queries before model, replay, or view delivery. During the bounded startup window it replies once
-when validated theme colors are available; after the deadline, or without colors, it consumes the
-query without replying. A consuming-view handshake does not transfer this authority. Split query
-candidates remain bounded and private across authority-close, expiry, and snapshot barriers; a
+won spawn: `windows-conpty`, `windows-wsl`, or `posix-pty`. ~~Native ConPTY consumes complete OSC
+10/11 queries before model, replay, or view delivery. During the bounded startup window it replies
+once when validated theme colors are available; after the deadline, or without colors, it consumes
+the query without replying. A consuming-view handshake does not transfer this authority. Split query
+candidates remain bounded and private across authority-close, expiry, and snapshot barriers~~; a
 candidate that proves malformed is released unchanged.
 
 WSL and POSIX PTYs continue to transfer authority to the normal visible/hidden responder after the
