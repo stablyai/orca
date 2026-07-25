@@ -31,6 +31,7 @@ type UseFileExplorerMoveDropParams = {
   dragSourcePath: string | null
   dragSourceIsDirectoryRef: RefObject<boolean>
   lastDragSourceMetaRef: RefObject<{ path: string; isDirectory: boolean } | null>
+  dragSourceDirectoryByPathRef: RefObject<Map<string, boolean>>
 }
 
 export function useFileExplorerMoveDrop({
@@ -41,7 +42,8 @@ export function useFileExplorerMoveDrop({
   setDropTargetDir,
   dragSourcePath,
   dragSourceIsDirectoryRef,
-  lastDragSourceMetaRef
+  lastDragSourceMetaRef,
+  dragSourceDirectoryByPathRef
 }: UseFileExplorerMoveDropParams): (sourcePath: string, destDir: string) => void {
   const confirm = useConfirmationDialog()
   return useCallback(
@@ -67,15 +69,15 @@ export function useFileExplorerMoveDrop({
 
       const newPath = joinPath(destDir, fileName)
       const operationOwner = getOperationOwnerForPath(sourcePath)
-      // Why: multi-select may drop several paths; use primary drag-source isDirectory
-      // when this path is that source (or last-drag meta after capture-phase clear).
+      // Why: multi-select may drop several paths; prefer the selection directory map.
       const meta = lastDragSourceMetaRef.current
       const isDirectory =
-        sourcePath === dragSourcePath
+        dragSourceDirectoryByPathRef.current.get(sourcePath) ??
+        (sourcePath === dragSourcePath
           ? dragSourceIsDirectoryRef.current
           : meta?.path === sourcePath
             ? meta.isDirectory
-            : false
+            : false)
 
       const run = async (): Promise<void> => {
         const mode = (useAppStore.getState().settings?.confirmFileExplorerMove ??
@@ -169,7 +171,8 @@ export function useFileExplorerMoveDrop({
       confirm,
       dragSourcePath,
       dragSourceIsDirectoryRef,
-      lastDragSourceMetaRef
+      lastDragSourceMetaRef,
+      dragSourceDirectoryByPathRef
     ]
   )
 }
