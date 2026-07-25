@@ -157,6 +157,7 @@ export async function executeWorktreeRemoval(
       repoPath: repo.path,
       repoId,
       worktreeId: args.worktreeId,
+      hostId: removalHostId,
       meta: removedMeta,
       localGitOptions: localWorktreeGitOptions
     })

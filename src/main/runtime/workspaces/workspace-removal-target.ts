@@ -134,6 +134,7 @@ export abstract class OrcaRuntimeWithResolveWorktreeRemovalTarget extends Runtim
             repoPath: repo.path,
             repoId,
             worktreeId,
+            hostId: LOCAL_EXECUTION_HOST_ID,
             meta: store.getWorktreeMeta(worktreeId),
             localGitOptions: getLocalProjectWorktreeGitOptions(store, repo)
           })
