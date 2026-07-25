@@ -1,5 +1,11 @@
 import { describe, expect, it, vi, beforeEach, afterEach } from 'vitest'
 import type { BrowserWindow } from 'electron'
+
+const scaleFactorMock = { value: 1 }
+vi.mock('electron', () => ({
+  screen: { getDisplayMatching: vi.fn(() => ({ scaleFactor: scaleFactorMock.value })) }
+}))
+
 import {
   reflowRendererViewport,
   VIEWPORT_REFLOW_RESTORE_ATTEMPTS,
@@ -16,6 +22,7 @@ function createWindow(overrides: Record<string, unknown> = {}): BrowserWindow {
     webContents,
     isDestroyed: vi.fn(() => false),
     getContentSize: vi.fn(() => [1200, 800]),
+    getBounds: vi.fn(() => ({ x: 0, y: 0, width: 1200, height: 840 })),
     setSize: vi.fn(),
     setBounds: vi.fn(),
     ...overrides
@@ -25,6 +32,7 @@ function createWindow(overrides: Record<string, unknown> = {}): BrowserWindow {
 describe('reflowRendererViewport', () => {
   beforeEach(() => {
     vi.useFakeTimers()
+    scaleFactorMock.value = 1
   })
   afterEach(() => {
     vi.useRealTimers()
@@ -47,16 +55,51 @@ describe('reflowRendererViewport', () => {
     vi.advanceTimersByTime(0)
     expect(window.webContents.enableDeviceEmulation).toHaveBeenCalledWith({
       screenPosition: 'desktop',
-      screenSize: { width: 1200, height: 801 },
+      screenSize: { width: 1200, height: 800 },
       viewPosition: { x: 0, y: 0 },
-      deviceScaleFactor: 0,
-      viewSize: { width: 1200, height: 801 },
+      deviceScaleFactor: 1.25,
+      viewSize: { width: 1200, height: 800 },
       scale: 1
     })
     expect(window.webContents.disableDeviceEmulation).not.toHaveBeenCalled()
 
     vi.advanceTimersByTime(VIEWPORT_REFLOW_SETTLE_MS)
     expect(window.webContents.disableDeviceEmulation).toHaveBeenCalledTimes(1)
+  })
+
+  // Why: a CSS-pixel delta re-grids terminals sitting on an xterm row boundary, so the emulated
+  // viewport must match the real one exactly — the scale factor is the only thing allowed to move.
+  it('emulates the real viewport size so no terminal re-grids mid-reflow', () => {
+    const window = createWindow()
+    reflowRendererViewport(window)
+    vi.advanceTimersByTime(0)
+    const [params] = (window.webContents.enableDeviceEmulation as ReturnType<typeof vi.fn>).mock
+      .calls[0] as [Electron.Parameters]
+    expect(params.viewSize).toEqual({ width: 1200, height: 800 })
+    expect(params.screenSize).toEqual({ width: 1200, height: 800 })
+    expect(params.scale).toBe(1)
+  })
+
+  // Why: a constant scale factor would equal the real one on a 1.25x display and reflow nothing.
+  it('offsets from the display the window is actually on', () => {
+    scaleFactorMock.value = 1.25
+    const window = createWindow()
+    reflowRendererViewport(window)
+    vi.advanceTimersByTime(0)
+    const [params] = (window.webContents.enableDeviceEmulation as ReturnType<typeof vi.fn>).mock
+      .calls[0] as [Electron.Parameters]
+    expect(params.deviceScaleFactor).toBe(1.5)
+  })
+
+  // Why: a display reporting 0 would emulate 0.25 and shrink everything.
+  it('falls back to 1x when the display reports no scale factor', () => {
+    scaleFactorMock.value = 0
+    const window = createWindow()
+    reflowRendererViewport(window)
+    vi.advanceTimersByTime(0)
+    const [params] = (window.webContents.enableDeviceEmulation as ReturnType<typeof vi.fn>).mock
+      .calls[0] as [Electron.Parameters]
+    expect(params.deviceScaleFactor).toBe(1.25)
   })
 
   it('collapses a burst of reveals into one emulation cycle', () => {

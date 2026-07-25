@@ -42,7 +42,8 @@ vi.mock('electron', () => ({
   nativeTheme: { shouldUseDarkColors: false },
   powerMonitor: { on: powerMonitorOnMock, removeListener: powerMonitorRemoveListenerMock },
   screen: {
-    getPrimaryDisplay: () => ({ workAreaSize: { width: 1440, height: 900 } })
+    getPrimaryDisplay: () => ({ workAreaSize: { width: 1440, height: 900 } }),
+    getDisplayMatching: () => ({ scaleFactor: 2 })
   },
   shell: { openExternal: openExternalMock }
 }))
@@ -497,6 +498,7 @@ describe('createMainWindow', () => {
       isFullScreen: vi.fn(() => false),
       getSize: vi.fn(() => [1200, 800]),
       getContentSize: vi.fn(() => [1200, 800]),
+      getBounds: vi.fn(() => ({ x: 0, y: 0, width: 1200, height: 840 })),
       setSize: vi.fn(),
       maximize: vi.fn(),
       show: vi.fn(),
@@ -521,10 +523,10 @@ describe('createMainWindow', () => {
     // dvh root — via the emulated viewport, which leaves the deadlock-prone frame untouched.
     expect(webContents.enableDeviceEmulation).toHaveBeenCalledWith({
       screenPosition: 'desktop',
-      screenSize: { width: 1200, height: 801 },
+      screenSize: { width: 1200, height: 800 },
       viewPosition: { x: 0, y: 0 },
-      deviceScaleFactor: 0,
-      viewSize: { width: 1200, height: 801 },
+      deviceScaleFactor: 2.25,
+      viewSize: { width: 1200, height: 800 },
       scale: 1
     })
     expect(webContents.disableDeviceEmulation).toHaveBeenCalled()
@@ -563,6 +565,7 @@ describe('createMainWindow', () => {
       isFullScreen: vi.fn(() => true),
       getSize: vi.fn(() => [1200, 800]),
       getContentSize: vi.fn(() => [1200, 800]),
+      getBounds: vi.fn(() => ({ x: 0, y: 0, width: 1200, height: 840 })),
       setSize: vi.fn(),
       maximize: vi.fn(),
       show: vi.fn(),
@@ -613,6 +616,7 @@ describe('createMainWindow', () => {
       isFullScreen: vi.fn(() => false),
       getSize: vi.fn(() => [1200, 800]),
       getContentSize: vi.fn(() => [1200, 800]),
+      getBounds: vi.fn(() => ({ x: 0, y: 0, width: 1200, height: 840 })),
       setSize: vi.fn(),
       maximize: vi.fn(),
       show: vi.fn(),
@@ -638,10 +642,10 @@ describe('createMainWindow', () => {
     expect(browserWindowInstance.setSize).not.toHaveBeenCalled()
     expect(webContents.enableDeviceEmulation).toHaveBeenCalledWith({
       screenPosition: 'desktop',
-      screenSize: { width: 1200, height: 801 },
+      screenSize: { width: 1200, height: 800 },
       viewPosition: { x: 0, y: 0 },
-      deviceScaleFactor: 0,
-      viewSize: { width: 1200, height: 801 },
+      deviceScaleFactor: 2.25,
+      viewSize: { width: 1200, height: 800 },
       scale: 1
     })
     expect(webContents.disableDeviceEmulation).toHaveBeenCalled()
