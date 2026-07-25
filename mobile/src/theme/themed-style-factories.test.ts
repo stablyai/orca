@@ -166,7 +166,9 @@ async function loadThemedFactories(): Promise<readonly StyleFactory[]> {
     import('../files/mobile-file-preview-styles'),
     import('../components/pr-sidebar/mobile-pr-sidebar-styles'),
     import('../components/pr-sidebar/pr-ai-triage-styles'),
-    import('../components/pr-sidebar/pr-conflict-styles')
+    import('../components/pr-sidebar/pr-conflict-styles'),
+    import('../components/pr-sidebar/pr-comments-styles'),
+    import('../components/pr-sidebar/pr-comment-composer-styles')
   ])
   const [
     bottomDrawer,
@@ -225,7 +227,9 @@ async function loadThemedFactories(): Promise<readonly StyleFactory[]> {
     filePreview,
     prSidebar,
     prAiTriage,
-    prConflict
+    prConflict,
+    prComments,
+    prCommentComposer
   ] = mods
   return [
     { name: 'createBottomDrawerStyles', factory: bottomDrawer.createBottomDrawerStyles },
@@ -386,6 +390,14 @@ async function loadThemedFactories(): Promise<readonly StyleFactory[]> {
     {
       name: 'createPrConflictStyles',
       factory: prConflict.createPrConflictStyles
+    },
+    {
+      name: 'createPrCommentsStyles',
+      factory: prComments.createPrCommentsStyles
+    },
+    {
+      name: 'createPrCommentComposerStyles',
+      factory: prCommentComposer.createPrCommentComposerStyles
     }
   ]
 }
@@ -558,5 +570,13 @@ describe('themed style factories', () => {
     expect(triage.triageArea.gap).toBeDefined()
     const conflict = createPrConflictStyles(darkColors)
     expect(conflict.meta.color).toBe(darkColors.textSecondary)
+
+    const { createPrCommentsStyles } = await import('../components/pr-sidebar/pr-comments-styles')
+    const { createPrCommentComposerStyles } =
+      await import('../components/pr-sidebar/pr-comment-composer-styles')
+    const comments = createPrCommentsStyles(darkColors)
+    expect(comments.card.backgroundColor).toBe(darkColors.bgPanel)
+    const composer = createPrCommentComposerStyles(darkColors)
+    expect(composer.input.color).toBe(darkColors.textPrimary)
   })
 })

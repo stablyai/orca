@@ -142,7 +142,7 @@ export function PRChecksSection({ checks, client, worktreeId, prRepo, actions, t
           <Text
             style={[
               styles.summaryLabel,
-              { color: statusColor(checkOutcomeToken(summary.outcome)) }
+              { color: statusColor(checkOutcomeToken(summary.outcome), colors) }
             ]}
           >
             {summary.label}
@@ -210,7 +210,7 @@ export function PRChecksSection({ checks, client, worktreeId, prRepo, actions, t
               accessibilityLabel={`${check.name} check details`}
             >
               <Chevron size={14} color={colors.textSecondary} strokeWidth={2.2} />
-              <View style={[styles.statusDot, { backgroundColor: statusColor(token) }]} />
+              <View style={[styles.statusDot, { backgroundColor: statusColor(token, colors) }]} />
               <View style={styles.rowMain}>
                 <Text style={styles.rowTitle} numberOfLines={1}>
                   {check.name}
@@ -218,7 +218,10 @@ export function PRChecksSection({ checks, client, worktreeId, prRepo, actions, t
               </View>
               {/* Status word + open-on-host icon (desktop ChecksList row), so the
                   outcome reads without expanding. */}
-              <Text style={[styles.rowStatus, { color: statusColor(token) }]} numberOfLines={1}>
+              <Text
+                style={[styles.rowStatus, { color: statusColor(token, colors) }]}
+                numberOfLines={1}
+              >
                 {checkStatusLabel(check)}
               </Text>
               {url ? (

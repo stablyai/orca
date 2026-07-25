@@ -25,8 +25,8 @@ import {
   isResolvedPRCommentGroup,
   type PRCommentGroup
 } from './pr-comment-groups'
-import { prCommentsStyles as styles } from './pr-comments-styles'
 import { useTheme, useThemedStyles } from '../../theme/theme-context'
+import { createPrCommentsStyles } from './pr-comments-styles'
 import { createMobilePrSidebarStyles } from './mobile-pr-sidebar-styles'
 
 type Props = {
@@ -60,6 +60,7 @@ export function PRCommentsSection({
   botAuthorOverrides
 }: Props) {
   const { colors } = useTheme()
+  const styles = useThemedStyles(createPrCommentsStyles)
   // details is null while phase 2 (the heavy comments/body payload) is still loading.
   // A synthetic placeholder means phase 2 failed — do not paint that as empty success.
   const loadingDetails = details === null
@@ -234,6 +235,7 @@ function CommentGroupView({
 }) {
   const { colors } = useTheme()
   const shared = useThemedStyles(createMobilePrSidebarStyles)
+  const styles = useThemedStyles(createPrCommentsStyles)
   const [expanded, setExpanded] = useState(false)
   const cards =
     group.kind === 'thread'

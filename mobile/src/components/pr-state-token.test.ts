@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 import { prStateToken } from './pr-state-token'
 import { prStateBadge } from './pr-sidebar/pr-checks-presentation'
 import { statusColor } from './pr-sidebar/pr-sidebar-status-color'
-import { colors } from '../theme/mobile-theme'
+import { darkColors as colors } from '../theme/mobile-theme'
 
 describe('prStateToken', () => {
   it('maps PR states to the desktop-matching status palette', () => {
@@ -19,10 +19,10 @@ describe('prStateToken', () => {
   })
 
   it('resolves to the expected concrete colors', () => {
-    expect(statusColor(prStateToken('merged'))).toBe(colors.statusPurple)
-    expect(statusColor(prStateToken('open'))).toBe(colors.statusGreen)
-    expect(statusColor(prStateToken('closed'))).toBe(colors.statusRed)
-    expect(statusColor(prStateToken('draft'))).toBe(colors.textSecondary)
+    expect(statusColor(prStateToken('merged'), colors)).toBe(colors.statusPurple)
+    expect(statusColor(prStateToken('open'), colors)).toBe(colors.statusGreen)
+    expect(statusColor(prStateToken('closed'), colors)).toBe(colors.statusRed)
+    expect(statusColor(prStateToken('draft'), colors)).toBe(colors.textSecondary)
   })
 })
 
@@ -32,8 +32,8 @@ describe('workspace-list and PR-sidebar palette agreement', () => {
   it.each(['open', 'closed', 'merged', 'draft'] as const)(
     'sidebar badge and list badge agree for %s',
     (state) => {
-      const listColor = statusColor(prStateToken(state))
-      const sidebarColor = statusColor(prStateBadge(state).token)
+      const listColor = statusColor(prStateToken(state), colors)
+      const sidebarColor = statusColor(prStateBadge(state).token, colors)
       expect(sidebarColor).toBe(listColor)
     }
   )

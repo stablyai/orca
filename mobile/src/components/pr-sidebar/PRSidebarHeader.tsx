@@ -9,7 +9,7 @@ import { canEditPRTitle } from '../../session/pr-title-edit'
 import { openMobilePrUrl } from '../MobilePrComposeSheet'
 import { useTheme, useThemedStyles } from '../../theme/theme-context'
 import { createMobilePrSidebarStyles } from './mobile-pr-sidebar-styles'
-import { prCommentComposerStyles as composerStyles } from './pr-comment-composer-styles'
+import { createPrCommentComposerStyles } from './pr-comment-composer-styles'
 
 type Props = {
   pr: PRInfo
@@ -35,7 +35,7 @@ export function PRSidebarHeader({
   const styles = useThemedStyles(createMobilePrSidebarStyles)
   const item = details?.item
   const badge = prStateBadge(pr.state)
-  const badgeColor = statusColor(badge.token)
+  const badgeColor = statusColor(badge.token, colors)
   const title = item?.title ?? pr.title
   const author = item?.author ?? null
   const baseRef = item?.baseRefName ?? null
@@ -118,6 +118,7 @@ function PRTitle({
 }) {
   const { colors } = useTheme()
   const styles = useThemedStyles(createMobilePrSidebarStyles)
+  const composerStyles = useThemedStyles(createPrCommentComposerStyles)
   const [editing, setEditing] = useState(false)
   const [draft, setDraft] = useState(title)
 

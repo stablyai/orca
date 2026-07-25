@@ -57,8 +57,12 @@ export function MobileSourceControlPrChip({ summary, onPress }: Props) {
       ) : (
         <>
           <Text style={hubStyles.chipNumber}>#{summary.number}</Text>
-          <View style={[hubStyles.statePill, { borderColor: statusColor(summary.stateToken) }]}>
-            <Text style={[hubStyles.statePillText, { color: statusColor(summary.stateToken) }]}>
+          <View
+            style={[hubStyles.statePill, { borderColor: statusColor(summary.stateToken, colors) }]}
+          >
+            <Text
+              style={[hubStyles.statePillText, { color: statusColor(summary.stateToken, colors) }]}
+            >
               {summary.stateLabel}
             </Text>
           </View>
@@ -78,8 +82,9 @@ export function MobileSourceControlPrChip({ summary, onPress }: Props) {
 }
 
 function ChipRollup({ rollup }: { rollup: MobilePrChipRollup }) {
+  const { colors } = useTheme()
   const hubStyles = useThemedStyles(createMobileSourceControlHubStyles)
-  const color = statusColor(rollup.token)
+  const color = statusColor(rollup.token, colors)
   return (
     <View style={hubStyles.rollup}>
       <RollupIcon kind={rollup.kind} color={color} />

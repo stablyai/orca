@@ -125,8 +125,8 @@ function WorktreeListRowComponent<T extends WorktreeListRowItem>({
           </Text>
           {item.linkedPR && (
             <View style={styles.prBadge}>
-              <GitPullRequest size={10} color={prStateColor(item.linkedPR.state)} />
-              <Text style={[styles.prNumber, { color: prStateColor(item.linkedPR.state) }]}>
+              <GitPullRequest size={10} color={prStateColor(item.linkedPR.state, colors)} />
+              <Text style={[styles.prNumber, { color: prStateColor(item.linkedPR.state, colors) }]}>
                 #{item.linkedPR.number}
               </Text>
             </View>

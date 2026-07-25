@@ -8,8 +8,8 @@ import { statusColor } from './pr-sidebar/pr-sidebar-status-color'
 // PR chip color by state, resolved through the shared prStateToken so it always
 // matches the PR sidebar's state badge: merged = purple, open = green, closed =
 // red, draft/unknown = muted.
-export function prStateColor(state: string): string {
-  return statusColor(prStateToken(state))
+export function prStateColor(state: string, colors: ThemeColors): string {
+  return statusColor(prStateToken(state), colors)
 }
 
 type Props = {
