@@ -126,6 +126,7 @@ async function loadThemedFactories(): Promise<readonly StyleFactory[]> {
     import('../components/WorkspaceDetailPlaceholder'),
     import('../components/NewWorkspaceFab'),
     import('../components/AccountUsage'),
+    import('../components/CodexResetCreditAction'),
     // App screens pull expo modules that vitest cannot load; their pure style
     // module (voice-settings-styles) and co-located component factories below
     // cover batch 3. Other app factories are identity-checked via git diff -w.
@@ -195,6 +196,7 @@ async function loadThemedFactories(): Promise<readonly StyleFactory[]> {
     placeholder,
     fab,
     accountUsage,
+    codexResetCreditAction,
     voiceSettings,
     connectionLog,
     voiceModelList,
@@ -273,6 +275,10 @@ async function loadThemedFactories(): Promise<readonly StyleFactory[]> {
     },
     { name: 'createNewWorkspaceFabStyles', factory: fab.createNewWorkspaceFabStyles },
     { name: 'createAccountUsageStyles', factory: accountUsage.createAccountUsageStyles },
+    {
+      name: 'createCodexResetCreditActionStyles',
+      factory: codexResetCreditAction.createCodexResetCreditActionStyles
+    },
     { name: 'createVoiceSettingsStyles', factory: voiceSettings.createVoiceSettingsStyles },
     { name: 'createConnectionLogStyles', factory: connectionLog.createConnectionLogStyles },
     { name: 'createVoiceModelListStyles', factory: voiceModelList.createVoiceModelListStyles },

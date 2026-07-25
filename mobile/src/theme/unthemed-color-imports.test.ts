@@ -5,9 +5,7 @@ import { describe, expect, it } from 'vitest'
 // RATCHET — this list may only SHRINK. Each entry still imports the frozen dark `colors`
 // alias and therefore will not follow the app theme. Delete entries as you convert;
 // never add one. Empty list == migration complete.
-const UNTHEMED_COLOR_IMPORTERS: readonly string[] = [
-  'src/components/CodexResetCreditAction.tsx',
-]
+const UNTHEMED_COLOR_IMPORTERS: readonly string[] = []
 
 const MOBILE_ROOT = path.resolve(__dirname, '../..')
 // Matches any relative path ending in mobile-theme (…/theme/mobile-theme or ./mobile-theme).
