@@ -263,6 +263,11 @@ const scheduleTerminalWebglAtlasRecovery = vi.fn()
 let mockStoreState: StoreState
 let transportFactoryQueue: MockTransport[] = []
 let createdTransportOptions: Record<string, unknown>[] = []
+// Why: transports handed to a live pane connection this test. On teardown we
+// point each one's getPtyId at null so any foreground-tracker read this test
+// scheduled on real timers (undisposed pane) bails on its ptyId guard instead
+// of landing on the next test's clearAgentLaunchConfig mock and flaking it.
+let connectedMockTransports: MockTransport[] = []
 let storeSubscribers: ((state: StoreState) => void)[] = []
 
 vi.mock('@/runtime/sync-runtime-graph', () => ({
@@ -339,6 +344,7 @@ vi.mock('./pty-transport', () => ({
     if (!nextTransport) {
       throw new Error('No mock transport queued')
     }
+    connectedMockTransports.push(nextTransport)
     return nextTransport
   })
 }))
@@ -351,6 +357,7 @@ vi.mock('./remote-runtime-pty-transport', () => ({
       if (!nextTransport) {
         throw new Error('No mock transport queued')
       }
+      connectedMockTransports.push(nextTransport)
       return nextTransport
     }
   )
@@ -770,6 +777,7 @@ describe('connectPanePty', () => {
     vi.clearAllMocks()
     transportFactoryQueue = []
     createdTransportOptions = []
+    connectedMockTransports = []
     storeSubscribers = []
     mockStoreState = {
       activeWorktreeId: 'wt-1',
@@ -933,6 +941,14 @@ describe('connectPanePty', () => {
     // Why: drain in-flight foreground-confirm microtasks while this test still owns the store mock, so its async fallout can't leak into (and flake) the next test.
     await flushAsyncTicks()
     vi.useRealTimers()
+    // Why: a real-timer test that connected a pane without disposing it leaves the
+    // foreground tracker's ~350ms confirmation setTimeout pending. Because
+    // useAppStore.getState() always returns the *current* mockStoreState, that
+    // stale callback would otherwise run clearAgentLaunchConfig on a later test's
+    // mock. Nulling getPtyId makes the tracker read bail on its ptyId guard.
+    for (const transport of connectedMockTransports) {
+      transport.getPtyId.mockReturnValue(null)
+    }
     if (originalRequestAnimationFrame) {
       globalThis.requestAnimationFrame = originalRequestAnimationFrame
     } else {
