@@ -48,6 +48,58 @@ describe('extractClosedTerminalAgentResume', () => {
     })
   })
 
+  it('attaches per-launch config from the live registry (not only sleeping records)', () => {
+    const launchConfig = { agentArgs: '--model o3', agentEnv: { FOO: '1' } }
+    const result = extractClosedTerminalAgentResume({
+      tabId: 'tab-1',
+      agentStatusByPaneKey: {
+        'tab-1:leaf': liveEntry({
+          paneKey: 'tab-1:leaf',
+          agentType: 'claude',
+          providerSession: { key: 'session_id', id: 'live-sess' }
+        })
+      },
+      sleepingAgentSessionsByPaneKey: {},
+      agentLaunchConfigByPaneKey: {
+        'tab-1:leaf': {
+          launchConfig,
+          identity: { agentType: 'claude' }
+        }
+      }
+    })
+
+    expect(result).toEqual({
+      agent: 'claude',
+      providerSession: { key: 'session_id', id: 'live-sess' },
+      launchConfig
+    })
+  })
+
+  it('ignores registry launch config when agent type does not match the live row', () => {
+    const result = extractClosedTerminalAgentResume({
+      tabId: 'tab-1',
+      agentStatusByPaneKey: {
+        'tab-1:leaf': liveEntry({
+          paneKey: 'tab-1:leaf',
+          agentType: 'claude',
+          providerSession: { key: 'session_id', id: 'live-sess' }
+        })
+      },
+      sleepingAgentSessionsByPaneKey: {},
+      agentLaunchConfigByPaneKey: {
+        'tab-1:leaf': {
+          launchConfig: { agentArgs: '--wrong', agentEnv: {} },
+          identity: { agentType: 'codex' }
+        }
+      }
+    })
+
+    expect(result).toEqual({
+      agent: 'claude',
+      providerSession: { key: 'session_id', id: 'live-sess' }
+    })
+  })
+
   it('falls back to a sleeping record when no live status remains', () => {
     const sleeping: SleepingAgentSessionRecord = {
       paneKey: 'tab-9:leaf',

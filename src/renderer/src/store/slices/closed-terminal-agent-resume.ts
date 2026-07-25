@@ -14,6 +14,11 @@ export type ClosedTerminalAgentResume = {
   launchConfig?: SleepingAgentLaunchConfig
 }
 
+type LaunchConfigRegistryLookup = {
+  launchConfig: SleepingAgentLaunchConfig
+  identity?: { agentType?: string }
+}
+
 /**
  * Prefer a live agent-status row for the closed tab; fall back to a sleeping
  * record still keyed to that tab (before close retirement clears it).
@@ -22,6 +27,8 @@ export function extractClosedTerminalAgentResume(args: {
   tabId: string
   agentStatusByPaneKey: Record<string, AgentStatusEntry> | undefined
   sleepingAgentSessionsByPaneKey: Record<string, SleepingAgentSessionRecord> | undefined
+  /** Why: live status rows do not carry per-launch args/env; the registry does. */
+  agentLaunchConfigByPaneKey?: Record<string, LaunchConfigRegistryLookup> | undefined
 }): ClosedTerminalAgentResume | null {
   const tabPrefix = `${args.tabId}:`
   let bestLive: ClosedTerminalAgentResume | null = null
@@ -31,7 +38,7 @@ export function extractClosedTerminalAgentResume(args: {
     if (!paneKey.startsWith(tabPrefix) && entry.tabId !== args.tabId) {
       continue
     }
-    const resume = resumeFromAgentStatusEntry(entry)
+    const resume = resumeFromAgentStatusEntry(entry, args.agentLaunchConfigByPaneKey?.[paneKey])
     if (!resume) {
       continue
     }
@@ -61,7 +68,10 @@ export function extractClosedTerminalAgentResume(args: {
   return null
 }
 
-function resumeFromAgentStatusEntry(entry: AgentStatusEntry): ClosedTerminalAgentResume | null {
+function resumeFromAgentStatusEntry(
+  entry: AgentStatusEntry,
+  registryEntry?: LaunchConfigRegistryLookup
+): ClosedTerminalAgentResume | null {
   const agent = entry.agentType
   if (!isResumableTuiAgent(agent) || !entry.providerSession) {
     return null
@@ -69,8 +79,15 @@ function resumeFromAgentStatusEntry(entry: AgentStatusEntry): ClosedTerminalAgen
   if (!getAgentResumeArgv(agent, entry.providerSession)) {
     return null
   }
+  // Why: keep per-launch args/env that sleeping-record resume already preserves (#10386).
+  const launchConfig =
+    registryEntry?.launchConfig &&
+    (registryEntry.identity?.agentType === undefined || registryEntry.identity.agentType === agent)
+      ? registryEntry.launchConfig
+      : undefined
   return {
     agent,
-    providerSession: entry.providerSession
+    providerSession: entry.providerSession,
+    ...(launchConfig ? { launchConfig } : {})
   }
 }
