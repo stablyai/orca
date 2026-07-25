@@ -41,7 +41,8 @@ export function getHeaderRowRenderedTop(args: HeaderRowPositionArgs): number {
     return args.dragAnchorTop + args.offsetY
   }
   if (args.isPinned) {
-    return args.scrollOffset + args.pinnedTopOffsetPx
+    // Why: sticky headers still need preview/pointer deltas during project drag.
+    return args.scrollOffset + args.pinnedTopOffsetPx + args.offsetY
   }
   return args.virtualStart + args.headerTopSpacingPx + args.offsetY
 }
