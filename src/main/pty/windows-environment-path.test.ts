@@ -94,6 +94,54 @@ describe('readPersistedWindowsPathSegments', () => {
       Object.defineProperty(process, 'platform', { configurable: true, value: originalPlatform })
     }
   })
+
+  it('keeps the last good segments when a forced read hits a blocked registry', () => {
+    const originalPlatform = process.platform
+    Object.defineProperty(process, 'platform', { configurable: true, value: 'win32' })
+    defaultExecFileSyncMock
+      .mockReturnValueOnce('    Path    REG_SZ    C:\\Machine\r\n')
+      .mockReturnValueOnce('    Path    REG_SZ    C:\\User\r\n')
+      .mockImplementation(() => {
+        throw new Error('ERROR: Access is denied.')
+      })
+    __resetPersistedWindowsPathCacheForTests()
+
+    try {
+      expect(readPersistedWindowsPathSegments()).toEqual(['C:\\Machine', 'C:\\User'])
+      expect(readPersistedWindowsPathSegments({ forceRefresh: true })).toEqual([
+        'C:\\Machine',
+        'C:\\User'
+      ])
+      expect(readPersistedWindowsPathSegments()).toEqual(['C:\\Machine', 'C:\\User'])
+    } finally {
+      __resetPersistedWindowsPathCacheForTests()
+      defaultExecFileSyncMock.mockReset()
+      Object.defineProperty(process, 'platform', { configurable: true, value: originalPlatform })
+    }
+  })
+
+  it('still clears the cache when the registry reports an empty Path', () => {
+    const originalPlatform = process.platform
+    Object.defineProperty(process, 'platform', { configurable: true, value: 'win32' })
+    defaultExecFileSyncMock
+      .mockReturnValueOnce('    Path    REG_SZ    C:\\Machine\r\n')
+      .mockReturnValueOnce('    Path    REG_SZ    C:\\User\r\n')
+      .mockReturnValue('    Path    REG_SZ    \r\n')
+    __resetPersistedWindowsPathCacheForTests()
+
+    try {
+      expect(readPersistedWindowsPathSegments()).toEqual(['C:\\Machine', 'C:\\User'])
+
+      // Why: an emptied persisted Path is a successful read, not a blocked one —
+      // it must not be mistaken for the failure case and served from the cache.
+      expect(readPersistedWindowsPathSegments({ forceRefresh: true })).toEqual([])
+      expect(readPersistedWindowsPathSegments()).toEqual([])
+    } finally {
+      __resetPersistedWindowsPathCacheForTests()
+      defaultExecFileSyncMock.mockReset()
+      Object.defineProperty(process, 'platform', { configurable: true, value: originalPlatform })
+    }
+  })
 })
 
 describe('mergePersistedWindowsPath', () => {

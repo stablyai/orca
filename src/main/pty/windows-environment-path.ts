@@ -77,6 +77,7 @@ export function readPersistedWindowsPathSegments(options: ReadWindowsPathOptions
   const env = options.env ?? process.env
   const pathDelimiter = getPathDelimiter(platform)
   const segments: string[] = []
+  let failedReads = 0
 
   for (const [key, valueName] of WINDOWS_PATH_REGISTRY_KEYS) {
     try {
@@ -93,20 +94,29 @@ export function readPersistedWindowsPathSegments(options: ReadWindowsPathOptions
     } catch {
       // Registry access can fail in stripped test containers or remote-like
       // Windows contexts. Existing PATH remains the fallback in those cases.
+      failedReads += 1
     }
   }
 
-  if (useProductionCache) {
-    // Why: local PTY spawn is a hot path on Windows, and each uncached read
-    // runs two synchronous `reg.exe query` subprocesses. A short TTL keeps
-    // terminal bursts cheap while still picking up newly installed CLIs soon.
-    persistedWindowsPathCache = {
-      readAt: now,
-      segments: [...segments]
-    }
+  if (!useProductionCache) {
+    return segments
   }
 
-  return segments
+  // Why: a fully blocked `reg.exe` must not evict a known-good Path on the forced
+  // path; key off thrown reads so a genuinely emptied Path still clears the cache.
+  const kept =
+    failedReads === WINDOWS_PATH_REGISTRY_KEYS.length && persistedWindowsPathCache
+      ? persistedWindowsPathCache.segments
+      : segments
+  // Why: local PTY spawn is a hot path on Windows, and each uncached read
+  // runs two synchronous `reg.exe query` subprocesses. A short TTL keeps
+  // terminal bursts cheap while still picking up newly installed CLIs soon.
+  persistedWindowsPathCache = {
+    readAt: now,
+    segments: [...kept]
+  }
+
+  return [...kept]
 }
 
 export function __resetPersistedWindowsPathCacheForTests(): void {
