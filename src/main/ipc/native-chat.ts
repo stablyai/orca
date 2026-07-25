@@ -1,4 +1,4 @@
-import { ipcMain, type IpcMainEvent, type WebContents } from 'electron'
+import { ipcMain, webContents, type IpcMainEvent, type WebContents } from 'electron'
 import type {
   AgentType,
   NativeChatMessage,
@@ -14,6 +14,10 @@ import {
   readNativeChatSessionTail,
   subscribeNativeChatSession
 } from '../native-chat/source-dispatch'
+import {
+  createAcpPermissionRegistry,
+  type AcpPermissionPrompt
+} from '../native-chat/acp-permission-registry'
 
 // Re-export so existing test imports of `clearNativeChatTranscriptCache` from
 // this module keep working after the cache moved to transcript-read-cache.ts.
@@ -84,6 +88,19 @@ type LiveSubscription = {
   subscription: NativeChatTranscriptSubscription
 }
 
+// An ACP agent blocks its turn until the client answers a permission request, so
+// the registry guarantees every request reaches an operator choice or a cancel —
+// including on teardown paths, where a dropped request would hang the agent.
+const acpPermissions = createAcpPermissionRegistry((senderId, prompt) => {
+  const sender = webContents.fromId(senderId)
+  if (sender == null || sender.isDestroyed()) {
+    throw new Error('renderer unavailable for ACP permission prompt')
+  }
+  sender.send('nativeChat:acpPermissionRequested', prompt)
+})
+
+export type { AcpPermissionPrompt }
+
 // Why: live subscriptions are keyed by (webContents.id, subscriptionId) so the
 // same renderer can watch several panes, and a destroyed window tears down all
 // of its watchers — strict teardown to avoid fd leaks (plan U4 risk).
@@ -105,6 +122,7 @@ function teardownSubscription(senderId: number, subscriptionId: string): void {
     return
   }
   live.subscription.unsubscribe()
+  acpPermissions.cancelSubscription(senderId, subscriptionId)
   bySubId.delete(subscriptionId)
   if (bySubId.size === 0) {
     liveSubscriptions.delete(senderId)
@@ -122,6 +140,7 @@ function teardownAllForSender(senderId: number): void {
   for (const live of bySubId.values()) {
     live.subscription.unsubscribe()
   }
+  acpPermissions.cancelSender(senderId)
   liveSubscriptions.delete(senderId)
 }
 
@@ -131,7 +150,12 @@ function registerSenderCleanup(sender: WebContents): void {
   }
   senderCleanupRegistered.add(sender.id)
   // Strict teardown: a closed/reloaded window releases every watcher it owns.
-  sender.once('destroyed', () => teardownAllForSender(sender.id))
+  sender.once('destroyed', () => {
+    teardownAllForSender(sender.id)
+    // Belt and braces: a request can be outstanding before any subscription is
+    // stored in the live map.
+    acpPermissions.cancelSender(sender.id)
+  })
 }
 
 function beginPendingSubscription(senderId: number, subscriptionId: string): symbol {
@@ -173,6 +197,8 @@ async function handleSubscribe(event: IpcMainEvent, args: NativeChatSubscribeArg
       sessionId,
       transcriptPath,
       initialLimit: limit,
+      onPermissionRequest: (params) =>
+        acpPermissions.request({ senderId: sender.id, subscriptionId, params }),
       onLog: (line) => {
         // ACP agents report startup and errors on stderr; keep it in the main
         // log rather than the renderer, which only shows conversation content.
@@ -259,6 +285,10 @@ async function handleSubscribe(event: IpcMainEvent, args: NativeChatSubscribeArg
   }
 }
 
+export function _getAcpPendingPermissionCountForTest(): number {
+  return acpPermissions.pendingCount
+}
+
 /** Test-only: drop all live and pending transcript subscriptions between runs. */
 export function clearNativeChatSubscriptions(): void {
   const senderIds = new Set([...liveSubscriptions.keys(), ...pendingSubscriptions.keys()])
@@ -291,4 +321,11 @@ export function registerNativeChatHandlers(): void {
   ipcMain.on('nativeChat:unsubscribe', (event, args: { subscriptionId: string }) => {
     teardownSubscription(event.sender.id, args.subscriptionId)
   })
+  // `optionId: null` is the operator dismissing the card — an explicit cancel,
+  // never an implicit allow.
+  ipcMain.handle(
+    'nativeChat:acpPermissionRespond',
+    (_event, args: { requestId: string; optionId: string | null }) =>
+      acpPermissions.respond(args.requestId, args.optionId)
+  )
 }

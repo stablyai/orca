@@ -203,6 +203,7 @@ import type { AiVaultListArgs, AiVaultSubagentListArgs } from '../shared/ai-vaul
 import type { AiVaultPrepareSessionResumeArgs } from '../shared/ai-vault-resume-preparation'
 import type { AgentType } from '../shared/native-chat-types'
 import type {
+  NativeChatAcpPermissionPrompt,
   NativeChatAppendedPayload,
   NativeChatReadSessionResult,
   NativeChatSubscriptionFrame
@@ -4106,7 +4107,21 @@ const api = {
         ipcRenderer.removeListener('nativeChat:appended', listener)
         ipcRenderer.send('nativeChat:unsubscribe', { subscriptionId: args.subscriptionId })
       }
-    }
+    },
+    onAcpPermissionRequested: (
+      listener: (prompt: NativeChatAcpPermissionPrompt) => void
+    ): (() => void) => {
+      const handler = (
+        _event: Electron.IpcRendererEvent,
+        prompt: NativeChatAcpPermissionPrompt
+      ) => listener(prompt)
+      ipcRenderer.on('nativeChat:acpPermissionRequested', handler)
+      return () => {
+        ipcRenderer.removeListener('nativeChat:acpPermissionRequested', handler)
+      }
+    },
+    respondAcpPermission: (requestId: string, optionId: string | null): Promise<boolean> =>
+      ipcRenderer.invoke('nativeChat:acpPermissionRespond', { requestId, optionId })
   },
 
   runtime: {
