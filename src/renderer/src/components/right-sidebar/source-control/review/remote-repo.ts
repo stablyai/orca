@@ -127,10 +127,11 @@ function parseAzureDevOpsRemote(
     const parts = cleanPath(scpLike[2])?.split('/') ?? []
     if (parts.length >= 4 && parts[0].toLowerCase() === 'v3') {
       const [, organization, project, repository] = parts
+      const azureScheme = resolveGitHostWebScheme('dev.azure.com', schemes)
       return {
         provider: 'azure-devops',
         path: `${organization}/${project}/_git/${repository}`,
-        webBaseUrl: `https://dev.azure.com/${encodePath(organization)}/${encodeURIComponent(project)}/_git/${encodeURIComponent(repository)}`
+        webBaseUrl: `${azureScheme}://dev.azure.com/${encodePath(organization)}/${encodeURIComponent(project)}/_git/${encodeURIComponent(repository)}`
       }
     }
   }
@@ -145,10 +146,11 @@ function parseAzureDevOpsRemote(
     const parts = cleanPath(url.pathname)?.split('/') ?? []
     if (host === 'ssh.dev.azure.com' && parts.length >= 4 && parts[0].toLowerCase() === 'v3') {
       const [, organization, project, repository] = parts
+      const azureScheme = resolveGitHostWebScheme('dev.azure.com', schemes)
       return {
         provider: 'azure-devops',
         path: `${organization}/${project}/_git/${repository}`,
-        webBaseUrl: `https://dev.azure.com/${encodePath(organization)}/${encodeURIComponent(project)}/_git/${encodeURIComponent(repository)}`
+        webBaseUrl: `${azureScheme}://dev.azure.com/${encodePath(organization)}/${encodeURIComponent(project)}/_git/${encodeURIComponent(repository)}`
       }
     }
 

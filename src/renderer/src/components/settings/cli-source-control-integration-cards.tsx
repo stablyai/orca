@@ -203,7 +203,7 @@ function GitHostWebSchemesField(): React.JSX.Element {
 
   return (
     <div className="space-y-1.5">
-      <Label className="text-xs font-medium">
+      <Label htmlFor="git-host-web-schemes" className="text-xs font-medium">
         {translate(
           'auto.components.settings.cli.source.control.integration.cards.git_host_web_schemes_label',
           'Self-hosted web URL schemes'
@@ -216,6 +216,7 @@ function GitHostWebSchemesField(): React.JSX.Element {
         )}
       </p>
       <textarea
+        id="git-host-web-schemes"
         value={draft}
         rows={3}
         spellCheck={false}
