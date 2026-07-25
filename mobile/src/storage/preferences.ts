@@ -228,7 +228,12 @@ export async function loadAppTheme(): Promise<MobileAppTheme> {
 }
 
 export async function saveAppTheme(theme: MobileAppTheme): Promise<void> {
-  await AsyncStorage.setItem(APP_THEME_KEY, theme)
+  try {
+    await AsyncStorage.setItem(APP_THEME_KEY, theme)
+  } catch {
+    // In-memory preference is already updated optimistically by the caller;
+    // a failed persist must not surface as an unhandled rejection.
+  }
 }
 
 function stringArray(value: unknown): string[] {
