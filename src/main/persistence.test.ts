@@ -11045,6 +11045,80 @@ describe('Store host-partitioned workspace sessions', () => {
     expect(store.getWorkspaceSession('local').terminalArchiveHintsByPaneKey).toEqual({})
   })
 
+  it.each(['local', 'ssh:ssh-1'] as const)(
+    'preserves the full main-owned hint set when an %s renderer replay omits it',
+    async (hostId) => {
+      const store = await createStore()
+      const paneKey = `tab-1:${TEST_LEAF_1}`
+      const hints = {
+        [paneKey]: { launchAgent: 'codex' as const, startedAt: 10 }
+      }
+      store.setWorkspaceSession(
+        {
+          ...makeBoundHostSession(hostId === 'local' ? 'local-pty' : 'ssh:ssh-1@@remote-pty'),
+          terminalArchiveHintsByPaneKey: hints
+        },
+        hostId
+      )
+      const rendererReplay = structuredClone(store.getWorkspaceSession(hostId))
+      delete rendererReplay.terminalArchiveHintsByPaneKey
+
+      store.setWorkspaceSession(rendererReplay, hostId)
+
+      expect(store.getWorkspaceSession(hostId).terminalArchiveHintsByPaneKey).toEqual(hints)
+    }
+  )
+
+  it('does not revive a retired hint when an old renderer snapshot replays', async () => {
+    const store = await createStore()
+    const worktreeId = 'repo-1::/worktree'
+    const retiredPaneKey = `tab-1:${TEST_LEAF_1}`
+    const retainedPaneKey = `tab-2:${TEST_LEAF_2}`
+    const initial = makeBoundHostSession('pty-1')
+    initial.tabsByWorktree[worktreeId] = [
+      initial.tabsByWorktree[worktreeId][0]!,
+      {
+        ...initial.tabsByWorktree[worktreeId][0]!,
+        id: 'tab-2',
+        ptyId: 'pty-2',
+        sortOrder: 1
+      }
+    ]
+    initial.terminalLayoutsByTabId['tab-2'] = {
+      root: { type: 'leaf', leafId: TEST_LEAF_2 },
+      activeLeafId: TEST_LEAF_2,
+      expandedLeafId: null,
+      ptyIdsByLeafId: { [TEST_LEAF_2]: 'pty-2' }
+    }
+    initial.terminalArchiveHintsByPaneKey = {
+      [retiredPaneKey]: { launchAgent: 'codex', startedAt: 10 },
+      [retainedPaneKey]: { cwd: '/worktree' }
+    }
+    store.setWorkspaceSession(initial)
+    const oldRendererSnapshot = structuredClone(store.getWorkspaceSession())
+    delete oldRendererSnapshot.terminalArchiveHintsByPaneKey
+
+    expect(
+      store.retireArchivedTerminalTabAndFlush({
+        worktreeId,
+        tabId: 'tab-1',
+        executionHostId: 'local'
+      }).closed
+    ).toBe(true)
+    expect(store.getWorkspaceSession().terminalArchiveHintsByPaneKey).toEqual({
+      [retainedPaneKey]: { cwd: '/worktree' }
+    })
+
+    store.setWorkspaceSession(oldRendererSnapshot)
+
+    expect(store.getWorkspaceSession().terminalArchiveHintsByPaneKey).toEqual({
+      [retainedPaneKey]: { cwd: '/worktree' }
+    })
+    expect(
+      store.getWorkspaceSession().terminalArchiveHintsByPaneKey?.[retiredPaneKey]
+    ).toBeUndefined()
+  })
+
   it.each([
     ['local', {}, 'local'],
     ['SSH', { connectionId: 'ssh-1' }, 'ssh:ssh-1'],

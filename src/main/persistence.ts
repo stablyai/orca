@@ -5906,11 +5906,15 @@ export class Store {
 
   /** Persist a non-'local' host partition; remote hosts skip setLocalWorkspaceSession's local-daemon PTY-binding race guards. */
   private setHostWorkspaceSession(hostId: ExecutionHostId, session: WorkspaceSessionState): void {
+    const prior = this.state.workspaceSessionsByHostId?.[hostId]
     // Why: each partition owns its topology fence; renderer writes omit it and must rebase locally.
-    session = sanitizeWorkspaceSessionTerminalRetirements(
-      session,
-      this.state.workspaceSessionsByHostId?.[hostId]
-    )
+    session = sanitizeWorkspaceSessionTerminalRetirements(session, prior)
+    const incoming = session.terminalArchiveHintsByPaneKey ?? {}
+    const incomingHasAnyHint = Object.keys(incoming).length > 0
+    if (!incomingHasAnyHint && prior?.terminalArchiveHintsByPaneKey) {
+      // Why: host-observed hints stay main-owned when a renderer session replay omits them.
+      session.terminalArchiveHintsByPaneKey = prior.terminalArchiveHintsByPaneKey
+    }
     const pruned = pruneWorkspaceSessionBrowserHistory(
       pruneLocalTerminalScrollbackBuffers(session, this.state.repos)
     )
@@ -6061,6 +6065,12 @@ export class Store {
       this.terminalScrollbackSnapshotStorage,
       this.getTerminalScrollbackRefsOutsideLocalSession()
     )
+    const incoming = session.terminalArchiveHintsByPaneKey ?? {}
+    const incomingHasAnyHint = Object.keys(incoming).length > 0
+    if (!incomingHasAnyHint && prior?.terminalArchiveHintsByPaneKey) {
+      // Why: host-observed hints stay main-owned when a renderer session replay omits them.
+      session.terminalArchiveHintsByPaneKey = prior.terminalArchiveHintsByPaneKey
+    }
     this.state.workspaceSession = session
     this.scheduleSave()
   }
