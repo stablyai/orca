@@ -35,13 +35,6 @@ const UNTHEMED_COLOR_IMPORTERS: readonly string[] = [
   'src/components/pr-sidebar/pr-conflict-styles.ts',
   'src/components/pr-sidebar/pr-create-empty-state-styles.ts',
   'src/components/pr-sidebar/pr-sidebar-status-color.ts',
-  'src/files/MobileFileExplorerPanel.tsx',
-  'src/files/MobileFileMarkdownPreview.tsx',
-  'src/files/MobileFilePreviewBody.tsx',
-  'src/files/MobileFilePreviewScreen.tsx',
-  'src/files/mobile-file-explorer-row.tsx',
-  'src/files/mobile-file-explorer-styles.ts',
-  'src/files/mobile-file-preview-styles.ts',
   'src/terminal/terminal-webview-frame-styles.ts',
   'src/terminal/terminal-webview-html.ts',
   'src/terminal/terminal-webview-theme-injected.ts'

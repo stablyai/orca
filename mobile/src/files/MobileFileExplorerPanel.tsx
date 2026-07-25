@@ -20,7 +20,6 @@ import {
   type MobileDirEntry
 } from './file-tree'
 import type { RpcSuccess } from '../transport/types'
-import { colors } from '../theme/mobile-theme'
 import {
   beginDirectoryLoad,
   createDirectoryLoadRevisions,
@@ -33,7 +32,8 @@ import {
   isMobileMethodUnavailableError,
   type LegacyFilesListResult
 } from './file-list-fallback'
-import { fileExplorerStyles as styles } from './mobile-file-explorer-styles'
+import { useTheme, useThemedStyles } from '../theme/theme-context'
+import { createMobileFileExplorerStyles } from './mobile-file-explorer-styles'
 import { MobileFileExplorerRow } from './mobile-file-explorer-row'
 import { navigateToMobileFilePreview } from './mobile-file-preview-navigation'
 
@@ -44,6 +44,8 @@ export function MobileFileExplorerPanel(props: {
   embedded?: boolean
   onRequestClose?: () => void
 }) {
+  const { colors } = useTheme()
+  const styles = useThemedStyles(createMobileFileExplorerStyles)
   const { hostId, worktreeId, name, embedded, onRequestClose } = props
   const router = useRouter()
   const { client, state: connState } = useHostClient(hostId)

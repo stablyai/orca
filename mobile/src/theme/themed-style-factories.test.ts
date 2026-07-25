@@ -161,7 +161,9 @@ async function loadThemedFactories(): Promise<readonly StyleFactory[]> {
     import('../source-control/mobile-source-control-hub-styles'),
     import('../source-control/mobile-source-control-list-styles'),
     import('../source-control/mobile-source-control-diff-styles'),
-    import('../source-control/mobile-source-control-styles')
+    import('../source-control/mobile-source-control-styles'),
+    import('../files/mobile-file-explorer-styles'),
+    import('../files/mobile-file-preview-styles')
   ])
   const [
     bottomDrawer,
@@ -215,7 +217,9 @@ async function loadThemedFactories(): Promise<readonly StyleFactory[]> {
     scHub,
     scList,
     scDiff,
-    scStyles
+    scStyles,
+    fileExplorer,
+    filePreview
   ] = mods
   return [
     { name: 'createBottomDrawerStyles', factory: bottomDrawer.createBottomDrawerStyles },
@@ -356,6 +360,14 @@ async function loadThemedFactories(): Promise<readonly StyleFactory[]> {
     {
       name: 'createMobileSourceControlStyles',
       factory: scStyles.createMobileSourceControlStyles
+    },
+    {
+      name: 'createMobileFileExplorerStyles',
+      factory: fileExplorer.createMobileFileExplorerStyles
+    },
+    {
+      name: 'createMobileFilePreviewStyles',
+      factory: filePreview.createMobileFilePreviewStyles
     }
   ]
 }
@@ -510,5 +522,12 @@ describe('themed style factories', () => {
     expect(sc.container.backgroundColor).toBe(darkColors.bgBase)
     expect(sc.listContent.paddingBottom).toBe(136)
     expect(sc.stateTitle.color).toBe(darkColors.textPrimary)
+
+    const { createMobileFileExplorerStyles } = await import('../files/mobile-file-explorer-styles')
+    const { createMobileFilePreviewStyles } = await import('../files/mobile-file-preview-styles')
+    const explorer = createMobileFileExplorerStyles(darkColors)
+    expect(explorer.container.backgroundColor).toBe(darkColors.bgBase)
+    const preview = createMobileFilePreviewStyles(darkColors)
+    expect(preview.container.backgroundColor).toBe(darkColors.bgBase)
   })
 })
