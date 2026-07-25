@@ -235,6 +235,8 @@ export async function runPreflightCheck(
   }
 
   if (force) {
+    // Why: a WSL preflight probes the guest's PATH, so refreshing the host's
+    // persisted Path would spawn reg.exe for nothing.
     if (!getPreflightWslTarget(context)) {
       mergePersistedWindowsPath(process.env, { forceRefresh: true })
     }
