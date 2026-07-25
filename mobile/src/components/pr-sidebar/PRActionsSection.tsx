@@ -1,7 +1,6 @@
 import { useCallback, useState } from 'react'
 import { ActivityIndicator, Pressable, Text, View } from 'react-native'
 import { GitMerge, Link2Off } from 'lucide-react-native'
-import { colors } from '../../theme/mobile-theme'
 import type { GitHubPRMergeMethod, PRInfo } from '../../../../src/shared/types'
 import type { RpcClient } from '../../transport/rpc-client'
 import type { MobilePrActions } from '../../session/use-mobile-pr-actions'
@@ -9,7 +8,8 @@ import { unlinkMobilePr } from '../../source-control/mobile-pr-link'
 import { ConfirmModal } from '../ConfirmModal'
 import { canShowMobilePRAutoMergeControl } from './pr-auto-merge-availability'
 import { resolveMobilePrMergeMethod, resolvePrActionAvailability } from './pr-actions-state'
-import { prActionsStyles as styles } from './pr-actions-styles'
+import { useTheme, useThemedStyles } from '../../theme/theme-context'
+import { createPrActionsStyles } from './pr-actions-styles'
 
 type Props = {
   pr: PRInfo
@@ -27,6 +27,8 @@ type Confirm =
 // Merge primary; Close/Reopen + Unlink share one secondary row. No section title —
 // button labels are self-explanatory and a header wasted a full row on mobile.
 export function PRActionsSection({ pr, actions, client, worktreeId, onUnlinked }: Props) {
+  const { colors } = useTheme()
+  const styles = useThemedStyles(createPrActionsStyles)
   const [confirm, setConfirm] = useState<Confirm | null>(null)
   const [unlinking, setUnlinking] = useState(false)
   // Local unlink errors — unlink is not routed through the actions engine.

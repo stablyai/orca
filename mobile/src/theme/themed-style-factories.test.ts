@@ -168,7 +168,10 @@ async function loadThemedFactories(): Promise<readonly StyleFactory[]> {
     import('../components/pr-sidebar/pr-ai-triage-styles'),
     import('../components/pr-sidebar/pr-conflict-styles'),
     import('../components/pr-sidebar/pr-comments-styles'),
-    import('../components/pr-sidebar/pr-comment-composer-styles')
+    import('../components/pr-sidebar/pr-comment-composer-styles'),
+    import('../components/pr-sidebar/mobile-pr-compose-form-styles'),
+    import('../components/pr-sidebar/pr-actions-styles'),
+    import('../components/pr-sidebar/pr-create-empty-state-styles')
   ])
   const [
     bottomDrawer,
@@ -229,7 +232,10 @@ async function loadThemedFactories(): Promise<readonly StyleFactory[]> {
     prAiTriage,
     prConflict,
     prComments,
-    prCommentComposer
+    prCommentComposer,
+    prComposeForm,
+    prActions,
+    prCreateEmpty
   ] = mods
   return [
     { name: 'createBottomDrawerStyles', factory: bottomDrawer.createBottomDrawerStyles },
@@ -398,6 +404,18 @@ async function loadThemedFactories(): Promise<readonly StyleFactory[]> {
     {
       name: 'createPrCommentComposerStyles',
       factory: prCommentComposer.createPrCommentComposerStyles
+    },
+    {
+      name: 'createMobilePrComposeFormStyles',
+      factory: prComposeForm.createMobilePrComposeFormStyles
+    },
+    {
+      name: 'createPrActionsStyles',
+      factory: prActions.createPrActionsStyles
+    },
+    {
+      name: 'createPrCreateEmptyStateStyles',
+      factory: prCreateEmpty.createPrCreateEmptyStateStyles
     }
   ]
 }
@@ -578,5 +596,17 @@ describe('themed style factories', () => {
     expect(comments.card.backgroundColor).toBe(darkColors.bgPanel)
     const composer = createPrCommentComposerStyles(darkColors)
     expect(composer.input.color).toBe(darkColors.textPrimary)
+
+    const { createMobilePrComposeFormStyles } =
+      await import('../components/pr-sidebar/mobile-pr-compose-form-styles')
+    const { createPrActionsStyles } = await import('../components/pr-sidebar/pr-actions-styles')
+    const { createPrCreateEmptyStateStyles } =
+      await import('../components/pr-sidebar/pr-create-empty-state-styles')
+    const compose = createMobilePrComposeFormStyles(darkColors)
+    expect(compose.headingTitle.flex).toBe(1)
+    const actions = createPrActionsStyles(darkColors)
+    expect(actions.actionButton.backgroundColor).toBe(darkColors.bgRaised)
+    const empty = createPrCreateEmptyStateStyles(darkColors)
+    expect(empty.section.backgroundColor).toBe(darkColors.bgPanel)
   })
 })

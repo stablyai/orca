@@ -8,15 +8,6 @@ import { describe, expect, it } from 'vitest'
 const UNTHEMED_COLOR_IMPORTERS: readonly string[] = [
   'src/components/CodexResetCreditAction.tsx',
   'app/h/[hostId]/tasks.tsx',
-  'src/components/MobilePrBasePicker.tsx',
-  'src/components/pr-sidebar/MobileLinkPrForm.tsx',
-  'src/components/pr-sidebar/MobilePrComposeForm.tsx',
-  'src/components/pr-sidebar/MobilePrViewPanel.tsx',
-  'src/components/pr-sidebar/PRActionsSection.tsx',
-  'src/components/pr-sidebar/PrSidebarCreateEmptyState.tsx',
-  'src/components/pr-sidebar/mobile-pr-compose-form-styles.ts',
-  'src/components/pr-sidebar/pr-actions-styles.ts',
-  'src/components/pr-sidebar/pr-create-empty-state-styles.ts',
   'src/terminal/terminal-webview-frame-styles.ts',
   'src/terminal/terminal-webview-html.ts',
   'src/terminal/terminal-webview-theme-injected.ts'
