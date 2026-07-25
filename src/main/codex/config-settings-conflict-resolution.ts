@@ -1,4 +1,4 @@
-import type { CodexSettingsConflict } from './config-settings-baseline'
+import type { CodexSettingsBaseline, CodexSettingsConflict } from './config-settings-baseline'
 
 export type CodexSettingsConflictResolution =
   | { action: 'aligned' }
@@ -32,4 +32,51 @@ export function resolveUntrackedCodexSetting(
     return { action: 'preserve', conflict: { runtime, system } }
   }
   return { action: 'preserve', conflict: existingConflict }
+}
+
+export type CodexPromotedSettingValue = {
+  raw: string
+  multiline: boolean
+}
+
+export function collectCodexSettingPromotionChanges(context: {
+  keys: readonly string[]
+  baseline: CodexSettingsBaseline
+  runtimeValues: ReadonlyMap<string, CodexPromotedSettingValue>
+  systemValues: ReadonlyMap<string, CodexPromotedSettingValue>
+  updates: Map<string, string>
+  conflicts: Map<string, CodexSettingsConflict>
+  runtimeValuesToPreserve: Map<string, string | null>
+}): void {
+  for (const key of context.keys) {
+    const runtimeRaw = getComparableRaw(context.runtimeValues.get(key))
+    const systemRaw = getComparableRaw(context.systemValues.get(key))
+    if (runtimeRaw === undefined || systemRaw === undefined) {
+      continue
+    }
+
+    const existingConflict = context.baseline.conflicts.get(key)
+    if (existingConflict || !context.baseline.settings.has(key)) {
+      const resolution = resolveUntrackedCodexSetting(runtimeRaw, systemRaw, existingConflict)
+      if (resolution.action === 'promote-runtime') {
+        context.updates.set(key, resolution.raw)
+      } else if (resolution.action === 'preserve') {
+        context.conflicts.set(key, resolution.conflict)
+        context.runtimeValuesToPreserve.set(key, runtimeRaw)
+      }
+      continue
+    }
+
+    const baselineRaw = context.baseline.settings.get(key)
+    if (runtimeRaw !== null && runtimeRaw !== baselineRaw && systemRaw === baselineRaw) {
+      context.updates.set(key, runtimeRaw)
+    }
+  }
+}
+
+function getComparableRaw(value: CodexPromotedSettingValue | undefined): string | null | undefined {
+  if (!value) {
+    return null
+  }
+  return value.multiline ? undefined : value.raw
 }

@@ -30,6 +30,7 @@
     "../src/main/codex/codex-hook-identity.ts",
     "../src/main/codex/codex-hook-trust-grant.ts",
     "../src/main/codex/codex-managed-trust-reconciliation.ts",
+    "../src/main/codex/codex-plugin-registration-config.ts",
     "../src/main/codex/codex-process-exit-deadline.ts",
     "../src/main/codex/codex-trust-config-rollback.ts",
     "../src/main/codex/codex-trust-grant-telemetry.ts",
