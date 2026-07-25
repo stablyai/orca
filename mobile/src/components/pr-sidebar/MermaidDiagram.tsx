@@ -19,7 +19,7 @@ export function MermaidDiagram({ source, base }: Props) {
   const styles = useThemedStyles(createMermaidDiagramStyles)
   const [height, setHeight] = useState(0)
   const [failed, setFailed] = useState(false)
-  const html = useMemo(() => buildHtml(source, colors), [source])
+  const html = useMemo(() => buildHtml(source, colors), [colors, source])
 
   if (failed) {
     return <MermaidFallback source={source} base={base} />

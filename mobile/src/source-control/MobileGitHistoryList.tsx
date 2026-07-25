@@ -186,7 +186,7 @@ export const MobileGitHistoryList = memo(function MobileGitHistoryList({
         </View>
       )
     },
-    [expanded, filesById, toggleCommit]
+    [colors, expanded, filesById, styles, toggleCommit]
   )
 
   const view = resolveMobileHistoryScreenView({

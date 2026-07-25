@@ -1058,12 +1058,15 @@ export function MobileBrowserPane({
   )
   const renderedFrameSource =
     frameUriRef.current || frameUri ? { uri: frameUriRef.current ?? frameUri! } : null
-  const frameLayerStyle = useCallback((layer: FrameLayer) => {
-    return [
-      styles.browserImageLayer,
-      visibleFrameLayerRef.current !== layer && styles.browserImageLayerHidden
-    ]
-  }, [])
+  const frameLayerStyle = useCallback(
+    (layer: FrameLayer) => {
+      return [
+        styles.browserImageLayer,
+        visibleFrameLayerRef.current !== layer && styles.browserImageLayerHidden
+      ]
+    },
+    [styles]
+  )
   const browserLayerRef = useCallback(
     (layer: FrameLayer) => (layer === 0 ? setBrowserLayer0Ref : setBrowserLayer1Ref),
     [setBrowserLayer0Ref, setBrowserLayer1Ref]
