@@ -93,7 +93,7 @@ export function GeneralRemoteServerUpdates(): React.JSX.Element | null {
           )}
         </p>
       </div>
-      <div>
+      <div className="flex flex-col items-start gap-1.5">
         <Button
           type="button"
           variant="outline"
@@ -118,6 +118,7 @@ export function GeneralRemoteServerUpdates(): React.JSX.Element | null {
                 'Check for server updates'
               )}
         </Button>
+        <p className="text-xs text-muted-foreground">{updateCheckHint}</p>
       </div>
       <p className="text-xs text-muted-foreground">{summary}</p>
     </SearchableSetting>
