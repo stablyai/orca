@@ -6,11 +6,14 @@ import type {
 } from '../../shared/native-chat-types'
 import { clearNativeChatTranscriptCache } from '../native-chat/transcript-read-cache'
 import type { ReadTranscriptResult } from '../native-chat/transcript-reader'
+import type { NativeChatTranscriptSubscription } from '../native-chat/transcript-watch'
+// Why the dispatcher rather than transcript-watch directly: an agent's
+// conversation arrives either from its own JSONL transcript or over ACP, and the
+// transport is resolved per agent (source-dispatch.ts).
 import {
-  subscribeNativeChatTranscript,
-  readNativeChatTranscriptTail,
-  type NativeChatTranscriptSubscription
-} from '../native-chat/transcript-watch'
+  readNativeChatSessionTail,
+  subscribeNativeChatSession
+} from '../native-chat/source-dispatch'
 
 // Re-export so existing test imports of `clearNativeChatTranscriptCache` from
 // this module keep working after the cache moved to transcript-read-cache.ts.
@@ -35,7 +38,7 @@ async function readSession(args: NativeChatReadSessionArgs): Promise<ReadTranscr
   const { agent, sessionId } = args
   // Clamp to a positive window; default to the desktop window for the first page.
   const limit = args.limit && args.limit > 0 ? Math.floor(args.limit) : DESKTOP_READ_WINDOW
-  return readNativeChatTranscriptTail({
+  return readNativeChatSessionTail({
     agent,
     sessionId,
     transcriptPath: args.transcriptPath,
@@ -165,11 +168,16 @@ async function handleSubscribe(event: IpcMainEvent, args: NativeChatSubscribeArg
 
   let subscription: NativeChatTranscriptSubscription
   try {
-    subscription = await subscribeNativeChatTranscript({
+    subscription = await subscribeNativeChatSession({
       agent,
       sessionId,
       transcriptPath,
       initialLimit: limit,
+      onLog: (line) => {
+        // ACP agents report startup and errors on stderr; keep it in the main
+        // log rather than the renderer, which only shows conversation content.
+        console.warn(`[native-chat:acp] ${line}`)
+      },
       onInitialSnapshot: (messages, hasMore, _beforeOffset, error, lifecycle) => {
         if (sender.isDestroyed()) {
           return

@@ -1,0 +1,163 @@
+// Native chat conversation source backed by ACP instead of a JSONL transcript.
+//
+// Implements the same `NativeChatTranscriptSubscription` contract the file
+// watcher implements (transcript-watch-contract.ts), which is already
+// callback-shaped — so the renderer, the IPC layer, and mobile need no changes
+// to consume an ACP-backed conversation.
+//
+// Lifecycle: one ACP client per subscription. Hermes reports 8 concurrent
+// sessions and omp supports session/close, so a shared pool is possible later,
+// but per-subscription ownership makes teardown unambiguous — unsubscribe()
+// disposes exactly the client it created. Teardown is where this kind of
+// feature rots, so it stays boring on purpose.
+
+import { createAcpStdioClient, type AcpClient } from '../acp/acp-stdio-client'
+import type { AcpPermissionRequestParams } from '../acp/acp-permission-bridge'
+import { createAcpTurnAccumulator } from './acp-event-mapper'
+import type {
+  NativeChatTranscriptSubscription,
+  SubscribeNativeChatTranscriptArgs
+} from './transcript-watch-contract'
+import { resolveNativeChatAcpAgent, type NativeChatAcpAgent } from '../../shared/native-chat-agent-support'
+
+/** Argv for each ACP agent. Both serve ACP on stdio as a subcommand of their
+ *  normal CLI, so there is no separate binary to locate. */
+const ACP_COMMANDS: Record<NativeChatAcpAgent, { command: string; args: string[] }> = {
+  hermes: { command: 'hermes', args: ['acp'] },
+  omp: { command: 'omp', args: ['acp'] }
+}
+
+export type SubscribeAcpArgs = SubscribeNativeChatTranscriptArgs & {
+  /** Working directory for the agent session. Defaults to the main process cwd. */
+  cwd?: string
+  /** Surfaces a permission request to the operator; resolves to the chosen ACP
+   *  optionId, or null to cancel. Absent means every request is cancelled. */
+  onPermissionRequest?: (params: AcpPermissionRequestParams) => Promise<string | null>
+  onLog?: (line: string) => void
+  /** Test seam: supply a prebuilt client instead of spawning an agent. */
+  createClient?: typeof createAcpStdioClient
+}
+
+export function resolveAcpCommand(
+  agent: string | null | undefined
+): { command: string; args: string[] } | null {
+  const acpAgent = resolveNativeChatAcpAgent(agent)
+  return acpAgent == null ? null : ACP_COMMANDS[acpAgent]
+}
+
+/**
+ * Subscribe to an ACP agent's conversation.
+ *
+ * When `sessionId` names an existing agent session, `session/load` replays that
+ * history as `session/update` notifications — so history and live updates arrive
+ * through one path and there is no separate backfill read. When the session
+ * cannot be loaded, a fresh session is opened and the view starts empty.
+ */
+export async function subscribeNativeChatAcpSession(
+  args: SubscribeAcpArgs
+): Promise<NativeChatTranscriptSubscription> {
+  const command = resolveAcpCommand(args.agent)
+  if (command == null) {
+    args.onInitialSnapshot?.([], false, 0, 'Agent does not serve ACP')
+    return { unsubscribe: () => {}, watching: false }
+  }
+
+  let disposed = false
+  let snapshotDelivered = false
+  const accumulator = createAcpTurnAccumulator(args.sessionId)
+  const spawnClient = args.createClient ?? createAcpStdioClient
+
+  // Why buffer: session/load replays history immediately after the request is
+  // sent, so updates can arrive before the initial snapshot has been delivered.
+  // Buffering until the snapshot goes out keeps ordering correct — the view
+  // never receives an append for a conversation it has not been given yet.
+  let replayBuffer: Parameters<NonNullable<SubscribeAcpArgs['onAppend']>>[0] = []
+  let bufferingReplay = true
+
+  function flushReplay(): void {
+    if (!snapshotDelivered) {
+      snapshotDelivered = true
+      args.onInitialSnapshot?.(replayBuffer, false, 0)
+    } else if (replayBuffer.length > 0) {
+      args.onAppend(replayBuffer)
+    }
+    replayBuffer = []
+    bufferingReplay = false
+  }
+
+  const client: AcpClient = spawnClient({
+    command: command.command,
+    args: command.args,
+    cwd: args.cwd,
+    onLog: args.onLog,
+    onPermissionRequest: args.onPermissionRequest,
+    onSessionUpdate: (update) => {
+      if (disposed) {
+        return
+      }
+      const decoded = accumulator.decode(update)
+      if (decoded.messages.length === 0 && decoded.lifecycle == null) {
+        return
+      }
+      if (bufferingReplay) {
+        replayBuffer = [...replayBuffer, ...decoded.messages]
+        return
+      }
+      args.onAppend(decoded.messages, decoded.lifecycle)
+    },
+    onExit: (code, signal) => {
+      if (disposed) {
+        return
+      }
+      // An agent that dies mid-conversation must not leave the view spinning.
+      const reason = `ACP agent exited (code ${String(code)}, signal ${String(signal)})`
+      if (!snapshotDelivered) {
+        snapshotDelivered = true
+        args.onInitialSnapshot?.([], false, 0, reason)
+      } else {
+        args.onAppend([], accumulator.endTurn('interrupted').lifecycle)
+      }
+    }
+  })
+
+  try {
+    await client.initialize()
+
+    // Prefer resuming the named session so the operator sees existing history;
+    // fall back to a new session when the agent cannot load it (unknown id,
+    // pruned history) rather than failing the whole view.
+    let loaded = false
+    try {
+      await client.loadSession(args.sessionId, { cwd: args.cwd })
+      loaded = true
+    } catch (error) {
+      args.onLog?.(`acp: session/load failed, opening a new session: ${String(error)}`)
+    }
+    if (!loaded) {
+      await client.newSession({ cwd: args.cwd })
+    }
+
+    flushReplay()
+  } catch (error) {
+    // Startup failure (agent missing from PATH, handshake rejected) is terminal
+    // for this subscription: surface it in the view instead of a blank pane.
+    client.dispose()
+    disposed = true
+    if (!snapshotDelivered) {
+      snapshotDelivered = true
+      args.onInitialSnapshot?.([], false, 0, `ACP agent unavailable: ${String(error)}`)
+    }
+    return { unsubscribe: () => {}, watching: false }
+  }
+
+  return {
+    unsubscribe: () => {
+      if (disposed) {
+        return
+      }
+      disposed = true
+      client.dispose()
+    },
+    watching: true
+  }
+}

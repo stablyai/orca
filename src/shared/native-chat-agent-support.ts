@@ -12,19 +12,22 @@ export type NativeChatTransport = 'transcript' | 'acp'
 
 export const NATIVE_CHAT_ACP_AGENTS: ReadonlySet<string> = new Set(['hermes', 'omp'])
 
-/** Agents whose conversation the native chat view can render.
+/** Agents whose conversation the native chat view can render — the transcript
+ *  agents by parsing their JSONL, the ACP agents by driving a live session.
  *
- *  NOTE: the ACP agents (`hermes`, `omp`) are deliberately NOT in this set yet.
- *  This set is the UI availability gate — every consumer (native-chat-availability,
- *  native-chat-initial-view-mode, mobile-native-chat-eligibility) offers the chat
- *  toggle for anything listed here. Adding an ACP agent before the ACP transport
- *  is wired would offer a toggle that opens an empty view. They get added in the
- *  same change that lands the transport dispatch. */
+ *  This set is the UI availability gate: every consumer
+ *  (native-chat-availability, native-chat-initial-view-mode,
+ *  mobile-native-chat-eligibility) offers the chat toggle for anything listed
+ *  here, so an entry must have a working transport in source-dispatch.ts. */
 export const NATIVE_CHAT_SUPPORTED_AGENTS: ReadonlySet<string> = new Set([
   'claude',
   'openclaude',
   'codex',
-  'grok'
+  'grok',
+  // ACP transport (source-dispatch.ts -> acp-source.ts). `omp` is the agent type
+  // omherm presents as; there is no separate `omherm` type.
+  'hermes',
+  'omp'
 ])
 
 export function isNativeChatSupportedAgent(agent: string | null | undefined): boolean {
