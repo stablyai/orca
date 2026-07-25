@@ -219,6 +219,7 @@ export function GeneralWorkspaceSettingsSection({
           ]}
         >
           <SettingsRow
+            labelId="confirm-file-explorer-move-label"
             label={translate(
               'auto.components.settings.GeneralWorkspaceSettingsSection.confirmFileExplorerMove',
               'Confirm Before Moving Files in Explorer'
@@ -236,7 +237,11 @@ export function GeneralWorkspaceSettingsSection({
                   }
                 }}
               >
-                <SelectTrigger size="sm" className="w-[160px]">
+                <SelectTrigger
+                  aria-labelledby="confirm-file-explorer-move-label"
+                  size="sm"
+                  className="w-[160px]"
+                >
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>

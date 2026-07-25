@@ -63,10 +63,18 @@ export function useFileExplorerDragDrop({
   const [dropTargetDir, setDropTargetDir] = useState<string | null>(null)
   const [dragSourcePath, setDragSourcePathState] = useState<string | null>(null)
   const dragSourceIsDirectoryRef = useRef(false)
+  // Why: document-level capture `drop` clears live drag state before React
+  // onDrop runs handleMoveDrop; keep last primary-source metadata for that race.
+  const lastDragSourceMetaRef = useRef<{ path: string; isDirectory: boolean } | null>(null)
 
   const setDragSourcePath = useCallback((path: string | null, isDirectory = false) => {
     setDragSourcePathState(path)
-    dragSourceIsDirectoryRef.current = path !== null && isDirectory
+    if (path !== null) {
+      dragSourceIsDirectoryRef.current = isDirectory
+      lastDragSourceMetaRef.current = { path, isDirectory }
+    } else {
+      dragSourceIsDirectoryRef.current = false
+    }
   }, [])
 
   const [isNativeDragOver, setIsNativeDragOver] = useState(false)
@@ -115,7 +123,8 @@ export function useFileExplorerDragDrop({
     getOperationOwnerForPath,
     setDropTargetDir,
     dragSourcePath,
-    dragSourceIsDirectoryRef
+    dragSourceIsDirectoryRef,
+    lastDragSourceMetaRef
   })
 
   const clearNativeDragState = useCallback(() => {
