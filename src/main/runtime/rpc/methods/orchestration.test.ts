@@ -2677,20 +2677,22 @@ describe('orchestration RPC methods', () => {
       [Number.MAX_SAFE_INTEGER, ORCHESTRATION_ASK_MAX_TIMEOUT_MS]
     ])('applies effective timeout %s at the RPC handler boundary', async (requested, expected) => {
       setup()
-      vi.spyOn(runtime, 'deliverPendingMessagesForHandle').mockImplementation(() => {})
+      createAskingDispatch()
       vi.spyOn(runtime, 'notifyMessageArrived').mockImplementation(() => {})
       let observedTimeoutMs: number | undefined
       vi.spyOn(runtime, 'waitForMessage').mockImplementation(async (_handle, options) => {
         observedTimeoutMs = options?.timeoutMs
-        const outbound = db.getInbox(10).find((m) => m.type === 'decision_gate')
+        // End the wait loop so the assertion runs against the first budget slice.
+        const outbound = db.getInbox(10).find((message) => message.type === 'question')
+        // Why: without a reply the handler's while(true) spins on this mock until vitest times out, hanging instead of failing.
         expect(outbound).toBeDefined()
-        db.insertMessage({
-          from: 'term_coord',
-          to: 'term_worker',
-          subject: 'Re: Question',
-          body: 'ok',
-          threadId: outbound!.id
+        db.answerQuestion({
+          messageId: outbound!.id,
+          runId: activeRunId!,
+          consumerGeneration: db.getRun(activeRunId!)!.consumer_generation,
+          body: 'ok'
         })
+        return 'notified'
       })
 
       const result = (await call('orchestration.ask', {
@@ -2707,6 +2709,7 @@ describe('orchestration RPC methods', () => {
 
     it('returns a zero effective timeout without entering the waiter', async () => {
       setup()
+      createAskingDispatch()
       const waitForMessage = vi.spyOn(runtime, 'waitForMessage')
 
       const result = (await call('orchestration.ask', {
