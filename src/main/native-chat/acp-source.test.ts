@@ -214,12 +214,13 @@ describe('subscribeNativeChatAcpSession', () => {
 
 describe('readNativeChatSessionTail', () => {
   it('returns an empty window for ACP agents — history arrives via replay', async () => {
+    // hasMore false keeps the client's "nothing older to load" path intact.
     await expect(
       readNativeChatSessionTail({ agent: 'hermes', sessionId: 's', limit: 300 })
-    ).resolves.toEqual({ messages: [] })
+    ).resolves.toEqual({ messages: [], hasMore: false, beforeOffset: 0 })
     await expect(
       readNativeChatSessionTail({ agent: 'omp', sessionId: 's', limit: 300 })
-    ).resolves.toEqual({ messages: [] })
+    ).resolves.toEqual({ messages: [], hasMore: false, beforeOffset: 0 })
   })
 })
 

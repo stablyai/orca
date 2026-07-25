@@ -8,7 +8,6 @@
 // conditionals for the other's failure modes.
 
 import { resolveNativeChatTransport } from '../../shared/native-chat-agent-support'
-import type { ReadTranscriptResult } from './transcript-reader'
 import {
   readNativeChatTranscriptTail,
   subscribeNativeChatTranscript
@@ -57,11 +56,17 @@ export type ReadNativeChatSessionTailArgs = Parameters<typeof readNativeChatTran
  * already delivered by the time a reader would ask. Returning an empty result
  * (not an error) keeps the renderer's "no more to load" path intact.
  */
+export type ReadNativeChatSessionTailResult = Awaited<
+  ReturnType<typeof readNativeChatTranscriptTail>
+>
+
 export async function readNativeChatSessionTail(
   args: ReadNativeChatSessionTailArgs
-): Promise<ReadTranscriptResult> {
+): Promise<ReadNativeChatSessionTailResult> {
   if (resolveNativeChatTransport(args.agent) === 'acp') {
-    return { messages: [] }
+    // No file to page through, and replay already delivered history — an empty
+    // window with hasMore false keeps the client's "nothing older" path intact.
+    return { messages: [], hasMore: false, beforeOffset: 0 }
   }
   return readNativeChatTranscriptTail(args)
 }

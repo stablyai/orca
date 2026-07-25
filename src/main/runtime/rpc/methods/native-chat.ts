@@ -2,14 +2,16 @@ import { z } from 'zod'
 import type { NativeChatBlock, NativeChatMessage } from '../../../../shared/native-chat-types'
 import type { AgentType } from '../../../../shared/native-chat-types'
 import {
-  readNativeChatTranscriptTail,
-  subscribeNativeChatTranscript
-} from '../../../native-chat/transcript-watch'
+  readNativeChatSessionTail,
+  subscribeNativeChatSession
+} from '../../../native-chat/source-dispatch'
 import { defineMethod, defineStreamingMethod, type RpcAnyMethod, type RpcContext } from '../core'
 
-// Why: native chat renders an agent's own transcript (Claude/Codex JSONL). The
-// desktop reaches the readers via Electron IPC; mobile/web clients reach the
-// same pure readers through these runtime RPC methods so the native chat view
+// Why: native chat renders an agent's conversation from whichever transport the
+// agent serves — a JSONL transcript (Claude/Codex/Grok) or a live ACP session
+// (hermes/omp), resolved by source-dispatch. The desktop reaches it via Electron
+// IPC; mobile/web/remote clients reach the same dispatcher through these runtime
+// RPC methods so the native chat view
 // works over the paired connection, not just in the desktop renderer.
 
 const NativeChatSession = z.object({
@@ -183,7 +185,7 @@ export const NATIVE_CHAT_METHODS: readonly RpcAnyMethod[] = [
     params: NativeChatSession,
     handler: async (params, { clientKind }) => {
       const limit = params.limit ?? MOBILE_NATIVE_CHAT_DEFAULT_WINDOW
-      const result = await readNativeChatTranscriptTail({
+      const result = await readNativeChatSessionTail({
         agent: params.agent,
         sessionId: params.sessionId,
         transcriptPath: params.transcriptPath,
@@ -228,7 +230,12 @@ export const NATIVE_CHAT_METHODS: readonly RpcAnyMethod[] = [
       if (closed) {
         return
       }
-      const subscription = await subscribeNativeChatTranscript({
+      const subscription = await subscribeNativeChatSession({
+        // No permission handler on this path yet: an ACP tool approval reaching a
+        // mobile/remote client has nowhere to render, and the registry's contract
+        // is that an unanswerable request cancels rather than silently allowing.
+        // Wiring approvals over RPC is the follow-up that makes ACP fully usable
+        // from mobile; rendering and sending already work.
         agent: params.agent,
         sessionId: params.sessionId,
         transcriptPath: params.transcriptPath,
