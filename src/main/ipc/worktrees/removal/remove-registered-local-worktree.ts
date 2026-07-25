@@ -36,6 +36,7 @@ import {
   removeWorktreeMetadataAndTransientState,
   stopPtysForDestructiveWorktreeRemoval
 } from './worktree-removal-ownership'
+import { maybePruneReviewHeadRefsAfterWorktreeDelete } from '../../../worktree-review-head-prune'
 import { preservedBranchCleanupScopeKey } from '../../../../shared/git/branches/preserved-branch-cleanup'
 import {
   removesInBackground,
@@ -258,6 +259,14 @@ async function finishLocalWorktreeRemoval({
         await pruneGitWorktrees({ cwd: repo.path, ...localWorktreeGitOptions }).catch(() => {})
         await cleanupPushTarget()
         runtime.clearOptimisticReconcileToken(args.worktreeId)
+        await maybePruneReviewHeadRefsAfterWorktreeDelete({
+          store,
+          repoPath: repo.path,
+          repoId,
+          worktreeId: args.worktreeId,
+          meta: store.getWorktreeMeta(args.worktreeId),
+          localGitOptions: localWorktreeGitOptions
+        })
         removeWorktreeMetadataAndTransientState(
           { store, runtime },
           args.worktreeId,
@@ -294,6 +303,14 @@ async function finishLocalWorktreeRemoval({
     removedPushTarget
   )
   runtime.clearOptimisticReconcileToken(args.worktreeId)
+  await maybePruneReviewHeadRefsAfterWorktreeDelete({
+    store,
+    repoPath: repo.path,
+    repoId,
+    worktreeId: args.worktreeId,
+    meta: store.getWorktreeMeta(args.worktreeId),
+    localGitOptions: localWorktreeGitOptions
+  })
   await withWorktreeRemoveStageSpan('metadata_purge', 'local', async () => {
     removeWorktreeMetadataAndTransientState(
       { store, runtime },
