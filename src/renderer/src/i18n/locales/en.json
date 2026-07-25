@@ -15672,6 +15672,11 @@
     "settingsTooltip": "Board settings",
     "card": {
       "you": "You",
+      "stop": {
+        "action": "Stop agent",
+        "confirm": "Stop agent?",
+        "tooltip": "Stop agent — kills the process and closes its terminal"
+      },
       "time": {
         "justNow": "just now",
         "minutes": "{{count}}m",

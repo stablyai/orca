@@ -217,7 +217,6 @@ export type DashboardRevealAgentArgs = {
   tabId: string
   leafId: string | null
 }
-
 export type DashboardSpawnAgentArgs = {
   worktreeId: string
   agent: TuiAgent
@@ -227,4 +226,15 @@ export type DashboardSpawnAgentArgs = {
  *  teardown sequence, so the pop-out only names the target. */
 export type DashboardSleepWorkspaceArgs = {
   worktreeId: string
+}
+
+/** Payload for stopping an agent from the board: kills its process and drops
+ *  its row. ptyId is null for a retained card whose pane is already gone —
+ *  there is nothing left to kill, so the stop degrades to dropping the row. */
+export type DashboardStopAgentArgs = {
+  paneKey: string
+  worktreeId: string
+  tabId: string
+  leafId: string | null
+  ptyId: string | null
 }

@@ -14546,6 +14546,11 @@
     "total": "共 {{count}} 个",
     "card": {
       "you": "你",
+      "stop": {
+        "action": "停止 Agent",
+        "confirm": "停止 Agent?",
+        "tooltip": "停止 Agent — 结束进程并关闭其终端"
+      },
       "time": {
         "justNow": "刚刚",
         "minutes": "{{count}} 分钟",

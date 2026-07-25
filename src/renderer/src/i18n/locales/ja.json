@@ -14526,6 +14526,11 @@
     "total": "合計 {{count}} 件",
     "card": {
       "you": "あなた",
+      "stop": {
+        "action": "エージェントを停止",
+        "confirm": "エージェントを停止?",
+        "tooltip": "エージェントを停止 — プロセスを終了してターミナルを閉じます"
+      },
       "time": {
         "justNow": "たった今",
         "minutes": "{{count}}分",

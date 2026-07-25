@@ -14,6 +14,8 @@ import { TooltipProvider } from '@/components/ui/tooltip'
 import { installWindowVisibilityInterval } from '@/lib/window-visibility-interval'
 import { AgentKanbanCard } from './AgentKanbanCard'
 import { AgentDashboardToolbar } from './AgentDashboardToolbar'
+import { stopNeedsDialog } from './AgentKanbanCardStopControl'
+import { AgentStopConfirmDialog } from './AgentStopConfirmDialog'
 import { AgentTerminalDialog, type AgentRevealArgs } from './AgentTerminalDialog'
 import {
   EMPTY_DASHBOARD_FILTERS,
@@ -95,13 +97,15 @@ function KanbanColumn({
   cards,
   repoIconsByRepoId,
   now,
-  onOpenTerminal
+  onOpenTerminal,
+  onStop
 }: {
   bucket: DashboardBucket
   cards: DashboardCard[]
   repoIconsByRepoId: Record<string, RepoIcon | null> | undefined
   now: number
   onOpenTerminal: (card: DashboardCard) => void
+  onStop: (card: DashboardCard) => void
 }): React.JSX.Element {
   return (
     // Why: attention no longer tints the whole column — the cards inside carry
@@ -128,6 +132,7 @@ function KanbanColumn({
               repoIcon={repoIconsByRepoId?.[card.repoId] ?? null}
               now={now}
               onOpenTerminal={onOpenTerminal}
+              onStop={onStop}
             />
           ))
         )}
@@ -288,6 +293,40 @@ export function AgentKanbanBoard({
     },
     [onAckAgent]
   )
+
+  // Stopping kills the agent's process in the main renderer, which owns the
+  // store and the terminal teardown. Still-running agents confirm through a
+  // dialog first; idle/done ones already confirmed inline on their card.
+  const [pendingStopCard, setPendingStopCard] = useState<DashboardCard | null>(null)
+  // ?. shields this from dev-HMR preload skew, same as the ack relay above.
+  const emitStop = useCallback((card: DashboardCard) => {
+    void window.api.dashboard.stopAgent?.({
+      paneKey: card.paneKey,
+      worktreeId: card.worktreeId,
+      tabId: card.tabId,
+      leafId: card.leafId,
+      ptyId: card.ptyId
+    })
+  }, [])
+  const handleStop = useCallback(
+    (card: DashboardCard) => {
+      if (stopNeedsDialog(card)) {
+        setPendingStopCard(card)
+        return
+      }
+      emitStop(card)
+    },
+    [emitStop]
+  )
+  const handleConfirmStop = useCallback(
+    (card: DashboardCard) => {
+      setPendingStopCard(null)
+      emitStop(card)
+    },
+    [emitStop]
+  )
+  const handleCancelStop = useCallback(() => setPendingStopCard(null), [])
+
   // Watching the open dialog counts as seeing state changes as they happen —
   // without this, an agent finishing while you watch would re-flag its card.
   useEffect(() => {
@@ -401,6 +440,7 @@ export function AgentKanbanBoard({
                     repoIconsByRepoId={snapshot.repoIconsByRepoId}
                     now={now}
                     onOpenTerminal={handleOpenTerminal}
+                    onStop={handleStop}
                   />
                 ))}
               </div>
@@ -414,6 +454,11 @@ export function AgentKanbanBoard({
             onReveal={onRevealAgent}
           />
         ) : null}
+        <AgentStopConfirmDialog
+          card={pendingStopCard}
+          onCancel={handleCancelStop}
+          onConfirm={handleConfirmStop}
+        />
       </div>
     </TooltipProvider>
   )

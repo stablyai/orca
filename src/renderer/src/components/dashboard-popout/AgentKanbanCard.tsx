@@ -1,4 +1,4 @@
-import { memo, useState } from 'react'
+import { memo, useCallback, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import {
   ChevronRight,
@@ -13,6 +13,7 @@ import { AgentQuestionIcon } from '@/components/AgentQuestionIcon'
 import { AgentStateDot } from '@/components/AgentStateDot'
 import { RepoIconGlyph } from '@/components/repo/repo-icon'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
+import { AgentKanbanCardStopControl } from './AgentKanbanCardStopControl'
 import { cn } from '@/lib/utils'
 import {
   dashboardCardDisplayState,
@@ -191,6 +192,8 @@ type AgentKanbanCardProps = {
    *  card: bucket moves remount the card, and an embedded dialog would close
    *  the chat mid-conversation. */
   onOpenTerminal: (card: DashboardCard) => void
+  /** Stops the agent (kills its process). Board-owned for the same reason. */
+  onStop: (card: DashboardCard) => void
 }
 
 /** One agent on the kanban board. Clicking opens the board's live terminal dialog. */
@@ -199,7 +202,8 @@ export const AgentKanbanCard = memo(
     card,
     repoIcon = null,
     now,
-    onOpenTerminal
+    onOpenTerminal,
+    onStop
   }: AgentKanbanCardProps): React.JSX.Element {
     useTranslation()
     const [subagentsOpen, setSubagentsOpen] = useState(false)
@@ -214,21 +218,30 @@ export const AgentKanbanCard = memo(
     // twice.
     const heading = card.conversationName ?? card.worktreeName
     const worktreeInFooter = card.conversationName !== undefined
+    const [confirmingStop, setConfirmingStop] = useState(false)
+    const armStop = useCallback(() => setConfirmingStop(true), [])
+    const disarmStop = useCallback(() => setConfirmingStop(false), [])
 
     return (
+      // Why: the stop control overlays the card rather than nesting inside its
+      // button (nested buttons are invalid HTML), which keeps the whole card
+      // clickable for open-terminal.
       <div
         // Why: a stable per-agent view-transition-name lets the browser morph
         // the card from its old column to its new one when its bucket changes.
         // paneKey has ':'/'/' which aren't valid in a custom-ident, so slugify.
         style={{ viewTransitionName: `agentcard-${card.paneKey.replace(/[^a-zA-Z0-9]/g, '-')}` }}
         className={cn(
-          'group flex w-full flex-col gap-1.5 rounded-lg border p-2.5 text-left transition-colors',
+          'group group/card relative flex w-full flex-col gap-1.5 rounded-lg border p-2.5 text-left transition-colors',
           needsYou
             ? 'border-agent-question/40 bg-agent-question/[0.06] hover:border-agent-question/60 hover:bg-agent-question/10'
             : isDone
               ? 'border-emerald-500/40 bg-emerald-500/[0.06] hover:border-emerald-500/60 hover:bg-emerald-500/10'
               : 'border-border/60 bg-card hover:border-border hover:bg-accent/40'
         )}
+        // Why: leaving the card is the cheapest possible "never mind" — an armed
+        // stop confirmation must not survive the pointer moving to another card.
+        onMouseLeave={disarmStop}
       >
         <button
           type="button"
@@ -345,11 +358,19 @@ export const AgentKanbanCard = memo(
             </span>
           ) : null}
         </button>
+        <AgentKanbanCardStopControl
+          card={card}
+          confirming={confirmingStop}
+          onArm={armStop}
+          onDisarm={disarmStop}
+          onStop={onStop}
+        />
       </div>
     )
   },
   (previous, next) =>
     previous.onOpenTerminal === next.onOpenTerminal &&
+    previous.onStop === next.onStop &&
     sameCard(previous.card, next.card) &&
     sameRepoIcon(previous.repoIcon, next.repoIcon) &&
     (displayTimestamp(previous.card) <= 0 ||

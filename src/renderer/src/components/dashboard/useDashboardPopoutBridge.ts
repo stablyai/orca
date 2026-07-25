@@ -3,6 +3,7 @@ import { useAppStore, type AppState } from '@/store'
 import { activateTabAndFocusPane } from '@/lib/activate-tab-and-focus-pane'
 import { runSleepWorktree } from '../sidebar/sleep-worktree-flow'
 import type { RepoIcon } from '../../../../shared/repo-icon'
+import { stopDashboardAgent } from '@/lib/stop-dashboard-agent'
 import { buildDashboardSnapshot, type DashboardSnapshotState } from './build-dashboard-snapshot'
 import { launchDashboardAgent } from './launch-dashboard-agent'
 
@@ -146,6 +147,17 @@ export function useDashboardPopoutBridge(enabled: boolean): void {
     }
     return window.api.dashboard.onAckAgent?.((paneKey) => {
       useAppStore.getState().acknowledgeAgents([paneKey])
+    })
+  }, [enabled])
+
+  // Stopping an agent from the board runs its terminal teardown here, where the
+  // store lives. Same ?. shield as the ack listener above.
+  useEffect(() => {
+    if (!enabled) {
+      return
+    }
+    return window.api.dashboard.onStopAgent?.((args) => {
+      stopDashboardAgent(args)
     })
   }, [enabled])
 
