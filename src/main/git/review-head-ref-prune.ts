@@ -52,8 +52,9 @@ export async function listOrcaReviewHeadLocalRefs(gitExec: GitExec): Promise<str
       .split('\n')
       .map((line) => line.trim())
       .filter((line) => line.length > 0)
-  } catch {
-    // Why: empty orca namespace / older git — nothing to prune.
+  } catch (error) {
+    // Why: empty namespace succeeds with empty stdout; real for-each-ref failures must still warn.
+    console.warn('[git] Failed to list durable review-head refs:', error)
     return []
   }
 }
