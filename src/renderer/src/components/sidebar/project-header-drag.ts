@@ -4,6 +4,7 @@ import {
   computeProjectHeaderDropPreview,
   measureProjectHeaderDragRects
 } from './project-header-drop'
+import { measureSidebarRootSlotDragRects } from './sidebar-root-slot-order'
 import { commitProjectHeaderDragDrop } from './project-header-drag-commit'
 import {
   INITIAL_REPO_DRAG_STATE,
@@ -24,11 +25,14 @@ import type { Repo } from '../../../../shared/repo-types'
 export function useRepoHeaderDrag({
   orderedRepoIds,
   sidebarRepoHeaderIdsByBucket,
+  sidebarRootSlots = [],
   repoById,
+  projectGroupById,
   getLiveRepos,
   usesProjectGroupOrdering,
   onCommitRepoOrder,
   onCommitProjectGroupOrder,
+  onCommitProjectGroupTabOrder,
   getScrollContainer
 }: UseRepoHeaderDragArgs): RepoHeaderDragController {
   const [state, setState] = useState<RepoDragState>(INITIAL_REPO_DRAG_STATE)
@@ -39,8 +43,12 @@ export function useRepoHeaderDrag({
   orderedIdsRef.current = orderedRepoIds
   const sidebarRepoHeaderIdsByBucketRef = useRef(sidebarRepoHeaderIdsByBucket)
   sidebarRepoHeaderIdsByBucketRef.current = sidebarRepoHeaderIdsByBucket
+  const sidebarRootSlotsRef = useRef(sidebarRootSlots)
+  sidebarRootSlotsRef.current = sidebarRootSlots
   const repoByIdRef = useRef(repoById)
   repoByIdRef.current = repoById
+  const projectGroupByIdRef = useRef(projectGroupById)
+  projectGroupByIdRef.current = projectGroupById
   const usesProjectGroupOrderingRef = useRef(usesProjectGroupOrdering)
   usesProjectGroupOrderingRef.current = usesProjectGroupOrdering
   const onCommitRepoOrderRef = useRef(onCommitRepoOrder)
@@ -49,6 +57,8 @@ export function useRepoHeaderDrag({
   const getLiveReposRef = useRef(getLiveRepos)
   const onCommitProjectGroupOrderRef = useRef(onCommitProjectGroupOrder)
   onCommitProjectGroupOrderRef.current = onCommitProjectGroupOrder
+  const onCommitProjectGroupTabOrderRef = useRef(onCommitProjectGroupTabOrder)
+  onCommitProjectGroupTabOrderRef.current = onCommitProjectGroupTabOrder
   const getContainerRef = useRef(getScrollContainer)
   getContainerRef.current = getScrollContainer
   const autoscrollLastFrameTimeRef = useRef<number | null>(null)
@@ -63,7 +73,9 @@ export function useRepoHeaderDrag({
     if (!container || !session) {
       return []
     }
-    const rects = measureProjectHeaderDragRects(container, session.bucketKey)
+    const rects = session.orderedRootSlots
+      ? measureSidebarRootSlotDragRects(container)
+      : measureProjectHeaderDragRects(container, session.bucketKey)
     session.headerRects = rects
     return rects
   }, [])
@@ -145,10 +157,12 @@ export function useRepoHeaderDrag({
         sidebarDropIndex,
         orderedRepoIds: orderedIdsRef.current,
         repoById: repoByIdRef.current,
+        projectGroupById: projectGroupByIdRef.current,
         liveRepos: getLiveReposRef.current(),
         usesProjectGroupOrdering: usesProjectGroupOrderingRef.current,
         onCommitRepoOrder: onCommitRepoOrderRef.current,
-        onCommitProjectGroupOrder: onCommitProjectGroupOrderRef.current
+        onCommitProjectGroupOrder: onCommitProjectGroupOrderRef.current,
+        onCommitProjectGroupTabOrder: onCommitProjectGroupTabOrderRef.current
       })
     },
     [cancelAutoscroll]
@@ -299,6 +313,8 @@ export function useRepoHeaderDrag({
       event,
       repo,
       sidebarRepoHeaderIdsByBucket: sidebarRepoHeaderIdsByBucketRef.current,
+      sidebarRootSlots: sidebarRootSlotsRef.current,
+      usesProjectGroupOrdering: usesProjectGroupOrderingRef.current,
       getScrollContainer: getContainerRef.current
     })
     if (!session) {
