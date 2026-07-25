@@ -24,11 +24,23 @@ vi.mock('./MobileFilePreviewSourceText', () => ({
 }))
 
 vi.mock('../theme/mobile-theme', () => ({
-  colors: { textPrimary: '#fff', textSecondary: '#999' }
+  colors: { textPrimary: '#fff', textSecondary: '#999' },
+  darkColors: { textPrimary: '#fff', textSecondary: '#999', bgBase: '#111' },
+  lightColors: { textPrimary: '#111', textSecondary: '#666', bgBase: '#fff' }
+}))
+
+vi.mock('../theme/theme-context', () => ({
+  useTheme: () => ({
+    colors: { textPrimary: '#fff', textSecondary: '#999', bgBase: '#111' },
+    preference: 'dark',
+    setPreference: () => undefined
+  }),
+  useThemedStyles: (factory: (colors: Record<string, string>) => unknown) =>
+    factory({ textPrimary: '#fff', textSecondary: '#999', bgBase: '#111' })
 }))
 
 vi.mock('./mobile-file-preview-styles', () => ({
-  filePreviewStyles: {}
+  createMobileFilePreviewStyles: () => ({})
 }))
 
 type PreviewProps = Parameters<typeof MobileFileMarkdownPreview>[0]

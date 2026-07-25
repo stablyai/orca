@@ -172,7 +172,8 @@ async function loadThemedFactories(): Promise<readonly StyleFactory[]> {
     import('../components/pr-sidebar/mobile-pr-compose-form-styles'),
     import('../components/pr-sidebar/pr-actions-styles'),
     import('../components/pr-sidebar/pr-create-empty-state-styles'),
-    import('../terminal/terminal-webview-frame-styles')
+    import('../terminal/terminal-webview-frame-styles'),
+    import('../../app/h/[hostId]/tasks-screen-styles')
   ])
   const [
     bottomDrawer,
@@ -237,7 +238,8 @@ async function loadThemedFactories(): Promise<readonly StyleFactory[]> {
     prComposeForm,
     prActions,
     prCreateEmpty,
-    terminalFrame
+    terminalFrame,
+    tasksScreen
   ] = mods
   return [
     { name: 'createBottomDrawerStyles', factory: bottomDrawer.createBottomDrawerStyles },
@@ -422,6 +424,10 @@ async function loadThemedFactories(): Promise<readonly StyleFactory[]> {
     {
       name: 'createTerminalWebViewFrameStyles',
       factory: terminalFrame.createTerminalWebViewFrameStyles
+    },
+    {
+      name: 'createTasksScreenStyles',
+      factory: tasksScreen.createTasksScreenStyles
     }
   ]
 }
@@ -620,5 +626,9 @@ describe('themed style factories', () => {
     const termFrame = createTerminalWebViewFrameStyles(darkColors)
     expect(termFrame.container.backgroundColor).toBe(darkColors.terminalBg)
     expect(termFrame.webview.backgroundColor).toBe(darkColors.terminalBg)
+
+    const { createTasksScreenStyles } = await import('../../app/h/[hostId]/tasks-screen-styles')
+    const tasks = createTasksScreenStyles(darkColors)
+    expect(tasks.createButtonText.color).toBe(darkColors.bgBase)
   })
 })
