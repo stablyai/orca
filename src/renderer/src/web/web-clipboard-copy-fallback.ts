@@ -7,6 +7,15 @@ export function copyClipboardTextViaExecCommand(text: string, doc: Document = do
     return false
   }
   const previousFocus = doc.activeElement as { focus?: () => void } | null
+  // Why: textarea.select() clobbers the page's DOM selection (chat/diff text,
+  // not xterm's canvas-internal selection); clone ranges so cleanup restores it.
+  const selection = doc.getSelection?.()
+  const previousRanges: Range[] = []
+  if (selection) {
+    for (let i = 0; i < selection.rangeCount; i++) {
+      previousRanges.push(selection.getRangeAt(i).cloneRange())
+    }
+  }
   const textarea = doc.createElement('textarea')
   textarea.value = text
   // Why: readonly stops mobile browsers from opening a keyboard; fixed +
@@ -24,6 +33,16 @@ export function copyClipboardTextViaExecCommand(text: string, doc: Document = do
     return false
   } finally {
     textarea.remove()
+    if (selection && previousRanges.length > 0) {
+      try {
+        selection.removeAllRanges()
+        for (const range of previousRanges) {
+          selection.addRange(range)
+        }
+      } catch {
+        /* ignore selection restore failures */
+      }
+    }
     previousFocus?.focus?.()
   }
 }
