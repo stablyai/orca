@@ -92,25 +92,31 @@ async function installCreateOrAttachTrace(app: ElectronApplication): Promise<voi
     const trace: TraceEntry[] = []
     scope.__orcaCreateOrAttachTrace = trace
 
-    // Why via `process.mainModule`: Playwright evaluates this function in a
-    // scope that has no module-level `require`, and a dynamic `import()` would
-    // be rewritten by the test transform. The main entry is CommonJS, so its
-    // module object still carries a working `require`.
-    const mainModule = (
-      process as typeof process & {
-        mainModule?: { require?: (id: string) => unknown }
-      }
-    ).mainModule
-    if (typeof mainModule?.require !== 'function') {
+    // Why not a plain `require`: Playwright evaluates this function in a scope
+    // with no module-level `require`, and a dynamic `import()` would be
+    // rewritten by the test transform. `process.getBuiltinModule` is the
+    // supported way to reach a builtin from such a scope and, unlike
+    // `process.mainModule` (deprecated, and gone the moment main becomes ESM),
+    // it does not bind this probe to the main entry staying CommonJS.
+    type NetModule = {
+      Socket: { prototype: { write: (this: unknown, ...args: unknown[]) => boolean } }
+    }
+    const runtime = process as typeof process & {
+      getBuiltinModule?: (id: string) => unknown
+      mainModule?: { require?: (id: string) => unknown }
+    }
+    const netModule =
+      typeof runtime.getBuiltinModule === 'function'
+        ? (runtime.getBuiltinModule('node:net') as NetModule)
+        : typeof runtime.mainModule?.require === 'function'
+          ? (runtime.mainModule.require('node:net') as NetModule)
+          : null
+    if (!netModule) {
       throw new Error(
-        `createOrAttach trace cannot reach node:net (process.mainModule=${typeof mainModule})`
+        `createOrAttach trace cannot reach node:net (getBuiltinModule=${typeof runtime.getBuiltinModule}, mainModule=${typeof runtime.mainModule})`
       )
     }
-    const socketPrototype = (
-      mainModule.require('node:net') as {
-        Socket: { prototype: { write: (this: unknown, ...args: unknown[]) => boolean } }
-      }
-    ).Socket.prototype
+    const socketPrototype = netModule.Socket.prototype
     const originalWrite = socketPrototype.write
     socketPrototype.write = function writeWithCreateOrAttachTrace(
       this: unknown,
@@ -698,13 +704,30 @@ test.describe('daemon crash lost worker archive', () => {
         )
         .toBe('codex')
 
+      // Why an ordinary shell here too: the brief requires the zero-replacement
+      // assertion to carry a same-run positive control from an ordinary shell
+      // (B3c-e2e-daemon-crash-brief.md:53). The worker's own attach-only count
+      // cannot serve as that control — a spawn that reaches the dying daemon is
+      // retried after the respawn, so it is not an exact quantity.
+      const ordinaryTabId = await createTerminalTab(page, worktreeId)
+      await waitForTerminalOnTab(page, ordinaryTabId)
+      const ordinaryPane = await getPaneIdentity(page, ordinaryTabId)
+      const ordinaryMarker = `RACE-ORDINARY-${testInfo.retry}-${Date.now()}`
+      await page.evaluate(
+        ({ marker, ptyId }) => window.api.pty.write(ptyId, `printf '${marker}\\n'\\n`),
+        { marker: ordinaryMarker, ptyId: ordinaryPane.ptyId }
+      )
+      await waitForTerminalOutput(page, ordinaryMarker)
+
       // Why wait for durable history: the recovery path can only archive what it
       // can capture, and the cold-restore payload is rebuilt from the on-disk
       // terminal history. Killing the daemon before the flush lands turns this
       // scenario into a `capture-unavailable` receipt that proves nothing.
-      await expect
-        .poll(() => historyContains(restartSession.userDataDir, workerMarker), { timeout: 20_000 })
-        .toBe(true)
+      for (const marker of [workerMarker, ordinaryMarker]) {
+        await expect
+          .poll(() => historyContains(restartSession.userDataDir, marker), { timeout: 20_000 })
+          .toBe(true)
+      }
 
       // Start the count at the crash boundary so pre-crash mounts can't be
       // mistaken for a recovery-time replacement request.
@@ -720,6 +743,28 @@ test.describe('daemon crash lost worker archive', () => {
       // calls land inside the same recovery window. The dead daemon is respawned
       // lazily by the first call that hits it (daemon-pty-adapter.ts:1442), which
       // is exactly the contention this scenario is about.
+      //
+      // What this does and does not lock, stated plainly: both calls name the
+      // same pane, so they merge at the pane-level reservation
+      // (`paneSpawnReservationsByPaneKey`, pty.ts:5068) — one layer above the
+      // archive-level `lostWorkerArchiveInFlight` map (pty.ts:2014). So this
+      // proves "concurrent callers yield exactly one archive and no
+      // replacement", NOT that the archive map itself dedupes.
+      //
+      // Two panes of one tab would give two admissions sharing a tab-level
+      // `operationKey`, but that construction cannot finish an archive on *this*
+      // path: under normal local persistence the non-calling leaf has no
+      // snapshot source — local layouts have `buffersByLeafId` and
+      // `scrollbackRefsByLeafId` pruned on persist
+      // (workspace-session-terminal-buffers.ts:79-125), only the calling leaf
+      // may use cold-restore data (pty.ts:2044-2055), and a single `unavailable`
+      // leaf fails the whole capture (terminal-archive-store.ts:124-128). That
+      // is a product gap tracked separately, and it is a statement about this
+      // daemon pre-spawn path, not proof that the map is unreachable in general:
+      // the renderer candidate handler (pty.ts:1838-1980) can supply
+      // `snapshotsByLeafId` and reach the same map. Locking that belongs in a
+      // main-IPC integration test, not here — left uncovered deliberately rather
+      // than papered over.
       const raceReceipts = (await page.evaluate(
         async ({ cwd, pane, tabId, requestedWorktreeId }) =>
           Promise.all(
@@ -737,6 +782,29 @@ test.describe('daemon crash lost worker archive', () => {
           ),
         { cwd: repoPath, pane: workerPane, requestedWorktreeId: worktreeId, tabId: workerTabId }
       )) as LostWorkerSpawnReceipt[]
+
+      // Why the ordinary shell restores after the worker race rather than inside
+      // it: it is the same-run positive control for the probe, not part of the
+      // contention under test, and keeping it out of that batch leaves the two
+      // worker admissions competing only with each other.
+      await page.evaluate(
+        ({ cwd, ordinary, ordinaryTab, requestedWorktreeId }) =>
+          window.api.pty.spawn({
+            cols: ordinary.cols,
+            cwd,
+            leafId: ordinary.leafId,
+            rows: ordinary.rows,
+            sessionId: ordinary.ptyId,
+            tabId: ordinaryTab,
+            worktreeId: requestedWorktreeId
+          }),
+        {
+          cwd: repoPath,
+          ordinary: ordinaryPane,
+          ordinaryTab: ordinaryTabId,
+          requestedWorktreeId: worktreeId
+        }
+      )
 
       // Why project the receipts instead of asserting `.kind` twice: a failure
       // then reports the recovery `code` that explains it instead of a bare
@@ -758,12 +826,37 @@ test.describe('daemon crash lost worker archive', () => {
           message: 'Concurrent lost-worker spawns did not settle on exactly one durable archive'
         })
         .toHaveLength(1)
+      // Why bind the receipts to the durable row: two receipts agreeing on an ID
+      // does not prove that ID is the archive that landed. Without this, both
+      // callers could share one wrong ID while the real archive persisted under
+      // another and the count-of-one above would still pass. (Cross-restart
+      // stability of an archive ID is covered by the first test.)
+      const durableRaceArchives = workerArchives(
+        readPersistedData(restartSession.userDataDir),
+        workerTabId
+      )
+      expect(durableRaceArchives[0]?.[0]).toBe(raceOutcomes[0]?.archiveId)
 
-      // Positive control for this run's probe: the recovery path must have sent
-      // at least one attach-only request, otherwise the zero below proves nothing.
-      // Why not an exact count: a spawn that reaches the daemon while it is dying
-      // is retried once after the respawn (daemon-pty-adapter.ts:1442), so one or
-      // two attach-only requests are both correct here.
+      // Same-run positive controls before the zero: the ordinary shell must show
+      // exactly one cold restore, and the recovery path at least one attach-only
+      // request. Without them a zero over an unwired probe is vacuously true.
+      // Why the worker count is not exact: a spawn that reaches the daemon while
+      // it is dying is retried once after the respawn
+      // (daemon-pty-adapter.ts:1442), so one or two are both correct.
+      await expect
+        .poll(
+          async () =>
+            countCreateOrAttach(
+              await readCreateOrAttachTrace(tracedApp),
+              (entry) =>
+                entry.sessionId === ordinaryPane.ptyId && !entry.attachOnly && entry.hasHistorySeed
+            ),
+          {
+            timeout: 20_000,
+            message: 'Main-side probe never observed the ordinary shell cold restore'
+          }
+        )
+        .toBe(1)
       await expect
         .poll(
           async () =>
