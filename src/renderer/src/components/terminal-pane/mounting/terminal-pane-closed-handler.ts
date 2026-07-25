@@ -1,5 +1,6 @@
 import { useAppStore } from '@/store/index'
 import { makePaneKey } from '../../../../../shared/workspace-layout/stable-pane-id'
+import { clearLivePaneCwd } from '@/components/sidebar/live-pane-cwd-registry'
 import { scheduleRuntimeGraphSync } from '@/runtime/sync-runtime-graph/graph-sync-scheduler'
 import {
   resolveTabTitleAfterPaneClose,
@@ -74,6 +75,9 @@ export function createTerminalPaneClosedHandler(
     disposeMapEntry(refs.osc52DisposablesRef.current, paneId)
     disposeMapEntry(refs.osc7DisposablesRef.current, paneId)
     paneCwdRef.current.delete(paneId)
+    if (closedPane?.leafId) {
+      clearLivePaneCwd(makePaneKey(tabId, closedPane.leafId))
+    }
     disposeMapEntry(refs.mouseHideDisposablesRef.current, paneId)
 
     const transport = paneTransportsRef.current.get(paneId)

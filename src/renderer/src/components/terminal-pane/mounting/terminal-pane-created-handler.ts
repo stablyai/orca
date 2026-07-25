@@ -10,6 +10,7 @@ import {
   showOsc52ClipboardFailedToast
 } from '../clipboard/osc52-clipboard-toast'
 import { parseOsc7 } from '../emulation/parse-osc7'
+import { setLivePaneCwd } from '@/components/sidebar/live-pane-cwd-registry'
 import { mergePaneCwdFromOsc7, settlePaneCwdDeferredSpawn } from '../layout/split/resolve-split-cwd'
 import {
   deferredSplitPaneConnectionInput,
@@ -136,6 +137,11 @@ export function createTerminalPaneCreatedHandler(
             pane.id,
             mergePaneCwdFromOsc7(paneCwdRef.current.get(pane.id), parsedCwd, confirmed)
           )
+          // Why: confirmed OSC 7 only — replayed scrollback must not flip
+          // sidebar agent worktree-mismatch labels (#10572).
+          if (confirmed) {
+            setLivePaneCwd(paneKey, parsedCwd)
+          }
         }
         return true
       })
