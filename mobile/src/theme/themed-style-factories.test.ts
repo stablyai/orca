@@ -18,6 +18,11 @@ type StyleFactory = {
 const THEMED_STYLE_FACTORIES: readonly StyleFactory[] = []
 
 describe('themed style factories', () => {
+  // Intentional seed: this PR only adds palettes. Conversion batches append factories.
+  it('starts empty until themed-styles conversion batches register factories', () => {
+    expect(THEMED_STYLE_FACTORIES).toHaveLength(0)
+  })
+
   it('emits the same keys in both palettes and differs in value', () => {
     for (const { name, factory } of THEMED_STYLE_FACTORIES) {
       const darkSheet = factory(darkColors)
