@@ -10,15 +10,21 @@ import type { AgentType } from './agent-status-types'
 
 export type { AgentType }
 
-/** Where a message came from. Used for dedup precedence: a transcript message
- *  supersedes a hook message, which supersedes a scrape message. */
-export const NATIVE_CHAT_SOURCES = ['transcript', 'hook', 'scrape'] as const
+/** Where a message came from. Used for dedup precedence: an ACP message
+ *  supersedes a transcript message, which supersedes a hook message, which
+ *  supersedes a scrape message. */
+export const NATIVE_CHAT_SOURCES = ['acp', 'transcript', 'hook', 'scrape'] as const
 export type NativeChatSource = (typeof NATIVE_CHAT_SOURCES)[number]
 
 /** Priority rank for a source — higher wins when two sources describe the same
  *  turn. Kept as data so the assembler's precedence is a single lookup, not a
- *  chain of conditionals. */
+ *  chain of conditionals.
+ *
+ *  Why `acp` outranks `transcript`: ACP session/update notifications are the
+ *  agent's own live report of the turn, delivered before any file is flushed,
+ *  so they are the most authoritative description available. */
 export const NATIVE_CHAT_SOURCE_PRIORITY: Record<NativeChatSource, number> = {
+  acp: 4,
   transcript: 3,
   hook: 2,
   scrape: 1

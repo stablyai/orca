@@ -1,6 +1,25 @@
 export type NativeChatTranscriptAgent = 'claude' | 'codex' | 'grok'
 
-/** Agents whose transcripts the native chat view can parse and render. */
+/** Agents that expose an Agent Client Protocol server instead of writing a
+ *  JSONL transcript. `hermes` serves ACP via `hermes acp` (acp_adapter, protocol
+ *  v1); `omp` via `omp acp`. Both report loadSession + session fork/list/resume,
+ *  so native chat drives them live over stdio rather than tailing a file. */
+export type NativeChatAcpAgent = 'hermes' | 'omp'
+
+/** How native chat obtains an agent's conversation. `transcript` tails the
+ *  agent's own JSONL on disk; `acp` drives a JSON-RPC session over stdio. */
+export type NativeChatTransport = 'transcript' | 'acp'
+
+export const NATIVE_CHAT_ACP_AGENTS: ReadonlySet<string> = new Set(['hermes', 'omp'])
+
+/** Agents whose conversation the native chat view can render.
+ *
+ *  NOTE: the ACP agents (`hermes`, `omp`) are deliberately NOT in this set yet.
+ *  This set is the UI availability gate — every consumer (native-chat-availability,
+ *  native-chat-initial-view-mode, mobile-native-chat-eligibility) offers the chat
+ *  toggle for anything listed here. Adding an ACP agent before the ACP transport
+ *  is wired would offer a toggle that opens an empty view. They get added in the
+ *  same change that lands the transport dispatch. */
 export const NATIVE_CHAT_SUPPORTED_AGENTS: ReadonlySet<string> = new Set([
   'claude',
   'openclaude',
@@ -10,6 +29,24 @@ export const NATIVE_CHAT_SUPPORTED_AGENTS: ReadonlySet<string> = new Set([
 
 export function isNativeChatSupportedAgent(agent: string | null | undefined): boolean {
   return agent != null && NATIVE_CHAT_SUPPORTED_AGENTS.has(agent)
+}
+
+export function resolveNativeChatAcpAgent(
+  agent: string | null | undefined
+): NativeChatAcpAgent | null {
+  return agent === 'hermes' || agent === 'omp' ? agent : null
+}
+
+/** Resolve which transport carries this agent's conversation, or null when the
+ *  agent is unsupported. Transcript is checked first so an agent that somehow
+ *  appears in both sets keeps its existing file-based behavior. */
+export function resolveNativeChatTransport(
+  agent: string | null | undefined
+): NativeChatTransport | null {
+  if (resolveNativeChatTranscriptAgent(agent) != null) {
+    return 'transcript'
+  }
+  return resolveNativeChatAcpAgent(agent) != null ? 'acp' : null
 }
 
 /** True when the agent renders a digit-commit question selector that ignores
