@@ -213,6 +213,11 @@ export const getLayoutEntries = createLocalizedCatalog((): SettingsSearchEntry[]
         'auto.components.settings.appearance.search.c1bca1885a',
         'file explorer'
       ),
+      // Why: settings copy also says "resource manager"; keep the outer catalog searchable by that alias.
+      ...translateSearchKeyword(
+        'auto.components.settings.appearance.search.resourceManager',
+        'resource manager'
+      ),
       ...translateSearchKeyword('auto.components.settings.appearance.search.font', 'font'),
       ...translateSearchKeyword('auto.components.settings.appearance.search.size', 'size'),
       ...translateSearchKeyword('auto.components.settings.appearance.search.5bff6a2ef0', 'sidebar'),
