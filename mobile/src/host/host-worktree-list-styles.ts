@@ -132,6 +132,6 @@ export const createHostWorktreeListStyles = (colors: ThemeColors) =>
     confirmBtnDestructiveText: {
       fontSize: typography.bodySize,
       fontWeight: '600',
-      color: '#fff'
+      color: colors.onStatusRed
     }
   })

@@ -15,11 +15,11 @@ type Props = {
 // height so we can size to content. On any failure (no network, parse error,
 // render error) we fall back to the raw source in a labeled mono code box.
 export function MermaidDiagram({ source, base }: Props) {
-  const { colors } = useTheme()
+  const { colors, mode } = useTheme()
   const styles = useThemedStyles(createMermaidDiagramStyles)
   const [height, setHeight] = useState(0)
   const [failed, setFailed] = useState(false)
-  const html = useMemo(() => buildHtml(source, colors), [colors, source])
+  const html = useMemo(() => buildHtml(source, colors, mode), [colors, mode, source])
 
   if (failed) {
     return <MermaidFallback source={source} base={base} />
@@ -78,8 +78,8 @@ function MermaidFallback({ source, base }: Props) {
 }
 
 // Self-contained HTML: load mermaid from CDN, render the graph, post the body
-// height (or "error") back to RN. Theme variables match the dark sidebar palette.
-function buildHtml(source: string, colors: ThemeColors): string {
+// height (or "error") back to RN. `theme: 'base'` so themeVariables actually apply.
+function buildHtml(source: string, colors: ThemeColors, mode: 'light' | 'dark'): string {
   // JSON.stringify safely escapes the user's diagram source for embedding.
   const encoded = JSON.stringify(source)
   return `<!DOCTYPE html>
@@ -106,9 +106,9 @@ function buildHtml(source: string, colors: ThemeColors): string {
     document.querySelector('.mermaid').textContent = ${encoded};
     mermaid.initialize({
       startOnLoad: false,
-      theme: 'dark',
+      theme: 'base',
       securityLevel: 'strict',
-      darkMode: true,
+      darkMode: ${mode === 'dark' ? 'true' : 'false'},
       themeVariables: {
         background: '${colors.bgRaised}',
         primaryColor: '${colors.bgPanel}',

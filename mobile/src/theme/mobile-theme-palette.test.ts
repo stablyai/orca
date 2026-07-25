@@ -5,6 +5,7 @@ const HEX = /^#[0-9a-f]{6}$/
 const RGBA = /^rgba\(\d+, ?\d+, ?\d+, ?[0-9.]+\)$/
 const SHARED_ACROSS_MODES = [
   'onAccent',
+  'onStatusRed',
   'mergeGreen',
   'onMergeGreen'
 ] as const satisfies readonly (keyof ThemeColors)[]
@@ -106,9 +107,9 @@ const CONTRAST_PAIRS: ReadonlyArray<{
 ]
 
 describe('mobile theme palettes', () => {
-  it('keeps dark and light key sets identical (33 keys)', () => {
+  it('keeps dark and light key sets identical (35 keys)', () => {
     expect(Object.keys(lightColors).sort()).toEqual(Object.keys(darkColors).sort())
-    expect(Object.keys(darkColors)).toHaveLength(33)
+    expect(Object.keys(darkColors)).toHaveLength(35)
   })
 
   // Why exact: the home stat tiles rendered this literal before the token existed,
@@ -118,12 +119,24 @@ describe('mobile theme palettes', () => {
     expect(lightColors.statTileSurface).toBe('rgba(0,0,0,0.04)')
   })
 
+  // Why exact: home icon wells used white-alpha; dark keeps that, light flips to ink-alpha
+  // so the well remains a lift over bgPanel instead of vanishing into white.
+  it('keeps the faint surface lift byte-identical in dark and re-derived in light', () => {
+    expect(darkColors.surfaceFaint).toBe('rgba(255,255,255,0.04)')
+    expect(lightColors.surfaceFaint).toBe('rgba(0,0,0,0.04)')
+  })
+
   // Why exact: the selected chip fill is textPrimary, so this ink has to sit on the
   // opposite side of the palette in each mode — reusing the dark literal in light
   // puts the same near-black ink on a near-black fill (1:1, glyph gone).
   it('inverts the on-inverted-fill ink instead of reusing the dark literal', () => {
     expect(darkColors.onInvertedMuted).toBe('rgba(10,10,10,0.5)')
     expect(lightColors.onInvertedMuted).toBe('rgba(255,255,255,0.5)')
+  })
+
+  it('keeps on-status-red white in both palettes', () => {
+    expect(darkColors.onStatusRed).toBe('#ffffff')
+    expect(lightColors.onStatusRed).toBe('#ffffff')
   })
 
   it('uses only 6-digit hex or rgba values, and textMuted is hex in both palettes', () => {

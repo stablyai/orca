@@ -5,7 +5,10 @@ export function escapeInjectedJavaScriptString(value: string): string {
   return JSON.stringify(value).replace(/<\/script/gi, '<\\/script')
 }
 
-export function buildMobileRichMarkdownEditorHtml(colors: ThemeColors): string {
+export function buildMobileRichMarkdownEditorHtml(
+  colors: ThemeColors,
+  colorScheme: 'light' | 'dark' = 'dark'
+): string {
   return `<!doctype html>
 <html>
 <head>
@@ -13,7 +16,7 @@ export function buildMobileRichMarkdownEditorHtml(colors: ThemeColors): string {
   <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no" />
   <style>
     :root {
-      color-scheme: dark;
+      color-scheme: ${colorScheme};
       --background: ${colors.bgBase};
       --editor-surface: ${colors.bgBase};
       --foreground: ${colors.textPrimary};

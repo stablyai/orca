@@ -13,16 +13,12 @@ const UNTHEMED_COLOR_IMPORTERS: readonly string[] = []
 // guard sees them: the sheets are byte-identical under dark and the both-palettes suite
 // still differs. May only shrink, or grow with a reason.
 const MODE_FIXED_FACTORY_LITERALS: Readonly<Record<string, string>> = {
-  'app/index.tsx#createHomeScreenStyles#rgba(255,255,255,0.04)':
-    'decorative lift on the quick-action icon and step number; light composites it to the surface, losing the lift but nothing readable',
   'app/pair-scan.tsx#createPairScanStyles#rgba(255,255,255,0.7)':
     'reticle over the live camera feed, not over an app surface',
   'src/browser/MobileBrowserPane.tsx#createMobileBrowserPaneStyles#rgba(13, 15, 24, 0.2)':
     'scrim over rendered web content, which is not our palette in either mode',
   'src/browser/MobileBrowserPane.tsx#createMobileBrowserPaneStyles#rgba(13, 15, 24, 0.5)':
     'dialog scrim over rendered web content',
-  'src/components/ConfirmModal.tsx#createConfirmModalStyles##fff':
-    'on-fill text over statusRed, the same red in both palettes',
   'src/components/DragReorderList.tsx#createDragReorderListStyles##000':
     'shadowColor — RN shadows are black in both modes',
   'src/components/MobileHtmlPreview.tsx#createMobileHtmlPreviewStyles##ffffff':
@@ -36,9 +32,7 @@ const MODE_FIXED_FACTORY_LITERALS: Readonly<Record<string, string>> = {
   'src/components/terminal-shortcut-settings-styles.ts#createTerminalShortcutSettingsStyles#rgba(239, 68, 68, 0.1)':
     'statusRed wash; still a legible pink over a light surface',
   'src/components/terminal-shortcut-settings-styles.ts#createTerminalShortcutSettingsStyles#rgba(239, 68, 68, 0.2)':
-    'statusRed wash',
-  'src/host/host-worktree-list-styles.ts#createHostWorktreeListStyles##fff':
-    'on-fill text over statusRed'
+    'statusRed wash'
 }
 
 const COLOUR_LITERAL = /#[0-9a-fA-F]{3,8}\b|\brgba?\([^)]*\)/g

@@ -109,6 +109,6 @@ export const createConfirmModalStyles = (colors: ThemeColors) =>
     destructiveText: {
       fontSize: typography.bodySize,
       fontWeight: '600',
-      color: '#fff'
+      color: colors.onStatusRed
     }
   })

@@ -8424,7 +8424,7 @@ export default function MobileTasksScreen() {
       entries.push({ type: 'item', key: item.key, item })
     }
     return entries
-  }, [reposById, sortedItems, taskSort])
+  }, [colors, reposById, sortedItems, taskSort])
   const sortLabel = SORT_OPTIONS.find((option) => option.value === taskSort)?.label ?? 'Updated'
   const githubProjectFields = githubProjectTable?.selectedView.fields ?? []
   const githubProjectViewSort = githubProjectTable?.selectedView.sortByFields?.[0] ?? null

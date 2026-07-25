@@ -18,124 +18,131 @@ type RowState = Pick<
   | 'setDiscardTarget'
 >
 
+function ThemedFileRow({
+  item,
+  busyAction,
+  openingPath,
+  openingBranchPath,
+  openFile,
+  runGitAction,
+  setDiscardTarget
+}: RowState & { item: MobileGitStatusEntryView }) {
+  const { colors } = useTheme()
+  const styles = useThemedStyles(createMobileSourceControlStyles)
+  const rowBusy =
+    busyAction === item.stageActionId ||
+    busyAction === item.unstageActionId ||
+    busyAction === item.discardActionId ||
+    openingPath === item.path
+  const rowDisabled =
+    !item.canOpen || busyAction !== null || openingPath !== null || openingBranchPath !== null
+  const ioBusy = busyAction !== null || openingPath !== null || openingBranchPath !== null
+  return (
+    <Pressable
+      style={({ pressed }) => [
+        styles.fileRow,
+        pressed && item.canOpen && styles.fileRowPressed,
+        rowDisabled && styles.fileRowDisabled,
+        !item.canOpen && styles.fileRowUnavailable
+      ]}
+      onPress={() => void openFile(item)}
+      disabled={rowDisabled}
+      accessibilityLabel={`Open changed file ${item.path}`}
+    >
+      <View style={styles.statusBadge}>
+        <Text style={[styles.statusBadgeText, { color: statusColor(item.status, colors) }]}>
+          {MOBILE_GIT_STATUS_LABELS[item.status]}
+        </Text>
+      </View>
+      <FileText
+        size={16}
+        color={item.canOpen ? colors.textSecondary : colors.textMuted}
+        strokeWidth={2.1}
+      />
+      <View style={styles.fileTextBlock}>
+        <Text style={[styles.filePath, !item.canOpen && styles.filePathDisabled]} numberOfLines={1}>
+          {item.path}
+        </Text>
+        {item.oldPath ? (
+          <Text style={styles.fileMeta} numberOfLines={1}>
+            from {item.oldPath}
+          </Text>
+        ) : item.conflictStatus === 'unresolved' ? (
+          <Text style={styles.fileMeta} numberOfLines={1}>
+            Unresolved conflict
+          </Text>
+        ) : null}
+      </View>
+      {rowBusy ? (
+        <ActivityIndicator size="small" color={colors.textSecondary} />
+      ) : item.area === 'staged' ? (
+        <Pressable
+          style={({ pressed }) => [
+            styles.iconButton,
+            ioBusy && styles.iconButtonDisabled,
+            pressed && styles.iconButtonPressed
+          ]}
+          disabled={ioBusy}
+          onPress={() =>
+            void runGitAction(item.unstageActionId, 'git.unstage', { filePath: item.path })
+          }
+          hitSlop={8}
+          accessibilityLabel={`Unstage ${item.path}`}
+        >
+          <Minus size={16} color={colors.textSecondary} strokeWidth={2.2} />
+        </Pressable>
+      ) : item.canStage || item.canDiscard ? (
+        <View style={styles.rowActions}>
+          {item.canStage ? (
+            <Pressable
+              style={({ pressed }) => [
+                styles.iconButton,
+                ioBusy && styles.iconButtonDisabled,
+                pressed && styles.iconButtonPressed
+              ]}
+              disabled={ioBusy}
+              onPress={() =>
+                void runGitAction(item.stageActionId, 'git.stage', { filePath: item.path })
+              }
+              hitSlop={8}
+              accessibilityLabel={`Stage ${item.path}`}
+            >
+              <Plus size={16} color={colors.textSecondary} strokeWidth={2.2} />
+            </Pressable>
+          ) : null}
+          {item.canDiscard ? (
+            <Pressable
+              style={({ pressed }) => [
+                styles.iconButton,
+                ioBusy && styles.iconButtonDisabled,
+                pressed && styles.iconButtonPressed
+              ]}
+              disabled={ioBusy}
+              onPress={() => setDiscardTarget(item)}
+              hitSlop={8}
+              accessibilityLabel={`Discard ${item.path}`}
+            >
+              <Trash2 size={16} color={colors.statusRed} strokeWidth={2.1} />
+            </Pressable>
+          ) : null}
+        </View>
+      ) : null}
+      {!rowBusy && item.canOpen ? (
+        <ChevronRight size={16} color={colors.textMuted} strokeWidth={2.1} />
+      ) : null}
+    </Pressable>
+  )
+}
+
+// SectionList calls renderItem as a plain callback — return a component element so hooks run
+// under a real React mount, not as a free function call.
 export function makeRenderFileRow(
   state: RowState
 ): SectionListRenderItem<
   MobileGitStatusEntryView,
   MobileSourceControlSection<MobileGitStatusEntryView>
 > {
-  const { busyAction, openingPath, openingBranchPath, openFile, runGitAction, setDiscardTarget } =
-    state
-  return function FileRow({ item }) {
-    const { colors } = useTheme()
-    const styles = useThemedStyles(createMobileSourceControlStyles)
-    const rowBusy =
-      busyAction === item.stageActionId ||
-      busyAction === item.unstageActionId ||
-      busyAction === item.discardActionId ||
-      openingPath === item.path
-    const rowDisabled =
-      !item.canOpen || busyAction !== null || openingPath !== null || openingBranchPath !== null
-    const ioBusy = busyAction !== null || openingPath !== null || openingBranchPath !== null
-    return (
-      <Pressable
-        style={({ pressed }) => [
-          styles.fileRow,
-          pressed && item.canOpen && styles.fileRowPressed,
-          rowDisabled && styles.fileRowDisabled,
-          !item.canOpen && styles.fileRowUnavailable
-        ]}
-        onPress={() => void openFile(item)}
-        disabled={rowDisabled}
-        accessibilityLabel={`Open changed file ${item.path}`}
-      >
-        <View style={styles.statusBadge}>
-          <Text style={[styles.statusBadgeText, { color: statusColor(item.status, colors) }]}>
-            {MOBILE_GIT_STATUS_LABELS[item.status]}
-          </Text>
-        </View>
-        <FileText
-          size={16}
-          color={item.canOpen ? colors.textSecondary : colors.textMuted}
-          strokeWidth={2.1}
-        />
-        <View style={styles.fileTextBlock}>
-          <Text
-            style={[styles.filePath, !item.canOpen && styles.filePathDisabled]}
-            numberOfLines={1}
-          >
-            {item.path}
-          </Text>
-          {item.oldPath ? (
-            <Text style={styles.fileMeta} numberOfLines={1}>
-              from {item.oldPath}
-            </Text>
-          ) : item.conflictStatus === 'unresolved' ? (
-            <Text style={styles.fileMeta} numberOfLines={1}>
-              Unresolved conflict
-            </Text>
-          ) : null}
-        </View>
-        {rowBusy ? (
-          <ActivityIndicator size="small" color={colors.textSecondary} />
-        ) : item.area === 'staged' ? (
-          <Pressable
-            style={({ pressed }) => [
-              styles.iconButton,
-              ioBusy && styles.iconButtonDisabled,
-              pressed && styles.iconButtonPressed
-            ]}
-            disabled={ioBusy}
-            onPress={() =>
-              void runGitAction(item.unstageActionId, 'git.unstage', { filePath: item.path })
-            }
-            hitSlop={8}
-            accessibilityLabel={`Unstage ${item.path}`}
-          >
-            <Minus size={16} color={colors.textSecondary} strokeWidth={2.2} />
-          </Pressable>
-        ) : item.canStage || item.canDiscard ? (
-          <View style={styles.rowActions}>
-            {item.canStage ? (
-              <Pressable
-                style={({ pressed }) => [
-                  styles.iconButton,
-                  ioBusy && styles.iconButtonDisabled,
-                  pressed && styles.iconButtonPressed
-                ]}
-                disabled={ioBusy}
-                onPress={() =>
-                  void runGitAction(item.stageActionId, 'git.stage', { filePath: item.path })
-                }
-                hitSlop={8}
-                accessibilityLabel={`Stage ${item.path}`}
-              >
-                <Plus size={16} color={colors.textSecondary} strokeWidth={2.2} />
-              </Pressable>
-            ) : null}
-            {item.canDiscard ? (
-              <Pressable
-                style={({ pressed }) => [
-                  styles.iconButton,
-                  ioBusy && styles.iconButtonDisabled,
-                  pressed && styles.iconButtonPressed
-                ]}
-                disabled={ioBusy}
-                onPress={() => setDiscardTarget(item)}
-                hitSlop={8}
-                accessibilityLabel={`Discard ${item.path}`}
-              >
-                <Trash2 size={16} color={colors.statusRed} strokeWidth={2.1} />
-              </Pressable>
-            ) : null}
-          </View>
-        ) : null}
-        {!rowBusy && item.canOpen ? (
-          <ChevronRight size={16} color={colors.textMuted} strokeWidth={2.1} />
-        ) : null}
-      </Pressable>
-    )
-  }
+  return ({ item }) => <ThemedFileRow item={item} {...state} />
 }
 
 type FooterState = Pick<

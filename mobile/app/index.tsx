@@ -1347,7 +1347,7 @@ export const createHomeScreenStyles = (colors: ThemeColors) =>
       width: 28,
       height: 28,
       borderRadius: 9,
-      backgroundColor: 'rgba(255,255,255,0.04)',
+      backgroundColor: colors.surfaceFaint,
       alignItems: 'center',
       justifyContent: 'center'
     },
@@ -1420,7 +1420,7 @@ export const createHomeScreenStyles = (colors: ThemeColors) =>
       width: 28,
       height: 28,
       borderRadius: 8,
-      backgroundColor: 'rgba(255,255,255,0.04)',
+      backgroundColor: colors.surfaceFaint,
       borderWidth: 1,
       borderColor: colors.borderSubtle,
       alignItems: 'center',

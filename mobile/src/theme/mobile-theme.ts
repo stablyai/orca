@@ -12,6 +12,10 @@ export const darkColors = {
   // (a few percent of ink over bgBase) instead of the dark hex, which composited
   // to a mid-grey that made the 11px labels unreadable.
   statTileSurface: 'rgba(26,26,26,0.6)',
+  // Faint lift for icon wells on panel surfaces (home quick-action / onboarding step).
+  // Dark keeps the previous white-alpha literal; light uses black-alpha so the well
+  // stays visible over bgPanel instead of vanishing into white.
+  surfaceFaint: 'rgba(255,255,255,0.04)',
 
   textPrimary: '#e0e0e0',
   textSecondary: '#888888',
@@ -38,6 +42,8 @@ export const darkColors = {
   statusGreen: '#22c55e',
   statusAmber: '#f59e0b',
   statusRed: '#ef4444',
+  // On-fill text over statusRed destructive buttons (same white in both palettes).
+  onStatusRed: '#ffffff',
   // Merge CTA fill + its on-fill text, mirroring the desktop ChecksPanel's
   // bg-green-600 "Squash and merge" button (green-600 / white).
   mergeGreen: '#16a34a',
@@ -71,6 +77,7 @@ export const lightColors: ThemeColors = {
   borderSubtle: '#e5e5e5', // --border :150
   editorSurface: '#ffffff', // --editor-surface :134
   statTileSurface: 'rgba(0,0,0,0.04)', // composites to bgPanel over bgBase, matching the sibling cards
+  surfaceFaint: 'rgba(0,0,0,0.04)',
 
   textPrimary: '#0a0a0a', // --foreground :135 (NOT --primary, which is a surface token)
   textSecondary: '#737373', // --muted-foreground :145
@@ -97,6 +104,7 @@ export const lightColors: ThemeColors = {
   // ~5:1-on-bgBase weight as statusGreen/statusRed so the trio reads as one family.
   statusAmber: '#b45309',
   statusRed: '#e40014', // --destructive :148
+  onStatusRed: '#ffffff',
   // Fixed: desktop renders the merge CTA bg-green-600/text-white with no dark: variant.
   mergeGreen: '#16a34a',
   onMergeGreen: '#ffffff',

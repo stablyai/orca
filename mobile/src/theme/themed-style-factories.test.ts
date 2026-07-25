@@ -577,7 +577,7 @@ describe('themed style factories', () => {
     const confirm = createConfirmModalStyles(darkColors)
     expect(confirm.title.color).toBe(darkColors.textPrimary)
     expect(confirm.destructiveButton.backgroundColor).toBe(darkColors.statusRed)
-    expect(confirm.destructiveText.color).toBe('#fff')
+    expect(confirm.destructiveText.color).toBe(darkColors.onStatusRed)
 
     const fab = createNewWorkspaceFabStyles(darkColors)
     expect(fab.fab.backgroundColor).toBe(darkColors.surfaceBright)
@@ -628,7 +628,7 @@ describe('themed style factories', () => {
     const list = createHostWorktreeListStyles(darkColors)
     expect(list.sectionTitle.color).toBe(darkColors.textMuted)
     expect(list.confirmBtnDestructive.backgroundColor).toBe(darkColors.statusRed)
-    expect(list.confirmBtnDestructiveText.color).toBe('#fff')
+    expect(list.confirmBtnDestructiveText.color).toBe(darkColors.onStatusRed)
 
     const { createSmartWorkspaceSourceDrawerStyles } =
       await import('../components/smart-workspace-source-drawer-styles')
