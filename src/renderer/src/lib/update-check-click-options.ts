@@ -8,6 +8,11 @@ function isMacShortcutPlatform(): boolean {
   return getShortcutPlatform() === 'darwin'
 }
 
+/**
+ * Localized one-liner documenting the modifier-click update channels, for the
+ * Settings hint line and the renderer tooltips. `isMac` is injectable so tests
+ * can assert both platform variants without stubbing the platform.
+ */
 export function getUpdateCheckHint(isMac = isMacShortcutPlatform()): string {
   // Why: only the modifier glyphs are platform-bound; the sentence (including
   // "click") stays translatable as a whole.
@@ -28,6 +33,10 @@ export function getUpdateCheckHint(isMac = isMacShortcutPlatform()): string {
   )}`
 }
 
+/**
+ * Maps a renderer click's modifier state onto update channel options: Shift
+ * selects the latest RC, Cmd (mac) / Ctrl (elsewhere) the latest perf build.
+ */
 export function getUpdateCheckClickOptions(
   event: UpdateCheckClickEvent,
   isMac = isMacShortcutPlatform()

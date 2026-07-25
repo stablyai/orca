@@ -87,9 +87,15 @@ function buildAndApplyMenu(options: RegisterAppMenuOptions): void {
     webContents.reload()
   }
 
-  // Why: modifier-click update checks are hidden power-user affordances.
-  // Extracted so the macOS app-menu entries and Windows/Linux Help entries
-  // share identical RC/perf channel routing.
+  /**
+   * Maps a menu click's modifier state onto update channel options: Shift
+   * selects the latest RC, Cmd (mac) / Ctrl (elsewhere) the latest perf build.
+   * Accelerator invocations carry no meaningful modifier state, so they always
+   * resolve to the stable channel.
+   *
+   * Why: extracted so the macOS app-menu entries and the Windows/Linux Help
+   * entries share identical RC/perf routing instead of duplicating it.
+   */
   const menuUpdateCheckOptions = (event: Electron.KeyboardEvent): UpdateCheckOptions => {
     const modifierClick = !event.triggeredByAccelerator
     const localBuild = isMac && modifierClick && event.altKey === true
