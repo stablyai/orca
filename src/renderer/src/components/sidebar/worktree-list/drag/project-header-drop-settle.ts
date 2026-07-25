@@ -19,8 +19,22 @@ export function settleProjectHeaderDrop(args: ProjectHeaderDropSettleArgs): void
       : PROJECT_HEADER_DROP_SETTLE_MS
   window.setTimeout(
     () => {
-      commitProjectHeaderDragDrop(args)
-      args.onFinish()
+      // The commit helper is typed void, but a caller can still hand back a promise.
+      const result = commitProjectHeaderDragDrop(args) as void | PromiseLike<void>
+      if (result) {
+        void result.then(
+          () => {
+            args.onFinish()
+          },
+          (error: unknown) => {
+            // Why: silent .then(onFinish, onFinish) hid failed reorders while UI looked settled.
+            console.warn('[sidebar] Project header drag commit failed:', error)
+            args.onFinish()
+          }
+        )
+      } else {
+        args.onFinish()
+      }
     },
     canAnimate ? settleMs : 0
   )
