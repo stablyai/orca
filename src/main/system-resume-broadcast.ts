@@ -21,9 +21,9 @@ type SystemResumeBroadcastOptions = {
   now?: () => number
 }
 
-// Why: macOS maintenance-sleeps dozens of times a day (median span ~2s), which would
-// flood the 30-entry breadcrumb ring and evict the crash evidence this is meant to
-// explain. Only a sleep long enough to swallow a renderer heartbeat is worth recording.
+// Why: a sleep shorter than the renderer's 60s memory-sample interval only delays a
+// heartbeat, it cannot open the multi-minute gap this attributes -- so recording one
+// spends a slot in the 30-entry ring without explaining anything.
 const MIN_REPORTABLE_SUSPEND_MS = 60_000
 
 // Why: renderers cannot observe OS sleep/wake directly, and Linux has no

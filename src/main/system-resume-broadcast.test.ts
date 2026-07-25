@@ -133,7 +133,7 @@ describe('registerSystemResumeBroadcast', () => {
     expect(window.webContents.send).toHaveBeenCalledWith(SYSTEM_RESUMED_CHANNEL)
   })
 
-  it('ignores maintenance sleeps too short to swallow a renderer heartbeat', () => {
+  it('ignores sleeps too short to open a gap, keeping ring slots for real evidence', () => {
     const { source, fireSuspend, fireResume } = createResumeSource()
     const clock = { value: 0 }
     registerSystemResumeBroadcast({
@@ -142,7 +142,7 @@ describe('registerSystemResumeBroadcast', () => {
       now: () => clock.value
     })
 
-    // Why: 20 maintenance cycles must not evict the 30-entry breadcrumb ring.
+    // Why: 20 sub-heartbeat cycles must not evict the 30-entry breadcrumb ring.
     for (let cycle = 0; cycle < 20; cycle++) {
       fireSuspend()
       clock.value += 2_000
