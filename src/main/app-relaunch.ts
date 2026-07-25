@@ -8,6 +8,7 @@ export type AppRelaunchReason =
   | 'profile-switch'
   | 'profile-transfer'
   | 'renderer-request'
+  | 'renderer-sandbox-fallback'
 
 export function relaunchApp(reason: AppRelaunchReason, data?: CrashReportBreadcrumbData): void {
   // Why: the current process can exit immediately after app.relaunch(), so

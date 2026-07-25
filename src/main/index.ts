@@ -103,6 +103,21 @@ import {
   isGpuFallbackCrashCandidate
 } from './crash-reporting/gpu-crash-fallback-decision'
 import {
+  readActiveRendererSandboxFallbackMarker,
+  writeRendererSandboxFallbackMarker
+} from './startup/renderer-sandbox-fallback-marker'
+import {
+  DEFAULT_RENDERER_SANDBOX_FALLBACK_THRESHOLD,
+  DEFAULT_RENDERER_SANDBOX_FALLBACK_WINDOW_MS,
+  RendererSandboxCrashFallbackTracker,
+  STATUS_BREAKPOINT_EXIT_CODE,
+  isRendererSandboxFallbackCrashCandidate
+} from './crash-reporting/renderer-sandbox-crash-decision'
+import {
+  isRendererSandboxFallbackActive,
+  setRendererSandboxFallbackActive
+} from './window/renderer-sandbox-fallback-state'
+import {
   shouldSuppressDevEducation,
   suppressDevEducationForStore
 } from './startup/dev-education-suppression'
@@ -290,13 +305,24 @@ let managedWslCliReconciliationReady: Promise<void> = Promise.resolve()
 let managedWslCliStartupBarrierReady: Promise<void> = Promise.resolve()
 // Why: the serve barrier fails open, so this state tells headless clients a WSL PTY launch may still race an un-migrated registration ('settled' = off-Windows no-op).
 let managedWslCliReconciliationStatus: 'pending' | 'settled' | 'failed' = 'settled'
-// Why: GPU child crashes clustered right after launch indicate a broken driver; track them to switch this build to software rendering.
-const gpuLaunchTimeMs = Date.now()
+// Why: GPU child crashes and renderer STATUS_BREAKPOINT crashes clustered right after launch indicate a broken driver or sandbox; both trackers measure from this shared launch time.
+const appLaunchTimeMs = Date.now()
 const gpuCrashFallbackTracker = new GpuCrashFallbackTracker({
   windowMs: DEFAULT_GPU_CRASH_FALLBACK_WINDOW_MS,
   threshold: DEFAULT_GPU_CRASH_FALLBACK_THRESHOLD
 })
 let gpuFallbackActiveThisLaunch = false
+// Why: on Win11 build 26200 the sandboxed renderer breakpoints on launch (#9891); a burst means this build must run its top-level renderer unsandboxed.
+const rendererSandboxCrashFallbackTracker = new RendererSandboxCrashFallbackTracker({
+  windowMs: DEFAULT_RENDERER_SANDBOX_FALLBACK_WINDOW_MS,
+  threshold: DEFAULT_RENDERER_SANDBOX_FALLBACK_THRESHOLD
+})
+// Why: a launch-time STATUS_BREAKPOINT burst detected this launch (#9891) carries the context for the user-consent prompt shown when the recovery breaker gives up. Never acted on without explicit consent.
+let rendererSandboxBurst: {
+  reason: string
+  exitCode: number | null
+  crashesInWindow: number
+} | null = null
 let localPtyStartupReady: Promise<void> = Promise.resolve()
 let localPtyProviderStartupReady: Promise<void> = Promise.resolve()
 const AGENT_STATE_CRASH_BREADCRUMB_MIN_INTERVAL_MS = 30_000
@@ -663,6 +689,7 @@ if (hasSingleInstanceLock) {
   configureElectronNetworkCompatibility()
   enableRendererHeapHeadroom()
   maybeApplyGpuFallbackForThisLaunch()
+  maybeApplyRendererSandboxFallbackForThisLaunch()
   if (!gpuFallbackActiveThisLaunch) {
     enableMainProcessGpuFeatures()
   }
@@ -1053,6 +1080,17 @@ function openMainWindow(): BrowserWindow {
         },
         webContentsId
       )
+      // Why: a launch-time renderer STATUS_BREAKPOINT burst means this build's renderer can't run sandboxed (#9891); engage the build-scoped unsandboxed-renderer fallback before the recovery breaker dead-ends at the "keeps failing to load" dialog. Only genuine (teardown 'none') main-window crashes count.
+      if (
+        isRendererSandboxFallbackCrashCandidate({
+          platform: process.platform,
+          source: 'renderer',
+          exitCode: details.exitCode ?? null
+        }) &&
+        getExpectedTeardownScope(webContentsId) === 'none'
+      ) {
+        handleRendererSandboxCrash(details.exitCode ?? null, details.reason)
+      }
     },
     shouldRecoverRenderer: (details, webContentsId) =>
       shouldRecoverRendererAfterProcessGone({
@@ -1065,9 +1103,19 @@ function openMainWindow(): BrowserWindow {
         exitCode: details.exitCode ?? null,
         recentRecoveryCount
       })
-      void presentRendererRecoveryPrompt(recentRecoveryCount)
+      // Why: if the crash loop is the win32 renderer-sandbox signature (#9891), OFFER the user the unsandboxed-restart workaround instead of the generic dead-end dialog. Never auto-applied.
+      if (
+        rendererSandboxBurst &&
+        !isRendererSandboxFallbackActive() &&
+        process.platform === 'win32'
+      ) {
+        void presentRendererSandboxConsentPrompt()
+      } else {
+        void presentRendererRecoveryPrompt(recentRecoveryCount)
+      }
     },
     deferLoad: true,
+    disableRendererSandbox: isRendererSandboxFallbackActive(),
     title: devInstanceIdentity.name,
     getKeybindings: () => keybindings?.getOverrides(),
     onBeforeReload: ({ ignoreCache, webContentsId }) => {
@@ -1395,7 +1443,7 @@ function handleGpuChildCrash(reason: string, exitCode: number | null): void {
   if (gpuFallbackActiveThisLaunch || isQuitting || isServeMode) {
     return
   }
-  const result = gpuCrashFallbackTracker.recordGpuCrash(Date.now() - gpuLaunchTimeMs)
+  const result = gpuCrashFallbackTracker.recordGpuCrash(Date.now() - appLaunchTimeMs)
   if (!result.shouldEngageFallback) {
     return
   }
@@ -1427,6 +1475,126 @@ function handleGpuChildCrash(reason: string, exitCode: number | null): void {
     processReason: reason,
     exitCode,
     crashesInWindow: result.crashesInWindow
+  })
+  app.exit(0)
+}
+
+// Why: read the renderer-sandbox-fallback marker before app.whenReady() so the first BrowserWindow is created unsandboxed. Windows desktop only; sets no command-line switch — the effect is applied per-window in createMainWindow.
+function maybeApplyRendererSandboxFallbackForThisLaunch(): void {
+  if (isServeMode || process.platform !== 'win32') {
+    return
+  }
+  const marker = readActiveRendererSandboxFallbackMarker(
+    app.getPath('userData'),
+    getGpuFallbackEnvironment()
+  )
+  if (!marker) {
+    return
+  }
+  setRendererSandboxFallbackActive(true)
+  recordCrashBreadcrumb('renderer_sandbox_fallback_applied', {
+    crashesInWindow: marker.crashesInWindow,
+    exitCode: marker.exitCode
+  })
+  // Why: per-window sandbox:false is silently ignored if the sandbox is forced globally (app.enableSandbox()/--enable-sandbox), which would send #9891 machines back into the crash loop. Surface that so it's diagnosable instead of invisible.
+  if (app.commandLine.hasSwitch('enable-sandbox')) {
+    recordDurableCrashBreadcrumb('renderer_sandbox_fallback_neutralized', {
+      crashesInWindow: marker.crashesInWindow
+    })
+  }
+}
+
+// Why: detection only — a burst of launch-time renderer STATUS_BREAKPOINT crashes is the sandbox-incompatibility signature (#9891). Orca NEVER drops the sandbox automatically; it just remembers the burst so the recovery-exhausted handler can offer the workaround to the user.
+function handleRendererSandboxCrash(exitCode: number | null, reason: string): void {
+  if (isRendererSandboxFallbackActive() || isQuitting || isServeMode) {
+    return
+  }
+  const result = rendererSandboxCrashFallbackTracker.recordRendererCrash(
+    Date.now() - appLaunchTimeMs
+  )
+  if (!result.shouldEngageFallback) {
+    return
+  }
+  rendererSandboxBurst = { reason, exitCode, crashesInWindow: result.crashesInWindow }
+  recordDurableCrashBreadcrumb('renderer_sandbox_crash_burst_detected', {
+    reason,
+    exitCode,
+    crashesInWindow: result.crashesInWindow
+  })
+}
+
+// Why: the renderer cannot launch sandboxed on this build (#9891). Never auto-drop the sandbox — ASK the user whether to restart with it off. Shown when the recovery breaker gives up, replacing the generic "keeps failing to load" dialog for this signature.
+async function presentRendererSandboxConsentPrompt(): Promise<void> {
+  const burst = rendererSandboxBurst
+  if (!burst || isQuitting || isServeMode) {
+    return
+  }
+  const parent = mainWindow && !mainWindow.isDestroyed() ? mainWindow : undefined
+  const options = {
+    type: 'warning' as const,
+    buttons: ['Disable the sandbox and restart', 'Quit'],
+    defaultId: 0,
+    cancelId: 1,
+    title: 'Orca keeps crashing on startup',
+    message:
+      'Orca’s window crashed repeatedly right after launch, which looks like a security-sandbox incompatibility with this version of Windows.',
+    detail:
+      'Orca can restart with the renderer security sandbox turned off to work around it. This lowers one process-hardening layer for the app window only — your workspaces and data stay isolated, and Orca automatically tries the sandbox again after its next update. Nothing changes unless you choose to disable it.'
+  }
+  const { response } = parent
+    ? await dialog.showMessageBox(parent, options)
+    : await dialog.showMessageBox(options)
+  if (response === 0) {
+    recordDurableCrashBreadcrumb('renderer_sandbox_fallback_user_accepted', {
+      crashesInWindow: burst.crashesInWindow
+    })
+    engageRendererSandboxFallback(burst)
+  } else {
+    recordDurableCrashBreadcrumb('renderer_sandbox_fallback_user_declined', {
+      crashesInWindow: burst.crashesInWindow
+    })
+    isQuitting = true
+    app.quit()
+  }
+}
+
+// Why: only invoked AFTER explicit user consent — persist a build-scoped marker and relaunch with the top-level renderer unsandboxed for this build.
+function engageRendererSandboxFallback(burst: {
+  reason: string
+  exitCode: number | null
+  crashesInWindow: number
+}): void {
+  if (isRendererSandboxFallbackActive() || isServeMode) {
+    return
+  }
+  const environment = getWindowsGpuFallbackEnvironment()
+  if (!environment) {
+    return
+  }
+  recordCrashBreadcrumb('renderer_sandbox_fallback_engaged', {
+    reason: burst.reason,
+    exitCode: burst.exitCode,
+    crashesInWindow: burst.crashesInWindow
+  })
+  try {
+    writeRendererSandboxFallbackMarker(
+      app.getPath('userData'),
+      {
+        engagedAt: Date.now(),
+        crashesInWindow: burst.crashesInWindow,
+        exitCode: burst.exitCode ?? STATUS_BREAKPOINT_EXIT_CODE
+      },
+      environment
+    )
+  } catch (error) {
+    console.warn('[renderer-sandbox-fallback] failed to persist marker:', error)
+    return
+  }
+  isQuitting = true
+  relaunchApp('renderer-sandbox-fallback', {
+    processReason: burst.reason,
+    exitCode: burst.exitCode,
+    crashesInWindow: burst.crashesInWindow
   })
   app.exit(0)
 }

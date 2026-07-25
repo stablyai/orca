@@ -5,6 +5,7 @@ import type { Store } from '../persistence'
 import { rectHasVisibleAreaOnAnyDisplay } from './window-bounds-validation'
 import { sendToTrustedUIRenderer } from '../ipc/ui'
 import { installPrivilegedWindowNavigationPolicy } from './privileged-window-navigation'
+import { isRendererSandboxFallbackActive } from './renderer-sandbox-fallback-state'
 import { stepUIZoomLevel, type UIZoomDirection } from '../../shared/ui-zoom-level'
 import { nativeZoomCommandMatchesKeybindings } from '../../shared/window-shortcut-policy'
 import {
@@ -168,7 +169,8 @@ export function createOrFocusDashboardPopout(
     // no such chrome yet, so a native frame is the correct default here.
     webPreferences: {
       preload: join(__dirname, '../preload/index.js'),
-      sandbox: true,
+      // Why: keep the pop-out renderer sandboxed by default; honor the same build-scoped #9891 fallback as the main window so this companion renderer doesn't STATUS_BREAKPOINT on a sandbox-incompatible Windows build.
+      sandbox: !isRendererSandboxFallbackActive(),
       // Why: Chromium shares zoom by origin; a separate in-memory session keeps pop-out zoom window-local.
       partition: DASHBOARD_POPOUT_PARTITION,
       // Why: the dashboard is plain DOM — no <webview> guests — so keep the

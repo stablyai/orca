@@ -140,6 +140,7 @@ import {
   isDashboardPopoutRenderer,
   zoomDashboardPopoutIfFocused
 } from './dashboard-popout-window'
+import { setRendererSandboxFallbackActive } from './renderer-sandbox-fallback-state'
 
 type FakeWindow = InstanceType<typeof BrowserWindowMock>
 
@@ -174,6 +175,8 @@ describe('createOrFocusDashboardPopout', () => {
   beforeEach(() => {
     instances.length = 0
     isMock.dev = false
+    // Reset the shared #9891 launch flag so window-sandbox assertions are isolated.
+    setRendererSandboxFallbackActive(false)
     vi.stubEnv('ELECTRON_RENDERER_URL', '')
     getAllDisplaysMock.mockReturnValue([{ workArea: { x: 0, y: 0, width: 1920, height: 1080 } }])
   })
@@ -183,6 +186,12 @@ describe('createOrFocusDashboardPopout', () => {
     closeDashboardPopout()
     vi.unstubAllEnvs()
     vi.clearAllMocks()
+  })
+
+  it('unsandboxes the pop-out renderer when the #9891 sandbox fallback is active', () => {
+    setRendererSandboxFallbackActive(true)
+    createOrFocusDashboardPopout(makeStore() as never)
+    expect(instances[0].options.webPreferences?.sandbox).toBe(false)
   })
 
   it('creates a native-frame window with the shared preload and no webview surface', () => {

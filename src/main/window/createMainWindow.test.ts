@@ -145,6 +145,50 @@ describe('createMainWindow', () => {
     expect(browserWindowInstance.loadURL).not.toHaveBeenCalled()
   })
 
+  it('unsandboxes the renderer only when the #9891 sandbox fallback is engaged', () => {
+    const webContents = {
+      on: vi.fn(),
+      setZoomLevel: vi.fn(),
+      setBackgroundThrottling: vi.fn(),
+      invalidate: vi.fn(),
+      setWindowOpenHandler: vi.fn(),
+      send: vi.fn(),
+      isDevToolsOpened: vi.fn(),
+      openDevTools: vi.fn(),
+      closeDevTools: vi.fn()
+    }
+    const browserWindowInstance = {
+      webContents,
+      on: vi.fn(),
+      isDestroyed: vi.fn(() => false),
+      isMaximized: vi.fn(() => false),
+      isFullScreen: vi.fn(() => false),
+      getSize: vi.fn(() => [1200, 800]),
+      setSize: vi.fn(),
+      show: vi.fn(),
+      loadFile: vi.fn(),
+      loadURL: vi.fn()
+    }
+    browserWindowMock.mockImplementation(function () {
+      return browserWindowInstance
+    })
+
+    createMainWindow(null, { deferLoad: true, disableRendererSandbox: true })
+    expect(browserWindowMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        webPreferences: expect.objectContaining({ sandbox: false })
+      })
+    )
+
+    browserWindowMock.mockClear()
+    createMainWindow(null, { deferLoad: true, disableRendererSandbox: false })
+    expect(browserWindowMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        webPreferences: expect.objectContaining({ sandbox: true })
+      })
+    )
+  })
+
   it('enables renderer sandboxing and opens external links safely', () => {
     const windowHandlers: Record<string, (...args: any[]) => void> = {}
     const webContents = {
