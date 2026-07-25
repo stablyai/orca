@@ -69,6 +69,32 @@ export function resolveDetectedTuiAgentIds(
   return [...new Set(detected)]
 }
 
+/**
+ * Which executable name matched for each detected agent, primary name first.
+ *
+ * Why: agents with `detectCmdAliases` can be installed under more than one binary
+ * name, and only detection knows which one this host actually has on PATH.
+ */
+export function resolveDetectedTuiAgentExecutables(
+  commands: readonly TuiAgentDetectionCommand[],
+  foundCommands: ReadonlySet<string>,
+  runtime: TuiAgentDetectionRuntime
+): Partial<Record<TuiAgent, string>> {
+  const executables: Partial<Record<TuiAgent, string>> = {}
+  for (const command of commands) {
+    if (
+      isDetectionUnsupportedInRuntime(command, runtime) ||
+      !foundCommands.has(command.cmd) ||
+      executables[command.id] !== undefined ||
+      !(command.requiredCommands ?? []).every((required) => foundCommands.has(required))
+    ) {
+      continue
+    }
+    executables[command.id] = command.cmd
+  }
+  return executables
+}
+
 export function isDetectionUnsupportedInRuntime(
   command: TuiAgentDetectionCommand,
   runtime: TuiAgentDetectionRuntime

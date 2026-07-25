@@ -1,10 +1,18 @@
-import { describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it } from 'vitest'
 import {
   buildAgentDraftLaunchPlan,
   buildAgentStartupPlan,
   isShellProcess
 } from './tui-agent-startup'
 import { resolveTuiAgentLaunchArgs } from '../../../shared/tui-agent-launch-defaults'
+import {
+  _resetDetectedTuiAgentExecutables,
+  setDetectedTuiAgentExecutables
+} from '../../../shared/detected-agent-executables'
+
+afterEach(() => {
+  _resetDetectedTuiAgentExecutables()
+})
 
 const emptyLaunchConfig = (agentCommand: string) => ({
   agentCommand,
@@ -173,7 +181,26 @@ describe('buildAgentStartupPlan', () => {
     ).toBe("prime-agent -- 'help me name this config'")
   })
 
-  it('uses cursor agent as the actual launch command', () => {
+  it('uses cursor-agent as the actual launch binary', () => {
+    expect(
+      buildAgentStartupPlan({
+        agent: 'cursor',
+        prompt: 'Review this file',
+        cmdOverrides: {},
+        platform: 'darwin'
+      })
+    ).toEqual({
+      agent: 'cursor',
+      launchCommand: "cursor-agent 'Review this file'",
+      expectedProcess: 'cursor-agent',
+      followupPrompt: null,
+      launchConfig: emptyLaunchConfig('cursor-agent')
+    })
+  })
+
+  it('launches Cursor through `cursor agent` when only the IDE binary was detected', () => {
+    setDetectedTuiAgentExecutables({ cursor: 'cursor' })
+
     expect(
       buildAgentStartupPlan({
         agent: 'cursor',
@@ -188,6 +215,46 @@ describe('buildAgentStartupPlan', () => {
       followupPrompt: null,
       launchConfig: emptyLaunchConfig('cursor agent')
     })
+  })
+
+  it('keeps cursor-agent when the standalone binary was detected', () => {
+    setDetectedTuiAgentExecutables({ cursor: 'cursor-agent' })
+
+    expect(
+      buildAgentStartupPlan({
+        agent: 'cursor',
+        prompt: 'Review this file',
+        cmdOverrides: {},
+        platform: 'darwin'
+      })?.launchCommand
+    ).toBe("cursor-agent 'Review this file'")
+  })
+
+  it('ignores locally detected Cursor aliases for remote launches', () => {
+    setDetectedTuiAgentExecutables({ cursor: 'cursor' })
+
+    expect(
+      buildAgentStartupPlan({
+        agent: 'cursor',
+        prompt: 'Review this file',
+        cmdOverrides: {},
+        platform: 'darwin',
+        isRemote: true
+      })?.launchCommand
+    ).toBe("cursor-agent 'Review this file'")
+  })
+
+  it('lets an explicit command override win over the detected executable', () => {
+    setDetectedTuiAgentExecutables({ cursor: 'cursor' })
+
+    expect(
+      buildAgentStartupPlan({
+        agent: 'cursor',
+        prompt: 'Review this file',
+        cmdOverrides: { cursor: '/opt/cursor/bin/cursor-agent' },
+        platform: 'darwin'
+      })?.launchCommand
+    ).toBe("/opt/cursor/bin/cursor-agent 'Review this file'")
   })
 
   it('applies command overrides without changing the prompt syntax contract', () => {

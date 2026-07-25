@@ -42,8 +42,13 @@ import {
 import {
   getTuiAgentDetectionProbeCommands,
   KNOWN_TUI_AGENT_DETECTION_COMMANDS,
+  resolveDetectedTuiAgentExecutables,
   resolveDetectedTuiAgentIds
 } from '../ipc/tui-agent-detection-commands'
+import {
+  setDetectedTuiAgentExecutables,
+  type DetectedAgentExecutables
+} from '../../shared/detected-agent-executables'
 import { invalidateWslGuestEnvironment } from '../wsl/wsl-guest-environment'
 
 export type PreflightStatus = {
@@ -77,6 +82,8 @@ export type { RemoteWindowsTerminalCapabilities }
 // Why: cache the result so repeated Landing mounts don't re-spawn processes.
 // The check only runs once per app session — relaunch to re-check.
 let cached: PreflightStatus | null = null
+let detectedAgentExecutables: DetectedAgentExecutables = {}
+let hasDetectedAgentExecutables = false
 // Why keyed by distro rather than one slot: each distro carries its own
 // toolchain, so distro A's result must never answer for distro B. Previously a
 // WSL target skipped the cache entirely and re-spawned five wsl.exe probes —
@@ -112,6 +119,8 @@ function preflightCacheKey(wslTarget: WslPreflightTarget | null): string {
 /** @internal - tests need a clean preflight cache between cases. */
 export function _resetPreflightCache(): void {
   cached = null
+  detectedAgentExecutables = {}
+  hasDetectedAgentExecutables = false
   cachedByWslDistro.clear()
   preflightInFlight.clear()
   latestPreflightRun.clear()
@@ -169,11 +178,41 @@ export async function detectInstalledAgents(context?: PreflightRuntimeContext): 
       .filter(({ cmd, installedOnPath }) => installedOnPath || installDirCommands.has(cmd))
       .map(({ cmd }) => cmd)
   )
+  publishDetectedAgentExecutables(foundCommands, process.platform)
   return resolveDetectedTuiAgentIds(
     KNOWN_TUI_AGENT_DETECTION_COMMANDS,
     foundCommands,
     process.platform
   )
+}
+
+// Why: launches on this host read the matched executable so alias-only installs
+// (Cursor.app's `cursor` without `cursor-agent`) don't launch a missing binary.
+// WSL is deliberately excluded — its PATH belongs to the distro, not this process.
+function publishDetectedAgentExecutables(
+  foundCommands: ReadonlySet<string>,
+  runtime: NodeJS.Platform
+): void {
+  detectedAgentExecutables = resolveDetectedTuiAgentExecutables(
+    KNOWN_TUI_AGENT_DETECTION_COMMANDS,
+    foundCommands,
+    runtime
+  )
+  hasDetectedAgentExecutables = true
+  setDetectedTuiAgentExecutables(detectedAgentExecutables)
+}
+
+/** Executables matched by the last local detection; empty for WSL/remote runtimes. */
+export async function detectInstalledAgentExecutables(
+  context?: PreflightRuntimeContext
+): Promise<DetectedAgentExecutables> {
+  if (getPreflightWslTarget(context)) {
+    return {}
+  }
+  if (!hasDetectedAgentExecutables) {
+    await detectInstalledAgents(context)
+  }
+  return detectedAgentExecutables
 }
 
 export async function detectInstalledAgentsWithShellPathHydration(

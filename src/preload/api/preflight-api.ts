@@ -1,3 +1,4 @@
+import type { DetectedAgentExecutables } from '../../shared/detected-agent-executables'
 import type { ProjectExecutionRuntimeResolution } from '../../shared/project-execution-runtime'
 import type {
   PathSource,
@@ -46,6 +47,7 @@ export type PreflightRuntimeContext = {
 export type PreflightApi = {
   check: (args?: PreflightRuntimeContext & { force?: boolean }) => Promise<PreflightStatus>
   detectAgents: (args?: PreflightRuntimeContext) => Promise<string[]>
+  detectAgentExecutables: (args?: PreflightRuntimeContext) => Promise<DetectedAgentExecutables>
   refreshAgents: (args?: PreflightRuntimeContext) => Promise<RefreshAgentsResult>
   detectRemoteAgents: (args: { connectionId: string }) => Promise<string[]>
   detectRemoteWindowsTerminalCapabilities: (args: { connectionId: string }) => Promise<{

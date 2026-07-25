@@ -1,5 +1,6 @@
 import { ipcRenderer } from 'electron'
 import type { PreflightRuntimeContext, PreloadApi, RefreshAgentsResult } from '../api-types'
+import type { DetectedAgentExecutables } from '../../shared/detected-agent-executables'
 
 export const preflightApi = {
   check: (args?: {
@@ -27,6 +28,8 @@ export const preflightApi = {
   }> => ipcRenderer.invoke('preflight:check', args),
   detectAgents: (args?: PreflightRuntimeContext): Promise<string[]> =>
     ipcRenderer.invoke('preflight:detectAgents', args),
+  detectAgentExecutables: (args?: PreflightRuntimeContext): Promise<DetectedAgentExecutables> =>
+    ipcRenderer.invoke('preflight:detectAgentExecutables', args),
   refreshAgents: (args?: PreflightRuntimeContext): Promise<RefreshAgentsResult> =>
     ipcRenderer.invoke('preflight:refreshAgents', args),
   detectRemoteAgents: (args: { connectionId: string }): Promise<string[]> =>

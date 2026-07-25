@@ -10,8 +10,23 @@ import * as contextEviction from './local-agent-context-eviction'
 import { getLegacyLoadingPatch, getSupersededDetectPatch } from './local-agent-legacy-loading'
 import { createEmptyLocalDetectedAgentState } from './local-detected-agent-store-state'
 import type { LocalDetectedAgentState } from './local-detected-agent-store-state'
+import { setDetectedTuiAgentExecutables } from '../../../../shared/detected-agent-executables'
+import type { PreflightRuntimeContext } from '../../../../preload/api-types'
 
 type LocalDetectedAgentStateCreator = StateCreator<AppState, [], [], LocalDetectedAgentState>
+
+// Why: launch commands are built synchronously all over the renderer, so the
+// matched executable per agent is published to a module registry instead of
+// being threaded through every buildAgentStartupPlan() call site.
+function publishDetectedAgentExecutables(context?: PreflightRuntimeContext): void {
+  void window.api.preflight
+    .detectAgentExecutables?.(context)
+    .then((executables) => setDetectedTuiAgentExecutables(executables ?? {}))
+    .catch(() => {
+      // Why: alias resolution is an enhancement; on failure the static
+      // launchCmd defaults still work for the primary install layout.
+    })
+}
 
 export const createLocalDetectedAgentState: LocalDetectedAgentStateCreator = (set, get) => {
   const detectPromises = new Map<string, Promise<TuiAgent[]>>()
@@ -107,6 +122,7 @@ export const createLocalDetectedAgentState: LocalDetectedAgentStateCreator = (se
                 contextKey
               )
             }))
+            publishDetectedAgentExecutables(context)
           }
           return typed
         })
@@ -218,6 +234,7 @@ export const createLocalDetectedAgentState: LocalDetectedAgentStateCreator = (se
                 contextKey
               )
             }))
+            publishDetectedAgentExecutables(context)
           }
           return typed
         })

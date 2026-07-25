@@ -5,6 +5,7 @@ import {
   isCustomAgentId
 } from './commit-message-agent-spec'
 import { planCustomCommand, tokenizeCustomCommandTemplate } from './commit-message-prompt'
+import { applyDetectedTuiAgentExecutable } from './tui-agent-config'
 import type { TuiAgent } from './tui-agent'
 
 // Why: planning is a pure transformation from "user request + prompt text"
@@ -42,11 +43,18 @@ export type CommitMessagePlanResult =
 export function planAgentBinary(
   defaultBinary: string,
   commandOverride: string | undefined,
-  backslash: CommandTemplateBackslash = 'escape'
+  backslash: CommandTemplateBackslash = 'escape',
+  agent?: TuiAgent
 ): { ok: true; binary: string; prefixArgs: string[] } | { ok: false; error: string } {
   const command = commandOverride?.trim()
   if (!command) {
-    return { ok: true, binary: defaultBinary, prefixArgs: [] }
+    // Why: an alias-only install (Cursor.app's `cursor`, no `cursor-agent`) reaches
+    // the same CLI through a subcommand, so the default binary may expand to
+    // multiple tokens once the detected executable is applied.
+    const [binary, ...prefixArgs] = (
+      agent ? applyDetectedTuiAgentExecutable(agent, defaultBinary) : defaultBinary
+    ).split(' ')
+    return { ok: true, binary: binary ?? defaultBinary, prefixArgs }
   }
 
   const tokenized = tokenizeCustomCommandTemplate(command, backslash)
@@ -305,7 +313,12 @@ export function planCommitMessageGeneration(
   if (!agentArgs.ok) {
     return agentArgs
   }
-  const command = planAgentBinary(spec.binary, input.agentCommandOverride, input.backslash)
+  const command = planAgentBinary(
+    spec.binary,
+    input.agentCommandOverride,
+    input.backslash,
+    spec.id
+  )
   if (!command.ok) {
     return { ok: false, error: command.error }
   }

@@ -2,6 +2,7 @@ import {
   removeOverriddenAgentSessionArgs,
   resolveAgentSessionOptionLaunch
 } from './agent-session-option-launch'
+import { getDetectedTuiAgentExecutable } from './detected-agent-executables'
 import type { SessionOptionValue } from './native-chat-session-options'
 import { getTuiAgentLaunchCommand, TUI_AGENT_CONFIG } from './tui-agent-config'
 import {
@@ -30,12 +31,19 @@ export function resolveAgentLaunchCommand(args: {
   sessionOptions?: Record<string, SessionOptionValue>
   sessionOptionsOverrideAgentArgs?: boolean
   isRemote?: boolean
+  /** Executable detected on PATH for this agent; defaults to this process's detection result. */
+  detectedCmd?: string
 }): ResolvedAgentLaunchCommand {
   const override = args.cmdOverrides[args.agent]
+  // Why: the ambient registry describes this machine's PATH, so a remote launch
+  // must fall back to the static defaults instead of inheriting local aliases.
+  const detectedCmd =
+    args.detectedCmd ?? (args.isRemote ? undefined : getDetectedTuiAgentExecutable(args.agent))
   const command =
     override ||
     getTuiAgentLaunchCommand(TUI_AGENT_CONFIG[args.agent], args.platform, {
-      isRemote: args.isRemote
+      isRemote: args.isRemote,
+      ...(detectedCmd ? { detectedCmd } : {})
     })
   const suffix = planAgentCliArgsSuffix(args.agentArgs, args.shell)
   if (!suffix.ok) {

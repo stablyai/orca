@@ -1,5 +1,13 @@
-import { describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it } from 'vitest'
 import { planCommitMessageGeneration, planAgentBinary } from './commit-message-plan'
+import {
+  _resetDetectedTuiAgentExecutables,
+  setDetectedTuiAgentExecutables
+} from './detected-agent-executables'
+
+afterEach(() => {
+  _resetDetectedTuiAgentExecutables()
+})
 
 describe('planCommitMessageGeneration', () => {
   it('keeps extension-provided Pi models available in generated Git text plans', () => {
@@ -283,6 +291,33 @@ describe('planCommitMessageGeneration', () => {
         ],
         stdinPayload: null,
         label: 'Antigravity'
+      }
+    })
+  })
+
+  it('spawns Cursor through the `agent` subcommand when only the IDE binary was detected', () => {
+    setDetectedTuiAgentExecutables({ cursor: 'cursor' })
+
+    const result = planCommitMessageGeneration({ agentId: 'cursor', model: 'gpt-5.2' }, 'PROMPT')
+
+    expect(result).toEqual({
+      ok: true,
+      plan: {
+        binary: 'cursor',
+        args: [
+          'agent',
+          '--print',
+          '--mode',
+          'ask',
+          '--trust',
+          '--output-format',
+          'text',
+          '--model',
+          'gpt-5.2',
+          'PROMPT'
+        ],
+        stdinPayload: null,
+        label: 'Cursor'
       }
     })
   })

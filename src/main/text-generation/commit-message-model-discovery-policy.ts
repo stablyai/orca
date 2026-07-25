@@ -72,7 +72,7 @@ export function planModelDiscovery(
   if (!modelDiscovery) {
     return { ok: false, error: `${spec.label} does not support dynamic model discovery.` }
   }
-  const command = planAgentBinary(modelDiscovery.binary, agentCommandOverride, backslash)
+  const command = planAgentBinary(modelDiscovery.binary, agentCommandOverride, backslash, spec.id)
   if (!command.ok) {
     return command
   }

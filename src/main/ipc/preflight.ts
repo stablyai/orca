@@ -1,5 +1,6 @@
 import { ipcMain } from 'electron'
 import {
+  detectInstalledAgentExecutables,
   detectInstalledAgentsWithShellPathHydration,
   detectRemoteAgents,
   detectRemoteWindowsTerminalCapabilities,
@@ -30,6 +31,11 @@ export function registerPreflightHandlers(): void {
 
   ipcMain.handle('preflight:detectAgents', async (_event, args?: PreflightRuntimeContext) =>
     detectInstalledAgentsWithShellPathHydration(args)
+  )
+
+  ipcMain.handle(
+    'preflight:detectAgentExecutables',
+    async (_event, args?: PreflightRuntimeContext) => detectInstalledAgentExecutables(args)
   )
 
   ipcMain.handle('preflight:refreshAgents', async (_event, args?: PreflightRuntimeContext) => {
