@@ -31,6 +31,9 @@ jobs:
       - name: Lint
         run: pnpm exec oxlint --format github
 
+      - name: Check switch exhaustiveness
+        run: pnpm run lint:switch-exhaustiveness
+
       - name: Check styled scrollbars
         run: pnpm check:styled-scrollbars
 
@@ -46,6 +49,17 @@ jobs:
       - name: Verify skill freshness manifest
         run: pnpm run verify:skill-bundle-manifest
 
+      - name: Verify localization catalog
+        run: pnpm run verify:localization-catalog
+
+      - name: Verify localization coverage
+        run: pnpm run verify:localization-coverage
+
+      # Why: project-owned type declarations must live in .ts so tsc
+      # actually checks them. TypeScript's skipLibCheck: true (inherited
+      # from @electron-toolkit/tsconfig) silently widens unresolved names
+      # in .d.ts to `any`, which is how #1186 shipped a broken IPC signature
+      # past typecheck. See docs/preload-typecheck-hole.md.
       - name: Guard against project-owned .d.ts in preload/shared
         run: |
           matches=$(find src/preload src/shared -name '*.d.ts' 2>/dev/null || true)
