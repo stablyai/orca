@@ -21,7 +21,16 @@ export function settleProjectHeaderDrop(args: ProjectHeaderDropSettleArgs): void
     () => {
       const result = commitProjectHeaderDragDrop(args)
       if (result) {
-        void result.then(args.onFinish, args.onFinish)
+        void result.then(
+          () => {
+            args.onFinish()
+          },
+          (error) => {
+            // Why: silent .then(onFinish, onFinish) hid failed reorders while UI looked settled.
+            console.warn('[sidebar] Project header drag commit failed:', error)
+            args.onFinish()
+          }
+        )
       } else {
         args.onFinish()
       }
