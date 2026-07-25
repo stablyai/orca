@@ -168,7 +168,7 @@ const UNTHEMED_COLOR_IMPORTERS: readonly string[] = [
 const MOBILE_ROOT = path.resolve(__dirname, '../..')
 // Matches any relative path ending in mobile-theme (…/theme/mobile-theme or ./mobile-theme).
 const BARE_COLORS_IMPORT = /import\s*\{[^}]*\bcolors\b[^}]*\}\s*from\s*['"][^'"]*mobile-theme['"]/
-const INLINE_THEMED_STYLES = /useThemedStyles\s*\(\s*\(/
+const INLINE_THEMED_STYLES = /useThemedStyles\s*\(\s*(?:\([^)]*\)|[$A-Z_a-z][$\w]*)\s*=>/
 
 function walkSourceFiles(dir: string, out: string[] = []): string[] {
   for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
