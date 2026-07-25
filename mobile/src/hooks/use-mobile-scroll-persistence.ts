@@ -1,36 +1,37 @@
-import { useEffect, useRef } from 'react'
+import { useCallback, useEffect, useRef } from 'react'
 import { mobileScrollCache, setWithLRU } from '../lib/mobile-scroll-cache'
 
 /**
  * Track scroll position for a component and persist across unmount/remount.
- * Returns a ref to store the current scrollY and a cache key to use.
+ * Returns a capture callback and the cached scrollY to restore.
  */
 export function useMobileScrollPersistence(cacheKey: string) {
   const scrollYRef = useRef(0)
   const throttleTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const cacheKeyRef = useRef(cacheKey)
+  cacheKeyRef.current = cacheKey
 
-  // Save on unmount.
   useEffect(() => {
     return () => {
       if (throttleTimerRef.current !== null) {
         clearTimeout(throttleTimerRef.current)
       }
       if (scrollYRef.current > 0) {
-        setWithLRU(mobileScrollCache, cacheKey, scrollYRef.current)
+        setWithLRU(mobileScrollCache, cacheKeyRef.current, scrollYRef.current)
       }
     }
-  }, [cacheKey])
+  }, [])
 
-  const captureScroll = useRef((y: number) => {
+  const captureScroll = useCallback((y: number) => {
     scrollYRef.current = y
     if (throttleTimerRef.current !== null) {
       return
     }
     throttleTimerRef.current = setTimeout(() => {
       throttleTimerRef.current = null
-      setWithLRU(mobileScrollCache, cacheKey, scrollYRef.current)
+      setWithLRU(mobileScrollCache, cacheKeyRef.current, scrollYRef.current)
     }, 200)
-  }).current
+  }, [])
 
   const restoreScrollY = mobileScrollCache.get(cacheKey)
 

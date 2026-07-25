@@ -19,7 +19,7 @@ import {
 } from 'lucide-react-native'
 import WebView, { type WebViewMessageEvent } from 'react-native-webview'
 import { colors, radii, spacing } from '../theme/mobile-theme'
-import { mobileScrollCache, setWithLRU } from '../lib/mobile-scroll-cache'
+import { useMobileScrollPersistence } from '../hooks/use-mobile-scroll-persistence'
 import { normalizeMobileRichMarkdownKeyboardInset } from './mobile-rich-markdown-editor-keyboard-inset-script'
 import {
   buildMobileRichMarkdownEditorHtml,
@@ -123,8 +123,7 @@ function MobileRichMarkdownEditorInner({
   const currentWebViewContentRef = useRef<string | null>(null)
   const html = useMemo(() => buildMobileRichMarkdownEditorHtml(), [])
   // Scroll position tracking for persistence across unmount/remount.
-  const scrollYRef = useRef(0)
-  const throttleTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const { captureScroll, restoreScrollY } = useMobileScrollPersistence(scrollCacheKey ?? '')
   const restoredRef = useRef(false)
 
   const inject = useCallback((script: string) => {
@@ -170,25 +169,13 @@ function MobileRichMarkdownEditorInner({
     return () => onKeyboardInsetChange?.(0)
   }, [onKeyboardInsetChange])
 
-  // Save scroll position on unmount.
-  useEffect(() => {
-    return () => {
-      if (throttleTimerRef.current !== null) {
-        clearTimeout(throttleTimerRef.current)
-      }
-      if (scrollCacheKey && scrollYRef.current > 0) {
-        setWithLRU(mobileScrollCache, scrollCacheKey, scrollYRef.current)
-      }
-    }
-  }, [scrollCacheKey])
-
   // Restore scroll position after content is applied.
   const restoreScrollPosition = useCallback(
     (webView: WebView) => {
       if (!scrollCacheKey || restoredRef.current) {
         return
       }
-      const target = mobileScrollCache.get(scrollCacheKey)
+      const target = restoreScrollY
       if (target === undefined || target <= 0) {
         return
       }
@@ -260,16 +247,7 @@ function MobileRichMarkdownEditorInner({
         return
       }
       if (editorMessage.type === 'scroll' && typeof editorMessage.scrollY === 'number') {
-        scrollYRef.current = editorMessage.scrollY
-        if (throttleTimerRef.current !== null) {
-          return
-        }
-        throttleTimerRef.current = setTimeout(() => {
-          throttleTimerRef.current = null
-          if (scrollCacheKey) {
-            setWithLRU(mobileScrollCache, scrollCacheKey, scrollYRef.current)
-          }
-        }, 200)
+        captureScroll(editorMessage.scrollY)
         return
       }
       if (
