@@ -11,6 +11,7 @@
 // disposes exactly the client it created. Teardown is where this kind of
 // feature rots, so it stays boring on purpose.
 
+import { randomUUID } from 'node:crypto'
 import { createAcpStdioClient, type AcpClient } from '../acp/acp-stdio-client'
 import type { AcpPermissionRequestParams } from '../acp/acp-permission-bridge'
 import { createAcpTurnAccumulator } from './acp-event-mapper'
@@ -18,7 +19,10 @@ import type {
   NativeChatTranscriptSubscription,
   SubscribeNativeChatTranscriptArgs
 } from './transcript-watch-contract'
-import { resolveNativeChatAcpAgent, type NativeChatAcpAgent } from '../../shared/native-chat-agent-support'
+import {
+  resolveNativeChatAcpAgent,
+  type NativeChatAcpAgent
+} from '../../shared/native-chat-agent-support'
 
 /** Argv for each ACP agent. Both serve ACP on stdio as a subcommand of their
  *  normal CLI, so there is no separate binary to locate. */
@@ -63,7 +67,9 @@ export function resolveAcpCommand(
  * When `sessionId` names an existing agent session, `session/load` replays that
  * history as `session/update` notifications — so history and live updates arrive
  * through one path and there is no separate backfill read. When the session
- * cannot be loaded, a fresh session is opened and the view starts empty.
+ * cannot be loaded, a fresh session is opened and the view starts empty. An
+ * absent `sessionId` (ACP agents report none to Orca's agent hooks) opens a new
+ * session directly — the pane still gets a live conversation.
  */
 export async function subscribeNativeChatAcpSession(
   args: SubscribeAcpArgs
@@ -85,7 +91,12 @@ export async function subscribeNativeChatAcpSession(
    *  after load/new succeeds; prompts before that are rejected rather than sent
    *  to an unaddressable session. */
   let agentSessionId: string | null = null
-  const accumulator = createAcpTurnAccumulator(args.sessionId)
+  // Why a fallback scope: ACP agents report no provider session to Orca's hooks,
+  // so a pane opens its conversation with no session id at all. Message ids are
+  // scoped per conversation, so an empty scope would collide across two live
+  // panes of the same agent — mint a unique one instead.
+  const idScope = args.sessionId ? args.sessionId : `sub-${randomUUID()}`
+  const accumulator = createAcpTurnAccumulator(idScope)
   const spawnClient = args.createClient ?? createAcpStdioClient
 
   // Why buffer: session/load replays history immediately after the request is
@@ -148,12 +159,17 @@ export async function subscribeNativeChatAcpSession(
     // fall back to a new session when the agent cannot load it (unknown id,
     // pruned history) rather than failing the whole view.
     let loaded = false
-    try {
-      await client.loadSession(args.sessionId, { cwd: args.cwd })
-      loaded = true
-      agentSessionId = args.sessionId
-    } catch (error) {
-      args.onLog?.(`acp: session/load failed, opening a new session: ${String(error)}`)
+    // No session id means there is nothing to resume (the common case for ACP:
+    // the agent never reported one), so go straight to a new session rather than
+    // paying a load round-trip that can only fail.
+    if (args.sessionId) {
+      try {
+        await client.loadSession(args.sessionId, { cwd: args.cwd })
+        loaded = true
+        agentSessionId = args.sessionId
+      } catch (error) {
+        args.onLog?.(`acp: session/load failed, opening a new session: ${String(error)}`)
+      }
     }
     if (!loaded) {
       agentSessionId = await client.newSession({ cwd: args.cwd })

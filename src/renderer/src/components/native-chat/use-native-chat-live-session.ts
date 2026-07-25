@@ -23,6 +23,12 @@ import {
   NATIVE_CHAT_INITIAL_LIMIT,
   nextNativeChatLimit
 } from './native-chat-pagination'
+import { resolveNativeChatTransport } from '../../../../shared/native-chat-agent-support'
+import {
+  nextSubscriptionId,
+  notFoundRetryDelayMs,
+  NOTFOUND_RETRY_WINDOW_MS
+} from './native-chat-live-session-ids'
 import { getNativeChatSessionTransport } from './native-chat-session-transport'
 import { useNativeChatTranscriptLifecycle } from './use-native-chat-transcript-lifecycle'
 import { useNativeChatHookStatus } from './use-native-chat-hook-status'
@@ -37,6 +43,8 @@ export type UseNativeChatLiveSessionArgs = {
   transcriptPath?: string | null
   /** Runtime owner (Model B): non-null routes read/subscribe to the remote host; null keeps the local IPC path. */
   runtimeEnvironmentId?: string | null
+  /** Pane worktree path. Only ACP uses it — the agent is a process this pane starts, so it must start where the operator is looking. */
+  cwd?: string | null
   /** Caller-supplied subscription id. ACP panes address prompts and tool approvals by it, so the view mints it. */
   subscriptionId?: string
 }
@@ -68,22 +76,6 @@ function sharesPrefix(
   return true
 }
 
-let subscriptionCounter = 0
-
-function nextSubscriptionId(): string {
-  subscriptionCounter += 1
-  return `native-chat-${subscriptionCounter}-${Date.now()}`
-}
-
-// Why: a new session's transcript can take minutes to appear on disk (#8401); a `notFound` miss retries with backoff until the window below elapses.
-const NOTFOUND_RETRY_DELAYS_MS = [1_000, 2_000, 4_000, 8_000]
-const NOTFOUND_RETRY_FIXED_DELAY_MS = 10_000
-const NOTFOUND_RETRY_WINDOW_MS = 60_000
-
-function notFoundRetryDelayMs(attempt: number): number {
-  return NOTFOUND_RETRY_DELAYS_MS[attempt] ?? NOTFOUND_RETRY_FIXED_DELAY_MS
-}
-
 type ReadState =
   | { phase: 'loading' }
   | { phase: 'ready'; messages: NativeChatMessage[] }
@@ -106,12 +98,22 @@ type ReadState =
 export function useNativeChatLiveSession(
   args: UseNativeChatLiveSessionArgs
 ): NativeChatLiveSession {
-  const { paneKey, agent, sessionId, transcriptPath, runtimeEnvironmentId, subscriptionId: callerSubscriptionId } = args
+  const {
+    paneKey,
+    agent,
+    sessionId,
+    transcriptPath,
+    cwd,
+    runtimeEnvironmentId,
+    subscriptionId: callerSubscriptionId
+  } = args
   // Stable per owner id so a re-render without an owner flip keeps the same transport and doesn't re-subscribe.
   const transport = useMemo(
     () => getNativeChatSessionTransport(runtimeEnvironmentId ?? null),
     [runtimeEnvironmentId]
   )
+  // ACP panes drive a live session rather than tailing a transcript, so the transcript-shaped rules below (session-id gate, seed read) do not apply to them.
+  const isAcp = resolveNativeChatTransport(agent) === 'acp'
 
   const [read, setRead] = useState<ReadState>({ phase: 'loading' })
   const [hasMore, setHasMore] = useState(false)
@@ -145,7 +147,8 @@ export function useNativeChatLiveSession(
     transcriptEpochRef.current += 1
     setLoadingEarlier(false)
     transcriptLifecycleControl.reset()
-    if (!sessionId) {
+    // Why ACP is exempt: its conversation is a live session this pane opens, not a file named by a reported id. Hermes/omp report no provider session, so gating on one left those panes with no subscription at all — every prompt failing with "No live ACP session for this chat view".
+    if (!sessionId && !isAcp) {
       // No session id yet: surface live hook state on an empty transcript; backfills once the id arrives.
       setRead({ phase: 'ready', messages: [] })
       replaceList(appendMergerRef.current, [])
@@ -160,7 +163,7 @@ export function useNativeChatLiveSession(
     let retryTimer: ReturnType<typeof setTimeout> | null = null
     const retryStartedAt = Date.now()
     // Re-bound as a const: TS drops the `!sessionId` narrowing inside the hoisted nested function.
-    const activeSessionId = sessionId
+    const activeSessionId = sessionId ?? ''
     limitRef.current = NATIVE_CHAT_INITIAL_LIMIT
     setRead({ phase: 'loading' })
     replaceList(appendMergerRef.current, [])
@@ -202,15 +205,19 @@ export function useNativeChatLiveSession(
         })
     }
 
-    loadSession(0)
+    // ACP has no file to seed from: the session replays through the subscription, so this read could only return an empty window.
+    if (!isAcp) {
+      loadSession(0)
+    }
 
     const subscriptionId = callerSubscriptionId ?? nextSubscriptionId()
     const unsubscribe = transport.subscribe(
       {
         subscriptionId,
         agent,
-        sessionId,
+        sessionId: activeSessionId,
         transcriptPath: transcriptPath ?? undefined,
+        ...(cwd ? { cwd } : {}),
         limit: limitRef.current
       },
       (frame) => {
@@ -257,7 +264,16 @@ export function useNativeChatLiveSession(
       }
     }
     // `transport` identity changes on an owner flip, re-running this effect to re-subscribe against the new host.
-  }, [agent, sessionId, transcriptPath, transport, transcriptLifecycleControl, callerSubscriptionId])
+  }, [
+    agent,
+    isAcp,
+    cwd,
+    sessionId,
+    transcriptPath,
+    transport,
+    transcriptLifecycleControl,
+    callerSubscriptionId
+  ])
 
   const loadEarlier = useCallback(() => {
     if (!sessionId || loadingEarlier || !hasMore || read.phase !== 'ready') {

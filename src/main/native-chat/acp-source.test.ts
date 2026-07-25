@@ -105,6 +105,17 @@ describe('subscribeNativeChatAcpSession', () => {
     expect(onInitialSnapshot).toHaveBeenCalledWith([], false, 0)
   })
 
+  it('opens a new session directly when the pane has no session id', async () => {
+    // The ordinary case for ACP: hermes/omp report no provider session to Orca's
+    // agent hooks, so a pane subscribes with an empty id and must still get a
+    // live, promptable session — not a load round-trip that can only fail.
+    const fake = createFakeClient()
+    const { subscription } = await subscribe(fake, { sessionId: '' })
+    expect(fake.calls).toEqual(['initialize', 'newSession'])
+    expect(subscription.watching).toBe(true)
+    await expect(subscription.sendPrompt('hi')).resolves.toBeUndefined()
+  })
+
   it('opens a fresh session when the named one cannot be loaded', async () => {
     const fake = createFakeClient()
     fake.failLoad()
@@ -306,9 +317,7 @@ describe('ACP send path', () => {
     const fake = createFakeClient()
     const { subscription } = await subscribe(fake)
     subscription.unsubscribe()
-    await expect((subscription as AcpChatSubscription).sendPrompt('x')).rejects.toThrow(
-      'not ready'
-    )
+    await expect((subscription as AcpChatSubscription).sendPrompt('x')).rejects.toThrow('not ready')
   })
 
   it('rejects a prompt when the agent never started', async () => {

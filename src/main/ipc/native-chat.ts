@@ -10,7 +10,6 @@ import type { ReadTranscriptResult } from '../native-chat/transcript-reader'
 // conversation arrives either from its own JSONL transcript or over ACP, and the
 // transport is resolved per agent (source-dispatch.ts).
 import {
-  isAcpChatSubscription,
   readNativeChatSessionTail,
   subscribeNativeChatSession,
   type NativeChatSessionSubscription
@@ -19,6 +18,7 @@ import {
   createAcpPermissionRegistry,
   type AcpPermissionPrompt
 } from '../native-chat/acp-permission-registry'
+import { registerNativeChatAcpHandlers } from './native-chat-acp'
 
 // Re-export so existing test imports of `clearNativeChatTranscriptCache` from
 // this module keep working after the cache moved to transcript-read-cache.ts.
@@ -59,6 +59,10 @@ export type NativeChatSubscribeArgs = {
   sessionId: string
   /** Authoritative transcript path from the agent hook (providerSession). */
   transcriptPath?: string
+  /** Working directory for an ACP agent's session — the pane's worktree, so the
+   *  agent works where the operator is looking. Unused by the transcript
+   *  transport, which reads a file rather than starting a process. */
+  cwd?: string
   limit?: number
 }
 
@@ -192,7 +196,7 @@ async function handleSubscribe(event: IpcMainEvent, args: NativeChatSubscribeArg
   if (sender.isDestroyed()) {
     return
   }
-  const { subscriptionId, agent, sessionId, transcriptPath } = args
+  const { subscriptionId, agent, sessionId, transcriptPath, cwd } = args
   const limit = args.limit && args.limit > 0 ? Math.floor(args.limit) : DESKTOP_READ_WINDOW
   // Replace any prior subscription under the same id (session change/resubscribe).
   const pendingToken = beginPendingSubscription(sender.id, subscriptionId)
@@ -204,6 +208,7 @@ async function handleSubscribe(event: IpcMainEvent, args: NativeChatSubscribeArg
       agent,
       sessionId,
       transcriptPath,
+      ...(cwd ? { cwd } : {}),
       initialLimit: limit,
       onPermissionRequest: (params) =>
         acpPermissions.request({ senderId: sender.id, subscriptionId, params }),
@@ -259,8 +264,24 @@ async function handleSubscribe(event: IpcMainEvent, args: NativeChatSubscribeArg
         sender.send('nativeChat:appended', payload)
       }
     })
-  } catch {
+  } catch (error) {
+    // Why surface it: a swallowed setup failure left the pane with no
+    // subscription and no explanation — the view sat empty and every ACP prompt
+    // failed with "No live ACP session for this chat view" rather than the real
+    // reason (agent missing from PATH, handshake rejected).
     takePendingSubscription(sender.id, subscriptionId, pendingToken)
+    if (!sender.isDestroyed()) {
+      const payload: NativeChatAppendedPayload = {
+        subscriptionId,
+        frame: {
+          type: 'snapshot',
+          messages: [],
+          hasMore: false,
+          error: `Chat session unavailable: ${error instanceof Error ? error.message : String(error)}`
+        }
+      }
+      sender.send('nativeChat:appended', payload)
+    }
     return
   }
 
@@ -329,31 +350,8 @@ export function registerNativeChatHandlers(): void {
   ipcMain.on('nativeChat:unsubscribe', (event, args: { subscriptionId: string }) => {
     teardownSubscription(event.sender.id, args.subscriptionId)
   })
-  // `optionId: null` is the operator dismissing the card — an explicit cancel,
-  // never an implicit allow.
-  // Why these live on the subscription rather than a standalone session map:
-  // the ACP client is owned by the subscription, so a prompt can only be sent
-  // while the chat view that started the agent is still open.
-  ipcMain.handle(
-    'nativeChat:acpPrompt',
-    async (event, args: { subscriptionId: string; text: string }) => {
-      const subscription = findLiveSubscription(event.sender.id, args.subscriptionId)
-      if (subscription == null || !isAcpChatSubscription(subscription)) {
-        throw new Error('No live ACP session for this chat view')
-      }
-      await subscription.sendPrompt(args.text)
-      return true
-    }
-  )
-  ipcMain.on('nativeChat:acpCancelTurn', (event, args: { subscriptionId: string }) => {
-    const subscription = findLiveSubscription(event.sender.id, args.subscriptionId)
-    if (subscription != null && isAcpChatSubscription(subscription)) {
-      subscription.cancelTurn()
-    }
+  registerNativeChatAcpHandlers({
+    findLiveSubscription,
+    respondPermission: (requestId, optionId) => acpPermissions.respond(requestId, optionId)
   })
-  ipcMain.handle(
-    'nativeChat:acpPermissionRespond',
-    (_event, args: { requestId: string; optionId: string | null }) =>
-      acpPermissions.respond(args.requestId, args.optionId)
-  )
 }

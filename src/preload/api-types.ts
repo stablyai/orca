@@ -1,10 +1,5 @@
 /* eslint-disable max-lines -- Why: the preload contract is intentionally centralized in one declaration file so renderer and preload stay in lockstep when IPC surfaces change. */
-import type {
-  PetEdge,
-  PetPoint,
-  PetPresenceSnapshot,
-  PetSurfaceKind
-} from '../shared/pet-presence'
+import type { PetEdge, PetPoint, PetPresenceSnapshot, PetSurfaceKind } from '../shared/pet-presence'
 import type {
   CreateHostedReviewArgs,
   CreateHostedReviewResult,
@@ -902,9 +897,13 @@ export type NativeChatSubscribeArgs = {
    *  one renderer don't cross-talk. */
   subscriptionId: string
   agent: AgentType
+  /** The agent's own session id. Empty for an ACP pane, which opens a live
+   *  session instead of naming an existing one. */
   sessionId: string
   /** Authoritative transcript path from the agent hook (providerSession). */
   transcriptPath?: string
+  /** Working directory for an ACP agent's session (the pane's worktree). */
+  cwd?: string
   /** First snapshot size; later readSession calls grow this for pagination. */
   limit?: number
 }

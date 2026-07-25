@@ -6,6 +6,7 @@ import {
   subscribeNativeChatSession
 } from '../../../native-chat/source-dispatch'
 import { defineMethod, defineStreamingMethod, type RpcAnyMethod, type RpcContext } from '../core'
+import { resolveNativeChatTransport } from '../../../../shared/native-chat-agent-support'
 
 // Why: native chat renders an agent's conversation from whichever transport the
 // agent serves — a JSONL transcript (Claude/Codex/Grok) or a live ACP session
@@ -14,38 +15,56 @@ import { defineMethod, defineStreamingMethod, type RpcAnyMethod, type RpcContext
 // RPC methods so the native chat view
 // works over the paired connection, not just in the desktop renderer.
 
-const NativeChatSession = z.object({
-  agent: z
-    .unknown()
-    .transform((v) => (typeof v === 'string' ? v : ''))
-    .pipe(z.string().min(1, 'Missing agent'))
-    .transform((v) => v as AgentType),
-  sessionId: z
-    .unknown()
-    .transform((v) => (typeof v === 'string' ? v : ''))
-    .pipe(z.string().min(1, 'Missing session id')),
-  // How many of the most-recent messages to return. Clients start small for a
-  // fast first paint and raise it to page older history in as the user scrolls.
-  // Clamp (don't reject) a limit past the max window so a client paging beyond it
-  // gets the capped tail and pagination stops cleanly — a hard `.max` rejection
-  // would fail the read and stall "load earlier" at the boundary.
-  limit: z
-    .number()
-    .int()
-    .positive()
-    .transform((value) => Math.min(value, MOBILE_NATIVE_CHAT_MAX_WINDOW))
-    .optional(),
-  // Optional client-supplied cleanup token. When present, the subscribe handler
-  // keys the fs-watcher cleanup under it so registration and unsubscribe derive
-  // from the SAME token (back-compat: falls back to `agent:sessionId` when absent,
-  // which is exactly what existing mobile clients rely on).
-  subscriptionId: z.string().min(1).optional(),
-  // Authoritative transcript path from the agent hook (providerSession), used to
-  // locate the file directly when the session id no longer names it (recent
-  // Claude Code). Optional for back-compat with older clients.
-  transcriptPath: z.string().min(1).optional(),
-  beforeOffset: z.number().int().nonnegative().optional()
-})
+const NativeChatSession = z
+  .object({
+    agent: z
+      .unknown()
+      .transform((v) => (typeof v === 'string' ? v : ''))
+      .pipe(z.string().min(1, 'Missing agent'))
+      .transform((v) => v as AgentType),
+    // Empty is tolerated here and rejected below for transcript agents only: an
+    // ACP pane opens a live session and has no id to name (hermes/omp report no
+    // provider session to the agent hooks), so a hard min(1) locked them out.
+    sessionId: z
+      .unknown()
+      .transform((v) => (typeof v === 'string' ? v : ''))
+      .pipe(z.string()),
+    /** Working directory for an ACP agent's session. Ignored by the transcript
+     *  transport, which reads a file rather than starting a process. */
+    cwd: z.string().min(1).optional(),
+    // How many of the most-recent messages to return. Clients start small for a
+    // fast first paint and raise it to page older history in as the user scrolls.
+    // Clamp (don't reject) a limit past the max window so a client paging beyond it
+    // gets the capped tail and pagination stops cleanly — a hard `.max` rejection
+    // would fail the read and stall "load earlier" at the boundary.
+    limit: z
+      .number()
+      .int()
+      .positive()
+      .transform((value) => Math.min(value, MOBILE_NATIVE_CHAT_MAX_WINDOW))
+      .optional(),
+    // Optional client-supplied cleanup token. When present, the subscribe handler
+    // keys the fs-watcher cleanup under it so registration and unsubscribe derive
+    // from the SAME token (back-compat: falls back to `agent:sessionId` when absent,
+    // which is exactly what existing mobile clients rely on).
+    subscriptionId: z.string().min(1).optional(),
+    // Authoritative transcript path from the agent hook (providerSession), used to
+    // locate the file directly when the session id no longer names it (recent
+    // Claude Code). Optional for back-compat with older clients.
+    transcriptPath: z.string().min(1).optional(),
+    beforeOffset: z.number().int().nonnegative().optional()
+  })
+  .superRefine((params, ctx) => {
+    // A transcript read is addressed by session id (or path); without one there is
+    // nothing to open, so keep the original rejection for those agents.
+    if (resolveNativeChatTransport(params.agent) !== 'acp' && params.sessionId.length === 0) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['sessionId'],
+        message: 'Missing session id'
+      })
+    }
+  })
 
 const NativeChatUnsubscribe = z.object({
   subscriptionId: z.string().min(1).optional()
@@ -239,6 +258,7 @@ export const NATIVE_CHAT_METHODS: readonly RpcAnyMethod[] = [
         agent: params.agent,
         sessionId: params.sessionId,
         transcriptPath: params.transcriptPath,
+        ...(params.cwd ? { cwd: params.cwd } : {}),
         initialLimit: limit,
         onInitialSnapshot: (messages, hasMore, beforeOffset, error, lifecycle) => {
           if (closed) {

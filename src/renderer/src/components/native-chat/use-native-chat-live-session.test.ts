@@ -400,6 +400,27 @@ describe('useNativeChatLiveSession — transport routing', () => {
     expect(transport.subscribe).not.toHaveBeenCalled()
   })
 
+  it('subscribes an ACP agent with no session id (the agent opens the session)', async () => {
+    // hermes/omp report no provider session to the agent hooks, so gating the
+    // subscribe on a session id left their panes with no ACP client at all, and
+    // every prompt failing with "No live ACP session for this chat view".
+    await render({
+      paneKey: PANE,
+      agent: 'hermes',
+      sessionId: null,
+      cwd: '/repo',
+      runtimeEnvironmentId: 'env-acp'
+    })
+
+    const transport = getMockTransport('env-acp')
+    expect(transport.subscribe).toHaveBeenCalledWith(
+      expect.objectContaining({ agent: 'hermes', sessionId: '', cwd: '/repo' }),
+      expect.any(Function)
+    )
+    // Nothing to page through: the session replays through the subscription.
+    expect(transport.readSession).not.toHaveBeenCalled()
+  })
+
   it('uses the local transport when the owner is null (unchanged behavior, R6)', async () => {
     await render({ paneKey: PANE, agent: AGENT, sessionId: SESSION })
 

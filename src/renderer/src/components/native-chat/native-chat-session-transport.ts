@@ -66,7 +66,7 @@ function createRuntimeNativeChatTransport(environmentId: string): NativeChatSess
       }
     },
     subscribe: (args, onFrame) => {
-      const { subscriptionId, agent, sessionId, transcriptPath, limit } = args
+      const { subscriptionId, agent, sessionId, transcriptPath, cwd, limit } = args
       let cancelled = false
       let receivedInitial = false
       let handleUnsubscribe: (() => void) | null = null
@@ -105,7 +105,7 @@ function createRuntimeNativeChatTransport(environmentId: string): NativeChatSess
             {
               selector: environmentId,
               method: 'nativeChat.subscribe',
-              params: { subscriptionId, agent, sessionId, transcriptPath, limit },
+              params: { subscriptionId, agent, sessionId, transcriptPath, cwd, limit },
               timeoutMs: 15_000
             },
             {

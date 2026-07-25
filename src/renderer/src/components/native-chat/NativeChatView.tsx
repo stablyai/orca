@@ -134,12 +134,19 @@ function NativeChatResolvedView({
   )
   const { subscriptionId: nativeChatSubscriptionId, acpSubscriptionId } =
     useNativeChatSubscriptionId(paneKey, agent)
+  // Why here rather than beside the other file-link wiring below: an ACP agent is
+  // a process this pane starts, and it must start in the pane's worktree — the
+  // same path the file links resolve against.
+  const fileLinkContext = useAppStore(
+    useShallow((s) => resolveNativeChatFileLinkContext(s, terminalTabId))
+  )
   const session = useNativeChatLiveSession({
     subscriptionId: nativeChatSubscriptionId,
     paneKey,
     agent,
     sessionId,
     transcriptPath,
+    cwd: fileLinkContext?.worktreePath ?? null,
     runtimeEnvironmentId
   })
   const launchPrompt = useAppStore((s) => s.nativeChatLaunchPromptByTabId[terminalTabId] ?? null)
@@ -169,9 +176,6 @@ function NativeChatResolvedView({
   // The question card's free-text row; keeps Paste working while the card
   // replaces the composer.
   const questionAnswerInputRef = useRef<HTMLInputElement>(null)
-  const fileLinkContext = useAppStore(
-    useShallow((s) => resolveNativeChatFileLinkContext(s, terminalTabId))
-  )
   const pasteClipboardIntoComposer = useNativeChatPasteBridge({
     rootRef,
     composerRef,
