@@ -147,7 +147,16 @@ export function RepoIconGlyph({
   iconClassName?: string
   color?: string
 }): React.JSX.Element {
-  if (repoIcon?.type === 'image') {
+  // Why: remote icon sources can vanish server-side (e.g. GitHub returning
+  // 404 for an owner's avatar endpoint) — a broken-image square in every repo
+  // header is worse than the lucide default, so fall back on load error.
+  const [imageFailed, setImageFailed] = React.useState(false)
+  const imageSrc = repoIcon?.type === 'image' ? repoIcon.src : null
+  React.useEffect(() => {
+    setImageFailed(false)
+  }, [imageSrc])
+
+  if (repoIcon?.type === 'image' && !imageFailed) {
     return (
       <span className={cn('inline-flex items-center justify-center overflow-hidden', className)}>
         <img
@@ -155,6 +164,7 @@ export function RepoIconGlyph({
           alt=""
           className={cn('size-full object-contain', iconClassName)}
           draggable={false}
+          onError={() => setImageFailed(true)}
         />
       </span>
     )

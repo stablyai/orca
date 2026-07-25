@@ -1,6 +1,12 @@
 import type { AppState } from '@/store/types'
+import type { PinnedTerminalPanel } from '../../../shared/types'
 import { getIndexedRepoMap, getIndexedWorktreeMap } from '@/store/worktree-repo-index'
-import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../shared/constants'
+import {
+  getPinnedTerminalPanelHostForWorktreeId,
+  isPinnedTerminalPanelWorktreeId,
+  isSentinelWorktreeId,
+  resolvePinnedTerminalPanelSshTargetIdFromLabels
+} from '../../../shared/pinned-terminal-panels'
 import { getRepoIdFromWorktreeId } from '../../../shared/worktree-id'
 import { parseWorkspaceKey } from '../../../shared/workspace-scope'
 import {
@@ -15,7 +21,13 @@ import {
 type ConnectionOwnerState = Pick<
   AppState,
   'folderWorkspaces' | 'projectGroups' | 'repos' | 'worktreesByRepo'
->
+> & {
+  // Why: structural (not AppState['settings']) so narrow test states and
+  // intersected caller state types don't have to satisfy full GlobalSettings.
+  settings?: { pinnedTerminalPanels?: readonly PinnedTerminalPanel[] } | null
+  /** Hydrated SSH target id->label map (ssh slice); panel host resolution. */
+  sshTargetLabels?: ReadonlyMap<string, string>
+}
 
 export function createConnectionIdForFileSelector(
   worktreeId: string | null,
@@ -51,7 +63,25 @@ export function getConnectionIdFromState(
   state: ConnectionOwnerState,
   worktreeId: string | null
 ): string | null | undefined {
-  if (!worktreeId || worktreeId === FLOATING_TERMINAL_WORKTREE_ID) {
+  if (!worktreeId) {
+    return null
+  }
+  if (isPinnedTerminalPanelWorktreeId(worktreeId)) {
+    const panelHost = getPinnedTerminalPanelHostForWorktreeId(
+      state.settings?.pinnedTerminalPanels,
+      worktreeId
+    )
+    if (panelHost === null) {
+      return null
+    }
+    // Why: undefined (not null) for an unresolvable host — null means "local",
+    // and a panel pointed at a missing/typo'd SSH target must not silently run
+    // its command on this machine (see isWorktreeConnectionResolved).
+    return (
+      resolvePinnedTerminalPanelSshTargetIdFromLabels(state.sshTargetLabels, panelHost) ?? undefined
+    )
+  }
+  if (isSentinelWorktreeId(worktreeId)) {
     return null
   }
   const parsedWorkspaceKey = parseWorkspaceKey(worktreeId)

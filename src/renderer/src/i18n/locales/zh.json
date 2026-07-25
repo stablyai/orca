@@ -752,7 +752,8 @@
         "a4c8e1b2f7": "Codex 仍以 {{value0}} 身份登录",
         "d3e8a1f4b2": "账户已切换",
         "9375620cc3": "Restart this session to use {{value0}}. It stays on the previous account until you do.",
-        "6133594b12": "Keep old account"
+        "6133594b12": "Keep old account",
+        "b9000fe511": "Not now"
       },
       "FirstLaunchBanner": {
         "b9e1b966c7": "关闭通知",
@@ -1913,7 +1914,11 @@
         "workspaceTabMissing": "标签页不再存在",
         "projectsGroupsHeader": "项目和分组",
         "projectBadge": "项目",
-        "repoGroupBadge": "仓库组"
+        "repoGroupBadge": "仓库组",
+        "panelsHeader": "Panels",
+        "panelWebBadge": "Web panel",
+        "panelTerminalBadge": "Terminal panel",
+        "panelLayoutBadge": "Layout"
       },
       "github": {
         "pr": {
@@ -3290,7 +3295,9 @@
             "a37e8c15d4": "Run kimi in a terminal on the computer running Orca and wait for it to start, then retry usage."
           },
           "SshTargetStatusRow": {
-            "sshHost": "SSH 主机"
+            "sshHost": "SSH 主机",
+            "openShell": "Open shell in canvas",
+            "detachShell": "Open shell in new window"
           },
           "usagePercentageLabel": {
             "used": "已用 {{value0}}%",
@@ -4069,7 +4076,7 @@
         },
         "SidebarNav": {
           "80611a8b10": "搜索",
-          "0c3395fd32": "搜索工作树和浏览器选项卡",
+          "0c3395fd32": "搜索工作树、面板和浏览器选项卡",
           "c86d83b5c3": "新建",
           "1b5c41caee": "Orca 手机端",
           "9c95e1ce91": "智能体",
@@ -4079,7 +4086,9 @@
           "196c1b5362": "打开 GitLab 任务",
           "0ccba862b8": "打开 GitHub 任务",
           "fee535205b": "任务",
-          "d599269755": "从侧边栏隐藏"
+          "d599269755": "从侧边栏隐藏",
+          "pinnedPanelNodes": "Nodes",
+          "pinnedPanelUserPanels": "User Panels"
         },
         "SidebarRepositoryFilterSection": {
           "d3a9c4cea1": "清除",
@@ -4680,7 +4689,8 @@
           "toastInstallCliDescription": "安装 Orca CLI，让智能体可以读取并编辑 Linear 任务。",
           "toastInstallSkillDescription": "安装 Linear 技能，让智能体可以通过 Orca CLI 读取并编辑 Linear 任务。",
           "toastRemoteDescription": "{{value0}} 远程智能体环境可能仍需要自己的设置。",
-          "toastWslDescription": "{{value0}} 此设置会在所选 WSL 智能体运行时中执行。"
+          "toastWslDescription": "{{value0}} 此设置会在所选 WSL 智能体运行时中执行。",
+          "notNow": "暂不"
         },
         "FolderWorkspaceComposerDialog": {
           "connectFailed": "无法连接到项目。",
@@ -4861,6 +4871,35 @@
           "cancel": "取消",
           "forget": "从 Orca 中移除",
           "reconnectAndDelete": "重新连接并删除"
+        },
+        "SidebarPanelsNav": {
+          "canvasSplitRight": "Add to canvas (split right)",
+          "canvasSplitDown": "Add to canvas (split down)",
+          "deleteLayout": "Delete layout",
+          "layouts": "Layouts",
+          "renamePanel": "Rename",
+          "detachPanel": "Open in new window",
+          "openInCanvas": "Open in canvas",
+          "emptyUserPanels": "Pin a dashboard with +",
+          "emptyNodes": "Add an observability terminal with +",
+          "newGroup": "New group",
+          "addChildGroup": "Add nested group",
+          "deleteGroup": "Delete group",
+          "deletePanel": "删除面板",
+          "unsavedCanvas": "Unsaved canvas",
+          "closeCanvas": "Close canvas",
+          "panelCanvas": "Panel Canvas",
+          "savedLayouts": "Saved Layouts"
+        },
+        "SidebarPanelRows": {
+          "renameLabel": "Rename"
+        },
+        "QuickAddPanelPopovers": {
+          "addWebPanel": "Add browser panel",
+          "webTitle": "New user panel",
+          "addTerminalPanel": "Add node terminal",
+          "terminalTitle": "New node panel",
+          "commandPlaceholder": "Command (e.g. btop)"
         }
       },
       "shared": {
@@ -5035,7 +5074,8 @@
           "codexSystemDefaultNeedsSignIn": "未找到 {{value0}} 的 Codex 登录信息。",
           "codexConfigSyncMissingSource": "Codex is still using the settings it last synced because {{value0}} is missing. Restore that file to resume syncing.",
           "codexConfigSyncBlankSource": "Codex is still using the settings it last synced because {{value0}} is empty. That is expected while a synced folder finishes downloading.",
-          "codexConfigSyncUnreadableSource": "Codex is still using the settings it last synced because {{value0}} could not be read. Check that file's permissions."
+          "codexConfigSyncUnreadableSource": "Codex is still using the settings it last synced because {{value0}} could not be read. Check that file's permissions.",
+          "99c8f9e498": "Orca 将删除此已保存账户的托管 Codex 主目录。如果当前处于活动状态，Orca 将回退到系统默认的 Codex 登录。"
         },
         "AdvancedPane": {
           "40b29e0bf3": "重新启动",
@@ -6479,7 +6519,8 @@
           "orcaVersion": "Orca v{{value0}}",
           "removeActiveServerBlocked": "Choose another Active Server in Advanced before removing this server.",
           "removeActiveServerDescription": "Choose another Active Server in Advanced before removing this server. Existing host sessions are left alone.",
-          "updatingServers": "Updating servers…"
+          "updatingServers": "Updating servers…",
+          "a5b58465b6": "连接到 {{value0}}。"
         },
         "RuntimePairingGeneratedUrlRows": {
           "0495f68959": "复制 {{value0}}"
@@ -7083,7 +7124,8 @@
           "cf37ff69f6": "根据",
           "8abdab9f7c": "立即重启",
           "907131d741": "正在重新启动...",
-          "605a35d600": "Not applied by the terminal renderer yet — xterm.js has no bold color slot. A saved value is preserved."
+          "605a35d600": "Not applied by the terminal renderer yet — xterm.js has no bold color slot. A saved value is preserved.",
+          "fb8c6f1967": "粗体文本的颜色。如果未设置，则返回正常颜色。"
         },
         "UIZoomControl": {
           "c2c64b24d0": "重置"
@@ -9308,7 +9350,14 @@
           "signInRequired": "请登录以使用 Orca Mobile Relay。",
           "relayUnavailable": "此版本不支持 Orca Relay。请使用局域网。",
           "signInAgain": "重新登录",
-          "localTitle": "局域网"
+          "localTitle": "局域网",
+          "title": "新手机应如何连接？",
+          "anywhere": "使用 Orca Relay 连接",
+          "recommended": "推荐",
+          "automaticDescription": "Orca 会优先使用直接连接，否则使用 Orca Relay。",
+          "signInDescription": "请在此桌面端登录以使用 Orca Relay。",
+          "localOnly": "仅限本地网络",
+          "localShort": "局域网或 Tailscale"
         },
         "MobilePairingSetupSection": {
           "title": "配对手机",
@@ -9319,7 +9368,14 @@
           "step1Title": "连接方式",
           "step2Title": "此电脑的地址",
           "step2RelayDescription": "距离较近时用于快速直接连接。Relay 覆盖远程访问。",
-          "step2LocalDescription": "手机必须能通过 Wi‑Fi 或 Tailscale 访问此地址。"
+          "step2LocalDescription": "手机必须能通过 Wi‑Fi 或 Tailscale 访问此地址。",
+          "automaticDescription": "配对码包含直接访问方式和加密的 Orca Relay 备用连接。",
+          "localDescription": "配对码仅通过下方的本地网络地址连接。",
+          "localSettings": "本地连接设置",
+          "localAddressDescription": "选择 Orca Mobile 可用于直接访问此电脑的局域网或专用网络地址。",
+          "tailnet": "使用自己的 tailnet 连接",
+          "tailnetDescription": "在此电脑和手机上安装 Tailscale，登录同一个 tailnet，然后在上方选择其 100.x.y.z 地址。",
+          "getTailscale": "获取 Tailscale"
         },
         "MobileRelayBetaAvailability": {
           "about": "关于 Orca Relay 测试版",
@@ -9405,6 +9461,32 @@
           "serviceManagerHelp": "Update Orca through the service manager that starts this server.",
           "unpackedHelp": "Development builds must be updated from their source checkout.",
           "legacyHelp": "Update this server manually once to enable remote updates."
+        },
+        "PinnedTerminalPanelsSetting": {
+          "title": "Pinned terminal panels",
+          "description": "Pin observability commands (nvtop, btop, watch …) to the sidebar as persistent terminals.",
+          "remove": "Remove panel",
+          "titlePlaceholder": "Title",
+          "add": "Add",
+          "hostPlaceholder": "SSH host (optional)",
+          "groupPlaceholder": "Group",
+          "sectionEnabled": "Show panels in the sidebar",
+          "reorder": "Reorder panel",
+          "panelEnabled": "Show this panel",
+          "unresolvedHostTitle": "No configured SSH target matches this host — the panel will refuse to start.",
+          "unresolvedHost": "unresolved host",
+          "edit": "Edit panel",
+          "duplicate": "Duplicate panel",
+          "saveEdit": "Save panel",
+          "cancelEdit": "Cancel edit",
+          "commandPlaceholder": "Command (e.g. btop)"
+        },
+        "PinnedWebPanelsSetting": {
+          "title": "Pinned web panels",
+          "description": "Pin dashboards (Grafana, CI, issue boards) to the sidebar as persistent pages.",
+          "remove": "Remove panel",
+          "titlePlaceholder": "Title",
+          "add": "Add"
         }
       },
       "right": {
@@ -9907,7 +9989,10 @@
             "b8c2e1a904": "{{value0}} → {{value1}}",
             "a4e93c21d7": "当前分支：{{value0}}",
             "c7d4e2f801": "更改基引用：{{value0}}",
-            "f3a1b8c204": "upstream"
+            "f3a1b8c204": "upstream",
+            "e9c2a5d416": "与 {{value0}} 同步",
+            "createPrIntentSyncConflicts": "同步遇到冲突。请解决后重试创建 PR。",
+            "createPrIntentSyncing": "正在同步分支…"
           },
           "SourceControlAgentActionDialog": {
             "8e856842d1": "无法启动选定的智能体。",
@@ -13574,6 +13659,64 @@
           "undo": "撤销",
           "widthOption": "{{value0}} px"
         }
+      },
+      "pinned-terminal-panels": {
+        "PinnedTerminalPanelPage": {
+          "close": "Close panel",
+          "splitRight": "Split right in canvas",
+          "splitDown": "Split down in canvas",
+          "detach": "Open in new window"
+        }
+      },
+      "pinned-web-panels": {
+        "PinnedWebPanelPage": {
+          "reload": "Reload panel",
+          "close": "Close panel",
+          "back": "Go back",
+          "forward": "Go forward",
+          "splitRight": "Split right in canvas",
+          "splitDown": "Split down in canvas",
+          "detach": "Open in new window"
+        }
+      },
+      "panel-canvas": {
+        "PanelCanvasPage": {
+          "scratchTitle": "Panel canvas",
+          "layoutNamePlaceholder": "Layout name",
+          "saveConfirm": "Save",
+          "save": "Save",
+          "saveAs": "Save as…",
+          "close": "Close canvas",
+          "reloadTile": "Reload tile",
+          "splitRight": "Split right",
+          "splitDown": "Split down",
+          "closeTile": "Close tile",
+          "missingPanel": "Panel removed",
+          "missingPanelBody": "This pinned panel was deleted in Settings.",
+          "detach": "Detach into its own window"
+        },
+        "PanelCanvasPopoutRoot": {
+          "title": "Panel canvas",
+          "reattach": "Reattach",
+          "close": "Close window",
+          "bootFailed": "This window has no canvas payload — close it and detach again.",
+          "loading": "Loading…"
+        },
+        "PopoutTerminalTile": {
+          "hostUnresolved": "SSH host not found — check the panel host in Settings.",
+          "exited": "Command exited"
+        },
+        "CanvasTileChrome": {
+          "back": "Go back",
+          "forward": "Go forward"
+        },
+        "PanelCanvasTree": {
+          "localShell": "Local shell",
+          "blankBrowser": "Blank browser"
+        },
+        "PanelSplitMenu": {
+          "chooseTile": "Choose tile to open"
+        }
       }
     },
     "i18n": {
@@ -13605,6 +13748,9 @@
       "webRuntimeSession": {
         "remoteHostDisconnected": "The workspace is not connected to a remote Orca host."
       }
+    },
+    "common": {
+      "cancel": "Cancel"
     }
   },
   "components": {

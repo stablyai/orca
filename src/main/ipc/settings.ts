@@ -23,7 +23,10 @@ import { prepareLocalWorktreeRootsForRepos } from '../worktree-root-preparation'
 import { scheduleCurrentWorktreeBaseDirectoryWatcherSync } from './worktree-base-directory-watcher'
 import { applyPRBotAuthorOverride } from '../../shared/pr-bot-author-overrides'
 import { resolveEnvironment } from '../../shared/runtime-environment-store'
-
+import { normalizePinnedWebPanels } from '../../shared/pinned-web-panels'
+import { normalizePinnedTerminalPanels } from '../../shared/pinned-terminal-panels'
+import { normalizePanelTreeGroups } from '../../shared/panel-tree'
+import { normalizePanelLayouts } from '../../shared/panel-layouts'
 // Why: the whitelist is the source-of-truth for which keys we emit on. Casting
 // to a Set once at module load lets the IPC handler's per-key membership
 // check stay O(1) without re-coercing the readonly tuple on every call.
@@ -128,6 +131,22 @@ export function registerSettingsHandlers(
     }
     if ('uiLanguage' in args) {
       sanitizedArgs.uiLanguage = normalizeUiLanguage(args.uiLanguage)
+    }
+    if ('pinnedWebPanels' in args) {
+      sanitizedArgs.pinnedWebPanels = normalizePinnedWebPanels(args.pinnedWebPanels)
+    }
+    if ('pinnedTerminalPanels' in args) {
+      sanitizedArgs.pinnedTerminalPanels = normalizePinnedTerminalPanels(args.pinnedTerminalPanels)
+    }
+    if ('panelTreeGroups' in args) {
+      sanitizedArgs.panelTreeGroups = normalizePanelTreeGroups(args.panelTreeGroups)
+    }
+    if ('panelLayouts' in args) {
+      sanitizedArgs.panelLayouts = normalizePanelLayouts(args.panelLayouts)
+    }
+    if ('pinnedTerminalPanelsEnabled' in args) {
+      // Why: absent-means-enabled — anything but an explicit false is enabled.
+      sanitizedArgs.pinnedTerminalPanelsEnabled = args.pinnedTerminalPanelsEnabled !== false
     }
     if (args.theme) {
       nativeTheme.themeSource = args.theme

@@ -2781,7 +2781,45 @@ export type GlobalSettings = {
   floatingTerminalEnabled: boolean
   /** One-shot migration flag for the floating-workspace default-on rollout; after migration an explicit off sticks. */
   floatingTerminalDefaultedForAllUsers?: boolean
-  /** Start dir for new floating-workspace terminal tabs; empty or '~' = home dir. */
+  /** User-pinned dashboard pages (Grafana, CI, issue boards, …) surfaced as
+   *  first-class sidebar entries hosting persistent webviews. Optional for
+   *  profiles saved before this setting existed; readers default to none. */
+  pinnedWebPanels?: PinnedWebPanel[]
+  /** Collapsed state of the sidebar's "User Panels" disclosure that groups
+   *  the pinned web panels — in settings (not per-window UI state) so the
+   *  fold survives relaunch, matching the terminal-panel group folds. */
+  pinnedWebPanelsCollapsed?: boolean
+  /** Collapsed state of the sidebar's "Panel Canvas" parent disclosure, which
+   *  holds the live (possibly unsaved) canvas row plus the Saved Layouts
+   *  subtree — in settings so the fold survives relaunch. */
+  panelCanvasCollapsed?: boolean
+  /** Collapsed state of the "Saved Layouts" subtree nested under Panel Canvas
+   *  — in settings so the fold survives relaunch, matching User Panels /
+   *  Nodes. */
+  panelLayoutsCollapsed?: boolean
+  /** Named split-window arrangements of pinned panels ("all nodes btop"),
+   *  sanitized by normalizePanelLayouts on every write. Optional for profiles
+   *  saved before this setting existed; readers default to none. */
+  panelLayouts?: PanelLayout[]
+  /** User-pinned terminal observability panels (nvtop, btop, watch …) surfaced
+   *  as sidebar entries hosting persistent PTYs. Optional for profiles saved
+   *  before this setting existed; readers default to none. */
+  pinnedTerminalPanels?: PinnedTerminalPanel[]
+  /** Master switch for the pinned-terminal-panels sidebar section. Absent
+   *  means enabled; an explicit false hides every panel entry without
+   *  touching the per-panel configuration. */
+  pinnedTerminalPanelsEnabled?: boolean
+  /** Collapsed pinned-terminal-panel group labels — in settings (not
+   *  per-window UI state) so rail folds survive relaunch and both windows
+   *  of a profile agree. Accepts legacy titles or modern group ids. */
+  collapsedPinnedTerminalPanelGroups?: string[]
+  /** First-class panel tree groups (User Panels / Nodes families). Optional
+   *  for older profiles; migrateLegacyPanelGroups mints groups from legacy
+   *  terminal `group` strings on first write. */
+  panelTreeGroups?: PanelTreeGroup[]
+  /** Where new Floating Workspace terminal tabs start. Empty or '~' means
+   *  the user's home directory; markdown notes use Orca's app-owned
+   *  floating workspace under Electron userData. */
   floatingTerminalCwd: string
   /** Picker-approved floating-workspace dirs reauthorized across restarts; renderer text alone must not populate this. */
   floatingTerminalTrustedCwds?: string[]
@@ -3197,6 +3235,97 @@ export type ManualRepoOrderEntry = {
   repoId: string
 }
 
+/** A user-configured web page pinned to the left sidebar. */
+export type PinnedWebPanel = {
+  id: string
+  title: string
+  /** http(s) only — enforced by normalizePinnedWebPanels on every write. */
+  url: string
+  /** Panel tree group id under the User Panels root; absent = top-level. */
+  groupId?: string
+  /** Sort order within the group (or root). */
+  order?: number
+}
+
+/** A user-configured observability command (nvtop, btop, watch …) pinned to
+ *  the left sidebar as a persistent terminal, running locally or on a
+ *  configured SSH target. */
+export type PinnedTerminalPanel = {
+  id: string
+  title: string
+  /** Sanitized by normalizePinnedTerminalPanels on every write: trimmed,
+   *  length-capped, control characters rejected. */
+  command: string
+  /** SSH target id to run the command on; absent means the local machine. */
+  host?: string
+  /** Legacy sidebar group label (pre-panelTreeGroups). Migrated to groupId. */
+  group?: string
+  /** Panel tree group id under the Nodes root; absent = top-level. */
+  groupId?: string
+  /** Sort order within the group (or root). */
+  order?: number
+  /** Absent means enabled — only an explicit false hides the panel from the
+   *  sidebar, so profiles saved before this field existed keep their panels. */
+  enabled?: boolean
+}
+
+/** First-class sidebar group for User Panels / Nodes trees (nested families). */
+export type PanelTreeGroup = {
+  id: string
+  title: string
+  root: 'user-panels' | 'nodes'
+  /** null = top-level family under the root rail. */
+  parentId: string | null
+  order: number
+  collapsed?: boolean
+}
+
+/** One tile of a saved panel layout: a reference to a pinned panel. The
+ *  panel's command/url/host always come from the live pinned-panel entry, so
+ *  editing a panel updates every layout that shows it. */
+export type PanelLayoutPanelLeaf = {
+  kind: 'terminal' | 'web'
+  panelId: string
+}
+
+/** A tile holding an ad-hoc login shell rather than a configured panel —
+ *  `host` names an SSH target (null = local). Shells are self-contained, so
+ *  they survive in saved layouts without depending on a pinned-panel entry.
+ *  Process lifespan: ephemeral (panel-lifespan); L0 only when saved in a layout. */
+export type PanelLayoutShellLeaf = {
+  kind: 'shell'
+  host: string | null
+  label?: string
+}
+
+/** Ad-hoc browser tile (not a pinned User Panel). Optional url defaults to
+ *  about:blank at spawn. Layout save is L0+L1 only — guest process is ephemeral. */
+export type PanelLayoutBrowserLeaf = {
+  kind: 'browser'
+  url?: string
+  label?: string
+}
+
+export type PanelLayoutLeaf = PanelLayoutPanelLeaf | PanelLayoutShellLeaf | PanelLayoutBrowserLeaf
+
+/** A resizable split holding two or more tiles or nested splits. `sizes` are
+ *  relative flex weights matching `children`; absent means equal shares. */
+export type PanelLayoutSplit = {
+  direction: 'row' | 'column'
+  children: PanelLayoutNode[]
+  sizes?: number[]
+}
+
+export type PanelLayoutNode = PanelLayoutLeaf | PanelLayoutSplit
+
+/** A named, saved split-window arrangement of pinned panels (e.g. "all nodes
+ *  btop"), openable from the sidebar as one unit. */
+export type PanelLayout = {
+  id: string
+  title: string
+  root: PanelLayoutNode
+}
+
 /** The active top-level section shown in the main content area. */
 export type TopLevelView =
   | 'terminal'
@@ -3207,6 +3336,9 @@ export type TopLevelView =
   | 'space'
   | 'skills'
   | 'mobile'
+  | 'web-panel'
+  | 'terminal-panel'
+  | 'panel-canvas'
 
 export type PersistedUIState = {
   lastActiveRepoId: string | null

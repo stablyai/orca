@@ -752,7 +752,8 @@
         "a4c8e1b2f7": "Codex가 아직 {{value0}} 계정으로 로그인되어 있습니다",
         "d3e8a1f4b2": "계정 전환됨",
         "9375620cc3": "Restart this session to use {{value0}}. It stays on the previous account until you do.",
-        "6133594b12": "Keep old account"
+        "6133594b12": "Keep old account",
+        "b9000fe511": "Not now"
       },
       "FirstLaunchBanner": {
         "b9e1b966c7": "알림 닫기",
@@ -1913,7 +1914,11 @@
         "workspaceTabMissing": "탭이 더 이상 존재하지 않습니다",
         "projectsGroupsHeader": "프로젝트 및 그룹",
         "projectBadge": "프로젝트",
-        "repoGroupBadge": "리포지토리 그룹"
+        "repoGroupBadge": "리포지토리 그룹",
+        "panelsHeader": "Panels",
+        "panelWebBadge": "Web panel",
+        "panelTerminalBadge": "Terminal panel",
+        "panelLayoutBadge": "Layout"
       },
       "github": {
         "pr": {
@@ -3290,7 +3295,9 @@
             "a37e8c15d4": "Run kimi in a terminal on the computer running Orca and wait for it to start, then retry usage."
           },
           "SshTargetStatusRow": {
-            "sshHost": "SSH 호스트"
+            "sshHost": "SSH 호스트",
+            "openShell": "Open shell in canvas",
+            "detachShell": "Open shell in new window"
           },
           "usagePercentageLabel": {
             "used": "{{value0}}% 사용",
@@ -4069,7 +4076,7 @@
         },
         "SidebarNav": {
           "80611a8b10": "검색",
-          "0c3395fd32": "작업 트리 및 브라우저 탭 검색",
+          "0c3395fd32": "작업 트리, 패널 및 브라우저 탭 검색",
           "c86d83b5c3": "새로 만들기",
           "1b5c41caee": "Orca 모바일",
           "9c95e1ce91": "에이전트",
@@ -4079,7 +4086,9 @@
           "196c1b5362": "GitLab 작업 열기",
           "0ccba862b8": "GitHub 작업 열기",
           "fee535205b": "작업",
-          "d599269755": "사이드바에서 숨기기"
+          "d599269755": "사이드바에서 숨기기",
+          "pinnedPanelNodes": "Nodes",
+          "pinnedPanelUserPanels": "User Panels"
         },
         "SidebarRepositoryFilterSection": {
           "d3a9c4cea1": "지우기",
@@ -4680,7 +4689,8 @@
           "toastInstallCliDescription": "Orca CLI를 설치하여 agents가 Linear 작업을 읽고 편집할 수 있게 하세요.",
           "toastInstallSkillDescription": "Linear 스킬을 설치하여 agents가 Orca CLI를 통해 Linear 작업을 읽고 편집할 수 있게 하세요.",
           "toastRemoteDescription": "{{value0}} 원격 agent 환경에는 자체 설정이 필요할 수 있습니다.",
-          "toastWslDescription": "{{value0}} 이 설정은 선택한 WSL agent 런타임에서 실행됩니다."
+          "toastWslDescription": "{{value0}} 이 설정은 선택한 WSL agent 런타임에서 실행됩니다.",
+          "notNow": "나중에"
         },
         "FolderWorkspaceComposerDialog": {
           "connectFailed": "프로젝트에 연결하지 못했습니다.",
@@ -4861,6 +4871,35 @@
           "cancel": "취소",
           "forget": "Orca에서 제거",
           "reconnectAndDelete": "재연결 후 삭제"
+        },
+        "SidebarPanelsNav": {
+          "canvasSplitRight": "Add to canvas (split right)",
+          "canvasSplitDown": "Add to canvas (split down)",
+          "deleteLayout": "Delete layout",
+          "layouts": "Layouts",
+          "renamePanel": "Rename",
+          "detachPanel": "Open in new window",
+          "openInCanvas": "Open in canvas",
+          "emptyUserPanels": "Pin a dashboard with +",
+          "emptyNodes": "Add an observability terminal with +",
+          "newGroup": "New group",
+          "addChildGroup": "Add nested group",
+          "deleteGroup": "Delete group",
+          "deletePanel": "패널 삭제",
+          "unsavedCanvas": "Unsaved canvas",
+          "closeCanvas": "Close canvas",
+          "panelCanvas": "Panel Canvas",
+          "savedLayouts": "Saved Layouts"
+        },
+        "SidebarPanelRows": {
+          "renameLabel": "Rename"
+        },
+        "QuickAddPanelPopovers": {
+          "addWebPanel": "Add browser panel",
+          "webTitle": "New user panel",
+          "addTerminalPanel": "Add node terminal",
+          "terminalTitle": "New node panel",
+          "commandPlaceholder": "Command (e.g. btop)"
         }
       },
       "shared": {
@@ -5035,7 +5074,8 @@
           "codexSystemDefaultNeedsSignIn": "{{value0}}에 대한 Codex 로그인을 찾을 수 없습니다.",
           "codexConfigSyncMissingSource": "Codex is still using the settings it last synced because {{value0}} is missing. Restore that file to resume syncing.",
           "codexConfigSyncBlankSource": "Codex is still using the settings it last synced because {{value0}} is empty. That is expected while a synced folder finishes downloading.",
-          "codexConfigSyncUnreadableSource": "Codex is still using the settings it last synced because {{value0}} could not be read. Check that file's permissions."
+          "codexConfigSyncUnreadableSource": "Codex is still using the settings it last synced because {{value0}} could not be read. Check that file's permissions.",
+          "99c8f9e498": "Orca는 저장된 계정에 대해 관리되는 Codex 홈을 삭제합니다. 현재 활성화된 경우 Orca는 시스템 기본 Codex 로그인으로 대체됩니다."
         },
         "AdvancedPane": {
           "40b29e0bf3": "다시 시작",
@@ -6479,7 +6519,8 @@
           "orcaVersion": "Orca v{{value0}}",
           "removeActiveServerBlocked": "Choose another Active Server in Advanced before removing this server.",
           "removeActiveServerDescription": "Choose another Active Server in Advanced before removing this server. Existing host sessions are left alone.",
-          "updatingServers": "Updating servers…"
+          "updatingServers": "Updating servers…",
+          "a5b58465b6": "{{value0}}에 연결되었습니다."
         },
         "RuntimePairingGeneratedUrlRows": {
           "0495f68959": "{{value0}} 복사"
@@ -7083,7 +7124,8 @@
           "cf37ff69f6": "베이스",
           "8abdab9f7c": "지금 재시작",
           "907131d741": "다시 시작하는 중…",
-          "605a35d600": "Not applied by the terminal renderer yet — xterm.js has no bold color slot. A saved value is preserved."
+          "605a35d600": "Not applied by the terminal renderer yet — xterm.js has no bold color slot. A saved value is preserved.",
+          "fb8c6f1967": "굵은 텍스트의 색상입니다. 설정하지 않으면 일반 색상으로 돌아갑니다."
         },
         "UIZoomControl": {
           "c2c64b24d0": "재설정"
@@ -9308,7 +9350,14 @@
           "signInRequired": "Orca Mobile Relay를 사용하려면 로그인하세요.",
           "relayUnavailable": "이 빌드에서는 Orca Relay를 사용할 수 없습니다. LAN을 사용하세요.",
           "signInAgain": "다시 로그인",
-          "localTitle": "LAN"
+          "localTitle": "LAN",
+          "title": "새 휴대폰을 어떻게 연결할까요?",
+          "anywhere": "Orca Relay로 연결",
+          "recommended": "권장",
+          "automaticDescription": "가능하면 직접 연결하고, 그렇지 않으면 Orca Relay를 사용합니다.",
+          "signInDescription": "Orca Relay를 사용하려면 이 데스크톱에서 로그인하세요.",
+          "localOnly": "로컬 네트워크만",
+          "localShort": "LAN 또는 Tailscale"
         },
         "MobilePairingSetupSection": {
           "title": "휴대폰 페어링",
@@ -9319,7 +9368,14 @@
           "step1Title": "연결 방식",
           "step2Title": "이 컴퓨터의 주소",
           "step2RelayDescription": "가까운 곳에서는 빠른 직접 연결에 사용됩니다. 먼 거리에서는 Relay가 원격 액세스를 제공합니다.",
-          "step2LocalDescription": "휴대폰이 Wi‑Fi 또는 Tailscale을 통해 이 주소에 접근할 수 있어야 합니다."
+          "step2LocalDescription": "휴대폰이 Wi‑Fi 또는 Tailscale을 통해 이 주소에 접근할 수 있어야 합니다.",
+          "automaticDescription": "페어링 코드에는 직접 연결과 암호화된 Orca Relay 대체 연결이 포함됩니다.",
+          "localDescription": "페어링 코드는 아래의 로컬 네트워크 주소로만 연결합니다.",
+          "localSettings": "로컬 연결 설정",
+          "localAddressDescription": "Orca Mobile에서 이 컴퓨터에 직접 연결할 수 있는 LAN 또는 사설 네트워크 주소를 선택하세요.",
+          "tailnet": "내 tailnet으로 연결",
+          "tailnetDescription": "이 컴퓨터와 휴대폰에 Tailscale을 설치하고 같은 tailnet에 로그인한 다음 위에서 100.x.y.z 주소를 선택하세요.",
+          "getTailscale": "Tailscale 받기"
         },
         "MobileRelayBetaAvailability": {
           "about": "Orca Relay 베타 정보",
@@ -9405,6 +9461,32 @@
           "serviceManagerHelp": "Update Orca through the service manager that starts this server.",
           "unpackedHelp": "Development builds must be updated from their source checkout.",
           "legacyHelp": "Update this server manually once to enable remote updates."
+        },
+        "PinnedTerminalPanelsSetting": {
+          "title": "Pinned terminal panels",
+          "description": "Pin observability commands (nvtop, btop, watch …) to the sidebar as persistent terminals.",
+          "remove": "Remove panel",
+          "titlePlaceholder": "Title",
+          "add": "Add",
+          "hostPlaceholder": "SSH host (optional)",
+          "groupPlaceholder": "Group",
+          "sectionEnabled": "Show panels in the sidebar",
+          "reorder": "Reorder panel",
+          "panelEnabled": "Show this panel",
+          "unresolvedHostTitle": "No configured SSH target matches this host — the panel will refuse to start.",
+          "unresolvedHost": "unresolved host",
+          "edit": "Edit panel",
+          "duplicate": "Duplicate panel",
+          "saveEdit": "Save panel",
+          "cancelEdit": "Cancel edit",
+          "commandPlaceholder": "Command (e.g. btop)"
+        },
+        "PinnedWebPanelsSetting": {
+          "title": "Pinned web panels",
+          "description": "Pin dashboards (Grafana, CI, issue boards) to the sidebar as persistent pages.",
+          "remove": "Remove panel",
+          "titlePlaceholder": "Title",
+          "add": "Add"
         }
       },
       "right": {
@@ -9907,7 +9989,10 @@
             "b8c2e1a904": "{{value0}} → {{value1}}",
             "a4e93c21d7": "현재 브랜치: {{value0}}",
             "c7d4e2f801": "베이스 ref 변경: {{value0}}",
-            "f3a1b8c204": "upstream"
+            "f3a1b8c204": "upstream",
+            "e9c2a5d416": "{{value0}}와 동일한 상태",
+            "createPrIntentSyncConflicts": "동기화 중 충돌이 발생했습니다. 해결한 다음 Create PR을 다시 시도하세요.",
+            "createPrIntentSyncing": "브랜치를 동기화하는 중…"
           },
           "SourceControlAgentActionDialog": {
             "8e856842d1": "선택한 agent를 시작할 수 없습니다.",
@@ -13574,6 +13659,64 @@
           "undo": "실행 취소",
           "widthOption": "{{value0}} px"
         }
+      },
+      "pinned-terminal-panels": {
+        "PinnedTerminalPanelPage": {
+          "close": "Close panel",
+          "splitRight": "Split right in canvas",
+          "splitDown": "Split down in canvas",
+          "detach": "Open in new window"
+        }
+      },
+      "pinned-web-panels": {
+        "PinnedWebPanelPage": {
+          "reload": "Reload panel",
+          "close": "Close panel",
+          "back": "Go back",
+          "forward": "Go forward",
+          "splitRight": "Split right in canvas",
+          "splitDown": "Split down in canvas",
+          "detach": "Open in new window"
+        }
+      },
+      "panel-canvas": {
+        "PanelCanvasPage": {
+          "scratchTitle": "Panel canvas",
+          "layoutNamePlaceholder": "Layout name",
+          "saveConfirm": "Save",
+          "save": "Save",
+          "saveAs": "Save as…",
+          "close": "Close canvas",
+          "reloadTile": "Reload tile",
+          "splitRight": "Split right",
+          "splitDown": "Split down",
+          "closeTile": "Close tile",
+          "missingPanel": "Panel removed",
+          "missingPanelBody": "This pinned panel was deleted in Settings.",
+          "detach": "Detach into its own window"
+        },
+        "PanelCanvasPopoutRoot": {
+          "title": "Panel canvas",
+          "reattach": "Reattach",
+          "close": "Close window",
+          "bootFailed": "This window has no canvas payload — close it and detach again.",
+          "loading": "Loading…"
+        },
+        "PopoutTerminalTile": {
+          "hostUnresolved": "SSH host not found — check the panel host in Settings.",
+          "exited": "Command exited"
+        },
+        "CanvasTileChrome": {
+          "back": "Go back",
+          "forward": "Go forward"
+        },
+        "PanelCanvasTree": {
+          "localShell": "Local shell",
+          "blankBrowser": "Blank browser"
+        },
+        "PanelSplitMenu": {
+          "chooseTile": "Choose tile to open"
+        }
       }
     },
     "i18n": {
@@ -13605,6 +13748,9 @@
       "webRuntimeSession": {
         "remoteHostDisconnected": "The workspace is not connected to a remote Orca host."
       }
+    },
+    "common": {
+      "cancel": "Cancel"
     }
   },
   "components": {
