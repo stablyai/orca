@@ -100,6 +100,28 @@ describe('registerSystemResumeBroadcast', () => {
     expect(getCrashBreadcrumbSnapshot().at(-1)?.data).toEqual({ suspendedForMs: 109 * 60_000 })
   })
 
+  it('spans from the first suspend when dark wake swallows the intervening resume', () => {
+    const { source, fireSuspend, fireResume } = createResumeSource()
+    const clock = { value: 0 }
+    registerSystemResumeBroadcast({
+      resumeSource: source,
+      getWindows: () => [],
+      now: () => clock.value
+    })
+
+    fireSuspend()
+    clock.value += 90 * 60_000
+    // Why: dark wake re-suspends without a resume; reporting only the trailing 20s
+    // would leave the 90 preceding minutes looking like an unexplained freeze.
+    fireSuspend()
+    clock.value += 20_000
+    fireResume()
+
+    expect(getCrashBreadcrumbSnapshot().at(-1)?.data).toEqual({
+      suspendedForMs: 90 * 60_000 + 20_000
+    })
+  })
+
   it('records nothing when resume arrives without a recorded suspend', () => {
     const { source, fireResume } = createResumeSource()
     const window = createWindow()

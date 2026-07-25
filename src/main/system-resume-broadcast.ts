@@ -40,7 +40,11 @@ export function registerSystemResumeBroadcast(
   let suspendedAt: number | null = null
 
   const onSuspend = (): void => {
-    suspendedAt = now()
+    // Why: resume maps to NSWorkspaceDidWake, which stays silent for dark wake, so
+    // suspend can repeat before a resume. Keep the earliest stamp: over-reporting the
+    // span is visibly inconsistent with surviving heartbeats, while under-reporting
+    // leaves a long gap looking unexplained -- the false freeze this exists to rule out.
+    suspendedAt ??= now()
   }
 
   const onResume = (): void => {
