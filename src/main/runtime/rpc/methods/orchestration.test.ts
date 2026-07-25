@@ -2203,7 +2203,8 @@ describe('orchestration RPC methods', () => {
           requested: 'run',
           hookFound: true,
           startupPolicy: 'start-immediately',
-          state: 'running'
+          state: 'running',
+          terminalHandle: 'term_setup'
         }
       } as never)
       vi.spyOn(runtime, 'listTerminals').mockResolvedValue({

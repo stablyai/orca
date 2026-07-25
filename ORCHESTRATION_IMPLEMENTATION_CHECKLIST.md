@@ -210,6 +210,14 @@ Explicit non-goals:
 - [x] Default `start-immediately` launches setup and agent side by side.
 - [x] Under `start-immediately`, setup outcome never gates Dispatch readiness regardless of when
       it is observed.
+- [x] Track the setup command's exit code without waiting for its interactive terminal shell to
+      exit or closing the setup tab.
+- [x] Register the completion observer before replaying bounded recent output so fast local setup
+      commands cannot finish in an observation gap.
+- [x] Carry the exact created setup terminal handle; never infer setup identity from a display
+      title shared with configured tabs or split panes.
+- [x] Scope completion signals to a private per-invocation token and preserve uncertain terminal
+      outcomes as running rather than converting a disconnect into setup failure.
 - [x] The return receipt contains the latest setup state.
 - [x] Only post-return setup state changes emit a typed setup notice.
 - [x] Setup failure never automatically stops or fails an already-ready worker.
@@ -1313,6 +1321,43 @@ Append new entries chronologically. Do not rewrite older entries except to corre
 - Next:
   - Rebuild both dev runtimes from this patch and repeat the physical setup-status slice before final
     PR reconciliation.
+
+### 2026-07-24 — Truthful setup command completion
+
+- Changes:
+  - Wrapped only orchestration-created non-gating setup commands with a private per-invocation
+    completion signal that preserves the command exit code.
+  - Added one runtime observer that subscribes to raw PTY output, replays the bounded recent-output
+    buffer, scans across chunk boundaries, and treats terminal exit as a fallback.
+  - Updated local and connected-server setup evidence monitors to observe command completion while
+    leaving the interactive setup terminal open.
+  - Propagated the exact setup terminal handle through worktree receipts and hardened native Windows
+    launch with an encoded PowerShell command plus an environment-carried runner path.
+- Files:
+  - `src/main/runtime/orchestration/setup-completion-signal.ts`
+  - `src/main/runtime/orca-runtime.ts`
+  - local and federation setup monitors and focused tests
+  - `ORCHESTRATION_IMPLEMENTATION_CHECKLIST.md`
+- Verification:
+  - The completion helper, exact-effect, local worker, federation, and setup-evidence suites passed
+    43 tests.
+  - Focused runtime tests proved live completion, replay-before-observer recovery, and opt-in setup
+    wrapping while the shell remains running.
+  - The complete runtime service suite passed 884 tests.
+  - The broader orchestration/CLI/SSH/execution-host selection passed 529 tests.
+  - Node, CLI, and web typechecks, the CLI/Electron build, focused lint/format, max-lines ratchet,
+    and `git diff --check` passed.
+  - The independent no-scope-creep recheck found no remaining correctness blocker.
+- Findings:
+  - Terminal exit is not setup-command completion because Orca intentionally runs setup in an
+    interactive terminal that returns to a shell prompt.
+  - Display titles are not terminal identity, and a disconnected terminal is not proof that its
+    setup command failed.
+  - The correction is runtime evidence only: it adds no public flag, setup job, scheduler, retry
+    policy, process heuristic, or automatic tab closure.
+- Next:
+  - Rebuild both dev runtimes and repeat the physical Mac Run-home to Windows-worker setup-status
+    slice, including a failing setup command that returns to a PowerShell prompt.
 
 ### Entry template
 

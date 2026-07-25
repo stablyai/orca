@@ -17,7 +17,8 @@ export type FederationEffect = {
 export function appendFederationTerminalEffects(
   effects: FederationEffect[],
   terminals: { handle: string; title: string | null; tabId?: string; leafId?: string }[],
-  agentHandle: string
+  agentHandle: string,
+  setupHandle?: string
 ): void {
   for (const terminal of terminals) {
     effects.push({
@@ -25,7 +26,7 @@ export function appendFederationTerminalEffects(
       role:
         terminal.handle === agentHandle
           ? 'agent'
-          : terminal.title === 'Setup'
+          : terminal.handle === setupHandle
             ? 'setup'
             : 'configured_tab',
       action: terminal.handle === agentHandle ? 'reused_agent_terminal' : 'created',

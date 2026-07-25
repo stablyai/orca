@@ -89,6 +89,7 @@ export async function createWorkerWorktree(args: {
     runHooks: setupDecision === 'run',
     setupDecision,
     awaitTerminalProvisioning: true,
+    observeSetupCompletion: true,
     createdWithAgent: args.agent,
     startupAgent: args.agent,
     activate: false,
@@ -123,13 +124,14 @@ export async function createWorkerWorktree(args: {
     throw new Error(created.warning ?? 'Agent-first worktree creation returned no terminal.')
   }
   const listed = await runtime.listTerminals(`id:${created.worktree.id}`)
+  const setupTerminalHandle = created.setupReceipt?.terminalHandle
   for (const terminal of listed.terminals) {
     effects.push({
       kind: 'terminal',
       role:
         terminal.handle === terminalHandle
           ? 'agent'
-          : terminal.title === 'Setup'
+          : terminal.handle === setupTerminalHandle
             ? 'setup'
             : 'configured_tab',
       action: terminal.handle === terminalHandle ? 'reused_agent_terminal' : 'created',
@@ -150,7 +152,7 @@ export async function createWorkerWorktree(args: {
     hookFound: setupReceipt.hookFound,
     startupPolicy: setupReceipt.startupPolicy,
     state: setupReceipt.state,
-    terminalId: setupTerminal?.id
+    terminalId: setupTerminalHandle ?? setupTerminal?.id
   })
   return {
     worktree: created.worktree as Awaited<ReturnType<OrcaRuntimeService['showManagedWorktree']>>,
@@ -177,11 +179,11 @@ export function monitorWorkerSetup(args: {
   ) {
     return
   }
-  // Why: setup is intentionally non-gating, but its later exit should remain durable evidence.
+  // Why: setup is intentionally non-gating, but command completion remains durable evidence.
   void args.runtime
-    .waitForTerminal(setupTerminal.id, { condition: 'exit' })
-    .then((wait) => {
-      const setupState = wait.exitCode === 0 ? 'succeeded' : 'failed'
+    .waitForSetupTerminalCompletion(setupTerminal.id)
+    .then((completion) => {
+      const setupState = completion.exitCode === 0 ? 'succeeded' : 'failed'
       const evidence = args.db.updateWorkerSetupEvidence({
         dispatchId: args.dispatchId,
         setupState,

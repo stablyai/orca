@@ -71,13 +71,7 @@ describe('orchestration federated setup evidence', () => {
       effects
     })
     db.markRemoteAttachmentReady(dispatchId)
-    vi.spyOn(runtime, 'waitForTerminal').mockResolvedValue({
-      handle: 'term_remote_setup',
-      condition: 'exit',
-      satisfied: true,
-      status: 'exited',
-      exitCode: 1
-    })
+    vi.spyOn(runtime, 'waitForSetupTerminalCompletion').mockResolvedValue({ exitCode: 1 })
     const monitorArgs = {
       runtime,
       db,

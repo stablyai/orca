@@ -122,6 +122,7 @@ export const ORCHESTRATION_FEDERATION_ATTACH_METHODS: RpcMethod[] = [
             runHooks: setupDecision === 'run',
             setupDecision,
             awaitTerminalProvisioning: true,
+            observeSetupCompletion: true,
             createdWithAgent: agent as TuiAgent,
             startupAgent: agent as TuiAgent,
             activate: false,
@@ -148,7 +149,12 @@ export const ORCHESTRATION_FEDERATION_ATTACH_METHODS: RpcMethod[] = [
             )
           }
           const listed = await runtime.listTerminals(`id:${created.worktree.id}`)
-          appendFederationTerminalEffects(effects, listed.terminals, terminalHandle)
+          appendFederationTerminalEffects(
+            effects,
+            listed.terminals,
+            terminalHandle,
+            created.setupReceipt?.terminalHandle
+          )
           appendFederationSetupEffect(effects, setup)
         } else {
           worktree = await runtime.showManagedWorktree(params.worktree).catch(() => {

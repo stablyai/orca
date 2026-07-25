@@ -2256,6 +2256,7 @@ export type CreateWorktreeResult = {
     hookFound: boolean
     startupPolicy: 'start-immediately' | 'wait-for-setup'
     state: 'running' | 'skipped' | 'not_configured' | 'spawn_failed'
+    terminalHandle?: string
   }
   defaultTabs?: WorktreeDefaultTabsLaunch
   warning?: string

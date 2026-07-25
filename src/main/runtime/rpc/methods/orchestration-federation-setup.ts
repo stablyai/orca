@@ -62,12 +62,9 @@ export function monitorFederatedSetup(
     return
   }
   void args.runtime
-    .waitForTerminal(setupTerminal.id, { condition: 'exit' })
-    .then((wait) => {
-      if (!wait.satisfied || wait.condition !== 'exit' || wait.status !== 'exited') {
-        return
-      }
-      const setupState = wait.exitCode === 0 ? 'succeeded' : 'failed'
+    .waitForSetupTerminalCompletion(setupTerminal.id)
+    .then((completion) => {
+      const setupState = completion.exitCode === 0 ? 'succeeded' : 'failed'
       const effects = args.effects.map((effect) =>
         effect.kind === 'setup' ? { ...effect, state: setupState } : effect
       )

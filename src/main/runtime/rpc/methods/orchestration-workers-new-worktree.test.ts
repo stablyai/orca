@@ -59,6 +59,9 @@ describe('orchestration new-worktree workers', () => {
       status: 'running',
       exitCode: null
     })
+    vi.spyOn(runtime, 'waitForSetupTerminalCompletion').mockReturnValue(
+      new Promise(() => undefined)
+    )
     vi.spyOn(runtime, 'getTerminalOrchestrationCliCommand').mockReturnValue('orca')
     vi.spyOn(runtime, 'sendTerminalAgentPrompt').mockResolvedValue({
       handle: 'term_worker',
@@ -94,6 +97,7 @@ describe('orchestration new-worktree workers', () => {
     startupPolicy?: 'start-immediately' | 'wait-for-setup'
     state?: 'running' | 'skipped' | 'not_configured' | 'spawn_failed'
     terminals?: { handle: string; title: string }[]
+    setupTerminalHandle?: string
   }) {
     const hookFound = options?.hookFound ?? true
     const state = options?.state ?? (hookFound ? 'running' : 'not_configured')
@@ -104,7 +108,10 @@ describe('orchestration new-worktree workers', () => {
         requested: state === 'skipped' ? 'skip' : 'run',
         hookFound,
         startupPolicy: options?.startupPolicy ?? 'start-immediately',
-        state
+        state,
+        terminalHandle:
+          options?.setupTerminalHandle ??
+          options?.terminals?.find((terminal) => terminal.title === 'Setup')?.handle
       }
     } as never)
     if (options?.terminals) {
@@ -125,6 +132,7 @@ describe('orchestration new-worktree workers', () => {
       expect.objectContaining({
         startupAgent: 'codex',
         awaitTerminalProvisioning: true,
+        observeSetupCompletion: true,
         lineage: expect.objectContaining({ noParent: true, parentWorktree: undefined })
       })
     )
@@ -262,24 +270,12 @@ describe('orchestration new-worktree workers', () => {
         { handle: 'term_setup', title: 'Setup' }
       ]
     })
-    let finishSetup:
-      | ((result: Awaited<ReturnType<OrcaRuntimeService['waitForTerminal']>>) => void)
-      | undefined
-    const setupExit = new Promise<Awaited<ReturnType<OrcaRuntimeService['waitForTerminal']>>>(
-      (resolve) => {
-        finishSetup = resolve
-      }
-    )
-    vi.mocked(runtime.waitForTerminal).mockImplementation((handle, options) =>
-      options?.condition === 'exit'
-        ? setupExit
-        : Promise.resolve({
-            handle,
-            condition: 'tui-idle',
-            satisfied: true,
-            status: 'running',
-            exitCode: null
-          })
+    let finishSetup: ((result: { exitCode: number | null }) => void) | undefined
+    vi.mocked(runtime.waitForSetupTerminalCompletion).mockImplementation(
+      async () =>
+        await new Promise((resolve) => {
+          finishSetup = resolve
+        })
     )
 
     const { result, task } = await startWorker()
@@ -294,13 +290,7 @@ describe('orchestration new-worktree workers', () => {
         result: '{}'
       })
     ).toMatchObject({ action: 'settled' })
-    finishSetup?.({
-      handle: 'term_setup',
-      condition: 'exit',
-      satisfied: true,
-      status: 'exited',
-      exitCode: 1
-    })
+    finishSetup?.({ exitCode: 1 })
     await vi.waitFor(() => expect(db.getWorkerDispatch(dispatchId)?.setup_state).toBe('failed'))
     expect(db.getWorkerDispatch(dispatchId)).toMatchObject({
       state: 'succeeded',
@@ -316,6 +306,31 @@ describe('orchestration new-worktree workers', () => {
     expect(db.getInbox(10).filter((message) => message.run_id === runId)).toEqual(
       expect.arrayContaining([expect.objectContaining({ type: 'status', priority: 'high' })])
     )
+  })
+
+  it('uses the exact setup handle instead of a configured tab title', async () => {
+    mockCreatedWorktree({
+      setupTerminalHandle: 'term_actual_setup',
+      terminals: [
+        { handle: 'term_worker', title: 'Codex' },
+        { handle: 'term_configured_setup', title: 'Setup' },
+        { handle: 'term_actual_setup', title: 'PowerShell' }
+      ]
+    })
+
+    const { result } = await startWorker()
+
+    expect(result).toMatchObject({
+      effects: expect.arrayContaining([
+        expect.objectContaining({
+          kind: 'terminal',
+          id: 'term_configured_setup',
+          role: 'configured_tab'
+        }),
+        expect.objectContaining({ kind: 'terminal', id: 'term_actual_setup', role: 'setup' }),
+        expect.objectContaining({ kind: 'setup', terminalId: 'term_actual_setup' })
+      ])
+    })
   })
 
   it('records wait-for-setup success before task input is accepted', async () => {
