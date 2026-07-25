@@ -13,6 +13,7 @@ export const FederationAttachStartParams = z.object({
   displayName: OptionalString,
   comment: OptionalString,
   setup: z.enum(['run', 'skip', 'inherit']).optional(),
+  setupSource: z.enum(['explicit_request', 'orchestration_default']).optional(),
   terminal: OptionalString,
   agent: OptionalString,
   timeoutMs: OptionalFiniteNumber,

@@ -49,7 +49,10 @@ export const ORCHESTRATION_FEDERATION_ATTACH_METHODS: RpcMethod[] = [
           '--terminal cannot combine with remote new-worktree creation.'
         )
       }
-      if (!createsWorktree && (params.name || params.repo || params.baseBranch || params.setup)) {
+      if (
+        !createsWorktree &&
+        (params.name || params.repo || params.baseBranch || params.setup || params.setupSource)
+      ) {
         throw new OrchestrationError(
           'invalid_argument',
           'Creation and setup options apply only to remote new-top-level worktrees.'
@@ -92,14 +95,13 @@ export const ORCHESTRATION_FEDERATION_ATTACH_METHODS: RpcMethod[] = [
       let failedStage = createsWorktree ? 'worktree_create' : 'worktree_resolve'
       let worktree
       let terminalHandle = params.terminal
+      const setupSource = createsWorktree
+        ? (params.setupSource ?? (params.setup ? 'explicit_request' : 'orchestration_default'))
+        : 'existing_worktree'
       let setup: WorkerSetupReceipt = {
         requested: createsWorktree ? (params.setup ?? 'run') : 'not_applicable',
         effective: createsWorktree ? (params.setup ?? 'run') : 'not_applicable',
-        source: createsWorktree
-          ? params.setup
-            ? 'explicit_request'
-            : 'orchestration_default'
-          : 'existing_worktree',
+        source: setupSource,
         hookFound: false,
         startupPolicy: 'start-immediately',
         state: createsWorktree ? 'not_configured' : 'not_applicable'
@@ -135,7 +137,7 @@ export const ORCHESTRATION_FEDERATION_ATTACH_METHODS: RpcMethod[] = [
           setup = {
             requested: setupDecision,
             effective: setupDecision,
-            source: params.setup ? 'explicit_request' : 'orchestration_default',
+            source: setupSource,
             hookFound: created.setupReceipt?.hookFound ?? false,
             startupPolicy: created.setupReceipt?.startupPolicy ?? 'start-immediately',
             state: created.setupReceipt?.state ?? 'not_configured'
@@ -261,7 +263,7 @@ export const ORCHESTRATION_FEDERATION_ATTACH_METHODS: RpcMethod[] = [
           id: terminalHandle,
           state: 'accepted'
         })
-        const attachment = db.markRemoteAttachmentReady(params.dispatchId)
+        const attachment = db.markRemoteAttachmentReady(params.dispatchId, effects)
         monitorFederatedSetup({ ...setupStage, runtime })
         return {
           dispatchId: params.dispatchId,

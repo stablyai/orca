@@ -205,6 +205,8 @@ Explicit non-goals:
 - [x] Omitted setup on a new worktree resolves to `run` for orchestration starts.
 - [x] No configured setup hook resolves to `not_configured`, not failure.
 - [x] Preserve repository `setupAgentStartupPolicy`.
+- [x] Preserve whether setup came from an explicit request or Orca's orchestration default across
+      connected-server starts.
 - [x] Default `start-immediately` launches setup and agent side by side.
 - [x] Under `start-immediately`, setup outcome never gates Dispatch readiness regardless of when
       it is observed.
@@ -226,6 +228,8 @@ Explicit non-goals:
 - [x] Echo effective timeout, setup startup policy, defaults, and resolution sources.
 - [x] Enumerate every effect: worktree, setup, agent terminal, setup terminal, each configured
       terminal pane, and dispatch input; include exact tab/leaf identity when available.
+- [x] Persist accepted dispatch input atomically with the ready transition so later setup refreshes
+      cannot erase it.
 - [x] Tag every terminal effect with role and created/reused action.
 - [x] Report setup as running only after its exact PTY spawn receipt is durable.
 - [x] List every residual resource on failure or unknown outcome.
@@ -1291,6 +1295,24 @@ Append new entries chronologically. Do not rewrite older entries except to corre
 - Next:
   - Run the complete changed-file quality gates, rebuild the physical Windows dev runtime with this
     final patch, repeat the setup-status slice, then push and recheck PR CI/review state.
+
+### 2026-07-24 — Physical receipt follow-up
+
+- Changes:
+  - Made local and connected-server ready transitions persist the accepted `dispatch_input` effect
+    atomically, so later setup evidence cannot replace it with an older effect snapshot.
+  - Carried the already-resolved setup source through the internal federation attach request, keeping
+    omitted setup labeled `orchestration_default` and explicit setup labeled `explicit_request`.
+- Verification:
+  - The focused new-worktree, federation, and setup-evidence slice passed 37 tests.
+  - The broader orchestration DB/RPC/CLI/SSH execution-host selection passed 630 tests.
+  - Node and CLI typechecks, changed-file lint/format, and `git diff --check` passed.
+- Findings:
+  - Both defects were receipt-provenance bugs found by the physical Mac-home to Windows-worker run;
+    neither changes worker placement, setup timing, lifecycle authority, or agent-facing commands.
+- Next:
+  - Rebuild both dev runtimes from this patch and repeat the physical setup-status slice before final
+    PR reconciliation.
 
 ### Entry template
 

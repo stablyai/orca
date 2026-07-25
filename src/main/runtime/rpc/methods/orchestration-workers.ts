@@ -269,7 +269,7 @@ export const ORCHESTRATION_WORKER_START_METHODS: RpcMethod[] = [
           id: terminalHandle,
           state: 'accepted'
         })
-        const worker = db.markWorkerDispatchReady(started.dispatch.id)
+        const worker = db.markWorkerDispatchReady(started.dispatch.id, effects)
         monitorWorkerSetup({
           runtime,
           db,

@@ -93,7 +93,7 @@ describe('orchestration federation', () => {
     return homeDb.createTask({ spec: 'Audit Windows behavior', runId: run.id })
   }
 
-  function startRequest(taskId: string): RpcRequest {
+  function startRequest(taskId: string, overrides: Record<string, unknown> = {}): RpcRequest {
     return {
       id: 'rpc_worker_start',
       authToken: 'coordinator-token',
@@ -106,7 +106,8 @@ describe('orchestration federation', () => {
         worktree: 'new-top-level',
         repo: 'id:windows-repo',
         name: 'windows-audit',
-        agent: 'codex'
+        agent: 'codex',
+        ...overrides
       }
     }
   }
@@ -192,6 +193,7 @@ describe('orchestration federation', () => {
         taskId: task.id,
         state: 'ready',
         server: { environmentId: 'environment_windows', name: 'windows' },
+        setup: { source: 'orchestration_default' },
         mutation: { requestId: 'request_windows_worker' }
       }
     })
@@ -211,6 +213,11 @@ describe('orchestration federation', () => {
       worktree_id: 'repo::windows-worktree',
       terminal_handle: 'term_windows_worker'
     })
+    expect(JSON.parse(workerDb.getRemoteDispatchAttachment(dispatch.id)?.effects ?? '[]')).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ kind: 'dispatch_input', state: 'accepted' })
+      ])
+    )
     expect(workerDb.listTasks()).toHaveLength(0)
     expect(workerRuntime.sendTerminalAgentPrompt).toHaveBeenCalledWith(
       'term_windows_worker',
@@ -231,7 +238,7 @@ describe('orchestration federation', () => {
     } as never)
     const task = createHomeTask()
 
-    const response = await homeDispatcher.dispatch(startRequest(task.id))
+    const response = await homeDispatcher.dispatch(startRequest(task.id, { setup: 'run' }))
 
     expect(response).toMatchObject({
       ok: true,
@@ -244,6 +251,7 @@ describe('orchestration federation', () => {
         ])
       }
     })
+    expect(response).toHaveProperty('result.setup.source', 'explicit_request')
     expect(workerRuntime.sendTerminalAgentPrompt).toHaveBeenCalledOnce()
   })
 

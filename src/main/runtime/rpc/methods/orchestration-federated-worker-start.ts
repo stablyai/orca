@@ -97,6 +97,11 @@ export async function startFederatedWorker(args: {
         displayName: params.displayName,
         comment: params.comment,
         setup: createsWorktree ? (params.setup ?? 'run') : undefined,
+        setupSource: createsWorktree
+          ? params.setup
+            ? 'explicit_request'
+            : 'orchestration_default'
+          : undefined,
         terminal: params.terminal,
         agent: params.agent,
         timeoutMs: params.timeoutMs,

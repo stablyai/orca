@@ -40,6 +40,12 @@ describe('orchestration federated setup evidence', () => {
         kind: 'setup' as const,
         action: 'run',
         state: 'running'
+      },
+      {
+        kind: 'dispatch_input' as const,
+        role: 'agent',
+        id: 'term_remote_worker',
+        state: 'accepted'
       }
     ]
     db.createRemoteDispatchAttachment({
@@ -102,6 +108,11 @@ describe('orchestration federated setup evidence', () => {
     expect(
       db.listFederationRelay({ dispatchId, direction: 'to_home', afterSequence: 0 })
     ).toHaveLength(1)
+    expect(JSON.parse(db.getRemoteDispatchAttachment(dispatchId)?.effects ?? '[]')).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ kind: 'dispatch_input', state: 'accepted' })
+      ])
+    )
   })
 
   it('refreshes home setup evidence without changing a ready Dispatch lifecycle', async () => {
@@ -127,7 +138,15 @@ describe('orchestration federated setup evidence', () => {
       dispatchId: started.dispatch.id,
       stage: 'terminal_readying',
       setupState: 'running',
-      effects: [{ kind: 'setup', action: 'run', state: 'running' }]
+      effects: [
+        { kind: 'setup', action: 'run', state: 'running' },
+        {
+          kind: 'dispatch_input',
+          role: 'agent',
+          id: 'term_remote_worker',
+          state: 'accepted'
+        }
+      ]
     })
     db.markWorkerDispatchReady(started.dispatch.id)
     vi.spyOn(runtime, 'resolveOrchestrationWorkerServer').mockReturnValue({
@@ -144,7 +163,15 @@ describe('orchestration federated setup evidence', () => {
         worktree_id: 'repo::remote-worktree',
         terminal_handle: 'term_remote_worker',
         setup_state: 'failed',
-        effects: [{ kind: 'setup', action: 'run', state: 'failed' }],
+        effects: [
+          { kind: 'setup', action: 'run', state: 'failed' },
+          {
+            kind: 'dispatch_input',
+            role: 'agent',
+            id: 'term_remote_worker',
+            state: 'accepted'
+          }
+        ],
         residualResources: []
       },
       terminal: { handle: 'term_remote_worker', connected: true },
@@ -164,7 +191,10 @@ describe('orchestration federated setup evidence', () => {
         state: 'ready',
         stage: 'input_accepted',
         setup_state: 'failed',
-        effects: [expect.objectContaining({ kind: 'setup', state: 'failed' })]
+        effects: expect.arrayContaining([
+          expect.objectContaining({ kind: 'setup', state: 'failed' }),
+          expect.objectContaining({ kind: 'dispatch_input', state: 'accepted' })
+        ])
       }
     })
     expect(db.getTask(task.id)?.status).toBe('dispatched')

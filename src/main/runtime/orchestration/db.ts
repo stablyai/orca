@@ -1961,7 +1961,7 @@ export class OrchestrationDb {
     }
   }
 
-  markWorkerDispatchReady(dispatchId: string): WorkerDispatchRow {
+  markWorkerDispatchReady(dispatchId: string, effects?: unknown[]): WorkerDispatchRow {
     this.db.exec('BEGIN IMMEDIATE')
     try {
       const dispatch = this.getDispatchContextById(dispatchId)
@@ -1975,10 +1975,11 @@ export class OrchestrationDb {
       this.db
         .prepare(
           `UPDATE worker_dispatches
-           SET state = 'ready', stage = 'input_accepted', updated_at = datetime('now')
+           SET state = 'ready', stage = 'input_accepted',
+               effects = COALESCE(?, effects), updated_at = datetime('now')
            WHERE dispatch_id = ?`
         )
-        .run(dispatchId)
+        .run(effects ? JSON.stringify(effects) : null, dispatchId)
       this.db.exec('COMMIT')
       return this.getWorkerDispatch(dispatchId) as WorkerDispatchRow
     } catch (error) {
@@ -2393,14 +2394,15 @@ export class OrchestrationDb {
     return capability
   }
 
-  markRemoteAttachmentReady(dispatchId: string): RemoteDispatchAttachmentRow {
+  markRemoteAttachmentReady(dispatchId: string, effects?: unknown[]): RemoteDispatchAttachmentRow {
     const result = this.db
       .prepare(
         `UPDATE remote_dispatch_attachments
-         SET state = 'ready', stage = 'input_accepted', updated_at = datetime('now')
+         SET state = 'ready', stage = 'input_accepted',
+             effects = COALESCE(?, effects), updated_at = datetime('now')
          WHERE dispatch_id = ? AND state = 'starting'`
       )
-      .run(dispatchId)
+      .run(effects ? JSON.stringify(effects) : null, dispatchId)
     if (result.changes !== 1) {
       throw new OrchestrationError(
         'dispatch_inactive',

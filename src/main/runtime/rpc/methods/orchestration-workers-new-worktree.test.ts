@@ -307,6 +307,11 @@ describe('orchestration new-worktree workers', () => {
       stage: 'settled',
       setup_state: 'failed'
     })
+    expect(JSON.parse(db.getWorkerDispatch(dispatchId)?.effects ?? '[]')).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ kind: 'dispatch_input', state: 'accepted' })
+      ])
+    )
     expect(runtime.sendTerminalAgentPrompt).toHaveBeenCalledOnce()
     expect(db.getInbox(10).filter((message) => message.run_id === runId)).toEqual(
       expect.arrayContaining([expect.objectContaining({ type: 'status', priority: 'high' })])
@@ -317,6 +322,7 @@ describe('orchestration new-worktree workers', () => {
     mockCreatedWorktree({ startupPolicy: 'wait-for-setup', state: 'running' })
 
     const { result } = await startWorker()
+    const dispatchId = (result as { dispatchId: string }).dispatchId
 
     expect(result).toMatchObject({
       state: 'ready',
@@ -328,6 +334,11 @@ describe('orchestration new-worktree workers', () => {
     })
     expect(vi.mocked(runtime.waitForTerminal).mock.invocationCallOrder[0]).toBeLessThan(
       vi.mocked(runtime.sendTerminalAgentPrompt).mock.invocationCallOrder[0]!
+    )
+    expect(JSON.parse(db.getWorkerDispatch(dispatchId)?.effects ?? '[]')).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ kind: 'dispatch_input', state: 'accepted' })
+      ])
     )
   })
 
