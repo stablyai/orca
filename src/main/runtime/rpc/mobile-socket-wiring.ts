@@ -3,6 +3,7 @@ import type { WebSocket } from 'ws'
 import type { DeviceEntry, DeviceRegistry } from '../device-registry'
 import type { E2EEKeypair } from '../e2ee-keypair'
 import { E2EEChannel, type E2EEAuthenticatedDevice } from './e2ee-channel'
+import { createMobileE2EEOutboundMemoryBudget } from './mobile-e2ee-outbound-memory-budget'
 
 type MobileSocketPayload = string | Uint8Array<ArrayBufferLike>
 
@@ -50,6 +51,8 @@ type MobileSocketWiringOptions = {
   onBinary: (socket: AuthenticatedMobileSocket, bytes: Uint8Array<ArrayBufferLike>) => void
   onClose: (socket: AuthenticatedMobileSocket | null, hasOtherConnections: boolean) => void
   onReady?: (socket: AuthenticatedMobileSocket) => void
+  // Why: stale keys and missing registry entries both fail before RPC can explain the re-pair action.
+  onUnpairedDeviceAuthFailure?: (metadata: MobileSocketTransportMetadata) => void
 }
 
 function toAuthenticatedDevice(device: DeviceEntry): E2EEAuthenticatedDevice {
@@ -67,10 +70,12 @@ export class MobileSocketWiring {
   private readonly onBinary: MobileSocketWiringOptions['onBinary']
   private readonly onClose: MobileSocketWiringOptions['onClose']
   private readonly onReady: MobileSocketWiringOptions['onReady']
+  private readonly onUnpairedDeviceAuthFailure: MobileSocketWiringOptions['onUnpairedDeviceAuthFailure']
   private readonly channels = new Map<WebSocket, E2EEChannel>()
   private readonly connectionIds = new Map<WebSocket, string>()
   private readonly authenticatedSockets = new Map<WebSocket, AuthenticatedMobileSocket>()
   private readonly transports = new Set<MobileSocketTransport>()
+  private readonly outboundMemoryBudget = createMobileE2EEOutboundMemoryBudget()
 
   constructor(options: MobileSocketWiringOptions) {
     this.deviceRegistry = options.deviceRegistry
@@ -79,6 +84,7 @@ export class MobileSocketWiring {
     this.onBinary = options.onBinary
     this.onClose = options.onClose
     this.onReady = options.onReady
+    this.onUnpairedDeviceAuthFailure = options.onUnpairedDeviceAuthFailure
   }
 
   attachTransport(
@@ -86,12 +92,20 @@ export class MobileSocketWiring {
     getMetadata: (ws: WebSocket) => MobileSocketTransportMetadata = () => ({
       transport: 'direct'
     })
-  ): void {
+  ): () => void {
     this.transports.add(transport)
     transport.onMessage((message, _reply, ws) => {
       this.handleRawMessage(transport, ws, message, getMetadata(ws))
     })
     transport.onConnectionClose((_clientId, ws) => this.handleClose(ws))
+    let attached = true
+    return () => {
+      if (!attached) {
+        return
+      }
+      attached = false
+      this.transports.delete(transport)
+    }
   }
 
   getConnectionId(ws: WebSocket): string | undefined {
@@ -131,6 +145,7 @@ export class MobileSocketWiring {
             ? { transport: 'relay', relayHostId: metadata.relayHostId }
             : { transport: 'direct' },
         requireV2: metadata.transport === 'relay',
+        outboundMemoryBudget: this.outboundMemoryBudget,
         resolveAuthenticatedDevice: (token) => {
           const device = this.deviceRegistry.validateToken(token)
           if (!device) {
@@ -151,9 +166,18 @@ export class MobileSocketWiring {
           this.onReady?.(socket)
         },
         onError: (code, reason) => {
+          const reportUnpairedDevice = code === 4001 && reason === 'Unauthorized'
           this.channels.get(ws)?.destroy()
           this.channels.delete(ws)
           ws.close(code, reason)
+          if (reportUnpairedDevice) {
+            try {
+              this.onUnpairedDeviceAuthFailure?.(metadata)
+            } catch (error) {
+              // Why: renderer teardown can make UI delivery throw; auth cleanup must remain authoritative.
+              console.error('[mobile] Failed to report unpaired-device auth failure:', error)
+            }
+          }
         }
       })
       channel.onMessage((plaintext, reply, sendBinary) => {

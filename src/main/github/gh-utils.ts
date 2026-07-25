@@ -1,11 +1,14 @@
 import { execFile } from 'node:child_process'
 import { promisify } from 'node:util'
-import { gitExecFileAsync, ghExecFileAsync, extractExecError } from '../git/runner'
+import { gitExecFileAsync, ghExecFileAsync } from '../git/runner'
+// Pure error-parsing helpers come from the lightweight module (not `runner`) so
+// tests that mock `../git/runner` still resolve the real implementations.
+import { extractExecError, parseRetryAfterMs } from '../git/exec-error'
 
 // Why: legacy generic execFile wrapper - only used by callers that don't need
 // WSL-aware routing. Repo-scoped callers should use the runner exports below.
 export const execFileAsync = promisify(execFile)
-export { ghExecFileAsync, gitExecFileAsync, extractExecError }
+export { ghExecFileAsync, gitExecFileAsync, extractExecError, parseRetryAfterMs }
 export { classifyGhError, classifyListIssuesError } from './gh-error-classification'
 export {
   _getOwnerRepoCacheSize,

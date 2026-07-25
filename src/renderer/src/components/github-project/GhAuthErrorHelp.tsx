@@ -21,6 +21,20 @@ type AuthErrorKind = 'auth_required' | 'scope_missing'
 const REFRESH_CMD = 'gh auth refresh -s project -s read:org -s repo'
 const LOGIN_CMD = 'gh auth login'
 
+// Why: GHES credentials are per-host — a bare `gh auth login` signs into
+// github.com and leaves the Enterprise host exactly as broken as before.
+function loginCommandForHost(host: string | null | undefined): string {
+  return host && host.toLowerCase() !== 'github.com'
+    ? `gh auth login --hostname ${host}`
+    : LOGIN_CMD
+}
+
+function refreshCommandForHost(host: string | null | undefined): string {
+  return host && host.toLowerCase() !== 'github.com'
+    ? `gh auth refresh --hostname ${host} -s project -s read:org -s repo`
+    : REFRESH_CMD
+}
+
 // AGENTS.md requires platform-specific shell guidance. The env-shadow
 // remediation needs different commands per host shell — bash/zsh on
 // macOS/Linux vs PowerShell on Windows.
@@ -108,10 +122,11 @@ type Remediation = {
   docsUrl?: string
 }
 
-function buildRemediation(
+export function buildRemediation(
   errorMessage: string,
   kind: AuthErrorKind,
-  diag: GhAuthDiagnostic | null
+  diag: GhAuthDiagnostic | null,
+  requestedHost?: string
 ): Remediation {
   // Diagnostic still loading or unavailable — fall back to the canned advice
   // so the UI never gets worse than the pre-diagnosis behavior.
@@ -124,7 +139,28 @@ function buildRemediation(
             'auto.components.github.project.GhAuthErrorHelp.b436c586d1',
             'Copy command'
           ),
-          command: kind === 'auth_required' ? LOGIN_CMD : REFRESH_CMD
+          command:
+            kind === 'auth_required'
+              ? loginCommandForHost(requestedHost)
+              : refreshCommandForHost(requestedHost)
+        }
+      ]
+    }
+  }
+
+  // Why: an Enterprise host with no gh account at all outranks every other
+  // diagnosis — env-token or scope advice for github.com would be misleading.
+  if (diag.requiredHost && diag.requiredHostAuthenticated === false) {
+    return {
+      summary: `\`gh\` is not signed in to ${diag.requiredHost}.`,
+      detail: `GitHub Enterprise hosts need their own \`gh\` login, separate from github.com. Run the login command in a terminal, complete the browser flow on ${diag.requiredHost}, then reload.`,
+      commands: [
+        {
+          label: translate(
+            'auto.components.github.project.GhAuthErrorHelp.9c2da6353b',
+            'Copy login command'
+          ),
+          command: loginCommandForHost(diag.requiredHost)
         }
       ]
     }
@@ -141,7 +177,7 @@ function buildRemediation(
             'auto.components.github.project.GhAuthErrorHelp.9c2da6353b',
             'Copy login command'
           ),
-          command: LOGIN_CMD
+          command: loginCommandForHost(diag.requiredHost ?? requestedHost)
         }
       ],
       docsUrl: 'https://cli.github.com/'
@@ -191,7 +227,7 @@ function buildRemediation(
             'auto.components.github.project.GhAuthErrorHelp.9c2da6353b',
             'Copy login command'
           ),
-          command: LOGIN_CMD
+          command: loginCommandForHost(diag.requiredHost)
         }
       ]
     }
@@ -213,7 +249,7 @@ function buildRemediation(
             'auto.components.github.project.GhAuthErrorHelp.3fefeebde4',
             'Copy refresh command'
           ),
-          command: REFRESH_CMD
+          command: refreshCommandForHost(diag.requiredHost)
         }
       ]
     }
@@ -232,7 +268,7 @@ function buildRemediation(
           'auto.components.github.project.GhAuthErrorHelp.3fefeebde4',
           'Copy refresh command'
         ),
-        command: REFRESH_CMD
+        command: refreshCommandForHost(diag.requiredHost ?? requestedHost)
       }
     ],
     docsUrl:
@@ -242,16 +278,19 @@ function buildRemediation(
 
 export function GhAuthErrorHelp({
   error,
-  variant = 'block'
+  variant = 'block',
+  host
 }: {
   error: GitHubProjectViewError & { type: AuthErrorKind }
   variant?: 'block' | 'banner'
+  /** GHES host the failing surface talks to; scopes the diagnosis per host. */
+  host?: string
 }): React.JSX.Element {
   const [diag, setDiag] = useState<GhAuthDiagnostic | null>(null)
   useEffect(() => {
     let cancelled = false
     window.api.gh
-      .diagnoseAuth()
+      .diagnoseAuth(host ? { host } : undefined)
       .then((d) => {
         if (!cancelled) {
           setDiag(d)
@@ -262,9 +301,9 @@ export function GhAuthErrorHelp({
     return () => {
       cancelled = true
     }
-  }, [])
+  }, [host])
 
-  const remedy = buildRemediation(error.message, error.type, diag)
+  const remedy = buildRemediation(error.message, error.type, diag, host)
   const docsUrl = remedy.docsUrl
 
   if (variant === 'banner') {

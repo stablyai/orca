@@ -14,7 +14,6 @@ import {
   removeEnvironment,
   updateEnvironmentFromPairingCode
 } from '../../shared/runtime-environment-store'
-import { clearActiveRuntimeEnvironmentFocusIfMatches } from '../runtime-environment-focus-self-heal'
 import {
   cleanupEphemeralVmRuntime,
   resumeEphemeralVmRuntime,
@@ -30,6 +29,7 @@ import {
   removeRuntimeOwnedSshTarget
 } from '../ephemeral-vm-runtime-ssh'
 import { getRecipeRepo, getRuntimeRecipeContext } from './ephemeral-vm-recipe-context'
+import { invalidateRuntimeEnvironmentTransport } from './runtime-environments'
 
 export type EphemeralVmCleanupCommandResult = {
   runtimeId: string
@@ -103,7 +103,6 @@ export function registerEphemeralVmRuntimeHandlers(store: Store): void {
       if (result.ok && runtime.runtimeEnvironmentId) {
         try {
           removeEnvironment(userDataPath, runtime.runtimeEnvironmentId)
-          clearActiveRuntimeEnvironmentFocusIfMatches(store, runtime.runtimeEnvironmentId)
         } catch {
           // Cleanup of provider resources matters more than hiding a stale local
           // environment row; users can still remove that manually.
@@ -192,6 +191,7 @@ export function registerEphemeralVmRuntimeHandlers(store: Store): void {
         updateEnvironmentFromPairingCode(userDataPath, runtime.runtimeEnvironmentId, {
           pairingCode
         })
+        invalidateRuntimeEnvironmentTransport(runtime.runtimeEnvironmentId)
       }
       const connection = getEphemeralVmRecipeResultConnection(result.runtime.recipeResult)
       if (!result.skipped && connection.type === 'ssh') {

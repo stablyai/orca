@@ -133,7 +133,7 @@ function GitLabRateLimitRows({
           )}
         >
           {rest.remaining}{' '}
-          {translate('auto.components.gitlab.gitlab.rate.limit.display.ea8ad0bae8', 'of')}
+          {translate('auto.components.gitlab.gitlab.rate.limit.display.ea8ad0bae8', 'of')}{' '}
           {rest.limit}{' '}
           {translate(
             'auto.components.gitlab.gitlab.rate.limit.display.3e2c982cfa',

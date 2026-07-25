@@ -1,10 +1,23 @@
 // @vitest-environment happy-dom
 
-import { act } from 'react'
+import { act, Profiler } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { UsagePercentageDisplayChangeNotice } from './UsagePercentageDisplayChangeNotice'
 import { USAGE_PERCENTAGE_DISPLAY_SETTING_ID } from '../settings/appearance-usage-percentage-search'
+
+// Controllable ResizeObserver so tests can drive reflow deliveries by hand.
+type ResizeObserverStub = { cb: ResizeObserverCallback; targets: Element[] }
+const resizeObservers: ResizeObserverStub[] = []
+
+function fireResizeObservers(): void {
+  for (const observer of resizeObservers) {
+    if (observer.targets.length === 0) {
+      continue
+    }
+    observer.cb([] as unknown as ResizeObserverEntry[], observer as unknown as ResizeObserver)
+  }
+}
 
 const storeState = {
   persistedUIReady: true,
@@ -31,6 +44,22 @@ describe('UsagePercentageDisplayChangeNotice', () => {
 
   beforeEach(() => {
     vi.useFakeTimers()
+    resizeObservers.length = 0
+    ;(globalThis as unknown as { ResizeObserver: unknown }).ResizeObserver = class {
+      cb: ResizeObserverCallback
+      targets: Element[] = []
+      constructor(cb: ResizeObserverCallback) {
+        this.cb = cb
+        resizeObservers.push({ cb, targets: this.targets })
+      }
+      observe(el: Element): void {
+        this.targets.push(el)
+      }
+      unobserve(): void {}
+      disconnect(): void {
+        this.targets.length = 0
+      }
+    }
     storeState.persistedUIReady = true
     storeState.usagePercentageDisplayChangeNoticeDismissed = false
     storeState.statusBarVisible = true
@@ -207,6 +236,40 @@ describe('UsagePercentageDisplayChangeNotice', () => {
       window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }))
     })
     expect(storeState.dismissUsagePercentageDisplayChangeNotice).toHaveBeenCalledTimes(1)
+  })
+
+  it('does not re-render on ResizeObserver deliveries with unchanged geometry', () => {
+    let commits = 0
+    act(() => {
+      root.render(
+        <Profiler
+          id="notice"
+          onRender={() => {
+            commits++
+          }}
+        >
+          <UsagePercentageDisplayChangeNotice hasVisibleUsageMeters>
+            <span>usage-meters</span>
+          </UsagePercentageDisplayChangeNotice>
+        </Profiler>
+      )
+    })
+    act(() => {
+      vi.advanceTimersByTime(1_800)
+    })
+    expect(document.querySelector('.status-bar-change-notice-card')).not.toBeNull()
+    const commitsAfterOpen = commits
+
+    for (let i = 0; i < 20; i++) {
+      act(() => {
+        fireResizeObservers()
+      })
+    }
+    // Why: without the equality guard every identical-geometry delivery churns a
+    // fresh AnchorPosition object → one re-render each (measured 20). The guard
+    // returns the same reference so React bails on all but the first settling
+    // commit → ≤1 (measured 1). This is the churn the fix removes.
+    expect(commits - commitsAfterOpen).toBeLessThanOrEqual(1)
   })
 
   function openNotice(): void {

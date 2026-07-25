@@ -5,13 +5,25 @@ import {
 } from '../../shared/crash-reporting'
 
 const MAX_BREADCRUMBS = 30
+// Why: retain two thresholds for each renderer surface without growing the ring.
+const MAX_RETAINED_BREADCRUMBS = 4
 // Why: coalesceKey embeds an open-string agentType (length-trimmed only, never
 // enum-checked), so the key space is unbounded over a long multi-agent/SSH session.
 // Bound the coalesce map the same way ProcessGoneDedupe bounds its key map.
 const MAX_COALESCE_KEYS = 128
 
 let breadcrumbs: CrashReportBreadcrumb[] = []
+let retainedBreadcrumbs = new Map<string, CrashReportBreadcrumb>()
 let coalescedBreadcrumbs = new Map<string, { recordedAt: number; suppressed: number }>()
+
+function retainedBreadcrumbKey(breadcrumb: CrashReportBreadcrumb): string | null {
+  if (breadcrumb.name !== 'renderer_memory_highwater') {
+    return null
+  }
+  const surface = breadcrumb.data?.rendererSurface
+  const threshold = breadcrumb.data?.thresholdPct
+  return `${breadcrumb.name}:${String(surface)}:${String(threshold)}`
+}
 
 export function recordCrashBreadcrumb(name: string, data?: CrashReportBreadcrumbData): void {
   const sanitized = sanitizeCrashReportBreadcrumbs([
@@ -23,6 +35,19 @@ export function recordCrashBreadcrumb(name: string, data?: CrashReportBreadcrumb
   ])
   const breadcrumb = sanitized?.[0]
   if (!breadcrumb) {
+    return
+  }
+  const retainedKey = retainedBreadcrumbKey(breadcrumb)
+  if (retainedKey) {
+    retainedBreadcrumbs.delete(retainedKey)
+    retainedBreadcrumbs.set(retainedKey, breadcrumb)
+    while (retainedBreadcrumbs.size > MAX_RETAINED_BREADCRUMBS) {
+      const oldestKey = retainedBreadcrumbs.keys().next()
+      if (oldestKey.done) {
+        break
+      }
+      retainedBreadcrumbs.delete(oldestKey.value)
+    }
     return
   }
   breadcrumbs.push(breadcrumb)
@@ -72,14 +97,20 @@ export function recordCoalescedCrashBreadcrumb({
 }
 
 export function getCrashBreadcrumbSnapshot(): CrashReportBreadcrumb[] {
-  return breadcrumbs.map((breadcrumb) => ({
-    ...breadcrumb,
-    ...(breadcrumb.data ? { data: { ...breadcrumb.data } } : {})
-  }))
+  // Why: long sessions must retain threshold profiles without growing the 30-entry budget.
+  const retained = [...retainedBreadcrumbs.values()]
+  const recent = breadcrumbs.slice(-(MAX_BREADCRUMBS - retained.length))
+  return [...retained, ...recent]
+    .sort((left, right) => left.createdAt.localeCompare(right.createdAt))
+    .map((breadcrumb) => ({
+      ...breadcrumb,
+      ...(breadcrumb.data ? { data: { ...breadcrumb.data } } : {})
+    }))
 }
 
 export function clearCrashBreadcrumbsForTest(): void {
   breadcrumbs = []
+  retainedBreadcrumbs = new Map()
   coalescedBreadcrumbs = new Map()
 }
 

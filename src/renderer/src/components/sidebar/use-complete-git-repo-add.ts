@@ -12,11 +12,16 @@ import { finishProjectAddWithDefaultCheckout } from './project-added-default-che
 type CompleteGitRepoAddOptions = {
   closeModal: () => void
   setHideDefaultBranchWorkspace: (hide: boolean) => void
+  /** Why: the nested Add Project flow (hosted inside the workspace composer)
+   *  keeps the composer open and selects the new project instead of running
+   *  the default-checkout navigation handoff. Telemetry above still applies. */
+  finishProjectAdd?: (repoId: string, source: AddRepoExistingWorkspaceSource) => Promise<void>
 }
 
 export function useCompleteGitRepoAdd({
   closeModal,
-  setHideDefaultBranchWorkspace
+  setHideDefaultBranchWorkspace,
+  finishProjectAdd
 }: CompleteGitRepoAddOptions): (
   repoId: string,
   source: AddRepoExistingWorkspaceSource
@@ -44,6 +49,10 @@ export function useCompleteGitRepoAdd({
         detectedTelemetryTrackedRef.current.add(repoId)
         track('add_repo_existing_workspaces_detected', existingWorkspaceTelemetry)
       }
+      if (finishProjectAdd) {
+        await finishProjectAdd(repoId, source)
+        return
+      }
       await finishProjectAddWithDefaultCheckout({
         repoId,
         source,
@@ -51,6 +60,6 @@ export function useCompleteGitRepoAdd({
         setHideDefaultBranchWorkspace
       })
     },
-    [closeModal, setHideDefaultBranchWorkspace]
+    [closeModal, finishProjectAdd, setHideDefaultBranchWorkspace]
   )
 }

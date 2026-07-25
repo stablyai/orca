@@ -7,6 +7,10 @@ import {
   resolveRuntimePath
 } from './cross-platform-path'
 import { parseWslUncPath } from './wsl-paths'
+import {
+  isAgentScratchWorktreePath,
+  type AgentScratchWorktreePathMatcher
+} from './agent-scratch-worktrees'
 import { isExplicitlyImportedExternalWorktreePath } from './external-worktree-inbox'
 import type {
   DetectedWorktree,
@@ -154,9 +158,19 @@ export function classifyWorktreeOwnership(args: {
   meta?: WorktreeMeta
   settings: Pick<GlobalSettings, 'workspaceDir' | 'nestWorkspaces' | 'workspaceDirHistory'>
   knownOrcaLayouts: OrcaWorkspaceLayout[]
+  agentScratchWorktreePathMatcher?: AgentScratchWorktreePathMatcher
 }): WorktreeOwnership {
   if (hasStrongOrcaMetadata(args.meta)) {
     return 'orca-managed'
+  }
+
+  // Why: sub-agent scratch worktrees (e.g. .claude/worktrees) are tool
+  // plumbing, not workspaces; classify before layout heuristics (#9388).
+  if (
+    args.agentScratchWorktreePathMatcher?.(args.worktree.path) ??
+    isAgentScratchWorktreePath(args.repo.path, args.worktree.path)
+  ) {
+    return 'agent-scratch'
   }
 
   if (isUnderFlatOrUntrustedOrcaRoot(args.worktree.path, args.knownOrcaLayouts)) {
@@ -179,6 +193,7 @@ export function toDetectedWorktree(args: {
   settings: Pick<GlobalSettings, 'workspaceDir' | 'nestWorkspaces' | 'workspaceDirHistory'>
   knownOrcaLayouts: OrcaWorkspaceLayout[]
   isLegacyRepoForVisibility?: boolean
+  agentScratchWorktreePathMatcher?: AgentScratchWorktreePathMatcher
 }): DetectedWorktree {
   const ownership = classifyWorktreeOwnership(args)
   const selectedCheckout = areRuntimePathsEqual(args.worktree.path, args.repo.path)
@@ -222,10 +237,27 @@ export function shouldShowWorktree(args: {
   ) {
     return true
   }
+  // Why: agent scratch stays hidden even when the repo shows non-Orca
+  // worktrees; only an explicit import or selected checkout reveals it.
+  if (args.ownership === 'agent-scratch') {
+    return false
+  }
   if (args.ownership === 'unknown-legacy' && args.isLegacyRepoForVisibility) {
     return true
   }
   return effectiveExternalWorktreeVisibility(args.repo, args.isLegacyRepoForVisibility) === 'show'
+}
+
+export function applyMetadataFallbackVisibility(detected: DetectedWorktree): DetectedWorktree {
+  if (detected.ownership === 'agent-scratch') {
+    // Why: retain scratch policy, including explicit imports, while ordinary fallback fails open.
+    return detected
+  }
+  return {
+    ...detected,
+    visible: true,
+    ownership: detected.ownership === 'orca-managed' ? 'orca-managed' : 'unknown-legacy'
+  }
 }
 
 export function areRuntimePathsEqual(leftPath: string, rightPath: string): boolean {

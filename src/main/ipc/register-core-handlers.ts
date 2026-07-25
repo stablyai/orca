@@ -30,6 +30,8 @@ import { registerNativeChatHandlers } from './native-chat'
 import { registerNotificationHandlers } from './notifications'
 import { registerNotebookHandlers } from './notebook'
 import { registerOnboardingHandlers } from './onboarding'
+import { registerDashboardPopoutHandlers } from './dashboard-popout'
+import { registerTerminalPreviewHandlers } from './terminal-preview'
 import { registerDeveloperPermissionHandlers } from './developer-permissions'
 import { registerComputerUsePermissionHandlers } from './computer-use-permissions'
 import { setTrustedBrowserRendererWebContentsId, setAgentBrowserBridgeRef } from './browser'
@@ -56,6 +58,7 @@ import { registerTerminalRenderDesyncEvidenceHandler } from './terminal-render-d
 import { registerOrcaProfileHandlers } from './orca-profiles'
 import { registerCodexAccountHandlers } from './codex-accounts'
 import { registerAgentHookHandlers } from './agent-hooks'
+import { registerCodexConfigSyncHandlers } from './codex-config-sync'
 import { getPtyIdForPaneKey } from './pty'
 import { registerAgentTrustHandlers } from './agent-trust'
 import { registerClaudeAccountHandlers } from './claude-accounts'
@@ -76,8 +79,13 @@ import type { AutomationService } from '../automations/service'
 import type { AgentAwakeService } from '../agent-awake-service'
 import type { CrashReportStore } from '../crash-reporting/crash-report-store'
 import type { KeybindingService } from '../keybindings/keybinding-service'
+import type {
+  AiVaultPrepareSessionResumeArgs,
+  AiVaultPrepareSessionResumeResult
+} from '../../shared/ai-vault-resume-preparation'
 import {
   getSavedRuntimeAiVaultHostInfos,
+  prepareRuntimeAiVaultSessionResume,
   scanRuntimeAiVaultSessions
 } from '../ai-vault/runtime-session-scanner'
 
@@ -88,6 +96,9 @@ type CoreHandlerLifecycleOptions = {
   onOrcaProfileAuthMutation?: () => void
   onBeforeOrcaProfileSignOut?: () => void
   getAdditionalAiVaultCodexHomePaths?: () => readonly string[]
+  prepareAiVaultSessionResume?: (
+    args: AiVaultPrepareSessionResumeArgs
+  ) => Promise<AiVaultPrepareSessionResumeResult>
 }
 
 export function registerCoreHandlers(
@@ -129,11 +140,12 @@ export function registerCoreHandlers(
   registerOpenCodeUsageHandlers(openCodeUsage)
   registerCodexAccountHandlers(codexAccounts)
   registerAgentHookHandlers(runtime, { getPtyIdForPaneKey })
+  registerCodexConfigSyncHandlers(codexAccounts.runtimeHomeService)
   registerAgentTrustHandlers()
   registerClaudeAccountHandlers(claudeAccounts)
   registerMiniMaxCredentialsHandlers(rateLimits)
   registerGrokAccountHandlers()
-  registerRateLimitHandlers(rateLimits)
+  registerRateLimitHandlers(rateLimits, codexAccounts)
   registerGitHubHandlers(store, stats)
   registerGitLabHandlers(store)
   registerHostedReviewHandlers(store, stats)
@@ -149,6 +161,8 @@ export function registerCoreHandlers(
   registerNotificationHandlers(store, runtime)
   registerNotebookHandlers(store)
   registerOnboardingHandlers(store)
+  registerDashboardPopoutHandlers(store, keybindings)
+  registerTerminalPreviewHandlers(runtime)
   registerDeveloperPermissionHandlers()
   // Why: diagnostics handlers are wired alongside telemetry but the two
   // lanes never share a code path — `ipc/diagnostics.ts` imports only from
@@ -173,7 +187,7 @@ export function registerCoreHandlers(
     onBeforeSignOut: lifecycleOptions.onBeforeOrcaProfileSignOut
   })
   registerBrowserHandlers()
-  registerShellHandlers()
+  registerShellHandlers(store)
   registerPetHandlers()
   registerPetPresenceHandlers()
   registerSessionHandlers(store)
@@ -194,10 +208,13 @@ export function registerCoreHandlers(
   registerEphemeralVmHandlers(store)
   registerAiVaultHandlers({
     getAdditionalCodexHomePaths: lifecycleOptions.getAdditionalAiVaultCodexHomePaths,
+    prepareSessionResume: lifecycleOptions.prepareAiVaultSessionResume,
     getActiveRuntimeAiVaultHostInfos: () =>
       getSavedRuntimeAiVaultHostInfos(app.getPath('userData')),
     scanRuntimeAiVaultSessions: async (environmentId, args, options) =>
-      scanRuntimeAiVaultSessions(app.getPath('userData'), environmentId, args, options)
+      scanRuntimeAiVaultSessions(app.getPath('userData'), environmentId, args, options),
+    prepareRuntimeSessionResume: async (environmentId, args) =>
+      prepareRuntimeAiVaultSessionResume(app.getPath('userData'), environmentId, args)
   })
   registerNativeChatHandlers()
   registerClipboardHandlers(store)

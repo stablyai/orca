@@ -1,5 +1,4 @@
-// xterm.js WebView document + default Tokyonight theme. Extracted from
-// TerminalWebView.tsx to keep that file within the max-lines budget.
+// xterm.js WebView document + default Tokyonight theme; extracted from TerminalWebView.tsx for the max-lines budget.
 import type { RuntimeMobileTerminalTheme } from '../../../src/shared/runtime-types'
 import { colors } from '../theme/mobile-theme'
 import { TERMINAL_TEXT_SCALES } from '../storage/preferences'
@@ -38,15 +37,7 @@ const DEFAULT_TERMINAL_THEME: RuntimeMobileTerminalTheme['theme'] = {
   brightWhite: '#c0caf5'
 }
 
-// Why: TUI apps (Claude Code / Ink) emit escape codes with absolute cursor
-// positioning designed for the desktop's terminal dimensions (~150+ cols).
-// We initialize xterm at the desktop's exact cols/rows so those escape codes
-// render correctly, then use a measured CSS transform: scale() to fit the
-// canvas into the phone viewport. The scale is computed after xterm opens
-// by measuring the rendered surface width, not hardcoded, so it adapts to
-// any terminal column count (80, 150, 200+). All touch gestures (scroll,
-// pinch-to-zoom, pan) are handled by custom JS rather than native WebView
-// behavior, so they work correctly with the CSS scale transform.
+// Why: TUI escape codes assume the desktop's cols/rows, so init xterm at those dims and fit the phone via a measured CSS scale() instead of resizing.
 export const XTERM_HTML = `<!DOCTYPE html>
 <html>
 <head>
@@ -299,6 +290,7 @@ window.onerror = function(msg) {
   var defaultTheme = ${JSON.stringify(DEFAULT_TERMINAL_THEME)};
   var terminalThemeInput = null;
   var terminalTheme = defaultTheme;
+  var terminalMinimumContrastRatio = 3;
   var webglAddon = null;
   var webglRecoveryTimer = null;
   var activeAltScreenSnapshot = false;
@@ -723,6 +715,7 @@ ${TERMINAL_WEBGL_RECOVERY_JS}
       cols: cols || 80,
       rows: rows || 24,
       theme: terminalTheme,
+      minimumContrastRatio: terminalMinimumContrastRatio,
       fontFamily: terminalFontFamily,
       fontSize: fontPxForScale(currentTextScale),
       fontWeight: '300',
@@ -733,7 +726,9 @@ ${TERMINAL_WEBGL_RECOVERY_JS}
       disableStdin: false,
       cursorBlink: false,
       cursorStyle: 'bar',
-      cursorInactiveStyle: 'none',
+      // Why: native TextInput owns mobile keyboard focus, so xterm stays inactive.
+      // Match its active bar while still honoring application cursor-hide sequences.
+      cursorInactiveStyle: 'bar',
       convertEol: false,
       allowProposedApi: true
     });
@@ -1892,6 +1887,5 @@ ${TERMINAL_WEBGL_RECOVERY_JS}
 </body>
 </html>`
 
-// Why: WebView treats source identity as page identity on some platforms; keep
-// parent/session re-renders from reloading xterm and forcing fresh snapshots.
+// Why: some WebViews treat source identity as page identity; keep this stable so re-renders don't reload xterm.
 export const XTERM_WEBVIEW_SOURCE = { html: XTERM_HTML }

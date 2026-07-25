@@ -111,8 +111,11 @@ function messageIsAfterPendingTimestamp(
   message: NativeChatMessage,
   pending: NativeChatPendingSend
 ): boolean {
+  // Why: some transcripts (e.g. Grok) never carry timestamps. Excluding their
+  // rows would make the echo unmatchable forever, stranding a rank-pinned
+  // bubble at the list tail — which reads as the conversation reordering.
   if (message.timestamp === null) {
-    return false
+    return true
   }
   const boundary = nativeChatPendingMatchingAfter(pending)
   // A transcript-clock boundary describes an existing message, so exclude ties.
@@ -231,9 +234,11 @@ export function launchPromptAsMessage(
   if (!entry) {
     return null
   }
+  // Why: a launch prompt seeds a brand-new session, so a matching user turn
+  // with no timestamp (e.g. Grok transcripts) can only be its own delivery.
   const represented = matchingNativeChatUserContentCounts(
     existingMessages.filter(
-      (message) => message.timestamp !== null && message.timestamp >= entry.createdAt
+      (message) => message.timestamp === null || message.timestamp >= entry.createdAt
     )
   )
   if ((represented.get(nativeChatPendingContentKey(entry)) ?? 0) > 0) {
@@ -256,7 +261,7 @@ export function shouldPruneLaunchPrompt(
   messages: NativeChatMessage[]
 ): boolean {
   const relevant = messages.filter(
-    (message) => message.timestamp !== null && message.timestamp >= entry.createdAt
+    (message) => message.timestamp === null || message.timestamp >= entry.createdAt
   )
   return (
     (advancedNativeChatUserContentCounts(relevant).get(nativeChatPendingContentKey(entry)) ?? 0) > 0

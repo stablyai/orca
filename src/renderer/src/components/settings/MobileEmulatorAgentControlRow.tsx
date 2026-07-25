@@ -1,6 +1,7 @@
 import { Import, Loader2 } from 'lucide-react'
 import {
   ORCA_CLI_SKILL_INSTALL_COMMAND,
+  ORCA_CLI_SKILL_NAME,
   ORCA_CLI_SKILL_UPDATE_COMMAND
 } from '@/lib/agent-feature-install-commands'
 import {
@@ -171,6 +172,9 @@ export function MobileEmulatorAgentControlRow(): React.JSX.Element {
               await ensureOrcaCliAvailableForAgentSkillTerminal()
             }}
             onRecheck={setup.refreshCliSkill}
+            // Why: this row builds its commands for the local host only, so the
+            // local-host freshness scan can vouch for the copy it points at.
+            freshnessSkillName={ORCA_CLI_SKILL_NAME}
           />
         </div>
 

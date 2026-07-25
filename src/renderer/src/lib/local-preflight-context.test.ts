@@ -410,6 +410,43 @@ describe('local preflight context', () => {
     })
   })
 
+  it('uses the target worktree runtime for local agent checks', () => {
+    const state = {
+      ...makeState({
+        repoPath: 'C:\\Users\\alice\\active',
+        worktreePath: 'C:\\Users\\alice\\active'
+      }),
+      repos: [
+        { id: 'repo-1', path: 'C:\\Users\\alice\\active' },
+        { id: 'repo-2', path: 'C:\\Users\\alice\\target' }
+      ],
+      worktreesByRepo: {
+        'repo-1': [
+          {
+            id: 'repo-1::worktree-1',
+            repoId: 'repo-1',
+            path: 'C:\\Users\\alice\\active'
+          }
+        ],
+        'repo-2': [
+          {
+            id: 'repo-2::worktree-1',
+            repoId: 'repo-2',
+            path: 'C:\\Users\\alice\\target'
+          }
+        ]
+      },
+      projects: [
+        { id: 'repo-1', localWindowsRuntimePreference: { kind: 'wsl', distro: 'Ubuntu' } },
+        { id: 'repo-2', localWindowsRuntimePreference: { kind: 'windows-host' } }
+      ]
+    } as unknown as AppState
+
+    const context = getLocalAgentPreflightContext(state, 'win32', {}, 'repo-2::worktree-1')
+
+    expect(localPreflightContextKey(context)).toBe('repo-2:windows-host')
+  })
+
   it('resolves a project host override for a specific worktree over a WSL default', () => {
     const state = {
       ...makeState({ repoPath: 'C:\\Users\\alice\\repo', worktreePath: 'C:\\Users\\alice\\repo' }),

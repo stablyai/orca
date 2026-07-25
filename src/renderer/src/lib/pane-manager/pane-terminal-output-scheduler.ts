@@ -1,6 +1,4 @@
-/* oxlint-disable max-lines -- Why: output ordering, foreground settle, queue
-state, and e2e diagnostics share one state machine; splitting it would make the
-backlog/resume guarantees harder to audit. */
+/* oxlint-disable max-lines -- Why: output ordering, foreground settle, queue state, and e2e diagnostics form one state machine; splitting it would make backlog/resume guarantees harder to audit. */
 import { e2eConfig } from '@/lib/e2e-config'
 import {
   discardForegroundRenderSettle,
@@ -37,11 +35,7 @@ type WriteTerminalOutputOptions = {
   foreground: boolean
   beforeWrite?: TerminalOutputBeforeWrite
   onParsed?: TerminalOutputParsedCallback
-  /** Parse-deferred delivery ACK (terminal-pty-ack-gate). The scheduler MUST
-   *  invoke it exactly when the chunk's bytes are parsed by xterm OR discarded
-   *  by any drop path. A missed credit permanently shrinks
-   *  main's in-flight window for this PTY (the callback is fire-once, so
-   *  double invocation is safe; omission is not). */
+  /** Parse-deferred delivery ACK (terminal-pty-ack-gate). MUST be invoked when the chunk is parsed OR discarded by any drop path; fire-once, so double invocation is safe but omission permanently shrinks main's in-flight window. */
   ackCredit?: () => void
   onBackgroundBacklogDropped?: () => void
   latencySensitive?: boolean
@@ -98,20 +92,12 @@ const BACKGROUND_DRAIN_INTERVAL_MS = 16
 const HIGH_PRIORITY_DRAIN_INTERVAL_MS = 4
 const BACKGROUND_CHUNK_CHARS = 16 * 1024
 const MAX_WRITES_PER_DRAIN = 2
-// Why 8: with the parse-clock pacer, high-priority ticks fire only after
-// xterm confirms the previous batch parsed, and Chromium clamps chained
-// timers to ~4ms — so per-tick volume (8 x 16KB = 128KB ≈ 1.3ms of parse)
-// sets the sustained ceiling (~30MB/s) while staying far inside
-// DRAIN_TIME_BUDGET_MS. At 2 the ceiling was 8MB/s against a ~100MB/s
-// parser (see pane-terminal-output-scheduler-throughput.bench.test.ts).
+// Why 8: per-tick volume (8 x 16KB = 128KB ≈ 1.3ms parse) sets the sustained ceiling (~30MB/s) within DRAIN_TIME_BUDGET_MS; at 2 it was only 8MB/s against a ~100MB/s parser (see throughput bench).
 const HIGH_PRIORITY_MAX_WRITES_PER_DRAIN = 8
 const DRAIN_TIME_BUDGET_MS = 8
 const LARGE_BACKLOG_CHARS = 512 * 1024
 const SYNC_FOREGROUND_FLUSH_CHARS = 256 * 1024
-// Why mutable: the cap scales with the user's scrollback setting (see
-// terminalOutputBacklogCapChars); the terminal lifecycle configures it when
-// settings are applied. The chunk-count cap stays fixed — it bounds queue
-// bookkeeping, not retained content.
+// Why mutable: the cap scales with the user's scrollback setting (terminalOutputBacklogCapChars), configured when settings apply; the chunk-count cap stays fixed.
 let maxQueueChars = TERMINAL_OUTPUT_BACKLOG_MIN_CAP_CHARS
 const MAX_BACKGROUND_QUEUE_CHUNKS = 4096
 
@@ -121,21 +107,16 @@ export function configureTerminalOutputBacklogCap(scrollbackRows: unknown): void
 const PARSE_SETTLE_TIMEOUT_MS = 250
 const FOREGROUND_COALESCE_DELAY_MS = 1000
 const FOREGROUND_HOLD_SAFETY_DELAY_MS = 250
-// Why: key repeat can tick every 30-50ms; one frame catches split restores
-// without batching multiple typed-character redraws behind the fallback.
+// Why: key repeat can tick every 30-50ms; one frame catches split restores without batching multiple typed-character redraws behind the fallback.
 const LATENCY_SENSITIVE_FOREGROUND_COALESCE_DELAY_MS = 16
 const LATENCY_SENSITIVE_FOREGROUND_HOLD_SAFETY_DELAY_MS = 32
 const CURSOR_SHOW_SEQUENCE = '\x1b[?25h'
 const CURSOR_HIDE_SEQUENCE = '\x1b[?25l'
 const SYNCHRONIZED_OUTPUT_END_SEQUENCE = '\x1b[?2026l'
-// Why: CAN aborts a partial escape sequence before resetting style and showing
-// the lossy-backlog warning. Cap-agnostic wording: the byte limit scales with
-// the scrollback setting.
+// Why: leading CAN aborts any partial escape sequence before the style reset so the backlog warning renders cleanly.
 const BACKGROUND_BACKLOG_WARNING =
   '\x18\x1b[0m\r\n[Orca skipped hidden terminal output because the backlog grew too large.]\r\n'
-// Why a separate foreground message: a visible pane hitting the cap means the
-// drain could not keep up with a flood (starved renderer) — the output was
-// skipped, not merely produced while hidden.
+// Why a separate foreground message: a visible pane hitting the cap means the drain couldn't keep up with a flood (starved renderer), not merely output produced while hidden.
 const FOREGROUND_BACKLOG_WARNING =
   '\x18\x1b[0m\r\n[Orca skipped a burst of terminal output because the backlog grew too large.]\r\n'
 const ALWAYS_REFRESH_FOREGROUND_SYNCHRONOUSLY = (): boolean => true
@@ -147,21 +128,14 @@ const backlogRecoveryByTerminal = new WeakMap<
 >()
 let drainTimer: ReturnType<typeof setTimeout> | null = null
 let drainTimerDelayMs: number | null = null
-// Why a MessageChannel for zero-delay drains: Chromium clamps nested
-// setTimeout(0) to ~4ms, which stacks a dead gap onto every parse-clocked
-// drain tick under flood (measured: standing queue ~18ms vs VS Code ~7ms).
-// A posted message is still a macrotask — input events and paint are
-// serviced between posts — so the cooperative yield survives without the
-// clamp. Cancellation is by generation: posts carry the generation they
-// were armed with and no-op when it has moved on.
+// Why a MessageChannel for zero-delay drains: Chromium clamps nested setTimeout(0) to ~4ms; a posted macrotask isn't clamped yet still yields to input/paint. Cancellation is by generation.
 let drainImmediatePending = false
 let drainImmediateGeneration = 0
 let useMessageChannelDrain = typeof MessageChannel !== 'undefined' && !isVitestEnv()
 let drainChannel: MessageChannel | null = null
 
 function isVitestEnv(): boolean {
-  // Why: vitest fake timers cannot advance MessageChannel macrotasks; the
-  // timer path keeps the existing suites' virtual clock authoritative.
+  // Why: vitest fake timers can't advance MessageChannel macrotasks; the timer path keeps the suites' virtual clock authoritative.
   return typeof process !== 'undefined' && process.env?.VITEST === 'true'
 }
 
@@ -190,9 +164,7 @@ export function setUseMessageChannelDrainForTesting(value: boolean | null): void
 }
 const debugEnabled = e2eConfig.exposeStore
 
-// Why the cap is lossy: a hidden/backgrounded Chromium document can throttle
-// timers while PTYs keep writing. Preserving unlimited hidden scrollback would
-// let renderer memory grow until the app stalls or crashes.
+// Why the cap is lossy: a backgrounded Chromium document throttles timers while PTYs keep writing, so unbounded hidden scrollback would grow renderer memory until the app crashes.
 
 type TerminalOutputSchedulerDebugSnapshot = {
   backgroundEnqueueCount: number
@@ -290,8 +262,7 @@ function exposeDebugApi(): void {
   if (!debugEnabled || typeof window === 'undefined') {
     return
   }
-  // Why: the e2e repro needs to prove background output used the shared drain,
-  // but production must not accumulate diagnostic counters indefinitely.
+  // Why: the e2e repro must prove background output used the shared drain, but production must not accumulate diagnostic counters indefinitely.
   const target = window as unknown as {
     __terminalOutputSchedulerDebug?: TerminalOutputSchedulerDebugApi
   }
@@ -458,9 +429,7 @@ function removeTransientCursorShowSequences(data: string): string {
         if (synchronizedEndIndex === -1) {
           break
         }
-        // Why: keep the cursor hidden while xterm parses the synchronized
-        // repaint, then restore it after the frame ends so Windows never paints
-        // the cursor in the transient draw position.
+        // Why: keep the cursor hidden through the synchronized repaint, restoring it after the frame ends so Windows never paints it in the transient draw position.
         result += data.slice(offset, showIndex)
         result += data.slice(
           showIndex + CURSOR_SHOW_SEQUENCE.length,
@@ -471,8 +440,7 @@ function removeTransientCursorShowSequences(data: string): string {
         showIndex = data.indexOf(CURSOR_SHOW_SEQUENCE, offset)
         continue
       }
-      // Why: Codex can show the cursor before its final synchronized-frame
-      // placement. Place first so xterm cannot rasterize the stale cell.
+      // Why: Codex can show the cursor before its final synchronized-frame placement. Place first so xterm cannot rasterize the stale cell.
       result += data.slice(offset, showIndex)
       result += data.slice(showIndex + CURSOR_SHOW_SEQUENCE.length, nextPositionEnd)
       result += CURSOR_SHOW_SEQUENCE
@@ -596,8 +564,7 @@ function takeQueuedChunk(entry: QueueEntry, limit: number): QueuedWrite | null {
     foreground ??= chunk.foreground
     forceForegroundRefresh ||= chunk.forceForegroundRefresh
     followupForegroundRefresh ||= chunk.followupForegroundRefresh
-    // Why: one drained write can combine chunks from different renderer
-    // states or producers; preserve every forced policy and preparation hook.
+    // Why: one drained write can combine chunks from different renderer states or producers; preserve every forced policy and prep hook.
     if (chunk.forceForegroundRefresh) {
       if (shouldRefreshForegroundSynchronously === null) {
         shouldRefreshForegroundSynchronously = chunk.shouldRefreshForegroundSynchronously
@@ -728,10 +695,7 @@ function enqueueChunk(
   recordQueueDebugPressure()
 }
 
-// Fires the delivery ACK credits of every not-yet-consumed queued chunk.
-// Every discard path MUST call this before clearing/replacing the queue —
-// a dropped chunk still counts as consumed for main's in-flight window, or
-// the window shrinks permanently and the PTY wedges behind lost credit.
+// Why: every discard path MUST fire these before clearing/replacing the queue — a dropped chunk still counts as consumed, or main's in-flight window shrinks permanently and the PTY wedges.
 function fireQueuedAckCredits(entry: QueueEntry): void {
   for (let index = entry.chunkIndex; index < entry.chunks.length; index += 1) {
     entry.chunks[index].ackCredit?.()
@@ -761,8 +725,7 @@ function replaceBacklogWithWarning(
 ): void {
   const shouldNotify = !entry.backgroundBacklogDropped
   if (shouldNotify) {
-    // Why: field visibility for cap tuning — how often drops happen and at
-    // what size decides whether the cap is too small (issue #2836 / #7017).
+    // Why: field visibility for cap tuning — drop frequency and size decide whether the cap is too small (issue #2836 / #7017).
     recordRendererCrashBreadcrumb('terminal_output_backlog_dropped', {
       foreground: warning === FOREGROUND_BACKLOG_WARNING,
       droppedChars: entry.queuedChars,
@@ -829,18 +792,14 @@ function hasDrainableBacklog(): boolean {
   return false
 }
 
-// Why no per-write scroll enforcement: xterm's BufferService.isUserScrolling
-// natively owns live follow/pin semantics. App-side intent enforcement is
-// limited to structural operations xterm cannot identify, such as replay.
+// Why no per-write scroll enforcement: xterm's BufferService.isUserScrolling owns live follow/pin; app-side enforcement is limited to structural ops xterm can't identify, like replay.
 function writeBackgroundTerminalChunk(
   terminal: TerminalOutputTarget,
   data: string,
   onParsed?: TerminalOutputParsedCallback,
   onWriteFailure?: () => void
 ): boolean {
-  // Why guarded: these callbacks run inside xterm's WriteBuffer loop, where an
-  // escaping throw permanently wedges the terminal (see
-  // xterm-write-callback-guard.ts).
+  // Why guarded: these callbacks run inside xterm's WriteBuffer loop, where an escaping throw permanently wedges the terminal (see xterm-write-callback-guard.ts).
   const runOnParsed = onParsed
     ? (): void => runGuardedWriteCompletionStep('background-on-parsed', onParsed)
     : undefined
@@ -867,8 +826,7 @@ function takeNextDrainableEntry(): QueueEntry | null {
     if (!isEntryDrainable(entry)) {
       continue
     }
-    // Why: active/foreground output should be chosen first, not just widen the
-    // drain budget while older background terminals keep their insertion order.
+    // Why: active/foreground output should be chosen first, not left in insertion order behind older background terminals.
     if (entry.highPriority) {
       queuedByTerminal.delete(entry.terminal)
       return entry
@@ -891,12 +849,7 @@ function takeNextDrainableEntry(): QueueEntry | null {
   return null
 }
 
-// Why: the parse-completion pacer re-arms a zero-delay drain as soon as xterm
-// reports the previous high-priority batch parsed. Without it, cadence is a
-// fixed 4/16ms nap per <=32KB batch — a ~2-8 MB/s drip against xterm's
-// ~100 MB/s parse rate (measured: scheduler-throughput bench + baseline-jul02).
-// Only high-priority (visible-pane) backlogs are pacer-clocked; background
-// panes keep the fixed cadence that protects the focused terminal.
+// Why: re-arm a zero-delay drain once xterm confirms the previous high-priority batch parsed; the fixed 4/16ms cadence otherwise drips far below xterm's ~100 MB/s parse. Only visible panes are pacer-clocked; background keeps the fixed cadence to protect the focused terminal.
 function makeParseClockPacer(): () => void {
   return () => {
     try {
@@ -904,8 +857,7 @@ function makeParseClockPacer(): () => void {
         scheduleDrain(0)
       }
     } catch {
-      // Why: runs inside xterm's write-callback chain; a throw here would
-      // wedge the terminal (see xterm-write-callback-guard.ts).
+      // Why: runs inside xterm's write-callback chain; a throw here would wedge the terminal (see xterm-write-callback-guard.ts).
     }
   }
 }
@@ -916,9 +868,7 @@ function composeParsedCallback(
   ackCreditsParsed: (() => void) | undefined,
   pacer: (() => void) | undefined
 ): TerminalOutputParsedCallback {
-  // Why always non-undefined: the write-completion callback doubles as the
-  // pipeline-health settle signal. A write with no callback could never settle
-  // the stall watch, forcing a probe round-trip for every healthy idle pane.
+  // Why always non-undefined: the callback doubles as the pipeline-health settle signal — with none, the stall watch could never settle, forcing a probe round-trip per healthy idle pane.
   return () => {
     try {
       onParsed?.()
@@ -939,8 +889,7 @@ function composeWriteFailureCallback(
       // A rejected write still consumed the main-owned delivery window.
       ackCreditsParsed?.()
     } finally {
-      // Why: a synchronous rejection proves undeliverability, but it proves
-      // nothing about parse progress. Recover without extending replay guards.
+      // Why: a synchronous rejection proves undeliverability but nothing about parse progress; recover without extending replay guards.
       failTerminalWriteStallWatch(terminal)
     }
   }
@@ -959,13 +908,7 @@ function writeQueuedChunk(entry: QueueEntry): 'foreground' | 'background' | null
   }
   const pacer = entry.highPriority ? makeParseClockPacer() : undefined
   const ackCreditsParsed = registerTerminalOutputAckCredits(entry.terminal, queuedWrite.ackCredits)
-  // Why armed BEFORE the write: a wedged WriteBuffer (escaping callback throw,
-  // issue #2836) or a disposed xterm (write() silently drops its completion —
-  // verified against 6.1.0-beta.287) never runs the parsed callback below. The
-  // stall watch probe-certifies dead-vs-slow and hands the pane to recovery;
-  // the entry cleanup credits queued deliveries so main's in-flight window
-  // never leaks. Arming first keeps a synchronously-completing write able to
-  // settle its own watch.
+  // Why armed BEFORE the write: a wedged WriteBuffer (issue #2836) or disposed xterm (6.1.0-beta.287) never runs the parsed callback, so the watch must be live first to catch it.
   armTerminalWriteStallWatch(entry.terminal, {
     onCertifiedDead: () => discardTerminalOutput(entry.terminal)
   })
@@ -997,8 +940,7 @@ function writeQueuedChunk(entry: QueueEntry): 'foreground' | 'background' | null
           composeWriteFailureCallback(entry.terminal, ackCreditsParsed)
         )
     if (!writeAccepted) {
-      // The failure callback credited the submitted chunk; credit and abandon
-      // the detached tail so the drain cannot retry a certified-dead xterm.
+      // Why: the failure callback credited the submitted chunk; credit and abandon the detached tail so the drain can't retry a certified-dead xterm.
       fireQueuedAckCredits(entry)
       entry.chunks.length = 0
       entry.chunkIndex = 0
@@ -1009,8 +951,7 @@ function writeQueuedChunk(entry: QueueEntry): 'foreground' | 'background' | null
       return null
     }
   } catch {
-    // Why: beforeWrite or write setup can fail before xterm owns the bytes.
-    // Cancel the armed watch without claiming parser failure.
+    // Why: beforeWrite or write setup can fail before xterm owns the bytes; cancel the armed watch without claiming parser failure.
     cancelTerminalWriteStallWatch(entry.terminal)
     ackCreditsParsed?.()
     fireQueuedAckCredits(entry)
@@ -1065,8 +1006,7 @@ function drainQueuedOutput(): void {
       clearForegroundCoalesce(entry)
       clearForegroundHoldSafety(entry)
     }
-    // Why: xterm parsing and DOM work share the renderer thread with input.
-    // Keep backlog draining cooperative so WSL/agent output cannot pin the UI.
+    // Why: xterm parsing and DOM work share the renderer thread with input; keep draining cooperative so WSL/agent output can't pin the UI.
     if (writes > 0 && getDrainNow() - startedAt >= DRAIN_TIME_BUDGET_MS) {
       break
     }
@@ -1077,11 +1017,7 @@ function drainQueuedOutput(): void {
   }
   recordQueueDebugPressure()
   if (queuedByTerminal.size > 0 && hasDrainableBacklog()) {
-    // Why 0 on the channel path: the 4ms high-priority interval existed to
-    // yield between ticks, but a posted message already yields — Chromium
-    // services input and paint between macrotasks. The explicit sleep only
-    // deepened the standing queue (~4ms per 128KB tick). Timer path keeps
-    // the interval so fake-timer tests retain stepwise drain semantics.
+    // Why 0 on the channel path: a posted message already yields (input/paint serviced between macrotasks), so the 4ms interval only deepened the queue; timer path keeps it for fake-timer tests.
     scheduleDrain(
       hasHighPriorityBacklog()
         ? useMessageChannelDrain
@@ -1098,15 +1034,13 @@ export function writeTerminalOutput(
   options: WriteTerminalOutputOptions
 ): void {
   exposeDebugApi()
-  // Why: recovery may be budget-delayed while PTY output keeps flowing. Main
-  // owns the authoritative buffer; credit delivery without waking dead xterm.
+  // Why: recovery may be budget-delayed while PTY output keeps flowing; main owns the authoritative buffer, so credit delivery without waking dead xterm.
   if (isTerminalWritePipelineCertifiedDead(terminal)) {
     options.ackCredit?.()
     return
   }
   if (!data) {
-    // Why: an empty write still consumed its delivery — credit or main's
-    // in-flight window leaks.
+    // Why: an empty write still consumed its delivery — credit or main's in-flight window leaks.
     options.ackCredit?.()
     return
   }
@@ -1132,20 +1066,16 @@ export function writeTerminalOutput(
         debugState.foregroundWriteCount++
         debugState.deferredForegroundEnqueueCount++
       }
-      // Why: a visible pane's queue was previously uncapped — a flood the
-      // drain can't keep up with ballooned renderer memory without bound.
+      // Why: a visible pane's queue was previously uncapped — a flood the drain couldn't keep up with ballooned renderer memory without bound.
       if (queueCapExceeded(queued)) {
         replaceBacklogWithWarning(queued, FOREGROUND_BACKLOG_WARNING)
         scheduleDrain(0)
         return
       }
       if (options.holdForeground) {
-        // Why: synchronized-output start/body chunks contain transient cursor
-        // moves. Holding them prevents Chromium from rasterizing those states.
+        // Why: synchronized-output start/body chunks contain transient cursor moves; holding them prevents Chromium from rasterizing those states.
         if (options.latencySensitive === true) {
-          // Why: Codex composer redraws can split the end marker from the
-          // input-triggered frame; keep cursor protection without adding a
-          // human-visible fallback delay to typed characters.
+          // Why: Codex composer redraws can split the end marker from the input-triggered frame; keep cursor protection without a human-visible fallback delay on typed chars.
           queued.foregroundHoldSafetyDelayMs = Math.min(
             queued.foregroundHoldSafetyDelayMs,
             LATENCY_SENSITIVE_FOREGROUND_HOLD_SAFETY_DELAY_MS
@@ -1163,8 +1093,7 @@ export function writeTerminalOutput(
         clearForegroundHoldSafety(queued)
         const shouldShortenCoalesceForLatencySensitiveForeground = options.latencySensitive === true
         if (shouldShortenCoalesceForLatencySensitiveForeground) {
-          // Why: user input echo must not inherit the normal synchronized-frame
-          // restore fallback; wait briefly for the restore, then paint.
+          // Why: user input echo must not inherit the normal synchronized-frame restore fallback; wait briefly for the restore, then paint.
           queued.foregroundCoalesceDelayMs = Math.min(
             queued.foregroundCoalesceDelayMs,
             LATENCY_SENSITIVE_FOREGROUND_COALESCE_DELAY_MS
@@ -1178,9 +1107,7 @@ export function writeTerminalOutput(
           scheduleDrain(0)
           return
         }
-        // Why: TUI synchronized-output end markers can be split from the
-        // immediate cursor-restoring bytes by the PTY transport. Wait only
-        // until the restore arrives; the timer is a bounded fallback.
+        // Why: the PTY transport can split TUI synchronized-output end markers from the cursor-restoring bytes; wait for the restore, with the timer as bounded fallback.
         scheduleForegroundCoalesceRelease(queued, {
           rescheduleEarlier: shouldShortenCoalesceForLatencySensitiveForeground
         })
@@ -1211,9 +1138,7 @@ export function writeTerminalOutput(
       if (queueCapExceeded(entry)) {
         replaceBacklogWithWarning(entry, FOREGROUND_BACKLOG_WARNING)
       }
-      // Why: returning from a hidden window can have megabytes queued. Keep
-      // byte order, but drain it asynchronously so the first foreground frame
-      // is not pinned behind the entire backlog.
+      // Why: returning from a hidden window can have megabytes queued — keep byte order but drain async so the first foreground frame isn't pinned behind the whole backlog.
       scheduleDrain(0)
       return
     }
@@ -1243,9 +1168,7 @@ export function writeTerminalOutput(
       if (queueCapExceeded(queued)) {
         replaceBacklogWithWarning(queued, FOREGROUND_BACKLOG_WARNING)
       }
-      // Why: visible command floods are throughput work, not keystroke echo.
-      // Queue them behind a zero-delay drain so one IPC callback cannot pin
-      // the renderer in xterm.write while input and paint are waiting.
+      // Why: visible command floods are throughput work, not keystroke echo — queue behind a zero-delay drain so one IPC callback can't pin the renderer while input/paint wait.
       scheduleDrain(0)
       return
     }
@@ -1275,8 +1198,7 @@ export function writeTerminalOutput(
         }
       )
     } catch (error) {
-      // beforeWrite can throw before xterm owns the callback; consume the
-      // delivery here. xterm write throws are caught by the foreground writer.
+      // Why: beforeWrite can throw before xterm owns the callback, so consume the delivery here (xterm write throws are caught by the foreground writer).
       ackCreditsParsed?.()
       cancelTerminalWriteStallWatch(terminal)
       throw error
@@ -1303,9 +1225,7 @@ export function writeTerminalOutput(
   if (debugEnabled) {
     debugState.backgroundEnqueueCount++
   }
-  // Why: non-focused panes can produce output continuously. Letting every
-  // pane call xterm.write immediately schedules one xterm WriteBuffer timer
-  // per pane, which starves the focused terminal on the shared renderer thread.
+  // Why: letting every non-focused pane call xterm.write immediately spawns a WriteBuffer timer per pane, starving the focused terminal on the shared renderer thread.
   scheduleDrain(
     entry.highPriority || entry.queuedChars > LARGE_BACKLOG_CHARS ? 0 : BACKGROUND_FLUSH_DELAY_MS
   )
@@ -1388,8 +1308,7 @@ export function flushTerminalOutput(
         return
       }
     } catch {
-      // Why: pre-write hooks/setup failed before xterm owned these bytes.
-      // Cancel the watch; consumed + abandoned chunks still credit delivery.
+      // Why: pre-write hooks/setup failed before xterm owned these bytes; cancel the watch, but consumed + abandoned chunks still credit delivery.
       cancelTerminalWriteStallWatch(terminal)
       ackCreditsParsed?.()
       fireQueuedAckCredits(entry)
@@ -1443,8 +1362,7 @@ export function registerTerminalBacklogRecovery(
 export function waitForTerminalOutputParsed(terminal: TerminalOutputTarget): Promise<void> {
   flushTerminalOutput(terminal)
   if (isTerminalWritePipelineCertifiedDead(terminal)) {
-    // A dead pipeline cannot settle; recovery owns it and serializers must not
-    // enqueue probe writes while a bounded remount retry is pending.
+    // Why: a dead pipeline cannot settle; recovery owns it and serializers must not enqueue probe writes during a pending remount retry.
     return Promise.resolve()
   }
 
@@ -1462,8 +1380,7 @@ export function waitForTerminalOutputParsed(terminal: TerminalOutputTarget): Pro
       resolve()
     }
     const finishParsed = (): void => {
-      // Why: serializer/startup probes share xterm's FIFO with replay guards;
-      // their completion is real parser progress even though they carry no bytes.
+      // Why: serializer/startup probes share xterm's FIFO with replay guards; their completion is real parser progress despite carrying no bytes.
       recordTerminalParseProgress(terminal)
       finish()
     }
@@ -1471,8 +1388,7 @@ export function waitForTerminalOutputParsed(terminal: TerminalOutputTarget): Pro
     try {
       terminal.write('', finishParsed)
     } catch {
-      // Why: a synchronous rejection means this concrete xterm cannot accept
-      // even an empty FIFO probe; recovery must replace it before reuse.
+      // Why: a synchronous rejection means this xterm can't accept even an empty FIFO probe; recovery must replace it before reuse.
       failTerminalWriteStallWatch(terminal)
       finish()
     }
@@ -1483,15 +1399,13 @@ export function discardTerminalOutput(terminal: TerminalOutputTarget): void {
   exposeDebugApi()
   const entry = queuedByTerminal.get(terminal)
   if (entry) {
-    // Why: discarded queued chunks still consumed their deliveries — credit
-    // them or main's in-flight window leaks (see fireQueuedAckCredits).
+    // Why: discarded chunks still consumed their deliveries — credit them or main's in-flight window leaks (fireQueuedAckCredits).
     fireQueuedAckCredits(entry)
   }
   discardInFlightTerminalOutputAckCredits(terminal)
   queuedByTerminal.delete(terminal)
   discardForegroundRenderSettle(terminal)
-  // Why: cleanup must cancel the watch without masquerading as parse progress;
-  // replay guards use real completions to distinguish slow from wedged.
+  // Why: cancel the watch without masquerading as parse progress; replay guards use real completions to tell slow from wedged.
   cancelTerminalWriteStallWatch(terminal)
   recordQueueDebugPressure()
 }

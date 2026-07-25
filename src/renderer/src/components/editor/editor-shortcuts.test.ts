@@ -21,7 +21,8 @@ import {
   installEditorAddReviewNoteShortcut,
   installEditorFindShortcut,
   installMonacoDiffChangeNavigationShortcut,
-  installMonacoEditorFindShortcut
+  installMonacoEditorFindShortcut,
+  installOpenDraftAddReviewNoteGuard
 } from './editor-shortcuts'
 
 type ShortcutFixture = {
@@ -267,6 +268,50 @@ describe('installEditorAddReviewNoteShortcut', () => {
     expect(event.defaultPrevented).toBe(false)
     expect(onDownstreamKeyDown).toHaveBeenCalledTimes(1)
     dispose()
+  })
+})
+
+describe('installOpenDraftAddReviewNoteGuard', () => {
+  it('consumes the add-review-note chord including OS key-repeat (product B)', () => {
+    // Why: the guard is scoped to the composer subtree, so mirror that with a
+    // container wrapping the focused textarea rather than attaching to window.
+    const container = document.createElement('div')
+    const input = document.createElement('textarea')
+    const onDownstreamKeyDown = vi.fn()
+    container.appendChild(input)
+    document.body.appendChild(container)
+    input.addEventListener('keydown', onDownstreamKeyDown)
+    const dispose = installOpenDraftAddReviewNoteGuard(container)
+
+    const first = dispatchKeyDown(input, {
+      key: 'a',
+      code: 'KeyA',
+      metaKey: true,
+      shiftKey: true
+    })
+    const repeat = dispatchKeyDown(input, {
+      key: 'a',
+      code: 'KeyA',
+      metaKey: true,
+      shiftKey: true,
+      repeat: true
+    })
+    const unrelated = dispatchKeyDown(input, { key: 'a', code: 'KeyA', metaKey: true })
+
+    expect(first.defaultPrevented).toBe(true)
+    expect(repeat.defaultPrevented).toBe(true)
+    expect(unrelated.defaultPrevented).toBe(false)
+    // Capture-phase guard stops propagation before the target listener.
+    expect(onDownstreamKeyDown).toHaveBeenCalledTimes(1)
+
+    dispose()
+    const afterDispose = dispatchKeyDown(input, {
+      key: 'a',
+      code: 'KeyA',
+      metaKey: true,
+      shiftKey: true
+    })
+    expect(afterDispose.defaultPrevented).toBe(false)
   })
 })
 

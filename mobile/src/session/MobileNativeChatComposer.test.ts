@@ -7,6 +7,7 @@ vi.mock('react-native', async () => {
   const React = await import('react')
   return {
     ActivityIndicator: 'ActivityIndicator',
+    Image: 'Image',
     Pressable: 'Pressable',
     ScrollView: ({ children, ...props }: { children?: unknown }) =>
       React.createElement('ScrollView', props, children),
@@ -24,7 +25,8 @@ vi.mock('lucide-react-native', () => ({
   ArrowUp: 'ArrowUp',
   ImagePlus: 'ImagePlus',
   Mic: 'Mic',
-  Square: 'Square'
+  Square: 'Square',
+  X: 'X'
 }))
 
 function suppressRendererWarning(): () => void {
@@ -110,6 +112,61 @@ describe('MobileNativeChatComposer', () => {
     expect(sendButton().props).toMatchObject({ disabled: true })
     await act(async () => sendButton().props.onPress())
     expect(onSend).not.toHaveBeenCalled()
+  })
+
+  it('renders a removable thumbnail for each pending image attachment', async () => {
+    const onRemoveAttachment = vi.fn()
+    const restore = suppressRendererWarning()
+    try {
+      await act(async () => {
+        renderer = create(
+          createElement(MobileNativeChatComposer, {
+            value: '',
+            onChangeText: vi.fn(),
+            onSend: vi.fn().mockResolvedValue(true),
+            attachments: [
+              { id: 'img-1', path: '/tmp/a.png', previewUri: 'file:///a.png' },
+              { id: 'img-2', path: '/tmp/b.png', previewUri: 'file:///b.png' }
+            ],
+            onRemoveAttachment
+          })
+        )
+      })
+    } finally {
+      restore()
+    }
+    const thumbs = renderer!.root.findAll((node) => node.type === 'Image') as Array<{
+      props: { source: { uri: string } }
+    }>
+    expect(thumbs.map((t) => t.props.source.uri)).toEqual(['file:///a.png', 'file:///b.png'])
+
+    const remove = renderer!.root.findAll(
+      (node) => node.type === 'Pressable' && node.props.accessibilityLabel === 'Remove image'
+    ) as Array<{ props: { onPress: () => void } }>
+    remove[1].props.onPress()
+    expect(onRemoveAttachment).toHaveBeenCalledWith('img-2')
+  })
+
+  it('enables send with an attached image even when the text is empty', async () => {
+    const onSend = vi.fn().mockResolvedValue(true)
+    const restore = suppressRendererWarning()
+    try {
+      await act(async () => {
+        renderer = create(
+          createElement(MobileNativeChatComposer, {
+            value: '',
+            onChangeText: vi.fn(),
+            onSend,
+            attachments: [{ id: 'img-1', path: '/tmp/a.png', previewUri: 'file:///a.png' }]
+          })
+        )
+      })
+    } finally {
+      restore()
+    }
+    expect(sendButton().props).toMatchObject({ disabled: false })
+    await act(async () => sendButton().props.onPress())
+    expect(onSend).toHaveBeenCalledWith('')
   })
 
   it('moves the caret to the insert point after an autocomplete pick, then releases control', async () => {

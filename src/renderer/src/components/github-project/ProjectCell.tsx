@@ -43,6 +43,7 @@ type Props = {
   onEditLabels?: (add: string[], remove: string[]) => void
   onEditIssueType?: (issueType: GitHubIssueType | null) => void
   onOpenDialog?: () => void
+  sourceHost?: string
   sourceSettings: Pick<GlobalSettings, 'activeRuntimeEnvironmentId'> | null | undefined
 }
 
@@ -55,6 +56,7 @@ export default function ProjectCell({
   onEditLabels,
   onEditIssueType,
   onOpenDialog,
+  sourceHost,
   sourceSettings
 }: Props): React.JSX.Element {
   const value = row.fieldValuesByFieldId[field.id]
@@ -70,6 +72,7 @@ export default function ProjectCell({
       <TypeCell
         row={row}
         editable={editableHere}
+        sourceHost={sourceHost}
         sourceSettings={sourceSettings}
         onEditIssueType={onEditIssueType}
       />
@@ -81,6 +84,7 @@ export default function ProjectCell({
       <AssigneesCell
         row={row}
         editable={editableHere}
+        sourceHost={sourceHost}
         sourceSettings={sourceSettings}
         onEditAssignees={onEditAssignees}
       />
@@ -92,6 +96,7 @@ export default function ProjectCell({
       <LabelsCell
         row={row}
         editable={editableHere}
+        sourceHost={sourceHost}
         sourceSettings={sourceSettings}
         onEditLabels={onEditLabels}
       />
@@ -263,11 +268,13 @@ function TitleCell({
 function TypeCell({
   row,
   editable,
+  sourceHost,
   sourceSettings,
   onEditIssueType
 }: {
   row: GitHubProjectRow
   editable: boolean
+  sourceHost?: string
   sourceSettings: Pick<GlobalSettings, 'activeRuntimeEnvironmentId'> | null | undefined
   onEditIssueType?: (issueType: GitHubIssueType | null) => void
 }): React.JSX.Element {
@@ -279,6 +286,7 @@ function TypeCell({
       <IssueTypeCell
         row={row}
         editable={editable}
+        sourceHost={sourceHost}
         sourceSettings={sourceSettings}
         onEditIssueType={onEditIssueType}
       />
@@ -311,11 +319,13 @@ function TypeCell({
 function IssueTypeCell({
   row,
   editable,
+  sourceHost,
   sourceSettings,
   onEditIssueType
 }: {
   row: GitHubProjectRow
   editable: boolean
+  sourceHost?: string
   sourceSettings: Pick<GlobalSettings, 'activeRuntimeEnvironmentId'> | null | undefined
   onEditIssueType?: (issueType: GitHubIssueType | null) => void
 }): React.JSX.Element {
@@ -326,8 +336,8 @@ function IssueTypeCell({
   const [owner, repo] = (row.content.repository ?? '').split('/')
   const { lookupSlug } = useRepoSlugIndex()
   const matchedRepo = useMemo(
-    () => lookupSlug(row.content.repository)[0] ?? null,
-    [lookupSlug, row.content.repository]
+    () => lookupSlug(row.content.repository, sourceHost)[0] ?? null,
+    [lookupSlug, row.content.repository, sourceHost]
   )
   const ownerSettings = useAppStore(
     useShallow((s) => getSettingsForRepoRuntimeOwner(s, matchedRepo?.id ?? null))
@@ -345,10 +355,14 @@ function IssueTypeCell({
         ? callRuntimeRpc<ListIssueTypesBySlugResult>(
             target,
             'github.project.listIssueTypesBySlug',
-            { owner, repo },
+            { owner, repo, ...(sourceHost ? { host: sourceHost } : {}) },
             { timeoutMs: 30_000 }
           )
-        : window.api.gh.listIssueTypesBySlug({ owner, repo })
+        : window.api.gh.listIssueTypesBySlug({
+            owner,
+            repo,
+            ...(sourceHost ? { host: sourceHost } : {})
+          })
     request
       .then((res) => {
         if (cancelled) {
@@ -366,7 +380,7 @@ function IssueTypeCell({
     return () => {
       cancelled = true
     }
-  }, [matchedRepo, open, owner, ownerSettings, repo, sourceSettings])
+  }, [matchedRepo, open, owner, ownerSettings, repo, sourceHost, sourceSettings])
 
   const trigger = (
     <span className="inline-flex items-center gap-1 text-xs">
@@ -818,11 +832,13 @@ function UserChip({ user }: { user: GitHubProjectUser }): React.JSX.Element {
 function AssigneesCell({
   row,
   editable,
+  sourceHost,
   sourceSettings,
   onEditAssignees
 }: {
   row: GitHubProjectRow
   editable: boolean
+  sourceHost?: string
   sourceSettings: Pick<GlobalSettings, 'activeRuntimeEnvironmentId'> | null | undefined
   onEditAssignees?: (add: string[], remove: string[]) => void
 }): React.JSX.Element {
@@ -849,7 +865,8 @@ function AssigneesCell({
     open ? owner : null,
     open ? repo : null,
     seedKey ? seedKey.split(',') : [],
-    sourceSettings
+    sourceSettings,
+    sourceHost
   )
 
   const labelContent =
@@ -933,11 +950,13 @@ function AssigneesCell({
 function LabelsCell({
   row,
   editable,
+  sourceHost,
   sourceSettings,
   onEditLabels
 }: {
   row: GitHubProjectRow
   editable: boolean
+  sourceHost?: string
   sourceSettings: Pick<GlobalSettings, 'activeRuntimeEnvironmentId'> | null | undefined
   onEditLabels?: (add: string[], remove: string[]) => void
 }): React.JSX.Element {
@@ -945,7 +964,12 @@ function LabelsCell({
   const [open, setOpen] = useState(false)
 
   const [owner, repo] = (row.content.repository ?? '').split('/')
-  const metadata = useRepoLabelsBySlug(open ? owner : null, open ? repo : null, sourceSettings)
+  const metadata = useRepoLabelsBySlug(
+    open ? owner : null,
+    open ? repo : null,
+    sourceSettings,
+    sourceHost
+  )
 
   const labelContent =
     labels.length === 0 ? null : labels.map((l) => <LabelChip key={l.name} label={l} />)

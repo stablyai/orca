@@ -1,6 +1,7 @@
 /* eslint-disable max-lines -- Why: git status/discard/chunking behavior is verified together here to keep the command contract readable in one place. */
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type * as NodeFs from 'node:fs'
+import type * as BoundedFileReader from '../../shared/node-bounded-file-reader'
 import path from 'node:path'
 import {
   MAX_RENDERED_DIFF_COMBINED_CHARACTERS,
@@ -61,6 +62,33 @@ vi.mock('fs/promises', () => ({
 vi.mock('fs', () => ({
   existsSync: existsSyncMock
 }))
+
+vi.mock('../../shared/node-bounded-file-reader', async (importOriginal) => {
+  const actual = await importOriginal<typeof BoundedFileReader>()
+  return {
+    ...actual,
+    readNodeFileWithinLimit: async (filePath: string, maxBytes: number) => {
+      if (maxBytes === 64 * 1024) {
+        const value = await readFileMock(filePath)
+        const buffer = Buffer.isBuffer(value) ? value : Buffer.from(value)
+        if (buffer.length > maxBytes) {
+          throw new actual.NodeFileReadTooLargeError(buffer.length, maxBytes)
+        }
+        return { buffer, stats: { isFile: () => true, size: buffer.length } }
+      }
+      const stats = await statMock(filePath)
+      if (stats.size > maxBytes) {
+        throw new actual.NodeFileReadTooLargeError(stats.size, maxBytes)
+      }
+      const value = await readFileMock(filePath)
+      const buffer = Buffer.isBuffer(value) ? value : Buffer.from(value)
+      if (buffer.length > maxBytes) {
+        throw new actual.NodeFileReadTooLargeError(buffer.length, maxBytes)
+      }
+      return { buffer, stats }
+    }
+  }
+})
 
 import {
   abortMerge,
@@ -1040,6 +1068,34 @@ describe('getSubmoduleStatus', () => {
     expect(result.entries).toContainEqual(
       expect.objectContaining({ path: 'lib/main.dart', status: 'modified', area: 'unstaged' })
     )
+    expect(gitExecFileAsyncMock.mock.calls.some(([args]) => args.includes('status'))).toBe(false)
+  })
+
+  it('caps staged commit-range entries before returning them to the renderer', async () => {
+    const OLD_OID = 'a'.repeat(40)
+    const NEW_OID = 'b'.repeat(40)
+    gitExecFileAsyncMock.mockReset()
+    gitExecFileAsyncMock.mockImplementation((args: string[]) => {
+      if (args.includes('--name-status')) {
+        return Promise.resolve({ stdout: 'M\tlib/a.dart\nM\tlib/b.dart\n' })
+      }
+      if (args[0] === 'ls-files') {
+        return Promise.resolve({ stdout: `160000 ${NEW_OID} 0\tflutter_mine\n` })
+      }
+      if (args[0] === 'ls-tree') {
+        return Promise.resolve({ stdout: `160000 commit ${OLD_OID}\tflutter_mine\n` })
+      }
+      return Promise.resolve({ stdout: '' })
+    })
+
+    const result = await getSubmoduleStatus('/repo', 'flutter_mine', {
+      staged: true,
+      limit: 1
+    })
+
+    expect(result.entries).toHaveLength(1)
+    expect(result.didHitLimit).toBe(true)
+    expect(result.statusLength).toBe(2)
   })
 })
 
@@ -1683,6 +1739,50 @@ describe('getStatus', () => {
     // attachLineStats (numstat) must be skipped when the limit was hit — only
     // the single streamed status read should have happened.
     expect(gitExecFileAsyncMock).toHaveBeenCalledTimes(1)
+  })
+
+  it('caps unmerged conflicts and keeps the visible conflict rows', async () => {
+    readFileMock.mockResolvedValue('gitdir: /repo/.git/worktrees/feature\n')
+    existsSyncMock.mockReturnValue(true)
+    const lines = [
+      'u UU S... 160000 160000 160000 160000 aa bb cc vendor/submodule',
+      ...Array.from(
+        { length: 3 },
+        (_, i) => `u UU N... 100644 100644 100644 100644 aa bb cc conflict-${i}.ts`
+      )
+    ].join('\n')
+    gitExecFileAsyncMock.mockReset()
+    gitExecFileAsyncMock.mockResolvedValueOnce({ stdout: `${lines}\n` })
+
+    const result = await getStatus('/repo', { limit: 2 })
+
+    expect(result.didHitLimit).toBe(true)
+    expect(result.statusLength).toBe(3)
+    expect(result.entries).toHaveLength(2)
+    expect(result.entries.map((entry) => entry.path)).toEqual(['conflict-0.ts', 'conflict-1.ts'])
+    expect(result.entries.every((entry) => entry.conflictStatus === 'unresolved')).toBe(true)
+    expect(gitExecFileAsyncMock).toHaveBeenCalledTimes(1)
+  })
+
+  it('keeps an early conflict ahead of later ordinary rows at the cap', async () => {
+    readFileMock.mockResolvedValue('gitdir: /repo/.git/worktrees/feature\n')
+    existsSyncMock.mockReturnValue(true)
+    const lines = [
+      '? before.ts',
+      'u UU N... 100644 100644 100644 100644 aa bb cc conflict.ts',
+      '? after.ts'
+    ].join('\n')
+    gitExecFileAsyncMock.mockReset()
+    gitExecFileAsyncMock.mockResolvedValueOnce({ stdout: `${lines}\n` })
+
+    const result = await getStatus('/repo', { limit: 2 })
+
+    expect(result.didHitLimit).toBe(true)
+    expect(result.entries.map((entry) => entry.path)).toEqual(['before.ts', 'conflict.ts'])
+    expect(result.entries[1]).toMatchObject({
+      conflictKind: 'both_modified',
+      conflictStatus: 'unresolved'
+    })
   })
 
   it('does not flag didHitLimit for a normal repo under the limit', async () => {

@@ -1,5 +1,5 @@
 import React, { useCallback, useMemo, useState } from 'react'
-import { Check, FolderPlus, GitBranch, ListFilter, Moon, Server, Workflow } from 'lucide-react'
+import { CalendarClock, Check, FolderPlus, GitBranch, ListFilter, Moon, Server } from 'lucide-react'
 import { useAppStore } from '@/store'
 import { Button } from '@/components/ui/button'
 import {
@@ -200,7 +200,7 @@ const SidebarFilter = React.memo(function SidebarFilter({
           onChange={setHideDefaultBranchWorkspace}
         />
         <FilterToggleRow
-          icon={<Workflow className="size-3.5" />}
+          icon={<CalendarClock className="size-3.5" />}
           label={translate(
             'auto.components.sidebar.SidebarFilter.automationCreated',
             'Hide automation-created'

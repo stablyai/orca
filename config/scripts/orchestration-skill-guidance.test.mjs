@@ -3,10 +3,14 @@ import { join, resolve } from 'node:path'
 import { describe, expect, it } from 'vitest'
 
 const projectDir = resolve(import.meta.dirname, '../..')
-const skillPath = join(projectDir, 'skills', 'orchestration', 'SKILL.md')
+// Why: orchestration now ships a hybrid discovery stub, so its version-sensitive command
+// guidance lives in the authoritative guide source — assert that content there. The
+// installable stub projection is checked separately below.
+const guidePath = join(projectDir, 'skill-guides', 'orchestration.md')
+const stubPath = join(projectDir, 'skills', 'orchestration', 'SKILL.md')
 
 function readSkill() {
-  return readFileSync(skillPath, 'utf8')
+  return readFileSync(guidePath, 'utf8')
 }
 
 function getSection(markdown, heading) {
@@ -144,23 +148,22 @@ describe('orchestration skill guidance', () => {
       'Sidebar lineage and orchestration lifecycle are related but not identical.'
     )
     expect(workerTerminals).toContain(
-      'A same-worktree worker created with `orca terminal create --worktree active` may appear as a peer terminal/agent'
+      'A same-worktree worker may appear as a peer under that worktree in the sidebar'
+    )
+    expect(workerTerminals).toContain('while remaining a child dispatch in orchestration state')
+    expect(workerTerminals).toContain(
+      'only an actual child worktree creates visible parent/child worktree lineage'
     )
     expect(workerTerminals).toContain(
-      'even though it is a child dispatch in Orca orchestration state'
+      'Create a new worktree only when the user explicitly requests one or a concrete checkout or filesystem conflict makes sharing unsafe or impossible'
     )
     expect(workerTerminals).toContain(
-      'A visible parent/child worktree relationship requires creating a child worktree'
+      'Independent tasks, parallel execution, convenience, or a preference for separate checkouts are not isolation requirements.'
     )
     expect(workerTerminals).toContain(
-      'only when the task can safely run from an isolated checkout and does not need uncommitted artifacts from the current working tree'
+      'When a new worktree is allowed, use child lineage for isolated work that is stacked under or dependent on the active worktree'
     )
-    expect(workerTerminals).toContain(
-      'For supervised new-worktree workers, decide the desired Orca lineage before creation'
-    )
-    expect(workerTerminals).toContain(
-      'use `--no-parent` for independent repo-wide fixes, standalone feature work, or unrelated follow-up tasks'
-    )
+    expect(workerTerminals).toContain('use `--no-parent` when it is not stacked')
   })
 
   it('keeps review-only completions and named next-owner fixes in their lanes', () => {
@@ -213,7 +216,7 @@ describe('orchestration skill guidance', () => {
       /```bash\norca worktree create --name <task-name> --agent codex --json\n[\s\S]*?```/
     )?.[0]
 
-    expect(workerTerminals).toContain('Agent-first (required for ordinary agent workers)')
+    expect(workerTerminals).toContain('For an allowed new worktree, use agent-first:')
     expect(workerTerminals).toContain('fallback shell + agent pair')
     expect(workerTerminals).toContain(
       'Repo setup or default-terminal settings may still add tabs or splits'
@@ -233,5 +236,52 @@ describe('orchestration skill guidance', () => {
     expect(messaging).toContain('continue with the replacement only')
     expect(messaging).toContain('it does not remotely wake another terminal')
     expect(messaging).toContain('Use `orchestration dispatch --inject` to deliver a tracked task')
+  })
+})
+
+describe('orchestration install stub', () => {
+  it('points at the version-matched guide and preserves the safe resolver', () => {
+    const stub = readFileSync(stubPath, 'utf8')
+
+    expect(stub).toContain('discovery stub')
+    expect(stub).toContain('ORCA skills get orchestration')
+    // The safe CLI-resolution contract must survive in the stub, never a bare `orca`.
+    expect(stub).toContain('ORCA_CLI_COMMAND')
+    expect(stub).toContain('orca-dev')
+    expect(stub).toContain('orca-ide')
+    expect(stub).toContain('GNOME Orca screen reader')
+    expect(stub).not.toMatch(/^orca /mu)
+  })
+
+  it('does not tell agents to mutate orchestration state before loading the guide', () => {
+    const preGuide = readFileSync(stubPath, 'utf8').split('## Load the full guide')[0]
+
+    expect(preGuide).not.toContain('orca orchestration task-create')
+    expect(preGuide).not.toContain('orca orchestration dispatch')
+  })
+
+  it('gives older binaries a bounded fallback instead of a dead end', () => {
+    const stub = readFileSync(stubPath, 'utf8').replace(/\s+/gu, ' ')
+
+    expect(stub).toContain('explicitly reports that `skills get` is an unknown command')
+    expect(stub).toContain('do not invent commands')
+    expect(stub).toContain('ask the user rather than guessing')
+  })
+
+  it('drops the changing command reference from the installable file', () => {
+    const stub = readFileSync(stubPath, 'utf8')
+
+    // Version-sensitive command detail lives in the binary-served guide now, not here.
+    expect(stub).not.toContain('check --wait')
+    expect(stub).not.toContain('dispatch-show')
+    expect(stub.length).toBeLessThan(readFileSync(guidePath, 'utf8').length)
+  })
+
+  it('keeps the routing frontmatter identical to the guide', () => {
+    const frontmatter = (text) => /^---\n[\s\S]*?\n---\n/u.exec(text)[0]
+
+    expect(frontmatter(readFileSync(stubPath, 'utf8'))).toBe(
+      frontmatter(readFileSync(guidePath, 'utf8'))
+    )
   })
 })

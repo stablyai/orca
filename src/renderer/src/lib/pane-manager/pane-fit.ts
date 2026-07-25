@@ -1,6 +1,10 @@
 import type { ManagedPane, ManagedPaneInternal, ScrollState } from './pane-manager-types'
 import { getFitOverrideForPty } from './mobile-fit-overrides'
 import {
+  armPaneFitContinuationRetry,
+  clearPaneFitContinuationRetry
+} from './pane-fit-continuation-retry'
+import {
   captureTerminalStructuralScrollIntent,
   isTerminalStructuralScrollIntentCurrent,
   markTerminalPinnedViewport,
@@ -46,7 +50,27 @@ function getProposedDimensions(pane: ManagedPane): { cols: number; rows: number 
   }
 }
 
-function canMeasurePaneForFit(pane: ManagedPane): boolean {
+// Why: measure the element FitAddon fits (the xterm host), not the outer .pane —
+// a title/banner can shrink the inner fittable area while the outer stays put.
+// Round to whole pixels so sub-pixel jitter never reads as a resize.
+export function readFitClientSize(pane: ManagedPane): { width: number; height: number } | null {
+  const element = (pane as ManagedPaneInternal).xtermContainer ?? pane.container
+  const measure = element?.getBoundingClientRect
+  if (typeof measure !== 'function') {
+    return null
+  }
+  const rect = measure.call(element)
+  return { width: Math.round(rect.width), height: Math.round(rect.height) }
+}
+
+function recordPaneFitClientSize(pane: ManagedPane): void {
+  const size = readFitClientSize(pane)
+  if (size && size.width > 0 && size.height > 0) {
+    ;(pane as ManagedPaneInternal).lastFitClientSize = size
+  }
+}
+
+export function canMeasurePaneForFit(pane: ManagedPane): boolean {
   const measure = pane.container?.getBoundingClientRect
   if (typeof measure === 'function') {
     const rect = measure.call(pane.container)
@@ -163,11 +187,12 @@ function settlePendingSafeFitContinuation(
   operations.delete(operationKey)
   if (operations.size === 0) {
     pendingSafeFitContinuations.delete(pane)
+    clearPaneFitContinuationRetry(pane)
   }
   pending.resolve(completed)
 }
 
-function flushPendingSafeFitContinuations(pane: ManagedPane): void {
+export function flushPendingSafeFitContinuations(pane: ManagedPane): void {
   const operations = pendingSafeFitContinuations.get(pane)
   if (!operations) {
     return
@@ -189,14 +214,57 @@ function flushPendingSafeFitContinuations(pane: ManagedPane): void {
 export function safeFit(pane: ManagedPane): boolean {
   const completed = performSafeFit(pane)
   if (completed) {
+    // Why: baseline for the reveal fit to tell a real resize from a metric wobble.
+    recordPaneFitClientSize(pane)
     // Why: replay transactions may be waiting for renderer dimensions; any
     // successful ordinary fit is the event that makes their PTY grid authoritative.
     flushPendingSafeFitContinuations(pane)
+    clearPaneFitContinuationRetry(pane)
   }
   return completed
 }
 
+function pruneStaleSafeFitContinuations(pane: ManagedPane): void {
+  const operations = pendingSafeFitContinuations.get(pane)
+  if (!operations) {
+    return
+  }
+  for (const [operationKey, pending] of operations) {
+    if (!pending.shouldContinue()) {
+      settlePendingSafeFitContinuation(pane, operationKey, pending, false)
+    }
+  }
+}
+
+function failPendingSafeFitContinuations(pane: ManagedPane): void {
+  const operations = pendingSafeFitContinuations.get(pane)
+  if (!operations) {
+    return
+  }
+  for (const [operationKey, pending] of Array.from(operations.entries())) {
+    settlePendingSafeFitContinuation(pane, operationKey, pending, false)
+  }
+}
+
+function armSafeFitContinuationRetry(pane: ManagedPane): void {
+  armPaneFitContinuationRetry(pane, {
+    retry: () => {
+      pruneStaleSafeFitContinuations(pane)
+      if (!pendingSafeFitContinuations.get(pane)?.size) {
+        return true
+      }
+      return safeFit(pane)
+    },
+    onExhausted: () => {
+      // Why: a reveal transaction must degrade after its bounded layout wait;
+      // leaving completion pending forever blocks deferred output release.
+      failPendingSafeFitContinuations(pane)
+    }
+  })
+}
+
 export function cancelPendingSafeFitContinuations(pane: ManagedPane): void {
+  clearPaneFitContinuationRetry(pane)
   const operations = pendingSafeFitContinuations.get(pane)
   if (!operations) {
     return
@@ -213,7 +281,7 @@ export function safeFitAndThen(
   pane: ManagedPane,
   operationKey: string,
   continuation: () => void,
-  options: { shouldContinue?: () => boolean } = {}
+  options: { shouldContinue?: () => boolean; retryIfUnmeasurable?: boolean } = {}
 ): SafeFitContinuationHandle {
   const operations = pendingSafeFitContinuations.get(pane) ?? new Map()
   const replaced = operations.get(operationKey)
@@ -245,13 +313,17 @@ export function safeFitAndThen(
       `safe-fit-and-then:${operationKey}`,
       () => {
         if (pendingSafeFitContinuations.get(pane)?.get(operationKey) === pending) {
-          safeFit(pane)
+          if (!safeFit(pane) && options.retryIfUnmeasurable) {
+            armSafeFitContinuationRetry(pane)
+          }
         }
       }
     )
   ) {
     return { completion, cancel }
   }
-  safeFit(pane)
+  if (!safeFit(pane) && options.retryIfUnmeasurable) {
+    armSafeFitContinuationRetry(pane)
+  }
   return { completion, cancel }
 }

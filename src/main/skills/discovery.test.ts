@@ -45,6 +45,90 @@ describe('skill discovery', () => {
     expect(result.skills.find((skill) => skill.name === 'Docs')?.providers).toEqual(['claude'])
   })
 
+  it('discovers the enabled Claude plugin version applicable to the project cwd', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'orca-skills-'))
+    const home = join(root, 'home')
+    const project = join(root, 'project')
+    const cwd = join(project, 'worktree')
+    const userInstall = join(home, '.claude', 'plugins', 'cache', 'compound', '3.13.1')
+    const projectInstall = join(home, '.claude', 'plugins', 'cache', 'compound', '3.14.3')
+    const pluginId = 'compound-engineering@compound-engineering-plugin'
+    await mkdir(join(userInstall, 'skills', 'old-plan'), { recursive: true })
+    await mkdir(join(projectInstall, 'skills', 'ce-plan'), { recursive: true })
+    await mkdir(join(home, '.claude', 'plugins'), { recursive: true })
+    await mkdir(cwd, { recursive: true })
+    await writeFile(join(userInstall, 'skills', 'old-plan', 'SKILL.md'), '# old-plan')
+    await writeFile(
+      join(projectInstall, 'skills', 'ce-plan', 'SKILL.md'),
+      '---\nname: ce-plan\ndescription: Create structured plans.\n---\n'
+    )
+    await writeFile(
+      join(home, '.claude', 'plugins', 'installed_plugins.json'),
+      JSON.stringify({
+        plugins: {
+          [pluginId]: [
+            { scope: 'user', installPath: userInstall },
+            { scope: 'project', projectPath: project, installPath: projectInstall }
+          ]
+        }
+      })
+    )
+    await writeFile(
+      join(home, '.claude', 'settings.json'),
+      JSON.stringify({ enabledPlugins: { [pluginId]: true } })
+    )
+
+    const result = await discoverSkills({ homeDir: home, cwd, repos: [] })
+
+    expect(result.skills.map((skill) => skill.name)).toContain('ce-plan')
+    expect(result.skills.map((skill) => skill.name)).not.toContain('old-plan')
+    const pluginSource = result.sources.find(
+      (source) => source.path === join(projectInstall, 'skills')
+    )
+    expect(pluginSource).toMatchObject({ sourceKind: 'plugin', owner: 'claude', exists: true })
+  })
+
+  it('skips Claude plugin discovery when no explicit cwd targets the scan (Settings shape)', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'orca-skills-'))
+    const home = join(root, 'home')
+    const install = join(home, '.claude', 'plugins', 'cache', 'compound', '3.14.3')
+    const pluginId = 'compound-engineering@compound-engineering-plugin'
+    await mkdir(join(install, 'skills', 'ce-plan'), { recursive: true })
+    await writeFile(join(install, 'skills', 'ce-plan', 'SKILL.md'), '# ce-plan')
+    await writeFile(
+      join(home, '.claude', 'plugins', 'installed_plugins.json'),
+      JSON.stringify({ plugins: { [pluginId]: [{ scope: 'user', installPath: install }] } })
+    )
+    await writeFile(
+      join(home, '.claude', 'settings.json'),
+      JSON.stringify({ enabledPlugins: { [pluginId]: true } })
+    )
+
+    const result = await discoverSkills({ homeDir: home, repos: [], includeCwd: false })
+
+    expect(result.skills.map((skill) => skill.name)).not.toContain('ce-plan')
+    expect(result.sources.some((source) => source.id.startsWith('claude-plugin'))).toBe(false)
+  })
+
+  it('records every contributing root when symlinked roots dedup to one skill', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'orca-skills-'))
+    const home = join(root, 'home')
+    const codexSkills = join(home, '.codex', 'skills')
+    await mkdir(join(codexSkills, 'review'), { recursive: true })
+    await writeFile(join(codexSkills, 'review', 'SKILL.md'), '# review')
+    await mkdir(join(home, '.agents'), { recursive: true })
+    // Shared root is a symlink onto the Codex root: one canonical file, two roots.
+    await symlink(codexSkills, join(home, '.agents', 'skills'), 'dir')
+
+    const result = await discoverSkills({ homeDir: home, repos: [], includeCwd: false })
+
+    const reviews = result.skills.filter((skill) => skill.name === 'review')
+    expect(reviews).toHaveLength(1)
+    expect(reviews[0].rootPaths?.slice().sort()).toEqual(
+      [codexSkills, join(home, '.agents', 'skills')].sort()
+    )
+  })
+
   it('does not add SSH-backed repository paths to local scan roots', () => {
     const roots = buildSkillDiscoverySources({
       homeDir: '/home/test',

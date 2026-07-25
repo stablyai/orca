@@ -1,11 +1,20 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import {
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  rmSync,
+  symlinkSync,
+  writeFileSync
+} from 'node:fs'
 import { tmpdir } from 'node:os'
 import type * as Os from 'node:os'
 import { join } from 'node:path'
 import {
   computeTrustKey,
   computeTrustedHash,
+  getCodexExplicitHomeHookSourcePath,
   readHookTrustEntries,
   upsertHookTrustEntriesInContent,
   type CodexTrustEntry
@@ -97,7 +106,7 @@ function runtimeUserStopEntry(): CodexTrustEntry {
   // install() prepends the managed status hook on Stop, so the mirrored user
   // hook lands at groupIndex 1.
   return {
-    sourcePath: join(runtimeHomeDir(), 'hooks.json'),
+    sourcePath: getCodexExplicitHomeHookSourcePath(join(runtimeHomeDir(), 'hooks.json')),
     eventLabel: 'stop',
     groupIndex: 1,
     handlerIndex: 0,
@@ -121,6 +130,25 @@ function readSystemToml(): string {
 }
 
 describe('codex hook trust write-back promotion', () => {
+  it('mirrors default-home trust when the .codex directory is a symlink', () => {
+    const targetHome = join(tmpHome, 'dotfiles-codex')
+    mkdirSync(targetHome)
+    symlinkSync(targetHome, systemCodexDir(), process.platform === 'win32' ? 'junction' : 'dir')
+    writeSystemUserHook()
+    const systemEntry = systemUserStopEntry()
+    writeFileSync(
+      join(systemCodexDir(), 'config.toml'),
+      upsertHookTrustEntriesInContent('', [systemEntry])
+    )
+
+    expect(new CodexHookService().install().state).toBe('installed')
+
+    const runtimeTrust = readHookTrustEntries(join(runtimeHomeDir(), 'config.toml'))
+    expect(runtimeTrust.get(computeTrustKey(runtimeUserStopEntry()))?.trustedHash).toBe(
+      computeTrustedHash(systemEntry)
+    )
+  })
+
   it('keeps an in-Orca approval of a user hook across launches and promotes it to ~/.codex', () => {
     writeSystemUserHook()
     const service = new CodexHookService()

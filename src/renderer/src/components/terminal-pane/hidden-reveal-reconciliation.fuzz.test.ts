@@ -20,25 +20,11 @@ import {
   writeChunksToTerminal
 } from '../../../../shared/terminal-restore-parity-fixture'
 
-// Property fuzz for the hidden-reveal seq-reconciliation path in
-// pty-connection.ts. When a pane is hidden, main keeps metering PTY output as
-// seq'd chunks. On reveal the renderer applies a HeadlessEmulator snapshot
-// captured at seq S (paints everything <= S), then stitches the racing tail
-// (chunks straddling / after S) on top WITHOUT duplicating or losing a byte.
-// The byte arithmetic lives in two non-exported closures:
-//   - getChunkDataAfterSnapshot            (pty-connection.ts ~L4629): slices a
-//     pending chunk against the snapshot seq.
-//   - reconcileChunkAgainstRestoredSnapshot (pty-connection.ts ~L4660): dedups
-//     backlog, detects a restarted seq domain, and heals dropped-output gaps by
-//     forcing a fresh restore.
-// This suite mirrors those rules EXACTLY (each branch tagged with its source
-// line) and asserts the invariant they guarantee: for any reveal boundary,
-// snapshot(hidden prefix) + reconciled tail reproduces the same screen an
-// always-visible terminal shows for the full stream. A wrong slice = a garble.
+// Property fuzz for the hidden-reveal seq-reconciliation path in pty-connection.ts: a hidden pane's snapshot at seq S plus
+// the reconciled racing tail must reproduce the always-visible screen without duplicating or losing a byte. Mirrors the two
+// non-exported closures EXACTLY: getChunkDataAfterSnapshot (~L4629) and reconcileChunkAgainstRestoredSnapshot (~L4660).
 //
-// Runtime knobs:
-//   FUZZ_ITERATIONS=2000  deep/nightly (default 200, <60s with the fidelity suite)
-//   FUZZ_SEED=1234        re-run exactly one seed
+// Runtime knobs: FUZZ_ITERATIONS=2000 (default 200) deep/nightly; FUZZ_SEED=1234 re-run exactly one seed.
 
 const DEFAULT_ITERATIONS = 200
 const FIXED_SEED = readPositiveIntEnv('FUZZ_SEED')
@@ -55,10 +41,8 @@ const DIMS: readonly AgentTuiStreamDims[] = [
   { cols: 100, rows: 30 }
 ]
 
-/** A metered chunk exactly as main delivers to onData: text, the seq of the
- *  LAST raw byte, the raw (pre-OSC-strip) length, and delivery-domain markers.
- *  domain increments across a ptyId-exit seq restart (production clears the
- *  restored baseline at that boundary, so the tail writes verbatim). */
+/** A metered chunk as main delivers to onData: text, the seq of the LAST raw byte, the pre-OSC-strip length, and a
+ *  delivery domain that increments across a ptyId-exit seq restart (past which the tail writes verbatim). */
 type MeteredChunk = {
   data: string
   seq?: number
@@ -67,11 +51,8 @@ type MeteredChunk = {
   droppedOutput?: boolean
 }
 
-/** Mirror of getChunkDataAfterSnapshot (pty-connection.ts ~L4629): how much of
- *  a chunk in the SNAPSHOT'S seq domain survives once the snapshot at
- *  snapshotSeq has painted everything <= snapshotSeq. null = "cannot slice,
- *  force a fresh snapshot" (OSC stripping desynced raw offsets). Byte-identical
- *  to production; each return tagged with its branch. */
+/** Mirror of getChunkDataAfterSnapshot (pty-connection.ts ~L4629): how much of a snapshot-domain chunk survives once the
+ *  snapshot at snapshotSeq has painted; null = "cannot slice, force a fresh snapshot" (OSC stripping desynced raw offsets). */
 function chunkDataAfterSnapshot(
   chunk: MeteredChunk,
   snapshotSeq: number | undefined
@@ -95,23 +76,14 @@ function chunkDataAfterSnapshot(
 }
 
 type RevealResult = {
-  /** Full normal-buffer content (visible + scrollback, trailing blanks
-   *  trimmed). Viewport-independent: a byte lost or duplicated by reconciliation
-   *  changes this even when the visible viewport happens to line up. */
+  /** Full normal-buffer content (visible + scrollback, trailing blanks trimmed). Viewport-independent, so it catches a lost/duped byte even when the viewport lines up. */
   content: string[]
   rows: string[]
   styles: string[]
   cursor: { x: number; y: number }
-  /** True when the buffer scrolled (baseY > 0). The visible viewport's top
-   *  anchor after a snapshot restore vs continuous writing can differ by a row
-   *  or two purely from trailing-blank trimming — a snapshot-scrollback-depth
-   *  concern owned by the fidelity suite, not seq reconciliation — so styles and
-   *  cursor (viewport-relative) are only asserted on non-scrolled scenarios. */
+  /** True when the buffer scrolled (baseY > 0); styles/cursor are only asserted on non-scrolled scenarios (viewport anchor differs after a restore — a fidelity concern). */
   scrolled: boolean
-  /** True when the terminal ended on the alternate screen. Alt has no
-   *  scrollback and a fixed viewport, so its content is the visible rows and the
-   *  normal-buffer content comparison does not apply (the alt-screen restore
-   *  contract is scrollback-free by design — serializeHeadlessTerminalBuffer). */
+  /** True when the terminal ended on the alternate screen: alt has no scrollback, so the normal-buffer content comparison does not apply. */
   alternate: boolean
   forcedFreshRestore: boolean
   knownSerializeWrapBug: boolean
@@ -133,11 +105,8 @@ async function readScreen(
   }
 }
 
-/** The renderer's screen for a hide→reveal cycle. `revealIdx` is the delivery
- *  index at which the pane is revealed: chunks [0, revealIdx) were captured by
- *  the HeadlessEmulator snapshot; chunks [revealIdx, end) are the racing tail.
- *  The snapshot seq is the seq of the last hidden chunk in the snapshot's
- *  domain; the tail is stitched via the production slice/reconcile rules. */
+/** The renderer's screen for a hide→reveal cycle. `revealIdx` splits delivery: chunks [0, revealIdx) are captured by the
+ *  snapshot; chunks [revealIdx, end) are the racing tail stitched via the production slice/reconcile rules. */
 async function revealFromSnapshot(
   dims: AgentTuiStreamDims,
   chunks: MeteredChunk[],
@@ -149,8 +118,7 @@ async function revealFromSnapshot(
     // Snapshot source = every hidden chunk painted in order.
     const hiddenChunks = chunks.slice(0, revealIdx).map((c) => c.data)
     await writeChunksToTerminal(source.terminal, hiddenChunks)
-    // Snapshot seq = seq of the last hidden chunk that carried one (the seq the
-    // emulator would report). undefined when the hidden prefix was unmetered.
+    // Snapshot seq = seq of the last hidden metered chunk; undefined when the hidden prefix was unmetered.
     let snapshotSeq: number | undefined
     let snapshotDomain = 0
     for (let i = revealIdx - 1; i >= 0; i--) {
@@ -161,15 +129,12 @@ async function revealFromSnapshot(
       }
     }
     const snapshot = buildParityMainBufferSnapshot(source, snapshotSeq ?? 0, {
-      // Mirror of HeadlessEmulator's ingest tracker: the hidden stream's
-      // trailing incomplete escape rides the snapshot out-of-band (Bug E fix).
+      // The hidden stream's trailing incomplete escape rides the snapshot out-of-band (Bug E fix).
       pendingEscapeTail: extractPartialEscapeTail(hiddenChunks.join(''))
     })
     const alt = snapshot.alternateScreen
     const knownSerializeWrapBug = bufferHasSerializeHostileWrappedRow(source.terminal)
-    // Mirror of applyMainBufferSnapshot's write order: the pending escape tail
-    // is the FINAL replay write — any later ESC (e.g. the post-replay reset)
-    // would abort the dangling sequence before the racing tail completes it.
+    // The pending escape tail must be the FINAL replay write (mirrors applyMainBufferSnapshot); a later ESC would abort the dangling sequence.
     const preamble =
       alt && snapshot.scrollbackAnsi !== undefined
         ? `\x1b[?1049l\x1b[2J\x1b[3J\x1b[H${snapshot.scrollbackAnsi}${SNAPSHOT_REPLAY_PREAMBLE_ALT}`
@@ -183,10 +148,7 @@ async function revealFromSnapshot(
       ...(snapshot.pendingEscapeTailAnsi ? [snapshot.pendingEscapeTailAnsi] : [])
     ])
 
-    // Stitch the tail. A chunk in the snapshot's domain is sliced against the
-    // snapshot seq (drains the painted prefix); a chunk from a later domain
-    // (post-exit seq restart) writes verbatim — production clears the baseline
-    // at the ptyId-exit boundary, so no seq dedupe applies across domains.
+    // Stitch the tail: same-domain chunks slice against the snapshot seq; later-domain (post-exit-restart) chunks write verbatim (main clears the restored baseline at the ptyId-exit restart, so no cross-domain seq dedupe).
     let forcedFreshRestore = false
     for (let i = revealIdx; i < chunks.length; i++) {
       const chunk = chunks[i]!
@@ -196,9 +158,7 @@ async function revealFromSnapshot(
       }
       const sliced = chunkDataAfterSnapshot(chunk, snapshotSeq)
       if (sliced === null) {
-        // Production re-fetches a fresh snapshot here; a fresh snapshot of the
-        // full stream trivially matches the always-visible screen, so mark the
-        // scenario as a fresh-restore (excluded from the stitch comparison).
+        // Production re-fetches a fresh snapshot here; that trivially matches live, so exclude the scenario from the comparison.
         forcedFreshRestore = true
         continue
       }
@@ -232,11 +192,8 @@ async function alwaysVisible(
   }
 }
 
-/** Reference for the seq-reconciliation gate: a snapshot of the WHOLE stream
- *  (reveal at the very end, no racing tail). Sharing the snapshot machinery with
- *  revealFromSnapshot cancels out snapshot-fidelity gaps (Bug C cursor restore,
- *  Bug B bold loss — owned by the fidelity suite), so a diff against a mid-point
- *  reveal is attributable purely to the tail-stitch seq arithmetic. */
+/** Reference for the seq-reconciliation gate: a snapshot of the WHOLE stream (no racing tail). Sharing snapshot machinery with
+ *  revealFromSnapshot cancels out fidelity gaps (Bugs B/C), so a diff vs a mid-point reveal is purely tail-stitch arithmetic. */
 async function fullSnapshotReference(
   dims: AgentTuiStreamDims,
   chunks: MeteredChunk[]
@@ -263,19 +220,11 @@ const TAIL_WORDS = [
   '+142 -37',
   'diff --git'
 ] as const
-// Why no SGR 7 (inverse): inverse marks trailing BLANK cells with an
-// inverse-fg the serializer round-trips slightly differently depending on how
-// much of the buffer it captures — a serialize SGR-fidelity nuance (the Bug B
-// class) that has nothing to do with seq reconciliation. Keeping it out of the
-// tail keeps the styles gate a clean function of the byte-stitch.
+// No SGR 7 (inverse): it round-trips through the serializer inconsistently (Bug B class), unrelated to seq reconciliation.
 const TAIL_SGR = ['\x1b[0m', '\x1b[31m', '\x1b[1m', '\x1b[38;5;204m', '\x1b[22m'] as const
 
-/** Append-only racing tail: SGR runs + text + newlines only. No absolute/
- *  relative cursor motion, scroll regions, alt frames, or DECSC — so the tail
- *  paints wherever the cursor sits and its screen effect is a pure function of
- *  which bytes the seq-reconciliation applies. Terminal-state-loss garbles
- *  (Bugs C/D/E, scroll region) are pinned separately; this suite isolates the
- *  seq slice. */
+/** Append-only racing tail (SGR + text + newlines, no cursor motion) so its screen effect is a pure function of which bytes
+ *  the seq-reconciliation applies; terminal-state-loss garbles (Bugs C/D/E) are pinned separately. */
 function buildAppendOnlyTail(rng: () => number, lines: number): string {
   const out: string[] = []
   for (let i = 0; i < lines; i++) {
@@ -290,20 +239,11 @@ function buildAppendOnlyTail(rng: () => number, lines: number): string {
   return out.join('')
 }
 
-/** Builds a seeded metered stream with a random reveal boundary. A running seq
- *  counter tags the LAST byte of each chunk; at most ONE mid-stream restart
- *  bumps the domain and resets the counter low (a revived ptyId with a fresh
- *  main-side counter — production clears the restored baseline at that exit
- *  boundary, so the post-restart tail writes verbatim). Rare unmetered chunks
- *  (no seq) and droppedOutput markers model no-metering runtimes and pending-cap
- *  trims. Op counts are kept modest so most scenarios reach the full
- *  non-scrolled comparison (the tail-stitch invariant); scrolled scenarios fall
- *  back to the snapshot-depth-tolerant path (see the assertion loop). */
+/** Builds a seeded metered stream with a random reveal boundary: a running seq tags each chunk's LAST byte, and at most one mid-stream restart bumps the domain. */
 function buildScenario(seed: number): Scenario {
   const rng = mulberry32(seed)
   const dims = DIMS[Math.floor(rng() * DIMS.length)]!
-  // Hidden prefix: full agent-TUI churn (cursor motion, panels, alt frames,
-  // scroll regions, DECSC…) so the SNAPSHOT is taken over rich state.
+  // Hidden prefix: full agent-TUI churn so the snapshot is taken over rich terminal state.
   const prefixOps = buildAgentTuiStreamOps(rng, dims, {
     includeMouseModes: false,
     includeOscHyperlinks: false,
@@ -314,8 +254,7 @@ function buildScenario(seed: number): Scenario {
     minLen: 2,
     maxLen: 64
   })
-  // Racing tail: append-only content. Isolates the seq-reconciliation byte
-  // stitch from terminal-state-loss garbles (Bugs C/D/E — pinned separately).
+  // Racing tail: append-only, isolating the seq-stitch from terminal-state-loss garbles (Bugs C/D/E, pinned separately).
   const tailStream = buildAppendOnlyTail(rng, 2 + Math.floor(rng() * 5))
   const tailRaw = splitIntoRandomChunks(mulberry32(seed ^ 0x2545f491), tailStream, {
     minLen: 2,
@@ -326,8 +265,7 @@ function buildScenario(seed: number): Scenario {
   let seq = 100 + Math.floor(rng() * 50)
   let domain = 0
   let hasDropped = false
-  // At most one restart, placed inside the tail so the snapshot's own domain
-  // has a stable prefix — mirrors a single mid-session ptyId revival.
+  // At most one restart, inside the tail so the snapshot's domain has a stable prefix — mirrors a mid-session ptyId revival.
   const restartAt =
     rng() < 0.25 ? prefixRaw.length + Math.floor(rng() * Math.max(1, tailRaw.length)) : -1
   const allRaw = [...prefixRaw, ...tailRaw]
@@ -340,8 +278,7 @@ function buildScenario(seed: number): Scenario {
     const rawLength = data.length
     seq += rawLength
     const chunk: MeteredChunk = { data, seq, rawLength, domain }
-    // Rare unmetered / dropped markers, only in the tail (the prefix must meter
-    // so the snapshot carries a seq).
+    // Rare unmetered / dropped markers, only in the tail (the prefix must meter so the snapshot carries a seq).
     if (i >= prefixRaw.length && rng() < 0.05) {
       delete chunk.seq
       delete chunk.rawLength
@@ -353,11 +290,7 @@ function buildScenario(seed: number): Scenario {
     chunks.push(chunk)
   }
 
-  // Reveal at or after the prefix ends, so the racing tail is purely the
-  // append-only region — the snapshot captures all cursor-motion/scroll/alt
-  // state and the tail cannot depend on unserialized terminal state. Landing
-  // the reveal at various points INSIDE the append-only tail exercises the
-  // straddle and "snapshot seq inside the tail" seq-slice cases.
+  // Reveal at or after the prefix ends so the tail is purely append-only; the snapshot captures all rich terminal state.
   const tailSpan = Math.max(1, chunks.length - prefixRaw.length)
   const revealIdx = Math.min(chunks.length, prefixRaw.length + Math.floor(rng() * tailSpan))
   return { seed, dims, chunks, revealIdx, domains: domain + 1, hasDropped }
@@ -388,9 +321,7 @@ function formatFailure(s: Scenario, stage: string, expected: unknown, actual: un
 
 describe('hidden reveal seq-reconciliation fuzz', () => {
   it('is a byte-exact identity when the snapshot seq splits a straddling chunk', async () => {
-    // Pin the core invariant on a hand-built case so the property test cannot
-    // pass vacuously. rawLength === data.length so the straddle slices cleanly.
-    // Chunk 0 fully hidden; chunk 1 straddles the reveal; chunk 2 is the tail.
+    // Pin the core invariant on a hand-built case so the property test cannot pass vacuously.
     const dims = { cols: 40, rows: 6 }
     const c0 = 'red line one\r\n'
     const c1 = 'green straddle\r\n'
@@ -400,17 +331,14 @@ describe('hidden reveal seq-reconciliation fuzz', () => {
       { data: c1, seq: c0.length + c1.length, rawLength: c1.length, domain: 0 },
       { data: c2, seq: c0.length + c1.length + c2.length, rawLength: c2.length, domain: 0 }
     ]
-    // Reveal after chunk 1 (snapshot seq = end of c1); tail = c2. Also exercise
-    // the straddle by revealing at chunk 1 with a snapshot seq mid-c1 handled by
-    // chunkDataAfterSnapshot when c1 is in the tail — covered by revealIdx=1.
+    // Reveal after chunk 1 (snapshot seq = end of c1); tail = c2. revealIdx=1 below exercises the straddle case.
     const revealAfterC1 = await revealFromSnapshot(dims, chunks, 2)
     const control = await alwaysVisible(dims, chunks)
     expect(revealAfterC1.rows).toEqual(control.rows)
     expect(revealAfterC1.styles).toEqual(control.styles)
     expect(revealAfterC1.cursor).toEqual(control.cursor)
 
-    // Reveal at chunk 1: c0 hidden (snapshot seq = end of c0), c1+c2 are the
-    // tail. c1 is fully after the snapshot seq so it writes whole — identity.
+    // Reveal at chunk 1: c0 hidden, c1+c2 tail; c1 is fully after the snapshot seq so it writes whole — identity.
     const revealAtC1 = await revealFromSnapshot(dims, chunks, 1)
     expect(revealAtC1.rows).toEqual(control.rows)
     expect(revealAtC1.styles).toEqual(control.styles)
@@ -418,12 +346,7 @@ describe('hidden reveal seq-reconciliation fuzz', () => {
   })
 
   // ── Bug D regression guard: DECSC saved-cursor register across hide/reveal ──
-  // The serialized screen cannot carry the VT100 saved-cursor register, so a
-  // hidden DECSC followed by a post-reveal DECRC restored to home and the next
-  // writes clobbered the wrong cells. FIXED: the snapshot epilogue re-saves at
-  // the source's saved position before the final absolute CUP
-  // (serializeWithAbsoluteCursor + readSavedCursorRegister). Found by fuzz
-  // seed 3; mechanism in notes/garble-fuzz-divergences.md (Bug D).
+  // The serialized screen can't carry the saved-cursor register, so a hidden DECSC + post-reveal DECRC restored to home. Seed 3; notes/garble-fuzz-divergences.md.
   it('preserves the DECSC saved-cursor register across a hide/reveal boundary', async () => {
     const dims = { cols: 20, rows: 4 }
     // Hidden: write 'AB', DECSC saves cursor at r0c2, move to r3c9, write 'CD'.
@@ -448,13 +371,7 @@ describe('hidden reveal seq-reconciliation fuzz', () => {
   })
 
   // ── Bug E regression guard: snapshot boundary mid-escape-sequence ──
-  // A PTY read (one delivery record) can split an escape; the partial lives in
-  // the emulator's parser, not the serialized screen, so the racing tail's
-  // continuation rendered literal ('ABmCD'). FIXED: the emulator tracks the
-  // unparsed trailing partial (terminal-partial-escape-tail.ts) and the
-  // snapshot ships it out-of-band (pendingEscapeTailAnsi); the reveal replay
-  // re-arms it as the final write. Found by fuzz seed 4; mechanism in
-  // notes/garble-fuzz-divergences.md (Bug E).
+  // A split escape's partial lives in the parser, not the serialized screen; the snapshot ships it out-of-band. Seed 4; notes/garble-fuzz-divergences.md.
   it('completes an escape sequence split across the hide/reveal boundary', async () => {
     const dims = { cols: 20, rows: 3 }
     // Hidden prefix ends mid-escape: 'AB' then ESC[3 (no final byte).
@@ -475,16 +392,8 @@ describe('hidden reveal seq-reconciliation fuzz', () => {
     for (let i = 0; i < ITERATIONS; i++) {
       const seed = FIXED_SEED ?? 1 + i
       const scenario = buildScenario(seed)
-      // Bug E (snapshot boundary mid-escape-sequence) is no longer tolerated:
-      // the snapshot now carries the trailing partial escape out-of-band and
-      // the reveal replay re-arms it last, so these scenarios must compare
-      // clean like any other — a regression fails the corpus loudly.
-      // Primary control: a snapshot of the WHOLE stream. Sharing the snapshot
-      // machinery isolates the seq-reconciliation tail-stitch from
-      // snapshot-fidelity gaps (fidelity suite's Bugs B/C). If snapshot-at-S +
-      // tail differs from snapshot-of-everything, a byte was lost/duped/mis-
-      // sliced. Also compare against always-visible where the two agree, to
-      // catch a tail that diverges from live output.
+      // Bug E (snapshot mid-escape) is no longer tolerated — a regression must fail the corpus loudly.
+      // Primary control is a full-stream snapshot: sharing snapshot machinery isolates the tail-stitch from fidelity gaps (Bugs B/C).
       const [reveal, reference, live] = await Promise.all([
         revealFromSnapshot(scenario.dims, scenario.chunks, scenario.revealIdx),
         fullSnapshotReference(scenario.dims, scenario.chunks),
@@ -503,8 +412,7 @@ describe('hidden reveal seq-reconciliation fuzz', () => {
           formatFailure(scenario, 'alt-screen-state', reference.alternate, reveal.alternate)
         )
       }
-      // Scrolled scenarios: top-row survival is a snapshot-depth question
-      // (fidelity suite), not seq reconciliation.
+      // Scrolled scenarios: top-row survival is a snapshot-depth question (fidelity suite), not seq reconciliation.
       if (reveal.scrolled || reference.scrolled) {
         statsSkippedScrolled += 1
         continue
@@ -525,9 +433,7 @@ describe('hidden reveal seq-reconciliation fuzz', () => {
       if (JSON.stringify(reveal.cursor) !== JSON.stringify(reference.cursor)) {
         expect.fail(formatFailure(scenario, 'tail-stitch-cursor', reference.cursor, reveal.cursor))
       }
-      // Stronger gate: when a full-stream SNAPSHOT already matches the
-      // always-visible LIVE screen (no fidelity gap in play), the mid-point
-      // reveal must match live too — a true end-to-end garble check.
+      // When a full-stream snapshot already matches the live screen (no fidelity gap), the mid-point reveal must match live too.
       if (
         !live.scrolled &&
         live.alternate === reference.alternate &&
@@ -546,8 +452,7 @@ describe('hidden reveal seq-reconciliation fuzz', () => {
         }
       }
     }
-    // Guard against a degenerate corpus that skips its way to green: a healthy
-    // fraction of scenarios must reach the full non-scrolled comparison.
+    // Guard against a degenerate corpus that skips its way to green.
     if (FIXED_SEED === null) {
       expect(statsCompared).toBeGreaterThan(ITERATIONS * 0.2)
     }

@@ -18,7 +18,9 @@ export default defineConfig({
     include: [
       'src/**/*.test.ts',
       'src/**/*.test.tsx',
+      'config/scripts/**/*.test.ts',
       'config/scripts/**/*.test.mjs',
+      'tools/**/*.test.mjs',
       'tests/e2e/**/*.unit.test.ts',
       // Collab canvas mobile offline engine + host-panel route pure units (E1/E2)
       'mobile/src/collab-canvas/**/*.test.ts'

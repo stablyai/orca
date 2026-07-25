@@ -25,7 +25,7 @@ export type SkillFreshnessGroupModel = {
   locations: SkillLocationRow[]
 }
 
-function locationChip(installation: SkillFreshnessInstallation): SkillLocationChip | null {
+export function locationChip(installation: SkillFreshnessInstallation): SkillLocationChip | null {
   // Why: a location's own status wins over its topology — "the contents don't
   // match" is more useful to the user than "it's a duplicate".
   if (installation.status === 'unrecognized') {

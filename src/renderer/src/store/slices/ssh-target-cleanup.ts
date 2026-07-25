@@ -11,6 +11,8 @@ export function sshConnectionStatesEqual(
     a?.status === b.status &&
     a?.error === b.error &&
     a?.reconnectAttempt === b.reconnectAttempt &&
+    a?.connectionGeneration === b.connectionGeneration &&
+    a?.supportsFolderDownload === b.supportsFolderDownload &&
     a?.remotePlatform === b.remotePlatform
   )
 }
@@ -47,13 +49,35 @@ function isSshTargetSessionId(sessionId: string, targetId: string): boolean {
   return parseAppSshPtyId(sessionId)?.connectionId === targetId
 }
 
-function shouldRemoveDeferredSshSession(
+// Why: a per-tab session map entry belongs to the removed target if the tab is
+// one of the target's, or the session id is an SSH pty id scoped to it. Shared
+// by the deferred-session and pending-reconnect cleanups so both drop the same
+// dead entries (an uncleared entry would keep a dead tab alive in the orphan
+// sweep, which now reads these maps as liveness — #9911).
+function isRemovedSshTargetTabSession(
   tabId: string,
   sessionId: string,
   targetId: string,
   targetTabIds: Set<string>
 ): boolean {
   return targetTabIds.has(tabId) || isSshTargetSessionId(sessionId, targetId)
+}
+
+function omitRemovedSshTargetTabSessions(
+  sessions: Record<string, string>,
+  targetId: string,
+  targetTabIds: Set<string>
+): { next: Record<string, string>; removed: boolean } {
+  const next: Record<string, string> = {}
+  let removed = false
+  for (const [tabId, sessionId] of Object.entries(sessions)) {
+    if (isRemovedSshTargetTabSession(tabId, sessionId, targetId, targetTabIds)) {
+      removed = true
+      continue
+    }
+    next[tabId] = sessionId
+  }
+  return { next, removed }
 }
 
 function clearSshTargetTabPtyState(
@@ -129,17 +153,23 @@ export function buildRemovedSshTargetCleanupPatch(
 ): Partial<AppState> | null {
   const targetTabIds = collectSshTargetTerminalTabIds(state, targetId)
   const tabPtyState = clearSshTargetTabPtyState(state, targetId, targetTabIds)
-  const nextDeferredSessions: Record<string, string> = {}
-  let removedDeferredSession = false
-  for (const [tabId, sessionId] of Object.entries(state.deferredSshSessionIdsByTabId)) {
-    if (shouldRemoveDeferredSshSession(tabId, sessionId, targetId, targetTabIds)) {
-      removedDeferredSession = true
-      continue
-    }
-    nextDeferredSessions[tabId] = sessionId
-  }
+  const { next: nextDeferredSessions, removed: removedDeferredSession } =
+    omitRemovedSshTargetTabSessions(state.deferredSshSessionIdsByTabId, targetId, targetTabIds)
+  // Why: pending-reconnect holds each tab's pre-restart session until reconnect
+  // drains it; if the target is removed first the entry is dead but the orphan
+  // sweep now reads it as liveness, so clear it here too (#9911).
+  const { next: nextPendingReconnect, removed: removedPendingReconnect } =
+    omitRemovedSshTargetTabSessions(state.pendingReconnectPtyIdByTabId, targetId, targetTabIds)
 
   const nextDeferredTargets = state.deferredSshReconnectTargets.filter((id) => id !== targetId)
+  const nextTransientClearedConnections = {
+    ...state.transientClearedAgentStatusConnectionIds
+  }
+  const removedTransientClearBlock = Object.prototype.hasOwnProperty.call(
+    nextTransientClearedConnections,
+    targetId
+  )
+  delete nextTransientClearedConnections[targetId]
   const nextConnectionStates = new Map(state.sshConnectionStates)
   const removedConnectionState = nextConnectionStates.delete(targetId)
   const nextLabels = new Map(state.sshTargetLabels)
@@ -169,6 +199,7 @@ export function buildRemovedSshTargetCleanupPatch(
   const removedDeferredTarget =
     nextDeferredTargets.length !== state.deferredSshReconnectTargets.length
   const changed =
+    removedTransientClearBlock ||
     removedConnectionState ||
     removedLabel ||
     removedHydrated ||
@@ -178,12 +209,16 @@ export function buildRemovedSshTargetCleanupPatch(
     tabPtyState.changed ||
     removedCredentialRequest ||
     removedDeferredTarget ||
-    removedDeferredSession
+    removedDeferredSession ||
+    removedPendingReconnect
   if (!changed) {
     return null
   }
 
   return {
+    ...(removedTransientClearBlock
+      ? { transientClearedAgentStatusConnectionIds: nextTransientClearedConnections }
+      : {}),
     ...(removedConnectionState ? { sshConnectionStates: nextConnectionStates } : {}),
     ...(removedLabel ? { sshTargetLabels: nextLabels } : {}),
     ...(removedHydrated ? { remoteWorkspaceHydratedTargetIds: nextHydrated } : {}),
@@ -201,6 +236,7 @@ export function buildRemovedSshTargetCleanupPatch(
       : {}),
     ...(removedCredentialRequest ? { sshCredentialQueue: nextCredentialQueue } : {}),
     ...(removedDeferredTarget ? { deferredSshReconnectTargets: nextDeferredTargets } : {}),
-    ...(removedDeferredSession ? { deferredSshSessionIdsByTabId: nextDeferredSessions } : {})
+    ...(removedDeferredSession ? { deferredSshSessionIdsByTabId: nextDeferredSessions } : {}),
+    ...(removedPendingReconnect ? { pendingReconnectPtyIdByTabId: nextPendingReconnect } : {})
   }
 }

@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import { Pressable, StyleSheet, Text, View } from 'react-native'
 import { Volume2, VolumeX } from 'lucide-react-native'
 import { MobileNativeChatView, type MobileNativeChatInputLockReason } from './MobileNativeChatView'
+import type { MobileNativeChatImageAttachments } from './use-mobile-native-chat-image-attachments'
 import type { MobileNativeChatController } from './use-mobile-native-chat-controller'
 import { nativeChatMessageText } from './mobile-native-chat-message-text'
 import { useMeshSpeak } from '../voice/use-mesh-speak'
@@ -9,8 +10,9 @@ import { colors, radii, spacing, typography } from '../theme/mobile-theme'
 
 type Props = {
   controller: MobileNativeChatController
-  onAttachImage: () => void
-  isAttaching: boolean
+  /** Native-chat image attachments: picking adds a composer chip, and sending
+   *  rides the pending images along with the message text (desktop parity). */
+  images: MobileNativeChatImageAttachments
   onMicPress: () => void
   micActive: boolean
   dictationMode: 'toggle' | 'hold'
@@ -25,8 +27,7 @@ type Props = {
  *  view toggles while the native surface owns the visible composer. */
 export function MobileNativeChatOverlay({
   controller,
-  onAttachImage,
-  isAttaching,
+  images,
   onMicPress,
   micActive,
   dictationMode,
@@ -87,12 +88,14 @@ export function MobileNativeChatOverlay({
         hasMore={session.hasMore}
         loadingEarlier={session.loadingEarlier}
         onLoadEarlier={session.loadEarlier}
-        onSend={controller.handleNativeChatSend}
+        onSend={images.sendNativeChat}
         pending={controller.chatPending}
         composerText={controller.chatComposerText}
         onComposerTextChange={controller.setChatComposerText}
-        onAttachImage={onAttachImage}
-        isAttaching={isAttaching}
+        onAttachImage={() => void images.attachImage('library')}
+        attachments={images.attachments}
+        onRemoveAttachment={images.removeAttachment}
+        isAttaching={images.isAttaching}
         onMicPress={onMicPress}
         micActive={micActive}
         dictationMode={dictationMode}

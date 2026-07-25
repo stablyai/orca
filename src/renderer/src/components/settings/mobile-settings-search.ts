@@ -21,6 +21,10 @@ export const getMobileOverviewSearchEntry = createLocalizedCatalog(
         'phone'
       ),
       ...translateSearchKeyword(
+        'auto.components.settings.mobile.settings.search.5d5af8e041',
+        'iphone'
+      ),
+      ...translateSearchKeyword(
         'auto.components.settings.mobile.settings.search.cf2c93b479',
         'pair'
       ),
@@ -36,6 +40,10 @@ export const getMobileOverviewSearchEntry = createLocalizedCatalog(
       ...translateSearchKeyword(
         'auto.components.settings.mobile.settings.search.7e801801ac',
         'remote'
+      ),
+      ...translateSearchKeyword(
+        'auto.components.settings.mobile.settings.search.e4f4daea0e',
+        'relay'
       ),
       ...translateSearchKeyword(
         'auto.components.settings.mobile.settings.search.a7eececc1d',

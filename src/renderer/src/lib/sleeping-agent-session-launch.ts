@@ -81,6 +81,9 @@ export function launchSleepingAgentSession(
         ? launchConfig.agentEnv
         : resolveTuiAgentLaunchEnv(record.agent, state.settings?.agentDefaultEnv),
     ...(launchConfig?.agentCommand ? { agentCommand: launchConfig.agentCommand } : {}),
+    ...(launchConfig?.ompResumeFilePath
+      ? { ompResumeFilePath: launchConfig.ompResumeFilePath }
+      : {}),
     platform: getResumeLaunchPlatform(record.worktreeId)
   })
   if (!startupPlan) {
@@ -103,6 +106,7 @@ export function launchSleepingAgentSession(
     launchConfig: startupPlan.launchConfig,
     resumeProviderSession: record.providerSession,
     launchAgent: record.agent,
+    ...(launchConfig ? { agentArgsOverride: launchConfig.agentArgs } : {}),
     ...(startupPlan.startupCommandDelivery
       ? { startupCommandDelivery: startupPlan.startupCommandDelivery }
       : {}),

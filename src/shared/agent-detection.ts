@@ -32,6 +32,7 @@ export { AGENT_NAMES, titleHasAgentName } from './agent-name-token-match'
 export {
   extractAllOscTitles,
   extractLastOscTitle,
-  MAX_OSC_TITLE_CHARS
+  MAX_OSC_TITLE_CHARS,
+  MAX_OSC_TITLES_PER_CHUNK
 } from './osc-title-extraction'
 export { isShellProcess } from './shell-process-detection'
