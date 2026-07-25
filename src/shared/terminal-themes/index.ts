@@ -22,7 +22,8 @@ export const BUILTIN_TERMINAL_THEME_NAMES: readonly string[] =
   Object.keys(TERMINAL_THEME_CATALOG).sort()
 
 export function getBuiltinTerminalThemePalette(name: string): TerminalColorOverrides | null {
-  return TERMINAL_THEME_CATALOG[name] ?? null
+  // Own-property only — `toString`/`constructor`/`__proto__` must not resolve to Object.prototype.
+  return Object.hasOwn(TERMINAL_THEME_CATALOG, name) ? TERMINAL_THEME_CATALOG[name] : null
 }
 
 export type { TerminalThemeMap } from './types'

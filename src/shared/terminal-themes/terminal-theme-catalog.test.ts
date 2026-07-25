@@ -58,6 +58,14 @@ describe('built-in terminal theme catalog', () => {
     expect(getBuiltinTerminalThemePalette('No Such Terminal Theme')).toBeNull()
   })
 
+  // Persisted selections and user-typed names must never resolve through Object.prototype.
+  it('rejects prototype property names as theme ids', () => {
+    for (const name of ['__proto__', 'constructor', 'toString', 'hasOwnProperty', 'valueOf']) {
+      expect(getBuiltinTerminalThemePalette(name), name).toBeNull()
+      expect(Object.hasOwn(TERMINAL_THEME_CATALOG, name), name).toBe(false)
+    }
+  })
+
   it('defines exactly the mobile-whitelisted keys in every palette', () => {
     for (const name of BUILTIN_TERMINAL_THEME_NAMES) {
       expect(Object.keys(TERMINAL_THEME_CATALOG[name]).sort(), name).toEqual(
