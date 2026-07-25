@@ -2,6 +2,7 @@ import type React from 'react'
 import { Loader2, RefreshCw } from 'lucide-react'
 import { useEffect } from 'react'
 import { Button } from '@/components/ui/button'
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { useAppStore } from '@/store'
 import { translate } from '@/i18n/i18n'
 import { getUpdateCheckClickOptions, getUpdateCheckHint } from '@/lib/update-check-click-options'
@@ -103,33 +104,39 @@ export function GeneralRemoteServerUpdates(): React.JSX.Element | null {
         </p>
       </div>
       <div>
-        <Button
-          type="button"
-          variant="outline"
-          size="sm"
-          className="gap-2"
-          title={updateCheckHint}
-          disabled={checking || running}
-          onClick={(event) => {
-            setDialogOpen(true)
-            void refresh(getUpdateCheckClickOptions(event))
-          }}
-        >
-          {checking || running ? (
-            <Loader2 className="size-3.5 animate-spin" />
-          ) : (
-            <RefreshCw className="size-3.5" />
-          )}
-          {running
-            ? translate(
-                'auto.components.settings.GeneralRemoteServerUpdates.updating',
-                'Updating servers…'
-              )
-            : translate(
-                'auto.components.settings.GeneralRemoteServerUpdates.reviewServers',
-                'Check for Server Updates'
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              className="gap-2"
+              disabled={checking || running}
+              onClick={(event) => {
+                setDialogOpen(true)
+                void refresh(getUpdateCheckClickOptions(event))
+              }}
+            >
+              {checking || running ? (
+                <Loader2 className="size-3.5 animate-spin" />
+              ) : (
+                <RefreshCw className="size-3.5" />
               )}
-        </Button>
+              {running
+                ? translate(
+                    'auto.components.settings.GeneralRemoteServerUpdates.updating',
+                    'Updating servers…'
+                  )
+                : translate(
+                    'auto.components.settings.GeneralRemoteServerUpdates.reviewServers',
+                    'Check for Server Updates'
+                  )}
+            </Button>
+          </TooltipTrigger>
+          <TooltipContent side="top" sideOffset={4}>
+            {updateCheckHint}
+          </TooltipContent>
+        </Tooltip>
       </div>
       <p className="text-xs text-muted-foreground">{summary}</p>
     </SearchableSetting>

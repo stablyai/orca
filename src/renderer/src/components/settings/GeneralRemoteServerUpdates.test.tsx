@@ -3,6 +3,7 @@
 import { act } from 'react'
 import { createRoot } from 'react-dom/client'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { TooltipProvider } from '@/components/ui/tooltip'
 import { GeneralRemoteServerUpdates } from './GeneralRemoteServerUpdates'
 
 const storeMock = vi.hoisted(() => ({
@@ -38,7 +39,14 @@ describe('GeneralRemoteServerUpdates', () => {
   it('matches the local update check action and forwards modifier options', async () => {
     const container = document.createElement('div')
     const root = createRoot(container)
-    await act(async () => root.render(<GeneralRemoteServerUpdates />))
+    // Why: the check button's channel hint renders through the app-level Tooltip provider.
+    await act(async () =>
+      root.render(
+        <TooltipProvider>
+          <GeneralRemoteServerUpdates />
+        </TooltipProvider>
+      )
+    )
     storeMock.state.refreshRemoteServerUpdates.mockClear()
 
     const button = container.querySelector('button')

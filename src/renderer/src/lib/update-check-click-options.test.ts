@@ -1,4 +1,9 @@
 import { describe, expect, it } from 'vitest'
+import en from '../i18n/locales/en.json'
+import es from '../i18n/locales/es.json'
+import ja from '../i18n/locales/ja.json'
+import ko from '../i18n/locales/ko.json'
+import zh from '../i18n/locales/zh.json'
 import { getUpdateCheckClickOptions, getUpdateCheckHint } from './update-check-click-options'
 
 function clickEvent(
@@ -62,5 +67,27 @@ describe('getUpdateCheckClickOptions', () => {
     expect(getUpdateCheckHint(false)).toBe(
       'Shift+click checks the latest RC; Ctrl+click checks the latest perf build.'
     )
+  })
+
+  it('keeps the hint localized in every catalog', () => {
+    const english = en.auto.lib.updateCheckClickOptions.hint
+    expect(english).toContain('{{value0}}')
+    expect(english).toContain('{{value1}}')
+    for (const [code, catalog] of Object.entries({ es, ja, ko, zh })) {
+      const localized = catalog.auto.lib.updateCheckClickOptions.hint
+      expect(localized, code).toContain('{{value0}}')
+      expect(localized, code).toContain('{{value1}}')
+      expect(localized, code).not.toBe(english)
+    }
+  })
+
+  it('keeps the macOS local-build hint localized in every catalog', () => {
+    const english = en.auto.lib.updateCheckClickOptions.localBuildHint
+    expect(english).toContain('{{value0}}')
+    for (const [code, catalog] of Object.entries({ es, ja, ko, zh })) {
+      const localized = catalog.auto.lib.updateCheckClickOptions.localBuildHint
+      expect(localized, code).toContain('{{value0}}')
+      expect(localized, code).not.toBe(english)
+    }
   })
 })

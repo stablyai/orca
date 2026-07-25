@@ -568,6 +568,10 @@
           }
         }
       },
+      "updateCheckClickOptions": {
+        "hint": "{{value0}}+click checks the latest RC; {{value1}}+click checks the latest perf build.",
+        "localBuildHint": "{{value0}}+click chooses a local macOS build."
+      },
       "folderWorkspacePathStatus": {
         "title": {
           "missing": "Folder not found",

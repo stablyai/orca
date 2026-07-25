@@ -37,6 +37,7 @@ import { Button } from '../ui/button'
 import { Input } from '../ui/input'
 import { Label } from '../ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../ui/select'
+import { Tooltip, TooltipContent, TooltipTrigger } from '../ui/tooltip'
 import { SearchableSetting } from './SearchableSetting'
 import {
   Dialog,
@@ -752,33 +753,39 @@ export function RuntimeEnvironmentsPane({
           </div>
           <div className="flex shrink-0 items-center gap-2">
             {environments.length > 0 ? (
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                className="gap-1.5"
-                title={updateCheckHint}
-                onClick={(event) => {
-                  setRemoteServerUpdateDialogOpen(true)
-                  void refreshRemoteServerUpdates(getUpdateCheckClickOptions(event))
-                }}
-                disabled={remoteServerUpdatesChecking && remoteServerUpdates.size === 0}
-              >
-                {remoteServerUpdatesChecking || remoteServerUpdatesRunning ? (
-                  <Loader2 className="animate-spin" />
-                ) : (
-                  <RefreshCw />
-                )}
-                {remoteServerUpdatesRunning
-                  ? translate(
-                      'auto.components.settings.RuntimeEnvironmentsPane.updatingServers',
-                      'Updating servers…'
-                    )
-                  : translate(
-                      'auto.components.settings.RuntimeEnvironmentsPane.reviewServerUpdates',
-                      'Check for Server Updates'
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    className="gap-1.5"
+                    onClick={(event) => {
+                      setRemoteServerUpdateDialogOpen(true)
+                      void refreshRemoteServerUpdates(getUpdateCheckClickOptions(event))
+                    }}
+                    disabled={remoteServerUpdatesChecking && remoteServerUpdates.size === 0}
+                  >
+                    {remoteServerUpdatesChecking || remoteServerUpdatesRunning ? (
+                      <Loader2 className="animate-spin" />
+                    ) : (
+                      <RefreshCw />
                     )}
-              </Button>
+                    {remoteServerUpdatesRunning
+                      ? translate(
+                          'auto.components.settings.RuntimeEnvironmentsPane.updatingServers',
+                          'Updating servers…'
+                        )
+                      : translate(
+                          'auto.components.settings.RuntimeEnvironmentsPane.reviewServerUpdates',
+                          'Check for Server Updates'
+                        )}
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent side="top" sideOffset={4}>
+                  {updateCheckHint}
+                </TooltipContent>
+              </Tooltip>
             ) : null}
             {addServerFormOpen ? null : (
               <Button

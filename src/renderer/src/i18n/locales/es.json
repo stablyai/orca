@@ -545,6 +545,10 @@
           }
         }
       },
+      "updateCheckClickOptions": {
+        "hint": "{{value0}}+clic busca la última RC; {{value1}}+clic busca la última compilación perf.",
+        "localBuildHint": "{{value0}}+clic elige una compilación local de macOS."
+      },
       "folderWorkspacePathStatus": {
         "title": {
           "missing": "Carpeta no encontrada",

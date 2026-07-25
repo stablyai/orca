@@ -545,6 +545,10 @@
           }
         }
       },
+      "updateCheckClickOptions": {
+        "hint": "{{value0}}+单击检查最新 RC；{{value1}}+单击检查最新 perf 构建。",
+        "localBuildHint": "{{value0}}+单击选择本地 macOS 构建。"
+      },
       "folderWorkspacePathStatus": {
         "title": {
           "missing": "未找到文件夹",

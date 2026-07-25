@@ -317,22 +317,31 @@ export function SidebarSettingsHelpMenu(): React.JSX.Element {
               <ExternalLink className="ml-auto size-3 text-muted-foreground" />
             </DropdownMenuItem>
             <DropdownMenuSeparator />
-            <DropdownMenuItem
-              disabled={updateStatus.state === 'checking' || updateStatus.state === 'downloading'}
-              onPointerDown={handleCheckForUpdatesPointerDown}
-              onSelect={handleCheckForUpdates}
-              title={updateCheckHint}
-            >
-              {updateStatus.state === 'checking' ? (
-                <Loader2 className="size-3.5 animate-spin" />
-              ) : (
-                <RefreshCw className="size-3.5" />
-              )}
-              {translate(
-                'auto.components.sidebar.SidebarSettingsHelpMenu.29c56f30ee',
-                'Check for Updates'
-              )}
-            </DropdownMenuItem>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <DropdownMenuItem
+                  disabled={
+                    updateStatus.state === 'checking' || updateStatus.state === 'downloading'
+                  }
+                  onPointerDown={handleCheckForUpdatesPointerDown}
+                  onSelect={handleCheckForUpdates}
+                >
+                  {updateStatus.state === 'checking' ? (
+                    <Loader2 className="size-3.5 animate-spin" />
+                  ) : (
+                    <RefreshCw className="size-3.5" />
+                  )}
+                  {translate(
+                    'auto.components.sidebar.SidebarSettingsHelpMenu.29c56f30ee',
+                    'Check for Updates'
+                  )}
+                </DropdownMenuItem>
+              </TooltipTrigger>
+              {/* Why: side="right" keeps the hint clear of the menu's own items. */}
+              <TooltipContent side="right" sideOffset={8}>
+                {updateCheckHint}
+              </TooltipContent>
+            </Tooltip>
             {showAdminOptions ? (
               <>
                 <DropdownMenuSeparator />

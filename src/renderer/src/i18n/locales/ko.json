@@ -545,6 +545,10 @@
           }
         }
       },
+      "updateCheckClickOptions": {
+        "hint": "{{value0}}+클릭으로 최신 RC를, {{value1}}+클릭으로 최신 perf 빌드를 확인합니다.",
+        "localBuildHint": "{{value0}}+클릭으로 로컬 macOS 빌드를 선택합니다."
+      },
       "folderWorkspacePathStatus": {
         "title": {
           "missing": "폴더를 찾을 수 없습니다",
