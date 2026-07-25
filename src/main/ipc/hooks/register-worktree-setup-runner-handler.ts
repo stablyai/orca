@@ -26,6 +26,17 @@ export function registerWorktreeSetupRunnerHandler(context: WorktreeIpcContext):
       if (isFolderRepo(repo)) {
         return { status: 'ok', setup: null, reason: 'folder-repo' }
       }
+      // getEffectiveHooks and createSetupRunnerScript are local-FS only.
+      // SSH worktrees need the remote setup path before a runner can be written.
+      if (repo.connectionId) {
+        return {
+          status: 'error',
+          setup: null,
+          reason: 'runner-failed',
+          message:
+            'Run setup script is not yet supported for remote/SSH worktrees. Create a new worktree to run setup on that host, or open a local clone.'
+        }
+      }
 
       let setupScript: string | undefined
       try {
