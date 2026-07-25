@@ -1,5 +1,13 @@
-import { describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it } from 'vitest'
 import { planCommitMessageGeneration } from './commit-message-plan'
+import {
+  _resetDetectedTuiAgentExecutables,
+  setDetectedTuiAgentExecutables
+} from './detected-agent-executables'
+
+afterEach(() => {
+  _resetDetectedTuiAgentExecutables()
+})
 
 describe('planCommitMessageGeneration', () => {
   it('plans Claude non-interactive generation with the prompt on stdin only', () => {
@@ -139,6 +147,33 @@ describe('planCommitMessageGeneration', () => {
       plan: {
         binary: 'cursor-agent',
         args: [
+          '--print',
+          '--mode',
+          'ask',
+          '--trust',
+          '--output-format',
+          'text',
+          '--model',
+          'gpt-5.2',
+          'PROMPT'
+        ],
+        stdinPayload: null,
+        label: 'Cursor'
+      }
+    })
+  })
+
+  it('spawns Cursor through the `agent` subcommand when only the IDE binary was detected', () => {
+    setDetectedTuiAgentExecutables({ cursor: 'cursor' })
+
+    const result = planCommitMessageGeneration({ agentId: 'cursor', model: 'gpt-5.2' }, 'PROMPT')
+
+    expect(result).toEqual({
+      ok: true,
+      plan: {
+        binary: 'cursor',
+        args: [
+          'agent',
           '--print',
           '--mode',
           'ask',

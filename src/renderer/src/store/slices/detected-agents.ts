@@ -5,6 +5,8 @@ import {
   getLocalAgentPreflightContext,
   localPreflightContextKey
 } from '@/lib/local-preflight-context'
+import { setDetectedTuiAgentExecutables } from '../../../../shared/detected-agent-executables'
+import type { PreflightRuntimeContext } from '../../../../preload/api-types'
 
 export type DetectedAgentsSlice = {
   detectedAgentIds: TuiAgent[] | null
@@ -52,6 +54,19 @@ export function _getRemoteDetectPromiseCountForTest(): number {
   return remoteDetectPromises.size
 }
 
+// Why: launch commands are built synchronously all over the renderer, so the
+// matched executable per agent is published to a module registry instead of
+// being threaded through every buildAgentStartupPlan() call site.
+function publishDetectedAgentExecutables(context?: PreflightRuntimeContext): void {
+  void window.api.preflight
+    .detectAgentExecutables?.(context)
+    .then((executables) => setDetectedTuiAgentExecutables(executables ?? {}))
+    .catch(() => {
+      // Why: alias resolution is an enhancement; on failure the static
+      // launchCmd defaults still work for the primary install layout.
+    })
+}
+
 export const createDetectedAgentsSlice: StateCreator<AppState, [], [], DetectedAgentsSlice> = (
   set,
   get
@@ -85,6 +100,7 @@ export const createDetectedAgentsSlice: StateCreator<AppState, [], [], DetectedA
         if (requestGeneration === localDetectionGeneration) {
           set({ detectedAgentIds: typed, isDetectingAgents: false })
           detectedContextKey = contextKey
+          publishDetectedAgentExecutables(context)
         }
         return typed
       })
@@ -131,6 +147,7 @@ export const createDetectedAgentsSlice: StateCreator<AppState, [], [], DetectedA
           // snapshot so `ensureDetectedAgents` short-circuits.
           detectedContextKey = contextKey
           detectPromise = { key: contextKey, promise: Promise.resolve(typed) }
+          publishDetectedAgentExecutables(context)
         }
         return typed
       })

@@ -2808,6 +2808,9 @@ function createPreflightApi(): NonNullable<Partial<PreloadApi>['preflight']> {
       }
       return callRuntimeResult<string[]>('preflight.detectAgents').catch(() => [])
     },
+    // Why: the web runtime launches agents on the host that ran detection, so the
+    // static launch commands already apply; no alias resolution to forward.
+    detectAgentExecutables: async () => ({}),
     refreshAgents: () =>
       requireActiveEnvironmentOrNull()
         ? callRuntimeResult('preflight.refreshAgents')

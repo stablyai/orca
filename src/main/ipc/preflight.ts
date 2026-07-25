@@ -25,8 +25,13 @@ import {
 import {
   getTuiAgentDetectionProbeCommands,
   KNOWN_TUI_AGENT_DETECTION_COMMANDS,
+  resolveDetectedTuiAgentExecutables,
   resolveDetectedTuiAgentIds
 } from './tui-agent-detection-commands'
+import {
+  setDetectedTuiAgentExecutables,
+  type DetectedAgentExecutables
+} from '../../shared/detected-agent-executables'
 
 export type PreflightStatus = {
   git: { installed: boolean }
@@ -59,10 +64,14 @@ export type { RemoteWindowsTerminalCapabilities }
 // Why: cache the result so repeated Landing mounts don't re-spawn processes.
 // The check only runs once per app session — relaunch to re-check.
 let cached: PreflightStatus | null = null
+let detectedAgentExecutables: DetectedAgentExecutables = {}
+let hasDetectedAgentExecutables = false
 
 /** @internal - tests need a clean preflight cache between cases. */
 export function _resetPreflightCache(): void {
   cached = null
+  detectedAgentExecutables = {}
+  hasDetectedAgentExecutables = false
 }
 
 function uniqueAgentIds(ids: Iterable<string>): string[] {
@@ -114,11 +123,41 @@ export async function detectInstalledAgents(context?: PreflightRuntimeContext): 
       .filter(({ cmd, installedOnPath }) => installedOnPath || installDirCommands.has(cmd))
       .map(({ cmd }) => cmd)
   )
+  publishDetectedAgentExecutables(foundCommands, process.platform)
   return resolveDetectedTuiAgentIds(
     KNOWN_TUI_AGENT_DETECTION_COMMANDS,
     foundCommands,
     process.platform
   )
+}
+
+// Why: launches on this host read the matched executable so alias-only installs
+// (Cursor.app's `cursor` without `cursor-agent`) don't launch a missing binary.
+// WSL is deliberately excluded — its PATH belongs to the distro, not this process.
+function publishDetectedAgentExecutables(
+  foundCommands: ReadonlySet<string>,
+  runtime: NodeJS.Platform
+): void {
+  detectedAgentExecutables = resolveDetectedTuiAgentExecutables(
+    KNOWN_TUI_AGENT_DETECTION_COMMANDS,
+    foundCommands,
+    runtime
+  )
+  hasDetectedAgentExecutables = true
+  setDetectedTuiAgentExecutables(detectedAgentExecutables)
+}
+
+/** Executables matched by the last local detection; empty for WSL/remote runtimes. */
+export async function detectInstalledAgentExecutables(
+  context?: PreflightRuntimeContext
+): Promise<DetectedAgentExecutables> {
+  if (getPreflightWslTarget(context)) {
+    return {}
+  }
+  if (!hasDetectedAgentExecutables) {
+    await detectInstalledAgents(context)
+  }
+  return detectedAgentExecutables
 }
 
 export async function detectInstalledAgentsWithShellPathHydration(
@@ -292,6 +331,11 @@ export function registerPreflightHandlers(): void {
 
   ipcMain.handle('preflight:detectAgents', async (_event, args?: PreflightRuntimeContext) =>
     detectInstalledAgentsWithShellPathHydration(args)
+  )
+
+  ipcMain.handle(
+    'preflight:detectAgentExecutables',
+    async (_event, args?: PreflightRuntimeContext) => detectInstalledAgentExecutables(args)
   )
 
   ipcMain.handle('preflight:refreshAgents', async (_event, args?: PreflightRuntimeContext) => {
