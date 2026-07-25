@@ -1,6 +1,12 @@
 import type { RuntimeMobileTerminalTheme } from '../../../src/shared/runtime-types'
 import type { TerminalOscLinkRange } from './terminal-osc-link-ranges'
 
+/** App-chrome values painted into the WebView document via CSS custom properties. */
+export type TerminalWebViewAppChrome = {
+  terminalBg: string
+  textSecondary: string
+}
+
 export type TerminalWebViewCommand =
   | { type: 'ping'; id?: number }
   | { type: 'write'; id?: number; data: string }
@@ -12,6 +18,7 @@ export type TerminalWebViewCommand =
       initialData?: string
       oscLinks?: TerminalOscLinkRange[]
       terminalTheme?: RuntimeMobileTerminalTheme
+      appChrome?: TerminalWebViewAppChrome
       fontScale?: number
       // Why: width-reflow re-streams replay the same content rewrapped at new
       // cols; preserve the reader's scroll position instead of jumping to bottom.
@@ -25,4 +32,9 @@ export type TerminalWebViewCommand =
   | { type: 'reset-zoom'; id?: number }
   | { type: 'cancel-select'; id?: number }
   | { type: 'do-select-all'; id?: number }
-  | { type: 'set-theme'; id?: number; terminalTheme?: RuntimeMobileTerminalTheme }
+  | {
+      type: 'set-theme'
+      id?: number
+      terminalTheme?: RuntimeMobileTerminalTheme
+      appChrome?: TerminalWebViewAppChrome
+    }

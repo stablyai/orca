@@ -1,11 +1,12 @@
-import { colors } from '../theme/mobile-theme'
-
 // Theme normalization and page-surface painting injected into the WebView IIFE.
 // Mirrors the desktop minimumContrastRatio gate (src/renderer/src/lib/terminal-contrast-correction.ts,
 // #7934/#10104): a dark composed background gets a mild floor of 3 to rescue near-background body text
 // (e.g. Antigravity's #262b30 on #1e242a) without over-brightening vibrant ANSI colors; a light
 // background keeps the WCAG-AA 4.5 floor. Gate on the composed background luminance, not app mode,
 // because either theme slot can hold either kind of theme.
+//
+// App-chrome CSS variables (--terminal-fallback-bg, --terminal-scrollbar) are set from the live
+// postMessage path so XTERM_HTML stays a stable module constant (no remount on app theme flip).
 export const TERMINAL_WEBVIEW_THEME_JS = `
   var DARK_BG_MIN_CONTRAST = 3;
   var LIGHT_BG_MIN_CONTRAST = 4.5;
@@ -94,10 +95,32 @@ export const TERMINAL_WEBVIEW_THEME_JS = `
     return Object.assign({}, defaultTheme, next);
   }
 
-  function applyTerminalTheme(input) {
+  function cssVar(name, fallback) {
+    try {
+      var v = getComputedStyle(document.documentElement).getPropertyValue(name);
+      if (typeof v === 'string') {
+        v = v.trim();
+        if (v) return v;
+      }
+    } catch (e) {}
+    return fallback;
+  }
+
+  function applyAppChrome(appChrome) {
+    if (!appChrome || typeof appChrome !== 'object') return;
+    if (typeof appChrome.terminalBg === 'string' && appChrome.terminalBg) {
+      document.documentElement.style.setProperty('--terminal-fallback-bg', appChrome.terminalBg);
+    }
+    if (typeof appChrome.textSecondary === 'string' && appChrome.textSecondary) {
+      document.documentElement.style.setProperty('--terminal-scrollbar', appChrome.textSecondary);
+    }
+  }
+
+  function applyTerminalTheme(input, appChrome) {
     terminalThemeInput = input;
     terminalTheme = normalizeTerminalTheme(input);
-    var background = terminalTheme.background || '${colors.terminalBg}';
+    applyAppChrome(appChrome);
+    var background = terminalTheme.background || cssVar('--terminal-fallback-bg', '#1a1b26');
     document.documentElement.style.background = background;
     document.body.style.background = background;
     terminalMinimumContrastRatio = resolveTerminalContrastFloor(background);

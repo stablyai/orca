@@ -7,7 +7,8 @@ import {
   TerminalWebViewEngineErrorOverlay,
   useTerminalWebViewEngineErrorState
 } from './terminal-webview-engine-error-state'
-import { TERMINAL_WEBVIEW_FRAME_STYLES } from './terminal-webview-frame-styles'
+import { createTerminalWebViewFrameStyles } from './terminal-webview-frame-styles'
+import { useTheme, useThemedStyles } from '../theme/theme-context'
 import { useTerminalWebReadyWatchdog } from './terminal-webview-ready-watchdog'
 import { XTERM_WEBVIEW_SOURCE } from './terminal-webview-html'
 import type { TerminalWebViewCommand } from './terminal-webview-messages'
@@ -42,6 +43,12 @@ export const TerminalWebView = forwardRef<TerminalWebViewHandle, Props>(function
   },
   ref
 ) {
+  const { colors } = useTheme()
+  const frameStyles = useThemedStyles(createTerminalWebViewFrameStyles)
+  const appChrome = useMemo(
+    () => ({ terminalBg: colors.terminalBg, textSecondary: colors.textSecondary }),
+    [colors.terminalBg, colors.textSecondary]
+  )
   const webViewRef = useRef<WebView>(null)
   const isWebReadyRef = useRef(false)
   const pendingMessages = useMemo(() => createTerminalWebViewPendingMessages(), [])
@@ -110,10 +117,11 @@ export const TerminalWebView = forwardRef<TerminalWebViewHandle, Props>(function
       }
       // Why: reload clears queued commands, so readiness must always restore the
       // native-selected theme even when its value did not change in React.
-      sendToWebView({ type: 'set-theme', terminalTheme })
+      sendToWebView({ type: 'set-theme', terminalTheme, appChrome })
       flushPendingMessages()
     },
     [
+      appChrome,
       clearEngineError,
       clearWebReadyWatchdog,
       flushPendingMessages,
@@ -221,8 +229,8 @@ export const TerminalWebView = forwardRef<TerminalWebViewHandle, Props>(function
   }, [armWebReadyWatchdog, clearEngineError, pendingMessages, writeCoalescer])
 
   useEffect(() => {
-    postMessage({ type: 'set-theme', terminalTheme })
-  }, [postMessage, terminalThemeKey, terminalTheme])
+    postMessage({ type: 'set-theme', terminalTheme, appChrome })
+  }, [postMessage, terminalThemeKey, terminalTheme, appChrome])
 
   // Why: live-apply text-size changes to an already-mounted terminal (the pane
   // stays alive while the user visits Settings), so no terminal reload is needed.
@@ -279,6 +287,7 @@ export const TerminalWebView = forwardRef<TerminalWebViewHandle, Props>(function
           initialData,
           oscLinks,
           terminalTheme,
+          appChrome,
           fontScale: textScale,
           preserveScroll
         })
@@ -360,7 +369,15 @@ export const TerminalWebView = forwardRef<TerminalWebViewHandle, Props>(function
         })
       }
     }),
-    [armWebReadyWatchdog, postMessage, sendToWebView, terminalTheme, textScale, writeCoalescer]
+    [
+      appChrome,
+      armWebReadyWatchdog,
+      postMessage,
+      sendToWebView,
+      terminalTheme,
+      textScale,
+      writeCoalescer
+    ]
   )
 
   // Why: the frame must follow the resolved terminal background, not the app
@@ -369,11 +386,11 @@ export const TerminalWebView = forwardRef<TerminalWebViewHandle, Props>(function
   const frameOverride = frameBackground ? { backgroundColor: frameBackground } : null
 
   return (
-    <View style={[TERMINAL_WEBVIEW_FRAME_STYLES.container, frameOverride, style]}>
+    <View style={[frameStyles.container, frameOverride, style]}>
       <WebView
         ref={webViewRef}
         source={XTERM_WEBVIEW_SOURCE}
-        style={[TERMINAL_WEBVIEW_FRAME_STYLES.webview, frameOverride]}
+        style={[frameStyles.webview, frameOverride]}
         originWhitelist={['*']}
         javaScriptEnabled
         scrollEnabled={false}

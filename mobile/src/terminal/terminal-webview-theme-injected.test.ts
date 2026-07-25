@@ -77,3 +77,35 @@ describe('mobile terminal-webview contrast floor gate', () => {
     expect(term.options.minimumContrastRatio).toBe(DARK_FLOOR)
   })
 })
+
+describe('app chrome CSS variables', () => {
+  it('applies appChrome onto CSS custom properties without remounting the document', () => {
+    const props: Record<string, string> = {}
+    const context = loadThemeInjected({
+      term: { options: { theme: undefined as unknown, minimumContrastRatio: 1 } },
+      document: {
+        documentElement: {
+          style: {
+            background: '',
+            setProperty: (name: string, value: string) => {
+              props[name] = value
+            }
+          }
+        },
+        body: { style: { background: '' } }
+      },
+      getComputedStyle: () => ({
+        getPropertyValue: (name: string) => props[name] ?? ''
+      })
+    }) as Record<string, unknown> & {
+      applyTerminalTheme: (input: unknown, appChrome?: unknown) => void
+    }
+
+    context.applyTerminalTheme(
+      { theme: { background: '#1e242a' } },
+      { terminalBg: '#ffffff', textSecondary: '#737373' }
+    )
+    expect(props['--terminal-fallback-bg']).toBe('#ffffff')
+    expect(props['--terminal-scrollbar']).toBe('#737373')
+  })
+})

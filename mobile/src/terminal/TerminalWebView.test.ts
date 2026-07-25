@@ -2,8 +2,9 @@ import { createElement } from 'react'
 import { act, create, type ReactTestRenderer } from 'react-test-renderer'
 import { afterAll, describe, expect, it, vi } from 'vitest'
 import { TerminalWebView } from './TerminalWebView'
-import { TERMINAL_WEBVIEW_FRAME_STYLES } from './terminal-webview-frame-styles'
+import { createTerminalWebViewFrameStyles } from './terminal-webview-frame-styles'
 import type { MobileTerminalTheme } from './terminal-webview-contract'
+import { darkColors } from '../theme/mobile-theme'
 
 vi.mock('react-native', () => ({
   Platform: { OS: 'ios' },
@@ -14,6 +15,11 @@ vi.mock('react-native', () => ({
 vi.mock('react-native-webview', () => ({ WebView: 'WebView' }))
 
 vi.mock('./terminal-webview-html', () => ({ XTERM_WEBVIEW_SOURCE: { html: '' } }))
+
+vi.mock('../theme/theme-context', () => ({
+  useTheme: () => ({ colors: darkColors, preference: 'dark', setPreference: () => undefined }),
+  useThemedStyles: <T>(factory: (colors: typeof darkColors) => T): T => factory(darkColors)
+}))
 
 vi.mock('./terminal-webview-engine-error-state', () => ({
   TerminalWebViewEngineErrorOverlay: 'TerminalWebViewEngineErrorOverlay',
@@ -45,6 +51,7 @@ function suppressReactTestRendererDeprecationWarning(): () => void {
 }
 
 const restoreConsoleError = suppressReactTestRendererDeprecationWarning()
+const frameStyles = createTerminalWebViewFrameStyles(darkColors)
 
 async function renderFrame(terminalTheme?: MobileTerminalTheme) {
   let renderer!: ReactTestRenderer
@@ -72,9 +79,9 @@ describe('TerminalWebView frame background', () => {
   it('keeps the app terminal background until a palette arrives', async () => {
     const frame = await renderFrame(undefined)
 
-    expect(frame.containerStyle[0]).toBe(TERMINAL_WEBVIEW_FRAME_STYLES.container)
+    expect(frame.containerStyle[0]).toEqual(frameStyles.container)
     expect(frame.containerStyle[1]).toBeNull()
-    expect(frame.webViewStyle[0]).toBe(TERMINAL_WEBVIEW_FRAME_STYLES.webview)
+    expect(frame.webViewStyle[0]).toEqual(frameStyles.webview)
     expect(frame.webViewStyle[1]).toBeNull()
 
     await frame.unmount()
