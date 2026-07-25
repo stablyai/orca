@@ -1,12 +1,12 @@
 import { useEffect, useMemo, useState } from 'react'
 import { ActivityIndicator, Pressable, Text, TextInput, View } from 'react-native'
 import { Check } from 'lucide-react-native'
-import { colors } from '../../theme/mobile-theme'
 import type { GitHubAssignableUser } from '../../../../src/shared/types'
 import type { RpcClient } from '../../transport/rpc-client'
 import { fetchAssignableUsers } from '../../session/github-pr-rpc'
 import { BottomDrawer } from '../BottomDrawer'
-import { mobilePrSidebarStyles as styles } from './mobile-pr-sidebar-styles'
+import { useTheme, useThemedStyles } from '../../theme/theme-context'
+import { createMobilePrSidebarStyles } from './mobile-pr-sidebar-styles'
 
 type Props = {
   visible: boolean
@@ -39,6 +39,8 @@ export function ReviewerPickerDrawer({
   isRequested,
   onToggle
 }: Props) {
+  const { colors } = useTheme()
+  const styles = useThemedStyles(createMobilePrSidebarStyles)
   const [load, setLoad] = useState<LoadState>({ status: 'idle' })
   const [query, setQuery] = useState('')
 

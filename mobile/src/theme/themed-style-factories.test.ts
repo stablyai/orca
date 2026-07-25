@@ -163,7 +163,10 @@ async function loadThemedFactories(): Promise<readonly StyleFactory[]> {
     import('../source-control/mobile-source-control-diff-styles'),
     import('../source-control/mobile-source-control-styles'),
     import('../files/mobile-file-explorer-styles'),
-    import('../files/mobile-file-preview-styles')
+    import('../files/mobile-file-preview-styles'),
+    import('../components/pr-sidebar/mobile-pr-sidebar-styles'),
+    import('../components/pr-sidebar/pr-ai-triage-styles'),
+    import('../components/pr-sidebar/pr-conflict-styles')
   ])
   const [
     bottomDrawer,
@@ -219,7 +222,10 @@ async function loadThemedFactories(): Promise<readonly StyleFactory[]> {
     scDiff,
     scStyles,
     fileExplorer,
-    filePreview
+    filePreview,
+    prSidebar,
+    prAiTriage,
+    prConflict
   ] = mods
   return [
     { name: 'createBottomDrawerStyles', factory: bottomDrawer.createBottomDrawerStyles },
@@ -368,6 +374,18 @@ async function loadThemedFactories(): Promise<readonly StyleFactory[]> {
     {
       name: 'createMobileFilePreviewStyles',
       factory: filePreview.createMobileFilePreviewStyles
+    },
+    {
+      name: 'createMobilePrSidebarStyles',
+      factory: prSidebar.createMobilePrSidebarStyles
+    },
+    {
+      name: 'createPrAiTriageStyles',
+      factory: prAiTriage.createPrAiTriageStyles
+    },
+    {
+      name: 'createPrConflictStyles',
+      factory: prConflict.createPrConflictStyles
     }
   ]
 }
@@ -529,5 +547,16 @@ describe('themed style factories', () => {
     expect(explorer.container.backgroundColor).toBe(darkColors.bgBase)
     const preview = createMobileFilePreviewStyles(darkColors)
     expect(preview.container.backgroundColor).toBe(darkColors.bgBase)
+
+    const { createMobilePrSidebarStyles } =
+      await import('../components/pr-sidebar/mobile-pr-sidebar-styles')
+    const { createPrAiTriageStyles } = await import('../components/pr-sidebar/pr-ai-triage-styles')
+    const { createPrConflictStyles } = await import('../components/pr-sidebar/pr-conflict-styles')
+    const pr = createMobilePrSidebarStyles(darkColors)
+    expect(pr.dockColumn.backgroundColor).toBe(darkColors.bgPanel)
+    const triage = createPrAiTriageStyles(darkColors)
+    expect(triage.triageArea.gap).toBeDefined()
+    const conflict = createPrConflictStyles(darkColors)
+    expect(conflict.meta.color).toBe(darkColors.textSecondary)
   })
 })

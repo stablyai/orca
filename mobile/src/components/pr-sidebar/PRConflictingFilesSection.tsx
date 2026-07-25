@@ -2,12 +2,12 @@ import { useEffect, useRef, useState } from 'react'
 import { ActivityIndicator, Pressable, ScrollView, Text, View } from 'react-native'
 import * as Clipboard from 'expo-clipboard'
 import { Check, Copy, FileWarning, Sparkles } from 'lucide-react-native'
-import { colors } from '../../theme/mobile-theme'
 import type { PRInfo } from '../../../../src/shared/types'
 import { PRSection } from './PRSection'
 import { resolveConflictDisplay } from './pr-conflict-presentation'
-import { prConflictStyles as styles } from './pr-conflict-styles'
-import { prAiTriageStyles as triageStyles } from './pr-ai-triage-styles'
+import { useTheme, useThemedStyles } from '../../theme/theme-context'
+import { createPrConflictStyles } from './pr-conflict-styles'
+import { createPrAiTriageStyles } from './pr-ai-triage-styles'
 
 // Launches the "Resolve conflicts with AI" agent. Absent for display-only usages.
 export type PrConflictsTriage = {
@@ -29,6 +29,9 @@ type Props = {
 // list is not yet available. Ports the desktop ConflictingFilesSection +
 // MergeConflictNotice into the mobile card shell.
 export function PRConflictingFilesSection({ pr, isRefreshing = false, triage }: Props) {
+  const { colors } = useTheme()
+  const styles = useThemedStyles(createPrConflictStyles)
+  const triageStyles = useThemedStyles(createPrAiTriageStyles)
   const [commandsCopied, setCommandsCopied] = useState(false)
   const copiedResetTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const conflict = resolveConflictDisplay(pr)

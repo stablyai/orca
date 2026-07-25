@@ -10,9 +10,12 @@ import { MobileDiffReviewFooter } from './MobileDiffReviewFooter'
 import { MobileDiffReviewHeader } from './MobileDiffReviewHeader'
 import { MobilePRSidebar } from './MobilePRSidebar'
 import { RightDrawer } from './RightDrawer'
-import { mobilePrSidebarStyles, PR_SIDEBAR_DOCK_WIDTH } from './pr-sidebar/mobile-pr-sidebar-styles'
-import { canDockPrSidebar, resolvePresentationMode } from './mobile-pr-sidebar-presentation'
 import { useThemedStyles } from '../theme/theme-context'
+import {
+  createMobilePrSidebarStyles,
+  PR_SIDEBAR_DOCK_WIDTH
+} from './pr-sidebar/mobile-pr-sidebar-styles'
+import { canDockPrSidebar, resolvePresentationMode } from './mobile-pr-sidebar-presentation'
 import { createMobileDiffReviewStyles } from './mobile-diff-review-screen-styles'
 
 type Props = {
@@ -22,6 +25,7 @@ type Props = {
 
 export function MobileDiffReviewScreenView({ controller, onBack }: Props) {
   const styles = useThemedStyles(createMobileDiffReviewStyles)
+  const mobilePrSidebarStyles = useThemedStyles(createMobilePrSidebarStyles)
   const { isWideLayout } = useResponsiveLayout()
   const insets = useSafeAreaInsets()
   const [contentRowWidth, setContentRowWidth] = useState(0)

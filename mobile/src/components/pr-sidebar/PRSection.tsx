@@ -1,6 +1,7 @@
 import type { ReactNode } from 'react'
 import { Text, View } from 'react-native'
-import { mobilePrSidebarStyles as styles } from './mobile-pr-sidebar-styles'
+import { useThemedStyles } from '../../theme/theme-context'
+import { createMobilePrSidebarStyles } from './mobile-pr-sidebar-styles'
 
 type Props = {
   // Optional: omit for self-explanatory sections (e.g. action buttons) so the
@@ -16,6 +17,7 @@ type Props = {
 // desktop PR page's card-with-header-divider so the sections read consistently.
 // Header is omitted when neither title nor trailing is provided.
 export function PRSection({ title, trailing, children }: Props) {
+  const styles = useThemedStyles(createMobilePrSidebarStyles)
   const showHeader = Boolean(title) || trailing != null
   return (
     <View style={styles.section}>

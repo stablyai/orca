@@ -1,14 +1,14 @@
 import { useState } from 'react'
 import { ActivityIndicator, Pressable, Text, TextInput, View } from 'react-native'
 import { ArrowRight, ExternalLink, Pencil } from 'lucide-react-native'
-import { colors } from '../../theme/mobile-theme'
 import type { GitHubWorkItemDetails, PRInfo } from '../../../../src/shared/types'
 import type { MobilePrTitleAction } from '../../session/use-mobile-pr-title-action'
 import { prStateBadge } from './pr-checks-presentation'
 import { statusColor } from './pr-sidebar-status-color'
 import { canEditPRTitle } from '../../session/pr-title-edit'
 import { openMobilePrUrl } from '../MobilePrComposeSheet'
-import { mobilePrSidebarStyles as styles } from './mobile-pr-sidebar-styles'
+import { useTheme, useThemedStyles } from '../../theme/theme-context'
+import { createMobilePrSidebarStyles } from './mobile-pr-sidebar-styles'
 import { prCommentComposerStyles as composerStyles } from './pr-comment-composer-styles'
 
 type Props = {
@@ -31,6 +31,8 @@ export function PRSidebarHeader({
   showOpenOnWeb = true,
   bare = false
 }: Props) {
+  const { colors } = useTheme()
+  const styles = useThemedStyles(createMobilePrSidebarStyles)
   const item = details?.item
   const badge = prStateBadge(pr.state)
   const badgeColor = statusColor(badge.token)
@@ -114,6 +116,8 @@ function PRTitle({
   editable: boolean
   titleAction: MobilePrTitleAction
 }) {
+  const { colors } = useTheme()
+  const styles = useThemedStyles(createMobilePrSidebarStyles)
   const [editing, setEditing] = useState(false)
   const [draft, setDraft] = useState(title)
 

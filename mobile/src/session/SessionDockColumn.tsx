@@ -2,7 +2,8 @@ import { memo } from 'react'
 import { View, StyleSheet } from 'react-native'
 import { MobileSourceControlPanel } from '../source-control/MobileSourceControlPanel'
 import { MobileFileExplorerPanel } from '../files/MobileFileExplorerPanel'
-import { mobilePrSidebarStyles } from '../components/pr-sidebar/mobile-pr-sidebar-styles'
+import { useThemedStyles } from '../theme/theme-context'
+import { createMobilePrSidebarStyles } from '../components/pr-sidebar/mobile-pr-sidebar-styles'
 import { useMobileDockResize } from './use-mobile-dock-resize'
 import type { ActivePanel } from './session-panel-host'
 
@@ -34,6 +35,7 @@ export function SessionDockColumn({
   onFileOpenStart,
   onOpenedFileDiff
 }: Props) {
+  const mobilePrSidebarStyles = useThemedStyles(createMobilePrSidebarStyles)
   const { dockWidth, panHandlers } = useMobileDockResize(availableWidth)
   return (
     <View style={[mobilePrSidebarStyles.dockColumn, { width: dockWidth }]}>
