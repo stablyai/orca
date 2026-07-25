@@ -90,7 +90,8 @@ Rules:
 - Omit `--from` unless impersonating another terminal; Orca auto-resolves it from the current terminal.
 - A coordinator `check` returns the bound Run's oldest FIFO Delivery (up to 50 messages) and replays that exact batch until `--ack <delivery_id>`. Process every message before acknowledging; `check --ack <id> --wait` acknowledges, checks, and waits in one operation.
 - Use `--peek` and `--all` only for read-only history/debugging. Type filters decide when a waiter wakes; the returned actionable Delivery is still the oldest full batch.
-- Message **one** live agent handle per worker. Prefer `agentTerminalHandle` from the create response, fall back to `startupTerminal.handle` for older runtimes, then re-resolve with `orca terminal list --worktree ... --json` if missing or stale. Continue with the replacement handle only.
+- Use `dispatch:<id>` for coordinator guidance to one supervised worker. Orca routes that stable address locally or through the connected-server relay; do not substitute a remote terminal handle.
+- Terminal handles remain appropriate for low-level pre-Dispatch messaging. Prefer `agentTerminalHandle` from the create response, fall back to `startupTerminal.handle` for older runtimes, then re-resolve with `orca terminal list --worktree ... --json` if missing or stale.
 - `orca orchestration check --peek --format --json` returns locally formatted unread mail without consuming it; it never writes to terminal input or remotely wakes another terminal. Use `orchestration dispatch --inject` to deliver a tracked task, or `terminal send` when an existing agent needs a free-form prompt.
 - While supervising workers manually, use `check --wait --types worker_done,escalation,question --timeout-ms <n>` instead of sleep/poll loops. Process the whole Delivery, reply to `question` messages with `orca orchestration reply --id <msg_id> --body <answer> --json`, then acknowledge and keep waiting.
 - Treat a `check --wait` timeout or `{count:0}` as a checkpoint, not a worker failure. Long coding tasks routinely run 15-60 minutes; keep using rolling waits unless you receive `worker_done`/`escalation`, the terminal exits or disappears, or the user explicitly asks you to stop.
@@ -161,9 +162,13 @@ To run the worker on another connected Orca server, add `--on <saved-environment
 orca orchestration worker-start --task <task_id> --on windows --worktree new-top-level --repo <exact_remote_repo_selector> --name <name> --agent codex --setup run --json
 orca orchestration worker-show --dispatch <dispatch_id> --json
 orca orchestration worker-read --dispatch <dispatch_id> --limit 50 --json
+orca orchestration send --to dispatch:<dispatch_id> --subject "Follow-up" --body "<attempt-specific guidance>" --json
 ```
 
 Remote `current` and `new-child` are intentionally invalid because those words are ambiguous across servers. Use an exact discovered remote worktree selector or `new-top-level` with an explicit remote repo selector.
+
+The follow-up is structured inbox mail, not prompt injection. The worker's next
+`orchestration check` receives it even when the Dispatch is on another connected Orca server.
 
 `worker-read` defaults to `--source auto`: Orca returns the exact hook-reported Codex/Claude transcript when it can prove the worker session, otherwise it returns bounded terminal output with `source: "terminal"` and a typed `fallbackReason`. Continue with the returned top-level `cursor`; it stays pinned to that exact source. If Orca reports `source_changed`, start a fresh read without the old cursor. Never supply or guess a provider session ID or transcript path.
 

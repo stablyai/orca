@@ -17,6 +17,8 @@ import { ORCHESTRATION_FEDERATION_METHODS } from './orchestration-federation-met
 import { OrchestrationError } from '../../orchestration/orchestration-error'
 import type { OrcaRuntimeService } from '../../orca-runtime'
 import type { RunRow } from '../../orchestration/types'
+import { encodeFederatedControlMessage } from '../../orchestration/federation-control-message'
+import { ORCHESTRATION_FEDERATION_CONTROL_MAIL_PROTOCOL_VERSION } from '../../../../shared/protocol-version'
 
 const TASK_STATUSES: TaskStatus[] = [
   'pending',
@@ -438,6 +440,7 @@ export const ORCHESTRATION_METHODS: RpcMethod[] = [
             messageId: relay.message_id,
             sequence: relay.sequence,
             dispatchId: relay.dispatch_id,
+            destination: 'run_home',
             accepted: true
           },
           ...(outcome
@@ -474,6 +477,59 @@ export const ORCHESTRATION_METHODS: RpcMethod[] = [
       }
 
       if (!isGroupAddress(to)) {
+        const federatedDispatchId = routing.dispatchId
+        const federatedTarget =
+          federatedDispatchId && to === `dispatch:${federatedDispatchId}`
+            ? db.getFederatedDispatch(federatedDispatchId)
+            : undefined
+        if (federatedTarget && federatedDispatchId) {
+          const dispatchId = federatedDispatchId
+          if (
+            federatedTarget.protocol_version <
+            ORCHESTRATION_FEDERATION_CONTROL_MAIL_PROTOCOL_VERSION
+          ) {
+            throw new OrchestrationError(
+              'capability_unsupported',
+              `Federated Dispatch ${dispatchId} does not support coordinator control mail; start a fresh worker after updating its Orca server.`
+            )
+          }
+          if (db.getWorkerDispatch(dispatchId)?.state !== 'ready') {
+            throw new OrchestrationError(
+              'dispatch_inactive',
+              `Federated Dispatch ${dispatchId} is not active.`
+            )
+          }
+          if (params.type === 'worker_done' || params.type === 'heartbeat') {
+            throw new OrchestrationError(
+              'invalid_argument',
+              'Coordinator-to-worker control mail cannot report worker lifecycle.'
+            )
+          }
+          const relay = db.enqueueFederationRelay({
+            dispatchId,
+            direction: 'to_worker',
+            kind: 'control_message',
+            payload: encodeFederatedControlMessage({
+              from,
+              subject: params.subject,
+              body: params.body ?? '',
+              type: (params.type ?? 'status') as MessageType,
+              priority: (params.priority ?? 'normal') as MessagePriority,
+              threadId: params.threadId ?? null,
+              payload: params.payload ?? null
+            })
+          })
+          runtime.ensureOrchestrationFederationRelay(routing.run?.id)
+          return {
+            relay: {
+              messageId: relay.message_id,
+              sequence: relay.sequence,
+              dispatchId: relay.dispatch_id,
+              destination: 'worker',
+              accepted: true
+            }
+          }
+        }
         // Point-to-point — existing single-recipient behavior
         const msg = db.insertMessage({
           from,
@@ -707,8 +763,28 @@ export const ORCHESTRATION_METHODS: RpcMethod[] = [
       }
 
       const activeDispatch = db.getActiveDispatchForIdentity(handle, paneKey ?? undefined)
-      if (activeDispatch) {
-        const address = `dispatch:${activeDispatch.id}`
+      const remoteAttachment =
+        !activeDispatch && paneKey ? db.findActiveRemoteAttachmentForPane(paneKey) : undefined
+      if (
+        remoteAttachment &&
+        !db.isRemoteAttachmentProcessCurrent({
+          dispatchId: remoteAttachment.dispatch_id,
+          paneKey,
+          processIncarnation: runtime.getTerminalProcessIncarnation(handle)
+        })
+      ) {
+        throw new OrchestrationError(
+          'dispatch_inactive',
+          `Dispatch ${remoteAttachment.dispatch_id} is no longer attached to this worker process.`
+        )
+      }
+      const workerMailbox = activeDispatch
+        ? { dispatchId: activeDispatch.id, runId: activeDispatch.run_id }
+        : remoteAttachment
+          ? { dispatchId: remoteAttachment.dispatch_id, runId: undefined }
+          : undefined
+      if (workerMailbox) {
+        const address = `dispatch:${workerMailbox.dispatchId}`
         const showAll = params.all === true || (params.unread === false && params.peek !== true)
         const messages = showAll
           ? db.getAllMessagesForHandle(address, 100, typeFilter)
@@ -718,8 +794,8 @@ export const ORCHESTRATION_METHODS: RpcMethod[] = [
         }
         if (messages.length > 0 || !params.wait) {
           return {
-            runId: activeDispatch.run_id,
-            dispatchId: activeDispatch.id,
+            ...(workerMailbox.runId ? { runId: workerMailbox.runId } : {}),
+            dispatchId: workerMailbox.dispatchId,
             messages,
             count: messages.length,
             ...(params.format || params.inject
@@ -734,8 +810,8 @@ export const ORCHESTRATION_METHODS: RpcMethod[] = [
         })
         if (waitResult === 'timed_out' || waitResult === 'cancelled') {
           return {
-            runId: activeDispatch.run_id,
-            dispatchId: activeDispatch.id,
+            ...(workerMailbox.runId ? { runId: workerMailbox.runId } : {}),
+            dispatchId: workerMailbox.dispatchId,
             messages: [],
             count: 0,
             timedOut: waitResult === 'timed_out',
@@ -746,8 +822,8 @@ export const ORCHESTRATION_METHODS: RpcMethod[] = [
         const arrived = db.getUnreadMessages(address, typeFilter)
         db.markAsRead(arrived.map((message) => message.id))
         return {
-          runId: activeDispatch.run_id,
-          dispatchId: activeDispatch.id,
+          ...(workerMailbox.runId ? { runId: workerMailbox.runId } : {}),
+          dispatchId: workerMailbox.dispatchId,
           messages: arrived,
           count: arrived.length,
           ...(params.format || params.inject

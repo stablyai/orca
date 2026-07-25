@@ -1,6 +1,9 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { RuntimeRpcResponse } from '../../../../shared/runtime-rpc-envelope'
-import { ORCHESTRATION_FEDERATION_RUNTIME_CAPABILITY } from '../../../../shared/protocol-version'
+import {
+  ORCHESTRATION_FEDERATION_CONTROL_MAIL_RUNTIME_CAPABILITY,
+  ORCHESTRATION_FEDERATION_RUNTIME_CAPABILITY
+} from '../../../../shared/protocol-version'
 import { OrcaRuntimeService } from '../../orca-runtime'
 import { OrchestrationDb } from '../../orchestration/db'
 import type { OrchestrationEnvironmentTransport } from '../../orchestration/environment-transport'
@@ -208,7 +211,7 @@ describe('orchestration federation', () => {
     })
     expect(workerDb.getRemoteDispatchAttachment(dispatch.id)).toMatchObject({
       task_id: task.id,
-      protocol_version: 1,
+      protocol_version: 2,
       state: 'ready',
       worktree_id: 'repo::windows-worktree',
       terminal_handle: 'term_windows_worker'
@@ -307,6 +310,36 @@ describe('orchestration federation', () => {
     expect(homeDb.getTask(task.id)?.status).toBe('ready')
     expect(homeDb.getDispatchContext(task.id)).toBeUndefined()
     expect(workerRuntime.createManagedWorktree).not.toHaveBeenCalled()
+  })
+
+  it('rejects control mail before queueing when the worker lacks that capability', async () => {
+    workerCapabilities = workerCapabilities.filter(
+      (capability) => capability !== ORCHESTRATION_FEDERATION_CONTROL_MAIL_RUNTIME_CAPABILITY
+    )
+    const task = createHomeTask()
+    const started = await homeDispatcher.dispatch(startRequest(task.id))
+    expect(started).toMatchObject({ ok: true, result: { state: 'ready' } })
+    const dispatch = homeDb.getDispatchContext(task.id)!
+
+    const sent = await homeDispatcher.dispatch({
+      id: 'send-control-to-old-worker',
+      authToken: 'coordinator-token',
+      orchestrationRequestId: 'send-control-to-old-worker-request',
+      method: 'orchestration.send',
+      params: {
+        from: 'term_coord',
+        to: `dispatch:${dispatch.id}`,
+        subject: 'Continue',
+        body: 'This worker cannot receive control mail yet.',
+        type: 'status'
+      }
+    })
+
+    expect(sent).toMatchObject({
+      ok: false,
+      error: { code: 'capability_unsupported' }
+    })
+    expect(homeDb.listPendingFederationRelay(dispatch.id, 'to_worker')).toHaveLength(0)
   })
 
   it('durably relays remote completion into the home Run and acknowledges it', async () => {

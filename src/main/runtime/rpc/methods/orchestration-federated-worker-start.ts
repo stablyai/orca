@@ -1,6 +1,10 @@
 import { isTuiAgent } from '../../../../shared/tui-agent-config'
 import type { RuntimeStatus } from '../../../../shared/runtime-types'
-import { ORCHESTRATION_FEDERATION_RUNTIME_CAPABILITY } from '../../../../shared/protocol-version'
+import {
+  ORCHESTRATION_FEDERATION_CONTROL_MAIL_PROTOCOL_VERSION,
+  ORCHESTRATION_FEDERATION_CONTROL_MAIL_RUNTIME_CAPABILITY,
+  ORCHESTRATION_FEDERATION_RUNTIME_CAPABILITY
+} from '../../../../shared/protocol-version'
 import type { OrcaRuntimeService } from '../../orca-runtime'
 import type { OrchestrationDb } from '../../orchestration/db'
 import { OrchestrationError } from '../../orchestration/orchestration-error'
@@ -49,6 +53,11 @@ export async function startFederatedWorker(args: {
       `Connected server ${server.name} does not support orchestration federation.`
     )
   }
+  const federationProtocolVersion = status.capabilities?.includes(
+    ORCHESTRATION_FEDERATION_CONTROL_MAIL_RUNTIME_CAPABILITY
+  )
+    ? ORCHESTRATION_FEDERATION_CONTROL_MAIL_PROTOCOL_VERSION
+    : 1
 
   const setupDecision = createsWorktree ? (params.setup ?? 'run') : 'not_applicable'
   const started = db.createStartingWorkerDispatch({
@@ -77,7 +86,7 @@ export async function startFederatedWorker(args: {
       environmentId: server.environmentId,
       environmentName: server.name,
       peerFingerprint: server.peerFingerprint,
-      protocolVersion: 1
+      protocolVersion: federationProtocolVersion
     }
   })
   db.recordWorkerStage({ dispatchId: started.dispatch.id, stage: 'remote_attach_requested' })
@@ -89,7 +98,7 @@ export async function startFederatedWorker(args: {
         dispatchId: started.dispatch.id,
         taskId: task.id,
         taskSpec: task.spec,
-        protocolVersion: 1,
+        protocolVersion: federationProtocolVersion,
         worktree,
         name: params.name,
         repo: params.repo,

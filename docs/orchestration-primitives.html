@@ -2424,7 +2424,11 @@ orca orchestration worker-start --task task_windows --on windows --worktree new-
 
 # One home wait fans in local and Windows messages. Repeat until both Dispatches settle.
 orca orchestration check --wait --timeout-ms 60000 --json
-orca orchestration check --ack delivery_81 --wait --timeout-ms 60000 --json</code></pre>
+orca orchestration check --ack delivery_81 --wait --timeout-ms 60000 --json
+
+# Attempt-specific guidance uses the stable Dispatch, never the remote terminal handle.
+orca orchestration send --to dispatch:dispatch_windows --subject "Follow-up" \
+  --body "Run the additional Windows-only check." --json</code></pre>
               </div>
             </details>
 

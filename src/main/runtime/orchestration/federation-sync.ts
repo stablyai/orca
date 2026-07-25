@@ -104,7 +104,10 @@ export async function syncFederatedDispatch(
       { orchestrationRequestId: `relay_ack_${dispatchId}_${cursor}` }
     )
   }
-  const toWorker = db.listPendingFederationRelay(dispatchId, 'to_worker')
+  const toWorker =
+    db.getWorkerDispatch(dispatchId)?.state === 'ready'
+      ? db.listPendingFederationRelay(dispatchId, 'to_worker')
+      : []
   if (toWorker.length > 0) {
     const delivered = (await runtime.callOrchestrationWorkerServer(
       federated.environment_id,

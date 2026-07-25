@@ -1,4 +1,6 @@
 import { z } from 'zod'
+import { ORCHESTRATION_FEDERATION_CONTROL_MAIL_PROTOCOL_VERSION } from '../../../../shared/protocol-version'
+import { importFederatedControlMessage } from '../../orchestration/federation-control-message'
 import { OrchestrationError } from '../../orchestration/orchestration-error'
 import { defineMethod, type RpcMethod } from '../core'
 import { OptionalFiniteNumber, requiredString } from '../schemas'
@@ -70,11 +72,26 @@ export const ORCHESTRATION_FEDERATION_RELAY_METHODS: RpcMethod[] = [
         authenticatedCallerFingerprint
       )
       let cursor = attachment.to_worker_imported_sequence
+      let imported = 0
       for (const item of params.items) {
-        if (item.dispatch_id !== params.dispatchId || item.sequence !== cursor + 1) {
+        if (item.dispatch_id !== params.dispatchId || item.sequence > cursor + 1) {
           throw new OrchestrationError(
             'operation_unknown',
             `Home relay for ${params.dispatchId} is not contiguous after sequence ${cursor}.`
+          )
+        }
+        if (item.sequence <= cursor) {
+          continue
+        }
+        const currentAttachment = requireHomeAttachment(
+          runtime,
+          params.dispatchId,
+          authenticatedCallerFingerprint
+        )
+        if (currentAttachment.state !== 'ready') {
+          throw new OrchestrationError(
+            'dispatch_inactive',
+            `Remote Dispatch ${params.dispatchId} is not active.`
           )
         }
         if (item.kind === 'reply') {
@@ -85,14 +102,36 @@ export const ORCHESTRATION_FEDERATION_RELAY_METHODS: RpcMethod[] = [
             answerMessageId: reply.answerMessageId,
             body: reply.body
           })
+          runtime.notifyMessageArrived(`dispatch:${params.dispatchId}`, 'status')
+        } else if (item.kind === 'control_message') {
+          if (
+            currentAttachment.protocol_version <
+            ORCHESTRATION_FEDERATION_CONTROL_MAIL_PROTOCOL_VERSION
+          ) {
+            throw new OrchestrationError(
+              'capability_unsupported',
+              `Remote Dispatch ${params.dispatchId} does not support coordinator control mail.`
+            )
+          }
+          const controlMessage = importFederatedControlMessage(db, {
+            dispatchId: params.dispatchId,
+            messageId: item.message_id,
+            payload: item.payload
+          })
+          imported += controlMessage.imported ? 1 : 0
+          if (controlMessage.imported) {
+            runtime.notifyMessageArrived(`dispatch:${params.dispatchId}`, controlMessage.type)
+          }
+        } else {
+          throw new OrchestrationError(
+            'invalid_argument',
+            `Federated worker relay kind ${item.kind} is not supported.`
+          )
         }
         cursor = item.sequence
         db.setRemoteWorkerImportSequence(params.dispatchId, cursor)
       }
-      if (cursor > attachment.to_worker_imported_sequence) {
-        runtime.notifyMessageArrived(`dispatch:${params.dispatchId}`, 'status')
-      }
-      return { dispatchId: params.dispatchId, acknowledgedThrough: cursor }
+      return { dispatchId: params.dispatchId, acknowledgedThrough: cursor, imported }
     }
   })
 ]

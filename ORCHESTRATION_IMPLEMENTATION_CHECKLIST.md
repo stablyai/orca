@@ -312,6 +312,8 @@ Explicit non-goals:
 - [x] Run a Run-home subscription/pull service for active remote Dispatches.
 - [x] Persist worker-to-home lifecycle/questions until home import acknowledgment.
 - [x] Persist home-to-worker replies/control mail until worker import acknowledgment.
+- [x] Route coordinator `send --to dispatch:<id>` through that same durable relay and wake the
+      exact remote worker's local `check --wait`.
 - [x] Key relay items by pinned peer, Dispatch ID, direction, monotonic sequence, and a
       128-bit-or-stronger message ID.
 - [x] Import only contiguous source sequences; buffer/reject gaps.
@@ -1477,6 +1479,60 @@ Append new entries chronologically. Do not rewrite older entries except to corre
 - Next:
   - Commit/push the tested implementation, update the physical Windows dev runtime, then run exact
     Mac-to-Windows and Windows-to-Mac structured reads plus disconnect/reconnect.
+
+### 2026-07-24 — Reverse dogfood found missing coordinator control mail
+
+- Finding:
+  - A Windows Run home successfully started and read an exact Mac Codex worker, and worker-to-home
+    status relayed correctly. However, coordinator mail addressed to that remote worker remained
+    queued at the Run home because only question replies used the home-to-worker relay.
+  - The injected worker's local `check --wait` also looked only for a same-server Dispatch, so even
+    an imported generic message could not wake it.
+- Changes:
+  - Route stable `dispatch:<id>` coordinator guidance through the existing per-Dispatch durable
+    relay; terminal-handle targeting remains a legacy/local path.
+  - Import control mail idempotently on the worker server, tolerate a replay after a lost import
+    acknowledgment, and wake only the exact attached worker process.
+  - Return a direction-aware relay receipt and teach CLI help, the versioned skill, and the
+    cross-server cookbook to use the Dispatch ID for follow-ups.
+- Verification:
+  - Focused Node/CLI typechecks and 184 orchestration/federation/CLI tests passed before physical
+    revalidation.
+- Next:
+  - Regenerate the bundled skill guide, re-review the narrow change, then repeat Windows-home to
+    Mac-worker follow-up, completion, exact transcript continuation, and disconnect/reconnect.
+
+### 2026-07-24 — Federated control-mail race hardening
+
+- Changes:
+  - Fence already-imported relay sequences before parsing or applying message side effects.
+  - Require the remote attachment to remain ready before accepting each new coordinator message.
+  - Recheck the Run-home worker state after importing worker lifecycle mail and do not push queued
+    guidance after the worker settles.
+  - Wake filtered worker waiters with the imported message's real type instead of always using
+    `status`.
+  - Negotiate a narrow control-mail capability and reject the send before queueing when an older
+    worker server supports base federation but not the new relay kind.
+- Verification:
+  - Regression tests prove a replayed sequence with a different message ID creates no duplicate.
+  - A waiter registered before `worker_done` receives no stale control mail after completion, and a
+    direct late import is rejected as inactive.
+  - An imported escalation wakes an escalation-filtered waiter while a status-filtered waiter times
+    out normally.
+  - A new Run home connected to a prior worker build can still start the worker, but control mail
+    returns `capability_unsupported` and leaves no undeliverable relay row.
+  - The focused federation suites passed 24 tests; the broader orchestration/CLI selection passed
+    475 tests.
+  - Full typecheck, lint, bundled-skill verification, CLI build, Electron/Vite build,
+    `git diff --check`, and the design-document reference-name audit passed.
+- Findings:
+  - Relay ordering and worker settlement are control-plane guardrails, not agent policy: the
+    coordinator still chooses what to send and when.
+  - Terminal worker state is authoritative for delivery; queued guidance is retained at the Run
+    home but never injected into a completed worker.
+- Next:
+  - Complete the final read-only review, then repeat the physical Windows-home to Mac-worker
+    follow-up, completion, exact transcript continuation, and disconnect/reconnect proof.
 
 ### Entry template
 

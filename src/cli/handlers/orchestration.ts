@@ -91,7 +91,13 @@ type OrchestrationSendResult =
   | { message: { id: string }; lifecycle?: LifecycleSendRejection }
   | { messages: { id: string }[]; recipients: number }
   | {
-      relay: { messageId: string; sequence: number; dispatchId: string; accepted: true }
+      relay: {
+        messageId: string
+        sequence: number
+        dispatchId: string
+        destination?: 'run_home' | 'worker'
+        accepted: true
+      }
       lifecycle?: { action: 'completed' | 'failed' }
     }
 
@@ -524,6 +530,9 @@ export const ORCHESTRATION_HANDLERS: Record<string, CommandHandler> = {
         return `Sent ${r.message.id}`
       }
       if ('relay' in r) {
+        if (r.relay.destination === 'worker') {
+          return `Queued ${r.relay.messageId} for worker Dispatch ${r.relay.dispatchId}`
+        }
         return `Queued ${r.relay.messageId} for Run home (Dispatch ${r.relay.dispatchId})`
       }
       return `Sent ${r.messages.length} messages to ${r.recipients} recipients`
