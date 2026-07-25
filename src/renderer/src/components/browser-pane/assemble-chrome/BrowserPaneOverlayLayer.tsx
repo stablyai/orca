@@ -66,31 +66,57 @@ const BrowserOverlaySlot = memo(function BrowserOverlaySlot({
   const isMountAdmitted = useAnyBrowserPageMountAdmission(browserPageIds)
   const isPaintable = isActive || needsGuestPaint || isMountAdmitted
   // Anchor changes move tabs without reparenting guests; unassigned orphans stay hidden.
-  const style: React.CSSProperties = useMemo(
-    () =>
-      anchorName
-        ? {
-            position: 'absolute',
-            positionAnchor: anchorName,
-            top: `anchor(${anchorName} top)`,
-            left: `anchor(${anchorName} left)`,
-            width: `anchor-size(${anchorName} width)`,
-            height: `anchor-size(${anchorName} height)`,
-            display: isPaintable ? 'flex' : 'none',
-            pointerEvents: isActive ? 'auto' : 'none',
-            opacity: isActive ? 1 : 0
-          }
-        : {
-            position: 'absolute',
-            top: 0,
-            left: 0,
-            width: 0,
-            height: 0,
-            display: 'none',
-            pointerEvents: 'none'
-          },
-    [anchorName, isActive, isPaintable]
-  )
+  // Why (#10546): a non-active paintable pane used to sit opacity-0 over the agent.
+  // Electron webviews ignore parent pointer-events, so park those panes off-screen.
+  const style: React.CSSProperties = useMemo(() => {
+    if (!anchorName) {
+      return {
+        position: 'absolute',
+        top: 0,
+        left: 0,
+        width: 0,
+        height: 0,
+        display: 'none',
+        pointerEvents: 'none'
+      }
+    }
+    if (isActive) {
+      return {
+        position: 'absolute',
+        positionAnchor: anchorName,
+        top: `anchor(${anchorName} top)`,
+        left: `anchor(${anchorName} left)`,
+        width: `anchor-size(${anchorName} width)`,
+        height: `anchor-size(${anchorName} height)`,
+        display: 'flex',
+        pointerEvents: 'auto',
+        opacity: 1
+      }
+    }
+    if (isPaintable) {
+      return {
+        position: 'fixed',
+        top: 0,
+        left: -10000,
+        width: 1280,
+        height: 720,
+        display: 'flex',
+        pointerEvents: 'none',
+        opacity: 1
+      }
+    }
+    return {
+      position: 'absolute',
+      positionAnchor: anchorName,
+      top: `anchor(${anchorName} top)`,
+      left: `anchor(${anchorName} left)`,
+      width: `anchor-size(${anchorName} width)`,
+      height: `anchor-size(${anchorName} height)`,
+      display: 'none',
+      pointerEvents: 'none',
+      opacity: 0
+    }
+  }, [anchorName, isActive, isPaintable])
   const handleFocus = useCallback(() => {
     if (groupId !== undefined && onFocusOwningGroup) {
       onFocusOwningGroup(groupId)
