@@ -9,7 +9,11 @@ import {
   resolveEditorOpenTargetGroupId
 } from '../tabs/editor-open-target-group'
 import { resolveEditorPreviewIntent } from '../tabs/editor-preview-tab-setting'
-import { openWorkspaceEditorItem } from '../tabs/workspace-editor-item'
+import {
+  getReplaceablePreviewFileId,
+  openWorkspaceEditorItem,
+  removeEditorStateForReplacedPreview
+} from '../tabs/workspace-editor-item'
 
 export function createOpenFileCompare(
   set: EditorSet,
@@ -83,6 +87,22 @@ export function createOpenFileCompare(
           conflictReview: undefined,
           isPreview: isPreview || undefined,
           runtimeEnvironmentId
+        }
+        // Why: match openDiff — preview mode replaces a replaceable preview tab.
+        if (isPreview) {
+          const replaceablePreviewId = getReplaceablePreviewFileId(s, worktreeId, targetGroupId)
+          const replaceablePreviewIndex = s.openFiles.findIndex(
+            (file) => file.id === replaceablePreviewId
+          )
+          if (replaceablePreviewIndex !== -1) {
+            return {
+              openFiles: s.openFiles.map((file, index) =>
+                index === replaceablePreviewIndex ? newFile : file
+              ),
+              ...removeEditorStateForReplacedPreview(s, s.openFiles[replaceablePreviewIndex], id),
+              ...activeResult
+            }
+          }
         }
         return {
           openFiles: [...s.openFiles, newFile],
