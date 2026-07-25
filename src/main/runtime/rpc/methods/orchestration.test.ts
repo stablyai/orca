@@ -1095,6 +1095,29 @@ describe('orchestration RPC methods', () => {
       expect(db.getUnreadMessages(`run:${activeRunId}`)).toHaveLength(1)
     })
 
+    it('acknowledges a Run Delivery before returning --peek history', async () => {
+      setup()
+      db.insertMessage({
+        from: 'worker',
+        to: `run:${activeRunId}`,
+        subject: 'queued',
+        runId: activeRunId
+      })
+
+      const first = (await call('orchestration.check', {
+        terminal: 'term_coord'
+      })) as { count: number; deliveryId: string }
+      const peeked = (await call('orchestration.check', {
+        terminal: 'term_coord',
+        ack: first.deliveryId,
+        peek: true
+      })) as { acknowledged: string | null; count: number }
+
+      expect(first.count).toBe(1)
+      expect(peeked).toMatchObject({ acknowledged: first.deliveryId, count: 0 })
+      expect(db.getUnreadMessages(`run:${activeRunId}`)).toHaveLength(0)
+    })
+
     it('reconciles worker_done returned by a waiting manual check', async () => {
       setup()
       const { task, dispatch } = createDispatchedTask()

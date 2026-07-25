@@ -1534,6 +1534,41 @@ Append new entries chronologically. Do not rewrite older entries except to corre
   - Complete the final read-only review, then repeat the physical Windows-home to Mac-worker
     follow-up, completion, exact transcript continuation, and disconnect/reconnect proof.
 
+### 2026-07-24 — Physical control-mail acceptance and dogfood fixes
+
+- Changes:
+  - Restarted the physical Windows runtime from branch head and confirmed both federation
+    capabilities before creating a fresh Windows-home Run.
+  - Fixed `check --ack <delivery> --peek` so the exact Delivery is acknowledged before the
+    read-only history projection; the previous early return silently ignored `--ack`.
+  - Preserved the existing structured remote transport codes through the Run-home RPC boundary
+    instead of collapsing disconnect, timeout, and malformed-response failures to `runtime_error`.
+- Verification:
+  - Run `run_074503e3edc6`, Task `task_8a07840e7aad`, and Dispatch `ctx_d6bac1ee6409` started a fresh
+    Codex worker in the existing Mac worktree with setup `not_applicable`.
+  - The worker relayed `ORCA_MAC_CONTROL_INITIAL_7C31`, blocked on its Dispatch inbox, received
+    coordinator guidance addressed to the stable Dispatch as `ORCA_MAC_CONTROL_FOLLOWUP_A842`, and
+    returned one authenticated successful `worker_done` containing both markers.
+  - The Windows home settled the Task and Dispatch once. `worker-read --source auto` returned
+    `source=transcript`, `provider=codex`, an opaque cursor, both markers, and no capability token or
+    transcript path.
+  - Removing the Mac listener left the Windows Task completed. Reconnecting with the wrong leftover
+    profile was rejected as unauthorized; reconnecting with the original profile preserved the
+    settled Dispatch and correctly returned `worker_identity_changed` for transcript reads after the
+    exact worker process was gone.
+  - The focused RPC suites passed 163 tests; formatting, diff checks, full typecheck, CLI build, and
+    desktop/web builds passed.
+- Findings:
+  - Delivery acknowledgment must compose with inspection modes explicitly; a successful command may
+    not silently ignore the acknowledgment effect.
+  - Remote transport already had narrow error codes. Preserving them is enough; no federation error
+    hierarchy or retry engine is needed.
+  - Saved peer identity fencing prevented accidental adoption of a server started from a different
+    profile. Exact process fencing also prevented stale transcript attribution after restart.
+- Next:
+  - Build and restart Windows with these two dogfood fixes, repeat the acknowledgment and typed
+    disconnect checks, then run final quality gates and update this entry with the final branch head.
+
 ### Entry template
 
 ```text

@@ -641,13 +641,24 @@ export const ORCHESTRATION_METHODS: RpcMethod[] = [
         const address = `run:${run.id}`
         runtime.ensureOrchestrationFederationRelay(run.id)
 
+        const acknowledged = params.ack
+          ? db.acknowledgeRunDelivery({
+              runId: run.id,
+              consumerGeneration: generation,
+              deliveryId: params.ack
+            })
+          : undefined
         if (params.peek || params.all || params.unread === false) {
           const history = db.getRunMailboxHistory(run.id, 100, typeFilter)
           const messages =
             params.all || (params.unread === false && !params.peek)
               ? history
               : history.filter((message) => message.read === 0)
-          const result = { messages, count: messages.length }
+          const result = {
+            messages,
+            count: messages.length,
+            acknowledged: acknowledged?.delivery.id ?? null
+          }
           if (params.format || params.inject) {
             return {
               ...result,
@@ -658,13 +669,6 @@ export const ORCHESTRATION_METHODS: RpcMethod[] = [
           return { ...result, runId: run.id }
         }
 
-        const acknowledged = params.ack
-          ? db.acknowledgeRunDelivery({
-              runId: run.id,
-              consumerGeneration: generation,
-              deliveryId: params.ack
-            })
-          : undefined
         const readDelivery = (wakeTypes?: MessageType[]) =>
           db.getOrCreateRunDelivery({
             runId: run.id,
