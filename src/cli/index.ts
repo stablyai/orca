@@ -22,7 +22,11 @@ const COMMAND_PATHS = COMMAND_SPECS.flatMap((spec) => specPaths(spec))
 function shouldIgnoreRemoteSelection(commandPath: string[]): boolean {
   return (
     commandPath[0] === 'environment' ||
-    commandPath[0] === 'serve' ||
+    // Why: bare `serve` starts a local runtime, so remote selection is moot and
+    // must be ignored. But `serve stats` queries a (possibly remote) runtime and
+    // MUST honor --environment/ORCA_ENVIRONMENT — narrow this guard to exactly
+    // `['serve']` so the stats subcommand keeps its remote selection.
+    (commandPath[0] === 'serve' && commandPath.length === 1) ||
     commandPath[0] === 'agent' ||
     commandPath[0] === 'vm' ||
     commandPath[0] === 'agent-context'

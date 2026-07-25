@@ -30,5 +30,16 @@ export const SERVE_COMMAND_SPECS: CommandSpec[] = [
       'orca serve --port 6768 --pairing-address 100.64.1.20',
       'orca serve --pairing-address 100.64.1.20 --mobile-pairing'
     ]
+  },
+  {
+    path: ['serve', 'stats'],
+    summary: 'Show live runtime counts (agents, tasks, terminals, worktrees)',
+    usage: 'orca serve stats [--json]',
+    allowedFlags: [...GLOBAL_FLAGS],
+    notes: [
+      'Queries a running runtime (local or --environment / pairing). Does not start a server.',
+      'JSON shape is a stable contract: version, uptimeSeconds, port, counts.{agents,tasks,terminals,worktrees}.'
+    ],
+    examples: ['orca serve stats', 'orca serve stats --json']
   }
 ]

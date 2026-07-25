@@ -82,6 +82,12 @@ export class StatsCollector {
     return this.aggregates.totalAgentsSpawned
   }
 
+  // Why: `liveAgents` already dedupes ptyId → startTimestamp for exactly the
+  // "currently live" set, so its size is the live agent count for serve stats.
+  getLiveAgentCount(): number {
+    return this.liveAgents.size
+  }
+
   // ── Recording ──────────────────────────────────────────────────────
 
   record(event: StatsEvent): void {

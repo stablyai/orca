@@ -413,6 +413,7 @@ import type {
   RuntimeTerminalDriverState,
   RuntimeSyncWindowGraph,
   RuntimeWorktreeListResult,
+  RuntimeServeStatsResult,
   BrowserTabInfo,
   BrowserScreencastResult
 } from '../../shared/runtime-types'
@@ -471,7 +472,7 @@ import {
 } from '../../shared/claude-agent-teams-tmux-compat'
 import { joinWorktreeRelativePath } from './runtime-relative-paths'
 import { collectMemorySnapshot } from '../memory/collector'
-import { BrowserWindow, ipcMain } from 'electron'
+import { app, BrowserWindow, ipcMain } from 'electron'
 import type { AgentBrowserBridge } from '../browser/agent-browser-bridge'
 import type { BrowserBackend } from '../browser/browser-backend'
 import { BrowserError } from '../browser/cdp-bridge'
@@ -2865,6 +2866,10 @@ export class OrcaRuntimeService {
   private freshSubscribeGuard = new Set<string>()
 
   private stats: StatsCollector | null = null
+  // Why: the WS port is owned by OrcaRuntimeRpcServer, not the runtime. It sets
+  // this at construction so `serve stats` can report the bound port without the
+  // runtime reaching back into the transport layer.
+  private servePort: number | null = null
   // Why (§3.3 + §7.1): the renderer-create path and coordinator
   // `probeWorktreeDrift` share this cache so a create that already fetched
   // `origin` within the last 30s does not re-fetch during dispatch, and
@@ -3038,6 +3043,35 @@ export class OrcaRuntimeService {
 
   getStatsSummary(): StatsSummary | null {
     return this.stats?.getSummary() ?? null
+  }
+
+  setServePort(port: number | null): void {
+    this.servePort = port
+  }
+
+  // Why: live current-state counts for `orca serve stats --json`. Terminals and
+  // worktrees come from in-memory registries; tasks read the local orchestration
+  // DB in-process (same source as orchestration.taskList); agents come from the
+  // stats collector's live set. Version/uptime/port round out the diagnostic
+  // snapshot. This is a stable contract — see RuntimeServeStatsResult.
+  async getServeStats(): Promise<RuntimeServeStatsResult> {
+    const worktrees = await this.listManagedWorktrees()
+    const tasks = this.getOrchestrationDb().listTasksWithDispatch()
+    return {
+      version: app.getVersion(),
+      uptimeSeconds: Math.floor((Date.now() - this.startedAt) / 1000),
+      // Why: the RPC server sets this to the actual bound WS port after the
+      // transport binds (post-listen resolvedPort), or null when no WS listener
+      // is active. Reporting the real bound port matters most in the port-
+      // conflict / restart cases this diagnostic exists to surface.
+      port: this.servePort,
+      counts: {
+        agents: this.stats?.getLiveAgentCount() ?? 0,
+        tasks: tasks.length,
+        terminals: this.leaves.size,
+        worktrees: worktrees.totalCount
+      }
+    }
   }
 
   getMemorySnapshot(): Promise<MemorySnapshot> {
