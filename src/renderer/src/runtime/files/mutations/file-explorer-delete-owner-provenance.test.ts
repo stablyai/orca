@@ -246,11 +246,15 @@ describe('file explorer deletion owner provenance', () => {
     expect(fsDeletePath).not.toHaveBeenCalled()
   })
 
-  it('fails closed when an exact worktree ID belongs to multiple hosts', async () => {
+  it('fails closed when an exact worktree ID belongs to multiple hosts and focus matches neither', async () => {
     useAppStore.setState({
-      repos: duplicateHostRepos(),
+      settings: { activeRuntimeEnvironmentId: 'other-hub' } as never,
+      repos: [],
       worktreesByRepo: {
-        [LOCAL_REPO_ID]: [makeWorktree('local'), makeWorktree(`ssh:${SSH_ID}`)]
+        [LOCAL_REPO_ID]: [
+          makeWorktree(`ssh:${SSH_ID}`, 'hub-a'),
+          makeWorktree(`ssh:${SSH_ID}`, 'hub-b')
+        ]
       }
     })
     const owner = getFileExplorerOperationOwner(LOCAL_WORKTREE_ID)
