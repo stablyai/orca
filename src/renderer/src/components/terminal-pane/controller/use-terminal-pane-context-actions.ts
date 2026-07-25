@@ -2,10 +2,15 @@ import { usePaneTitleRenameActions } from '../titles/use-pane-title-rename-actio
 import { useCallback, useEffect } from 'react'
 import { useTerminalPaneContextMenu } from '../context-menu/use-terminal-pane-context-menu'
 import type { TerminalPaneCloseController } from '../layout/close/use-terminal-pane-close-actions'
+import type { HttpLinkRoutingPreferenceRequester } from '@/lib/browser/navigation/http-link-destinations'
 import { useTerminalQuickCommandHosts } from '@/hooks/use-terminal-quick-command-hosts'
 import { useVisibleTerminalQuickCommandHosts } from '@/hooks/use-visible-terminal-quick-command-hosts'
 
-export function useTerminalPaneContextActions(controller: TerminalPaneCloseController) {
+export function useTerminalPaneContextActions(
+  controller: TerminalPaneCloseController & {
+    requestOpenLinksInAppPreference?: HttpLinkRoutingPreferenceRequester
+  }
+) {
   const {
     cancelPendingRenameFrames,
     clearPaneScrollback,
@@ -13,6 +18,7 @@ export function useTerminalPaneContextActions(controller: TerminalPaneCloseContr
     containerRef,
     cwd,
     forceBracketedMultilineTextPaste,
+    requestOpenLinksInAppPreference,
     handleClearPaneTitleShortcut,
     handleRequestClosePane,
     handleStartRename,
@@ -81,7 +87,8 @@ export function useTerminalPaneContextActions(controller: TerminalPaneCloseContr
     onAgentSessionForkReady: setAgentSessionFork,
     onAgentSessionContinuationReady: setAgentSessionContinuation,
     forceBracketedMultilineTextPaste,
-    rightClickToPaste
+    rightClickToPaste,
+    requestOpenLinksInAppPreference
   })
   const {
     executionHostId: quickCommandExecutionHostId,

@@ -76,7 +76,8 @@ export function useTerminalPaneContextMenu({
   onAgentSessionForkReady,
   onAgentSessionContinuationReady,
   forceBracketedMultilineTextPaste,
-  rightClickToPaste
+  rightClickToPaste,
+  requestOpenLinksInAppPreference
 }: UseTerminalPaneContextMenuDeps): TerminalMenuState {
   const contextPaneIdRef = useRef<number | null>(null)
   const [linkTarget, setLinkTarget] = useState<TerminalContextMenuLinkTarget | null>(null)
@@ -145,7 +146,7 @@ export function useTerminalPaneContextMenu({
       return
     }
     if (linkTarget.kind === 'http') {
-      openRoutedHttpLink(linkTarget.url, { worktreeId })
+      openRoutedHttpLink(linkTarget.url, { worktreeId, requestOpenLinksInAppPreference })
       return
     }
     const state = useAppStore.getState()
@@ -164,7 +165,7 @@ export function useTerminalPaneContextMenu({
         worktreeId
       )
     })
-  }, [fallbackCwd, linkTarget, paneTransportsRef, resolveMenuPane, worktreeId])
+  }, [fallbackCwd, linkTarget, paneTransportsRef, requestOpenLinksInAppPreference, resolveMenuPane, worktreeId])
 
   const onCopyLinkTarget = useCallback(async (): Promise<void> => {
     if (!linkTarget) {
