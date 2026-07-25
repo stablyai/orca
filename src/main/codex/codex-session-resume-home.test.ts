@@ -94,6 +94,69 @@ describe('resolveTrustedCodexSessionResumeHome', () => {
     ).toBeNull()
   })
 
+  // Why: the extended spelling can appear on the trusted-home side too, so both
+  // sides of the containment comparison must fold, not just the rollout path.
+  it('accepts a normal-form rollout under an extended-length trusted home', () => {
+    const homePath = '\\\\?\\C:\\Users\\Example\\.codex'
+    expect(
+      resolveTrustedCodexSessionResumeHome({
+        transcriptPath: 'C:\\Users\\Example\\.codex\\sessions\\2026\\07\\20\\rollout-a.jsonl',
+        trustedCodexHomes: [homePath],
+        fileIsRegular: () => true
+      })
+    ).toBe(homePath)
+  })
+
+  // Why: the .zst sibling is derived from the persisted path, so a folded
+  // comparison copy must never leak into the probed or returned path.
+  it('follows a compressed extended-length rollout without losing the extended spelling', async () => {
+    const homePath = 'C:\\Users\\Example\\.codex'
+    const plainPath =
+      '\\\\?\\C:\\Users\\Example\\.codex\\sessions\\2026\\07\\20\\rollout-session.jsonl'
+    const compressedPath = `${plainPath}.zst`
+
+    await expect(
+      findTrustedCodexSessionResume({
+        sessionId: 'session-a',
+        transcriptPath: plainPath,
+        trustedCodexHomes: [homePath],
+        fileIsRegular: (filePath) => filePath === compressedPath
+      })
+    ).resolves.toEqual({ homePath, transcriptPath: compressedPath })
+  })
+
+  // Why: the legacy id scan runs the same namespace check per directory entry,
+  // so extended-length entries must resolve and device namespaces must not.
+  it('accepts extended-length scan entries but not device-namespace entries', async () => {
+    const sessionId = '019f81b9-19a9-7651-a8d1-352d9420bd11'
+    const homePath = 'C:\\Users\\Example\\.codex'
+    const extendedEntry = `\\\\?\\C:\\Users\\Example\\.codex\\sessions\\2026\\07\\20\\rollout-${sessionId}.jsonl`
+
+    await expect(
+      findTrustedCodexSessionResume({
+        sessionId,
+        transcriptPath: undefined,
+        trustedCodexHomes: [homePath],
+        fileIsRegular: () => true,
+        listSessionFiles: async function* (): AsyncIterable<string> {
+          yield extendedEntry
+        }
+      })
+    ).resolves.toEqual({ homePath, transcriptPath: extendedEntry })
+
+    await expect(
+      findTrustedCodexSessionResume({
+        sessionId,
+        transcriptPath: undefined,
+        trustedCodexHomes: [homePath],
+        fileIsRegular: () => true,
+        listSessionFiles: async function* (): AsyncIterable<string> {
+          yield `\\\\.\\C:\\Users\\Example\\.codex\\sessions\\2026\\07\\20\\rollout-${sessionId}.jsonl`
+        }
+      })
+    ).resolves.toBeNull()
+  })
+
   it('rejects paths outside trusted homes or outside the rollout layout', () => {
     const fileIsRegular = vi.fn((): boolean => true)
     expect(
