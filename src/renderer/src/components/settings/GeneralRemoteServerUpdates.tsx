@@ -86,7 +86,7 @@ export function GeneralRemoteServerUpdates(): React.JSX.Element | null {
         'auto.components.settings.GeneralRemoteServerUpdates.description',
         'Check and update paired Orca servers from this client.'
       )}
-      keywords={['remote server', 'update all', 'paired', 'version']}
+      keywords={['remote server', 'update all', 'paired', 'version', 'rc', 'prerelease', 'perf']}
       className="space-y-3"
     >
       <div className="space-y-0.5">

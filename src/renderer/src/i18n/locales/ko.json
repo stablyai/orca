@@ -40,6 +40,7 @@
   },
   "menu": {
     "checkForUpdates": "업데이트 확인...",
+    "checkForPrereleaseUpdates": "프리릴리스 업데이트 확인...",
     "settings": "설정",
     "exploreOrca": "Orca 둘러보기",
     "gettingStarted": "Orca 시작하기",
@@ -8541,6 +8542,7 @@
               "09568ccc65": "서버",
               "ebd5369acf": "환경",
               "d198440ce3": "런타임",
+              "prerelease": "프리릴리스",
               "baec27aa8f": "이 브라우저를 저장된 Orca 서버에 연결하세요.",
               "3517fb2ec0": "활성 서버",
               "c6e5a03aa0": "개발 박스",

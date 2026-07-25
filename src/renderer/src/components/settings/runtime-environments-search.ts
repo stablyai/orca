@@ -57,6 +57,18 @@ export const getRuntimeEnvironmentsSearchEntry = createLocalizedCatalog(
       ...translateSearchKeyword(
         'auto.components.settings.runtime.environments.search.c6e5a03aa0',
         'dev box'
+      ),
+      ...translateSearchKeyword(
+        'auto.components.settings.runtime.environments.search.prerelease',
+        'prerelease'
+      ),
+      ...translateSearchKeyword('auto.components.settings.runtime.environments.search.rc', 'rc', {
+        englishOnly: true
+      }),
+      ...translateSearchKeyword(
+        'auto.components.settings.runtime.environments.search.perf',
+        'perf',
+        { englishOnly: true }
       )
     ]
   })
@@ -104,6 +116,18 @@ export const getWebRuntimeEnvironmentsSearchEntry = createLocalizedCatalog(
       ...translateSearchKeyword(
         'auto.components.settings.runtime.environments.search.772e3b4753',
         'vm'
+      ),
+      ...translateSearchKeyword(
+        'auto.components.settings.runtime.environments.search.prerelease',
+        'prerelease'
+      ),
+      ...translateSearchKeyword('auto.components.settings.runtime.environments.search.rc', 'rc', {
+        englishOnly: true
+      }),
+      ...translateSearchKeyword(
+        'auto.components.settings.runtime.environments.search.perf',
+        'perf',
+        { englishOnly: true }
       )
     ]
   })

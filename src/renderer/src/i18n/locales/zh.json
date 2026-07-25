@@ -40,6 +40,7 @@
   },
   "menu": {
     "checkForUpdates": "检查更新...",
+    "checkForPrereleaseUpdates": "检查预发布更新...",
     "settings": "设置",
     "exploreOrca": "探索 Orca",
     "gettingStarted": "Orca 入门",
@@ -8541,6 +8542,7 @@
               "09568ccc65": "服务器",
               "ebd5369acf": "环境",
               "d198440ce3": "运行时",
+              "prerelease": "预发布",
               "baec27aa8f": "将此浏览器连接到已保存的 Orca 服务器。",
               "3517fb2ec0": "活动服务器",
               "c6e5a03aa0": "开发盒",

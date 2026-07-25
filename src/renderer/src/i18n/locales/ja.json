@@ -40,6 +40,7 @@
   },
   "menu": {
     "checkForUpdates": "アップデートを確認...",
+    "checkForPrereleaseUpdates": "プレリリース版のアップデートを確認...",
     "settings": "設定",
     "exploreOrca": "Orca を探索",
     "gettingStarted": "Orca を使い始める",
@@ -8578,6 +8579,7 @@
               "09568ccc65": "サーバ",
               "ebd5369acf": "環境",
               "d198440ce3": "ランタイム",
+              "prerelease": "プレリリース",
               "baec27aa8f": "このブラウザを保存された Orca サーバーに接続します。",
               "3517fb2ec0": "アクティブサーバー",
               "c6e5a03aa0": "開発ボックス",
