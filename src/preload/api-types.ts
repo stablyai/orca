@@ -909,6 +909,18 @@ export type NativeChatSubscribeArgs = {
   limit?: number
 }
 
+/** An ACP agent's tool-approval request, pushed while a chat subscription is
+ *  live. The agent's turn is blocked until `respondAcpPermission` answers it. */
+export type NativeChatAcpPermissionPrompt = {
+  requestId: string
+  subscriptionId: string
+  title: string
+  detail?: string
+  /** `send` carries the ACP optionId, mirroring the terminal path where it
+   *  carries a PTY literal — the approval card passes it back untouched. */
+  options: { label: string; send: string }[]
+}
+
 export type NativeChatApi = {
   /** Read the on-disk transcript for an agent + session id, windowed to the most recent `limit`
    *  turns. `transcriptPath` is the hook-reported authoritative path, preferred over the id glob. */
@@ -924,6 +936,19 @@ export type NativeChatApi = {
     args: NativeChatSubscribeArgs,
     onFrame: (frame: NativeChatSubscriptionFrame) => void
   ) => () => void
+  /** Listen for ACP tool-approval requests. Returns an unsubscribe fn. */
+  onAcpPermissionRequested: (
+    listener: (prompt: NativeChatAcpPermissionPrompt) => void
+  ) => () => void
+  /** Answer a pending ACP approval. `optionId: null` cancels — the operator
+   *  dismissing the card is an explicit deny, never an implicit allow. */
+  respondAcpPermission: (requestId: string, optionId: string | null) => Promise<boolean>
+  /** Send operator text to an ACP agent as a new prompt turn. Rejects when the
+   *  chat view has no live ACP session (transcript agent, or agent still
+   *  starting) so the caller can fall back to the PTY path. */
+  sendAcpPrompt: (subscriptionId: string, text: string) => Promise<boolean>
+  /** Interrupt the ACP agent's in-flight turn. */
+  cancelAcpTurn: (subscriptionId: string) => void
 }
 
 export type AppApi = {

@@ -530,3 +530,61 @@
   color: #a1a1aa;
   background: rgba(24, 24, 27, 0.85);
 }
+
+/* Terminal ↔ native chat flip.
+ *
+ * The chat surface is an overlay above a still-mounted terminal, so only the
+ * chat layer rotates: it swings in on the Y axis to cover the terminal, and
+ * swings back out to reveal it. The terminal itself is never transformed —
+ * putting the xterm canvas in a 3D transform promotes it to a composited layer
+ * and blurs glyph rendering.
+ *
+ * Timing is mirrored in use-native-chat-flip.ts (NATIVE_CHAT_FLIP_MS). */
+.native-chat-flip-in,
+.native-chat-flip-out {
+  transform-origin: left center;
+  backface-visibility: hidden;
+  will-change: transform, opacity;
+}
+
+.native-chat-flip-in {
+  animation: native-chat-flip-in 260ms cubic-bezier(0.2, 0.7, 0.3, 1) both;
+}
+
+.native-chat-flip-out {
+  animation: native-chat-flip-out 260ms cubic-bezier(0.5, 0, 0.75, 0.4) both;
+  /* The layer is on its way out; clicks belong to the terminal underneath. */
+  pointer-events: none;
+}
+
+@keyframes native-chat-flip-in {
+  from {
+    transform: perspective(1600px) rotateY(-88deg);
+    opacity: 0;
+  }
+  to {
+    transform: perspective(1600px) rotateY(0deg);
+    opacity: 1;
+  }
+}
+
+@keyframes native-chat-flip-out {
+  from {
+    transform: perspective(1600px) rotateY(0deg);
+    opacity: 1;
+  }
+  to {
+    transform: perspective(1600px) rotateY(-88deg);
+    opacity: 0;
+  }
+}
+
+/* Motion-sensitive operators get the switch with no rotation. The hook also
+ * skips the held-open exit, so this is belt and braces for a class that is
+ * already applied. */
+@media (prefers-reduced-motion: reduce) {
+  .native-chat-flip-in,
+  .native-chat-flip-out {
+    animation: none;
+  }
+}

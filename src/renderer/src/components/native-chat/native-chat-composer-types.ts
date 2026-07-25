@@ -1,6 +1,9 @@
 import type { AgentType } from '../../../../shared/agent-status-types'
 
 export type NativeChatComposerProps = {
+  /** When set, the pane's conversation is an ACP session: sends go to the agent
+   *  as a prompt turn instead of being typed into a PTY. */
+  acpSubscriptionId?: string | null
   /** Tab hosting the agent; used to resolve the live ptyId + runtime settings. */
   terminalTabId: string
   /** Stable split-leaf identity; unlike a PTY id, this survives reconnects. */

@@ -103,6 +103,7 @@ import {
 } from '@/lib/pane-manager/mobile-driver-state'
 import { shouldChatTakeOverMobileSurface } from '../native-chat/native-chat-send-eligibility'
 import { canToggleNativeChat } from '../native-chat/native-chat-availability'
+import { useNativeChatFlip } from '../native-chat/use-native-chat-flip'
 import {
   nativeChatLaunchAgentForLeaf,
   resolveNativeChatLeafRoute,
@@ -610,6 +611,9 @@ export default function TerminalPane({
   )
   const nativeChatEnabled = useAppStore((store) => store.settings?.experimentalNativeChat === true)
   const effectiveChatViewMode = nativeChatEnabled && isChatViewMode
+  // Holds the chat layer in the tree through its flip-out so the terminal is
+  // revealed by the animation rather than appearing under a hard cut.
+  const chatFlip = useNativeChatFlip(effectiveChatViewMode)
   const unifiedTabLabel = useAppStore(
     (store) =>
       getCachedUnifiedTerminalTabForWorktree(store.unifiedTabsByWorktree, worktreeId, tabId)?.label
@@ -2988,9 +2992,11 @@ export default function TerminalPane({
         panes={managerRef.current?.getPanes() ?? []}
         paneIds={sessionRestoredBannerPaneIds}
       />
-      {effectiveChatViewMode && chatPane?.container
+      {chatFlip.rendered && chatPane?.container
         ? createPortal(
-            <div className="absolute inset-0 z-10 flex min-h-0 min-w-0 bg-background">
+            <div
+              className={`absolute inset-0 z-10 flex min-h-0 min-w-0 bg-background ${chatFlip.className}`}
+            >
               <NativeChatView
                 terminalTabId={tabId}
                 paneKey={makePaneKey(tabId, chatPane.leafId)}
