@@ -91,21 +91,42 @@ describe('registerSystemResumeBroadcast', () => {
     clock.value += 109 * 60_000
     fireResume()
 
-    expect(breadcrumbNames()).toEqual(['system_suspended', 'system_resumed'])
+    expect(breadcrumbNames()).toEqual(['system_slept'])
     expect(getCrashBreadcrumbSnapshot().at(-1)?.data).toEqual({ suspendedForMs: 109 * 60_000 })
   })
 
-  it('omits the sleep span when resume arrives without a recorded suspend', () => {
+  it('records nothing when resume arrives without a recorded suspend', () => {
     const { source, fireResume } = createResumeSource()
-    registerSystemResumeBroadcast({ resumeSource: source, getWindows: () => [] })
+    const window = createWindow()
+    registerSystemResumeBroadcast({ resumeSource: source, getWindows: () => [window] })
 
     fireResume()
 
-    expect(breadcrumbNames()).toEqual(['system_resumed'])
-    expect(getCrashBreadcrumbSnapshot().at(-1)?.data).toBeUndefined()
+    expect(breadcrumbNames()).toEqual([])
+    expect(window.webContents.send).toHaveBeenCalledWith(SYSTEM_RESUMED_CHANNEL)
   })
 
-  it('measures each sleep span independently across repeated cycles', () => {
+  it('ignores maintenance sleeps too short to swallow a renderer heartbeat', () => {
+    const { source, fireSuspend, fireResume } = createResumeSource()
+    const clock = { value: 0 }
+    registerSystemResumeBroadcast({
+      resumeSource: source,
+      getWindows: () => [],
+      now: () => clock.value
+    })
+
+    // Why: 20 maintenance cycles must not evict the 30-entry breadcrumb ring.
+    for (let cycle = 0; cycle < 20; cycle++) {
+      fireSuspend()
+      clock.value += 2_000
+      fireResume()
+      clock.value += 30_000
+    }
+
+    expect(breadcrumbNames()).toEqual([])
+  })
+
+  it('measures each reportable sleep independently across repeated cycles', () => {
     const { source, fireSuspend, fireResume } = createResumeSource()
     const clock = { value: 0 }
     registerSystemResumeBroadcast({
@@ -115,19 +136,17 @@ describe('registerSystemResumeBroadcast', () => {
     })
 
     fireSuspend()
-    clock.value += 5_000
+    clock.value += 5 * 60_000
     fireResume()
     clock.value += 60_000
     fireSuspend()
-    clock.value += 2_000
+    clock.value += 2 * 60_000
     fireResume()
     // Why: a spurious resume after the cycles must not re-report the last sleep.
-    clock.value += 30_000
+    clock.value += 30 * 60_000
     fireResume()
 
-    const spans = getCrashBreadcrumbSnapshot()
-      .filter((breadcrumb) => breadcrumb.name === 'system_resumed')
-      .map((breadcrumb) => breadcrumb.data?.suspendedForMs)
-    expect(spans).toEqual([5_000, 2_000, undefined])
+    const spans = getCrashBreadcrumbSnapshot().map((breadcrumb) => breadcrumb.data?.suspendedForMs)
+    expect(spans).toEqual([5 * 60_000, 2 * 60_000])
   })
 })

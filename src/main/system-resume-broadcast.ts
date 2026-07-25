@@ -21,6 +21,11 @@ type SystemResumeBroadcastOptions = {
   now?: () => number
 }
 
+// Why: macOS maintenance-sleeps dozens of times a day (median span ~2s), which would
+// flood the 30-entry breadcrumb ring and evict the crash evidence this is meant to
+// explain. Only a sleep long enough to swallow a renderer heartbeat is worth recording.
+const MIN_REPORTABLE_SUSPEND_MS = 60_000
+
 // Why: renderers cannot observe OS sleep/wake directly, and Linux has no
 // window-occlusion tracking so visibilitychange never fires around suspend.
 // Wake-sensitive renderer recovery needs this explicit resume signal.
@@ -36,13 +41,14 @@ export function registerSystemResumeBroadcast(
 
   const onSuspend = (): void => {
     suspendedAt = now()
-    recordCrashBreadcrumb('system_suspended')
   }
 
   const onResume = (): void => {
-    const suspendedForMs = suspendedAt === null ? undefined : Math.max(0, now() - suspendedAt)
+    const suspendedForMs = suspendedAt === null ? null : Math.max(0, now() - suspendedAt)
     suspendedAt = null
-    recordCrashBreadcrumb('system_resumed', suspendedForMs === undefined ? {} : { suspendedForMs })
+    if (suspendedForMs !== null && suspendedForMs >= MIN_REPORTABLE_SUSPEND_MS) {
+      recordCrashBreadcrumb('system_slept', { suspendedForMs })
+    }
     for (const window of getWindows()) {
       if (!window.isDestroyed()) {
         window.webContents.send(SYSTEM_RESUMED_CHANNEL)
