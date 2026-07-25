@@ -1,5 +1,5 @@
 import { StyleSheet } from 'react-native'
-import { radii, spacing, typography, type ThemeColors } from '../src/theme/mobile-theme'
+import { radii, spacing, typography, type ThemeColors } from '../theme/mobile-theme'
 
 // Extracted from voice-settings.tsx so the screen stays under the max-lines cap
 // (394/400 before extraction). ThemeColors factory for useThemedStyles.

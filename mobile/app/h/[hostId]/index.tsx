@@ -69,7 +69,7 @@ import { getCachedWorktrees, setCachedWorktrees } from '../../../src/cache/workt
 import { setCachedRepos } from '../../../src/cache/repo-cache'
 import { spacing } from '../../../src/theme/mobile-theme'
 import { useTheme, useThemedStyles } from '../../../src/theme/theme-context'
-import { createHostScreenStyles } from './host-screen-styles'
+import { createHostScreenStyles } from '../../../src/host/host-screen-styles'
 import { useResponsiveLayout } from '../../../src/layout/responsive-layout'
 import { leaveHostRoute } from '../../../src/host-route-exit'
 import { loadPinnedIds, savePinnedIds } from '../../../src/storage/preferences'

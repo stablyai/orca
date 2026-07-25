@@ -1,5 +1,5 @@
 import { StyleSheet } from 'react-native'
-import { spacing, typography, type ThemeColors } from '../../../src/theme/mobile-theme'
+import { spacing, typography, type ThemeColors } from '../theme/mobile-theme'
 
 // Born themed: list / section / filter modal / confirm sheet.
 export const createHostWorktreeListStyles = (colors: ThemeColors) =>

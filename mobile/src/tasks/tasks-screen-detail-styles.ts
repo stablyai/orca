@@ -1,5 +1,5 @@
 import { Platform, StyleSheet } from 'react-native'
-import { spacing, typography, type ThemeColors } from '../../../src/theme/mobile-theme'
+import { spacing, typography, type ThemeColors } from '../theme/mobile-theme'
 
 // Born themed — split from tasks.tsx (no max-lines headroom).
 export const createTasksScreenDetailStyles = (colors: ThemeColors) =>

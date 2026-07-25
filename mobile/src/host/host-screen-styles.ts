@@ -1,4 +1,4 @@
-import type { ThemeColors } from '../../../src/theme/mobile-theme'
+import type { ThemeColors } from '../theme/mobile-theme'
 import { createHostScreenChromeStyles } from './host-screen-chrome-styles'
 import { createHostWorktreeListStyles } from './host-worktree-list-styles'
 

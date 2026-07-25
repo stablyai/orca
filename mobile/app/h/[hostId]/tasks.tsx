@@ -115,7 +115,7 @@ import {
   createTasksScreenStyles,
   getGitLabPipelineStatusStyle,
   getPrSignalToneStyle
-} from './tasks-screen-styles'
+} from '../../../src/tasks/tasks-screen-styles'
 import { triggerMediumImpact } from '../../../src/platform/haptics'
 import {
   type GitHubProjectSortDirection,

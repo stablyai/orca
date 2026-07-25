@@ -1,5 +1,5 @@
 import { StyleSheet } from 'react-native'
-import { radii, spacing, typography, type ThemeColors } from '../../../src/theme/mobile-theme'
+import { radii, spacing, typography, type ThemeColors } from '../theme/mobile-theme'
 
 // Born themed: extracted from host index (1594/1603) so conversion fits the cap.
 // Chrome / toolbar / search / empty states.

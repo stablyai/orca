@@ -129,7 +129,7 @@ async function loadThemedFactories(): Promise<readonly StyleFactory[]> {
     // App screens pull expo modules that vitest cannot load; their pure style
     // module (voice-settings-styles) and co-located component factories below
     // cover batch 3. Other app factories are identity-checked via git diff -w.
-    import('../../app/voice-settings-styles'),
+    import('../dictation/voice-settings-styles'),
     import('../components/ConnectionLog'),
     import('../components/VoiceModelList'),
     import('../components/terminal-shortcut-settings-styles'),
@@ -139,8 +139,8 @@ async function loadThemedFactories(): Promise<readonly StyleFactory[]> {
     import('../onboarding/mobile-onboarding-styles'),
     import('../components/MobileHostCard'),
     import('../../app/h/[hostId]/accounts-screen-styles'),
-    import('../../app/h/[hostId]/host-screen-chrome-styles'),
-    import('../../app/h/[hostId]/host-worktree-list-styles'),
+    import('../host/host-screen-chrome-styles'),
+    import('../host/host-worktree-list-styles'),
     import('../components/smart-workspace-source-drawer-styles'),
     import('../agent-history/agent-history-styles'),
     import('../browser/MobileBrowserKeyRow'),
@@ -173,7 +173,7 @@ async function loadThemedFactories(): Promise<readonly StyleFactory[]> {
     import('../components/pr-sidebar/pr-actions-styles'),
     import('../components/pr-sidebar/pr-create-empty-state-styles'),
     import('../terminal/terminal-webview-frame-styles'),
-    import('../../app/h/[hostId]/tasks-screen-styles')
+    import('../tasks/tasks-screen-styles')
   ])
   const [
     bottomDrawer,
@@ -470,7 +470,7 @@ describe('themed style factories', () => {
     expect(banner.text.color).toBe(darkColors.statusRed)
     expect(banner.actionText.color).toBe(darkColors.accentBlue)
 
-    const { createVoiceSettingsStyles } = await import('../../app/voice-settings-styles')
+    const { createVoiceSettingsStyles } = await import('../dictation/voice-settings-styles')
     const { createConnectionLogStyles } = await import('../components/ConnectionLog')
     const voice = createVoiceSettingsStyles(darkColors)
     expect(voice.container.backgroundColor).toBe(darkColors.bgBase)
@@ -499,10 +499,8 @@ describe('themed style factories', () => {
 
     const { createAccountsScreenStyles } =
       await import('../../app/h/[hostId]/accounts-screen-styles')
-    const { createHostScreenChromeStyles } =
-      await import('../../app/h/[hostId]/host-screen-chrome-styles')
-    const { createHostWorktreeListStyles } =
-      await import('../../app/h/[hostId]/host-worktree-list-styles')
+    const { createHostScreenChromeStyles } = await import('../host/host-screen-chrome-styles')
+    const { createHostWorktreeListStyles } = await import('../host/host-worktree-list-styles')
     const accounts = createAccountsScreenStyles(darkColors)
     expect(accounts.container.backgroundColor).toBe(darkColors.bgBase)
     expect(accounts.rowTitle.color).toBe(darkColors.textPrimary)
@@ -627,7 +625,7 @@ describe('themed style factories', () => {
     expect(termFrame.container.backgroundColor).toBe(darkColors.terminalBg)
     expect(termFrame.webview.backgroundColor).toBe(darkColors.terminalBg)
 
-    const { createTasksScreenStyles } = await import('../../app/h/[hostId]/tasks-screen-styles')
+    const { createTasksScreenStyles } = await import('../tasks/tasks-screen-styles')
     const tasks = createTasksScreenStyles(darkColors)
     expect(tasks.createButtonText.color).toBe(darkColors.bgBase)
   })

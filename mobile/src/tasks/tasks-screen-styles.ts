@@ -1,4 +1,4 @@
-import type { ThemeColors } from '../../../src/theme/mobile-theme'
+import type { ThemeColors } from '../theme/mobile-theme'
 import { createTasksScreenChromeStyles } from './tasks-screen-chrome-styles'
 import { createTasksScreenListStyles } from './tasks-screen-list-styles'
 import { createTasksScreenDetailStyles } from './tasks-screen-detail-styles'
