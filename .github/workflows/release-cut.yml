@@ -73,9 +73,27 @@ jobs:
       should_release: ${{ steps.tag.outputs.tag != '' || steps.version.outputs.recovered_tag != '' }}
       latest_published_rc_tag: ${{ steps.publish_drafts.outputs.latest_published_tag }}
     steps:
-      # Surfaces workflow_dispatch inputs as a table in the job summary
-      # (kind, ref, dry_run, version_suffix) so runs are easy to audit.
-      - uses: m-s-abeer/update-gha-summary-with-workflow-inputs@v1
+      # Why inlined (not m-s-abeer/update-gha-summary-with-workflow-inputs):
+      # this job runs with contents:write and secret scope, so avoid executing
+      # any external (mutable @v1) action here. Surfaces every
+      # workflow_dispatch input as a table for audit; the resolved commit /
+      # branch / tag enrichment is written later in "Resolve ref SHA".
+      # Inputs are passed as JSON via env and parsed by jq as data — never
+      # interpolated into the shell — to avoid injection from dispatch values.
+      - name: Summarize workflow inputs
+        if: github.event_name == 'workflow_dispatch'
+        env:
+          INPUTS_JSON: ${{ toJSON(inputs) }}
+        run: |
+          {
+            echo "## Workflow inputs"
+            echo ""
+            echo "| Input | Value |"
+            echo "| --- | --- |"
+            # Values are data from env JSON; wrap in backticks for readability.
+            # Newlines collapsed so a multi-line input cannot break the table.
+            jq -r '(. // {}) | to_entries[] | "| `\(.key)` | `\(.value | tostring | gsub("\n"; " "))` |"' <<<"$INPUTS_JSON"
+          } >> "$GITHUB_STEP_SUMMARY"
 
       - name: Checkout ref
         uses: actions/checkout@v6
@@ -95,8 +113,17 @@ jobs:
 
       - name: Resolve ref SHA
         id: resolve
+        env:
+          # Why: keep the caller's ref as data (env) so we can label it in the
+          # summary without shell-interpolating a dispatch-controlled string
+          # into the script body.
+          INPUT_REF: ${{ github.event_name == 'schedule' && 'main' || inputs.ref }}
+          REPO: ${{ github.repository }}
+          SERVER_URL: ${{ github.server_url }}
         run: |
+          set -euo pipefail
           sha="$(git rev-parse HEAD)"
+          short_sha="$(git rev-parse --short=12 HEAD)"
           echo "sha=$sha" >>"$GITHUB_OUTPUT"
 
           # Why: only push the version-bump commit back to main when the
@@ -109,6 +136,97 @@ jobs:
           else
             echo "push_main=false" >>"$GITHUB_OUTPUT"
           fi
+
+          # Always surface the resolved commit in the job summary, plus any
+          # branches/tags that currently point at it (clickable). The raw
+          # `ref` input alone is ambiguous (branch vs tag vs SHA); for SHA
+          # inputs it also hides the human-readable names operators need
+          # when auditing RC cuts.
+          input_ref="${INPUT_REF:-main}"
+          repo_url="${SERVER_URL}/${REPO}"
+
+          branches="$(
+            git for-each-ref --format='%(refname:short)' --points-at="$sha" 'refs/remotes/origin/*' \
+              | sed 's|^origin/||' \
+              | grep -vx 'HEAD' \
+              | sort -u \
+              || true
+          )"
+          tags="$(
+            git for-each-ref --format='%(refname:short)' --points-at="$sha" 'refs/tags/*' \
+              | sort -u \
+              || true
+          )"
+
+          # Build comma-separated markdown links. Branch/tag names go in the
+          # URL path as-is (slashes must stay literal for GitHub tree URLs).
+          linkify_names() {
+            local url_kind="$1"
+            local names="$2"
+            if [[ -z "${names//[$'\t\r\n']/}" ]]; then
+              printf '_none_'
+              return
+            fi
+            local first=1
+            while IFS= read -r name; do
+              [[ -z "$name" ]] && continue
+              local path_name url
+              path_name="${name// /%20}"
+              case "$url_kind" in
+                branch) url="${repo_url}/tree/${path_name}" ;;
+                tag) url="${repo_url}/releases/tag/${path_name}" ;;
+                *) url="${repo_url}" ;;
+              esac
+              if [[ "$first" -eq 1 ]]; then
+                first=0
+              else
+                printf ', '
+              fi
+              printf '[`%s`](%s)' "$name" "$url"
+            done <<<"$names"
+          }
+
+          branch_md="$(linkify_names branch "$branches")"
+          tag_md="$(linkify_names tag "$tags")"
+
+          # When no branch tip matches (historical SHA cuts), fall back to
+          # name-rev so the summary still shows something like `main~3`.
+          contains_md="_none_"
+          if [[ "$branch_md" == "_none_" ]]; then
+            approx="$(git name-rev --name-only --no-undefined --refs='refs/remotes/origin/*' "$sha" 2>/dev/null || true)"
+            if [[ -n "$approx" ]]; then
+              # name-rev prints remotes/origin/<branch>[~N]; strip to branch[~N].
+              approx="${approx#remotes/origin/}"
+              approx="${approx#origin/}"
+              contains_md="\`${approx}\`"
+            fi
+          fi
+
+          input_kind="ref"
+          if git rev-parse -q --verify "refs/remotes/origin/${input_ref}" >/dev/null 2>&1; then
+            input_kind="branch"
+          elif git rev-parse -q --verify "refs/tags/${input_ref}" >/dev/null 2>&1; then
+            input_kind="tag"
+          elif [[ "$input_ref" =~ ^[0-9a-fA-F]{7,40}$ ]]; then
+            input_kind="sha"
+          fi
+
+          {
+            echo "## Resolved source"
+            echo ""
+            echo "Every cut resolves to a commit. Branch/tag rows list refs whose tip is that commit."
+            echo ""
+            echo "| Field | Value |"
+            echo "| --- | --- |"
+            echo "| Input ref | \`${input_ref}\` (${input_kind}) |"
+            echo "| Commit | [\`${short_sha}\`](${repo_url}/commit/${sha}) |"
+            echo "| Branches at commit | ${branch_md} |"
+            echo "| Tags at commit | ${tag_md} |"
+            if [[ "$branch_md" == "_none_" ]]; then
+              echo "| Also on | ${contains_md} |"
+            fi
+            echo ""
+          } >> "$GITHUB_STEP_SUMMARY"
 
       - name: Compute RC slot
         id: slot
