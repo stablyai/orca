@@ -80,22 +80,30 @@ function looksLikeWindowsPath(pathValue: string): boolean {
   return /^[A-Za-z]:[\\/]/.test(pathValue) || pathValue.startsWith('\\\\')
 }
 
-function getOpenCodeDatabasePathFromEnv(dataDirectory: string): string | null {
+type OpenCodeDatabaseOverride = {
+  isConfigured: boolean
+  path: string | null
+}
+
+function getOpenCodeDatabaseOverride(dataDirectory: string): OpenCodeDatabaseOverride {
   const raw = process.env.OPENCODE_DB?.trim()
   if (!raw) {
-    return null
+    return { isConfigured: false, path: null }
   }
   if (raw === ':memory:') {
-    return null
+    return { isConfigured: true, path: null }
   }
-  return isAbsolute(raw) ? raw : join(dataDirectory, raw)
+  return {
+    isConfigured: true,
+    path: isAbsolute(raw) ? raw : join(dataDirectory, raw)
+  }
 }
 
 export async function listOpenCodeDatabases(): Promise<string[]> {
   const dataDirectory = resolveOpenCodeDataDirectory()
-  const envPath = getOpenCodeDatabasePathFromEnv(dataDirectory)
-  if (envPath) {
-    return existsSync(envPath) ? [envPath] : []
+  const databaseOverride = getOpenCodeDatabaseOverride(dataDirectory)
+  if (databaseOverride.isConfigured) {
+    return databaseOverride.path && existsSync(databaseOverride.path) ? [databaseOverride.path] : []
   }
 
   try {

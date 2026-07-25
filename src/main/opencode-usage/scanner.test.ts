@@ -430,6 +430,13 @@ describe('scanOpenCodeUsageDatabases', () => {
     await expect(listOpenCodeDatabases()).resolves.toEqual([dbPath])
   })
 
+  it('does not scan disk databases when OPENCODE_DB uses memory', async () => {
+    writeSessionTotalsDb('opencode.db', [])
+    process.env.OPENCODE_DB = ':memory:'
+
+    await expect(listOpenCodeDatabases()).resolves.toEqual([])
+  })
+
   it('counts a session duplicated into a stale backup database exactly once', async () => {
     // The backup holds a stale snapshot of session-1; the canonical db has
     // grown since. The canonical totals must win and be counted once.
