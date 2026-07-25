@@ -106,9 +106,9 @@ const CONTRAST_PAIRS: ReadonlyArray<{
 ]
 
 describe('mobile theme palettes', () => {
-  it('keeps dark and light key sets identical (32 keys)', () => {
+  it('keeps dark and light key sets identical (33 keys)', () => {
     expect(Object.keys(lightColors).sort()).toEqual(Object.keys(darkColors).sort())
-    expect(Object.keys(darkColors)).toHaveLength(32)
+    expect(Object.keys(darkColors)).toHaveLength(33)
   })
 
   // Why exact: the home stat tiles rendered this literal before the token existed,
@@ -116,6 +116,14 @@ describe('mobile theme palettes', () => {
   it('keeps the stat tile fill byte-identical in dark and re-derived in light', () => {
     expect(darkColors.statTileSurface).toBe('rgba(26,26,26,0.6)')
     expect(lightColors.statTileSurface).toBe('rgba(0,0,0,0.04)')
+  })
+
+  // Why exact: the selected chip fill is textPrimary, so this ink has to sit on the
+  // opposite side of the palette in each mode — reusing the dark literal in light
+  // puts the same near-black ink on a near-black fill (1:1, glyph gone).
+  it('inverts the on-inverted-fill ink instead of reusing the dark literal', () => {
+    expect(darkColors.onInvertedMuted).toBe('rgba(10,10,10,0.5)')
+    expect(lightColors.onInvertedMuted).toBe('rgba(255,255,255,0.5)')
   })
 
   it('uses only 6-digit hex or rgba values, and textMuted is hex in both palettes', () => {

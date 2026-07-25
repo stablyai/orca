@@ -16,6 +16,10 @@ export const darkColors = {
   textPrimary: '#e0e0e0',
   textSecondary: '#888888',
   textMuted: '#555555',
+  // Secondary ink on a textPrimary-filled surface (the selected modifier chip).
+  // Dark keeps the literal the chip already rendered; light inverts to the bgBase
+  // side, because the same ink at 50% over a near-black light fill is invisible.
+  onInvertedMuted: 'rgba(10,10,10,0.5)',
 
   // Crisp near-white surface for the single primary action on a screen (the
   // worktree FAB). Brighter than textPrimary so it reads as a solid button, not
@@ -74,6 +78,9 @@ export const lightColors: ThemeColors = {
   // clears 3:1 on bgBase/bgPanel/bgRaised (3.69/3.38/3.07). Must stay 6-digit hex —
   // MobileAgentIcon.tsx:77 concatenates an alpha suffix onto it.
   textMuted: '#858585',
+  // Mirrors the dark construction from the other side: bgBase ink at 50% over the
+  // textPrimary fill, ~5.4:1 instead of the 1:1 the dark literal would give here.
+  onInvertedMuted: 'rgba(255,255,255,0.5)',
 
   surfaceBright: '#171717', // --primary :140 — the single affirmative-action fill; inverts
   surfaceBrightPressed: '#2e2e2e',

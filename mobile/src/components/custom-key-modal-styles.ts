@@ -153,7 +153,7 @@ export const createCustomKeyModalStyles = (colors: ThemeColors) =>
       fontFamily: typography.monoFamily
     },
     chipGlyphSelected: {
-      color: 'rgba(10,10,10,0.5)'
+      color: colors.onInvertedMuted
     },
     keyInput: {
       width: '100%',
