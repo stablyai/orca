@@ -41,10 +41,10 @@ const PET_MCP_CONFIG_DOC = meshOmpMcpConfigDocPath()
 /** MCP tool names the mesh's `mcp.json` exposes (Cloak → SearXNG priority).
  * Named in the persona only — never in omp `--tools`. omp 17.x validates
  * `--tools` against its native allowlist and rejects MCP names with
- * "Unknown tools in --tools". MCP loads via `~/.omp/agent/mcp.json`. */
-const PET_MCP_TOOLS = 'cloakbrowser_browse,searxng_search'
+ * "Unknown tools in --tools". MCP loads via `~/.omp/agent/mcp.json`.
+ * (cloakbrowser_browse, searxng_search — documentation only, not a runtime list.) */
 
-/** Native omp tools only. MCP tools are NOT listed here (see PET_MCP_TOOLS). */
+/** Native omp tools only. MCP tools are NOT listed here. */
 const PET_TOOLS = 'read,bash,edit,write,grep,glob,todo,web_search'
 
 /** A short persona so the pet knows what it is and how to reach the mesh's web

@@ -13,6 +13,7 @@ const TOP_LEVEL_VIEW_LOOKUP: Record<TopLevelView, true> = {
   mobile: true,
   'web-panel': true,
   'terminal-panel': true,
+  'canvas-panel': true,
   'panel-canvas': true
 }
 

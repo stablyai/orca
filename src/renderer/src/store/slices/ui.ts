@@ -521,7 +521,12 @@ function sanitizeHydratedActiveView(
   }
   // Why: the active panel id / canvas tree is not persisted, so a restored
   // panel view would render an empty page; land on the terminal instead.
-  if (value === 'web-panel' || value === 'terminal-panel' || value === 'panel-canvas') {
+  if (
+    value === 'web-panel' ||
+    value === 'terminal-panel' ||
+    value === 'canvas-panel' ||
+    value === 'panel-canvas'
+  ) {
     return 'terminal'
   }
   return value

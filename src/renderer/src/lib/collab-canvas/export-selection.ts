@@ -64,7 +64,7 @@ async function exportPng(
     return null
   }
   try {
-    const image = await editor.toImageDataUrl(shapes, {
+    const image = await editor.toImageDataUrl([...shapes], {
       format: 'png',
       background: true,
       padding: 24,
