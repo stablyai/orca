@@ -13484,7 +13484,7 @@ export class OrcaRuntimeService {
       throw new Error('orchestration_sender_unauthenticated')
     }
     const pty = this.getPtyRecordForPaneKey(args.paneKey)
-    if (!pty?.launchToken || pty.launchToken !== args.launchToken) {
+    if (!pty?.connected || !pty.launchToken || pty.launchToken !== args.launchToken) {
       throw new Error('orchestration_sender_unauthenticated')
     }
     const handle = this.getTerminalHandleForPaneKey(args.paneKey)

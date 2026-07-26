@@ -6390,6 +6390,57 @@ describe('registerPtyHandlers', () => {
     )
   })
 
+  it('drops launch provenance when the renderer token does not match the child environment', async () => {
+    const leafId = '99999999-9999-4999-8999-999999999999'
+    const runtime = {
+      setPtyController: vi.fn(),
+      preAllocateHandleForPty: vi.fn(() => 'term_seam'),
+      registerPreAllocatedHandleForPty: vi.fn(),
+      registerPty: vi.fn(),
+      getDriver: vi.fn(() => ({ kind: 'host' })),
+      onPtySpawned: vi.fn(),
+      onPtyExit: vi.fn(),
+      onPtyData: vi.fn()
+    }
+    handlers.clear()
+    registerPtyHandlers(mainWindow as never, runtime as never)
+
+    await handlers.get('pty:spawn')!(mainWindowIpcEvent, {
+      cols: 80,
+      rows: 24,
+      cwd: '/repo',
+      command: 'claude',
+      tabId: 'tab-1',
+      leafId,
+      worktreeId: 'wt-1',
+      env: {
+        ORCA_PANE_KEY: `tab-1:${leafId}`,
+        ORCA_TAB_ID: 'tab-1',
+        ORCA_WORKTREE_ID: 'wt-1',
+        ORCA_AGENT_LAUNCH_TOKEN: 'trusted-child-token'
+      },
+      launchConfig: {
+        agentCommand: 'claude',
+        agentArgs: '',
+        agentEnv: {}
+      },
+      launchToken: 'mismatched-renderer-token',
+      launchAgent: 'claude'
+    })
+
+    expect(runtime.registerPty).toHaveBeenCalledWith(
+      expect.any(String),
+      'wt-1',
+      null,
+      {
+        tabId: 'tab-1',
+        leafId,
+        incarnationId: expect.any(String)
+      },
+      false
+    )
+  })
+
   it('omits the pane identity from registerPty when the leafId is not a terminal leaf (#7587)', async () => {
     const runtime = {
       setPtyController: vi.fn(),

@@ -11058,6 +11058,14 @@ describe('OrcaRuntimeService', () => {
         launchToken: 'forged-token'
       })
     ).toThrow('orchestration_sender_unauthenticated')
+    runtime.onPtyExit('pty-bg', 0)
+    expect(() =>
+      runtime.authenticateOrchestrationSender({
+        claimedHandle: result.handle,
+        paneKey: spawnedEnv.ORCA_PANE_KEY,
+        launchToken: spawnedEnv.ORCA_AGENT_LAUNCH_TOKEN
+      })
+    ).toThrow('orchestration_sender_unauthenticated')
   })
 
   it('passes cached view colors to background agent spawns for source-owned startup replies', async () => {
@@ -11522,7 +11530,7 @@ describe('OrcaRuntimeService', () => {
       webContents
     })
 
-    await runtime.createTerminal(`path:${TEST_WORKTREE_PATH}`, {
+    const created = await runtime.createTerminal(`path:${TEST_WORKTREE_PATH}`, {
       command: 'codex',
       rendererBacked: true
     })
@@ -11552,7 +11560,7 @@ describe('OrcaRuntimeService', () => {
         launchToken: rendererRequest?.launchToken
       })
     ).toEqual({
-      handle: expect.stringMatching(/^term_/),
+      handle: created.handle,
       paneKey: `tab-renderer:${rendererLeafId}`
     })
     expect(markCodexProjectTrustedMock).toHaveBeenCalledWith(TEST_WORKTREE_PATH)
