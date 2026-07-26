@@ -47,8 +47,13 @@ function isIgnored(repo: string, relativePath: string): boolean {
   try {
     git(repo, ['check-ignore', '-q', '--', relativePath])
     return true
-  } catch {
-    return false
+  } catch (error) {
+    // Why: check-ignore exits 1 for a real non-match; other statuses mean a broken
+    // command/repo and must not be reported as "not ignored".
+    if (error !== null && typeof error === 'object' && 'status' in error && error.status === 1) {
+      return false
+    }
+    throw error
   }
 }
 
