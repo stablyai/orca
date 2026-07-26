@@ -58,6 +58,7 @@ export class RuntimeBrowserCommands {
   readonly browserCookieGet: RuntimeBrowserNetwork['browserCookieGet']
   readonly browserCookieSet: RuntimeBrowserNetwork['browserCookieSet']
   readonly browserCookieDelete: RuntimeBrowserNetwork['browserCookieDelete']
+  readonly browserCookieImport: RuntimeBrowserNetwork['browserCookieImport']
   readonly browserSetViewport: RuntimeBrowserNetwork['browserSetViewport']
   readonly browserSetGeolocation: RuntimeBrowserNetwork['browserSetGeolocation']
   readonly browserInterceptEnable: RuntimeBrowserNetwork['browserInterceptEnable']
@@ -164,6 +165,7 @@ export class RuntimeBrowserCommands {
     this.browserCookieGet = network.browserCookieGet.bind(network)
     this.browserCookieSet = network.browserCookieSet.bind(network)
     this.browserCookieDelete = network.browserCookieDelete.bind(network)
+    this.browserCookieImport = network.browserCookieImport.bind(network)
     this.browserSetViewport = network.browserSetViewport.bind(network)
     this.browserSetGeolocation = network.browserSetGeolocation.bind(network)
     this.browserInterceptEnable = network.browserInterceptEnable.bind(network)

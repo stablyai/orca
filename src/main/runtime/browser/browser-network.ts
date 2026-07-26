@@ -2,12 +2,15 @@ import type {
   BrowserNetworkLogResult,
   BrowserCookieDeleteResult,
   BrowserCookieGetResult,
+  BrowserCookieImportFromFileResult,
   BrowserCookieSetResult,
   BrowserGeolocationResult,
   BrowserInterceptDisableResult,
   BrowserInterceptEnableResult,
   BrowserViewportResult
 } from '../../../shared/runtime-types'
+import { browserSessionRegistry } from '../../browser/browser-session-registry'
+import { importCookiesFromFile } from '../../browser/cookies/browser-cookie-import'
 import type { BrowserCommandTargetParams } from './browser-command-contracts'
 import type { RuntimeBrowserCommandTargets } from './browser-command-targets'
 
@@ -66,6 +69,32 @@ export class RuntimeBrowserNetwork {
     return this.targets
       .requireAgentBrowserBridge()
       .cookieDelete(params.name, params.domain, params.url, target.worktreeId, target.browserPageId)
+  }
+
+  // Why: bulk file import writes into a persist partition so cookies survive restart (unlike per-cookie CDP set).
+  async browserCookieImport(params: {
+    file: string
+    profileId?: string
+  }): Promise<BrowserCookieImportFromFileResult> {
+    const profileId =
+      typeof params.profileId === 'string' && params.profileId.length > 0
+        ? params.profileId
+        : 'default'
+    const profile = browserSessionRegistry.getProfile(profileId)
+    if (!profile) {
+      return { ok: false, reason: `Session profile not found: ${profileId}` }
+    }
+
+    const result = await importCookiesFromFile(params.file, profile.partition)
+    if (!result.ok) {
+      return result
+    }
+
+    browserSessionRegistry.updateProfileSource(profileId, {
+      browserFamily: 'manual',
+      importedAt: Date.now()
+    })
+    return { ...result, profileId }
   }
 
   async browserSetViewport(
