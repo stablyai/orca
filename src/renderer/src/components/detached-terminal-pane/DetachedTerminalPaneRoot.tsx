@@ -116,8 +116,6 @@ export function DetachedTerminalPaneRoot({
   }
 
   const handleCloseTab = (): void => {
-    // Remove the active tab from the seed so it stays gone (no reintegrate).
-    // If it was the only tab, close the window. Otherwise switch to another tab.
     if (!seed || !activeSeedTab) {
       window.close()
       return
@@ -131,14 +129,27 @@ export function DetachedTerminalPaneRoot({
       window.close()
       return
     }
-    // Rebuild the seed with the tab removed.
+    // Replace the seed so the closed tab is gone from local UI state.
     const primary = remaining[0]
     const nextSeed: DetachedTerminalTabSeed = {
       ...primary,
       additionalTabs: remaining.slice(1).length > 0 ? remaining.slice(1) : undefined
     }
-    applyDetachedTerminalTabSeed(nextSeed, primary.tab.id)
     setSeed(nextSeed)
+    // Switch active tab to the first remaining entry without rebuilding the
+    // entire store — only the active-tab tracking fields need to move.
+    useAppStore.setState((state) => ({
+      activeTabId: primary.tab.id,
+      activeTabIdByWorktree: {
+        ...state.activeTabIdByWorktree,
+        [primary.worktreeId]: primary.tab.id
+      },
+      activeTabType: 'terminal' as const,
+      activeTabTypeByWorktree: {
+        ...state.activeTabTypeByWorktree,
+        [primary.worktreeId]: 'terminal' as const
+      }
+    }))
     setActiveSeedTabId(primary.tab.id)
   }
   const handleReintegrate = (): void => {
