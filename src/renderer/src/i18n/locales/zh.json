@@ -11197,7 +11197,7 @@
           "description": "公布手机可访问的 IP 地址、主机名或安全 WebSocket 隧道。",
           "label": "地址",
           "placeholder": "wss://orca.example.com、my-mac.ts.net 或 192.168.1.50",
-          "hint": "输入 IP 地址、主机名、可选的 :端口，或不含路径的 ws(s):// 源。",
+          "hint": "输入 IP 地址、主机名、可选的 :端口，或不含路径的 ws(s):// URL。",
           "cancel": "取消",
           "use": "使用地址"
         },
