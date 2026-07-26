@@ -12,6 +12,8 @@ describe('browser settings search copy', () => {
     const description = getBrowserLinkRoutingDescription({ isMac: true })
     expect(description).toContain('⇧⌘-click')
     expect(description).not.toContain('Cmd/Ctrl')
+    // The copy is translated: a leaked `{{...}}` means the interpolation name drifted from the catalog.
+    expect(description).not.toMatch(/\{\{.+?\}\}/)
 
     const linkRoutingEntry = getBrowserPaneSearchEntries({ isMac: true }).find(
       (entry) => entry.title === 'Link Routing'
@@ -32,6 +34,7 @@ describe('browser settings search copy', () => {
     const description = getBrowserLinkRoutingDescription({ isMac: false })
     expect(description).toContain('Shift+Ctrl+click')
     expect(description).not.toContain('Cmd/Ctrl')
+    expect(description).not.toMatch(/\{\{.+?\}\}/)
 
     const linkRoutingEntry = getBrowserPaneSearchEntries({ isMac: false }).find(
       (entry) => entry.title === 'Link Routing'
