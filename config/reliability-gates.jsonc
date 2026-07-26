@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "updatedAt": "2026-07-22",
+  "updatedAt": "2026-07-25",
   "policy": {
     "maturityLevels": [
       "experimental",
@@ -16,6 +16,131 @@
     }
   },
   "gates": [
+    {
+      "id": "mobile-relay.endpoint-recovery",
+      "title": "Mobile relay recovery retries offline hosts and races direct endpoints",
+      "maturity": "experimental",
+      "protection": "partial",
+      "owner": "mobile-runtime",
+      "layer": "shared-mobile-transport-contract",
+      "surfaces": [
+        "paired mobile reconnect",
+        "cloud relay host-offline recovery",
+        "LAN direct endpoint",
+        "Tailscale direct endpoint"
+      ],
+      "platforms": [
+        "ios",
+        "android",
+        "macos",
+        "linux",
+        "windows"
+      ],
+      "providers": [
+        "lan",
+        "tailscale",
+        "cloud-relay"
+      ],
+      "coveredPlatforms": [
+        "macos"
+      ],
+      "coveredProviders": [
+        "lan",
+        "tailscale",
+        "cloud-relay"
+      ],
+      "coverageNotes": "Deterministic TypeScript tests cover shared close-code policy, foreground retry timers, direct-winner cancellation, and concurrent LAN/Tailscale authentication. Physical iOS/Android radios, GFE, and production relay recovery remain live-test gaps.",
+      "motivatingLinks": [
+        "https://github.com/stablyai/orca-cloud/pull/96"
+      ],
+      "invariant": "A foregrounded paired phone must recover from relay HOST_OFFLINE without a foreground or network-change signal, while direct recovery must select the first authenticated configured LAN or Tailscale endpoint without serial timeout delays. Backgrounding, direct success, or stop must cancel pending work, and losing probes must close without affecting the winner.",
+      "oracle": "Inject deterministic relay close codes, random bytes, fake timers, and independently controlled direct clients. Require HOST_OFFLINE to replace any faster transport timer with one 5-15 second retry, require no retry before the selected delay, race all unique non-relay endpoints, select the first authenticated path, close every loser exactly once, and retain no retry after direct connectivity wins.",
+      "commands": [
+        "pnpm --dir mobile exec vitest run --root .. mobile/src/transport/mobile-direct-endpoint-probe.test.ts mobile/src/transport/mobile-relay-reconnect-controller.test.ts mobile/src/transport/mobile-endpoint-supervisor.test.ts",
+        "pnpm exec vitest run --config config/vitest.config.ts src/shared/mobile-relay-close-codes.test.ts --reporter=dot"
+      ],
+      "testFiles": [
+        "mobile/src/transport/mobile-direct-endpoint-probe.test.ts",
+        "mobile/src/transport/mobile-relay-reconnect-controller.test.ts",
+        "mobile/src/transport/mobile-endpoint-supervisor.test.ts",
+        "src/shared/mobile-relay-close-codes.test.ts"
+      ],
+      "assertionRefs": [
+        {
+          "file": "mobile/src/transport/mobile-direct-endpoint-probe.test.ts",
+          "assertions": [
+            "a reachable Tailscale endpoint authenticates without waiting for a stale primary LAN timeout",
+            "the stale direct candidate closes while the authenticated winner stays open"
+          ]
+        },
+        {
+          "file": "mobile/src/transport/mobile-relay-reconnect-controller.test.ts",
+          "assertions": [
+            "HOST_OFFLINE replaces a pending capacity retry with the bounded host-offline delay",
+            "direct connectivity cancels the pending relay retry"
+          ]
+        },
+        {
+          "file": "mobile/src/transport/mobile-endpoint-supervisor.test.ts",
+          "assertions": [
+            "a foregrounded supervisor retries HOST_OFFLINE without an external lifecycle signal"
+          ]
+        },
+        {
+          "file": "src/shared/mobile-relay-close-codes.test.ts",
+          "assertions": [
+            "HOST_OFFLINE maps to self-healing full-jitter recovery"
+          ]
+        }
+      ],
+      "evidenceRuns": [
+        {
+          "date": "2026-07-25",
+          "runner": "local",
+          "platform": "macos",
+          "command": "pnpm --dir mobile exec vitest run --root .. mobile/src/transport/mobile-direct-endpoint-probe.test.ts mobile/src/transport/mobile-relay-reconnect-controller.test.ts mobile/src/transport/mobile-endpoint-supervisor.test.ts",
+          "result": "passed",
+          "durationSeconds": 0.89,
+          "summary": "Three focused mobile transport files passed with 39 assertions."
+        },
+        {
+          "date": "2026-07-25",
+          "runner": "local",
+          "platform": "macos",
+          "command": "pnpm exec vitest run --config config/vitest.config.ts src/shared/mobile-relay-close-codes.test.ts --reporter=dot",
+          "result": "passed",
+          "durationSeconds": 0.19,
+          "summary": "The shared close-code contract passed with five assertions."
+        }
+      ],
+      "runtimeBudget": {
+        "p95Seconds": 5,
+        "scope": "focused shared and mobile transport unit tests"
+      },
+      "flakeHistory": {
+        "status": "unknown",
+        "evidence": "Two deterministic local runs exist; CI and soak history are not yet available."
+      },
+      "redGreenEvidence": {
+        "status": "complete",
+        "evidence": "The prior external-signal HOST_OFFLINE policy fails the retry oracle, and the prior serial direct probe fails the first-authenticated-endpoint timing oracle. Both pass with the candidate behavior."
+      },
+      "performanceBudget": {
+        "required": true,
+        "evidence": "All configured direct candidates start in one turn, the first authenticated candidate wins after 100 ms in the deterministic test, and every losing client is closed. A physical-device radio and battery budget is still required before promotion."
+      },
+      "promotionCriteria": [
+        "Collect 100 consecutive CI passes or 14 days of soak history.",
+        "Run paired iOS and Android recovery through production-like GFE HOST_OFFLINE responses.",
+        "Measure reconnect radio and battery impact for the 5-15 second foreground retry window."
+      ],
+      "knownGaps": [
+        "No physical iOS or Android device was exercised.",
+        "The deterministic transport seam does not measure production GFE, carrier NAT, DNS, TLS, or Cloud SQL latency.",
+        "Background-to-foreground recovery remains covered by existing supervisor tests but lacks a physical sleep/wake run."
+      ],
+      "demotionRule": "Keep experimental or demote if focused tests flake, HOST_OFFLINE can park indefinitely, direct probes serialize configured endpoints, loser cleanup leaks clients, or physical-device radio cost exceeds the measured budget."
+    },
     {
       "id": "git-worktree.refresh-event-semantics",
       "title": "Index-only Git metadata cannot trigger structural worktree refresh fanout",
