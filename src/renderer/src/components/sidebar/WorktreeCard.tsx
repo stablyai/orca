@@ -640,6 +640,7 @@ const WorktreeCard = React.memo(function WorktreeCard({
   const showLinearIssue = cardProps.includes('linear-issue')
   const showPR = cardProps.includes('pr')
   const showAutomation = cardProps.includes('automation')
+  const showCli = cardProps.includes('cli')
   const showComment = cardProps.includes('comment')
   const showPorts = cardProps.includes('ports')
   const shouldRefreshHostedReview = newCardStyle ? showStatus : showPR
@@ -1056,6 +1057,7 @@ const WorktreeCard = React.memo(function WorktreeCard({
   const metaLinearIssue = showLinearIssue ? hoverLinearIssue : null
   const metaReview = showPR ? hoverReview : null
   const metaAutomationProvenance = showAutomation ? worktree.automationProvenance : null
+  const metaCliProvenance = showCli ? worktree.cliProvenance : null
   const metaComment = showComment ? hoverComment : null
   const showInlineAgentList = cardProps.includes('inline-agents') && (newCardStyle || !compactCards)
   const compactInlineAgentRows = useWorktreeAgentRows(
@@ -1156,7 +1158,8 @@ const WorktreeCard = React.memo(function WorktreeCard({
     linearIssue: metaLinearIssue,
     review: newCardStyle ? null : metaReview,
     comment: metaComment,
-    automationProvenance: metaAutomationProvenance
+    automationProvenance: metaAutomationProvenance,
+    cliProvenance: metaCliProvenance
   })
   const hasPorts = showPorts && workspacePorts.length > 0
   const cacheStartedAt = usePromptCacheCountdownStartedAt(worktree.id, showAggregateCacheTimer)
@@ -1228,7 +1231,8 @@ const WorktreeCard = React.memo(function WorktreeCard({
       linearIssue: hoverLinearIssue,
       review: hoverReview,
       comment: hoverComment,
-      automationProvenance: metaAutomationProvenance
+      automationProvenance: metaAutomationProvenance,
+      cliProvenance: metaCliProvenance
     }) ||
       workspacePorts.length > 0 ||
       hasHoverIdentity)
@@ -1245,6 +1249,7 @@ const WorktreeCard = React.memo(function WorktreeCard({
             review={metaReview}
             comment={metaComment}
             automationProvenance={metaAutomationProvenance}
+            cliProvenance={metaCliProvenance}
             automationHostId={worktree.hostId}
             branchName={showBranchIdentityHover ? branch : undefined}
             workspaceTitle={worktree.displayName}
@@ -1300,6 +1305,7 @@ const WorktreeCard = React.memo(function WorktreeCard({
             review={newCardStyle ? null : metaReview}
             comment={metaComment}
             automationProvenance={metaAutomationProvenance}
+            cliProvenance={metaCliProvenance}
             className="ml-0 pr-0"
           />
         )}
@@ -1313,6 +1319,7 @@ const WorktreeCard = React.memo(function WorktreeCard({
         review={metaReview}
         comment={metaComment}
         automationProvenance={metaAutomationProvenance}
+        cliProvenance={metaCliProvenance}
         automationHostId={worktree.hostId}
         detailsAfter={hasPorts ? <WorktreeCardPortsDetails ports={workspacePorts} /> : null}
         hoverControl={detailsHoverControl}
@@ -1806,6 +1813,7 @@ const WorktreeCard = React.memo(function WorktreeCard({
         review={hoverReview}
         comment={hoverComment}
         automationProvenance={metaAutomationProvenance}
+        cliProvenance={metaCliProvenance}
         automationHostId={worktree.hostId}
         branchName={hoverBranchName}
         workspaceTitle={hoverWorkspaceTitle}

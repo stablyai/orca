@@ -4067,7 +4067,8 @@
           "75405270ed": "필터 편집({{value0}} 활성)",
           "489d1c8c9f": "프로젝트 검색...",
           "ee240a39eb": "필터 편집",
-          "automationCreated": "자동화로 생성된 워크스페이스 숨기기"
+          "automationCreated": "자동화로 생성된 워크스페이스 숨기기",
+          "cliCreated": "Hide CLI-created"
         },
         "SidebarHeader": {
           "92154beb7e": "새로운 워크스페이스",
@@ -4130,7 +4131,8 @@
           "c3fa13dc2e": "기본 브랜치 숨기기",
           "ed1611b65b": "슬립 중인 항목 숨기기",
           "82594419ba": "필터",
-          "automationCreated": "자동화로 생성된 워크스페이스 숨기기"
+          "automationCreated": "자동화로 생성된 워크스페이스 숨기기",
+          "cliCreated": "Hide CLI-created"
         },
         "SidebarWorkspaceOptionsMenu": {
           "95c9754653": "Agent 활동 레이아웃",
@@ -4185,7 +4187,8 @@
           "65a9820bd1": "Agent 상태",
           "219ebf1961": "브랜치 이름",
           "automation": "자동화",
-          "folderPathIdentity": "브랜치 / 폴더 경로"
+          "folderPathIdentity": "브랜치 / 폴더 경로",
+          "cli": "Orca CLI"
         },
         "SshDisconnectedDialog": {
           "ca4a7892af": "연결 중...",
@@ -4306,7 +4309,12 @@
           "copyLinkSuccess": "{{value0}} 복사됨",
           "copyLinkFailure": "링크 복사 실패",
           "issueLinkLabel": "이슈 링크",
-          "reviewLinkLabel": "{{value0}} 링크"
+          "reviewLinkLabel": "{{value0}} 링크",
+          "cliHeader": "Orca CLI",
+          "cliCreatedFromAgent": "Created by an agent via `orca worktree create`",
+          "cliCreatedFromShell": "Created via `orca worktree create`",
+          "cliStartupAgent": "Started with {{value0}}",
+          "cliCreated": "Created by Orca CLI"
         },
         "WorktreeCardMetadataStatusBadges": {
           "fe188062a1": "상태: 열림",

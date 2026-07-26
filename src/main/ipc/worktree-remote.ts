@@ -8,6 +8,7 @@ import { randomUUID } from 'node:crypto'
 import type { Store } from '../persistence'
 import type {
   AutomationWorkspaceProvenance,
+  CliWorkspaceProvenance,
   CreateWorktreeArgs,
   CreateWorktreeResult,
   GitPushTarget,
@@ -66,6 +67,7 @@ import {
 
 type CreateWorktreeArgsWithSystemProvenance = CreateWorktreeArgs & {
   automationProvenance?: AutomationWorkspaceProvenance
+  cliProvenance?: CliWorkspaceProvenance
 }
 import {
   sanitizeWorktreeName,
@@ -1823,6 +1825,7 @@ export async function createRemoteWorktree(
     orcaCreationSource: 'ssh',
     orcaCreationWorkspaceLayout: getWorktreeCreationLayout(repo, settings),
     ...(args.automationProvenance ? { automationProvenance: args.automationProvenance } : {}),
+    ...(args.cliProvenance ? { cliProvenance: args.cliProvenance } : {}),
     baseRef: metadataBaseRef,
     ...(checkoutExistingBranch ? { preserveBranchOnDelete: true } : {}),
     ...(configuredPushTarget ? { pushTarget: configuredPushTarget } : {}),
@@ -2405,6 +2408,7 @@ export async function createLocalWorktree(
     orcaCreationSource: 'desktop',
     orcaCreationWorkspaceLayout: getWorktreeCreationLayout(repo, settings),
     ...(args.automationProvenance ? { automationProvenance: args.automationProvenance } : {}),
+    ...(args.cliProvenance ? { cliProvenance: args.cliProvenance } : {}),
     baseRef: metadataBaseRef,
     ...(checkoutExistingBranch ? { preserveBranchOnDelete: true } : {}),
     ...(configuredPushTarget ? { pushTarget: configuredPushTarget } : {}),

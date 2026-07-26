@@ -4067,7 +4067,8 @@
           "75405270ed": "编辑筛选条件（{{value0}} 个已启用）",
           "489d1c8c9f": "搜索项目...",
           "ee240a39eb": "编辑筛选条件",
-          "automationCreated": "隐藏自动化创建的工作区"
+          "automationCreated": "隐藏自动化创建的工作区",
+          "cliCreated": "Hide CLI-created"
         },
         "SidebarHeader": {
           "92154beb7e": "新工作区",
@@ -4130,7 +4131,8 @@
           "c3fa13dc2e": "隐藏默认分支",
           "ed1611b65b": "隐藏休眠项",
           "82594419ba": "筛选条件",
-          "automationCreated": "隐藏自动化创建的工作区"
+          "automationCreated": "隐藏自动化创建的工作区",
+          "cliCreated": "Hide CLI-created"
         },
         "SidebarWorkspaceOptionsMenu": {
           "95c9754653": "智能体活动布局",
@@ -4185,7 +4187,8 @@
           "65a9820bd1": "智能体状态",
           "219ebf1961": "分支名称",
           "automation": "自动化",
-          "folderPathIdentity": "分支 / 文件夹路径"
+          "folderPathIdentity": "分支 / 文件夹路径",
+          "cli": "Orca CLI"
         },
         "SshDisconnectedDialog": {
           "ca4a7892af": "正在连接...",
@@ -4306,7 +4309,12 @@
           "copyLinkSuccess": "{{value0}} 已复制",
           "copyLinkFailure": "复制链接失败",
           "issueLinkLabel": "议题链接",
-          "reviewLinkLabel": "{{value0}} 链接"
+          "reviewLinkLabel": "{{value0}} 链接",
+          "cliHeader": "Orca CLI",
+          "cliCreatedFromAgent": "Created by an agent via `orca worktree create`",
+          "cliCreatedFromShell": "Created via `orca worktree create`",
+          "cliStartupAgent": "Started with {{value0}}",
+          "cliCreated": "Created by Orca CLI"
         },
         "WorktreeCardMetadataStatusBadges": {
           "fe188062a1": "状态：开放",

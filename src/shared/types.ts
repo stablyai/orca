@@ -535,7 +535,21 @@ export type Worktree = {
   diffComments?: DiffComment[]
   mobileDiffReview?: MobileDiffReviewState
   automationProvenance?: AutomationWorkspaceProvenance
+  cliProvenance?: CliWorkspaceProvenance
 } & GitWorktreeInfo
+
+/** Provenance for workspaces created through `orca worktree create`. Absent on
+ *  workspaces created before this field existed and on every non-CLI create, so
+ *  consumers must read "missing" as "not CLI-created". */
+export type CliWorkspaceProvenance = {
+  kind: 'created-by-cli'
+  createdAt: number
+  /** Orca terminal the CLI ran inside, when the caller had one — distinguishes
+   *  an agent-issued create from one hand-typed in an external shell. */
+  callerTerminalHandle?: string
+  /** Agent requested via `--agent`, when one was passed. */
+  startupAgent?: TuiAgent
+}
 
 export type AutomationWorkspaceProvenance = {
   kind: 'created-by-automation'
@@ -646,6 +660,8 @@ export type WorktreeMeta = {
   mobileDiffReview?: MobileDiffReviewState
   /** System-owned provenance for workspaces created by automation new-per-run dispatches. */
   automationProvenance?: AutomationWorkspaceProvenance
+  /** System-owned provenance for workspaces created via `orca worktree create`. */
+  cliProvenance?: CliWorkspaceProvenance
 }
 
 export type WorktreeOwnership = 'orca-managed' | 'external' | 'unknown-legacy' | 'agent-scratch'
@@ -3137,6 +3153,8 @@ export type WorktreeCardProperty =
   | 'linear-issue'
   | 'pr'
   | 'automation'
+  // Badge marking workspaces created through `orca worktree create`.
+  | 'cli'
   | 'comment'
   | 'ports'
   // Inline agent-activity list rendered in each workspace card; on by default (see DEFAULT_WORKTREE_CARD_PROPERTIES in shared/constants.ts).
@@ -3245,6 +3263,8 @@ export type PersistedUIState = {
   hideDefaultBranchWorkspace: boolean
   /** Hide workspaces created by automation new-per-run dispatches. */
   hideAutomationGeneratedWorkspaces?: boolean
+  /** Hide workspaces created through `orca worktree create`. */
+  hideCliCreatedWorkspaces?: boolean
   /** Per-worktree Explorer dotfile visibility. Missing entries inherit the default: show. */
   showDotfilesByWorktree?: Record<string, boolean>
   filterRepoIds: string[]

@@ -4086,7 +4086,8 @@
           "75405270ed": "Editar filtros ({{value0}} activo)",
           "489d1c8c9f": "Buscar proyectos...",
           "ee240a39eb": "Editar filtros",
-          "automationCreated": "Ocultar creados por automatizaciones"
+          "automationCreated": "Ocultar creados por automatizaciones",
+          "cliCreated": "Hide CLI-created"
         },
         "SidebarHeader": {
           "92154beb7e": "Nuevo espacio de trabajo",
@@ -4149,7 +4150,8 @@
           "c3fa13dc2e": "Ocultar rama predeterminada",
           "ed1611b65b": "Ocultar en reposo",
           "82594419ba": "Filtros",
-          "automationCreated": "Ocultar creados por automatizaciones"
+          "automationCreated": "Ocultar creados por automatizaciones",
+          "cliCreated": "Hide CLI-created"
         },
         "SidebarWorkspaceOptionsMenu": {
           "95c9754653": "Diseño de actividad del Agent",
@@ -4204,7 +4206,8 @@
           "2d74665a56": "Puertos",
           "65a9820bd1": "Estados de Agents",
           "219ebf1961": "Nombre de rama",
-          "folderPathIdentity": "Rama / ruta de carpeta"
+          "folderPathIdentity": "Rama / ruta de carpeta",
+          "cli": "Orca CLI"
         },
         "SshDisconnectedDialog": {
           "ca4a7892af": "Conectando...",
@@ -4325,7 +4328,12 @@
           "copyLinkSuccess": "{{value0}} copiado",
           "copyLinkFailure": "No se pudo copiar el enlace",
           "issueLinkLabel": "Enlace del issue",
-          "reviewLinkLabel": "Enlace de {{value0}}"
+          "reviewLinkLabel": "Enlace de {{value0}}",
+          "cliHeader": "Orca CLI",
+          "cliCreatedFromAgent": "Created by an agent via `orca worktree create`",
+          "cliCreatedFromShell": "Created via `orca worktree create`",
+          "cliStartupAgent": "Started with {{value0}}",
+          "cliCreated": "Created by Orca CLI"
         },
         "WorktreeCardMetadataStatusBadges": {
           "fe188062a1": "Estado: Abierto",

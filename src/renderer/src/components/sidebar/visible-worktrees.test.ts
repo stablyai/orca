@@ -82,6 +82,7 @@ function visibleOptions(overrides: Partial<VisibleOptions> = {}): VisibleOptions
     worktreeIdsWithLiveAgent: new Set(),
     hideDefaultBranchWorkspace: false,
     hideAutomationGeneratedWorkspaces: false,
+    hideCliCreatedWorkspaces: false,
     repoMap,
     workspaceHostScope: 'all',
     defaultHostId: LOCAL_EXECUTION_HOST_ID,
@@ -98,6 +99,7 @@ function filterState(overrides: Partial<FilterState> = {}): FilterState {
     filterRepoIds: [],
     hideDefaultBranchWorkspace: false,
     hideAutomationGeneratedWorkspaces: false,
+    hideCliCreatedWorkspaces: false,
     workspaceHostScope: 'all',
     ...overrides
   }
@@ -161,6 +163,57 @@ describe('computeVisibleWorktreeIds', () => {
     )
 
     expect(result).toEqual([manual.id])
+  })
+
+  it('hides CLI-created workspaces when the CLI filter is enabled', () => {
+    const manual = makeWorktree('manual')
+    const cliCreated = {
+      ...makeWorktree('cli-created'),
+      cliProvenance: {
+        kind: 'created-by-cli' as const,
+        createdAt: 123,
+        callerTerminalHandle: 'terminal-1',
+        startupAgent: 'claude' as const
+      }
+    }
+
+    const result = computeVisibleWorktreeIds(
+      { repo1: [manual, cliCreated] },
+      [manual.id, cliCreated.id],
+      visibleOptions({ hideCliCreatedWorkspaces: true })
+    )
+
+    expect(result).toEqual([manual.id])
+  })
+
+  it('keeps CLI-created workspaces visible while the CLI filter is off', () => {
+    const manual = makeWorktree('manual')
+    const cliCreated = {
+      ...makeWorktree('cli-created'),
+      cliProvenance: { kind: 'created-by-cli' as const, createdAt: 123 }
+    }
+
+    const result = computeVisibleWorktreeIds(
+      { repo1: [manual, cliCreated] },
+      [manual.id, cliCreated.id],
+      visibleOptions()
+    )
+
+    expect(result).toEqual([manual.id, cliCreated.id])
+  })
+
+  it('keeps workspaces without CLI provenance visible when the CLI filter is enabled', () => {
+    // Why: workspaces persisted before cliProvenance existed have no marker and
+    // must never be filtered as CLI-created.
+    const legacy = makeWorktree('legacy')
+
+    const result = computeVisibleWorktreeIds(
+      { repo1: [legacy] },
+      [legacy.id],
+      visibleOptions({ hideCliCreatedWorkspaces: true })
+    )
+
+    expect(result).toEqual([legacy.id])
   })
 
   it('does not treat slept wake-hint tabs as live surfaces', () => {
@@ -539,6 +592,10 @@ describe('computeVisibleWorktreeIds', () => {
       hostId: 'local'
     }
     expect(run(automationParent, { hideAutomationGeneratedWorkspaces: true })).toEqual([child.id])
+
+    const cliParent = makeWorktree('cli-parent')
+    cliParent.cliProvenance = { kind: 'created-by-cli', createdAt: 1 }
+    expect(run(cliParent, { hideCliCreatedWorkspaces: true })).toEqual([child.id])
   })
 
   it('includes inline lineage ancestors when send-target mode forces a filtered child visible', () => {
@@ -733,6 +790,10 @@ describe('sidebarHasActiveFilters', () => {
     )
   })
 
+  it('returns true when only CLI-created workspaces are hidden', () => {
+    expect(sidebarHasActiveFilters(filterState({ hideCliCreatedWorkspaces: true }))).toBe(true)
+  })
+
   it('returns true when sleeping workspaces are hidden', () => {
     expect(sidebarHasActiveFilters(filterState({ showSleepingWorkspaces: false }))).toBe(true)
   })
@@ -753,6 +814,7 @@ describe('computeClearFilterActions', () => {
       resetFilterRepoIds: false,
       resetHideDefaultBranchWorkspace: false,
       resetHideAutomationGeneratedWorkspaces: false,
+      resetHideCliCreatedWorkspaces: false,
       resetVisibleWorkspaceHostIds: false
     })
   })
@@ -766,6 +828,7 @@ describe('computeClearFilterActions', () => {
       resetFilterRepoIds: false,
       resetHideDefaultBranchWorkspace: true,
       resetHideAutomationGeneratedWorkspaces: false,
+      resetHideCliCreatedWorkspaces: false,
       resetVisibleWorkspaceHostIds: false
     })
   })
@@ -778,6 +841,18 @@ describe('computeClearFilterActions', () => {
       resetFilterRepoIds: false,
       resetHideDefaultBranchWorkspace: false,
       resetHideAutomationGeneratedWorkspaces: true,
+      resetHideCliCreatedWorkspaces: false,
+      resetVisibleWorkspaceHostIds: false
+    })
+  })
+
+  it('flags only hideCliCreatedWorkspaces for reset when it is the sole filter', () => {
+    expect(computeClearFilterActions(filterState({ hideCliCreatedWorkspaces: true }))).toEqual({
+      resetShowSleepingWorkspaces: false,
+      resetFilterRepoIds: false,
+      resetHideDefaultBranchWorkspace: false,
+      resetHideAutomationGeneratedWorkspaces: false,
+      resetHideCliCreatedWorkspaces: true,
       resetVisibleWorkspaceHostIds: false
     })
   })
@@ -801,6 +876,7 @@ describe('computeClearFilterActions', () => {
       resetFilterRepoIds: false,
       resetHideDefaultBranchWorkspace: false,
       resetHideAutomationGeneratedWorkspaces: false,
+      resetHideCliCreatedWorkspaces: false,
       resetVisibleWorkspaceHostIds: true
     })
   })
@@ -821,6 +897,7 @@ describe('computeClearFilterActions', () => {
       resetFilterRepoIds: true,
       resetHideDefaultBranchWorkspace: true,
       resetHideAutomationGeneratedWorkspaces: true,
+      resetHideCliCreatedWorkspaces: false,
       resetVisibleWorkspaceHostIds: true
     })
   })

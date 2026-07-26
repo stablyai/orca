@@ -638,6 +638,7 @@ function App(): React.JSX.Element {
   const showSleepingWorkspaces = useAppStore((s) => s.showSleepingWorkspaces)
   const hideDefaultBranchWorkspace = useAppStore((s) => s.hideDefaultBranchWorkspace)
   const hideAutomationGeneratedWorkspaces = useAppStore((s) => s.hideAutomationGeneratedWorkspaces)
+  const hideCliCreatedWorkspaces = useAppStore((s) => s.hideCliCreatedWorkspaces)
   const showDotfilesByWorktree = useAppStore((s) => s.showDotfilesByWorktree)
   const filterRepoIds = useAppStore((s) => s.filterRepoIds)
   const acknowledgedAgentsByPaneKey = useAppStore((s) => s.acknowledgedAgentsByPaneKey)
@@ -1337,6 +1338,7 @@ function App(): React.JSX.Element {
         showSleepingWorkspaces,
         hideDefaultBranchWorkspace,
         hideAutomationGeneratedWorkspaces,
+        hideCliCreatedWorkspaces,
         showDotfilesByWorktree,
         filterRepoIds,
         // Why (#9002): activeView is deliberately NOT included here. It used to
@@ -1367,6 +1369,7 @@ function App(): React.JSX.Element {
     showSleepingWorkspaces,
     hideDefaultBranchWorkspace,
     hideAutomationGeneratedWorkspaces,
+    hideCliCreatedWorkspaces,
     showDotfilesByWorktree,
     filterRepoIds,
     acknowledgedAgentsByPaneKey

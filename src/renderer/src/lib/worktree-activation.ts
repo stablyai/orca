@@ -364,6 +364,9 @@ export function activateAndRevealWorktree(
   ) {
     state.setHideAutomationGeneratedWorkspaces(false)
   }
+  if (state.hideCliCreatedWorkspaces && wt.cliProvenance?.kind === 'created-by-cli') {
+    state.setHideCliCreatedWorkspaces(false)
+  }
 
   // 6. Reveal in sidebar
   if (opts?.revealInSidebar !== false) {

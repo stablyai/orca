@@ -4124,7 +4124,8 @@
           "75405270ed": "Edit filters ({{value0}} active)",
           "489d1c8c9f": "Search projects...",
           "ee240a39eb": "Edit filters",
-          "automationCreated": "Hide automation-created"
+          "automationCreated": "Hide automation-created",
+          "cliCreated": "Hide CLI-created"
         },
         "SidebarHeader": {
           "25a95899c9": "Add Project",
@@ -4187,7 +4188,8 @@
           "c3fa13dc2e": "Hide default branch",
           "ed1611b65b": "Hide sleeping",
           "82594419ba": "Filters",
-          "automationCreated": "Hide automation-created"
+          "automationCreated": "Hide automation-created",
+          "cliCreated": "Hide CLI-created"
         },
         "sidebarHostOptions": {
           "3e102f111c": "All hosts",
@@ -4250,7 +4252,8 @@
           "2d74665a56": "Ports",
           "65a9820bd1": "Agent statuses",
           "219ebf1961": "Branch name",
-          "folderPathIdentity": "Branch / folder path"
+          "folderPathIdentity": "Branch / folder path",
+          "cli": "Orca CLI"
         },
         "SshDisconnectedDialog": {
           "ca4a7892af": "Connecting...",
@@ -4371,7 +4374,12 @@
           "checkingAutomationAvailability": "Checking automation availability...",
           "automationMissing": "Automation no longer available.",
           "automationRunMissing": "Run history no longer available.",
-          "automationAvailabilityUnavailable": "Automation availability could not be checked."
+          "automationAvailabilityUnavailable": "Automation availability could not be checked.",
+          "cliHeader": "Orca CLI",
+          "cliCreatedFromAgent": "Created by an agent via `orca worktree create`",
+          "cliCreatedFromShell": "Created via `orca worktree create`",
+          "cliStartupAgent": "Started with {{value0}}",
+          "cliCreated": "Created by Orca CLI"
         },
         "WorktreeCardMetadataStatusBadges": {
           "fe188062a1": "State: Open",

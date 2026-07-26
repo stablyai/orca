@@ -4067,7 +4067,8 @@
           "75405270ed": "フィルターの編集 ({{value0}} がアクティブ)",
           "489d1c8c9f": "プロジェクトを検索...",
           "ee240a39eb": "フィルターの編集",
-          "automationCreated": "自動化で作成されたワークスペースを非表示"
+          "automationCreated": "自動化で作成されたワークスペースを非表示",
+          "cliCreated": "Hide CLI-created"
         },
         "SidebarHeader": {
           "92154beb7e": "新規ワークスペース",
@@ -4130,7 +4131,8 @@
           "c3fa13dc2e": "デフォルトのブランチを非表示にする",
           "ed1611b65b": "スリープ中を非表示",
           "82594419ba": "フィルター",
-          "automationCreated": "自動化で作成されたワークスペースを非表示"
+          "automationCreated": "自動化で作成されたワークスペースを非表示",
+          "cliCreated": "Hide CLI-created"
         },
         "SidebarWorkspaceOptionsMenu": {
           "95c9754653": "Agent アクティビティのレイアウト",
@@ -4185,7 +4187,8 @@
           "65a9820bd1": "Agent ステータス",
           "219ebf1961": "ブランチ名",
           "automation": "自動化",
-          "folderPathIdentity": "ブランチ / フォルダパス"
+          "folderPathIdentity": "ブランチ / フォルダパス",
+          "cli": "Orca CLI"
         },
         "SshDisconnectedDialog": {
           "ca4a7892af": "接続中...",
@@ -4306,7 +4309,12 @@
           "copyLinkSuccess": "{{value0}} をコピーしました",
           "copyLinkFailure": "リンクのコピーに失敗しました",
           "issueLinkLabel": "Issue リンク",
-          "reviewLinkLabel": "{{value0}} リンク"
+          "reviewLinkLabel": "{{value0}} リンク",
+          "cliHeader": "Orca CLI",
+          "cliCreatedFromAgent": "Created by an agent via `orca worktree create`",
+          "cliCreatedFromShell": "Created via `orca worktree create`",
+          "cliStartupAgent": "Started with {{value0}}",
+          "cliCreated": "Created by Orca CLI"
         },
         "WorktreeCardMetadataStatusBadges": {
           "fe188062a1": "状態: オープン",

@@ -20,6 +20,7 @@ export function useVisibleWorkspaceKanbanWorktreeIds({
   const showSleepingWorkspaces = useAppStore((s) => s.showSleepingWorkspaces)
   const hideDefaultBranchWorkspace = useAppStore((s) => s.hideDefaultBranchWorkspace)
   const hideAutomationGeneratedWorkspaces = useAppStore((s) => s.hideAutomationGeneratedWorkspaces)
+  const hideCliCreatedWorkspaces = useAppStore((s) => s.hideCliCreatedWorkspaces)
   const workspaceHostScope = useAppStore((s) => s.workspaceHostScope)
   const visibleWorkspaceHostIds = useAppStore((s) => s.visibleWorkspaceHostIds)
   const settings = useAppStore((s) => s.settings)
@@ -57,6 +58,7 @@ export function useVisibleWorkspaceKanbanWorktreeIds({
         worktreeIdsWithLiveAgent,
         hideDefaultBranchWorkspace,
         hideAutomationGeneratedWorkspaces,
+        hideCliCreatedWorkspaces,
         repoMap,
         workspaceHostScope,
         visibleWorkspaceHostIds,
@@ -73,6 +75,7 @@ export function useVisibleWorkspaceKanbanWorktreeIds({
     filterRepoIds,
     hideDefaultBranchWorkspace,
     hideAutomationGeneratedWorkspaces,
+    hideCliCreatedWorkspaces,
     workspaceHostScope,
     visibleWorkspaceHostIds,
     settings,

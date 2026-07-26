@@ -105,6 +105,7 @@ import type {
 } from '../../shared/automations-types'
 import type {
   AutomationWorkspaceProvenance,
+  CliWorkspaceProvenance,
   BaseRefSearchResult,
   CreateWorktreeResult,
   DetectedWorktree,
@@ -1855,6 +1856,7 @@ function mergeRuntimeFolderWorkspace(repo: Repo, worktreeId: string, meta: Workt
     ...(meta.automationProvenance !== undefined
       ? { automationProvenance: meta.automationProvenance }
       : {}),
+    ...(meta.cliProvenance !== undefined ? { cliProvenance: meta.cliProvenance } : {}),
     ...(meta.priorWorktreeIds !== undefined ? { priorWorktreeIds: meta.priorWorktreeIds } : {}),
     workspaceStatus: meta.workspaceStatus ?? DEFAULT_WORKSPACE_STATUS_ID,
     diffComments: meta.diffComments,
@@ -18256,6 +18258,7 @@ export class OrcaRuntimeService {
     startupPrompt?: string
     pendingFirstAgentMessageRename?: boolean
     automationProvenance?: AutomationWorkspaceProvenance
+    cliProvenance?: CliWorkspaceProvenance
     startup?: WorktreeStartupLaunch
     startupDraft?: string
     startupDraftPaste?: WorktreeStartupDraftPaste
@@ -18316,6 +18319,7 @@ export class OrcaRuntimeService {
           nestWorkspaces: settings.nestWorkspaces
         },
         ...(args.automationProvenance ? { automationProvenance: args.automationProvenance } : {}),
+        ...(args.cliProvenance ? { cliProvenance: args.cliProvenance } : {}),
         ...(args.linkedIssue !== undefined ? { linkedIssue: args.linkedIssue } : {}),
         ...(args.linkedPR !== undefined ? { linkedPR: args.linkedPR } : {}),
         ...(args.linkedLinearIssue !== undefined
@@ -18921,6 +18925,7 @@ export class OrcaRuntimeService {
         ? { pendingFirstAgentMessageRename: true }
         : {}),
       ...(args.automationProvenance ? { automationProvenance: args.automationProvenance } : {}),
+      ...(args.cliProvenance ? { cliProvenance: args.cliProvenance } : {}),
       ...(args.comment !== undefined ? { comment: args.comment } : {}),
       ...(args.manualOrder !== undefined ? { manualOrder: args.manualOrder } : {}),
       ...(args.workspaceStatus !== undefined ? { workspaceStatus: args.workspaceStatus } : {})
@@ -19270,6 +19275,7 @@ export class OrcaRuntimeService {
       createdWithAgent?: TuiAgent
       pendingFirstAgentMessageRename?: boolean
       automationProvenance?: AutomationWorkspaceProvenance
+      cliProvenance?: CliWorkspaceProvenance
       startup?: WorktreeStartupLaunch
       startupFollowup?: WorktreeStartupFollowup
       startupDraftPaste?: WorktreeStartupDraftPaste
@@ -19321,7 +19327,8 @@ export class OrcaRuntimeService {
         ...(args.pendingFirstAgentMessageRename === true
           ? { pendingFirstAgentMessageRename: true }
           : {}),
-        ...(args.automationProvenance ? { automationProvenance: args.automationProvenance } : {})
+        ...(args.automationProvenance ? { automationProvenance: args.automationProvenance } : {}),
+        ...(args.cliProvenance ? { cliProvenance: args.cliProvenance } : {})
       },
       repo,
       this.store as unknown as Store,
