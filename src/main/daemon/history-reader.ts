@@ -38,6 +38,7 @@ export type ColdRestoreProbe =
         | 'payload-absent'
         | 'payload-corrupt'
         | 'io-error'
+        | 'completeness-lost'
     }
   | { kind: 'valid-snapshot'; restore: ColdRestoreInfo; truncated: boolean }
 
@@ -67,7 +68,10 @@ export class HistoryReader {
     }
     try {
       const detected = this.detectColdRestoreWithCompleteness(sessionId, opts)
-      if (detected) {
+      if (detected?.completenessLost) {
+        return { kind: 'completeness-lost' }
+      }
+      if (detected?.restore) {
         return {
           kind: 'valid-snapshot',
           restore: detected.restore,
@@ -94,7 +98,7 @@ export class HistoryReader {
   private detectColdRestoreWithCompleteness(
     sessionId: string,
     opts?: { ignoreCleanEnd?: boolean; wslDistro?: string }
-  ): { restore: ColdRestoreInfo; truncated: boolean } | null {
+  ): { restore: ColdRestoreInfo | null; truncated: boolean; completenessLost: boolean } | null {
     const meta = this.readMeta(sessionId)
     if (!meta) {
       return null
@@ -125,19 +129,28 @@ export class HistoryReader {
     // Why: the incremental log is newer than a checkpoint while remaining byte-exact.
     const logRestore = this.restoreFromIncrementalLog(sessionDir, meta, checkpoint, opts?.wslDistro)
     if (logRestore?.restore) {
-      return { restore: logRestore.restore, truncated: logRestore.truncated }
+      return {
+        restore: logRestore.restore,
+        truncated: logRestore.truncated,
+        completenessLost: logRestore.completenessLost
+      }
     }
 
     if (!checkpoint) {
       // Why: backward compatibility with pre-checkpoint sessions, and corrupt
       // checkpoints — the old scrollback.bin is the best remaining data.
       const restore = restoreTerminalHistoryScrollback(this.basePath, sessionId, meta)
-      return restore ? { restore, truncated: logRestore?.truncated ?? false } : null
+      return {
+        restore,
+        truncated: logRestore?.truncated ?? false,
+        completenessLost: logRestore?.completenessLost ?? false
+      }
     }
 
     return {
       restore: this.coldRestoreInfoFromSnapshot(checkpoint, checkpoint.cwd, meta),
-      truncated: logRestore?.truncated ?? false
+      truncated: logRestore?.truncated ?? false,
+      completenessLost: logRestore?.completenessLost ?? false
     }
   }
 
@@ -206,22 +219,23 @@ export class HistoryReader {
     meta: SessionMeta,
     checkpoint: TerminalCheckpointFile | null,
     wslDistro?: string
-  ): { restore: ColdRestoreInfo | null; truncated: boolean } | null {
+  ): { restore: ColdRestoreInfo | null; truncated: boolean; completenessLost: boolean } | null {
+    const logPath = join(sessionDir, 'output.log')
+    if (!existsSync(logPath)) {
+      return null
+    }
     let logBuffer: Buffer
     try {
-      logBuffer = readTerminalHistoryBuffer(
-        join(sessionDir, 'output.log'),
-        TERMINAL_HISTORY_LOG_MAX_BYTES
-      )
+      logBuffer = readTerminalHistoryBuffer(logPath, TERMINAL_HISTORY_LOG_MAX_BYTES)
     } catch {
-      return null
+      return { restore: null, truncated: false, completenessLost: true }
     }
     const log = decodeTerminalHistoryLog(logBuffer)
     if (!log) {
-      return { restore: null, truncated: false }
+      return { restore: null, truncated: false, completenessLost: true }
     }
     if (log.batches.length === 0) {
-      return { restore: null, truncated: log.truncatedTail }
+      return { restore: null, truncated: log.truncatedTail, completenessLost: false }
     }
     // Generation mismatch means the log does not continue this checkpoint
     // (e.g. crash between checkpoint rename and log reset, or a pre-log
@@ -229,10 +243,10 @@ export class HistoryReader {
     // garble content; the checkpoint alone is consistent.
     if (checkpoint) {
       if (typeof checkpoint.generation !== 'number' || log.generation !== checkpoint.generation) {
-        return { restore: null, truncated: log.truncatedTail }
+        return { restore: null, truncated: log.truncatedTail, completenessLost: true }
       }
     } else if (log.generation !== 0) {
-      return { restore: null, truncated: log.truncatedTail }
+      return { restore: null, truncated: log.truncatedTail, completenessLost: true }
     }
 
     const emulator = new HeadlessEmulator({
@@ -249,7 +263,7 @@ export class HistoryReader {
               checkpoint.snapshotAnsi
           )
         ) {
-          return { restore: null, truncated: log.truncatedTail }
+          return { restore: null, truncated: log.truncatedTail, completenessLost: true }
         }
         emulator.setRestoredOscLinks(checkpoint.oscLinks)
       }
@@ -257,7 +271,7 @@ export class HistoryReader {
         for (const record of batch.records) {
           if (record.kind === 'output') {
             if (!emulator.writeSync(record.data)) {
-              return { restore: null, truncated: log.truncatedTail }
+              return { restore: null, truncated: log.truncatedTail, completenessLost: true }
             }
           } else if (record.kind === 'resize') {
             emulator.resize(record.cols, record.rows)
@@ -273,12 +287,12 @@ export class HistoryReader {
           snapshot.cwd ?? checkpoint?.cwd ?? meta.cwd,
           meta
         ),
-        truncated: log.truncatedTail
+        truncated: log.truncatedTail,
+        completenessLost: false
       }
     } catch {
-      // Why: a replay failure must degrade to checkpoint-only restore, never
-      // surface as a failed spawn.
-      return { restore: null, truncated: log.truncatedTail }
+      // Why: normal cold restore may use the checkpoint, but archive capture cannot claim it is complete after replay fails.
+      return { restore: null, truncated: log.truncatedTail, completenessLost: true }
     } finally {
       emulator.dispose()
     }

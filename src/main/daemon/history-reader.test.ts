@@ -200,6 +200,30 @@ describe('HistoryReader', () => {
 
       expect(reader.probeColdRestore('no-payload')).toEqual({ kind: 'payload-absent' })
     })
+
+    it('marks log read, decode, and replay completeness failures unavailable', () => {
+      writeSessionWithCheckpoint(dir, 'log-read-failure', makeMeta(), makeCheckpoint())
+      mkdirSync(join(dir, getHistorySessionDirName('log-read-failure'), 'output.log'))
+      writeSessionWithCheckpoint(dir, 'log-decode-failure', makeMeta(), makeCheckpoint())
+      writeFileSync(
+        join(dir, getHistorySessionDirName('log-decode-failure'), 'output.log'),
+        'not a terminal history log'
+      )
+      writeSessionWithCheckpoint(
+        dir,
+        'log-replay-failure',
+        makeMeta(),
+        makeCheckpoint({ generation: 1 })
+      )
+      writeFileSync(
+        join(dir, getHistorySessionDirName('log-replay-failure'), 'output.log'),
+        Buffer.concat([encodeLogHeader(2), encodeLogBatch(1, [{ kind: 'output', data: 'newer' }])])
+      )
+
+      expect(reader.probeColdRestore('log-read-failure')).toEqual({ kind: 'completeness-lost' })
+      expect(reader.probeColdRestore('log-decode-failure')).toEqual({ kind: 'completeness-lost' })
+      expect(reader.probeColdRestore('log-replay-failure')).toEqual({ kind: 'completeness-lost' })
+    })
   })
 
   it('replays incremental hostname OSC-7 with the same WSL context', () => {

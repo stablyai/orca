@@ -20,6 +20,7 @@ export type PtyColdRestoreProbe =
         | 'payload-absent'
         | 'payload-corrupt'
         | 'io-error'
+        | 'completeness-lost'
     }
 
 export type PtyPreSpawnLostWorkerHandler = (coldRestore: {
