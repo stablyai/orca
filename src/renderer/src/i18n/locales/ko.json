@@ -14625,7 +14625,7 @@
   },
   "detachedTerminalPane": {
     "seedMissing": "이 터미널은 더 이상 이 창에서 사용할 수 없습니다.",
-    "reintegrate": "기본 창으로 복원",
+    "reintegrate": "메인 창으로 돌아가기",
     "recoverableError": {
       "title": "Orca 터미널에 오류가 발생했습니다.",
       "description": "분리된 터미널 렌더링을 완료할 수 없습니다. 다시 시도하여 다시 마운트하거나 다시 열어보세요."
