@@ -24,6 +24,7 @@ import {
   removeBindingOverride,
   sameBindings
 } from './keybinding-override-edits'
+import { buildKeybindingConflictWarnings } from './keybinding-conflict-warnings'
 import {
   buildShortcutGlobalSearchMatcher,
   matchesShortcutFilter,
@@ -95,23 +96,10 @@ export function ShortcutsPane(): React.JSX.Element {
     () => disabledAgentTabActionIds(disabledTuiAgents),
     [disabledTuiAgents]
   )
-  const conflictByAction = useMemo(() => {
-    const result = new Map<KeybindingActionId, string[]>()
-    for (const conflict of findKeybindingConflicts(platform, keybindings, {
-      ignoredActionIds: ignoredConflictActionIds
-    })) {
-      const labels = conflict.actionIds
-        .map((id) => getKeybindingDefinition(id)?.title ?? id)
-        .join(', ')
-      for (const actionId of conflict.actionIds) {
-        result.set(actionId, [
-          ...(result.get(actionId) ?? []),
-          `${formatKeybindingList([conflict.binding], platform)} conflicts with ${labels}.`
-        ])
-      }
-    }
-    return result
-  }, [ignoredConflictActionIds, keybindings])
+  const conflictByAction = useMemo(
+    () => buildKeybindingConflictWarnings(keybindingSnapshot, platform, ignoredConflictActionIds),
+    [keybindingSnapshot, ignoredConflictActionIds]
+  )
   const shortcutGroups = useMemo<ShortcutRowsByGroup[]>(
     () =>
       groups.map((group) => ({

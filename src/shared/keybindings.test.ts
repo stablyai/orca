@@ -10,6 +10,8 @@ import {
   formatKeybindingList,
   getEffectiveKeybindingsForAction,
   isDigitIndexActionId,
+  isKeybindingAllowedInTerminal,
+  KEYBINDING_DEFINITIONS,
   isDoubleTapBinding,
   keybindingFromInput,
   LEGACY_TAB_SWITCH_BINDINGS,
@@ -421,6 +423,49 @@ describe('keybindings', () => {
       binding: 'Alt+4',
       actionIds: expect.arrayContaining(['tab.selectByIndex', 'tab.openQuickCommandsMenu'])
     })
+  })
+
+  it('reports conflicts between terminal-scope actions and shortcuts that fire in terminals', () => {
+    // Why: worktree history is a global action, but allowInTerminal lets it consume
+    // the chord while a terminal is focused, so a terminal binding on the same chord
+    // silently never fires (#split-right-vs-history-forward).
+    expect(
+      findKeybindingConflicts('darwin', { 'terminal.splitRight': ['Mod+Alt+ArrowRight'] })
+    ).toContainEqual({
+      binding: 'Mod+Alt+ArrowRight',
+      actionIds: expect.arrayContaining(['worktree.history.forward', 'terminal.splitRight'])
+    })
+
+    expect(
+      findKeybindingConflicts('darwin', { 'terminal.splitDown': ['Mod+Alt+ArrowLeft'] })
+    ).toContainEqual({
+      binding: 'Mod+Alt+ArrowLeft',
+      actionIds: expect.arrayContaining(['worktree.history.back', 'terminal.splitDown'])
+    })
+
+    // Why: the terminal bucket must stay limited to actions that actually reach a
+    // focused terminal, otherwise every app chord would block terminal bindings.
+    expect(getKeybindingDefinition('view.tasks')?.allowInTerminal).toBeUndefined()
+    expect(
+      findKeybindingConflicts('darwin', {
+        'terminal.splitRight': getEffectiveKeybindingsForAction('view.tasks', 'darwin')
+      })
+    ).toEqual([])
+  })
+
+  it('keeps every terminal-reachable default binding conflict-free on all platforms', () => {
+    // Why: the terminal bucket makes previously separate scopes collide, so a new
+    // default landing on a chord another terminal-reachable action already owns
+    // would surface as a conflict the user cannot resolve without rebinding.
+    for (const platform of ['darwin', 'linux', 'win32'] as const) {
+      for (const definition of KEYBINDING_DEFINITIONS.filter(isKeybindingAllowedInTerminal)) {
+        const defaults = getEffectiveKeybindingsForAction(definition.id, platform)
+        if (defaults.length === 0) {
+          continue
+        }
+        expect(findKeybindingConflicts(platform, { [definition.id]: defaults })).toEqual([])
+      }
+    }
   })
 
   it('defines macOS-only rename shortcuts that stay conflict-free', () => {

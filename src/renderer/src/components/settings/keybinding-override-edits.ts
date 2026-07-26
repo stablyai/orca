@@ -1,3 +1,4 @@
+import { getKeybindingPlatform } from '../../../../shared/keybindings'
 import type {
   KeybindingActionId,
   KeybindingFileSnapshot,
@@ -34,4 +35,17 @@ export function hasCommonBindingOverride(
   actionId: KeybindingActionId
 ): boolean {
   return hasOwnBindingOverride(snapshot?.commonOverrides ?? {}, actionId)
+}
+
+// Why: the loader strips conflicting overrides before the app sees them, so the
+// active map can never explain a conflict. These are the file's bindings as
+// written, which is what conflict reporting has to judge.
+export function getFileBindingOverrides(
+  snapshot: KeybindingFileSnapshot | null,
+  platform: NodeJS.Platform
+): KeybindingOverrides {
+  return {
+    ...snapshot?.commonOverrides,
+    ...snapshot?.platformOverrides?.[getKeybindingPlatform(platform)]
+  }
 }
