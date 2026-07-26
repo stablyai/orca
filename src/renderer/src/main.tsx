@@ -10,12 +10,15 @@ import {
   recordRendererCrashBreadcrumb
 } from './lib/crash-diagnostics'
 import { applyDocumentTheme } from './lib/document-theme'
+import { installTypingLatencyDiagnostic } from './lib/typing-latency-diagnostic'
 import { shouldEnableReactGrab } from './lib/react-grab-dev-gate'
 import { I18nProvider } from './i18n/I18nProvider'
 import { translate } from './i18n/i18n'
 
 recordRendererCrashBreadcrumb('renderer_bootstrap_started', { dev: import.meta.env.DEV })
 installRendererCrashDiagnostics()
+// Why: must wrap store.subscribe before React mounts, so the census can count listeners.
+installTypingLatencyDiagnostic()
 
 if (
   import.meta.env.DEV &&
