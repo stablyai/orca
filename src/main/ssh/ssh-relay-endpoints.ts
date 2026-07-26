@@ -8,13 +8,34 @@ import {
 
 export const WINDOWS_ACTIVE_PIPE_MARKER_PREFIX = '.windows-active-pipe-'
 
+const LINUX_UNIX_SOCKET_MAX_PATH_BYTES = 107
+const DARWIN_UNIX_SOCKET_MAX_PATH_BYTES = 103
+
 export function relayEndpointForHost(
   hostPlatform: RemoteHostPlatform,
   remoteDir: string,
   sockName: string
 ): string {
   if (!isWindowsRemoteHost(hostPlatform)) {
-    return joinRemotePath(hostPlatform, remoteDir, sockName)
+    const maxPathBytes =
+      hostPlatform.os === 'darwin'
+        ? DARWIN_UNIX_SOCKET_MAX_PATH_BYTES
+        : LINUX_UNIX_SOCKET_MAX_PATH_BYTES
+    const fullPath = joinRemotePath(hostPlatform, remoteDir, sockName)
+    if (Buffer.byteLength(fullPath, 'utf8') > maxPathBytes) {
+      const parentDir = remoteDir.includes('/relay-')
+        ? remoteDir.substring(0, remoteDir.lastIndexOf('/'))
+        : remoteDir
+      const hash = createHash('sha256').update(fullPath).digest('hex').slice(0, 12)
+      const hashedSockName = `${hash}-${sockName}`
+      const shortened = joinRemotePath(hostPlatform, parentDir, hashedSockName)
+      if (Buffer.byteLength(shortened, 'utf8') <= maxPathBytes) {
+        return shortened
+      }
+      const tmpPath = `/tmp/orca-${hashedSockName}`
+      return Buffer.byteLength(tmpPath, 'utf8') <= maxPathBytes ? tmpPath : `/tmp/orca-${hash}.sock`
+    }
+    return fullPath
   }
   const endpointHash = createHash('sha256')
     .update(`${remoteDir}\0${sockName}`)

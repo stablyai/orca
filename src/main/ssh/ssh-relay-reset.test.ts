@@ -47,16 +47,21 @@ async function capturedResetScript(): Promise<string> {
   return vi.mocked(execCommand).mock.lastCall?.[1] ?? ''
 }
 
-async function runResetScript(lsofMode: LsofMode): Promise<{
+async function runResetScript(
+  lsofMode: LsofMode,
+  socketName = relaySocketNameForInstanceId('ssh-1')
+): Promise<{
   killCalls: string[]
   pgrepCalls: string[]
   socketExists: boolean
 }> {
   const script = await capturedResetScript()
-  const home = mkdtempSync(join(tmpdir(), 'orca-'))
+  const home = mkdtempSync(
+    process.platform === 'darwin' ? '/tmp/orca-reset-' : join(tmpdir(), 'orca-')
+  )
   const binDir = join(home, 'bin')
   const socketDir = join(home, '.orca-remote')
-  const socketPath = join(socketDir, relaySocketNameForInstanceId('ssh-1'))
+  const socketPath = join(socketDir, socketName)
   const killLog = join(home, 'kill.log')
   const pgrepLog = join(home, 'pgrep.log')
   mkdirSync(binDir)
@@ -152,6 +157,17 @@ describe('forceStopRelayForTarget', () => {
 
       expect(result.killCalls).toEqual([`-TERM ${TARGET_PID}`, `-KILL ${TARGET_PID}`])
       expect(result.pgrepCalls).toEqual(['called'])
+      expect(result.socketExists).toBe(false)
+    }
+  )
+
+  it.skipIf(process.platform === 'win32')(
+    'stops target-specific shortened sockets across relay versions',
+    async () => {
+      const sockName = relaySocketNameForInstanceId('ssh-1')
+      const result = await runResetScript('match', `abcdef012345-${sockName}`)
+
+      expect(result.killCalls).toEqual([`-TERM ${TARGET_PID}`, `-KILL ${TARGET_PID}`])
       expect(result.socketExists).toBe(false)
     }
   )
