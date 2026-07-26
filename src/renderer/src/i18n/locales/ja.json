@@ -2883,9 +2883,9 @@
             "6b3efb106e": "スプリットアップ",
             "fdd29eb669": "ピンタブ",
             "8e9d603a09": "タブの固定を解除する",
-            "unpinTabs": "Unpin Tabs",
-            "pinTabs": "Pin Tabs",
-            "closeTabs": "Close Tabs"
+            "unpinTabs": "タブの固定を解除",
+            "pinTabs": "タブを固定",
+            "closeTabs": "タブを閉じる"
           },
           "QuickLaunchButton": {
             "348a04c1ad": "Agent 設定…",
@@ -2928,11 +2928,11 @@
             "417722e9c2": "タブの固定を解除する",
             "splitTerminalRight": "ターミナルを右に分割",
             "splitTerminalDown": "ターミナルを下に分割",
-            "unpinTabs": "Unpin Tabs",
-            "pinTabs": "Pin Tabs",
-            "closeTabs": "Close Tabs",
-            "detachTabsToWindow": "Detach Tabs to Window",
-            "detachToWindow": "Detach to Window"
+            "unpinTabs": "タブの固定を解除",
+            "pinTabs": "タブを固定",
+            "closeTabs": "タブを閉じる",
+            "detachTabsToWindow": "タブをウィンドウに分離",
+            "detachToWindow": "ウィンドウに分離"
           },
           "TabBar": {
             "b1a132357f": "新規タブ",
@@ -3032,7 +3032,7 @@
             "down": "下",
             "up": "上",
             "moveToPaneColumn": "タブを分割へ移動",
-            "moveTabsToPaneColumn": "Move Tabs to Split"
+            "moveTabsToPaneColumn": "タブを分割へ移動"
           },
           "EditorFileTabCloseButton": {
             "4655cf570e": "タブを閉じる",
@@ -14624,14 +14624,14 @@
     }
   },
   "detachedTerminalPane": {
-    "seedMissing": "This terminal is no longer available in this window.",
-    "reintegrate": "Return to main window",
+    "seedMissing": "このターミナルはこのウィンドウで利用できなくなりました。",
+    "reintegrate": "メインウィンドウに戻す",
     "recoverableError": {
-      "title": "Orca terminal hit an error.",
-      "description": "The detached terminal could not finish rendering. Retry to remount it, or reopen it."
+      "title": "Orca ターミナルでエラーが発生しました。",
+      "description": "分離されたターミナルの描画を完了できませんでした。再読み込みして再マウントするか、開き直してください。"
     }
   },
   "detachToWindow": {
-    "error": "Could not detach tab to a new window"
+    "error": "タブを新しいウィンドウに分離できませんでした"
   }
 }

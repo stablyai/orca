@@ -2883,9 +2883,9 @@
             "6b3efb106e": "Dividir hacia arriba",
             "fdd29eb669": "Fijar pestaña",
             "8e9d603a09": "Desanclar pestaña",
-            "unpinTabs": "Unpin Tabs",
-            "pinTabs": "Pin Tabs",
-            "closeTabs": "Close Tabs"
+            "unpinTabs": "Desanclar pestañas",
+            "pinTabs": "Fijar pestañas",
+            "closeTabs": "Cerrar pestañas"
           },
           "QuickLaunchButton": {
             "348a04c1ad": "Ajustes de Agents…",
@@ -2928,11 +2928,11 @@
             "417722e9c2": "Desanclar pestaña",
             "splitTerminalRight": "Dividir terminal a la derecha",
             "splitTerminalDown": "Dividir terminal hacia abajo",
-            "unpinTabs": "Unpin Tabs",
-            "pinTabs": "Pin Tabs",
-            "closeTabs": "Close Tabs",
-            "detachTabsToWindow": "Detach Tabs to Window",
-            "detachToWindow": "Detach to Window"
+            "unpinTabs": "Desanclar pestañas",
+            "pinTabs": "Fijar pestañas",
+            "closeTabs": "Cerrar pestañas",
+            "detachTabsToWindow": "Separar pestañas a una ventana",
+            "detachToWindow": "Separar a una ventana"
           },
           "TabBar": {
             "b1a132357f": "Nueva pestaña",
@@ -3032,7 +3032,7 @@
             "down": "Abajo",
             "up": "Arriba",
             "moveToPaneColumn": "Mover pestaña a división",
-            "moveTabsToPaneColumn": "Move Tabs to Split"
+            "moveTabsToPaneColumn": "Mover pestañas a división"
           },
           "EditorFileTabCloseButton": {
             "4655cf570e": "Cerrar pestaña",
@@ -14624,14 +14624,14 @@
     }
   },
   "detachedTerminalPane": {
-    "seedMissing": "This terminal is no longer available in this window.",
-    "reintegrate": "Return to main window",
+    "seedMissing": "Este terminal ya no está disponible en esta ventana.",
+    "reintegrate": "Volver a la ventana principal",
     "recoverableError": {
-      "title": "Orca terminal hit an error.",
-      "description": "The detached terminal could not finish rendering. Retry to remount it, or reopen it."
+      "title": "El terminal de Orca encontró un error.",
+      "description": "El terminal separado no pudo completar la visualización. Reintenta volver a montarlo o vuelve a abrirlo."
     }
   },
   "detachToWindow": {
-    "error": "Could not detach tab to a new window"
+    "error": "No se pudo separar la pestaña a una nueva ventana"
   }
 }

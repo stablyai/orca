@@ -18,6 +18,7 @@ function isDetachedTerminalTabSeed(value: unknown): value is DetachedTerminalTab
   if (!value || typeof value !== 'object') {
     return false
   }
+  const candidate = value as Record<string, unknown>
   return (
     typeof candidate.worktreeId === 'string' &&
     typeof candidate.groupId === 'string' &&

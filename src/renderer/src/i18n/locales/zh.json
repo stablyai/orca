@@ -2883,9 +2883,9 @@
             "6b3efb106e": "向上拆分",
             "fdd29eb669": "固定标签",
             "8e9d603a09": "取消固定标签",
-            "unpinTabs": "Unpin Tabs",
-            "pinTabs": "Pin Tabs",
-            "closeTabs": "Close Tabs"
+            "unpinTabs": "取消固定标签页",
+            "pinTabs": "固定标签页",
+            "closeTabs": "关闭标签页"
           },
           "QuickLaunchButton": {
             "348a04c1ad": "智能体设置...",
@@ -2928,11 +2928,11 @@
             "417722e9c2": "取消固定标签",
             "splitTerminalRight": "向右拆分终端",
             "splitTerminalDown": "向下拆分终端",
-            "unpinTabs": "Unpin Tabs",
-            "pinTabs": "Pin Tabs",
-            "closeTabs": "Close Tabs",
-            "detachTabsToWindow": "Detach Tabs to Window",
-            "detachToWindow": "Detach to Window"
+            "unpinTabs": "取消固定标签页",
+            "pinTabs": "固定标签页",
+            "closeTabs": "关闭标签页",
+            "detachTabsToWindow": "将标签页分离至新窗口",
+            "detachToWindow": "分离至新窗口"
           },
           "TabBar": {
             "b1a132357f": "新标签页",
@@ -3032,7 +3032,7 @@
             "down": "下",
             "up": "上",
             "moveToPaneColumn": "将标签页移至拆分",
-            "moveTabsToPaneColumn": "Move Tabs to Split"
+            "moveTabsToPaneColumn": "将标签页移至拆分"
           },
           "EditorFileTabCloseButton": {
             "4655cf570e": "关闭选项卡",
@@ -14624,14 +14624,14 @@
     }
   },
   "detachedTerminalPane": {
-    "seedMissing": "This terminal is no longer available in this window.",
-    "reintegrate": "Return to main window",
+    "seedMissing": "此终端在该窗口中不再可用。",
+    "reintegrate": "返回主窗口",
     "recoverableError": {
-      "title": "Orca terminal hit an error.",
-      "description": "The detached terminal could not finish rendering. Retry to remount it, or reopen it."
+      "title": "Orca 终端遇到错误。",
+      "description": "分离的终端无法完成渲染。请重试以重新挂载，或重新打开它。"
     }
   },
   "detachToWindow": {
-    "error": "Could not detach tab to a new window"
+    "error": "无法将标签页分离到新窗口"
   }
 }
