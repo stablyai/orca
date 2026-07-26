@@ -11,7 +11,8 @@ import {
   statSync,
   realpathSync
 } from 'node:fs'
-import { writeFile, rename, mkdir, rm, copyFile } from 'node:fs/promises'
+import { rename, mkdir, rm, copyFile, open } from 'node:fs/promises'
+import { renameDurable, writeFileDurableSync } from './durable-file-write'
 import { join, dirname, isAbsolute, resolve, sep } from 'node:path'
 import { homedir } from 'node:os'
 import { createHash, randomUUID } from 'node:crypto'
@@ -3686,12 +3687,19 @@ export class Store {
     // Why: on any write/rename failure, remove the tmp file so it doesn't leave a multi-MB orphan.
     let renamed = false
     try {
-      await writeFile(tmpFile, payload, 'utf-8')
+      // Why: fsync before rename, then fsync the directory; see writeFileDurable.
+      const handle = await open(tmpFile, 'w')
+      try {
+        await handle.writeFile(payload, 'utf-8')
+        await handle.sync()
+      } finally {
+        await handle.close()
+      }
       // Why: if flush() bumped writeGeneration mid-write, it already wrote fresher state; don't overwrite it.
       if (this.writeGeneration !== gen) {
         return
       }
-      await rename(tmpFile, dataFile)
+      await renameDurable(tmpFile, dataFile)
       renamed = true
       // Why re-check gen: a sync flush during the rename await may have written fresher state; don't record a stale hash over it.
       if (this.writeGeneration === gen) {
@@ -3732,8 +3740,9 @@ export class Store {
     // Why: on any write/rename failure, remove the tmp file so shutdown crashes don't leak orphans.
     let renamed = false
     try {
-      writeFileSync(tmpFile, payload, 'utf-8')
-      renameSync(tmpFile, dataFile)
+      // Why: fsync the temp file and the directory; a bare rename can survive as stale or empty
+      // content after power loss, losing projects/tabs back to the newest usable .bak slot.
+      writeFileDurableSync(tmpFile, dataFile, payload)
       renamed = true
       this.lastWrittenStateHash = stateHash
     } finally {
