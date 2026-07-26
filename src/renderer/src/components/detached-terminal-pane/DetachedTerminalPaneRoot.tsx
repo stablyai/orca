@@ -179,7 +179,7 @@ export function DetachedTerminalPaneRoot({
           {translate('detachedTerminalPane.reintegrate', 'Return to main window')}
         </Button>
       </div>
-      <div className="min-h-0 flex-1">
+      <div className="relative min-h-0 flex-1">
         <TerminalPane
           tabId={activeSeedTab.tab.id}
           worktreeId={activeSeedTab.worktreeId}
