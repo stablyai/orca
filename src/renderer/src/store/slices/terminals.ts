@@ -644,6 +644,12 @@ export type TerminalSlice = {
   setTabPaneExpanded: (tabId: string, expanded: boolean) => void
   setTabCanExpandPane: (tabId: string, canExpand: boolean) => void
   setTabLayout: (tabId: string, layout: TerminalLayoutSnapshot | null) => void
+  swapTerminalPaneSessions: (
+    sourceTabId: string,
+    sourceLeafId: string,
+    targetTabId: string,
+    targetLeafId: string
+  ) => boolean
   syncPaneDetachPtyOwnership: (args: {
     detachedLeafId: string
     detachedPtyId: string | null
@@ -2873,6 +2879,190 @@ export const createTerminalSlice: StateCreator<AppState, [], [], TerminalSlice> 
       }
       return { terminalLayoutsByTabId: next }
     })
+  },
+
+  swapTerminalPaneSessions: (sourceTabId, sourceLeafId, targetTabId, targetLeafId) => {
+    const sourcePaneKey = makePaneKey(sourceTabId, sourceLeafId)
+    const targetPaneKey = makePaneKey(targetTabId, targetLeafId)
+
+    let success = false
+    let sourcePtyId: string | undefined
+    let targetPtyId: string | undefined
+
+    set((s) => {
+      const sourceLayout = s.terminalLayoutsByTabId[sourceTabId]
+      const targetLayout = s.terminalLayoutsByTabId[targetTabId]
+      if (!sourceLayout || !targetLayout) {
+        return {} as Partial<AppState>
+      }
+
+      sourcePtyId = sourceLayout.ptyIdsByLeafId?.[sourceLeafId]
+      targetPtyId = targetLayout.ptyIdsByLeafId?.[targetLeafId]
+      if (!sourcePtyId || !targetPtyId) {
+        return {} as Partial<AppState>
+      }
+
+      // Swap layout leaf PTY maps
+      const nextLayouts = { ...s.terminalLayoutsByTabId }
+      nextLayouts[sourceTabId] = {
+        ...sourceLayout,
+        ptyIdsByLeafId: {
+          ...sourceLayout.ptyIdsByLeafId,
+          [sourceLeafId]: targetPtyId
+        }
+      }
+      nextLayouts[targetTabId] = {
+        ...targetLayout,
+        ptyIdsByLeafId: {
+          ...targetLayout.ptyIdsByLeafId,
+          [targetLeafId]: sourcePtyId
+        }
+      }
+
+      // Swap tab level ptyIdsByTabId arrays
+      const sourceTabPtyIds = s.ptyIdsByTabId[sourceTabId] ?? []
+      const targetTabPtyIds = s.ptyIdsByTabId[targetTabId] ?? []
+      const nextPtyIdsByTabId = {
+        ...s.ptyIdsByTabId,
+        [sourceTabId]: sourceTabPtyIds.map((p) => (p === sourcePtyId ? targetPtyId : p)),
+        [targetTabId]: targetTabPtyIds.map((p) => (p === targetPtyId ? sourcePtyId : p))
+      }
+
+      success = true
+
+      // Perform state/authority swap for all pane-keyed properties
+      const swapPaneKeyed = <T>(
+        record: Record<string, T>,
+        keyA: string,
+        keyB: string,
+        transformA?: (val: T) => T,
+        transformB?: (val: T) => T
+      ): Record<string, T> => {
+        const valA = record[keyA]
+        const valB = record[keyB]
+        const next = { ...record }
+        if (valA === undefined) {
+          delete next[keyB]
+        } else {
+          next[keyB] = transformA ? transformA(valA) : valA
+        }
+        if (valB === undefined) {
+          delete next[keyA]
+        } else {
+          next[keyA] = transformB ? transformB(valB) : valB
+        }
+        return next
+      }
+
+      const nextAgentStatus = swapPaneKeyed(
+        s.agentStatusByPaneKey,
+        sourcePaneKey,
+        targetPaneKey,
+        (entry) => ({ ...entry, paneKey: targetPaneKey, tabId: targetTabId }),
+        (entry) => ({ ...entry, paneKey: sourcePaneKey, tabId: sourceTabId })
+      )
+
+      const nextOrchestration = swapPaneKeyed(
+        s.runtimeAgentOrchestrationByPaneKey,
+        sourcePaneKey,
+        targetPaneKey
+      )
+
+      const nextRetained = swapPaneKeyed(
+        s.retainedAgentsByPaneKey,
+        sourcePaneKey,
+        targetPaneKey,
+        (r) => ({
+          ...r,
+          entry: { ...r.entry, paneKey: targetPaneKey, tabId: targetTabId },
+          tab: { ...r.tab, id: targetTabId }
+        }),
+        (r) => ({
+          ...r,
+          entry: { ...r.entry, paneKey: sourcePaneKey, tabId: sourceTabId },
+          tab: { ...r.tab, id: sourceTabId }
+        })
+      )
+
+      const nextSleeping = swapPaneKeyed(
+        s.sleepingAgentSessionsByPaneKey,
+        sourcePaneKey,
+        targetPaneKey,
+        (r) => ({ ...r, paneKey: targetPaneKey, tabId: targetTabId }),
+        (r) => ({ ...r, paneKey: sourcePaneKey, tabId: sourceTabId })
+      )
+
+      const nextLaunchConfigs = swapPaneKeyed(
+        s.agentLaunchConfigByPaneKey,
+        sourcePaneKey,
+        targetPaneKey,
+        (entry) => ({
+          ...entry,
+          identity: { ...entry.identity, tabId: targetTabId, leafId: targetLeafId }
+        }),
+        (entry) => ({
+          ...entry,
+          identity: { ...entry.identity, tabId: sourceTabId, leafId: sourceLeafId }
+        })
+      )
+
+      const nextAck = swapPaneKeyed(s.acknowledgedAgentsByPaneKey, sourcePaneKey, targetPaneKey)
+      const nextForeground = swapPaneKeyed(
+        s.paneForegroundAgentByPaneKey,
+        sourcePaneKey,
+        targetPaneKey
+      )
+      const nextUnreadPanes = swapPaneKeyed(s.unreadTerminalPanes, sourcePaneKey, targetPaneKey)
+      const nextUnreadCompletionPanes = swapPaneKeyed(
+        s.unreadAgentCompletionPanes,
+        sourcePaneKey,
+        targetPaneKey
+      )
+      const nextInputTimestamps = swapPaneKeyed(
+        s.lastTerminalInputAtByPaneKey,
+        sourcePaneKey,
+        targetPaneKey
+      )
+      const nextCacheTimers = swapPaneKeyed(s.cacheTimerByKey, sourcePaneKey, targetPaneKey)
+      const nextRetentionSuppressed = swapPaneKeyed(
+        s.retentionSuppressedPaneKeys,
+        sourcePaneKey,
+        targetPaneKey
+      )
+
+      return {
+        terminalLayoutsByTabId: nextLayouts,
+        ptyIdsByTabId: nextPtyIdsByTabId,
+        agentStatusByPaneKey: nextAgentStatus,
+        runtimeAgentOrchestrationByPaneKey: nextOrchestration,
+        retainedAgentsByPaneKey: nextRetained,
+        sleepingAgentSessionsByPaneKey: nextSleeping,
+        agentLaunchConfigByPaneKey: nextLaunchConfigs,
+        acknowledgedAgentsByPaneKey: nextAck,
+        paneForegroundAgentByPaneKey: nextForeground,
+        unreadTerminalPanes: nextUnreadPanes,
+        unreadAgentCompletionPanes: nextUnreadCompletionPanes,
+        lastTerminalInputAtByPaneKey: nextInputTimestamps,
+        cacheTimerByKey: nextCacheTimers,
+        retentionSuppressedPaneKeys: nextRetentionSuppressed
+      } as Partial<AppState>
+    })
+
+    if (success && typeof window !== 'undefined') {
+      // IPC migration for agent hooks
+      window.api?.agentStatus?.transferPaneAuthority?.({
+        fromPaneKey: sourcePaneKey,
+        toPaneKey: targetPaneKey,
+        ptyId: targetPtyId
+      })
+      window.api?.agentStatus?.transferPaneAuthority?.({
+        fromPaneKey: targetPaneKey,
+        toPaneKey: sourcePaneKey,
+        ptyId: sourcePtyId
+      })
+    }
+
+    return success
   },
 
   syncPaneDetachPtyOwnership: ({

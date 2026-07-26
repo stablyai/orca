@@ -1,5 +1,5 @@
 /* oxlint-disable max-lines -- Why: per-type tab render branches (terminal/browser/editor) share little beyond drag data; consolidating costs more clarity than the ~5 lines it saves. */
-import React, { useEffect, useMemo, useRef, useState } from 'react'
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useShallow } from 'zustand/react/shallow'
 import { SortableContext } from '@dnd-kit/sortable'
 import {
@@ -38,6 +38,7 @@ import TabBarCreateEntry from './TabBarCreateEntry'
 import { ShellIcon } from './shell-icons'
 import { resolveWindowsShellLaunchTarget } from './windows-shell-launch'
 import { focusTerminalTabSurface } from '@/lib/focus-terminal-tab-surface'
+import { moveTabToNewPaneColumn } from './tab-move-to-pane-column'
 import { useDetectedAgents } from '@/hooks/useDetectedAgents'
 import { useAgentDetectionTargetForWorktree } from '@/hooks/useAgentDetectionTarget'
 import { launchAgentInNewTab } from '@/lib/launch-agent-in-new-tab'
@@ -46,6 +47,7 @@ import {
   getWindowsTerminalCapabilityOwnerKey,
   useWindowsTerminalCapabilities
 } from '@/lib/windows-terminal-capabilities'
+import type { TabSplitDirection } from '../../store/slices/tabs'
 import { getActiveRuntimeTarget } from '@/runtime/runtime-rpc-client'
 import { getRuntimeEnvironmentIdForWorktree } from '@/lib/worktree-runtime-owner'
 import { getLocalProjectExecutionRuntimeContext } from '@/lib/local-preflight-context'
@@ -112,6 +114,8 @@ type TabBarProps = {
   onClose: (tabId: string) => void
   onCloseOthers: (tabId: string) => void
   onCloseToRight: (tabId: string) => void
+  /** Pops terminal tabs out into one OS window; omitted where detach isn't offered. */
+  onDetachToWindow?: (tabId: string, additionalTabIds?: string[]) => void
   onNewTerminalTab: () => void
   /** On Windows, opens a new terminal with a specific shell instead of the default. */
   onNewTerminalWithShell?: (shell: string) => void
@@ -238,6 +242,7 @@ function TabBarInner({
   onClose,
   onCloseOthers,
   onCloseToRight,
+  onDetachToWindow,
   onNewTerminalTab,
   onNewTerminalWithShell,
   onNewBrowserTab,
@@ -940,19 +945,196 @@ function TabBarInner({
         .join('\u001f'),
     [expandedPaneByTabId, generatedTabTitlesEnabled, orderedItems, statusByRelativePath]
   )
+  const togglePinned = useCallback(
+    (item: TabItem): void => {
+      // pinTab/unpinTab mirror the change to the host for remote-server tabs.
+      if (item.isPinned) {
+        unpinTab(item.unifiedTabId)
+        return
+      }
+      if (item.type === 'editor' && onPinFile) {
+        onPinFile(item.data.id, item.unifiedTabId)
+        return
+      }
+      pinTab(item.unifiedTabId)
+    },
+    [onPinFile, pinTab, unpinTab]
+  )
 
-  const togglePinned = (item: TabItem): void => {
-    // pinTab/unpinTab mirror the change to the host for remote-server tabs.
-    if (item.isPinned) {
-      unpinTab(item.unifiedTabId)
+  const [selectedTabIds, setSelectedTabIds] = useState<Set<string>>(new Set())
+  const anchorTabIdRef = useRef<string | null>(null)
+
+  const effectiveSelectedTabIds = useMemo(() => {
+    if (selectedTabIds.size === 0) {
+      return activeVisibleTabId ? new Set([activeVisibleTabId]) : new Set<string>()
+    }
+    return selectedTabIds
+  }, [selectedTabIds, activeVisibleTabId])
+
+  const isMultiSelectActive = effectiveSelectedTabIds.size > 1
+
+  const allSelectedPinned = useMemo(() => {
+    const selectedItems = orderedItems.filter((it) => effectiveSelectedTabIds.has(it.id))
+    return selectedItems.length > 0 && selectedItems.every((it) => it.isPinned)
+  }, [orderedItems, effectiveSelectedTabIds])
+
+  const hasDetachableSelected = useMemo(() => {
+    return orderedItems
+      .filter((it) => effectiveSelectedTabIds.has(it.id))
+      .some((it) => it.type === 'terminal' && Boolean(it.data.ptyId))
+  }, [orderedItems, effectiveSelectedTabIds])
+
+  const handleTabClickActivate = useCallback(
+    (tabId: string, itemType: TabItem['type'], event?: PointerEvent | React.PointerEvent) => {
+      const isShift = Boolean(event?.shiftKey)
+      const isCtrlOrCmd = Boolean(event?.metaKey || event?.ctrlKey)
+
+      if (isShift) {
+        const anchorId =
+          anchorTabIdRef.current && orderedItems.some((it) => it.id === anchorTabIdRef.current)
+            ? anchorTabIdRef.current
+            : (activeVisibleTabId ?? tabId)
+
+        const anchorIdx = orderedItems.findIndex((it) => it.id === anchorId)
+        const targetIdx = orderedItems.findIndex((it) => it.id === tabId)
+
+        if (anchorIdx !== -1 && targetIdx !== -1) {
+          const start = Math.min(anchorIdx, targetIdx)
+          const end = Math.max(anchorIdx, targetIdx)
+          const rangeIds = new Set(orderedItems.slice(start, end + 1).map((it) => it.id))
+          setSelectedTabIds(rangeIds)
+        }
+      } else if (isCtrlOrCmd) {
+        setSelectedTabIds((prev) => {
+          const base =
+            prev.size === 0 && activeVisibleTabId ? new Set([activeVisibleTabId]) : new Set(prev)
+          if (base.has(tabId) && base.size > 1) {
+            base.delete(tabId)
+          } else {
+            base.add(tabId)
+          }
+          return base
+        })
+        anchorTabIdRef.current = tabId
+      } else {
+        setSelectedTabIds(new Set([tabId]))
+        anchorTabIdRef.current = tabId
+      }
+
+      if (itemType === 'terminal') {
+        onActivate(tabId)
+      } else if (itemType === 'browser') {
+        onActivateBrowserTab?.(tabId)
+      } else {
+        onActivateFile?.(tabId)
+      }
+    },
+    [orderedItems, activeVisibleTabId, onActivate, onActivateBrowserTab, onActivateFile]
+  )
+
+  const handleContextMenuRequest = useCallback(
+    (tabId: string) => {
+      setSelectedTabIds((prev) => {
+        const base = prev.size === 0 && activeVisibleTabId ? new Set([activeVisibleTabId]) : prev
+        if (base.has(tabId) && base.size > 1) {
+          return base
+        }
+        anchorTabIdRef.current = tabId
+        return new Set([tabId])
+      })
+    },
+    [activeVisibleTabId]
+  )
+
+  const handleCloseSelected = useCallback(() => {
+    const selectedItems = orderedItems.filter((it) => effectiveSelectedTabIds.has(it.id))
+    for (const item of selectedItems) {
+      if (item.isPinned) {
+        continue
+      }
+      if (item.type === 'terminal') {
+        onClose(item.id)
+      } else if (item.type === 'browser') {
+        onCloseBrowserTab?.(item.id)
+      } else {
+        onCloseFile?.(item.id)
+      }
+    }
+    setSelectedTabIds(new Set())
+  }, [orderedItems, effectiveSelectedTabIds, onClose, onCloseBrowserTab, onCloseFile])
+
+  const handleTogglePinSelected = useCallback(() => {
+    const selectedItems = orderedItems.filter((it) => effectiveSelectedTabIds.has(it.id))
+    const anyUnpinned = selectedItems.some((it) => !it.isPinned)
+    for (const item of selectedItems) {
+      if (anyUnpinned && !item.isPinned) {
+        togglePinned(item)
+      } else if (!anyUnpinned && item.isPinned) {
+        togglePinned(item)
+      }
+    }
+  }, [orderedItems, effectiveSelectedTabIds, togglePinned])
+
+  const handleDetachSelectedToWindow = useCallback(() => {
+    if (!onDetachToWindow) {
       return
     }
-    if (item.type === 'editor' && onPinFile) {
-      onPinFile(item.data.id, item.unifiedTabId)
+    const selectedItems = orderedItems.filter(
+      (it) => effectiveSelectedTabIds.has(it.id) && it.type === 'terminal' && it.data.ptyId
+    )
+    if (selectedItems.length === 0) {
       return
     }
-    pinTab(item.unifiedTabId)
-  }
+    const [firstSelectedItem, ...additionalSelectedItems] = selectedItems
+    if (additionalSelectedItems.length === 0) {
+      onDetachToWindow(firstSelectedItem.id)
+      return
+    }
+    onDetachToWindow(
+      firstSelectedItem.id,
+      additionalSelectedItems.map((item) => item.id)
+    )
+  }, [orderedItems, effectiveSelectedTabIds, onDetachToWindow])
+
+  const handleMoveSelectedToSplit = useCallback(
+    (direction: TabSplitDirection) => {
+      const selectedItems = orderedItems.filter((it) => effectiveSelectedTabIds.has(it.id))
+      if (selectedItems.length === 0) {
+        return
+      }
+
+      const firstItem = selectedItems[0]
+      const movedFirst = moveTabToNewPaneColumn({
+        unifiedTabId: firstItem.unifiedTabId,
+        groupId: resolvedGroupId,
+        direction
+      })
+
+      if (!movedFirst) {
+        return
+      }
+
+      const state = useAppStore.getState()
+      let targetGroupId: string | null = null
+      for (const tabs of Object.values(state.unifiedTabsByWorktree)) {
+        const match = tabs.find((t) => t.id === firstItem.unifiedTabId)
+        if (match) {
+          targetGroupId = match.groupId
+          break
+        }
+      }
+
+      if (!targetGroupId) {
+        return
+      }
+
+      for (let i = 1; i < selectedItems.length; i++) {
+        const item = selectedItems[i]
+        state.dropUnifiedTab(item.unifiedTabId, { groupId: targetGroupId })
+      }
+    },
+    [orderedItems, effectiveSelectedTabIds, resolvedGroupId]
+  )
 
   const { tabStripRef, tabStripOverflowState, scrollTabStrip } = useTabStripOverflowNavigation({
     activeVisibleTabId,
@@ -1058,6 +1240,7 @@ function TabBarInner({
                     nativeChatTranscriptIsLocalReadable,
                     isChatViewMode: unifiedTabForItem.viewMode === 'chat'
                   })
+                const isTabSelected = effectiveSelectedTabIds.has(item.id)
                 return (
                   <SortableTab
                     key={item.id}
@@ -1075,12 +1258,22 @@ function TabBarInner({
                       (activeTabType === 'terminal' || activeTabType === 'simulator') &&
                       item.id === activeTabId
                     }
+                    isSelected={isTabSelected}
+                    isMultiSelect={isMultiSelectActive}
+                    allSelectedPinned={allSelectedPinned}
+                    onTogglePinSelected={handleTogglePinSelected}
+                    onCloseSelected={handleCloseSelected}
+                    onDetachSelectedToWindow={handleDetachSelectedToWindow}
+                    onMoveSelectedToSplit={handleMoveSelectedToSplit}
+                    hasDetachableSelected={hasDetachableSelected}
+                    onContextMenuRequest={handleContextMenuRequest}
                     isPinned={item.isPinned}
                     isExpanded={expandedPaneByTabId[item.id] === true}
-                    onActivate={onActivate}
+                    onActivate={(tabId, event) => handleTabClickActivate(tabId, 'terminal', event)}
                     onClose={onClose}
                     onCloseOthers={onCloseOthers}
                     onCloseToRight={onCloseToRight}
+                    onDetachToWindow={onDetachToWindow}
                     onSetCustomTitle={onSetCustomTitle}
                     onSetTabColor={onSetTabColor}
                     onTogglePin={() => togglePinned(item)}
@@ -1092,14 +1285,22 @@ function TabBarInner({
                 )
               }
               if (item.type === 'browser') {
+                const isTabSelected = effectiveSelectedTabIds.has(item.id)
                 return (
                   <BrowserTab
                     key={item.id}
                     tab={item.data}
                     isActive={activeTabType === 'browser' && activeBrowserTabId === item.id}
+                    isSelected={isTabSelected}
+                    isMultiSelect={isMultiSelectActive}
+                    allSelectedPinned={allSelectedPinned}
+                    onTogglePinSelected={handleTogglePinSelected}
+                    onCloseSelected={handleCloseSelected}
+                    onMoveSelectedToSplit={handleMoveSelectedToSplit}
+                    onContextMenuRequest={handleContextMenuRequest}
                     isPinned={item.isPinned}
                     hasTabsToRight={index < orderedItems.length - 1}
-                    onActivate={() => onActivateBrowserTab?.(item.id)}
+                    onActivate={(event) => handleTabClickActivate(item.id, 'browser', event)}
                     onClose={() => onCloseBrowserTab?.(item.id)}
                     onCloseToRight={() => onCloseToRight(item.id)}
                     onDuplicate={() => onDuplicateBrowserTab?.(item.id)}
@@ -1123,15 +1324,23 @@ function TabBarInner({
                   isDirty: false,
                   mode: 'edit'
                 }
+                const isTabSelected = effectiveSelectedTabIds.has(item.id)
                 return (
                   <EditorFileTab
                     key={item.id}
                     file={simFile}
                     isActive={activeTabType === 'simulator' && item.id === activeSimulatorTabId}
+                    isSelected={isTabSelected}
+                    isMultiSelect={isMultiSelectActive}
+                    allSelectedPinned={allSelectedPinned}
+                    onTogglePinSelected={handleTogglePinSelected}
+                    onCloseSelected={handleCloseSelected}
+                    onMoveSelectedToSplit={handleMoveSelectedToSplit}
+                    onContextMenuRequest={handleContextMenuRequest}
                     isPinned={item.isPinned}
                     hasTabsToRight={index < orderedItems.length - 1}
                     statusByRelativePath={statusByRelativePath}
-                    onActivate={() => onActivateFile?.(item.id)}
+                    onActivate={(event) => handleTabClickActivate(item.id, 'simulator', event)}
                     onClose={() => onCloseFile?.(item.id)}
                     onCloseToRight={() => onCloseToRight(item.id)}
                     onCloseAll={() => onCloseAllFiles?.()}
@@ -1143,6 +1352,7 @@ function TabBarInner({
                   />
                 )
               }
+              const isTabSelected = effectiveSelectedTabIds.has(item.id)
               return (
                 <EditorFileTab
                   key={item.id}
@@ -1151,10 +1361,17 @@ function TabBarInner({
                     (activeTabType === 'editor' || activeTabType === 'simulator') &&
                     activeFileId === item.id
                   }
+                  isSelected={isTabSelected}
+                  isMultiSelect={isMultiSelectActive}
+                  allSelectedPinned={allSelectedPinned}
+                  onTogglePinSelected={handleTogglePinSelected}
+                  onCloseSelected={handleCloseSelected}
+                  onMoveSelectedToSplit={handleMoveSelectedToSplit}
+                  onContextMenuRequest={handleContextMenuRequest}
                   isPinned={item.isPinned}
                   hasTabsToRight={index < orderedItems.length - 1}
                   statusByRelativePath={statusByRelativePath}
-                  onActivate={() => onActivateFile?.(item.id)}
+                  onActivate={(event) => handleTabClickActivate(item.id, 'editor', event)}
                   onClose={() => onCloseFile?.(item.id)}
                   onCloseToRight={() => onCloseToRight(item.id)}
                   onCloseAll={() => onCloseAllFiles?.()}

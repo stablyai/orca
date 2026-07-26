@@ -51,6 +51,7 @@ import { AgentHibernationGate } from './components/AgentHibernationGate'
 import { ActivityTitlebarControls } from './components/activity/ActivityTitlebarControls'
 import Sidebar from './components/Sidebar'
 import { shutdownBufferCaptures } from './components/terminal-pane/shutdown-buffer-captures'
+import { reintegrateDetachedTerminalTab } from './components/terminal-pane/terminal-tab-window-detach'
 import { dispatchWindowCloseRequest } from './components/window-close-request-coordinator'
 import {
   getSystemPrefersDarkSnapshot,
@@ -1199,6 +1200,26 @@ function App(): React.JSX.Element {
   }, [])
 
   useEffect(() => registerUpdaterBeforeUnloadBypass(), [])
+
+  // Why: both reintegration paths (explicit "Return to main window" and a
+  // native pop-out close) resolve through the same main-process
+  // finalizeReintegration → pane:returned broadcast, so one listener here
+  // covers both.
+  useEffect(() => {
+    return window.api.pane.onReturned(({ seed }) => {
+      if (!seed) {
+        return
+      }
+      const store = useAppStore.getState()
+      const detachedTabs = [seed, ...(seed.additionalTabs ?? [])]
+      for (const detachedTab of detachedTabs) {
+        reintegrateDetachedTerminalTab(store, detachedTab)
+      }
+      if (detachedTabs.length > 1) {
+        store.setActiveTab(seed.tab.id)
+      }
+    })
+  }, [])
 
   useEffect(() => {
     setRuntimeGraphSyncEnabled(workspaceSessionReady)

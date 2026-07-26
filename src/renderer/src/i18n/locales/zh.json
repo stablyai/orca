@@ -2809,7 +2809,10 @@
             "1d04b1630b": "向下拆分",
             "6b3efb106e": "向上拆分",
             "fdd29eb669": "固定标签",
-            "8e9d603a09": "取消固定标签"
+            "8e9d603a09": "取消固定标签",
+            "unpinTabs": "取消固定标签页",
+            "pinTabs": "固定标签页",
+            "closeTabs": "关闭标签页"
           },
           "QuickLaunchButton": {
             "348a04c1ad": "智能体设置...",
@@ -2851,7 +2854,12 @@
             "60f958ec75": "固定标签",
             "417722e9c2": "取消固定标签",
             "splitTerminalRight": "向右拆分终端",
-            "splitTerminalDown": "向下拆分终端"
+            "splitTerminalDown": "向下拆分终端",
+            "unpinTabs": "取消固定标签页",
+            "pinTabs": "固定标签页",
+            "closeTabs": "关闭标签页",
+            "detachTabsToWindow": "将标签页分离至新窗口",
+            "detachToWindow": "分离至新窗口"
           },
           "TabBar": {
             "b1a132357f": "新标签页",
@@ -2950,7 +2958,8 @@
             "left": "左",
             "down": "下",
             "up": "上",
-            "moveToPaneColumn": "将标签页移至拆分"
+            "moveToPaneColumn": "将标签页移至拆分",
+            "moveTabsToPaneColumn": "将标签页移至拆分"
           },
           "EditorFileTabCloseButton": {
             "4655cf570e": "关闭选项卡",
@@ -13840,5 +13849,16 @@
       "certificateChallengeUnavailable": "This certificate request is no longer available. Retry the page to request a new one.",
       "certificateProceedFailed": "Orca could not approve this certificate request. Retry the page and try again."
     }
+  },
+  "detachedTerminalPane": {
+    "seedMissing": "此终端在该窗口中不再可用。",
+    "reintegrate": "返回主窗口",
+    "recoverableError": {
+      "title": "Orca 终端遇到错误。",
+      "description": "分离的终端无法完成渲染。请重试以重新挂载，或重新打开它。"
+    }
+  },
+  "detachToWindow": {
+    "error": "无法将标签页分离到新窗口"
   }
 }

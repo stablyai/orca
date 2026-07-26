@@ -2809,7 +2809,10 @@
             "1d04b1630b": "아래로 분할",
             "6b3efb106e": "위로 분할",
             "fdd29eb669": "탭 고정",
-            "8e9d603a09": "탭 고정 해제"
+            "8e9d603a09": "탭 고정 해제",
+            "unpinTabs": "탭 고정 해제",
+            "pinTabs": "탭 고정",
+            "closeTabs": "탭 닫기"
           },
           "QuickLaunchButton": {
             "348a04c1ad": "Agent 설정…",
@@ -2851,7 +2854,12 @@
             "60f958ec75": "탭 고정",
             "417722e9c2": "탭 고정 해제",
             "splitTerminalRight": "터미널을 오른쪽으로 분할",
-            "splitTerminalDown": "터미널을 아래로 분할"
+            "splitTerminalDown": "터미널을 아래로 분할",
+            "unpinTabs": "탭 고정 해제",
+            "pinTabs": "탭 고정",
+            "closeTabs": "탭 닫기",
+            "detachTabsToWindow": "탭을 새 창으로 분리",
+            "detachToWindow": "새 창으로 분리"
           },
           "TabBar": {
             "b1a132357f": "새 탭",
@@ -2950,7 +2958,8 @@
             "left": "왼쪽",
             "down": "아래",
             "up": "위",
-            "moveToPaneColumn": "탭을 분할로 이동"
+            "moveToPaneColumn": "탭을 분할로 이동",
+            "moveTabsToPaneColumn": "탭을 분할로 이동"
           },
           "EditorFileTabCloseButton": {
             "4655cf570e": "탭 닫기",
@@ -13840,5 +13849,16 @@
       "certificateChallengeUnavailable": "This certificate request is no longer available. Retry the page to request a new one.",
       "certificateProceedFailed": "Orca could not approve this certificate request. Retry the page and try again."
     }
+  },
+  "detachedTerminalPane": {
+    "seedMissing": "이 터미널은 더 이상 이 창에서 사용할 수 없습니다.",
+    "reintegrate": "메인 창으로 돌아가기",
+    "recoverableError": {
+      "title": "Orca 터미널에 오류가 발생했습니다.",
+      "description": "분리된 터미널 렌더링을 완료할 수 없습니다. 다시 시도하여 다시 마운트하거나 다시 열어보세요."
+    }
+  },
+  "detachToWindow": {
+    "error": "탭을 새 창으로 분리할 수 없습니다"
   }
 }

@@ -2809,7 +2809,10 @@
             "1d04b1630b": "Dividir hacia abajo",
             "6b3efb106e": "Dividir hacia arriba",
             "fdd29eb669": "Fijar pestaña",
-            "8e9d603a09": "Desanclar pestaña"
+            "8e9d603a09": "Desanclar pestaña",
+            "unpinTabs": "Desanclar pestañas",
+            "pinTabs": "Fijar pestañas",
+            "closeTabs": "Cerrar pestañas"
           },
           "QuickLaunchButton": {
             "348a04c1ad": "Ajustes de Agents…",
@@ -2851,7 +2854,12 @@
             "60f958ec75": "Fijar pestaña",
             "417722e9c2": "Desanclar pestaña",
             "splitTerminalRight": "Dividir terminal a la derecha",
-            "splitTerminalDown": "Dividir terminal hacia abajo"
+            "splitTerminalDown": "Dividir terminal hacia abajo",
+            "unpinTabs": "Desanclar pestañas",
+            "pinTabs": "Fijar pestañas",
+            "closeTabs": "Cerrar pestañas",
+            "detachTabsToWindow": "Separar pestañas a una ventana",
+            "detachToWindow": "Separar a una ventana"
           },
           "TabBar": {
             "b1a132357f": "Nueva pestaña",
@@ -2950,7 +2958,8 @@
             "left": "Izquierda",
             "down": "Abajo",
             "up": "Arriba",
-            "moveToPaneColumn": "Mover pestaña a división"
+            "moveToPaneColumn": "Mover pestaña a división",
+            "moveTabsToPaneColumn": "Mover pestañas a división"
           },
           "EditorFileTabCloseButton": {
             "4655cf570e": "Cerrar pestaña",
@@ -13840,5 +13849,16 @@
       "certificateChallengeUnavailable": "This certificate request is no longer available. Retry the page to request a new one.",
       "certificateProceedFailed": "Orca could not approve this certificate request. Retry the page and try again."
     }
+  },
+  "detachedTerminalPane": {
+    "seedMissing": "Este terminal ya no está disponible en esta ventana.",
+    "reintegrate": "Volver a la ventana principal",
+    "recoverableError": {
+      "title": "El terminal de Orca encontró un error.",
+      "description": "El terminal separado no pudo completar la visualización. Reintenta volver a montarlo o vuelve a abrirlo."
+    }
+  },
+  "detachToWindow": {
+    "error": "No se pudo separar la pestaña a una nueva ventana"
   }
 }

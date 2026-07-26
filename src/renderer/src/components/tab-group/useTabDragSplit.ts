@@ -17,6 +17,7 @@ import {
 import type { TabGroup, TuiAgent } from '../../../../shared/types'
 import { useAppStore } from '../../store'
 import type { TabSplitDirection } from '../../store/slices/tabs'
+import { useDetachTerminalTabToWindow } from '../terminal-pane/use-detach-terminal-tab-to-window'
 import { mirrorWebRuntimeTabMove } from '../tab-bar/web-runtime-tab-move-mirror'
 import {
   resolveTabInsertion,
@@ -416,11 +417,42 @@ export function useTabDragSplit({
     [acquireWebviewDragPassthrough, clearDragState, installMissedEndFallback, worktreeId]
   )
 
+  const detachTerminalTabToWindow = useDetachTerminalTabToWindow(worktreeId)
+
   const onDragMove = useCallback(
     (event: DragMoveEvent) => {
+      const activeData = event.active.data.current
+      if (isTabDragData(activeData) && activeData.worktreeId === worktreeId) {
+        const pointer = getDragPointer(event)
+        if (pointer) {
+          // Detect drag boundary breach (drag beyond window edge)
+          const threshold = 15 // pixels from edge
+          const isOut =
+            pointer.x < threshold ||
+            pointer.y < threshold ||
+            pointer.x > window.innerWidth - threshold ||
+            pointer.y > window.innerHeight - threshold
+
+          if (isOut) {
+            // Find backing terminal tab (detach only supports terminal tabs)
+            const tabId = activeData.unifiedTabId.startsWith('unified-terminal-')
+              ? activeData.unifiedTabId.replace('unified-terminal-', '')
+              : activeData.unifiedTabId.startsWith('term-')
+                ? activeData.unifiedTabId
+                : null
+
+            if (tabId) {
+              // Trigger detach immediately and cancel/finish dnd-kit drag
+              detachTerminalTabToWindow(tabId)
+              finishDrag(true)
+              return
+            }
+          }
+        }
+      }
       handleDragUpdate(event)
     },
-    [handleDragUpdate]
+    [handleDragUpdate, worktreeId, finishDrag, detachTerminalTabToWindow]
   )
 
   const onDragOver = useCallback((_event: DragOverEvent) => {

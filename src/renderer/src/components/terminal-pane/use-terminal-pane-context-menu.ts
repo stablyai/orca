@@ -1,3 +1,4 @@
+import { setSwapSource } from './swap-pane-session-coordinator'
 /* eslint-disable max-lines -- Why: context-menu actions share pane refs, focus
  * recovery, inherited-cwd split behavior, and agent-fork state in one hook. */
 import { useCallback, useEffect, useRef, useState } from 'react'
@@ -92,6 +93,7 @@ type TerminalMenuState = {
   onPaste: () => Promise<void>
   onSplitRight: () => void
   onSplitDown: () => void
+  onSwapSession: () => void
   onEqualizePaneSizes: () => void
   onClosePane: () => void
   onClearScreen: () => void
@@ -353,6 +355,13 @@ export function useTerminalPaneContextMenu({
 
   const onSplitRight = (): void => splitWithInheritedCwd('vertical')
   const onSplitDown = (): void => splitWithInheritedCwd('horizontal')
+  const onSwapSession = (): void => {
+    const pane = resolveMenuPane()
+    if (pane) {
+      // Set the swap source in the coordinator
+      setSwapSource(tabId, pane.leafId)
+    }
+  }
 
   useEffect(() => {
     const onRequestSplit = (event: Event): void => {
@@ -574,6 +583,7 @@ export function useTerminalPaneContextMenu({
     onPaste,
     onSplitRight,
     onSplitDown,
+    onSwapSession,
     onEqualizePaneSizes,
     onClosePane,
     onClearScreen,
