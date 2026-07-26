@@ -1041,9 +1041,7 @@ export type TerminalPaneLayoutNode =
       ratio?: number
     }
 
-/** Handoff payload from the main window to a detached-terminal-tab pop-out
- *  window so it can seed its own store before mounting the terminal pane. */
-export type DetachedTerminalTabSeed = {
+type DetachedTerminalTabSeedRecord = {
   tab: TerminalTab
   layout: TerminalLayoutSnapshot
   ptyId: string | null
@@ -1058,6 +1056,13 @@ export type DetachedTerminalTabSeed = {
     Repo,
     'id' | 'path' | 'displayName' | 'badgeColor' | 'addedAt' | 'connectionId' | 'executionHostId'
   >
+}
+
+/** Handoff payload from the main window to a detached-terminal-tab pop-out
+ *  window so it can seed its own store before mounting the terminal pane. */
+export type DetachedTerminalTabSeed = DetachedTerminalTabSeedRecord & {
+  /** Additional selected tabs captured in their requested order. */
+  additionalTabs?: DetachedTerminalTabSeedRecord[]
 }
 
 export type TerminalLayoutSnapshot = {

@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import TerminalPane from '@/components/terminal-pane/TerminalPane'
 import { Button } from '@/components/ui/button'
 import { translate } from '@/i18n/i18n'
+import { useAppStore } from '@/store'
 import { applyDetachedTerminalTabSeed } from './detached-terminal-pane-seed'
 import type { DetachedTerminalTabSeed } from '../../../../shared/types'
 
@@ -31,8 +32,25 @@ export function DetachedTerminalPaneRoot({
   tabId
 }: DetachedTerminalPaneRootProps): React.JSX.Element | null {
   const [seed, setSeed] = useState<DetachedTerminalTabSeed | null>(null)
+  const [activeSeedTabId, setActiveSeedTabId] = useState<string | null>(null)
   const [seedFailed, setSeedFailed] = useState(false)
   const reintegratingRef = useRef(false)
+  const detachedTabs = seed ? [seed, ...(seed.additionalTabs ?? [])] : []
+  const activeSeedTab =
+    detachedTabs.find((entry) => entry.tab.id === activeSeedTabId) ?? detachedTabs[0] ?? null
+  const activeStoreTab = useAppStore((state) =>
+    activeSeedTab
+      ? (state.tabsByWorktree[activeSeedTab.worktreeId]?.find(
+          (tab) => tab.id === activeSeedTab.tab.id
+        ) ?? null)
+      : null
+  )
+  const activeTitle =
+    activeStoreTab?.customTitle ??
+    activeSeedTab?.tab.customTitle ??
+    activeStoreTab?.title ??
+    activeSeedTab?.tab.title ??
+    null
 
   useEffect(() => {
     let disposed = false
@@ -46,8 +64,9 @@ export function DetachedTerminalPaneRoot({
           setSeedFailed(true)
           return
         }
-        applyDetachedTerminalTabSeed(result)
+        applyDetachedTerminalTabSeed(result, result.tab.id)
         setSeed(result)
+        setActiveSeedTabId(result.tab.id)
       })
       .catch(() => {
         if (!disposed) {
@@ -59,26 +78,42 @@ export function DetachedTerminalPaneRoot({
     }
   }, [tabId])
   useEffect(() => {
-    if (!seed) {
-      return
+    if (activeTitle) {
+      document.title = activeTitle
     }
-    const title = seed.tab.customTitle ?? seed.tab.title
-    if (title) {
-      document.title = title
-    }
-  }, [seed])
+  }, [activeTitle])
 
-  useDetachedRendererPtyDelivery(seed?.ptyId ?? null)
+  useDetachedRendererPtyDelivery(activeSeedTab?.ptyId ?? null)
 
   useEffect(() => {
-    const ptyId = seed?.ptyId
+    const ptyId = activeSeedTab?.ptyId
     if (!ptyId) {
       return
     }
     // Why: pre-hydrate scrollback before the live pty:data stream attaches,
     // so the first paint isn't a blank pane.
     void window.api.pty.getMainBufferSnapshot(ptyId).catch(() => null)
-  }, [seed?.ptyId])
+  }, [activeSeedTab?.ptyId])
+
+  const handleSelectTab = (nextTabId: string): void => {
+    const nextTab = detachedTabs.find((entry) => entry.tab.id === nextTabId)
+    if (!nextTab || nextTab.tab.id === activeSeedTab?.tab.id) {
+      return
+    }
+    setActiveSeedTabId(nextTab.tab.id)
+    useAppStore.setState((state) => ({
+      activeTabId: nextTab.tab.id,
+      activeTabIdByWorktree: {
+        ...state.activeTabIdByWorktree,
+        [nextTab.worktreeId]: nextTab.tab.id
+      },
+      activeTabType: 'terminal',
+      activeTabTypeByWorktree: {
+        ...state.activeTabTypeByWorktree,
+        [nextTab.worktreeId]: 'terminal'
+      }
+    }))
+  }
 
   const handleReintegrate = (): void => {
     if (reintegratingRef.current) {
@@ -101,21 +136,53 @@ export function DetachedTerminalPaneRoot({
     )
   }
 
-  if (!seed) {
+  if (!seed || !activeSeedTab) {
     return null
   }
 
   return (
     <div className="flex h-full w-full flex-col">
-      <div className="flex shrink-0 items-center justify-end border-b border-border px-2 py-1">
+      <div
+        className={`flex shrink-0 items-center border-b border-border px-2 py-1 ${
+          detachedTabs.length > 1 ? 'justify-between gap-2' : 'justify-end'
+        }`}
+      >
+        {detachedTabs.length > 1 ? (
+          <div
+            className="flex min-w-0 flex-1 items-center gap-1 overflow-x-auto"
+            role="tablist"
+            aria-label={translate('detachedTerminalPane.tabs', 'Detached terminals')}
+          >
+            {detachedTabs.map((entry) => {
+              const isActive = entry.tab.id === activeSeedTab.tab.id
+              const label = entry.tab.customTitle ?? entry.tab.title ?? entry.tab.id
+              return (
+                <Button
+                  key={entry.tab.id}
+                  type="button"
+                  variant={isActive ? 'secondary' : 'ghost'}
+                  size="sm"
+                  role="tab"
+                  aria-selected={isActive}
+                  data-active={isActive ? 'true' : 'false'}
+                  aria-label={label}
+                  className="max-w-48 truncate"
+                  onClick={() => handleSelectTab(entry.tab.id)}
+                >
+                  {label}
+                </Button>
+              )
+            })}
+          </div>
+        ) : null}
         <Button variant="ghost" size="sm" onClick={handleReintegrate}>
           {translate('detachedTerminalPane.reintegrate', 'Return to main window')}
         </Button>
       </div>
       <div className="min-h-0 flex-1">
         <TerminalPane
-          tabId={seed.tab.id}
-          worktreeId={seed.worktreeId}
+          tabId={activeSeedTab.tab.id}
+          worktreeId={activeSeedTab.worktreeId}
           isActive
           isVisible
           onPtyExit={() => undefined}

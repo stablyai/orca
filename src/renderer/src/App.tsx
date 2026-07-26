@@ -1208,7 +1208,14 @@ function App(): React.JSX.Element {
       if (!seed) {
         return
       }
-      reintegrateDetachedTerminalTab(useAppStore.getState(), seed)
+      const store = useAppStore.getState()
+      const detachedTabs = [seed, ...(seed.additionalTabs ?? [])]
+      for (const detachedTab of detachedTabs) {
+        reintegrateDetachedTerminalTab(store, detachedTab)
+      }
+      if (detachedTabs.length > 1) {
+        store.setActiveTab(seed.tab.id)
+      }
     })
   }, [])
 
