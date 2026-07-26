@@ -23945,7 +23945,12 @@ export class OrcaRuntimeService {
     // Why: preserve handle->pane mapping before bulk graph teardown for historical pane key recovery
     for (const [handle, record] of this.handles) {
       if (isTerminalLeafId(record.leafId)) {
-        this.historicalPaneKeys.set(handle, makePaneKey(record.tabId, record.leafId))
+        setBoundedMapEntry(
+          this.historicalPaneKeys,
+          handle,
+          makePaneKey(record.tabId, record.leafId),
+          HISTORICAL_PANE_KEY_MAX
+        )
       }
     }
     this.handles.clear()
@@ -23982,7 +23987,12 @@ export class OrcaRuntimeService {
     // Why: preserve handle->pane mapping before bulk graph teardown for historical pane key recovery
     for (const [handle, record] of this.handles) {
       if (isTerminalLeafId(record.leafId)) {
-        this.historicalPaneKeys.set(handle, makePaneKey(record.tabId, record.leafId))
+        setBoundedMapEntry(
+          this.historicalPaneKeys,
+          handle,
+          makePaneKey(record.tabId, record.leafId),
+          HISTORICAL_PANE_KEY_MAX
+        )
       }
     }
     this.handles.clear()
@@ -30422,6 +30432,7 @@ const DEFAULT_TERMINAL_LIST_LIMIT = 200
 const DEFAULT_WORKTREE_LIST_LIMIT = 200
 const DEFAULT_WORKTREE_PS_LIMIT = 200
 const DISCONNECTED_PTY_RECORD_MAX = 128
+const HISTORICAL_PANE_KEY_MAX = 512
 const RESOLVED_WORKTREE_CACHE_TTL_MS = 1000
 const WORKTREE_SCAN_CACHE_TTL_MS = 30_000
 // Why: agent-scratch repos don't need 30s freshness — the steady-state scan
