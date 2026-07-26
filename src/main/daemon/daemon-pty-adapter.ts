@@ -1038,12 +1038,16 @@ export class DaemonPtyAdapter implements IPtyProvider {
   // and every PTY are gone, but the on-disk history still holds the last frame.
   // The hasPty check is only this adapter's attach state, which is why the
   // authoritative cross-adapter guard lives in readColdRestoreTerminalSnapshot.
-  async readColdRestoreSnapshot(sessionId: string): Promise<ColdRestoreInfo | null> {
+  async readColdRestoreSnapshot(
+    sessionId: string,
+    opts?: { scrollbackRows?: number }
+  ): Promise<ColdRestoreInfo | null> {
     if (this.hasPty(sessionId) || !this.historyReader?.hasRestorableHistory(sessionId)) {
       return null
     }
     return await this.historyReader.detectColdRestore(sessionId, {
-      wslDistro: this.wslDistrosBySessionId.get(sessionId)
+      wslDistro: this.wslDistrosBySessionId.get(sessionId),
+      scrollbackRows: opts?.scrollbackRows
     })
   }
 

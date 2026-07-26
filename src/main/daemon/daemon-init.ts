@@ -1106,7 +1106,8 @@ export async function listLiveDaemonPtyIds(): Promise<string[] | null> {
 // running. Legacy adapters are searched too — they run an older protocol but
 // share this profile's one history directory, so any of them can answer.
 export async function readColdRestoreTerminalSnapshot(
-  sessionId: string
+  sessionId: string,
+  opts?: { scrollbackRows?: number }
 ): Promise<ColdRestoreInfo | null> {
   const provider = adapter
   if (!provider) {
@@ -1125,12 +1126,15 @@ export async function readColdRestoreTerminalSnapshot(
   }
   for (const entry of adapters) {
     try {
-      const restore = await entry.readColdRestoreSnapshot(sessionId)
+      const restore = await entry.readColdRestoreSnapshot(sessionId, opts)
       if (restore) {
         return restore
       }
-    } catch {
-      // Best effort: a failed history read just leaves the preview empty.
+    } catch (error) {
+      // Best effort: a failed history read just leaves the preview empty — but
+      // silently, it is indistinguishable from the "pane has closed" this path
+      // exists to avoid, so a corrupt history directory must leave a trace.
+      console.warn('[daemon] Cold-restore history read failed for preview:', error)
     }
   }
   return null

@@ -20,8 +20,14 @@ import {
 import { attachRepoAndOpenTerminal, createRestartSession } from './helpers/orca-restart'
 import { PROTOCOL_VERSION } from '../../src/main/daemon/types'
 
-/** Tab session ids as they currently sit on disk, across whichever profile the app chose. */
-function persistedTabPtyIds(userDataDir: string): string[] {
+type PersistedWorkspaceSession = {
+  activeWorktreeId?: string | null
+  activeWorkspaceKey?: string | null
+  tabsByWorktree?: Record<string, { ptyId?: string }[]>
+}
+
+/** Sessions as they currently sit on disk, across whichever profile the app chose. */
+function persistedWorkspaceSessions(userDataDir: string): PersistedWorkspaceSession[] {
   const candidates = [
     path.join(userDataDir, 'orca-data.json'),
     ...(existsSync(path.join(userDataDir, 'profiles'))
@@ -30,26 +36,39 @@ function persistedTabPtyIds(userDataDir: string): string[] {
         )
       : [])
   ]
-  const ptyIds: string[] = []
+  const sessions: PersistedWorkspaceSession[] = []
   for (const candidate of candidates) {
     if (!existsSync(candidate)) {
       continue
     }
-    let parsed: { workspaceSession?: { tabsByWorktree?: Record<string, { ptyId?: string }[]> } }
+    let parsed: { workspaceSession?: PersistedWorkspaceSession }
     try {
       parsed = JSON.parse(readFileSync(candidate, 'utf8'))
     } catch {
       continue
     }
-    for (const tabs of Object.values(parsed.workspaceSession?.tabsByWorktree ?? {})) {
-      for (const tab of tabs) {
-        if (tab.ptyId) {
-          ptyIds.push(tab.ptyId)
-        }
-      }
+    if (parsed.workspaceSession) {
+      sessions.push(parsed.workspaceSession)
     }
   }
-  return ptyIds
+  return sessions
+}
+
+function persistedTabPtyIds(userDataDir: string): string[] {
+  return persistedWorkspaceSessions(userDataDir).flatMap((session) =>
+    Object.values(session.tabsByWorktree ?? {})
+      .flat()
+      .flatMap((tab) => (tab.ptyId ? [tab.ptyId] : []))
+  )
+}
+
+/** Both spellings, since the active owner persists as a raw id or a `worktree:` key. */
+function persistedActiveWorktreeRefs(userDataDir: string): string[] {
+  return persistedWorkspaceSessions(userDataDir).flatMap((session) =>
+    [session.activeWorktreeId, session.activeWorkspaceKey].filter(
+      (value): value is string => typeof value === 'string'
+    )
+  )
 }
 
 function readDaemonPid(userDataDir: string): number {
@@ -190,6 +209,12 @@ test('pop-out dashboard replays a rebooted pane from history', async (// oxlint-
       throw new Error('Seeded repo did not expose a second worktree to park on')
     }
     await switchToWorktree(firstLaunch.page, otherWorktreeId)
+    // The same debounced writer persists the active owner, and the relaunch
+    // reads it from disk. Quitting before it lands restores the parked worktree
+    // as active, which remounts and respawns the very pane this test needs cold.
+    await expect
+      .poll(() => persistedActiveWorktreeRefs(session.userDataDir), { timeout: 30_000 })
+      .toEqual(expect.arrayContaining([expect.stringContaining(otherWorktreeId)]))
 
     // Quit leaves meta.endedAt null (the session stays crash-recoverable), then
     // SIGKILL stands in for the reboot that takes the daemon with it.

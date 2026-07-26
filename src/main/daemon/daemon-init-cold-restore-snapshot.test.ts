@@ -83,7 +83,14 @@ describe('readColdRestoreTerminalSnapshot', () => {
     const { mod, legacy } = await installStubbedRouter()
     legacy.readColdRestoreSnapshot.mockResolvedValue(frame)
 
-    await expect(mod.readColdRestoreTerminalSnapshot('rebooted')).resolves.toBe(frame)
+    await expect(
+      mod.readColdRestoreTerminalSnapshot('rebooted', { scrollbackRows: 24 })
+    ).resolves.toBe(frame)
+    // The caller's bound has to survive the hop, or history returns whatever
+    // the session ever wrote.
+    expect(legacy.readColdRestoreSnapshot).toHaveBeenCalledWith('rebooted', {
+      scrollbackRows: 24
+    })
   })
 
   it('keeps searching when an adapter throws', async () => {

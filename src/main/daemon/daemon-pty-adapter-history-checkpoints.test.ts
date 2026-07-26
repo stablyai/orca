@@ -3,6 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { join } from 'node:path'
 import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { DaemonPtyAdapter } from './daemon-pty-adapter'
+import type { HistoryReader } from './history-reader'
 import type { DaemonServer } from './daemon-server'
 import { getHistorySessionDirName } from './history-paths'
 import type { PendingOutputRecord } from './types'
@@ -806,7 +807,15 @@ describe('DaemonPtyAdapter (IPtyProvider)', () => {
       writeFileSync(join(sessionDir, 'scrollback.bin'), 'output from before the reboot\r\n')
 
       historyAdapter = new DaemonPtyAdapter({ socketPath, tokenPath, historyPath: historyDir })
-      const restore = await historyAdapter.readColdRestoreSnapshot(sessionId)
+      const reader = (historyAdapter as unknown as { historyReader: HistoryReader }).historyReader
+      const detectSpy = vi.spyOn(reader, 'detectColdRestore')
+      const restore = await historyAdapter.readColdRestoreSnapshot(sessionId, {
+        scrollbackRows: 24
+      })
+      expect(detectSpy).toHaveBeenCalledWith(
+        sessionId,
+        expect.objectContaining({ scrollbackRows: 24 })
+      )
       expect(restore).not.toBeNull()
       expect(restore!.scrollbackAnsi + restore!.snapshotAnsi).toContain(
         'output from before the reboot'

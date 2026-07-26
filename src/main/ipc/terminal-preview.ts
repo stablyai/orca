@@ -154,7 +154,10 @@ export function registerTerminalPreviewHandlers(runtime: OrcaRuntimeService): vo
         // renderer never mounted has no emulator here, and after a reboot its
         // PTY is gone for good — but the daemon's history still holds the last
         // frame, which is what the board is being asked to display.
-        const restored = await readColdRestoreTerminalSnapshot(ptyId)
+        // Why the same scrollbackRows the live path clamps to: history holds
+        // whatever the session ever wrote, and this frame is not cached — every
+        // reopen of the dialog would push the unclamped buffer over IPC.
+        const restored = await readColdRestoreTerminalSnapshot(ptyId, { scrollbackRows })
         if (!restored) {
           return { snapshot: null, replay: [] }
         }

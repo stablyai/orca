@@ -60,6 +60,30 @@ describe('incremental terminal history restore', () => {
     expect(restore!.cwd).toBe('/home/user')
   })
 
+  // Why: read-only surfaces (the pop-out dashboard) re-read this frame on every
+  // open and push it over IPC uncached, so they ask for the same bounded buffer
+  // the live preview path serializes.
+  it('clamps replayed scrollback to the requested rows', async () => {
+    const lines = Array.from(
+      { length: 200 },
+      (_, i) => `line-${String(i + 1).padStart(3, '0')}\r\n`
+    )
+    await manager.appendIncrements(
+      SESSION_ID,
+      1,
+      lines.map((data) => ({ kind: 'output', data }) as PendingOutputRecord)
+    )
+
+    const clamped = await reader.detectColdRestore(SESSION_ID, { scrollbackRows: 5 })
+    expect(clamped).not.toBeNull()
+    const clampedAnsi = clamped!.scrollbackAnsi + clamped!.snapshotAnsi
+    expect(clampedAnsi).toContain('line-200')
+    expect(clampedAnsi).not.toContain('line-001')
+
+    const unclamped = await reader.detectColdRestore(SESSION_ID)
+    expect(unclamped!.scrollbackAnsi + unclamped!.snapshotAnsi).toContain('line-001')
+  })
+
   it('replays checkpoint base plus log tail', async () => {
     await manager.checkpoint(SESSION_ID, snapshotOf(['from base\r\n']))
     await manager.appendIncrements(SESSION_ID, 1, [

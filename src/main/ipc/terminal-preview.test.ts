@@ -359,7 +359,10 @@ describe('registerTerminalPreviewHandlers', () => {
     const sender = makeSender()
 
     await expect(
-      handlers.get('terminalPreview:connect')!(eventFor(sender), { ptyId: 'rebooted' })
+      handlers.get('terminalPreview:connect')!(eventFor(sender), {
+        ptyId: 'rebooted',
+        opts: { scrollbackRows: 24 }
+      })
     ).resolves.toEqual({
       snapshot: {
         data: '\x1b[?7hlast-screen',
@@ -370,6 +373,9 @@ describe('registerTerminalPreviewHandlers', () => {
       },
       replay: []
     })
+    // History holds everything the session ever wrote and this frame is not
+    // cached, so it must honour the same bound the live path serializes to.
+    expect(readColdRestoreMock).toHaveBeenCalledWith('rebooted', { scrollbackRows: 24 })
     // The frame is static: no live boundary is held open for it.
     expect(runtime.unsubscribe).toHaveBeenCalledTimes(1)
     expect(runtime.releaseRawView).toHaveBeenCalledTimes(1)
