@@ -23,10 +23,11 @@ export async function buildWorkspaceCleanupCandidate(args: {
   provider: IGitProvider | null
   skipGit: boolean
   forceGitCheck: boolean
+  hasGitCost?: boolean
 }): Promise<WorkspaceCleanupCandidate> {
   const { repo, worktree, scannedAt, provider, skipGit, forceGitCheck } = args
   const blockers: WorkspaceCleanupBlocker[] = []
-  const reasons = getWorkspaceCleanupInactivityReasonsForWorkspace(worktree, scannedAt)
+  const reasons = getWorkspaceCleanupInactivityReasonsForWorkspace(worktree, scannedAt, args.hasGitCost)
   const repoIsFolder = isFolderRepo(repo)
 
   if (worktree.isMainWorktree) {
@@ -95,7 +96,8 @@ export async function buildWorkspaceCleanupCandidate(args: {
 export function buildWorkspaceCleanupCandidateFromError(
   repo: Repo,
   worktree: Worktree,
-  scannedAt: number
+  scannedAt: number,
+  hasGitCost?: boolean
 ): WorkspaceCleanupCandidate {
   return applyWorkspaceCleanupPolicy({
     worktreeId: worktree.id,
@@ -107,7 +109,7 @@ export function buildWorkspaceCleanupCandidateFromError(
     path: worktree.path,
     tier: 'protected',
     selectedByDefault: false,
-    reasons: getWorkspaceCleanupInactivityReasonsForWorkspace(worktree, scannedAt),
+    reasons: getWorkspaceCleanupInactivityReasonsForWorkspace(worktree, scannedAt, hasGitCost),
     blockers: ['git-status-error'],
     lastActivityAt: worktree.lastActivityAt,
     ...(worktree.createdAt !== undefined ? { createdAt: worktree.createdAt } : {}),
@@ -159,7 +161,7 @@ export function getNewestWorkspaceCleanupDiffCommentAt(
 }
 
 export function isWorkspaceInactiveForCleanup(
-  workspace: Pick<Worktree, 'isArchived' | 'lastActivityAt'>,
+  workspace: Pick<Worktree, 'isArchived' | 'lastActivityAt'> & { hasGitCost?: boolean },
   scannedAt: number
 ): boolean {
   return isWorkspaceOldForCleanup(workspace, scannedAt)
@@ -167,9 +169,10 @@ export function isWorkspaceInactiveForCleanup(
 
 export function getWorkspaceCleanupInactivityReasonsForWorkspace(
   workspace: Pick<Worktree, 'isArchived' | 'lastActivityAt'>,
-  scannedAt: number
+  scannedAt: number,
+  hasGitCost?: boolean
 ): WorkspaceCleanupReason[] {
-  return getWorkspaceCleanupInactivityReasons(workspace, scannedAt)
+  return getWorkspaceCleanupInactivityReasons({ ...workspace, hasGitCost }, scannedAt)
 }
 
 export function shortWorkspaceCleanupBranchName(branch: string): string {

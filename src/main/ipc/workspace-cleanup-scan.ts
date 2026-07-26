@@ -135,10 +135,11 @@ async function scanRepoWorkspaces(
     const meta = store.getWorktreeMeta(worktreeId)
     return mergeWorktree(repo.id, gitWorktree, meta, repo.displayName)
   })
+  const hasGitCost = !repoIsFolder && gitWorktrees.length >= 100
   const candidateWorktrees = targetWorktreeId
     ? mergedWorktrees.filter((worktree) => worktree.id === targetWorktreeId)
     : mergedWorktrees.filter((worktree) =>
-        shouldResolveBroadWorkspaceCleanupActivity(repoIsFolder, worktree, scannedAt)
+        shouldResolveBroadWorkspaceCleanupActivity(repoIsFolder, worktree, scannedAt, hasGitCost)
       )
   // Why: fs stat has no cancellation, so on a hung network/WSL mount every
   // timed-out row would abandon more threadpool work. After the first timeout,
@@ -155,7 +156,11 @@ async function scanRepoWorkspaces(
         : await resolveCleanupActivityWithTimeout(repo, worktree, () => {
             activityStatsUnavailable = true
           })
-      if (!targetWorktreeId && !isWorkspaceInactiveForCleanup(worktreeWithActivity, scannedAt)) {
+      if (!targetWorktreeId && !isWorkspaceInactiveForCleanup({
+        isArchived: worktreeWithActivity.isArchived,
+        lastActivityAt: worktreeWithActivity.lastActivityAt,
+        hasGitCost
+      }, scannedAt)) {
         return null
       }
       onWorktreesDiscovered?.(1)
@@ -165,10 +170,11 @@ async function scanRepoWorkspaces(
         scannedAt,
         provider,
         skipGit: skipGitWorktreeIds.has(worktreeWithActivity.id),
-        forceGitCheck: Boolean(targetWorktreeId)
+        forceGitCheck: Boolean(targetWorktreeId),
+        hasGitCost
       }).catch((error) => {
         console.error('Workspace cleanup candidate scan failed', error)
-        return buildWorkspaceCleanupCandidateFromError(repo, worktreeWithActivity, scannedAt)
+        return buildWorkspaceCleanupCandidateFromError(repo, worktreeWithActivity, scannedAt, hasGitCost)
       })
       onCandidateScanned?.(candidate)
       return candidate
@@ -202,7 +208,8 @@ async function resolveCleanupActivityWithTimeout(
 function shouldResolveBroadWorkspaceCleanupActivity(
   repoIsFolder: boolean,
   worktree: Worktree,
-  scannedAt: number
+  scannedAt: number,
+  hasGitCost: boolean
 ): boolean {
   if (repoIsFolder || worktree.isMainWorktree) {
     return false
@@ -210,7 +217,8 @@ function shouldResolveBroadWorkspaceCleanupActivity(
   return isWorkspaceInactiveForCleanup(
     {
       isArchived: worktree.isArchived,
-      lastActivityAt: getPersistedWorkspaceCleanupActivityAt(worktree)
+      lastActivityAt: getPersistedWorkspaceCleanupActivityAt(worktree),
+      hasGitCost
     },
     scannedAt
   )
