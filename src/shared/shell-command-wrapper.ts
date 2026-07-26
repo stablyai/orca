@@ -40,10 +40,13 @@ export function applyShellCommandWrapper(
     return normalizedCommand
   }
 
-  for (const placeholder of SHELL_COMMAND_WRAPPER_PLACEHOLDERS) {
-    if (normalizedWrapper.includes(placeholder)) {
-      return normalizedWrapper.split(placeholder).join(normalizedCommand)
-    }
+  // Why: replace every variant ($CMD, $COMMAND, {command}) — stop-after-first
+  // leaves mixed templates like `echo $CMD && {command}` half-substituted.
+  if (SHELL_COMMAND_WRAPPER_PLACEHOLDERS.some((placeholder) => normalizedWrapper.includes(placeholder))) {
+    return SHELL_COMMAND_WRAPPER_PLACEHOLDERS.reduce(
+      (wrapped, placeholder) => wrapped.split(placeholder).join(normalizedCommand),
+      normalizedWrapper
+    )
   }
 
   return `${normalizedWrapper} ${normalizedCommand}`
