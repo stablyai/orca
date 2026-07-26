@@ -2039,15 +2039,17 @@ describe('registerWorktreeHandlers', () => {
   })
 
   it('threads explicit origin preference into dual-remote PR head resolution', async () => {
-    store.getRepo.mockReturnValue({
+    const repo = {
       id: 'repo-1',
       path: '/workspace/repo',
       displayName: 'repo',
       badgeColor: '#000',
       addedAt: 0,
-      issueSourcePreference: 'origin',
+      issueSourcePreference: 'origin' as const,
       worktreeBaseRef: null
-    })
+    }
+    store.getRepos.mockReturnValue([repo])
+    store.getRepo.mockReturnValue(repo)
     getPullRequestPushTargetMock.mockResolvedValue({
       pushTarget: {
         remoteName: 'pr-prateek-orca',
