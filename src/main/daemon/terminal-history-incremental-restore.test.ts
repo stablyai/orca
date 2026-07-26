@@ -156,6 +156,18 @@ describe('incremental terminal history restore', () => {
     expect(restore!.scrollbackAnsi).not.toContain('torn batch')
   })
 
+  it('marks a torn log tail truncated so lost-worker capture cannot claim it is empty', async () => {
+    await manager.appendIncrements(SESSION_ID, 1, [{ kind: 'output', data: 'complete batch\r\n' }])
+    await manager.appendIncrements(SESSION_ID, 2, [{ kind: 'output', data: 'torn batch\r\n' }])
+    const logPath = sessionFile('output.log')
+    truncateSync(logPath, readFileSync(logPath).length - 5)
+
+    expect(reader.probeColdRestore(SESSION_ID)).toMatchObject({
+      kind: 'valid-snapshot',
+      truncated: true
+    })
+  })
+
   it('applies resize records during replay', async () => {
     await manager.appendIncrements(SESSION_ID, 1, [
       { kind: 'output', data: 'before resize\r\n' },

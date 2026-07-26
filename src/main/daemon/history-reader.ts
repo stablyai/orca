@@ -6,22 +6,17 @@ import type { TerminalOscLinkRange } from '../../shared/terminal-osc-link-ranges
 import { getHistorySessionDirName } from './history-paths'
 import { decodeTerminalHistoryLog } from './terminal-history-log'
 import { HeadlessEmulator } from './headless-emulator'
-import { truncateUnclosedAlternateScreen } from './terminal-alt-screen-truncation'
 import { probeTerminalHistoryMetadata } from './terminal-history-metadata-probe'
-import {
-  readTerminalHistoryBuffer,
-  readTerminalHistoryJson,
-  readTerminalHistoryText
-} from './terminal-history-file-reader'
+import { readTerminalHistoryBuffer, readTerminalHistoryJson } from './terminal-history-file-reader'
 import {
   TERMINAL_HISTORY_CHECKPOINT_MAX_BYTES,
-  TERMINAL_HISTORY_LEGACY_SCROLLBACK_MAX_BYTES,
   TERMINAL_HISTORY_LOG_MAX_BYTES
 } from './terminal-history-file-limits'
 import {
   retainNewestRestorableTerminalHistorySessions,
   type RestorableTerminalHistorySession
 } from './terminal-history-restorable-retention'
+import { restoreTerminalHistoryScrollback } from './terminal-history-scrollback-restore'
 
 export type ColdRestoreInfo = {
   snapshotAnsi: string
@@ -44,7 +39,7 @@ export type ColdRestoreProbe =
         | 'payload-corrupt'
         | 'io-error'
     }
-  | { kind: 'valid-snapshot'; restore: ColdRestoreInfo; truncated: false }
+  | { kind: 'valid-snapshot'; restore: ColdRestoreInfo; truncated: boolean }
 
 export class HistoryReader {
   private basePath: string
@@ -71,9 +66,13 @@ export class HistoryReader {
       return { kind: 'meta-closed' }
     }
     try {
-      const restore = this.detectColdRestore(sessionId, opts)
-      if (restore) {
-        return { kind: 'valid-snapshot', restore, truncated: false }
+      const detected = this.detectColdRestoreWithCompleteness(sessionId, opts)
+      if (detected) {
+        return {
+          kind: 'valid-snapshot',
+          restore: detected.restore,
+          truncated: detected.truncated
+        }
       }
       const sessionDir = join(this.basePath, getHistorySessionDirName(sessionId))
       const hasPayload = ['checkpoint.json', 'output.log', 'scrollback.bin'].some((name) =>
@@ -89,6 +88,13 @@ export class HistoryReader {
     sessionId: string,
     opts?: { ignoreCleanEnd?: boolean; wslDistro?: string }
   ): ColdRestoreInfo | null {
+    return this.detectColdRestoreWithCompleteness(sessionId, opts)?.restore ?? null
+  }
+
+  private detectColdRestoreWithCompleteness(
+    sessionId: string,
+    opts?: { ignoreCleanEnd?: boolean; wslDistro?: string }
+  ): { restore: ColdRestoreInfo; truncated: boolean } | null {
     const meta = this.readMeta(sessionId)
     if (!meta) {
       return null
@@ -118,17 +124,21 @@ export class HistoryReader {
 
     // Why: the incremental log is newer than a checkpoint while remaining byte-exact.
     const logRestore = this.restoreFromIncrementalLog(sessionDir, meta, checkpoint, opts?.wslDistro)
-    if (logRestore) {
-      return logRestore
+    if (logRestore?.restore) {
+      return { restore: logRestore.restore, truncated: logRestore.truncated }
     }
 
     if (!checkpoint) {
       // Why: backward compatibility with pre-checkpoint sessions, and corrupt
       // checkpoints — the old scrollback.bin is the best remaining data.
-      return this.detectColdRestoreFromScrollback(sessionId, meta)
+      const restore = restoreTerminalHistoryScrollback(this.basePath, sessionId, meta)
+      return restore ? { restore, truncated: logRestore?.truncated ?? false } : null
     }
 
-    return this.coldRestoreInfoFromSnapshot(checkpoint, checkpoint.cwd, meta)
+    return {
+      restore: this.coldRestoreInfoFromSnapshot(checkpoint, checkpoint.cwd, meta),
+      truncated: logRestore?.truncated ?? false
+    }
   }
 
   listRestorable(): string[] {
@@ -196,7 +206,7 @@ export class HistoryReader {
     meta: SessionMeta,
     checkpoint: TerminalCheckpointFile | null,
     wslDistro?: string
-  ): ColdRestoreInfo | null {
+  ): { restore: ColdRestoreInfo | null; truncated: boolean } | null {
     let logBuffer: Buffer
     try {
       logBuffer = readTerminalHistoryBuffer(
@@ -207,8 +217,11 @@ export class HistoryReader {
       return null
     }
     const log = decodeTerminalHistoryLog(logBuffer)
-    if (!log || log.batches.length === 0) {
-      return null
+    if (!log) {
+      return { restore: null, truncated: false }
+    }
+    if (log.batches.length === 0) {
+      return { restore: null, truncated: log.truncatedTail }
     }
     // Generation mismatch means the log does not continue this checkpoint
     // (e.g. crash between checkpoint rename and log reset, or a pre-log
@@ -216,10 +229,10 @@ export class HistoryReader {
     // garble content; the checkpoint alone is consistent.
     if (checkpoint) {
       if (typeof checkpoint.generation !== 'number' || log.generation !== checkpoint.generation) {
-        return null
+        return { restore: null, truncated: log.truncatedTail }
       }
     } else if (log.generation !== 0) {
-      return null
+      return { restore: null, truncated: log.truncatedTail }
     }
 
     const emulator = new HeadlessEmulator({
@@ -236,7 +249,7 @@ export class HistoryReader {
               checkpoint.snapshotAnsi
           )
         ) {
-          return null
+          return { restore: null, truncated: log.truncatedTail }
         }
         emulator.setRestoredOscLinks(checkpoint.oscLinks)
       }
@@ -244,7 +257,7 @@ export class HistoryReader {
         for (const record of batch.records) {
           if (record.kind === 'output') {
             if (!emulator.writeSync(record.data)) {
-              return null
+              return { restore: null, truncated: log.truncatedTail }
             }
           } else if (record.kind === 'resize') {
             emulator.resize(record.cols, record.rows)
@@ -254,15 +267,18 @@ export class HistoryReader {
         }
       }
       const snapshot = emulator.getSnapshot()
-      return this.coldRestoreInfoFromSnapshot(
-        snapshot,
-        snapshot.cwd ?? checkpoint?.cwd ?? meta.cwd,
-        meta
-      )
+      return {
+        restore: this.coldRestoreInfoFromSnapshot(
+          snapshot,
+          snapshot.cwd ?? checkpoint?.cwd ?? meta.cwd,
+          meta
+        ),
+        truncated: log.truncatedTail
+      }
     } catch {
       // Why: a replay failure must degrade to checkpoint-only restore, never
       // surface as a failed spawn.
-      return null
+      return { restore: null, truncated: log.truncatedTail }
     } finally {
       emulator.dispose()
     }
@@ -300,44 +316,5 @@ export class HistoryReader {
   private readMeta(sessionId: string): SessionMeta | null {
     const result = probeTerminalHistoryMetadata(this.basePath, sessionId)
     return result.kind === 'valid' ? result.meta : null
-  }
-
-  // Why: handles the upgrade transition where sessions created before the
-  // checkpoint migration still have scrollback.bin but no checkpoint.json.
-  private detectColdRestoreFromScrollback(
-    sessionId: string,
-    meta: SessionMeta
-  ): ColdRestoreInfo | null {
-    const scrollbackPath = join(
-      this.basePath,
-      getHistorySessionDirName(sessionId),
-      'scrollback.bin'
-    )
-    if (!existsSync(scrollbackPath)) {
-      return null
-    }
-    try {
-      const scrollback = readTerminalHistoryText(
-        scrollbackPath,
-        TERMINAL_HISTORY_LEGACY_SCROLLBACK_MAX_BYTES
-      )
-      const truncated = truncateUnclosedAlternateScreen(scrollback)
-      return {
-        snapshotAnsi: truncated,
-        scrollbackAnsi: truncated,
-        rehydrateSequences: '',
-        cwd: meta.cwd,
-        cols: meta.cols,
-        rows: meta.rows,
-        modes: {
-          bracketedPaste: false,
-          mouseTracking: false,
-          applicationCursor: false,
-          alternateScreen: false
-        }
-      }
-    } catch {
-      return null
-    }
   }
 }

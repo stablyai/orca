@@ -10,7 +10,7 @@ export type PtyColdRestoreProbe =
       cols?: number
       rows?: number
       oscLinks?: TerminalOscLinkRange[]
-      truncated: false
+      truncated: boolean
     }
   | {
       kind:

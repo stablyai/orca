@@ -29,6 +29,19 @@ describe('decodeRelayStagedPtySnapshots', () => {
     expect(decoded.snapshotsByPaneKey.size).toBe(0)
   })
 
+  it('fails the entire envelope when one entry is malformed', () => {
+    const valid = v2Entry(1)
+    const decoded = decodeRelayStagedPtySnapshots(
+      JSON.stringify({
+        schemaVersion: 2,
+        entries: [valid, { ...v2Entry(2), sourceIncarnationId: null }]
+      })
+    )
+
+    expect(decoded).toMatchObject({ kind: 'invalid' })
+    expect(decoded.snapshotsByPaneKey.size).toBe(0)
+  })
+
   it('distinguishes the legacy array envelope from a missing staged state', () => {
     expect(decodeRelayStagedPtySnapshots(JSON.stringify([v2Entry(1)]))).toMatchObject({
       kind: 'legacy'

@@ -1,7 +1,6 @@
 const ALT_SCREEN_ON = '\x1b[?1049h'
 const ALT_SCREEN_OFF = '\x1b[?1049l'
 
-/** Keeps only normal-screen history when a legacy scrollback ends inside a TUI. */
 export function truncateUnclosedAlternateScreen(data: string): string {
   let depth = 0
   let outermostUnmatchedOnIdx = -1

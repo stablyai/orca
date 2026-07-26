@@ -17,7 +17,6 @@ export type RelayStagedPtySnapshots =
 
 const EMPTY_SNAPSHOTS = new Map<string, RelayStagedPtySnapshot>()
 
-/** Decodes only the v2 fields main may use before a replacement PTY is exposed. */
 export function decodeRelayStagedPtySnapshots(state: string | null): RelayStagedPtySnapshots {
   if (state === null) {
     return { kind: 'missing', snapshotsByPaneKey: EMPTY_SNAPSHOTS }
@@ -55,7 +54,7 @@ export function decodeRelayStagedPtySnapshots(state: string | null): RelayStaged
         typeof candidate.paneKey !== 'string' ||
         typeof candidate.sourceIncarnationId !== 'string'
       ) {
-        continue
+        return { kind: 'invalid', snapshotsByPaneKey: EMPTY_SNAPSHOTS }
       }
       if (snapshotsByPaneKey.has(candidate.paneKey)) {
         return { kind: 'invalid', snapshotsByPaneKey: EMPTY_SNAPSHOTS }
