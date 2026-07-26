@@ -85,7 +85,7 @@ export function computeRenderedSidebarWorktreeOrder(
   )
 
   // Why lazy: with no host filter, addHostSectionRows is a pass-through, so skip building the whole host registry on a keystroke.
-  // Deliberately a superset of its internal guards — it still no-ops on <=1 host, which only costs us the skipped shortcut.
+  // Deliberately a superset of its internal guards — on <=1 host it still no-ops, wasting only the registry build.
   const needsHostSections =
     state.workspaceHostScope !== ALL_EXECUTION_HOSTS_SCOPE || state.visibleWorkspaceHostIds != null
   const sectionRows = needsHostSections
