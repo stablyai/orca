@@ -10,6 +10,7 @@ import {
   getWorktreeParentPickerAnchor,
   getWorktreeParentPickerLabel,
   getDetachableContextWorktrees,
+  runBulkDetachFromParent,
   hasWorktreeParentLink,
   isWorktreeParentPickerDisabled,
   planWorkspaceStatusAssignment,
@@ -142,45 +143,105 @@ describe('shouldContinueDeleteSiblingPositionRestore', () => {
   })
 })
 
-describe('parent picker context menu affordance', () => {
-  it('targets every selected worktree with a parent and skips unattached selections', () => {
-    const attached = {
-      id: 'repo::attached',
-      instanceId: 'attached-instance'
-    } as Worktree
-    const alsoAttached = {
-      id: 'repo::also-attached',
-      instanceId: 'also-attached-instance'
-    } as Worktree
-    const unattached = { id: 'repo::unattached', instanceId: 'unattached-instance' } as Worktree
-    const lineageById: Record<string, WorktreeLineage> = {
-      [attached.id]: {
-        worktreeId: attached.id,
-        worktreeInstanceId: 'attached-instance',
-        parentWorktreeId: 'repo::parent',
-        parentWorktreeInstanceId: 'parent-instance',
-        origin: 'cli',
-        capture: { source: 'explicit-cli-flag', confidence: 'explicit' },
-        createdAt: 1
-      },
-      [alsoAttached.id]: {
-        worktreeId: alsoAttached.id,
-        worktreeInstanceId: 'also-attached-instance',
-        parentWorktreeId: 'repo::parent',
-        parentWorktreeInstanceId: 'parent-instance',
-        origin: 'cli',
-        capture: { source: 'explicit-cli-flag', confidence: 'explicit' },
-        createdAt: 1
-      }
-    }
+describe('bulk detach target selection', () => {
+  // A three-generation tree: grandparent <- parent <- child, plus a lineage-free
+  // standalone row and a folder workspace (never a git worktree, never a lineage child).
+  const grandparent = { id: 'repo::grandparent', displayName: 'grandparent' } as Worktree
+  const parent = { id: 'repo::parent', displayName: 'parent' } as Worktree
+  const child = { id: 'repo::child', displayName: 'child' } as Worktree
+  const otherParent = { id: 'repo::other-parent', displayName: 'other-parent' } as Worktree
+  const otherChild = { id: 'repo::other-child', displayName: 'other-child' } as Worktree
+  const standalone = { id: 'repo::standalone', displayName: 'standalone' } as Worktree
+  const folderWorkspace = { id: 'folder:fw-1', displayName: 'a folder' } as Worktree
 
-    expect(
-      getDetachableContextWorktrees([attached, unattached, alsoAttached], lineageById, {}).map(
-        (worktree) => worktree.id
-      )
-    ).toEqual([attached.id, alsoAttached.id])
+  function lineage(childId: string, parentId: string): WorktreeLineage {
+    return {
+      worktreeId: childId,
+      worktreeInstanceId: `${childId}-instance`,
+      parentWorktreeId: parentId,
+      parentWorktreeInstanceId: `${parentId}-instance`,
+      origin: 'cli',
+      capture: { source: 'explicit-cli-flag', confidence: 'explicit' },
+      createdAt: 1
+    }
+  }
+
+  const lineageById: Record<string, WorktreeLineage> = {
+    [parent.id]: lineage(parent.id, grandparent.id),
+    [child.id]: lineage(child.id, parent.id),
+    [otherChild.id]: lineage(otherChild.id, otherParent.id)
+  }
+
+  const detachIds = (selection: readonly Worktree[]): string[] =>
+    getDetachableContextWorktrees(selection, lineageById, {}).map((worktree) => worktree.id)
+
+  it('detaches every selected child across multiple parents', () => {
+    expect(detachIds([child, otherChild])).toEqual([child.id, otherChild.id])
   })
 
+  it('skips selected rows that have no parent link', () => {
+    expect(detachIds([child, standalone, otherChild])).toEqual([child.id, otherChild.id])
+  })
+
+  // Why: the classic bug. Selecting a parent AND its own child must detach each row from
+  // its OWN parent exactly once — the child is never detached twice, and the parent is
+  // detached from the grandparent rather than being silently orphaned or skipped.
+  it('detaches a selected parent and its selected child exactly once each', () => {
+    const targets = detachIds([parent, child])
+    expect(targets).toEqual([parent.id, child.id])
+    expect(new Set(targets).size).toBe(targets.length)
+  })
+
+  it('detaches a lone selected parent from its own grandparent', () => {
+    expect(detachIds([parent])).toEqual([parent.id])
+  })
+
+  it('detaches the whole tree without duplicating any row', () => {
+    const targets = detachIds([grandparent, parent, child])
+    // grandparent is a root: it has no parent link, so it is not a detach target.
+    expect(targets).toEqual([parent.id, child.id])
+  })
+
+  // Folder workspaces are not git worktrees and are never lineage children, so a mixed
+  // selection must exclude them rather than dispatching a detach that cannot resolve.
+  it('excludes folder workspaces from a mixed selection', () => {
+    expect(detachIds([folderWorkspace, child])).toEqual([child.id])
+    expect(detachIds([folderWorkspace])).toEqual([])
+  })
+
+  it('detaches nothing when the selection has no lineage at all', () => {
+    expect(detachIds([standalone, grandparent])).toEqual([])
+  })
+})
+
+describe('bulk detach partial failure reporting', () => {
+  const first = { id: 'repo::first', displayName: 'first' } as Worktree
+  const second = { id: 'repo::second', displayName: 'second' } as Worktree
+  const third = { id: 'repo::third', displayName: 'third' } as Worktree
+
+  it('reports every row as detached when all succeed', async () => {
+    const result = await runBulkDetachFromParent([first, second], () => Promise.resolve())
+    expect(result).toEqual({ detachedIds: [first.id, second.id], failedNames: [] })
+  })
+
+  // Why: a selection can span hosts, and updateWorktreeLineage rejects per row. One
+  // failing row must not abort the others, and the user must learn WHICH row failed.
+  it('detaches the surviving rows and names only the failed one', async () => {
+    const result = await runBulkDetachFromParent([first, second, third], (worktreeId) =>
+      worktreeId === second.id ? Promise.reject(new Error('host ambiguous')) : Promise.resolve()
+    )
+    expect(result.detachedIds).toEqual([first.id, third.id])
+    expect(result.failedNames).toEqual([second.displayName])
+  })
+
+  it('falls back to the worktree id when a failed row has no display name', async () => {
+    const unnamed = { id: 'repo::unnamed', displayName: '' } as Worktree
+    const result = await runBulkDetachFromParent([unnamed], () => Promise.reject(new Error('nope')))
+    expect(result).toEqual({ detachedIds: [], failedNames: [unnamed.id] })
+  })
+})
+
+describe('parent picker context menu affordance', () => {
   it('offers unlink for valid inline-only legacy lineage after stable-update hydration', () => {
     const parent = { id: 'repo::parent', instanceId: 'parent-instance' }
     const lineage: WorktreeLineage = {

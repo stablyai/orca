@@ -1,5 +1,6 @@
 /* eslint-disable max-lines -- Why: this menu keeps row targeting, batch actions, and ctrl-click event guards together so nested worktree menus share one event policy. */
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { toast } from 'sonner'
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -114,6 +115,11 @@ export function hasWorktreeParentLink(
   )
 }
 
+// Why: bulk detach must target only the selected rows that actually carry a parent
+// link. Dispatching `noParent` for every selected row also clears the lineage of a
+// selected PARENT (unlinking it from its own grandparent), which the user never asked
+// for. Folder workspaces are excluded implicitly — they are never lineage children,
+// so they never hold a parent link.
 export function getDetachableContextWorktrees(
   worktrees: readonly Worktree[],
   lineageById: AppState['worktreeLineageById'],
@@ -122,6 +128,31 @@ export function getDetachableContextWorktrees(
   return worktrees.filter((worktree) =>
     hasWorktreeParentLink(worktree, lineageById, workspaceLineageByChildKey)
   )
+}
+
+// Why: `updateWorktreeLineage` resolves per-worktree owner settings and rejects when a
+// row's host identity is ambiguous, so a selection spanning hosts can fail for only some
+// rows. Detach every row independently and name the ones still attached, so a partial
+// bulk detach is retryable instead of collapsing into one generic error.
+export async function runBulkDetachFromParent(
+  targets: readonly Worktree[],
+  detach: (worktreeId: string) => Promise<unknown>
+): Promise<{ detachedIds: string[]; failedNames: string[] }> {
+  const outcomes = await Promise.all(
+    targets.map((item) =>
+      detach(item.id).then(
+        () => ({ item, ok: true }),
+        (err: unknown) => {
+          console.error('Failed to detach workspace from parent:', item.id, err)
+          return { item, ok: false }
+        }
+      )
+    )
+  )
+  return {
+    detachedIds: outcomes.filter((o) => o.ok).map((o) => o.item.id),
+    failedNames: outcomes.filter((o) => !o.ok).map((o) => o.item.displayName || o.item.id)
+  }
 }
 
 function shouldUseNativeContextMenu(target: EventTarget | null): boolean {
@@ -684,9 +715,26 @@ const WorktreeContextMenu = React.memo(function WorktreeContextMenu({
   )
 
   const handleRemoveParentLink = useCallback(() => {
-    void Promise.all(
-      detachableContextWorktrees.map((item) => updateWorktreeLineage(item.id, { noParent: true }))
-    )
+    void runBulkDetachFromParent(detachableContextWorktrees, (worktreeId) =>
+      updateWorktreeLineage(worktreeId, { noParent: true })
+    ).then(({ detachedIds, failedNames }) => {
+      if (failedNames.length === 0) {
+        return
+      }
+      toast.error(
+        translate(
+          'auto.components.sidebar.WorktreeContextMenu.failedDetachFromParent',
+          'Failed to remove some workspaces from their parent'
+        ),
+        {
+          description: translate(
+            'auto.components.sidebar.WorktreeContextMenu.failedDetachFromParentDetail',
+            'Detached {{value0}}. Still attached: {{value1}}.',
+            { value0: detachedIds.length, value1: failedNames.join(', ') }
+          )
+        }
+      )
+    })
   }, [detachableContextWorktrees, updateWorktreeLineage])
 
   const suppressOpeningPointerEvent = useCallback((event: React.SyntheticEvent) => {

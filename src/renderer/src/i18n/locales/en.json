@@ -4408,7 +4408,9 @@
           "setParentWorkspace": "Set Parent Worktree...",
           "workspaceSection": "Workspace",
           "primaryDeleteDisabled": "Primary worktree — can't be deleted. Remove the project instead.",
-          "deleteWorktree": "Delete Worktree"
+          "deleteWorktree": "Delete Worktree",
+          "failedDetachFromParent": "Failed to remove some workspaces from their parent",
+          "failedDetachFromParentDetail": "Detached {{value0}}. Still attached: {{value1}}."
         },
         "WorktreeList": {
           "7a8b9c0d1e": "Update required",
