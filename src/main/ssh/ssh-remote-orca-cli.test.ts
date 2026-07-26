@@ -253,12 +253,15 @@ describe('runRemoteOrcaCli', () => {
     const runtime = new OrcaRuntimeService()
     runtime.setOrchestrationDb(db)
     vi.spyOn(runtime, 'authenticateOrchestrationSender').mockImplementation(
-      ({ claimedHandle, paneKey, launchToken }) => {
+      ({ paneKey, launchToken }) => {
         if (!paneKey || !launchToken) {
           throw new Error('orchestration_sender_unauthenticated')
         }
         return {
-          handle: claimedHandle ?? 'term_test',
+          handle:
+            paneKey === 'tab_owner:leaf_owner' && launchToken === 'launch-token-owner'
+              ? 'term_ssh'
+              : 'term_foreign',
           paneKey
         }
       }
@@ -320,12 +323,15 @@ describe('runRemoteOrcaCli', () => {
     const runtime = new OrcaRuntimeService()
     runtime.setOrchestrationDb(db)
     vi.spyOn(runtime, 'authenticateOrchestrationSender').mockImplementation(
-      ({ claimedHandle, paneKey, launchToken }) => {
+      ({ paneKey, launchToken }) => {
         if (!paneKey || !launchToken) {
           throw new Error('orchestration_sender_unauthenticated')
         }
         return {
-          handle: claimedHandle ?? 'term_test',
+          handle:
+            paneKey === 'tab_owner:leaf_owner' && launchToken === 'launch-token-owner'
+              ? 'term_ssh'
+              : 'term_foreign',
           paneKey
         }
       }

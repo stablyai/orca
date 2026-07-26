@@ -8,6 +8,20 @@ vi.mock('../selectors', () => ({ getTerminalHandle: getTerminalHandleMock }))
 
 import { ORCHESTRATION_HANDLERS } from './orchestration'
 
+const originalSenderEnvironment = {
+  terminalHandle: process.env.ORCA_TERMINAL_HANDLE,
+  paneKey: process.env.ORCA_PANE_KEY,
+  launchToken: process.env.ORCA_AGENT_LAUNCH_TOKEN
+}
+
+function restoreEnvironmentVariable(name: string, value: string | undefined): void {
+  if (value === undefined) {
+    delete process.env[name]
+  } else {
+    process.env[name] = value
+  }
+}
+
 describe('orchestration sender credential forwarding', () => {
   beforeEach(() => {
     callMock.mockReset()
@@ -18,9 +32,9 @@ describe('orchestration sender credential forwarding', () => {
   })
 
   afterEach(() => {
-    delete process.env.ORCA_TERMINAL_HANDLE
-    delete process.env.ORCA_PANE_KEY
-    delete process.env.ORCA_AGENT_LAUNCH_TOKEN
+    restoreEnvironmentVariable('ORCA_TERMINAL_HANDLE', originalSenderEnvironment.terminalHandle)
+    restoreEnvironmentVariable('ORCA_PANE_KEY', originalSenderEnvironment.paneKey)
+    restoreEnvironmentVariable('ORCA_AGENT_LAUNCH_TOKEN', originalSenderEnvironment.launchToken)
     vi.restoreAllMocks()
   })
 
