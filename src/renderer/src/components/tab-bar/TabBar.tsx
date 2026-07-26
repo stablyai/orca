@@ -115,8 +115,8 @@ type TabBarProps = {
   onCloseOthers: (tabId: string) => void
   onCloseToRight: (tabId: string) => void
   onCloseToLeft: (tabId: string) => void
-  /** Pops a terminal tab out into its own OS window; omitted where detach isn't offered. */
-  onDetachToWindow?: (tabId: string) => void
+  /** Pops terminal tabs out into one OS window; omitted where detach isn't offered. */
+  onDetachToWindow?: (tabId: string, additionalTabIds?: string[]) => void
   onNewTerminalTab: () => void
   /** On Windows, opens a new terminal with a specific shell instead of the default. */
   onNewTerminalWithShell?: (shell: string) => void
@@ -1087,9 +1087,15 @@ function TabBarInner({
     if (selectedItems.length === 0) {
       return
     }
-    // Why: the popout window architecture supports one tab per window. Detach
-    // only the first selected tab; multi-tab popout windows are not supported.
-    onDetachToWindow(selectedItems[0].id)
+    const [firstSelectedItem, ...additionalSelectedItems] = selectedItems
+    if (additionalSelectedItems.length === 0) {
+      onDetachToWindow(firstSelectedItem.id)
+      return
+    }
+    onDetachToWindow(
+      firstSelectedItem.id,
+      additionalSelectedItems.map((item) => item.id)
+    )
   }, [orderedItems, effectiveSelectedTabIds, onDetachToWindow])
 
   const handleMoveSelectedToSplit = useCallback(

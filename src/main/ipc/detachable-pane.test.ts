@@ -51,6 +51,25 @@ const validSeed: DetachedTerminalTabSeed = {
     executionHostId: null
   }
 }
+const validGroupedSeed = {
+  ...validSeed,
+  additionalTabs: [
+    {
+      ...validSeed,
+      tab: { id: 'tab-2' } as unknown as DetachedTerminalTabSeed['tab']
+    }
+  ]
+} as DetachedTerminalTabSeed
+
+const malformedAdditionalTabs = [
+  ['tab', { ...validSeed, tab: undefined }],
+  ['layout', { ...validSeed, layout: undefined }],
+  ['ptyId', { ...validSeed, ptyId: 42 }],
+  ['worktreeId', { ...validSeed, worktreeId: 42 }],
+  ['groupId', { ...validSeed, groupId: 42 }],
+  ['repo', { ...validSeed, repo: { ...validSeed.repo, id: 42 } }],
+  ['nested additionalTabs', { ...validSeed, additionalTabs: [] }]
+] as const
 
 describe('registerDetachablePaneHandlers', () => {
   beforeEach(() => {
@@ -73,6 +92,30 @@ describe('registerDetachablePaneHandlers', () => {
     handler(trustedEvent, { paneId: 'pane-1', seed: validSeed })
     expect(managerMock.detachPane).toHaveBeenCalledWith('pane-1', store, validSeed)
   })
+
+  it('detach: accepts a valid grouped seed with additional tabs', () => {
+    const store = {} as Store
+    registerDetachablePaneHandlers(store)
+    const handler = getHandler('pane:detach')
+    handler(trustedEvent, { paneId: 'pane-1', seed: validGroupedSeed })
+
+    expect(managerMock.detachPane).toHaveBeenCalledWith('pane-1', store, validGroupedSeed)
+  })
+
+  it.each(malformedAdditionalTabs)(
+    'detach: rejects an additional tab with an invalid %s',
+    (_field, malformedAdditionalTab) => {
+      registerDetachablePaneHandlers({} as Store)
+      const handler = getHandler('pane:detach')
+      const seed = {
+        ...validSeed,
+        additionalTabs: [malformedAdditionalTab]
+      } as unknown as DetachedTerminalTabSeed
+
+      expect(() => handler(trustedEvent, { paneId: 'pane-1', seed })).toThrow()
+      expect(managerMock.detachPane).not.toHaveBeenCalled()
+    }
+  )
 
   it('detach: throws on a malformed seed payload without detaching', () => {
     registerDetachablePaneHandlers({} as Store)

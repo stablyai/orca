@@ -202,7 +202,7 @@ export default function SortableTab({
       {...attributes}
       {...dragListeners}
       // Why: subtle amber wash flags unread activity at a glance, layered over the active highlight so it still reads selected.
-      className={`group relative flex items-center h-full px-1.5 text-xs cursor-pointer select-none outline-none focus:outline-none focus-visible:outline-none ${getTabStripBorderClasses(hasTabsToRight, { includeTopBorder: includeTopTabBorder })} ${getDropIndicatorClasses(dropIndicator ?? null)} ${getTabRootStateClasses(isActive, isSelected)}`}
+      className={`group relative flex items-center h-full px-1.5 text-xs cursor-pointer select-none outline-none focus:outline-none focus-visible:outline-none ${getTabStripBorderClasses(hasTabsToRight, { includeTopBorder: includeTopTabBorder })} ${getDropIndicatorClasses(dropIndicator ?? null)} ${getTabRootStateClasses(isActive, isSelected)} ${isSelected && !isActive ? 'border-b-2 border-foreground/50' : ''}`}
       onDoubleClick={(e) => {
         if (isEditing) {
           return

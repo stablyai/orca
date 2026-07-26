@@ -14,12 +14,13 @@ function isTrustedForPane(sender: WebContents, paneId: string): boolean {
   )
 }
 
-function isDetachedTerminalTabSeed(value: unknown): value is DetachedTerminalTabSeed {
+function isDetachedTerminalTabShape(value: unknown, allowAdditionalTabs: boolean): boolean {
   if (!value || typeof value !== 'object') {
     return false
   }
   const candidate = value as Record<string, unknown>
   return (
+    (allowAdditionalTabs || !('additionalTabs' in candidate)) &&
     typeof candidate.worktreeId === 'string' &&
     typeof candidate.groupId === 'string' &&
     (candidate.ptyId === null || typeof candidate.ptyId === 'string') &&
@@ -30,6 +31,18 @@ function isDetachedTerminalTabSeed(value: unknown): value is DetachedTerminalTab
     !!candidate.repo &&
     typeof candidate.repo === 'object' &&
     typeof (candidate.repo as Record<string, unknown>).id === 'string'
+  )
+}
+
+function isDetachedTerminalTabSeed(value: unknown): value is DetachedTerminalTabSeed {
+  if (!isDetachedTerminalTabShape(value, true)) {
+    return false
+  }
+  const candidate = value as Record<string, unknown>
+  return (
+    candidate.additionalTabs === undefined ||
+    (Array.isArray(candidate.additionalTabs) &&
+      candidate.additionalTabs.every((tab) => isDetachedTerminalTabShape(tab, false)))
   )
 }
 

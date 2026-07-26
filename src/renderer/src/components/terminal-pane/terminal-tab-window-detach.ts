@@ -6,37 +6,21 @@ type TerminalTabWindowDetachStore = Pick<
   'tabsByWorktree' | 'groupsByWorktree' | 'terminalLayoutsByTabId' | 'ptyIdsByTabId' | 'repos'
 >
 
+type DetachedTerminalTabSeedRecord = Omit<DetachedTerminalTabSeed, 'additionalTabs'>
+
 /**
- * Snapshot a tab and its live layout for a whole-tab-to-window detach. Pure —
- * the caller still owns removing the tab from the strip (via `closeTab` with
- * `localPtyTeardownOwnedExternally: true`, which keeps the PTY alive while
- * running the same side-table cleanup a normal close does).
+ * Snapshot the selected tabs and their live layouts for a whole-tab-to-window
+ * detach. Pure — the caller still owns removing the tabs from the strip (via
+ * `closeTab` with `localPtyTeardownOwnedExternally: true`, which keeps the PTYs
+ * alive while running the same side-table cleanup a normal close does).
  */
+
 export function captureTerminalTabForWindowDetach(
   store: TerminalTabWindowDetachStore,
   worktreeId: string,
-  tabId: string
+  tabId: string,
+  additionalTabIds?: string[]
 ): DetachedTerminalTabSeed | null {
-  const tab = store.tabsByWorktree[worktreeId]?.find((candidate) => candidate.id === tabId)
-  if (!tab) {
-    return null
-  }
-
-  const group = store.groupsByWorktree[worktreeId]?.find((candidate) =>
-    candidate.tabOrder.includes(tabId)
-  )
-  if (!group) {
-    return null
-  }
-
-  const layout = store.terminalLayoutsByTabId[tabId] ?? null
-  if (!layout) {
-    return null
-  }
-
-  const ptyIds = store.ptyIdsByTabId[tabId] ?? []
-  const ptyId = ptyIds.at(-1) ?? tab.ptyId ?? null
-
   // Derive repoId from worktreeId for the popout store's terminal route resolver.
   const separatorIdx = worktreeId.indexOf('::')
   const repoId = separatorIdx === -1 ? worktreeId : worktreeId.slice(0, separatorIdx)
@@ -45,22 +29,55 @@ export function captureTerminalTabForWindowDetach(
     return null
   }
 
-  return {
-    worktreeId,
-    groupId: group.id,
-    tab,
-    layout,
-    ptyId,
-    repo: {
-      id: repo.id,
-      path: repo.path,
-      displayName: repo.displayName,
-      badgeColor: repo.badgeColor,
-      addedAt: repo.addedAt,
-      connectionId: repo.connectionId ?? null,
-      executionHostId: repo.executionHostId ?? null
+  const capturedTabs: DetachedTerminalTabSeedRecord[] = []
+  const requestedTabIds = [tabId, ...(additionalTabIds ?? [])]
+  for (const requestedTabId of requestedTabIds) {
+    const tab = store.tabsByWorktree[worktreeId]?.find(
+      (candidate) => candidate.id === requestedTabId
+    )
+    if (!tab) {
+      return null
     }
+
+    const group = store.groupsByWorktree[worktreeId]?.find((candidate) =>
+      candidate.tabOrder.includes(requestedTabId)
+    )
+    if (!group) {
+      return null
+    }
+
+    const layout = store.terminalLayoutsByTabId[requestedTabId] ?? null
+    if (!layout) {
+      return null
+    }
+
+    const ptyIds = store.ptyIdsByTabId[requestedTabId] ?? []
+    const ptyId = ptyIds.at(-1) ?? tab.ptyId ?? null
+
+    capturedTabs.push({
+      worktreeId,
+      groupId: group.id,
+      tab,
+      layout,
+      ptyId,
+      repo: {
+        id: repo.id,
+        path: repo.path,
+        displayName: repo.displayName,
+        badgeColor: repo.badgeColor,
+        addedAt: repo.addedAt,
+        connectionId: repo.connectionId ?? null,
+        executionHostId: repo.executionHostId ?? null
+      }
+    })
   }
+
+  const primary = capturedTabs[0]
+  if (!primary) {
+    return null
+  }
+  const additionalTabs = capturedTabs.slice(1)
+  return additionalTabs.length > 0 ? { ...primary, additionalTabs } : primary
 }
 
 type TerminalTabWindowReintegrateStore = Pick<
