@@ -3176,7 +3176,7 @@ export function registerPtyHandlers(
     provider: IPtyProvider,
     id: string,
     opts: { immediate?: boolean; keepHistory?: boolean; deadlineMs?: number }
-  ): Promise<boolean> {
+  ): Promise<{ providerExitObserved: boolean; expectedIncarnationId: string | undefined }> {
     let providerExitObserved = false
     const expectedIncarnationId = ptyIncarnationById.get(id)
     const unsubscribe = provider.onExit((payload) => {
@@ -3193,7 +3193,7 @@ export function registerPtyHandlers(
     } finally {
       unsubscribe()
     }
-    return providerExitObserved
+    return { providerExitObserved, expectedIncarnationId }
   }
 
   async function shutdownLostWorkerArchivePtys(args: {
@@ -3208,7 +3208,7 @@ export function registerPtyHandlers(
         const provider = tryGetProviderForPty(ptyId)
         const sshTargetId = parseExecutionHostId(args.executionHostId)
         const isSsh = sshTargetId?.kind === 'ssh'
-        const expectedIncarnationId = ptyIncarnationById.get(ptyId)
+        let expectedIncarnationId = ptyIncarnationById.get(ptyId)
         if (isSsh) {
           beginArchivedSshPtyExitRecovery(ptyId, args.archiveId)
         } else {
@@ -3228,9 +3228,11 @@ export function registerPtyHandlers(
           })
         } else {
           try {
-            providerExitObserved = await shutdownProviderAndDetectExit(provider, ptyId, {
+            const shutdown = await shutdownProviderAndDetectExit(provider, ptyId, {
               immediate: true
             })
+            providerExitObserved = shutdown.providerExitObserved
+            expectedIncarnationId = shutdown.expectedIncarnationId
             succeeded = true
           } catch (error) {
             succeeded = isSshPtyNotFoundError(error)
@@ -3246,18 +3248,20 @@ export function registerPtyHandlers(
           }
         }
         if (succeeded) {
-          const incarnationId = finishPtyShutdown(
-            ptyId,
-            isSsh ? sshTargetId.targetId : undefined,
-            store
-          )
+          const isExpectedIncarnationCurrent =
+            ptyIncarnationById.get(ptyId) === expectedIncarnationId
+          const incarnationId = isExpectedIncarnationCurrent
+            ? finishPtyShutdown(ptyId, isSsh ? sshTargetId.targetId : undefined, store)
+            : expectedIncarnationId
           if (!providerExitObserved) {
             runtime?.onPtyExit(ptyId, -1, incarnationId)
           }
         } else {
-          clearProviderPtyState(ptyId)
-          ptyOwnership.delete(ptyId)
-          markClaudePtyExited(ptyId)
+          if (ptyIncarnationById.get(ptyId) === expectedIncarnationId) {
+            clearProviderPtyState(ptyId)
+            ptyOwnership.delete(ptyId)
+            markClaudePtyExited(ptyId)
+          }
           runtime?.onPtyExit(ptyId, -1, expectedIncarnationId)
         }
         const recoveryArchiveId = isSsh
@@ -4384,6 +4388,7 @@ export function registerPtyHandlers(
       const parsedSshId = connectionId === undefined ? parseAppSshPtyId(ptyId) : null
       connectionId ??= parsedSshId?.connectionId
       const killWithCurrentProvider = (): boolean => {
+        const expectedIncarnationId = ptyIncarnationById.get(ptyId)
         let provider: IPtyProvider
         try {
           provider = connectionId ? getProvider(connectionId) : getProviderForPty(ptyId)
@@ -4402,16 +4407,28 @@ export function registerPtyHandlers(
         }
         // Why: controller is synchronous, but keep ownership until async shutdown proves whether the provider emitted an exit.
         void shutdownProviderAndDetectExit(provider, ptyId, { immediate: false })
-          .then((providerExitObserved) => {
-            const incarnationId = finishPtyShutdown(ptyId, connectionId, store)
-            if (!providerExitObserved) {
-              runtime?.onPtyExit(ptyId, -1, incarnationId)
-              rememberSyntheticKillExit(ptyId)
-              sendPtyExitToRenderer({ id: ptyId, code: -1 })
+          .then(
+            ({ providerExitObserved, expectedIncarnationId: shutdownExpectedIncarnationId }) => {
+              if (ptyIncarnationById.get(ptyId) !== shutdownExpectedIncarnationId) {
+                if (!providerExitObserved) {
+                  runtime?.onPtyExit(ptyId, -1, shutdownExpectedIncarnationId)
+                }
+                return
+              }
+              const incarnationId = finishPtyShutdown(ptyId, connectionId, store)
+              if (!providerExitObserved) {
+                runtime?.onPtyExit(ptyId, -1, incarnationId)
+                rememberSyntheticKillExit(ptyId)
+                sendPtyExitToRenderer({ id: ptyId, code: -1 })
+              }
             }
-          })
+          )
           .catch((err) => {
             if (isPtyAlreadyGoneError(err)) {
+              if (ptyIncarnationById.get(ptyId) !== expectedIncarnationId) {
+                runtime?.onPtyExit(ptyId, -1, expectedIncarnationId)
+                return
+              }
               const incarnationId = finishPtyShutdown(ptyId, connectionId, store)
               runtime?.onPtyExit(ptyId, -1, incarnationId)
               rememberSyntheticKillExit(ptyId)
@@ -4423,7 +4440,7 @@ export function registerPtyHandlers(
             )
             // Why: close runtime tails without clearing provider ownership, so
             // a retry can still target a PTY that survived the failed shutdown.
-            runtime?.onPtyExit(ptyId, -1, ptyIncarnationById.get(ptyId))
+            runtime?.onPtyExit(ptyId, -1, expectedIncarnationId)
           })
         return true
       }
@@ -4506,13 +4523,16 @@ export function registerPtyHandlers(
         }
         return false
       }
+      let expectedIncarnationId = ptyIncarnationById.get(ptyId)
       let providerExitObserved = false
       try {
-        providerExitObserved = await shutdownProviderAndDetectExit(provider, ptyId, {
+        const shutdown = await shutdownProviderAndDetectExit(provider, ptyId, {
           immediate: true,
           keepHistory: opts?.keepHistory ?? false,
           deadlineMs
         })
+        providerExitObserved = shutdown.providerExitObserved
+        expectedIncarnationId = shutdown.expectedIncarnationId
       } catch (err) {
         if (!isPtyAlreadyGoneError(err)) {
           console.warn(
@@ -4520,6 +4540,12 @@ export function registerPtyHandlers(
           )
           return false
         }
+      }
+      if (ptyIncarnationById.get(ptyId) !== expectedIncarnationId) {
+        if (!providerExitObserved) {
+          runtime?.onPtyExit(ptyId, -1, expectedIncarnationId)
+        }
+        return true
       }
       try {
         if (!(await verifyPtyStopped(provider, ptyId, opts))) {
@@ -4532,6 +4558,12 @@ export function registerPtyHandlers(
           }`
         )
         return false
+      }
+      if (ptyIncarnationById.get(ptyId) !== expectedIncarnationId) {
+        if (!providerExitObserved) {
+          runtime?.onPtyExit(ptyId, -1, expectedIncarnationId)
+        }
+        return true
       }
       const incarnationId = finishPtyShutdown(ptyId, connectionId, store)
       if (!providerExitObserved) {
@@ -6079,12 +6111,15 @@ export function registerPtyHandlers(
       return
     }
     const shutdownProvider = provider ?? getProviderForPty(args.id)
+    let expectedIncarnationId = ptyIncarnationById.get(args.id)
     let providerExitObserved = false
     try {
-      providerExitObserved = await shutdownProviderAndDetectExit(shutdownProvider, args.id, {
+      const shutdown = await shutdownProviderAndDetectExit(shutdownProvider, args.id, {
         immediate: true,
         keepHistory: args.keepHistory ?? false
       })
+      providerExitObserved = shutdown.providerExitObserved
+      expectedIncarnationId = shutdown.expectedIncarnationId
     } catch (err) {
       if (!isPtyAlreadyGoneError(err)) {
         // Why: a failed shutdown can leave the process alive (SSH relay grace window / local daemon); keep ownership/lease state so the user can retry.
@@ -6094,6 +6129,12 @@ export function registerPtyHandlers(
     }
     // Why: some shutdown paths do not emit onExit through the provider listener.
     // Explicit cleanup is idempotent and covers already-dead PTYs.
+    if (ptyIncarnationById.get(args.id) !== expectedIncarnationId) {
+      if (!providerExitObserved) {
+        runtime?.onPtyExit(args.id, -1, expectedIncarnationId)
+      }
+      return
+    }
     const incarnationId = finishPtyShutdown(args.id, connectionId, store)
     if (!providerExitObserved) {
       runtime?.onPtyExit(args.id, -1, incarnationId)

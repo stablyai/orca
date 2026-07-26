@@ -4698,6 +4698,91 @@ describe('registerPtyHandlers', () => {
         ).toEqual([['pty:exit', { id: 'local-pty', code: 0 }]])
       })
 
+      it.each([
+        ['controller kill', 'controllerKill'],
+        ['controller stopAndWait', 'controllerStopAndWait'],
+        ['IPC kill', 'ipcKill']
+      ] as const)(
+        'keeps a replacement PTY open when %s races its predecessor shutdown',
+        async (_label, operation) => {
+          const ptyId = `local-shutdown-replaced-${operation}`
+          const oldIncarnationId = 'incarnation-old'
+          const replacementIncarnationId = 'incarnation-replacement'
+          const shutdownStarted = makeDeferred()
+          const releaseShutdown = makeDeferred()
+          const exitListeners = new Set<
+            (payload: { id: string; code: number; incarnationId?: string }) => void
+          >()
+          const runtime = {
+            setPtyController: vi.fn(),
+            onPtyExit: vi.fn()
+          }
+          setLocalPtyProvider({
+            spawn: vi.fn(),
+            write: vi.fn(),
+            resize: vi.fn(),
+            shutdown: vi.fn(async () => {
+              shutdownStarted.resolve()
+              await releaseShutdown.promise
+              for (const listener of exitListeners) {
+                listener({ id: ptyId, code: 0, incarnationId: oldIncarnationId })
+              }
+            }),
+            sendSignal: vi.fn(),
+            getCwd: vi.fn(),
+            getInitialCwd: vi.fn(),
+            clearBuffer: vi.fn(),
+            acknowledgeDataEvent: vi.fn(),
+            hasChildProcesses: vi.fn(),
+            getForegroundProcess: vi.fn(),
+            confirmForegroundProcess: vi.fn(),
+            serialize: vi.fn(),
+            revive: vi.fn(),
+            onData: vi.fn(() => () => {}),
+            onReplay: vi.fn(() => () => {}),
+            onExit: vi.fn((listener) => {
+              exitListeners.add(listener)
+              return () => exitListeners.delete(listener)
+            }),
+            listProcesses: vi.fn(async () => []),
+            attach: vi.fn(),
+            getDefaultShell: vi.fn(),
+            getProfiles: vi.fn()
+          } as never)
+          restorePtyIncarnation(ptyId, oldIncarnationId)
+          handlers.clear()
+          registerPtyHandlers(mainWindow as never, runtime as never)
+          const controller = runtime.setPtyController.mock.calls[0]?.[0] as {
+            kill: (id: string) => boolean
+            stopAndWait: (id: string) => Promise<boolean>
+          }
+          let completed: Promise<unknown>
+          if (operation === 'controllerKill') {
+            expect(controller.kill(ptyId)).toBe(true)
+            completed = new Promise((resolve) => setImmediate(resolve))
+          } else if (operation === 'controllerStopAndWait') {
+            completed = controller.stopAndWait(ptyId)
+          } else {
+            completed = Promise.resolve(handlers.get('pty:kill')!(null, { id: ptyId }))
+          }
+
+          await shutdownStarted.promise
+          restorePtyIncarnation(ptyId, replacementIncarnationId)
+          releaseShutdown.resolve()
+          await completed
+
+          expect(runtime.onPtyExit).toHaveBeenCalledWith(ptyId, -1, oldIncarnationId)
+          expect(runtime.onPtyExit).not.toHaveBeenCalledWith(ptyId, -1, replacementIncarnationId)
+          expect(isCurrentPtyExit({ id: ptyId, incarnationId: replacementIncarnationId })).toBe(
+            true
+          )
+          expect(
+            mainWindow.webContents.send.mock.calls.filter((call) => call[0] === 'pty:exit')
+          ).toEqual([])
+          clearProviderPtyState(ptyId)
+        }
+      )
+
       it('controller stopAndWait skips the synthetic exit when the provider emitted one', async () => {
         vi.useFakeTimers()
         const exitListeners = new Set<(payload: { id: string; code: number }) => void>()
