@@ -3401,9 +3401,11 @@ describe('connectPanePty', () => {
       onDataHandler = handler
       return { dispose: vi.fn() }
     }) as typeof pane.terminal.onData)
+    const manager = createManager(1)
+    manager.getActivePane.mockReturnValue({ id: 1 })
     const deps = createDeps()
 
-    connectPanePty(pane as never, createManager(1) as never, deps as never)
+    connectPanePty(pane as never, manager as never, deps as never)
     if (!onDataHandler) {
       throw new Error('expected onData handler to be registered')
     }
@@ -3414,7 +3416,81 @@ describe('connectPanePty', () => {
     await flushAsyncTicks()
 
     expect(transport.sendInput).toHaveBeenCalledWith('\x03')
-    expect(deps.setRuntimePaneTitle).toHaveBeenCalled()
+    expect(deps.setRuntimePaneTitle).toHaveBeenCalledWith('tab-1', 1, 'Terminal')
+    expect(deps.updateTabTitle).toHaveBeenCalledWith('tab-1', 'Terminal')
+  })
+
+  it('does not infer a fire-and-forget interrupt from an Alt chord that emits an Escape prefix', async () => {
+    const { connectPanePty } = await import('./pty-connection')
+    const transport = createMockTransport()
+    delete transport.sendInputAccepted
+    transportFactoryQueue.push(transport)
+    vi.useFakeTimers()
+    vi.setSystemTime(1_100)
+    const paneKey = makePaneKey('tab-1', LEAF_1)
+    mockStoreState.agentStatusByPaneKey[paneKey] = {
+      state: 'working',
+      prompt: 'keep working',
+      updatedAt: 1_000,
+      stateStartedAt: 900,
+      agentType: 'claude',
+      paneKey,
+      terminalTitle: '⠂ keep working',
+      stateHistory: []
+    }
+    const terminalTarget = createKeyboardEventTarget()
+    const pane = createPane(1)
+    ;(pane.terminal as { element?: unknown }).element = terminalTarget.target
+    let onDataHandler: ((data: string) => void) | null = null
+    pane.terminal.onData = vi.fn(((handler: (data: string) => void) => {
+      onDataHandler = handler
+      return { dispose: vi.fn() }
+    }) as typeof pane.terminal.onData)
+
+    connectPanePty(pane as never, createManager(1) as never, createDeps() as never)
+    if (!onDataHandler) {
+      throw new Error('expected onData handler to be registered')
+    }
+    // Alt+b sends ESC+b; the leading \x1b must not read as a user interrupt.
+    terminalTarget.dispatch(keyEvent({ key: 'b', altKey: true }))
+    ;(onDataHandler as unknown as (data: string) => void)('\x1bb')
+    await flushAsyncTicks()
+    vi.advanceTimersByTime(500)
+    await flushAsyncTicks()
+
+    expect(transport.sendInput).toHaveBeenCalledWith('\x1bb')
+    expect(window.api.agentStatus.inferInterrupt).not.toHaveBeenCalled()
+  })
+
+  it('does not infer a fire-and-forget interrupt for a pane with no working agent status', async () => {
+    const { connectPanePty } = await import('./pty-connection')
+    const transport = createMockTransport()
+    delete transport.sendInputAccepted
+    transportFactoryQueue.push(transport)
+    vi.useFakeTimers()
+    vi.setSystemTime(1_100)
+    const terminalTarget = createKeyboardEventTarget()
+    const pane = createPane(1)
+    ;(pane.terminal as { element?: unknown }).element = terminalTarget.target
+    let onDataHandler: ((data: string) => void) | null = null
+    pane.terminal.onData = vi.fn(((handler: (data: string) => void) => {
+      onDataHandler = handler
+      return { dispose: vi.fn() }
+    }) as typeof pane.terminal.onData)
+
+    connectPanePty(pane as never, createManager(1) as never, createDeps() as never)
+    if (!onDataHandler) {
+      throw new Error('expected onData handler to be registered')
+    }
+    // Esc in a plain shell/vim pane: no agent turn to interrupt.
+    terminalTarget.dispatch(keyEvent({ key: 'Escape' }))
+    ;(onDataHandler as unknown as (data: string) => void)('\x1b')
+    await flushAsyncTicks()
+    vi.advanceTimersByTime(500)
+    await flushAsyncTicks()
+
+    expect(transport.sendInput).toHaveBeenCalledWith('\x1b')
+    expect(window.api.agentStatus.inferInterrupt).not.toHaveBeenCalled()
   })
 
   it('infers exact Ctrl+C terminal input when keydown capture misses the press', async () => {
