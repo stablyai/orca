@@ -66,7 +66,7 @@ describe('MobilePairingSetupSection', () => {
 
   it('describes address role when Anywhere is selected', () => {
     renderSection({ connectionMode: 'automatic' })
-    expect(screen.getByText(/faster direct path when nearby/i)).toBeVisible()
+    expect(screen.getByText(/Relay remains available as a fallback/i)).toBeVisible()
   })
 
   it('disables generate when sign-in is required', () => {

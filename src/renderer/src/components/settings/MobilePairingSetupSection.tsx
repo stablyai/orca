@@ -102,7 +102,7 @@ export function MobilePairingSetupSection({
           {usingRelay
             ? translate(
                 'auto.components.settings.MobilePairingSetupSection.step2RelayDescription',
-                'Used for a faster direct path when nearby. Relay covers remote access.'
+                'The phone uses this address for a direct connection over Wi‑Fi, Tailscale, or a secure WebSocket tunnel. Relay remains available as a fallback.'
               )
             : translate(
                 'auto.components.settings.MobilePairingSetupSection.step2LocalDescription',

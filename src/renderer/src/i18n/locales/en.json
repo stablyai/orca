@@ -9358,7 +9358,7 @@
           "overview": "Generate a QR code, then scan it in Orca Mobile under Pair Desktop.",
           "step1Title": "Connection",
           "step2Title": "This computer’s address",
-          "step2RelayDescription": "Used for a faster direct path when nearby. Relay covers remote access.",
+          "step2RelayDescription": "The phone uses this address for a direct connection over Wi‑Fi, Tailscale, or a secure WebSocket tunnel. Relay remains available as a fallback.",
           "step2LocalDescription": "The phone must be able to reach this address on Wi‑Fi, Tailscale, or a secure WebSocket tunnel.",
           "regenerate": "Regenerate QR code",
           "generate": "Generate QR code",

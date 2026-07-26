@@ -9338,7 +9338,7 @@
           "overview": "QR コードを生成し、Orca Mobile の Pair Desktop でスキャンしてください。",
           "step1Title": "接続方法",
           "step2Title": "このコンピューターのアドレス",
-          "step2RelayDescription": "近くでは高速な直接接続に使用されます。Relay はリモートアクセスに対応します。",
+          "step2RelayDescription": "スマートフォンはこのアドレスを使い、Wi‑Fi、Tailscale、または安全な WebSocket トンネル経由で直接接続します。Relay はフォールバックとして引き続き利用できます。",
           "step2LocalDescription": "スマートフォンが Wi‑Fi、Tailscale、または安全な WebSocket トンネルでこのアドレスに到達できる必要があります。"
         },
         "MobileRelayBetaAvailability": {

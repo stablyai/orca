@@ -9338,7 +9338,7 @@
           "overview": "QR 코드를 생성한 후 Orca Mobile의 Pair Desktop에서 스캔하세요.",
           "step1Title": "연결 방식",
           "step2Title": "이 컴퓨터의 주소",
-          "step2RelayDescription": "가까운 곳에서는 빠른 직접 연결에 사용됩니다. 먼 거리에서는 Relay가 원격 액세스를 제공합니다.",
+          "step2RelayDescription": "휴대폰은 이 주소를 사용해 Wi‑Fi, Tailscale 또는 안전한 WebSocket 터널을 통해 직접 연결합니다. Relay는 대체 연결로 계속 사용할 수 있습니다.",
           "step2LocalDescription": "휴대폰이 Wi‑Fi, Tailscale 또는 안전한 WebSocket 터널을 통해 이 주소에 접근할 수 있어야 합니다."
         },
         "MobileRelayBetaAvailability": {

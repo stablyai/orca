@@ -9338,7 +9338,7 @@
           "overview": "生成二维码，然后在 Orca Mobile 的 Pair Desktop 中扫描。",
           "step1Title": "连接方式",
           "step2Title": "此电脑的地址",
-          "step2RelayDescription": "距离较近时用于快速直接连接。Relay 覆盖远程访问。",
+          "step2RelayDescription": "手机使用此地址通过 Wi‑Fi、Tailscale 或安全 WebSocket 隧道直接连接。Relay 仍可作为备用连接。",
           "step2LocalDescription": "手机必须能通过 Wi‑Fi、Tailscale 或安全的 WebSocket 隧道访问此地址。"
         },
         "MobileRelayBetaAvailability": {
