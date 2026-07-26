@@ -69,6 +69,14 @@ export function useSortableTabRename({
     setRenamingTabId(null)
   }, [renamingTabId, tab.id, handleRenameOpen, setRenamingTabId])
 
+  useEffect(() => {
+    return () => {
+      if (renameFocusFrameRef.current !== null) {
+        cancelAnimationFrame(renameFocusFrameRef.current)
+      }
+    }
+  }, [])
+
   return {
     isEditing,
     renameValue,

@@ -331,13 +331,13 @@ export default function BrowserTab({
               <DropdownMenuItem onSelect={onTogglePinSelected ?? onTogglePin}>
                 {allSelectedPinned ? <PinOff className="size-3.5" /> : <Pin className="size-3.5" />}
                 {allSelectedPinned
-                  ? translate('auto.components.tab.bar.BrowserTab.c5aaee8c39', 'Unpin Tabs')
-                  : translate('auto.components.tab.bar.BrowserTab.911542656f', 'Pin Tabs')}
+                  ? translate('auto.components.tab.bar.BrowserTab.8184cea86c', 'Unpin Tabs')
+                  : translate('auto.components.tab.bar.BrowserTab.9b98341009', 'Pin Tabs')}
               </DropdownMenuItem>
               <DropdownMenuSeparator />
               <DropdownMenuItem onSelect={onCloseSelected ?? onClose}>
                 <X className="size-3.5" />
-                {translate('auto.components.tab.bar.BrowserTab.1611a1324b', 'Close Tabs')}
+                {translate('auto.components.tab.bar.BrowserTab.fa56fb767a', 'Close Tabs')}
               </DropdownMenuItem>
             </>
           ) : (

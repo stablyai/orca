@@ -102,17 +102,13 @@ export default function EditorFileTab({
   const isConflictReview = file.mode === 'conflict-review'
   const isCheckDetails = file.mode === 'check-details'
   const isMarkdownPreviewTab = file.mode === 'markdown-preview'
-  // Why: only deleted/renamed mean the file is gone from its path, which is
-  // what strikethrough conveys. 'changed' keeps a normal label — its surface
-  // is the changed-on-disk banner inside the editor.
   const isMissingFileMutation =
     file.externalMutation === 'deleted' || file.externalMutation === 'renamed'
-  const resolvedLanguage =
-    file.mode === 'diff'
-      ? detectLanguage(file.relativePath)
-      : isConflictReview
-        ? 'plaintext'
-        : file.language
+  const resolvedLanguage = isDiff
+    ? detectLanguage(file.relativePath)
+    : isConflictReview
+      ? 'plaintext'
+      : file.language
   const canShowMarkdownPreview = canOpenMarkdownPreview({
     language: resolvedLanguage,
     mode: file.mode,
@@ -130,18 +126,13 @@ export default function EditorFileTab({
   // commitRename *after* cancel — committing the typed value against the
   // user's intent. This flag suppresses the trailing blur-commit.
   const renameCancelledRef = useRef(false)
-  // Only on-disk edit tabs are renameable. Diff, conflict-review, and
-  // combined/virtual views don't point at a single concrete file we can safely
-  // rename. Read-only tabs (AI Vault View Log) also stay unrenameable — rename
-  // would rewrite the agent-owned artifact's backing path.
   const canRename = file.mode === 'edit' && !file.diffSource && !file.conflict && !file.readOnly
 
   const openRenameInput = (): void => {
-    if (!canRename) {
-      return
+    if (canRename) {
+      renameCancelledRef.current = false
+      setIsRenaming(true)
     }
-    renameCancelledRef.current = false
-    setIsRenaming(true)
   }
 
   const commitRename = (): void => {
@@ -151,8 +142,8 @@ export default function EditorFileTab({
       return
     }
     const input = renameInputRef.current
+    setIsRenaming(false)
     if (!input) {
-      setIsRenaming(false)
       return
     }
     const newName = input.value.trim()
@@ -229,7 +220,6 @@ export default function EditorFileTab({
     window.addEventListener('blur', dismiss)
     return () => window.removeEventListener('blur', dismiss)
   }, [menuOpen])
-
   const dragListeners = isRenaming ? undefined : listeners
   // Why: defer activation to pointer-up so dragging the tab (reorder / move into
   // another pane / split) does not switch the active tab mid-gesture.
@@ -243,25 +233,19 @@ export default function EditorFileTab({
       ref={setNodeRef}
       data-tab-id={file.tabId ?? file.id}
       data-pinned={isPinned ? 'true' : 'false'}
+      data-active={isActive ? 'true' : 'false'}
+      data-selected={isSelected || isActive ? 'true' : 'false'}
       {...attributes}
       {...dragListeners}
       className={`group relative flex items-center h-full px-1.5 text-xs cursor-pointer select-none outline-none focus:outline-none focus-visible:outline-none ${getTabStripBorderClasses(hasTabsToRight, { includeTopBorder: includeTopTabBorder })} ${getDropIndicatorClasses(dropIndicator ?? null)} ${getTabRootStateClasses(isActive, isSelected)}`}
-      onPointerDown={(e) => {
+      onPointerDown={(e) =>
         onTabPointerDown(
           e,
           dragListeners?.onPointerDown as ((event: React.PointerEvent<Element>) => void) | undefined
         )
-      }}
-      onDoubleClick={() => {
-        if (file.isPreview && onMakePermanent) {
-          onMakePermanent()
-        }
-      }}
-      onMouseDown={(e) => {
-        if (e.button === 1) {
-          e.preventDefault()
-        }
-      }}
+      }
+      onDoubleClick={() => file.isPreview && onMakePermanent && onMakePermanent()}
+      onMouseDown={(e) => e.button === 1 && preventMiddleButtonDefault(e, onClose)}
       onMouseUp={preventMiddleButtonDefault}
       onAuxClick={(e) => {
         if (e.button === 1) {
@@ -380,11 +364,7 @@ export default function EditorFileTab({
           <span className="absolute size-1.5 rounded-full bg-foreground/60 group-hover:hidden group-focus-within:hidden" />
         )}
         {!isPinned && (
-          <EditorFileTabCloseButton
-            fileIsDirty={file.isDirty}
-            showsSelectionChrome={isActive}
-            onClose={onClose}
-          />
+          <EditorFileTabCloseButton showsSelectionChrome={isActive} onClose={onClose} />
         )}
       </div>
     </div>

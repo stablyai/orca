@@ -60,7 +60,11 @@ const {
       this.emit('closed')
     })
     destroy = vi.fn(() => {
+      if (this.destroyed) {
+        return
+      }
       this.destroyed = true
+      this.emit('closed')
     })
 
     constructor(options: Electron.BrowserWindowConstructorOptions) {

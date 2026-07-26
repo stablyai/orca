@@ -195,15 +195,18 @@ export function SortableTabContextMenu({
               )}
               {allSelectedPinned
                 ? translate(
-                    'auto.components.tab.bar.SortableTabContextMenu.unpinTabs',
+                    'auto.components.tab.bar.SortableTabContextMenu.1a9723c5d0',
                     'Unpin Tabs'
                   )
-                : translate('auto.components.tab.bar.SortableTabContextMenu.pinTabs', 'Pin Tabs')}
+                : translate(
+                    'auto.components.tab.bar.SortableTabContextMenu.ebaea2fd14',
+                    'Pin Tabs'
+                  )}
             </DropdownMenuItem>
             <DropdownMenuSeparator />
             <DropdownMenuItem onSelect={onCloseSelected ?? (() => onClose(tab.id))}>
               <X className="size-3.5" />
-              {translate('auto.components.tab.bar.SortableTabContextMenu.closeTabs', 'Close Tabs')}
+              {translate('auto.components.tab.bar.SortableTabContextMenu.74366d8a40', 'Close Tabs')}
               {closeShortcut ? <DropdownMenuShortcut>{closeShortcut}</DropdownMenuShortcut> : null}
             </DropdownMenuItem>
             {onDetachToWindow || onDetachSelectedToWindow ? (

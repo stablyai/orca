@@ -2864,7 +2864,10 @@
             "2186a8407c": "Dividir hacia abajo",
             "96354ed249": "Dividir hacia arriba",
             "911542656f": "Fijar pestaña",
-            "c5aaee8c39": "Desanclar pestaña"
+            "c5aaee8c39": "Desanclar pestaña",
+            "8184cea86c": "Desanclar pestañas",
+            "9b98341009": "Fijar pestañas",
+            "fa56fb767a": "Cerrar pestañas"
           },
           "EditorFileTab": {
             "3da7445c84": "Cambiar el nombre del archivo {{value0}}"
@@ -2883,9 +2886,9 @@
             "6b3efb106e": "Dividir hacia arriba",
             "fdd29eb669": "Fijar pestaña",
             "8e9d603a09": "Desanclar pestaña",
-            "unpinTabs": "Desanclar pestañas",
-            "pinTabs": "Fijar pestañas",
-            "closeTabs": "Cerrar pestañas"
+            "01149d9510": "Desanclar pestañas",
+            "4abb1f6983": "Fijar pestañas",
+            "df968bc22f": "Cerrar pestañas"
           },
           "QuickLaunchButton": {
             "348a04c1ad": "Ajustes de Agents…",
@@ -2928,9 +2931,9 @@
             "417722e9c2": "Desanclar pestaña",
             "splitTerminalRight": "Dividir terminal a la derecha",
             "splitTerminalDown": "Dividir terminal hacia abajo",
-            "unpinTabs": "Desanclar pestañas",
-            "pinTabs": "Fijar pestañas",
-            "closeTabs": "Cerrar pestañas",
+            "1a9723c5d0": "Desanclar pestañas",
+            "ebaea2fd14": "Fijar pestañas",
+            "74366d8a40": "Cerrar pestañas",
             "detachTabsToWindow": "Separar pestañas a una ventana",
             "detachToWindow": "Separar a una ventana"
           },

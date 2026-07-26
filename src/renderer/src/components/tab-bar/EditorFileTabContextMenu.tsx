@@ -152,16 +152,19 @@ export function EditorFileTabContextMenu({
               {allSelectedPinned ? <PinOff className="size-3.5" /> : <Pin className="size-3.5" />}
               {allSelectedPinned
                 ? translate(
-                    'auto.components.tab.bar.EditorFileTabContextMenu.unpinTabs',
+                    'auto.components.tab.bar.EditorFileTabContextMenu.01149d9510',
                     'Unpin Tabs'
                   )
-                : translate('auto.components.tab.bar.EditorFileTabContextMenu.pinTabs', 'Pin Tabs')}
+                : translate(
+                    'auto.components.tab.bar.EditorFileTabContextMenu.4abb1f6983',
+                    'Pin Tabs'
+                  )}
             </DropdownMenuItem>
             <DropdownMenuSeparator />
             <DropdownMenuItem onSelect={onCloseSelected ?? onClose}>
               <X className="size-3.5" />
               {translate(
-                'auto.components.tab.bar.EditorFileTabContextMenu.closeTabs',
+                'auto.components.tab.bar.EditorFileTabContextMenu.df968bc22f',
                 'Close Tabs'
               )}
               {closeShortcut ? <DropdownMenuShortcut>{closeShortcut}</DropdownMenuShortcut> : null}

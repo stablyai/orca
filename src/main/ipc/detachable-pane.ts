@@ -86,7 +86,7 @@ export function registerDetachablePaneHandlers(store: Store): void {
     if (!isTrustedUIRenderer(event.sender)) {
       return
     }
-    // handlers use — the renderer closes the tab when this call resolves, so a
+    // Why: the renderer closes the tab when this call resolves, so a
     // resolved-but-not-detached call would lose the tab. The seed rides along
     // in the same call so a detached window can never exist without one.
     if (

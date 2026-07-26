@@ -52,12 +52,26 @@ export function installPopoutWindowSecurity(webContents: WebContents): void {
 /**
  * Debounced bounds persistence, frozen during close/quit so teardown-time
  * resize/move events can't clobber the remembered size with near-minimum
- * bounds. Removes its own before-quit listener on 'closed'.
+ * bounds.
  */
+let appQuitting = false
+let beforeQuitRegistered = false
+
+function registerGlobalBeforeQuitListener(): void {
+  if (beforeQuitRegistered) {
+    return
+  }
+  beforeQuitRegistered = true
+  app.on('before-quit', () => {
+    appQuitting = true
+  })
+}
+
 export function installPopoutBoundsPersistence(
   window: BrowserWindow,
   saveRect: (rect: WindowRect) => void
 ): void {
+  registerGlobalBeforeQuitListener()
   let boundsTimer: ReturnType<typeof setTimeout> | null = null
   let windowClosing = false
   const saveBounds = (): void => {
@@ -66,7 +80,13 @@ export function installPopoutBoundsPersistence(
     }
     boundsTimer = setTimeout(() => {
       boundsTimer = null
-      if (windowClosing || window.isDestroyed() || window.isMinimized() || window.isFullScreen()) {
+      if (
+        windowClosing ||
+        appQuitting ||
+        window.isDestroyed() ||
+        window.isMinimized() ||
+        window.isFullScreen()
+      ) {
         return
       }
       const bounds = window.getBounds()
@@ -86,10 +106,22 @@ export function installPopoutBoundsPersistence(
       boundsTimer = null
     }
   }
-  window.on('close', freezeBounds)
-  app.on('before-quit', freezeBounds)
-  window.on('closed', () => {
-    app.removeListener('before-quit', freezeBounds)
+
+  const unfreezeBounds = (): void => {
+    // If the close event was prevented, allow bounds persistence again
+    windowClosing = false
+  }
+
+  window.on('close', (e) => {
+    freezeBounds()
+    // Wait until next tick to check if close was prevented by e.preventDefault()
+    process.nextTick(() => {
+      if (!window.isDestroyed() && !e.defaultPrevented) {
+        // Not prevented or already destroyed, do nothing
+      } else if (!window.isDestroyed() && e.defaultPrevented) {
+        unfreezeBounds()
+      }
+    })
   })
 }
 

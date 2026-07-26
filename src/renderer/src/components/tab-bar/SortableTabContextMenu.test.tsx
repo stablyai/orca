@@ -335,4 +335,15 @@ describe('SortableTabContextMenu multi-select', () => {
     act(() => getButton(container, 'Unpin Tabs').click())
     expect(onTogglePinSelected).toHaveBeenCalled()
   })
+
+  it('renders Detach Tabs to Window as disabled when hasDetachableSelected is false', () => {
+    const { container } = renderMenu({
+      isMultiSelect: true,
+      onDetachSelectedToWindow: vi.fn(),
+      hasDetachableSelected: false
+    })
+
+    const button = getButton(container, 'Detach Tabs to Window')
+    expect(button.getAttribute('disabled')).not.toBeNull()
+  })
 })

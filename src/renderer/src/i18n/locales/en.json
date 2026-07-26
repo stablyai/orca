@@ -2905,7 +2905,10 @@
             "2186a8407c": "Split Down",
             "96354ed249": "Split Up",
             "911542656f": "Pin Tab",
-            "c5aaee8c39": "Unpin Tab"
+            "c5aaee8c39": "Unpin Tab",
+            "8184cea86c": "Unpin Tabs",
+            "9b98341009": "Pin Tabs",
+            "fa56fb767a": "Close Tabs"
           },
           "EditorFileTab": {
             "3da7445c84": "Rename file {{value0}}"
@@ -2924,9 +2927,9 @@
             "6b3efb106e": "Split Up",
             "fdd29eb669": "Pin Tab",
             "8e9d603a09": "Unpin Tab",
-            "unpinTabs": "Unpin Tabs",
-            "pinTabs": "Pin Tabs",
-            "closeTabs": "Close Tabs"
+            "01149d9510": "Unpin Tabs",
+            "4abb1f6983": "Pin Tabs",
+            "df968bc22f": "Close Tabs"
           },
           "QuickLaunchButton": {
             "348a04c1ad": "Agent settings…",
@@ -2969,9 +2972,9 @@
             "417722e9c2": "Unpin Tab",
             "splitTerminalRight": "Split terminal right",
             "splitTerminalDown": "Split terminal down",
-            "unpinTabs": "Unpin Tabs",
-            "pinTabs": "Pin Tabs",
-            "closeTabs": "Close Tabs",
+            "1a9723c5d0": "Unpin Tabs",
+            "ebaea2fd14": "Pin Tabs",
+            "74366d8a40": "Close Tabs",
             "detachTabsToWindow": "Detach Tabs to Window",
             "detachToWindow": "Detach to Window"
           },
