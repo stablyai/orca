@@ -124,9 +124,8 @@ describe('closed-sidebar Cmd+1-9 ordering (#9497)', () => {
   })
 
   it('ignores the agent-send collapse override, which only applies to a mounted list', () => {
-    // WorktreeList expands the send target's group via effectiveCollapsedGroups;
-    // this path reads state.collapsedGroups instead. That is only sound because a
-    // mounted list publishes its order and short-circuits this path entirely.
+    // Safe to ignore WorktreeList's effectiveCollapsedGroups override only because
+    // it needs a mounted list, which publishes its order and skips this path.
     const main = makeMainWorktree('wt-main')
     const feature = makeWorktree('wt-feature')
     seedStore([main, feature], {

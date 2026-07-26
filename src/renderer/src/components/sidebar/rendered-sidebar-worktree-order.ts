@@ -26,20 +26,13 @@ const EMPTY_INBOX_BY_REPO = Object.freeze(new Map()) as never
 const EMPTY_PENDING_CREATIONS = Object.freeze([]) as never
 
 /**
- * Orders already-filtered worktrees the way the sidebar would render them,
- * derived from a store snapshot with no mounted WorktreeList.
+ * Orders already-filtered worktrees the way the sidebar would render them, for
+ * Cmd+1–9 numbering while WorktreeList is unmounted (#9497).
  *
- * Why: Cmd+1–9 numbering must match the cards on screen. While the sidebar is
- * mounted WorktreeList publishes its exact rendered order. While it is closed
- * the old fallback returned a *flat* list — no grouping, pinning, main-worktree
- * hoisting or collapse elision — so the shortcut jumped to the wrong workspace
- * (#9497). Reusing the render pipeline keeps the two in agreement instead of
- * re-deriving the ordering rules a second time.
- *
- * Why it takes worktrees rather than computing them: membership filtering lives
- * in visible-worktrees.ts, this module's only caller. Passing them in keeps the
- * dependency one-way — that module owns the public entry points, which several
- * test suites mock by path.
+ * Why replay the pipeline: a flat list drops grouping, pinning, main-worktree
+ * hoisting and collapse elision, so the shortcut numbered the wrong card.
+ * Why worktrees are passed in: keeps the dependency on visible-worktrees.ts
+ * one-way, since test suites mock that module's path.
  */
 export function computeRenderedSidebarWorktreeOrder(
   state: AppState,
@@ -92,6 +85,7 @@ export function computeRenderedSidebarWorktreeOrder(
   )
 
   // Why lazy: with no host filter, addHostSectionRows is a pass-through, so skip building the whole host registry on a keystroke.
+  // Deliberately a superset of its internal guards — it still no-ops on <=1 host, which only costs us the skipped shortcut.
   const needsHostSections =
     state.workspaceHostScope !== ALL_EXECUTION_HOSTS_SCOPE || state.visibleWorkspaceHostIds != null
   const sectionRows = needsHostSections
