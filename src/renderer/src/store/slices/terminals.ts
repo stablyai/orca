@@ -1059,6 +1059,10 @@ function targetScopedWorkspaceHydrationPatch(
   }
 }
 
+/** Tab IDs currently being moved to a detached window — suppress from the tab
+ *  bar while the PTY allocates so the user never sees a brief flicker of the
+ *  tab appearing and disappearing in the main window. */
+export const detachingTabIds = new Set<string>()
 /** How long openNewDetachedTerminalWindow waits for the new tab's PTY before giving up and closing the never-visible tab. */
 const DETACHED_WINDOW_PTY_ALLOCATION_TIMEOUT_MS = 5_000
 
@@ -1580,6 +1584,7 @@ export const createTerminalSlice: StateCreator<AppState, [], [], TerminalSlice> 
       return
     }
     const tab = get().createTab(worktreeId, groupId)
+    detachingTabIds.add(tab.id)
     // Why: createTab returns with ptyIdsByTabId[tab.id] still empty — the PTY id
     // arrives asynchronously via updateTabPtyId. Wait for it before building the
     // detach seed, but bound the wait so a failed spawn can't wedge the flow.
@@ -1602,6 +1607,7 @@ export const createTerminalSlice: StateCreator<AppState, [], [], TerminalSlice> 
       }
     })
     if (!ptyAllocated) {
+      detachingTabIds.delete(tab.id)
       // Why: no PTY within the timeout means nothing useful to detach; close the
       // never-visible tab so the attempt leaves no trace for the user.
       get().closeTab(tab.id)
@@ -1609,6 +1615,7 @@ export const createTerminalSlice: StateCreator<AppState, [], [], TerminalSlice> 
     }
     const seed = captureTerminalTabForWindowDetach(get(), worktreeId, tab.id)
     if (!seed) {
+      detachingTabIds.delete(tab.id)
       // Why: graceful degradation — without a seed the tab simply stays in the main window.
       console.error('[new-detached-window] could not build a detach seed for tab', tab.id)
       return
@@ -1616,12 +1623,14 @@ export const createTerminalSlice: StateCreator<AppState, [], [], TerminalSlice> 
     try {
       await window.api.pane.detach(tab.id, seed)
     } catch (error) {
+      detachingTabIds.delete(tab.id)
       // Why: graceful degradation — a failed detach leaves the tab in the main window.
       console.error('[new-detached-window] failed to detach tab to a new window', error)
       return
     }
     // Why: the detached window now owns the PTYs, so close the main-window tab
     // without killing them and without feeding the Cmd+Shift+T reopen stack.
+    detachingTabIds.delete(tab.id)
     get().closeTab(tab.id, {
       localPtyTeardownOwnedExternally: true,
       captureRecentlyClosed: false

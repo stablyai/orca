@@ -24,6 +24,7 @@ import type {
 import type { ProjectExecutionRuntimeResolution } from '../../../../shared/project-execution-runtime'
 import { resolveTerminalTabTitle } from '../../../../shared/tab-title-resolution'
 import { useAppStore } from '../../store'
+import { detachingTabIds } from '@/store/slices/terminals'
 import { buildStatusMap } from '../right-sidebar/status-display'
 import type { OpenFile } from '../../store/slices/editor'
 import SortableTab from './SortableTab'
@@ -296,7 +297,10 @@ function TabBarInner({
   const gitStatusEntries = useAppStore(
     (s) => s.gitStatusByWorktree[worktreeId] ?? EMPTY_GIT_STATUS_ENTRIES
   )
-  const unifiedTabs = useAppStore((s) => s.unifiedTabsByWorktree[worktreeId] ?? EMPTY_UNIFIED_TABS)
+  const unifiedTabs = useAppStore((s) => {
+    const tabs = s.unifiedTabsByWorktree[worktreeId] ?? EMPTY_UNIFIED_TABS
+    return tabs.filter((t) => !detachingTabIds.has(t.id))
+  })
   const pinTab = useAppStore((s) => s.pinTab)
   const unpinTab = useAppStore((s) => s.unpinTab)
   const activeGroupIdForWorktree = useAppStore((s) => s.activeGroupIdByWorktree[worktreeId])
