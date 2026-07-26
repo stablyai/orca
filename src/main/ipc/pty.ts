@@ -25,7 +25,7 @@ import type {
   TerminalLostWorkerRendererReceipt,
   TerminalLostWorkerRendererRequest
 } from '../../shared/terminal-archive-types'
-import { getUtf8ByteLength } from '../../shared/utf8-byte-limits'
+import { captureTerminalArchiveBuffer } from '../../shared/terminal-archive-snapshot-capture'
 import { classifyLostTerminal } from '../../shared/terminal-lost-worker-policy'
 import { archiveLostTerminalWorker } from '../terminal-lost-worker-archive'
 import { workspaceSessionStateSchema } from '../../shared/workspace-session-schema'
@@ -1695,8 +1695,6 @@ export function registerPtyHandlers(
           capture: async (pane) => archiveSnapshotsByPane.get(pane) ?? { kind: 'unavailable' }
         })
       : null
-  const lostWorkerArchiveInFlight = new Map<string, Promise<TerminalLostWorkerRendererReceipt>>()
-
   ipcMain.handle(
     'pty:archiveTerminalTab',
     async (_event, raw: unknown): Promise<{ archiveId: string }> => {
@@ -1745,21 +1743,6 @@ export function registerPtyHandlers(
         const archivedPane = cwd ? { ...pane, cwd } : pane
         captured.panesByLeafId[leafId] = archivedPane
 
-        const fromBuffer = (
-          buffer: string,
-          source: 'renderer' | 'daemon-headless' | 'relay-tail' | 'session-sidecar',
-          truncated = false
-        ): TerminalArchivePaneSnapshotCapture =>
-          buffer.length === 0
-            ? { kind: 'captured-empty' }
-            : {
-                kind: 'captured-bytes',
-                buffer,
-                source,
-                truncated,
-                byteLength: getUtf8ByteLength(buffer)
-              }
-
         // Provider snapshots are authoritative for daemon-backed panes and win over all client material.
         const providerSnapshot =
           ptyId && provider?.canProvideAuthoritativeBufferSnapshot?.(ptyId)
@@ -1770,7 +1753,10 @@ export function registerPtyHandlers(
         if (providerSnapshot?.data !== undefined) {
           archiveSnapshotsByPane.set(
             archivedPane,
-            fromBuffer(providerSnapshot.data, 'daemon-headless')
+            captureTerminalArchiveBuffer({
+              buffer: providerSnapshot.data,
+              source: 'daemon-headless'
+            })
           )
           continue
         }
@@ -1785,7 +1771,11 @@ export function registerPtyHandlers(
         ) {
           archiveSnapshotsByPane.set(
             archivedPane,
-            fromBuffer(snapshot.buffer, 'renderer', snapshot.truncated)
+            captureTerminalArchiveBuffer({
+              buffer: snapshot.buffer,
+              source: 'renderer',
+              truncated: snapshot.truncated
+            })
           )
           continue
         }
@@ -1796,7 +1786,10 @@ export function registerPtyHandlers(
             ? store.readTerminalScrollbackSnapshot(persistedLayout.scrollbackRefsByLeafId[leafId])
             : null)
         if (typeof sidecarBuffer === 'string') {
-          archiveSnapshotsByPane.set(archivedPane, fromBuffer(sidecarBuffer, 'session-sidecar'))
+          archiveSnapshotsByPane.set(
+            archivedPane,
+            captureTerminalArchiveBuffer({ buffer: sidecarBuffer, source: 'session-sidecar' })
+          )
           continue
         }
         const relaySnapshot = ptyId
@@ -1805,7 +1798,11 @@ export function registerPtyHandlers(
         if (relaySnapshot?.data !== undefined) {
           archiveSnapshotsByPane.set(
             archivedPane,
-            fromBuffer(relaySnapshot.data, 'relay-tail', true)
+            captureTerminalArchiveBuffer({
+              buffer: relaySnapshot.data,
+              source: 'relay-tail',
+              truncated: true
+            })
           )
           continue
         }
@@ -1883,15 +1880,7 @@ export function registerPtyHandlers(
       if (!captured) {
         return { kind: 'retryable-error', code: 'capture-unavailable' }
       }
-      const operationKey = `${reason}:${executionHostId}:${tabId}:${makeTerminalArchiveSourcePaneSignature(
-        captured.panesByLeafId,
-        captured.sourcePaneIdentityByLeafId
-      )}`
-      const existing = lostWorkerArchiveInFlight.get(operationKey)
-      if (existing) {
-        return await existing
-      }
-      const operation = (async (): Promise<TerminalLostWorkerRendererReceipt> => {
+      return await (async (): Promise<TerminalLostWorkerRendererReceipt> => {
         const snapshotSource = {
           capture: async (
             pane: ArchivedTerminalPane
@@ -1905,22 +1894,11 @@ export function registerPtyHandlers(
                     .getBufferSnapshot?.(ptyId, { scrollbackRows: 50_000 })
                     .catch(() => null)
                 : null
-            const fromBuffer = (
-              buffer: string,
-              source: 'renderer' | 'daemon-headless' | 'relay-tail' | 'session-sidecar',
-              truncated = false
-            ): TerminalArchivePaneSnapshotCapture =>
-              buffer.length === 0
-                ? { kind: 'captured-empty' }
-                : {
-                    kind: 'captured-bytes',
-                    buffer,
-                    source,
-                    truncated,
-                    byteLength: getUtf8ByteLength(buffer)
-                  }
             if (providerSnapshot?.data !== undefined) {
-              return fromBuffer(providerSnapshot.data, 'daemon-headless')
+              return captureTerminalArchiveBuffer({
+                buffer: providerSnapshot.data,
+                source: 'daemon-headless'
+              })
             }
             const rendererSnapshot = request.snapshotsByLeafId?.[leafId]
             if (
@@ -1932,7 +1910,11 @@ export function registerPtyHandlers(
               Number.isFinite(rendererSnapshot.byteLength) &&
               rendererSnapshot.byteLength >= 0
             ) {
-              return fromBuffer(rendererSnapshot.buffer, 'renderer', rendererSnapshot.truncated)
+              return captureTerminalArchiveBuffer({
+                buffer: rendererSnapshot.buffer,
+                source: 'renderer',
+                truncated: rendererSnapshot.truncated
+              })
             }
             const persistedLayout = persistedSession.terminalLayoutsByTabId[tabId]
             const sidecar =
@@ -1943,7 +1925,7 @@ export function registerPtyHandlers(
                   )
                 : null)
             return typeof sidecar === 'string'
-              ? fromBuffer(sidecar, 'session-sidecar')
+              ? captureTerminalArchiveBuffer({ buffer: sidecar, source: 'session-sidecar' })
               : { kind: 'unavailable' }
           }
         }
@@ -1973,14 +1955,6 @@ export function registerPtyHandlers(
         }
         return { kind: 'archived', archiveId: result.archive.id }
       })()
-      lostWorkerArchiveInFlight.set(operationKey, operation)
-      try {
-        return await operation
-      } finally {
-        if (lostWorkerArchiveInFlight.get(operationKey) === operation) {
-          lostWorkerArchiveInFlight.delete(operationKey)
-        }
-      }
     }
   )
 
@@ -2016,42 +1990,17 @@ export function registerPtyHandlers(
     if (!captured) {
       return { kind: 'retryable-error', code: 'capture-unavailable' }
     }
-    const operationKey = `daemon-worker-lost:${executionHostId}:${args.tabId}:${makeTerminalArchiveSourcePaneSignature(
-      captured.panesByLeafId,
-      captured.sourcePaneIdentityByLeafId
-    )}`
-    const existing = lostWorkerArchiveInFlight.get(operationKey)
-    if (existing) {
-      const receipt = await existing
-      return receipt.kind === 'archived'
-        ? receipt
-        : {
-            kind: 'retryable-error',
-            code: receipt.kind === 'ordinary-shell' ? 'not-owned' : receipt.code
-          }
-    }
-    const operation = (async (): Promise<TerminalLostWorkerRendererReceipt> => {
+    const receipt = await (async (): Promise<TerminalLostWorkerRendererReceipt> => {
       const snapshotSource = {
         capture: async (
           pane: ArchivedTerminalPane
         ): Promise<TerminalArchivePaneSnapshotCapture> => {
           const leafId = pane.archivedLeafId
-          const fromBuffer = (
-            buffer: string,
-            source: 'renderer' | 'daemon-headless' | 'relay-tail' | 'session-sidecar',
-            truncated = false
-          ): TerminalArchivePaneSnapshotCapture =>
-            buffer.length === 0
-              ? { kind: 'captured-empty' }
-              : {
-                  kind: 'captured-bytes',
-                  buffer,
-                  source,
-                  truncated,
-                  byteLength: getUtf8ByteLength(buffer)
-                }
           if (leafId === args.leafId) {
-            return fromBuffer(args.coldRestore.scrollback, 'daemon-headless')
+            return captureTerminalArchiveBuffer({
+              buffer: args.coldRestore.scrollback,
+              source: 'daemon-headless'
+            })
           }
           const layout = persistedSession.terminalLayoutsByTabId[args.tabId]
           const sidecar =
@@ -2060,14 +2009,17 @@ export function registerPtyHandlers(
               ? store.readTerminalScrollbackSnapshot(layout.scrollbackRefsByLeafId[leafId])
               : null)
           if (typeof sidecar === 'string') {
-            return fromBuffer(sidecar, 'session-sidecar')
+            return captureTerminalArchiveBuffer({ buffer: sidecar, source: 'session-sidecar' })
           }
           const ptyId = layout?.ptyIdsByLeafId?.[leafId]
           const probe = ptyId ? args.coldRestore.probeSibling(ptyId) : null
           if (probe?.kind !== 'valid-snapshot' || probe.truncated) {
             return { kind: 'unavailable' }
           }
-          return fromBuffer(probe.scrollback, 'daemon-headless')
+          return captureTerminalArchiveBuffer({
+            buffer: probe.scrollback,
+            source: 'daemon-headless'
+          })
         }
       }
       const result = await archiveLostTerminalWorker({
@@ -2093,20 +2045,12 @@ export function registerPtyHandlers(
       }
       return { kind: 'archived', archiveId: result.archive.id }
     })()
-    lostWorkerArchiveInFlight.set(operationKey, operation)
-    try {
-      const receipt = await operation
-      return receipt.kind === 'archived'
-        ? receipt
-        : {
-            kind: 'retryable-error',
-            code: receipt.kind === 'ordinary-shell' ? 'not-owned' : receipt.code
-          }
-    } finally {
-      if (lostWorkerArchiveInFlight.get(operationKey) === operation) {
-        lostWorkerArchiveInFlight.delete(operationKey)
-      }
-    }
+    return receipt.kind === 'archived'
+      ? receipt
+      : {
+          kind: 'retryable-error',
+          code: receipt.kind === 'ordinary-shell' ? 'not-owned' : receipt.code
+        }
   }
 
   // Why: only LocalPtyProvider needs main-process hook injection; daemon-backed providers spawn subprocesses internally.

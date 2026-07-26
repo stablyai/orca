@@ -11,6 +11,8 @@ import { TerminalArchiveError } from './terminal-archive-failure'
 
 type LostWorkerArchiveReason = Exclude<TerminalArchiveReason, 'user-close'>
 
+const lostWorkerArchiveInFlight = new Map<string, Promise<TerminalLostWorkerArchiveResult>>()
+
 export type TerminalLostWorkerArchiveCandidate = {
   reason: LostWorkerArchiveReason
   executionHostId: ExecutionHostId
@@ -143,24 +145,52 @@ export async function archiveLostTerminalWorker(args: {
     captured.sourcePaneIdentityByLeafId
   )
   const operationId = `${args.candidate.reason}:${args.candidate.tabId}:${sourcePaneSignature}`
+  const inFlightKey = `${args.candidate.reason}:${args.candidate.executionHostId}:${args.candidate.tabId}:${sourcePaneSignature}`
+  const existing = lostWorkerArchiveInFlight.get(inFlightKey)
+  if (existing) {
+    return await existing
+  }
+  const operation = archiveLostTerminalWorkerOnce({
+    ...args,
+    captured,
+    operationId
+  })
+  lostWorkerArchiveInFlight.set(inFlightKey, operation)
+  try {
+    return await operation
+  } finally {
+    if (lostWorkerArchiveInFlight.get(inFlightKey) === operation) {
+      lostWorkerArchiveInFlight.delete(inFlightKey)
+    }
+  }
+}
+
+async function archiveLostTerminalWorkerOnce(args: {
+  owner: TerminalLostWorkerArchiveOwner
+  candidate: TerminalLostWorkerArchiveCandidate
+  frozenSession: WorkspaceSessionState
+  snapshotSource: TerminalArchiveSnapshotSource
+  captured: NonNullable<ReturnType<typeof captureTerminalArchiveTab>>
+  operationId: string
+}): Promise<TerminalLostWorkerArchiveResult> {
   const archiveStore = args.owner.createTerminalArchiveStore(args.snapshotSource)
   try {
     const archive = await archiveStore.archiveTerminalTab({
-      operationId,
+      operationId: args.operationId,
       sourceTabId: args.candidate.tabId,
       executionHostId: args.candidate.executionHostId,
       ...(args.candidate.runtimeEnvironmentId
         ? { runtimeEnvironmentId: args.candidate.runtimeEnvironmentId }
         : {}),
       worktreeId: args.candidate.worktreeId,
-      title: captured.tab.customTitle || captured.tab.title,
-      ...(captured.tab.defaultTitle ? { defaultTitle: captured.tab.defaultTitle } : {}),
-      ...(captured.tab.color !== undefined ? { color: captured.tab.color } : {}),
-      layout: captured.layout,
-      panesByLeafId: captured.panesByLeafId,
-      sourcePaneIdentityByLeafId: captured.sourcePaneIdentityByLeafId,
+      title: args.captured.tab.customTitle || args.captured.tab.title,
+      ...(args.captured.tab.defaultTitle ? { defaultTitle: args.captured.tab.defaultTitle } : {}),
+      ...(args.captured.tab.color !== undefined ? { color: args.captured.tab.color } : {}),
+      layout: args.captured.layout,
+      panesByLeafId: args.captured.panesByLeafId,
+      sourcePaneIdentityByLeafId: args.captured.sourcePaneIdentityByLeafId,
       reason: args.candidate.reason,
-      createdAt: captured.tab.createdAt,
+      createdAt: args.captured.tab.createdAt,
       capturedAt: Date.now()
     })
     const retired = args.owner.retireArchivedTerminalTabAndFlush({
@@ -174,7 +204,12 @@ export async function archiveLostTerminalWorker(args: {
     if (!retired.closed) {
       return { kind: 'error', code: 'stale-source' }
     }
-    return { kind: 'archived', archive, operationId, ptyIdsToKill: retired.ptyIdsToKill }
+    return {
+      kind: 'archived',
+      archive,
+      operationId: args.operationId,
+      ptyIdsToKill: retired.ptyIdsToKill
+    }
   } catch (error) {
     return { kind: 'error', code: terminalArchiveFailureCode(error) }
   } finally {

@@ -107,7 +107,7 @@ export async function installDockerRelaySnapshotCaptureProbe(
     }
     const session = scope.__orcaE2eRelaySessions?.get(capturedTargetId) as
       | (RelaySessionForE2E & {
-          archiveRelayLostWorker?: (lost: unknown) => Promise<void>
+          archiveRelayLostWorker?: (args: unknown) => Promise<void>
           store?: {
             createTerminalArchiveStore?: (snapshotSource: {
               capture: (pane: unknown) => Promise<unknown>
@@ -134,11 +134,14 @@ export async function installDockerRelaySnapshotCaptureProbe(
     let archiveAttempt = 0
     let currentLost: Record<string, unknown> | null = null
     const captures: DockerRelaySnapshotCapture[] = []
-    session.archiveRelayLostWorker = async (lost: unknown) => {
+    session.archiveRelayLostWorker = async (args: unknown) => {
       archiveAttempt += 1
-      currentLost = lost as Record<string, unknown>
+      currentLost =
+        args && typeof args === 'object' && 'lost' in args
+          ? ((args as { lost?: unknown }).lost as Record<string, unknown>)
+          : (args as Record<string, unknown>)
       try {
-        await originalArchiveRelayLostWorker.call(session, lost)
+        await originalArchiveRelayLostWorker.call(session, args)
       } finally {
         currentLost = null
       }

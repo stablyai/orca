@@ -406,8 +406,9 @@ test.describe('Docker SSH mixed-version lost-worker archive', () => {
           expect.objectContaining({
             lostReplayTail: 'present',
             paneKeyMatchesLost: false,
-            result: 'unavailable',
-            sidecar: 'none'
+            result: 'captured-bytes',
+            sidecar: 'none',
+            source: 'relay-tail'
           })
         ])
       )

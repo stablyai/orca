@@ -74,7 +74,7 @@ import {
   type TerminalArchivePaneSnapshotCapture
 } from '../../shared/workspace-session-terminal-archive'
 import type { ArchivedTerminalPane } from '../../shared/terminal-archive-types'
-import { getUtf8ByteLength } from '../../shared/utf8-byte-limits'
+import { captureTerminalArchiveBuffer } from '../../shared/terminal-archive-snapshot-capture'
 import { archiveLostTerminalWorker } from '../terminal-lost-worker-archive'
 import type { RelayPtyLostEntry } from '../../shared/pty-revive-protocol'
 import {
@@ -1097,15 +1097,7 @@ export class SshRelaySession {
             ? this.store.readTerminalScrollbackSnapshot(layout.scrollbackRefsByLeafId[leafId])
             : null)
         if (typeof sidecar === 'string') {
-          return sidecar.length === 0
-            ? { kind: 'captured-empty' }
-            : {
-                kind: 'captured-bytes',
-                buffer: sidecar,
-                source: 'session-sidecar',
-                truncated: false,
-                byteLength: getUtf8ByteLength(sidecar)
-              }
+          return captureTerminalArchiveBuffer({ buffer: sidecar, source: 'session-sidecar' })
         }
         const expectedSource = captured.sourcePaneIdentityByLeafId[leafId]
         const staged = expectedSource
@@ -1128,18 +1120,14 @@ export class SshRelaySession {
           return { kind: 'unavailable' }
         }
         const replayTail = staged.replayTail
-        if (!replayTail || (replayTail.data.length === 0 && replayTail.truncated)) {
+        if (!replayTail) {
           return { kind: 'unavailable' }
         }
-        return replayTail.data.length === 0
-          ? { kind: 'captured-empty' }
-          : {
-              kind: 'captured-bytes',
-              buffer: replayTail.data,
-              source: 'relay-tail',
-              truncated: replayTail.truncated,
-              byteLength: replayTail.byteLength
-            }
+        return captureTerminalArchiveBuffer({
+          buffer: replayTail.data,
+          source: 'relay-tail',
+          truncated: replayTail.truncated
+        })
       }
     }
     const result = await archiveLostTerminalWorker({

@@ -132,6 +132,43 @@ describe('archiveLostTerminalWorker', () => {
     })
   })
 
+  it('shares one archive attempt across concurrent lost-worker entry points', async () => {
+    const frozenSession = session()
+    const archiveOwner = owner(frozenSession)
+    let releaseCapture: (() => void) | undefined
+    const capture = vi.fn(
+      async () =>
+        await new Promise<void>((resolve) => {
+          releaseCapture = resolve
+        }).then(() => ({ kind: 'captured-empty' as const }))
+    )
+    const request = {
+      owner: archiveOwner.value,
+      candidate: {
+        reason: 'daemon-worker-lost' as const,
+        executionHostId: 'local' as const,
+        worktreeId: WORKTREE_ID,
+        tabId: TAB_ID,
+        expectedSourcePaneIdentityByLeafId: {
+          [LEAF_ID]: { paneKey: `${TAB_ID}:${LEAF_ID}`, incarnationId: 'incarnation-1' }
+        }
+      },
+      frozenSession,
+      snapshotSource: { capture }
+    }
+
+    const first = archiveLostTerminalWorker(request)
+    await vi.waitFor(() => expect(capture).toHaveBeenCalledOnce())
+    const second = archiveLostTerminalWorker(request)
+    releaseCapture?.()
+
+    await expect(Promise.all([first, second])).resolves.toEqual([
+      expect.objectContaining({ kind: 'archived' }),
+      expect.objectContaining({ kind: 'archived' })
+    ])
+    expect(archiveOwner.retireArchivedTerminalTabAndFlush).toHaveBeenCalledOnce()
+  })
+
   it('rejects a stale source incarnation before archive or retirement', async () => {
     const frozenSession = session()
     const archiveOwner = owner(frozenSession)

@@ -202,7 +202,7 @@ import {
 } from '../../shared/workspace-session-terminal-archive'
 import type { ArchivedTerminalPane } from '../../shared/terminal-archive-types'
 import { makeTerminalArchiveSourcePaneSignature } from '../terminal-archive-source-pane-signature'
-import { getUtf8ByteLength } from '../../shared/utf8-byte-limits'
+import { captureTerminalArchiveBuffer } from '../../shared/terminal-archive-snapshot-capture'
 import type {
   LinearCurrentIssueContextHints,
   LinearAttachResult,
@@ -6235,20 +6235,6 @@ export class OrcaRuntimeService {
     const snapshots = new WeakMap<ArchivedTerminalPane, TerminalArchivePaneSnapshotCapture>()
     for (const [leafId, pane] of Object.entries(captured.panesByLeafId)) {
       const ptyId = session.terminalLayoutsByTabId[tab.parentTabId]?.ptyIdsByLeafId?.[leafId]
-      const fromBuffer = (
-        buffer: string,
-        source: 'renderer' | 'daemon-headless' | 'relay-tail' | 'session-sidecar',
-        truncated = false
-      ): TerminalArchivePaneSnapshotCapture =>
-        buffer.length === 0
-          ? { kind: 'captured-empty' }
-          : {
-              kind: 'captured-bytes',
-              buffer,
-              source,
-              truncated,
-              byteLength: getUtf8ByteLength(buffer)
-            }
       const providerSnapshot = ptyId
         ? await this.serializeProviderTerminalBuffer(ptyId, { scrollbackRows: 50_000 })
         : null
@@ -6257,7 +6243,10 @@ export class OrcaRuntimeService {
       if (providerSnapshot) {
         snapshots.set(
           archivedPane,
-          fromBuffer(providerSnapshot.scrollbackAnsi ?? providerSnapshot.data, 'daemon-headless')
+          captureTerminalArchiveBuffer({
+            buffer: providerSnapshot.scrollbackAnsi ?? providerSnapshot.data,
+            source: 'daemon-headless'
+          })
         )
         continue
       }
@@ -6265,7 +6254,10 @@ export class OrcaRuntimeService {
         ? await this.serializeRendererTerminalBuffer(ptyId, { scrollbackRows: 50_000 })
         : null
       if (rendererSnapshot) {
-        snapshots.set(archivedPane, fromBuffer(rendererSnapshot.data, 'renderer'))
+        snapshots.set(
+          archivedPane,
+          captureTerminalArchiveBuffer({ buffer: rendererSnapshot.data, source: 'renderer' })
+        )
         continue
       }
       const layout = session.terminalLayoutsByTabId[tab.parentTabId]
@@ -6275,7 +6267,10 @@ export class OrcaRuntimeService {
           ? this.store.readTerminalScrollbackSnapshot?.(layout.scrollbackRefsByLeafId[leafId])
           : null)
       if (typeof persisted === 'string') {
-        snapshots.set(archivedPane, fromBuffer(persisted, 'session-sidecar'))
+        snapshots.set(
+          archivedPane,
+          captureTerminalArchiveBuffer({ buffer: persisted, source: 'session-sidecar' })
+        )
         continue
       }
       const relayTail = ptyId
@@ -6283,7 +6278,13 @@ export class OrcaRuntimeService {
         : null
       snapshots.set(
         archivedPane,
-        relayTail ? fromBuffer(relayTail.data, 'relay-tail', true) : { kind: 'unavailable' }
+        relayTail
+          ? captureTerminalArchiveBuffer({
+              buffer: relayTail.data,
+              source: 'relay-tail',
+              truncated: true
+            })
+          : { kind: 'unavailable' }
       )
     }
     const operationId = `user-close:${tab.parentTabId}:${makeTerminalArchiveSourcePaneSignature(
