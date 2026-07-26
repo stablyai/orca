@@ -32,14 +32,14 @@ type Mode2031Parser = Pick<IParser, 'registerCsiHandler'>
 type Mode2031HandlerDeps = {
   paneId: number
   parser: Mode2031Parser
-  /** Called when a real (non-replayed) `CSI ?2031h` arrives, after the subscribe flag is set.
-   *  A callback so the lifecycle hook keeps its transport-aware `pushMode2031ForPane` closure. */
-  onSubscribe: () => void
   isReplaying: () => boolean
   paneMode2031: Map<number, boolean>
   paneLastThemeMode: Map<number, 'dark' | 'light'>
-  /** Defers the reply past the rest of the chunk's parse. Injectable for tests. */
-  scheduleReply?: (callback: () => void) => void
+  /** True only for hidden-delivery-gate-managed PTYs, whose bytes may never reach this
+   *  parser. Everything else has its state owned by pty-connection's chunk scanner, and a
+   *  second writer here would rewind it: xterm parses on a later tick than the scanner, so
+   *  a queued handler for chunk N can re-subscribe after chunk N+1 already withdrew (#9993). */
+  shouldObserveInParser: () => boolean
 }
 
 // Why a pure function: lets tests drive a real xterm parser end-to-end against the "random characters on restart" guard.
@@ -47,39 +47,25 @@ export function installMode2031Handlers(deps: Mode2031HandlerDeps): IDisposable[
   const hasMode2031 = (params: (number | number[])[]): boolean =>
     params.some((p) => (Array.isArray(p) ? p.includes(2031) : p === 2031))
 
-  // Why deferred: xterm dispatches CSI handlers mid-parse, but fish toggles 2031
-  // on and off around every prompt, so a reply sent the instant `?2031h` parses
-  // answers a subscription the same chunk withdraws microseconds later — it
-  // lands as literal text at the prompt or in a child's stdin (#9993). Settling
-  // on a microtask lets the rest of the chunk cancel a withdrawn subscribe.
-  const schedule = deps.scheduleReply ?? queueMicrotask
-  let replyPending = false
-  const settleSubscribe = (): void => {
-    replyPending = false
-    // The chunk may have unsubscribed after the handler ran; re-read the state.
-    if (deps.paneMode2031.get(deps.paneId) === true) {
-      deps.onSubscribe()
-    }
-  }
+  // Why no reply from here: xterm dispatches CSI handlers mid-parse and batches
+  // several PTY chunks into one parse, so this layer cannot see a chunk boundary
+  // — and fish toggles 2031 on and off around every prompt, so a reply owed to
+  // one chunk gets cancelled by the next one's withdrawal, or never sent at all.
+  // The reply decision lives at the raw chunk boundary in pty-connection (#9993).
 
   // Why return false: we only observe mode 2031; false lets xterm's built-in DEC handler still process compound sequences.
   return [
     deps.parser.registerCsiHandler(
       { prefix: '?', final: 'h' },
       guardParserHandler('csi-mode2031-subscribe', (params) => {
-        if (hasMode2031(params)) {
-          // Why gate on isReplaying: a restored buffer's replayed `?2031h` would push `?997;1n` into a fresh shell with no
-          // TUI, which echoes it as literal text; pty-connection's guard covers only xterm auto-replies, not handler sends.
-          // Return early (before recording the subscribe bit) so a later theme flip won't push into a shell that isn't subscribed.
+        if (hasMode2031(params) && deps.shouldObserveInParser()) {
+          // Why gate on isReplaying: a restored buffer's replayed `?2031h` would leave the pane marked
+          // subscribed, so a later theme flip would push `?997;1n` into a fresh shell with no TUI, which
+          // echoes it as literal text.
           if (deps.isReplaying()) {
             return false
           }
           deps.paneMode2031.set(deps.paneId, true)
-          // Coalesce: a chunk with several subscribes still gets one reply.
-          if (!replyPending) {
-            replyPending = true
-            schedule(settleSubscribe)
-          }
         }
         return false
       })
@@ -88,7 +74,7 @@ export function installMode2031Handlers(deps: Mode2031HandlerDeps): IDisposable[
     deps.parser.registerCsiHandler(
       { prefix: '?', final: 'l' },
       guardParserHandler('csi-mode2031-unsubscribe', (params) => {
-        if (hasMode2031(params)) {
+        if (hasMode2031(params) && deps.shouldObserveInParser()) {
           deps.paneMode2031.delete(deps.paneId)
           deps.paneLastThemeMode.delete(deps.paneId)
         }

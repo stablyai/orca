@@ -5434,7 +5434,7 @@ export function connectPanePty(
     let foregroundImmediateBudgetWindowStart = 0
     let foregroundRewriteChunkEndedWithCarriageReturn = false
     let foregroundRewriteCsiScanTail = ''
-    let hiddenMode2031ScanTail = ''
+    let mode2031ScanTail = ''
     const shouldSnapshotHiddenCodexOutput = shouldKeepHiddenStartupRendererQueriesLive(paneStartup)
     let hiddenStartupRendererQueryPending = ''
     let hiddenRendererStateDirty = false
@@ -5756,9 +5756,19 @@ export function connectPanePty(
       }
     }
 
-    function respondToSkippedMode2031Subscribe(data: string): void {
-      const scan = scanMode2031Sequences(hiddenMode2031ScanTail, data)
-      hiddenMode2031ScanTail = scan.tail
+    // Why here and not in xterm's CSI handler: xterm batches several PTY chunks into one
+    // synchronous parse, so a handler cannot tell where a chunk ended. fish enables and
+    // disables 2031 around every prompt, so answering a subscribe the same chunk withdraws
+    // pushes `?997;1n` into the prompt or a child's stdin as literal text (#9993). One raw
+    // chunk in, one order-aware decision out.
+    function observeLiveMode2031Chunk(data: string): void {
+      // Main's '2031-subscribe' fact is the sole responder for gate-managed PTYs; a second
+      // reply from here would answer one subscribe twice.
+      if (isHiddenDeliveryGateManagedPty(transport.getPtyId())) {
+        return
+      }
+      const scan = scanMode2031Sequences(mode2031ScanTail, data)
+      mode2031ScanTail = scan.tail
       if (scan.finalState === 'unsubscribed') {
         deps.paneMode2031Ref.current.delete(pane.id)
         deps.paneLastThemeModeRef.current.delete(pane.id)
@@ -5768,7 +5778,8 @@ export function connectPanePty(
       }
       const settings = useAppStore.getState().settings
       const mode = resolveTerminalColorSchemeMode(settings, getSystemPrefersDark())
-      // Why: hidden snapshot-backed panes skip xterm.write for PTY bytes; answer immediately so the reply can't outlive the program's read window.
+      // Why immediate: the reply must land inside the program's read window, and hidden
+      // snapshot-backed panes skip xterm.write for PTY bytes entirely.
       deps.paneMode2031Ref.current.set(pane.id, true)
       sendDesktopQueryReplyImmediate(mode2031SequenceFor(mode))
       deps.paneLastThemeModeRef.current.set(pane.id, mode)
@@ -5846,9 +5857,6 @@ export function connectPanePty(
       const synchronizedFrameLatencySensitive =
         synchronizedForegroundOutput && synchronizedForegroundFrameInteractive
       synchronizedForegroundOutputActive = nextSynchronizedForegroundOutputActive
-      if (!foreground && hiddenMode2031ScanTail) {
-        respondToSkippedMode2031Subscribe(data)
-      }
       writeTerminalOutput(pane.terminal, data, {
         foreground: foregroundOutput,
         beforeWrite: beforeTerminalOutputWrite,
@@ -6018,7 +6026,6 @@ export function connectPanePty(
 
     function skipHiddenRendererOutput(data: string): void {
       writeHiddenStartupRendererQueries(data)
-      respondToSkippedMode2031Subscribe(data)
       markHiddenOutputRestoreNeeded()
       hiddenRendererStateDirty = true
       if (hiddenOutputRestoreInFlight) {
@@ -6505,6 +6512,9 @@ export function connectPanePty(
     function clearPaneMode2031State(): void {
       deps.paneMode2031Ref.current.delete(pane.id)
       deps.paneLastThemeModeRef.current.delete(pane.id)
+      // A partial CSI prefix belongs to the stream that produced it; carrying it into a
+      // replacement PTY would splice two unrelated byte ranges into one sequence.
+      mode2031ScanTail = ''
     }
 
     function pulseVisibleLocalPtySizeForTuiRepaint(ptyId: string): void {
@@ -6527,7 +6537,6 @@ export function connectPanePty(
 
     function skipBackgroundAlternateScreenOutput(data: string): void {
       writeHiddenStartupRendererQueries(data)
-      respondToSkippedMode2031Subscribe(data)
       resetSkippedHiddenRendererRiskState()
       hiddenRendererStateDirty = true
       recordHiddenRendererSkip(data.length)
@@ -7035,9 +7044,10 @@ export function connectPanePty(
       if (!foreground) {
         syncHiddenRendererPtyDelivery()
       }
-      if (foreground && hiddenMode2031ScanTail) {
-        respondToSkippedMode2031Subscribe(data)
-      }
+      // Why unconditional and this early: a mode-2031 query must be answered whether or not
+      // the chunk survives reconciliation, restore deferral, or the hidden-delivery skip —
+      // every one of those can drop bytes that xterm would otherwise have parsed (#9993).
+      observeLiveMode2031Chunk(data)
       // Post-restore reconciliation: drop chunks the snapshot covers, force a fresh restore for unmappable seq gaps; runs after byte observers, before any xterm write.
       const reconciliation = reconcileChunkAgainstRestoredSnapshot(data, meta)
       if (reconciliation.action === 'drop-duplicate') {

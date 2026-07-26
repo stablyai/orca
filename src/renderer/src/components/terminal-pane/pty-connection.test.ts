@@ -9573,6 +9573,23 @@ describe('connectPanePty', () => {
       expect(bindingWithPredicate.isHiddenDeliveryGateManagedPty()).toBe(true)
     })
 
+    it('leaves the chunk scanner silent on a gate-managed PTY', async () => {
+      // Main's '2031-subscribe' fact already answers these; a chunk-boundary reply here
+      // would answer the same subscribe a second time.
+      enableMainAuthority()
+      const deps = createDeps({ isVisibleRef: { current: false } })
+      const { transport, dataCallback } = await connectHiddenPane(deps)
+      const before = transport.sendInput.mock.calls.length
+
+      dataCallback('\x1b[?2031h')
+
+      const replies = transport.sendInput.mock.calls
+        .slice(before)
+        .flat()
+        .filter((arg) => String(arg).includes('997'))
+      expect(replies).toEqual([])
+    })
+
     it('declares hidden-at-spawn on connect for hidden panes', async () => {
       enableMainAuthority()
       const deps = createDeps({ isVisibleRef: { current: false } })
@@ -10627,7 +10644,7 @@ describe('connectPanePty', () => {
     binding.dispose()
   })
 
-  it('writes mode 2031 through hidden xterm instead of side-channel answering it', async () => {
+  it('answers a mode 2031 subscribe once, from the raw chunk boundary', async () => {
     const { connectPanePty } = await import('./pty-connection')
     const transport = createMockTransport('pty-id')
     const capturedDataCallback: { current: ((data: string) => void) | null } = { current: null }
@@ -10655,13 +10672,152 @@ describe('connectPanePty', () => {
       capturedDataCallback.current?.('\x1b[?2031h')
       vi.advanceTimersByTime(50)
 
-      expect(transport.sendInput).not.toHaveBeenCalled()
+      // Why the scanner and not xterm's CSI handler: xterm batches PTY chunks into one
+      // parse, so only this layer knows the chunk ended still subscribed (#9993).
+      expect(transport.sendInput).toHaveBeenCalledTimes(1)
+      expect(transport.sendInput).toHaveBeenCalledWith('\x1b[?997;2n')
+      // The bytes still reach xterm so the emulator tracks the mode itself.
       expect(pane.terminal.write).toHaveBeenCalledWith('\x1b[?2031h')
     } finally {
       vi.useRealTimers()
     }
 
     binding.dispose()
+  })
+
+  // Why these three: fish 4.7.1 enables and disables 2031 around *every* prompt with no
+  // opt-out, so back-to-back chunks each carrying a toggle are the normal case, not an edge
+  // case. Each chunk owes exactly one decision, and xterm cannot make it — it parses several
+  // chunks in one synchronous batch, so a reply deferred to the parser is either dropped or
+  // answered against a subscription a later chunk already withdrew (#9993).
+  describe('mode 2031 replies are decided per raw PTY chunk', () => {
+    async function connectVisiblePane(): Promise<{
+      transport: ReturnType<typeof createMockTransport>
+      deps: ReturnType<typeof createDeps>
+      emit: (data: string, meta?: { droppedOutput?: boolean }) => void
+      dispose: () => void
+    }> {
+      const { connectPanePty } = await import('./pty-connection')
+      const transport = createMockTransport('pty-id')
+      const captured: {
+        current: ((data: string, meta?: { droppedOutput?: boolean }) => void) | null
+      } = { current: null }
+      transport.connect.mockImplementation(
+        async ({ callbacks }: { callbacks: ConnectCallbacks }) => {
+          captured.current = callbacks.onData ?? null
+          return 'pty-id'
+        }
+      )
+      transportFactoryQueue.push(transport)
+      mockStoreState = {
+        ...mockStoreState,
+        settings: { ...mockStoreState.settings, theme: 'light' }
+      }
+      const pane = createPane(1)
+      const manager = createManager(1)
+      const deps = createDeps({ isVisibleRef: { current: true } })
+      const binding = connectPanePty(pane as never, manager as never, deps as never)
+      await flushAsyncTicks(6)
+      return {
+        transport,
+        deps,
+        emit: (data: string, meta?: { droppedOutput?: boolean }) => captured.current?.(data, meta),
+        dispose: () => binding.dispose()
+      }
+    }
+
+    const replies = (transport: { sendInput: { mock: { calls: unknown[][] } } }): unknown[] =>
+      transport.sendInput.mock.calls.flat().filter((arg) => String(arg).includes('997'))
+
+    it('answers a chunk that ends subscribed even when the next chunk withdraws', async () => {
+      const { transport, emit, dispose } = await connectVisiblePane()
+      // Two separate PTY chunks. xterm would parse both in one batch and see only the net
+      // result; the first chunk still owes a reply.
+      emit('\x1b[?2031h')
+      emit('\x1b[?2031l')
+      expect(replies(transport)).toEqual(['\x1b[?997;2n'])
+      dispose()
+    })
+
+    it('answers each chunk that ends subscribed', async () => {
+      const { transport, emit, dispose } = await connectVisiblePane()
+      emit('\x1b[?2031h')
+      emit('\x1b[?2031l\x1b[?2031h')
+      expect(replies(transport)).toHaveLength(2)
+      dispose()
+    })
+
+    it('stays silent when one chunk both subscribes and withdraws', async () => {
+      const { transport, emit, dispose } = await connectVisiblePane()
+      // The fish prompt case: the subscription is gone before the program could read a reply.
+      emit('\x1b[?2031h prompt \x1b[?2031l')
+      expect(replies(transport)).toEqual([])
+      dispose()
+    })
+
+    // One fish prompt cycle, exactly as fish's tty_handoff.rs emits it.
+    const FISH_PROMPT_HANDOFF = '\x1b[?2031h\x1b[0m~/orca \x1b[32m❯\x1b[0m \x1b[?2031l'
+
+    it('stays silent across three fish prompts', async () => {
+      const { transport, emit, dispose } = await connectVisiblePane()
+      emit(FISH_PROMPT_HANDOFF)
+      emit(FISH_PROMPT_HANDOFF)
+      emit(FISH_PROMPT_HANDOFF)
+      expect(replies(transport)).toEqual([])
+      dispose()
+    })
+
+    it('leaves no stale subscription behind after a fish prompt cycle', async () => {
+      const { deps, emit, dispose } = await connectVisiblePane()
+      emit(FISH_PROMPT_HANDOFF)
+      // A later theme flip must not push CSI 997 at a shell that unsubscribed.
+      expect(deps.paneMode2031Ref.current.get(1)).toBeUndefined()
+      dispose()
+    })
+
+    it('answers once when a TUI subscribes at the end of a fish prompt chunk', async () => {
+      const { transport, emit, dispose } = await connectVisiblePane()
+      emit(`${FISH_PROMPT_HANDOFF}\x1b[?2031h`)
+      expect(replies(transport)).toHaveLength(1)
+      dispose()
+    })
+
+    it('answers a subscribe whose withdrawal never arrives', async () => {
+      const { transport, emit, dispose } = await connectVisiblePane()
+      // A real TUI: subscribe now, unsubscribe minutes later on exit.
+      emit('\x1b[?2031h')
+      emit('painting the ui')
+      expect(replies(transport)).toHaveLength(1)
+      dispose()
+    })
+
+    it('drops a live subscription when a later chunk withdraws it', async () => {
+      const { deps, emit, dispose } = await connectVisiblePane()
+      // A TUI that exits: the earlier chunk really did register, so the withdrawal has
+      // state to undo — otherwise a theme flip pushes CSI 997 at the shell that replaced it.
+      emit('\x1b[?2031h')
+      expect(deps.paneMode2031Ref.current.get(1)).toBe(true)
+      emit('\x1b[?2031l')
+      expect(deps.paneMode2031Ref.current.get(1)).toBeUndefined()
+      expect(deps.paneLastThemeModeRef.current.get(1)).toBeUndefined()
+      dispose()
+    })
+
+    it('discards a half-read escape prefix when the pane swaps PTYs', async () => {
+      const { transport, emit, dispose } = await connectVisiblePane()
+      // Why: the tail is a byte range from the old stream. Splicing it onto the first
+      // chunk of a replacement PTY fabricates a subscribe no program ever sent.
+      transport.serializeBuffer = vi.fn().mockResolvedValue(null)
+      emit('\x1b[?20')
+      // droppedOutput latches the hidden-restore PTY id, which is what detects the swap.
+      emit('', { droppedOutput: true })
+      transport.getPtyId.mockReturnValue('pty-id-2')
+
+      emit('31h')
+
+      expect(replies(transport)).toEqual([])
+      dispose()
+    })
   })
 
   it('answers hidden Codex mode 2031 subscribes split across becoming visible', async () => {
