@@ -56,6 +56,10 @@ describe('COMMIT_MESSAGE_AGENT_SPECS', () => {
     expect(COMMIT_MESSAGE_AGENT_SPECS.copilot?.defaultModelId).toBe('gpt-5.4')
     expect(COMMIT_MESSAGE_AGENT_SPECS.copilot?.models.map((m) => m.id)).toEqual([
       'auto',
+      'claude-opus-5',
+      'claude-opus-5-fast',
+      'claude-sonnet-5',
+      'claude-fable-5',
       'claude-haiku-4.5',
       'claude-sonnet-4.5',
       'claude-sonnet-4.6',

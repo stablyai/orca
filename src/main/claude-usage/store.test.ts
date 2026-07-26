@@ -254,6 +254,69 @@ describe('ClaudeUsageStore', () => {
     ).toBeCloseTo(36.75)
   })
 
+  it('prices Claude 5-series models with current Anthropic rates', async () => {
+    const store = createStoreWithState({
+      dailyAggregates: [
+        {
+          day: '2026-07-25',
+          model: 'claude-opus-5-20260724',
+          projectKey: 'worktree:repo-1::/workspace/repo-a',
+          projectLabel: 'Repo A',
+          repoId: 'repo-1',
+          worktreeId: 'repo-1::/workspace/repo-a',
+          turnCount: 1,
+          zeroCacheReadTurnCount: 0,
+          inputTokens: 1_000_000,
+          outputTokens: 1_000_000,
+          cacheReadTokens: 1_000_000,
+          cacheWriteTokens: 1_000_000
+        },
+        {
+          day: '2026-07-25',
+          model: 'anthropic/claude-fable-5',
+          projectKey: 'worktree:repo-1::/workspace/repo-a',
+          projectLabel: 'Repo A',
+          repoId: 'repo-1',
+          worktreeId: 'repo-1::/workspace/repo-a',
+          turnCount: 1,
+          zeroCacheReadTurnCount: 0,
+          inputTokens: 1_000_000,
+          outputTokens: 1_000_000,
+          cacheReadTokens: 1_000_000,
+          cacheWriteTokens: 1_000_000
+        },
+        {
+          day: '2026-07-25',
+          model: 'claude-sonnet-5-thinking',
+          projectKey: 'worktree:repo-1::/workspace/repo-a',
+          projectLabel: 'Repo A',
+          repoId: 'repo-1',
+          worktreeId: 'repo-1::/workspace/repo-a',
+          turnCount: 1,
+          zeroCacheReadTurnCount: 0,
+          inputTokens: 1_000_000,
+          outputTokens: 1_000_000,
+          cacheReadTokens: 1_000_000,
+          cacheWriteTokens: 1_000_000
+        }
+      ]
+    })
+
+    const summary = await store.getSummary('orca', '30d')
+    const breakdown = await store.getBreakdown('orca', '30d', 'model')
+
+    expect(summary.estimatedCostUsd).toBeCloseTo(124.95)
+    expect(
+      breakdown.find((row) => row.key === 'claude-opus-5-20260724')?.estimatedCostUsd
+    ).toBeCloseTo(36.75)
+    expect(
+      breakdown.find((row) => row.key === 'anthropic/claude-fable-5')?.estimatedCostUsd
+    ).toBeCloseTo(73.5)
+    expect(
+      breakdown.find((row) => row.key === 'claude-sonnet-5-thinking')?.estimatedCostUsd
+    ).toBeCloseTo(14.7)
+  })
+
   it('prices unknown newer Opus 4 point releases with current Opus rates', async () => {
     const store = createStoreWithState({
       dailyAggregates: [

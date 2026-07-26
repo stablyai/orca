@@ -59,12 +59,19 @@ const SONNET_LONG_CONTEXT_PRICING = {
 } satisfies Partial<ClaudeModelPricing>
 
 const MODEL_PRICING: Record<string, ClaudeModelPricing> = {
+  'claude-fable-5': { input: 10, output: 50, cacheRead: 1, cacheWrite: 12.5 },
+  'claude-opus-5': { input: 5, output: 25, cacheRead: 0.5, cacheWrite: 6.25 },
   'claude-opus-4-8': { input: 5, output: 25, cacheRead: 0.5, cacheWrite: 6.25 },
   'claude-opus-4-7': { input: 5, output: 25, cacheRead: 0.5, cacheWrite: 6.25 },
   'claude-opus-4-6': { input: 5, output: 25, cacheRead: 0.5, cacheWrite: 6.25 },
   'claude-opus-4-5': { input: 5, output: 25, cacheRead: 0.5, cacheWrite: 6.25 },
   'claude-opus-4-1': { input: 15, output: 75, cacheRead: 1.5, cacheWrite: 18.75 },
   'claude-opus-4': { input: 15, output: 75, cacheRead: 1.5, cacheWrite: 18.75 },
+  // Why: Sonnet 5 introductory pricing ($2/$10, cache 0.2/2.5) is in effect
+  // through 2026-08-31; standard pricing $3/$15 (cache 0.3/3.75) starts
+  // 2026-09-01. No long-context surcharge: 4.6+ models include the full 1M
+  // context window at standard rates.
+  'claude-sonnet-5': { input: 2, output: 10, cacheRead: 0.2, cacheWrite: 2.5 },
   'claude-sonnet-4-6': {
     input: 3,
     output: 15,
@@ -102,6 +109,9 @@ const MODEL_ALIASES: Record<string, string> = {
   'claude-opus-4.8-thinking': 'claude-opus-4-8',
   'claude-opus-4.6-thinking': 'claude-opus-4-6',
   'claude-sonnet-4.6-thinking': 'claude-sonnet-4-6',
+  'claude-opus-5-thinking': 'claude-opus-5',
+  'claude-sonnet-5-thinking': 'claude-sonnet-5',
+  'claude-fable-5-thinking': 'claude-fable-5',
   'claude-opus-4-8-thinking': 'claude-opus-4-8',
   'claude-opus-4-6-thinking': 'claude-opus-4-6',
   'claude-sonnet-4-6-thinking': 'claude-sonnet-4-6'
@@ -155,6 +165,15 @@ function normalizeModelForPricing(model: string | null): string | null {
   const alias = MODEL_ALIASES[lower]
   if (alias) {
     return alias
+  }
+  if (hasClaudeModelVersion(lower, 'fable', '5')) {
+    return 'claude-fable-5'
+  }
+  if (hasClaudeModelVersion(lower, 'opus', '5')) {
+    return 'claude-opus-5'
+  }
+  if (hasClaudeModelVersion(lower, 'sonnet', '5')) {
+    return 'claude-sonnet-5'
   }
   if (hasClaudeModelVersion(lower, 'opus', '4-8')) {
     return 'claude-opus-4-8'
