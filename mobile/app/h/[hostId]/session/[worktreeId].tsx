@@ -13,7 +13,6 @@ import {
   Keyboard,
   Platform,
   ActivityIndicator,
-  type KeyboardEvent,
   type LayoutChangeEvent,
   type ListRenderItem
 } from 'react-native'
@@ -211,12 +210,16 @@ import { MobileBrowserTabActionSheet } from '../../../../src/session/MobileBrows
 import { useMobileNativeChatController } from '../../../../src/session/use-mobile-native-chat-controller'
 import { useMobileNativeChatReadability } from '../../../../src/session/use-mobile-native-chat-readability'
 import { useMobileNativeChatInputLease } from '../../../../src/session/use-mobile-native-chat-input-lease'
+import * as sessionKeyboard from '../../../../src/session/use-mobile-session-keyboard-height'
 import { getMobileTerminalActionSheetActions } from '../../../../src/session/mobile-terminal-action-sheet-actions'
 import * as nativeChatTerminalStream from '../../../../src/session/mobile-native-chat-terminal-stream'
 import { mobileNativeChatScopeKey } from '../../../../src/session/mobile-native-chat-scope-key'
 import { useMobileNativeChatTerminalStream } from '../../../../src/session/use-mobile-native-chat-terminal-stream'
 import { subscribeMobileTerminalSafely } from '../../../../src/session/mobile-terminal-stream-subscribe'
+import { recoverMobileTerminalSubscription } from '../../../../src/session/mobile-terminal-subscription-recovery'
+import { recordMobileTerminalActivationFailure } from '../../../../src/session/mobile-terminal-retry-delay'
 import { activateMobileSessionTab } from '../../../../src/session/mobile-session-tab-activation'
+import { preservePendingSessionTab } from '../../../../src/session/pending-session-tab-preservation'
 import { MobileTerminalDiagnostics } from '../../../../src/session/mobile-terminal-diagnostics'
 import { runAcceptedMobileSessionTabsEffects } from '../../../../src/session/mobile-session-tabs-accepted-effects'
 import type {
@@ -959,8 +962,8 @@ export default function SessionScreen() {
     () => getVisibleTerminalAccessoryKeys(visibleBuiltInIds),
     [visibleBuiltInIds]
   )
-  // Why: Expo SDK 55 edge-to-edge doesn't resize the window on IME open, so track keyboard height ourselves and lift the input without resizing the desktop PTY.
-  const [keyboardHeight, setKeyboardHeight] = useState(0)
+  const [pendingTerminalActivationRetryRevision, setPendingTerminalActivationRetryRevision] =
+    useState(0)
   // Why: server-authoritative display mode per terminal, populated from subscribe responses.
   const [terminalModes, setTerminalModes] = useState<Map<string, MobileDisplayMode>>(new Map())
   const [terminalKeyboardMetrics, setTerminalKeyboardMetrics] = useState<
@@ -1017,8 +1020,12 @@ export default function SessionScreen() {
   const pendingBrowserFocusPageIdRef = useRef<string | null>(null)
   const switchSessionTabRef = useRef<((tab: MobileSessionTab) => void) | null>(null)
   const pendingTerminalActivationAttemptRef = useRef<string | null>(null)
+  const pendingTerminalActivationFailuresRef = useRef<{ key: string; count: number } | null>(null)
   // Why: route the terminal URL tap through a ref so it runs the current handleCreateBrowser closure (the memoized one may hold a null-client render).
   const handleCreateBrowserRef = useRef<((rawUrl?: string) => Promise<boolean>) | null>(null)
+  const recoverNativeChatInputRef = useRef<
+    (handle: string, tabId: string | null) => Promise<boolean>
+  >(async () => false)
 
   const initialEmptySessionAutoCreateRef = useRef<string | null>(null)
   const markdownSaveSeqRef = useRef<Map<string, number>>(new Map())
@@ -1150,20 +1157,19 @@ export default function SessionScreen() {
     lockReason: nativeChatInputLockReason,
     markReady: markNativeChatInputLeaseReady,
     clear: clearNativeChatInputLease
-  } = useMobileNativeChatInputLease({
-    activeHandle,
-    connected: connState === 'connected'
-  })
+  } = useMobileNativeChatInputLease({ activeHandle, connected: connState === 'connected' })
   const nativeChatController = useMobileNativeChatController({
     client,
     hostId,
     worktreeId,
     activeSessionTab,
     activeSessionTabId,
+    activeSessionTabIdRef,
     activeHandleRef,
     deviceTokenRef,
     nativeChatTranscriptIsLocalReadable,
     nativeChatInputLeaseReady,
+    recoverInputLease: (handle, tabId) => recoverNativeChatInputRef.current(handle, tabId),
     onSendError: showNativeChatSendError
   })
   const { toggleTabChatView, showNativeChat, showNativeChatRef } = nativeChatController
@@ -1346,7 +1352,7 @@ export default function SessionScreen() {
   )
 
   const subscribeToTerminal = useCallback(
-    (handle: string) => {
+    (handle: string, recoveryAttempt = 0) => {
       const diagnostics = terminalDiagnosticsRef.current
       const logSkippedGate = (reason: string) =>
         diagnostics.streamSkipped(handle, reason, handle === activeHandleRef.current)
@@ -1383,7 +1389,16 @@ export default function SessionScreen() {
       const seq = (subscribeSeqRef.current.get(handle) ?? 0) + 1
       subscribeSeqRef.current.set(handle, seq)
       diagnostics.streamArmed(handle, seq, viewportRef.current)
-
+      const recoverSubscription = () =>
+        recoverMobileTerminalSubscription({
+          handle,
+          attempt: recoveryAttempt,
+          unsubscribe: unsubscribeTerminalRef.current,
+          subscribe: subscribeToTerminal,
+          isCurrent: () =>
+            [activeHandleRef.current, pendingActiveTerminalHandleRef.current].includes(handle),
+          schedule: scheduleDelayedAction
+        })
       // Why: viewport is embedded in the subscribe params so the server auto-fits before serializing scrollback (no focus→safeFit race).
       const unsub = subscribeMobileTerminalSafely(
         client,
@@ -1403,9 +1418,10 @@ export default function SessionScreen() {
           const data = result as Record<string, unknown>
           diagnostics.firstStreamEvent(handle, seq, data.type)
           if (data.type === 'end' || data.type === 'error') {
-            unsubscribeTerminalRef.current(handle)
+            recoverSubscription()
             return
           }
+          recoveryAttempt = 0
           if (data.type === 'subscribed') {
             markNativeChatInputLeaseReady(handle)
             return
@@ -1550,9 +1566,8 @@ export default function SessionScreen() {
             scheduleDelayedAction(() => getTerminalRef(handle)?.resetZoom(), 200)
           }
         },
-        () => unsubscribeTerminalRef.current(handle)
+        recoverSubscription
       )
-
       if (subscribeSeqRef.current.get(handle) === seq) {
         terminalUnsubsRef.current.set(handle, unsub)
       } else {
@@ -1713,10 +1728,15 @@ export default function SessionScreen() {
         closedTabTombstonesRef.current,
         Date.now()
       )
-      const presentTabIds = new Set(nextTabs.map((tab) => tab.id))
       const orphanedDraftTabs: MobileSessionTab[] = []
       const currentMarkdownDocs = markdownDocsRef.current
       const currentSessionTabs = sessionTabsRef.current
+      nextTabs = preservePendingSessionTab(
+        nextTabs,
+        currentSessionTabs,
+        pendingActiveSessionTabIdRef.current
+      )
+      const presentTabIds = new Set(nextTabs.map((tab) => tab.id))
       for (const [tabId, doc] of currentMarkdownDocs) {
         if (doc.status !== 'ready' || !doc.isDirty || presentTabIds.has(tabId)) {
           continue
@@ -2335,6 +2355,16 @@ export default function SessionScreen() {
       onFetchFailed: reportSessionTabsFetchFailed,
       onFetchErrored: reportSessionTabsFetchErrored
     })
+  recoverNativeChatInputRef.current = nativeChatTerminalStream.createMobileNativeChatInputRecovery({
+    isConnected: () => connStateRef.current === 'connected',
+    getActiveHandle: () => activeHandleRef.current,
+    getActiveSessionTabId: () => activeSessionTabIdRef.current,
+    isActiveTerminal: () => activeSessionTabTypeRef.current === 'terminal',
+    isLeaseReady: () => nativeChatInputLeaseReadyRef.current,
+    reconcile: () => fetchSessionTabs().then(() => fetchTerminals()),
+    unsubscribe: unsubscribeTerminal,
+    subscribe: subscribeToTerminal
+  })
 
   useEffect(() => {
     if (connState === 'connected') {
@@ -2512,24 +2542,8 @@ export default function SessionScreen() {
     subscribeToTerminal
   })
 
-  useEffect(() => {
-    const onShow = (e: KeyboardEvent) => {
-      notifyKeyboardVisibility(true)
-      setKeyboardHeight(e.endCoordinates?.height ?? 0)
-    }
-    const onHide = () => {
-      notifyKeyboardVisibility(false)
-      setKeyboardHeight(0)
-    }
-    const showEvent = Platform.OS === 'ios' ? 'keyboardWillShow' : 'keyboardDidShow'
-    const hideEvent = Platform.OS === 'ios' ? 'keyboardWillHide' : 'keyboardDidHide'
-    const showSub = Keyboard.addListener(showEvent, onShow)
-    const hideSub = Keyboard.addListener(hideEvent, onHide)
-    return () => {
-      showSub.remove()
-      hideSub.remove()
-    }
-  }, [notifyKeyboardVisibility])
+  // Why: Expo SDK 55 edge-to-edge doesn't resize the window on IME open.
+  const keyboardHeight = sessionKeyboard.useMobileSessionKeyboardHeight(notifyKeyboardVisibility)
 
   const scrollActiveTabIntoView = useCallback((tabId: string | null, animated: boolean) => {
     if (!tabId) {
@@ -2593,6 +2607,7 @@ export default function SessionScreen() {
     pendingActiveTerminalHandleRef.current = null
     pendingBrowserFocusPageIdRef.current = null
     pendingTerminalActivationAttemptRef.current = null
+    pendingTerminalActivationFailuresRef.current = null
     initialEmptySessionAutoCreateRef.current = null
     terminalDiagnosticsRef.current.resetRoute()
     appliedSnapshotMarkerRef.current = { epoch: null, version: -1 }
@@ -4139,17 +4154,26 @@ export default function SessionScreen() {
 
   useEffect(() => {
     if (!client || connState !== 'connected' || !activePendingTerminalTab) {
-      if (connState !== 'connected' || !activePendingTerminalTab) {
-        pendingTerminalActivationAttemptRef.current = null
-      }
+      pendingTerminalActivationAttemptRef.current = null
+      pendingTerminalActivationFailuresRef.current = null
       return
     }
     const activationKey = `${worktreeId}:${activePendingTerminalTab.id}:${activePendingTerminalTab.leafId ?? ''}`
     if (pendingTerminalActivationAttemptRef.current === activationKey) {
       return
     }
-    // Why: a server-owned tab can be active but still pending; activation is the RPC that materializes its PTY handle.
     pendingTerminalActivationAttemptRef.current = activationKey
+    const recoverPendingActivation = () => {
+      const retryDelay = recordMobileTerminalActivationFailure(
+        pendingTerminalActivationFailuresRef,
+        pendingTerminalActivationAttemptRef,
+        activationKey
+      )
+      scheduleDelayedAction(() => {
+        void fetchSessionTabs()
+        setPendingTerminalActivationRetryRevision((revision) => revision + 1)
+      }, retryDelay)
+    }
     void activateMobileSessionTab(client, {
       worktree: `id:${worktreeId}`,
       tabId: activePendingTerminalTab.id,
@@ -4159,19 +4183,16 @@ export default function SessionScreen() {
     })
       .then((response) => {
         if (!response.ok) {
-          if (pendingTerminalActivationAttemptRef.current === activationKey) {
-            pendingTerminalActivationAttemptRef.current = null
-          }
+          recoverPendingActivation()
           return
         }
+        pendingTerminalActivationFailuresRef.current = null
         applySessionTabs((response as RpcSuccess).result as SessionTabsResult)
         scheduleDelayedAction(() => void fetchSessionTabs(), 300)
         scheduleDelayedAction(() => void fetchSessionTabs(), 1200)
       })
       .catch(() => {
-        if (pendingTerminalActivationAttemptRef.current === activationKey) {
-          pendingTerminalActivationAttemptRef.current = null
-        }
+        recoverPendingActivation()
       })
   }, [
     activePendingTerminalTab,
@@ -4179,6 +4200,7 @@ export default function SessionScreen() {
     client,
     connState,
     fetchSessionTabs,
+    pendingTerminalActivationRetryRevision,
     scheduleDelayedAction,
     worktreeId
   ])
@@ -4225,13 +4247,11 @@ export default function SessionScreen() {
         ? `${verdictDisplayLabel(connectionVerdict)} — tap to retry`
         : MOBILE_SESSION_STATUS_LABELS[connState]
 
-  // Why: iOS keyboard height includes the home-indicator inset; Android IME height does not.
-  const keyboardLift =
-    keyboardHeight > 0
-      ? Platform.OS === 'ios'
-        ? Math.max(0, keyboardHeight - insets.bottom)
-        : keyboardHeight
-      : 0
+  const keyboardLift = sessionKeyboard.resolveMobileSessionKeyboardLift({
+    keyboardHeight,
+    bottomInset: insets.bottom,
+    platform: Platform.OS
+  })
   const activeTerminalKeyboardLift = (() => {
     if (keyboardLift <= 0 || !activeHandle) {
       return 0
@@ -4713,6 +4733,9 @@ export default function SessionScreen() {
                 ))}
                 <MobileNativeChatOverlay
                   controller={nativeChatController}
+                  sessionKey={
+                    mobileNativeChatScopeKey(hostId, worktreeId, activeSessionTabId) ?? ''
+                  }
                   images={nativeChatImages}
                   onMicPress={handleDictationToggle}
                   micActive={dictation.isRecording}

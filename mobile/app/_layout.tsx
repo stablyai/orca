@@ -12,6 +12,7 @@ import { getNotificationNavigationPath } from '../src/notifications/notification
 import { loadHosts } from '../src/transport/host-store'
 import { extractPairingCodeFromUrl } from '../src/transport/pairing'
 import { recoverMobileRelayPairing } from '../src/transport/mobile-relay-pairing-recovery'
+import { MobileLocaleProvider } from '../src/localization/mobile-locale-provider'
 
 // Why: keeps the native splash screen visible until the React tree is mounted
 // and ready to render. Without this the user sees a blank white/black frame
@@ -33,6 +34,14 @@ Notifications.setNotificationHandler({
 })
 
 export default function RootLayout() {
+  return (
+    <MobileLocaleProvider>
+      <RootNavigator />
+    </MobileLocaleProvider>
+  )
+}
+
+function RootNavigator() {
   const router = useRouter()
   const handledNotificationIdsRef = useRef<Set<string>>(new Set())
 
@@ -183,6 +192,7 @@ export default function RootLayout() {
             options={{ headerShown: false, presentation: 'modal', gestureEnabled: false }}
           />
           <Stack.Screen name="settings" options={{ headerShown: false }} />
+          <Stack.Screen name="language-settings" options={{ headerShown: false }} />
           <Stack.Screen name="terminal-settings" options={{ headerShown: false }} />
           <Stack.Screen name="native-chat-settings" options={{ headerShown: false }} />
           <Stack.Screen name="browser-settings" options={{ headerShown: false }} />

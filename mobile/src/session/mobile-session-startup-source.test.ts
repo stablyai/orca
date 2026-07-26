@@ -4,11 +4,11 @@ import { describe, expect, it } from 'vitest'
 const source = readFileSync(
   new URL('../../app/h/[hostId]/session/[worktreeId].tsx', import.meta.url),
   'utf8'
-)
+).replaceAll('\r\n', '\n')
 const reconciliationHookSource = readFileSync(
   new URL('./use-mobile-session-tabs-reconciliation.ts', import.meta.url),
   'utf8'
-)
+).replaceAll('\r\n', '\n')
 
 function sliceBetween(startPattern: string, endPattern: string): string {
   const start = source.indexOf(startPattern)
@@ -114,6 +114,24 @@ describe('mobile session startup', () => {
       'applySessionTabs((response as RpcSuccess).result as SessionTabsResult)'
     )
     expect(pendingActivationEffect).toContain('scheduleDelayedAction(() => void fetchSessionTabs()')
+  })
+
+  it('reconciles after a pending terminal activation error instead of loading forever', () => {
+    const pendingActivationEffect = sliceBetween(
+      "if (!client || connState !== 'connected' || !activePendingTerminalTab) {",
+      'const showLoadingState ='
+    )
+    const recovery = pendingActivationEffect.slice(
+      pendingActivationEffect.indexOf('const recoverPendingActivation ='),
+      pendingActivationEffect.indexOf('void activateMobileSessionTab')
+    )
+    const catchBranch = pendingActivationEffect.slice(
+      pendingActivationEffect.indexOf('.catch(() => {')
+    )
+
+    expect(recovery).toContain('fetchSessionTabs()')
+    expect(recovery).toContain('recordMobileTerminalActivationFailure(')
+    expect(catchBranch).toContain('recoverPendingActivation()')
   })
 
   it('keeps ready terminal taps local while publishing caller selection', () => {

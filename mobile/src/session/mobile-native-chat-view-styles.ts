@@ -56,11 +56,20 @@ export const styles = StyleSheet.create({
   },
   listWrap: {
     flex: 1,
+    minHeight: 0,
+    overflow: 'hidden',
     position: 'relative'
+  },
+  list: {
+    flex: 1,
+    minHeight: 0
   },
   listContent: {
     paddingVertical: spacing.sm,
     flexGrow: 1
+  },
+  composerWrap: {
+    flexShrink: 0
   },
   center: {
     flex: 1,

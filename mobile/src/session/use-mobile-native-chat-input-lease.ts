@@ -12,7 +12,9 @@ export function useMobileNativeChatInputLease(args: {
   clear: (handle?: string) => void
 } {
   const [readyHandles, setReadyHandles] = useState<Set<string>>(new Set())
-  const ready = args.activeHandle != null && readyHandles.has(args.activeHandle)
+  const activeHandleRef = useRef(args.activeHandle)
+  const connectedRef = useRef(args.connected)
+  const ready = args.connected && args.activeHandle != null && readyHandles.has(args.activeHandle)
   // Why: absence of an acknowledgement proves only that setup is still pending;
   // the protocol does not report evidence that another client owns the floor.
   const lockReason: MobileNativeChatInputLockReason | null = !args.connected
@@ -21,16 +23,30 @@ export function useMobileNativeChatInputLease(args: {
       ? null
       : 'waiting'
   const readyRef = useRef(ready)
+  activeHandleRef.current = args.activeHandle
+  connectedRef.current = args.connected
   readyRef.current = ready
   useEffect(() => {
     if (!args.connected) {
+      readyRef.current = false
       setReadyHandles(new Set())
     }
   }, [args.connected])
   const markReady = useCallback((handle: string) => {
-    setReadyHandles((current) => new Set(current).add(handle))
+    if (connectedRef.current && activeHandleRef.current === handle) {
+      readyRef.current = true
+    }
+    setReadyHandles((current) => {
+      if (current.has(handle)) {
+        return current
+      }
+      return new Set(current).add(handle)
+    })
   }, [])
   const clear = useCallback((handle?: string) => {
+    if (handle === undefined || activeHandleRef.current === handle) {
+      readyRef.current = false
+    }
     setReadyHandles((current) => {
       if (handle === undefined) {
         return new Set()

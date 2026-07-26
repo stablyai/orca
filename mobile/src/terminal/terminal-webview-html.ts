@@ -2,12 +2,14 @@
 import type { RuntimeMobileTerminalTheme } from '../../../src/shared/runtime-types'
 import { colors } from '../theme/mobile-theme'
 import { TERMINAL_TEXT_SCALES } from '../storage/preferences'
+import { TERMINAL_SCROLL_COORDINATOR_JS } from './terminal-scroll-coordinator-injected'
 import { TERMINAL_PATH_TAP_JS } from './terminal-path-tap-injected'
 import { XTERM_ENGINE_CSS, XTERM_ENGINE_JS } from './terminal-webview-engine.generated'
 import { TERMINAL_REFLOW_JS } from './terminal-webview-reflow-injected'
 import { TERMINAL_SURFACE_SWAP_JS } from './terminal-webview-surface-swap-injected'
 import { TERMINAL_TAP_DISPATCH_JS } from './terminal-webview-tap-dispatch-injected'
 import { TERMINAL_WEBVIEW_THEME_JS } from './terminal-webview-theme-injected'
+import { TERMINAL_WRITE_PUMP_JS } from './terminal-webview-write-pump-injected'
 import { TERMINAL_QUERY_REPLY_JS } from './terminal-webview-query-reply-injected'
 import { URL_TAP_WEBVIEW_JS } from './terminal-webview-url-tap'
 import { TERMINAL_WEBGL_RECOVERY_JS } from './terminal-webview-webgl-recovery-injected'
@@ -276,17 +278,23 @@ window.onerror = function(msg) {
         var cols = Math.floor(window.innerWidth / cellW);
         if (cols < MIN_FIT_COLS) return;
         var rows = Math.max(8, Math.floor(window.innerHeight / cellH));
-        term.resize(cols, rows);
+        scrollCoordinator.dispatch({
+          type: 'viewport-change',
+          generation: terminalGeneration,
+          change: { cols: cols, rows: rows, reason: 'font' }
+        });
+        scrollCoordinator.dispatch({ type: 'viewport-committed', generation: terminalGeneration });
       }
-      applyFitScale('text-scale');
     });
   }
   var panX = 0, panY = 0;
-  var smoothScrollOffsetY = 0;
-  var pendingNormalScrollDeltaY = 0;
-  var normalScrollFrameId = null;
+  var pendingScrollDeltaY = 0;
+  var pendingScrollClientX = 0;
+  var pendingScrollClientY = 0;
+  var scrollFrameId = null;
   var initRows = 24;
   var terminalGeneration = 0;
+  var lastViewportWidth = window.innerWidth;
   var defaultTheme = ${JSON.stringify(DEFAULT_TERMINAL_THEME)};
   var terminalThemeInput = null;
   var terminalTheme = defaultTheme;
@@ -306,6 +314,55 @@ window.onerror = function(msg) {
   // once when the first live data chunk arrives so a wider line that pushes
   // scrollWidth past the previously-measured value gets re-scaled to fit.
   var firstDataPending = false;
+
+  ${TERMINAL_SCROLL_COORDINATOR_JS}
+  var scrollCoordinator = createTerminalScrollCoordinator({
+    readMetrics: function() {
+      if (!term || !term.buffer || !term.buffer.active) return null;
+      var buffer = term.buffer.active;
+      return {
+        baseY: buffer.baseY || 0,
+        viewportY: buffer.viewportY || 0,
+        bufferMode: buffer.type === 'alternate' ? 'alternate' : 'normal'
+      };
+    },
+    scrollLines: function(lines) {
+      if (!term) return;
+      try { term.scrollLines(lines); } catch (e) {}
+    },
+    scrollToBottom: function() {
+      if (!term) return;
+      try { term.scrollToBottom(); } catch (e) {}
+      updateScrollIndicator(false);
+    },
+    scrollToLine: function(line) {
+      if (!term) return;
+      try { term.scrollToLine(line); } catch (e) {}
+      updateScrollIndicator(false);
+    },
+    changeViewport: function(change) {
+      if (!term) return;
+      if (change.reason === 'reflow' && isAlternateBufferActive()) return;
+      if (change.reason !== 'window') {
+        initRows = change.rows || initRows;
+        term.resize(change.cols || term.cols, change.rows || term.rows);
+      }
+      applyFitScale(change.reason + '-viewport');
+      repositionOverlay();
+      clampPan();
+      updateTransform();
+      if (change.reason === 'resize') {
+        notify({ type: 'ready', cols: change.cols, rows: change.rows });
+      }
+    },
+    routeTerminalInput: function(lines, clientX, clientY) {
+      routeTerminalInputLines(lines, clientX, clientY);
+    },
+    shouldRouteToTerminalInput: shouldRouteScrollToTerminalInput,
+    revealIndicator: function() {
+      updateScrollIndicator(true);
+    }
+  });
 
   // Diagnostic logger — bridges WebView console.log to RN via postMessage.
   // Tag with [fit] so it's easy to filter in the Expo/Metro logs.
@@ -479,7 +536,7 @@ ${TERMINAL_WEBVIEW_THEME_JS}
     userScale = 1;
     panX = 0;
     panY = 0;
-    smoothScrollOffsetY = 0;
+    scrollCoordinator.dispatch({ type: 'reset-gesture', generation: terminalGeneration });
     updateTransform();
     adjustRowsForViewport();
 
@@ -639,25 +696,7 @@ ${TERMINAL_WEBVIEW_THEME_JS}
     return '';
   }
 
-  function pumpWrites(gen) {
-    if (!ready || !term || writesDraining || gen !== terminalGeneration) return;
-    var next = nextQueuedWrite();
-    if (typeof next !== 'string') {
-      if (typeof next === 'function') return next(), pumpWrites(gen);
-      var callbacks = afterDrainCallbacks;
-      afterDrainCallbacks = [];
-      for (var i = 0; i < callbacks.length; i++) callbacks[i]();
-      return;
-    }
-    writesDraining = true;
-    // Why: xterm.write() parses asynchronously. Row adjustment/resizing must
-    // wait until replayed SGR attributes have landed in the buffer.
-    term.write(next, function() {
-      if (gen !== terminalGeneration) return;
-      writesDraining = false;
-      pumpWrites(gen);
-    });
-  }
+${TERMINAL_WRITE_PUMP_JS}
 
   function afterWritesDrained(callback) {
     afterDrainCallbacks.push(callback);
@@ -668,13 +707,13 @@ ${TERMINAL_WEBGL_RECOVERY_JS}
 
   function init(cols, rows, initialData, nextTheme, nextFontScale, preserveScroll, nextOscLinks) {
     if (typeof nextFontScale === 'number' && nextFontScale > 0) currentTextScale = nextFontScale;
-    // Why: a width-reflow re-stream rewraps the same content at new cols.
-    // Distance-from-bottom (rows) is the only stable anchor across reflow,
-    // since line counts and cell positions change. null = stay pinned to bottom.
-    var prevB = preserveScroll && term && term.buffer && term.buffer.active ? term.buffer.active : null;
-    var scrollAnchorRows = prevB ? Math.max(0, (prevB.baseY || 0) - (prevB.viewportY || 0)) : -1;
     terminalGeneration++;
     var gen = terminalGeneration;
+    scrollCoordinator.dispatch({
+      type: 'begin-generation',
+      generation: gen,
+      preserveScroll: !!preserveScroll
+    });
     // Why: snapshot replay can contain old queries whose replies must never
     // re-enter the live PTY. Each replacement terminal earns authority anew.
     resetTerminalDataReplyAuthority();
@@ -687,7 +726,7 @@ ${TERMINAL_WEBGL_RECOVERY_JS}
     afterDrainCallbacks = [];
     initRows = rows || 24;
     firstDataPending = true;
-    smoothScrollOffsetY = 0;
+    scrollCoordinator.dispatch({ type: 'reset-gesture', generation: gen });
     mouseModeScanTail = '';
     trackedMouseTrackingMode = 'none';
     sgrMouseMode = false;
@@ -754,11 +793,7 @@ ${TERMINAL_WEBGL_RECOVERY_JS}
       afterWritesDrained(function() {
         if (gen !== terminalGeneration) return;
         commitTerminalSurfaceSwap(surfaceSwap, nextTerm);
-        // Why: restore the reader's place after the rewrapped buffer replays.
-        // Replay lands at bottom, so only act when they were scrolled up (rows>0).
-        if (scrollAnchorRows > 0 && term && term.buffer && term.buffer.active) {
-          try { term.scrollToLine(Math.max(0, (term.buffer.active.baseY || 0) - scrollAnchorRows)); } catch (e) {}
-        }
+        scrollCoordinator.dispatch({ type: 'replay-committed', generation: gen });
         captureInitialOscLinkTexts();
         initialOscLinkRowOffset = 0;
         initialOscLinkEvictionReady = true;
@@ -788,10 +823,12 @@ ${TERMINAL_WEBGL_RECOVERY_JS}
 
   function resize(cols, rows) {
     if (!term) return;
-    initRows = rows || initRows;
-    term.resize(cols || term.cols, rows || term.rows);
-    applyFitScale('resize-msg');
-    notify({ type: 'ready', cols: cols, rows: rows });
+    scrollCoordinator.dispatch({
+      type: 'viewport-change',
+      generation: terminalGeneration,
+      change: { cols: cols, rows: rows, reason: 'resize' }
+    });
+    scrollCoordinator.dispatch({ type: 'viewport-committed', generation: terminalGeneration });
   }
 
   // reflow(): see terminal-webview-reflow-injected.ts (extracted for max-lines).
@@ -1304,10 +1341,9 @@ ${TERMINAL_WEBGL_RECOVERY_JS}
     return repeatSequence(sequence, count);
   }
 
-  function routeScrollLines(lines, clientX, clientY) {
+  function routeTerminalInputLines(lines, clientX, clientY) {
     if (!term || lines === 0) return;
     var mouseTrackingMode = getMouseTrackingMode();
-    var alternateBufferActive = isAlternateBufferActive();
     if (isWheelMouseTrackingMode(mouseTrackingMode)) {
       // Why: xterm sends wheel events to mouse-aware TUIs before considering
       // scrollback, even if the app stays on the normal buffer.
@@ -1323,91 +1359,49 @@ ${TERMINAL_WEBGL_RECOVERY_JS}
       if (fallbackInput) notify({ type: 'terminal-input', bytes: fallbackInput });
       return;
     }
-    if (alternateBufferActive) {
-      // Why: alternate-screen TUIs own their scroll state and xterm has no
-      // scrollback there, so mobile scroll gestures must become terminal input.
-      var input = buildTuiScrollInput(lines, clientX, clientY);
-      if (input) notify({ type: 'terminal-input', bytes: input });
-      return;
-    }
-    term.scrollLines(lines);
+    var input = buildTuiScrollInput(lines, clientX, clientY);
+    if (input) notify({ type: 'terminal-input', bytes: input });
   }
 
-  function clampNormalScrollLines(lines) {
-    if (!term || !term.buffer || !term.buffer.active || lines === 0) return 0;
-    var buffer = term.buffer.active;
-    if (lines > 0) {
-      return Math.min(lines, Math.max(0, buffer.baseY - buffer.viewportY));
-    }
-    return Math.max(lines, -buffer.viewportY);
-  }
-
-  function canScrollNormalBufferDelta(deltaY) {
-    if (!term || !term.buffer || !term.buffer.active || deltaY === 0) return false;
-    var buffer = term.buffer.active;
-    if (deltaY > 0) return buffer.viewportY < buffer.baseY;
-    return buffer.viewportY > 0;
-  }
-
-  function applyNormalBufferScrollDelta(deltaY) {
+  function applyScrollDelta(deltaY, clientX, clientY) {
     if (!term || deltaY === 0) return false;
     var effectiveCellH = getCellHeight() * getTotalScale();
     if (effectiveCellH <= 0) return false;
-    if (!canScrollNormalBufferDelta(deltaY)) {
-      resetSmoothScrollOffset();
-      return false;
-    }
-    smoothScrollOffsetY -= deltaY;
-    var lines = Math.trunc(-smoothScrollOffsetY / effectiveCellH);
-    if (lines !== 0) {
-      var applied = clampNormalScrollLines(lines);
-      if (applied !== 0) {
-        term.scrollLines(applied);
-        // Why: xterm's renderer is row-based. Buffer touch pixels and only
-        // commit whole rows so TUI canvas layers do not shimmer between
-        // fractional transforms and xterm repaints.
-        smoothScrollOffsetY += applied * effectiveCellH;
-      }
-      if (applied !== lines) smoothScrollOffsetY = 0;
-    }
-    var limit = effectiveCellH - 1;
-    if (smoothScrollOffsetY > limit) smoothScrollOffsetY = limit;
-    if (smoothScrollOffsetY < -limit) smoothScrollOffsetY = -limit;
-    updateScrollIndicator(true);
-    return true;
+    return scrollCoordinator.dispatch({
+      type: 'user-scroll-pixels',
+      generation: terminalGeneration,
+      deltaY: deltaY,
+      pixelsPerLine: effectiveCellH,
+      clientX: clientX,
+      clientY: clientY
+    });
   }
 
-  function enqueueNormalBufferScrollDelta(deltaY) {
+  function enqueueScrollDelta(deltaY, clientX, clientY) {
     if (!term || deltaY === 0) return false;
-    if (!canScrollNormalBufferDelta(deltaY)) {
-      resetSmoothScrollOffset();
-      return false;
-    }
-    pendingNormalScrollDeltaY += deltaY;
-    if (normalScrollFrameId !== null) return true;
+    pendingScrollDeltaY += deltaY;
+    pendingScrollClientX = clientX;
+    pendingScrollClientY = clientY;
+    if (scrollFrameId !== null) return true;
     // Why: dense terminal rows are expensive to repaint. Coalesce touchmove
     // deltas into one xterm row-scroll per frame instead of repainting from
     // the input event stream.
-    normalScrollFrameId = requestAnimationFrame(function() {
-      normalScrollFrameId = null;
-      var delta = pendingNormalScrollDeltaY;
-      pendingNormalScrollDeltaY = 0;
-      if (!applyNormalBufferScrollDelta(delta)) {
-        resetSmoothScrollOffset();
-      }
+    scrollFrameId = requestAnimationFrame(function() {
+      scrollFrameId = null;
+      var delta = pendingScrollDeltaY;
+      pendingScrollDeltaY = 0;
+      applyScrollDelta(delta, pendingScrollClientX, pendingScrollClientY);
     });
     return true;
   }
 
-  function resetSmoothScrollOffset() {
-    pendingNormalScrollDeltaY = 0;
-    if (normalScrollFrameId !== null) {
-      cancelAnimationFrame(normalScrollFrameId);
-      normalScrollFrameId = null;
+  function resetScrollGesture() {
+    pendingScrollDeltaY = 0;
+    if (scrollFrameId !== null) {
+      cancelAnimationFrame(scrollFrameId);
+      scrollFrameId = null;
     }
-    if (smoothScrollOffsetY === 0) return;
-    smoothScrollOffsetY = 0;
-    updateScrollIndicator(false);
+    scrollCoordinator.dispatch({ type: 'reset-gesture', generation: terminalGeneration });
   }
 
   function cellToViewportPx(col, absRow) {
@@ -1600,7 +1594,11 @@ ${TERMINAL_WEBGL_RECOVERY_JS}
     edgeScrollTimer = setInterval(function() {
       if (!term || edgeScrollDir === 0) return;
       var beforeY = term.buffer.active.viewportY;
-      term.scrollLines(edgeScrollDir);
+      scrollCoordinator.dispatch({
+        type: 'user-scroll-lines',
+        generation: terminalGeneration,
+        lines: edgeScrollDir
+      });
       var afterY = term.buffer.active.viewportY;
       if (beforeY === afterY) {
         notify({ type: 'haptic', kind: 'edge-bump' });
@@ -1664,7 +1662,7 @@ ${TERMINAL_WEBGL_RECOVERY_JS}
 
   var ts = {
     lastX: 0, lastY: 0, lastTime: 0, velY: 0,
-    accumDelta: 0, momentumId: null, isPinching: false,
+    momentumId: null, isPinching: false,
     pinchDist: 0, pinchScale: 0, pinchSurfX: 0, pinchSurfY: 0
   };
 
@@ -1698,7 +1696,7 @@ ${TERMINAL_WEBGL_RECOVERY_JS}
       }
       if (e.touches.length === 2) {
         ts.isPinching = true;
-        smoothScrollOffsetY = 0;
+        resetScrollGesture();
         ts.pinchDist = getDistance(e.touches[0], e.touches[1]);
         ts.pinchScale = userScale;
         var mx = (e.touches[0].clientX + e.touches[1].clientX) / 2;
@@ -1708,11 +1706,11 @@ ${TERMINAL_WEBGL_RECOVERY_JS}
         ts.pinchSurfY = (my - panY) / total;
       } else if (e.touches.length === 1) {
         ts.isPinching = false;
+        resetScrollGesture();
         ts.lastX = e.touches[0].clientX;
         ts.lastY = e.touches[0].clientY;
         ts.lastTime = Date.now();
         ts.velY = 0;
-        ts.accumDelta = 0;
       }
     }, { capture: true, passive: true });
 
@@ -1759,22 +1757,10 @@ ${TERMINAL_WEBGL_RECOVERY_JS}
 
         var deltaY = ts.lastY - y;
         ts.lastTime = now;
-        if (shouldRouteScrollToTerminalInput()) {
+        if (enqueueScrollDelta(deltaY, x, y)) {
           updateTouchVelocity(deltaY, dt);
-          resetSmoothScrollOffset();
-          var effectiveCellH = getCellHeight() * getTotalScale();
-          ts.accumDelta += deltaY;
-          var lines = Math.trunc(ts.accumDelta / effectiveCellH);
-          if (lines !== 0) {
-            ts.accumDelta -= lines * effectiveCellH;
-            routeScrollLines(lines, x, y);
-          }
         } else {
-          if (enqueueNormalBufferScrollDelta(deltaY)) {
-            updateTouchVelocity(deltaY, dt);
-          } else {
-            ts.velY = 0;
-          }
+          ts.velY = 0;
         }
         ts.lastX = x;
         ts.lastY = y;
@@ -1804,7 +1790,7 @@ ${TERMINAL_WEBGL_RECOVERY_JS}
           ts.lastY = e.touches[0].clientY;
           ts.lastTime = Date.now();
           ts.velY = 0;
-          ts.accumDelta = 0;
+          resetScrollGesture();
         }
         return;
       }
@@ -1817,20 +1803,9 @@ ${TERMINAL_WEBGL_RECOVERY_JS}
           vel *= FRICTION;
           if (Math.abs(vel) < MIN_VEL) { ts.momentumId = null; return; }
           var delta = vel * 16;
-          if (shouldRouteScrollToTerminalInput()) {
-            resetSmoothScrollOffset();
-            var effectiveCellH = getCellHeight() * getTotalScale();
-            ts.accumDelta += delta;
-            var lines = Math.trunc(ts.accumDelta / effectiveCellH);
-            if (lines !== 0) {
-              ts.accumDelta -= lines * effectiveCellH;
-              routeScrollLines(lines, ts.lastX, ts.lastY);
-            }
-          } else {
-            if (!applyNormalBufferScrollDelta(delta)) {
-              ts.momentumId = null;
-              return;
-            }
+          if (!applyScrollDelta(delta, ts.lastX, ts.lastY)) {
+            ts.momentumId = null;
+            return;
           }
           ts.momentumId = requestAnimationFrame(momentumStep);
         }
@@ -1866,15 +1841,23 @@ ${TERMINAL_WEBGL_RECOVERY_JS}
   document.addEventListener('message', handleIncomingMessage);
 
   window.addEventListener('resize', function() {
-    // Why: viewport changed (keyboard open/close, orientation, RN container
-    // size update). Re-fit so the scale matches the new vpWidth — without
-    // this, opening the keyboard leaves the terminal at the old scale even
-    // though there's now less vertical room and the fit ratio may differ.
-    applyFitScale('window-resize');
-    adjustRowsForViewport();
-    repositionOverlay();
-    clampPan();
-    updateTransform();
+    // RN owns keyboard-height refits; changing the WebView transform would add a second scroll owner.
+    if (window.innerWidth === lastViewportWidth) {
+      repositionOverlay();
+      updateScrollIndicator(false);
+      return;
+    }
+    lastViewportWidth = window.innerWidth;
+    scrollCoordinator.dispatch({
+      type: 'viewport-change',
+      generation: terminalGeneration,
+      change: {
+        cols: term ? term.cols : 0,
+        rows: term ? term.rows : initRows,
+        reason: 'window'
+      }
+    });
+    scrollCoordinator.dispatch({ type: 'viewport-committed', generation: terminalGeneration });
   });
 
   if (window.Terminal) {

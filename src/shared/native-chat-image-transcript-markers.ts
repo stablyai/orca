@@ -53,32 +53,47 @@ export function normalizeImageTranscriptMessages(
       normalized.push(message)
       continue
     }
-    const imagePath = imageSourcePathFromText(soleText(message) ?? '')
-    const next = messages[index + 1]
-    if (
-      imagePath &&
-      next?.role === 'user' &&
-      next.source === message.source &&
-      imagePromptMarkerStartsMessage(next)
-    ) {
-      normalized.push({
-        ...next,
-        blocks: [
-          { type: 'image-ref', path: imagePath },
-          ...stripFirstImagePromptMarker(next.blocks)
-        ]
-      })
-      index += 1
-      continue
-    }
-    // A lone `[Image: source: /path]` turn (no following `[Image #1]` prompt —
-    // e.g. an image sent with no caption) still renders as an image chip rather
-    // than the raw marker text.
-    if (imagePath) {
-      normalized.push({
-        ...message,
-        blocks: [{ type: 'image-ref', path: imagePath }]
-      })
+    const firstImagePath = imageSourcePathFromText(soleText(message) ?? '')
+    if (firstImagePath) {
+      const imageMessages = [message]
+      const imagePaths = [firstImagePath]
+      let lastImageIndex = index
+      while (lastImageIndex + 1 < messages.length) {
+        const candidate = messages[lastImageIndex + 1]!
+        const candidatePath =
+          candidate.role === 'user' && candidate.source === message.source
+            ? imageSourcePathFromText(soleText(candidate) ?? '')
+            : null
+        if (!candidatePath) {
+          break
+        }
+        imageMessages.push(candidate)
+        imagePaths.push(candidatePath)
+        lastImageIndex += 1
+      }
+      const prompt = messages[lastImageIndex + 1]
+      if (
+        prompt?.role === 'user' &&
+        prompt.source === message.source &&
+        imagePromptMarkerStartsMessage(prompt)
+      ) {
+        normalized.push({
+          ...prompt,
+          blocks: [
+            ...imagePaths.map((path) => ({ type: 'image-ref' as const, path })),
+            ...stripFirstImagePromptMarker(prompt.blocks)
+          ]
+        })
+        index = lastImageIndex + 1
+        continue
+      }
+      normalized.push(
+        ...imageMessages.map((imageMessage, imageIndex) => ({
+          ...imageMessage,
+          blocks: [{ type: 'image-ref' as const, path: imagePaths[imageIndex]! }]
+        }))
+      )
+      index = lastImageIndex
       continue
     }
     normalized.push({

@@ -22,9 +22,11 @@ import {
   Globe,
   MessageSquare,
   Terminal as TerminalIcon,
-  KeyRound
+  KeyRound,
+  Languages
 } from 'lucide-react-native'
 import { colors, radii, spacing, typography } from '../src/theme/mobile-theme'
+import { useMobileLocale } from '../src/localization/mobile-locale-provider'
 import {
   loadPendingHostCredentialCleanup,
   subscribePendingHostCredentialCleanup
@@ -34,6 +36,7 @@ import { retryPendingHostCredentialCleanup } from '../src/transport/host-store'
 export default function SettingsScreen() {
   const router = useRouter()
   const insets = useSafeAreaInsets()
+  const { t } = useMobileLocale()
   const [pendingCredentialIds, setPendingCredentialIds] = useState<string[]>([])
   const [credentialStorageUnreadable, setCredentialStorageUnreadable] = useState(false)
   const [retryingCredentialCleanup, setRetryingCredentialCleanup] = useState(false)
@@ -98,7 +101,7 @@ export default function SettingsScreen() {
         <Pressable style={styles.backButton} onPress={() => router.back()}>
           <ChevronLeft size={22} color={colors.textSecondary} />
         </Pressable>
-        <Text style={styles.heading}>Settings</Text>
+        <Text style={styles.heading}>{t('settings.title')}</Text>
       </View>
 
       <ScrollView
@@ -111,7 +114,7 @@ export default function SettingsScreen() {
             onPress={() => router.push('/terminal-settings')}
           >
             <TerminalIcon size={16} color={colors.textSecondary} />
-            <Text style={styles.rowLabel}>Terminal</Text>
+            <Text style={styles.rowLabel}>{t('settings.terminal')}</Text>
             <ChevronRight size={16} color={colors.textMuted} />
           </Pressable>
           <View style={styles.separator} />
@@ -120,7 +123,7 @@ export default function SettingsScreen() {
             onPress={() => router.push('/native-chat-settings')}
           >
             <MessageSquare size={16} color={colors.textSecondary} />
-            <Text style={styles.rowLabel}>Chat UI</Text>
+            <Text style={styles.rowLabel}>{t('settings.chatUi')}</Text>
             <ChevronRight size={16} color={colors.textMuted} />
           </Pressable>
           <View style={styles.separator} />
@@ -129,7 +132,7 @@ export default function SettingsScreen() {
             onPress={() => router.push('/browser-settings')}
           >
             <Globe size={16} color={colors.textSecondary} />
-            <Text style={styles.rowLabel}>Browser</Text>
+            <Text style={styles.rowLabel}>{t('settings.browser')}</Text>
             <ChevronRight size={16} color={colors.textMuted} />
           </Pressable>
           <View style={styles.separator} />
@@ -138,7 +141,7 @@ export default function SettingsScreen() {
             onPress={() => router.push('/voice-settings')}
           >
             <Mic size={16} color={colors.textSecondary} />
-            <Text style={styles.rowLabel}>Voice</Text>
+            <Text style={styles.rowLabel}>{t('settings.voice')}</Text>
             <ChevronRight size={16} color={colors.textMuted} />
           </Pressable>
           <View style={styles.separator} />
@@ -147,7 +150,7 @@ export default function SettingsScreen() {
             onPress={() => router.push('/notifications')}
           >
             <Bell size={16} color={colors.textSecondary} />
-            <Text style={styles.rowLabel}>Notifications</Text>
+            <Text style={styles.rowLabel}>{t('settings.notifications')}</Text>
             <ChevronRight size={16} color={colors.textMuted} />
           </Pressable>
           <View style={styles.separator} />
@@ -156,7 +159,7 @@ export default function SettingsScreen() {
             onPress={() => router.push('/troubleshoot')}
           >
             <Wrench size={16} color={colors.textSecondary} />
-            <Text style={styles.rowLabel}>Troubleshooting</Text>
+            <Text style={styles.rowLabel}>{t('settings.troubleshooting')}</Text>
             <ChevronRight size={16} color={colors.textMuted} />
           </Pressable>
           <View style={styles.separator} />
@@ -165,7 +168,16 @@ export default function SettingsScreen() {
             onPress={() => router.push('/about')}
           >
             <Info size={16} color={colors.textSecondary} />
-            <Text style={styles.rowLabel}>About</Text>
+            <Text style={styles.rowLabel}>{t('settings.about')}</Text>
+            <ChevronRight size={16} color={colors.textMuted} />
+          </Pressable>
+          <View style={styles.separator} />
+          <Pressable
+            style={({ pressed }) => [styles.row, pressed && styles.rowPressed]}
+            onPress={() => router.push('/language-settings')}
+          >
+            <Languages size={16} color={colors.textSecondary} />
+            <Text style={styles.rowLabel}>{t('settings.language')}</Text>
             <ChevronRight size={16} color={colors.textMuted} />
           </Pressable>
         </View>
@@ -175,18 +187,23 @@ export default function SettingsScreen() {
             <View style={styles.credentialCleanupRow}>
               <KeyRound size={16} color={colors.statusAmber} />
               <View style={styles.credentialCleanupCopy}>
-                <Text style={styles.credentialCleanupTitle}>Pairing credential cleanup</Text>
+                <Text style={styles.credentialCleanupTitle}>{t('settings.credentialCleanup')}</Text>
                 <Text accessibilityLiveRegion="polite" style={styles.rowHint}>
                   {credentialRetryFailed
-                    ? "Cleanup still couldn't be confirmed. Try again later."
+                    ? t('settings.cleanupRetryFailed')
                     : pendingCredentialCount > 0
-                      ? `Couldn't confirm cleanup for ${pendingCredentialCount} credential${pendingCredentialCount === 1 ? '' : 's'} on this device.`
-                      : "Couldn't check cleanup status on this device. Retry to be safe."}
+                      ? t(
+                          pendingCredentialCount === 1
+                            ? 'settings.cleanupPendingOne'
+                            : 'settings.cleanupPendingMany',
+                          { count: pendingCredentialCount }
+                        )
+                      : t('settings.cleanupUnreadable')}
                 </Text>
               </View>
               <Pressable
                 accessibilityRole="button"
-                accessibilityLabel="Retry clearing pairing credentials"
+                accessibilityLabel={t('settings.retryCleanupA11y')}
                 accessibilityState={{
                   busy: retryingCredentialCleanup,
                   disabled: retryingCredentialCleanup
@@ -202,7 +219,7 @@ export default function SettingsScreen() {
                 {retryingCredentialCleanup ? (
                   <ActivityIndicator size="small" color={colors.textSecondary} />
                 ) : (
-                  <Text style={styles.retryButtonText}>Retry</Text>
+                  <Text style={styles.retryButtonText}>{t('common.retry')}</Text>
                 )}
               </Pressable>
             </View>
@@ -215,7 +232,7 @@ export default function SettingsScreen() {
             onPress={() => void Linking.openURL('https://www.onorca.dev/privacy')}
           >
             <Shield size={16} color={colors.textSecondary} />
-            <Text style={styles.rowLabel}>Privacy Policy</Text>
+            <Text style={styles.rowLabel}>{t('settings.privacy')}</Text>
           </Pressable>
           <View style={styles.separator} />
           <Pressable
@@ -223,7 +240,7 @@ export default function SettingsScreen() {
             onPress={() => void Linking.openURL('https://github.com/stablyai/orca/issues')}
           >
             <LifeBuoy size={16} color={colors.textSecondary} />
-            <Text style={styles.rowLabel}>Support</Text>
+            <Text style={styles.rowLabel}>{t('settings.support')}</Text>
           </Pressable>
         </View>
       </ScrollView>

@@ -8,6 +8,7 @@ type Lease = ReturnType<typeof useMobileNativeChatInputLease>
 describe('useMobileNativeChatInputLease', () => {
   let renderer: ReactTestRenderer | null = null
   let lease: Lease | null = null
+  let renderedReady: boolean[] = []
 
   beforeEach(() => {
     globalThis.IS_REACT_ACT_ENVIRONMENT = true
@@ -17,10 +18,12 @@ describe('useMobileNativeChatInputLease', () => {
     act(() => renderer?.unmount())
     renderer = null
     lease = null
+    renderedReady = []
   })
 
   function Harness({ connected }: { connected: boolean }): null {
     lease = useMobileNativeChatInputLease({ activeHandle: 'terminal', connected })
+    renderedReady.push(lease.ready)
     return null
   }
 
@@ -47,7 +50,17 @@ describe('useMobileNativeChatInputLease', () => {
       act(() => lease?.markReady('terminal'))
       expect(lease?.ready).toBe(true)
 
+      let readyDuringClear = true
+      act(() => {
+        lease?.clear('terminal')
+        readyDuringClear = lease?.readyRef.current ?? true
+      })
+      expect(readyDuringClear).toBe(false)
+      act(() => lease?.markReady('terminal'))
+
+      renderedReady = []
       await act(async () => renderer?.update(createElement(Harness, { connected: false })))
+      expect(renderedReady[0]).toBe(false)
       expect(lease?.ready).toBe(false)
       expect(lease?.lockReason).toBe('disconnected')
     } finally {

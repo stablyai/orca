@@ -15,12 +15,11 @@ export function resolveBottomDrawerKeyboardInset(input: {
   fillAvailable: boolean
   platform: 'ios' | 'android' | 'windows' | 'macos' | 'web'
 }): number {
-  const keyboardHeight = Math.max(0, input.keyboardHeight)
-  if (input.fillAvailable) {
-    return keyboardHeight
-  }
-  if (input.platform === 'ios') {
-    return Math.max(0, keyboardHeight - Math.max(0, input.bottomInset))
-  }
-  return keyboardHeight
+  return resolveMobileKeyboardInset({
+    keyboardHeight: input.keyboardHeight,
+    bottomInset: input.bottomInset,
+    includesSafeArea: input.fillAvailable,
+    platform: input.platform
+  })
 }
+import { resolveMobileKeyboardInset } from '../platform/mobile-keyboard-inset'

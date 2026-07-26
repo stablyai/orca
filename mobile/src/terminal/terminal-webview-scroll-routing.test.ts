@@ -8,6 +8,8 @@ const source =
   readFileSync(new URL('./terminal-webview-pending-messages.ts', import.meta.url), 'utf8') +
   readFileSync(new URL('./terminal-webview-url-tap.ts', import.meta.url), 'utf8') +
   readFileSync(new URL('./terminal-webview-tap-dispatch-injected.ts', import.meta.url), 'utf8') +
+  readFileSync(new URL('./terminal-scroll-coordinator.ts', import.meta.url), 'utf8') +
+  readFileSync(new URL('./terminal-scroll-coordinator-injected.ts', import.meta.url), 'utf8') +
   readFileSync(new URL('./terminal-webview-html.ts', import.meta.url), 'utf8')
 const sessionSource = readFileSync(
   new URL('../../app/h/[hostId]/session/[worktreeId].tsx', import.meta.url),
@@ -15,6 +17,10 @@ const sessionSource = readFileSync(
 )
 const sessionHelperSource = readFileSync(
   new URL('../session/mobile-session-route-helpers.ts', import.meta.url),
+  'utf8'
+)
+const terminalHtmlSource = readFileSync(
+  new URL('./terminal-webview-html.ts', import.meta.url),
   'utf8'
 )
 
@@ -27,14 +33,19 @@ function sliceBetween(startPattern: string, endPattern: string): string {
 }
 
 describe('TerminalWebView scroll routing', () => {
+  it('injects the scroll coordinator without runtime function serialization', () => {
+    expect(terminalHtmlSource).toContain('TERMINAL_SCROLL_COORDINATOR_JS')
+    expect(terminalHtmlSource).not.toContain('createTerminalScrollCoordinator.toString()')
+  })
+
   it('keeps Android touch drags inside the terminal WebView', () => {
     expect(source).toContain('nestedScrollEnabled')
   })
 
   it('maps a downward pull at the bottom to older scrollback rows', () => {
     expect(source).toContain('var deltaY = ts.lastY - y;')
-    expect(source).toContain('smoothScrollOffsetY -= deltaY;')
-    expect(source).toContain('var lines = Math.trunc(-smoothScrollOffsetY / effectiveCellH);')
+    expect(source).toContain("type: 'user-scroll-pixels'")
+    expect(source).toContain('const lines = Math.trunc(pixelRemainder / event.pixelsPerLine)')
 
     const nextViewportY = simulateNormalBufferPull({
       baseY: 120,
@@ -56,57 +67,47 @@ describe('TerminalWebView scroll routing', () => {
       "targetSurface.addEventListener('touchmove'",
       '}, { capture: true, passive: false });'
     )
-    expect(touchMoveBlock.indexOf('if (shouldRouteScrollToTerminalInput())')).toBeLessThan(
-      touchMoveBlock.indexOf('if (enqueueNormalBufferScrollDelta(deltaY))')
-    )
-    expect(touchMoveBlock).toContain('routeScrollLines(lines, x, y);')
+    expect(touchMoveBlock).toContain('enqueueScrollDelta(deltaY, x, y)')
 
     const momentumBlock = sliceBetween('function momentumStep()', 'if (Math.abs(vel) > MIN_VEL)')
-    expect(momentumBlock.indexOf('if (shouldRouteScrollToTerminalInput())')).toBeLessThan(
-      momentumBlock.indexOf('if (!applyNormalBufferScrollDelta(delta))')
-    )
-    expect(momentumBlock).toContain('routeScrollLines(lines, ts.lastX, ts.lastY);')
+    expect(momentumBlock).toContain('applyScrollDelta(delta, ts.lastX, ts.lastY)')
+    expect(source).toContain('if (adapter.shouldRouteToTerminalInput())')
+    expect(source).toContain('adapter.routeTerminalInput(lines, clientX, clientY)')
   })
 
   it('does not rubber-band normal scroll at scrollback edges', () => {
-    expect(source).toContain('function canScrollNormalBufferDelta(deltaY)')
-    const smoothScrollBlock = sliceBetween(
-      'function applyNormalBufferScrollDelta(deltaY)',
-      'function enqueueNormalBufferScrollDelta(deltaY)'
-    )
-    expect(smoothScrollBlock).toContain('if (!canScrollNormalBufferDelta(deltaY))')
-    expect(smoothScrollBlock).toContain('resetSmoothScrollOffset();')
-    expect(smoothScrollBlock).toContain('return false;')
-    expect(smoothScrollBlock).toContain('return true;')
+    expect(source).toContain('const clamped =')
+    expect(source).toContain('Math.min(lines, Math.max(0, before.baseY - before.viewportY))')
+    expect(source).toContain('Math.max(lines, -before.viewportY)')
+    expect(source).toContain('if (clamped === 0)')
 
     const touchMoveBlock = sliceBetween(
       "targetSurface.addEventListener('touchmove'",
       '}, { capture: true, passive: false });'
     )
-    expect(touchMoveBlock).toContain('if (enqueueNormalBufferScrollDelta(deltaY))')
+    expect(touchMoveBlock).toContain('if (enqueueScrollDelta(deltaY, x, y))')
     expect(touchMoveBlock).toContain('ts.velY = 0;')
 
     const momentumBlock = sliceBetween('function momentumStep()', 'if (Math.abs(vel) > MIN_VEL)')
-    expect(momentumBlock).toContain('if (!applyNormalBufferScrollDelta(delta))')
+    expect(momentumBlock).toContain('if (!applyScrollDelta(delta, ts.lastX, ts.lastY))')
     expect(momentumBlock).toContain('ts.momentumId = null;')
   })
 
   it('coalesces normal touch scroll row commits onto animation frames', () => {
     const enqueueBlock = sliceBetween(
-      'function enqueueNormalBufferScrollDelta(deltaY)',
-      'function resetSmoothScrollOffset()'
+      'function enqueueScrollDelta(deltaY, clientX, clientY)',
+      'function resetScrollGesture()'
     )
-    expect(enqueueBlock).toContain('pendingNormalScrollDeltaY += deltaY;')
-    expect(enqueueBlock).toContain('if (normalScrollFrameId !== null) return true;')
-    expect(enqueueBlock).toContain('normalScrollFrameId = requestAnimationFrame(function()')
-    expect(enqueueBlock).toContain('applyNormalBufferScrollDelta(delta)')
+    expect(enqueueBlock).toContain('pendingScrollDeltaY += deltaY;')
+    expect(enqueueBlock).toContain('if (scrollFrameId !== null) return true;')
+    expect(enqueueBlock).toContain('scrollFrameId = requestAnimationFrame(function()')
+    expect(enqueueBlock).toContain(
+      'applyScrollDelta(delta, pendingScrollClientX, pendingScrollClientY)'
+    )
 
-    const resetBlock = sliceBetween(
-      'function resetSmoothScrollOffset()',
-      'function cellToViewportPx'
-    )
-    expect(resetBlock).toContain('pendingNormalScrollDeltaY = 0;')
-    expect(resetBlock).toContain('cancelAnimationFrame(normalScrollFrameId);')
+    const resetBlock = sliceBetween('function resetScrollGesture()', 'function cellToViewportPx')
+    expect(resetBlock).toContain('pendingScrollDeltaY = 0;')
+    expect(resetBlock).toContain('cancelAnimationFrame(scrollFrameId);')
   })
 
   it('drains terminal writes without shifting the queued array', () => {
@@ -178,7 +179,7 @@ describe('TerminalWebView scroll routing', () => {
     expect(startBlock.indexOf('stopEdgeScroll();')).toBeLessThan(
       startBlock.indexOf('edgeScrollDir = dir;')
     )
-    expect(startBlock.indexOf('term.scrollLines(edgeScrollDir);')).toBeLessThan(
+    expect(startBlock.indexOf("type: 'user-scroll-lines'")).toBeLessThan(
       startBlock.indexOf('syncEdgeScrollSelectionEndpoint();')
     )
 

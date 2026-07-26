@@ -1,3 +1,5 @@
+export { createMobileNativeChatInputRecovery } from './mobile-native-chat-input-recovery'
+
 export type MobileNativeChatTerminalStreamAction = 'pause' | 'resume' | 'none'
 
 /** Decides whether the active mobile terminal stream should run while native chat

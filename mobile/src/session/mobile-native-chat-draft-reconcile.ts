@@ -3,6 +3,7 @@ import {
   isImageSourceUserTurn,
   stripImagePromptMarker
 } from './mobile-native-chat-image-transcript-markers'
+import type { MobileNativeChatPendingMessage } from './mobile-native-chat-draft-contract'
 
 /** An ack-lost ('unknown' outcome) send held until its transcript echo lands or
  *  the deadline surfaces the uncertainty. */
@@ -12,7 +13,11 @@ export type UnconfirmedSend = {
   text: string
   normalizedText: string
   baselineTailMessageId: string | null
+  draftEditRevision: number
   deadline: ReturnType<typeof setTimeout> | null
+  expired: boolean
+  surfaced: boolean
+  onUnconfirmed: () => void
 }
 
 export function normalizedUserText(message: NativeChatMessage): string | null {
@@ -100,4 +105,33 @@ export function findLandedUnconfirmedSends(
     }
   }
   return landed
+}
+
+export function reconcilePendingMessages(
+  messages: readonly NativeChatMessage[],
+  current: MobileNativeChatPendingMessage[]
+): MobileNativeChatPendingMessage[] {
+  const landedCounts = new Map<string, number>()
+  const imageCountThroughMessageId = new Map<string, number>()
+  let imageCount = 0
+  for (const message of messages) {
+    if (isImageSourceUserTurn(message)) {
+      imageCount++
+    }
+    imageCountThroughMessageId.set(message.id, imageCount)
+    const text = normalizedUserText(message)
+    if (text) {
+      landedCounts.set(text, (landedCounts.get(text) ?? 0) + 1)
+    }
+  }
+  const next = current.filter((item) =>
+    item.text.trim() === ''
+      ? imageCount -
+          (item.baselineTailMessageId
+            ? (imageCountThroughMessageId.get(item.baselineTailMessageId) ?? 0)
+            : 0) <
+        item.expectedOccurrence
+      : (landedCounts.get(item.text.trim()) ?? 0) < item.expectedOccurrence
+  )
+  return next.length === current.length ? current : next
 }

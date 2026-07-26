@@ -63,8 +63,17 @@ function makeTerminal(writeCallbacks: Array<() => void>) {
     selectAll() {},
     clearSelection() {},
     select() {},
-    scrollLines() {},
-    scrollToBottom() {},
+    scrollLines(lines: number) {
+      terminal.buffer.active.viewportY = Math.max(
+        0,
+        Math.min(terminal.buffer.active.baseY, terminal.buffer.active.viewportY + lines)
+      )
+    },
+    scrollToBottomCalls: 0,
+    scrollToBottom() {
+      terminal.scrollToBottomCalls++
+      terminal.buffer.active.viewportY = terminal.buffer.active.baseY
+    },
     scrollToLine() {},
     getSelection: () => '',
     onData: () => ({ dispose() {} }),
@@ -84,6 +93,22 @@ function dispatchInit(cols: number, initialData: string): void {
       data: JSON.stringify({ type: 'init', cols, rows: 40, initialData })
     })
   )
+}
+
+function dispatchWrite(data: string): void {
+  window.dispatchEvent(
+    new MessageEvent('message', {
+      data: JSON.stringify({ type: 'write', data })
+    })
+  )
+}
+
+function dispatchTouch(target: Element, type: 'touchstart' | 'touchmove', y: number): void {
+  const event = new Event(type, { bubbles: true, cancelable: true })
+  Object.defineProperty(event, 'touches', {
+    value: [{ clientX: 20, clientY: y }]
+  })
+  target.dispatchEvent(event)
 }
 
 describe('terminal WebView init surface replacement', () => {
@@ -172,5 +197,100 @@ describe('terminal WebView init surface replacement', () => {
     expect(surfaces[0]?.id).toBe('terminal-surface')
     expect((surfaces[0] as HTMLElement).style.visibility).toBe('visible')
     expect(terminals.map((terminal) => terminal.disposed)).toEqual([true, true, false])
+  })
+
+  it('commits an initial replay at the live bottom', () => {
+    dispatchInit(80, 'desktop')
+    animationFrames.shift()?.()
+    const terminal = terminals[0]
+    expect(terminal).toBeDefined()
+    if (!terminal) {
+      return
+    }
+    terminal.buffer.active.baseY = 200
+    terminal.buffer.active.viewportY = 0
+
+    writeCallbacks.shift()?.()
+
+    expect(terminal.buffer.active.viewportY).toBe(200)
+    expect(terminal.scrollToBottomCalls).toBe(1)
+  })
+
+  it('does not start a second fit cycle for keyboard-only height changes', () => {
+    dispatchInit(80, 'desktop')
+    animationFrames.shift()?.()
+    writeCallbacks.shift()?.()
+    const terminal = terminals[0]
+    expect(terminal).toBeDefined()
+    if (!terminal) {
+      return
+    }
+    terminal.scrollToBottomCalls = 0
+    terminal.buffer.active.baseY = 100
+    terminal.buffer.active.viewportY = 100
+    const framesBeforeResize = animationFrames.length
+    Object.defineProperty(window, 'innerHeight', { value: 400, configurable: true })
+
+    window.dispatchEvent(new Event('resize'))
+
+    expect(animationFrames).toHaveLength(framesBeforeResize)
+    expect(terminal.scrollToBottomCalls).toBe(0)
+    expect(terminal.buffer.active.viewportY).toBe(100)
+  })
+
+  it('keeps live output pinned when the terminal was at the bottom before an async write', () => {
+    dispatchInit(80, 'desktop')
+    animationFrames.shift()?.()
+    writeCallbacks.shift()?.()
+
+    const terminal = terminals[0]
+    expect(terminal).toBeDefined()
+    if (!terminal) {
+      return
+    }
+    terminal.scrollToBottomCalls = 0
+    terminal.buffer.active.baseY = 100
+    terminal.buffer.active.viewportY = 100
+
+    dispatchWrite('new output')
+    terminal.buffer.active.baseY = 101
+    writeCallbacks.shift()?.()
+
+    expect(terminal.scrollToBottomCalls).toBe(1)
+    expect(terminal.buffer.active.viewportY).toBe(101)
+  })
+
+  it('does not pull a reader back to the bottom after they scroll up during a write', () => {
+    dispatchInit(80, 'desktop')
+    animationFrames.shift()?.()
+    writeCallbacks.shift()?.()
+
+    const terminal = terminals[0]
+    expect(terminal).toBeDefined()
+    if (!terminal) {
+      return
+    }
+    terminal.scrollToBottomCalls = 0
+    terminal.buffer.active.baseY = 100
+    terminal.buffer.active.viewportY = 100
+
+    dispatchWrite('new output')
+    terminal.buffer.active.baseY = 101
+    const surface = document.querySelector('#terminal-surface')
+    expect(surface).not.toBeNull()
+    if (!surface) {
+      return
+    }
+    dispatchTouch(surface, 'touchstart', 100)
+    dispatchTouch(surface, 'touchmove', 250)
+    while (animationFrames.length > 0 && terminal.buffer.active.viewportY === 100) {
+      animationFrames.shift()?.()
+    }
+    const readerViewportY = terminal.buffer.active.viewportY
+    expect(readerViewportY).toBeLessThan(100)
+    writeCallbacks.shift()?.()
+
+    expect(terminal.scrollToBottomCalls).toBe(0)
+    expect(terminal.buffer.active.viewportY).toBe(readerViewportY)
   })
 })

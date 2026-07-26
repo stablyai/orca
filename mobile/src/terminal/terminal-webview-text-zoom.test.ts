@@ -9,7 +9,7 @@ const terminalWebViewSource = readFileSync(
 const terminalHtmlSource = readFileSync(
   new URL('./terminal-webview-html.ts', import.meta.url),
   'utf8'
-)
+).replaceAll('\r\n', '\n')
 const terminalWebglRecoverySource = readFileSync(
   new URL('./terminal-webview-webgl-recovery-injected.ts', import.meta.url),
   'utf8'

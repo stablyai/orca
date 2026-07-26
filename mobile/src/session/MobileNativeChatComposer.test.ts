@@ -114,6 +114,18 @@ describe('MobileNativeChatComposer', () => {
     expect(onSend).not.toHaveBeenCalled()
   })
 
+  it('grows multiline typing between a comfortable minimum and a bounded maximum', async () => {
+    await render(vi.fn().mockResolvedValue(true), vi.fn())
+
+    const input = renderer!.root.findByType('TextInput')
+    expect(input.props).toMatchObject({
+      multiline: true,
+      scrollEnabled: true,
+      style: expect.objectContaining({ minHeight: 48, maxHeight: 120 })
+    })
+    expect(input.props.style).not.toHaveProperty('height')
+  })
+
   it('renders a removable thumbnail for each pending image attachment', async () => {
     const onRemoveAttachment = vi.fn()
     const restore = suppressRendererWarning()

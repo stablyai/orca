@@ -1,12 +1,31 @@
 import { ChevronRight, Monitor } from 'lucide-react-native'
 import { Pressable, StyleSheet, Text, View } from 'react-native'
 import type { ConnectionVerdict } from '../transport/connection-health'
-import { verdictDisplayLabel } from '../transport/connection-health'
-import { mobileConnectionPathLabel } from '../transport/mobile-connection-path-label'
 import type { MobileConnectionPath } from '../transport/stable-logical-rpc-client'
 import type { ConnectionState, HostProfile } from '../transport/types'
 import { colors, radii, spacing } from '../theme/mobile-theme'
+import { useMobileLocale } from '../localization/mobile-locale-provider'
+import type { TranslationKey } from '../localization/mobile-locale'
 import { StatusDot } from './StatusDot'
+
+function connectionStatusKey(state: ConnectionState, verdict: ConnectionVerdict): TranslationKey {
+  if (verdict.kind === 'auth-failed') {
+    return 'host.pairingInvalid'
+  }
+  if (verdict.kind === 'unreachable') {
+    return 'host.cantReachDesktop'
+  }
+  if (verdict.kind === 'warning') {
+    return 'host.cantConnect'
+  }
+  if (state === 'connected') {
+    return 'host.connected'
+  }
+  if (state === 'disconnected') {
+    return 'host.disconnected'
+  }
+  return state === 'reconnecting' ? 'host.reconnecting' : 'host.connecting'
+}
 
 export function MobileHostCard(props: {
   host: HostProfile
@@ -17,10 +36,32 @@ export function MobileHostCard(props: {
   onPress: () => void
   onLongPress: () => void
 }) {
+  const { t } = useMobileLocale()
   const connected = props.state === 'connected'
   const isError = ['warning', 'unreachable', 'auth-failed'].includes(props.verdict.kind)
+  const statusLabel = t(connectionStatusKey(props.state, props.verdict))
+  const displayStatus =
+    (props.verdict.kind === 'warning' || props.verdict.kind === 'unreachable') && props.verdict.hint
+      ? t('host.statusWithHint', {
+          status: statusLabel,
+          hint:
+            props.verdict.hint === 'check Tailscale' ? t('host.checkTailscale') : props.verdict.hint
+        })
+      : statusLabel
+  const connectionPath =
+    props.path === 'relay'
+      ? t('host.pathRelay')
+      : props.path === 'tailscale'
+        ? t('host.pathTailscale')
+        : t('host.pathLan')
   const worktreeSummary = props.worktreeCounts
-    ? `${props.worktreeCounts.total} worktree${props.worktreeCounts.total === 1 ? '' : 's'}${props.worktreeCounts.active > 0 ? ` · ${props.worktreeCounts.active} active` : ''}`
+    ? `${t(props.worktreeCounts.total === 1 ? 'host.worktreeOne' : 'host.worktreeMany', {
+        count: props.worktreeCounts.total
+      })}${
+        props.worktreeCounts.active > 0
+          ? t('host.activeWorktrees', { count: props.worktreeCounts.active })
+          : ''
+      }`
     : null
   return (
     <Pressable
@@ -42,8 +83,8 @@ export function MobileHostCard(props: {
         <View style={styles.meta}>
           <StatusDot state={props.state} verdict={props.verdict} />
           <Text style={[styles.metaText, isError && { color: colors.statusRed }]} numberOfLines={1}>
-            {verdictDisplayLabel(props.verdict)}
-            {connected ? ` · ${mobileConnectionPathLabel(props.path)}` : ''}
+            {displayStatus}
+            {connected ? ` · ${connectionPath}` : ''}
           </Text>
         </View>
         {connected && worktreeSummary ? (
@@ -53,7 +94,7 @@ export function MobileHostCard(props: {
         ) : null}
         {props.verdict.kind === 'unreachable' && !props.host.relay ? (
           <Text style={styles.discoveryHint} numberOfLines={2}>
-            Update desktop Orca and sign in to connect from anywhere
+            {t('host.discoveryHint')}
           </Text>
         ) : null}
       </View>

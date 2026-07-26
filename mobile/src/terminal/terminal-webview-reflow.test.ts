@@ -11,6 +11,10 @@ const reflowSource = readFileSync(
 )
 const htmlSource = readFileSync(new URL('./terminal-webview-html.ts', import.meta.url), 'utf8')
 const handleSource = readFileSync(new URL('./TerminalWebView.tsx', import.meta.url), 'utf8')
+const coordinatorSource = readFileSync(
+  new URL('./terminal-scroll-coordinator-injected.ts', import.meta.url),
+  'utf8'
+)
 
 function reflowFnBody(): string {
   const start = reflowSource.indexOf('function reflow(cols, rows) {')
@@ -25,16 +29,18 @@ describe('terminal WebView reflow', () => {
     expect(reflowFnBody()).toContain('if (!term || isAlternateBufferActive()) return;')
   })
 
-  it('rewraps the local buffer via term.resize to the new cols', () => {
-    expect(reflowFnBody()).toContain('term.resize(nextCols, nextRows);')
+  it('delegates the local resize through the single scroll coordinator', () => {
+    expect(reflowFnBody()).toContain("reason: 'reflow'")
+    expect(coordinatorSource).toContain('adapter.changeViewport(event.change)')
+    expect(htmlSource).toContain('term.resize(change.cols || term.cols, change.rows || term.rows);')
   })
 
-  it('preserves the user scroll position across the rewrap', () => {
+  it('brackets the rewrap in one coordinator transaction', () => {
     const body = reflowFnBody()
-    // At the live bottom -> stay pinned; scrolled up -> hold distance-from-bottom.
-    expect(body).toContain('var wasAtBottom = buffer.viewportY >= buffer.baseY;')
-    expect(body).toContain('term.scrollToBottom();')
-    expect(body).toContain('rewrapped.baseY - distanceFromBottom - rewrapped.viewportY')
+    const changeAt = body.indexOf("type: 'viewport-change'")
+    const committedAt = body.indexOf("type: 'viewport-committed'")
+    expect(changeAt).toBeGreaterThanOrEqual(0)
+    expect(committedAt).toBeGreaterThan(changeAt)
   })
 
   it('is no-op when the dimensions are unchanged', () => {
@@ -66,7 +72,7 @@ describe('terminal WebView reflow', () => {
   describe('assembled XTERM_HTML', () => {
     it('still injects the reflow routine (placeholder fully expanded)', () => {
       expect(XTERM_HTML).toContain('function reflow(cols, rows) {')
-      expect(XTERM_HTML).toContain('term.resize(nextCols, nextRows);')
+      expect(XTERM_HTML).toContain("change: { cols: nextCols, rows: nextRows, reason: 'reflow' }")
       // No unexpanded template placeholder for the injected reflow JS.
       expect(XTERM_HTML).not.toContain('TERMINAL_REFLOW_JS}')
     })

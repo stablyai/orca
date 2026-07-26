@@ -8,6 +8,7 @@ const captureSendOrigin = vi.fn()
 const clearDraftForSend = vi.fn()
 const restoreRejectedDraft = vi.fn()
 const holdUnconfirmedSend = vi.fn()
+const recoverInputLease = vi.fn()
 
 // The controller composes many session hooks; each is mocked to a minimal shape
 // so this test isolates the send seam (outcome -> drafts accounting).
@@ -66,7 +67,8 @@ const ORIGIN = {
   pendingKey: 'h\0w\0tab-1\0session-1',
   normalizedText: 'look',
   baselineOccurrences: 0,
-  baselineTailMessageId: null
+  baselineTailMessageId: null,
+  draftEditRevision: 0
 }
 
 describe('useMobileNativeChatController handleNativeChatSend', () => {
@@ -76,6 +78,8 @@ describe('useMobileNativeChatController handleNativeChatSend', () => {
   // Only the stale-input heal reaches the transport directly (the message send
   // itself is mocked above).
   const clientStub = { sendRequest: vi.fn() }
+  const activeHandleRef = { current: 'term-1' as string | null }
+  const activeSessionTabIdRef = { current: 'tab-1' as string | null }
 
   function Harness(): null {
     controller = useMobileNativeChatController({
@@ -84,10 +88,12 @@ describe('useMobileNativeChatController handleNativeChatSend', () => {
       worktreeId: 'w',
       activeSessionTab: null,
       activeSessionTabId: 'tab-1',
-      activeHandleRef: { current: 'term-1' },
+      activeSessionTabIdRef,
+      activeHandleRef,
       deviceTokenRef: { current: null },
       nativeChatTranscriptIsLocalReadable: true,
       nativeChatInputLeaseReady: true,
+      recoverInputLease,
       onSendError
     })
     return null
@@ -98,6 +104,9 @@ describe('useMobileNativeChatController handleNativeChatSend', () => {
     vi.clearAllMocks()
     resetMobileNativeChatStaleInputForTests()
     captureSendOrigin.mockReturnValue(ORIGIN)
+    activeHandleRef.current = 'term-1'
+    activeSessionTabIdRef.current = 'tab-1'
+    recoverInputLease.mockResolvedValue(false)
     const original = console.error
     const spy = vi.spyOn(console, 'error').mockImplementation((...a) => {
       if (typeof a[0] === 'string' && a[0].includes('react-test-renderer is deprecated')) {
@@ -201,6 +210,7 @@ describe('useMobileNativeChatController handleNativeChatSend', () => {
     // Delivery-unknown usually means delivered — keep the composer clear.
     expect(clearDraftForSend).toHaveBeenCalledWith(ORIGIN, 'look')
     expect(restoreRejectedDraft).not.toHaveBeenCalled()
+    expect(recoverInputLease).not.toHaveBeenCalled()
   })
 
   it('preserves the unknown outcome on the WithOutcome surface for paste-first callers', async () => {
@@ -239,5 +249,86 @@ describe('useMobileNativeChatController handleNativeChatSend', () => {
     expect(clearDraftForSend).not.toHaveBeenCalled()
     expect(restoreRejectedDraft).not.toHaveBeenCalled()
     expect(onSendError).toHaveBeenCalledWith('Message not sent')
+  })
+
+  it('renews a stale input lease and retries a definitely rejected send once', async () => {
+    sendWithOutcome.mockResolvedValueOnce('rejected').mockResolvedValueOnce('accepted')
+    recoverInputLease.mockResolvedValue(true)
+
+    let accepted = false
+    await act(async () => {
+      accepted = await controller!.handleNativeChatSend('look')
+    })
+
+    expect(accepted).toBe(true)
+    expect(recoverInputLease).toHaveBeenCalledWith('term-1', 'tab-1')
+    expect(sendWithOutcome).toHaveBeenCalledTimes(2)
+    expect(acceptSend).toHaveBeenCalledWith(ORIGIN, 'look', undefined)
+    expect(onSendError).not.toHaveBeenCalled()
+  })
+
+  it('uses a reconciled terminal handle for the single retry', async () => {
+    sendWithOutcome.mockResolvedValueOnce('rejected').mockResolvedValueOnce('accepted')
+    recoverInputLease.mockImplementation(async () => {
+      activeHandleRef.current = 'term-2'
+      return true
+    })
+
+    await act(async () => {
+      await controller!.handleNativeChatSend('look')
+    })
+
+    expect(sendWithOutcome.mock.calls.map(([request]) => request.terminal)).toEqual([
+      'term-1',
+      'term-2'
+    ])
+  })
+
+  it('does not retry more than once when the renewed send is also rejected', async () => {
+    sendWithOutcome.mockResolvedValue('rejected')
+    recoverInputLease.mockResolvedValue(true)
+
+    let accepted = true
+    await act(async () => {
+      accepted = await controller!.handleNativeChatSend('look')
+    })
+
+    expect(accepted).toBe(false)
+    expect(recoverInputLease).toHaveBeenCalledTimes(1)
+    expect(sendWithOutcome).toHaveBeenCalledTimes(2)
+    expect(onSendError).toHaveBeenCalledWith('Message not sent')
+  })
+
+  it('does not move a rejected message into a session selected during recovery', async () => {
+    sendWithOutcome.mockResolvedValueOnce('rejected')
+    recoverInputLease.mockImplementation(async () => {
+      activeSessionTabIdRef.current = 'tab-2'
+      activeHandleRef.current = 'term-2'
+      return true
+    })
+
+    await act(async () => {
+      await controller!.handleNativeChatSend('look')
+    })
+
+    expect(sendWithOutcome).toHaveBeenCalledTimes(1)
+    expect(onSendError).toHaveBeenCalledWith('Message not sent')
+  })
+
+  it('does not split a pasted image from its text when reconciliation replaces the handle', async () => {
+    sendWithOutcome.mockResolvedValueOnce('rejected')
+    recoverInputLease.mockImplementation(async () => {
+      activeHandleRef.current = 'term-2'
+      return true
+    })
+
+    let outcome = 'accepted'
+    await act(async () => {
+      outcome = await controller!.handleNativeChatSendWithOutcome('look', ['file:///a.jpg'])
+    })
+
+    expect(outcome).toBe('rejected')
+    expect(sendWithOutcome).toHaveBeenCalledTimes(1)
+    expect(acceptSend).not.toHaveBeenCalled()
   })
 })

@@ -1,11 +1,12 @@
-import { useCallback, type MutableRefObject } from 'react'
+import { useCallback, type RefObject } from 'react'
 import type { RpcClient } from '../transport/rpc-client'
+import { canRetryMobileNativeChatSend } from './mobile-native-chat-input-recovery'
 import {
   sendMobileNativeChatMessageWithOutcome,
   type MobileNativeChatSendOutcome
 } from './mobile-native-chat-send'
 import { healMobileNativeChatStaleInput } from './mobile-native-chat-stale-input'
-import type { MobileNativeChatSendOrigin } from './use-mobile-native-chat-drafts'
+import type { MobileNativeChatSendOrigin } from './mobile-native-chat-draft-contract'
 
 export type MobileNativeChatMessageSend = {
   /** Composer send that syncs the draft (clear on send, restore on rejection). */
@@ -22,8 +23,13 @@ export type MobileNativeChatMessageSend = {
 export function useMobileNativeChatMessageSend(args: {
   client: RpcClient | null
   enabled: boolean
-  handleRef: MutableRefObject<string | null>
-  deviceTokenRef: MutableRefObject<string | null>
+  handleRef: RefObject<string | null>
+  activeSessionTabIdRef: RefObject<string | null>
+  deviceTokenRef: RefObject<string | null>
+  recoverInputLease: (
+    rejectedHandle: string,
+    expectedSessionTabId: string | null
+  ) => Promise<boolean>
   captureSendOrigin: (text: string) => MobileNativeChatSendOrigin | null
   clearDraftForSend: (origin: MobileNativeChatSendOrigin, text: string) => void
   restoreRejectedDraft: (origin: MobileNativeChatSendOrigin, text: string) => void
@@ -39,7 +45,9 @@ export function useMobileNativeChatMessageSend(args: {
     client,
     enabled,
     handleRef,
+    activeSessionTabIdRef,
     deviceTokenRef,
+    recoverInputLease,
     captureSendOrigin,
     clearDraftForSend,
     restoreRejectedDraft,
@@ -55,6 +63,7 @@ export function useMobileNativeChatMessageSend(args: {
       syncComposer: boolean
     ): Promise<MobileNativeChatSendOutcome> => {
       const handle = handleRef.current
+      const sessionTabId = activeSessionTabIdRef.current
       const origin = captureSendOrigin(text)
       if (!client || !handle || !origin || !enabled) {
         onSendError('Message not sent (disconnected)')
@@ -75,14 +84,30 @@ export function useMobileNativeChatMessageSend(args: {
       if (syncComposer) {
         clearDraftForSend(origin, text)
       }
-      const outcome = await sendMobileNativeChatMessageWithOutcome({
-        client,
-        terminal: handle,
-        text,
-        ...(deviceTokenRef.current
-          ? { mobileClient: { id: deviceTokenRef.current, type: 'mobile' } }
-          : {})
-      })
+      const sendToTerminal = (terminal: string) =>
+        sendMobileNativeChatMessageWithOutcome({
+          client,
+          terminal,
+          text,
+          ...(deviceTokenRef.current
+            ? { mobileClient: { id: deviceTokenRef.current, type: 'mobile' } }
+            : {})
+        })
+      let outcome = await sendToTerminal(handle)
+      if (outcome === 'rejected' && (await recoverInputLease(handle, sessionTabId))) {
+        const recoveredHandle = handleRef.current
+        if (
+          canRetryMobileNativeChatSend(
+            handle,
+            recoveredHandle,
+            sessionTabId,
+            activeSessionTabIdRef.current,
+            Boolean(images?.length)
+          )
+        ) {
+          outcome = await sendToTerminal(recoveredHandle)
+        }
+      }
       if (outcome === 'unknown') {
         // Why: an ack-lost send usually WAS delivered (issue seen on cellular
         // relay) — verify via the transcript echo instead of a false "not sent".
@@ -105,6 +130,7 @@ export function useMobileNativeChatMessageSend(args: {
     },
     [
       acceptSend,
+      activeSessionTabIdRef,
       captureSendOrigin,
       clearDraftForSend,
       client,
@@ -113,6 +139,7 @@ export function useMobileNativeChatMessageSend(args: {
       handleRef,
       holdUnconfirmedSend,
       onSendError,
+      recoverInputLease,
       restoreRejectedDraft
     ]
   )

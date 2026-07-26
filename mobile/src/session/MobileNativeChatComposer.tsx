@@ -215,6 +215,7 @@ export function MobileNativeChatComposer({
           placeholderTextColor={colors.textMuted}
           selectionColor={colors.accentBlue}
           multiline
+          scrollEnabled
           editable={!disabled}
           textAlignVertical="top"
         />
@@ -331,8 +332,8 @@ const styles = StyleSheet.create({
   },
   input: {
     flex: 1,
-    maxHeight: 140,
-    minHeight: 40,
+    minHeight: spacing.xl * 2,
+    maxHeight: spacing.xl * 5,
     color: colors.textPrimary,
     fontSize: typography.bodySize + 1,
     backgroundColor: colors.bgRaised,

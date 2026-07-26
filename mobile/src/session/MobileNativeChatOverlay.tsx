@@ -5,6 +5,7 @@ import type { MobileNativeChatController } from './use-mobile-native-chat-contro
 
 type Props = {
   controller: MobileNativeChatController
+  sessionKey: string
   /** Native-chat image attachments: picking adds a composer chip, and sending
    *  rides the pending images along with the message text (desktop parity). */
   images: MobileNativeChatImageAttachments
@@ -21,6 +22,7 @@ type Props = {
  *  view toggles while the native surface owns the visible composer. */
 export function MobileNativeChatOverlay({
   controller,
+  sessionKey,
   images,
   onMicPress,
   micActive,
@@ -37,6 +39,7 @@ export function MobileNativeChatOverlay({
   return (
     <View style={styles.overlay}>
       <MobileNativeChatView
+        sessionKey={sessionKey}
         messages={session.messages}
         status={session.status}
         error={session.error}

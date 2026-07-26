@@ -58,6 +58,8 @@ import {
   type TaskProvider
 } from '../src/tasks/mobile-task-providers'
 import { useResponsiveLayout } from '../src/layout/responsive-layout'
+import { useMobileLocale } from '../src/localization/mobile-locale-provider'
+import type { MobileTranslator } from '../src/localization/mobile-locale'
 
 function endpointLabel(endpoint: string): string {
   try {
@@ -113,19 +115,19 @@ const TASK_PROVIDER_LABELS: Record<TaskProvider, string> = {
   linear: 'Linear'
 }
 
-function formatDuration(ms: number): string {
+function formatDuration(ms: number, t: MobileTranslator): string {
   const totalMinutes = Math.floor(ms / 60_000)
   const totalHours = Math.floor(totalMinutes / 60)
   const days = Math.floor(totalHours / 24)
   const hours = totalHours % 24
   if (days > 0) {
-    return `${days}d ${hours}h`
+    return t('home.durationDaysHours', { days, hours })
   }
   const minutes = totalMinutes % 60
   if (totalHours > 0) {
-    return `${totalHours}h ${minutes}m`
+    return t('home.durationHoursMinutes', { hours: totalHours, minutes })
   }
-  return `${totalMinutes}m`
+  return t('home.durationMinutes', { minutes: totalMinutes })
 }
 
 // Why: stable per-instance RpcClient identity so wireUp's dep key changes when forceReconnect swaps the client, re-attaching listeners.
@@ -294,6 +296,7 @@ function repoColor(name: string): string {
 export default function HomeScreen() {
   const router = useRouter()
   const insets = useSafeAreaInsets()
+  const { locale, t } = useMobileLocale()
   // Why: cap/center content on wide/tablet canvases so cards don't stretch edge-to-edge on iPad.
   const { isWideLayout, contentMaxWidth } = useResponsiveLayout()
   const [hosts, setHosts] = useState<HostProfile[]>([])
@@ -630,11 +633,11 @@ export default function HomeScreen() {
         <ListTodo size={18} color={colors.textSecondary} />
       </View>
       <View style={styles.taskHomeMain}>
-        <Text style={styles.taskHomeTitle}>Tasks</Text>
+        <Text style={styles.taskHomeTitle}>{t('home.tasks')}</Text>
         <Text style={styles.taskHomeSubtitle} numberOfLines={1}>
           {primaryTaskProviders.length > 0
             ? primaryTaskProviders.map((provider) => TASK_PROVIDER_LABELS[provider]).join(' · ')
-            : 'No task sources connected'}
+            : t('home.noTaskSources')}
         </Text>
       </View>
       <View style={styles.taskHomeTrailing}>
@@ -648,7 +651,9 @@ export default function HomeScreen() {
             <Pressable
               key={provider}
               accessibilityRole="button"
-              accessibilityLabel={`Open ${TASK_PROVIDER_LABELS[provider]} tasks`}
+              accessibilityLabel={t('home.openProviderTasks', {
+                provider: TASK_PROVIDER_LABELS[provider]
+              })}
               hitSlop={8}
               style={({ pressed }) => [
                 styles.taskHomeProviderButton,
@@ -680,7 +685,7 @@ export default function HomeScreen() {
     } catch {
       // Why: ConfirmModal closes on confirm; re-open for retry so the failure isn't silent.
       setConfirmRemove(hostToRemove)
-      Alert.alert('Could not remove host', 'Please try again.')
+      Alert.alert(t('home.removeFailedTitle'), t('home.tryAgain'))
     }
   }
 
@@ -712,20 +717,21 @@ export default function HomeScreen() {
           ]}
         >
           <View style={styles.emptyHero}>
-            <Text style={styles.emptyTitle}>Connect your desktop</Text>
-            <Text style={styles.emptyBody}>
-              Pair with Orca on your computer to check on your agents, jump into any terminal, and
-              drive work from your phone.
-            </Text>
+            <Text style={styles.emptyTitle}>{t('home.connectDesktop')}</Text>
+            <Text style={styles.emptyBody}>{t('home.connectDesktopBody')}</Text>
             <Pressable style={styles.primaryButton} onPress={() => router.push('/pair-scan')}>
               <QrCode size={17} color={colors.bgBase} />
-              <Text style={styles.primaryButtonText}>Pair Desktop</Text>
+              <Text style={styles.primaryButtonText}>{t('home.pairDesktop')}</Text>
             </Pressable>
           </View>
 
           <View style={styles.stepsSection}>
-            <Text style={styles.sectionHeading}>How it works</Text>
-            {ONBOARDING_STEPS.map((step, i) => (
+            <Text style={styles.sectionHeading}>{t('home.howItWorks')}</Text>
+            {[
+              { title: t('home.stepOpenTitle'), desc: t('home.stepOpenBody') },
+              { title: t('home.stepPairTitle'), desc: t('home.stepPairBody') },
+              { title: t('home.stepConnectedTitle'), desc: t('home.stepConnectedBody') }
+            ].map((step, i) => (
               <View key={step.title} style={[styles.stepRow, i > 0 && styles.stepRowBorder]}>
                 <View style={styles.stepNum}>
                   <Text style={styles.stepNumText}>{i + 1}</Text>
@@ -752,29 +758,33 @@ export default function HomeScreen() {
           ListHeaderComponent={
             <View>
               <View style={styles.hero}>
-                <Text style={styles.heroTitle}>Welcome back</Text>
+                <Text style={styles.heroTitle}>{t('home.welcomeBack')}</Text>
               </View>
 
               {stats && (
                 <View style={styles.statsRow}>
                   <View style={styles.statCard}>
                     <Text style={styles.statValue}>
-                      {stats.totalAgentsSpawned.toLocaleString()}
+                      {stats.totalAgentsSpawned.toLocaleString(locale)}
                     </Text>
-                    <Text style={styles.statLabel}>Agents spawned</Text>
+                    <Text style={styles.statLabel}>{t('home.agentsSpawned')}</Text>
                   </View>
                   <View style={styles.statCard}>
-                    <Text style={styles.statValue}>{formatDuration(stats.totalAgentTimeMs)}</Text>
-                    <Text style={styles.statLabel}>Agent time</Text>
+                    <Text style={styles.statValue}>
+                      {formatDuration(stats.totalAgentTimeMs, t)}
+                    </Text>
+                    <Text style={styles.statLabel}>{t('home.agentTime')}</Text>
                   </View>
                   <View style={styles.statCard}>
-                    <Text style={styles.statValue}>{stats.totalPRsCreated.toLocaleString()}</Text>
-                    <Text style={styles.statLabel}>PRs created</Text>
+                    <Text style={styles.statValue}>
+                      {stats.totalPRsCreated.toLocaleString(locale)}
+                    </Text>
+                    <Text style={styles.statLabel}>{t('home.prsCreated')}</Text>
                   </View>
                 </View>
               )}
 
-              <Text style={styles.sectionHeading}>Desktops</Text>
+              <Text style={styles.sectionHeading}>{t('home.desktops')}</Text>
             </View>
           }
           ItemSeparatorComponent={CardGap}
@@ -811,7 +821,9 @@ export default function HomeScreen() {
               {/* ─── Resume card ─── */}
               {resumeWorktree ? (
                 <>
-                  <Text style={[styles.sectionHeading, styles.sectionHeadingTightTop]}>Resume</Text>
+                  <Text style={[styles.sectionHeading, styles.sectionHeadingTightTop]}>
+                    {t('home.resume')}
+                  </Text>
                   <Pressable
                     style={({ pressed }) => [styles.resumeCard, pressed && styles.hostCardPressed]}
                     onPress={() =>
@@ -843,18 +855,24 @@ export default function HomeScreen() {
                     </View>
                     <ChevronRight size={16} color={colors.textMuted} />
                   </Pressable>
-                  <Text style={[styles.sectionHeading, styles.sectionHeadingTightTop]}>Tasks</Text>
+                  <Text style={[styles.sectionHeading, styles.sectionHeadingTightTop]}>
+                    {t('home.tasks')}
+                  </Text>
                   {renderTaskHomeCard()}
                 </>
               ) : (
                 <>
-                  <Text style={[styles.sectionHeading, styles.sectionHeadingTightTop]}>Tasks</Text>
+                  <Text style={[styles.sectionHeading, styles.sectionHeadingTightTop]}>
+                    {t('home.tasks')}
+                  </Text>
                   {renderTaskHomeCard()}
                 </>
               )}
 
               {/* ─── Quick actions ─── */}
-              <Text style={[styles.sectionHeading, { marginTop: spacing.xl }]}>Quick Actions</Text>
+              <Text style={[styles.sectionHeading, { marginTop: spacing.xl }]}>
+                {t('home.quickActions')}
+              </Text>
               <View style={styles.quickActions}>
                 <Pressable
                   style={({ pressed }) => [styles.quickAction, pressed && styles.hostCardPressed]}
@@ -863,7 +881,7 @@ export default function HomeScreen() {
                   <View style={styles.quickActionIcon}>
                     <QrCode size={16} color={colors.textSecondary} />
                   </View>
-                  <Text style={styles.quickActionLabel}>Pair Desktop</Text>
+                  <Text style={styles.quickActionLabel}>{t('home.pairDesktop')}</Text>
                 </Pressable>
                 <Pressable
                   disabled={!primaryConnectedHost}
@@ -881,7 +899,7 @@ export default function HomeScreen() {
                   <View style={styles.quickActionIcon}>
                     <Plus size={16} color={colors.textSecondary} />
                   </View>
-                  <Text style={styles.quickActionLabel}>New Workspace</Text>
+                  <Text style={styles.quickActionLabel}>{t('home.newWorkspace')}</Text>
                 </Pressable>
               </View>
 
@@ -889,7 +907,7 @@ export default function HomeScreen() {
               {accountsHosts.length > 0 ? (
                 <>
                   <Text style={[styles.sectionHeading, { marginTop: spacing.xl }]}>
-                    Account usage
+                    {t('home.accountUsage')}
                   </Text>
                   {accountsHosts.map(({ host, snapshot }) => {
                     const claudeActiveId = snapshot.claude.activeAccountId
@@ -937,7 +955,7 @@ export default function HomeScreen() {
                               </View>
                               <View style={styles.accountsInfo}>
                                 <Text style={styles.accountsEmail} numberOfLines={1}>
-                                  {active?.email ?? 'System default'}
+                                  {active?.email ?? t('home.systemDefault')}
                                 </Text>
                                 <View style={styles.accountsBars}>
                                   <UsageBar
@@ -987,7 +1005,7 @@ export default function HomeScreen() {
           const hasEverConnected = (hostLastConnected[host.id] ?? null) != null
           const items: ActionSheetAction[] = []
           items.push({
-            label: hasEverConnected && isLive ? 'Reconnect' : 'Connect',
+            label: hasEverConnected && isLive ? t('home.reconnect') : t('home.connect'),
             icon: RefreshCw,
             onPress: () => {
               setActionTarget(null)
@@ -996,7 +1014,7 @@ export default function HomeScreen() {
           })
           if (isLive) {
             items.push({
-              label: 'Disconnect',
+              label: t('home.disconnect'),
               icon: PowerOff,
               onPress: () => {
                 setActionTarget(null)
@@ -1005,7 +1023,7 @@ export default function HomeScreen() {
             })
           }
           items.push({
-            label: 'Edit host',
+            label: t('home.editHost'),
             icon: Edit3,
             closeBeforePress: true,
             onPress: () => {
@@ -1014,7 +1032,7 @@ export default function HomeScreen() {
             }
           })
           items.push({
-            label: 'Remove',
+            label: t('home.remove'),
             destructive: true,
             closeBeforePress: true,
             onPress: () => {
@@ -1028,9 +1046,9 @@ export default function HomeScreen() {
 
       <ConfirmModal
         visible={confirmRemove != null}
-        title="Remove Host"
-        message={`Remove "${confirmRemove?.name}"? You can re-pair later.`}
-        confirmLabel="Remove"
+        title={t('home.removeHost')}
+        message={t('home.removeHostMessage', { name: confirmRemove?.name ?? '' })}
+        confirmLabel={t('home.remove')}
         destructive
         onConfirm={() => void handleRemove()}
         onCancel={() => setConfirmRemove(null)}
@@ -1042,21 +1060,6 @@ export default function HomeScreen() {
 function CardGap() {
   return <View style={styles.cardGap} />
 }
-
-const ONBOARDING_STEPS = [
-  {
-    title: 'Open Orca desktop',
-    desc: 'Go to Settings → Mobile and generate a pairing QR code.'
-  },
-  {
-    title: 'Scan the code',
-    desc: 'Tap the button above to open the scanner. Point at the QR code on your screen.'
-  },
-  {
-    title: "You're connected",
-    desc: 'Your desktop will appear here. Everything is encrypted end-to-end.'
-  }
-]
 
 const styles = StyleSheet.create({
   container: {
