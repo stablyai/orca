@@ -8,6 +8,7 @@ const SCRIPT_DIR = import.meta.dirname
 const REPO_ROOT = path.resolve(SCRIPT_DIR, '..', '..')
 
 const CANONICAL_GUIDE_NAMES = [
+  'agent-memory',
   'computer-use',
   'linear-tickets',
   'orca-cli',
@@ -21,6 +22,7 @@ const CANONICAL_GUIDE_NAMES = [
 // Why: old discovery stubs can outlive a rename indefinitely, so aliases are
 // a compatibility ledger: add entries for renames, but never remove them.
 const GUIDE_ALIASES = {
+  'agent-memory': [],
   'computer-use': [],
   'linear-tickets': [],
   'orca-cli': [],
@@ -37,6 +39,7 @@ const GUIDE_ALIASES = {
 // landing to converge — so entries are added as skills convert, never removed. The stub
 // body lives in skill-stubs/<topic>.md; the projection reuses the guide's own frontmatter.
 const STUB_TOPICS = [
+  'agent-memory',
   'computer-use',
   'linear-tickets',
   'orca-cli',

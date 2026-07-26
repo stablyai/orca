@@ -41,6 +41,7 @@ export const BOOLEAN_FLAGS = new Set([
   'help',
   'inject',
   'include-archived',
+  'include-superseded',
   'interrupt',
   'json',
   'messages',
@@ -68,7 +69,7 @@ export const BOOLEAN_FLAGS = new Set([
 ])
 
 export const REPEATED_FLAG_SEPARATOR = '\u0000'
-const REPEATABLE_STRING_FLAGS = new Set(['label'])
+const REPEATABLE_STRING_FLAGS = new Set(['label', 'source', 'tag'])
 
 function setFlagValue(flags: Map<string, string | boolean>, name: string, value: string): void {
   const existing = flags.get(name)
@@ -183,6 +184,7 @@ export function supportsBrowserPageFlag(commandPath: string[]): boolean {
       'diagnostics',
       'linear',
       'skills',
+      'agent',
       'agent-context'
     ].includes(commandPath[0])
   ) {
@@ -242,6 +244,7 @@ export function isCommandGroup(commandPath: string[]): boolean {
         'vm'
       ].includes(commandPath[0])) ||
     (commandPath.length === 2 && commandPath[0] === 'agent' && commandPath[1] === 'hooks') ||
+    (commandPath.length === 2 && commandPath[0] === 'agent' && commandPath[1] === 'memory') ||
     (commandPath.length === 2 &&
       commandPath[0] === 'storage' &&
       ['local', 'session'].includes(commandPath[1]))

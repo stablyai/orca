@@ -156,6 +156,23 @@ describe('parseArgs', () => {
     expect(parsed.flags.get('label')).toBe(`Bug${REPEATED_FLAG_SEPARATOR}Regression`)
   })
 
+  it('preserves repeated agent-memory source and tag flags', () => {
+    const parsed = parseArgs([
+      'agent',
+      'memory',
+      'remember',
+      '--source',
+      'docs/a.md',
+      '--source=issue:#1',
+      '--tag',
+      'auth',
+      '--tag=security'
+    ])
+
+    expect(parsed.flags.get('source')).toBe(`docs/a.md${REPEATED_FLAG_SEPARATOR}issue:#1`)
+    expect(parsed.flags.get('tag')).toBe(`auth${REPEATED_FLAG_SEPARATOR}security`)
+  })
+
   it('does not apply repeated flag encoding to ordinary string flags', () => {
     const parsed = parseArgs(['linear', 'list', '--workspace', 'old', '--workspace', 'new'])
 
