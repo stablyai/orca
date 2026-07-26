@@ -4861,6 +4861,7 @@
           "loadAccountsFailed": "No se pudieron cargar las cuentas de proveedor.",
           "remoteScopeAccounts": "Mostrando las cuentas administradas por {{value0}}. Agrega o vuelve a autenticar cuentas en ese servidor.",
           "accountScopePrefix": "Alcance de la cuenta",
+          "accountScopeRemoteServerUnnamed": "Servidor remoto",
           "remoteScopeLocalAccountsKept": "Las cuentas administradas en este escritorio no cambian. Vuelve a cambiar el runtime predeterminado a Escritorio local para verlas.",
           "remoteScopeAuthContext": "Cada cuenta mantiene su propio contexto de inicio de sesión en {{value0}}.",
           "remoteEmptyClaudeAccounts": "No hay cuentas de Claude administradas en {{value0}}. Usa su inicio de sesión de Claude predeterminado del sistema; agrega cuentas en ese servidor.",

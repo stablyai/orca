@@ -4861,6 +4861,7 @@
           "loadAccountsFailed": "Could not load provider accounts.",
           "remoteScopeAccounts": "Showing accounts managed by {{value0}}. Add or re-authenticate accounts on that server.",
           "accountScopePrefix": "Account scope",
+          "accountScopeRemoteServerUnnamed": "Remote server",
           "remoteScopeLocalAccountsKept": "Accounts managed on this desktop are unchanged. Switch the default runtime back to Local desktop to view them.",
           "remoteScopeAuthContext": "Each account keeps its own sign-in context on {{value0}}.",
           "remoteEmptyClaudeAccounts": "No managed Claude accounts on {{value0}}. It uses its system default Claude login; add accounts on that server.",
