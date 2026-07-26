@@ -25,6 +25,7 @@ export function useAgentBucketCounts(): AgentBucketCounts {
     terminalLayoutsByTabId,
     ptyIdsByTabId,
     runtimePaneTitlesByTabId,
+    paneForegroundAgentByPaneKey,
     agentStatusEpoch
   } = useAppStore(
     useShallow((s) => ({
@@ -38,6 +39,7 @@ export function useAgentBucketCounts(): AgentBucketCounts {
       terminalLayoutsByTabId: s.terminalLayoutsByTabId,
       ptyIdsByTabId: s.ptyIdsByTabId,
       runtimePaneTitlesByTabId: s.runtimePaneTitlesByTabId,
+      paneForegroundAgentByPaneKey: s.paneForegroundAgentByPaneKey,
       agentStatusEpoch: s.agentStatusEpoch
     }))
   )
@@ -55,6 +57,7 @@ export function useAgentBucketCounts(): AgentBucketCounts {
         terminalLayoutsByTabId,
         ptyIdsByTabId,
         runtimePaneTitlesByTabId,
+        paneForegroundAgentByPaneKey,
         // Counts do not render acknowledgement state, so avoid subscribing the sidebar to it.
         acknowledgedAgentsByPaneKey: {}
       },
@@ -82,6 +85,7 @@ export function useAgentBucketCounts(): AgentBucketCounts {
     terminalLayoutsByTabId,
     ptyIdsByTabId,
     runtimePaneTitlesByTabId,
+    paneForegroundAgentByPaneKey,
     agentStatusEpoch
   ])
 }

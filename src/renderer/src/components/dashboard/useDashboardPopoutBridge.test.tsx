@@ -55,6 +55,7 @@ function makeSnapshotWatchState(): DashboardSnapshotWatchState {
     terminalLayoutsByTabId: {},
     ptyIdsByTabId: {},
     runtimePaneTitlesByTabId: {},
+    paneForegroundAgentByPaneKey: {},
     acknowledgedAgentsByPaneKey: {},
     agentStatusEpoch: 0
   }
@@ -119,6 +120,7 @@ describe('useDashboardPopoutBridge', () => {
       'terminalLayoutsByTabId',
       'ptyIdsByTabId',
       'runtimePaneTitlesByTabId',
+      'paneForegroundAgentByPaneKey',
       'acknowledgedAgentsByPaneKey'
     ] as const
     for (const key of referenceInputs) {

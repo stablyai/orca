@@ -10,6 +10,7 @@ import { getLiveEntriesFullRebuildCountForTests } from './worktree-agent-live-in
 import {
   selectLiveAgentStatusEntriesForWorktree,
   selectMigrationUnsupportedEntriesForWorktree,
+  selectPaneForegroundAgentEntriesForWorktree,
   selectRuntimeAgentOrchestrationForWorktree,
   selectRetainedAgentEntriesForWorktree
 } from './worktree-agent-row-selectors'
@@ -88,6 +89,35 @@ describe('selectMigrationUnsupportedEntriesForWorktree', () => {
     expect(second).toEqual([unsupported])
     expect(first).toBe(second)
     expect(first[0]).toBe(second[0])
+  })
+})
+
+describe('selectPaneForegroundAgentEntriesForWorktree', () => {
+  it('reuses the snapshot when only another worktree foreground agent changes', () => {
+    const wt1Entry = { agent: 'codex' as const, shellForeground: false }
+    const state = {
+      tabsByWorktree: {
+        'wt-1': [makeTab('tab-1')],
+        'wt-2': [makeTab('tab-2')]
+      },
+      paneForegroundAgentByPaneKey: {
+        [PANE_KEY_1]: wt1Entry,
+        [PANE_KEY_2]: { agent: 'claude' as const, shellForeground: false }
+      }
+    }
+    const nextState = {
+      ...state,
+      paneForegroundAgentByPaneKey: {
+        ...state.paneForegroundAgentByPaneKey,
+        [PANE_KEY_2]: { agent: 'aider' as const, shellForeground: false }
+      }
+    }
+
+    const first = selectPaneForegroundAgentEntriesForWorktree(state, 'wt-1')
+    const second = selectPaneForegroundAgentEntriesForWorktree(nextState, 'wt-1')
+
+    expect(first).toEqual({ [PANE_KEY_1]: wt1Entry })
+    expect(second).toBe(first)
   })
 })
 

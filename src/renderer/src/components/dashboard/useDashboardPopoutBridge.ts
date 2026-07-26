@@ -25,6 +25,7 @@ export function dashboardSnapshotInputsChanged(
     state.terminalLayoutsByTabId !== previousState.terminalLayoutsByTabId ||
     state.ptyIdsByTabId !== previousState.ptyIdsByTabId ||
     state.runtimePaneTitlesByTabId !== previousState.runtimePaneTitlesByTabId ||
+    state.paneForegroundAgentByPaneKey !== previousState.paneForegroundAgentByPaneKey ||
     state.acknowledgedAgentsByPaneKey !== previousState.acknowledgedAgentsByPaneKey ||
     // Why: freshness can change a bucket without replacing any backing map.
     state.agentStatusEpoch !== previousState.agentStatusEpoch

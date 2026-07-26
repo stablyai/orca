@@ -1,4 +1,5 @@
 import type { RetainedAgentEntry } from '@/store/slices/agent-status'
+import type { PaneForegroundAgentEntry } from '@/store/slices/pane-foreground-agent'
 import type { AppState } from '@/store/types'
 import type {
   AgentStatusEntry,
@@ -13,11 +14,13 @@ import {
   recordLiveEntriesFullRebuild
 } from './worktree-agent-live-index-patch'
 import type { TerminalLayoutSnapshot } from '../../../../shared/types'
+import { indexPaneForegroundAgentsByWorktree } from './worktree-pane-foreground-index'
 
 const EMPTY_LIVE_ENTRIES: AgentStatusEntry[] = []
 const EMPTY_MIGRATION_UNSUPPORTED_ENTRIES: MigrationUnsupportedPtyEntry[] = []
 const EMPTY_RETAINED: RetainedAgentEntry[] = []
 const EMPTY_RUNTIME_AGENT_ORCHESTRATION: Record<string, AgentStatusOrchestrationContext> = {}
+const EMPTY_PANE_FOREGROUND_AGENTS: Record<string, PaneForegroundAgentEntry> = {}
 // Why: selector unit tests often pass partial store mocks; production state
 // owns these maps, but missing mock maps should behave like empty slices.
 const EMPTY_RECORD = {}
@@ -275,4 +278,18 @@ export function selectTerminalLayoutsForWorktree(
     out[tab.id] = (state.terminalLayoutsByTabId ?? EMPTY_RECORD)[tab.id]
   }
   return out
+}
+
+export function selectPaneForegroundAgentEntriesForWorktree(
+  state: Pick<AppState, 'tabsByWorktree' | 'paneForegroundAgentByPaneKey'>,
+  worktreeId: string
+): Record<string, PaneForegroundAgentEntry> {
+  const tabsByWorktree = state.tabsByWorktree ?? EMPTY_RECORD
+  const paneForegroundAgentByPaneKey = state.paneForegroundAgentByPaneKey ?? EMPTY_RECORD
+  return (
+    indexPaneForegroundAgentsByWorktree(
+      getTabIdToWorktreeId(tabsByWorktree),
+      paneForegroundAgentByPaneKey
+    ).get(worktreeId) ?? EMPTY_PANE_FOREGROUND_AGENTS
+  )
 }

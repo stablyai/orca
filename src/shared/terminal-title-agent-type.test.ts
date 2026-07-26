@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { getAgentLabel as getSharedAgentLabel } from './agent-title-identity'
+import { hasCanonicalBrailleAgentTitleIdentity } from './explicit-agent-title-identity'
 import { isOpenCodeNativeTitle } from './opencode-terminal-title'
 import {
   isClaudeAgent,
@@ -46,11 +47,49 @@ describe('resolveExplicitTerminalTitleAgentType', () => {
     expect(resolveExplicitTerminalTitleAgentType('OMP')).toBe('omp')
   })
 
+  it('keeps bare Windows launcher titles explicit', () => {
+    expect(resolveExplicitTerminalTitleAgentType('codex.exe')).toBe('codex')
+    expect(resolveExplicitTerminalTitleAgentType('claude.cmd')).toBe('claude')
+    expect(resolveExplicitTerminalTitleAgentType('openclaude.ps1')).toBe('openclaude')
+  })
+
   it('treats Claude generic status prefixes as activity-only, not identity', () => {
     expect(resolveExplicitTerminalTitleAgentType('✳ investigating startup')).toBeNull()
     expect(resolveExplicitTerminalTitleAgentType('⠸ investigating startup')).toBeNull()
     expect(resolveExplicitTerminalTitleAgentType('. Compare Opencode Vs Orca')).toBeNull()
     expect(resolveExplicitTerminalTitleAgentType('* Review Codex behavior')).toBeNull()
+  })
+
+  it('does not treat agent names inside spinner task text as explicit identity', () => {
+    expect(resolveExplicitTerminalTitleAgentType('⠋ investigate Claude icon')).toBeNull()
+    expect(resolveExplicitTerminalTitleAgentType('⠋ investigate Codex icon')).toBeNull()
+    expect(
+      resolveExplicitTerminalTitleAgentType('⠋ compare Gemini and OpenCode behavior')
+    ).toBeNull()
+    expect(resolveExplicitTerminalTitleAgentType('⠋ fix the flaky suite - grok')).toBeNull()
+    expect(resolveExplicitTerminalTitleAgentType('Investigate Claude icon')).toBeNull()
+  })
+
+  it('does not treat task text after a generic pipe separator as explicit identity', () => {
+    expect(
+      resolveExplicitTerminalTitleAgentType('Investigate sidebar | Claude icon regression')
+    ).toBeNull()
+    expect(resolveExplicitTerminalTitleAgentType('Review behavior | ⠋ Codex')).toBeNull()
+  })
+
+  it('keeps provider-specific native title frames explicit', () => {
+    expect(resolveExplicitTerminalTitleAgentType('✦ Typing prompt... (workspace)')).toBe('gemini')
+    expect(resolveExplicitTerminalTitleAgentType('tmux | ✦ Gemini CLI')).toBe('gemini')
+    expect(resolveExplicitTerminalTitleAgentType('Fix the auth bug - grok')).toBe('grok')
+    expect(resolveExplicitTerminalTitleAgentType('⠋ Codex is thinking')).toBe('codex')
+  })
+
+  it('distinguishes canonical braille identity frames from leading task text', () => {
+    expect(hasCanonicalBrailleAgentTitleIdentity('⠋ Codex', 'codex')).toBe(true)
+    expect(hasCanonicalBrailleAgentTitleIdentity('⠋ Codex is thinking', 'codex')).toBe(true)
+    expect(hasCanonicalBrailleAgentTitleIdentity('⠋ Claude icon investigation', 'claude')).toBe(
+      false
+    )
   })
 
   it('resolves OpenCode native abbreviated session titles before task-text identities', () => {

@@ -1,19 +1,26 @@
 import type { DashboardAgentRow } from '@/components/dashboard/useDashboardData'
 import { formatAgentTypeLabel, isClaudeManagementTitle } from '@/lib/agent-status'
 import { containsBrailleSpinner } from '../../../../shared/agent-title-core'
-import { classifyTitleActivity, resolveTitleActivityLabel } from '@/lib/pane-agent-evidence'
+import {
+  classifyTitleActivity,
+  resolveCommittedTitleAgentType,
+  resolveTitleActivityLabel
+} from '@/lib/pane-agent-evidence'
 import { tabHasLivePty } from '@/lib/tab-has-live-pty'
+import type { PaneForegroundAgentEntry } from '@/store/slices/pane-foreground-agent'
+import { hasCanonicalBrailleAgentTitleIdentity } from '../../../../shared/explicit-agent-title-identity'
 import type {
   AgentStatusEntry,
   AgentStatusOrchestrationContext,
   AgentStatusState,
   AgentType
 } from '../../../../shared/agent-status-types'
-import { isTerminalLeafId, makePaneKey } from '../../../../shared/stable-pane-id'
+import { isTerminalLeafId, makePaneKey, parsePaneKey } from '../../../../shared/stable-pane-id'
 import type {
   TerminalLayoutSnapshot,
   TerminalPaneLayoutNode,
-  TerminalTab
+  TerminalTab,
+  TuiAgent
 } from '../../../../shared/types'
 import {
   normalizeCompatibleAgentTitleForOwner,
@@ -23,26 +30,7 @@ import {
 const EMPTY_RUNTIME_TITLES: Record<string, Record<number, string>> = {}
 const EMPTY_LIVE_PTY_IDS: Record<string, string[]> = {}
 const EMPTY_TERMINAL_LAYOUTS: Record<string, TerminalLayoutSnapshot | undefined> = {}
-
-const TITLE_AGENT_LABEL_TO_TYPE: Record<string, AgentType> = {
-  'Claude Code': 'claude',
-  OpenClaude: 'openclaude',
-  Codex: 'codex',
-  'Gemini CLI': 'gemini',
-  'GitHub Copilot': 'copilot',
-  Grok: 'grok',
-  Devin: 'devin',
-  Antigravity: 'antigravity',
-  OpenCode: 'opencode',
-  Aider: 'aider',
-  Cursor: 'cursor',
-  Droid: 'droid',
-  Hermes: 'hermes',
-  Pi: 'pi',
-  OMP: 'omp'
-}
-
-const CLAUDE_AGENT_TOKEN_RE = /(?<![\w./\\-])claude(?![\w./\\-])/i
+const EMPTY_PANE_FOREGROUND_AGENTS: Record<string, PaneForegroundAgentEntry> = {}
 
 export function buildTitleDerivedAgentRows(args: {
   tabs: TerminalTab[]
@@ -50,6 +38,7 @@ export function buildTitleDerivedAgentRows(args: {
   ptyIdsByTabId?: Record<string, string[]>
   terminalLayoutsByTabId?: Record<string, TerminalLayoutSnapshot | undefined>
   runtimeAgentOrchestrationByPaneKey?: Record<string, AgentStatusOrchestrationContext>
+  paneForegroundAgentByPaneKey?: Record<string, PaneForegroundAgentEntry>
   seenPaneKeys: Set<string>
   now: number
 }): DashboardAgentRow[] {
@@ -57,6 +46,8 @@ export function buildTitleDerivedAgentRows(args: {
   const runtimePaneTitlesByTabId = args.runtimePaneTitlesByTabId ?? EMPTY_RUNTIME_TITLES
   const ptyIdsByTabId = args.ptyIdsByTabId ?? EMPTY_LIVE_PTY_IDS
   const terminalLayoutsByTabId = args.terminalLayoutsByTabId ?? EMPTY_TERMINAL_LAYOUTS
+  const paneForegroundAgentByPaneKey =
+    args.paneForegroundAgentByPaneKey ?? EMPTY_PANE_FOREGROUND_AGENTS
 
   for (const tab of args.tabs) {
     if (!tabHasLivePty(ptyIdsByTabId, tab.id)) {
@@ -68,6 +59,10 @@ export function buildTitleDerivedAgentRows(args: {
       paneTitles && Object.keys(paneTitles).length > 0
         ? Object.entries(paneTitles).sort(([a], [b]) => Number(a) - Number(b))
         : []
+    const rootLeafIds = collectLeafIds(layout?.root ?? null)
+    const currentLeafIds = new Set(
+      rootLeafIds.length > 0 ? rootLeafIds : Object.keys(layout?.ptyIdsByLeafId ?? {})
+    )
 
     if (paneTitleEntries.length > 0) {
       for (const [paneId, title] of paneTitleEntries) {
@@ -85,7 +80,8 @@ export function buildTitleDerivedAgentRows(args: {
           leafId,
           title,
           now: args.now,
-          runtimeAgentOrchestrationByPaneKey: args.runtimeAgentOrchestrationByPaneKey
+          runtimeAgentOrchestrationByPaneKey: args.runtimeAgentOrchestrationByPaneKey,
+          paneForegroundAgentByPaneKey
         })
         if (!row || args.seenPaneKeys.has(row.paneKey)) {
           continue
@@ -93,33 +89,57 @@ export function buildTitleDerivedAgentRows(args: {
         rows.push(row)
         args.seenPaneKeys.add(row.paneKey)
       }
-      continue
+    } else {
+      const leafId = layout?.activeLeafId ?? collectLeafIds(layout?.root ?? null)[0]
+      if (leafId) {
+        const row = buildTitleDerivedAgentRow({
+          tab,
+          leafId,
+          title: tab.title,
+          now: args.now,
+          runtimeAgentOrchestrationByPaneKey: args.runtimeAgentOrchestrationByPaneKey,
+          paneForegroundAgentByPaneKey
+        })
+        if (row && !args.seenPaneKeys.has(row.paneKey)) {
+          rows.push(row)
+          args.seenPaneKeys.add(row.paneKey)
+        }
+      }
     }
 
-    const leafId = layout?.activeLeafId ?? collectLeafIds(layout?.root ?? null)[0]
-    if (!leafId) {
-      continue
+    for (const paneKey of Object.keys(paneForegroundAgentByPaneKey)) {
+      const parsed = parsePaneKey(paneKey)
+      if (
+        parsed?.tabId !== tab.id ||
+        args.seenPaneKeys.has(paneKey) ||
+        (currentLeafIds.size > 0 && !currentLeafIds.has(parsed.leafId))
+      ) {
+        continue
+      }
+      const title =
+        layout?.titlesByLeafId?.[parsed.leafId] ??
+        (layout?.activeLeafId === parsed.leafId ? tab.title : '')
+      const row = buildTitleDerivedAgentRow({
+        tab,
+        leafId: parsed.leafId,
+        title,
+        now: args.now,
+        runtimeAgentOrchestrationByPaneKey: args.runtimeAgentOrchestrationByPaneKey,
+        paneForegroundAgentByPaneKey
+      })
+      if (row) {
+        rows.push(row)
+        args.seenPaneKeys.add(row.paneKey)
+      }
     }
-    const row = buildTitleDerivedAgentRow({
-      tab,
-      leafId,
-      title: tab.title,
-      now: args.now,
-      runtimeAgentOrchestrationByPaneKey: args.runtimeAgentOrchestrationByPaneKey
-    })
-    if (!row || args.seenPaneKeys.has(row.paneKey)) {
-      continue
-    }
-    rows.push(row)
-    args.seenPaneKeys.add(row.paneKey)
   }
 
   return rows
 }
 
 /**
- * Constructs a dashboard agent row from a terminal tab's title fallback,
- * normalising Pi-compatible agent names to their owner.
+ * Constructs a synthetic dashboard row from title and foreground-process
+ * evidence, normalising Pi-compatible agent names to their owner.
  */
 function buildTitleDerivedAgentRow(args: {
   tab: TerminalTab
@@ -127,36 +147,60 @@ function buildTitleDerivedAgentRow(args: {
   title: string
   now: number
   runtimeAgentOrchestrationByPaneKey?: Record<string, AgentStatusOrchestrationContext>
+  paneForegroundAgentByPaneKey: Record<string, PaneForegroundAgentEntry>
 }): DashboardAgentRow | null {
   const title = normalizeCompatibleAgentTitleForOwner(args.title, args.tab.launchAgent)
-  const isClaudeAgentsTitle = isClaudeManagementTitle(title)
-  // Why: `claude agents` is a live Claude Code Agent Teams surface, but the
-  // shared detector keeps it neutral so runtime liveness probes do not treat
-  // the management/list screen as active work.
-  const status = isClaudeAgentsTitle ? 'idle' : classifyTitleActivity(title)
-  const label = isClaudeAgentsTitle ? 'Claude Code' : resolveTitleActivityLabel(title)
-  if (!status || !label) {
-    return null
-  }
   if (!isTerminalLeafId(args.leafId)) {
     return null
   }
   const paneKey = makePaneKey(args.tab.id, args.leafId)
+  const foreground = args.paneForegroundAgentByPaneKey[paneKey]
+  if (foreground?.shellForeground) {
+    return null
+  }
+  const foregroundAgentType =
+    resolveCompatibleAgentTypeForOwner(foreground?.agent, args.tab.launchAgent) ?? null
+  const isClaudeAgentsTitle = isClaudeManagementTitle(title)
+  // Why: `claude agents` is a live Claude Code Agent Teams surface, but the
+  // shared detector keeps it neutral so runtime liveness probes do not treat
+  // the management/list screen as active work.
+  const titleStatus = isClaudeAgentsTitle ? 'idle' : classifyTitleActivity(title)
+  const label = isClaudeAgentsTitle ? 'Claude Code' : resolveTitleActivityLabel(title)
+  const resolvedTitleAgentType = isClaudeAgentsTitle
+    ? 'claude'
+    : resolveTitleDerivedAgentType(title)
+  const knownAgentType = foregroundAgentType ?? args.tab.launchAgent
+  // Why: braille is shared; a conflicting provider name may be task text.
+  const titleAgentType =
+    resolvedTitleAgentType &&
+    knownAgentType &&
+    resolvedTitleAgentType !== knownAgentType &&
+    containsBrailleSpinner(title) &&
+    !hasCanonicalBrailleAgentTitleIdentity(title, resolvedTitleAgentType)
+      ? null
+      : resolvedTitleAgentType
+  const titleBelongsToForeground =
+    !foregroundAgentType || !titleAgentType || titleAgentType === foregroundAgentType
+  // Why: a foreground process proves presence, not active work.
+  const status = titleBelongsToForeground
+    ? (titleStatus ?? (foregroundAgentType ? 'idle' : null))
+    : 'idle'
+  if (!status) {
+    return null
+  }
   const orchestration = args.runtimeAgentOrchestrationByPaneKey?.[paneKey]
-  const titleAgentType = isClaudeAgentsTitle ? 'claude' : resolveTitleDerivedAgentType(title, label)
-  // Why: a braille spinner proves activity, not identity, so the resolver drops
-  // it. Hook-less agents over SSH (Codex, #8711) surface only spinner+cwd titles;
-  // fall back to the tab's launch identity instead of hiding the pane. Gated on
-  // the spinner on purpose — unlike the hook path's unconditional launchAgent
-  // fallback (resolveRowAgentType), this path manufactures agent-ness from a
-  // title alone, so a non-agent title must never become a row. Residual: a split
-  // pane whose own title carries a braille glyph is still attributed to launchAgent.
+  // Why: braille proves activity, not identity. Hook-less SSH agents may expose
+  // only spinner+cwd, so use launch identity only when that spinner is present.
+  // Residual: a split pane with its own braille title inherits launchAgent.
   const agentType =
-    titleAgentType ?? (containsBrailleSpinner(title) ? (args.tab.launchAgent ?? null) : null)
+    foregroundAgentType ??
+    titleAgentType ??
+    (containsBrailleSpinner(title) ? (args.tab.launchAgent ?? null) : null)
   if (!agentType) {
     return null
   }
-  const rowLabel = titleAgentType ? label : formatAgentTypeLabel(agentType)
+  const rowLabel =
+    !foregroundAgentType && titleAgentType && label ? label : formatAgentTypeLabel(agentType)
   const rowState = titleStatusToRowState(status)
   const secondary =
     status === 'permission' ? 'Needs input' : status === 'working' ? 'Running' : 'Idle'
@@ -184,15 +228,8 @@ function buildTitleDerivedAgentRow(args: {
   }
 }
 
-export function resolveTitleDerivedAgentType(title: string, label: string): AgentType | null {
-  const agentType = TITLE_AGENT_LABEL_TO_TYPE[label] ?? 'unknown'
-  if (agentType !== 'claude') {
-    return agentType
-  }
-  // Why: Claude's task-title spinner heuristic has no provider identity. In
-  // split panes it can match arbitrary terminal spinners, so sidebar rows only
-  // accept Claude when the title itself names Claude.
-  return CLAUDE_AGENT_TOKEN_RE.test(title) ? agentType : null
+export function resolveTitleDerivedAgentType(title: string): TuiAgent | null {
+  return resolveCommittedTitleAgentType(title)
 }
 
 /**
@@ -207,13 +244,12 @@ export function resolveAgentTypeFromTerminalTitle(
     return null
   }
   const normalizedTitle = normalizeCompatibleAgentTitleForOwner(title, ownerAgentType)
-  const label = resolveTitleActivityLabel(normalizedTitle)
-  return label
-    ? (resolveCompatibleAgentTypeForOwner(
-        resolveTitleDerivedAgentType(normalizedTitle, label),
-        ownerAgentType
-      ) ?? null)
-    : null
+  return (
+    resolveCompatibleAgentTypeForOwner(
+      resolveTitleDerivedAgentType(normalizedTitle),
+      ownerAgentType
+    ) ?? null
+  )
 }
 
 function titleStatusToRowState(

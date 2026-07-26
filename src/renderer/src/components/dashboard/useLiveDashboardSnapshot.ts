@@ -22,6 +22,7 @@ export function useLiveDashboardSnapshot(): DashboardSnapshot {
   const terminalLayoutsByTabId = useAppStore((s) => s.terminalLayoutsByTabId)
   const ptyIdsByTabId = useAppStore((s) => s.ptyIdsByTabId)
   const runtimePaneTitlesByTabId = useAppStore((s) => s.runtimePaneTitlesByTabId)
+  const paneForegroundAgentByPaneKey = useAppStore((s) => s.paneForegroundAgentByPaneKey)
   const acknowledgedAgentsByPaneKey = useAppStore((s) => s.acknowledgedAgentsByPaneKey)
   // Why: freshness can flip a bucket without any backing map changing; the epoch
   // ticks on the freshness boundary so the memo re-derives stale-decayed cards.
@@ -43,6 +44,7 @@ export function useLiveDashboardSnapshot(): DashboardSnapshot {
           terminalLayoutsByTabId,
           ptyIdsByTabId,
           runtimePaneTitlesByTabId,
+          paneForegroundAgentByPaneKey,
           acknowledgedAgentsByPaneKey
         },
         Date.now()
@@ -59,6 +61,7 @@ export function useLiveDashboardSnapshot(): DashboardSnapshot {
       terminalLayoutsByTabId,
       ptyIdsByTabId,
       runtimePaneTitlesByTabId,
+      paneForegroundAgentByPaneKey,
       acknowledgedAgentsByPaneKey,
       agentStatusEpoch
     ]

@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { applyAgentRowLineage } from '@/components/dashboard/agent-row-lineage'
+import { AGENT_STATUS_STALE_AFTER_MS } from '../../../../shared/agent-status-types'
 import type { TerminalLayoutSnapshot, TerminalTab, TuiAgent } from '../../../../shared/types'
 import { makePaneKey } from '../../../../shared/stable-pane-id'
 import { buildWorktreeAgentRows } from './worktree-agent-rows'
@@ -107,6 +108,22 @@ describe('buildTitleDerivedAgentRows', () => {
     expect(rows.map((row) => [row.agentType, row.state, row.entry.terminalTitle])).toEqual([
       ['pi', 'working', '\u280b Pi']
     ])
+  })
+
+  it('uses the shared title identity map for MiMo Code', () => {
+    const rows = buildWorktreeAgentRows({
+      tabs: [makeTab('tab-1')],
+      entries: [],
+      retained: [],
+      runtimePaneTitlesByTabId: {
+        'tab-1': { 1: 'MiMo Code ready' }
+      },
+      ptyIdsByTabId: { 'tab-1': ['pty-mimo'] },
+      terminalLayoutsByTabId: { 'tab-1': makeSingleLayout(LEAF_ID_1) },
+      now: 2000
+    })
+
+    expect(rows.map((row) => [row.agentType, row.state])).toEqual([['mimo-code', 'idle']])
   })
 
   it('does not add title-derived rows for panes without a live PTY', () => {
@@ -236,6 +253,207 @@ describe('buildTitleDerivedAgentRows', () => {
     })
 
     expect(rows.map((row) => [row.agentType, row.state])).toEqual([['codex', 'working']])
+  })
+
+  it.each([
+    ['codex', '⠋ Claude icon investigation'],
+    ['claude', '⠋ Codex icon investigation']
+  ] as const)(
+    'keeps launched %s identity when task text mentions another agent',
+    (launchAgent, title) => {
+      const rows = buildWorktreeAgentRows({
+        tabs: [makeTab('tab-1', { launchAgent })],
+        entries: [],
+        retained: [],
+        runtimePaneTitlesByTabId: {
+          'tab-1': { 1: title }
+        },
+        ptyIdsByTabId: { 'tab-1': ['pty-launched'] },
+        terminalLayoutsByTabId: { 'tab-1': makeSingleLayout(LEAF_ID_1) },
+        now: 2000
+      })
+
+      expect(rows.map((row) => [row.agentType, row.state, row.entry.prompt])).toEqual([
+        [launchAgent, 'working', launchAgent === 'codex' ? 'Codex' : 'Claude']
+      ])
+    }
+  )
+
+  it('uses foreground process identity when a manually started agent has no launch metadata', () => {
+    const paneKey = makePaneKey('tab-1', LEAF_ID_1)
+    const rows = buildWorktreeAgentRows({
+      tabs: [makeTab('tab-1', { title: 'Terminal 1' })],
+      entries: [],
+      retained: [],
+      ptyIdsByTabId: { 'tab-1': ['pty-manual'] },
+      terminalLayoutsByTabId: { 'tab-1': makeSingleLayout(LEAF_ID_1) },
+      paneForegroundAgentByPaneKey: {
+        [paneKey]: { agent: 'codex', shellForeground: false }
+      },
+      now: 2000
+    })
+
+    expect(rows.map((row) => [row.agentType, row.state, row.entry.prompt])).toEqual([
+      ['codex', 'idle', 'Codex']
+    ])
+  })
+
+  it('prefers foreground process identity over another agent mentioned in task text', () => {
+    const paneKey = makePaneKey('tab-1', LEAF_ID_1)
+    const rows = buildWorktreeAgentRows({
+      tabs: [makeTab('tab-1')],
+      entries: [],
+      retained: [],
+      runtimePaneTitlesByTabId: {
+        'tab-1': { 1: '⠋ Claude icon investigation' }
+      },
+      ptyIdsByTabId: { 'tab-1': ['pty-manual'] },
+      terminalLayoutsByTabId: { 'tab-1': makeSingleLayout(LEAF_ID_1) },
+      paneForegroundAgentByPaneKey: {
+        [paneKey]: { agent: 'codex', shellForeground: false }
+      },
+      now: 2000
+    })
+
+    expect(rows.map((row) => [row.agentType, row.state, row.entry.prompt])).toEqual([
+      ['codex', 'working', 'Codex']
+    ])
+  })
+
+  it('keeps live hook identity ahead of a conflicting foreground process', () => {
+    const paneKey = makePaneKey('tab-1', LEAF_ID_1)
+    const rows = buildWorktreeAgentRows({
+      tabs: [makeTab('tab-1')],
+      entries: [
+        {
+          paneKey,
+          agentType: 'claude',
+          state: 'working',
+          prompt: 'Investigate the icon',
+          updatedAt: 2000,
+          stateStartedAt: 2000,
+          stateHistory: []
+        }
+      ],
+      retained: [],
+      runtimePaneTitlesByTabId: {
+        'tab-1': { 1: '⠋ Codex' }
+      },
+      ptyIdsByTabId: { 'tab-1': ['pty-hook'] },
+      terminalLayoutsByTabId: { 'tab-1': makeSingleLayout(LEAF_ID_1) },
+      paneForegroundAgentByPaneKey: {
+        [paneKey]: { agent: 'codex', shellForeground: false }
+      },
+      now: 2000
+    })
+
+    expect(rows.map((row) => row.agentType)).toEqual(['claude'])
+  })
+
+  it('lets a current foreground process replace a conflicting stale hook row', () => {
+    const paneKey = makePaneKey('tab-1', LEAF_ID_1)
+    const now = AGENT_STATUS_STALE_AFTER_MS + 2001
+    const rows = buildWorktreeAgentRows({
+      tabs: [makeTab('tab-1', { launchAgent: 'codex' })],
+      entries: [
+        {
+          paneKey,
+          agentType: 'claude',
+          state: 'working',
+          prompt: 'Previous Claude task',
+          updatedAt: 2000,
+          stateStartedAt: 2000,
+          stateHistory: []
+        }
+      ],
+      retained: [],
+      runtimePaneTitlesByTabId: {
+        'tab-1': { 1: '⠋ Codex is thinking' }
+      },
+      ptyIdsByTabId: { 'tab-1': ['pty-reused'] },
+      terminalLayoutsByTabId: { 'tab-1': makeSingleLayout(LEAF_ID_1) },
+      paneForegroundAgentByPaneKey: {
+        [paneKey]: { agent: 'codex', shellForeground: false }
+      },
+      now
+    })
+
+    expect(rows.map((row) => [row.agentType, row.state, row.entry.prompt])).toEqual([
+      ['codex', 'working', 'Codex']
+    ])
+  })
+
+  it('normalizes a foreground Pi process to its launched OMP owner', () => {
+    const paneKey = makePaneKey('tab-1', LEAF_ID_1)
+    const rows = buildWorktreeAgentRows({
+      tabs: [makeTab('tab-1', { launchAgent: 'omp', title: 'Terminal 1' })],
+      entries: [],
+      retained: [],
+      ptyIdsByTabId: { 'tab-1': ['pty-omp'] },
+      terminalLayoutsByTabId: { 'tab-1': makeSingleLayout(LEAF_ID_1) },
+      paneForegroundAgentByPaneKey: {
+        [paneKey]: { agent: 'pi', shellForeground: false }
+      },
+      now: 2000
+    })
+
+    expect(rows.map((row) => [row.agentType, row.state])).toEqual([['omp', 'idle']])
+  })
+
+  it('includes a titleless foreground agent in an inactive split pane', () => {
+    const paneKey = makePaneKey('tab-1', LEAF_ID_2)
+    const rows = buildWorktreeAgentRows({
+      tabs: [makeTab('tab-1', { title: 'Terminal 1' })],
+      entries: [],
+      retained: [],
+      ptyIdsByTabId: { 'tab-1': ['pty-left', 'pty-right'] },
+      terminalLayoutsByTabId: { 'tab-1': makeSplitLayout() },
+      paneForegroundAgentByPaneKey: {
+        [paneKey]: { agent: 'codex', shellForeground: false }
+      },
+      now: 2000
+    })
+
+    expect(rows.map((row) => [row.paneKey, row.agentType, row.state])).toEqual([
+      [paneKey, 'codex', 'idle']
+    ])
+  })
+
+  it('ignores a stale foreground entry whose split leaf left the current layout', () => {
+    const stalePaneKey = makePaneKey('tab-1', LEAF_ID_2)
+    const rows = buildWorktreeAgentRows({
+      tabs: [makeTab('tab-1', { title: 'Terminal 1' })],
+      entries: [],
+      retained: [],
+      ptyIdsByTabId: { 'tab-1': ['pty-current'] },
+      terminalLayoutsByTabId: { 'tab-1': makeSingleLayout(LEAF_ID_1) },
+      paneForegroundAgentByPaneKey: {
+        [stalePaneKey]: { agent: 'codex', shellForeground: false }
+      },
+      now: 2000
+    })
+
+    expect(rows).toHaveLength(0)
+  })
+
+  it('drops a stale title-derived row after the pane returns to the shell', () => {
+    const paneKey = makePaneKey('tab-1', LEAF_ID_1)
+    const rows = buildWorktreeAgentRows({
+      tabs: [makeTab('tab-1', { launchAgent: 'codex' })],
+      entries: [],
+      retained: [],
+      runtimePaneTitlesByTabId: {
+        'tab-1': { 1: '⠋ Codex is thinking' }
+      },
+      ptyIdsByTabId: { 'tab-1': ['pty-finished'] },
+      terminalLayoutsByTabId: { 'tab-1': makeSingleLayout(LEAF_ID_1) },
+      paneForegroundAgentByPaneKey: {
+        [paneKey]: { agent: null, shellForeground: true }
+      },
+      now: 2000
+    })
+
+    expect(rows).toHaveLength(0)
   })
 
   it('produces no row for a spinner-only title when the tab has no launch identity', () => {

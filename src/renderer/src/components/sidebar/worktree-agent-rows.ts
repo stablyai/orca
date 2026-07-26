@@ -1,9 +1,9 @@
 import type { DashboardAgentRow } from '@/components/dashboard/useDashboardData'
 import { isExplicitAgentStatusFresh } from '@/lib/agent-status'
 import type { RetainedAgentEntry } from '@/store/slices/agent-status'
+import type { PaneForegroundAgentEntry } from '@/store/slices/pane-foreground-agent'
 import {
   AGENT_STATUS_STALE_AFTER_MS,
-  type AgentType,
   type AgentStatusEntry,
   type AgentStatusOrchestrationContext
 } from '../../../../shared/agent-status-types'
@@ -18,10 +18,7 @@ import type {
   TerminalTab
 } from '../../../../shared/types'
 import { resolveRuntimePaneTitleLeafId } from '@/lib/runtime-pane-title-leaf-id'
-import {
-  buildTitleDerivedAgentRows,
-  resolveAgentTypeFromTerminalTitle
-} from './worktree-title-derived-agent-rows'
+import { buildTitleDerivedAgentRows } from './worktree-title-derived-agent-rows'
 import { buildSubagentChildRows } from './worktree-subagent-child-rows'
 import { resolveCompatibleAgentTypeForOwner } from '../../../../shared/agent-title-owner'
 import { compareWorktreeAgentRows } from './worktree-agent-row-order'
@@ -29,23 +26,7 @@ import {
   effectiveWorktreeAgentRowStartedAt,
   tabFromWorktreeAttributedStatusEntry
 } from './worktree-agent-row-fallback-tab'
-
-/**
- * Resolves the sidebar row agent type, prioritizing launch agent configuration
- * and normalizing compatible agent kinds.
- */
-function resolveRowAgentType(entry: AgentStatusEntry, tab?: TerminalTab | null): AgentType {
-  const entryAgentType = resolveCompatibleAgentTypeForOwner(entry.agentType, tab?.launchAgent)
-  if (entryAgentType && entryAgentType !== 'unknown') {
-    return entryAgentType
-  }
-  return (
-    resolveAgentTypeFromTerminalTitle(entry.terminalTitle ?? tab?.title, tab?.launchAgent) ??
-    tab?.launchAgent ??
-    entryAgentType ??
-    'unknown'
-  )
-}
+import { resolveWorktreeAgentRowType } from './worktree-agent-row-type'
 
 function orchestrationContextsEqual(
   a: AgentStatusOrchestrationContext,
@@ -209,10 +190,12 @@ export function buildWorktreeAgentRows(args: {
   ptyIdsByTabId?: Record<string, string[]>
   terminalLayoutsByTabId?: Record<string, TerminalLayoutSnapshot | undefined>
   runtimeAgentOrchestrationByPaneKey?: Record<string, AgentStatusOrchestrationContext>
+  paneForegroundAgentByPaneKey?: Record<string, PaneForegroundAgentEntry>
   now: number
 }): DashboardAgentRow[] {
   const rows: DashboardAgentRow[] = []
   const seenPaneKeys = new Set<string>()
+  const supersededPaneKeys = new Set<string>()
   const currentTabIds = new Set(args.tabs.map((tab) => tab.id))
 
   const entriesByTabId = new Map<string, AgentStatusEntry[]>()
@@ -234,6 +217,24 @@ export function buildWorktreeAgentRows(args: {
     for (const entry of explicitEntries) {
       const rowEntry = entryWithRuntimeOrchestration(entry, args.runtimeAgentOrchestrationByPaneKey)
       const isFresh = isExplicitAgentStatusFresh(rowEntry, args.now, AGENT_STATUS_STALE_AFTER_MS)
+      const rowAgentType = resolveWorktreeAgentRowType(rowEntry, tab)
+      const foreground = args.paneForegroundAgentByPaneKey?.[rowEntry.paneKey]
+      const foregroundAgentType = foreground?.agent
+        ? (resolveCompatibleAgentTypeForOwner(foreground.agent, tab.launchAgent) ??
+          foreground.agent)
+        : null
+      // Why: confirmed shell or current-process evidence supersedes hooks that no longer own the pane.
+      if (
+        (foreground?.shellForeground === true && rowEntry.state !== 'done') ||
+        (!isFresh && foregroundAgentType !== null) ||
+        (rowEntry.state === 'done' &&
+          foregroundAgentType !== null &&
+          foreground?.shellForeground !== true &&
+          foregroundAgentType !== rowAgentType)
+      ) {
+        supersededPaneKeys.add(rowEntry.paneKey)
+        continue
+      }
       const shouldDecay =
         !isFresh &&
         (rowEntry.state === 'working' ||
@@ -244,7 +245,7 @@ export function buildWorktreeAgentRows(args: {
         paneKey: rowEntry.paneKey,
         entry: rowEntry,
         tab,
-        agentType: resolveRowAgentType(rowEntry, tab),
+        agentType: rowAgentType,
         rowSource: 'live',
         state: shouldDecay ? 'idle' : rowEntry.state,
         startedAt
@@ -269,7 +270,7 @@ export function buildWorktreeAgentRows(args: {
   // their tab is present in this renderer. Keep those live rows visible in the
   // worktree card instead of waiting for tab membership that may never arrive.
   for (const entry of args.entries) {
-    if (seenPaneKeys.has(entry.paneKey)) {
+    if (seenPaneKeys.has(entry.paneKey) || supersededPaneKeys.has(entry.paneKey)) {
       continue
     }
     const rowEntry = entryWithRuntimeOrchestration(entry, args.runtimeAgentOrchestrationByPaneKey)
@@ -286,7 +287,7 @@ export function buildWorktreeAgentRows(args: {
       paneKey: rowEntry.paneKey,
       entry: rowEntry,
       tab,
-      agentType: resolveRowAgentType(rowEntry, tab),
+      agentType: resolveWorktreeAgentRowType(rowEntry, tab),
       rowSource: 'live',
       state: shouldDecay ? 'idle' : rowEntry.state,
       startedAt
@@ -296,7 +297,7 @@ export function buildWorktreeAgentRows(args: {
   }
 
   for (const ra of args.retained) {
-    if (seenPaneKeys.has(ra.entry.paneKey)) {
+    if (seenPaneKeys.has(ra.entry.paneKey) || supersededPaneKeys.has(ra.entry.paneKey)) {
       continue
     }
     if (
@@ -316,7 +317,7 @@ export function buildWorktreeAgentRows(args: {
       paneKey: rowEntry.paneKey,
       entry: rowEntry,
       tab: ra.tab,
-      agentType: resolveRowAgentType(rowEntry, ra.tab),
+      agentType: resolveWorktreeAgentRowType(rowEntry, ra.tab),
       rowSource: 'retained',
       state: 'done',
       startedAt: ra.startedAt

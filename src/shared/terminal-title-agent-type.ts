@@ -10,6 +10,7 @@ import {
   getPiCompatibleSyntheticAgentLabel,
   isLegacyPiCompatibleTitle
 } from './pi-compatible-synthetic-title'
+import { hasLeadingExplicitAgentTitleIdentity } from './explicit-agent-title-identity'
 import type { TuiAgent } from './types'
 
 export const CLAUDE_IDLE = '\u2733' // ✳ (eight-spoked asterisk — Claude Code idle prefix)
@@ -231,39 +232,29 @@ const TITLE_LABEL_TO_AGENT: Partial<Record<string, TuiAgent>> = {
   OMP: 'omp'
 }
 
-function hasGenericClaudeStatusPrefix(title: string): boolean {
-  return (
-    containsBrailleSpinner(title) ||
-    title.startsWith('✳ ') ||
-    title === '✳' ||
-    title.startsWith('. ') ||
-    title.startsWith('* ')
-  )
-}
-
-function isGenericClaudeStatusClaim(title: string, titleAgent: TuiAgent | null): boolean {
-  return (
-    titleAgent === 'claude' &&
-    hasGenericClaudeStatusPrefix(title) &&
-    !titleHasAgentName(title, 'claude')
-  )
-}
-
 export function resolveTerminalTitleAgentType(title: string): TuiAgent | null {
   const label = getAgentLabel(title)
   return label ? (TITLE_LABEL_TO_AGENT[label] ?? null) : null
 }
 
 /**
- * Resolve a terminal title's agent identity, but treat Claude's bare status
- * prefixes (spinner / "✳" / ". " / "* ") as activity-only. They are evidence
- * that something is running, not proof the agent is Claude — so a task or
- * worktree title cannot become Claude without an explicit "Claude Code" name.
+ * Resolve identity only when a provider owns the title frame. Agent names
+ * inside task text are activity content, not evidence that the pane changed
+ * providers.
  */
 export function resolveExplicitTerminalTitleAgentType(title: string): TuiAgent | null {
   const titleAgent = resolveTerminalTitleAgentType(title)
-  if (isGenericClaudeStatusClaim(title, titleAgent)) {
+  if (!titleAgent) {
     return null
   }
-  return titleAgent
+  if (
+    isOpenCodeNativeTitle(title) ||
+    isGrokRotatingWorkingTitle(title) ||
+    (titleAgent === 'gemini' && /(?:^| \| )\s*[✦⏲◇✋]/u.test(title)) ||
+    (titleAgent === 'pi' && isPiAgentTitle(title)) ||
+    (titleAgent === 'grok' && !containsBrailleSpinner(title) && /\s-\s+grok\s*$/i.test(title))
+  ) {
+    return titleAgent
+  }
+  return hasLeadingExplicitAgentTitleIdentity(title, titleAgent) ? titleAgent : null
 }

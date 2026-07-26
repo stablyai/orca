@@ -83,12 +83,26 @@ function baseState(overrides: Partial<DashboardSnapshotState>): DashboardSnapsho
     },
     ptyIdsByTabId: { [TAB_ID]: ['pty1'] },
     runtimePaneTitlesByTabId: {},
+    paneForegroundAgentByPaneKey: {},
     acknowledgedAgentsByPaneKey: {},
     ...overrides
   } as unknown as DashboardSnapshotState
 }
 
 describe('buildDashboardSnapshot', () => {
+  it('keeps foreground-only sidebar agents in the dashboard snapshot', () => {
+    const snapshot = buildDashboardSnapshot(
+      baseState({
+        paneForegroundAgentByPaneKey: {
+          [PANE_KEY]: { agent: 'codex', shellForeground: false }
+        }
+      }),
+      NOW
+    )
+
+    expect(snapshot.cards.map((card) => [card.agentType, card.bucket])).toEqual([['codex', 'idle']])
+  })
+
   it('maps a live working agent to the working bucket with a resolved ptyId', () => {
     const snapshot = buildDashboardSnapshot(
       baseState({

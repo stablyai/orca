@@ -12,6 +12,7 @@ import { buildWorktreeAgentRows } from './worktree-agent-rows'
 import {
   selectLiveAgentStatusEntriesForWorktree,
   selectMigrationUnsupportedEntriesForWorktree,
+  selectPaneForegroundAgentEntriesForWorktree,
   selectRuntimeAgentOrchestrationForWorktree,
   selectRetainedAgentEntriesForWorktree,
   selectTerminalLayoutsForWorktree
@@ -25,14 +26,15 @@ export { buildWorktreeAgentRows } from './worktree-agent-rows'
 export {
   selectLiveAgentStatusEntriesForWorktree,
   selectMigrationUnsupportedEntriesForWorktree,
+  selectPaneForegroundAgentEntriesForWorktree,
   selectRuntimeAgentOrchestrationForWorktree,
   selectRetainedAgentEntriesForWorktree
 } from './worktree-agent-row-selectors'
 
 /**
  * Narrow per-worktree agent row hook used by the WorktreeCard inline agents
- * list. Produces live hook-reported agents plus retained "done" snapshots,
- * stale-decayed to 'idle' when the hook stream has gone quiet.
+ * list. Produces hook, title, and foreground-process agents plus retained
+ * "done" snapshots, stale-decayed to 'idle' when the hook stream goes quiet.
  *
  * Uses indexed per-worktree selectors rather than reusing useDashboardData's
  * cross-worktree aggregate. The index is rebuilt once per relevant immutable
@@ -74,6 +76,9 @@ export function useWorktreeAgentRows(worktreeId: string, active = true): Dashboa
   const runtimeAgentOrchestrationByPaneKey = useAppStore(
     useShallow((s) => (active ? selectRuntimeAgentOrchestrationForWorktree(s, worktreeId) : {}))
   )
+  const paneForegroundAgentByPaneKey = useAppStore(
+    useShallow((s) => (active ? selectPaneForegroundAgentEntriesForWorktree(s, worktreeId) : {}))
+  )
   const agentFreshnessSignature = useAppStore((s) =>
     active ? selectAgentFreshness(s) : EMPTY_WORKTREE_AGENT_FRESHNESS_SIGNATURE
   )
@@ -104,6 +109,7 @@ export function useWorktreeAgentRows(worktreeId: string, active = true): Dashboa
         ptyIdsByTabId,
         terminalLayoutsByTabId,
         runtimeAgentOrchestrationByPaneKey,
+        paneForegroundAgentByPaneKey,
         now
       })
     )
@@ -118,6 +124,7 @@ export function useWorktreeAgentRows(worktreeId: string, active = true): Dashboa
     ptyIdsByTabId,
     terminalLayoutsByTabId,
     runtimeAgentOrchestrationByPaneKey,
+    paneForegroundAgentByPaneKey,
     agentFreshnessSignature
   ])
 }
