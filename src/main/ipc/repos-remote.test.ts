@@ -120,6 +120,7 @@ vi.mock('../worktree-root-preparation', () => ({
 }))
 
 vi.mock('../providers/ssh-git-dispatch', () => ({
+  getSshGitProviderGeneration: () => 0,
   getSshGitProvider: vi.fn().mockImplementation((id: string) => {
     if (id === 'conn-1') {
       return mockGitProvider

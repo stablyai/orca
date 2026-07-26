@@ -1,6 +1,13 @@
+import { assertJsonTextStructureWithinLimits } from './json-text-structure-limit'
+
 const TERMINAL_STREAM_KIND = 0x74
 const TERMINAL_STREAM_VERSION = 1
 const HEADER_BYTES = 16
+export const TERMINAL_STREAM_JSON_MAX_BYTES = 8 * 1024 * 1024
+export const TERMINAL_STREAM_JSON_STRUCTURE_LIMITS = {
+  structuralTokens: 256 * 1024,
+  nestingDepth: 32
+} as const
 
 export enum TerminalStreamOpcode {
   Output = 1,
@@ -73,8 +80,13 @@ export function encodeTerminalStreamJson(value: unknown): Uint8Array {
 }
 
 export function decodeTerminalStreamJson<T>(payload: Uint8Array): T | null {
+  if (payload.byteLength > TERMINAL_STREAM_JSON_MAX_BYTES) {
+    return null
+  }
   try {
-    return JSON.parse(new TextDecoder().decode(payload)) as T
+    const content = new TextDecoder().decode(payload)
+    assertJsonTextStructureWithinLimits(content, TERMINAL_STREAM_JSON_STRUCTURE_LIMITS)
+    return JSON.parse(content) as T
   } catch {
     return null
   }

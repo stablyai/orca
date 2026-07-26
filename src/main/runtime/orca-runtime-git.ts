@@ -23,6 +23,7 @@ import {
   mergeLegacyCommitMessageAiIntoSourceControlAi,
   type ResolvedSourceControlAiGenerationParams
 } from '../../shared/source-control-ai'
+import { withLinkedIssueDraftContext } from '../../shared/source-control-ai-action-variables'
 import type { SourceControlAiOperation } from '../../shared/source-control-ai-types'
 import type { GitProviderStatusOptions } from '../providers/types'
 import { getRemoteCommitUrl, getRemoteFileUrl } from '../git/repo'
@@ -160,10 +161,25 @@ export type RuntimeGitCommandHost = {
   resolveRuntimeGitTarget(selector: string): Promise<RuntimeGitTarget>
   getRuntimeSettings(): GlobalSettings
   getCommitMessageAgentEnvironment?(): CommitMessageAgentEnvironmentResolvers | undefined
+  /**
+   * Live linked-issue read by worktree id. Resolved worktrees come from a
+   * short-TTL cache, so link/unlink would otherwise lag generation; hosts that
+   * implement this are authoritative, including the `null` unlinked answer.
+   * Return `undefined` when metadata is unavailable (store not ready) so the
+   * caller keeps the resolved worktree's cached value instead of reading it as
+   * unlinked.
+   */
+  getWorktreeLinkedIssue?(worktreeId: string): number | null | undefined
 }
 
 export class RuntimeGitCommands {
   constructor(private readonly host: RuntimeGitCommandHost) {}
+
+  private linkedIssueForTarget(target: RuntimeGitTarget): number | null | undefined {
+    const live = this.host.getWorktreeLinkedIssue?.(target.worktree.id)
+    // Why: `undefined` means the host could not answer, not "unlinked".
+    return live === undefined ? target.worktree.linkedIssue : live
+  }
 
   async getRuntimeGitStatus(
     worktreeSelector: string,
@@ -615,6 +631,7 @@ export class RuntimeGitCommands {
       if (!context) {
         return { success: false, error: 'No staged changes to summarize.' }
       }
+      context = withLinkedIssueDraftContext(context, this.linkedIssueForTarget(target))
       return generateCommitMessageFromContext(context, resolvedSettings.params, {
         kind: 'remote',
         cwd: target.worktree.path,
@@ -634,6 +651,7 @@ export class RuntimeGitCommands {
     if (!context) {
       return { success: false, error: 'No staged changes to summarize.' }
     }
+    context = withLinkedIssueDraftContext(context, this.linkedIssueForTarget(target))
     const localEnv = await prepareLocalCommitMessageAgentEnv(
       resolvedSettings.params.agentId,
       this.host.getCommitMessageAgentEnvironment?.(),
@@ -738,6 +756,8 @@ export class RuntimeGitCommands {
     if (!context) {
       return { success: false, error: 'No branch changes to summarize.' }
     }
+    // Why: both SSH and local branches share this context, so one attach covers each.
+    context = withLinkedIssueDraftContext(context, this.linkedIssueForTarget(target))
 
     if (target.connectionId) {
       return generatePullRequestFieldsFromContext(context, resolvedSettings.params, {

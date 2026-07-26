@@ -29,6 +29,8 @@ import type {
   TuiAgent
 } from '../../shared/types'
 import type { GitHistoryOptions, GitHistoryResult } from '../../shared/git-history'
+import type { SshMutationExpectation } from '../../shared/ssh-types'
+import { assertSshMutationExpectation } from '../ssh/ssh-connection-generation'
 import {
   buildRgArgs,
   createAccumulator,
@@ -85,6 +87,7 @@ import { assertGitPushTargetShape } from '../../shared/git-push-target-validatio
 import { getCommitMessageModelDiscoveryHostKey } from '../../shared/commit-message-host-key'
 import type { HostedReviewProvider } from '../../shared/hosted-review'
 import type { ResolvedSourceControlAiGenerationParams } from '../../shared/source-control-ai'
+import { withLinkedIssueDraftContext } from '../../shared/source-control-ai-action-variables'
 import { validateGitPushTarget } from '../git/push-target-validation'
 import { getRemoteCommitUrl, getRemoteFileUrl } from '../git/repo'
 import {
@@ -98,6 +101,7 @@ import { listQuickOpenFiles } from './filesystem-list-files'
 import { registerFilesystemMutationHandlers } from './filesystem-mutations'
 import { searchWithGitGrep } from './filesystem-search-git'
 import { getLocalGitOptionsForRegisteredWorktree } from './local-worktree-runtime-options'
+import { resolveSourceControlAiLinkedIssue } from './source-control-ai-linked-issue'
 import { listMarkdownDocuments, markdownDocumentsFromRelativePaths } from './markdown-documents'
 import { checkRgAvailable } from './rg-availability'
 import {
@@ -807,8 +811,14 @@ export function registerFilesystemHandlers(
     'fs:writeFile',
     async (
       _event,
-      args: { filePath: string; content: string; connectionId?: string }
+      args: { filePath: string; content: string; connectionId?: string } & SshMutationExpectation
     ): Promise<void> => {
+      assertSshMutationExpectation(
+        args.connectionId,
+        args.expectedSshTargetId,
+        args.expectedSshConnectionGeneration,
+        args.expectedExecutionHostId
+      )
       if (args.connectionId) {
         const provider = requireSshFilesystemProvider(args.connectionId)
         return provider.writeFile(args.filePath, args.content)
@@ -834,8 +844,18 @@ export function registerFilesystemHandlers(
     'fs:deletePath',
     async (
       _event,
-      args: { targetPath: string; connectionId?: string; recursive?: boolean }
+      args: {
+        targetPath: string
+        connectionId?: string
+        recursive?: boolean
+      } & SshMutationExpectation
     ): Promise<void> => {
+      assertSshMutationExpectation(
+        args.connectionId,
+        args.expectedSshTargetId,
+        args.expectedSshConnectionGeneration,
+        args.expectedExecutionHostId
+      )
       if (args.connectionId) {
         const provider = requireSshFilesystemProvider(args.connectionId)
         return provider.deletePath(args.targetPath, args.recursive)
@@ -1342,6 +1362,8 @@ export function registerFilesystemHandlers(
       _event,
       args: {
         worktreePath: string
+        // Raw (unstripped) meta key; validated against worktreePath before any meta read.
+        worktreeId?: string
         repoId?: string
         connectionId?: string
         sourceControlAiResolvedParams?: ResolvedSourceControlAiGenerationParams
@@ -1390,6 +1412,10 @@ export function registerFilesystemHandlers(
         if (!context) {
           return { success: false, error: 'No staged changes to summarize.' }
         }
+        context = withLinkedIssueDraftContext(
+          context,
+          resolveSourceControlAiLinkedIssue(store, args)
+        )
         return generateCommitMessageFromContext(context, resolvedSettings.params, {
           kind: 'remote',
           cwd: args.worktreePath,
@@ -1417,6 +1443,10 @@ export function registerFilesystemHandlers(
       if (!context) {
         return { success: false, error: 'No staged changes to summarize.' }
       }
+      context = withLinkedIssueDraftContext(
+        context,
+        resolveSourceControlAiLinkedIssue(store, args, worktreePath)
+      )
       const localEnv = await prepareLocalCommitMessageAgentEnv(
         resolvedSettings.params.agentId,
         commitMessageAgentEnv,
@@ -1514,6 +1544,8 @@ export function registerFilesystemHandlers(
       _event,
       args: {
         worktreePath: string
+        // Raw (unstripped) meta key; validated against worktreePath before any meta read.
+        worktreeId?: string
         repoId?: string
         base: string
         title: string
@@ -1583,6 +1615,10 @@ export function registerFilesystemHandlers(
         if (!context) {
           return { success: false, error: 'No branch changes to summarize.' }
         }
+        context = withLinkedIssueDraftContext(
+          context,
+          resolveSourceControlAiLinkedIssue(store, args)
+        )
         return generatePullRequestFieldsFromContext(context, resolvedSettings.params, {
           kind: 'remote',
           cwd: args.worktreePath,
@@ -1626,6 +1662,10 @@ export function registerFilesystemHandlers(
       if (!context) {
         return { success: false, error: 'No branch changes to summarize.' }
       }
+      context = withLinkedIssueDraftContext(
+        context,
+        resolveSourceControlAiLinkedIssue(store, args, worktreePath)
+      )
       const localEnv = await prepareLocalCommitMessageAgentEnv(
         resolvedSettings.params.agentId,
         commitMessageAgentEnv,

@@ -3,13 +3,17 @@ import { basename } from 'node:path'
 import { existsSync } from 'node:fs'
 import { DaemonClient } from './client'
 import { getMacDaemonSystemResolverHealth } from './daemon-health'
-import { HistoryManager } from './history-manager'
+import { HistoryManager, type HistoryRecoveryFreeze } from './history-manager'
 import { HistoryReader, type ColdRestoreInfo } from './history-reader'
 import { mintPtySessionId, parsePtySessionId } from './pty-session-id'
 import { supportsPtyStartupBarrier } from './shell-ready'
 import { CODEX_SHELL_READY_TIMEOUT_MS } from './session'
 import {
   CLEAN_DISCONNECT_PROTOCOL_VERSION,
+  COMPLETION_PROCESS_INSPECTION_PROTOCOL_VERSION,
+  GET_FOREGROUND_PROCESS_PROTOCOL_VERSION,
+  AGENT_SESSION_CLAIM_DAEMON_PROTOCOL_VERSION,
+  AGENT_SESSION_CREATE_OPERATION_DAEMON_PROTOCOL_VERSION,
   GIT_CREDENTIAL_GUARD_HOST_PROTOCOL_VERSION,
   PROTOCOL_VERSION,
   supportsPtyStartupIngress,
@@ -20,6 +24,13 @@ import {
   type SessionInfo,
   type TakePendingOutputResult
 } from './types'
+import {
+  isAgentSessionClaimedSpawnResult,
+  isAgentSessionOwnerBinding,
+  type AgentSessionOwnerBinding
+} from '../../shared/agent-session-host-authority'
+import { MAX_CLAIMED_AGENT_PTY_OWNER_ENTRIES } from '../../shared/claimed-agent-pty-owner'
+import { cloneAgentSessionOwnerBinding } from '../../shared/claimed-agent-pty-owner-snapshot'
 import type {
   IPtyProvider,
   PtyBackgroundStreamEvent,
@@ -28,20 +39,38 @@ import type {
   PtySpawnOptions,
   PtySpawnResult
 } from '../providers/types'
+import type { PtyProcessInspection } from '../providers/pty-process-inspection'
 import { isShellProcess } from '../../shared/agent-detection'
 import { resolveWslSessionContext } from './wsl-session-context'
 import { normalizeWslColdRestoreCwd } from './wsl-cold-restore-cwd'
 import { recognizeAgentProcessFromCommandLine } from '../../shared/agent-process-recognition'
 import { shouldUseShellReadyStartupDelivery } from '../../shared/codex-startup-delivery'
-import type { TerminalOscLinkRange } from '../../shared/terminal-osc-link-ranges'
+import type { PtyIncarnationId } from '../../shared/pty-incarnation'
 import { resolveSafePtyDefaultCwd } from '../providers/pty-default-cwd'
+import { ColdRestorePayloadCache, type ColdRestorePayload } from './cold-restore-payload-cache'
+import { PtyProcessListAdmission } from '../providers/pty-process-list-admission'
 
-type ColdRestorePayload = {
-  scrollback: string
-  cwd: string
-  cols: number
-  rows: number
-  oscLinks?: TerminalOscLinkRange[]
+type PendingDaemonSpawnOperation = {
+  exitsBySessionId: Map<string, { incarnationId?: string }[]>
+  ignoredExitIncarnationIds: Set<string>
+  ignoreNextExit: boolean
+}
+
+type HistoryRecoveryContext = {
+  freeze: HistoryRecoveryFreeze | null
+  unreadableSessionId: string | null
+  identityChanged: boolean
+}
+
+// Why take-and-clear together: every consuming branch must reset the field, so pairing them stops one from forgetting.
+function takeRecoveryFreeze(
+  historyRecovery: HistoryRecoveryContext,
+  sessionId: string
+): HistoryRecoveryFreeze | undefined {
+  const freeze =
+    historyRecovery.freeze?.sessionId === sessionId ? historyRecovery.freeze : undefined
+  historyRecovery.freeze = null
+  return freeze
 }
 
 function getRecoveredHistorySeed(restoreInfo: ColdRestoreInfo): string | null {
@@ -108,7 +137,11 @@ export class DaemonPtyAdapter implements IPtyProvider {
     transformed?: boolean
     seq?: number
   }) => void)[] = []
-  private exitListeners: ((payload: { id: string; code: number }) => void)[] = []
+  private exitListeners: ((payload: {
+    id: string
+    code: number
+    incarnationId?: PtyIncarnationId
+  }) => void)[] = []
   private backgroundStreamListeners: ((payload: PtyBackgroundStreamEvent) => void)[] = []
   private removeEventListener: (() => void) | null = null
   private initialCwds = new Map<string, string>()
@@ -116,14 +149,22 @@ export class DaemonPtyAdapter implements IPtyProvider {
   // Why: StrictMode/re-render remounts can call createOrAttach for a just-killed session; tombstones stop the daemon resurrecting it (Map evicts oldest-first, per terminal-host.ts).
   private killedSessionTombstones = new Map<string, number>()
   // Why: React StrictMode double-mounts; this sticky cache returns the same cold restore data on remount until the renderer acknowledges it.
-  private coldRestoreCache = new Map<string, ColdRestorePayload>()
   private sleepRestoreSessionIds = new Set<string>()
+  private coldRestoreCache = new ColdRestorePayloadCache(undefined, (sessionId) => {
+    this.sleepRestoreSessionIds.delete(sessionId)
+  })
   private activeSessionIds = new Set<string>()
+  private sessionIncarnations = new Map<string, string>()
+  private pendingSpawnOperationsBySessionId = new Map<string, Set<PendingDaemonSpawnOperation>>()
+  private pendingClaimSpawnOperations = new Set<PendingDaemonSpawnOperation>()
+  private historySpawnLocks = new Map<string, Promise<void>>()
   private dirtySessionVersions = new Map<string, number>()
   // Why: a cold-restored session is a fresh shell atop a pre-crash log; incremental appends would be rejected on restore, so the first tick re-anchors with a full snapshot.
   private sessionsNeedingFullCheckpoint = new Set<string>()
   private checkpointTimer: ReturnType<typeof setTimeout> | null = null
   private checkpointInFlight: Promise<void> | null = null
+  private keepHistoryShutdowns = new Set<Promise<void>>()
+  private disconnectOnlyPromise: Promise<void> | null = null
   // Why: checkpoint persistence needs the getSnapshot RPC (v4+); legacy daemons reject it, spamming logs every 5s.
   private supportsCheckpoints: boolean
   // Why: incremental checkpoints need the takePendingOutput RPC (v13+); older daemons fall back to full-snapshot checkpoints.
@@ -179,21 +220,103 @@ export class DaemonPtyAdapter implements IPtyProvider {
     return this.historyManager
   }
 
-  async spawn(opts: PtySpawnOptions): Promise<PtySpawnResult> {
-    return this.withDaemonRetry(() => this.doSpawn(opts))
+  supportsAgentSessionClaims(): boolean {
+    return this.protocolVersion >= AGENT_SESSION_CLAIM_DAEMON_PROTOCOL_VERSION
   }
 
-  private async doSpawn(opts: PtySpawnOptions): Promise<PtySpawnResult> {
+  providesAgentSessionOwnerListings(_ptyId: string): boolean {
+    return this.supportsAgentSessionClaims()
+  }
+
+  supportsAgentSessionCreateOperations(): boolean {
+    // Why: old daemons never advertised the lower-owner protocol, so preserve their legacy launch.
+    return this.protocolVersion >= AGENT_SESSION_CREATE_OPERATION_DAEMON_PROTOCOL_VERSION
+  }
+
+  async spawn(opts: PtySpawnOptions): Promise<PtySpawnResult> {
     const sessionId = opts.sessionId ?? mintPtySessionId(opts.worktreeId)
+    const operation = {
+      exitsBySessionId: new Map<string, { incarnationId?: string }[]>(),
+      ignoredExitIncarnationIds: new Set<string>(),
+      ignoreNextExit: false
+    }
+    const operations = this.pendingSpawnOperationsBySessionId.get(sessionId) ?? new Set()
+    operations.add(operation)
+    this.pendingSpawnOperationsBySessionId.set(sessionId, operations)
+    if (opts.agentSessionEnsure) {
+      this.pendingClaimSpawnOperations.add(operation)
+    }
+    const historyRecovery: HistoryRecoveryContext = {
+      freeze: null,
+      unreadableSessionId: null,
+      identityChanged: false
+    }
+    try {
+      return await this.withHistorySpawnLock(sessionId, () =>
+        this.withDaemonRetry(() => this.doSpawn({ ...opts, sessionId }, operation, historyRecovery))
+      )
+    } finally {
+      if (historyRecovery.freeze) {
+        this.historyManager?.abandonRecoveryFreeze(historyRecovery.freeze)
+      }
+      this.pendingClaimSpawnOperations.delete(operation)
+      operations.delete(operation)
+      if (operations.size === 0) {
+        this.pendingSpawnOperationsBySessionId.delete(sessionId)
+      }
+    }
+  }
+
+  private async doSpawn(
+    opts: PtySpawnOptions,
+    operation: PendingDaemonSpawnOperation,
+    historyRecovery: HistoryRecoveryContext
+  ): Promise<PtySpawnResult> {
+    if (
+      opts.agentSessionEnsure &&
+      this.protocolVersion < AGENT_SESSION_CLAIM_DAEMON_PROTOCOL_VERSION
+    ) {
+      throw new Error('agent_session_claim_unavailable')
+    }
+    let sessionId = opts.sessionId!
     let wslDistro = resolveWslSessionContext({
       cwd: opts.cwd,
       sessionId,
       shellOverride: opts.shellOverride,
       terminalWindowsWslDistro: opts.terminalWindowsWslDistro
     })?.distro
-    const detectColdRestore = (options?: { ignoreCleanEnd?: boolean }): ColdRestoreInfo | null => {
-      const restoreInfo =
-        this.historyReader?.detectColdRestore(sessionId, { ...options, wslDistro }) ?? null
+    const freezeHistory = async (): Promise<void> => {
+      if (!this.historyManager) {
+        return
+      }
+      if (historyRecovery.freeze?.sessionId === sessionId) {
+        return
+      }
+      if (historyRecovery.freeze) {
+        this.historyManager.abandonRecoveryFreeze(historyRecovery.freeze)
+      }
+      historyRecovery.freeze = await this.historyManager.freezeForRecovery(sessionId)
+      historyRecovery.unreadableSessionId = null
+    }
+    const detectColdRestore = async (options?: {
+      ignoreCleanEnd?: boolean
+    }): Promise<ColdRestoreInfo | null> => {
+      if (!this.historyReader) {
+        return null
+      }
+      await freezeHistory()
+      const detection = await this.historyReader.detectColdRestoreState(sessionId, {
+        ...options,
+        wslDistro
+      })
+      if (detection.status === 'unreadable') {
+        historyRecovery.unreadableSessionId = detection.sessionId
+        return null
+      }
+      const restoreInfo = detection.status === 'restored' ? detection.restoreInfo : null
+      if (detection.status === 'restored' && detection.hasUnreadableRecovery) {
+        historyRecovery.unreadableSessionId = detection.sessionId
+      }
       if (!restoreInfo) {
         return null
       }
@@ -226,11 +349,16 @@ export class DaemonPtyAdapter implements IPtyProvider {
     // Why probe aliveness first: detectColdRestore replays up to ~5MB on the main process, but a live session's snapshot supersedes disk, so the replay would be wasted.
     let restoreInfo: ColdRestoreInfo | null = null
     let restoreSkippedForLiveSession = false
-    if (this.historyReader?.hasRestorableHistory(sessionId)) {
+    const historyProbe = this.historyReader?.probeRestorableHistory(sessionId)
+    if (historyProbe && historyProbe.status !== 'none') {
       if ((await this.getAppliedSize(sessionId)) !== null) {
         restoreSkippedForLiveSession = true
+        if (this.historyManager && !this.historyManager.hasWriter(sessionId)) {
+          await detectColdRestore()
+          restoreInfo = null
+        }
       } else {
-        restoreInfo = detectColdRestore()
+        restoreInfo = await detectColdRestore()
       }
     }
     let effectiveCwd = restoreInfo?.cwd ?? opts.cwd
@@ -251,8 +379,11 @@ export class DaemonPtyAdapter implements IPtyProvider {
         ? CODEX_SHELL_READY_TIMEOUT_MS
         : undefined
 
-    const createOrAttach = (historySeed: string | null) =>
-      this.client.request<CreateOrAttachResult>('createOrAttach', {
+    const createOrAttach = (historySeed: string | null) => {
+      if (opts.signal?.aborted) {
+        throw new Error('client_disconnected')
+      }
+      return this.client.request<CreateOrAttachResult>('createOrAttach', {
         sessionId,
         cols: effectiveCols,
         rows: effectiveRows,
@@ -271,11 +402,49 @@ export class DaemonPtyAdapter implements IPtyProvider {
         ...(historySeed ? { historySeed } : {}),
         ...(this.supportsStartupIngress && opts.startupIngress
           ? { startupIngress: opts.startupIngress }
-          : {})
+          : {}),
+        ...(opts.agentSessionEnsure ? { agentSessionEnsure: opts.agentSessionEnsure } : {})
       })
+    }
 
     let scrollback = restoreInfo ? getRecoveredHistorySeed(restoreInfo) : null
+    const adoptSpawnResultSession = async (spawnResult: CreateOrAttachResult): Promise<void> => {
+      const requestedSessionId = sessionId
+      if (
+        opts.agentSessionEnsure &&
+        !isAgentSessionClaimedSpawnResult(spawnResult.agentSessionEnsure)
+      ) {
+        // Why: a claim-incapable owner may already have spawned before returning
+        // a malformed response; retire only this requested session before failing closed.
+        await this.client.request('kill', { sessionId: requestedSessionId }).catch(() => {})
+        throw new Error('agent_session_claim_unavailable')
+      }
+      sessionId = spawnResult.agentSessionEnsure?.owner.ptyId ?? requestedSessionId
+      if (requestedSessionId === sessionId) {
+        return
+      }
+      if (historyRecovery.freeze) {
+        this.historyManager?.abandonRecoveryFreeze(historyRecovery.freeze)
+        historyRecovery.freeze = null
+      }
+      historyRecovery.unreadableSessionId = null
+      historyRecovery.identityChanged = true
+      restoreInfo = null
+      scrollback = null
+    }
     let result = await createOrAttach(scrollback)
+    await adoptSpawnResultSession(result)
+    const exitedResult = this.resultForExitBeforeSpawnReply(sessionId, result, operation)
+    if (exitedResult) {
+      return exitedResult
+    }
+    if (result.incarnationId) {
+      this.sessionIncarnations.set(sessionId, result.incarnationId)
+    }
+    const claimResult = (): Pick<PtySpawnResult, 'agentSessionEnsure'> | Record<string, never> =>
+      result.agentSessionEnsure ? { agentSessionEnsure: result.agentSessionEnsure } : {}
+    const incarnationResult = (): Pick<PtySpawnResult, 'incarnationId'> | Record<string, never> =>
+      result.incarnationId ? { incarnationId: result.incarnationId } : {}
     let providerWslDistro = result.wslDistro === undefined ? wslDistro : result.wslDistro
     // Why: explicit null from a current daemon overrides the caller's WSL preference; undefined keeps compatibility with older daemons.
     wslDistro = providerWslDistro ?? undefined
@@ -299,12 +468,19 @@ export class DaemonPtyAdapter implements IPtyProvider {
     if (cachedRestore) {
       // Why: wake-after-sleep lands here too; sleep dropped active tracking + the history writer, so re-register both or the next sleep/wake restores a blank terminal.
       this.activeSessionIds.add(sessionId)
-      if (this.historyManager) {
-        this.historyManager.reopenSession(sessionId)
+      if (this.historyManager && !historyRecovery.identityChanged) {
+        const recoveryFreeze = takeRecoveryFreeze(historyRecovery, sessionId)
+        if (historyRecovery.unreadableSessionId === sessionId) {
+          this.historyManager.suspendSession(sessionId, recoveryFreeze)
+        } else {
+          this.historyManager.reopenSession(sessionId, recoveryFreeze)
+        }
       }
       return {
         id: sessionId,
+        ...incarnationResult(),
         pid,
+        ...claimResult(),
         ...launchIdentity(),
         coldRestore: cachedRestore,
         ...(providerWslDistro !== undefined ? { wslDistro: providerWslDistro } : {}),
@@ -314,16 +490,29 @@ export class DaemonPtyAdapter implements IPtyProvider {
 
     // Why: the probe→createOrAttach gap is racy — the session can exit in between, so re-detect to match the unprobed restore path.
     // Why ignoreCleanEnd: the raced exit event can write endedAt before the reply; nulling the restore here would delete the checkpoint instead of restoring it.
-    if (result.isNew && restoreSkippedForLiveSession) {
-      restoreInfo = detectColdRestore({ ignoreCleanEnd: true })
+    if (!historyRecovery.identityChanged && result.isNew && restoreSkippedForLiveSession) {
+      restoreInfo = await detectColdRestore({ ignoreCleanEnd: true })
       scrollback = restoreInfo ? getRecoveredHistorySeed(restoreInfo) : null
       if (restoreInfo && scrollback) {
-        // Why: the aliveness probe raced with session death, so the first create lacked recovery bytes; replace it before exposing the PTY.
+        // Why: the aliveness probe raced with session death, so the first
+        // create lacked recovery bytes. Replace it before exposing the PTY.
+        if (result.incarnationId) {
+          operation.ignoredExitIncarnationIds.add(result.incarnationId)
+        }
+        operation.ignoreNextExit = true
         await this.client.request('kill', { sessionId, immediate: true })
         effectiveCwd = restoreInfo.cwd
         effectiveCols = restoreInfo.cols
         effectiveRows = restoreInfo.rows
         result = await createOrAttach(scrollback)
+        await adoptSpawnResultSession(result)
+        const exitedRetryResult = this.resultForExitBeforeSpawnReply(sessionId, result, operation)
+        if (exitedRetryResult) {
+          return exitedRetryResult
+        }
+        if (result.incarnationId) {
+          this.sessionIncarnations.set(sessionId, result.incarnationId)
+        }
         providerWslDistro = result.wslDistro === undefined ? wslDistro : result.wslDistro
         wslDistro = providerWslDistro ?? undefined
         if (wslDistro) {
@@ -334,8 +523,12 @@ export class DaemonPtyAdapter implements IPtyProvider {
         pid = typeof result.pid === 'number' && result.pid > 0 ? result.pid : null
         this.initialCwds.set(sessionId, effectiveCwd)
       }
-    } else if (!result.isNew && result.historySeeded === false) {
-      restoreInfo = detectColdRestore()
+    } else if (
+      !historyRecovery.identityChanged &&
+      !result.isNew &&
+      result.historySeeded === false
+    ) {
+      restoreInfo = await detectColdRestore()
       scrollback = restoreInfo ? getRecoveredHistorySeed(restoreInfo) : null
     }
 
@@ -348,22 +541,37 @@ export class DaemonPtyAdapter implements IPtyProvider {
       const coldRestore = this.buildColdRestorePayload(restoreInfo)
       const canReanchorHistory = !scrollback || result.historySeeded === true
       // Why: registerWriter (not openSession) avoids deleting checkpoint.json — the only recovery data if the revived daemon crashes before the next tick.
-      if (this.historyManager) {
-        if (canReanchorHistory) {
-          this.historyManager.registerWriter(sessionId)
+      if (this.historyManager && !historyRecovery.identityChanged) {
+        const recoveryFreeze = takeRecoveryFreeze(historyRecovery, sessionId)
+        if (historyRecovery.unreadableSessionId === sessionId) {
+          await this.historyManager.openSession(sessionId, {
+            cwd: effectiveCwd ?? '',
+            cols: effectiveCols,
+            rows: effectiveRows,
+            ...(recoveryFreeze ? { recoveryFreeze } : {}),
+            quarantineUnreadableRecovery: true
+          })
+          if (this.historyManager.hasWriter(sessionId)) {
+            this.sessionsNeedingFullCheckpoint.add(sessionId)
+            this.lastFullCheckpointAt.delete(sessionId)
+          }
+        } else if (canReanchorHistory) {
+          this.historyManager.registerWriter(sessionId, recoveryFreeze)
           this.sessionsNeedingFullCheckpoint.add(sessionId)
           // Why: the revived generation has no valid checkpoint yet; a cooldown inherited from the pre-crash generation must not defer this re-anchor.
           this.lastFullCheckpointAt.delete(sessionId)
         } else {
           // Preserve old recovery files when the new daemon can't include them; a fresh-only checkpoint would make the data loss permanent.
-          this.historyManager.suspendSession(sessionId)
+          this.historyManager.suspendSession(sessionId, recoveryFreeze)
         }
       }
       if (coldRestore) {
         this.coldRestoreCache.set(sessionId, coldRestore)
         return {
           id: sessionId,
+          ...incarnationResult(),
           pid,
+          ...claimResult(),
           ...launchIdentity(),
           coldRestore,
           ...(providerWslDistro !== undefined ? { wslDistro: providerWslDistro } : {}),
@@ -373,27 +581,36 @@ export class DaemonPtyAdapter implements IPtyProvider {
       }
       return {
         id: sessionId,
+        ...incarnationResult(),
         pid,
+        ...claimResult(),
         ...launchIdentity(),
         ...(providerWslDistro !== undefined ? { wslDistro: providerWslDistro } : {}),
         ...(providerSequence ? { providerSequence } : {})
       }
     }
 
-    if (this.historyManager && result.isNew) {
-      void this.historyManager
-        .openSession(sessionId, {
-          cwd: effectiveCwd ?? '',
-          cols: effectiveCols,
-          rows: effectiveRows
-        })
-        .catch((err) => console.warn('[history] openSession failed:', sessionId, err))
-    } else if (this.historyManager && result.historySeeded === false) {
+    if (this.historyManager && !historyRecovery.identityChanged && result.isNew) {
+      const recoveryFreeze = takeRecoveryFreeze(historyRecovery, sessionId)
+      await this.historyManager.openSession(sessionId, {
+        cwd: effectiveCwd ?? '',
+        cols: effectiveCols,
+        rows: effectiveRows,
+        ...(recoveryFreeze ? { recoveryFreeze } : {}),
+        ...(historyRecovery.unreadableSessionId === sessionId
+          ? { quarantineUnreadableRecovery: true }
+          : {})
+      })
+    } else if (
+      this.historyManager &&
+      !historyRecovery.identityChanged &&
+      (result.historySeeded === false || historyRecovery.unreadableSessionId === sessionId)
+    ) {
       // Why: the daemon keeps this failure bit with the live session, so a new adapter can't promote its fresh-only snapshot after restart.
-      this.historyManager.suspendSession(sessionId)
-    } else if (this.historyManager) {
+      this.historyManager.suspendSession(sessionId, takeRecoveryFreeze(historyRecovery, sessionId))
+    } else if (this.historyManager && !historyRecovery.identityChanged) {
       // Why: on warm reattach after relaunch the HistoryManager is fresh; registerWriter adds a writer without deleting the still-only-valid checkpoint.
-      this.historyManager.registerWriter(sessionId)
+      this.historyManager.registerWriter(sessionId, takeRecoveryFreeze(historyRecovery, sessionId))
       if (!wasAlreadyManaged) {
         // Why: a previous adapter may have drained records it never persisted, so appending would leave a seq gap the reader rejects; force a full snapshot to re-anchor.
         this.sessionsNeedingFullCheckpoint.add(sessionId)
@@ -405,7 +622,9 @@ export class DaemonPtyAdapter implements IPtyProvider {
     if (!isReattach || !result.snapshot) {
       return {
         id: sessionId,
+        ...incarnationResult(),
         pid,
+        ...claimResult(),
         ...launchIdentity(),
         ...(providerWslDistro !== undefined ? { wslDistro: providerWslDistro } : {}),
         ...(providerSequence ? { providerSequence } : {}),
@@ -422,7 +641,9 @@ export class DaemonPtyAdapter implements IPtyProvider {
     const kittyKeyboardFlags = result.snapshot.modes.kittyKeyboardFlags
     return {
       id: sessionId,
+      ...incarnationResult(),
       pid,
+      ...claimResult(),
       ...launchIdentity(),
       ...(providerWslDistro !== undefined ? { wslDistro: providerWslDistro } : {}),
       snapshot: snapshotPayload,
@@ -439,6 +660,36 @@ export class DaemonPtyAdapter implements IPtyProvider {
         ? { pendingEscapeTailAnsi: result.snapshot.pendingEscapeTailAnsi }
         : {})
     }
+  }
+
+  private resultForExitBeforeSpawnReply(
+    sessionId: string,
+    result: CreateOrAttachResult,
+    operation: PendingDaemonSpawnOperation
+  ): PtySpawnResult | null {
+    const matchingExit = (operation.exitsBySessionId.get(sessionId) ?? []).some(
+      (exit) =>
+        !(exit.incarnationId && operation.ignoredExitIncarnationIds.has(exit.incarnationId)) &&
+        (!exit.incarnationId ||
+          !result.incarnationId ||
+          exit.incarnationId === result.incarnationId)
+    )
+    if (!matchingExit) {
+      return null
+    }
+    // Why: stream exit can beat the control reply; return proof upward without republishing dead adapter state.
+    const exitedResult: PtySpawnResult = {
+      id: sessionId,
+      exitedBeforeSpawnReply: true,
+      ...(result.incarnationId ? { incarnationId: result.incarnationId } : {}),
+      ...(result.agentSessionEnsure ? { agentSessionEnsure: result.agentSessionEnsure } : {}),
+      ...(!result.isNew ? { isReattach: true } : {})
+    }
+    return exitedResult
+  }
+
+  didExitBeforeSpawnReply(result: PtySpawnResult): boolean {
+    return result.exitedBeforeSpawnReply === true
   }
 
   async attach(id: string): Promise<void> {
@@ -504,6 +755,26 @@ export class DaemonPtyAdapter implements IPtyProvider {
     id: string,
     opts: { immediate?: boolean; keepHistory?: boolean; deadlineMs?: number }
   ): Promise<void> {
+    if (opts.keepHistory && this.disconnectOnlyPromise) {
+      throw new Error('Cannot keep history after daemon disconnect has started')
+    }
+    const shutdown = this.withHistorySpawnLock(id, () => this.shutdownWithHistoryLock(id, opts))
+    if (!opts.keepHistory) {
+      await shutdown
+      return
+    }
+    this.keepHistoryShutdowns.add(shutdown)
+    try {
+      await shutdown
+    } finally {
+      this.keepHistoryShutdowns.delete(shutdown)
+    }
+  }
+
+  private async shutdownWithHistoryLock(
+    id: string,
+    opts: { immediate?: boolean; keepHistory?: boolean; deadlineMs?: number }
+  ): Promise<void> {
     // Why: shutdown can be the first lazy-client operation after restart; connect
     // before killing so a healthy daemon session is not orphaned (#7742). Connect
     // and kill share the caller's one absolute deadline, so a wedged handshake
@@ -512,12 +783,12 @@ export class DaemonPtyAdapter implements IPtyProvider {
     // Why: sleep/exact-stop kills the live PTY before the periodic checkpoint may run.
     // Force a final snapshot so wake can restore the pane users left.
     if (opts.keepHistory) {
-      if (this.checkpointInFlight) {
-        await this.checkpointInFlight
-      }
-      await this.checkpointSessions([id], { final: true, teardown: true })
+      await this.runExclusiveCheckpoint(async () => {
+        await this.checkpointSessions([id], { final: true, teardown: true })
+      })
       const wslDistro = this.wslDistrosBySessionId.get(id)
-      const detected = this.historyReader?.detectColdRestore(id, { wslDistro }) ?? null
+      const detection = await this.historyReader?.detectColdRestoreState(id, { wslDistro })
+      const detected = detection?.status === 'restored' ? detection.restoreInfo : null
       const restoreInfo = detected
         ? {
             ...detected,
@@ -532,8 +803,15 @@ export class DaemonPtyAdapter implements IPtyProvider {
       const coldRestore = restoreInfo ? this.buildColdRestorePayload(restoreInfo) : null
       if (coldRestore) {
         this.coldRestoreCache.set(id, coldRestore)
-        this.sleepRestoreSessionIds.add(id)
+        if (this.coldRestoreCache.has(id)) {
+          this.sleepRestoreSessionIds.add(id)
+        }
         // Why: physical exit must not mark intentional sleep as a clean end; the final checkpoint stays the wake-time recovery authority.
+        this.historyManager?.suspendSession(id)
+      } else if (
+        detection?.status === 'unreadable' ||
+        (detection?.status === 'restored' && detection.hasUnreadableRecovery)
+      ) {
         this.historyManager?.suspendSession(id)
       }
     }
@@ -556,7 +834,7 @@ export class DaemonPtyAdapter implements IPtyProvider {
     this.wslDistrosBySessionId.delete(id)
     // Why: only remove history on explicit close; sleep also calls shutdown but wake needs the dir intact for cold restore (opts.keepHistory).
     if (this.historyManager && !opts.keepHistory) {
-      void this.historyManager
+      await this.historyManager
         .removeSession(id)
         .catch((err) => console.warn('[history] removeSession failed:', id, err))
     }
@@ -678,13 +956,45 @@ export class DaemonPtyAdapter implements IPtyProvider {
     // No flow control for daemon-backed terminals
   }
 
-  async hasChildProcesses(id: string): Promise<boolean> {
-    const foregroundProcess = await this.getForegroundProcess(id)
-    // Why: daemon-backed PTYs can host long-lived agents while detached; cleanup prompts must not treat them as idle shells.
+  // Why: daemon-backed PTYs can host long-lived agents while detached; cleanup prompts must not treat them as idle shells.
+  private hasChildProcessesFromForeground(foregroundProcess: string | null): boolean {
     return foregroundProcess !== null && !isShellProcess(foregroundProcess)
   }
 
+  async hasChildProcesses(id: string): Promise<boolean> {
+    if (this.protocolVersion < GET_FOREGROUND_PROCESS_PROTOCOL_VERSION) {
+      return true
+    }
+    return this.hasChildProcessesFromForeground(await this.getForegroundProcess(id))
+  }
+
+  async inspectProcess(id: string): Promise<PtyProcessInspection> {
+    if (this.protocolVersion < GET_FOREGROUND_PROCESS_PROTOCOL_VERSION) {
+      return { foregroundProcess: null, hasChildProcesses: true, unavailable: true }
+    }
+    if (this.protocolVersion < COMPLETION_PROCESS_INSPECTION_PROTOCOL_VERSION) {
+      // Why: pre-v27 daemons survive an in-place app update; compose the inspection client-side from the
+      // one call they do support instead of throwing, or completion detection stays dead until recreate.
+      // Requests directly (not via getForegroundProcess) so a dead socket still rejects rather than
+      // reading as an idle foreground and dispatching a false completion.
+      const { foregroundProcess } = await this.client.request<{
+        foregroundProcess: string | null
+      }>('getForegroundProcess', { sessionId: id })
+      return {
+        foregroundProcess,
+        hasChildProcesses: this.hasChildProcessesFromForeground(foregroundProcess)
+      }
+    }
+    return this.client.request<{
+      foregroundProcess: string | null
+      hasChildProcesses: boolean
+    }>('inspectProcess', { sessionId: id })
+  }
+
   async getForegroundProcess(id: string): Promise<string | null> {
+    if (this.protocolVersion < GET_FOREGROUND_PROCESS_PROTOCOL_VERSION) {
+      return null
+    }
     try {
       const result = await this.client.request<{ foregroundProcess: string | null }>(
         'getForegroundProcess',
@@ -755,11 +1065,59 @@ export class DaemonPtyAdapter implements IPtyProvider {
         alive.push(session.sessionId)
         // Why: track background sessions in the checkpoint set so disconnectOnly's final checkpoint doesn't leave stale recovery data.
         this.activeSessionIds.add(session.sessionId)
-        this.historyManager?.registerWriter(session.sessionId)
+        await this.reconcileLiveSessionHistory(session).catch((err) =>
+          console.warn('[history] live-session reconciliation failed:', session.sessionId, err)
+        )
       }
     }
 
     return { alive, killed }
+  }
+
+  private async reconcileLiveSessionHistory(session: SessionInfo): Promise<void> {
+    const historyManager = this.historyManager
+    const historyReader = this.historyReader
+    if (!historyManager || !historyReader) {
+      return
+    }
+    await this.withHistorySpawnLock(session.sessionId, async () => {
+      if (historyManager.hasWriter(session.sessionId)) {
+        return
+      }
+      const probe = historyReader.probeRestorableHistory(session.sessionId)
+      if (probe.status === 'unreadable') {
+        return
+      }
+      if (probe.status === 'none') {
+        await historyManager.openSession(session.sessionId, {
+          cwd: session.cwd ?? '',
+          cols: session.cols,
+          rows: session.rows
+        })
+      } else {
+        const recoveryFreeze = await historyManager.freezeForRecovery(session.sessionId)
+        try {
+          const detection = await historyReader.detectColdRestoreState(session.sessionId, {
+            wslDistro: session.wslDistro ?? undefined
+          })
+          if (
+            detection.status === 'unreadable' ||
+            (detection.status === 'restored' && detection.hasUnreadableRecovery)
+          ) {
+            historyManager.suspendSession(session.sessionId, recoveryFreeze)
+            return
+          }
+          historyManager.reopenSession(session.sessionId, recoveryFreeze)
+        } finally {
+          historyManager.abandonRecoveryFreeze(recoveryFreeze)
+        }
+      }
+      if (historyManager.hasWriter(session.sessionId)) {
+        this.sessionsNeedingFullCheckpoint.add(session.sessionId)
+        this.lastFullCheckpointAt.delete(session.sessionId)
+        this.markSessionDirty(session.sessionId)
+      }
+    })
   }
 
   async listProcesses(opts?: { deadlineMs?: number }): Promise<PtyProcessInfo[]> {
@@ -771,22 +1129,61 @@ export class DaemonPtyAdapter implements IPtyProvider {
       undefined,
       remainingRequestTimeoutMs(opts?.deadlineMs)
     )
-    return result.sessions
-      .filter((s) => s.isAlive)
-      .map((s) => ({
-        id: s.sessionId,
-        // Why: OSC 7 may not arrive before cleanup; spawn cwd is authoritative until the daemon reports a live cwd.
-        cwd: s.cwd ?? this.initialCwds.get(s.sessionId) ?? '',
-        title: 'shell',
-        ...(s.terminalHandle ? { terminalHandle: s.terminalHandle } : {})
-      }))
+    const admission = new PtyProcessListAdmission()
+    const processes: PtyProcessInfo[] = []
+    for (const session of result.sessions) {
+      if (!session.isAlive) {
+        continue
+      }
+      const { worktreeId } = parsePtySessionId(session.sessionId)
+      processes.push(
+        admission.admit({
+          id: session.sessionId,
+          ...(session.incarnationId ? { incarnationId: session.incarnationId } : {}),
+          // Why: OSC 7 may not arrive before cleanup; spawn cwd is authoritative until the daemon reports a live cwd.
+          cwd: session.cwd ?? this.initialCwds.get(session.sessionId) ?? '',
+          title: 'shell',
+          ...(worktreeId ? { worktreeId } : {}),
+          ...(session.terminalHandle ? { terminalHandle: session.terminalHandle } : {}),
+          ...(session.wslDistro !== undefined ? { wslDistro: session.wslDistro } : {}),
+          ...this.validatedAgentSessionOwners(session.agentSessionOwners)
+        })
+      )
+    }
+    return processes
   }
 
-  // Why keep both: the Manage Sessions panel needs full SessionInfo (pid/state/createdAt) that listProcesses drops for the IPtyProvider contract.
+  private validatedAgentSessionOwners(
+    owners: unknown
+  ): { agentSessionOwners: AgentSessionOwnerBinding[] } | Record<string, never> {
+    if (owners === undefined) {
+      return {}
+    }
+    if (
+      !Array.isArray(owners) ||
+      owners.length > MAX_CLAIMED_AGENT_PTY_OWNER_ENTRIES ||
+      !owners.every((owner) => isAgentSessionOwnerBinding(owner) && owner.phase === 'live')
+    ) {
+      throw new Error('agent_session_ownership_unknown')
+    }
+    return owners.length > 0
+      ? { agentSessionOwners: owners.map(cloneAgentSessionOwnerBinding) }
+      : {}
+  }
+
+  // Why: the Manage Sessions panel needs the full SessionInfo (pid, state,
+  // createdAt) per session for display; listProcesses drops that detail for
+  // the IPtyProvider contract. Keep both in parallel rather than widening
+  // the provider surface.
   async listSessions(): Promise<SessionInfo[]> {
     await this.ensureConnected()
     const result = await this.client.request<ListSessionsResult>('listSessions', undefined)
-    return result.sessions.filter((s) => s.isAlive)
+    return result.sessions
+      .filter((s) => s.isAlive)
+      .map((session) => ({
+        ...session,
+        ...this.validatedAgentSessionOwners(session.agentSessionOwners)
+      }))
   }
 
   getActiveSessionIds(): string[] {
@@ -809,8 +1206,15 @@ export class DaemonPtyAdapter implements IPtyProvider {
       // Why: don't catch listener throws — matches the natural onExit fanout so synthetic exits keep the same error semantics.
       // oxlint-disable-next-line unicorn/no-useless-spread -- copy-safe: listeners may unsubscribe during iteration
       for (const listener of [...this.exitListeners]) {
-        listener({ id, code })
+        listener({
+          id,
+          code,
+          ...(this.sessionIncarnations.get(id)
+            ? { incarnationId: this.sessionIncarnations.get(id) }
+            : {})
+        })
       }
+      this.sessionIncarnations.delete(id)
     }
   }
 
@@ -864,7 +1268,9 @@ export class DaemonPtyAdapter implements IPtyProvider {
     return () => {}
   }
 
-  onExit(callback: (payload: { id: string; code: number }) => void): () => void {
+  onExit(
+    callback: (payload: { id: string; code: number; incarnationId?: PtyIncarnationId }) => void
+  ): () => void {
     this.exitListeners.push(callback)
     return () => {
       const idx = this.exitListeners.indexOf(callback)
@@ -907,16 +1313,23 @@ export class DaemonPtyAdapter implements IPtyProvider {
   // Why: unlike dispose(), leave history files unclean (no endedAt) so the next launch treats them as crash-recoverable,
   // but still write a final checkpoint so a daemon crash while Orca is closed has recovery data.
   async disconnectOnly(): Promise<void> {
-    this.respawnAdoptionClosed = true
-    this.releasePendingRespawnAdoptionLease()
-    this.stopCheckpointTimer()
-    // Why: wait out an in-flight timer pass; racing on the shared tmp file risks ENOENT on rename, disabling future writes.
-    if (this.checkpointInFlight) {
-      await this.checkpointInFlight
+    if (!this.disconnectOnlyPromise) {
+      this.respawnAdoptionClosed = true
+      this.releasePendingRespawnAdoptionLease()
+      this.disconnectOnlyPromise = this.finishDisconnectOnly([...this.keepHistoryShutdowns])
     }
+    await this.disconnectOnlyPromise
+  }
+
+  private async finishDisconnectOnly(keepHistoryShutdowns: Promise<void>[]): Promise<void> {
+    // Why: sleep shutdowns still detect recovery and kill after checkpointing; disconnecting first rejects those admitted operations.
+    await Promise.allSettled(keepHistoryShutdowns)
+    this.respawnAdoptionClosed = true
     // Why: a final checkpoint covers sessions opened since the last tick (else cold restore finds nothing if the daemon
     // later dies). Await it — fire-and-forget would race client.disconnect() and reject the pending getSnapshot RPCs.
-    await this.checkpointAllSessions()
+    await this.runExclusiveCheckpoint(() => this.checkpointAllSessions(), {
+      rescheduleDirty: false
+    })
     this.dirtySessionVersions.clear()
     this.lastFullCheckpointAt.clear()
     this.coldRestoreCache.clear()
@@ -1015,10 +1428,17 @@ export class DaemonPtyAdapter implements IPtyProvider {
         this.scheduleCheckpointTimer()
         return
       }
-      this.checkpointInFlight = this.checkpointDirtySessions().finally(() => {
-        this.checkpointInFlight = null
-        this.scheduleCheckpointTimer()
-      })
+      const checkpoint = this.checkpointDirtySessions()
+      this.checkpointInFlight = checkpoint
+      void checkpoint
+        .finally(() => {
+          if (this.checkpointInFlight === checkpoint) {
+            this.checkpointInFlight = null
+            this.scheduleCheckpointTimer()
+          }
+        })
+        // Why: .finally() re-throws, so a rejected checkpoint would surface as an unhandled rejection here.
+        .catch(() => {})
     }, DaemonPtyAdapter.CHECKPOINT_INTERVAL_MS)
   }
 
@@ -1051,6 +1471,28 @@ export class DaemonPtyAdapter implements IPtyProvider {
       }
     }
     this.stopCheckpointTimerIfIdle()
+  }
+
+  private async runExclusiveCheckpoint(
+    operation: () => Promise<void>,
+    options: { rescheduleDirty?: boolean } = {}
+  ): Promise<void> {
+    this.stopCheckpointTimer()
+    // Why: a promise tail keeps every waiter ordered; awaiting one active operation lets sibling waiters resume together.
+    const previous = this.checkpointInFlight ?? Promise.resolve()
+    const checkpoint = previous.catch(() => {}).then(operation)
+    this.checkpointInFlight = checkpoint
+    try {
+      await checkpoint
+    } finally {
+      if (this.checkpointInFlight === checkpoint) {
+        this.checkpointInFlight = null
+      }
+      this.stopCheckpointTimer()
+      if (options.rescheduleDirty !== false) {
+        this.scheduleCheckpointTimer()
+      }
+    }
   }
 
   // Why final=true not teardown: clean disconnect needs the full-depth snapshot as the restore source, but the
@@ -1222,6 +1664,34 @@ export class DaemonPtyAdapter implements IPtyProvider {
     }
   }
 
+  private async withHistorySpawnLock<T>(
+    sessionId: string,
+    operation: () => Promise<T>
+  ): Promise<T> {
+    if (!this.historyManager) {
+      return await operation()
+    }
+    const previous = this.historySpawnLocks.get(sessionId) ?? Promise.resolve()
+    let release!: () => void
+    const current = new Promise<void>((resolve) => {
+      release = resolve
+    })
+    const tail = previous.then(
+      () => current,
+      () => current
+    )
+    this.historySpawnLocks.set(sessionId, tail)
+    await previous.catch(() => {})
+    try {
+      return await operation()
+    } finally {
+      release()
+      if (this.historySpawnLocks.get(sessionId) === tail) {
+        this.historySpawnLocks.delete(sessionId)
+      }
+    }
+  }
+
   private async replaceUnhealthyMacResolverDaemonBeforeNewPty(): Promise<void> {
     if (!this.respawnFn) {
       return
@@ -1346,6 +1816,29 @@ export class DaemonPtyAdapter implements IPtyProvider {
           fact: event.payload
         })
       } else if (event.event === 'exit') {
+        const pendingOperations = new Set([
+          ...(this.pendingSpawnOperationsBySessionId.get(event.sessionId) ?? []),
+          ...this.pendingClaimSpawnOperations
+        ])
+        for (const operation of pendingOperations) {
+          if (operation.ignoreNextExit) {
+            operation.ignoreNextExit = false
+            continue
+          }
+          const exits = operation.exitsBySessionId.get(event.sessionId) ?? []
+          exits.push(
+            event.payload.incarnationId ? { incarnationId: event.payload.incarnationId } : {}
+          )
+          operation.exitsBySessionId.set(event.sessionId, exits)
+        }
+        const currentIncarnationId = this.sessionIncarnations.get(event.sessionId)
+        if (
+          event.payload.incarnationId &&
+          currentIncarnationId &&
+          event.payload.incarnationId !== currentIncarnationId
+        ) {
+          return
+        }
         this.activeSessionIds.delete(event.sessionId)
         this.dirtySessionVersions.delete(event.sessionId)
         // Why: a reused sessionId must not inherit the dead session's owed resume (stray resumePty) or backgrounded/thinned state.
@@ -1367,9 +1860,14 @@ export class DaemonPtyAdapter implements IPtyProvider {
         }
         this.initialCwds.delete(event.sessionId)
         this.wslDistrosBySessionId.delete(event.sessionId)
+        this.sessionIncarnations.delete(event.sessionId)
         // oxlint-disable-next-line unicorn/no-useless-spread -- copy-safe: listeners may unsubscribe during iteration
         for (const listener of [...this.exitListeners]) {
-          listener({ id: event.sessionId, code: event.payload.code })
+          listener({
+            id: event.sessionId,
+            code: event.payload.code,
+            ...(event.payload.incarnationId ? { incarnationId: event.payload.incarnationId } : {})
+          })
         }
       }
     })

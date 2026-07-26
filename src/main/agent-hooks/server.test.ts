@@ -24,6 +24,11 @@ import {
   AGENT_STATUS_STALE_AFTER_MS,
   parseAgentStatusPayload
 } from '../../shared/agent-status-types'
+import {
+  createHookListenerState,
+  normalizeHookPayload,
+  type HookListenerState
+} from '../../shared/agent-hook-listener'
 import { makePaneKey } from '../../shared/stable-pane-id'
 
 const { getCohortAtEmitMock, trackMock } = vi.hoisted(() => ({
@@ -89,7 +94,144 @@ afterEach(() => {
 })
 
 describe('AgentHookServer listener replay', () => {
-  it('applies inferred interrupts through the cached status lifecycle', () => {
+  it('preserves Codex sibling and lead state across relay listener restarts', () => {
+    const server = new AgentHookServer()
+    const send = (state: HookListenerState, payload: Record<string, unknown>): void => {
+      const event = normalizeHookPayload(state, 'codex', buildBody(payload), 'production')
+      if (!event) {
+        throw new Error('normalizeHookPayload rejected a known-good Codex fixture')
+      }
+      server.ingestRemote(event, 'conn-1')
+    }
+
+    const initialRelay = createHookListenerState()
+    send(initialRelay, {
+      hook_event_name: 'UserPromptSubmit',
+      session_id: 'root-session',
+      prompt: 'coordinate reviewers',
+      model: 'gpt-5.4'
+    })
+    for (const id of ['child-a', 'child-b']) {
+      send(initialRelay, {
+        hook_event_name: 'SubagentStart',
+        agent_id: id,
+        agent_type: 'reviewer',
+        model: 'gpt-5.4-mini'
+      })
+    }
+
+    const restartedRelay = createHookListenerState()
+    send(restartedRelay, { hook_event_name: 'SubagentStop', agent_id: 'child-a' })
+    expect(server.getStatusSnapshot()[0]).toMatchObject({
+      state: 'working',
+      model: 'gpt-5.4',
+      providerSession: { key: 'session_id', id: 'root-session' },
+      subagents: [expect.objectContaining({ id: 'child-b' })]
+    })
+
+    send(restartedRelay, {
+      hook_event_name: 'Stop',
+      session_id: 'root-session',
+      model: 'gpt-5.4'
+    })
+    const restartedAgain = createHookListenerState()
+    send(restartedAgain, { hook_event_name: 'SubagentStop', agent_id: 'child-b' })
+    expect(server.getStatusSnapshot()[0]).toMatchObject({
+      state: 'done',
+      model: 'gpt-5.4',
+      providerSession: { key: 'session_id', id: 'root-session' },
+      subagents: undefined
+    })
+  })
+
+  it('does not carry a remote Codex roster across connection cleanup', () => {
+    const server = new AgentHookServer()
+    const child = (id: string) => ({
+      id,
+      state: 'working' as const,
+      startedAt: 1
+    })
+    server.ingestRemote(
+      {
+        paneKey: PANE,
+        hookEventName: 'SubagentStart',
+        toolAgentId: 'old-child',
+        payload: {
+          state: 'working',
+          prompt: '',
+          agentType: 'codex',
+          subagents: [child('old-child')]
+        }
+      },
+      'conn-1'
+    )
+
+    server.clearStatusEntriesForConnection('conn-1')
+    server.ingestRemote(
+      {
+        paneKey: PANE,
+        hookEventName: 'SubagentStart',
+        toolAgentId: 'new-child',
+        payload: {
+          state: 'working',
+          prompt: '',
+          agentType: 'codex',
+          subagents: [child('new-child')]
+        }
+      },
+      'conn-2'
+    )
+
+    expect(server.getStatusSnapshot()[0]?.subagents).toEqual([child('new-child')])
+  })
+
+  it('retains root Codex identity when relay child events omit it', () => {
+    const server = new AgentHookServer()
+    const providerSession = { key: 'session_id' as const, id: 'root-session' }
+
+    server.ingestRemote(
+      {
+        paneKey: PANE,
+        providerSession,
+        payload: {
+          state: 'working',
+          prompt: 'coordinate reviewers',
+          agentType: 'codex',
+          model: 'gpt-5.4'
+        }
+      },
+      'conn-1'
+    )
+    server.ingestRemote(
+      {
+        paneKey: PANE,
+        toolAgentId: 'child-session',
+        payload: { state: 'waiting', prompt: 'coordinate reviewers', agentType: 'codex' }
+      },
+      'conn-1'
+    )
+    expect(server.getStatusSnapshot()[0]).toMatchObject({
+      model: 'gpt-5.4',
+      providerSession
+    })
+
+    server.ingestRemote(
+      {
+        paneKey: PANE,
+        hookEventName: 'SubagentStop',
+        toolAgentId: 'child-session',
+        payload: { state: 'done', prompt: 'coordinate reviewers', agentType: 'codex' }
+      },
+      'conn-1'
+    )
+    expect(server.getStatusSnapshot()[0]).toMatchObject({
+      state: 'done',
+      model: 'gpt-5.4',
+      providerSession
+    })
+  })
+
+  it('keeps Codex lead state terminal after an inferred interrupt', () => {
     vi.useFakeTimers()
     vi.setSystemTime(1_000)
     try {
@@ -102,7 +244,13 @@ describe('AgentHookServer listener replay', () => {
           tabId: 'tab-1',
           worktreeId: 'wt-1',
           providerSession: { key: 'session_id', id: 'codex-interrupt-session-1' },
-          payload: { state: 'working', prompt: 'long task', agentType: 'codex' }
+          hookEventName: 'UserPromptSubmit',
+          payload: {
+            state: 'working',
+            prompt: 'long task',
+            agentType: 'codex',
+            model: 'gpt-5.6-sol'
+          }
         },
         'conn-1'
       )
@@ -138,6 +286,25 @@ describe('AgentHookServer listener replay', () => {
           payload: expect.objectContaining({ state: 'done', interrupted: true })
         })
       )
+
+      vi.setSystemTime(17_000)
+      server.ingestRemote(
+        {
+          paneKey: PANE,
+          tabId: 'tab-1',
+          worktreeId: 'wt-1',
+          hookEventName: 'SubagentStop',
+          toolAgentId: 'delayed-child',
+          payload: { state: 'done', prompt: 'long task', agentType: 'codex' }
+        },
+        'conn-1'
+      )
+
+      expect(server.getStatusSnapshot()[0]).toMatchObject({
+        state: 'done',
+        model: 'gpt-5.6-sol',
+        prompt: 'long task'
+      })
     } finally {
       vi.useRealTimers()
     }
@@ -4209,6 +4376,109 @@ describe('Claude hook normalization', () => {
 })
 
 describe('Codex hook normalization', () => {
+  it('tracks nested subagents with their role, model, and lifecycle state', () => {
+    const root = _internals.normalizeHookPayload(
+      'codex',
+      buildBody({
+        hook_event_name: 'UserPromptSubmit',
+        prompt: 'Coordinate the review',
+        model: 'gpt-5.4'
+      }),
+      'production'
+    )
+    expect(root?.payload.model).toBe('gpt-5.4')
+
+    const started = _internals.normalizeHookPayload(
+      'codex',
+      buildBody({
+        hook_event_name: 'SubagentStart',
+        session_id: 'child-session',
+        agent_id: 'child-session',
+        agent_type: 'reviewer',
+        model: 'gpt-5.4-mini'
+      }),
+      'production'
+    )
+    expect(started?.providerSession).toBeUndefined()
+    expect(started?.payload).toMatchObject({
+      state: 'working',
+      prompt: 'Coordinate the review',
+      model: 'gpt-5.4',
+      subagents: [
+        {
+          id: 'child-session',
+          agentType: 'reviewer',
+          model: 'gpt-5.4-mini',
+          state: 'working'
+        }
+      ]
+    })
+
+    const waiting = _internals.normalizeHookPayload(
+      'codex',
+      buildBody({
+        hook_event_name: 'PermissionRequest',
+        agent_id: 'child-session',
+        agent_type: 'reviewer',
+        model: 'gpt-5.4-mini',
+        tool_name: 'exec_command',
+        tool_input: { cmd: 'git fetch' }
+      }),
+      'production'
+    )
+    expect(waiting?.payload.state).toBe('waiting')
+    expect(waiting?.payload.subagents?.[0].state).toBe('waiting')
+
+    const workingAgain = _internals.normalizeHookPayload(
+      'codex',
+      buildBody({
+        hook_event_name: 'PreToolUse',
+        agent_id: 'child-session',
+        agent_type: 'reviewer',
+        model: 'gpt-5.4-mini',
+        tool_name: 'exec_command',
+        tool_input: { cmd: 'git fetch' }
+      }),
+      'production'
+    )
+    expect(workingAgain?.payload.state).toBe('working')
+    expect(workingAgain?.payload.subagents?.[0].state).toBe('working')
+
+    const rootStop = _internals.normalizeHookPayload(
+      'codex',
+      buildBody({ hook_event_name: 'Stop', model: 'gpt-5.4' }),
+      'production'
+    )
+    expect(rootStop?.payload.state).toBe('done')
+    expect(rootStop?.payload.subagents).toBeUndefined()
+
+    const resumedChild = _internals.normalizeHookPayload(
+      'codex',
+      buildBody({
+        hook_event_name: 'PreToolUse',
+        agent_id: 'child-session',
+        agent_type: 'reviewer',
+        model: 'gpt-5.4-mini',
+        tool_name: 'exec_command',
+        tool_input: { cmd: 'pnpm test' }
+      }),
+      'production'
+    )
+    expect(resumedChild?.payload.state).toBe('working')
+    expect(resumedChild?.payload.subagents?.[0]).toMatchObject({
+      id: 'child-session',
+      state: 'working'
+    })
+
+    const stopped = _internals.normalizeHookPayload(
+      'codex',
+      buildBody({ hook_event_name: 'SubagentStop', agent_id: 'child-session' }),
+      'production'
+    )
+    expect(stopped?.payload.state).toBe('done')
+    expect(stopped?.payload.subagents).toBeUndefined()
+  })
+
   it('Stop carries last_assistant_message into lastAssistantMessage', () => {
     const result = _internals.normalizeHookPayload(
       'codex',
@@ -6238,6 +6508,90 @@ describe('Last-status persistence', () => {
       // Why: migration must be one-time, else every launch re-prunes the same persisted idle rows.
       const persisted = JSON.parse(readFileSync(lastStatusPath(), 'utf8'))
       expect(persisted.entries[PANE].payload.subagents).toBeUndefined()
+    } finally {
+      server.stop()
+    }
+  })
+
+  it('restores Codex child hierarchy and reaps unconfirmed children on the next root Stop', async () => {
+    mkdirSync(join(userDataPath, 'agent-hooks'), { recursive: true })
+    const receivedAt = recentTs()
+    writeFileSync(
+      lastStatusPath(),
+      JSON.stringify({
+        version: 2,
+        entries: {
+          [PANE]: {
+            paneKey: PANE,
+            tabId: 'tab-1',
+            worktreeId: 'wt-1',
+            receivedAt,
+            stateStartedAt: recentTs(-1000),
+            payload: {
+              state: 'working',
+              prompt: 'coordinate reviews',
+              agentType: 'codex',
+              model: 'gpt-5.4',
+              subagents: [
+                {
+                  id: '11111111-2222-4333-8444-555555555555',
+                  state: 'working',
+                  startedAt: receivedAt - 5000,
+                  agentType: 'reviewer',
+                  model: 'gpt-5.4-mini'
+                }
+              ]
+            }
+          }
+        }
+      }),
+      'utf8'
+    )
+
+    const server = new AgentHookServer()
+    await server.start({ env: 'production', userDataPath })
+    try {
+      expect(server.getStatusSnapshot()).toEqual([
+        expect.objectContaining({
+          state: 'working',
+          model: 'gpt-5.4',
+          subagents: [
+            expect.objectContaining({
+              id: '11111111-2222-4333-8444-555555555555',
+              model: 'gpt-5.4-mini'
+            })
+          ]
+        })
+      ])
+
+      await postHookEvent(
+        server,
+        buildBody({
+          hook_event_name: 'PreToolUse',
+          agent_id: '11111111-2222-4333-8444-555555555555',
+          agent_type: 'reviewer',
+          model: 'gpt-5.4-mini',
+          tool_name: 'exec_command',
+          tool_input: { cmd: 'pnpm test' }
+        }),
+        '/hook/codex'
+      )
+      expect(server.getStatusSnapshot()).toEqual([
+        expect.objectContaining({
+          state: 'working',
+          model: 'gpt-5.4',
+          subagents: [expect.objectContaining({ model: 'gpt-5.4-mini' })]
+        })
+      ])
+
+      await postHookEvent(
+        server,
+        buildBody({ hook_event_name: 'Stop', model: 'gpt-5.4' }),
+        '/hook/codex'
+      )
+      expect(server.getStatusSnapshot()).toEqual([
+        expect.objectContaining({ state: 'done', model: 'gpt-5.4', subagents: undefined })
+      ])
     } finally {
       server.stop()
     }

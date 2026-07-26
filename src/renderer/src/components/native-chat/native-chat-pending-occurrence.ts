@@ -1,4 +1,4 @@
-import { stripImagePromptMarker } from './native-chat-image-transcript-markers'
+import { stripImagePromptMarker } from '../../../../shared/native-chat-image-transcript-markers'
 import {
   isImageRefBlock,
   isTextBlock,

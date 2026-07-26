@@ -48,6 +48,7 @@ export function getStartupErrorFallbackUI(uiHydrated: boolean): PersistedUIState
     hideSleepingWorkspaces: DEFAULT_HIDE_SLEEPING_WORKSPACES,
     showSleepingWorkspaces: DEFAULT_SHOW_SLEEPING_WORKSPACES,
     hideDefaultBranchWorkspace: false,
+    hideCliCreatedWorkspaces: false,
     hideAutomationGeneratedWorkspaces: false,
     filterRepoIds: [],
     collapsedGroups: [],

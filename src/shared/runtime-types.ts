@@ -37,6 +37,10 @@ import type {
   SleepingAgentLaunchConfig
 } from './agent-session-resume'
 import type { StartupCommandDelivery } from './codex-startup-delivery'
+import type { RemoteServerUpdateSupport } from './remote-server-update'
+import type { ExecutionHostId } from './execution-host'
+import type { PtyIncarnationId } from './pty-incarnation'
+import type { RasterImageDimensions } from './raster-image-dimensions'
 
 export type { RuntimeMarkdownReadTabResult, RuntimeMarkdownSaveTabResult }
 
@@ -74,6 +78,9 @@ export type RuntimeStatus = {
   runtimeProtocolVersion?: number
   minCompatibleRuntimeClientVersion?: number
   capabilities?: RuntimeCapability[]
+  // Why: optional fields let updated clients inventory both new and legacy paired servers.
+  appVersion?: string
+  remoteUpdateSupport?: RemoteServerUpdateSupport
   remoteControl?: RemoteRuntimeSharedConnectionDiagnostics | null
   hostPlatform?: NodeJS.Platform
   terminalWindowsShell?: string | null
@@ -106,6 +113,9 @@ export type CliStatusResult = {
     state: CliRuntimeState
     reachable: boolean
     runtimeId: string | null
+    appVersion?: string
+    remoteUpdateSupport?: RemoteServerUpdateSupport
+    capabilities?: RuntimeCapability[]
   }
   graph: {
     state: RuntimeGraphStatus | 'not_running' | 'starting'
@@ -273,6 +283,25 @@ export type RuntimeMobileSessionTabMoveResult = {
   moved: true
 }
 
+export type RuntimeMobileSessionTabCloseResult = {
+  closed: true
+  refused?: true
+  refusalReason?:
+    | 'missing-intent'
+    | 'stale-publication'
+    | 'stale-terminal'
+    | 'live-host-pty'
+    | 'unknown-liveness'
+    | 'retirement-owner'
+  // Why: only a republished snapshot can restore a live mirror; dead-leaf refusals intentionally omit this marker.
+  snapshotRepublished?: true
+}
+
+// Why: lets the host tell a user's close from a client-lifecycle echo
+// ('pty-exit'/'cleanup') and adjudicate against its own PTY liveness.
+// Absent on legacy clients, where the existing close endpoint remains user intent.
+export type RuntimeSessionTabCloseReason = 'user' | 'pty-exit' | 'cleanup'
+
 export type RuntimeMobileSessionTabsSnapshot = {
   worktree: string
   publicationEpoch: string
@@ -379,6 +408,7 @@ export type RuntimeFilePreviewResult = {
   isBinary: boolean
   isImage?: boolean
   mimeType?: string
+  imageDimensions?: RasterImageDimensions
 }
 
 export type RuntimeFileReadChunkResult = {
@@ -390,6 +420,8 @@ export type RuntimeFileReadChunkResult = {
 export type RuntimeTerminalSummary = {
   handle: string
   ptyId: string | null
+  incarnationId?: string | null
+  orphaned?: boolean
   worktreeId: string
   worktreePath: string
   branch: string
@@ -453,9 +485,79 @@ export type RuntimeTerminalVisualLayout = {
 export type RuntimeTerminalListResult = {
   terminals: RuntimeTerminalSummary[]
   visualLayouts?: RuntimeTerminalVisualLayout[]
+  topologyRevisions?: Record<string, number>
   totalCount: number
   truncated: boolean
 }
+
+export type RuntimeTerminalOrphanAdoptionClaim = {
+  terminal: string
+  ptyId: string
+  incarnationId: PtyIncarnationId
+  tabId: string
+  leafId: string
+}
+
+export type RuntimeTerminalOrphanTopologyTab = {
+  tabId: string
+  root: TerminalPaneLayoutNode
+  activeLeafId: string
+  expandedLeafId: string | null
+}
+
+export type RuntimeTerminalOrphanTopologyGroup = {
+  id: string
+  activeTabId: string
+  tabOrder: string[]
+  recentTabIds?: string[]
+}
+
+export type RuntimeTerminalOrphanTopology = {
+  tabs: RuntimeTerminalOrphanTopologyTab[]
+  groups: RuntimeTerminalOrphanTopologyGroup[]
+  groupLayout?: TabGroupLayoutNode
+}
+
+export type RuntimeTerminalOrphanAdoptionRequest = {
+  worktree: string
+  expectedTopologyRevision: number
+  claims: RuntimeTerminalOrphanAdoptionClaim[]
+  activeTabId?: string
+  activeGroupId?: string
+  topology?: RuntimeTerminalOrphanTopology
+}
+
+export type RuntimeTerminalOrphanAdoptionResult = {
+  adopted: boolean
+  topologyRevision: number
+  snapshot: RuntimeMobileSessionTabsResult
+}
+
+export type RuntimeWorktreeTerminalSleepFailure =
+  | 'terminal_liveness_unavailable'
+  | 'terminal_worktree_sleep_still_live'
+
+export type RuntimeWorktreeTerminalSleepResult = {
+  stopped: number
+  stoppedPtyIds: string[]
+  livePtyIds: string[]
+} & (
+  | {
+      postStopVerified: true
+      postStopFailure?: never
+      remainingLivePtyIds?: never
+    }
+  | {
+      postStopVerified: false
+      postStopFailure: 'terminal_liveness_unavailable'
+      remainingLivePtyIds?: never
+    }
+  | {
+      postStopVerified: false
+      postStopFailure: 'terminal_worktree_sleep_still_live'
+      remainingLivePtyIds: string[]
+    }
+)
 
 export type RuntimeTerminalShow = RuntimeTerminalSummary & {
   paneRuntimeId: number
@@ -535,8 +637,13 @@ export type RuntimeTerminalCreate = {
   ptyId?: string | null
   worktreeId: string
   title: string | null
+  /** Spawn-time execution identity; paired clients must not infer nested SSH from their own graph. */
+  executionHostId?: ExecutionHostId
+  hostPlatform?: NodeJS.Platform
   surface?: 'background' | 'visible'
   warning?: string
+  /** Present only for the structured host-authority resume path. */
+  agentSessionDisposition?: 'created' | 'adopted'
 }
 
 export type RuntimeTerminalSplit = {
@@ -550,6 +657,9 @@ export type RuntimeTerminalResolvePane = {
   tabId: string
   leafId: string
   ptyId: string | null
+  worktreeId?: string
+  executionHostId?: ExecutionHostId
+  hostPlatform?: NodeJS.Platform
 }
 
 export type RuntimeTerminalFocus = {

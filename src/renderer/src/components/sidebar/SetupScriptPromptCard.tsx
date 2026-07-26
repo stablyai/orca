@@ -26,6 +26,7 @@ import {
   type LastVisibleSetupScriptPrompt,
   useSetupScriptPromptProjectContext
 } from './setup-script-prompt-render-state'
+import { useSetupScriptPromptRevalidation } from './useSetupScriptPromptRevalidation'
 import { translate } from '@/i18n/i18n'
 
 type PromptState = SetupScriptPromptInspection
@@ -112,6 +113,14 @@ function SetupScriptPromptCard(): React.JSX.Element | null {
   const handleRetryInspection = useCallback(() => {
     setInspectionRetryKey((value) => value + 1)
   }, [])
+
+  useSetupScriptPromptRevalidation({
+    activeRepo,
+    isDismissed,
+    sidebarOpen,
+    promptState,
+    requestRevalidation: handleRetryInspection
+  })
 
   useEffect(() => {
     if (

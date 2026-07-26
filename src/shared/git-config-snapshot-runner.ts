@@ -27,7 +27,7 @@ function canonicalizeGitConfigLookupKey(key: string): string {
 
 function parseGitConfigListSnapshot(stdout: string): GitConfigSnapshot {
   const snapshot: GitConfigSnapshot = new Map()
-  for (const record of stdout.split('\0')) {
+  for (const record of iterateNulDelimitedFields(stdout)) {
     if (!record.trim()) {
       continue
     }
@@ -101,3 +101,4 @@ export function createGitConfigSnapshotRunner(runGit: GitCommandRunner): GitComm
     return { stdout: values.at(-1) ?? '' }
   }
 }
+import { iterateNulDelimitedFields } from './nul-delimited-fields'

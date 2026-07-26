@@ -67,6 +67,8 @@ type MuxInternals = {
   notificationHandlers: unknown[]
   methodNotificationHandlers: Map<string, Set<unknown>>
   disposeHandlers: unknown[]
+  lastReceivedAt: number
+  unackedTimestamps: Map<number, number>
 }
 
 function getMuxInternals(instance: SshChannelMultiplexer): MuxInternals {
@@ -286,14 +288,16 @@ describe('SshChannelMultiplexer', () => {
   })
 
   describe('keepalive', () => {
-    it('sends keepalive frames periodically', () => {
+    it('sends one keepalive frame per cadence tick', () => {
       const initialWrites = transport.written.length
 
       vi.advanceTimersByTime(5_000)
-      expect(transport.written.length).toBeGreaterThan(initialWrites)
+      expect(transport.written).toHaveLength(initialWrites + 1)
+      expect(transport.written.at(-1)![0]).toBe(MessageType.KeepAlive)
 
-      const lastFrame = transport.written.at(-1)!
-      expect(lastFrame[0]).toBe(MessageType.KeepAlive)
+      vi.advanceTimersByTime(5_000)
+      expect(transport.written).toHaveLength(initialWrites + 2)
+      expect(transport.written.at(-1)![0]).toBe(MessageType.KeepAlive)
     })
 
     it('turns transport write failures into connection loss instead of throwing from the timer', () => {
@@ -327,22 +331,42 @@ describe('SshChannelMultiplexer', () => {
   })
 
   describe('wake guard (timer pause across system sleep, #7773)', () => {
-    it('does not kill a healthy link on the first tick after a long timer pause', () => {
-      // Reach steady state with pending unacked keepalives (<5s old at pause).
-      vi.advanceTimersByTime(5_000)
-      expect(mux.isDisposed()).toBe(false)
+    it('sends one fresh probe per link and rebaselines liveness after a wake gap', () => {
+      const secondTransport = createMockTransport()
+      const secondMux = new SshChannelMultiplexer(secondTransport)
 
-      // Simulate sleep/App Nap: wall clock jumps far ahead with no ticks.
-      // Without the guard, the first post-wake tick sees lastReceivedAt and
-      // the pre-pause keepalive both >20s stale and disposes the mux.
-      vi.setSystemTime(Date.now() + 60 * 60 * 1000)
-      const writesBefore = transport.written.length
-      vi.advanceTimersByTime(5_000)
+      try {
+        // Reach steady state with pending unacked keepalives (<5s old at pause).
+        vi.advanceTimersByTime(5_000)
+        expect(mux.isDisposed()).toBe(false)
+        expect(secondMux.isDisposed()).toBe(false)
 
-      expect(mux.isDisposed()).toBe(false)
-      // The guard probes immediately with a fresh keepalive.
-      expect(transport.written.length).toBeGreaterThan(writesBefore)
-      expect(transport.written.at(-1)![0]).toBe(MessageType.KeepAlive)
+        const internals = getMuxInternals(mux)
+        const secondInternals = getMuxInternals(secondMux)
+        const previousReceivedAt = internals.lastReceivedAt
+        const writesBefore = transport.written.length
+        const secondWritesBefore = secondTransport.written.length
+
+        // Simulate sleep/App Nap: wall clock jumps far ahead with no ticks.
+        vi.setSystemTime(Date.now() + 60 * 60 * 1000)
+        vi.advanceTimersByTime(5_000)
+        const resumedAt = Date.now()
+
+        expect(mux.isDisposed()).toBe(false)
+        expect(secondMux.isDisposed()).toBe(false)
+        expect(transport.written).toHaveLength(writesBefore + 1)
+        expect(secondTransport.written).toHaveLength(secondWritesBefore + 1)
+        expect(transport.written.at(-1)![0]).toBe(MessageType.KeepAlive)
+        expect(secondTransport.written.at(-1)![0]).toBe(MessageType.KeepAlive)
+
+        expect(internals.lastReceivedAt).toBe(resumedAt)
+        expect(internals.lastReceivedAt).toBeGreaterThan(previousReceivedAt)
+        expect(new Set(internals.unackedTimestamps.values())).toEqual(new Set([resumedAt]))
+        expect(secondInternals.lastReceivedAt).toBe(resumedAt)
+        expect(new Set(secondInternals.unackedTimestamps.values())).toEqual(new Set([resumedAt]))
+      } finally {
+        secondMux.dispose()
+      }
     })
 
     it('keeps the link alive after wake when frames resume', () => {

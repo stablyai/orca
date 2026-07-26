@@ -11,6 +11,8 @@ export type DaemonStartOptions = {
   protocolVersion?: number
   spawnSubprocess: DaemonServerOptions['spawnSubprocess']
   preparePtySpawn?: DaemonServerOptions['preparePtySpawn']
+  onPtySessionExit?: DaemonServerOptions['onPtySessionExit']
+  onAuthenticatedClientPair?: DaemonServerOptions['onAuthenticatedClientPair']
   log?: DaemonFileLog
   onIdleShutdown?: () => void
   initialAdoptionTestConfig?: DaemonServerOptions['initialAdoptionTestConfig']
@@ -30,6 +32,10 @@ export async function startDaemon(opts: DaemonStartOptions): Promise<DaemonHandl
     ...(opts.protocolVersion !== undefined ? { protocolVersion: opts.protocolVersion } : {}),
     spawnSubprocess: opts.spawnSubprocess,
     ...(opts.preparePtySpawn ? { preparePtySpawn: opts.preparePtySpawn } : {}),
+    ...(opts.onPtySessionExit ? { onPtySessionExit: opts.onPtySessionExit } : {}),
+    ...(opts.onAuthenticatedClientPair
+      ? { onAuthenticatedClientPair: opts.onAuthenticatedClientPair }
+      : {}),
     ...(opts.log ? { log: opts.log } : {}),
     ...(opts.onIdleShutdown ? { onIdleShutdown: opts.onIdleShutdown } : {}),
     ...(opts.initialAdoptionTestConfig

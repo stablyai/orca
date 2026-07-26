@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
 import type { AiVaultSession } from '../../../src/shared/ai-vault-types'
+import { buildAgentResumeStartupPlan } from '../../../src/shared/tui-agent-startup'
 import {
   buildMobileAiVaultResumeLaunch,
   buildMobileAiVaultResumeCommand,
@@ -120,6 +121,50 @@ describe('buildMobileAiVaultResumeCommand', () => {
 })
 
 describe('buildMobileAiVaultResumeLaunch', () => {
+  it('preserves an arbitrary OMP transcript locator for later cold resume', () => {
+    const launch = buildMobileAiVaultResumeLaunch({
+      session: session({
+        agent: 'omp',
+        sessionId: 'omp-custom-1',
+        filePath: '/custom/omp-sessions/project/session.jsonl'
+      }),
+      hostPlatform: 'linux',
+      settings: {
+        agentDefaultArgs: { omp: '--model custom' },
+        agentDefaultEnv: { omp: { OMP_PROFILE: 'custom' } }
+      }
+    })
+
+    expect(launch).toMatchObject({
+      command:
+        "cd '/Users/ada/repo' && omp '--model' 'custom' --resume '/custom/omp-sessions/project/session.jsonl'",
+      env: { OMP_PROFILE: 'custom' },
+      launchConfig: {
+        agentCommand: "omp '--model' 'custom'",
+        agentArgs: '--model custom',
+        agentEnv: { OMP_PROFILE: 'custom' },
+        ompResumeFilePath: '/custom/omp-sessions/project/session.jsonl'
+      },
+      launchAgent: 'omp'
+    })
+
+    const coldLaunch = buildAgentResumeStartupPlan({
+      agent: 'omp',
+      providerSession: { key: 'session_id', id: 'omp-custom-1' },
+      cmdOverrides: {},
+      agentArgs: launch.launchConfig?.agentArgs,
+      agentEnv: launch.launchConfig?.agentEnv,
+      agentCommand: launch.launchConfig?.agentCommand,
+      ompResumeFilePath: launch.launchConfig?.ompResumeFilePath,
+      platform: 'linux'
+    })
+    expect(coldLaunch).toMatchObject({
+      launchCommand:
+        "omp '--model' 'custom' '--resume' '/custom/omp-sessions/project/session.jsonl'",
+      env: { OMP_PROFILE: 'custom' }
+    })
+  })
+
   it('uses shared TUI startup planning for default args, env, and launch config', () => {
     const launch = buildMobileAiVaultResumeLaunch({
       session: session({

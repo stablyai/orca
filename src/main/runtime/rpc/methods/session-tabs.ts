@@ -11,6 +11,7 @@ import {
   UpdatePaneLayout,
   WorktreeTabSelector
 } from './session-tabs-schemas'
+import { SESSION_TAB_CLOSE_METHODS } from './session-tab-close-methods'
 
 export const SESSION_TAB_METHODS: RpcAnyMethod[] = [
   defineMethod({
@@ -40,12 +41,7 @@ export const SESSION_TAB_METHODS: RpcAnyMethod[] = [
         })
       })
   }),
-  defineMethod({
-    name: 'session.tabs.close',
-    params: ActivateTab,
-    handler: async (params, { runtime }) =>
-      runtime.closeMobileSessionTab(params.worktree, params.tabId)
-  }),
+  ...SESSION_TAB_CLOSE_METHODS,
   defineMethod({
     name: 'session.tabs.createTerminal',
     params: CreateTerminalTab,

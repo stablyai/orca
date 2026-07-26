@@ -290,6 +290,7 @@ window.onerror = function(msg) {
   var defaultTheme = ${JSON.stringify(DEFAULT_TERMINAL_THEME)};
   var terminalThemeInput = null;
   var terminalTheme = defaultTheme;
+  var terminalMinimumContrastRatio = 3;
   var webglAddon = null;
   var webglRecoveryTimer = null;
   var activeAltScreenSnapshot = false;
@@ -714,6 +715,7 @@ ${TERMINAL_WEBGL_RECOVERY_JS}
       cols: cols || 80,
       rows: rows || 24,
       theme: terminalTheme,
+      minimumContrastRatio: terminalMinimumContrastRatio,
       fontFamily: terminalFontFamily,
       fontSize: fontPxForScale(currentTextScale),
       fontWeight: '300',
@@ -724,7 +726,9 @@ ${TERMINAL_WEBGL_RECOVERY_JS}
       disableStdin: false,
       cursorBlink: false,
       cursorStyle: 'bar',
-      cursorInactiveStyle: 'none',
+      // Why: native TextInput owns mobile keyboard focus, so xterm stays inactive.
+      // Match its active bar while still honoring application cursor-hide sequences.
+      cursorInactiveStyle: 'bar',
       convertEol: false,
       allowProposedApi: true
     });

@@ -6,7 +6,6 @@ import { useTabAgent } from '@/lib/use-tab-agent'
 import { isImeCompositionKeyDown } from '@/lib/ime-composition-keyboard-event'
 import { Input } from '@/components/ui/input'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
-import { ShortcutKeyCombo } from '@/components/ShortcutKeyCombo'
 import type { TerminalTab } from '../../../../shared/types'
 import type { TabDragItemData } from '../tab-group/useTabDragSplit'
 import { useAppStore } from '../../store'
@@ -21,7 +20,7 @@ import { preventMiddleButtonDefault } from './middle-button-default-guard'
 import { SortableTabContextMenu } from './SortableTabContextMenu'
 import { translate } from '@/i18n/i18n'
 import { TAB_CONTAINER_WIDTH_CLASSES, TAB_LABEL_WIDTH_CLASSES } from './tab-width-rules'
-import { useShortcutKeyDetails } from '@/hooks/useShortcutLabel'
+import { useOptionalShortcutLabel } from '@/hooks/useShortcutLabel'
 import { useTabStripPointerActivation } from './tab-strip-pointer-activation'
 import { TerminalTabLeadingIcon } from './TerminalTabLeadingIcon'
 import {
@@ -205,7 +204,8 @@ export default function SortableTab({
     onActivate: handleActivate,
     disabled: isEditing
   })
-  const closeShortcut = useShortcutKeyDetails('tab.close')
+  const closeShortcut = useOptionalShortcutLabel('tab.close')
+  const closeLabel = translate('auto.components.tab.bar.SortableTab.95db5f2f7d', 'Close tab')
   const tabTitle = tab.customTitle ?? tab.title
   const tabRoot = (
     <div
@@ -387,11 +387,8 @@ export default function SortableTab({
               <X className="w-3 h-3" />
             </button>
           </TooltipTrigger>
-          <TooltipContent side="bottom" sideOffset={6} className="flex items-center gap-2">
-            <span>{translate('auto.components.tab.bar.SortableTab.95db5f2f7d', 'Close tab')}</span>
-            {closeShortcut.keys.length > 0 && (
-              <ShortcutKeyCombo keys={closeShortcut.keys} doubleTap={closeShortcut.doubleTap} />
-            )}
+          <TooltipContent side="bottom" sideOffset={6}>
+            {closeShortcut ? `${closeLabel} (${closeShortcut})` : closeLabel}
           </TooltipContent>
         </Tooltip>
       )}

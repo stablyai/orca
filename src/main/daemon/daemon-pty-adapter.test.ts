@@ -2,10 +2,15 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { hostname, tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { mkdtempSync, mkdirSync, rmSync, existsSync, readFileSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdtempSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { DaemonClient } from './client'
 import { DaemonProtocolError } from './daemon-errors'
 import { DaemonPtyAdapter } from './daemon-pty-adapter'
+import {
+  COMPLETION_PROCESS_INSPECTION_PROTOCOL_VERSION,
+  GET_FOREGROUND_PROCESS_PROTOCOL_VERSION,
+  PROTOCOL_VERSION
+} from './daemon-protocol-version'
 import { DaemonServer } from './daemon-server'
 import { HeadlessEmulator } from './headless-emulator'
 import { getHistorySessionDirName } from './history-paths'
@@ -129,6 +134,16 @@ describe('DaemonPtyAdapter (IPtyProvider)', () => {
     getMacDaemonSystemResolverHealthMock.mockResolvedValue('unknown')
   })
 
+  it('reports whether its daemon protocol can participate in agent claims', () => {
+    const legacy = new DaemonPtyAdapter({ socketPath, tokenPath, protocolVersion: 23 })
+
+    expect(adapter.supportsAgentSessionClaims()).toBe(true)
+    expect(legacy.supportsAgentSessionClaims()).toBe(false)
+    expect(adapter.supportsAgentSessionCreateOperations()).toBe(true)
+    expect(legacy.supportsAgentSessionCreateOperations()).toBe(false)
+    legacy.dispose()
+  })
+
   afterEach(async () => {
     adapter?.dispose()
     await server?.shutdown()
@@ -204,6 +219,135 @@ describe('DaemonPtyAdapter (IPtyProvider)', () => {
         requestSpy.mockRestore()
         ensureConnectedSpy.mockRestore()
       }
+    })
+
+    it('does not republish adapter state when stream exit beats the create reply', async () => {
+      const sessionId = 'exit-before-create-reply'
+      const exits: { id: string; incarnationId?: string }[] = []
+      adapter.onExit((payload) => exits.push(payload))
+      const client = (
+        adapter as unknown as {
+          client: { request: (type: string, payload?: unknown) => Promise<unknown> }
+        }
+      ).client
+      const originalRequest = client.request.bind(client)
+      vi.spyOn(client, 'request').mockImplementation(async (type: string, payload?: unknown) => {
+        const response = await originalRequest(type, payload)
+        if (type === 'createOrAttach') {
+          const exitCount = exits.length
+          lastSubprocess._simulateExit(0)
+          await waitFor(() => exits.length === exitCount + 1)
+        }
+        return response
+      })
+
+      await adapter.spawn({ cols: 80, rows: 24, sessionId })
+      await adapter.spawn({ cols: 80, rows: 24, sessionId })
+
+      expect(exits).toHaveLength(2)
+      expect(exits[0]?.incarnationId).toBeDefined()
+      expect(exits[1]?.incarnationId).toBeDefined()
+      expect(exits[1]?.incarnationId).not.toBe(exits[0]?.incarnationId)
+      const internals = adapter as unknown as {
+        activeSessionIds: Set<string>
+        sessionIncarnations: Map<string, string>
+        pendingSpawnOperationsBySessionId: Map<string, unknown>
+      }
+      expect(internals.activeSessionIds.has(sessionId)).toBe(false)
+      expect(internals.sessionIncarnations.has(sessionId)).toBe(false)
+      expect(internals.pendingSpawnOperationsBySessionId.has(sessionId)).toBe(false)
+    })
+
+    it('does not republish an adopted canonical id when its exit beats the reply', async () => {
+      const claim = {
+        digestVersion: 1 as const,
+        keyId: 'key',
+        identityDigest: 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
+        worktreeScopeDigest: 'bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb',
+        agent: 'codex' as const
+      }
+      const surface = {
+        worktreeId: 'worktree',
+        tabId: 'tab',
+        leafId: '11111111-1111-4111-8111-111111111111',
+        terminalHandle: 'term_claimed'
+      }
+      const canonicalId = 'canonical-claimed-session'
+      const first = await adapter.spawn({
+        cols: 80,
+        rows: 24,
+        sessionId: canonicalId,
+        agentSessionEnsure: { claim, surface }
+      })
+      expect(first.agentSessionEnsure?.disposition).toBe('created')
+
+      const exits: { id: string; incarnationId?: string }[] = []
+      adapter.onExit((payload) => exits.push(payload))
+      const client = (
+        adapter as unknown as {
+          client: { request: (type: string, payload?: unknown) => Promise<unknown> }
+        }
+      ).client
+      const originalRequest = client.request.bind(client)
+      vi.spyOn(client, 'request').mockImplementation(async (type: string, payload?: unknown) => {
+        const response = await originalRequest(type, payload)
+        if (type === 'createOrAttach') {
+          const exitCount = exits.length
+          lastSubprocess._simulateExit(0)
+          await waitFor(() => exits.length === exitCount + 1)
+        }
+        return response
+      })
+
+      const adopted = await adapter.spawn({
+        cols: 80,
+        rows: 24,
+        sessionId: 'different-requested-session',
+        agentSessionEnsure: {
+          claim,
+          surface: { ...surface, terminalHandle: 'term_retry' }
+        }
+      })
+
+      expect(adopted.id).toBe(canonicalId)
+      expect(adopted.agentSessionEnsure?.disposition).toBe('adopted')
+      expect(adapter.didExitBeforeSpawnReply(adopted)).toBe(true)
+      const internals = adapter as unknown as {
+        activeSessionIds: Set<string>
+        sessionIncarnations: Map<string, string>
+        pendingSpawnOperationsBySessionId: Map<string, unknown>
+        pendingClaimSpawnOperations: Set<unknown>
+      }
+      expect(internals.activeSessionIds.has(canonicalId)).toBe(false)
+      expect(internals.sessionIncarnations.has(canonicalId)).toBe(false)
+      expect(internals.pendingSpawnOperationsBySessionId.has('different-requested-session')).toBe(
+        false
+      )
+      expect(internals.pendingClaimSpawnOperations.size).toBe(0)
+    })
+
+    it('does not dispatch createOrAttach when cancellation wins during preflight', async () => {
+      let finishPreflight: (() => void) | undefined
+      const preflight = new Promise<void>((resolve) => {
+        finishPreflight = resolve
+      })
+      const internals = adapter as unknown as {
+        ensureConnected(): Promise<void>
+        client: { request: (...args: unknown[]) => Promise<unknown> }
+      }
+      const ensureConnected = vi
+        .spyOn(internals, 'ensureConnected')
+        .mockImplementation(() => preflight)
+      const request = vi.spyOn(internals.client, 'request')
+      const abort = new AbortController()
+
+      const spawning = adapter.spawn({ cols: 80, rows: 24, signal: abort.signal })
+      await waitFor(() => ensureConnected.mock.calls.length === 1)
+      abort.abort()
+      finishPreflight?.()
+
+      await expect(spawning).rejects.toThrow('client_disconnected')
+      expect(request).not.toHaveBeenCalledWith('createOrAttach', expect.anything())
     })
 
     it('uses worktreeId as session prefix when provided', async () => {
@@ -656,7 +800,7 @@ describe('DaemonPtyAdapter (IPtyProvider)', () => {
       lastSubprocess._simulateExit(42)
 
       await waitFor(() => exits.length > 0)
-      expect(exits[0]).toEqual({ id, code: 42 })
+      expect(exits[0]).toEqual({ id, code: 42, incarnationId: expect.any(String) })
     })
   })
 
@@ -730,7 +874,12 @@ describe('DaemonPtyAdapter (IPtyProvider)', () => {
 
   describe('listProcesses', () => {
     it('returns active sessions', async () => {
-      await adapter.spawn({ cols: 80, rows: 24, cwd: '/repo/owned-before-osc7' })
+      await adapter.spawn({
+        cols: 80,
+        rows: 24,
+        cwd: '/repo/owned-before-osc7',
+        worktreeId: 'repo::/repo/owned-before-osc7'
+      })
       await adapter.spawn({ cols: 80, rows: 24 })
 
       const procs = await adapter.listProcesses()
@@ -739,6 +888,27 @@ describe('DaemonPtyAdapter (IPtyProvider)', () => {
       expect(procs[0]).toHaveProperty('cwd')
       expect(procs[0]).toHaveProperty('title')
       expect(procs[0].cwd).toBe('/repo/owned-before-osc7')
+      expect(procs[0].worktreeId).toBe('repo::/repo/owned-before-osc7')
+    })
+
+    it('reports the daemon session WSL owner', async () => {
+      const platform = Object.getOwnPropertyDescriptor(process, 'platform')
+      Object.defineProperty(process, 'platform', { configurable: true, value: 'win32' })
+      try {
+        const spawned = await adapter.spawn({
+          cols: 80,
+          rows: 24,
+          cwd: '\\\\wsl.localhost\\Ubuntu\\home\\jin\\repo'
+        })
+
+        const procs = await adapter.listProcesses()
+
+        expect(procs.find((process) => process.id === spawned.id)?.wslDistro).toBe('Ubuntu')
+      } finally {
+        if (platform) {
+          Object.defineProperty(process, 'platform', platform)
+        }
+      }
     })
   })
 
@@ -760,6 +930,118 @@ describe('DaemonPtyAdapter (IPtyProvider)', () => {
       vi.mocked(lastSubprocess.getForegroundProcess).mockReturnValue('codex')
       expect(await adapter.getForegroundProcess(id)).toBe('codex')
     })
+  })
+
+  describe('inspectProcess on pre-inspection daemon protocols', () => {
+    type ClientInternals = {
+      client: { request: ReturnType<typeof vi.fn>; disconnect: ReturnType<typeof vi.fn> }
+    }
+
+    function createInspectionAdapter(
+      protocolVersion: number,
+      request: ReturnType<typeof vi.fn>
+    ): DaemonPtyAdapter {
+      const inspectionAdapter = new DaemonPtyAdapter({
+        socketPath,
+        tokenPath,
+        protocolVersion
+      })
+      ;(inspectionAdapter as unknown as ClientInternals).client = {
+        request,
+        disconnect: vi.fn()
+      }
+      return inspectionAdapter
+    }
+
+    it('reports protocol 10 inspection as unavailable without unsupported RPCs', async () => {
+      const request = vi.fn()
+      const legacy = createInspectionAdapter(GET_FOREGROUND_PROCESS_PROTOCOL_VERSION - 1, request)
+
+      await expect(legacy.inspectProcess('sess-a')).resolves.toEqual({
+        foregroundProcess: null,
+        hasChildProcesses: true,
+        unavailable: true
+      })
+      await expect(legacy.getForegroundProcess('sess-a')).resolves.toBeNull()
+      await expect(legacy.hasChildProcesses('sess-a')).resolves.toBe(true)
+      expect(request).not.toHaveBeenCalled()
+
+      legacy.dispose()
+    })
+
+    it.each([
+      GET_FOREGROUND_PROCESS_PROTOCOL_VERSION,
+      COMPLETION_PROCESS_INSPECTION_PROTOCOL_VERSION - 1
+    ])('composes protocol %s inspection from getForegroundProcess', async (protocolVersion) => {
+      const request = vi.fn(async () => ({ foregroundProcess: 'codex' }))
+      const legacy = createInspectionAdapter(protocolVersion, request)
+
+      expect(await legacy.inspectProcess('sess-a')).toEqual({
+        foregroundProcess: 'codex',
+        hasChildProcesses: true
+      })
+      expect(request).toHaveBeenCalledWith('getForegroundProcess', { sessionId: 'sess-a' })
+      expect(request).not.toHaveBeenCalledWith('inspectProcess', expect.anything())
+
+      legacy.dispose()
+    })
+
+    it('reports an idle shell as having no child processes', async () => {
+      const legacy = createInspectionAdapter(
+        COMPLETION_PROCESS_INSPECTION_PROTOCOL_VERSION - 1,
+        vi.fn(async () => ({ foregroundProcess: 'bash' }))
+      )
+
+      expect(await legacy.inspectProcess('sess-a')).toEqual({
+        foregroundProcess: 'bash',
+        hasChildProcesses: false
+      })
+
+      legacy.dispose()
+    })
+
+    it('reports a null foreground as idle, matching what the legacy daemon can report', async () => {
+      const legacy = createInspectionAdapter(
+        COMPLETION_PROCESS_INSPECTION_PROTOCOL_VERSION - 1,
+        vi.fn(async () => ({ foregroundProcess: null }))
+      )
+
+      expect(await legacy.inspectProcess('sess-a')).toEqual({
+        foregroundProcess: null,
+        hasChildProcesses: false
+      })
+
+      legacy.dispose()
+    })
+
+    it('rejects rather than reading as idle when the daemon call fails', async () => {
+      // Why: getForegroundProcess swallows errors into null; composing through it would turn a dead
+      // socket into a false "agent exited" completion, the mirror of the bug this path fixes.
+      const legacy = createInspectionAdapter(
+        COMPLETION_PROCESS_INSPECTION_PROTOCOL_VERSION - 1,
+        vi.fn(async () => {
+          throw new Error('socket_closed')
+        })
+      )
+
+      await expect(legacy.inspectProcess('sess-a')).rejects.toThrow('socket_closed')
+
+      legacy.dispose()
+    })
+
+    it.each([COMPLETION_PROCESS_INSPECTION_PROTOCOL_VERSION, PROTOCOL_VERSION])(
+      'delegates protocol %s inspection to inspectProcess',
+      async (protocolVersion) => {
+        const request = vi.fn(async () => ({ foregroundProcess: 'codex', hasChildProcesses: true }))
+        const current = createInspectionAdapter(protocolVersion, request)
+
+        await current.inspectProcess('sess-a')
+
+        expect(request).toHaveBeenCalledWith('inspectProcess', { sessionId: 'sess-a' })
+
+        current.dispose()
+      }
+    )
   })
 
   describe('serialize / revive', () => {
@@ -1849,9 +2131,13 @@ describe('DaemonPtyAdapter (IPtyProvider)', () => {
       writeFileSync(join(sessionDir, 'scrollback.bin'), 'cached output')
 
       historyAdapter = new DaemonPtyAdapter({ socketPath, tokenPath, historyPath: historyDir })
+      const internals = historyAdapter as unknown as {
+        coldRestoreCache: { byteSize: number }
+      }
 
       const first = await historyAdapter.spawn({ cols: 80, rows: 24, sessionId })
       expect(first.coldRestore).toBeDefined()
+      expect(internals.coldRestoreCache.byteSize).toBeGreaterThan(0)
 
       // Second call (StrictMode remount) should get cached data
       const second = await historyAdapter.spawn({ cols: 80, rows: 24, sessionId })
@@ -1860,6 +2146,7 @@ describe('DaemonPtyAdapter (IPtyProvider)', () => {
 
       // After ack, cold restore should not be returned
       historyAdapter.ackColdRestore(sessionId)
+      expect(internals.coldRestoreCache.byteSize).toBe(0)
       const third = await historyAdapter.spawn({ cols: 80, rows: 24, sessionId })
       expect(third.coldRestore).toBeUndefined()
     })

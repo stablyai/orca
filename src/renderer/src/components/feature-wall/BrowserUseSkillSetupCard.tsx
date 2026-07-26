@@ -1,6 +1,7 @@
 import type { JSX } from 'react'
 import {
   ORCA_CLI_SKILL_INSTALL_COMMAND,
+  ORCA_CLI_SKILL_NAME,
   ORCA_CLI_SKILL_UPDATE_COMMAND
 } from '@/lib/agent-feature-install-commands'
 import {
@@ -74,6 +75,11 @@ export function BrowserUseSkillSetupCard(props: {
       onBeforeOpenTerminal={handleBeforeOpenTerminal}
       showRecheckWhenInstalled={false}
       onRecheck={skill.refresh}
+      // Why: the local-host-only freshness scan cannot vouch for a WSL runtime,
+      // so fall back to the presence-only pill there (mirrors the settings cards).
+      freshnessSkillName={
+        activeSkillRuntime.agentRuntime?.runtime === 'wsl' ? undefined : ORCA_CLI_SKILL_NAME
+      }
     />
   )
 

@@ -127,6 +127,7 @@ vi.mock('../providers/ssh-filesystem-dispatch', () => ({
 vi.mock('../ipc/runtime-environment-transport-routing', () => ({
   callRuntimeEnvironment: callRuntimeEnvironmentMock
 }))
+vi.mock('./dashboard-popout-window', () => ({ isDashboardPopoutRenderer: () => false }))
 
 import {
   registerClipboardHandlers,

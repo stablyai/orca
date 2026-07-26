@@ -1,23 +1,21 @@
 // @vitest-environment happy-dom
-import { describe, expect, it, vi } from 'vitest'
+import React from 'react'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import { renderToStaticMarkup } from 'react-dom/server'
-import { CommitArea, ConflictSummaryCard, OperationBanner } from './SourceControl'
+import { fireEvent, render } from '@testing-library/react'
+import {
+  CommitArea,
+  ConflictSummaryCard,
+  handleSourceControlCommitShortcut,
+  OperationBanner
+} from './SourceControl'
 import {
   resolveCommitAreaPrimaryAction,
   type PrimaryActionInputs
 } from './source-control-primary-action'
 import { resolveDropdownItems, type DropdownActionKind } from './source-control-dropdown-items'
-import React from 'react'
-import { render, fireEvent } from '@testing-library/react'
 import { TooltipProvider } from '@/components/ui/tooltip'
 import { deriveSourceControlPushRecovery } from './source-control-push-recovery'
-
-let mockIsMac = false
-
-vi.mock('@/components/terminal-pane/terminal-link-open-hints', () => ({
-  isMacPlatform: () => mockIsMac,
-  getTerminalUrlSystemBrowserHint: () => ''
-}))
 
 vi.mock('@/components/ui/tooltip', () => ({
   Tooltip: ({ children }: { children: React.ReactNode }) => <>{children}</>,
@@ -27,6 +25,14 @@ vi.mock('@/components/ui/tooltip', () => ({
   ),
   TooltipProvider: ({ children }: { children: React.ReactNode }) => <>{children}</>
 }))
+
+afterEach(() => {
+  vi.unstubAllGlobals()
+})
+
+function setUserAgent(userAgent: string): void {
+  vi.stubGlobal('navigator', { userAgent })
+}
 
 function buildInputs(overrides: Partial<PrimaryActionInputs> = {}): PrimaryActionInputs {
   return {
@@ -167,73 +173,88 @@ describe('CommitArea', () => {
 
   it('renders the Commit shortcut key indicator (⌘Enter) in primary button tooltip on macOS', () => {
     const props = baseProps()
-    mockIsMac = true
+    setUserAgent('Macintosh')
     const markupMac = renderCommitArea({
       ...props,
       primaryAction: { kind: 'commit', disabled: false, label: 'Commit', title: 'Commit changes' }
     })
-    expect(markupMac).toContain('Commit changes (⌘Enter)')
+    expect(markupMac).toContain('Commit changes')
+    expect(markupMac).toContain('⌘')
+    expect(markupMac).toContain('Enter')
   })
 
   it('renders the Commit shortcut key indicator (Ctrl+Enter) in primary button tooltip on Windows/Linux', () => {
     const props = baseProps()
-    mockIsMac = false
+    setUserAgent('Windows NT')
     const markupWin = renderCommitArea({
       ...props,
       primaryAction: { kind: 'commit', disabled: false, label: 'Commit', title: 'Commit changes' }
     })
-    expect(markupWin).toContain('Commit changes (Ctrl+Enter)')
+    expect(markupWin).toContain('Commit changes')
+    expect(markupWin).toContain('Ctrl')
+    expect(markupWin).toContain('+')
+    expect(markupWin).toContain('Enter')
   })
 
-  it('triggers onPrimaryAction on Cmd+Enter on macOS', () => {
+  it('only handles Cmd+Enter when focus is within the Source Control sidebar', () => {
+    setUserAgent('Macintosh')
     const onPrimaryAction = vi.fn()
-    const props = {
-      ...baseProps(),
-      primaryAction: { kind: 'commit', disabled: false, label: 'Commit', title: 'Commit changes' },
-      onPrimaryAction
+    const primaryAction = {
+      kind: 'commit' as const,
+      disabled: false
     }
-
-    mockIsMac = true
-    const { container } = render(
-      <TooltipProvider>
-        <CommitArea {...props} />
-      </TooltipProvider>
+    const { getByTestId } = render(
+      <>
+        <div
+          data-testid="source-control-sidebar"
+          onKeyDown={(event) =>
+            handleSourceControlCommitShortcut(event, primaryAction, onPrimaryAction)
+          }
+        >
+          <button type="button" data-testid="inside-sidebar">
+            Inside
+          </button>
+        </div>
+        <button type="button" data-testid="outside-sidebar">
+          Outside
+        </button>
+      </>
     )
-    const textarea = container.querySelector('textarea')
-    if (!textarea) throw new Error('textarea not found')
 
-    // On Mac, Ctrl+Enter should NOT trigger commit
-    fireEvent.keyDown(textarea, { key: 'Enter', ctrlKey: true })
+    const outside = getByTestId('outside-sidebar')
+    outside.focus()
+    fireEvent.keyDown(outside, { key: 'Enter', metaKey: true })
     expect(onPrimaryAction).not.toHaveBeenCalled()
 
-    // On Mac, Cmd+Enter (metaKey) SHOULD trigger commit
-    fireEvent.keyDown(textarea, { key: 'Enter', metaKey: true })
+    const inside = getByTestId('inside-sidebar')
+    inside.focus()
+    fireEvent.keyDown(inside, { key: 'Enter', metaKey: true })
     expect(onPrimaryAction).toHaveBeenCalledTimes(1)
   })
 
-  it('triggers onPrimaryAction on Ctrl+Enter on Windows/Linux', () => {
+  it('handles Ctrl+Enter, but not Cmd+Enter, inside the sidebar on Windows/Linux', () => {
+    setUserAgent('Linux')
     const onPrimaryAction = vi.fn()
-    const props = {
-      ...baseProps(),
-      primaryAction: { kind: 'commit', disabled: false, label: 'Commit', title: 'Commit changes' },
-      onPrimaryAction
+    const primaryAction = {
+      kind: 'commit' as const,
+      disabled: false
     }
-
-    mockIsMac = false
-    const { container } = render(
-      <TooltipProvider>
-        <CommitArea {...props} />
-      </TooltipProvider>
+    const { getByRole } = render(
+      <button
+        type="button"
+        onKeyDown={(event) =>
+          handleSourceControlCommitShortcut(event, primaryAction, onPrimaryAction)
+        }
+      >
+        Commit scope
+      </button>
     )
-    const textarea = container.querySelector('textarea')
-    if (!textarea) throw new Error('textarea not found')
+    const target = getByRole('button', { name: 'Commit scope' })
 
-    // On Windows/Linux, Cmd+Enter (metaKey) should NOT trigger commit
-    fireEvent.keyDown(textarea, { key: 'Enter', metaKey: true })
+    fireEvent.keyDown(target, { key: 'Enter', metaKey: true })
     expect(onPrimaryAction).not.toHaveBeenCalled()
 
-    // On Windows/Linux, Ctrl+Enter SHOULD trigger commit
-    fireEvent.keyDown(textarea, { key: 'Enter', ctrlKey: true })
+    fireEvent.keyDown(target, { key: 'Enter', ctrlKey: true })
     expect(onPrimaryAction).toHaveBeenCalledTimes(1)
   })
 

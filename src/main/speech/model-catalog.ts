@@ -124,6 +124,28 @@ export const SPEECH_MODEL_CATALOG: SpeechModelManifest[] = [
     modelingUnit: 'cjkchar'
   },
   {
+    id: 'zipformer-streaming-korean',
+    label: 'Zipformer Streaming KO',
+    description: 'Korean only. Low-latency real-time streaming.',
+    type: 'transducer',
+    provider: 'local',
+    language: 'ko',
+    sizeBytes: 418_218_652,
+    downloadUrl:
+      'https://github.com/k2-fsa/sherpa-onnx/releases/download/asr-models/sherpa-onnx-streaming-zipformer-korean-2024-06-16.tar.bz2',
+    archiveSha256: 'e346a5882a409650472be17326237e24df7bf409db6b4a8a52e1a61422bf2500',
+    archiveFormat: 'tar.bz2',
+    files: [
+      'encoder-epoch-99-avg-1.int8.onnx',
+      'decoder-epoch-99-avg-1.int8.onnx',
+      'joiner-epoch-99-avg-1.int8.onnx',
+      'tokens.txt'
+    ],
+    sampleRate: 16000,
+    streaming: true,
+    modelingUnit: 'bpe'
+  },
+  {
     id: 'whisper-tiny',
     label: 'Whisper Tiny',
     description: '90+ languages. Lower accuracy than Parakeet but broadest language coverage.',

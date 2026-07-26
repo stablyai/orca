@@ -9,6 +9,7 @@ const {
   previewGhosttyImportMock,
   previewWarpThemeImportMock,
   prepareLocalWorktreeRootsForReposMock,
+  resolveEnvironmentMock,
   rebuildAppMenuMock
 } = vi.hoisted(() => ({
   applyAppIconMock: vi.fn(),
@@ -19,10 +20,12 @@ const {
   previewGhosttyImportMock: vi.fn(),
   previewWarpThemeImportMock: vi.fn(),
   prepareLocalWorktreeRootsForReposMock: vi.fn(),
+  resolveEnvironmentMock: vi.fn(),
   rebuildAppMenuMock: vi.fn()
 }))
 
 vi.mock('electron', () => ({
+  app: { getPath: vi.fn(() => '/test/user-data') },
   BrowserWindow: { getAllWindows: browserWindowGetAllWindowsMock },
   ipcMain: { handle: handleMock, on: onMock },
   nativeTheme: { themeSource: 'system' }
@@ -52,6 +55,10 @@ vi.mock('../menu/register-app-menu', () => ({
   rebuildAppMenu: rebuildAppMenuMock
 }))
 
+vi.mock('../../shared/runtime-environment-store', () => ({
+  resolveEnvironment: resolveEnvironmentMock
+}))
+
 import { registerSettingsHandlers } from './settings'
 
 const settingsInvokeEvent = { sender: { id: 1 } }
@@ -79,6 +86,12 @@ describe('registerSettingsHandlers', () => {
     previewGhosttyImportMock.mockClear()
     previewWarpThemeImportMock.mockClear()
     prepareLocalWorktreeRootsForReposMock.mockReset().mockResolvedValue(undefined)
+    resolveEnvironmentMock.mockReset().mockImplementation((_userDataPath, selector) => {
+      if (selector !== 'windows-2' && selector !== 'Windows 2') {
+        throw new Error('Runtime environment not found')
+      }
+      return { id: 'windows-2' }
+    })
     rebuildAppMenuMock.mockClear()
     browserWindowGetAllWindowsMock.mockReset()
     store.getSettings.mockReset()
@@ -106,6 +119,52 @@ describe('registerSettingsHandlers', () => {
     const event = { returnValue: undefined as unknown }
     listener(event)
     expect(event.returnValue).toEqual({ terminalMainSideEffectAuthority: false })
+  })
+
+  it('rejects durable Active Server writes through generic settings:set', async () => {
+    store.getSettings.mockReturnValue({ activeRuntimeEnvironmentId: null })
+    store.updateSettings.mockReturnValue({ activeRuntimeEnvironmentId: null })
+    registerSettingsHandlers(store as never)
+    const handler = handleMock.mock.calls.find((call) => call[0] === 'settings:set')?.[1] as (
+      event: typeof settingsInvokeEvent,
+      args: { activeRuntimeEnvironmentId: string }
+    ) => Promise<unknown>
+
+    await handler(settingsInvokeEvent, { activeRuntimeEnvironmentId: 'windows-2' })
+
+    expect(store.updateSettings).toHaveBeenCalledWith(
+      {},
+      expect.objectContaining({ originWebContentsId: 1 })
+    )
+  })
+
+  it('persists Active Server only through the dedicated preference channel', () => {
+    store.updateSettings.mockReturnValue({ activeRuntimeEnvironmentId: 'windows-2' })
+    registerSettingsHandlers(store as never)
+    const handler = handleMock.mock.calls.find(
+      (call) => call[0] === 'settings:set-active-runtime-environment-preference'
+    )?.[1] as (event: typeof settingsInvokeEvent, args: { environmentId: string | null }) => unknown
+
+    expect(handler(settingsInvokeEvent, { environmentId: '  windows-2  ' })).toEqual({
+      activeRuntimeEnvironmentId: 'windows-2'
+    })
+    expect(store.updateSettings).toHaveBeenCalledWith(
+      { activeRuntimeEnvironmentId: 'windows-2' },
+      { notifyListeners: true, originWebContentsId: 1 }
+    )
+    handler(settingsInvokeEvent, { environmentId: 'Windows 2' })
+    expect(store.updateSettings).toHaveBeenLastCalledWith(
+      { activeRuntimeEnvironmentId: 'windows-2' },
+      { notifyListeners: true, originWebContentsId: 1 }
+    )
+
+    expect(() => handler(settingsInvokeEvent, { environmentId: 42 as never })).toThrow(
+      'Invalid Active Server preference'
+    )
+    expect(() => handler(settingsInvokeEvent, { environmentId: 'does-not-exist' })).toThrow(
+      'Runtime environment not found'
+    )
+    expect(store.updateSettings).toHaveBeenCalledTimes(2)
   })
 
   it('applies bot-author deltas against the authoritative settings snapshot', () => {

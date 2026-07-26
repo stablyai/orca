@@ -24,6 +24,44 @@ describe('crash breadcrumb store', () => {
     expect(snapshot[29].name).toBe('event_31')
   })
 
+  it('retains bounded renderer high-water profiles across later activity', () => {
+    vi.useFakeTimers()
+    vi.setSystemTime(new Date('2026-07-22T12:00:00.000Z'))
+    recordCrashBreadcrumb('renderer_memory_highwater', {
+      rendererSurface: 'main',
+      thresholdPct: 80,
+      'store.agentStatusByPaneKey': 500
+    })
+    for (let index = 0; index < 32; index += 1) {
+      vi.advanceTimersByTime(60_000)
+      recordCrashBreadcrumb('renderer_memory', { index })
+    }
+
+    const snapshot = getCrashBreadcrumbSnapshot()
+
+    expect(snapshot).toHaveLength(30)
+    expect(snapshot[0]).toEqual(
+      expect.objectContaining({
+        name: 'renderer_memory_highwater',
+        data: expect.objectContaining({ thresholdPct: 80 })
+      })
+    )
+    expect(snapshot.at(-1)?.data).toEqual({ index: 31 })
+  })
+
+  it('caps retained high-water profiles', () => {
+    for (let index = 0; index < 5; index += 1) {
+      recordCrashBreadcrumb('renderer_memory_highwater', {
+        rendererSurface: `surface-${index}`,
+        thresholdPct: 80
+      })
+    }
+
+    expect(
+      getCrashBreadcrumbSnapshot().map((breadcrumb) => breadcrumb.data?.rendererSurface)
+    ).toEqual(['surface-1', 'surface-2', 'surface-3', 'surface-4'])
+  })
+
   it('redacts sensitive breadcrumb fields before they can be snapshotted', () => {
     recordCrashBreadcrumb('workspace_opened', {
       path: '/Users/alice/project',

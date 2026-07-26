@@ -59,6 +59,41 @@ describe('registerMobileHandlers', () => {
     })
   })
 
+  it('includes IPv6 addresses (ranked after IPv4) and excludes link-local IPv6', () => {
+    networkInterfacesMock.mockReturnValue({
+      en0: [
+        { family: 'IPv4', internal: false, address: '192.168.1.24' },
+        { family: 'IPv6', internal: false, address: 'fe80::1' },
+        { family: 'IPv6', internal: false, address: '2605:340:cd51:2a01:0:2b13:f279:c096' }
+      ],
+      lo0: [{ family: 'IPv6', internal: true, address: '::1' }]
+    })
+
+    registerMobileHandlers({} as never)
+
+    expect(handlers.get('mobile:listNetworkInterfaces')?.()).toEqual({
+      interfaces: [
+        { name: 'en0', address: '192.168.1.24' },
+        { name: 'en0', address: '2605:340:cd51:2a01:0:2b13:f279:c096' }
+      ]
+    })
+  })
+
+  it('returns an IPv6 interface on an IPv6-only host (regression: was empty, breaking mobile pairing)', () => {
+    networkInterfacesMock.mockReturnValue({
+      eth0: [
+        { family: 'IPv6', internal: false, address: '2605:340:cd51:2a01:0:2b13:f279:c096' },
+        { family: 'IPv6', internal: false, address: 'fe80::42:acff:fe11:2' }
+      ]
+    })
+
+    registerMobileHandlers({} as never)
+
+    expect(handlers.get('mobile:listNetworkInterfaces')?.()).toEqual({
+      interfaces: [{ name: 'eth0', address: '2605:340:cd51:2a01:0:2b13:f279:c096' }]
+    })
+  })
+
   it('generates mobile pairing urls with the tailnet address by default', async () => {
     networkInterfacesMock.mockReturnValue({
       en0: [{ family: 'IPv4', internal: false, address: '192.168.1.24' }],
@@ -271,6 +306,25 @@ describe('registerMobileHandlers', () => {
     registerMobileHandlers({} as never, { getRelayStatus: () => 'registered' })
 
     expect(handlers.get('mobile:getRelayStatus')?.()).toEqual({ status: 'registered' })
+  })
+
+  it('consumes a pending auth-failure notification only from a window renderer', () => {
+    const consumePendingUnpairedDeviceAuthFailure = vi.fn(() => true)
+    registerMobileHandlers({} as never, { consumePendingUnpairedDeviceAuthFailure })
+
+    expect(
+      handlers.get('mobile:consumePendingUnpairedDeviceAuthFailure')?.({
+        sender: { id: 42, isDestroyed: () => false, getType: () => 'window' }
+      })
+    ).toBe(true)
+    expect(consumePendingUnpairedDeviceAuthFailure).toHaveBeenCalledWith(42)
+
+    expect(
+      handlers.get('mobile:consumePendingUnpairedDeviceAuthFailure')?.({
+        sender: { id: 99, isDestroyed: () => false, getType: () => 'webview' }
+      })
+    ).toBe(false)
+    expect(consumePendingUnpairedDeviceAuthFailure).toHaveBeenCalledOnce()
   })
 
   it('inspects and repairs the current packaged Windows websocket port', async () => {

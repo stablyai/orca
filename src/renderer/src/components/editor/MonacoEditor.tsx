@@ -65,11 +65,15 @@ import {
   isMonacoAutoHeightCapped
 } from './monaco-auto-height'
 import { installMonacoE2EProbe } from './monaco-e2e-probe'
+import { monacoFindOptions } from './monaco-find-options'
+import { matchesPendingEditorFocusRequest } from './pending-editor-focus-request'
 
 type MonacoEditorProps = {
   fileId: string
   filePath: string
   viewStateKey: string
+  // Why: identifies the pane for explicit open focus handoffs; omit on surfaces that never receive one.
+  viewStateId?: string
   relativePath: string
   content: string
   language: string
@@ -95,6 +99,7 @@ export default function MonacoEditor({
   fileId,
   filePath,
   viewStateKey,
+  viewStateId,
   relativePath,
   content,
   language,
@@ -558,6 +563,16 @@ export default function MonacoEditor({
           editorInstance.focus()
         }
       }
+
+      // Why: every mount path above focuses, so an explicit open handoff is already satisfied here.
+      // Retiring it stops a later rich-mode remount of this same pane from stealing focus back.
+      const focusRequest = useAppStore.getState().pendingEditorFocusRequest
+      if (
+        focusRequest &&
+        matchesPendingEditorFocusRequest(focusRequest, { fileId, worktreeId, viewStateId })
+      ) {
+        useAppStore.getState().consumeEditorFocusRequest(focusRequest.token)
+      }
     },
     [
       queueReveal,
@@ -567,6 +582,7 @@ export default function MonacoEditor({
       setEditorCursorLine,
       updateMarkdownCompletionDocuments,
       viewStateKey,
+      viewStateId,
       autoHeight,
       autoHeightLineHeight,
       worktreeId
@@ -848,11 +864,7 @@ export default function MonacoEditor({
           smoothScrolling: true,
           cursorSmoothCaretAnimation: 'off',
           padding: { top: 0 },
-          find: {
-            addExtraSpaceOnTop: false,
-            autoFindInSelection: 'never',
-            seedSearchStringFromSelection: 'never'
-          },
+          find: monacoFindOptions,
           // Why: Monaco owns its rendered line surface, so align its selection-clipboard with the app opt-out (the global DOM hook can't).
           selectionClipboard: settings?.primarySelectionMiddleClickPaste ?? isLinuxUserAgent()
         }}

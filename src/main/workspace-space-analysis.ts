@@ -24,6 +24,7 @@ import { getSshFilesystemProvider } from './providers/ssh-filesystem-dispatch'
 import { getSshGitProvider } from './providers/ssh-git-dispatch'
 import { createFolderWorktree, listRepoWorktrees } from './repo-worktrees'
 import { mergeWorktree } from './ipc/worktree-logic'
+import { getLocalProjectWorktreeGitOptions } from './project-runtime-git-options'
 
 const WORKTREE_SCAN_CONCURRENCY = 3
 const LOCAL_FS_CONCURRENCY = 48
@@ -763,6 +764,7 @@ async function scanRemoteWorktree(
 }
 
 async function listWorktreesForSpaceScan(
+  store: Store,
   repo: Repo,
   signal?: AbortSignal
 ): Promise<WorktreeListResult> {
@@ -784,7 +786,10 @@ async function listWorktreesForSpaceScan(
       throwIfAborted(signal)
       return { ok: true, worktrees }
     }
-    const worktrees = await listRepoWorktrees(repo)
+    const worktrees = await listRepoWorktrees(repo, {
+      ...getLocalProjectWorktreeGitOptions(store, repo),
+      signal
+    })
     throwIfAborted(signal)
     return { ok: true, worktrees }
   } catch (error) {
@@ -826,7 +831,7 @@ async function scanRepo(
     },
     options.onProgress
   )
-  const listed = await listWorktreesForSpaceScan(repo, options.signal)
+  const listed = await listWorktreesForSpaceScan(store, repo, options.signal)
   if (!listed.ok) {
     reportProgress(
       progress,

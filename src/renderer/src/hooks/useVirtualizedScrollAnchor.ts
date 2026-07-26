@@ -254,7 +254,8 @@ export function useVirtualizedScrollAnchor<
         // adjustment; restoring here would fight concurrent user scrolling.
         return
       }
-      if (anchor.scrollTop !== undefined) {
+      // Why: pending restores own layout shifts; unmarked user scrolls disarm them in the listener.
+      if (anchor.scrollTop !== undefined && !pendingRestoreRef.current) {
         const maxScrollTop = Math.max(0, el.scrollHeight - el.clientHeight)
         const clampExplained =
           anchor.scrollTop > maxScrollTop + 1 && el.scrollTop >= maxScrollTop - 2

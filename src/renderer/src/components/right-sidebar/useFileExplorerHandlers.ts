@@ -6,6 +6,10 @@ import { toast } from 'sonner'
 import type { TreeNode } from './file-explorer-types'
 import { FILE_EXPLORER_DRAGGABLE_SELECTOR } from './file-explorer-drag-scroll-marker'
 import { translate } from '@/i18n/i18n'
+import {
+  getFileExplorerOwnerUnresolvedMessage,
+  requireMatchingFileExplorerOperationRoute
+} from './file-explorer-operation-owner'
 
 type UseFileExplorerHandlersParams = {
   activeWorktreeId: string | null
@@ -19,7 +23,11 @@ type UseFileExplorerHandlersParams = {
       mode: 'edit'
       runtimeEnvironmentId?: string | null
     },
-    options?: { preview?: boolean; suppressActiveRuntimeFallback?: boolean }
+    options?: {
+      preview?: boolean
+      suppressActiveRuntimeFallback?: boolean
+      focusEditor?: boolean
+    }
   ) => void
   makePreviewFilePermanent: (filePath: string) => void
   toggleDir: (worktreeId: string, dirPath: string) => void
@@ -59,7 +67,6 @@ export async function activateFileExplorerNode(args: {
   const {
     node,
     activeWorktreeId,
-    runtimeEnvironmentId,
     openFile,
     toggleDir,
     canToggleDirectories = true,
@@ -115,20 +122,31 @@ export async function activateFileExplorerNode(args: {
       return
     }
   }
+  let fileRuntimeEnvironmentId: string | null
+  try {
+    const route = requireMatchingFileExplorerOperationRoute(activeWorktreeId, node.operationOwner)
+    fileRuntimeEnvironmentId = route.settings.activeRuntimeEnvironmentId?.trim() || null
+  } catch {
+    toast.error(getFileExplorerOwnerUnresolvedMessage())
+    return
+  }
   openFile(
     {
       filePath: node.path,
       relativePath: node.relativePath,
       worktreeId: activeWorktreeId,
-      runtimeEnvironmentId: runtimeEnvironmentId ?? undefined,
+      runtimeEnvironmentId: fileRuntimeEnvironmentId ?? undefined,
       language: detectLanguage(node.name),
       mode: 'edit'
     },
     {
       preview: true,
+      // Why: activating an Explorer file is a focus handoff even if the rich
+      // editor finishes mounting after the row receives browser focus.
+      focusEditor: true,
       // Why: explicit local opens must not inherit the active runtime, so we
       // encode "no runtime owner" via the fallback-suppression option.
-      suppressActiveRuntimeFallback: runtimeEnvironmentId === null
+      suppressActiveRuntimeFallback: fileRuntimeEnvironmentId === null
     }
   )
 }

@@ -1,6 +1,19 @@
 import { describe, expect, it } from 'vitest'
 import { classifyConnection, verdictDisplayLabel } from './connection-health'
 
+describe('classifyConnection auth-failed verdict', () => {
+  it('tells the user to re-pair instead of showing a generic auth error', () => {
+    const verdict = classifyConnection({
+      state: 'auth-failed',
+      reconnectAttempts: 0,
+      lastConnectedAt: null,
+      nowMs: 1_000_000
+    })
+    expect(verdict.kind).toBe('auth-failed')
+    expect(verdictDisplayLabel(verdict)).toBe('Pairing invalid — re-pair with your desktop')
+  })
+})
+
 describe('classifyConnection Tailscale hint', () => {
   const base = {
     state: 'reconnecting' as const,

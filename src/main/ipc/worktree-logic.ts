@@ -8,7 +8,11 @@ import { getWslHome, parseWslPath } from '../wsl'
 type WorktreePathSettings = Pick<GlobalSettings, 'nestWorkspaces' | 'workspaceDir'>
 type WorktreeBasePathRepo = Pick<Repo, 'path' | 'worktreeBasePath'>
 
-export { computeBranchName, getConfiguredBranchPrefix } from './worktree-branch-name'
+export {
+  computeBranchName,
+  getConfiguredBranchPrefix,
+  computeValidatedBranchName
+} from './worktree-branch-name'
 export { mergeWorktree } from './worktree-metadata-merge'
 export { areWorktreePathsEqual } from './worktree-path-comparison'
 
@@ -125,9 +129,10 @@ export function computeRemoteWorktreePath(
     return computeWorktreePath(sanitizedName, repoPath, settings)
   }
   // Why: absolute global workspaceDir values belong to the desktop machine.
-  // SSH worktrees keep the legacy repo-sibling root unless a repo-specific
-  // path opts into a remote-host location.
-  return getRuntimePathOps(repoPath, repoPath).join(repoPath, '..', sanitizedName)
+  // SSH falls back to repo-qualified sibling paths so origin/main is not shared.
+  const pathOps = getRuntimePathOps(repoPath, repoPath)
+  const repoName = pathOps.basename(repoPath).replace(/\.git$/, '')
+  return pathOps.join(repoPath, '..', `${repoName}-${sanitizedName}`)
 }
 
 export function getWorktreePathSettings(

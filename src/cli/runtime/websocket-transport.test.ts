@@ -64,7 +64,15 @@ describe('CLI remote WebSocket transport', () => {
   })
 
   it('accepts a bare pairing payload as well as the orca URL wrapper', async () => {
-    const runtime = await startTestRuntime('runtime-ws-2')
+    const runtime = await startTestRuntime('runtime-ws-2', {
+      appVersion: '1.5.0',
+      remoteUpdateSupport: {
+        installMode: 'unsupported-headless-serve',
+        automatic: false,
+        reason: 'manual-service-update-required'
+      },
+      capabilities: ['updater.remote-control.v1']
+    })
     servers.push(runtime)
     const offer: PairingOffer = {
       v: 2,
@@ -83,6 +91,11 @@ describe('CLI remote WebSocket transport', () => {
     expect(status.result.app).toEqual({ running: false, pid: null })
     expect(status.result.runtime.reachable).toBe(true)
     expect(status.result.runtime.runtimeId).toBe('runtime-ws-2')
+    expect(status.result.runtime).toMatchObject({
+      appVersion: '1.5.0',
+      remoteUpdateSupport: { automatic: false, reason: 'manual-service-update-required' },
+      capabilities: ['updater.remote-control.v1']
+    })
   })
 
   it('does not launch a local desktop app for remote-paired open', async () => {
@@ -157,6 +170,13 @@ async function startTestRuntime(
     runtimeProtocolVersion?: number
     minCompatibleRuntimeClientVersion?: number
     desktopWindowStatus?: 'available' | 'openable' | 'initializing' | 'blocked'
+    appVersion?: string
+    remoteUpdateSupport?: {
+      installMode: 'unsupported-headless-serve'
+      automatic: false
+      reason: 'manual-service-update-required'
+    }
+    capabilities?: string[]
   } = {}
 ): Promise<TestRuntime> {
   const serverKeyPair = generateKeyPair()
@@ -213,7 +233,10 @@ async function startTestRuntime(
                   statusOverrides.runtimeProtocolVersion ?? RUNTIME_PROTOCOL_VERSION,
                 minCompatibleRuntimeClientVersion:
                   statusOverrides.minCompatibleRuntimeClientVersion ??
-                  MIN_COMPATIBLE_RUNTIME_CLIENT_VERSION
+                  MIN_COMPATIBLE_RUNTIME_CLIENT_VERSION,
+                appVersion: statusOverrides.appVersion,
+                remoteUpdateSupport: statusOverrides.remoteUpdateSupport,
+                capabilities: statusOverrides.capabilities
               },
               _meta: { runtimeId }
             }

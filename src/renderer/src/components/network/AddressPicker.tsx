@@ -42,6 +42,10 @@ export type AddressPickerProps = {
   id?: string
 }
 
+// Note (crash cluster C6, React #185 in settings): the throwing dispatch is in
+// @radix-ui/react-select's SelectItem unmount cleanup, not in our code — this
+// file holds no unmount-phase setState, so there is nothing here to guard.
+// Item churn here is derived from props only; re-audit if that stops holding.
 export function AddressPicker({
   options,
   value,
