@@ -35,20 +35,17 @@ export function selectPreferredAttachmentIds(args: {
   const needing = args.mediaAttrs.filter((attrs) => !(attrs.url && /^https?:\/\//i.test(attrs.url)))
   const needCount = needing.length
   if (needCount === 0) {
+    // Why: no attachment-needing ADF media — skip downloads (do not sweep HTML-only).
     return { preferredIds: [], fallbackRan: false, needCount: 0 }
   }
 
   const preferredIds = [...args.renderedHtmlIds]
-  const preferredSet = new Set(preferredIds)
+  const taken = new Set(preferredIds)
   let fallbackRan = false
 
   if (needCount > preferredIds.length) {
     const metas = parseImageAttachmentMetas(args.attachmentField)
-    const covered = new Set(
-      metas.filter((meta) => preferredSet.has(meta.id)).map((meta) => meta.filename.toLowerCase())
-    )
-    const taken = new Set(preferredIds)
-
+    // Why: multiple Jira screenshots often share image.png — assign next unused meta per node.
     for (const node of needing) {
       if (preferredIds.length >= MAX_IMAGES) {
         break
@@ -58,9 +55,6 @@ export function selectPreferredAttachmentIds(args: {
         continue
       }
       const altKey = alt.toLowerCase()
-      if (covered.has(altKey)) {
-        continue
-      }
       const meta = metas.find(
         (candidate) => candidate.filename.toLowerCase() === altKey && !taken.has(candidate.id)
       )
@@ -69,7 +63,6 @@ export function selectPreferredAttachmentIds(args: {
       }
       taken.add(meta.id)
       preferredIds.push(meta.id)
-      covered.add(altKey)
       fallbackRan = true
     }
   }

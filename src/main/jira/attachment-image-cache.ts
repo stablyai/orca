@@ -14,9 +14,16 @@ type CacheEntry = {
 
 const cache = new Map<string, CacheEntry>()
 const inFlight = new Map<string, Promise<string | null>>()
+// Why: mid-flight downloads must not repopulate cache after disconnect/clearToken.
+let cacheEpoch = 0
+const siteEpoch = new Map<string, number>()
 
 function cacheKey(siteId: string, attachmentId: string): string {
   return `${siteId}::${attachmentId}`
+}
+
+function currentEpoch(siteId: string): number {
+  return (siteEpoch.get(siteId) ?? 0) + cacheEpoch
 }
 
 function pruneExpired(now = Date.now()): void {
@@ -100,18 +107,22 @@ export async function loadAttachmentDataUrlWithCache(args: {
     return existing
   }
 
+  const epochAtStart = currentEpoch(args.siteId)
   const promise = (async (): Promise<string | null> => {
     try {
       const loaded = await args.load()
       if (!loaded) {
         return null
       }
-      setCachedAttachmentDataUrl({
-        siteId: args.siteId,
-        attachmentId: args.attachmentId,
-        dataUrl: loaded.dataUrl,
-        byteSize: loaded.byteSize
-      })
+      // Why: return bytes to the waiter but skip cache if site was cleared mid-flight.
+      if (currentEpoch(args.siteId) === epochAtStart) {
+        setCachedAttachmentDataUrl({
+          siteId: args.siteId,
+          attachmentId: args.attachmentId,
+          dataUrl: loaded.dataUrl,
+          byteSize: loaded.byteSize
+        })
+      }
       return loaded.dataUrl
     } finally {
       inFlight.delete(key)
@@ -126,8 +137,11 @@ export function clearAttachmentImagesForSite(siteId?: string): void {
   if (siteId == null || siteId === '') {
     cache.clear()
     inFlight.clear()
+    cacheEpoch += 1
+    siteEpoch.clear()
     return
   }
+  siteEpoch.set(siteId, (siteEpoch.get(siteId) ?? 0) + 1)
   const prefix = `${siteId}::`
   for (const key of cache.keys()) {
     if (key.startsWith(prefix)) {
@@ -145,6 +159,8 @@ export function clearAttachmentImagesForSite(siteId?: string): void {
 export function _resetAttachmentImageCache(): void {
   cache.clear()
   inFlight.clear()
+  cacheEpoch = 0
+  siteEpoch.clear()
 }
 
 /** @internal — test-only */

@@ -199,6 +199,28 @@ describe('attachment image helpers', () => {
     expect(noMedia.needCount).toBe(0)
   })
 
+  it('Option A unions multiple same-filename attachments for repeated alts', async () => {
+    const { selectPreferredAttachmentIds } = await import('./attachment-discovery')
+    const attachments = [
+      { id: '1', filename: 'image.png', mimeType: 'image/png', size: 1 },
+      { id: '2', filename: 'image.png', mimeType: 'image/png', size: 1 }
+    ]
+    const zeroHtml = selectPreferredAttachmentIds({
+      renderedHtmlIds: [],
+      attachmentField: attachments,
+      mediaAttrs: [{ alt: 'image.png' }, { alt: 'image.png' }]
+    })
+    expect(zeroHtml.preferredIds).toEqual(['1', '2'])
+    expect(zeroHtml.fallbackRan).toBe(true)
+
+    const partialHtml = selectPreferredAttachmentIds({
+      renderedHtmlIds: ['1'],
+      attachmentField: attachments,
+      mediaAttrs: [{ alt: 'image.png' }, { alt: 'image.png' }]
+    })
+    expect(partialHtml.preferredIds).toEqual(['1', '2'])
+  })
+
   it('downloads only referenced attachments after prioritizing the complete metadata list', async () => {
     jiraRequestBinaryMock.mockResolvedValue({
       data: Uint8Array.from([1]).buffer,

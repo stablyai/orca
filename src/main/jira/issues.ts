@@ -393,11 +393,17 @@ function collectIssueMediaRequest(raw: JiraRecord): MediaRequest | undefined {
   }
 }
 
+type PreparedMedia = {
+  options: AdfToMarkdownOptions
+  stats: MediaResolutionStats
+  request: MediaRequest
+}
+
 /** Unpooled: binary downloads + resolver (outside the Jira API semaphore). */
-async function resolveMediaOptions(
+async function prepareMediaResolver(
   client: JiraClientForSite,
   request: MediaRequest
-): Promise<AdfToMarkdownOptions | undefined> {
+): Promise<PreparedMedia | undefined> {
   if (request.preferredIds.length === 0) {
     warnIfMediaResolutionIncomplete({
       siteId: client.site.id,
@@ -425,26 +431,24 @@ async function resolveMediaOptions(
     })
     return undefined
   }
-  const stats: MediaResolutionStats = { mediaAttemptCount: 0, resolvedCount: 0 }
+  const stats: MediaResolutionStats = { attachmentResolvedCount: 0 }
   const resolveMedia = createMediaMarkdownResolver(images, request.preferredIds, stats)
-  // Why: download count is a lower bound before ADF map; map is sync so we also
-  // flush a post-map warn via the returned options consumer in map* helpers.
-  if (images.length < request.needCount) {
-    warnIfMediaResolutionIncomplete({
-      siteId: client.site.id,
-      issueKey: request.issueKey,
-      needCount: request.needCount,
-      preferredIdCount: request.preferredIds.length,
-      resolvedCount: images.length,
-      fallbackRan: request.fallbackRan
-    })
-  }
   return {
-    resolveMedia: (attrs) => {
-      const result = resolveMedia(attrs)
-      return result
-    }
+    options: { resolveMedia },
+    stats,
+    request
   }
+}
+
+function flushMediaResolutionWarn(client: JiraClientForSite, prepared: PreparedMedia): void {
+  warnIfMediaResolutionIncomplete({
+    siteId: client.site.id,
+    issueKey: prepared.request.issueKey,
+    needCount: prepared.request.needCount,
+    preferredIdCount: prepared.request.preferredIds.length,
+    resolvedCount: prepared.stats.attachmentResolvedCount,
+    fallbackRan: prepared.request.fallbackRan
+  })
 }
 
 function sortAndLimitIssues(issues: JiraIssue[], limit: number): JiraIssue[] {
@@ -584,8 +588,12 @@ export async function getIssue(
       if (!issue) {
         continue
       }
-      const mediaOptions = mediaRequest ? await resolveMediaOptions(entry, mediaRequest) : undefined
-      return mapJiraIssue(entry.site, issue, mediaOptions)
+      const prepared = mediaRequest ? await prepareMediaResolver(entry, mediaRequest) : undefined
+      const mapped = mapJiraIssue(entry.site, issue, prepared?.options)
+      if (prepared) {
+        flushMediaResolutionWarn(entry, prepared)
+      }
+      return mapped
     } catch (error) {
       console.warn('[jira] getIssue media load failed:', error)
       return mapJiraIssue(entry.site, issue)
@@ -841,8 +849,12 @@ export async function getIssueComments(
   }
 
   try {
-    const mediaOptions = mediaRequest ? await resolveMediaOptions(entry, mediaRequest) : undefined
-    return comments.map((comment) => mapComment(comment, mediaOptions))
+    const prepared = mediaRequest ? await prepareMediaResolver(entry, mediaRequest) : undefined
+    const mapped = comments.map((comment) => mapComment(comment, prepared?.options))
+    if (prepared) {
+      flushMediaResolutionWarn(entry, prepared)
+    }
+    return mapped
   } catch (error) {
     console.warn('[jira] getIssueComments media load failed:', error)
     return comments.map((comment) => mapComment(comment))

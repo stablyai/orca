@@ -149,8 +149,8 @@ export async function loadIssueImageAttachments(
 }
 
 export type MediaResolutionStats = {
-  mediaAttemptCount: number
-  resolvedCount: number
+  /** Attachment-needing media nodes that successfully resolved to a data: image. */
+  attachmentResolvedCount: number
 }
 
 export function createMediaMarkdownResolver(
@@ -199,15 +199,11 @@ export function createMediaMarkdownResolver(
   }
 
   return (attrs: JiraAdfMediaAttrs): string | null => {
-    if (stats) {
-      stats.mediaAttemptCount += 1
-    }
-
     if (attrs.id) {
       const cached = resolvedByMediaId.get(attrs.id)
       if (cached) {
-        if (stats) {
-          stats.resolvedCount += 1
+        if (stats && !cached.startsWith('*[') && cached.includes('data:')) {
+          stats.attachmentResolvedCount += 1
         }
         return cached
       }
@@ -223,9 +219,7 @@ export function createMediaMarkdownResolver(
       if (!safeUrl) {
         return unresolvedMediaPlaceholder({ ...attrs, alt })
       }
-      if (stats) {
-        stats.resolvedCount += 1
-      }
+      // External success does not count toward attachment needCount.
       return `![${escapeMarkdownAlt(alt)}](${safeUrl})`
     }
 
@@ -251,7 +245,7 @@ export function createMediaMarkdownResolver(
       resolvedByMediaId.set(attrs.id, resolved)
     }
     if (resolved && stats) {
-      stats.resolvedCount += 1
+      stats.attachmentResolvedCount += 1
     }
     return resolved
   }

@@ -659,6 +659,8 @@ export async function testConnection(
 
 export function clearToken(siteId: string): void {
   deleteToken(siteId)
+  // Why: auth failure removes the site; drop cached attachment data URLs too.
+  clearAttachmentImagesForSite(siteId)
   const file = getSiteFile()
   writeSiteFile({ ...file, sites: file.sites.filter((site) => site.id !== siteId) })
 }
