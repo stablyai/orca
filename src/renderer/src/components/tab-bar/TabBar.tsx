@@ -297,10 +297,12 @@ function TabBarInner({
   const gitStatusEntries = useAppStore(
     (s) => s.gitStatusByWorktree[worktreeId] ?? EMPTY_GIT_STATUS_ENTRIES
   )
-  const unifiedTabs = useAppStore((s) => {
-    const tabs = s.unifiedTabsByWorktree[worktreeId] ?? EMPTY_UNIFIED_TABS
-    return tabs.filter((t) => !detachingTabIds.has(t.id))
-  })
+  const rawUnifiedTabs = useAppStore(
+    (s) => s.unifiedTabsByWorktree[worktreeId] ?? EMPTY_UNIFIED_TABS
+  )
+  // Why: filter outside the store selector so .filter() doesn't create a new
+  // array on every render — that would trigger an infinite Zustand re-render loop.
+  const unifiedTabs = rawUnifiedTabs.filter((t) => !detachingTabIds.has(t.id))
   const pinTab = useAppStore((s) => s.pinTab)
   const unpinTab = useAppStore((s) => s.unpinTab)
   const activeGroupIdForWorktree = useAppStore((s) => s.activeGroupIdByWorktree[worktreeId])
