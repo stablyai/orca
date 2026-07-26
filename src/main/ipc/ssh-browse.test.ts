@@ -68,7 +68,9 @@ describe('registerSshBrowseHandler', () => {
         { name: 'README.md', isDirectory: false }
       ]
     })
-    expect(exec).toHaveBeenCalledWith('cd "$HOME" && pwd && command ls -1Ap')
+    expect(exec).toHaveBeenCalledWith(
+      `printf '%s\\n' '__ORCA_POSIX_BROWSE__' >&2 && cd "$HOME" && pwd && command ls -1Ap`
+    )
     expect(channel.listenerCount('data')).toBe(0)
     expect(channel.listenerCount('exit')).toBe(0)
     expect(channel.listenerCount('close')).toBe(0)
@@ -95,7 +97,9 @@ describe('registerSshBrowseHandler', () => {
       resolvedPath: "/tmp/it's here",
       entries: []
     })
-    expect(exec).toHaveBeenCalledWith("cd '/tmp/it'\\''s here' && pwd && command ls -1Ap")
+    expect(exec).toHaveBeenCalledWith(
+      "printf '%s\\n' '__ORCA_POSIX_BROWSE__' >&2 && cd '/tmp/it'\\''s here' && pwd && command ls -1Ap"
+    )
   })
 
   it('falls back to PowerShell when a Windows SSH shell rejects POSIX exec', async () => {
@@ -134,7 +138,10 @@ describe('registerSshBrowseHandler', () => {
       ]
     })
     expect(exec).toHaveBeenCalledTimes(2)
-    expect(exec).toHaveBeenNthCalledWith(1, "cd 'C:/Users/alice' && pwd && command ls -1Ap")
+    expect(exec).toHaveBeenNthCalledWith(
+      1,
+      "printf '%s\\n' '__ORCA_POSIX_BROWSE__' >&2 && cd 'C:/Users/alice' && pwd && command ls -1Ap"
+    )
     expect(exec.mock.calls[1]?.[0]).toMatch(/^powershell\.exe /)
     expect(exec.mock.calls[1]?.[1]).toEqual({ wrapCommand: false })
 
@@ -285,10 +292,9 @@ describe('registerSshBrowseHandler', () => {
     }
   )
 
-  it('surfaces the original POSIX failure when the PowerShell retry shows the host is not Windows', async () => {
+  it('does not try PowerShell after the POSIX shell started', async () => {
     const posixChannel = createMockChannel()
-    const windowsChannel = createMockChannel()
-    const exec = vi.fn().mockResolvedValueOnce(posixChannel).mockResolvedValueOnce(windowsChannel)
+    const exec = vi.fn().mockResolvedValueOnce(posixChannel)
     const getConnectionManager = () => ({
       getConnection: () => ({ exec })
     })
@@ -296,22 +302,16 @@ describe('registerSshBrowseHandler', () => {
 
     const resultPromise = handler(null, { targetId: 'ssh-1', dirPath: '/root/secret' })
     await Promise.resolve()
-    // A genuine POSIX permission failure exits non-zero; it's indistinguishable
-    // from a Windows shell reject without probing, so the fallback is attempted...
-    posixChannel.stderr.emit('data', Buffer.from('ls: /root/secret: Permission denied'))
+    posixChannel.stderr.emit(
+      'data',
+      Buffer.from('__ORCA_POSIX_BROWSE__\nls: /root/secret: Permission denied')
+    )
     posixChannel.emit('exit', 1)
     posixChannel.emit('close')
-    await vi.waitFor(() => {
-      expect(windowsChannel.listenerCount('close')).toBe(1)
-    })
-    // ...but on a POSIX host the login shell can't find powershell.exe (exit 127),
-    // so the original permission error is surfaced, never masked by the retry.
-    windowsChannel.stderr.emit('data', Buffer.from('bash: powershell.exe: command not found'))
-    windowsChannel.emit('exit', 127)
-    windowsChannel.emit('close')
 
     await expect(resultPromise).rejects.toThrow('Permission denied')
-    expect(exec).toHaveBeenCalledTimes(2)
+    await expect(resultPromise).rejects.not.toThrow('__ORCA_POSIX_BROWSE__')
+    expect(exec).toHaveBeenCalledTimes(1)
   })
 
   it('surfaces the PowerShell error when the Windows fallback runs but fails', async () => {
@@ -340,7 +340,7 @@ describe('registerSshBrowseHandler', () => {
     await expect(resultPromise).rejects.toThrow('Cannot find path')
   })
 
-  it('surfaces the original POSIX error when the fallback shows powershell.exe is missing', async () => {
+  it('surfaces the original POSIX error when zsh rewrites the missing PowerShell exit', async () => {
     const posixChannel = createMockChannel()
     const windowsChannel = createMockChannel()
     const exec = vi.fn().mockResolvedValueOnce(posixChannel).mockResolvedValueOnce(windowsChannel)
@@ -358,8 +358,8 @@ describe('registerSshBrowseHandler', () => {
     await vi.waitFor(() => {
       expect(windowsChannel.listenerCount('close')).toBe(1)
     })
-    windowsChannel.stderr.emit('data', Buffer.from('sh: powershell.exe: not found'))
-    windowsChannel.emit('exit', 127)
+    windowsChannel.stderr.emit('data', Buffer.from('zsh:1: command not found: powershell.exe'))
+    windowsChannel.emit('exit', 1)
     windowsChannel.emit('close')
 
     // The original POSIX failure is the real one — don't mask it with the

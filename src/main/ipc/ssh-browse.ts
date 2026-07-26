@@ -9,15 +9,17 @@ export type RemoteDirEntry = {
 }
 
 const SSH_BROWSE_TIMEOUT_MS = 15_000
+const POSIX_BROWSE_MARKER = '__ORCA_POSIX_BROWSE__'
 
 // Why: 127 = POSIX "command not found" (locale-independent) — the Windows fallback never ran, so the original POSIX error is the real one.
 const POSIX_COMMAND_NOT_FOUND_EXIT = 127
 
-// Carries the raw exit code so the fallback can distinguish 127 (no powershell.exe → not Windows) from a genuine PowerShell error.
+// Carries the raw exit code so the fallback can distinguish a missing executable from a genuine PowerShell error.
 class RemoteBrowseError extends Error {
   constructor(
     message: string,
-    readonly exitCode: number | null
+    readonly exitCode: number | null,
+    readonly posixShellStarted = false
   ) {
     super(message)
     this.name = 'RemoteBrowseError'
@@ -48,15 +50,18 @@ export function registerSshBrowseHandler(
       try {
         return await browseWithPosixShell(conn, args.dirPath)
       } catch (posixError) {
-        // Why: only a RemoteBrowseError (ran, non-zero exit) signals a Windows shell; don't retry transport errors/timeouts as Windows.
+        // Why: transport errors/timeouts must not trigger a different command dialect.
         if (!(posixError instanceof RemoteBrowseError)) {
+          throw posixError
+        }
+        if (posixError.posixShellStarted) {
           throw posixError
         }
         try {
           return await browseWithWindowsPowerShell(conn, args.dirPath)
         } catch (fallbackError) {
-          // Why: exit 127 (no powershell.exe) → host isn't Windows, surface the original POSIX failure; otherwise PowerShell's own error is the real cause.
-          throw isPosixCommandNotFound(fallbackError) ? posixError : fallbackError
+          // Why: some SSH servers rewrite command-not-found to exit 1 or omit the status.
+          throw isPowerShellUnavailable(fallbackError) ? posixError : fallbackError
         }
       }
     }
@@ -69,8 +74,9 @@ function browseWithPosixShell(
   conn: SshBrowseConnection,
   dirPath: string
 ): Promise<{ entries: RemoteDirEntry[]; resolvedPath: string }> {
-  // Why: `command ls` skips aliases; `&&` makes a failing ls exit non-zero (not look empty); -1Ap = one-per-line + trailing / on dirs.
-  return runBrowseCommand(conn, `cd ${shellEscape(dirPath)} && pwd && command ls -1Ap`)
+  // Why: the stderr marker proves the POSIX shell started even when cd/ls fails.
+  const command = `printf '%s\\n' '${POSIX_BROWSE_MARKER}' >&2 && cd ${shellEscape(dirPath)} && pwd && command ls -1Ap`
+  return runBrowseCommand(conn, command)
 }
 
 function browseWithWindowsPowerShell(
@@ -168,18 +174,27 @@ async function runBrowseCommand(
       rejectOnce(error)
     }
     const onClose = (): void => {
+      const posixShellStarted = stderr
+        .split(/\r?\n/)
+        .some((line) => line.trim() === POSIX_BROWSE_MARKER)
+      const visibleStderr = stderr
+        .split(/\r?\n/)
+        .filter((line) => line.trim() !== POSIX_BROWSE_MARKER)
+        .join('\n')
+        .trim()
+
       // Why: a null exitCode (channel closed without exit status) isn't success; don't treat empty stdout as an empty dir.
       if (exitCode !== 0) {
         const msg =
-          stderr.trim() ||
+          visibleStderr ||
           (exitCode === null
             ? 'Remote listing failed (channel closed without exit status)'
             : `Remote listing failed (exit ${exitCode})`)
-        rejectOnce(new RemoteBrowseError(msg, exitCode))
+        rejectOnce(new RemoteBrowseError(msg, exitCode, posixShellStarted))
         return
       }
-      if (stderr.trim() && !stdout.trim()) {
-        rejectOnce(new Error(stderr.trim()))
+      if (visibleStderr && !stdout.trim()) {
+        rejectOnce(new Error(visibleStderr))
         return
       }
 
@@ -230,9 +245,18 @@ async function runBrowseCommand(
   })
 }
 
-// Why: exit 127 means powershell.exe wasn't found — the host isn't Windows, so surface the original POSIX failure instead.
-function isPosixCommandNotFound(error: unknown): boolean {
-  return error instanceof RemoteBrowseError && error.exitCode === POSIX_COMMAND_NOT_FOUND_EXIT
+function isPowerShellUnavailable(error: unknown): boolean {
+  if (!(error instanceof RemoteBrowseError)) {
+    return false
+  }
+  if (error.exitCode === POSIX_COMMAND_NOT_FOUND_EXIT) {
+    return true
+  }
+  const message = error.message.toLowerCase()
+  return (
+    message.includes('powershell.exe') &&
+    (message.includes('command not found') || message.includes('not found'))
+  )
 }
 
 // Why: single-quote to block shell injection; ~ needs $HOME since single quotes suppress tilde expansion.
