@@ -15,6 +15,7 @@ import TabBar from '../tab-bar/TabBar'
 import { TabBarQuickCommandsButton } from '../tab-bar/TabBarQuickCommandsButton'
 import { useTabGroupWorkspaceModel } from './useTabGroupWorkspaceModel'
 import { closeTerminalTab } from '../terminal/terminal-tab-actions'
+import { useDetachTerminalTabToWindow } from '../terminal-pane/use-detach-terminal-tab-to-window'
 import { resolveGroupTabFromVisibleId } from './tab-group-visible-id'
 import { getTabPaneBodyDroppableId, type HoveredTabInsertion } from './useTabDragSplit'
 import { tabGroupBodyAnchorName } from './tab-group-body-anchor'
@@ -57,6 +58,7 @@ export default function TabGroupPanel({
   const sidebarOpen = useAppStore((state) => state.sidebarOpen)
 
   const model = useTabGroupWorkspaceModel({ groupId, worktreeId })
+  const detachTerminalTabToWindow = useDetachTerminalTabToWindow(worktreeId)
   const { activeTab, browserItems, commands, editorItems, tabBarOrder, terminalTabs } = model
   const { setNodeRef: setBodyDropRef } = useDroppable({
     id: getTabPaneBodyDroppableId(groupId),
@@ -111,6 +113,7 @@ export default function TabGroupPanel({
           commands.closeToLeft(item.id)
         }
       }}
+      onDetachToWindow={detachTerminalTabToWindow}
       onNewTerminalTab={commands.newTerminalTab}
       onNewTerminalWithShell={commands.newTerminalWithShell}
       onNewBrowserTab={commands.newBrowserTab}

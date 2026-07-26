@@ -16,6 +16,7 @@ import { shouldDeferParkedPtyExitTabClose } from '@/components/terminal-pane/ter
 import { useTerminalTabColdParking } from '@/components/terminal-pane/use-terminal-tab-cold-parking'
 import { isTerminalPaneCloseChord } from '@/components/terminal-pane/terminal-shortcut-policy'
 import { isTerminalImeInputContextRefreshing } from '@/components/terminal-pane/terminal-ime-input-context-refresh'
+import { useDetachTerminalTabToWindow } from '@/components/terminal-pane/use-detach-terminal-tab-to-window'
 import { Button } from '@/components/ui/button'
 import { useMountedRef } from '@/hooks/useMountedRef'
 import { useShortcutKeyDetails, type ShortcutKeyComboDetails } from '@/hooks/useShortcutLabel'
@@ -1000,6 +1001,15 @@ export function FloatingTerminalPanel({
     [closeToSide]
   )
 
+  // Why: the seed is captured before closeTab runs — closeTab's side-table
+  // purge (unread flags, agent sessions, tab order, etc.) also clears
+  // terminalLayoutsByTabId, so the layout/pty would be gone by the time we
+  // read it afterward. localPtyTeardownOwnedExternally keeps the PTY alive
+  // (ownership moves to the pop-out); captureRecentlyClosed: false keeps the
+  // detached tab out of the "reopen closed tab" stack while it's live
+  // elsewhere.
+  const detachTerminalTabToWindow = useDetachTerminalTabToWindow(FLOATING_TERMINAL_WORKTREE_ID)
+
   const closeAllFiles = useCallback(() => {
     const state = useAppStore.getState()
     const currentGroupTabs = activeGroup
@@ -1788,6 +1798,7 @@ export function FloatingTerminalPanel({
               onCloseOthers={closeOthers}
               onCloseToRight={closeToRight}
               onCloseToLeft={closeToLeft}
+              onDetachToWindow={detachTerminalTabToWindow}
               onNewTerminalTab={() => createFloatingTerminalTab()}
               onNewTerminalWithShell={createFloatingTerminalTab}
               onNewBrowserTab={createFloatingBrowserTab}

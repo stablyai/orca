@@ -2923,7 +2923,10 @@
             "1d04b1630b": "Split Down",
             "6b3efb106e": "Split Up",
             "fdd29eb669": "Pin Tab",
-            "8e9d603a09": "Unpin Tab"
+            "8e9d603a09": "Unpin Tab",
+            "unpinTabs": "Unpin Tabs",
+            "pinTabs": "Pin Tabs",
+            "closeTabs": "Close Tabs"
           },
           "QuickLaunchButton": {
             "348a04c1ad": "Agent settings…",
@@ -2965,7 +2968,12 @@
             "60f958ec75": "Pin Tab",
             "417722e9c2": "Unpin Tab",
             "splitTerminalRight": "Split terminal right",
-            "splitTerminalDown": "Split terminal down"
+            "splitTerminalDown": "Split terminal down",
+            "unpinTabs": "Unpin Tabs",
+            "pinTabs": "Pin Tabs",
+            "closeTabs": "Close Tabs",
+            "detachTabsToWindow": "Detach Tabs to Window",
+            "detachToWindow": "Detach to Window"
           },
           "TabBar": {
             "b1a132357f": "New tab",
@@ -3064,7 +3072,8 @@
             "left": "Left",
             "down": "Down",
             "up": "Up",
-            "moveToPaneColumn": "Move Tab to Split"
+            "moveToPaneColumn": "Move Tab to Split",
+            "moveTabsToPaneColumn": "Move Tabs to Split"
           },
           "EditorFileTabCloseButton": {
             "4655cf570e": "Close tab",
@@ -14745,5 +14754,16 @@
       "settingsInstruction": "Change the model, dictation mode, or shortcut anytime in",
       "settingsLink": "Settings → Voice"
     }
+  },
+  "detachedTerminalPane": {
+    "seedMissing": "This terminal is no longer available in this window.",
+    "reintegrate": "Return to main window",
+    "recoverableError": {
+      "title": "Orca terminal hit an error.",
+      "description": "The detached terminal could not finish rendering. Retry to remount it, or reopen it."
+    }
+  },
+  "detachToWindow": {
+    "error": "Could not detach tab to a new window"
   }
 }

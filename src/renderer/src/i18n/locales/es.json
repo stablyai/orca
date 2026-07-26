@@ -2882,7 +2882,10 @@
             "1d04b1630b": "Dividir hacia abajo",
             "6b3efb106e": "Dividir hacia arriba",
             "fdd29eb669": "Fijar pestaña",
-            "8e9d603a09": "Desanclar pestaña"
+            "8e9d603a09": "Desanclar pestaña",
+            "unpinTabs": "Unpin Tabs",
+            "pinTabs": "Pin Tabs",
+            "closeTabs": "Close Tabs"
           },
           "QuickLaunchButton": {
             "348a04c1ad": "Ajustes de Agents…",
@@ -2924,7 +2927,12 @@
             "60f958ec75": "Fijar pestaña",
             "417722e9c2": "Desanclar pestaña",
             "splitTerminalRight": "Dividir terminal a la derecha",
-            "splitTerminalDown": "Dividir terminal hacia abajo"
+            "splitTerminalDown": "Dividir terminal hacia abajo",
+            "unpinTabs": "Unpin Tabs",
+            "pinTabs": "Pin Tabs",
+            "closeTabs": "Close Tabs",
+            "detachTabsToWindow": "Detach Tabs to Window",
+            "detachToWindow": "Detach to Window"
           },
           "TabBar": {
             "b1a132357f": "Nueva pestaña",
@@ -3023,7 +3031,8 @@
             "left": "Izquierda",
             "down": "Abajo",
             "up": "Arriba",
-            "moveToPaneColumn": "Mover pestaña a división"
+            "moveToPaneColumn": "Mover pestaña a división",
+            "moveTabsToPaneColumn": "Move Tabs to Split"
           },
           "EditorFileTabCloseButton": {
             "4655cf570e": "Cerrar pestaña",
@@ -14613,5 +14622,16 @@
         "unknown": "Restart Orca to try again."
       }
     }
+  },
+  "detachedTerminalPane": {
+    "seedMissing": "This terminal is no longer available in this window.",
+    "reintegrate": "Return to main window",
+    "recoverableError": {
+      "title": "Orca terminal hit an error.",
+      "description": "The detached terminal could not finish rendering. Retry to remount it, or reopen it."
+    }
+  },
+  "detachToWindow": {
+    "error": "Could not detach tab to a new window"
   }
 }

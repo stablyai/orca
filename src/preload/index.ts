@@ -56,6 +56,7 @@ import type {
   BaseRefDefaultResult,
   BrowserViewportOverride,
   CustomPet,
+  DetachedTerminalTabSeed,
   FsChangedPayload,
   FilesystemPathFlavor,
   GetRateLimitResult,
@@ -2302,6 +2303,29 @@ const api = {
       ipcRenderer.invoke('dashboardPopout:revealAgent', args),
     ackAgent: (paneKey: string): Promise<void> =>
       ipcRenderer.invoke('dashboardPopout:ackAgent', { paneKey })
+  },
+
+  pane: {
+    detach: (paneId: string, seed: DetachedTerminalTabSeed): Promise<void> =>
+      ipcRenderer.invoke('pane:detach', { paneId, seed }),
+    reintegrate: (paneId: string): Promise<void> =>
+      ipcRenderer.invoke('pane:reintegrate', { paneId }),
+    getDetachedState: (
+      paneId: string
+    ): Promise<'attached' | 'transferring' | 'detached' | 'reintegrating' | 'parked' | null> =>
+      ipcRenderer.invoke('pane:getDetachedState', { paneId }),
+    getDetachedTabSeed: (paneId: string): Promise<DetachedTerminalTabSeed | null> =>
+      ipcRenderer.invoke('pane:getDetachedTabSeed', { paneId }),
+    onReturned: (
+      callback: (payload: { paneId: string; seed: DetachedTerminalTabSeed | null }) => void
+    ): (() => void) => {
+      const listener = (
+        _event: Electron.IpcRendererEvent,
+        payload: { paneId: string; seed: DetachedTerminalTabSeed | null }
+      ): void => callback(payload)
+      ipcRenderer.on('pane:returned', listener)
+      return () => ipcRenderer.removeListener('pane:returned', listener)
+    }
   },
 
   terminalPreview: {

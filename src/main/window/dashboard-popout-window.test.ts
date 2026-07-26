@@ -59,6 +59,9 @@ const {
       this.emit('close')
       this.emit('closed')
     })
+    destroy = vi.fn(() => {
+      this.destroyed = true
+    })
 
     constructor(options: Electron.BrowserWindowConstructorOptions) {
       this.options = options
@@ -313,6 +316,25 @@ describe('createOrFocusDashboardPopout', () => {
     } finally {
       vi.useRealTimers()
     }
+  })
+
+  it('destroys the window and rethrows if wiring setup throws, without adopting it as the singleton', () => {
+    installNavigationPolicyMock.mockImplementationOnce(() => {
+      throw new Error('boom')
+    })
+
+    expect(() => createOrFocusDashboardPopout(makeStore() as never)).toThrow('boom')
+    expect(instances).toHaveLength(1)
+    expect(instances[0].destroy).toHaveBeenCalledTimes(1)
+    expect(isDashboardPopoutRenderer(instances[0].webContents as never)).toBe(false)
+    expect(sendToTrustedUIRendererMock).not.toHaveBeenCalledWith(
+      'dashboard:popoutOpenChanged',
+      true
+    )
+
+    // A subsequent call must open a fresh window, not be blocked by a stuck singleton.
+    createOrFocusDashboardPopout(makeStore() as never)
+    expect(instances).toHaveLength(2)
   })
 
   it('closeDashboardPopout closes an open window', () => {
