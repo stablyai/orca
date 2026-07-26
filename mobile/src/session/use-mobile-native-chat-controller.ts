@@ -17,9 +17,16 @@ import { detectAgentPermission } from './mobile-native-chat-permission'
 import { parseAgentQuestion } from './mobile-native-chat-question'
 import { openMobileNativeChatFile } from './mobile-native-chat-open-file'
 import { useMobileNativeChatPermissionSend } from './mobile-native-chat-permission-send'
-import { sendMobileNativeChatMessageWithOutcome } from './mobile-native-chat-send'
+import {
+  sendMobileNativeChatMessageWithOutcome,
+  type MobileNativeChatSendOutcome
+} from './mobile-native-chat-send'
+import { healMobileNativeChatStaleInput } from './mobile-native-chat-stale-input'
 import { useMobileNativeChatAnswerSend } from './use-mobile-native-chat-answer-send'
-import { useMobileNativeChatDrafts } from './use-mobile-native-chat-drafts'
+import {
+  useMobileNativeChatDrafts,
+  type MobileNativeChatPendingMessage
+} from './use-mobile-native-chat-drafts'
 import { useMobileNativeChatFileSearch } from './use-mobile-native-chat-file-search'
 import { useMobileNativeChatSession } from './use-mobile-native-chat-session'
 import { useMobileNativeChatPrompts } from './use-mobile-native-chat-prompts'
@@ -38,7 +45,7 @@ export type MobileNativeChatController = {
   nativeChatAgent: string | null
   chatComposerText: string
   setChatComposerText: Dispatch<SetStateAction<string>>
-  chatPending: Array<{ id: string; text: string }>
+  chatPending: MobileNativeChatPendingMessage[]
   nativeChatSession: ReturnType<typeof useMobileNativeChatSession>
   nativeChatAgentWorking: boolean
   nativeChatStreamingText?: string
@@ -55,7 +62,13 @@ export type MobileNativeChatController = {
   handleNativeChatStop: () => void
   nativeChatFilePaths: string[]
   loadNativeChatFiles: (query: string) => void
-  handleNativeChatSend: (text: string) => Promise<boolean>
+  handleNativeChatSend: (text: string, images?: string[]) => Promise<boolean>
+  /** Outcome-preserving send: callers that pasted terminal input beforehand
+   *  (image sends) must see 'unknown' to heal a possibly-orphaned paste. */
+  handleNativeChatSendWithOutcome: (
+    text: string,
+    images?: string[]
+  ) => Promise<MobileNativeChatSendOutcome>
 }
 
 /** Owns mobile native-chat state and teardown outside the already dense session
@@ -172,6 +185,8 @@ export function useMobileNativeChatController(args: {
       return false
     }
     cancelNativeChatAnswer()
+    // Escape never submits the composer, so no stale-input heal: it would consume
+    // the marker still protecting the next real message.
     const outcome = await sendMobileNativeChatMessageWithOutcome({
       client,
       terminal: handle,
@@ -221,13 +236,21 @@ export function useMobileNativeChatController(args: {
     worktreeId
   })
 
-  const handleNativeChatSend = useCallback(
-    async (text: string): Promise<boolean> => {
+  const handleNativeChatSendWithOutcome = useCallback(
+    async (text: string, images?: string[]): Promise<MobileNativeChatSendOutcome> => {
       const handle = activeHandleRef.current
       const origin = captureSendOrigin(text)
       if (!client || !handle || !origin || !nativeChatInputLeaseReady) {
         onSendError('Message not sent (disconnected)')
-        return false
+        return 'rejected'
+      }
+      // The composer may still hold an orphaned image paste from an earlier send
+      // (#10228); submitting on top of it would glue the image onto this message.
+      // Also covers question-card answers, which reach this send directly.
+      const healArgs = { client, terminal: handle, deviceToken: deviceTokenRef.current }
+      if (!(await healMobileNativeChatStaleInput(healArgs))) {
+        onSendError('Message not sent')
+        return 'rejected'
       }
       const outcome = await sendMobileNativeChatMessageWithOutcome({
         client,
@@ -243,14 +266,16 @@ export function useMobileNativeChatController(args: {
         holdUnconfirmedSend(origin, text, () =>
           onSendError('Delivery unconfirmed — check chat before retrying')
         )
-        return true
+        return 'unknown'
       }
       if (outcome === 'rejected') {
         onSendError('Message not sent')
-        return false
+        return 'rejected'
       }
-      acceptSend(origin, text)
-      return true
+      // `images` are local preview URIs for the optimistic echo only — the actual
+      // image bytes already rode along as a bracketed paste before this text send.
+      acceptSend(origin, text, images)
+      return 'accepted'
     },
     [
       acceptSend,
@@ -262,6 +287,14 @@ export function useMobileNativeChatController(args: {
       nativeChatInputLeaseReady,
       onSendError
     ]
+  )
+
+  // Boolean surface for callers with no pre-pasted input: 'unknown' stays true
+  // (the send usually landed; the optimistic echo is already held unconfirmed).
+  const handleNativeChatSend = useCallback(
+    async (text: string, images?: string[]): Promise<boolean> =>
+      (await handleNativeChatSendWithOutcome(text, images)) !== 'rejected',
+    [handleNativeChatSendWithOutcome]
   )
 
   return {
@@ -286,6 +319,7 @@ export function useMobileNativeChatController(args: {
     handleNativeChatStop,
     nativeChatFilePaths,
     loadNativeChatFiles,
-    handleNativeChatSend
+    handleNativeChatSend,
+    handleNativeChatSendWithOutcome
   }
 }

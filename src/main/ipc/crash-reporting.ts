@@ -325,16 +325,24 @@ function buildUncapturedCrashReportText(
 // storm, #8260) can flush the whole fixed-size breadcrumb ring in seconds,
 // erasing the pre-crash trail. Coalesce repeats into one entry that carries a
 // suppressed count instead.
-const COALESCED_RENDERER_ERROR_BREADCRUMB_NAMES = new Set([
+const COALESCED_RENDERER_BREADCRUMB_NAMES = new Set([
   'renderer_error',
-  'renderer_unhandled_rejection'
+  'renderer_unhandled_rejection',
+  'terminal_park_verdict_churn'
 ])
-const RENDERER_ERROR_BREADCRUMB_COALESCE_MS = 30_000
+const RENDERER_BREADCRUMB_COALESCE_MS = 30_000
+// Why: these carry no message identity — they are per-tab telemetry whose rate,
+// not whose text, is the signal. Coalescing by name alone bounds a many-tab
+// storm to one ring entry plus a suppressed count.
+const NAME_ONLY_COALESCED_BREADCRUMB_NAMES = new Set(['terminal_park_verdict_churn'])
 
-function rendererErrorBreadcrumbCoalesceKey(
+function rendererBreadcrumbCoalesceKey(
   name: string,
   data: CrashReportBreadcrumbData | undefined
 ): string | undefined {
+  if (NAME_ONLY_COALESCED_BREADCRUMB_NAMES.has(name)) {
+    return name
+  }
   const primaryMessage = name === 'renderer_error' ? data?.message : data?.reasonMessage
   const fallbackMessage = name === 'renderer_error' ? data?.errorMessage : undefined
   const message =
@@ -394,8 +402,8 @@ export function registerCrashReportingHandlers(store: CrashReportStore): void {
         return
       }
       const data = sanitizeRendererBreadcrumbData(args.data)
-      if (COALESCED_RENDERER_ERROR_BREADCRUMB_NAMES.has(args.name)) {
-        const coalesceKey = rendererErrorBreadcrumbCoalesceKey(args.name, data)
+      if (COALESCED_RENDERER_BREADCRUMB_NAMES.has(args.name)) {
+        const coalesceKey = rendererBreadcrumbCoalesceKey(args.name, data)
         if (!coalesceKey) {
           recordCrashBreadcrumb(args.name, data)
           recordRendererBreadcrumbTrace(args.name, data)
@@ -405,7 +413,7 @@ export function registerCrashReportingHandlers(store: CrashReportStore): void {
           name: args.name,
           data,
           coalesceKey,
-          minIntervalMs: RENDERER_ERROR_BREADCRUMB_COALESCE_MS
+          minIntervalMs: RENDERER_BREADCRUMB_COALESCE_MS
         })
         // Why: tracing every suppressed duplicate would preserve the same
         // serialization and disk churn that breadcrumb coalescing removes.

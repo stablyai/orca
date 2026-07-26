@@ -42,6 +42,8 @@ type LaunchOptions = {
    * the test starts capturing.
    */
   onStderr?: (chunk: string) => void
+  /** Merged into this launch only (not baked into the session's shared env). */
+  extraEnv?: Record<string, string>
 }
 
 type RestartSession = {
@@ -153,6 +155,7 @@ export function createRestartSession(
       args: getOrcaElectronLaunchArgs(mainPath, headful),
       env: {
         ...homeIsolation.env,
+        ...options?.extraEnv,
         ORCA_E2E_RUNTIME_WS_PORT: String(runtimeWsPort)
       }
     })

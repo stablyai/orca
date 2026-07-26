@@ -835,6 +835,18 @@ describe('SshPtyProvider', () => {
     expect(mux.request).toHaveBeenCalledWith('pty.getForegroundProcess', { id: 'pty-1' })
   })
 
+  it('preserves unavailable process inspection', async () => {
+    const inspection = {
+      foregroundProcess: null,
+      hasChildProcesses: true,
+      unavailable: true as const
+    }
+    mux.request.mockResolvedValue(inspection)
+
+    await expect(provider.inspectProcess(scopedPty1)).resolves.toEqual(inspection)
+    expect(mux.request).toHaveBeenCalledWith('pty.inspectProcess', { id: 'pty-1' })
+  })
+
   it('serializes scoped app ids using raw relay ids', async () => {
     mux.request.mockResolvedValue('serialized')
 

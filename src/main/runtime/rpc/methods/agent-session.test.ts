@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from 'vitest'
 import {
   AGENT_SESSION_HOST_AUTHORITY_RUNTIME_CAPABILITY,
+  AGENT_SESSION_OMP_RESUME_PATH_RUNTIME_CAPABILITY,
   MIN_COMPATIBLE_RUNTIME_CLIENT_VERSION,
   RUNTIME_CAPABILITIES,
   RUNTIME_PROTOCOL_VERSION
@@ -48,8 +49,9 @@ describe('agent session RPC methods', () => {
       request('terminal.ensureAgentSession', {
         kind: 'explicit',
         worktree: 'id:worktree-1',
-        agent: 'codex',
+        agent: 'omp',
         providerSession: { key: 'session_id', id: 'provider-session-1' },
+        ompResumeFilePath: '/custom/omp/project/session.jsonl',
         agentArgs: '--profile review',
         launchPreferences: { model: 'gpt-5', effort: 'high' },
         presentation: 'focused',
@@ -62,8 +64,9 @@ describe('agent session RPC methods', () => {
       {
         kind: 'explicit',
         worktree: 'id:worktree-1',
-        agent: 'codex',
+        agent: 'omp',
         providerSession: { key: 'session_id', id: 'provider-session-1' },
+        ompResumeFilePath: '/custom/omp/project/session.jsonl',
         agentArgs: '--profile review',
         launchPreferences: { model: 'gpt-5', effort: 'high' },
         presentation: 'focused',
@@ -71,6 +74,52 @@ describe('agent session RPC methods', () => {
       },
       {}
     )
+  })
+
+  it.each([
+    {
+      method: 'terminal.createAgentSession',
+      params: {
+        clientOperationId: '1752883200000-0123456789abcdef0123456789abcdef',
+        worktree: 'id:worktree-1',
+        agent: 'codex',
+        presentation: 'focused'
+      },
+      runtimeMethod: 'createAgentSession' as const
+    },
+    {
+      method: 'terminal.ensureAgentSession',
+      params: {
+        kind: 'explicit',
+        worktree: 'id:worktree-1',
+        agent: 'codex',
+        providerSession: { key: 'session_id', id: 'provider-session-1' },
+        presentation: 'focused'
+      },
+      runtimeMethod: 'ensureAgentSession' as const
+    }
+  ])('keeps $method presentation viewer-local for paired clients', async (testCase) => {
+    for (const clientKind of ['runtime', 'mobile'] as const) {
+      const runtime = runtimeStub()
+      const dispatcher = new RpcDispatcher({
+        runtime: runtime as unknown as OrcaRuntimeService,
+        methods: AGENT_SESSION_METHODS
+      })
+      const replies: RpcResponse[] = []
+
+      await dispatcher.dispatchStreaming(
+        request(testCase.method, testCase.params),
+        (response) => replies.push(JSON.parse(response) as RpcResponse),
+        { pairedDeviceId: `paired-${clientKind}`, clientKind }
+      )
+
+      expect(replies).toHaveLength(1)
+      expect(replies[0]).toMatchObject({ ok: true })
+      expect(runtime[testCase.runtimeMethod]).toHaveBeenCalledWith(
+        { ...testCase.params, presentation: 'background' },
+        { clientId: `paired-${clientKind}`, clientKind }
+      )
+    }
   })
 
   it('keeps automatic authority checkpoint-only', async () => {
@@ -321,5 +370,6 @@ describe('agent session RPC methods', () => {
     expect(RUNTIME_PROTOCOL_VERSION).toBe(3)
     expect(MIN_COMPATIBLE_RUNTIME_CLIENT_VERSION).toBe(2)
     expect(RUNTIME_CAPABILITIES).toContain(AGENT_SESSION_HOST_AUTHORITY_RUNTIME_CAPABILITY)
+    expect(RUNTIME_CAPABILITIES).toContain(AGENT_SESSION_OMP_RESUME_PATH_RUNTIME_CAPABILITY)
   })
 })

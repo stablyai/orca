@@ -2646,8 +2646,17 @@
               "blocked": {
                 "toast": {
                   "97c98f1afe": "Abrir ajustes",
-                  "7cf51f74fd": "Habilita las escrituras al portapapeles TUI en los ajustes de Terminal para copiar desde SSH, tmux, Neovim, fzf o Grok.",
+                  "7cf51f74fd": "Habilita las escrituras al portapapeles TUI en los ajustes de Terminal para copiar desde SSH, Zellij, tmux, Neovim, fzf o Grok.",
                   "89eaa3e80b": "Escritura al portapapeles del terminal bloqueada"
+                }
+              },
+              "default": {
+                "on": {
+                  "notice": {
+                    "title": "La escritura del portapapeles desde TUI ahora está activada de forma predeterminada",
+                    "description": "Zellij, tmux, Neovim y otros programas de terminal ya pueden copiar a tu portapapeles. Desactívalo en la configuración de Terminal.",
+                    "action": "Abrir ajuste"
+                  }
                 }
               }
             }
@@ -2904,7 +2913,8 @@
                   "5a9c83c04b": "Abrir cualquier archivo, URL, agente, ...",
                   "90eb94dc48": "Introduce una URL http:// o https://.",
                   "5553b283ce": "Introduce una URL o ruta de archivo.",
-                  "queryTooLarge": "El texto de búsqueda es demasiado grande."
+                  "queryTooLarge": "El texto de búsqueda es demasiado grande.",
+                  "absolutePathRemoteBlocked": "Las rutas absolutas requieren un espacio de trabajo local."
                 }
               },
               "menu": {
@@ -3656,7 +3666,8 @@
           "SourceControlActionVariableChips": {
             "1b77798d5f": "Variables",
             "6b921a0ac2": "Ejemplo",
-            "4bf6d88039": "(vacío)"
+            "4bf6d88039": "(vacío)",
+            "7377483644": "Este espacio de trabajo"
           }
         }
       },
@@ -3724,7 +3735,8 @@
           "skippedReasonInRepo": "This is a project skill, not a global one — Orca only updates your global skills, so it left this out of the update.",
           "skippedReasonPluginCache": "A plugin manages this skill, so Orca left it out of the update — update the plugin instead.",
           "skippedReasonExternalLink": "This copy is a shortcut pointing outside Orca’s skill folders, so Orca left it out of the update.",
-          "skippedReasonBrokenLink": "This copy is a shortcut to something that no longer exists, so Orca left it out — you can safely delete it."
+          "skippedReasonBrokenLink": "This copy is a shortcut to something that no longer exists, so Orca left it out — you can safely delete it.",
+          "skippedReasonDuplicate": "This is a separate copy, so the update won’t reach it — the command only refreshes the main copy. Remove this copy, then reinstall the skill so this location follows the main one."
         },
         "SkillFreshnessUpdateDialog": {
           "title": "Actualizar skills",
@@ -3745,7 +3757,9 @@
         "SkillFreshnessStatusPill": {
           "updateAvailable": "Actualización disponible",
           "upToDate": "Actualizado",
-          "installed": "Instalado"
+          "installed": "Instalado",
+          "details": "Details",
+          "needsAttention": "Needs attention"
         }
       },
       "sidebar": {
@@ -5043,7 +5057,10 @@
           "remoteEmptyClaudeAccounts": "No hay cuentas de Claude administradas en {{value0}}. Usa su inicio de sesión de Claude predeterminado del sistema; agrega cuentas en ese servidor.",
           "remoteEmptyCodexAccounts": "No hay cuentas de Codex administradas en {{value0}}. Usa su inicio de sesión de Codex predeterminado del sistema; agrega cuentas en ese servidor.",
           "codexSystemDefaultCustomProvider": "Proveedor personalizado — no se registra el uso.",
-          "codexSystemDefaultNeedsSignIn": "No se encontró ningún inicio de sesión de Codex para {{value0}}."
+          "codexSystemDefaultNeedsSignIn": "No se encontró ningún inicio de sesión de Codex para {{value0}}.",
+          "codexConfigSyncMissingSource": "Codex is still using the settings it last synced because {{value0}} is missing. Restore that file to resume syncing.",
+          "codexConfigSyncBlankSource": "Codex is still using the settings it last synced because {{value0}} is empty. That is expected while a synced folder finishes downloading.",
+          "codexConfigSyncUnreadableSource": "Codex is still using the settings it last synced because {{value0}} could not be read. Check that file's permissions."
         },
         "AdvancedPane": {
           "40b29e0bf3": "Reiniciar",
@@ -5483,7 +5500,7 @@
           "dfbc12c8c8": "Depuración de hardware y herramientas que se comunican con dispositivos USB.",
           "bf51e4a542": "Dispositivos USB",
           "f903bf20b5": "Descubrimiento y acceso para servidores de desarrollo en tu red.",
-          "e7bb06007c": "Red local",
+          "e7bb06007c": "LAN",
           "4a73f5217a": "Apple Events para scripts que controlan otras apps locales.",
           "e119f0d66b": "Automatización",
           "7ca17b62c8": "Recomendado cuando proyectos, worktrees o archivos symlinked tocan carpetas protegidas de macOS.",
@@ -5539,9 +5556,14 @@
           },
           "agentDashboard": {
             "title": "Agent Dashboard",
-            "description": "Pop-out Kanban board for monitoring agents across worktrees.",
-            "copy": "Adds an Agent Dashboard entry to the left sidebar. Open it to monitor attention, working, and idle agents in a separate window and jump into their live terminals.",
-            "toggleLabel": "Toggle Agent Dashboard"
+            "description": "Kanban board for monitoring agents across worktrees, in-window or as a pop-out.",
+            "copy": "Adds an Agent Dashboard entry to the left sidebar. Open it to monitor attention, working, and idle agents and jump into their live terminals.",
+            "toggleLabel": "Toggle Agent Dashboard",
+            "modeLabel": "Open as",
+            "modeCopy": "Show the dashboard as an in-window board beside the sidebar or a separate pop-out window.",
+            "modeAriaLabel": "Agent Dashboard open mode",
+            "modeInWindow": "In-window",
+            "modePopout": "Pop-out"
           }
         },
         "FloatingWorkspacePane": {
@@ -5695,6 +5717,11 @@
           "d2f33670a9": "Importar desde Ghostty",
           "273e7e81fe": "Configuraciones",
           "1f744a72f4": "configuración"
+        },
+        "BranchPrefixFeedback": {
+          "6c40c0908f": "El prefijo no puede contener espacios ni caracteres especiales como ~ ^ : ? * [ \\",
+          "64d70b156a": "Las ramas se llamarán {{example}}",
+          "808f9a726e": "No se aplicará ningún prefijo"
         },
         "GitPane": {
           "d2eede4c54": "Agrega la atribución de Orca a commits, PR e issues.",
@@ -5954,7 +5981,7 @@
           "668016be7a": "en su computadora y teléfono.",
           "1dc87a7fbc": "Tailscale",
           "51d29927eb": "Instalar",
-          "9fc5d203ff": "Orca Mobile se conecta directamente a esta computadora. Para usarlo fuera de la misma red local, coloque su computadora y teléfono en la misma red superpuesta privada, luego genere el código QR con esa dirección de red seleccionada.",
+          "9fc5d203ff": "Orca Mobile se conecta directamente a esta computadora. Para usarlo fuera de la misma LAN, coloque su computadora y teléfono en la misma red superpuesta privada, luego genere el código QR con esa dirección de red seleccionada.",
           "39fad211d9": "Conéctate fuera de tu Wi-Fi con una tailnet",
           "a9db5d771d": "Actualizar interfaces de red",
           "b2c384cfd6": "No se encontraron interfaces",
@@ -5985,7 +6012,7 @@
           "6436e56546": "Código QR para emparejamiento móvil",
           "1b1b70279a": "Aún no hay dispositivos emparejados.",
           "1592afcc7a": "Aún no hay dispositivos emparejados. Escanea el código QR con la aplicación móvil de Orca.",
-          "relayDegradedNotice": "Relay couldn’t be reached — this code only works on your local network. Regenerate to try again."
+          "relayDegradedNotice": "No se pudo contactar con Relay: este código solo funciona en tu LAN o Tailscale. Genera uno nuevo e inténtalo de nuevo."
         },
         "MobileSettingsPane": {
           "9a3c280e49": "GitHub Releases",
@@ -6299,6 +6326,7 @@
           "removeSetup": "Eliminar",
           "hostSetupBlockedVersion": "La versión del servidor Orca no es compatible",
           "hostSetupMissingCapability": "Actualiza Orca en este host para configurar proyectos",
+          "hostSetupConnectionRequired": "Conecta este host antes de importar o clonar el proyecto",
           "setupProjectOnHost": "Configurar en otro host",
           "setupProjectOnHostHelp": "Elige un host y luego importa un checkout existente, clona el repositorio allí o registra una configuración que se aprovisionará más tarde.",
           "setupExistingFolder": "Importar carpeta existente",
@@ -6924,9 +6952,9 @@
           "d23b43c5be": "Ubicación del script de configuración",
           "34a0dfa06e": "Dónde se ejecuta el script de configuración del repositorio cuando se crea un nuevo espacio de trabajo.",
           "21f8da2078": "Script de configuración del espacio de trabajo",
-          "6e6480a7df": "Permite que los programas del terminal (Grok, tmux, Neovim, fzf, SSH) copien al portapapeles del sistema.",
+          "6e6480a7df": "Permite que los programas del terminal (Zellij, tmux, Neovim, fzf, Grok, SSH) copien al portapapeles del sistema.",
           "3338dcf8c1": "Permitir escrituras en el portapapeles TUI (OSC 52)",
-          "69c64a479c": "Permite que Grok, tmux, Neovim y fzf copien al portapapeles del sistema a través de PTY (incluso por SSH).",
+          "69c64a479c": "Permite que Zellij, tmux, Neovim, fzf y Grok copien al portapapeles del sistema a través de PTY (incluso por SSH).",
           "4729c645fc": "Copia automáticamente las selecciones del terminal al portapapeles.",
           "902f5dee1f": "Copiar al seleccionar",
           "9129b7e805": "Al pasar el cursor sobre un panel de terminal, se activa sin necesidad de hacer clic.",
@@ -7618,14 +7646,15 @@
         "developer": {
           "permissions": {
             "search": {
-              "3363889768": "Red local, USB y Bluetooth",
+              "3363889768": "LAN, USB y Bluetooth",
               "6c82846f66": "dispositivo",
               "11653d3f42": "mdns",
               "78a10b826f": "bonjour",
               "e3fbc48083": "bluetooth",
               "c4a4a02ea4": "USB",
               "fa3239cd42": "red local",
-              "acad3d4743": "Permitir que las herramientas del dispositivo y de la red local se utilicen desde sesiones de terminal.",
+              "87620e6416": "LAN",
+              "acad3d4743": "Permitir herramientas de dispositivo y acceso LAN desde sesiones de terminal.",
               "3e0131e45d": "iCloud",
               "ce07159ff5": "escritorio",
               "a0c19119fb": "descargas",
@@ -7729,7 +7758,7 @@
             },
             "agentDashboard": {
               "title": "Agent Dashboard",
-              "description": "Pop-out Kanban board for monitoring agents across worktrees."
+              "description": "Kanban board for monitoring agents across worktrees, in-window or as a pop-out."
             }
           }
         },
@@ -8563,7 +8592,6 @@
             "10f9fb6fea": "ajustes",
             "2ade3ea490": "configuración",
             "fd752b3cac": "importar",
-            "82b63d07fe": "ghostty",
             "73e9422f19": "Importación única de ajustes de terminal compatibles de Ghostty.",
             "a979df0083": "Importar desde Ghostty",
             "4cec42dbf7": "internacional",
@@ -9287,9 +9315,9 @@
           "anywhereTitle": "Orca Relay",
           "anywhereDescription": "El teléfono puede estar en datos móviles o cualquier Wi‑Fi. Se requiere inicio de sesión.",
           "signInRequired": "Inicia sesión para usar Orca Mobile Relay.",
-          "relayUnavailable": "Orca Relay no está disponible en esta compilación. Usa Red local.",
+          "relayUnavailable": "Orca Relay no está disponible en esta compilación. Usa LAN.",
           "signInAgain": "Iniciar sesión de nuevo",
-          "localTitle": "Red local"
+          "localTitle": "LAN"
         },
         "MobilePairingSetupSection": {
           "title": "Vincular un teléfono",
@@ -9867,7 +9895,6 @@
             "b715ef615b": "{{value0}} commits por delante de {{value1}}",
             "c1a8f3e204": "1 commit por detrás de {{value0}}",
             "d2b9g4f315": "{{value0}} commits por detrás de {{value1}}",
-            "e9c2a5d416": "A la par con {{value0}}",
             "4b4a7de138": "Abrir página de revisión en el navegador",
             "createPrIntentCommitBlockedSummary": "Commit bloqueado: {{value0}} Corrige el issue y reintenta crear PR.",
             "pushRecovery": {
@@ -9885,7 +9912,11 @@
               "834cb3f23d": "Corregir con AI",
               "783a808870": "Cerrar"
             },
-            "97e7124eac": "No se pudo actualizar Source Control. Vuelve a intentarlo."
+            "97e7124eac": "No se pudo actualizar Source Control. Vuelve a intentarlo.",
+            "b8c2e1a904": "{{value0}} → {{value1}}",
+            "a4e93c21d7": "Rama actual: {{value0}}",
+            "c7d4e2f801": "Cambiar ref base: {{value0}}",
+            "f3a1b8c204": "upstream"
           },
           "SourceControlAgentActionDialog": {
             "8e856842d1": "No se pudo iniciar el agente seleccionado.",
@@ -11035,7 +11066,7 @@
             "preview": "Vista previa",
             "stable": "Estable"
           },
-          "relayDegradedNotice": "Relay couldn’t be reached — this code only works on your local network."
+          "relayDegradedNotice": "No se pudo contactar con Relay: este código solo funciona en tu LAN o Tailscale."
         },
         "MobilePage": {
           "e17393c6a3": "Vista previa del teléfono",
@@ -13777,7 +13808,10 @@
       "closed": "No live terminal — this agent's pane has closed.",
       "focusWorktree": "Focus worktree",
       "close": "Close"
-    }
+    },
+    "close": "Close dashboard",
+    "settings": "Agent Dashboard settings",
+    "settingsTooltip": "Board settings"
   },
   "dashboard": {
     "sidebar": {

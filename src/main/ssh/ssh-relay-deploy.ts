@@ -6,11 +6,19 @@ import type { SshConnection } from './ssh-connection'
 import type { RelayPlatform } from './relay-protocol'
 import type { MultiplexerTransport } from './ssh-channel-multiplexer'
 import {
-  uploadDirectory,
   waitForSentinel,
   execCommand,
   isUnconfirmedSshCommandTermination
 } from './ssh-relay-deploy-helpers'
+import { uploadRelayDirectory, writeRelayFile } from './ssh-relay-install-transfers'
+import {
+  createRelayInstallMarkerCommand,
+  createRelayInstallNamespace,
+  makeRelayInstallDirectoryCommand,
+  relayHomeRelativeDir,
+  relaySftpNamespaceMapping,
+  type RelayInstallNamespace
+} from './ssh-relay-install-namespace'
 import { resolveRemoteNodePath } from './ssh-remote-node-resolution'
 import {
   readLocalFullVersion,
@@ -36,7 +44,6 @@ import {
 } from './ssh-relay-build-toolchain'
 import {
   commandWithNodePath,
-  makeRemoteDirectoryCommand,
   makeRemoteExecutableCommand,
   readRemoteHomeCommand,
   removeRemoteFileCommand
@@ -311,6 +318,9 @@ async function deployAndLaunchRelayAttempt(
   console.log(`[ssh-relay] Remote dir: ${remoteRelayDir}`)
   console.log(`[ssh-relay] Already installed at ${fullVersion}: ${alreadyInstalled}`)
 
+  // Why: derive the home-relative suffix once — recomputing it by stripping the shell home breaks on a split namespace.
+  const homeRelativeRelayDir = relayHomeRelativeDir(fullVersion)
+
   let ownsInstallLock = false
   let launchGcClaimToken: string | undefined
   if (alreadyInstalled) {
@@ -320,6 +330,7 @@ async function deployAndLaunchRelayAttempt(
       platform,
       hostPlatform,
       nodePath,
+      homeRelativeRelayDir,
       deploySignal
     )
     ownsInstallLock = launchFence.ownsInstallLock
@@ -336,9 +347,23 @@ async function deployAndLaunchRelayAttempt(
           signal: deploySignal
         }))
       ) {
+        const installNamespace = createInstallNamespaceIfSupported(
+          conn,
+          hostPlatform,
+          homeRelativeRelayDir
+        )
+
         onProgress?.('Uploading relay...')
         console.log('[ssh-relay] Uploading relay...')
-        await uploadRelay(conn, platform, remoteRelayDir, fullVersion, hostPlatform, deploySignal)
+        await uploadRelay(
+          conn,
+          platform,
+          remoteRelayDir,
+          fullVersion,
+          hostPlatform,
+          deploySignal,
+          installNamespace
+        )
         console.log('[ssh-relay] Upload complete')
 
         onProgress?.('Installing native dependencies...')
@@ -349,7 +374,9 @@ async function deployAndLaunchRelayAttempt(
           platform,
           hostPlatform,
           nodePath,
-          deploySignal
+          deploySignal,
+          [],
+          installNamespace
         )
         console.log('[ssh-relay] Native deps installed')
 
@@ -421,7 +448,8 @@ async function uploadRelay(
   remoteDir: string,
   fullVersion: string,
   hostPlatform: RemoteHostPlatform,
-  signal?: AbortSignal
+  signal?: AbortSignal,
+  namespace?: RelayInstallNamespace
 ): Promise<void> {
   const localRelayDir = getLocalRelayPath(platform)
   if (!localRelayDir || !existsSync(localRelayDir)) {
@@ -431,11 +459,20 @@ async function uploadRelay(
     )
   }
 
-  await execHostCommand(conn, hostPlatform, makeRemoteDirectoryCommand(hostPlatform, remoteDir), {
-    signal
-  })
+  // Why: the install-owner marker rides along with mkdir, so a standard install spends no extra exec channel on it.
+  await execHostCommand(
+    conn,
+    hostPlatform,
+    makeRelayInstallDirectoryCommand(hostPlatform, remoteDir, namespace),
+    { signal }
+  )
 
-  await uploadDirectoryForConnection(conn, localRelayDir, remoteDir, hostPlatform, signal)
+  await uploadRelayDirectory(conn, localRelayDir, remoteDir, hostPlatform, {
+    signal,
+    sftpNamespace: namespace
+      ? relaySftpNamespaceMapping(namespace, hostPlatform, remoteDir)
+      : undefined
+  })
 
   if (!isWindowsRemoteHost(hostPlatform)) {
     await execHostCommand(
@@ -447,60 +484,36 @@ async function uploadRelay(
   }
 
   // Why: write .version via SFTP not shell to avoid quoting content-hashed versions; the daemon reads it to validate the wire handshake.
-  await writeRemoteFile(
+  await writeRelayFile(
     conn,
     hostPlatform,
     joinRemotePath(hostPlatform, remoteDir, '.version'),
     fullVersion,
-    signal
+    {
+      signal,
+      sftpNamespace: namespace
+        ? relaySftpNamespaceMapping(namespace, hostPlatform, remoteDir, '.version')
+        : undefined
+    }
   )
 }
 
-async function uploadDirectoryForConnection(
-  conn: SshConnection,
-  localRelayDir: string,
-  remoteDir: string,
-  hostPlatform: RemoteHostPlatform,
-  signal?: AbortSignal
-): Promise<void> {
-  if (typeof conn.uploadDirectory === 'function') {
-    await conn.uploadDirectory(localRelayDir, remoteDir, { hostPlatform, signal })
-    return
-  }
-
-  const sftp = await conn.sftp()
-  try {
-    await uploadDirectory(sftp, localRelayDir, remoteDir)
-  } finally {
-    sftp.end()
-  }
-}
-
-async function writeRemoteFile(
+/**
+ * A marker is only meaningful where a split namespace can occur and where Orca
+ * owns the SFTP session: POSIX hosts reached over the bundled ssh2 transport.
+ */
+function createInstallNamespaceIfSupported(
   conn: SshConnection,
   hostPlatform: RemoteHostPlatform,
-  remotePath: string,
-  contents: string,
-  signal?: AbortSignal
-): Promise<void> {
-  if (typeof conn.writeFile === 'function') {
-    await conn.writeFile(remotePath, contents, { hostPlatform, signal })
-    return
+  homeRelativeRelayDir: string
+): RelayInstallNamespace | undefined {
+  if (isWindowsRemoteHost(hostPlatform)) {
+    return undefined
   }
-
-  const sftp = await conn.sftp()
-  try {
-    await new Promise<void>((resolve, reject) => {
-      const ws = sftp.createWriteStream(remotePath)
-      // .once: a late session 'error' after resolve/reject would otherwise be unhandled and crash main.
-      sftp.once('error', reject)
-      ws.once('close', resolve)
-      ws.once('error', reject)
-      ws.end(contents)
-    })
-  } finally {
-    sftp.end()
-  }
+  // A connection double without the transport accessor is an ssh2 connection.
+  const usesSystemSsh =
+    typeof conn.usesSystemSshTransport === 'function' ? conn.usesSystemSshTransport() : false
+  return usesSystemSsh ? undefined : createRelayInstallNamespace(homeRelativeRelayDir)
 }
 
 const NODE_PTY_VERSION = '1.1.0'
@@ -576,6 +589,7 @@ async function repairInstalledNativeDeps(
   platform: RelayPlatform,
   hostPlatform: RemoteHostPlatform,
   nodePath: string,
+  homeRelativeRelayDir: string,
   signal?: AbortSignal
 ): Promise<{ ownsInstallLock: boolean; gcClaimToken?: string }> {
   const initialProbe = await probeRequiredNativeDeps(
@@ -627,6 +641,14 @@ async function repairInstalledNativeDeps(
     // Why: older complete relay dirs predate @parcel/watcher; re-probe under the lock so only one reconnect mutates the dir.
     const probe = await probeRequiredNativeDeps(conn, remoteDir, hostPlatform, nodePath, signal)
     if (!probe.available) {
+      // Why: only stamp ownership once the locked recheck proves this connection is the one about to write.
+      const repairNamespace = await createRepairInstallMarker(
+        conn,
+        hostPlatform,
+        remoteDir,
+        homeRelativeRelayDir,
+        signal
+      )
       await installNativeDeps(
         conn,
         remoteDir,
@@ -634,7 +656,8 @@ async function repairInstalledNativeDeps(
         hostPlatform,
         nodePath,
         signal,
-        probe.missing
+        probe.missing,
+        repairNamespace
       )
       await finalizeInstall(conn, remoteDir, hostPlatform, { signal, releaseLock: false })
     }
@@ -649,6 +672,42 @@ async function repairInstalledNativeDeps(
       }`
     )
     return { ownsInstallLock: !terminationUnconfirmed }
+  }
+}
+
+/**
+ * Stamp this connection as the install owner during repair. Marker creation is
+ * best-effort: without it the writes simply keep using the shell path.
+ */
+async function createRepairInstallMarker(
+  conn: SshConnection,
+  hostPlatform: RemoteHostPlatform,
+  remoteDir: string,
+  homeRelativeRelayDir: string,
+  signal?: AbortSignal
+): Promise<RelayInstallNamespace | undefined> {
+  const namespace = createInstallNamespaceIfSupported(conn, hostPlatform, homeRelativeRelayDir)
+  if (!namespace) {
+    return undefined
+  }
+  try {
+    await execHostCommand(
+      conn,
+      hostPlatform,
+      createRelayInstallMarkerCommand(namespace, hostPlatform, remoteDir),
+      { signal }
+    )
+    return namespace
+  } catch (err) {
+    // Why: an unconfirmed termination still owes the caller its lock semantics; only a confirmed failure degrades to shell paths.
+    if (isUnconfirmedSshCommandTermination(err)) {
+      throw err
+    }
+    signal?.throwIfAborted()
+    console.warn(
+      `[ssh-relay] SFTP namespace marker unavailable at ${remoteDir}; retaining shell paths`
+    )
+    return undefined
   }
 }
 
@@ -689,7 +748,8 @@ async function installNativeDeps(
   hostPlatform: RemoteHostPlatform,
   nodePath: string,
   signal?: AbortSignal,
-  resetDeps: RelayNativeDepName[] = []
+  resetDeps: RelayNativeDepName[] = [],
+  namespace?: RelayInstallNamespace
 ): Promise<void> {
   // Why: node-pty's prebuild spawns `node` as a child, so node must be in PATH (commandWithNodePath) or it fails exit 127.
   // Why: npm init -y rejects '+' in content-hashed dir names, so write a fixed minimal package.json instead.
@@ -702,12 +762,17 @@ async function installNativeDeps(
     dependencies: RELAY_NATIVE_DEPS,
     allowScripts: RELAY_NATIVE_DEP_SCRIPT_ALLOWLIST
   })}\n`
-  await writeRemoteFile(
+  await writeRelayFile(
     conn,
     hostPlatform,
     joinRemotePath(hostPlatform, remoteDir, 'package.json'),
     pkgJson,
-    signal
+    {
+      signal,
+      sftpNamespace: namespace
+        ? relaySftpNamespaceMapping(namespace, hostPlatform, remoteDir, 'package.json')
+        : undefined
+    }
   )
 
   try {

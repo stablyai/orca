@@ -54,6 +54,7 @@ export function createSeededRepo(dir) {
 export function buildFreshProfile({ repo = null } = {}) {
   return {
     settings: {
+      defaultTuiAgent: 'blank',
       telemetry: {
         optedIn: true,
         installId: '00000000-0000-4000-8000-000000000000',

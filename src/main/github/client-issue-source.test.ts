@@ -696,6 +696,58 @@ describe('GitHub issue source split', () => {
       })
     })
 
+    it("preference='auto' + upstream exists → PRs query upstream too", async () => {
+      // Why: fork-contribution PRs live on the upstream repo — the fork's own
+      // PR list is almost always empty. 'auto' must resolve PRs upstream-first
+      // like issues, or the PRs tab renders "No matching GitHub work" on forks.
+      resolveIssueSourceMock.mockResolvedValueOnce({
+        source: { owner: 'stablyai', repo: 'orca' },
+        fellBack: false
+      })
+      getOwnerRepoMock.mockResolvedValueOnce({ owner: 'fork', repo: 'orca' })
+      mockUpstreamCandidate({ owner: 'stablyai', repo: 'orca' })
+      ghExecFileAsyncMock.mockResolvedValueOnce({ stdout: '[]' }).mockResolvedValueOnce({
+        stdout: '[]'
+      })
+
+      const result = await listWorkItems('/repo-root', 10, undefined, undefined, 'auto')
+
+      expect(ghExecFileAsyncMock).toHaveBeenNthCalledWith(
+        2,
+        expect.arrayContaining(['--repo', 'stablyai/orca']),
+        { cwd: '/repo-root' }
+      )
+      expect(result.sources).toEqual({
+        issues: { owner: 'stablyai', repo: 'orca' },
+        prs: { owner: 'stablyai', repo: 'orca' },
+        originCandidate: { owner: 'fork', repo: 'orca' },
+        upstreamCandidate: { owner: 'stablyai', repo: 'orca' }
+      })
+    })
+
+    it('collapses the default count to one query when auto resolves both sides to upstream', async () => {
+      getIssueOwnerRepoMock.mockResolvedValueOnce({ owner: 'stablyai', repo: 'orca' })
+      getOwnerRepoMock.mockResolvedValueOnce({ owner: 'fork', repo: 'orca' })
+      mockUpstreamCandidate({ owner: 'stablyai', repo: 'orca' })
+      ghExecFileAsyncMock.mockResolvedValueOnce({ stdout: '11\n' })
+
+      const count = await countWorkItems('/repo-root')
+
+      expect(count).toBe(11)
+      expect(ghExecFileAsyncMock).toHaveBeenCalledTimes(1)
+      expect(ghExecFileAsyncMock).toHaveBeenCalledWith(
+        [
+          'api',
+          '--cache',
+          '120s',
+          `search/issues?q=${encodeURIComponent('repo:stablyai/orca is:open')}&per_page=1`,
+          '--jq',
+          '.total_count'
+        ],
+        { cwd: '/repo-root' }
+      )
+    })
+
     it("preference='upstream' + upstream exists → queries upstream", async () => {
       resolveIssueSourceMock.mockResolvedValueOnce({
         source: { owner: 'stablyai', repo: 'orca' },

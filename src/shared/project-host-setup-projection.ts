@@ -80,6 +80,22 @@ export function isGitHubBackedRepo(
   return getProjectProviderIdentity(repo) !== null
 }
 
+export function hasProjectRemoteIdentity(
+  repo: Pick<Repo, 'upstream' | 'repoIcon' | 'gitRemoteIdentity'>
+): boolean {
+  return getProjectProviderIdentity(repo) !== null || getProjectGitRemoteIdentity(repo) !== null
+}
+
+/** True while nothing has settled the repo's remote identity yet: the background
+ *  probe has not answered (or could not reach the host), as distinct from the
+ *  resolved `null` marker meaning "checked, no usable remote". Provider-neutral —
+ *  GitHub repos usually settle through persisted `upstream` instead. */
+export function isProjectRemoteIdentityPending(
+  repo: Pick<Repo, 'upstream' | 'repoIcon' | 'gitRemoteIdentity'>
+): boolean {
+  return repo.gitRemoteIdentity === undefined && !hasProjectRemoteIdentity(repo)
+}
+
 export function getProjectIdentityKey(
   repo: Pick<Repo, 'id' | 'upstream' | 'repoIcon' | 'gitRemoteIdentity'>
 ): string {

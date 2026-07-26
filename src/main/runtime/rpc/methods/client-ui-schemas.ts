@@ -227,6 +227,7 @@ export const UiUpdate = z
     dismissedUpdateNudgeId: NullableString.optional(),
     notificationPermissionRequested: z.boolean().optional(),
     updateReassuranceSeen: z.boolean().optional(),
+    osc52ClipboardDefaultOnNoticePending: z.boolean().optional(),
     acknowledgedAgentsByPaneKey: z.record(z.string(), z.number().finite()).optional(),
     browserDefaultUrl: NullableString.optional(),
     browserDefaultSearchEngine: z

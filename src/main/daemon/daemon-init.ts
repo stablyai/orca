@@ -428,6 +428,17 @@ function createOutOfProcessLauncher(
           )
           return preserveDaemon()
         }
+        // Why: the sibling replace branches announce themselves, but this one used
+        // to kill a daemon silently — leaving no way to tell a replacement apart
+        // from an adoption after the fact. A cold start also lands here with
+        // nothing to replace, so only speak up once something actually answered:
+        // a probe that returned a count, a socket that survived a grace retry, or
+        // a refused hello.
+        if (liveSessionCount !== null || graceRetry > 0 || health === 'rejected') {
+          console.warn(
+            `[daemon] Replacing daemon that failed the health check (health=${health}, liveSessions=${liveSessionCount ?? 'unverifiable'}, graceRetries=${graceRetry})`
+          )
+        }
       }
 
       // Why: a raw socket can outlive a broken daemon; kill by PID before respawn so the new daemon doesn't race the stale one.

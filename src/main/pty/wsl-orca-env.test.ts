@@ -124,9 +124,42 @@ describe('addOrcaWslInteropEnv', () => {
   })
 
   it('marks the WSL hook relay version for import on relay spawn envs', () => {
-    const env: Record<string, string> = { ORCA_WSL_HOOK_RELAY_VERSION: '0.1.0+abc' }
+    const env: Record<string, string> = {
+      ORCA_WSL_HOOK_RELAY_VERSION: '0.1.0+abc'
+    }
     addOrcaWslInteropEnv(env)
     expect(env.WSLENV).toBe('ORCA_WSL_HOOK_RELAY_VERSION/u')
+  })
+
+  it('crosses a guest-side OpenCode config overlay untranslated (/u)', () => {
+    const env: Record<string, string> = {
+      OPENCODE_CONFIG_DIR: '/home/jin/.orca-relay/opencode-overlays/abc',
+      ORCA_OPENCODE_CONFIG_DIR: '/home/jin/.orca-relay/opencode-overlays/abc'
+    }
+    addOrcaWslInteropEnv(env)
+    expect(env.WSLENV).toContain('OPENCODE_CONFIG_DIR/u')
+    expect(env.WSLENV).toContain('ORCA_OPENCODE_CONFIG_DIR/u')
+    expect(env.WSLENV).not.toContain('OPENCODE_CONFIG_DIR/p')
+  })
+
+  it('never crosses a Windows OpenCode config dir into the guest', () => {
+    // Why: the relay spawn env spreads process.env and the daemon inherits its
+    // own — a /p entry here would deliver C:\... as /mnt/c and in-guest OpenCode
+    // would adopt Orca's Windows overlay as its config root.
+    const env: Record<string, string> = {
+      OPENCODE_CONFIG_DIR: 'C:\\Users\\jin\\AppData\\Roaming\\Orca\\opencode-overlays\\abc',
+      ORCA_OPENCODE_CONFIG_DIR: 'C:\\Users\\jin\\AppData\\Roaming\\Orca\\opencode-overlays\\abc'
+    }
+    addOrcaWslInteropEnv(env)
+    expect(env.WSLENV).not.toContain('OPENCODE_CONFIG_DIR')
+    expect(env.WSLENV).not.toContain('ORCA_OPENCODE_CONFIG_DIR')
+  })
+
+  it('does not register the OpenCode config vars when they are absent', () => {
+    const env: Record<string, string> = { ORCA_TERMINAL_HANDLE: 'term_wsl' }
+    addOrcaWslInteropEnv(env)
+    expect(env.WSLENV).not.toContain('OPENCODE_CONFIG_DIR')
+    expect(env.WSLENV).not.toContain('ORCA_OPENCODE_CONFIG_DIR')
   })
 })
 

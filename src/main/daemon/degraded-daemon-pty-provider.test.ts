@@ -2,8 +2,10 @@ import { describe, expect, it, vi } from 'vitest'
 import { DegradedDaemonPtyProvider } from './degraded-daemon-pty-provider'
 import type { DaemonPtyAdapter } from './daemon-pty-adapter'
 import type { IPtyProvider, PtySpawnOptions, PtySpawnResult } from '../providers/types'
+import type { PtyProcessInspection } from '../providers/pty-process-inspection'
 
 type ProviderMock = IPtyProvider & {
+  inspectProcess: (id: string) => Promise<PtyProcessInspection>
   emitData: (id: string, data: string, sequenceChars?: number) => void
   emitReplay: (id: string, data: string) => void
   emitExit: (id: string, code: number) => void
@@ -42,6 +44,7 @@ function createProvider(
     acknowledgeDataEvent: vi.fn(),
     hasChildProcesses: vi.fn(async () => false),
     getForegroundProcess: vi.fn(async () => null),
+    inspectProcess: vi.fn(async () => ({ foregroundProcess: null, hasChildProcesses: false })),
     confirmForegroundProcess: vi.fn(async () => `${label}-confirmed`),
     serialize: vi.fn(async () => '{}'),
     revive: vi.fn(async () => {}),
@@ -121,6 +124,27 @@ it('rejects completion inspection instead of borrowing the fallback provider', a
   })
 
   await expect(provider.inspectProcess('unmapped-session')).rejects.toThrow('terminal_gone')
+})
+
+it('preserves unavailable inspection from an owning daemon', async () => {
+  const daemon = createDaemonAdapter('daemon', ['daemon-session'])
+  vi.mocked(daemon.inspectProcess).mockResolvedValue({
+    foregroundProcess: null,
+    hasChildProcesses: true,
+    unavailable: true
+  })
+  const provider = new DegradedDaemonPtyProvider({
+    current: daemon,
+    legacy: [],
+    fallback: createProvider('fallback')
+  })
+  await provider.discoverDaemonSessions()
+
+  await expect(provider.inspectProcess('daemon-session')).resolves.toEqual({
+    foregroundProcess: null,
+    hasChildProcesses: true,
+    unavailable: true
+  })
 })
 
 describe('DegradedDaemonPtyProvider', () => {

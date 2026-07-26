@@ -17,6 +17,7 @@ import { ClaudeIcon, OpenAIIcon } from '../src/components/AgentIcons'
 import {
   type AccountsSnapshot,
   type ProviderKey,
+  decodeAccountsSnapshot,
   getActiveProviderRateLimits,
   getUsageBarState,
   hasActiveProviderUsage,
@@ -231,7 +232,7 @@ function fetchAccountsSnapshot(
         return
       }
       if (response.ok) {
-        const snapshot = response.result as AccountsSnapshot
+        const snapshot = decodeAccountsSnapshot(response.result)
         setSnapshots((prev) => ({ ...prev, [hostId]: snapshot }))
       }
     })
@@ -503,9 +504,15 @@ export default function HomeScreen() {
               if (!payload || typeof payload !== 'object') {
                 return
               }
-              const evt = payload as { type?: string; snapshot?: AccountsSnapshot }
-              if ((evt.type === 'ready' || evt.type === 'snapshot') && evt.snapshot) {
-                setAccountsByHost((prev) => ({ ...prev, [entry.hostId]: evt.snapshot! }))
+              const evt = payload as { type?: string; snapshot?: unknown }
+              if (evt.type === 'ready' || evt.type === 'snapshot') {
+                try {
+                  const snapshot = decodeAccountsSnapshot(evt.snapshot)
+                  setAccountsByHost((prev) => ({ ...prev, [entry.hostId]: snapshot }))
+                } catch {
+                  // Keep the last proven snapshot; malformed remote data must
+                  // not enter render state or crash the home host cards.
+                }
               }
             })
           }

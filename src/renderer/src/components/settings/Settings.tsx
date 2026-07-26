@@ -645,7 +645,7 @@ function Settings(): React.JSX.Element {
     }
     pendingNavSectionRef.current = paneSectionId
     pendingScrollTargetRef.current = settingsNavigationTarget.sectionId ?? paneSectionId
-    // Why: force Appearance's collapsed status-bar accordion open before scrolling so the row is visible.
+    // Why: ensure Appearance's nested status-bar section is open before scrolling so the row is visible.
     if (settingsNavigationTarget.pane === 'appearance') {
       const accordion = resolveAppearanceAccordionDeepLink(settingsNavigationTarget.sectionId)
       if (accordion) {
@@ -974,7 +974,7 @@ function Settings(): React.JSX.Element {
     const scrollTargetId = pendingScrollTargetRef.current
     const pendingNavSectionId = pendingNavSectionRef.current
 
-    // Why: subsection deep links clear a stale filter that could hide the target row; pane-level links keep it to force-open the matching accordion.
+    // Why: subsection deep links clear a stale filter that could hide the target row; pane-level links keep it to force-open the matching section.
     if (
       scrollTargetId &&
       pendingNavSectionId &&

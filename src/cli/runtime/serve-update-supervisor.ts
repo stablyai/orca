@@ -6,7 +6,7 @@ import {
   parseServeUpdateHandoffState,
   type ServeUpdateHandoffState
 } from '../../shared/serve-update-handoff'
-import { RuntimeClientError } from './types'
+import { serveSignalExitError } from './serve-signal-exit-diagnostic'
 import { waitForMacBundleVersion } from './mac-app-update-bundle'
 
 export const SERVE_REPLACEMENT_READY_TIMEOUT_MS = 60_000
@@ -80,7 +80,7 @@ export async function superviseForegroundServe(
       if (typeof result.code === 'number') {
         return result.code
       }
-      throw new RuntimeClientError('runtime_serve_failed', `Orca serve exited via ${result.signal}`)
+      throw serveSignalExitError(result.signal)
     }
 
     const installed = await waitForMacBundleVersion(args.executable, handoff.targetVersion)

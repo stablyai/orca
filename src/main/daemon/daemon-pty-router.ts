@@ -8,6 +8,7 @@ import type {
   PtySpawnResult
 } from '../providers/types'
 import type { PtyIncarnationId } from '../../shared/pty-incarnation'
+import type { PtyProcessInspection } from '../providers/pty-process-inspection'
 
 export class DaemonPtyRouter implements IPtyProvider {
   private current: DaemonPtyAdapter
@@ -189,9 +190,7 @@ export class DaemonPtyRouter implements IPtyProvider {
     return this.adapterFor(id).getForegroundProcess(id)
   }
 
-  async inspectProcess(
-    id: string
-  ): Promise<{ foregroundProcess: string | null; hasChildProcesses: boolean }> {
+  async inspectProcess(id: string): Promise<PtyProcessInspection> {
     return this.adapterForInspection(id).inspectProcess(id)
   }
 

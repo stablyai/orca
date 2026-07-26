@@ -16,9 +16,9 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v6
         with:
-          # Why: the freshness registry is derived from immutable release tags,
-          # so shallow PR checkouts cannot verify historical official identities.
-          fetch-depth: 0
+          # Why: verify:skill-bundle-manifest now checks working-tree bytes
+          # against the committed skill ledger (advanced only at release cut) and
+          # no longer walks release tags, so a shallow checkout is sufficient.
           persist-credentials: false
 
       - name: Install native build tools

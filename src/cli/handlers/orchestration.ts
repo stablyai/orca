@@ -618,6 +618,7 @@ export const ORCHESTRATION_HANDLERS: Record<string, CommandHandler> = {
       messageId: string | null
       threadId: string
       timedOut: boolean
+      timeoutMs?: number
     }>(
       'orchestration.ask',
       {
@@ -638,7 +639,9 @@ export const ORCHESTRATION_HANDLERS: Record<string, CommandHandler> = {
     }
     if (result.result.timedOut) {
       if (!json) {
-        console.error(`ask timeout after ${timeoutMs}ms (thread ${result.result.threadId})`)
+        // Why: report the server's effective budget — it clamps large values, so the requested one would overstate the wait.
+        const waitedMs = result.result.timeoutMs ?? timeoutMs
+        console.error(`ask timeout after ${waitedMs}ms (thread ${result.result.threadId})`)
       }
       process.exitCode = 1
     }

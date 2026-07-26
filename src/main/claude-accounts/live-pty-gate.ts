@@ -17,6 +17,26 @@ export function attachClaudeLivePtyPersistence(target: ClaudeLivePtyPersistence 
   persistence = target
 }
 
+// Why: a live claude defers the managed OAuth refresh ("Waiting for Claude
+// session"); consumers need the 1 -> 0 transition to recover promptly instead
+// of waiting out the usage-fetch failure backoff.
+type LiveClaudePtyDrainListener = () => void
+const drainListeners = new Set<LiveClaudePtyDrainListener>()
+
+export function onLiveClaudePtysDrained(listener: LiveClaudePtyDrainListener): () => void {
+  drainListeners.add(listener)
+  return () => drainListeners.delete(listener)
+}
+
+function notifyDrainedOnTransition(hadLivePtys: boolean): void {
+  if (!hadLivePtys || liveClaudePtyIds.size > 0) {
+    return
+  }
+  for (const listener of drainListeners) {
+    listener()
+  }
+}
+
 export function seedLiveClaudePtysFromPersistence(sessionIds: readonly string[]): void {
   for (const sessionId of sessionIds) {
     liveClaudePtyIds.add(sessionId)
@@ -35,6 +55,7 @@ export function hasSeededUnconfirmedClaudePtys(): boolean {
  * their pane never reattaches: that daemon process still owns the credentials.
  */
 export function confirmSeededClaudeLivePtys(aliveSessionIds: readonly string[]): void {
+  const hadLivePtys = liveClaudePtyIds.size > 0
   const alive = new Set(aliveSessionIds)
   for (const sessionId of seededUnconfirmedPtyIds) {
     if (!alive.has(sessionId)) {
@@ -43,6 +64,7 @@ export function confirmSeededClaudeLivePtys(aliveSessionIds: readonly string[]):
     }
   }
   seededUnconfirmedPtyIds.clear()
+  notifyDrainedOnTransition(hadLivePtys)
 }
 
 export function markClaudePtySpawned(ptyId: string): void {
@@ -52,9 +74,11 @@ export function markClaudePtySpawned(ptyId: string): void {
 }
 
 export function markClaudePtyExited(ptyId: string): void {
+  const hadLivePtys = liveClaudePtyIds.size > 0
   liveClaudePtyIds.delete(ptyId)
   seededUnconfirmedPtyIds.delete(ptyId)
   persistence?.removeClaudeLivePtySessionId(ptyId)
+  notifyDrainedOnTransition(hadLivePtys)
 }
 
 export function hasLiveClaudePtys(): boolean {

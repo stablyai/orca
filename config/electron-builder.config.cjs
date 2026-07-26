@@ -86,7 +86,13 @@ module.exports = {
     // Why: feature-wall media is copied via extraResources so runtime can read
     // it from process.resourcesPath; exclude the source copy from app.asar.
     '!resources/onboarding/feature-wall/**',
-    '!resources/skills/**'
+    '!resources/skills/**',
+    // Why: the Windows CLI shim ships via extraResources to resources/bin/orca.cmd
+    // (beside the native resources/bin/orca.exe). Packing the source tree into
+    // app.asar too lets asarUnpack:['resources/**'] extract a second copy at
+    // app.asar.unpacked/resources/win32/bin/orca.cmd with no adjacent orca.exe,
+    // which fails to launch the CLI (#7351).
+    '!resources/win32{,/**/*}'
   ],
   // Why: the CLI entry-point lives in out/cli/ but imports shared modules
   // from out/shared/ and local hook mutators from out/main/. These paths must be

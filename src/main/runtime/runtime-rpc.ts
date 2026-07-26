@@ -115,6 +115,12 @@ const KEEPALIVE_INTERVAL_MS = 10_000
 // Why: cap long-polls at half the 32-slot connection budget so they can't starve short RPCs; overflow → runtime_busy. See §7 risk #2.
 const LONG_POLL_CAP = 16
 
+// Why: orchestration.ask blocks on a human/agent reply for minutes, an order of
+// magnitude longer than terminal.wait or check --wait, so a fleet of asking
+// workers would otherwise hold every slot and starve the mobile/web/CLI/relay
+// clients sharing this runtime. Reserve half the budget for the other classes.
+const ASK_LONG_POLL_SHARE = 0.5
+
 function createWebClientUrl(endpoint: string, pairingUrl: string): string {
   const url = new URL(endpoint)
   url.protocol = url.protocol === 'wss:' ? 'https:' : 'http:'
@@ -134,8 +140,10 @@ function webClientPathForEndpoint(pathname: string): string {
 
 const MOBILE_RPC_METHOD_ALLOWLIST = new Set([
   'accounts.list',
+  'accounts.consumeCodexResetCredit',
   'accounts.selectClaude',
   'accounts.selectCodex',
+  'accounts.selectCodexForTarget',
   'accounts.subscribe',
   'accounts.unsubscribe',
   'aiVault.listSessions',
@@ -392,16 +400,27 @@ const MOBILE_RPC_METHOD_ALLOWLIST = new Set([
   'worktree.sleep'
 ])
 
+// Why: 'ask' is metered separately from 'wait' — same keepalive/abort wiring, its own sub-cap.
+type LongPollClass = 'ask' | 'wait'
+
 // Why: single classifier for long-poll requests (handlers that block on an external event), shared by counter/abort/keepalive. See §3.1.
-function isLongPollRequest(request: RpcRequest): boolean {
+function longPollClassOf(request: RpcRequest): LongPollClass | null {
   if (request.method === 'terminal.wait') {
-    return true
+    return 'wait'
+  }
+  // Why: orchestration.ask blocks unconditionally (default 600 s) holding the
+  // RPC open until a reply lands or the deadline passes, so it needs the same
+  // keepalive as check --wait or the 30 s socket idle timer tears it down. It
+  // also relies on the abort signal (only wired for long-polls) to release the
+  // waiter when the asking client disconnects.
+  if (request.method === 'orchestration.ask') {
+    return 'ask'
   }
   if (request.method === 'orchestration.check') {
     const params = request.params as { wait?: unknown } | undefined
-    return params?.wait === true
+    return params?.wait === true ? 'wait' : null
   }
-  return false
+  return null
 }
 
 // Why: status.get has no per-connection context in the dispatcher, so stamp the scope here at the transport boundary.
@@ -431,6 +450,7 @@ export class OrcaRuntimeRpcServer {
   private readonly authToken = randomBytes(24).toString('hex')
   private readonly keepaliveIntervalMs: number
   private readonly longPollCap: number
+  private readonly askLongPollCap: number
   private readonly relayRevokeOutbox: RelayRevokeOutbox
   private deviceRegistry: DeviceRegistry | null = null
   private e2eeKeypair: E2EEKeypair | null = null
@@ -452,6 +472,8 @@ export class OrcaRuntimeRpcServer {
   >()
   // Why: separate from server.maxConnections — count only long-running dispatches, not short RPCs. See §3.1 + §7 risk #2.
   private activeLongPolls = 0
+  // Why: subset of activeLongPolls held by orchestration.ask, fenced by askLongPollCap.
+  private activeAskLongPolls = 0
 
   constructor({
     runtime,
@@ -476,6 +498,8 @@ export class OrcaRuntimeRpcServer {
     this.webClientRoot = webClientRoot
     this.keepaliveIntervalMs = keepaliveIntervalMs
     this.longPollCap = longPollCap
+    // Why: derived, not configurable — the reservation must hold for whatever cap a caller picks.
+    this.askLongPollCap = Math.max(1, Math.floor(longPollCap * ASK_LONG_POLL_SHARE))
     this.relayRevokeOutbox = new RelayRevokeOutbox(userDataPath)
   }
 
@@ -1010,16 +1034,12 @@ export class OrcaRuntimeRpcServer {
     const request = parsed.request
 
     // Why: long-poll admission fence; short RPCs bypass the counter. See §7 risk #2.
-    const longPoll = isLongPollRequest(request)
-    if (longPoll && this.activeLongPolls >= this.longPollCap) {
-      return this.buildError(
-        request.id,
-        'runtime_busy',
-        'long-poll capacity reached; retry with backoff'
-      )
+    const longPoll = longPollClassOf(request)
+    const rejection = this.admitLongPoll(longPoll)
+    if (rejection) {
+      return this.buildError(request.id, 'runtime_busy', rejection)
     }
     if (longPoll) {
-      this.activeLongPolls += 1
       // Why: arm keepalive only for long-polls; short RPCs never create the setInterval. See §3.1.
       context?.startKeepalive()
     }
@@ -1029,9 +1049,37 @@ export class OrcaRuntimeRpcServer {
         signal: longPoll ? context?.signal : undefined
       })
     } finally {
-      if (longPoll) {
-        this.activeLongPolls = Math.max(0, this.activeLongPolls - 1)
-      }
+      this.releaseLongPoll(longPoll)
+    }
+  }
+
+  // Why: one fence for both transports — the total cap protects short RPCs, the ask
+  // sub-cap protects terminal.wait / check --wait from slow reply-blocked asks.
+  // Returns the rejection message, or null once the slot is reserved.
+  private admitLongPoll(longPoll: LongPollClass | null): string | null {
+    if (!longPoll) {
+      return null
+    }
+    if (this.activeLongPolls >= this.longPollCap) {
+      return 'long-poll capacity reached; retry with backoff'
+    }
+    if (longPoll === 'ask' && this.activeAskLongPolls >= this.askLongPollCap) {
+      return 'orchestration.ask capacity reached; retry with backoff'
+    }
+    this.activeLongPolls += 1
+    if (longPoll === 'ask') {
+      this.activeAskLongPolls += 1
+    }
+    return null
+  }
+
+  private releaseLongPoll(longPoll: LongPollClass | null): void {
+    if (!longPoll) {
+      return
+    }
+    this.activeLongPolls = Math.max(0, this.activeLongPolls - 1)
+    if (longPoll === 'ask') {
+      this.activeAskLongPolls = Math.max(0, this.activeAskLongPolls - 1)
     }
   }
 
@@ -1123,24 +1171,14 @@ export class OrcaRuntimeRpcServer {
       wsTransport.setClientId(ws, token)
     }
 
-    const longPoll = isLongPollRequest(request)
-    if (longPoll && this.activeLongPolls >= this.longPollCap) {
-      reply(
-        JSON.stringify(
-          this.buildError(
-            request.id,
-            'runtime_busy',
-            'long-poll capacity reached; retry with backoff'
-          )
-        )
-      )
+    const longPoll = longPollClassOf(request)
+    const rejection = this.admitLongPoll(longPoll)
+    if (rejection) {
+      reply(JSON.stringify(this.buildError(request.id, 'runtime_busy', rejection)))
       return
     }
 
     const abortRegistration = ws ? this.registerWebSocketDispatchAbort(ws) : null
-    if (longPoll) {
-      this.activeLongPolls += 1
-    }
 
     // Why: older pairings may lack scope metadata, so stamp the authenticated scope onto status.get.
     const replyForRequest =
@@ -1188,9 +1226,7 @@ export class OrcaRuntimeRpcServer {
       })
     } finally {
       abortRegistration?.dispose()
-      if (longPoll) {
-        this.activeLongPolls = Math.max(0, this.activeLongPolls - 1)
-      }
+      this.releaseLongPoll(longPoll)
     }
   }
 

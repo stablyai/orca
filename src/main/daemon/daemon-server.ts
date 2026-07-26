@@ -759,6 +759,7 @@ export class DaemonServer {
                   sessionIdSuffix: routedSessionId.slice(-10)
                 })
                 this.transientFactRelay.onSessionExit(routedSessionId)
+                this.streamDataBatcher.refreshSessionDroppability(routedSessionId)
                 this.streamClientIdBySessionId.delete(routedSessionId)
                 this.lastInputAtBySessionId.delete(routedSessionId)
                 this.reevaluateIdleShutdown()
@@ -771,6 +772,7 @@ export class DaemonServer {
         }
         routedSessionId = result.agentSessionEnsure?.owner.ptyId ?? p.sessionId
         this.streamClientIdBySessionId.set(routedSessionId, clientId)
+        this.streamDataBatcher.refreshSessionDroppability(routedSessionId)
         // Why an attach-time marker: background resync can precede this attach, so scan suppression must start at the new stream's head.
         if (this.transientFactRelay.isBackgrounded(routedSessionId)) {
           this.streamDataBatcher.enqueueControlEvent(clientId, routedSessionId, {
@@ -845,7 +847,12 @@ export class DaemonServer {
           sessionIdSuffix: sessionId.slice(-10),
           background
         })
-        if (!this.transientFactRelay.setSessionBackground(sessionId, background)) {
+        const backgroundChanged = this.transientFactRelay.setSessionBackground(
+          sessionId,
+          background
+        )
+        this.streamDataBatcher.refreshSessionDroppability(sessionId)
+        if (!backgroundChanged) {
           return {}
         }
         if (background) {

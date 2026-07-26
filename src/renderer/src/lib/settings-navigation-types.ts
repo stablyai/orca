@@ -8,6 +8,7 @@ export type SettingsNavInstallStatus =
   | 'installed'
   | 'up-to-date'
   | 'update-available'
+  | 'needs-attention'
   | 'checking'
 
 export type SettingsNavTarget =
