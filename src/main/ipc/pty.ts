@@ -1948,10 +1948,14 @@ export function registerPtyHandlers(
         if (result.kind !== 'archived') {
           return { kind: 'retryable-error', code: result.code }
         }
-        for (const ptyId of result.ptyIdsToKill) {
-          const provider = tryGetProviderForPty(ptyId)
-          if (provider) {
-            void shutdownProviderAndDetectExit(provider, ptyId, { immediate: true }).catch(() => {})
+        if (result.archiveCompletionOwner) {
+          for (const ptyId of result.ptyIdsToKill) {
+            const provider = tryGetProviderForPty(ptyId)
+            if (provider) {
+              void shutdownProviderAndDetectExit(provider, ptyId, { immediate: true }).catch(
+                () => {}
+              )
+            }
           }
         }
         return { kind: 'archived', archiveId: result.archive.id }
@@ -2033,10 +2037,12 @@ export function registerPtyHandlers(
       if (result.kind !== 'archived') {
         return { kind: 'retryable-error', code: result.code }
       }
-      for (const ptyId of result.ptyIdsToKill) {
-        const provider = tryGetProviderForPty(ptyId)
-        if (provider) {
-          void shutdownProviderAndDetectExit(provider, ptyId, { immediate: true }).catch(() => {})
+      if (result.archiveCompletionOwner) {
+        for (const ptyId of result.ptyIdsToKill) {
+          const provider = tryGetProviderForPty(ptyId)
+          if (provider) {
+            void shutdownProviderAndDetectExit(provider, ptyId, { immediate: true }).catch(() => {})
+          }
         }
       }
       return { kind: 'archived', archiveId: result.archive.id }

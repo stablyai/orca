@@ -44,6 +44,22 @@ export function execDockerSshRelayTargetCommand(
   })
 }
 
+export function dockerSshPidsAreGone(
+  target: DockerSshRelayTarget,
+  pids: readonly number[]
+): boolean {
+  const uniquePids = [...new Set(pids)]
+  if (uniquePids.length === 0 || uniquePids.some((pid) => !Number.isSafeInteger(pid) || pid <= 0)) {
+    return false
+  }
+  return (
+    execDockerSshRelayTargetCommand(
+      target,
+      uniquePids.map((pid) => `test ! -e /proc/${pid}`).join(' && ')
+    ) === ''
+  )
+}
+
 function sshArgs(target: DockerSshRelayTarget, command: string): string[] {
   return [
     '-i',

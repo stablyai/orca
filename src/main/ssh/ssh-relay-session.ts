@@ -1167,7 +1167,9 @@ export class SshRelaySession {
       })
       return
     }
-    await this.shutdownArchivedRelayPtys(result.ptyIdsToKill, result.archive.id, tabId)
+    if (result.archiveCompletionOwner) {
+      await this.shutdownArchivedRelayPtys(result.ptyIdsToKill, result.archive.id, tabId)
+    }
   }
 
   private async shutdownArchivedRelayPtys(

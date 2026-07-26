@@ -132,7 +132,7 @@ describe('archiveLostTerminalWorker', () => {
     })
   })
 
-  it('shares one archive attempt across concurrent lost-worker entry points', async () => {
+  it('deduplicates overlapping relay reconnect attempts and grants kill authority once', async () => {
     const frozenSession = session()
     const archiveOwner = owner(frozenSession)
     let releaseCapture: (() => void) | undefined
@@ -145,7 +145,7 @@ describe('archiveLostTerminalWorker', () => {
     const request = {
       owner: archiveOwner.value,
       candidate: {
-        reason: 'daemon-worker-lost' as const,
+        reason: 'relay-worker-lost' as const,
         executionHostId: 'local' as const,
         worktreeId: WORKTREE_ID,
         tabId: TAB_ID,
@@ -163,8 +163,8 @@ describe('archiveLostTerminalWorker', () => {
     releaseCapture?.()
 
     await expect(Promise.all([first, second])).resolves.toEqual([
-      expect.objectContaining({ kind: 'archived' }),
-      expect.objectContaining({ kind: 'archived' })
+      expect.objectContaining({ kind: 'archived', archiveCompletionOwner: true }),
+      expect.objectContaining({ kind: 'archived', archiveCompletionOwner: false })
     ])
     expect(archiveOwner.retireArchivedTerminalTabAndFlush).toHaveBeenCalledOnce()
   })

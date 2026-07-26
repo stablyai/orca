@@ -52,6 +52,7 @@ export type TerminalLostWorkerArchiveReceipt = {
   archive: ArchivedTerminalTab
   operationId: string
   ptyIdsToKill: string[]
+  archiveCompletionOwner: boolean
 }
 
 export type TerminalLostWorkerArchiveResult =
@@ -148,7 +149,8 @@ export async function archiveLostTerminalWorker(args: {
   const inFlightKey = `${args.candidate.reason}:${args.candidate.executionHostId}:${args.candidate.tabId}:${sourcePaneSignature}`
   const existing = lostWorkerArchiveInFlight.get(inFlightKey)
   if (existing) {
-    return await existing
+    const settled = await existing
+    return settled.kind === 'archived' ? { ...settled, archiveCompletionOwner: false } : settled
   }
   const operation = archiveLostTerminalWorkerOnce({
     ...args,
@@ -208,7 +210,8 @@ async function archiveLostTerminalWorkerOnce(args: {
       kind: 'archived',
       archive,
       operationId: args.operationId,
-      ptyIdsToKill: retired.ptyIdsToKill
+      ptyIdsToKill: retired.ptyIdsToKill,
+      archiveCompletionOwner: true
     }
   } catch (error) {
     return { kind: 'error', code: terminalArchiveFailureCode(error) }

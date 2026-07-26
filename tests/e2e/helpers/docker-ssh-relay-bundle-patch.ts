@@ -12,6 +12,7 @@ export type DockerRelayReviveMode = 'typed-lost' | 'typed-mixed' | 'legacy' | 'm
 export type DockerRelayProbe = {
   capabilityPath: string
   loadedPath: string
+  ptyPidPath: string
   revivePath: string
   spawnPath: string
 }
@@ -27,6 +28,7 @@ export function createDockerRelayProbe(testId: string): DockerRelayProbe {
   return {
     capabilityPath: `${root}-capability`,
     loadedPath: `${root}-loaded`,
+    ptyPidPath: `${root}-pty-pids`,
     revivePath: `${root}-revive`,
     spawnPath: `${root}-spawn`
   }
@@ -61,7 +63,7 @@ export function readDockerRelayProbe(target: DockerSshRelayTarget, filePath: str
 export function clearDockerRelayProbe(target: DockerSshRelayTarget, probe: DockerRelayProbe): void {
   execDockerSshRelayTargetCommand(
     target,
-    `rm -f ${[probe.capabilityPath, probe.revivePath, probe.spawnPath].map(shellQuote).join(' ')}`
+    `rm -f ${[probe.capabilityPath, probe.ptyPidPath, probe.revivePath, probe.spawnPath].map(shellQuote).join(' ')}`
   )
 }
 
@@ -71,11 +73,13 @@ function relayInstrumentation(probe: DockerRelayProbe): string {
     'const __orcaE2eFs=require("node:fs")',
     `const __orcaE2eCapabilityPath=${JSON.stringify(probe.capabilityPath)}`,
     `const __orcaE2eLoadedPath=${JSON.stringify(probe.loadedPath)}`,
+    `const __orcaE2ePtyPidPath=${JSON.stringify(probe.ptyPidPath)}`,
     `const __orcaE2eRevivePath=${JSON.stringify(probe.revivePath)}`,
     `const __orcaE2eSpawnPath=${JSON.stringify(probe.spawnPath)}`,
     '__orcaE2eFs.appendFileSync(__orcaE2eLoadedPath,"loaded\\n")',
     'const __orcaE2eRecord=kind=>__orcaE2eFs.appendFileSync(kind.startsWith("capability")?__orcaE2eCapabilityPath:kind.startsWith("revive")?__orcaE2eRevivePath:__orcaE2eSpawnPath,kind+"\\n")',
-    'const __orcaE2eLost=state=>{const entries=JSON.parse(state).entries||[];return{outcomeVersion:1,revived:[],lost:entries.map(entry=>{const lost={id:entry.id,kind:"recognized-worker",reason:"worker-replacement-forbidden",pid:entry.pid,cols:entry.cols,rows:entry.rows,cwd:entry.cwd};for(const key of["sourceIncarnationId","paneKey","tabId","attachIdentity","worktreeId","terminalHandle","replayTail","durableLaunch","agentOwners","providerSession","orchestrationTaskId"]){if(entry[key]!==undefined)lost[key]=entry[key]}return lost}),diagnostics:[]}}',
+    'const __orcaE2eRecordPtyPids=entries=>{for(const entry of entries){if(Number.isInteger(entry.pid)&&entry.pid>0)__orcaE2eFs.appendFileSync(__orcaE2ePtyPidPath,String(entry.pid)+"\\n")}}',
+    'const __orcaE2eLost=state=>{const entries=JSON.parse(state).entries||[];__orcaE2eRecordPtyPids(entries);return{outcomeVersion:1,revived:[],lost:entries.map(entry=>{const lost={id:entry.id,kind:"recognized-worker",reason:"worker-replacement-forbidden",pid:entry.pid,cols:entry.cols,rows:entry.rows,cwd:entry.cwd};for(const key of["sourceIncarnationId","paneKey","tabId","attachIdentity","worktreeId","terminalHandle","replayTail","durableLaunch","agentOwners","providerSession","orchestrationTaskId"]){if(entry[key]!==undefined)lost[key]=entry[key]}return lost}),diagnostics:[]}}',
     'const __orcaE2eMixed=state=>{const entries=JSON.parse(state).entries||[];const lost=__orcaE2eLost(state).lost;return{outcomeVersion:1,lost:lost.slice(0,1),revived:entries.slice(1).map(entry=>{const revived={id:entry.id,disposition:"replacement-spawned",incarnationId:`e2e-replacement-${entry.id}`};for(const key of["paneKey","tabId"]){if(entry[key]!==undefined)revived[key]=entry[key]}return revived}),diagnostics:[]}}'
   ].join(';')
 }

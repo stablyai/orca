@@ -25,6 +25,7 @@ import {
 } from './helpers/docker-ssh-relay-session-capture'
 import {
   cleanupDockerSshRelayTarget,
+  dockerSshPidsAreGone,
   startDockerSshRelayTarget,
   type DockerSshRelayTarget
 } from './helpers/docker-ssh-relay-target'
@@ -70,6 +71,10 @@ type DurableRelayState = {
 
 function readArchiveRows(userDataDir: string, tabId: string): string[] {
   return readDurableRelayState(userDataDir, '', tabId, '').archiveIds
+}
+
+function readDockerRelayPtyPids(scenario: DockerRelayScenario): number[] {
+  return readDockerRelayProbe(scenario.target, scenario.probe.ptyPidPath).map(Number)
 }
 
 function readDurableRelayState(
@@ -271,6 +276,8 @@ test.describe('Docker SSH mixed-version lost-worker archive', () => {
       await expect
         .poll(() => readDockerRelayProbe(scenario.target, scenario.probe.revivePath))
         .toEqual(['revive:typed'])
+      await expect.poll(() => readDockerRelayPtyPids(scenario)).toHaveLength(1)
+      const remotePtyPids = readDockerRelayPtyPids(scenario)
       const archiveId = await waitForSingleArchive(scenario)
       await typedArchiveDurabilityProbe(scenario)
       await expect.poll(() => inspectTabDom(scenario.page, scenario.tabId)).toEqual([])
@@ -313,6 +320,7 @@ test.describe('Docker SSH mixed-version lost-worker archive', () => {
       await expect(
         scenario.page.locator(`[data-testid="sortable-tab"][data-tab-id="${scenario.tabId}"]`)
       ).toHaveCount(0)
+      await expect.poll(() => dockerSshPidsAreGone(scenario.target, remotePtyPids)).toBe(true)
       expect(readDockerRelayProbe(scenario.target, scenario.probe.spawnPath)).toEqual([])
       testInfo.annotations.push({ type: 'relay-worker-archive', description: archiveId })
     })

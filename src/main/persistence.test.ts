@@ -11390,6 +11390,51 @@ describe('Store host-partitioned workspace sessions', () => {
     flush.mockRestore()
   })
 
+  it('persists only archived SSH leases as termination-pending in the retirement flush', async () => {
+    const store = await createStore()
+    const worktreeId = 'repo-1::/worktree'
+    const archivedPtyId = 'ssh:ssh-1@@remote-pty'
+    store.setWorkspaceSession(makeBoundHostSession(archivedPtyId), 'ssh:ssh-1')
+    store.upsertSshRemotePtyLease({
+      targetId: 'ssh-1',
+      ptyId: 'remote-pty',
+      worktreeId,
+      tabId: 'tab-1',
+      leafId: TEST_LEAF_1,
+      state: 'attached'
+    })
+    store.upsertSshRemotePtyLease({
+      targetId: 'ssh-1',
+      ptyId: 'unrelated-pty',
+      worktreeId,
+      tabId: 'other-tab',
+      leafId: TEST_LEAF_2,
+      state: 'attached'
+    })
+    const flushOrThrow = store.flushOrThrow.bind(store)
+    const flush = vi.spyOn(store, 'flushOrThrow').mockImplementation(() => {
+      expect(store.getWorkspaceSession('ssh:ssh-1').tabsByWorktree[worktreeId]).toEqual([])
+      expect(store.getSshRemotePtyLeases('ssh-1')).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({ ptyId: 'remote-pty', state: 'termination-pending' }),
+          expect.objectContaining({ ptyId: 'unrelated-pty', state: 'attached' })
+        ])
+      )
+      flushOrThrow()
+    })
+
+    const retired = store.retireArchivedTerminalTabAndFlush({
+      worktreeId,
+      tabId: 'tab-1',
+      executionHostId: 'ssh:ssh-1',
+      sshTerminationTargetId: 'ssh-1'
+    })
+
+    expect(retired).toMatchObject({ closed: true, ptyIdsToKill: [archivedPtyId] })
+    expect(flush).toHaveBeenCalledOnce()
+    flush.mockRestore()
+  })
+
   it('rolls back a failed SSH PTY binding flush in the SSH host partition', async () => {
     const store = await createStore()
     store.setWorkspaceSession(makeBoundHostSession(null), 'local')

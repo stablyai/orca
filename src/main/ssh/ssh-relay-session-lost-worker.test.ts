@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { SshRelaySession } from './ssh-relay-session'
 import { getDefaultWorkspaceSession } from '../../shared/constants'
 import type { RelayPtyLostEntry } from '../../shared/pty-revive-protocol'
+import { decodeRelayStagedPtySnapshots } from '../../shared/relay-staged-pty-snapshots'
 import type { WorkspaceSessionState } from '../../shared/types'
 import { createMockDeps, mockDeploySuccess } from './ssh-relay-session-test-fixtures'
 
@@ -134,8 +135,9 @@ function configureStagedPtyRevive(args: {
   serialize: ReturnType<typeof vi.fn>
   revive: ReturnType<typeof vi.fn>
   reattachPtyIds?: string[]
-}): { attachForReconnect: ReturnType<typeof vi.fn> } {
+}): { attachForReconnect: ReturnType<typeof vi.fn>; shutdown: ReturnType<typeof vi.fn> } {
   const attachForReconnect = vi.fn().mockResolvedValue({})
+  const shutdown = vi.fn().mockResolvedValue(undefined)
   vi.mocked(getSshPtyProvider)
     .mockReset()
     .mockReturnValueOnce({
@@ -144,13 +146,13 @@ function configureStagedPtyRevive(args: {
     } as unknown as ReturnType<typeof getSshPtyProvider>)
     .mockReturnValue({
       revive: args.revive,
-      shutdown: vi.fn().mockResolvedValue(undefined),
+      shutdown,
       attachForReconnect,
       dispose: vi.fn()
     } as unknown as ReturnType<typeof getSshPtyProvider>)
   vi.mocked(getPtyIdsForConnection).mockReturnValueOnce(['ssh:target-1@@pty-lost'])
   vi.mocked(getPtyIdsForConnection).mockReturnValue(args.reattachPtyIds ?? [])
-  return { attachForReconnect }
+  return { attachForReconnect, shutdown }
 }
 
 async function establishRelaySession() {
@@ -163,6 +165,24 @@ async function establishRelaySession() {
   )
   await session.establish(deps.mockConn)
   return { ...deps, session }
+}
+
+type SshRelaySessionArchiveInternals = {
+  archiveRelayLostWorker: (args: {
+    lost: RelayPtyLostEntry
+    session: WorkspaceSessionState
+    stagedSnapshots: ReturnType<typeof decodeRelayStagedPtySnapshots>
+  }) => Promise<void>
+  archiveRelayLostWorkerGroups: (
+    lost: readonly RelayPtyLostEntry[],
+    stagedSnapshots: ReturnType<typeof decodeRelayStagedPtySnapshots>
+  ) => Promise<void>
+  reattachKnownPtys: (shouldContinue: () => boolean) => Promise<void>
+  retryTerminationPendingPtys: () => Promise<void>
+}
+
+function archiveInternals(session: SshRelaySession): SshRelaySessionArchiveInternals {
+  return session as unknown as SshRelaySessionArchiveInternals
 }
 
 describe('SshRelaySession lost-worker archive', () => {
@@ -223,7 +243,8 @@ describe('SshRelaySession lost-worker archive', () => {
             kind: 'archived',
             archive: { id: 'archive-1' },
             operationId: 'relay-worker-lost:tab-1',
-            ptyIdsToKill: [RELAY_LOST_WORKER.id]
+            ptyIdsToKill: [RELAY_LOST_WORKER.id],
+            archiveCompletionOwner: true
           }
     )
     mockStore.getWorkspaceSession = vi
@@ -291,5 +312,112 @@ describe('SshRelaySession lost-worker archive', () => {
         'expired'
       )
     }
+  })
+
+  it('selects worker evidence when an ordinary loss appears first in its tab group', async () => {
+    const { mockStore, session } = await establishRelaySession()
+    const persistedSession = workspaceSessionForRelayLostWorker()
+    mockStore.getWorkspaceSession = vi.fn().mockReturnValue(persistedSession)
+    archiveLostTerminalWorkerMock.mockResolvedValue({ kind: 'error', code: 'capture-unavailable' })
+
+    await archiveInternals(session).archiveRelayLostWorkerGroups(
+      [
+        { ...RELAY_LOST_WORKER, id: 'ssh:target-1@@ordinary-first', kind: 'ordinary-shell' },
+        RELAY_LOST_WORKER
+      ],
+      decodeRelayStagedPtySnapshots(JSON.stringify({ schemaVersion: 2, entries: [] }))
+    )
+
+    expect(archiveLostTerminalWorkerMock).toHaveBeenCalledOnce()
+    expect(archiveLostTerminalWorkerMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        candidate: expect.objectContaining({ relayEvidence: RELAY_LOST_WORKER })
+      })
+    )
+  })
+
+  it('does not repeat physical shutdown when this reconnect joined an in-flight archive', async () => {
+    const { mockConn, mockStore, session } = await establishRelaySession()
+    const serialize = vi.fn().mockResolvedValue('staged-pty-state')
+    const revive = vi.fn().mockResolvedValue({
+      mode: 'typed',
+      outcome: { outcomeVersion: 1, revived: [], lost: [RELAY_LOST_WORKER], diagnostics: [] }
+    })
+    archiveLostTerminalWorkerMock.mockResolvedValue({
+      kind: 'archived',
+      archive: { id: 'archive-1' },
+      operationId: 'relay-worker-lost:tab-1',
+      ptyIdsToKill: [RELAY_LOST_WORKER.id],
+      archiveCompletionOwner: false
+    })
+    mockStore.getWorkspaceSession = vi.fn().mockReturnValue(workspaceSessionForRelayLostWorker())
+    const { shutdown } = configureStagedPtyRevive({ serialize, revive })
+
+    await session.reconnect(mockConn)
+
+    expect(shutdown).not.toHaveBeenCalled()
+    expect(routeExternalPtyExit).not.toHaveBeenCalled()
+  })
+
+  it('fails closed with the legacy-envelope diagnostic instead of fabricating a tail', async () => {
+    const { mockStore, session } = await establishRelaySession()
+    const persistedSession = workspaceSessionForRelayLostWorker()
+    mockStore.getWorkspaceSession = vi.fn().mockReturnValue(persistedSession)
+    const diagnostic = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    archiveLostTerminalWorkerMock.mockImplementation(async ({ snapshotSource }) => {
+      await expect(
+        snapshotSource.capture({ archivedLeafId: REVIVE_LEAF_ID, cwd: '/repo' })
+      ).resolves.toEqual({ kind: 'unavailable' })
+      return { kind: 'error', code: 'capture-unavailable' }
+    })
+
+    await archiveInternals(session).archiveRelayLostWorker({
+      lost: RELAY_LOST_WORKER,
+      session: persistedSession,
+      stagedSnapshots: decodeRelayStagedPtySnapshots(JSON.stringify([]))
+    })
+
+    expect(diagnostic).toHaveBeenCalledWith(
+      '[ssh-relay-session] lost-worker archive diagnostic',
+      expect.objectContaining({ stage: 'staged-state-legacy', paneKey: REVIVE_PANE_KEY })
+    )
+    diagnostic.mockRestore()
+  })
+
+  it('keeps a failed physical shutdown pending, excludes it from reattach, and retries it', async () => {
+    const { mockStore, session } = await establishRelaySession()
+    const shutdown = vi
+      .fn()
+      .mockRejectedValueOnce(new Error('remote unavailable'))
+      .mockResolvedValueOnce(undefined)
+    const attachForReconnect = vi.fn()
+    vi.mocked(getSshPtyProvider).mockReturnValue({
+      shutdown,
+      attachForReconnect,
+      dispose: vi.fn()
+    } as unknown as ReturnType<typeof getSshPtyProvider>)
+    vi.mocked(mockStore.getSshRemotePtyLeases).mockReturnValue([
+      {
+        targetId: 'target-1',
+        ptyId: 'pty-lost',
+        state: 'termination-pending',
+        worktreeId: REVIVE_WORKTREE_ID,
+        tabId: REVIVE_TAB_ID,
+        leafId: REVIVE_LEAF_ID
+      }
+    ] as ReturnType<typeof mockStore.getSshRemotePtyLeases>)
+
+    await archiveInternals(session).retryTerminationPendingPtys()
+    await archiveInternals(session).reattachKnownPtys(() => true)
+    expect(mockStore.markSshRemotePtyLease).not.toHaveBeenCalled()
+    expect(attachForReconnect).not.toHaveBeenCalled()
+
+    await archiveInternals(session).retryTerminationPendingPtys()
+    expect(shutdown).toHaveBeenCalledTimes(2)
+    expect(mockStore.markSshRemotePtyLease).toHaveBeenCalledWith(
+      'target-1',
+      'pty-lost',
+      'terminated'
+    )
   })
 })
