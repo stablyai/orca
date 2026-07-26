@@ -65,6 +65,41 @@ describe('ModelManager', () => {
     }
   })
 
+  it('recognizes Korean streaming Zipformer after its required files are installed', async () => {
+    const dir = mkdtempSync(join(tmpdir(), 'orca-model-manager-'))
+    try {
+      const manifest = SPEECH_MODEL_CATALOG.find((model) => model.id === 'zipformer-streaming-ko')
+      expect(manifest).toMatchObject({
+        provider: 'local',
+        language: 'ko',
+        type: 'transducer',
+        streaming: true,
+        modelingUnit: 'cjkchar'
+      })
+      expect(manifest?.files).toEqual([
+        'encoder-epoch-99-avg-1.int8.onnx',
+        'decoder-epoch-99-avg-1.onnx',
+        'joiner-epoch-99-avg-1.int8.onnx',
+        'tokens.txt'
+      ])
+
+      const manager = new ModelManager(dir)
+      const modelDir = manager.getModelDir(manifest!.id)
+      for (const file of manifest!.files ?? []) {
+        const path = join(modelDir, file)
+        mkdirSync(dirname(path), { recursive: true })
+        writeFileSync(path, 'model file')
+      }
+
+      await expect(manager.getModelState(manifest!.id)).resolves.toEqual({
+        id: manifest!.id,
+        status: 'ready'
+      })
+    } finally {
+      rmSync(dir, { recursive: true, force: true })
+    }
+  })
+
   it('verifies downloaded archive hashes before extraction', async () => {
     const dir = mkdtempSync(join(tmpdir(), 'orca-model-manager-'))
     try {
