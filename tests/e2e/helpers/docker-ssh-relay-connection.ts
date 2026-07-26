@@ -64,17 +64,58 @@ export async function connectDockerSshRelayTarget(
         if ('error' in result) {
           throw new Error(result.error)
         }
+        // Why: fetchRepos is generation-gated and can drop a stale refresh that
+        // races this add; without the repo row, terminal spawn fails open to local
+        // with the remote Docker cwd and never binds a PTY.
         await store.getState().fetchRepos()
+        if (!store.getState().repos.some((repo) => repo.id === result.repo.id)) {
+          store.setState((state) => ({
+            repos: state.repos.some((repo) => repo.id === result.repo.id)
+              ? state.repos
+              : [...state.repos, result.repo]
+          }))
+        }
         await store.getState().fetchWorktrees(result.repo.id)
         const worktree = (store.getState().worktreesByRepo[result.repo.id] ?? [])[0]
         if (!worktree) {
           throw new Error(`No remote worktree found for ${result.repo.path}`)
+        }
+        // Why: pane routing needs a hydrated connectionId before spawn; wait so a
+        // late repo merge cannot leave the terminal on an unresolved owner transport.
+        const deadline = Date.now() + 15_000
+        while (Date.now() < deadline) {
+          const connectionId = store
+            .getState()
+            .repos.find((repo) => repo.id === result.repo.id)?.connectionId
+          if (connectionId === createdTarget.id) {
+            break
+          }
+          await new Promise((resolve) => setTimeout(resolve, 25))
+        }
+        const hydratedConnectionId = store
+          .getState()
+          .repos.find((repo) => repo.id === result.repo.id)?.connectionId
+        if (hydratedConnectionId !== createdTarget.id) {
+          throw new Error(
+            `Remote repo ${result.repo.id} never hydrated with connectionId ${createdTarget.id}`
+          )
         }
         store.getState().setActiveWorktree(worktree.id)
         if ((store.getState().tabsByWorktree[worktree.id] ?? []).length === 0) {
           store.getState().createTab(worktree.id)
         }
         store.getState().setActiveTabType('terminal')
+        // Why: a pane that mounted during hydration used the unresolved-owner
+        // transport; bump generation so TerminalPane remounts with SSH routing.
+        store.setState((state) => ({
+          tabsByWorktree: {
+            ...state.tabsByWorktree,
+            [worktree.id]: (state.tabsByWorktree[worktree.id] ?? []).map((tab) => ({
+              ...tab,
+              generation: (tab.generation ?? 0) + 1
+            }))
+          }
+        }))
         return {
           targetId: createdTarget.id,
           repoId: result.repo.id,

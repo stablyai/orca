@@ -3231,9 +3231,13 @@ export function connectPanePty(
     : mirroredRuntimeEnvironmentId
       ? mirroredRuntimeEnvironmentId
       : null
+  // Why: undefined means the backing repo has not hydrated yet. Coalescing to null
+  // would fail-open a remote cwd onto the local daemon (ENOENT on Docker SSH paths).
+  const connectionOwnerHydrating =
+    !terminalOwnerUnresolved && runtimeEnvironmentId === null && worktreeConnectionId === undefined
   // Why: an SSH host nested under a HUB is execution identity, not permission for the paired client to dial that host.
   const connectionId =
-    !terminalOwnerUnresolved && runtimeEnvironmentId === null
+    !terminalOwnerUnresolved && !connectionOwnerHydrating && runtimeEnvironmentId === null
       ? (worktreeConnectionId ?? null)
       : null
   const shellOverride = tab?.shellOverride
@@ -3518,13 +3522,16 @@ export function connectPanePty(
         }
       : {})
   }
-  const transport = terminalOwnerUnresolved
-    ? createUnresolvedOwnerPtyTransport(
-        'Workspace identity is ambiguous across hosts. Refresh projects and try again.'
-      )
-    : runtimeEnvironmentId
-      ? createRemoteRuntimePtyTransport(runtimeEnvironmentId, transportOptions)
-      : createIpcPtyTransport(transportOptions)
+  const transport =
+    terminalOwnerUnresolved || connectionOwnerHydrating
+      ? createUnresolvedOwnerPtyTransport(
+          terminalOwnerUnresolved
+            ? 'Workspace identity is ambiguous across hosts. Refresh projects and try again.'
+            : 'Workspace host is still loading. Retry when the project finishes hydrating.'
+        )
+      : runtimeEnvironmentId
+        ? createRemoteRuntimePtyTransport(runtimeEnvironmentId, transportOptions)
+        : createIpcPtyTransport(transportOptions)
   const canSendDesktopQueryReply = (): boolean => {
     const ptyId = transport.getPtyId()
     return !ptyId || !isPtyLocked(ptyId)
