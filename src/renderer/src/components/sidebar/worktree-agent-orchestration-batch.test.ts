@@ -403,15 +403,24 @@ describe('selectRuntimeAgentOrchestrationBatch', () => {
     )
 
     expect(Object.keys(actual)).toEqual(Object.keys(expected))
-    const operationBudget = {
+    // Why the batch still gets the tighter budget: it is told which worktrees
+    // are on screen, so it can skip unrelated tabs entirely. The per-worktree
+    // selector reads a shared index covering every worktree, so it visits all
+    // tabs once — the cost it saves is per *card*, not per worktree.
+    expect(batched.counts()).toEqual({
       runtimeEnumerations: 1,
       runtimeValueReads: contextCount,
       contextVisits: contextCount,
       targetTabIdReads: 1,
       unrelatedTabIdReads: 0
-    }
-    expect(reference.counts()).toEqual(operationBudget)
-    expect(batched.counts()).toEqual(operationBudget)
+    })
+    expect(reference.counts()).toEqual({
+      runtimeEnumerations: 1,
+      runtimeValueReads: contextCount,
+      contextVisits: contextCount,
+      targetTabIdReads: 1,
+      unrelatedTabIdReads: tabCount - 1
+    })
   })
 
   it('collapses multi-worktree runtime scans and caches unchanged publications', () => {
@@ -478,10 +487,13 @@ describe('selectRuntimeAgentOrchestrationBatch', () => {
     }
     selectRuntimeAgentOrchestrationBatch(batched.state, requested)
 
+    // Why one enumeration for worktreeCount separate calls: the per-worktree
+    // selector reads a shared index, so the first caller builds it and the rest
+    // are Map lookups. Before that index, this cost scaled with mounted cards.
     expect(reference.counts()).toEqual({
-      runtimeEnumerations: worktreeCount,
-      runtimeValueReads: worktreeCount * contextCount,
-      contextVisits: worktreeCount * contextCount,
+      runtimeEnumerations: 1,
+      runtimeValueReads: contextCount,
+      contextVisits: contextCount,
       tabIdReads: worktreeCount
     })
     expect(batched.counts()).toEqual({
@@ -518,5 +530,16 @@ describe('selectRuntimeAgentOrchestrationBatch', () => {
       contextVisits: contextCount * (publicationCount + 1),
       tabIdReads: worktreeCount
     })
+
+    // Why: the sidebar's real hot path is every mounted card re-running its own
+    // selector on every publication. Held flat, that is the whole point of the
+    // shared index — it must not scale with cards or with publications.
+    const referenceBefore = reference.counts()
+    for (let publication = 0; publication < publicationCount; publication += 1) {
+      for (const worktreeId of requested) {
+        selectRuntimeAgentOrchestrationForWorktree(reference.state, worktreeId)
+      }
+    }
+    expect(reference.counts()).toEqual(referenceBefore)
   })
 })
