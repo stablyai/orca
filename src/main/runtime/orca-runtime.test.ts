@@ -3779,6 +3779,62 @@ describe('OrcaRuntimeService', () => {
     ).toMatchObject({ persisted: false, rendererMounted: false })
   })
 
+  it('derives terminal tab lifecycle from the pty connected/lastExitCode state', () => {
+    const runtime = createRuntime()
+    const internals = runtime as unknown as {
+      recordPtyWorktree: (
+        ptyId: string,
+        worktreeId: string,
+        state?: Record<string, unknown>
+      ) => void
+      ptysById: Map<string, { connected: boolean; lastExitCode: number | null }>
+      mobileSessionTabsByWorktree: Map<string, unknown>
+      getMobileSessionTabsForWorktree: (worktreeId: string) => {
+        tabs: { type: string; leafId?: string; lifecycle?: string }[]
+      }
+    }
+    // Record connected PTYs first so the worktree fallback binds each tab.
+    internals.recordPtyWorktree('pty-live', TEST_WORKTREE_ID, { connected: true })
+    internals.recordPtyWorktree('pty-exited', TEST_WORKTREE_ID, { connected: true })
+    internals.recordPtyWorktree('pty-disc', TEST_WORKTREE_ID, { connected: true })
+    const exited = internals.ptysById.get('pty-exited')!
+    exited.connected = false
+    exited.lastExitCode = 7
+    const disconnected = internals.ptysById.get('pty-disc')!
+    disconnected.connected = false
+    disconnected.lastExitCode = null
+
+    const terminalTab = (leafId: string, ptyId: string, isActive: boolean) => ({
+      type: 'terminal' as const,
+      id: `lc::${leafId}`,
+      parentTabId: 'lc',
+      leafId,
+      ptyId,
+      title: 'T',
+      isActive
+    })
+    internals.mobileSessionTabsByWorktree.set(TEST_WORKTREE_ID, {
+      worktree: TEST_WORKTREE_ID,
+      publicationEpoch: 'renderer:test:1',
+      snapshotVersion: 1,
+      activeGroupId: null,
+      activeTabId: 'lc::leaf-live',
+      activeTabType: 'terminal',
+      tabs: [
+        terminalTab('leaf-live', 'pty-live', true),
+        terminalTab('leaf-exited', 'pty-exited', false),
+        terminalTab('leaf-disc', 'pty-disc', false)
+      ]
+    })
+
+    const result = internals.getMobileSessionTabsForWorktree(TEST_WORKTREE_ID)
+    const byLeaf = (leafId: string) =>
+      result.tabs.find((tab) => tab.type === 'terminal' && tab.leafId === leafId)
+    expect(byLeaf('leaf-live')?.lifecycle).toBe('live')
+    expect(byLeaf('leaf-exited')?.lifecycle).toBe('exited')
+    expect(byLeaf('leaf-disc')?.lifecycle).toBe('disconnected')
+  })
+
   it('keeps targeted terminal lists from adopting controller PTYs for other worktrees', async () => {
     vi.mocked(listWorktrees).mockResolvedValue([
       ...MOCK_GIT_WORKTREES,
