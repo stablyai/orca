@@ -29,6 +29,11 @@ export async function activateWorktreeFromSidebar(
   if (typeof window !== 'undefined' && window.api?.ephemeralVm?.resumeWorkspace) {
     try {
       const runtime = await window.api.ephemeralVm.resumeWorkspace({ workspaceId: worktreeId })
+      // Why: VM resume can take seconds. A later sidebar click owns navigation
+      // AND the runtime-env refresh — a stale request must not mutate either.
+      if (activationRequest !== latestActivationRequest) {
+        return
+      }
       if (runtime?.runtimeEnvironmentId) {
         const store = (await import('@/store')).useAppStore
         store.getState().setRuntimeEnvironments(await window.api.runtimeEnvironments.list())
@@ -47,11 +52,6 @@ export async function activateWorktreeFromSidebar(
           description: error instanceof Error ? error.message : String(error)
         }
       )
-      return
-    }
-    // Why: VM resume can take seconds. A later sidebar click owns navigation;
-    // the older completion must not pull the user back to this workspace.
-    if (activationRequest !== latestActivationRequest) {
       return
     }
   }
