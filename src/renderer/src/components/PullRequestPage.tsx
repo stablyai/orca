@@ -2291,6 +2291,7 @@ function PRFilesCombinedDiffViewer({
             authorAvatarUrl: comment.authorAvatarUrl,
             createdAtLabel: formatRelativeTime(comment.createdAt),
             url: comment.url,
+            isResolved: comment.isResolved,
             canDelete: false,
             canEdit: false
           }

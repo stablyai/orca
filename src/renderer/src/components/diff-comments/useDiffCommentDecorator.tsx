@@ -32,6 +32,7 @@ export type DecoratedDiffComment = DiffComment & {
   url?: string
   canDelete?: boolean
   canEdit?: boolean
+  isResolved?: boolean
 }
 
 type DecoratorArgs = {
@@ -541,6 +542,7 @@ export function useDiffCommentDecorator({
             author={comment.author}
             createdAtLabel={comment.createdAtLabel}
             url={comment.url}
+            isResolved={comment.isResolved}
             onDelete={
               comment.canDelete === false ? undefined : () => onDeleteCommentRef.current(comment.id)
             }
@@ -616,8 +618,11 @@ export function useDiffCommentDecorator({
         // covers fixed chrome (inline wrapper padding ~10, card border 2, card
         // padding 12, header+meta ~24, body margin 2) and the per-line factor
         // matches the 13.5px/1.5 body line-height.
-        const lineCount = getCommentBodyLayoutLineCount(c.body)
-        const heightInPx = Math.max(ZONE_MIN_PX, ZONE_CHROME_PX + lineCount * ZONE_LINE_PX)
+        const isCollapsed = c.isResolved === true
+        const lineCount = isCollapsed ? 0 : getCommentBodyLayoutLineCount(c.body)
+        const heightInPx = isCollapsed
+          ? 32
+          : Math.max(ZONE_MIN_PX, ZONE_CHROME_PX + lineCount * ZONE_LINE_PX)
 
         // Why: suppressMouseDown: false so clicks inside the zone (Delete
         // button) reach our DOM listeners. With true, Monaco intercepts the

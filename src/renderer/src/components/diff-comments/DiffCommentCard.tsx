@@ -34,6 +34,7 @@ type Props = {
   onContentResize?: () => void
   onSubmitEdit?: (body: string) => Promise<boolean>
   headerActions?: ReactNode
+  isResolved?: boolean
 }
 
 export function DiffCommentCard({
@@ -49,12 +50,13 @@ export function DiffCommentCard({
   onDelete,
   onContentResize,
   onSubmitEdit,
-  headerActions
+  headerActions,
+  isResolved
 }: Props): React.JSX.Element {
   const [editing, setEditing] = useState(false)
   const [draft, setDraft] = useState(body)
   const [submitting, setSubmitting] = useState(false)
-  const [collapsed, setCollapsed] = useState(false)
+  const [collapsed, setCollapsed] = useState(isResolved ?? false)
   const mountedRef = useMountedRef()
   const textareaRef = useRef<HTMLTextAreaElement | null>(null)
   const resizeAfterCloseRef = useRef(false)
@@ -179,16 +181,16 @@ export function DiffCommentCard({
 
           <div className="orca-diff-comment-meta-group">{metaText}</div>
 
-          {/* Action buttons pill (only shown if not editing and not collapsed) */}
-          {!editing && !collapsed && (
+          {/* Action buttons pill (shown if not editing, allowing Open button when collapsed) */}
+          {!editing && (url || !collapsed) && (
             <div
               className="orca-diff-comment-actions-pill"
               onMouseDown={(ev) => ev.stopPropagation()}
             >
-              {headerActions}
-              {headerActions && (url || onSubmitEdit || onDelete) && (
+              {!collapsed && headerActions}
+              {!collapsed && headerActions && (url || onSubmitEdit || onDelete) ? (
                 <span className="orca-diff-comment-pill-divider" />
-              )}
+              ) : null}
               {url && (
                 <>
                   <button
@@ -210,12 +212,12 @@ export function DiffCommentCard({
                   >
                     {translate('auto.components.diff.comments.DiffCommentCard.6978871a3d', 'Open')}
                   </button>
-                  {(onSubmitEdit || onDelete) && (
+                  {!collapsed && (onSubmitEdit || onDelete) ? (
                     <span className="orca-diff-comment-pill-divider" />
-                  )}
+                  ) : null}
                 </>
               )}
-              {onSubmitEdit && (
+              {!collapsed && onSubmitEdit ? (
                 <>
                   <button
                     type="button"
@@ -236,10 +238,10 @@ export function DiffCommentCard({
                   >
                     <Pencil className="size-3" />
                   </button>
-                  {onDelete && <span className="orca-diff-comment-pill-divider" />}
+                  {onDelete ? <span className="orca-diff-comment-pill-divider" /> : null}
                 </>
-              )}
-              {onDelete && (
+              ) : null}
+              {!collapsed && onDelete ? (
                 <button
                   type="button"
                   className="orca-diff-comment-pill-btn orca-diff-comment-pill-btn-danger"
@@ -259,7 +261,7 @@ export function DiffCommentCard({
                 >
                   <Trash className="size-3" />
                 </button>
-              )}
+              ) : null}
             </div>
           )}
         </div>

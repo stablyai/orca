@@ -71,6 +71,7 @@ export function prCommentToDecoratedDiffComment(
     authorAvatarUrl: prComment.authorAvatarUrl,
     createdAtLabel: new Date(prComment.createdAt).toLocaleString(),
     url: prComment.url,
+    isResolved: prComment.isResolved,
     canDelete: false, // PR comments are managed remotely
     canEdit: false, // PR comments are managed remotely
     source: 'diff', // PR comments are always shown in diff context
@@ -169,7 +170,9 @@ export function selectRawPRCommentsFromStore(
   if (!linkedPR && worktree.branch) {
     const keys = Object.keys(state.prCache)
     const targetKey = keys.find(
-      (k) => k.toLowerCase().includes(worktree.repoId.toLowerCase()) && k.endsWith(`::${worktree.branch}`)
+      (k) =>
+        k.toLowerCase().includes(worktree.repoId.toLowerCase()) &&
+        k.endsWith(`::${worktree.branch}`)
     )
     const cachedPR = targetKey ? state.prCache[targetKey]?.data : null
     if (cachedPR) {
