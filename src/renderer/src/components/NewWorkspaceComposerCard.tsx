@@ -52,7 +52,8 @@ import type {
   SetupAgentStartupPolicy,
   OrcaHooks,
   SparsePreset,
-  TuiAgent
+  TuiAgent,
+  CustomAgent
 } from '../../../shared/types'
 import SparseCheckoutPresetSelect from '@/components/sparse/SparseCheckoutPresetSelect'
 import SmartWorkspaceNameField, {
@@ -145,7 +146,7 @@ type NewWorkspaceComposerCardProps = {
   createDisabled: boolean
   projectError: string | null
   creating: boolean
-  onCreate: () => void
+  onCreate: (customLaunchAgentId?: string | null) => void
   note: string
   onNoteChange: (value: string) => void
   setupConfig: SetupConfig | null
@@ -956,7 +957,30 @@ export default function NewWorkspaceComposerCard({
   const activeModal = useAppStore((s) => s.activeModal)
   const defaultTuiAgent = useAppStore((s) => s.settings?.defaultTuiAgent ?? null)
   const disabledTuiAgents = useAppStore((s) => s.settings?.disabledTuiAgents ?? [])
+  const customAgents = useAppStore((s) => s.settings?.customAgents ?? [])
+  const defaultCustomAgentId = useAppStore((s) => s.settings?.defaultCustomAgentId ?? null)
   const updateSettings = useAppStore((s) => s.updateSettings)
+  const [selectedCustomAgentId, setSelectedCustomAgentId] = React.useState<string | null>(
+    defaultCustomAgentId
+  )
+  const handleCustomAgentSelect = React.useCallback(
+    (agent: CustomAgent | null): void => {
+      setSelectedCustomAgentId(agent?.id ?? null)
+      if (agent !== null) {
+        onQuickAgentChange(null)
+      }
+    },
+    [onQuickAgentChange]
+  )
+  const handleQuickAgentChange = React.useCallback(
+    (next: TuiAgent | null): void => {
+      if (next !== null && selectedCustomAgentId !== null) {
+        setSelectedCustomAgentId(null)
+      }
+      onQuickAgentChange(next)
+    },
+    [onQuickAgentChange, selectedCustomAgentId]
+  )
   const nameInputFocusFrameRef = React.useRef<number | null>(null)
   const branchNameInputId = React.useId()
   const submitShortcutModifierLabel = getScreenSubmitModifierLabel()
@@ -1455,12 +1479,15 @@ export default function NewWorkspaceComposerCard({
           <AgentCombobox
             agents={visibleQuickAgents}
             value={quickAgent}
-            onValueChange={onQuickAgentChange}
+            onValueChange={handleQuickAgentChange}
             onOpenManageAgents={onOpenAgentSettings}
             defaultAgent={defaultTuiAgent}
             onSetDefault={handleSetDefaultAgent}
             triggerClassName="h-9 w-full border-input text-sm focus:border-ring focus:ring-[3px] focus:ring-ring/50"
-            onTriggerEnter={createDisabled ? undefined : onCreate}
+            onTriggerEnter={createDisabled ? undefined : () => void onCreate(selectedCustomAgentId)}
+            customAgents={customAgents}
+            selectedCustomAgentId={selectedCustomAgentId}
+            onCustomAgentSelect={handleCustomAgentSelect}
           />
         </div>
 
@@ -1787,7 +1814,7 @@ export default function NewWorkspaceComposerCard({
           </button>
         ) : null}
         <Button
-          onClick={() => void onCreate()}
+          onClick={() => void onCreate(selectedCustomAgentId)}
           disabled={createDisabled}
           size="sm"
           className="text-xs"

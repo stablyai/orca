@@ -325,6 +325,7 @@ export function getDefaultSettings(homedir: string): GlobalSettings {
     agentDefaultArgs: { ...DEFAULT_TUI_AGENT_ARGS },
     agentDefaultEnv: { ...DEFAULT_TUI_AGENT_ENV },
     agentYoloDefaultsMigrated: true,
+    customAgents: [],
     agentStatusHooksEnabled: true,
     tabAutoGenerateTitle: false,
     confirmClosePinnedTab: true,

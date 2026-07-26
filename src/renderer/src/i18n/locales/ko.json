@@ -2816,7 +2816,8 @@
             "ec2adf093e": "새 terminal에서 {{value0}} 실행",
             "465e432ef1": "{{value0}}에 대한 실행 명령을 작성할 수 없습니다.",
             "e518f544b1": "감지된 agents가 없습니다.",
-            "8dea9b5cdf": "활성화된 agents가 없습니다."
+            "8dea9b5cdf": "활성화된 agents가 없습니다.",
+            "customAgents": "사용자 정의 agents"
           },
           "RecentTabSwitcher": {
             "329638ff6f": "탭 전환",
@@ -5143,7 +5144,33 @@
           "03e1a5081a": "on {{value0}}",
           "25a41a9aad": "Re-detect agents installed on the active server",
           "remoteDetectionFailed": "Couldn’t detect installed agents. Check the host connection and try again.",
-          "retryDetection": "Retry"
+          "retryDetection": "Retry",
+          "customAgentsTitle": "사용자 정의 Agent",
+          "customAgentsDescription": "내장 카탈로그에 없는 자체 CLI agent를 추가합니다.",
+          "customAgentAdd": "추가",
+          "customAgentName": "이름",
+          "customAgentNamePlaceholder": "나의 Agent",
+          "customAgentCmd": "명령",
+          "customAgentCmdPlaceholder": "my-agent",
+          "customAgentArgs": "인수",
+          "customAgentArgsPlaceholder": "--flag value",
+          "customAgentEnv": "환경 변수 (한 줄에 하나씩 KEY=VALUE)",
+          "customAgentEnvPlaceholder": "API_KEY=xxx\nMODEL=gpt-4",
+          "customAgentNameRequired": "이름은 필수 항목입니다",
+          "customAgentCmdRequired": "명령은 필수 항목입니다",
+          "customAgentEnvFormat": "환경 변수는 한 줄에 하나의 KEY=VALUE 형식이어야 합니다",
+          "customAgentCancel": "취소",
+          "customAgentSave": "저장",
+          "customAgentBadge": "사용자 정의",
+          "customAgentIconUrl": "아이콘 URL",
+          "customAgentIconUrlPlaceholder": "https://example.com/icon.png",
+          "customAgentFaviconDomain": "Favicon 도메인",
+          "customAgentFaviconDomainPlaceholder": "example.com",
+          "customAgentIconBrowse": "찾아보기",
+          "customAgentEdit": "사용자 정의 agent 편집",
+          "customAgentDelete": "사용자 정의 agent 삭제",
+          "customAgentsEmpty": "사용자 정의 agent가 없습니다. \"추가\"를 클릭하여 만드세요.",
+          "customAgentsDefaultGroup": "사용자 정의 agents"
         },
         "AppIconSelector": {
           "d5a112dc9b": "다음 아이콘",
@@ -13146,7 +13173,8 @@
           "579c768bde": "검색어와 일치하는 agents가 없습니다.",
           "48c6a5a9b4": "agents 검색...",
           "9c6b59fe58": "기본값으로 설정",
-          "1b0d6965fa": "현재 기본값"
+          "1b0d6965fa": "현재 기본값",
+          "customAgents": "사용자 정의 agents"
         },
         "AgentSettingsDialog": {
           "50cdb57c03": "AI agents를 관리하고, 기본값을 설정하고, 명령을 사용자 정의하세요.",

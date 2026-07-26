@@ -2839,7 +2839,8 @@
             "ec2adf093e": "Launch {{value0}} in a new terminal",
             "465e432ef1": "Could not build launch command for {{value0}}.",
             "e518f544b1": "No agents detected",
-            "8dea9b5cdf": "No enabled agents"
+            "8dea9b5cdf": "No enabled agents",
+            "customAgents": "Custom agents"
           },
           "RecentTabSwitcher": {
             "329638ff6f": "Switch Tab",
@@ -5143,6 +5144,31 @@
           "25a41a9aad": "Re-detect agents installed on the active server",
           "remoteDetectionFailed": "Couldn’t detect installed agents. Check the host connection and try again.",
           "retryDetection": "Retry",
+          "customAgentsTitle": "Custom Agents",
+          "customAgentsDescription": "Add your own CLI agents that are not in the built-in catalog.",
+          "customAgentAdd": "Add",
+          "customAgentName": "Name",
+          "customAgentNamePlaceholder": "My Agent",
+          "customAgentCmd": "Command",
+          "customAgentCmdPlaceholder": "my-agent",
+          "customAgentArgs": "Arguments",
+          "customAgentArgsPlaceholder": "--flag value",
+          "customAgentEnv": "Environment (one KEY=VALUE per line)",
+          "customAgentEnvPlaceholder": "API_KEY=xxx\nMODEL=gpt-4",
+          "customAgentNameRequired": "Name is required",
+          "customAgentCmdRequired": "Command is required",
+          "customAgentEnvFormat": "Environment must be KEY=VALUE per line",
+          "customAgentCancel": "Cancel",
+          "customAgentSave": "Save",
+          "customAgentBadge": "Custom",
+          "customAgentIconUrl": "Icon URL",
+          "customAgentIconUrlPlaceholder": "https://example.com/icon.png",
+          "customAgentFaviconDomain": "Favicon Domain",
+          "customAgentFaviconDomainPlaceholder": "example.com",
+          "customAgentIconBrowse": "Browse",
+          "customAgentEdit": "Edit custom agent",
+          "customAgentDelete": "Delete custom agent",
+          "customAgentsEmpty": "No custom agents. Click \"Add\" to create one.",
           "02e0143be5": "Installed",
           "110b74b022": "No agent (blank terminal)",
           "92033495ff": "Auto",
@@ -5181,7 +5207,8 @@
           "3f1bdf3cb4": "Environment text is too large to parse safely.",
           "codexSessionSource": "Codex home to import from",
           "codexSessionSourceInfo": "About importing Codex history",
-          "codexSessionSourceTooltip": "Orca runs Codex in an isolated home. Point this at your existing Codex home to import that session history. Empty uses ~/.codex."
+          "codexSessionSourceTooltip": "Orca runs Codex in an isolated home. Point this at your existing Codex home to import that session history. Empty uses ~/.codex.",
+          "customAgentsDefaultGroup": "Custom agents"
         },
         "AppIconSelector": {
           "d5a112dc9b": "Next icon",
@@ -13169,7 +13196,8 @@
           "579c768bde": "No agents match your search.",
           "48c6a5a9b4": "Search agents...",
           "9c6b59fe58": "Set as default",
-          "1b0d6965fa": "Current default"
+          "1b0d6965fa": "Current default",
+          "customAgents": "Custom agents"
         },
         "AgentSettingsDialog": {
           "50cdb57c03": "Manage AI agents, set a default, and customize commands.",

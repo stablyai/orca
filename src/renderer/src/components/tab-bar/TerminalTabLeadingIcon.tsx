@@ -1,7 +1,8 @@
 import { AgentStateDot, type AgentDotState } from '@/components/AgentStateDot'
 import { AgentIcon } from '@/lib/agent-catalog'
 import { cn } from '@/lib/utils'
-import type { TerminalTab, TuiAgent } from '../../../../shared/types'
+import type { CustomAgent, TerminalTab, TuiAgent } from '../../../../shared/types'
+import { CustomAgentIcon } from '../agent/CustomAgentIcon'
 import { FilledBellIcon } from '../sidebar/WorktreeCardHelpers'
 import { ShellIcon } from './shell-icons'
 import type { TerminalTabActivityStatus } from './terminal-tab-activity-status'
@@ -13,10 +14,12 @@ type TerminalTabLeadingIconProps = {
   shell: TerminalTab['shellOverride']
   showUnreadActivity: boolean
   isActive: boolean
+  customAgent?: CustomAgent | null
 }
 
 type TerminalTabAgentIdentityIconProps = {
-  agent: TuiAgent
+  agent: TuiAgent | null
+  customAgent?: CustomAgent | null
   isActive: boolean
   className?: string
 }
@@ -42,12 +45,31 @@ function activityDotState(status: TerminalTabActivityStatus): AgentDotState | nu
   }
 }
 
-/** Keep the provider glyph treatment identical across every terminal-tab state. */
+/** Keep the provider glyph treatment identical across every terminal-tab state.
+ *  Why: a custom agent is the user's explicit launch choice and may wrap a
+ *  known TuiAgent (e.g. a `claude` wrapper), so its identity icon takes
+ *  precedence over any title/process-detected TuiAgent to avoid showing the
+ *  wrong glyph and to reflect icon updates made in settings. */
 function TerminalTabAgentIdentityIcon({
   agent,
+  customAgent,
   isActive,
   className
-}: TerminalTabAgentIdentityIconProps): React.JSX.Element {
+}: TerminalTabAgentIdentityIconProps): React.JSX.Element | null {
+  if (customAgent) {
+    return (
+      <span
+        className={cn('inline-flex', !isActive && 'opacity-70', className)}
+        data-agent-icon={customAgent.id}
+        aria-hidden
+      >
+        <CustomAgentIcon agent={customAgent} size={12} />
+      </span>
+    )
+  }
+  if (!agent) {
+    return null
+  }
   return (
     <span
       className={cn('inline-flex', !isActive && 'opacity-70', className)}
@@ -65,8 +87,19 @@ export function TerminalTabLeadingIcon({
   activityStatus,
   shell,
   showUnreadActivity,
-  isActive
+  isActive,
+  customAgent
 }: TerminalTabLeadingIconProps): React.JSX.Element {
+  const identityIcon =
+    customAgent || agent ? (
+      <TerminalTabAgentIdentityIcon
+        agent={agent}
+        customAgent={customAgent}
+        isActive={isActive}
+        className="mr-1 shrink-0"
+      />
+    ) : null
+
   if (showUnreadActivity) {
     return (
       <span
@@ -78,7 +111,7 @@ export function TerminalTabLeadingIcon({
         className="mr-1 inline-flex shrink-0 items-center gap-1"
       >
         <FilledBellIcon className="size-3 text-amber-500 drop-shadow-sm" />
-        {agent ? <TerminalTabAgentIdentityIcon agent={agent} isActive={isActive} /> : null}
+        {identityIcon}
       </span>
     )
   }
@@ -94,15 +127,13 @@ export function TerminalTabLeadingIcon({
         <AgentStateDot state={dotState} size="md" />
         {/* Why: status and identity answer different questions. Keep the agent
             logo beside the state glyph so parallel tabs remain scannable. */}
-        {agent ? <TerminalTabAgentIdentityIcon agent={agent} isActive={isActive} /> : null}
+        {identityIcon}
       </span>
     )
   }
 
-  if (agent) {
-    return (
-      <TerminalTabAgentIdentityIcon agent={agent} isActive={isActive} className="mr-1 shrink-0" />
-    )
+  if (identityIcon) {
+    return identityIcon
   }
 
   // Why: ShellIcon renders a colored brand-style tile for PowerShell, CMD,

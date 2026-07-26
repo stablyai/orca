@@ -832,6 +832,11 @@ export type Tab = {
    *  underneath; `'terminal'` (the default for legacy/missing) shows the raw
    *  xterm. Optional so sessions persisted before this field hydrate cleanly. */
   viewMode?: 'terminal' | 'chat'
+  /** Why: mirror of TerminalTab.customLaunchAgentId so the unified tab model
+   *  preserves the custom agent binding across reconcile/hydration/runtime
+   *  sync. Without this, rebuilds from the unified model drop the field and
+   *  the tab bar falls back to the default shell icon. */
+  customLaunchAgentId?: string
 }
 
 export type TabGroup = {
@@ -886,6 +891,8 @@ export type TerminalTab = {
    *  hook status overrides this once the agent does anything. Plain terminals
    *  and manually-started agents omit it. */
   launchAgent?: TuiAgent
+  /** ID of a user-defined custom agent that launched this tab (not in TuiAgent catalog). */
+  customLaunchAgentId?: string
   /** Why: when `setActiveWorktree` bumps generation on all-dead tabs to drive a
    *  TerminalPane remount, the fresh PTY that results is caused by navigation,
    *  not by the user doing work. Without this flag the resulting
@@ -2477,6 +2484,24 @@ export type ClaudeManagedAccountRuntimeSelection = {
   wsl: Record<string, string | null>
 }
 
+/** User-defined custom agent that is not part of the built-in TuiAgent catalog. */
+export type CustomAgent = {
+  /** Stable unique identifier (generated at creation time). */
+  id: string
+  /** Display name shown in the agent picker and settings. */
+  label: string
+  /** CLI binary name or absolute path used to launch the agent. */
+  cmd: string
+  /** Default arguments appended after the command. */
+  args?: string
+  /** Default environment variables for the agent process. */
+  env?: Record<string, string>
+  /** Direct image URL for the agent icon (data URL or remote URL). */
+  iconUrl?: string
+  /** Domain for Google's favicon service as an icon fallback. */
+  faviconDomain?: string
+}
+
 /** All AI coding agents Orca knows how to launch. Used for the agent picker in the new-workspace
  *  flow and for the default-agent setting. Extend this union as new agents are added. */
 export type TuiAgent =
@@ -2842,6 +2867,8 @@ export type GlobalSettings = {
    *  - 'blank': blank terminal (no agent launched)
    *  - TuiAgent: a specific agent id */
   defaultTuiAgent: TuiAgent | 'blank' | null
+  /** ID of a user-defined custom agent to use as default; takes priority over defaultTuiAgent when set. */
+  defaultCustomAgentId?: string | null
   /** Agents hidden from picker/auto-launch; detection stays a raw PATH snapshot. */
   disabledTuiAgents: TuiAgent[]
   /** One-shot guard: start Claude Agent Teams hidden for existing profiles without overriding later opt-ins. */
@@ -2894,6 +2921,8 @@ export type GlobalSettings = {
   agentDefaultEnv?: Partial<Record<TuiAgent, Record<string, string>>>
   /** One-shot guard for adding yolo-mode default args to untouched agent launch profiles. */
   agentYoloDefaultsMigrated?: boolean
+  /** User-defined custom agents that appear alongside built-in agents in the picker. */
+  customAgents?: CustomAgent[]
   /** Why: disabling must persist so startup doesn't reinstall global agent hook entries the user just removed. */
   agentStatusHooksEnabled: boolean
   /** Dismissed freshness tuples: no write authority, just suppress re-nudging the same official placement/revision. */

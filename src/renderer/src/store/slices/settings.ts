@@ -127,6 +127,30 @@ export const createSettingsSlice: StateCreator<AppState, [], [], SettingsSlice> 
         sanitizedUpdates.agentDefaultEnv = normalizeTuiAgentEnvRecord(updates.agentDefaultEnv)
         sanitizedUpdates.agentYoloDefaultsMigrated = true
       }
+      if ('customAgents' in updates) {
+        const raw = Array.isArray(updates.customAgents) ? updates.customAgents : []
+        sanitizedUpdates.customAgents = raw
+          .filter(
+            (a): a is NonNullable<typeof a> =>
+              a != null &&
+              typeof a.id === 'string' &&
+              typeof a.label === 'string' &&
+              typeof a.cmd === 'string' &&
+              a.label.trim() !== '' &&
+              a.cmd.trim() !== ''
+          )
+          .map((a) => ({
+            id: a.id,
+            label: a.label.trim(),
+            cmd: a.cmd.trim(),
+            ...(a.args && a.args.trim() ? { args: a.args.trim() } : {}),
+            ...(a.env && Object.keys(a.env).length > 0 ? { env: a.env } : {}),
+            ...(a.iconUrl && a.iconUrl.trim() ? { iconUrl: a.iconUrl.trim() } : {}),
+            ...(a.faviconDomain && a.faviconDomain.trim()
+              ? { faviconDomain: a.faviconDomain.trim() }
+              : {})
+          }))
+      }
       if ('uiLanguage' in updates) {
         sanitizedUpdates.uiLanguage = normalizeUiLanguage(updates.uiLanguage)
       }

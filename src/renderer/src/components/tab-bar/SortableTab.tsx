@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import { useSortable } from '@dnd-kit/sortable'
 import { X, Minimize2, Pin } from 'lucide-react'
 import { stripLeadingAgentTitleDecoration } from '../../../../shared/agent-title-decoration'
@@ -6,9 +6,9 @@ import { useTabAgent } from '@/lib/use-tab-agent'
 import { isImeCompositionKeyDown } from '@/lib/ime-composition-keyboard-event'
 import { Input } from '@/components/ui/input'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
+import { useAppStore } from '@/store'
 import type { TerminalTab } from '../../../../shared/types'
 import type { TabDragItemData } from '../tab-group/useTabDragSplit'
-import { useAppStore } from '../../store'
 import {
   ACTIVE_TAB_INDICATOR_CLASSES,
   getDropIndicatorClasses,
@@ -23,6 +23,7 @@ import { TAB_CONTAINER_WIDTH_CLASSES, TAB_LABEL_WIDTH_CLASSES } from './tab-widt
 import { useOptionalShortcutLabel } from '@/hooks/useShortcutLabel'
 import { useTabStripPointerActivation } from './tab-strip-pointer-activation'
 import { TerminalTabLeadingIcon } from './TerminalTabLeadingIcon'
+import { useTabRename } from './use-tab-rename'
 import {
   hasUnreadAgentCompletionForTerminalTab,
   isTerminalTabActivityLive,
@@ -113,6 +114,14 @@ export default function SortableTab({
   // Why: use hook status + title evidence so the icon reflects the harness running now, not just the launch command.
   const tabAgent = useTabAgent(tab)
 
+  // Look up custom agent info for icon rendering when launchAgent is absent.
+  const customAgent = useAppStore((s) => {
+    if (!tab.customLaunchAgentId) {
+      return null
+    }
+    return s.settings?.customAgents?.find((a) => a.id === tab.customLaunchAgentId) ?? null
+  })
+
   // Why: with a provider icon shown, strip the agent's own leading glyph so the tab doesn't show two icons for one agent.
   const displayTitle =
     tab.customTitle ?? (tabAgent ? stripLeadingAgentTitleDecoration(tab.title) : tab.title)
@@ -126,61 +135,18 @@ export default function SortableTab({
   // Why: no transform/transition/opacity so tabs stay anchored during drag, only the insertion bar moves (see TabBar.tsx).
   const [menuOpen, setMenuOpen] = useState(false)
   const [menuPoint, setMenuPoint] = useState({ x: 0, y: 0 })
-  const [isEditing, setIsEditing] = useState(false)
+  const {
+    isEditing,
+    renameValue,
+    setRenameValue,
+    handleRenameOpen,
+    commitRename,
+    cancelRename,
+    setRenameInputElement
+  } = useTabRename({ tab, renamingTabId, setRenamingTabId, onSetCustomTitle })
   // Why: a live working/needs-input state is newer than a prior-turn unread, so it owns the icon until the turn ends.
   const showUnreadActivity =
     hasUnreadActivity && !isEditing && !isTerminalTabActivityLive(activityStatus)
-  const [renameValue, setRenameValue] = useState('')
-  const renameFocusFrameRef = useRef<number | null>(null)
-  // Why: onBlur fires during Input unmount; mark rename resolved so it can't re-commit and overwrite discarded edits.
-  const committedOrCancelledRef = useRef(false)
-
-  const handleRenameOpen = useCallback(() => {
-    committedOrCancelledRef.current = false
-    // Why: snapshot title once; don't refresh if tab.title changes mid-edit (e.g. OSC) so the user's edits aren't overwritten.
-    setRenameValue(tab.customTitle ?? tab.title)
-    setIsEditing(true)
-  }, [tab.customTitle, tab.title])
-
-  const commitRename = useCallback(() => {
-    if (committedOrCancelledRef.current) {
-      return
-    }
-    committedOrCancelledRef.current = true
-    const trimmed = renameValue.trim()
-    onSetCustomTitle(tab.id, trimmed.length > 0 ? trimmed : null)
-    setIsEditing(false)
-  }, [renameValue, onSetCustomTitle, tab.id])
-
-  const cancelRename = useCallback(() => {
-    committedOrCancelledRef.current = true
-    setIsEditing(false)
-  }, [])
-
-  const setRenameInputElement = useCallback((input: HTMLInputElement | null) => {
-    if (renameFocusFrameRef.current !== null) {
-      cancelAnimationFrame(renameFocusFrameRef.current)
-      renameFocusFrameRef.current = null
-    }
-    if (!input) {
-      return
-    }
-    // Why: defer past Radix menu teardown/focus restore; key off input mount so title updates don't re-select edited text.
-    renameFocusFrameRef.current = requestAnimationFrame(() => {
-      renameFocusFrameRef.current = null
-      input.focus()
-      input.select()
-    })
-  }, [])
-
-  // Why: the tab.rename shortcut routes through store renamingTabId; open the editor and clear it so it fires once.
-  useEffect(() => {
-    if (renamingTabId !== tab.id) {
-      return
-    }
-    handleRenameOpen()
-    setRenamingTabId(null)
-  }, [renamingTabId, tab.id, handleRenameOpen, setRenamingTabId])
 
   useEffect(() => {
     const closeMenu = (): void => setMenuOpen(false)
@@ -270,6 +236,7 @@ export default function SortableTab({
         shell={shellForIcon}
         showUnreadActivity={showUnreadActivity}
         isActive={isActive}
+        customAgent={customAgent}
       />
       {isPinned && !isEditing && (
         <Pin className="mr-1 size-3 shrink-0 text-muted-foreground" aria-hidden />

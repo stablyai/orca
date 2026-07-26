@@ -7,8 +7,8 @@ import { useAppStore } from '@/store'
 import { useAgentDetectionTargetForWorktree } from '@/hooks/useAgentDetectionTarget'
 import { useDetectedAgents } from '@/hooks/useDetectedAgents'
 import { useOptionalShortcutLabel } from '@/hooks/useShortcutLabel'
-import { launchAgentInNewTab } from '@/lib/launch-agent-in-new-tab'
-import type { TuiAgent } from '../../../../shared/types'
+import { launchAgentInNewTab, launchCustomAgentInNewTab } from '@/lib/launch-agent-in-new-tab'
+import type { TuiAgent, CustomAgent } from '../../../../shared/types'
 import type { LaunchSource } from '../../../../shared/telemetry-events'
 import { filterEnabledTuiAgents } from '../../../../shared/tui-agent-selection'
 import { translate } from '@/i18n/i18n'
@@ -108,6 +108,7 @@ function QuickLaunchAgentMenuItemsInner({
   const { detectedIds } = useDetectedAgents(agentDetectionTarget)
   const defaultAgent = useAppStore((s) => s.settings?.defaultTuiAgent)
   const disabledAgents = useAppStore((s) => s.settings?.disabledTuiAgents ?? [])
+  const customAgents = useAppStore((s) => s.settings?.customAgents ?? [])
   const openSettingsPage = useAppStore((s) => s.openSettingsPage)
   const openSettingsTarget = useAppStore((s) => s.openSettingsTarget)
   const newAgentShortcut = useOptionalShortcutLabel('tab.newAgent')
@@ -171,6 +172,31 @@ function QuickLaunchAgentMenuItemsInner({
     [worktreeId, groupId, onFocusTerminal, prompt, promptDelivery, launchSource, onPromptDelivered]
   )
 
+  const runCustomLaunch = useCallback(
+    (agent: CustomAgent) => {
+      const result = launchCustomAgentInNewTab({
+        agent,
+        worktreeId,
+        groupId,
+        ...(prompt !== undefined ? { prompt } : {}),
+        ...(launchSource !== undefined ? { launchSource } : {}),
+        ...(onPromptDelivered !== undefined ? { onPromptDelivered } : {})
+      })
+      if (!result) {
+        toast.error(
+          translate(
+            'auto.components.tab.bar.QuickLaunchButton.465e432ef1',
+            'Could not build launch command for {{value0}}.',
+            { value0: agent.label }
+          )
+        )
+        return
+      }
+      onFocusTerminal(result.tabId)
+    },
+    [worktreeId, groupId, onFocusTerminal, prompt, launchSource, onPromptDelivered]
+  )
+
   const enabledDetectedIds = detectedIds ? filterEnabledTuiAgents(detectedIds, disabledAgents) : []
   const agents = detectedIds ? orderAgents(defaultAgent, enabledDetectedIds) : []
 
@@ -213,6 +239,31 @@ function QuickLaunchAgentMenuItemsInner({
           </DropdownMenuItem>
         )
       })}
+      {customAgents.length > 0 ? (
+        <>
+          <DropdownMenuItem
+            disabled
+            className="gap-2 px-2 py-1 text-[10px] font-medium uppercase tracking-wide text-muted-foreground/60"
+          >
+            {translate('auto.components.tab.bar.QuickLaunchButton.customAgents', 'Custom agents')}
+          </DropdownMenuItem>
+          {customAgents.map((agent) => (
+            <DropdownMenuItem
+              key={agent.id}
+              onSelect={() => runCustomLaunch(agent)}
+              className="gap-2 rounded-[7px] px-2 py-1.5 text-[12px] leading-5 font-medium"
+              title={translate(
+                'auto.components.tab.bar.QuickLaunchButton.ec2adf093e',
+                'Launch {{value0}} in a new terminal',
+                { value0: agent.label }
+              )}
+            >
+              <CustomAgentListItemIcon agent={agent} />
+              <span className="flex-1">{agent.label}</span>
+            </DropdownMenuItem>
+          ))}
+        </>
+      ) : null}
       <DropdownMenuItem
         onSelect={openAgentSettings}
         className="gap-2 rounded-[7px] px-2 py-1.5 text-[12px] leading-5 font-medium text-muted-foreground"
@@ -221,6 +272,38 @@ function QuickLaunchAgentMenuItemsInner({
         {translate('auto.components.tab.bar.QuickLaunchButton.348a04c1ad', 'Agent settings…')}
       </DropdownMenuItem>
     </>
+  )
+}
+
+function CustomAgentListItemIcon({ agent }: { agent: CustomAgent }): React.JSX.Element {
+  if (agent.iconUrl) {
+    return (
+      <img
+        src={agent.iconUrl}
+        width={14}
+        height={14}
+        alt=""
+        aria-hidden
+        style={{ borderRadius: 2 }}
+      />
+    )
+  }
+  if (agent.faviconDomain) {
+    return (
+      <img
+        src={`https://www.google.com/s2/favicons?domain=${agent.faviconDomain}&sz=64`}
+        width={14}
+        height={14}
+        alt=""
+        aria-hidden
+        style={{ borderRadius: 2 }}
+      />
+    )
+  }
+  return (
+    <span className="flex size-3.5 shrink-0 items-center justify-center rounded-[3px] bg-muted text-[8px] font-bold text-muted-foreground">
+      {agent.label.charAt(0).toUpperCase()}
+    </span>
   )
 }
 

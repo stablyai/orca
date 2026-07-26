@@ -2816,7 +2816,8 @@
             "ec2adf093e": "Iniciar {{value0}} en un nuevo terminal",
             "465e432ef1": "No se pudo generar el comando de inicio para {{value0}}.",
             "e518f544b1": "No se detectaron agentes",
-            "8dea9b5cdf": "No hay agentes habilitados"
+            "8dea9b5cdf": "No hay agentes habilitados",
+            "customAgents": "Agents personalizados"
           },
           "RecentTabSwitcher": {
             "329638ff6f": "Cambiar pestaña",
@@ -5158,7 +5159,33 @@
           "03e1a5081a": "on {{value0}}",
           "25a41a9aad": "Re-detect agents installed on the active server",
           "remoteDetectionFailed": "Couldn’t detect installed agents. Check the host connection and try again.",
-          "retryDetection": "Retry"
+          "retryDetection": "Retry",
+          "customAgentsTitle": "Agents Personalizados",
+          "customAgentsDescription": "Agrega tus propios agents CLI que no están en el catálogo integrado.",
+          "customAgentAdd": "Agregar",
+          "customAgentName": "Nombre",
+          "customAgentNamePlaceholder": "Mi Agent",
+          "customAgentCmd": "Comando",
+          "customAgentCmdPlaceholder": "my-agent",
+          "customAgentArgs": "Argumentos",
+          "customAgentArgsPlaceholder": "--flag value",
+          "customAgentEnv": "Entorno (un KEY=VALUE por línea)",
+          "customAgentEnvPlaceholder": "API_KEY=xxx\nMODEL=gpt-4",
+          "customAgentNameRequired": "El nombre es obligatorio",
+          "customAgentCmdRequired": "El comando es obligatorio",
+          "customAgentEnvFormat": "El entorno debe tener el formato KEY=VALUE por línea",
+          "customAgentCancel": "Cancelar",
+          "customAgentSave": "Guardar",
+          "customAgentBadge": "Personalizado",
+          "customAgentIconUrl": "URL del icono",
+          "customAgentIconUrlPlaceholder": "https://example.com/icon.png",
+          "customAgentFaviconDomain": "Dominio Favicon",
+          "customAgentFaviconDomainPlaceholder": "example.com",
+          "customAgentIconBrowse": "Examinar",
+          "customAgentEdit": "Editar agent personalizado",
+          "customAgentDelete": "Eliminar agent personalizado",
+          "customAgentsEmpty": "No hay agents personalizados. Haz clic en \"Agregar\" para crear uno.",
+          "customAgentsDefaultGroup": "Agents personalizados"
         },
         "AppIconSelector": {
           "d5a112dc9b": "Icono siguiente",
@@ -13146,7 +13173,8 @@
           "579c768bde": "Ningún agente coincide con su búsqueda.",
           "48c6a5a9b4": "Agentes de búsqueda...",
           "9c6b59fe58": "Establecer como predeterminado",
-          "1b0d6965fa": "Valor predeterminado actual"
+          "1b0d6965fa": "Valor predeterminado actual",
+          "customAgents": "Agents personalizados"
         },
         "AgentSettingsDialog": {
           "50cdb57c03": "Administre agents de IA, establezca un valor predeterminado y personalice comandos.",

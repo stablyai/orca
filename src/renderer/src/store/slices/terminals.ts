@@ -567,6 +567,8 @@ export type TerminalSlice = {
       id?: string
       /** Coding-harness agent launched here, recorded so the tab bar shows the provider icon before the agent's first hook event. */
       launchAgent?: TuiAgent
+      /** ID of a user-defined custom agent that launched this tab. */
+      customLaunchAgentId?: string
       quickCommandLabel?: string | null
       /** Initial native-chat view mode; agent launches pass 'chat' when openAgentTabsInChatByDefault is on, else omitted for the 'terminal' default. */
       viewMode?: Tab['viewMode']
@@ -967,6 +969,9 @@ export const createTerminalSlice: StateCreator<AppState, [], [], TerminalSlice> 
         ...(createdShellOverride !== undefined ? { shellOverride: createdShellOverride } : {}),
         ...(startupCwd && startupCwd.length > 0 ? { startupCwd } : {}),
         ...(options?.launchAgent ? { launchAgent: options.launchAgent } : {}),
+        ...(options?.customLaunchAgentId
+          ? { customLaunchAgentId: options.customLaunchAgentId }
+          : {}),
         // Why: mark click-caused (not work-caused) spawns so updateTabPtyId skips the activity/sortEpoch bump that would reorder Recent/Smart on click.
         ...(options?.pendingActivationSpawn ? { pendingActivationSpawn: true } : {})
       }
@@ -1036,7 +1041,8 @@ export const createTerminalSlice: StateCreator<AppState, [], [], TerminalSlice> 
         sortOrder: cleanedGroupOrder.length,
         createdAt: tab.createdAt,
         // Why: omit for non-agent tabs so they keep the implicit 'terminal' view mode.
-        ...(options?.viewMode ? { viewMode: options.viewMode } : {})
+        ...(options?.viewMode ? { viewMode: options.viewMode } : {}),
+        ...(tab.customLaunchAgentId ? { customLaunchAgentId: tab.customLaunchAgentId } : {})
       }
       const nextGroupOrder = dedupeTabOrder([...cleanedGroupOrder, unifiedTab.id])
       const nextRecent = shouldActivate

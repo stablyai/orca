@@ -224,7 +224,8 @@ function hydrateLegacyFormat(
         sortOrder: tt.sortOrder,
         createdAt: tt.createdAt,
         isPreview: false,
-        isPinned: false
+        isPinned: false,
+        ...(tt.customLaunchAgentId ? { customLaunchAgentId: tt.customLaunchAgentId } : {})
       })
       tabOrder.push(tt.id)
     }

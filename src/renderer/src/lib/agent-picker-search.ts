@@ -1,4 +1,5 @@
 import type { AgentCatalogEntry } from '@/lib/agent-catalog'
+import type { CustomAgent } from '../../../shared/types'
 import { isClipboardTextByteLengthOverLimit } from '../../../shared/clipboard-text'
 
 type RankedAgent = {
@@ -22,12 +23,16 @@ export function getAgentPickerCommandValue({
   blankMatchesQuery,
   currentValue,
   filteredAgents,
+  filteredCustomAgents,
+  selectedCustomAgentId,
   rawQuery
 }: {
   blankValue: string
   blankMatchesQuery: boolean
   currentValue: AgentCatalogEntry['id'] | null
   filteredAgents: readonly AgentCatalogEntry[]
+  filteredCustomAgents?: readonly CustomAgent[]
+  selectedCustomAgentId?: string | null
   rawQuery: string
 }): string {
   const query = getAgentPickerSearchQuery(rawQuery)
@@ -35,12 +40,12 @@ export function getAgentPickerCommandValue({
     return ''
   }
   if (!query) {
-    return currentValue ?? blankValue
+    return selectedCustomAgentId ?? currentValue ?? blankValue
   }
   if (blankMatchesQuery) {
     return blankValue
   }
-  return filteredAgents[0]?.id ?? ''
+  return filteredAgents[0]?.id ?? filteredCustomAgents?.[0]?.id ?? ''
 }
 
 export function searchAgentPickerEntries(
@@ -58,6 +63,34 @@ export function searchAgentPickerEntries(
   const matches: RankedAgent[] = []
   agents.forEach((agent, index) => {
     const score = scoreAgent(agent, query)
+    if (score !== NO_MATCH) {
+      matches.push({ agent, score, index })
+    }
+  })
+
+  matches.sort((a, b) => a.score - b.score || a.index - b.index)
+  return matches.map((m) => m.agent)
+}
+
+export function searchCustomAgentPickerEntries(
+  agents: readonly CustomAgent[],
+  rawQuery: string
+): CustomAgent[] {
+  const query = getAgentPickerSearchQuery(rawQuery)
+  if (query === null) {
+    return []
+  }
+  if (!query) {
+    return [...agents]
+  }
+
+  const matches: { agent: CustomAgent; score: number; index: number }[] = []
+  agents.forEach((agent, index) => {
+    const score = Math.min(
+      scoreCandidate(query, agent.label, 0),
+      scoreCandidate(query, agent.id, 600),
+      scoreCandidate(query, agent.cmd, 650)
+    )
     if (score !== NO_MATCH) {
       matches.push({ agent, score, index })
     }

@@ -2816,7 +2816,8 @@
             "ec2adf093e": "在新终端中启动 {{value0}}",
             "465e432ef1": "无法为 {{value0}} 构建启动命令。",
             "e518f544b1": "未检测到智能体",
-            "8dea9b5cdf": "没有启用智能体"
+            "8dea9b5cdf": "没有启用智能体",
+            "customAgents": "自定义智能体"
           },
           "RecentTabSwitcher": {
             "329638ff6f": "切换选项卡",
@@ -5143,7 +5144,33 @@
           "03e1a5081a": "on {{value0}}",
           "25a41a9aad": "Re-detect agents installed on the active server",
           "remoteDetectionFailed": "Couldn’t detect installed agents. Check the host connection and try again.",
-          "retryDetection": "Retry"
+          "retryDetection": "Retry",
+          "customAgentsTitle": "自定义智能体",
+          "customAgentsDescription": "添加不在内置目录中的自定义 CLI 智能体。",
+          "customAgentAdd": "添加",
+          "customAgentName": "名称",
+          "customAgentNamePlaceholder": "我的智能体",
+          "customAgentCmd": "命令",
+          "customAgentCmdPlaceholder": "my-agent",
+          "customAgentArgs": "参数",
+          "customAgentArgsPlaceholder": "--flag value",
+          "customAgentEnv": "环境变量（每行一个 KEY=VALUE）",
+          "customAgentEnvPlaceholder": "API_KEY=xxx\nMODEL=gpt-4",
+          "customAgentNameRequired": "名称为必填项",
+          "customAgentCmdRequired": "命令为必填项",
+          "customAgentEnvFormat": "环境变量必须每行一个 KEY=VALUE 格式",
+          "customAgentCancel": "取消",
+          "customAgentSave": "保存",
+          "customAgentBadge": "自定义",
+          "customAgentIconUrl": "图标 URL",
+          "customAgentIconUrlPlaceholder": "https://example.com/icon.png",
+          "customAgentFaviconDomain": "Favicon 域名",
+          "customAgentFaviconDomainPlaceholder": "example.com",
+          "customAgentIconBrowse": "浏览",
+          "customAgentEdit": "编辑自定义智能体",
+          "customAgentDelete": "删除自定义智能体",
+          "customAgentsEmpty": "暂无自定义智能体。点击「添加」创建一个。",
+          "customAgentsDefaultGroup": "自定义智能体"
         },
         "AppIconSelector": {
           "d5a112dc9b": "下一个图标",
@@ -13146,7 +13173,8 @@
           "579c768bde": "没有智能体符合您的搜索。",
           "48c6a5a9b4": "搜索智能体...",
           "9c6b59fe58": "设置为默认值",
-          "1b0d6965fa": "当前默认值"
+          "1b0d6965fa": "当前默认值",
+          "customAgents": "自定义智能体"
         },
         "AgentSettingsDialog": {
           "50cdb57c03": "管理 AI 智能体、设置默认值并自定义命令。",
