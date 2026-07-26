@@ -10,6 +10,7 @@ export const BULK_TAB_CLOSE_ACTIONS: { mode: BulkTabCloseMode; label: string }[]
 type BulkClosableTab = {
   id: string
   isDirty?: boolean
+  isPinned?: boolean
 }
 
 /**
@@ -33,5 +34,5 @@ export function selectBulkCloseTabs<T extends BulkClosableTab>(
       : mode === 'left'
         ? tabs.slice(0, anchorIndex)
         : tabs.slice(anchorIndex + 1)
-  return candidates.filter((tab) => tab.isDirty !== true)
+  return candidates.filter((tab) => tab.isDirty !== true && tab.isPinned !== true)
 }

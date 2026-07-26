@@ -1,9 +1,10 @@
 import { describe, expect, it } from 'vitest'
 import { selectBulkCloseTabs } from './mobile-tab-close-selection'
 
-const tab = (id: string, isDirty?: boolean) => ({
+const tab = (id: string, isDirty?: boolean, isPinned?: boolean) => ({
   id,
-  ...(isDirty === undefined ? {} : { isDirty })
+  ...(isDirty === undefined ? {} : { isDirty }),
+  ...(isPinned === undefined ? {} : { isPinned })
 })
 
 describe('selectBulkCloseTabs', () => {
@@ -34,5 +35,11 @@ describe('selectBulkCloseTabs', () => {
     const withDirty = [tab('a', true), tab('b'), tab('c', false), tab('d')]
     expect(selectBulkCloseTabs(withDirty, 'd', 'left').map((t) => t.id)).toEqual(['b', 'c'])
     expect(selectBulkCloseTabs(withDirty, 'b', 'others').map((t) => t.id)).toEqual(['c', 'd'])
+  })
+
+  it('skips pinned tabs', () => {
+    const withPinned = [tab('a', undefined, true), tab('b'), tab('c', undefined, true), tab('d')]
+    expect(selectBulkCloseTabs(withPinned, 'd', 'left').map((t) => t.id)).toEqual(['b'])
+    expect(selectBulkCloseTabs(withPinned, 'b', 'others').map((t) => t.id)).toEqual(['d'])
   })
 })
