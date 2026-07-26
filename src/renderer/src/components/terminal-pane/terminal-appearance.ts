@@ -38,12 +38,29 @@ type Mode2031HandlerDeps = {
   isReplaying: () => boolean
   paneMode2031: Map<number, boolean>
   paneLastThemeMode: Map<number, 'dark' | 'light'>
+  /** Defers the reply past the rest of the chunk's parse. Injectable for tests. */
+  scheduleReply?: (callback: () => void) => void
 }
 
 // Why a pure function: lets tests drive a real xterm parser end-to-end against the "random characters on restart" guard.
 export function installMode2031Handlers(deps: Mode2031HandlerDeps): IDisposable[] {
   const hasMode2031 = (params: (number | number[])[]): boolean =>
     params.some((p) => (Array.isArray(p) ? p.includes(2031) : p === 2031))
+
+  // Why deferred: xterm dispatches CSI handlers mid-parse, but fish toggles 2031
+  // on and off around every prompt, so a reply sent the instant `?2031h` parses
+  // answers a subscription the same chunk withdraws microseconds later — it
+  // lands as literal text at the prompt or in a child's stdin (#9993). Settling
+  // on a microtask lets the rest of the chunk cancel a withdrawn subscribe.
+  const schedule = deps.scheduleReply ?? queueMicrotask
+  let replyPending = false
+  const settleSubscribe = (): void => {
+    replyPending = false
+    // The chunk may have unsubscribed after the handler ran; re-read the state.
+    if (deps.paneMode2031.get(deps.paneId) === true) {
+      deps.onSubscribe()
+    }
+  }
 
   // Why return false: we only observe mode 2031; false lets xterm's built-in DEC handler still process compound sequences.
   return [
@@ -58,7 +75,11 @@ export function installMode2031Handlers(deps: Mode2031HandlerDeps): IDisposable[
             return false
           }
           deps.paneMode2031.set(deps.paneId, true)
-          deps.onSubscribe()
+          // Coalesce: a chunk with several subscribes still gets one reply.
+          if (!replyPending) {
+            replyPending = true
+            schedule(settleSubscribe)
+          }
         }
         return false
       })

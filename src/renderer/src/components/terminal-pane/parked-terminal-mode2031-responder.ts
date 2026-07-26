@@ -39,7 +39,10 @@ export function startParkedTerminalMode2031Responder(
   return subscribeToPtyData(ptyId, (data) => {
     const scan = scanMode2031Sequences(scanTail, data)
     scanTail = scan.tail
-    if (!scan.subscribe) {
+    // Why finalState, not the sticky subscribe flag: a fish prompt cycle
+    // subscribes and unsubscribes in one chunk, and answering the withdrawn
+    // subscription writes `?997;1n` into the shell as input (#9993).
+    if (scan.finalState !== 'subscribed') {
       return
     }
     // Why: reply with the resolved theme so TUIs that subscribe while parked

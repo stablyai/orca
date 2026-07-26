@@ -198,7 +198,10 @@ export function createTerminalTitleTracker(
       if (onMode2031Subscribe) {
         const mode2031Scan = scanMode2031Sequences(mode2031ScanTail, data)
         mode2031ScanTail = mode2031Scan.tail
-        if (mode2031Scan.subscribe) {
+        // Why finalState, not the sticky subscribe flag: fish toggles 2031 on
+        // and off around every prompt, so a chunk that ends unsubscribed must
+        // not be answered — the reply would land as text at the prompt (#9993).
+        if (mode2031Scan.finalState === 'subscribed') {
           onMode2031Subscribe()
         }
       }
