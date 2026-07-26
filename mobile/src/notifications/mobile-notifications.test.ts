@@ -506,11 +506,9 @@ describe('subscribeToDesktopNotifications — reconnect catch-up', () => {
     } as never)
     vi.mocked(Notifications.scheduleNotificationAsync).mockResolvedValue('scheduled-1')
     vi.mocked(AsyncStorage.getItem).mockImplementation(async (key: string) =>
-      key.startsWith('orca:mobileNotificationsLastSeq:')
-        ? '57'
-        : key.startsWith('orca:mobileNotificationsLastEpoch:')
-          ? 'epoch-before-restart'
-          : null
+      key.startsWith('orca:mobileNotificationsWatermark:')
+        ? JSON.stringify({ seq: 57, epoch: 'epoch-before-restart' })
+        : null
     )
 
     const sub = makeClient()
@@ -552,11 +550,9 @@ describe('subscribeToDesktopNotifications — reconnect catch-up', () => {
     })
     vi.mocked(AsyncStorage.getItem).mockImplementation(async (key: string) => {
       await storageGate
-      return key.startsWith('orca:mobileNotificationsLastSeq:')
-        ? '57'
-        : key.startsWith('orca:mobileNotificationsLastEpoch:')
-          ? 'epoch-before-restart'
-          : null
+      return key.startsWith('orca:mobileNotificationsWatermark:')
+        ? JSON.stringify({ seq: 57, epoch: 'epoch-before-restart' })
+        : null
     })
 
     const sub = makeClient()
@@ -588,11 +584,9 @@ describe('subscribeToDesktopNotifications — reconnect catch-up', () => {
     } as never)
     vi.mocked(Notifications.scheduleNotificationAsync).mockResolvedValue('scheduled-1')
     vi.mocked(AsyncStorage.getItem).mockImplementation(async (key: string) =>
-      key.startsWith('orca:mobileNotificationsLastSeq:')
-        ? '57'
-        : key.startsWith('orca:mobileNotificationsLastEpoch:')
-          ? 'epoch-stable'
-          : null
+      key.startsWith('orca:mobileNotificationsWatermark:')
+        ? JSON.stringify({ seq: 57, epoch: 'epoch-stable' })
+        : null
     )
 
     const sub = makeClient()
@@ -698,8 +692,8 @@ describe('subscribeToDesktopNotifications — reconnect catch-up', () => {
     await flushAsync()
 
     expect(AsyncStorageMock.setItem).toHaveBeenCalledWith(
-      'orca:mobileNotificationsLastSeq:host-1',
-      '5'
+      'orca:mobileNotificationsWatermark:host-1',
+      JSON.stringify({ seq: 5, epoch: null })
     )
   })
 
@@ -748,8 +742,8 @@ describe('subscribeToDesktopNotifications — reconnect catch-up', () => {
 
     // Watermark advanced to the replayed seq and was persisted.
     expect(AsyncStorageMock.setItem).toHaveBeenCalledWith(
-      'orca:mobileNotificationsLastSeq:host-1',
-      '8'
+      'orca:mobileNotificationsWatermark:host-1',
+      JSON.stringify({ seq: 8, epoch: null })
     )
 
     // Second reconnect resumes from the advanced watermark, not 0.
@@ -759,5 +753,127 @@ describe('subscribeToDesktopNotifications — reconnect catch-up', () => {
       .mocked(sub.client.sendRequest)
       .mock.calls.filter((c: unknown[]) => c[0] === 'notifications.getMissedSince')
     expect(missedCalls.at(-1)?.[1]).toEqual({ lastSeenSeq: 8 })
+  })
+
+  it('replays a terminal bell at a seq the previous desktop counter already used', async () => {
+    // Round-1 review finding: seen-keys are seq-derived, and terminal bells carry no
+    // notificationId (they key on `seq:N` alone). Epoch A delivers a bell at seq 1;
+    // after a restart, epoch B's first bell is ALSO seq 1. The catch-up path is the
+    // one that consults the seen-set, so without clearing it on epoch change the
+    // replayed post-restart bell is mistaken for a duplicate and silently skipped —
+    // #8591's silent loss again, now one notification at a time.
+    vi.mocked(loadPushNotificationsEnabled).mockResolvedValue(true)
+    vi.mocked(Notifications.getPermissionsAsync).mockResolvedValue({
+      status: 'granted',
+      canAskAgain: true
+    } as never)
+    vi.mocked(Notifications.scheduleNotificationAsync).mockResolvedValue('s')
+
+    const sub = makeClient()
+    // Catch-up returns epoch B's first bell — same seq 1 the old counter used.
+    sub.client.sendRequest = vi.fn(async (method: string) => {
+      if (method === 'notifications.getMissedSince') {
+        return {
+          ok: true,
+          result: {
+            epoch: 'epoch-B',
+            notifications: [{ type: 'notification', title: 'bell', body: 'B', notificationSeq: 1 }]
+          }
+        } as never
+      }
+      return { ok: true, result: undefined } as never
+    })
+
+    subscribeToDesktopNotifications(sub.client, 'host-1')
+    sub.onData?.({ type: 'ready', subscriptionId: 'sub-1', epoch: 'epoch-A' })
+    await flushAsync()
+    // A live bell under epoch A — no notificationId, so its seen-key is `seq:1`.
+    sub.onData?.({ type: 'notification', title: 'bell', body: 'A', notificationSeq: 1 })
+    await flushAsync()
+    expect(vi.mocked(Notifications.scheduleNotificationAsync).mock.calls.length).toBe(1)
+
+    // Desktop restarts; reconnect triggers catch-up against the fresh counter.
+    sub.onData?.({ type: 'ready', subscriptionId: 'sub-2', epoch: 'epoch-B' })
+    await flushAsync()
+    await flushAsync()
+
+    // The post-restart bell must reach the user, not be swallowed as a stale `seq:1`.
+    expect(vi.mocked(Notifications.scheduleNotificationAsync).mock.calls.length).toBe(2)
+  })
+
+  it('does not trust a legacy epoch-less watermark against a live counter', async () => {
+    // Round-1 review finding: pre-upgrade installs stored a bare seq with no epoch.
+    // Seeding it and then treating the first observed epoch as "nothing changed"
+    // leaves 57 cutting a counter it was never measured against — #8591 reached
+    // through the upgrade path. An unprovenanced seq may not survive epoch adoption.
+    vi.mocked(loadPushNotificationsEnabled).mockResolvedValue(true)
+    vi.mocked(Notifications.getPermissionsAsync).mockResolvedValue({
+      status: 'granted',
+      canAskAgain: true
+    } as never)
+    vi.mocked(Notifications.scheduleNotificationAsync).mockResolvedValue('s')
+    // Only the LEGACY key exists — exactly what an upgrading install has on disk.
+    vi.mocked(AsyncStorage.getItem).mockImplementation(async (key: string) =>
+      key.startsWith('orca:mobileNotificationsLastSeq:') ? '57' : null
+    )
+
+    const sub = makeClient()
+    subscribeToDesktopNotifications(sub.client, 'host-1')
+    // Seed lands FIRST (no epoch known yet), so 57 is provisionally adopted...
+    await flushAsync()
+    await flushAsync()
+    // ...then the live epoch arrives for the first time.
+    sub.onData?.({ type: 'ready', subscriptionId: 'sub-1', epoch: 'epoch-live' })
+    await flushAsync()
+    sub.onData?.({ type: 'ready', subscriptionId: 'sub-2', epoch: 'epoch-live' })
+    await flushAsync()
+    await flushAsync()
+
+    const missedCall = vi
+      .mocked(sub.client.sendRequest)
+      .mock.calls.find((c: unknown[]) => c[0] === 'notifications.getMissedSince')
+    // Must not be 57: that seq was never shown to belong to this counter.
+    expect(missedCall?.[1]).toEqual({ lastSeenSeq: 0, epoch: 'epoch-live' })
+  })
+
+  it('persists seq and epoch as one value so a crash cannot split the pair', async () => {
+    // Round-1 review finding: written as two keys, a process death between the writes
+    // leaves epoch-B beside seq-57-from-A. That pair looks internally valid on the
+    // next launch and is therefore trusted — silently cutting B's first 57 events.
+    // One key means the pair is always written whole or not at all.
+    vi.mocked(loadPushNotificationsEnabled).mockResolvedValue(true)
+    vi.mocked(Notifications.getPermissionsAsync).mockResolvedValue({
+      status: 'granted',
+      canAskAgain: true
+    } as never)
+    vi.mocked(Notifications.scheduleNotificationAsync).mockResolvedValue('s')
+
+    const sub = makeClient()
+    subscribeToDesktopNotifications(sub.client, 'host-1')
+    sub.onData?.({ type: 'ready', subscriptionId: 'sub-1', epoch: 'epoch-A' })
+    await flushAsync()
+    sub.onData?.({
+      type: 'notification',
+      title: 't',
+      body: 'b',
+      notificationId: 'agent:x',
+      notificationSeq: 9
+    })
+    await flushAsync()
+
+    // Every watermark write is a single key carrying both halves together.
+    const watermarkWrites = AsyncStorageMock.setItem.mock.calls.filter((c: unknown[]) =>
+      String(c[0]).startsWith('orca:mobileNotifications')
+    )
+    expect(watermarkWrites.length).toBeGreaterThan(0)
+    for (const [key, value] of watermarkWrites) {
+      expect(key).toBe('orca:mobileNotificationsWatermark:host-1')
+      expect(JSON.parse(String(value))).toHaveProperty('epoch')
+      expect(JSON.parse(String(value))).toHaveProperty('seq')
+    }
+    expect(JSON.parse(String(watermarkWrites.at(-1)?.[1]))).toEqual({
+      seq: 9,
+      epoch: 'epoch-A'
+    })
   })
 })

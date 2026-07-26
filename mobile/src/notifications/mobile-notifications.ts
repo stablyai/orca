@@ -13,7 +13,7 @@ import { ensureNotificationPermissions } from './notification-permissions'
 import {
   adoptNotificationEpoch,
   getHostNotificationSession,
-  saveLastSeenSeq,
+  saveWatermark,
   seedWatermarkFromStorage,
   seenKeyForEvent
 } from './notification-reconnect-catchup'
@@ -225,7 +225,11 @@ export function subscribeToDesktopNotifications(client: RpcClient, hostId: strin
     adoptNotificationEpoch(session, hostId, event.notificationEpoch)
     if (event.notificationSeq != null && event.notificationSeq > session.lastDeliveredSeq) {
       session.lastDeliveredSeq = event.notificationSeq
-      void saveLastSeenSeq(hostId, session.lastDeliveredSeq)
+      // Persisted as a pair: a seq is only trustworthy alongside the epoch it indexes.
+      void saveWatermark(hostId, {
+        seq: session.lastDeliveredSeq,
+        epoch: session.lastDeliveredEpoch
+      })
     }
     // Why (#8129): mark seen on the live path too, so a later replay of an already-pushed id dedups instead of double-pushing.
     const key = seenKeyForEvent(event)

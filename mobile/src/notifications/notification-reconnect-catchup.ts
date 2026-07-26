@@ -9,58 +9,65 @@ import AsyncStorage from '@react-native-async-storage/async-storage'
 // notification we already delivered. The in-memory seen-set is a second guard
 // against double-delivery for events that arrive on both the live stream and a
 // replay (e.g. a brief liveness spell before a reap).
-const LAST_SEQ_STORAGE_KEY_PREFIX = 'orca:mobileNotificationsLastSeq:'
-// Why (#8591): the watermark alone is meaningless after a desktop restart — the
-// counter it indexes is gone. Persist the epoch beside it so a reconnect can tell
-// "nothing missed" from "different counter" and refuse to trust a stale cut.
-const LAST_EPOCH_STORAGE_KEY_PREFIX = 'orca:mobileNotificationsLastEpoch:'
+// Why (#8591): a seq is meaningless without the counter it indexes — after a
+// desktop restart that counter is gone. The epoch names the counter's lifetime so
+// a reconnect can tell "nothing missed" from "different counter".
+//
+// Why ONE key holding both, rather than a key each: they are only meaningful as a
+// pair. Written separately, a process death between the two writes leaves an epoch
+// from one counter beside a seq from another — a pair that looks internally valid
+// on the next launch and is therefore trusted, silently cutting real notifications.
+// A single JSON value cannot tear that way.
+const WATERMARK_STORAGE_KEY_PREFIX = 'orca:mobileNotificationsWatermark:'
+// Pre-#8591 installs wrote the seq alone. Read once to migrate; never written.
+const LEGACY_SEQ_STORAGE_KEY_PREFIX = 'orca:mobileNotificationsLastSeq:'
 
-function lastSeqStorageKey(hostId: string): string {
-  return LAST_SEQ_STORAGE_KEY_PREFIX + encodeURIComponent(hostId)
+function watermarkStorageKey(hostId: string): string {
+  return WATERMARK_STORAGE_KEY_PREFIX + encodeURIComponent(hostId)
 }
 
-function lastEpochStorageKey(hostId: string): string {
-  return LAST_EPOCH_STORAGE_KEY_PREFIX + encodeURIComponent(hostId)
+// A null epoch means "the counter this seq came from is unknown" — a legacy
+// watermark, or nothing stored. It can never be assumed to be the live counter.
+export type PersistedWatermark = { seq: number; epoch: string | null }
+
+function coerceSeq(value: unknown): number {
+  const parsed = typeof value === 'number' ? value : Number(value)
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : 0
 }
 
-export async function loadLastSeenSeq(hostId: string): Promise<number> {
+export async function loadWatermark(hostId: string): Promise<PersistedWatermark> {
   try {
-    const raw = await AsyncStorage.getItem(lastSeqStorageKey(hostId))
-    const parsed = raw == null ? 0 : Number(raw)
-    return Number.isFinite(parsed) && parsed > 0 ? parsed : 0
+    const raw = await AsyncStorage.getItem(watermarkStorageKey(hostId))
+    if (raw != null) {
+      const parsed = JSON.parse(raw) as { seq?: unknown; epoch?: unknown }
+      const epoch =
+        typeof parsed.epoch === 'string' && parsed.epoch.length > 0 ? parsed.epoch : null
+      return { seq: coerceSeq(parsed.seq), epoch }
+    }
   } catch {
-    return 0
+    // Unreadable or malformed: fall through to the legacy key rather than throw.
   }
-}
-
-// Null means "no epoch stored" — a watermark written before this field existed.
-export async function loadLastSeenEpoch(hostId: string): Promise<string | null> {
   try {
-    const raw = await AsyncStorage.getItem(lastEpochStorageKey(hostId))
-    return raw != null && raw.length > 0 ? raw : null
+    const legacy = await AsyncStorage.getItem(
+      LEGACY_SEQ_STORAGE_KEY_PREFIX + encodeURIComponent(hostId)
+    )
+    return { seq: coerceSeq(legacy), epoch: null }
   } catch {
-    return null
+    return { seq: 0, epoch: null }
   }
 }
 
-export async function saveLastSeenEpoch(hostId: string, epoch: string): Promise<void> {
-  if (!epoch) {
-    return
-  }
+export async function clearWatermark(hostId: string): Promise<void> {
   try {
-    await AsyncStorage.setItem(lastEpochStorageKey(hostId), epoch)
+    await AsyncStorage.removeItem(watermarkStorageKey(hostId))
   } catch {
-    // Best-effort, same trade-off as saveLastSeenSeq: a lost epoch degrades to the
-    // seq-only cut, never to a wrong one.
+    // Best-effort; a surviving key is re-validated by epoch on the next pair anyway.
   }
 }
 
-export async function saveLastSeenSeq(hostId: string, seq: number): Promise<void> {
-  if (!Number.isFinite(seq) || seq <= 0) {
-    return
-  }
+export async function saveWatermark(hostId: string, watermark: PersistedWatermark): Promise<void> {
   try {
-    await AsyncStorage.setItem(lastSeqStorageKey(hostId), String(seq))
+    await AsyncStorage.setItem(watermarkStorageKey(hostId), JSON.stringify(watermark))
   } catch {
     // Why: persisting the watermark is best-effort. If it fails (or lags), the
     // stored value stays BELOW what we delivered, so a later cold start can
@@ -83,6 +90,7 @@ const RECENTLY_SEEN_CAP = 512
 export function createSeenNotificationGuard(): {
   has: (id: string) => boolean
   add: (id: string) => void
+  clear: () => void
 } {
   const seen = new Set<string>()
   return {
@@ -99,6 +107,9 @@ export function createSeenNotificationGuard(): {
           seen.delete(first)
         }
       }
+    },
+    clear(): void {
+      seen.clear()
     }
   }
 }
@@ -160,12 +171,18 @@ export function adoptNotificationEpoch(
   if (!epoch || epoch === session.lastDeliveredEpoch) {
     return
   }
-  if (session.lastDeliveredEpoch !== null) {
-    // A real epoch change (not first observation): the old watermark is void.
-    session.lastDeliveredSeq = 0
-  }
+  // Why reset on a FIRST observation too (lastDeliveredEpoch === null): a seq seeded
+  // from a legacy store carries no epoch, so it cannot be shown to belong to this
+  // counter. Keeping it would let a pre-upgrade 57 cut the new counter's 1..57 —
+  // the exact #8591 failure, reached through the upgrade path instead of a restart.
+  session.lastDeliveredSeq = 0
+  // Why clear `seen`: its keys are seq-derived, and terminal-bell notifications have
+  // no notificationId at all (they key on `seq:N` alone). Across a restart the new
+  // counter re-issues those same low seqs, so a stale `seq:1` would silently drop
+  // the new counter's first bell. The dedup window belongs to one counter lifetime.
+  session.seen.clear()
   session.lastDeliveredEpoch = epoch
-  void saveLastSeenEpoch(hostId, epoch)
+  void saveWatermark(hostId, { seq: 0, epoch })
 }
 
 // Why: seed the watermark lazily so subscribe() doesn't block on an AsyncStorage read.
@@ -174,21 +191,27 @@ export function seedWatermarkFromStorage(session: HostNotificationSession, hostI
   if (session.watermarkLoaded) {
     return
   }
-  void Promise.all([loadLastSeenSeq(hostId), loadLastSeenEpoch(hostId)]).then(([seq, epoch]) => {
+  void loadWatermark(hostId).then(({ seq, epoch }) => {
     // Why the epoch comparison: this read can land AFTER 'ready' already adopted a
     // live epoch. If the stored watermark belongs to a different (older) counter,
     // applying it here would silently reinstate exactly the stale cut this fixes.
-    // Only a stored epoch matching the live one — or no live one yet — can seed.
-    const storedSeqIsCurrent =
-      session.lastDeliveredEpoch === null || session.lastDeliveredEpoch === epoch
-    if (session.lastDeliveredEpoch === null && epoch !== null) {
-      session.lastDeliveredEpoch = epoch
-    }
-    if (storedSeqIsCurrent) {
+    // A null stored epoch is a legacy watermark of unknown provenance — it may only
+    // seed while no live epoch is known, and adopting one later resets it.
+    if (session.lastDeliveredEpoch === null || session.lastDeliveredEpoch === epoch) {
       session.lastDeliveredSeq = Math.max(session.lastDeliveredSeq, seq)
+      if (session.lastDeliveredEpoch === null && epoch !== null) {
+        session.lastDeliveredEpoch = epoch
+      }
     }
     session.watermarkLoaded = true
   })
+}
+
+// Why (#8591): sessions live at module scope so they survive the subscription
+// teardown a reconnect performs. Nothing else drops them, so a host that is removed
+// and re-paired would retain its session and up to 512 seen keys until app restart.
+export function forgetHostNotificationSession(hostId: string): void {
+  sessionsByHost.delete(hostId)
 }
 
 // Why: key for the replay dedup guard. Uses notificationId when present, but
