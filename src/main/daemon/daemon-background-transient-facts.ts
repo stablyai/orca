@@ -59,7 +59,8 @@ export class BackgroundTransientFactRelay {
           // PR-link dedup memory, so a link re-printed across toggles can
           // re-fire — consumers treat pr-link as a latest-association update.
           onPrLink: (link) => this.emitFact(sessionId, { kind: 'pr-link', link }),
-          onMode2031Subscribe: () => this.emitFact(sessionId, { kind: '2031-subscribe' })
+          onMode2031Subscribe: () => this.emitFact(sessionId, { kind: '2031-subscribe' }),
+          onMode2031Unsubscribe: () => this.emitFact(sessionId, { kind: '2031-unsubscribe' })
         })
       )
     } else {

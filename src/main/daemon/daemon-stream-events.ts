@@ -69,6 +69,7 @@ export type DaemonTransientFact =
   | { kind: 'command-finished'; exitCode: number | null }
   | { kind: 'pr-link'; link: TerminalGitHubPRLink }
   | { kind: '2031-subscribe' }
+  | { kind: '2031-unsubscribe' }
 
 export type TransientFactEvent = {
   type: 'event'

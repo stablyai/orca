@@ -489,6 +489,23 @@ export function getPreviousVisibleForTerminalPane(args: {
   return args.previous.isVisible
 }
 
+/**
+ * Whether xterm's CSI parser owns this pane's 2031 state. Only gate-managed PTYs
+ * qualify: their bytes can be withheld from xterm, so the parser is the one place the
+ * renderer sees the subscribe. Every other PTY is owned by pty-connection's chunk
+ * scanner, and a second writer here would rewind it (#9993). An unbound pane, or a
+ * binding predating the predicate, is scanner-owned.
+ */
+export function isPaneParserOwnedMode2031Observer(
+  panePtyBindings: Map<number, IDisposable>,
+  paneId: number
+): boolean {
+  const binding = panePtyBindings.get(paneId) as
+    | (IDisposable & { isHiddenDeliveryGateManagedPty?: () => boolean })
+    | undefined
+  return binding?.isHiddenDeliveryGateManagedPty?.() === true
+}
+
 /** Wires mounted terminal panes to renderer state and terminal event handling. */
 export function useTerminalPaneLifecycle({
   tabId,
@@ -762,12 +779,7 @@ export function useTerminalPaneLifecycle({
           // Why only gate-managed PTYs: their bytes can be withheld from xterm, so the parser is
           // the only place the renderer sees the subscribe. Every other PTY has its state owned
           // by pty-connection's chunk scanner; a second writer here would rewind it (#9993).
-          shouldObserveInParser: () => {
-            const binding = panePtyBindings.get(pane.id) as
-              | (IDisposable & { isHiddenDeliveryGateManagedPty?: () => boolean })
-              | undefined
-            return binding?.isHiddenDeliveryGateManagedPty?.() === true
-          },
+          shouldObserveInParser: () => isPaneParserOwnedMode2031Observer(panePtyBindings, pane.id),
           isReplaying: () => isPaneReplaying(replayingPanesRef, pane.id),
           paneMode2031: paneMode2031Ref.current,
           paneLastThemeMode: paneLastThemeModeRef.current

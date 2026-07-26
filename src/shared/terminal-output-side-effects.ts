@@ -60,6 +60,13 @@ export type TerminalTitleTrackerCallbacks = {
    * hidden-delivery-gated renderer views answer the color-scheme query without byte access.
    */
   onMode2031Subscribe?: () => void
+  /**
+   * Fired per chunk that ends *unsubscribed* after having carried 2031 bytes. Gated
+   * views never see the withdrawal (main drops their bytes), so without this fact
+   * their subscription registry goes stale and a later theme flip pushes CSI 997
+   * into a shell that already withdrew — #9993 through the theme-change door.
+   */
+  onMode2031Unsubscribe?: () => void
 }
 
 export type TerminalTitleTracker = {
@@ -99,7 +106,8 @@ export function createTerminalTitleTracker(
     onBell,
     onCommandFinished,
     onPrLink,
-    onMode2031Subscribe
+    onMode2031Subscribe,
+    onMode2031Unsubscribe
   } = callbacks
   const bellDetector = onBell ? createBellDetector() : null
   // Why: created only when a consumer exists so headless serve never pays the per-chunk 133/URL scans.
@@ -195,14 +203,18 @@ export function createTerminalTitleTracker(
           onPrLink?.(link)
         }
       }
-      if (onMode2031Subscribe) {
+      if (onMode2031Subscribe || onMode2031Unsubscribe) {
         const mode2031Scan = scanMode2031Sequences(mode2031ScanTail, data)
         mode2031ScanTail = mode2031Scan.tail
         // Why finalState, not the sticky subscribe flag: fish toggles 2031 on
         // and off around every prompt, so a chunk that ends unsubscribed must
         // not be answered — the reply would land as text at the prompt (#9993).
         if (mode2031Scan.finalState === 'subscribed') {
-          onMode2031Subscribe()
+          onMode2031Subscribe?.()
+        } else if (mode2031Scan.finalState === 'unsubscribed') {
+          // null finalState means the chunk carried no 2031 bytes at all, so this
+          // fires only on a real withdrawal — not once per ordinary chunk.
+          onMode2031Unsubscribe?.()
         }
       }
     }

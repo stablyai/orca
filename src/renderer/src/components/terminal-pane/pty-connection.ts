@@ -2229,7 +2229,10 @@ export function connectPanePty(
         // Why: gated hidden panes never see the subscribe bytes; the fact
         // replaces the byte scan (and the old post-latch subscribe drop).
         ...(hiddenDeliveryGateActive
-          ? { onMode2031Subscribe: handleHiddenMode2031SubscribeFact }
+          ? {
+              onMode2031Subscribe: handleHiddenMode2031SubscribeFact,
+              onMode2031Unsubscribe: handleHiddenMode2031UnsubscribeFact
+            }
           : {})
       },
       restoreTitleOnRegister: true
@@ -3556,6 +3559,20 @@ export function connectPanePty(
     // CSI 997 update and the TUI keeps a stale theme after reveal.
     deps.recordPaneMode2031Subscription?.(pane.id, mode)
     recordHiddenMode2031Reply()
+  }
+  // Why (gate mode only): the counterpart to the subscribe fact. These panes never
+  // receive the withdrawal bytes — main drops them before delivery — and both the
+  // chunk scanner and the xterm CSI handler are disabled for them, so this fact is
+  // the ONLY observer that can retire the subscription. Without it a TUI that exits
+  // while hidden leaves paneMode2031 set, and the next theme flip pushes CSI 997
+  // into the shell that replaced it (#9993 via maybePushMode2031Flip). No reply is
+  // sent: a withdrawal is not a query.
+  const handleHiddenMode2031UnsubscribeFact = (): void => {
+    if (disposed || !isHiddenDeliveryGateManagedPty(transport.getPtyId())) {
+      return
+    }
+    deps.paneMode2031Ref.current.delete(pane.id)
+    deps.paneLastThemeModeRef.current.delete(pane.id)
   }
   deps.paneTransportsRef.current.set(pane.id, transport)
   const terminalCapabilityRepliesDisposable = installTerminalCapabilityReplyHandlers({
