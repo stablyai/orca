@@ -44,16 +44,32 @@ test.describe('Terminal shortcut conflicting with a chord that fires in terminal
     await searchInput.fill('shortcuts')
     await expect(orcaPage.getByRole('heading', { name: 'Shortcuts', exact: true })).toBeVisible()
 
-    if (shotDir) {
-      await orcaPage.screenshot({ path: path.join(shotDir, `${shotLabel}-1-shortcuts-pane.png`) })
+    const capture = async (name: string): Promise<void> => {
+      if (shotDir) {
+        await orcaPage.screenshot({ path: path.join(shotDir, `${shotLabel}-${name}.png`) })
+      }
     }
 
-    await orcaPage.getByPlaceholder('Search command or keys').fill('split terminal')
+    await capture('1-pane')
+
+    const localSearch = orcaPage.getByPlaceholder('Search command or keys')
+    await localSearch.fill('split terminal')
     await expect(orcaPage.getByText('Split terminal right', { exact: true })).toBeVisible()
+    await capture('2-affected-row')
 
-    if (shotDir) {
-      await orcaPage.screenshot({ path: path.join(shotDir, `${shotLabel}-2-split-terminal.png`) })
-    }
+    // The Conflicts filter is the pane's own answer to "what is wrong here".
+    await localSearch.clear()
+    await orcaPage.getByRole('button', { name: /Conflicts/ }).click()
+    await capture('3-conflicts-filter')
+
+    // The other claimant kept its default and must not be flagged.
+    await orcaPage.getByRole('button', { name: /^All/ }).click()
+    await localSearch.fill('worktree history')
+    await expect(orcaPage.getByText('Worktree History Forward', { exact: true })).toBeVisible()
+    await capture('4-other-action-untouched')
+
+    await localSearch.fill('split terminal')
+    await expect(orcaPage.getByText('Split terminal right', { exact: true })).toBeVisible()
 
     // Before the fix the pane reported no conflict at all: the chord was lost to
     // worktree history, the override was dropped, and nothing said why.
