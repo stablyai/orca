@@ -165,6 +165,43 @@ describe('HistoryReader', () => {
     })
   })
 
+  describe('probeColdRestore', () => {
+    it('distinguishes a proven empty snapshot from missing or closed history', () => {
+      writeSessionWithCheckpoint(
+        dir,
+        'empty',
+        makeMeta(),
+        makeCheckpoint({ snapshotAnsi: '', scrollbackAnsi: '', rehydrateSequences: '' })
+      )
+      writeSessionWithCheckpoint(
+        dir,
+        'closed',
+        makeMeta({ endedAt: '2026-04-15T12:00:00Z' }),
+        makeCheckpoint()
+      )
+      const corruptDir = join(dir, getHistorySessionDirName('corrupt-meta'))
+      mkdirSync(corruptDir, { recursive: true })
+      writeFileSync(join(corruptDir, 'meta.json'), 'not json')
+
+      expect(reader.probeColdRestore('empty')).toMatchObject({
+        kind: 'valid-snapshot',
+        truncated: false,
+        restore: { snapshotAnsi: '' }
+      })
+      expect(reader.probeColdRestore('missing')).toEqual({ kind: 'meta-absent' })
+      expect(reader.probeColdRestore('closed')).toEqual({ kind: 'meta-closed' })
+      expect(reader.probeColdRestore('corrupt-meta')).toEqual({ kind: 'meta-corrupt' })
+    })
+
+    it('fails closed when metadata is valid but no recovery payload exists', () => {
+      const sessionDir = join(dir, getHistorySessionDirName('no-payload'))
+      mkdirSync(sessionDir, { recursive: true })
+      writeFileSync(join(sessionDir, 'meta.json'), JSON.stringify(makeMeta()))
+
+      expect(reader.probeColdRestore('no-payload')).toEqual({ kind: 'payload-absent' })
+    })
+  })
+
   it('replays incremental hostname OSC-7 with the same WSL context', () => {
     writeSessionWithCheckpoint(dir, 'wsl-log', makeMeta(), makeCheckpoint({ generation: 7 }))
     const sessionDir = join(dir, getHistorySessionDirName('wsl-log'))

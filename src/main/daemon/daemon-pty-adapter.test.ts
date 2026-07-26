@@ -2027,7 +2027,7 @@ describe('DaemonPtyAdapter (IPtyProvider)', () => {
       expect(result.coldRestore).toBeUndefined()
     })
 
-    it('returns capture-unavailable for an empty lost-worker payload without creating a replacement', async () => {
+    it('passes a proven empty lost-worker payload to the archive gate', async () => {
       const sessionId = 'lost-worker-empty-payload'
       const sessionDir = join(historyDir, getHistorySessionDirName(sessionId))
       mkdirSync(sessionDir, { recursive: true })
@@ -2066,7 +2066,7 @@ describe('DaemonPtyAdapter (IPtyProvider)', () => {
       historyAdapter = new DaemonPtyAdapter({ socketPath, tokenPath, historyPath: historyDir })
       const preSpawnLostWorker = vi.fn(async () => ({
         kind: 'archived' as const,
-        archiveId: 'unexpected-archive'
+        archiveId: 'archive-empty-worker'
       }))
 
       const result = await historyAdapter.spawn({
@@ -2077,10 +2077,12 @@ describe('DaemonPtyAdapter (IPtyProvider)', () => {
       })
 
       expect(result.lostWorkerRecovery).toEqual({
-        kind: 'retryable-error',
-        code: 'capture-unavailable'
+        kind: 'archived',
+        archiveId: 'archive-empty-worker'
       })
-      expect(preSpawnLostWorker).not.toHaveBeenCalled()
+      expect(preSpawnLostWorker).toHaveBeenCalledWith(
+        expect.objectContaining({ scrollback: '', probeSibling: expect.any(Function) })
+      )
       expect(lastSpawnOpts).toBeNull()
     })
 

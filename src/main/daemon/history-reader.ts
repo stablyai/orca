@@ -6,6 +6,8 @@ import type { TerminalOscLinkRange } from '../../shared/terminal-osc-link-ranges
 import { getHistorySessionDirName } from './history-paths'
 import { decodeTerminalHistoryLog } from './terminal-history-log'
 import { HeadlessEmulator } from './headless-emulator'
+import { truncateUnclosedAlternateScreen } from './terminal-alt-screen-truncation'
+import { probeTerminalHistoryMetadata } from './terminal-history-metadata-probe'
 import {
   readTerminalHistoryBuffer,
   readTerminalHistoryJson,
@@ -14,8 +16,7 @@ import {
 import {
   TERMINAL_HISTORY_CHECKPOINT_MAX_BYTES,
   TERMINAL_HISTORY_LEGACY_SCROLLBACK_MAX_BYTES,
-  TERMINAL_HISTORY_LOG_MAX_BYTES,
-  TERMINAL_HISTORY_META_MAX_BYTES
+  TERMINAL_HISTORY_LOG_MAX_BYTES
 } from './terminal-history-file-limits'
 import {
   retainNewestRestorableTerminalHistorySessions,
@@ -33,8 +34,17 @@ export type ColdRestoreInfo = {
   modes: TerminalModes
 }
 
-const ALT_SCREEN_ON = '\x1b[?1049h'
-const ALT_SCREEN_OFF = '\x1b[?1049l'
+export type ColdRestoreProbe =
+  | {
+      kind:
+        | 'meta-absent'
+        | 'meta-corrupt'
+        | 'meta-closed'
+        | 'payload-absent'
+        | 'payload-corrupt'
+        | 'io-error'
+    }
+  | { kind: 'valid-snapshot'; restore: ColdRestoreInfo; truncated: false }
 
 export class HistoryReader {
   private basePath: string
@@ -43,13 +53,36 @@ export class HistoryReader {
     this.basePath = basePath
   }
 
-  // Why: spawn needs a cheap "could this cold-restore?" predicate before
-  // deciding to pay detectColdRestore's full checkpoint+log replay. Reads only
-  // the small meta.json, using the same unclean-shutdown test detectColdRestore
-  // starts with.
+  // Why: spawn avoids replaying history until metadata proves an unclean shutdown is possible.
   hasRestorableHistory(sessionId: string): boolean {
     const meta = this.readMeta(sessionId)
     return meta !== null && meta.endedAt === null
+  }
+
+  probeColdRestore(
+    sessionId: string,
+    opts?: { ignoreCleanEnd?: boolean; wslDistro?: string }
+  ): ColdRestoreProbe {
+    const meta = probeTerminalHistoryMetadata(this.basePath, sessionId)
+    if (meta.kind !== 'valid') {
+      return meta
+    }
+    if (meta.meta.endedAt !== null && !opts?.ignoreCleanEnd) {
+      return { kind: 'meta-closed' }
+    }
+    try {
+      const restore = this.detectColdRestore(sessionId, opts)
+      if (restore) {
+        return { kind: 'valid-snapshot', restore, truncated: false }
+      }
+      const sessionDir = join(this.basePath, getHistorySessionDirName(sessionId))
+      const hasPayload = ['checkpoint.json', 'output.log', 'scrollback.bin'].some((name) =>
+        existsSync(join(sessionDir, name))
+      )
+      return { kind: hasPayload ? 'payload-corrupt' : 'payload-absent' }
+    } catch {
+      return { kind: 'io-error' }
+    }
   }
 
   detectColdRestore(
@@ -83,10 +116,7 @@ export class HistoryReader {
       }
     }
 
-    // Why log replay is preferred over the checkpoint alone: the log carries
-    // byte-exact output up to ~5s before the crash (up to the full-snapshot
-    // cooldown, ~45s, for a streaming session mid-deferral), while the
-    // checkpoint can be a full log-cap (~5MB of output) stale.
+    // Why: the incremental log is newer than a checkpoint while remaining byte-exact.
     const logRestore = this.restoreFromIncrementalLog(sessionDir, meta, checkpoint, opts?.wslDistro)
     if (logRestore) {
       return logRestore
@@ -268,15 +298,8 @@ export class HistoryReader {
   }
 
   private readMeta(sessionId: string): SessionMeta | null {
-    const metaPath = join(this.basePath, getHistorySessionDirName(sessionId), 'meta.json')
-    if (!existsSync(metaPath)) {
-      return null
-    }
-    try {
-      return readTerminalHistoryJson<SessionMeta>(metaPath, TERMINAL_HISTORY_META_MAX_BYTES)
-    } catch {
-      return null
-    }
+    const result = probeTerminalHistoryMetadata(this.basePath, sessionId)
+    return result.kind === 'valid' ? result.meta : null
   }
 
   // Why: handles the upgrade transition where sessions created before the
@@ -298,7 +321,7 @@ export class HistoryReader {
         scrollbackPath,
         TERMINAL_HISTORY_LEGACY_SCROLLBACK_MAX_BYTES
       )
-      const truncated = this.truncateAltScreen(scrollback)
+      const truncated = truncateUnclosedAlternateScreen(scrollback)
       return {
         snapshotAnsi: truncated,
         scrollbackAnsi: truncated,
@@ -316,43 +339,5 @@ export class HistoryReader {
     } catch {
       return null
     }
-  }
-
-  // Why: raw scrollback from TUI sessions (vim, less, htop) contains
-  // alternate-screen switches that produce garbled output when replayed.
-  // Truncate before the outermost unmatched alt-screen-on so only normal
-  // terminal output is restored.
-  private truncateAltScreen(data: string): string {
-    let depth = 0
-    let outermostUnmatchedOnIdx = -1
-
-    let searchFrom = 0
-    while (searchFrom < data.length) {
-      const onIdx = data.indexOf(ALT_SCREEN_ON, searchFrom)
-      const offIdx = data.indexOf(ALT_SCREEN_OFF, searchFrom)
-
-      if (onIdx === -1 && offIdx === -1) {
-        break
-      }
-
-      if (onIdx !== -1 && (offIdx === -1 || onIdx < offIdx)) {
-        if (depth === 0) {
-          outermostUnmatchedOnIdx = onIdx
-        }
-        depth++
-        searchFrom = onIdx + ALT_SCREEN_ON.length
-      } else {
-        if (depth > 0) {
-          depth--
-        }
-        searchFrom = offIdx + ALT_SCREEN_OFF.length
-      }
-    }
-
-    if (depth > 0 && outermostUnmatchedOnIdx !== -1) {
-      return data.slice(0, outermostUnmatchedOnIdx)
-    }
-
-    return data
   }
 }

@@ -39,7 +39,10 @@ import type {
   PtyProcessInfo,
   PtySpawnResult
 } from '../providers/types'
-import type { PtySpawnOptionsWithLostWorker } from '../providers/pty-lost-worker-recovery'
+import type {
+  PtyColdRestoreProbe,
+  PtySpawnOptionsWithLostWorker
+} from '../providers/pty-lost-worker-recovery'
 import { isShellProcess } from '../../shared/agent-detection'
 import { resolveWslSessionContext } from './wsl-session-context'
 import { normalizeWslColdRestoreCwd } from './wsl-cold-restore-cwd'
@@ -365,7 +368,9 @@ export class DaemonPtyAdapter implements IPtyProvider {
           throw error
         }
         restoreInfo = detectColdRestore({ ignoreCleanEnd: true })
-        const coldRestore = restoreInfo ? this.buildColdRestorePayload(restoreInfo) : null
+        const coldRestore = restoreInfo
+          ? this.buildColdRestorePayloadForLostWorker(restoreInfo)
+          : null
         if (!coldRestore) {
           return {
             id: sessionId,
@@ -375,7 +380,11 @@ export class DaemonPtyAdapter implements IPtyProvider {
         }
         return {
           id: sessionId,
-          lostWorkerRecovery: await opts.preSpawnLostWorker(coldRestore),
+          lostWorkerRecovery: await opts.preSpawnLostWorker({
+            ...coldRestore,
+            probeSibling: (candidateSessionId) =>
+              this.probeColdRestoreForLostWorker(candidateSessionId)
+          }),
           ...(wslDistro ? { wslDistro } : {})
         }
       }
@@ -784,6 +793,27 @@ export class DaemonPtyAdapter implements IPtyProvider {
       rows: restoreInfo.rows,
       oscLinks: restoreInfo.oscLinks
     }
+  }
+
+  private buildColdRestorePayloadForLostWorker(restoreInfo: ColdRestoreInfo): ColdRestorePayload {
+    return {
+      scrollback: getRecoveredHistorySeed(restoreInfo) ?? '',
+      cwd: restoreInfo.cwd,
+      cols: restoreInfo.cols,
+      rows: restoreInfo.rows,
+      oscLinks: restoreInfo.oscLinks
+    }
+  }
+
+  private probeColdRestoreForLostWorker(sessionId: string): PtyColdRestoreProbe {
+    const probe = this.historyReader?.probeColdRestore(sessionId, {
+      wslDistro: this.wslDistrosBySessionId.get(sessionId)
+    }) ?? { kind: 'io-error' as const }
+    if (probe.kind !== 'valid-snapshot') {
+      return probe
+    }
+    const payload = this.buildColdRestorePayloadForLostWorker(probe.restore)
+    return { kind: 'valid-snapshot', ...payload, truncated: probe.truncated }
   }
 
   async sendSignal(id: string, signal: string): Promise<void> {

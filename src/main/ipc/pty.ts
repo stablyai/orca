@@ -80,7 +80,10 @@ import type {
   PtySpawnResult
 } from '../providers/types'
 import type { PtyLostWorkerRecovery } from '../providers/pty-spawn-result'
-import type { PtySpawnOptionsWithLostWorker } from '../providers/pty-lost-worker-recovery'
+import type {
+  PtyColdRestoreProbe,
+  PtySpawnOptionsWithLostWorker
+} from '../providers/pty-lost-worker-recovery'
 import { inspectPtyProviderProcess } from '../providers/pty-process-inspection'
 import {
   PtyProcessListAdmission,
@@ -1985,7 +1988,13 @@ export function registerPtyHandlers(
     worktreeId: string
     tabId: string
     leafId: string
-    coldRestore: { scrollback: string; cwd: string; cols?: number; rows?: number }
+    coldRestore: {
+      scrollback: string
+      cwd: string
+      cols?: number
+      rows?: number
+      probeSibling: (sessionId: string) => PtyColdRestoreProbe
+    }
   }): Promise<PtyLostWorkerRecovery> => {
     if (!store) {
       return { kind: 'retryable-error', code: 'durability-failed' }
@@ -2050,9 +2059,15 @@ export function registerPtyHandlers(
             (layout?.scrollbackRefsByLeafId?.[leafId]
               ? store.readTerminalScrollbackSnapshot(layout.scrollbackRefsByLeafId[leafId])
               : null)
-          return typeof sidecar === 'string'
-            ? fromBuffer(sidecar, 'session-sidecar')
-            : { kind: 'unavailable' }
+          if (typeof sidecar === 'string') {
+            return fromBuffer(sidecar, 'session-sidecar')
+          }
+          const ptyId = layout?.ptyIdsByLeafId?.[leafId]
+          const probe = ptyId ? args.coldRestore.probeSibling(ptyId) : null
+          if (probe?.kind !== 'valid-snapshot' || probe.truncated) {
+            return { kind: 'unavailable' }
+          }
+          return fromBuffer(probe.scrollback, 'daemon-headless')
         }
       }
       const result = await archiveLostTerminalWorker({
