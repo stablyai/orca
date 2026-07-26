@@ -130,6 +130,42 @@ describe('agent process recognition', () => {
     })
   })
 
+  it('recognizes Trae by its primary binary and documented aliases', () => {
+    expect(recognizeAgentProcess('trae-cli')).toEqual({
+      agent: 'trae',
+      processName: 'trae-cli'
+    })
+    expect(recognizeAgentProcess('traecli')).toEqual({
+      agent: 'trae',
+      processName: 'traecli'
+    })
+    expect(recognizeAgentProcess('trae-agent')).toEqual({
+      agent: 'trae',
+      processName: 'trae-agent'
+    })
+    expect(recognizeAgentProcess('/Users/dev/.local/bin/trae-cli')).toEqual({
+      agent: 'trae',
+      processName: 'trae-cli'
+    })
+    expect(isExpectedAgentProcess('/Users/dev/.local/bin/trae-cli', 'trae-cli')).toBe(true)
+    expect(isRecognizedAgentType('trae-cli')).toBe(true)
+  })
+
+  it('does not recognize Trae headless one-shot commands as interactive agents', () => {
+    expect(recognizeAgentProcessFromCommandLine('trae-cli -p "summarize this diff"')).toBeNull()
+    expect(recognizeAgentProcessFromCommandLine('trae-cli --print "review this"')).toBeNull()
+    expect(
+      recognizeAgentProcessFromCommandLine('trae-cli --output-format json "review this"')
+    ).toBeNull()
+    expect(
+      recognizeAgentProcessFromCommandLine('trae-cli --output-format=stream-json review')
+    ).toBeNull()
+    expect(recognizeAgentProcessFromCommandLine('trae-cli --resume AUTO')).toEqual({
+      agent: 'trae',
+      processName: 'trae-cli'
+    })
+  })
+
   it('recognizes Mistral Vibe by its installed executable and legacy alias', () => {
     expect(recognizeAgentProcess('/home/dev/.local/bin/vibe')).toEqual({
       agent: 'mistral-vibe',

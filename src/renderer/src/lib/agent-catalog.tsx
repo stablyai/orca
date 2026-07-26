@@ -105,6 +105,13 @@ export const getAgentCatalog = createLocalizedCatalog((): AgentCatalogEntry[] =>
     homepageUrl: 'https://github.com/AntigmaLabs/ante-preview'
   },
   {
+    id: 'trae',
+    label: translate('auto.lib.agent.catalog.060d152fb5', 'Trae'),
+    cmd: 'trae-cli',
+    faviconDomain: 'docs.trae.cn',
+    homepageUrl: 'https://docs.trae.cn/cli'
+  },
+  {
     id: 'pi',
     label: translate('auto.lib.agent.catalog.302934c5d9', 'Pi'),
     cmd: 'pi',

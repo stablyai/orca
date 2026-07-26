@@ -115,6 +115,23 @@ describe('buildAgentStartupPlan', () => {
     })
   })
 
+  it('passes the prompt to Trae as a positional argv, same as Claude/Codex', () => {
+    expect(
+      buildAgentStartupPlan({
+        agent: 'trae',
+        prompt: 'Summarize the failing tests',
+        cmdOverrides: {},
+        platform: 'linux'
+      })
+    ).toEqual({
+      agent: 'trae',
+      launchCommand: "trae-cli 'Summarize the failing tests'",
+      expectedProcess: 'trae-cli',
+      followupPrompt: null,
+      launchConfig: emptyLaunchConfig('trae-cli')
+    })
+  })
+
   it('uses cursor-agent as the actual launch binary', () => {
     expect(
       buildAgentStartupPlan({

@@ -96,6 +96,21 @@ export const TUI_AGENT_CONFIG: Record<TuiAgent, TuiAgentConfig> = {
     // Why: `ante --prompt` is headless (runs once and exits), so launch the bare TUI and inject after startup.
     promptInjectionMode: 'stdin-after-start'
   },
+  trae: {
+    // Why: the published trae-cli binary is installed under this name (with
+    // `traecli`/`trae-agent` as documented aliases for the same binary).
+    // Excludes the CLI's third documented alias `ta` — too generic a
+    // 2-letter name to safely treat as a PATH-existence signal for Trae;
+    // it would false-positive on unrelated tools users already have there.
+    detectCmd: 'trae-cli',
+    detectCmdAliases: ['traecli', 'trae-agent'],
+    launchCmd: 'trae-cli',
+    expectedProcess: 'trae-cli',
+    // Why: `trae-cli [prompt]` accepts the initial task as a positional argv,
+    // same contract as Claude/Codex, so Orca can launch straight into the
+    // composed prompt instead of pasting after startup.
+    promptInjectionMode: 'argv'
+  },
   opencode: {
     detectCmd: 'opencode',
     launchCmd: 'opencode',
