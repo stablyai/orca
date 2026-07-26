@@ -287,6 +287,16 @@ describe('Gitea client', () => {
     ])
   })
 
+  it('resolves null without throwing when the scan returns an empty list', async () => {
+    // Gitea has no head-branch filter, so "branch has no PR" arrives as a 200
+    // with [] from the repo listing — never a 404. The throwing variant must
+    // still report that as a plain "no PR".
+    const fetchMock = vi.fn(async () => Response.json([]))
+    vi.stubGlobal('fetch', fetchMock)
+
+    await expect(getGiteaPullRequestForBranchOrThrow('/repo', 'feature/gitea')).resolves.toBeNull()
+  })
+
   it('still throws on a 404 from the /pulls scan so a misconfigured host is not read as "no PR"', async () => {
     const fetchMock = vi.fn(async () => Response.json({ message: 'not found' }, { status: 404 }))
     vi.stubGlobal('fetch', fetchMock)
