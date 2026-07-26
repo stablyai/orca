@@ -224,6 +224,22 @@ describe('command aliases dispatch to the canonical handler', () => {
       vi.unstubAllEnvs()
     }
   })
+
+  it('honors remote environment selection for agent-memory commands', async () => {
+    const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
+    const priorExitCode = process.exitCode
+
+    await main(['agent', 'memory', 'init', '--environment', 'desk', '--json'], '/tmp/repo')
+
+    expect(callMock).not.toHaveBeenCalled()
+    expect([...logSpy.mock.calls, ...errorSpy.mock.calls].flat().join('\n')).toContain(
+      'Remote agent-memory commands require --worktree'
+    )
+    expect(process.exitCode).toBe(1)
+
+    process.exitCode = priorExitCode
+    errorSpy.mockRestore()
+  })
 })
 
 describe('unknown command surfaces a suggestion', () => {
