@@ -31,6 +31,7 @@ import { sortWorktreesSmart } from '@/components/sidebar/smart-sort'
 import {
   isAutomationGeneratedWorkspace,
   isCliCreatedWorkspace,
+  isDetachedHeadWorkspace,
   isDefaultBranchWorkspace
 } from '@/components/sidebar/visible-worktrees'
 import { getLiveAgentStatusByWorktreeId, isInactiveWorkspace } from '@/lib/worktree-activity-state'
@@ -394,6 +395,7 @@ export default function WorktreeJumpPalette(): React.JSX.Element | null {
   const hideDefaultBranchWorkspace = useAppStore((s) => s.hideDefaultBranchWorkspace)
   const hideAutomationGeneratedWorkspaces = useAppStore((s) => s.hideAutomationGeneratedWorkspaces)
   const hideCliCreatedWorkspaces = useAppStore((s) => s.hideCliCreatedWorkspaces)
+  const hideDetachedHeadWorkspaces = useAppStore((s) => s.hideDetachedHeadWorkspaces)
   const showSleepingWorkspaces = useAppStore((s) => s.showSleepingWorkspaces)
   const lastVisitedAtByWorktreeId = useAppStore((s) => s.lastVisitedAtByWorktreeId)
   const workspacePortScan = useAppStore((s) => s.workspacePortScan?.result ?? null)
@@ -487,6 +489,9 @@ export default function WorktreeJumpPalette(): React.JSX.Element | null {
         if (hideCliCreatedWorkspaces && isCliCreatedWorkspace(worktree)) {
           return false
         }
+        if (hideDetachedHeadWorkspaces && isDetachedHeadWorkspace(worktree)) {
+          return false
+        }
         if (
           !showSleepingWorkspaces &&
           isInactiveWorkspace(
@@ -507,6 +512,7 @@ export default function WorktreeJumpPalette(): React.JSX.Element | null {
       hideAutomationGeneratedWorkspaces,
       hideCliCreatedWorkspaces,
       hideDefaultBranchWorkspace,
+      hideDetachedHeadWorkspaces,
       ptyIdsByTabId,
       showSleepingWorkspaces,
       tabsByWorktree,

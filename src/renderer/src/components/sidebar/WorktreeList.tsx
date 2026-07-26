@@ -5232,6 +5232,7 @@ const WorktreeList = React.memo(function WorktreeList({
   const hideDefaultBranchWorkspace = useAppStore((s) => s.hideDefaultBranchWorkspace)
   const hideAutomationGeneratedWorkspaces = useAppStore((s) => s.hideAutomationGeneratedWorkspaces)
   const hideCliCreatedWorkspaces = useAppStore((s) => s.hideCliCreatedWorkspaces)
+  const hideDetachedHeadWorkspaces = useAppStore((s) => s.hideDetachedHeadWorkspaces)
   const filterRepoIds = useAppStore((s) => s.filterRepoIds)
   const openModal = useAppStore((s) => s.openModal)
   const openSettingsPage = useAppStore((s) => s.openSettingsPage)
@@ -5518,6 +5519,7 @@ const WorktreeList = React.memo(function WorktreeList({
       hideDefaultBranchWorkspace,
       hideAutomationGeneratedWorkspaces,
       hideCliCreatedWorkspaces,
+      hideDetachedHeadWorkspaces,
       repoMap,
       workspaceHostScope,
       visibleWorkspaceHostIds,
@@ -5534,6 +5536,7 @@ const WorktreeList = React.memo(function WorktreeList({
     hideDefaultBranchWorkspace,
     hideAutomationGeneratedWorkspaces,
     hideCliCreatedWorkspaces,
+    hideDetachedHeadWorkspaces,
     workspaceHostScope,
     visibleWorkspaceHostIds,
     settings,
@@ -6494,6 +6497,7 @@ const WorktreeList = React.memo(function WorktreeList({
       hideDefaultBranchWorkspace,
       hideAutomationGeneratedWorkspaces,
       hideCliCreatedWorkspaces,
+      hideDetachedHeadWorkspaces,
       visibleWorkspaceHostIds,
       workspaceHostScope
     }),
@@ -6503,6 +6507,7 @@ const WorktreeList = React.memo(function WorktreeList({
       hideDefaultBranchWorkspace,
       hideAutomationGeneratedWorkspaces,
       hideCliCreatedWorkspaces,
+      hideDetachedHeadWorkspaces,
       visibleWorkspaceHostIds,
       workspaceHostScope
     ]
@@ -6514,6 +6519,7 @@ const WorktreeList = React.memo(function WorktreeList({
     (s) => s.setHideAutomationGeneratedWorkspaces
   )
   const setHideCliCreatedWorkspaces = useAppStore((s) => s.setHideCliCreatedWorkspaces)
+  const setHideDetachedHeadWorkspaces = useAppStore((s) => s.setHideDetachedHeadWorkspaces)
   const setFilterRepoIds = useAppStore((s) => s.setFilterRepoIds)
   const setVisibleWorkspaceHostIds = useAppStore((s) => s.setVisibleWorkspaceHostIds)
 
@@ -6534,6 +6540,9 @@ const WorktreeList = React.memo(function WorktreeList({
     if (actions.resetHideCliCreatedWorkspaces) {
       setHideCliCreatedWorkspaces(false)
     }
+    if (actions.resetHideDetachedHeadWorkspaces) {
+      setHideDetachedHeadWorkspaces(false)
+    }
     if (actions.resetVisibleWorkspaceHostIds) {
       setVisibleWorkspaceHostIds(null)
     }
@@ -6543,6 +6552,7 @@ const WorktreeList = React.memo(function WorktreeList({
     setHideDefaultBranchWorkspace,
     setHideAutomationGeneratedWorkspaces,
     setHideCliCreatedWorkspaces,
+    setHideDetachedHeadWorkspaces,
     setVisibleWorkspaceHostIds,
     filterState
   ])

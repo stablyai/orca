@@ -4068,7 +4068,8 @@
           "489d1c8c9f": "搜索项目...",
           "ee240a39eb": "编辑筛选条件",
           "automationCreated": "隐藏自动化创建的工作区",
-          "cliCreated": "Hide CLI-created"
+          "cliCreated": "Hide CLI-created",
+          "detachedHead": "隐藏分离 HEAD"
         },
         "SidebarHeader": {
           "92154beb7e": "新工作区",
@@ -4132,7 +4133,8 @@
           "ed1611b65b": "隐藏休眠项",
           "82594419ba": "筛选条件",
           "automationCreated": "隐藏自动化创建的工作区",
-          "cliCreated": "Hide CLI-created"
+          "cliCreated": "Hide CLI-created",
+          "detachedHead": "隐藏分离 HEAD"
         },
         "SidebarWorkspaceOptionsMenu": {
           "95c9754653": "智能体活动布局",

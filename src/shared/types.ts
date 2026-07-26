@@ -3265,6 +3265,8 @@ export type PersistedUIState = {
   hideAutomationGeneratedWorkspaces?: boolean
   /** Hide workspaces created through `orca worktree create`. */
   hideCliCreatedWorkspaces?: boolean
+  /** Hide workspaces sitting on a detached HEAD; folder workspaces (no head at all) are unaffected. */
+  hideDetachedHeadWorkspaces?: boolean
   /** Per-worktree Explorer dotfile visibility. Missing entries inherit the default: show. */
   showDotfilesByWorktree?: Record<string, boolean>
   filterRepoIds: string[]

@@ -4125,7 +4125,8 @@
           "489d1c8c9f": "Search projects...",
           "ee240a39eb": "Edit filters",
           "automationCreated": "Hide automation-created",
-          "cliCreated": "Hide CLI-created"
+          "cliCreated": "Hide CLI-created",
+          "detachedHead": "Hide detached HEAD"
         },
         "SidebarHeader": {
           "25a95899c9": "Add Project",
@@ -4189,7 +4190,8 @@
           "ed1611b65b": "Hide sleeping",
           "82594419ba": "Filters",
           "automationCreated": "Hide automation-created",
-          "cliCreated": "Hide CLI-created"
+          "cliCreated": "Hide CLI-created",
+          "detachedHead": "Hide detached HEAD"
         },
         "sidebarHostOptions": {
           "3e102f111c": "All hosts",

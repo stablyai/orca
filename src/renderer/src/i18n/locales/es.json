@@ -4087,7 +4087,8 @@
           "489d1c8c9f": "Buscar proyectos...",
           "ee240a39eb": "Editar filtros",
           "automationCreated": "Ocultar creados por automatizaciones",
-          "cliCreated": "Hide CLI-created"
+          "cliCreated": "Hide CLI-created",
+          "detachedHead": "Ocultar HEAD desacoplado"
         },
         "SidebarHeader": {
           "92154beb7e": "Nuevo espacio de trabajo",
@@ -4151,7 +4152,8 @@
           "ed1611b65b": "Ocultar en reposo",
           "82594419ba": "Filtros",
           "automationCreated": "Ocultar creados por automatizaciones",
-          "cliCreated": "Hide CLI-created"
+          "cliCreated": "Hide CLI-created",
+          "detachedHead": "Ocultar HEAD desacoplado"
         },
         "SidebarWorkspaceOptionsMenu": {
           "95c9754653": "Diseño de actividad del Agent",

@@ -64,6 +64,7 @@ import {
 import { toast } from 'sonner'
 import { initialAgentTabViewModeProps } from './native-chat-initial-view-mode'
 import { getConnectionId } from '@/lib/connection-context'
+import { isDetachedHeadWorkspace } from '@/components/sidebar/visible-worktrees'
 import { isNativeChatTranscriptLocalReadable } from '@/lib/native-chat-transcript-readability'
 import { seedNativeChatAppliedSessionOptions } from '@/components/native-chat/native-chat-session-option-cache'
 import { resolveNativeChatSessionOptionDefaults } from '../../../shared/native-chat-session-option-defaults'
@@ -366,6 +367,9 @@ export function activateAndRevealWorktree(
   }
   if (state.hideCliCreatedWorkspaces && wt.cliProvenance?.kind === 'created-by-cli') {
     state.setHideCliCreatedWorkspaces(false)
+  }
+  if (state.hideDetachedHeadWorkspaces && isDetachedHeadWorkspace(wt)) {
+    state.setHideDetachedHeadWorkspaces(false)
   }
 
   // 6. Reveal in sidebar
