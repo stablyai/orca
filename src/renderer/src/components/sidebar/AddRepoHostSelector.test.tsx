@@ -134,4 +134,37 @@ describe('AddRepoHostSelector', () => {
     expect(html).toContain('Update Orca on the server.')
     expect(html).toContain('aria-disabled="true"')
   })
+
+  it('keeps a reachable runtime host selectable while shared control finishes connecting', () => {
+    const html = renderToStaticMarkup(
+      <AddRepoHostSelector
+        hosts={[
+          {
+            id: 'local',
+            label: 'Local Mac',
+            detail: 'This computer',
+            kind: 'local',
+            health: 'local',
+            presence: 'local'
+          },
+          {
+            id: 'runtime:server',
+            label: 'OCI',
+            detail: 'Orca server',
+            kind: 'runtime',
+            health: 'connecting',
+            presence: 'active'
+          }
+        ]}
+        selectedHostId="local"
+        open
+        onOpenChange={vi.fn()}
+        onSelectHost={vi.fn()}
+      />
+    )
+
+    expect(html).toContain('OCI')
+    expect(html).not.toContain('cursor-not-allowed')
+    expect(html).not.toContain('opacity-55')
+  })
 })

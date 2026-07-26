@@ -228,6 +228,22 @@ describe('useAddRepoHostSelection', () => {
     expect(mocks.stateSetters[0]).toHaveBeenCalledWith('local')
   })
 
+  it('selects a runtime host while shared control finishes connecting', async () => {
+    mocks.stateValues = ['local', false]
+    mocks.hostOptions[2] = {
+      ...mocks.hostOptions[2],
+      health: 'connecting'
+    }
+    const setStep = vi.fn()
+    const { useAddRepoHostSelection } = await import('./use-add-repo-host-selection')
+
+    const result = useAddRepoHostSelection({ isOpen: true, setStep })
+    await result.handleSelectAddProjectHost('runtime:env-1')
+
+    expect(mocks.stateSetters[0]).toHaveBeenCalledWith('runtime:env-1')
+    expect(setStep).toHaveBeenCalledWith('add')
+  })
+
   it('hides ephemeral VM runtime hosts from Add Project selection', async () => {
     mocks.stateValues = ['runtime:env-vm', false]
     mocks.hostOptions.push({
