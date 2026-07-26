@@ -21,6 +21,7 @@ export type TerminalLostWorkerArchiveCandidate = {
   tabId: string
   runtimeEnvironmentId?: string
   sshTerminationTargetId?: string
+  attempt?: number
   expectedSourcePaneIdentityByLeafId: Record<string, TerminalArchiveSourcePaneIdentity>
   relayEvidence?: Pick<
     RelayPtyLostEntry,
@@ -228,6 +229,8 @@ async function archiveLostTerminalWorkerOnce(args: {
         reason: args.candidate.reason,
         executionHostId: args.candidate.executionHostId,
         tabId: args.candidate.tabId,
+        attempt: args.candidate.attempt ?? 'archive-completion',
+        operationId: args.operationId,
         error: error instanceof Error ? error.message : String(error)
       })
     }

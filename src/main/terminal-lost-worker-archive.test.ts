@@ -219,6 +219,40 @@ describe('archiveLostTerminalWorker', () => {
     expect(completeArchive).toHaveBeenCalledOnce()
   })
 
+  it('correlates post-commit completion failures with the operation and attempt', async () => {
+    const frozenSession = session()
+    const archiveOwner = owner(frozenSession)
+    const diagnostic = vi.spyOn(console, 'warn').mockImplementation(() => {})
+
+    const result = await archiveLostTerminalWorker({
+      owner: archiveOwner.value,
+      candidate: {
+        reason: 'relay-worker-lost',
+        executionHostId: 'ssh:target-1',
+        worktreeId: WORKTREE_ID,
+        tabId: TAB_ID,
+        attempt: 7,
+        expectedSourcePaneIdentityByLeafId: {
+          [LEAF_ID]: { paneKey: `${TAB_ID}:${LEAF_ID}`, incarnationId: 'incarnation-1' }
+        }
+      },
+      frozenSession,
+      snapshotSource: { capture: async () => ({ kind: 'captured-empty' }) },
+      completeArchive: vi.fn().mockRejectedValue(new Error('shutdown unavailable'))
+    })
+
+    expect(result).toMatchObject({ kind: 'archived' })
+    expect(diagnostic).toHaveBeenCalledWith(
+      '[terminal-lost-worker-archive] completion diagnostic',
+      expect.objectContaining({
+        attempt: 7,
+        operationId: expect.stringMatching(/^relay-worker-lost:tab-1:[0-9a-f]{64}$/),
+        error: 'shutdown unavailable'
+      })
+    )
+    diagnostic.mockRestore()
+  })
+
   it('checks the reconnect attempt fence before every pre-commit leaf capture', async () => {
     const secondLeafId = '22222222-2222-4222-8222-222222222222'
     const frozenSession = session()

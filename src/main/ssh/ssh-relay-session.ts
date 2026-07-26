@@ -1154,6 +1154,7 @@ export class SshRelaySession {
         worktreeId,
         tabId,
         sshTerminationTargetId: this.targetId,
+        attempt: this.lostWorkerArchiveAttempt,
         expectedSourcePaneIdentityByLeafId: captured.sourcePaneIdentityByLeafId,
         relayEvidence: lost
       },
