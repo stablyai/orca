@@ -3,7 +3,12 @@ import type { DetachedTerminalTabSeed } from '../../../../shared/types'
 
 type TerminalTabWindowDetachStore = Pick<
   AppState,
-  'tabsByWorktree' | 'groupsByWorktree' | 'terminalLayoutsByTabId' | 'ptyIdsByTabId'
+  | 'tabsByWorktree'
+  | 'groupsByWorktree'
+  | 'terminalLayoutsByTabId'
+  | 'ptyIdsByTabId'
+  | 'repos'
+  | 'worktreesByRepo'
 >
 
 /**
@@ -37,7 +42,30 @@ export function captureTerminalTabForWindowDetach(
   const ptyIds = store.ptyIdsByTabId[tabId] ?? []
   const ptyId = ptyIds.at(-1) ?? tab.ptyId ?? null
 
-  return { worktreeId, groupId: group.id, tab, layout, ptyId }
+  // Derive repoId from worktreeId for the popout store's terminal route resolver.
+  const separatorIdx = worktreeId.indexOf('::')
+  const repoId = separatorIdx === -1 ? worktreeId : worktreeId.slice(0, separatorIdx)
+  const repo = store.repos.find((r) => r.id === repoId)
+  const worktree = (store.worktreesByRepo[repoId] ?? []).find((w) => w.id === worktreeId)
+  if (!repo || !worktree) {
+    return null
+  }
+
+  return {
+    worktreeId,
+    groupId: group.id,
+    tab,
+    layout,
+    ptyId,
+    repo: {
+      id: repo.id,
+      path: repo.path,
+      displayName: repo.displayName,
+      badgeColor: repo.badgeColor,
+      addedAt: repo.addedAt
+    },
+    worktree: { id: worktree.id, repoId: worktree.repoId, displayName: worktree.displayName }
+  }
 }
 
 type TerminalTabWindowReintegrateStore = Pick<
