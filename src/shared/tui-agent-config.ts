@@ -227,6 +227,8 @@ const TUI_AGENT_CONFIG_SOURCE: Record<TuiAgent, TuiAgentConfigSource> = {
     // installs `cursor`, which reaches the same agent via the `agent` subcommand.
     detectCmd: 'cursor-agent',
     detectCmdAliases: ['cursor'],
+    // Why: Cursor.app's shim self-installs the agent (`curl https://cursor.com/install | bash`)
+    // when `cursor-agent` is missing, so this form can block on a download on first launch.
     launchCmdByDetectCmd: { cursor: 'cursor agent' },
     promptInjectionMode: 'argv',
     // Why: first-launch trust menu swallows the bracketed paste; pre-write the .workspace-trusted marker so it skips (agent-trust-presets.ts).
