@@ -2,6 +2,7 @@ import { mkdir, mkdtemp, rm, utimes, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
+import { AI_VAULT_SESSION_PATH_MAX_UTF8_BYTES } from './session-list-retention'
 import { listClaudeSubagentSessions } from './session-scanner-claude-subagents'
 import { countSubagentTranscripts } from './session-scanner-subagent-transcripts'
 
@@ -373,6 +374,111 @@ describe('listClaudeSubagentSessions', () => {
     expect(result.sessions.map((session) => session.subagent?.parentSessionId)).toEqual([
       'parent-session'
     ])
+  })
+
+  it('caps an oversized subagent directory to the newest transcript files', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'orca-ai-vault-subagent-cap-'))
+    tempRoots.push(root)
+    const parentFilePath = join(root, 'project', 'parent-session.jsonl')
+    const subagentsDir = join(root, 'project', 'parent-session', 'subagents')
+
+    for (const [index, agentId] of ['oldest', 'middle', 'newest'].entries()) {
+      await writeSubagentTranscript({
+        subagentsDir,
+        agentId,
+        taskPrompt: `Task for ${agentId}`,
+        timestamp: `2026-07-05T10:0${index + 1}:00.000Z`
+      })
+      const mtime = new Date(1_700_000_000_000 + index * 1_000)
+      await utimes(join(subagentsDir, `agent-${agentId}.jsonl`), mtime, mtime)
+    }
+
+    const result = await listClaudeSubagentSessions({
+      parentFilePath,
+      platform: 'darwin',
+      maxSessions: 2
+    })
+
+    expect(result.sessions.map((session) => session.title)).toEqual([
+      'Task for newest',
+      'Task for middle'
+    ])
+    expect(result.issues).toHaveLength(1)
+    expect(result.issues[0]?.message).toContain('newest 2 subagent transcripts')
+  })
+
+  it('omits a subagent whose retained session metadata exceeds its per-session limit', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'orca-ai-vault-subagent-session-limit-'))
+    tempRoots.push(root)
+    const parentFilePath = join(root, 'project', 'parent-session.jsonl')
+    const subagentsDir = join(root, 'project', 'parent-session', 'subagents')
+
+    await writeJsonlFile(join(subagentsDir, 'agent-oversized.jsonl'), [
+      {
+        type: 'user',
+        sessionId: 'parent-session',
+        timestamp: '2026-07-05T10:00:00.000Z',
+        cwd: 'x'.repeat(AI_VAULT_SESSION_PATH_MAX_UTF8_BYTES + 1),
+        message: { role: 'user', content: 'Oversized task' }
+      }
+    ])
+    await writeSubagentTranscript({
+      subagentsDir,
+      agentId: 'retained',
+      taskPrompt: 'Retained task',
+      timestamp: '2026-07-05T10:01:00.000Z'
+    })
+
+    const result = await listClaudeSubagentSessions({ parentFilePath, platform: 'darwin' })
+
+    expect(result.sessions.map((session) => session.title)).toEqual(['Retained task'])
+    expect(result.issues).toHaveLength(1)
+    expect(result.issues[0]?.message).toContain('working directory exceeds')
+  })
+
+  it('stops before parsing older transcripts when the aggregate memory limit is full', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'orca-ai-vault-subagent-aggregate-limit-'))
+    tempRoots.push(root)
+    const parentFilePath = join(root, 'project', 'parent-session.jsonl')
+    const subagentsDir = join(root, 'project', 'parent-session', 'subagents')
+
+    for (let index = 0; index < 8; index += 1) {
+      await writeSubagentTranscript({
+        subagentsDir,
+        agentId: `task-${index}`,
+        taskPrompt: `Task for task-${index}`,
+        timestamp: `2026-07-05T10:${index.toString().padStart(2, '0')}:00.000Z`
+      })
+      const mtime = new Date(1_700_000_000_000 + index * 1_000)
+      await utimes(join(subagentsDir, `agent-task-${index}.jsonl`), mtime, mtime)
+    }
+
+    const unbounded = await listClaudeSubagentSessions({ parentFilePath, platform: 'darwin' })
+    expect(unbounded.issues).toEqual([])
+    const newestSessionBytes = Buffer.byteLength(JSON.stringify([unbounded.sessions[0]]), 'utf8')
+
+    await writeJsonlFile(join(subagentsDir, 'agent-unparsed.jsonl'), [
+      {
+        type: 'user',
+        sessionId: 'parent-session',
+        timestamp: '2026-07-05T09:00:00.000Z',
+        cwd: 'x'.repeat(AI_VAULT_SESSION_PATH_MAX_UTF8_BYTES + 1),
+        message: { role: 'user', content: 'This older task must not be parsed' }
+      }
+    ])
+    const oldestMtime = new Date(1_699_999_999_000)
+    await utimes(join(subagentsDir, 'agent-unparsed.jsonl'), oldestMtime, oldestMtime)
+
+    const result = await listClaudeSubagentSessions({
+      parentFilePath,
+      platform: 'darwin',
+      maxAggregateBytes: newestSessionBytes
+    })
+
+    expect(result.sessions.map((session) => session.title)).toEqual(['Task for task-7'])
+    expect(result.issues).toHaveLength(1)
+    expect(result.issues[0]?.message).toContain('8 older entries were omitted')
+    expect(result.issues[0]?.message).toContain('memory limit')
   })
 
   it('returns an empty list when the session never spawned subagents', async () => {

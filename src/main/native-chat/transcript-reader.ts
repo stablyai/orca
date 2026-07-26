@@ -28,13 +28,7 @@ export type ReadTranscriptOptions = ResolveSessionFileOptions & {
   filePath?: string
 }
 
-/**
- * Read the ENTIRE Claude/Codex JSONL transcript for an agent + session id into
- * the NativeChatMessage model. Unlike the AI-Vault preview scan, this applies
- * NO message cap. Unknown record types are skipped rather than throwing, so a
- * single malformed/unrecognized line cannot fail the whole read. The per-line
- * record-to-message mapping is shared with the live tailer.
- */
+/** Reads the newest bounded transcript window; malformed records are skipped. */
 export async function readNativeChatTranscript(
   agent: AgentType,
   sessionId: string,

@@ -1,7 +1,8 @@
-import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { mkdtempSync, rmSync, truncateSync, writeFileSync } from 'node:fs'
 import { homedir, tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
+import { ORCA_PERSISTED_STATE_MAX_BYTES } from '../../shared/persisted-state-file-bounds'
 
 vi.mock('electron', () => {
   const paths = new Map<string, string>([['appData', '/tmp/app-data']])
@@ -302,6 +303,14 @@ describe('configureElectronNetworkCompatibility', () => {
     expect(shouldDisableHttp2ForElectronNetworking({ env: {}, userDataPath })).toBe(false)
   })
 
+  it('ignores an oversized persisted state file before early startup parsing', async () => {
+    const { shouldDisableHttp2ForElectronNetworking } = await import('./configure-process')
+    const userDataPath = createUserDataDir({ electronHttp1CompatibilityMode: true })
+    truncateSync(join(userDataPath, 'orca-data.json'), ORCA_PERSISTED_STATE_MAX_BYTES + 1)
+
+    expect(shouldDisableHttp2ForElectronNetworking({ env: {}, userDataPath })).toBe(false)
+  })
+
   it('lets the environment override force compatibility on', async () => {
     const { shouldDisableHttp2ForElectronNetworking } = await import('./configure-process')
 
@@ -396,6 +405,29 @@ describe('enableMainProcessGpuFeatures', () => {
     enableMainProcessGpuFeatures()
 
     expect(app.commandLine.appendSwitch).toHaveBeenCalledWith('max-active-webgl-contexts', '128')
+  })
+
+  it('disables Skia Graphite only on macOS without disabling hardware acceleration', async () => {
+    const { app } = await import('electron')
+    const { enableMainProcessGpuFeatures } = await import('./configure-process')
+
+    delete process.env.ORCA_E2E_USER_DATA_DIR
+    vi.mocked(app.disableHardwareAcceleration).mockClear()
+
+    for (const platform of ['darwin', 'linux', 'win32'] as const) {
+      setPlatform(platform)
+      vi.mocked(app.commandLine.appendSwitch).mockClear()
+
+      enableMainProcessGpuFeatures()
+
+      if (platform === 'darwin') {
+        expect(app.commandLine.appendSwitch).toHaveBeenCalledWith('disable-skia-graphite')
+      } else {
+        expect(app.commandLine.appendSwitch).not.toHaveBeenCalledWith('disable-skia-graphite')
+      }
+    }
+
+    expect(app.disableHardwareAcceleration).not.toHaveBeenCalled()
   })
 
   it('disables the GPU sandbox on Linux Wayland without disabling acceleration', async () => {

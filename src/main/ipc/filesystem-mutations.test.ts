@@ -24,7 +24,7 @@ vi.mock('fs/promises', () => ({
   writeFile: writeFileMock,
   realpath: realpathMock,
   copyFile: copyFileMock,
-  readdir: vi.fn()
+  opendir: vi.fn()
 }))
 
 import { registerFilesystemMutationHandlers } from './filesystem-mutations'
@@ -77,6 +77,7 @@ describe('registerFilesystemMutationHandlers', () => {
     writeFileMock.mockReset()
     realpathMock.mockReset()
     resetSshConnectionGenerations()
+    setSshConnectionGeneration('ssh-1', 0)
 
     handleMock.mockImplementation((channel: string, handler: never) => {
       handlers.set(channel, handler)

@@ -1,5 +1,5 @@
 /* oxlint-disable max-lines */
-import { existsSync, readFileSync, realpathSync, statSync } from 'node:fs'
+import { existsSync, realpathSync, statSync } from 'node:fs'
 import { basename, dirname, isAbsolute, join, relative, resolve } from 'node:path'
 import { gitExecFileSync, gitExecFileAsync } from './runner'
 import type { BaseRefSearchResult } from '../../shared/types'
@@ -10,6 +10,7 @@ import { parseWslUncPath } from '../../shared/wsl-paths'
 import { toWindowsWslPath } from '../wsl'
 import { buildHostedRemoteCommitUrl, buildHostedRemoteFileUrl } from './hosted-remote-url'
 import { getLocalGitCapabilityCache } from './git-capability-state'
+import { readNodeFileSyncWithinLimit } from '../../shared/memory-safety/node-bounded-file-reader'
 
 type LocalGitExecOptions = {
   wslDistro?: string
@@ -21,6 +22,7 @@ type LocalDefaultBaseRefGitOptions = {
 }
 
 const DEFAULT_BASE_REF_PROBE_TIMEOUT_MS = 15_000
+export const MAX_GIT_MARKER_FILE_BYTES = 64 * 1024
 
 type GitRepoProbeResult = 'repo' | 'not-repo' | 'indeterminate'
 type GitMarkerScanResult = { status: 'valid'; rootPath: string } | { status: 'absent' | 'invalid' }
@@ -155,6 +157,52 @@ export function getGitRepoRoot(path: string): string {
   return path
 }
 
+function canonicalizeGitDirPath(path: string): string {
+  return resolveRealPathSync(path) ?? path
+}
+
+/**
+ * Main-checkout path when `path` is a *linked* worktree, else null (main worktree, bare repo,
+ * non-repo, or any git failure). A linked worktree's `--git-dir` is `<common>/worktrees/<name>`
+ * while the main worktree's equals `--git-common-dir`; comparing the two from one invocation is
+ * git's own canonical test and avoids symlink-canonicalization mismatches. Baseline-safe: both
+ * flags long predate Git 2.25, and a relative answer resolves against `path` as old Git reports it.
+ */
+export function getLinkedWorktreeMainRepoRoot(path: string): string | null {
+  try {
+    if (!existsSync(path) || !statSync(path).isDirectory()) {
+      return null
+    }
+    if (gitExecFileSync(['rev-parse', '--is-inside-work-tree'], { cwd: path }).trim() !== 'true') {
+      return null
+    }
+    const [gitDir, commonDir] = gitExecFileSync(['rev-parse', '--git-dir', '--git-common-dir'], {
+      cwd: path
+    })
+      .split('\n')
+      .map((line) => line.trim())
+    if (!gitDir || !commonDir) {
+      return null
+    }
+    // Why realpath both: git answers one flag absolutely (already symlink-resolved) and the other
+    // relative to cwd, so a repo under a symlinked root (macOS /var -> /private/var) compares
+    // unequal on raw strings and a main checkout gets misread as a linked worktree.
+    const absoluteCommonDir = canonicalizeGitDirPath(resolve(path, commonDir))
+    if (canonicalizeGitDirPath(resolve(path, gitDir)) === absoluteCommonDir) {
+      return null
+    }
+    // A bare/separate git dir has no adjacent working checkout to point at.
+    if (basename(absoluteCommonDir) !== '.git') {
+      return null
+    }
+    // Re-resolve through getGitRepoRoot so the returned path matches the canonical form
+    // add-project stores for the main checkout (symlinks resolved the way git reports them).
+    return getGitRepoRoot(dirname(absoluteCommonDir))
+  } catch {
+    return null
+  }
+}
+
 export function normalizeGitRepoRootForInputPath(inputPath: string, rootPath: string): string {
   const inputWsl = parseWslUncPath(inputPath)
   if (inputWsl && rootPath.startsWith('/')) {
@@ -276,7 +324,10 @@ function scanWorktreeMarkerSync(worktreePath: string): GitMarkerScanResult {
   if (marker.isFile()) {
     let gitDir: string | null
     try {
-      gitDir = parseGitdirFile(worktreePath, readFileSync(dotGit, 'utf8'))
+      gitDir = parseGitdirFile(
+        worktreePath,
+        readNodeFileSyncWithinLimit(dotGit, MAX_GIT_MARKER_FILE_BYTES).buffer.toString('utf8')
+      )
     } catch {
       return { status: 'invalid' }
     }
@@ -331,7 +382,10 @@ function hasValidLinkedWorktreeGitDirectorySync(gitDir: string): boolean {
     }
     const commonDir = resolveGitMetadataPath(
       gitDir,
-      readFileSync(join(gitDir, 'commondir'), 'utf8')
+      readNodeFileSyncWithinLimit(
+        join(gitDir, 'commondir'),
+        MAX_GIT_MARKER_FILE_BYTES
+      ).buffer.toString('utf8')
     )
     return commonDir !== null && hasValidCommonGitDirectorySync(commonDir)
   } catch {
@@ -345,7 +399,10 @@ function hasValidBareRepoMarkerSync(path: string): boolean {
 
 function gitConfigDeclaresNonBare(gitDir: string): boolean {
   try {
-    const config = readFileSync(join(gitDir, 'config'), 'utf8')
+    const config = readNodeFileSyncWithinLimit(
+      join(gitDir, 'config'),
+      MAX_GIT_MARKER_FILE_BYTES
+    ).buffer.toString('utf8')
     let inCoreSection = false
     for (const line of config.split(/\r?\n/)) {
       const section = line.match(/^\s*\[([^\]]+)\]/)

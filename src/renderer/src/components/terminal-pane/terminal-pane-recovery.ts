@@ -1,5 +1,6 @@
 import { useAppStore } from '@/store'
 import { recordRendererCrashBreadcrumb } from '@/lib/crash-breadcrumb-recorder'
+import { registerTerminalPaneRecoveryRetirementHandler } from './terminal-pane-recovery-retirement'
 
 // Why this module exists: a terminal pane can die renderer-side while its PTY
 // stays alive — a wedged xterm WriteBuffer (issue #2836), a disposed xterm
@@ -50,6 +51,7 @@ const RECOVERY_COOLDOWN_MS = 15_000
 const recoveryTimestampsByTabId = new Map<string, number[]>()
 const recoveryGenerationByTabId = new Map<string, number>()
 const activeTerminalRecoveryInstanceIds = new Set<number>()
+const terminalRecoveryTabIdByInstanceId = new Map<number, string>()
 const pendingRetryByTabId = new Map<
   string,
   {
@@ -98,10 +100,12 @@ export function registerTerminalPaneRecoveryInstance(tabId: string): {
 } {
   const id = ++nextTerminalRecoveryInstanceId
   activeTerminalRecoveryInstanceIds.add(id)
+  terminalRecoveryTabIdByInstanceId.set(id, tabId)
   return {
     id,
     unregister: () => {
       activeTerminalRecoveryInstanceIds.delete(id)
+      terminalRecoveryTabIdByInstanceId.delete(id)
       const pendingRetry = pendingRetryByTabId.get(tabId)
       pendingRetry?.requestsByInstanceId.delete(id)
       if (pendingRetry?.requestsByInstanceId.size === 0) {
@@ -271,10 +275,30 @@ export async function requestTerminalPaneRecovery(request: RecoveryRequest): Pro
   return true
 }
 
+export function forgetTerminalPaneRecovery(tabId: string): void {
+  recoveryTimestampsByTabId.delete(tabId)
+  recoveryGenerationByTabId.delete(tabId)
+  cancelPendingRecoveryRetry(tabId)
+  for (const [instanceId, instanceTabId] of terminalRecoveryTabIdByInstanceId) {
+    if (instanceTabId === tabId) {
+      terminalRecoveryTabIdByInstanceId.delete(instanceId)
+      activeTerminalRecoveryInstanceIds.delete(instanceId)
+    }
+  }
+}
+
+const unregisterTerminalPaneRecoveryRetirement = registerTerminalPaneRecoveryRetirementHandler(
+  forgetTerminalPaneRecovery
+)
+if (import.meta.hot) {
+  import.meta.hot.dispose(unregisterTerminalPaneRecoveryRetirement)
+}
+
 export function _resetTerminalPaneRecoveryForTests(): void {
   recoveryTimestampsByTabId.clear()
   recoveryGenerationByTabId.clear()
   activeTerminalRecoveryInstanceIds.clear()
+  terminalRecoveryTabIdByInstanceId.clear()
   nextTerminalRecoveryInstanceId = 0
   for (const pendingRetry of pendingRetryByTabId.values()) {
     clearTimeout(pendingRetry.timer)

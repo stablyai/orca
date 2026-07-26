@@ -16,7 +16,13 @@ type PendingRequest = {
   resolve: (value: unknown) => void
   reject: (error: Error) => void
   timer: ReturnType<typeof setTimeout>
+  reqIdBytes: number
 }
+
+export const RELAY_CONTROL_MAX_PENDING_REQUESTS = 256
+export const RELAY_CONTROL_REQUEST_ID_MAX_UTF8_BYTES = 512
+export const RELAY_CONTROL_RETAINED_REQUEST_ID_MAX_UTF8_BYTES =
+  RELAY_CONTROL_MAX_PENDING_REQUESTS * RELAY_CONTROL_REQUEST_ID_MAX_UTF8_BYTES
 
 export type DeviceCredentialInstallAuthorization =
   | { mode: 'relay-basis'; basisConnId: string }
@@ -24,6 +30,7 @@ export type DeviceCredentialInstallAuthorization =
 
 export class RelayControlRequests {
   private readonly pending = new Map<string, PendingRequest>()
+  private retainedRequestIdBytes = 0
 
   get size(): number {
     return this.pending.size
@@ -160,12 +167,22 @@ export class RelayControlRequests {
     if (this.pending.has(reqId)) {
       return Promise.reject(new Error('duplicate_relay_request_id'))
     }
+    const reqIdBytes = Buffer.byteLength(reqId, 'utf8')
+    if (
+      reqId.length === 0 ||
+      reqIdBytes > RELAY_CONTROL_REQUEST_ID_MAX_UTF8_BYTES ||
+      this.pending.size >= RELAY_CONTROL_MAX_PENDING_REQUESTS ||
+      reqIdBytes > RELAY_CONTROL_RETAINED_REQUEST_ID_MAX_UTF8_BYTES - this.retainedRequestIdBytes
+    ) {
+      return Promise.reject(new Error('relay_control_request_limit'))
+    }
     return new Promise((resolve, reject) => {
       const timer = setTimeout(() => {
-        this.pending.delete(reqId)
+        this.finish(reqId)
         reject(new Error('relay_control_request_timeout'))
       }, 10_000)
-      this.pending.set(reqId, { kind, resolve, reject, timer })
+      this.pending.set(reqId, { kind, resolve, reject, timer, reqIdBytes })
+      this.retainedRequestIdBytes += reqIdBytes
       try {
         send(payload)
       } catch (error) {
@@ -180,6 +197,7 @@ export class RelayControlRequests {
     if (pending) {
       clearTimeout(pending.timer)
       this.pending.delete(reqId)
+      this.retainedRequestIdBytes -= pending.reqIdBytes
     }
   }
 }

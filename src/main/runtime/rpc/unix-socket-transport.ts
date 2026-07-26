@@ -6,6 +6,7 @@
 // away. See design doc §3.1.
 import { createServer, type Server, type Socket } from 'node:net'
 import { chmodSync, existsSync, rmSync } from 'node:fs'
+import { GrowingByteBuffer } from '../../../shared/growing-byte-buffer'
 import type { RpcMessageContext, RpcTransport } from './transport'
 
 const MAX_RUNTIME_RPC_MESSAGE_BYTES = 1024 * 1024
@@ -104,7 +105,7 @@ export class UnixSocketTransport implements RpcTransport {
 
   private handleConnection(socket: Socket): void {
     this.activeSockets.add(socket)
-    let buffer = ''
+    const buffer = new GrowingByteBuffer()
     let oversized = false
     // Why: each in-flight dispatch registers its own AbortController here so
     // `socket.on('close')` can abort them all at once. Keeping the set scoped
@@ -114,7 +115,6 @@ export class UnixSocketTransport implements RpcTransport {
     // multiplexes sequential requests.
     const inflight = new Set<() => void>()
 
-    socket.setEncoding('utf8')
     socket.setNoDelay(true)
     socket.setTimeout(RUNTIME_RPC_SOCKET_IDLE_TIMEOUT_MS, () => {
       socket.destroy()
@@ -129,30 +129,31 @@ export class UnixSocketTransport implements RpcTransport {
       inflight.clear()
       this.activeSockets.delete(socket)
     })
-    socket.on('data', (chunk: string) => {
+    socket.on('data', (chunk: Buffer) => {
       if (oversized) {
         return
       }
-      buffer += chunk
+      buffer.append(chunk)
       // Why: the Orca runtime lives in Electron main, so it must reject
       // oversized local RPC frames instead of letting a local client grow an
       // unbounded buffer and stall the app.
-      if (Buffer.byteLength(buffer, 'utf8') > MAX_RUNTIME_RPC_MESSAGE_BYTES) {
+      if (buffer.byteLength > MAX_RUNTIME_RPC_MESSAGE_BYTES) {
         oversized = true
+        buffer.clear()
         this.messageHandler?.('', (response) => {
           socket.write(`${response}\n`)
           socket.end()
         })
         return
       }
-      let newlineIndex = buffer.indexOf('\n')
+      let newlineIndex = buffer.indexOfByte(0x0a)
       while (newlineIndex !== -1) {
-        const rawMessage = buffer.slice(0, newlineIndex).trim()
-        buffer = buffer.slice(newlineIndex + 1)
+        const rawMessage = buffer.takePrefixString(newlineIndex).trim()
+        buffer.discardPrefix(1)
         if (rawMessage) {
           this.dispatchMessage(socket, rawMessage, inflight)
         }
-        newlineIndex = buffer.indexOf('\n')
+        newlineIndex = buffer.indexOfByte(0x0a)
       }
     })
   }

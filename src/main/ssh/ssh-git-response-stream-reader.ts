@@ -1,31 +1,26 @@
 import type { SshChannelMultiplexer } from './ssh-channel-multiplexer'
-import { RelayErrorCode, isGitResponseStreamMarker } from './relay-protocol'
+import {
+  MAX_GIT_RESPONSE_STREAM_BYTES,
+  MAX_GIT_RESPONSE_STREAM_CHUNKS,
+  isGitResponseStreamMarker
+} from './relay-protocol'
+import {
+  PreMetadataStreamFrameBuffer,
+  STREAM_READER_INACTIVITY_TIMEOUT_MS,
+  defaultSshPreMetadataStreamBudget,
+  defaultSshStreamAssemblyBudget,
+  type SshPreMetadataStreamBudget,
+  type SshStreamAssemblyBudget,
+  createStreamInactivityDeadline
+} from './ssh-stream-reader-memory'
+import {
+  GitResponseStreamAssembler,
+  GitResponseStreamError
+} from './ssh-git-response-stream-assembler'
 
 const SENTINEL_STREAM_ID = -1
 
-/** Reject if no stream frame (chunk/end/error) arrives within this window,
- * reset on each frame. mux.request's own timeout only bounds the fast sentinel
- * response; without this, a relay pump that breaks on staleness (which sends no
- * responseEnd) while the SSH channel stays up would hang the client forever. */
-const STREAM_INACTIVITY_TIMEOUT_MS = 30_000
-
-/** Bound transient buffering of other concurrent streams' chunks while this
- * reader awaits its sentinel: every reader sees all git.responseChunk frames
- * and can't filter by streamId until its own sentinel resolves. Foreign frames
- * are dropped on drain anyway; this just caps the pre-sentinel backlog. */
-const MAX_PENDING_FRAMES = 64
-
-export class GitResponseStreamError extends Error {
-  readonly code = RelayErrorCode.StreamProtocolError
-  constructor(message: string) {
-    super(message)
-  }
-}
-
-type PendingFrame =
-  | { kind: 'chunk'; params: Record<string, unknown> }
-  | { kind: 'end'; params: Record<string, unknown> }
-  | { kind: 'error'; params: Record<string, unknown> }
+export { GitResponseStreamError } from './ssh-git-response-stream-assembler'
 
 /**
  * Request a git method that may return a large payload, opting into response
@@ -49,7 +44,9 @@ export function requestGitStreamable(
     timeoutMs?: number
     /** Bounds the post-sentinel reassembly stall; resets on each chunk. */
     inactivityTimeoutMs?: number
-  }
+  },
+  assemblyBudget: SshStreamAssemblyBudget = defaultSshStreamAssemblyBudget,
+  preMetadataBudget: SshPreMetadataStreamBudget = defaultSshPreMetadataStreamBudget
 ): Promise<unknown> {
   // Why: subscribe to chunk/end/error BEFORE awaiting the sentinel response so a
   // chunk that lands in the same dispatch tick as the response is not dropped
@@ -68,42 +65,22 @@ export function requestGitStreamable(
   }
 
   return new Promise<unknown>((resolve, reject) => {
-    const parts: Buffer[] = []
-    let expectedSeq = 0
-    let receivedBytes = 0
-    let totalBytes = 0
-    let chunkCount = 0
+    let assembler: GitResponseStreamAssembler | null = null
     let settled = false
     let metadataReady = false
-    const pending: PendingFrame[] = []
+    const pending = new PreMetadataStreamFrameBuffer(preMetadataBudget)
 
-    const inactivityMs = options?.inactivityTimeoutMs ?? STREAM_INACTIVITY_TIMEOUT_MS
-    let inactivityTimer: ReturnType<typeof setTimeout> | null = null
-    const clearInactivity = (): void => {
-      if (inactivityTimer) {
-        clearTimeout(inactivityTimer)
-        inactivityTimer = null
-      }
-    }
-    // Why: reset on every stream frame so a legitimately long stream is not
-    // killed, but a wedged stream (no frames arriving) rejects instead of
-    // hanging the caller forever.
-    const armInactivity = (): void => {
-      clearInactivity()
-      inactivityTimer = setTimeout(() => {
-        fail(
-          new GitResponseStreamError(
-            `Git response stream stalled (>${inactivityMs}ms without data)`
-          )
-        )
-      }, inactivityMs)
-      inactivityTimer.unref?.()
-    }
+    const inactivityMs = options?.inactivityTimeoutMs ?? STREAM_READER_INACTIVITY_TIMEOUT_MS
+    const inactivity = createStreamInactivityDeadline(inactivityMs, () => {
+      fail(
+        new GitResponseStreamError(`Git response stream stalled (>${inactivityMs}ms without data)`)
+      )
+    })
 
-    const cancel = (): void => {
-      if (streamIdRef.current !== SENTINEL_STREAM_ID && !mux.isDisposed()) {
+    const cancelStreamId = (streamId: number): void => {
+      if (streamId !== SENTINEL_STREAM_ID && !mux.isDisposed()) {
         try {
-          mux.notify('git.cancelResponseStream', { streamId: streamIdRef.current })
+          mux.notify('git.cancelResponseStream', { streamId })
         } catch {
           // best-effort
         }
@@ -114,8 +91,11 @@ export function requestGitStreamable(
         return
       }
       settled = true
-      clearInactivity()
-      cancel()
+      inactivity.clear()
+      pending.clear()
+      assembler?.release()
+      assembler = null
+      cancelStreamId(streamIdRef.current)
       cleanup()
       reject(err)
     }
@@ -124,7 +104,8 @@ export function requestGitStreamable(
         return
       }
       settled = true
-      clearInactivity()
+      inactivity.clear()
+      pending.clear()
       cleanup()
       resolve(value)
     }
@@ -133,25 +114,22 @@ export function requestGitStreamable(
       if (settled || p.streamId !== streamIdRef.current) {
         return
       }
-      const seq = p.seq as number
-      const data = p.data as string
-      if (typeof seq !== 'number' || typeof data !== 'string') {
-        fail(new GitResponseStreamError(`Malformed chunk for git stream ${streamIdRef.current}`))
-        return
-      }
-      if (seq !== expectedSeq) {
+      if (!assembler) {
         fail(
           new GitResponseStreamError(
-            `Out-of-order chunk for git stream ${streamIdRef.current}: expected ${expectedSeq}, got ${seq}`
+            `Chunk arrived before metadata for git stream ${streamIdRef.current}`
           )
         )
         return
       }
-      const decoded = Buffer.from(data, 'base64')
-      parts.push(decoded)
-      receivedBytes += decoded.length
-      expectedSeq += 1
-      armInactivity()
+      let seq: number
+      try {
+        seq = assembler.acceptChunk(p)
+      } catch (error) {
+        fail(error as Error)
+        return
+      }
+      inactivity.reset()
       // Why: credit-based flow control — the relay caps unacked chunks so a big
       // response cannot queue unbounded ahead of interactive pty.data frames.
       if (!mux.isDisposed()) {
@@ -167,22 +145,18 @@ export function requestGitStreamable(
       if (settled || p.streamId !== streamIdRef.current) {
         return
       }
-      if (expectedSeq !== chunkCount || receivedBytes !== totalBytes) {
+      if (!assembler) {
         fail(
           new GitResponseStreamError(
-            `Git stream ${streamIdRef.current} incomplete: chunks ${expectedSeq}/${chunkCount}, bytes ${receivedBytes}/${totalBytes}`
+            `Stream end before metadata for git stream ${streamIdRef.current}`
           )
         )
         return
       }
       try {
-        succeed(JSON.parse(Buffer.concat(parts).toString('utf-8')))
-      } catch (err) {
-        fail(
-          new GitResponseStreamError(
-            `Git stream ${streamIdRef.current} JSON parse failed: ${String(err)}`
-          )
-        )
+        succeed(assembler.finish())
+      } catch (error) {
+        fail(error as Error)
       }
     }
 
@@ -195,7 +169,10 @@ export function requestGitStreamable(
 
     const drainPending = (): void => {
       while (!settled && pending.length > 0) {
-        const frame = pending.shift()!
+        const frame = pending.shift()
+        if (!frame) {
+          break
+        }
         if (frame.kind === 'chunk') {
           handleChunk(frame.params)
         } else if (frame.kind === 'end') {
@@ -206,22 +183,18 @@ export function requestGitStreamable(
       }
     }
 
-    // Why: pre-sentinel we cannot filter by streamId (our id is unknown yet), so
-    // every concurrent reader transiently buffers all readers' chunks. Cap the
-    // backlog by dropping the oldest; foreign frames are dropped on drain anyway,
-    // and if our own seq-0 were ever dropped the seq check fails loudly rather
-    // than corrupting. The sentinel normally resolves long before this cap.
-    const pushPending = (frame: PendingFrame): void => {
-      pending.push(frame)
-      if (pending.length > MAX_PENDING_FRAMES) {
-        pending.shift()
-      }
+    const pushPending = (
+      kind: 'chunk' | 'end' | 'error',
+      params: Record<string, unknown>
+    ): void => {
+      // Why: the stream id is unknown here; overload drops must not let one foreign frame fail every reader.
+      pending.push({ kind, params })
     }
 
     unsubscribers.push(
       mux.onNotificationByMethod('git.responseChunk', (p) => {
         if (!metadataReady) {
-          pushPending({ kind: 'chunk', params: p })
+          pushPending('chunk', p)
           return
         }
         handleChunk(p)
@@ -230,7 +203,7 @@ export function requestGitStreamable(
     unsubscribers.push(
       mux.onNotificationByMethod('git.responseEnd', (p) => {
         if (!metadataReady) {
-          pushPending({ kind: 'end', params: p })
+          pushPending('end', p)
           return
         }
         handleEnd(p)
@@ -239,7 +212,7 @@ export function requestGitStreamable(
     unsubscribers.push(
       mux.onNotificationByMethod('git.responseError', (p) => {
         if (!metadataReady) {
-          pushPending({ kind: 'error', params: p })
+          pushPending('error', p)
           return
         }
         handleStreamError(p)
@@ -289,21 +262,52 @@ export function requestGitStreamable(
     void requestPromise
       .then((result) => {
         if (settled) {
+          if (isGitResponseStreamMarker(result)) {
+            cancelStreamId(result.__orcaGitResponseStream.streamId)
+          }
           return
         }
         // Old relay / small result: plain single-frame value, no stream follows.
         if (!isGitResponseStreamMarker(result)) {
+          if (
+            typeof result === 'object' &&
+            result !== null &&
+            '__orcaGitResponseStream' in result
+          ) {
+            fail(new GitResponseStreamError('Malformed Git response stream metadata'))
+            return
+          }
           succeed(result)
           return
         }
         const marker = result.__orcaGitResponseStream
-        totalBytes = marker.totalBytes
-        chunkCount = marker.chunkCount
         streamIdRef.current = marker.streamId
+        if (
+          marker.totalBytes > MAX_GIT_RESPONSE_STREAM_BYTES ||
+          marker.chunkCount > MAX_GIT_RESPONSE_STREAM_CHUNKS
+        ) {
+          fail(
+            new GitResponseStreamError(
+              `Git response stream exceeds client limit (${marker.totalBytes} bytes, ${marker.chunkCount} chunks)`
+            )
+          )
+          return
+        }
+        try {
+          assembler = new GitResponseStreamAssembler(
+            marker.streamId,
+            marker.totalBytes,
+            marker.chunkCount,
+            assemblyBudget
+          )
+        } catch (error) {
+          fail(error as Error)
+          return
+        }
         metadataReady = true
         // Why: start the inactivity deadline now — mux.request's timeout only
         // covered the sentinel; the reassembly phase needs its own guard.
-        armInactivity()
+        inactivity.reset()
         drainPending()
       })
       .catch((err) => fail(err as Error))

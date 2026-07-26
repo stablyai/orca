@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { API_RESPONSE_MAX_BYTES, FetchResponseBodyTooLargeError } from './lib/fetch-response-body'
 
 const fetchMock = vi.fn()
 
@@ -224,6 +225,18 @@ describe('fetchChangelog', () => {
     const result = await fetchChangelog('1.1.21', '1.1.19')
 
     expect(result).toBeNull()
+  })
+
+  it('rejects an oversized successful Electron net response before reading it', async () => {
+    fetchMock.mockResolvedValue(
+      new Response('{', {
+        headers: { 'content-length': String(API_RESPONSE_MAX_BYTES + 1) }
+      })
+    )
+
+    await expect(fetchChangelog('1.1.21', '1.1.19')).rejects.toBeInstanceOf(
+      FetchResponseBodyTooLargeError
+    )
   })
 
   it('prefers exact match over fallback when both have rich content', async () => {

@@ -1,7 +1,7 @@
 /* eslint-disable max-lines -- Why: filesystem, editor-file, and search commands share the same local/SSH path authorization rules. Keeping that IO adapter together prevents separate command paths from drifting on safety checks. */
 import type { ChildProcess } from 'node:child_process'
 import { randomUUID } from 'node:crypto'
-import { watch as watchFs } from 'node:fs'
+import { watch as watchFs, type Dirent } from 'node:fs'
 import type { FileHandle } from 'node:fs/promises'
 import {
   chmod,
@@ -10,8 +10,7 @@ import {
   lstat,
   mkdir,
   open,
-  readFile,
-  readdir,
+  opendir,
   rename,
   realpath,
   rm,
@@ -38,6 +37,13 @@ import {
   resolveRuntimePath
 } from '../../shared/cross-platform-path'
 import { PhysicalExitTracker } from '../../shared/physical-exit-tracker'
+import {
+  assertMobileFileDirectoryWithinLimit,
+  createMobileFileDirectoryLimitState,
+  MOBILE_FILE_DIRECTORY_MAX_ENTRIES,
+  MOBILE_FILE_DIRECTORY_MAX_RETAINED_BYTES,
+  trackMobileFileDirectoryEntry
+} from '../../shared/mobile-file-directory-limit'
 import type {
   RuntimeFileListResult,
   RuntimeFileOpenResult,
@@ -72,7 +78,6 @@ import {
 import type { Store } from '../persistence'
 import {
   getSshFilesystemProvider,
-  onSshFilesystemProviderRegistered,
   SSH_FILESYSTEM_PROVIDER_UNAVAILABLE_MESSAGE
 } from '../providers/ssh-filesystem-dispatch'
 import type { FileStat, IFilesystemProvider } from '../providers/types'
@@ -81,6 +86,10 @@ import {
   WatcherProcessFailure
 } from '../ipc/parcel-watcher-process-failure'
 import { assertNoClobberRenameDestinationAvailable } from '../../shared/filesystem-rename-collision'
+import {
+  NodeFileReadTooLargeError,
+  readNodeFileWithinLimit
+} from '../../shared/memory-safety/node-bounded-file-reader'
 import { joinWorktreeRelativePath, normalizeRuntimeRelativePath } from './runtime-relative-paths'
 import {
   rankRuntimeMobileFilePaths,
@@ -89,12 +98,18 @@ import {
 import { beginWatcherInstall } from '../ipc/watcher-removal-gate'
 import { assertSshMutationExpectation } from '../ssh/ssh-connection-generation'
 import { toSshExecutionHostId } from '../../shared/execution-host'
+import { assertRasterImagePreviewWithinLimits } from '../../shared/raster-image-preview-limits'
+import { SearchSubprocessLineAccumulator } from '../../shared/search-subprocess-lines'
+import { retainRuntimeTerminalFileGrant } from './runtime-terminal-file-grant-retention'
+import { assertRuntimeTextSearchAdmission } from './runtime-text-search-admission'
+import { RuntimeFileWatcherAdmission } from './runtime-file-watcher-admission'
 
 const MOBILE_FILE_LIST_LIMIT = 5000
 const MOBILE_FILE_PATH_SEARCH_CACHE_LIMIT = 20_000
 const MOBILE_FILE_PATH_SEARCH_CACHE_ENTRIES = 8
 const MOBILE_FILE_PATH_SEARCH_CACHE_TTL_MS = 30_000
 const MOBILE_FILE_READ_MAX_BYTES = 512 * 1024
+const RUNTIME_MOBILE_DIRECTORY_CLASSIFICATION_CONCURRENCY = 32
 const RUNTIME_PREVIEWABLE_BINARY_MAX_BYTES = 10 * 1024 * 1024
 const WINDOWS_RUNTIME_FILE_WATCH_DEBOUNCE_MS = 150
 export const WINDOWS_RUNTIME_FILE_WATCH_CLOSE_DEADLINE_MS = 10_000
@@ -127,10 +142,7 @@ type RuntimeFileWatcherLease = {
   forget(): void
 }
 const runtimeFileWatcherLeasesByOwnerAndRoot = new Map<string, Set<RuntimeFileWatcherLease>>()
-// Why: the provider's dispose() stops each watch registration without firing its terminal callback,
-// so a dropped SSH transport leaves this watch silently dead — a reconnect's fresh provider is the
-// only signal it can be rebuilt from. Keyed like the leases so worktree removal can drop it.
-const sshFileExplorerWatchRearms = new Map<string, Set<() => void>>()
+const runtimeFileWatcherAdmission = new RuntimeFileWatcherAdmission()
 const MOBILE_BINARY_EXTENSIONS = new Set([
   '.avif',
   '.bmp',
@@ -230,101 +242,14 @@ function runtimeWatcherReleaseKey(
   return JSON.stringify([runtimeId, connectionId ?? null, normalizeRuntimeWatcherRoot(rootPath)])
 }
 
-/**
- * Keep an SSH file-explorer watch alive across reconnects.
- *
- * Why: the previous provider's unwatch handle belongs to the dead transport, so reinstalling on the
- * fresh provider is the only way the subscription comes back. Callers get an overflow because the
- * events lost while the watch was down can't be replayed.
- */
-function armSshFileExplorerWatchRearm(args: {
-  runtimeId: string
-  connectionId: string
-  rootPath: string
-  callback: (events: FsChangeEvent[]) => void
-  onTerminalError: (error: Error) => void
-  signal?: AbortSignal
-  initialUnwatch: () => void
-}): { unsubscribe: () => Promise<void> } {
-  const key = runtimeWatcherReleaseKey(args.runtimeId, args.connectionId, args.rootPath)
-  let currentUnwatch = args.initialUnwatch
-  let stopped = false
-  let reinstalling: Promise<void> | null = null
-
-  const reinstall = async (): Promise<void> => {
-    const provider = getSshFilesystemProvider(args.connectionId)
-    if (stopped || !provider) {
-      return
-    }
-    // Why: the old handle is scoped to the dead transport; closing it here would only risk
-    // unwatching the root we just re-registered on the new one.
-    const nextUnwatch = await provider.watch(args.rootPath, args.callback, {
-      signal: args.signal,
-      onTerminalError: args.onTerminalError
-    })
-    if (stopped) {
-      nextUnwatch()
-      return
-    }
-    currentUnwatch = nextUnwatch
-    args.callback([{ kind: 'overflow', absolutePath: args.rootPath }])
-  }
-
-  const unsubscribeRearm = onSshFilesystemProviderRegistered((registeredId) => {
-    if (registeredId !== args.connectionId || stopped) {
-      return
-    }
-    // Why: reconnect storms can register repeatedly; chain so a second one can't double-install.
-    const attempt = (reinstalling ?? Promise.resolve())
-      .then(reinstall)
-      .catch((error: unknown) => {
-        args.onTerminalError(error instanceof Error ? error : new Error(String(error)))
-      })
-      .finally(() => {
-        if (reinstalling === attempt) {
-          reinstalling = null
-        }
-      })
-    reinstalling = attempt
-  })
-
-  const stop = (): void => {
-    stopped = true
-    unsubscribeRearm()
-    const rearms = sshFileExplorerWatchRearms.get(key)
-    rearms?.delete(stop)
-    if (rearms?.size === 0) {
-      sshFileExplorerWatchRearms.delete(key)
-    }
-  }
-  const rearms = sshFileExplorerWatchRearms.get(key) ?? new Set<() => void>()
-  rearms.add(stop)
-  sshFileExplorerWatchRearms.set(key, rearms)
-
-  return {
-    unsubscribe: () => {
-      stop()
-      const close = async (): Promise<void> => currentUnwatch()
-      // Why: awaiting an absent reinstall costs a microtask, and removal gating relies on the
-      // unwatch being issued on the same turn the lease releases it.
-      return reinstalling ? reinstalling.catch(() => undefined).then(close) : close()
-    }
-  }
-}
-
-function stopSshFileExplorerWatchRearms(key: string): void {
-  for (const stop of Array.from(sshFileExplorerWatchRearms.get(key) ?? [])) {
-    stop()
-  }
-}
-
 function registerRuntimeFileWatcherRelease(
   runtimeId: string,
   connectionId: string | undefined,
   rootPaths: string[],
   unsubscribe: () => Promise<void>,
   restart: () => Promise<() => Promise<void>>,
-  onRestoreError: (error: Error) => void
+  onRestoreError: (error: Error) => void,
+  releaseAdmission: () => void
 ): () => Promise<void> {
   const keys = Array.from(
     new Set(
@@ -345,6 +270,7 @@ function registerRuntimeFileWatcherRelease(
         runtimeFileWatcherLeasesByOwnerAndRoot.delete(key)
       }
     }
+    releaseAdmission()
   }
   const suspend = (): Promise<void> => {
     if (releasePromise) {
@@ -477,9 +403,6 @@ export function _resetRuntimeFileWatcherLeasesForTests(): void {
   }
   for (const lease of leases) {
     lease.forget()
-  }
-  for (const key of Array.from(sshFileExplorerWatchRearms.keys())) {
-    stopSshFileExplorerWatchRearms(key)
   }
   runtimeFileWatcherLeasesByOwnerAndRoot.clear()
 }
@@ -926,7 +849,10 @@ export class RuntimeFileCommands {
       expiresAt: Date.now() + TERMINAL_FILE_GRANT_TTL_MS,
       statIdentity: terminalFileStatIdentity(args.stats)
     }
-    this.terminalFileGrants.set(grant.id, grant)
+    this.pruneExpiredTerminalFileGrants()
+    retainRuntimeTerminalFileGrant(this.terminalFileGrants, grant, (id, retained) =>
+      this.releaseTerminalFileGrant(id, retained)
+    )
     this.scheduleTerminalFileGrantExpiry(grant)
     return grant
   }
@@ -1258,21 +1184,23 @@ export class RuntimeFileCommands {
       if (!provider) {
         throw new Error(SSH_FILESYSTEM_PROVIDER_UNAVAILABLE_MESSAGE)
       }
-      return provider.readDir(target.path)
+      const entries = await provider.readDir(target.path, {
+        maxEntries: MOBILE_FILE_DIRECTORY_MAX_ENTRIES,
+        maxRetainedBytes: MOBILE_FILE_DIRECTORY_MAX_RETAINED_BYTES
+      })
+      assertMobileFileDirectoryWithinLimit(entries)
+      return entries
     }
 
     const dirPath = await resolveAuthorizedPath(target.path, this.host.requireStore())
-    const entries = await readdir(dirPath, { withFileTypes: true })
-    const mapped = await Promise.all(
-      entries.map(async (entry) => {
-        const entryPath = join(dirPath, entry.name)
-        return {
-          name: entry.name,
-          isDirectory: await isRuntimeDirectoryEntry(entry, entryPath),
-          isSymlink: entry.isSymbolicLink()
-        }
-      })
-    )
+    const limit = createMobileFileDirectoryLimitState()
+    const directory = await opendir(dirPath)
+    const entries: Dirent[] = []
+    for await (const entry of directory) {
+      trackMobileFileDirectoryEntry(limit, entry)
+      entries.push(entry)
+    }
+    const mapped = await classifyRuntimeMobileDirectoryEntries(dirPath, entries)
     return mapped.sort((a, b) => {
       if (a.isDirectory !== b.isDirectory) {
         return a.isDirectory ? -1 : 1
@@ -1288,6 +1216,11 @@ export class RuntimeFileCommands {
     signal?: AbortSignal
   ): Promise<() => void> {
     const target = await this.resolveFileExplorerPath(worktreeSelector, '')
+    const releaseAdmission = runtimeFileWatcherAdmission.claim(
+      this.host.getRuntimeId(),
+      target.connectionId,
+      target.path
+    )
     const open = async (): Promise<{
       unsubscribe: () => Promise<void>
       rootPaths: string[]
@@ -1301,16 +1234,7 @@ export class RuntimeFileCommands {
           }
           // Why: the RPC layer already threads AbortSignal for local watches; SSH must cancel the remote fs.watch, not wait it out.
           const close = await provider.watch(target.path, callback, { signal, onTerminalError })
-          const rearm = armSshFileExplorerWatchRearm({
-            runtimeId: this.host.getRuntimeId(),
-            connectionId: target.connectionId,
-            rootPath: target.path,
-            callback,
-            onTerminalError,
-            signal,
-            initialUnwatch: close
-          })
-          return { unsubscribe: rearm.unsubscribe, rootPaths: [target.path] }
+          return { unsubscribe: async () => close(), rootPaths: [target.path] }
         }
 
         const rootPath = await resolveAuthorizedPath(target.path, this.host.requireStore())
@@ -1334,15 +1258,30 @@ export class RuntimeFileCommands {
         finishInstall()
       }
     }
-    const initial = await open()
-    return registerRuntimeFileWatcherRelease(
-      this.host.getRuntimeId(),
-      target.connectionId,
-      initial.rootPaths,
-      initial.unsubscribe,
-      async () => (await open()).unsubscribe,
-      onTerminalError
-    )
+    let initial: Awaited<ReturnType<typeof open>>
+    try {
+      initial = await open()
+    } catch (error) {
+      releaseAdmission()
+      throw error
+    }
+    try {
+      return registerRuntimeFileWatcherRelease(
+        this.host.getRuntimeId(),
+        target.connectionId,
+        initial.rootPaths,
+        initial.unsubscribe,
+        async () => (await open()).unsubscribe,
+        onTerminalError,
+        releaseAdmission
+      )
+    } catch (error) {
+      releaseAdmission()
+      await trackRuntimeFileWatcherUnsubscribe(initial.rootPaths[0], initial.unsubscribe).catch(
+        () => undefined
+      )
+      throw error
+    }
   }
 
   async closeFileExplorerWatchersForPath(rootPath: string, connectionId?: string): Promise<void> {
@@ -1371,9 +1310,6 @@ export class RuntimeFileCommands {
 
   forgetFileExplorerWatchersAfterRemoval(rootPath: string, connectionId?: string): void {
     const key = runtimeWatcherReleaseKey(this.host.getRuntimeId(), connectionId, rootPath)
-    // Why: forget() never runs the lease's unsubscribe, so the re-arm would outlive a deleted
-    // worktree and re-watch it on the next reconnect.
-    stopSshFileExplorerWatchRearms(key)
     const leases = runtimeFileWatcherLeasesByOwnerAndRoot.get(key)
     if (leases) {
       for (const lease of Array.from(leases)) {
@@ -1403,23 +1339,30 @@ export class RuntimeFileCommands {
     const filePath = await resolveAuthorizedPath(target.path, this.host.requireStore())
     const fileStats = await stat(filePath)
     const mimeType = RUNTIME_PREVIEWABLE_BINARY_MIME_TYPES[extname(filePath).toLowerCase()]
-    if (mimeType) {
-      if (fileStats.size > RUNTIME_PREVIEWABLE_BINARY_MAX_BYTES) {
+    const sizeLimit = mimeType ? RUNTIME_PREVIEWABLE_BINARY_MAX_BYTES : MOBILE_FILE_READ_MAX_BYTES
+    if (fileStats.size > sizeLimit) {
+      throw new Error('file_too_large')
+    }
+    let buffer: Buffer
+    try {
+      buffer = (await readNodeFileWithinLimit(filePath, sizeLimit)).buffer
+    } catch (error) {
+      if (error instanceof NodeFileReadTooLargeError) {
         throw new Error('file_too_large')
       }
-      const buffer = await readFile(filePath)
+      throw error
+    }
+    if (mimeType) {
+      const imageDimensions = assertRasterImagePreviewWithinLimits(buffer, mimeType)
       return {
         content: buffer.toString('base64'),
         isBinary: true,
         isImage: true,
-        mimeType
+        mimeType,
+        ...(imageDimensions ? { imageDimensions } : {})
       }
     }
 
-    if (fileStats.size > MOBILE_FILE_READ_MAX_BYTES) {
-      throw new Error('file_too_large')
-    }
-    const buffer = await readFile(filePath)
     if (isBinaryBuffer(buffer)) {
       return { content: '', isBinary: true }
     }
@@ -1846,7 +1789,12 @@ export class RuntimeFileCommands {
       if (!provider) {
         throw new Error(SSH_FILESYSTEM_PROVIDER_UNAVAILABLE_MESSAGE)
       }
-      const relativePaths = await provider.listFiles(target.worktree.path)
+      if (!provider.listMarkdownDocuments) {
+        throw new Error(
+          'Remote Markdown link discovery is unavailable. Reconnect the SSH target and retry.'
+        )
+      }
+      const relativePaths = await provider.listMarkdownDocuments(target.worktree.path)
       return markdownDocumentsFromRelativePaths(target.worktree.path, relativePaths)
     }
     return listMarkdownDocuments(target.worktree.path)
@@ -1896,11 +1844,12 @@ export class RuntimeFileCommands {
 
     return new Promise((resolvePromise) => {
       const searchKey = `${this.host.getRuntimeId()}:${authorizedRootPath}`
+      assertRuntimeTextSearchAdmission(this.activeRuntimeTextSearches, searchKey)
       const rgArgs = buildRgArgs(options.query, authorizedRootPath, options)
       this.activeRuntimeTextSearches.get(searchKey)?.kill()
 
       const acc = createAccumulator()
-      let stdoutBuffer = ''
+      const stdoutLines = new SearchSubprocessLineAccumulator()
       let resolved = false
       let child: ChildProcess | null = null
       const wslInfo = parseWslPath(authorizedRootPath)
@@ -1953,13 +1902,11 @@ export class RuntimeFileCommands {
       child = nextChild
       this.activeRuntimeTextSearches.set(searchKey, nextChild)
 
-      nextChild.stdout!.setEncoding('utf-8')
-      const onStdoutData = (chunk: string): void => {
-        stdoutBuffer += chunk
-        const lines = stdoutBuffer.split('\n')
-        stdoutBuffer = lines.pop() ?? ''
-        for (const line of lines) {
-          processLine(line)
+      const onStdoutData = (chunk: Buffer): void => {
+        if (!stdoutLines.push(chunk, processLine)) {
+          acc.truncated = true
+          child?.kill()
+          resolveOnce()
         }
       }
       const onStderrData = (): void => {
@@ -1967,8 +1914,9 @@ export class RuntimeFileCommands {
       }
       const onError = (): void => resolveOnce()
       const onClose = (): void => {
-        if (stdoutBuffer) {
-          processLine(stdoutBuffer)
+        const trailingLine = stdoutLines.finish()
+        if (trailingLine !== null) {
+          processLine(trailingLine)
         }
         resolveOnce()
       }
@@ -2167,6 +2115,45 @@ async function isRuntimeDirectoryEntry(
   return false
 }
 
+type RuntimeDirectorySourceEntry = {
+  name: string
+  isDirectory(): boolean
+  isSymbolicLink(): boolean
+}
+
+type RuntimeDirectoryClassifier = (
+  entry: RuntimeDirectorySourceEntry,
+  entryPath: string
+) => Promise<boolean>
+
+export async function classifyRuntimeMobileDirectoryEntries(
+  dirPath: string,
+  entries: readonly RuntimeDirectorySourceEntry[],
+  classify: RuntimeDirectoryClassifier = isRuntimeDirectoryEntry
+): Promise<DirEntry[]> {
+  const mapped: DirEntry[] = []
+  for (
+    let offset = 0;
+    offset < entries.length;
+    offset += RUNTIME_MOBILE_DIRECTORY_CLASSIFICATION_CONCURRENCY
+  ) {
+    const batch = entries.slice(
+      offset,
+      offset + RUNTIME_MOBILE_DIRECTORY_CLASSIFICATION_CONCURRENCY
+    )
+    mapped.push(
+      ...(await Promise.all(
+        batch.map(async (entry) => ({
+          name: entry.name,
+          isDirectory: await classify(entry, join(dirPath, entry.name)),
+          isSymlink: entry.isSymbolicLink()
+        }))
+      ))
+    )
+  }
+  return mapped
+}
+
 function isBinaryBuffer(buffer: Buffer): boolean {
   const len = Math.min(buffer.length, 8192)
   for (let i = 0; i < len; i += 1) {
@@ -2256,11 +2243,13 @@ async function readLocalTerminalArtifactPreviewFromHandle(
       handle,
       RUNTIME_PREVIEWABLE_BINARY_MAX_BYTES + 1
     )
+    const imageDimensions = assertRasterImagePreviewWithinLimits(buffer, mimeType)
     return {
       content: buffer.toString('base64'),
       isBinary: true,
       isImage: true,
-      mimeType
+      mimeType,
+      ...(imageDimensions ? { imageDimensions } : {})
     }
   }
 

@@ -4,6 +4,7 @@ import type { IFilesystemProvider } from '../providers/types'
 import type { RemoteHostPlatform } from '../ssh/ssh-remote-platform'
 import type { FileWithMtime } from './session-scanner-types'
 import type { AntigravityWorkspaceResolver } from './session-scanner-antigravity-history'
+import type { AiVaultSessionDiscoveryBudget } from './session-discovery-budget'
 
 export type RemoteScannerContext = {
   provider: IFilesystemProvider
@@ -11,6 +12,7 @@ export type RemoteScannerContext = {
   hostPlatform: RemoteHostPlatform
   titleCaches: Map<string, Promise<Map<string, string>>>
   antigravityWorkspaceResolver: AntigravityWorkspaceResolver
+  discoveryBudget: AiVaultSessionDiscoveryBudget
 }
 
 export type RemoteParserOptions = {

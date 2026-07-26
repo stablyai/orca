@@ -1,7 +1,6 @@
-import { createReadStream } from 'node:fs'
-import { readFile } from 'node:fs/promises'
-import { createInterface } from 'node:readline'
 import type { AiVaultSession } from '../../shared/ai-vault-types'
+import { iterateAiVaultJsonlLines } from './session-jsonl-line-reader'
+import { withAiVaultWholeJsonFile } from './session-whole-json-reader'
 import {
   addPreviewContent,
   addPreviewMessage,
@@ -13,7 +12,7 @@ import {
   kimiPrimaryAgentWirePath,
   kimiSessionIdFromStatePath,
   kimiSessionIndexPathFromStatePath,
-  readKimiWorkDirBySessionId
+  readKimiWorkDirForSessionId
 } from './session-scanner-kimi-paths'
 import type { FileWithMtime, SessionAccumulator } from './session-scanner-types'
 import {
@@ -26,6 +25,15 @@ import {
   parseJsonObject
 } from './session-scanner-values'
 
+// The rendered preview is 220 chars; this also covers hidden-context close-tag scanning.
+const KIMI_ASSISTANT_PREVIEW_SOURCE_MAX_CHARS = 512 * 1024
+const KIMI_ASSISTANT_PREVIEW_CHUNK_MAX = 256
+
+type KimiAssistantPreviewBuffer = {
+  chunks: string[]
+  charCount: number
+}
+
 // Parses a Kimi Code `state.json` plus its sibling `agents/<id>/wire.jsonl`
 // transcript into an AI Vault session. Metadata (title, timestamps, last prompt)
 // comes from state.json; the work directory comes from the top-level
@@ -34,13 +42,30 @@ export async function parseKimiSessionFile(
   file: FileWithMtime,
   platform: NodeJS.Platform = process.platform
 ): Promise<AiVaultSession | null> {
-  let stateRecord: Record<string, unknown> | null
+  let metadata: {
+    title: string | null
+    fallbackTitle: string | null
+    createdAt: string | null
+    updatedAt: string | null
+    wirePath: string
+  } | null
   try {
-    stateRecord = asRecord(JSON.parse(await readFile(file.path, 'utf-8')) as unknown)
+    metadata = await withAiVaultWholeJsonFile(file.path, (content) => {
+      const stateRecord = parseJsonObject(content)
+      return stateRecord
+        ? {
+            title: normalizeTitleText(extractString(stateRecord.title) ?? ''),
+            fallbackTitle: normalizeTitleText(extractString(stateRecord.lastPrompt) ?? ''),
+            createdAt: extractString(stateRecord.createdAt),
+            updatedAt: extractString(stateRecord.updatedAt),
+            wirePath: kimiPrimaryAgentWirePath(file.path, stateRecord)
+          }
+        : null
+    })
   } catch {
     return null
   }
-  if (!stateRecord) {
+  if (!metadata) {
     return null
   }
 
@@ -50,17 +75,17 @@ export async function parseKimiSessionFile(
   // Why: Kimi sessions are work-dir-scoped — the resume command must `cd` into
   // the original directory or the CLI rejects it. That path lives only in the
   // top-level session_index.jsonl, keyed by the (prefixed) session id.
-  const workDirBySessionId = await readKimiWorkDirBySessionId(
-    kimiSessionIndexPathFromStatePath(file.path)
+  accumulator.cwd = await readKimiWorkDirForSessionId(
+    kimiSessionIndexPathFromStatePath(file.path),
+    sessionId
   )
-  accumulator.cwd = workDirBySessionId.get(sessionId) ?? null
 
-  accumulator.title = normalizeTitleText(extractString(stateRecord.title) ?? '')
-  accumulator.fallbackTitle = normalizeTitleText(extractString(stateRecord.lastPrompt) ?? '')
-  updateTimeline(accumulator, extractString(stateRecord.createdAt))
-  updateTimeline(accumulator, extractString(stateRecord.updatedAt))
+  accumulator.title = metadata.title
+  accumulator.fallbackTitle = metadata.fallbackTitle
+  updateTimeline(accumulator, metadata.createdAt)
+  updateTimeline(accumulator, metadata.updatedAt)
 
-  await consumeKimiWireTranscript(accumulator, kimiPrimaryAgentWirePath(file.path, stateRecord))
+  await consumeKimiWireTranscript(accumulator, metadata.wirePath)
 
   return finalizeSession(accumulator, platform)
 }
@@ -69,14 +94,15 @@ async function consumeKimiWireTranscript(
   accumulator: SessionAccumulator,
   wirePath: string
 ): Promise<void> {
-  let pendingAssistantText: string[] = []
+  const pendingAssistantText: KimiAssistantPreviewBuffer = { chunks: [], charCount: 0 }
   const flushAssistant = (): void => {
     // Why: previews use the 220-char limit (normalizePreviewText), not the
     // 96-char title limit — assistant replies are shown in full preview width
     // like every other agent's. Join raw chunks first so inter-chunk spacing
     // survives; normalizePreviewText then collapses whitespace and caps length.
-    const text = normalizePreviewText(pendingAssistantText.join(''))
-    pendingAssistantText = []
+    const text = normalizePreviewText(pendingAssistantText.chunks.join(''))
+    pendingAssistantText.chunks = []
+    pendingAssistantText.charCount = 0
     if (text) {
       accumulator.messageCount++
       addPreviewMessage(accumulator, { role: 'assistant', text })
@@ -84,10 +110,7 @@ async function consumeKimiWireTranscript(
   }
 
   try {
-    const lines = createInterface({
-      input: createReadStream(wirePath, { encoding: 'utf-8' }),
-      crlfDelay: Infinity
-    })
+    const lines = iterateAiVaultJsonlLines(wirePath)
     for await (const line of lines) {
       const record = parseJsonObject(line)
       if (!record) {
@@ -134,7 +157,7 @@ function consumeKimiUserMessage(accumulator: SessionAccumulator, value: unknown)
 
 function consumeKimiLoopEvent(
   value: unknown,
-  pendingAssistantText: string[],
+  pendingAssistantText: KimiAssistantPreviewBuffer,
   flushAssistant: () => void
 ): void {
   const event = asRecord(value)
@@ -146,7 +169,7 @@ function consumeKimiLoopEvent(
     // Push the raw chunk text; flushAssistant normalizes the joined result so
     // multi-chunk spacing is not lost to per-chunk trimming.
     if (part?.type === 'text' && typeof part.text === 'string') {
-      pendingAssistantText.push(part.text)
+      appendKimiAssistantPreviewText(pendingAssistantText, part.text)
     }
     return
   }
@@ -154,6 +177,19 @@ function consumeKimiLoopEvent(
   // preview message so streamed `content.part` chunks collapse into one entry.
   if (event.type === 'step.end') {
     flushAssistant()
+  }
+}
+
+function appendKimiAssistantPreviewText(buffer: KimiAssistantPreviewBuffer, text: string): void {
+  const remaining = KIMI_ASSISTANT_PREVIEW_SOURCE_MAX_CHARS - buffer.charCount
+  if (remaining <= 0 || text.length === 0) {
+    return
+  }
+  const retained = text.length <= remaining ? text : text.slice(0, remaining)
+  buffer.chunks.push(retained)
+  buffer.charCount += retained.length
+  if (buffer.chunks.length >= KIMI_ASSISTANT_PREVIEW_CHUNK_MAX) {
+    buffer.chunks = [buffer.chunks.join('')]
   }
 }
 

@@ -11,7 +11,7 @@ const {
   fromWebContentsMock,
   trashItemMock,
   readdirMock,
-  readFileMock,
+  opendirMock,
   writeFileMock,
   statMock,
   openMock,
@@ -42,6 +42,8 @@ const {
   discoverCommitMessageModelsRemoteMock,
   cancelGenerateCommitMessageLocalMock,
   cancelGeneratePullRequestFieldsLocalMock,
+  getPullRequestDraftContextMock,
+  resolveHostedReviewBodyForGenerationMock,
   getSshFilesystemProviderMock,
   getSshGitProviderMock,
   tryDeleteWslUncPathMock,
@@ -54,7 +56,7 @@ const {
   fromWebContentsMock: vi.fn(),
   trashItemMock: vi.fn(),
   readdirMock: vi.fn(),
-  readFileMock: vi.fn(),
+  opendirMock: vi.fn(),
   writeFileMock: vi.fn(),
   statMock: vi.fn(),
   openMock: vi.fn(),
@@ -85,6 +87,8 @@ const {
   discoverCommitMessageModelsRemoteMock: vi.fn(),
   cancelGenerateCommitMessageLocalMock: vi.fn(),
   cancelGeneratePullRequestFieldsLocalMock: vi.fn(),
+  getPullRequestDraftContextMock: vi.fn(),
+  resolveHostedReviewBodyForGenerationMock: vi.fn(),
   getSshFilesystemProviderMock: vi.fn(),
   getSshGitProviderMock: vi.fn(),
   tryDeleteWslUncPathMock: vi.fn(),
@@ -110,7 +114,7 @@ vi.mock('electron', () => ({
 
 vi.mock('fs/promises', () => ({
   readdir: readdirMock,
-  readFile: readFileMock,
+  opendir: opendirMock,
   writeFile: writeFileMock,
   stat: statMock,
   open: openMock,
@@ -189,6 +193,16 @@ vi.mock('../text-generation/commit-message-text-generation', () => ({
   cancelGeneratePullRequestFieldsLocal: cancelGeneratePullRequestFieldsLocalMock
 }))
 
+vi.mock('../text-generation/pull-request-context', () => ({
+  getPullRequestDraftContext: getPullRequestDraftContextMock
+}))
+
+vi.mock('../source-control/pull-request-template', () => ({
+  readHostedPullRequestTemplate: vi.fn(),
+  readHostedReviewTemplate: vi.fn(),
+  resolveHostedReviewBodyForGeneration: resolveHostedReviewBodyForGenerationMock
+}))
+
 import { registerFilesystemHandlers } from './filesystem'
 import { invalidateAuthorizedRootsCache, registerWorktreeRootsForRepo } from './filesystem-auth'
 
@@ -217,6 +231,33 @@ function dirEntry({ name, directory, file, symlink }: MockDirEntry): {
     isFile: () => file ?? false,
     isSymbolicLink: () => symlink ?? false
   }
+}
+
+function mockReadableFile(
+  content: Buffer,
+  stats: { dev?: number; ino?: number; birthtimeMs?: number } = {}
+) {
+  const handle = {
+    stat: vi.fn().mockResolvedValue({ size: content.byteLength, ...stats }),
+    read: vi.fn(async (target: Buffer, offset: number, length: number, position: number) => {
+      const bytesRead = Math.min(length, Math.max(0, content.byteLength - position))
+      content.copy(target, offset, position, position + bytesRead)
+      return { bytesRead, buffer: target }
+    }),
+    close: vi.fn().mockResolvedValue(undefined)
+  }
+  openMock.mockResolvedValue(handle)
+  return handle
+}
+
+function pngHeader(width = 1, height = 1): Buffer {
+  const bytes = Buffer.alloc(24)
+  Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]).copy(bytes)
+  bytes.writeUInt32BE(13, 8)
+  bytes.write('IHDR', 12, 'ascii')
+  bytes.writeUInt32BE(width, 16)
+  bytes.writeUInt32BE(height, 20)
+  return bytes
 }
 
 async function withPlatform<T>(platform: NodeJS.Platform, run: () => Promise<T>): Promise<T> {
@@ -262,7 +303,7 @@ describe('registerFilesystemHandlers', () => {
       fromWebContentsMock,
       trashItemMock,
       readdirMock,
-      readFileMock,
+      opendirMock,
       writeFileMock,
       statMock,
       openMock,
@@ -289,6 +330,8 @@ describe('registerFilesystemHandlers', () => {
       resolveCommitMessageSettingsMock,
       generateCommitMessageFromContextMock,
       generatePullRequestFieldsFromContextMock,
+      getPullRequestDraftContextMock,
+      resolveHostedReviewBodyForGenerationMock,
       discoverCommitMessageModelsLocalMock,
       discoverCommitMessageModelsRemoteMock,
       cancelGenerateCommitMessageLocalMock,
@@ -340,6 +383,14 @@ describe('registerFilesystemHandlers', () => {
       close: vi.fn()
     })
     lstatMock.mockRejectedValue(Object.assign(new Error('missing'), { code: 'ENOENT' }))
+    opendirMock.mockImplementation(async (dirPath: string) => {
+      const entries = await readdirMock(dirPath, { withFileTypes: true })
+      return {
+        async *[Symbol.asyncIterator]() {
+          yield* entries
+        }
+      }
+    })
   })
 
   it('returns an actionable reconnect error when the SSH filesystem provider is unavailable', async () => {
@@ -986,7 +1037,7 @@ describe('registerFilesystemHandlers', () => {
       'Access denied: path resolves outside allowed directories'
     )
 
-    expect(readFileMock).not.toHaveBeenCalled()
+    expect(openMock).not.toHaveBeenCalled()
   })
 
   it('allows readDir when a registered worktree resolves to a macOS canonical alias', async () => {
@@ -1105,7 +1156,7 @@ describe('registerFilesystemHandlers', () => {
       'Access denied: path resolves outside allowed directories'
     )
 
-    expect(readFileMock).not.toHaveBeenCalled()
+    expect(openMock).not.toHaveBeenCalled()
   })
 
   it('does not enumerate worktrees when filesystem handlers register', () => {
@@ -1148,32 +1199,56 @@ describe('registerFilesystemHandlers', () => {
   )
 
   it.each([
-    { ext: 'png', mime: 'image/png', data: [0x89, 0x50, 0x4e, 0x47, 0x00] },
+    {
+      ext: 'png',
+      mime: 'image/png',
+      data: Array.from(pngHeader()),
+      imageDimensions: { width: 1, height: 1 }
+    },
     { ext: 'pdf', mime: 'application/pdf', data: [0x25, 0x50, 0x44, 0x46, 0x00] },
     {
       ext: 'svg',
       mime: 'image/svg+xml',
       data: Array.from(Buffer.from('<svg xmlns="http://www.w3.org/2000/svg" />'))
     }
-  ])('returns base64 content for supported $ext binaries', async ({ ext, mime, data }) => {
-    const buf = Buffer.from(data)
+  ])(
+    'returns base64 content for supported $ext binaries',
+    async ({ ext, mime, data, imageDimensions }) => {
+      const buf = Buffer.from(data)
+      statMock.mockResolvedValue({ size: buf.length, isDirectory: () => false, mtimeMs: 123 })
+      mockReadableFile(buf)
+      registerFilesystemHandlers(store as never)
+      await expect(
+        handlers.get('fs:readFile')!(null, {
+          filePath: path.resolve(`/workspace/repo/file.${ext}`)
+        })
+      ).resolves.toEqual({
+        content: buf.toString('base64'),
+        isBinary: true,
+        isImage: true,
+        mimeType: mime,
+        ...(imageDimensions ? { imageDimensions } : {})
+      })
+    }
+  )
+
+  it('rejects a raster dimension bomb before returning base64 to the renderer', async () => {
+    const buf = pngHeader(32_769, 1)
     statMock.mockResolvedValue({ size: buf.length, isDirectory: () => false, mtimeMs: 123 })
-    readFileMock.mockResolvedValue(buf)
+    mockReadableFile(buf)
     registerFilesystemHandlers(store as never)
+
     await expect(
-      handlers.get('fs:readFile')!(null, { filePath: path.resolve(`/workspace/repo/file.${ext}`) })
-    ).resolves.toEqual({
-      content: buf.toString('base64'),
-      isBinary: true,
-      isImage: true,
-      mimeType: mime
-    })
+      handlers.get('fs:readFile')!(null, {
+        filePath: path.resolve('/workspace/repo/bomb.png')
+      })
+    ).rejects.toThrow('Image dimensions exceed the preview safety limit')
   })
 
   it('opens text files larger than the old 5MB guard', async () => {
     const content = 'a'.repeat(6 * 1024 * 1024)
     statMock.mockResolvedValue({ size: content.length, isDirectory: () => false, mtimeMs: 123 })
-    readFileMock.mockResolvedValue(Buffer.from(content))
+    mockReadableFile(Buffer.from(content))
 
     registerFilesystemHandlers(store as never)
 
@@ -1187,17 +1262,7 @@ describe('registerFilesystemHandlers', () => {
 
   it('returns stable byte metadata only for opted-in local log snapshots', async () => {
     const content = Buffer.from('first\npartial')
-    const close = vi.fn()
-    openMock.mockResolvedValue({
-      stat: vi.fn().mockResolvedValue({
-        size: content.byteLength,
-        dev: 1,
-        ino: 2,
-        birthtimeMs: 3
-      }),
-      readFile: vi.fn().mockResolvedValue(content),
-      close
-    })
+    const handle = mockReadableFile(content, { dev: 1, ino: 2, birthtimeMs: 3 })
     registerFilesystemHandlers(store as never)
 
     await expect(
@@ -1210,8 +1275,7 @@ describe('registerFilesystemHandlers', () => {
       isBinary: false,
       fileIdentity: '1:2:3'
     })
-    expect(close).toHaveBeenCalledTimes(1)
-    expect(readFileMock).not.toHaveBeenCalled()
+    expect(handle.close).toHaveBeenCalledTimes(1)
   })
 
   it('rejects text files beyond the editor read budget', async () => {
@@ -1223,7 +1287,7 @@ describe('registerFilesystemHandlers', () => {
       handlers.get('fs:readFile')!(null, { filePath: path.resolve('/workspace/repo/huge.json') })
     ).rejects.toThrow('exceeds 50MB limit')
 
-    expect(readFileMock).not.toHaveBeenCalled()
+    expect(openMock).not.toHaveBeenCalled()
   })
 
   it('probes large unknown binaries without reading the full file', async () => {
@@ -1245,7 +1309,7 @@ describe('registerFilesystemHandlers', () => {
       isBinary: true
     })
 
-    expect(readFileMock).not.toHaveBeenCalled()
+    expect(openMock).toHaveBeenCalledTimes(1)
   })
 
   it('moves files to trash', async () => {
@@ -1316,7 +1380,7 @@ describe('registerFilesystemHandlers', () => {
 
   it('keeps non-image binaries hidden from the editor payload', async () => {
     statMock.mockResolvedValue({ size: 4, isDirectory: () => false, mtimeMs: 123 })
-    readFileMock.mockResolvedValue(Buffer.from([0x00, 0x01, 0x02]))
+    mockReadableFile(Buffer.from([0x00, 0x01, 0x02]))
 
     registerFilesystemHandlers(store as never)
 
@@ -1777,7 +1841,7 @@ describe('registerFilesystemHandlers', () => {
 
   it('lists remote markdown documents through the SSH filesystem provider', async () => {
     const provider = {
-      listFiles: vi
+      listMarkdownDocuments: vi
         .fn()
         .mockResolvedValue(['README.md', 'docs/guide.mdx', '../outside.md', 'src/app.ts'])
     }
@@ -1804,6 +1868,7 @@ describe('registerFilesystemHandlers', () => {
         name: 'README'
       }
     ])
+    expect(provider.listMarkdownDocuments).toHaveBeenCalledWith('/home/user/project')
   })
 
   it('routes branch compare queries through the git compare helper', async () => {
@@ -2052,6 +2117,220 @@ describe('registerFilesystemHandlers', () => {
           wslDistro: 'Ubuntu',
           env: expect.objectContaining({ CODEX_HOME: '/home/tester/.codex' })
         })
+      )
+    })
+  })
+
+  it('enriches the local commit context with a validated worktree linked issue', async () => {
+    const context = {
+      branch: 'feature/ai',
+      stagedSummary: 'M\tREADME.md',
+      stagedPatch: '+hello'
+    }
+    const params = { agentId: 'codex', model: 'gpt-5.4-mini' }
+    const worktreeId = `repo-1::${WORKTREE_FEATURE_PATH}`
+    resolveCommitMessageSettingsMock.mockReturnValue({ ok: true, params })
+    getStagedCommitContextMock.mockResolvedValue(context)
+    generateCommitMessageFromContextMock.mockResolvedValue({ success: true, message: 'Update' })
+    const linkedStore = {
+      ...store,
+      getWorktreeMeta: (id: string) => (id === worktreeId ? { linkedIssue: 123 } : undefined)
+    }
+
+    registerFilesystemHandlers(linkedStore as never)
+
+    await handlers.get('git:generateCommitMessage')!(null, {
+      worktreePath: WORKTREE_FEATURE_PATH,
+      worktreeId
+    })
+
+    expect(generateCommitMessageFromContextMock).toHaveBeenCalledWith(
+      { ...context, linkedIssue: 123 },
+      params,
+      expect.objectContaining({ kind: 'local' })
+    )
+  })
+
+  // Why: folder-repo instances keep `::workspace:<uuid>` on the meta key while the
+  // request path is the stripped cwd. A strip-before-lookup "cleanup" would still
+  // pass plain-id tests and silently lose enrichment on second workspaces.
+  it('enriches local commit context when the worktree id carries a folder-repo workspace suffix', async () => {
+    const context = {
+      branch: 'feature/ai',
+      stagedSummary: 'M\tREADME.md',
+      stagedPatch: '+hello'
+    }
+    const params = { agentId: 'codex', model: 'gpt-5.4-mini' }
+    const instanceId = `repo-1::${WORKTREE_FEATURE_PATH}::workspace:${'0'.repeat(8)}-0000-0000-0000-${'0'.repeat(12)}`
+    resolveCommitMessageSettingsMock.mockReturnValue({ ok: true, params })
+    getStagedCommitContextMock.mockResolvedValue(context)
+    generateCommitMessageFromContextMock.mockResolvedValue({ success: true, message: 'Update' })
+    const getWorktreeMeta = vi.fn((id: string) =>
+      id === instanceId ? { linkedIssue: 9 } : undefined
+    )
+
+    registerFilesystemHandlers({ ...store, getWorktreeMeta } as never)
+
+    await handlers.get('git:generateCommitMessage')!(null, {
+      worktreePath: WORKTREE_FEATURE_PATH,
+      worktreeId: instanceId
+    })
+
+    expect(getWorktreeMeta).toHaveBeenCalledWith(instanceId)
+    expect(generateCommitMessageFromContextMock).toHaveBeenCalledWith(
+      { ...context, linkedIssue: 9 },
+      params,
+      expect.objectContaining({ kind: 'local' })
+    )
+  })
+
+  // Why: the renderer derives worktreePath from worktreeId, so a mismatched pair
+  // models an independent caller (relay/CLI/future), not a stale renderer context.
+  it('ignores an independently supplied id that does not own the requested worktree path', async () => {
+    const context = {
+      branch: 'feature/ai',
+      stagedSummary: 'M\tREADME.md',
+      stagedPatch: '+hello'
+    }
+    const params = { agentId: 'codex', model: 'gpt-5.4-mini' }
+    const getWorktreeMeta = vi.fn(() => ({ linkedIssue: 123 }))
+    resolveCommitMessageSettingsMock.mockReturnValue({ ok: true, params })
+    getStagedCommitContextMock.mockResolvedValue(context)
+    generateCommitMessageFromContextMock.mockResolvedValue({ success: true, message: 'Update' })
+
+    registerFilesystemHandlers({ ...store, getWorktreeMeta } as never)
+
+    await handlers.get('git:generateCommitMessage')!(null, {
+      worktreePath: WORKTREE_FEATURE_PATH,
+      worktreeId: `repo-1::${path.resolve('/workspace/repo-other')}`
+    })
+
+    expect(getWorktreeMeta).not.toHaveBeenCalled()
+    // Why: without this the assertion below passes vacuously on an early return.
+    expect(generateCommitMessageFromContextMock.mock.calls).toHaveLength(1)
+    expect(generateCommitMessageFromContextMock.mock.calls[0]?.[0]).not.toHaveProperty(
+      'linkedIssue'
+    )
+  })
+
+  it('enriches the SSH commit context from host meta using the remote path', async () => {
+    const context = { branch: 'main', stagedSummary: 'A\tremote.txt', stagedPatch: '+remote' }
+    const params = { agentId: 'custom', model: '', customAgentCommand: 'agent' }
+    const worktreeId = 'repo-1::/remote/repo'
+    resolveCommitMessageSettingsMock.mockReturnValue({ ok: true, params })
+    getSshGitProviderMock.mockReturnValue({
+      getStagedCommitContext: vi.fn().mockResolvedValue(context),
+      executeCommitMessagePlan: vi.fn()
+    })
+    generateCommitMessageFromContextMock.mockResolvedValue({ success: true, message: 'Add file' })
+    const linkedStore = {
+      ...store,
+      getWorktreeMeta: (id: string) => (id === worktreeId ? { linkedIssue: 77 } : undefined)
+    }
+
+    registerFilesystemHandlers(linkedStore as never)
+
+    await handlers.get('git:generateCommitMessage')!(null, {
+      worktreePath: '/remote/repo',
+      worktreeId,
+      connectionId: 'conn-1'
+    })
+
+    expect(generateCommitMessageFromContextMock).toHaveBeenCalledWith(
+      { ...context, linkedIssue: 77 },
+      params,
+      expect.objectContaining({ kind: 'remote' })
+    )
+  })
+
+  describe('git:generatePullRequestFields linked issue', () => {
+    const PULL_REQUEST_CONTEXT = {
+      base: 'main',
+      branch: 'feature/ai',
+      branchChangedByPreparation: false,
+      commitSummary: 'a1b2c3d Add generation',
+      changeSummary: 'README.md | 2 +-',
+      patch: '+hello',
+      currentTitle: '',
+      currentBody: '',
+      currentDraft: false
+    }
+    const PULL_REQUEST_ARGS = { base: 'main', title: '', body: '', draft: false }
+    const params = { agentId: 'codex', model: 'gpt-5.4-mini' }
+
+    beforeEach(() => {
+      resolveCommitMessageSettingsMock.mockReturnValue({ ok: true, params })
+      resolveHostedReviewBodyForGenerationMock.mockResolvedValue('')
+      getPullRequestDraftContextMock.mockResolvedValue(PULL_REQUEST_CONTEXT)
+      generatePullRequestFieldsFromContextMock.mockResolvedValue({ success: true, fields: {} })
+    })
+
+    it('enriches the local pull-request context with a validated worktree linked issue', async () => {
+      const worktreeId = `repo-1::${WORKTREE_FEATURE_PATH}`
+      const linkedStore = {
+        ...store,
+        getWorktreeMeta: (id: string) => (id === worktreeId ? { linkedIssue: 123 } : undefined)
+      }
+
+      registerFilesystemHandlers(linkedStore as never)
+
+      await handlers.get('git:generatePullRequestFields')!(null, {
+        ...PULL_REQUEST_ARGS,
+        worktreePath: WORKTREE_FEATURE_PATH,
+        worktreeId
+      })
+
+      expect(generatePullRequestFieldsFromContextMock).toHaveBeenCalledWith(
+        { ...PULL_REQUEST_CONTEXT, linkedIssue: 123 },
+        params,
+        expect.objectContaining({ kind: 'local' })
+      )
+    })
+
+    it('enriches the SSH pull-request context from host meta using the remote path', async () => {
+      const worktreeId = 'repo-1::/remote/repo'
+      getSshGitProviderMock.mockReturnValue({
+        exec: vi.fn(),
+        executeCommitMessagePlan: vi.fn()
+      })
+      const linkedStore = {
+        ...store,
+        getWorktreeMeta: (id: string) => (id === worktreeId ? { linkedIssue: 77 } : undefined)
+      }
+
+      registerFilesystemHandlers(linkedStore as never)
+
+      await handlers.get('git:generatePullRequestFields')!(null, {
+        ...PULL_REQUEST_ARGS,
+        worktreePath: '/remote/repo',
+        worktreeId,
+        connectionId: 'conn-1'
+      })
+
+      expect(generatePullRequestFieldsFromContextMock).toHaveBeenCalledWith(
+        { ...PULL_REQUEST_CONTEXT, linkedIssue: 77 },
+        params,
+        expect.objectContaining({ kind: 'remote' })
+      )
+    })
+
+    it('ignores a pull-request worktree id that does not own the requested path', async () => {
+      const getWorktreeMeta = vi.fn(() => ({ linkedIssue: 123 }))
+
+      registerFilesystemHandlers({ ...store, getWorktreeMeta } as never)
+
+      await handlers.get('git:generatePullRequestFields')!(null, {
+        ...PULL_REQUEST_ARGS,
+        worktreePath: WORKTREE_FEATURE_PATH,
+        worktreeId: `repo-1::${path.resolve('/workspace/repo-other')}`
+      })
+
+      expect(getWorktreeMeta).not.toHaveBeenCalled()
+      // Why: without the length guard the property assertion passes vacuously on `undefined`,
+      // so an unrelated early return would read as "enrichment correctly suppressed".
+      expect(generatePullRequestFieldsFromContextMock.mock.calls).toHaveLength(1)
+      expect(generatePullRequestFieldsFromContextMock.mock.calls[0]?.[0]).not.toHaveProperty(
+        'linkedIssue'
       )
     })
   })

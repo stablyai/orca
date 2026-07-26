@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, describe, expect, it } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import {
   existsSync,
   mkdirSync,
@@ -11,6 +11,7 @@ import {
 } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { basename, join } from 'node:path'
+import * as configOverlayMirroring from '../main/pty/config-overlay-mirroring'
 import { PluginOverlayManager } from './plugin-overlay'
 import { resolvePiSourceAgentDir } from './plugin-overlay-env'
 
@@ -68,6 +69,30 @@ describe('PluginOverlayManager', () => {
     manager.setSources({ opencodePluginSource: 'orca plugin' })
 
     expect(manager.materializeOpenCode('tab-missing:0', join(homeDir, 'missing'))).toBeNull()
+  })
+
+  it('rejects an over-capacity remote config before replacing the last good overlay', () => {
+    manager.setSources({ opencodePluginSource: 'first plugin' })
+    const overlayDir = manager.materializeOpenCode('tab-capacity:0')!
+    const pluginPath = join(overlayDir, 'plugins', 'orca-opencode-status.js')
+    const userConfigDir = join(homeDir, 'large-opencode-config')
+    mkdirSync(userConfigDir)
+    const planSpy = vi
+      .spyOn(configOverlayMirroring, 'createConfigOverlayPlan')
+      .mockImplementation(() => {
+        throw new configOverlayMirroring.ConfigOverlayCapacityError('entries', 4_097, 4_096)
+      })
+    const stderrSpy = vi.spyOn(process.stderr, 'write').mockImplementation(() => true)
+    try {
+      expect(manager.materializeOpenCode('tab-capacity:0', userConfigDir)).toBeNull()
+      expect(readFileSync(pluginPath, 'utf8')).toBe('first plugin')
+      expect(stderrSpy).toHaveBeenCalledWith(
+        expect.stringContaining('Agent config overlay entries exceeded its 4096 limit')
+      )
+    } finally {
+      planSpy.mockRestore()
+      stderrSpy.mockRestore()
+    }
   })
 
   it('installs Pi extension into the real agent extensions dir', () => {

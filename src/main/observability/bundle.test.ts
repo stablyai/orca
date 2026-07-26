@@ -1,7 +1,7 @@
 // Bundle collection + upload tests. Upload helpers live outside bundle.ts, but
 // this suite keeps the diagnostic bundle contract in one place.
 
-import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { mkdtempSync, rmSync, truncateSync, writeFileSync } from 'node:fs'
 import { createServer, type RequestListener, type Server } from 'node:http'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -342,6 +342,23 @@ describe('bundle — collection', () => {
         orcaChannel: 'dev'
       })
     ).not.toThrow()
+  })
+
+  it('skips a sparse source file above the bounded read limit', () => {
+    writeFileSync(traceFile, '')
+    truncateSync(traceFile, 50 * 1024 * 1024 + 1)
+
+    const bundle = collectBundle({
+      traceFilePath: traceFile,
+      maxFiles: 10,
+      appVersion: '1',
+      platform: 'darwin',
+      arch: 'arm64',
+      osRelease: '24',
+      orcaChannel: 'dev'
+    })
+
+    expect(bundle.spanCount).toBe(0)
   })
 
   it('skips valid JSON lines that are not span objects without throwing', () => {

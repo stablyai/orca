@@ -3,6 +3,7 @@ import type { IPtyProvider } from './types'
 export type PtyProcessInspection = {
   foregroundProcess: string | null
   hasChildProcesses: boolean
+  unavailable?: true
 }
 
 type CompletionSensitivePtyProvider = IPtyProvider & {

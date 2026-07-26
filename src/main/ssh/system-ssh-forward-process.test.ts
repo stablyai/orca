@@ -34,6 +34,7 @@ import {
   waitForSystemSshForwardStop
 } from './system-ssh-forward-process'
 import type { SshTarget } from '../../shared/ssh-types'
+import { SYSTEM_SSH_OUTPUT_TAIL_MAX_BYTES } from './system-ssh-output-tail'
 
 const SYSTEM_SSH_PATH =
   process.platform === 'win32' ? 'C:\\Windows\\System32\\OpenSSH\\ssh.exe' : '/usr/bin/ssh'
@@ -245,6 +246,22 @@ describe('system SSH forward process', () => {
     child.emit('exit', 255)
 
     await expect(pending).rejects.toThrow('bind: Address already in use')
+  })
+
+  it('keeps only a bounded stderr tail while waiting for forward startup', async () => {
+    vi.useFakeTimers()
+    const child = createFakeProcess()
+    connectMock.mockReturnValue(createFakeSocket())
+
+    const pending = waitForSystemSshForwardStartup(child as never, 3000)
+    child.stderr.emit(
+      'data',
+      Buffer.from(`HEAD${'x'.repeat(SYSTEM_SSH_OUTPUT_TAIL_MAX_BYTES)}TAIL`)
+    )
+    child.emit('exit', 255)
+
+    await expect(pending).rejects.toThrow('TAIL')
+    await expect(pending).rejects.not.toThrow('HEAD')
   })
 
   it('rejects startup when the ssh process emits an error', async () => {

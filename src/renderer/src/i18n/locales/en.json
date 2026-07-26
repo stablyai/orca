@@ -2669,8 +2669,17 @@
               "blocked": {
                 "toast": {
                   "97c98f1afe": "Open Setting",
-                  "7cf51f74fd": "Enable TUI clipboard writes in Terminal settings to copy from SSH, tmux, Neovim, fzf, or Grok.",
+                  "7cf51f74fd": "Enable TUI clipboard writes in Terminal settings to copy from SSH, Zellij, tmux, Neovim, fzf, or Grok.",
                   "89eaa3e80b": "Terminal clipboard write blocked"
+                }
+              },
+              "default": {
+                "on": {
+                  "notice": {
+                    "title": "TUI clipboard writes are now on by default",
+                    "description": "Zellij, tmux, Neovim and other terminal programs can now copy to your clipboard. Turn it off in Terminal settings.",
+                    "action": "Open Setting"
+                  }
                 }
               }
             }
@@ -3680,7 +3689,8 @@
           "SourceControlActionVariableChips": {
             "1b77798d5f": "Variables",
             "6b921a0ac2": "Example",
-            "4bf6d88039": "(empty)"
+            "4bf6d88039": "(empty)",
+            "7377483644": "This workspace"
           }
         }
       },
@@ -7002,9 +7012,9 @@
           "d23b43c5be": "Setup Script Location",
           "34a0dfa06e": "Where the repository setup script runs when a new workspace is created.",
           "21f8da2078": "Workspace Setup Script",
-          "6e6480a7df": "Let programs in the terminal (Grok, tmux, Neovim, fzf, SSH) copy to your system clipboard.",
+          "6e6480a7df": "Let programs in the terminal (Zellij, tmux, Neovim, fzf, Grok, SSH) copy to your system clipboard.",
           "3338dcf8c1": "Allow TUI Clipboard Writes (OSC 52)",
-          "69c64a479c": "Let Grok, tmux, Neovim, and fzf copy to the system clipboard over the PTY (including over SSH).",
+          "69c64a479c": "Let Zellij, tmux, Neovim, fzf, and Grok copy to the system clipboard over the PTY (including over SSH).",
           "4729c645fc": "Automatically copy terminal selections to the clipboard.",
           "902f5dee1f": "Copy on Select",
           "9129b7e805": "Hovering a terminal pane activates it without needing to click.",
@@ -7702,7 +7712,8 @@
               "78a10b826f": "bonjour",
               "e3fbc48083": "bluetooth",
               "c4a4a02ea4": "usb",
-              "fa3239cd42": "lan",
+              "fa3239cd42": "local network",
+              "87620e6416": "lan",
               "acad3d4743": "Allow device tools and LAN access used from terminal sessions.",
               "3e0131e45d": "icloud",
               "ce07159ff5": "desktop",
@@ -8641,7 +8652,6 @@
             "10f9fb6fea": "settings",
             "2ade3ea490": "config",
             "fd752b3cac": "import",
-            "82b63d07fe": "ghostty",
             "73e9422f19": "One-time import of supported Ghostty terminal settings.",
             "a979df0083": "Import from Ghostty",
             "warp_import": {

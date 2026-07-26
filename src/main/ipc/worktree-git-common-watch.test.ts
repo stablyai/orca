@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { appendFile, mkdtemp, mkdir, realpath, rm, writeFile } from 'node:fs/promises'
+import type * as NodeFsPromises from 'node:fs/promises'
 import { chmodSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -19,6 +20,20 @@ vi.mock('./parcel-watcher-process', () => ({
   subscribeViaWatcherProcess: vi.fn()
 }))
 
+// Records every stat target so a test can assert which paths a parked poll stopped touching.
+const { statCalls } = vi.hoisted(() => ({ statCalls: [] as string[] }))
+
+vi.mock('node:fs/promises', async (importOriginal) => {
+  const actual = await importOriginal<typeof NodeFsPromises>()
+  return {
+    ...actual,
+    stat: (...args: Parameters<typeof actual.stat>) => {
+      statCalls.push(String(args[0]))
+      return actual.stat(...args)
+    }
+  }
+})
+
 const POLL_MS = 25
 
 const alwaysVisible: WorktreePollerWindowVisibility = {
@@ -30,18 +45,18 @@ function createVisibilityHarness(): {
   source: WorktreePollerWindowVisibility
   hide: () => void
   show: () => void
+  listenerCount: () => number
 } {
   let visible = true
-  let listener: (() => void) | null = null
+  // A set, not a single slot: the darwin path parks two independent watches.
+  const listeners = new Set<() => void>()
   return {
     source: {
       isWindowVisible: () => visible,
       onWindowBecameVisible: (nextListener) => {
-        listener = nextListener
+        listeners.add(nextListener)
         return () => {
-          if (listener === nextListener) {
-            listener = null
-          }
+          listeners.delete(nextListener)
         }
       }
     },
@@ -50,8 +65,11 @@ function createVisibilityHarness(): {
     },
     show: () => {
       visible = true
-      listener?.()
-    }
+      for (const listener of listeners) {
+        listener()
+      }
+    },
+    listenerCount: () => listeners.size
   }
 }
 
@@ -70,6 +88,7 @@ describe('worktree git-common narrow watch (darwin)', () => {
   afterEach(async () => {
     await Promise.all(cleanups.splice(0).map((cleanup) => cleanup()))
     childSubscriptions = []
+    statCalls.length = 0
     subscribeMock.mockReset()
   })
 
@@ -204,6 +223,110 @@ describe('worktree git-common narrow watch (darwin)', () => {
     await vi.waitFor(() => {
       expect(subscribeMock).toHaveBeenCalledTimes(1)
     })
+  })
+
+  async function startHiddenExistencePoll(visibility: {
+    source: WorktreePollerWindowVisibility
+    hide: () => void
+  }): Promise<{ commonDir: string; worktreesDir: string; received: WorktreeBasePollEvent[][] }> {
+    const commonDir = await makeCommonDir(false)
+    const received: WorktreeBasePollEvent[][] = []
+    const watch = await startGitCommonWatch(
+      makeTarget(commonDir),
+      (events) => received.push(events),
+      POLL_MS,
+      'darwin',
+      visibility.source
+    )
+    cleanups.push(() => watch.unsubscribe())
+    visibility.hide()
+    // Let the armed poll observe the hidden window and park itself.
+    await new Promise((resolve) => setTimeout(resolve, POLL_MS * 4))
+    statCalls.length = 0
+    return { commonDir, worktreesDir: join(commonDir, 'worktrees'), received }
+  }
+
+  it('parks the existence poll while the window is hidden', async () => {
+    installSubscribeMock()
+    const visibility = createVisibilityHarness()
+    const { worktreesDir, received } = await startHiddenExistencePoll(visibility)
+
+    await mkdir(worktreesDir)
+    await new Promise((resolve) => setTimeout(resolve, POLL_MS * 4))
+
+    expect(statCalls.filter((path) => path === worktreesDir)).toHaveLength(0)
+    expect(subscribeMock).not.toHaveBeenCalled()
+    expect(received.flat()).toHaveLength(0)
+  })
+
+  it('re-checks on show and still reports a worktrees dir created while hidden', async () => {
+    installSubscribeMock()
+    const visibility = createVisibilityHarness()
+    const { worktreesDir, received } = await startHiddenExistencePoll(visibility)
+
+    await mkdir(worktreesDir)
+    await new Promise((resolve) => setTimeout(resolve, POLL_MS * 4))
+    expect(subscribeMock).not.toHaveBeenCalled()
+
+    visibility.show()
+    // Promptly: the re-check stats on show, not a poll interval later.
+    expect(statCalls.filter((path) => path === worktreesDir)).toHaveLength(1)
+    await vi.waitFor(() => {
+      expect(subscribeMock).toHaveBeenCalledTimes(1)
+    })
+    expect(received.flat()).toContainEqual({ type: 'create', path: worktreesDir })
+  })
+
+  it('resumes polling when the dir is still absent on show', async () => {
+    installSubscribeMock()
+    const visibility = createVisibilityHarness()
+    const { worktreesDir } = await startHiddenExistencePoll(visibility)
+
+    visibility.show()
+    await mkdir(worktreesDir)
+    await vi.waitFor(() => {
+      expect(subscribeMock).toHaveBeenCalledTimes(1)
+    })
+  })
+
+  it('keeps polling and reporting while the window stays visible', async () => {
+    installSubscribeMock()
+    const visibility = createVisibilityHarness()
+    const commonDir = await makeCommonDir(false)
+    const worktreesDir = join(commonDir, 'worktrees')
+    const received: WorktreeBasePollEvent[][] = []
+    const watch = await startGitCommonWatch(
+      makeTarget(commonDir),
+      (events) => received.push(events),
+      POLL_MS,
+      'darwin',
+      visibility.source
+    )
+    cleanups.push(() => watch.unsubscribe())
+
+    await mkdir(worktreesDir)
+    await vi.waitFor(() => {
+      expect(subscribeMock).toHaveBeenCalledTimes(1)
+    })
+    expect(received.flat()).toContainEqual({ type: 'create', path: worktreesDir })
+  })
+
+  it('drops both visibility subscriptions on dispose', async () => {
+    installSubscribeMock()
+    const visibility = createVisibilityHarness()
+    const commonDir = await makeCommonDir(false)
+    const watch = await startGitCommonWatch(
+      makeTarget(commonDir),
+      () => {},
+      POLL_MS,
+      'darwin',
+      visibility.source
+    )
+
+    // Narrow watch + primary-metadata poll each park on window visibility.
+    expect(visibility.listenerCount()).toBe(2)
+    await watch.unsubscribe()
+    expect(visibility.listenerCount()).toBe(0)
   })
 
   it('keeps the native stream live while the primary poll is parked', async () => {

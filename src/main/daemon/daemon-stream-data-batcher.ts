@@ -6,13 +6,14 @@ import {
   encodeStreamDataEvent,
   writeStreamDataEvents
 } from './daemon-stream-data-split'
-import type { PendingStreamDataBatch } from './daemon-stream-keep-tail-drop'
+import {
+  backgroundSessionDropCapChars,
+  backgroundSessionKeepTailChars,
+  dropOldestQueuedForSession,
+  type PendingStreamDataBatch
+} from './daemon-stream-keep-tail-drop'
 import type { DaemonEvent } from './types'
 import { appendDaemonStreamData, type DaemonStreamEnqueueOptions } from './daemon-stream-data-entry'
-import {
-  evaluateDroppableEnqueue,
-  refreshDroppableSessionMembership
-} from './daemon-stream-droppable-membership'
 
 type StreamDataClient = {
   streamSocket: Socket | null
@@ -73,16 +74,30 @@ export class DaemonStreamDataBatcher {
     }
 
     const batch = this.getOrCreateBatch(clientId)
-    const queuedAfter = appendDaemonStreamData(batch, sessionId, data, options)
-    const queuedBefore = queuedAfter - data.length
-    evaluateDroppableEnqueue(
-      batch,
-      sessionId,
-      queuedBefore,
-      queuedAfter,
-      this.isSessionDroppable,
-      this.salvageDroppedData
-    )
+    appendDaemonStreamData(batch, sessionId, data, options)
+
+    if (this.isSessionDroppable(sessionId)) {
+      // Keep-tail scales down as more backgrounded sessions queue, bounding the aggregate a reveal must drain (see daemon-stream-keep-tail-drop).
+      const droppableQueued = this.countDroppableSessionsWithQueuedData(batch)
+      const dropCap = backgroundSessionDropCapChars(droppableQueued)
+      const keepTail = backgroundSessionKeepTailChars(droppableQueued)
+      if ((batch.queuedCharsBySession.get(sessionId) ?? 0) > dropCap) {
+        dropOldestQueuedForSession(batch, sessionId, keepTail, this.salvageDroppedData)
+      }
+      if (droppableQueued > (batch.lastDroppableSessionCount ?? 0)) {
+        // Shared budget tightened: re-trim sessions that already finished producing — they never re-enter this path on their own.
+        for (const [queuedSessionId, queued] of Array.from(batch.queuedCharsBySession)) {
+          if (
+            queued > dropCap &&
+            queuedSessionId !== sessionId &&
+            this.isSessionDroppable(queuedSessionId)
+          ) {
+            dropOldestQueuedForSession(batch, queuedSessionId, keepTail, this.salvageDroppedData)
+          }
+        }
+      }
+      batch.lastDroppableSessionCount = droppableQueued
+    }
 
     if (
       options.flushImmediately === true &&
@@ -110,21 +125,20 @@ export class DaemonStreamDataBatcher {
     }
   }
 
-  refreshSessionDroppability(sessionId: string): void {
-    const droppable = this.isSessionDroppable(sessionId)
-    refreshDroppableSessionMembership(this.pendingByClient.values(), sessionId, droppable)
+  private countDroppableSessionsWithQueuedData(batch: PendingStreamDataBatch): number {
+    let count = 0
+    for (const [sessionId, queued] of batch.queuedCharsBySession) {
+      if (queued > 0 && this.isSessionDroppable(sessionId)) {
+        count++
+      }
+    }
+    return count
   }
 
   private getOrCreateBatch(clientId: string): PendingStreamDataBatch {
     let batch = this.pendingByClient.get(clientId)
     if (!batch) {
-      batch = {
-        timer: null,
-        queue: [],
-        queuedChars: 0,
-        queuedCharsBySession: new Map(),
-        droppableQueuedSessionIds: new Set()
-      }
+      batch = { timer: null, queue: [], queuedChars: 0, queuedCharsBySession: new Map() }
       this.pendingByClient.set(clientId, batch)
     }
     return batch
@@ -211,7 +225,6 @@ export class DaemonStreamDataBatcher {
         (batch.queuedCharsBySession.get(entry.sessionId) ?? slice.length) - slice.length
       if (sessionHeldAfter <= 0) {
         batch.queuedCharsBySession.delete(entry.sessionId)
-        batch.droppableQueuedSessionIds.delete(entry.sessionId)
       } else {
         batch.queuedCharsBySession.set(entry.sessionId, sessionHeldAfter)
       }
@@ -283,7 +296,6 @@ export class DaemonStreamDataBatcher {
     batch.queue = retained
     batch.queuedChars -= flushedChars
     batch.queuedCharsBySession.delete(sessionId)
-    batch.droppableQueuedSessionIds.delete(sessionId)
     if (batch.queue.length === 0) {
       if (batch.timer) {
         clearTimeout(batch.timer)

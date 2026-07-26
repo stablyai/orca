@@ -18,6 +18,15 @@ import type { RemoteScannerContext, RemoteSessionCandidate } from './remote-sess
 import { sessionSortTime } from './session-scanner-accumulator'
 import { createAntigravityWorkspaceResolver } from './session-scanner-antigravity-history'
 import { errorMessage } from './session-scanner-values'
+import {
+  AiVaultSessionDiscoveryBudget,
+  type AiVaultSessionDiscoveryLimits
+} from './session-discovery-budget'
+import {
+  boundAiVaultListResult,
+  retainAiVaultSession,
+  retainAiVaultSessionsWithinAggregate
+} from './session-list-retention'
 
 const DEFAULT_REMOTE_SCAN_LIMIT = 1000
 const REMOTE_SCAN_CONCURRENCY = 8
@@ -30,6 +39,7 @@ export async function scanRemoteAiVaultSessions(args: {
   hostPlatform: RemoteHostPlatform
   limit?: number
   scopePaths?: readonly string[]
+  discoveryLimits?: Partial<AiVaultSessionDiscoveryLimits>
 }): Promise<AiVaultListResult> {
   const limit = args.limit && args.limit > 0 ? Math.floor(args.limit) : DEFAULT_REMOTE_SCAN_LIMIT
   const issues: AiVaultScanIssue[] = []
@@ -38,6 +48,7 @@ export async function scanRemoteAiVaultSessions(args: {
     executionHostId: args.executionHostId,
     hostPlatform: args.hostPlatform,
     titleCaches: new Map(),
+    discoveryBudget: new AiVaultSessionDiscoveryBudget(args.discoveryLimits),
     antigravityWorkspaceResolver: createAntigravityWorkspaceResolver(async (historyPath) => {
       try {
         const read = await args.provider.readFile(historyPath)
@@ -85,11 +96,11 @@ export async function scanRemoteAiVaultSessions(args: {
     ...extraScopeSessions
   ])
 
-  return {
+  return boundAiVaultListResult({
     sessions: mergeRemoteSessions(cappedSessions, scopeSessions),
     issues,
     scannedAt: new Date().toISOString()
-  }
+  })
 }
 
 async function parseRemoteSessionCandidates(args: {
@@ -116,7 +127,12 @@ async function parseRemoteSessionCandidates(args: {
     )
     sessions.push(...results.filter(isAiVaultSession))
     const uniqueSessions = dedupeCodexSessionsBySessionId(sessions)
-    sessions.splice(0, sessions.length, ...uniqueSessions)
+    const retained = retainAiVaultSessionsWithinAggregate(uniqueSessions)
+    sessions.splice(0, sessions.length, ...retained.sessions)
+    if (retained.omitted > 0) {
+      addRemoteSessionCapacityIssue(args.issues, args.context.executionHostId, retained.omitted)
+      break
+    }
     index += batch.length
   }
 
@@ -150,6 +166,12 @@ async function scanRemoteInScopeSessions(args: {
           isAiVaultSession(session) && isRemoteSessionInScope(session, args.scopePaths)
       )
     )
+    const retained = retainAiVaultSessionsWithinAggregate(sessions)
+    sessions.splice(0, sessions.length, ...retained.sessions)
+    if (retained.omitted > 0) {
+      addRemoteSessionCapacityIssue(args.issues, args.context.executionHostId, retained.omitted)
+      break
+    }
   }
 
   return sessions
@@ -170,10 +192,9 @@ async function parseRemoteSessionCandidate(
     // transcript count (row badge; recoverable signal at zero turns). The
     // walk listing supplies it — the parser can't readdir a remote disk.
     const subagentTranscriptCount = candidate.subagentTranscriptCount ?? 0
-    if (session && subagentTranscriptCount > 0) {
-      return { ...session, subagentTranscriptCount }
-    }
-    return session
+    const enriched =
+      session && subagentTranscriptCount > 0 ? { ...session, subagentTranscriptCount } : session
+    return enriched ? retainAiVaultSession(enriched) : null
   } catch (err) {
     issues.push({
       executionHostId: context.executionHostId,
@@ -231,6 +252,19 @@ function canStopParsingRemoteSessions(
 
 function isAiVaultSession(session: AiVaultSession | null): session is AiVaultSession {
   return Boolean(session)
+}
+
+function addRemoteSessionCapacityIssue(
+  issues: AiVaultScanIssue[],
+  executionHostId: ExecutionHostId,
+  omitted: number
+): void {
+  issues.push({
+    executionHostId,
+    agent: 'codex',
+    path: 'AI Vault session list',
+    message: `AI Vault stopped after omitting ${omitted} sessions at its memory limit.`
+  })
 }
 
 async function mapRemoteScanConcurrently<T, U>(

@@ -20,4 +20,6 @@ export type DiffSection = {
   // Why: combined sections keep Monaco models by path; bump on reload so
   // refetched git content does not replay through keepCurrent* model reuse.
   contentGeneration?: number
+  // Why: releasing a reviewed body must not make its file-tree entry appear unviewed.
+  textEvictedForRetention?: boolean
 }

@@ -1,9 +1,18 @@
 /* eslint-disable max-lines -- Why: daemon handshake, RPC, stream events, and reconnect cleanup share one socket lifecycle. */
 import { connect, type Socket } from 'node:net'
-import { readFileSync } from 'node:fs'
 import { randomUUID } from 'node:crypto'
 import { StringDecoder } from 'node:string_decoder'
-import { encodeNdjson, createNdjsonParser } from './ndjson'
+import {
+  DAEMON_HANDSHAKE_MAX_LINE_BYTES,
+  encodeBoundedNdjson,
+  encodeNdjson,
+  createNdjsonParser
+} from './ndjson'
+import {
+  DAEMON_CONTROL_SOCKET_MAX_BUFFERED_BYTES,
+  DAEMON_MAX_ACTIVE_REQUEST_BYTES_PER_CLIENT,
+  DAEMON_MAX_ACTIVE_REQUESTS_PER_CLIENT
+} from './daemon-admission-limits'
 import {
   CLEAN_DISCONNECT_PROTOCOL_VERSION,
   PROTOCOL_VERSION,
@@ -18,10 +27,14 @@ import type {
   DaemonEvent
 } from './types'
 import { addNodePtyRecoveryHint } from './node-pty-error-hints'
+import { readDaemonControlFileText } from './daemon-control-file-reader'
 
 const CONNECT_TIMEOUT_MS = 5000
 const CONNECTION_ATTEMPT_WAIT_MS = CONNECT_TIMEOUT_MS * 4
 const REQUEST_TIMEOUT_MS = 30000
+export const DAEMON_CLIENT_MAX_PENDING_REQUESTS = DAEMON_MAX_ACTIVE_REQUESTS_PER_CLIENT
+export const DAEMON_CLIENT_MAX_CONTROL_BUFFERED_BYTES = DAEMON_CONTROL_SOCKET_MAX_BUFFERED_BYTES
+export const DAEMON_CLIENT_MAX_REQUEST_LINE_BYTES = DAEMON_MAX_ACTIVE_REQUEST_BYTES_PER_CLIENT
 
 export type DaemonClientOptions = {
   socketPath: string
@@ -118,7 +131,7 @@ export class DaemonClient {
     attemptGeneration: number,
     sharedBudget: boolean
   ): Promise<void> {
-    const token = readFileSync(this.tokenPath, 'utf-8').trim()
+    const token = readDaemonControlFileText(this.tokenPath).trim()
     const deadlineMs = Date.now() + timeoutMs
     const remainingMs = (): number =>
       sharedBudget ? Math.max(1, deadlineMs - Date.now()) : timeoutMs
@@ -196,9 +209,18 @@ export class DaemonClient {
     if (!this.connected || !this.controlSocket) {
       throw new DaemonProtocolError('Not connected')
     }
+    if (this.pendingRequests.size >= DAEMON_CLIENT_MAX_PENDING_REQUESTS) {
+      throw new DaemonProtocolError('Daemon client pending request limit reached')
+    }
 
     const id = `req-${++this.requestCounter}`
     const msg = { id, type, ...(payload !== undefined ? { payload } : {}) }
+    const encoded = encodeBoundedNdjson(msg, DAEMON_CLIENT_MAX_REQUEST_LINE_BYTES + 1)
+    const socket = this.controlSocket
+    if (!this.canBufferControlMessage(socket, encoded)) {
+      socket.destroy(new DaemonProtocolError('Daemon client control buffer limit reached'))
+      throw new DaemonProtocolError('Daemon client control buffer limit reached')
+    }
 
     return new Promise<T>((resolve, reject) => {
       const timer = setTimeout(() => {
@@ -212,7 +234,13 @@ export class DaemonClient {
         timer
       })
 
-      this.controlSocket!.write(encodeNdjson(msg))
+      try {
+        socket.write(encoded)
+      } catch (error) {
+        this.pendingRequests.delete(id)
+        clearTimeout(timer)
+        reject(error instanceof Error ? error : new DaemonProtocolError(String(error)))
+      }
     })
   }
 
@@ -223,7 +251,14 @@ export class DaemonClient {
 
     const id = `${NOTIFY_PREFIX}${++this.requestCounter}`
     const msg = { id, type, ...(payload !== undefined ? { payload } : {}) }
-    this.controlSocket.write(encodeNdjson(msg))
+    const encoded = encodeBoundedNdjson(msg, DAEMON_CLIENT_MAX_REQUEST_LINE_BYTES + 1)
+    if (!this.canBufferControlMessage(this.controlSocket, encoded)) {
+      this.controlSocket.destroy(
+        new DaemonProtocolError('Daemon client control buffer limit reached')
+      )
+      return
+    }
+    this.controlSocket.write(encoded)
   }
 
   onEvent(listener: (event: unknown) => void): () => void {
@@ -333,7 +368,6 @@ export class DaemonClient {
         role
       }
 
-      let buffer = ''
       let settled = false
       let timer: ReturnType<typeof setTimeout> | null = null
       const cleanup = (): void => {
@@ -360,16 +394,12 @@ export class DaemonClient {
       // Why: daemon socket chunks can split emoji/box-drawing UTF-8 bytes.
       // Decoding each Buffer independently would permanently inject U+FFFD.
       const decoder = new StringDecoder('utf8')
-      const onData = (chunk: Buffer): void => {
-        buffer += decoder.write(chunk)
-        const newlineIdx = buffer.indexOf('\n')
-        if (newlineIdx === -1) {
-          return
-        }
-
-        const line = buffer.slice(0, newlineIdx)
-        try {
-          const response = JSON.parse(line) as HelloResponse
+      const parser = createNdjsonParser(
+        (message) => {
+          if (settled) {
+            return
+          }
+          const response = message as HelloResponse
           if (response.ok) {
             const identity = parseDaemonEndpointIdentity(response.daemonIdentity)
             if (
@@ -385,9 +415,15 @@ export class DaemonClient {
               new DaemonProtocolError(addNodePtyRecoveryHint(response.error ?? 'Hello rejected'))
             )
           }
-        } catch {
-          finish(new DaemonProtocolError('Invalid hello response'))
+        },
+        () => finish(new DaemonProtocolError('Invalid hello response')),
+        { maxLineBytes: DAEMON_HANDSHAKE_MAX_LINE_BYTES }
+      )
+      const onData = (chunk: Buffer): void => {
+        if (settled) {
+          return
         }
+        parser.feed(decoder.write(chunk))
       }
       const onError = (error: Error): void => finish(error)
       const onClose = (): void =>
@@ -453,6 +489,11 @@ export class DaemonClient {
     const onData = (chunk: Buffer) => parser.feed(decoder.write(chunk))
     socket.on('data', onData)
     return () => socket.off('data', onData)
+  }
+
+  private canBufferControlMessage(socket: Socket, encoded: string): boolean {
+    const messageBytes = Buffer.byteLength(encoded, 'utf8')
+    return messageBytes <= DAEMON_CLIENT_MAX_CONTROL_BUFFERED_BYTES - socket.writableLength
   }
 
   private handleDisconnect(generation: number): void {

@@ -11,6 +11,7 @@ import type {
 import type { RelayDispatcher, RequestContext } from './dispatcher'
 import { RelayFilesystemWatchRegistry } from './relay-filesystem-watch-registry'
 import { createRelayWatcherProcessPool } from './relay-watcher-process-pool'
+import { MAX_RELAY_WATCH_ROOT_KEY_BYTES } from './relay-watcher-root-capacity'
 
 type InstalledWatch = {
   rootPath: string
@@ -84,6 +85,21 @@ describe('RelayFilesystemWatchRegistry', () => {
     dispatcher = createDispatcher()
     pool = new FakeWatcherPool()
     registry = new RelayFilesystemWatchRegistry(dispatcher as unknown as RelayDispatcher, pool)
+  })
+
+  it('rejects an oversized raw root before retaining a pending setup', async () => {
+    await expect(
+      registry.watch('/'.repeat(MAX_RELAY_WATCH_ROOT_KEY_BYTES + 1), context(1))
+    ).rejects.toThrow('File watcher root path is too long')
+
+    expect(pool.installed).toHaveLength(0)
+    expect(
+      (
+        registry as unknown as {
+          pendingSetups: Map<string, unknown>
+        }
+      ).pendingSetups.size
+    ).toBe(0)
   })
 
   it('emits overflow around child replacement and resumes ordered event delivery', async () => {

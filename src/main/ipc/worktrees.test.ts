@@ -156,6 +156,7 @@ vi.mock('../source-control/hosted-review', () => ({
 }))
 
 vi.mock('../providers/ssh-git-dispatch', () => ({
+  getSshGitProviderGeneration: () => 0,
   getSshGitProvider: getSshGitProviderMock,
   SSH_GIT_PROVIDER_UNAVAILABLE_MESSAGE:
     'Remote connection dropped. Click Reconnect on the SSH target before retrying.',
@@ -2037,7 +2038,16 @@ describe('registerWorktreeHandlers', () => {
     )
   })
 
-  it('returns the PR head push target when resolving a fork PR base', async () => {
+  it('threads explicit origin preference into dual-remote PR head resolution', async () => {
+    store.getRepo.mockReturnValue({
+      id: 'repo-1',
+      path: '/workspace/repo',
+      displayName: 'repo',
+      badgeColor: '#000',
+      addedAt: 0,
+      issueSourcePreference: 'origin',
+      worktreeBaseRef: null
+    })
     getPullRequestPushTargetMock.mockResolvedValue({
       pushTarget: {
         remoteName: 'pr-prateek-orca',
@@ -2047,7 +2057,12 @@ describe('registerWorktreeHandlers', () => {
     })
     gitExecFileAsyncMock.mockImplementation(async (args: string[]) => {
       if (args[0] === 'remote' && args[1] === 'get-url') {
-        return { stdout: `${ORIGIN_REMOTE_URL}\n`, stderr: '' }
+        const url =
+          args[2] === 'origin' ? ORIGIN_REMOTE_URL : 'git@github.com:org/upstream-repo.git'
+        return { stdout: `${url}\n`, stderr: '' }
+      }
+      if (args[0] === 'remote') {
+        return { stdout: 'origin\nupstream\n', stderr: '' }
       }
       if (args[0] === 'rev-parse') {
         return { stdout: 'abc123\n', stderr: '' }
@@ -2070,6 +2085,17 @@ describe('registerWorktreeHandlers', () => {
         `+refs/pull/1738/head:refs/orca/pull/${ORIGIN_HEAD_COMPONENT}/1738`
       ],
       { cwd: '/workspace/repo', timeout: REVIEW_HEAD_FETCH_TIMEOUT_MS }
+    )
+    expect(gitExecFileAsyncMock).not.toHaveBeenCalledWith(
+      ['remote', 'get-url', 'upstream'],
+      expect.anything()
+    )
+    expect(getPullRequestPushTargetMock).toHaveBeenCalledWith(
+      '/workspace/repo',
+      1738,
+      null,
+      {},
+      'origin'
     )
     expect(result).toMatchObject({
       baseBranch: 'abc123',
@@ -3842,6 +3868,12 @@ describe('registerWorktreeHandlers', () => {
       ])
     }
     const fsProvider = {
+      stat: vi.fn(async (filePath: string) => {
+        if (filePath.endsWith('orca.yaml')) {
+          return { size: 32, type: 'file', mtime: 0 }
+        }
+        throw Object.assign(new Error('missing'), { code: 'ENOENT' })
+      }),
       readFile: vi.fn().mockResolvedValue({
         content: 'scripts:\n  setup: pnpm install\n',
         isBinary: false

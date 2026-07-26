@@ -18,6 +18,11 @@ export type AndroidAxNode = {
 // Raw element produced by the parser before mapping to the typed Android node.
 type RawElement = { tag: string; attributes: Record<string, string>; children: RawElement[] }
 
+export const ANDROID_UIAUTOMATOR_XML_MAX_BYTES = 16 * 1024 * 1024
+export const ANDROID_UIAUTOMATOR_XML_MAX_ELEMENTS = 50_000
+export const ANDROID_UIAUTOMATOR_XML_MAX_DEPTH = 256
+export const ANDROID_UIAUTOMATOR_XML_MAX_ATTRIBUTES_PER_ELEMENT = 64
+
 // Parses an Android bounds string "[left,top][right,bottom]" -> AndroidAxBounds,
 // or null when the format doesn't match. Coordinates may be negative (off-screen).
 export function parseAndroidBounds(value: string): AndroidAxBounds | null {
@@ -39,6 +44,9 @@ export function parseAndroidBounds(value: string): AndroidAxBounds | null {
 export function parseUiAutomatorXml(xml: string): AndroidAxNode {
   if (xml.trim() === '') {
     throw new EmulatorError('emulator_error', 'Cannot parse empty uiautomator XML')
+  }
+  if (Buffer.byteLength(xml) > ANDROID_UIAUTOMATOR_XML_MAX_BYTES) {
+    throw new EmulatorError('emulator_error', 'uiautomator XML exceeds the 16 MiB limit')
   }
   let root: RawElement
   try {
@@ -107,6 +115,7 @@ function setBool(
 function parseDocument(xml: string): RawElement {
   let i = 0
   const n = xml.length
+  let elementCount = 0
 
   const fail = (message: string): never => {
     throw new EmulatorError('emulator_error', `${message} at offset ${i}`)
@@ -156,7 +165,14 @@ function parseDocument(xml: string): RawElement {
     }
   }
 
-  const parseElement = (): RawElement => {
+  const parseElement = (depth: number): RawElement => {
+    if (depth > ANDROID_UIAUTOMATOR_XML_MAX_DEPTH) {
+      fail(`uiautomator XML exceeds ${ANDROID_UIAUTOMATOR_XML_MAX_DEPTH} levels`)
+    }
+    elementCount += 1
+    if (elementCount > ANDROID_UIAUTOMATOR_XML_MAX_ELEMENTS) {
+      fail(`uiautomator XML exceeds ${ANDROID_UIAUTOMATOR_XML_MAX_ELEMENTS} elements`)
+    }
     if (xml[i] !== '<') {
       fail('Expected element start')
     }
@@ -166,6 +182,7 @@ function parseDocument(xml: string): RawElement {
       fail('Expected tag name')
     }
     const attributes: Record<string, string> = {}
+    let attributeCount = 0
     for (;;) {
       skipWs()
       if (i >= n) {
@@ -185,6 +202,12 @@ function parseDocument(xml: string): RawElement {
       const name = readName()
       if (name === '') {
         fail('Expected attribute name')
+      }
+      attributeCount += 1
+      if (attributeCount > ANDROID_UIAUTOMATOR_XML_MAX_ATTRIBUTES_PER_ELEMENT) {
+        fail(
+          `uiautomator XML element exceeds ${ANDROID_UIAUTOMATOR_XML_MAX_ATTRIBUTES_PER_ELEMENT} attributes`
+        )
       }
       skipWs()
       if (xml[i] !== '=') {
@@ -207,10 +230,14 @@ function parseDocument(xml: string): RawElement {
       attributes[name] = decodeEntities(xml.slice(start, i))
       i++
     }
-    return parseChildren(tag, attributes)
+    return parseChildren(tag, attributes, depth)
   }
 
-  const parseChildren = (tag: string, attributes: Record<string, string>): RawElement => {
+  const parseChildren = (
+    tag: string,
+    attributes: Record<string, string>,
+    depth: number
+  ): RawElement => {
     const children: RawElement[] = []
     for (;;) {
       if (i >= n) {
@@ -243,7 +270,7 @@ function parseDocument(xml: string): RawElement {
       } else if (startsWith('<?')) {
         skipDelimited('<?', '?>', 'processing instruction')
       } else {
-        children.push(parseElement())
+        children.push(parseElement(depth + 1))
       }
     }
   }
@@ -252,7 +279,7 @@ function parseDocument(xml: string): RawElement {
   if (i >= n || xml[i] !== '<') {
     fail('No root element found')
   }
-  return parseElement()
+  return parseElement(1)
 }
 
 // Decodes the predefined XML entities plus numeric character references.

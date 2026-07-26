@@ -198,4 +198,56 @@ describe('createWorktreeChangeRefreshQueue', () => {
 
     expect(handler).not.toHaveBeenCalled()
   })
+
+  it('bounds a stalled repo queue and converges with one full refresh after overflow', async () => {
+    const firstRefresh = deferred()
+    const handler = vi.fn().mockReturnValueOnce(firstRefresh.promise).mockResolvedValue(undefined)
+    const queue = createWorktreeChangeRefreshQueue(handler, {
+      maxRepoStates: 2,
+      maxQueuedPerRepo: 2,
+      maxQueuedTotal: 2
+    })
+    const firstRename = { oldWorktreeId: 'wt-1', newWorktreeId: 'wt-2' }
+    const secondRename = { oldWorktreeId: 'wt-2', newWorktreeId: 'wt-3' }
+
+    queue.enqueue({ repoId: 'repo-1' })
+    queue.enqueue({ repoId: 'repo-1', renamed: firstRename })
+    queue.enqueue({ repoId: 'repo-1', renamed: secondRename })
+    for (let index = 0; index < 100; index++) {
+      queue.enqueue({
+        repoId: 'repo-1',
+        renamed: { oldWorktreeId: `overflow-${index}`, newWorktreeId: `next-${index}` }
+      })
+    }
+
+    firstRefresh.resolve()
+    await vi.waitFor(() => expect(handler).toHaveBeenCalledTimes(4))
+
+    expect(handler).toHaveBeenNthCalledWith(2, 'repo-1', firstRename, {
+      forceLocalOwner: undefined
+    })
+    expect(handler).toHaveBeenNthCalledWith(3, 'repo-1', secondRename, {
+      forceLocalOwner: undefined
+    })
+    expect(handler).toHaveBeenNthCalledWith(4, 'repo-1', undefined, {
+      forceLocalOwner: undefined
+    })
+  })
+
+  it('bounds repo records while refresh handlers are stalled', () => {
+    const stalled = deferred()
+    const handler = vi.fn(() => stalled.promise)
+    const queue = createWorktreeChangeRefreshQueue(handler, {
+      maxRepoStates: 1,
+      maxQueuedPerRepo: 2,
+      maxQueuedTotal: 2
+    })
+
+    queue.enqueue({ repoId: 'repo-1' })
+    queue.enqueue({ repoId: 'repo-2' })
+
+    expect(handler).toHaveBeenCalledTimes(1)
+    expect(handler).toHaveBeenCalledWith('repo-1', undefined, { forceLocalOwner: undefined })
+    queue.dispose()
+  })
 })

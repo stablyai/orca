@@ -8,7 +8,8 @@ const fakes = vi.hoisted(() => ({
   start: vi.fn(),
   handleMessage: vi.fn(),
   sendText: vi.fn(() => true),
-  dispose: vi.fn()
+  dispose: vi.fn(),
+  socketClosed: vi.fn()
 }))
 
 vi.mock('./mobile-e2ee-v2-client-session', () => ({
@@ -23,6 +24,7 @@ vi.mock('./mobile-e2ee-v2-physical-channel', () => ({
     handleMessage = fakes.handleMessage
     sendText = fakes.sendText
     dispose = fakes.dispose
+    socketClosed = fakes.socketClosed
   }
 }))
 
@@ -131,5 +133,22 @@ describe('mobile relay physical pairing client', () => {
 
     await expect(status).rejects.toEqual(new RelayOuterError(4404))
     expect(fakes.start).not.toHaveBeenCalled()
+  })
+
+  it('rejects relay hello JSON above the nesting cap', async () => {
+    const socket = new FakeSocket()
+    const client = connectMobileRelayForPairing({
+      relay,
+      deviceToken: 'device-token',
+      desktopPublicKeyB64: 'AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=',
+      createSocket: () => socket as unknown as WebSocket
+    })
+    const status = client.sendRequest('status.get')
+
+    socket.receive(`${'['.repeat(129)}0${']'.repeat(129)}`)
+
+    await expect(status).rejects.toThrow('invalid relay hello JSON')
+    expect(fakes.start).not.toHaveBeenCalled()
+    expect(fakes.dispose).toHaveBeenCalledOnce()
   })
 })

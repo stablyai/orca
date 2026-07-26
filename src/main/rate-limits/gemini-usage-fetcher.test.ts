@@ -22,9 +22,11 @@ vi.mock('./gemini-cli-oauth-extractor', () => ({
 }))
 
 vi.mock('node:fs/promises', () => ({
-  readFile: readFileMock,
   writeFile: vi.fn().mockResolvedValue(undefined),
   rename: vi.fn().mockResolvedValue(undefined)
+}))
+vi.mock('../integration-credential-file', () => ({
+  readIntegrationCredentialFileText: readFileMock
 }))
 vi.mock('electron', () => ({ net: { fetch: netFetchMock } }))
 

@@ -2,38 +2,29 @@
 // so the host detail page can render instantly on navigation instead of
 // waiting for a fresh RPC connection + fetch cycle.
 
-type CachedWorktrees = {
-  worktrees: unknown[]
-  at: number
-}
-
-const cache = new Map<string, CachedWorktrees>()
+import { MobileRpcListCache } from './mobile-rpc-list-cache'
 
 const MAX_AGE_MS = 30_000
-const MAX_ENTRIES = 20
+export const MOBILE_WORKTREE_CACHE_MAX_ENTRIES = 20
+export const MOBILE_WORKTREE_CACHE_MAX_ITEMS_PER_HOST = 10_000
+export const MOBILE_WORKTREE_CACHE_MAX_RETAINED_BYTES = 16 * 1024 * 1024
+
+const cache = new MobileRpcListCache(
+  MAX_AGE_MS,
+  MOBILE_WORKTREE_CACHE_MAX_ENTRIES,
+  MOBILE_WORKTREE_CACHE_MAX_ITEMS_PER_HOST,
+  MOBILE_WORKTREE_CACHE_MAX_RETAINED_BYTES
+)
 
 export function setCachedWorktrees(hostId: string, worktrees: unknown[]): void {
-  // Why: Map.set on an existing key does not move it to the end of iteration
-  // order. Delete first so the re-inserted key becomes the newest entry,
-  // giving us true LRU eviction when the cap is hit.
-  cache.delete(hostId)
-  cache.set(hostId, { worktrees, at: Date.now() })
-  if (cache.size > MAX_ENTRIES) {
-    const oldest = cache.keys().next().value
-    if (oldest) {
-      cache.delete(oldest)
-    }
-  }
+  cache.set(hostId, worktrees)
 }
 
 export function getCachedWorktrees(hostId: string): unknown[] | null {
-  const entry = cache.get(hostId)
-  if (!entry) {
-    return null
-  }
-  if (Date.now() - entry.at > MAX_AGE_MS) {
-    cache.delete(hostId)
-    return null
-  }
-  return entry.worktrees
+  return cache.get(hostId)
+}
+
+/** Test-only: clear process-lifetime cache state between cases. */
+export function resetWorktreeCacheForTests(): void {
+  cache.clear()
 }

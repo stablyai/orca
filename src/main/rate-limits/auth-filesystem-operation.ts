@@ -1,9 +1,21 @@
 import { parseWslUncPath } from '../../shared/wsl-paths'
 
 const MAX_CONCURRENT_WSL_AUTH_OPERATIONS = 2
+export const MAX_QUEUED_WSL_AUTH_OPERATIONS = 128
+export const MAX_AUTH_FILESYSTEM_OPERATION_WAITERS = 256
+export const MAX_AUTH_FILESYSTEM_OPERATION_PATH_BYTES = 64 * 1024
+export const MAX_AUTH_FILESYSTEM_REGISTRY_ENTRIES = 128
+export const MAX_AUTH_FILESYSTEM_REGISTRY_PATH_BYTES = 8 * 1024 * 1024
 const activeWslOperationDistros = new Set<string>()
 const queuedWslOperations: QueuedWslOperation<unknown>[] = []
 let activeWslOperationCount = 0
+
+export class AuthFilesystemOperationLimitError extends Error {
+  constructor(message: string) {
+    super(message)
+    this.name = 'AuthFilesystemOperationLimitError'
+  }
+}
 
 type QueuedWslOperation<T> = {
   distroKey: string
@@ -70,6 +82,13 @@ function scheduleWslAuthFilesystemOperation<T>(
   neededSignal: AbortSignal,
   operation: () => Promise<T>
 ): Promise<T> {
+  if (queuedWslOperations.length >= MAX_QUEUED_WSL_AUTH_OPERATIONS) {
+    return Promise.reject(
+      new AuthFilesystemOperationLimitError(
+        `Auth filesystem queue exceeds ${MAX_QUEUED_WSL_AUTH_OPERATIONS} operations`
+      )
+    )
+  }
   return new Promise<T>((resolve, reject) => {
     const task: QueuedWslOperation<T> = {
       distroKey,
@@ -126,6 +145,19 @@ export type SharedAuthFilesystemOperation<T> = {
   wait: (signal: AbortSignal) => Promise<T>
 }
 
+function rejectedAuthFilesystemOperation<T>(
+  error: AuthFilesystemOperationLimitError
+): SharedAuthFilesystemOperation<T> {
+  const result = Promise.reject<T>(error)
+  void result.catch(() => undefined)
+  return {
+    result,
+    wait(signal) {
+      return Promise.reject(signal.aborted ? getAbortReason(signal) : error)
+    }
+  }
+}
+
 /**
  * Shares one raw operation with all callers for an auth path. WSL paths also
  * serialize by normalized distro because one stuck UNC request per account can
@@ -135,8 +167,15 @@ export function createAuthFilesystemOperation<T>(
   authPath: string,
   operation: () => Promise<T>
 ): SharedAuthFilesystemOperation<T> {
+  if (Buffer.byteLength(authPath, 'utf8') > MAX_AUTH_FILESYSTEM_OPERATION_PATH_BYTES) {
+    return rejectedAuthFilesystemOperation(
+      new AuthFilesystemOperationLimitError(
+        `Auth filesystem path exceeds ${MAX_AUTH_FILESYSTEM_OPERATION_PATH_BYTES} bytes`
+      )
+    )
+  }
   const neededController = new AbortController()
-  const waiters = new Set<symbol>()
+  let waiterCount = 0
   let settled = false
   const result = scheduleAuthFilesystemOperation(authPath, neededController.signal, operation)
   const markSettled = (): void => {
@@ -148,14 +187,23 @@ export function createAuthFilesystemOperation<T>(
     result,
     wait(signal) {
       if (signal.aborted) {
-        if (!settled && waiters.size === 0) {
+        if (!settled && waiterCount === 0) {
           neededController.abort(getAbortReason(signal))
         }
         return Promise.reject(getAbortReason(signal))
       }
 
-      const waiter = Symbol('auth-filesystem-waiter')
-      waiters.add(waiter)
+      if (settled) {
+        return result
+      }
+      if (waiterCount >= MAX_AUTH_FILESYSTEM_OPERATION_WAITERS) {
+        return Promise.reject(
+          new AuthFilesystemOperationLimitError(
+            `Auth filesystem operation exceeds ${MAX_AUTH_FILESYSTEM_OPERATION_WAITERS} waiters`
+          )
+        )
+      }
+      waiterCount += 1
       let onAbort: (() => void) | null = null
       const aborted = new Promise<never>((_resolve, reject) => {
         onAbort = () => reject(getAbortReason(signal))
@@ -165,11 +213,53 @@ export function createAuthFilesystemOperation<T>(
         if (onAbort) {
           signal.removeEventListener('abort', onAbort)
         }
-        waiters.delete(waiter)
-        if (!settled && waiters.size === 0) {
+        waiterCount -= 1
+        if (!settled && waiterCount === 0) {
           neededController.abort(getAbortReason(signal))
         }
       })
     }
+  }
+}
+
+export class AuthFilesystemOperationRegistry<T> {
+  private readonly operations = new Map<string, SharedAuthFilesystemOperation<T>>()
+  private retainedPathBytes = 0
+
+  get size(): number {
+    return this.operations.size
+  }
+
+  getOrCreate(
+    authPath: string,
+    operation: () => Promise<T>
+  ): SharedAuthFilesystemOperation<T> | null {
+    const pathBytes = Buffer.byteLength(authPath, 'utf8')
+    if (pathBytes > MAX_AUTH_FILESYSTEM_OPERATION_PATH_BYTES) {
+      return null
+    }
+    const existing = this.operations.get(authPath)
+    if (existing) {
+      return existing
+    }
+    if (
+      this.operations.size >= MAX_AUTH_FILESYSTEM_REGISTRY_ENTRIES ||
+      pathBytes > MAX_AUTH_FILESYSTEM_REGISTRY_PATH_BYTES - this.retainedPathBytes
+    ) {
+      return null
+    }
+
+    const shared = createAuthFilesystemOperation(authPath, operation)
+    this.operations.set(authPath, shared)
+    this.retainedPathBytes += pathBytes
+    const clear = (): void => {
+      if (this.operations.get(authPath) !== shared) {
+        return
+      }
+      this.operations.delete(authPath)
+      this.retainedPathBytes -= pathBytes
+    }
+    void shared.result.then(clear, clear)
+    return shared
   }
 }

@@ -3395,3 +3395,33 @@ describe('openDiffNotesSendMenuForActiveWorktree', () => {
     expect(store.getState().diffNotesSendMenuOpenRequest).toBeNull()
   })
 })
+
+describe('createUISlice clearOsc52ClipboardDefaultOnNotice', () => {
+  it('restores the armed notice from persisted UI', () => {
+    const store = createUIStore()
+
+    expect(store.getState().osc52ClipboardDefaultOnNoticePending).toBe(false)
+    store
+      .getState()
+      .hydratePersistedUI(makePersistedUI({ osc52ClipboardDefaultOnNoticePending: true }))
+
+    expect(store.getState().osc52ClipboardDefaultOnNoticePending).toBe(true)
+  })
+
+  it('stops the toast this session even when the persist fails', () => {
+    // Why local-first: the flag is the only thing keeping the toast off screen, and a
+    // rejected ui.set must not leave it re-firing on every render of this session. Losing
+    // the persist just re-arms the notice next launch, which is the safe direction.
+    const setUI = vi.fn(() => Promise.reject(new Error('runtime offline')))
+    vi.stubGlobal('window', { api: { ui: { set: setUI } } })
+    const store = createUIStore()
+    store
+      .getState()
+      .hydratePersistedUI(makePersistedUI({ osc52ClipboardDefaultOnNoticePending: true }))
+
+    store.getState().clearOsc52ClipboardDefaultOnNotice()
+
+    expect(store.getState().osc52ClipboardDefaultOnNoticePending).toBe(false)
+    expect(setUI).toHaveBeenCalledWith({ osc52ClipboardDefaultOnNoticePending: false })
+  })
+})

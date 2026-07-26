@@ -1,16 +1,12 @@
 import { createHash } from 'node:crypto'
 import { join, basename } from 'node:path'
-import {
-  mkdirSync,
-  existsSync,
-  readFileSync,
-  writeFileSync,
-  readdirSync,
-  rmSync,
-  statSync
-} from 'node:fs'
+import { mkdirSync, existsSync, writeFileSync, rmSync } from 'node:fs'
 import { app } from 'electron'
 import { parseWslPath, toLinuxPath } from './wsl'
+import {
+  deleteWslWorktreeHistoryDirectories,
+  runTerminalHistoryGarbageCollection
+} from './terminal-history-gc'
 
 // ─── Constants ─────────────────────────────────────────────────────
 
@@ -227,14 +223,7 @@ export function deleteWorktreeHistoryDir(worktreeId: string): void {
   if (process.platform === 'win32') {
     try {
       const wslRoot = join(app.getPath('userData'), HISTORY_DIR_NAME_WSL)
-      if (existsSync(wslRoot)) {
-        for (const distro of readdirSync(wslRoot)) {
-          const wslDir = join(wslRoot, distro, worktreeHash)
-          if (existsSync(wslDir)) {
-            rmSync(wslDir, { recursive: true, force: true })
-          }
-        }
-      }
+      deleteWslWorktreeHistoryDirectories({ wslRoot, worktreeHash })
     } catch {
       // Non-fatal.
     }
@@ -243,112 +232,19 @@ export function deleteWorktreeHistoryDir(worktreeId: string): void {
 
 // ─── Garbage Collection ────────────────────────────────────────────
 
-// Why 5 minutes: GC runs ~10s after startup, and the live-worktree snapshot is
-// taken just before. A worktree created between the snapshot and GC execution
-// won't appear in liveWorktreeIds, so without an age guard GC would delete its
-// freshly-created history directory (TOCTOU race). 5 minutes is generous enough
-// to cover any realistic snapshot-to-scan delay.
-const GC_MIN_AGE_MS = 5 * 60 * 1000
-
-/** Scan a single history root directory, pruning orphaned entries.
- *  Returns { totalDirs, orphaned, pruned, totalSizeKB }. */
-function gcScanRoot(
-  root: string,
-  liveWorktreeIds: Set<string>
-): { totalDirs: number; orphaned: number; pruned: number; totalSizeKB: number } {
-  const result = { totalDirs: 0, orphaned: 0, pruned: 0, totalSizeKB: 0 }
-  if (!existsSync(root)) {
-    return result
-  }
-
-  const now = Date.now()
-
-  for (const entry of readdirSync(root)) {
-    const entryPath = join(root, entry)
-    try {
-      const stat = statSync(entryPath)
-      if (!stat.isDirectory()) {
-        continue
-      }
-      result.totalDirs++
-
-      // Estimate directory size from meta.json + history files.
-      try {
-        for (const file of readdirSync(entryPath)) {
-          result.totalSizeKB += Math.ceil(statSync(join(entryPath, file)).size / 1024)
-        }
-      } catch {
-        // Skip size estimation on error.
-      }
-
-      const metaPath = join(entryPath, 'meta.json')
-      if (!existsSync(metaPath)) {
-        // No meta.json — can't determine ownership, skip.
-        continue
-      }
-
-      const meta = JSON.parse(readFileSync(metaPath, 'utf-8')) as {
-        worktreeId?: string
-        createdAt?: string
-      }
-      if (!meta.worktreeId) {
-        continue
-      }
-
-      if (!liveWorktreeIds.has(meta.worktreeId)) {
-        // Why: avoid a TOCTOU race where a worktree is created after the
-        // live-ID snapshot but before GC runs. Directories younger than
-        // GC_MIN_AGE_MS are presumed still live and skipped.
-        if (meta.createdAt) {
-          const ageMs = now - new Date(meta.createdAt).getTime()
-          if (ageMs < GC_MIN_AGE_MS) {
-            continue
-          }
-        }
-
-        result.orphaned++
-        rmSync(entryPath, { recursive: true, force: true })
-        result.pruned++
-        console.log(`[pty:history:gc] Pruned orphaned history: ${meta.worktreeId}`)
-      }
-    } catch {
-      // Skip individual entries that fail.
-    }
-  }
-  return result
-}
-
 /** Run background GC to prune history directories for worktrees that are no
  *  longer in Orca's known live-worktree set. */
 export function runHistoryGc(liveWorktreeIds: Set<string>): void {
   try {
-    const main = gcScanRoot(getHistoryRoot(), liveWorktreeIds)
-
-    // Also scan WSL history directories (each distro has its own subdirectory).
     const wslRoot = join(app.getPath('userData'), HISTORY_DIR_NAME_WSL)
-    let wslTotals = { totalDirs: 0, orphaned: 0, pruned: 0, totalSizeKB: 0 }
-    if (existsSync(wslRoot)) {
-      try {
-        for (const distro of readdirSync(wslRoot)) {
-          const distroRoot = join(wslRoot, distro)
-          const r = gcScanRoot(distroRoot, liveWorktreeIds)
-          wslTotals.totalDirs += r.totalDirs
-          wslTotals.orphaned += r.orphaned
-          wslTotals.pruned += r.pruned
-          wslTotals.totalSizeKB += r.totalSizeKB
-        }
-      } catch {
-        // Non-fatal.
-      }
-    }
-
-    const totalDirs = main.totalDirs + wslTotals.totalDirs
-    const orphaned = main.orphaned + wslTotals.orphaned
-    const pruned = main.pruned + wslTotals.pruned
-    const totalSizeKB = main.totalSizeKB + wslTotals.totalSizeKB
+    const summary = runTerminalHistoryGarbageCollection({
+      mainRoot: getHistoryRoot(),
+      wslRoot,
+      liveWorktreeIds
+    })
 
     console.log(
-      `[pty:history:gc] totalDirs=${totalDirs} orphaned=${orphaned} pruned=${pruned} totalSizeKB=${totalSizeKB}`
+      `[pty:history:gc] totalDirs=${summary.totalDirs} orphaned=${summary.orphaned} pruned=${summary.pruned} totalSizeKB=${summary.totalSizeKB}`
     )
   } catch (err) {
     console.warn(`[pty:history:gc] GC failed: ${err instanceof Error ? err.message : String(err)}`)

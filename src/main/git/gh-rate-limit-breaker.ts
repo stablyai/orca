@@ -12,6 +12,8 @@
  * the github rate-limit prober can use it without an import cycle.
  */
 
+import { cacheIdentityDigest } from '../cache-identity-digest'
+
 export type GhRateLimitBucket = 'core' | 'search' | 'graphql'
 
 // Why: a primary 403 does not carry the reset time. The search window resets
@@ -62,7 +64,7 @@ const blockedUntilMsByScopeAndBucket = new Map<string, number>()
 let resetProbe: ((bucket: GhRateLimitBucket, scope: string) => void) | null = null
 
 function breakerKey(bucket: GhRateLimitBucket, scope = DEFAULT_SCOPE): string {
-  return `${scope}\0${bucket}`
+  return cacheIdentityDigest([scope, bucket])
 }
 
 // gh api flags that take a separate value, so the endpoint arg can be found.

@@ -54,7 +54,7 @@ vi.mock('./popup-origin-bar-window', () => ({
   openPopupWithOriginBar: openPopupWithOriginBarMock
 }))
 
-import { browserManager } from './browser-manager'
+import { MAX_ACTIVE_BROWSER_DOWNLOADS, browserManager } from './browser-manager'
 
 describe('browserManager', () => {
   const rendererWebContentsId = 5001
@@ -1925,6 +1925,24 @@ describe('browserManager', () => {
         error: null
       })
     )
+  })
+
+  it('cancels excess concurrent downloads before retaining another item', () => {
+    const item = createDownloadItem()
+    const managerState = browserManager as unknown as { downloadsById: Map<string, unknown> }
+    for (let index = 0; index < MAX_ACTIVE_BROWSER_DOWNLOADS; index += 1) {
+      managerState.downloadsById.set(`active-${index}`, {})
+    }
+
+    try {
+      browserManager.handleGuestWillDownload({ guestWebContentsId: 999, item })
+
+      expect(item.cancel).toHaveBeenCalledTimes(1)
+      expect(item.setSavePath).not.toHaveBeenCalled()
+      expect(managerState.downloadsById.size).toBe(MAX_ACTIVE_BROWSER_DOWNLOADS)
+    } finally {
+      managerState.downloadsById.clear()
+    }
   })
 
   it('flushes started and terminal snapshots for downloads that finish before registration', () => {

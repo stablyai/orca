@@ -1,7 +1,7 @@
 import { EventEmitter } from 'node:events'
 import { createServer } from 'node:net'
 import { describe, expect, it, vi, beforeEach } from 'vitest'
-import { SshPortForwardManager } from './ssh-port-forward'
+import { SSH_FORWARD_CLOSE_CONCURRENCY, SshPortForwardManager } from './ssh-port-forward'
 
 const { startSystemSshPortForwardProcessMock } = vi.hoisted(() => ({
   startSystemSshPortForwardProcessMock: vi.fn()
@@ -244,6 +244,43 @@ describe('SshPortForwardManager', () => {
     resolveClose()
     await removal
     expect(resolved).toBe(true)
+  })
+
+  it.each([
+    ['at the limit', SSH_FORWARD_CLOSE_CONCURRENCY],
+    ['above the limit', SSH_FORWARD_CLOSE_CONCURRENCY + 1]
+  ])('bounds forward closes %s', async (_, count) => {
+    let active = 0
+    let peak = 0
+    let started = 0
+    const releases: (() => void)[] = []
+    const forwards = Array.from({ length: count }, () => {
+      const forward = createFakeSystemSshForward()
+      forward.close.mockImplementation(async () => {
+        started++
+        active++
+        peak = Math.max(peak, active)
+        await new Promise<void>((resolve) => releases.push(resolve))
+        active--
+      })
+      return forward
+    })
+    startSystemSshPortForwardProcessMock.mockImplementation(() => forwards.shift())
+    const conn = createSystemSshConn()
+    for (let index = 0; index < count; index++) {
+      await manager.addForward('conn-1', conn as never, 3000 + index, '127.0.0.1', 8080)
+    }
+
+    const removal = manager.removeAllForwards('conn-1')
+    await vi.waitFor(() => expect(started).toBe(Math.min(count, SSH_FORWARD_CLOSE_CONCURRENCY)))
+    if (count > SSH_FORWARD_CLOSE_CONCURRENCY) {
+      releases.shift()?.()
+      await vi.waitFor(() => expect(started).toBe(count))
+    }
+    releases.splice(0).forEach((release) => release())
+    await removal
+
+    expect(peak).toBe(Math.min(count, SSH_FORWARD_CLOSE_CONCURRENCY))
   })
 
   it('removes an unexpectedly exited system SSH forward and calls the close callback', async () => {

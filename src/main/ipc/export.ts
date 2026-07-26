@@ -1,6 +1,7 @@
 import { BrowserWindow, dialog, ipcMain } from 'electron'
 import { writeFile } from 'node:fs/promises'
 import { ExportTimeoutError, htmlToPdf } from '../lib/html-to-pdf'
+import { assertHtmlToPdfInputWithinMemoryLimit } from '../lib/html-to-pdf-memory-limit'
 
 export type ExportHtmlToPdfArgs = {
   html: string
@@ -17,11 +18,12 @@ export function registerExportHandlers(): void {
     'export:html-to-pdf',
     async (event, args: ExportHtmlToPdfArgs): Promise<ExportHtmlToPdfResult> => {
       const { html, title } = args
-      if (!html.trim()) {
-        return { success: false, error: 'No content to export' }
-      }
 
       try {
+        assertHtmlToPdfInputWithinMemoryLimit(html)
+        if (!html.trim()) {
+          return { success: false, error: 'No content to export' }
+        }
         const pdfBuffer = await htmlToPdf(html)
 
         // Why: sanitize to keep the suggested filename legal on every platform.

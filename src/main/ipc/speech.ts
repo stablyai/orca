@@ -11,6 +11,28 @@ import {
   saveOpenAiSpeechApiKey
 } from '../speech/openai-api-key-store'
 import type { Store } from '../persistence'
+import {
+  buildSpeechHotwordsContent,
+  decodeSpeechAudioChunk,
+  SpeechIpcAdmission,
+  validateOpenAiSpeechApiKey,
+  validateSpeechModelId,
+  validateSpeechSessionId
+} from './speech-ipc-admission'
+
+const speechAdmission = new SpeechIpcAdmission()
+
+export function clearSpeechIpcAdmissionForTests(): void {
+  speechAdmission.reset()
+}
+
+export function getPendingDesktopDictationStartCountForTest(): number {
+  return speechAdmission.pendingStartCount
+}
+
+export function getActiveDesktopDictationListenerCountForTest(): number {
+  return speechAdmission.activeListenerCount
+}
 
 export function registerSpeechHandlers(store: Store): void {
   ipcMain.handle('speech:getCatalog', () => {
@@ -26,7 +48,7 @@ export function registerSpeechHandlers(store: Store): void {
   })
 
   ipcMain.handle('speech:saveOpenAiApiKey', async (_event, apiKey: string) => {
-    saveOpenAiSpeechApiKey(apiKey)
+    saveOpenAiSpeechApiKey(validateOpenAiSpeechApiKey(apiKey))
     return { configured: true }
   })
 
@@ -36,6 +58,7 @@ export function registerSpeechHandlers(store: Store): void {
   })
 
   ipcMain.handle('speech:downloadModel', async (event, modelId: string) => {
+    const validatedModelId = validateSpeechModelId(modelId)
     const manager = getSpeechModelManager(store)
     const window = BrowserWindow.fromWebContents(event.sender)
     if (!window) {
@@ -59,22 +82,23 @@ export function registerSpeechHandlers(store: Store): void {
     }
     window.once('closed', cleanupProgressCallback)
     try {
-      await manager.downloadModel(modelId)
+      await manager.downloadModel(validatedModelId)
     } finally {
       cleanupProgressCallback()
     }
   })
 
   ipcMain.handle('speech:cancelDownload', async (_event, modelId: string) => {
-    getSpeechModelManager(store).cancelDownload(modelId)
+    getSpeechModelManager(store).cancelDownload(validateSpeechModelId(modelId))
   })
 
   ipcMain.handle('speech:deleteModel', async (_event, modelId: string) => {
+    const validatedModelId = validateSpeechModelId(modelId)
     await deleteLocalSpeechModel({
       store,
       modelManager: getSpeechModelManager(store),
       sttService: getSpeechSttService(store),
-      modelId
+      modelId: validatedModelId
     })
   })
 
@@ -91,15 +115,21 @@ export function registerSpeechHandlers(store: Store): void {
   ipcMain.handle(
     'speech:startDictation',
     async (event, modelId: string, hotwords?: string[], sessionId = 'desktop') => {
+      const validatedModelId = validateSpeechModelId(modelId)
+      const validatedSessionId = validateSpeechSessionId(sessionId)
+      const hotwordsContent = buildSpeechHotwordsContent(hotwords)
       const window = BrowserWindow.fromWebContents(event.sender)
       if (!window) {
         return
       }
       let resolvedHotwordsPath: string | undefined
       let windowClosed = false
-      const owner = getDesktopOwner(event.sender.id, sessionId)
+      let sessionListenerReleased = false
+      const owner = getDesktopOwner(event.sender.id, validatedSessionId)
+      speechAdmission.claimStart(owner)
       const cleanupOnWindowClosed = (): void => {
         windowClosed = true
+        cleanupSessionListener()
         void getSpeechSttService(store)
           .stopDictation(owner)
           .finally(() => {
@@ -110,8 +140,14 @@ export function registerSpeechHandlers(store: Store): void {
           .catch(() => {})
       }
       const cleanupSessionListener = (): void => {
+        if (sessionListenerReleased) {
+          return
+        }
+        sessionListenerReleased = true
         window.off('closed', cleanupOnWindowClosed)
+        speechAdmission.deleteListenerIfCurrent(owner, sessionListener)
       }
+      const sessionListener = { release: cleanupSessionListener }
       window.once('closed', cleanupOnWindowClosed)
 
       try {
@@ -133,10 +169,9 @@ export function registerSpeechHandlers(store: Store): void {
           }
         }
 
-        if (hotwords && hotwords.length > 0) {
-          const content = `${hotwords.map((w) => `${w} :2.0`).join('\n')}\n`
-          const hotwordsFilePath = getHotwordsFilePath(content)
-          await writeFile(hotwordsFilePath, content, 'utf-8')
+        if (hotwordsContent) {
+          const hotwordsFilePath = getHotwordsFilePath(hotwordsContent)
+          await writeFile(hotwordsFilePath, hotwordsContent, 'utf-8')
           resolvedHotwordsPath = hotwordsFilePath
         }
 
@@ -149,27 +184,36 @@ export function registerSpeechHandlers(store: Store): void {
         }
 
         await getSpeechSttService(store).startDictation(
-          modelId,
+          validatedModelId,
           (msg) => {
             if (window.isDestroyed()) {
               return
             }
             switch (msg.type) {
               case 'ready':
-                window.webContents.send('speech:ready', { sessionId })
+                window.webContents.send('speech:ready', { sessionId: validatedSessionId })
                 break
               case 'partial':
-                window.webContents.send('speech:partial', { text: msg.text ?? '', sessionId })
+                window.webContents.send('speech:partial', {
+                  text: msg.text ?? '',
+                  sessionId: validatedSessionId
+                })
                 break
               case 'final':
-                window.webContents.send('speech:final', { text: msg.text ?? '', sessionId })
+                window.webContents.send('speech:final', {
+                  text: msg.text ?? '',
+                  sessionId: validatedSessionId
+                })
                 break
               case 'stopped':
                 cleanupSessionListener()
-                window.webContents.send('speech:stopped', { sessionId })
+                window.webContents.send('speech:stopped', { sessionId: validatedSessionId })
                 break
               case 'error':
-                window.webContents.send('speech:error', { error: msg.error ?? '', sessionId })
+                window.webContents.send('speech:error', {
+                  error: msg.error ?? '',
+                  sessionId: validatedSessionId
+                })
                 void getSpeechSttService(store)
                   .stopDictation(owner)
                   .catch(() => undefined)
@@ -180,6 +224,14 @@ export function registerSpeechHandlers(store: Store): void {
           resolvedHotwordsPath,
           owner
         )
+        if (windowClosed || window.isDestroyed() || sessionListenerReleased) {
+          cleanupSessionListener()
+          if (resolvedHotwordsPath) {
+            unlink(resolvedHotwordsPath).catch(() => {})
+          }
+          return
+        }
+        speechAdmission.commitListener(owner, sessionListener)
         if (resolvedHotwordsPath) {
           unlink(resolvedHotwordsPath).catch(() => {})
         }
@@ -189,25 +241,33 @@ export function registerSpeechHandlers(store: Store): void {
           unlink(resolvedHotwordsPath).catch(() => {})
         }
         throw err
+      } finally {
+        speechAdmission.releaseStart(owner)
       }
     }
   )
 
   ipcMain.handle(
     'speech:feedAudio',
-    async (_event, buffer: Buffer, sampleRate: number, sessionId = 'desktop') => {
+    async (_event, buffer: Uint8Array, sampleRate: number, sessionId = 'desktop') => {
       // Why: the preload sends audio as a Buffer to avoid Float32Array data
       // being zeroed out during contextBridge + IPC serialization.
-      const samples = new Float32Array(buffer.buffer, buffer.byteOffset, buffer.byteLength / 4)
+      const audio = decodeSpeechAudioChunk(buffer, sampleRate)
+      const validatedSessionId = validateSpeechSessionId(sessionId)
       getSpeechSttService(store).feedAudio(
-        samples,
-        sampleRate,
-        getDesktopOwner(_event.sender.id, sessionId)
+        audio.samples,
+        audio.sampleRate,
+        getDesktopOwner(_event.sender.id, validatedSessionId)
       )
     }
   )
 
   ipcMain.handle('speech:stopDictation', async (_event, sessionId = 'desktop') => {
-    await getSpeechSttService(store).stopDictation(getDesktopOwner(_event.sender.id, sessionId))
+    const owner = getDesktopOwner(_event.sender.id, validateSpeechSessionId(sessionId))
+    try {
+      await getSpeechSttService(store).stopDictation(owner)
+    } finally {
+      speechAdmission.releaseListener(owner)
+    }
   })
 }

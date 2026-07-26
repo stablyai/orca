@@ -5,12 +5,12 @@ import type {
   RateLimitWindow
 } from '../../shared/rate-limit-types'
 import { spawn } from 'node:child_process'
-import { readFile } from 'node:fs/promises'
 import { homedir } from 'node:os'
 import { cancelUnreadResponseBody } from '../lib/unread-response-body'
+import { readFetchResponseJsonWithinLimit } from '../lib/fetch-response-body'
+import { readIntegrationCredentialFileText } from '../integration-credential-file'
 import { join } from 'node:path'
 import { probeCodexAuthPresence } from './codex-auth-presence'
-import { extractClaudePtyResetMetadata } from './claude-pty-reset-parser'
 import {
   classifyCodexRateLimitWindows,
   CODEX_SESSION_WINDOW_MINUTES,
@@ -33,26 +33,21 @@ import {
   resolveHiddenRateLimitPtyCwd
 } from './hidden-rate-limit-pty-cwd'
 import {
-  createAuthFilesystemOperation,
+  AuthFilesystemOperationLimitError,
+  AuthFilesystemOperationRegistry,
   type SharedAuthFilesystemOperation
 } from './auth-filesystem-operation'
+import { GrowingByteBuffer } from '../../shared/growing-byte-buffer'
+import { appendRateLimitPtyOutputTail } from './rate-limit-pty-output-tail'
 
 const RPC_TIMEOUT_MS = 10_000
 const WSL_RPC_TIMEOUT_MS = 25_000
 const PTY_TIMEOUT_MS = 15_000
-// Why: codex ≥0.145 renders a '›' composer with placeholder text after it, so a
-// prompt-anchored send can never fire; nudge /status after a short boot grace.
-const PTY_STATUS_NUDGE_MS = 2_500
-// Why: '/status\r' in one write coalesces into a paste-like chunk and the TUI
-// inserts the newline instead of submitting; Enter must be its own keypress.
-const PTY_STATUS_ENTER_DELAY_MS = 350
-// Why: slow hosts (WSL/SSH) can drop the first Enter while the TUI is still
-// booting; one spare Enter is a no-op on an empty, ready composer.
-const PTY_STATUS_ENTER_RETRY_MS = 3_000
 const BACKEND_TIMEOUT_MS = 10_000
 // Why: redeeming a reset credit is an explicit user action, not a poll — allow more time for a slow backend.
 const REDEEM_BACKEND_TIMEOUT_MS = 30_000
 const MAX_DIAGNOSTIC_OUTPUT_LENGTH = 100_000
+export const MAX_RPC_RESPONSE_LINE_BYTES = 4 * 1024 * 1024
 
 export type FetchCodexRateLimitsOptions = {
   codexHomePath?: string | null
@@ -140,10 +135,7 @@ type BackendAuthReadResult =
   | { content: string; error?: never }
   | { content?: never; error: unknown }
 
-const backendAuthReadByPath = new Map<
-  string,
-  SharedAuthFilesystemOperation<BackendAuthReadResult>
->()
+const backendAuthReads = new AuthFilesystemOperationRegistry<BackendAuthReadResult>()
 
 function shellQuote(value: string): string {
   return `'${value.replace(/'/g, "'\\''")}'`
@@ -302,30 +294,22 @@ function createBackendRequestSignal(
 
 function getBackendAuthRead(
   authPath: string
-): SharedAuthFilesystemOperation<BackendAuthReadResult> {
-  const existing = backendAuthReadByPath.get(authPath)
-  if (existing) {
-    return existing
-  }
+): SharedAuthFilesystemOperation<BackendAuthReadResult> | null {
   // Why: Node can't cancel an in-flight UNC read; keep one read per auth path so repeated refreshes don't stack them.
-  const read = createAuthFilesystemOperation(authPath, () =>
-    readFile(authPath, 'utf8').then(
+  return backendAuthReads.getOrCreate(authPath, () =>
+    readIntegrationCredentialFileText(authPath).then(
       (content) => ({ content }),
       (error: unknown) => ({ error })
     )
   )
-  backendAuthReadByPath.set(authPath, read)
-  const clearRead = (): void => {
-    if (backendAuthReadByPath.get(authPath) === read) {
-      backendAuthReadByPath.delete(authPath)
-    }
-  }
-  void read.result.then(clearRead, clearRead)
-  return read
 }
 
 async function readBackendAuth(authPath: string, signal: AbortSignal): Promise<string> {
-  const result = await getBackendAuthRead(authPath).wait(signal)
+  const read = getBackendAuthRead(authPath)
+  if (!read) {
+    throw new AuthFilesystemOperationLimitError('Codex backend auth read capacity exceeded')
+  }
+  const result = await read.wait(signal)
   if ('error' in result) {
     throw result.error
   }
@@ -381,7 +365,8 @@ async function fetchBackendRateLimitResetCredits(
     await cancelUnreadResponseBody(response)
     return null
   }
-  const payload = (await response.json()) as BackendRateLimitResetCreditsResponse
+  const payload =
+    await readFetchResponseJsonWithinLimit<BackendRateLimitResetCreditsResponse>(response)
   return mapBackendRateLimitResetCredits(payload) ?? null
 }
 
@@ -449,7 +434,8 @@ export async function consumeCodexRateLimitResetCredit(options: {
     await cancelUnreadResponseBody(response)
     throw new Error(`Codex reset failed: HTTP ${response.status}`)
   }
-  const payload = (await response.json()) as BackendConsumeRateLimitResetCreditResponse
+  const payload =
+    await readFetchResponseJsonWithinLimit<BackendConsumeRateLimitResetCreditResponse>(response)
   return mapBackendConsumeOutcome(payload.code)
 }
 
@@ -529,7 +515,7 @@ async function fetchViaBackend(
     await cancelUnreadResponseBody(response)
     return null
   }
-  const payload = (await response.json()) as BackendUsageResponse
+  const payload = await readFetchResponseJsonWithinLimit<BackendUsageResponse>(response)
   // Why: plan_type is required by Codex's RateLimitStatusPayload; reject malformed JSON so the app-server fallback still runs.
   if (typeof payload.plan_type !== 'string') {
     return null
@@ -561,8 +547,8 @@ async function fetchViaRpc(options?: FetchCodexRateLimitsOptions): Promise<Provi
     return abortedCodexRateLimitResult()
   }
   return new Promise<ProviderRateLimits>((resolve) => {
-    let buffer = ''
-    let stderr = ''
+    const buffer = new GrowingByteBuffer()
+    const stderr = new GrowingByteBuffer()
     let resolved = false
     let rpcId = 0
 
@@ -609,6 +595,8 @@ async function fetchViaRpc(options?: FetchCodexRateLimitsOptions): Promise<Provi
       }
       resolved = true
       cleanupListeners()
+      buffer.clear()
+      stderr.clear()
       if (options?.kill) {
         child.kill()
       }
@@ -659,13 +647,34 @@ async function fetchViaRpc(options?: FetchCodexRateLimitsOptions): Promise<Provi
     }
 
     function onStdoutData(chunk: Buffer): void {
-      buffer += chunk.toString()
-
-      // JSON-RPC messages are newline-delimited
-      let newlineIdx: number
-      while ((newlineIdx = buffer.indexOf('\n')) !== -1) {
-        const line = buffer.slice(0, newlineIdx).trim()
-        buffer = buffer.slice(newlineIdx + 1)
+      if (resolved) {
+        return
+      }
+      let offset = 0
+      while (offset <= chunk.byteLength) {
+        const newlineIdx = chunk.indexOf(0x0a, offset)
+        const hasNewline = newlineIdx !== -1
+        const segment = chunk.subarray(offset, hasNewline ? newlineIdx : chunk.byteLength)
+        if (segment.byteLength > MAX_RPC_RESPONSE_LINE_BYTES - buffer.byteLength) {
+          settle(
+            {
+              provider: 'codex',
+              session: null,
+              weekly: null,
+              updatedAt: Date.now(),
+              error: `RPC response exceeded ${MAX_RPC_RESPONSE_LINE_BYTES} byte line limit`,
+              status: 'error'
+            },
+            { kill: true }
+          )
+          return
+        }
+        buffer.append(segment)
+        if (!hasNewline) {
+          return
+        }
+        offset = newlineIdx + 1
+        const line = buffer.takeString('utf8').trim()
         if (!line) {
           continue
         }
@@ -697,7 +706,7 @@ async function fetchViaRpc(options?: FetchCodexRateLimitsOptions): Promise<Provi
                   session: null,
                   weekly: null,
                   updatedAt: Date.now(),
-                  error: withMacTailscaleDnsHint(msg.error.message, stderr),
+                  error: withMacTailscaleDnsHint(msg.error.message, stderr.toString()),
                   status: 'error'
                 },
                 { kill: true }
@@ -734,11 +743,7 @@ async function fetchViaRpc(options?: FetchCodexRateLimitsOptions): Promise<Provi
     }
 
     function onStderrData(chunk: Buffer): void {
-      stderr += chunk.toString()
-      // Why: this background poll only needs recent failure context for hints.
-      if (stderr.length > MAX_DIAGNOSTIC_OUTPUT_LENGTH) {
-        stderr = stderr.slice(-MAX_DIAGNOSTIC_OUTPUT_LENGTH)
-      }
+      stderr.appendRetainedSuffix(chunk, MAX_DIAGNOSTIC_OUTPUT_LENGTH)
     }
 
     function onError(err: Error): void {
@@ -753,7 +758,7 @@ async function fetchViaRpc(options?: FetchCodexRateLimitsOptions): Promise<Provi
           ? isBareCommand
             ? 'Codex CLI not found'
             : 'Codex CLI found but could not run — Node.js may not be in your PATH'
-          : withMacTailscaleDnsHint(err.message, stderr),
+          : withMacTailscaleDnsHint(err.message, stderr.toString()),
         status: isEnoent && isBareCommand ? 'unavailable' : 'error'
       })
     }
@@ -764,7 +769,7 @@ async function fetchViaRpc(options?: FetchCodexRateLimitsOptions): Promise<Provi
         session: null,
         weekly: null,
         updatedAt: Date.now(),
-        error: withMacTailscaleDnsHint('RPC process exited unexpectedly', stderr),
+        error: withMacTailscaleDnsHint('RPC process exited unexpectedly', stderr.toString()),
         status: 'error'
       })
     }
@@ -780,33 +785,10 @@ async function fetchViaRpc(options?: FetchCodexRateLimitsOptions): Promise<Provi
 // PTY fallback — spawn `codex`, send `/status`, parse rendered output
 // ---------------------------------------------------------------------------
 
-// Why: match the Codex CLI /status output ("5h limit"/"Weekly limit" lines). Newer
-// CLIs render a meter between the label and the percent ("Weekly limit: [███░] 43% left"),
-// so skip any non-digit run and capture the used/left word to orient the number.
-// The lookbehind rejects model-scoped rows ("GPT-…-Spark Weekly limit") so they are
-// never selected as the account window regardless of row order; line-start anchoring
-// is unusable here because stripping cursor-move sequences merges visual lines.
-const FIVE_HOUR_RE = /(?<![\w-][^\S\r\n]{0,4})5h\s+limit[^\d%\r\n]*(\d+)%(?:\s*(used|left))?/i
-const WEEKLY_RE = /(?<![\w-][^\S\r\n]{0,4})weekly\s+limit[^\d%\r\n]*(\d+)%(?:\s*(used|left))?/i
-// Why: model-scoped limit rows must still stop a per-window reset-text scan.
-const ANY_LIMIT_LABEL_RE = /(?:5h|weekly)\s+limit/i
-
-// eslint-disable-next-line no-control-regex
-const PTY_CONTROL_SEQUENCE_RE = /\x1b\[[0-?]*[ -/]*[@-~]/g
-
-function stripPtyControlSequences(output: string): string {
-  return output.replace(PTY_CONTROL_SEQUENCE_RE, '')
-}
-
-function isPtyLimitLabel(line: string): boolean {
-  return ANY_LIMIT_LABEL_RE.test(line)
-}
-
-function ptyUsedPercent(match: RegExpExecArray): number {
-  const pct = Number.parseInt(match[1], 10)
-  const oriented = match[2]?.toLowerCase() === 'left' ? 100 - pct : pct
-  return Math.min(100, Math.max(0, oriented))
-}
+// Why: match the Codex CLI /status output ("5h limit"/"Weekly limit" lines with a percent and optional reset text).
+const FIVE_HOUR_RE = /5h\s+limit[:\s]*(\d+)%/i
+const WEEKLY_RE = /weekly\s+limit[:\s]*(\d+)%/i
+const RESET_TEXT_RE = /resets?\s+(?:at\s+|in\s+)?(.+)/i
 
 function parsePtyStatus(output: string): {
   session: RateLimitWindow | null
@@ -814,37 +796,30 @@ function parsePtyStatus(output: string): {
 } {
   const fiveMatch = FIVE_HOUR_RE.exec(output)
   const weeklyMatch = WEEKLY_RE.exec(output)
-  const lines = output.split(/\r\n|\n|\r/)
-  // Why: each limit line owns the reset text that follows it (weekly-only plans
-  // have no 5h line), and parsing it into resetsAt is what the UI renders.
-  const sessionReset = extractClaudePtyResetMetadata(
-    lines,
-    (line) => FIVE_HOUR_RE.test(line),
-    isPtyLimitLabel
-  )
-  const weeklyReset = extractClaudePtyResetMetadata(
-    lines,
-    (line) => WEEKLY_RE.test(line),
-    isPtyLimitLabel
-  )
 
   const session: RateLimitWindow | null = fiveMatch
     ? {
-        usedPercent: ptyUsedPercent(fiveMatch),
+        usedPercent: Math.min(100, Number.parseInt(fiveMatch[1], 10)),
         windowMinutes: 300,
-        resetsAt: sessionReset.resetsAt,
-        resetDescription: sessionReset.resetDescription
+        resetsAt: null,
+        resetDescription: null
       }
     : null
 
   const weekly: RateLimitWindow | null = weeklyMatch
     ? {
-        usedPercent: ptyUsedPercent(weeklyMatch),
+        usedPercent: Math.min(100, Number.parseInt(weeklyMatch[1], 10)),
         windowMinutes: 10080,
-        resetsAt: weeklyReset.resetsAt,
-        resetDescription: weeklyReset.resetDescription
+        resetsAt: null,
+        resetDescription: null
       }
     : null
+
+  // Try to extract reset time from surrounding text
+  const resetMatch = RESET_TEXT_RE.exec(output)
+  if (resetMatch && session) {
+    session.resetDescription = resetMatch[1].trim()
+  }
 
   return { session, weekly }
 }
@@ -884,53 +859,6 @@ async function fetchViaPty(options?: FetchCodexRateLimitsOptions): Promise<Provi
       }
     })
     const termDisposables: { dispose: () => void }[] = [registerHiddenRateLimitPty(term)]
-
-    let statusEnter: ReturnType<typeof setTimeout> | null = null
-    function sendStatusCommand(): void {
-      sentStatus = true
-      if (statusNudge) {
-        clearTimeout(statusNudge)
-        statusNudge = null
-      }
-      term.write('/status')
-      statusEnter = setTimeout(() => {
-        statusEnter = null
-        term.write('\r')
-        statusEnter = setTimeout(() => {
-          statusEnter = null
-          if (!resolved && !settleTimer) {
-            term.write('\r')
-          }
-        }, PTY_STATUS_ENTER_RETRY_MS)
-      }, PTY_STATUS_ENTER_DELAY_MS)
-    }
-
-    let statusNudge: ReturnType<typeof setTimeout> | null = null
-    // Why: count the nudge grace from first TUI output, not spawn, so slow
-    // WSL/SSH boots get the full window before /status is typed.
-    function armStatusNudge(): void {
-      if (statusNudge || sentStatus || resolved) {
-        return
-      }
-      statusNudge = setTimeout(() => {
-        statusNudge = null
-        if (!resolved && !sentStatus) {
-          sendStatusCommand()
-        }
-      }, PTY_STATUS_NUDGE_MS)
-    }
-    termDisposables.push({
-      dispose: () => {
-        if (statusNudge) {
-          clearTimeout(statusNudge)
-          statusNudge = null
-        }
-        if (statusEnter) {
-          clearTimeout(statusEnter)
-          statusEnter = null
-        }
-      }
-    })
 
     function settleAborted(): void {
       if (resolved) {
@@ -980,24 +908,18 @@ async function fetchViaPty(options?: FetchCodexRateLimitsOptions): Promise<Provi
     }, PTY_TIMEOUT_MS)
 
     const onDataDisposable = term.onData((data) => {
-      output += data
-      // Why: only recent status output is needed; cap noisy TUI output like the Claude fallback.
-      if (output.length > MAX_DIAGNOSTIC_OUTPUT_LENGTH) {
-        output = output.slice(-MAX_DIAGNOSTIC_OUTPUT_LENGTH)
-      }
-
-      armStatusNudge()
+      const appended = appendRateLimitPtyOutputTail(output, data, MAX_DIAGNOSTIC_OUTPUT_LENGTH)
+      output = appended.output
 
       // Wait for prompt, then send /status
-      if (!sentStatus && /[>›]\s*$/.test(data)) {
-        sendStatusCommand()
+      if (!sentStatus && />\s*$/.test(appended.scannedChunk)) {
+        sentStatus = true
+        term.write('/status\r')
         return
       }
 
       // Check if we have parseable output
-      // Why: colored meter bars embed digits inside CSI sequences, so probe cleaned text.
-      const probe = sentStatus && !settleTimer ? stripPtyControlSequences(output) : null
-      if (probe !== null && (FIVE_HOUR_RE.test(probe) || WEEKLY_RE.test(probe))) {
+      if (sentStatus && !settleTimer && (FIVE_HOUR_RE.test(output) || WEEKLY_RE.test(output))) {
         // Why: the TUI keeps streaming after status is parseable; one settle timer lets the panel finish flushing.
         settleTimer = setTimeout(() => {
           settleTimer = null
@@ -1011,7 +933,8 @@ async function fetchViaPty(options?: FetchCodexRateLimitsOptions): Promise<Provi
           }
           cleanupHiddenRateLimitPty(term, termDisposables, { kill: true })
 
-          const clean = stripPtyControlSequences(output)
+          // eslint-disable-next-line no-control-regex
+          const clean = output.replace(/\x1b\[[0-9;]*[a-zA-Z]/g, '')
           const { session, weekly } = parsePtyStatus(clean)
 
           resolve({
@@ -1044,7 +967,8 @@ async function fetchViaPty(options?: FetchCodexRateLimitsOptions): Promise<Provi
           clearTimeout(timeout)
           timeout = null
         }
-        const clean = stripPtyControlSequences(output)
+        // eslint-disable-next-line no-control-regex
+        const clean = output.replace(/\x1b\[[0-9;]*[a-zA-Z]/g, '')
         const { session, weekly } = parsePtyStatus(clean)
         resolve({
           provider: 'codex',

@@ -7,6 +7,10 @@ import {
   type ClaudePluginMetadata
 } from './claude-plugin-skill-sources'
 import type { SkillScanRoot } from './skill-discovery-sources'
+import {
+  readWslSkillProtocolField,
+  type WslSkillProtocolFieldCursor
+} from './wsl-skill-protocol-fields'
 
 const MAX_PLUGIN_METADATA_BYTES = 4 * 1024 * 1024
 const WSL_METADATA_TIMEOUT_MS = 5_000
@@ -39,17 +43,26 @@ export function parseWslClaudePluginMetadataOutput(
   fileCount: number
 ): (string | null)[] {
   const contents = Array<string | null>(fileCount).fill(null)
-  const fields = output.split('\0')
-  let index = 0
-  while (index < fields.length && fields[index]) {
-    const kind = fields[index++]
-    const fileIndex = Number.parseInt(fields[index++] ?? '', 10)
-    const exists = fields[index++] === '1'
-    const encoded = fields[index++]
+  const cursor: WslSkillProtocolFieldCursor = { offset: 0 }
+  const readField = (): string =>
+    readWslSkillProtocolField(
+      output,
+      cursor,
+      'WSL Claude plugin metadata returned an incomplete response.'
+    )
+  while (cursor.offset < output.length) {
+    // Why: cursor reads keep delimiter-heavy subprocess output from amplifying into a huge array.
+    const kind = readField()
+    if (!kind) {
+      break
+    }
+    const fileIndex = Number.parseInt(readField(), 10)
+    const exists = readField() === '1'
+    const encoded = readField()
     if (kind !== 'F' || !Number.isInteger(fileIndex) || fileIndex < 0 || fileIndex >= fileCount) {
       throw new Error('WSL Claude plugin metadata returned an invalid response.')
     }
-    if (exists && encoded !== undefined) {
+    if (exists) {
       contents[fileIndex] = Buffer.from(encoded, 'base64').toString('utf8')
     }
   }

@@ -16,6 +16,10 @@ import type {
   CodexUserHookTrustRebaseRequest,
   CodexUserHookTrustRebaseResult
 } from './codex-user-hook-trust-rebase-client'
+import {
+  findLastNonEmptyCodexAppServerGrantLine,
+  parseCodexAppServerGrantJson
+} from './codex-app-server-grant-json'
 
 // Why: hook install/refresh is synchronous launch prep — a Codex pane must
 // not start before its trust is settled — but a stdio JSON-RPC session needs
@@ -114,12 +118,11 @@ function runCodexAppServerEntrySync(
       `codex trust-grant entry killed by ${spawned.signal} after ${request.invocation.timeoutMs}ms deadline`
     )
   }
-  const lines = (spawned.stdout ?? '').split('\n').filter((line) => line.trim().length > 0)
-  const lastLine = lines.at(-1)
+  const lastLine = findLastNonEmptyCodexAppServerGrantLine(spawned.stdout ?? '')
   let envelope: GrantEntryEnvelope | null = null
   if (lastLine) {
     try {
-      envelope = JSON.parse(lastLine) as GrantEntryEnvelope
+      envelope = parseCodexAppServerGrantJson<GrantEntryEnvelope>(lastLine)
     } catch {
       envelope = null
     }

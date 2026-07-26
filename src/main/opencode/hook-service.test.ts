@@ -8,10 +8,12 @@ import {
   readdirSync,
   rmSync,
   symlinkSync,
+  truncateSync,
   writeFileSync
 } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
+import { GENERATED_NODE_MANAGED_FILE_MAX_BYTES } from '../generated-node-bounded-file-reader'
 
 const { getPathMock } = vi.hoisted(() => ({
   getPathMock: vi.fn<(name: string) => string>()
@@ -24,6 +26,10 @@ vi.mock('electron', () => ({
 }))
 
 import { OpenCodeHookService, _internals } from './hook-service'
+import {
+  OPENCODE_OVERLAY_MANIFEST_FILE,
+  OPENCODE_OVERLAY_MANIFEST_MAX_BYTES
+} from './config-overlay-manifest'
 
 const { isUsableId, toSafeDirName } = _internals
 
@@ -65,6 +71,11 @@ describe('OpenCode hook plugin source', () => {
     expect(source).toContain('const coords = resolveHookCoords();')
     expect(source).toContain('`http://127.0.0.1:${coords.port}/hook/opencode`')
     expect(source).toContain('"X-Orca-Agent-Hook-Token": coords.token')
+    expect(source).toContain(
+      `function readOrcaManagedFileWithinLimit(fs, path, maxBytes = ${GENERATED_NODE_MANAGED_FILE_MAX_BYTES})`
+    )
+    expect(source).toContain('readOrcaManagedFileWithinLimit(fs, path)')
+    expect(source).not.toContain('fs.readFileSync')
   })
 
   it('caches the parsed endpoint file on mtime+size+inode to skip re-reads per post', () => {
@@ -354,6 +365,81 @@ describe('OpenCodeHookService overlay mode (user OPENCODE_CONFIG_DIR set)', () =
     expect(overlayPlugin).not.toBe(userOrcaSentinel)
     expectUserConfigIntact()
   })
+
+  it('does not mirror or overwrite a user file named like the internal manifest', () => {
+    const userManifest = join(userConfigDir, OPENCODE_OVERLAY_MANIFEST_FILE)
+    writeFileSync(userManifest, 'USER MANIFEST SENTINEL')
+
+    const env = new OpenCodeHookService().buildPtyEnv(ptyId, userConfigDir)
+    const overlayManifest = join(env.OPENCODE_CONFIG_DIR!, OPENCODE_OVERLAY_MANIFEST_FILE)
+
+    expect(readFileSync(userManifest, 'utf8')).toBe('USER MANIFEST SENTINEL')
+    expect(lstatSync(overlayManifest).isSymbolicLink()).toBe(false)
+    expect(JSON.parse(readFileSync(overlayManifest, 'utf8'))).toMatchObject({
+      topLevelEntries: expect.arrayContaining(['auth.json', 'opencode.json'])
+    })
+  })
+
+  it('falls back before mutation when a retained manifest exceeds its byte limit', () => {
+    const service = new OpenCodeHookService()
+    const first = service.buildPtyEnv(ptyId, userConfigDir)
+    const overlayDir = first.OPENCODE_CONFIG_DIR!
+    const overlayManifest = join(overlayDir, OPENCODE_OVERLAY_MANIFEST_FILE)
+    truncateSync(overlayManifest, OPENCODE_OVERLAY_MANIFEST_MAX_BYTES + 1)
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {})
+
+    expect(service.buildPtyEnv(ptyId, userConfigDir)).toEqual({
+      OPENCODE_CONFIG_DIR: userConfigDir
+    })
+    expect(readFileSync(join(overlayDir, 'auth.json'), 'utf8')).toBe('user-auth-token')
+    expect(warnSpy).toHaveBeenCalledWith(
+      '[opencode-hooks] config overlay exceeded its memory limit; using the original OPENCODE_CONFIG_DIR without Orca status integration'
+    )
+    expectUserConfigIntact()
+  })
+
+  it('ignores forged manifest traversal entries during cleanup', () => {
+    const overlayDir = join(
+      userDataDir,
+      'opencode-config-overlays',
+      toSafeDirName(`source:${userConfigDir}`)
+    )
+    mkdirSync(overlayDir, { recursive: true })
+    const outsideMarker = join(userDataDir, 'outside-manifest-marker')
+    writeFileSync(outsideMarker, 'keep')
+    writeFileSync(
+      join(overlayDir, OPENCODE_OVERLAY_MANIFEST_FILE),
+      JSON.stringify({ topLevelEntries: ['../outside-manifest-marker'] })
+    )
+
+    const env = new OpenCodeHookService().buildPtyEnv(ptyId, userConfigDir)
+
+    expect(env.OPENCODE_CONFIG_DIR).toBe(overlayDir)
+    expect(readFileSync(outsideMarker, 'utf8')).toBe('keep')
+  })
+
+  it.skipIf(process.platform === 'win32')(
+    'replaces a stale manifest symlink without writing through to the user file',
+    () => {
+      const userManifest = join(userConfigDir, OPENCODE_OVERLAY_MANIFEST_FILE)
+      writeFileSync(userManifest, 'USER MANIFEST SENTINEL')
+      const overlayDir = join(
+        userDataDir,
+        'opencode-config-overlays',
+        toSafeDirName(`source:${userConfigDir}`)
+      )
+      mkdirSync(overlayDir, { recursive: true })
+      symlinkSync(userManifest, join(overlayDir, OPENCODE_OVERLAY_MANIFEST_FILE), 'file')
+
+      const env = new OpenCodeHookService().buildPtyEnv(ptyId, userConfigDir)
+
+      expect(env.OPENCODE_CONFIG_DIR).toBe(overlayDir)
+      expect(readFileSync(userManifest, 'utf8')).toBe('USER MANIFEST SENTINEL')
+      expect(lstatSync(join(overlayDir, OPENCODE_OVERLAY_MANIFEST_FILE)).isSymbolicLink()).toBe(
+        false
+      )
+    }
+  )
 
   it.skipIf(process.platform === 'win32')(
     'does not write through a symlinked plugins/ directory into the user filesystem',

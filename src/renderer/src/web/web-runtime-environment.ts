@@ -2,6 +2,7 @@ import type { PublicKnownRuntimeEnvironment } from '../../../shared/runtime-envi
 import type { WebPairingOffer } from './web-pairing'
 import { createBrowserUuid } from '@/lib/browser-uuid'
 import { translate } from '@/i18n/i18n'
+import { parseWebLocalStorageJson, stringifyWebLocalStorageJson } from './web-local-storage-json'
 
 export type StoredWebRuntimeEnvironment = Omit<PublicKnownRuntimeEnvironment, 'endpoints'> & {
   compatibleEnvironmentIds?: string[]
@@ -23,7 +24,7 @@ export function readStoredWebRuntimeEnvironment(): StoredWebRuntimeEnvironment |
     return null
   }
   try {
-    const parsed = JSON.parse(raw) as StoredWebRuntimeEnvironment
+    const parsed = parseWebLocalStorageJson<StoredWebRuntimeEnvironment>(raw)
     if (
       !parsed.id ||
       !parsed.name ||
@@ -48,7 +49,7 @@ export function readStoredWebRuntimeEnvironment(): StoredWebRuntimeEnvironment |
 }
 
 export function saveStoredWebRuntimeEnvironment(environment: StoredWebRuntimeEnvironment): void {
-  window.localStorage.setItem(ENVIRONMENT_STORAGE_KEY, JSON.stringify(environment))
+  window.localStorage.setItem(ENVIRONMENT_STORAGE_KEY, stringifyWebLocalStorageJson(environment))
 }
 
 export function clearStoredWebRuntimeEnvironment(): void {

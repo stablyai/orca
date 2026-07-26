@@ -8,6 +8,7 @@ import {
 import { mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { tmpdir } from 'node:os'
+import { UsageHistoryScanBudget } from '../usage-history-scan-budget'
 
 describe('parseClaudeUsageRecord', () => {
   it('extracts token usage from assistant transcript lines', () => {
@@ -98,6 +99,31 @@ describe('parseClaudeUsageRecord', () => {
           cacheWriteTokens: 7
         }
       ])
+    } finally {
+      await rm(root, { recursive: true, force: true })
+    }
+  })
+
+  it('fails the whole parse when retained usage records exceed capacity', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'orca-claude-capacity-'))
+    const filePath = join(root, 'session.jsonl')
+    const record = (uuid: string) =>
+      JSON.stringify({
+        type: 'assistant',
+        sessionId: 'session-1',
+        uuid,
+        timestamp: '2026-04-09T10:00:00.000Z',
+        message: { usage: { input_tokens: 1 } }
+      })
+    try {
+      await writeFile(filePath, [record('turn-1'), record('turn-2')].join('\n'))
+      const budget = new UsageHistoryScanBudget({ records: 1 })
+
+      await expect(parseClaudeUsageFile(filePath, budget)).rejects.toMatchObject({
+        name: 'UsageHistoryScanCapacityError',
+        resource: 'records',
+        limit: 1
+      })
     } finally {
       await rm(root, { recursive: true, force: true })
     }

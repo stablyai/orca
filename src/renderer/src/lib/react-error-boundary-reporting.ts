@@ -100,13 +100,25 @@ function rememberRendererErrorKey(key: string): boolean {
 }
 
 function getRendererErrorKey(args: ReactErrorBoundaryReportArgs): string {
-  return JSON.stringify({
-    boundaryId: args.boundaryId,
-    surface: args.surface,
-    errorName: args.errorName,
-    errorMessage: args.errorMessage,
-    componentStack: args.componentStack
-  })
+  // Why: error text can be arbitrarily large; retain only a fixed-size dedupe identity.
+  let first = 2166136261
+  let second = 2246822507
+  for (const value of [
+    args.boundaryId,
+    args.surface,
+    args.errorName,
+    args.errorMessage,
+    args.componentStack ?? ''
+  ]) {
+    for (let index = 0; index < value.length; index += 1) {
+      const code = value.charCodeAt(index)
+      first = Math.imul(first ^ code, 16777619)
+      second = Math.imul(second ^ code, 3266489909)
+    }
+    first = Math.imul(first ^ value.length, 16777619)
+    second = Math.imul(second ^ value.length, 668265263)
+  }
+  return `${first >>> 0}:${second >>> 0}`
 }
 
 export function takePendingReactErrorBoundaryReport(): CrashReportRecord | null {

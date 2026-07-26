@@ -1,10 +1,19 @@
-import { describe, expect, it } from 'vitest'
-import { setCachedWorktrees, getCachedWorktrees } from './worktree-cache'
+import { beforeEach, describe, expect, it } from 'vitest'
+import {
+  getCachedWorktrees,
+  MOBILE_WORKTREE_CACHE_MAX_ITEMS_PER_HOST,
+  resetWorktreeCacheForTests,
+  setCachedWorktrees
+} from './worktree-cache'
 
 // Why: AC #8498 guarantees a reconnect refetch writes through the
 // same cache path the host detail screen seeds from, so a reconnect can't
 // serve a stale snapshot. This unit pins the write-through contract.
 describe('worktree-cache write-through', () => {
+  beforeEach(() => {
+    resetWorktreeCacheForTests()
+  })
+
   it('returns the most-recently written snapshot, not a stale one', () => {
     const hostId = 'host-write-through'
     const stale = [{ worktreeId: 'a', name: 'stale' }]
@@ -39,5 +48,14 @@ describe('worktree-cache write-through', () => {
 
     // A fresh screen mount reads the cache — must see the connected set.
     expect(getCachedWorktrees(hostId)).toEqual(reconnected)
+  })
+
+  it('retains the exact per-host item cap and rejects one over', () => {
+    const exact = Array.from({ length: MOBILE_WORKTREE_CACHE_MAX_ITEMS_PER_HOST }, () => null)
+    setCachedWorktrees('host', exact)
+    expect(getCachedWorktrees('host')).toBe(exact)
+
+    setCachedWorktrees('host', [...exact, null])
+    expect(getCachedWorktrees('host')).toBeNull()
   })
 })

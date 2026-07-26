@@ -29,6 +29,10 @@ export function createFrameParser(
   function parse(): void {
     while (buffer.length >= FRAME_HEADER_SIZE) {
       const payloadLength = buffer.readUInt32BE(1)
+      if (payloadLength > FRAME_MAX_PAYLOAD) {
+        buffer = Buffer.alloc(0)
+        throw new Error(`Frame payload ${payloadLength} exceeds max ${FRAME_MAX_PAYLOAD}`)
+      }
       const totalLength = FRAME_HEADER_SIZE + payloadLength
 
       if (buffer.length < totalLength) {

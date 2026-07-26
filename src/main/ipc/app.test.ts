@@ -33,12 +33,13 @@ vi.mock('node:child_process', () => ({
 // events, so tests drive the async command lifecycle readCommandStdout expects.
 function createFakeSpawnChild(options: {
   stdout?: string
+  stdoutFragmentSize?: number
   code?: number
   error?: Error
   pid?: number
   hang?: boolean
 }): EventEmitter & { pid: number; kill: ReturnType<typeof vi.fn>; stdout: EventEmitter } {
-  const { stdout, code = 0, error, pid = 4242, hang = false } = options
+  const { stdout, stdoutFragmentSize, code = 0, error, pid = 4242, hang = false } = options
   const child = new EventEmitter() as EventEmitter & {
     pid: number
     kill: ReturnType<typeof vi.fn>
@@ -58,7 +59,13 @@ function createFakeSpawnChild(options: {
         return
       }
       if (stdout !== undefined) {
-        stdoutStream.emit('data', stdout)
+        if (stdoutFragmentSize === undefined) {
+          stdoutStream.emit('data', stdout)
+        } else {
+          for (let offset = 0; offset < stdout.length; offset += stdoutFragmentSize) {
+            stdoutStream.emit('data', stdout.slice(offset, offset + stdoutFragmentSize))
+          }
+        }
       }
       child.emit('close', code)
     })
@@ -340,6 +347,44 @@ describe('registerAppHandlers', () => {
       'com.apple.keylayout.ABC'
     )
     expect(spawnMock).toHaveBeenCalledTimes(2)
+  })
+
+  it('kills an oversized selected-input probe before using the layout fallback', async () => {
+    Object.defineProperty(process, 'platform', { value: 'darwin', configurable: true })
+    spawnMock
+      .mockImplementationOnce(() =>
+        createFakeSpawnChild({ stdout: 'x'.repeat(1024 * 1024 + 1), pid: 4242 })
+      )
+      .mockImplementationOnce(() => createFakeSpawnChild({ stdout: 'com.apple.keylayout.ABC\n' }))
+    registerAppHandlers({} as never)
+
+    await expect(handlers.get('app:getKeyboardInputSourceId')?.(null)).resolves.toBe(
+      'com.apple.keylayout.ABC'
+    )
+    expect(processKillSpy).toHaveBeenCalledWith(-4242, 'SIGKILL')
+    expect(spawnMock).toHaveBeenCalledTimes(2)
+  })
+
+  it('parses selected-input JSON after 100,000 one-byte fragments', async () => {
+    Object.defineProperty(process, 'platform', { value: 'darwin', configurable: true })
+    const selected = JSON.stringify([
+      {
+        'Bundle ID': 'com.apple.inputmethod.SCIM',
+        'Input Mode': 'com.apple.inputmethod.SCIM.ITABC',
+        InputSourceKind: 'Input Mode'
+      }
+    ])
+    spawnMock.mockImplementationOnce(() =>
+      createFakeSpawnChild({
+        stdout: `${' '.repeat(100_000)}${selected}`,
+        stdoutFragmentSize: 1
+      })
+    )
+    registerAppHandlers({} as never)
+
+    await expect(handlers.get('app:getKeyboardInputSourceId')?.(null)).resolves.toBe(
+      'com.apple.inputmethod.SCIM.ITABC'
+    )
   })
 
   it('falls back when macOS keyboard input source probes never report completion', async () => {

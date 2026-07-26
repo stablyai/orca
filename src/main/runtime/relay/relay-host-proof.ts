@@ -5,6 +5,7 @@ const HOST_PROOF_TRANSCRIPT_DOMAIN = 'orca-relay-host-proof/v1'
 const HOST_CHALLENGE_PLAINTEXT_DOMAIN = 'orca-relay-host-challenge/v1'
 const textEncoder = new TextEncoder()
 const textDecoder = new TextDecoder()
+export const RELAY_HOST_CHALLENGE_MAX_CIPHERTEXT_BASE64_CHARACTERS = 16 * 1024
 
 export type RelayHostChallenge = {
   challengeId: string
@@ -29,7 +30,10 @@ export type RelayHostProofContext = {
 }
 
 function decodeCanonicalBase64(value: string, expectedBytes: number): Uint8Array | null {
-  if (!/^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$/.test(value)) {
+  if (
+    value.length !== Math.ceil(expectedBytes / 3) * 4 ||
+    !/^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$/.test(value)
+  ) {
     return null
   }
   const decoded = Buffer.from(value, 'base64')
@@ -129,8 +133,18 @@ export function answerRelayHostChallenge(
 ): string | null {
   const relayKey = decodeCanonicalBase64(challenge.relayEphemeralPublicKeyB64, 32)
   const nonce = decodeCanonicalBase64(challenge.nonceB64, 24)
+  if (
+    !relayKey ||
+    !nonce ||
+    challenge.ciphertextB64.length > RELAY_HOST_CHALLENGE_MAX_CIPHERTEXT_BASE64_CHARACTERS ||
+    !/^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$/.test(
+      challenge.ciphertextB64
+    )
+  ) {
+    return null
+  }
   const ciphertext = Buffer.from(challenge.ciphertextB64, 'base64')
-  if (!relayKey || !nonce || ciphertext.toString('base64') !== challenge.ciphertextB64) {
+  if (ciphertext.toString('base64') !== challenge.ciphertextB64) {
     return null
   }
   const plaintext = nacl.box.open(ciphertext, nonce, relayKey, context.hostSecretKey)

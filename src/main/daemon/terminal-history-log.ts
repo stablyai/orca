@@ -23,6 +23,8 @@ const FRAME_BATCH = 0x01
 const FRAME_OUTPUT = 0x02
 const FRAME_RESIZE = 0x03
 const FRAME_CLEAR = 0x04
+const FRAME_HEADER_BYTES = 5
+const BATCH_FRAME_BYTES = FRAME_HEADER_BYTES + 4
 
 export type TerminalHistoryLogBatch = {
   seq: number
@@ -61,20 +63,75 @@ export function decodeLogHeader(buffer: Buffer): number | null {
 }
 
 export function encodeLogBatch(seq: number, records: PendingOutputRecord[]): Buffer {
-  const frames: Buffer[] = [encodeFrame(FRAME_BATCH, encodeSeqPayload(seq))]
+  const byteLength = measureLogBatchBytes(records)
+  return encodeLogBatchWithByteLength(seq, records, byteLength)
+}
+
+export function encodeLogBatchWithinLimit(
+  seq: number,
+  records: PendingOutputRecord[],
+  maxBytes: number
+): Buffer | null {
+  if (!Number.isSafeInteger(maxBytes) || maxBytes < 0) {
+    return null
+  }
+  const byteLength = measureLogBatchBytes(records, maxBytes)
+  return byteLength === null ? null : encodeLogBatchWithByteLength(seq, records, byteLength)
+}
+
+function measureLogBatchBytes(records: PendingOutputRecord[]): number
+function measureLogBatchBytes(records: PendingOutputRecord[], maxBytes: number): number | null
+function measureLogBatchBytes(records: PendingOutputRecord[], maxBytes?: number): number | null {
+  let byteLength = BATCH_FRAME_BYTES
+  if (maxBytes !== undefined && byteLength > maxBytes) {
+    return null
+  }
   for (const record of records) {
     if (record.kind === 'output') {
-      frames.push(encodeFrame(FRAME_OUTPUT, Buffer.from(record.data, 'utf8')))
+      const payloadBytes = Buffer.byteLength(record.data, 'utf8')
+      if (maxBytes !== undefined && payloadBytes > maxBytes - byteLength - FRAME_HEADER_BYTES) {
+        return null
+      }
+      byteLength += FRAME_HEADER_BYTES + payloadBytes
     } else if (record.kind === 'resize') {
-      const payload = Buffer.alloc(4)
-      payload.writeUInt16LE(clampU16(record.cols), 0)
-      payload.writeUInt16LE(clampU16(record.rows), 2)
-      frames.push(encodeFrame(FRAME_RESIZE, payload))
+      byteLength += FRAME_HEADER_BYTES + 4
     } else {
-      frames.push(encodeFrame(FRAME_CLEAR, Buffer.alloc(0)))
+      byteLength += FRAME_HEADER_BYTES
+    }
+    if (maxBytes !== undefined && byteLength > maxBytes) {
+      return null
     }
   }
-  return Buffer.concat(frames)
+  return byteLength
+}
+
+function encodeLogBatchWithByteLength(
+  seq: number,
+  records: PendingOutputRecord[],
+  byteLength: number
+): Buffer {
+  const batch = Buffer.allocUnsafe(byteLength)
+  let offset = 0
+  offset = writeFrameHeader(batch, offset, FRAME_BATCH, 4)
+  batch.writeUInt32LE(seq >>> 0, offset)
+  offset += 4
+
+  for (const record of records) {
+    if (record.kind === 'output') {
+      const payloadBytes = Buffer.byteLength(record.data, 'utf8')
+      offset = writeFrameHeader(batch, offset, FRAME_OUTPUT, payloadBytes)
+      batch.write(record.data, offset, payloadBytes, 'utf8')
+      offset += payloadBytes
+    } else if (record.kind === 'resize') {
+      offset = writeFrameHeader(batch, offset, FRAME_RESIZE, 4)
+      batch.writeUInt16LE(clampU16(record.cols), offset)
+      batch.writeUInt16LE(clampU16(record.rows), offset + 2)
+      offset += 4
+    } else {
+      offset = writeFrameHeader(batch, offset, FRAME_CLEAR, 0)
+    }
+  }
+  return batch
 }
 
 /** Returns null for missing magic / unknown format version — callers fall
@@ -147,17 +204,15 @@ export function decodeTerminalHistoryLog(buffer: Buffer): TerminalHistoryLogCont
   return { generation, batches, truncatedTail }
 }
 
-function encodeFrame(kind: number, payload: Buffer): Buffer {
-  const header = Buffer.alloc(5)
-  header.writeUInt8(kind, 0)
-  header.writeUInt32LE(payload.length, 1)
-  return Buffer.concat([header, payload])
-}
-
-function encodeSeqPayload(seq: number): Buffer {
-  const payload = Buffer.alloc(4)
-  payload.writeUInt32LE(seq >>> 0, 0)
-  return payload
+function writeFrameHeader(
+  buffer: Buffer,
+  offset: number,
+  kind: number,
+  payloadBytes: number
+): number {
+  buffer.writeUInt8(kind, offset)
+  buffer.writeUInt32LE(payloadBytes, offset + 1)
+  return offset + FRAME_HEADER_BYTES
 }
 
 function clampU16(value: number): number {

@@ -1,4 +1,4 @@
-import type { GitHubPrStartPoint, GitPushTarget } from '../../shared/types'
+import type { GitHubPrStartPoint, GitPushTarget, IssueSourcePreference } from '../../shared/types'
 import { fetchCompareBaseRefWithLocalFallback } from '../git/compare-base-ref-fetch'
 import {
   isMissingRemoteRefGitError,
@@ -18,6 +18,7 @@ type ResolveGitHubPrStartPointArgs = {
   headRefName?: string
   baseRefName?: string
   isCrossRepository?: boolean
+  issueSourcePreference?: IssueSourcePreference
   connectionId?: string | null
   localGitOptions?: { wslDistro?: string }
   gitExec: GitExec
@@ -29,12 +30,6 @@ type ResolveGitHubPrStartPointArgs = {
 }
 
 type ResolveGitHubPrStartPointResult = GitHubPrStartPoint | { error: string }
-
-function localGitOptionArgs(
-  options: { wslDistro?: string } | undefined
-): [] | [{ wslDistro?: string }] {
-  return options && Object.keys(options).length > 0 ? [options] : []
-}
 
 export async function resolveGitHubPrStartPoint(
   args: ResolveGitHubPrStartPointArgs
@@ -54,7 +49,8 @@ export async function resolveGitHubPrStartPoint(
         args.repoPath,
         args.prNumber,
         args.connectionId ?? null,
-        ...localGitOptionArgs(args.localGitOptions)
+        args.localGitOptions ?? {},
+        args.issueSourcePreference
       )
       pushTarget = resolved?.pushTarget
       maintainerCanModify = resolved?.maintainerCanModify
@@ -71,7 +67,8 @@ export async function resolveGitHubPrStartPoint(
       args.prNumber,
       'pr',
       args.connectionId ?? null,
-      ...localGitOptionArgs(args.localGitOptions)
+      args.localGitOptions ?? {},
+      args.issueSourcePreference
     )
     if (!item || item.type !== 'pr') {
       return { error: `PR #${args.prNumber} not found.` }

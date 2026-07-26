@@ -1,4 +1,4 @@
-import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises'
+import { mkdir, mkdtemp, rm, truncate, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { tmpdir } from 'node:os'
 import { afterEach, describe, expect, it } from 'vitest'
@@ -9,6 +9,16 @@ const PNG_1X1_BASE64 =
   'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+/p9sAAAAASUVORK5CYII='
 
 const tempDirs: string[] = []
+
+function pngHeader(width: number, height: number): Buffer {
+  const bytes = Buffer.alloc(24)
+  Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]).copy(bytes)
+  bytes.writeUInt32BE(13, 8)
+  bytes.write('IHDR', 12, 'ascii')
+  bytes.writeUInt32BE(width, 16)
+  bytes.writeUInt32BE(height, 20)
+  return bytes
+}
 
 async function makeTempRepoDir(): Promise<string> {
   const dir = await mkdtemp(join(tmpdir(), 'orca-repo-icon-'))
@@ -52,6 +62,13 @@ describe('detectRepoIcon', () => {
     })
   })
 
+  it('ignores a repo-local raster dimension bomb', async () => {
+    const repoPath = await makeTempRepoDir()
+    await writeFile(join(repoPath, 'favicon.png'), pngHeader(32_769, 1))
+
+    await expect(detectRepoIcon({ repoPath, kind: 'folder' })).resolves.toBeUndefined()
+  })
+
   it('resolves declared icon hrefs from project source files', async () => {
     const repoPath = await makeTempRepoDir()
     await writeFile(join(repoPath, 'index.html'), '<link rel="icon" href="/brand/icon.png">')
@@ -91,10 +108,9 @@ describe('detectRepoIcon', () => {
 
   it('skips oversized source files when looking for declared icon hrefs', async () => {
     const repoPath = await makeTempRepoDir()
-    await writeFile(
-      join(repoPath, 'index.html'),
-      `${'x'.repeat(256 * 1024 + 1)}<link rel="icon" href="/brand/icon.png">`
-    )
+    const sourcePath = join(repoPath, 'index.html')
+    await writeFile(sourcePath, '<link rel="icon" href="/brand/icon.png">')
+    await truncate(sourcePath, 256 * 1024 + 1)
     await mkdir(join(repoPath, 'public', 'brand'), { recursive: true })
     await writeFile(
       join(repoPath, 'public', 'brand', 'icon.png'),

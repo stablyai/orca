@@ -70,8 +70,16 @@ describe('runRemoteOrcaCli', () => {
       getUnreadMessages: vi.fn((handle: string) =>
         messages.filter((message) => message.to_handle === handle && message.read_at === null)
       ),
+      countUnreadMessages: vi.fn(
+        (handle: string) =>
+          messages.filter((message) => message.to_handle === handle && message.read_at === null)
+            .length
+      ),
       getAllMessagesForHandle: vi.fn((handle: string) =>
         messages.filter((message) => message.to_handle === handle)
+      ),
+      countAllMessagesForHandle: vi.fn(
+        (handle: string) => messages.filter((message) => message.to_handle === handle).length
       ),
       markAsRead: vi.fn((ids: string[]) => {
         for (const message of messages) {

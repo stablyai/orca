@@ -6,7 +6,12 @@ vi.mock('node:child_process', () => ({
   execFile: execFileMock
 }))
 
-import { _internals, createCodexWslRuntimeHookInstallPlan } from './codex-wsl-hook-install-plan'
+import {
+  _internals,
+  createCodexWslRuntimeHookInstallPlan,
+  WSL_CANONICAL_PATH_CACHE_MAX_ENTRIES,
+  WSL_CANONICAL_PATH_CACHE_MAX_UTF8_BYTES
+} from './codex-wsl-hook-install-plan'
 
 const originalPlatform = process.platform
 
@@ -125,6 +130,17 @@ describe('canonicalizeWslLinuxPath', () => {
     expect(execFileMock).toHaveBeenCalledTimes(2)
   })
 
+  it('clears in-flight ownership when spawning wsl.exe throws synchronously', () => {
+    setPlatform('win32')
+    execFileMock.mockImplementationOnce(() => {
+      throw new Error('invalid WSL argv')
+    })
+
+    expect(_internals.canonicalizeWslLinuxPath('Ubuntu', '/home/alias')).toBeNull()
+    expect(_internals.canonicalizeWslLinuxPath('Ubuntu', '/home/alias')).toBeNull()
+    expect(execFileMock).toHaveBeenCalledTimes(2)
+  })
+
   it('keeps the last known-good cache when revalidation later fails', () => {
     setPlatform('win32')
     _internals.canonicalizeWslLinuxPath('Ubuntu', '/home/alias')
@@ -207,5 +223,49 @@ describe('canonicalizeWslLinuxPath', () => {
     callback(null, 'readlink: missing operand\n')
 
     expect(_internals.canonicalizeWslLinuxPath('Ubuntu', '/home/alias')).toBeNull()
+  })
+
+  it('LRU-evicts canonical identities beyond the entry cap', () => {
+    setPlatform('win32')
+    for (let index = 0; index <= WSL_CANONICAL_PATH_CACHE_MAX_ENTRIES; index += 1) {
+      const logicalPath = `/home/runtime-${index}`
+      _internals.canonicalizeWslLinuxPath('Ubuntu', logicalPath)
+      const callback = execFileMock.mock.calls[index][3] as (
+        error: Error | null,
+        stdout: string
+      ) => void
+      callback(null, `/canonical/runtime-${index}\n`)
+    }
+
+    expect(_internals.getWslCanonicalPathCacheSize()).toBe(WSL_CANONICAL_PATH_CACHE_MAX_ENTRIES)
+    expect(_internals.canonicalizeWslLinuxPath('Ubuntu', '/home/runtime-0')).toBeNull()
+    expect(_internals.canonicalizeWslLinuxPath('Ubuntu', '/home/runtime-1')).toBe(
+      '/canonical/runtime-1'
+    )
+  })
+
+  it('does not retain a canonical identity larger than the aggregate byte budget', () => {
+    setPlatform('win32')
+    _internals.canonicalizeWslLinuxPath('Ubuntu', '/home/oversized')
+    const callback = execFileMock.mock.calls[0][3] as (error: Error | null, stdout: string) => void
+    callback(null, `/${'x'.repeat(WSL_CANONICAL_PATH_CACHE_MAX_UTF8_BYTES)}\n`)
+
+    expect(_internals.getWslCanonicalPathCacheSize()).toBe(0)
+    expect(_internals.getWslCanonicalPathCacheBytes()).toBe(0)
+    expect(_internals.canonicalizeWslLinuxPath('Ubuntu', '/home/oversized')).toBeNull()
+  })
+
+  it('retains a canonical identity at the exact aggregate byte budget', () => {
+    setPlatform('win32')
+    const logicalPath = '/home/exact-limit'
+    const keyBytes = Buffer.byteLength(`Ubuntu\0${logicalPath}`, 'utf8')
+    const canonicalPath = `/${'x'.repeat(WSL_CANONICAL_PATH_CACHE_MAX_UTF8_BYTES - keyBytes - 1)}`
+    _internals.canonicalizeWslLinuxPath('Ubuntu', logicalPath)
+    const callback = execFileMock.mock.calls[0][3] as (error: Error | null, stdout: string) => void
+    callback(null, canonicalPath)
+
+    expect(_internals.getWslCanonicalPathCacheSize()).toBe(1)
+    expect(_internals.getWslCanonicalPathCacheBytes()).toBe(WSL_CANONICAL_PATH_CACHE_MAX_UTF8_BYTES)
+    expect(_internals.canonicalizeWslLinuxPath('Ubuntu', logicalPath)).toBe(canonicalPath)
   })
 })

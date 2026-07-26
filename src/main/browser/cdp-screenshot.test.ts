@@ -1,9 +1,18 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import { captureFullPageScreenshot, captureScreenshot } from './cdp-screenshot'
+import { resetBrowserScreenshotAdmissionForTests } from './browser-screenshot-admission'
+import {
+  BROWSER_SCREENSHOT_BUSY_ERROR,
+  BROWSER_SCREENSHOT_MAX_CONCURRENT_CAPTURES,
+  BROWSER_SCREENSHOT_MAX_DIMENSION_PX,
+  BROWSER_SCREENSHOT_MEMORY_LIMIT_ERROR
+} from './browser-screenshot-limits'
 
 function createMockWebContents() {
   return {
+    once: vi.fn(),
+    removeListener: vi.fn(),
     isDestroyed: vi.fn(() => false),
     invalidate: vi.fn(),
     capturePage: vi.fn(),
@@ -16,6 +25,7 @@ function createMockWebContents() {
 
 describe('captureScreenshot', () => {
   afterEach(() => {
+    resetBrowserScreenshotAdmissionForTests()
     vi.useRealTimers()
   })
 
@@ -36,6 +46,102 @@ describe('captureScreenshot', () => {
     expect(onError).not.toHaveBeenCalled()
   })
 
+  it('rejects concurrent capture overload without retaining another native promise', async () => {
+    const webContents = createMockWebContents()
+    const resolvers: ((result: { data: string }) => void)[] = []
+    webContents.debugger.sendCommand.mockImplementation(
+      () =>
+        new Promise<{ data: string }>((resolve) => {
+          resolvers.push(resolve)
+        })
+    )
+    const results = Array.from({ length: BROWSER_SCREENSHOT_MAX_CONCURRENT_CAPTURES + 1 }, () =>
+      vi.fn()
+    )
+    const errors = results.map(() => vi.fn())
+
+    for (let index = 0; index < results.length; index += 1) {
+      captureScreenshot(webContents as never, { format: 'png' }, results[index]!, errors[index]!)
+    }
+    await Promise.resolve()
+    await Promise.resolve()
+
+    expect(webContents.debugger.sendCommand).toHaveBeenCalledTimes(
+      BROWSER_SCREENSHOT_MAX_CONCURRENT_CAPTURES
+    )
+    expect(errors.at(-1)).toHaveBeenCalledWith(BROWSER_SCREENSHOT_BUSY_ERROR)
+    for (const resolve of resolvers) {
+      resolve({ data: 'cG5n' })
+    }
+    await Promise.resolve()
+    await Promise.resolve()
+    expect(
+      results
+        .slice(0, BROWSER_SCREENSHOT_MAX_CONCURRENT_CAPTURES)
+        .every((callback) => callback.mock.calls.length === 1)
+    ).toBe(true)
+  })
+
+  it('keeps timed-out native captures admitted until Chromium actually settles', async () => {
+    vi.useFakeTimers()
+    const webContents = createMockWebContents()
+    webContents.debugger.sendCommand.mockImplementation(() => new Promise(() => {}))
+    webContents.capturePage.mockResolvedValue({
+      isEmpty: () => false,
+      getSize: () => ({ width: 800, height: 600 }),
+      toPNG: () => Buffer.from('fallback-png')
+    })
+    const results = Array.from({ length: BROWSER_SCREENSHOT_MAX_CONCURRENT_CAPTURES }, () =>
+      vi.fn()
+    )
+    const errors = results.map(() => vi.fn())
+
+    for (let index = 0; index < results.length; index += 1) {
+      captureScreenshot(webContents as never, { format: 'png' }, results[index]!, errors[index]!)
+    }
+    await vi.advanceTimersByTimeAsync(8000)
+
+    expect(results.every((callback) => callback.mock.calls.length === 0)).toBe(true)
+    expect(
+      errors.every((callback) => callback.mock.calls[0]?.[0] === BROWSER_SCREENSHOT_BUSY_ERROR)
+    ).toBe(true)
+    expect(webContents.capturePage).not.toHaveBeenCalled()
+    const overloadError = vi.fn()
+    captureScreenshot(webContents as never, { format: 'png' }, vi.fn(), overloadError)
+    expect(overloadError).toHaveBeenCalledWith(BROWSER_SCREENSHOT_BUSY_ERROR)
+    expect(webContents.debugger.sendCommand).toHaveBeenCalledTimes(
+      BROWSER_SCREENSHOT_MAX_CONCURRENT_CAPTURES
+    )
+  })
+
+  it('retains admission for a fallback that outlives the failed CDP capture', async () => {
+    vi.useFakeTimers()
+    const webContents = createMockWebContents()
+    const commandRejectors: ((error: Error) => void)[] = []
+    webContents.debugger.sendCommand.mockImplementation(
+      () =>
+        new Promise((_, reject) => {
+          commandRejectors.push(reject)
+        })
+    )
+    webContents.capturePage.mockImplementation(() => new Promise(() => {}))
+    const firstError = vi.fn()
+
+    captureScreenshot(webContents as never, { format: 'png' }, vi.fn(), firstError)
+    await vi.advanceTimersByTimeAsync(8000)
+    commandRejectors[0]!(new Error('CDP failed after timeout'))
+    await Promise.resolve()
+    await Promise.resolve()
+
+    expect(firstError).toHaveBeenCalledWith('CDP failed after timeout')
+    const secondError = vi.fn()
+    captureScreenshot(webContents as never, { format: 'png' }, vi.fn(), secondError)
+    await vi.advanceTimersByTimeAsync(8000)
+
+    expect(secondError).toHaveBeenCalledWith(BROWSER_SCREENSHOT_BUSY_ERROR)
+    expect(webContents.capturePage).toHaveBeenCalledOnce()
+  })
+
   it('falls back to capturePage when Page.captureScreenshot stalls', async () => {
     vi.useFakeTimers()
 
@@ -43,6 +149,7 @@ describe('captureScreenshot', () => {
     webContents.debugger.sendCommand.mockImplementation(() => new Promise(() => {}))
     webContents.capturePage.mockResolvedValueOnce({
       isEmpty: () => false,
+      getSize: () => ({ width: 800, height: 600 }),
       toPNG: () => Buffer.from('fallback-png')
     })
     const onResult = vi.fn()
@@ -63,6 +170,7 @@ describe('captureScreenshot', () => {
 
     const croppedImage = {
       isEmpty: () => false,
+      getSize: () => ({ width: 60, height: 80 }),
       toPNG: () => Buffer.from('cropped-png')
     }
     const webContents = createMockWebContents()
@@ -125,6 +233,47 @@ describe('captureScreenshot', () => {
     expect(onError).toHaveBeenCalledWith(
       'Screenshot timed out — the browser tab may not be visible or the window may not have focus.'
     )
+  })
+
+  it('rejects an oversized clip before asking Chromium to capture it', () => {
+    const webContents = createMockWebContents()
+    const onResult = vi.fn()
+    const onError = vi.fn()
+
+    captureScreenshot(
+      webContents as never,
+      {
+        format: 'png',
+        clip: { x: 0, y: 0, width: BROWSER_SCREENSHOT_MAX_DIMENSION_PX + 1, height: 1 }
+      },
+      onResult,
+      onError
+    )
+
+    expect(onError).toHaveBeenCalledWith(BROWSER_SCREENSHOT_MEMORY_LIMIT_ERROR)
+    expect(onResult).not.toHaveBeenCalled()
+    expect(webContents.debugger.sendCommand).not.toHaveBeenCalled()
+  })
+
+  it('rejects an oversized fallback bitmap before encoding it', async () => {
+    vi.useFakeTimers()
+    const toPNG = vi.fn(() => Buffer.from('unused'))
+    const webContents = createMockWebContents()
+    webContents.debugger.sendCommand.mockImplementation(() => new Promise(() => {}))
+    webContents.capturePage.mockResolvedValueOnce({
+      isEmpty: () => false,
+      getSize: () => ({ width: BROWSER_SCREENSHOT_MAX_DIMENSION_PX + 1, height: 1 }),
+      toPNG
+    })
+    const onResult = vi.fn()
+    const onError = vi.fn()
+
+    captureScreenshot(webContents as never, { format: 'png' }, onResult, onError)
+    await vi.advanceTimersByTimeAsync(8000)
+
+    expect(onError).toHaveBeenCalledWith(BROWSER_SCREENSHOT_MEMORY_LIMIT_ERROR)
+    expect(onResult).not.toHaveBeenCalled()
+    expect(toPNG).not.toHaveBeenCalled()
   })
 
   it('ignores the fallback result when CDP settles first after the timeout fires', async () => {
@@ -237,6 +386,11 @@ describe('captureScreenshot', () => {
 })
 
 describe('captureFullPageScreenshot', () => {
+  afterEach(() => {
+    resetBrowserScreenshotAdmissionForTests()
+    vi.useRealTimers()
+  })
+
   it('uses cssContentSize so HiDPI pages are captured at the real page size', async () => {
     const webContents = createMockWebContents()
     webContents.debugger.sendCommand.mockImplementation((method: string) => {
@@ -287,5 +441,44 @@ describe('captureFullPageScreenshot', () => {
       captureBeyondViewport: true,
       clip: { x: 0, y: 0, width: 800, height: 1600, scale: 1 }
     })
+  })
+
+  it('rejects oversized full-page layout bounds before capture allocation', async () => {
+    const webContents = createMockWebContents()
+    webContents.debugger.sendCommand.mockResolvedValueOnce({
+      cssContentSize: { width: BROWSER_SCREENSHOT_MAX_DIMENSION_PX + 1, height: 1 }
+    })
+
+    await expect(captureFullPageScreenshot(webContents as never, 'png')).rejects.toThrow(
+      BROWSER_SCREENSHOT_MEMORY_LIMIT_ERROR
+    )
+    expect(webContents.debugger.sendCommand).toHaveBeenCalledOnce()
+    expect(webContents.debugger.sendCommand).toHaveBeenCalledWith('Page.getLayoutMetrics', {})
+  })
+
+  it('bounds hung full-page metric commands across logical timeouts', async () => {
+    vi.useFakeTimers()
+    const webContents = createMockWebContents()
+    webContents.debugger.sendCommand.mockImplementation(() => new Promise(() => {}))
+    const active = Array.from({ length: BROWSER_SCREENSHOT_MAX_CONCURRENT_CAPTURES }, () =>
+      captureFullPageScreenshot(webContents as never, 'png')
+    )
+    const activeAssertions = active.map((capture) =>
+      expect(capture).rejects.toThrow(
+        'Screenshot timed out — the browser tab may not be visible or the window may not have focus.'
+      )
+    )
+
+    await expect(captureFullPageScreenshot(webContents as never, 'png')).rejects.toThrow(
+      BROWSER_SCREENSHOT_BUSY_ERROR
+    )
+    await vi.advanceTimersByTimeAsync(8000)
+    await Promise.all(activeAssertions)
+    await expect(captureFullPageScreenshot(webContents as never, 'png')).rejects.toThrow(
+      BROWSER_SCREENSHOT_BUSY_ERROR
+    )
+    expect(webContents.debugger.sendCommand).toHaveBeenCalledTimes(
+      BROWSER_SCREENSHOT_MAX_CONCURRENT_CAPTURES
+    )
   })
 })

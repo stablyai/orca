@@ -4,6 +4,7 @@ import {
   clearNoEffectiveUpstreamStatusCacheEntry,
   getNoEffectiveUpstreamStatusCacheCountForTests,
   getNoEffectiveUpstreamStatusGenerationCountForTests,
+  MAX_NO_EFFECTIVE_UPSTREAM_CACHE_KEY_BYTES,
   readOrProbeNoEffectiveUpstreamStatus
 } from './git-status-upstream-negative-cache'
 
@@ -325,6 +326,59 @@ describe('relay upstream negative cache', () => {
 
     expect(getNoEffectiveUpstreamStatusCacheCountForTests()).toBe(0)
     expect(getNoEffectiveUpstreamStatusGenerationCountForTests()).toBe(512)
+  })
+
+  it('retains the exact key-byte boundary but not oversized identities', async () => {
+    const worktreePath = '/r'
+    const keyOverheadBytes = Buffer.byteLength(`${worktreePath}\0\0`, 'utf8')
+    const exactBranch = 'x'.repeat(MAX_NO_EFFECTIVE_UPSTREAM_CACHE_KEY_BYTES - keyOverheadBytes)
+    const oversizedBranch = `${exactBranch}x`
+    const createRunner = (branchName: string) =>
+      vi.fn(async (args: string[]): Promise<{ stdout: string }> => {
+        if (args[0] === 'symbolic-ref') {
+          return { stdout: `${branchName}\n` }
+        }
+        if (args[0] === 'rev-parse' && args.includes('HEAD@{u}')) {
+          throw new Error(`fatal: no upstream configured for branch ${branchName}`)
+        }
+        if (isConfigListSnapshotCommand(args)) {
+          return emptyGitConfigSnapshot()
+        }
+        if (args[0] === 'rev-parse') {
+          throw new Error('missing remote branch')
+        }
+        throw new Error(`No upstream fixture for git ${args.join(' ')}`)
+      })
+    const exactRunner = createRunner(exactBranch)
+    const oversizedRunner = createRunner(oversizedBranch)
+
+    await readOrProbeNoEffectiveUpstreamStatus(
+      { worktreePath, branchName: exactBranch },
+      exactRunner
+    )
+    await readOrProbeNoEffectiveUpstreamStatus(
+      { worktreePath, branchName: exactBranch },
+      exactRunner
+    )
+    await readOrProbeNoEffectiveUpstreamStatus(
+      { worktreePath, branchName: oversizedBranch },
+      oversizedRunner
+    )
+    await readOrProbeNoEffectiveUpstreamStatus(
+      { worktreePath, branchName: oversizedBranch },
+      oversizedRunner
+    )
+    clearNoEffectiveUpstreamStatusCacheEntry({
+      worktreePath,
+      branchName: oversizedBranch
+    })
+
+    expect(exactRunner.mock.calls.filter(([args]) => args[0] === 'symbolic-ref')).toHaveLength(1)
+    expect(oversizedRunner.mock.calls.filter(([args]) => args[0] === 'symbolic-ref')).toHaveLength(
+      2
+    )
+    expect(getNoEffectiveUpstreamStatusCacheCountForTests()).toBe(1)
+    expect(getNoEffectiveUpstreamStatusGenerationCountForTests()).toBe(0)
   })
 
   it('coalesces no-upstream config reads into one snapshot subprocess', async () => {

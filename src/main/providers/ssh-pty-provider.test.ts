@@ -32,6 +32,16 @@ describe('SshPtyProvider', () => {
     provider = new SshPtyProvider('conn-1', mux as never)
   })
 
+  function emitRelayNotification(method: string, params: Record<string, unknown>): void {
+    const callback = mux.onNotification.mock.calls[0]?.[0] as
+      | ((method: string, params: Record<string, unknown>) => void)
+      | undefined
+    if (!callback) {
+      throw new Error('Notification listener was not registered')
+    }
+    callback(method, params)
+  }
+
   it('returns the connectionId', () => {
     expect(provider.getConnectionId()).toBe('conn-1')
   })
@@ -821,6 +831,47 @@ describe('SshPtyProvider', () => {
     expect(mux.notify).toHaveBeenCalledWith('pty.ackData', { id: 'pty-1', charCount: 1024 })
   })
 
+  it('defers tokenized relay output credit until downstream acknowledgement', () => {
+    const events: Parameters<Parameters<SshPtyProvider['onData']>[0]>[0][] = []
+    provider.onData((event) => {
+      events.push(event)
+    })
+
+    emitRelayNotification('pty.data', {
+      id: 'pty-1',
+      data: 'clean',
+      rawLength: 12,
+      deliveryToken: 'delivery-1'
+    })
+
+    expect(events).toHaveLength(1)
+    expect(events[0]).toMatchObject({ id: scopedPty1, data: 'clean', sequenceChars: 12 })
+    expect(mux.notify).not.toHaveBeenCalled()
+
+    events[0]?.upstreamCredit?.acknowledge(12)
+
+    expect(mux.notify).toHaveBeenCalledOnce()
+    expect(mux.notify).toHaveBeenCalledWith('pty.ackData', {
+      id: 'pty-1',
+      charCount: 12,
+      deliveryToken: 'delivery-1'
+    })
+  })
+
+  it('restores legacy acknowledgements after tokenized PTY exit', () => {
+    emitRelayNotification('pty.data', {
+      id: 'pty-1',
+      data: 'output',
+      deliveryToken: 'delivery-3'
+    })
+    emitRelayNotification('pty.exit', { id: 'pty-1', code: 0 })
+    mux.notify.mockClear()
+
+    provider.acknowledgeDataEvent(scopedPty1, 6)
+
+    expect(mux.notify).toHaveBeenCalledWith('pty.ackData', { id: 'pty-1', charCount: 6 })
+  })
+
   it('hasChildProcesses sends request and returns result', async () => {
     mux.request.mockResolvedValue(true)
     const result = await provider.hasChildProcesses(scopedPty1)
@@ -833,6 +884,18 @@ describe('SshPtyProvider', () => {
     const result = await provider.getForegroundProcess(scopedPty1)
     expect(result).toBe('node')
     expect(mux.request).toHaveBeenCalledWith('pty.getForegroundProcess', { id: 'pty-1' })
+  })
+
+  it('preserves unavailable process inspection', async () => {
+    const inspection = {
+      foregroundProcess: null,
+      hasChildProcesses: true,
+      unavailable: true as const
+    }
+    mux.request.mockResolvedValue(inspection)
+
+    await expect(provider.inspectProcess(scopedPty1)).resolves.toEqual(inspection)
+    expect(mux.request).toHaveBeenCalledWith('pty.inspectProcess', { id: 'pty-1' })
   })
 
   it('serializes scoped app ids using raw relay ids', async () => {

@@ -8,6 +8,7 @@ import { isPwshAvailable } from '../main/pwsh'
 import { isWslAvailable, listWslDistros } from '../main/wsl'
 import { isGitBashAvailable } from '../main/git-bash'
 import { buildPosixCommandPathLookupScript } from '../shared/posix-command-path-lookup'
+import { mapWithConcurrency } from '../shared/map-with-concurrency'
 
 const execFileAsync = promisify(execFile)
 
@@ -35,6 +36,7 @@ type AgentDetectionCommand = {
 const SUPPORTED_POSIX_SHELLS = new Set(['sh', 'dash', 'bash', 'zsh', 'fish'])
 const CONSERVATIVE_SYSTEM_SHELL_DIRS = new Set(['/bin', '/usr/bin'])
 const AGENT_PATH_PREFIX = '__ORCA_AGENT_PATH__'
+export const RELAY_AGENT_PATH_PROBE_CONCURRENCY = 8
 
 export class PreflightHandler {
   private dispatcher: RelayDispatcher
@@ -67,11 +69,13 @@ export class PreflightHandler {
       )
     ]
 
-    const results = await Promise.all(
-      probeCommands.map(async (cmd) => ({
+    const results = await mapWithConcurrency(
+      probeCommands,
+      RELAY_AGENT_PATH_PROBE_CONCURRENCY,
+      async (cmd) => ({
         cmd,
         installed: await this.isCommandOnPath(cmd)
-      }))
+      })
     )
     const foundCommands = new Set(
       results.filter((result) => result.installed).map(({ cmd }) => cmd)

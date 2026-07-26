@@ -17,7 +17,11 @@ import {
 } from './client'
 import { _resetGiteaRepoRefCache } from './repository-ref'
 import {
+  GITEA_SCAN_CACHE_ENTRY_MAX_BYTES,
+  GITEA_SCAN_MAX_IN_FLIGHT,
+  GITEA_SCAN_REPO_KEY_MAX_BYTES,
   _getGiteaPullRequestScanCacheSize,
+  _getGiteaPullRequestScanState,
   _resetGiteaPullRequestScanCache,
   scanGiteaPullRequests
 } from './pull-request-scan-cache'
@@ -297,6 +301,62 @@ describe('Gitea client', () => {
     } finally {
       vi.useRealTimers()
     }
+  })
+
+  it('skips retained state for oversized scan keys and payloads', async () => {
+    const exactKey = 'k'.repeat(GITEA_SCAN_REPO_KEY_MAX_BYTES)
+    const oversizedKey = `${exactKey}x`
+    await scanGiteaPullRequests(exactKey, async () => [], 50, 5)
+    await scanGiteaPullRequests(oversizedKey, async () => [], 50, 5)
+    const oversizedListing = [giteaPr(1, 'x'.repeat(GITEA_SCAN_CACHE_ENTRY_MAX_BYTES))]
+    await expect(
+      scanGiteaPullRequests('oversized-payload', async () => oversizedListing, 50, 5)
+    ).resolves.toEqual(oversizedListing)
+
+    expect(_getGiteaPullRequestScanCacheSize()).toBe(1)
+  })
+
+  it('caps distinct in-flight scans and recovers tracked capacity', async () => {
+    let release!: () => void
+    const gate = new Promise<void>((resolve) => {
+      release = resolve
+    })
+    const scans = Array.from({ length: GITEA_SCAN_MAX_IN_FLIGHT }, (_, index) =>
+      scanGiteaPullRequests(
+        `in-flight-${index}`,
+        async () => {
+          await gate
+          return []
+        },
+        50,
+        5
+      )
+    )
+    let overflowCalls = 0
+    await scanGiteaPullRequests(
+      'overflow',
+      async () => {
+        overflowCalls += 1
+        return []
+      },
+      50,
+      5
+    )
+    await scanGiteaPullRequests(
+      'overflow',
+      async () => {
+        overflowCalls += 1
+        return []
+      },
+      50,
+      5
+    )
+
+    expect(_getGiteaPullRequestScanState().inFlight).toBe(GITEA_SCAN_MAX_IN_FLIGHT)
+    expect(overflowCalls).toBe(2)
+    release()
+    await Promise.all(scans)
+    expect(_getGiteaPullRequestScanState().inFlight).toBe(0)
   })
 
   it('does not let an in-flight scan re-cache results from before an invalidation', async () => {

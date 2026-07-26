@@ -3,19 +3,21 @@ import type {
   RuntimeMobileSessionTabsResult
 } from '../../shared/runtime-types'
 import type { PersistedMobileClientTabSelections } from '../../shared/types'
-import { normalizePersistedMobileClientTabSelections } from './client-session-tab-selection-persistence'
+import {
+  boundMobileClientTabSelectionGroups,
+  isMobileTabSelectionIdRetainable,
+  normalizePersistedMobileClientTabSelections
+} from './client-session-tab-selection-persistence'
+import {
+  getOrCreateClientTabSelectionWorktrees,
+  rememberClientTabSelectionWorktree,
+  type StoredClientSessionTabSelection
+} from './client-session-tab-selection-retention'
 
 export type ClientSessionTabSelection = {
   activeTabId: string | null
   activeGroupId: string | null
   activeTabIdByGroupId: Readonly<Record<string, string>>
-}
-
-type StoredClientSessionTabSelection = {
-  selection: ClientSessionTabSelection
-  revision: number
-  // Why: listAll projects every worktree; only hydrated or user-activated selections belong on disk.
-  shouldPersist: boolean
 }
 
 function emptyClientSessionTabSelection(): ClientSessionTabSelection {
@@ -42,7 +44,7 @@ function findTabByTopLevelId(
 export function deriveClientSessionTabSelection(
   snapshot: RuntimeMobileSessionTabsResult
 ): ClientSessionTabSelection {
-  return {
+  return boundMobileClientTabSelectionGroups({
     activeTabId: snapshot.activeTabId,
     activeGroupId: snapshot.activeGroupId,
     activeTabIdByGroupId: Object.fromEntries(
@@ -50,7 +52,7 @@ export function deriveClientSessionTabSelection(
         group.activeTabId ? [[group.id, group.activeTabId] as const] : []
       ) ?? []
     )
-  }
+  })
 }
 
 export function activateClientSessionTabSelection(
@@ -66,13 +68,13 @@ export function activateClientSessionTabSelection(
   const activeGroup = snapshot.tabGroups?.find((group) =>
     group.tabOrder.includes(activeTopLevelTabId)
   )
-  return {
+  return boundMobileClientTabSelectionGroups({
     activeTabId,
     activeGroupId: activeGroup?.id ?? selection.activeGroupId,
     activeTabIdByGroupId: activeGroup
       ? { ...selection.activeTabIdByGroupId, [activeGroup.id]: activeTopLevelTabId }
       : selection.activeTabIdByGroupId
-  }
+  })
 }
 
 export function projectClientSessionTabSelection(
@@ -110,11 +112,11 @@ export function projectClientSessionTabSelection(
       : null) ??
     tabGroups?.[0]?.id ??
     null
-  const nextSelection: ClientSessionTabSelection = {
+  const nextSelection: ClientSessionTabSelection = boundMobileClientTabSelectionGroups({
     activeTabId: activeTab?.id ?? null,
     activeGroupId,
     activeTabIdByGroupId
-  }
+  })
   return {
     selection: nextSelection,
     snapshot: {
@@ -137,9 +139,16 @@ export class ClientSessionTabSelectionStore {
     for (const [clientNavigationId, selectionsByWorktree] of Object.entries(
       normalizePersistedMobileClientTabSelections(persisted)
     )) {
-      const statesByWorktree = this.getStatesByWorktree(clientNavigationId)
+      const statesByWorktree = getOrCreateClientTabSelectionWorktrees(
+        this.statesByClient,
+        clientNavigationId
+      )
       for (const [worktreeId, selection] of Object.entries(selectionsByWorktree)) {
-        statesByWorktree.set(worktreeId, { selection, revision: 0, shouldPersist: true })
+        rememberClientTabSelectionWorktree(statesByWorktree, worktreeId, {
+          selection,
+          revision: 0,
+          shouldPersist: true
+        })
       }
     }
   }
@@ -168,25 +177,21 @@ export class ClientSessionTabSelectionStore {
     this.persistListener?.(this.serialize())
   }
 
-  private getStatesByWorktree(
-    clientNavigationId: string
-  ): Map<string, StoredClientSessionTabSelection> {
-    let statesByWorktree = this.statesByClient.get(clientNavigationId)
-    if (!statesByWorktree) {
-      statesByWorktree = new Map()
-      this.statesByClient.set(clientNavigationId, statesByWorktree)
-    }
-    return statesByWorktree
-  }
-
   project(
     snapshot: RuntimeMobileSessionTabsResult,
     clientNavigationId?: string
   ): RuntimeMobileSessionTabsResult {
-    if (!clientNavigationId) {
+    if (
+      !clientNavigationId ||
+      !isMobileTabSelectionIdRetainable(clientNavigationId) ||
+      !isMobileTabSelectionIdRetainable(snapshot.worktree)
+    ) {
       return snapshot
     }
-    const statesByWorktree = this.getStatesByWorktree(clientNavigationId)
+    const statesByWorktree = getOrCreateClientTabSelectionWorktrees(
+      this.statesByClient,
+      clientNavigationId
+    )
     const state = statesByWorktree.get(snapshot.worktree) ?? {
       // Why: host focus is private navigation; a new paired device starts from deterministic topology instead of inheriting it.
       selection: emptyClientSessionTabSelection(),
@@ -202,7 +207,7 @@ export class ClientSessionTabSelectionStore {
       }
     }
     const projected = projectClientSessionTabSelection(snapshot, state.selection)
-    statesByWorktree.set(snapshot.worktree, {
+    rememberClientTabSelectionWorktree(statesByWorktree, snapshot.worktree, {
       selection: projected.selection,
       revision: state.revision,
       shouldPersist: state.shouldPersist
@@ -219,14 +224,23 @@ export class ClientSessionTabSelectionStore {
     clientNavigationId: string,
     activeTabId: string
   ): RuntimeMobileSessionTabsResult {
-    const statesByWorktree = this.getStatesByWorktree(clientNavigationId)
+    if (
+      !isMobileTabSelectionIdRetainable(clientNavigationId) ||
+      !isMobileTabSelectionIdRetainable(snapshot.worktree)
+    ) {
+      return snapshot
+    }
+    const statesByWorktree = getOrCreateClientTabSelectionWorktrees(
+      this.statesByClient,
+      clientNavigationId
+    )
     const state = statesByWorktree.get(snapshot.worktree) ?? {
       selection: emptyClientSessionTabSelection(),
       revision: 0,
       shouldPersist: false
     }
     const nextSelection = activateClientSessionTabSelection(snapshot, state.selection, activeTabId)
-    statesByWorktree.set(snapshot.worktree, {
+    rememberClientTabSelectionWorktree(statesByWorktree, snapshot.worktree, {
       selection: nextSelection,
       revision: state.revision + 1,
       shouldPersist: true
@@ -255,8 +269,8 @@ export class ClientSessionTabSelectionStore {
       if (!state) {
         continue
       }
-      statesByWorktree.set(newWorktreeId, state)
       statesByWorktree.delete(oldWorktreeId)
+      rememberClientTabSelectionWorktree(statesByWorktree, newWorktreeId, state)
       changed = state.shouldPersist || changed
     }
     if (changed) {

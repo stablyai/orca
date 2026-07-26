@@ -3,8 +3,12 @@ export type HostClientOpenTicket = {
   promise: Promise<void>
 }
 
+export const HOST_CLIENT_OPEN_MAX_PENDING = 64
+
 export class HostClientOpenRegistry {
   private readonly pending = new Map<string, HostClientOpenTicket>()
+
+  constructor(private readonly maxPending = HOST_CLIENT_OPEN_MAX_PENDING) {}
 
   getActivePromise(hostId: string): Promise<void> | null {
     const ticket = this.pending.get(hostId)
@@ -12,6 +16,22 @@ export class HostClientOpenRegistry {
   }
 
   register(hostId: string, promise: Promise<void>): HostClientOpenTicket {
+    const prior = this.pending.get(hostId)
+    if (prior) {
+      prior.cancelled = true
+      this.pending.delete(hostId)
+    }
+    while (this.pending.size >= Math.max(1, this.maxPending)) {
+      const oldestHostId = this.pending.keys().next().value as string | undefined
+      if (oldestHostId === undefined) {
+        break
+      }
+      const oldest = this.pending.get(oldestHostId)
+      if (oldest) {
+        oldest.cancelled = true
+      }
+      this.pending.delete(oldestHostId)
+    }
     const ticket = { cancelled: false, promise }
     this.pending.set(hostId, ticket)
     return ticket

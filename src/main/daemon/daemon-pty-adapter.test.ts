@@ -6,7 +6,11 @@ import { mkdtempSync, mkdirSync, rmSync, existsSync, readFileSync, writeFileSync
 import { DaemonClient } from './client'
 import { DaemonProtocolError } from './daemon-errors'
 import { DaemonPtyAdapter } from './daemon-pty-adapter'
-import { COMPLETION_PROCESS_INSPECTION_PROTOCOL_VERSION } from './daemon-protocol-version'
+import {
+  COMPLETION_PROCESS_INSPECTION_PROTOCOL_VERSION,
+  GET_FOREGROUND_PROCESS_PROTOCOL_VERSION,
+  PROTOCOL_VERSION
+} from './daemon-protocol-version'
 import { DaemonServer } from './daemon-server'
 import { HeadlessEmulator } from './headless-emulator'
 import { getHistorySessionDirName } from './history-paths'
@@ -869,6 +873,60 @@ describe('DaemonPtyAdapter (IPtyProvider)', () => {
   })
 
   describe('listProcesses', () => {
+    it('strips unknown daemon owner payloads before publication', () => {
+      const normalize = (
+        adapter as unknown as {
+          validatedAgentSessionOwners(owners: unknown): {
+            agentSessionOwners?: unknown[]
+          }
+        }
+      ).validatedAgentSessionOwners.bind(adapter)
+      const owner = {
+        claim: {
+          digestVersion: 1,
+          keyId: 'key',
+          identityDigest: 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
+          worktreeScopeDigest: 'bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb',
+          agent: 'codex',
+          unknownPayload: 'claim payload'
+        },
+        generation: 'generation-1',
+        phase: 'live',
+        ptyId: 'pty-1',
+        surface: {
+          worktreeId: 'worktree',
+          tabId: 'tab',
+          leafId: '11111111-1111-4111-8111-111111111111',
+          terminalHandle: 'term_claimed',
+          unknownPayload: 'surface payload'
+        },
+        unknownPayload: 'owner payload'
+      }
+
+      expect(normalize([owner])).toEqual({
+        agentSessionOwners: [
+          {
+            claim: {
+              digestVersion: 1,
+              keyId: 'key',
+              identityDigest: 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
+              worktreeScopeDigest: 'bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb',
+              agent: 'codex'
+            },
+            generation: 'generation-1',
+            phase: 'live',
+            ptyId: 'pty-1',
+            surface: {
+              worktreeId: 'worktree',
+              tabId: 'tab',
+              leafId: '11111111-1111-4111-8111-111111111111',
+              terminalHandle: 'term_claimed'
+            }
+          }
+        ]
+      })
+    })
+
     it('returns active sessions', async () => {
       await adapter.spawn({
         cols: 80,
@@ -929,31 +987,53 @@ describe('DaemonPtyAdapter (IPtyProvider)', () => {
   })
 
   describe('inspectProcess on pre-inspection daemon protocols', () => {
-    // Why: daemons outlive an in-place app update, so a v26 daemon must still answer inspections
-    // client-side; throwing here leaves agent-completion detection permanently retrying.
     type ClientInternals = {
       client: { request: ReturnType<typeof vi.fn>; disconnect: ReturnType<typeof vi.fn> }
     }
 
-    function createLegacyAdapter(request: ReturnType<typeof vi.fn>): DaemonPtyAdapter {
-      const legacy = new DaemonPtyAdapter({
+    function createInspectionAdapter(
+      protocolVersion: number,
+      request: ReturnType<typeof vi.fn>
+    ): DaemonPtyAdapter {
+      const inspectionAdapter = new DaemonPtyAdapter({
         socketPath,
         tokenPath,
-        protocolVersion: COMPLETION_PROCESS_INSPECTION_PROTOCOL_VERSION - 1
+        protocolVersion
       })
-      ;(legacy as unknown as ClientInternals).client = { request, disconnect: vi.fn() }
-      return legacy
+      ;(inspectionAdapter as unknown as ClientInternals).client = {
+        request,
+        disconnect: vi.fn()
+      }
+      return inspectionAdapter
     }
 
-    it('composes a real inspection from the foreground call the daemon does support', async () => {
+    it('reports protocol 10 inspection as unavailable without unsupported RPCs', async () => {
+      const request = vi.fn()
+      const legacy = createInspectionAdapter(GET_FOREGROUND_PROCESS_PROTOCOL_VERSION - 1, request)
+
+      await expect(legacy.inspectProcess('sess-a')).resolves.toEqual({
+        foregroundProcess: null,
+        hasChildProcesses: true,
+        unavailable: true
+      })
+      await expect(legacy.getForegroundProcess('sess-a')).resolves.toBeNull()
+      await expect(legacy.hasChildProcesses('sess-a')).resolves.toBe(true)
+      expect(request).not.toHaveBeenCalled()
+
+      legacy.dispose()
+    })
+
+    it.each([
+      GET_FOREGROUND_PROCESS_PROTOCOL_VERSION,
+      COMPLETION_PROCESS_INSPECTION_PROTOCOL_VERSION - 1
+    ])('composes protocol %s inspection from getForegroundProcess', async (protocolVersion) => {
       const request = vi.fn(async () => ({ foregroundProcess: 'codex' }))
-      const legacy = createLegacyAdapter(request)
+      const legacy = createInspectionAdapter(protocolVersion, request)
 
       expect(await legacy.inspectProcess('sess-a')).toEqual({
         foregroundProcess: 'codex',
         hasChildProcesses: true
       })
-      // Why: the fallback must not depend on a capability the legacy daemon lacks.
       expect(request).toHaveBeenCalledWith('getForegroundProcess', { sessionId: 'sess-a' })
       expect(request).not.toHaveBeenCalledWith('inspectProcess', expect.anything())
 
@@ -961,7 +1041,10 @@ describe('DaemonPtyAdapter (IPtyProvider)', () => {
     })
 
     it('reports an idle shell as having no child processes', async () => {
-      const legacy = createLegacyAdapter(vi.fn(async () => ({ foregroundProcess: 'bash' })))
+      const legacy = createInspectionAdapter(
+        COMPLETION_PROCESS_INSPECTION_PROTOCOL_VERSION - 1,
+        vi.fn(async () => ({ foregroundProcess: 'bash' }))
+      )
 
       expect(await legacy.inspectProcess('sess-a')).toEqual({
         foregroundProcess: 'bash',
@@ -972,11 +1055,10 @@ describe('DaemonPtyAdapter (IPtyProvider)', () => {
     })
 
     it('reports a null foreground as idle, matching what the legacy daemon can report', async () => {
-      // Why: pins the one response shape whose semantics differ from v27, where inspectProcess goes
-      // through getAliveSession() and throws for a vanished session while getForegroundProcess stays
-      // null-not-throw. Reading it as idle is deliberate — this is also the only shape that reaches a
-      // user-visible completion — so the divergence must not change silently.
-      const legacy = createLegacyAdapter(vi.fn(async () => ({ foregroundProcess: null })))
+      const legacy = createInspectionAdapter(
+        COMPLETION_PROCESS_INSPECTION_PROTOCOL_VERSION - 1,
+        vi.fn(async () => ({ foregroundProcess: null }))
+      )
 
       expect(await legacy.inspectProcess('sess-a')).toEqual({
         foregroundProcess: null,
@@ -989,7 +1071,8 @@ describe('DaemonPtyAdapter (IPtyProvider)', () => {
     it('rejects rather than reading as idle when the daemon call fails', async () => {
       // Why: getForegroundProcess swallows errors into null; composing through it would turn a dead
       // socket into a false "agent exited" completion, the mirror of the bug this path fixes.
-      const legacy = createLegacyAdapter(
+      const legacy = createInspectionAdapter(
+        COMPLETION_PROCESS_INSPECTION_PROTOCOL_VERSION - 1,
         vi.fn(async () => {
           throw new Error('socket_closed')
         })
@@ -1000,21 +1083,19 @@ describe('DaemonPtyAdapter (IPtyProvider)', () => {
       legacy.dispose()
     })
 
-    it('still delegates to the daemon once the protocol supports inspectProcess', async () => {
-      const request = vi.fn(async () => ({ foregroundProcess: 'codex', hasChildProcesses: true }))
-      const current = new DaemonPtyAdapter({
-        socketPath,
-        tokenPath,
-        protocolVersion: COMPLETION_PROCESS_INSPECTION_PROTOCOL_VERSION
-      })
-      ;(current as unknown as ClientInternals).client = { request, disconnect: vi.fn() }
+    it.each([COMPLETION_PROCESS_INSPECTION_PROTOCOL_VERSION, PROTOCOL_VERSION])(
+      'delegates protocol %s inspection to inspectProcess',
+      async (protocolVersion) => {
+        const request = vi.fn(async () => ({ foregroundProcess: 'codex', hasChildProcesses: true }))
+        const current = createInspectionAdapter(protocolVersion, request)
 
-      await current.inspectProcess('sess-a')
+        await current.inspectProcess('sess-a')
 
-      expect(request).toHaveBeenCalledWith('inspectProcess', { sessionId: 'sess-a' })
+        expect(request).toHaveBeenCalledWith('inspectProcess', { sessionId: 'sess-a' })
 
-      current.dispose()
-    })
+        current.dispose()
+      }
+    )
   })
 
   describe('serialize / revive', () => {
@@ -1413,6 +1494,7 @@ describe('DaemonPtyAdapter (IPtyProvider)', () => {
           cwd: '/home/user',
           sessionId: 'idle-checkpoint'
         })
+        setTimeoutSpy.mockClear()
 
         expect(setTimeoutSpy.mock.calls.some(([, delay]) => delay === 10_000)).toBe(false)
 

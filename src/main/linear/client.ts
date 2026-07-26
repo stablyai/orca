@@ -3,13 +3,15 @@
    stay in one consistency boundary. */
 import { safeStorage } from 'electron'
 import type { LinearClient } from '@linear/sdk'
-import { existsSync, mkdirSync, readFileSync, unlinkSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdirSync, unlinkSync, writeFileSync } from 'node:fs'
 import { homedir } from 'node:os'
 import { join } from 'node:path'
 import { loadLinearSdk } from './linear-sdk'
 import {
   CredentialDecryptionError,
   credentialFileHasContent,
+  readIntegrationCredentialFileSync,
+  readIntegrationCredentialFileSyncText,
   readStoredCredentialToken
 } from '../integration-credential-file'
 import type {
@@ -18,31 +20,32 @@ import type {
   LinearWorkspace,
   LinearWorkspaceSelection
 } from '../../shared/types'
+import { IntegrationApiConcurrencyGate } from '../integration-api-concurrency'
+import {
+  assertIntegrationAccountCount,
+  assertIntegrationCredentialBytes,
+  assertIntegrationStringBytes,
+  IntegrationAccountPersistenceLimitError,
+  MAX_INTEGRATION_ACCOUNT_EMAIL_BYTES,
+  MAX_INTEGRATION_ACCOUNT_FILE_BYTES,
+  MAX_INTEGRATION_ACCOUNT_ID_BYTES,
+  MAX_INTEGRATION_ACCOUNT_LABEL_BYTES,
+  MAX_INTEGRATION_ACCOUNTS,
+  serializeIntegrationAccountFile,
+  unreadableIntegrationAccountFileError
+} from '../integration-account-persistence-limits'
+import { boundedIntegrationErrorMessage } from '../integration-error-message'
 
 // ── Concurrency limiter — max 4 parallel Linear API calls ────────────
 const MAX_CONCURRENT = 4
-let running = 0
-const queue: (() => void)[] = []
+const concurrencyGate = new IntegrationApiConcurrencyGate(MAX_CONCURRENT)
 
 export function acquire(): Promise<void> {
-  if (running < MAX_CONCURRENT) {
-    running++
-    return Promise.resolve()
-  }
-  return new Promise((resolve) =>
-    queue.push(() => {
-      running++
-      resolve()
-    })
-  )
+  return concurrencyGate.acquire()
 }
 
 export function release(): void {
-  running--
-  const next = queue.shift()
-  if (next) {
-    next()
-  }
+  concurrencyGate.release()
 }
 
 // ── Token + workspace storage ────────────────────────────────────────
@@ -74,6 +77,17 @@ let cachedLegacyViewer: LinearViewer | null = null
 let legacyViewerLoadedFromDisk = false
 let cachedWorkspaceFile: LinearWorkspaceFile | null = null
 let workspaceFileLoadedFromDisk = false
+let workspaceFileReadError: Error | null = null
+
+function cacheToken(workspaceId: string, token: string): void {
+  if (!cachedTokens.has(workspaceId) && cachedTokens.size >= MAX_INTEGRATION_ACCOUNTS) {
+    const oldestWorkspaceId = cachedTokens.keys().next().value
+    if (oldestWorkspaceId !== undefined) {
+      cachedTokens.delete(oldestWorkspaceId)
+    }
+  }
+  cachedTokens.set(workspaceId, token)
+}
 
 function getOrcaDir(): string {
   return join(homedir(), '.orca')
@@ -99,6 +113,12 @@ function getWorkspaceTokenPath(workspaceId: string): string {
   if (workspaceId === LEGACY_WORKSPACE_ID) {
     return getLegacyTokenPath()
   }
+  assertIntegrationStringBytes(
+    'Linear',
+    'workspace ID',
+    workspaceId,
+    MAX_INTEGRATION_ACCOUNT_ID_BYTES
+  )
   return join(getWorkspaceTokenDir(), `${Buffer.from(workspaceId).toString('base64url')}.enc`)
 }
 
@@ -122,10 +142,46 @@ function readLegacyViewerFromDisk(): LinearViewer | null {
     return null
   }
   try {
-    const raw = readFileSync(path, { encoding: 'utf-8' })
+    const raw = readIntegrationCredentialFileSyncText(path)
     const parsed = JSON.parse(raw) as Partial<LinearViewer>
     if (typeof parsed?.displayName !== 'string' || typeof parsed?.organizationName !== 'string') {
       return null
+    }
+    assertIntegrationStringBytes(
+      'Linear',
+      'legacy display name',
+      parsed.displayName,
+      MAX_INTEGRATION_ACCOUNT_LABEL_BYTES
+    )
+    assertIntegrationStringBytes(
+      'Linear',
+      'legacy organization name',
+      parsed.organizationName,
+      MAX_INTEGRATION_ACCOUNT_LABEL_BYTES
+    )
+    if (typeof parsed.email === 'string') {
+      assertIntegrationStringBytes(
+        'Linear',
+        'legacy email',
+        parsed.email,
+        MAX_INTEGRATION_ACCOUNT_EMAIL_BYTES
+      )
+    }
+    if (typeof parsed.organizationId === 'string') {
+      assertIntegrationStringBytes(
+        'Linear',
+        'legacy organization ID',
+        parsed.organizationId,
+        MAX_INTEGRATION_ACCOUNT_ID_BYTES
+      )
+    }
+    if (typeof parsed.organizationUrlKey === 'string') {
+      assertIntegrationStringBytes(
+        'Linear',
+        'legacy organization URL key',
+        parsed.organizationUrlKey,
+        MAX_INTEGRATION_ACCOUNT_LABEL_BYTES
+      )
     }
     return {
       displayName: parsed.displayName,
@@ -180,6 +236,76 @@ function normalizeWorkspace(input: unknown): LinearWorkspace | null {
   }
 }
 
+function assertWorkspaceBounds(workspace: LinearWorkspace): void {
+  assertIntegrationStringBytes(
+    'Linear',
+    'workspace ID',
+    workspace.id,
+    MAX_INTEGRATION_ACCOUNT_ID_BYTES
+  )
+  assertIntegrationStringBytes(
+    'Linear',
+    'organization ID',
+    workspace.organizationId,
+    MAX_INTEGRATION_ACCOUNT_ID_BYTES
+  )
+  assertIntegrationStringBytes(
+    'Linear',
+    'organization name',
+    workspace.organizationName,
+    MAX_INTEGRATION_ACCOUNT_LABEL_BYTES
+  )
+  if (workspace.organizationUrlKey !== undefined) {
+    assertIntegrationStringBytes(
+      'Linear',
+      'organization URL key',
+      workspace.organizationUrlKey,
+      MAX_INTEGRATION_ACCOUNT_LABEL_BYTES
+    )
+  }
+  assertIntegrationStringBytes(
+    'Linear',
+    'display name',
+    workspace.displayName,
+    MAX_INTEGRATION_ACCOUNT_LABEL_BYTES
+  )
+  if (workspace.email !== null) {
+    assertIntegrationStringBytes(
+      'Linear',
+      'email',
+      workspace.email,
+      MAX_INTEGRATION_ACCOUNT_EMAIL_BYTES
+    )
+  }
+}
+
+function assertStoredWorkspaceBounds(input: unknown): void {
+  if (!input || typeof input !== 'object') {
+    return
+  }
+  const record = input as Record<string, unknown>
+  const fields = [
+    ['workspace ID', record.id, MAX_INTEGRATION_ACCOUNT_ID_BYTES],
+    ['organization ID', record.organizationId, MAX_INTEGRATION_ACCOUNT_ID_BYTES],
+    ['organization name', record.organizationName, MAX_INTEGRATION_ACCOUNT_LABEL_BYTES],
+    ['organization URL key', record.organizationUrlKey, MAX_INTEGRATION_ACCOUNT_LABEL_BYTES],
+    ['display name', record.displayName, MAX_INTEGRATION_ACCOUNT_LABEL_BYTES],
+    ['email', record.email, MAX_INTEGRATION_ACCOUNT_EMAIL_BYTES]
+  ] as const
+  for (const [field, value, maxBytes] of fields) {
+    if (typeof value === 'string') {
+      assertIntegrationStringBytes('Linear', field, value, maxBytes)
+    }
+  }
+}
+
+function assertWorkspaceFileBounds(file: LinearWorkspaceFile): void {
+  assertIntegrationAccountCount('Linear', file.workspaces.length)
+  for (const workspace of file.workspaces) {
+    assertWorkspaceBounds(workspace)
+  }
+}
+
 function emptyWorkspaceFile(): LinearWorkspaceFile {
   return {
     version: 1,
@@ -192,17 +318,49 @@ function emptyWorkspaceFile(): LinearWorkspaceFile {
 function readWorkspaceFileFromDisk(): LinearWorkspaceFile {
   const path = getWorkspaceFilePath()
   if (!existsSync(path)) {
+    workspaceFileReadError = null
     return emptyWorkspaceFile()
   }
   try {
-    const raw = readFileSync(path, { encoding: 'utf-8' })
+    const raw = readIntegrationCredentialFileSyncText(path)
     const parsed = JSON.parse(raw) as Partial<LinearWorkspaceFile>
-    const workspaces = Array.isArray(parsed.workspaces)
-      ? parsed.workspaces
-          .map((workspace) => normalizeWorkspace(workspace))
-          .filter((workspace): workspace is LinearWorkspace => workspace !== null)
-          .filter((workspace) => hasStoredToken(workspace.id))
-      : []
+    if (
+      !parsed ||
+      typeof parsed !== 'object' ||
+      Array.isArray(parsed) ||
+      parsed.version !== 1 ||
+      !Array.isArray(parsed.workspaces)
+    ) {
+      throw unreadableIntegrationAccountFileError('Linear')
+    }
+    if (typeof parsed.activeWorkspaceId === 'string') {
+      assertIntegrationStringBytes(
+        'Linear',
+        'active workspace ID',
+        parsed.activeWorkspaceId,
+        MAX_INTEGRATION_ACCOUNT_ID_BYTES
+      )
+    }
+    if (typeof parsed.selectedWorkspaceId === 'string' && parsed.selectedWorkspaceId !== 'all') {
+      assertIntegrationStringBytes(
+        'Linear',
+        'selected workspace ID',
+        parsed.selectedWorkspaceId,
+        MAX_INTEGRATION_ACCOUNT_ID_BYTES
+      )
+    }
+    const workspaces: LinearWorkspace[] = []
+    assertIntegrationAccountCount('Linear', parsed.workspaces.length)
+    for (const input of parsed.workspaces) {
+      assertStoredWorkspaceBounds(input)
+      const workspace = normalizeWorkspace(input)
+      if (!workspace) {
+        throw unreadableIntegrationAccountFileError('Linear')
+      }
+      if (hasStoredToken(workspace.id)) {
+        workspaces.push(workspace)
+      }
+    }
     const activeWorkspaceId =
       typeof parsed.activeWorkspaceId === 'string' &&
       workspaces.some((workspace) => workspace.id === parsed.activeWorkspaceId)
@@ -215,6 +373,7 @@ function readWorkspaceFileFromDisk(): LinearWorkspaceFile {
         ? parsed.selectedWorkspaceId
         : activeWorkspaceId
 
+    workspaceFileReadError = null
     return {
       version: 1,
       activeWorkspaceId,
@@ -222,6 +381,7 @@ function readWorkspaceFileFromDisk(): LinearWorkspaceFile {
       workspaces
     }
   } catch {
+    workspaceFileReadError = unreadableIntegrationAccountFileError('Linear')
     return emptyWorkspaceFile()
   }
 }
@@ -235,6 +395,10 @@ function getWorkspaceFile(): LinearWorkspaceFile {
 }
 
 function writeWorkspaceFile(file: LinearWorkspaceFile): void {
+  if (workspaceFileReadError) {
+    throw workspaceFileReadError
+  }
+  assertWorkspaceFileBounds(file)
   ensureOrcaDir()
   const persistedWorkspaces = file.workspaces.filter(
     (workspace) => workspace.id !== LEGACY_WORKSPACE_ID
@@ -255,17 +419,19 @@ function writeWorkspaceFile(file: LinearWorkspaceFile): void {
         ? file.selectedWorkspaceId
         : activeWorkspaceId
 
-  cachedWorkspaceFile = {
+  const nextFile: LinearWorkspaceFile = {
     version: 1,
     activeWorkspaceId,
     selectedWorkspaceId,
     workspaces: persistedWorkspaces
   }
-  workspaceFileLoadedFromDisk = true
-  writeFileSync(getWorkspaceFilePath(), JSON.stringify(cachedWorkspaceFile, null, 2), {
+  const serialized = serializeIntegrationAccountFile(nextFile)
+  writeFileSync(getWorkspaceFilePath(), serialized, {
     encoding: 'utf-8',
     mode: 0o600
   })
+  cachedWorkspaceFile = nextFile
+  workspaceFileLoadedFromDisk = true
 }
 
 function getLegacyWorkspace(): LinearWorkspace | null {
@@ -321,8 +487,14 @@ function clearLegacyViewerOnDisk(): void {
 }
 
 function writeEncryptedToken(path: string, apiKey: string): void {
+  assertIntegrationCredentialBytes('Linear', apiKey)
   if (safeStorage.isEncryptionAvailable()) {
     const encrypted = safeStorage.encryptString(apiKey)
+    if (encrypted.length > MAX_INTEGRATION_ACCOUNT_FILE_BYTES) {
+      throw new IntegrationAccountPersistenceLimitError(
+        `Linear encrypted credential exceeds ${MAX_INTEGRATION_ACCOUNT_FILE_BYTES} bytes.`
+      )
+    }
     writeFileSync(path, encrypted, { mode: 0o600 })
     return
   }
@@ -338,7 +510,7 @@ function saveWorkspaceToken(workspaceId: string, apiKey: string): void {
   }
   const tokenPath = getWorkspaceTokenPath(workspaceId)
   writeEncryptedToken(tokenPath, apiKey)
-  cachedTokens.set(workspaceId, apiKey)
+  cacheToken(workspaceId, apiKey)
   credentialErrors.delete(workspaceId)
 }
 
@@ -350,6 +522,12 @@ export function saveToken(apiKey: string): void {
 export function loadToken(options: { force?: boolean; workspaceId?: string } = {}): string | null {
   const workspaceId = options.workspaceId ?? resolveWorkspaceId()
   if (!workspaceId) {
+    return null
+  }
+  if (
+    workspaceId !== LEGACY_WORKSPACE_ID &&
+    !getWorkspaceState().workspaces.some((workspace) => workspace.id === workspaceId)
+  ) {
     return null
   }
   const cached = cachedTokens.get(workspaceId)
@@ -364,15 +542,19 @@ export function loadToken(options: { force?: boolean; workspaceId?: string } = {
     return null
   }
   try {
-    const raw = readFileSync(tokenPath)
+    const raw = readIntegrationCredentialFileSync(tokenPath)
     const token = readStoredCredentialToken('Linear', raw)
     if (token) {
-      cachedTokens.set(workspaceId, token)
+      assertIntegrationCredentialBytes('Linear', token)
+      cacheToken(workspaceId, token)
     }
     credentialErrors.delete(workspaceId)
     return token
   } catch (error) {
-    if (error instanceof CredentialDecryptionError) {
+    if (
+      error instanceof CredentialDecryptionError ||
+      error instanceof IntegrationAccountPersistenceLimitError
+    ) {
       credentialErrors.set(workspaceId, error.message)
       throw error
     }
@@ -401,6 +583,10 @@ function clearTokenFile(workspaceId: string): void {
 }
 
 export function clearToken(workspaceId?: string): void {
+  getWorkspaceFile()
+  if (workspaceFileReadError) {
+    throw workspaceFileReadError
+  }
   if (!workspaceId) {
     const state = getWorkspaceState()
     for (const workspace of state.workspaces) {
@@ -417,6 +603,9 @@ export function clearToken(workspaceId?: string): void {
     return
   }
 
+  if (!getWorkspaceState().workspaces.some((workspace) => workspace.id === workspaceId)) {
+    return
+  }
   clearTokenFile(workspaceId)
   if (workspaceId === LEGACY_WORKSPACE_ID) {
     cachedLegacyViewer = null
@@ -453,7 +642,10 @@ function workspaceFromLinearData(
   }
 }
 
-function upsertWorkspace(workspace: LinearWorkspace, options: { select?: boolean } = {}): void {
+function workspaceFileWithUpsert(
+  workspace: LinearWorkspace,
+  options: { select?: boolean } = {}
+): LinearWorkspaceFile {
   const file = getWorkspaceFile()
   const current = file.workspaces.find((entry) => entry.id === workspace.id)
   const credentialRevision = (current?.credentialRevision ?? 0) + 1
@@ -467,12 +659,16 @@ function upsertWorkspace(workspace: LinearWorkspace, options: { select?: boolean
     : file.selectedWorkspaceId && file.selectedWorkspaceId !== LEGACY_WORKSPACE_ID
       ? file.selectedWorkspaceId
       : workspace.id
-  writeWorkspaceFile({
+  return {
     version: 1,
     activeWorkspaceId: workspace.id,
     selectedWorkspaceId,
     workspaces
-  })
+  }
+}
+
+function upsertWorkspace(workspace: LinearWorkspace, options: { select?: boolean } = {}): void {
+  writeWorkspaceFile(workspaceFileWithUpsert(workspace, options))
 }
 
 function replaceLegacyWorkspace(workspace: LinearWorkspace, token: string): void {
@@ -486,7 +682,8 @@ function replaceLegacyWorkspace(workspace: LinearWorkspace, token: string): void
 
 function resolveWorkspaceId(workspaceId?: string | null): string | null {
   if (workspaceId && workspaceId !== 'all') {
-    return workspaceId
+    const state = getWorkspaceState()
+    return state.workspaces.some((workspace) => workspace.id === workspaceId) ? workspaceId : null
   }
   const state = getWorkspaceState()
   if (
@@ -539,7 +736,11 @@ export function getClients(
       // per-workspace credentialError for getStatus to surface, so skip this
       // workspace like a missing token. A specific-workspace selection still
       // rethrows so the renderer can surface the decrypt banner promptly.
-      if (isAllSelection && error instanceof CredentialDecryptionError) {
+      if (
+        isAllSelection &&
+        (error instanceof CredentialDecryptionError ||
+          error instanceof IntegrationAccountPersistenceLimitError)
+      ) {
         continue
       }
       throw error
@@ -580,13 +781,22 @@ export async function connect(
   { ok: true; viewer: LinearViewer; workspace: LinearWorkspace } | { ok: false; error: string }
 > {
   try {
+    assertIntegrationCredentialBytes('Linear', apiKey)
+    getWorkspaceFile()
+    if (workspaceFileReadError) {
+      throw workspaceFileReadError
+    }
     const client = new (loadLinearSdk().LinearClient)({ apiKey })
     const me = await client.viewer
     const org = await me.organization
     const workspace = workspaceFromLinearData(me, org)
 
-    saveWorkspaceToken(workspace.id, apiKey)
+    assertWorkspaceBounds(workspace)
     const legacyWorkspace = getLegacyWorkspace()
+    const candidateFile = workspaceFileWithUpsert(workspace, { select: true })
+    assertWorkspaceFileBounds(candidateFile)
+    serializeIntegrationAccountFile(candidateFile)
+    saveWorkspaceToken(workspace.id, apiKey)
     if (
       legacyWorkspace &&
       legacyWorkspace.organizationName === workspace.organizationName &&
@@ -600,7 +810,8 @@ export async function connect(
     upsertWorkspace(workspace, { select: true })
     return { ok: true, viewer: workspace, workspace }
   } catch (error) {
-    const message = error instanceof Error ? error.message : 'Failed to validate API key'
+    const message =
+      error instanceof Error ? boundedIntegrationErrorMessage(error) : 'Failed to validate API key'
     return { ok: false, error: message }
   }
 }
@@ -659,6 +870,10 @@ export async function testConnection(
 ): Promise<
   { ok: true; viewer: LinearViewer; workspace: LinearWorkspace } | { ok: false; error: string }
 > {
+  getWorkspaceFile()
+  if (workspaceFileReadError) {
+    return { ok: false, error: workspaceFileReadError.message }
+  }
   const resolvedWorkspaceId = resolveWorkspaceId(workspaceId)
   if (!resolvedWorkspaceId) {
     return { ok: false, error: 'No API key stored.' }
@@ -667,7 +882,7 @@ export async function testConnection(
   try {
     token = loadToken({ force: true, workspaceId: resolvedWorkspaceId })
   } catch (error) {
-    const message = error instanceof Error ? error.message : 'Test failed'
+    const message = error instanceof Error ? boundedIntegrationErrorMessage(error) : 'Test failed'
     return { ok: false, error: message }
   }
   if (!token) {
@@ -679,6 +894,10 @@ export async function testConnection(
     const me = await client.viewer
     const org = await me.organization
     const workspace = workspaceFromLinearData(me, org)
+    assertWorkspaceBounds(workspace)
+    const candidateFile = workspaceFileWithUpsert(workspace, { select: true })
+    assertWorkspaceFileBounds(candidateFile)
+    serializeIntegrationAccountFile(candidateFile)
     if (resolvedWorkspaceId === LEGACY_WORKSPACE_ID) {
       replaceLegacyWorkspace(workspace, token)
     } else {
@@ -690,7 +909,7 @@ export async function testConnection(
     if (isAuthError(error)) {
       clearToken(resolvedWorkspaceId)
     }
-    const message = error instanceof Error ? error.message : 'Test failed'
+    const message = error instanceof Error ? boundedIntegrationErrorMessage(error) : 'Test failed'
     return { ok: false, error: message }
   }
 }

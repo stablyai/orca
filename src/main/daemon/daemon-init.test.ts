@@ -235,6 +235,10 @@ vi.mock('fs', () => ({
   writeFileSync: writeFileSyncMock
 }))
 
+vi.mock('./daemon-control-file-reader', () => ({
+  readDaemonControlFileText: readFileSyncMock
+}))
+
 vi.mock('child_process', () => ({ fork: forkMock }))
 
 vi.mock('net', () => ({ connect: netConnectMock }))
@@ -2160,6 +2164,64 @@ describe('daemon-init: runRestartDaemon (7-step sequence)', () => {
     expect(forkMock).toHaveBeenCalled()
   })
 
+  it('stays silent about replacing a daemon on a cold start, where there is none', async () => {
+    // Why: a first launch reaches the same replace fall-through (unreachable health,
+    // no socket, nothing to probe); announcing a replacement there reports killing a
+    // daemon that never existed, on the most common path there is.
+    const mod = await importFresh()
+    await mod.initDaemonPtyProvider()
+
+    // Both pre-spawn probes fail: nothing ever answers, so no session count is observed.
+    const unreachableClient = function MockDaemonClient() {
+      return {
+        ensureConnected: vi.fn(async () => {
+          throw new Error('connect ENOENT')
+        }),
+        request: vi.fn(),
+        disconnect: vi.fn()
+      }
+    }
+    daemonClientMock
+      .mockImplementationOnce(unreachableClient)
+      .mockImplementationOnce(unreachableClient)
+
+    const launcher = spawnerInstances[0].launcher as (
+      socketPath: string,
+      tokenPath: string
+    ) => Promise<{ shutdown(): Promise<void> }>
+    checkDaemonHealthMock.mockResolvedValueOnce('unreachable')
+    probeSocketExistsMock.mockReturnValue(false)
+    forkMock.mockImplementationOnce(() => ({
+      pid: 12345,
+      on(event: string, cb: (arg?: unknown) => void) {
+        if (event === 'message') {
+          queueMicrotask(() => cb({ type: 'ready', startedAtMs: 1_000_000 }))
+        }
+        return this
+      },
+      once() {
+        return this
+      },
+      off() {
+        return this
+      },
+      disconnect: vi.fn(),
+      unref: vi.fn()
+    }))
+
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    try {
+      await launcher('/fake/socket', '/fake/token')
+
+      expect(forkMock).toHaveBeenCalled()
+      expect(warnSpy).not.toHaveBeenCalledWith(
+        expect.stringContaining('Replacing daemon that failed the health check')
+      )
+    } finally {
+      warnSpy.mockRestore()
+    }
+  })
+
   // Why: net.connect stub whose 'connect' fires, so probeSocket() reports the pipe alive on every grace re-check.
   function stubAliveSocketConnect() {
     const handlers: Record<string, (() => void)[]> = { connect: [], error: [] }
@@ -2267,6 +2329,7 @@ describe('daemon-init: runRestartDaemon (7-step sequence)', () => {
 
     // Count only the launcher's own session-count probes.
     daemonClientMock.mockClear()
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {})
 
     try {
       await launcher('/fake/socket', '/fake/token')
@@ -2279,7 +2342,16 @@ describe('daemon-init: runRestartDaemon (7-step sequence)', () => {
       expect(forkMock).toHaveBeenCalled()
       // The launcher probes the full grace budget: 1 initial probe + WEDGED_DAEMON_GRACE_RETRIES retries.
       expect(daemonClientMock).toHaveBeenCalledTimes(3 + WEDGED_DAEMON_GRACE_RETRIES)
+      // Why: this replace path used to kill the daemon with no log, so a post-hoc
+      // reader could not tell it apart from an adoption; the verdict must be recorded.
+      expect(warnSpy).toHaveBeenCalledWith(
+        expect.stringContaining('Replacing daemon that failed the health check')
+      )
+      expect(warnSpy).toHaveBeenCalledWith(
+        expect.stringContaining(`graceRetries=${WEDGED_DAEMON_GRACE_RETRIES}`)
+      )
     } finally {
+      warnSpy.mockRestore()
       // Restore the answering default: clearAllMocks clears calls not impls, so the throwing impl would leak into later tests.
       daemonClientMock.mockImplementation(answeringDefault)
     }

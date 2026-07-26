@@ -1,11 +1,18 @@
 import type { TerminalGitHubPRLink } from '../../shared/terminal-github-pr-link-detector'
 
+export type PtyDataUpstreamCredit = {
+  charCount: number
+  acknowledge(charCount: number): void
+}
+
 export type PtyDataEvent = {
   id: string
   data: string
   sequenceChars?: number
   transformed?: boolean
   seq?: number
+  /** Main-process-only credit captured from the exact provider generation that emitted this data. */
+  upstreamCredit?: PtyDataUpstreamCredit
 }
 
 /** Notification-bearing fact a thinning transport detected while it held

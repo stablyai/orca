@@ -1,7 +1,4 @@
 /* oxlint-disable react-doctor/no-adjust-state-on-prop-change -- Why: mobile browser state mirrors a remote desktop screencast session and CDP dialogs, which are external systems that cannot be derived during render. */
-// Why: import from 'buffer' (the npm polyfill), not 'node:buffer' — Metro
-// can't resolve Node's builtin in a React Native bundle.
-import { Buffer } from 'buffer'
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import {
   ActivityIndicator,
@@ -42,6 +39,10 @@ import {
   getInitialMobileBrowserViewMode,
   saveMobileBrowserViewMode
 } from './mobile-browser-view-mode-state'
+import {
+  createMobileBrowserFrameDataUri,
+  MobileBrowserFrameCache
+} from './mobile-browser-frame-cache'
 import {
   clampBrowserZoomState,
   computeBrowserFrameGeometry,
@@ -108,14 +109,7 @@ const TOUCH_CLICK_RADIUS_DIP = 14
 const MIN_ZOOM = 1
 const MAX_ZOOM = 3.5
 const DEFAULT_ZOOM: BrowserZoomState = { scale: 1, offsetX: 0, offsetY: 0 }
-const BROWSER_FRAME_CACHE_LIMIT = 4
-
-type BrowserFrameCacheEntry = {
-  uri: string
-  metadata: BrowserScreencastFrameMetadata
-}
-
-const browserFrameCache = new Map<string, BrowserFrameCacheEntry>()
+const browserFrameCache = new MobileBrowserFrameCache()
 
 type BrowserPageParams = {
   worktree: string
@@ -143,7 +137,7 @@ export function MobileBrowserPane({
     getInitialMobileBrowserViewMode(worktreeId, tab.browserPageId)
   )
   const cacheKey = makeBrowserFrameCacheKey(worktreeId, tab.browserPageId, browserViewMode)
-  const cachedInitialFrame = peekCachedBrowserFrame(cacheKey)
+  const cachedInitialFrame = browserFrameCache.peek(cacheKey)
   const [addressValue, setAddressValue] = useState(displayBrowserUrl(tab.url))
   const [addressFocused, setAddressFocused] = useState(false)
   const [addressSyncState, setAddressSyncState] = useState({
@@ -229,7 +223,7 @@ export function MobileBrowserPane({
     const subscription = AppState.addEventListener('change', (nextState) => {
       const active = nextState === 'active'
       if (!active) {
-        clearCachedBrowserFramesForWorktree(worktreeId)
+        browserFrameCache.clearWorktree(worktreeId)
       }
       setAppActive(active)
     })
@@ -280,8 +274,14 @@ export function MobileBrowserPane({
       frameMetadataRef.current = frame.metadata
       setFrameMetadata(frame.metadata)
     }
-    const nextFrameUri = createBrowserFrameDataUri(frame)
-    cacheBrowserFrame(frameCacheKey, { uri: nextFrameUri, metadata: frame.metadata })
+    const nextFrameUri = createMobileBrowserFrameDataUri(frame)
+    if (!nextFrameUri) {
+      busyRef.current = false
+      setBusy(false)
+      setError('Browser frame is too large to display safely.')
+      return
+    }
+    browserFrameCache.set(frameCacheKey, { uri: nextFrameUri, metadata: frame.metadata })
     if (!frameMountedRef.current) {
       frameUriRef.current = nextFrameUri
       frameMountedRef.current = true
@@ -389,7 +389,7 @@ export function MobileBrowserPane({
     const sameStream = Boolean(cacheKey) && lastStreamCacheKeyRef.current === cacheKey
     lastStreamCacheKeyRef.current = cacheKey
     if (!sameStream || !frameUriRef.current) {
-      const cachedFrame = getCachedBrowserFrame(cacheKey)
+      const cachedFrame = browserFrameCache.get(cacheKey)
       if (cachedFrame) {
         frameUriRef.current = cachedFrame.uri
         frameMountedRef.current = true
@@ -1303,57 +1303,12 @@ function buttonColor(enabled: boolean): string {
   return enabled ? colors.textSecondary : colors.textMuted
 }
 
-function createBrowserFrameDataUri(frame: BrowserScreencastFrame): string {
-  return `data:image/${frame.format};base64,${Buffer.from(frame.image).toString('base64')}`
-}
-
 function makeBrowserFrameCacheKey(
   worktreeId: string,
   browserPageId: string | null,
   viewMode: MobileBrowserViewMode
 ): string | null {
   return browserPageId ? `${worktreeId}:${browserPageId}:${viewMode}` : null
-}
-
-function clearCachedBrowserFramesForWorktree(worktreeId: string): void {
-  const prefix = `${worktreeId}:`
-  for (const key of browserFrameCache.keys()) {
-    if (key.startsWith(prefix)) {
-      browserFrameCache.delete(key)
-    }
-  }
-}
-
-function getCachedBrowserFrame(cacheKey: string | null): BrowserFrameCacheEntry | null {
-  if (!cacheKey) {
-    return null
-  }
-  const cached = browserFrameCache.get(cacheKey)
-  if (!cached) {
-    return null
-  }
-  browserFrameCache.delete(cacheKey)
-  browserFrameCache.set(cacheKey, cached)
-  return cached
-}
-
-function peekCachedBrowserFrame(cacheKey: string | null): BrowserFrameCacheEntry | null {
-  return cacheKey ? (browserFrameCache.get(cacheKey) ?? null) : null
-}
-
-function cacheBrowserFrame(cacheKey: string | null, entry: BrowserFrameCacheEntry): void {
-  if (!cacheKey) {
-    return
-  }
-  browserFrameCache.delete(cacheKey)
-  browserFrameCache.set(cacheKey, entry)
-  while (browserFrameCache.size > BROWSER_FRAME_CACHE_LIMIT) {
-    const oldestKey = browserFrameCache.keys().next().value
-    if (typeof oldestKey !== 'string') {
-      break
-    }
-    browserFrameCache.delete(oldestKey)
-  }
 }
 
 function updateBrowserLayerVisibility(

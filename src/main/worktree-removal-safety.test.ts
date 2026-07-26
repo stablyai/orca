@@ -190,6 +190,22 @@ describe('canSafelyRemoveOrphanedWorktreeDirectory', () => {
     ).resolves.toBe(false)
   })
 
+  it('rejects oversized git pointer metadata from filesystem providers', async () => {
+    await expect(
+      canSafelyRemoveOrphanedWorktreeDirectory(
+        '/workspaces/orphan',
+        '/repo',
+        makeStatPath(['/workspaces/orphan/.git'], ['/repo/.git']),
+        makeReadPath([
+          [
+            '/workspaces/orphan/.git',
+            `gitdir: /repo/.git/worktrees/orphan\n${'x'.repeat(64 * 1024)}`
+          ]
+        ])
+      )
+    ).resolves.toBe(false)
+  })
+
   it('rejects a copied .git file when the admin entry points at another candidate path', async () => {
     await expect(
       canSafelyRemoveOrphanedWorktreeDirectory(

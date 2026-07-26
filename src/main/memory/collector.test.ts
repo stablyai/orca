@@ -653,6 +653,53 @@ describe('collectMemorySnapshot', () => {
     expectProcessSweepCount(2)
   })
 
+  it('bounds retained worktree histories and recovers an evicted active history', async () => {
+    mockPsResponse('')
+    const {
+      collectMemorySnapshot,
+      getMemoryHistoryWorktreeCountForTests,
+      MEMORY_HISTORY_MAX_WORKTREES
+    } = await loadCollector()
+    const registrations = Array.from({ length: MEMORY_HISTORY_MAX_WORKTREES }, (_, index) => ({
+      ptyId: `pty-${index}`,
+      worktreeId: `repo::/worktree-${index}`,
+      sessionId: `session-${index}`,
+      paneKey: `pane-${index}`,
+      pid: null
+    }))
+    listRegisteredPtysMock.mockReturnValue(registrations)
+
+    await collectMemorySnapshot(emptyStore)
+    const atBoundary = await collectMemorySnapshot(emptyStore)
+
+    expect(atBoundary.worktrees.every((worktree) => worktree.history.length === 2)).toBe(true)
+    expect(getMemoryHistoryWorktreeCountForTests()).toBe(MEMORY_HISTORY_MAX_WORKTREES)
+
+    listRegisteredPtysMock.mockReturnValue([
+      ...registrations,
+      {
+        ptyId: 'pty-overflow',
+        worktreeId: 'repo::/worktree-overflow',
+        sessionId: 'session-overflow',
+        paneKey: 'pane-overflow',
+        pid: null
+      }
+    ])
+    const overflow = await collectMemorySnapshot(emptyStore)
+
+    expect(overflow.worktrees).toHaveLength(MEMORY_HISTORY_MAX_WORKTREES + 1)
+    expect(overflow.worktrees[0].history).toEqual([0])
+    expect(getMemoryHistoryWorktreeCountForTests()).toBe(MEMORY_HISTORY_MAX_WORKTREES)
+
+    listRegisteredPtysMock.mockReturnValue([registrations[0]])
+    const reactivated = await collectMemorySnapshot(emptyStore)
+    const retained = await collectMemorySnapshot(emptyStore)
+
+    expect(reactivated.worktrees[0].history).toEqual([0])
+    expect(retained.worktrees[0].history).toEqual([0, 0])
+    expect(getMemoryHistoryWorktreeCountForTests()).toBe(MEMORY_HISTORY_MAX_WORKTREES)
+  })
+
   it('uses host process RSS for Electron app metrics when available', async () => {
     mockPsResponse(['10 1 1.5 111', '20 10 2.5 222', '30 10 3.5 333'].join('\n'))
     appMetricsMock.mockReturnValue([

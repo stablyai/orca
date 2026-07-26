@@ -35,4 +35,8 @@ describe('WSL Claude plugin metadata', () => {
       'invalid response'
     )
   })
+
+  it('parses delimiter-heavy output without materializing a field array', () => {
+    expect(parseWslClaudePluginMetadataOutput('\0'.repeat(1_000_000), 2)).toEqual([null, null])
+  })
 })

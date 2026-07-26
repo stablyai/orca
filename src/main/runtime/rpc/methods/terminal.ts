@@ -53,6 +53,7 @@ import {
   TERMINAL_STREAM_CHUNK_BYTES
 } from '../../../../shared/terminal-multiplex-flow-control'
 import { drainTerminalMultiplexRoundRobin } from '../terminal-multiplex-round-robin'
+import { appendCompactedStringChunk } from '../../../../shared/string-chunk-compaction'
 
 const REQUESTED_SNAPSHOT_BYTE_BUDGET = 2 * 1024 * 1024
 const TERMINAL_OUTPUT_FLUSH_MS = 5
@@ -208,7 +209,7 @@ function createTerminalOutputBatcher(onFlush: (data: string, meta?: TerminalOutp
         flush()
         pendingCwd = meta.cwd
       }
-      chunks.push(data)
+      appendCompactedStringChunk(chunks, data)
       pendingRawLength += rawLength
       const remainingBudget = Math.max(1, TERMINAL_OUTPUT_BATCH_MAX_BYTES - bytes)
       const measurement = measureTerminalStreamByteLength(data, {
@@ -935,12 +936,7 @@ const TerminalCreateParams = z.object({
     .object({
       agentCommand: z.string().optional(),
       agentArgs: z.string(),
-      agentEnv: z.record(z.string(), z.string()),
-      ompResumeFilePath: z
-        .string()
-        .min(1)
-        .max(32 * 1024)
-        .optional()
+      agentEnv: z.record(z.string(), z.string())
     })
     .optional(),
   resumeProviderSession: z

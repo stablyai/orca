@@ -16,8 +16,10 @@ import {
   nativeChatTurnLifecycleDecoderForAgent,
   type NativeChatTurnLifecycleDecoder
 } from './transcript-turn-lifecycle'
+import { estimateTranscriptMessageRetainedBytes } from './transcript-message-retention'
 
 export const MAX_NATIVE_CHAT_TRANSCRIPT_RECORD_BYTES = 2 * 1024 * 1024
+export const MAX_NATIVE_CHAT_TRANSCRIPT_PAGE_RETAINED_BYTES = 16 * 1024 * 1024
 const TAIL_CHUNK_BYTES = 64 * 1024
 
 export type NativeChatLineDecoder = (line: string, fallbackId: string) => NativeChatMessage | null
@@ -59,6 +61,8 @@ export async function readNativeChatTranscriptTailFile(
   let lineBytes = 0
   let lineOversized = false
   let lifecycle: NativeChatTurnLifecycle | undefined
+  let retainedMessageBytes = 0
+  let pageBudgetReached = false
   try {
     const consumedTo = includeTrailingLine ? end : await findLastCompleteLineEnd(handle, end)
     if (consumedTo === 0) {
@@ -68,12 +72,16 @@ export async function readNativeChatTranscriptTailFile(
     const finalByte = Buffer.allocUnsafe(1)
     await handle.read(finalByte, 0, 1, consumedTo - 1)
     let cursor = consumedTo - (finalByte[0] === 0x0a ? 1 : 0)
-    while (cursor > 0 && newestFirst.length <= limit) {
+    while (cursor > 0 && newestFirst.length <= limit && !pageBudgetReached) {
       const start = Math.max(0, cursor - TAIL_CHUNK_BYTES)
       const buffer = Buffer.allocUnsafe(cursor - start)
       const { bytesRead } = await handle.read(buffer, 0, buffer.length, start)
       let segmentEnd = bytesRead
-      for (let index = bytesRead - 1; index >= 0 && newestFirst.length <= limit; index--) {
+      for (
+        let index = bytesRead - 1;
+        index >= 0 && newestFirst.length <= limit && !pageBudgetReached;
+        index--
+      ) {
         if (buffer[index] !== 0x0a) {
           continue
         }
@@ -89,7 +97,7 @@ export async function readNativeChatTranscriptTailFile(
       }
       cursor = start
     }
-    if (cursor === 0 && lineParts.length > 0 && newestFirst.length <= limit) {
+    if (cursor === 0 && lineParts.length > 0 && newestFirst.length <= limit && !pageBudgetReached) {
       decodeLine(0, newestFirst)
     }
     const chronological = newestFirst.toReversed()
@@ -100,7 +108,7 @@ export async function readNativeChatTranscriptTailFile(
       messages: selected.map((entry) => entry.message),
       ...(lifecycle ? { lifecycle } : {}),
       consumedTo,
-      hasMore: limit > 0 && chronological.length > limit,
+      hasMore: limit > 0 && (chronological.length > limit || pageBudgetReached),
       beforeOffset: selected[0]?.offset ?? end
     }
   } finally {
@@ -144,6 +152,12 @@ export async function readNativeChatTranscriptTailFile(
     lifecycle ??= decodeLifecycle?.(line, fallbackId) ?? undefined
     const message = decode(line, fallbackId)
     if (message) {
+      const estimatedBytes = estimateTranscriptMessageRetainedBytes(lineBytes)
+      if (estimatedBytes > MAX_NATIVE_CHAT_TRANSCRIPT_PAGE_RETAINED_BYTES - retainedMessageBytes) {
+        pageBudgetReached = true
+        return
+      }
+      retainedMessageBytes += estimatedBytes
       messages.push({ message, offset: lineOffset })
     }
   }

@@ -113,6 +113,14 @@ jobs:
       - name: Verify macOS entitlements
         run: pnpm verify:macos-entitlements
 
+      # Why: a branch built by overwriting files (instead of merging) silently reverts shipped work.
+      # Typecheck and tests cannot see it — a reverted feature still compiles and its old tests pass.
+      - name: Check for reverted merge-base work
+        if: github.event_name == 'pull_request'
+        run: |
+          git fetch --no-tags --depth=200 origin "${{ github.base_ref }}"
+          node config/scripts/check-no-merge-base-revert.mjs --base "origin/${{ github.base_ref }}" --head HEAD
+
       - name: Typecheck
         run: pnpm typecheck
 

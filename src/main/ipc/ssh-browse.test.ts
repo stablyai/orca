@@ -1,6 +1,10 @@
 import { EventEmitter } from 'node:events'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { registerSshBrowseHandler } from './ssh-browse'
+import { registerSshBrowseHandler, type RemoteDirEntry } from './ssh-browse'
+import {
+  FILESYSTEM_DIRECTORY_LIMIT_MESSAGE,
+  FILESYSTEM_DIRECTORY_MAX_RETAINED_BYTES
+} from '../../shared/filesystem-directory-listing-limit'
 
 const { handleMock, removeHandlerMock } = vi.hoisted(() => ({
   handleMock: vi.fn(),
@@ -75,6 +79,68 @@ describe('registerSshBrowseHandler', () => {
     expect(channel.listenerCount('error')).toBe(0)
     expect(channel.stderr.listenerCount('data')).toBe(0)
     expect(channel.stderr.listenerCount('error')).toBe(0)
+  })
+
+  it('closes and rejects a remote listing that exceeds the shared byte limit', async () => {
+    const channel = Object.assign(createMockChannel(), { close: vi.fn() })
+    const exec = vi.fn().mockResolvedValue(channel)
+    const getConnectionManager = () => ({ getConnection: () => ({ exec }) })
+    registerSshBrowseHandler(getConnectionManager as never)
+
+    const resultPromise = handler(null, { targetId: 'ssh-1', dirPath: '~' })
+    await Promise.resolve()
+    channel.emit('data', Buffer.alloc(FILESYSTEM_DIRECTORY_MAX_RETAINED_BYTES + 1, 0x78))
+
+    await expect(resultPromise).rejects.toThrow(FILESYSTEM_DIRECTORY_LIMIT_MESSAGE)
+    expect(channel.close).toHaveBeenCalledOnce()
+    expect(channel.listenerCount('data')).toBe(0)
+    expect(channel.stderr.listenerCount('data')).toBe(0)
+  })
+
+  it('retains tens of thousands of tiny stdout chunks without quadratic copying', async () => {
+    const channel = createMockChannel()
+    const exec = vi.fn().mockResolvedValue(channel)
+    const getConnectionManager = () => ({ getConnection: () => ({ exec }) })
+    registerSshBrowseHandler(getConnectionManager as never)
+
+    const resultPromise = handler(null, { targetId: 'ssh-1', dirPath: '~' })
+    await Promise.resolve()
+    channel.emit('data', Buffer.from('/home/user\n'))
+    for (let index = 0; index < 65_000; index += 1) {
+      channel.emit('data', Buffer.from(`f${String(index).padStart(5, '0')}\n`))
+    }
+    channel.emit('exit', 0)
+    channel.emit('close')
+
+    const result = (await resultPromise) as {
+      resolvedPath: string
+      entries: RemoteDirEntry[]
+    }
+    expect(result.resolvedPath).toBe('/home/user')
+    expect(result.entries).toHaveLength(65_000)
+    expect(result.entries[0]).toEqual({ name: 'f00000', isDirectory: false })
+    expect(result.entries.at(-1)).toEqual({ name: 'f64999', isDirectory: false })
+  })
+
+  it('decodes a filename whose UTF-8 bytes span stdout chunks', async () => {
+    const channel = createMockChannel()
+    const exec = vi.fn().mockResolvedValue(channel)
+    const getConnectionManager = () => ({ getConnection: () => ({ exec }) })
+    registerSshBrowseHandler(getConnectionManager as never)
+
+    const resultPromise = handler(null, { targetId: 'ssh-1', dirPath: '~' })
+    await Promise.resolve()
+    const output = Buffer.from('/home/user\nemoji-🙂.txt\n')
+    const emojiOffset = output.indexOf(Buffer.from('🙂'))
+    channel.emit('data', output.subarray(0, emojiOffset + 1))
+    channel.emit('data', output.subarray(emojiOffset + 1))
+    channel.emit('exit', 0)
+    channel.emit('close')
+
+    await expect(resultPromise).resolves.toEqual({
+      resolvedPath: '/home/user',
+      entries: [{ name: 'emoji-🙂.txt', isDirectory: false }]
+    })
   })
 
   it('escapes remote browse paths before invoking command ls', async () => {

@@ -9,10 +9,12 @@
 // reconnects via `relay.js --connect`, bridging the new SSH channel's stdio to the existing relay's socket.
 
 import { createServer, createConnection, type Socket, type Server } from 'node:net'
-import { join } from 'node:path'
+import { homedir } from 'node:os'
+import { resolve, join } from 'node:path'
 import { unlinkSync, existsSync, statSync } from 'node:fs'
 import {
   RELAY_SENTINEL,
+  MAX_MESSAGE_SIZE,
   FrameDecoder,
   MessageType,
   encodeJsonRpcFrame,
@@ -21,8 +23,8 @@ import {
   type JsonRpcResponse
 } from './protocol'
 import { readLaunchVersion, runConnectHandshake, setupDaemonHandshake } from './relay-handshake'
-import { RelayDispatcher } from './dispatcher'
-import { RelayContext, expandTilde } from './context'
+import { MAX_RELAY_SOCKET_CONNECTIONS, RelayDispatcher } from './dispatcher'
+import { RelayContext } from './context'
 import { PtyHandler } from './pty-handler'
 import { FsHandler } from './fs-handler'
 import { installRelayLogRotation } from './rotating-log-writer'
@@ -52,6 +54,10 @@ import { relayLogLine } from './relay-diagnostic-log'
 import { remoteCliRequestTimeoutMs } from './remote-cli-timeout'
 import { shouldReadRemoteCliStdin } from './remote-cli-stdin'
 import { registerManagedHookInstaller } from './managed-hook-installer'
+import {
+  NodeReadableTextTooLargeError,
+  readNodeReadableTextWithinLimit
+} from '../shared/node-readable-text'
 
 const DEFAULT_GRACE_MS = DEFAULT_SSH_RELAY_GRACE_PERIOD_SECONDS * 1000
 const SOCK_NAME = 'relay.sock'
@@ -282,11 +288,14 @@ async function readOrcaCliStdin(): Promise<string | undefined> {
   if (process.stdin.isTTY) {
     return undefined
   }
-  const chunks: Buffer[] = []
-  for await (const chunk of process.stdin) {
-    chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(String(chunk)))
+  try {
+    return await readNodeReadableTextWithinLimit(process.stdin, MAX_MESSAGE_SIZE)
+  } catch (error) {
+    if (error instanceof NodeReadableTextTooLargeError) {
+      throw new Error(`Remote CLI stdin exceeds ${MAX_MESSAGE_SIZE} byte relay frame limit`)
+    }
+    throw error
   }
-  return Buffer.concat(chunks).toString('utf8')
 }
 
 // ── Normal mode ──────────────────────────────────────────────────────
@@ -376,6 +385,12 @@ async function main(): Promise<void> {
           return
         }
         stdoutDrainWaiters.add(cb)
+      },
+      disconnect: () => {
+        stdoutAlive = false
+        flushStdoutDrainWaiters()
+        process.stdin.destroy()
+        process.stdout.destroy()
       }
     }
   )
@@ -401,10 +416,13 @@ async function main(): Promise<void> {
   // Why: `~` is a shell expansion Node's fs APIs don't understand; resolve it to an absolute path on the remote host before persisting.
   dispatcher.onRequest('session.resolveHome', async (params) => {
     const inputPath = params.path as string
-    // Use the shared expander so Windows `~\…` paths resolve too — a remote
-    // relay host can be Windows, where a literal `~\` would otherwise fall
-    // through unexpanded and break every downstream fs op.
-    return { resolvedPath: expandTilde(inputPath) }
+    if (inputPath === '~' || inputPath === '~/') {
+      return { resolvedPath: homedir() }
+    }
+    if (inputPath.startsWith('~/')) {
+      return { resolvedPath: resolve(homedir(), inputPath.slice(2)) }
+    }
+    return { resolvedPath: inputPath }
   })
 
   const ptyHandler = new PtyHandler(dispatcher, graceTimeMs)
@@ -608,17 +626,6 @@ async function main(): Promise<void> {
   }
 
   function attachAcceptedSocket(sock: Socket, leftover: Buffer): void {
-    // Why: remove the initial stdin data listener once a socket client is accepted, so stale SSH-channel bytes can't interleave.
-    process.stdin.pause()
-    process.stdin.removeAllListeners('data')
-
-    hasAcceptedSocketClient = true
-    acceptedSocketConnections++
-    relayLogLine(
-      `[relay] Socket client accepted (clients=${socketClients.size + 1}, accepted=${acceptedSocketConnections})`
-    )
-    cancelGrace('socket client accepted')
-
     // Why: same backpressure surface as stdout — bulk frames wait for socket drain so they can't bury interactive PTY frames.
     const sockDrainWaiters = new Set<() => void>()
     const flushSockDrainWaiters = (): void => {
@@ -630,23 +637,44 @@ async function main(): Promise<void> {
     sock.on('drain', flushSockDrainWaiters)
     sock.on('close', flushSockDrainWaiters)
     sock.on('error', flushSockDrainWaiters)
-    const clientId = dispatcher.attachClient(
-      (data) => {
-        if (!sock.destroyed) {
-          return sock.write(data)
-        }
-        return undefined
-      },
-      {
-        waitWriteDrain: (cb) => {
+    let clientId: number
+    try {
+      clientId = dispatcher.attachClient(
+        (data) => {
           if (sock.destroyed) {
-            cb()
-            return
+            return undefined
           }
-          sockDrainWaiters.add(cb)
+          return sock.write(data)
+        },
+        {
+          waitWriteDrain: (cb) => {
+            if (sock.destroyed) {
+              cb()
+              return
+            }
+            sockDrainWaiters.add(cb)
+          },
+          disconnect: () => sock.destroy()
         }
-      }
+      )
+    } catch (error) {
+      relayLogLine(
+        `[relay] Socket client rejected: ${error instanceof Error ? error.message : String(error)}`
+      )
+      sock.destroy()
+      return
+    }
+
+    // Why: remove the initial stdin data listener once a socket client is accepted, so stale SSH-channel bytes can't interleave.
+    process.stdin.pause()
+    process.stdin.removeAllListeners('data')
+
+    hasAcceptedSocketClient = true
+    acceptedSocketConnections++
+    relayLogLine(
+      `[relay] Socket client accepted (clients=${socketClients.size + 1}, accepted=${acceptedSocketConnections})`
     )
+    cancelGrace('socket client accepted')
     socketClients.set(sock, clientId)
 
     // Why: feed handshake-buffered leftover bytes before wiring sock.on('data') so frame ordering is preserved.
@@ -688,6 +716,7 @@ async function main(): Promise<void> {
         }
       })
     })
+    server.maxConnections = MAX_RELAY_SOCKET_CONNECTIONS
 
     // Why: umask 0o177 before listen makes the socket 0o600 atomically, closing the chmod-after-listen TOCTOU window.
     const shouldSetSocketUmask = !isWindowsNamedPipePath(sockPath)
@@ -857,6 +886,7 @@ async function main(): Promise<void> {
   if (detached) {
     // Why: detached stdin is /dev/null, so listening would EOF → grace → shutdown before --connect arrives; use the socket instead.
     stdoutAlive = false
+    dispatcher.invalidateClient()
     startGrace('detached startup')
   } else {
     process.stdin.on('data', (chunk: Buffer) => {

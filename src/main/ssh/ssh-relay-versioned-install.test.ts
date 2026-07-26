@@ -1,8 +1,12 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 vi.mock('fs', () => ({
-  existsSync: vi.fn(),
-  readFileSync: vi.fn()
+  existsSync: vi.fn()
+}))
+
+const readRelayVersionMarkerSyncMock = vi.hoisted(() => vi.fn())
+vi.mock('../../shared/relay-version-marker', () => ({
+  readRelayVersionMarkerSync: readRelayVersionMarkerSyncMock
 }))
 
 vi.mock('./ssh-relay-deploy-helpers', () => ({
@@ -13,7 +17,7 @@ vi.mock('./ssh-connection-utils', () => ({
   shellEscape: (s: string) => `'${s}'`
 }))
 
-import { existsSync, readFileSync } from 'node:fs'
+import { existsSync } from 'node:fs'
 import {
   readLocalFullVersion,
   computeRemoteRelayDir,
@@ -34,11 +38,11 @@ import {
 import { execCommand } from './ssh-relay-deploy-helpers'
 import { getRemoteHostPlatform } from './ssh-remote-platform'
 import type { SshConnection } from './ssh-connection'
+import { RELAY_BASE_DIRECTORY_LISTING_LIMIT_SENTINEL } from './ssh-relay-base-directory-listing'
 
 const conn = {} as SshConnection
 const mockExec = vi.mocked(execCommand)
 const mockExists = vi.mocked(existsSync)
-const mockRead = vi.mocked(readFileSync)
 
 function decodePowerShellCommand(command: string): string {
   const match = command.match(/-EncodedCommand\s+([A-Za-z0-9+/=]+)/)
@@ -52,7 +56,7 @@ describe('readLocalFullVersion', () => {
 
   it('returns trimmed contents of the .version file', () => {
     mockExists.mockReturnValue(true)
-    mockRead.mockReturnValue('0.1.0+deadbeef\n')
+    readRelayVersionMarkerSyncMock.mockReturnValue('0.1.0+deadbeef')
     expect(readLocalFullVersion('/local/relay')).toBe('0.1.0+deadbeef')
   })
 
@@ -63,7 +67,7 @@ describe('readLocalFullVersion', () => {
 
   it('throws when the .version file is empty', () => {
     mockExists.mockReturnValue(true)
-    mockRead.mockReturnValue('   \n')
+    readRelayVersionMarkerSyncMock.mockReturnValue('')
     expect(() => readLocalFullVersion('/local/relay')).toThrow(/is empty/)
   })
 })
@@ -509,7 +513,9 @@ describe('relay GC claim', () => {
     const releaseScript = decodePowerShellCommand(mockExec.mock.calls[2]?.[1] ?? '')
     expect(ownerScript).toContain('Set-Content -LiteralPath')
     expect(ownerScript).toContain('.gc-claim/.gc-owner')
-    expect(releaseScript).toContain('Get-Content -LiteralPath')
+    expect(releaseScript).toContain('[System.IO.File]::Open')
+    expect(releaseScript).toContain('New-Object byte[] 1025')
+    expect(releaseScript).not.toContain('Get-Content')
     expect(releaseScript).toContain('-cne')
     expect(releaseScript).toContain('Remove-Item -LiteralPath')
     expect(releaseScript).toContain("'RELEASED'")
@@ -568,6 +574,16 @@ describe('gcOldRelayVersions', () => {
     expect(
       commands.some((command) => command === "rm -rf '/home/u/.orca-remote/relay-0.1.0+aaa'")
     ).toBe(false)
+  })
+
+  it('does not inspect or delete entries from a capacity-limited listing', async () => {
+    mockExec.mockResolvedValueOnce(
+      `relay-0.1.0+aaa\n${RELAY_BASE_DIRECTORY_LISTING_LIMIT_SENTINEL}\n`
+    )
+
+    await gcOldRelayVersions(conn, '/home/u', '/home/u/.orca-remote/relay-0.1.0+bbb')
+
+    expect(mockExec).toHaveBeenCalledTimes(1)
   })
 
   it('cleans only strict POSIX orphan tombstones even with no relay candidates', async () => {

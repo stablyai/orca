@@ -68,15 +68,23 @@ export async function projectHostAuthenticationError(
 const OWNER_SLUG_RE = /^[A-Za-z0-9][A-Za-z0-9-]*$/
 const REPO_SLUG_RE = /^[A-Za-z0-9._-]+$/
 const REPO_SLUG_RESERVED = new Set(['.', '..'])
+const OWNER_SLUG_MAX_CHARS = 256
+const REPO_SLUG_MAX_CHARS = 1024
 
 export function isValidOwnerSlug(value: unknown): value is string {
-  return typeof value === 'string' && value.length > 0 && OWNER_SLUG_RE.test(value)
+  return (
+    typeof value === 'string' &&
+    value.length > 0 &&
+    value.length <= OWNER_SLUG_MAX_CHARS &&
+    OWNER_SLUG_RE.test(value)
+  )
 }
 
 export function isValidRepoSlug(value: unknown): value is string {
   return (
     typeof value === 'string' &&
     value.length > 0 &&
+    value.length <= REPO_SLUG_MAX_CHARS &&
     REPO_SLUG_RE.test(value) &&
     !REPO_SLUG_RESERVED.has(value)
   )

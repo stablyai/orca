@@ -154,11 +154,16 @@ export const getDeveloperPermissionsPaneSearchEntries = createLocalizedCatalog((
     ),
     keywords: [
       // Why: UI says LAN (aligned with mobile), but macOS System Settings still
-      // labels the privacy toggle "Local Network" — keep both findable.
+      // labels the privacy toggle "Local Network" — index both through the
+      // catalogs so every locale keeps the wording macOS actually shows it.
+      ...translateSearchKeyword(
+        'auto.components.settings.developer.permissions.search.87620e6416',
+        'lan'
+      ),
       ...translateSearchKeyword(
         'auto.components.settings.developer.permissions.search.fa3239cd42',
-        'lan',
-        { aliases: ['local network', 'local-network'] }
+        'local network',
+        { aliases: ['local-network'] }
       ),
       ...translateSearchKeyword(
         'auto.components.settings.developer.permissions.search.c4a4a02ea4',

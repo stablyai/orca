@@ -9,6 +9,7 @@ import { spawn as nodeSpawn } from 'node:child_process'
 import { existsSync } from 'node:fs'
 import { join } from 'node:path'
 import { getCanonicalUserDataPath } from '../persistence'
+import { GrowingByteBuffer } from '../../shared/growing-byte-buffer'
 
 export type RemoteOrcaCliRequest = {
   argv: string[]
@@ -226,8 +227,7 @@ export async function runHostOrcaCliPassthrough(
 }
 
 class CappedOutputCollector {
-  private readonly chunks: Buffer[] = []
-  private bytes = 0
+  private readonly output = new GrowingByteBuffer()
   private truncated = false
 
   constructor(private readonly maxBytes: number) {}
@@ -236,19 +236,17 @@ class CappedOutputCollector {
     if (this.truncated) {
       return
     }
-    const remaining = this.maxBytes - this.bytes
+    const remaining = this.maxBytes - this.output.byteLength
     if (chunk.length >= remaining) {
-      this.chunks.push(chunk.subarray(0, remaining))
-      this.bytes = this.maxBytes
+      this.output.append(chunk.subarray(0, remaining))
       this.truncated = true
       return
     }
-    this.chunks.push(chunk)
-    this.bytes += chunk.length
+    this.output.append(chunk)
   }
 
   toString(): string {
-    const text = Buffer.concat(this.chunks).toString('utf8')
+    const text = this.output.toString()
     return this.truncated ? `${text}\n[orca ssh cli] output truncated\n` : text
   }
 }

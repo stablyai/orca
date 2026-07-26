@@ -67,7 +67,7 @@ import { makePaneKey } from '../../../../shared/stable-pane-id'
 import { applyExpandedLayoutTo, restoreExpandedLayoutFrom } from './expand-collapse'
 import { applyTerminalAppearance, installMode2031Handlers } from './terminal-appearance'
 import { pushMode2031SeedReply } from './terminal-mode-2031-replies'
-import { handleOsc52ClipboardRequest } from './osc52-clipboard'
+import { createOsc52OscHandler } from './osc52-clipboard'
 import { showOsc52ClipboardBlockedToast } from './osc52-clipboard-blocked-toast'
 import { parseOsc7 } from './parse-osc7'
 import { guardParserHandler } from './terminal-parser-handler-guard'
@@ -110,7 +110,10 @@ import { getConnectionId } from '@/lib/connection-context'
 import { getExecutionHostIdForWorktree } from '@/lib/worktree-runtime-owner'
 import { isPaneReplaying, type ReplayingPanesRef } from './replay-guard'
 import { fitAndFocusPanes, fitPanes } from './pane-helpers'
-import { markTerminalPinnedViewport } from '@/lib/pane-manager/terminal-scroll-intent'
+import {
+  markTerminalPinnedViewport,
+  releaseTerminalScrollIntentKeys
+} from '@/lib/pane-manager/terminal-scroll-intent'
 import { syncTerminalScrollIntentSoon } from '@/lib/pane-manager/terminal-scroll-intent-settle'
 import { registerRuntimeTerminalTab, scheduleRuntimeGraphSync } from '@/runtime/sync-runtime-graph'
 import { captureParkedTerminalPaneCandidates } from './terminal-parked-tab-watchers'
@@ -802,15 +805,17 @@ export function useTerminalPaneLifecycle({
         })
         mode2031DisposablesRef.current.set(pane.id, mode2031Disposables)
 
-        // OSC 52 — TUI-initiated clipboard writes (tmux/nvim/fzf/ssh).
+        // OSC 52 — TUI-initiated clipboard writes (Zellij/tmux/nvim/fzf/ssh).
         // Why: read settingsRef at fire time so mid-session gate toggles apply; return true in both paths so xterm doesn't fall through.
         const osc52Disposable = pane.terminal.parser.registerOscHandler(
           52,
-          guardParserHandler('osc-52-clipboard', (data) =>
-            handleOsc52ClipboardRequest(data, {
-              allowClipboardWrite: settingsRef.current?.terminalAllowOsc52Clipboard === true,
-              writeClipboardText: window.api.ui.writeClipboardText,
-              onBlockedWrite: showOsc52ClipboardBlockedToast
+          guardParserHandler(
+            'osc-52-clipboard',
+            createOsc52OscHandler({
+              getSettingEnabled: () => settingsRef.current?.terminalAllowOsc52Clipboard,
+              getReplaying: () => isPaneReplaying(replayingPanesRef, pane.id),
+              writeClipboardText: (text) => window.api.ui.writeClipboardText(text),
+              showBlockedWriteToast: showOsc52ClipboardBlockedToast
             })
           )
         )
@@ -1222,6 +1227,7 @@ export function useTerminalPaneLifecycle({
         }
         const leafId = closedPane?.leafId
         if (leafId && !isDetachedToTab) {
+          releaseTerminalScrollIntentKeys([leafId])
           // Why: revoke only this pane's authority; an exact tombstone blocks queued hooks without suppressing siblings.
           const paneKey = makePaneKey(tabId, leafId)
           useAppStore.getState().retireAgentPaneAuthority(paneKey)

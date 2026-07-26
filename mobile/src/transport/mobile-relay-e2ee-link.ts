@@ -4,7 +4,9 @@ import {
 } from '../../../src/shared/mobile-relay-phone-protocol'
 import { MobileE2EEV2ClientSession } from './mobile-e2ee-v2-client-session'
 import { MobileE2EEV2PhysicalChannel } from './mobile-e2ee-v2-physical-channel'
+import { assertMobileInboundFrameSize } from './mobile-inbound-frame-queue'
 import { websocketPayloadToUint8 } from './websocket-payload-bytes'
+import { parseMobileJsonTextWithinLimits } from './mobile-json-text-admission'
 
 export class RelayOuterError extends Error {
   constructor(readonly code: number) {
@@ -32,7 +34,6 @@ export class MobileRelayE2eeLink {
   private readonly channel: MobileE2EEV2PhysicalChannel
   private outerReady = false
   private closed = false
-  private inboundChain: Promise<void> = Promise.resolve()
 
   constructor(options: MobileRelayE2eeLinkOptions) {
     this.options = options
@@ -44,16 +45,21 @@ export class MobileRelayE2eeLink {
       transport: 'relay',
       relayHostId: options.endpoint.relayHostId
     })
-    this.channel = new MobileE2EEV2PhysicalChannel({
-      session,
-      socket: this.socket,
-      deviceToken: options.deviceToken,
-      decodeBinary: websocketPayloadToUint8,
-      onAuthenticated: options.onAuthenticated,
-      onText: options.onText,
-      onBinary: options.onBinary,
-      onError: (error) => this.fail(error)
-    })
+    try {
+      this.channel = new MobileE2EEV2PhysicalChannel({
+        session,
+        socket: this.socket,
+        deviceToken: options.deviceToken,
+        decodeBinary: websocketPayloadToUint8,
+        onAuthenticated: options.onAuthenticated,
+        onText: options.onText,
+        onBinary: options.onBinary,
+        onError: (error) => this.fail(error)
+      })
+    } catch (error) {
+      this.socket.close()
+      throw error
+    }
     this.bindSocket()
   }
 
@@ -86,21 +92,25 @@ export class MobileRelayE2eeLink {
       )
     }
     this.socket.onmessage = (event) => {
-      this.inboundChain = this.inboundChain
-        .then(async () => {
-          if (this.closed) {
-            return
-          }
-          if (!this.outerReady) {
-            this.acceptHello(event.data)
-          } else {
-            await this.channel.handleMessage(event.data)
-          }
-        })
-        .catch((error: unknown) => this.fail(asError(error)))
+      if (this.closed) {
+        return
+      }
+      try {
+        if (!this.outerReady) {
+          assertMobileInboundFrameSize(event.data, 'relay hello frame too large')
+          this.acceptHello(event.data)
+        } else {
+          void this.channel.handleMessage(event.data)
+        }
+      } catch (error) {
+        this.fail(asError(error))
+      }
     }
     this.socket.onerror = () => this.fail(new Error('relay transport error'))
-    this.socket.onclose = (event) => this.fail(new RelayOuterError(event.code || 1006))
+    this.socket.onclose = (event) => {
+      this.channel.socketClosed()
+      this.fail(new RelayOuterError(event.code || 1006))
+    }
   }
 
   private acceptHello(raw: unknown): void {
@@ -109,7 +119,7 @@ export class MobileRelayE2eeLink {
     }
     let value: unknown
     try {
-      value = JSON.parse(raw)
+      value = parseMobileJsonTextWithinLimits(raw)
     } catch {
       throw new Error('invalid relay hello JSON')
     }

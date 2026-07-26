@@ -27,9 +27,11 @@ import type {
   WorktreeBaseWatchKind,
   WorktreeBaseWatchTarget
 } from './worktree-base-directory-event-filter'
+import { WORKTREE_POLLING_MAX_REPO_CONFIGS } from './worktree-polling-scan-budget'
 
 const missingRootWarnings = new Set<string>()
 const skippedWslWarnings = new Set<string>()
+let repoCapacityWarningEmitted = false
 
 function normalizeWatchKey(pathValue: string): string {
   return normalizeRuntimePathForComparison(normalize(pathValue))
@@ -179,8 +181,23 @@ async function maybeAddBaseTarget(
 export async function buildWorktreeBaseDirectoryWatchTargets(
   store: Store
 ): Promise<Map<string, WorktreeBaseWatchTarget>> {
-  const settings = store.getSettings()
   const targets = new Map<string, WorktreeBaseWatchTarget>()
+  const repoCount = store.getRepoCount()
+  if (
+    !Number.isSafeInteger(repoCount) ||
+    repoCount < 0 ||
+    repoCount > WORKTREE_POLLING_MAX_REPO_CONFIGS
+  ) {
+    if (!repoCapacityWarningEmitted) {
+      console.warn(
+        `[worktree-base-watcher] skipping background watchers for ${repoCount} repos; limit is ${WORKTREE_POLLING_MAX_REPO_CONFIGS}`
+      )
+      repoCapacityWarningEmitted = true
+    }
+    return targets
+  }
+  repoCapacityWarningEmitted = false
+  const settings = store.getSettings()
   for (const repo of store.getRepos()) {
     if (isFolderRepo(repo)) {
       continue
@@ -198,4 +215,5 @@ export async function buildWorktreeBaseDirectoryWatchTargets(
 export function clearWorktreeBaseDirectoryWatchTargetWarnings(): void {
   missingRootWarnings.clear()
   skippedWslWarnings.clear()
+  repoCapacityWarningEmitted = false
 }

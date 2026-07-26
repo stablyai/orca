@@ -2646,8 +2646,17 @@
               "blocked": {
                 "toast": {
                   "97c98f1afe": "設定を開く",
-                  "7cf51f74fd": "SSH、tmux、Neovim、fzf、または Grok からコピーするには、Terminal 設定で TUI クリップボードへの書き込みを有効にします。",
+                  "7cf51f74fd": "SSH、Zellij、tmux、Neovim、fzf、または Grok からコピーするには、Terminal 設定で TUI クリップボードへの書き込みを有効にします。",
                   "89eaa3e80b": "Terminal のクリップボードへの書き込みがブロックされました"
+                }
+              },
+              "default": {
+                "on": {
+                  "notice": {
+                    "title": "TUI からのクリップボードへの書き込みがデフォルトで有効になりました",
+                    "description": "Zellij、tmux、Neovim などのターミナルプログラムがクリップボードにコピーできるようになりました。Terminal 設定で無効にできます。",
+                    "action": "設定を開く"
+                  }
                 }
               }
             }
@@ -3657,7 +3666,8 @@
           "SourceControlActionVariableChips": {
             "1b77798d5f": "変数",
             "6b921a0ac2": "例",
-            "4bf6d88039": "（空の）"
+            "4bf6d88039": "（空の）",
+            "7377483644": "このワークスペース"
           }
         }
       },
@@ -6964,9 +6974,9 @@
           "d23b43c5be": "セットアップスクリプトの場所",
           "34a0dfa06e": "新規ワークスペースの作成時に repos セットアップ スクリプトが実行される場所。",
           "21f8da2078": "ワークスペースセットアップスクリプト",
-          "6e6480a7df": "terminal 内のプログラム (Grok、tmux、Neovim、fzf、SSH) をシステムのクリップボードにコピーします。",
+          "6e6480a7df": "terminal 内のプログラム (Zellij、tmux、Neovim、fzf、Grok、SSH) をシステムのクリップボードにコピーします。",
           "3338dcf8c1": "TUI クリップボードへの書き込みを許可する (OSC 52)",
-          "69c64a479c": "Grok、tmux、Neovim、および fzf が PTY 経由 (SSH 経由を含む) でシステム クリップボードにコピーできるようにします。",
+          "69c64a479c": "Zellij、tmux、Neovim、fzf、および Grok が PTY 経由 (SSH 経由を含む) でシステム クリップボードにコピーできるようにします。",
           "4729c645fc": "terminal の選択内容をクリップボードに自動的にコピーします。",
           "902f5dee1f": "選択時にコピー",
           "9129b7e805": "terminal ペインにマウスを移動すると、クリックしなくても terminal ペインがアクティブになります。",
@@ -7665,6 +7675,7 @@
               "e3fbc48083": "ブルートゥース",
               "c4a4a02ea4": "USB",
               "fa3239cd42": "ローカルネットワーク",
+              "87620e6416": "LAN",
               "acad3d4743": "terminal セッションから使用されるデバイス ツールと LAN アクセスを許可します。",
               "3e0131e45d": "icloud",
               "ce07159ff5": "デスクトップ",
@@ -8603,7 +8614,6 @@
             "10f9fb6fea": "設定",
             "2ade3ea490": "構成",
             "fd752b3cac": "インポート",
-            "82b63d07fe": "ghostty",
             "73e9422f19": "サポートされている Ghostty terminal 設定の 1 回限りのインポート。",
             "a979df0083": "Ghostty からインポート",
             "warp_import": {

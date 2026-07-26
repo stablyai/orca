@@ -1,7 +1,6 @@
 import type { RpcClient } from '../transport/rpc-client'
 import type { ConnectionState } from '../transport/types'
 import type { MobileImageSource } from './mobile-image-source-picker'
-import type { MobileNativeChatSendOutcome } from './mobile-native-chat-send'
 import { useMobileImageAttachment } from './use-mobile-image-attachment'
 import {
   useMobileNativeChatImageAttachments,
@@ -23,12 +22,7 @@ type Args = {
   readonly nativeChatInputLeaseReady: boolean
   readonly getActiveWorktreeConnectionId: () => Promise<string | null>
   readonly beforeTerminalSend: (terminal: string) => Promise<boolean>
-  /** Outcome-preserving so an ambiguous ('unknown') delivery after an image
-   *  paste can mark the terminal input for healing (#10228). */
-  readonly nativeChatBaseSend: (
-    text: string,
-    images?: string[]
-  ) => Promise<MobileNativeChatSendOutcome>
+  readonly nativeChatBaseSend: (text: string, images?: string[]) => Promise<boolean>
   readonly showToast: (message: string, durationMs?: number) => void
   readonly onSuccess: () => void
   readonly onError: () => void

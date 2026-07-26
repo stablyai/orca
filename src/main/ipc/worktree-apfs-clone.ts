@@ -95,24 +95,51 @@ async function getCachedDarwinFilesystemInfo(
   return pending
 }
 
+async function isSameApfsVolume(
+  source: string,
+  targetDirectory: string,
+  deps: ApfsCloneDeps,
+  cache: DarwinFilesystemCache
+): Promise<boolean> {
+  const [sourceInfo, targetInfo] = await Promise.all([
+    getCachedDarwinFilesystemInfo(source, deps, cache),
+    getCachedDarwinFilesystemInfo(targetDirectory, deps, cache)
+  ])
+  return (
+    sourceInfo.device === targetInfo.device &&
+    sourceInfo.filesystemName === 'APFS' &&
+    targetInfo.filesystemName === 'APFS'
+  )
+}
+
 async function assertSameApfsVolume(
   source: string,
   target: string,
   deps: ApfsCloneDeps,
   cache: DarwinFilesystemCache
 ): Promise<void> {
-  const [sourceInfo, targetInfo] = await Promise.all([
-    getCachedDarwinFilesystemInfo(source, deps, cache),
-    getCachedDarwinFilesystemInfo(dirname(target), deps, cache)
-  ])
-  if (
-    sourceInfo.device !== targetInfo.device ||
-    sourceInfo.filesystemName !== 'APFS' ||
-    targetInfo.filesystemName !== 'APFS'
-  ) {
+  if (!(await isSameApfsVolume(source, dirname(target), deps, cache))) {
     throw new ApfsCloneUnavailableError(
       'APFS clone-copy requires source and target on the same APFS volume'
     )
+  }
+}
+
+/** Whether copying `source` into `targetDirectory` would take the clonefile
+ *  path. Pure probe: it reuses the cached df+diskutil pair the clone itself
+ *  runs and writes nothing, so a caller can size the work before any bytes
+ *  land. A failed probe answers "no", matching the clone's own fallback to a
+ *  real copy. */
+export async function canCloneWithApfs(
+  source: string,
+  targetDirectory: string,
+  deps: ApfsCloneDeps = defaultApfsCloneDeps,
+  filesystemCache: DarwinFilesystemCache = new Map()
+): Promise<boolean> {
+  try {
+    return await isSameApfsVolume(source, targetDirectory, deps, filesystemCache)
+  } catch {
+    return false
   }
 }
 

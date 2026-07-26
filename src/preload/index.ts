@@ -3,6 +3,10 @@ import { contextBridge, ipcRenderer, webFrame, webUtils } from 'electron'
 import { electronAPI } from '@electron-toolkit/preload'
 import { preloadE2EConfig } from './e2e-config'
 import { glApi } from './gitlab'
+import {
+  subscribeFrameStreamFrames,
+  subscribeVideoStreamFrames
+} from './emulator-stream-frame-listeners'
 import type { AppIdentity } from '../shared/app-identity'
 import type { DashboardSnapshot, DashboardRevealAgentArgs } from '../shared/dashboard-snapshot'
 import type {
@@ -239,6 +243,8 @@ import type {
   ReactErrorBoundaryReportArgs,
   ReactErrorBoundaryReportResult
 } from '../shared/crash-reporting'
+import type { RendererHeapStatistics } from '../shared/renderer-heap-statistics'
+import { readRendererHeapStatistics } from './renderer-heap-statistics-reader'
 import type { PreloadApi } from './api-types'
 import {
   createUpdaterQuitAbortRelay,
@@ -984,8 +990,11 @@ const api = {
       ipcRenderer.invoke('pty:getForegroundProcess', { id }),
     inspectProcess: (
       id: string
-    ): Promise<{ foregroundProcess: string | null; hasChildProcesses: boolean }> =>
-      ipcRenderer.invoke('pty:inspectProcess', { id }),
+    ): Promise<{
+      foregroundProcess: string | null
+      hasChildProcesses: boolean
+      unavailable?: true
+    }> => ipcRenderer.invoke('pty:inspectProcess', { id }),
     confirmForegroundProcess: (id: string): Promise<string | null> =>
       ipcRenderer.invoke('pty:confirmForegroundProcess', { id }),
 
@@ -1151,7 +1160,8 @@ const api = {
     submit: (args: CrashReportSubmitArgs): Promise<CrashReportSubmitResult> =>
       ipcRenderer.invoke('crashReports:submit', args),
     copyLatestDiagnostics: (args?: CrashReportCopyDiagnosticsArgs) =>
-      ipcRenderer.invoke('crashReports:copyLatestDiagnostics', args)
+      ipcRenderer.invoke('crashReports:copyLatestDiagnostics', args),
+    readHeapStatistics: (): RendererHeapStatistics | null => readRendererHeapStatistics()
   },
 
   export: {
@@ -2592,14 +2602,7 @@ const api = {
       ipcRenderer.invoke('emulator:frameStreamStop', args),
     onFrameStreamFrame: (
       callback: (data: { streamId: string; bytes: ArrayBuffer }) => void
-    ): (() => void) => {
-      const listener = (
-        _event: Electron.IpcRendererEvent,
-        data: { streamId: string; bytes: ArrayBuffer }
-      ) => callback(data)
-      ipcRenderer.on('emulator:frameStreamFrame', listener)
-      return () => ipcRenderer.removeListener('emulator:frameStreamFrame', listener)
-    },
+    ): (() => void) => subscribeFrameStreamFrames(ipcRenderer, callback),
     onFrameStreamError: (
       callback: (data: { streamId: string; message: string }) => void
     ): (() => void) => {
@@ -2642,20 +2645,7 @@ const api = {
         keyFrame: boolean
         bytes: ArrayBuffer
       }) => void
-    ): (() => void) => {
-      const listener = (
-        _event: Electron.IpcRendererEvent,
-        data: {
-          streamId: string
-          deviceId: string
-          config: boolean
-          keyFrame: boolean
-          bytes: ArrayBuffer
-        }
-      ) => callback(data)
-      ipcRenderer.on('emulator:videoStreamFrame', listener)
-      return () => ipcRenderer.removeListener('emulator:videoStreamFrame', listener)
-    },
+    ): (() => void) => subscribeVideoStreamFrames(ipcRenderer, callback),
     onPaneFocus: (callback: (data: { worktreeId: string }) => void): (() => void) => {
       const listener = (_event: Electron.IpcRendererEvent, data: { worktreeId: string }) =>
         callback(data)
@@ -3137,6 +3127,7 @@ const api = {
     }): Promise<{ success: boolean; error?: string }> => ipcRenderer.invoke('git:commit', args),
     generateCommitMessage: (args: {
       worktreePath: string
+      worktreeId?: string
       repoId?: string
       connectionId?: string
       sourceControlAiResolvedParams?: unknown
@@ -3154,6 +3145,7 @@ const api = {
     }): Promise<void> => ipcRenderer.invoke('git:cancelGenerateCommitMessage', args),
     generatePullRequestFields: (args: {
       worktreePath: string
+      worktreeId?: string
       repoId?: string
       base: string
       title: string

@@ -12,7 +12,12 @@ vi.mock('electron', () => ({
 
 vi.mock('node:fs', () => ({
   existsSync: () => fsState.credentials !== null,
-  readFileSync: () => {
+  writeFileSync: () => {},
+  renameSync: () => {}
+}))
+
+vi.mock('../integration-credential-file', () => ({
+  readIntegrationCredentialFileSyncText: () => {
     if (fsState.readError) {
       throw fsState.readError
     }
@@ -20,9 +25,7 @@ vi.mock('node:fs', () => ({
       throw new Error('ENOENT')
     }
     return fsState.credentials
-  },
-  writeFileSync: () => {},
-  renameSync: () => {}
+  }
 }))
 
 vi.mock('node:os', () => ({ homedir: () => '/home/test' }))

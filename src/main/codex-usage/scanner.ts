@@ -1,14 +1,21 @@
 /* eslint-disable max-lines -- Why: Codex discovery, incremental parsing, attribution, and aggregation all depend on the same event-normalization rules. Keeping them together makes the duplicate-snapshot logic easier to audit when usage totals look wrong. */
 import { basename, join, win32, posix } from 'node:path'
-import { createReadStream, existsSync } from 'node:fs'
-import { realpath, readdir, stat } from 'node:fs/promises'
-import { createInterface } from 'node:readline'
+import { existsSync } from 'node:fs'
+import { realpath, stat } from 'node:fs/promises'
 import type { Repo } from '../../shared/types'
 import { areWorktreePathsEqual } from '../ipc/worktree-logic'
 import { getOrcaManagedCodexHomePath, getSystemCodexHomePath } from '../codex/codex-home-paths'
 import { getCodexAccountHomeSessionDirectories } from '../codex/codex-account-home-discovery'
 import { getLegacyCopiedCodexSessionBridgeScanPreference } from '../codex/codex-session-bridge'
 import { canonicalizeUsageWorktreePaths } from '../usage-worktree-canonicalizer'
+import { walkUsageHistoryJsonlFiles } from '../usage-history-file-discovery'
+import { readUsageHistoryJsonlLines } from '../usage-history-jsonl-reader'
+import {
+  MAX_USAGE_HISTORY_FILES,
+  UsageHistoryScanBudget,
+  UsageHistoryScanCapacityError,
+  getUsageHistoryRetainedBytes
+} from '../usage-history-scan-budget'
 import type {
   CodexUsageAttributedEvent,
   CodexUsageDailyAggregate,
@@ -93,39 +100,6 @@ async function yieldToEventLoop(): Promise<void> {
   await new Promise((resolve) => setImmediate(resolve))
 }
 
-async function walkJsonlFiles(
-  dirPath: string,
-  progress: { entriesVisited: number } = { entriesVisited: 0 }
-): Promise<string[]> {
-  const entries = await readdir(dirPath, { withFileTypes: true })
-  const files: string[] = []
-
-  for (const entry of entries) {
-    progress.entriesVisited += 1
-    if (progress.entriesVisited % YIELD_EVERY_DISCOVERY_ENTRIES === 0) {
-      await yieldToEventLoop()
-    }
-    const fullPath = join(dirPath, entry.name)
-    if (entry.isDirectory()) {
-      appendDiscoveredFiles(files, await walkJsonlFiles(fullPath, progress))
-      continue
-    }
-    if (entry.isFile() && entry.name.endsWith('.jsonl')) {
-      files.push(fullPath)
-    }
-  }
-
-  return files
-}
-
-function appendDiscoveredFiles(target: string[], source: readonly string[]): void {
-  // Why: large session directories can exceed V8's argument limit if child
-  // file arrays are spread into push().
-  for (const filePath of source) {
-    target.push(filePath)
-  }
-}
-
 export function getCodexSessionsDirectory(): string {
   // Why: Orca-launched Codex processes receive an Orca-owned CODEX_HOME, so
   // callers that need the primary runtime path should not consult ambient
@@ -148,12 +122,19 @@ function hasLegacyCopiedSessionBridgeMarkers(): boolean {
   return existsSync(join(getOrcaManagedCodexHomePath(), '.orca-session-copies'))
 }
 
-export async function listCodexSessionFiles(): Promise<string[]> {
+export async function listCodexSessionFiles(
+  budget = new UsageHistoryScanBudget()
+): Promise<string[]> {
   const files: string[] = []
   for (const dirPath of getCodexSessionDirectories()) {
     try {
-      appendDiscoveredFiles(files, await walkJsonlFiles(dirPath))
-    } catch {
+      for (const filePath of await walkUsageHistoryJsonlFiles(dirPath, budget)) {
+        files.push(filePath)
+      }
+    } catch (error) {
+      if (error instanceof UsageHistoryScanCapacityError) {
+        throw error
+      }
       // Missing or unreadable history in one home should not hide the other.
     }
   }
@@ -894,6 +875,62 @@ function mergeDailyAggregates(
   }
 }
 
+function claimCodexUsageProjection(
+  budget: UsageHistoryScanBudget,
+  sessions: readonly CodexUsageSession[],
+  dailyAggregates: readonly CodexUsageDailyAggregate[]
+): void {
+  for (const session of sessions) {
+    budget.claimProjection(
+      getUsageHistoryRetainedBytes([
+        session.sessionId,
+        session.firstTimestamp,
+        session.lastTimestamp,
+        session.primaryModel,
+        session.primaryProjectLabel,
+        session.primaryWorktreeId,
+        session.primaryRepoId
+      ])
+    )
+    for (const location of session.locationBreakdown) {
+      budget.claimProjection(
+        getUsageHistoryRetainedBytes([
+          location.locationKey,
+          location.projectLabel,
+          location.repoId,
+          location.worktreeId
+        ])
+      )
+    }
+    for (const model of session.modelBreakdown) {
+      budget.claimProjection(getUsageHistoryRetainedBytes([model.modelKey, model.modelLabel]))
+    }
+    for (const locationModel of session.locationModelBreakdown) {
+      budget.claimProjection(
+        getUsageHistoryRetainedBytes([
+          locationModel.locationKey,
+          locationModel.modelKey,
+          locationModel.modelLabel,
+          locationModel.repoId,
+          locationModel.worktreeId
+        ])
+      )
+    }
+  }
+  for (const daily of dailyAggregates) {
+    budget.claimProjection(
+      getUsageHistoryRetainedBytes([
+        daily.day,
+        daily.model,
+        daily.projectKey,
+        daily.projectLabel,
+        daily.repoId,
+        daily.worktreeId
+      ])
+    )
+  }
+}
+
 export function parseCodexUsageRecord(
   line: string,
   context: CodexUsageParseContext
@@ -997,16 +1034,14 @@ export function parseCodexUsageRecord(
 export async function parseCodexUsageFile(
   filePath: string,
   worktrees: (CodexUsageWorktreeRef & { canonicalPath: string })[],
-  options: { skipInitialBytes?: number; claimEventKey?: (eventKey: string) => boolean } = {}
+  options: {
+    skipInitialBytes?: number
+    claimEventKey?: (eventKey: string) => boolean
+    budget?: UsageHistoryScanBudget
+  } = {}
 ): Promise<CodexUsagePersistedFile> {
+  const budget = options.budget ?? new UsageHistoryScanBudget()
   const processedFile = await getProcessedFileInfo(filePath)
-  const lines = createInterface({
-    input: createReadStream(filePath, {
-      encoding: 'utf-8',
-      start: options.skipInitialBytes ?? 0
-    }),
-    crlfDelay: Infinity
-  })
   const events: CodexUsageAttributedEvent[] = []
   const context: CodexUsageParseContext = {
     sessionId: basename(filePath, '.jsonl'),
@@ -1021,7 +1056,9 @@ export async function parseCodexUsageFile(
 
   const ownedEventKeys = new Set<string>()
   let hasDeferredClaims = false
-  for await (const line of lines) {
+  for await (const line of readUsageHistoryJsonlLines(filePath, {
+    start: options.skipInitialBytes ?? 0
+  })) {
     const parsed = parseCodexUsageRecord(line, context)
     if (!parsed) {
       continue
@@ -1033,6 +1070,18 @@ export async function parseCodexUsageFile(
       hasDeferredClaims = true
       continue
     }
+    budget.claimRecord(
+      getUsageHistoryRetainedBytes([
+        parsed.sessionId,
+        parsed.timestamp,
+        parsed.eventKey,
+        parsed.cwd,
+        parsed.model
+      ])
+    )
+    if (!ownedEventKeys.has(parsed.eventKey)) {
+      budget.claimOwnershipKey(parsed.eventKey)
+    }
     ownedEventKeys.add(parsed.eventKey)
     const attributed = await attributeCodexUsageEvent(parsed, worktrees)
     if (attributed) {
@@ -1040,9 +1089,11 @@ export async function parseCodexUsageFile(
     }
   }
 
+  const aggregates = aggregateCodexUsage(events)
+  claimCodexUsageProjection(budget, aggregates.sessions, aggregates.dailyAggregates)
   return {
     ...processedFile,
-    ...aggregateCodexUsage(events),
+    ...aggregates,
     ownedEventKeys: [...ownedEventKeys],
     hasDeferredClaims
   }
@@ -1056,7 +1107,14 @@ export async function scanCodexUsageFiles(
   sessions: CodexUsageSession[]
   dailyAggregates: CodexUsageDailyAggregate[]
 }> {
-  const files = await listCodexSessionFiles()
+  if (previousProcessedFiles.length > MAX_USAGE_HISTORY_FILES) {
+    throw new UsageHistoryScanCapacityError('files', MAX_USAGE_HISTORY_FILES)
+  }
+  const budget = new UsageHistoryScanBudget()
+  const files = await listCodexSessionFiles(budget)
+  for (const previous of previousProcessedFiles) {
+    budget.claimPath(previous.path)
+  }
   const previousByPath = new Map(previousProcessedFiles.map((file) => [file.path, file]))
   const worktreesWithCanonicalPaths = await buildWorktreesWithCanonicalPaths(worktrees)
   const legacySourceSkipBytesByPath = getLegacySourceSkipBytesByPath(files)
@@ -1107,7 +1165,12 @@ export async function scanCodexUsageFiles(
   // deterministic.
   const eventOwnerByKey = new Map<string, string>()
   for (const [filePath, previous] of reusedByPath) {
+    for (const session of previous.sessions) {
+      budget.claimRecords(session.eventCount)
+    }
+    claimCodexUsageProjection(budget, previous.sessions, previous.dailyAggregates)
     for (const eventKey of previous.ownedEventKeys) {
+      budget.claimOwnershipKey(eventKey)
       // First cached claim wins so conflicting projections stay deterministic.
       if (!eventOwnerByKey.has(eventKey)) {
         eventOwnerByKey.set(eventKey, filePath)
@@ -1119,6 +1182,7 @@ export async function scanCodexUsageFiles(
   for (const [index, filePath] of pathsToParse.entries()) {
     const processed = await parseCodexUsageFile(filePath, worktreesWithCanonicalPaths, {
       skipInitialBytes: legacySourceSkipBytesByPath.get(filePath) ?? 0,
+      budget,
       claimEventKey: (eventKey) => {
         const owner = eventOwnerByKey.get(eventKey)
         if (owner !== undefined && owner !== filePath) {
@@ -1151,14 +1215,17 @@ export async function scanCodexUsageFiles(
     mergeDailyAggregates(dailyByKey, processed.dailyAggregates)
   }
 
+  const sessions = finalizeSessions(sessionsById)
+  const dailyAggregates = [...dailyByKey.values()].sort((left, right) =>
+    left.day === right.day
+      ? left.projectLabel.localeCompare(right.projectLabel)
+      : left.day.localeCompare(right.day)
+  )
+  claimCodexUsageProjection(budget, sessions, dailyAggregates)
   return {
     processedFiles,
-    sessions: finalizeSessions(sessionsById),
-    dailyAggregates: [...dailyByKey.values()].sort((left, right) =>
-      left.day === right.day
-        ? left.projectLabel.localeCompare(right.projectLabel)
-        : left.day.localeCompare(right.day)
-    )
+    sessions,
+    dailyAggregates
   }
 }
 

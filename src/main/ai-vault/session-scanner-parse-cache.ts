@@ -1,4 +1,3 @@
-import { createReadStream } from 'node:fs'
 import { open } from 'node:fs/promises'
 import type { AiVaultSession } from '../../shared/ai-vault-types'
 import { createAntigravitySessionResumeState } from './session-scanner-antigravity-parser'
@@ -14,28 +13,21 @@ import {
 } from './session-scanner-secondary-parsers'
 import { countSubagentTranscripts } from './session-scanner-subagent-transcripts'
 import type { ResumableSessionParseState, SessionFileCandidate } from './session-scanner-types'
+import { consumeAiVaultJsonlLines } from './session-jsonl-line-reader'
+import {
+  getSessionParseCacheEntry,
+  resetSessionParseCacheRetentionForTests,
+  storeSessionParseCacheEntry,
+  type SessionParseCacheEntry
+} from './session-parse-cache-retention'
 
-// Sized past the default recency cap (1000) plus the in-scope cap (2000) so a
-// full steady-state result set stays resident between forced rescans.
-const MAX_CACHE_ENTRIES = 4096
+export {
+  seedSessionParseCache,
+  snapshotSessionParseCacheForPersistence,
+  type PersistedSessionParseCacheEntry
+} from './session-parse-cache-retention'
 
 const NEWLINE_BYTE = 0x0a
-const CARRIAGE_RETURN_BYTE = 0x0d
-
-type ResumePoint = {
-  state: ResumableSessionParseState
-  // Byte offset just past the last complete ('\n'-terminated) line consumed;
-  // a trailing unterminated line is deliberately left before this point.
-  byteOffset: number
-}
-
-type SessionParseCacheEntry = {
-  mtimeMs: number
-  sizeBytes: number | null
-  platform: NodeJS.Platform
-  session: AiVaultSession | null
-  resume: ResumePoint | null
-}
 
 // Incremental append-parsing applies only to transcripts that are append-only
 // JSONL line-folds. Whole-JSON documents (grok/rovo/devin/hermes/gemini-json)
@@ -91,67 +83,8 @@ export function createSessionParseStats(): SessionParseStats {
   return { reused: 0, incremental: 0, fullParses: 0, bytesRead: 0 }
 }
 
-const cache = new Map<string, SessionParseCacheEntry>()
-
 export function resetSessionParseCacheForTests(): void {
-  cache.clear()
-}
-
-// Persisted subset of a cache entry: the non-serializable `resume` parser
-// state is dropped (see session-parse-cache-persistence.ts).
-export type PersistedSessionParseCacheEntry = Omit<SessionParseCacheEntry, 'resume'>
-
-export function snapshotSessionParseCacheForPersistence(): [
-  string,
-  PersistedSessionParseCacheEntry
-][] {
-  return [...cache].map(([path, entry]): [string, PersistedSessionParseCacheEntry] => [
-    path,
-    {
-      mtimeMs: entry.mtimeMs,
-      sizeBytes: entry.sizeBytes,
-      platform: entry.platform,
-      session: entry.session
-    }
-  ])
-}
-
-// Seeded entries carry `resume: null`: after a restart an unchanged file is a
-// cache hit; a file that changed while the app was closed pays one full
-// (not incremental) re-parse.
-export function seedSessionParseCache(
-  entries: Iterable<[string, PersistedSessionParseCacheEntry]>
-): void {
-  const list = [...entries]
-  // Snapshot order is oldest→newest (LRU); an over-cap list keeps the newest
-  // tail rather than seeding the oldest entries and dropping the tail.
-  for (const [path, entry] of list.slice(Math.max(0, list.length - MAX_CACHE_ENTRIES))) {
-    if (cache.size >= MAX_CACHE_ENTRIES) {
-      return
-    }
-    // In-process entries are always fresher than persisted ones; never clobber.
-    if (cache.has(path)) {
-      continue
-    }
-    cache.set(path, {
-      mtimeMs: entry.mtimeMs,
-      sizeBytes: entry.sizeBytes,
-      platform: entry.platform,
-      session: entry.session,
-      resume: null
-    })
-  }
-}
-
-function storeEntry(path: string, entry: SessionParseCacheEntry): void {
-  cache.delete(path)
-  cache.set(path, entry)
-  if (cache.size > MAX_CACHE_ENTRIES) {
-    const oldest = cache.keys().next()
-    if (!oldest.done) {
-      cache.delete(oldest.value)
-    }
-  }
+  resetSessionParseCacheRetentionForTests()
 }
 
 /**
@@ -169,7 +102,7 @@ export async function parseAgentSessionFileCached(
   stats?: SessionParseStats
 ): Promise<AiVaultSession | null> {
   const { file } = candidate
-  const entry = cache.get(file.path)
+  const entry = getSessionParseCacheEntry(file.path)
 
   const unchanged =
     entry !== undefined &&
@@ -190,7 +123,7 @@ export async function parseAgentSessionFileCached(
         entry.session = { ...entry.session, subagentTranscriptCount }
       }
     }
-    storeEntry(file.path, entry)
+    storeSessionParseCacheEntry(file.path, entry)
     return entry.session
   }
 
@@ -203,7 +136,7 @@ export async function parseAgentSessionFileCached(
       stats,
       stateFactory
     })
-    storeEntry(file.path, parsed)
+    storeSessionParseCacheEntry(file.path, parsed)
     return parsed.session
   }
 
@@ -212,7 +145,7 @@ export async function parseAgentSessionFileCached(
     stats.bytesRead += file.sizeBytes ?? 0
   }
   const session = await parseAgentSessionFile(candidate, platform)
-  storeEntry(file.path, {
+  storeSessionParseCacheEntry(file.path, {
     mtimeMs: file.mtimeMs,
     sizeBytes: file.sizeBytes ?? null,
     platform,
@@ -250,7 +183,7 @@ async function parseResumableCandidate(args: {
     }
   }
 
-  const readResult = await consumeCompleteJsonlLines({
+  const readResult = await consumeAiVaultJsonlLines({
     path: file.path,
     start: startOffset,
     onLine: (line) => state.consumeLine(line)
@@ -292,50 +225,5 @@ async function endsWithNewlineAt(path: string, offset: number): Promise<boolean>
     return bytesRead === 1 && buffer[0] === NEWLINE_BYTE
   } finally {
     await handle.close()
-  }
-}
-
-type JsonlReadResult = {
-  consumedThrough: number
-  trailingPartialLine: string | null
-  bytesRead: number
-}
-
-// Byte-accurate replacement for readline: offsets must count bytes (not
-// UTF-8-decoded characters) so a resumed read starts exactly where the last
-// complete line ended.
-async function consumeCompleteJsonlLines(args: {
-  path: string
-  start: number
-  onLine: (line: string) => void
-}): Promise<JsonlReadResult> {
-  let consumedThrough = args.start
-  let bytesRead = 0
-  let remainder: Buffer | null = null
-
-  const stream = createReadStream(args.path, { start: args.start })
-  for await (const chunk of stream as AsyncIterable<Buffer>) {
-    bytesRead += chunk.length
-    const data = remainder ? Buffer.concat([remainder, chunk]) : chunk
-    let lineStart = 0
-    let newlineIndex = data.indexOf(NEWLINE_BYTE, lineStart)
-    while (newlineIndex !== -1) {
-      let lineEnd = newlineIndex
-      if (lineEnd > lineStart && data[lineEnd - 1] === CARRIAGE_RETURN_BYTE) {
-        lineEnd--
-      }
-      args.onLine(data.toString('utf-8', lineStart, lineEnd))
-      lineStart = newlineIndex + 1
-      newlineIndex = data.indexOf(NEWLINE_BYTE, lineStart)
-    }
-    consumedThrough += lineStart
-    // Copy the tail so retaining it doesn't pin the whole chunk buffer.
-    remainder = lineStart < data.length ? Buffer.from(data.subarray(lineStart)) : null
-  }
-
-  return {
-    consumedThrough,
-    trailingPartialLine: remainder && remainder.length > 0 ? remainder.toString('utf-8') : null,
-    bytesRead
   }
 }

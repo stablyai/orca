@@ -1,16 +1,9 @@
 import { execFile } from 'node:child_process'
-import {
-  accessSync,
-  chmodSync,
-  constants,
-  existsSync,
-  mkdirSync,
-  readFileSync,
-  writeFileSync
-} from 'node:fs'
+import { accessSync, chmodSync, constants, existsSync, mkdirSync, writeFileSync } from 'node:fs'
 import { app } from 'electron'
 import { platform, tmpdir } from 'node:os'
 import { delimiter, dirname, join } from 'node:path'
+import { nodeFileContentsEqualSync } from '../../shared/node-file-content-equality'
 import { EmulatorError } from './emulator-errors'
 import { materializeServeSimRuntime } from './serve-sim-runtime-materializer'
 
@@ -45,8 +38,10 @@ function ensureMacOpenShim(): string | null {
   }
   try {
     mkdirSync(MAC_OPEN_SHIM_DIR, { recursive: true })
-    const current = existsSync(MAC_OPEN_SHIM_PATH) ? readFileSync(MAC_OPEN_SHIM_PATH, 'utf8') : ''
-    if (current !== MAC_OPEN_SHIM) {
+    if (
+      !existsSync(MAC_OPEN_SHIM_PATH) ||
+      !nodeFileContentsEqualSync(MAC_OPEN_SHIM_PATH, MAC_OPEN_SHIM)
+    ) {
       writeFileSync(MAC_OPEN_SHIM_PATH, MAC_OPEN_SHIM, { mode: 0o755 })
     }
     chmodSync(MAC_OPEN_SHIM_PATH, 0o755)

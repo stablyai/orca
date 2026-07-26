@@ -10,6 +10,15 @@ export { glabExecFileAsync, gitExecFileAsync }
 export { classifyGlabError, classifyListIssuesError } from './glab-error-classification'
 export {
   DEFAULT_GITLAB_HOSTS,
+  GLAB_KNOWN_HOST_MAX_BYTES,
+  GLAB_KNOWN_HOSTS_CONTEXT_KEYS_MAX_BYTES,
+  GLAB_KNOWN_HOSTS_CONTEXT_KEY_MAX_BYTES,
+  GLAB_KNOWN_HOSTS_CONTEXT_MAX_ENTRIES,
+  GLAB_KNOWN_HOSTS_MAX_BYTES,
+  GLAB_KNOWN_HOSTS_MAX_ENTRIES,
+  GLAB_KNOWN_HOSTS_MAX_IN_FLIGHT,
+  GLAB_KNOWN_HOSTS_OUTPUT_MAX_BYTES,
+  _getKnownHostsCacheState,
   _getProjectRefCacheSize,
   _resetKnownHostsCache,
   _resetProjectRefCache,
@@ -21,6 +30,7 @@ export {
   glabRepoExecOptions,
   parseGlabAuthStatusHosts,
   parseGitLabProjectRef,
+  rememberGlabKnownHost,
   resolveIssueSource
 } from './gitlab-project-ref-resolution'
 export type {

@@ -1,8 +1,22 @@
 import { describe, it, expect, vi, afterEach } from 'vitest'
-import { buildPrintToPdfOptions, CdpPdfStreamStore } from './cdp-print-to-pdf'
+import {
+  buildPrintToPdfOptions,
+  CDP_PDF_MAX_RETAINED_STREAMS,
+  CDP_PDF_MEMORY_LIMIT_ERROR,
+  CdpPdfRetentionBudget,
+  CdpPdfStreamStore
+} from './cdp-print-to-pdf'
+import type { CdpPdfStreamStoreOptions } from './cdp-print-to-pdf'
 
 const DEFAULT_MARGIN_INCHES = 1 / 2.54
 const TTL_MS = 5 * 60 * 1000
+const stores = new Set<CdpPdfStreamStore>()
+
+function createStore(options: CdpPdfStreamStoreOptions = {}): CdpPdfStreamStore {
+  const store = new CdpPdfStreamStore(options)
+  stores.add(store)
+  return store
+}
 
 describe('buildPrintToPdfOptions', () => {
   it('returns empty options for empty params', () => {
@@ -78,11 +92,15 @@ describe('buildPrintToPdfOptions', () => {
 
 describe('CdpPdfStreamStore', () => {
   afterEach(() => {
+    for (const store of stores) {
+      store.clear()
+    }
+    stores.clear()
     vi.useRealTimers()
   })
 
   it('claims only its own handles', () => {
-    const store = new CdpPdfStreamStore()
+    const store = createStore()
     const handle = store.create(Buffer.from('pdf'))
 
     expect(store.ownsHandle({ handle })).toBe(true)
@@ -93,12 +111,12 @@ describe('CdpPdfStreamStore', () => {
   })
 
   it('mints distinct handles per stream', () => {
-    const store = new CdpPdfStreamStore()
+    const store = createStore()
     expect(store.create(Buffer.from('a'))).not.toBe(store.create(Buffer.from('b')))
   })
 
   it('reads sequential chunks and reports eof', () => {
-    const store = new CdpPdfStreamStore()
+    const store = createStore()
     const handle = store.create(Buffer.from('abcdef'))
 
     expect(store.read({ handle, size: 2 })).toEqual({
@@ -112,7 +130,7 @@ describe('CdpPdfStreamStore', () => {
   })
 
   it('honors an explicit read offset', () => {
-    const store = new CdpPdfStreamStore()
+    const store = createStore()
     const handle = store.create(Buffer.from('abcdef'))
 
     expect(store.read({ handle, offset: 4 })).toEqual({
@@ -122,20 +140,20 @@ describe('CdpPdfStreamStore', () => {
   })
 
   it('returns an empty eof chunk when reading past the end', () => {
-    const store = new CdpPdfStreamStore()
+    const store = createStore()
     const handle = store.create(Buffer.from('abc'))
 
     expect(store.read({ handle, offset: 99 })).toEqual({ data: '', eof: true })
   })
 
   it('returns null for unknown handles', () => {
-    const store = new CdpPdfStreamStore()
+    const store = createStore()
     expect(store.read({ handle: 'nope' })).toBeNull()
     expect(store.read({})).toBeNull()
   })
 
   it('drops a stream on close', () => {
-    const store = new CdpPdfStreamStore()
+    const store = createStore()
     const handle = store.create(Buffer.from('abc'))
 
     store.close({ handle })
@@ -143,7 +161,7 @@ describe('CdpPdfStreamStore', () => {
   })
 
   it('drops all streams on clear', () => {
-    const store = new CdpPdfStreamStore()
+    const store = createStore()
     const handle = store.create(Buffer.from('abc'))
 
     store.clear()
@@ -152,7 +170,7 @@ describe('CdpPdfStreamStore', () => {
 
   it('evicts an abandoned stream after the TTL', () => {
     vi.useFakeTimers()
-    const store = new CdpPdfStreamStore()
+    const store = createStore()
     const handle = store.create(Buffer.from('abc'))
 
     vi.advanceTimersByTime(TTL_MS + 1)
@@ -161,12 +179,75 @@ describe('CdpPdfStreamStore', () => {
 
   it('refreshes the TTL on each read', () => {
     vi.useFakeTimers()
-    const store = new CdpPdfStreamStore()
+    const store = createStore()
     const handle = store.create(Buffer.from('abcdef'))
 
     vi.advanceTimersByTime(TTL_MS - 1)
     expect(store.read({ handle, size: 1 })).not.toBeNull()
     vi.advanceTimersByTime(TTL_MS - 1)
     expect(store.read({ handle, size: 1 })).not.toBeNull()
+  })
+
+  it('rejects aggregate stream retention past its count or byte budget', () => {
+    const store = createStore({ maxStreams: 2, maxRetainedBytes: 5 })
+    const first = store.create(Buffer.from('ab'))
+    store.create(Buffer.from('cde'))
+
+    expect(() => store.create(Buffer.alloc(0))).toThrow(CDP_PDF_MEMORY_LIMIT_ERROR)
+    store.close({ handle: first })
+    expect(() => store.create(Buffer.from('fg'))).not.toThrow()
+    expect(() => createStore({ maxRetainedBytes: 5 }).create(Buffer.alloc(6))).toThrow(
+      CDP_PDF_MEMORY_LIMIT_ERROR
+    )
+    store.clear()
+  })
+
+  it('clamps oversized IO.read requests to a bounded base64 chunk', () => {
+    const store = createStore({ maxReadChunkBytes: 2 })
+    const handle = store.create(Buffer.from('abcdef'))
+
+    expect(store.read({ handle, size: Number.MAX_SAFE_INTEGER })).toEqual({
+      data: Buffer.from('ab').toString('base64'),
+      eof: false
+    })
+    store.clear()
+  })
+
+  it('shares the default retained-stream cap across independent proxy stores', () => {
+    const admitted = Array.from({ length: CDP_PDF_MAX_RETAINED_STREAMS }, () => {
+      const store = createStore()
+      return { handle: store.create(Buffer.alloc(0)), store }
+    })
+    const overflow = createStore()
+
+    expect(() => overflow.create(Buffer.alloc(0))).toThrow(CDP_PDF_MEMORY_LIMIT_ERROR)
+
+    admitted[0]!.store.close({ handle: admitted[0]!.handle })
+    expect(() => overflow.create(Buffer.alloc(0))).not.toThrow()
+  })
+
+  it('releases a shared byte budget on close, expiry, clear, and failed admission', () => {
+    vi.useFakeTimers()
+    const budget = new CdpPdfRetentionBudget(4, 5)
+    const first = createStore({ maxRetainedBytes: 5, retentionBudget: budget })
+    const second = createStore({ maxRetainedBytes: 5, retentionBudget: budget })
+    const firstHandle = first.create(Buffer.from('abc'))
+    const secondHandle = second.create(Buffer.from('de'))
+
+    expect(budget.inspect()).toEqual({ retainedBytes: 5, retainedStreams: 2 })
+    expect(() => second.create(Buffer.from('f'))).toThrow(CDP_PDF_MEMORY_LIMIT_ERROR)
+    expect(budget.inspect()).toEqual({ retainedBytes: 5, retainedStreams: 2 })
+
+    first.close({ handle: firstHandle })
+    expect(budget.inspect()).toEqual({ retainedBytes: 2, retainedStreams: 1 })
+    second.close({ handle: secondHandle })
+    const expiring = first.create(Buffer.from('xy'))
+    expect(first.read({ handle: expiring })).not.toBeNull()
+    vi.advanceTimersByTime(TTL_MS + 1)
+    expect(budget.inspect()).toEqual({ retainedBytes: 0, retainedStreams: 0 })
+
+    first.create(Buffer.from('z'))
+    first.clear()
+    expect(budget.inspect()).toEqual({ retainedBytes: 0, retainedStreams: 0 })
   })
 })

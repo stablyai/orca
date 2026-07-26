@@ -111,7 +111,13 @@ describe('resolveGitHubPrStartPoint', () => {
       resolveRemote: async () => 'origin'
     })
 
-    expect(getPullRequestPushTargetMock).toHaveBeenCalledWith('/repo-root', 1849, null)
+    expect(getPullRequestPushTargetMock).toHaveBeenCalledWith(
+      '/repo-root',
+      1849,
+      null,
+      {},
+      undefined
+    )
     expect(result).toEqual({
       baseBranch: 'def456',
       headSha: 'def456',
@@ -144,7 +150,13 @@ describe('resolveGitHubPrStartPoint', () => {
       resolveRemote: async () => 'origin'
     })
 
-    expect(getPullRequestPushTargetMock).toHaveBeenCalledWith('/repo-root', 1849, null)
+    expect(getPullRequestPushTargetMock).toHaveBeenCalledWith(
+      '/repo-root',
+      1849,
+      null,
+      {},
+      undefined
+    )
     expect(fetchPullRequestHeadRefMock).toHaveBeenCalledWith('origin', 1849)
     expect(result).toEqual({
       baseBranch: 'abc123',
@@ -383,13 +395,21 @@ describe('resolveGitHubPrStartPoint', () => {
     const result = await resolveGitHubPrStartPoint({
       repoPath: '/repo-root',
       prNumber: 1738,
+      issueSourcePreference: 'origin',
       gitExec,
       fetchRemoteTrackingRef,
       fetchPullRequestHeadRef: fetchPullRequestHeadRefMock,
       resolveRemote: async () => 'origin'
     })
 
-    expect(getWorkItemMock).toHaveBeenCalledWith('/repo-root', 1738, 'pr', null)
+    expect(getWorkItemMock).toHaveBeenCalledWith('/repo-root', 1738, 'pr', null, {}, 'origin')
+    expect(getPullRequestPushTargetMock).toHaveBeenCalledWith(
+      '/repo-root',
+      1738,
+      null,
+      {},
+      'origin'
+    )
     expect(result).toEqual({
       baseBranch: 'abc123',
       compareBaseRef: 'refs/remotes/origin/main',

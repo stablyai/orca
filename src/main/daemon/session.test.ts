@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { PRE_READY_STDIN_MAX_CODE_UNITS } from './session'
 import { PRODUCER_PAUSE_FAILSAFE_MS, SESSION_FORCE_KILL_RETRY_MS, Session } from './session'
 import type { SessionState, ShellReadyState } from './types'
 import type { TuiAgent } from '../../shared/types'
@@ -350,6 +351,19 @@ describe('Session', () => {
       subprocess.simulateData('\r\nuser@host $ ')
       vi.advanceTimersByTime(30)
       expect(subprocess.written).toEqual(['first\n', 'second\n'])
+    })
+
+    it('bounds aggregate input retained before shell readiness without changing admitted writes', () => {
+      createSession({ shellReadySupported: true })
+      const chunk = 'x'.repeat(16 * 1024)
+      const admittedChunks = PRE_READY_STDIN_MAX_CODE_UNITS / chunk.length
+
+      for (let index = 0; index < admittedChunks; index += 1) {
+        session.write(chunk)
+      }
+      expect(() => session.write('overflow')).toThrow('safe memory limit')
+      vi.advanceTimersByTime(15_000)
+      expect(subprocess.written).toEqual(Array(admittedChunks).fill(chunk))
     })
 
     it('uses the short settle path when marker and prompt bytes arrive together', () => {

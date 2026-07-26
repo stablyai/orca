@@ -1,9 +1,10 @@
 import { app } from 'electron'
-import { existsSync, mkdirSync, readFileSync } from 'node:fs'
+import { existsSync, mkdirSync } from 'node:fs'
 import { homedir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { getVersionManagerBinPaths } from '../codex-cli/command'
 import { getMainE2EConfig } from '../e2e-config'
+import { readPersistedStateJsonFileSync } from '../../shared/persisted-state-file-bounds'
 
 const DEV_PARENT_SHUTDOWN_GRACE_MS = 3000
 const HTTP1_COMPATIBILITY_ENV_VAR = 'ORCA_DISABLE_HTTP2'
@@ -37,9 +38,9 @@ function readPersistedHttp1CompatibilityMode(userDataPath: string): boolean {
   }
 
   try {
-    const parsed = JSON.parse(readFileSync(dataFile, 'utf-8')) as {
+    const { value: parsed } = readPersistedStateJsonFileSync<{
       settings?: { electronHttp1CompatibilityMode?: unknown }
-    }
+    }>(dataFile)
     return parsed.settings?.electronHttp1CompatibilityMode === true
   } catch {
     return false
@@ -260,6 +261,13 @@ export function enableMainProcessGpuFeatures(): void {
     app.disableHardwareAcceleration()
     app.commandLine.appendSwitch('disable-gpu')
     return
+  }
+
+  if (process.platform === 'darwin') {
+    // Why: Graphite can strand corrupt Metal tiles after idle; Ganesh preserves GPU compositing without the stale surface.
+    // Reached on every macOS launch only because GPU fallback skips this function and is win32-only; if fallback ever
+    // reaches macOS this must move out of this path or Macs silently lose the fix.
+    app.commandLine.appendSwitch('disable-skia-graphite')
   }
 
   // Why: Blink evicts the oldest WebGL context past 16/renderer and each terminal pane holds one, silently downgrading panes to DOM.

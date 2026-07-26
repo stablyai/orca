@@ -1,4 +1,7 @@
 import nacl from 'tweetnacl'
+import { MAX_E2EE_ENCRYPTED_BASE64_CHARACTERS } from '../../../shared/e2ee-crypto'
+
+export const WEB_E2EE_PUBLIC_KEY_MAX_BASE64_CHARACTERS = 44
 
 if (globalThis.crypto?.getRandomValues) {
   nacl.setPRNG((bytes, count) => {
@@ -15,6 +18,9 @@ export function deriveSharedKey(ourSecretKey: Uint8Array, peerPublicKey: Uint8Ar
 }
 
 export function publicKeyFromBase64(b64: string): Uint8Array {
+  if (b64.length > WEB_E2EE_PUBLIC_KEY_MAX_BASE64_CHARACTERS) {
+    throw new Error('Invalid public key: encoded value is too large')
+  }
   const key = base64ToBytes(b64)
   if (key.length !== 32) {
     throw new Error(`Invalid public key: expected 32 bytes, got ${key.length}`)
@@ -31,6 +37,9 @@ export function encrypt(plaintext: string, sharedKey: Uint8Array): string {
 }
 
 export function decrypt(encrypted: string, sharedKey: Uint8Array): string | null {
+  if (encrypted.length > MAX_E2EE_ENCRYPTED_BASE64_CHARACTERS) {
+    return null
+  }
   const plaintext = decryptBytes(base64ToBytes(encrypted), sharedKey)
   return plaintext ? new TextDecoder().decode(plaintext) : null
 }

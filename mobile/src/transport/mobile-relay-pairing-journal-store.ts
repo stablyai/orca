@@ -2,11 +2,15 @@ import AsyncStorage from '@react-native-async-storage/async-storage'
 import * as SecureStore from 'expo-secure-store'
 import { Platform } from 'react-native'
 import {
+  MOBILE_RELAY_PAIRING_METADATA_MAX_STORAGE_CHARACTERS,
+  MOBILE_RELAY_PAIRING_SECRETS_MAX_STORAGE_CHARACTERS,
   MobileRelayPairingJournalMetadataSchema,
   MobileRelayPairingJournalSecretsSchema,
   type MobileRelayPairingJournal,
-  type MobileRelayPairingJournalMetadata
+  type MobileRelayPairingJournalMetadata,
+  type MobileRelayPairingJournalSecrets
 } from './mobile-relay-pairing-journal'
+import { parseMobileJsonTextWithinLimits } from './mobile-json-text-admission'
 
 const JOURNAL_STORAGE_KEY = 'orca:mobile-relay:pairing-journal:v1'
 const JOURNAL_SECRET_KEY = 'orca.mobile-relay.pairing-journal.v1'
@@ -24,6 +28,8 @@ export async function saveMobileRelayPairingJournal(
   if (metadata.journalId !== secrets.journalId) {
     throw new Error('mobile relay pairing journal identity mismatch')
   }
+  const serializedMetadata = serializeMetadata(metadata)
+  const serializedSecrets = serializeSecrets(secrets)
   const mutation = journalMutation.then(async () => {
     const existingRaw = await AsyncStorage.getItem(JOURNAL_STORAGE_KEY)
     const existing = existingRaw ? parseMetadata(existingRaw) : null
@@ -38,8 +44,8 @@ export async function saveMobileRelayPairingJournal(
     // a new user-initiated scan may safely supersede a pre-authorization attempt.
     // Why: metadata-first makes a crash before the keychain write recover as
     // an incomplete journal, never as an untracked bearer secret.
-    await AsyncStorage.setItem(JOURNAL_STORAGE_KEY, JSON.stringify(metadata))
-    await SecureStore.setItemAsync(JOURNAL_SECRET_KEY, JSON.stringify(secrets), KEYCHAIN_OPTIONS)
+    await AsyncStorage.setItem(JOURNAL_STORAGE_KEY, serializedMetadata)
+    await SecureStore.setItemAsync(JOURNAL_SECRET_KEY, serializedSecrets, KEYCHAIN_OPTIONS)
   })
   journalMutation = mutation.catch(() => {})
   return mutation
@@ -100,7 +106,7 @@ export async function updateMobileRelayPairingJournal(
     if (next.journalId !== journalId) {
       throw new Error('mobile relay pairing journal identity mismatch')
     }
-    await AsyncStorage.setItem(JOURNAL_STORAGE_KEY, JSON.stringify(next))
+    await AsyncStorage.setItem(JOURNAL_STORAGE_KEY, serializeMetadata(next))
   })
   journalMutation = mutation.catch(() => {})
   return mutation
@@ -121,21 +127,47 @@ export async function clearMobileRelayPairingJournal(journalId: string): Promise
 }
 
 function parseMetadata(raw: string): MobileRelayPairingJournalMetadata | null {
+  if (raw.length > MOBILE_RELAY_PAIRING_METADATA_MAX_STORAGE_CHARACTERS) {
+    return null
+  }
   try {
-    const result = MobileRelayPairingJournalMetadataSchema.safeParse(JSON.parse(raw))
+    const result = MobileRelayPairingJournalMetadataSchema.safeParse(
+      parseMobileJsonTextWithinLimits(raw)
+    )
     return result.success ? result.data : null
   } catch {
     return null
   }
 }
 
-function parseSecrets(raw: string) {
+function parseSecrets(raw: string): MobileRelayPairingJournalSecrets | null {
+  if (raw.length > MOBILE_RELAY_PAIRING_SECRETS_MAX_STORAGE_CHARACTERS) {
+    return null
+  }
   try {
-    const result = MobileRelayPairingJournalSecretsSchema.safeParse(JSON.parse(raw))
+    const result = MobileRelayPairingJournalSecretsSchema.safeParse(
+      parseMobileJsonTextWithinLimits(raw)
+    )
     return result.success ? result.data : null
   } catch {
     return null
   }
+}
+
+function serializeMetadata(metadata: MobileRelayPairingJournalMetadata): string {
+  const serialized = JSON.stringify(metadata)
+  if (serialized.length > MOBILE_RELAY_PAIRING_METADATA_MAX_STORAGE_CHARACTERS) {
+    throw new Error('mobile relay pairing metadata exceeds storage limit')
+  }
+  return serialized
+}
+
+function serializeSecrets(secrets: MobileRelayPairingJournalSecrets): string {
+  const serialized = JSON.stringify(secrets)
+  if (serialized.length > MOBILE_RELAY_PAIRING_SECRETS_MAX_STORAGE_CHARACTERS) {
+    throw new Error('mobile relay pairing secrets exceed storage limit')
+  }
+  return serialized
 }
 
 function requireNativeSecretStore(): void {

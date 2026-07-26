@@ -328,4 +328,25 @@ describe('skill discovery', () => {
 
     expect(result.skills.map((skill) => skill.name)).not.toContain('Too Deep')
   })
+
+  it('rejects pathological retained skill metadata instead of growing the result unboundedly', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'orca-skills-'))
+    const home = join(root, 'home')
+    const skillsRoot = join(home, '.agents', 'skills')
+    const description = 'x'.repeat(150_000)
+    await Promise.all(
+      Array.from({ length: 16 }, async (_, index) => {
+        const skillDir = join(skillsRoot, `large-${index}`)
+        await mkdir(skillDir, { recursive: true })
+        await writeFile(
+          join(skillDir, 'SKILL.md'),
+          `---\nname: large-${index}\ndescription: ${description}\n---\n`
+        )
+      })
+    )
+
+    await expect(
+      discoverSkills({ homeDir: home, cwd: join(root, 'missing-cwd'), repos: [] })
+    ).rejects.toThrow(/result is too large/)
+  })
 })

@@ -519,6 +519,33 @@ describe('serveOrcaApp', () => {
     expect(child.unref).toHaveBeenCalledOnce()
   })
 
+  it('preserves recipe JSON after 100,000 one-byte fragments', async () => {
+    const { child, result, stdoutSpy } = startRecipeJsonServer()
+    const output = Buffer.from(`${' '.repeat(100_000)}${RECIPE_JSON}\n`)
+    queueMicrotask(() => {
+      for (let index = 0; index < output.byteLength; index += 1) {
+        child.stdout.emit('data', output.subarray(index, index + 1))
+      }
+    })
+
+    await expect(result).resolves.toBe(0)
+    expect(stdoutSpy).toHaveBeenCalledWith(`${RECIPE_JSON}\n`)
+  })
+
+  it('kills a server that emits an oversized recipe line without a newline', async () => {
+    const { child, result } = startRecipeJsonServer()
+    queueMicrotask(() => {
+      child.stdout.emit('data', Buffer.alloc(4 * 1024 * 1024 + 1, 0x78))
+    })
+
+    await expect(result).rejects.toMatchObject({
+      code: 'runtime_serve_failed',
+      message: 'Recipe JSON output exceeded 4194304 byte line limit.'
+    })
+    expect(child.kill).toHaveBeenCalledWith('SIGTERM')
+    expect(child.stdout.listenerCount('data')).toBe(0)
+  })
+
   it('rejects when the server exits without valid recipe JSON', async () => {
     const { child, result, stdoutSpy, stderrSpy } = startRecipeJsonServer()
     const secrets = ['UPPER-SECRET', 'SLASH-SECRET', 'LEGACY-SECRET', 'PRIVATE-SECRET']

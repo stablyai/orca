@@ -2,13 +2,14 @@
 // `posix.resolve` against a POSIX guest home. On win32 `posix.resolve` of a
 // Windows tmpdir yields an invalid path, so the whole suite is skipped there
 // (the bridge only ever runs inside a Linux WSL guest).
-import { mkdtempSync, rmSync, statSync } from 'node:fs'
+import { mkdirSync, mkdtempSync, rmSync, statSync, writeFileSync } from 'node:fs'
 import { posix } from 'node:path'
 import { tmpdir } from 'node:os'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 
 import { registerWslHookFsHandlers } from './wsl-hook-fs-bridge'
 import type { MethodHandler, RelayDispatcher, RequestContext } from './dispatcher'
+import { estimateFilesystemDirectoryEntryBytes } from '../shared/filesystem-directory-listing-limit'
 import { WSL_HOOK_FS_METHODS, type WslFsResult } from '../shared/wsl-hook-relay-contract'
 
 describe.skipIf(process.platform === 'win32')('registerWslHookFsHandlers (WSL fs bridge)', () => {
@@ -57,6 +58,22 @@ describe.skipIf(process.platform === 'win32')('registerWslHookFsHandlers (WSL fs
     expect(read).toEqual({ ok: true, content: 'hello guest' })
   })
 
+  it('accepts an exact byte-limit read and rejects an oversized file before materializing it', async () => {
+    const path = posix.join(home, 'bounded.txt')
+    writeFileSync(path, '🐋')
+
+    await expect(
+      call<{ content: string }>(WSL_HOOK_FS_METHODS.readFile, { path, maxBytes: 4 })
+    ).resolves.toEqual({ ok: true, content: '🐋' })
+    await expect(
+      call<{ content: string }>(WSL_HOOK_FS_METHODS.readFile, { path, maxBytes: 3 })
+    ).resolves.toMatchObject({
+      ok: false,
+      errno: 'EFBIG',
+      fileCapacity: { observedBytes: 4, maxBytes: 3 }
+    })
+  })
+
   it('refuses writeFile to an absolute path outside home', async () => {
     const result = await call(WSL_HOOK_FS_METHODS.writeFile, {
       path: '/etc/orca-evil.txt',
@@ -98,6 +115,48 @@ describe.skipIf(process.platform === 'win32')('registerWslHookFsHandlers (WSL fs
       path: '/'
     })
     expect(root.ok).toBe(true)
+  })
+
+  it('streams directory entries through requested entry and retained-byte limits', async () => {
+    const directory = posix.join(home, 'bounded-dir')
+    mkdirSync(directory)
+    writeFileSync(posix.join(directory, 'alpha'), '')
+    writeFileSync(posix.join(directory, 'beta'), '')
+
+    const exactEntries = await call<{ entries: { filename: string }[] }>(
+      WSL_HOOK_FS_METHODS.readdir,
+      { path: directory, maxEntries: 2, maxRetainedBytes: 4096 }
+    )
+    expect(exactEntries).toMatchObject({ ok: true })
+    if (exactEntries.ok) {
+      expect(exactEntries.entries).toHaveLength(2)
+    }
+    await expect(
+      call(WSL_HOOK_FS_METHODS.readdir, {
+        path: directory,
+        maxEntries: 1,
+        maxRetainedBytes: 4096
+      })
+    ).resolves.toMatchObject({ ok: false })
+
+    const single = posix.join(home, 'single-entry-dir')
+    mkdirSync(single)
+    writeFileSync(posix.join(single, 'one'), '')
+    const exactRetainedBytes = estimateFilesystemDirectoryEntryBytes({ name: 'one' })
+    await expect(
+      call(WSL_HOOK_FS_METHODS.readdir, {
+        path: single,
+        maxEntries: 1,
+        maxRetainedBytes: exactRetainedBytes
+      })
+    ).resolves.toMatchObject({ ok: true })
+    await expect(
+      call(WSL_HOOK_FS_METHODS.readdir, {
+        path: single,
+        maxEntries: 1,
+        maxRetainedBytes: exactRetainedBytes - 1
+      })
+    ).resolves.toMatchObject({ ok: false })
   })
 
   it('refuses readdir on a non-ancestor dir outside home', async () => {

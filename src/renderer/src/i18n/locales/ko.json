@@ -2646,8 +2646,17 @@
               "blocked": {
                 "toast": {
                   "97c98f1afe": "설정 열기",
-                  "7cf51f74fd": "SSH, tmux, Neovim, fzf 또는 Grok에서 복사하려면 Terminal 설정에서 TUI 클립보드 쓰기를 활성화하세요.",
+                  "7cf51f74fd": "SSH, Zellij, tmux, Neovim, fzf 또는 Grok에서 복사하려면 Terminal 설정에서 TUI 클립보드 쓰기를 활성화하세요.",
                   "89eaa3e80b": "Terminal 클립보드 쓰기가 차단되었습니다."
+                }
+              },
+              "default": {
+                "on": {
+                  "notice": {
+                    "title": "TUI 클립보드 쓰기가 이제 기본으로 켜져 있습니다",
+                    "description": "Zellij, tmux, Neovim 등 터미널 프로그램이 클립보드에 복사할 수 있습니다. Terminal 설정에서 끌 수 있습니다.",
+                    "action": "설정 열기"
+                  }
                 }
               }
             }
@@ -3657,7 +3666,8 @@
           "SourceControlActionVariableChips": {
             "1b77798d5f": "변수",
             "6b921a0ac2": "예",
-            "4bf6d88039": "(비어 있음)"
+            "4bf6d88039": "(비어 있음)",
+            "7377483644": "이 워크스페이스"
           }
         }
       },
@@ -6927,9 +6937,9 @@
           "d23b43c5be": "설정 스크립트 위치",
           "34a0dfa06e": "새 워크스페이스를 만들 때 repos 설정 스크립트를 실행할 위치입니다.",
           "21f8da2078": "워크스페이스 설정 스크립트",
-          "6e6480a7df": "terminal의 프로그램(Grok, tmux, Neovim, fzf, SSH)이 시스템 클립보드에 복사할 수 있게 합니다.",
+          "6e6480a7df": "terminal의 프로그램(Zellij, tmux, Neovim, fzf, Grok, SSH)이 시스템 클립보드에 복사할 수 있게 합니다.",
           "3338dcf8c1": "TUI 클립보드 쓰기 허용(OSC 52)",
-          "69c64a479c": "Grok, tmux, Neovim 및 fzf가 PTY(SSH 포함)를 통해 시스템 클립보드에 복사하도록 합니다.",
+          "69c64a479c": "Zellij, tmux, Neovim, fzf 및 Grok이 PTY(SSH 포함)를 통해 시스템 클립보드에 복사하도록 합니다.",
           "4729c645fc": "terminal 선택 사항을 클립보드에 자동으로 복사합니다.",
           "902f5dee1f": "선택 시 복사",
           "9129b7e805": "terminal 패널에 마우스를 가리키면 클릭하지 않고도 활성화됩니다.",
@@ -7628,6 +7638,7 @@
               "e3fbc48083": "블루투스",
               "c4a4a02ea4": "USB",
               "fa3239cd42": "로컬 네트워크",
+              "87620e6416": "LAN",
               "acad3d4743": "terminal 세션에서 사용되는 장치 도구와 LAN 액세스를 허용합니다.",
               "3e0131e45d": "icloud",
               "ce07159ff5": "데스크탑",
@@ -8566,7 +8577,6 @@
             "10f9fb6fea": "설정",
             "2ade3ea490": "구성",
             "fd752b3cac": "가져오기",
-            "82b63d07fe": "ghostty",
             "73e9422f19": "지원되는 Ghostty terminal 설정을 한 번만 가져옵니다.",
             "a979df0083": "Ghostty에서 가져오기",
             "4cec42dbf7": "국제",

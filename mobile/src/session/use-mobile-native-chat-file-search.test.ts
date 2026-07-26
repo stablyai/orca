@@ -2,7 +2,10 @@ import { createElement } from 'react'
 import { act, create, type ReactTestRenderer } from 'react-test-renderer'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { RpcClient } from '../transport/rpc-client'
-import { useMobileNativeChatFileSearch } from './use-mobile-native-chat-file-search'
+import {
+  retainMobileNativeChatFilePaths,
+  useMobileNativeChatFileSearch
+} from './use-mobile-native-chat-file-search'
 
 type SearchState = ReturnType<typeof useMobileNativeChatFileSearch>
 
@@ -161,5 +164,17 @@ describe('useMobileNativeChatFileSearch', () => {
       await Promise.resolve()
     })
     expect(state?.nativeChatFilePaths).toEqual(['docs/readme.md'])
+  })
+})
+
+describe('retainMobileNativeChatFilePaths', () => {
+  it('accepts exact count and retained-byte limits and truncates at one over', () => {
+    const result = {
+      files: [{ relativePath: 'a' }, { relativePath: 'bb' }, { relativePath: 'ignored' }]
+    }
+    const exactBytes = 'a'.length * 2 + 64 + ('bb'.length * 2 + 64)
+
+    expect(retainMobileNativeChatFilePaths(result, 2, exactBytes)).toEqual(['a', 'bb'])
+    expect(retainMobileNativeChatFilePaths(result, 3, exactBytes - 1)).toEqual(['a'])
   })
 })

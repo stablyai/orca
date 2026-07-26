@@ -1,6 +1,6 @@
 import React, { useMemo, useRef } from 'react'
 import { useVirtualizer } from '@tanstack/react-virtual'
-import { detectCsvDelimiter, parseCsv } from './csv-parse'
+import { CSV_PARSE_LIMITS, detectCsvDelimiter, parseCsv } from './csv-parse'
 import { translate } from '@/i18n/i18n'
 
 type CsvViewerProps = {
@@ -14,6 +14,40 @@ const MIN_COL_PX = 80
 const MAX_COL_PX = 320
 const ROW_NUMBER_COL_PX = 48
 const CHAR_PX = 7
+const numberFormatter = new Intl.NumberFormat()
+
+function CsvLimitFallback({ filePath }: { filePath: string }): React.JSX.Element {
+  return (
+    <div className="flex h-full items-center justify-center px-4 text-muted-foreground">
+      <div className="max-w-xl space-y-3 text-center">
+        <div className="text-sm font-medium text-foreground">
+          {translate(
+            'auto.components.editor.CsvViewer.2b65aa2913',
+            'This CSV is too large to display safely.'
+          )}
+        </div>
+        <div className="break-all text-xs">{filePath}</div>
+        <div className="text-xs">
+          {translate(
+            'auto.components.editor.CsvViewer.d5e8a2b453',
+            'Table view is limited to {{rows}} rows, {{columns}} columns, and {{cells}} cells.',
+            {
+              rows: numberFormatter.format(CSV_PARSE_LIMITS.rows),
+              columns: numberFormatter.format(CSV_PARSE_LIMITS.columnsPerRow),
+              cells: numberFormatter.format(CSV_PARSE_LIMITS.cells)
+            }
+          )}
+        </div>
+        <div className="text-[11px]">
+          {translate(
+            'auto.components.editor.CsvViewer.59cfb175a2',
+            'Switch to source mode to inspect the raw text.'
+          )}
+        </div>
+      </div>
+    </div>
+  )
+}
 
 // Why: CsvViewer is the table counterpart to source-mode Monaco for .csv/.tsv
 // files. Row virtualization via @tanstack/react-virtual keeps large files
@@ -88,6 +122,10 @@ export default function CsvViewer({ content, filePath }: CsvViewerProps): React.
     overscan: OVERSCAN,
     getItemKey: (index) => index
   })
+
+  if (parsed.limitExceeded) {
+    return <CsvLimitFallback filePath={filePath} />
+  }
 
   if (parsed.rows.length === 0) {
     return (

@@ -16,16 +16,29 @@ import {
   type SkillScanRoot
 } from './skill-discovery-sources'
 import { discoverClaudePluginSkillSourcesInWsl } from './claude-plugin-skill-sources-wsl'
+import {
+  MAX_SKILL_DISCOVERY_CANDIDATES,
+  SkillDiscoveryBudget,
+  SkillDiscoveryLimitError,
+  WSL_SKILL_DISCOVERY_MAX_OUTPUT_BYTES,
+  assertSkillDiscoveryOutputWithinLimit,
+  assertSkillDiscoveryRootsWithinLimit
+} from './skill-discovery-limits'
+import {
+  readWslSkillProtocolField,
+  type WslSkillProtocolFieldCursor
+} from './wsl-skill-protocol-fields'
 
 const MAX_MARKDOWN_BYTES = 256 * 1024
 const MAX_PACKAGE_FILES = 200
 const WSL_SCAN_TIMEOUT_MS = 10_000
-const WSL_SCAN_MAX_BUFFER_BYTES = 128 * 1024 * 1024
 
 export function buildWslSkillDiscoveryCommand(roots: readonly SkillScanRoot[]): string {
+  assertSkillDiscoveryRootsWithinLimit(roots)
   const lines = [
     'set -u',
     'set -o pipefail',
+    'skill_count=0',
     'scan_root() {',
     '  root_index=$1',
     '  root_path=$2',
@@ -40,6 +53,11 @@ export function buildWslSkillDiscoveryCommand(roots: readonly SkillScanRoot[]): 
     `    directory_path=\${skill_file%/*}`,
     `    updated_at=$(stat -c '%Y' -- "$skill_file" 2>/dev/null || true)`,
     `    encoded_markdown=$(head -c ${MAX_MARKDOWN_BYTES} -- "$skill_file" 2>/dev/null | base64 | tr -d '\\n') || continue`,
+    '    skill_count=$((skill_count + 1))',
+    `    if [ "$skill_count" -gt ${MAX_SKILL_DISCOVERY_CANDIDATES} ]; then`,
+    `      printf '%s\\0%s\\0' E skill-limit`,
+    '      exit 0',
+    '    fi',
     '    file_count=0',
     `    while IFS= read -r -d '' package_file; do`,
     '      file_count=$((file_count + 1))',
@@ -65,7 +83,7 @@ function executeWslSkillDiscovery(distro: string, command: string): Promise<stri
       ['-d', distro, '--', 'bash', '-c', command],
       {
         encoding: 'utf8',
-        maxBuffer: WSL_SCAN_MAX_BUFFER_BYTES,
+        maxBuffer: WSL_SKILL_DISCOVERY_MAX_OUTPUT_BYTES,
         timeout: WSL_SCAN_TIMEOUT_MS,
         windowsHide: true
       },
@@ -80,12 +98,12 @@ function executeWslSkillDiscovery(distro: string, command: string): Promise<stri
   })
 }
 
-function readProtocolField(fields: string[], index: number): string {
-  const value = fields[index]
-  if (value === undefined) {
-    throw new Error('WSL skill discovery returned an incomplete response.')
-  }
-  return value
+function readProtocolField(output: string, cursor: WslSkillProtocolFieldCursor): string {
+  return readWslSkillProtocolField(
+    output,
+    cursor,
+    'WSL skill discovery returned an incomplete response.'
+  )
 }
 
 export function parseWslSkillDiscoveryOutput(
@@ -93,30 +111,44 @@ export function parseWslSkillDiscoveryOutput(
   roots: readonly SkillScanRoot[],
   scannedAt = Date.now()
 ): SkillDiscoveryResult {
-  const fields = output.split('\0')
+  assertSkillDiscoveryOutputWithinLimit(output)
+  const budget = new SkillDiscoveryBudget(roots)
   const rootExists = new Map<number, boolean>()
   const skillsByCanonicalPath = new Map<string, DiscoveredSkill>()
-  let index = 0
-  while (index < fields.length && fields[index]) {
-    const recordKind = fields[index++]
-    const rootIndex = Number.parseInt(readProtocolField(fields, index++), 10)
+  const cursor: WslSkillProtocolFieldCursor = { offset: 0 }
+  while (cursor.offset < output.length) {
+    // Why: cursor reads avoid turning delimiter-heavy bounded output into millions of string slots.
+    const recordKind = readProtocolField(output, cursor)
+    if (!recordKind) {
+      break
+    }
+    if (recordKind === 'E') {
+      const reason = readProtocolField(output, cursor)
+      throw new SkillDiscoveryLimitError(
+        reason === 'skill-limit'
+          ? `WSL installed-skill discovery found too many skills (max ${MAX_SKILL_DISCOVERY_CANDIDATES}).`
+          : 'WSL installed-skill discovery exceeded a safety limit.'
+      )
+    }
+    const rootIndex = Number.parseInt(readProtocolField(output, cursor), 10)
     const root = roots[rootIndex]
     if (!root) {
       throw new Error('WSL skill discovery returned an unknown source.')
     }
     if (recordKind === 'R') {
-      rootExists.set(rootIndex, readProtocolField(fields, index++) === '1')
+      rootExists.set(rootIndex, readProtocolField(output, cursor) === '1')
       continue
     }
     if (recordKind !== 'S') {
       throw new Error('WSL skill discovery returned an invalid response.')
     }
+    budget.admitCandidate()
 
-    const skillFilePath = readProtocolField(fields, index++)
-    const canonicalSkillFilePath = readProtocolField(fields, index++)
-    const updatedAtSeconds = Number.parseInt(readProtocolField(fields, index++), 10)
-    const fileCount = Number.parseInt(readProtocolField(fields, index++), 10)
-    const markdown = Buffer.from(readProtocolField(fields, index++), 'base64').toString('utf8')
+    const skillFilePath = readProtocolField(output, cursor)
+    const canonicalSkillFilePath = readProtocolField(output, cursor)
+    const updatedAtSeconds = Number.parseInt(readProtocolField(output, cursor), 10)
+    const fileCount = Number.parseInt(readProtocolField(output, cursor), 10)
+    const markdown = Buffer.from(readProtocolField(output, cursor), 'base64').toString('utf8')
     const existing = skillsByCanonicalPath.get(canonicalSkillFilePath)
     if (existing) {
       // Why: dedup keeps one row, but every contributing root must survive so
@@ -139,7 +171,7 @@ export function parseWslSkillDiscoveryOutput(
     const directoryPath = pathPosix.dirname(skillFilePath)
     const summary = summarizeSkillMarkdown(markdown)
     const sourceKind = sourceKindForSkill(root, skillFilePath, pathPosix)
-    skillsByCanonicalPath.set(canonicalSkillFilePath, {
+    const skill: DiscoveredSkill = {
       id: stablePathId(canonicalSkillFilePath),
       name: summary.name ?? pathPosix.basename(directoryPath),
       description: summary.description,
@@ -155,7 +187,9 @@ export function parseWslSkillDiscoveryOutput(
       installed: true,
       fileCount: Number.isFinite(fileCount) ? fileCount : 0,
       updatedAt: Number.isFinite(updatedAtSeconds) ? updatedAtSeconds * 1000 : null
-    })
+    }
+    budget.retainSkill(skill)
+    skillsByCanonicalPath.set(canonicalSkillFilePath, skill)
   }
 
   const sources: SkillDiscoverySource[] = roots.map((root, rootIndex) => {

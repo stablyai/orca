@@ -1,4 +1,7 @@
 import { describe, expect, it, vi } from 'vitest'
+import { mkdtemp, rm, writeFile } from 'node:fs/promises'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
 
 const { getPathMock } = vi.hoisted(() => ({
   getPathMock: vi.fn<(name: string) => string>()
@@ -10,7 +13,8 @@ vi.mock('electron', () => ({
   }
 }))
 
-import { attributeCodexUsageEvent, parseCodexUsageRecord } from './scanner'
+import { attributeCodexUsageEvent, parseCodexUsageFile, parseCodexUsageRecord } from './scanner'
+import { UsageHistoryScanBudget } from '../usage-history-scan-budget'
 
 describe('parseCodexUsageRecord', () => {
   it('uses token totals only as a duplicate baseline', () => {
@@ -319,5 +323,39 @@ describe('attributeCodexUsageEvent', () => {
 
     expect(attributed?.projectKey).toBe('cwd:d:/other/repo')
     expect(attributed?.worktreeId).toBeNull()
+  })
+})
+
+describe('parseCodexUsageFile capacity', () => {
+  it('fails the whole parse when retained usage events exceed capacity', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'orca-codex-capacity-'))
+    const filePath = join(root, 'rollout.jsonl')
+    const event = (timestamp: string, total: number) =>
+      JSON.stringify({
+        timestamp,
+        type: 'event_msg',
+        payload: {
+          type: 'token_count',
+          info: {
+            total_token_usage: { input_tokens: total, total_tokens: total },
+            last_token_usage: { input_tokens: 1, total_tokens: 1 }
+          }
+        }
+      })
+    try {
+      await writeFile(
+        filePath,
+        [event('2026-04-09T10:00:00.000Z', 1), event('2026-04-09T10:00:01.000Z', 2)].join('\n')
+      )
+      const budget = new UsageHistoryScanBudget({ records: 1 })
+
+      await expect(parseCodexUsageFile(filePath, [], { budget })).rejects.toMatchObject({
+        name: 'UsageHistoryScanCapacityError',
+        resource: 'records',
+        limit: 1
+      })
+    } finally {
+      await rm(root, { recursive: true, force: true })
+    }
   })
 })

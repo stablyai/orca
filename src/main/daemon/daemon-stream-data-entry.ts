@@ -13,7 +13,7 @@ export function appendDaemonStreamData(
   sessionId: string,
   data: string,
   options: DaemonStreamEnqueueOptions
-): number {
+): void {
   const last = batch.queue.at(-1)
   // Why: control and transformed spans mark indivisible source-stream positions.
   if (
@@ -39,7 +39,8 @@ export function appendDaemonStreamData(
     })
   }
   batch.queuedChars += data.length
-  const queuedAfter = (batch.queuedCharsBySession.get(sessionId) ?? 0) + data.length
-  batch.queuedCharsBySession.set(sessionId, queuedAfter)
-  return queuedAfter
+  batch.queuedCharsBySession.set(
+    sessionId,
+    (batch.queuedCharsBySession.get(sessionId) ?? 0) + data.length
+  )
 }

@@ -1,6 +1,8 @@
 import { z } from 'zod'
 import { MobileRelayEndpointSchema } from '../../../src/shared/mobile-relay-credential-contract'
 
+export const MOBILE_RELAY_HOST_OVERLAY_MAX_HOST_ID_CHARACTERS = 4_096
+
 export const MobileAccessEndpointSchema = z
   .object({
     id: z.string().min(1).max(128),
@@ -12,7 +14,7 @@ export const MobileAccessEndpointSchema = z
 export const MobileRelayHostOverlaySchema = z
   .object({
     v: z.literal(2),
-    hostId: z.string().min(1),
+    hostId: z.string().min(1).max(MOBILE_RELAY_HOST_OVERLAY_MAX_HOST_ID_CHARACTERS),
     endpoints: z.array(MobileAccessEndpointSchema).min(1).max(16),
     relayHostId: z
       .string()

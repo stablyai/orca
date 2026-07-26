@@ -92,11 +92,12 @@ import { GIT_FETCH_SKIP_AUTO_MAINTENANCE_CONFIG_ARGS } from '../../shared/git-fe
 import { createHash, randomUUID } from 'node:crypto'
 import { homedir } from 'node:os'
 import { isAbsolute, join, resolve } from 'node:path'
-import { mkdir, readFile, readdir, rm, stat } from 'node:fs/promises'
+import { mkdir, opendir, rm, stat } from 'node:fs/promises'
 import { resolveWorktreeCreateBase } from '../worktree-create-base'
 import { resolveWorktreeAddBaseRef } from '../../shared/worktree-base-ref'
 import { OrchestrationDb } from './orchestration/db'
 import { formatMessagesForInjection } from './orchestration/formatter'
+import { OrchestrationMessageWaiterRegistry } from './orchestration-message-waiter-registry'
 import type {
   Automation,
   AutomationCreateInput,
@@ -191,6 +192,11 @@ import {
 } from '../../shared/runtime-navigation'
 import type { SshConnectionState } from '../../shared/ssh-types'
 import { getPublicSshState } from './public-ssh-state'
+import {
+  RuntimeSshRelayRecoveryGenerations,
+  type RuntimeSshRelayRecoveryGenerationLease
+} from './runtime-ssh-relay-recovery-generations'
+import { RuntimeOperationGenerations } from './runtime-operation-generations'
 import { closeTerminalTabInWorkspaceSession } from '../../shared/workspace-session-terminal-tab-close'
 import type {
   LinearCurrentIssueContextHints,
@@ -243,6 +249,7 @@ import {
 import { parsePtySessionId } from '../../shared/pty-session-id-format'
 import { clampLinearIssueListLimit } from '../../shared/linear-issue-read-limits'
 import { isFolderRepo } from '../../shared/repo-kind'
+import { mapWithConcurrency } from '../../shared/map-with-concurrency'
 import { DEFAULT_WORKSPACE_STATUS_ID } from '../../shared/workspace-statuses'
 import {
   buildSetupRunnerCommand,
@@ -573,6 +580,14 @@ import type {
   PRRefreshOutcome
 } from '../../shared/types'
 import { inspectSetupScriptImportCandidates } from '../../shared/setup-script-imports'
+import {
+  readSetupScriptImportFile,
+  SETUP_SCRIPT_IMPORT_FILE_MAX_BYTES,
+  SETUP_SCRIPT_IMPORT_MAX_CODE_UNITS
+} from '../setup-script-import-file'
+import { MAX_ORCA_YAML_BYTES, MAX_ORCA_YAML_CODE_UNITS } from '../../shared/orca-yaml-file-limit'
+import { readFilesystemProviderBoundedText } from '../filesystem-provider-bounded-text'
+import { readLocalFilesystemDirectory } from '../ipc/filesystem-directory-reader'
 import type {
   CreateHostedReviewInput,
   CreateHostedReviewResult,
@@ -775,6 +790,8 @@ import {
   hasUnrecognizedOrcaYamlKeys,
   hasHooksFile,
   loadHooks,
+  MAX_HOOK_GITIGNORE_BYTES,
+  MAX_ISSUE_COMMAND_BYTES,
   parseOrcaYaml,
   readIssueCommand,
   runHook,
@@ -793,6 +810,7 @@ import {
   findExistingWorktreeSymlinkPaths,
   removeWorktreeLinkedPaths
 } from '../ipc/worktree-symlinks'
+import { formatWorktreeIncludeCopyWarning } from '../ipc/worktree-include-copy-budget'
 import { resolveWorktreeIncludePaths } from '../git/worktree-include-file'
 import { deleteWorktreeHistoryDir } from '../terminal-history'
 import {
@@ -1464,7 +1482,7 @@ type RuntimePtyController = {
   getForegroundProcess(ptyId: string): Promise<string | null>
   inspectProcess?(
     ptyId: string
-  ): Promise<{ foregroundProcess: string | null; hasChildProcesses: boolean }>
+  ): Promise<{ foregroundProcess: string | null; hasChildProcesses: boolean; unavailable?: true }>
   confirmForegroundProcess?(ptyId: string): Promise<string | null>
   hasChildProcesses?(ptyId: string): Promise<boolean>
   clearBuffer?(ptyId: string): Promise<void>
@@ -1690,14 +1708,6 @@ type TerminalWaiter = {
   reject: (error: Error) => void
   timeout: NodeJS.Timeout | null
   pollInterval: NodeJS.Timeout | null
-  abortCleanup: (() => void) | null
-}
-
-type MessageWaiter = {
-  handle: string
-  typeFilter: string[] | undefined
-  resolve: (result: void) => void
-  timeout: NodeJS.Timeout | null
   abortCleanup: (() => void) | null
 }
 
@@ -2531,7 +2541,7 @@ export class OrcaRuntimeService {
   private resolvedWorktreeCache: ResolvedWorktreeCache | null = null
   private resolvedWorktreeInFlight: ResolvedWorktreeInFlight | null = null
   private resolvedWorktreeGeneration = 0
-  private worktreeScanGenerations = new Map<string, number>()
+  private readonly worktreeScanGenerations = new RuntimeOperationGenerations()
   private worktreeScanCache = new Map<string, RuntimeWorktreeScanCache>()
   private worktreeScanInFlight = new Map<string, RuntimeWorktreeScanInFlight>()
   private cloneInFlightByPath = new Map<string, Promise<void>>()
@@ -2539,7 +2549,7 @@ export class OrcaRuntimeService {
   private ptyForegroundAgentRefreshes = new Map<string, PtyForegroundAgentRefresh>()
   private ptyDelayedForegroundSnapshotTitleObservations = new Map<string, number>()
   private _orchestrationDb: OrchestrationDb | null = null
-  private messageWaitersByHandle = new Map<string, Set<MessageWaiter>>()
+  private readonly messageWaiters = new OrchestrationMessageWaiterRegistry()
   // Why: mobile clients subscribe to terminal output via terminal.subscribe.
   // These listeners fire on every onPtyData call, enabling real-time streaming
   // without polling. Keyed by ptyId for O(1) lookup per data event.
@@ -2610,8 +2620,7 @@ export class OrcaRuntimeService {
   private providerVisibleStateByPtyId = new Map<string, RuntimeVisibleTerminalState>()
   private providerVisibleRetryAtByPtyId = new Map<string, number>()
   private providerSnapshotsWithLiveModeTransition = new WeakSet<PtyProviderBufferSnapshot>()
-  private ptyLifecycleGenerationById = new Map<string, number>()
-  private nextPtyLifecycleGeneration = 1
+  private readonly ptyLifecycleGenerations = new RuntimeOperationGenerations()
   private recentPtyPathCandidatesById = new Map<string, string[]>()
   // Why: candidates only feed mobile file-tap provenance; desktop-only
   // sessions skip the 3-regex extraction on every PTY chunk until a
@@ -2915,7 +2924,7 @@ export class OrcaRuntimeService {
     | null
   private readonly agentSessionClaimSigner: AgentSessionClaimSigner
   private readonly agentSessionCreateOperations = new Map<string, AgentSessionCreateOperation>()
-  private sshRelayRecoveryGenerationByTargetId = new Map<string, number>()
+  private readonly sshRelayRecoveryGenerations = new RuntimeSshRelayRecoveryGenerations()
   private accountServices: RuntimeAccountServices | null = null
   private commitMessageAgentEnv: CommitMessageAgentEnvironmentResolvers | null = null
   private automationService: AutomationService | null = null
@@ -3612,33 +3621,32 @@ export class OrcaRuntimeService {
   // Why: SSH state changes originate in main's ssh handlers, not in runtime
   // methods, so they need a public entry point onto the client-event stream.
   notifySshStateChanged(targetId: string, state: SshConnectionState): void {
-    this.bumpSshRelayRecoveryGeneration(targetId)
+    this.sshRelayRecoveryGenerations.invalidate(targetId)
     this.invalidateSshWorktreeScanCache(targetId)
     this.emitClientEvent({ type: 'sshStateChanged', targetId, state: getPublicSshState(state)! })
   }
 
   notifySshRelayReady(targetId: string): void {
-    const generation = this.bumpSshRelayRecoveryGeneration(targetId)
-    void this.publishRecoveredSshMobileSessionTabs(targetId, generation).catch((error) => {
-      if (this.sshRelayRecoveryGenerationByTargetId.get(targetId) !== generation) {
-        return
-      }
-      console.warn('[runtime] failed to publish recovered SSH session tabs', {
-        targetId,
-        error
+    const generationLease = this.sshRelayRecoveryGenerations.begin(targetId)
+    if (!generationLease) {
+      return
+    }
+    void this.publishRecoveredSshMobileSessionTabs(targetId, generationLease)
+      .catch((error) => {
+        if (!generationLease.isCurrent()) {
+          return
+        }
+        console.warn('[runtime] failed to publish recovered SSH session tabs', {
+          targetId,
+          error
+        })
       })
-    })
-  }
-
-  private bumpSshRelayRecoveryGeneration(targetId: string): number {
-    const generation = (this.sshRelayRecoveryGenerationByTargetId.get(targetId) ?? 0) + 1
-    this.sshRelayRecoveryGenerationByTargetId.set(targetId, generation)
-    return generation
+      .finally(() => generationLease.release())
   }
 
   private async publishRecoveredSshMobileSessionTabs(
     targetId: string,
-    generation: number
+    generationLease: RuntimeSshRelayRecoveryGenerationLease
   ): Promise<void> {
     const repoIds = new Set(
       (this.store?.getRepos() ?? [])
@@ -3670,7 +3678,7 @@ export class OrcaRuntimeService {
       })
     }
     await this.refreshMobileSessionPtyRecords()
-    if (this.sshRelayRecoveryGenerationByTargetId.get(targetId) !== generation) {
+    if (!generationLease.isCurrent()) {
       return
     }
     for (const worktreeId of worktreeIds) {
@@ -7066,7 +7074,18 @@ export class OrcaRuntimeService {
   private readonly gitCommands = new RuntimeGitCommands({
     resolveRuntimeGitTarget: (selector) => this.resolveRuntimeGitTarget(selector),
     getRuntimeSettings: () => this.requireStore().getSettings() as GlobalSettings,
-    getCommitMessageAgentEnvironment: () => this.commitMessageAgentEnv ?? undefined
+    getCommitMessageAgentEnvironment: () => this.commitMessageAgentEnv ?? undefined,
+    // Why: resolved worktrees are cached for a second, so link/unlink would lag
+    // generation; meta is keyed by the same id the resolver returns.
+    getWorktreeLinkedIssue: (worktreeId) => {
+      const store = this.store
+      // Why: an unreadable store is "unknown", not "unlinked" — undefined keeps
+      // the resolver's cached linkedIssue instead of suppressing {linkedIssue}.
+      if (!store?.getWorktreeMeta) {
+        return undefined
+      }
+      return store.getWorktreeMeta(worktreeId)?.linkedIssue ?? null
+    }
   })
 
   getRuntimeGitStatus: RuntimeGitCommands['getRuntimeGitStatus'] =
@@ -8465,17 +8484,15 @@ export class OrcaRuntimeService {
   }
 
   private getPtyLifecycleGeneration(ptyId: string): number {
-    const existing = this.ptyLifecycleGenerationById.get(ptyId)
-    if (existing !== undefined) {
-      return existing
-    }
-    const generation = this.nextPtyLifecycleGeneration++
-    this.ptyLifecycleGenerationById.set(ptyId, generation)
-    return generation
+    return this.ptyLifecycleGenerations.current(ptyId)
+  }
+
+  private isPtyLifecycleGenerationCurrent(ptyId: string, generation: number): boolean {
+    return this.ptyLifecycleGenerations.isCurrent(ptyId, generation)
   }
 
   private advancePtyLifecycleGeneration(ptyId: string): void {
-    this.ptyLifecycleGenerationById.set(ptyId, this.nextPtyLifecycleGeneration++)
+    this.ptyLifecycleGenerations.advance(ptyId)
     // Why: a provider response belongs to the process generation that issued
     // it; a respawn must neither reuse its frame nor join its in-flight call.
     this.providerBufferAcquisitionsByPtyId.delete(ptyId)
@@ -9327,7 +9344,7 @@ export class OrcaRuntimeService {
       // Why: daemon PTYs survive an app relaunch before any renderer mounts.
       // Mobile still needs their retained history without navigating desktop.
       const snapshot = await this.ptyController?.serializeProviderBuffer?.(ptyId, opts)
-      if (!snapshot || this.getPtyLifecycleGeneration(ptyId) !== generation) {
+      if (!snapshot || !this.isPtyLifecycleGenerationCurrent(ptyId, generation)) {
         return null
       }
       const snapshotModeTracker = new TerminalKittyKeyboardModeTracker()
@@ -9465,7 +9482,7 @@ export class OrcaRuntimeService {
       { scrollbackRows: 0 },
       { timeoutMs: VISIBLE_TERMINAL_SNAPSHOT_TIMEOUT_MS }
     )
-    if (!snapshot || this.getPtyLifecycleGeneration(ptyId) !== generation) {
+    if (!snapshot || !this.isPtyLifecycleGenerationCurrent(ptyId, generation)) {
       this.providerVisibleRetryAtByPtyId.set(ptyId, Date.now() + VISIBLE_TERMINAL_SNAPSHOT_RETRY_MS)
       return null
     }
@@ -9479,7 +9496,7 @@ export class OrcaRuntimeService {
       }
     }
     const lines = await this.parseVisibleSnapshotLines(snapshot)
-    if (this.getPtyLifecycleGeneration(ptyId) !== generation) {
+    if (!this.isPtyLifecycleGenerationCurrent(ptyId, generation)) {
       return null
     }
     const visibleState: RuntimeVisibleTerminalState = {
@@ -9505,7 +9522,7 @@ export class OrcaRuntimeService {
     await state.writeChain
     if (
       this.headlessTerminals.get(ptyId) !== state ||
-      this.getPtyLifecycleGeneration(ptyId) !== generation
+      !this.isPtyLifecycleGenerationCurrent(ptyId, generation)
     ) {
       return null
     }
@@ -9740,16 +9757,15 @@ export class OrcaRuntimeService {
     // before the first-ever connect no longer yields candidates.
     for (const [ptyId, buffer] of this.recentPtyOutputById) {
       let candidates = this.recentPtyPathCandidatesById.get(ptyId)
-      const { chunks, headChunkIsPartial } = buffer.retainedChunks()
-      for (let index = 0; index < chunks.length; index += 1) {
+      buffer.forEachRetainedChunk((chunk, index, headChunkIsPartial) => {
         if (index === 0 && headChunkIsPartial) {
           // A pre-sliced over-window chunk was already extracted eagerly at
           // append time (while its original text was intact); replaying its
           // truncated remainder would mint or drop candidates spuriously.
-          continue
+          return
         }
-        candidates = appendRecentPtyPathCandidates(candidates, chunks[index]!)
-      }
+        candidates = appendRecentPtyPathCandidates(candidates, chunk)
+      })
       if (candidates) {
         this.recentPtyPathCandidatesById.set(ptyId, candidates)
       }
@@ -15195,21 +15211,7 @@ export class OrcaRuntimeService {
     if (!dirStat.isDirectory()) {
       throw new Error(`${dirPath} is not a directory`)
     }
-    const entries = await readdir(dirPath, { withFileTypes: true })
-    const mapped = entries
-      .filter((entry) => entry.name !== '.' && entry.name !== '..')
-      .map((entry) => ({
-        name: entry.name,
-        isDirectory: entry.isDirectory(),
-        isSymlink: entry.isSymbolicLink()
-      }))
-    mapped.sort((a, b) => {
-      if (a.isDirectory !== b.isDirectory) {
-        return a.isDirectory ? -1 : 1
-      }
-      return a.name.localeCompare(b.name)
-    })
-    return { resolvedPath: dirPath, entries: mapped }
+    return { resolvedPath: dirPath, entries: await readLocalFilesystemDirectory(dirPath) }
   }
 
   async isGitAvailable(): Promise<boolean> {
@@ -15482,9 +15484,13 @@ export class OrcaRuntimeService {
         if (!existingStat.isDirectory()) {
           return { error: `"${trimmedName}" already exists at this location and is not a folder.` }
         }
-        const entries = await readdir(targetPath)
-        if (entries.length > 0) {
-          return { error: `"${trimmedName}" already exists at this location and is not empty.` }
+        const directory = await opendir(targetPath)
+        try {
+          if ((await directory.read()) !== null) {
+            return { error: `"${trimmedName}" already exists at this location and is not empty.` }
+          }
+        } finally {
+          await directory.close().catch(() => {})
         }
       } else {
         await mkdir(targetPath, { recursive: false })
@@ -15815,17 +15821,27 @@ export class OrcaRuntimeService {
     }
     const repo = await this.resolveRepoSelector(repoSelector)
     this.store.removeProject(repo.id)
-    this.terminalTopologyRevisionByRepoId.delete(repo.id)
-    this.invalidateResolvedWorktreeCache()
-    this.invalidateWorktreeScanCacheForRepo(repo.id)
+    this.notifyRepoStoreChanged(repo.id)
     invalidateAuthorizedRootsCache()
-    this.notifyReposChanged()
     return { removed: true }
+  }
+
+  notifyRepoStoreChanged(repoId: string): void {
+    const removed = !this.store?.getRepo(repoId)
+    if (removed) {
+      this.terminalTopologyRevisionByRepoId.delete(repoId)
+    }
+    this.invalidateResolvedWorktreeCache()
+    this.invalidateWorktreeScanCacheForRepo(repoId)
+    if (removed) {
+      this.worktreeScanGenerations.forget(repoId)
+    }
+    this.notifyReposChanged()
   }
 
   async inspectTerminalProcess(
     terminalSelector: string
-  ): Promise<{ foregroundProcess: string | null; hasChildProcesses: boolean }> {
+  ): Promise<{ foregroundProcess: string | null; hasChildProcesses: boolean; unavailable?: true }> {
     const leaf = this.resolveLiveLeafForHandle(terminalSelector)
     if (!leaf?.ptyId || !this.ptyController) {
       throw new Error('terminal_gone')
@@ -16132,12 +16148,15 @@ export class OrcaRuntimeService {
     type?: 'issue' | 'pr'
   ): Promise<Awaited<ReturnType<typeof getWorkItem>>> {
     const repo = await this.resolveRepoSelector(repoSelector)
+    // Why: open-by-number must pin the same source the list and start-point use,
+    // else a fork and its upstream sharing a PR number resolve to different PRs.
     return getWorkItem(
       repo.path,
       number,
       type,
       repo.connectionId ?? null,
-      ...this.getLocalGitExecutionOptionArgs(repo)
+      this.getLocalGitExecutionOptionArgs(repo)[0] ?? {},
+      repo.issueSourcePreference
     )
   }
 
@@ -16169,7 +16188,8 @@ export class OrcaRuntimeService {
       number,
       type,
       repo.connectionId ?? null,
-      ...this.getLocalGitExecutionOptionArgs(repo)
+      this.getLocalGitExecutionOptionArgs(repo)[0] ?? {},
+      repo.issueSourcePreference
     )
   }
 
@@ -17208,8 +17228,12 @@ export class OrcaRuntimeService {
         }
       }
       try {
-        const result = await fsProvider.readFile(joinWorktreeRelativePath(repo.path, 'orca.yaml'))
-        const hooks = result.isBinary ? null : parseOrcaYaml(result.content)
+        const result = await readFilesystemProviderBoundedText(
+          fsProvider,
+          joinWorktreeRelativePath(repo.path, 'orca.yaml'),
+          { maxBytes: MAX_ORCA_YAML_BYTES, maxCodeUnits: MAX_ORCA_YAML_CODE_UNITS }
+        )
+        const hooks = result.kind === 'text' ? parseOrcaYaml(result.content) : null
         return {
           hasHooksFile: Boolean(hooks),
           hooks,
@@ -17257,11 +17281,19 @@ export class OrcaRuntimeService {
         return { hasHooks: false, hooks: null, mayNeedUpdate: false }
       }
       try {
-        const result = await fsProvider.readFile(joinWorktreeRelativePath(repo.path, 'orca.yaml'))
-        if (result.isBinary) {
+        const result = await readFilesystemProviderBoundedText(
+          fsProvider,
+          joinWorktreeRelativePath(repo.path, 'orca.yaml'),
+          { maxBytes: MAX_ORCA_YAML_BYTES, maxCodeUnits: MAX_ORCA_YAML_CODE_UNITS }
+        )
+        if (result.kind === 'binary') {
           return { hasHooks: false, hooks: null, mayNeedUpdate: false }
         }
-        return { hasHooks: true, hooks: parseOrcaYaml(result.content), mayNeedUpdate: false }
+        return {
+          hasHooks: true,
+          hooks: result.kind === 'text' ? parseOrcaYaml(result.content) : null,
+          mayNeedUpdate: false
+        }
       } catch {
         return { hasHooks: false, hooks: null, mayNeedUpdate: false }
       }
@@ -17290,15 +17322,18 @@ export class OrcaRuntimeService {
           return null
         }
         try {
-          const result = await fsProvider.readFile(filePath)
-          return result.isBinary ? null : result.content
+          const result = await readFilesystemProviderBoundedText(fsProvider, filePath, {
+            maxBytes: SETUP_SCRIPT_IMPORT_FILE_MAX_BYTES,
+            maxCodeUnits: SETUP_SCRIPT_IMPORT_MAX_CODE_UNITS
+          })
+          return result.kind === 'text' ? result.content : null
         } catch {
           return null
         }
       }
 
       try {
-        return await readFile(filePath, 'utf-8')
+        return await readSetupScriptImportFile(filePath)
       } catch (error) {
         if (!isENOENT(error)) {
           console.warn('[runtime] Failed to inspect setup script import candidate:', error)
@@ -17356,11 +17391,11 @@ export class OrcaRuntimeService {
     issueCommandPath: string
   ): Promise<string | null> {
     try {
-      const result = await fsProvider.readFile(issueCommandPath)
-      if (result.isBinary) {
-        return null
-      }
-      return result.content.trim() || null
+      const result = await readFilesystemProviderBoundedText(fsProvider, issueCommandPath, {
+        maxBytes: MAX_ISSUE_COMMAND_BYTES,
+        maxCodeUnits: MAX_ISSUE_COMMAND_BYTES
+      })
+      return result.kind === 'text' ? result.content.trim() || null : null
     } catch {
       return null
     }
@@ -17371,8 +17406,12 @@ export class OrcaRuntimeService {
     repoPath: string
   ): Promise<string | null> {
     try {
-      const result = await fsProvider.readFile(joinWorktreeRelativePath(repoPath, 'orca.yaml'))
-      if (result.isBinary) {
+      const result = await readFilesystemProviderBoundedText(
+        fsProvider,
+        joinWorktreeRelativePath(repoPath, 'orca.yaml'),
+        { maxBytes: MAX_ORCA_YAML_BYTES, maxCodeUnits: MAX_ORCA_YAML_CODE_UNITS }
+      )
+      if (result.kind !== 'text') {
         return null
       }
       return parseOrcaYaml(result.content)?.issueCommand?.trim() || null
@@ -17418,9 +17457,12 @@ export class OrcaRuntimeService {
     options: { required?: boolean } = {}
   ): Promise<void> {
     const gitignorePath = joinWorktreeRelativePath(repoPath, '.gitignore')
-    let result: Awaited<ReturnType<IFilesystemProvider['readFile']>>
+    let result: Awaited<ReturnType<typeof readFilesystemProviderBoundedText>>
     try {
-      result = await fsProvider.readFile(gitignorePath)
+      result = await readFilesystemProviderBoundedText(fsProvider, gitignorePath, {
+        maxBytes: MAX_HOOK_GITIGNORE_BYTES,
+        maxCodeUnits: MAX_HOOK_GITIGNORE_BYTES
+      })
     } catch (error) {
       if (!isENOENT(error)) {
         if (options.required) {
@@ -17439,9 +17481,13 @@ export class OrcaRuntimeService {
       }
       return
     }
-    if (result.isBinary) {
+    if (result.kind !== 'text') {
       if (options.required) {
-        throw new Error('Remote .gitignore is binary; cannot verify .orca is ignored')
+        throw new Error(
+          result.kind === 'binary'
+            ? 'Remote .gitignore is binary; cannot verify .orca is ignored'
+            : 'Remote .gitignore exceeds the supported size limit'
+        )
       }
       return
     }
@@ -18935,12 +18981,21 @@ export class OrcaRuntimeService {
       repo.path,
       localWorktreeGitOptions
     )
+    let includeCopyWarning: string | undefined
     if (worktreeIncludePaths.length > 0) {
-      await createWorktreeCopiedPaths(repo.path, created.path, worktreeIncludePaths)
+      const skippedIncludePaths = await createWorktreeCopiedPaths(
+        repo.path,
+        created.path,
+        worktreeIncludePaths
+      )
+      includeCopyWarning = formatWorktreeIncludeCopyWarning(skippedIncludePaths)
+      if (includeCopyWarning) {
+        console.warn(`[worktree-include] ${includeCopyWarning}`)
+      }
     }
 
     let setup: CreateWorktreeResult['setup']
-    let warning: string | undefined
+    let warning: string | undefined = includeCopyWarning
     // Why: CLI-created worktrees do not have a renderer preview to mismatch
     // against. Trust is granted by the direct CLI invocation (`--run-hooks`),
     // so loading the setup hook from the created worktree is intentional here.
@@ -18994,8 +19049,9 @@ export class OrcaRuntimeService {
       }
     } else if (hooks?.scripts.setup && effectiveDecision !== 'skip') {
       // Runtime RPC calls have no renderer trust prompt, so hooks require explicit CLI opt-in.
-      warning = `orca.yaml setup hook skipped for ${worktreePath}; pass --setup run to run it.`
-      console.warn(`[hooks] ${warning}`)
+      const setupSkipped = `orca.yaml setup hook skipped for ${worktreePath}; pass --setup run to run it.`
+      warning = warning ? `${warning} Also ${setupSkipped}` : setupSkipped
+      console.warn(`[hooks] ${setupSkipped}`)
     }
 
     this.invalidateResolvedWorktreeCache()
@@ -20123,11 +20179,12 @@ export class OrcaRuntimeService {
     const gitExec = sshGitProvider
       ? (gitArgs: string[]) => sshGitProvider.exec(gitArgs, repo.path)
       : (gitArgs: string[]) => gitExecFileAsync(gitArgs, localGitExecOptions ?? { cwd: repo.path })
-    // Why: one shared resolver for local and SSH so origin-vs-upstream cannot
-    // diverge by surface; it prefers the remote hosting the PR's project.
+    // Why: one resolver keeps source preference and hosting identity aligned
+    // across local, WSL, and SSH worktree creation.
     const resolveRemote = (): Promise<string> =>
       resolveGitHubReviewHeadRemote({
         repoPath: repo.path,
+        issueSourcePreference: repo.issueSourcePreference,
         connectionId: repo.connectionId ?? null,
         localGitOptions: localWorktreeGitOptions,
         gitExec
@@ -20157,6 +20214,7 @@ export class OrcaRuntimeService {
       headRefName: args.headRefName,
       baseRefName: args.baseRefName,
       isCrossRepository: args.isCrossRepository,
+      issueSourcePreference: repo.issueSourcePreference,
       connectionId: repo.connectionId ?? null,
       localGitOptions: localWorktreeGitOptions,
       gitExec,
@@ -24733,8 +24791,10 @@ export class OrcaRuntimeService {
         getAgentLaunchPlatformForRepo(repo, projectRuntimeByRepoId.get(repo.id))
       ])
     )
-    const perRepoWorktrees = await Promise.all(
-      repos.map(async (repo) => {
+    const perRepoWorktrees = await mapWithConcurrency(
+      repos,
+      RESOLVED_WORKTREE_REPO_CONCURRENCY,
+      async (repo) => {
         if (isFolderRepo(repo)) {
           return listRuntimeFolderWorkspaces(this.requireStore(), repo).map((worktree) => ({
             ...worktree,
@@ -24791,7 +24851,7 @@ export class OrcaRuntimeService {
             comment: merged.comment
           }
         })
-      })
+      }
     )
     const worktrees = projectResolvedWorktreeLineage(
       perRepoWorktrees.flat(),
@@ -24855,7 +24915,7 @@ export class OrcaRuntimeService {
     projectRuntimeByRepoId?: ReadonlyMap<string, ProjectExecutionRuntimeResolution>
   ): Promise<RuntimeWorktreeScanResult> {
     const now = Date.now()
-    const generation = this.worktreeScanGenerations.get(repo.id) ?? 0
+    const generation = this.worktreeScanGenerations.current(repo.id)
     const projectRuntime = projectRuntimeByRepoId
       ? projectRuntimeByRepoId.get(repo.id)
       : !repo.connectionId
@@ -24886,7 +24946,7 @@ export class OrcaRuntimeService {
       const result = await promise
       if (
         result.ok &&
-        generation === (this.worktreeScanGenerations.get(repo.id) ?? 0) &&
+        this.worktreeScanGenerations.isCurrent(repo.id, generation) &&
         this.worktreeScanInFlight.get(repo.id)?.promise === promise
       ) {
         this.worktreeScanCache.set(repo.id, {
@@ -24966,7 +25026,7 @@ export class OrcaRuntimeService {
   }
 
   private invalidateWorktreeScanCacheForRepo(repoId: string): void {
-    this.worktreeScanGenerations.set(repoId, (this.worktreeScanGenerations.get(repoId) ?? 0) + 1)
+    this.worktreeScanGenerations.advance(repoId)
     this.worktreeScanCache.delete(repoId)
     this.worktreeScanInFlight.delete(repoId)
   }
@@ -24977,7 +25037,7 @@ export class OrcaRuntimeService {
       repos.filter((repo) => repo.connectionId === targetId).map((repo) => repo.id)
     )
     for (const repoId of affectedRepoIds) {
-      this.worktreeScanGenerations.set(repoId, (this.worktreeScanGenerations.get(repoId) ?? 0) + 1)
+      this.worktreeScanGenerations.advance(repoId)
       this.worktreeScanCache.delete(repoId)
       this.worktreeScanInFlight.delete(repoId)
     }
@@ -25455,6 +25515,7 @@ export class OrcaRuntimeService {
     this.terminalFileUriHostnameByPtyId.delete(ptyId)
     this.wslDistroByPtyId.delete(ptyId)
     this.clearAgentRowSnapshotsForPty(ptyId)
+    this.ptyLifecycleGenerations.forget(ptyId)
     const handle = this.handleByPtyId.get(ptyId)
     if (handle) {
       // Why: pruning can remove a PTY without onPtyExit firing; release this leader's agent team so it doesn't leak.
@@ -26797,84 +26858,14 @@ export class OrcaRuntimeService {
 
   // Why: wake blocking orchestration.check --wait calls on this handle so they return the new message immediately instead of polling.
   notifyMessageArrived(handle: string, messageType?: string): void {
-    const waiters = this.messageWaitersByHandle.get(handle)
-    if (!waiters || waiters.size === 0) {
-      return
-    }
-    for (const waiter of [...waiters]) {
-      // Why: don't wake a coordinator waiting for worker_done/escalation on heartbeat noise it would misread as idleness.
-      if (messageType && waiter.typeFilter && !waiter.typeFilter.includes(messageType)) {
-        continue
-      }
-      this.resolveMessageWaiter(waiter)
-    }
+    this.messageWaiters.notify(handle, messageType)
   }
 
   waitForMessage(
     handle: string,
     options?: { typeFilter?: string[]; timeoutMs?: number; signal?: AbortSignal }
   ): Promise<void> {
-    return new Promise((resolve) => {
-      const timeoutMs = options?.timeoutMs ?? MESSAGE_WAIT_DEFAULT_TIMEOUT_MS
-
-      const waiter: MessageWaiter = {
-        handle,
-        typeFilter: options?.typeFilter,
-        resolve,
-        timeout: null,
-        abortCleanup: null
-      }
-
-      // Why: on caller abort (RPC socket closed — design doc §3.1), resolve now to release the long-poll slot instead of waiting out timeoutMs.
-      const signal = options?.signal
-      const onAbort = (): void => {
-        this.removeMessageWaiter(waiter)
-        resolve()
-      }
-      if (signal) {
-        if (signal.aborted) {
-          resolve()
-          return
-        }
-        waiter.abortCleanup = () => signal.removeEventListener('abort', onAbort)
-        signal.addEventListener('abort', onAbort, { once: true })
-      }
-
-      waiter.timeout = setTimeout(() => {
-        this.removeMessageWaiter(waiter)
-        resolve()
-      }, timeoutMs)
-
-      let waiters = this.messageWaitersByHandle.get(handle)
-      if (!waiters) {
-        waiters = new Set()
-        this.messageWaitersByHandle.set(handle, waiters)
-      }
-      waiters.add(waiter)
-    })
-  }
-
-  private resolveMessageWaiter(waiter: MessageWaiter): void {
-    this.removeMessageWaiter(waiter)
-    waiter.resolve()
-  }
-
-  private removeMessageWaiter(waiter: MessageWaiter): void {
-    if (waiter.timeout) {
-      clearTimeout(waiter.timeout)
-      waiter.timeout = null
-    }
-    if (waiter.abortCleanup) {
-      waiter.abortCleanup()
-      waiter.abortCleanup = null
-    }
-    const waiters = this.messageWaitersByHandle.get(waiter.handle)
-    if (waiters) {
-      waiters.delete(waiter)
-      if (waiters.size === 0) {
-        this.messageWaitersByHandle.delete(waiter.handle)
-      }
-    }
+    return this.messageWaiters.wait(handle, options)
   }
 
   private buildPtyTerminalSummary(
@@ -30387,6 +30378,7 @@ const WORKTREE_SCAN_CACHE_TTL_MS = 30_000
 // these (crash-cluster diagnostics, 2026-07).
 const WORKTREE_SCAN_AGENT_SCRATCH_TTL_MS = 5 * 60_000
 const RESOLVED_WORKTREE_REPO_TIMEOUT_MS = 5000
+const RESOLVED_WORKTREE_REPO_CONCURRENCY = 8
 
 export function resolveWorktreeScanCacheTtlMs(repo: Pick<Repo, 'path' | 'connectionId'>): number {
   return !repo.connectionId && isAgentScratchRepoRootPath(repo.path)
@@ -31819,7 +31811,6 @@ async function assertTerminalInputWithinLimitWithYield(text: string | undefined)
 const TUI_IDLE_DEFAULT_TIMEOUT_MS = 5 * 60 * 1000
 const TUI_IDLE_POLL_INTERVAL_MS = 2000
 const TUI_IDLE_QUIESCENCE_MS = 3000
-const MESSAGE_WAIT_DEFAULT_TIMEOUT_MS = 2 * 60 * 1000
 const EXPLICIT_IDLE_TITLE_RE = /(^|\s)(ready|idle|done)(\s|$|[.!?])/i
 const CLAUDE_IDLE_PREFIX = '\u2733'
 const GEMINI_IDLE_PREFIX = '\u25c7'

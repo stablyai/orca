@@ -15,6 +15,10 @@ import {
 } from './ssh-remote-node-toolchain-probe'
 import { isSshSessionLimitError } from './ssh-session-limit-error'
 import { buildSshLoginShellCommand } from './ssh-login-shell-command'
+import {
+  buildPosixRemoteNodeCandidateProbe,
+  isRemoteNodeCandidateProbeLimited
+} from './ssh-remote-node-candidate-probe'
 
 // Why: the login-shell fallback catches custom PATH setups in ~/.profile that
 // the path probes don't cover. Interactive configs (conda prompts, etc.) can
@@ -58,54 +62,13 @@ async function tryResolveViaKnownPaths(
   conn: SshConnection,
   options?: RemoteNodeResolutionOptions
 ): Promise<string | null> {
-  const script = `
-command -v node 2>/dev/null
-nvm_dirs=\${NVM_DIR:-"$HOME/.nvm"}
-for nvm_file in "$HOME/.profile" "$HOME/.bash_profile" "$HOME/.bashrc" "$HOME/.zprofile" "$HOME/.zshrc"
-do
-  [ -r "$nvm_file" ] || continue
-  nvm_dir_from_file=$(sed -n 's/^[[:space:]]*export[[:space:]][[:space:]]*NVM_DIR[[:space:]]*=[[:space:]]*//p; s/^[[:space:]]*NVM_DIR[[:space:]]*=[[:space:]]*//p' "$nvm_file" | tail -n 1)
-  case "$nvm_dir_from_file" in
-    \\"*\\") nvm_dir_from_file=\${nvm_dir_from_file#\\"}; nvm_dir_from_file=\${nvm_dir_from_file%%\\"*} ;;
-    \\'*\\') nvm_dir_from_file=\${nvm_dir_from_file#\\'}; nvm_dir_from_file=\${nvm_dir_from_file%%\\'*} ;;
-    *) nvm_dir_from_file=\${nvm_dir_from_file%%[[:space:]]*} ;;
-  esac
-  case "$nvm_dir_from_file" in
-    '$HOME'*) nvm_dir_from_file="$HOME\${nvm_dir_from_file#'$HOME'}" ;;
-    "~/"*) nvm_dir_from_file="$HOME/\${nvm_dir_from_file#\\~/}" ;;
-  esac
-  [ -n "$nvm_dir_from_file" ] && nvm_dirs="$nvm_dirs
-$nvm_dir_from_file"
-done
-printf '%s\\n' "$nvm_dirs" | while IFS= read -r nvm_dir
-do
-  [ -n "$nvm_dir" ] || continue
-  for candidate in "$nvm_dir"/versions/node/*/bin/node
-  do
-    [ -x "$candidate" ] && printf '%s\\n' "$candidate"
-  done
-done
-for candidate in \\
-  /usr/local/bin/node \\
-  /opt/homebrew/bin/node \\
-  "$HOME/.local/bin/node" \\
-  "$HOME/.fnm/aliases/default/bin/node" \\
-  "$HOME/.fnm/node-versions"/*/installation/bin/node \\
-  "$HOME/.local/share/fnm/node-versions"/*/installation/bin/node \\
-  "$HOME/.local/share/mise/shims/node" \\
-  "$HOME/.local/share/mise/installs/node"/*/bin/node \\
-  "$HOME/.asdf/shims/node" \\
-  "$HOME/.asdf/installs/nodejs"/*/bin/node \\
-  "$HOME/.volta/bin/node" \\
-  /usr/local/n/versions/node/*/bin/node
-do
-  [ -x "$candidate" ] && printf '%s\\n' "$candidate"
-done
-true
-`
+  const script = buildPosixRemoteNodeCandidateProbe()
 
   try {
     const result = await execCommandWithOptionalOptions(conn, script, signalOnlyOptions(options))
+    if (isRemoteNodeCandidateProbeLimited(result)) {
+      return null
+    }
     const seen = new Set<string>()
     for (const line of result.split('\n')) {
       const candidate = line.trim()

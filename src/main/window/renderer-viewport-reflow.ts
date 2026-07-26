@@ -1,5 +1,6 @@
 import { screen } from 'electron'
 import type { BrowserWindow } from 'electron'
+import { recordCrashBreadcrumb } from '../crash-reporting/crash-breadcrumb-store'
 
 // Why: long enough for the emulated scale factor to reach the renderer and drive a relayout.
 export const VIEWPORT_REFLOW_SETTLE_MS = 32
@@ -52,16 +53,19 @@ export function reflowRendererViewport(window: BrowserWindow): void {
       // Why: emulating the current factor is a no-op, so offset from this window's own display
       // rather than a constant, which would match on a 1.25x screen and reflow nothing.
       const realScaleFactor = screen.getDisplayMatching(window.getBounds()).scaleFactor || 1
+      // Why: Blink reads screenSize/viewPosition before the desktop branch, so 'desktop' does
+      // not make them inert despite the mobile-only docs. Passing the content size and 0,0
+      // moved screen.width and window.screenX for the 32ms hold, misplacing anything that
+      // translates screen coords (the BrowserPane context menu). Empty screenSize means "no
+      // override", and an omitted viewPosition stays nullopt so the real position survives --
+      // Electron's types require the key, but its converter only assigns when present.
       window.webContents.enableDeviceEmulation({
         screenPosition: 'desktop',
-        // Why: Electron types every field as required; screenSize is mobile-only and scale is
-        // the emulated-view zoom, so both carry their documented no-op defaults.
-        screenSize: viewSize,
-        viewPosition: { x: 0, y: 0 },
+        screenSize: { width: 0, height: 0 },
         deviceScaleFactor: realScaleFactor + VIEWPORT_REFLOW_SCALE_DELTA,
         viewSize,
         scale: 1
-      })
+      } as Parameters<typeof window.webContents.enableDeviceEmulation>[0])
       emulating = true
     } catch {
       // Why: a teardown race can destroy the webContents mid-call; nothing was applied.
@@ -90,6 +94,10 @@ function restoreRealViewport(window: BrowserWindow, attempt: number): void {
       // Why: the webContents is still alive, so the renderer is stuck at the emulated scale;
       // keep retrying and hold the latch so no second cycle stacks on the unrestored state.
       if (attempt >= VIEWPORT_REFLOW_RESTORE_ATTEMPTS) {
+        // Why: releasing the latch beats pinning it — a later reveal can still restore. But the
+        // renderer is stranded at the wrong scale factor until one happens, so leave evidence
+        // rather than let a permanently-emulated viewport look like a rendering bug.
+        recordCrashBreadcrumb('viewport_reflow_restore_failed', { attempts: attempt + 1 })
         activeViewportReflows.delete(window)
         return
       }

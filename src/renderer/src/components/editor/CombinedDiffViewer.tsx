@@ -76,6 +76,12 @@ import { removeDiffSectionMeasuredHeight } from './diff-section-height-cache'
 import { createCombinedDiffLoadScheduler } from './combined-diff-load-scheduler'
 import { combinedDiffSectionsMatchEntryMetadata } from './combined-diff-section-cache-match'
 import {
+  COMBINED_DIFF_VIEW_STATE_CACHE_MAX_ENTRIES,
+  getCombinedDiffViewedSectionKeys,
+  retainCombinedDiffSectionText,
+  retainCombinedDiffViewStateText
+} from './combined-diff-text-retention'
+import {
   beginCombinedDiffScrollbarDrag,
   type CombinedDiffScrollbarDragCleanup
 } from './combined-diff-scrollbar-drag'
@@ -294,9 +300,28 @@ export default function CombinedDiffViewer({
   const loadedIndicesRef = useRef<Set<number>>(new Set())
   const loadingIndicesRef = useRef<Set<number>>(new Set())
   const sectionsRef = useRef<DiffSection[]>([])
+  const protectedSectionKeysRef = useRef<ReadonlySet<string>>(new Set())
   const generationRef = useRef(0)
   const loadSectionRef = useRef<(index: number) => Promise<void>>(async () => {})
   const retrySectionRef = useRef<(index: number) => void>(() => {})
+  const applySectionTextRetention = useCallback(
+    (nextSections: DiffSection[], additionallyProtectedKey?: string): DiffSection[] => {
+      const protectedSectionKeys = new Set(protectedSectionKeysRef.current)
+      if (additionallyProtectedKey) {
+        protectedSectionKeys.add(additionallyProtectedKey)
+      }
+      const retained = retainCombinedDiffSectionText({
+        sections: nextSections,
+        loadedIndices: loadedIndicesRef.current,
+        protectedSectionKeys
+      })
+      for (const index of retained.evictedIndices) {
+        loadedIndicesRef.current.delete(index)
+      }
+      return retained.sections
+    },
+    []
+  )
   const updateCombinedDiffScrollbar = useCallback(() => {
     const container = scrollContainerRef.current
     if (!container || container.scrollHeight <= container.clientHeight + 1) {
@@ -689,7 +714,7 @@ export default function CombinedDiffViewer({
       const storedResult = getStoredTextDiffResult(result, largeDiffRenderLimit)
       loadedIndicesRef.current.add(index)
       setSections((prev) => {
-        return prev.map((s, i) =>
+        const nextSections = prev.map((s, i) =>
           i === index
             ? {
                 ...s,
@@ -702,6 +727,7 @@ export default function CombinedDiffViewer({
               }
             : s
         )
+        return applySectionTextRetention(nextSections, nextSections[index]?.key)
       })
     },
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -719,7 +745,8 @@ export default function CombinedDiffViewer({
       isBranchMode,
       isCommitMode,
       renderableBranchEntries,
-      uncommittedEntries
+      uncommittedEntries,
+      applySectionTextRetention
     ]
   )
   loadSectionRef.current = loadSectionNow
@@ -987,8 +1014,20 @@ export default function CombinedDiffViewer({
     // Why: the tree highlight belongs to one entry set; reset now so it can't flash on another before an Effect would.
     setActiveTreeSectionState({ entrySignature, key: null })
   }
+  const protectedSectionKeys = [
+    ...virtualizer
+      .getVirtualItems()
+      .map((item) => sections[item.index]?.key)
+      .filter((key): key is string => key !== undefined),
+    ...(activeTreeSectionKey ? [activeTreeSectionKey] : [])
+  ]
+  protectedSectionKeysRef.current = new Set(protectedSectionKeys)
+  const protectedSectionSignature = protectedSectionKeys.join('\0')
+  useLayoutEffect(() => {
+    setSections((current) => applySectionTextRetention(current))
+  }, [applySectionTextRetention, protectedSectionSignature, sections])
   const viewedSectionKeys = React.useMemo(
-    () => new Set(sections.filter((section) => !section.loading).map((section) => section.key)),
+    () => getCombinedDiffViewedSectionKeys(sections),
     [sections]
   )
   const handleTreeNavigate = useCallback(
@@ -1203,8 +1242,8 @@ export default function CombinedDiffViewer({
           content
         )
         setSectionHeights((prev) => removeDiffSectionMeasuredHeight(prev, index))
-        setSections((prev) =>
-          prev.map((s, i) => {
+        setSections((prev) => {
+          const nextSections = prev.map((s, i) => {
             if (i !== index) {
               return s
             }
@@ -1234,12 +1273,20 @@ export default function CombinedDiffViewer({
               largeDiffRenderLimit: nextLargeDiffRenderLimit
             }
           })
-        )
+          return applySectionTextRetention(nextSections, nextSections[index]?.key)
+        })
       } catch (err) {
         console.error('Save failed:', err)
       }
     },
-    [file.filePath, file.operationProvenance, file.runtimeEnvironmentId, file.worktreeId, sections]
+    [
+      applySectionTextRetention,
+      file.filePath,
+      file.operationProvenance,
+      file.runtimeEnvironmentId,
+      file.worktreeId,
+      sections
+    ]
   )
 
   const handleSectionSaveRef = useRef(handleSectionSave)
@@ -1251,17 +1298,23 @@ export default function CombinedDiffViewer({
     }
     const preservedScrollTop =
       combinedDiffScrollTopCache.get(viewStateKey) ?? scrollContainerRef.current?.scrollTop ?? 0
-    setWithLRU(combinedDiffViewStateCache, viewStateKey, {
-      entrySignature,
-      gitStatusSignature: combinedGitStatusSignature,
-      sections,
-      sectionHeights,
-      loadedIndices: Array.from(loadedIndicesRef.current).filter(
-        (index) => !sections[index]?.loading
-      ),
-      scrollTop: preservedScrollTop,
-      sideBySide
-    })
+    setWithLRU(
+      combinedDiffViewStateCache,
+      viewStateKey,
+      {
+        entrySignature,
+        gitStatusSignature: combinedGitStatusSignature,
+        sections,
+        sectionHeights,
+        loadedIndices: Array.from(loadedIndicesRef.current).filter(
+          (index) => !sections[index]?.loading
+        ),
+        scrollTop: preservedScrollTop,
+        sideBySide
+      },
+      COMBINED_DIFF_VIEW_STATE_CACHE_MAX_ENTRIES
+    )
+    retainCombinedDiffViewStateText(combinedDiffViewStateCache)
   }, [
     combinedGitStatusSignature,
     entries.length,

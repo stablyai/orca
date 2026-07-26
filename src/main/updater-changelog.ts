@@ -1,6 +1,7 @@
 import { net } from 'electron'
 import type { ChangelogData } from '../shared/types'
 import { compareVersions } from './updater-fallback'
+import { readFetchResponseJsonWithinLimit } from './lib/fetch-response-body'
 
 type ChangelogEntry = {
   version: string
@@ -48,7 +49,7 @@ export async function fetchChangelog(
   if (!res.ok) {
     return null
   }
-  const json: unknown = await res.json()
+  const json = await readFetchResponseJsonWithinLimit<unknown>(res)
 
   // Why: the JSON endpoint is external and could serve malformed data.
   // Validate the shape before indexing into it to avoid runtime errors

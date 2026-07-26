@@ -12,6 +12,14 @@ import { getPRForBranchOutcome, type GitHubPRBranchLookupOptions } from './clien
 import { getOriginGitHubApiRepository } from './github-api-repository'
 import { ghRepoExecOptions, githubRepoContext } from './gh-utils'
 import {
+  boundedVisiblePRRefreshCandidates,
+  PR_REFRESH_ACTIVE_SCOPE_LIMIT,
+  PR_REFRESH_QUEUE_ENTRY_LIMIT,
+  PR_REFRESH_RETRY_STATE_LIMIT,
+  retainPRRefreshAlias,
+  retainPRRefreshState
+} from './pr-refresh-memory-bounds'
+import {
   getRateLimit,
   noteRepositoryRateLimitSpend,
   repositoryRateLimitGuard,
@@ -97,8 +105,19 @@ let lastBackgroundStartAt = 0
  * Only a rate-limit outcome carrying `retryDisabledUntil` sets a gate; any other settled outcome clears it.
  */
 function noteManualRetryGate(key: string, outcome: PRRefreshOutcome): void {
+  const now = Date.now()
+  for (const [gateKey, retryAt] of manualRetryGates) {
+    if (retryAt <= now) {
+      manualRetryGates.delete(gateKey)
+    }
+  }
   if (outcome.kind === 'upstream-error' && outcome.retryDisabledUntil !== undefined) {
-    manualRetryGates.set(key, outcome.retryDisabledUntil)
+    retainPRRefreshState(
+      manualRetryGates,
+      key,
+      outcome.retryDisabledUntil,
+      PR_REFRESH_RETRY_STATE_LIMIT
+    )
   } else {
     manualRetryGates.delete(key)
   }
@@ -116,6 +135,14 @@ const diagnosticsCounters = {
   coalesced: 0,
   skipped: 0,
   backgroundPauses: 0
+}
+
+function setBoundedQueueEntry(entry: QueueEntry): boolean {
+  if (!queue.has(entry.key) && queue.size >= PR_REFRESH_QUEUE_ENTRY_LIMIT) {
+    return false
+  }
+  queue.set(entry.key, entry)
+  return true
 }
 
 export function setPRRefreshOutcomeObserver(observer: PRRefreshOutcomeObserver | null): void {
@@ -156,6 +183,26 @@ function recordPRRefreshQueueDiagnostic(
       backgroundPauses: diagnosticsCounters.backgroundPauses
     }
   })
+}
+
+function broadcastCapacitySkip(
+  aliases: GitHubPRRefreshAlias[],
+  reason: GitHubPRRefreshReason
+): void {
+  diagnosticsCounters.skipped += 1
+  recordPRRefreshQueueDiagnostic('skipped', reason, 'capacity')
+  broadcast({ aliases, reason, status: 'skipped', skippedReason: 'capacity' })
+}
+
+function addBoundedQueueAlias(
+  entry: QueueEntry,
+  alias: GitHubPRRefreshAlias,
+  reason: GitHubPRRefreshReason
+): void {
+  const evicted = retainPRRefreshAlias(entry.aliases, alias, entry.candidate.cacheKey)
+  if (evicted) {
+    broadcastCapacitySkip([evicted], reason)
+  }
 }
 
 function clearActiveBurstWindow(windowId: number): void {
@@ -364,15 +411,18 @@ function visibleCandidateAfterOutcome(
   }
 }
 
-function setVisibleFollowUp(entry: QueueEntry): void {
+function setVisibleFollowUp(entry: QueueEntry): boolean {
   const existing = queue.get(entry.key)
   if (!existing) {
-    queue.set(entry.key, entry)
-    return
+    if (!setBoundedQueueEntry(entry)) {
+      broadcastCapacitySkip(Array.from(entry.aliases.values()), entry.reason)
+      return false
+    }
+    return true
   }
 
   for (const alias of entry.aliases.values()) {
-    existing.aliases.set(alias.cacheKey, alias)
+    addBoundedQueueAlias(existing, alias, entry.reason)
   }
 
   // Why: a user activation can arrive while a background refresh awaits gh; the follow-up must not overwrite that pending active/manual work.
@@ -381,13 +431,14 @@ function setVisibleFollowUp(entry: QueueEntry): void {
     existing.priority > entry.priority ||
     existing.dueAt <= entry.dueAt
   ) {
-    return
+    return true
   }
 
-  queue.set(entry.key, {
+  setBoundedQueueEntry({
     ...entry,
     aliases: existing.aliases
   })
+  return true
 }
 
 function removeQueuedAliasForInvalidCandidate(key: string, alias: GitHubPRRefreshAlias): void {
@@ -426,7 +477,7 @@ function nextVisibleErrorRetryAt(key: string): number {
   const failures = (errorBackoff.get(key)?.failures ?? 0) + 1
   const retryAt =
     Date.now() + Math.min(BACKOFF_MAX_MS, BACKOFF_BASE_MS * 2 ** Math.min(failures - 1, 4))
-  errorBackoff.set(key, { failures, retryAt })
+  retainPRRefreshState(errorBackoff, key, { failures, retryAt }, PR_REFRESH_RETRY_STATE_LIMIT)
   return retryAt
 }
 
@@ -463,7 +514,7 @@ function scheduleVisibleFollowUp(
   if (outcome.kind === 'upstream-error') {
     // Why: reuse the retry time already computed for the broadcast so the same failure isn't counted twice against the backoff.
     const retryAt = options?.plannedRetryAt ?? nextVisibleErrorRetryAt(key)
-    setVisibleFollowUp({
+    const retained = setVisibleFollowUp({
       key,
       candidate,
       aliases: new Map(aliases.map((alias) => [alias.cacheKey, alias])),
@@ -473,6 +524,10 @@ function scheduleVisibleFollowUp(
       queuedAt: nextQueueOrder(),
       windowId
     })
+    if (!retained) {
+      resetKeyRetryState(key)
+      return
+    }
     // Why: this is a delayed retry, not active work; a spinner would make visible worktrees look stuck until backoff expires.
     scheduleDrain(retryAt - Date.now())
     return
@@ -489,7 +544,7 @@ function scheduleVisibleFollowUp(
       ? regularDueAt
       : Math.min(regularDueAt, pendingMergeabilityDueAt)
   // Why: a coalesced linked-PR refresh may represent several branches; preserve every alias so all cache entries keep getting updates.
-  setVisibleFollowUp({
+  const retained = setVisibleFollowUp({
     key,
     candidate: followUpCandidate,
     aliases: new Map(aliases.map((alias) => [alias.cacheKey, alias])),
@@ -501,6 +556,10 @@ function scheduleVisibleFollowUp(
     bypassBackgroundBudget: pendingMergeabilityDueAt !== null,
     windowId
   })
+  if (!retained) {
+    resetKeyRetryState(key)
+    return
+  }
   scheduleDrain(Math.max(0, dueAt - Date.now()))
 }
 
@@ -595,6 +654,12 @@ function pruneActiveStarts(scope: string, now: number): number[] {
   return activeStarts
 }
 
+function pruneExpiredActiveScopes(now: number): void {
+  for (const scope of Array.from(activeStartsByScope.keys())) {
+    pruneActiveStarts(scope, now)
+  }
+}
+
 function nextActiveBurstDelay(entry: QueueEntry): number {
   const now = Date.now()
   const activeStarts = pruneActiveStarts(activeBurstScope(entry), now)
@@ -607,9 +672,10 @@ function nextActiveBurstDelay(entry: QueueEntry): number {
 function noteActiveStart(entry: QueueEntry): void {
   const now = Date.now()
   const scope = activeBurstScope(entry)
+  pruneExpiredActiveScopes(now)
   const activeStarts = pruneActiveStarts(scope, now)
   activeStarts.push(now)
-  activeStartsByScope.set(scope, activeStarts)
+  retainPRRefreshState(activeStartsByScope, scope, activeStarts, PR_REFRESH_ACTIVE_SCOPE_LIMIT)
 }
 
 function activeOrder(a: QueueEntry, b: QueueEntry): number {
@@ -758,7 +824,12 @@ async function drainQueue(): Promise<void> {
           .find((guard) => guard.blocked)
         if (blockedGuard?.blocked) {
           const retryAt = blockedGuard.resetAt * 1000
-          queue.set(next.key, { ...next, dueAt: retryAt })
+          const retained = setBoundedQueueEntry({ ...next, dueAt: retryAt })
+          if (!retained) {
+            resetKeyRetryState(next.key)
+            broadcastCapacitySkip(aliases, next.reason)
+            continue
+          }
           broadcast({
             aliases,
             reason: next.reason,
@@ -845,7 +916,7 @@ export function enqueuePRRefresh(
   const freshDueAt = shouldSkipFresh(candidate, reason) ? freshRetryAt(candidate) : null
   const dueAt = freshDueAt ?? Date.now() + (reason === 'post-push' ? POST_PUSH_DELAY_MS : 0)
   if (existing) {
-    existing.aliases.set(alias.cacheKey, alias)
+    addBoundedQueueAlias(existing, alias, reason)
     diagnosticsCounters.coalesced += 1
     recordPRRefreshQueueDiagnostic('coalesced', reason)
     const shouldPromoteExisting =
@@ -871,9 +942,13 @@ export function enqueuePRRefresh(
       }
     }
   } else {
+    if (queue.size >= PR_REFRESH_QUEUE_ENTRY_LIMIT) {
+      broadcastCapacitySkip([alias], reason)
+      return
+    }
     diagnosticsCounters.enqueued += 1
     recordPRRefreshQueueDiagnostic('enqueued', reason)
-    queue.set(key, {
+    setBoundedQueueEntry({
       key,
       candidate,
       aliases: new Map([[alias.cacheKey, alias]]),
@@ -900,9 +975,13 @@ export function reportVisiblePRRefreshCandidates(
   if (existingVisible && generation < existingVisible.generation) {
     return
   }
-  visibleByWindow.set(windowId, { generation, keys: new Set(candidates.map(refreshKey)) })
+  const retainedCandidates = boundedVisiblePRRefreshCandidates(candidates)
+  visibleByWindow.set(windowId, {
+    generation,
+    keys: new Set(retainedCandidates.map(refreshKey))
+  })
   removeInvisibleVisibleRefreshes()
-  for (const candidate of candidates) {
+  for (const candidate of retainedCandidates) {
     enqueuePRRefresh(candidate, 'visible', 40, windowId)
   }
 }
@@ -928,7 +1007,14 @@ export async function refreshPRNow(candidate: GitHubPRRefreshCandidate): Promise
   const key = refreshKey(candidate)
   const existing = queue.get(key)
   const aliasMap = new Map(existing ? existing.aliases : [])
-  aliasMap.set(alias.cacheKey, alias)
+  const evictedAlias = retainPRRefreshAlias(
+    aliasMap,
+    alias,
+    existing?.candidate.cacheKey ?? alias.cacheKey
+  )
+  if (evictedAlias) {
+    broadcastCapacitySkip([evictedAlias], 'manual')
+  }
   const aliases = Array.from(aliasMap.values())
   const skippedReason = validateCandidate(candidate)
   if (skippedReason) {
@@ -963,7 +1049,7 @@ export async function refreshPRNow(candidate: GitHubPRRefreshCandidate): Promise
   if (gateUntil > Date.now()) {
     const retryAt = gateUntil
     // Why: paused maps `pausedUntil` into the renderer's auto-retry, so requeue at reset (finding 12) — don't advertise an unscheduled retry.
-    queue.set(key, {
+    const retained = setBoundedQueueEntry({
       key,
       candidate,
       aliases: aliasMap,
@@ -972,6 +1058,16 @@ export async function refreshPRNow(candidate: GitHubPRRefreshCandidate): Promise
       dueAt: retryAt,
       queuedAt: nextQueueOrder()
     })
+    if (!retained) {
+      broadcastCapacitySkip(aliases, 'manual')
+      return {
+        kind: 'upstream-error',
+        errorType: 'rate_limited',
+        message: 'GitHub is temporarily limiting requests. Try again after the limit resets.',
+        fetchedAt: Date.now(),
+        retryDisabledUntil: retryAt
+      }
+    }
     broadcast({
       aliases,
       reason: 'manual',

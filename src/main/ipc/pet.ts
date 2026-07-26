@@ -1,18 +1,19 @@
 /* eslint-disable max-lines */
-import { app, BrowserWindow, dialog, ipcMain, nativeImage } from 'electron'
-import { copyFile, mkdir, open, readFile, rename, rm, stat, lstat } from 'node:fs/promises'
+import { app, BrowserWindow, dialog, ipcMain } from 'electron'
+import { copyFile, mkdir, open, rename, rm, stat, lstat } from 'node:fs/promises'
 import { constants as fsConstants, createWriteStream } from 'node:fs'
 import { pipeline } from 'node:stream/promises'
 import { randomUUID } from 'node:crypto'
 import { basename, dirname, extname, isAbsolute, join, normalize, resolve, sep } from 'node:path'
 import { z } from 'zod'
 import type { CustomPet } from '../../shared/types'
+import { applyCodexPetDefaults, type PetManifestLike, type ResolvedPetManifest } from './pet-bundle'
 import {
-  applyCodexPetDefaults,
-  readWebpDimensionsFromBuffer,
-  type PetManifestLike,
-  type ResolvedPetManifest
-} from './pet-bundle'
+  MAX_CUSTOM_PET_FILE_BYTES,
+  isCustomPetSheetSizeSafe
+} from '../../shared/custom-pet-media-limits'
+import { readCustomPetFile } from './custom-pet-file-reader'
+import { readRasterImageDimensions } from '../../shared/raster-image-dimensions'
 
 // Why: pets are image-only — render natively via <img> (no 3D engine); main owns this format allowlist.
 const IMAGE_FORMATS: Record<string, string> = {
@@ -39,7 +40,6 @@ function getPetsDir(): string {
   return join(app.getPath('userData'), 'sidekicks', 'custom')
 }
 
-const MAX_BYTES = 64 * 1024 * 1024 // 64 MB — generous but bounded so a user can't point at a multi-GB file and OOM the renderer when it builds a Blob URL.
 const MAX_MANIFEST_BYTES = 64 * 1024 // pet.json is tiny by spec; cap to defend against a malicious bundle stuffing megabytes into the manifest.
 
 function isSafeId(id: string): boolean {
@@ -121,25 +121,24 @@ const PetFileRequestSchema = z.object({
   kind: z.enum(['image', 'bundle']).optional()
 })
 
-async function readSheetDimensions(
-  buffer: Buffer
-): Promise<{ width: number; height: number } | null> {
-  // Why: nativeImage can fail on some valid WebP that Chromium renders — read WebP dims from the header before native decode.
-  const webpDims = readWebpDimensionsFromBuffer(buffer)
-  if (webpDims) {
-    return webpDims
-  }
-
-  // Why: nativeImage can't decode SVG (vector → no pixel grid) — pet bundles must use a raster sheet.
-  const image = nativeImage.createFromBuffer(buffer)
-  if (image.isEmpty()) {
+function assertCustomPetRasterDimensions(
+  data: ArrayBuffer,
+  extension: string,
+  label: 'Pet image' | 'Spritesheet'
+): { width: number; height: number } | null {
+  if (extension === '.svg') {
     return null
   }
-  const size = image.getSize()
-  if (size.width <= 0 || size.height <= 0) {
-    return null
+  const dimensions = readRasterImageDimensions(new Uint8Array(data))
+  if (!dimensions) {
+    throw new Error(`Could not decode the ${label.toLowerCase()}.`)
   }
-  return { width: size.width, height: size.height }
+  if (!isCustomPetSheetSizeSafe(dimensions.width, dimensions.height)) {
+    throw new Error(
+      `${label} dimensions ${dimensions.width}×${dimensions.height} exceed the safe limit.`
+    )
+  }
+  return dimensions
 }
 
 // Why: TOCTOU symlink-swap defense — O_NOFOLLOW makes open() fail on a symlink; Windows lacks it, so fall back to copyFile.
@@ -201,10 +200,15 @@ export function registerPetHandlers(): void {
     if (!srcStat.isFile()) {
       throw new Error('Selected path is not a file')
     }
-    if (srcStat.size > MAX_BYTES) {
+    if (srcStat.size > MAX_CUSTOM_PET_FILE_BYTES) {
       throw new Error(
-        `File is too large (${(srcStat.size / (1024 * 1024)).toFixed(1)} MB). Max is ${MAX_BYTES / (1024 * 1024)} MB.`
+        `File is too large (${(srcStat.size / (1024 * 1024)).toFixed(1)} MB). Max is ${MAX_CUSTOM_PET_FILE_BYTES / (1024 * 1024)} MB.`
       )
+    }
+    if (classified.ext !== '.svg') {
+      const sourceBytes = await readCustomPetFile(src)
+      // Why: renderer delivery would otherwise let Chromium decode a compressed dimension bomb first.
+      assertCustomPetRasterDimensions(sourceBytes, classified.ext, 'Pet image')
     }
 
     const dir = getPetsDir()
@@ -270,11 +274,9 @@ export function registerPetHandlers(): void {
 
     let manifest: ResolvedPetManifest<PetManifest>
     try {
-      const raw = await readFile(manifestPath, 'utf8')
-      // Why: defend against TOCTOU — the file may have grown between the stat check and this read.
-      if (Buffer.byteLength(raw, 'utf8') > MAX_MANIFEST_BYTES) {
-        throw new Error('pet.json exceeded the manifest size limit.')
-      }
+      const raw = Buffer.from(await readCustomPetFile(manifestPath, MAX_MANIFEST_BYTES)).toString(
+        'utf8'
+      )
       manifest = applyCodexPetDefaults(PetManifestSchema.parse(JSON.parse(raw)))
     } catch (error) {
       throw new Error(`Invalid pet.json: ${error instanceof Error ? error.message : 'parse error'}`)
@@ -318,24 +320,23 @@ export function registerPetHandlers(): void {
     if (!sheetStat.isFile()) {
       throw new Error('Spritesheet path is not a file.')
     }
-    if (sheetStat.size > MAX_BYTES) {
+    if (sheetStat.size > MAX_CUSTOM_PET_FILE_BYTES) {
       throw new Error(
         `Spritesheet is too large (${(sheetStat.size / (1024 * 1024)).toFixed(1)} MB).`
       )
     }
 
+    const sheetBytes = await readCustomPetFile(sheetSrc)
+    // Why: metadata-free bundles also reach the renderer image decoder, so every raster needs the same pre-decode gate.
+    const sheetDimensions = assertCustomPetRasterDimensions(
+      sheetBytes,
+      sheetClass.ext,
+      'Spritesheet'
+    )
+
     let sprite: NonNullable<CustomPet['sprite']> | undefined
     if (manifest.frame) {
-      // Why: only decode when a frame layout needs validating — nativeImage can fail on some WebP variants in headless contexts.
-      const sheetBuf = await readFile(sheetSrc)
-      // Why: defend against TOCTOU — file may have grown between stat and read.
-      if (sheetBuf.byteLength > MAX_BYTES) {
-        throw new Error('Spritesheet exceeded the size limit.')
-      }
-      const dims = await readSheetDimensions(sheetBuf)
-      if (!dims) {
-        throw new Error('Could not decode the spritesheet image.')
-      }
+      const dims = sheetDimensions!
       const { width: fw, height: fh } = manifest.frame
       if (dims.width % fw !== 0 || dims.height % fh !== 0) {
         throw new Error(
@@ -432,8 +433,16 @@ export function registerPetHandlers(): void {
         return null
       }
       try {
-        const buf = await readFile(filePath)
-        return buf.buffer.slice(buf.byteOffset, buf.byteOffset + buf.byteLength)
+        // Why: stored pet files can be replaced after import; the reader keeps
+        // one handle and never allocates beyond the same 64 MiB import limit.
+        const data = await readCustomPetFile(filePath)
+        const classified = classifyFile(filePath)
+        if (!classified) {
+          return null
+        }
+        // Why: this gates legacy image pets and metadata-free bundles before renderer decode.
+        assertCustomPetRasterDimensions(data, classified.ext, 'Pet image')
+        return data
       } catch (error) {
         console.warn('[pet-overlay] pet:read failed', error)
         return null

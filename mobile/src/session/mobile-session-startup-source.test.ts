@@ -5,10 +5,6 @@ const source = readFileSync(
   new URL('../../app/h/[hostId]/session/[worktreeId].tsx', import.meta.url),
   'utf8'
 )
-const reconciliationHookSource = readFileSync(
-  new URL('./use-mobile-session-tabs-reconciliation.ts', import.meta.url),
-  'utf8'
-)
 
 function sliceBetween(startPattern: string, endPattern: string): string {
   const start = source.indexOf(startPattern)
@@ -33,23 +29,24 @@ describe('mobile session startup', () => {
     expect(autoCreateEffect).toContain('void handleCreateTerminal()')
   })
 
-  it('delegates stream ownership while retaining the exact terminal polling cadence', () => {
-    expect(source).toContain('useMobileSessionTabsReconciliation<')
-    expect(source).toContain('const applicationRevision = ++appliedSessionTabsRevisionRef.current')
-    expect(source).toContain('getApplicationRevision: getSessionTabsApplicationRevision')
-    expect(source).not.toContain("client.subscribe(\n      'session.tabs.subscribe'")
-    expect(reconciliationHookSource).toContain("client.subscribe(\n      'session.tabs.subscribe'")
-    expect(reconciliationHookSource).toContain(
-      "if (AppState.currentState !== 'active') {\n          controller.setReconciliationActive(false)"
+  it('stops fallback list polling in the background and reconciles on resume', () => {
+    const pollEffect = sliceBetween(
+      "const refreshOnForeground = () => {\n        if (AppState.currentState !== 'active')",
+      '// Why: pick up Settings → Terminal text size on return'
     )
-    expect(reconciliationHookSource).toContain('void controller.poll()')
-    expect(reconciliationHookSource).toContain('void fetchTerminals()')
-    expect(reconciliationHookSource).toContain("AppState.addEventListener('change'")
-    expect(reconciliationHookSource).toContain('const interval = setInterval(')
-    expect(reconciliationHookSource).toContain('2000')
-    expect(reconciliationHookSource).toContain('controller.setReconciliationActive(false)')
-    expect(reconciliationHookSource).toContain('clearInterval(interval)')
-    expect(reconciliationHookSource).toContain('appStateSubscription.remove()')
+
+    expect(pollEffect).toContain(
+      "if (AppState.currentState !== 'active') {\n          return\n        }\n        void fetchSessionTabs()"
+    )
+    expect(pollEffect).toContain('void fetchTerminals()')
+    expect(pollEffect).toContain("AppState.addEventListener('change'")
+    expect(pollEffect).toContain("if (state === 'active') {\n          refreshOnForeground()")
+    expect(pollEffect).toContain('const interval = setInterval(refreshOnForeground, 2000)')
+    expect(pollEffect.lastIndexOf('\n      refreshOnForeground()')).toBeGreaterThan(
+      pollEffect.indexOf("AppState.addEventListener('change'")
+    )
+    expect(pollEffect).toContain('clearInterval(interval)')
+    expect(pollEffect).toContain('appStateSubscription.remove()')
   })
 
   it('loads session tabs without waiting for desktop activation', () => {
@@ -65,7 +62,7 @@ describe('mobile session startup', () => {
     expect(startupEffect).toContain("navigation: 'caller'")
     expect(startupEffect).not.toContain("await client\n          .sendRequest('worktree.activate'")
     expect(startupEffect.indexOf("sendRequest('worktree.activate'")).toBeLessThan(
-      startupEffect.indexOf('await ensureSessionTabs()')
+      startupEffect.indexOf('await fetchSessionTabs()')
     )
     expect(startupEffect).toContain('headlessActivationNeedsHostRenderer(response.result)')
     expect(startupEffect).toContain("showToast('Open Orca on the host to wake sleeping agents.'")

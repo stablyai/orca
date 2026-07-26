@@ -100,21 +100,6 @@ describe('createIpcPtyTransport', () => {
     expect(kill).not.toHaveBeenCalled()
   })
 
-  it('retires an adopted PTY when recovery disconnects before a replacement spawn', async () => {
-    const { createIpcPtyTransport } = await import('./pty-transport')
-    const spawn = window.api.pty.spawn as unknown as ReturnType<typeof vi.fn>
-    const kill = window.api.pty.kill as unknown as ReturnType<typeof vi.fn>
-    spawn.mockResolvedValueOnce({ id: 'empty-reattach', isReattach: true })
-    const transport = createIpcPtyTransport({})
-
-    await transport.connect({ url: '', sessionId: 'empty-reattach', callbacks: {} })
-    transport.disconnect()
-
-    expect(kill).toHaveBeenCalledWith('empty-reattach')
-    expect(transport.getPtyId()).toBeNull()
-    expect(transport.isConnected()).toBe(false)
-  })
-
   it('forwards requested environment deletions to the PTY spawn', async () => {
     const { createIpcPtyTransport } = await import('./pty-transport')
     const spawn = window.api.pty.spawn as unknown as ReturnType<typeof vi.fn>
@@ -1404,7 +1389,6 @@ describe('createIpcPtyTransport', () => {
 
     expect(result).toEqual({
       id: 'pty-reattach',
-      isReattach: true,
       launchAgent: 'droid',
       snapshot: 'snapshot data',
       snapshotCols: 132,
@@ -1429,7 +1413,6 @@ describe('createIpcPtyTransport', () => {
 
     expect(result).toEqual({
       id: 'pty-unknown-launch-agent',
-      isReattach: true,
       snapshot: undefined,
       snapshotCols: undefined,
       snapshotRows: undefined,

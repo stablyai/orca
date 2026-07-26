@@ -966,6 +966,9 @@ export type UISlice = {
   setUpdateCardCollapsed: (collapsed: boolean) => void
   updateReassuranceSeen: boolean
   markUpdateReassuranceSeen: () => void
+  /** True on the launch where the OSC 52 default-on migration overrode a persisted `false`. */
+  osc52ClipboardDefaultOnNoticePending: boolean
+  clearOsc52ClipboardDefaultOnNotice: () => void
   isFullScreen: boolean
   setIsFullScreen: (v: boolean) => void
   /** URL opened when a new browser tab is created. Null = blank tab (default). */
@@ -2464,6 +2467,7 @@ export const createUISlice: StateCreator<AppState, [], [], UISlice> = (set, get)
         })(),
         dismissedUpdateVersion: ui.dismissedUpdateVersion ?? null,
         updateReassuranceSeen: ui.updateReassuranceSeen ?? false,
+        osc52ClipboardDefaultOnNoticePending: ui.osc52ClipboardDefaultOnNoticePending === true,
         browserDefaultUrl: ui.browserDefaultUrl ?? null,
         browserDefaultSearchEngine: ui.browserDefaultSearchEngine ?? null,
         browserDefaultZoomLevel: normalizeBrowserPageZoomLevel(ui.browserDefaultZoomLevel),
@@ -2577,6 +2581,13 @@ export const createUISlice: StateCreator<AppState, [], [], UISlice> = (set, get)
   markUpdateReassuranceSeen: () => {
     void window.api.ui.set({ updateReassuranceSeen: true }).catch(console.error)
     set({ updateReassuranceSeen: true })
+  },
+  osc52ClipboardDefaultOnNoticePending: false,
+  clearOsc52ClipboardDefaultOnNotice: () => {
+    // Why clear locally first: a failed persist must not re-toast this session. It will
+    // re-arm on the next launch, which is the safe direction for a one-shot notice.
+    set({ osc52ClipboardDefaultOnNoticePending: false })
+    void window.api.ui.set({ osc52ClipboardDefaultOnNoticePending: false }).catch(console.error)
   },
   isFullScreen: false,
   setIsFullScreen: (v) => set({ isFullScreen: v }),

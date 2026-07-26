@@ -66,6 +66,7 @@ import { assertSafeAgentStartupCwd, resolveSafePtyDefaultCwd } from '../provider
 import { ORCA_HERMES_STARTUP_QUERY_ENV } from '../../shared/hermes-startup-query'
 import type { TuiAgent } from '../../shared/types'
 import { forceKillPosixPtyProcessGroups } from '../pty/posix-pty-process-groups'
+import { appendCompactedStringChunk } from '../../shared/string-chunk-compaction'
 
 const PANE_IDENTITY_ENV_KEYS = [
   'ORCA_PANE_KEY',
@@ -592,12 +593,10 @@ export function createPtySubprocess(opts: PtySubprocessOptions): SubprocessHandl
   let windowsFallbackAttempts: WindowsShellSpawnAttempt[] = []
   const startupAgentRecognition = recognizeAgentProcessFromCommandLine(opts.command)
   const isCodexStartupCommand = startupAgentRecognition?.agent === 'codex'
-  // Why: gate on the effective cwd, not raw opts.cwd — an omitted cwd becomes a safe
-  // default (mirrors LocalPtyProvider). Guarding first treated undefined as root-like (#9578).
-  const requestedCwd = opts.cwd || getDefaultCwd()
   if (opts.command && startupAgentRecognition) {
-    assertSafeAgentStartupCwd(requestedCwd, opts.command)
+    assertSafeAgentStartupCwd(opts.cwd, opts.command)
   }
+  const requestedCwd = opts.cwd || getDefaultCwd()
   let spawnCwd = requestedCwd
   let validationCwd = spawnCwd
 
@@ -812,7 +811,7 @@ export function createPtySubprocess(opts: PtySubprocessOptions): SubprocessHandl
 
   const bufferPreListenerData = (data: string): void => {
     // Why: Windows shell-arg startup commands can print before Session wires this subprocess in; preserve that spawn-time race window.
-    pendingPreListenerData.push(data)
+    appendCompactedStringChunk(pendingPreListenerData, data)
     pendingPreListenerDataChars += data.length
     while (pendingPreListenerDataChars > PENDING_PRE_LISTENER_DATA_MAX_CHARS) {
       const removed = pendingPreListenerData.shift()

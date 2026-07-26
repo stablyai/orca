@@ -12,7 +12,13 @@ import {
   parseGitHubRemoteIdentity,
   type LocalGitExecOptions
 } from './github-repository-identity'
+import {
+  effectiveGitHubRemoteHost,
+  gitHubSshConfigHostAlias
+} from './github-remote-identity-parsing'
+import { resolveSshConfigHostname } from './github-ssh-host-alias-resolution'
 import { parseWslPath } from '../wsl'
+import { cacheIdentityDigest } from '../cache-identity-digest'
 
 export type GitHubEnterpriseRepoSlug = GitHubOwnerRepo & { host: string }
 
@@ -22,6 +28,8 @@ export type GitHubEnterpriseRepoSlug = GitHubOwnerRepo & { host: string }
 // GHES remote is not left to fall through to Gitea (#8312).
 const HOST_AUTH_TTL_MS = 60_000
 const HOST_AUTH_CACHE_MAX_ENTRIES = 512
+const HOST_AUTH_MAX_IN_FLIGHT = 16
+const GITHUB_HOST_MAX_CHARS = 1024
 
 type HostAuthCacheEntry = {
   authenticatedHost: string | null
@@ -82,6 +90,9 @@ type NormalizedGitHubHost = {
 }
 
 function normalizeGitHubHost(host: string): NormalizedGitHubHost | null {
+  if (host.length > GITHUB_HOST_MAX_CHARS) {
+    return null
+  }
   const match = host
     .trim()
     .toLowerCase()
@@ -128,8 +139,14 @@ async function resolveAuthenticatedGitHubHost(
   connectionId?: string | null,
   localGitOptions: LocalGitExecOptions = {}
 ): Promise<string | null | undefined> {
-  const normalizedHost = normalizeGitHubHost(host)?.authority ?? host.trim().toLowerCase()
-  const cacheKey = `${runtimeCacheKey(repoPath, localGitOptions.wslDistro)}\0${normalizedHost}`
+  const normalizedHost = normalizeGitHubHost(host)?.authority
+  if (!normalizedHost) {
+    return null
+  }
+  const cacheKey = cacheIdentityDigest([
+    runtimeCacheKey(repoPath, localGitOptions.wslDistro),
+    normalizedHost
+  ])
   const now = Date.now()
   pruneHostAuthCache(now)
   const cached = hostAuthCache.get(cacheKey)
@@ -168,6 +185,9 @@ async function resolveAuthenticatedGitHubHost(
     pruneHostAuthCache(Date.now())
     return authenticatedHost
   })()
+  if (hostAuthInFlight.size >= HOST_AUTH_MAX_IN_FLIGHT) {
+    return probe
+  }
   hostAuthInFlight.set(cacheKey, probe)
   try {
     return await probe
@@ -225,11 +245,32 @@ export async function getEnterpriseGitHubRepoSlugForRemote(
     return null
   }
   const identity = remoteUrl ? parseGitHubRemoteIdentity(remoteUrl) : null
-  if (!identity || identity.host === 'github.com') {
+  if (!identity) {
+    return null
+  }
+  // Why: GHES routing needs the effective host behind an SSH alias.
+  let effectiveHost = identity.host
+  const aliasHost = remoteUrl ? gitHubSshConfigHostAlias(remoteUrl) : null
+  if (aliasHost) {
+    const { hostname, resolved } = await resolveSshConfigHostname(aliasHost, context)
+    if (!resolved || !hostname) {
+      const authenticatedLiteralHost = await resolveAuthenticatedGitHubHost(
+        identity.host,
+        repoPath,
+        connectionId,
+        localGitOptions
+      )
+      return authenticatedLiteralHost
+        ? { owner: identity.owner, repo: identity.repo, host: authenticatedLiteralHost }
+        : undefined
+    }
+    effectiveHost = effectiveGitHubRemoteHost(identity.host, hostname)
+  }
+  if (effectiveHost === 'github.com') {
     return null
   }
   const authenticatedHost = await resolveAuthenticatedGitHubHost(
-    identity.host,
+    effectiveHost,
     repoPath,
     connectionId,
     localGitOptions

@@ -1,4 +1,4 @@
-import { mkdir, mkdtemp, readFile, rm, stat, writeFile } from 'node:fs/promises'
+import { mkdir, mkdtemp, readFile, rm, stat, truncate, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
@@ -7,7 +7,10 @@ vi.mock('electron', () => ({
   app: { isPackaged: true }
 }))
 
-import { installLinuxBareOrcaDispatcher } from './linux-bare-orca-dispatcher'
+import {
+  LINUX_BARE_ORCA_DISPATCHER_MAX_BYTES,
+  installLinuxBareOrcaDispatcher
+} from './linux-bare-orca-dispatcher'
 
 const created: string[] = []
 
@@ -65,6 +68,45 @@ describe('installLinuxBareOrcaDispatcher', () => {
 
     expect(second).toEqual(first)
     expect(second.state).toBe('installed')
+  })
+
+  it('recognizes an owned dispatcher at the exact inspection boundary', async () => {
+    const { homePath, resourcesPath } = await makeFixture()
+    const dispatcherPath = join(homePath, '.local', 'bin', 'orca')
+    const ownedPrefix = '#!/bin/sh\n# orca-serve-bare-orca-dispatcher\n'
+    await mkdir(join(homePath, '.local', 'bin'), { recursive: true })
+    await writeFile(
+      dispatcherPath,
+      ownedPrefix +
+        ' '.repeat(LINUX_BARE_ORCA_DISPATCHER_MAX_BYTES - Buffer.byteLength(ownedPrefix)),
+      'utf8'
+    )
+
+    const result = await installLinuxBareOrcaDispatcher({
+      resourcesPath,
+      homePath,
+      appImagePath: null
+    })
+
+    expect(result.state).toBe('installed')
+    expect((await stat(dispatcherPath)).size).toBeLessThan(LINUX_BARE_ORCA_DISPATCHER_MAX_BYTES)
+  })
+
+  it('preserves an oversized dispatcher even when its prefix contains the ownership marker', async () => {
+    const { homePath, resourcesPath } = await makeFixture()
+    const dispatcherPath = join(homePath, '.local', 'bin', 'orca')
+    await mkdir(join(homePath, '.local', 'bin'), { recursive: true })
+    await writeFile(dispatcherPath, '#!/bin/sh\n# orca-serve-bare-orca-dispatcher\n', 'utf8')
+    await truncate(dispatcherPath, LINUX_BARE_ORCA_DISPATCHER_MAX_BYTES + 1)
+
+    const result = await installLinuxBareOrcaDispatcher({
+      resourcesPath,
+      homePath,
+      appImagePath: null
+    })
+
+    expect(result.state).toBe('skipped-foreign')
+    expect((await stat(dispatcherPath)).size).toBe(LINUX_BARE_ORCA_DISPATCHER_MAX_BYTES + 1)
   })
 
   it('quotes a resources path containing spaces so the exec line cannot be split', async () => {

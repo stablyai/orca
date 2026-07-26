@@ -13,9 +13,8 @@ import { readNativeChatTranscript, type ReadTranscriptResult } from './transcrip
 // share one sessionId yet resolve to DIFFERENT files (the same session resumed
 // into a second worktree, which writes a new transcript file), and a
 // sessionId-only key let one worktree's cached parse be served to another when
-// their file mtimes momentarily coincided (#7326). The cache stores ONE
-// canonical, unwindowed parse; windowing and per-surface truncation stay in the
-// callers so the same parse is reused across all `limit` values and every client kind.
+// their file mtimes momentarily coincided (#7326). The cache stores one
+// canonical bounded parse; surface-specific windowing stays in callers.
 
 type CachedTranscript = {
   result: ReadTranscriptResult
@@ -34,7 +33,7 @@ const cache = new Map<string, CachedTranscript>()
 const MAX_CACHE_ENTRIES = 50
 // Why: a heavy Claude/Codex coding session's JSONL is routinely tens of MB (tool
 // results embed whole file contents, command output, and diffs), and each cached
-// entry is the full unwindowed parse. The count cap alone let 50 such entries
+// entry is a large bounded parse. The count cap alone let 50 such entries
 // retain multiple GB in the one process that now serves desktop + every paired
 // web/mobile client. Bound total cached file bytes too; we always keep the most-
 // recent entry (see setCached) so an active transcript is never re-parsed on
@@ -79,9 +78,7 @@ async function fileStat(filePath: string): Promise<{ mtimeMs: number; bytes: num
 }
 
 /**
- * Read the full transcript for an agent + session, returning the cached parse on
- * an mtime hit and re-reading (and re-caching) when the file changed. Returns the
- * canonical, unwindowed result; callers apply their own windowing/truncation.
+ * Read the canonical bounded transcript for a session, refreshing on file changes.
  */
 export async function readNativeChatTranscriptCached(
   agent: AgentType,

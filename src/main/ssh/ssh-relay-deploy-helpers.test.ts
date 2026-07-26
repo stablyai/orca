@@ -3,7 +3,12 @@ import { describe, expect, it, vi } from 'vitest'
 import type { ClientChannel } from 'ssh2'
 import { execCommand, waitForSentinel } from './ssh-relay-deploy-helpers'
 import { shouldProbeBuildToolchainAfterNativeDepsFailure } from './ssh-relay-build-toolchain'
-import { RELAY_SENTINEL } from './relay-protocol'
+import {
+  HEADER_LENGTH,
+  MAX_BUFFERED_FRAME_CHUNKS,
+  MAX_MESSAGE_SIZE,
+  RELAY_SENTINEL
+} from './relay-protocol'
 import {
   RelayVersionMismatchError,
   RELAY_EXIT_CODE_VERSION_MISMATCH
@@ -204,9 +209,68 @@ describe('waitForSentinel', () => {
     expect(Buffer.concat(chunks)).toEqual(postSentinelPayload)
     expect(channel.close).not.toHaveBeenCalled()
   })
+
+  it('preserves the exact post-sentinel payload at the pending transport cap', async () => {
+    const channel = createMockChannel()
+    const transportPromise = waitForSentinel(channel)
+    const payload = Buffer.alloc((MAX_MESSAGE_SIZE + HEADER_LENGTH) * 2, 'p')
+
+    channel.emit('data', Buffer.from(RELAY_SENTINEL))
+    channel.emit('data', payload)
+
+    const transport = await transportPromise
+    const chunks: Buffer[] = []
+    transport.onData((chunk) => chunks.push(chunk))
+
+    expect(chunks).toHaveLength(1)
+    expect(chunks[0]?.equals(payload)).toBe(true)
+    expect(channel.close).not.toHaveBeenCalled()
+  })
+
+  it('closes before retaining post-sentinel bytes beyond the pending transport cap', async () => {
+    const channel = createMockChannel()
+    const transportPromise = waitForSentinel(channel)
+
+    channel.emit('data', Buffer.from(RELAY_SENTINEL))
+    channel.emit('data', Buffer.alloc((MAX_MESSAGE_SIZE + HEADER_LENGTH) * 2, 'p'))
+    channel.emit('data', Buffer.from('overflow'))
+
+    const transport = await transportPromise
+    const onData = vi.fn()
+    const onClose = vi.fn()
+    transport.onData(onData)
+    transport.onClose(onClose)
+
+    expect(onData).not.toHaveBeenCalled()
+    expect(onClose).toHaveBeenCalledOnce()
+    expect(channel.close).toHaveBeenCalledOnce()
+  })
+
+  it('closes before retaining too many post-sentinel fragments', async () => {
+    const channel = createMockChannel()
+    const transportPromise = waitForSentinel(channel)
+
+    channel.emit('data', Buffer.from(RELAY_SENTINEL))
+    for (let index = 0; index <= MAX_BUFFERED_FRAME_CHUNKS; index++) {
+      channel.emit('data', Buffer.from('p'))
+    }
+
+    const transport = await transportPromise
+    const onData = vi.fn()
+    const onClose = vi.fn()
+    transport.onData(onData)
+    transport.onClose(onClose)
+
+    expect(onData).not.toHaveBeenCalled()
+    expect(onClose).toHaveBeenCalledOnce()
+    expect(channel.close).toHaveBeenCalledOnce()
+  })
 })
 
 describe('execCommand', () => {
+  const installMarkerToken = 'a'.repeat(32)
+  const installMarkerPath = `/home/u/.install-lock/.sftp-namespace-${installMarkerToken}`
+
   it('waits for channel close before rejecting a timed-out remote command', async () => {
     vi.useFakeTimers()
     try {
@@ -269,6 +333,42 @@ describe('execCommand', () => {
     expect(channel.listenerCount('close')).toBe(0)
     expect(channel.stderr.listenerCount('error')).toBe(0)
     expect(channel.stderr.listenerCount('data')).toBe(0)
+  })
+
+  it('redacts install-owner marker tokens from command failures', async () => {
+    const channel = createMockChannel()
+    const conn = {
+      exec: vi.fn().mockResolvedValue(channel)
+    }
+    const commandPromise = execCommand(conn as never, `touch '${installMarkerPath}'`)
+
+    await Promise.resolve()
+    channel.emit('data', Buffer.from(`touch failed for ${installMarkerPath}\n`))
+    channel.emit('close', 1)
+
+    const error = await execCommandRejection(commandPromise)
+    expect(error.message).toContain('.sftp-namespace-[redacted]')
+    expect(error.message).not.toContain(installMarkerToken)
+  })
+
+  it('redacts install-owner marker tokens from timeout errors', async () => {
+    vi.useFakeTimers()
+    try {
+      const channel = createMockChannel()
+      const conn = { exec: vi.fn().mockResolvedValue(channel) }
+      const commandPromise = execCommand(conn as never, `touch '${installMarkerPath}'`, {
+        timeoutMs: 1_000
+      })
+
+      await vi.advanceTimersByTimeAsync(1_000)
+      channel.emit('close', 0)
+
+      const error = await execCommandRejection(commandPromise)
+      expect(error.message).toContain('.sftp-namespace-[redacted]')
+      expect(error.message).not.toContain(installMarkerToken)
+    } finally {
+      vi.useRealTimers()
+    }
   })
 
   it('surfaces stdout alongside stderr on nonzero exit instead of masking it', async () => {

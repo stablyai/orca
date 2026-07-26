@@ -3,7 +3,6 @@ import {
   existsSync,
   lstatSync,
   mkdirSync,
-  readFileSync,
   realpathSync,
   statSync,
   unlinkSync,
@@ -12,6 +11,7 @@ import {
 import { basename, dirname, join, posix as pathPosix, win32 as pathWin32 } from 'node:path'
 import { createHash, randomUUID } from 'node:crypto'
 import { renameFileWithWindowsRetry } from '../codex-accounts/fs-utils'
+import { readAgentStateFileSync } from '../agent-state-file-reader'
 import { foldWslUncPathCaseInsensitiveParts } from '../../shared/wsl-paths'
 import { writeRollingFileBackup } from '../rolling-file-backup'
 import {
@@ -327,7 +327,7 @@ function isCodexEventLabel(value: string): value is CodexEventLabel {
 
 // Why: strip a leading BOM (some Windows editors write one) so header regexes anchored at `^[ \t]*\[` still match.
 function readTomlFile(configPath: string): string {
-  const raw = readFileSync(configPath, 'utf-8')
+  const raw = readAgentStateFileSync(configPath)
   return raw.charCodeAt(0) === 0xfeff ? raw.slice(1) : raw
 }
 

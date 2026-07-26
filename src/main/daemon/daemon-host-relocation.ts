@@ -3,8 +3,7 @@ import {
   cpSync,
   existsSync,
   mkdirSync,
-  readFileSync,
-  readdirSync,
+  opendirSync,
   renameSync,
   rmSync,
   writeFileSync
@@ -12,6 +11,7 @@ import {
 import { dirname, join, win32 as winPath } from 'node:path'
 import { app } from 'electron'
 import { parseDaemonPidFile, startTimeMatches } from './daemon-health'
+import { readDaemonControlFileText } from './daemon-control-file-reader'
 
 /**
  * Relocate the terminal daemon's process image out of the app install dir into LOCAL userData so it
@@ -30,6 +30,7 @@ export type RelocatedDaemonHost = {
 
 const HOST_SUBDIR = 'daemon-host'
 const MARKER_NAME = '.materialized.json'
+const MAX_PINNED_DAEMON_VERSIONS = 1024
 
 // LOCAL appData (not roaming) so OneDrive/roaming never syncs this ~260MB runtime. Shared with NSIS uninstall (config/nsis/daemon-host-uninstall.nsh) — keep in sync.
 const LOCAL_HOST_ROOT_NAME = 'Orca'
@@ -184,7 +185,7 @@ function executeManifest(ops: CopyOp[], stagingRoot: string): void {
 function readMarker(dir: string): MaterializeMarker | null {
   try {
     const parsed = JSON.parse(
-      readFileSync(join(dir, MARKER_NAME), 'utf8')
+      readDaemonControlFileText(join(dir, MARKER_NAME))
     ) as Partial<MaterializeMarker>
     if (typeof parsed.version === 'string' && typeof parsed.entryRelPath === 'string') {
       return {
@@ -289,25 +290,41 @@ function isDaemonPidAlive(pid: number, startedAtMs: number | null): boolean {
  */
 export function collectPinnedDaemonVersions(runtimeDir: string): Set<string> {
   const pinned = new Set<string>()
-  let entries
+  let directory: ReturnType<typeof opendirSync>
   try {
-    entries = readdirSync(runtimeDir, { withFileTypes: true })
+    directory = opendirSync(runtimeDir)
   } catch {
     return pinned
   }
-  for (const entry of entries) {
-    if (!entry.isFile() || !/^daemon-v\d+\.pid$/.test(entry.name)) {
-      continue
+  try {
+    while (pinned.size < MAX_PINNED_DAEMON_VERSIONS) {
+      const entry = directory.readSync()
+      if (!entry) {
+        break
+      }
+      if (!entry.isFile() || !/^daemon-v\d+\.pid$/.test(entry.name)) {
+        continue
+      }
+      let parsed
+      try {
+        parsed = parseDaemonPidFile(readDaemonControlFileText(join(runtimeDir, entry.name)))
+      } catch {
+        continue
+      }
+      // appVersion null => pre-relocation daemon forked from the install dir; pins no host dir here.
+      if (
+        parsed &&
+        parsed.appVersion !== null &&
+        isDaemonPidAlive(parsed.pid, parsed.startedAtMs)
+      ) {
+        pinned.add(parsed.appVersion)
+      }
     }
-    let parsed
+  } finally {
     try {
-      parsed = parseDaemonPidFile(readFileSync(join(runtimeDir, entry.name), 'utf8'))
+      directory.closeSync()
     } catch {
-      continue
-    }
-    // appVersion null => pre-relocation daemon forked from the install dir; pins no host dir here.
-    if (parsed && parsed.appVersion !== null && isDaemonPidAlive(parsed.pid, parsed.startedAtMs)) {
-      pinned.add(parsed.appVersion)
+      // Best-effort discovery cleanup.
     }
   }
   return pinned
@@ -321,22 +338,38 @@ export function pruneOldDaemonHosts(pinnedVersions: ReadonlySet<string>): void {
   if (process.platform !== 'win32' || !app.isPackaged) {
     return
   }
+  // Why: an incomplete saturated pin scan must fail closed rather than remove a live daemon image.
+  if (pinnedVersions.size >= MAX_PINNED_DAEMON_VERSIONS) {
+    return
+  }
   const version = app.getVersion()
   const root = hostRootDir()
-  let entries
+  let directory: ReturnType<typeof opendirSync>
   try {
-    entries = readdirSync(root, { withFileTypes: true })
+    directory = opendirSync(root)
   } catch {
     return
   }
-  for (const entry of entries) {
-    if (!entry.isDirectory() || entry.name === version || pinnedVersions.has(entry.name)) {
-      continue
+  try {
+    while (true) {
+      const entry = directory.readSync()
+      if (!entry) {
+        break
+      }
+      if (!entry.isDirectory() || entry.name === version || pinnedVersions.has(entry.name)) {
+        continue
+      }
+      try {
+        rmSync(join(root, entry.name), { recursive: true, force: true })
+      } catch {
+        // Still locked or already gone — retry on a future launch.
+      }
     }
+  } finally {
     try {
-      rmSync(join(root, entry.name), { recursive: true, force: true })
+      directory.closeSync()
     } catch {
-      // Still locked or already gone — retry on a future launch.
+      // Best-effort pruning cleanup.
     }
   }
 }

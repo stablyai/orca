@@ -14,6 +14,7 @@ import {
   type HostedReviewExecutionOptions
 } from '../source-control/hosted-review-git-options'
 import { cancelUnreadResponseBody } from '../lib/unread-response-body'
+import { readFetchResponseJsonWithinLimit } from '../lib/fetch-response-body'
 
 const REQUEST_TIMEOUT_MS = 5000
 // Why: self-hosted Forgejo can take ~5s to serve one /pulls page (it loads
@@ -102,7 +103,7 @@ async function requestJsonAtBase<T>(
       }
       return null
     }
-    return (await response.json()) as T
+    return await readFetchResponseJsonWithinLimit<T>(response)
   } catch (error) {
     if (throwOnFailure) {
       throw error

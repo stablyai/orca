@@ -11,6 +11,10 @@ import {
 } from '../../../src/shared/mobile-e2ee-v2-framing'
 import { deriveSharedKey, generateKeyPair, publicKeyFromBase64, publicKeyToBase64 } from './e2ee'
 import { deriveMobileE2EEV2KeySchedule } from './mobile-e2ee-v2-key-schedule'
+import { MOBILE_INBOUND_MAX_FRAME_BYTES } from './mobile-inbound-frame-queue'
+
+export const MOBILE_E2EE_V2_MAX_TEXT_FRAME_BASE64_CHARACTERS =
+  Math.ceil(MOBILE_INBOUND_MAX_FRAME_BYTES / 3) * 4
 
 export class MobileE2EEV2ClientSession {
   readonly hello: MobileE2EEV2Hello
@@ -91,6 +95,9 @@ export class MobileE2EEV2ClientSession {
   }
 
   openBinary(frame: Uint8Array): Uint8Array | null {
+    if (frame.byteLength > MOBILE_INBOUND_MAX_FRAME_BYTES) {
+      return null
+    }
     return this.open(frame, 'binary')
   }
 
@@ -146,8 +153,14 @@ function encodeBase64(bytes: Uint8Array): string {
 }
 
 function decodeCanonicalBase64(value: string): Uint8Array | null {
+  if (value.length > MOBILE_E2EE_V2_MAX_TEXT_FRAME_BASE64_CHARACTERS) {
+    return null
+  }
   try {
     const binary = atob(value)
+    if (binary.length > MOBILE_INBOUND_MAX_FRAME_BYTES) {
+      return null
+    }
     const bytes = Uint8Array.from(binary, (character) => character.charCodeAt(0))
     return encodeBase64(bytes) === value ? bytes : null
   } catch {

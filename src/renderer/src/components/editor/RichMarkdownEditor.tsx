@@ -34,6 +34,7 @@ import type { RichMarkdownEditorProps } from './rich-markdown-editor-props'
 
 export default function RichMarkdownEditor({
   fileId,
+  viewStateId,
   content,
   filePath,
   worktreeId,
@@ -240,7 +241,14 @@ export default function RichMarkdownEditor({
     setDocLinkMenu: menu.setDocLinkMenu
   })
 
-  useRichMarkdownPendingFocus({ editor, fileId, worktreeId, rootRef, cancelAutoFocusRef })
+  useRichMarkdownPendingFocus({
+    editor,
+    fileId,
+    viewStateId,
+    worktreeId,
+    rootRef,
+    cancelAutoFocusRef
+  })
 
   // Why: useEditor defaults shouldRerenderOnTransaction to false, so selection-only
   // citation NodeSelections would leave aria status stale without useEditorState.

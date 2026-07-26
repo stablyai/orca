@@ -1,11 +1,19 @@
 /* eslint-disable max-lines */
 import { execFile, type ChildProcess } from 'node:child_process'
-import { existsSync, accessSync, chmodSync, readFileSync, constants } from 'node:fs'
+import { existsSync, accessSync, chmodSync, constants } from 'node:fs'
 import { join } from 'node:path'
 import { platform, arch } from 'node:os'
 import { app, type WebContents } from 'electron'
 import { CdpWsProxy } from './cdp-ws-proxy'
 import { captureFullPageScreenshot } from './cdp-screenshot'
+import { assertCdpPdfWithinMemoryLimit } from './cdp-print-to-pdf'
+import {
+  assertBrowserScreenshotGeometry,
+  BROWSER_SCREENSHOT_BUSY_ERROR,
+  BROWSER_SCREENSHOT_MEMORY_LIMIT_ERROR
+} from './browser-screenshot-limits'
+import { readBrowserScreenshotFile } from './browser-screenshot-file-reader'
+import { BROWSER_PDF_BUSY_ERROR, startBrowserPdfPrint } from './browser-pdf-admission'
 import { acquireElectronDebugger } from './electron-debugger-lease'
 import type { BrowserManager } from './browser-manager'
 import { BrowserError } from './cdp-bridge'
@@ -59,6 +67,8 @@ const STALE_SESSION_CLOSE_TIMEOUT_MS = 3_000
 const EMBEDDED_NAVIGATION_TIMEOUT_MS = 30_000
 export const AGENT_BROWSER_TEXT_ARGUMENT_MAX_BYTES = 8 * 1024
 export const AGENT_BROWSER_CLIPBOARD_WRITE_MAX_BYTES = AGENT_BROWSER_TEXT_ARGUMENT_MAX_BYTES
+export const AGENT_BROWSER_MAX_QUEUED_COMMANDS_PER_SESSION = 64
+const AGENT_BROWSER_MAX_QUEUED_COMMANDS_TOTAL = 512
 
 type SessionState = {
   proxy: CdpWsProxy
@@ -575,6 +585,9 @@ export class AgentBrowserBridge {
   private readonly sessions = new Map<string, SessionState>()
   private readonly commandQueues = new Map<string, QueuedCommand[]>()
   private readonly processingQueues = new Set<string>()
+  private queuedCommandCount = 0
+  private readonly pendingEnqueueCounts = new Map<string, number>()
+  private pendingEnqueueCount = 0
   // Why: screenshot prep mutates shared paintability across tabs; serialize globally so concurrent captures don't blank each other.
   private screenshotTurn: Promise<void> = Promise.resolve()
   private readonly agentBrowserBin: string
@@ -1483,7 +1496,17 @@ export class AgentBrowserBridge {
     if (!existsSync(parsed.path)) {
       throw new BrowserError('browser_error', `Screenshot file not found: ${parsed.path}`)
     }
-    const data = readFileSync(parsed.path).toString('base64')
+    let bytes: Buffer
+    try {
+      bytes = readBrowserScreenshotFile(parsed.path)
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Unable to read screenshot file'
+      if (message !== BROWSER_SCREENSHOT_MEMORY_LIMIT_ERROR) {
+        throw new BrowserError('browser_error', message)
+      }
+      throw new BrowserError('browser_screenshot_too_large', BROWSER_SCREENSHOT_MEMORY_LIMIT_ERROR)
+    }
+    const data = bytes.toString('base64')
     return { data, format: format === 'jpeg' ? 'jpeg' : 'png' } as BrowserScreenshotResult
   }
 
@@ -1529,7 +1552,17 @@ export class AgentBrowserBridge {
         }
         return await captureFullPageScreenshot(wc, format)
       } catch (error) {
-        throw new BrowserError('browser_error', (error as Error).message)
+        if (error instanceof BrowserError) {
+          throw error
+        }
+        const message = error instanceof Error ? error.message : 'Screenshot failed'
+        if (message === BROWSER_SCREENSHOT_MEMORY_LIMIT_ERROR) {
+          throw new BrowserError('browser_screenshot_too_large', message)
+        }
+        if (message === BROWSER_SCREENSHOT_BUSY_ERROR) {
+          throw new BrowserError('browser_busy', message)
+        }
+        throw new BrowserError('browser_error', message)
       } finally {
         restore()
       }
@@ -1780,10 +1813,15 @@ export class AgentBrowserBridge {
       if (!wc) {
         throw new BrowserError('browser_no_tab', 'Tab is no longer available')
       }
-      const buffer = await wc.printToPDF({
+      const print = startBrowserPdfPrint(wc, {
         printBackground: true,
         preferCSSPageSize: true
       })
+      if (!print) {
+        throw new BrowserError('browser_busy', BROWSER_PDF_BUSY_ERROR)
+      }
+      const buffer = await print
+      assertCdpPdfWithinMemoryLimit(buffer)
       return { data: buffer.toString('base64') }
     })
   }
@@ -1861,6 +1899,14 @@ export class AgentBrowserBridge {
     worktreeId?: string,
     browserPageId?: string
   ): Promise<BrowserViewportResult> {
+    try {
+      assertBrowserScreenshotGeometry(width, height, scale)
+    } catch (error) {
+      throw new BrowserError(
+        'browser_screenshot_too_large',
+        error instanceof Error ? error.message : BROWSER_SCREENSHOT_MEMORY_LIMIT_ERROR
+      )
+    }
     return this.enqueueTargetedCommand(worktreeId, browserPageId, async (_sessionName, target) => {
       const wc = this.getWebContents(target.webContentsId)
       if (!wc) {
@@ -2069,12 +2115,29 @@ export class AgentBrowserBridge {
     const target = this.resolveCommandTarget(worktreeId, browserPageId, options.requireScopedTarget)
     const sessionName = `orca-tab-${target.browserPageId}`
 
-    if (options.ensureSession !== false) {
-      await this.ensureSession(sessionName, target.browserPageId, target.webContentsId)
+    this.acquirePendingEnqueue(sessionName)
+    try {
+      if (options.ensureSession !== false) {
+        await this.ensureSession(sessionName, target.browserPageId, target.webContentsId)
+      }
+    } finally {
+      this.releasePendingEnqueue(sessionName)
     }
 
     return new Promise<T>((resolve, reject) => {
       let queue = this.commandQueues.get(sessionName)
+      if (
+        (queue?.length ?? 0) >= AGENT_BROWSER_MAX_QUEUED_COMMANDS_PER_SESSION ||
+        this.queuedCommandCount >= AGENT_BROWSER_MAX_QUEUED_COMMANDS_TOTAL
+      ) {
+        reject(
+          new BrowserError(
+            'browser_busy',
+            'Browser command queue is full; retry after the current commands finish'
+          )
+        )
+        return
+      }
       if (!queue) {
         queue = []
         this.commandQueues.set(sessionName, queue)
@@ -2091,8 +2154,35 @@ export class AgentBrowserBridge {
         resolve: resolve as (value: unknown) => void,
         reject
       })
+      this.queuedCommandCount += 1
       this.processQueue(sessionName)
     })
+  }
+
+  private acquirePendingEnqueue(sessionName: string): void {
+    const pendingForSession = this.pendingEnqueueCounts.get(sessionName) ?? 0
+    const queuedForSession = this.commandQueues.get(sessionName)?.length ?? 0
+    if (
+      pendingForSession + queuedForSession >= AGENT_BROWSER_MAX_QUEUED_COMMANDS_PER_SESSION ||
+      this.pendingEnqueueCount + this.queuedCommandCount >= AGENT_BROWSER_MAX_QUEUED_COMMANDS_TOTAL
+    ) {
+      throw new BrowserError(
+        'browser_busy',
+        'Browser command queue is full; retry after the current commands finish'
+      )
+    }
+    this.pendingEnqueueCounts.set(sessionName, pendingForSession + 1)
+    this.pendingEnqueueCount += 1
+  }
+
+  private releasePendingEnqueue(sessionName: string): void {
+    const remaining = (this.pendingEnqueueCounts.get(sessionName) ?? 1) - 1
+    if (remaining > 0) {
+      this.pendingEnqueueCounts.set(sessionName, remaining)
+    } else {
+      this.pendingEnqueueCounts.delete(sessionName)
+    }
+    this.pendingEnqueueCount = Math.max(0, this.pendingEnqueueCount - 1)
   }
 
   private async executeWithVisibleTarget<T>(
@@ -2159,6 +2249,7 @@ export class AgentBrowserBridge {
     const queue = this.commandQueues.get(sessionName)
     while (queue && queue.length > 0) {
       const cmd = queue.shift()!
+      this.queuedCommandCount = Math.max(0, this.queuedCommandCount - 1)
       try {
         const result = await cmd.execute()
         cmd.resolve(result)
@@ -2456,6 +2547,7 @@ export class AgentBrowserBridge {
     this.commandQueues.delete(sessionName)
     this.processingQueues.delete(sessionName)
     if (queue) {
+      this.queuedCommandCount = Math.max(0, this.queuedCommandCount - queue.length)
       const err = new BrowserError(
         'browser_tab_closed',
         'Tab was closed while commands were queued'

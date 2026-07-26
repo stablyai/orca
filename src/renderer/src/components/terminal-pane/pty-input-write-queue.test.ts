@@ -7,6 +7,7 @@ import {
   TERMINAL_INPUT_CHUNK_MAX_BYTES,
   TERMINAL_INPUT_MAX_BYTES
 } from '../../../../shared/terminal-input'
+import { CLIPBOARD_TEXT_MEASURE_YIELD_CODE_UNITS } from '../../../../shared/clipboard-text'
 
 const WHEEL_UP_REPORT = '\x1b[<64;60;20M'
 
@@ -153,5 +154,42 @@ describe('pty input write queue', () => {
 
     expect(writes.length).toBe(1)
     expect(writes.map((write) => write.data).join('')).not.toContain('tail')
+  })
+
+  it('rejects producer backlog beyond the retained item and text budgets', async () => {
+    const writes: WriteRecord[] = []
+    const pendingYields: (() => void)[] = []
+    const large = 'y'.repeat(TERMINAL_INPUT_CHUNK_MAX_BYTES * 2)
+    const queue = createPtyInputWriteQueue({
+      isWritable: () => true,
+      write: (id, data) => writes.push({ id, data }),
+      yieldBetweenWrites: () =>
+        new Promise<void>((resolve) => {
+          pendingYields.push(resolve)
+        }),
+      maxPendingItems: 2,
+      maxPendingCodeUnits: large.length + 4
+    })
+
+    expect(queue.enqueue('pty-1', large)).toBe(true)
+    expect(queue.enqueue('pty-1', 'tail')).toBe(true)
+    expect(queue.enqueue('pty-1', '!')).toBe(false)
+
+    queue.clear()
+    pendingYields.shift()?.()
+    await queue.waitForDrain()
+
+    expect(writes).toEqual([{ id: 'pty-1', data: large.slice(0, TERMINAL_INPUT_CHUNK_MAX_BYTES) }])
+  })
+
+  it('does not write deferred input after clear', async () => {
+    const { writes, queue } = createRecordingQueue()
+    const deferred = 'x'.repeat(CLIPBOARD_TEXT_MEASURE_YIELD_CODE_UNITS + 1)
+
+    expect(queue.enqueue('pty-1', deferred)).toBe(true)
+    queue.clear()
+    await queue.waitForDrain()
+
+    expect(writes).toEqual([])
   })
 })

@@ -1,8 +1,9 @@
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import {
   decodeLogHeader,
   decodeTerminalHistoryLog,
   encodeLogBatch,
+  encodeLogBatchWithinLimit,
   encodeLogHeader,
   LOG_HEADER_BYTES
 } from './terminal-history-log'
@@ -42,6 +43,16 @@ describe('terminal history log codec', () => {
     expect(log!.generation).toBe(7)
     expect(log!.truncatedTail).toBe(false)
     expect(log!.batches).toEqual([{ seq: 3, records }])
+  })
+
+  it('rejects an oversized batch before allocating its encoded buffer', () => {
+    const allocation = vi.spyOn(Buffer, 'allocUnsafe')
+
+    expect(
+      encodeLogBatchWithinLimit(1, [{ kind: 'output', data: 'escaped 🐋 output' }], 12)
+    ).toBeNull()
+    expect(allocation).not.toHaveBeenCalled()
+    allocation.mockRestore()
   })
 
   it('decodes multiple contiguous batches', () => {

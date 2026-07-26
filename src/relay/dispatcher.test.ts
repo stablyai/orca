@@ -1,11 +1,17 @@
 import { describe, expect, it, vi, beforeEach, afterEach } from 'vitest'
-import { RelayDispatcher } from './dispatcher'
+import {
+  MAX_PENDING_RELAY_REQUESTS,
+  MAX_RELAY_DISPATCHER_CLIENTS,
+  RelayDispatcher
+} from './dispatcher'
+import { MAX_ACTIVE_RELAY_REQUESTS_PER_CLIENT } from './client-request-aborts'
 import {
   encodeJsonRpcFrame,
   encodeKeepAliveFrame,
   MessageType,
   type JsonRpcRequest,
-  type JsonRpcNotification
+  type JsonRpcNotification,
+  type JsonRpcResponse
 } from './protocol'
 
 function decodeFirstFrame(buf: Buffer): { type: number; id: number; ack: number; payload: Buffer } {
@@ -118,6 +124,48 @@ describe('RelayDispatcher', () => {
     expect(resp.id).toBe(5)
   })
 
+  it('rejects incoming request overflow without evicting active work', async () => {
+    const resolutions: ((value: unknown) => void)[] = []
+    const handler = vi.fn(
+      (_params, context) =>
+        new Promise((resolve) => {
+          resolutions.push(resolve)
+          context.signal?.addEventListener('abort', () => resolve(null), { once: true })
+        })
+    )
+    dispatcher.onRequest('slow.method', handler)
+
+    for (let id = 1; id <= MAX_ACTIVE_RELAY_REQUESTS_PER_CLIENT + 1; id += 1) {
+      dispatcher.feed(encodeJsonRpcFrame({ jsonrpc: '2.0', id, method: 'slow.method' }, id, 0))
+    }
+    await vi.advanceTimersByTimeAsync(0)
+
+    expect(handler).toHaveBeenCalledTimes(MAX_ACTIVE_RELAY_REQUESTS_PER_CLIENT)
+    const overflowId = MAX_ACTIVE_RELAY_REQUESTS_PER_CLIENT + 1
+    const overflow = written
+      .map(decodeFirstFrame)
+      .filter((frame) => frame.type === MessageType.Regular)
+      .map((frame) => JSON.parse(frame.payload.toString('utf-8')) as JsonRpcResponse)
+      .find((response) => response.id === overflowId)
+    expect(overflow?.error?.message).toBe(
+      `Relay client active request limit of ${MAX_ACTIVE_RELAY_REQUESTS_PER_CLIENT} reached`
+    )
+    expect(resolutions).toHaveLength(MAX_ACTIVE_RELAY_REQUESTS_PER_CLIENT)
+
+    resolutions[0]('done')
+    await vi.advanceTimersByTimeAsync(0)
+    dispatcher.feed(
+      encodeJsonRpcFrame(
+        { jsonrpc: '2.0', id: overflowId + 1, method: 'slow.method' },
+        overflowId + 1,
+        0
+      )
+    )
+    await vi.advanceTimersByTimeAsync(0)
+
+    expect(handler).toHaveBeenCalledTimes(MAX_ACTIVE_RELAY_REQUESTS_PER_CLIENT + 1)
+  })
+
   it('sends method-not-found for unknown methods', async () => {
     const req: JsonRpcRequest = {
       jsonrpc: '2.0',
@@ -201,6 +249,21 @@ describe('RelayDispatcher', () => {
     expect(socketWritten).toHaveLength(1)
   })
 
+  it('accepts the exact client cap, rejects aggregate overflow, and recovers after detach', () => {
+    const attachedIds = Array.from({ length: MAX_RELAY_DISPATCHER_CLIENTS - 1 }, () =>
+      dispatcher.attachClient(() => undefined)
+    )
+
+    expect(dispatcher.connectedClientIds()).toHaveLength(MAX_RELAY_DISPATCHER_CLIENTS)
+    expect(() => dispatcher.attachClient(() => undefined)).toThrow(
+      `Relay client limit of ${MAX_RELAY_DISPATCHER_CLIENTS} reached`
+    )
+
+    dispatcher.detachClient(attachedIds[0])
+    expect(() => dispatcher.attachClient(() => undefined)).not.toThrow()
+    expect(dispatcher.connectedClientIds()).toHaveLength(MAX_RELAY_DISPATCHER_CLIENTS)
+  })
+
   it('targets terminal ownership notifications to one attached client', () => {
     const firstWritten: Buffer[] = []
     const secondWritten: Buffer[] = []
@@ -216,6 +279,76 @@ describe('RelayDispatcher', () => {
     expect(written).toHaveLength(0)
     expect(firstWritten).toHaveLength(1)
     expect(secondWritten).toHaveLength(0)
+  })
+
+  it('reports targeted sink saturation and waits for its drain signal', async () => {
+    const ownerWritten: Buffer[] = []
+    let signalDrain: (() => void) | undefined
+    const ownerId = dispatcher.attachClient(
+      (data) => {
+        ownerWritten.push(Buffer.from(data))
+        return false
+      },
+      {
+        waitWriteDrain: (callback) => {
+          signalDrain = callback
+        }
+      }
+    )
+    const otherWritten: Buffer[] = []
+    dispatcher.attachClient((data) => {
+      otherWritten.push(Buffer.from(data))
+    })
+
+    const result = dispatcher.notifyClientWithBackpressure(ownerId, 'pty.data', {
+      id: 'pty-1',
+      data: 'output'
+    })
+
+    expect(result.delivered).toBe(true)
+    expect(result.saturated).toBe(true)
+    expect(ownerWritten).toHaveLength(1)
+    expect(written).toHaveLength(0)
+    expect(otherWritten).toHaveLength(0)
+    let drained = false
+    void result.drained.then(() => {
+      drained = true
+    })
+    await Promise.resolve()
+    expect(drained).toBe(false)
+
+    signalDrain?.()
+    await expect(result.drained).resolves.toBeUndefined()
+    expect(drained).toBe(true)
+  })
+
+  it('reports a detached targeted client without writing', async () => {
+    const ownerId = dispatcher.attachClient(() => true)
+    dispatcher.detachClient(ownerId)
+
+    const result = dispatcher.notifyClientWithBackpressure(ownerId, 'pty.data', {
+      id: 'pty-1',
+      data: 'output'
+    })
+
+    expect(result).toMatchObject({ delivered: false, saturated: false })
+    await expect(result.drained).resolves.toBeUndefined()
+    expect(written).toHaveLength(0)
+  })
+
+  it('allows a targeted drain waiter to be canceled during owner cleanup', async () => {
+    const ownerId = dispatcher.attachClient(() => false, {
+      waitWriteDrain: () => {}
+    })
+    const result = dispatcher.notifyClientWithBackpressure(ownerId, 'pty.data', {
+      id: 'pty-1',
+      data: 'output'
+    })
+
+    expect(result.saturated).toBe(true)
+    result.cancelDrain?.()
+
+    await expect(result.drained).resolves.toBeUndefined()
   })
 
   it('forwards relay-originated requests to an owning socket client instead of the caller', async () => {
@@ -271,6 +404,48 @@ describe('RelayDispatcher', () => {
     )
 
     await expect(pending).resolves.toEqual({ exitCode: 0 })
+  })
+
+  it('bounds relay-originated pending requests and recovers after a response', async () => {
+    const pending = Array.from({ length: MAX_PENDING_RELAY_REQUESTS }, (_, index) => {
+      const request = dispatcher.requestPrimary('orca.cli', { index })
+      void request.catch(() => undefined)
+      return request
+    })
+
+    expect(written).toHaveLength(MAX_PENDING_RELAY_REQUESTS)
+    await expect(dispatcher.requestPrimary('orca.cli', { overflow: true })).rejects.toThrow(
+      `Relay pending request limit of ${MAX_PENDING_RELAY_REQUESTS} reached`
+    )
+    expect(written).toHaveLength(MAX_PENDING_RELAY_REQUESTS)
+
+    const firstRequest = JSON.parse(
+      decodeFirstFrame(written[0]).payload.toString('utf-8')
+    ) as JsonRpcRequest
+    dispatcher.feed(
+      encodeJsonRpcFrame({ jsonrpc: '2.0', id: firstRequest.id, result: 'done' }, 1, 0)
+    )
+    await expect(pending[0]).resolves.toBe('done')
+
+    const recovered = dispatcher.requestPrimary('orca.cli', { recovered: true })
+    expect(written).toHaveLength(MAX_PENDING_RELAY_REQUESTS + 1)
+    const recoveredRequest = JSON.parse(
+      decodeFirstFrame(written.at(-1)!).payload.toString('utf-8')
+    ) as JsonRpcRequest
+    dispatcher.feed(
+      encodeJsonRpcFrame({ jsonrpc: '2.0', id: recoveredRequest.id, result: 'recovered' }, 2, 0)
+    )
+    await expect(recovered).resolves.toBe('recovered')
+  })
+
+  it('rejects relay-originated requests when their owning client detaches', async () => {
+    const ownerId = dispatcher.attachClient(() => undefined)
+    dispatcher.invalidateClient()
+    const pending = dispatcher.requestAnyClient('orca.cli')
+
+    dispatcher.detachClient(ownerId)
+
+    await expect(pending).rejects.toThrow('Relay client disconnected')
   })
 
   it('isolates failed socket-client writes from other clients', () => {

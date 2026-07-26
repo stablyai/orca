@@ -12,6 +12,8 @@ import {
   buildWebTerminalOrphanTopologyProposal,
   type WebTerminalOrphanTopologyState
 } from './web-session-terminal-orphan-topology'
+import { measureMetadataValueBytes } from '../hooks/metadata-retention-measurement'
+import { WebSessionTerminalOrphanRecoveryAdmission } from './web-session-terminal-orphan-recovery-admission'
 
 type TerminalOrphanRecoveryState = WebTerminalOrphanTopologyState & {
   tabsByWorktree: Record<string, TerminalTab[]>
@@ -24,7 +26,9 @@ type RuntimeCall = (args: {
   timeoutMs: number
 }) => Promise<RuntimeRpcResponse<unknown>>
 
-const inFlightRecoveryByWorktree = new Map<string, Promise<RuntimeMobileSessionTabsResult | null>>()
+export const WEB_SESSION_ORPHAN_RECOVERY_MAX_SNAPSHOT_BYTES = 4 * 1024 * 1024
+const recoveryAdmission =
+  new WebSessionTerminalOrphanRecoveryAdmission<RuntimeMobileSessionTabsResult | null>()
 
 function recoveryKey(environmentId: string, worktreeId: string): string {
   return `${environmentId}\0${worktreeId}`
@@ -184,20 +188,18 @@ export function recoverWebSessionTerminalOrphansBeforeApply(
   call: RuntimeCall = (args) => window.api.runtimeEnvironments.call(args)
 ): Promise<RuntimeMobileSessionTabsResult | null> {
   const key = recoveryKey(environmentId, snapshot.worktree)
-  const existing = inFlightRecoveryByWorktree.get(key)
-  const recovery = (existing ?? Promise.resolve(null))
-    .catch(() => null)
-    .then(() => recoverTerminalOrphans(state, snapshot, environmentId, call))
-    .catch(() => null)
-    .finally(() => {
-      if (inFlightRecoveryByWorktree.get(key) === recovery) {
-        inFlightRecoveryByWorktree.delete(key)
-      }
-    })
-  inFlightRecoveryByWorktree.set(key, recovery)
-  return recovery
+  const retainedBytes = measureMetadataValueBytes(
+    snapshot,
+    WEB_SESSION_ORPHAN_RECOVERY_MAX_SNAPSHOT_BYTES
+  )
+  if (retainedBytes === null) {
+    return Promise.resolve(null)
+  }
+  return recoveryAdmission.schedule(key, retainedBytes, () =>
+    recoverTerminalOrphans(state, snapshot, environmentId, call)
+  )
 }
 
 export function clearWebSessionTerminalOrphanRecoveryForTests(): void {
-  inFlightRecoveryByWorktree.clear()
+  recoveryAdmission.reset()
 }

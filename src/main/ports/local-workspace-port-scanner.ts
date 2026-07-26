@@ -1,7 +1,7 @@
 /* eslint-disable max-lines -- Why: the platform-specific scan paths share parsing,
 attribution, and normalization rules that must stay in lockstep. */
 import { execFile } from 'node:child_process'
-import { readFile, readdir, readlink } from 'node:fs/promises'
+import { readlink } from 'node:fs/promises'
 import path from 'node:path'
 import type {
   WorkspacePort,
@@ -10,6 +10,14 @@ import type {
   WorkspacePortScanResult
 } from '../../shared/workspace-ports'
 import { getProcessOutputFields } from '../../shared/process-output-field-scanner'
+import { mapLinuxSocketInodesToPids } from '../../shared/linux-proc-socket-owner-scanner'
+import {
+  createLinuxProcTextReadBudget,
+  LINUX_PROC_LISTENING_SOCKET_MAX_ENTRIES,
+  readLinuxProcNetworkTable,
+  readLinuxProcTextWithinBudget,
+  type LinuxProcTextReadBudget
+} from '../../shared/linux-proc-port-scan-limits'
 import { advertisedUrlWatcher, type AdvertisedUrlWatcher } from './advertised-url-watcher'
 import { WorkspacePortScanTimeoutBackoff } from './workspace-port-scan-timeout-backoff'
 
@@ -190,6 +198,9 @@ export function parseProcNetTcp(content: string): { host: string; port: number; 
       continue
     }
     results.push({ ...parsed, inode })
+    if (results.length >= LINUX_PROC_LISTENING_SOCKET_MAX_ENTRIES) {
+      break
+    }
   }
   return results
 }
@@ -230,15 +241,18 @@ async function scanLinuxProcPorts(): Promise<RawListeningPort[]> {
     readProcNet('/proc/net/tcp'),
     readProcNet('/proc/net/tcp6')
   ])
-  const sockets = [...tcp4, ...tcp6]
-  const inodeToPid = await mapLinuxInodesToPids(new Set(sockets.map((socket) => socket.inode)))
+  const sockets = [...tcp4, ...tcp6].slice(0, LINUX_PROC_LISTENING_SOCKET_MAX_ENTRIES)
+  const inodeToPid = await mapLinuxSocketInodesToPids(
+    new Set(sockets.map((socket) => socket.inode))
+  )
   const metadata = new Map<number, ProcessMetadata>()
+  const metadataBudget = createLinuxProcTextReadBudget()
   const rawPorts: RawListeningPort[] = []
 
   for (const socket of sockets) {
     const pid = inodeToPid.get(socket.inode)
     if (pid != null && !metadata.has(pid)) {
-      metadata.set(pid, await loadLinuxProcessMetadata(pid))
+      metadata.set(pid, await loadLinuxProcessMetadata(pid, metadataBudget))
     }
     rawPorts.push({
       host: socket.host,
@@ -254,59 +268,17 @@ async function scanLinuxProcPorts(): Promise<RawListeningPort[]> {
 async function readProcNet(
   filePath: string
 ): Promise<{ host: string; port: number; inode: number }[]> {
-  try {
-    return parseProcNetTcp(await readFile(filePath, 'utf-8'))
-  } catch {
-    return []
-  }
+  const content = await readLinuxProcNetworkTable(filePath)
+  return content === null ? [] : parseProcNetTcp(content)
 }
 
-async function mapLinuxInodesToPids(inodes: Set<number>): Promise<Map<number, number>> {
-  const result = new Map<number, number>()
-  if (inodes.size === 0) {
-    return result
-  }
-  let pids: string[]
-  try {
-    pids = (await readdir('/proc')).filter((entry) => /^\d+$/.test(entry))
-  } catch {
-    return result
-  }
-
-  for (const pidText of pids) {
-    let fds: string[]
-    try {
-      fds = await readdir(`/proc/${pidText}/fd`)
-    } catch {
-      continue
-    }
-    const pid = Number.parseInt(pidText, 10)
-    for (const fd of fds) {
-      let link: string
-      try {
-        link = await readlink(`/proc/${pidText}/fd/${fd}`)
-      } catch {
-        continue
-      }
-      const match = link.match(/^socket:\[(\d+)\]$/)
-      if (!match) {
-        continue
-      }
-      const inode = Number.parseInt(match[1], 10)
-      if (inodes.has(inode)) {
-        result.set(inode, pid)
-      }
-    }
-  }
-  return result
-}
-
-async function loadLinuxProcessMetadata(pid: number): Promise<ProcessMetadata> {
-  const [comm, cmdline, cwd] = await Promise.all([
-    readTextIfAvailable(`/proc/${pid}/comm`),
-    readTextIfAvailable(`/proc/${pid}/cmdline`),
-    readlink(`/proc/${pid}/cwd`).catch(() => undefined)
-  ])
+async function loadLinuxProcessMetadata(
+  pid: number,
+  budget: LinuxProcTextReadBudget
+): Promise<ProcessMetadata> {
+  const comm = await readLinuxProcTextWithinBudget(`/proc/${pid}/comm`, budget)
+  const cmdline = await readLinuxProcTextWithinBudget(`/proc/${pid}/cmdline`, budget)
+  const cwd = await readlink(`/proc/${pid}/cwd`).catch(() => undefined)
   return {
     processName: comm?.trim() || undefined,
     commandLine: cmdline?.split('\u0000').join(' ').trim() || undefined,
@@ -438,14 +410,6 @@ class CommandTimeoutError extends Error {
 
 function isCommandTimeoutError(error: unknown): boolean {
   return error instanceof CommandTimeoutError
-}
-
-async function readTextIfAvailable(filePath: string): Promise<string | undefined> {
-  try {
-    return await readFile(filePath, 'utf-8')
-  } catch {
-    return undefined
-  }
 }
 
 function enrichPort(

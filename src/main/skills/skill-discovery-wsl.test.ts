@@ -85,12 +85,29 @@ describe('WSL skill discovery', () => {
     expect(script).toContain('find -L "$root_path"')
     expect(script).toContain('realpath -- "$skill_file"')
     expect(script).toContain('head -c 262144 -- "$skill_file"')
+    expect(script).toContain('skill_count=$((skill_count + 1))')
+    expect(script).toContain("printf '%s\\0%s\\0' E skill-limit")
     expect(script).toContain(`'/work/alice'\\''s project/.agents/skills'`)
+  })
+
+  it('rejects an explicit distro-side candidate-limit marker', () => {
+    expect(() => parseWslSkillDiscoveryOutput(record('E', 'skill-limit'), [homeRoot])).toThrow(
+      /too many skills/
+    )
   })
 
   it('rejects malformed host responses instead of reporting an empty scan', () => {
     expect(() => parseWslSkillDiscoveryOutput(record('S', '9'), [homeRoot])).toThrow(
       'unknown source'
     )
+  })
+
+  it('parses delimiter-heavy output without materializing a field array', () => {
+    const result = parseWslSkillDiscoveryOutput('\0'.repeat(1_000_000), [homeRoot], 42)
+
+    expect(result.skills).toEqual([])
+    expect(result.sources).toEqual([
+      expect.objectContaining({ id: 'home-codex', exists: false, skippedReason: 'missing' })
+    ])
   })
 })

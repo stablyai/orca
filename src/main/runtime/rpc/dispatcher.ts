@@ -29,6 +29,10 @@ import {
 import { ALL_RPC_METHODS } from './methods'
 import { emulatorProbe, emulatorProbeError } from '../../emulator/emulator-probe'
 import type { OrcaRuntimeService } from '../orca-runtime'
+import {
+  boundRuntimeRpcResponse,
+  serializeRuntimeRpcResponse
+} from './runtime-rpc-response-serialization'
 
 export type DispatcherOptions = {
   runtime: OrcaRuntimeService
@@ -48,28 +52,27 @@ export class RpcDispatcher {
     const meta = this.meta()
     const method = this.registry.get(request.method)
     if (!method) {
-      return errorResponse(
-        request.id,
-        meta,
-        'method_not_found',
-        `Unknown method: ${request.method}`
+      return boundRuntimeRpcResponse(
+        errorResponse(request.id, meta, 'method_not_found', `Unknown method: ${request.method}`)
       )
     }
 
     const parsedParams = this.parseParams(request, method, meta)
     if (parsedParams.error) {
-      return parsedParams.error
+      return boundRuntimeRpcResponse(parsedParams.error)
     }
 
     // Why: streaming methods are not supported over one-shot transports like
     // Unix sockets. They require a reply function that can be called multiple
     // times, which is only available via dispatchStreaming.
     if (isStreamingMethod(method)) {
-      return errorResponse(
-        request.id,
-        meta,
-        'method_not_supported',
-        `Method ${request.method} requires a streaming transport`
+      return boundRuntimeRpcResponse(
+        errorResponse(
+          request.id,
+          meta,
+          'method_not_supported',
+          `Method ${request.method} requires a streaming transport`
+        )
       )
     }
 
@@ -83,12 +86,12 @@ export class RpcDispatcher {
         signal: options?.signal
       })
       this.recordRuntimeFeatureInteraction(request.method, result, undefined, request.params)
-      return successResponse(request.id, meta, result)
+      return boundRuntimeRpcResponse(successResponse(request.id, meta, result))
     } catch (error) {
       if (isEmulator) {
         emulatorProbeError(`rpc ${request.method}`, error, { params: request.params })
       }
-      return this.mapError(request, meta, error)
+      return boundRuntimeRpcResponse(this.mapError(request, meta, error))
     }
   }
 
@@ -116,7 +119,7 @@ export class RpcDispatcher {
     const method = this.registry.get(request.method)
     if (!method) {
       reply(
-        JSON.stringify(
+        serializeRuntimeRpcResponse(
           errorResponse(request.id, meta, 'method_not_found', `Unknown method: ${request.method}`)
         )
       )
@@ -125,7 +128,7 @@ export class RpcDispatcher {
 
     const parsedParams = this.parseParams(request, method, meta)
     if (parsedParams.error) {
-      reply(JSON.stringify(parsedParams.error))
+      reply(serializeRuntimeRpcResponse(parsedParams.error))
       return
     }
 
@@ -144,9 +147,9 @@ export class RpcDispatcher {
           registerBinaryStreamHandler: options?.registerBinaryStreamHandler
         })
         this.recordRuntimeFeatureInteraction(request.method, result, undefined, request.params)
-        reply(JSON.stringify(successResponse(request.id, meta, result)))
+        reply(serializeRuntimeRpcResponse(successResponse(request.id, meta, result)))
       } catch (error) {
-        reply(JSON.stringify(this.mapError(request, meta, error)))
+        reply(serializeRuntimeRpcResponse(this.mapError(request, meta, error)))
       }
       return
     }
@@ -161,7 +164,7 @@ export class RpcDispatcher {
       )
       const response = successResponse(request.id, meta, result)
       response.streaming = true
-      reply(JSON.stringify(response))
+      reply(serializeRuntimeRpcResponse(response))
     }
 
     try {
@@ -188,7 +191,7 @@ export class RpcDispatcher {
         request.params
       )
     } catch (error) {
-      reply(JSON.stringify(this.mapError(request, meta, error)))
+      reply(serializeRuntimeRpcResponse(this.mapError(request, meta, error)))
     }
   }
 

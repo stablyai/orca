@@ -58,13 +58,10 @@ export class MobileRelayRpcStreams {
       .waitForConnected()
       .then(() => {
         if (!stream.cancelled && !this.options.sendFrame({ id, method, params: stream.params })) {
-          this.fail(id, stream, 'Connection interrupted')
+          this.remove(id)
         }
       })
-      .catch((error: unknown) => {
-        const message = error instanceof Error ? error.message : 'Connection interrupted'
-        this.fail(id, stream, message, error)
-      })
+      .catch(() => this.remove(id))
     return () => this.cancel(id)
   }
 
@@ -78,7 +75,7 @@ export class MobileRelayRpcStreams {
       return false
     }
     if (!response.ok) {
-      this.fail(response.id, stream, response.error.message, response.error)
+      this.remove(response.id)
       return true
     }
     const result = (response as RpcSuccess).result
@@ -120,9 +117,6 @@ export class MobileRelayRpcStreams {
   }
 
   clear(): void {
-    for (const stream of this.streams.values()) {
-      stream.cancelled = true
-    }
     this.streams.clear()
     this.terminalListeners.clear()
     this.terminalSnapshots.clear()
@@ -167,16 +161,5 @@ export class MobileRelayRpcStreams {
       this.activeBrowserStream = null
     }
     this.streams.delete(id)
-  }
-
-  private fail(id: string, stream: StreamRecord, message: string, error?: unknown): void {
-    if (stream.cancelled || this.streams.get(id) !== stream) {
-      return
-    }
-    try {
-      stream.listener({ type: 'error', message, error })
-    } finally {
-      this.remove(id)
-    }
   }
 }

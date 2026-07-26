@@ -101,7 +101,13 @@ function resolveMatches(matches: MarkdownDocument[] | undefined): MarkdownDocLin
     : { status: 'ambiguous', matches }
 }
 
+const markdownDocumentIndexes = new WeakMap<MarkdownDocument[], MarkdownDocumentIndex>()
+
 export function createMarkdownDocumentIndex(documents: MarkdownDocument[]): MarkdownDocumentIndex {
+  const cached = markdownDocumentIndexes.get(documents)
+  if (cached) {
+    return cached
+  }
   const byName = new Map<string, MarkdownDocument[]>()
   const byRelativePath = new Map<string, MarkdownDocument[]>()
   const byRelativePathWithoutExtension = new Map<string, MarkdownDocument[]>()
@@ -116,7 +122,9 @@ export function createMarkdownDocumentIndex(documents: MarkdownDocument[]): Mark
     )
   }
 
-  return { byName, byRelativePath, byRelativePathWithoutExtension }
+  const index = { byName, byRelativePath, byRelativePathWithoutExtension }
+  markdownDocumentIndexes.set(documents, index)
+  return index
 }
 
 export function resolveMarkdownDocLink(

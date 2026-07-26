@@ -1,18 +1,5 @@
-// Why: Project mode rows carry a GitHub `owner/repo` slug, but Orca's
-// `state.repos` stores only absolute paths. Before any repo-context action
-// (opening the item dialog in repo-backed mode, launching a worktree) can
-// dispatch correctly, we need a renderer-side index mapping slug → Repo[].
-//
-// The index is built lazily from `window.api.gh.repoSlug({ repoPath })` —
-// the main-process resolver that reads `git remote` and classifies the
-// remote into `owner/repo`. Repos whose slug cannot be resolved (no GitHub
-// remote, SSH lookup failure) are excluded; the design doc (§Row actions)
-// says to keep the unknown-repo fallback in that case.
-//
-// The index rebuilds only when `state.repos` changes — adding or removing
-// a repo is rare enough that a full re-resolution is simpler than per-id
-// invalidation, and the underlying IPC result is itself cached by the main
-// process (`repoSlug` reads `.git/config`).
+// Project rows carry slugs while repo state carries paths, so repo-context
+// actions need a lazily resolved slug → Repo[] index.
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useAppStore } from '@/store'
 import type { Repo } from '../../../shared/types'
@@ -30,22 +17,35 @@ import {
   type SlugIndex
 } from './repo-slug-cache'
 import { githubRepoIdentityKey } from '../../../shared/github-repository-identity-key'
+import { resolveRepoSlugsWithFixedWorkers } from './repo-slug-resolution-pool'
 
 export { lookupReposBySlugFromCache } from './repo-slug-cache'
+export { REPO_SLUG_RESOLUTION_CONCURRENCY } from './repo-slug-resolution-pool'
 
 const slugResolutionInFlight = new Map<string, Promise<string | null>>()
 
-// Why: an invalidation (repo removed, remote changed) can land while a
-// resolution is in-flight — before it ever wrote to `slugByRepoId`. Deleting
-// the in-flight promise doesn't stop its pending `rememberRepoSlug` write, so a
-// stale slug would repopulate the cache after invalidation. Bump the key's
-// generation on every invalidation and commit a result only if the generation
-// it started with is still current.
-const slugResolutionGeneration = new Map<string, number>()
+const slugResolutionTokenByCacheKey = new Map<string, object>()
+
+type RepoSlugResolver = (
+  repo: Repo,
+  settings: Pick<GlobalSettings, 'activeRuntimeEnvironmentId'> | null | undefined
+) => Promise<string | null>
+
+type RepoSlugIndexBuildResult = { index: SlugIndex; retryDelayMs: number | null }
+
+let sharedIndexBuild:
+  | {
+      repos: readonly Repo[]
+      settings: GlobalSettings | null | undefined
+      resolver: RepoSlugResolver
+      controller: AbortController
+      promise: Promise<RepoSlugIndexBuildResult>
+    }
+  | undefined
 
 function invalidateSlugResolution(cacheKey: string): void {
   slugResolutionInFlight.delete(cacheKey)
-  slugResolutionGeneration.set(cacheKey, (slugResolutionGeneration.get(cacheKey) ?? 0) + 1)
+  slugResolutionTokenByCacheKey.delete(cacheKey)
 }
 
 // Why: clear after remove/remote-change so the next index build re-resolves.
@@ -72,11 +72,21 @@ export function clearRepoSlugCacheEntry(repoId: string): void {
 
 /** Clear the entire slug cache. Useful for tests or full repo-list resets. */
 export function clearRepoSlugCache(): void {
+  sharedIndexBuild?.controller.abort()
+  sharedIndexBuild = undefined
   clearRepoSlugCacheValues()
-  for (const key of slugResolutionInFlight.keys()) {
-    slugResolutionGeneration.set(key, (slugResolutionGeneration.get(key) ?? 0) + 1)
-  }
+  slugResolutionTokenByCacheKey.clear()
   slugResolutionInFlight.clear()
+}
+
+export function getRepoSlugResolutionStateSizesForTests(): {
+  inFlight: number
+  tokens: number
+} {
+  return {
+    inFlight: slugResolutionInFlight.size,
+    tokens: slugResolutionTokenByCacheKey.size
+  }
 }
 
 async function resolveRepoSlug(
@@ -92,12 +102,13 @@ async function resolveRepoSlug(
   if (inFlight) {
     return inFlight
   }
-  const generation = slugResolutionGeneration.get(cacheKey) ?? 0
+  const resolutionToken = {}
+  slugResolutionTokenByCacheKey.set(cacheKey, resolutionToken)
   const resolution = (async () => {
     // Why: only write the resolved value if this key wasn't invalidated
     // mid-flight; otherwise a stale slug would repopulate the cache.
     const commit = (value: string | null): string | null => {
-      if ((slugResolutionGeneration.get(cacheKey) ?? 0) === generation) {
+      if (slugResolutionTokenByCacheKey.get(cacheKey) === resolutionToken) {
         rememberRepoSlug(cacheKey, value)
       }
       return value
@@ -131,39 +142,109 @@ async function resolveRepoSlug(
     if (slugResolutionInFlight.get(cacheKey) === resolution) {
       slugResolutionInFlight.delete(cacheKey)
     }
+    if (slugResolutionTokenByCacheKey.get(cacheKey) === resolutionToken) {
+      slugResolutionTokenByCacheKey.delete(cacheKey)
+    }
   }
+}
+
+function indexResolvedRepoSlugs(
+  repos: readonly Repo[],
+  slugs: readonly (string | null)[]
+): SlugIndex {
+  const index: SlugIndex = new Map()
+  for (let repoIndex = 0; repoIndex < repos.length; repoIndex += 1) {
+    const slug = slugs[repoIndex]
+    if (slug) {
+      const repo = repos[repoIndex]
+      const matches = index.get(slug)
+      if (matches) {
+        matches.push(repo)
+      } else {
+        index.set(slug, [repo])
+      }
+    }
+  }
+  return index
+}
+
+/** @internal - fixed-worker regression coverage only. */
+export async function buildRepoSlugIndexForTests(
+  repos: readonly Repo[],
+  resolver: (repo: Repo) => Promise<string | null>
+): Promise<SlugIndex> {
+  const slugs = await resolveRepoSlugsWithFixedWorkers(repos, resolver)
+  return indexResolvedRepoSlugs(repos, slugs)
 }
 
 async function buildIndex(
   repos: Repo[],
-  settings: Pick<GlobalSettings, 'activeRuntimeEnvironmentId'> | null | undefined
-): Promise<{ index: SlugIndex; retryDelayMs: number | null }> {
+  settings: GlobalSettings | null | undefined,
+  resolver: RepoSlugResolver = resolveRepoSlug,
+  signal?: AbortSignal
+): Promise<RepoSlugIndexBuildResult> {
   // Why: evict cached entries for repos that no longer exist in state so
   // the cache cannot grow unbounded across long sessions where users add
   // and remove repos. Without this, every removed repo's id (and its
   // negative-cached null) lingers forever.
-  const liveKeys = new Set(repos.map((r) => slugCacheKey(r.id, settingsForRepoOwner(r, settings))))
+  const liveKeys = new Set<string>()
+  for (const repo of repos) {
+    liveKeys.add(slugCacheKey(repo.id, settingsForRepoOwner(repo, settings)))
+  }
   for (const key of slugByRepoId.keys()) {
     if (!liveKeys.has(key)) {
       deleteRepoSlugCacheKey(key)
       invalidateSlugResolution(key)
     }
   }
-  const next: SlugIndex = new Map()
-  const results = await Promise.all(
-    repos.map(async (r) => ({
-      repo: r,
-      // Why: the project slug index spans repos from multiple hosts; each
-      // repo's remote metadata must be read from its owner.
-      slug: await resolveRepoSlug(r, settingsForRepoOwner(r, settings))
-    }))
-  )
-  for (const { repo, slug } of results) {
-    if (slug) {
-      next.set(slug, [...(next.get(slug) ?? []), repo])
+  for (const key of slugResolutionInFlight.keys()) {
+    if (!liveKeys.has(key)) {
+      invalidateSlugResolution(key)
     }
   }
+  // Why: repo fleets can be large; only a fixed number of IPC/RPC slug probes
+  // should own promises and provider response buffers at once.
+  const slugs = await resolveRepoSlugsWithFixedWorkers(
+    repos,
+    (repo) => resolver(repo, settingsForRepoOwner(repo, settings)),
+    signal
+  )
+  const next = indexResolvedRepoSlugs(repos, slugs)
   return { index: next, retryDelayMs: nextRepoSlugFailureRetryDelay(liveKeys) }
+}
+
+function getSharedRepoSlugIndexBuild(
+  repos: Repo[],
+  settings: GlobalSettings | null | undefined,
+  resolver: RepoSlugResolver
+): Promise<RepoSlugIndexBuildResult> {
+  if (
+    sharedIndexBuild?.repos === repos &&
+    sharedIndexBuild.settings === settings &&
+    sharedIndexBuild.resolver === resolver
+  ) {
+    return sharedIndexBuild.promise
+  }
+  sharedIndexBuild?.controller.abort()
+  const controller = new AbortController()
+  const promise = buildIndex(repos, settings, resolver, controller.signal)
+  const entry = { repos, settings, resolver, controller, promise }
+  sharedIndexBuild = entry
+  const release = (): void => {
+    if (sharedIndexBuild === entry) {
+      sharedIndexBuild = undefined
+    }
+  }
+  void promise.then(release, release)
+  return promise
+}
+
+/** @internal - shared-build regression coverage only. */
+export function buildSharedRepoSlugIndexForTests(
+  repos: Repo[],
+  resolver: RepoSlugResolver
+): Promise<SlugIndex> {
+  return getSharedRepoSlugIndexBuild(repos, null, resolver).then((result) => result.index)
 }
 
 export type RepoSlugIndexState = {
@@ -188,16 +269,19 @@ export function useRepoSlugIndex(): RepoSlugIndexState {
     const gen = ++generationRef.current
     let retryTimer: ReturnType<typeof setTimeout> | undefined
     setReady(false)
-    void buildIndex(repos, settings).then(({ index: next, retryDelayMs }) => {
-      if (gen !== generationRef.current) {
-        return
-      }
-      setIndex(next)
-      setReady(true)
-      if (retryDelayMs !== null) {
-        retryTimer = setTimeout(() => setRetryGeneration((value) => value + 1), retryDelayMs)
-      }
-    })
+    void getSharedRepoSlugIndexBuild(repos, settings, resolveRepoSlug).then(
+      ({ index: next, retryDelayMs }) => {
+        if (gen !== generationRef.current) {
+          return
+        }
+        setIndex(next)
+        setReady(true)
+        if (retryDelayMs !== null) {
+          retryTimer = setTimeout(() => setRetryGeneration((value) => value + 1), retryDelayMs)
+        }
+      },
+      () => {}
+    )
     return () => {
       generationRef.current += 1
       if (retryTimer) {

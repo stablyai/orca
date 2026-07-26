@@ -7,6 +7,7 @@ import {
   AGENT_SESSION_CREATE_OPERATION_DAEMON_PROTOCOL_VERSION,
   GIT_CREDENTIAL_GUARD_HOST_PROTOCOL_VERSION
 } from './types'
+import { MAX_AGGREGATED_PTY_PROCESS_LIST_ENTRIES } from '../providers/pty-process-list-admission'
 
 type AdapterMock = DaemonPtyAdapter & {
   emitData: (id: string, data: string, sequenceChars?: number) => void
@@ -148,6 +149,26 @@ it('rejects completion inspection when no daemon owns the session', async () => 
   })
 
   await expect(router.inspectProcess('unmapped-session')).rejects.toThrow('terminal_gone')
+})
+
+it('preserves unavailable inspection from the owning legacy daemon', async () => {
+  const legacy = createAdapter('legacy', ['legacy-session'])
+  vi.mocked(legacy.inspectProcess).mockResolvedValue({
+    foregroundProcess: null,
+    hasChildProcesses: true,
+    unavailable: true
+  })
+  const router = new DaemonPtyRouter({
+    current: createAdapter('current'),
+    legacy: [legacy]
+  })
+  await router.discoverLegacySessions()
+
+  await expect(router.inspectProcess('legacy-session')).resolves.toEqual({
+    foregroundProcess: null,
+    hasChildProcesses: true,
+    unavailable: true
+  })
 })
 
 describe('DaemonPtyRouter', () => {
@@ -419,6 +440,17 @@ describe('DaemonPtyRouter', () => {
     const router = new DaemonPtyRouter({ current, legacy: [legacy] })
 
     await expect(router.listProcesses()).rejects.toThrow('legacy unavailable')
+  })
+
+  it('fails listProcesses closed when adapters amplify the aggregate listing', async () => {
+    const current = createAdapter(
+      'current',
+      buildSessionIds('current', MAX_AGGREGATED_PTY_PROCESS_LIST_ENTRIES)
+    )
+    const legacy = createAdapter('legacy', ['legacy-over-cap'])
+    const router = new DaemonPtyRouter({ current, legacy: [legacy] })
+
+    await expect(router.listProcesses()).rejects.toThrow('pty_process_list_capacity')
   })
 
   it('merges startup reconciliation and updates route mappings', async () => {

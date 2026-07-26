@@ -1341,16 +1341,18 @@ export function registerWorktreeHandlers(
         headRefName: args.headRefName,
         baseRefName: args.baseRefName,
         isCrossRepository: args.isCrossRepository,
+        issueSourcePreference: repo.issueSourcePreference,
         connectionId: repo.connectionId ?? null,
         localGitOptions: getLocalProjectWorktreeGitOptions(store, repo),
         gitExec,
         fetchRemoteTrackingRef,
         fetchPullRequestHeadRef,
-        // Why: one shared resolver for local and SSH so origin-vs-upstream
-        // cannot diverge by surface; it prefers the remote hosting the PR's project.
+        // Why: one resolver keeps source preference and hosting identity aligned
+        // across local, WSL, and SSH worktree creation.
         resolveRemote: () =>
           resolveGitHubReviewHeadRemote({
             repoPath: repo.path,
+            issueSourcePreference: repo.issueSourcePreference,
             connectionId: repo.connectionId ?? null,
             localGitOptions: getLocalProjectWorktreeGitOptions(store, repo),
             gitExec

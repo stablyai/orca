@@ -3,6 +3,12 @@ import type { OrchestrationDb } from './db'
 import type { MessageRow, TaskRow, CoordinatorStatus } from './types'
 import { buildDispatchPreamble } from './preamble'
 import { reconcileLifecycleMessage } from './lifecycle-reconciliation'
+import {
+  orchestrationRowRetainedUtf8Bytes,
+  ORCHESTRATION_QUERY_MAX_RETAINED_UTF8_BYTES,
+  ORCHESTRATION_QUERY_MAX_ROWS,
+  parseOrchestrationJson
+} from './query-retention'
 
 export type CoordinatorRuntime = {
   sendTerminalAgentPrompt(handle: string, prompt: string): Promise<unknown>
@@ -66,6 +72,7 @@ type CoordinatorState = {
   completedTasks: string[]
   failedTasks: string[]
   escalations: MessageRow[]
+  escalationRetainedBytes: number
 }
 
 const DEFAULT_POLL_MS = 2000
@@ -73,6 +80,23 @@ const MAX_CONCURRENT_DEFAULT = 4
 
 // Why: 10 min = documented heartbeat cadence (5 min) × 2, so one missed heartbeat is the earliest a dispatch can look stale.
 const HUNG_THRESHOLD_MS = 10 * 60 * 1000
+
+function mergeCoordinatorTaskIds(...sources: string[][]): string[] {
+  const retained: string[] = []
+  const seen = new Set<string>()
+  for (const source of sources) {
+    for (const id of source) {
+      if (!seen.has(id)) {
+        seen.add(id)
+        retained.push(id)
+        if (retained.length >= ORCHESTRATION_QUERY_MAX_ROWS) {
+          return retained
+        }
+      }
+    }
+  }
+  return retained
+}
 
 export class Coordinator {
   private db: OrchestrationDb
@@ -100,7 +124,8 @@ export class Coordinator {
       phase: 'decomposing',
       completedTasks: [],
       failedTasks: [],
-      escalations: []
+      escalations: [],
+      escalationRetainedBytes: 0
     }
   }
 
@@ -152,14 +177,12 @@ export class Coordinator {
       }
 
       // Why: an early stop leaves tasks incomplete, so the run counts as failed.
-      const tasks = this.db.listTasks()
-      const allDone = tasks.every((t) => t.status === 'completed' || t.status === 'failed')
-      const failedTasks = [
-        ...new Set([
-          ...this.state.failedTasks,
-          ...tasks.filter((task) => task.status === 'failed').map((task) => task.id)
-        ])
-      ]
+      const counts = this.db.getTaskStatusCounts()
+      const allDone = counts.total === counts.completed + counts.failed
+      const failedTasks = mergeCoordinatorTaskIds(
+        this.state.failedTasks,
+        this.db.listTaskIdsByStatus('failed')
+      )
       const finalStatus =
         this.stopped || failedTasks.length > 0 || !allDone ? 'failed' : 'completed'
       this.db.updateCoordinatorRun(runId, finalStatus)
@@ -185,13 +208,13 @@ export class Coordinator {
   // Why: decomposition isn't implemented yet — tasks must be pre-created before run(); AI-driven decomposition is a future phase.
   private async decompose(): Promise<void> {
     this.state.phase = 'decomposing'
-    const existing = this.db.listTasks()
-    if (existing.length === 0) {
+    const taskCount = this.db.getTaskStatusCounts().total
+    if (taskCount === 0) {
       throw new Error(
         'No tasks found. Create tasks with orchestration.taskCreate before running the coordinator.'
       )
     }
-    this.opts.onLog(`Found ${existing.length} tasks in DAG`)
+    this.opts.onLog(`Found ${taskCount} tasks in DAG`)
     this.state.phase = 'dispatching'
   }
 
@@ -207,13 +230,12 @@ export class Coordinator {
   // Why: warn only, never auto-fail — a false positive (slow but correct worker) costs more than a false negative (hung worker holding a slot); see R6 of DESIGN_DOC_PREAMBLE_FIX.md.
   private warnStaleDispatches(): void {
     const thresholdIso = new Date(Date.now() - HUNG_THRESHOLD_MS).toISOString()
-    const stale = this.db.getStaleDispatches(thresholdIso)
-    for (const ctx of stale) {
+    this.db.forEachStaleDispatch(thresholdIso, (ctx) => {
       const minutes = Math.round(HUNG_THRESHOLD_MS / 60000)
       this.opts.onLog(
         `Warning: worker ${ctx.assignee_handle ?? '<unknown>'} on task ${ctx.task_id} has not sent a heartbeat in ~${minutes} min (dispatch ${ctx.id})`
       )
-    }
+    })
   }
 
   private processMessages(): void {
@@ -252,7 +274,10 @@ export class Coordinator {
   private handleLifecycleMessage(msg: MessageRow): void {
     const result = reconcileLifecycleMessage(this.db, msg, this.opts.onLog)
     if (result.action === 'completed') {
-      if (!this.state.completedTasks.includes(result.taskId)) {
+      if (
+        this.state.completedTasks.length < ORCHESTRATION_QUERY_MAX_ROWS &&
+        !this.state.completedTasks.includes(result.taskId)
+      ) {
         this.state.completedTasks.push(result.taskId)
       }
     }
@@ -260,13 +285,24 @@ export class Coordinator {
 
   private handleEscalation(msg: MessageRow): void {
     this.opts.onLog(`Escalation from ${msg.from_handle}: ${msg.subject}`)
-    this.state.escalations.push(msg)
+    const messageBytes = orchestrationRowRetainedUtf8Bytes(msg)
+    if (
+      this.state.escalations.length < ORCHESTRATION_QUERY_MAX_ROWS &&
+      this.state.escalationRetainedBytes + messageBytes <=
+        ORCHESTRATION_QUERY_MAX_RETAINED_UTF8_BYTES
+    ) {
+      this.state.escalations.push(msg)
+      this.state.escalationRetainedBytes += messageBytes
+    }
 
     let taskId: string | undefined
     if (msg.payload) {
       try {
-        const payload = JSON.parse(msg.payload)
-        taskId = payload.taskId
+        const payload = parseOrchestrationJson(msg.payload)
+        if (payload && typeof payload === 'object') {
+          const rawTaskId = (payload as { taskId?: unknown }).taskId
+          taskId = typeof rawTaskId === 'string' ? rawTaskId : undefined
+        }
       } catch {
         // Escalation without structured payload — log subject as context
       }
@@ -291,7 +327,12 @@ export class Coordinator {
     if (updated?.status === 'circuit_broken') {
       this.opts.onLog(`Task ${taskId} circuit broken after repeated failures`)
       this.db.updateTaskStatus(taskId, 'failed', `Circuit broken: ${msg.subject}`)
-      this.state.failedTasks.push(taskId)
+      if (
+        this.state.failedTasks.length < ORCHESTRATION_QUERY_MAX_ROWS &&
+        !this.state.failedTasks.includes(taskId)
+      ) {
+        this.state.failedTasks.push(taskId)
+      }
     } else {
       this.opts.onLog(`Task ${taskId} will be retried (failure ${updated?.failure_count ?? 0}/3)`)
     }
@@ -303,7 +344,10 @@ export class Coordinator {
     let payload: { taskId?: string; question?: string; options?: string[] } = {}
     if (msg.payload) {
       try {
-        payload = JSON.parse(msg.payload)
+        const parsed = parseOrchestrationJson(msg.payload)
+        if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
+          payload = parsed as typeof payload
+        }
       } catch {
         return
       }
@@ -329,14 +373,7 @@ export class Coordinator {
 
   private processDecisionGates(): void {
     // Why: the coordinator never auto-resolves gates (humans do, via orchestration.gateResolve) — that would defeat them as approval checkpoints.
-    const pendingGates = this.db.listGates({ status: 'pending' })
-    for (const gate of pendingGates) {
-      const task = this.db.getTask(gate.task_id)
-      if (task && task.status !== 'blocked') {
-        // Why: gate exists but task isn't blocked — re-block to restore the invariant.
-        this.db.updateTaskStatus(gate.task_id, 'blocked')
-      }
-    }
+    this.db.restorePendingGateTaskStatuses()
   }
 
   private async dispatchReadyTasks(): Promise<void> {
@@ -346,8 +383,8 @@ export class Coordinator {
       return
     }
 
-    const dispatched = this.db.listTasks({ status: 'dispatched' })
-    let slotsAvailable = this.opts.maxConcurrent - dispatched.length
+    const dispatchedCount = this.db.getTaskStatusCounts().dispatched
+    let slotsAvailable = this.opts.maxConcurrent - dispatchedCount
     if (slotsAvailable <= 0) {
       return
     }
@@ -437,10 +474,9 @@ export class Coordinator {
     })
 
     // Why: surface a since-resolved decision gate's outcome to the worker via the preamble.
-    const gates = this.db.listGates({ taskId: task.id, status: 'resolved' })
     let gateContext = ''
-    if (gates.length > 0) {
-      const latest = gates.at(-1)!
+    const latest = this.db.getLatestGate({ taskId: task.id, status: 'resolved' })
+    if (latest) {
       gateContext = `\n\n--- DECISION GATE RESOLVED ---\nQuestion: ${latest.question}\nResolution: ${latest.resolution}\n---\n`
     }
 
@@ -452,7 +488,12 @@ export class Coordinator {
         err instanceof Error ? err.message : String(err)
       )
       if (updated?.status === 'circuit_broken') {
-        this.state.failedTasks.push(task.id)
+        if (
+          this.state.failedTasks.length < ORCHESTRATION_QUERY_MAX_ROWS &&
+          !this.state.failedTasks.includes(task.id)
+        ) {
+          this.state.failedTasks.push(task.id)
+        }
       }
       throw err
     }
@@ -464,13 +505,11 @@ export class Coordinator {
   private async getAvailableTerminals(): Promise<string[]> {
     try {
       const result = await this.runtime.listTerminals(this.opts.worktree)
-      const dispatched = this.db.listTasks({ status: 'dispatched' })
       const busyHandles = new Set<string>()
 
-      for (const task of dispatched) {
-        const ctx = this.db.getDispatchContext(task.id)
-        if (ctx?.assignee_handle) {
-          busyHandles.add(ctx.assignee_handle)
+      for (const terminal of result.terminals) {
+        if (this.db.getActiveDispatchForTerminal(terminal.handle)) {
+          busyHandles.add(terminal.handle)
         }
       }
 
@@ -490,25 +529,22 @@ export class Coordinator {
   }
 
   private checkConvergence(): boolean {
-    const tasks = this.db.listTasks()
-    if (tasks.length === 0) {
+    const counts = this.db.getTaskStatusCounts()
+    if (counts.total === 0) {
       return true
     }
 
-    const allDone = tasks.every((t) => t.status === 'completed' || t.status === 'failed')
+    const allDone = counts.total === counts.completed + counts.failed
     if (allDone) {
       this.state.phase = 'done'
       return true
     }
 
     // Why: no active tasks but some blocked → dependencies can never be satisfied (stuck).
-    const active = tasks.filter(
-      (t) => t.status === 'ready' || t.status === 'dispatched' || t.status === 'pending'
-    )
-    const blocked = tasks.filter((t) => t.status === 'blocked')
-    if (active.length === 0 && blocked.length > 0) {
+    const activeCount = counts.ready + counts.dispatched + counts.pending
+    if (activeCount === 0 && counts.blocked > 0) {
       this.opts.onLog(
-        `Stuck: ${blocked.length} tasks blocked with no active tasks. Resolve decision gates to continue.`
+        `Stuck: ${counts.blocked} tasks blocked with no active tasks. Resolve decision gates to continue.`
       )
     }
 

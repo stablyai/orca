@@ -4,6 +4,7 @@ import type {
   AutomationRunOutputSnapshot
 } from '../../shared/automations-types'
 import type { AutomationRunTargetResult } from './run-target-resolution'
+import { appendCompactedStringChunk } from '../../shared/string-chunk-compaction'
 
 const MAX_HEADLESS_OUTPUT_SNAPSHOT_CHARS = 256 * 1024
 
@@ -39,7 +40,7 @@ export function createHeadlessAutomationOutputSnapshotBuffer(): {
       if (!chunk) {
         return
       }
-      chunks.push(chunk)
+      appendCompactedStringChunk(chunks, chunk)
       totalChars += chunk.length
       let overflowChars = totalChars - MAX_HEADLESS_OUTPUT_SNAPSHOT_CHARS
       while (overflowChars > 0 && chunks.length > 0) {

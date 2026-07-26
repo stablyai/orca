@@ -50,9 +50,6 @@ export type PtyConnectResult = {
   /** The requested session exited while it had no primary pane handler. Its
    *  buffered final data/exit were delivered, so callers must not fresh-spawn. */
   exitedBeforeAttach?: boolean
-  /** The provider adopted an existing session rather than creating a fresh one.
-   *  Startup commands may be ignored; recovery still requires separate ownership evidence. */
-  isReattach?: boolean
   launchAgent?: TuiAgent
   launchConfig?: SleepingAgentLaunchConfig
   snapshot?: string

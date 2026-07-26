@@ -16,6 +16,10 @@ import { tmpdir } from 'node:os'
 import { listFilesWithGit } from './fs-handler-git-fallback'
 import { listFilesWithRg } from './fs-handler-list-files'
 import { searchWithRg } from './fs-handler-utils'
+import {
+  QUICK_OPEN_LISTING_MAX_PATH_BYTES,
+  QUICK_OPEN_LISTING_MAX_RESULTS
+} from '../shared/quick-open-listing-limits'
 
 const tempDirs: string[] = []
 const SHA1 = '0123456789abcdef0123456789abcdef01234567'
@@ -77,10 +81,12 @@ describe('relay quick open ignored file listing', () => {
       ;(primaryProc.stdout as unknown as EventEmitter).emit('data', 'src/index.ts\n')
       primaryProc.emit('close', 0, null)
 
-      ;(ignoredProc.stdout as unknown as EventEmitter).emit('data', 'dist/generated.js\n')
-      ;(ignoredProc.stdout as unknown as EventEmitter).emit('data', 'node_modules/pkg/index.js\n')
-      ;(ignoredProc.stdout as unknown as EventEmitter).emit('data', 'packages/other/src/x.ts\n')
-      ignoredProc.emit('close', 0, null)
+      queueMicrotask(() => {
+        ;(ignoredProc.stdout as unknown as EventEmitter).emit('data', 'dist/generated.js\n')
+        ;(ignoredProc.stdout as unknown as EventEmitter).emit('data', 'node_modules/pkg/index.js\n')
+        ;(ignoredProc.stdout as unknown as EventEmitter).emit('data', 'packages/other/src/x.ts\n')
+        ignoredProc.emit('close', 0, null)
+      })
     }, 10)
 
     await expect(promise).resolves.toEqual(['src/index.ts', 'dist/generated.js'])
@@ -115,6 +121,46 @@ describe('relay quick open ignored file listing', () => {
     expect(callIndex).toBe(1)
   })
 
+  it('bounds an omitted relay rg result limit without spawning the ignored pass', async () => {
+    const primary = createMockProcess()
+    const ignored = createMockProcess()
+    let callIndex = 0
+    spawnMock.mockImplementation(() => (++callIndex === 1 ? primary : ignored))
+    const promise = listFilesWithRg('/remote/root')
+    const paths = Array.from(
+      { length: QUICK_OPEN_LISTING_MAX_RESULTS + 1 },
+      (_value, index) => `src/file-${index}.ts`
+    )
+
+    ;(primary.stdout as unknown as EventEmitter).emit('data', paths.join('\n'))
+
+    const result = await promise
+    expect(result).toHaveLength(QUICK_OPEN_LISTING_MAX_RESULTS)
+    expect(primary.kill).toHaveBeenCalled()
+    expect(ignored.kill).not.toHaveBeenCalled()
+    expect(callIndex).toBe(1)
+  })
+
+  it('kills a relay rg scan whose residual path exceeds the field limit', async () => {
+    const primary = createMockProcess()
+    const ignored = createMockProcess()
+    let callIndex = 0
+    spawnMock.mockImplementation(() => (++callIndex === 1 ? primary : ignored))
+    const promise = listFilesWithRg('/remote/root')
+
+    ;(primary.stdout as unknown as EventEmitter).emit(
+      'data',
+      Buffer.alloc(QUICK_OPEN_LISTING_MAX_PATH_BYTES + 1, 0x61)
+    )
+
+    await expect(promise).rejects.toThrow(
+      `Quick Open file path exceeded ${QUICK_OPEN_LISTING_MAX_PATH_BYTES} bytes`
+    )
+    expect(primary.kill).toHaveBeenCalled()
+    expect(ignored.kill).not.toHaveBeenCalled()
+    expect(callIndex).toBe(1)
+  })
+
   it('git fallback ignored pass includes ignored non-env files', async () => {
     const root = await makeTempRoot()
     await writeRel(root, 'dist/generated.js')
@@ -140,9 +186,11 @@ describe('relay quick open ignored file listing', () => {
       )
       primaryProc.emit('close', 0, null)
 
-      ;(ignoredProc.stdout as unknown as EventEmitter).emit('data', 'dist/\0')
-      ;(ignoredProc.stdout as unknown as EventEmitter).emit('data', 'packages/other/src/x.ts\0')
-      ignoredProc.emit('close', 0, null)
+      queueMicrotask(() => {
+        ;(ignoredProc.stdout as unknown as EventEmitter).emit('data', 'dist/\0')
+        ;(ignoredProc.stdout as unknown as EventEmitter).emit('data', 'packages/other/src/x.ts\0')
+        ignoredProc.emit('close', 0, null)
+      })
     }, 10)
 
     await expect(promise).resolves.toEqual(['dist/generated.js', 'src/index.ts', 'tab\tfile.txt'])
@@ -176,6 +224,26 @@ describe('relay quick open ignored file listing', () => {
     await expect(promise).resolves.toEqual(['src/one.ts', 'src/two.ts'])
     expect(primaryProc.kill).toHaveBeenCalled()
     expect(ignoredProc.kill).not.toHaveBeenCalled()
+    expect(callIndex).toBe(1)
+  })
+
+  it('bounds an omitted relay Git result limit before spawning the ignored pass', async () => {
+    const primary = createMockProcess()
+    const ignored = createMockProcess()
+    let callIndex = 0
+    spawnMock.mockImplementation(() => (++callIndex === 1 ? primary : ignored))
+    const promise = listFilesWithGit('/remote/root')
+    const paths = Array.from(
+      { length: QUICK_OPEN_LISTING_MAX_RESULTS + 1 },
+      (_value, index) => `src/file-${index}.ts`
+    )
+
+    ;(primary.stdout as unknown as EventEmitter).emit('data', paths.join('\0'))
+
+    const result = await promise
+    expect(result).toHaveLength(QUICK_OPEN_LISTING_MAX_RESULTS)
+    expect(primary.kill).toHaveBeenCalled()
+    expect(ignored.kill).not.toHaveBeenCalled()
     expect(callIndex).toBe(1)
   })
 
@@ -219,7 +287,7 @@ describe('relay quick open ignored file listing', () => {
         `${staged('100644', 'README.md')}\0${staged('160000', 'packages/app')}\0packages/lib/\0`
       )
       primaryProc.emit('close', 0, null)
-      ignoredProc.emit('close', 0, null)
+      queueMicrotask(() => ignoredProc.emit('close', 0, null))
     }, 10)
 
     await expect(promise).resolves.toEqual([
@@ -247,9 +315,11 @@ describe('relay quick open ignored file listing', () => {
         ;(primaryProc.stdout as unknown as EventEmitter).emit('data', 'src/index.ts\0')
         primaryProc.emit('close', 0, null)
 
-        // Entries streamed before the kill are kept alongside the primary pass.
-        ;(ignoredProc.stdout as unknown as EventEmitter).emit('data', 'dist/generated.js\0')
-        ignoredProc.emit('close', null, 'SIGTERM')
+        queueMicrotask(() => {
+          // Entries streamed before the kill are kept alongside the primary pass.
+          ;(ignoredProc.stdout as unknown as EventEmitter).emit('data', 'dist/generated.js\0')
+          ignoredProc.emit('close', null, 'SIGTERM')
+        })
       }, 10)
 
       await expect(promise).resolves.toEqual(['dist/generated.js', 'src/index.ts'])
@@ -277,7 +347,7 @@ describe('relay quick open ignored file listing', () => {
         ;(primaryProc.stdout as unknown as EventEmitter).emit('data', 'src/index.ts\0')
         primaryProc.emit('close', 0, null)
 
-        ignoredProc.emit('close', 128, null)
+        queueMicrotask(() => ignoredProc.emit('close', 128, null))
       }, 10)
 
       await expect(promise).resolves.toEqual(['src/index.ts'])
@@ -302,12 +372,10 @@ describe('relay quick open ignored file listing', () => {
     setTimeout(() => {
       ;(primaryProc.stdout as unknown as EventEmitter).emit('data', 'src/index.ts\0')
       primaryProc.emit('close', null, 'SIGTERM')
-
-      ;(ignoredProc.stdout as unknown as EventEmitter).emit('data', 'dist/generated.js\0')
-      ignoredProc.emit('close', 0, null)
     }, 10)
 
     await expect(promise).rejects.toThrow('git ls-files killed by SIGTERM')
+    expect(callIndex).toBe(1)
   })
 
   it('git fallback rejects when the primary pass exits non-zero', async () => {
@@ -324,12 +392,10 @@ describe('relay quick open ignored file listing', () => {
 
     setTimeout(() => {
       primaryProc.emit('close', 128, null)
-
-      ;(ignoredProc.stdout as unknown as EventEmitter).emit('data', 'dist/generated.js\0')
-      ignoredProc.emit('close', 0, null)
     }, 10)
 
     await expect(promise).rejects.toThrow('git ls-files exited with code 128')
+    expect(callIndex).toBe(1)
   })
 
   it('git fallback rejects when a timed-out child does not emit close', async () => {
@@ -355,15 +421,12 @@ describe('relay quick open ignored file listing', () => {
 
       expect(outcome).toContain('git ls-files timed out')
       expect(primaryProc.kill).toHaveBeenCalled()
-      expect(ignoredProc.kill).toHaveBeenCalled()
+      expect(ignoredProc.kill).not.toHaveBeenCalled()
+      expect(callIndex).toBe(1)
       expect((primaryProc.stdout as unknown as EventEmitter).listenerCount('data')).toBe(0)
       expect((primaryProc.stderr as unknown as EventEmitter).listenerCount('data')).toBe(0)
       expect(primaryProc.listenerCount('error')).toBe(0)
       expect(primaryProc.listenerCount('close')).toBe(0)
-      expect((ignoredProc.stdout as unknown as EventEmitter).listenerCount('data')).toBe(0)
-      expect((ignoredProc.stderr as unknown as EventEmitter).listenerCount('data')).toBe(0)
-      expect(ignoredProc.listenerCount('error')).toBe(0)
-      expect(ignoredProc.listenerCount('close')).toBe(0)
     } finally {
       vi.useRealTimers()
     }
@@ -392,15 +455,12 @@ describe('relay quick open ignored file listing', () => {
 
       expect(outcome).toBe('rejected:rg list timed out')
       expect(primaryProc.kill).toHaveBeenCalled()
-      expect(ignoredProc.kill).toHaveBeenCalled()
+      expect(ignoredProc.kill).not.toHaveBeenCalled()
+      expect(callIndex).toBe(1)
       expect((primaryProc.stdout as unknown as EventEmitter).listenerCount('data')).toBe(0)
       expect((primaryProc.stderr as unknown as EventEmitter).listenerCount('data')).toBe(0)
       expect(primaryProc.listenerCount('error')).toBe(0)
       expect(primaryProc.listenerCount('close')).toBe(0)
-      expect((ignoredProc.stdout as unknown as EventEmitter).listenerCount('data')).toBe(0)
-      expect((ignoredProc.stderr as unknown as EventEmitter).listenerCount('data')).toBe(0)
-      expect(ignoredProc.listenerCount('error')).toBe(0)
-      expect(ignoredProc.listenerCount('close')).toBe(0)
     } finally {
       vi.useRealTimers()
     }

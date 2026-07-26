@@ -2,12 +2,27 @@
 import { z } from 'zod'
 import { defineMethod, type RpcMethod } from '../core'
 import { OptionalFiniteNumber, OptionalString, OptionalBoolean, requiredString } from '../schemas'
-import type { MessageType, MessagePriority, TaskStatus } from '../../orchestration/db'
+import type {
+  MessageRow,
+  MessageType,
+  MessagePriority,
+  TaskStatus
+} from '../../orchestration/db'
 import { buildDispatchPreamble } from '../../orchestration/preamble'
 import { formatMessageBanner } from '../../orchestration/formatter'
 import { isGroupAddress, resolveGroupAddress } from '../../orchestration/groups'
 import { reconcileLifecycleMessage } from '../../orchestration/lifecycle-reconciliation'
+import {
+  assertOrchestrationStringListFits,
+  assertOrchestrationWaitTypeFilterFits,
+  assertOrchestrationWriteFits
+} from '../../orchestration/query-retention'
 import { abbreviateOrchestrationTasks } from '../../../../shared/orchestration-task-summary'
+import {
+  JsonStringifyByteLimitError,
+  stringifyJsonWithinByteLimit
+} from '../../../../shared/memory-safety/node-bounded-json-stringify'
+import { REMOTE_RUNTIME_MAX_OUTBOUND_JSON_BYTES } from '../../../../shared/remote-runtime-memory-limits'
 import { ORCHESTRATION_GATE_METHODS } from './orchestration-gates'
 
 const MESSAGE_TYPES: MessageType[] = [
@@ -21,6 +36,21 @@ const MESSAGE_TYPES: MessageType[] = [
   'heartbeat'
 ]
 
+function parseMessageTypeFilter(types: string | undefined): MessageType[] | undefined {
+  if (!types) {
+    return undefined
+  }
+  const parsed = types
+    .split(',')
+    .map((type) => type.trim())
+    .filter(Boolean) as MessageType[]
+  const invalidTypes = parsed.filter((type) => !MESSAGE_TYPES.includes(type))
+  if (invalidTypes.length > 0) {
+    throw new Error(`Invalid --types: ${invalidTypes.join(',')}`)
+  }
+  return Array.from(new Set(parsed))
+}
+
 const TASK_STATUSES: TaskStatus[] = [
   'pending',
   'ready',
@@ -29,6 +59,19 @@ const TASK_STATUSES: TaskStatus[] = [
   'failed',
   'blocked'
 ]
+
+const ASK_DEFAULT_TIMEOUT_MS = 600_000
+
+// Why: ask pins a shared long-poll slot for its entire timeout, so a caller-supplied
+// value can't be unbounded; 30 min covers a slow human gate and still frees the slot.
+const ASK_MAX_TIMEOUT_MS = 1_800_000
+
+export function clampAskTimeoutMs(timeoutMs: number | undefined): number {
+  if (timeoutMs === undefined) {
+    return ASK_DEFAULT_TIMEOUT_MS
+  }
+  return Math.min(Math.max(0, timeoutMs), ASK_MAX_TIMEOUT_MS)
+}
 
 function getLifecycleGroupRecipientError(type: 'worker_done' | 'heartbeat'): string {
   return `${type} messages must be sent to a concrete coordinator terminal handle, not a group address.`
@@ -269,54 +312,113 @@ export const ORCHESTRATION_METHODS: RpcMethod[] = [
   defineMethod({
     name: 'orchestration.check',
     params: CheckParams,
-    handler: async (params, { runtime, signal }) => {
+    handler: async (params, { runtime, signal, requestId }) => {
       const db = runtime.getOrchestrationDb()
       const handle = params.terminal ?? 'unknown'
-      const typeFilter = params.types
-        ? (params.types
-            .split(',')
-            .map((t) => t.trim())
-            .filter(Boolean) as MessageType[])
-        : undefined
-      const invalidTypes = typeFilter?.filter((t) => !MESSAGE_TYPES.includes(t))
-      if (invalidTypes && invalidTypes.length > 0) {
-        throw new Error(`Invalid --types: ${invalidTypes.join(',')}`)
+      if (params.wait) {
+        assertOrchestrationWaitTypeFilterFits(params.types)
       }
+      assertOrchestrationWriteFits('Message type filter', [params.types])
+      const typeFilter = parseMessageTypeFilter(params.types)
 
       // Why: unread:false is honored for one release as a compat shim so in-flight callers don't break (design doc §5).
       const showAll = params.all === true || (params.unread === false && params.peek !== true)
       const consumeUnread = !showAll && params.peek !== true
 
+      const responseFits = (result: unknown): boolean => {
+        try {
+          // Why: one-shot handlers omit requestId, so reserve their 1 MiB request frame for the correlated response ID.
+          const byteLimit =
+            requestId === undefined
+              ? REMOTE_RUNTIME_MAX_OUTBOUND_JSON_BYTES - 1024 * 1024
+              : REMOTE_RUNTIME_MAX_OUTBOUND_JSON_BYTES
+          stringifyJsonWithinByteLimit(
+            {
+              id: requestId ?? '',
+              ok: true,
+              result,
+              _meta: { runtimeId: runtime.getRuntimeId() }
+            },
+            byteLimit
+          )
+          return true
+        } catch (error) {
+          if (error instanceof JsonStringifyByteLimitError) {
+            return false
+          }
+          throw error
+        }
+      }
+
+      const buildResult = (visibleMessages: MessageRow[], remaining: number) => {
+        const saturation = remaining > 0 ? { truncated: true as const, remaining } : {}
+        if (params.inject) {
+          const formatted = visibleMessages.map(formatMessageBanner).join('\n\n')
+          return {
+            messages: visibleMessages,
+            formatted,
+            count: visibleMessages.length,
+            ...saturation
+          }
+        }
+        return { messages: visibleMessages, count: visibleMessages.length, ...saturation }
+      }
+
+      const fittingPrefixLength = (messages: MessageRow[], total: number): number => {
+        let low = 0
+        let high = messages.length
+        while (low < high) {
+          const middle = Math.ceil((low + high) / 2)
+          const remaining = Math.max(0, total - middle)
+          if (responseFits(buildResult(messages.slice(0, middle), remaining))) {
+            low = middle
+          } else {
+            high = middle - 1
+          }
+        }
+        return low
+      }
+
       const readAndReturn = () => {
+        const totalBeforeRead = showAll
+          ? db.countAllMessagesForHandle(handle, typeFilter)
+          : db.countUnreadMessages(handle, typeFilter)
         const messages = showAll
           ? db.getAllMessagesForHandle(handle, undefined, typeFilter)
           : db.getUnreadMessages(handle, typeFilter)
+        let deliveredMessages = messages.slice(
+          0,
+          fittingPrefixLength(messages, totalBeforeRead)
+        )
 
-        let visibleMessages = messages
-        if (consumeUnread && messages.length > 0) {
+        let visibleMessages = deliveredMessages
+        if (consumeUnread && deliveredMessages.length > 0) {
           // Why: unread check is an authoritative read path for worker_done/heartbeat, so reconcile lifecycle messages here too.
-          visibleMessages = messages.map((message) => {
+          visibleMessages = deliveredMessages.map((message) => {
             const reconciled = reconcileLifecycleMessage(db, message)
             return reconciled.action === 'rejected'
               ? (db.getMessageById(message.id) ?? message)
               : message
           })
-          db.markAsRead(messages.map((m) => m.id))
+          const visibleLength = fittingPrefixLength(visibleMessages, totalBeforeRead)
+          visibleMessages = visibleMessages.slice(0, visibleLength)
+          deliveredMessages = deliveredMessages.slice(0, visibleLength)
         }
 
-        if (params.inject) {
-          const formatted = visibleMessages.map(formatMessageBanner).join('\n\n')
-          return { messages: visibleMessages, formatted, count: visibleMessages.length }
+        const remainingUpperBound = Math.max(0, totalBeforeRead - visibleMessages.length)
+        const result = buildResult(visibleMessages, remainingUpperBound)
+        if (consumeUnread && deliveredMessages.length > 0) {
+          db.markAsRead(deliveredMessages.map((message) => message.id))
+          return buildResult(visibleMessages, db.countUnreadMessages(handle, typeFilter))
         }
-
-        return { messages: visibleMessages, count: visibleMessages.length }
+        return result
       }
 
       if (signal?.aborted) {
         return { messages: [], count: 0 }
       }
       const result = readAndReturn()
-      if (result.count > 0 || !params.wait) {
+      if (result.count > 0 || result.truncated || !params.wait) {
         return result
       }
 
@@ -367,7 +469,14 @@ export const ORCHESTRATION_METHODS: RpcMethod[] = [
       const messages = params.terminal
         ? db.getAllMessagesForHandle(params.terminal, params.limit)
         : db.getInbox(params.limit)
-      return { messages, count: messages.length }
+      const total = params.terminal
+        ? db.countAllMessagesForHandle(params.terminal)
+        : db.countInbox()
+      return {
+        messages,
+        count: messages.length,
+        ...(total > messages.length ? { total, truncated: true as const } : {})
+      }
     }
   }),
 
@@ -379,10 +488,12 @@ export const ORCHESTRATION_METHODS: RpcMethod[] = [
       let deps: string[] | undefined
       if (params.deps) {
         try {
+          assertOrchestrationWriteFits('Task dependencies', [params.deps])
           const parsed = JSON.parse(params.deps)
           if (!Array.isArray(parsed) || !parsed.every((d) => typeof d === 'string')) {
             throw new Error('not an array of strings')
           }
+          assertOrchestrationStringListFits('Task dependencies', parsed)
           deps = parsed
         } catch {
           throw new Error('Invalid --deps: must be a JSON array of task IDs')
@@ -405,11 +516,12 @@ export const ORCHESTRATION_METHODS: RpcMethod[] = [
     params: TaskListParams,
     handler: (params, { runtime }) => {
       const db = runtime.getOrchestrationDb()
-      // Why: listTasksWithDispatch adds assignee_handle + dispatch_id (NULL for non-dispatched), so legacy-shape consumers are unaffected.
-      const joined = db.listTasksWithDispatch({
+      const filter = {
         status: params.status as TaskStatus,
         ready: params.ready
-      })
+      }
+      // Why: listTasksWithDispatch adds assignee_handle + dispatch_id (NULL for non-dispatched), so legacy-shape consumers are unaffected.
+      const joined = db.listTasksWithDispatch(filter)
       const tasks = joined.map((row) => {
         const { assignee_handle, dispatch_id, ...base } = row
         if (base.status === 'dispatched') {
@@ -417,9 +529,11 @@ export const ORCHESTRATION_METHODS: RpcMethod[] = [
         }
         return base
       })
+      const total = db.countTasks(filter)
       return {
         tasks: params.brief ? abbreviateOrchestrationTasks(tasks) : tasks,
-        count: tasks.length
+        count: tasks.length,
+        ...(total > tasks.length ? { total, truncated: true as const } : {})
       }
     }
   }),
@@ -567,12 +681,15 @@ export const ORCHESTRATION_METHODS: RpcMethod[] = [
 
       const db = runtime.getOrchestrationDb()
       const from = params.from ?? 'unknown'
-      const timeoutMs = params.timeoutMs ?? 600_000
+      // Why: echoed on every return so a clamped caller reports the budget actually waited, not the one it asked for.
+      const timeoutMs = clampAskTimeoutMs(params.timeoutMs)
+      assertOrchestrationWriteFits('Decision gate options', [params.options])
       const options =
         params.options
           ?.split(',')
           .map((s) => s.trim())
           .filter(Boolean) ?? []
+      assertOrchestrationStringListFits('Decision gate options', options)
 
       const payload = JSON.stringify({ question: params.question, options })
       const outbound = db.insertMessage({
@@ -600,15 +717,16 @@ export const ORCHESTRATION_METHODS: RpcMethod[] = [
             answer: reply.body,
             messageId: reply.id,
             threadId,
-            timedOut: false
+            timedOut: false,
+            timeoutMs
           }
         }
         if (signal?.aborted) {
-          return { answer: null, messageId: null, threadId, timedOut: true }
+          return { answer: null, messageId: null, threadId, timedOut: true, timeoutMs }
         }
         const remainingMs = deadline - Date.now()
         if (remainingMs <= 0) {
-          return { answer: null, messageId: null, threadId, timedOut: true }
+          return { answer: null, messageId: null, threadId, timedOut: true, timeoutMs }
         }
         // Why: signal releases the waiter on client disconnect while the already-sent decision gate stays visible to the recipient.
         await runtime.waitForMessage(from, { timeoutMs: remainingMs, signal })

@@ -93,6 +93,34 @@ describe('RecentPtyOutputBuffer', () => {
     expectEquivalent(chunks)
   })
 
+  it('retains 100,000 tiny writes in compact payload storage and typed boundary metadata', () => {
+    const buffer = new RecentPtyOutputBuffer()
+    let reference: string | undefined
+    for (let index = 0; index < 100_000; index += 1) {
+      const chunk = String.fromCharCode(97 + (index % 26))
+      buffer.append(chunk)
+      reference = referenceAppend(reference, chunk)
+    }
+
+    const internals = buffer as unknown as {
+      chunks: string[]
+      originalChunkLengths: { length: number; capacity: number }
+    }
+    expect(internals.chunks.length).toBeLessThanOrEqual(1024)
+    expect(internals.originalChunkLengths.length).toBe(RECENT_PTY_OUTPUT_LIMIT)
+    expect(internals.originalChunkLengths.capacity).toBe(RECENT_PTY_OUTPUT_LIMIT)
+    expect(buffer.read()).toBe(reference)
+
+    let streamedLength = 0
+    let streamedChunks = 0
+    buffer.forEachRetainedChunk((chunk) => {
+      streamedLength += chunk.length
+      streamedChunks += 1
+    })
+    expect(streamedLength).toBe(RECENT_PTY_OUTPUT_LIMIT)
+    expect(streamedChunks).toBe(RECENT_PTY_OUTPUT_LIMIT)
+  })
+
   it('matches the old UTF-16 slice behavior for multi-byte content at the boundary', () => {
     // JS string .slice counts UTF-16 code units, so trimming can split a
     // surrogate pair; the buffer must reproduce that split exactly.

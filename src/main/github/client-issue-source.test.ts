@@ -513,6 +513,54 @@ describe('GitHub issue source split', () => {
     expect(item?.prRepo).toEqual(upstream)
   })
 
+  it('pins typed PR metadata to explicit origin when upstream has the same number', async () => {
+    const upstream = { owner: 'stablyai', repo: 'orca', host: 'github.com' }
+    const origin = { owner: 'fork', repo: 'orca', host: 'github.com' }
+    getOwnerRepoMock.mockResolvedValue(origin)
+    mockUpstreamCandidate(upstream)
+    resolvePRRepositoryCandidatesMock.mockResolvedValue({
+      candidates: [upstream, origin],
+      headRepo: origin
+    })
+    ghExecFileAsyncMock.mockResolvedValueOnce({
+      stdout: JSON.stringify({
+        number: 42,
+        title: 'Origin PR',
+        state: 'open',
+        url: 'https://github.com/fork/orca/pull/42',
+        labels: [],
+        updatedAt: '2026-04-02T00:00:00Z',
+        author: { login: 'octocat' },
+        isDraft: false,
+        headRefName: 'origin/fix',
+        baseRefName: 'main'
+      })
+    })
+
+    const item = await getWorkItem('/repo-root', 42, 'pr', null, {}, 'origin')
+
+    expect(resolvePRRepositoryCandidatesMock).not.toHaveBeenCalled()
+    expect(ghExecFileAsyncMock.mock.calls[0]?.[0]).toEqual(
+      expect.arrayContaining(['pr', 'view', '--repo', 'fork/orca'])
+    )
+    expect(
+      ghExecFileAsyncMock.mock.calls.some((call) =>
+        (call[0] as string[]).some((arg) => arg.includes('upstream/orca'))
+      )
+    ).toBe(false)
+    expect(item?.prRepo).toEqual(origin)
+  })
+
+  it('does not run a bare PR lookup when explicit origin identity is unresolved', async () => {
+    getOwnerRepoMock.mockResolvedValue(null)
+    mockUpstreamCandidate({ owner: 'stablyai', repo: 'orca' })
+
+    await expect(getWorkItem('/repo-root', 42, 'pr', null, {}, 'origin')).resolves.toBeNull()
+
+    expect(resolvePRRepositoryCandidatesMock).not.toHaveBeenCalled()
+    expect(ghExecFileAsyncMock).not.toHaveBeenCalled()
+  })
+
   it('does not run a bare gh lookup for an SSH repo without candidates', async () => {
     resolvePRRepositoryCandidatesMock.mockResolvedValueOnce({ candidates: [], headRepo: null })
 
@@ -694,58 +742,6 @@ describe('GitHub issue source split', () => {
       expect(ghExecFileAsyncMock).toHaveBeenNthCalledWith(1, issueSearchArgs('solo/orca'), {
         cwd: '/repo-root'
       })
-    })
-
-    it("preference='auto' + upstream exists → PRs query upstream too", async () => {
-      // Why: fork-contribution PRs live on the upstream repo — the fork's own
-      // PR list is almost always empty. 'auto' must resolve PRs upstream-first
-      // like issues, or the PRs tab renders "No matching GitHub work" on forks.
-      resolveIssueSourceMock.mockResolvedValueOnce({
-        source: { owner: 'stablyai', repo: 'orca' },
-        fellBack: false
-      })
-      getOwnerRepoMock.mockResolvedValueOnce({ owner: 'fork', repo: 'orca' })
-      mockUpstreamCandidate({ owner: 'stablyai', repo: 'orca' })
-      ghExecFileAsyncMock.mockResolvedValueOnce({ stdout: '[]' }).mockResolvedValueOnce({
-        stdout: '[]'
-      })
-
-      const result = await listWorkItems('/repo-root', 10, undefined, undefined, 'auto')
-
-      expect(ghExecFileAsyncMock).toHaveBeenNthCalledWith(
-        2,
-        expect.arrayContaining(['--repo', 'stablyai/orca']),
-        { cwd: '/repo-root' }
-      )
-      expect(result.sources).toEqual({
-        issues: { owner: 'stablyai', repo: 'orca' },
-        prs: { owner: 'stablyai', repo: 'orca' },
-        originCandidate: { owner: 'fork', repo: 'orca' },
-        upstreamCandidate: { owner: 'stablyai', repo: 'orca' }
-      })
-    })
-
-    it('collapses the default count to one query when auto resolves both sides to upstream', async () => {
-      getIssueOwnerRepoMock.mockResolvedValueOnce({ owner: 'stablyai', repo: 'orca' })
-      getOwnerRepoMock.mockResolvedValueOnce({ owner: 'fork', repo: 'orca' })
-      mockUpstreamCandidate({ owner: 'stablyai', repo: 'orca' })
-      ghExecFileAsyncMock.mockResolvedValueOnce({ stdout: '11\n' })
-
-      const count = await countWorkItems('/repo-root')
-
-      expect(count).toBe(11)
-      expect(ghExecFileAsyncMock).toHaveBeenCalledTimes(1)
-      expect(ghExecFileAsyncMock).toHaveBeenCalledWith(
-        [
-          'api',
-          '--cache',
-          '120s',
-          `search/issues?q=${encodeURIComponent('repo:stablyai/orca is:open')}&per_page=1`,
-          '--jq',
-          '.total_count'
-        ],
-        { cwd: '/repo-root' }
-      )
     })
 
     it("preference='upstream' + upstream exists → queries upstream", async () => {

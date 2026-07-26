@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import {
   beginDirectoryLoad,
   createDirectoryLoadRevisions,
+  forgetDirectoryLoadBranches,
   isCurrentDirectoryLoad,
   resetDirectoryLoadRevisions,
   type DirectoryLoadRevisions
@@ -40,5 +41,18 @@ describe('directory-load-revisions', () => {
     const load = beginDirectoryLoad(revisions, 'host-a:worktree-a', '__proto__')
 
     expect(isCurrentDirectoryLoad(revisions, 'host-a:worktree-a', load)).toBe(true)
+  })
+
+  it('invalidates evicted branches without staling unrelated loads', () => {
+    const revisions = createDirectoryLoadRevisions()
+    const src = beginDirectoryLoad(revisions, 'host-a:worktree-a', 'src')
+    const nested = beginDirectoryLoad(revisions, 'host-a:worktree-a', 'src/lib')
+    const docs = beginDirectoryLoad(revisions, 'host-a:worktree-a', 'docs')
+
+    forgetDirectoryLoadBranches(revisions, ['src'])
+
+    expect(isCurrentDirectoryLoad(revisions, 'host-a:worktree-a', src)).toBe(false)
+    expect(isCurrentDirectoryLoad(revisions, 'host-a:worktree-a', nested)).toBe(false)
+    expect(isCurrentDirectoryLoad(revisions, 'host-a:worktree-a', docs)).toBe(true)
   })
 })

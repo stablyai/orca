@@ -7,6 +7,10 @@ vi.mock('electron', () => ({
 }))
 
 import {
+  clearCrashBreadcrumbsForTest,
+  getCrashBreadcrumbSnapshot
+} from '../crash-reporting/crash-breadcrumb-store'
+import {
   reflowRendererViewport,
   VIEWPORT_REFLOW_RESTORE_ATTEMPTS,
   VIEWPORT_REFLOW_SETTLE_MS
@@ -33,6 +37,7 @@ describe('reflowRendererViewport', () => {
   beforeEach(() => {
     vi.useFakeTimers()
     scaleFactorMock.value = 1
+    clearCrashBreadcrumbsForTest()
   })
   afterEach(() => {
     vi.useRealTimers()
@@ -55,8 +60,7 @@ describe('reflowRendererViewport', () => {
     vi.advanceTimersByTime(0)
     expect(window.webContents.enableDeviceEmulation).toHaveBeenCalledWith({
       screenPosition: 'desktop',
-      screenSize: { width: 1200, height: 800 },
-      viewPosition: { x: 0, y: 0 },
+      screenSize: { width: 0, height: 0 },
       deviceScaleFactor: 1.25,
       viewSize: { width: 1200, height: 800 },
       scale: 1
@@ -76,8 +80,20 @@ describe('reflowRendererViewport', () => {
     const [params] = (window.webContents.enableDeviceEmulation as ReturnType<typeof vi.fn>).mock
       .calls[0] as [Electron.Parameters]
     expect(params.viewSize).toEqual({ width: 1200, height: 800 })
-    expect(params.screenSize).toEqual({ width: 1200, height: 800 })
     expect(params.scale).toBe(1)
+  })
+
+  // Why: Blink applies screenSize/viewPosition ahead of the desktop branch, so overriding them
+  // moves screen.width and window.screenX for the whole hold — a context menu opened mid-reflow
+  // would land at the wrong coordinates. Only the scale factor may move.
+  it('leaves screen geometry and window position untouched while emulating', () => {
+    const window = createWindow()
+    reflowRendererViewport(window)
+    vi.advanceTimersByTime(0)
+    const [params] = (window.webContents.enableDeviceEmulation as ReturnType<typeof vi.fn>).mock
+      .calls[0] as [Electron.Parameters]
+    expect(params.screenSize).toEqual({ width: 0, height: 0 })
+    expect(params).not.toHaveProperty('viewPosition')
   })
 
   // Why: a constant scale factor would equal the real one on a 1.25x display and reflow nothing.
@@ -220,6 +236,27 @@ describe('reflowRendererViewport', () => {
     reflowRendererViewport(window)
     vi.advanceTimersByTime(VIEWPORT_REFLOW_SETTLE_MS + 1)
     expect(window.webContents.enableDeviceEmulation).toHaveBeenCalledTimes(2)
+  })
+
+  it('leaves evidence when it gives up with the viewport still emulated', () => {
+    const window = createWindow()
+    vi.mocked(window.webContents.disableDeviceEmulation).mockImplementation(() => {
+      throw new Error('always fails')
+    })
+    reflowRendererViewport(window)
+    vi.advanceTimersByTime(VIEWPORT_REFLOW_SETTLE_MS * (VIEWPORT_REFLOW_RESTORE_ATTEMPTS + 4))
+
+    expect(getCrashBreadcrumbSnapshot().map((crumb) => crumb.name)).toEqual([
+      'viewport_reflow_restore_failed'
+    ])
+  })
+
+  it('records nothing when the restore succeeds', () => {
+    const window = createWindow()
+    reflowRendererViewport(window)
+    vi.advanceTimersByTime(VIEWPORT_REFLOW_SETTLE_MS * (VIEWPORT_REFLOW_RESTORE_ATTEMPTS + 4))
+
+    expect(getCrashBreadcrumbSnapshot()).toEqual([])
   })
 
   it('abandons the restore once the webContents is gone', () => {

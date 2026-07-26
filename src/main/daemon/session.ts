@@ -37,6 +37,9 @@ const SESSION_FORCE_KILL_MAX_ATTEMPTS = 2
 // Why: bounds in-memory pending output when no client drains it; past the cap we drop records and flag
 // overflow so the next take falls back to one full snapshot. UTF-16 units; worst-case wire is ~6x, under NDJSON_MAX_LINE_BYTES (16MB).
 const PENDING_OUTPUT_MAX_BYTES = 2 * 1024 * 1024
+export const PENDING_OUTPUT_MAX_RECORDS = 4_096
+export const PRE_READY_STDIN_MAX_CODE_UNITS = 16 * 1024 * 1024
+export const PRE_READY_STDIN_MAX_SEGMENTS = 4_096
 // Why: pause is a fire-and-forget notify, so a resume can be lost (main crash, dropped socket); a lost
 // resume must never wedge a shell, so auto-resume after this window — a still-flooded main re-pauses.
 export const PRODUCER_PAUSE_FAILSAFE_MS = 5_000
@@ -112,6 +115,7 @@ export class Session {
   private readonly onSessionExit?: (code: number) => void
   private attachedClients: AttachedClient[] = []
   private preReadyStdinQueue: string[] = []
+  private preReadyStdinCodeUnits = 0
   private shellReadyScanState: ShellReadyScanState | null = null
   private shellReadyTimer: ReturnType<typeof setTimeout> | null = null
   private killTimer: ReturnType<typeof setTimeout> | null = null
@@ -218,7 +222,17 @@ export class Session {
     // Why: keep queuing during the post-ready flush-gate window ('ready' but not yet flushed); a
     // direct write would race fresh input ahead of the buffered startup command.
     if (this._shellState === 'pending' || this.postReadyFlushGate.isPending) {
+      const nextCodeUnits = this.preReadyStdinCodeUnits + data.length
+      if (
+        nextCodeUnits > PRE_READY_STDIN_MAX_CODE_UNITS ||
+        this.preReadyStdinQueue.length >= PRE_READY_STDIN_MAX_SEGMENTS
+      ) {
+        throw new Error(
+          'Terminal input queued before shell readiness exceeds the safe memory limit.'
+        )
+      }
       this.preReadyStdinQueue.push(data)
+      this.preReadyStdinCodeUnits = nextCodeUnits
       return
     }
 
@@ -523,6 +537,7 @@ export class Session {
 
     this.attachedClients = []
     this.preReadyStdinQueue = []
+    this.preReadyStdinCodeUnits = 0
     this.postReadyFlushGate.clear()
     this.emulator.dispose()
 
@@ -567,6 +582,7 @@ export class Session {
     }
     this.shellReadyScanState = null
     this.preReadyStdinQueue = []
+    this.preReadyStdinCodeUnits = 0
     this.postReadyFlushGate.clear()
     this.disposeSubprocessHandle()
   }
@@ -589,15 +605,20 @@ export class Session {
       return
     }
     const bytes = record.kind === 'output' ? record.data.length : 8
-    if (this.pendingOutputBytes + bytes > PENDING_OUTPUT_MAX_BYTES) {
+    const last = this.pendingOutputRecords.at(-1)
+    const canCoalesce =
+      record.kind === 'output' && last?.kind === 'output' && last.data.length < 64 * 1024
+    if (
+      this.pendingOutputBytes + bytes > PENDING_OUTPUT_MAX_BYTES ||
+      (!canCoalesce && this.pendingOutputRecords.length >= PENDING_OUTPUT_MAX_RECORDS)
+    ) {
       this.pendingOutputRecords = []
       this.pendingOutputBytes = 0
       this.pendingOutputOverflowed = true
       return
     }
     // Why: coalesce the thousands of tiny TUI chunks per tick to keep take RPC/log frames compact; 64KB cap bounds append cost.
-    const last = this.pendingOutputRecords.at(-1)
-    if (record.kind === 'output' && last?.kind === 'output' && last.data.length < 64 * 1024) {
+    if (canCoalesce) {
       last.data += record.data
     } else {
       this.pendingOutputRecords.push(record)
@@ -720,6 +741,7 @@ export class Session {
   private flushPreReadyQueue(): void {
     const queued = this.preReadyStdinQueue
     this.preReadyStdinQueue = []
+    this.preReadyStdinCodeUnits = 0
     for (const data of queued) {
       this.subprocess.write(data)
     }

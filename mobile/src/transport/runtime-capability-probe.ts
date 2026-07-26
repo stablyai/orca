@@ -27,17 +27,8 @@ export function startRuntimeCapabilityProbe(
           scheduleRetry(false)
           return
         }
-        const result = (response as RpcSuccess).result
-        const rawCapabilities =
-          result && typeof result === 'object'
-            ? (result as { capabilities?: unknown }).capabilities
-            : null
-        const capabilities =
-          Array.isArray(rawCapabilities) &&
-          rawCapabilities.every((value) => typeof value === 'string')
-            ? rawCapabilities
-            : []
-        onCapabilities(capabilities)
+        const status = (response as RpcSuccess).result as { capabilities?: string[] }
+        onCapabilities(status.capabilities ?? [])
       },
       (error: unknown) => {
         if (cancelled) {

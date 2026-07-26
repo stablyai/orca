@@ -2872,6 +2872,151 @@ describe('Store', () => {
     expect(store.getSettings().floatingTerminalDefaultedForAllUsers).toBe(true)
   })
 
+  it('migrates the legacy OSC 52 clipboard disabled default to enabled', async () => {
+    // Why this migration exists: the old off default was persisted for every
+    // profile, so without the one-shot flip #10567 would only fix new installs.
+    writeDataFile({
+      schemaVersion: 1,
+      repos: [],
+      worktreeMeta: {},
+      settings: { terminalAllowOsc52Clipboard: false },
+      ui: {},
+      githubCache: { pr: {}, issue: {} },
+      workspaceSession: {}
+    })
+
+    const store = await createStore()
+    expect(store.getSettings().terminalAllowOsc52Clipboard).toBe(true)
+    expect(store.getSettings().terminalAllowOsc52ClipboardDefaultedOnForAllUsers).toBe(true)
+  })
+
+  it('persists the OSC 52 clipboard migration stamp back to disk', async () => {
+    // Why round-trip a store first: on a bare legacy profile ~30 other migrations also
+    // set loadNeedsSave, so the save happens regardless and this migration's own dirty
+    // flag goes untested. Re-loading a profile the new build already wrote leaves OSC 52
+    // as the only unmigrated key — which is exactly the upgrade case that matters.
+    // Why no flush(): flush() writes unconditionally, so only the debounced load-path
+    // save proves this migration marked the state dirty by itself.
+    writeDataFile({
+      schemaVersion: 1,
+      repos: [],
+      worktreeMeta: {},
+      settings: {},
+      ui: {},
+      githubCache: { pr: {}, issue: {} },
+      workspaceSession: {}
+    })
+    const migrated = await createStore()
+    migrated.flush()
+
+    const settled = readDataFile() as { settings: Record<string, unknown> }
+    settled.settings.terminalAllowOsc52Clipboard = false
+    delete settled.settings.terminalAllowOsc52ClipboardDefaultedOnForAllUsers
+    writeDataFile(settled)
+
+    vi.useFakeTimers()
+    try {
+      const store = await createStore()
+      // Why over-advance: the debounce is exactly 1000ms, so an exact-fit advance turns a
+      // future debounce raise into a confusing no-write instead of a loud failure.
+      vi.advanceTimersByTime(5000)
+      await store.waitForPendingWrite()
+    } finally {
+      vi.useRealTimers()
+    }
+
+    const persisted = readDataFile() as {
+      settings?: {
+        terminalAllowOsc52Clipboard?: boolean
+        terminalAllowOsc52ClipboardDefaultedOnForAllUsers?: boolean
+      }
+    }
+
+    expect(persisted.settings?.terminalAllowOsc52Clipboard).toBe(true)
+    expect(persisted.settings?.terminalAllowOsc52ClipboardDefaultedOnForAllUsers).toBe(true)
+  })
+
+  it('preserves a post-migration OSC 52 clipboard opt-out', async () => {
+    writeDataFile({
+      schemaVersion: 1,
+      repos: [],
+      worktreeMeta: {},
+      settings: {
+        terminalAllowOsc52Clipboard: false,
+        terminalAllowOsc52ClipboardDefaultedOnForAllUsers: true
+      },
+      ui: {},
+      githubCache: { pr: {}, issue: {} },
+      workspaceSession: {}
+    })
+
+    const store = await createStore()
+    expect(store.getSettings().terminalAllowOsc52Clipboard).toBe(false)
+    expect(store.getSettings().terminalAllowOsc52ClipboardDefaultedOnForAllUsers).toBe(true)
+  })
+
+  it('arms the one-shot notice when the OSC 52 flip overrides a persisted off', async () => {
+    writeDataFile({
+      schemaVersion: 1,
+      repos: [],
+      worktreeMeta: {},
+      settings: { terminalAllowOsc52Clipboard: false },
+      ui: {},
+      githubCache: { pr: {}, issue: {} },
+      workspaceSession: {}
+    })
+
+    const store = await createStore()
+    expect(store.getUI().osc52ClipboardDefaultOnNoticePending).toBe(true)
+  })
+
+  it('leaves the OSC 52 notice disarmed for a profile with no persisted value', async () => {
+    // Why: the notice explains an overridden choice; a fresh profile made no choice.
+    writeDataFile({
+      schemaVersion: 1,
+      repos: [],
+      worktreeMeta: {},
+      settings: {},
+      ui: {},
+      githubCache: { pr: {}, issue: {} },
+      workspaceSession: {}
+    })
+
+    const store = await createStore()
+    expect(store.getUI().osc52ClipboardDefaultOnNoticePending).toBe(false)
+  })
+
+  it('keeps the OSC 52 notice armed on disk until the renderer clears it', async () => {
+    // Why the disk assertion: the flip happens during load, before any window exists, and
+    // once the settings stamp lands the arming predicate is false forever — so the on-disk
+    // ui flag is the only thing that survives a crash before the toast renders.
+    writeDataFile({
+      schemaVersion: 1,
+      repos: [],
+      worktreeMeta: {},
+      settings: { terminalAllowOsc52Clipboard: false },
+      ui: {},
+      githubCache: { pr: {}, issue: {} },
+      workspaceSession: {}
+    })
+
+    const armed = await createStore()
+    armed.flush()
+    const armedOnDisk = readDataFile() as {
+      ui?: { osc52ClipboardDefaultOnNoticePending?: boolean }
+    }
+    expect(armedOnDisk.ui?.osc52ClipboardDefaultOnNoticePending).toBe(true)
+
+    const reloaded = await createStore()
+    expect(reloaded.getUI().osc52ClipboardDefaultOnNoticePending).toBe(true)
+
+    reloaded.updateUI({ osc52ClipboardDefaultOnNoticePending: false })
+    reloaded.flush()
+    const cleared = await createStore()
+    // Why re-check after the stamp: a cleared notice must not be resurrected by a later load.
+    expect(cleared.getUI().osc52ClipboardDefaultOnNoticePending).toBe(false)
+  })
+
   it('migrates the legacy Linux primary-selection default to enabled', async () => {
     await withPlatform('linux', async () => {
       writeDataFile({
@@ -4384,6 +4529,29 @@ describe('Store', () => {
     store.flush()
     const reloaded = await createStore()
     expect(reloaded.getRepo('r1')!.upstream).toBeNull()
+  })
+
+  it('updateRepo persists the resolved no-usable-remote identity marker', async () => {
+    const store = await createStore()
+    store.addRepo(makeRepo())
+
+    const updated = store.updateRepo('r1', {
+      gitRemoteIdentity: {
+        canonicalKey: 'gitlab.example.com/team/orca',
+        remoteName: 'origin',
+        remoteUrl: 'git@gitlab.example.com:team/orca.git'
+      }
+    })
+    expect(updated!.gitRemoteIdentity).toEqual({
+      canonicalKey: 'gitlab.example.com/team/orca',
+      remoteName: 'origin',
+      remoteUrl: 'git@gitlab.example.com:team/orca.git'
+    })
+
+    store.updateRepo('r1', { gitRemoteIdentity: null })
+    store.flush()
+    const reloaded = await createStore()
+    expect(reloaded.getRepo('r1')!.gitRemoteIdentity).toBeNull()
   })
 
   it('getRepo does not expose invalid persisted repo upstream metadata', async () => {

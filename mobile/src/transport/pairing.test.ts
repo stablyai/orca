@@ -1,6 +1,11 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { decodePairingUrl, extractPairingCodeFromUrl, parsePairingCode } from './pairing'
-import type { PairingOffer } from './types'
+import {
+  PAIRING_CODE_MAX_CHARACTERS,
+  PAIRING_DEVICE_TOKEN_MAX_CHARACTERS,
+  PairingOfferSchema,
+  type PairingOffer
+} from './types'
 
 const offer: PairingOffer = {
   v: 2,
@@ -71,5 +76,32 @@ describe('pairing deep links', () => {
     const code = encodeOffer(proxiedOffer)
 
     expect(parsePairingCode(code)).toEqual(proxiedOffer)
+  })
+
+  it('rejects an oversized code before base64 decoding', () => {
+    const decode = vi.fn(() => {
+      throw new Error('must not decode')
+    })
+    vi.stubGlobal('atob', decode)
+    const oversized = 'A'.repeat(PAIRING_CODE_MAX_CHARACTERS + 1)
+
+    expect(parsePairingCode(oversized)).toBeNull()
+    expect(decodePairingUrl(`orca://pair?code=${oversized}`)).toBeNull()
+    expect(decode).not.toHaveBeenCalled()
+  })
+
+  it('accepts the device-token limit and rejects one character more', () => {
+    expect(
+      PairingOfferSchema.safeParse({
+        ...offer,
+        deviceToken: 't'.repeat(PAIRING_DEVICE_TOKEN_MAX_CHARACTERS)
+      }).success
+    ).toBe(true)
+    expect(
+      PairingOfferSchema.safeParse({
+        ...offer,
+        deviceToken: 't'.repeat(PAIRING_DEVICE_TOKEN_MAX_CHARACTERS + 1)
+      }).success
+    ).toBe(false)
   })
 })

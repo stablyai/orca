@@ -2,7 +2,11 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { homedir, tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { endpointDirForRelaySocket, RelayAgentHookServer } from './agent-hook-server'
+import {
+  endpointDirForRelaySocket,
+  MAX_RELAY_AGENT_HOOK_STATUS_CACHE_PANES,
+  RelayAgentHookServer
+} from './agent-hook-server'
 import type { AgentHookRelayEnvelope } from '../shared/agent-hook-relay'
 import { makePaneKey } from '../shared/stable-pane-id'
 import * as agentHookListener from '../shared/agent-hook-listener'
@@ -391,10 +395,8 @@ describe('RelayAgentHookServer', () => {
     }
   })
 
-  it('caps the replay cache at 256 panes, evicting the least-recently-updated', async () => {
-    // Mirrors the server's private MAX_CACHED_PANES. The WSL relay never gets a
-    // per-pane teardown signal, so the cache is recency-capped instead.
-    const CAP = 256
+  it('caps the replay cache, evicting the least-recently-updated', async () => {
+    const CAP = MAX_RELAY_AGENT_HOOK_STATUS_CACHE_PANES
     const forward = vi.fn<(envelope: AgentHookRelayEnvelope) => void>()
     const server = new RelayAgentHookServer({ endpointDir: dir, forward })
     await server.start()

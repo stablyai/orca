@@ -6,14 +6,60 @@ import { join } from 'node:path'
 import { randomUUID } from 'node:crypto'
 import { connectMacOSProviderSocket } from './macos-native-provider-socket'
 import { RuntimeClientError } from './runtime-client-error'
+import { GrowingByteBuffer } from '../../shared/growing-byte-buffer'
 
 const HELPER_CONNECT_TIMEOUT_MS = 10_000
+export const MACOS_NATIVE_PROVIDER_MAX_RESPONSE_LINE_BYTES = 64 * 1024 * 1024
+
+export class MacOSNativeProviderResponseTooLargeError extends Error {
+  constructor(
+    readonly observedBytes: number,
+    readonly maxBytes: number
+  ) {
+    super(`native macOS provider response exceeded ${maxBytes} byte line limit`)
+    this.name = 'MacOSNativeProviderResponseTooLargeError'
+  }
+}
 
 export type StartedMacOSProviderSocket = {
   socket: net.Socket
   socketDirectory: string
   socketPath: string
   socketToken: string
+}
+
+export class MacOSNativeProviderLineBuffer {
+  private readonly pending = new GrowingByteBuffer()
+
+  constructor(private readonly maxLineBytes = MACOS_NATIVE_PROVIDER_MAX_RESPONSE_LINE_BYTES) {}
+
+  feed(chunk: string, handleLine: (line: string) => void): void {
+    let remaining = chunk
+    while (remaining.length > 0) {
+      const newline = remaining.indexOf('\n')
+      const hasNewline = newline >= 0
+      const segment = hasNewline ? remaining.slice(0, newline) : remaining
+      remaining = hasNewline ? remaining.slice(newline + 1) : ''
+      const segmentBytes = Buffer.byteLength(segment)
+      const observedBytes = this.pending.byteLength + segmentBytes
+      if (observedBytes > this.maxLineBytes) {
+        this.pending.clear()
+        throw new MacOSNativeProviderResponseTooLargeError(observedBytes, this.maxLineBytes)
+      }
+      this.pending.append(Buffer.from(segment))
+      if (!hasNewline) {
+        return
+      }
+      const line = this.pending.takeString('utf8')
+      if (line.trim()) {
+        handleLine(line)
+      }
+    }
+  }
+
+  clear(): void {
+    this.pending.clear()
+  }
 }
 
 export function isMacOS14OrNewer(): boolean {
@@ -47,16 +93,25 @@ export function attachMacOSNativeProviderSocketListeners(
 
 export function consumeNativeProviderLines(
   buffer: string,
-  handleLine: (line: string) => void
+  handleLine: (line: string) => void,
+  maxLineBytes = MACOS_NATIVE_PROVIDER_MAX_RESPONSE_LINE_BYTES
 ): string {
   let remaining = buffer
   while (true) {
     const newline = remaining.indexOf('\n')
     if (newline < 0) {
+      const remainingBytes = Buffer.byteLength(remaining)
+      if (remainingBytes > maxLineBytes) {
+        throw new MacOSNativeProviderResponseTooLargeError(remainingBytes, maxLineBytes)
+      }
       return remaining
     }
     const line = remaining.slice(0, newline)
     remaining = remaining.slice(newline + 1)
+    const lineBytes = Buffer.byteLength(line)
+    if (lineBytes > maxLineBytes) {
+      throw new MacOSNativeProviderResponseTooLargeError(lineBytes, maxLineBytes)
+    }
     if (line.trim()) {
       handleLine(line)
     }

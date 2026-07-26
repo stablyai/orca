@@ -79,17 +79,6 @@ const AgentArgs = z
   )
   .nullable()
 
-const OmpResumeFilePath = z
-  .string()
-  .min(1)
-  .refine((value) => value === value.trim(), 'Invalid OMP resume path')
-  .refine(
-    (value) =>
-      !hasUnsafeProviderSessionIdChars(value) &&
-      Buffer.byteLength(value, 'utf8') <= MAX_TRANSCRIPT_PATH_BYTES,
-    'Invalid OMP resume path'
-  )
-
 const ProviderSession = z
   .object({
     key: z.enum(['session_id', 'conversation_id']),
@@ -129,7 +118,6 @@ const ExplicitEnsure = z
     worktree: WorktreeSelector,
     agent: z.enum(RESUMABLE_TUI_AGENTS),
     providerSession: ProviderSession,
-    ompResumeFilePath: OmpResumeFilePath.optional(),
     agentArgs: AgentArgs.optional(),
     launchPreferences: LaunchPreferences.optional(),
     presentation: Presentation.optional(),
@@ -137,14 +125,7 @@ const ExplicitEnsure = z
   })
   .strict()
   .superRefine((value, context) => {
-    if (value.ompResumeFilePath !== undefined && value.agent !== 'omp') {
-      context.addIssue({
-        code: z.ZodIssueCode.custom,
-        path: ['ompResumeFilePath'],
-        message: 'OMP resume path requires the OMP agent'
-      })
-    }
-    if (getAgentResumeArgv(value.agent, value.providerSession, value.ompResumeFilePath) === null) {
+    if (getAgentResumeArgv(value.agent, value.providerSession) === null) {
       context.addIssue({
         code: z.ZodIssueCode.custom,
         path: ['providerSession'],
@@ -215,16 +196,6 @@ function callerContext(
   }
 }
 
-function withExecutionHostAgentPresentation<T extends { presentation?: 'background' | 'focused' }>(
-  params: T,
-  clientKind: 'mobile' | 'runtime' | undefined
-): T {
-  // Why: paired viewers focus their own mirror; the execution host may have no renderer.
-  return clientKind && params.presentation === 'focused'
-    ? { ...params, presentation: 'background' }
-    : params
-}
-
 function assertOperationTimestampWithinFutureSkew(clientOperationId: string): void {
   const timestamp = parseAgentSessionOperationTimestamp(clientOperationId)
   if (timestamp === null || timestamp > Date.now() + AGENT_SESSION_OPERATION_FUTURE_SKEW_MS) {
@@ -239,7 +210,7 @@ export const AGENT_SESSION_METHODS: RpcAnyMethod[] = [
     params: EnsureAgentSessionParams,
     handler: (params, { runtime, pairedDeviceId, clientId, clientKind, signal }) =>
       (runtime as AgentSessionRuntime).ensureAgentSession(
-        withExecutionHostAgentPresentation(params, clientKind),
+        params,
         callerContext(pairedDeviceId ?? clientId, clientKind, signal)
       )
   }),
@@ -249,7 +220,7 @@ export const AGENT_SESSION_METHODS: RpcAnyMethod[] = [
     handler: (params, { runtime, pairedDeviceId, clientId, clientKind, signal }) => {
       assertOperationTimestampWithinFutureSkew(params.clientOperationId)
       return (runtime as AgentSessionRuntime).createAgentSession(
-        withExecutionHostAgentPresentation(params, clientKind),
+        params,
         callerContext(pairedDeviceId ?? clientId, clientKind, signal)
       )
     }

@@ -37,6 +37,7 @@ vi.mock('fs/promises', () => ({
   copyFile: copyFileMock,
   open: openMock,
   readdir: readdirMock,
+  opendir: vi.fn(),
   unlink: unlinkMock,
   rm: vi.fn()
 }))
@@ -47,7 +48,10 @@ import {
   registerSshFilesystemProvider,
   unregisterSshFilesystemProvider
 } from '../providers/ssh-filesystem-dispatch'
-import { resetSshConnectionGenerations } from '../ssh/ssh-connection-generation'
+import {
+  resetSshConnectionGenerations,
+  setSshConnectionGeneration
+} from '../ssh/ssh-connection-generation'
 
 const store = {
   getRepos: () => [
@@ -130,6 +134,7 @@ describe('fs:importExternalPaths — SSH routing & connection', () => {
   beforeEach(() => {
     handlers.clear()
     resetSshConnectionGenerations()
+    setSshConnectionGeneration(connId, 0)
     ;[
       handleMock,
       lstatMock,

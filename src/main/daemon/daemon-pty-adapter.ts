@@ -11,6 +11,7 @@ import { CODEX_SHELL_READY_TIMEOUT_MS } from './session'
 import {
   CLEAN_DISCONNECT_PROTOCOL_VERSION,
   COMPLETION_PROCESS_INSPECTION_PROTOCOL_VERSION,
+  GET_FOREGROUND_PROCESS_PROTOCOL_VERSION,
   AGENT_SESSION_CLAIM_DAEMON_PROTOCOL_VERSION,
   AGENT_SESSION_CREATE_OPERATION_DAEMON_PROTOCOL_VERSION,
   GIT_CREDENTIAL_GUARD_HOST_PROTOCOL_VERSION,
@@ -38,6 +39,7 @@ import type {
   PtySpawnOptions,
   PtySpawnResult
 } from '../providers/types'
+import type { PtyProcessInspection } from '../providers/pty-process-inspection'
 import { isShellProcess } from '../../shared/agent-detection'
 import { resolveWslSessionContext } from './wsl-session-context'
 import { normalizeWslColdRestoreCwd } from './wsl-cold-restore-cwd'
@@ -824,12 +826,16 @@ export class DaemonPtyAdapter implements IPtyProvider {
   }
 
   async hasChildProcesses(id: string): Promise<boolean> {
+    if (this.protocolVersion < GET_FOREGROUND_PROCESS_PROTOCOL_VERSION) {
+      return true
+    }
     return this.hasChildProcessesFromForeground(await this.getForegroundProcess(id))
   }
 
-  async inspectProcess(
-    id: string
-  ): Promise<{ foregroundProcess: string | null; hasChildProcesses: boolean }> {
+  async inspectProcess(id: string): Promise<PtyProcessInspection> {
+    if (this.protocolVersion < GET_FOREGROUND_PROCESS_PROTOCOL_VERSION) {
+      return { foregroundProcess: null, hasChildProcesses: true, unavailable: true }
+    }
     if (this.protocolVersion < COMPLETION_PROCESS_INSPECTION_PROTOCOL_VERSION) {
       // Why: pre-v27 daemons survive an in-place app update; compose the inspection client-side from the
       // one call they do support instead of throwing, or completion detection stays dead until recreate.
@@ -850,6 +856,9 @@ export class DaemonPtyAdapter implements IPtyProvider {
   }
 
   async getForegroundProcess(id: string): Promise<string | null> {
+    if (this.protocolVersion < GET_FOREGROUND_PROCESS_PROTOCOL_VERSION) {
+      return null
+    }
     try {
       const result = await this.client.request<{ foregroundProcess: string | null }>(
         'getForegroundProcess',

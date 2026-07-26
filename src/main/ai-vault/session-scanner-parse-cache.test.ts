@@ -7,6 +7,7 @@ import {
   resetSessionParseCacheForTests,
   createSessionParseStats
 } from './session-scanner-parse-cache'
+import { AI_VAULT_PARSE_CACHE_VALUE_MAX_UTF8_BYTES } from './session-parse-cache-retention'
 import { parseClaudeSessionFile } from './session-scanner-primary-parsers'
 import type { FileWithMtime, SessionFileCandidate } from './session-scanner-types'
 
@@ -90,6 +91,29 @@ describe('parseAgentSessionFileCached', () => {
     expect(stats.fullParses).toBe(1)
     expect(stats.reused).toBe(1)
     expect(stats.incremental).toBe(0)
+  })
+
+  it('returns oversized metadata unchanged without retaining it', async () => {
+    const root = await makeTempDir()
+    const path = join(root, 'aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee.jsonl')
+    const oversizedModel = 'é'.repeat(AI_VAULT_PARSE_CACHE_VALUE_MAX_UTF8_BYTES / 2)
+    await writeFile(
+      path,
+      `${userRecord(0, 'question')}\n${assistantRecord(1, 'answer').replace(
+        'claude-fable-5',
+        oversizedModel
+      )}\n`
+    )
+    const candidate = await claudeCandidate(path)
+    const stats = createSessionParseStats()
+
+    const first = await parseAgentSessionFileCached(candidate, process.platform, stats)
+    const second = await parseAgentSessionFileCached(candidate, process.platform, stats)
+
+    expect(first?.model).toBe(oversizedModel)
+    expect(second).toEqual(first)
+    expect(stats.fullParses).toBe(2)
+    expect(stats.reused).toBe(0)
   })
 
   it('incrementally parses appended lines and matches a cold parse exactly', async () => {

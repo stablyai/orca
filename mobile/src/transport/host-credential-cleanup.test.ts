@@ -1,6 +1,8 @@
 import AsyncStorage from '@react-native-async-storage/async-storage'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import {
+  HOST_CREDENTIAL_CLEANUP_MAX_INFLIGHT_DELETES,
+  HOST_CREDENTIAL_CLEANUP_MAX_PENDING_IDS,
   loadPendingHostCredentialCleanup,
   loadPendingHostCredentialCleanupIds,
   resetHostCredentialCleanupForTests,
@@ -269,5 +271,42 @@ describe('host credential cleanup', () => {
     vi.mocked(AsyncStorage.getItem).mockResolvedValueOnce('{')
 
     await expect(loadPendingHostCredentialCleanupIds()).resolves.toEqual([])
+  })
+
+  it('accepts the exact pending-id cap and treats one over as unreadable', async () => {
+    storedPendingIds = Array.from(
+      { length: HOST_CREDENTIAL_CLEANUP_MAX_PENDING_IDS },
+      (_, index) => `host-${index}`
+    )
+
+    await expect(loadPendingHostCredentialCleanup()).resolves.toEqual({
+      ids: storedPendingIds,
+      storageUnreadable: false
+    })
+
+    storedPendingIds = [...storedPendingIds, 'one-over']
+    await expect(loadPendingHostCredentialCleanup()).resolves.toEqual({
+      ids: [],
+      storageUnreadable: true
+    })
+  })
+
+  it('caps simultaneous native deletes while preserving excess durable intents', async () => {
+    vi.useFakeTimers()
+    const deleteCredential = vi.fn(() => new Promise<void>(() => undefined))
+    const hostCount = HOST_CREDENTIAL_CLEANUP_MAX_INFLIGHT_DELETES + 1
+
+    await Promise.all(
+      Array.from({ length: hostCount }, (_, index) =>
+        scheduleHostCredentialCleanup(`host-${index}`, deleteCredential, 3_000)
+      )
+    )
+    await flushMicrotasks()
+
+    expect(deleteCredential).toHaveBeenCalledTimes(HOST_CREDENTIAL_CLEANUP_MAX_INFLIGHT_DELETES)
+    expect(storedPendingIds).toHaveLength(hostCount)
+
+    await vi.advanceTimersByTimeAsync(3_000)
+    await expect(loadPendingHostCredentialCleanupIds()).resolves.toHaveLength(hostCount)
   })
 })

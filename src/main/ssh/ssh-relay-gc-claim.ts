@@ -10,6 +10,10 @@ import {
 import { removeRemoteTreeCommand } from './ssh-remote-commands'
 import { powerShellCommand, powerShellLiteral } from './ssh-remote-powershell'
 import {
+  posixReadRelayMarkerAssignment,
+  powerShellReadRelayMarkerAssignment
+} from './ssh-relay-bounded-marker-commands'
+import {
   getRemoteHostPlatform,
   isWindowsRemoteHost,
   joinRemotePath,
@@ -131,9 +135,9 @@ export async function isRelayGcClaimOwned(
   const ownerPath = joinRemotePath(host, relayGcClaimPath(remoteRelayDir), RELAY_GC_OWNER_NAME)
   const command = isWindowsRemoteHost(host)
     ? powerShellCommand(
-        `if ((Get-Content -LiteralPath ${powerShellLiteral(ownerPath)} -Raw -ErrorAction SilentlyContinue) -ceq ${powerShellLiteral(token)}) { 'OWNED' } else { 'LOST' }`
+        `${powerShellReadRelayMarkerAssignment(ownerPath)}; if ($orcaMarkerValue -ceq ${powerShellLiteral(token)}) { 'OWNED' } else { 'LOST' }`
       )
-    : `test "$(cat ${shellEscape(ownerPath)} 2>/dev/null)" = ${shellEscape(token)} && echo OWNED || echo LOST`
+    : `${posixReadRelayMarkerAssignment(ownerPath)}; test "$orca_marker" = ${shellEscape(token)} && echo OWNED || echo LOST`
   const output = await execHostCommand(conn, host, command).catch(() => 'LOST')
   return output.trim() === 'OWNED'
 }
@@ -152,15 +156,17 @@ export async function releaseRelayGcClaim(
     ? powerShellCommand(
         `$claim = ${powerShellLiteral(claimPath)}; ` +
           `if (-not (Test-Path -LiteralPath $claim)) { 'RELEASED' } ` +
-          `elseif ((Get-Content -LiteralPath ${powerShellLiteral(ownerPath)} -Raw -ErrorAction SilentlyContinue) -cne ${powerShellLiteral(token)}) { 'LOST' } ` +
+          `else { ${powerShellReadRelayMarkerAssignment(ownerPath)}; ` +
+          `if ($orcaMarkerValue -cne ${powerShellLiteral(token)}) { 'LOST' } ` +
           'else { try { Remove-Item -LiteralPath $claim -Recurse -Force -ErrorAction Stop } catch {}; ' +
-          "if (Test-Path -LiteralPath $claim) { 'UNKNOWN' } else { 'RELEASED' } }"
+          "if (Test-Path -LiteralPath $claim) { 'UNKNOWN' } else { 'RELEASED' } } }"
       )
     : [
         `if ! test -e ${shellEscape(claimPath)}; then echo RELEASED;`,
-        `elif test "$(cat ${shellEscape(ownerPath)} 2>/dev/null)" != ${shellEscape(token)}; then echo LOST;`,
+        `else ${posixReadRelayMarkerAssignment(ownerPath)};`,
+        `if test "$orca_marker" != ${shellEscape(token)}; then echo LOST;`,
         `else ${removeRemoteTreeCommand(host, claimPath)} 2>/dev/null;`,
-        `if test -e ${shellEscape(claimPath)}; then echo UNKNOWN; else echo RELEASED; fi; fi`
+        `if test -e ${shellEscape(claimPath)}; then echo UNKNOWN; else echo RELEASED; fi; fi; fi`
       ].join(' ')
   const output = await execHostCommand(conn, host, command).catch(() => 'UNKNOWN')
   switch (output.trim()) {

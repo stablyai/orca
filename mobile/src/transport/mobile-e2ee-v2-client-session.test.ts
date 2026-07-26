@@ -12,8 +12,12 @@ vi.mock('expo-crypto', () => ({
 }))
 
 import { deriveSharedKey } from './e2ee'
-import { MobileE2EEV2ClientSession } from './mobile-e2ee-v2-client-session'
+import {
+  MOBILE_E2EE_V2_MAX_TEXT_FRAME_BASE64_CHARACTERS,
+  MobileE2EEV2ClientSession
+} from './mobile-e2ee-v2-client-session'
 import { deriveMobileE2EEV2KeySchedule } from './mobile-e2ee-v2-key-schedule'
+import { MOBILE_INBOUND_MAX_FRAME_BYTES } from './mobile-inbound-frame-queue'
 
 const desktop = nacl.box.keyPair.fromSecretKey(new Uint8Array(32).fill(1))
 const client = nacl.box.keyPair.fromSecretKey(new Uint8Array(32).fill(2))
@@ -81,5 +85,20 @@ describe('mobile E2EE v2 client session', () => {
     const encoded = Buffer.from(response).toString('base64')
     expect(session.openText(encoded)).toBe('authenticated')
     expect(session.openText(encoded)).toBeNull()
+  })
+
+  it('rejects oversized text and binary frames before materialization', () => {
+    const { session } = setup()
+    const decode = vi.spyOn(globalThis, 'atob')
+    const oversizedText = {
+      length: MOBILE_E2EE_V2_MAX_TEXT_FRAME_BASE64_CHARACTERS + 1
+    } as unknown as string
+    const oversizedBinary = {
+      byteLength: MOBILE_INBOUND_MAX_FRAME_BYTES + 1
+    } as unknown as Uint8Array
+
+    expect(session.openText(oversizedText)).toBeNull()
+    expect(session.openBinary(oversizedBinary)).toBeNull()
+    expect(decode).not.toHaveBeenCalled()
   })
 })

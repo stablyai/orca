@@ -49,9 +49,10 @@ export class TerminalSessionTeardown {
    * reap orphaned children (node-pty `useConptyDll` skips the console-process reap), so a
    * live `pnpm i`/`node` survives shell exit, keeps the ConPTY console non-empty, and holds
    * the worktree cwd — failing destructive worktree removal with "Failed to physically stop
-   * every PTY". taskkill /T /F the tree first so physical exit becomes verifiable. Mirrors
-   * the agent path (#10004/#10100). POSIX shells already reach their child pgroup on
-   * forceKill, so they stay on the plain force-kill path.
+   * every PTY". Tree-kill only when the OS identity probe returns `own`; `unknown`/`foreign`/
+   * `absent` skip taskkill and rely on root close alone. Mirrors the agent path
+   * (#10004/#10100). POSIX shells already reach their child pgroup on forceKill, so they
+   * stay on the plain force-kill path.
    */
   private async forceKillPlainShellSession(sessionId: string, session: Session): Promise<void> {
     if (process.platform === 'win32') {

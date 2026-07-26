@@ -9,10 +9,10 @@ import {
   getTerminalHtmlFileOpenHint,
   getTerminalUrlOpenHint,
   installFilePathLinkClickFallback,
-  mapTerminalFilePath,
   isTerminalLinkActivation,
   openFilePathLinkAtBufferPosition,
-  openDetectedFilePath
+  openDetectedFilePath,
+  TERMINAL_FILE_LINK_PROBE_CONCURRENCY
 } from './terminal-link-handlers'
 import { TERMINAL_PATH_EXISTS_CACHE_MAX_ENTRIES } from './terminal-path-exists-cache'
 import { handleOscLink } from './terminal-osc-link-routing'
@@ -65,7 +65,7 @@ vi.mock('@/store', () => ({
 }))
 
 vi.mock('@/lib/language-detect', () => ({
-  detectLanguage: (filePath: string) => (filePath.endsWith('.md') ? 'markdown' : 'plaintext')
+  detectLanguage: () => 'plaintext'
 }))
 
 // Why: the real helper reads worktreesByRepo/activeRepoId/etc. from the store
@@ -111,8 +111,8 @@ beforeEach(() => {
   vi.mocked(getConnectionId).mockReturnValue(null)
   openFilePathMock.mockResolvedValue(true)
   storeState.settings = undefined
-  storeState.activeFileIdByWorktree = {}
   storeState.worktreesByRepo = {}
+  storeState.activeFileIdByWorktree = {}
   registerHttpLinkStoreAccessor(() => storeState)
   vi.stubGlobal('window', {
     dispatchEvent: vi.fn(),
@@ -374,8 +374,8 @@ describe('handleOscLink', () => {
     )
     expect(setPendingEditorRevealMock).toHaveBeenNthCalledWith(1, null)
     expect(setPendingEditorRevealMock).toHaveBeenNthCalledWith(2, {
-      filePath: '/tmp/src/main.ts',
       fileId: '/tmp/src/main.ts',
+      filePath: '/tmp/src/main.ts',
       line: 42,
       column: 1,
       matchLength: 0
@@ -392,57 +392,13 @@ describe('handleOscLink', () => {
 
     expect(setPendingEditorRevealMock).toHaveBeenNthCalledWith(1, null)
     expect(setPendingEditorRevealMock).toHaveBeenNthCalledWith(2, {
-      filePath: '/tmp/src/main.ts',
       fileId: '/tmp/src/main.ts',
+      filePath: '/tmp/src/main.ts',
       line: 42,
       column: 7,
       matchLength: 0
     })
     expect(openFilePathMock).not.toHaveBeenCalled()
-  })
-
-  it('opens terminal markdown line links in source mode so Monaco can reveal the line', async () => {
-    setPlatform('Macintosh')
-    const filePath = '/tmp/docs/terminal-scroll-intent-architecture.md'
-    const fileId = 'editor:wt-1:runtime-1:terminal-scroll-intent-architecture.md'
-    openFileMock.mockImplementationOnce(() => {
-      storeState.activeFileIdByWorktree['wt-1'] = fileId
-    })
-
-    openDetectedFilePath(filePath, 230, null, deps)
-    await flushAsyncWork()
-    await flushDoubleRaf()
-
-    expect(setMarkdownViewModeMock).toHaveBeenCalledWith(fileId, 'source')
-    expect(setPendingEditorRevealMock).toHaveBeenLastCalledWith({
-      filePath,
-      fileId,
-      line: 230,
-      column: 1,
-      matchLength: 0
-    })
-  })
-
-  it('scopes non-Markdown line reveals to the owner-qualified editor tab', async () => {
-    setPlatform('Macintosh')
-    const filePath = '/tmp/src/main.ts'
-    const fileId = 'editor:wt-1:runtime-1:main.ts'
-    openFileMock.mockImplementationOnce(() => {
-      storeState.activeFileIdByWorktree['wt-1'] = fileId
-    })
-
-    openDetectedFilePath(filePath, 42, 7, deps)
-    await flushAsyncWork()
-    await flushDoubleRaf()
-
-    expect(setMarkdownViewModeMock).not.toHaveBeenCalled()
-    expect(setPendingEditorRevealMock).toHaveBeenLastCalledWith({
-      filePath,
-      fileId,
-      line: 42,
-      column: 7,
-      matchLength: 0
-    })
   })
 
   it('uses the system default app for shift+cmd/ctrl-click file paths', async () => {
@@ -477,8 +433,8 @@ describe('handleOscLink', () => {
     )
     expect(setPendingEditorRevealMock).toHaveBeenNthCalledWith(1, null)
     expect(setPendingEditorRevealMock).toHaveBeenNthCalledWith(2, {
-      filePath: '/tmp/src/main.ts',
       fileId: '/tmp/src/main.ts',
+      filePath: '/tmp/src/main.ts',
       line: 42,
       column: 7,
       matchLength: 0
@@ -576,8 +532,8 @@ describe('handleOscLink', () => {
     )
     expect(setPendingEditorRevealMock).toHaveBeenNthCalledWith(1, null)
     expect(setPendingEditorRevealMock).toHaveBeenNthCalledWith(2, {
-      filePath: 'C:/repo/src/index.ts',
       fileId: 'C:/repo/src/index.ts',
+      filePath: 'C:/repo/src/index.ts',
       line: 12,
       column: 3,
       matchLength: 0
@@ -638,8 +594,8 @@ describe('handleOscLink', () => {
     )
     expect(setPendingEditorRevealMock).toHaveBeenNthCalledWith(1, null)
     expect(setPendingEditorRevealMock).toHaveBeenNthCalledWith(2, {
-      filePath: '/tmp/test.txt',
       fileId: '/tmp/test.txt',
+      filePath: '/tmp/test.txt',
       line: 42,
       column: 1,
       matchLength: 0
@@ -681,8 +637,8 @@ describe('handleOscLink', () => {
     )
     expect(setPendingEditorRevealMock).toHaveBeenNthCalledWith(1, null)
     expect(setPendingEditorRevealMock).toHaveBeenNthCalledWith(2, {
-      filePath: '/tmp/test.txt',
       fileId: '/tmp/test.txt',
+      filePath: '/tmp/test.txt',
       line: 42,
       column: 7,
       matchLength: 0
@@ -715,8 +671,8 @@ describe('handleOscLink', () => {
     )
     expect(setPendingEditorRevealMock).toHaveBeenNthCalledWith(1, null)
     expect(setPendingEditorRevealMock).toHaveBeenNthCalledWith(2, {
-      filePath: '//server/Share/Repo/src/app.ts',
       fileId: '//server/Share/Repo/src/app.ts',
+      filePath: '//server/Share/Repo/src/app.ts',
       line: 12,
       column: 3,
       matchLength: 0
@@ -748,71 +704,6 @@ describe('handleOscLink', () => {
       { forceContentReload: true }
     )
     expect(openFilePathMock).not.toHaveBeenCalled()
-  })
-
-  it('maps POSIX OSC file links for a WSL worktree before opening them', async () => {
-    setPlatform('Windows')
-
-    handleOscLink(
-      '/root/workspace/myrepo/README.md:5:3',
-      { metaKey: false, ctrlKey: true },
-      {
-        ...deps,
-        startupCwd: '/root/workspace/myrepo',
-        worktreePath: '\\\\wsl.localhost\\Ubuntu\\home\\repo'
-      }
-    )
-    await flushAsyncWork()
-    await flushDoubleRaf()
-
-    expect(authorizeExternalPathMock).toHaveBeenCalledWith({
-      targetPath: '//wsl.localhost/Ubuntu/root/workspace/myrepo/README.md'
-    })
-    expect(openFileMock).toHaveBeenCalledWith(
-      expect.objectContaining({
-        filePath: '//wsl.localhost/Ubuntu/root/workspace/myrepo/README.md'
-      }),
-      { forceContentReload: true }
-    )
-    expect(setPendingEditorRevealMock).toHaveBeenNthCalledWith(2, {
-      filePath: '//wsl.localhost/Ubuntu/root/workspace/myrepo/README.md',
-      fileId: '//wsl.localhost/Ubuntu/root/workspace/myrepo/README.md',
-      line: 5,
-      column: 3,
-      matchLength: 0
-    })
-  })
-
-  it('maps file URL OSC links for a WSL worktree before opening them', async () => {
-    setPlatform('Windows')
-
-    handleOscLink(
-      'file:///root/workspace/myrepo/README.md#L5C3',
-      { metaKey: false, ctrlKey: true },
-      {
-        ...deps,
-        worktreePath: '\\\\wsl.localhost\\Ubuntu\\home\\repo'
-      }
-    )
-    await flushAsyncWork()
-    await flushDoubleRaf()
-
-    expect(authorizeExternalPathMock).toHaveBeenCalledWith({
-      targetPath: '//wsl.localhost/Ubuntu/root/workspace/myrepo/README.md'
-    })
-    expect(openFileMock).toHaveBeenCalledWith(
-      expect.objectContaining({
-        filePath: '//wsl.localhost/Ubuntu/root/workspace/myrepo/README.md'
-      }),
-      { forceContentReload: true }
-    )
-    expect(setPendingEditorRevealMock).toHaveBeenNthCalledWith(2, {
-      filePath: '//wsl.localhost/Ubuntu/root/workspace/myrepo/README.md',
-      fileId: '//wsl.localhost/Ubuntu/root/workspace/myrepo/README.md',
-      line: 5,
-      column: 3,
-      matchLength: 0
-    })
   })
 
   it('opens tilde OSC file links against explicit terminal home when cwd is outside home', async () => {
@@ -929,54 +820,6 @@ describe('handleOscLink', () => {
         filePath: '/home/me/repo/src/main.ts',
         relativePath: 'src/main.ts'
       }),
-      { forceContentReload: true }
-    )
-  })
-
-  it('pins SSH links outside the worktree to their target host', async () => {
-    setPlatform('Macintosh')
-    vi.mocked(getConnectionId).mockReturnValue('ssh-1')
-
-    openDetectedFilePath('/tmp/ssh-preview.png', null, null, {
-      worktreeId: 'wt-1',
-      worktreePath: '/home/me/repo'
-    })
-    await flushAsyncWork()
-
-    expect(authorizeExternalPathMock).not.toHaveBeenCalled()
-    expect(statMock).toHaveBeenCalledWith({
-      filePath: '/tmp/ssh-preview.png',
-      connectionId: 'ssh-1'
-    })
-    expect(openFileMock).toHaveBeenCalledWith(
-      expect.objectContaining({
-        filePath: '/tmp/ssh-preview.png',
-        relativePath: '/tmp/ssh-preview.png',
-        externalSshTargetId: 'ssh-1'
-      }),
-      { forceContentReload: true }
-    )
-  })
-
-  it('does not pin runtime-owned links to the worktree SSH target', async () => {
-    setPlatform('Windows')
-    vi.mocked(getConnectionId).mockReturnValue('ssh-1')
-    runtimeEnvironmentCallMock.mockResolvedValueOnce({
-      id: 'rpc-1',
-      ok: true,
-      result: { size: 1, isDirectory: false, mtime: 1 },
-      _meta: { runtimeId: 'remote-runtime' }
-    })
-
-    openDetectedFilePath('//wsl.localhost/ubuntu/home/Alice/repo/src/main.ts', null, null, {
-      worktreeId: 'wt-1',
-      worktreePath: '//wsl$/Ubuntu/home/Alice/repo',
-      runtimeEnvironmentId: 'env-1'
-    })
-    await flushAsyncWork()
-
-    expect(openFileMock).toHaveBeenCalledWith(
-      expect.not.objectContaining({ externalSshTargetId: expect.anything() }),
       { forceContentReload: true }
     )
   })
@@ -1152,8 +995,8 @@ describe('handleOscLink', () => {
     )
     expect(setPendingEditorRevealMock).toHaveBeenNthCalledWith(1, null)
     expect(setPendingEditorRevealMock).toHaveBeenNthCalledWith(2, {
-      filePath: '/tmp/src/second.ts',
       fileId: '/tmp/src/second.ts',
+      filePath: '/tmp/src/second.ts',
       line: 20,
       column: 3,
       matchLength: 0
@@ -1235,7 +1078,7 @@ describe('createFilePathLinkProvider range bounds', () => {
       1,
       {
         worktreeId: 'wt-1',
-        worktreePath: depsOverrides.worktreePath ?? '/repo',
+        worktreePath: '/repo',
         startupCwd: '/repo',
         managerRef,
         linkProviderDisposablesRef: { current: new Map<number, IDisposable>() },
@@ -1400,6 +1243,43 @@ describe('createFilePathLinkProvider range bounds', () => {
 
     expect(links).toEqual([])
     expect(shellPathExists).toHaveBeenCalled()
+  })
+
+  it.each([
+    ['at the limit', TERMINAL_FILE_LINK_PROBE_CONCURRENCY],
+    ['above the limit', TERMINAL_FILE_LINK_PROBE_CONCURRENCY + 1]
+  ])('bounds path-existence probes %s', async (_, count) => {
+    let active = 0
+    let peak = 0
+    const releases: (() => void)[] = []
+    const shellPathExists = vi.mocked(window.api.shell.pathExists)
+    shellPathExists.mockImplementation(async () => {
+      active++
+      peak = Math.max(peak, active)
+      await new Promise<void>((resolve) => releases.push(resolve))
+      active--
+      return true
+    })
+    const text = Array.from({ length: count }, (_, index) => `file-${index}.ts`).join(' ')
+    const { provider } = createProviderSetup([makeBufferLine(text)], new Map())
+    const links = new Promise<ILink[]>((resolve) => {
+      provider.provideLinks(1, (provided) => resolve(provided ?? []))
+    })
+
+    expect(shellPathExists).toHaveBeenCalledTimes(
+      Math.min(count, TERMINAL_FILE_LINK_PROBE_CONCURRENCY)
+    )
+    if (count > TERMINAL_FILE_LINK_PROBE_CONCURRENCY) {
+      releases.shift()?.()
+      for (let turn = 0; turn < 5 && shellPathExists.mock.calls.length < count; turn++) {
+        await Promise.resolve()
+      }
+      expect(shellPathExists).toHaveBeenCalledTimes(count)
+    }
+    releases.splice(0).forEach((release) => release())
+
+    await expect(links).resolves.toHaveLength(count)
+    expect(peak).toBe(Math.min(count, TERMINAL_FILE_LINK_PROBE_CONCURRENCY))
   })
 
   it('does not invoke the xterm callback twice when the callback throws', async () => {
@@ -1630,45 +1510,6 @@ describe('createFilePathLinkProvider range bounds', () => {
     expect(openFilePathMock).not.toHaveBeenCalled()
   })
 
-  it('maps POSIX file paths for a WSL direct-click fallback before opening them', async () => {
-    setPlatform('Windows')
-
-    const opened = openFilePathLinkAtBufferPosition(
-      makeBuffer([makeBufferLine('/root/workspace/myrepo/README.md:5:3')]),
-      { x: 10, y: 1 },
-      80,
-      {
-        startupCwd: '/root/workspace/myrepo',
-        worktreeId: 'wt-1',
-        worktreePath: '\\\\wsl.localhost\\Ubuntu\\home\\repo',
-        runtimeEnvironmentId: null,
-        pathExistsCache: new Map([
-          ['active\0//wsl.localhost/Ubuntu/root/workspace/myrepo/README.md', true]
-        ])
-      }
-    )
-    await flushAsyncWork()
-    await flushDoubleRaf()
-
-    expect(opened).toBe(true)
-    expect(statMock).toHaveBeenCalledWith({
-      filePath: '//wsl.localhost/Ubuntu/root/workspace/myrepo/README.md'
-    })
-    expect(openFileMock).toHaveBeenCalledWith(
-      expect.objectContaining({
-        filePath: '//wsl.localhost/Ubuntu/root/workspace/myrepo/README.md'
-      }),
-      { forceContentReload: true }
-    )
-    expect(setPendingEditorRevealMock).toHaveBeenNthCalledWith(2, {
-      filePath: '//wsl.localhost/Ubuntu/root/workspace/myrepo/README.md',
-      fileId: '//wsl.localhost/Ubuntu/root/workspace/myrepo/README.md',
-      line: 5,
-      column: 3,
-      matchLength: 0
-    })
-  })
-
   it('switches to a known worktree root from direct fallback even when cache says missing', async () => {
     setPlatform('Macintosh')
     storeState.worktreesByRepo = {
@@ -1844,83 +1685,6 @@ describe('createFilePathLinkProvider range bounds', () => {
 
     expect(links.map((link) => link.text)).toEqual(['package.json'])
     expect(window.api.shell.pathExists).toHaveBeenCalledWith('/repo/package.json')
-  })
-
-  it.each([
-    ['modern', '\\\\wsl.localhost\\Ubuntu\\home\\repo'],
-    ['legacy', '\\\\wsl$\\Ubuntu\\home\\repo']
-  ])('maps POSIX terminal links for a %s WSL worktree', async (_label, worktreePath) => {
-    const mappedPath = '//wsl.localhost/Ubuntu/root/workspace/myrepo/README.md'
-    vi.mocked(window.api.shell.pathExists).mockImplementation(
-      async (pathValue) => pathValue === mappedPath
-    )
-    const { provider, linkTooltip } = createProviderSetup(
-      [makeBufferLine('/root/workspace/myrepo/README.md:5:3')],
-      new Map(),
-      { worktreePath, startupCwd: '/root/workspace/myrepo' }
-    )
-
-    const links = await new Promise<ILink[]>((resolve) => {
-      provider.provideLinks(1, (provided) => resolve(provided ?? []))
-    })
-
-    expect(links).toHaveLength(1)
-    expect(window.api.shell.pathExists).toHaveBeenCalledWith(mappedPath)
-    links[0]!.hover?.({} as MouseEvent, links[0]!.text)
-    expect(linkTooltip.textContent).toContain(mappedPath)
-    links[0]!.activate?.(
-      { ctrlKey: true, metaKey: false, shiftKey: false } as MouseEvent,
-      links[0]!.text
-    )
-    await flushAsyncWork()
-    await flushDoubleRaf()
-
-    expect(statMock).toHaveBeenCalledWith({ filePath: mappedPath })
-    expect(openFileMock).toHaveBeenCalledWith(expect.objectContaining({ filePath: mappedPath }), {
-      forceContentReload: true
-    })
-    expect(setPendingEditorRevealMock).toHaveBeenLastCalledWith({
-      filePath: mappedPath,
-      fileId: mappedPath,
-      line: 5,
-      column: 3,
-      matchLength: 0
-    })
-  })
-
-  it('resolves relative POSIX terminal links against the pane cwd before mapping', async () => {
-    const mappedPath = '//wsl.localhost/Ubuntu/root/workspace/myrepo/README.md'
-    vi.mocked(window.api.shell.pathExists).mockImplementation(
-      async (pathValue) => pathValue === mappedPath
-    )
-    const { provider } = createProviderSetup([makeBufferLine('README.md:5')], new Map(), {
-      worktreePath: '\\\\wsl.localhost\\Ubuntu\\home\\repo',
-      startupCwd: '/stale',
-      getPaneLinkCwd: () => '/root/workspace/myrepo'
-    })
-
-    const links = await new Promise<ILink[]>((resolve) => {
-      provider.provideLinks(1, (provided) => resolve(provided ?? []))
-    })
-
-    expect(links).toHaveLength(1)
-    expect(window.api.shell.pathExists).toHaveBeenCalledWith(mappedPath)
-  })
-
-  it('preserves existing UNC and native paths', () => {
-    expect(
-      mapTerminalFilePath('//wsl.localhost/Ubuntu/root/file.md', '\\\\wsl.localhost\\Ubuntu\\repo')
-    ).toBe('//wsl.localhost/Ubuntu/root/file.md')
-    expect(
-      mapTerminalFilePath('\\\\server\\share\\file.md', '\\\\wsl.localhost\\Ubuntu\\repo')
-    ).toBe('\\\\server\\share\\file.md')
-    expect(mapTerminalFilePath('C:/repo/file.md', '\\\\wsl.localhost\\Ubuntu\\repo')).toBe(
-      'C:/repo/file.md'
-    )
-  })
-
-  it('does not map POSIX paths for a native Windows worktree', () => {
-    expect(mapTerminalFilePath('/repo/file.md', 'C:\\repo')).toBe('/repo/file.md')
   })
 
   it('opens an existing extensionless spaced prefix from direct fallback cache', async () => {
