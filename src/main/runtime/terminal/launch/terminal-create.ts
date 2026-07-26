@@ -16,6 +16,7 @@ import { agentLaunchTokenFor, withAgentLaunchToken } from '../../../agent-launch
 import { seedPtyLaunchTitle } from './pty-launch-title'
 import { migratedPaneRestoreHint } from '../../migrated-pane-restore-cwd'
 import { paneSize, resolvePtyFirstSize } from '../../../ipc/pty/pty-first-size'
+import { applyShellCommandWrapper } from '../../../../shared/shell-command-wrapper'
 
 export abstract class OrcaRuntimeWithCreateTerminal extends OrcaRuntimeWithTerminalCreateDeduplication {
   protected abstract paneStartStatusArgs: dependencies.PaneStartArgsOf
@@ -42,7 +43,24 @@ export abstract class OrcaRuntimeWithCreateTerminal extends OrcaRuntimeWithTermi
         throw new Error('runtime_unavailable')
       }
       const workspace = await this.resolveTerminalCreateLaunchScope(selector, opts, ...evidence)
-      const launchOpts = await this.resolveAgentTerminalCreateOptions(workspace, opts)
+      const resolvedLaunchOpts = await this.resolveAgentTerminalCreateOptions(workspace, opts)
+      // Why: wrap bare/agent launch commands through the opt-in shell template so CLI/mobile
+      // createTerminal paths match renderer queueTabStartupCommand (e.g. devenv shell -- $CMD).
+      // Keep claudeAgentTeamsSourceCommand on the unwrapped agent line so teammate-mode
+      // inference still sees `claude` rather than `devenv shell -- claude`.
+      const launchOpts = {
+        ...resolvedLaunchOpts,
+        ...(resolvedLaunchOpts.command
+          ? {
+              command: applyShellCommandWrapper(
+                this.store?.getSettings?.().shellCommandWrapper,
+                resolvedLaunchOpts.command
+              ),
+              claudeAgentTeamsSourceCommand:
+                resolvedLaunchOpts.claudeAgentTeamsSourceCommand ?? resolvedLaunchOpts.command
+            }
+          : {})
+      }
       const launchTitleAt = { sequence: this.nextTitleObservationSequence(), epochMs: Date.now() }
       let cwd = this.resolveWorkspaceTerminalStartupCwd(workspace, launchOpts.cwd) ?? workspace.path
       const session = this.getWorkspaceSessionForWorktree(workspace.id)
