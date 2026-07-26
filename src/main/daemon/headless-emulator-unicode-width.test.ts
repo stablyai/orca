@@ -25,4 +25,23 @@ describe('headless emulator unicode widths', () => {
     expect(emulator.getVisibleLines()[0]).toBe('\u{1F469}\u{200D}\u{1F4BB}Y')
     emulator.dispose()
   })
+
+  it('joins a regional indicator pair into one wide flag like the renderer provider', async () => {
+    const emulator = new HeadlessEmulator({ cols: 40, rows: 4 })
+    // 🇺🇸 is two regional indicators with no ZWJ; it occupies columns 1-2, so a
+    // write to column 3 replaces "A" rather than landing inside the flag.
+    await emulator.write('\x1b[H\u{1F1FA}\u{1F1F8}AB')
+    await emulator.write('\x1b[1;3HZ')
+    expect(emulator.getVisibleLines()[0]).toBe('\u{1F1FA}\u{1F1F8}ZB')
+    emulator.dispose()
+  })
+
+  it('pairs consecutive flags instead of chaining every indicator', async () => {
+    const emulator = new HeadlessEmulator({ cols: 40, rows: 4 })
+    // 🇺🇸🇩🇪 is four indicators forming two flags across columns 1-4.
+    await emulator.write('\x1b[H\u{1F1FA}\u{1F1F8}\u{1F1E9}\u{1F1EA}A')
+    await emulator.write('\x1b[1;5HZ')
+    expect(emulator.getVisibleLines()[0]).toBe('\u{1F1FA}\u{1F1F8}\u{1F1E9}\u{1F1EA}Z')
+    emulator.dispose()
+  })
 })

@@ -12,6 +12,12 @@ type XtermTerminalWithUnicodeCore = {
 const ORCA_UNICODE_VERSION = 'orca-11-zwj'
 const UNICODE11_VERSION = '11'
 const ZERO_WIDTH_JOINER = 0x200d
+const REGIONAL_INDICATOR_FIRST = 0x1f1e6
+const REGIONAL_INDICATOR_LAST = 0x1f1ff
+
+function isRegionalIndicator(codepoint: number): boolean {
+  return codepoint >= REGIONAL_INDICATOR_FIRST && codepoint <= REGIONAL_INDICATOR_LAST
+}
 
 function extractWidth(properties: number): 0 | 1 | 2 {
   return ((properties >> 1) & 3) as 0 | 1 | 2
@@ -46,6 +52,17 @@ class OrcaUnicodeProvider implements IUnicodeVersionProvider {
       // Why: CLIs render ZWJ emoji as one visible glyph and budget them as one
       // wide cell pair; xterm Unicode11 otherwise advances for both emoji parts.
       return createProperties(codepoint, precedingWidth, true)
+    }
+
+    if (isRegionalIndicator(codepoint)) {
+      // Why: a country flag is two adjacent regional indicators with no ZWJ. CLIs
+      // budget the pair as one wide cell pair; xterm Unicode11 otherwise gives each
+      // indicator its own cell and the font paints two lone letter tiles.
+      if (isRegionalIndicator(precedingKind) && precedingWidth > 0) {
+        // charKind 0 closes the pair so a third indicator opens the next flag.
+        return createProperties(0, 2, true)
+      }
+      return createProperties(codepoint, this.wcwidth(codepoint), false)
     }
 
     return this.baseProvider.charProperties(codepoint, preceding)
