@@ -3560,7 +3560,11 @@ function BrowserPagePane({
       if (!isActiveRef.current) {
         return
       }
-      const nextLevel = applyBrowserPageZoom(webviewRef.current, direction)
+      const nextLevel = applyBrowserPageZoom(
+        webviewRef.current,
+        direction,
+        browserDefaultZoomLevelRef.current
+      )
       if (nextLevel !== null) {
         setBrowserDefaultZoomLevel(nextLevel)
         showBrowserZoomFeedback(nextLevel)
@@ -3659,7 +3663,6 @@ function BrowserPagePane({
     container = ensuredWebview.container
     const webview = ensuredWebview.webview
     const needsInitialNavigation = ensuredWebview.created
-    let needsInitialDefaultZoom = ensuredWebview.created
 
     if (!ensuredWebview.created) {
       // pointerEvents already applied inside ensureBrowserPageWebview for the reused-webview path.
@@ -3739,12 +3742,10 @@ function BrowserPagePane({
       if (!queuedAnnotationViewportBridgeSync) {
         syncBrowserAnnotationViewportBridge()
       }
-      if (needsInitialDefaultZoom) {
-        const appliedLevel = setBrowserPageZoomLevel(webview, browserDefaultZoomLevelRef.current)
-        if (appliedLevel !== null) {
-          setBrowserZoomPercent(browserPageZoomLevelToPercent(appliedLevel))
-        }
-        needsInitialDefaultZoom = false
+      // Why: Chromium can restore per-origin zoom on reload, so enforce Orca's configured level after every guest load.
+      const appliedLevel = setBrowserPageZoomLevel(webview, browserDefaultZoomLevelRef.current)
+      if (appliedLevel !== null) {
+        setBrowserZoomPercent(browserPageZoomLevelToPercent(appliedLevel))
       }
       // Why: CDP viewport overrides are scoped to the debugger session and don't survive cross-origin nav, so reapply (idempotently) on dom-ready.
       const presetId = viewportPresetIdRef.current

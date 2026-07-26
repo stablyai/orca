@@ -106,6 +106,18 @@ describe('setBrowserPageZoomLevel', () => {
     expect(setBrowserPageZoomLevel(webview, 1.26)).toBe(1.5)
     expect(webview.setZoomLevel).toHaveBeenCalledWith(1.5)
   })
+
+  it('restores the configured level when Chromium carries zoom across reloads', () => {
+    const webview = {
+      getZoomLevel: vi.fn(() => 0.5),
+      setZoomLevel: vi.fn()
+    }
+
+    expect(setBrowserPageZoomLevel(webview, 0)).toBe(0)
+    expect(setBrowserPageZoomLevel(webview, 0)).toBe(0)
+    expect(webview.setZoomLevel).toHaveBeenNthCalledWith(1, 0)
+    expect(webview.setZoomLevel).toHaveBeenNthCalledWith(2, 0)
+  })
 })
 
 describe('getBrowserPageZoomIndicatorState', () => {

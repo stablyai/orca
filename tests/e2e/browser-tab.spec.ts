@@ -461,6 +461,50 @@ test.describe('Browser Tab', () => {
     }
   })
 
+  test('browser page reload restores the configured 100% zoom', async ({ orcaPage }) => {
+    const formServer = await startBrowserFormServer()
+    try {
+      const worktreeId = (await getActiveWorktreeId(orcaPage))!
+      const browserTab = await createBrowserTab(
+        orcaPage,
+        worktreeId,
+        formServer.url('Zoom reload'),
+        'Zoom Reload'
+      )
+      expect(browserTab?.id).toBeTruthy()
+      await expect
+        .poll(async () => readBrowserInputValue(orcaPage, browserTab!.id), { timeout: 5_000 })
+        .not.toBeNull()
+
+      const zoomLevels = await orcaPage.evaluate(async (browserTabId) => {
+        const slot = document.querySelector(`[data-browser-overlay-tab-id="${browserTabId}"]`)
+        const webview = slot?.querySelector('webview') as Electron.WebviewTag | null
+        if (!webview) {
+          throw new Error(`Missing webview for browser tab ${browserTabId}`)
+        }
+
+        const levels = [webview.getZoomLevel()]
+        webview.setZoomLevel(0.5)
+        for (let reload = 0; reload < 3; reload += 1) {
+          await new Promise<void>((resolve) => {
+            webview.addEventListener('dom-ready', () => resolve(), { once: true })
+            if (reload === 1) {
+              webview.reloadIgnoringCache()
+            } else {
+              webview.reload()
+            }
+          })
+          levels.push(webview.getZoomLevel())
+        }
+        return levels
+      }, browserTab!.id)
+
+      expect(zoomLevels).toEqual([0, 0, 0, 0])
+    } finally {
+      await formServer.close()
+    }
+  })
+
   test('plain links stay current while explicit new-tab gestures activate Orca tabs', async ({
     electronApp,
     orcaPage
