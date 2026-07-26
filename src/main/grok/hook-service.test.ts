@@ -89,14 +89,10 @@ describe('GrokHookService', () => {
     if (process.platform === 'win32') {
       expect(script).toContain('%SystemRoot%\\System32\\curl.exe')
       expect(script).toContain('set "ORCA_GROK_HOME=%GROK_HOME%"')
-      // Why: empty GROK_HOME must goto-skip substring lines — cmd expands %VAR:~n%
-      // before evaluating a same-line `if`, which is a syntax error.
-      expect(script).toContain('if "%GROK_HOME%"=="" goto :orca_grok_home_ready')
       expect(script).toContain('%GROK_HOME:~4096,1%')
       expect(script).toContain(
         'if "%ORCA_GROK_HOME:~-1%"=="\\" set "ORCA_GROK_HOME=%ORCA_GROK_HOME%."'
       )
-      expect(script).toContain(':orca_grok_home_ready')
       expect(script).toContain('--data-urlencode "grokHome=%ORCA_GROK_HOME%"')
     } else {
       // Why: payload is piped to curl via stdin (`payload@-`) so it never lands
@@ -196,22 +192,65 @@ describe('GrokHookService', () => {
     ).toBe(true)
   })
 
-  // Why: empty/unset GROK_HOME used to trip `%ORCA_GROK_HOME:~-1%` (cmd syntax
-  // error) before curl ran, so Native Chat never received sessionId on Windows.
+  // Why: GROK_HOME is unset for most users, and cmd leaves `%VAR:~-1%` literal
+  // when VAR is undefined — the trailing-backslash line then collapses to
+  // `if "~-1ORCA_GROK_HOME."` and aborts before curl, so Native Chat never got
+  // a sessionId. Runs off-Windows too; the win32 branch is a pure string build.
+  it('guards the Windows trailing-backslash line against an undefined GROK_HOME', () => {
+    const originalPlatform = Object.getOwnPropertyDescriptor(process, 'platform')
+    Object.defineProperty(process, 'platform', { configurable: true, value: 'win32' })
+    try {
+      expect(new GrokHookService().install().state).toBe('installed')
+      const script = readFileSync(
+        join(homeDir, '.orca', 'agent-hooks', 'grok-hook.cmd'),
+        'utf8'
+      ).split('\r\n')
+
+      const guardIndex = script.indexOf('if not defined ORCA_GROK_HOME goto :orca_grok_home_ready')
+      const substringIndex = script.indexOf(
+        'if "%ORCA_GROK_HOME:~-1%"=="\\" set "ORCA_GROK_HOME=%ORCA_GROK_HOME%."'
+      )
+      const labelIndex = script.indexOf(':orca_grok_home_ready')
+
+      expect(guardIndex).toBeGreaterThanOrEqual(0)
+      // Why: the guard is only useful ahead of the substring it protects, and
+      // the jump target must sit after it or the line still runs.
+      expect(guardIndex).toBeLessThan(substringIndex)
+      expect(labelIndex).toBeGreaterThan(substringIndex)
+      // Why: truncation clears ORCA_GROK_HOME, so the guard must follow it to
+      // cover an oversize GROK_HOME emptying the copy.
+      expect(script.indexOf('if not "%GROK_HOME:~4096,1%"=="" set "ORCA_GROK_HOME="')).toBeLessThan(
+        guardIndex
+      )
+      // Why: comparing the raw value breaks on a quote inside GROK_HOME; the
+      // `if defined` form never embeds it.
+      expect(script).not.toContain('if "%GROK_HOME%"=="" goto :orca_grok_home_ready')
+    } finally {
+      if (originalPlatform) {
+        Object.defineProperty(process, 'platform', originalPlatform)
+      }
+    }
+  })
+
+  // Why: the guard above is a string assertion; only real cmd.exe proves the
+  // script still reaches curl with GROK_HOME unset, empty, or oversize.
   it.skipIf(process.platform !== 'win32')(
-    'windows hook script survives unset GROK_HOME without cmd syntax error',
+    'windows hook script reaches curl for every GROK_HOME shape',
     async () => {
       expect(new GrokHookService().install().state).toBe('installed')
       const scriptPath = join(homeDir, '.orca', 'agent-hooks', 'grok-hook.cmd')
       const { spawnSync } = await import('node:child_process')
-      const result = spawnSync('cmd.exe', ['/d', '/c', scriptPath], {
-        encoding: 'utf8',
-        input: JSON.stringify({
-          hook_event_name: 'UserPromptSubmit',
-          sessionId: 'test-session',
-          prompt: 'hi'
-        }),
-        env: {
+
+      for (const grokHome of [
+        undefined,
+        '',
+        '   ',
+        'C:\\Users\\dev\\.grok',
+        'C:\\Users\\dev\\.grok\\',
+        'C:\\a"b\\.grok',
+        `C:\\${'a'.repeat(5000)}`
+      ]) {
+        const env: NodeJS.ProcessEnv = {
           ...process.env,
           ORCA_AGENT_HOOK_PORT: '1',
           ORCA_AGENT_HOOK_TOKEN: 'test-token',
@@ -219,14 +258,30 @@ describe('GrokHookService', () => {
           ORCA_AGENT_HOOK_VERSION: '1',
           ORCA_PANE_KEY:
             'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa:bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb',
-          ORCA_TAB_ID: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',
-          GROK_HOME: ''
-        },
-        windowsHide: true
-      })
-      const combined = `${result.stdout ?? ''}\n${result.stderr ?? ''}`
-      expect(combined).not.toMatch(/语法不正确|The syntax of the command is incorrect/i)
-      expect(result.status).toBe(0)
+          ORCA_TAB_ID: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa'
+        }
+        delete env.GROK_HOME
+        if (grokHome !== undefined) {
+          env.GROK_HOME = grokHome
+        }
+
+        const result = spawnSync('cmd.exe', ['/d', '/c', scriptPath], {
+          encoding: 'utf8',
+          input: JSON.stringify({
+            hook_event_name: 'UserPromptSubmit',
+            sessionId: 'test-session',
+            prompt: 'hi'
+          }),
+          env,
+          windowsHide: true
+        })
+
+        const combined = `${result.stdout ?? ''}\n${result.stderr ?? ''}`
+        expect(combined).not.toMatch(/语法不正确|The syntax of the command is incorrect/i)
+        // Why: the hook is best-effort — the listener is absent here, so only a
+        // cmd-level abort (non-zero) signals the parse bug.
+        expect(result.status).toBe(0)
+      }
     }
   )
 })

@@ -89,10 +89,7 @@ function getRemoteGrokHome(remoteHome: string, remoteGrokHome?: string): string 
 }
 
 function hasControlCharacter(value: string): boolean {
-  return Array.from(value).some((character) => {
-    const code = character.charCodeAt(0)
-    return code <= 0x1f || code === 0x7f
-  })
+  return Array.from(value, (c) => c.charCodeAt(0)).some((code) => code <= 0x1f || code === 0x7f)
 }
 
 const WINDOWS_GROK_HOOK_POST_COMMAND = buildWindowsAgentHookPostCommand('grok').replace(
@@ -122,10 +119,11 @@ function getManagedScript(target: 'local' | 'posix' = 'local'): string {
       'if defined ORCA_AGENT_HOOK_ENDPOINT if exist "%ORCA_AGENT_HOOK_ENDPOINT%" call "%ORCA_AGENT_HOOK_ENDPOINT%" 2>nul',
       ...buildWindowsHookEnvironmentGuardLines(),
       'set "ORCA_GROK_HOME=%GROK_HOME%"',
-      // Why: cmd expands %VAR:~n% on the whole line before evaluating `if`, so an
-      // empty GROK_HOME still syntax-errors unless we skip those lines entirely.
-      'if "%GROK_HOME%"=="" goto :orca_grok_home_ready',
-      `if not "%GROK_HOME:~${GROK_HOME_ENVELOPE_MAX_LENGTH},1%"=="" set "ORCA_GROK_HOME=" & goto :orca_grok_home_ready`,
+      `if not "%GROK_HOME:~${GROK_HOME_ENVELOPE_MAX_LENGTH},1%"=="" set "ORCA_GROK_HOME="`,
+      // Why: cmd leaves %VAR:~-1% literal when VAR is undefined, so the next
+      // line collapses to `if "~-1ORCA_GROK_HOME."` and aborts the script before
+      // curl posts. Unset GROK_HOME is the common case, so skip it entirely.
+      'if not defined ORCA_GROK_HOME goto :orca_grok_home_ready',
       // Why: a trailing backslash escapes curl's closing argv quote on Windows,
       // merging the payload option into grokHome and dropping the hook body.
       'if "%ORCA_GROK_HOME:~-1%"=="\\" set "ORCA_GROK_HOME=%ORCA_GROK_HOME%."',
