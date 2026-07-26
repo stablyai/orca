@@ -307,6 +307,37 @@ describe('archiveLostTerminalWorker', () => {
     expect(archiveOwner.retireArchivedTerminalTabAndFlush).not.toHaveBeenCalled()
   })
 
+  it('checks the reconnect attempt fence after a single leaf capture before commit', async () => {
+    const frozenSession = session()
+    const archiveOwner = owner(frozenSession)
+    let attemptCurrent = true
+    const capture = vi.fn(async () => {
+      attemptCurrent = false
+      return { kind: 'captured-empty' as const }
+    })
+
+    const result = await archiveLostTerminalWorker({
+      owner: archiveOwner.value,
+      candidate: {
+        reason: 'relay-worker-lost',
+        executionHostId: 'ssh:target-1',
+        worktreeId: WORKTREE_ID,
+        tabId: TAB_ID,
+        expectedSourcePaneIdentityByLeafId: {
+          [LEAF_ID]: { paneKey: `${TAB_ID}:${LEAF_ID}`, incarnationId: 'incarnation-1' }
+        }
+      },
+      frozenSession,
+      snapshotSource: { capture },
+      isCaptureAttemptCurrent: () => attemptCurrent
+    })
+
+    expect(result).toEqual({ kind: 'error', code: 'capture-unavailable' })
+    expect(capture).toHaveBeenCalledOnce()
+    expect(archiveOwner.archives()).toEqual({})
+    expect(archiveOwner.retireArchivedTerminalTabAndFlush).not.toHaveBeenCalled()
+  })
+
   it('continues completion after the archive commit loses the reconnect fence', async () => {
     const frozenSession = session()
     const archiveOwner = owner(frozenSession)

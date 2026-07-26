@@ -9,9 +9,11 @@ import type { TerminalArchiveStore } from './terminal-archive-store'
 export function writeLostWorkerTerminalArchive(
   store: TerminalArchiveStore,
   request: ArchiveTerminalTabRequest,
-  retirement: LostTerminalArchiveRetirement
+  retirement: LostTerminalArchiveRetirement,
+  beforeCommit?: () => void
 ): Promise<{ archive: ArchivedTerminalTab; ptyIdsToKill: string[] }> {
   return store.archiveTerminalTabWithCommit(request, (archive, archives) => {
+    beforeCommit?.()
     const committed = store.commitLostTerminalArchiveAndRetire(archives, retirement)
     if (!committed) {
       throw new Error('lost-worker archive retirement is unavailable')

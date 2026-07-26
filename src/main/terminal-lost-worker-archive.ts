@@ -216,7 +216,14 @@ async function archiveLostTerminalWorkerOnce(args: {
         ...(args.candidate.sshTerminationTargetId
           ? { sshTerminationTargetId: args.candidate.sshTerminationTargetId }
           : {})
-      }
+      },
+      args.isCaptureAttemptCurrent
+        ? () => {
+            if (!args.isCaptureAttemptCurrent?.()) {
+              throw new TerminalArchiveError('capture-unavailable')
+            }
+          }
+        : undefined
     )
     try {
       await args.completeArchive?.({
