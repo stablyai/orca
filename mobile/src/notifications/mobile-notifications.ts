@@ -3,10 +3,18 @@ import { Platform } from 'react-native'
 import type { RpcClient } from '../transport/rpc-client'
 import { loadPushNotificationsEnabled } from '../storage/preferences'
 import { buildLocalNotificationData, type DesktopNotificationSource } from './notification-routing'
+// Re-exported so the existing importers (and their vi.mock paths) keep working.
+export {
+  ensureNotificationPermissions,
+  getNotificationPermissionState,
+  type NotificationPermissionState
+} from './notification-permissions'
+import { ensureNotificationPermissions } from './notification-permissions'
 import {
+  adoptNotificationEpoch,
   getHostNotificationSession,
-  loadLastSeenSeq,
   saveLastSeenSeq,
+  seedWatermarkFromStorage,
   seenKeyForEvent
 } from './notification-reconnect-catchup'
 
@@ -19,17 +27,22 @@ type NotificationEvent = {
   notificationId?: string
   // Desktop-assigned seq for reconnect catch-up (#8129); optional since older runtimes may omit it.
   notificationSeq?: number
+  // Counter lifetime the seq belongs to (#8591); absent on older runtimes.
+  notificationEpoch?: string
 }
 
 type DismissNotificationEvent = {
   type: 'dismiss'
   notificationId: string
   notificationSeq?: number
+  notificationEpoch?: string
 }
 
 type SubscribeResult = {
   type: 'ready'
   subscriptionId: string
+  // Desktop counter lifetime (#8591); absent from runtimes that predate it.
+  epoch?: string
 }
 
 type ScheduledNotificationState = {
@@ -68,36 +81,6 @@ function boundScheduledNotifications(): void {
 /** Test-only: override the cap (pass no arg to restore the default). */
 export function setScheduledNotificationsMaxForTests(max?: number): void {
   maxScheduledNotifications = max ?? MAX_SCHEDULED_NOTIFICATIONS
-}
-
-export type NotificationPermissionState = {
-  granted: boolean
-  status: string
-  canAskAgain: boolean
-  authorizationReflectsUserChoice: boolean
-}
-
-export async function getNotificationPermissionState(): Promise<NotificationPermissionState> {
-  const { status, canAskAgain } = await Notifications.getPermissionsAsync()
-  return {
-    granted: status === 'granted',
-    status,
-    canAskAgain,
-    // Why: Android <33 has no runtime notification permission, so "granted" is capability, not user consent.
-    authorizationReflectsUserChoice:
-      status === 'granted' && (Platform.OS !== 'android' || Number(Platform.Version) >= 33)
-  }
-}
-
-// Why: re-read OS state every call — users can change it in Settings while Orca is backgrounded.
-export async function ensureNotificationPermissions(): Promise<boolean> {
-  const existing = await getNotificationPermissionState()
-  if (existing.granted) {
-    return true
-  }
-
-  const { status } = await Notifications.requestPermissionsAsync()
-  return status === 'granted'
 }
 
 function configureNotificationChannel(): void {
@@ -239,6 +222,7 @@ export function subscribeToDesktopNotifications(client: RpcClient, hostId: strin
     type: 'notification' | 'dismiss',
     event: NotificationEvent | DismissNotificationEvent
   ): Promise<void> {
+    adoptNotificationEpoch(session, hostId, event.notificationEpoch)
     if (event.notificationSeq != null && event.notificationSeq > session.lastDeliveredSeq) {
       session.lastDeliveredSeq = event.notificationSeq
       void saveLastSeenSeq(hostId, session.lastDeliveredSeq)
@@ -260,12 +244,18 @@ export function subscribeToDesktopNotifications(client: RpcClient, hostId: strin
       return
     }
     const missed = await client
-      .sendRequest('notifications.getMissedSince', { lastSeenSeq: session.lastDeliveredSeq })
+      .sendRequest('notifications.getMissedSince', {
+        lastSeenSeq: session.lastDeliveredSeq,
+        // Why: sending the epoch lets the desktop reject a watermark from a counter
+        // it no longer has and return the whole retained buffer instead of nothing.
+        ...(session.lastDeliveredEpoch != null ? { epoch: session.lastDeliveredEpoch } : {})
+      })
       .then((response) => {
         if (!response.ok) {
           return []
         }
-        const result = response.result as { notifications?: unknown[] } | undefined
+        const result = response.result as { notifications?: unknown[]; epoch?: string } | undefined
+        adoptNotificationEpoch(session, hostId, result?.epoch)
         return Array.isArray(result?.notifications) ? result.notifications : []
       })
       .catch(() => [])
@@ -286,14 +276,7 @@ export function subscribeToDesktopNotifications(client: RpcClient, hostId: strin
     }
   }
 
-  // Why: seed the watermark lazily so subscribe() doesn't block on an AsyncStorage read.
-  // Only the first subscription for a host needs it; later ones inherit the live value.
-  if (!session.watermarkLoaded) {
-    void loadLastSeenSeq(hostId).then((seq) => {
-      session.lastDeliveredSeq = Math.max(session.lastDeliveredSeq, seq)
-      session.watermarkLoaded = true
-    })
-  }
+  seedWatermarkFromStorage(session, hostId)
 
   function unsubscribeServer(id: string) {
     if (client.getState() === 'connected') {
@@ -316,6 +299,10 @@ export function subscribeToDesktopNotifications(client: RpcClient, hostId: strin
         unsubscribeStream()
         return
       }
+      // Why before fetchMissed: adopting the epoch here is what voids a watermark
+      // left over from a previous desktop lifetime, so the catch-up request carries
+      // a watermark that means something against the counter now answering it.
+      adoptNotificationEpoch(session, hostId, (event as SubscribeResult).epoch)
       // Why: only reconnects fetch missed; watermarkLoaded guards against fetching from a stale 0 (which re-pushes everything).
       if (isReconnect && session.watermarkLoaded) {
         void fetchMissed()

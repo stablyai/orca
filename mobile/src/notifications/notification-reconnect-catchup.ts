@@ -10,9 +10,17 @@ import AsyncStorage from '@react-native-async-storage/async-storage'
 // against double-delivery for events that arrive on both the live stream and a
 // replay (e.g. a brief liveness spell before a reap).
 const LAST_SEQ_STORAGE_KEY_PREFIX = 'orca:mobileNotificationsLastSeq:'
+// Why (#8591): the watermark alone is meaningless after a desktop restart — the
+// counter it indexes is gone. Persist the epoch beside it so a reconnect can tell
+// "nothing missed" from "different counter" and refuse to trust a stale cut.
+const LAST_EPOCH_STORAGE_KEY_PREFIX = 'orca:mobileNotificationsLastEpoch:'
 
 function lastSeqStorageKey(hostId: string): string {
   return LAST_SEQ_STORAGE_KEY_PREFIX + encodeURIComponent(hostId)
+}
+
+function lastEpochStorageKey(hostId: string): string {
+  return LAST_EPOCH_STORAGE_KEY_PREFIX + encodeURIComponent(hostId)
 }
 
 export async function loadLastSeenSeq(hostId: string): Promise<number> {
@@ -22,6 +30,28 @@ export async function loadLastSeenSeq(hostId: string): Promise<number> {
     return Number.isFinite(parsed) && parsed > 0 ? parsed : 0
   } catch {
     return 0
+  }
+}
+
+// Null means "no epoch stored" — a watermark written before this field existed.
+export async function loadLastSeenEpoch(hostId: string): Promise<string | null> {
+  try {
+    const raw = await AsyncStorage.getItem(lastEpochStorageKey(hostId))
+    return raw != null && raw.length > 0 ? raw : null
+  } catch {
+    return null
+  }
+}
+
+export async function saveLastSeenEpoch(hostId: string, epoch: string): Promise<void> {
+  if (!epoch) {
+    return
+  }
+  try {
+    await AsyncStorage.setItem(lastEpochStorageKey(hostId), epoch)
+  } catch {
+    // Best-effort, same trade-off as saveLastSeenSeq: a lost epoch degrades to the
+    // seq-only cut, never to a wrong one.
   }
 }
 
@@ -83,6 +113,9 @@ export type HostNotificationSession = {
   // Highest desktop seq delivered for this host in this app process. Outranks
   // the persisted value, which lags because saveLastSeenSeq is fire-and-forget.
   lastDeliveredSeq: number
+  // Counter lifetime lastDeliveredSeq belongs to; null until one is known. A
+  // mismatch on reconnect means the desktop restarted and the watermark is void.
+  lastDeliveredEpoch: string | null
   seen: ReturnType<typeof createSeenNotificationGuard>
   // False only until the host's first subscription reaches 'ready' — a true cold open.
   connectedBefore: boolean
@@ -99,6 +132,7 @@ export function getHostNotificationSession(hostId: string): HostNotificationSess
   if (!session) {
     session = {
       lastDeliveredSeq: 0,
+      lastDeliveredEpoch: null,
       seen: createSeenNotificationGuard(),
       connectedBefore: false,
       watermarkLoaded: false
@@ -111,6 +145,50 @@ export function getHostNotificationSession(hostId: string): HostNotificationSess
 /** Test-only: drop per-host session state so each test starts from a cold open. */
 export function resetHostNotificationSessionsForTests(): void {
   sessionsByHost.clear()
+}
+
+// Why (#8591): the desktop's seq counter restarts at 0 every launch, so a watermark
+// from a previous lifetime indexes a counter that no longer exists. Comparing it
+// against the fresh counter makes `lastSeenSeq >= seq` true for everything and
+// catch-up dies silently until the new process out-dispatches the old watermark.
+// Adopting the new epoch means dropping the watermark with it.
+export function adoptNotificationEpoch(
+  session: HostNotificationSession,
+  hostId: string,
+  epoch: string | undefined
+): void {
+  if (!epoch || epoch === session.lastDeliveredEpoch) {
+    return
+  }
+  if (session.lastDeliveredEpoch !== null) {
+    // A real epoch change (not first observation): the old watermark is void.
+    session.lastDeliveredSeq = 0
+  }
+  session.lastDeliveredEpoch = epoch
+  void saveLastSeenEpoch(hostId, epoch)
+}
+
+// Why: seed the watermark lazily so subscribe() doesn't block on an AsyncStorage read.
+// Only the first subscription for a host needs it; later ones inherit the live value.
+export function seedWatermarkFromStorage(session: HostNotificationSession, hostId: string): void {
+  if (session.watermarkLoaded) {
+    return
+  }
+  void Promise.all([loadLastSeenSeq(hostId), loadLastSeenEpoch(hostId)]).then(([seq, epoch]) => {
+    // Why the epoch comparison: this read can land AFTER 'ready' already adopted a
+    // live epoch. If the stored watermark belongs to a different (older) counter,
+    // applying it here would silently reinstate exactly the stale cut this fixes.
+    // Only a stored epoch matching the live one — or no live one yet — can seed.
+    const storedSeqIsCurrent =
+      session.lastDeliveredEpoch === null || session.lastDeliveredEpoch === epoch
+    if (session.lastDeliveredEpoch === null && epoch !== null) {
+      session.lastDeliveredEpoch = epoch
+    }
+    if (storedSeqIsCurrent) {
+      session.lastDeliveredSeq = Math.max(session.lastDeliveredSeq, seq)
+    }
+    session.watermarkLoaded = true
+  })
 }
 
 // Why: key for the replay dedup guard. Uses notificationId when present, but

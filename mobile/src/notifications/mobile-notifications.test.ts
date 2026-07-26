@@ -494,6 +494,122 @@ describe('subscribeToDesktopNotifications — reconnect catch-up', () => {
     expect(scheduledIds.filter((id) => id === 'agent:dup')).toHaveLength(1)
   })
 
+  it('voids a persisted watermark whose epoch predates a desktop restart', async () => {
+    // #8591: the desktop's seq counter restarts at 0 each launch while this watermark
+    // is persisted. Reconnecting to a restarted desktop with seq 57 would make
+    // `57 >= 2` true and silently kill catch-up. The epoch on 'ready' is what tells
+    // the client the counter changed, so the stale watermark must be dropped.
+    vi.mocked(loadPushNotificationsEnabled).mockResolvedValue(true)
+    vi.mocked(Notifications.getPermissionsAsync).mockResolvedValue({
+      status: 'granted',
+      canAskAgain: true
+    } as never)
+    vi.mocked(Notifications.scheduleNotificationAsync).mockResolvedValue('scheduled-1')
+    vi.mocked(AsyncStorage.getItem).mockImplementation(async (key: string) =>
+      key.startsWith('orca:mobileNotificationsLastSeq:')
+        ? '57'
+        : key.startsWith('orca:mobileNotificationsLastEpoch:')
+          ? 'epoch-before-restart'
+          : null
+    )
+
+    const sub = makeClient()
+    subscribeToDesktopNotifications(sub.client, 'host-1')
+    // Cold open under the OLD desktop process, so the watermark loads as 57.
+    sub.onData?.({ type: 'ready', subscriptionId: 'sub-1', epoch: 'epoch-before-restart' })
+    await flushAsync()
+    await flushAsync()
+
+    // Desktop restarts: new epoch, counter back near 0.
+    sub.onData?.({ type: 'ready', subscriptionId: 'sub-2', epoch: 'epoch-after-restart' })
+    await flushAsync()
+    await flushAsync()
+
+    const missedCall = vi
+      .mocked(sub.client.sendRequest)
+      .mock.calls.find((c: unknown[]) => c[0] === 'notifications.getMissedSince')
+    // Watermark reset to 0 and tagged with the live epoch — not the stale 57.
+    expect(missedCall?.[1]).toEqual({ lastSeenSeq: 0, epoch: 'epoch-after-restart' })
+  })
+
+  it('refuses to seed a stored watermark that lost the race to a newer live epoch', async () => {
+    // The seed read is deliberately not awaited (so subscribe doesn't block on
+    // AsyncStorage), which means it can land AFTER 'ready' already adopted the live
+    // epoch. If it seeds unconditionally it reinstates the exact stale cut #8591 is
+    // about — the reset having already happened doesn't help, because the seed runs
+    // last and wins. Only a stored epoch matching the live one may seed.
+    vi.mocked(loadPushNotificationsEnabled).mockResolvedValue(true)
+    vi.mocked(Notifications.getPermissionsAsync).mockResolvedValue({
+      status: 'granted',
+      canAskAgain: true
+    } as never)
+    vi.mocked(Notifications.scheduleNotificationAsync).mockResolvedValue('scheduled-1')
+
+    // Hold the storage read open so 'ready' is guaranteed to be processed first.
+    let releaseStorage: () => void = () => {}
+    const storageGate = new Promise<void>((resolve) => {
+      releaseStorage = resolve
+    })
+    vi.mocked(AsyncStorage.getItem).mockImplementation(async (key: string) => {
+      await storageGate
+      return key.startsWith('orca:mobileNotificationsLastSeq:')
+        ? '57'
+        : key.startsWith('orca:mobileNotificationsLastEpoch:')
+          ? 'epoch-before-restart'
+          : null
+    })
+
+    const sub = makeClient()
+    subscribeToDesktopNotifications(sub.client, 'host-1')
+    // Live epoch adopted while the stored one is still in flight.
+    sub.onData?.({ type: 'ready', subscriptionId: 'sub-1', epoch: 'epoch-after-restart' })
+    await flushAsync()
+
+    releaseStorage()
+    await flushAsync()
+
+    sub.onData?.({ type: 'ready', subscriptionId: 'sub-2', epoch: 'epoch-after-restart' })
+    await flushAsync()
+    await flushAsync()
+
+    const missedCall = vi
+      .mocked(sub.client.sendRequest)
+      .mock.calls.find((c: unknown[]) => c[0] === 'notifications.getMissedSince')
+    expect(missedCall?.[1]).toEqual({ lastSeenSeq: 0, epoch: 'epoch-after-restart' })
+  })
+
+  it('keeps the persisted watermark when the desktop epoch is unchanged', async () => {
+    // The reset must be narrow: a plain socket reap with the same desktop process
+    // still has to send the real watermark, or every reconnect re-pushes the buffer.
+    vi.mocked(loadPushNotificationsEnabled).mockResolvedValue(true)
+    vi.mocked(Notifications.getPermissionsAsync).mockResolvedValue({
+      status: 'granted',
+      canAskAgain: true
+    } as never)
+    vi.mocked(Notifications.scheduleNotificationAsync).mockResolvedValue('scheduled-1')
+    vi.mocked(AsyncStorage.getItem).mockImplementation(async (key: string) =>
+      key.startsWith('orca:mobileNotificationsLastSeq:')
+        ? '57'
+        : key.startsWith('orca:mobileNotificationsLastEpoch:')
+          ? 'epoch-stable'
+          : null
+    )
+
+    const sub = makeClient()
+    subscribeToDesktopNotifications(sub.client, 'host-1')
+    sub.onData?.({ type: 'ready', subscriptionId: 'sub-1', epoch: 'epoch-stable' })
+    await flushAsync()
+    await flushAsync()
+    sub.onData?.({ type: 'ready', subscriptionId: 'sub-2', epoch: 'epoch-stable' })
+    await flushAsync()
+    await flushAsync()
+
+    const missedCall = vi
+      .mocked(sub.client.sendRequest)
+      .mock.calls.find((c: unknown[]) => c[0] === 'notifications.getMissedSince')
+    expect(missedCall?.[1]).toEqual({ lastSeenSeq: 57, epoch: 'epoch-stable' })
+  })
+
   it('drops an already-seen id if a replay re-includes it (defense-in-depth)', async () => {
     vi.mocked(loadPushNotificationsEnabled).mockResolvedValue(true)
     vi.mocked(Notifications.getPermissionsAsync).mockResolvedValue({
