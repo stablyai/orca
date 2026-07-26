@@ -65,6 +65,22 @@ describe('patched node-pty Windows Job Object contract', () => {
     expect(resume).toBeGreaterThan(assignJob)
   })
 
+  it('closes the suspended-thread handle after a successful resume', () => {
+    const native = patchedLines(patchSection('src/win/conpty.cc'))
+    const resume = native.indexOf('if (ResumeThread(piClient.hThread) == static_cast<DWORD>(-1))')
+    const failedResumeClose = native.indexOf('CloseHandle(piClient.hThread);', resume)
+    const failedResumeEnd = native.indexOf('\n    }\n', failedResumeClose)
+    const successfulResumeClose = native.indexOf(
+      '    CloseHandle(piClient.hThread);',
+      failedResumeEnd
+    )
+
+    expect(resume).toBeGreaterThanOrEqual(0)
+    expect(failedResumeClose).toBeGreaterThan(resume)
+    expect(failedResumeEnd).toBeGreaterThan(failedResumeClose)
+    expect(successfulResumeClose).toBeGreaterThan(failedResumeEnd)
+  })
+
   it('keeps Job Object cleanup race-safe and falls back to direct-root termination', () => {
     const native = patchedLines(patchSection('src/win/conpty.cc'))
 

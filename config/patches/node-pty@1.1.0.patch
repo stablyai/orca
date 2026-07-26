@@ -659,6 +659,7 @@ index 7b286d3d64..7434bcc994 100644
 +      (void)removed;
 +      throw errorWithCode(info, "Cannot resume process", resumeError);
 +    }
++    CloseHandle(piClient.hThread);
 +  }
 +
 @@ -441,3 +550,0 @@ static Napi::Value PtyConnect(const Napi::CallbackInfo& info) {

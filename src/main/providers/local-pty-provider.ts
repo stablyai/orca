@@ -66,6 +66,7 @@ import { PhysicalExitTracker } from '../../shared/physical-exit-tracker'
 import { mergeGitConfigEnvProtocol } from '../../shared/git-credential-prompt-env'
 import { PtyStartupIngress, type PtyIngressEmission } from '../../shared/pty-startup-ingress'
 import { resolvePtyOwnerBackend } from '../../shared/pty-owner-backend'
+import { isWslShellName } from '../../shared/local-windows-terminal-runtime'
 import {
   createPtySlaveEchoProbe,
   readPtySlavePath
@@ -87,6 +88,8 @@ const ptyProcesses = new Map<string, pty.IPty>()
 const ptyIncarnations = new Map<string, string>()
 // Why: agent sessions always sweep descendant trees; plain terminals preserve nohup children except on immediate win32 shutdown.
 const ptyAgentSessionIds = new Set<string>()
+// Why: only native ConPTY agent sessions receive kill-on-close Job Object ownership.
+const ptyWindowsJobObjectSessionIds = new Set<string>()
 // Why: descendant teardown is async, so reattach/duplicate shutdown must wait for the original owner, not return a dying PTY.
 type PtyShutdownOperation = {
   promise: Promise<void>
@@ -251,6 +254,7 @@ function clearPtyState(id: string): void {
   ptyProcesses.delete(id)
   ptyIncarnations.delete(id)
   ptyAgentSessionIds.delete(id)
+  ptyWindowsJobObjectSessionIds.delete(id)
   ptyShellName.delete(id)
   ptyAgentForegroundContextPaths.delete(id)
   ptyLastRecognizedForeground.delete(id)
@@ -893,6 +897,9 @@ export class LocalPtyProvider implements IPtyProvider {
     if (args.launchAgent || startupAgentRecognition) {
       ptyAgentSessionIds.add(id)
     }
+    if (process.platform === 'win32' && isAgentPty && !isWslShellName(shellPath)) {
+      ptyWindowsJobObjectSessionIds.add(id)
+    }
     ptyShellName.set(id, getSpawnedShellName(shellPath))
     if (finalEnv.ORCA_TERMINAL_HANDLE) {
       ptyTerminalHandle.set(id, finalEnv.ORCA_TERMINAL_HANDLE)
@@ -1158,7 +1165,7 @@ export class LocalPtyProvider implements IPtyProvider {
       operation.rootSignalled = true
       this.requestTrackedPtyShutdown(id, proc, operation.immediate)
     }
-    if (ptyAgentSessionIds.has(id) && process.platform === 'win32') {
+    if (ptyWindowsJobObjectSessionIds.has(id)) {
       // Why: Windows agent trees are owned by node-pty Job Objects (useConptyJobObject);
       // killRoot closing the job reaps descendants — taskkill /T is redundant.
       killRoot()
