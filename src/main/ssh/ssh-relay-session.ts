@@ -86,6 +86,7 @@ export type RelaySessionState = 'idle' | 'deploying' | 'ready' | 'reconnecting' 
 
 type SshPtyExitPayload = Parameters<SshPtyExitCallback>[0]
 type PendingPtyReattach = { exits: SshPtyExitPayload[] }
+type PendingArchivedExitRecovery = { archiveId: string; receiptDelivered: boolean }
 
 type RemoteCliBridgeEnv = {
   remoteHome: string
@@ -165,6 +166,7 @@ export class SshRelaySession {
   private forwardedReattachReplayByPty = new Map<string, ForwardedReplayFingerprint>()
   private pendingPtyReattaches = new Map<string, PendingPtyReattach>()
   private pendingPtyReviveState: string | null = null
+  private archivedExitRecoveryByPtyId = new Map<string, PendingArchivedExitRecovery>()
 
   constructor(
     readonly targetId: string,
@@ -958,12 +960,25 @@ export class SshRelaySession {
 
   private retireExitedPty(payload: SshPtyExitPayload): void {
     const relayPtyId = toRelaySshPtyId(this.targetId, payload.id)
+    const recovery = this.archivedExitRecoveryByPtyId.get(payload.id)
+    this.archivedExitRecoveryByPtyId.delete(payload.id)
     clearProviderPtyState(payload.id)
     deletePtyOwnership(payload.id)
     this.forwardedReattachReplayByPty.delete(payload.id)
     this.store.markSshRemotePtyLease(this.targetId, relayPtyId, 'terminated')
     this.runtime?.onPtyExit(payload.id, payload.code, payload.incarnationId)
-    routeExternalPtyExit(payload)
+    if (recovery?.receiptDelivered) {
+      return
+    }
+    if (!recovery) {
+      routeExternalPtyExit(payload)
+      return
+    }
+    routeExternalPtyExit({
+      id: payload.id,
+      code: payload.code,
+      lostWorkerRecovery: { kind: 'archived', archiveId: recovery.archiveId }
+    })
   }
 
   private replayFingerprint(data: string): string {
@@ -1162,6 +1177,10 @@ export class SshRelaySession {
     tabId: string
   ): Promise<void> {
     const provider = getSshPtyProvider(this.targetId) as SshPtyProvider | undefined
+    for (const ptyId of ptyIds) {
+      // Why: shutdown can synchronously emit onExit, which must carry the archive receipt instead of a normal exit.
+      this.archivedExitRecoveryByPtyId.set(ptyId, { archiveId, receiptDelivered: false })
+    }
     const outcomes = provider
       ? await Promise.allSettled(
           ptyIds.map((ptyId) => provider.shutdown(ptyId, { immediate: true, keepHistory: false }))
@@ -1190,14 +1209,18 @@ export class SshRelaySession {
       }
       clearProviderPtyState(ptyId)
       deletePtyOwnership(ptyId)
-      routeExternalPtyExit({
-        id: ptyId,
-        code: -1,
-        lostWorkerRecovery: {
-          kind: 'archived',
-          archiveId
-        }
-      })
+      const recovery = this.archivedExitRecoveryByPtyId.get(ptyId)
+      if (recovery && !recovery.receiptDelivered) {
+        recovery.receiptDelivered = true
+        routeExternalPtyExit({
+          id: ptyId,
+          code: -1,
+          lostWorkerRecovery: {
+            kind: 'archived',
+            archiveId: recovery.archiveId
+          }
+        })
+      }
     }
   }
 

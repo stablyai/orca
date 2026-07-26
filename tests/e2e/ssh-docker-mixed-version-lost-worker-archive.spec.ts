@@ -41,7 +41,6 @@ const RUN_DOCKER_SSH = process.env.ORCA_E2E_SSH_DOCKER === '1'
 
 type PersistedData = {
   terminalArchivesById?: Record<string, { reason?: string; sourceTabId?: string }>
-  sshRemotePtyLeases?: { state?: string; tabId?: string; targetId?: string }[]
   workspaceSessionsByHostId?: Record<
     string,
     {
@@ -65,7 +64,6 @@ type DockerRelayScenario = {
 
 type DurableRelayState = {
   archiveIds: string[]
-  leaseStates: string[]
   tabInTabsByWorktree: boolean
   tabInUnifiedTabs: boolean
 }
@@ -89,7 +87,6 @@ function readDurableRelayState(
   if (!existsSync(statePath)) {
     return {
       archiveIds: [],
-      leaseStates: [],
       tabInTabsByWorktree: false,
       tabInUnifiedTabs: false
     }
@@ -102,9 +99,6 @@ function readDurableRelayState(
         ([, archive]) => archive.reason === 'relay-worker-lost' && archive.sourceTabId === tabId
       )
       .map(([archiveId]) => archiveId),
-    leaseStates: (data.sshRemotePtyLeases ?? [])
-      .filter((lease) => lease.targetId === targetId && lease.tabId === tabId)
-      .map((lease) => lease.state ?? 'missing-state'),
     tabInTabsByWorktree: (session?.tabsByWorktree?.[worktreeId] ?? []).some(
       (tab) => tab.id === tabId
     ),
@@ -278,7 +272,19 @@ test.describe('Docker SSH mixed-version lost-worker archive', () => {
         .poll(() => readDockerRelayProbe(scenario.target, scenario.probe.revivePath))
         .toEqual(['revive:typed'])
       const archiveId = await waitForSingleArchive(scenario)
-      const durable = await typedArchiveDurabilityProbe(scenario)
+      await typedArchiveDurabilityProbe(scenario)
+      await expect.poll(() => inspectTabDom(scenario.page, scenario.tabId)).toEqual([])
+      await expect
+        .poll(() =>
+          scenario.page.locator(`[data-pty-id=${JSON.stringify(scenario.ptyId)}]`).count()
+        )
+        .toBe(0)
+      const durable = readDurableRelayState(
+        scenario.userDataDir,
+        scenario.targetId,
+        scenario.tabId,
+        scenario.worktreeId
+      )
       const remainingTabDom = await inspectTabDom(scenario.page, scenario.tabId)
       const remainingPtyDom = await scenario.page
         .locator(`[data-pty-id=${JSON.stringify(scenario.ptyId)}]`)
@@ -289,11 +295,10 @@ test.describe('Docker SSH mixed-version lost-worker archive', () => {
           remainingPtyDom,
           remainingTabDom
         },
-        'typed archive must retire the main durable tab, expire its SSH lease, and remove every DOM tab node'
+        'typed archive must retire the main durable tab and remove every DOM tab node'
       ).toEqual({
         durable: {
           archiveIds: [archiveId],
-          leaseStates: ['expired'],
           tabInTabsByWorktree: false,
           tabInUnifiedTabs: false
         },
@@ -367,9 +372,9 @@ test.describe('Docker SSH mixed-version lost-worker archive', () => {
   })
 
   // oxlint-disable-next-line no-empty-pattern -- Playwright fixture callbacks require object destructuring here.
-  test('archives a split relay tab without leaving a replacement shell beside it', async ({}, testInfo) => {
+  test('archives a split relay tab when a lost worker has a revived ordinary sibling', async ({}, testInfo) => {
     test.slow()
-    await withDockerRelayScenario(testInfo, 'typed-lost', async (scenario) => {
+    await withDockerRelayScenario(testInfo, 'typed-mixed', async (scenario) => {
       await splitActiveTerminalPane(scenario.page, 'vertical')
       await expect
         .poll(() =>
