@@ -321,21 +321,19 @@ type PaletteItem =
 
 type PaletteListEntry = PaletteItem | CreateWorktreePaletteItem | SectionHeader | HintRow
 
-// Why: the arrow-key selectable set is derived by excluding these types, so a new
-// plain-div row type must be added there too or it becomes highlightable but
-// unfocusable. Fails the build in both directions if the two lists drift apart.
+// Why: isSelectableWorktreePaletteEntry() excludes exactly these row types, so a new
+// plain-div row type must be excluded there too or it becomes highlightable but
+// unfocusable. Fails the build in both directions if the two sets drift apart.
 type NonSelectablePaletteEntryType = Exclude<
   PaletteListEntry,
   PaletteItem | CreateWorktreePaletteItem
 >['type']
+type ExcludedByPredicate = 'section-header' | 'hint'
 type _UnlistedNonSelectableType = Exclude<
   NonSelectablePaletteEntryType,
-  (typeof NON_SELECTABLE_WORKTREE_PALETTE_ENTRY_TYPES)[number]
+  ExcludedByPredicate
 >
-type _ListedSelectableType = Exclude<
-  (typeof NON_SELECTABLE_WORKTREE_PALETTE_ENTRY_TYPES)[number],
-  NonSelectablePaletteEntryType
->
+type _ListedSelectableType = Exclude<ExcludedByPredicate, NonSelectablePaletteEntryType>
 const _exhaustive: [_UnlistedNonSelectableType | _ListedSelectableType] extends [never]
   ? true
   : never = true
