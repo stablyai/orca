@@ -62,10 +62,15 @@ test.describe('Terminal shortcut conflicting with a chord that fires in terminal
     await orcaPage.getByRole('button', { name: /Conflicts/ }).click()
     await capture('3-conflicts-filter')
 
-    // The other claimant kept its default and must not be flagged.
+    // The other claimant kept its default and must not be flagged. Asserting the
+    // row is visible is not enough — a regression that warns on both rows would
+    // still pass, so require the warning to be absent.
     await orcaPage.getByRole('button', { name: /^All/ }).click()
     await localSearch.fill('worktree history')
     await expect(orcaPage.getByText('Worktree History Forward', { exact: true })).toBeVisible()
+    await expect(
+      orcaPage.getByText('was ignored — it conflicts with Split terminal right', { exact: false })
+    ).toHaveCount(0)
     await capture('4-other-action-untouched')
 
     await localSearch.fill('split terminal')
