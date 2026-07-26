@@ -109,7 +109,7 @@ export const getAgentCatalog = createLocalizedCatalog((): AgentCatalogEntry[] =>
     label: translate('auto.lib.agent.catalog.060d152fb5', 'Trae'),
     cmd: 'trae-cli',
     faviconDomain: 'docs.trae.cn',
-    homepageUrl: 'https://docs.trae.cn/cli'
+    homepageUrl: 'https://docs.trae.cn/cli_get-started-with-trae-cli'
   },
   {
     id: 'pi',
