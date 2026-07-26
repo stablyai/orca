@@ -19,17 +19,7 @@ export async function getOwnerRepo(
   return getOwnerRepoForRemote(repoPath, 'origin', connectionId, localGitOptions)
 }
 
-export async function getIssueOwnerRepo(
-  repoPath: string,
-  connectionId?: string | null,
-  localGitOptions: LocalGitExecOptions = {}
-): Promise<OwnerRepo | null> {
-  const upstream = await getOwnerRepoForRemote(repoPath, 'upstream', connectionId, localGitOptions)
-  if (upstream) {
-    return upstream
-  }
-  return getOwnerRepoForRemote(repoPath, 'origin', connectionId, localGitOptions)
-}
+export const getIssueOwnerRepo = getOwnerRepo
 
 export type PRRepositoryCandidates = {
   candidates: OwnerRepo[]
@@ -41,8 +31,10 @@ export async function resolvePRRepositoryCandidates(
   connectionId?: string | null,
   localGitOptions: LocalGitExecOptions = {}
 ): Promise<PRRepositoryCandidates> {
-  const upstream = await getOwnerRepoForRemote(repoPath, 'upstream', connectionId, localGitOptions)
-  const origin = await getOwnerRepoForRemote(repoPath, 'origin', connectionId, localGitOptions)
+  const [upstream, origin] = await Promise.all([
+    getOwnerRepoForRemote(repoPath, 'upstream', connectionId, localGitOptions),
+    getOwnerRepoForRemote(repoPath, 'origin', connectionId, localGitOptions)
+  ])
   const seen = new Set<string>()
   const candidates: OwnerRepo[] = []
 

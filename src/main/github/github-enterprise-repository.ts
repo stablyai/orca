@@ -238,9 +238,18 @@ export async function getEnterpriseGitHubRepoSlugForRemote(
   const aliasHost = remoteUrl ? gitHubSshConfigHostAlias(remoteUrl) : null
   if (aliasHost) {
     const { hostname, resolved } = await resolveSshConfigHostname(aliasHost, context)
-    if (resolved && hostname) {
-      effectiveHost = effectiveGitHubRemoteHost(identity.host, hostname)
+    if (!resolved || !hostname) {
+      const authenticatedLiteralHost = await resolveAuthenticatedGitHubHost(
+        identity.host,
+        repoPath,
+        connectionId,
+        localGitOptions
+      )
+      return authenticatedLiteralHost
+        ? { owner: identity.owner, repo: identity.repo, host: authenticatedLiteralHost }
+        : undefined
     }
+    effectiveHost = effectiveGitHubRemoteHost(identity.host, hostname)
   }
   if (effectiveHost === 'github.com') {
     return null

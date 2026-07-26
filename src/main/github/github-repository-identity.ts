@@ -1,6 +1,6 @@
 import { gitExecFileAsync } from '../git/runner'
 import type { GitHubOwnerRepo } from '../../shared/types'
-import { getSshGitProvider } from '../providers/ssh-git-dispatch'
+import { getSshGitProvider, getSshGitProviderGeneration } from '../providers/ssh-git-dispatch'
 import { readLocalGitConfigSignature } from './local-git-config-signature'
 import {
   parseGitHubOwnerRepo,
@@ -122,7 +122,9 @@ export async function getOwnerRepoForRemote(
   localGitOptions: LocalGitExecOptions = {}
 ): Promise<OwnerRepo | null> {
   const context = githubRepoContext(repoPath, connectionId, localGitOptions)
-  const runtimeKey = context.connectionId ?? `local:${context.wslDistro ?? 'host'}`
+  const runtimeKey = context.connectionId
+    ? `ssh:${context.connectionId}:${getSshGitProviderGeneration(context.connectionId)}`
+    : `local:${context.wslDistro ?? 'host'}`
   const cacheKey = `${runtimeKey}\0${context.repoPath}\0${remoteName}`
   const now = Date.now()
   pruneOwnerRepoCache(now)

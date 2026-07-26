@@ -16,6 +16,7 @@ export type GitHubOwnerRepoResolution =
   | { kind: 'indeterminate' }
 
 const SSH_HOSTNAME_CACHE_TTL_MS = 60_000
+const SSH_HOSTNAME_FAILURE_CACHE_TTL_MS = 5_000
 const SSH_HOSTNAME_CACHE_MAX = 256
 const SSH_G_TIMEOUT_MS = 5_000
 
@@ -122,7 +123,7 @@ export async function resolveSshConfigHostname(
   hostname: string | null
   resolved: boolean
 }> {
-  const cacheKey = `${sshRuntimeCacheKey(context)}\0${host.toLowerCase()}`
+  const cacheKey = `${sshRuntimeCacheKey(context)}\0${host}`
   const now = Date.now()
   pruneSshHostnameCache(now)
   const cached = sshHostnameCache.get(cacheKey)
@@ -140,7 +141,8 @@ export async function resolveSshConfigHostname(
     const entry: SshHostnameCacheEntry = {
       hostname: resolved ? hostname : null,
       resolved,
-      expiresAt: Date.now() + (resolved ? SSH_HOSTNAME_CACHE_TTL_MS : 5_000)
+      expiresAt:
+        Date.now() + (resolved ? SSH_HOSTNAME_CACHE_TTL_MS : SSH_HOSTNAME_FAILURE_CACHE_TTL_MS)
     }
     sshHostnameCache.set(cacheKey, entry)
     pruneSshHostnameCache(Date.now())

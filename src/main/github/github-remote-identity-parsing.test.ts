@@ -137,8 +137,10 @@ describe('SSH Host alias identity (#10284)', () => {
     expect(gitHubSshConfigHostAlias('https://github.com/team/orca.git')).toBeNull()
   })
 
-  it('preserves SCP Host alias case for OpenSSH Host matching', () => {
+  it('preserves SSH Host alias case for OpenSSH Host matching', () => {
     expect(gitHubSshConfigHostAlias('git@GitHub-Work:team/orca.git')).toBe('GitHub-Work')
+    expect(gitHubSshConfigHostAlias('ssh://git@GitHub-Work/team/orca.git')).toBe('GitHub-Work')
+    expect(gitHubSshConfigHostAlias('git+ssh://git@GitHub-Work/team/orca.git')).toBe('GitHub-Work')
   })
 
   it('returns owner/repo when resolved HostName is github.com', () => {

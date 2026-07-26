@@ -156,6 +156,7 @@ vi.mock('../source-control/hosted-review', () => ({
 }))
 
 vi.mock('../providers/ssh-git-dispatch', () => ({
+  getSshGitProviderGeneration: () => 0,
   getSshGitProvider: getSshGitProviderMock,
   SSH_GIT_PROVIDER_UNAVAILABLE_MESSAGE:
     'Remote connection dropped. Click Reconnect on the SSH target before retrying.',

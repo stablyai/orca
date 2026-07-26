@@ -123,6 +123,26 @@ describe('getEnterpriseGitHubRepoSlug', () => {
     expect(resolveWithSshGMock).toHaveBeenCalledWith('ghe-work')
   })
 
+  it('keeps a failed GHES alias probe indeterminate and recovers on retry', async () => {
+    vi.useFakeTimers()
+    mockOriginRemote('git@ghe-work:team/orca.git')
+    resolveWithSshGMock
+      .mockResolvedValueOnce(null)
+      .mockResolvedValueOnce(sshConfig('github.acme-corp.com'))
+    mockHostNotAuthenticated()
+
+    await expect(getEnterpriseGitHubRepoSlug('/repo')).resolves.toBeUndefined()
+
+    await vi.advanceTimersByTimeAsync(5_001)
+    ghExecFileAsyncMock.mockReset()
+    mockHostAuthenticated('github.acme-corp.com')
+    await expect(getEnterpriseGitHubRepoSlug('/repo')).resolves.toEqual({
+      owner: 'team',
+      repo: 'orca',
+      host: 'github.acme-corp.com'
+    })
+  })
+
   it('returns null for a Host alias that resolves to github.com (dotcom path owns it)', async () => {
     mockOriginRemote('git@github-work:team/orca.git')
     resolveWithSshGMock.mockResolvedValueOnce(sshConfig('ssh.github.com', 443))

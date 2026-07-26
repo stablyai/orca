@@ -71,10 +71,10 @@ function mockRemoteUrl(url: string): void {
   })
 }
 
-function sshProvider(hostname: string) {
+function sshProvider(hostname: string, remoteUrl = 'git@github-work:team/orca.git') {
   return {
     exec: vi.fn().mockResolvedValue({
-      stdout: 'git@github-work:team/orca.git\n',
+      stdout: `${remoteUrl}\n`,
       stderr: ''
     }),
     execNonInteractive: vi.fn().mockResolvedValue({
@@ -210,6 +210,27 @@ describe('#10284 SSH Host alias → github.com owner/repo', () => {
     ).resolves.toBeNull()
   })
 
+  it('invalidates owner/repo identity when an SSH provider reconnects', async () => {
+    getSshGitProviderGenerationMock.mockReturnValue(1)
+    getSshGitProviderMock.mockReturnValue(
+      sshProvider('github.com', 'git@github-work:team/orca.git')
+    )
+
+    await expect(getOwnerRepoForRemote('/remote/repo', 'origin', 'ssh-1')).resolves.toEqual({
+      owner: 'team',
+      repo: 'orca'
+    })
+
+    getSshGitProviderGenerationMock.mockReturnValue(2)
+    getSshGitProviderMock.mockReturnValue(
+      sshProvider('github.com', 'git@github-work:acme/widgets.git')
+    )
+    await expect(getOwnerRepoForRemote('/remote/repo', 'origin', 'ssh-1')).resolves.toEqual({
+      owner: 'acme',
+      repo: 'widgets'
+    })
+  })
+
   it('does not call ssh -G for literal github.com remotes', async () => {
     mockRemoteUrl('git@github.com:team/orca.git')
 
@@ -306,6 +327,26 @@ describe('#10284 SSH Host alias → github.com owner/repo', () => {
       repo: 'orca'
     })
     expect(resolveWithSshGMock).toHaveBeenCalledTimes(1)
+  })
+
+  it('isolates case-sensitive OpenSSH Host aliases in the cache', async () => {
+    resolveWithSshGMock.mockImplementation(async (host: string) =>
+      sshConfig(host === 'GitHub-Work' ? 'github.com' : 'gitlab.com')
+    )
+
+    await expect(
+      classifyGitHubOwnerRepoFromRemoteUrl('git@GitHub-Work:team/orca.git')
+    ).resolves.toEqual({
+      kind: 'github',
+      ownerRepo: { owner: 'team', repo: 'orca' }
+    })
+    await expect(
+      classifyGitHubOwnerRepoFromRemoteUrl('git@github-work:team/orca.git')
+    ).resolves.toEqual({
+      kind: 'not-github',
+      cacheWithGitConfigSignature: false
+    })
+    expect(resolveWithSshGMock).toHaveBeenCalledTimes(2)
   })
 
   it('classifies a resolved non-GitHub HostName as not-github', async () => {
