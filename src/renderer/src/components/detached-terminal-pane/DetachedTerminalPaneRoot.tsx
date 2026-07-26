@@ -115,6 +115,32 @@ export function DetachedTerminalPaneRoot({
     }))
   }
 
+  const handleCloseTab = (): void => {
+    // Remove the active tab from the seed so it stays gone (no reintegrate).
+    // If it was the only tab, close the window. Otherwise switch to another tab.
+    if (!seed || !activeSeedTab) {
+      window.close()
+      return
+    }
+    const remaining = detachedTabs.filter((entry) => entry.tab.id !== activeSeedTab.tab.id)
+    if (remaining.length === 0) {
+      // Last tab: kill the PTY so it doesn't leak, then close the window.
+      if (activeSeedTab.ptyId) {
+        void window.api.pty.kill(activeSeedTab.ptyId)
+      }
+      window.close()
+      return
+    }
+    // Rebuild the seed with the tab removed.
+    const primary = remaining[0]
+    const nextSeed: DetachedTerminalTabSeed = {
+      ...primary,
+      additionalTabs: remaining.slice(1).length > 0 ? remaining.slice(1) : undefined
+    }
+    applyDetachedTerminalTabSeed(nextSeed, primary.tab.id)
+    setSeed(nextSeed)
+    setActiveSeedTabId(primary.tab.id)
+  }
   const handleReintegrate = (): void => {
     if (reintegratingRef.current) {
       return
@@ -186,7 +212,7 @@ export function DetachedTerminalPaneRoot({
           isActive
           isVisible
           onPtyExit={() => undefined}
-          onCloseTab={handleReintegrate}
+          onCloseTab={handleCloseTab}
         />
       </div>
     </div>
