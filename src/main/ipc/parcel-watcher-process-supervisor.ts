@@ -1,26 +1,28 @@
 import type { ChildProcess } from 'node:child_process'
 import { existsSync } from 'node:fs'
+import { restartCancelledWatcherChild } from './parcel-watcher-cancellation-restart'
+import { WatcherCancellationTracker } from './parcel-watcher-cancellation-tracker'
 import { getWatcherProcessEntryPath } from './parcel-watcher-entry-path'
 import { removeWatcherCanaryDirectory } from './parcel-watcher-canary-directory'
+import * as termination from './parcel-watcher-child-termination'
 import { launchWatcherChild } from './parcel-watcher-child-launch'
-import { WatcherProcessCrashFuse } from './parcel-watcher-crash-fuse'
+import { sendToWatcherChild } from './parcel-watcher-child-messaging'
 import {
-  disposeWatcherSupervisorSubscriptions,
-  failAllWatcherSubscriptions,
-  handleWatcherHostMessage,
+  recoverWatcherRecordsAfterChildGone,
+  terminateDisconnectedWatcherChild
+} from './parcel-watcher-child-recovery'
+import { resetWatcherChildRegistryForTest } from './parcel-watcher-child-registry'
+import { WatcherSupervisorCapacityWait } from './parcel-watcher-supervisor-capacity-wait'
+import { WatcherProcessCrashFuse } from './parcel-watcher-crash-fuse'
+import { cancelInterruptedWatcherSubscribe } from './parcel-watcher-interrupted-cancellation'
+import {
+  type PendingWatcherUnsubscribe,
   reportWatcherTerminalError,
   resolvePendingWatcherUnsubscribes
 } from './parcel-watcher-host-subscriptions'
-import {
-  resetPendingSubscribeAttempt,
-  startInterruptedSubscribeTimeout,
-  startPendingSubscribeTimeout,
-  takePendingSubscribe
-} from './parcel-watcher-pending-subscribe'
-import { watcherHostFailure } from './parcel-watcher-process-failure'
+import { cancelPendingWatcherSubscribe } from './parcel-watcher-pending-cancellation'
 import type { WatcherProcessFailure } from './parcel-watcher-process-failure'
 import type {
-  HostToWatcherMessage,
   WatcherProcessSubscribeOptions,
   WatcherToHostMessage
 } from './parcel-watcher-process-protocol'
@@ -31,14 +33,12 @@ import type {
   WatcherProcessSubscriptionRecord
 } from './parcel-watcher-process-subscription'
 import type { WatcherProcessSupervisorOptions } from './parcel-watcher-process-supervisor-options'
-import { subscribeThroughWatcherSupervisor } from './parcel-watcher-supervisor-subscribe'
-
-export type {
-  WatcherProcessCallback,
-  WatcherProcessHooks,
-  WatcherProcessSubscription
-} from './parcel-watcher-process-subscription'
-export type { WatcherProcessSupervisorOptions } from './parcel-watcher-process-supervisor-options'
+import {
+  sendWatcherSubscribe,
+  subscribeThroughWatcherSupervisor
+} from './parcel-watcher-supervisor-subscribe'
+import { disposeWatcherSupervisor } from './parcel-watcher-supervisor-disposal'
+import { handleWatcherSupervisorMessage } from './parcel-watcher-supervisor-message'
 
 export class WatcherProcessSupervisor {
   private child: ChildProcess | null = null
@@ -46,9 +46,12 @@ export class WatcherProcessSupervisor {
   private readonly crashFuse = new WatcherProcessCrashFuse()
   private shutdownRequested = false
   private canaryDir: string | null = null
+  private terminatingChild: ChildProcess | null = null
+  private readonly terminationQueue = new termination.WatcherTerminationQueue()
   private readonly records = new Map<number, WatcherProcessSubscriptionRecord>()
-  private readonly pendingUnsubscribes = new Map<number, () => void>()
-  private readonly cancelledSubscribesAwaitingChild = new Set<number>()
+  private readonly pendingUnsubscribes = new Map<number, PendingWatcherUnsubscribe>()
+  private readonly cancelledSubscribes = new WatcherCancellationTracker()
+  private readonly capacityWait = new WatcherSupervisorCapacityWait()
 
   constructor(private readonly options: WatcherProcessSupervisorOptions = {}) {}
 
@@ -58,51 +61,63 @@ export class WatcherProcessSupervisor {
     opts: WatcherProcessSubscribeOptions,
     hooks: WatcherProcessHooks = {}
   ): Promise<WatcherProcessSubscription> {
-    return subscribeThroughWatcherSupervisor({
-      dir,
-      callback,
-      opts,
-      hooks,
-      shutdownRequested: this.shutdownRequested,
-      entryPath: this.options.entryPath ?? getWatcherProcessEntryPath(),
-      useInProcessVitestFallback: this.options.useInProcessVitestFallback ?? true,
-      allocateId: () => this.nextSubscriptionId++,
-      records: this.records,
-      pendingUnsubscribes: this.pendingUnsubscribes,
-      ensureWatcherProcess: (entryPath) => this.ensureWatcherProcess(entryPath),
-      getChild: () => this.child,
-      killWatcherChildIfIdle: () => this.killWatcherChildIfIdle(),
-      sendSubscribe: (child, record) => this.sendSubscribe(child, record),
-      sendToChild: (child, message) => this.sendToChild(child, message),
-      cancelPendingSubscribe: (record, error) => this.cancelPendingSubscribe(record, error)
-    })
+    const queued = this.terminationQueue.waitFor(() => this.subscribe(dir, callback, opts, hooks))
+    if (queued) {
+      return queued
+    }
+    return this.capacityWait.run(
+      subscribeThroughWatcherSupervisor({
+        dir,
+        callback,
+        opts,
+        hooks,
+        shutdownRequested: this.shutdownRequested,
+        entryPath: this.options.entryPath ?? getWatcherProcessEntryPath(),
+        useInProcessVitestFallback: this.options.useInProcessVitestFallback ?? true,
+        allocateId: () => this.nextSubscriptionId++,
+        records: this.records,
+        pendingUnsubscribes: this.pendingUnsubscribes,
+        ensureWatcherProcess: (entryPath) => this.ensureWatcherProcess(entryPath),
+        getChild: () => this.child,
+        getTerminationPromise: () => this.terminationQueue.getCurrent(),
+        killWatcherChildIfIdle: () => this.killWatcherChildIfIdle(),
+        terminateUnavailableChild: (child) => this.terminateUnavailableChild(child),
+        sendSubscribe: sendWatcherSubscribe,
+        sendToChild: sendToWatcherChild,
+        cancelPendingSubscribe: (record, error) => this.cancelPendingSubscribe(record, error)
+      }),
+      () => this.subscribe(dir, callback, opts, hooks),
+      hooks.signal
+    )
   }
 
   dispose(): void {
     this.shutdownRequested = true
+    this.capacityWait.dispose()
     const proc = this.child
     this.child = null
-    const error = watcherHostFailure('file watcher supervisor disposed', 'supervisor_disposed')
-    disposeWatcherSupervisorSubscriptions(
+    this.canaryDir = disposeWatcherSupervisor(
+      proc,
       this.records,
       this.pendingUnsubscribes,
-      this.cancelledSubscribesAwaitingChild,
-      error
+      this.cancelledSubscribes,
+      this.canaryDir
     )
-    proc?.kill()
-    this.canaryDir = removeWatcherCanaryDirectory(this.canaryDir)
   }
 
   resetForTest(): void {
     this.dispose()
     this.shutdownRequested = false
+    this.terminatingChild = null
+    this.terminationQueue.resetForTest()
     this.crashFuse.reset()
+    resetWatcherChildRegistryForTest()
   }
 
   private ensureWatcherProcess(
     entryPath = this.options.entryPath ?? getWatcherProcessEntryPath()
   ): ChildProcess | null {
-    if (this.shutdownRequested) {
+    if (this.shutdownRequested || this.terminatingChild) {
       return null
     }
     if (this.child?.connected) {
@@ -135,43 +150,30 @@ export class WatcherProcessSupervisor {
   }
 
   private handleChildMessage(message: WatcherToHostMessage): void {
-    if (message.op === 'subscribe-started') {
-      const record = this.records.get(message.id)
-      if (record) {
-        startPendingSubscribeTimeout(record, (error) => this.cancelPendingSubscribe(record, error))
-        startInterruptedSubscribeTimeout(record, (error) =>
-          this.cancelInterruptedSubscribe(record, error)
-        )
-      }
-      return
-    }
-    if (message.op === 'cancel-requires-restart') {
-      if (this.cancelledSubscribesAwaitingChild.delete(message.id)) {
-        this.restartAfterCancelledSubscribe()
-      }
-      return
-    }
-    if (message.op === 'unsubscribed') {
-      const completedCancellation = this.cancelledSubscribesAwaitingChild.delete(message.id)
-      handleWatcherHostMessage(
-        message,
-        this.records,
-        this.pendingUnsubscribes,
-        reportWatcherTerminalError,
-        () => this.killWatcherChildIfIdle()
-      )
-      if (completedCancellation) {
-        this.killWatcherChildIfIdle()
-      }
-      return
-    }
-    handleWatcherHostMessage(
-      message,
-      this.records,
-      this.pendingUnsubscribes,
-      reportWatcherTerminalError,
-      () => this.killWatcherChildIfIdle()
-    )
+    const child = this.child
+    handleWatcherSupervisorMessage(message, {
+      records: this.records,
+      pendingUnsubscribes: this.pendingUnsubscribes,
+      cancelledSubscribes: this.cancelledSubscribes,
+      child,
+      cancelPendingSubscribe: (record, error) => this.cancelPendingSubscribe(record, error),
+      cancelInterruptedSubscribe: (record, error) =>
+        cancelInterruptedWatcherSubscribe({
+          record,
+          error,
+          records: this.records,
+          reportTerminalError: reportWatcherTerminalError,
+          restartChild: () => this.restartAfterCancelledSubscribe(child)
+        }),
+      restartAfterCancelledSubscribe: (child) => this.restartAfterCancelledSubscribe(child),
+      terminateUnavailableChild: (child) => {
+        if (child) {
+          this.terminateUnavailableChild(child)
+        }
+      },
+      killWatcherChildIfIdle: () =>
+        termination.ignoreWatcherTermination(this.killWatcherChildIfIdle())
+    })
   }
 
   private handleChildGone(
@@ -182,135 +184,131 @@ export class WatcherProcessSupervisor {
     if (this.child !== proc) {
       return
     }
-    if (code !== undefined && (code !== 0 || signal)) {
-      console.error(
-        `[parcel-watcher-process] watcher process exited (code=${code}, signal=${signal})`
-      )
+    if (code === undefined) {
+      this.terminateUnavailableChild(proc)
+      return
     }
     this.child = null
-    this.cancelledSubscribesAwaitingChild.clear()
+    this.cancelledSubscribes.completeForChild(proc)
     resolvePendingWatcherUnsubscribes(this.pendingUnsubscribes)
-    if (this.shutdownRequested || this.records.size === 0) {
-      return
-    }
-    this.crashFuse.recordCrash()
-    for (const record of this.records.values()) {
-      record.interrupted = true
-      resetPendingSubscribeAttempt(record)
-    }
-    const replacement = this.ensureWatcherProcess()
-    if (!replacement) {
-      console.error(
-        '[parcel-watcher-process] watcher process crashed repeatedly; disabling file watching'
-      )
-      failAllWatcherSubscriptions(
-        this.records,
-        watcherHostFailure('file watcher process crashed repeatedly', 'supervisor_crash_fuse')
-      )
-      this.canaryDir = removeWatcherCanaryDirectory(this.canaryDir)
-      return
-    }
-    console.error(
-      `[parcel-watcher-process] watcher process crashed; resubscribing ${this.records.size} root(s)`
+    recoverWatcherRecordsAfterChildGone(
+      this.records,
+      this.crashFuse,
+      this.shutdownRequested,
+      () => this.ensureWatcherProcess(),
+      sendWatcherSubscribe,
+      () => {
+        this.canaryDir = removeWatcherCanaryDirectory(this.canaryDir)
+      },
+      code,
+      signal
     )
-    for (const record of this.records.values()) {
-      this.sendSubscribe(replacement, record)
-    }
   }
 
-  private killWatcherChildIfIdle(): void {
-    const proc = this.child
-    if (!proc || this.records.size > 0) {
-      return
+  private terminateUnavailableChild(requestedChild: ChildProcess | null): Promise<void> {
+    const currentTermination = this.terminationQueue.getCurrent()
+    if (currentTermination) {
+      return currentTermination
+    }
+    const proc = requestedChild ?? this.terminatingChild
+    if (!proc) {
+      return Promise.resolve()
     }
     this.child = null
-    resolvePendingWatcherUnsubscribes(this.pendingUnsubscribes)
-    proc.kill()
+    this.terminatingChild = proc
     this.canaryDir = removeWatcherCanaryDirectory(this.canaryDir)
+    return this.terminationQueue.track(
+      terminateDisconnectedWatcherChild(
+        proc,
+        this.records,
+        this.pendingUnsubscribes,
+        this.cancelledSubscribes,
+        this.crashFuse,
+        (exited) => {
+          this.terminatingChild = null
+          if (!exited) {
+            this.shutdownRequested = true
+          }
+          return !this.shutdownRequested
+        },
+        () => this.ensureWatcherProcess(),
+        sendWatcherSubscribe,
+        () => {
+          this.canaryDir = removeWatcherCanaryDirectory(this.canaryDir)
+        }
+      )
+    )
+  }
+
+  private killWatcherChildIfIdle(): Promise<void> {
+    const terminationPromise = this.terminationQueue.getCurrent()
+    if (terminationPromise) {
+      return terminationPromise
+    }
+    const proc = this.child
+    if (!proc || this.records.size > 0) {
+      return Promise.resolve()
+    }
+    this.child = null
+    this.terminatingChild = proc
+    // Why: destructive Windows cleanup must await exit to release directory handles.
+    this.canaryDir = removeWatcherCanaryDirectory(this.canaryDir)
+    return this.terminationQueue.track(
+      termination.terminateIdleWatcherChild(proc, this.pendingUnsubscribes, () => {
+        // Why: an idle child owns zero records, so a missed exit deadline has no
+        // double-watch hazard; the child keeps its capacity reservation until
+        // physical exit, and poisoning this supervisor would permanently end
+        // local watching — the shared singleton has no retire-and-replace path.
+        this.terminatingChild = null
+      })
+    )
   }
 
   private cancelPendingSubscribe(
     record: WatcherProcessSubscriptionRecord,
     error: WatcherProcessFailure
   ): void {
-    if (!record.pendingSubscribe || !this.records.delete(record.id)) {
-      return
-    }
-    const crawlStarted = record.crawlStarted
-    const pending = takePendingSubscribe(record)
-    pending?.reject(error)
-    if (crawlStarted) {
-      this.restartAfterCancelledSubscribe()
-      return
-    }
-    const proc = this.child
-    if (!proc?.connected) {
-      this.killWatcherChildIfIdle()
-      return
-    }
-    this.cancelledSubscribesAwaitingChild.add(record.id)
-    this.sendToChild(proc, { op: 'cancel-subscribe', id: record.id })
-  }
-
-  private cancelInterruptedSubscribe(
-    record: WatcherProcessSubscriptionRecord,
-    error: WatcherProcessFailure
-  ): void {
-    if (!record.interrupted || record.pendingSubscribe || !this.records.delete(record.id)) {
-      return
-    }
-    resetPendingSubscribeAttempt(record)
-    // Why: one slow recovery root must not pin every healthy root in its shard.
-    // End that subscription so the runtime pool can retry it in quarantine.
-    reportWatcherTerminalError(record, error)
-    this.restartAfterCancelledSubscribe()
-  }
-
-  private restartAfterCancelledSubscribe(): void {
-    const proc = this.child
-    this.child = null
-    this.cancelledSubscribesAwaitingChild.clear()
-    resolvePendingWatcherUnsubscribes(this.pendingUnsubscribes)
-    proc?.kill()
-    if (this.records.size === 0) {
-      this.canaryDir = removeWatcherCanaryDirectory(this.canaryDir)
-      return
-    }
-    const replacement = this.ensureWatcherProcess()
-    if (!replacement) {
-      failAllWatcherSubscriptions(
-        this.records,
-        watcherHostFailure(
-          'file watcher process unavailable after subscription cancellation',
-          'process_unavailable'
-        )
-      )
-      this.canaryDir = removeWatcherCanaryDirectory(this.canaryDir)
-      return
-    }
-    for (const liveRecord of this.records.values()) {
-      liveRecord.interrupted = true
-      resetPendingSubscribeAttempt(liveRecord)
-      this.sendSubscribe(replacement, liveRecord)
-    }
-  }
-
-  private sendSubscribe(proc: ChildProcess, record: WatcherProcessSubscriptionRecord): void {
-    resetPendingSubscribeAttempt(record)
-    this.sendToChild(proc, {
-      op: 'subscribe',
-      id: record.id,
-      dir: record.dir,
-      opts: record.opts,
-      delivery: record.hooks.delivery
+    cancelPendingWatcherSubscribe({
+      record,
+      error,
+      records: this.records,
+      child: this.child,
+      cancelledSubscribes: this.cancelledSubscribes,
+      onChildUnavailable: (child) => this.terminateUnavailableChild(child),
+      restartChild: (child) => this.restartAfterCancelledSubscribe(child),
+      sendCancel: (child, id) => sendToWatcherChild(child, { op: 'cancel-subscribe', id })
     })
   }
 
-  private sendToChild(proc: ChildProcess, message: HostToWatcherMessage): void {
-    try {
-      proc.send(message)
-    } catch {
-      // Channel already closed — the child's exit handler recovers.
+  private restartAfterCancelledSubscribe(proc: ChildProcess | null): Promise<void> {
+    const activeTermination = this.terminationQueue.getCurrent()
+    if (activeTermination || !proc || !this.cancelledSubscribes.beginRestart(proc)) {
+      return activeTermination ?? Promise.resolve()
     }
+    if (this.child === proc) {
+      this.child = null
+    }
+    this.terminatingChild = proc
+    this.canaryDir = removeWatcherCanaryDirectory(this.canaryDir)
+    return this.terminationQueue.track(
+      restartCancelledWatcherChild(
+        proc,
+        this.records,
+        this.pendingUnsubscribes,
+        this.cancelledSubscribes,
+        (exited) => {
+          this.terminatingChild = null
+          if (!exited) {
+            this.shutdownRequested = true
+          }
+          return !this.shutdownRequested
+        },
+        () => this.ensureWatcherProcess(),
+        sendWatcherSubscribe,
+        () => {
+          this.canaryDir = removeWatcherCanaryDirectory(this.canaryDir)
+        }
+      )
+    )
   }
 }

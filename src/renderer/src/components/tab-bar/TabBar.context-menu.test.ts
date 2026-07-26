@@ -330,6 +330,14 @@ describe('TabBar context menu wiring', () => {
     vi.unstubAllGlobals()
   })
 
+  it('wires the shared agent projection selector into the production TabBar', async () => {
+    const { selectTabBarAgentProjections } = await import('./tab-agent-types-by-tab-id')
+
+    await renderTabBar({ tabs: [], editorFiles: [], browserTabs: [], tabBarOrder: [] })
+
+    expect(useAppStoreMock).toHaveBeenCalledWith(selectTabBarAgentProjections)
+  })
+
   it('counts every tab kind for SortableTab.tabCount', async () => {
     // Why: Close Others used to pass tabCount=tabs.length, where tabs is just the
     // terminal list. With one terminal + any number of editor/browser tabs, the

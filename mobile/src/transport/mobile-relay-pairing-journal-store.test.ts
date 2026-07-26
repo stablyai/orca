@@ -130,7 +130,7 @@ describe('mobile relay pairing journal store', () => {
     expect(metadataRaw).toBeNull()
   })
 
-  it('cleans mismatched secret records and refuses to replace a recoverable journal', async () => {
+  it('cleans mismatched secret records', async () => {
     const journal = createMobileRelayPairingJournal({
       offer: offer as PairingOffer & { relay: NonNullable<PairingOffer['relay']> },
       hostId: 'host-1',
@@ -142,6 +142,137 @@ describe('mobile relay pairing journal store', () => {
     await expect(loadMobileRelayPairingJournal()).resolves.toBeNull()
     expect(metadataRaw).toBeNull()
     expect(secretRaw).toBeNull()
+  })
+
+  it('replaces a journal that never selected an authorization path', async () => {
+    const journal = createMobileRelayPairingJournal({
+      offer: offer as PairingOffer & { relay: NonNullable<PairingOffer['relay']> },
+      hostId: 'host-1',
+      hostName: 'Blue Whale',
+      randomBytes: (length) => new Uint8Array(length).fill(10)
+    })
+    await saveMobileRelayPairingJournal(journal)
+    const replacement = createMobileRelayPairingJournal({
+      offer: offer as PairingOffer & { relay: NonNullable<PairingOffer['relay']> },
+      hostId: 'host-2',
+      hostName: 'Red Panda',
+      randomBytes: (length) => new Uint8Array(length).fill(12)
+    })
+
+    const replacementSave = saveMobileRelayPairingJournal(replacement)
+    const staleUpdate = updateMobileRelayPairingJournal(
+      journal.metadata.journalId,
+      (metadata) => metadata
+    )
+
+    await expect(replacementSave).resolves.toBeUndefined()
+    await expect(staleUpdate).rejects.toThrow(/stale/)
+    await expect(loadMobileRelayPairingJournal()).resolves.toEqual(replacement)
+  })
+
+  it('serializes a replacement behind an in-flight journal snapshot', async () => {
+    const journal = createMobileRelayPairingJournal({
+      offer: offer as PairingOffer & { relay: NonNullable<PairingOffer['relay']> },
+      hostId: 'host-1',
+      hostName: 'Blue Whale',
+      randomBytes: (length) => new Uint8Array(length).fill(10)
+    })
+    await saveMobileRelayPairingJournal(journal)
+    let releaseSecretRead!: () => void
+    const secretReadGate = new Promise<void>((resolve) => {
+      releaseSecretRead = resolve
+    })
+    secureStore.getItemAsync.mockImplementationOnce(async () => {
+      await secretReadGate
+      return secretRaw
+    })
+    const loading = loadMobileRelayPairingJournal()
+    await vi.waitFor(() => expect(secureStore.getItemAsync).toHaveBeenCalled())
+
+    const replacement = createMobileRelayPairingJournal({
+      offer: offer as PairingOffer & { relay: NonNullable<PairingOffer['relay']> },
+      hostId: 'host-2',
+      hostName: 'Red Panda',
+      randomBytes: (length) => new Uint8Array(length).fill(12)
+    })
+    let replacementSaved = false
+    const saving = saveMobileRelayPairingJournal(replacement).then(() => {
+      replacementSaved = true
+    })
+    await Promise.resolve()
+    expect(replacementSaved).toBe(false)
+
+    releaseSecretRead()
+    await expect(loading).resolves.toEqual(journal)
+    await expect(saving).resolves.toBeUndefined()
+    await expect(loadMobileRelayPairingJournal()).resolves.toEqual(replacement)
+    expect(asyncStorage.removeItem).not.toHaveBeenCalled()
+  })
+
+  it('cleans a replacement whose secret write fails', async () => {
+    const journal = createMobileRelayPairingJournal({
+      offer: offer as PairingOffer & { relay: NonNullable<PairingOffer['relay']> },
+      hostId: 'host-1',
+      hostName: 'Blue Whale',
+      randomBytes: (length) => new Uint8Array(length).fill(10)
+    })
+    await saveMobileRelayPairingJournal(journal)
+    const replacement = createMobileRelayPairingJournal({
+      offer: offer as PairingOffer & { relay: NonNullable<PairingOffer['relay']> },
+      hostId: 'host-2',
+      hostName: 'Red Panda',
+      randomBytes: (length) => new Uint8Array(length).fill(12)
+    })
+    secureStore.setItemAsync.mockRejectedValueOnce(new Error('keychain unavailable'))
+
+    await expect(saveMobileRelayPairingJournal(replacement)).rejects.toThrow(/keychain/)
+    await expect(loadMobileRelayPairingJournal()).resolves.toBeNull()
+    expect(metadataRaw).toBeNull()
+    expect(secretRaw).toBeNull()
+  })
+
+  it('blocks replacement when the old authorization update wins the mutation race', async () => {
+    const journal = createMobileRelayPairingJournal({
+      offer: offer as PairingOffer & { relay: NonNullable<PairingOffer['relay']> },
+      hostId: 'host-1',
+      hostName: 'Blue Whale',
+      randomBytes: (length) => new Uint8Array(length).fill(10)
+    })
+    await saveMobileRelayPairingJournal(journal)
+    const replacement = createMobileRelayPairingJournal({
+      offer: offer as PairingOffer & { relay: NonNullable<PairingOffer['relay']> },
+      hostId: 'host-2',
+      hostName: 'Red Panda',
+      randomBytes: (length) => new Uint8Array(length).fill(12)
+    })
+    const authorizationUpdate = updateMobileRelayPairingJournal(
+      journal.metadata.journalId,
+      (metadata) => ({
+        ...metadata,
+        winner: 'direct',
+        authorizationMode: 'authenticated-direct'
+      })
+    )
+    const replacementSave = saveMobileRelayPairingJournal(replacement)
+
+    await expect(authorizationUpdate).resolves.toBeUndefined()
+    await expect(replacementSave).rejects.toThrow(/recovery pending/)
+  })
+
+  it.each([
+    ['winner', { winner: 'direct' as const }],
+    ['authorization mode', { authorizationMode: 'authenticated-direct' as const }]
+  ])('refuses replacement once the durable %s exists', async (_name, authorization) => {
+    const created = createMobileRelayPairingJournal({
+      offer: offer as PairingOffer & { relay: NonNullable<PairingOffer['relay']> },
+      hostId: 'host-1',
+      hostName: 'Blue Whale',
+      randomBytes: (length) => new Uint8Array(length).fill(10)
+    })
+    const journal = {
+      ...created,
+      metadata: { ...created.metadata, ...authorization }
+    }
 
     await saveMobileRelayPairingJournal(journal)
     const replacement = createMobileRelayPairingJournal({

@@ -4,6 +4,12 @@ import StarterKit from '@tiptap/starter-kit'
 import { createIsolatedMarkdownExtensionForTests } from './isolated-markdown-extension-for-tests'
 import { createRichMarkdownKeyHandler, type KeyHandlerContext } from './rich-markdown-key-handler'
 
+// Why: keybinding matching resolves the platform from navigator.userAgent,
+// which is environment-dependent under vitest; pin it for determinism.
+vi.mock('@/lib/shortcut-platform', () => ({
+  getShortcutPlatform: () => 'darwin' as NodeJS.Platform
+}))
+
 const extensions = [StarterKit, createIsolatedMarkdownExtensionForTests()]
 
 function createEditor(content: object): Editor {
@@ -53,6 +59,9 @@ function createContext(editor: Editor, typedMarker: boolean): KeyHandlerContext 
     editorRef: { current: editor },
     rootRef: { current: null },
     lastCommittedMarkdownRef: { current: '' },
+    originalSourceRef: { current: '' },
+    baseCanonicalRef: { current: '' },
+    reconcileRoundTripRef: { current: () => null },
     onContentChangeRef: { current: vi.fn() },
     onSaveRef: { current: vi.fn() },
     isEditingLinkRef: { current: false },
@@ -79,6 +88,7 @@ function createContext(editor: Editor, typedMarker: boolean): KeyHandlerContext 
       subscribe: () => () => {},
       update: () => {}
     },
+    openAnnotationPopoverRef: { current: vi.fn(() => true) },
     setIsEditingLink: vi.fn(),
     setLinkBubble: vi.fn(),
     setSelectedCommandIndex: vi.fn(),
@@ -102,6 +112,74 @@ function emptyTopLevelOrderedList(): object {
 }
 
 describe('rich markdown key handler', () => {
+  it('opens the review-note composer on the add-review-note shortcut', () => {
+    const editor = createEditor(emptyTopLevelOrderedList())
+
+    try {
+      const ctx = createContext(editor, false)
+      const event = keyEvent('a', { metaKey: true, shiftKey: true, code: 'KeyA' })
+
+      expect(createRichMarkdownKeyHandler(ctx)(null, event)).toBe(true)
+      expect(event.preventDefault).toHaveBeenCalled()
+      expect(ctx.openAnnotationPopoverRef.current).toHaveBeenCalledWith(true)
+    } finally {
+      editor.destroy()
+    }
+  })
+
+  it('leaves the add-review-note chord unconsumed when no composer opens', () => {
+    const editor = createEditor(emptyTopLevelOrderedList())
+
+    try {
+      const ctx = createContext(editor, false)
+      ctx.openAnnotationPopoverRef.current = vi.fn(() => false)
+      const event = keyEvent('a', { metaKey: true, shiftKey: true, code: 'KeyA' })
+
+      expect(createRichMarkdownKeyHandler(ctx)(null, event)).toBe(false)
+      expect(event.preventDefault).not.toHaveBeenCalled()
+      expect(ctx.openAnnotationPopoverRef.current).toHaveBeenCalledTimes(1)
+    } finally {
+      editor.destroy()
+    }
+  })
+
+  it('ignores OS key-repeat for the add-review-note shortcut', () => {
+    const editor = createEditor(emptyTopLevelOrderedList())
+
+    try {
+      const ctx = createContext(editor, false)
+      const event = keyEvent('a', { metaKey: true, shiftKey: true, code: 'KeyA', repeat: true })
+
+      // Why: leave the repeat unconsumed here; open drafts are consumed by the
+      // mounted composer guard (product B) instead of this editor key path.
+      expect(createRichMarkdownKeyHandler(ctx)(null, event)).toBe(false)
+      expect(event.preventDefault).not.toHaveBeenCalled()
+      expect(ctx.openAnnotationPopoverRef.current).not.toHaveBeenCalled()
+    } finally {
+      editor.destroy()
+    }
+  })
+
+  it('delegates a fresh add-review-note chord to openAnnotationPopover and consumes it', () => {
+    const editor = createEditor(emptyTopLevelOrderedList())
+
+    try {
+      const ctx = createContext(editor, false)
+      // Why: the ProseMirror-selection flush moved into openAnnotationPopover
+      // (which reads the selection), so the handler now only delegates the open
+      // with requireLiveSelection and consumes the chord when it succeeds.
+      ctx.openAnnotationPopoverRef.current = vi.fn(() => true)
+      const event = keyEvent('a', { metaKey: true, shiftKey: true, code: 'KeyA' })
+
+      expect(createRichMarkdownKeyHandler(ctx)(null, event)).toBe(true)
+      expect(event.preventDefault).toHaveBeenCalled()
+      expect(ctx.openAnnotationPopoverRef.current).toHaveBeenCalledTimes(1)
+      expect(ctx.openAnnotationPopoverRef.current).toHaveBeenCalledWith(true)
+    } finally {
+      editor.destroy()
+    }
+  })
+
   it('preserves a typed empty ordered-list shortcut on Enter', () => {
     const editor = createEditor(emptyTopLevelOrderedList())
 

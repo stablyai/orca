@@ -11,6 +11,7 @@ import { translate } from '@/i18n/i18n'
 import { LargeDiffFallback } from './LargeDiffFallback'
 import { buildDiffEditorWordWrapOptions } from './diff-editor-word-wrap-options'
 import type { MonacoEditorTheme } from '@/lib/editor-theme'
+import { monacoFindOptions } from './monaco-find-options'
 
 const ImageDiffViewer = lazy(() => import('./ImageDiffViewer'))
 
@@ -37,7 +38,7 @@ type DiffSectionBodyProps = {
   isEditable: boolean
   diffEditorFontSize: number
   diffWordWrap?: boolean
-  terminalFontFamily?: string
+  editorFontFamily?: string
   onCancelComment: () => void
   onSubmitComment: (body: string) => Promise<void>
   onRetrySection: (index: number) => void
@@ -62,7 +63,7 @@ export function DiffSectionBody({
   isEditable,
   diffEditorFontSize,
   diffWordWrap,
-  terminalFontFamily,
+  editorFontFamily,
   onCancelComment,
   onSubmitComment,
   onRetrySection,
@@ -192,18 +193,14 @@ export function DiffSectionBody({
             minimap: { enabled: false },
             scrollBeyondLastLine: false,
             fontSize: diffEditorFontSize,
-            fontFamily: terminalFontFamily || 'monospace',
+            fontFamily: editorFontFamily || 'monospace',
             lineNumbers: 'on',
             ...buildDiffEditorWordWrapOptions(diffWordWrap),
             automaticLayout: true,
             renderOverviewRuler: false,
             scrollbar: combinedDiffSectionScrollbarOptions,
             hideUnchangedRegions: { enabled: true },
-            find: {
-              addExtraSpaceOnTop: false,
-              autoFindInSelection: 'never',
-              seedSearchStringFromSelection: 'never'
-            }
+            find: monacoFindOptions
           }}
         />
       )}

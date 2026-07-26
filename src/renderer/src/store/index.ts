@@ -28,6 +28,7 @@ import { createAgentStatusSlice } from './slices/agent-status'
 import { createPaneForegroundAgentSlice } from './slices/pane-foreground-agent'
 import { createDiffCommentsSlice } from './slices/diffComments'
 import { createDetectedAgentsSlice } from './slices/detected-agents'
+import { createRuntimeDetectedAgentsSlice } from './slices/runtime-detected-agents'
 import { createWorktreeNavHistorySlice } from './slices/worktree-nav-history'
 import { createDictationSlice } from './slices/dictation'
 import { createWorkspaceCleanupSlice } from './slices/workspace-cleanup'
@@ -35,10 +36,17 @@ import { createRuntimeStatusSlice } from './slices/runtime-status'
 import { createPullRequestGenerationSlice } from './slices/pull-request-generation'
 import { createCommitMessageGenerationSlice } from './slices/commit-message-generation'
 import { createPinnedTabCloseConfirmSlice } from './slices/pinned-tab-close-confirm'
+import { createRecentlyClosedTabsSlice } from './slices/recently-closed-tabs'
 import { createOrcaProfilesSlice } from './slices/orca-profiles'
 import { createNewIssueDraftSlice } from './slices/new-issue-draft'
+import { createRemoteServerUpdatesSlice } from './slices/remote-server-updates'
 import { e2eConfig } from '@/lib/e2e-config'
+import type { createWebRuntimeSessionTerminal } from '@/runtime/web-runtime-session'
 import { registerHttpLinkStoreAccessor } from '@/lib/http-link-routing'
+import {
+  registerRendererMemoryProfileContributor,
+  summarizeStateCollectionSizes
+} from '@/lib/renderer-memory-profile'
 
 export const useAppStore = create<AppState>()((...a) => ({
   ...createRepoSlice(...a),
@@ -69,6 +77,7 @@ export const useAppStore = create<AppState>()((...a) => ({
   ...createPaneForegroundAgentSlice(...a),
   ...createDiffCommentsSlice(...a),
   ...createDetectedAgentsSlice(...a),
+  ...createRuntimeDetectedAgentsSlice(...a),
   ...createWorktreeNavHistorySlice(...a),
   ...createDictationSlice(...a),
   ...createWorkspaceCleanupSlice(...a),
@@ -76,11 +85,19 @@ export const useAppStore = create<AppState>()((...a) => ({
   ...createPullRequestGenerationSlice(...a),
   ...createCommitMessageGenerationSlice(...a),
   ...createPinnedTabCloseConfirmSlice(...a),
+  ...createRecentlyClosedTabsSlice(...a),
   ...createOrcaProfilesSlice(...a),
-  ...createNewIssueDraftSlice(...a)
+  ...createNewIssueDraftSlice(...a),
+  ...createRemoteServerUpdatesSlice(...a)
 }))
 
 registerHttpLinkStoreAccessor(() => useAppStore.getState())
+
+// Why: names the fattest store slices in renderer_memory_highwater breadcrumbs
+// so OOM crash reports identify what grew without a local repro.
+registerRendererMemoryProfileContributor('store', () =>
+  summarizeStateCollectionSizes(useAppStore.getState(), 20)
+)
 
 export type { AppState } from './types'
 
@@ -89,5 +106,12 @@ export type { AppState } from './types'
 // to avoid fragile DOM scraping. Harmless — the store is already reachable
 // via React DevTools in any environment.
 if ((import.meta.env.DEV || e2eConfig.exposeStore) && typeof window !== 'undefined') {
-  ;(window as unknown as Record<string, unknown>).__store = useAppStore
+  const testWindow = window as unknown as Record<string, unknown>
+  testWindow.__store = useAppStore
+  if (e2eConfig.exposeStore) {
+    testWindow.__webRuntimeSessionE2E = {
+      createTerminal: async (args: Parameters<typeof createWebRuntimeSessionTerminal>[0]) =>
+        (await import('@/runtime/web-runtime-session')).createWebRuntimeSessionTerminal(args)
+    }
+  }
 }

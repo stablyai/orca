@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { toAppSshPtyId } from '../../../shared/ssh-pty-id'
 
 const mockCreateTab = vi.fn()
 const mockQueueTabStartupCommand = vi.fn()
@@ -29,6 +30,10 @@ const store = {
     terminalWindowsShell?: string
     experimentalNativeChat?: boolean
     openAgentTabsInChatByDefault?: boolean
+    nativeChatSessionOptions?: Record<
+      string,
+      { model?: string; valuesByModel?: Record<string, Record<string, string | boolean>> }
+    >
   },
   projects: [
     {
@@ -43,6 +48,8 @@ const store = {
       | { kind: 'wsl'; distro: string | null }
   }[],
   repos: [{ id: 'repo-1', connectionId: null as string | null, path: '/repo' }],
+  sshConnectionStates: new Map([['ssh-a', { status: 'connected' }]]),
+  transientClearedAgentStatusConnectionIds: {} as Record<string, true>,
   worktreesByRepo: {
     'repo-1': [
       {
@@ -61,7 +68,11 @@ const store = {
   openFiles: [] as { id: string; worktreeId: string }[],
   browserTabsByWorktree: {} as Record<string, { id: string }[]>,
   tabBarOrderByWorktree: {} as Record<string, string[]>,
-  terminalLayoutsByTabId: {} as Record<string, { activeLeafId: string | null }>,
+  terminalLayoutsByTabId: {} as Record<
+    string,
+    { activeLeafId: string | null; ptyIdsByLeafId?: Record<string, string> }
+  >,
+  ptyIdsByTabId: {} as Record<string, string[]>,
   createTab: mockCreateTab,
   closeTab: vi.fn(),
   queueTabStartupCommand: mockQueueTabStartupCommand,
@@ -116,7 +127,7 @@ describe('launchAgentInNewTab', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     mockIsWebRuntimeSessionActive.mockReturnValue(false)
-    mockCreateWebRuntimeSessionTerminal.mockResolvedValue(true)
+    mockCreateWebRuntimeSessionTerminal.mockResolvedValue({ status: 'created' })
     store.activeRepoId = 'repo-1'
     store.activeWorktreeId = 'wt-1'
     store.settings = {
@@ -132,6 +143,8 @@ describe('launchAgentInNewTab', () => {
       }
     ]
     store.repos = [{ id: 'repo-1', connectionId: null, path: '/repo' }]
+    store.sshConnectionStates = new Map([['ssh-a', { status: 'connected' }]])
+    store.transientClearedAgentStatusConnectionIds = {}
     store.worktreesByRepo = {
       'repo-1': [
         {
@@ -148,6 +161,7 @@ describe('launchAgentInNewTab', () => {
     store.browserTabsByWorktree = {}
     store.tabBarOrderByWorktree = {}
     store.terminalLayoutsByTabId = {}
+    store.ptyIdsByTabId = {}
     mockCreateTab.mockReturnValue({ id: 'tab-1' })
     mockPasteDraftWhenAgentReady.mockResolvedValue(true)
   })
@@ -267,90 +281,41 @@ describe('launchAgentInNewTab', () => {
     })
   })
 
-  it('delegates agent quick launch to the host runtime in paired web clients', async () => {
+  it('preserves paired-host draft delivery and supported launch preferences', async () => {
     mockIsWebRuntimeSessionActive.mockReturnValue(true)
     store.settings = {
       agentCmdOverrides: {},
       agentDefaultArgs: {},
       agentDefaultEnv: {},
-      activeRuntimeEnvironmentId: 'web-runtime'
-    }
-    store.tabsByWorktree = {
-      'wt-1': [
-        { id: 'tab-1' },
-        { id: 'stale-agent-tab', launchAgent: 'claude' } as { id: string; launchAgent: string }
-      ]
+      activeRuntimeEnvironmentId: 'web-runtime',
+      nativeChatSessionOptions: {
+        claude: {
+          model: 'opus',
+          valuesByModel: { opus: { effort: 'high', fastMode: true } }
+        }
+      }
     }
     const { launchAgentInNewTab } = await import('./launch-agent-in-new-tab')
 
     const result = launchAgentInNewTab({
       agent: 'claude',
       worktreeId: 'wt-1',
-      groupId: 'group-1'
+      prompt: 'review before sending',
+      promptDelivery: 'draft',
+      agentArgs: '--permission-mode plan'
     })
 
-    expect(result).toEqual(
+    expect(result).toEqual(expect.objectContaining({ tabId: null, pasteDraftAfterLaunch: false }))
+    expect(mockCreateWebRuntimeSessionTerminal).toHaveBeenCalledWith(
       expect.objectContaining({
-        tabId: null,
-        pasteDraftAfterLaunch: false
+        launchAgent: 'claude',
+        prompt: 'review before sending',
+        promptDelivery: 'draft',
+        agentArgs: '--permission-mode plan',
+        launchPreferences: { model: 'opus', effort: 'high' }
       })
     )
-    expect(mockCreateWebRuntimeSessionTerminal).toHaveBeenCalledWith({
-      worktreeId: 'wt-1',
-      environmentId: 'web-runtime',
-      targetGroupId: 'group-1',
-      activate: true,
-      agent: 'claude',
-      viewMode: 'terminal'
-    })
     expect(mockCreateTab).not.toHaveBeenCalled()
-    expect(mockQueueTabStartupCommand).not.toHaveBeenCalled()
-    await Promise.resolve()
-    expect(mockSetActiveTabType).toHaveBeenCalledWith('terminal')
-    expect(store.closeTab).toHaveBeenCalledWith('stale-agent-tab')
-  })
-
-  it('forwards prompt launch env and captured config to paired web runtime hosts', async () => {
-    mockIsWebRuntimeSessionActive.mockReturnValue(true)
-    store.settings = {
-      agentCmdOverrides: {},
-      agentDefaultArgs: { codex: '--model gpt-5 --reasoning-effort high' },
-      agentDefaultEnv: { codex: { CODEX_PROFILE: 'captured' } },
-      activeRuntimeEnvironmentId: 'web-runtime'
-    }
-    const { launchAgentInNewTab } = await import('./launch-agent-in-new-tab')
-
-    const result = launchAgentInNewTab({
-      agent: 'codex',
-      worktreeId: 'wt-1',
-      prompt: 'fix the spinner',
-      groupId: 'group-1'
-    })
-
-    expect(result).toEqual(
-      expect.objectContaining({
-        tabId: null,
-        pasteDraftAfterLaunch: false
-      })
-    )
-    expect(mockCreateWebRuntimeSessionTerminal).toHaveBeenCalledWith({
-      worktreeId: 'wt-1',
-      environmentId: 'web-runtime',
-      targetGroupId: 'group-1',
-      activate: true,
-      command: "codex '--model' 'gpt-5' '--reasoning-effort' 'high' 'fix the spinner'",
-      env: { CODEX_PROFILE: 'captured' },
-      startupCommandDelivery: 'shell-ready',
-      launchConfig: {
-        agentCommand: "codex '--model' 'gpt-5' '--reasoning-effort' 'high'",
-        agentArgs: '--model gpt-5 --reasoning-effort high',
-        agentEnv: { CODEX_PROFILE: 'captured' }
-      },
-      launchAgent: 'codex',
-      viewMode: 'terminal'
-    })
-    expect(mockCreateTab).not.toHaveBeenCalled()
-    expect(mockQueueTabStartupCommand).not.toHaveBeenCalled()
   })
 
   it('propagates the default chat mode to paired web runtime launches', async () => {
@@ -371,6 +336,7 @@ describe('launchAgentInNewTab', () => {
       expect.objectContaining({
         worktreeId: 'wt-1',
         environmentId: 'web-runtime',
+        agentSessionKind: 'fresh',
         agent: 'codex',
         viewMode: 'chat'
       })
@@ -395,6 +361,7 @@ describe('launchAgentInNewTab', () => {
       expect.objectContaining({
         worktreeId: 'wt-1',
         environmentId: 'web-runtime',
+        agentSessionKind: 'fresh',
         agent: 'codex',
         viewMode: 'terminal'
       })
@@ -403,7 +370,10 @@ describe('launchAgentInNewTab', () => {
 
   it('surfaces a toast when host agent launch fails in paired web clients', async () => {
     mockIsWebRuntimeSessionActive.mockReturnValue(true)
-    mockCreateWebRuntimeSessionTerminal.mockResolvedValue(false)
+    mockCreateWebRuntimeSessionTerminal.mockResolvedValue({
+      status: 'failed',
+      message: 'Upgrade the remote Orca host before starting or resuming agent sessions.'
+    })
     store.settings = {
       agentCmdOverrides: {},
       agentDefaultArgs: {},
@@ -418,7 +388,9 @@ describe('launchAgentInNewTab', () => {
     })
 
     await Promise.resolve()
-    expect(mockToastError).toHaveBeenCalledWith('Could not launch claude in a new terminal.')
+    expect(mockToastError).toHaveBeenCalledWith(
+      'Upgrade the remote Orca host before starting or resuming agent sessions.'
+    )
     expect(mockSetActiveTabType).not.toHaveBeenCalled()
   })
 
@@ -539,7 +511,8 @@ describe('launchAgentInNewTab', () => {
     expect(mockQueueTabStartupCommand).toHaveBeenCalledWith(
       'tab-1',
       expect.objectContaining({
-        command: 'codex "--model" "gpt-5" "fix the spinner"'
+        command: 'codex "--model" "gpt-5" "fix the spinner"',
+        agentArgsOverride: '--model gpt-5'
       })
     )
   })
@@ -676,6 +649,7 @@ describe('launchAgentInNewTab', () => {
   })
 
   it('seeds working after Command Code submit-after-ready prompt delivery', async () => {
+    store.repos = [{ id: 'repo-1', connectionId: 'ssh-a', path: '/repo' }]
     const { launchAgentInNewTab } = await import('./launch-agent-in-new-tab')
 
     const result = launchAgentInNewTab({
@@ -684,7 +658,13 @@ describe('launchAgentInNewTab', () => {
       prompt: 'large generated prompt',
       promptDelivery: 'submit-after-ready'
     })
-    store.terminalLayoutsByTabId = { 'tab-1': { activeLeafId: LEAF_ID } }
+    store.terminalLayoutsByTabId = {
+      'tab-1': {
+        activeLeafId: LEAF_ID,
+        ptyIdsByLeafId: { [LEAF_ID]: toAppSshPtyId('ssh-a', 'pty-1') }
+      }
+    }
+    store.ptyIdsByTabId = { 'tab-1': [toAppSshPtyId('ssh-a', 'pty-1')] }
     await expect(result?.promptDeliveryResult).resolves.toEqual({
       delivered: true,
       failureNotified: false
@@ -707,12 +687,52 @@ describe('launchAgentInNewTab', () => {
         forcePaste: true
       })
     )
-    expect(mockSetAgentStatus).toHaveBeenCalledWith(`tab-1:${LEAF_ID}`, {
-      state: 'working',
-      prompt: 'large generated prompt',
-      agentType: 'command-code'
-    })
+    expect(mockSetAgentStatus).toHaveBeenCalledWith(
+      `tab-1:${LEAF_ID}`,
+      {
+        state: 'working',
+        prompt: 'large generated prompt',
+        agentType: 'command-code'
+      },
+      undefined,
+      undefined,
+      { connectionId: 'ssh-a' }
+    )
     expect(mockTrack).not.toHaveBeenCalledWith('agent_prompt_sent', expect.anything())
+  })
+
+  it('does not recreate SSH status when clear arrives before disconnect state', async () => {
+    let finishDelivery: ((delivered: boolean) => void) | undefined
+    mockPasteDraftWhenAgentReady.mockReturnValue(
+      new Promise<boolean>((resolve) => {
+        finishDelivery = resolve
+      })
+    )
+    store.repos = [{ id: 'repo-1', connectionId: 'ssh-a', path: '/repo' }]
+    const ptyId = toAppSshPtyId('ssh-a', 'pty-1')
+    const { launchAgentInNewTab } = await import('./launch-agent-in-new-tab')
+
+    const result = launchAgentInNewTab({
+      agent: 'command-code',
+      worktreeId: 'wt-1',
+      prompt: 'pending prompt',
+      promptDelivery: 'submit-after-ready'
+    })
+    store.terminalLayoutsByTabId = {
+      'tab-1': { activeLeafId: LEAF_ID, ptyIdsByLeafId: { [LEAF_ID]: ptyId } }
+    }
+    store.ptyIdsByTabId = { 'tab-1': [ptyId] }
+
+    // Why: explicit disconnect sends the transient clear before its state
+    // event, while the old connection can still appear connected and bound.
+    store.transientClearedAgentStatusConnectionIds = { 'ssh-a': true }
+    finishDelivery?.(true)
+    await expect(result?.promptDeliveryResult).resolves.toEqual({
+      delivered: true,
+      failureNotified: false
+    })
+
+    expect(mockSetAgentStatus).not.toHaveBeenCalled()
   })
 
   it('does not track prompt-sent when submit-after-ready delivery fails', async () => {

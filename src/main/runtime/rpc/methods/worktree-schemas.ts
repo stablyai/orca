@@ -3,6 +3,7 @@ import { isTuiAgent } from '../../../../shared/tui-agent-config'
 import type { TuiAgent } from '../../../../shared/types'
 import { workspaceSourceSchema } from '../../../../shared/telemetry-events'
 import { sleepingAgentLaunchConfigSchema } from '../../../../shared/workspace-session-sleeping-agents'
+import { RUNTIME_NAVIGATION_TARGETS } from '../../../../shared/runtime-navigation'
 import {
   OptionalBoolean,
   OptionalFiniteNumber,
@@ -56,7 +57,8 @@ export const WorktreeSelector = z.object({
 })
 
 export const WorktreeActivate = WorktreeSelector.extend({
-  notifyClients: OptionalBoolean
+  notifyClients: OptionalBoolean,
+  navigation: z.enum(RUNTIME_NAVIGATION_TARGETS).optional()
 })
 
 export const WorktreeCreate = z
@@ -126,8 +128,9 @@ export const WorktreeCreate = z
       )
       .pipe(z.union([z.enum(['run', 'skip', 'inherit']), z.undefined()]))
       .optional(),
-    // Why: mobile clients pass a startup command (e.g. 'claude') so the first
-    // terminal pane launches the selected agent instead of an idle shell.
+    // Why: some clients (e.g. desktop) pass a pre-built launch command so the
+    // first terminal pane launches the selected agent instead of an idle shell.
+    // Clients that can't quote for the host shell send `startupAgent` instead.
     startupCommand: OptionalString,
     startupEnv: z.record(z.string(), z.string()).optional(),
     startupLaunchConfig: sleepingAgentLaunchConfigSchema,
@@ -143,6 +146,9 @@ export const WorktreeCreate = z
       .unknown()
       .transform((value) => (isTuiAgent(value) ? value : undefined))
       .optional(),
+    // Why: mobile retries a create interrupted by a connection migration with the
+    // same key so the host dedupes instead of spawning a duplicate worktree.
+    clientMutationId: z.string().min(1).max(128).optional(),
     automationProvenanceRequest: AutomationWorkspaceProvenanceRequest.optional()
   })
   .superRefine((params, ctx) => {

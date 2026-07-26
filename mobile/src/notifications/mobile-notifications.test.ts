@@ -1,6 +1,8 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import * as Notifications from 'expo-notifications'
+import { Platform } from 'react-native'
 import {
+  getNotificationPermissionState,
   setScheduledNotificationsMaxForTests,
   subscribeToDesktopNotifications
 } from './mobile-notifications'
@@ -18,7 +20,7 @@ vi.mock('expo-notifications', () => ({
 }))
 
 vi.mock('react-native', () => ({
-  Platform: { OS: 'ios' }
+  Platform: { OS: 'ios', Version: 18 }
 }))
 
 // Why: mobile-notifications now persists the catch-up watermark to
@@ -34,6 +36,32 @@ vi.mock('@react-native-async-storage/async-storage', () => ({
 vi.mock('../storage/preferences', () => ({
   loadPushNotificationsEnabled: vi.fn()
 }))
+
+beforeEach(() => {
+  Object.assign(Platform, { OS: 'ios', Version: 18 })
+})
+
+describe('getNotificationPermissionState', () => {
+  it.each([
+    { os: 'android', version: 32, expected: false },
+    { os: 'android', version: 33, expected: true },
+    { os: 'ios', version: 18, expected: true }
+  ])(
+    'reports whether a granted $os $version authorization reflects user choice',
+    async ({ os, version, expected }) => {
+      Object.assign(Platform, { OS: os, Version: version })
+      vi.mocked(Notifications.getPermissionsAsync).mockResolvedValue({
+        status: 'granted',
+        canAskAgain: true
+      } as never)
+
+      await expect(getNotificationPermissionState()).resolves.toMatchObject({
+        granted: true,
+        authorizationReflectsUserChoice: expected
+      })
+    }
+  )
+})
 
 describe('subscribeToDesktopNotifications', () => {
   beforeEach(() => {

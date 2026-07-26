@@ -132,6 +132,64 @@ describe('resolveTabAgentFromSignals — Pi/OMP identity', () => {
     expect(afterHookCleared).toBe('omp')
   })
 
+  it('does not flap between OMP and Pi as the foreground process oscillates', () => {
+    // The reported flicker: OMP wraps Pi (`shell → omp → pi`), so the foreground
+    // reader alternates between reporting `omp` and `pi` at command boundaries.
+    // The process signal outranks launchAgent, so without owner-normalization the
+    // OMP-owned tab's icon flips to Pi on every `pi` read. Both reads must land on
+    // the launched owner.
+    const readsPi = resolveTabAgentFromSignals({
+      hasObservedAgentSignal: true,
+      isRemote: false,
+      title: '⠋ OMP',
+      hookAgent: null,
+      processAgent: 'pi',
+      launchAgent: 'omp'
+    })
+    const readsOmp = resolveTabAgentFromSignals({
+      hasObservedAgentSignal: true,
+      isRemote: false,
+      title: '⠋ OMP',
+      hookAgent: null,
+      processAgent: 'omp',
+      launchAgent: 'omp'
+    })
+    expect(readsPi).toBe('omp')
+    expect(readsOmp).toBe('omp')
+  })
+
+  it('re-owns a Pi foreground read to a durable OMP identity when launchAgent is gone', () => {
+    // A mirrored/restored OMP pane keeps only its completed-hook identity; a `pi`
+    // foreground read (OMP's nested child) must not repaint it to Pi.
+    expect(
+      resolveTabAgentFromSignals({
+        hasObservedAgentSignal: true,
+        isRemote: false,
+        title: '⠋ OMP',
+        hookAgent: null,
+        focusedCompletedHookAgent: 'omp',
+        processAgent: 'pi',
+        launchAgent: undefined
+      })
+    ).toBe('omp')
+  })
+
+  it('still lets a genuine cross-group foreground process reclaim a reused OMP pane', () => {
+    // Scope guard: a different-group process (Codex is not Pi-compatible) is
+    // real-time proof the pane was reused, so it overrides the OMP launch owner
+    // instead of collapsing onto it.
+    expect(
+      resolveTabAgentFromSignals({
+        hasObservedAgentSignal: true,
+        isRemote: false,
+        title: 'zsh',
+        hookAgent: null,
+        processAgent: 'codex',
+        launchAgent: 'omp'
+      })
+    ).toBe('codex')
+  })
+
   it('keeps a launchAgent-less Pi pane on Pi and rejects a stale OMP session record', () => {
     // The fallback must not over-reach: a genuine Pi pane (recent Pi hook) stays
     // Pi even if a stale hibernated OMP record is present.

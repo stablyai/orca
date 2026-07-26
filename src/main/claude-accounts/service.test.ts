@@ -1,7 +1,7 @@
 /* eslint-disable max-lines -- test suite covers Claude capture and rollback edge cases */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { EventEmitter } from 'node:events'
-import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { PassThrough } from 'node:stream'
@@ -21,8 +21,12 @@ vi.mock('electron', () => ({
   }
 }))
 
+const commandMocks = vi.hoisted(() => ({
+  resolveClaudeCommand: vi.fn(() => 'claude')
+}))
+
 vi.mock('../codex-cli/command', () => ({
-  resolveClaudeCommand: () => 'claude'
+  resolveClaudeCommand: commandMocks.resolveClaudeCommand
 }))
 
 vi.mock('./keychain', () => ({
@@ -671,6 +675,159 @@ describe('ClaudeAccountService credential capture', () => {
     )
   })
 
+  it('rejects adding a Claude account whose identity already exists', async () => {
+    setPlatform('linux')
+    tempDir = '/tmp/orca-claude-service-test'
+    rmSync(tempDir, { recursive: true, force: true })
+    const existingAuthPath = join(tempDir, 'claude-accounts', 'existing-account', 'auth')
+    mkdirSync(existingAuthPath, { recursive: true })
+    const existingMarkerPath = join(existingAuthPath, '.orca-managed-claude-auth')
+    writeFileSync(existingMarkerPath, 'existing-account\n', 'utf-8')
+    let settings = {
+      claudeManagedAccounts: [
+        {
+          id: 'existing-account',
+          email: 'new@example.com',
+          managedAuthPath: existingAuthPath,
+          managedAuthRuntime: 'host',
+          wslDistro: null,
+          wslLinuxAuthPath: null,
+          authMethod: 'subscription-oauth',
+          organizationUuid: null,
+          organizationName: null,
+          createdAt: 1,
+          updatedAt: 1,
+          lastAuthenticatedAt: 1
+        }
+      ],
+      activeClaudeManagedAccountId: 'existing-account',
+      activeClaudeManagedAccountIdsByRuntime: { host: 'existing-account', wsl: {} }
+    }
+    const store = {
+      getSettings: vi.fn(() => settings),
+      updateSettings: vi.fn((updates: Partial<typeof settings>) => {
+        settings = { ...settings, ...updates }
+        return settings
+      })
+    }
+    const runtimeAuth = {
+      clearLastWrittenCredentialsJson: vi.fn(),
+      syncForCurrentSelection: vi.fn(async () => {}),
+      forceMaterializeCurrentSelectionForRollback: vi.fn(async () => {})
+    }
+    const rateLimits = {
+      evictInactiveClaudeCache: vi.fn(),
+      refreshForClaudeAccountChange: vi.fn(async () => ({ accounts: [], activeAccountId: null }))
+    }
+    const { ClaudeAccountService } = await import('./service')
+    const service = new ClaudeAccountService(
+      store as never,
+      rateLimits as never,
+      runtimeAuth as never
+    )
+    ;(
+      service as unknown as {
+        runClaudeLoginAndCapture(): Promise<{
+          credentialsJson: string
+          oauthAccount: unknown
+          identity: { email: string; organizationUuid: string | null; organizationName: null }
+        }>
+      }
+    ).runClaudeLoginAndCapture = vi.fn(async () => ({
+      credentialsJson: '{"new":true}\n',
+      oauthAccount: { newOauth: true },
+      identity: { email: 'new@example.com', organizationUuid: null, organizationName: null }
+    }))
+
+    await expect(service.addAccount({ runtime: 'host' })).rejects.toThrow(
+      'This Claude account is already added.'
+    )
+
+    expect(settings.claudeManagedAccounts).toHaveLength(1)
+    expect(readFileSync(existingMarkerPath, 'utf-8')).toBe('existing-account\n')
+    // The guard fires before credentials/settings change, so rollback I/O
+    // would only add latency and could mask the duplicate error.
+    expect(store.updateSettings).not.toHaveBeenCalled()
+    expect(runtimeAuth.forceMaterializeCurrentSelectionForRollback).not.toHaveBeenCalled()
+    // The rejected add's throwaway managed-auth dir must be cleaned up, leaving
+    // only the pre-existing account's dir behind.
+    expect(readdirSync(join(tempDir, 'claude-accounts')).sort()).toEqual(['existing-account'])
+  })
+
+  it('adds a Claude account with the same email under a different organization', async () => {
+    setPlatform('linux')
+    tempDir = '/tmp/orca-claude-service-test'
+    rmSync(tempDir, { recursive: true, force: true })
+    const existingAuthPath = join(tempDir, 'claude-accounts', 'existing-account', 'auth')
+    mkdirSync(existingAuthPath, { recursive: true })
+    writeFileSync(
+      join(existingAuthPath, '.orca-managed-claude-auth'),
+      'existing-account\n',
+      'utf-8'
+    )
+    let settings = {
+      claudeManagedAccounts: [
+        {
+          id: 'existing-account',
+          email: 'new@example.com',
+          managedAuthPath: existingAuthPath,
+          managedAuthRuntime: 'host',
+          wslDistro: null,
+          wslLinuxAuthPath: null,
+          authMethod: 'subscription-oauth',
+          organizationUuid: 'org-A',
+          organizationName: null,
+          createdAt: 1,
+          updatedAt: 1,
+          lastAuthenticatedAt: 1
+        }
+      ],
+      activeClaudeManagedAccountId: 'existing-account',
+      activeClaudeManagedAccountIdsByRuntime: { host: 'existing-account', wsl: {} }
+    }
+    const store = {
+      getSettings: vi.fn(() => settings),
+      updateSettings: vi.fn((updates: Partial<typeof settings>) => {
+        settings = { ...settings, ...updates }
+        return settings
+      })
+    }
+    const runtimeAuth = {
+      clearLastWrittenCredentialsJson: vi.fn(),
+      syncForCurrentSelection: vi.fn(async () => {}),
+      forceMaterializeCurrentSelectionForRollback: vi.fn(async () => {})
+    }
+    const rateLimits = {
+      evictInactiveClaudeCache: vi.fn(),
+      refreshForClaudeAccountChange: vi.fn(async () => ({ accounts: [], activeAccountId: null }))
+    }
+    const { ClaudeAccountService } = await import('./service')
+    const service = new ClaudeAccountService(
+      store as never,
+      rateLimits as never,
+      runtimeAuth as never
+    )
+    ;(
+      service as unknown as {
+        runClaudeLoginAndCapture(): Promise<{
+          credentialsJson: string
+          oauthAccount: unknown
+          identity: { email: string; organizationUuid: string | null; organizationName: null }
+        }>
+      }
+    ).runClaudeLoginAndCapture = vi.fn(async () => ({
+      credentialsJson: '{"new":true}\n',
+      oauthAccount: { newOauth: true },
+      identity: { email: 'new@example.com', organizationUuid: 'org-B', organizationName: null }
+    }))
+
+    await service.addAccount({ runtime: 'host' })
+
+    expect(settings.claudeManagedAccounts).toHaveLength(2)
+    expect(settings.claudeManagedAccounts[1].email).toBe('new@example.com')
+    expect(settings.claudeManagedAccounts[1].organizationUuid).toBe('org-B')
+  })
+
   it('switches the active Claude account while PTYs are live', async () => {
     setPlatform('linux')
     tempDir = '/tmp/orca-claude-service-test'
@@ -1107,6 +1264,126 @@ describe('ClaudeAccountService credential capture', () => {
     }
   })
 
+  it('owns the complete cmd.exe command line for a resolved Windows Claude command', async () => {
+    setPlatform('win32')
+    vi.resetModules()
+    commandMocks.resolveClaudeCommand.mockReturnValueOnce(
+      'C:\\Users\\First Last\\AppData\\Roaming\\npm\\claude.cmd'
+    )
+    const child = new EventEmitter() as EventEmitter & {
+      stdout: PassThrough
+      stderr: PassThrough
+      kill: ReturnType<typeof vi.fn>
+    }
+    child.stdout = new PassThrough()
+    child.stderr = new PassThrough()
+    child.kill = vi.fn()
+    const spawnMock = vi.fn(() => {
+      child.stdout.write('{"email":"user@example.com"}\n')
+      queueMicrotask(() => child.emit('close', 0))
+      return child
+    })
+    vi.doMock('node:child_process', () => ({ spawn: spawnMock }))
+
+    try {
+      const { ClaudeAccountService } = await import('./service')
+      const service = new ClaudeAccountService(
+        createService() as never,
+        createService() as never,
+        createService() as never
+      )
+      await (
+        service as unknown as {
+          runClaudeCommand(
+            args: string[],
+            configDir: { windowsPath: string; linuxPath: string | null; wslDistro: string | null },
+            timeoutMs: number
+          ): Promise<string>
+        }
+      ).runClaudeCommand(
+        ['auth', 'status', '--json'],
+        { windowsPath: 'C:\\tmp\\claude-auth', linuxPath: null, wslDistro: null },
+        1000
+      )
+
+      expect(spawnMock).toHaveBeenCalledWith(
+        process.env.ComSpec ?? 'cmd.exe',
+        [
+          '/d',
+          '/v:off',
+          '/s',
+          '/c',
+          '""C:\\Users\\First Last\\AppData\\Roaming\\npm\\claude.cmd" "auth" "status" "--json""'
+        ],
+        expect.objectContaining({ shell: false, windowsVerbatimArguments: true })
+      )
+    } finally {
+      vi.doUnmock('node:child_process')
+    }
+  })
+
+  it('keeps WSL execution separate from Windows command resolution', async () => {
+    setPlatform('win32')
+    vi.resetModules()
+    commandMocks.resolveClaudeCommand.mockClear()
+    const child = new EventEmitter() as EventEmitter & {
+      stdout: PassThrough
+      stderr: PassThrough
+      kill: ReturnType<typeof vi.fn>
+    }
+    child.stdout = new PassThrough()
+    child.stderr = new PassThrough()
+    child.kill = vi.fn()
+    const spawnMock = vi.fn(() => {
+      child.stdout.write('{"email":"user@example.com"}\n')
+      queueMicrotask(() => child.emit('close', 0))
+      return child
+    })
+    vi.doMock('node:child_process', () => ({ spawn: spawnMock }))
+
+    try {
+      const { ClaudeAccountService } = await import('./service')
+      const service = new ClaudeAccountService(
+        createService() as never,
+        createService() as never,
+        createService() as never
+      )
+      await (
+        service as unknown as {
+          runClaudeCommand(
+            args: string[],
+            configDir: { windowsPath: string; linuxPath: string | null; wslDistro: string | null },
+            timeoutMs: number
+          ): Promise<string>
+        }
+      ).runClaudeCommand(
+        ['auth', 'status', '--json'],
+        {
+          windowsPath: 'C:\\tmp\\claude-auth',
+          linuxPath: '/home/user/.config/orca auth',
+          wslDistro: 'Ubuntu Test'
+        },
+        1000
+      )
+
+      expect(commandMocks.resolveClaudeCommand).not.toHaveBeenCalled()
+      expect(spawnMock).toHaveBeenCalledWith(
+        'wsl.exe',
+        [
+          '-d',
+          'Ubuntu Test',
+          '--',
+          'bash',
+          '-lc',
+          "export CLAUDE_CONFIG_DIR='/home/user/.config/orca auth'; exec claude 'auth' 'status' '--json'"
+        ],
+        expect.objectContaining({ shell: false, windowsVerbatimArguments: false })
+      )
+    } finally {
+      vi.doUnmock('node:child_process')
+    }
+  })
+
   it('pipes stdin only for the explicit Claude account login command', async () => {
     setPlatform('linux')
     vi.resetModules()
@@ -1394,10 +1671,7 @@ describe('ClaudeAccountService credential capture', () => {
     child.stderr = new PassThrough()
     child.kill = vi.fn()
     const destroyStdin = vi.spyOn(child.stdin, 'destroy')
-    const taskkill = new EventEmitter() as EventEmitter & {
-      unref: ReturnType<typeof vi.fn>
-    }
-    taskkill.unref = vi.fn()
+    const taskkill = new EventEmitter()
     const spawnMock = vi.fn((command: string) => (command === 'taskkill.exe' ? taskkill : child))
     vi.doMock('node:child_process', () => ({ spawn: spawnMock }))
 
@@ -1432,21 +1706,23 @@ describe('ClaudeAccountService credential capture', () => {
       const addPromise = service.addAccount()
       await vi.waitFor(() => {
         expect(spawnMock).toHaveBeenCalledWith(
-          'claude',
-          ['auth', 'login', '--claudeai'],
-          expect.objectContaining({ shell: true })
+          process.env.ComSpec ?? 'cmd.exe',
+          ['/d', '/v:off', '/s', '/c', '""claude" "auth" "login" "--claudeai""'],
+          expect.objectContaining({ shell: false, windowsVerbatimArguments: true })
         )
       })
 
       expect(service.cancelPendingLogin()).toBe(true)
-      await expect(addPromise).rejects.toThrow('Claude sign-in was cancelled.')
+      const rejection = expect(addPromise).rejects.toThrow('Claude sign-in was cancelled.')
       expect(child.kill).not.toHaveBeenCalled()
       expect(spawnMock).toHaveBeenCalledWith(
         'taskkill.exe',
         ['/pid', '1234', '/t', '/f'],
         expect.objectContaining({ stdio: 'ignore', windowsHide: true })
       )
-      expect(taskkill.unref).toHaveBeenCalled()
+      expect(destroyStdin).not.toHaveBeenCalled()
+      taskkill.emit('close', 0)
+      await rejection
       expect(destroyStdin).toHaveBeenCalledTimes(1)
       expect(service.cancelPendingLogin()).toBe(false)
     } finally {

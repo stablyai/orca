@@ -132,6 +132,29 @@ describe('rich markdown round trip', () => {
     )
   })
 
+  it.each(['heading-2', 'heading-3', 'heading-4', 'heading-5'])(
+    'preserves %s-styled details blocks',
+    (variant) => {
+      expect(
+        roundTripMarkdown(
+          `<details data-orca-toggle="${variant}"><summary>Toggle</summary><p>Body</p></details>\n`
+        )
+      ).toBe(
+        `<details class="orca-details" data-orca-toggle="${variant}">\n<summary>Toggle</summary>\n\nBody\n\n</details>`
+      )
+    }
+  )
+
+  it('preserves a heading toggle when its attribute uses HTML whitespace around equals', () => {
+    expect(
+      roundTripMarkdown(
+        '<details data-orca-toggle = "heading-4"><summary>Toggle</summary><p>Body</p></details>\n'
+      )
+    ).toBe(
+      '<details class="orca-details" data-orca-toggle="heading-4">\n<summary>Toggle</summary>\n\nBody\n\n</details>'
+    )
+  })
+
   it('preserves details blocks with raw html as passthrough html', () => {
     const input = '<details><summary><span>Toggle</span></summary><p><em>Body</em></p></details>\n'
     expect(roundTripMarkdown(input)).toBe(input.trimEnd())
@@ -140,6 +163,12 @@ describe('rich markdown round trip', () => {
   it('preserves details blocks with unsupported attributes as passthrough html', () => {
     const input =
       '<details id="x"><summary class="s">Toggle</summary><p data-x="1">Body</p></details>\n'
+    expect(roundTripMarkdown(input)).toBe(input.trimEnd())
+  })
+
+  it('preserves details blocks with unsupported toggle variants as passthrough html', () => {
+    const input =
+      '<details data-orca-toggle="heading-6"><summary>Toggle</summary><p>Body</p></details>\n'
     expect(roundTripMarkdown(input)).toBe(input.trimEnd())
   })
 
@@ -180,6 +209,18 @@ describe('rich markdown round trip', () => {
       '<details class="orca-details" data-orca-toggle="heading-1" open>\n<summary></summary>\n\n\n\n</details>'
     )
     expect(slashCommandSelectionParent('toggle-h1')).toBe('detailsSummary')
+  })
+
+  it.each([
+    ['toggle-h2', 'heading-2'],
+    ['toggle-h3', 'heading-3'],
+    ['toggle-h4', 'heading-4'],
+    ['toggle-h5', 'heading-5']
+  ] as const)('inserts editable %s toggles from slash commands', (commandId, variant) => {
+    expect(slashCommandMarkdown(commandId)).toBe(
+      `<details class="orca-details" data-orca-toggle="${variant}" open>\n<summary></summary>\n\n\n\n</details>`
+    )
+    expect(slashCommandSelectionParent(commandId)).toBe('detailsSummary')
   })
 
   it('preserves markdown tables', () => {

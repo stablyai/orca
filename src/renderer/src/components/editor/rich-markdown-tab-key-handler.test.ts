@@ -60,6 +60,9 @@ function createContext(editor: Editor): KeyHandlerContext {
     editorRef: { current: editor },
     rootRef: { current: null },
     lastCommittedMarkdownRef: { current: '' },
+    originalSourceRef: { current: '' },
+    baseCanonicalRef: { current: '' },
+    reconcileRoundTripRef: { current: () => null },
     onContentChangeRef: { current: vi.fn() },
     onSaveRef: { current: vi.fn() },
     isEditingLinkRef: { current: false },
@@ -86,6 +89,7 @@ function createContext(editor: Editor): KeyHandlerContext {
       subscribe: () => () => {},
       update: () => {}
     },
+    openAnnotationPopoverRef: { current: vi.fn() },
     setIsEditingLink: vi.fn(),
     setLinkBubble: vi.fn(),
     setSelectedCommandIndex: vi.fn(),

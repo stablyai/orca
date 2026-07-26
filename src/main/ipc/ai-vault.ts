@@ -18,6 +18,7 @@ import type {
   AiVaultSubagentListArgs,
   AiVaultSubagentListResult
 } from '../../shared/ai-vault-types'
+import { registerAiVaultResumeHandler, type AiVaultResumeHandlerOptions } from './ai-vault-resume'
 import {
   LOCAL_EXECUTION_HOST_ID,
   normalizeExecutionHostScope,
@@ -35,14 +36,15 @@ import { getActiveSshAiVaultHostInfo, getActiveSshAiVaultHostInfos } from './ssh
 const AI_VAULT_CACHE_TTL_MS = 15_000
 const AI_VAULT_ALL_HOST_RUNTIME_TIMEOUT_MS = 3_000
 
-type AiVaultHandlerOptions = AiVaultSessionSources & {
-  getActiveRuntimeAiVaultHostInfos?: () => readonly RuntimeAiVaultHostInfo[]
-  scanRuntimeAiVaultSessions?: (
-    environmentId: string,
-    args: AiVaultListArgs,
-    options?: RuntimeAiVaultScanOptions
-  ) => Promise<AiVaultListResult>
-}
+type AiVaultHandlerOptions = AiVaultSessionSources &
+  AiVaultResumeHandlerOptions & {
+    getActiveRuntimeAiVaultHostInfos?: () => readonly RuntimeAiVaultHostInfo[]
+    scanRuntimeAiVaultSessions?: (
+      environmentId: string,
+      args: AiVaultListArgs,
+      options?: RuntimeAiVaultScanOptions
+    ) => Promise<AiVaultListResult>
+  }
 
 type RuntimeAiVaultScanOptions = {
   timeoutMs?: number
@@ -281,6 +283,7 @@ export function registerAiVaultHandlers(options: AiVaultHandlerOptions = {}): vo
   ipcMain.handle('aiVault:listSessions', (_event, args?: AiVaultListArgs) =>
     listAiVaultSessions(args)
   )
+  registerAiVaultResumeHandler(options)
   ipcMain.handle(
     'aiVault:listSubagentSessions',
     (_event, args?: AiVaultSubagentListArgs): Promise<AiVaultSubagentListResult> =>

@@ -29,7 +29,10 @@ describe('electron-builder config', () => {
         '!native{,/**/*}',
         '!skills{,/**/*}',
         '!skill-guides{,/**/*}',
+        '!skill-stubs{,/**/*}',
+        '!resources/skills/**',
         '!tests{,/**/*}',
+        '!pr-evidence{,/**/*}',
         '!Casks{,/**/*}',
         '!{AGENTS.md,CLAUDE.md,DEVELOPING.md,bundle-size-progress.md}',
         '!out/**/*.test.js'
@@ -38,6 +41,12 @@ describe('electron-builder config', () => {
   })
 
   it('keeps runtime resources available through extraResources', () => {
+    for (const platform of ['mac', 'linux', 'win']) {
+      expect(electronBuilderConfig[platform].extraResources).toContainEqual({
+        from: 'resources/skills',
+        to: 'skills'
+      })
+    }
     expect(electronBuilderConfig.mac.extraResources).toEqual(
       expect.arrayContaining([
         expect.objectContaining({
@@ -63,6 +72,26 @@ describe('electron-builder config', () => {
         expect.objectContaining({
           from: 'native/windows-cli-launcher/.build/orca.exe',
           to: 'bin/orca.exe'
+        })
+      ])
+    )
+  })
+
+  // Why: the Windows CLI shim is delivered only via extraResources to
+  // resources/bin/orca.cmd (beside the native resources/bin/orca.exe). If the
+  // source tree is also packed into app.asar it gets extracted by
+  // asarUnpack:['resources/**'] to app.asar.unpacked/resources/win32/bin/orca.cmd,
+  // a duplicate with no adjacent orca.exe that fails to launch (#7351).
+  it('keeps the Windows CLI shim source tree out of app.asar', () => {
+    expect(electronBuilderConfig.files).toEqual(
+      expect.arrayContaining(['!resources/win32{,/**/*}'])
+    )
+    // Regression guard: the working shim must still ship via extraResources.
+    expect(electronBuilderConfig.win.extraResources).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          from: 'resources/win32/bin/orca.cmd',
+          to: 'bin/orca.cmd'
         })
       ])
     )

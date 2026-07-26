@@ -16,7 +16,9 @@ describe('git RPC methods', () => {
         entries: [],
         conflictOperation: 'unknown',
         branch: 'main',
-        head: 'abc'
+        head: 'abc',
+        didHitLimit: true,
+        statusLength: 1_001
       })
     } as unknown as OrcaRuntimeService
     const dispatcher = new RpcDispatcher({ runtime, methods: GIT_METHODS })
@@ -26,7 +28,7 @@ describe('git RPC methods', () => {
     expect(runtime.getRuntimeGitStatus).toHaveBeenCalledWith('id:wt-1')
     expect(response).toMatchObject({
       ok: true,
-      result: { entries: [], branch: 'main' }
+      result: { entries: [], branch: 'main', didHitLimit: true, statusLength: 1_001 }
     })
   })
 
@@ -77,6 +79,28 @@ describe('git RPC methods', () => {
     expect(response).toMatchObject({
       ok: true,
       result: { entries: [] }
+    })
+  })
+
+  it('forwards line-stat reuse and request cancellation for status requests', async () => {
+    const controller = new AbortController()
+    const runtime = {
+      getRuntimeId: () => 'test-runtime',
+      getRuntimeGitStatus: vi.fn().mockResolvedValue({
+        entries: [],
+        conflictOperation: 'unknown'
+      })
+    } as unknown as OrcaRuntimeService
+    const dispatcher = new RpcDispatcher({ runtime, methods: GIT_METHODS })
+
+    await dispatcher.dispatch(
+      makeRequest('git.status', { worktree: 'id:wt-1', reuseLineStats: true }),
+      { signal: controller.signal }
+    )
+
+    expect(runtime.getRuntimeGitStatus).toHaveBeenCalledWith('id:wt-1', {
+      reuseLineStats: true,
+      signal: controller.signal
     })
   })
 

@@ -668,7 +668,7 @@ describe('registerGitHubHandlers', () => {
       repoPath: '/workspace/repo',
       limit: 10,
       query: 'is:open',
-      before: 'cursor-1',
+      page: 2,
       noCache: true
     })
 
@@ -676,7 +676,7 @@ describe('registerGitHubHandlers', () => {
       '/workspace/repo',
       10,
       'is:open',
-      'cursor-1',
+      2,
       'origin',
       null,
       true
@@ -732,7 +732,7 @@ describe('registerGitHubHandlers', () => {
       repoPath: '/workspace/repo',
       limit: 10,
       query: 'is:open',
-      before: 'cursor-1',
+      page: 2,
       noCache: true
     })
     await handlers['gh:countWorkItems'](null, {
@@ -789,7 +789,7 @@ describe('registerGitHubHandlers', () => {
       '/workspace/repo',
       10,
       'is:open',
-      'cursor-1',
+      2,
       undefined,
       null,
       true,
@@ -843,6 +843,48 @@ describe('registerGitHubHandlers', () => {
     )
   })
 
+  // Why: open-by-number must pin the same source the list uses, else a fork and
+  // its upstream sharing PR #42 open different PRs from the same click.
+  it('pins the repo origin source preference on work item and details IPC', async () => {
+    repos = [
+      {
+        id: 'repo-1',
+        path: '/workspace/repo',
+        displayName: 'repo',
+        badgeColor: '#000',
+        addedAt: 0,
+        issueSourcePreference: 'origin'
+      }
+    ]
+    getWorkItemMock.mockResolvedValue(null)
+    getWorkItemDetailsMock.mockResolvedValue(null)
+    registerGitHubHandlers(store as never, stats as never)
+
+    await handlers['gh:workItem'](null, { repoPath: '/workspace/repo', number: 42, type: 'pr' })
+    await handlers['gh:workItemDetails'](null, {
+      repoPath: '/workspace/repo',
+      number: 42,
+      type: 'pr'
+    })
+
+    expect(getWorkItemMock).toHaveBeenCalledWith(
+      '/workspace/repo',
+      42,
+      'pr',
+      null,
+      undefined,
+      'origin'
+    )
+    expect(getWorkItemDetailsMock).toHaveBeenCalledWith(
+      '/workspace/repo',
+      42,
+      'pr',
+      null,
+      undefined,
+      'origin'
+    )
+  })
+
   it('routes local WSL project GitHub PR detail and action IPC through project git options', async () => {
     setPlatform('win32')
     projects = [
@@ -856,7 +898,7 @@ describe('registerGitHubHandlers', () => {
         updatedAt: 0
       }
     ]
-    const prRepo = { owner: 'acme', repo: 'orca' }
+    const prRepo = { owner: 'acme', repo: 'orca', host: 'github.acme-corp.com' }
     const localGitOptions = { wslDistro: 'Ubuntu' }
     getWorkItemMock.mockResolvedValue(null)
     getWorkItemByOwnerRepoMock.mockResolvedValue(null)
@@ -883,6 +925,7 @@ describe('registerGitHubHandlers', () => {
       repoPath: '/workspace/repo',
       owner: 'acme',
       repo: 'orca',
+      host: prRepo.host,
       number: 42,
       type: 'pr'
     })
@@ -894,6 +937,7 @@ describe('registerGitHubHandlers', () => {
     await handlers['gh:prFileContents'](null, {
       repoPath: '/workspace/repo',
       prNumber: 42,
+      prRepo,
       path: 'src/app.ts',
       status: 'modified',
       headSha: 'head-sha',
@@ -923,13 +967,15 @@ describe('registerGitHubHandlers', () => {
     await handlers['gh:resolveReviewThread'](null, {
       repoPath: '/workspace/repo',
       threadId: 'thread-1',
-      resolve: true
+      resolve: true,
+      prRepo
     })
     await handlers['gh:setPRFileViewed'](
       { sender: { id: 1 } },
       {
         repoPath: '/workspace/repo',
         prNumber: 42,
+        prRepo,
         pullRequestId: 'PR_kw',
         path: 'src/app.ts',
         viewed: true
@@ -940,12 +986,12 @@ describe('registerGitHubHandlers', () => {
       {
         repoPath: '/workspace/repo',
         prNumber: 42,
+        prRepo,
         commentId: 11,
         body: ' Reply ',
         threadId: 'thread-1',
         path: 'src/app.ts',
-        line: 10,
-        prRepo
+        line: 10
       }
     )
     await handlers['gh:addPRReviewComment'](
@@ -953,6 +999,7 @@ describe('registerGitHubHandlers', () => {
       {
         repoPath: '/workspace/repo',
         prNumber: 42,
+        prRepo,
         commitId: ' head-sha ',
         path: 'src/app.ts',
         line: 10,
@@ -992,21 +1039,24 @@ describe('registerGitHubHandlers', () => {
       {
         repoPath: '/workspace/repo',
         prNumber: 42,
-        updates: { state: 'closed' }
+        updates: { state: 'closed' },
+        prRepo
       }
     )
     await handlers['gh:rerunPRChecks'](null, {
       repoPath: '/workspace/repo',
       prNumber: 42,
       headSha: 'head-sha',
-      failedOnly: true
+      failedOnly: true,
+      prRepo
     })
     await handlers['gh:requestPRReviewers'](
       { sender: { id: 1 } },
       {
         repoPath: '/workspace/repo',
         prNumber: 42,
-        reviewers: ['octo']
+        reviewers: ['octo'],
+        prRepo
       }
     )
     await handlers['gh:removePRReviewers'](
@@ -1014,11 +1064,19 @@ describe('registerGitHubHandlers', () => {
       {
         repoPath: '/workspace/repo',
         prNumber: 42,
-        reviewers: ['octo']
+        reviewers: ['octo'],
+        prRepo
       }
     )
 
-    expect(getWorkItemMock).toHaveBeenCalledWith('/workspace/repo', 42, 'pr', null, localGitOptions)
+    expect(getWorkItemMock).toHaveBeenCalledWith(
+      '/workspace/repo',
+      42,
+      'pr',
+      null,
+      localGitOptions,
+      undefined
+    )
     expect(getWorkItemByOwnerRepoMock).toHaveBeenCalledWith(
       '/workspace/repo',
       prRepo,
@@ -1032,10 +1090,11 @@ describe('registerGitHubHandlers', () => {
       42,
       'pr',
       null,
-      localGitOptions
+      localGitOptions,
+      undefined
     )
     expect(getPRFileContentsMock).toHaveBeenCalledWith(
-      expect.objectContaining({ repoPath: '/workspace/repo', localGitOptions })
+      expect.objectContaining({ repoPath: '/workspace/repo', localGitOptions, prRepo })
     )
     expect(getPRChecksMock).toHaveBeenCalledWith(
       '/workspace/repo',
@@ -1070,10 +1129,11 @@ describe('registerGitHubHandlers', () => {
       'thread-1',
       true,
       null,
+      prRepo,
       localGitOptions
     )
     expect(setPRFileViewedMock).toHaveBeenCalledWith(
-      expect.objectContaining({ repoPath: '/workspace/repo', localGitOptions })
+      expect.objectContaining({ repoPath: '/workspace/repo', localGitOptions, prRepo })
     )
     expect(addPRReviewCommentReplyMock).toHaveBeenCalledWith(
       '/workspace/repo',
@@ -1092,6 +1152,7 @@ describe('registerGitHubHandlers', () => {
         repoPath: '/workspace/repo',
         commitId: 'head-sha',
         body: 'Inline',
+        prRepo,
         localGitOptions
       })
     )
@@ -1125,12 +1186,13 @@ describe('registerGitHubHandlers', () => {
       42,
       { state: 'closed' },
       null,
+      prRepo,
       localGitOptions
     )
     expect(rerunPRChecksMock).toHaveBeenCalledWith(
       '/workspace/repo',
       42,
-      { headSha: 'head-sha', failedOnly: true },
+      { headSha: 'head-sha', failedOnly: true, prRepo },
       null,
       localGitOptions
     )
@@ -1139,6 +1201,7 @@ describe('registerGitHubHandlers', () => {
       42,
       ['octo'],
       null,
+      prRepo,
       localGitOptions
     )
     expect(removePRReviewersMock).toHaveBeenCalledWith(
@@ -1146,6 +1209,7 @@ describe('registerGitHubHandlers', () => {
       42,
       ['octo'],
       null,
+      prRepo,
       localGitOptions
     )
   })

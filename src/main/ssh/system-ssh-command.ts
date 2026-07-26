@@ -17,6 +17,7 @@ export type SystemSshProcess = {
 
 export type SystemSshCommandChannel = ClientChannel & {
   _process?: ChildProcess
+  _closeRequested?: boolean
 }
 
 type SystemSshCommandOptions = SshExecOptions & SystemSshBuildArgsOptions
@@ -103,12 +104,14 @@ function wrapCommandProcess(proc: ChildProcess): SystemSshCommandChannel {
     stdin: NodeJS.WritableStream
     stderr: NodeJS.ReadableStream
     _process?: ChildProcess
+    _closeRequested?: boolean
     close: () => void
   }
   mutableChannel.stdin = proc.stdin!
   mutableChannel.stderr = proc.stderr!
   mutableChannel._process = proc
   mutableChannel.close = () => {
+    mutableChannel._closeRequested = true
     try {
       proc.kill('SIGTERM')
     } catch {

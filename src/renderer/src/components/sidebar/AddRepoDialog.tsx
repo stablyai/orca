@@ -16,24 +16,36 @@ import { useAddRepoHostChangeReset } from './use-add-repo-host-change-reset'
 import { AddRepoDialogChrome } from './AddRepoDialogChrome'
 import { AddRepoHostSelectorSlot } from './AddRepoHostSelectorSlot'
 import { useAddRepoRemoteNestedScan } from './use-add-repo-remote-nested-scan'
+import {
+  useAddRepoHostedController,
+  type AddRepoDialogHostedController
+} from './use-add-repo-hosted-controller'
 
-const AddRepoDialog = React.memo(function AddRepoDialog() {
-  const activeModal = useAppStore((s) => s.activeModal)
-  const modalData = useAppStore((s) => s.modalData)
-  const closeModal = useAppStore((s) => s.closeModal)
+const AddRepoDialog = React.memo(function AddRepoDialog({
+  hosted
+}: {
+  hosted?: AddRepoDialogHostedController
+}) {
+  const isOpen = useAppStore((s) => (hosted ? hosted.open : s.activeModal === 'add-repo'))
+  // Why: hosted mode never receives dropped paths through modalData — that
+  // channel belongs to the store-modal instance.
+  const droppedLocalPath = useAppStore((s) =>
+    !hosted && typeof s.modalData.droppedLocalPath === 'string' ? s.modalData.droppedLocalPath : ''
+  )
   const addRepoPath = useAppStore((s) => s.addRepoPath)
   const scanNestedRepos = useAppStore((s) => s.scanNestedRepos)
   const cancelNestedRepoScan = useAppStore((s) => s.cancelNestedRepoScan)
   const importNestedRepos = useAppStore((s) => s.importNestedRepos)
   const repos = useAppStore((s) => s.repos)
   const fetchWorktrees = useAppStore((s) => s.fetchWorktrees)
-  const openSettingsPage = useAppStore((s) => s.openSettingsPage)
-  const openSettingsTarget = useAppStore((s) => s.openSettingsTarget)
   const setHideDefaultBranchWorkspace = useAppStore((s) => s.setHideDefaultBranchWorkspace)
   const settings = useAppStore((s) => s.settings)
+  const { closeModal, closeForFolderHandoff, finishProjectAdd, handleOpenSshSettings } =
+    useAddRepoHostedController(hosted)
   const completeGitRepoAdd = useCompleteGitRepoAdd({
     closeModal,
-    setHideDefaultBranchWorkspace
+    setHideDefaultBranchWorkspace,
+    finishProjectAdd
   })
 
   const [step, setStep] = useState<AddRepoDialogStep>('add')
@@ -63,7 +75,7 @@ const AddRepoDialog = React.memo(function AddRepoDialog() {
     setStep
   })
 
-  const hostSelection = useAddRepoHostSelection({ isOpen: activeModal === 'add-repo', setStep })
+  const hostSelection = useAddRepoHostSelection({ isOpen, setStep })
   const selectedRuntimeEnvironmentId =
     hostSelection.selectedParsedHost?.kind === 'runtime'
       ? hostSelection.selectedParsedHost.environmentId
@@ -90,7 +102,8 @@ const AddRepoDialog = React.memo(function AddRepoDialog() {
   } = useRemoteRepo(
     fetchWorktrees,
     setStep,
-    closeModal,
+    // Why: useRemoteRepo closes only for the non-git → confirm-dialog handoff.
+    closeForFolderHandoff,
     (repoId) => completeGitRepoAdd(repoId, 'ssh_remote_path'),
     scanNestedRepos,
     showRemoteNestedRepoReview,
@@ -110,7 +123,8 @@ const AddRepoDialog = React.memo(function AddRepoDialog() {
     handleCreate
   } = useCreateRepo(
     fetchWorktrees,
-    closeModal,
+    // Why: useCreateRepo closes only after a folder (non-git) create.
+    closeForFolderHandoff,
     (repoId) => completeGitRepoAdd(repoId, 'create_project'),
     {
       hostId: hostSelection.selectedHostId,
@@ -155,9 +169,6 @@ const AddRepoDialog = React.memo(function AddRepoDialog() {
     onGitRepoReady: completeGitRepoAdd
   })
 
-  const isOpen = activeModal === 'add-repo'
-  const droppedLocalPath =
-    typeof modalData.droppedLocalPath === 'string' ? modalData.droppedLocalPath : ''
   const isRuntimeEnvironmentActive = Boolean(selectedRuntimeEnvironmentId)
   const selectedHostKind = hostSelection.selectedParsedHost?.kind
   const { handleBrowse, resetLocalFolderFlow } = useAddRepoLocalFolderFlow({
@@ -165,7 +176,8 @@ const AddRepoDialog = React.memo(function AddRepoDialog() {
     droppedLocalPath,
     activeRuntimeEnvironmentId: selectedRuntimeEnvironmentId,
     addRepoPath,
-    closeModal,
+    // Why: this flow's closes are all folder/non-git outcomes that navigate.
+    closeModal: closeForFolderHandoff,
     fetchWorktrees,
     scanNestedRepos,
     setActiveNestedScanId,
@@ -183,7 +195,8 @@ const AddRepoDialog = React.memo(function AddRepoDialog() {
     handleAddServerPath
   } = useAddRepoServerPathFlow({
     addRepoPath,
-    closeModal,
+    // Why: closes only after a folder add, which activates the folder workspace.
+    closeModal: closeForFolderHandoff,
     fetchWorktrees,
     getNestedRepoRuntimeKind,
     scanNestedRepos,
@@ -207,6 +220,9 @@ const AddRepoDialog = React.memo(function AddRepoDialog() {
     nestedGroupName,
     nestedImportScanId,
     activeRuntimeEnvironmentId: selectedRuntimeEnvironmentId,
+    // Why: open-as-folder outcomes navigate; git imports finish via
+    // completeGitRepoAdd instead.
+    closeModal: closeForFolderHandoff,
     fetchWorktrees,
     importNestedRepos,
     getNestedRepoRuntimeKind,
@@ -289,6 +305,7 @@ const AddRepoDialog = React.memo(function AddRepoDialog() {
       step={step}
       isAdding={isAdding}
       onBack={handleBack}
+      onCloseAutoFocus={hosted?.onCloseAutoFocus}
       onOpenChange={handleOpenChange}
     >
       <AddRepoDialogStepContent
@@ -365,11 +382,7 @@ const AddRepoDialog = React.memo(function AddRepoDialog() {
           setRemoteError(null)
         }}
         onAddRemoteRepo={handleAddRemoteRepo}
-        onOpenSshSettings={() => {
-          closeModal()
-          openSettingsTarget({ pane: 'ssh', repoId: null, sectionId: 'ssh' })
-          openSettingsPage()
-        }}
+        onOpenSshSettings={handleOpenSshSettings}
         onConnectTarget={handleConnectTarget}
         onStopRemoteNestedScan={stopRemoteNestedScan}
         onCloneUrlChange={(value) => {

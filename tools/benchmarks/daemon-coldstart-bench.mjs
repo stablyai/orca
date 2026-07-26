@@ -166,13 +166,24 @@ function runIteration({ exe, fixtureDir, timeoutMs, lingerMs }) {
     const commandArgs = exe ? [] : [repoRoot]
     const events = []
     const startedAt = process.hrtime.bigint()
+    // Why: daemon timings must not include real-home Codex work or let a
+    // benchmark launch resolve paths against the developer profile.
+    const isolatedHome = join(fixtureDir, 'home')
+    mkdirSync(isolatedHome, { recursive: true })
+    const env = {
+      ...process.env,
+      ORCA_STARTUP_DIAGNOSTICS: '1',
+      ORCA_E2E_USER_DATA_DIR: fixtureDir,
+      HOME: isolatedHome,
+      USERPROFILE: isolatedHome,
+      ORCA_E2E_HOME_DIR: isolatedHome,
+      ORCA_CODEX_SYSTEM_DEFAULT_REAL_HOME: '0',
+      ORCA_E2E_HEADLESS: '1'
+    }
+    delete env.CODEX_HOME
+    delete env.ORCA_CODEX_HOME
     const child = spawn(command, commandArgs, {
-      env: {
-        ...process.env,
-        ORCA_STARTUP_DIAGNOSTICS: '1',
-        ORCA_E2E_USER_DATA_DIR: fixtureDir,
-        ORCA_E2E_HEADLESS: '1'
-      },
+      env,
       stdio: ['ignore', 'ignore', 'pipe']
     })
     let finished = false

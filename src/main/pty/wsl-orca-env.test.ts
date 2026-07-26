@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { addOrcaWslInteropEnv } from './wsl-orca-env'
+import { addOrcaWslInteropEnv, addWorktreeSetupWslInteropEnv } from './wsl-orca-env'
 
 describe('addOrcaWslInteropEnv', () => {
   it('marks the Orca terminal handle for Windows to WSL env import', () => {
@@ -65,9 +65,116 @@ describe('addOrcaWslInteropEnv', () => {
     expect(guestEnv.WSLENV).not.toContain('ORCA_AGENT_HOOK_ENDPOINT/p')
   })
 
+  it('tags pre-translated Linux setup paths /u so WSLENV does not translate them again (#9206)', () => {
+    const env: Record<string, string> = {
+      ORCA_ROOT_PATH: '/home/jin/repo',
+      ORCA_WORKTREE_PATH: '/home/jin/repo-worktrees/fix-1',
+      ORCA_WORKSPACE_NAME: 'fix-1',
+      CONDUCTOR_ROOT_PATH: '/home/jin/repo',
+      GHOSTX_ROOT_PATH: '/home/jin/repo'
+    }
+
+    addOrcaWslInteropEnv(env)
+
+    // /u (not /p): hooks.ts already converted these to Linux paths before
+    // spawn, so a /p flag would make WSLENV double-translate them.
+    expect(env.WSLENV).toContain('ORCA_ROOT_PATH/u')
+    expect(env.WSLENV).toContain('ORCA_WORKTREE_PATH/u')
+    expect(env.WSLENV).toContain('CONDUCTOR_ROOT_PATH/u')
+    expect(env.WSLENV).toContain('GHOSTX_ROOT_PATH/u')
+    expect(env.WSLENV).not.toContain('ORCA_ROOT_PATH/p')
+    expect(env.WSLENV).not.toContain('ORCA_WORKTREE_PATH/p')
+    // The value itself must stay the already-Linux path.
+    expect(env.ORCA_ROOT_PATH).toBe('/home/jin/repo')
+    expect(env.ORCA_WORKTREE_PATH).toBe('/home/jin/repo-worktrees/fix-1')
+  })
+
+  it('tags untranslated Windows setup paths /p so WSLENV translates them (wsl.exe shell over a Windows worktree)', () => {
+    const env: Record<string, string> = {
+      ORCA_ROOT_PATH: 'C:\\Users\\jin\\repo',
+      ORCA_WORKTREE_PATH: 'C:\\Users\\jin\\repo-worktrees\\fix-1',
+      CONDUCTOR_ROOT_PATH: 'C:\\Users\\jin\\repo',
+      GHOSTX_ROOT_PATH: 'C:\\Users\\jin\\repo'
+    }
+
+    addOrcaWslInteropEnv(env)
+
+    expect(env.WSLENV).toContain('ORCA_ROOT_PATH/p')
+    expect(env.WSLENV).toContain('ORCA_WORKTREE_PATH/p')
+    expect(env.WSLENV).toContain('CONDUCTOR_ROOT_PATH/p')
+    expect(env.WSLENV).toContain('GHOSTX_ROOT_PATH/p')
+    expect(env.WSLENV).not.toContain('ORCA_ROOT_PATH/u')
+    expect(env.WSLENV).not.toContain('ORCA_WORKTREE_PATH/u')
+  })
+
+  it('always tags ORCA_WORKSPACE_NAME /u because it is a name, not a path', () => {
+    const env: Record<string, string> = { ORCA_WORKSPACE_NAME: 'fix-1' }
+
+    addOrcaWslInteropEnv(env)
+
+    expect(env.WSLENV).toBe('ORCA_WORKSPACE_NAME/u')
+  })
+
+  it('does not register setup vars that are absent from the env', () => {
+    const env: Record<string, string> = { ORCA_TERMINAL_HANDLE: 'term_wsl' }
+
+    addOrcaWslInteropEnv(env)
+
+    expect(env.WSLENV).toBe('ORCA_TERMINAL_HANDLE/u')
+  })
+
   it('marks the WSL hook relay version for import on relay spawn envs', () => {
-    const env: Record<string, string> = { ORCA_WSL_HOOK_RELAY_VERSION: '0.1.0+abc' }
+    const env: Record<string, string> = {
+      ORCA_WSL_HOOK_RELAY_VERSION: '0.1.0+abc'
+    }
     addOrcaWslInteropEnv(env)
     expect(env.WSLENV).toBe('ORCA_WSL_HOOK_RELAY_VERSION/u')
+  })
+
+  it('crosses a guest-side OpenCode config overlay untranslated (/u)', () => {
+    const env: Record<string, string> = {
+      OPENCODE_CONFIG_DIR: '/home/jin/.orca-relay/opencode-overlays/abc',
+      ORCA_OPENCODE_CONFIG_DIR: '/home/jin/.orca-relay/opencode-overlays/abc'
+    }
+    addOrcaWslInteropEnv(env)
+    expect(env.WSLENV).toContain('OPENCODE_CONFIG_DIR/u')
+    expect(env.WSLENV).toContain('ORCA_OPENCODE_CONFIG_DIR/u')
+    expect(env.WSLENV).not.toContain('OPENCODE_CONFIG_DIR/p')
+  })
+
+  it('never crosses a Windows OpenCode config dir into the guest', () => {
+    // Why: the relay spawn env spreads process.env and the daemon inherits its
+    // own — a /p entry here would deliver C:\... as /mnt/c and in-guest OpenCode
+    // would adopt Orca's Windows overlay as its config root.
+    const env: Record<string, string> = {
+      OPENCODE_CONFIG_DIR: 'C:\\Users\\jin\\AppData\\Roaming\\Orca\\opencode-overlays\\abc',
+      ORCA_OPENCODE_CONFIG_DIR: 'C:\\Users\\jin\\AppData\\Roaming\\Orca\\opencode-overlays\\abc'
+    }
+    addOrcaWslInteropEnv(env)
+    expect(env.WSLENV).not.toContain('OPENCODE_CONFIG_DIR')
+    expect(env.WSLENV).not.toContain('ORCA_OPENCODE_CONFIG_DIR')
+  })
+
+  it('does not register the OpenCode config vars when they are absent', () => {
+    const env: Record<string, string> = { ORCA_TERMINAL_HANDLE: 'term_wsl' }
+    addOrcaWslInteropEnv(env)
+    expect(env.WSLENV).not.toContain('OPENCODE_CONFIG_DIR')
+    expect(env.WSLENV).not.toContain('ORCA_OPENCODE_CONFIG_DIR')
+  })
+})
+
+describe('addWorktreeSetupWslInteropEnv', () => {
+  it('registers only setup vars, sharing the /u-vs-/p flag logic with the PTY path (#9206)', () => {
+    const env: Record<string, string | undefined> = {
+      ORCA_ROOT_PATH: '/mnt/c/Users/jin/repo',
+      ORCA_WORKTREE_PATH: 'C:\\Users\\jin\\repo-worktrees\\fix-1',
+      ORCA_WORKSPACE_NAME: 'fix-1',
+      // Terminal-only vars must not leak into runHook's WSLENV.
+      ORCA_TERMINAL_HANDLE: 'term_wsl'
+    }
+
+    addWorktreeSetupWslInteropEnv(env)
+
+    expect(env.WSLENV).toBe('ORCA_ROOT_PATH/u:ORCA_WORKTREE_PATH/p:ORCA_WORKSPACE_NAME/u')
   })
 })

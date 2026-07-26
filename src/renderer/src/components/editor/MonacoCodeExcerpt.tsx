@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react'
 import { monaco } from '@/lib/monaco-setup'
-import { computeEditorFontSize } from '@/lib/editor-font-zoom'
+import { computeEditorFontSize, resolveEditorFontFamily } from '@/lib/editor-font-zoom'
 import { useAppStore } from '@/store'
 import { cn } from '@/lib/utils'
 import { resolveCurrentMonacoTheme } from '@/lib/editor-theme'
@@ -51,7 +51,7 @@ export default function MonacoCodeExcerpt({
     settings?.terminalFontSize ?? 13,
     editorFontZoomLevel
   )
-  const fontFamily = settings?.terminalFontFamily || 'monospace'
+  const fontFamily = resolveEditorFontFamily(settings)
   const monacoTheme = resolveCurrentMonacoTheme(settings)
   const code = useMemo(() => lines.join('\n'), [lines])
   const [htmlLines, setHtmlLines] = useState<string[]>(() => lines.map(() => ''))

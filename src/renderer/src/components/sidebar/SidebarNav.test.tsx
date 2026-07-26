@@ -3,6 +3,7 @@
 import { act, type ReactNode } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { TooltipProvider } from '@/components/ui/tooltip'
 import { getDefaultSettings } from '../../../../shared/constants'
 import type { GlobalSettings, Repo } from '../../../../shared/types'
 import { i18n } from '../../i18n/i18n'
@@ -18,6 +19,8 @@ const mocks = vi.hoisted(() => ({
   updateSettings: vi.fn(),
   refreshPreflightStatus: vi.fn(),
   checkLinearConnection: vi.fn(),
+  hasPairedMobileDevice: false,
+  agentBucketCounts: { attention: 0, working: 0, idle: 0 },
   dismissMobileOnboardingBadge: vi.fn(),
   setSetupGuideSidebarDismissed: vi.fn()
 }))
@@ -37,6 +40,10 @@ vi.mock('@/components/activity/useActivityUnreadCount', () => ({
   useActivityUnreadCount: () => 0
 }))
 
+vi.mock('@/components/dashboard/useAgentBucketCounts', () => ({
+  useAgentBucketCounts: () => mocks.agentBucketCounts
+}))
+
 vi.mock('@/hooks/useShortcutLabel', () => ({
   useShortcutKeyComboDetails: () => [{ keys: ['⌘', 'J'], doubleTap: false }]
 }))
@@ -44,6 +51,7 @@ vi.mock('@/hooks/useShortcutLabel', () => ({
 vi.mock('./mobile-sidebar-onboarding-badge', () => ({
   useMobileSidebarOnboardingBadge: () => ({
     visible: false,
+    hasPairedDevice: mocks.hasPairedMobileDevice,
     dismiss: mocks.dismissMobileOnboardingBadge
   })
 }))
@@ -74,6 +82,7 @@ vi.mock('@/components/ui/context-menu', () => ({
 
 import {
   getSetupGuideSidebarEntryReady,
+  shouldShowAgentDashboardButton,
   shouldShowAgentsButton,
   shouldShowAutomationsButton,
   shouldShowMobileButton,
@@ -143,7 +152,11 @@ async function renderSidebarNav(): Promise<HTMLDivElement> {
   const root = createRoot(container)
   mountedRoots.push(root)
   await act(async () => {
-    root.render(<SidebarNav />)
+    root.render(
+      <TooltipProvider>
+        <SidebarNav />
+      </TooltipProvider>
+    )
   })
   return container
 }
@@ -194,6 +207,8 @@ describe('SidebarNav', () => {
   beforeEach(async () => {
     vi.clearAllMocks()
     await i18n.changeLanguage('en')
+    mocks.hasPairedMobileDevice = false
+    mocks.agentBucketCounts = { attention: 0, working: 0, idle: 0 }
     setSidebarState()
   })
 
@@ -217,6 +232,50 @@ describe('SidebarNav', () => {
         experimentalActivity: true
       })
     ).toBe(true)
+  })
+
+  it('shows the Agent Dashboard entry only when its experiment is enabled', () => {
+    expect(shouldShowAgentDashboardButton(null)).toBe(false)
+    expect(shouldShowAgentDashboardButton({ experimentalAgentDashboardPopout: false })).toBe(false)
+    expect(shouldShowAgentDashboardButton({ experimentalAgentDashboardPopout: true })).toBe(true)
+  })
+
+  it('keeps the Agent Dashboard row unmounted by default', async () => {
+    const container = await renderSidebarNav()
+
+    expect(queryButtonByText(container, 'Agent Dashboard')).toBeNull()
+  })
+
+  it('mounts the Agent Dashboard row after opt-in', async () => {
+    setSidebarState({
+      settings: {
+        ...getDefaultSettings('/tmp'),
+        experimentalAgentDashboardPopout: true
+      }
+    })
+    const container = await renderSidebarNav()
+
+    expect(queryButtonByText(container, 'Agent Dashboard')).not.toBeNull()
+  })
+
+  it('uses a question glyph only for the Needs You count', async () => {
+    mocks.agentBucketCounts = { attention: 2, working: 3, idle: 4 }
+    setSidebarState({
+      settings: {
+        ...getDefaultSettings('/tmp'),
+        experimentalAgentDashboardPopout: true
+      }
+    })
+    const container = await renderSidebarNav()
+
+    const attention = container.querySelector('[aria-label="Needs You: 2"]')
+    const working = container.querySelector('[aria-label="Working: 3"]')
+    const idle = container.querySelector('[aria-label="Idle: 4"]')
+    expect(attention?.querySelector('.lucide-message-circle-question-mark')).not.toBeNull()
+    expect(working?.querySelector('.rounded-full')).not.toBeNull()
+    expect(idle?.querySelector('.rounded-full')).not.toBeNull()
+    expect(working?.querySelector('svg')).toBeNull()
+    expect(idle?.querySelector('svg')).toBeNull()
   })
 
   it('shows the Mobile entry by default for older settings', () => {
@@ -251,6 +310,27 @@ describe('SidebarNav', () => {
 
     expect(queryButtonByText(container, '[Automations]')).not.toBeNull()
     expect(queryButtonByText(container, '[Orca Mobile]')).not.toBeNull()
+  })
+
+  it('shows the inline hide control only once a device is paired', async () => {
+    const beforePairing = await renderSidebarNav()
+    expect(queryButtonByText(beforePairing, 'Orca Mobile')).not.toBeNull()
+    expect(beforePairing.querySelector('button[aria-label="Hide from sidebar"]')).toBeNull()
+
+    mocks.hasPairedMobileDevice = true
+    const container = await renderSidebarNav()
+    const hideButton = container.querySelector<HTMLButtonElement>(
+      'button[aria-label="Hide from sidebar"]'
+    )
+
+    expect(queryButtonByText(container, 'Orca Mobile')).not.toBeNull()
+    expect(hideButton).not.toBeNull()
+    expect(hideButton?.querySelector('svg')).not.toBeNull()
+
+    await clickButton(hideButton as HTMLButtonElement)
+
+    expect(mocks.updateSettings).toHaveBeenCalledWith({ showMobileButton: false })
+    expect(mocks.openMobilePage).not.toHaveBeenCalled()
   })
 
   it('shows the Automations entry by default for older settings', () => {

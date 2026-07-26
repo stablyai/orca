@@ -3,6 +3,10 @@ import type { ManagedPaneInternal } from './pane-manager-types'
 import { disposePane } from './pane-lifecycle'
 import { suspendPaneRendering } from './pane-rendering-control'
 import { disposeWebgl } from './pane-webgl-renderer'
+import {
+  beginTerminalScrollIntentBufferRebuild,
+  endTerminalScrollIntentBufferRebuild
+} from './terminal-scroll-intent-rebuild'
 
 function createPane(
   overrides: Partial<Pick<ManagedPaneInternal, 'pendingWebglRefreshRafId' | 'webglAddon'>> = {}
@@ -14,11 +18,17 @@ function createPane(
     stablePaneId: leafId,
     terminal: {
       element: null,
+      cols: 80,
       rows: 24,
+      buffer: { active: { type: 'normal', viewportY: 0, baseY: 0 } },
       refresh: vi.fn(),
+      resize: vi.fn(),
       dispose: vi.fn()
     } as never,
-    container: {} as never,
+    container: {
+      dataset: {},
+      getBoundingClientRect: () => ({ width: 800, height: 600 })
+    } as never,
     xtermContainer: {} as never,
     linkTooltip: {} as never,
     terminalGpuAcceleration: 'off',
@@ -28,6 +38,7 @@ function createPane(
     hasComplexScriptOutput: false,
     fitAddon: {
       fit: vi.fn(),
+      proposeDimensions: vi.fn(() => ({ cols: 100, rows: 24 })),
       dispose: vi.fn()
     } as never,
     fitResizeObserver: null,
@@ -64,6 +75,26 @@ describe('pane WebGL refresh lifecycle', () => {
 
     expect(pane.webglAddon).toBeNull()
     expect(pane.pendingWebglRefreshRafId).toBe(29)
+  })
+
+  it('defers the DOM-renderer refit until structural replay completes', async () => {
+    const refreshFrame: { current: FrameRequestCallback | null } = { current: null }
+    vi.stubGlobal('requestAnimationFrame', (callback: FrameRequestCallback) => {
+      refreshFrame.current = callback
+      return 29
+    })
+    const pane = createPane()
+    beginTerminalScrollIntentBufferRebuild(pane.terminal)
+
+    disposeWebgl(pane, { refreshDimensions: true })
+    refreshFrame.current?.(0)
+    expect(pane.fitAddon.fit).not.toHaveBeenCalled()
+    expect(pane.terminal.refresh).not.toHaveBeenCalled()
+
+    endTerminalScrollIntentBufferRebuild(pane.terminal)
+    await Promise.resolve()
+    expect(pane.fitAddon.fit).toHaveBeenCalledTimes(1)
+    expect(pane.terminal.refresh).toHaveBeenCalledTimes(1)
   })
 
   it('actively releases the xterm WebGL context before disposing the addon', () => {

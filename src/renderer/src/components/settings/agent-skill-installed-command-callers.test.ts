@@ -24,6 +24,12 @@ const updateCapableCallers = new Map<string, readonly string[]>([
     ['COMPUTER_USE_SKILL_UPDATE_COMMAND', 'installedCommand={updateCommand}']
   ],
   [
+    // Why: the Linear settings section shares the update-target resolver so
+    // legacy-only installs keep the command and freshness identity aligned.
+    'src/renderer/src/components/settings/LinearAgentSkillPane.tsx',
+    ['getLinearAgentSkillUpdateTarget', 'installedCommand={updateCommand}']
+  ],
+  [
     'src/renderer/src/components/settings/EphemeralVmsPane.tsx',
     ['EPHEMERAL_VMS_SKILL_UPDATE_COMMAND', 'installedCommand={updateCommand}']
   ],

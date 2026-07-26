@@ -146,6 +146,14 @@ describe('DashboardAgentRow', () => {
     expect(markup).not.toContain('You are working inside Orca')
   })
 
+  it('shows the active model beside the agent label', () => {
+    const markup = renderRow(makeAgent({}, { model: 'gpt-5.4-mini' }))
+
+    expect(markup).toContain('title="gpt-5.4-mini"')
+    expect(markup).toContain('>gpt-5.4-mini</span>')
+    expect(classTokens(markup)).toContain('font-mono')
+  })
+
   it('uses the hover background as the focused-pane row highlight', () => {
     const markup = renderToStaticMarkup(
       <TooltipProvider>
@@ -239,12 +247,13 @@ describe('DashboardAgentRow', () => {
     expect(classes.every((className) => !/\bgroup-hover:/.test(className))).toBe(true)
   })
 
-  it('renders waiting rows with the amber permission color', () => {
+  it('renders waiting rows with the amber question glyph', () => {
     const markup = renderRow(makeAgent({}, { state: 'waiting' }))
     const tokens = classTokens(markup)
 
     expect(markup).toContain('aria-label="Waiting for input"')
-    expect(tokens).toContain('bg-amber-500')
+    expect(markup).toContain('lucide-message-circle-question-mark')
+    expect(tokens).toContain('text-amber-500')
     expect(tokens).not.toContain('bg-red-500')
   })
 

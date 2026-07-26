@@ -161,9 +161,9 @@ vi.mock('./pty', () => ({
   clearProviderPtyState: vi.fn(),
   deletePtyOwnership: vi.fn(),
   setPtyOwnership: vi.fn(),
-  answerStartupTerminalColorQueriesForPty: vi.fn((_id: string, data: string) => data),
   getSshPtyProvider: vi.fn(),
   getPtyIdsForConnection: vi.fn().mockReturnValue([]),
+  isCurrentPtyExit: vi.fn().mockReturnValue(true),
   isRendererPtyOutputPaused: vi.fn().mockReturnValue(false)
 }))
 
@@ -214,13 +214,19 @@ vi.mock('../ssh/ssh-port-scanner', () => ({
 }))
 
 import { getSshConnectionManager, registerSshHandlers, resetSshHandlerStateForTests } from './ssh'
-import { SSH_RELAY_CONFIGURE_GRACE_TIME_METHOD, type SshTarget } from '../../shared/ssh-types'
+import { RelayVersionMismatchError } from '../ssh/ssh-relay-version-mismatch-error'
+import {
+  SSH_RELAY_CONFIGURE_GRACE_TIME_METHOD,
+  type SshConnectionState,
+  type SshTarget
+} from '../../shared/ssh-types'
 import {
   clearProviderPtyState,
   deletePtyOwnership,
   getSshPtyProvider,
   getPtyIdsForConnection
 } from './pty'
+import { assertSshMutationExpectation } from '../ssh/ssh-connection-generation'
 
 describe('SSH IPC handlers', () => {
   const handlers = new Map<string, (_event: unknown, args: unknown) => unknown>()
@@ -533,6 +539,7 @@ describe('SSH IPC handlers', () => {
       status: 'connected',
       error: null,
       reconnectAttempt: 0,
+      connectionGeneration: 1,
       remotePlatform: 'win32'
     })
     expect(mockWindow.webContents.send).toHaveBeenCalledWith('ssh:state-changed', {
@@ -542,6 +549,8 @@ describe('SSH IPC handlers', () => {
         status: 'connected',
         error: null,
         reconnectAttempt: 0,
+        connectionGeneration: 1,
+        supportsFolderDownload: true,
         remotePlatform: 'win32'
       }
     })
@@ -581,14 +590,16 @@ describe('SSH IPC handlers', () => {
           targetId: 'ssh-1',
           status: 'reconnecting',
           error: 'Relay channel lost. Reconnecting...',
-          reconnectAttempt: 1
+          reconnectAttempt: 1,
+          connectionGeneration: 1
         }
       })
       expect(handlers.get('ssh:getState')!(null, { targetId: 'ssh-1' })).toEqual({
         targetId: 'ssh-1',
         status: 'reconnecting',
         error: 'Relay channel lost. Reconnecting...',
-        reconnectAttempt: 1
+        reconnectAttempt: 1,
+        connectionGeneration: 1
       })
 
       await vi.advanceTimersByTimeAsync(500)
@@ -599,15 +610,224 @@ describe('SSH IPC handlers', () => {
           targetId: 'ssh-1',
           status: 'connected',
           error: null,
-          reconnectAttempt: 0
+          reconnectAttempt: 0,
+          connectionGeneration: 1,
+          supportsFolderDownload: true
         }
       })
       expect(handlers.get('ssh:getState')!(null, { targetId: 'ssh-1' })).toEqual({
         targetId: 'ssh-1',
         status: 'connected',
         error: null,
+        reconnectAttempt: 0,
+        connectionGeneration: 1
+      })
+      expect(() => assertSshMutationExpectation('ssh-1', 'ssh-1', 1)).not.toThrow()
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('rejects a staged mutation after the underlying SSH transport reconnects', async () => {
+    const target: SshTarget = {
+      id: 'ssh-1',
+      label: 'Server',
+      host: 'example.com',
+      port: 22,
+      username: 'deploy'
+    }
+    const conn = {}
+    mockSshStore.getTarget.mockReturnValue(target)
+    mockConnectionManager.connect.mockResolvedValue(conn)
+    mockConnectionManager.getConnection.mockReturnValue(conn)
+    mockConnectionManager.getState.mockReturnValue({
+      targetId: 'ssh-1',
+      status: 'connected',
+      error: null,
+      reconnectAttempt: 0
+    })
+
+    await handlers.get('ssh:connect')!(null, { targetId: 'ssh-1' })
+    const stagedGeneration = 1
+    const callbacks = mockConnectionManager.callbacksRef.current as {
+      onStateChange: (targetId: string, state: SshConnectionState) => void
+    }
+
+    callbacks.onStateChange('ssh-1', {
+      targetId: 'ssh-1',
+      status: 'reconnecting',
+      error: null,
+      reconnectAttempt: 1
+    })
+    callbacks.onStateChange('ssh-1', {
+      targetId: 'ssh-1',
+      status: 'connected',
+      error: null,
+      reconnectAttempt: 0
+    })
+    callbacks.onStateChange('ssh-1', {
+      targetId: 'ssh-1',
+      status: 'connected',
+      error: null,
+      reconnectAttempt: 0
+    })
+
+    expect(handlers.get('ssh:getState')!(null, { targetId: 'ssh-1' })).toEqual({
+      targetId: 'ssh-1',
+      status: 'reconnecting',
+      error: 'Relay channel reconnecting...',
+      reconnectAttempt: 0,
+      connectionGeneration: 2
+    })
+    expect(() => assertSshMutationExpectation('ssh-1', 'ssh-1', stagedGeneration)).toThrow(
+      'SSH connection changed; refresh and try again'
+    )
+    expect(() => assertSshMutationExpectation('ssh-1', 'ssh-1', 2)).not.toThrow()
+  })
+
+  // Why: reproduces the "Infinite reconnect bug" — when the raw SSH transport
+  // connects but relay deploy fails permanently (dev build missing the platform
+  // relay package), doConnect must not leak the transport's premature 'connected'
+  // to the renderer. The renderer treats 'connected' as "session fully up" and
+  // remounts SSH panes (-> window.api.ssh.connect); a premature 'connected' on
+  // every failing attempt drives an unbounded reconnect loop.
+  it('does not broadcast a premature connected when relay deploy fails', async () => {
+    const target: SshTarget = {
+      id: 'ssh-1',
+      label: 'Server',
+      host: 'example.com',
+      port: 22,
+      username: 'deploy'
+    }
+    const conn = {}
+    mockSshStore.getTarget.mockReturnValue(target)
+    // Why: mirror the real SshConnection — connect() drives the raw transport to
+    // 'connected' via onStateChange BEFORE the relay session establishes. The await
+    // yields a microtask so this lands after connectTarget records connectInFlight,
+    // matching the real ssh2 'ready' event (which fires async, post connect() call).
+    mockConnectionManager.connect.mockImplementation(async () => {
+      await Promise.resolve()
+      const callbacks = mockConnectionManager.callbacksRef.current as {
+        onStateChange: (targetId: string, state: SshConnectionState) => void
+      }
+      callbacks.onStateChange('ssh-1', {
+        targetId: 'ssh-1',
+        status: 'connecting',
+        error: null,
         reconnectAttempt: 0
       })
+      callbacks.onStateChange('ssh-1', {
+        targetId: 'ssh-1',
+        status: 'connected',
+        error: null,
+        reconnectAttempt: 0,
+        supportsFolderDownload: true
+      })
+      return conn
+    })
+    mockConnectionManager.getConnection.mockReturnValue(conn)
+    mockConnectionManager.disconnect.mockResolvedValue(undefined)
+    mockDeployAndLaunchRelay
+      .mockReset()
+      .mockRejectedValue(
+        new Error(
+          'Relay package for linux-x64 not found locally. ' +
+            'This may be a packaging issue — try reinstalling Orca.'
+        )
+      )
+
+    await expect(handlers.get('ssh:connect')!(null, { targetId: 'ssh-1' })).rejects.toThrow(
+      'not found locally'
+    )
+
+    // Main performs exactly one connect + one disconnect per IPC (no main-side loop).
+    expect(mockConnectionManager.connect).toHaveBeenCalledTimes(1)
+    expect(mockConnectionManager.disconnect).toHaveBeenCalledWith('ssh-1')
+
+    // The renderer must never see 'connected' for a connect whose relay never
+    // became ready — doConnect broadcasts the authoritative 'connected' only after
+    // establish() succeeds, which it does not here.
+    const connectedBroadcasts = mockWindow.webContents.send.mock.calls.filter(
+      ([channel, payload]) =>
+        channel === 'ssh:state-changed' &&
+        (payload as { state?: SshConnectionState }).state?.status === 'connected'
+    )
+    expect(connectedBroadcasts).toEqual([])
+  })
+
+  // Why: guards the fix's scope. A relay version mismatch during a relay reconnect
+  // strands the session 'idle' in activeSessions (only doConnect deletes it). A later
+  // transport blip then delivers a raw 'connected' with NO connect in flight — the
+  // 'deploying-relay' hold must NOT fire there (it would wedge the UI on an eternal
+  // spinner with every reconnect/reset control disabled). The hold is gated to live
+  // connects via connectInFlight.
+  it('does not hold a stray connected as deploying-relay when no connect is in flight', async () => {
+    vi.useFakeTimers()
+    vi.setSystemTime(0)
+    const target: SshTarget = {
+      id: 'ssh-1',
+      label: 'Server',
+      host: 'example.com',
+      port: 22,
+      username: 'deploy'
+    }
+    const conn = {}
+    mockSshStore.getTarget.mockReturnValue(target)
+    mockConnectionManager.connect.mockResolvedValue(conn)
+    mockConnectionManager.getConnection.mockReturnValue(conn)
+    mockConnectionManager.getState.mockReturnValue({
+      targetId: 'ssh-1',
+      status: 'connected',
+      error: null,
+      reconnectAttempt: 0
+    })
+
+    try {
+      // Establish a ready relay session, then lose the relay and fail the reconnect with
+      // a version mismatch so the session is left stranded 'idle' in activeSessions.
+      await handlers.get('ssh:connect')!(null, { targetId: 'ssh-1' })
+      mockDeployAndLaunchRelay
+        .mockReset()
+        .mockRejectedValue(new RelayVersionMismatchError('2.0.0', '1.0.0'))
+      getLatestRelayDisposeCallback()('connection_lost')
+      await vi.advanceTimersByTimeAsync(relayReconnectDelaysMs[0])
+
+      // The terminal relay error is surfaced; the session is now stranded 'idle'.
+      expect(
+        (handlers.get('ssh:getState')!(null, { targetId: 'ssh-1' }) as SshConnectionState).status
+      ).toBe('error')
+
+      const callbacks = mockConnectionManager.callbacksRef.current as {
+        onStateChange: (targetId: string, state: SshConnectionState) => void
+      }
+      mockWindow.webContents.send.mockClear()
+      // A transport blip on the still-live SSH socket auto-recovers to 'connected' with
+      // no ssh:connect in flight (connectInFlight is empty).
+      callbacks.onStateChange('ssh-1', {
+        targetId: 'ssh-1',
+        status: 'reconnecting',
+        error: null,
+        reconnectAttempt: 0
+      })
+      callbacks.onStateChange('ssh-1', {
+        targetId: 'ssh-1',
+        status: 'connected',
+        error: null,
+        reconnectAttempt: 0
+      })
+
+      // The stray 'connected' is forwarded as-is — never wedged at 'deploying-relay'.
+      const stateChanges = mockWindow.webContents.send.mock.calls.filter(
+        ([channel]) => channel === 'ssh:state-changed'
+      )
+      const lastStateChange = stateChanges.at(-1)
+      expect(lastStateChange).toBeDefined()
+      expect((lastStateChange![1] as { state: SshConnectionState }).state.status).toBe('connected')
+      const heldAsDeploying = stateChanges.some(
+        ([, payload]) =>
+          (payload as { state?: SshConnectionState }).state?.status === 'deploying-relay'
+      )
+      expect(heldAsDeploying).toBe(false)
     } finally {
       vi.useRealTimers()
     }
@@ -645,7 +865,8 @@ describe('SSH IPC handlers', () => {
         targetId: 'ssh-1',
         status: 'reconnecting',
         error: 'Relay channel lost. Reconnecting...',
-        reconnectAttempt: 1
+        reconnectAttempt: 1,
+        connectionGeneration: 1
       })
 
       mockDeployAndLaunchRelay.mockClear()
@@ -655,7 +876,8 @@ describe('SSH IPC handlers', () => {
         targetId: 'ssh-1',
         status: 'connected',
         error: null,
-        reconnectAttempt: 0
+        reconnectAttempt: 0,
+        connectionGeneration: 2
       })
 
       expect(mockPortForwardManager.removeAllForwards).toHaveBeenCalledWith('ssh-1')
@@ -664,7 +886,8 @@ describe('SSH IPC handlers', () => {
         targetId: 'ssh-1',
         status: 'connected',
         error: null,
-        reconnectAttempt: 0
+        reconnectAttempt: 0,
+        connectionGeneration: 2
       })
     } finally {
       vi.useRealTimers()
@@ -703,7 +926,8 @@ describe('SSH IPC handlers', () => {
           targetId: 'ssh-1',
           status: 'connected',
           error: null,
-          reconnectAttempt: 0
+          reconnectAttempt: 0,
+          connectionGeneration: 1
         })
       }
 
@@ -713,7 +937,8 @@ describe('SSH IPC handlers', () => {
         targetId: 'ssh-1',
         status: 'error',
         error: 'Relay channel kept dropping. Click Reconnect on the SSH target before retrying.',
-        reconnectAttempt: 0
+        reconnectAttempt: 0,
+        connectionGeneration: 1
       })
     } finally {
       vi.useRealTimers()
@@ -750,7 +975,8 @@ describe('SSH IPC handlers', () => {
         targetId: 'ssh-1',
         status: 'connected',
         error: null,
-        reconnectAttempt: 0
+        reconnectAttempt: 0,
+        connectionGeneration: 1
       })
 
       await vi.advanceTimersByTimeAsync(relayLostStabilizedMs + 1)
@@ -761,7 +987,8 @@ describe('SSH IPC handlers', () => {
         targetId: 'ssh-1',
         status: 'connected',
         error: null,
-        reconnectAttempt: 0
+        reconnectAttempt: 0,
+        connectionGeneration: 1
       })
       expect(mockPortForwardManager.removeAllForwards).not.toHaveBeenCalled()
       expect(mockDeployAndLaunchRelay).not.toHaveBeenCalled()
@@ -803,15 +1030,22 @@ describe('SSH IPC handlers', () => {
     onData?.({ id: 'remote-pty', data: 'hello' })
     onExit?.({ id: 'remote-pty', code: 7 })
 
-    expect(runtime.onPtyData).toHaveBeenCalledWith('remote-pty', 'hello', expect.any(Number))
-    expect(runtime.onPtyExit).toHaveBeenCalledWith('remote-pty', 7)
+    expect(runtime.onPtyData).toHaveBeenCalledWith(
+      'remote-pty',
+      'hello',
+      expect.any(Number),
+      'hello'.length,
+      undefined
+    )
+    expect(runtime.onPtyExit).toHaveBeenCalledWith('remote-pty', 7, undefined)
   })
 
   it('mirrors SSH state broadcasts onto the runtime client-event stream', async () => {
     const runtime = {
       onPtyData: vi.fn(),
       onPtyExit: vi.fn(),
-      notifySshStateChanged: vi.fn()
+      notifySshStateChanged: vi.fn(),
+      notifySshRelayReady: vi.fn()
     }
     registerSshHandlers(mockStore as never, () => mockWindow as never, runtime as never)
     const target: SshTarget = {
@@ -837,6 +1071,67 @@ describe('SSH IPC handlers', () => {
     expect(runtime.notifySshStateChanged).toHaveBeenCalledWith(
       'ssh-1',
       expect.objectContaining({ targetId: 'ssh-1', status: 'connected' })
+    )
+    expect(runtime.notifySshRelayReady).toHaveBeenCalledWith('ssh-1')
+  })
+
+  it('keeps runtime-owned SSH state off the renderer while invalidating runtime scans', async () => {
+    const runtime = {
+      onPtyData: vi.fn(),
+      onPtyExit: vi.fn(),
+      invalidateSshWorktreeScanCache: vi.fn(),
+      notifySshStateChanged: vi.fn()
+    }
+    registerSshHandlers(mockStore as never, () => mockWindow as never, runtime as never)
+    mockSshStore.getTarget.mockReturnValue({
+      id: 'runtime-ssh-1',
+      label: 'Runtime host',
+      host: 'example.com',
+      port: 22,
+      username: 'deploy'
+    } satisfies SshTarget)
+    mockConnectionManager.connect.mockResolvedValue({})
+    mockConnectionManager.getState.mockReturnValue({
+      targetId: 'runtime-ssh-1',
+      status: 'connected',
+      error: null,
+      reconnectAttempt: 0
+    })
+
+    await handlers.get('ssh:connect')!(null, { targetId: 'runtime-ssh-1' })
+
+    expect(mockWindow.webContents.send).not.toHaveBeenCalledWith(
+      'ssh:state-changed',
+      expect.anything()
+    )
+    expect(runtime.invalidateSshWorktreeScanCache).toHaveBeenCalledWith('runtime-ssh-1')
+    expect(runtime.notifySshStateChanged).not.toHaveBeenCalled()
+  })
+
+  it('invalidates runtime scans from hidden SSH state broadcasts', () => {
+    const runtime = {
+      onPtyData: vi.fn(),
+      onPtyExit: vi.fn(),
+      invalidateSshWorktreeScanCache: vi.fn(),
+      notifySshStateChanged: vi.fn()
+    }
+    registerSshHandlers(mockStore as never, () => mockWindow as never, runtime as never)
+    const callbacks = mockConnectionManager.callbacksRef.current as {
+      onStateChange: (targetId: string, state: SshConnectionState) => void
+    }
+
+    callbacks.onStateChange('runtime-ssh-1', {
+      targetId: 'runtime-ssh-1',
+      status: 'disconnected',
+      error: null,
+      reconnectAttempt: 1
+    })
+
+    expect(runtime.invalidateSshWorktreeScanCache).toHaveBeenCalledWith('runtime-ssh-1')
+    expect(runtime.notifySshStateChanged).not.toHaveBeenCalled()
+    expect(mockWindow.webContents.send).not.toHaveBeenCalledWith(
+      'ssh:state-changed',
+      expect.anything()
     )
   })
 
@@ -898,9 +1193,10 @@ describe('SSH IPC handlers', () => {
     mockDeployAndLaunchRelay.mockClear()
     mockPortForwardManager.removeAllForwards.mockClear()
 
-    await expect(handlers.get('ssh:connect')!(null, { targetId: 'ssh-1' })).resolves.toEqual(
-      connectedState
-    )
+    await expect(handlers.get('ssh:connect')!(null, { targetId: 'ssh-1' })).resolves.toEqual({
+      ...connectedState,
+      connectionGeneration: 1
+    })
     expect(mockDeployAndLaunchRelay).not.toHaveBeenCalled()
     expect(mockPortForwardManager.removeAllForwards).not.toHaveBeenCalled()
     expect(await handlers.get('ssh:listPortForwards')!(null, { targetId: 'ssh-1' })).toEqual([
@@ -1099,7 +1395,8 @@ describe('SSH IPC handlers', () => {
         targetId: 'ssh-1',
         status: 'error',
         error: 'network down',
-        reconnectAttempt: 0
+        reconnectAttempt: 0,
+        connectionGeneration: 1
       }
     })
     expect(secondWindow.webContents.send).toHaveBeenCalledWith(
@@ -1114,8 +1411,14 @@ describe('SSH IPC handlers', () => {
       targetId: 'ssh-1',
       ports: expect.arrayContaining([expect.objectContaining({ port: 3000 })])
     })
-    expect(secondRuntime.onPtyData).toHaveBeenCalledWith('remote-pty', 'hello', expect.any(Number))
-    expect(secondRuntime.onPtyExit).toHaveBeenCalledWith('remote-pty', 9)
+    expect(secondRuntime.onPtyData).toHaveBeenCalledWith(
+      'remote-pty',
+      'hello',
+      expect.any(Number),
+      'hello'.length,
+      undefined
+    )
+    expect(secondRuntime.onPtyExit).toHaveBeenCalledWith('remote-pty', 9, undefined)
     expect(firstRuntime.onPtyData).not.toHaveBeenCalled()
     expect(firstRuntime.onPtyExit).not.toHaveBeenCalled()
     expect(mockStore.markSshRemotePtyLease).toHaveBeenCalledWith(
@@ -1146,6 +1449,49 @@ describe('SSH IPC handlers', () => {
     await handlers.get('ssh:disconnect')!(null, { targetId: 'ssh-1' })
 
     expect(mockConnectionManager.disconnect).toHaveBeenCalledWith('ssh-1')
+  })
+
+  it('invalidates a pending connect when disconnect wins and allows a fresh connect', async () => {
+    const target: SshTarget = {
+      id: 'ssh-1',
+      label: 'Server',
+      host: 'example.com',
+      port: 22,
+      username: 'deploy'
+    }
+    const staleConn = {}
+    const freshConn = {}
+    let resolveStaleConnect!: (connection: unknown) => void
+    mockSshStore.getTarget.mockReturnValue(target)
+    mockConnectionManager.connect.mockReturnValueOnce(
+      new Promise((resolve) => {
+        resolveStaleConnect = resolve
+      })
+    )
+    mockConnectionManager.getState.mockReturnValue({
+      targetId: 'ssh-1',
+      status: 'connected',
+      error: null,
+      reconnectAttempt: 0
+    })
+
+    const staleConnect = handlers.get('ssh:connect')!(null, {
+      targetId: 'ssh-1'
+    }) as Promise<SshConnectionState>
+    await vi.waitFor(() => expect(mockConnectionManager.connect).toHaveBeenCalledTimes(1))
+
+    await handlers.get('ssh:disconnect')!(null, { targetId: 'ssh-1' })
+    mockConnectionManager.connect.mockResolvedValueOnce(freshConn)
+    const freshConnect = handlers.get('ssh:connect')!(null, {
+      targetId: 'ssh-1'
+    }) as Promise<SshConnectionState>
+    await vi.waitFor(() => expect(mockConnectionManager.connect).toHaveBeenCalledTimes(2))
+
+    resolveStaleConnect(staleConn)
+
+    await expect(staleConnect).rejects.toThrow('SSH connection attempt was cancelled')
+    await expect(freshConnect).resolves.toMatchObject({ targetId: 'ssh-1', status: 'connected' })
+    expect(mockDeployAndLaunchRelay).toHaveBeenCalledTimes(1)
   })
 
   it('ssh:terminateSessions preserves tracking when relay shutdown fails', async () => {
@@ -1448,6 +1794,23 @@ describe('SSH IPC handlers', () => {
       error: null,
       reconnectAttempt: 0
     })
+    mockConnectionManager.reconnect.mockImplementation(async (targetId: string) => {
+      const callbacks = mockConnectionManager.callbacksRef.current as {
+        onStateChange: (id: string, state: SshConnectionState) => void
+      }
+      callbacks.onStateChange(targetId, {
+        targetId,
+        status: 'reconnecting',
+        error: null,
+        reconnectAttempt: 1
+      })
+      callbacks.onStateChange(targetId, {
+        targetId,
+        status: 'connected',
+        error: null,
+        reconnectAttempt: 0
+      })
+    })
     mockMux.probeLiveness.mockResolvedValue(false)
 
     await handlers.get('ssh:connect')!(null, { targetId: 'ssh-1' })
@@ -1460,6 +1823,9 @@ describe('SSH IPC handlers', () => {
     await vi.waitFor(() => expect(mockConnectionManager.reconnect).toHaveBeenCalledWith('ssh-1'))
     // Why: a failed first probe gets one retry before teardown (slow post-wake network).
     expect(mockMux.probeLiveness).toHaveBeenCalledTimes(2)
+    expect(handlers.get('ssh:getState')!(null, { targetId: 'ssh-1' })).toMatchObject({
+      connectionGeneration: 2
+    })
   })
 
   it('skips reconnect on system resume when the relay link is still alive', async () => {
@@ -1608,6 +1974,6 @@ describe('SSH IPC handlers', () => {
     mockConnectionManager.getState.mockReturnValue(state)
 
     const result = await handlers.get('ssh:getState')!(null, { targetId: 'ssh-1' })
-    expect(result).toEqual(state)
+    expect(result).toEqual({ ...state, connectionGeneration: 0 })
   })
 })

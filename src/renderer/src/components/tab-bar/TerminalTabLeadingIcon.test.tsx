@@ -23,7 +23,7 @@ describe('TerminalTabLeadingIcon', () => {
     expect(markup).toContain('data-testid="tab-agent-activity-indicator"')
     expect(markup).toContain('data-agent-activity-status="working"')
     expect(markup).toContain('aria-label="Working"')
-    expect(markup).toContain('[animation:spin_1s_steps(12,end)_infinite]')
+    expect(markup).toContain('data-agent-spinner')
     expect(markup).toContain('data-agent-icon="codex"')
   })
 
@@ -36,11 +36,12 @@ describe('TerminalTabLeadingIcon', () => {
     expect(markup).toContain('data-agent-icon="codex"')
   })
 
-  it('shows a needs-input (permission) state as an amber dot', () => {
+  it('shows a needs-input (permission) state as an amber question glyph', () => {
     const markup = renderStatus('permission')
 
     expect(markup).toContain('data-agent-activity-status="permission"')
-    expect(markup).toContain('bg-amber-500')
+    expect(markup).toContain('lucide-message-circle-question-mark')
+    expect(markup).toContain('text-amber-500')
     expect(markup).not.toContain('bg-red-500')
   })
 

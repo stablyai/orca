@@ -8,6 +8,7 @@ import {
   type GitHubRemoteIdentity
 } from './github-remote-identity-parsing'
 import { isStableMissingGitRemoteError } from './stable-missing-git-remote-error'
+import { githubRepoIdentityKey } from '../../shared/github-repository-identity-key'
 
 export type OwnerRepo = GitHubOwnerRepo
 
@@ -208,6 +209,11 @@ export async function getOwnerRepo(
   connectionId?: string | null,
   localGitOptions: LocalGitExecOptions = {}
 ): Promise<OwnerRepo | null> {
+  // Why: on a fork checkout PRs live on the upstream parent, not origin (#7331).
+  const upstream = await getOwnerRepoForRemote(repoPath, 'upstream', connectionId, localGitOptions)
+  if (upstream) {
+    return upstream
+  }
   return getOwnerRepoForRemote(repoPath, 'origin', connectionId, localGitOptions)
 }
 
@@ -229,7 +235,7 @@ export type PRRepositoryCandidates = {
 }
 
 function ownerRepoKey(ownerRepo: OwnerRepo): string {
-  return `${ownerRepo.owner.toLowerCase()}/${ownerRepo.repo.toLowerCase()}`
+  return githubRepoIdentityKey(ownerRepo)
 }
 
 export async function resolvePRRepositoryCandidates(

@@ -1,17 +1,25 @@
 import {
   deriveGiteaCommitStatus,
   mapGiteaPullRequest,
+  mapGiteaPullRequestState,
   type GiteaPullRequestInfo,
   type RawGiteaCombinedStatus,
   type RawGiteaPullRequest
 } from './pull-request-mappers'
+import { shouldHideNonOpenReviewOnDefaultBranch } from '../source-control/repo-default-branch'
 import { getGiteaRepoRef, type GiteaRepoRef } from './repository-ref'
+import { invalidateGiteaPullRequestScan, scanGiteaPullRequests } from './pull-request-scan-cache'
 import {
   getHostedReviewLocalGitOptions,
   type HostedReviewExecutionOptions
 } from '../source-control/hosted-review-git-options'
+import { cancelUnreadResponseBody } from '../lib/unread-response-body'
 
 const REQUEST_TIMEOUT_MS = 5000
+// Why: self-hosted Forgejo can take ~5s to serve one /pulls page (it loads
+// reviewer data per PR). The default 5s cap aborted responses right as they
+// completed, so the work was discarded and retried on the next refresh (#8807).
+const PULL_REQUEST_LIST_TIMEOUT_MS = 15_000
 const PULL_REQUEST_PAGE_LIMIT = 50
 const MAX_PULL_REQUEST_PAGES = 5
 
@@ -72,7 +80,11 @@ function apiUrl(baseUrl: string, path: string, searchParams?: RequestOptions['se
 async function requestJsonAtBase<T>(
   baseUrl: string,
   path: string,
-  options: RequestOptions = {}
+  options: RequestOptions = {},
+  // Why: the existing-review lookup behind Create must distinguish a real
+  // transport/auth failure from an accepted "no PR". When true, a failed request
+  // throws instead of collapsing to null so callers never report false not_found.
+  throwOnFailure = false
 ): Promise<T | null> {
   const config = getAuthConfig()
   try {
@@ -84,10 +96,17 @@ async function requestJsonAtBase<T>(
       signal: AbortSignal.timeout(options.timeoutMs ?? REQUEST_TIMEOUT_MS)
     })
     if (!response.ok) {
+      await cancelUnreadResponseBody(response)
+      if (throwOnFailure) {
+        throw new Error(`Gitea request failed: HTTP ${response.status}`)
+      }
       return null
     }
     return (await response.json()) as T
-  } catch {
+  } catch (error) {
+    if (throwOnFailure) {
+      throw error
+    }
     return null
   }
 }
@@ -95,13 +114,24 @@ async function requestJsonAtBase<T>(
 function requestJson<T>(
   repo: GiteaRepoRef,
   path: string,
-  options: RequestOptions = {}
+  options: RequestOptions = {},
+  throwOnFailure = false
 ): Promise<T | null> {
-  return requestJsonAtBase(configuredApiBaseUrl(repo), path, options)
+  return requestJsonAtBase(configuredApiBaseUrl(repo), path, options, throwOnFailure)
 }
 
 function encodedRepoPath(repo: GiteaRepoRef): string {
   return `${encodeURIComponent(repo.owner)}/${encodeURIComponent(repo.repo)}`
+}
+
+function giteaPullRequestScanKey(repo: GiteaRepoRef): string {
+  return `${configuredApiBaseUrl(repo)}/${encodedRepoPath(repo)}`
+}
+
+/** Invalidate the shared /pulls scan after Orca itself creates a PR so the
+ *  next worktree-card refresh sees it instead of a cached miss. */
+export function invalidateGiteaPullRequestScanForRepo(repo: GiteaRepoRef): void {
+  invalidateGiteaPullRequestScan(giteaPullRequestScanKey(repo))
 }
 
 async function getCommitStatus(
@@ -210,7 +240,8 @@ export async function getGiteaPullRequestForBranch(
   branch: string,
   linkedPRNumber?: number | null,
   connectionId?: string | null,
-  options: HostedReviewExecutionOptions = {}
+  options: HostedReviewExecutionOptions = {},
+  throwOnFailure = false
 ): Promise<GiteaPullRequestInfo | null> {
   const branchName = branch.replace(/^refs\/heads\//, '')
   if (!branchName && linkedPRNumber == null) {
@@ -227,25 +258,44 @@ export async function getGiteaPullRequestForBranch(
   }
 
   if (branchName) {
-    for (let page = 1; page <= MAX_PULL_REQUEST_PAGES; page++) {
-      const list = await requestJson<RawGiteaPullRequest[]>(
-        repo,
-        `/repos/${encodedRepoPath(repo)}/pulls`,
-        {
-          searchParams: {
-            state: 'all',
-            sort: 'recentupdate',
-            page,
-            limit: PULL_REQUEST_PAGE_LIMIT
-          }
-        }
-      )
-      const raw = list?.find((item) => matchesBranch(item, branchName))
-      if (raw) {
+    const pullRequests = await scanGiteaPullRequests(
+      // Why: throwing scans keep a separate cache namespace so they never reuse a
+      // prior swallowing scan's cached-empty from a failed page fetch, which would
+      // otherwise let a real lookup failure masquerade as "no PR".
+      throwOnFailure ? `${giteaPullRequestScanKey(repo)}::strict` : giteaPullRequestScanKey(repo),
+      (page) =>
+        requestJson<RawGiteaPullRequest[]>(
+          repo,
+          `/repos/${encodedRepoPath(repo)}/pulls`,
+          {
+            searchParams: {
+              state: 'all',
+              sort: 'recentupdate',
+              page,
+              limit: PULL_REQUEST_PAGE_LIMIT
+            },
+            timeoutMs: PULL_REQUEST_LIST_TIMEOUT_MS
+          },
+          throwOnFailure
+        ),
+      PULL_REQUEST_PAGE_LIMIT,
+      MAX_PULL_REQUEST_PAGES
+    )
+    const raw = pullRequests.find((item) => matchesBranch(item, branchName))
+    if (raw) {
+      // Why (#9171): discard a non-open implicit branch match on the repo
+      // default branch and fall through to the linked-number fallback below.
+      const hideOnDefaultBranch = await shouldHideNonOpenReviewOnDefaultBranch({
+        state: mapGiteaPullRequestState(raw),
+        reviewNumber: raw.number ?? null,
+        linkedReviewNumber: linkedPRNumber,
+        branchName,
+        repoPath,
+        connectionId,
+        localGitOptions: getHostedReviewLocalGitOptions(options)
+      })
+      if (!hideOnDefaultBranch) {
         return normalizePullRequest(repo, raw)
-      }
-      if (!list || list.length < PULL_REQUEST_PAGE_LIMIT) {
-        break
       }
     }
   }
@@ -255,9 +305,26 @@ export async function getGiteaPullRequestForBranch(
   }
   const raw = await requestJson<RawGiteaPullRequest>(
     repo,
-    `/repos/${encodedRepoPath(repo)}/pulls/${encodeURIComponent(String(linkedPRNumber))}`
+    `/repos/${encodedRepoPath(repo)}/pulls/${encodeURIComponent(String(linkedPRNumber))}`,
+    {},
+    throwOnFailure
   )
   return raw ? normalizePullRequest(repo, raw) : null
+}
+
+/**
+ * Existing-review lookup that surfaces transport/auth failures instead of
+ * collapsing them to null, so a failed lookup becomes
+ * `reviewLookupOutcome: 'unavailable'` rather than a false "No pull request found".
+ */
+export function getGiteaPullRequestForBranchOrThrow(
+  repoPath: string,
+  branch: string,
+  linkedPRNumber?: number | null,
+  connectionId?: string | null,
+  options: HostedReviewExecutionOptions = {}
+): Promise<GiteaPullRequestInfo | null> {
+  return getGiteaPullRequestForBranch(repoPath, branch, linkedPRNumber, connectionId, options, true)
 }
 
 export async function getGiteaRepoSlug(

@@ -51,7 +51,13 @@ vi.mock('./pty-pre-handler-buffer', () => ({
   discardPreHandlerPtyState: (ptyId: string) => consumePreHandlerPtyState(ptyId)
 }))
 
-type CloseTerminalTabOptions = { onClosed?: () => void; onCancel?: () => void }
+type CloseTerminalTabOptions = {
+  captureRecentlyClosed?: boolean
+  hostCloseReason?: string
+  lifecyclePtyId?: string
+  onClosed?: () => void
+  onCancel?: () => void
+}
 const closeTerminalTab = vi.fn()
 vi.mock('../terminal/terminal-tab-actions', () => ({
   closeTerminalTab: (tabId: string, options?: CloseTerminalTabOptions) =>
@@ -255,6 +261,42 @@ describe('terminal-parked-tab-watchers', () => {
     expect(getParkedTerminalWatcherTabIds()).toEqual([TAB_ID])
   })
 
+  it('collapses a dead split leaf even when a stale primary handler also observed the exit', () => {
+    // Why (regression, #ghost-blank-pane): a genuinely parked tab's PaneManager
+    // is already destroyed, so the retained primary exit handler's own
+    // split-collapse path is a no-op against the persisted layout — hadPrimary
+    // must not skip this sidecar's collapse for a surviving sibling leaf.
+    capturePanes([
+      { ptyId: PTY_ID, paneId: 1, leafId: LEAF_ID, drivesTabTitle: true },
+      { ptyId: SECOND_PTY_ID, paneId: 2, leafId: SECOND_LEAF_ID, drivesTabTitle: false }
+    ])
+    syncParked()
+    mockStoreState.terminalLayoutsByTabId[TAB_ID] = {
+      root: {
+        type: 'split',
+        direction: 'vertical',
+        first: { type: 'leaf', leafId: LEAF_ID },
+        second: { type: 'leaf', leafId: SECOND_LEAF_ID }
+      },
+      activeLeafId: SECOND_LEAF_ID,
+      expandedLeafId: null,
+      ptyIdsByLeafId: { [LEAF_ID]: PTY_ID, [SECOND_LEAF_ID]: SECOND_PTY_ID }
+    }
+
+    const exited = exitSubscriptions.find((entry) => entry.ptyId === SECOND_PTY_ID)
+    exited?.callback(0, { hadPrimary: true })
+
+    expect(mockStoreState.setTabLayout).toHaveBeenCalledWith(TAB_ID, {
+      root: { type: 'leaf', leafId: LEAF_ID },
+      activeLeafId: LEAF_ID,
+      expandedLeafId: null,
+      ptyIdsByLeafId: { [LEAF_ID]: PTY_ID }
+    })
+    expect(startedWatchers[1].dispose).toHaveBeenCalledTimes(1)
+    expect(startedWatchers[0].dispose).not.toHaveBeenCalled()
+    expect(getParkedTerminalWatcherTabIds()).toEqual([TAB_ID])
+  })
+
   it('seeds each watcher with the pane slot last known runtime title', () => {
     mockStoreState.runtimePaneTitlesByTabId = { [TAB_ID]: { 1: '⠋ Build feature' } }
     capturePanes([
@@ -276,6 +318,11 @@ describe('terminal-parked-tab-watchers', () => {
     expect(consumePreHandlerPtyState).not.toHaveBeenCalled()
     expect(getParkedTerminalWatcherTabIds()).toEqual([TAB_ID])
     const options = closeTerminalTab.mock.calls[0]?.[1] as CloseTerminalTabOptions
+    expect(options.captureRecentlyClosed).toBe(false)
+    // Why: the wire must carry the pty-exit intent so a paired host can refuse
+    // the echo while its PTY is live, without skipping the pinned guard here.
+    expect(options.hostCloseReason).toBe('pty-exit')
+    expect(options.lifecyclePtyId).toBe(PTY_ID)
     options.onClosed?.()
 
     expect(consumePreHandlerPtyState).toHaveBeenCalledWith(PTY_ID)
@@ -625,6 +672,23 @@ describe('terminal-parked-tab-watchers', () => {
       expect(canWatcherCoverParkedTerminalTab(WORKTREE_ID, { id: TAB_ID, ptyId: PTY_ID })).toBe(
         true
       )
+    })
+
+    it('lets cold activation add stricter eligibility without changing ordinary parking', () => {
+      capturePanes([{ ptyId: PTY_ID, paneId: 1, leafId: LEAF_ID, drivesTabTitle: true }])
+      const providerCanSnapshotWithoutRenderer = vi.fn(() => false)
+
+      expect(canWatcherCoverParkedTerminalTab(WORKTREE_ID, { id: TAB_ID, ptyId: PTY_ID })).toBe(
+        true
+      )
+      expect(
+        canWatcherCoverParkedTerminalTab(
+          WORKTREE_ID,
+          { id: TAB_ID, ptyId: PTY_ID },
+          providerCanSnapshotWithoutRenderer
+        )
+      ).toBe(false)
+      expect(providerCanSnapshotWithoutRenderer).toHaveBeenCalledWith(PTY_ID)
     })
 
     it('rejects a capture containing a legacy non-UUID leaf id', () => {

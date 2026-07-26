@@ -1,4 +1,7 @@
-import { shouldForcePushWithLeaseForUpstream } from '../../../../shared/git-upstream-status'
+import {
+  isBehindOnlyUpstream,
+  shouldForcePushWithLeaseForUpstream
+} from '../../../../shared/git-upstream-status'
 import type { HostedReviewCreationEligibility } from '../../../../shared/hosted-review'
 import {
   normalizeHostedReviewBaseRef,
@@ -8,7 +11,13 @@ import type { GitStatusEntry, GitUpstreamStatus } from '../../../../shared/types
 import { summarizeCommitFailure } from './commit-failure-summary'
 import { getStageAllPaths } from './discard-all-sequence'
 
-export type CreatePrIntentRemoteStep = 'publish' | 'push' | 'force_push' | 'blocked' | 'none'
+export type CreatePrIntentRemoteStep =
+  | 'publish'
+  | 'push'
+  | 'force_push'
+  | 'fast_forward'
+  | 'blocked'
+  | 'none'
 
 export type CreatePrIntentRunToken = {
   repoId: string
@@ -138,15 +147,16 @@ export function resolveCreatePrIntentRemoteStep({
     return 'push'
   }
 
-  if (
-    hostedReviewCreation.blockedReason === 'needs_sync' &&
-    shouldForcePushWithLeaseForUpstream(upstreamStatus)
-  ) {
-    return 'force_push'
-  }
-
   if (hostedReviewCreation.blockedReason === 'needs_sync') {
-    return 'blocked'
+    if (shouldForcePushWithLeaseForUpstream(upstreamStatus)) {
+      return 'force_push'
+    }
+    // Why: auto-prepare only a behind-only branch, and only via `--ff-only`.
+    // Plain sync/merge could create a merge commit if the branch diverges mid
+    // flight or the user has pull.ff=no; --ff-only enforces the no-consent-
+    // merge invariant at execution time. Genuinely diverged branches keep the
+    // explicit sync-first stop.
+    return isBehindOnlyUpstream(upstreamStatus) ? 'fast_forward' : 'blocked'
   }
 
   return 'none'

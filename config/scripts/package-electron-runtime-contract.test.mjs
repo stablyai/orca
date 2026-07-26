@@ -1,9 +1,12 @@
 import { readFileSync } from 'node:fs'
+import { createRequire } from 'node:module'
 import { join, resolve } from 'node:path'
 import { describe, expect, it } from 'vitest'
 import { parse } from 'yaml'
 
 const projectDir = resolve(import.meta.dirname, '../..')
+const require = createRequire(import.meta.url)
+const { createPackagedRuntimeNodeModuleResources } = require('../packaged-runtime-node-modules.cjs')
 const packageJson = JSON.parse(readFileSync(join(projectDir, 'package.json'), 'utf8'))
 
 describe('Electron runtime package contract', () => {
@@ -23,6 +26,45 @@ describe('Electron runtime package contract', () => {
   it('keeps root postinstall as the single Electron binary install owner', () => {
     expect(packageJson.scripts.postinstall).toBe('node config/scripts/rebuild-native-deps.mjs')
     expect(packageJson.pnpm.onlyBuiltDependencies).not.toContain('electron')
+  })
+
+  it('keeps the native Windows registry addon optional and platform-gated', () => {
+    const rebuildScript = readFileSync(
+      join(projectDir, 'config/scripts/rebuild-native-deps.mjs'),
+      'utf8'
+    )
+    const ensureScript = readFileSync(
+      join(projectDir, 'config/scripts/ensure-native-runtime.mjs'),
+      'utf8'
+    )
+    expect(packageJson.optionalDependencies['windows-native-registry']).toBe('3.2.2')
+    // Why: pnpm installs optional target architectures on every host; the root
+    // Windows-only rebuild owns this addon so macOS/Linux never run node-gyp for it.
+    expect(packageJson.pnpm.onlyBuiltDependencies).not.toContain('windows-native-registry')
+    expect(rebuildScript).toContain(
+      "rebuildPlatform === 'win32' ? ['windows-native-registry'] : []"
+    )
+    expect(ensureScript).toContain(
+      "process.platform === 'win32' ? ['windows-native-registry'] : []"
+    )
+    const packageTargets = {
+      win32: createPackagedRuntimeNodeModuleResources('win32'),
+      darwin: createPackagedRuntimeNodeModuleResources('darwin'),
+      linux: createPackagedRuntimeNodeModuleResources('linux')
+    }
+    expect(packageTargets.win32).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ to: join('node_modules', 'windows-native-registry') }),
+        expect.objectContaining({ to: join('node_modules', 'node-addon-api') })
+      ])
+    )
+    for (const platform of ['darwin', 'linux']) {
+      expect(packageTargets[platform]).not.toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({ to: join('node_modules', 'windows-native-registry') })
+        ])
+      )
+    }
   })
 
   it('guards package scripts that launch Electron tooling', () => {
@@ -173,6 +215,23 @@ describe('Electron runtime package contract', () => {
     expect(releaseNames.indexOf('Gate SSH relay watcher process isolation')).toBeLessThan(
       releaseNames.indexOf('Build Windows release artifacts')
     )
+  })
+
+  it('packages and verifies the Windows SSH node-pty console-list fallback', () => {
+    const relayBuild = readFileSync(join(projectDir, 'config/scripts/build-relay.mjs'), 'utf8')
+    const relayDeploy = readFileSync(join(projectDir, 'src/main/ssh/ssh-relay-deploy.ts'), 'utf8')
+    const patchAsset = readFileSync(
+      join(projectDir, 'config/relay-assets/node-pty-1.1.0-console-list-agent-patch.cjs'),
+      'utf8'
+    )
+
+    expect(relayBuild).toContain('copyFileSync(')
+    expect(relayBuild).toContain('hash.update(readFileSync')
+    expect(relayBuild).toContain('node-pty-1.1.0-console-list-agent-patch.cjs')
+    expect(relayDeploy).toContain('assertPatchedNodePtyConsoleListAgent')
+    expect(relayDeploy.match(/\$\{windowsNodePtyPatchCommand\(nodePath\)\}/g)).toHaveLength(2)
+    expect(patchAsset).toContain('consoleProcessList = [shellPid];')
+    expect(patchAsset).toContain('packageJson.version !== EXPECTED_NODE_PTY_VERSION')
   })
 
   it('pins the Windows release builder to the VS 2022 runner image', () => {
@@ -374,16 +433,44 @@ describe('Electron runtime package contract', () => {
     expect(afterInstallScript).not.toContain('chmod 0755 "$sandbox"')
   })
 
-  it('lets release-cut tag a version that is already present on main', () => {
+  it('advances only the skill release ledger in a taggable release-cut commit', () => {
     const releaseWorkflow = readFileSync(
       join(projectDir, '.github/workflows/release-cut.yml'),
       'utf8'
     )
     const parsedWorkflow = parse(releaseWorkflow)
+    const checkoutStep = parsedWorkflow.jobs.cut.steps.find((step) => step.name === 'Checkout ref')
     const bumpStep = parsedWorkflow.jobs.cut.steps.find(
       (step) => step.name === 'Bump package.json and tag'
     )
 
+    const bumpIndex = bumpStep.run.indexOf(
+      'npm version "$VERSION" --no-git-tag-version --allow-same-version'
+    )
+    const generateIndex = bumpStep.run.indexOf(
+      'node config/scripts/generate-skill-bundle-manifest.mjs --release "$VERSION"'
+    )
+    const commands = bumpStep.run.replace(/^\s*#.*$/gm, '')
+    // Unanchored: a `git add` chained after `&&` stages just as effectively.
+    const stagedPaths = [...commands.matchAll(/\bgit add (.+)$/gm)].flatMap((match) =>
+      match[1].trim().split(/\s+/)
+    )
+    // Quotes trimmed and deduped: the index guard names the row a second time.
+    const mentioned = new Set(commands.match(/resources[/\\]skills[^\s'"]*/g))
+    expect(checkoutStep.with['fetch-depth']).toBe(0)
+    expect(bumpIndex).toBeGreaterThanOrEqual(0)
+    // Why: the cut is the only point that advances the release ledger, so this
+    // tag's revision is never rebuilt later — it appends that row, nothing else.
+    expect(generateIndex).toBeGreaterThan(bumpIndex)
+    expect(bumpStep.run.indexOf('git add package.json')).toBeGreaterThan(generateIndex)
+    expect(stagedPaths).toEqual(['package.json', 'resources/skills/release-mapping.json'])
+    // Every distinct mention must be staged, so a copy, a redirect, or a path
+    // held in a variable cannot reach the content-addressed artifacts. Matched
+    // without a trailing slash so `dir="resources/skills"` still counts.
+    expect([...mentioned]).toEqual(stagedPaths.slice(1))
+    // Regeneration is banned job-wide by the generator suite. Here: `-a`, `-am`,
+    // and `--all` sweep unstaged artifacts in; `--allow-empty` below must not.
+    expect(commands).not.toMatch(/\bcommit\b[^\n]*(?:\s-[a-z]*a[a-z]*\b|\s--all\b)/)
     expect(bumpStep.run).toContain('git diff --cached --quiet')
     expect(bumpStep.run).toContain('git commit --allow-empty -m "$commit_message"')
   })

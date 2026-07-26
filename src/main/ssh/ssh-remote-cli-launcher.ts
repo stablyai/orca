@@ -169,9 +169,6 @@ function createWindowsLauncherCompileCommand(
     .join(' ')
   return powerShellCommand(
     [
-      // Why: an upgrade must not leave the old %* batch bridge callable when
-      // compiler discovery fails; losing the convenience CLI is safer.
-      `Remove-Item -LiteralPath ${powerShellLiteral(legacyShimPath)} -Force -ErrorAction SilentlyContinue`,
       `Set-Location -ErrorAction Stop -LiteralPath ${powerShellLiteral(binDir)}`,
       '$windowsDirectory = if ($env:WINDIR) { $env:WINDIR } else { $env:SystemRoot }',
       `$compilerCandidates = @((Join-Path $windowsDirectory 'Microsoft.NET\\Framework64\\v4.0.30319\\csc.exe'), (Join-Path $windowsDirectory 'Microsoft.NET\\Framework\\v4.0.30319\\csc.exe'))`,
@@ -180,6 +177,9 @@ function createWindowsLauncherCompileCommand(
       `& $compiler ${compilerArgs}`,
       'if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }',
       `if (-not (Test-Path -LiteralPath ${powerShellLiteral(launcherPath)} -PathType Leaf)) { Write-Error 'The Orca SSH CLI launcher compiler produced no executable.'; exit 1 }`,
+      // Why: remove the legacy %* bridge only after a successful compile, so a
+      // host missing csc.exe keeps its existing CLI (orca.exe shadows orca.cmd).
+      `Remove-Item -LiteralPath ${powerShellLiteral(legacyShimPath)} -Force -ErrorAction SilentlyContinue`,
       `Remove-Item -LiteralPath ${powerShellLiteral(sourcePath)} -Force`
     ].join('; ')
   )

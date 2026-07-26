@@ -1,3 +1,5 @@
+import { REMOTE_SERVER_UPDATE_CAPABILITY } from './remote-server-update'
+
 // Why: declares the Orca runtime RPC compatibility contract. Desktop,
 // headless server, CLI, and mobile builds may drift in app version, but
 // they must agree on this protocol range before runtime RPCs are allowed.
@@ -38,11 +40,32 @@ export const AI_VAULT_RUNTIME_CAPABILITY = 'aiVault.v1' as const
 // offscreen backend). Advertised only when that backend is actually available, so
 // clients never fall back to a local desktop browser tab for a remote-owned page.
 export const BROWSER_HEADLESS_RUNTIME_CAPABILITY = 'browser.headless.v1' as const
+export const BROWSER_CERTIFICATE_TRUST_RUNTIME_CAPABILITY = 'browser.certificate-trust.v1' as const
 // Why: hosts without this strip terminal.send's inputKind (zod object drops
 // unknown keys), so a mobile xterm query reply would land as ordinary
 // floor-taking input. Mobile must not forward replies unless advertised.
 export const TERMINAL_QUERY_REPLY_INPUT_RUNTIME_CAPABILITY =
   'terminal.query-reply-input.v1' as const
+// Why: older hosts lack the targeted settings RPCs and strip agentPrompt from
+// terminal creation, so mobile must hide Quick Commands unless both are present.
+export const TERMINAL_QUICK_COMMANDS_RUNTIME_CAPABILITY = 'terminal.quick-commands.v1' as const
+// Why: older hosts strip worktree.create's clientMutationId, so mobile must only
+// replay ambiguous cutovers when the host advertises idempotent create support.
+export const WORKTREE_CREATE_IDEMPOTENCY_RUNTIME_CAPABILITY =
+  'worktree.create-idempotency.v1' as const
+export const CODEX_RESET_CREDIT_RUNTIME_CAPABILITY = 'accounts.codex-reset-credit.v1' as const
+// Why: older hosts cannot reconcile terminal.create's mutation after losing the reply, so clients may only retry unknown outcomes when advertised.
+export const TERMINAL_CREATE_IDEMPOTENCY_RUNTIME_CAPABILITY =
+  'terminal.create-idempotency.v2' as const
+export { REMOTE_SERVER_UPDATE_CAPABILITY } from './remote-server-update'
+export const AGENT_SESSION_HOST_AUTHORITY_RUNTIME_CAPABILITY =
+  'agent-session.host-authority.v1' as const
+export const AGENT_SESSION_OMP_RESUME_PATH_RUNTIME_CAPABILITY =
+  'agent-session.omp-resume-path.v1' as const
+// Why: older runtimes strip mutation owner fields, so clients must fence writes before RPC.
+export const FILE_MUTATION_OWNERSHIP_RUNTIME_CAPABILITY = 'files.mutation-ownership.v1' as const
+export const FILE_MUTATION_OWNERSHIP_UPDATE_REQUIRED_MESSAGE =
+  'Remote file changes require a newer Orca server. Update the HUB and try again.'
 
 export const RUNTIME_CAPABILITIES = [
   'runtime.status.compat.v1',
@@ -59,7 +82,15 @@ export const RUNTIME_CAPABILITIES = [
   FOLDER_WORKSPACE_PATH_STATUS_RUNTIME_CAPABILITY,
   LINEAR_ISSUE_ATTRIBUTE_FILTER_RUNTIME_CAPABILITY,
   AI_VAULT_RUNTIME_CAPABILITY,
-  TERMINAL_QUERY_REPLY_INPUT_RUNTIME_CAPABILITY
+  TERMINAL_QUERY_REPLY_INPUT_RUNTIME_CAPABILITY,
+  TERMINAL_QUICK_COMMANDS_RUNTIME_CAPABILITY,
+  WORKTREE_CREATE_IDEMPOTENCY_RUNTIME_CAPABILITY,
+  TERMINAL_CREATE_IDEMPOTENCY_RUNTIME_CAPABILITY,
+  REMOTE_SERVER_UPDATE_CAPABILITY,
+  AGENT_SESSION_HOST_AUTHORITY_RUNTIME_CAPABILITY,
+  AGENT_SESSION_OMP_RESUME_PATH_RUNTIME_CAPABILITY,
+  FILE_MUTATION_OWNERSHIP_RUNTIME_CAPABILITY,
+  CODEX_RESET_CREDIT_RUNTIME_CAPABILITY
 ] as const
 
 export type RuntimeCapability = (typeof RUNTIME_CAPABILITIES)[number] | (string & {})

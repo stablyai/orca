@@ -1,10 +1,16 @@
-import { parse } from 'yaml'
+import { parseDocument } from 'yaml'
 import type {
   OrcaDefaultTabTemplate,
   OrcaHooks,
   OrcaVmRecipe,
   OrcaVmRecipeDiagnostic
 } from './types'
+import {
+  isOrcaYamlFieldWithinLimit,
+  isOrcaYamlTextWithinLimit,
+  MAX_ORCA_YAML_ALIAS_COUNT,
+  MAX_ORCA_YAML_COLLECTION_ENTRIES
+} from './orca-yaml-file-limit'
 
 function asRecord(value: unknown): Record<string, unknown> | null {
   return value !== null && typeof value === 'object' && !Array.isArray(value)
@@ -13,7 +19,11 @@ function asRecord(value: unknown): Record<string, unknown> | null {
 }
 
 function asTrimmedString(value: unknown): string | undefined {
-  return typeof value === 'string' && value.trim() ? value.trim() : undefined
+  if (typeof value !== 'string' || !isOrcaYamlFieldWithinLimit(value)) {
+    return undefined
+  }
+  const trimmed = value.trim()
+  return trimmed || undefined
 }
 
 const DEFAULT_TAB_COLOR_RE = /^#[0-9a-fA-F]{3}(?:[0-9a-fA-F]{3})?$/
@@ -22,7 +32,7 @@ export const ORCA_VM_RECIPE_ID_RULE =
   'Use 1-64 lowercase letters, numbers, dots, underscores, or hyphens, starting with a letter or number.'
 
 function normalizeDefaultTabs(value: unknown): OrcaDefaultTabTemplate[] {
-  if (!Array.isArray(value)) {
+  if (!Array.isArray(value) || value.length > MAX_ORCA_YAML_COLLECTION_ENTRIES) {
     return []
   }
 
@@ -57,6 +67,17 @@ function normalizeVmRecipes(value: unknown): VmRecipeParseResult {
   const diagnostics: OrcaVmRecipeDiagnostic[] = []
   if (!Array.isArray(value)) {
     return { recipes: [], diagnostics }
+  }
+  if (value.length > MAX_ORCA_YAML_COLLECTION_ENTRIES) {
+    return {
+      recipes: [],
+      diagnostics: [
+        {
+          index: MAX_ORCA_YAML_COLLECTION_ENTRIES,
+          message: `At most ${MAX_ORCA_YAML_COLLECTION_ENTRIES} environment recipes are supported.`
+        }
+      ]
+    }
   }
 
   const seenIds = new Set<string>()
@@ -126,9 +147,22 @@ function normalizeVmRecipes(value: unknown): VmRecipeParseResult {
  * Parse the supported project defaults from `orca.yaml`.
  */
 export function parseOrcaYaml(content: string): OrcaHooks | null {
+  if (!isOrcaYamlTextWithinLimit(content)) {
+    return null
+  }
+
   let root: unknown
   try {
-    root = parse(content)
+    const document = parseDocument(content, {
+      keepSourceTokens: false,
+      logLevel: 'silent',
+      prettyErrors: false,
+      uniqueKeys: true
+    })
+    if (document.errors.length > 0) {
+      return null
+    }
+    root = document.toJS({ maxAliasCount: MAX_ORCA_YAML_ALIAS_COUNT })
   } catch {
     return null
   }

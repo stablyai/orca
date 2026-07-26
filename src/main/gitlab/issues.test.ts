@@ -214,7 +214,7 @@ describe('gitlab issue operations', () => {
 
     await listIssues('/repo-root', 5, undefined, 'opened', undefined, 'conn-7')
 
-    expect(getGlabKnownHostsMock).toHaveBeenCalledWith('conn-7')
+    expect(getGlabKnownHostsMock).toHaveBeenCalledWith('conn-7', {})
   })
 
   it('creates an issue and returns its iid + web_url', async () => {

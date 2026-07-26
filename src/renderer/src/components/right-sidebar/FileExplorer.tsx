@@ -54,7 +54,7 @@ import { translate } from '@/i18n/i18n'
 import { CLOSE_ALL_CONTEXT_MENUS_EVENT } from '@/components/tab-bar/SortableTab'
 import type { RightSidebarExplorerView } from '../../../../shared/types'
 import { getRuntimeEnvironmentIdForWorktree } from '@/lib/worktree-runtime-owner'
-import { createNewTerminalTab } from '@/components/terminal/terminal-tab-actions'
+import { createNewTerminalTab } from '@/components/terminal/terminal-tab-create'
 
 function FileExplorerFiles(): React.JSX.Element {
   const explorerView = useAppStore((s) => s.rightSidebarExplorerView)
@@ -80,6 +80,12 @@ function FileExplorerFiles(): React.JSX.Element {
   const activeWorktreeId = useAppStore((s) => s.activeWorktreeId)
   const activeWorktree = useActiveWorktree()
   const activeRepo = useRepoById(activeWorktree?.repoId ?? null)
+  const supportsFolderDownload = useAppStore((s) => {
+    const connectionId = activeRepo?.connectionId
+    return connectionId
+      ? s.sshConnectionStates.get(connectionId)?.supportsFolderDownload === true
+      : false
+  })
   const activeRuntimeEnvironmentId = useAppStore((s) =>
     getRuntimeEnvironmentIdForWorktree(s, activeWorktreeId)
   )
@@ -294,7 +300,8 @@ function FileExplorerFiles(): React.JSX.Element {
     expanded,
     toggleDir,
     refreshDir,
-    scrollRef
+    scrollRef,
+    getOperationOwnerForPath: (path) => rowProjection.getRowByPath(path)?.operationOwner
   })
 
   const lastResetWorktreePathRef = useRef<string | null>(null)
@@ -387,7 +394,8 @@ function FileExplorerFiles(): React.JSX.Element {
     refreshTree,
     inlineInput,
     dragSourcePath,
-    isNativeDragOver
+    isNativeDragOver,
+    operationOwner: rootCache?.operationOwner
   })
 
   useFileExplorerImport({
@@ -395,7 +403,8 @@ function FileExplorerFiles(): React.JSX.Element {
     activeWorktreeId,
     refreshDir,
     clearNativeDragState,
-    setSelectedPath: setSingleSelectedPath
+    setSelectedPath: setSingleSelectedPath,
+    operationOwner: rootCache?.operationOwner
   })
 
   const totalCount = visibleRowCount + (inlineInputIndex >= 0 ? 1 : 0)
@@ -746,6 +755,7 @@ function FileExplorerFiles(): React.JSX.Element {
                 deleteShortcutLabel={deleteShortcutLabel}
                 connectionId={activeRepo?.connectionId ?? null}
                 runtimeDownloadContext={runtimeDownloadContext}
+                supportsFolderDownload={supportsFolderDownload}
                 onClick={handleRowClick}
                 onDoubleClick={handleDoubleClick}
                 onViewFile={handleClick}

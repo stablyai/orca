@@ -2,12 +2,14 @@ import { useState, type RefObject } from 'react'
 import { Check, Pencil, X } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { translate } from '@/i18n/i18n'
-import { formatAskAnswer, type AskPrompt } from './native-chat-interactive-prompt'
+import type { AskAnswerSelection, AskPrompt } from './native-chat-interactive-prompt'
 
 export type NativeChatQuestionCardProps = {
   prompt: AskPrompt
-  /** Send the formatted answer text to the agent. */
-  onAnswer: (text: string) => void
+  /** Whether the snapshotted answer is still being delivered to the agent. */
+  isSubmitting?: boolean
+  /** Deliver the chosen answer (per-question option indices + free text). */
+  onAnswer: (selections: AskAnswerSelection[]) => void
   /** Dismiss the prompt (sends Escape to the agent). */
   onCancel: () => void
   /** Exposes the free-text row so pane-level Paste can target it while the
@@ -24,12 +26,15 @@ export type NativeChatQuestionCardProps = {
  */
 export function NativeChatQuestionCard({
   prompt,
+  isSubmitting = false,
   onAnswer,
   onCancel,
   answerInputRef
 }: NativeChatQuestionCardProps): React.JSX.Element {
   const [index, setIndex] = useState(0)
-  const [selections, setSelections] = useState<string[][]>(() => prompt.questions.map(() => []))
+  // Keep option identity by index: labels are display text and are not guaranteed
+  // unique, while Claude's selector commits the numbered row (STA-1860).
+  const [selections, setSelections] = useState<number[][]>(() => prompt.questions.map(() => []))
   const [otherText, setOtherText] = useState<string[]>(() => prompt.questions.map(() => ''))
 
   const total = prompt.questions.length
@@ -46,29 +51,30 @@ export function NativeChatQuestionCard({
 
   // The resolved answer for a question: picked labels plus any typed free-text.
   const answerFor = (qi: number, sel = selections, oth = otherText): string => {
-    const picked = sel[qi] ?? []
+    const question = prompt.questions[qi]
+    const picked = (sel[qi] ?? [])
+      .map((optionIndex) => question?.options[optionIndex]?.label ?? '')
+      .filter((label) => label.length > 0)
     const other = (oth[qi] ?? '').trim()
     return [...picked, ...(other ? [other] : [])].join(', ')
   }
 
   const currentAnswered = answerFor(index).length > 0
 
-  const submitAll = (sel: string[][], oth: string[]): void => {
-    const resolved = prompt.questions.map((_, i) => {
-      const picked = sel[i] ?? []
-      const other = (oth[i] ?? '').trim()
-      return [...picked, ...(other ? [other] : [])]
+  const submitAll = (sel: number[][], oth: string[]): void => {
+    const resolved: AskAnswerSelection[] = prompt.questions.map((_, i) => {
+      return { indices: [...(sel[i] ?? [])], other: (oth[i] ?? '').trim() }
     })
-    const text = formatAskAnswer(prompt, resolved)
-    if (text.length > 0) {
-      onAnswer(text)
+    const anyAnswered = resolved.some((s) => s.indices.length > 0 || (s.other ?? '').length > 0)
+    if (anyAnswered) {
+      onAnswer(resolved)
     }
   }
 
   // Advance to the next question, or submit on the last one — always from an
   // explicit snapshot so a just-committed single-select pick isn't lost to the
   // async setState.
-  const advanceOrSubmit = (sel: string[][], oth: string[]): void => {
+  const advanceOrSubmit = (sel: number[][], oth: string[]): void => {
     if (isLast) {
       submitAll(sel, oth)
     } else {
@@ -79,14 +85,16 @@ export function NativeChatQuestionCard({
   // Selecting only highlights the row; submitting is an explicit step via the
   // trailing Send/Next button. (Auto-submitting on the first click dismissed the
   // card before the user saw any feedback, which read as "nothing happened".)
-  const pickOption = (label: string): void => {
+  const pickOption = (optionIndex: number): void => {
     setSelections((prev) => {
       const next = prev.map((s) => [...s])
       const cur = next[index] ?? []
       if (q.multiSelect) {
-        next[index] = cur.includes(label) ? cur.filter((l) => l !== label) : [...cur, label]
+        next[index] = cur.includes(optionIndex)
+          ? cur.filter((pickedIndex) => pickedIndex !== optionIndex)
+          : [...cur, optionIndex].sort((a, b) => a - b)
       } else {
-        next[index] = cur.includes(label) ? [] : [label]
+        next[index] = cur.includes(optionIndex) ? [] : [optionIndex]
       }
       return next
     })
@@ -115,7 +123,7 @@ export function NativeChatQuestionCard({
     // Part of the composer: docked in the bottom input region, matching the
     // composer's width and padding, rendered as the "ask" dialog card directly
     // above the text input. Its free-text row is the answer input.
-    <div className="shrink-0 bg-background">
+    <div className="shrink-0 bg-background" aria-busy={isSubmitting}>
       <div className="mx-auto w-full max-w-4xl px-3 pt-2 pb-4 sm:px-4">
         {total > 1 ? (
           <div className="mb-2 flex gap-1 overflow-x-auto pb-1 scrollbar-sleek">
@@ -123,9 +131,10 @@ export function NativeChatQuestionCard({
               <button
                 key={i}
                 type="button"
+                disabled={isSubmitting}
                 onClick={() => setIndex(i)}
                 className={cn(
-                  'flex shrink-0 items-center gap-1 rounded-md px-2 py-1 text-xs font-medium',
+                  'flex shrink-0 items-center gap-1 rounded-md px-2 py-1 text-xs font-medium disabled:pointer-events-none',
                   i === index
                     ? 'bg-accent text-accent-foreground'
                     : 'text-muted-foreground hover:text-foreground'
@@ -168,12 +177,13 @@ export function NativeChatQuestionCard({
           <div className="max-h-[50vh] divide-y divide-border/60 overflow-y-auto border-t border-border scrollbar-sleek">
             {q.options.map((opt, i) => (
               <OptionRow
-                key={opt.label}
+                key={`${i}:${opt.label}`}
                 badge={String(i + 1)}
                 label={opt.label}
                 description={opt.description}
-                selected={(selections[index] ?? []).includes(opt.label)}
-                onSelect={() => pickOption(opt.label)}
+                selected={(selections[index] ?? []).includes(i)}
+                disabled={isSubmitting}
+                onSelect={() => pickOption(i)}
               />
             ))}
             <div className="flex items-center gap-3 px-3.5 py-2.5">
@@ -182,6 +192,7 @@ export function NativeChatQuestionCard({
               </span>
               <input
                 ref={answerInputRef}
+                disabled={isSubmitting}
                 value={otherText[index]}
                 onChange={(e) => setOther(index, e.target.value)}
                 onKeyDown={(e) => {
@@ -194,23 +205,26 @@ export function NativeChatQuestionCard({
                   'components.native-chat.question.otherPlaceholder',
                   'Type your answer'
                 )}
-                className="min-w-0 flex-1 bg-transparent text-sm text-foreground outline-none placeholder:text-muted-foreground/60"
+                className="min-w-0 flex-1 bg-transparent text-sm text-foreground outline-none placeholder:text-muted-foreground/60 disabled:cursor-default disabled:opacity-50"
               />
               <button
                 type="button"
+                disabled={isSubmitting}
                 onClick={() => confirm()}
                 className={cn(
-                  'shrink-0 rounded-md px-3 py-1 text-xs font-semibold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
+                  'w-24 shrink-0 rounded-md px-3 py-1 text-xs font-semibold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-default disabled:opacity-50',
                   currentAnswered
                     ? 'bg-primary text-primary-foreground hover:bg-primary/90'
                     : 'text-muted-foreground hover:bg-accent hover:text-accent-foreground'
                 )}
               >
-                {currentAnswered
-                  ? isLast
-                    ? translate('components.native-chat.question.send', 'Send answer')
-                    : translate('components.native-chat.question.next', 'Next')
-                  : translate('components.native-chat.question.skip', 'Skip')}
+                {isSubmitting
+                  ? translate('components.native-chat.question.sending', 'Sending…')
+                  : currentAnswered
+                    ? isLast
+                      ? translate('components.native-chat.question.send', 'Send answer')
+                      : translate('components.native-chat.question.next', 'Next')
+                    : translate('components.native-chat.question.skip', 'Skip')}
               </button>
             </div>
           </div>
@@ -231,23 +245,26 @@ function OptionRow({
   label,
   description,
   selected,
+  disabled,
   onSelect
 }: {
   badge: string
   label: string
   description?: string
   selected: boolean
+  disabled: boolean
   onSelect: () => void
 }): React.JSX.Element {
   return (
     <button
       type="button"
+      disabled={disabled}
       onClick={onSelect}
       // Selection is otherwise only the visual check/badge swap; expose it to
       // assistive tech.
       aria-pressed={selected}
       className={cn(
-        'flex w-full items-center gap-3 px-3.5 py-2.5 text-left transition-colors',
+        'flex w-full items-center gap-3 px-3.5 py-2.5 text-left transition-colors disabled:pointer-events-none',
         selected ? 'bg-accent' : 'hover:bg-accent'
       )}
     >

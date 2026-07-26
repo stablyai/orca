@@ -1,4 +1,5 @@
 import { translate } from '@/i18n/i18n'
+import { classifySchemeLessLocalDevAddress } from '../../../../shared/browser-url'
 
 const HOST_FILE_EXTENSIONS = new Set([
   'css',
@@ -15,9 +16,6 @@ const HOST_FILE_EXTENSIONS = new Set([
   'yml'
 ])
 
-const LOCAL_ADDRESS_PATTERN =
-  /^(?:localhost|127(?:\.\d{1,3}){3}|0\.0\.0\.0|\[[0-9a-f:]+\])(?::\d+)?(?:[/?#].*)?$/i
-
 const LOCALHOST_WITH_PORT_PATTERN = /^localhost(?::\d{1,5})?$/i
 const IPV4_WITH_PORT_PATTERN =
   /^(?:(?:25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)\.){3}(?:25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)(?::\d{1,5})?$/
@@ -33,7 +31,7 @@ export type HostUrlClassification = { kind: 'host-url'; url: string }
 export function classifyExplicitUrl(query: string): ExplicitUrlClassification | null {
   // Local dev inputs are handled by host-url classification so users can
   // enter localhost/IP addresses without an explicit scheme.
-  if (LOCAL_ADDRESS_PATTERN.test(query)) {
+  if (classifySchemeLessLocalDevAddress(query)) {
     return null
   }
   let url: URL
@@ -55,15 +53,8 @@ export function classifyExplicitUrl(query: string): ExplicitUrlClassification | 
 }
 
 function classifyLocalDevUrl(query: string): HostUrlClassification | null {
-  if (!LOCAL_ADDRESS_PATTERN.test(query)) {
-    return null
-  }
-  try {
-    const url = new URL(`http://${query}`)
-    return url.hostname ? { kind: 'host-url', url: url.href } : null
-  } catch {
-    return null
-  }
+  const url = classifySchemeLessLocalDevAddress(query)
+  return url?.hostname ? { kind: 'host-url', url: url.href } : null
 }
 
 function classifyHostLikeUrl(query: string): HostUrlClassification | null {

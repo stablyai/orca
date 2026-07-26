@@ -16,6 +16,8 @@ import {
   resolveTuiAgentLaunchEnv
 } from '../../../shared/tui-agent-launch-defaults'
 import { translate } from '@/i18n/i18n'
+import { resolveNativeChatSessionOptionDefaults } from '../../../shared/native-chat-session-option-defaults'
+import type { PersistedNativeChatSessionOptions } from '../../../shared/native-chat-session-options'
 
 export function buildDirectWorkItemAgentStartupPlan(args: {
   agent: TuiAgent | null
@@ -27,6 +29,7 @@ export function buildDirectWorkItemAgentStartupPlan(args: {
         agentCmdOverrides?: Partial<Record<TuiAgent, string>>
         agentDefaultArgs?: Partial<Record<TuiAgent, string>>
         agentDefaultEnv?: Partial<Record<TuiAgent, Record<string, string>>>
+        nativeChatSessionOptions?: PersistedNativeChatSessionOptions
       }
     | null
     | undefined
@@ -48,6 +51,10 @@ export function buildDirectWorkItemAgentStartupPlan(args: {
       ? resolveTuiAgentLaunchArgs(args.agent, args.settings?.agentDefaultArgs)
       : args.agentArgs
   const effectiveAgentEnv = resolveTuiAgentLaunchEnv(args.agent, args.settings?.agentDefaultEnv)
+  const sessionOptions = resolveNativeChatSessionOptionDefaults(
+    args.settings?.nativeChatSessionOptions,
+    args.agent
+  )
   const draftLaunchPlan =
     args.promptDelivery === 'submit-after-ready'
       ? null
@@ -58,7 +65,8 @@ export function buildDirectWorkItemAgentStartupPlan(args: {
           platform: args.launchPlatform,
           isRemote: args.isRemote,
           agentArgs: effectiveAgentArgs,
-          agentEnv: effectiveAgentEnv
+          agentEnv: effectiveAgentEnv,
+          sessionOptions
         })
 
   if (draftLaunchPlan) {
@@ -69,6 +77,9 @@ export function buildDirectWorkItemAgentStartupPlan(args: {
         expectedProcess: draftLaunchPlan.expectedProcess,
         followupPrompt: null,
         launchConfig: draftLaunchPlan.launchConfig,
+        ...(draftLaunchPlan.sessionOptions
+          ? { sessionOptions: draftLaunchPlan.sessionOptions }
+          : {}),
         ...(draftLaunchPlan.startupCommandDelivery
           ? { startupCommandDelivery: draftLaunchPlan.startupCommandDelivery }
           : {}),
@@ -87,6 +98,7 @@ export function buildDirectWorkItemAgentStartupPlan(args: {
     isRemote: args.isRemote,
     agentArgs: effectiveAgentArgs,
     agentEnv: effectiveAgentEnv,
+    sessionOptions,
     allowEmptyPromptLaunch: true
   })
   if (startupPlan && args.promptDelivery === 'draft') {
@@ -110,6 +122,7 @@ export function buildDirectWorkItemStartupOpts(
     launchConfig?: SleepingAgentLaunchConfig
     launchAgent?: TuiAgent
     draftPrompt?: string
+    sessionOptions?: AgentStartupPlan['sessionOptions']
     startupCommandDelivery?: StartupCommandDelivery
     telemetry?: AgentStartedTelemetry
   }
@@ -126,6 +139,7 @@ export function buildDirectWorkItemStartupOpts(
       command: plan.launchCommand,
       ...(plan.env ? { env: plan.env } : {}),
       launchConfig: plan.launchConfig,
+      ...(plan.sessionOptions ? { sessionOptions: plan.sessionOptions } : {}),
       ...(agent ? { launchAgent: agent } : {}),
       ...(plan.draftPrompt ? { draftPrompt: plan.draftPrompt } : {}),
       ...(plan.startupCommandDelivery

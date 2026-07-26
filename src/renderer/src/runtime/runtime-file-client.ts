@@ -12,7 +12,8 @@ import type {
 import type {
   RuntimeFilePreviewResult,
   RuntimeFileReadChunkResult,
-  RuntimeFileReadResult
+  RuntimeFileReadResult,
+  RuntimeStatus
 } from '../../../shared/runtime-types'
 import {
   callRuntimeRpc,
@@ -31,6 +32,11 @@ import {
   createEmptyRuntimeFileSearchResult,
   getRuntimeFileSearchRejectedField
 } from './runtime-file-search-bounds'
+import { assertFileMutationOwnershipCapability } from '../../../shared/file-mutation-ownership'
+import {
+  captureRuntimeEnvironmentRequestRevision,
+  getRuntimeEnvironmentRevision
+} from './runtime-environment-revision'
 
 export type RuntimeReadableFileContent = {
   content: string
@@ -46,6 +52,7 @@ export type RuntimeFileReadArgs = {
   relativePath?: string
   worktreeId?: string
   connectionId?: string
+  expectedExternalSshTargetId?: string
   includeLocalLogMetadata?: boolean
 }
 
@@ -54,6 +61,47 @@ export type RuntimeFileOperationArgs = {
   worktreeId: string | null | undefined
   worktreePath: string | null | undefined
   connectionId?: string
+  expectedExecutionHostId?: 'local' | `ssh:${string}`
+  expectedSshTargetId?: string
+  expectedSshConnectionGeneration?: number
+  expectedExternalSshTargetId?: string
+}
+
+function assertExternalSshReadOwnership(
+  settings: Pick<GlobalSettings, 'activeRuntimeEnvironmentId'> | null | undefined,
+  connectionId: string | undefined,
+  expectedExternalSshTargetId: string | undefined
+): void {
+  const expectedTargetId = expectedExternalSshTargetId?.trim()
+  if (
+    expectedTargetId &&
+    (getActiveRuntimeTarget(settings).kind === 'environment' || connectionId !== expectedTargetId)
+  ) {
+    throw new Error('External SSH files are not available after the workspace host changes.')
+  }
+}
+
+function withSshMutationExpectation<T extends object>(
+  context: RuntimeFileOperationArgs,
+  params: T
+): T & {
+  expectedExecutionHostId: 'local' | `ssh:${string}`
+  expectedSshTargetId?: string
+  expectedSshConnectionGeneration?: number
+} {
+  const sshTargetId = context.expectedSshTargetId ?? context.connectionId
+  return {
+    ...params,
+    expectedExecutionHostId:
+      context.expectedExecutionHostId ??
+      (sshTargetId ? `ssh:${encodeURIComponent(sshTargetId)}` : 'local'),
+    ...(context.expectedSshTargetId === undefined
+      ? {}
+      : { expectedSshTargetId: context.expectedSshTargetId }),
+    ...(context.expectedSshConnectionGeneration === undefined
+      ? {}
+      : { expectedSshConnectionGeneration: context.expectedSshConnectionGeneration })
+  }
 }
 
 export type RuntimeFileDownloadResult =
@@ -99,6 +147,7 @@ type RuntimeImportResult =
     }
 
 type RuntimeFileWatchEvent =
+  | { type: 'starting'; subscriptionId: string }
   | { type: 'ready'; subscriptionId: string }
   | { type: 'changed'; worktree: string; events: FsChangedPayload['events'] }
   | { type: 'error'; message: string }
@@ -110,6 +159,49 @@ const REMOTE_DOWNLOAD_UPDATE_REQUIRED_MESSAGE =
   'Remote file download requires a newer Orca server. Update the headless server and try again.'
 
 type RemoteFileDownloadArgs = NonNullable<ReturnType<typeof getRemoteFileArgs>>
+type RuntimeFileMutationTarget = { kind: 'environment'; environmentId: string }
+
+async function assertRuntimeFileMutationCapability(
+  target: RuntimeFileMutationTarget,
+  expectedEnvironmentPairingRevision: number | undefined
+): Promise<void> {
+  const status = await callRuntimeRpc<RuntimeStatus>(target, 'status.get', undefined, {
+    timeoutMs: 15_000,
+    expectedEnvironmentPairingRevision
+  })
+  assertFileMutationOwnershipCapability(status)
+}
+
+async function callRuntimeFileMutation<TResult>(
+  target: RuntimeFileMutationTarget,
+  method: string,
+  params: unknown,
+  timeoutMs: number,
+  expectedEnvironmentPairingRevision?: number
+): Promise<TResult> {
+  const requestRevision = captureRuntimeEnvironmentRequestRevision(
+    target.environmentId,
+    expectedEnvironmentPairingRevision
+  )
+  await assertRuntimeFileMutationCapability(target, requestRevision)
+  return callRuntimeRpc<TResult>(target, method, params, {
+    timeoutMs,
+    expectedEnvironmentPairingRevision: requestRevision
+  })
+}
+
+function createRuntimeImportSessionGuard(
+  environmentId: string,
+  expectedEnvironmentPairingRevision: number | undefined,
+  assertCallerCurrent?: () => void
+): () => void {
+  return () => {
+    if (getRuntimeEnvironmentRevision(environmentId) !== expectedEnvironmentPairingRevision) {
+      throw new Error('Runtime pairing changed; retry the import.')
+    }
+    assertCallerCurrent?.()
+  }
+}
 
 type RuntimeFileWatchListener = {
   onPayload: (payload: FsChangedPayload) => void
@@ -151,8 +243,10 @@ export async function readRuntimeFileContent({
   relativePath,
   worktreeId,
   connectionId,
+  expectedExternalSshTargetId,
   includeLocalLogMetadata
 }: RuntimeFileReadArgs): Promise<RuntimeReadableFileContent> {
+  assertExternalSshReadOwnership(settings, connectionId, expectedExternalSshTargetId)
   const target = getActiveRuntimeTarget(settings)
   if (target.kind !== 'environment') {
     return window.api.fs.readFile({ filePath, connectionId, includeLocalLogMetadata })
@@ -199,6 +293,11 @@ export async function readRuntimeFilePreview(
   context: RuntimeFileOperationArgs,
   filePath: string
 ): Promise<RuntimeFilePreviewResult> {
+  assertExternalSshReadOwnership(
+    context.settings,
+    context.connectionId,
+    context.expectedExternalSshTargetId
+  )
   const remoteArgs = getRemoteFileArgs(context, filePath)
   if (!remoteArgs) {
     if (hasRemoteRuntimeOwner(context)) {
@@ -219,6 +318,11 @@ export async function downloadRuntimeFile(
   filePath: string,
   suggestedName: string
 ): Promise<RuntimeFileDownloadResult> {
+  assertExternalSshReadOwnership(
+    context.settings,
+    context.connectionId,
+    context.expectedExternalSshTargetId
+  )
   const remoteArgs = getRemoteFileArgs(context, filePath)
   if (!remoteArgs) {
     if (hasRemoteRuntimeOwner(context)) {
@@ -381,14 +485,20 @@ export async function writeRuntimeFile(
   const remoteArgs = getRemoteFileArgs(context, filePath)
   if (!remoteArgs) {
     assertLocalFilesystemFallbackAllowed(context)
-    await window.api.fs.writeFile({ filePath, content, connectionId: context.connectionId })
+    await window.api.fs.writeFile(
+      withSshMutationExpectation(context, { filePath, content, connectionId: context.connectionId })
+    )
     return
   }
-  await callRuntimeRpc(
+  await callRuntimeFileMutation(
     remoteArgs.target,
     'files.write',
-    { worktree: remoteArgs.worktreeSelector, relativePath: remoteArgs.relativePath, content },
-    { timeoutMs: 15_000 }
+    withSshMutationExpectation(context, {
+      worktree: remoteArgs.worktreeSelector,
+      relativePath: remoteArgs.relativePath,
+      content
+    }),
+    15_000
   )
 }
 
@@ -401,15 +511,25 @@ export async function createRuntimePath(
   if (!remoteArgs) {
     assertLocalFilesystemFallbackAllowed(context)
     await (kind === 'directory'
-      ? window.api.fs.createDir({ dirPath: path, connectionId: context.connectionId })
-      : window.api.fs.createFile({ filePath: path, connectionId: context.connectionId }))
+      ? window.api.fs.createDir(
+          withSshMutationExpectation(context, { dirPath: path, connectionId: context.connectionId })
+        )
+      : window.api.fs.createFile(
+          withSshMutationExpectation(context, {
+            filePath: path,
+            connectionId: context.connectionId
+          })
+        ))
     return
   }
-  await callRuntimeRpc(
+  await callRuntimeFileMutation(
     remoteArgs.target,
     kind === 'directory' ? 'files.createDir' : 'files.createFile',
-    { worktree: remoteArgs.worktreeSelector, relativePath: remoteArgs.relativePath },
-    { timeoutMs: 15_000 }
+    withSshMutationExpectation(context, {
+      worktree: remoteArgs.worktreeSelector,
+      relativePath: remoteArgs.relativePath
+    }),
+    15_000
   )
 }
 
@@ -422,18 +542,20 @@ export async function renameRuntimePath(
   const newRelativePath = getRelativePathInsideWorktree(context.worktreePath, newPath)
   if (!oldRemoteArgs || newRelativePath === null) {
     assertLocalFilesystemFallbackAllowed(context)
-    await window.api.fs.rename({ oldPath, newPath, connectionId: context.connectionId })
+    await window.api.fs.rename(
+      withSshMutationExpectation(context, { oldPath, newPath, connectionId: context.connectionId })
+    )
     return
   }
-  await callRuntimeRpc(
+  await callRuntimeFileMutation(
     oldRemoteArgs.target,
     'files.rename',
-    {
+    withSshMutationExpectation(context, {
       worktree: oldRemoteArgs.worktreeSelector,
       oldRelativePath: oldRemoteArgs.relativePath,
       newRelativePath
-    },
-    { timeoutMs: 15_000 }
+    }),
+    15_000
   )
 }
 
@@ -446,22 +568,24 @@ export async function copyRuntimePath(
   const destinationArgs = getRemoteFileArgs(context, destinationPath)
   if (!sourceArgs || !destinationArgs) {
     assertLocalFilesystemFallbackAllowed(context)
-    await window.api.fs.copy({
-      sourcePath,
-      destinationPath,
-      connectionId: context.connectionId
-    })
+    await window.api.fs.copy(
+      withSshMutationExpectation(context, {
+        sourcePath,
+        destinationPath,
+        connectionId: context.connectionId
+      })
+    )
     return
   }
-  await callRuntimeRpc(
+  await callRuntimeFileMutation(
     sourceArgs.target,
     'files.copy',
-    {
+    withSshMutationExpectation(context, {
       worktree: sourceArgs.worktreeSelector,
       sourceRelativePath: sourceArgs.relativePath,
       destinationRelativePath: destinationArgs.relativePath
-    },
-    { timeoutMs: 15_000 }
+    }),
+    15_000
   )
 }
 
@@ -473,18 +597,24 @@ export async function deleteRuntimePath(
   const remoteArgs = getRemoteFileArgs(context, targetPath)
   if (!remoteArgs) {
     assertLocalFilesystemFallbackAllowed(context)
-    await window.api.fs.deletePath({
-      targetPath,
-      connectionId: context.connectionId,
-      recursive
-    })
+    await window.api.fs.deletePath(
+      withSshMutationExpectation(context, {
+        targetPath,
+        connectionId: context.connectionId,
+        recursive
+      })
+    )
     return
   }
-  await callRuntimeRpc(
+  await callRuntimeFileMutation(
     remoteArgs.target,
     'files.delete',
-    { worktree: remoteArgs.worktreeSelector, relativePath: remoteArgs.relativePath, recursive },
-    { timeoutMs: 15_000 }
+    withSshMutationExpectation(context, {
+      worktree: remoteArgs.worktreeSelector,
+      relativePath: remoteArgs.relativePath,
+      recursive
+    }),
+    15_000
   )
 }
 
@@ -501,15 +631,15 @@ export async function deleteRuntimeRelativePath(
   ) {
     return false
   }
-  await callRuntimeRpc(
+  await callRuntimeFileMutation(
     target,
     'files.delete',
-    {
+    withSshMutationExpectation(context, {
       worktree: toRuntimeWorktreeSelector(context.worktreeId),
       relativePath: normalizeRelativePath(relativePath),
       recursive
-    },
-    { timeoutMs: 15_000 }
+    }),
+    15_000
   )
   return true
 }
@@ -518,16 +648,18 @@ export async function importExternalPathsToRuntime(
   context: RuntimeFileOperationArgs,
   sourcePaths: string[],
   destinationDir: string,
-  options?: { ensureDestinationDir?: boolean }
+  options?: { ensureDestinationDir?: boolean; assertCurrent?: () => void }
 ): Promise<{ results: RuntimeImportResult[] }> {
   const target = getActiveRuntimeTarget(context.settings)
   if (target.kind !== 'environment' || !context.worktreeId || !context.worktreePath) {
-    return window.api.fs.importExternalPaths({
-      sourcePaths,
-      destDir: destinationDir,
-      connectionId: context.connectionId,
-      ensureDir: options?.ensureDestinationDir
-    })
+    return window.api.fs.importExternalPaths(
+      withSshMutationExpectation(context, {
+        sourcePaths,
+        destDir: destinationDir,
+        connectionId: context.connectionId,
+        ensureDir: options?.ensureDestinationDir
+      })
+    )
   }
 
   const destinationArgs = getRemoteFileArgs(context, destinationDir)
@@ -535,11 +667,27 @@ export async function importExternalPathsToRuntime(
     throw new Error('Destination is outside the active runtime worktree')
   }
 
+  const expectedEnvironmentPairingRevision = captureRuntimeEnvironmentRequestRevision(
+    target.environmentId
+  )
+  const assertImportSessionCurrent = createRuntimeImportSessionGuard(
+    target.environmentId,
+    expectedEnvironmentPairingRevision,
+    options?.assertCurrent
+  )
+  await assertRuntimeFileMutationCapability(target, expectedEnvironmentPairingRevision)
+  assertImportSessionCurrent()
   const staged = await window.api.fs.stageExternalPathsForRuntimeUpload({ sourcePaths })
+  assertImportSessionCurrent()
   const results: RuntimeImportResult[] = []
   const reservedNames = new Set<string>()
 
-  await ensureRuntimeDirectory(context, destinationDir)
+  await ensureRuntimeDirectory(
+    context,
+    destinationDir,
+    assertImportSessionCurrent,
+    expectedEnvironmentPairingRevision
+  )
 
   for (const source of staged.sources as StagedRuntimeImportSource[]) {
     if (source.status !== 'staged') {
@@ -552,21 +700,24 @@ export async function importExternalPathsToRuntime(
         context,
         destinationDir,
         source.name,
-        reservedNames
+        reservedNames,
+        expectedEnvironmentPairingRevision
       )
       const destPath = joinPath(destinationDir, finalName)
       const destRelativePath = joinRuntimeRelativePath(destinationArgs.relativePath, finalName)
       for (const entry of source.entries) {
         const entryRelativePath = joinRuntimeRelativePath(destRelativePath, entry.relativePath)
         if (entry.kind === 'directory') {
-          await callRuntimeRpc(
+          assertImportSessionCurrent()
+          await callRuntimeFileMutation(
             target,
             'files.createDirNoClobber',
-            {
+            withSshMutationExpectation(context, {
               worktree: toRuntimeWorktreeSelector(context.worktreeId),
               relativePath: entryRelativePath
-            },
-            { timeoutMs: 15_000 }
+            }),
+            15_000,
+            expectedEnvironmentPairingRevision
           )
           if (source.kind === 'directory' && entry.relativePath === '') {
             createdDirectoryImportRoot = entryRelativePath
@@ -577,7 +728,15 @@ export async function importExternalPathsToRuntime(
           target,
           context.worktreeId,
           entryRelativePath,
-          entry.contentBase64
+          entry.contentBase64,
+          assertImportSessionCurrent,
+          context.expectedSshConnectionGeneration,
+          context.expectedSshTargetId,
+          context.expectedExecutionHostId ??
+            (context.expectedSshTargetId
+              ? `ssh:${encodeURIComponent(context.expectedSshTargetId)}`
+              : 'local'),
+          expectedEnvironmentPairingRevision
         )
       }
       reservedNames.add(finalName)
@@ -592,15 +751,17 @@ export async function importExternalPathsToRuntime(
       if (createdDirectoryImportRoot) {
         // Why: match local directory imports by removing the no-clobber root
         // Orca created when a nested runtime upload fails halfway through.
-        await callRuntimeRpc(
+        assertImportSessionCurrent()
+        await callRuntimeFileMutation(
           target,
           'files.delete',
-          {
+          withSshMutationExpectation(context, {
             worktree: toRuntimeWorktreeSelector(context.worktreeId),
             relativePath: createdDirectoryImportRoot,
             recursive: true
-          },
-          { timeoutMs: 15_000 }
+          }),
+          15_000,
+          expectedEnvironmentPairingRevision
         ).catch(() => {})
       }
       results.push({
@@ -618,31 +779,56 @@ async function uploadRuntimeFileWithoutClobber(
   target: { kind: 'environment'; environmentId: string },
   worktreeId: string,
   relativePath: string,
-  contentBase64: string
+  contentBase64: string,
+  assertCurrent?: () => void,
+  expectedSshConnectionGeneration?: number,
+  expectedSshTargetId?: string,
+  expectedExecutionHostId?: 'local' | `ssh:${string}`,
+  expectedEnvironmentPairingRevision?: number
 ): Promise<void> {
   const tempRelativePath = makeRuntimeUploadTempPath(relativePath)
   try {
-    await writeRuntimeBase64File(target, worktreeId, tempRelativePath, contentBase64)
-    await callRuntimeRpc(
+    await writeRuntimeBase64File(
+      target,
+      worktreeId,
+      tempRelativePath,
+      contentBase64,
+      assertCurrent,
+      expectedSshConnectionGeneration,
+      expectedSshTargetId,
+      expectedExecutionHostId,
+      expectedEnvironmentPairingRevision
+    )
+    assertCurrent?.()
+    await callRuntimeFileMutation(
       target,
       'files.commitUpload',
       {
         worktree: toRuntimeWorktreeSelector(worktreeId),
         tempRelativePath,
-        finalRelativePath: relativePath
+        finalRelativePath: relativePath,
+        expectedSshTargetId,
+        expectedSshConnectionGeneration,
+        expectedExecutionHostId
       },
-      { timeoutMs: 30_000 }
+      30_000,
+      expectedEnvironmentPairingRevision
     )
   } finally {
-    await callRuntimeRpc(
+    assertCurrent?.()
+    await callRuntimeFileMutation(
       target,
       'files.delete',
       {
         worktree: toRuntimeWorktreeSelector(worktreeId),
         relativePath: tempRelativePath,
-        recursive: false
+        recursive: false,
+        expectedSshTargetId,
+        expectedSshConnectionGeneration,
+        expectedExecutionHostId
       },
-      { timeoutMs: 15_000 }
+      15_000,
+      expectedEnvironmentPairingRevision
     ).catch(() => {})
   }
 }
@@ -651,29 +837,48 @@ async function writeRuntimeBase64File(
   target: { kind: 'environment'; environmentId: string },
   worktreeId: string,
   relativePath: string,
-  contentBase64: string
+  contentBase64: string,
+  assertCurrent?: () => void,
+  expectedSshConnectionGeneration?: number,
+  expectedSshTargetId?: string,
+  expectedExecutionHostId?: 'local' | `ssh:${string}`,
+  expectedEnvironmentPairingRevision?: number
 ): Promise<void> {
   if (contentBase64.length <= REMOTE_UPLOAD_BASE64_CHUNK_CHARS) {
-    await callRuntimeRpc(
+    assertCurrent?.()
+    await callRuntimeFileMutation(
       target,
       'files.writeBase64',
-      { worktree: toRuntimeWorktreeSelector(worktreeId), relativePath, contentBase64 },
-      { timeoutMs: 30_000 }
+      {
+        worktree: toRuntimeWorktreeSelector(worktreeId),
+        relativePath,
+        contentBase64,
+        expectedSshTargetId,
+        expectedSshConnectionGeneration,
+        expectedExecutionHostId
+      },
+      30_000,
+      expectedEnvironmentPairingRevision
     )
     return
   }
 
   for (let offset = 0; offset < contentBase64.length; offset += REMOTE_UPLOAD_BASE64_CHUNK_CHARS) {
-    await callRuntimeRpc(
+    assertCurrent?.()
+    await callRuntimeFileMutation(
       target,
       'files.writeBase64Chunk',
       {
         worktree: toRuntimeWorktreeSelector(worktreeId),
         relativePath,
         contentBase64: contentBase64.slice(offset, offset + REMOTE_UPLOAD_BASE64_CHUNK_CHARS),
-        append: offset > 0
+        append: offset > 0,
+        expectedSshTargetId,
+        expectedSshConnectionGeneration,
+        expectedExecutionHostId
       },
-      { timeoutMs: 30_000 }
+      30_000,
+      expectedEnvironmentPairingRevision
     )
   }
 }
@@ -689,7 +894,9 @@ function makeRuntimeUploadTempPath(relativePath: string): string {
 
 async function ensureRuntimeDirectory(
   context: RuntimeFileOperationArgs,
-  destinationDir: string
+  destinationDir: string,
+  assertCurrent: () => void,
+  expectedEnvironmentPairingRevision: number | undefined
 ): Promise<void> {
   const destinationArgs = getRemoteFileArgs(context, destinationDir)
   if (!destinationArgs) {
@@ -702,14 +909,20 @@ async function ensureRuntimeDirectory(
   for (const part of parts) {
     current = joinRuntimeRelativePath(current, part)
     const absolutePath = joinPath(context.worktreePath ?? '', current)
-    if (await runtimePathExists(context, absolutePath)) {
+    assertCurrent()
+    if (await runtimePathExists(context, absolutePath, expectedEnvironmentPairingRevision)) {
       continue
     }
-    await callRuntimeRpc(
+    assertCurrent?.()
+    await callRuntimeFileMutation(
       destinationArgs.target,
       'files.createDir',
-      { worktree: destinationArgs.worktreeSelector, relativePath: current },
-      { timeoutMs: 15_000 }
+      withSshMutationExpectation(context, {
+        worktree: destinationArgs.worktreeSelector,
+        relativePath: current
+      }),
+      15_000,
+      expectedEnvironmentPairingRevision
     )
   }
 }
@@ -890,7 +1103,7 @@ function createSharedRuntimeFileWatch(
           handleSharedRuntimeFileWatchResponse(key, shared, worktreePath, response)
         },
         onError: (error) => {
-          notifySharedRuntimeFileWatchError(shared, new Error(error.message))
+          failSharedRuntimeFileWatch(key, shared, new Error(error.message))
         },
         onClose: () => {
           if (sharedRuntimeFileWatches.get(key) === shared) {
@@ -912,11 +1125,7 @@ function createSharedRuntimeFileWatch(
       }
     })
     .catch((err) => {
-      if (sharedRuntimeFileWatches.get(key) === shared) {
-        sharedRuntimeFileWatches.delete(key)
-      }
-      shared.closed = true
-      notifySharedRuntimeFileWatchError(shared, err instanceof Error ? err : new Error(String(err)))
+      failSharedRuntimeFileWatch(key, shared, err instanceof Error ? err : new Error(String(err)))
       throw err
     })
   return shared
@@ -932,7 +1141,7 @@ function handleSharedRuntimeFileWatchResponse(
     const event = unwrapRuntimeRpcResult<RuntimeFileWatchEvent>(
       response as RuntimeRpcResponse<RuntimeFileWatchEvent>
     )
-    if (event.type === 'ready') {
+    if (event.type === 'starting' || event.type === 'ready') {
       shared.remoteSubscriptionId = event.subscriptionId
       if (shared.closed) {
         shared.unsubscribe?.()
@@ -948,15 +1157,7 @@ function handleSharedRuntimeFileWatchResponse(
     } else if (event.type === 'error') {
       // Why: error listeners may synchronously retry. Evict the terminal watch
       // before callbacks run so the retry cannot join a stream awaiting `end`.
-      if (sharedRuntimeFileWatches.get(key) === shared) {
-        sharedRuntimeFileWatches.delete(key)
-      }
-      shared.closed = true
-      const listeners = Array.from(shared.listeners)
-      shared.listeners.clear()
-      for (const listener of listeners) {
-        listener.onError?.(new Error(event.message))
-      }
+      failSharedRuntimeFileWatch(key, shared, new Error(event.message))
     } else if (event.type === 'end') {
       // Why: shared-control completes without onClose; evict and release its
       // transport handle so later listeners start cleanly without retained state.
@@ -971,12 +1172,26 @@ function handleSharedRuntimeFileWatchResponse(
       unsubscribe?.()
     }
   } catch (err) {
-    notifySharedRuntimeFileWatchError(shared, err instanceof Error ? err : new Error(String(err)))
+    failSharedRuntimeFileWatch(key, shared, err instanceof Error ? err : new Error(String(err)))
   }
 }
 
-function notifySharedRuntimeFileWatchError(shared: SharedRuntimeFileWatch, error: Error): void {
-  for (const listener of Array.from(shared.listeners)) {
+function failSharedRuntimeFileWatch(
+  key: string,
+  shared: SharedRuntimeFileWatch,
+  error: Error
+): void {
+  if (sharedRuntimeFileWatches.get(key) === shared) {
+    sharedRuntimeFileWatches.delete(key)
+  }
+  shared.closed = true
+  shared.remoteSubscriptionId = null
+  const unsubscribe = shared.unsubscribe
+  shared.unsubscribe = null
+  const listeners = Array.from(shared.listeners)
+  shared.listeners.clear()
+  unsubscribe?.()
+  for (const listener of listeners) {
     listener.onError?.(error)
   }
 }
@@ -989,7 +1204,7 @@ function closeSharedRuntimeFileWatch(key: string, shared: SharedRuntimeFileWatch
   sharedRuntimeFileWatches.delete(key)
   if (shared.keepStreamUntilReady) {
     // Why: WebRuntimeClient owns shared-socket file-watch cleanup, including
-    // pre-ready fallback timers and late-ready files.unwatch.
+    // pre-ready cancellation ownership and late-ready files.unwatch.
     shared.unsubscribe?.()
     shared.unsubscribe = null
     return
@@ -1017,7 +1232,8 @@ function unwatchSharedRuntimeFileWatch(shared: SharedRuntimeFileWatch): void {
 
 export async function runtimePathExists(
   context: RuntimeFileOperationArgs,
-  absolutePath: string
+  absolutePath: string,
+  expectedEnvironmentPairingRevision?: number
 ): Promise<boolean> {
   const remoteArgs = getRemoteFileArgs(context, absolutePath)
   if (!remoteArgs) {
@@ -1033,7 +1249,7 @@ export async function runtimePathExists(
       remoteArgs.target,
       'files.stat',
       { worktree: remoteArgs.worktreeSelector, relativePath: remoteArgs.relativePath },
-      { timeoutMs: 15_000 }
+      { timeoutMs: 15_000, expectedEnvironmentPairingRevision }
     )
     return true
   } catch (err) {
@@ -1115,10 +1331,15 @@ async function deconflictRuntimeImportName(
   context: RuntimeFileOperationArgs,
   destinationDir: string,
   originalName: string,
-  reservedNames: Set<string>
+  reservedNames: Set<string>,
+  expectedEnvironmentPairingRevision?: number
 ): Promise<string> {
   if (
-    !(await runtimePathExists(context, joinPath(destinationDir, originalName))) &&
+    !(await runtimePathExists(
+      context,
+      joinPath(destinationDir, originalName),
+      expectedEnvironmentPairingRevision
+    )) &&
     !reservedNames.has(originalName)
   ) {
     return originalName
@@ -1130,7 +1351,11 @@ async function deconflictRuntimeImportName(
   const ext = hasMeaningfulExt ? originalName.slice(dotIndex) : ''
   let candidate = `${stem} copy${ext}`
   if (
-    !(await runtimePathExists(context, joinPath(destinationDir, candidate))) &&
+    !(await runtimePathExists(
+      context,
+      joinPath(destinationDir, candidate),
+      expectedEnvironmentPairingRevision
+    )) &&
     !reservedNames.has(candidate)
   ) {
     return candidate
@@ -1140,7 +1365,11 @@ async function deconflictRuntimeImportName(
   while (counter < 10000) {
     candidate = `${stem} copy ${counter}${ext}`
     if (
-      !(await runtimePathExists(context, joinPath(destinationDir, candidate))) &&
+      !(await runtimePathExists(
+        context,
+        joinPath(destinationDir, candidate),
+        expectedEnvironmentPairingRevision
+      )) &&
       !reservedNames.has(candidate)
     ) {
       return candidate

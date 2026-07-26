@@ -11,6 +11,12 @@ vi.mock('child_process', () => ({
 }))
 
 import { createWslWatcher } from './filesystem-watcher-wsl'
+import { WSL_WATCHER_PHYSICAL_EXIT_TIMEOUT_MS } from './wsl-watcher-process-exit'
+import {
+  MAX_PHYSICAL_WATCHER_CHILDREN,
+  reserveWatcherChild,
+  resetWatcherChildRegistryForTest
+} from './parcel-watcher-child-registry'
 import type { WatchedRoot, WslWatcherDeps } from './filesystem-watcher-wsl'
 
 const SNAPSHOT_START = '\x1e'
@@ -71,6 +77,7 @@ async function resolveInitialSnapshot(
 describe('createWslWatcher', () => {
   beforeEach(() => {
     spawnMock.mockReset()
+    resetWatcherChildRegistryForTest()
   })
 
   afterEach(() => {
@@ -91,6 +98,54 @@ describe('createWslWatcher', () => {
         windowsHide: true
       })
     )
+  })
+
+  it('counts WSL watcher processes against the global physical child cap', async () => {
+    const releases = Array.from({ length: MAX_PHYSICAL_WATCHER_CHILDREN }, () =>
+      reserveWatcherChild()
+    )
+
+    await expect(createWslWatcher(ROOT_KEY, ROOT_KEY, makeDeps())).rejects.toThrow(
+      'Physical file watcher process limit reached'
+    )
+    expect(spawnMock).not.toHaveBeenCalled()
+    releases.forEach((release) => release?.())
+  })
+
+  it('releases the WSL physical child reservation only after close', async () => {
+    const siblingReleases = Array.from({ length: MAX_PHYSICAL_WATCHER_CHILDREN - 1 }, () =>
+      reserveWatcherChild()
+    )
+    const { child, promise } = startWatcher()
+    await resolveInitialSnapshot(child, promise)
+
+    expect(reserveWatcherChild()).toBeNull()
+    child.emit('close', null, 'SIGTERM')
+    const afterClose = reserveWatcherChild()
+    expect(afterClose).not.toBeNull()
+
+    afterClose?.()
+    siblingReleases.forEach((release) => release?.())
+  })
+
+  it('releases the WSL child reservation after a synchronous script write failure', async () => {
+    const siblingReleases = Array.from({ length: MAX_PHYSICAL_WATCHER_CHILDREN - 1 }, () =>
+      reserveWatcherChild()
+    )
+    const child = new FakeChildProcess()
+    vi.spyOn(child.stdin, 'end').mockImplementation(() => {
+      throw new Error('script write failed')
+    })
+    spawnMock.mockReturnValueOnce(child)
+
+    await expect(createWslWatcher(ROOT_KEY, ROOT_KEY, makeDeps())).rejects.toThrow(
+      'script write failed'
+    )
+    const afterFailure = reserveWatcherChild()
+    expect(afterFailure).not.toBeNull()
+
+    afterFailure?.()
+    siblingReleases.forEach((release) => release?.())
   })
 
   it('diffs WSL snapshots into create, update, and delete events', async () => {
@@ -145,6 +200,69 @@ describe('createWslWatcher', () => {
     expect(scheduleBatchFlush).not.toHaveBeenCalled()
   })
 
+  it('keeps unsubscribe pending until the WSL child physically closes', async () => {
+    const child = new FakeChildProcess()
+    child.kill = vi.fn(() => true)
+    spawnMock.mockReturnValueOnce(child)
+    const promise = createWslWatcher(ROOT_KEY, ROOT_KEY, makeDeps())
+    const root = await resolveInitialSnapshot(child, promise)
+
+    let settled = false
+    const unsubscribe = root.subscription.unsubscribe().finally(() => {
+      settled = true
+    })
+    await Promise.resolve()
+    expect(settled).toBe(false)
+
+    child.emit('close', null, 'SIGTERM')
+    await unsubscribe
+    expect(settled).toBe(true)
+  })
+
+  it('retains a timed-out WSL watcher owner until a later physical close', async () => {
+    vi.useFakeTimers()
+    try {
+      const child = new FakeChildProcess()
+      child.kill = vi.fn(() => true)
+      spawnMock.mockReturnValueOnce(child)
+      const promise = createWslWatcher(ROOT_KEY, ROOT_KEY, makeDeps())
+      const root = await resolveInitialSnapshot(child, promise)
+
+      const unsubscribe = root.subscription.unsubscribe()
+      const rejected = expect(unsubscribe).rejects.toMatchObject({
+        code: 'process_unavailable',
+        physicalExit: expect.any(Promise)
+      })
+      await vi.advanceTimersByTimeAsync(WSL_WATCHER_PHYSICAL_EXIT_TIMEOUT_MS)
+      await rejected
+
+      const retry = root.subscription.unsubscribe()
+      child.emit('close', null, 'SIGTERM')
+      await expect(retry).resolves.toBeUndefined()
+      expect(child.kill).toHaveBeenCalledTimes(1)
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('retains the WSL owner when the termination signal is rejected', async () => {
+    const child = new FakeChildProcess()
+    child.kill = vi.fn().mockReturnValueOnce(false).mockReturnValue(true)
+    spawnMock.mockReturnValueOnce(child)
+    const promise = createWslWatcher(ROOT_KEY, ROOT_KEY, makeDeps())
+    const root = await resolveInitialSnapshot(child, promise)
+
+    await expect(root.subscription.unsubscribe()).rejects.toMatchObject({
+      code: 'process_unavailable',
+      physicalExit: expect.any(Promise)
+    })
+
+    const retry = root.subscription.unsubscribe()
+    child.emit('close', null, 'SIGTERM')
+    await expect(retry).resolves.toBeUndefined()
+    expect(child.kill).toHaveBeenCalledTimes(2)
+  })
+
   it('rejects when the WSL process exits before the first snapshot', async () => {
     const { child, promise } = startWatcher()
 
@@ -183,6 +301,30 @@ describe('createWslWatcher', () => {
 
     await expect(promise).rejects.toMatchObject({ name: 'AbortError' })
     expect(child.kill).toHaveBeenCalledOnce()
+  })
+
+  it('does not acknowledge startup abort before the WSL child closes', async () => {
+    const child = new FakeChildProcess()
+    child.kill = vi.fn(() => true)
+    spawnMock.mockReturnValueOnce(child)
+    const controller = new AbortController()
+    const promise = createWslWatcher(ROOT_KEY, ROOT_KEY, makeDeps(), controller.signal)
+
+    controller.abort()
+    let settled = false
+    void promise.then(
+      () => {
+        settled = true
+      },
+      () => {
+        settled = true
+      }
+    )
+    await Promise.resolve()
+    expect(settled).toBe(false)
+
+    child.emit('close', null, 'SIGTERM')
+    await expect(promise).rejects.toMatchObject({ name: 'AbortError' })
   })
 
   it('rejects immediately when the install abort signal is already aborted', async () => {

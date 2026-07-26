@@ -4,6 +4,7 @@ import {
   isPaneReplaying,
   replayIntoTerminal,
   replayIntoTerminalAsync,
+  waitForTerminalReplayWritesParsed,
   type ReplayingPanesRef
 } from './replay-guard'
 import { configureLazyArabicShapingJoiner } from '@/lib/pane-manager/terminal-arabic-shaping-joiner'
@@ -418,6 +419,27 @@ describe('replay-guard', () => {
 })
 
 describe('replay-guard stall handling (probe-certified release)', () => {
+  it('waits for the FIFO replay sentinel without releasing on elapsed time', async () => {
+    vi.useFakeTimers()
+    const { terminal } = makeFakePane(1)
+    let resolved = false
+
+    void waitForTerminalReplayWritesParsed(terminal, { stallCheckMs: 1_000 }).then(() => {
+      resolved = true
+    })
+    expect(terminal.lastData).toEqual([''])
+
+    vi.advanceTimersByTime(1_000)
+    expect(terminal.lastData).toEqual(['', ''])
+    expect(resolved).toBe(false)
+    vi.advanceTimersByTime(60_000)
+    expect(resolved).toBe(false)
+
+    terminal.flush()
+    await Promise.resolve()
+    expect(resolved).toBe(true)
+  })
+
   it('HOLDS the guard while a slow replay is still parsing — a probe is queued, never a blind release', () => {
     // Why this is the load-bearing safety test: a time-based release here
     // would leak xterm auto-replies into the shell (and a leaked ESC into an

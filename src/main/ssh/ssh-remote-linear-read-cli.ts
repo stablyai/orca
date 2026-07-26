@@ -7,6 +7,7 @@ import {
 import type { RpcDispatcher } from '../runtime/rpc/dispatcher'
 import type { RpcResponse } from '../runtime/rpc/core'
 import { RemoteCliArgumentError, type ParsedRemoteCli } from './ssh-remote-cli-argument-error'
+import { dispatchRemoteLinearListIssues } from './ssh-remote-linear-list-issues'
 
 import {
   LINEAR_ISSUE_FLAGS,
@@ -22,6 +23,9 @@ export async function tryDispatchRemoteLinearReadCli(
   parsed: ParsedRemoteCli,
   env: Record<string, string>
 ): Promise<RpcResponse | null> {
+  if (isRemoteCommand(parsed, 'linear', 'list-issues')) {
+    return await dispatchRemoteLinearListIssues(dispatcher, parsed)
+  }
   if (isRemoteCommand(parsed, 'linear', 'issue')) {
     validateLinearRemoteArgs(parsed, {
       command: ['linear', 'issue'],
@@ -178,7 +182,8 @@ function buildRemoteLinearIssueRequest(
     comments: full || parsed.flags.get('comments') === true,
     children: full || parsed.flags.get('children') === true,
     attachments: full || parsed.flags.get('attachments') === true,
-    relations: full || parsed.flags.get('relations') === true
+    relations: full || parsed.flags.get('relations') === true,
+    activity: full || parsed.flags.get('activity') === true
   }
   if (parsed.flags.has('depth') && !include.children) {
     throw new RemoteCliArgumentError('invalid_argument', '--depth requires --children or --full')

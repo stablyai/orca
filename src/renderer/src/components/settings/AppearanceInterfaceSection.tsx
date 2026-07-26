@@ -17,6 +17,7 @@ import {
 import { DEFAULT_APP_FONT_FAMILY } from '../../../../shared/constants'
 import {
   getLanguageEntries,
+  getMenuBarIconEntries,
   getSystemTrayEntries,
   getThemeEntries,
   getTitlebarEntries,
@@ -37,6 +38,7 @@ type AppearanceInterfaceSectionProps = {
   updateSettings: (updates: Partial<GlobalSettings>) => void
   applyTheme: (theme: 'system' | 'dark' | 'light') => void
   fontSuggestions: string[]
+  isDesktopMac: boolean
   isDesktopWindows: boolean
   onRequestFontSuggestions?: () => void
   forceVisiblePrimary?: boolean
@@ -47,6 +49,7 @@ export function AppearanceInterfaceSection({
   updateSettings,
   applyTheme,
   fontSuggestions,
+  isDesktopMac,
   isDesktopWindows,
   onRequestFontSuggestions,
   forceVisiblePrimary = false
@@ -56,6 +59,7 @@ export function AppearanceInterfaceSection({
   const zoomInKeyCombos = useShortcutKeyComboDetails('zoom.in')
   const zoomOutKeyCombos = useShortcutKeyComboDetails('zoom.out')
   const languageEntry = getLanguageEntries()[0]
+  const menuBarIconEntry = getMenuBarIconEntries({ showMenuBarIcon: true })[0]
   const systemTrayEntry = getSystemTrayEntries({ showSystemTray: true })[0]
   const themeEntry = getThemeEntries()[0]
   const themeLabel = translate('auto.components.settings.AppearancePane.932ff1fbff', 'Theme')
@@ -63,11 +67,12 @@ export function AppearanceInterfaceSection({
   const typographyEntry = getTypographyEntries()[0]
   const zoomEntry = getZoomEntries()[0]
   const advancedEntries = [
-    ...(SHOW_UI_LANGUAGE_SETTING ? getLanguageEntries() : []),
     ...getTitlebarEntries(),
-    ...getSystemTrayEntries({ showSystemTray: isDesktopWindows })
+    ...getSystemTrayEntries({ showSystemTray: isDesktopWindows }),
+    ...getMenuBarIconEntries({ showMenuBarIcon: isDesktopMac })
   ]
   const showAdvanced = !isSearching || matchesSettingsSearch(searchQuery, advancedEntries)
+  const languageTitle = translate('settings.appearance.language.title', 'Language')
 
   return (
     <div className="divide-y divide-border/40">
@@ -105,6 +110,36 @@ export function AppearanceInterfaceSection({
           }
         />
       </SearchableSetting>
+
+      {SHOW_UI_LANGUAGE_SETTING ? (
+        <SearchableSetting
+          title={languageTitle}
+          description={languageEntry?.description}
+          keywords={languageEntry?.keywords ?? []}
+          forceVisible={forceVisiblePrimary}
+        >
+          <SettingsRow
+            label={languageTitle}
+            control={
+              <Select
+                value={settings.uiLanguage}
+                onValueChange={(value) => updateSettings({ uiLanguage: value as UiLanguage })}
+              >
+                <SelectTrigger size="sm" className="min-w-[220px]" aria-label={languageTitle}>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {UI_LANGUAGE_CHOICES.map((choice) => (
+                    <SelectItem key={choice.value} value={choice.value}>
+                      {getUiLanguageChoiceLabel(choice, translate)}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            }
+          />
+        </SearchableSetting>
+      ) : null}
 
       <SearchableSetting
         title={translate('auto.components.settings.AppearancePane.5e6d7aba8d', 'UI Zoom')}
@@ -156,39 +191,6 @@ export function AppearanceInterfaceSection({
       {showAdvanced ? (
         <AppearanceAdvancedDisclosure showTopBorder={false}>
           <div className="divide-y divide-border/40">
-            {SHOW_UI_LANGUAGE_SETTING ? (
-              <SearchableSetting
-                title={translate('settings.appearance.language.title', 'Language')}
-                description={languageEntry?.description}
-                keywords={languageEntry?.keywords ?? []}
-              >
-                <SettingsRow
-                  label={translate('settings.appearance.language.title', 'Language')}
-                  control={
-                    <Select
-                      value={settings.uiLanguage}
-                      onValueChange={(value) => updateSettings({ uiLanguage: value as UiLanguage })}
-                    >
-                      <SelectTrigger
-                        size="sm"
-                        className="min-w-[220px]"
-                        aria-label={translate('settings.appearance.language.title', 'Language')}
-                      >
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {UI_LANGUAGE_CHOICES.map((choice) => (
-                          <SelectItem key={choice.value} value={choice.value}>
-                            {getUiLanguageChoiceLabel(choice, translate)}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  }
-                />
-              </SearchableSetting>
-            ) : null}
-
             <SearchableSetting
               title={translate(
                 'auto.components.settings.AppearancePane.9868f39007',
@@ -232,6 +234,28 @@ export function AppearanceInterfaceSection({
                   checked={settings.minimizeToTrayOnClose === true}
                   onChange={() =>
                     updateSettings({ minimizeToTrayOnClose: !settings.minimizeToTrayOnClose })
+                  }
+                />
+              </SearchableSetting>
+            ) : null}
+
+            {isDesktopMac ? (
+              <SearchableSetting
+                title={translate('settings.appearance.menuBarIcon.title', 'Show Menu Bar Icon')}
+                description={menuBarIconEntry?.description}
+                keywords={menuBarIconEntry?.keywords ?? ['menu bar', 'status item', 'activity']}
+              >
+                <SettingsSwitchRow
+                  label={translate('settings.appearance.menuBarIcon.title', 'Show Menu Bar Icon')}
+                  // Why: this opt-out removes only the status item; macOS Dock
+                  // activation and the close-keeps-running lifecycle stay intact.
+                  description={translate(
+                    'settings.appearance.menuBarIcon.description',
+                    'Keep an Orca shortcut and activity indicator in the macOS menu bar.'
+                  )}
+                  checked={settings.showMenuBarIcon !== false}
+                  onChange={() =>
+                    updateSettings({ showMenuBarIcon: settings.showMenuBarIcon === false })
                   }
                 />
               </SearchableSetting>

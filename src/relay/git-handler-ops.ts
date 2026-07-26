@@ -16,7 +16,13 @@ import { readWorkingDiffFile } from './git-working-file-read'
 export type GitExec = (
   args: string[],
   cwd: string,
-  opts?: { maxBuffer?: number; disableOptionalLocks?: boolean; stdin?: string; timeout?: number }
+  opts?: {
+    maxBuffer?: number
+    disableOptionalLocks?: boolean
+    signal?: AbortSignal
+    stdin?: string
+    timeout?: number
+  }
 ) => Promise<{ stdout: string; stderr: string }>
 
 export type GitBufferExec = (args: string[], cwd: string) => Promise<Buffer>
@@ -46,17 +52,19 @@ export async function readBlobAtIndex(
   gitBuffer: GitBufferExec,
   cwd: string,
   filePath: string
-): Promise<{ content: string; isBinary: boolean }> {
+): Promise<{ content: string; isBinary: boolean; missing: boolean }> {
   // Why: Git's `:<path>` syntax expects forward slashes even on Windows.
   const gitPath = filePath.replace(/\\/g, '/')
   try {
     const buf = await gitBuffer(['show', '--end-of-options', `:${gitPath}`], cwd)
-    return bufferToBlob(buf, filePath)
+    return { ...bufferToBlob(buf, filePath), missing: false }
   } catch (error) {
     if (isGitBufferOverflowError(error)) {
-      return { content: '', isBinary: true }
+      return { content: '', isBinary: true, missing: false }
     }
-    return { content: '', isBinary: false }
+    // Why: a non-overflow failure means the path is absent from the index (a
+    // staged deletion), distinct from the size-capped case handled above.
+    return { content: '', isBinary: false, missing: true }
   }
 }
 
@@ -85,6 +93,7 @@ export async function computeDiff(
   let modifiedContent = ''
   let originalIsBinary = false
   let modifiedIsBinary = false
+  let modifiedDeleted = false
 
   try {
     if (staged) {
@@ -95,6 +104,7 @@ export async function computeDiff(
       const right = await readBlobAtIndex(git, worktreePath, filePath)
       modifiedContent = right.content
       modifiedIsBinary = right.isBinary
+      modifiedDeleted = right.missing
     } else {
       const left = compareAgainstHead
         ? await readBlobAtOid(git, worktreePath, 'HEAD', filePath)
@@ -105,18 +115,25 @@ export async function computeDiff(
       const right = await readWorkingDiffFile(path.join(worktreePath, filePath))
       modifiedContent = right.content
       modifiedIsBinary = right.isBinary
+      modifiedDeleted = right.missing
     }
   } catch {
     // Fallback to empty
   }
 
-  return buildDiffResult(
+  const result = buildDiffResult(
     originalContent,
     modifiedContent,
     originalIsBinary,
     modifiedIsBinary,
     filePath
   )
+  // Why: mark a proven deletion so previewers can fall back to the original bytes
+  // without mistaking a read failure's empty modified side for a deletion.
+  if (result.kind === 'binary' && modifiedDeleted) {
+    return { ...result, modifiedDeleted: true }
+  }
+  return result
 }
 
 // ─── Branch compare ──────────────────────────────────────────────────

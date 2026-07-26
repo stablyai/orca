@@ -1,42 +1,26 @@
-/* eslint-disable no-control-regex, max-lines -- Why: ANSI/OSC stripping must match raw
- * control sequences in PTY output, same as src/main/runtime/orca-runtime.ts;
- * URL parsing, host classification, cache lifecycle, and cross-worktree lookup
- * are tightly coupled and kept in one file to keep the rules in lockstep. */
-// Watches PTY output for HTTP(S) URLs that dev servers (Vite, Next, etc.)
-// print on startup. Maintains a per-{worktreeId, port} cache so the workspace
-// ports panel can show the tool-advertised origin instead of the kernel bind
-// (e.g. `https://local.getmontecarlo.com:3001/` rather than `127.0.0.1:3001`).
-//
-// Why a separate stateful buffer per PTY: ANSI escape sequences and URLs can
-// both straddle PTY write boundaries, so we cannot strip ANSI and scan one
-// chunk at a time. We accumulate raw bytes, finalize only at newline-anchored
-// boundaries, then run a stateless strip-and-scan on the finalized prefix.
+/* eslint-disable no-control-regex, max-lines -- control-sequence regexes need raw matching; URL parsing, host classification, cache lifecycle, and cross-worktree lookup stay in one file to keep the rules in lockstep. */
+// Watches PTY output for HTTP(S) URLs dev servers print on startup, caching the
+// advertised origin per {worktreeId, port} for the ports panel (vs the kernel bind).
+// Why a separate stateful buffer per PTY: ANSI sequences and URLs can straddle PTY
+// write boundaries, so we accumulate raw bytes and strip-and-scan only at newlines.
 
 const PER_PTY_BUFFER_LIMIT = 4096
 const PENDING_PRE_BIND_LIMIT = 16 * 1024
-/** Cap on distinct never-bound PTY IDs. Spawn-failure paths can leave a
- *  pending entry that never gets bindPty'd — without an upper bound, a
- *  long-running app would slowly leak one entry per failure. */
+/** Cap on distinct never-bound PTY IDs; spawn-failure paths never bindPty, so without a bound they'd leak one entry each. */
 const MAX_PENDING_ENTRIES = 32
 const MAX_CACHE_ENTRIES = 256
 const URL_CANDIDATE_LIMIT = 2048
 
-// ANSI/OSC strippers mirror the runtime normalizer, with URL-specific cursor
-// move handling below to avoid fusing text that a real terminal would skip.
+// ANSI/OSC strippers mirror the runtime normalizer in src/main/runtime/orca-runtime.ts, plus URL-specific cursor-move handling to avoid fusing skipped text.
 const OSC_PATTERN = /\x1b\][^\x07\x1b]*(?:\x07|\x1b\\)/g
-// Why: cursor moves in differential redraws can skip cells that are already on
-// screen. Replacing them with a URL-invalid guard skips the damaged candidate.
+// Why: cursor moves in differential redraws skip on-screen cells; a URL-invalid guard drops the damaged candidate.
 const CURSOR_MOVE_PATTERN = /\x1b\[[0-?]*[ -/]*[CDGHf]/g
 const CURSOR_MOVE_URL_GUARD = '['
 const CSI_PATTERN = /\x1b\[[0-?]*[ -/]*[@-~]/g
 const SINGLE_ESC_PATTERN = /\x1b[@-_]/g
 const CONTROL_PATTERN = /[\x00-\x08\x0b-\x1f\x7f]/g
 
-// Why: this is a permissive candidate matcher. Real validation happens via
-// `new URL()` below. Stopping at characters that cannot appear in a URL
-// (whitespace, quotes, angle brackets, backtick) avoids absorbing terminal
-// punctuation. Trailing punctuation like `.,;)` is trimmed before parsing
-// because URLs are commonly followed by sentence punctuation in human text.
+// Permissive matcher (real validation is `new URL()` below); stops at non-URL chars so terminal punctuation isn't absorbed.
 const URL_CANDIDATE_PATTERN = /\bhttps?:\/\/[^\s<>"'`]+/gi
 
 export type HostKind = 'custom' | 'loopback' | 'private-ip' | 'public-ip'
@@ -49,11 +33,8 @@ export type AdvertisedUrl = {
   port: number
   ptyId: string
   lastSeenAt: number
-  /** PID of the listening process that this advertised URL was validated
-   *  against on a previous scan. Set by lookup APIs when a current PID is
-   *  supplied; a later mismatch evicts the entry. Captured on first scan
-   *  rather than at capture time because the PTY shell PID is not the
-   *  listener PID. */
+  /** Listener PID this URL was validated against on a prior scan; a later mismatch evicts the entry.
+   *  Captured on first scan (not at capture time) because the PTY shell PID isn't the listener PID. */
   validatedListenerPid?: number
 }
 
@@ -82,9 +63,7 @@ function worktreeIdFromCacheKey(key: CacheKey, port: number): string {
 class PtyBuffer {
   private raw = ''
 
-  /** Append a chunk and return the cleaned, finalized text (everything up to
-   *  and including the last newline). Whatever follows the last newline stays
-   *  buffered so that a URL or ANSI sequence split across chunks survives. */
+  /** Append a chunk; return cleaned text up to the last newline. The tail stays buffered so a URL or ANSI sequence split across chunks survives. */
   ingest(chunk: string): string {
     const chunkHasLineBreak = chunk.includes('\n') || chunk.includes('\r')
     this.raw += chunk
@@ -105,8 +84,7 @@ class PtyBuffer {
 }
 
 function lastLineBreak(text: string): number {
-  // Both \n and \r are accepted; \r\n is handled by stripping \r in
-  // stripTerminalControls — but we still want either one as a finalize point.
+  // Accept either \n or \r as a finalize point (\r\n is normalized later in stripTerminalControls).
   for (let i = text.length - 1; i >= 0; i--) {
     const ch = text.charCodeAt(i)
     if (ch === 0x0a || ch === 0x0d) {
@@ -162,8 +140,7 @@ function parseUrl(candidate: string): URL | null {
 }
 
 export function classifyHost(hostname: string): HostKind {
-  // Why: Node's URL.hostname returns IPv6 literals with brackets ("[::1]"),
-  // while the public API for this function should accept either form.
+  // Why: strip IPv6 brackets so this public API accepts both "[::1]" (Node's form) and bare literals.
   const lower = hostname.toLowerCase().replace(/^\[|\]$/g, '')
   if (lower === 'localhost' || lower === '127.0.0.1' || lower === '::1') {
     return 'loopback'
@@ -230,10 +207,7 @@ function isPrivateIpv6(value: string): boolean {
 }
 
 function hostKindScore(kind: HostKind): number {
-  // Codex's preference: custom DNS > loopback > private IP > public IP.
-  // A custom-configured host (e.g. `local.getmontecarlo.com`) is almost always
-  // the one the user wants opened, and loopback beats LAN for cert/cookie
-  // reasons on a single-machine setup.
+  // Prefer custom DNS > loopback > private IP > public IP: loopback beats LAN for cert/cookie reasons on one machine.
   switch (kind) {
     case 'custom':
       return 3
@@ -310,8 +284,7 @@ export class AdvertisedUrlWatcher {
       if (entry.ptyId !== ptyId) {
         continue
       }
-      // Why: SSH forward enrichment has no listener PID to validate against,
-      // so PTY teardown is the only reliable expiry signal for that cache row.
+      // Why: SSH forward enrichment has no listener PID, so PTY teardown is the only reliable expiry signal.
       this.cache.delete(key)
       this.validationBaselines.delete(key)
       this.startupAbsentAllowances.delete(key)
@@ -324,8 +297,7 @@ export class AdvertisedUrlWatcher {
   }
 
   forgetWorktree(worktreeId: string): void {
-    // Why: worktree IDs are reused for the same repo/path, so removed
-    // worktrees must not leave scan baselines for a future workspace.
+    // Why: worktree IDs are reused, so a removed worktree must not leave scan baselines for a future one.
     for (const [ptyId, boundWorktreeId] of this.ptyToWorktree) {
       if (boundWorktreeId !== worktreeId) {
         continue
@@ -357,14 +329,10 @@ export class AdvertisedUrlWatcher {
     }
     const worktreeId = this.ptyToWorktree.get(ptyId)
     if (!worktreeId) {
-      // Why: data can arrive on daemon-backed PTYs before the spawn handler
-      // resolves and we learn the worktreeId (see comment at
-      // src/main/ipc/pty.ts:1318-1323). Buffer until bindPty replays.
+      // Why: daemon PTY data can arrive before the spawn handler resolves the worktreeId (src/main/ipc/pty.ts:1318-1323); buffer until bindPty replays.
       const prior = this.pending.get(ptyId) ?? ''
       const merged = (prior + chunk).slice(-PENDING_PRE_BIND_LIMIT)
-      // Why: drop+reinsert touches insertion order so this acts as an LRU
-      // (Map iterates in insertion order). Combined with the eviction below,
-      // we keep at most MAX_PENDING_ENTRIES distinct unbound PTYs.
+      // Why: drop+reinsert refreshes Map insertion order (LRU) so the eviction below drops the oldest unbound PTY.
       this.pending.delete(ptyId)
       this.pending.set(ptyId, merged)
       while (this.pending.size > MAX_PENDING_ENTRIES) {
@@ -398,18 +366,12 @@ export class AdvertisedUrlWatcher {
       return
     }
     const hostname = url.hostname
-    // Why: dev servers sometimes print their bind address verbatim
-    // (`http://0.0.0.0:3000/`). Those wildcard hosts cannot be opened in a
-    // browser — the OS scanner already normalizes wildcards to `localhost`
-    // for the connect host, so refuse the advertised value rather than let
-    // it overwrite that sensible default.
+    // Why: wildcard bind hosts (0.0.0.0, ::) can't be opened in a browser; keep the scanner's localhost default instead.
     if (isUnspecifiedHost(hostname)) {
       return
     }
     const hostKind = classifyHost(hostname)
-    // Why: store origin only — no path, query, fragment, or userinfo. A
-    // terminal line containing an OAuth callback or token must not get
-    // surfaced in the port panel.
+    // Why: store origin only (no path/query/fragment/userinfo) so an OAuth callback or token can't leak to the panel.
     const origin = `${protocol}://${formatHostForOrigin(url)}${
       isDefaultPort(protocol, port) ? '' : `:${port}`
     }`
@@ -430,17 +392,14 @@ export class AdvertisedUrlWatcher {
       if (baseline) {
         this.validationBaselines.set(key, baseline)
         if (baseline.kind === 'absent') {
-          // Why: the advertised URL can arrive between the process printing its
-          // banner and the scanner seeing the listener; allow one settling scan.
+          // Why: the URL can arrive between the banner print and the scanner seeing the listener; allow one settling scan.
           this.startupAbsentAllowances.add(key)
         } else {
           this.startupAbsentAllowances.delete(key)
         }
       } else {
         this.validationBaselines.delete(key)
-        // Why: PTY output can arrive before the scanner has produced any
-        // snapshot for the worktree; give that startup race the same one-scan
-        // absent allowance as a known-absent baseline.
+        // Why: PTY output can arrive before any scan snapshot exists; grant the same one-scan absent allowance.
         this.startupAbsentAllowances.add(key)
       }
       const changedEvents = this.enforceCacheLimit()
@@ -496,9 +455,7 @@ export class AdvertisedUrlWatcher {
       if (entry.validatedListenerPid === undefined) {
         entry.validatedListenerPid = currentListenerPid
       } else if (entry.validatedListenerPid !== currentListenerPid) {
-        // Why: the process that printed this URL is gone and a different
-        // process is now listening on the port. Drop the cached URL — the
-        // new listener may be unrelated to the captured banner.
+        // Why: a different process now listens on this port, so the captured banner may be unrelated — drop it.
         this.cache.delete(key)
         this.validationBaselines.delete(key)
         this.startupAbsentAllowances.delete(key)
@@ -519,9 +476,8 @@ export class AdvertisedUrlWatcher {
     }
   }
 
-  /** Reconcile the URL cache with a scanner snapshot for a worktree scope.
-   *  Unvalidated URLs are tied to the listener state observed around capture,
-   *  so a later absent port or changed PID cannot be lazily blessed. */
+  /** Reconcile the URL cache with a scanner snapshot. Unvalidated URLs stay tied to the
+   *  listener state seen at capture, so a later absent port or changed PID can't lazily bless them. */
   reconcileScan(
     worktreeIds: readonly string[],
     observations: readonly AdvertisedUrlListenerObservation[]
@@ -582,8 +538,7 @@ export class AdvertisedUrlWatcher {
     }
     if (baseline?.kind === 'absent' && current.kind === 'present') {
       this.startupAbsentAllowances.delete(key)
-      // Why: dev servers can print their URL before the OS listener scan sees
-      // the port. Let that first present scan validate the startup banner.
+      // Why: dev servers print their URL before the listener scan sees the port; let this first present scan validate it.
       return false
     }
     return (
@@ -593,17 +548,10 @@ export class AdvertisedUrlWatcher {
     )
   }
 
-  /** Find the best advertised URL for `port` across multiple worktrees. SSH
-   *  connections host several worktrees but the remote-side port scanner
-   *  returns ports for the whole connection, so we need to scan all the
-   *  worktrees attached to that connection. Returns the highest-scoring
-   *  entry by hostKind (custom DNS > loopback > private IP > public IP),
-   *  with HTTPS and recency as tie-breakers — same rule as `shouldReplace`
-   *  uses on insert.
-   *
-   *  When `currentListenerPid` is supplied each candidate entry is run
-   *  through PID filtering first. Already-pinned mismatches are evicted,
-   *  then only the returned winner is pinned to the current listener. */
+  /** Find the best advertised URL for `port` across worktrees, scored via `shouldReplace`.
+   *  Scans all worktrees on the connection because an SSH port scanner reports ports for the
+   *  whole connection, not per-worktree. With `currentListenerPid`, mismatched pinned entries
+   *  are evicted and only the winner is pinned. */
   lookupBest(
     worktreeIds: readonly string[],
     port: number,
@@ -663,15 +611,11 @@ function isDefaultPort(protocol: 'http' | 'https', port: number): boolean {
   return (protocol === 'http' && port === 80) || (protocol === 'https' && port === 443)
 }
 
-/** Process-wide singleton. The runtime feeds it from `onPtyData`; the scanner
- *  enrichment reads it. Tests should instantiate their own
- *  `AdvertisedUrlWatcher` rather than relying on this. */
+/** Process-wide singleton fed by the runtime and read by scanner enrichment. Tests should instantiate their own instead. */
 export const advertisedUrlWatcher = new AdvertisedUrlWatcher()
 
 function formatHostForOrigin(url: URL): string {
-  // Why: Node returns IPv6 hostnames pre-bracketed ("[::1]"). Some other JS
-  // runtimes strip the brackets. Accept both: re-bracket if a bare IPv6
-  // literal slips through.
+  // Why: some JS runtimes strip the IPv6 brackets Node adds; re-bracket a bare IPv6 literal.
   const h = url.hostname
   if (h.startsWith('[') && h.endsWith(']')) {
     return h
@@ -691,8 +635,7 @@ function observedListenersByPort(
     if (!observed.has(observation.port)) {
       observed.set(observation.port, observation.pid)
     } else if (existing !== observation.pid) {
-      // Multiple host-specific listeners on one port make PID attribution
-      // ambiguous for our port-keyed URL cache; preserve presence only.
+      // Multiple host-specific listeners on one port make PID attribution ambiguous; keep presence only.
       observed.set(observation.port, undefined)
     }
   }
