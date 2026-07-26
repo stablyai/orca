@@ -12619,6 +12619,39 @@ describe('OrcaRuntimeService', () => {
     )
   })
 
+  it('claims a typed Cursor alias command for the managed cursor lane', async () => {
+    const spawn = vi.fn().mockResolvedValue({ id: 'pty-bg' })
+    const runtimeStore = {
+      ...store,
+      getSettings: () => ({
+        ...store.getSettings(),
+        disabledTuiAgents: [],
+        agentCmdOverrides: {},
+        agentDefaultArgs: {},
+        agentDefaultEnv: {}
+      })
+    }
+    const runtime = new OrcaRuntimeService(runtimeStore)
+    runtime.setPtyController({
+      spawn,
+      write: () => true,
+      kill: () => true,
+      getForegroundProcess: async () => null
+    })
+
+    await runtime.createTerminal(`path:${TEST_WORKTREE_PATH}`, {
+      command: 'cursor agent'
+    })
+
+    const spawnCall = spawn.mock.calls[0]?.[0] as
+      | { launchAgent?: string; env?: Record<string, string> }
+      | undefined
+    expect(spawnCall?.launchAgent).toBe('cursor')
+    expect(spawnCall?.env?.ORCA_AGENT_LAUNCH_TOKEN).toMatch(UUID_RE)
+    // Why: the trust preset is the payoff — an unclaimed lane leaves the first-launch menu to eat the paste.
+    expect(markCursorWorkspaceTrustedMock).toHaveBeenCalledWith(TEST_WORKTREE_PATH)
+  })
+
   it('keeps non-bare agent command terminal creates unchanged', async () => {
     const spawn = vi.fn().mockResolvedValue({ id: 'pty-bg' })
     const runtimeStore = {

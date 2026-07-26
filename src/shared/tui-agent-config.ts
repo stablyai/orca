@@ -232,6 +232,8 @@ export const TUI_AGENT_CONFIG: Record<TuiAgent, TuiAgentConfig> = {
     detectCmd: 'cursor-agent',
     detectCmdAliases: ['cursor'],
     launchCmd: 'cursor-agent',
+    // Why: Cursor.app's shim self-installs the agent (`curl https://cursor.com/install | bash`)
+    // when `cursor-agent` is missing, so this form can block on a download on first launch.
     launchCmdByDetectCmd: { cursor: 'cursor agent' },
     expectedProcess: 'cursor-agent',
     promptInjectionMode: 'argv',
