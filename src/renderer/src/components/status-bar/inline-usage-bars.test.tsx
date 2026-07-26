@@ -59,7 +59,7 @@ describe('InlineUsageBars', () => {
   })
 
   it('renders Claude Fable usage in inactive account preview rows', async () => {
-    const { InlineUsageBars } = await import('./StatusBar')
+    const { InlineUsageBars } = await import('./inline-usage-bars')
 
     const markup = renderToStaticMarkup(
       <InlineUsageBars limits={claudeLimits()} isFetching={false} />
@@ -72,7 +72,7 @@ describe('InlineUsageBars', () => {
   })
 
   it('derives the collapsed session label from resetsAt (#5399)', async () => {
-    const { InlineUsageBars } = await import('./StatusBar')
+    const { InlineUsageBars } = await import('./inline-usage-bars')
 
     const limits = claudeLimits()
     // ~1h 20m away; +5s buffer keeps the floor-based formatter at '1h 20m'
@@ -89,7 +89,7 @@ describe('InlineUsageBars', () => {
   })
 
   it('shows "now" for an already-expired session reset', async () => {
-    const { InlineUsageBars } = await import('./StatusBar')
+    const { InlineUsageBars } = await import('./inline-usage-bars')
 
     const limits = claudeLimits()
     limits.session!.resetsAt = Date.now() - 1000
@@ -126,7 +126,7 @@ describe('InlineUsageBars', () => {
 
   it('shows remaining copy and remaining meter fill', async () => {
     mocks.usagePercentageDisplay = 'remaining'
-    const { InlineUsageBars } = await import('./StatusBar')
+    const { InlineUsageBars } = await import('./inline-usage-bars')
 
     const markup = renderToStaticMarkup(
       <InlineUsageBars limits={claudeLimits()} isFetching={false} />
