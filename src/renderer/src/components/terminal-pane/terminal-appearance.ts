@@ -169,7 +169,8 @@ export function applyTerminalAppearance(
     // Why value-gated: writing minimumContrastRatio clears xterm's contrast cache, so skip on no-op re-applies.
     const minimumContrastRatio = resolveTerminalMinimumContrastRatio(
       theme?.background,
-      appearance.mode
+      appearance.mode,
+      settings.terminalMinimumContrastRatio
     )
     if (pane.terminal.options.minimumContrastRatio !== minimumContrastRatio) {
       pane.terminal.options.minimumContrastRatio = minimumContrastRatio

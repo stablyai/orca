@@ -2,6 +2,8 @@ import { describe, expect, it } from 'vitest'
 import {
   DARK_BG_MIN_CONTRAST,
   LIGHT_BG_MIN_CONTRAST,
+  MAX_CONTRAST_RATIO,
+  MIN_CONTRAST_RATIO,
   resolveTerminalMinimumContrastRatio
 } from './terminal-contrast-correction'
 import { TERMINAL_THEME_CATALOG } from './terminal-themes'
@@ -39,6 +41,47 @@ describe('resolveTerminalMinimumContrastRatio', () => {
 
   it('treats an undefined/transparent background as dark', () => {
     expect(resolveTerminalMinimumContrastRatio(undefined, 'dark')).toBe(DARK_BG_MIN_CONTRAST)
+  })
+})
+
+// #10754: the floor rewrites foregrounds a TUI picked on purpose, so it has to be opt-out per user.
+describe('resolveTerminalMinimumContrastRatio override', () => {
+  it('honors an explicit override over the luminance-gated default', () => {
+    expect(resolveTerminalMinimumContrastRatio('#1e242a', 'dark', 1)).toBe(MIN_CONTRAST_RATIO)
+    expect(resolveTerminalMinimumContrastRatio('#ffffff', 'light', 7)).toBe(7)
+  })
+
+  it('clamps an out-of-range override into the accepted window', () => {
+    expect(resolveTerminalMinimumContrastRatio('#1e242a', 'dark', 0)).toBe(MIN_CONTRAST_RATIO)
+    expect(resolveTerminalMinimumContrastRatio('#1e242a', 'dark', -5)).toBe(MIN_CONTRAST_RATIO)
+    expect(resolveTerminalMinimumContrastRatio('#1e242a', 'dark', 99)).toBe(MAX_CONTRAST_RATIO)
+  })
+
+  it('falls back to the default when the override is absent or not a finite number', () => {
+    expect(resolveTerminalMinimumContrastRatio('#1e242a', 'dark', undefined)).toBe(
+      DARK_BG_MIN_CONTRAST
+    )
+    expect(resolveTerminalMinimumContrastRatio('#1e242a', 'dark', Number.NaN)).toBe(
+      DARK_BG_MIN_CONTRAST
+    )
+    expect(resolveTerminalMinimumContrastRatio('#ffffff', 'light', Number.NaN)).toBe(
+      LIGHT_BG_MIN_CONTRAST
+    )
+  })
+
+  // The reported case: a Powerline statusline draws the seam between two pills in the neighbouring
+  // segment's background (xterm 238 on 237, ~1.17:1) and dims secondary text (245 on 238, ~2.82:1).
+  // Both sit under the default floor, so xterm lifts them into a visible line and flattens the
+  // hierarchy. An override of 1 has to leave them alone.
+  it('exposes the opt-out floor for deliberately low-contrast Powerline colors', () => {
+    const DARK_BG = '#1e242a'
+    const seam = contrastRatio('#3a3a3a', '#444444') // xterm 237 vs 238
+    const secondaryText = contrastRatio('#444444', '#8a8a8a') // xterm 238 vs 245
+
+    expect(seam).toBeLessThan(resolveTerminalMinimumContrastRatio(DARK_BG, 'dark'))
+    expect(secondaryText).toBeLessThan(resolveTerminalMinimumContrastRatio(DARK_BG, 'dark'))
+
+    expect(resolveTerminalMinimumContrastRatio(DARK_BG, 'dark', 1)).toBe(MIN_CONTRAST_RATIO)
   })
 })
 

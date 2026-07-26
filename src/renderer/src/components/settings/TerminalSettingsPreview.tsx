@@ -206,7 +206,8 @@ export function TerminalSettingsPreview({
     // Why: share applyTerminalAppearance's gating helper (#7934) so the preview can't drift from live panes.
     terminal.options.minimumContrastRatio = resolveTerminalMinimumContrastRatio(
       composedTheme.background,
-      effectiveMode
+      effectiveMode,
+      settings.terminalMinimumContrastRatio
     )
     // Why: xterm renders an alpha-channel background opaque unless allowTransparency is set (matches applyTerminalAppearance).
     terminal.options.allowTransparency =
@@ -218,7 +219,12 @@ export function TerminalSettingsPreview({
     // Why reset() not clear(): buffer ends mid-line on the prompt, so clear()+write would duplicate the trailing fragment.
     terminal.reset()
     terminal.write(PREVIEW_BUFFER)
-  }, [composedTheme, effectiveMode, settings.terminalBackgroundOpacity])
+  }, [
+    composedTheme,
+    effectiveMode,
+    settings.terminalBackgroundOpacity,
+    settings.terminalMinimumContrastRatio
+  ])
 
   useEffect(() => {
     const terminal = terminalRef.current

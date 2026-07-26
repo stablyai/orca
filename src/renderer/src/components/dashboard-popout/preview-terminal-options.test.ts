@@ -16,7 +16,8 @@ const SETTINGS = {
   terminalCursorBlink: false,
   terminalLineHeight: 1.4,
   terminalWordSeparator: ' ()[]',
-  terminalScrollSensitivity: 3
+  terminalScrollSensitivity: 3,
+  terminalMinimumContrastRatio: 7
 } as unknown as GlobalSettings
 
 describe('buildPreviewAppearanceOptions', () => {
@@ -72,6 +73,7 @@ describe('buildPreviewTerminalOptions', () => {
     expect(options.vtExtensions?.kittyKeyboard).toBe(true)
     expect(options.windowsPty).toBeUndefined()
     expect(options.cols).toBe(100)
+    expect(options.minimumContrastRatio).toBe(7)
   })
 
   it('mirrors the ConPTY backend and kitty withhold a local Windows pane resolves', () => {
