@@ -18,6 +18,7 @@ import type { AgentHookInstallStatus } from '../shared/agent-hook-types'
 import type { TerminalPaneSplitSource } from '../shared/feature-education-telemetry'
 import type { ProjectExecutionRuntimeResolution } from '../shared/project-execution-runtime'
 import type { StartupCommandDelivery } from '../shared/codex-startup-delivery'
+import type { TerminalLostWorkerRendererReceipt } from '../shared/terminal-archive-types'
 import type {
   AgentProviderSessionMetadata,
   SleepingAgentLaunchConfig
@@ -1063,10 +1064,22 @@ const api = {
       ipcRenderer.invoke('pty:sideEffectSnapshot', { id }),
 
     onExit: (
-      callback: (data: { id: string; code: number; preserveRendererBinding?: boolean }) => void
+      callback: (data: {
+        id: string
+        code: number
+        preserveRendererBinding?: boolean
+        lostWorkerRecovery?: TerminalLostWorkerRendererReceipt
+      }) => void
     ): (() => void) => {
-      const listener = (_event: Electron.IpcRendererEvent, data: { id: string; code: number }) =>
-        callback(data)
+      const listener = (
+        _event: Electron.IpcRendererEvent,
+        data: {
+          id: string
+          code: number
+          preserveRendererBinding?: boolean
+          lostWorkerRecovery?: TerminalLostWorkerRendererReceipt
+        }
+      ) => callback(data)
       ipcRenderer.on('pty:exit', listener)
       return () => ipcRenderer.removeListener('pty:exit', listener)
     },

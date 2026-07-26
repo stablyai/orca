@@ -14,13 +14,19 @@ import {
   TERMINAL_INPUT_MAX_BYTES
 } from '../../../../shared/terminal-input'
 import { CLIPBOARD_TEXT_MEASURE_YIELD_CODE_UNITS } from '../../../../shared/clipboard-text'
+import type { TerminalLostWorkerRendererReceipt } from '../../../../shared/terminal-archive-types'
 
 describe('createIpcPtyTransport', () => {
   const originalWindow = (globalThis as { window?: typeof window }).window
   let onData: ((payload: { id: string; data: string }) => void) | null = null
   let onReplay: ((payload: { id: string; data: string }) => void) | null = null
   let onExit:
-    | ((payload: { id: string; code: number; preserveRendererBinding?: boolean }) => void)
+    | ((payload: {
+        id: string
+        code: number
+        preserveRendererBinding?: boolean
+        lostWorkerRecovery?: TerminalLostWorkerRendererReceipt
+      }) => void)
     | null = null
 
   function flushPtySideEffects(): Promise<void> {
@@ -58,6 +64,7 @@ describe('createIpcPtyTransport', () => {
                 id: string
                 code: number
                 preserveRendererBinding?: boolean
+                lostWorkerRecovery?: TerminalLostWorkerRendererReceipt
               }) => void
             ) => {
               onExit = callback
@@ -109,6 +116,29 @@ describe('createIpcPtyTransport', () => {
       lostWorkerRecovery: { kind: 'archived', archiveId: 'archive-1' }
     })
     expect(transport.getPtyId()).toBeNull()
+  })
+
+  it('routes an archived exit receipt to the renderer retirement callback', async () => {
+    const { createIpcPtyTransport } = await import('./pty-transport')
+    const onExitCallback = vi.fn()
+    const onLostWorkerRecovery = vi.fn()
+    const onPtyExit = vi.fn()
+    const transport = createIpcPtyTransport({ onPtyExit })
+
+    await transport.connect({
+      url: '',
+      callbacks: { onExit: onExitCallback, onLostWorkerRecovery }
+    })
+
+    onExit?.({
+      id: 'pty-1',
+      code: -1,
+      lostWorkerRecovery: { kind: 'archived', archiveId: 'archive-1' }
+    })
+
+    expect(onLostWorkerRecovery).toHaveBeenCalledWith({ kind: 'archived', archiveId: 'archive-1' })
+    expect(onExitCallback).not.toHaveBeenCalled()
+    expect(onPtyExit).toHaveBeenCalledWith('pty-1')
   })
 
   it('does not create a second kill authority when a mounted pane detaches', async () => {

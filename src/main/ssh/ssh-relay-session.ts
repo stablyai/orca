@@ -1098,7 +1098,16 @@ export class SshRelaySession {
       'expired'
     )
     for (const ptyId of result.ptyIdsToKill) {
-      routeExternalPtyExit({ id: ptyId, code: -1 })
+      clearProviderPtyState(ptyId)
+      deletePtyOwnership(ptyId)
+      routeExternalPtyExit({
+        id: ptyId,
+        code: -1,
+        lostWorkerRecovery: {
+          kind: 'archived',
+          archiveId: result.archive.id
+        }
+      })
     }
   }
 

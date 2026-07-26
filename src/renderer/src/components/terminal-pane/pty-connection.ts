@@ -30,6 +30,7 @@ import {
 import { serializeWithAbsoluteCursor } from '../../../../shared/terminal-serialize-absolute-cursor'
 import { isTerminalQueryReply } from '../../../../shared/terminal-query-reply'
 import type { TerminalLostWorkerRendererReceipt } from '../../../../shared/terminal-archive-types'
+import { retireMainAuthoritativeTerminalTab } from '@/lib/main-authoritative-terminal-retirement'
 import type { PtyBufferSnapshot, PtyConnectResult } from './pty-transport'
 import type { PtyTransportRecoveryState } from './pty-transport-types'
 import { createIpcPtyTransport } from './pty-transport'
@@ -4626,12 +4627,7 @@ export function connectPanePty(
         return
       }
       if (receipt.kind === 'archived') {
-        useAppStore.getState().closeTab(deps.tabId, {
-          reason: 'cleanup',
-          captureRecentlyClosed: false,
-          localPtyTeardownOwnedExternally: true,
-          runtimePtyTeardownOwnedExternally: true
-        })
+        retireMainAuthoritativeTerminalTab(deps.tabId)
         return
       }
       reportError(`Terminal recovery is pending archive (${receipt.code}).`)
@@ -5366,6 +5362,11 @@ export function connectPanePty(
           onError: (message: string): void => {
             if (isCurrent()) {
               onError(message)
+            }
+          },
+          onLostWorkerRecovery: (receipt: TerminalLostWorkerRendererReceipt): void => {
+            if (isCurrent()) {
+              applyLostWorkerRecoveryReceipt(receipt)
             }
           },
           onRecoveryStateChange: (state: PtyTransportRecoveryState): void => {

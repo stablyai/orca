@@ -141,6 +141,12 @@ import { resolveTerminalWorktreeRoute } from '@/lib/terminal-worktree-route'
 import { resolveAgentPaneAuthorityKey } from '@/store/slices/agent-pane-authority'
 import { translate } from '@/i18n/i18n'
 import { closeTerminalTab } from '@/components/terminal/terminal-tab-actions'
+import {
+  beginRemoteWorkspaceSnapshotApply,
+  finishRemoteWorkspaceSnapshotApply,
+  isRemoteWorkspaceSnapshotApplyInProgress
+} from '@/lib/remote-workspace-snapshot-gate'
+import { reapplyMainAuthoritativeTerminalRetirements } from '@/lib/main-authoritative-terminal-retirement'
 import { initialAgentTabViewModeProps } from '@/lib/native-chat-initial-view-mode'
 import { getConnectionIdFromState } from '@/lib/connection-context'
 import { isNativeChatTranscriptLocalReadable } from '@/lib/native-chat-transcript-readability'
@@ -254,10 +260,6 @@ const MAX_PENDING_AGENT_STATUS_EVENTS = 100
 const MAX_PENDING_MOBILE_STATE_EVENTS = 300
 // Why: a rename's event burst lags the on-disk move; shield both ids from the deletion diff for a grace window.
 const WORKTREE_RENAME_PURGE_GRACE_MS = 20_000
-let remoteWorkspaceSnapshotApplyDepth = 0
-let remoteWorkspaceSnapshotWriteSuppressUntil = 0
-const REMOTE_WORKSPACE_SNAPSHOT_WRITE_SUPPRESS_MS = 1000
-
 function isAgentStatusForRecentlyClosedTab(
   store: Pick<AppState, 'recentlyClosedAgentStatusTabIds' | 'recentlyRetiredAgentStatusPaneKeys'>,
   paneKey: string
@@ -414,11 +416,7 @@ function activateExistingLeafInLayout(
   }
 }
 
-export function isRemoteWorkspaceSnapshotApplyInProgress(): boolean {
-  return (
-    remoteWorkspaceSnapshotApplyDepth > 0 || Date.now() < remoteWorkspaceSnapshotWriteSuppressUntil
-  )
-}
+export { isRemoteWorkspaceSnapshotApplyInProgress }
 
 async function waitForWorkspaceSessionReady(): Promise<boolean> {
   for (let attempt = 0; attempt < 100; attempt += 1) {
@@ -556,12 +554,13 @@ async function applyRemoteWorkspaceSnapshot(
   const current = buildWorkspaceSessionPayload(useAppStore.getState())
   const merged = mergeRemoteWorkspaceSession(current, remoteSession, targetId)
   const store = useAppStore.getState()
-  remoteWorkspaceSnapshotApplyDepth += 1
+  beginRemoteWorkspaceSnapshotApply()
   try {
     store.hydrateWorkspaceSession(merged)
     store.hydrateTabsSession(merged)
     store.hydrateEditorSession(merged)
     store.hydrateBrowserSession(merged)
+    reapplyMainAuthoritativeTerminalRetirements()
     store.markRemoteWorkspaceHydrated(targetId)
     store.setRemoteWorkspaceSyncStatus(targetId, {
       phase: 'synced',
@@ -574,9 +573,7 @@ async function applyRemoteWorkspaceSnapshot(
     await useAppStore.getState().reconnectPersistedTerminals()
   } finally {
     // Why: reattach updates pty ids/titles after hydration; they came from the snapshot, don't echo back as a new revision.
-    remoteWorkspaceSnapshotWriteSuppressUntil =
-      Date.now() + REMOTE_WORKSPACE_SNAPSHOT_WRITE_SUPPRESS_MS
-    remoteWorkspaceSnapshotApplyDepth -= 1
+    finishRemoteWorkspaceSnapshotApply()
   }
 }
 

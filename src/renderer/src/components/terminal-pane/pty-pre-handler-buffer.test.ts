@@ -103,6 +103,16 @@ describe('pre-handler PTY buffer', () => {
     expect(onExit).toHaveBeenCalledWith(3)
   })
 
+  it('keeps an archived receipt with a buffered exit', () => {
+    const receipt = { kind: 'archived' as const, archiveId: 'archive-1' }
+    const onExit = vi.fn()
+
+    bufferPreHandlerPtyExit(EXIT_PTY_ID, -1, receipt)
+    drainPreHandlerPtyExit(EXIT_PTY_ID, onExit)
+
+    expect(onExit).toHaveBeenCalledWith(-1, receipt)
+  })
+
   it('consumes a drained exit even when its handler throws', () => {
     bufferPreHandlerPtyExit(EXIT_PTY_ID, 7)
     expect(() =>

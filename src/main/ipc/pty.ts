@@ -3087,7 +3087,11 @@ export function registerPtyHandlers(
     return true
   }
 
-  function sendPtyExitToRenderer(payload: { id: string; code: number }): void {
+  function sendPtyExitToRenderer(payload: {
+    id: string
+    code: number
+    lostWorkerRecovery?: TerminalLostWorkerRendererReceipt
+  }): void {
     if (mainWindow.isDestroyed()) {
       const pending = pendingData.get(payload.id)
       if (pending) {

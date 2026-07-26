@@ -220,7 +220,7 @@ describe('SshRelaySession lost-worker archive', () => {
         ? { kind: 'error', code: 'durability-failed' }
         : {
             kind: 'archived',
-            archive: {},
+            archive: { id: 'archive-1' },
             operationId: 'relay-worker-lost:tab-1',
             ptyIdsToKill: [RELAY_LOST_WORKER.id]
           }
@@ -253,7 +253,15 @@ describe('SshRelaySession lost-worker archive', () => {
       archived ? 'pty-lost' : 'pty-fallback',
       archived ? 'expired' : 'attached'
     )
-    expect(routeExternalPtyExit).toHaveBeenCalledTimes(archived ? 1 : 0)
+    if (archived) {
+      expect(routeExternalPtyExit).toHaveBeenCalledWith({
+        id: RELAY_LOST_WORKER.id,
+        code: -1,
+        lostWorkerRecovery: { kind: 'archived', archiveId: 'archive-1' }
+      })
+    } else {
+      expect(routeExternalPtyExit).not.toHaveBeenCalled()
+    }
     expect(session.getState()).toBe('ready')
     if (state === 'typed unclassified') {
       expect(mockStore.getWorkspaceSession).toHaveBeenCalledWith('ssh:target-1')

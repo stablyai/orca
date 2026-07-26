@@ -119,6 +119,8 @@ type StoreState = {
       pendingActivationSpawn?: true | number
     }[]
   >
+  openFiles: { id: string; worktreeId: string }[]
+  browserTabsByWorktree: Record<string, { id: string }[]>
   ptyIdsByTabId?: Record<string, string[]>
   terminalLayoutsByTabId?: Record<string, TerminalLayoutSnapshot>
   unreadTerminalTabs?: Record<string, true>
@@ -210,6 +212,7 @@ type StoreState = {
   markTerminalTabUnread: ReturnType<typeof vi.fn>
   markTerminalPaneUnread: ReturnType<typeof vi.fn>
   markAgentCompletionPaneUnread: ReturnType<typeof vi.fn>
+  setActiveWorktree: ReturnType<typeof vi.fn>
   closeTab: ReturnType<typeof vi.fn>
 }
 
@@ -775,6 +778,8 @@ describe('connectPanePty', () => {
       tabsByWorktree: {
         'wt-1': [{ id: 'tab-1', ptyId: 'tab-pty' }]
       },
+      openFiles: [],
+      browserTabsByWorktree: {},
       ptyIdsByTabId: {
         'tab-1': ['tab-pty']
       },
@@ -863,6 +868,7 @@ describe('connectPanePty', () => {
       markTerminalTabUnread: vi.fn(),
       markTerminalPaneUnread: vi.fn(),
       markAgentCompletionPaneUnread: vi.fn(),
+      setActiveWorktree: vi.fn(),
       closeTab: vi.fn()
     } as StoreState
     ;(globalThis as unknown as { window: unknown }).window = {
@@ -17724,6 +17730,7 @@ describe('connectPanePty', () => {
         'tab-1',
         expect.objectContaining({ localPtyTeardownOwnedExternally: true })
       )
+      expect(mockStoreState.setActiveWorktree).toHaveBeenCalledWith(null)
       expect(deps.clearTabPtyId).not.toHaveBeenCalled()
     } else {
       expect(transport.connect).toHaveBeenCalledTimes(1)

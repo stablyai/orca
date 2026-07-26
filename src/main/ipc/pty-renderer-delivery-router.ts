@@ -1,9 +1,14 @@
 import type { PtyDataEvent } from '../providers/pty-provider-events'
+import type { TerminalLostWorkerRendererReceipt } from '../../shared/terminal-archive-types'
 
 export type ExternalPtyRendererDeliveryRouter = {
   data(payload: PtyDataEvent): void
   replay(payload: { id: string; data: string }): void
-  exit(payload: { id: string; code: number }): void
+  exit(payload: {
+    id: string
+    code: number
+    lostWorkerRecovery?: TerminalLostWorkerRendererReceipt
+  }): void
 }
 
 function returnUnroutedCredit(payload: PtyDataEvent): void {
@@ -30,6 +35,10 @@ export function routeExternalPtyReplay(payload: { id: string; data: string }): v
   router.replay(payload)
 }
 
-export function routeExternalPtyExit(payload: { id: string; code: number }): void {
+export function routeExternalPtyExit(payload: {
+  id: string
+  code: number
+  lostWorkerRecovery?: TerminalLostWorkerRendererReceipt
+}): void {
   router.exit(payload)
 }

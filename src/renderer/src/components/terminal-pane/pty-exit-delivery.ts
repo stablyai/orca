@@ -3,11 +3,13 @@ import {
   clearPreHandlerPtyState,
   consumePreHandlerPtyState
 } from './pty-pre-handler-buffer'
+import type { TerminalLostWorkerRendererReceipt } from '../../../../shared/terminal-archive-types'
 
 type PtyExitDelivery = {
   ptyId: string
   code: number
-  primary?: (code: number) => void
+  lostWorkerRecovery?: TerminalLostWorkerRendererReceipt
+  primary?: (code: number, lostWorkerRecovery?: TerminalLostWorkerRendererReceipt) => void
   sidecars: readonly ((code: number, context: { hadPrimary: boolean }) => void)[]
 }
 
@@ -19,14 +21,22 @@ export function deliverPtyExitToHandlers(delivery: PtyExitDelivery): void {
     if (delivery.primary) {
       clearPreHandlerPtyState(delivery.ptyId)
       try {
-        delivery.primary(delivery.code)
+        if (delivery.lostWorkerRecovery) {
+          delivery.primary(delivery.code, delivery.lostWorkerRecovery)
+        } else {
+          delivery.primary(delivery.code)
+        }
       } finally {
         // Why: ownership is final even when cleanup throws; a duplicate exit
         // must not become a new pre-handler event for a future mount.
         consumePreHandlerPtyState(delivery.ptyId)
       }
     } else {
-      bufferPreHandlerPtyExit(delivery.ptyId, delivery.code)
+      if (delivery.lostWorkerRecovery) {
+        bufferPreHandlerPtyExit(delivery.ptyId, delivery.code, delivery.lostWorkerRecovery)
+      } else {
+        bufferPreHandlerPtyExit(delivery.ptyId, delivery.code)
+      }
     }
   } catch (error) {
     firstError = error

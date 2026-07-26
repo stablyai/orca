@@ -196,6 +196,7 @@ function attachPtySecondaryPushListeners(unsubscribes: (() => void)[]): void {
       deliverPtyExitToHandlers({
         ptyId: payload.id,
         code: payload.code,
+        ...(payload.lostWorkerRecovery ? { lostWorkerRecovery: payload.lostWorkerRecovery } : {}),
         ...(primary ? { primary } : {}),
         sidecars: sidecars ? Array.from(sidecars) : []
       })

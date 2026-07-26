@@ -80,6 +80,7 @@ type PtyCallbacks = {
   onStatus?: (shell: string) => void
   onError?: (message: string, errors?: string[]) => void
   onExit?: (code: number) => void
+  onLostWorkerRecovery?: (receipt: TerminalLostWorkerRendererReceipt) => void
   onRecoveryStateChange?: (state: PtyTransportRecoveryState) => void
 }
 

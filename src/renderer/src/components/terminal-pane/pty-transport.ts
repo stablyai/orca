@@ -11,6 +11,7 @@ import {
   iterateTerminalInputChunks
 } from '../../../../shared/terminal-input'
 import { isRuntimeOwnedSshTargetId } from '../../../../shared/execution-host'
+import type { TerminalLostWorkerRendererReceipt } from '../../../../shared/terminal-archive-types'
 import {
   ptyDataHandlers,
   ptyReplayHandlers,
@@ -527,7 +528,10 @@ export function createIpcPtyTransport(opts: IpcPtyTransportOptions = {}): PtyTra
     string,
     { data: (data: string, meta?: PtyDataMeta) => void; replay: (data: string) => void }
   >()
-  const ownedExitHandlers = new Map<string, (code: number) => void>()
+  const ownedExitHandlers = new Map<
+    string,
+    (code: number, lostWorkerRecovery?: TerminalLostWorkerRendererReceipt) => void
+  >()
 
   function unregisterPtyHandlers(id: string): void {
     unregisterPtyDataAndStatusHandlers(id)
@@ -634,7 +638,10 @@ export function createIpcPtyTransport(opts: IpcPtyTransportOptions = {}): PtyTra
 
   function registerPtyExitHandler(id: string): boolean {
     const hadBufferedExit = hasPreHandlerPtyExit(id)
-    const exitHandler = (code: number): void => {
+    const exitHandler = (
+      code: number,
+      lostWorkerRecovery?: TerminalLostWorkerRendererReceipt
+    ): void => {
       if (ptyId !== null && ptyId !== id) {
         // Why: a preserved sleep/reconnect session can report its old exit after this transport already rebound to a replacement PTY.
         unregisterPtyHandlers(id)
@@ -644,6 +651,11 @@ export function createIpcPtyTransport(opts: IpcPtyTransportOptions = {}): PtyTra
       connected = false
       ptyId = null
       unregisterPtyHandlers(id)
+      if (lostWorkerRecovery && storedCallbacks.onLostWorkerRecovery) {
+        storedCallbacks.onLostWorkerRecovery(lostWorkerRecovery)
+        onPtyExit?.(id)
+        return
+      }
       storedCallbacks.onExit?.(code)
       storedCallbacks.onDisconnect?.()
       onPtyExit?.(id)
