@@ -73,6 +73,46 @@ export function createSeenNotificationGuard(): {
   }
 }
 
+// Why (#8591): app/index.tsx tears the notification subscription down on every
+// non-'connected' state and builds a fresh one on reconnect, so everything held
+// in the subscription closure — the ready counter, the delivered watermark, the
+// seen-set — is destroyed exactly when a reconnect needs it. Keeping it per host
+// at module scope is what makes the catch-up recognise a reconnect (instead of
+// mistaking it for a cold open) and keeps dedup effective across the teardown.
+export type HostNotificationSession = {
+  // Highest desktop seq delivered for this host in this app process. Outranks
+  // the persisted value, which lags because saveLastSeenSeq is fire-and-forget.
+  lastDeliveredSeq: number
+  seen: ReturnType<typeof createSeenNotificationGuard>
+  // False only until the host's first subscription reaches 'ready' — a true cold open.
+  connectedBefore: boolean
+  // Why: gates catch-up until the persisted watermark has been read once for this
+  // host. Per host, not per subscription: a reconnect that races the very first
+  // AsyncStorage read would otherwise fetch from seq 0 and re-push the buffer.
+  watermarkLoaded: boolean
+}
+
+const sessionsByHost = new Map<string, HostNotificationSession>()
+
+export function getHostNotificationSession(hostId: string): HostNotificationSession {
+  let session = sessionsByHost.get(hostId)
+  if (!session) {
+    session = {
+      lastDeliveredSeq: 0,
+      seen: createSeenNotificationGuard(),
+      connectedBefore: false,
+      watermarkLoaded: false
+    }
+    sessionsByHost.set(hostId, session)
+  }
+  return session
+}
+
+/** Test-only: drop per-host session state so each test starts from a cold open. */
+export function resetHostNotificationSessionsForTests(): void {
+  sessionsByHost.clear()
+}
+
 // Why: key for the replay dedup guard. Uses notificationId when present, but
 // disambiguates by seq so a legitimate live re-delivery of the same id at a
 // NEW seq (content refresh, allowed by the existing behaviour) is NOT treated

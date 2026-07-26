@@ -9,6 +9,7 @@ import {
 import AsyncStorage from '@react-native-async-storage/async-storage'
 import type { RpcClient } from '../transport/rpc-client'
 import { loadPushNotificationsEnabled } from '../storage/preferences'
+import { resetHostNotificationSessionsForTests } from './notification-reconnect-catchup'
 
 vi.mock('expo-notifications', () => ({
   AndroidImportance: { HIGH: 'high' },
@@ -39,6 +40,10 @@ vi.mock('../storage/preferences', () => ({
 
 beforeEach(() => {
   Object.assign(Platform, { OS: 'ios', Version: 18 })
+  // Why (#8591): the reconnect watermark/seen-set now live per host at module
+  // scope so they survive the app's unsubscribe-on-disconnect. Reset between
+  // tests so each case starts from a genuine cold open.
+  resetHostNotificationSessionsForTests()
 })
 
 describe('getNotificationPermissionState', () => {
