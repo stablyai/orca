@@ -1,4 +1,10 @@
-export type SpeechModelType = 'transducer' | 'paraformer' | 'whisper' | 'openai' | 'nemo-ctc'
+export type SpeechModelType =
+  | 'transducer'
+  | 'paraformer'
+  | 'whisper'
+  | 'senseVoice'
+  | 'nemo-ctc'
+  | 'openai'
 export type SpeechModelProvider = 'local' | 'openai'
 
 export type ModelingUnit = 'bpe' | 'cjkchar' | 'cjkchar+bpe'

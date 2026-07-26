@@ -178,6 +178,23 @@ export const SPEECH_MODEL_CATALOG: SpeechModelManifest[] = [
     streaming: false
   },
   {
+    id: 'sense-voice-zh-en-ja-ko-yue',
+    label: 'SenseVoice',
+    description:
+      'Chinese, English, Japanese, Korean, and Cantonese with automatic language detection.',
+    type: 'senseVoice',
+    provider: 'local',
+    language: 'multilingual',
+    sizeBytes: 163_002_883,
+    downloadUrl:
+      'https://github.com/k2-fsa/sherpa-onnx/releases/download/asr-models/sherpa-onnx-sense-voice-zh-en-ja-ko-yue-int8-2024-07-17.tar.bz2',
+    archiveSha256: '7d1efa2138a65b0b488df37f8b89e3d91a60676e416f515b952358d83dfd347e',
+    archiveFormat: 'tar.bz2',
+    files: ['model.int8.onnx', 'tokens.txt'],
+    sampleRate: 16000,
+    streaming: false
+  },
+  {
     id: 'openai-gpt-4o-mini-transcribe',
     label: 'GPT-4o mini Transcribe',
     description:
