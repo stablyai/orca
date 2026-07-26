@@ -55,11 +55,9 @@ class OrcaUnicodeProvider implements IUnicodeVersionProvider {
     }
 
     if (isRegionalIndicator(codepoint)) {
-      // Why: a country flag is two adjacent regional indicators with no ZWJ. CLIs
-      // budget the pair as one wide cell pair; xterm Unicode11 otherwise gives each
-      // indicator its own cell and the font paints two lone letter tiles.
+      // Flags join two indicators while retaining their two-cell CLI width.
       if (isRegionalIndicator(precedingKind) && precedingWidth > 0) {
-        // charKind 0 closes the pair so a third indicator opens the next flag.
+        // Reset the kind so a third indicator starts the next pair.
         return createProperties(0, 2, true)
       }
       return createProperties(codepoint, this.wcwidth(codepoint), false)

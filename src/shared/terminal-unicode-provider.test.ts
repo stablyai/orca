@@ -2,10 +2,7 @@ import { describe, expect, it } from 'vitest'
 import type { Terminal } from '@xterm/headless'
 import { createRendererParityTerminal, writeToTerminal } from './terminal-restore-parity-fixture'
 
-// Why these oracles: a country flag is two regional indicators with no ZWJ, so the
-// ZWJ-only join rule left each indicator in its own cell. Chromium then shapes each
-// one alone and paints a lettered tile instead of the flag. Cell contents (not just
-// row text) are asserted because the row string looks identical either way.
+// Cell contents expose shaping clusters that row text cannot distinguish.
 type Cell = { chars: string; width: number }
 
 function readCells(terminal: Terminal, count: number): Cell[] {
@@ -22,10 +19,11 @@ const US = '\u{1F1FA}\u{1F1F8}'
 const DE = '\u{1F1E9}\u{1F1EA}'
 
 describe('orca terminal unicode provider', () => {
-  it('folds a regional indicator pair into one wide flag cluster', async () => {
+  it('folds a regional indicator pair split across writes into one flag cluster', async () => {
     const { terminal } = createRendererParityTerminal({ cols: 40, rows: 4 })
 
-    await writeToTerminal(terminal, US)
+    await writeToTerminal(terminal, '\u{1F1FA}')
+    await writeToTerminal(terminal, '\u{1F1F8}')
 
     expect(readCells(terminal, 2)).toEqual([
       { chars: US, width: 2 },
@@ -64,8 +62,7 @@ describe('orca terminal unicode provider', () => {
   it('budgets a flag as two cells so positioned writes land past it', async () => {
     const { terminal } = createRendererParityTerminal({ cols: 40, rows: 4 })
 
-    // A flag totals two cells in wcwidth (each indicator is East_Asian_Width
-    // Neutral), so an agent TUI addressing column 3 must clear the flag.
+    // Agent TUIs address the flag's two-column CLI width.
     await writeToTerminal(terminal, `\x1b[H${US}AB`)
     await writeToTerminal(terminal, '\x1b[1;3HZ')
 
