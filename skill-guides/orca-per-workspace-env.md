@@ -336,7 +336,12 @@ vercel sandbox create --name "$base" --runtime node24 --timeout 30m --vcpus 4 --
 # with LITERAL \$1/\$GH_TOKEN so they resolve at git-runtime, not write-time — see §5/§7f create — then
 # `rm -f /tmp/askpass.sh`), write the headless main-only build config (drop the renderer), dev setup,
 # build CLI + headless main, smoke-check
-vercel sandbox exec "$base" "${vercel_args[@]}" --timeout 25m --env "GH_TOKEN=$gh_token" … -- bash -lc '…build…' >&2
+# Why: pipe the token via stdin instead of --env "GH_TOKEN=$gh_token", which
+# exposes it in the vercel process's argv (visible to ps aux on the host).
+printf '%s\n' "$gh_token" | vercel sandbox exec "$base" "${vercel_args[@]}" --timeout 25m … -- bash -lc '
+  set -euo pipefail; read -r GH_TOKEN; export GH_TOKEN GIT_TERMINAL_PROMPT=0
+  …build…
+' >&2
 # snapshot the STOPPED sandbox and parse the id from CLI output (fail if unparseable)
 out="$(vercel sandbox snapshot "$base" --stop --expiration 30d "${vercel_args[@]}" 2>&1)"; printf '%s\n' "$out" >&2
 snapshot_id="$(printf '%s\n' "$out" | sed -nE 's/.*(snap_[A-Za-z0-9]+).*/\1/p' | tail -1)"
@@ -384,10 +389,12 @@ public_url="$(printf '%s\n' "$create_output" | sed -nE 's#.*(https://[^[:space:]
 pairing_ws="${public_url/https:\/\//wss://}"
 
 # 2. (remote) ensure the repo is at the right commit; rebuild only if the commit changed (cache marker)
-vercel sandbox exec "$name" "${vercel_args[@]}" --timeout 20m \
-  --env "GH_TOKEN=$gh_token" --env "ORCA_PROJECT_ROOT=$project_root" \
+# Why: pipe the token via stdin instead of --env "GH_TOKEN=$gh_token", which
+# exposes it in the vercel process's argv (visible to ps aux on the host).
+printf '%s\n' "$gh_token" | vercel sandbox exec "$name" "${vercel_args[@]}" --timeout 20m \
+  --env "ORCA_PROJECT_ROOT=$project_root" \
   --env "ORCA_REPO_URL=$repo_url" --env "ORCA_REPO_REF=$repo_ref" \
-  -- bash -lc 'set -euo pipefail; cd "$ORCA_PROJECT_ROOT"; \
+  -- bash -lc 'set -euo pipefail; read -r GH_TOKEN; export GH_TOKEN; cd "$ORCA_PROJECT_ROOT"; \
     # Re-establish git auth for the private-repo fetch (why + full rationale: §5); else it hangs on a prompt.
     # Load-bearing escaping: \$1 and \$GH_TOKEN must land LITERALLY and resolve at git-runtime. Test after
     # any edit here — reformatting the nested printf/node quoting silently breaks the fetch or leaks the token.
@@ -488,12 +495,14 @@ ssh_opts=(-p "$ssh_port"); [ -n "$identity_file" ] && ssh_opts+=(-i "$identity_f
 ssh-keyscan -p "$ssh_port" "$host" >> "$HOME/.ssh/known_hosts" 2>/dev/null || true
 
 # 1. ensure the repo is present and at the right commit on the host (NO orca serve here)
-ssh "${ssh_opts[@]}" "$ssh_target" \
-  "GH_TOKEN='$gh_token' GIT_TERMINAL_PROMPT=0 bash -lc '
+# Why: stream the token via stdin to prevent exposing it in the local and remote process lists (ps aux).
+ssh "${ssh_opts[@]}" "$ssh_target" "bash -lc '
      set -euo pipefail
+     read -r GH_TOKEN
+     export GH_TOKEN GIT_TERMINAL_PROMPT=0
      [ -d \"$project_root/.git\" ] || git clone \"$repo_url\" \"$project_root\"
      cd \"$project_root\" && git fetch origin \"$repo_ref\" && git checkout -B \"$repo_ref\" FETCH_HEAD
-   '" >&2
+   '" >&2 <<< "$gh_token"
 
 # 2. print the SSH connection block (NO pairingCode, NO orca serve). host/port/username tell Orca's
 #    relay how to dial in; identityFile/jumpHost/proxyCommand/portForwards are emitted when set.

@@ -93,7 +93,7 @@ Use `--json` for agent-friendly output. Coordinates are **normalized 0..1**
 |----------------------------|----------------------------------------------------------------|-------|
 | List devices + AVDs        | `ORCA emulator devices --json`                                 | Cross-platform; shows iOS + Android with a platform column, booted vs shutdown. |
 | Single tap                 | `ORCA emulator tap <x> <y> --device <serial>`                  | Normalized 0..1. Preferred for single taps. |
-| Swipe / gesture            | `ORCA emulator gesture '<json>' --device <serial>`             | adb approximates the path by its endpoints (start→end). |
+| Swipe / gesture            | `ORCA emulator gesture '<json>' --device <serial>` (Unix) or `ORCA emulator gesture "<json>" --device <serial>` (Windows, escaping inner quotes) | adb approximates the path by its endpoints (start→end). |
 | Type text                  | `ORCA emulator type "user@example.com" --device <serial>`      | US ASCII; spaces handled. No newlines. |
 | Hardware button            | `ORCA emulator button back --device <serial>`                  | home, back, recents, power, volume_up, volume_down. |
 | Rotate                     | `ORCA emulator rotate landscape_left --device <serial>`        | Sets user_rotation (disables auto-rotate). |

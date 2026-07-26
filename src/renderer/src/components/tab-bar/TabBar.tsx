@@ -41,6 +41,7 @@ import { ShellIcon } from './shell-icons'
 import { resolveWindowsShellLaunchTarget } from './windows-shell-launch'
 import { focusTerminalTabSurface } from '@/lib/focus-terminal-tab-surface'
 import { moveTabToNewPaneColumn } from './tab-move-to-pane-column'
+import { mirrorWebRuntimeTabMove } from './web-runtime-tab-move-mirror'
 import { useDetectedAgents } from '@/hooks/useDetectedAgents'
 import { useAgentDetectionTargetForWorktree } from '@/hooks/useAgentDetectionTarget'
 import { launchAgentInNewTab } from '@/lib/launch-agent-in-new-tab'
@@ -991,11 +992,20 @@ function TabBarInner({
   const anchorTabIdRef = useRef<string | null>(null)
 
   const effectiveSelectedTabIds = useMemo(() => {
-    if (selectedTabIds.size === 0) {
-      return activeVisibleTabId ? new Set([activeVisibleTabId]) : new Set<string>()
+    const liveIds = new Set(orderedItems.map((item) => item.id))
+    const pruned = new Set<string>()
+    for (const id of selectedTabIds) {
+      if (liveIds.has(id)) {
+        pruned.add(id)
+      }
     }
-    return selectedTabIds
-  }, [selectedTabIds, activeVisibleTabId])
+    if (pruned.size === 0) {
+      return activeVisibleTabId && liveIds.has(activeVisibleTabId)
+        ? new Set([activeVisibleTabId])
+        : new Set<string>()
+    }
+    return pruned
+  }, [selectedTabIds, orderedItems, activeVisibleTabId])
 
   const isMultiSelectActive = effectiveSelectedTabIds.size > 1
 
@@ -1060,16 +1070,17 @@ function TabBarInner({
 
   const handleContextMenuRequest = useCallback(
     (tabId: string) => {
-      setSelectedTabIds((prev) => {
-        const base = prev.size === 0 && activeVisibleTabId ? new Set([activeVisibleTabId]) : prev
-        if (base.has(tabId) && base.size > 1) {
-          return base
-        }
-        anchorTabIdRef.current = tabId
-        return new Set([tabId])
-      })
+      const base =
+        selectedTabIds.size === 0 && activeVisibleTabId
+          ? new Set([activeVisibleTabId])
+          : selectedTabIds
+      if (base.has(tabId) && base.size > 1) {
+        return
+      }
+      anchorTabIdRef.current = tabId
+      setSelectedTabIds(new Set([tabId]))
     },
-    [activeVisibleTabId]
+    [activeVisibleTabId, selectedTabIds]
   )
 
   const handleCloseSelected = useCallback(() => {
@@ -1156,10 +1167,18 @@ function TabBarInner({
 
       for (let i = 1; i < selectedItems.length; i++) {
         const item = selectedItems[i]
-        state.dropUnifiedTab(item.unifiedTabId, { groupId: targetGroupId })
+        const moved = state.dropUnifiedTab(item.unifiedTabId, { groupId: targetGroupId })
+        if (moved) {
+          mirrorWebRuntimeTabMove({
+            kind: 'move-to-group',
+            worktreeId,
+            tabId: item.unifiedTabId,
+            targetGroupId
+          })
+        }
       }
     },
-    [orderedItems, effectiveSelectedTabIds, resolvedGroupId]
+    [orderedItems, effectiveSelectedTabIds, resolvedGroupId, worktreeId]
   )
 
   const { tabStripRef, tabStripOverflowState, scrollTabStrip } = useTabStripOverflowNavigation({

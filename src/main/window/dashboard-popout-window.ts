@@ -156,6 +156,8 @@ export function createOrFocusDashboardPopout(
   // partway through, the already-constructed native window must not be
   // leaked, and the module-level singleton/broadcast below must not fire for
   // a dead window.
+  let unsubscribeUIChanged: (() => void) | undefined
+  let openBroadcasted = false
   try {
     installPopoutWindowSecurity(window.webContents)
 
@@ -171,7 +173,6 @@ export function createOrFocusDashboardPopout(
     // not the live webContents level, so a window-local zoom via the menu/chords
     // is not snapped back until the app-wide level actually changes.
     let lastFollowedZoomLevel = store?.getUI().uiZoomLevel ?? 0
-    let unsubscribeUIChanged: (() => void) | undefined
     unsubscribeUIChanged = store?.onUIChanged((ui) => {
       const level = ui.uiZoomLevel ?? 0
       if (level === lastFollowedZoomLevel) {
@@ -223,6 +224,8 @@ export function createOrFocusDashboardPopout(
       unsubscribeUIChanged?.()
       if (dashboardPopoutWindow === window) {
         dashboardPopoutWindow = null
+      }
+      if (openBroadcasted) {
         broadcastPopoutOpenChanged(false)
       }
     })
@@ -237,6 +240,7 @@ export function createOrFocusDashboardPopout(
   }
 
   dashboardPopoutWindow = window
+  openBroadcasted = true
   broadcastPopoutOpenChanged(true)
 
   return window
