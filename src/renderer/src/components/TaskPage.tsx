@@ -212,6 +212,12 @@ import { sortWorkItemsByNumber } from '../../../shared/work-items'
 import LinearIssueAttributeFilterDropdowns from '@/components/linear-issue-attribute-filter-dropdowns'
 import { resolveLinearIssueAttributeFilterPrimaryTeam } from '@/components/linear-issue-attribute-filter-primary-team'
 import {
+  DEFAULT_LINEAR_DISPLAY_PROPERTIES,
+  linearIssueViewPreferencesResumeUpdate,
+  resolveLinearIssueViewPreferences,
+  shouldResetLinearFilterForWorkspaceChange
+} from '@/components/linear-issue-view-preferences'
+import {
   buildLinearIssueListReadArgs,
   buildLinearIssueListRequestSignature,
   isLinearIssueSearchActive,
@@ -620,15 +626,6 @@ function mergeLinearCollectionResults<T>(
     ...(results.some((result) => result.hasMore) ? { hasMore: true } : {})
   }
 }
-
-const DEFAULT_LINEAR_DISPLAY_PROPERTIES: LinearDisplayProperty[] = [
-  'state',
-  'priority',
-  'assignee',
-  'team',
-  'labels',
-  'updated'
-]
 
 function getLinearStatusSectionState(section: LinearGroupSection): LinearIssue['state'] | null {
   if (!section.key.startsWith('status:')) {
@@ -3668,6 +3665,7 @@ export default function TaskPage(): React.JSX.Element {
   const taskResumeAppliedRef = useRef(false)
   const githubSearchPersistReadyRef = useRef(false)
   const linearSearchPersistReadyRef = useRef(false)
+  const linearViewPersistReadyRef = useRef(false)
   const jiraSearchPersistReadyRef = useRef(false)
   const [taskResumeApplied, setTaskResumeApplied] = useState(false)
 
@@ -4344,7 +4342,7 @@ export default function TaskPage(): React.JSX.Element {
     linearIssueAttributeFilterSignature(emptyLinearIssueAttributeFilter())
   )
   const linearPrimaryTeamIdRef = useRef<string | null>(null)
-  const previousLinearWorkspaceIdForFiltersRef = useRef<string | null | undefined>(undefined)
+  const previousLinearWorkspaceIdForFiltersRef = useRef<string | undefined>(undefined)
   const [linearViewMode, setLinearViewMode] = useState<LinearViewMode>('list')
   const [linearGroupBy, setLinearGroupBy] = useState<LinearGroupBy>('none')
   const [linearOrderBy, setLinearOrderBy] = useState<LinearOrderBy>('priority')
@@ -4627,6 +4625,16 @@ export default function TaskPage(): React.JSX.Element {
     setLinearMode(taskResumeState?.linearMode ?? 'issues')
     setLinearSearchInput(linearQuery)
     setAppliedLinearSearch(linearQuery)
+
+    const linearView = resolveLinearIssueViewPreferences(taskResumeState)
+    setLinearViewMode(linearView.viewMode)
+    setLinearGroupBy(linearView.groupBy)
+    setLinearOrderBy(linearView.orderBy)
+    setLinearDisplayProperties(linearView.displayProperties)
+    setLinearTeamPropertyTouched(linearView.teamPropertyTouched)
+    setLinearAttributeFilter(linearView.attributeFilter)
+    // Why: seed the workspace the saved facets belong to, so resolving a different one drops them as a switch.
+    previousLinearWorkspaceIdForFiltersRef.current = taskResumeState?.linearIssueFilterWorkspaceId
 
     const jiraPreset = taskResumeState?.jiraPreset ?? 'assigned'
     const jiraQuery = taskResumeState?.jiraQuery ?? ''
@@ -5152,13 +5160,17 @@ export default function TaskPage(): React.JSX.Element {
   }, [])
 
   useEffect(() => {
-    const workspaceId = selectedLinearWorkspaceId ?? null
-    const previous = previousLinearWorkspaceIdForFiltersRef.current
-    previousLinearWorkspaceIdForFiltersRef.current = workspaceId
-    if (previous === undefined || previous === workspaceId) {
-      return
+    const reset = shouldResetLinearFilterForWorkspaceChange(
+      previousLinearWorkspaceIdForFiltersRef.current,
+      selectedLinearWorkspaceId
+    )
+    // Why: only remember resolved ids, so a not-yet-loaded null can't later read as a workspace switch.
+    if (selectedLinearWorkspaceId !== null) {
+      previousLinearWorkspaceIdForFiltersRef.current = selectedLinearWorkspaceId
     }
-    applyLinearAttributeFilter(emptyLinearIssueAttributeFilter())
+    if (reset) {
+      applyLinearAttributeFilter(emptyLinearIssueAttributeFilter())
+    }
   }, [applyLinearAttributeFilter, selectedLinearWorkspaceId])
 
   useEffect(() => {
@@ -7204,6 +7216,42 @@ export default function TaskPage(): React.JSX.Element {
     }
     setTaskResumeState({ linearQuery: appliedLinearSearch.trim() })
   }, [appliedLinearSearch, setTaskResumeState, taskResumeApplied])
+
+  // Why: watch the values rather than each setter, so the workspace/team filter resets persist too.
+  useEffect(() => {
+    if (!taskResumeApplied) {
+      return
+    }
+    if (!linearViewPersistReadyRef.current) {
+      linearViewPersistReadyRef.current = true
+      return
+    }
+    setTaskResumeState(
+      linearIssueViewPreferencesResumeUpdate(
+        {
+          viewMode: linearViewMode,
+          groupBy: linearGroupBy,
+          orderBy: linearOrderBy,
+          displayProperties: linearDisplayProperties,
+          teamPropertyTouched: linearTeamPropertyTouched,
+          attributeFilter: linearAttributeFilter
+        },
+        // Why: the ref tracks the workspace the current facets belong to, so an unresolved
+        // (null) status keeps the existing tag instead of dropping the filter's scope.
+        previousLinearWorkspaceIdForFiltersRef.current ?? null
+      )
+    )
+  }, [
+    linearAttributeFilter,
+    linearDisplayProperties,
+    linearGroupBy,
+    linearOrderBy,
+    linearTeamPropertyTouched,
+    linearViewMode,
+    selectedLinearWorkspaceId,
+    setTaskResumeState,
+    taskResumeApplied
+  ])
 
   useEffect(() => {
     setLinearIssueLimit(LINEAR_ITEM_LIMIT)

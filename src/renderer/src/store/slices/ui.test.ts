@@ -1616,6 +1616,18 @@ describe('createUISlice hydratePersistedUI', () => {
           githubItemsQuery: 42,
           linearPreset: 'completed',
           linearQuery: 'label:bug',
+          linearViewMode: 'board',
+          linearGroupBy: 'nonsense',
+          linearOrderBy: 'updated',
+          linearDisplayProperties: ['state', 'bogus', 'labels'],
+          linearTeamPropertyTouched: 'yes',
+          linearIssueFilter: {
+            stateIds: ['state-b', 'state-a'],
+            priorities: [2],
+            assignee: null,
+            labelIds: []
+          },
+          linearIssueFilterWorkspaceId: 'workspace-1',
           jiraPreset: 'reported',
           jiraQuery: 99
         } as unknown as PersistedUIState['taskResumeState']
@@ -1626,8 +1638,33 @@ describe('createUISlice hydratePersistedUI', () => {
       githubMode: 'project',
       linearPreset: 'completed',
       linearQuery: 'label:bug',
+      linearViewMode: 'board',
+      linearOrderBy: 'updated',
+      linearDisplayProperties: ['state', 'labels'],
+      linearIssueFilter: {
+        stateIds: ['state-a', 'state-b'],
+        priorities: [2],
+        assignee: null,
+        labelIds: []
+      },
+      linearIssueFilterWorkspaceId: 'workspace-1',
       jiraPreset: 'reported'
     })
+  })
+
+  it('drops a corrupt persisted Linear filter without losing the rest of the resume state', () => {
+    const store = createUIStore()
+
+    store.getState().hydratePersistedUI(
+      makePersistedUI({
+        taskResumeState: {
+          linearViewMode: 'board',
+          linearIssueFilter: { stateIds: 'not-an-array' }
+        } as unknown as PersistedUIState['taskResumeState']
+      })
+    )
+
+    expect(store.getState().taskResumeState).toEqual({ linearViewMode: 'board' })
   })
 
   it('restores acknowledgedAgentsByPaneKey from persisted UI state', () => {

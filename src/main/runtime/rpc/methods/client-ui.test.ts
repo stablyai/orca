@@ -437,7 +437,19 @@ describe('client UI RPC methods', () => {
         githubItemsQuery: 'is:open',
         githubProjectHiddenFieldIdsByView: {
           'project-1:view-1': ['field-1']
-        }
+        },
+        linearViewMode: 'board',
+        linearGroupBy: 'assignee',
+        linearOrderBy: 'updated',
+        linearDisplayProperties: ['state', 'labels'],
+        linearTeamPropertyTouched: true,
+        linearIssueFilter: {
+          stateIds: ['state-1'],
+          priorities: [2],
+          assignee: { kind: 'user', id: 'user-1' },
+          labelIds: ['label-1']
+        },
+        linearIssueFilterWorkspaceId: 'workspace-1'
       },
       workspaceCleanup: {
         dismissals: {
@@ -479,7 +491,19 @@ describe('client UI RPC methods', () => {
         githubItemsQuery: 'is:open',
         githubProjectHiddenFieldIdsByView: {
           'project-1:view-1': ['field-1']
-        }
+        },
+        linearViewMode: 'board',
+        linearGroupBy: 'assignee',
+        linearOrderBy: 'updated',
+        linearDisplayProperties: ['state', 'labels'],
+        linearTeamPropertyTouched: true,
+        linearIssueFilter: {
+          stateIds: ['state-1'],
+          priorities: [2],
+          assignee: { kind: 'user', id: 'user-1' },
+          labelIds: ['label-1']
+        },
+        linearIssueFilterWorkspaceId: 'workspace-1'
       },
       workspaceCleanup: {
         dismissals: {

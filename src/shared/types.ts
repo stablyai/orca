@@ -1,5 +1,6 @@
 /* eslint-disable max-lines */
 import type { ExecutionHostId } from './execution-host'
+import type { LinearIssueAttributeFilter } from './linear-issue-attribute-filter'
 import type { RemovedSshTargetTombstone, SshRemotePtyLease, SshTarget } from './ssh-types'
 import type { Automation, AutomationExecutionTargetType, AutomationRun } from './automations-types'
 import type { WorkspaceSource } from './workspace-source'
@@ -3168,6 +3169,16 @@ export type TaskResumeState = {
   linearMode?: 'issues' | 'projects' | 'views'
   linearPreset?: 'assigned' | 'created' | 'all' | 'completed'
   linearQuery?: string
+  // Mirrors the renderer's LinearViewMode/LinearGroupBy/LinearOrderBy/LinearDisplayProperty unions.
+  linearViewMode?: 'list' | 'board'
+  linearGroupBy?: 'none' | 'status' | 'assignee' | 'priority' | 'team'
+  linearOrderBy?: 'priority' | 'updated' | 'identifier'
+  linearDisplayProperties?: ('state' | 'priority' | 'assignee' | 'team' | 'labels' | 'updated')[]
+  linearTeamPropertyTouched?: boolean
+  /** Omitted when empty, mirroring how an unfiltered list is sent over the wire. */
+  linearIssueFilter?: LinearIssueAttributeFilter
+  /** Facet ids above are workspace-scoped; this tags the workspace they were captured under. */
+  linearIssueFilterWorkspaceId?: string
   linearContext?: {
     kind: 'project' | 'view'
     id: string

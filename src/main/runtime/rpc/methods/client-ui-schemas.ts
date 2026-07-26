@@ -13,6 +13,7 @@ import { isTaskProvider } from '../../../../shared/task-providers'
 import { normalizeDisabledTuiAgents } from '../../../../shared/tui-agent-selection'
 import { normalizePRBotAuthorOverrides } from '../../../../shared/pr-bot-author-overrides'
 import { normalizeWorktreeCardProperties } from '../../../../shared/worktree-card-properties'
+import { LinearIssueAttributeFilterSchema } from './linear-issue-attribute-filter-schema'
 import type { TaskProvider } from '../../../../shared/types'
 
 const NullableString = z.string().nullable()
@@ -66,7 +67,18 @@ const TaskResumeState = z
     githubItemsQuery: z.string().optional(),
     githubProjectHiddenFieldIdsByView: z.record(z.string(), z.array(z.string())).optional(),
     linearPreset: z.enum(['assigned', 'created', 'all', 'completed']).optional(),
-    linearQuery: z.string().optional()
+    linearQuery: z.string().optional(),
+    // Why: this schema is strict — a TaskResumeState field the renderer persists but
+    // that is missing here fails the whole ui.set call for paired web/mobile clients.
+    linearViewMode: z.enum(['list', 'board']).optional(),
+    linearGroupBy: z.enum(['none', 'status', 'assignee', 'priority', 'team']).optional(),
+    linearOrderBy: z.enum(['priority', 'updated', 'identifier']).optional(),
+    linearDisplayProperties: z
+      .array(z.enum(['state', 'priority', 'assignee', 'team', 'labels', 'updated']))
+      .optional(),
+    linearTeamPropertyTouched: z.boolean().optional(),
+    linearIssueFilter: LinearIssueAttributeFilterSchema.optional(),
+    linearIssueFilterWorkspaceId: z.string().optional()
   })
   .strict()
 const WorkspaceCleanupDismissal = z

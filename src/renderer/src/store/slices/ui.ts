@@ -36,6 +36,7 @@ import {
   normalizeManualRepoOrder
 } from '../../../../shared/manual-repo-order'
 import { isTopLevelView } from '../../../../shared/top-level-view'
+import { optionalParsedLinearIssueAttributeFilter } from '../../../../shared/linear-issue-attribute-filter'
 import type { UsagePercentageDisplay } from '../../../../shared/usage-percentage-display'
 import {
   DEFAULT_USAGE_PERCENTAGE_DISPLAY,
@@ -321,6 +322,31 @@ const VALID_JIRA_PRESETS = new Set<NonNullable<TaskResumeState['jiraPreset']>>([
   'all',
   'done'
 ])
+const VALID_LINEAR_VIEW_MODES = new Set<NonNullable<TaskResumeState['linearViewMode']>>([
+  'list',
+  'board'
+])
+const VALID_LINEAR_GROUP_BY = new Set<NonNullable<TaskResumeState['linearGroupBy']>>([
+  'none',
+  'status',
+  'assignee',
+  'priority',
+  'team'
+])
+const VALID_LINEAR_ORDER_BY = new Set<NonNullable<TaskResumeState['linearOrderBy']>>([
+  'priority',
+  'updated',
+  'identifier'
+])
+type LinearDisplayPropertyId = NonNullable<TaskResumeState['linearDisplayProperties']>[number]
+const VALID_LINEAR_DISPLAY_PROPERTIES = new Set<LinearDisplayPropertyId>([
+  'state',
+  'priority',
+  'assignee',
+  'team',
+  'labels',
+  'updated'
+])
 
 function resolvePaneKeyWorktreeIdFromTabs(state: AppState, paneKey: string): string | null {
   const parsed = parsePaneKey(paneKey)
@@ -551,6 +577,51 @@ function sanitizeTaskResumeState(value: unknown): TaskResumeState | undefined {
   }
   if (typeof input.linearQuery === 'string') {
     next.linearQuery = input.linearQuery
+  }
+  if (
+    typeof input.linearViewMode === 'string' &&
+    VALID_LINEAR_VIEW_MODES.has(
+      input.linearViewMode as NonNullable<TaskResumeState['linearViewMode']>
+    )
+  ) {
+    next.linearViewMode = input.linearViewMode as NonNullable<TaskResumeState['linearViewMode']>
+  }
+  if (
+    typeof input.linearGroupBy === 'string' &&
+    VALID_LINEAR_GROUP_BY.has(input.linearGroupBy as NonNullable<TaskResumeState['linearGroupBy']>)
+  ) {
+    next.linearGroupBy = input.linearGroupBy as NonNullable<TaskResumeState['linearGroupBy']>
+  }
+  if (
+    typeof input.linearOrderBy === 'string' &&
+    VALID_LINEAR_ORDER_BY.has(input.linearOrderBy as NonNullable<TaskResumeState['linearOrderBy']>)
+  ) {
+    next.linearOrderBy = input.linearOrderBy as NonNullable<TaskResumeState['linearOrderBy']>
+  }
+  // Why: an empty array is meaningful here (every property hidden), so keep it rather than dropping the key.
+  if (Array.isArray(input.linearDisplayProperties)) {
+    next.linearDisplayProperties = input.linearDisplayProperties.filter(
+      (property): property is LinearDisplayPropertyId =>
+        typeof property === 'string' &&
+        VALID_LINEAR_DISPLAY_PROPERTIES.has(property as LinearDisplayPropertyId)
+    )
+  }
+  if (typeof input.linearTeamPropertyTouched === 'boolean') {
+    next.linearTeamPropertyTouched = input.linearTeamPropertyTouched
+  }
+  try {
+    const parsedFilter = optionalParsedLinearIssueAttributeFilter(input.linearIssueFilter)
+    if (parsedFilter) {
+      next.linearIssueFilter = parsedFilter
+    }
+  } catch {
+    // Why: a corrupt persisted filter must not take the rest of the resume state down with it.
+  }
+  if (
+    typeof input.linearIssueFilterWorkspaceId === 'string' &&
+    input.linearIssueFilterWorkspaceId
+  ) {
+    next.linearIssueFilterWorkspaceId = input.linearIssueFilterWorkspaceId
   }
   if (input.linearContext && typeof input.linearContext === 'object') {
     const context = input.linearContext as Record<string, unknown>
