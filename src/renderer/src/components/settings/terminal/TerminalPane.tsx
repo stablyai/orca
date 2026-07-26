@@ -18,6 +18,7 @@ import {
 } from './platform/terminal-advanced-platform-search'
 import { getTerminalPaneInteractionSearchEntries } from './appearance/terminal-pane-appearance-search'
 import { getTerminalRenderingSearchEntries } from './appearance/terminal-typography-search'
+import { getTerminalShellCommandWrapperSearchEntries } from './appearance/terminal-window-search'
 import {
   getTerminalRightClickToPasteSearchEntry,
   getTerminalWindowsPowershellImplementationSearchEntry,
@@ -28,6 +29,7 @@ import { ManageSessionsSection } from './session-management/ManageSessionsSectio
 import { TerminalAdvancedSection } from './TerminalAdvancedSection'
 import { TerminalInteractionSection } from './TerminalInteractionSection'
 import { TerminalRenderingSection } from './appearance/TerminalRenderingSection'
+import { TerminalShellCommandWrapperSection } from './TerminalShellCommandWrapperSection'
 import { TerminalWindowsShellSection } from './platform/TerminalWindowsShellSection'
 import { TerminalWindowsAdministratorSection } from './platform/TerminalWindowsAdministratorSection'
 import { TerminalCustomShellInput } from './platform/TerminalCustomShellInput'
@@ -307,6 +309,13 @@ export function TerminalPane({
         settings={settings}
         updateSettings={updateSettings}
         searchQuery={searchQuery}
+      />
+    ) : null,
+    matchesSettingsSearch(searchQuery, getTerminalShellCommandWrapperSearchEntries()) ? (
+      <TerminalShellCommandWrapperSection
+        key="shell-command-wrapper"
+        settings={settings}
+        updateSettings={updateSettings}
       />
     ) : null,
     matchesSettingsSearch(searchQuery, getManageSessionsSearchEntries()) ? (
