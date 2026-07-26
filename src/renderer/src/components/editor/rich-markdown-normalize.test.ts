@@ -1,10 +1,10 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { Editor } from '@tiptap/core'
 import StarterKit from '@tiptap/starter-kit'
-import { Markdown } from '@tiptap/markdown'
+import { createIsolatedMarkdownExtensionForTests } from './isolated-markdown-extension-for-tests'
 import { normalizeEmptyListItems, normalizeSoftBreaks } from './rich-markdown-normalize'
 
-const extensions = [StarterKit, Markdown.configure({ markedOptions: { gfm: true } })]
+const extensions = [StarterKit, createIsolatedMarkdownExtensionForTests()]
 
 afterEach(() => {
   vi.restoreAllMocks()

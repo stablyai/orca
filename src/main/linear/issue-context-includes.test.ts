@@ -1,10 +1,12 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { LinearIssueContextResult, LinearIssueRequest } from '../../shared/linear-agent-access'
 import type { ResolvedIssue } from './issue-context-client'
+import { ACTIVITY_QUERY } from './issue-activity-raw'
 import {
   ATTACHMENTS_QUERY,
   CHILDREN_QUERY,
   COMMENTS_QUERY,
+  INVERSE_RELATIONS_QUERY,
   RELATIONS_QUERY
 } from './issue-context-raw'
 
@@ -70,7 +72,13 @@ function resolvedIssue(): ResolvedIssue {
 
 function request(): LinearIssueRequest {
   return {
-    include: { comments: false, children: true, attachments: false, relations: false },
+    include: {
+      comments: false,
+      children: true,
+      attachments: false,
+      relations: false,
+      activity: false
+    },
     depth: 2
   }
 }
@@ -84,7 +92,26 @@ function requestWithDepth(depth: number): LinearIssueRequest {
 
 function requestWithComments(): LinearIssueRequest {
   return {
-    include: { comments: true, children: false, attachments: false, relations: false },
+    include: {
+      comments: true,
+      children: false,
+      attachments: false,
+      relations: false,
+      activity: false
+    },
+    depth: 2
+  }
+}
+
+function requestWithActivity(): LinearIssueRequest {
+  return {
+    include: {
+      comments: false,
+      children: false,
+      attachments: false,
+      relations: false,
+      activity: true
+    },
     depth: 2
   }
 }
@@ -95,7 +122,13 @@ function result(): LinearIssueContextResult {
     meta: {
       requested: {
         current: false,
-        include: { comments: false, children: true, attachments: false, relations: false },
+        include: {
+          comments: false,
+          children: true,
+          attachments: false,
+          relations: false,
+          activity: false
+        },
         depth: 2
       },
       resolved: {
@@ -117,10 +150,18 @@ describe('Linear issue context includes', () => {
   })
 
   it('declares cursor variables on every paged include query', () => {
-    for (const query of [COMMENTS_QUERY, CHILDREN_QUERY, ATTACHMENTS_QUERY, RELATIONS_QUERY]) {
+    for (const query of [
+      COMMENTS_QUERY,
+      CHILDREN_QUERY,
+      ATTACHMENTS_QUERY,
+      RELATIONS_QUERY,
+      ACTIVITY_QUERY,
+      INVERSE_RELATIONS_QUERY
+    ]) {
       expect(query).toContain('$after: String')
       expect(query).toContain('after: $after')
     }
+    expect(ACTIVITY_QUERY).not.toContain('attachment { id title url source }')
   })
 
   it('does not probe grandchildren when the first child page exhausts the node cap', async () => {
@@ -198,6 +239,127 @@ describe('Linear issue context includes', () => {
       id: 'parent',
       first: 50,
       after: 'comment-cursor-1'
+    })
+  })
+
+  it('returns normalized issue activity with user, bot, and field changes', async () => {
+    plainRawRequest.mockResolvedValueOnce({
+      data: {
+        issue: {
+          history: {
+            nodes: [
+              {
+                id: 'history-1',
+                createdAt: '2026-07-20T10:00:00.000Z',
+                actor: { id: 'user-1', displayName: 'Ada' },
+                fromState: { id: 'todo', name: 'Todo' },
+                toState: { id: 'started', name: 'In Progress' },
+                addedLabels: [{ id: 'bug', name: 'Bug' }]
+              },
+              {
+                id: 'history-2',
+                botActor: { id: 'bot-1', name: 'Workflow', type: 'app' },
+                fromPriority: 3,
+                toPriority: 2,
+                relationChanges: [{ identifier: 'ENG-9', type: 'blocks' }]
+              },
+              {
+                id: 'history-3',
+                archived: false,
+                trashed: false
+              }
+            ],
+            pageInfo: { hasNextPage: false }
+          }
+        }
+      }
+    })
+    const { readOptionalIncludes } = await import('./issue-context-includes')
+    const output = result()
+
+    await readOptionalIncludes(
+      resolvedIssue(),
+      requestWithActivity(),
+      output,
+      [],
+      output.meta.sections
+    )
+
+    expect(output.activity).toEqual([
+      expect.objectContaining({
+        id: 'history-1',
+        actor: expect.objectContaining({ kind: 'user', displayName: 'Ada' }),
+        changes: [
+          {
+            field: 'state',
+            from: { id: 'todo', name: 'Todo' },
+            to: { id: 'started', name: 'In Progress' }
+          },
+          { field: 'labelsAdded', to: [{ id: 'bug', name: 'Bug' }] }
+        ]
+      }),
+      expect.objectContaining({
+        id: 'history-2',
+        actor: expect.objectContaining({ kind: 'bot', name: 'Workflow' }),
+        changes: [
+          { field: 'priority', from: 3, to: 2 },
+          { field: 'relations', to: [{ identifier: 'ENG-9', type: 'blocks' }] }
+        ]
+      }),
+      expect.objectContaining({
+        id: 'history-3',
+        actor: { kind: 'system', displayName: 'Linear' },
+        changes: [
+          { field: 'archived', to: false },
+          { field: 'trashed', to: false }
+        ]
+      })
+    ])
+    expect(output.meta.sections.activity).toMatchObject({
+      returned: 3,
+      cap: 250,
+      capReached: false
+    })
+  })
+
+  it('caps activity history at five provider pages', async () => {
+    for (let page = 0; page < 5; page += 1) {
+      plainRawRequest.mockResolvedValueOnce({
+        data: {
+          issue: {
+            history: {
+              nodes: Array.from({ length: 50 }, (_, index) => ({
+                id: `history-${page * 50 + index}`
+              })),
+              pageInfo: { hasNextPage: true, endCursor: `activity-cursor-${page}` }
+            }
+          }
+        }
+      })
+    }
+    const { readOptionalIncludes } = await import('./issue-context-includes')
+    const output = result()
+
+    await readOptionalIncludes(
+      resolvedIssue(),
+      requestWithActivity(),
+      output,
+      [],
+      output.meta.sections
+    )
+
+    expect(output.activity).toHaveLength(250)
+    expect(output.meta.sections.activity).toMatchObject({
+      returned: 250,
+      cap: 250,
+      capReached: true,
+      hasMore: true
+    })
+    expect(plainRawRequest).toHaveBeenCalledTimes(5)
+    expect(plainRawRequest.mock.calls[4]?.[1]).toEqual({
+      id: 'parent',
+      first: 50,
+      after: 'activity-cursor-3'
     })
   })
 

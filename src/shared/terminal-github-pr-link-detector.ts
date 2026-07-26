@@ -1,3 +1,4 @@
+/* eslint-disable no-control-regex -- ANSI SGR sequences are raw PTY input. */
 /**
  * Chunk-boundary-safe GitHub PR URL scan over PTY output.
  *
@@ -11,6 +12,9 @@ import type { RepoSlug } from './github-links'
 import { parseGitHubIssueOrPRLink } from './github-links'
 
 const GITHUB_PR_PATH_MARKER = '/pull/'
+const TERMINAL_SGR_PATTERN = /\x1b\[[0-?]*[ -/]*m/g
+const TERMINAL_CURSOR_CONTROL_PATTERN = /[\x08\x0b\x0c]/g
+const TERMINAL_CONTROL_GUARD = '\ufffd'
 const HTTP_SCHEME_PREFIXES = ['https://', 'http://'] as const
 const TRAILING_TERMINAL_PUNCTUATION_RE = /[),.;\]}]+$/
 const MAX_CARRY_LENGTH = 512
@@ -27,6 +31,9 @@ function trimTerminalUrl(candidate: string): string {
 }
 
 function parseTerminalGitHubPRUrl(candidate: string): TerminalGitHubPRLink | null {
+  if (candidate.includes('\x1b') || candidate.includes(TERMINAL_CONTROL_GUARD)) {
+    return null
+  }
   const url = trimTerminalUrl(candidate)
   const parsed = parseGitHubIssueOrPRLink(url)
   if (!parsed || parsed.type !== 'pr') {
@@ -128,12 +135,19 @@ export function createTerminalGitHubPRLinkDetector(): (data: string) => Terminal
   const seenUrls = new Set<string>()
 
   return (data: string): TerminalGitHubPRLink[] => {
-    const combined = carry ? carry + data : data
+    const rawCombined = carry ? carry + data : data
 
-    if (!combined.includes(GITHUB_PR_PATH_MARKER)) {
-      carry = getPotentialGitHubPRCarry(combined)
+    // Why: PTY output is a hot path; avoid multi-pass ANSI normalization for
+    // chunks that cannot contain a GitHub pull-request URL.
+    if (!rawCombined.includes(GITHUB_PR_PATH_MARKER)) {
+      carry = getPotentialGitHubPRCarry(rawCombined)
       return []
     }
+    // Why: SGR styling has no screen width, so removing it is safe. Cursor
+    // controls get a guard; other escape sequences remain URL-invalid.
+    const combined = rawCombined
+      .replace(TERMINAL_SGR_PATTERN, '')
+      .replace(TERMINAL_CURSOR_CONTROL_PATTERN, TERMINAL_CONTROL_GUARD)
 
     const links: TerminalGitHubPRLink[] = []
     // Why: PTY data may echo a huge pasted line. Scan URL candidates directly
@@ -154,7 +168,7 @@ export function createTerminalGitHubPRLinkDetector(): (data: string) => Terminal
       links.push(parsed)
     }
 
-    carry = getPotentialGitHubPRCarry(combined)
+    carry = getPotentialGitHubPRCarry(rawCombined)
     return links
   }
 }

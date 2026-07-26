@@ -15,6 +15,7 @@ export const AI_VAULT_AGENTS = [
   'omp',
   'cursor',
   'gemini',
+  'antigravity',
   'rovo',
   'copilot',
   'opencode',
@@ -43,6 +44,7 @@ export const AI_VAULT_AGENT_LABELS = {
   omp: 'OMP',
   cursor: 'Cursor',
   gemini: 'Gemini',
+  antigravity: 'Antigravity',
   rovo: 'Rovo Dev',
   copilot: 'GitHub Copilot',
   opencode: 'OpenCode',
@@ -89,6 +91,8 @@ export type AiVaultSession = {
   messageCount: number
   totalTokens: number
   previewMessages: AiVaultSessionPreviewMessage[]
+  /** Latest provider-authenticated user prompt; absent when the transcript has no trustworthy signal. */
+  lastUserPrompt?: string | null
   // Recoverable signal for sessions whose conversation transcript persisted zero
   // user/assistant turns: queued (never-flushed) prompts survive even when the
   // main conversation was lost.
@@ -188,9 +192,12 @@ export function buildAiVaultResumeCommand(args: {
   // home) the file was discovered under, where an id-prefix lookup scoped to
   // the default store would miss it. Falls back to the id if no path is known.
   const resumeTarget = agent === 'omp' && resumeFilePath?.trim() ? resumeFilePath.trim() : sessionId
-  const sessionArg = shell
-    ? quoteStartupArg(resumeTarget, shell)
-    : quoteShellArg(resumeTarget, platform)
+  const sessionArg =
+    shell === 'cmd'
+      ? quoteWindowsCmdArg(resumeTarget)
+      : shell
+        ? quoteStartupArg(resumeTarget, shell)
+        : quoteShellArg(resumeTarget, platform)
   const resumeCommand = buildAgentResumeInvocation(agent, baseCommand, sessionArg)
 
   return buildAiVaultResumeShellCommand({
@@ -208,16 +215,14 @@ export function buildAiVaultResumeShellCommand(args: {
   platform: NodeJS.Platform
   codexHome?: string | null
   // Why: the QUEUED resume command is typed into the live tab shell, so its
-  // cd/env prefix must match that shell. The copy-to-clipboard string omits this
-  // and keeps the self-contained `cmd /d /s /c` wrapper (its documented purpose).
+  // cd/env prefix must match that shell. Shell-less persisted commands keep the
+  // legacy self-contained `cmd /d /s /c` wrapper.
   shell?: AgentStartupShell
 }): string {
   const { cwd, platform, codexHome, shell } = args
 
-  // Why: on Windows the queued command must target the configured live shell
-  // (default PowerShell). PowerShell mis-parses the cmd `""`-doubled wrapper and
-  // reports "operable program or batch file", so only re-wrap with cmd when the
-  // live shell actually is cmd (or when no shell is given, i.e. the copy path).
+  // Why: shell-aware commands are parsed by a known running shell, while
+  // shell-less persisted commands keep the legacy self-contained cmd wrapper.
   if (platform === 'win32' && shell && shell !== 'cmd') {
     return buildResumeShellCommandForShell({
       resumeCommand: args.resumeCommand,
@@ -230,6 +235,11 @@ export function buildAiVaultResumeShellCommand(args: {
   const resumeCommand = `${codexHomeEnvPrefix(codexHome?.trim() || null, platform)}${
     args.resumeCommand
   }`
+  if (platform === 'win32' && shell === 'cmd') {
+    // Why: an interactive cmd splits the doubled quotes required by a nested
+    // `cmd /s /c` wrapper, so queued commands must use direct cmd syntax.
+    return cwd ? `cd /d ${quoteWindowsCmdArg(cwd)} && ${resumeCommand}` : resumeCommand
+  }
   if (!cwd) {
     return resumeCommand
   }
@@ -267,6 +277,18 @@ function buildResumeShellCommandForShell(args: {
   }
   segments.push(args.resumeCommand)
   return segments.join(separator)
+}
+
+// Why: a bare real-home resume carries no CODEX_HOME prefix, so every surface
+// that spawns the pane must drop account-routed or daemon-inherited Codex
+// homes from its env, not only patch a sparse env on top.
+export function realHomeCodexResumeEnvDeletion(
+  session: Pick<AiVaultSession, 'agent' | 'codexHome'>
+): { envToDelete: string[] } | Record<string, never> {
+  if (session.agent !== 'codex' || session.codexHome !== null) {
+    return {}
+  }
+  return { envToDelete: ['CODEX_HOME', 'ORCA_CODEX_HOME'] }
 }
 
 export function aiVaultAgentLabel(agent: AiVaultAgent): string {
@@ -317,6 +339,8 @@ function buildAgentResumeInvocation(
     // but the `--resume <arg>` invocation form is identical to the others here.
     case 'omp':
       return `${baseCommand} --resume ${sessionArg}`
+    case 'antigravity':
+      return `${baseCommand} --conversation ${sessionArg}`
   }
 }
 

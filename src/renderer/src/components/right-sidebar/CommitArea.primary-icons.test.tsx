@@ -39,7 +39,6 @@ function baseProps(overrides: Partial<PrimaryActionInputs> = {}) {
     isFixingCommitFailureWithAI: false,
     isFixingPushFailureWithAI: false,
     sourceControlAiActionsVisible: true,
-    aiEnabled: false,
     aiAgentConfigured: false,
     isGenerating: false,
     generateError: null as string | null,
@@ -66,11 +65,13 @@ function primaryButton(props: ReturnType<typeof baseProps>): string {
       <CommitArea {...props} />
     </TooltipProvider>
   )
-  const match = markup.match(/<button\b[\s\S]*?<\/button>/)
-  if (!match) {
+  const button = [...markup.matchAll(/<button\b[\s\S]*?<\/button>/g)]
+    .map((match) => match[0])
+    .find((entry) => entry.includes('data-slot="button"'))
+  if (!button) {
     throw new Error('primary button not found')
   }
-  return match[0]
+  return button
 }
 
 describe('CommitArea primary action icons', () => {

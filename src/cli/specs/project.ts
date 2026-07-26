@@ -101,6 +101,7 @@ export const PROJECT_COMMAND_SPECS: CommandSpec[] = [
   },
   {
     path: ['project', 'setup-delete'],
+    destructive: true,
     summary: 'Remove a project host setup',
     usage: 'orca project setup-delete --setup <setup-id> [--json]',
     allowedFlags: [...GLOBAL_FLAGS, 'setup'],

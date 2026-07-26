@@ -2,13 +2,11 @@ import type { RpcDispatcher } from '../runtime/rpc/dispatcher'
 import type { RpcResponse } from '../runtime/rpc/core'
 import { getRemoteLinearReadHelp } from './ssh-remote-linear-read-help'
 import { tryDispatchRemoteLinearReadCli } from './ssh-remote-linear-read-cli'
-import { RemoteCliArgumentError, type ParsedRemoteCli } from './ssh-remote-linear-argument-error'
+import type { ParsedRemoteCli } from './ssh-remote-cli-argument-error'
 import {
   getRemoteLinearWriteHelp,
   tryDispatchRemoteLinearWriteCli
 } from './ssh-remote-linear-write-cli'
-
-export { RemoteCliArgumentError }
 
 export function getRemoteLinearHelp(parsed: ParsedRemoteCli): string | null {
   const helpPath = remoteLinearHelpPath(parsed)

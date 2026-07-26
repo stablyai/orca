@@ -42,6 +42,7 @@ import {
 import type { TerminalLeafId } from '../../../../shared/stable-pane-id'
 import { registerLivePaneManager, unregisterLivePaneManager } from './pane-manager-registry'
 import { schedulePaneRevealPresent, schedulePaneRevealRepaint } from './pane-reveal-repaint'
+import { fitRevealedPane } from './pane-reveal-fit'
 import { PaneIdentityRegistry } from './pane-identity-registry'
 import {
   closeManagedPane,
@@ -197,6 +198,14 @@ export class PaneManager {
     fitAllPanesInternal(this.panes)
   }
 
+  // Why: a raw synchronous fit on reveal can apply a transient DOM<->WebGL
+  // cell-metric grid and reflow-garble diff-painting inline TUIs; see fitRevealedPane.
+  fitAllRevealedPanes(): void {
+    for (const pane of this.panes.values()) {
+      fitRevealedPane(pane)
+    }
+  }
+
   refreshAllPanes(): void {
     for (const pane of this.panes.values()) {
       try {
@@ -243,6 +252,10 @@ export class PaneManager {
       terminalWebglAutoDecision: getTerminalWebglAutoDecision(),
       hasWebgl: Boolean(pane.webglAddon)
     }))
+  }
+
+  hasWebglRenderer(paneId: number): boolean {
+    return this.panes.get(paneId)?.webglAddon != null
   }
 
   getLeafId(numericPaneId: number): TerminalLeafId | null {

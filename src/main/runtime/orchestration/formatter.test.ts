@@ -17,6 +17,7 @@ function makeMessage(overrides: Partial<MessageRow> = {}): MessageRow {
     sequence: 1,
     created_at: '2026-01-01T00:00:00Z',
     delivered_at: null,
+    sender_pane_key: null,
     ...overrides
   }
 }
@@ -70,7 +71,9 @@ describe('formatMessageBanner', () => {
 
   it('includes reply hint with message ID', () => {
     const banner = formatMessageBanner(makeMessage({ id: 'msg_xyz789' }))
-    expect(banner).toContain('[Reply: orca orchestration reply --id msg_xyz789 --body "..."]')
+    expect(banner).toContain(
+      '[Reply: orca orchestration reply --id msg_xyz789 --from term_coord --body "..."]'
+    )
   })
 
   it('ends with a separator line', () => {

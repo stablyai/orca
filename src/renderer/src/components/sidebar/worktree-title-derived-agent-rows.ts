@@ -1,5 +1,6 @@
 import type { DashboardAgentRow } from '@/components/dashboard/useDashboardData'
-import { isClaudeManagementTitle } from '@/lib/agent-status'
+import { formatAgentTypeLabel, isClaudeManagementTitle } from '@/lib/agent-status'
+import { containsBrailleSpinner } from '../../../../shared/agent-title-core'
 import { classifyTitleActivity, resolveTitleActivityLabel } from '@/lib/pane-agent-evidence'
 import { tabHasLivePty } from '@/lib/tab-has-live-pty'
 import type {
@@ -142,10 +143,20 @@ function buildTitleDerivedAgentRow(args: {
   }
   const paneKey = makePaneKey(args.tab.id, args.leafId)
   const orchestration = args.runtimeAgentOrchestrationByPaneKey?.[paneKey]
-  const agentType = isClaudeAgentsTitle ? 'claude' : resolveTitleDerivedAgentType(title, label)
+  const titleAgentType = isClaudeAgentsTitle ? 'claude' : resolveTitleDerivedAgentType(title, label)
+  // Why: a braille spinner proves activity, not identity, so the resolver drops
+  // it. Hook-less agents over SSH (Codex, #8711) surface only spinner+cwd titles;
+  // fall back to the tab's launch identity instead of hiding the pane. Gated on
+  // the spinner on purpose — unlike the hook path's unconditional launchAgent
+  // fallback (resolveRowAgentType), this path manufactures agent-ness from a
+  // title alone, so a non-agent title must never become a row. Residual: a split
+  // pane whose own title carries a braille glyph is still attributed to launchAgent.
+  const agentType =
+    titleAgentType ?? (containsBrailleSpinner(title) ? (args.tab.launchAgent ?? null) : null)
   if (!agentType) {
     return null
   }
+  const rowLabel = titleAgentType ? label : formatAgentTypeLabel(agentType)
   const rowState = titleStatusToRowState(status)
   const secondary =
     status === 'permission' ? 'Needs input' : status === 'working' ? 'Running' : 'Idle'
@@ -153,7 +164,7 @@ function buildTitleDerivedAgentRow(args: {
   const entry: AgentStatusEntry = {
     paneKey,
     state: entryState,
-    prompt: label,
+    prompt: rowLabel,
     updatedAt: args.now,
     stateStartedAt: args.now,
     stateHistory: [],

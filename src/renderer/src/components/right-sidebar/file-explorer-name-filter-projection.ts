@@ -1,6 +1,6 @@
 import { joinPath, normalizeRelativePath } from '@/lib/path'
 import { isClipboardTextByteLengthOverLimit } from '../../../../shared/clipboard-text'
-import type { TreeNode } from './file-explorer-types'
+import type { FileExplorerOperationOwner, TreeNode } from './file-explorer-types'
 import {
   createFileExplorerRowProjectionFromParts,
   type FileExplorerRowProjection
@@ -12,6 +12,7 @@ import { isPathIgnored } from './status-display'
 export type FileExplorerNameFilterProjectionSource = {
   query: string
   relativePaths: readonly string[] | null
+  operationOwner?: FileExplorerOperationOwner
 }
 
 export const FILE_EXPLORER_NAME_FILTER_QUERY_MAX_BYTES = 2 * 1024
@@ -133,14 +134,16 @@ function createSyntheticNode(
   relativePath: string,
   name: string,
   depth: number,
-  isDirectory: boolean
+  isDirectory: boolean,
+  operationOwner: FileExplorerOperationOwner | undefined
 ): TreeNode {
   return {
     name,
     path: joinPath(worktreePath, relativePath),
     relativePath,
     isDirectory,
-    depth
+    depth,
+    operationOwner
   }
 }
 
@@ -197,7 +200,14 @@ export function createNameFilteredFileExplorerProjection({
       let entry = currentChildren.get(name)
       if (!entry) {
         entry = {
-          node: createSyntheticNode(worktreePath, currentRelativePath, name, index, isDirectory),
+          node: createSyntheticNode(
+            worktreePath,
+            currentRelativePath,
+            name,
+            index,
+            isDirectory,
+            nameFilter.operationOwner
+          ),
           children: new Map()
         }
         currentChildren.set(name, entry)

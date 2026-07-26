@@ -109,7 +109,9 @@ function installModuleMocks(
   vi.doMock('./browser-manager', () => ({
     browserManager: {
       notifyPermissionDenied: browserManagerNotifyPermissionDeniedMock,
-      handleGuestWillDownload: browserManagerHandleGuestWillDownloadMock
+      handleGuestWillDownload: browserManagerHandleGuestWillDownloadMock,
+      installCertificateRequestGuard: vi.fn(),
+      removeCertificateRequestGuard: vi.fn()
     }
   }))
   vi.doMock('./browser-media-access', () => ({

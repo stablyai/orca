@@ -95,6 +95,13 @@ describe('GeneralPane search entries', () => {
     expect(matchesSettingsSearch('wsl', entries)).toBe(true)
   })
 
+  it('includes file-editor word-wrap and horizontal-scroll keywords', () => {
+    const entries = getGeneralPaneSearchEntries()
+
+    expect(matchesSettingsSearch('editor word wrap', entries)).toBe(true)
+    expect(matchesSettingsSearch('horizontal scroll', entries)).toBe(true)
+  })
+
   it('includes rich Markdown spellcheck keywords', () => {
     const entries = getGeneralPaneSearchEntries()
 

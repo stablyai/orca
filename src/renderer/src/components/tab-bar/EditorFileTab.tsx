@@ -109,8 +109,10 @@ export default function EditorFileTab({
   // user's intent. This flag suppresses the trailing blur-commit.
   const renameCancelledRef = useRef(false)
   // Only on-disk edit tabs are renameable. Diff, conflict-review, and
-  // combined/virtual views don't point at a single concrete file we can safely rename.
-  const canRename = file.mode === 'edit' && !file.diffSource && !file.conflict
+  // combined/virtual views don't point at a single concrete file we can safely
+  // rename. Read-only tabs (AI Vault View Log) also stay unrenameable — rename
+  // would rewrite the agent-owned artifact's backing path.
+  const canRename = file.mode === 'edit' && !file.diffSource && !file.conflict && !file.readOnly
 
   const openRenameInput = (): void => {
     if (!canRename) {

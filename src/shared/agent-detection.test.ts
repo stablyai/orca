@@ -5,7 +5,9 @@ import {
   extractAllOscTitles,
   extractLastOscTitle,
   getAgentLabel,
+  isCursorAgentTitle,
   MAX_OSC_TITLE_CHARS,
+  MAX_OSC_TITLES_PER_CHUNK,
   normalizeTerminalTitle
 } from './agent-detection'
 import {
@@ -14,6 +16,7 @@ import {
   normalizeCompatibleAgentTitleForOwner,
   resolveCompatibleAgentTypeForOwner
 } from './agent-title-owner'
+import { SYNTHETIC_AGENT_TITLE_PROFILES } from './synthetic-agent-title'
 
 afterEach(() => {
   vi.restoreAllMocks()
@@ -62,6 +65,19 @@ describe('OSC title extraction', () => {
     expect(extracted?.startsWith('a'.repeat(MAX_OSC_TITLE_CHARS / 2))).toBe(true)
     expect(extracted?.endsWith('b'.repeat(MAX_OSC_TITLE_CHARS / 2))).toBe(true)
     expect(extractAllOscTitles(data)).toEqual([extracted])
+  })
+
+  it('retains only the newest titles when one chunk contains limit +1', () => {
+    const data = Array.from(
+      { length: MAX_OSC_TITLES_PER_CHUNK + 1 },
+      (_, index) => `\x1b]0;title-${index}\x07`
+    ).join('')
+
+    const titles = extractAllOscTitles(data)
+
+    expect(titles).toHaveLength(MAX_OSC_TITLES_PER_CHUNK)
+    expect(titles[0]).toBe('title-1')
+    expect(titles.at(-1)).toBe(`title-${MAX_OSC_TITLES_PER_CHUNK}`)
   })
 })
 
@@ -176,4 +192,51 @@ describe('Pi-compatible title detection', () => {
       expect(detectAgentStatusFromTitle(title)).toBeNull()
     }
   )
+})
+
+describe('Cursor agent title identity', () => {
+  // Why: the accepted vocabulary is the set of labels Orca actually synthesizes for Cursor.
+  // Pin it to that profile so renaming a label there cannot silently drop @cursor to zero
+  // recipients (and desync the auto-Enter suppression that shares this predicate).
+  it('accepts every label Orca synthesizes for Cursor', () => {
+    const profile = SYNTHETIC_AGENT_TITLE_PROFILES.cursor
+
+    for (const label of [
+      profile.workingLabel,
+      `⠋ ${profile.workingLabel}`,
+      profile.idleLabel,
+      profile.permissionLabel
+    ]) {
+      expect(isCursorAgentTitle(label)).toBe(true)
+    }
+  })
+
+  it.each([
+    'Cursor Agent',
+    '  cursor agent  ',
+    '⠋ Cursor Agent',
+    '⣿ Cursor Agent',
+    'Cursor ready',
+    'Cursor - action required'
+  ])('accepts the native or Orca-synthesized Cursor title %j', (title) => {
+    expect(isCursorAgentTitle(title)).toBe(true)
+  })
+
+  // Why: "cursor" is ordinary editor vocabulary in another agent's task-summary title,
+  // so a whole-token name match is not Cursor identity.
+  it.each([
+    '⠋ fix the text cursor blink',
+    '✳ Fix the text cursor blink',
+    '. fix cursor position',
+    '* cursor rendering done',
+    'Terminal Cursor and Orca slows down',
+    'cursor-agent',
+    'cursor.exe',
+    '~/cursor-rules',
+    '',
+    null,
+    undefined
+  ])('rejects the non-Cursor title %j', (title) => {
+    expect(isCursorAgentTitle(title)).toBe(false)
+  })
 })

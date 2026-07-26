@@ -1,5 +1,5 @@
 import type React from 'react'
-import { useState } from 'react'
+import { useLayoutEffect, useState } from 'react'
 import { AppWindow, PanelLeft, TerminalSquare } from 'lucide-react'
 
 import type { GlobalSettings } from '../../../../shared/types'
@@ -10,11 +10,13 @@ import { AppearanceWindowSidebarSection } from './AppearanceWindowSidebarSection
 import { SearchableSetting } from './SearchableSetting'
 import { matchesSettingsSearch, normalizeSettingsSearchQuery } from './settings-search'
 import { useAppStore } from '../../store'
+import { USAGE_PERCENTAGE_DISPLAY_SETTING_ID } from './appearance-usage-percentage-search'
 import {
   getAppIconEntries,
   getAppearancePaneSearchEntries,
   getLanguageEntries,
   getLayoutEntries,
+  getMenuBarIconEntries,
   getSidebarEntries,
   getStatusBarEntries,
   getSystemTrayEntries,
@@ -37,6 +39,7 @@ import {
   getLeftSidebarAppearanceEntry,
   getWorkspaceCardLayoutEntry
 } from './appearance-sidebar-search'
+import { resolveInterfaceSectionSummary } from './appearance-interface-summary'
 export { getAppearancePaneSearchEntries }
 
 type AppearancePaneProps = {
@@ -53,15 +56,11 @@ type AppearancePaneProps = {
 
 type AppearanceSectionKey = 'interface' | 'terminal' | 'window'
 
-function resolveThemeSummary(theme: GlobalSettings['theme']): string {
-  if (theme === 'system') {
-    return translate('auto.components.settings.AppearancePane.fb0e0b4453', 'System')
-  }
-  if (theme === 'light') {
-    return translate('auto.components.settings.AppearancePane.fd89b5487c', 'Light')
-  }
-  return translate('auto.components.settings.AppearancePane.7d26ccabe8', 'Dark')
-}
+const ALL_APPEARANCE_SECTIONS = [
+  'interface',
+  'terminal',
+  'window'
+] as const satisfies readonly AppearanceSectionKey[]
 
 export function AppearancePane({
   settings,
@@ -75,15 +74,49 @@ export function AppearancePane({
   warpThemes
 }: AppearancePaneProps): React.JSX.Element {
   const searchQuery = useAppStore((state) => state.settingsSearchQuery)
+  const appearanceAccordionDeepLink = useAppStore((state) => state.appearanceAccordionDeepLink)
+  const clearAppearanceAccordionDeepLink = useAppStore(
+    (state) => state.clearAppearanceAccordionDeepLink
+  )
   const isSearching = normalizeSettingsSearchQuery(searchQuery).length > 0
   const isWebClient = isWebClientLocation()
   // Why: the system tray behavior is desktop-Electron Windows-only; a Windows
   // browser web client has no local tray to control.
   const isDesktopWindows = getRendererAppPlatform() === 'win32' && !isWebClient
+  const isDesktopMac = getRendererAppPlatform() === 'darwin' && !isWebClient
 
-  const [manuallyOpenSection, setManuallyOpenSection] = useState<AppearanceSectionKey | null>(
-    'interface'
+  // Why: Terminal / Window settings were too easy to miss when only Interface
+  // started open; keep sections independently collapsible but expanded by default.
+  const [openSections, setOpenSections] = useState<ReadonlySet<AppearanceSectionKey>>(
+    () => new Set(ALL_APPEARANCE_SECTIONS)
   )
+
+  // Why: nested deep links (e.g. Usage percentages) land under Window & Sidebar;
+  // expand that section before Settings scrolls so the row is actually visible.
+  useLayoutEffect(() => {
+    if (!appearanceAccordionDeepLink) {
+      return
+    }
+    setOpenSections((current) => {
+      if (current.has(appearanceAccordionDeepLink)) {
+        return current
+      }
+      const next = new Set(current)
+      next.add(appearanceAccordionDeepLink)
+      return next
+    })
+    clearAppearanceAccordionDeepLink()
+    // Why: expand is layout-synchronous; scroll on the next frame so the target
+    // has non-zero height when Settings (or this fallback) scrolls.
+    const frameId = requestAnimationFrame(() => {
+      document
+        .getElementById(USAGE_PERCENTAGE_DISPLAY_SETTING_ID)
+        ?.scrollIntoView({ block: 'nearest' })
+    })
+    return () => {
+      cancelAnimationFrame(frameId)
+    }
+  }, [appearanceAccordionDeepLink, clearAppearanceAccordionDeepLink])
   const interfaceTitle = translate(
     'auto.components.settings.AppearancePane.interfaceTitle',
     'Interface'
@@ -109,7 +142,8 @@ export function AppearancePane({
     ...getTypographyEntries(),
     ...(SHOW_UI_LANGUAGE_SETTING ? getLanguageEntries() : []),
     ...getTitlebarEntries(),
-    ...getSystemTrayEntries({ showSystemTray: isDesktopWindows })
+    ...getSystemTrayEntries({ showSystemTray: isDesktopWindows }),
+    ...getMenuBarIconEntries({ showMenuBarIcon: isDesktopMac })
   ]
   const terminalSearchEntries = [
     { title: terminalTitle },
@@ -139,8 +173,8 @@ export function AppearancePane({
   const appIconMatches = matchesSettingsSearch(searchQuery, getAppIconEntries())
 
   // While searching, force-open every section that contains a match so its
-  // controls (including advanced ones) are revealed; otherwise the accordion
-  // shows exactly one manually-chosen section.
+  // controls (including advanced ones) are revealed; otherwise use the user's
+  // independent open/closed state (all expanded by default).
   function isSectionOpen(key: AppearanceSectionKey): boolean {
     if (isSearching) {
       return key === 'interface'
@@ -149,17 +183,22 @@ export function AppearancePane({
           ? terminalMatches
           : windowMatches
     }
-    return manuallyOpenSection === key
+    return openSections.has(key)
   }
 
   function toggleSection(key: AppearanceSectionKey): void {
-    setManuallyOpenSection((current) => (current === key ? null : key))
+    setOpenSections((current) => {
+      const next = new Set(current)
+      if (next.has(key)) {
+        next.delete(key)
+      } else {
+        next.add(key)
+      }
+      return next
+    })
   }
 
-  const interfaceSummary = `${resolveThemeSummary(settings.theme)} · ${
-    settings.appFontFamily ||
-    translate('auto.components.settings.AppearancePane.interfaceDefaultFont', 'Default font')
-  }`
+  const interfaceSummary = resolveInterfaceSectionSummary(settings)
   const terminalSummary = `${
     settings.terminalFontFamily ||
     translate('auto.components.settings.AppearancePane.terminalDefaultFont', 'Default font')
@@ -175,6 +214,7 @@ export function AppearancePane({
           summary={interfaceSummary}
           open={isSectionOpen('interface')}
           onToggle={() => toggleSection('interface')}
+          toggleDisabled={isSearching}
         >
           <AppearanceInterfaceSection
             settings={settings}
@@ -182,6 +222,7 @@ export function AppearancePane({
             applyTheme={applyTheme}
             fontSuggestions={fontSuggestions}
             onRequestFontSuggestions={onRequestFontSuggestions}
+            isDesktopMac={isDesktopMac}
             isDesktopWindows={isDesktopWindows}
             forceVisiblePrimary={interfaceLabelMatches}
           />
@@ -202,6 +243,7 @@ export function AppearancePane({
           summary={terminalSummary}
           open={isSectionOpen('terminal')}
           onToggle={() => toggleSection('terminal')}
+          toggleDisabled={isSearching}
         >
           <TerminalAppearanceSection
             settings={settings}
@@ -224,6 +266,7 @@ export function AppearancePane({
           summary={windowSidebarSummary}
           open={isSectionOpen('window')}
           onToggle={() => toggleSection('window')}
+          toggleDisabled={isSearching}
         >
           <AppearanceWindowSidebarSection
             settings={settings}

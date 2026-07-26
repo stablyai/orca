@@ -15,6 +15,9 @@ import {
   type LinkBubbleState
 } from '@/components/editor/RichMarkdownLinkBubble'
 import { encodeRawMarkdownHtmlForRichEditor } from '@/components/editor/raw-markdown-html'
+import { createRichMarkdownEditorCodec } from '@/components/editor/rich-markdown-source-transport'
+import { createEditableMarkdownLinkBubble } from '@/components/editor/rich-markdown-selected-link-actions'
+import { copyRichMarkdownLink } from '@/components/editor/rich-markdown-link-clipboard'
 import { normalizeSoftBreaks } from '@/components/editor/rich-markdown-normalize'
 import { GitHubMarkdownComposerPreviewPane } from '@/components/github/github-markdown-composer-preview-pane'
 import {
@@ -71,6 +74,7 @@ export function GitHubMarkdownComposer({
   const [linkBubble, setLinkBubble] = useState<LinkBubbleState | null>(null)
   const [isEditingLink, setIsEditingLink] = useState(false)
   const isTabbed = layout === 'tabbed'
+  const codec = useMemo(() => createRichMarkdownEditorCodec(), [])
 
   const {
     imageUrl,
@@ -89,13 +93,13 @@ export function GitHubMarkdownComposer({
 
   const extensions = useMemo(
     () => [
-      ...createRichMarkdownExtensions(),
+      ...createRichMarkdownExtensions({ codec }),
       Placeholder.configure({
         includeChildren: true,
         placeholder
       })
     ],
-    [placeholder]
+    [codec, placeholder]
   )
 
   const openLinkEditor = useCallback(() => {
@@ -109,7 +113,7 @@ export function GitHubMarkdownComposer({
       return
     }
     const href = editor.isActive('link') ? String(editor.getAttributes('link').href ?? '') : ''
-    setLinkBubble({ href, ...position })
+    setLinkBubble(createEditableMarkdownLinkBubble(href, position))
     setIsEditingLink(true)
   }, [])
 
@@ -117,7 +121,7 @@ export function GitHubMarkdownComposer({
     immediatelyRender: false,
     extensions,
     editable: !disabled,
-    content: encodeRawMarkdownHtmlForRichEditor(value),
+    content: encodeRawMarkdownHtmlForRichEditor(value, codec),
     contentType: 'markdown',
     editorProps: {
       attributes: {
@@ -177,10 +181,12 @@ export function GitHubMarkdownComposer({
       if (nextEditor.isActive('link')) {
         const position = getLinkBubblePosition(nextEditor, rootRef.current)
         if (position) {
-          setLinkBubble({
-            href: String(nextEditor.getAttributes('link').href ?? ''),
-            ...position
-          })
+          setLinkBubble(
+            createEditableMarkdownLinkBubble(
+              String(nextEditor.getAttributes('link').href ?? ''),
+              position
+            )
+          )
           return
         }
       }
@@ -224,7 +230,7 @@ export function GitHubMarkdownComposer({
     }
     applyingExternalValueRef.current = true
     try {
-      editor.commands.setContent(encodeRawMarkdownHtmlForRichEditor(value), {
+      editor.commands.setContent(encodeRawMarkdownHtmlForRichEditor(value, codec), {
         contentType: 'markdown',
         emitUpdate: false
       })
@@ -233,7 +239,7 @@ export function GitHubMarkdownComposer({
     } finally {
       applyingExternalValueRef.current = false
     }
-  }, [editor, value])
+  }, [codec, editor, value])
 
   const handleLinkSave = useCallback((href: string) => {
     const editor = editorRef.current
@@ -403,6 +409,7 @@ export function GitHubMarkdownComposer({
             editorRef.current?.commands.focus()
           }}
           onOpen={handleLinkOpen}
+          onCopy={() => void copyRichMarkdownLink(linkBubble.href)}
         />
       ) : null}
     </div>

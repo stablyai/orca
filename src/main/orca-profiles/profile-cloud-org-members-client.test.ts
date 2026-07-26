@@ -21,6 +21,8 @@ const config: OrcaCloudAuthConfig = {
   profileEndpoint: 'https://orca-cloud.example/v1/desktop/auth/profile',
   orgEndpoint: 'https://orca-cloud.example/v1/desktop/auth/org',
   logoutEndpoint: 'https://orca-cloud.example/v1/desktop/auth/logout',
+  relayTokenEndpoint: 'https://orca-cloud.example/v1/desktop/auth/relay-token',
+  relayDirectorUrl: 'https://relay.example',
   clientId: 'desktop-client',
   scope: 'openid profile email offline_access'
 }

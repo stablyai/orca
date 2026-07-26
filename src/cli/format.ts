@@ -168,6 +168,7 @@ export function formatCliStatus(status: CliStatusResult): string {
   return [
     `appRunning: ${status.app.running}`,
     `pid: ${status.app.pid ?? 'none'}`,
+    `desktopWindowStatus: ${status.app.desktopWindowStatus ?? 'unknown'}`,
     `runtimeState: ${status.runtime.state}`,
     `runtimeReachable: ${status.runtime.reachable}`,
     `runtimeId: ${status.runtime.runtimeId ?? 'none'}`,

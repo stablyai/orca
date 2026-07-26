@@ -1,6 +1,8 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { createTerminalGitHubPRLinkDetector } from './terminal-github-pr-link-detector'
 
+const issue8126Url = 'https://github.com/owner/repo/pull/10'
+
 afterEach(() => {
   vi.restoreAllMocks()
 })
@@ -12,8 +14,67 @@ describe('createTerminalGitHubPRLinkDetector', () => {
     expect(observe('Created https://github.com/acme/orca/pull/42\r\n')).toEqual([
       {
         url: 'https://github.com/acme/orca/pull/42',
-        slug: { owner: 'acme', repo: 'orca' },
+        slug: { owner: 'acme', repo: 'orca', host: 'github.com' },
         number: 42
+      }
+    ])
+  })
+
+  it('detects issue 8126 Claude Code PR links with attached ANSI reset', () => {
+    const observe = createTerminalGitHubPRLinkDetector()
+
+    expect(observe(`${issue8126Url}\x1b[22m\n`)).toEqual([
+      {
+        url: issue8126Url,
+        slug: { owner: 'owner', repo: 'repo', host: 'github.com' },
+        number: 10
+      }
+    ])
+  })
+
+  it('strips an ANSI reset split across PTY chunks', () => {
+    const observe = createTerminalGitHubPRLinkDetector()
+
+    expect(observe(`${issue8126Url}\x1b`)).toEqual([])
+    expect(observe('[22m\n')).toEqual([
+      {
+        url: issue8126Url,
+        slug: { owner: 'owner', repo: 'repo', host: 'github.com' },
+        number: 10
+      }
+    ])
+  })
+
+  it('rejects PR URLs corrupted by cursor movement', () => {
+    const observe = createTerminalGitHubPRLinkDetector()
+
+    expect(observe('https://github.com/owne\x1b[1Cr/repo/pull/10\n')).toEqual([])
+  })
+
+  it('rejects PR URLs fused across terminal rows', () => {
+    for (const cursorMove of ['\x1b[1A', '\x1b[1B']) {
+      const observe = createTerminalGitHubPRLinkDetector()
+
+      expect(observe(`https://github.com/owner/repo/pull/${cursorMove}10\n`)).toEqual([])
+    }
+  })
+
+  it('does not fuse screen-editing controls into PR URLs', () => {
+    for (const screenEdit of ['\x08', '\x0b', '\x0c', '\x1bD', '\x1b[2J', '\x1b[2K', '\x1b[1S']) {
+      const observe = createTerminalGitHubPRLinkDetector()
+
+      expect(observe(`https://github.com/owner/repo/pull/1${screenEdit}0\n`)).toEqual([])
+    }
+  })
+
+  it('deduplicates styled and plain instances', () => {
+    const observe = createTerminalGitHubPRLinkDetector()
+
+    expect(observe(`${issue8126Url}\x1b[22m\n${issue8126Url}\n`)).toEqual([
+      {
+        url: issue8126Url,
+        slug: { owner: 'owner', repo: 'repo', host: 'github.com' },
+        number: 10
       }
     ])
   })
@@ -25,7 +86,7 @@ describe('createTerminalGitHubPRLinkDetector', () => {
     expect(observe('2\r\n')).toEqual([
       {
         url: 'https://github.com/acme/orca/pull/42',
-        slug: { owner: 'acme', repo: 'orca' },
+        slug: { owner: 'acme', repo: 'orca', host: 'github.com' },
         number: 42
       }
     ])
@@ -38,7 +99,7 @@ describe('createTerminalGitHubPRLinkDetector', () => {
     expect(observe('ub.com/acme/orca/pull/42\n')).toEqual([
       {
         url: 'https://github.com/acme/orca/pull/42',
-        slug: { owner: 'acme', repo: 'orca' },
+        slug: { owner: 'acme', repo: 'orca', host: 'github.com' },
         number: 42
       }
     ])
@@ -71,7 +132,7 @@ describe('createTerminalGitHubPRLinkDetector', () => {
     expect(observe('Created https://github.my-company.net/MyOrg/my_repo/pull/395\r\n')).toEqual([
       {
         url: 'https://github.my-company.net/MyOrg/my_repo/pull/395',
-        slug: { owner: 'MyOrg', repo: 'my_repo' },
+        slug: { owner: 'MyOrg', repo: 'my_repo', host: 'github.my-company.net' },
         number: 395
       }
     ])
@@ -83,7 +144,7 @@ describe('createTerminalGitHubPRLinkDetector', () => {
     expect(observe('Created http://github.internal/MyOrg/my_repo/pull/395\r\n')).toEqual([
       {
         url: 'http://github.internal/MyOrg/my_repo/pull/395',
-        slug: { owner: 'MyOrg', repo: 'my_repo' },
+        slug: { owner: 'MyOrg', repo: 'my_repo', host: 'github.internal' },
         number: 395
       }
     ])
@@ -95,7 +156,8 @@ describe('createTerminalGitHubPRLinkDetector', () => {
     expect(observe('Created https://github.internal:8443/MyOrg/my_repo/pull/397\r\n')).toEqual([
       {
         url: 'https://github.internal:8443/MyOrg/my_repo/pull/397',
-        slug: { owner: 'MyOrg', repo: 'my_repo' },
+        // Why: GHES on a non-default port needs the port in its host identity.
+        slug: { owner: 'MyOrg', repo: 'my_repo', host: 'github.internal:8443' },
         number: 397
       }
     ])
@@ -109,7 +171,7 @@ describe('createTerminalGitHubPRLinkDetector', () => {
     expect(observe(`${noise}Created https://github.com/acme/orca/pull/42\r\n`)).toEqual([
       {
         url: 'https://github.com/acme/orca/pull/42',
-        slug: { owner: 'acme', repo: 'orca' },
+        slug: { owner: 'acme', repo: 'orca', host: 'github.com' },
         number: 42
       }
     ])

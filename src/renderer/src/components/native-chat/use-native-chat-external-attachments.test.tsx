@@ -104,7 +104,10 @@ describe('useNativeChatExternalAttachments', () => {
     mocks.resolveNativeChatAttachmentOwner.mockReturnValue({
       kind: 'ssh',
       connectionId: 'conn-1',
-      worktreePath: '/remote/wt'
+      worktreePath: '/remote/wt',
+      expectedExecutionHostId: 'ssh:conn-1',
+      expectedSshTargetId: 'conn-1',
+      expectedSshConnectionGeneration: 4
     })
     mocks.uploadNativeChatAttachmentPaths.mockResolvedValue(['/remote/wt/.orca/drops/a.txt'])
     const attachResolvedPaths = vi.fn()
@@ -115,7 +118,10 @@ describe('useNativeChatExternalAttachments', () => {
     expect(mocks.uploadNativeChatAttachmentPaths).toHaveBeenCalledWith(['/local/a.txt'], {
       kind: 'ssh',
       connectionId: 'conn-1',
-      worktreePath: '/remote/wt'
+      worktreePath: '/remote/wt',
+      expectedExecutionHostId: 'ssh:conn-1',
+      expectedSshTargetId: 'conn-1',
+      expectedSshConnectionGeneration: 4
     })
     expect(attachResolvedPaths).toHaveBeenCalledWith(['/remote/wt/.orca/drops/a.txt'])
   })
@@ -136,7 +142,10 @@ describe('useNativeChatExternalAttachments', () => {
     mocks.resolveNativeChatAttachmentOwner.mockReturnValue({
       kind: 'ssh',
       connectionId: 'conn-1',
-      worktreePath: '/remote/wt'
+      worktreePath: '/remote/wt',
+      expectedExecutionHostId: 'ssh:conn-1',
+      expectedSshTargetId: 'conn-1',
+      expectedSshConnectionGeneration: 4
     })
     let resolveUpload: (paths: string[]) => void = () => {}
     mocks.uploadNativeChatAttachmentPaths.mockReturnValue(

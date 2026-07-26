@@ -10,6 +10,10 @@ import { dispatchTerminalNotification } from '@/components/terminal-pane/use-not
 import { collectLeafIdsInOrder } from '@/components/terminal-pane/layout-serialization'
 import { createCodexAutoApprovalHookCompletionSuppressor } from '@/components/terminal-pane/codex-auto-approval-notification-suppression'
 import { dispatchAgentHookTerminalLifecycle } from '@/components/terminal-pane/agent-hook-terminal-lifecycle'
+import {
+  shouldSyncAgentHookCompletionForStoreUpdate,
+  type AgentHookCompletionStoreSnapshot
+} from './agent-hook-completion-store-sync'
 
 type CoordinatorEntry = {
   worktreeId: string
@@ -19,7 +23,8 @@ type CoordinatorEntry = {
 type StoreSnapshot = ReturnType<typeof useAppStore.getState>
 type WorktreeTab = NonNullable<StoreSnapshot['tabsByWorktree']>[string][number]
 // Why: a paneKey resolves to a tab by id. Prebuilding this index once per prune
-// pass avoids re-flattening tabsByWorktree per coordinator (O(coordinators x tabs)).
+// pass avoids re-flattening tabsByWorktree per coordinator (O(coordinators x
+// tabs)) when a liveness or notification-setting update requires a prune.
 type TabIndex = ReadonlyMap<string, WorktreeTab>
 type PaneCoordinatorLivenessSnapshot = Pick<
   StoreSnapshot,
@@ -117,6 +122,19 @@ export function syncAgentHookCompletionNotificationSettings(): boolean {
   }
   wasAgentTaskCompleteTrackingEnabled = enabled
   return enabled
+}
+
+export function syncAgentHookCompletionNotificationsForStoreUpdate(
+  current: AgentHookCompletionStoreSnapshot,
+  previous: AgentHookCompletionStoreSnapshot
+): boolean {
+  // Why: Zustand also publishes high-rate title/status writes that cannot make
+  // module-scoped completion coordinators stale.
+  if (!shouldSyncAgentHookCompletionForStoreUpdate(current, previous)) {
+    return false
+  }
+  syncAgentHookCompletionNotificationSettings()
+  return true
 }
 
 function getPtyIdForPaneKey(paneKey: string): string | null {

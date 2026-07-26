@@ -14,6 +14,14 @@ export type RuntimeClientEvent =
   // overlays never learn the host connected (STA-1468).
   | { type: 'sshStateChanged'; targetId: string; state: SshConnectionState }
   | {
+      type: 'worktreeTerminalSleepState'
+      worktreeId: string
+      generation: number
+      phase: 'started' | 'committed' | 'cancelled' | 'woken'
+      ptyIds: string[]
+      terminalHandles: string[]
+    }
+  | {
       type: 'linearLinkedIssueUpdated'
       worktreeId: string
       identifier: string
@@ -31,9 +39,8 @@ export type RuntimeClientEvent =
 export type RuntimeClientEventStreamMessage =
   | ({ type: 'ready'; subscriptionId: string } & {
       snapshot?: {
-        // Reserved for future hydration. Current clients refresh through the
-        // existing repo/worktree RPCs after receiving server events.
         repos?: unknown[]
+        sshStates?: { targetId: string; state: SshConnectionState }[]
       }
     })
   | RuntimeClientEvent

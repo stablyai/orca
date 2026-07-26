@@ -4,8 +4,17 @@ import {
   isPaneReplaying,
   replayIntoTerminal,
   replayIntoTerminalAsync,
+  waitForTerminalReplayWritesParsed,
   type ReplayingPanesRef
 } from './replay-guard'
+import { configureLazyArabicShapingJoiner } from '@/lib/pane-manager/terminal-arabic-shaping-joiner'
+import {
+  _resetWritePipelineHealthForTests,
+  captureTerminalParseProgressGeneration,
+  hasTerminalParseProgressSince,
+  notifyUndeliverableWrite,
+  registerUndeliverableWriteHandler
+} from '@/lib/pane-manager/terminal-write-pipeline-health'
 
 const mocks = vi.hoisted(() => ({
   recordRendererCrashBreadcrumb: vi.fn()
@@ -41,6 +50,7 @@ type FakeTerminal = {
   _core: {
     refresh: (start: number, end: number, sync?: boolean) => void
   }
+  refresh: (start: number, end: number) => void
   /** Flush all pending xterm write callbacks, simulating parse completion. */
   flush: () => void
 }
@@ -60,6 +70,7 @@ function makeFakePane(paneId: number): { pane: ManagedPane; terminal: FakeTermin
     _core: {
       refresh() {}
     },
+    refresh() {},
     write(data: string, cb?: () => void) {
       terminal.lastData.push(data)
       if (cb) {
@@ -81,6 +92,53 @@ describe('replay-guard', () => {
   it('reports no replay for untouched pane', () => {
     const ref = makeRef()
     expect(isPaneReplaying(ref, 1)).toBe(false)
+  })
+
+  it('registers Arabic shaping before replay bytes are written', () => {
+    const ref = makeRef()
+    const { pane, terminal } = makeFakePane(1)
+    const events: string[] = []
+    const joinerTerminal = terminal as FakeTerminal & {
+      registerCharacterJoiner: (handler: (text: string) => [number, number][]) => number
+      deregisterCharacterJoiner: (joinerId: number) => void
+    }
+    joinerTerminal.registerCharacterJoiner = () => {
+      events.push('register')
+      return 5
+    }
+    joinerTerminal.deregisterCharacterJoiner = () => undefined
+    terminal.write = (data: string, callback?: () => void) => {
+      events.push(`write:${data}`)
+      if (callback) {
+        terminal.pendingCallbacks.push(callback)
+      }
+    }
+    const cleanup = configureLazyArabicShapingJoiner(joinerTerminal as never, () => true)
+
+    replayIntoTerminal(pane, ref, 'مرحبا')
+
+    expect(events).toEqual(['register', 'write:مرحبا'])
+    cleanup()
+  })
+
+  it('still replays RTL bytes when joiner registration fails', () => {
+    const ref = makeRef()
+    const { pane, terminal } = makeFakePane(1)
+    const joinerTerminal = terminal as FakeTerminal & {
+      registerCharacterJoiner: () => number
+      deregisterCharacterJoiner: () => void
+    }
+    joinerTerminal.registerCharacterJoiner = () => {
+      throw new Error('terminal disposed')
+    }
+    joinerTerminal.deregisterCharacterJoiner = () => undefined
+    configureLazyArabicShapingJoiner(joinerTerminal as never, () => true)
+
+    replayIntoTerminal(pane, ref, 'مرحبا')
+
+    expect(terminal.lastData).toEqual(['مرحبا'])
+    terminal.flush()
+    expect(isPaneReplaying(ref, pane.id)).toBe(false)
   })
 
   it('is replaying between write dispatch and xterm parse completion', () => {
@@ -168,9 +226,9 @@ describe('replay-guard', () => {
     try {
       const ref = makeRef()
       const { pane } = makeFakePane(1)
-      replayIntoTerminal(pane, ref, '\x1b[2J\x1b[3J\x1b[H', 400)
-      replayIntoTerminal(pane, ref, 'scrollback bytes', 400)
-      replayIntoTerminal(pane, ref, '--- session restored ---', 400)
+      replayIntoTerminal(pane, ref, '\x1b[2J\x1b[3J\x1b[H', { stallCheckMs: 400 })
+      replayIntoTerminal(pane, ref, 'scrollback bytes', { stallCheckMs: 400 })
+      replayIntoTerminal(pane, ref, '--- session restored ---', { stallCheckMs: 400 })
       expect(isPaneReplaying(ref, 1)).toBe(true)
 
       // Never flush — the probe write never parses; the wedged release fires
@@ -184,13 +242,78 @@ describe('replay-guard', () => {
     }
   })
 
+  it('a wedged release hands the terminal to pane recovery', () => {
+    vi.useFakeTimers()
+    try {
+      const ref = makeRef()
+      const { pane } = makeFakePane(1)
+      const onUndeliverable = vi.fn()
+      registerUndeliverableWriteHandler(pane.terminal, onUndeliverable)
+
+      replayIntoTerminal(pane, ref, 'fossil frame bytes', { stallCheckMs: 400 })
+      // Never flush: probe never parses → wedged release.
+      vi.advanceTimersByTime(1000)
+
+      expect(onUndeliverable).toHaveBeenCalledTimes(1)
+      expect(onUndeliverable).toHaveBeenCalledWith('replay-wedged')
+      _resetWritePipelineHealthForTests(pane.terminal)
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('short-circuits replays into a certified-dead terminal', () => {
+    const ref = makeRef()
+    const { pane, terminal } = makeFakePane(1)
+    notifyUndeliverableWrite(pane.terminal, 'write-stalled')
+
+    replayIntoTerminal(pane, ref, 'zombie restore bytes')
+
+    // No write reaches the dead pipeline and no guard is engaged — the
+    // watchdog-driven restore loop can no longer produce the wedged drip.
+    expect(terminal.lastData).toHaveLength(0)
+    expect(isPaneReplaying(ref, 1)).toBe(false)
+    _resetWritePipelineHealthForTests(pane.terminal)
+  })
+
+  it('resolves async replays into a certified-dead terminal without writing', async () => {
+    const ref = makeRef()
+    const { pane, terminal } = makeFakePane(1)
+    notifyUndeliverableWrite(pane.terminal, 'replay-wedged')
+
+    await replayIntoTerminalAsync(pane, ref, 'zombie restore bytes')
+
+    expect(terminal.lastData).toHaveLength(0)
+    expect(isPaneReplaying(ref, 1)).toBe(false)
+    _resetWritePipelineHealthForTests(pane.terminal)
+  })
+
+  it('a healthy parse completion never notifies pane recovery', () => {
+    vi.useFakeTimers()
+    try {
+      const ref = makeRef()
+      const { pane, terminal } = makeFakePane(1)
+      const onUndeliverable = vi.fn()
+      registerUndeliverableWriteHandler(pane.terminal, onUndeliverable)
+
+      replayIntoTerminal(pane, ref, 'healthy bytes', { stallCheckMs: 400 })
+      terminal.flush()
+      vi.advanceTimersByTime(1000)
+
+      expect(onUndeliverable).not.toHaveBeenCalled()
+      _resetWritePipelineHealthForTests(pane.terminal)
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
   it('parse completion cancels the stall probe without over-releasing', () => {
     vi.useFakeTimers()
     try {
       const ref = makeRef()
       const { pane, terminal } = makeFakePane(1)
-      replayIntoTerminal(pane, ref, 'a', 400)
-      replayIntoTerminal(pane, ref, 'b', 400)
+      replayIntoTerminal(pane, ref, 'a', { stallCheckMs: 400 })
+      replayIntoTerminal(pane, ref, 'b', { stallCheckMs: 400 })
 
       terminal.flush()
       expect(isPaneReplaying(ref, 1)).toBe(false)
@@ -210,7 +333,7 @@ describe('replay-guard', () => {
       const ref = makeRef()
       const { pane } = makeFakePane(1)
       let resolved = false
-      const promise = replayIntoTerminalAsync(pane, ref, 'x', 400).then(() => {
+      const promise = replayIntoTerminalAsync(pane, ref, 'x', { stallCheckMs: 400 }).then(() => {
         resolved = true
       })
       expect(isPaneReplaying(ref, 1)).toBe(true)
@@ -257,9 +380,66 @@ describe('replay-guard', () => {
       globalThis.cancelAnimationFrame = originalCancelAnimationFrame
     }
   })
+
+  it('coalesces WebGL replay refreshes and rechecks before the follow-up', () => {
+    const scheduledFrames: FrameRequestCallback[] = []
+    const originalRequestAnimationFrame = globalThis.requestAnimationFrame
+    const originalCancelAnimationFrame = globalThis.cancelAnimationFrame
+    globalThis.requestAnimationFrame = ((callback: FrameRequestCallback) => {
+      scheduledFrames.push(callback)
+      return scheduledFrames.length
+    }) as typeof requestAnimationFrame
+    globalThis.cancelAnimationFrame = (() => {}) as typeof cancelAnimationFrame
+
+    try {
+      const ref = makeRef()
+      const { pane, terminal } = makeFakePane(1)
+      const synchronousRefresh = vi.fn()
+      const debouncedRefresh = vi.fn()
+      terminal._core.refresh = synchronousRefresh
+      terminal.refresh = debouncedRefresh
+      let webglLive = true
+
+      replayIntoTerminal(pane, ref, 'snapshot bytes', {
+        shouldRefreshViewportSynchronously: () => !webglLive
+      })
+      terminal.flush()
+
+      expect(debouncedRefresh).toHaveBeenCalledWith(0, 23)
+      expect(synchronousRefresh).not.toHaveBeenCalled()
+      webglLive = false
+      scheduledFrames[0]?.(16)
+
+      expect(synchronousRefresh).toHaveBeenCalledWith(0, 23, true)
+    } finally {
+      globalThis.requestAnimationFrame = originalRequestAnimationFrame
+      globalThis.cancelAnimationFrame = originalCancelAnimationFrame
+    }
+  })
 })
 
 describe('replay-guard stall handling (probe-certified release)', () => {
+  it('waits for the FIFO replay sentinel without releasing on elapsed time', async () => {
+    vi.useFakeTimers()
+    const { terminal } = makeFakePane(1)
+    let resolved = false
+
+    void waitForTerminalReplayWritesParsed(terminal, { stallCheckMs: 1_000 }).then(() => {
+      resolved = true
+    })
+    expect(terminal.lastData).toEqual([''])
+
+    vi.advanceTimersByTime(1_000)
+    expect(terminal.lastData).toEqual(['', ''])
+    expect(resolved).toBe(false)
+    vi.advanceTimersByTime(60_000)
+    expect(resolved).toBe(false)
+
+    terminal.flush()
+    await Promise.resolve()
+    expect(resolved).toBe(true)
+  })
+
   it('HOLDS the guard while a slow replay is still parsing — a probe is queued, never a blind release', () => {
     // Why this is the load-bearing safety test: a time-based release here
     // would leak xterm auto-replies into the shell (and a leaked ESC into an
@@ -269,7 +449,7 @@ describe('replay-guard stall handling (probe-certified release)', () => {
     const ref = makeRef()
     const { pane, terminal } = makeFakePane(1)
 
-    replayIntoTerminal(pane, ref, 'slow but alive', 1_000)
+    replayIntoTerminal(pane, ref, 'slow but alive', { stallCheckMs: 1_000 })
     expect(isPaneReplaying(ref, 1)).toBe(true)
 
     // Stall check fires: an empty probe write is enqueued behind the replay.
@@ -298,7 +478,7 @@ describe('replay-guard stall handling (probe-certified release)', () => {
       const ref = makeRef()
       const { pane, terminal } = makeFakePane(1)
 
-      replayIntoTerminal(pane, ref, 'restored bytes', 1_000)
+      replayIntoTerminal(pane, ref, 'restored bytes', { stallCheckMs: 1_000 })
       terminal.pendingCallbacks.shift() // xterm lost the replay's completion
       vi.advanceTimersByTime(1_000) // stall check → probe enqueued
 
@@ -322,7 +502,7 @@ describe('replay-guard stall handling (probe-certified release)', () => {
       const ref = makeRef()
       const { pane } = makeFakePane(1)
 
-      replayIntoTerminal(pane, ref, 'restored bytes', 1_000)
+      replayIntoTerminal(pane, ref, 'restored bytes', { stallCheckMs: 1_000 })
       vi.advanceTimersByTime(1_000) // stall check → probe enqueued
       expect(isPaneReplaying(ref, 1)).toBe(true)
 
@@ -339,6 +519,115 @@ describe('replay-guard stall handling (probe-certified release)', () => {
     }
   })
 
+  it('holds past the probe deadline while sibling completions prove the parser alive', () => {
+    // Production shape (wedge-release breadcrumbs in bursts of ~a dozen on a
+    // pane that later parses fine): a hidden-restore loop queues several
+    // replay writes and xterm's FIFO parse falls behind by more than two
+    // probe windows while still completing writes. Certifying that as wedged
+    // opens the guard mid-parse (auto-reply leak) and remounts a live pane.
+    vi.useFakeTimers()
+    const ref = makeRef()
+    const { pane, terminal } = makeFakePane(1)
+    const recoveryReasons: string[] = []
+    const unregister = registerUndeliverableWriteHandler(terminal, (reason) => {
+      recoveryReasons.push(reason)
+    })
+    try {
+      replayIntoTerminal(pane, ref, 'chunk-A', { stallCheckMs: 1_000 })
+      vi.advanceTimersByTime(500)
+      replayIntoTerminal(pane, ref, 'chunk-B', { stallCheckMs: 1_000 })
+
+      // t=1000: A's probe queued. t=1500: B's probe queued.
+      vi.advanceTimersByTime(1_100)
+      // t=1600: A's completion parses — the pipeline is alive, just behind.
+      terminal.pendingCallbacks.shift()!()
+      expect(isPaneReplaying(ref, 1)).toBe(true)
+
+      // t=2500: B's probe deadline fires with A's completion inside the
+      // window. Progress means "behind", not "wedged" — the guard HOLDS.
+      vi.advanceTimersByTime(900)
+      expect(isPaneReplaying(ref, 1)).toBe(true)
+      expect(recoveryReasons).toEqual([])
+      expect(mocks.recordRendererCrashBreadcrumb).not.toHaveBeenCalled()
+
+      // Parse catches up: FIFO releases B as parsed, probes are no-ops.
+      terminal.flush()
+      expect(isPaneReplaying(ref, 1)).toBe(false)
+      expect(ref.current.has(1)).toBe(false)
+      expect(recoveryReasons).toEqual([])
+      expect(mocks.recordRendererCrashBreadcrumb).not.toHaveBeenCalled()
+    } finally {
+      unregister()
+      _resetWritePipelineHealthForTests(terminal)
+    }
+  })
+
+  it('still certifies a wedge after progress stops for a full probe window', () => {
+    vi.useFakeTimers()
+    const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
+    const ref = makeRef()
+    const { pane, terminal } = makeFakePane(1)
+    const recoveryReasons: string[] = []
+    const unregister = registerUndeliverableWriteHandler(terminal, (reason) => {
+      recoveryReasons.push(reason)
+    })
+    try {
+      replayIntoTerminal(pane, ref, 'chunk-A', { stallCheckMs: 1_000 })
+      replayIntoTerminal(pane, ref, 'chunk-B', { stallCheckMs: 1_000 })
+
+      // t=1000: both probes queued. t=1100: A completes, then silence.
+      vi.advanceTimersByTime(1_100)
+      terminal.pendingCallbacks.shift()!()
+
+      // t=2000: B's deadline sees A's progress → extends one quiet window.
+      vi.advanceTimersByTime(900)
+      expect(isPaneReplaying(ref, 1)).toBe(true)
+      expect(recoveryReasons).toEqual([])
+
+      // t=3000: the extended window passed with zero progress → wedged.
+      vi.advanceTimersByTime(1_000)
+      expect(isPaneReplaying(ref, 1)).toBe(false)
+      expect(recoveryReasons).toEqual(['replay-wedged'])
+      expect(mocks.recordRendererCrashBreadcrumb).toHaveBeenCalledWith(
+        'terminal_replay_guard_wedged_release',
+        { paneId: 1 }
+      )
+    } finally {
+      unregister()
+      _resetWritePipelineHealthForTests(terminal)
+      errorSpy.mockRestore()
+    }
+  })
+
+  it('recovers an immediately rejected replay without recording parse progress', () => {
+    const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
+    const ref = makeRef()
+    const { pane, terminal } = makeFakePane(1)
+    const recoveryReasons: string[] = []
+    const generation = captureTerminalParseProgressGeneration(terminal)
+    const unregister = registerUndeliverableWriteHandler(terminal, (reason) => {
+      recoveryReasons.push(reason)
+    })
+    terminal.write = () => {
+      throw new Error('terminal disposed')
+    }
+    try {
+      replayIntoTerminal(pane, ref, 'rejected replay')
+
+      expect(isPaneReplaying(ref, 1)).toBe(false)
+      expect(hasTerminalParseProgressSince(terminal, generation)).toBe(false)
+      expect(recoveryReasons).toEqual(['replay-wedged'])
+      expect(mocks.recordRendererCrashBreadcrumb).toHaveBeenCalledWith(
+        'terminal_replay_guard_wedged_release',
+        { paneId: 1 }
+      )
+    } finally {
+      unregister()
+      _resetWritePipelineHealthForTests(terminal)
+      errorSpy.mockRestore()
+    }
+  })
+
   it('releases immediately when the probe write throws (terminal disposed mid-replay)', () => {
     vi.useFakeTimers()
     const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
@@ -346,7 +635,7 @@ describe('replay-guard stall handling (probe-certified release)', () => {
       const ref = makeRef()
       const { pane, terminal } = makeFakePane(1)
 
-      replayIntoTerminal(pane, ref, 'restored bytes', 1_000)
+      replayIntoTerminal(pane, ref, 'restored bytes', { stallCheckMs: 1_000 })
       terminal.write = () => {
         throw new Error('terminal disposed')
       }
@@ -368,8 +657,8 @@ describe('replay-guard stall handling (probe-certified release)', () => {
       const ref = makeRef()
       const { pane, terminal } = makeFakePane(1)
 
-      replayIntoTerminal(pane, ref, 'lost completion', 1_000)
-      replayIntoTerminal(pane, ref, 'healthy completion', 60_000)
+      replayIntoTerminal(pane, ref, 'lost completion', { stallCheckMs: 1_000 })
+      replayIntoTerminal(pane, ref, 'healthy completion', { stallCheckMs: 60_000 })
       terminal.pendingCallbacks.shift() // drop only the first completion
       vi.advanceTimersByTime(1_000) // first engagement's probe enqueued
 
@@ -389,7 +678,7 @@ describe('replay-guard stall handling (probe-certified release)', () => {
     const ref = makeRef()
     const { pane, terminal } = makeFakePane(1)
 
-    replayIntoTerminal(pane, ref, 'healthy', 1_000)
+    replayIntoTerminal(pane, ref, 'healthy', { stallCheckMs: 1_000 })
     terminal.flush()
     expect(isPaneReplaying(ref, 1)).toBe(false)
 
@@ -405,7 +694,9 @@ describe('replay-guard stall handling (probe-certified release)', () => {
       const ref = makeRef()
       const { pane } = makeFakePane(1)
 
-      const replayDone = replayIntoTerminalAsync(pane, ref, 'restored bytes', 1_000)
+      const replayDone = replayIntoTerminalAsync(pane, ref, 'restored bytes', {
+        stallCheckMs: 1_000
+      })
       let resolved = false
       void replayDone.then(() => {
         resolved = true

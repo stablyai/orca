@@ -1,21 +1,9 @@
 import type { Worktree, WorktreeLineage } from '../../../../shared/types'
+import { getProjectedWorktreeLineageChildrenByParentId } from './worktree-lineage-projection'
 
 type WorkspaceDeleteLineage = {
   descendants: Worktree[]
   deleteAllTargets: Worktree[]
-}
-
-function isValidLineageLink(
-  child: Worktree,
-  parent: Worktree | undefined,
-  lineage: WorktreeLineage | undefined
-): parent is Worktree {
-  return Boolean(
-    lineage &&
-    parent &&
-    child.instanceId === lineage.worktreeInstanceId &&
-    parent.instanceId === lineage.parentWorktreeInstanceId
-  )
 }
 
 export function getWorkspaceDeleteLineage(
@@ -24,18 +12,10 @@ export function getWorkspaceDeleteLineage(
   lineageById: Record<string, WorktreeLineage>
 ): WorkspaceDeleteLineage {
   const worktreeById = new Map(worktrees.map((worktree) => [worktree.id, worktree]))
-  const childrenByParentId = new Map<string, Worktree[]>()
-
-  for (const worktree of worktrees) {
-    const lineage = lineageById[worktree.id]
-    const lineageParent = lineage ? worktreeById.get(lineage.parentWorktreeId) : undefined
-    if (!isValidLineageLink(worktree, lineageParent, lineage)) {
-      continue
-    }
-    const children = childrenByParentId.get(lineageParent.id) ?? []
-    children.push(worktree)
-    childrenByParentId.set(lineageParent.id, children)
-  }
+  const childrenByParentId = getProjectedWorktreeLineageChildrenByParentId(
+    lineageById,
+    worktreeById
+  )
 
   const descendants: Worktree[] = []
   const childFirstTargets: Worktree[] = []

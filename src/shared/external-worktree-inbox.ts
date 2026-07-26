@@ -39,8 +39,28 @@ export function getHiddenExternalWorktrees(
     return []
   }
   return detected.worktrees.filter(
-    (worktree) =>
-      !worktree.visible && !worktree.selectedCheckout && worktree.ownership !== 'orca-managed'
+    (worktree) => !worktree.visible && isUserFacingExternalWorktree(worktree)
+  )
+}
+
+export function getVisibleExternalWorktrees(
+  detected: DetectedWorktreeListResult | undefined
+): DetectedWorktree[] {
+  if (detected?.authoritative !== true) {
+    return []
+  }
+  return detected.worktrees.filter(
+    (worktree) => worktree.visible && isUserFacingExternalWorktree(worktree)
+  )
+}
+
+function isUserFacingExternalWorktree(worktree: DetectedWorktree): boolean {
+  // Why: an explicit scratch import may be visible, but agent plumbing must
+  // stay outside repo-wide discovery and visibility controls (#9388).
+  return (
+    !worktree.selectedCheckout &&
+    worktree.ownership !== 'orca-managed' &&
+    worktree.ownership !== 'agent-scratch'
   )
 }
 

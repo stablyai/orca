@@ -19,7 +19,11 @@ import type {
   LinearWorkspaceSelection,
   LinearWorkflowState
 } from '../../../shared/types'
-import { callRuntimeRpc, getActiveRuntimeTarget } from './runtime-rpc-client'
+import {
+  callRuntimeRpc,
+  getActiveRuntimeTarget,
+  runtimeEnvironmentSupportsCapability
+} from './runtime-rpc-client'
 import {
   getTaskSourceRuntimeSettings,
   type TaskSourceContext
@@ -30,12 +34,29 @@ import {
   canonicalizeLinearIssueAttributeFilter,
   isEmptyLinearIssueAttributeFilter
 } from '../../../shared/linear-issue-attribute-filter'
+import { LINEAR_ISSUE_ATTRIBUTE_FILTER_RUNTIME_CAPABILITY } from '../../../shared/protocol-version'
 
 export type RuntimeLinearSettings =
   | Pick<GlobalSettings, 'activeRuntimeEnvironmentId'>
   | TaskSourceContext
   | null
   | undefined
+
+// Why: mixed-version remotes must not look like an empty filtered result. The
+// Linear store swallows most read failures; this typed error is rethrown so UI
+// can show an upgrade message instead of "no matching issues".
+export class LinearIssueAttributeFilterUnsupportedError extends Error {
+  constructor(message = 'This remote runtime must be updated to filter Linear issues.') {
+    super(message)
+    this.name = 'LinearIssueAttributeFilterUnsupportedError'
+  }
+}
+
+export function isLinearIssueAttributeFilterUnsupportedError(
+  error: unknown
+): error is LinearIssueAttributeFilterUnsupportedError {
+  return error instanceof LinearIssueAttributeFilterUnsupportedError
+}
 
 export type LinearIssueFilter = 'assigned' | 'created' | 'all' | 'completed'
 export type LinearConnectResult = { ok: true; viewer: LinearViewer } | { ok: false; error: string }
@@ -207,6 +228,19 @@ export async function linearListIssues(
     limit,
     workspaceId: workspaceId ?? undefined,
     ...(canonicalAttributeFilter ? { attributeFilter: canonicalAttributeFilter } : {})
+  }
+  if (
+    target.kind === 'environment' &&
+    canonicalAttributeFilter &&
+    !(await runtimeEnvironmentSupportsCapability(
+      target.environmentId,
+      LINEAR_ISSUE_ATTRIBUTE_FILTER_RUNTIME_CAPABILITY,
+      30_000
+    ))
+  ) {
+    // Why: older runtimes silently strip unknown RPC params; rejecting here
+    // prevents their unfiltered rows from being presented or cached as filtered.
+    throw new LinearIssueAttributeFilterUnsupportedError()
   }
   const result =
     target.kind === 'environment'

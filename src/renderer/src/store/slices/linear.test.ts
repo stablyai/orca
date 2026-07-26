@@ -17,6 +17,7 @@ import {
   type TaskSourceContext
 } from '../../../../shared/task-source-context'
 import { credentialDecryptionMessage } from '../../../../shared/integration-credential-errors'
+import { LinearIssueAttributeFilterUnsupportedError } from '@/runtime/runtime-linear-client'
 import { createLinearSlice } from './linear'
 
 const linearStatus = vi.fn()
@@ -35,25 +36,29 @@ const linearListCustomViewIssues = vi.fn()
 const linearListCustomViewProjects = vi.fn()
 const linearTestConnection = vi.fn()
 
-vi.mock('@/runtime/runtime-linear-client', () => ({
-  linearConnect: (...args: unknown[]) => linearConnect(...args),
-  linearDisconnect: (...args: unknown[]) => linearDisconnect(...args),
-  linearDisconnectWorkspace: vi.fn(),
-  linearGetCustomView: (...args: unknown[]) => linearGetCustomView(...args),
-  linearGetProject: (...args: unknown[]) => linearGetProject(...args),
-  linearGetIssue: (...args: unknown[]) => linearGetIssue(...args),
-  linearListCustomViewIssues: (...args: unknown[]) => linearListCustomViewIssues(...args),
-  linearListCustomViewProjects: (...args: unknown[]) => linearListCustomViewProjects(...args),
-  linearListCustomViews: (...args: unknown[]) => linearListCustomViews(...args),
-  linearListIssues: (...args: unknown[]) => linearListIssues(...args),
-  linearListProjectIssues: (...args: unknown[]) => linearListProjectIssues(...args),
-  linearListProjects: (...args: unknown[]) => linearListProjects(...args),
-  linearListTeams: (...args: unknown[]) => linearListTeams(...args),
-  linearSearchIssues: (...args: unknown[]) => linearSearchIssues(...args),
-  linearSelectWorkspace: vi.fn(),
-  linearStatus: (...args: unknown[]) => linearStatus(...args),
-  linearTestConnection: (...args: unknown[]) => linearTestConnection(...args)
-}))
+vi.mock('@/runtime/runtime-linear-client', async (importOriginal) => {
+  const actual = await importOriginal<Record<string, unknown>>()
+  return {
+    ...actual,
+    linearConnect: (...args: unknown[]) => linearConnect(...args),
+    linearDisconnect: (...args: unknown[]) => linearDisconnect(...args),
+    linearDisconnectWorkspace: vi.fn(),
+    linearGetCustomView: (...args: unknown[]) => linearGetCustomView(...args),
+    linearGetProject: (...args: unknown[]) => linearGetProject(...args),
+    linearGetIssue: (...args: unknown[]) => linearGetIssue(...args),
+    linearListCustomViewIssues: (...args: unknown[]) => linearListCustomViewIssues(...args),
+    linearListCustomViewProjects: (...args: unknown[]) => linearListCustomViewProjects(...args),
+    linearListCustomViews: (...args: unknown[]) => linearListCustomViews(...args),
+    linearListIssues: (...args: unknown[]) => linearListIssues(...args),
+    linearListProjectIssues: (...args: unknown[]) => linearListProjectIssues(...args),
+    linearListProjects: (...args: unknown[]) => linearListProjects(...args),
+    linearListTeams: (...args: unknown[]) => linearListTeams(...args),
+    linearSearchIssues: (...args: unknown[]) => linearSearchIssues(...args),
+    linearSelectWorkspace: vi.fn(),
+    linearStatus: (...args: unknown[]) => linearStatus(...args),
+    linearTestConnection: (...args: unknown[]) => linearTestConnection(...args)
+  }
+})
 
 vi.mock('../../hooks/useIssueMetadata', () => ({
   clearLinearMetadataCache: vi.fn()
@@ -272,6 +277,50 @@ describe('createLinearSlice caching', () => {
     await expect(
       store.getState().listLinearIssues({ kind: 'list', filter: 'all', limit: 36 }, { force: true })
     ).resolves.toMatchObject({ items: [{ id: 'LIN-CACHED' }] })
+  })
+
+  it('rethrows attribute-filter unsupported errors so UI can surface an upgrade message', async () => {
+    const store = createTestStore()
+    store.setState({
+      linearStatus: { connected: true, viewer: null, selectedWorkspaceId: 'workspace-1' }
+    })
+    const attributeFilter = {
+      stateIds: ['state-1'],
+      priorities: [] as number[],
+      assignee: null as null,
+      labelIds: [] as string[]
+    }
+    // Seed via a successful read so the cache key matches production signing.
+    linearListIssues.mockResolvedValueOnce({ items: [issue('LIN-CACHED')] })
+    await store.getState().listLinearIssues({
+      kind: 'list',
+      filter: 'all',
+      limit: 36,
+      attributeFilter
+    })
+    linearListIssues.mockRejectedValueOnce(new LinearIssueAttributeFilterUnsupportedError())
+
+    await expect(
+      store.getState().listLinearIssues(
+        {
+          kind: 'list',
+          filter: 'all',
+          limit: 36,
+          attributeFilter
+        },
+        { force: true }
+      )
+    ).rejects.toBeInstanceOf(LinearIssueAttributeFilterUnsupportedError)
+
+    // Why: must not replace a warm filtered cache with empty on capability miss.
+    expect(
+      store.getState().getCachedLinearIssues({
+        kind: 'list',
+        filter: 'all',
+        limit: 36,
+        attributeFilter
+      })
+    ).toMatchObject({ items: [{ id: 'LIN-CACHED' }] })
   })
 
   it('returns an empty list and refreshes status on Linear decrypt errors during list reads', async () => {

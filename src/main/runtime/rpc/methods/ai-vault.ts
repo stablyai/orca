@@ -2,7 +2,8 @@ import { z } from 'zod'
 import { defineMethod, type RpcMethod } from '../core'
 import { OptionalBoolean } from '../schemas'
 import { restampAiVaultListResult } from '../../../ai-vault/session-list-results'
-import { AI_VAULT_SCOPE_PATHS_MAX_COUNT } from '../../../../shared/ai-vault-types'
+import { AI_VAULT_AGENTS, AI_VAULT_SCOPE_PATHS_MAX_COUNT } from '../../../../shared/ai-vault-types'
+import { LOCAL_EXECUTION_HOST_ID } from '../../../../shared/execution-host'
 import { parseExecutionHostId } from '../../../../shared/execution-host'
 
 // Why: bound limit + scopePaths so a client cannot force an unbounded scan.
@@ -45,6 +46,13 @@ export const AiVaultListSessionsParams = z.object({
   executionHostId: executionHostIdSchema.optional()
 })
 
+export const AiVaultPrepareSessionResumeParams = z.object({
+  agent: z.enum(AI_VAULT_AGENTS),
+  filePath: z.string().min(1).max(AI_VAULT_SCOPE_PATH_MAX_LENGTH),
+  codexHome: z.string().min(1).max(AI_VAULT_SCOPE_PATH_MAX_LENGTH).nullable(),
+  executionHostId: z.string().optional()
+})
+
 export const AI_VAULT_METHODS: RpcMethod[] = [
   defineMethod({
     name: 'aiVault.listSessions',
@@ -61,5 +69,18 @@ export const AI_VAULT_METHODS: RpcMethod[] = [
         ? restampAiVaultListResult(result, params.executionHostId)
         : result
     }
+  }),
+  defineMethod({
+    name: 'aiVault.prepareSessionResume',
+    params: AiVaultPrepareSessionResumeParams,
+    handler: (params, { runtime }) =>
+      runtime.prepareAiVaultSessionResume({
+        agent: params.agent,
+        filePath: params.filePath,
+        codexHome: params.codexHome,
+        // Why: the RPC executes on the transcript-owning host; never let a
+        // client-provided runtime/SSH stamp escape that host boundary.
+        executionHostId: LOCAL_EXECUTION_HOST_ID
+      })
   })
 ]

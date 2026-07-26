@@ -66,6 +66,8 @@ function renderMenu(overrides: Record<string, unknown> = {}): void {
     onEqualizePaneSizes: vi.fn(),
     onClosePane: vi.fn(),
     onClearScreen: vi.fn(),
+    canContinueAgentSessionInNewSession: false,
+    onContinueAgentSessionInNewSession: vi.fn(),
     onForkAgentSession: vi.fn(),
     canToggleNativeChat: false,
     isNativeChatView: false,
@@ -112,6 +114,22 @@ describe('TerminalContextMenu', () => {
     expect(onCopyAgentSessionContext).toHaveBeenCalledTimes(1)
     // Why: copying context must not go through the fork dialog path.
     expect(onForkAgentSession).not.toHaveBeenCalled()
+  })
+
+  it('shows new-session continuation only for eligible agent panes', () => {
+    const onContinueAgentSessionInNewSession = vi.fn()
+    renderMenu({
+      canContinueAgentSessionInNewSession: true,
+      onContinueAgentSessionInNewSession
+    })
+
+    const handoffItem = items.list.find(
+      (item) => childrenText(item.children) === 'Continue in New Session…'
+    )
+    expect(handoffItem).toBeDefined()
+
+    handoffItem?.onSelect?.()
+    expect(onContinueAgentSessionInNewSession).toHaveBeenCalledTimes(1)
   })
 
   it('shows one shortcut per terminal menu action on Windows', () => {

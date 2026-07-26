@@ -2,10 +2,12 @@ import { describe, expect, it } from 'vitest'
 import {
   isSetupHookTrusted,
   normalizeSetupHookTrust,
+  persistSetupHookTrustApproval,
   trustedOrcaHooksWithSetupApproval,
   wasSetupHookPreviouslyApproved
 } from './setup-hook-trust'
 import type { PersistedTrustedOrcaHooks } from '../../../src/shared/types'
+import type { RpcClient } from '../transport/rpc-client'
 
 describe('setup hook trust', () => {
   it('trusts a setup script only when the approved hash matches', () => {
@@ -69,6 +71,27 @@ describe('setup hook trust', () => {
         all: { approvedAt: 2000 }
       }
     })
+  })
+
+  it('persists and returns the approved trust state', async () => {
+    let persisted: unknown
+    const client = {
+      sendRequest: async (_method: string, params: unknown) => {
+        persisted = params
+        return { ok: true, result: null }
+      }
+    } as unknown as RpcClient
+
+    const next = await persistSetupHookTrustApproval({
+      client,
+      trust: {},
+      repoId: 'repo-1',
+      contentHash: 'setup-hash',
+      alwaysTrust: false
+    })
+
+    expect(persisted).toEqual({ trustedOrcaHooks: next })
+    expect(isSetupHookTrusted(next, 'repo-1', 'setup-hash')).toBe(true)
   })
 
   it('detects previous setup approval and ignores incomplete trust payloads', () => {

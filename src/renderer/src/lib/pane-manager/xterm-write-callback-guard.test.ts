@@ -63,6 +63,26 @@ describe('runGuardedWriteCompletionStep', () => {
 })
 
 describe('writeForegroundTerminalChunk completion guarding', () => {
+  it('reports a synchronous write failure without claiming parse completion', () => {
+    const terminal = {
+      write: vi.fn(() => {
+        throw new Error('terminal disposed')
+      })
+    }
+    const onParsed = vi.fn()
+    const onWriteFailure = vi.fn()
+
+    expect(() =>
+      writeForegroundTerminalChunk(terminal, 'rejected bytes', {
+        onParsed,
+        onWriteFailure
+      })
+    ).not.toThrow()
+
+    expect(onWriteFailure).toHaveBeenCalledTimes(1)
+    expect(onParsed).not.toHaveBeenCalled()
+  })
+
   it('still releases onParsed when the settle step throws (replay-guard latch protection)', () => {
     const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
     try {

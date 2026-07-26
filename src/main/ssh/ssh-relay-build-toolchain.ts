@@ -141,15 +141,20 @@ export function formatMissingToolchainError(
 // callers fall back to the original install error in those cases.
 export async function probeBuildToolchain(
   conn: SshConnection,
-  hostPlatform: RemoteHostPlatform
+  hostPlatform: RemoteHostPlatform,
+  signal?: AbortSignal
 ): Promise<BuildToolchainStatus | null> {
   if (isWindowsRemoteHost(hostPlatform)) {
     return null
   }
   try {
-    const output = await execCommand(conn, buildToolchainProbeCommand(), { wrapCommand: true })
+    const output = await execCommand(conn, buildToolchainProbeCommand(), {
+      wrapCommand: true,
+      signal
+    })
     return parseBuildToolchainProbe(output)
   } catch {
+    signal?.throwIfAborted()
     return null
   }
 }

@@ -258,6 +258,20 @@ describe('resolveTabAgentFromSignals', () => {
     ).toBe('claude')
   })
 
+  // Why: #8478 — OpenCode native `OC | …` titles must reclaim a stale Claude
+  // launch identity so the tab icon is OpenCode, not Claude.
+  it('uses OpenCode native session titles to replace stale Claude launch identity', () => {
+    expect(
+      resolveTabAgentFromSignals({
+        hasObservedAgentSignal: true,
+        isRemote: false,
+        title: 'OC | Understand about the plugin',
+        hookAgent: null,
+        launchAgent: 'claude'
+      })
+    ).toBe('opencode')
+  })
+
   it('does not let an explicit title override launch identity before any activity is observed', () => {
     expect(
       resolveTabAgentFromSignals({

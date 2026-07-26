@@ -99,7 +99,7 @@ describe('formatCliError', () => {
         message: 'Parent selector was not found.',
         data: {
           nextSteps: [
-            'Pass a valid --parent-worktree selector such as folder:<id>, worktree:<id>, id:<worktreeId>, branch:<branch>, issue:<number>, path:<absolute-path>, or active/current.',
+            'Pass a valid --parent-worktree selector such as folder:<id>, worktree:<worktreeId>, id:<repo-id>::<path>, branch:<branch>, issue:<number>, path:<absolute-path>, or active/current.',
             'Retry with --no-parent to create without lineage.',
             123
           ]
@@ -111,7 +111,7 @@ describe('formatCliError', () => {
     expect(formatCliError(error)).toBe(
       [
         'Parent selector was not found.',
-        'Next step: Pass a valid --parent-worktree selector such as folder:<id>, worktree:<id>, id:<worktreeId>, branch:<branch>, issue:<number>, path:<absolute-path>, or active/current.',
+        'Next step: Pass a valid --parent-worktree selector such as folder:<id>, worktree:<worktreeId>, id:<repo-id>::<path>, branch:<branch>, issue:<number>, path:<absolute-path>, or active/current.',
         'Next step: Retry with --no-parent to create without lineage.'
       ].join('\n')
     )

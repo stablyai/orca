@@ -33,8 +33,9 @@ test.use({
 // never retains anything here — the ORCA_E2E_TERMINAL_PARKING_DELAY_MS
 // collapse (terminal-parking-e2e-overrides.ts) shrinks hotRetainMs to the
 // same delay as coldParkDelayMs, and the policy cold-parks any tab hidden
-// past hotRetainMs before the retain-count limit is even consulted. So all 8
-// park without needing 14 tabs or extra policy knobs.
+// past hotRetainMs before the retain-count limit is even consulted. The one
+// exception is the last-active (most-recently-hidden) tab, which is exempt
+// from parking so returning to it is instant — so 7 of the 8 park.
 const SCROLLBACK_TAB_COUNT = 8
 const SCROLLBACK_LINE_COUNT = 3000
 const PARK_SETTLE_MS = 2_000
@@ -105,13 +106,17 @@ async function countMountedPaneManagers(page: Page, tabIds: string[]): Promise<n
   )
 }
 
-async function waitForTabsParked(page: Page, tabIds: string[]): Promise<void> {
+// Why: the last-active tab per worktree is exempt from parking so returning to
+// it is instant, so one of the hidden scrollback tabs stays mounted. The
+// exempt one is the most-recently-hidden — here the last scrollback tab filled
+// before the visible tab was created — so we expect exactly one still mounted.
+async function waitForTabsParkedExceptLastActive(page: Page, tabIds: string[]): Promise<void> {
   await expect
     .poll(() => countMountedPaneManagers(page, tabIds), {
       timeout: Math.max(30_000, PARKING_DELAY_MS * 10),
-      message: 'hidden scrollback tabs did not all park (pane managers still mounted)'
+      message: 'hidden scrollback tabs did not park down to the last-active exemption'
     })
-    .toBe(0)
+    .toBe(1)
 }
 
 type ScrollbackTab = {
@@ -264,9 +269,16 @@ test.describe('Terminal parked memory', () => {
     try {
       const { worktreeId, scrollbackTabs } = await setUpScrollbackTabs(orcaPage, scriptPath, runId)
 
-      // A fresh 9th tab hides all 8 scrollback tabs.
+      // A fresh 9th tab hides all 8 scrollback tabs. The last one filled is the
+      // most-recently-hidden, so it stays warm under the last-active exemption;
+      // the other 7 park.
       const visibleTab = await createActiveTerminalTab(orcaPage, worktreeId)
-      await waitForTabsParked(
+      const lastActiveTab = scrollbackTabs.at(-1)
+      if (!lastActiveTab) {
+        throw new Error('parked memory spec: no scrollback tabs were created')
+      }
+      const parkableTabs = scrollbackTabs.slice(0, -1)
+      await waitForTabsParkedExceptLastActive(
         orcaPage,
         scrollbackTabs.map((tab) => tab.tabId)
       )
@@ -274,21 +286,22 @@ test.describe('Terminal parked memory', () => {
       const metrics = await sampleParkedMemoryMetrics(orcaPage)
       testInfo.annotations.push({
         type: 'opencode-parked-memory',
-        description: formatParkedMemoryAnnotation(metrics, scrollbackTabs.length)
+        description: formatParkedMemoryAnnotation(metrics, parkableTabs.length)
       })
 
-      // Structural assertions: all 8 parked (managers gone), and the only
-      // live xterm/pane manager belongs to the visible tab.
-      for (const tab of scrollbackTabs) {
+      // Structural assertions: the 7 non-last-active tabs parked (managers
+      // gone); the visible tab and the exempt last-active tab keep theirs.
+      for (const tab of parkableTabs) {
         expect((await readTerminalTabViewState(orcaPage, tab.tabId)).hasManager).toBe(false)
       }
+      expect((await readTerminalTabViewState(orcaPage, lastActiveTab.tabId)).hasManager).toBe(true)
       const visibleState = await readTerminalTabViewState(orcaPage, visibleTab.tabId)
       expect(visibleState.hasManager).toBe(true)
       expect(visibleState.paneCount).toBeGreaterThan(0)
-      // Why: design invariant 5 — renderer terminal views scale with visible
-      // panes, so parked tabs must leave no xterm DOM behind.
-      expect(metrics.liveTerminals).toBe(visibleState.paneCount)
-      expect(metrics.livePaneManagers).toBe(1)
+      // Why: design invariant 5 — renderer terminal views scale with mounted
+      // panes; only the visible tab and the exempt last-active tab keep an
+      // xterm and pane manager, everything else parks.
+      expect(metrics.livePaneManagers).toBe(2)
     } finally {
       rmSync(scriptPath, { force: true })
     }

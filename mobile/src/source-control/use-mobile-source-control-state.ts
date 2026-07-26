@@ -15,6 +15,7 @@ import {
   canOpenMobileBranchCompareDiff,
   formatMobileBranchCompareSummary
 } from './mobile-branch-compare'
+
 import {
   buildMobileSourceControlSections,
   countStagedEntries,
@@ -140,6 +141,7 @@ export function useMobileSourceControlState(params: MobileSourceControlStatePara
       })),
     [branchCompareCanOpen, branchCompareSection]
   )
+  // Local changes only: dirty files + committed file diffs vs base (not PR/push).
   const shouldShowBranchCompareSection =
     branchEntries.length > 0 ||
     branchCompareState.kind === 'loading' ||

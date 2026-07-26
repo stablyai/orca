@@ -13,24 +13,30 @@ import { translate } from '@/i18n/i18n'
 type AutoRenameFailedDialogProps = {
   open: boolean
   onOpenChange: (open: boolean) => void
+  /** Worktree whose auto-rename failed; keys the full-output lookup. */
+  worktreeId: string
   /** Sidebar name of the worktree whose auto-rename failed. */
   worktreeName: string
-  /** Full failure message — usually formatted agent-CLI output (multi-line). */
+  /** Persisted failure message — headline plus a sanitized output excerpt. */
   error: string
 }
 
 /**
- * Modal that surfaces the full auto-rename generation failure. The message is
- * raw agent-CLI output that can run many lines, so it gets a dedicated scrollable
- * surface rather than a tooltip — see the sibling SshDisconnectedDialog pattern.
+ * Modal that surfaces the auto-rename generation failure. It shows the full
+ * CLI output when main still holds it (in-memory, lost on restart), falling
+ * back to the persisted excerpt — either can run many lines, so it gets a
+ * dedicated scrollable surface rather than a tooltip — see the sibling
+ * SshDisconnectedDialog pattern.
  */
 export function AutoRenameFailedDialog({
   open,
   onOpenChange,
+  worktreeId,
   worktreeName,
   error
 }: AutoRenameFailedDialogProps): React.JSX.Element {
   const [copied, setCopied] = useState(false)
+  const [fullOutput, setFullOutput] = useState<string | null>(null)
   const copiedResetTimerRef = useRef<number | null>(null)
 
   useEffect(() => {
@@ -41,12 +47,37 @@ export function AutoRenameFailedDialog({
     }
   }, [])
 
+  useEffect(() => {
+    if (!open) {
+      return
+    }
+    let stale = false
+    setFullOutput(null)
+    window.api.worktrees
+      .getBranchRenameFailureOutput({ worktreeId })
+      .then((output) => {
+        if (!stale) {
+          setFullOutput(output)
+        }
+      })
+      .catch(() => {
+        if (!stale) {
+          setFullOutput(null)
+        }
+      })
+    return () => {
+      stale = true
+    }
+  }, [error, open, worktreeId])
+
+  const detailText = fullOutput ?? error
+
   const handleCopy = useCallback(async () => {
     try {
       // Why: Electron's clipboard IPC, not navigator.clipboard, which fails
       // silently inside Radix dialogs — and an inline icon swap (no toast),
       // matching the app's other inline copy buttons.
-      await window.api.ui.writeClipboardText(error)
+      await window.api.ui.writeClipboardText(detailText)
       setCopied(true)
       if (copiedResetTimerRef.current !== null) {
         window.clearTimeout(copiedResetTimerRef.current)
@@ -58,7 +89,7 @@ export function AutoRenameFailedDialog({
     } catch {
       /* best-effort */
     }
-  }, [error])
+  }, [detailText])
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -113,7 +144,7 @@ export function AutoRenameFailedDialog({
               {copied ? <Check className="size-3.5" /> : <Copy className="size-3.5" />}
             </Button>
             <pre className="scrollbar-sleek max-h-[40vh] overflow-auto rounded-md border border-border/60 bg-muted/40 py-3 pl-3 pr-9 font-mono text-[11px] leading-4 whitespace-pre-wrap break-words text-foreground">
-              {error}
+              {detailText}
             </pre>
           </div>
         </div>

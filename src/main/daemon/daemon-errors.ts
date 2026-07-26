@@ -1,6 +1,5 @@
 // Error classes shared across the daemon protocol boundary (client, server,
 // host). Split from types.ts, which is capped for wire-shape declarations.
-
 export class TerminalAttachCanceledError extends Error {
   constructor(sessionId: string) {
     super(`Attach canceled for session ${sessionId}`)

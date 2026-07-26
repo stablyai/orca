@@ -2,10 +2,11 @@
    selection share one module so keychain-safe status reads and token mutation
    stay in one consistency boundary. */
 import { safeStorage } from 'electron'
-import { LinearClient, AuthenticationLinearError } from '@linear/sdk'
+import type { LinearClient } from '@linear/sdk'
 import { existsSync, mkdirSync, readFileSync, unlinkSync, writeFileSync } from 'node:fs'
 import { homedir } from 'node:os'
 import { join } from 'node:path'
+import { loadLinearSdk } from './linear-sdk'
 import {
   CredentialDecryptionError,
   credentialFileHasContent,
@@ -515,7 +516,7 @@ export function getClient(workspaceId?: string | null): LinearClient | null {
   if (!token) {
     return null
   }
-  return new LinearClient({ apiKey: token })
+  return new (loadLinearSdk().LinearClient)({ apiKey: token })
 }
 
 export function getClients(
@@ -546,13 +547,17 @@ export function getClients(
     if (!token) {
       continue
     }
-    clients.push({ workspace, client: new LinearClient({ apiKey: token }), apiKey: token })
+    clients.push({
+      workspace,
+      client: new (loadLinearSdk().LinearClient)({ apiKey: token }),
+      apiKey: token
+    })
   }
   return clients
 }
 
 export function getPublicFileUrlClient(entry: LinearClientForWorkspace): LinearClient {
-  return new LinearClient({
+  return new (loadLinearSdk().LinearClient)({
     apiKey: entry.apiKey,
     headers: {
       'public-file-urls-expire-in': String(LINEAR_PUBLIC_FILE_URL_EXPIRY_SECONDS)
@@ -565,7 +570,7 @@ export function getPublicFileUrlClient(entry: LinearClientForWorkspace): LinearC
 // renderer. All other errors are swallowed with console.warn to match GitHub
 // client's graceful degradation.
 export function isAuthError(error: unknown): boolean {
-  return error instanceof AuthenticationLinearError
+  return error instanceof loadLinearSdk().AuthenticationLinearError
 }
 
 // ── Connect / disconnect / status ────────────────────────────────────
@@ -575,7 +580,7 @@ export async function connect(
   { ok: true; viewer: LinearViewer; workspace: LinearWorkspace } | { ok: false; error: string }
 > {
   try {
-    const client = new LinearClient({ apiKey })
+    const client = new (loadLinearSdk().LinearClient)({ apiKey })
     const me = await client.viewer
     const org = await me.organization
     const workspace = workspaceFromLinearData(me, org)
@@ -670,7 +675,7 @@ export async function testConnection(
   }
 
   try {
-    const client = new LinearClient({ apiKey: token })
+    const client = new (loadLinearSdk().LinearClient)({ apiKey: token })
     const me = await client.viewer
     const org = await me.organization
     const workspace = workspaceFromLinearData(me, org)

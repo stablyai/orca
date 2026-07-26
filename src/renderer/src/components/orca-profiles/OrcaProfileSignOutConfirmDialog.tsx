@@ -1,4 +1,4 @@
-import { AlertTriangle, Loader2 } from 'lucide-react'
+import { Loader2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import {
   Dialog,
@@ -14,28 +14,24 @@ export function OrcaProfileSignOutConfirmDialog({
   open,
   onOpenChange,
   onConfirm,
-  profileName,
   signingOut
 }: {
   open: boolean
   onOpenChange: (open: boolean) => void
   onConfirm: () => void
-  profileName: string
   signingOut: boolean
 }): React.JSX.Element {
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-[420px]">
         <DialogHeader>
-          <DialogTitle className="flex items-center gap-2">
-            <AlertTriangle className="size-4 text-muted-foreground" />
-            {translate('auto.components.orca.profiles.signout.confirm.title', 'Sign out?')}
+          <DialogTitle>
+            {translate('auto.components.orca.profiles.signout.confirm.title', 'Sign out of Orca?')}
           </DialogTitle>
           <DialogDescription>
             {translate(
               'auto.components.orca.profiles.signout.confirm.description',
-              'Sign out of {{profileName}} and keep its projects, worktrees, and local metadata on this device.',
-              { profileName }
+              "You'll be signed out of Orca on this device. Your local projects and worktrees won't be affected."
             )}
           </DialogDescription>
         </DialogHeader>

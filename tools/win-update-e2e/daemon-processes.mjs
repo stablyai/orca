@@ -97,14 +97,26 @@ export function readDaemonPidFiles(userDataDir = defaultUserDataDir()) {
 }
 
 /** True if a PID currently maps to a live process. */
-export function isPidAlive(pid) {
+export function isPidAlive(pid, runCommand = runCommandSync) {
   if (!Number.isInteger(pid) || pid <= 0) {
     return false
   }
-  const { stdout } = runCommandSync(
+  const { stdout, stderr, code, error } = runCommand(
     `if (Get-Process -Id ${pid} -ErrorAction SilentlyContinue) { 'alive' } else { 'dead' }`
   )
-  return stdout.trim() === 'alive'
+  if (error) {
+    throw new Error(`PID liveness probe failed to spawn: ${error.message}`)
+  }
+  if (code !== 0) {
+    throw new Error(`PID liveness probe failed (exit ${code}): ${stderr.trim()}`)
+  }
+  const state = stdout.trim()
+  if (state !== 'alive' && state !== 'dead') {
+    // Why: blank or unexpected output is unavailable evidence, not proof that
+    // a process died; crash-survival assertions must fail closed.
+    throw new Error(`PID liveness probe returned an invalid state: ${JSON.stringify(state)}`)
+  }
+  return state === 'alive'
 }
 
 function runJsonCommand(command) {

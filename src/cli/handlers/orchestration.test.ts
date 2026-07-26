@@ -14,6 +14,7 @@ vi.mock('../selectors', () => ({ getTerminalHandle: getTerminalHandleMock }))
 
 import { ORCHESTRATION_HANDLERS } from './orchestration'
 import { RuntimeClientError } from '../runtime-client'
+import { printResult } from '../format'
 
 function staleHandleError(): RuntimeClientError {
   return new RuntimeClientError('terminal_handle_stale', 'terminal_handle_stale')
@@ -135,6 +136,21 @@ describe('orchestration send structured payload flags', () => {
     })
   })
 
+  it('forwards multiline message bodies without normalization', async () => {
+    const body = 'paragraph one line one\nparagraph one line two\n\nparagraph two'
+
+    await invokeSend(
+      new Map<string, string | boolean>([
+        ['from', 'term_worker'],
+        ['to', 'term_coord'],
+        ['subject', 'multiline'],
+        ['body', body]
+      ])
+    )
+
+    expect(callMock).toHaveBeenCalledWith('orchestration.send', expect.objectContaining({ body }))
+  })
+
   it('rejects mixing raw payload with structured payload flags', async () => {
     await expect(
       invokeSend(
@@ -213,7 +229,7 @@ describe('orchestration send structured payload flags', () => {
     })
   })
 
-  it('continues to use ORCA_TERMINAL_HANDLE as worker lifecycle sender authority', async () => {
+  it('sends lifecycle messages from ORCA_TERMINAL_HANDLE without a liveness probe', async () => {
     process.env.ORCA_TERMINAL_HANDLE = 'term_worker_env'
 
     await invokeSend(
@@ -238,6 +254,50 @@ describe('orchestration send structured payload flags', () => {
     })
   })
 
+  it.each(['worker_done', 'heartbeat'] as const)(
+    'never probes or remints a %s sender even when a pane key is set',
+    async (type) => {
+      process.env.ORCA_TERMINAL_HANDLE = 'term_worker_env'
+      process.env.ORCA_PANE_KEY = 'tab_worker:leaf_worker'
+
+      await invokeSend(
+        new Map<string, string | boolean>([
+          ['to', 'term_coord'],
+          ['subject', 'update'],
+          ['type', type]
+        ])
+      )
+
+      // Why: pre-payload-authority runtimes only complete a worker_done whose
+      // sender equals the recorded (equally stale) assignee handle, and
+      // coordinator replies route to the sender row the worker's env-handle
+      // `check` actually reads — so lifecycle sends must stay env-verbatim.
+      expect(callMock).toHaveBeenCalledTimes(1)
+      expect(callMock).toHaveBeenCalledWith(
+        'orchestration.send',
+        expect.objectContaining({ from: 'term_worker_env' })
+      )
+    }
+  )
+
+  it('passes ORCA_PANE_KEY as the sender pane identity', async () => {
+    process.env.ORCA_TERMINAL_HANDLE = 'term_worker_env'
+    process.env.ORCA_PANE_KEY = 'tab_worker:leaf_worker'
+
+    await invokeSend(
+      new Map<string, string | boolean>([
+        ['to', 'term_coord'],
+        ['subject', 'done'],
+        ['type', 'worker_done']
+      ])
+    )
+
+    expect(callMock).toHaveBeenCalledWith(
+      'orchestration.send',
+      expect.objectContaining({ senderPaneKey: 'tab_worker:leaf_worker' })
+    )
+  })
+
   it('reports sender resolution failure instead of raw no_active_terminal', async () => {
     getTerminalHandleMock.mockRejectedValue(
       new RuntimeClientError('no_active_terminal', 'no_active_terminal')
@@ -257,6 +317,26 @@ describe('orchestration send structured payload flags', () => {
     })
     expect(callMock).not.toHaveBeenCalled()
   })
+
+  it.each(['worker_done', 'heartbeat'] as const)(
+    'does not resolve an identity-less %s sender from the active terminal',
+    async (type) => {
+      getTerminalHandleMock.mockResolvedValue('term_active_coordinator')
+
+      await expect(
+        invokeSend(
+          new Map<string, string | boolean>([
+            ['to', 'term_coord'],
+            ['subject', 'update'],
+            ['type', type]
+          ])
+        )
+      ).rejects.toMatchObject({ code: 'no_active_sender_terminal' })
+
+      expect(getTerminalHandleMock).not.toHaveBeenCalled()
+      expect(callMock).not.toHaveBeenCalled()
+    }
+  )
 })
 
 describe('orchestration dispatch coordinator handle', () => {
@@ -631,26 +711,110 @@ describe('orchestration timeout flag validation', () => {
     expect(callMock).not.toHaveBeenCalled()
   })
 
-  it('passes a parsed check timeout into the RPC payload', async () => {
+  it('passes a parsed check timeout and peek mode into the RPC payload', async () => {
     process.env.ORCA_TERMINAL_HANDLE = 'term_worker'
     callMock.mockResolvedValue({ result: { messages: [], count: 0 } })
 
     await invokeCheck(
       new Map<string, string | boolean>([
         ['wait', true],
+        ['peek', true],
         ['timeout-ms', '250']
       ])
     )
 
+    // Why: --peek rides with unread:false so pre-peek runtimes fall back to
+    // the non-consuming all mode instead of the destructive mark-read default.
     expect(callMock).toHaveBeenCalledWith('orchestration.check', {
       terminal: 'term_worker',
-      unread: undefined,
+      unread: false,
+      peek: true,
       all: undefined,
       types: undefined,
       inject: undefined,
       wait: true,
       timeoutMs: 250
     })
+  })
+
+  it('filters already-read rows from a peek response for pre-peek runtimes', async () => {
+    process.env.ORCA_TERMINAL_HANDLE = 'term_worker'
+    callMock.mockResolvedValue({
+      result: {
+        messages: [
+          { id: 'msg_old', from_handle: 'a', subject: 'seen', read: 1 },
+          { id: 'msg_new', from_handle: 'a', subject: 'fresh', read: 0 }
+        ],
+        count: 2,
+        formatted: 'banners built from all rows'
+      }
+    })
+    vi.mocked(printResult).mockClear()
+
+    await invokeCheck(new Map<string, string | boolean>([['peek', true]]))
+
+    const response = vi.mocked(printResult).mock.calls[0]?.[0] as {
+      result: { messages: { id: string }[]; count: number; formatted?: string }
+    }
+    expect(response.result.messages.map((m) => m.id)).toEqual(['msg_new'])
+    expect(response.result.count).toBe(1)
+    // Why: the pre-peek runtime built `formatted` from all rows, including
+    // the read one the filter just removed.
+    expect(response.result.formatted).toBeUndefined()
+  })
+
+  it('rejects combined read modes before calling the runtime', async () => {
+    process.env.ORCA_TERMINAL_HANDLE = 'term_worker'
+    callMock.mockClear()
+
+    await expect(
+      invokeCheck(
+        new Map<string, string | boolean>([
+          ['unread', true],
+          ['peek', true]
+        ])
+      )
+    ).rejects.toMatchObject({
+      code: 'invalid_argument',
+      message: expect.stringContaining('read mode')
+    })
+    expect(callMock).not.toHaveBeenCalled()
+  })
+
+  it('warns when a pre-peek runtime returned a full 100-row page', async () => {
+    process.env.ORCA_TERMINAL_HANDLE = 'term_worker'
+    const rows = Array.from({ length: 100 }, (_, i) => ({
+      id: `msg_${i}`,
+      from_handle: 'a',
+      subject: `s${i}`,
+      read: i === 0 ? 0 : 1
+    }))
+    callMock.mockResolvedValue({ result: { messages: rows, count: 100 } })
+    const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
+
+    await invokeCheck(new Map<string, string | boolean>([['peek', true]]))
+
+    expect(errorSpy).toHaveBeenCalledWith(expect.stringContaining('newest 100 messages'))
+    errorSpy.mockRestore()
+  })
+
+  it('fails --peek --wait against a runtime that returned only read rows', async () => {
+    process.env.ORCA_TERMINAL_HANDLE = 'term_worker'
+    callMock.mockResolvedValue({
+      result: {
+        messages: [{ id: 'msg_old', from_handle: 'a', subject: 'seen', read: 1 }],
+        count: 1
+      }
+    })
+
+    await expect(
+      invokeCheck(
+        new Map<string, string | boolean>([
+          ['peek', true],
+          ['wait', true]
+        ])
+      )
+    ).rejects.toMatchObject({ code: 'peek_wait_unsupported' })
   })
 
   it.each(invalidTimeoutValues)('rejects invalid ask --timeout-ms: %s', async (_label, value) => {
@@ -695,5 +859,55 @@ describe('orchestration timeout flag validation', () => {
       },
       { timeoutMs: 5_123 }
     )
+  })
+})
+
+describe('orchestration task-list brief output', () => {
+  it('requests server-side brief and falls back client-side for older runtimes', async () => {
+    callMock.mockReset().mockResolvedValue({
+      result: {
+        // No spec_truncated field — the pre-brief-runtime signature.
+        tasks: [{ id: 'task_1', spec: `First line\n${'detail '.repeat(40)}`, status: 'ready' }],
+        count: 1
+      }
+    })
+    vi.mocked(printResult).mockClear()
+
+    await ORCHESTRATION_HANDLERS['orchestration task-list']({
+      flags: new Map([['brief', true]]),
+      client: { call: callMock },
+      json: true
+    } as never)
+
+    expect(callMock).toHaveBeenCalledWith(
+      'orchestration.taskList',
+      expect.objectContaining({ brief: true })
+    )
+    const response = vi.mocked(printResult).mock.calls[0]?.[0] as {
+      result: { tasks: { spec: string; spec_truncated: boolean }[] }
+    }
+    expect(response.result.tasks[0].spec).toHaveLength(160)
+    expect(response.result.tasks[0].spec_truncated).toBe(true)
+  })
+
+  it('passes server-abbreviated rows through untouched', async () => {
+    const serverTasks = [
+      { id: 'task_1', spec: 'already brief…', status: 'ready', spec_truncated: true }
+    ]
+    callMock.mockReset().mockResolvedValue({ result: { tasks: serverTasks, count: 1 } })
+    vi.mocked(printResult).mockClear()
+
+    await ORCHESTRATION_HANDLERS['orchestration task-list']({
+      flags: new Map([['brief', true]]),
+      client: { call: callMock },
+      json: true
+    } as never)
+
+    const response = vi.mocked(printResult).mock.calls[0]?.[0] as {
+      result: { tasks: { spec: string; spec_truncated: boolean }[] }
+    }
+    // Why: re-abbreviating a server-truncated spec would flip spec_truncated
+    // back to false (the truncated text fits the cap).
+    expect(response.result.tasks).toBe(serverTasks)
   })
 })

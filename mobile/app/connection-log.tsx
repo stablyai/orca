@@ -9,11 +9,11 @@ import { colors, spacing, typography } from '../src/theme/mobile-theme'
 import { ConnectionLog } from '../src/components/ConnectionLog'
 import { loadHosts } from '../src/transport/host-store'
 import { connectionLogStore } from '../src/transport/connection-log-buffer'
+import { useHostClient } from '../src/transport/client-context'
 import {
-  useHostClient,
   useLastConnectedAt,
   useReconnectAttempt
-} from '../src/transport/client-context'
+} from '../src/transport/client-context-connection-metrics'
 import { buildConnectionDiagnosticsReport } from '../src/diagnostics/connection-diagnostics-report'
 import type { ConnectionLogEntry, HostProfile } from '../src/transport/types'
 

@@ -25,7 +25,7 @@ import {
   sameBindings
 } from './keybinding-override-edits'
 import {
-  getShortcutSearchEntry,
+  buildShortcutGlobalSearchMatcher,
   matchesShortcutFilter,
   matchesShortcutLocalSearch,
   normalizeShortcutLocalSearchQuery,
@@ -138,9 +138,10 @@ export function ShortcutsPane(): React.JSX.Element {
   )
   const shortcutSearchQuery = normalizeShortcutLocalSearchQuery(shortcutQuery)
   const shortcutRows = shortcutGroups.flatMap((group) => group.rows)
+  const matchesShortcutGlobalSearch = buildShortcutGlobalSearchMatcher(shortcutRows, searchQuery)
   const matchesShortcutSearch = (row: ShortcutRowsByGroup['rows'][number]): boolean =>
     shortcutSearchQuery !== null &&
-    matchesSettingsSearch(searchQuery, getShortcutSearchEntry(row)) &&
+    matchesShortcutGlobalSearch(row) &&
     matchesShortcutLocalSearch(row, shortcutSearchQuery, platform)
   const baseVisibleRows = shortcutRows.filter((row) => matchesShortcutSearch(row))
   const filterCounts: Record<ShortcutFilter, number> = {
@@ -342,7 +343,10 @@ export function ShortcutsPane(): React.JSX.Element {
           </div>
         ) : null}
 
-        <div className="grid min-h-0 flex-1 gap-6 xl:grid-cols-[16rem_minmax(0,1fr)]">
+        {/* Below xl the rail stacks above the list in one column; pin the rail
+            row to its content (auto) and let the list row take the rest, so the
+            rail can't spill over the list the way two equal auto rows would. */}
+        <div className="grid min-h-0 flex-1 gap-6 max-xl:grid-rows-[auto_minmax(0,1fr)] xl:grid-cols-[16rem_minmax(0,1fr)]">
           <ShortcutFilterRail
             query={shortcutQuery}
             onQueryChange={setShortcutQuery}

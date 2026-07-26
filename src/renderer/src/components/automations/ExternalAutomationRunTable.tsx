@@ -288,7 +288,7 @@ export function ExternalAutomationRunTable({
           <FileText className="size-3.5" />
           <span>
             {pageStart}-{pageEnd}{' '}
-            {translate('auto.components.automations.ExternalAutomationRunTable.7475c0ce96', 'of')}
+            {translate('auto.components.automations.ExternalAutomationRunTable.7475c0ce96', 'of')}{' '}
             {totalCount}
           </span>
         </div>

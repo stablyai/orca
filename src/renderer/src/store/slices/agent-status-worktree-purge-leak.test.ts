@@ -92,11 +92,13 @@ describe('bulk worktree purge evicts pane-scoped agent/unread/input maps (leak r
   it('purgeWorktreeTerminalState drops every pane-scoped map for the removed worktree', () => {
     const store = createTestStore()
     seedPaneState(store)
+    const epochBefore = store.getState().agentStatusEpoch
 
     store.getState().purgeWorktreeTerminalState([WT])
 
     const s = store.getState()
     expect(s.agentStatusByPaneKey[PANE]).toBeUndefined()
+    expect(s.agentStatusEpoch).toBe(epochBefore + 1)
     expect(s.agentLaunchConfigByPaneKey[PANE]).toBeUndefined()
     expect(s.acknowledgedAgentsByPaneKey[PANE]).toBeUndefined()
     expect(s.paneForegroundAgentByPaneKey[PANE]).toBeUndefined()

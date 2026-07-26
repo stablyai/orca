@@ -261,12 +261,50 @@ describe('syncSystemConfigIntoManagedCodexHome', () => {
     expect(runtimeConfig).not.toContain('codex_hooks')
   })
 
+  it('preserves an existing runtime config when the system config is missing', () => {
+    mkdirSync(join(userDataDir, 'codex-runtime-home', 'home'), { recursive: true })
+    const runtimeConfig = [
+      'model = "runtime-model"',
+      '',
+      '[features]',
+      'hooks = true',
+      '',
+      '[projects."/repo"]',
+      'trust_level = "trusted"',
+      ''
+    ].join('\n')
+    writeFileSync(getRuntimeConfigPath(), runtimeConfig, 'utf-8')
+
+    syncSystemConfigIntoManagedCodexHome()
+
+    expect(readFileSync(getRuntimeConfigPath(), 'utf-8')).toBe(runtimeConfig)
+    expect(existsSync(getSystemConfigPath())).toBe(false)
+  })
+
+  it('preserves an existing runtime config when the system config is blank', () => {
+    // Why: a 0-byte config.toml is what a half-written or unhydrated
+    // cloud-synced home shows, not a deliberate "erase all my settings".
+    mkdirSync(join(userDataDir, 'codex-runtime-home', 'home'), { recursive: true })
+    const runtimeConfig = ['model = "runtime-model"', '', '[features]', 'hooks = true', ''].join(
+      '\n'
+    )
+    writeFileSync(getRuntimeConfigPath(), runtimeConfig, 'utf-8')
+    writeFileSync(getSystemConfigPath(), '', 'utf-8')
+
+    syncSystemConfigIntoManagedCodexHome()
+
+    expect(readFileSync(getRuntimeConfigPath(), 'utf-8')).toBe(runtimeConfig)
+  })
+
   it('mirrors system config updates while preserving runtime-owned trust sections', () => {
     mkdirSync(join(userDataDir, 'codex-runtime-home', 'home'), { recursive: true })
     writeFileSync(
       getRuntimeConfigPath(),
       [
         'model = "runtime-model"',
+        '',
+        '[hooks.state]',
+        '# runtime-owned parent',
         '',
         '[hooks.state."runtime-hooks:stop:0:0"]',
         'enabled = false',
@@ -285,6 +323,9 @@ describe('syncSystemConfigIntoManagedCodexHome', () => {
       getSystemConfigPath(),
       [
         'model = "system-model"',
+        '',
+        '[hooks.state]',
+        '# system-owned parent',
         '',
         '[projects."/repo"] # explicit revocation',
         'trust_level = "untrusted"',
@@ -310,6 +351,8 @@ describe('syncSystemConfigIntoManagedCodexHome', () => {
     expect(runtimeConfig).toContain('[projects."/system-only"]')
     expect(runtimeConfig).toContain('[hooks.state."runtime-hooks:stop:0:0"]')
     expect(runtimeConfig).not.toContain('[hooks.state."system-hooks:stop:0:0"]')
+    expect(runtimeConfig).toContain('# runtime-owned parent')
+    expect(runtimeConfig).not.toContain('# system-owned parent')
     expect(runtimeConfig).toContain('trust_level = "untrusted"')
     expect(runtimeConfig.match(/\[projects\."\/repo"\]/g)?.length).toBe(1)
   })
@@ -420,6 +463,80 @@ describe('syncSystemConfigIntoManagedCodexHome', () => {
     expect(runtimeConfig).toContain('[projects."C:/gemini_etl"]')
     expect(runtimeConfig).toContain('trust_level = "untrusted"')
     expect(runtimeConfig).not.toContain('trust_level = "trusted"')
+  })
+
+  it('applies a case-drifted WSL system revocation to the runtime trusted block', () => {
+    // Why: configs written before WSL tails compared case-sensitively can hold
+    // the revocation under drifted casing; err toward revoked, not trusted.
+    mkdirSync(join(userDataDir, 'codex-runtime-home', 'home'), { recursive: true })
+    writeFileSync(
+      getRuntimeConfigPath(),
+      ["[projects.'\\\\wsl$\\Ubuntu\\home\\u\\Repo']", 'trust_level = "trusted"', ''].join('\n'),
+      'utf-8'
+    )
+    writeFileSync(
+      getSystemConfigPath(),
+      ["[projects.'\\\\wsl$\\Ubuntu\\home\\u\\repo']", 'trust_level = "untrusted"', ''].join('\n'),
+      'utf-8'
+    )
+
+    syncSystemConfigIntoManagedCodexHome()
+
+    const runtimeConfig = readFileSync(getRuntimeConfigPath(), 'utf-8')
+    expect(runtimeConfig).toContain('trust_level = "untrusted"')
+    expect(runtimeConfig).not.toContain('trust_level = "trusted"')
+  })
+
+  it('keeps runtime trust when the system config re-trusts the exact-cased WSL project', () => {
+    // Why: after a user re-grants trust, markCodexProjectTrusted appends an
+    // exact-cased trusted block beside a legacy drifted-case revocation; the
+    // loose revocation match must not revert that grant on every mirror pass.
+    mkdirSync(join(userDataDir, 'codex-runtime-home', 'home'), { recursive: true })
+    writeFileSync(
+      getRuntimeConfigPath(),
+      ["[projects.'\\\\wsl$\\Ubuntu\\home\\u\\Repo']", 'trust_level = "trusted"', ''].join('\n'),
+      'utf-8'
+    )
+    writeFileSync(
+      getSystemConfigPath(),
+      [
+        "[projects.'\\\\wsl$\\Ubuntu\\home\\u\\repo']",
+        'trust_level = "untrusted"',
+        '',
+        "[projects.'\\\\wsl$\\Ubuntu\\home\\u\\Repo']",
+        'trust_level = "trusted"',
+        ''
+      ].join('\n'),
+      'utf-8'
+    )
+
+    syncSystemConfigIntoManagedCodexHome()
+
+    const runtimeConfig = readFileSync(getRuntimeConfigPath(), 'utf-8')
+    expect(runtimeConfig).toContain("[projects.'\\\\wsl$\\Ubuntu\\home\\u\\Repo']")
+    expect(runtimeConfig).toContain('trust_level = "trusted"')
+    expect(runtimeConfig).toContain('trust_level = "untrusted"')
+  })
+
+  it('does not let a case-distinct POSIX system revocation clobber runtime trust', () => {
+    mkdirSync(join(userDataDir, 'codex-runtime-home', 'home'), { recursive: true })
+    writeFileSync(
+      getRuntimeConfigPath(),
+      ['[projects."/home/u/Repo"]', 'trust_level = "trusted"', ''].join('\n'),
+      'utf-8'
+    )
+    writeFileSync(
+      getSystemConfigPath(),
+      ['[projects."/home/u/repo"]', 'trust_level = "untrusted"', ''].join('\n'),
+      'utf-8'
+    )
+
+    syncSystemConfigIntoManagedCodexHome()
+
+    const runtimeConfig = readFileSync(getRuntimeConfigPath(), 'utf-8')
+    expect(runtimeConfig.match(/\[projects\./g)).toHaveLength(2)
+    expect(runtimeConfig).toContain('trust_level = "untrusted"')
+    expect(runtimeConfig).toContain('trust_level = "trusted"')
   })
 
   it.each([

@@ -10,6 +10,7 @@ import type {
   WorktreeLineage
 } from '../../../../shared/types'
 import { folderWorkspaceKey } from '../../../../shared/workspace-scope'
+import type * as WorktreeListModule from './WorktreeList'
 import { cloneDefaultWorkspaceStatuses } from '../../../../shared/workspace-statuses'
 
 const mockStore = vi.hoisted(() => ({
@@ -22,6 +23,7 @@ type WorktreeListComponent = React.ComponentType<{
 }>
 
 let WorktreeList: WorktreeListComponent
+let getPinnedWorktreeRevealCollapsedGroupKeys: typeof WorktreeListModule.getPinnedWorktreeRevealCollapsedGroupKeys
 
 function makeFolderWorkspacePathStatusMockState(): Record<string, unknown> {
   return {
@@ -434,12 +436,12 @@ function setFolderWorkspaceFixtureState(
   }
 }
 
-function setPinnedDuplicateFixtureState(): void {
+function setPinnedFixtureState(): void {
   const repo = makeRepo()
   const pinned = makeWorktree({
     id: 'pinned',
     instanceId: 'pinned-instance',
-    displayName: 'pinned duplicate',
+    displayName: 'pinned workspace',
     branch: 'pinned-branch',
     sortOrder: 20
   })
@@ -850,8 +852,10 @@ function escapeRegExp(value: string): string {
 
 describe('WorktreeList lineage child card renderer', () => {
   beforeAll(async () => {
-    WorktreeList = (await import('./WorktreeList')).default as WorktreeListComponent
-  }, 20_000)
+    const module = await import('./WorktreeList')
+    WorktreeList = module.default as WorktreeListComponent
+    getPinnedWorktreeRevealCollapsedGroupKeys = module.getPinnedWorktreeRevealCollapsedGroupKeys
+  }, 60_000)
 
   it('renders project group headers when repos import before worktree rows load', async () => {
     setProjectGroupWithoutWorktreeRowsState()
@@ -883,6 +887,24 @@ describe('WorktreeList lineage child card renderer', () => {
     const markup = await renderWorktreeListMarkup()
 
     expect(markup).not.toContain('data-repo-header-collapse-affordance=""')
+  })
+
+  it('uncollapses pinned reveal through the pinned section after host expansion', () => {
+    const worktree = makeWorktree({
+      id: 'pinned-ssh',
+      instanceId: 'pinned-ssh-instance',
+      displayName: 'Pinned SSH workspace',
+      branch: 'pinned-ssh',
+      sortOrder: 1
+    })
+    worktree.isPinned = true
+
+    expect(
+      getPinnedWorktreeRevealCollapsedGroupKeys({
+        worktree,
+        collapsedGroups: new Set(['host:ssh:builder-1', 'pinned', 'done'])
+      })
+    ).toEqual(['pinned'])
   })
 
   it('renders a collapse chevron on status group headers with worktrees', async () => {
@@ -1112,12 +1134,23 @@ describe('WorktreeList lineage child card renderer', () => {
     ).toBe(30)
   })
 
-  it('points aria-activedescendant at the natural row for active pinned duplicates', async () => {
-    setPinnedDuplicateFixtureState()
+  it('points aria-activedescendant at the pinned row for active pinned workspaces', async () => {
+    setPinnedFixtureState()
+    const markup = await renderWorktreeListMarkup()
+
+    expect(markup).toContain('aria-activedescendant="worktree-list-option-pinned%3Apinned"')
+    expect(markup).toContain('id="worktree-list-option-pinned%3Apinned"')
+    expect(markup).not.toContain('id="worktree-list-option-all%3Apinned"')
+  })
+
+  it('points aria-activedescendant at the natural duplicate when enabled', async () => {
+    setPinnedFixtureState()
+    mockStore.state.settings = { showPinnedWorktreesInGroups: true }
     const markup = await renderWorktreeListMarkup()
 
     expect(markup).toContain('aria-activedescendant="worktree-list-option-all%3Apinned"')
     expect(markup).toContain('id="worktree-list-option-pinned%3Apinned"')
+    expect(markup).toContain('id="worktree-list-option-all%3Apinned"')
   })
 
   it('opens inline rename only for the row-scoped lineage child request', async () => {

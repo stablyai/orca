@@ -204,6 +204,8 @@
   --git-graph-lane-4: #40b0a6;
   --git-graph-lane-5: #b66dff;
   --annotation-highlight: #f59e0b;
+  --markdown-search-match: #facc15;
+  --markdown-search-match-active: #fb923c;
   /* Why: tab-group splits use a dedicated divider — `--border` is too faint on
      card/editor surfaces when panes are side-by-side or stacked. Default must
      meet >=3:1 against `--card`, not only the hover/drag strong state. */
@@ -292,6 +294,8 @@
   --git-graph-lane-4: #40b0a6;
   --git-graph-lane-5: #b66dff;
   --annotation-highlight: #fbbf24;
+  --markdown-search-match: #facc15;
+  --markdown-search-match-active: #fb923c;
   /* Brighter than terminal defaults so the always-visible line clears 3:1 on `--card`. */
   --tab-group-split-divider: #71717a;
   --tab-group-split-divider-strong: #a1a1aa;
@@ -970,7 +974,8 @@
 .editor-header {
   display: flex;
   align-items: center;
-  gap: 12px;
+  /* Keep adjacent actions aligned with the app's compact toolbar spacing. */
+  gap: 4px;
   min-height: 36px;
   padding: 6px 14px;
   background: var(--editor-surface);
@@ -1103,26 +1108,34 @@
   background: color-mix(in srgb, var(--sidebar-accent) 40%, transparent);
 }
 
+/* Why: mixing into the concrete sidebar surface keeps selected contrast stable,
+   including when a custom translucent sidebar theme is active. */
 [data-worktree-card-surface][data-worktree-card-active='primary'] {
-  border-color: color-mix(in srgb, var(--sidebar-border) 40%, transparent);
-  background: color-mix(in srgb, var(--sidebar-foreground) 8%, transparent);
-  box-shadow: 0 1px 2px color-mix(in srgb, var(--sidebar-foreground) 4%, transparent);
+  border-color: color-mix(in srgb, var(--worktree-sidebar-border) 40%, transparent);
+  background: color-mix(in srgb, var(--worktree-sidebar-foreground) 8%, var(--worktree-sidebar));
+  box-shadow: 0 1px 2px color-mix(in srgb, var(--worktree-sidebar-foreground) 4%, transparent);
 }
 
 .dark [data-worktree-card-surface][data-worktree-card-active='primary'] {
-  background: color-mix(in srgb, var(--sidebar-foreground) 10%, transparent);
-  box-shadow: 0 1px 2px color-mix(in srgb, var(--sidebar-foreground) 3%, transparent);
+  border-color: color-mix(
+    in srgb,
+    var(--worktree-sidebar-foreground) 18%,
+    var(--worktree-sidebar-border)
+  );
+  background: color-mix(in srgb, var(--worktree-sidebar-foreground) 16%, var(--worktree-sidebar));
+  box-shadow: 0 1px 2px color-mix(in srgb, var(--worktree-sidebar-foreground) 3%, transparent);
 }
 
 [data-worktree-card-surface][data-worktree-card-active='secondary'] {
   border-color: color-mix(in srgb, var(--sidebar-ring) 25%, transparent);
   background: color-mix(in srgb, var(--sidebar-accent) 45%, transparent);
-  box-shadow: none;
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--sidebar-ring) 15%, transparent);
 }
 
 .dark [data-worktree-card-surface][data-worktree-card-active='secondary'] {
   border-color: color-mix(in srgb, var(--sidebar-ring) 28%, transparent);
   background: color-mix(in srgb, var(--sidebar-accent) 34%, transparent);
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--sidebar-ring) 18%, transparent);
 }
 
 .worktree-agent-row-hover:hover {
@@ -1207,6 +1220,31 @@
     var(--worktree-sidebar-border)
   );
   background: color-mix(in srgb, var(--worktree-sidebar-foreground) 14%, var(--worktree-sidebar));
+}
+
+/* Why: one-shot status-bar callout is portaled fixed above the meters.
+   Opaque popover surface (not glass) so titlebar/terminal chrome cannot
+   bleed through; use design tokens + the documented floating elevation. */
+.status-bar-change-notice-card {
+  border: 1px solid var(--border);
+  background: var(--popover);
+  color: var(--popover-foreground);
+  /* STYLEGUIDE: floating elevation for popovers that escape the editor surface. */
+  box-shadow: 0 10px 24px rgb(0 0 0 / 0.18);
+}
+
+/* Why: caret points down at the usage meters this notice explains. */
+.status-bar-change-notice-card::after {
+  content: '';
+  position: absolute;
+  left: 1.25rem;
+  bottom: -6px;
+  width: 12px;
+  height: 12px;
+  transform: rotate(45deg);
+  border-right: 1px solid var(--border);
+  border-bottom: 1px solid var(--border);
+  background: var(--popover);
 }
 
 /* Why: the first-run Mobile Emulator intro sits directly under that menu row;

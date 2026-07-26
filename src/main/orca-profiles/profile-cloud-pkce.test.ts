@@ -1,4 +1,5 @@
 import { get } from 'node:http'
+import type { IncomingHttpHeaders } from 'node:http'
 import { describe, expect, it, beforeEach, vi } from 'vitest'
 import type { OrcaCloudAuthConfig } from './profile-cloud-auth-config'
 
@@ -16,6 +17,7 @@ import { beginOrcaCloudPkceFlow } from './profile-cloud-pkce'
 
 type HttpResponse = {
   body: string
+  headers: IncomingHttpHeaders
   statusCode: number | undefined
 }
 
@@ -28,6 +30,8 @@ const config: OrcaCloudAuthConfig = {
   profileEndpoint: 'https://orca-cloud.example/v1/desktop/auth/profile',
   orgEndpoint: 'https://orca-cloud.example/v1/desktop/auth/org',
   logoutEndpoint: 'https://orca-cloud.example/v1/desktop/auth/logout',
+  relayTokenEndpoint: 'https://orca-cloud.example/v1/desktop/auth/relay-token',
+  relayDirectorUrl: 'https://relay.example',
   clientId: 'desktop-client',
   scope: 'openid profile email offline_access'
 }
@@ -41,7 +45,7 @@ function readHttp(url: string): Promise<HttpResponse> {
         body += chunk
       })
       response.on('end', () => {
-        resolve({ body, statusCode: response.statusCode })
+        resolve({ body, headers: response.headers, statusCode: response.statusCode })
       })
     })
     request.on('error', reject)
@@ -91,6 +95,11 @@ describe('Orca cloud PKCE flow', () => {
 
     const validResponse = await readHttp(callbackUrl(redirectUri, { code: 'real-code', state }))
     expect(validResponse.statusCode).toBe(200)
+    expect(validResponse.headers['cache-control']).toBe('no-store')
+    expect(validResponse.headers['content-security-policy']).toContain("default-src 'none'")
+    expect(validResponse.body).toContain('<h1>Signed in to Orca</h1>')
+    expect(validResponse.body).toContain('You can close this tab and return to the app.')
+    expect(validResponse.body).not.toContain('class="brand"')
     await expect(flow).resolves.toMatchObject({
       code: 'real-code',
       redirectUri,

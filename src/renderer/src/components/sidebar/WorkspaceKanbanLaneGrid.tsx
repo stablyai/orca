@@ -27,6 +27,7 @@ type WorkspaceKanbanLaneGridProps = {
     event: React.MouseEvent<HTMLElement>,
     worktree: Worktree
   ) => readonly Worktree[]
+  onAssignWorkspaceStatus?: (worktreeIds: readonly string[], status: WorkspaceStatus) => void
   onCreateWorktree: (statusId: string) => void
   onColumnResizeStart: (event: React.PointerEvent<HTMLElement>) => void
   onColumnResizeKeyDown: (event: React.KeyboardEvent<HTMLElement>) => void
@@ -49,6 +50,7 @@ export default function WorkspaceKanbanLaneGrid({
   onActivate,
   onSelectionGesture,
   onContextMenuSelect,
+  onAssignWorkspaceStatus,
   onCreateWorktree,
   onColumnResizeStart,
   onColumnResizeKeyDown
@@ -81,6 +83,7 @@ export default function WorkspaceKanbanLaneGrid({
           onActivate={onActivate}
           onSelectionGesture={onSelectionGesture}
           onContextMenuSelect={onContextMenuSelect}
+          onAssignWorkspaceStatus={onAssignWorkspaceStatus}
           onCreateWorktree={onCreateWorktree}
           onColumnResizeStart={onColumnResizeStart}
           onColumnResizeKeyDown={onColumnResizeKeyDown}

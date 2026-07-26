@@ -32,6 +32,7 @@ export type MessageRow = {
   sequence: number
   created_at: string
   delivered_at: string | null
+  sender_pane_key: string | null
 }
 
 export type TaskRow = {
@@ -52,6 +53,7 @@ export type DispatchContextRow = {
   id: string
   task_id: string
   assignee_handle: string | null
+  assignee_pane_key: string | null
   status: DispatchStatus
   failure_count: number
   last_failure: string | null

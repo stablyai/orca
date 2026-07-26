@@ -1,4 +1,4 @@
-import { BrowserWindow, ipcMain, type WebContents } from 'electron'
+import { BrowserWindow, ipcMain, webContents, type WebContents } from 'electron'
 import type { Store } from '../persistence'
 import type { PersistedUIState } from '../../shared/types'
 import { isFeatureInteractionId } from '../../shared/feature-interactions'
@@ -13,6 +13,35 @@ export function clearTrustedUIRendererWebContentsId(webContentsId: number): void
   if (trustedUIRendererWebContentsId === webContentsId) {
     trustedUIRendererWebContentsId = null
   }
+}
+
+export function sendToTrustedUIRenderer(
+  channel: string,
+  payload: unknown,
+  excludedWebContentsId?: number
+): void {
+  const renderer = getTrustedUIRendererWebContents(excludedWebContentsId)
+  renderer?.send(channel, payload)
+}
+
+export function getTrustedUIRendererWebContents(
+  excludedWebContentsId?: number
+): WebContents | null {
+  // Why: exact targeting avoids waking retained browser/utility windows that cannot consume app UI events.
+  const rendererId = trustedUIRendererWebContentsId
+  if (rendererId == null || rendererId === excludedWebContentsId) {
+    return null
+  }
+  const renderer = webContents.fromId(rendererId)
+  if (!renderer || renderer.isDestroyed()) {
+    return null
+  }
+  return renderer
+}
+
+export function getTrustedUIRendererWindow(): BrowserWindow | null {
+  const renderer = getTrustedUIRendererWebContents()
+  return renderer ? BrowserWindow.fromWebContents(renderer) : null
 }
 
 export function registerUIHandlers(store: Store): void {
@@ -58,7 +87,7 @@ export function registerUIHandlers(store: Store): void {
   })
 }
 
-function isTrustedUIRenderer(sender: WebContents): boolean {
+export function isTrustedUIRenderer(sender: WebContents): boolean {
   if (sender.isDestroyed() || sender.getType() !== 'window') {
     return false
   }

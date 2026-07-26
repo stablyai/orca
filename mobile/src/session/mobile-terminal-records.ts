@@ -1,4 +1,4 @@
-import type { MobileTerminalTheme } from '../terminal/TerminalWebView'
+import type { MobileTerminalTheme } from '../terminal/terminal-webview-contract'
 import type { AgentStatusEntry } from '../../../src/shared/agent-status-types'
 
 export type TerminalRecord = {
@@ -116,6 +116,20 @@ function mobileSessionTabEqual(
   }
 }
 
+// Reconcile a partial session snapshot against the last known record for the
+// same terminal. The snapshot owns live fields (title, activity); the known
+// theme only survives when the snapshot omits it, since lightweight snapshots
+// can drop it.
+function mergeTerminalSnapshotWithKnownRecord(
+  snapshot: TerminalRecord,
+  known: TerminalRecord
+): TerminalRecord {
+  return {
+    ...snapshot,
+    terminalTheme: snapshot.terminalTheme ?? known.terminalTheme
+  }
+}
+
 export function mergeTerminalRecordsByCurrentOrder(
   terminalTabs: TerminalRecord[],
   currentTerminals: TerminalRecord[]
@@ -126,7 +140,12 @@ export function mergeTerminalRecordsByCurrentOrder(
   const terminalTabsByHandle = new Map(terminalTabs.map((tab) => [tab.handle, tab]))
   const currentHandles = new Set(currentTerminals.map((terminal) => terminal.handle))
   return [
-    ...currentTerminals.map((terminal) => terminalTabsByHandle.get(terminal.handle) ?? terminal),
+    ...currentTerminals.map((terminal) => {
+      const snapshotTerminal = terminalTabsByHandle.get(terminal.handle)
+      return snapshotTerminal
+        ? mergeTerminalSnapshotWithKnownRecord(snapshotTerminal, terminal)
+        : terminal
+    }),
     ...terminalTabs.filter((terminal) => !currentHandles.has(terminal.handle))
   ]
 }

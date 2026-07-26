@@ -14,6 +14,9 @@ describe('SPEECH_MODEL_CATALOG', () => {
     expect(manifest?.files).toEqual(['model.int8.onnx', 'tokens.txt'])
     expect(manifest?.archiveFormat).toBe('tar.bz2')
     expect(manifest?.sizeBytes).toBe(489_389_564)
+    expect(manifest?.downloadUrl).toBe(
+      'https://github.com/k2-fsa/sherpa-onnx/releases/download/asr-models/sherpa-onnx-nemo-parakeet-tdt_ctc-0.6b-ja-35000-int8.tar.bz2'
+    )
     expect(manifest?.archiveSha256).toBe(
       '4b0a800ef29f4f4c8667339bf6f60d5bfdc2852ddc9dc5741aea65b6f8d1306b'
     )

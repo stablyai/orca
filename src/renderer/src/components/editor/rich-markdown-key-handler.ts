@@ -3,8 +3,8 @@ import type { Editor } from '@tiptap/react'
 import { getShortcutPlatform } from '@/lib/shortcut-platform'
 import { useAppStore } from '@/store'
 import { isMarkdownPreviewFindShortcut } from './markdown-preview-search'
-import { editorShortcutMatches } from './editor-shortcuts'
-import { getLinkBubblePosition, type LinkBubbleState } from './RichMarkdownLinkBubble'
+import { handleRichMarkdownAddReviewNoteShortcut } from './rich-markdown-annotation-shortcut'
+import type { LinkBubbleState } from './RichMarkdownLinkBubble'
 import { commitRow, type DocLinkMenuRow, type DocLinkMenuState } from './rich-markdown-commands'
 import {
   runSlashCommand,
@@ -18,12 +18,20 @@ import {
   exitTrailingEmptyOrderedListItem
 } from './rich-markdown-list-continuation'
 import { deleteAdjacentEmptyParagraph } from './rich-markdown-empty-paragraph-delete'
+import { handleRichMarkdownCitationKey } from './rich-markdown-citation-keyboard'
+import type { RichMarkdownHtmlSuperscriptLinkContext } from './rich-markdown-html-superscript-link-context'
+import { handleRichMarkdownLinkShortcut } from './rich-markdown-link-shortcut'
+import { handleRichMarkdownSaveShortcut } from './rich-markdown-save-shortcut'
+import { flushPendingProseMirrorSelection } from './rich-markdown-selection-flush'
 
 export type KeyHandlerContext = {
   isMac: boolean
   editorRef: MutableRefObject<Editor | null>
   rootRef: MutableRefObject<HTMLDivElement | null>
   lastCommittedMarkdownRef: MutableRefObject<string>
+  originalSourceRef: MutableRefObject<string>
+  baseCanonicalRef: MutableRefObject<string>
+  reconcileRoundTripRef: MutableRefObject<(markdown: string) => string | null>
   onContentChangeRef: MutableRefObject<(content: string) => void>
   onSaveRef: MutableRefObject<(content: string) => void>
   isEditingLinkRef: MutableRefObject<boolean>
@@ -38,57 +46,20 @@ export type KeyHandlerContext = {
   typedEmptyOrderedListMarkerRef: MutableRefObject<boolean>
   flushPendingSerialization: () => void
   openSearchRef: MutableRefObject<() => void>
+  openAnnotationPopoverRef: MutableRefObject<(requireLiveSelection?: boolean) => boolean>
   setIsEditingLink: (editing: boolean) => void
   setLinkBubble: (bubble: LinkBubbleState | null) => void
   setSelectedCommandIndex: Dispatch<SetStateAction<number>>
   setSelectedDocLinkIndex: Dispatch<SetStateAction<number>>
   setSlashMenu: Dispatch<SetStateAction<SlashMenuState | null>>
   setDocLinkMenu: (menu: DocLinkMenuState | null) => void
+  openSelectedHtmlSuperscriptLink?: () => boolean
+  linkBubbleOwnerId: string
+  htmlSuperscriptLinkContext: RichMarkdownHtmlSuperscriptLinkContext
 }
 
 function isComposingMarkdownInput(event: KeyboardEvent, editor: Editor | null): boolean {
   return event.isComposing || editor?.view.composing === true
-}
-
-type NativeSelectionSnapshot = {
-  anchorNode: Node | null
-  anchorOffset: number
-  focusNode: Node | null
-  focusOffset: number
-}
-
-type ProseMirrorDomObserver = {
-  currentSelection?: {
-    set?: (selection: NativeSelectionSnapshot) => void
-  }
-  flush?: () => void
-}
-
-type ProseMirrorViewWithDomObserver = Editor['view'] & {
-  domObserver?: ProseMirrorDomObserver
-}
-
-function flushPendingProseMirrorSelection(editor: Editor): void {
-  let observer: ProseMirrorDomObserver | undefined
-  try {
-    observer = (editor.view as ProseMirrorViewWithDomObserver).domObserver
-  } catch {
-    return
-  }
-
-  if (typeof observer?.flush !== 'function') {
-    return
-  }
-
-  // Why: immediate Tab after a mouse click can run before ProseMirror has
-  // copied the native selection into editor state, so list commands hit stale item state.
-  observer.currentSelection?.set?.({
-    anchorNode: null,
-    anchorOffset: 0,
-    focusNode: null,
-    focusOffset: 0
-  })
-  observer.flush()
 }
 
 /**
@@ -101,6 +72,16 @@ export function createRichMarkdownKeyHandler(
   return (_view, event) => {
     const mod = ctx.isMac ? event.metaKey && !event.ctrlKey : event.ctrlKey && !event.metaKey
     if (
+      handleRichMarkdownCitationKey({
+        editor: ctx.editorRef.current,
+        event,
+        linkBubbleOwnerId: ctx.linkBubbleOwnerId,
+        onOpen: ctx.openSelectedHtmlSuperscriptLink
+      })
+    ) {
+      return true
+    }
+    if (
       isMarkdownPreviewFindShortcut(
         event,
         getShortcutPlatform(),
@@ -111,15 +92,10 @@ export function createRichMarkdownKeyHandler(
       ctx.openSearchRef.current()
       return true
     }
-    if (editorShortcutMatches('editor.save', event)) {
-      event.preventDefault()
-      // Why: flush any pending debounced serialization so the save
-      // captures the very latest editor content, not a stale snapshot.
-      ctx.flushPendingSerialization()
-      const markdown = ctx.editorRef.current?.getMarkdown() ?? ctx.lastCommittedMarkdownRef.current
-      ctx.lastCommittedMarkdownRef.current = markdown
-      ctx.onContentChangeRef.current(markdown)
-      ctx.onSaveRef.current(markdown)
+    if (handleRichMarkdownSaveShortcut(ctx, event)) {
+      return true
+    }
+    if (handleRichMarkdownAddReviewNoteShortcut(ctx, event)) {
       return true
     }
 
@@ -131,29 +107,18 @@ export function createRichMarkdownKeyHandler(
       return true
     }
 
-    // Link: Cmd/Ctrl+K — insert or edit a hyperlink.
-    if (mod && event.key.toLowerCase() === 'k') {
-      event.preventDefault()
-      const ed = ctx.editorRef.current
-      if (!ed) {
-        return true
-      }
-
-      if (ctx.isEditingLinkRef.current) {
-        ctx.setIsEditingLink(false)
-        if (!ed.isActive('link')) {
-          ctx.setLinkBubble(null)
-        }
-        ed.commands.focus()
-        return true
-      }
-
-      const pos = getLinkBubblePosition(ed, ctx.rootRef.current)
-      if (pos) {
-        const href = ed.isActive('link') ? (ed.getAttributes('link').href as string) || '' : ''
-        ctx.setLinkBubble({ href, ...pos })
-        ctx.setIsEditingLink(true)
-      }
+    if (
+      handleRichMarkdownLinkShortcut({
+        editor: ctx.editorRef.current,
+        event,
+        htmlSuperscriptLinkContext: ctx.htmlSuperscriptLinkContext,
+        isEditing: ctx.isEditingLinkRef.current,
+        isMac: ctx.isMac,
+        root: ctx.rootRef.current,
+        setEditing: ctx.setIsEditingLink,
+        setLinkBubble: ctx.setLinkBubble
+      })
+    ) {
       return true
     }
 

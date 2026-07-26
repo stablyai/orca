@@ -2,19 +2,28 @@
 request timestamps, and follow-up scheduling against shared module state. */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { GitHubPRRefreshCandidate, PRInfo } from '../../shared/types'
+import { isWslUncPath } from '../../shared/wsl-paths'
 
 const {
   sendMock,
+  sendToTrustedUIRendererMock,
   getAllWebContentsMock,
   getPRForBranchOutcomeMock,
+  getOriginGitHubApiRepositoryMock,
   getRateLimitMock,
-  rateLimitGuardMock
+  noteRepositoryRateLimitSpendMock,
+  repositoryRateLimitGuardMock,
+  spendsSharedGitHubComQuotaMock
 } = vi.hoisted(() => ({
   sendMock: vi.fn(),
+  sendToTrustedUIRendererMock: vi.fn(),
   getAllWebContentsMock: vi.fn(),
   getPRForBranchOutcomeMock: vi.fn(),
+  getOriginGitHubApiRepositoryMock: vi.fn(),
   getRateLimitMock: vi.fn(),
-  rateLimitGuardMock: vi.fn()
+  noteRepositoryRateLimitSpendMock: vi.fn(),
+  repositoryRateLimitGuardMock: vi.fn(),
+  spendsSharedGitHubComQuotaMock: vi.fn()
 }))
 
 vi.mock('electron', () => ({
@@ -27,10 +36,19 @@ vi.mock('./client', () => ({
   getPRForBranchOutcome: getPRForBranchOutcomeMock
 }))
 
+vi.mock('./github-api-repository', () => ({
+  getOriginGitHubApiRepository: getOriginGitHubApiRepositoryMock
+}))
+
 vi.mock('./rate-limit', () => ({
   getRateLimit: getRateLimitMock,
-  noteRateLimitSpend: vi.fn(),
-  rateLimitGuard: rateLimitGuardMock
+  noteRepositoryRateLimitSpend: noteRepositoryRateLimitSpendMock,
+  repositoryRateLimitGuard: repositoryRateLimitGuardMock,
+  spendsSharedGitHubComQuota: spendsSharedGitHubComQuotaMock
+}))
+
+vi.mock('../ipc/ui', () => ({
+  sendToTrustedUIRenderer: sendToTrustedUIRendererMock
 }))
 
 function makeCandidate(
@@ -82,11 +100,29 @@ describe('pr-refresh-coordinator', () => {
     vi.useFakeTimers()
     vi.setSystemTime(1_000)
     sendMock.mockReset()
+    sendToTrustedUIRendererMock.mockReset()
+    sendToTrustedUIRendererMock.mockImplementation((channel, payload) => {
+      sendMock(channel, payload)
+    })
     getAllWebContentsMock.mockReset()
     getPRForBranchOutcomeMock.mockReset()
+    getOriginGitHubApiRepositoryMock.mockReset()
+    getOriginGitHubApiRepositoryMock.mockResolvedValue({
+      owner: 'acme',
+      repo: 'widgets',
+      host: 'github.com'
+    })
     getRateLimitMock.mockReset()
-    rateLimitGuardMock.mockReset()
-    rateLimitGuardMock.mockReturnValue({ blocked: false })
+    noteRepositoryRateLimitSpendMock.mockReset()
+    repositoryRateLimitGuardMock.mockReset()
+    repositoryRateLimitGuardMock.mockReturnValue({ blocked: false })
+    spendsSharedGitHubComQuotaMock.mockReset()
+    spendsSharedGitHubComQuotaMock.mockImplementation(
+      (repository: { host?: string } | null, options?: { cwd?: string; wslDistro?: string }) =>
+        (!repository?.host || repository.host.toLowerCase() === 'github.com') &&
+        !options?.wslDistro &&
+        !(options?.cwd && isWslUncPath(options.cwd))
+    )
     getAllWebContentsMock.mockReturnValue([
       {
         id: 1,
@@ -99,6 +135,29 @@ describe('pr-refresh-coordinator', () => {
 
   afterEach(() => {
     vi.useRealTimers()
+  })
+
+  it('sends each refresh event once without broadcasting to 100 browser guests', async () => {
+    const guestSends = Array.from({ length: 100 }, () => vi.fn())
+    getAllWebContentsMock.mockReturnValue(
+      guestSends.map((send, index) => ({
+        id: index + 100,
+        isDestroyed: () => false,
+        send
+      }))
+    )
+    const { enqueuePRRefresh } = await import('./pr-refresh-coordinator')
+
+    enqueuePRRefresh(makeCandidate({ isBare: true }), 'manual')
+
+    expect(sendToTrustedUIRendererMock).toHaveBeenCalledOnce()
+    expect(sendToTrustedUIRendererMock).toHaveBeenCalledWith(
+      'gh:prRefreshEvent',
+      expect.objectContaining({ status: 'skipped', skippedReason: 'bare' })
+    )
+    expect(sendMock).toHaveBeenCalledOnce()
+    expect(getAllWebContentsMock).not.toHaveBeenCalled()
+    expect(guestSends.reduce((total, send) => total + send.mock.calls.length, 0)).toBe(0)
   })
 
   it('forwards the candidate worktree head into the branch lookup options', async () => {
@@ -536,6 +595,75 @@ describe('pr-refresh-coordinator', () => {
     expect(pausedEvents).toHaveLength(0)
   })
 
+  it.each([
+    {
+      scope: 'GitHub Enterprise',
+      repository: { owner: 'acme', repo: 'widgets', host: 'github.acme-corp.com' },
+      repoPath: '/repo',
+      localGitOptions: undefined
+    },
+    {
+      scope: 'WSL',
+      repository: { owner: 'acme', repo: 'widgets', host: 'github.com' },
+      repoPath: '/repo',
+      localGitOptions: { wslDistro: 'Ubuntu' }
+    },
+    {
+      scope: 'implicit WSL UNC',
+      repository: { owner: 'acme', repo: 'widgets', host: 'github.com' },
+      repoPath: String.raw`\\wsl.localhost\Ubuntu\home\me\widgets`,
+      localGitOptions: undefined
+    }
+  ])('bypasses the shared budget for $scope background refreshes', async (testCase) => {
+    const { enqueuePRRefresh } = await import('./pr-refresh-coordinator')
+    getOriginGitHubApiRepositoryMock.mockResolvedValue(testCase.repository)
+    getPRForBranchOutcomeMock.mockResolvedValue({
+      kind: 'no-pr',
+      fetchedAt: Date.now()
+    })
+    const executionOptions = {
+      cwd: testCase.repoPath,
+      ...testCase.localGitOptions
+    }
+
+    enqueuePRRefresh(
+      makeCandidate({
+        repoPath: testCase.repoPath,
+        localGitOptions: testCase.localGitOptions
+      }),
+      'active',
+      80,
+      1
+    )
+
+    await vi.advanceTimersByTimeAsync(0)
+
+    expect(getRateLimitMock).not.toHaveBeenCalled()
+    expect(repositoryRateLimitGuardMock).toHaveBeenCalledWith(
+      testCase.repository,
+      'core',
+      executionOptions
+    )
+    expect(repositoryRateLimitGuardMock).toHaveBeenCalledWith(
+      testCase.repository,
+      'graphql',
+      executionOptions
+    )
+    expect(noteRepositoryRateLimitSpendMock).toHaveBeenCalledWith(
+      testCase.repository,
+      'core',
+      1,
+      executionOptions
+    )
+    expect(noteRepositoryRateLimitSpendMock).toHaveBeenCalledWith(
+      testCase.repository,
+      'graphql',
+      1,
+      executionOptions
+    )
+    expect(getPRForBranchOutcomeMock).toHaveBeenCalledTimes(1)
+  })
+
   it('does not consume active burst slots for rate-limit pauses', async () => {
     const { enqueuePRRefresh } = await import('./pr-refresh-coordinator')
     // Why: keyed on drained items (one getRateLimit call each) rather than
@@ -546,7 +674,7 @@ describe('pr-refresh-coordinator', () => {
       drainedItems += 1
       return { ok: true }
     })
-    rateLimitGuardMock.mockImplementation(() =>
+    repositoryRateLimitGuardMock.mockImplementation(() =>
       drainedItems <= 3
         ? { blocked: true, remaining: 0, limit: 5000, resetAt: 61 }
         : { blocked: false }

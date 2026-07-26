@@ -313,11 +313,19 @@ describe('source-control AI resolution', () => {
       }).params.customPrompt
     ).toBe('Repo commit style')
     expect(resolve('branchName').params.customPrompt).toBe('Global branch style')
+    expect(resolve('branchName').params.commandInputTemplate).toBe(
+      'Global branch style\n\n{basePrompt}'
+    )
     expect(
       resolve('branchName', {
         instructionsByOperation: { branchName: 'Repo branch style' }
       }).params.customPrompt
     ).toBe('Repo branch style')
+    expect(
+      resolve('branchName', {
+        instructionsByOperation: { branchName: 'Repo branch style' }
+      }).params.commandInputTemplate
+    ).toBe('Repo branch style\n\n{basePrompt}')
   })
 
   it('does not treat null repo instructions as configured overrides', () => {
@@ -368,6 +376,12 @@ describe('source-control AI resolution', () => {
     expect(migrated.instructionsByOperation.commitMessage).toBe('Legacy commit prompt')
     expect(migrated.instructionsByOperation.pullRequest).toBe('')
     expect(migrated.instructionsByOperation.branchName).toBe('Legacy commit prompt')
+    expect(migrated.actions?.commitMessage?.commandInputTemplate).toBe(
+      '{basePrompt}\n\nLegacy commit prompt'
+    )
+    expect(migrated.actions?.branchName?.commandInputTemplate).toBe(
+      'Legacy commit prompt\n\n{basePrompt}'
+    )
   })
 
   it('merges legacy commit-message updates without wiping PR-only settings', () => {
@@ -702,7 +716,7 @@ describe('source-control AI resolution', () => {
           commandInputTemplate: '{basePrompt}'
         },
         branchName: {
-          commandInputTemplate: '{basePrompt}\n\nbranch style'
+          commandInputTemplate: 'branch style\n\n{basePrompt}'
         }
       },
       prCreationDefaults: {

@@ -11,6 +11,8 @@ import type { WebContents } from 'electron'
 import type { Event as WatcherEvent } from '@parcel/watcher'
 import { queueWatcherEvents } from './filesystem-watcher-event-batch'
 import { parseWslUncPath } from '../../shared/wsl-paths'
+import { createWslWatcherProcessExit, createWslWatcherStartup } from './wsl-watcher-process-exit'
+import { reserveWatcherChild, WatcherChildCapacityError } from './parcel-watcher-child-registry'
 
 export type WatcherSubscription = {
   unsubscribe(): Promise<void>
@@ -27,6 +29,7 @@ export type WatchedRoot = {
   subscription: WatcherSubscription
   listeners: Map<number, WebContents>
   batch: DebouncedBatch
+  rootPath?: string
 }
 
 export type WslWatcherDeps = {
@@ -35,11 +38,9 @@ export type WslWatcherDeps = {
   watchedRoots: Map<string, WatchedRoot>
 }
 
-const POLL_INTERVAL_MS = 2000
-const POLL_INTERVAL_SECONDS = Math.max(1, Math.ceil(POLL_INTERVAL_MS / 1000))
+const POLL_INTERVAL_SECONDS = 2
 const STARTUP_TIMEOUT_MS = 10_000
-const SNAPSHOT_START = '\x1e'
-const SNAPSHOT_END = '\x1f'
+const [SNAPSHOT_START, SNAPSHOT_END] = ['\x1e', '\x1f']
 const MAX_STREAM_BUFFER_CHARS = 10 * 1024 * 1024
 
 type WslSnapshotEntry = {
@@ -150,8 +151,14 @@ function markOverflowWithoutUncStat(root: WatchedRoot): void {
 export async function createWslWatcher(
   rootKey: string,
   worktreePath: string,
-  deps: WslWatcherDeps
+  deps: WslWatcherDeps,
+  signal?: AbortSignal
 ): Promise<WatchedRoot> {
+  // Why: honor local-install cancellation before spawning a WSL snapshot process.
+  if (signal?.aborted) {
+    throw new DOMException('WSL watcher subscription aborted', 'AbortError')
+  }
+
   const wsl = parseWslUncPath(worktreePath)
   if (!wsl) {
     throw new Error(`Not a WSL path: ${worktreePath}`)
@@ -162,7 +169,8 @@ export async function createWslWatcher(
   const root: WatchedRoot = {
     subscription: null!,
     listeners: new Map(),
-    batch: { events: [], overflowed: false, timer: null, firstEventAt: 0 }
+    batch: { events: [], overflowed: false, timer: null, firstEventAt: 0 },
+    rootPath: worktreePath
   }
 
   let disposed = false
@@ -173,25 +181,7 @@ export async function createWslWatcher(
   const stderrDecoder = new StringDecoder('utf8')
   let stderrTail = ''
 
-  let resolveInitial!: () => void
-  let rejectInitial!: (error: Error) => void
-  let initialSettled = false
-  const initialSnapshotReady = new Promise<void>((resolve, reject) => {
-    resolveInitial = resolve
-    rejectInitial = reject
-  })
-
-  function settleInitial(error?: Error): void {
-    if (initialSettled) {
-      return
-    }
-    initialSettled = true
-    if (error) {
-      rejectInitial(error)
-    } else {
-      resolveInitial()
-    }
-  }
+  const startup = createWslWatcherStartup()
 
   function signalWatcherStopped(): void {
     if (stopped) {
@@ -210,7 +200,7 @@ export async function createWslWatcher(
     const nextSnapshot = parseSnapshotFrame(frame, distro)
     if (!prevSnapshot) {
       prevSnapshot = nextSnapshot
-      settleInitial()
+      startup.settle()
       return
     }
     const events = diffSnapshots(prevSnapshot, nextSnapshot)
@@ -248,25 +238,40 @@ export async function createWslWatcher(
   }
 
   let child: ChildProcessWithoutNullStreams
+  const releaseChildReservation = reserveWatcherChild()
+  if (!releaseChildReservation) {
+    throw new WatcherChildCapacityError()
+  }
   try {
     child = spawn('wsl.exe', ['-d', distro, '--', 'sh', '-s', '--', linuxPath], {
       stdio: ['pipe', 'pipe', 'pipe'],
       windowsHide: true
     })
   } catch (error) {
+    releaseChildReservation()
     throw error instanceof Error ? error : new Error(String(error))
   }
 
+  // Why: the physical-exit owner releases the shared process reservation on
+  // exactly the same close/error proof that settles destructive cleanup.
+  const processExit = createWslWatcherProcessExit(child, worktreePath, releaseChildReservation)
+
+  const onAbort = (): void => {
+    startup.settle(new DOMException('WSL watcher subscription aborted', 'AbortError'))
+    processExit.requestStopBestEffort()
+  }
+  signal?.addEventListener('abort', onAbort, { once: true })
+
   const startupTimer = setTimeout(() => {
-    settleInitial(new Error(`Timed out starting WSL watcher for ${worktreePath}`))
-    child.kill()
+    startup.settle(new Error(`Timed out starting WSL watcher for ${worktreePath}`))
+    processExit.requestStopBestEffort()
   }, STARTUP_TIMEOUT_MS)
 
   child.stdin.on('error', (error) => {
     // Why: WSL can exit before reading the script; handle EPIPE here so the
     // startup failure rejects the watcher instead of crashing on a stream error.
-    if (!initialSettled) {
-      settleInitial(error)
+    if (!startup.settled) {
+      startup.settle(error)
     }
   })
 
@@ -283,8 +288,8 @@ export async function createWslWatcher(
   })
 
   child.stdout.on('error', (error) => {
-    if (!initialSettled) {
-      settleInitial(error)
+    if (!startup.settled) {
+      startup.settle(error)
       return
     }
     if (!disposed) {
@@ -297,8 +302,13 @@ export async function createWslWatcher(
   })
 
   child.once('error', (error) => {
-    if (!initialSettled) {
-      settleInitial(error)
+    // Why: a child that never acquired a pid has no OS owner to await. Kill
+    // errors for an already-spawned child still require the close event.
+    if (child.pid === undefined) {
+      processExit.markPhysicalExit()
+    }
+    if (!startup.settled) {
+      startup.settle(error)
       return
     }
     if (!disposed) {
@@ -307,9 +317,10 @@ export async function createWslWatcher(
   })
 
   child.once('close', (code, signal) => {
-    if (!initialSettled) {
+    processExit.markPhysicalExit()
+    if (!startup.settled) {
       const suffix = stderrTail.trim() ? `: ${stderrTail.trim()}` : ''
-      settleInitial(
+      startup.settle(
         new Error(`WSL watcher exited before first snapshot (${code ?? signal})${suffix}`)
       )
       return
@@ -319,14 +330,25 @@ export async function createWslWatcher(
     }
   })
 
-  child.stdin.end(buildSnapshotScript(deps.ignoreDirs))
-
-  await initialSnapshotReady.finally(() => clearTimeout(startupTimer))
+  try {
+    child.stdin.end(buildSnapshotScript(deps.ignoreDirs))
+    await startup.ready
+  } catch (error) {
+    // Why: cancellation is part of destructive removal. Do not let the failed
+    // install disappear from ownership until WSL confirms the child exited.
+    startup.settle(error instanceof Error ? error : new Error(String(error)))
+    await startup.ready.catch(() => undefined)
+    await processExit.stopAndWait()
+    throw error
+  } finally {
+    clearTimeout(startupTimer)
+    signal?.removeEventListener('abort', onAbort)
+  }
 
   root.subscription = {
     unsubscribe: async () => {
       disposed = true
-      child.kill()
+      await processExit.stopAndWait()
     }
   }
 

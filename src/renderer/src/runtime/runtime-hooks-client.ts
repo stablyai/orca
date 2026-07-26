@@ -54,11 +54,12 @@ export async function inspectRuntimeSetupScriptImports(
 
 export async function readRuntimeIssueCommand(
   settings: Pick<GlobalSettings, 'activeRuntimeEnvironmentId'> | null | undefined,
-  repoId: string
+  repoId: string,
+  hostId?: ExecutionHostId
 ): Promise<IssueCommandReadResult> {
   const target = getActiveRuntimeTarget(settings)
   if (target.kind !== 'environment') {
-    return window.api.hooks.readIssueCommand({ repoId })
+    return window.api.hooks.readIssueCommand({ repoId, ...(hostId ? { hostId } : {}) })
   }
   return callRuntimeRpc<IssueCommandReadResult>(
     target,
@@ -71,11 +72,12 @@ export async function readRuntimeIssueCommand(
 export async function writeRuntimeIssueCommand(
   settings: Pick<GlobalSettings, 'activeRuntimeEnvironmentId'> | null | undefined,
   repoId: string,
-  content: string
+  content: string,
+  hostId?: ExecutionHostId
 ): Promise<void> {
   const target = getActiveRuntimeTarget(settings)
   if (target.kind !== 'environment') {
-    await window.api.hooks.writeIssueCommand({ repoId, content })
+    await window.api.hooks.writeIssueCommand({ repoId, content, ...(hostId ? { hostId } : {}) })
     return
   }
   await callRuntimeRpc(

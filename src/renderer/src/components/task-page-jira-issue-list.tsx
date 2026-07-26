@@ -22,6 +22,7 @@ type TaskPageJiraIssueListProps = {
   onStartWorkspace: (issue: JiraIssue) => void
   selectedIssue: JiraIssue | null
   showSiteContext: boolean
+  statusDirection?: 'asc' | 'desc'
   statusOrder: JiraProjectStatusOrder | null
 }
 
@@ -50,7 +51,8 @@ function sectionColumnRank(
 
 export function groupJiraIssuesByStatus(
   issues: readonly JiraIssue[],
-  statusOrder: JiraProjectStatusOrder | null
+  statusOrder: JiraProjectStatusOrder | null,
+  statusDirection: 'asc' | 'desc' = 'asc'
 ): TaskPageJiraIssueSection[] {
   const sections = new Map<string, TaskPageJiraIssueSection>()
   for (const issue of issues) {
@@ -67,11 +69,12 @@ export function groupJiraIssuesByStatus(
   const sectionRanks = new Map(
     [...sections.values()].map((section) => [section.key, sectionColumnRank(section, ranks)])
   )
-  return [...sections.values()].sort((a, b) => {
+  const sortedSections = [...sections.values()].sort((a, b) => {
     const rankA = sectionRanks.get(a.key) ?? Number.POSITIVE_INFINITY
     const rankB = sectionRanks.get(b.key) ?? Number.POSITIVE_INFINITY
     return rankA === rankB ? a.label.localeCompare(b.label) : rankA - rankB
   })
+  return statusDirection === 'desc' ? sortedSections.toReversed() : sortedSections
 }
 
 function isSelectedIssue(issue: JiraIssue, selectedIssue: JiraIssue | null): boolean {
@@ -123,7 +126,7 @@ function JiraIssueRow({
         }
       }}
       className={cn(
-        'group/row grid min-h-12 cursor-pointer grid-cols-[minmax(0,1fr)_auto] items-center gap-3 px-3 py-2 text-left transition hover:bg-accent focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring md:grid-cols-[90px_minmax(0,1fr)_128px_92px_80px] lg:grid-cols-[96px_minmax(0,1.25fr)_132px_120px_136px_96px_64px] xl:grid-cols-[104px_minmax(0,1.45fr)_144px_132px_160px_128px_72px]',
+        'group/row grid min-h-12 cursor-pointer grid-cols-[minmax(0,1fr)_auto] items-center gap-3 px-3 py-2 text-left transition hover:bg-accent focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring md:grid-cols-[90px_minmax(0,1fr)_128px_92px_80px_64px] lg:grid-cols-[96px_minmax(0,1.25fr)_132px_120px_136px_96px_64px] xl:grid-cols-[104px_minmax(0,1.45fr)_144px_132px_160px_128px_72px]',
         selected && 'bg-accent'
       )}
     >
@@ -280,12 +283,13 @@ export function TaskPageJiraIssueList({
   onStartWorkspace,
   selectedIssue,
   showSiteContext,
+  statusDirection = 'asc',
   statusOrder
 }: TaskPageJiraIssueListProps): React.JSX.Element {
   const [collapsedGroups, setCollapsedGroups] = useState<Set<string>>(() => new Set())
   const sections = useMemo(
-    () => groupJiraIssuesByStatus(issues, statusOrder),
-    [issues, statusOrder]
+    () => groupJiraIssuesByStatus(issues, statusOrder, statusDirection),
+    [issues, statusDirection, statusOrder]
   )
 
   return (

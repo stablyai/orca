@@ -1,5 +1,5 @@
 import type { MobileBrowserTab } from '../../../../src/browser/MobileBrowserPane'
-import type { MobileTerminalTheme } from '../../../../src/terminal/TerminalWebView'
+import type { MobileTerminalTheme } from '../../../../src/terminal/terminal-webview-contract'
 import type { MobileDiffLine } from '../../../../src/session/mobile-diff-lines'
 import type {
   MobileHighlightedDiffLine,
@@ -23,6 +23,8 @@ export type MobileSessionTab =
       status?: 'pending-handle' | 'ready'
       terminal: string | null
       agentStatus?: AgentStatusEntry | null
+      /** Agent Orca launched in this terminal, if any. This makes chat eligible
+       *  before the first live agent-status update reaches the mobile client. */
       launchAgent?: TuiAgent
       terminalTheme?: MobileTerminalTheme
       isActive: boolean

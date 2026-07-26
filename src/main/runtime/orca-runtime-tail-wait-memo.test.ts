@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import {
   appendNormalizedToTailBuffer,
   buildPreview,
@@ -10,8 +10,8 @@ import {
 // These tests pin the onPtyData wait-detection memoization: caching the
 // post-append wait state and reusing it as the next chunk's pre-append state
 // must produce byte-for-byte the same waitBlockedAt stamping as recomputing the
-// full-tail scan on both sides of every chunk (the pre-memoization behavior),
-// while doing roughly half the full-tail work.
+// wait-state scan on both sides of every chunk (the pre-memoization behavior),
+// while doing roughly half the state computations.
 
 type RedrawCursor = ReturnType<typeof appendNormalizedToTailBuffer>['redrawCursor']
 
@@ -137,6 +137,21 @@ describe('onPtyData tail wait memoization', () => {
     expect(blocked.signal?.reason).toBe('codex-update-prompt')
   })
 
+  it('does not rebuild or repeatedly scan an ordinary saturated tail', () => {
+    const lines = Array.from({ length: 2000 }, () => 'x'.repeat(126))
+    const lastIndexOf = vi.spyOn(String.prototype, 'lastIndexOf')
+
+    try {
+      const state = computeTerminalTailWaitState(lines, '', '')
+
+      expect(state.signal).toBeNull()
+      expect(state.waitText).toBe('')
+      expect(lastIndexOf).not.toHaveBeenCalled()
+    } finally {
+      lastIndexOf.mockRestore()
+    }
+  })
+
   for (const [name, chunks] of Object.entries(SCENARIOS)) {
     it(`memoized stamping matches recompute reference: ${name}`, () => {
       const { memoized, reference } = runBoth(chunks)
@@ -194,7 +209,7 @@ describe('onPtyData tail wait memoization', () => {
     expect(memoSim.waitBlockedAt).not.toBeNull()
   })
 
-  it('does roughly half the full-tail wait scans of the recompute reference', () => {
+  it('does roughly half the wait-state computations of the recompute reference', () => {
     const chunks: string[] = []
     for (let i = 0; i < 500; i += 1) {
       chunks.push(`streaming line ${i}\n`)

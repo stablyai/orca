@@ -5,6 +5,7 @@ import {
   MAX_SSH_RELAY_GRACE_PERIOD_SECONDS,
   MIN_SSH_RELAY_GRACE_PERIOD_SECONDS
 } from './ssh-types'
+import { assertJsonTextStructureWithinLimits } from './json-text-structure-limit'
 // Why: ephemeral-vm-recipe-doctor imports Node's fs/path, so it must NOT be
 // re-exported through this barrel — the renderer/web-client imports this module
 // and would otherwise pull Node built-ins into the browser bundle (build fails).
@@ -34,6 +35,11 @@ export type JsonValue =
   | null
   | JsonValue[]
   | { [key: string]: JsonValue }
+
+export const EPHEMERAL_VM_RECIPE_JSON_STRUCTURE_LIMITS = {
+  structuralTokens: 256 * 1024,
+  nestingDepth: 64
+} as const
 
 const SavedPortForwardSchema = z
   .object({
@@ -151,6 +157,7 @@ export function parseEphemeralVmRecipeResult(stdout: string): EphemeralVmRecipeR
   }
   let parsed: unknown
   try {
+    assertJsonTextStructureWithinLimits(trimmed, EPHEMERAL_VM_RECIPE_JSON_STRUCTURE_LIMITS)
     parsed = JSON.parse(trimmed)
   } catch {
     return { ok: false, error: 'Recipe stdout must be one JSON object.' }

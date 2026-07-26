@@ -4,6 +4,7 @@ import React, { act } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { ORPHAN_WORKTREE_ID } from '../../../../shared/constants'
+import type { BrowserWorkspace } from '../../../../shared/types'
 import type { UnifiedSessionRow, UnifiedWorktreeRow } from './resource-usage-merge-types'
 
 vi.mock('@/store', () => {
@@ -64,6 +65,7 @@ function makeWorktree(overrides: Partial<UnifiedWorktreeRow>): UnifiedWorktreeRo
     hasLocalSamples: true,
     isRemote: false,
     sessions: [],
+    browsers: [],
     ...overrides
   }
 }
@@ -130,5 +132,30 @@ describe('resource manager row presentation', () => {
     )
 
     expect(container.querySelector('button[aria-label="Kill session orphan-a"]')).not.toBeNull()
+  })
+
+  it('shows browsers as read-only workspace resources', () => {
+    renderWorktreeRow(
+      makeWorktree({
+        browsers: [
+          {
+            id: 'browser-1',
+            worktreeId: 'wt-1',
+            title: 'Orca docs',
+            url: 'https://docs.orca.dev',
+            loading: false,
+            faviconUrl: null,
+            canGoBack: false,
+            canGoForward: false,
+            loadError: null,
+            createdAt: 1
+          } as BrowserWorkspace
+        ]
+      })
+    )
+
+    expect(container.textContent).toContain('Orca docs')
+    expect(container.querySelector('.lucide-globe')).not.toBeNull()
+    expect(container.querySelector('button[aria-label^="Open browser"]')).toBeNull()
   })
 })

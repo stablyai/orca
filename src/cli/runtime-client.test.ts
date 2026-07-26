@@ -2,13 +2,19 @@ import { mkdtempSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { createServer, type Socket } from 'node:net'
-import { afterEach, describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import { RuntimeClient, RuntimeRpcFailureError } from './runtime-client'
+import { launchOrcaApp } from './runtime/launch'
+
+vi.mock('./runtime/launch', () => ({
+  launchOrcaApp: vi.fn()
+}))
 
 const servers = new Set<ReturnType<typeof createServer>>()
 const sockets = new Set<Socket>()
 
 afterEach(async () => {
+  vi.mocked(launchOrcaApp).mockClear()
   for (const socket of sockets) {
     socket.destroy()
   }
@@ -170,7 +176,7 @@ describe.skipIf(process.platform === 'win32')('RuntimeClient', () => {
     expect(status.result.graph.state).toBe('unavailable')
   })
 
-  it('openOrca succeeds immediately when the runtime is already reachable', async () => {
+  it('openOrca activates the app even when a desktop runtime is already reachable', async () => {
     const userDataPath = mkdtempSync(join(tmpdir(), 'orca-runtime-client-'))
     const endpoint = join(userDataPath, 'runtime.sock')
     const server = createServer((socket) => {
@@ -204,6 +210,87 @@ describe.skipIf(process.platform === 'win32')('RuntimeClient', () => {
 
     expect(status.result.runtime.state).toBe('ready')
     expect(status.result.runtime.reachable).toBe(true)
+    expect(launchOrcaApp).toHaveBeenCalledOnce()
+  })
+
+  it('openOrca waits for a reachable headless runtime to expose a desktop window', async () => {
+    const userDataPath = mkdtempSync(join(tmpdir(), 'orca-runtime-client-'))
+    const endpoint = join(userDataPath, 'runtime.sock')
+    let statusRequests = 0
+    const server = createServer((socket) => {
+      sockets.add(socket)
+      socket.once('close', () => sockets.delete(socket))
+      socket.once('data', (data) => {
+        const request = JSON.parse(String(data).trim()) as { id: string }
+        statusRequests += 1
+        const available = statusRequests > 1
+        socket.write(
+          `${JSON.stringify({
+            id: request.id,
+            ok: true,
+            result: {
+              runtimeId: 'runtime-1',
+              rendererGraphEpoch: available ? 1 : 0,
+              graphStatus: available ? 'reloading' : 'ready',
+              authoritativeWindowId: available ? 1 : 0,
+              desktopWindowStatus: available ? 'available' : 'initializing',
+              liveTabCount: 0,
+              liveLeafCount: 0
+            },
+            _meta: { runtimeId: 'runtime-1' }
+          })}\n`
+        )
+      })
+    })
+    servers.add(server)
+    await new Promise<void>((resolve) => server.listen(endpoint, resolve))
+    writeMetadata(userDataPath, endpoint)
+
+    const client = new RuntimeClient(userDataPath, 100)
+    const status = await client.openOrca(1_000)
+
+    expect(launchOrcaApp).toHaveBeenCalledOnce()
+    expect(status.result.app.desktopWindowStatus).toBe('available')
+    expect(statusRequests).toBeGreaterThan(1)
+  })
+
+  it('openOrca fails explicitly when the serve owner cannot promote safely', async () => {
+    const userDataPath = mkdtempSync(join(tmpdir(), 'orca-runtime-client-'))
+    const endpoint = join(userDataPath, 'runtime.sock')
+    const server = createServer((socket) => {
+      sockets.add(socket)
+      socket.once('close', () => sockets.delete(socket))
+      socket.once('data', (data) => {
+        const request = JSON.parse(String(data).trim()) as { id: string }
+        socket.write(
+          `${JSON.stringify({
+            id: request.id,
+            ok: true,
+            result: {
+              runtimeId: 'runtime-1',
+              rendererGraphEpoch: 0,
+              graphStatus: 'ready',
+              authoritativeWindowId: 0,
+              desktopWindowStatus: 'blocked',
+              liveTabCount: 1,
+              liveLeafCount: 1
+            },
+            _meta: { runtimeId: 'runtime-1' }
+          })}\n`
+        )
+      })
+    })
+    servers.add(server)
+    await new Promise<void>((resolve) => server.listen(endpoint, resolve))
+    writeMetadata(userDataPath, endpoint)
+
+    const client = new RuntimeClient(userDataPath, 100)
+
+    await expect(client.openOrca(100)).rejects.toMatchObject({
+      code: 'desktop_activation_blocked'
+    })
+    // A blocked runtime can't promote, so we bail before spawning the app.
+    expect(launchOrcaApp).not.toHaveBeenCalled()
   })
 
   it('times out if the runtime never responds', async () => {

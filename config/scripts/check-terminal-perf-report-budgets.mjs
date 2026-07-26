@@ -20,11 +20,25 @@ const BUDGETS = {
   maxWorstKeyLatencyMs: 300,
   maxRevisitLatencyMs: 300,
   maxTimerDriftMs: 150,
+  // Why: mirrors MAX_TIMER_DRIFT_UNDER_LOAD_MS in artificial-opencode-terminal-load.spec.ts
+  // so injected multi-pane redraw rows are not judged against the unloaded ceiling.
+  maxTimerDriftUnderLoadMs: 2_500,
   maxScrollLatencyMs: 150,
   maxRestoreLatencyMs: 1000,
   maxRendererQueuedChars: 2 * 1024 * 1024,
   maxRendererPeakQueuedChars: 2 * 1024 * 1024,
   maxRendererDroppedBacklogs: 0
+}
+
+// Why: only these annotation types assert against MAX_TIMER_DRIFT_UNDER_LOAD_MS
+// in the e2e suite; other rows keep the unloaded smoke ceiling.
+function isUnderLoadTimerDriftScenario(scenario) {
+  return (
+    scenario === 'opencode-same-workspace-typing' ||
+    scenario === 'opencode-cross-workspace-typing' ||
+    scenario.startsWith('opencode-scale-same-workspace-') ||
+    scenario.startsWith('opencode-scale-cross-workspace-')
+  )
 }
 
 function parseMs(value, fieldName, row, failures) {
@@ -90,7 +104,9 @@ function validateRow(row) {
   addBudgetCheck(
     'timer drift',
     parseMs(row.maxTimerDrift, 'maxTimerDrift', row, failures),
-    BUDGETS.maxTimerDriftMs,
+    isUnderLoadTimerDriftScenario(row.scenario)
+      ? BUDGETS.maxTimerDriftUnderLoadMs
+      : BUDGETS.maxTimerDriftMs,
     'ms'
   )
   addBudgetCheck(

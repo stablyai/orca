@@ -6,6 +6,42 @@ import { specPaths } from './args'
 const SUGGESTION_THRESHOLD = 3
 const MAX_SUGGESTIONS = 3
 
+// Why: a close typo of a destructive verb (`remov`→`remove`) still signals that
+// intent, but `move` (distance 2 from `remove`) does not — keep this at 1 so
+// genuine recovery works while unrelated verbs stay locked out. #6303
+const DESTRUCTIVE_INTENT_THRESHOLD = 1
+
+function finalToken(path: string[]): string {
+  return path.at(-1) ?? ''
+}
+
+// Why: destructiveness is declared on the spec (single source of truth); the
+// intent verbs are the final tokens of every destructive path/alias so the guard
+// tracks the registry instead of a hand-maintained list.
+function destructiveVerbs(specs: CommandSpec[]): Set<string> {
+  const verbs = new Set<string>()
+  for (const spec of specs) {
+    if (spec.destructive) {
+      for (const path of specPaths(spec)) {
+        verbs.add(finalToken(path))
+      }
+    }
+  }
+  return verbs
+}
+
+// Why: deletion is irreversible and suggestions flow into agents' recovery
+// channel (--json nextSteps), so only unlock destructive candidates when the
+// input token is itself a near-miss of a destructive verb. #6303
+function intendsDestruction(inputToken: string, verbs: Set<string>): boolean {
+  for (const verb of verbs) {
+    if (levenshtein(inputToken, verb) <= DESTRUCTIVE_INTENT_THRESHOLD) {
+      return true
+    }
+  }
+  return false
+}
+
 export type CommandErrorData = {
   suggestions: string[]
   nextSteps: string[]
@@ -47,9 +83,15 @@ function rankByDistance(scored: { label: string; distance: number }[]): string[]
 // Why: same-depth matching avoids suggesting parent groups or unrelated commands.
 export function suggestCommands(specs: CommandSpec[], commandPath: string[]): string[] {
   const input = commandPath.join(' ')
+  // Why: only surface destructive commands when the user actually reached for one;
+  // otherwise a benign typo could recover into an irreversible action. #6303
+  const allowDestructive = intendsDestruction(finalToken(commandPath), destructiveVerbs(specs))
   const seen = new Set<string>()
   const scored: { label: string; distance: number }[] = []
   for (const spec of specs) {
+    if (spec.destructive && !allowDestructive) {
+      continue
+    }
     const candidates = specPaths(spec).map((path) =>
       commandPath.length === 1 ? path.slice(0, 1) : path
     )

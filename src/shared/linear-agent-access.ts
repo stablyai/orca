@@ -7,6 +7,7 @@ export const LINEAR_CHILDREN_MAX_DEPTH = 5
 export const LINEAR_CHILDREN_NODE_CAP = 200
 export const LINEAR_ATTACHMENTS_CAP = 100
 export const LINEAR_RELATIONS_CAP = 100
+export const LINEAR_ACTIVITY_CAP = 250
 export const LINEAR_WRITE_BODY_CAP = 65_000
 
 export const LINEAR_ERROR_CODES = [
@@ -38,7 +39,7 @@ export const LINEAR_ERROR_CODES = [
 
 export type LinearErrorCode = (typeof LINEAR_ERROR_CODES)[number]
 
-export type LinearIssueInclude = 'comments' | 'children' | 'attachments' | 'relations'
+export type LinearIssueInclude = 'comments' | 'children' | 'attachments' | 'relations' | 'activity'
 
 export type LinearIncludeErrorCode =
   | 'linear_timeout'
@@ -89,9 +90,17 @@ export type {
   LinearUserSummary,
   LinearWorkspaceCandidate,
   LinearWriteIssueRef,
-  LinearIssueTaskUpdateResult
+  LinearIssueTaskUpdateResult,
+  LinearSaveIssueResult
 } from './linear-agent-result-types'
+export type { LinearIssueActivityEntry, LinearIssueActivityValue } from './linear-issue-activity'
 export type { LinearInlineMedia } from './linear-inline-media'
+export type { LinearMcpIssueListRequest, LinearMcpIssueListResult } from './linear-mcp-issue-list'
+export type {
+  LinearIssueRelationship,
+  LinearIssueRelationWriteRequest,
+  LinearIssueRelationWriteResult
+} from './linear-issue-relation-write'
 
 export type LinearWriteTargetRequest = {
   input?: string
@@ -164,6 +173,21 @@ export type LinearCreateRequest = {
   workspaceId?: string
   writeId?: string
   context?: LinearCurrentIssueContextHints
+}
+
+export type LinearSaveIssueRequest = LinearWriteTargetRequest & {
+  team?: string
+  title?: string
+  description?: string
+  state?: string
+  assignee?: string | null
+  priority?: number
+  estimate?: number | null
+  dueDate?: string | null
+  labels?: string[]
+  project?: string | null
+  parentId?: string | null
+  writeId?: string
 }
 
 export function clampLinearSearchLimit(limit: number | undefined): number {

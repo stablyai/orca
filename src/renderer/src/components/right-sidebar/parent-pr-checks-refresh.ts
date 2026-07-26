@@ -7,6 +7,7 @@ import type {
 import type { HostedReviewInfo } from '../../../../shared/hosted-review'
 import { isFolderRepo } from '../../../../shared/repo-kind'
 import { getWorktreeGitIdentityDisplay } from '@/lib/worktree-git-identity-display'
+import { compareWorktreeDisplayName } from '@/lib/worktree-display-name-order'
 import {
   getParentPrChecksRefreshIdentity,
   type ParentPrChecksRefreshOutcome
@@ -169,7 +170,7 @@ function compareRefreshCandidates(
   return (
     leftPriority - rightPriority ||
     (right.worktree.lastActivityAt ?? 0) - (left.worktree.lastActivityAt ?? 0) ||
-    left.worktree.displayName.localeCompare(right.worktree.displayName)
+    compareWorktreeDisplayName(left.worktree, right.worktree)
   )
 }
 

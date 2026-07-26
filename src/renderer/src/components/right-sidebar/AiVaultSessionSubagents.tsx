@@ -6,6 +6,8 @@ import { Button } from '@/components/ui/button'
 import { AgentStateDot, agentStateLabel, type AgentDotState } from '@/components/AgentStateDot'
 import type { AiVaultSession, AiVaultSubagentRunStatus } from '../../../../shared/ai-vault-types'
 import { LOCAL_EXECUTION_HOST_ID } from '../../../../shared/execution-host'
+import { canOpenAiVaultSessionLogInOrca } from './ai-vault-session-path-actions'
+import { openAiVaultSessionLogInOrca } from './ai-vault-session-log-open'
 import { translate } from '@/i18n/i18n'
 
 type SubagentListState = { status: 'loading' } | { status: 'loaded'; sessions: AiVaultSession[] }
@@ -143,23 +145,25 @@ function SubagentSessionLine({ session }: { session: AiVaultSession }): React.JS
           { value0: session.messageCount }
         )}
       </span>
-      <Button
-        type="button"
-        variant="ghost"
-        size="icon-xs"
-        draggable={false}
-        title={translate(
-          'auto.components.right.sidebar.AiVaultSessionSubagents.viewLog',
-          'View Log'
-        )}
-        onClick={(event) => {
-          event.stopPropagation()
-          void window.api.shell.openFilePath(session.filePath)
-        }}
-        className="shrink-0 text-muted-foreground"
-      >
-        <FileJson className="size-3.5" />
-      </Button>
+      {canOpenAiVaultSessionLogInOrca(session) ? (
+        <Button
+          type="button"
+          variant="ghost"
+          size="icon-xs"
+          draggable={false}
+          title={translate(
+            'auto.components.right.sidebar.AiVaultSessionSubagents.viewLog',
+            'View Log'
+          )}
+          onClick={(event) => {
+            event.stopPropagation()
+            void openAiVaultSessionLogInOrca(session)
+          }}
+          className="shrink-0 text-muted-foreground"
+        >
+          <FileJson className="size-3.5" />
+        </Button>
+      ) : null}
     </div>
   )
 }

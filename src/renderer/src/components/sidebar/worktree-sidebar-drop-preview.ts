@@ -92,11 +92,27 @@ export function resolveWorktreeSidebarStatusDropCommitTarget(args: {
     : { target: args.currentTarget, preview: args.currentPreview }
 }
 
+function getWorktreeSidebarDropIndicatorY(args: {
+  rects: readonly WorktreeSidebarDragRect[]
+  dropIndex: number
+}): number {
+  const target = args.rects.find((rect) => rect.groupIndex === args.dropIndex)
+  if (target) {
+    return Math.max(0, target.top - 3)
+  }
+  const last = args.rects.at(-1)
+  return last ? last.bottom + 3 : 0
+}
+
 export function computeWorktreeSidebarDropPreview(args: {
   pointerY: number
   containerTop: number
   scrollTop: number
   rects: readonly WorktreeSidebarDragRect[]
+  // Why: `rects` are held stable so resizing cards cannot move the drop target
+  // under a still pointer. The indicator and row previews still draw from live
+  // geometry, so a card growing mid-drag does not strand them at stale tops.
+  liveRects?: readonly WorktreeSidebarDragRect[]
   groupIds: readonly string[]
   draggedIds: readonly string[]
   draggingWorktreeId?: string | null
@@ -108,6 +124,12 @@ export function computeWorktreeSidebarDropPreview(args: {
   if (rects.length === 0 || args.groupIds.length === 0) {
     return null
   }
+  const liveUnitRects = args.liveRects
+    ? getWorktreeSidebarDragUnitRects({ rects: args.liveRects, groupIds: args.groupIds })
+    : rects
+  // Why: an empty live measurement (rows unmounted by virtualization) would
+  // collapse the indicator to the top of the list; keep the held geometry then.
+  const renderRects = liveUnitRects.length === rects.length ? liveUnitRects : rects
 
   const localY = args.pointerY - args.containerTop + args.scrollTop
   const first = rects[0]!
@@ -123,26 +145,24 @@ export function computeWorktreeSidebarDropPreview(args: {
   }
 
   let dropIndex = last.groupIndex + 1
-  let indicatorY = last.bottom + 3
   if (boundaryDrop.kind === 'drop') {
     dropIndex = boundaryDrop.dropIndex
-    indicatorY = boundaryDrop.indicatorY
   } else {
     for (const rect of rects) {
       const mid = (rect.top + rect.bottom) / 2
       if (localY < mid) {
         dropIndex = rect.groupIndex
-        indicatorY = Math.max(0, rect.top - 3)
         break
       }
     }
   }
+  const indicatorY = getWorktreeSidebarDropIndicatorY({ rects: renderRects, dropIndex })
   const previewOffsetsByWorktreeId = buildWorktreeDragPreviewOffsets({
     groupIds: args.groupIds,
     draggedIds: args.draggedIds,
     draggingWorktreeId: args.draggingWorktreeId,
     dropIndex,
-    rects
+    rects: renderRects
   })
   return { dropIndex, dropIndicatorY: indicatorY, previewOffsetsByWorktreeId }
 }

@@ -1,6 +1,10 @@
 import { describe, expect, it, vi } from 'vitest'
 import { homedir } from 'node:os'
-import { buildRelayCommandEnv, buildRelayGitEnv } from './relay-command-env'
+import {
+  buildRelayCommandEnv,
+  buildRelayGitEnv,
+  buildRelayUnattendedGitEnv
+} from './relay-command-env'
 
 // homedir() is the fallback when the relay env carries no HOME; mock it so the
 // fallback path is deterministic and the "no resolvable home" branch is reachable.
@@ -243,5 +247,31 @@ describe('buildRelayGitEnv', () => {
     expect(env.LANGUAGE).toBe('en')
     // PATH fallback behavior is unchanged.
     expect(env.PATH?.split(':')).toEqual(expect.arrayContaining(['/usr/bin', '/usr/local/bin']))
+  })
+})
+
+describe('buildRelayUnattendedGitEnv', () => {
+  it('disables credential UI while preserving relay PATH, locale, and caller askpass', () => {
+    const env = buildRelayUnattendedGitEnv(
+      {
+        HOME: '/home/me',
+        PATH: '/custom/bin',
+        LC_ALL: 'de_DE.UTF-8',
+        GIT_ASKPASS: '/opt/noninteractive-credential-feeder'
+      },
+      'linux'
+    )
+
+    expect(env.GIT_TERMINAL_PROMPT).toBe('0')
+    expect(env.GCM_INTERACTIVE).toBe('never')
+    expect(env.GIT_ASKPASS).toBe('/opt/noninteractive-credential-feeder')
+    expect(env.GIT_CONFIG_COUNT).toBe('2')
+    expect(env.GIT_CONFIG_KEY_0).toBe('credential.interactive')
+    expect(env.GIT_CONFIG_VALUE_0).toBe('false')
+    expect(env.GIT_CONFIG_KEY_1).toBe('credential.guiPrompt')
+    expect(env.GIT_CONFIG_VALUE_1).toBe('false')
+    expect(env.GIT_SSH_COMMAND).toBe('ssh -o BatchMode=yes')
+    expect(env.LC_ALL).toBe('en_US.UTF-8')
+    expect(env.PATH?.split(':')).toEqual(expect.arrayContaining(['/custom/bin', '/usr/bin']))
   })
 })

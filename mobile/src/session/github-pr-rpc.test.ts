@@ -103,13 +103,17 @@ describe('readPRForBranch', () => {
     const parsed = readPRForBranch({
       number: 3,
       state: 'open',
-      prRepo: { owner: 'forkOwner', repo: 'forkRepo' },
+      prRepo: { owner: 'forkOwner', repo: 'forkRepo', host: 'github.acme.test' },
       mergeMethodSettings: {
         defaultMethod: 'squash',
         allowedMethods: { merge: false, squash: true, rebase: true }
       }
     })
-    expect(parsed?.prRepo).toEqual({ owner: 'forkOwner', repo: 'forkRepo' })
+    expect(parsed?.prRepo).toEqual({
+      owner: 'forkOwner',
+      repo: 'forkRepo',
+      host: 'github.acme.test'
+    })
     expect(parsed?.mergeMethodSettings).toEqual({
       defaultMethod: 'squash',
       allowedMethods: { merge: false, squash: true, rebase: true }
@@ -266,7 +270,7 @@ describe('readAssignableUsers', () => {
 })
 
 describe('buildGithubPrParams — method-aware prRepo / headSha', () => {
-  const fork = { owner: 'forkOwner', repo: 'forkRepo' }
+  const fork = { owner: 'forkOwner', repo: 'forkRepo', host: 'github.acme.test' }
 
   it('reuses mobileRepoSelectorFromWorktreeId for the repo selector', () => {
     const params = buildGithubPrParams('github.prChecks', WORKTREE_ID, { prNumber: 1 })
@@ -278,9 +282,20 @@ describe('buildGithubPrParams — method-aware prRepo / headSha', () => {
     for (const method of [
       'github.prChecks',
       'github.prCheckDetails',
+      'github.rerunPRChecks',
+      'github.resolveReviewThread',
+      'github.setPRFileViewed',
+      'github.updatePRState',
+      'github.requestPRReviewers',
+      'github.removePRReviewers',
       'github.mergePR',
       'github.setPRAutoMerge',
-      'github.prComments'
+      'github.updatePRTitle',
+      'github.prComments',
+      'github.prFileContents',
+      'github.addPRReviewComment',
+      'github.addIssueComment',
+      'github.addPRReviewCommentReply'
     ]) {
       const params = buildGithubPrParams(method, WORKTREE_ID, { prNumber: 1 }, { prRepo: fork })
       expect(params.prRepo).toEqual(fork)
@@ -288,13 +303,7 @@ describe('buildGithubPrParams — method-aware prRepo / headSha', () => {
   })
 
   it('omits prRepo for methods that reject it', () => {
-    for (const method of [
-      'github.updatePRState',
-      'github.requestPRReviewers',
-      'github.removePRReviewers',
-      'github.listAssignableUsers',
-      'github.rerunPRChecks'
-    ]) {
+    for (const method of ['github.repoSlug', 'github.prForBranch', 'github.listAssignableUsers']) {
       const params = buildGithubPrParams(method, WORKTREE_ID, { prNumber: 1 }, { prRepo: fork })
       expect('prRepo' in params).toBe(false)
     }
@@ -380,12 +389,15 @@ describe('fetch wrappers', () => {
     expect('headSha' in (params as object)).toBe(false)
   })
 
-  it('fetchGithubRepoSlug returns the slug for a github repo, null otherwise', async () => {
+  it('fetchGithubRepoSlug preserves an Enterprise host, and returns null otherwise', async () => {
     const found = await fetchGithubRepoSlug(
-      mockClient(okResponse({ owner: 'o', repo: 'r' })).client,
+      mockClient(okResponse({ owner: 'o', repo: 'r', host: 'github.acme.test' })).client,
       WORKTREE_ID
     )
-    expect(found).toEqual({ ok: true, result: { owner: 'o', repo: 'r' } })
+    expect(found).toEqual({
+      ok: true,
+      result: { owner: 'o', repo: 'r', host: 'github.acme.test' }
+    })
     const none = await fetchGithubRepoSlug(mockClient(okResponse(null)).client, WORKTREE_ID)
     expect(none).toEqual({ ok: true, result: null })
   })

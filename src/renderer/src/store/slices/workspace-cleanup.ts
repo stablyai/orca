@@ -21,6 +21,7 @@ import {
   type WorkspaceCleanupScanProgress,
   type WorkspaceCleanupScanResult
 } from '../../../../shared/workspace-cleanup'
+import { mapWithConcurrency } from '../../../../shared/map-with-concurrency'
 import { classifyTitleActivity, isExplicitAgentStatusFresh } from '@/lib/pane-agent-evidence'
 import { translate } from '@/i18n/i18n'
 
@@ -551,26 +552,6 @@ function getWorkspaceCleanupProgressCandidateIndex(
       candidates.map((candidate, index) => [candidate.worktreeId, index])
     )
   }
-}
-
-async function mapWithConcurrency<T, R>(
-  items: readonly T[],
-  limit: number,
-  fn: (item: T) => Promise<R>
-): Promise<R[]> {
-  const results: R[] = []
-  let nextIndex = 0
-  const workerCount = Math.min(limit, items.length)
-  await Promise.all(
-    Array.from({ length: workerCount }, async () => {
-      while (nextIndex < items.length) {
-        const index = nextIndex
-        nextIndex += 1
-        results[index] = await fn(items[index])
-      }
-    })
-  )
-  return results
 }
 
 function getInitialWorkspaceCleanupGitDeferrals(state: AppState): string[] {

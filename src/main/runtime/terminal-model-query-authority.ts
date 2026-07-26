@@ -1,6 +1,6 @@
 /**
  * Phase 5 of the terminal model/view architecture: main-side terminal query
- * authority (docs/reference/terminal-query-authority.md).
+ * authority.
  *
  * The delivery decision is the reply decision: main answers a query iff the
  * hidden-delivery gate dropped the chunk that carried it. This module owns

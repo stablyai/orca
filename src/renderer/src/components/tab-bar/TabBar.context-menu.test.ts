@@ -20,6 +20,8 @@ const useAppStoreMock = vi.fn(
       activeTabId: string | null
       activeTabType: 'terminal' | 'editor' | 'browser' | 'simulator' | null
       gitStatusByWorktree: Record<string, never[]>
+      repos: never[]
+      worktreesByRepo: Record<string, never[]>
       unifiedTabsByWorktree: Record<string, unknown[]>
       activeGroupIdByWorktree: Record<string, string>
       pinTab: typeof pinTabMock
@@ -34,6 +36,8 @@ const useAppStoreMock = vi.fn(
       activeTabId: appStoreSnapshot.activeTabId,
       activeTabType: appStoreSnapshot.activeTabType,
       gitStatusByWorktree: {},
+      repos: [],
+      worktreesByRepo: {},
       unifiedTabsByWorktree: appStoreSnapshot.unifiedTabsByWorktree,
       activeGroupIdByWorktree: appStoreSnapshot.activeGroupIdByWorktree,
       pinTab: pinTabMock,
@@ -107,6 +111,8 @@ useAppStoreExport.getState = vi.fn(() => ({
   activeTabId: appStoreSnapshot.activeTabId,
   activeTabType: appStoreSnapshot.activeTabType,
   gitStatusByWorktree: {},
+  repos: [],
+  worktreesByRepo: {},
   unifiedTabsByWorktree: appStoreSnapshot.unifiedTabsByWorktree,
   activeGroupIdByWorktree: appStoreSnapshot.activeGroupIdByWorktree,
   pinTab: pinTabMock,
@@ -322,6 +328,14 @@ describe('TabBar context menu wiring', () => {
   afterEach(() => {
     vi.useRealTimers()
     vi.unstubAllGlobals()
+  })
+
+  it('wires the shared agent projection selector into the production TabBar', async () => {
+    const { selectTabBarAgentProjections } = await import('./tab-agent-types-by-tab-id')
+
+    await renderTabBar({ tabs: [], editorFiles: [], browserTabs: [], tabBarOrder: [] })
+
+    expect(useAppStoreMock).toHaveBeenCalledWith(selectTabBarAgentProjections)
   })
 
   it('counts every tab kind for SortableTab.tabCount', async () => {

@@ -10,6 +10,12 @@ import type {
 import { getOrcaProfileDirectory } from './profile-storage-paths'
 import { allowsPlaintextOrcaCloudSession } from './profile-cloud-auth-config'
 import type { OrcaCloudSessionExchangeResponse } from './profile-cloud-session-exchange'
+import {
+  cloudSessionIdentity,
+  isCloudSessionMutationCurrent,
+  recordSuccessfulCloudSessionLogin,
+  type CloudSessionMutationSnapshot
+} from './profile-cloud-session-mutation'
 
 export type OrcaCloudSession = {
   accessToken: string
@@ -135,6 +141,7 @@ export function saveOrcaCloudSessionExchange(
   userDataPath: string,
   exchange: OrcaCloudSessionExchangeResponse
 ): OrcaCloudSessionPersistence {
+  recordSuccessfulCloudSessionLogin(cloudSessionIdentity(profileId, exchange.cloud), userDataPath)
   return saveOrcaCloudSession(profileId, userDataPath, {
     accessToken: exchange.accessToken,
     refreshToken: exchange.refreshToken,
@@ -142,6 +149,20 @@ export function saveOrcaCloudSessionExchange(
     organizations: exchange.organizations,
     capabilities: exchange.capabilities
   })
+}
+
+export function saveOrcaCloudSessionIfCurrent(
+  profileId: string,
+  userDataPath: string,
+  session: OrcaCloudSession,
+  snapshot: CloudSessionMutationSnapshot
+): OrcaCloudSessionPersistence | null {
+  // Why: the check and sync save share one main-process turn, so an async
+  // refresh captured before sign-out/org-switch cannot resurrect the session.
+  if (!isCloudSessionMutationCurrent(profileId, userDataPath, snapshot)) {
+    return null
+  }
+  return saveOrcaCloudSession(profileId, userDataPath, session)
 }
 
 export function readOrcaCloudSession(

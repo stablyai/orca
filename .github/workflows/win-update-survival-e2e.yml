@@ -73,7 +73,7 @@ jobs:
         uses: actions/cache@v4
         with:
           path: dist/orca-windows-setup.exe
-          key: branch-installer-${{ hashFiles('src/**', 'config/**', 'package.json', 'pnpm-lock.yaml') }}
+          key: branch-installer-${{ hashFiles('src/**', 'config/**', 'native/**', 'resources/win32/**', 'package.json', 'pnpm-lock.yaml') }}
 
       - name: Build Windows installer (unsigned)
         if: steps.cache-installer.outputs.cache-hit != 'true'

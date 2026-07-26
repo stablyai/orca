@@ -7,6 +7,7 @@ import {
   resetTerminalWebglSuggestion
 } from './pane-webgl-renderer'
 import { attachLigatures, disposePane, openTerminal } from './pane-lifecycle'
+import { ensureArabicShapingJoinerForText } from './terminal-arabic-shaping-joiner'
 import {
   buildDefaultTerminalOptions,
   DEFAULT_TERMINAL_FAST_SCROLL_SENSITIVITY,
@@ -45,6 +46,7 @@ function createPane(): ManagedPaneInternal {
       loadAddon: vi.fn(),
       attachCustomWheelEventHandler: vi.fn(),
       refresh: vi.fn(),
+      cols: 80,
       rows: 24
     } as never,
     container: {} as never,
@@ -56,7 +58,8 @@ function createPane(): ManagedPaneInternal {
     webglDisabledAfterContextLoss: false,
     hasComplexScriptOutput: false,
     fitAddon: {
-      fit: vi.fn()
+      fit: vi.fn(),
+      proposeDimensions: vi.fn(() => ({ cols: 80, rows: 23 }))
     } as never,
     fitResizeObserver: null,
     pendingObservedFitRafId: null,
@@ -111,7 +114,7 @@ describe('buildDefaultTerminalOptions', () => {
     expect(normalizeTerminalFastScrollSensitivity(25)).toBe(20)
   })
 
-  it('enables xterm contrast correction for low-contrast CLI colors', () => {
+  it('defaults minimumContrastRatio to the light-background value (applyTerminalAppearance re-gates it)', () => {
     expect(buildDefaultTerminalOptions().minimumContrastRatio).toBe(4.5)
   })
 
@@ -512,6 +515,7 @@ describe('openTerminal — addon and provider wiring', () => {
         }
       }),
       attachCustomWheelEventHandler: vi.fn(),
+      onWriteParsed: vi.fn(() => ({ dispose: vi.fn() })),
       write: vi.fn(() => {
         events.push('write')
       }),
@@ -585,22 +589,38 @@ describe('openTerminal — addon and provider wiring', () => {
     expect(events.indexOf('open')).toBeLessThan(loadUnicodeIdx)
   })
 
-  // Why: terminal.dispose() does not deregister character joiners, so the
-  // pane lifecycle must — this locks the register/deregister pairing that
-  // makes Arabic/RTL shaping (#5262) actually reach a real terminal.
-  it('registers the Arabic shaping joiner on open and deregisters it on dispose', () => {
+  // Why: ordinary panes must avoid xterm's full-grid character-joiner scan,
+  // while the first RTL write still registers before xterm parses the text.
+  it('registers Arabic shaping lazily and deregisters it on dispose', () => {
     const { pane, events } = createOpenTerminalHarness()
 
     openTerminal(pane)
 
-    expect(events).toContain('registerCharacterJoiner')
-    expect(events.indexOf('open')).toBeLessThan(events.indexOf('registerCharacterJoiner'))
+    expect(events).not.toContain('registerCharacterJoiner')
     expect(pane.arabicShapingJoinerCleanup).toBeTypeOf('function')
+    ensureArabicShapingJoinerForText(pane.terminal, 'مرحبا')
+    expect(events).toContain('registerCharacterJoiner')
 
     disposePane(pane, new Map([[pane.id, pane]]))
 
     expect(events).toContain('deregisterCharacterJoiner:3')
     expect(pane.arabicShapingJoinerCleanup).toBeNull()
+  })
+
+  // Why: a link streamed under a stationary pointer must re-linkify on the next
+  // move; openTerminal wires the hover-cache reset and disposePane must detach it.
+  it('installs the streamed-output linkifier hover reset and disposes it', () => {
+    const { pane } = createOpenTerminalHarness()
+
+    openTerminal(pane)
+    const disposable = pane.linkifierHoverResetDisposable
+    expect(disposable?.dispose).toBeTypeOf('function')
+    expect(pane.terminal.onWriteParsed).toHaveBeenCalledTimes(1)
+
+    const disposeSpy = vi.spyOn(disposable!, 'dispose')
+    disposePane(pane, new Map([[pane.id, pane]]))
+    expect(disposeSpy).toHaveBeenCalledTimes(1)
+    expect(pane.linkifierHoverResetDisposable).toBeNull()
   })
 
   // Why: the DOM renderer misrenders joined spans (per-character
@@ -610,6 +630,7 @@ describe('openTerminal — addon and provider wiring', () => {
     const { pane, getRegisteredJoinHandler } = createOpenTerminalHarness()
 
     openTerminal(pane)
+    ensureArabicShapingJoinerForText(pane.terminal, 'مرحبا')
     const handler = getRegisteredJoinHandler()!
 
     expect(pane.webglAddon).toBeNull()

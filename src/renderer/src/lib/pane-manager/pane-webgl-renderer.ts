@@ -6,6 +6,7 @@ import {
   getTerminalWebglAutoDecision,
   resetTerminalWebglAutoDecision
 } from './terminal-webgl-auto-policy'
+import { safeFitAndThen } from './pane-fit'
 
 export const ENABLE_WEBGL_RENDERER = true
 let suggestedRendererType: 'dom' | undefined
@@ -90,8 +91,11 @@ export function disposeWebgl(
     pane.pendingWebglRefreshRafId = requestAnimationFrame(() => {
       pane.pendingWebglRefreshRafId = null
       try {
-        pane.fitAddon.fit()
-        pane.terminal.refresh(0, pane.terminal.rows - 1)
+        // Why: context loss can coincide with snapshot parsing; refresh only
+        // after the replay-aware fit has authoritative renderer dimensions.
+        safeFitAndThen(pane, 'webgl-fallback-refresh', () => {
+          pane.terminal.refresh(0, pane.terminal.rows - 1)
+        })
       } catch {
         /* ignore — pane may have been disposed in the meantime */
       }

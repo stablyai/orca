@@ -8,6 +8,7 @@ import { cleanup, render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 
 import { TooltipProvider } from '@/components/ui/tooltip'
+import { sortJiraIssues } from './jira-issue-sorter'
 import { groupJiraIssuesByStatus, TaskPageJiraIssueList } from './task-page-jira-issue-list'
 import {
   getSingleJiraProjectScope,
@@ -34,7 +35,7 @@ function jiraIssue(
   title: string,
   statusId: string,
   statusName: string,
-  options: { projectKey?: string; siteId?: string } = {}
+  options: { priority?: string; projectKey?: string; siteId?: string } = {}
 ): JiraIssue {
   const siteId = options.siteId ?? 'site-1'
   const projectKey = options.projectKey ?? 'ALP'
@@ -48,6 +49,7 @@ function jiraIssue(
     project: { id: projectKey, key: projectKey, name: projectKey, siteId },
     issueType: { id: '10001', name: 'Bug' },
     status: { id: statusId, name: statusName, categoryKey: 'new', categoryName: statusName },
+    priority: options.priority ? { id: options.priority, name: options.priority } : undefined,
     labels: [],
     createdAt: '2026-01-01T00:00:00.000Z',
     updatedAt: '2026-01-01T00:00:00.000Z'
@@ -81,6 +83,35 @@ describe('Jira issue status grouping', () => {
     )
 
     expect(sections.map((section) => section.label)).toEqual(['In Progress', 'To Do', 'Done'])
+  })
+
+  it('reverses Jira column order for descending status sort', () => {
+    const sections = groupJiraIssuesByStatus(
+      [
+        jiraIssue('ALP-1', 'Done issue', '3', 'Done'),
+        jiraIssue('ALP-2', 'To do issue', '1', 'To Do'),
+        jiraIssue('ALP-3', 'Progress issue', '2', 'In Progress')
+      ],
+      statusOrder([['1', '2'], ['3']]),
+      'desc'
+    )
+
+    expect(sections.map((section) => section.label)).toEqual(['Done', 'To Do', 'In Progress'])
+  })
+
+  it('preserves priority sorting inside the production status groups', () => {
+    const sortedIssues = sortJiraIssues(
+      [
+        jiraIssue('ALP-1', 'High issue', '1', 'To Do', { priority: 'High' }),
+        jiraIssue('ALP-2', 'Low issue', '1', 'To Do', { priority: 'Low' })
+      ],
+      'priority',
+      'asc'
+    )
+
+    const sections = groupJiraIssuesByStatus(sortedIssues, statusOrder([['1']]))
+
+    expect(sections[0]?.issues.map((issue) => issue.key)).toEqual(['ALP-2', 'ALP-1'])
   })
 
   it('places statuses missing from board configuration last in alphabetical order', () => {

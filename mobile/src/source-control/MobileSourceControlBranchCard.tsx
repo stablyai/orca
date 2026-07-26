@@ -55,23 +55,28 @@ export function MobileSourceControlBranchCard({
         <Text style={styles.countText}>{unstagedCount} changed</Text>
         <Text style={styles.countText}>{stagedCount} staged</Text>
         {branchCount > 0 ? <Text style={styles.countText}>{branchCount} on branch</Text> : null}
-        {showConflict ? (
-          <View style={styles.conflictRow}>
-            <Text style={styles.conflictText}>{conflictOperation}</Text>
-            {conflictOperation === 'merge' || conflictOperation === 'rebase' ? (
-              <Pressable
-                style={({ pressed }) => [styles.abortButton, pressed && styles.abortPressed]}
-                disabled={conflictBusy}
-                onPress={() => onAbortConflict(conflictOperation)}
-              >
-                <Text style={styles.abortText}>
-                  {mobileConflictAbortLabel(conflictOperation, conflictAborting)}
-                </Text>
-              </Pressable>
-            ) : null}
-          </View>
-        ) : null}
       </View>
+      {/* Own row so Abort never overflows past the card when counts are long. */}
+      {showConflict ? (
+        <View style={styles.conflictRow}>
+          <Text style={styles.conflictText}>{conflictOperation}</Text>
+          {conflictOperation === 'merge' || conflictOperation === 'rebase' ? (
+            <Pressable
+              style={({ pressed }) => [
+                styles.abortButton,
+                conflictBusy && styles.abortButtonDisabled,
+                pressed && !conflictBusy && styles.abortPressed
+              ]}
+              disabled={conflictBusy}
+              onPress={() => onAbortConflict(conflictOperation)}
+            >
+              <Text style={styles.abortText}>
+                {mobileConflictAbortLabel(conflictOperation, conflictAborting)}
+              </Text>
+            </Pressable>
+          ) : null}
+        </View>
+      ) : null}
       {prChip ? <MobileSourceControlPrChip summary={prChip} onPress={onOpenPr} /> : null}
     </View>
   )

@@ -34,11 +34,12 @@ function makeEntry(options?: {
   } as unknown as LinearClientForWorkspace
 }
 
-function rawIssue(id: string, updatedAt = '2026-01-01T00:00:00.000Z') {
+function rawIssue(id: string, updatedAt = '2026-01-01T00:00:00.000Z', branchName?: string | null) {
   return {
     id,
     identifier: id,
     title: id,
+    branchName,
     description: 'Description',
     url: `https://linear.app/${id}`,
     estimate: 3,
@@ -118,6 +119,17 @@ describe('Linear issue queries', () => {
     expect(rawRequest.mock.calls[0][0]).toContain('query OrcaLinearIssues')
     expect(rawRequest.mock.calls[0][0]).toContain('pageInfo')
     expect(rawRequest.mock.calls[0][0]).toContain('estimate')
+  })
+
+  it('maps Linear branch names from raw issue reads', async () => {
+    rawRequest.mockResolvedValueOnce({
+      data: { issues: { nodes: [rawIssue('LIN-1', undefined, 'team/lin-1-fix')] } }
+    })
+    const { listIssues } = await import('./issues')
+
+    await expect(listIssues('all', 10, 'workspace-1')).resolves.toMatchObject({
+      items: [{ branchName: 'team/lin-1-fix' }]
+    })
   })
 
   it('fetches issue comments with one request (no per-comment user N+1)', async () => {

@@ -172,8 +172,9 @@ export function allPassed(assertions) {
   return assertions.every((a) => a.pass === true || a.pass === null)
 }
 
-/** Render the assertion list as an aligned PASS/FAIL/INFO table. */
-export function renderTable(assertions) {
+/** Render the assertion list as an aligned PASS/FAIL/INFO table. `label` names
+ *  the harness in the header (shared with the crash-survival harness). */
+export function renderTable(assertions, label = 'win-update-e2e') {
   const symbol = (pass) => (pass === true ? 'PASS' : pass === false ? 'FAIL' : 'INFO')
   const nameWidth = Math.max(...assertions.map((a) => a.name.length), 10)
   const lines = assertions.map((a) => {
@@ -181,6 +182,6 @@ export function renderTable(assertions) {
     return `  [${symbol(a.pass)}] ${a.name.padEnd(nameWidth)}  expected: ${a.expected}; actual: ${a.actual}${detail}`
   })
   const failed = assertions.filter((a) => a.pass === false).length
-  const header = `\n===== win-update-e2e assertions (${failed === 0 ? 'ALL PASS' : `${failed} FAILED`}) =====`
+  const header = `\n===== ${label} assertions (${failed === 0 ? 'ALL PASS' : `${failed} FAILED`}) =====`
   return [header, ...lines, ''].join('\n')
 }

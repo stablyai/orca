@@ -16,6 +16,7 @@ vi.mock('@/runtime/runtime-linear-client', () => ({
   linearDisconnect: vi.fn(),
   linearDisconnectWorkspace: vi.fn(),
   linearGetIssue: (...args: unknown[]) => linearGetIssue(...args),
+  isLinearIssueAttributeFilterUnsupportedError: () => false,
   linearListIssues: (...args: unknown[]) => linearListIssues(...args),
   linearListTeams: (...args: unknown[]) => linearListTeams(...args),
   linearSearchIssues: (...args: unknown[]) => linearSearchIssues(...args),

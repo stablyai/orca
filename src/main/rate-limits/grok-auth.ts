@@ -29,6 +29,8 @@ type GrokAuthEntry = {
   oidc_client_id?: string
 }
 
+type TokenizedGrokAuthEntry = GrokAuthEntry & { key: string }
+
 export type GrokAuthReadResult =
   | { status: 'missing' }
   | { status: 'error'; error: string }
@@ -43,7 +45,7 @@ function getGrokAuthReadError(err: unknown): string {
   return 'Unable to read Grok auth file'
 }
 
-function parseAuthEntry(value: unknown): GrokAuthEntry | null {
+function parseAuthEntry(value: unknown): TokenizedGrokAuthEntry | null {
   if (typeof value !== 'object' || value === null) {
     return null
   }
@@ -51,7 +53,7 @@ function parseAuthEntry(value: unknown): GrokAuthEntry | null {
   if (typeof entry.key !== 'string' || entry.key.length === 0) {
     return null
   }
-  return entry
+  return entry as TokenizedGrokAuthEntry
 }
 
 function parseExpiresAtMs(iso: string | undefined): number | null {
@@ -60,6 +62,24 @@ function parseExpiresAtMs(iso: string | undefined): number | null {
   }
   const ms = Date.parse(iso)
   return Number.isFinite(ms) ? ms : null
+}
+
+// Why: stale alternate issuers can precede the default xAI OAuth session in auth.json.
+const PREFERRED_GROK_AUTH_ISSUER = 'https://auth.x.ai'
+
+function sessionFromAuthEntry(authEntry: TokenizedGrokAuthEntry): GrokAuthSession {
+  return {
+    accessToken: authEntry.key,
+    userId: typeof authEntry.user_id === 'string' ? authEntry.user_id : null,
+    email: typeof authEntry.email === 'string' ? authEntry.email : null,
+    teamId: typeof authEntry.team_id === 'string' ? authEntry.team_id : null,
+    expiresAtMs: parseExpiresAtMs(authEntry.expires_at),
+    oidcClientId: typeof authEntry.oidc_client_id === 'string' ? authEntry.oidc_client_id : null
+  }
+}
+
+function isPreferredGrokAuthKey(key: string): boolean {
+  return key === PREFERRED_GROK_AUTH_ISSUER || key.startsWith(`${PREFERRED_GROK_AUTH_ISSUER}::`)
 }
 
 export function readGrokAuthSession(): GrokAuthReadResult {
@@ -72,23 +92,32 @@ export function readGrokAuthSession(): GrokAuthReadResult {
     if (typeof parsed !== 'object' || parsed === null) {
       return { status: 'error', error: 'Grok auth file is invalid' }
     }
-    for (const entry of Object.values(parsed)) {
+    let preferredKeySeen = false
+    let expiredPreferred: GrokAuthSession | null = null
+    let fallback: GrokAuthSession | null = null
+    for (const [key, entry] of Object.entries(parsed as Record<string, unknown>)) {
+      const isPreferred = isPreferredGrokAuthKey(key)
+      preferredKeySeen ||= isPreferred
       const authEntry = parseAuthEntry(entry)
-      if (!authEntry?.key) {
+      if (!authEntry) {
         continue
       }
-      return {
-        status: 'ok',
-        session: {
-          accessToken: authEntry.key,
-          userId: typeof authEntry.user_id === 'string' ? authEntry.user_id : null,
-          email: typeof authEntry.email === 'string' ? authEntry.email : null,
-          teamId: typeof authEntry.team_id === 'string' ? authEntry.team_id : null,
-          expiresAtMs: parseExpiresAtMs(authEntry.expires_at),
-          oidcClientId:
-            typeof authEntry.oidc_client_id === 'string' ? authEntry.oidc_client_id : null
+      const session = sessionFromAuthEntry(authEntry)
+      if (isPreferred) {
+        if (isGrokAccessTokenFresh(session)) {
+          return { status: 'ok', session }
         }
+        expiredPreferred ??= session
+        continue
       }
+      if (!fallback) {
+        fallback = session
+      }
+    }
+    // Why: alternate issuers are compatibility fallbacks only when no default entry exists.
+    const selectedSession = expiredPreferred ?? (preferredKeySeen ? null : fallback)
+    if (selectedSession) {
+      return { status: 'ok', session: selectedSession }
     }
     // Why: a token-less file (e.g. after grok logout) means signed out, not a
     // failure — 'error' would keep a status-bar alert visible for that user.
