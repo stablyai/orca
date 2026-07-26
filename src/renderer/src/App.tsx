@@ -1260,8 +1260,12 @@ function App(): React.JSX.Element {
       if (detachedTabs.length > 1) {
         store.setActiveTab(seed.tab.id)
       }
+      // Reopen the floating terminal panel if a detached tab belonging to the floating workspace is reintegrated
+      if (detachedTabs.some((tab) => tab.tab.worktreeId === 'global-floating-terminal')) {
+        setFloatingTerminalOpenWithFocus(true)
+      }
     })
-  }, [])
+  }, [setFloatingTerminalOpenWithFocus])
 
   useEffect(() => {
     setRuntimeGraphSyncEnabled(workspaceSessionReady)

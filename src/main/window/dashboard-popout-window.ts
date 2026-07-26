@@ -171,7 +171,8 @@ export function createOrFocusDashboardPopout(
     // not the live webContents level, so a window-local zoom via the menu/chords
     // is not snapped back until the app-wide level actually changes.
     let lastFollowedZoomLevel = store?.getUI().uiZoomLevel ?? 0
-    const unsubscribeUIChanged = store?.onUIChanged((ui) => {
+    let unsubscribeUIChanged: (() => void) | undefined
+    unsubscribeUIChanged = store?.onUIChanged((ui) => {
       const level = ui.uiZoomLevel ?? 0
       if (level === lastFollowedZoomLevel) {
         return
@@ -181,7 +182,6 @@ export function createOrFocusDashboardPopout(
         window.webContents.setZoomLevel(level)
       }
     })
-
     // Why: the pop-out has no renderer-side shortcut plumbing; resolve only the
     // zoom chords here and let every other key fall through untouched.
     window.webContents.on('before-input-event', (event, input) => {
@@ -223,12 +223,13 @@ export function createOrFocusDashboardPopout(
       unsubscribeUIChanged?.()
       if (dashboardPopoutWindow === window) {
         dashboardPopoutWindow = null
+        broadcastPopoutOpenChanged(false)
       }
-      broadcastPopoutOpenChanged(false)
     })
 
     loadPopoutHtml(window, `view=${encodeURIComponent(view)}`)
   } catch (err) {
+    unsubscribeUIChanged?.()
     if (!window.isDestroyed()) {
       window.destroy()
     }

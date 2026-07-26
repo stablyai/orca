@@ -222,7 +222,7 @@ export class DetachablePaneWindowManager {
       // window is fully destroyed.
       window.on('closed', () => {
         const entry = this.#panes.get(paneId)
-        if (!entry) {
+        if (!entry || entry.window !== window) {
           return
         }
 

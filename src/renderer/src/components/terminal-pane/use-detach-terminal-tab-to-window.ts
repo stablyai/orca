@@ -18,6 +18,8 @@ export function useDetachTerminalTabToWindow(worktreeId: string) {
       const state = useAppStore.getState()
       const seed = captureTerminalTabForWindowDetach(state, worktreeId, tabId, additionalTabIds)
       if (!seed) {
+        console.error('[detach-to-window] could not build a detach seed for tab', tabId)
+        toast.error(translate('detachToWindow.error', 'Could not detach tab to a new window'))
         return
       }
       void window.api.pane
