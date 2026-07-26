@@ -146,6 +146,22 @@ export const SPEECH_MODEL_CATALOG: SpeechModelManifest[] = [
     modelingUnit: 'bpe'
   },
   {
+    id: 'parakeet-tdt-ctc-0.6b-ja-int8',
+    label: 'Parakeet TDT-CTC JA',
+    description: 'Japanese only. Trained on 35k+ hours of natural speech. Punctuation included.',
+    type: 'nemo-ctc',
+    provider: 'local',
+    language: 'ja',
+    sizeBytes: 489_389_564,
+    downloadUrl:
+      'https://github.com/k2-fsa/sherpa-onnx/releases/download/asr-models/sherpa-onnx-nemo-parakeet-tdt_ctc-0.6b-ja-35000-int8.tar.bz2',
+    archiveSha256: '4b0a800ef29f4f4c8667339bf6f60d5bfdc2852ddc9dc5741aea65b6f8d1306b',
+    archiveFormat: 'tar.bz2',
+    files: ['model.int8.onnx', 'tokens.txt'],
+    sampleRate: 16000,
+    streaming: false
+  },
+  {
     id: 'whisper-tiny',
     label: 'Whisper Tiny',
     description: '90+ languages. Lower accuracy than Parakeet but broadest language coverage.',

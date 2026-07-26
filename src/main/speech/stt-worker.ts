@@ -111,6 +111,22 @@ function handleInit(msg: Extract<WorkerMessage, { type: 'init' }>): void {
       }
       recognizer = sherpa.createOfflineRecognizer(config)
       stream = sherpa.createOfflineStream(recognizer)
+    } else if (modelType === 'nemo-ctc') {
+      const config = {
+        featConfig: { sampleRate, featureDim: 80 },
+        modelConfig: {
+          nemoCtc: {
+            model: resolveFile(files, 'model', modelDir)
+          },
+          tokens,
+          numThreads: 2,
+          provider: 'cpu',
+          debug: 0
+        },
+        decodingMethod: 'greedy_search'
+      }
+      recognizer = sherpa.createOfflineRecognizer(config)
+      stream = sherpa.createOfflineStream(recognizer)
     } else if (modelType === 'senseVoice') {
       const config = {
         featConfig: { sampleRate, featureDim: 80 },
