@@ -5,13 +5,32 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import { TAB_DRAG_ACTIVATION_DISTANCE_PX } from '../tab-group/useTabDragSplit'
 import { useTabStripPointerActivation } from './tab-strip-pointer-activation'
 
-function pointerDownEvent(clientX: number, clientY: number, button = 0): React.PointerEvent {
-  return { button, clientX, clientY } as unknown as React.PointerEvent
+type PointerModifiers = Partial<Pick<PointerEvent, 'shiftKey' | 'ctrlKey' | 'metaKey'>>
+function pointerDownEvent(
+  clientX: number,
+  clientY: number,
+  button = 0,
+  modifiers: PointerModifiers = {}
+): React.PointerEvent {
+  return {
+    button,
+    clientX,
+    clientY,
+    shiftKey: false,
+    ctrlKey: false,
+    metaKey: false,
+    ...modifiers
+  } as unknown as React.PointerEvent
 }
 
-function firePointer(type: string, clientX: number, clientY: number): void {
+function firePointer(
+  type: string,
+  clientX: number,
+  clientY: number,
+  modifiers: PointerModifiers = {}
+): void {
   act(() => {
-    window.dispatchEvent(new PointerEvent(type, { clientX, clientY, bubbles: true }))
+    window.dispatchEvent(new PointerEvent(type, { clientX, clientY, bubbles: true, ...modifiers }))
   })
 }
 
@@ -20,6 +39,17 @@ afterEach(() => {
 })
 
 describe('useTabStripPointerActivation', () => {
+  it('preserves press modifiers when pointerup loses them', () => {
+    const onActivate = vi.fn()
+    const { result } = renderHook(() => useTabStripPointerActivation({ onActivate }))
+
+    act(() => result.current.onPointerDown(pointerDownEvent(10, 10, 0, { shiftKey: true })))
+    firePointer('pointerup', 10, 10)
+
+    expect(onActivate).toHaveBeenCalledWith(
+      expect.objectContaining({ shiftKey: true, ctrlKey: false, metaKey: false })
+    )
+  })
   it('activates on a release that never crossed the drag threshold (a click)', () => {
     const onActivate = vi.fn()
     const dragListener = vi.fn()
