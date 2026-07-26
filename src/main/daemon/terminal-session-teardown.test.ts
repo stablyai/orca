@@ -96,18 +96,37 @@ describe('TerminalSessionTeardown plain-shell teardown', () => {
 
   it('non-win32 immediate kill sweeps detached descendants before force-kill', async () => {
     setPlatform('linux')
-    const session = createPlainShellSession()
+    const events: string[] = []
+    const session = createPlainShellSession({
+      forceKillAndWaitForExit: vi.fn(async () => {
+        events.push('force-kill')
+      })
+    })
+    killWithDescendantSweepMock.mockImplementation(async (_pid: number, killRoot: () => void) => {
+      events.push('descendants-swept')
+      killRoot()
+    })
     const teardown = new TerminalSessionTeardown(new Map([['s1', session]]))
 
     await teardown.killSession('s1', session, true)
 
     expect(killWithDescendantSweepMock).toHaveBeenCalled()
     expect(session.forceKillAndWaitForExit).toHaveBeenCalled()
+    expect(events).toEqual(['descendants-swept', 'force-kill'])
   })
 
   it('non-immediate (graceful) kill sweeps before signalling the root', async () => {
     setPlatform('win32')
-    const session = createPlainShellSession()
+    const events: string[] = []
+    const session = createPlainShellSession({
+      signalTerminationRoot: vi.fn(() => {
+        events.push('root-signal')
+      })
+    })
+    killWithDescendantSweepMock.mockImplementation(async (_pid: number, killRoot: () => void) => {
+      events.push('descendants-swept')
+      killRoot()
+    })
     const teardown = new TerminalSessionTeardown(new Map([['s1', session]]))
 
     await teardown.killSession('s1', session, false)
@@ -116,5 +135,6 @@ describe('TerminalSessionTeardown plain-shell teardown', () => {
     expect(session.forceKillAndWaitForExit).not.toHaveBeenCalled()
     expect(session.signalTerminationRoot).toHaveBeenCalled()
     expect(session.scheduleForceDisposeFallback).toHaveBeenCalled()
+    expect(events).toEqual(['descendants-swept', 'root-signal'])
   })
 })

@@ -62,7 +62,7 @@ describe('TerminalHost dead-session reaping (leak regression)', () => {
     // Windows taskkill tree-kill path is covered in terminal-session-teardown.test.ts.
     platformDescriptor = Object.getOwnPropertyDescriptor(process, 'platform')
     Object.defineProperty(process, 'platform', { configurable: true, value: 'linux' })
-    killWithDescendantSweepMock.mockReset().mockImplementation((_pid, killRoot) => killRoot())
+    killWithDescendantSweepMock.mockReset().mockImplementation(async (_pid, killRoot) => killRoot())
     emulatorDispose = vi.spyOn(HeadlessEmulator.prototype, 'dispose')
     const spawnFn = vi.fn(() => {
       lastSubprocess = createMockSubprocess()
@@ -127,7 +127,14 @@ describe('TerminalHost dead-session reaping (leak regression)', () => {
       rows: 24,
       streamClient: streamClient()
     })
-    lastSubprocess.forceKill = vi.fn()
+    const events: string[] = []
+    lastSubprocess.forceKill = vi.fn(() => {
+      events.push('force-kill')
+    })
+    killWithDescendantSweepMock.mockImplementation(async (_pid, killRoot) => {
+      events.push('descendants-swept')
+      killRoot()
+    })
 
     const killed = host.kill('session-1', { immediate: true })
 
@@ -135,6 +142,7 @@ describe('TerminalHost dead-session reaping (leak regression)', () => {
     expect(lastSubprocess.kill).not.toHaveBeenCalled()
     expect(lastSubprocess.forceKill).toHaveBeenCalled()
     expect(killWithDescendantSweepMock).toHaveBeenCalled()
+    expect(events).toEqual(['descendants-swept', 'force-kill'])
     expect(emulatorDispose).not.toHaveBeenCalled()
     expect(host.listSessions()).toHaveLength(1)
     lastSubprocess._onExitCb?.(137)
