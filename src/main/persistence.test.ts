@@ -11435,6 +11435,88 @@ describe('Store host-partitioned workspace sessions', () => {
     flush.mockRestore()
   })
 
+  it('rolls back archive metadata, host session, and SSH leases when the retirement flush fails', async () => {
+    const store = await createStore()
+    const worktreeId = 'repo-1::/worktree'
+    const hostId = 'ssh:ssh-1'
+    const archivedPtyId = 'ssh:ssh-1@@remote-pty'
+    const session = {
+      ...makeBoundHostSession(archivedPtyId),
+      terminalPtyIncarnationsByPaneKey: {
+        [makePaneKey('tab-1', TEST_LEAF_1)]: 'incarnation-1'
+      }
+    }
+    store.setWorkspaceSession(session, hostId)
+    store.upsertSshRemotePtyLease({
+      targetId: 'ssh-1',
+      ptyId: 'remote-pty',
+      worktreeId,
+      tabId: 'tab-1',
+      leafId: TEST_LEAF_1,
+      state: 'attached'
+    })
+    const archiveId = '11111111-1111-4111-8111-111111111111'
+    const nextArchives = {
+      [archiveId]: {
+        schemaVersion: 1,
+        id: archiveId,
+        operationId: 'relay-worker-lost:tab-1:test',
+        sourceTabId: 'tab-1',
+        sourcePaneSignature: 'a'.repeat(64),
+        executionHostId: hostId,
+        worktreeId,
+        title: 'Terminal',
+        layout: {
+          root: { type: 'leaf' as const, leafId: TEST_LEAF_1 },
+          activeLeafId: TEST_LEAF_1,
+          expandedLeafId: null
+        },
+        panesByLeafId: { [TEST_LEAF_1]: { archivedLeafId: TEST_LEAF_1, cwd: '/worktree' } },
+        reason: 'relay-worker-lost' as const,
+        archivedAt: 1,
+        expiresAt: 2,
+        restoreCount: 0
+      }
+    }
+    const flush = vi.spyOn(store, 'flushOrThrow').mockImplementationOnce(() => {
+      expect(store.getTerminalArchives()).toEqual(nextArchives)
+      expect(store.getWorkspaceSession(hostId).tabsByWorktree[worktreeId]).toEqual([])
+      expect(store.getSshRemotePtyLeases('ssh-1')).toEqual([
+        expect.objectContaining({ ptyId: 'remote-pty', state: 'termination-pending' })
+      ])
+      throw new Error('disk unavailable')
+    })
+    const commitLostTerminalArchiveAndRetire = store as unknown as {
+      commitLostTerminalArchiveAndRetire: (
+        archives: typeof nextArchives,
+        args: {
+          worktreeId: string
+          tabId: string
+          executionHostId: typeof hostId
+          sshTerminationTargetId: string
+        }
+      ) => void
+    }
+
+    expect(() =>
+      commitLostTerminalArchiveAndRetire.commitLostTerminalArchiveAndRetire(nextArchives, {
+        worktreeId,
+        tabId: 'tab-1',
+        executionHostId: hostId,
+        sshTerminationTargetId: 'ssh-1'
+      })
+    ).toThrow('disk unavailable')
+    flush.mockRestore()
+
+    expect(store.getTerminalArchives()).toEqual({})
+    expect(store.getWorkspaceSession(hostId).tabsByWorktree[worktreeId]).toEqual([
+      expect.objectContaining({ id: 'tab-1', ptyId: archivedPtyId })
+    ])
+    expect(store.getSshRemotePtyLeases('ssh-1')).toEqual([
+      expect.objectContaining({ ptyId: 'remote-pty', state: 'attached' })
+    ])
+  })
+
   it('rolls back a failed SSH PTY binding flush in the SSH host partition', async () => {
     const store = await createStore()
     store.setWorkspaceSession(makeBoundHostSession(null), 'local')
