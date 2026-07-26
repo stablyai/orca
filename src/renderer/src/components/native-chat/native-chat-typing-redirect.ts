@@ -50,7 +50,10 @@ export function shouldFocusNativeChatPaneFromPointerTarget(target: EventTarget |
  *  are not inserted (their character has no literal form), so the caller only
  *  focuses. Modified chords (Shift/Alt/Ctrl/Cmd+Delete = cut, delete-word, …)
  *  are left to the focused target. */
-export function shouldFocusNativeChatComposerFromEditingKey(event: KeyboardRedirectEvent): boolean {
+export function shouldFocusNativeChatComposerFromEditingKey(
+  event: KeyboardRedirectEvent,
+  activeTarget: EventTarget | null = null
+): boolean {
   if (
     event.defaultPrevented ||
     event.isComposing ||
@@ -62,7 +65,7 @@ export function shouldFocusNativeChatComposerFromEditingKey(event: KeyboardRedir
   ) {
     return false
   }
-  return !isNativeChatInteractiveTarget(event.target)
+  return !isNativeChatInteractiveTarget(event.target) && !isNativeChatInteractiveTarget(activeTarget)
 }
 
 function isNativeChatInteractiveTarget(target: EventTarget | null): boolean {

@@ -377,7 +377,7 @@ function NativeChatResolvedView({
       onKeyDownCapture={(event) => {
         // Backspace/Delete outside an input focuses the composer (like typing)
         // but inserts nothing — let the now-focused field handle the keystroke.
-        if (shouldFocusNativeChatComposerFromEditingKey(event)) {
+        if (shouldFocusNativeChatComposerFromEditingKey(event, document.activeElement)) {
           composerRef.current?.focus()
           return
         }

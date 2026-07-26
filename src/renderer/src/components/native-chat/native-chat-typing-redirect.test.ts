@@ -85,6 +85,15 @@ describe('shouldFocusNativeChatComposerFromEditingKey', () => {
       )
     ).toBe(false)
   })
+
+  it('does not refocus a selected textarea when Electron retargets Delete to the pane', () => {
+    expect(
+      shouldFocusNativeChatComposerFromEditingKey(
+        keyEvent({ key: 'Delete', target: inertTarget() }),
+        interactiveTarget()
+      )
+    ).toBe(false)
+  })
 })
 
 describe('shouldFocusNativeChatPaneFromPointerTarget', () => {
