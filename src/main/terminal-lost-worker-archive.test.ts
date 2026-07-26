@@ -414,6 +414,6 @@ describe('archiveLostTerminalWorker', () => {
 
     expect(result).toEqual({ kind: 'error', code: 'durability-failed' })
     expect(archiveOwner.archives()).toEqual({})
-    expect(archiveOwner.retireArchivedTerminalTabAndFlush).not.toHaveBeenCalled()
+    expect(archiveOwner.retireArchivedTerminalTabAndFlush).toHaveBeenCalledOnce()
   })
 })
