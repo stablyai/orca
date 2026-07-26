@@ -104,6 +104,12 @@ describe('resolveClaudeRowUsage', () => {
     })
   })
 
+  it('reports unavailable for a settled inactive entry carrying no snapshot', () => {
+    expect(resolveClaudeRowUsage({ ...base, inactiveAccounts: [entry({})] })).toEqual({
+      kind: 'unavailable'
+    })
+  })
+
   it('keeps loading while an inactive account is still fetching', () => {
     expect(
       resolveClaudeRowUsage({ ...base, inactiveAccounts: [entry({ isFetching: true })] })
