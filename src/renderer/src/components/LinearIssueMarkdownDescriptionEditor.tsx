@@ -7,6 +7,10 @@ import { LoaderCircle } from 'lucide-react'
 
 import { createRichMarkdownExtensions } from '@/components/editor/rich-markdown-extensions'
 import { encodeRawMarkdownHtmlForRichEditor } from '@/components/editor/raw-markdown-html'
+import {
+  createRichMarkdownEditorCodec,
+  type RichMarkdownEditorCodec
+} from '@/components/editor/rich-markdown-source-transport'
 import { LinearIssueMarkdownToolbar } from '@/components/LinearIssueMarkdownToolbar'
 import { isScreenSubmitShortcut } from '@/lib/screen-submit-shortcut'
 import { cn } from '@/lib/utils'
@@ -26,8 +30,8 @@ type LinearIssueMarkdownDescriptionEditorProps = {
   submitShortcutLabel: string
 }
 
-function createLinearIssueMarkdownExtensions() {
-  const extensions = createRichMarkdownExtensions()
+function createLinearIssueMarkdownExtensions(codec: RichMarkdownEditorCodec) {
+  const extensions = createRichMarkdownExtensions({ codec })
   return [
     ...extensions,
     Placeholder.configure({
@@ -54,18 +58,24 @@ export function LinearIssueMarkdownDescriptionEditor({
   const richMarkdownSpellcheckEnabled = useAppStore(
     (s) => s.settings?.richMarkdownSpellcheckEnabled ?? true
   )
+  // Why: changing language recreates Tiptap and re-registers tokenizers, so it
+  // must also receive a fresh private Marked registry instead of growing one.
+  const codec = useMemo(() => {
+    void language
+    return createRichMarkdownEditorCodec()
+  }, [language])
   const linearIssueMarkdownExtensions = useMemo(() => {
     // Why: Tiptap freezes extension options when the editor is created; the
     // language value is the recreation key for translated extension options.
     void language
-    return createLinearIssueMarkdownExtensions()
-  }, [language])
+    return createLinearIssueMarkdownExtensions(codec)
+  }, [codec, language])
 
   const editor = useEditor(
     {
       immediatelyRender: false,
       extensions: linearIssueMarkdownExtensions,
-      content: encodeRawMarkdownHtmlForRichEditor(value),
+      content: encodeRawMarkdownHtmlForRichEditor(value, codec),
       contentType: 'markdown',
       editable: !disabled,
       editorProps: {
@@ -99,7 +109,7 @@ export function LinearIssueMarkdownDescriptionEditor({
         onChange(nextValue)
       }
     },
-    [language]
+    [codec, language]
   )
   useRichMarkdownSpellcheckAttribute(editor, richMarkdownSpellcheckEnabled)
 
@@ -124,12 +134,12 @@ export function LinearIssueMarkdownDescriptionEditor({
 
     // Why: Linear remains the source of truth when the selected issue changes
     // or an optimistic save is reverted; keep the rich view aligned with it.
-    editor.commands.setContent(encodeRawMarkdownHtmlForRichEditor(value), {
+    editor.commands.setContent(encodeRawMarkdownHtmlForRichEditor(value, codec), {
       contentType: 'markdown',
       emitUpdate: false
     })
     lastEditorMarkdownRef.current = value
-  }, [editor, value])
+  }, [codec, editor, value])
 
   return (
     <div

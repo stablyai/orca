@@ -601,6 +601,32 @@ describe('createSessionWriteSubscriber', () => {
     cleanup()
   })
 
+  it('rebuilds a pending tab patch after close so it cannot resurrect the tab', () => {
+    const persist = vi.fn<(payload: WorkspaceSessionWrite) => void>()
+    const cleanup = createSessionWriteSubscriber({ store: useAppStore, persist })
+
+    useAppStore.setState({
+      workspaceSessionReady: true,
+      hydrationSucceeded: true,
+      ...makeTerminalSessionState('shell')
+    })
+    vi.advanceTimersByTime(50)
+    useAppStore.setState({
+      tabsByWorktree: { 'wt-1': [] },
+      unifiedTabsByWorktree: { 'wt-1': [] },
+      groupsByWorktree: { 'wt-1': [] },
+      layoutByWorktree: {},
+      activeGroupIdByWorktree: {},
+      activeTabId: null
+    })
+    vi.advanceTimersByTime(200)
+
+    expect(persist).toHaveBeenCalledTimes(1)
+    expect(persist.mock.calls[0][0].patch.tabsByWorktree?.['wt-1']).toEqual([])
+    expect(persist.mock.calls[0][0].patch.unifiedTabs?.['wt-1']).toBeUndefined()
+    cleanup()
+  })
+
   it('cleanup unsubscribes and cancels a pending timer', () => {
     const persist = vi.fn<(payload: WorkspaceSessionWrite) => void>()
     const cleanup = createSessionWriteSubscriber({ store: useAppStore, persist })

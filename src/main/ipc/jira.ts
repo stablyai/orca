@@ -6,6 +6,7 @@ import {
   createIssue,
   getIssue,
   getIssueComments,
+  getProjectStatusOrder,
   listAssignableUsers,
   listCreateFields,
   listIssueTypes,
@@ -90,7 +91,8 @@ export function registerJiraHandlers(): void {
     const result = await connect({
       siteUrl: args.siteUrl,
       email: args.email,
-      apiToken: args.apiToken
+      apiToken: args.apiToken,
+      authType: args.authType === 'server' ? 'server' : 'cloud'
     })
     if (result.ok) {
       _resetPreflightCache()
@@ -259,4 +261,14 @@ export function registerJiraHandlers(): void {
     }
     return listTransitions(args.key.trim(), normalizeSiteId(args.siteId))
   })
+
+  ipcMain.handle(
+    'jira:getProjectStatusOrder',
+    async (_event, args: { projectKey: string; siteId?: string }) => {
+      if (typeof args?.projectKey !== 'string' || !args.projectKey.trim()) {
+        return { statusIdsByColumn: [] }
+      }
+      return getProjectStatusOrder(args.projectKey.trim(), normalizeSiteId(args.siteId))
+    }
+  )
 }

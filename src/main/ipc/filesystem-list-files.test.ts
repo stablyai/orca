@@ -1,4 +1,3 @@
-/* eslint-disable max-lines -- Why: one Quick Open file-list suite covers both rg and git fallback process lifecycles. */
 import { describe, expect, it, vi, beforeEach } from 'vitest'
 
 const {
@@ -70,6 +69,30 @@ describe('filesystem-list-files', () => {
     resolveAuthorizedPathMock.mockImplementation(async (path) => path)
     checkRgAvailableMock.mockResolvedValue(true)
     getLocalGitOptionsForRegisteredWorktreeMock.mockReturnValue({})
+  })
+
+  it('stops after the primary rg pass fills the result budget', async () => {
+    const p1 = createMockProcess()
+    const p2 = createMockProcess()
+    spawnMock.mockImplementation((_cmd, args: string[]) => (isIgnoredRgPass(args) ? p2 : p1))
+    const promise = listQuickOpenFiles(
+      '/mock/root',
+      {} as unknown as Store,
+      undefined,
+      undefined,
+      2
+    )
+
+    setTimeout(() => {
+      ;(p1.stdout as unknown as EventEmitter).emit('data', 'one.ts\ntwo.ts')
+      p1.emit('close', 0, null)
+    }, 0)
+    const result = await promise
+
+    expect(result).toEqual(['one.ts', 'two.ts'])
+    expect(p1.kill).toHaveBeenCalled()
+    expect(p2.kill).not.toHaveBeenCalled()
+    expect(spawnMock).toHaveBeenCalledTimes(1)
   })
 
   it('merges normal files and ignored files and filters correctly', async () => {
@@ -366,6 +389,9 @@ describe('filesystem-list-files', () => {
       expect(gitCalls.length).toBe(2)
       expect(gitCalls[0][1]).toContain('ls-files')
       expect(gitCalls[0][1]).toContain('-s')
+      expect(gitCalls[0][1]).toContain('--directory')
+      expect(gitCalls[1][1]).toContain('--directory')
+      expect(gitCalls[1][1]).toContain('--no-empty-directory')
 
       // Should include valid files and filter node_modules
       expect(result).toContain('src/index.ts')
@@ -373,6 +399,73 @@ describe('filesystem-list-files', () => {
       expect(result).toContain('.env.local')
       expect(result).toContain('dist/generated.js')
       expect(result).not.toContain('node_modules/dep/index.js')
+    })
+
+    it('stops after primary Git files fill the result budget', async () => {
+      checkRgAvailableMock.mockResolvedValue(false)
+      const revParseProc = createMockProcess()
+      const gitP1 = createMockProcess()
+      const gitP2 = createMockProcess()
+      let callIndex = 0
+
+      spawnMock.mockImplementation((cmd: string, args: string[]) => {
+        if (cmd === 'git' && args.includes('rev-parse')) {
+          return revParseProc
+        }
+        if (cmd === 'git' && args.includes('ls-files')) {
+          callIndex += 1
+          return callIndex === 1 ? gitP1 : gitP2
+        }
+        return createMockProcess()
+      })
+
+      const promise = listQuickOpenFiles(
+        '/mock/root',
+        {} as unknown as Store,
+        undefined,
+        undefined,
+        2
+      )
+      setTimeout(() => revParseProc.emit('close', 0, null), 0)
+      setTimeout(() => {
+        ;(gitP1.stdout as unknown as EventEmitter).emit('data', 'one.ts\0two.ts')
+        gitP1.emit('close', 0, null)
+      }, 10)
+
+      await expect(promise).resolves.toEqual(['one.ts', 'two.ts'])
+      expect(gitP1.kill).toHaveBeenCalled()
+      expect(gitP2.kill).not.toHaveBeenCalled()
+      expect(callIndex).toBe(1)
+    })
+
+    it('does not let a discarded Git directory placeholder consume the result budget', async () => {
+      checkRgAvailableMock.mockResolvedValue(false)
+      const revParseProc = createMockProcess()
+      const primary = createMockProcess()
+      spawnMock.mockImplementation((cmd: string, args: string[]) => {
+        if (cmd === 'git' && args.includes('rev-parse')) {
+          return revParseProc
+        }
+        return primary
+      })
+
+      const promise = listQuickOpenFiles(
+        '/mock/root',
+        {} as unknown as Store,
+        undefined,
+        undefined,
+        1
+      )
+      setTimeout(() => revParseProc.emit('close', 0, null), 0)
+      setTimeout(() => {
+        ;(primary.stdout as unknown as EventEmitter).emit(
+          'data',
+          `discarded/\0${staged('100644', 'src/kept.ts')}\0`
+        )
+      }, 10)
+
+      await expect(promise).resolves.toEqual(['src/kept.ts'])
+      expect(primary.kill).toHaveBeenCalled()
     })
 
     it('git fallback applies hidden dir blocklist', async () => {
@@ -470,6 +563,60 @@ describe('filesystem-list-files', () => {
         expect(gitP1.listenerCount('close')).toBe(0)
       } finally {
         vi.useRealTimers()
+      }
+    })
+
+    it('keeps primary results when only the ignored pass times out', async () => {
+      checkRgAvailableMock.mockResolvedValue(false)
+      const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {})
+      vi.useFakeTimers()
+
+      try {
+        const revParseProc = createMockProcess()
+        const gitP1 = createMockProcess()
+        const gitP2 = createMockProcess()
+        let callIndex = 0
+
+        spawnMock.mockImplementation((cmd: string, args: string[]) => {
+          if (cmd === 'git' && args.includes('rev-parse')) {
+            return revParseProc
+          }
+          if (cmd === 'git' && args.includes('ls-files')) {
+            callIndex++
+            return callIndex === 1 ? gitP1 : gitP2
+          }
+          return createMockProcess()
+        })
+
+        const storeMock = {} as unknown as Store
+        const promise = listQuickOpenFiles('/mock/root', storeMock)
+
+        await Promise.resolve()
+        await Promise.resolve()
+        await Promise.resolve()
+        revParseProc.emit('close', 0, null)
+        await Promise.resolve()
+        await Promise.resolve()
+        await Promise.resolve()
+
+        ;(gitP1.stdout as unknown as EventEmitter).emit(
+          'data',
+          `${staged('100644', 'src/index.ts')}\0`
+        )
+        gitP1.emit('close', 0, null)
+        // Ignored entries streamed before the timeout are kept.
+        ;(gitP2.stdout as unknown as EventEmitter).emit('data', 'dist/generated.js\0')
+
+        await vi.advanceTimersByTimeAsync(10000)
+
+        await expect(promise).resolves.toEqual(
+          expect.arrayContaining(['src/index.ts', 'dist/generated.js'])
+        )
+        expect(gitP2.kill).toHaveBeenCalled()
+        expect(warnSpy).toHaveBeenCalled()
+      } finally {
+        vi.useRealTimers()
+        warnSpy.mockRestore()
       }
     })
 

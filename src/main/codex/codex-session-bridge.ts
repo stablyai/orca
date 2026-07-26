@@ -42,9 +42,12 @@ let backgroundSessionBridgeTask: Promise<void> | null = null
 
 /**
  * Synchronously mirrors system session files into the managed runtime home.
+ *
+ * `sourceCodexHomePath` overrides the default ~/.codex history source for users
+ * who run Codex with a custom CODEX_HOME; it only affects history discovery.
  */
-export function syncSystemCodexSessionsIntoManagedHome(): void {
-  const systemSessionsRoot = join(getSystemCodexHomePath(), 'sessions')
+export function syncSystemCodexSessionsIntoManagedHome(sourceCodexHomePath?: string): void {
+  const systemSessionsRoot = join(sourceCodexHomePath || getSystemCodexHomePath(), 'sessions')
   if (!existsSync(systemSessionsRoot)) {
     return
   }
@@ -62,12 +65,13 @@ export function syncSystemCodexSessionsIntoManagedHome(): void {
  * background bridging without starting duplicate directory walks.
  */
 export function startSystemCodexSessionBridgeInBackground(
-  options: CodexSessionBridgeIncrementalOptions = {}
+  options: CodexSessionBridgeIncrementalOptions = {},
+  sourceCodexHomePath?: string
 ): Promise<void> {
   if (backgroundSessionBridgeTask) {
     return backgroundSessionBridgeTask
   }
-  const task = syncSystemCodexSessionsIntoManagedHomeIncrementally(options)
+  const task = syncSystemCodexSessionsIntoManagedHomeIncrementally(options, sourceCodexHomePath)
     .catch((error: unknown) => {
       console.warn('[codex-session-bridge] Background session bridge failed:', error)
     })
@@ -88,9 +92,10 @@ export function startSystemCodexSessionBridgeInBackground(
  * bridge operation equivalent to the synchronous path.
  */
 export async function syncSystemCodexSessionsIntoManagedHomeIncrementally(
-  options: CodexSessionBridgeIncrementalOptions = {}
+  options: CodexSessionBridgeIncrementalOptions = {},
+  sourceCodexHomePath?: string
 ): Promise<CodexSessionBridgeSummary> {
-  const systemSessionsRoot = join(getSystemCodexHomePath(), 'sessions')
+  const systemSessionsRoot = join(sourceCodexHomePath || getSystemCodexHomePath(), 'sessions')
   if (!existsSync(systemSessionsRoot)) {
     return { scannedFiles: 0, linkedFiles: 0 }
   }

@@ -15,4 +15,16 @@ describe('shouldReadRemoteCliStdin', () => {
       false
     )
   })
+
+  it('reads stdin for *-stdin payload flags bridged to the full host CLI', () => {
+    expect(shouldReadRemoteCliStdin(['computer', 'action', '--app', 'Notes', '--text-stdin'])).toBe(
+      true
+    )
+    expect(shouldReadRemoteCliStdin(['computer', 'action', '--app', 'Notes', '--text', 'hi'])).toBe(
+      false
+    )
+    expect(
+      shouldReadRemoteCliStdin(['computer', 'action', '--app', 'Notes', '--text-stdin', '--help'])
+    ).toBe(false)
+  })
 })

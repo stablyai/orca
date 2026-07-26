@@ -15,10 +15,10 @@ import { toRuntimeWorktreeSelector } from '@/runtime/runtime-worktree-selector'
 import { isTerminalLeafId, makePaneKey } from '../../../shared/stable-pane-id'
 import type { TerminalLayoutSnapshot } from '../../../shared/types'
 import {
-  detectAgentStatusFromTitle,
-  getAgentLabel,
-  isExplicitAgentStatusFresh
-} from './agent-status'
+  classifyTitleActivity,
+  isExplicitAgentStatusFresh,
+  resolveTitleActivityLabel
+} from '@/lib/pane-agent-evidence'
 import { resolveRuntimePaneTitleForLeaf } from './runtime-pane-title-leaf-id'
 
 const ACTIVE_AGENT_PROBE_RPC_TIMEOUT_MS = 3000
@@ -271,5 +271,5 @@ function getFocusedRuntimePaneTitle(
 }
 
 function isRecognizedAgentTitle(title: string): boolean {
-  return detectAgentStatusFromTitle(title) !== null && getAgentLabel(title) !== null
+  return classifyTitleActivity(title) !== null && resolveTitleActivityLabel(title) !== null
 }

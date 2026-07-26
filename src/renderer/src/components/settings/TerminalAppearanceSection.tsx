@@ -44,6 +44,7 @@ type TerminalAppearanceSectionProps = {
   updateSettings: (updates: Partial<GlobalSettings>) => void
   systemPrefersDark: boolean
   terminalFontSuggestions: string[]
+  onRequestFontSuggestions?: () => void
   ghostty: UseGhosttyImportReturn
   warpThemes: UseWarpThemeImportReturn
   forceVisiblePrimary?: boolean
@@ -74,6 +75,7 @@ export function TerminalAppearanceSection({
   updateSettings,
   systemPrefersDark,
   terminalFontSuggestions,
+  onRequestFontSuggestions,
   ghostty,
   warpThemes,
   forceVisiblePrimary = false
@@ -225,6 +227,7 @@ export function TerminalAppearanceSection({
                   <FontAutocomplete
                     value={settings.terminalFontFamily}
                     suggestions={terminalFontSuggestions}
+                    onRequestSuggestions={onRequestFontSuggestions}
                     onChange={(value) => updateSettings({ terminalFontFamily: value })}
                     onPreviewFontFamily={setPreviewFontFamily}
                   />

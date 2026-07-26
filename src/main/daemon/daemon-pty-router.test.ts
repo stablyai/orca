@@ -1,11 +1,17 @@
 import { describe, expect, it, vi } from 'vitest'
 import { DaemonPtyRouter } from './daemon-pty-router'
 import type { DaemonPtyAdapter } from './daemon-pty-adapter'
-import type { PtySpawnOptions, PtySpawnResult } from '../providers/types'
+import type { PtyBackgroundStreamEvent, PtySpawnOptions, PtySpawnResult } from '../providers/types'
+import {
+  AGENT_SESSION_CLAIM_DAEMON_PROTOCOL_VERSION,
+  AGENT_SESSION_CREATE_OPERATION_DAEMON_PROTOCOL_VERSION,
+  GIT_CREDENTIAL_GUARD_HOST_PROTOCOL_VERSION
+} from './types'
 
 type AdapterMock = DaemonPtyAdapter & {
-  emitData: (id: string, data: string) => void
-  emitExit: (id: string, code: number) => void
+  emitData: (id: string, data: string, sequenceChars?: number) => void
+  emitBackground: (event: PtyBackgroundStreamEvent) => void
+  emitExit: (id: string, code: number, incarnationId?: string) => void
 }
 
 const LARGE_RECONCILE_SESSION_COUNT = 150_000
@@ -21,12 +27,26 @@ function buildSessionIds(prefix: string, count: number): string[] {
 function createAdapter(
   label: string,
   sessions: string[] = [],
-  reconcileResult?: { alive: string[]; killed: string[] }
+  reconcileResult?: { alive: string[]; killed: string[] },
+  protocolVersion = GIT_CREDENTIAL_GUARD_HOST_PROTOCOL_VERSION
 ): AdapterMock {
   const writes: { id: string; data: string }[] = []
-  const dataListeners: ((payload: { id: string; data: string }) => void)[] = []
-  const exitListeners: ((payload: { id: string; code: number }) => void)[] = []
+  const dataListeners: ((payload: { id: string; data: string; sequenceChars?: number }) => void)[] =
+    []
+  const backgroundListeners: ((payload: PtyBackgroundStreamEvent) => void)[] = []
+  const exitListeners: ((payload: { id: string; code: number; incarnationId?: string }) => void)[] =
+    []
   return {
+    protocolVersion,
+    supportsGitCredentialGuardHost: () =>
+      protocolVersion >= GIT_CREDENTIAL_GUARD_HOST_PROTOCOL_VERSION,
+    supportsAgentSessionClaims: () =>
+      protocolVersion >= AGENT_SESSION_CLAIM_DAEMON_PROTOCOL_VERSION,
+    supportsAgentSessionCreateOperations: () =>
+      protocolVersion >= AGENT_SESSION_CREATE_OPERATION_DAEMON_PROTOCOL_VERSION,
+    providesAgentSessionOwnerListings: () =>
+      protocolVersion >= AGENT_SESSION_CLAIM_DAEMON_PROTOCOL_VERSION,
+    canProvideAuthoritativeBufferSnapshot: () => protocolVersion >= 20,
     spawn: vi.fn(async (opts: PtySpawnOptions): Promise<PtySpawnResult> => {
       const id = opts.sessionId ?? `${label}-new`
       sessions.push(id)
@@ -44,6 +64,8 @@ function createAdapter(
       writes.push({ id, data })
     }),
     resize: vi.fn(),
+    setPtyBackgrounded: vi.fn(),
+    getBufferSnapshot: vi.fn(async () => null),
     shutdown: vi.fn(async (id: string) => {
       const idx = sessions.indexOf(id)
       if (idx !== -1) {
@@ -58,48 +80,257 @@ function createAdapter(
     acknowledgeDataEvent: vi.fn(),
     hasChildProcesses: vi.fn(async () => false),
     getForegroundProcess: vi.fn(async () => null),
+    inspectProcess: vi.fn(async () => ({ foregroundProcess: null, hasChildProcesses: false })),
+    confirmForegroundProcess: vi.fn(async () => `${label}-confirmed`),
     serialize: vi.fn(async () => '{}'),
     revive: vi.fn(async () => {}),
     getDefaultShell: vi.fn(async () => '/bin/zsh'),
     getProfiles: vi.fn(async () => []),
-    onData: vi.fn((callback: (payload: { id: string; data: string }) => void) => {
-      dataListeners.push(callback)
+    onData: vi.fn(
+      (callback: (payload: { id: string; data: string; sequenceChars?: number }) => void) => {
+        dataListeners.push(callback)
+        return () => {
+          const idx = dataListeners.indexOf(callback)
+          if (idx !== -1) {
+            dataListeners.splice(idx, 1)
+          }
+        }
+      }
+    ),
+    onBackgroundStreamEvent: vi.fn((callback: (payload: PtyBackgroundStreamEvent) => void) => {
+      backgroundListeners.push(callback)
       return () => {
-        const idx = dataListeners.indexOf(callback)
+        const idx = backgroundListeners.indexOf(callback)
         if (idx !== -1) {
-          dataListeners.splice(idx, 1)
+          backgroundListeners.splice(idx, 1)
         }
       }
     }),
-    onExit: vi.fn((callback: (payload: { id: string; code: number }) => void) => {
-      exitListeners.push(callback)
-      return () => {
-        const idx = exitListeners.indexOf(callback)
-        if (idx !== -1) {
-          exitListeners.splice(idx, 1)
+    onExit: vi.fn(
+      (callback: (payload: { id: string; code: number; incarnationId?: string }) => void) => {
+        exitListeners.push(callback)
+        return () => {
+          const idx = exitListeners.indexOf(callback)
+          if (idx !== -1) {
+            exitListeners.splice(idx, 1)
+          }
         }
       }
-    }),
+    ),
     ackColdRestore: vi.fn(),
     clearTombstone: vi.fn(),
     reconcileOnStartup: vi.fn(async () => reconcileResult ?? { alive: sessions, killed: [] }),
     dispose: vi.fn(),
     disconnectOnly: vi.fn(async () => {}),
-    emitData: (id: string, data: string) => {
+    emitData: (id: string, data: string, sequenceChars?: number) => {
       for (const listener of dataListeners) {
-        listener({ id, data })
+        listener({ id, data, ...(sequenceChars === undefined ? {} : { sequenceChars }) })
       }
     },
-    emitExit: (id: string, code: number) => {
+    emitBackground: (event: PtyBackgroundStreamEvent) => {
+      for (const listener of backgroundListeners) {
+        listener(event)
+      }
+    },
+    emitExit: (id: string, code: number, incarnationId?: string) => {
       for (const listener of exitListeners) {
-        listener({ id, code })
+        listener({ id, code, ...(incarnationId ? { incarnationId } : {}) })
       }
     },
     _writes: writes
   } as unknown as AdapterMock
 }
 
+it('rejects completion inspection when no daemon owns the session', async () => {
+  const router = new DaemonPtyRouter({
+    current: createAdapter('current'),
+    legacy: [createAdapter('legacy')]
+  })
+
+  await expect(router.inspectProcess('unmapped-session')).rejects.toThrow('terminal_gone')
+})
+
+it('preserves unavailable inspection from the owning legacy daemon', async () => {
+  const legacy = createAdapter('legacy', ['legacy-session'])
+  vi.mocked(legacy.inspectProcess).mockResolvedValue({
+    foregroundProcess: null,
+    hasChildProcesses: true,
+    unavailable: true
+  })
+  const router = new DaemonPtyRouter({
+    current: createAdapter('current'),
+    legacy: [legacy]
+  })
+  await router.discoverLegacySessions()
+
+  await expect(router.inspectProcess('legacy-session')).resolves.toEqual({
+    foregroundProcess: null,
+    hasChildProcesses: true,
+    unavailable: true
+  })
+})
+
 describe('DaemonPtyRouter', () => {
+  it('reports separate conservative resume and fresh-create boundaries', () => {
+    const current = createAdapter(
+      'current',
+      [],
+      undefined,
+      AGENT_SESSION_CREATE_OPERATION_DAEMON_PROTOCOL_VERSION
+    )
+    const legacy = createAdapter(
+      'legacy',
+      [],
+      undefined,
+      AGENT_SESSION_CREATE_OPERATION_DAEMON_PROTOCOL_VERSION - 1
+    )
+    const mixed = new DaemonPtyRouter({ current, legacy: [legacy] })
+    const old = new DaemonPtyRouter({ current: legacy, legacy: [] })
+
+    expect(mixed.supportsAgentSessionClaims()).toBe(false)
+    expect(mixed.supportsAgentSessionCreateOperations()).toBe(true)
+    expect(old.supportsAgentSessionClaims()).toBe(false)
+    expect(old.supportsAgentSessionCreateOperations()).toBe(false)
+  })
+
+  it('only treats owner listings as authoritative for a mapped daemon route', async () => {
+    const current = createAdapter(
+      'current',
+      [],
+      undefined,
+      AGENT_SESSION_CLAIM_DAEMON_PROTOCOL_VERSION
+    )
+    const legacy = createAdapter(
+      'legacy',
+      ['legacy-session'],
+      undefined,
+      AGENT_SESSION_CLAIM_DAEMON_PROTOCOL_VERSION
+    )
+    const router = new DaemonPtyRouter({ current, legacy: [legacy] })
+    await router.discoverLegacySessions()
+    const created = await router.spawn({ cols: 80, rows: 24 })
+
+    expect(router.providesAgentSessionOwnerListings('legacy-session')).toBe(true)
+    expect(router.providesAgentSessionOwnerListings(created.id)).toBe(true)
+    expect(router.providesAgentSessionOwnerListings('unknown-session')).toBe(false)
+  })
+
+  it('does not publish a route when the adapter proves exit before reply', async () => {
+    const current = createAdapter('current')
+    let finishSpawn: ((result: PtySpawnResult) => void) | undefined
+    vi.mocked(current.spawn).mockImplementation(
+      () =>
+        new Promise<PtySpawnResult>((resolve) => {
+          finishSpawn = resolve
+        })
+    )
+    const router = new DaemonPtyRouter({ current, legacy: [] })
+
+    const spawning = router.spawn({ cols: 80, rows: 24, sessionId: 'raced-session' })
+    finishSpawn?.({
+      id: 'raced-session',
+      incarnationId: 'raced-incarnation',
+      exitedBeforeSpawnReply: true
+    })
+    await expect(spawning).resolves.toMatchObject({ exitedBeforeSpawnReply: true })
+
+    const internals = router as unknown as {
+      sessionAdapters: Map<string, DaemonPtyAdapter>
+    }
+    expect(internals.sessionAdapters.has('raced-session')).toBe(false)
+  })
+
+  it('routes a replacement when only an older incarnation exits during spawn', async () => {
+    const current = createAdapter('current')
+    let finishSpawn: ((result: PtySpawnResult) => void) | undefined
+    vi.mocked(current.spawn).mockImplementation(
+      () =>
+        new Promise<PtySpawnResult>((resolve) => {
+          finishSpawn = resolve
+        })
+    )
+    const router = new DaemonPtyRouter({ current, legacy: [] })
+
+    const spawning = router.spawn({ cols: 80, rows: 24, sessionId: 'reused-session' })
+    current.emitExit('reused-session', 0, 'incarnation-old')
+    finishSpawn?.({ id: 'reused-session', incarnationId: 'incarnation-current' })
+    await spawning
+
+    const internals = router as unknown as {
+      sessionAdapters: Map<string, DaemonPtyAdapter>
+    }
+    expect(internals.sessionAdapters.get('reused-session')).toBe(current)
+  })
+
+  it('preserves canonical claimed-owner exit proof from the adapter', async () => {
+    const current = createAdapter('current')
+    let finishSpawn: ((result: PtySpawnResult) => void) | undefined
+    vi.mocked(current.spawn).mockImplementation(
+      () =>
+        new Promise<PtySpawnResult>((resolve) => {
+          finishSpawn = resolve
+        })
+    )
+    const router = new DaemonPtyRouter({ current, legacy: [] })
+
+    const spawning = router.spawn({
+      cols: 80,
+      rows: 24,
+      sessionId: 'requested-session',
+      agentSessionEnsure: {} as never
+    })
+    finishSpawn?.({
+      id: 'canonical-session',
+      incarnationId: 'canonical-incarnation',
+      exitedBeforeSpawnReply: true
+    })
+
+    await expect(spawning).resolves.toMatchObject({
+      id: 'canonical-session',
+      exitedBeforeSpawnReply: true
+    })
+    const internals = router as unknown as {
+      sessionAdapters: Map<string, DaemonPtyAdapter>
+    }
+    expect(internals.sessionAdapters.has('canonical-session')).toBe(false)
+  })
+
+  it('reports snapshot capability for the adapter that owns each session', async () => {
+    const current = createAdapter('current', ['current-session'], undefined, 22)
+    const legacy = createAdapter('legacy', ['legacy-session'], undefined, 19)
+    const router = new DaemonPtyRouter({ current, legacy: [legacy] })
+    await router.discoverLegacySessions()
+
+    expect(router.canProvideAuthoritativeBufferSnapshot('current-session')).toBe(true)
+    expect(router.canProvideAuthoritativeBufferSnapshot('legacy-session')).toBe(false)
+  })
+
+  it('reports guard-host support for the adapter that owns the session', async () => {
+    const current = createAdapter('current', [], undefined, 22)
+    const legacy = createAdapter('legacy', ['legacy-session'], undefined, 21)
+    const router = new DaemonPtyRouter({ current, legacy: [legacy] })
+    await router.discoverLegacySessions()
+
+    expect(router.supportsGitCredentialGuardHost()).toBe(true)
+    expect(router.supportsGitCredentialGuardHost('legacy-session')).toBe(false)
+  })
+
+  it('routes fresh foreground confirmation to the session-owning daemon', async () => {
+    const current = createAdapter('current', ['current-session'])
+    const legacy = createAdapter('legacy', ['legacy-session'])
+    const router = new DaemonPtyRouter({ current, legacy: [legacy] })
+    await router.discoverLegacySessions()
+
+    await expect(router.confirmForegroundProcess('legacy-session')).resolves.toBe(
+      'legacy-confirmed'
+    )
+    await expect(router.confirmForegroundProcess('current-session')).resolves.toBe(
+      'current-confirmed'
+    )
+    expect(legacy.confirmForegroundProcess).toHaveBeenCalledWith('legacy-session')
+    expect(current.confirmForegroundProcess).toHaveBeenCalledWith('current-session')
+  })
+
   it('routes existing legacy sessions to their old daemon and new sessions to current daemon', async () => {
     const current = createAdapter('current')
     const legacy = createAdapter('legacy', ['legacy-session'])
@@ -116,6 +347,62 @@ describe('DaemonPtyRouter', () => {
     expect(current.spawn).toHaveBeenCalledWith({ cols: 80, rows: 24 })
     expect(legacy.write).toHaveBeenCalledWith('legacy-session', 'old\n')
     expect(current.write).toHaveBeenCalledWith(fresh.id, 'new\n')
+  })
+
+  it('routes background hints and authoritative snapshots to the session owner', async () => {
+    const current = createAdapter('current')
+    const legacy = createAdapter('legacy', ['legacy-session'])
+    const snapshot = {
+      data: 'legacy frame',
+      cols: 80,
+      rows: 24,
+      seq: 42,
+      source: 'headless' as const
+    }
+    vi.mocked(legacy.getBufferSnapshot).mockResolvedValue(snapshot)
+    const router = new DaemonPtyRouter({ current, legacy: [legacy] })
+    await router.discoverLegacySessions()
+
+    router.setPtyBackgrounded('legacy-session', true)
+    await expect(
+      router.getBufferSnapshot('legacy-session', { scrollbackRows: 50_000 })
+    ).resolves.toEqual(snapshot)
+
+    expect(legacy.setPtyBackgrounded).toHaveBeenCalledWith('legacy-session', true)
+    expect(current.setPtyBackgrounded).not.toHaveBeenCalled()
+    expect(legacy.getBufferSnapshot).toHaveBeenCalledWith('legacy-session', {
+      scrollbackRows: 50_000
+    })
+  })
+
+  it('forwards gap events and explicit sequence accounting from every adapter', () => {
+    const current = createAdapter('current')
+    const legacy = createAdapter('legacy')
+    const router = new DaemonPtyRouter({ current, legacy: [legacy] })
+    const dataSpy = vi.fn()
+    const backgroundSpy = vi.fn()
+    router.onData(dataSpy)
+    router.onBackgroundStreamEvent(backgroundSpy)
+
+    current.emitData('current-session', '\x1b[6n', 0)
+    legacy.emitBackground({
+      id: 'legacy-session',
+      kind: 'dataGap',
+      droppedChars: 512,
+      sequenceChars: 508
+    })
+
+    expect(dataSpy).toHaveBeenCalledWith({
+      id: 'current-session',
+      data: '\x1b[6n',
+      sequenceChars: 0
+    })
+    expect(backgroundSpy).toHaveBeenCalledWith({
+      id: 'legacy-session',
+      kind: 'dataGap',
+      droppedChars: 512,
+      sequenceChars: 508
+    })
   })
 
   it('drops a legacy mapping after the routed session exits', async () => {

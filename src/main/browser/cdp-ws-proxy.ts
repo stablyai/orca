@@ -19,6 +19,7 @@ export class CdpWsProxy {
   private httpServer: Server | null = null
   private wss: WebSocketServer | null = null
   private client: WebSocket | null = null
+  private readonly responseSessionIdsByClient = new WeakMap<WebSocket, Map<number, string>>()
   private detachClientListeners: (() => void) | null = null
   private port = 0
   private debuggerMessageHandler: ((...args: unknown[]) => void) | null = null
@@ -27,6 +28,10 @@ export class CdpWsProxy {
   private attached = false
   // Why: agent-browser filters events by sessionId from Target.attachToTarget.
   private clientSessionId: string | undefined = undefined
+  private readonly clientSessionIds = new Set<string>()
+  private readonly clientBrowserSessionIds = new Set<string>()
+  private nextClientSessionOrdinal = 0
+  private nextClientBrowserSessionOrdinal = 0
   private readonly pdfStreams = new CdpPdfStreamStore()
 
   constructor(private readonly webContents: WebContents) {}
@@ -59,7 +64,7 @@ export class CdpWsProxy {
         const onClose = (): void => {
           detach()
           if (this.client === ws) {
-            this.pdfStreams.clear()
+            this.clearClientState()
             this.client = null
           }
         }
@@ -110,16 +115,43 @@ export class CdpWsProxy {
     this.detachClientListeners?.()
     this.detachClientListeners = null
     this.client = null
-    // Why: a pending focus belongs to the departing client; never replay it for the next one.
-    this.pendingDomFocusBySession.clear()
-    this.pdfStreams.clear()
+    this.clearClientState()
+    if (client) {
+      this.responseSessionIdsByClient.delete(client)
+    }
     client?.close()
   }
 
+  private clearClientState(): void {
+    // Why: session and focus state belongs to one websocket and must not cross client replacement.
+    this.pendingDomFocusBySession.clear()
+    this.pdfStreams.clear()
+    this.clientSessionId = undefined
+    this.clientSessionIds.clear()
+    this.clientBrowserSessionIds.clear()
+    this.nextClientSessionOrdinal = 0
+    this.nextClientBrowserSessionOrdinal = 0
+  }
+
   private send(payload: unknown, client = this.client): void {
+    const responsePayload = client ? this.addResponseSessionId(payload, client) : payload
     if (client?.readyState === WebSocket.OPEN) {
-      client.send(JSON.stringify(payload))
+      client.send(JSON.stringify(responsePayload))
     }
+  }
+
+  private addResponseSessionId(payload: unknown, client: WebSocket): unknown {
+    if (typeof payload !== 'object' || payload === null) {
+      return payload
+    }
+    const clientId = (payload as { id?: unknown }).id
+    if (typeof clientId !== 'number') {
+      return payload
+    }
+    const responseSessionIds = this.responseSessionIdsByClient.get(client)
+    const sessionId = responseSessionIds?.get(clientId)
+    responseSessionIds?.delete(clientId)
+    return sessionId ? { ...payload, sessionId } : payload
   }
 
   private sendResult(clientId: number, result: unknown, client = this.client): void {
@@ -253,6 +285,13 @@ export class CdpWsProxy {
       return
     }
     const clientId = msg.id
+    const responseSessionIds = this.responseSessionIdsByClient.get(client) ?? new Map()
+    if (msg.sessionId) {
+      responseSessionIds.set(clientId, msg.sessionId)
+    } else {
+      responseSessionIds.delete(clientId)
+    }
+    this.responseSessionIdsByClient.set(client, responseSessionIds)
 
     if (msg.method === 'Target.getTargets') {
       this.sendResult(clientId, { targetInfos: [this.buildTargetInfo()] }, client)
@@ -264,14 +303,30 @@ export class CdpWsProxy {
     }
     if (msg.method === 'Target.setDiscoverTargets' || msg.method === 'Target.detachFromTarget') {
       if (msg.method === 'Target.detachFromTarget') {
-        this.clientSessionId = undefined
+        const detachedSessionId = msg.params?.sessionId
+        if (typeof detachedSessionId === 'string') {
+          this.clientSessionIds.delete(detachedSessionId)
+          this.clientBrowserSessionIds.delete(detachedSessionId)
+          if (detachedSessionId === this.clientSessionId) {
+            this.clientSessionId = this.clientSessionIds.values().next().value
+          }
+        }
       }
       this.sendResult(clientId, {}, client)
       return
     }
+    if (msg.method === 'Target.attachToBrowserTarget') {
+      // Why: Playwright needs a distinct browser session before it attaches to the selected page.
+      const sessionId = this.nextSyntheticBrowserSessionId()
+      this.clientBrowserSessionIds.add(sessionId)
+      this.sendResult(clientId, { sessionId }, client)
+      return
+    }
     if (msg.method === 'Target.attachToTarget') {
-      this.clientSessionId = 'orca-proxy-session'
-      this.sendResult(clientId, { sessionId: this.clientSessionId }, client)
+      const sessionId = this.nextSyntheticPageSessionId()
+      this.clientSessionIds.add(sessionId)
+      this.clientSessionId ??= sessionId
+      this.sendResult(clientId, { sessionId }, client)
       return
     }
     if (msg.method === 'Browser.getVersion') {
@@ -363,7 +418,24 @@ export class CdpWsProxy {
   }
 
   private resolveDebuggerSessionId(msgSessionId?: string): string | undefined {
-    return msgSessionId && msgSessionId !== this.clientSessionId ? msgSessionId : undefined
+    const syntheticSession =
+      (msgSessionId && this.clientSessionIds.has(msgSessionId)) ||
+      (msgSessionId && this.clientBrowserSessionIds.has(msgSessionId))
+    return msgSessionId && !syntheticSession ? msgSessionId : undefined
+  }
+
+  private nextSyntheticPageSessionId(): string {
+    this.nextClientSessionOrdinal += 1
+    return this.nextClientSessionOrdinal === 1
+      ? 'orca-proxy-session'
+      : `orca-proxy-session-${this.nextClientSessionOrdinal}`
+  }
+
+  private nextSyntheticBrowserSessionId(): string {
+    this.nextClientBrowserSessionOrdinal += 1
+    return this.nextClientBrowserSessionOrdinal === 1
+      ? 'orca-proxy-browser-session'
+      : `orca-proxy-browser-session-${this.nextClientBrowserSessionOrdinal}`
   }
 
   private isActiveClient(client: WebSocket): boolean {

@@ -89,4 +89,66 @@ describe('createPinnedTabCloseConfirmSlice', () => {
     expect(onCancel).toHaveBeenCalledTimes(1)
     expect(store.getState().pinnedTabCloseConfirm).toBeNull()
   })
+
+  it('queues concurrent requests and advances them in request order', () => {
+    const now = vi.spyOn(Date, 'now').mockReturnValue(1_000)
+    const store = makeStore()
+    const firstConfirm = vi.fn()
+    const secondConfirm = vi.fn()
+    store.getState().requestPinnedTabCloseConfirm({
+      tabLabel: 'First terminal',
+      onConfirm: firstConfirm
+    })
+    store.getState().requestPinnedTabCloseConfirm({
+      tabLabel: 'Second terminal',
+      onConfirm: secondConfirm
+    })
+
+    expect(store.getState().pinnedTabCloseConfirm?.tabLabel).toBe('First terminal')
+    store.getState().confirmPinnedTabClose()
+    expect(firstConfirm).toHaveBeenCalledTimes(1)
+    expect(secondConfirm).not.toHaveBeenCalled()
+    expect(store.getState().pinnedTabCloseConfirm?.tabLabel).toBe('Second terminal')
+
+    now.mockReturnValue(1_351)
+    store.getState().confirmPinnedTabClose()
+    expect(secondConfirm).toHaveBeenCalledTimes(1)
+    expect(store.getState().pinnedTabCloseConfirm).toBeNull()
+  })
+
+  it('advances the queue when an earlier request is dismissed', () => {
+    const store = makeStore()
+    const firstCancel = vi.fn()
+    store.getState().requestPinnedTabCloseConfirm({
+      tabLabel: 'First terminal',
+      onConfirm: vi.fn(),
+      onCancel: firstCancel
+    })
+    store.getState().requestPinnedTabCloseConfirm({
+      tabLabel: 'Second terminal',
+      onConfirm: vi.fn()
+    })
+
+    store.getState().dismissPinnedTabClose()
+
+    expect(firstCancel).toHaveBeenCalledTimes(1)
+    expect(store.getState().pinnedTabCloseConfirm?.tabLabel).toBe('Second terminal')
+  })
+
+  it('ignores a rapid second action on the newly advanced request', () => {
+    vi.spyOn(Date, 'now').mockReturnValue(1_000)
+    const store = makeStore()
+    const secondConfirm = vi.fn()
+    store.getState().requestPinnedTabCloseConfirm({ tabLabel: 'First', onConfirm: vi.fn() })
+    store.getState().requestPinnedTabCloseConfirm({
+      tabLabel: 'Second',
+      onConfirm: secondConfirm
+    })
+
+    store.getState().confirmPinnedTabClose()
+    store.getState().confirmPinnedTabClose()
+
+    expect(secondConfirm).not.toHaveBeenCalled()
+    expect(store.getState().pinnedTabCloseConfirm?.tabLabel).toBe('Second')
+  })
 })

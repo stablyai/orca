@@ -81,7 +81,7 @@ function extractPercentAfterLabel(
       }
       const m = PERCENT_RE.exec(lines[j])
       if (m) {
-        const pct = parseFloat(m[1])
+        const pct = Number.parseFloat(m[1])
         const word = m[2].toLowerCase()
         const isUsed = word === 'used' || word === 'consumed'
         return isUsed ? pct : 100 - pct

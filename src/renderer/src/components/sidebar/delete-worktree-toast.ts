@@ -1,4 +1,8 @@
 import { translate } from '@/i18n/i18n'
+import {
+  isLockedWorktreeRemovalError,
+  type WorktreeForceDeleteReason
+} from '../../../../shared/worktree-removal'
 export type DeleteWorktreeToastCopy = {
   title: string
   description?: string
@@ -7,11 +11,33 @@ export type DeleteWorktreeToastCopy = {
 
 export function getDeleteWorktreeToastCopy(
   worktreeName: string,
-  canForceDelete: boolean,
-  error: string
+  forceDeleteReason: WorktreeForceDeleteReason | null,
+  error: string,
+  lockReason: string | null = null
 ): DeleteWorktreeToastCopy {
-  if (canForceDelete) {
-    if (error.includes('Worktree is no longer registered with Git but its directory remains.')) {
+  if (isLockedWorktreeRemovalError(error)) {
+    return {
+      title: translate(
+        'auto.components.sidebar.delete.worktree.toast.1d0fa5c0a5',
+        'Failed to delete workspace {{value0}}',
+        { value0: worktreeName }
+      ),
+      description: lockReason
+        ? translate(
+            'auto.components.sidebar.delete.worktree.toast.lockedReason',
+            'This workspace is locked by Git. Git reported: {{value0}}. Run git worktree unlock <worktree-path> from its repository, then retry deletion.',
+            { value0: lockReason }
+          )
+        : translate(
+            'auto.components.sidebar.delete.worktree.toast.locked',
+            'This workspace is locked by Git. Run git worktree unlock <worktree-path> from its repository, then retry deletion.'
+          ),
+      isDestructive: false
+    }
+  }
+
+  if (forceDeleteReason) {
+    if (forceDeleteReason === 'orphan-directory') {
       return {
         title: translate(
           'auto.components.sidebar.delete.worktree.toast.1d0fa5c0a5',
@@ -25,9 +51,7 @@ export function getDeleteWorktreeToastCopy(
         isDestructive: false
       }
     }
-    if (
-      error.includes('Worktree is no longer registered with Git and its directory is already gone.')
-    ) {
+    if (forceDeleteReason === 'missing-registration') {
       return {
         title: translate(
           'auto.components.sidebar.delete.worktree.toast.1d0fa5c0a5',

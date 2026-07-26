@@ -126,10 +126,15 @@ export function findOpenCodeStorageRoot(filePath: string): string | null {
   return dirname(sessionRoot)
 }
 
-export function normalizePiSessionsDir(rawValue: string): string {
+// Pi and OMP (a Pi fork) both store transcripts under
+// <home>/<agentHomeDirName>/agent/sessions; accept any prefix of that path.
+export function normalizeAgentSessionsDir(
+  rawValue: string,
+  agentHomeDirName: '.pi' | '.omp'
+): string {
   const trimmed = rawValue.trim()
   if (!trimmed) {
-    return join(homedir(), '.pi', 'agent', 'sessions')
+    return join(homedir(), agentHomeDirName, 'agent', 'sessions')
   }
   const normalized = trimmed.replace(/[\\/]+$/, '')
   const leaf = basename(normalized)
@@ -139,7 +144,7 @@ export function normalizePiSessionsDir(rawValue: string): string {
   if (leaf === 'agent') {
     return join(normalized, 'sessions')
   }
-  if (leaf === '.pi') {
+  if (leaf === agentHomeDirName) {
     return join(normalized, 'agent', 'sessions')
   }
   return normalized
@@ -154,6 +159,7 @@ export function errorMessage(err: unknown): string {
 }
 
 export {
+  addCodexUsage,
   claudeUsageTotal,
   copilotModelMetricsTotal,
   normalizeCodexUsage,

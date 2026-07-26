@@ -4,7 +4,11 @@ import { clearRemoteActionErrorsForCompletedConflictOperations } from './SourceC
 describe('SourceControl remote action error reconciliation', () => {
   it('clears a rebase failure after git status observes the rebase completed', () => {
     const errors = {
-      'wt-1': { kind: 'rebase' as const, message: 'Rebase failed. Could not apply abc123' }
+      'wt-1': {
+        kind: 'rebase' as const,
+        message: 'Rebase failed. Could not apply abc123',
+        rawError: 'Rebase failed. Could not apply abc123'
+      }
     }
 
     expect(
@@ -18,7 +22,11 @@ describe('SourceControl remote action error reconciliation', () => {
 
   it('keeps a rebase failure while the rebase is still in progress', () => {
     const errors = {
-      'wt-1': { kind: 'rebase' as const, message: 'Rebase failed. Could not apply abc123' }
+      'wt-1': {
+        kind: 'rebase' as const,
+        message: 'Rebase failed. Could not apply abc123',
+        rawError: 'Rebase failed. Could not apply abc123'
+      }
     }
 
     expect(
@@ -32,7 +40,11 @@ describe('SourceControl remote action error reconciliation', () => {
 
   it('keeps immediate rebase failures that never entered a rebase operation', () => {
     const errors = {
-      'wt-1': { kind: 'rebase' as const, message: 'Rebase blocked - commit first.' }
+      'wt-1': {
+        kind: 'rebase' as const,
+        message: 'Rebase blocked - commit first.',
+        rawError: 'Rebase blocked - commit first.'
+      }
     }
 
     expect(
@@ -46,9 +58,21 @@ describe('SourceControl remote action error reconciliation', () => {
 
   it('clears pull and sync conflict errors after their merge operation completes', () => {
     const errors = {
-      'wt-pull': { kind: 'pull' as const, message: 'Pull stopped with merge conflicts.' },
-      'wt-sync': { kind: 'sync' as const, message: 'Sync stopped with merge conflicts.' },
-      'wt-fetch': { kind: 'fetch' as const, message: 'Fetch failed. network timeout' }
+      'wt-pull': {
+        kind: 'pull' as const,
+        message: 'Pull stopped with merge conflicts.',
+        rawError: 'Pull stopped with merge conflicts.'
+      },
+      'wt-sync': {
+        kind: 'sync' as const,
+        message: 'Sync stopped with merge conflicts.',
+        rawError: 'Sync stopped with merge conflicts.'
+      },
+      'wt-fetch': {
+        kind: 'fetch' as const,
+        message: 'Fetch failed. network timeout',
+        rawError: 'Fetch failed. network timeout'
+      }
     }
 
     expect(

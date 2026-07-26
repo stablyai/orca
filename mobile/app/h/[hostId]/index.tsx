@@ -6,7 +6,8 @@ import {
   SectionList,
   Pressable,
   ActivityIndicator,
-  TextInput
+  Alert,
+  RefreshControl
 } from 'react-native'
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context'
 import { useFocusEffect, useLocalSearchParams, usePathname, useRouter } from 'expo-router'
@@ -14,7 +15,6 @@ import {
   Search,
   X,
   Pin,
-  GitBranch,
   List,
   SlidersHorizontal,
   Layers,
@@ -26,17 +26,23 @@ import {
   Filter,
   Check,
   UserCircle,
-  PanelLeftClose
+  PanelLeftClose,
+  SquareTerminal
 } from 'lucide-react-native'
 import type { RpcClient } from '../../../src/transport/rpc-client'
-import { loadHosts, updateLastConnected, removeHost } from '../../../src/transport/host-store'
+import { loadHosts, updateLastConnected } from '../../../src/transport/host-store'
+import { removeHostAndCloseClient } from '../../../src/transport/host-removal-lifecycle'
 import {
   useHostClient,
   useCloseHost,
-  useForceReconnect,
-  useReconnectAttempt,
-  useLastConnectedAt
+  useForceReconnect
 } from '../../../src/transport/client-context'
+import { useWorktreeResync } from '../../../src/transport/use-worktree-resync'
+import { startHostWorktreeRefresh } from '../../../src/worktree/host-worktree-refresh'
+import {
+  useLastConnectedAt,
+  useReconnectAttempt
+} from '../../../src/transport/client-context-connection-metrics'
 import {
   classifyConnection,
   type ConnectionVerdict
@@ -52,17 +58,19 @@ import { useActiveWorktreeScroll } from '../../../src/hooks/use-active-worktree-
 import type { RepoIcon } from '../../../../src/shared/repo-icon'
 import { PickerModal } from '../../../src/components/PickerModal'
 import { ActionSheetContent } from '../../../src/components/ActionSheetModal'
+import { buildWorktreeNavigationActions } from '../../../src/agent-history/worktree-navigation-actions'
+import { floatingWorkspaceSessionPath } from '../../../src/session/floating-workspace'
 import { ConfirmModal } from '../../../src/components/ConfirmModal'
 import { BottomDrawer } from '../../../src/components/BottomDrawer'
-import { ProtocolBlockScreen } from '../../../src/components/ProtocolBlockScreen'
+import { useHostProtocolGates } from '../../../src/components/HostProtocolGate'
 import { AuthFailedBanner } from '../../../src/components/AuthFailedBanner'
+import { MobileSearchField } from '../../../src/components/MobileSearchField'
 import { WorkspaceDetailPlaceholder } from '../../../src/components/WorkspaceDetailPlaceholder'
-import { getCachedWorktrees } from '../../../src/cache/worktree-cache'
+import { getCachedWorktrees, setCachedWorktrees } from '../../../src/cache/worktree-cache'
 import { setCachedRepos } from '../../../src/cache/repo-cache'
 import { colors, radii, spacing, typography } from '../../../src/theme/mobile-theme'
 import { useResponsiveLayout } from '../../../src/layout/responsive-layout'
 import { leaveHostRoute } from '../../../src/host-route-exit'
-import { evaluateCompat, type CompatVerdict } from '../../../src/transport/protocol-compat'
 import { loadPinnedIds, savePinnedIds } from '../../../src/storage/preferences'
 import {
   createInitialHostRouteActionState,
@@ -91,7 +99,7 @@ import {
   WORKSPACE_GROUP_OPTIONS as GROUP_OPTIONS,
   WORKSPACE_SORT_OPTIONS as SORT_OPTIONS
 } from '../../../src/worktree/workspace-list-picker-options'
-import type { DesktopStatus, RepoSummary } from '../../../src/worktree/host-worktree-rpc-types'
+import type { RepoSummary } from '../../../src/worktree/host-worktree-rpc-types'
 import type { WorkspaceStatusDefinition } from '../../../../src/shared/types'
 import { DEFAULT_MOBILE_WORKSPACE_STATUSES } from '../../../src/worktree/mobile-workspace-statuses'
 
@@ -102,14 +110,9 @@ function isErrorVerdict(v: ConnectionVerdict): boolean {
 const REPO_METADATA_REFRESH_MS = 60_000
 
 type HostScreenProps = {
-  // Why: when true, this worktree list is rendered as the persistent tablet
-  // sidebar by the host layout rather than as its own routed screen. That
-  // swaps the back button for a hide-sidebar control, drives data fetching
-  // from a plain mount effect (the sidebar is never the "focused" route), and
-  // opens sessions into the detail pane instead of pushing a new full screen.
+  // When true, rendered as the persistent tablet sidebar by the host layout, not as its own routed screen.
   embedded?: boolean
-  // Route params aren't in scope when rendered from the layout, so the caller
-  // passes hostId/action explicitly; falls back to the local route params.
+  // Route params aren't in scope when rendered from the layout, so the caller passes these explicitly.
   hostId?: string
   action?: string
   onHideSidebar?: () => void
@@ -127,22 +130,19 @@ export function HostScreen({
   const router = useRouter()
   const pathname = usePathname()
   const insets = useSafeAreaInsets()
-  // Why: cap and center the worktree list on wide/tablet canvases; on phones
-  // isWideLayout is false so the list stays edge-to-edge as before. When
-  // embedded as the sidebar the list already lives in a narrow pane, so the
-  // cap is skipped (see the SectionList contentContainerStyle below).
+  // Why: cap and center the list on wide/tablet canvases; on phones isWideLayout is false so it stays edge-to-edge.
   const { isWideLayout, contentMaxWidth } = useResponsiveLayout()
   const [initialCache] = useState(() =>
     hostId ? (getCachedWorktrees(hostId) as Worktree[] | null) : null
   )
-  // Why: shared client per host owned by RpcClientProvider. See
-  // docs/mobile-shared-client-per-host.md.
+  // Shared client per host owned by RpcClientProvider. See docs/mobile-shared-client-per-host.md.
   const { client, state: connState } = useHostClient(hostId)
   const reconnectAttempts = useReconnectAttempt(hostId)
   const lastConnectedAt = useLastConnectedAt(hostId)
   const clientRef = useRef<RpcClient | null>(null)
   const fetchWorktreesInFlightRef = useRef(false)
-  const fetchRepoMetadataInFlightRef = useRef(false)
+  const fetchRepoMetadataInFlightRef = useRef(new WeakSet<RpcClient>())
+  const fetchRepoMetadataPendingRef = useRef(new WeakSet<RpcClient>())
   const repoMetadataFetchedAtRef = useRef(0)
   const newWorktreeModalRef = useRef<{ open: () => void }>(null)
   const newWorktreeModalVisibleRef = useRef(false)
@@ -150,18 +150,14 @@ export function HostScreen({
   const forceReconnectHost = useForceReconnect()
   const [worktrees, setWorktrees] = useState<Worktree[]>(initialCache ?? [])
   const [worktreesLoaded, setWorktreesLoaded] = useState(initialCache != null)
-  // Why: opening a worktree activates it on the host, but the active-row
-  // highlight otherwise waits for the next worktree.ps poll to reflect it.
-  // Track the locally-opened worktree so the highlight moves instantly.
+  // Why: track the locally-opened worktree so the active-row highlight moves instantly instead of waiting for the next poll.
   const [optimisticActiveWorktreeId, setOptimisticActiveWorktreeId] = useState<string | null>(null)
   // One tick drives every visible agent row's relative timestamp.
   const now = useNow(30_000)
   const [repoColorsByName, setRepoColorsByName] = useState<Map<string, string>>(new Map())
   const [repoIconsByName, setRepoIconsByName] = useState<Map<string, RepoIcon>>(new Map())
-  const [repoSummaries, setRepoSummaries] = useState<RepoSummary[]>([])
   const [hostName, setHostName] = useState('')
   const [error, setError] = useState('')
-  const [compatVerdict, setCompatVerdict] = useState<CompatVerdict>({ kind: 'ok' })
   const [lastKnownWorktrees, setLastKnownWorktrees] = useState<Worktree[]>(initialCache ?? [])
   const [search, setSearch] = useState('')
   const [showSearch, setShowSearch] = useState(false)
@@ -175,14 +171,13 @@ export function HostScreen({
   const [workspaceStatuses, setWorkspaceStatuses] = useState<readonly WorkspaceStatusDefinition[]>(
     DEFAULT_MOBILE_WORKSPACE_STATUSES
   )
-  // displayName → repo id, populated from repo.list. The filter model keys on
-  // repo ids (desktop's PersistedUIState), but the section headers/rows key on
-  // displayName, so we bridge the two here.
+  // displayName → repo id: filters key on repo id, but section headers/rows key on displayName, so bridge the two.
   const [repoIdsByName, setRepoIdsByName] = useState<Map<string, string>>(new Map())
   const [showSortPicker, setShowSortPicker] = useState(false)
   const [showGroupPicker, setShowGroupPicker] = useState(false)
   const [showFilterModal, setShowFilterModal] = useState(false)
   const [actionTarget, setActionTarget] = useState<Worktree | null>(null)
+  const { hostCapabilities, floatingWorkspaceEnabled } = useHostProtocolGates()
   const [confirmDelete, setConfirmDelete] = useState<Worktree | null>(null)
   const [confirmRemoveHost, setConfirmRemoveHost] = useState(false)
   const [routeActionState, setRouteActionState] = useState(() =>
@@ -195,9 +190,7 @@ export function HostScreen({
   }, [router])
   const [pinnedIds, setPinnedIds] = useState<Set<string>>(new Set())
   const [collapsedGroups, setCollapsedGroups] = useState<Set<string>>(new Set())
-  // Why: snapshot of the synced view settings so the focus-effect ui.get merge
-  // and the optimistic ui.set writes read the latest values without forcing the
-  // callbacks to re-create on every state change.
+  // Why: ref so the ui.get merge and ui.set writes read the latest values without re-creating callbacks on every state change.
   const viewStateRef = useRef<MobileViewState>({
     groupMode: 'repo',
     sortMode: 'recent',
@@ -205,9 +198,7 @@ export function HostScreen({
     hideDefaultBranch: false,
     filterRepoIds: [],
     collapsedGroups: [],
-    workspaceStatuses: DEFAULT_MOBILE_WORKSPACE_STATUSES,
-    workspaceHostScope: undefined,
-    visibleWorkspaceHostIds: undefined
+    workspaceStatuses: DEFAULT_MOBILE_WORKSPACE_STATUSES
   })
 
   useEffect(() => {
@@ -218,14 +209,11 @@ export function HostScreen({
       hideDefaultBranch: filters.hideDefaultBranch,
       filterRepoIds: [...filters.filterRepoIds],
       collapsedGroups: [...collapsedGroups],
-      workspaceStatuses,
-      workspaceHostScope: viewStateRef.current.workspaceHostScope,
-      visibleWorkspaceHostIds: viewStateRef.current.visibleWorkspaceHostIds
+      workspaceStatuses
     }
   }, [groupMode, sortMode, filters, collapsedGroups, workspaceStatuses])
 
-  // Apply a MobileViewState (e.g. from a desktop ui.get) onto the individual
-  // states and the snapshot ref in one shot.
+  // Apply a MobileViewState onto the individual states and the snapshot ref in one shot.
   const applyViewState = useCallback((next: MobileViewState) => {
     viewStateRef.current = next
     setGroupMode(next.groupMode)
@@ -239,8 +227,7 @@ export function HostScreen({
     })
   }, [])
 
-  // Optimistically apply a partial change locally, then push the full mapped
-  // settings to the desktop's shared store via ui.set so both apps stay in sync.
+  // Apply the change locally, then push full settings to the desktop's shared store (ui.set) so both apps stay in sync.
   const persistViewSettings = useCallback(
     (patch: Partial<MobileViewState>) => {
       const next: MobileViewState = { ...viewStateRef.current, ...patch }
@@ -273,8 +260,7 @@ export function HostScreen({
   }, [])
 
   const resolvedRouteActionState = resolveHostRouteActionState(routeActionState, action)
-  // Why: `action=newWorktree` is a route-derived open edge. Resolve it before
-  // commit, but don't reopen after the user closes while the same URL remains.
+  // Why: resolve `action=newWorktree` before commit, but don't reopen after the user closes while the URL persists.
   if (resolvedRouteActionState !== routeActionState) {
     setRouteActionState(resolvedRouteActionState)
   }
@@ -283,8 +269,7 @@ export function HostScreen({
     setRouteActionState((current) => setHostRouteNewWorktreeVisible(current, visible))
   }, [])
 
-  // Load persisted pins from the local cache. View settings are no longer
-  // stored locally — they sync from the desktop's shared store via ui.get.
+  // Load persisted pins from local cache; view settings are no longer local (they sync via ui.get).
   useEffect(() => {
     if (!hostId) {
       return
@@ -302,9 +287,7 @@ export function HostScreen({
     }
   }, [hostId])
 
-  // Read the desktop's shared view settings (PersistedUIState) and merge them
-  // onto local state. Runs on connect and on screen focus so changes made on
-  // desktop appear on the phone.
+  // Merge the desktop's shared view settings (PersistedUIState) onto local state so desktop changes appear here.
   const syncViewSettingsFromDesktop = useCallback(async () => {
     if (!client || connState !== 'connected') {
       return
@@ -326,9 +309,7 @@ export function HostScreen({
     }
   }, [client, connState, hostId, applyViewState])
 
-  // Why: keep clientRef in sync so existing imperative call sites work
-  // unchanged. Also re-seed the cached worktree list on hostId change
-  // since the useState initializer only runs on first mount.
+  // Why: mirror client into a ref so imperative call sites read it without re-subscribing.
   useEffect(() => {
     clientRef.current = client
   }, [client])
@@ -336,14 +317,10 @@ export function HostScreen({
   useEffect(() => {
     setHostName('')
     setError('')
-    setCompatVerdict({ kind: 'ok' })
     setRepoColorsByName(new Map())
     setRepoIconsByName(new Map())
-    setRepoSummaries([])
     repoMetadataFetchedAtRef.current = 0
-    // Why: re-seed from the current host's cache on every hostId change.
-    // The useState initializer only runs on first mount, so if Expo Router
-    // reuses this screen with a different hostId, we must reset here.
+    // Why: useState initializer runs only on first mount, so re-seed the cache when Expo Router reuses this screen for a new hostId.
     const freshCache = hostId ? (getCachedWorktrees(hostId) as Worktree[] | null) : null
     if (freshCache) {
       setWorktrees(freshCache)
@@ -376,49 +353,54 @@ export function HostScreen({
   }, [hostId])
 
   const fetchRepoMetadata = useCallback(
-    async (options: { force?: boolean } = {}) => {
+    async (options: { force?: boolean; queueIfInFlight?: boolean } = {}) => {
       if (!client || connState !== 'connected' || !hostId) {
         return
       }
-      if (fetchRepoMetadataInFlightRef.current) {
+      if (fetchRepoMetadataInFlightRef.current.has(client)) {
+        if (options.queueIfInFlight) {
+          fetchRepoMetadataPendingRef.current.add(client)
+        }
         return
       }
       const now = Date.now()
       if (!options.force && now - repoMetadataFetchedAtRef.current < REPO_METADATA_REFRESH_MS) {
         return
       }
-      fetchRepoMetadataInFlightRef.current = true
+      fetchRepoMetadataInFlightRef.current.add(client)
       const requestClient = client,
         requestHostId = hostId
       try {
-        const repoResponse = await requestClient.sendRequest('repo.list')
-        if (clientRef.current !== requestClient || hostId !== requestHostId || !repoResponse.ok) {
-          return
-        }
-        const repoResult = (repoResponse as RpcSuccess).result as { repos: RepoSummary[] }
-        repoMetadataFetchedAtRef.current = Date.now()
-        setCachedRepos(requestHostId, repoResult.repos)
-        setRepoSummaries(repoResult.repos)
-        setRepoColorsByName(
-          new Map(
-            repoResult.repos.map((repo) => [
-              repo.displayName,
-              repo.badgeColor || repoColor(repo.displayName)
-            ])
-          )
-        )
-        setRepoIconsByName(
-          new Map(
-            repoResult.repos.flatMap((repo) =>
-              repo.repoIcon ? [[repo.displayName, repo.repoIcon] as const] : []
+        do {
+          fetchRepoMetadataPendingRef.current.delete(requestClient)
+          const repoResponse = await requestClient.sendRequest('repo.list')
+          if (clientRef.current !== requestClient || hostId !== requestHostId || !repoResponse.ok) {
+            return
+          }
+          const repoResult = (repoResponse as RpcSuccess).result as { repos: RepoSummary[] }
+          repoMetadataFetchedAtRef.current = Date.now()
+          setCachedRepos(requestHostId, repoResult.repos)
+          setRepoColorsByName(
+            new Map(
+              repoResult.repos.map((repo) => [
+                repo.displayName,
+                repo.badgeColor || repoColor(repo.displayName)
+              ])
             )
           )
-        )
-        setRepoIdsByName(new Map(repoResult.repos.map((repo) => [repo.displayName, repo.id])))
+          setRepoIconsByName(
+            new Map(
+              repoResult.repos.flatMap((repo) =>
+                repo.repoIcon ? [[repo.displayName, repo.repoIcon] as const] : []
+              )
+            )
+          )
+          setRepoIdsByName(new Map(repoResult.repos.map((repo) => [repo.displayName, repo.id])))
+        } while (fetchRepoMetadataPendingRef.current.has(requestClient))
       } catch {
-        // Repo metadata is decorative; the next throttled refresh can retry.
+        // Repo metadata is decorative; the next refresh can retry.
       } finally {
-        fetchRepoMetadataInFlightRef.current = false
+        fetchRepoMetadataInFlightRef.current.delete(requestClient)
       }
     },
     [client, connState, hostId]
@@ -432,8 +414,7 @@ export function HostScreen({
       if (!options.allowDuringModal && newWorktreeModalVisibleRef.current) {
         return
       }
-      // The embedded sidebar polls for the whole split-view session; keep slow
-      // remote hosts from stacking overlapping expensive list requests.
+      // Why: prevent slow remote hosts from stacking overlapping worktree.ps requests during polling.
       if (fetchWorktreesInFlightRef.current) {
         return
       }
@@ -442,8 +423,7 @@ export function HostScreen({
       const requestHostId = hostId
 
       try {
-        // Why: worktree.ps defaults to 200 and silently truncates; match the
-        // desktop's high cap so large hosts don't drop workspaces on mobile.
+        // Why: worktree.ps silently truncates at 200; use a high cap so large hosts don't drop workspaces.
         const response = await requestClient.sendRequest('worktree.ps', { limit: 10000 })
         if (clientRef.current !== requestClient || hostId !== requestHostId) {
           return
@@ -453,9 +433,7 @@ export function HostScreen({
         }
         if (response.ok) {
           const result = (response as RpcSuccess).result as { worktrees: Worktree[] }
-          // Why: large hosts can return identical worktree.ps snapshots every
-          // poll. Preserving the existing array keeps SectionList/sort rebuilds
-          // off the JS tap path unless something actually changed.
+          // Why: reuse the existing array on identical snapshots to keep SectionList/sort rebuilds off the tap path.
           setWorktrees((current) =>
             areWorktreeListsEqual(current, result.worktrees) ? current : result.worktrees
           )
@@ -463,17 +441,18 @@ export function HostScreen({
             areWorktreeListsEqual(current, result.worktrees) ? current : result.worktrees
           )
           setWorktreesLoaded(true)
-          // Drop the optimistic active override once the host confirms it (the
-          // activate RPC has landed and worktree.ps now reports it active), so we
-          // stop overriding and respect any later desktop-driven change.
+          // Why (#8498): overwrite the home-written cache with the confirmed snapshot so a reconnect/remount can't serve a stale list.
+          if (hostId) {
+            setCachedWorktrees(hostId, result.worktrees)
+          }
+          // Drop the optimistic active override once the host reports it active, so later desktop changes win.
           setOptimisticActiveWorktreeId((pending) =>
             pending && result.worktrees.some((w) => w.worktreeId === pending && w.isActive)
               ? null
               : pending
           )
 
-          // Clear optimistic sleep overrides once the server confirms the
-          // worktree is actually inactive (liveTerminalCount dropped to 0).
+          // Clear optimistic sleep overrides once the server confirms inactive (liveTerminalCount === 0).
           setSleptIds((prev) => {
             if (prev.size === 0) {
               return prev
@@ -488,8 +467,7 @@ export function HostScreen({
             return still.size === prev.size ? prev : still
           })
 
-          // Sync local pin state from server so desktop-initiated pins/unpins
-          // are reflected without relying on stale AsyncStorage.
+          // Sync pin state from server so desktop-initiated pins reflect without relying on stale AsyncStorage.
           const serverPinned = new Set(
             result.worktrees.filter((w) => w.isPinned).map((w) => w.worktreeId)
           )
@@ -512,91 +490,44 @@ export function HostScreen({
     [client, connState, hostId]
   )
 
-  // Why: read desktop's protocol version from status.get on every connect
-  // and re-evaluate compatibility. If the desktop declares this mobile
-  // build too old (or vice versa via the local minimum), the host detail
-  // screen swaps to a hard-block screen instead of the worktree list.
-  // Today's compat constants are wide-open so this never blocks; the wire
-  // format is in place to flip a switch in a future release.
-  useEffect(() => {
-    if (connState !== 'connected' || !client) {
+  useFocusEffect(
+    useCallback(() => {
+      // Why: focus nudges reconnect and probes a possibly half-open socket; empty deps fire per focus, not per state flip (which defeats backoff).
+      clientRef.current?.notifyForeground()
+    }, [])
+  )
+
+  const startWorktreeRefresh = useCallback(() => {
+    if (!client || connState !== 'connected') {
       return
     }
-    let cancelled = false
-    const requestClient = client
-    void (async () => {
-      try {
-        const response = await requestClient.sendRequest('status.get')
-        if (cancelled || clientRef.current !== requestClient) {
-          return
-        }
-        if (!response.ok) {
-          return
-        }
-        const status = (response as RpcSuccess).result as DesktopStatus
-        const verdict = evaluateCompat({
-          desktopProtocolVersion: status.protocolVersion,
-          desktopMinCompatibleMobileVersion: status.minCompatibleMobileVersion
-        })
-        setCompatVerdict(verdict)
-        if (verdict.kind === 'blocked') {
-          // Why: deterministic breadcrumb so support can confirm a block
-          // actually fired (vs a render bug). No PII — just version ints.
-          console.warn('[protocol-compat] blocked', {
-            reason: verdict.reason,
-            desktopVersion: verdict.desktopVersion,
-            requiredMobileVersion: verdict.requiredMobileVersion,
-            requiredDesktopVersion: verdict.requiredDesktopVersion
-          })
-        }
-      } catch {
-        // Why: rare path — sendRequest can throw on transport tear-down.
-        // Treat as transient; verdict stays at previous value.
-      }
-    })()
-    return () => {
-      cancelled = true
-    }
-  }, [connState, client])
+    void syncViewSettingsFromDesktop()
+    return startHostWorktreeRefresh({ client, fetchWorktrees, fetchRepoMetadata })
+  }, [client, connState, fetchWorktrees, fetchRepoMetadata, syncViewSettingsFromDesktop])
 
   useFocusEffect(
     useCallback(() => {
-      // The embedded sidebar drives its own polling below; focus never fires
-      // for it since it isn't a routed screen.
-      if (embedded || connState !== 'connected') {
-        return
+      // The embedded sidebar isn't a routed screen (focus never fires); it refreshes via the mount effect below.
+      if (!embedded) {
+        return startWorktreeRefresh()
       }
-      void fetchWorktrees()
-      void fetchRepoMetadata()
-      // Pull desktop's shared view settings on focus so desktop-side changes
-      // show up here without a manual refresh.
-      void syncViewSettingsFromDesktop()
-      // Why: React Navigation keeps previous stack screens mounted; only
-      // poll the host list while this route is visible.
-      const interval = setInterval(() => {
-        void fetchWorktrees()
-        void fetchRepoMetadata()
-      }, 3000)
-      return () => clearInterval(interval)
-    }, [embedded, connState, fetchWorktrees, fetchRepoMetadata, syncViewSettingsFromDesktop])
+    }, [embedded, startWorktreeRefresh])
   )
 
-  // Why: as the persistent tablet sidebar this list is never the focused
-  // route, so useFocusEffect won't fetch/poll. Mirror that behavior from a
-  // plain mount effect while connected instead.
+  // Why: the embedded sidebar is never the focused route, so wire its refresh lifecycle from a mount effect.
   useEffect(() => {
-    if (!embedded || connState !== 'connected') {
-      return
+    if (embedded) {
+      return startWorktreeRefresh()
     }
-    void fetchWorktrees()
-    void fetchRepoMetadata()
-    void syncViewSettingsFromDesktop()
-    const interval = setInterval(() => {
-      void fetchWorktrees()
-      void fetchRepoMetadata()
-    }, 3000)
-    return () => clearInterval(interval)
-  }, [embedded, connState, fetchWorktrees, fetchRepoMetadata, syncViewSettingsFromDesktop])
+  }, [embedded, startWorktreeRefresh])
+
+  // Why (#8498): steady-state polls miss the transition INTO 'connected' after background/sleep, when the cache is stalest.
+  const { refreshing, onRefresh } = useWorktreeResync({
+    client,
+    connState,
+    fetchWorktrees,
+    fetchRepoMetadata
+  })
 
   const updateLocalPins = useCallback(
     (worktreeId: string, pinned: boolean) => {
@@ -678,13 +609,14 @@ export function HostScreen({
     if (!hostId) {
       return
     }
-    // Why: close the shared client first so its WebSocket is gone before
-    // the host record disappears; otherwise the next loadHosts() the
-    // provider does (e.g. on remount) wouldn't find this host but the
-    // socket would still be open, leaking state.
-    closeHostClient(hostId)
-    await removeHost(hostId)
-    leaveHost()
+    try {
+      await removeHostAndCloseClient(hostId, closeHostClient)
+      leaveHost()
+    } catch {
+      // Why: removal can fail while still paired; re-open confirm (ConfirmModal closes on confirm).
+      setConfirmRemoveHost(true)
+      Alert.alert('Could not remove host', 'Please try again.')
+    }
   }, [hostId, leaveHost, closeHostClient])
 
   const navigateFromHostList = useCallback(
@@ -693,8 +625,7 @@ export function HostScreen({
         router.push(target)
         return
       }
-      const targetPath = target.split('?')[0] ?? target
-      if (pathname === targetPath) {
+      if (pathname === (target.split('?')[0] ?? target)) {
         return
       }
       if (pathname === `/h/${hostId}`) {
@@ -708,15 +639,13 @@ export function HostScreen({
 
   const openWorktreeSession = useCallback(
     (item: Worktree) => {
-      // Highlight the row immediately; the next worktree.ps poll confirms it.
       setOptimisticActiveWorktreeId(item.worktreeId)
       if (client && connState === 'connected') {
-        // Why: opening a mobile session should hydrate host-owned tabs without
-        // pulling other paired clients, especially desktop, into this worktree.
         void client
           .sendRequest('worktree.activate', {
             worktree: `id:${item.worktreeId}`,
-            notifyClients: false
+            notifyClients: false,
+            navigation: 'caller'
           })
           .catch(() => null)
       }
@@ -725,6 +654,12 @@ export function HostScreen({
     },
     [client, connState, hostId, navigateFromHostList]
   )
+
+  const openFloatingWorkspace = useCallback(() => {
+    // Why: no worktree.activate here — the floating sentinel has no worktree
+    // record; session.tabs.list hydrates its host-owned tabs on open.
+    navigateFromHostList(floatingWorkspaceSessionPath(hostId))
+  }, [hostId, navigateFromHostList])
 
   const handleSortChange = useCallback(
     (value: MobileSortMode) => {
@@ -791,8 +726,7 @@ export function HostScreen({
       const slept = sleptIds.has(w.worktreeId)
         ? { liveTerminalCount: 0, hasAttachedPty: false, status: 'inactive' as const }
         : null
-      // Force the just-opened worktree active (and the rest inactive) until the
-      // next poll confirms it, so the highlight doesn't lag the navigation.
+      // Force the just-opened worktree active until the next poll confirms it, so the highlight doesn't lag.
       const active =
         optimisticActiveWorktreeId !== null
           ? { isActive: w.worktreeId === optimisticActiveWorktreeId }
@@ -804,14 +738,16 @@ export function HostScreen({
   const toggleCollapsed = useCallback(
     (key: string) => {
       const next = new Set(viewStateRef.current.collapsedGroups)
-      if (next.has(key)) {
-        next.delete(key)
-      } else {
+      if (!next.delete(key)) {
         next.add(key)
       }
       persistViewSettings({ collapsedGroups: [...next] })
     },
     [persistViewSettings]
+  )
+  const toggleWorktreeLineage = useCallback(
+    (item: Worktree) => toggleCollapsed(getMobileWorkspaceLineageGroupKey(item.worktreeId)),
+    [toggleCollapsed]
   )
   const { sections, rawSections, uniqueRepos, uniqueRepoColors } = useWorkspaceSections({
     displayWorktrees,
@@ -821,11 +757,8 @@ export function HostScreen({
     groupMode,
     pinnedIds,
     repoIdsByName,
-    repoSummaries,
     repoColorsByName,
     collapsedGroups,
-    workspaceHostScope: viewStateRef.current.workspaceHostScope,
-    visibleWorkspaceHostIds: viewStateRef.current.visibleWorkspaceHostIds,
     workspaceStatuses
   })
   const existingWorktreePaths = useMemo(() => worktrees.map((w) => w.path), [worktrees])
@@ -840,10 +773,6 @@ export function HostScreen({
         <Text style={styles.errorText}>{error}</Text>
       </View>
     )
-  }
-
-  if (compatVerdict.kind === 'blocked') {
-    return <ProtocolBlockScreen verdict={compatVerdict} />
   }
 
   return (
@@ -875,12 +804,7 @@ export function HostScreen({
                 </View>
                 {connState !== 'connected' &&
                   (() => {
-                    // Why: status label removed in favor of just the dot +
-                    // Reconnect button — the home screen already surfaces the
-                    // verdict text per host, and the dot color already
-                    // signals severity here. Auth-failed routes through its
-                    // dedicated banner so we still want to suppress the
-                    // Reconnect button for that case.
+                    // Why: auth-failed has its own banner, so suppress the Reconnect button for that verdict.
                     const verdict = headerVerdict
                     const isError = isErrorVerdict(verdict)
                     const showReconnectButton = isError && hostId && verdict.kind !== 'auth-failed'
@@ -900,6 +824,24 @@ export function HostScreen({
               </>
             )
           })()}
+          {!embedded && floatingWorkspaceEnabled ? (
+            <Pressable
+              style={[
+                styles.floatingWorkspaceHeaderButton,
+                connState !== 'connected' && styles.toolbarIconDisabled
+              ]}
+              onPress={openFloatingWorkspace}
+              disabled={connState !== 'connected'}
+              accessibilityRole="button"
+              accessibilityLabel="Floating Workspace"
+              hitSlop={8}
+            >
+              <SquareTerminal
+                size={18}
+                color={connState === 'connected' ? colors.textPrimary : colors.textMuted}
+              />
+            </Pressable>
+          ) : null}
           {embedded && onHideSidebar ? (
             <Pressable
               style={styles.sidebarCollapseButton}
@@ -1005,6 +947,24 @@ export function HostScreen({
                   color={connState === 'connected' ? colors.textSecondary : colors.textMuted}
                 />
               </Pressable>
+
+              {floatingWorkspaceEnabled ? (
+                <Pressable
+                  style={[
+                    styles.embeddedToolbarIconButton,
+                    connState !== 'connected' && styles.toolbarIconDisabled
+                  ]}
+                  onPress={openFloatingWorkspace}
+                  disabled={connState !== 'connected'}
+                  accessibilityRole="button"
+                  accessibilityLabel="Floating Workspace"
+                >
+                  <SquareTerminal
+                    size={18}
+                    color={connState === 'connected' ? colors.textSecondary : colors.textMuted}
+                  />
+                </Pressable>
+              ) : null}
 
               <Pressable
                 style={[
@@ -1124,22 +1084,15 @@ export function HostScreen({
       {/* Search bar */}
       {showSearch && (
         <View style={styles.searchBar}>
-          <Search size={14} color={colors.textMuted} />
-          <TextInput
-            style={styles.searchInput}
+          <MobileSearchField
             value={search}
             onChangeText={setSearch}
             placeholder="Search worktrees…"
-            placeholderTextColor={colors.textMuted}
-            autoCapitalize="none"
-            autoCorrect={false}
             autoFocus
+            // Why: new key per open remounts the focus effect across rapid toggles so the keyboard reappears.
+            focusKey={showSearch}
+            accessibilityLabel="Search worktrees"
           />
-          {search.length > 0 && (
-            <Pressable onPress={() => setSearch('')}>
-              <X size={14} color={colors.textSecondary} />
-            </Pressable>
-          )}
         </View>
       )}
 
@@ -1171,14 +1124,14 @@ export function HostScreen({
           sections={sections}
           keyExtractor={(w) => w.sectionListKey ?? w.worktreeId}
           stickySectionHeadersEnabled={false}
+          // Why: keep the search IME up while tapping clear / scrolling results.
+          keyboardShouldPersistTaps="handled"
+          keyboardDismissMode="on-drag"
           onScrollToIndexFailed={onScrollToIndexFailed}
-          // Why: edge-to-edge — the list scrolls under the system nav bar
-          // while reserving insets.bottom keeps the last worktree row reachable
-          // above the Samsung 3-button nav / iOS home indicator.
+          // Why: edge-to-edge under the system nav bar; insets.bottom keeps the last row above it.
           contentContainerStyle={[
             styles.list,
-            // Phone shows a floating "+" button bottom-right; reserve room so the
-            // last row stays tappable above it. Embedded sidebars keep the toolbar +.
+            // Reserve room so the last row stays tappable above the phone's floating "+" (embedded uses the toolbar +).
             { paddingBottom: (embedded ? spacing.lg : FAB_SIZE + spacing.xl) + insets.bottom },
             isWideLayout &&
               !embedded && { maxWidth: contentMaxWidth, width: '100%', alignSelf: 'center' }
@@ -1218,6 +1171,15 @@ export function HostScreen({
             )
           }}
           ItemSeparatorComponent={ListSeparator}
+          // Why (#8498): manual pull-to-refresh forces a fresh snapshot after a stale-cache reconnect.
+          refreshControl={
+            <RefreshControl
+              refreshing={refreshing}
+              onRefresh={onRefresh}
+              tintColor={colors.textSecondary}
+              colors={[colors.textSecondary]}
+            />
+          }
           renderItem={({ item }) => (
             <WorktreeListRow
               item={item}
@@ -1229,9 +1191,7 @@ export function HostScreen({
               hideRepo={groupMode === 'repo'}
               onPress={openWorktreeSession}
               onLongPress={item.workspaceKind === 'folder-workspace' ? undefined : setActionTarget}
-              onToggleLineage={(row) =>
-                toggleCollapsed(getMobileWorkspaceLineageGroupKey(row.worktreeId))
-              }
+              onToggleLineage={toggleWorktreeLineage}
             />
           )}
         />
@@ -1358,20 +1318,14 @@ export function HostScreen({
             actions={
               actionTarget
                 ? [
-                    {
-                      label: 'Source Control',
-                      icon: GitBranch,
-                      onPress: () => {
-                        const params = new URLSearchParams({
-                          name: actionTarget.displayName || actionTarget.repo,
-                          origin: 'host'
-                        })
-                        navigateFromHostList(
-                          `/h/${hostId}/source-control/${encodeURIComponent(actionTarget.worktreeId)}?${params.toString()}`
-                        )
-                        setActionTarget(null)
-                      }
-                    },
+                    ...buildWorktreeNavigationActions({
+                      hostId,
+                      worktreeId: actionTarget.worktreeId,
+                      worktreeName: actionTarget.displayName || actionTarget.repo,
+                      hostCapabilities,
+                      navigate: navigateFromHostList,
+                      onDone: () => setActionTarget(null)
+                    }),
                     {
                       label: 'Sleep',
                       icon: Moon,
@@ -1423,6 +1377,7 @@ export function HostScreen({
         client={client}
         hostId={hostId}
         existingWorktreePaths={existingWorktreePaths}
+        existingWorktrees={worktrees}
         onVisibleChange={(visible) => {
           newWorktreeModalVisibleRef.current = visible
         }}
@@ -1439,10 +1394,7 @@ export function HostScreen({
   )
 }
 
-// Default route export. On wide tablet/foldable canvases the worktree list is
-// rendered as a persistent sidebar by the host layout, so the route itself
-// becomes the empty detail pane until a workspace is opened. On phones it is
-// the full-screen worktree list as before.
+// On wide layouts the sidebar hosts the list, so this route is just the empty detail pane.
 export default function HostWorktreeRoute() {
   const { isWideLayout } = useResponsiveLayout()
   if (isWideLayout) {
@@ -1590,12 +1542,12 @@ const styles = StyleSheet.create({
   toolbarSpacer: {
     flex: 1
   },
-  toolbarIconButton: {
+  floatingWorkspaceHeaderButton: {
     width: 32,
-    height: 28,
+    height: 32,
     alignItems: 'center',
     justifyContent: 'center',
-    borderRadius: radii.button
+    marginLeft: spacing.xs
   },
   embeddedToolbarIconButton: {
     flex: 1,
@@ -1611,20 +1563,11 @@ const styles = StyleSheet.create({
     padding: spacing.xs
   },
   searchBar: {
-    flexDirection: 'row',
-    alignItems: 'center',
     paddingHorizontal: spacing.md,
-    paddingVertical: spacing.xs + 2,
-    gap: spacing.sm,
-    borderBottomWidth: 1,
+    paddingVertical: spacing.sm,
+    borderBottomWidth: StyleSheet.hairlineWidth,
     borderBottomColor: colors.borderSubtle,
     backgroundColor: colors.bgPanel
-  },
-  searchInput: {
-    flex: 1,
-    color: colors.textPrimary,
-    fontSize: 13,
-    paddingVertical: 2
   },
   centered: {
     flex: 1,

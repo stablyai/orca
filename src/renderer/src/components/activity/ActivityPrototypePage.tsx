@@ -1,6 +1,4 @@
-/* eslint-disable max-lines -- Why: this prototype keeps the real-data adapter
-and current visual skeleton together until the next refinement pass decides
-which pieces become production modules. */
+/* eslint-disable max-lines -- Why: prototype keeps the real-data adapter and visual skeleton together until a refinement pass splits them into modules. */
 import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { useShallow } from 'zustand/react/shallow'
 import {
@@ -67,6 +65,11 @@ import { parsePaneKey } from '../../../../shared/stable-pane-id'
 import { isClipboardTextByteLengthOverLimit } from '../../../../shared/clipboard-text'
 import { migrationUnsupportedToAgentStatusEntry } from '@/lib/migration-unsupported-agent-entry'
 import { translate } from '@/i18n/i18n'
+import {
+  getActivityThreadTaskTitle,
+  getActivityThreadWorkspaceTitle,
+  resolveActivityThreadStatusPreview
+} from '@/lib/activity-thread-display'
 import { getAgentRowPrimaryText } from '@/lib/agent-row-primary-text'
 
 type ThreadReadFilter = 'all' | 'unread'
@@ -99,9 +102,7 @@ type ActivityLiveAgentSnapshot = {
   agentType: AgentType
 }
 
-// Why (per-pane thread): the activity feed is keyed on the agent pane (a
-// terminal tab + stable leaf id) rather than on the workspace, so the left list
-// shows one entry per agent. paneKey is the durable identity (`${tabId}:${leafId}`).
+// Why: keyed per agent pane (tab + leaf id), not per workspace, so the list shows one row per agent; paneKey is `${tabId}:${leafId}`.
 type AgentPaneThread = {
   paneKey: string
   paneTitle: string
@@ -347,9 +348,7 @@ function useActivityTerminalPortalStatus(
         if (readyFrame !== null) {
           return
         }
-        // Why: the PTY id can appear before xterm has painted replayed output.
-        // Waiting one frame keeps Activity's cover in place for the blank canvas
-        // frame without moving terminal lifecycle work into global layout effects.
+        // Why: PTY id can appear before xterm paints replayed output; wait one frame so Activity's cover hides the blank frame.
         readyFrame = requestAnimationFrame(() => {
           readyFrame = null
           if (!disposed && getSelectedActivityTerminalPortalStatus(target, paneKey).ready) {
@@ -438,36 +437,25 @@ function agentMeta(event: ActivityEvent): string {
   return event.state === 'waiting' ? `${agent} waiting` : `${agent} blocked`
 }
 
-// Why (label hierarchy): mirror DashboardAgentRow — the agent's last prompt
-// IS what the agent is working on and is the primary signal users want at a
-// glance. A user-renamed customTitle still wins (explicit rename intent), but
-// the OSC-set live title ("Claude Code", "Codex", …) must NOT shadow the
-// prompt: agent CLIs set that title eagerly, so preferring it would pin every
-// row to the agent name and hide the actual turn. Fall back to a non-default
-// liveTitle only when there is no prompt at all.
-function paneTitleForEntry(entry: AgentStatusEntry, tab: TerminalTab): string {
-  const customTitle = tab.customTitle?.trim()
-  if (customTitle) {
-    return customTitle
-  }
-  const prompt = getAgentRowPrimaryText(entry)
-  if (prompt) {
-    return prompt
-  }
-  const liveTitle = tab.title?.trim()
-  const defaultTitle = tab.defaultTitle?.trim()
-  if (liveTitle && liveTitle !== defaultTitle) {
-    return liveTitle
-  }
-  return defaultTitle || liveTitle || 'Terminal'
+// Why: rows need a stable task identity across follow-up turns; the live turn prompt ("yes", "ok proceed") must not replace the task title.
+function paneTitleForEntry(
+  entry: AgentStatusEntry,
+  tab: TerminalTab,
+  generatedTitlesEnabled: boolean
+): string {
+  return getActivityThreadTaskTitle({ entry, tab, generatedTitlesEnabled })
 }
 
-function paneTitleForEvent(event: ActivityEvent): string {
-  return paneTitleForEntry(event.entry, event.tab)
+function paneTitleForEvent(event: ActivityEvent, generatedTitlesEnabled: boolean): string {
+  return paneTitleForEntry(event.entry, event.tab, generatedTitlesEnabled)
 }
 
-function responsePreviewForEntry(entry: AgentStatusEntry): string {
-  return entry.lastAssistantMessage?.trim() ?? ''
+function statusPreviewForEntry(
+  entry: AgentStatusEntry,
+  agentState?: AgentStatusState | null,
+  previousPreview?: string
+): string {
+  return resolveActivityThreadStatusPreview(entry, agentState, previousPreview)
 }
 
 function isActivityEventState(state: AgentStatusState): state is ActivityEventState {
@@ -579,9 +567,7 @@ function appendActivityEventsForEntry(args: {
   acknowledgedAt: number
   migrationUnsupportedPtyId?: string
 }): void {
-  // Why: Activity is an append-only history surface. When a user continues in
-  // the same terminal pane, the live entry moves done→working; stateHistory is
-  // the only place the previous done/blocking event still exists.
+  // Why: Activity is append-only; when a pane continues (done→working), stateHistory is the only record of the previous done/blocking event.
   for (const history of args.entry.stateHistory) {
     if (!isActivityEventState(history.state)) {
       continue
@@ -639,9 +625,7 @@ export function buildActivityEvents(args: {
       continue
     }
     const ackAt = args.acknowledgedAgentsByPaneKey[paneKey] ?? 0
-    // Why: live status is separate from historical events. A fresh working turn
-    // should update/create the pane thread without being counted as an unread
-    // done/blocked/waiting event.
+    // Why: live status is separate from history; a fresh working turn updates the thread without counting as an unread done/blocked/waiting event.
     const liveState = freshActivityLiveAgentState(entry, args.now)
     if (liveState) {
       liveAgentByPaneKey[paneKey] = {
@@ -734,10 +718,7 @@ export function buildActivityEvents(args: {
   const perPaneCount = new Map<string, number>()
   const includedEventIds = new Set<string>()
   const capped: ActivityEvent[] = []
-  // Why: reserve each pane's most-recent event before applying the global 80
-  // cap so a pane never disappears from the left list when many panes are
-  // active. The validator's scenario (>16 panes × ≥5 events) could push a
-  // pane's events past the 80-event window, hiding the pane entirely.
+  // Why: reserve each pane's newest event before the global 80-event cap so the validator's >16 panes × ≥5 events can't push a pane out of the window and hide it.
   for (const event of sorted) {
     const paneKey = event.entry.paneKey
     if (perPaneCount.has(paneKey)) {
@@ -772,7 +753,9 @@ export function buildActivityEvents(args: {
 export function buildAgentPaneThreads(args: {
   events: ActivityEvent[]
   liveAgentByPaneKey: Record<string, ActivityLiveAgentSnapshot>
+  generatedTitlesEnabled?: boolean
 }): AgentPaneThread[] {
+  const generatedTitlesEnabled = args.generatedTitlesEnabled === true
   const byPaneKey = new Map<string, AgentPaneThread>()
   for (const event of args.events) {
     const paneKey = event.entry.paneKey
@@ -780,14 +763,14 @@ export function buildAgentPaneThreads(args: {
     if (!existing) {
       byPaneKey.set(paneKey, {
         paneKey,
-        paneTitle: paneTitleForEvent(event),
+        paneTitle: paneTitleForEvent(event, generatedTitlesEnabled),
         worktree: event.worktree,
         repo: event.repo,
         tab: event.tab,
         agentType: event.agentType,
         currentAgentState: null,
         currentAgentEntry: null,
-        responsePreview: responsePreviewForEntry(event.entry),
+        responsePreview: statusPreviewForEntry(event.entry, event.state),
         latestTimestamp: event.timestamp,
         latestEvent: event,
         events: [event],
@@ -802,10 +785,14 @@ export function buildAgentPaneThreads(args: {
       existing.migrationUnsupportedPtyId ?? event.migrationUnsupportedPtyId
     if (!existing.latestEvent || event.timestamp > existing.latestEvent.timestamp) {
       existing.latestEvent = event
-      existing.paneTitle = paneTitleForEvent(event)
+      existing.paneTitle = paneTitleForEvent(event, generatedTitlesEnabled)
       existing.agentType = event.agentType
       existing.tab = event.tab
-      existing.responsePreview = responsePreviewForEntry(event.entry)
+      existing.responsePreview = statusPreviewForEntry(
+        event.entry,
+        event.state,
+        existing.responsePreview
+      )
       existing.latestTimestamp = event.timestamp
     }
   }
@@ -815,14 +802,14 @@ export function buildAgentPaneThreads(args: {
     if (!existing) {
       byPaneKey.set(paneKey, {
         paneKey,
-        paneTitle: paneTitleForEntry(liveAgent.entry, liveAgent.tab),
+        paneTitle: paneTitleForEntry(liveAgent.entry, liveAgent.tab, generatedTitlesEnabled),
         worktree: liveAgent.worktree,
         repo: liveAgent.repo,
         tab: liveAgent.tab,
         agentType: liveAgent.agentType,
         currentAgentState: liveAgent.state,
         currentAgentEntry: liveAgent.entry,
-        responsePreview: responsePreviewForEntry(liveAgent.entry),
+        responsePreview: statusPreviewForEntry(liveAgent.entry, liveAgent.state),
         latestTimestamp: liveAgent.timestamp,
         latestEvent: null,
         events: [],
@@ -830,17 +817,19 @@ export function buildAgentPaneThreads(args: {
       })
       continue
     }
-    // Why: live metadata is the current thread identity. Historical events stay
-    // in the event list, but the row title/time/target must follow the active
-    // turn so a running agent never shows the previous prompt as primary.
-    existing.paneTitle = paneTitleForEntry(liveAgent.entry, liveAgent.tab)
+    // Why: row title/time/target must follow the active turn (not historical events) so a running agent never shows the previous prompt as primary.
+    existing.paneTitle = paneTitleForEntry(liveAgent.entry, liveAgent.tab, generatedTitlesEnabled)
     existing.worktree = liveAgent.worktree
     existing.repo = liveAgent.repo
     existing.tab = liveAgent.tab
     existing.agentType = liveAgent.agentType
     existing.currentAgentState = liveAgent.state
     existing.currentAgentEntry = liveAgent.entry
-    existing.responsePreview = responsePreviewForEntry(liveAgent.entry)
+    existing.responsePreview = statusPreviewForEntry(
+      liveAgent.entry,
+      liveAgent.state,
+      existing.responsePreview
+    )
     existing.latestTimestamp = liveAgent.timestamp
   }
 
@@ -888,8 +877,7 @@ export function ActivityThreadOptionsMenu({
     <DropdownMenu>
       <Tooltip>
         <TooltipTrigger asChild>
-          {/* Why: keep Tooltip and Dropdown from composing refs onto the same
-              button; the crash report's stack loops through Radix setRef. */}
+          {/* Why: keep Tooltip and Dropdown from composing refs onto the same button (Radix setRef crash loop). */}
           <span className="inline-flex shrink-0">
             <DropdownMenuTrigger asChild>
               <Button
@@ -925,6 +913,23 @@ export function ActivityThreadOptionsMenu({
         </DropdownMenuItem>
       </DropdownMenuContent>
     </DropdownMenu>
+  )
+}
+
+function ActivityProjectLabel({ repo }: { repo: Repo | null }): React.JSX.Element {
+  const label =
+    repo?.displayName?.trim() ||
+    translate('auto.components.activity.ActivityPrototypePage.5651b216c6', 'Unknown project')
+  return (
+    <div className="flex min-w-0 items-center gap-1.5">
+      {repo ? <RepoBadgeMark color={repo.badgeColor} /> : null}
+      <span
+        className="min-w-0 truncate text-[11px] font-semibold uppercase tracking-[0.04em] text-muted-foreground"
+        title={label}
+      >
+        {label}
+      </span>
+    </div>
   )
 }
 
@@ -1054,7 +1059,7 @@ function threadSearchText(thread: AgentPaneThread): string {
   const latestEventText = latest
     ? `${agentTitle(latest)} ${agentSummary(latest)} ${agentMeta(latest)}`
     : ''
-  return `${thread.paneTitle} ${thread.worktree.displayName} ${thread.repo?.displayName ?? ''} ${formatAgentTypeLabel(thread.agentType)} ${stateLabel} ${currentPrompt} ${rawCurrentPrompt} ${currentSummary} ${thread.responsePreview} ${latestEventText}`.toLowerCase()
+  return `${thread.paneTitle} ${getActivityThreadWorkspaceTitle(thread.worktree)} ${thread.worktree.branch ?? ''} ${thread.repo?.displayName ?? ''} ${formatAgentTypeLabel(thread.agentType)} ${stateLabel} ${currentPrompt} ${rawCurrentPrompt} ${currentSummary} ${thread.responsePreview} ${latestEventText}`.toLowerCase()
 }
 
 export const ACTIVITY_SEARCH_QUERY_MAX_BYTES = 2 * 1024
@@ -1100,8 +1105,7 @@ export function shouldIgnoreActivityFilterFocusShortcutTarget(
   if (!target) {
     return false
   }
-  // Why: the workspace terminal stays mounted while Activity is open; only the
-  // Activity-portaled terminal should keep Cmd/Ctrl+F for terminal search.
+  // Why: workspace terminal stays mounted while Activity is open; only the Activity-portaled terminal keeps Cmd/Ctrl+F for terminal search.
   return terminalPortalTargets.some((portalTarget) => portalTarget?.contains(target) ?? false)
 }
 
@@ -1138,8 +1142,7 @@ export function handleActivityFilterFocusShortcut({
     return false
   }
   event.preventDefault()
-  // Why: hidden workspace xterms can retain focus behind Activity; capture-phase
-  // handling must stop the chord before xterm forwards it to a local/SSH PTY.
+  // Why: hidden workspace xterms can retain focus behind Activity; stop the chord before xterm forwards it to a local/SSH PTY.
   event.stopPropagation()
   event.stopImmediatePropagation()
   input.focus()
@@ -1219,6 +1222,14 @@ function ThreadRow({
   const renderedResponsePreview = activityThreadResponseRenderPreview({
     responsePreview: thread.responsePreview
   })
+  const workspaceTitle = getActivityThreadWorkspaceTitle(thread.worktree)
+  const taskTitle = thread.paneTitle
+  const agentLabel = formatAgentTypeLabel(thread.agentType)
+  const showStatusPreview =
+    !compactMode &&
+    renderedResponsePreview.length > 0 &&
+    renderedResponsePreview !== taskTitle &&
+    renderedResponsePreview !== workspaceTitle
   return (
     <div
       data-current={selected ? 'true' : undefined}
@@ -1226,8 +1237,7 @@ function ThreadRow({
       role="button"
       tabIndex={0}
       onKeyDown={(event) => {
-        // Why: response markdown can contain links; keyboard activation on a
-        // nested link should follow the link instead of selecting the row.
+        // Why: markdown responses can contain links; keyboard activation on a nested link follows the link instead of selecting the row.
         if (isEventFromNestedInteractiveElement(event.target, event.currentTarget)) {
           return
         }
@@ -1237,19 +1247,8 @@ function ThreadRow({
         }
       }}
       className={cn(
-        // Why (selected/hover/unread cues match WorktreeCard):
-        // - selected → solid black/white tint + faint shadow, no hover
-        //   override (the active class wins so hover doesn't fight it).
-        // - non-selected → only then does hover apply (bg-accent/40), so a
-        //   selected row stays visually fixed when the cursor moves over it.
-        // - unread → weight + left-edge primary bar carry the cue; no row
-        //   tint, mirroring WorktreeCard's "weight alone" pattern. Three
-        //   stacked tints (selected + unread + hover) made selected and
-        //   unread look identical when hovered.
-        // Why (asymmetric padding): the title uses leading-snug, which adds
-        // ~3px of internal space above the cap-height that isn't present
-        // below the secondary badge row. Symmetric py made the top read
-        // heavier; the smaller top pad visually evens the row.
+        // Why (WorktreeCard cues): selected = tint+shadow, beats hover; unread = weight + left bar only; stacking all three confused selected vs unread on hover.
+        // Why (asymmetric padding): title leading-snug adds ~3px above cap-height; smaller top pad evens the row.
         'group relative flex w-full cursor-pointer flex-col gap-1 border-b border-border px-3 pt-2.5 pb-3 text-left transition-colors',
         selected
           ? 'bg-black/[0.08] shadow-[0_1px_2px_rgba(0,0,0,0.04)] dark:bg-white/[0.10] dark:shadow-[0_1px_2px_rgba(0,0,0,0.03)]'
@@ -1259,10 +1258,6 @@ function ThreadRow({
       {thread.unread ? (
         <span className="absolute left-0 top-1.5 bottom-1.5 w-0.5 rounded-r-full bg-primary" />
       ) : null}
-      {/* Why (right cluster aligned to title, not centered between rows):
-          parking the timestamp on the title row leaves the secondary row
-          full-width for the repo badge + branch name, which used to get
-          truncated when the right cluster ate horizontal space. */}
       <div className="flex min-w-0 items-start gap-2">
         <span className="inline-flex shrink-0 items-start gap-1">
           <ThreadAgentStateIndicator thread={thread} />
@@ -1271,128 +1266,126 @@ function ThreadRow({
           </span>
         </span>
         <div className="min-w-0 flex-1">
-          <span
-            className={cn(
-              'min-w-0 text-xs leading-snug',
-              compactMode ? 'block truncate' : 'line-clamp-3 break-words',
-              thread.unread ? 'font-semibold text-foreground' : 'font-medium text-foreground'
-            )}
-            title={compactMode ? thread.paneTitle : undefined}
-          >
-            {thread.paneTitle}
-          </span>
-          {!compactMode && renderedResponsePreview ? (
-            <CommentMarkdown
-              content={renderedResponsePreview}
-              className={cn(
-                // Why: mirror the in-workspace agent card's compact response
-                // preview while keeping Activity rows to one scannable line;
-                // the content is capped before markdown parsing to keep large
-                // assistant summaries cheap in long Activity lists.
-                'mt-1 h-[1lh] min-w-0 overflow-hidden truncate whitespace-nowrap text-[11px] font-normal leading-snug text-muted-foreground/80',
-                '[&_*]:inline [&_*]:!m-0 [&_*]:!p-0 [&_*]:!whitespace-nowrap [&_br]:hidden [&_ol]:list-none [&_ul]:list-none'
-              )}
-              title={thread.responsePreview}
-            />
-          ) : null}
-        </div>
-        <span className="inline-flex shrink-0 items-center gap-1.5 pt-px">
-          {/* Why (bell matches WorktreeCard pattern): unread → amber filled
-              bell as a static, non-interactive cue (selecting the thread
-              auto-marks it read, so a Mark-read button would be redundant);
-              read → outline Bell that fades in on row hover and acts as
-              Mark-unread. Bare button (no shadcn outline) so it reads as
-              an inline cue rather than a discrete control square. */}
-          <span className="inline-flex size-4 shrink-0 items-center justify-center">
-            {thread.unread ? (
-              <FilledBellIcon
-                className="size-[13px] shrink-0 text-amber-500 drop-shadow-sm"
-                aria-label={translate(
-                  'auto.components.activity.ActivityPrototypePage.beb2c19173',
-                  'Unread'
+          <div className="flex min-w-0 items-start gap-2">
+            <div className="min-w-0 flex-1 space-y-0.5">
+              <ActivityProjectLabel repo={thread.repo} />
+              <div
+                className={cn(
+                  'min-w-0 text-[13px] leading-snug',
+                  compactMode ? 'truncate' : 'line-clamp-2 break-words',
+                  thread.unread ? 'font-semibold text-foreground' : 'font-medium text-foreground'
                 )}
-              />
-            ) : (
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <button
-                    type="button"
-                    onClick={(event) => {
-                      event.stopPropagation()
-                      onMarkUnread()
-                    }}
-                    onMouseDown={(event) => event.stopPropagation()}
+                title={workspaceTitle}
+              >
+                {workspaceTitle}
+              </div>
+              {taskTitle !== workspaceTitle ? (
+                <div
+                  className={cn(
+                    'min-w-0 text-[12px] leading-snug text-muted-foreground',
+                    compactMode ? 'truncate' : 'line-clamp-2 break-words'
+                  )}
+                  title={taskTitle}
+                >
+                  {taskTitle}
+                </div>
+              ) : null}
+              {showStatusPreview ? (
+                <CommentMarkdown
+                  content={renderedResponsePreview}
+                  className={cn(
+                    'h-[1lh] min-w-0 overflow-hidden truncate whitespace-nowrap text-[11px] font-normal leading-snug text-muted-foreground/80',
+                    '[&_*]:inline [&_*]:!m-0 [&_*]:!p-0 [&_*]:!whitespace-nowrap [&_br]:hidden [&_ol]:list-none [&_ul]:list-none'
+                  )}
+                  title={thread.responsePreview}
+                />
+              ) : null}
+              <div className="flex min-w-0 items-center gap-1.5 pt-0.5">
+                <span className="shrink-0 text-[10px] text-muted-foreground/80">{agentLabel}</span>
+                {canJump ? (
+                  <span
                     className={cn(
-                      'group/unread flex size-4 shrink-0 cursor-pointer items-center justify-center rounded transition-all',
-                      'hover:bg-accent/80 active:scale-95',
-                      'focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring'
-                    )}
-                    aria-label={translate(
-                      'auto.components.activity.ActivityPrototypePage.59b131fbd9',
-                      'Mark thread unread'
+                      'ml-auto inline-flex shrink-0 items-center transition-opacity',
+                      'can-hover:pointer-events-none can-hover:invisible can-hover:opacity-0',
+                      'group-hover:pointer-events-auto group-hover:visible group-hover:opacity-100'
                     )}
                   >
-                    <Bell className="size-3 text-muted-foreground/40 can-hover:opacity-0 transition-opacity group-hover:opacity-100 group-hover/unread:opacity-100" />
-                  </button>
-                </TooltipTrigger>
-                <TooltipContent side="left">
-                  {translate(
-                    'auto.components.activity.ActivityPrototypePage.59b131fbd9',
-                    'Mark thread unread'
-                  )}
-                </TooltipContent>
-              </Tooltip>
-            )}
-          </span>
-          <EventTime timestamp={thread.latestTimestamp} />
-        </span>
-      </div>
-      <div className="flex min-w-0 items-center gap-1.5 pl-[42px]">
-        <EventRepoBadge repo={thread.repo} />
-        <span className="min-w-0 flex-1 truncate text-[11px] text-muted-foreground">
-          {thread.worktree.displayName}
-        </span>
-        {/* Why (Jump-to-workspace lives on the secondary row): the bell slot
-            on the title row already holds the unread/Mark-unread state, so
-            the navigation action gets its own slot down here aligned with
-            the worktree name. On hover-capable pointers, the hidden state
-            keeps the worktree-name's flex-1 width stable across hover. */}
-        {canJump ? (
-          <span
-            className={cn(
-              'ml-auto inline-flex shrink-0 items-center transition-opacity',
-              'can-hover:pointer-events-none can-hover:invisible can-hover:opacity-0',
-              'group-hover:pointer-events-auto group-hover:visible group-hover:opacity-100'
-            )}
-          >
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="icon-xs"
-                  aria-label={translate(
-                    'auto.components.activity.ActivityPrototypePage.4616ea39fd',
-                    'Jump to workspace'
-                  )}
-                  onClick={(event) => {
-                    event.stopPropagation()
-                    onJump()
-                  }}
-                  onMouseDown={(event) => event.stopPropagation()}
-                >
-                  <ExternalLink className="size-3" />
-                </Button>
-              </TooltipTrigger>
-              <TooltipContent side="left">
-                {translate(
-                  'auto.components.activity.ActivityPrototypePage.4616ea39fd',
-                  'Jump to workspace'
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="icon-xs"
+                          aria-label={translate(
+                            'auto.components.activity.ActivityPrototypePage.4616ea39fd',
+                            'Jump to workspace'
+                          )}
+                          onClick={(event) => {
+                            event.stopPropagation()
+                            onJump()
+                          }}
+                          onMouseDown={(event) => event.stopPropagation()}
+                        >
+                          <ExternalLink className="size-3" />
+                        </Button>
+                      </TooltipTrigger>
+                      <TooltipContent side="left">
+                        {translate(
+                          'auto.components.activity.ActivityPrototypePage.4616ea39fd',
+                          'Jump to workspace'
+                        )}
+                      </TooltipContent>
+                    </Tooltip>
+                  </span>
+                ) : null}
+              </div>
+            </div>
+            <span className="inline-flex shrink-0 items-center gap-1.5 pt-px">
+              <span className="inline-flex size-4 shrink-0 items-center justify-center">
+                {thread.unread ? (
+                  <FilledBellIcon
+                    className="size-[13px] shrink-0 text-amber-500 drop-shadow-sm"
+                    aria-label={translate(
+                      'auto.components.activity.ActivityPrototypePage.beb2c19173',
+                      'Unread'
+                    )}
+                  />
+                ) : (
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <button
+                        type="button"
+                        onClick={(event) => {
+                          event.stopPropagation()
+                          onMarkUnread()
+                        }}
+                        onMouseDown={(event) => event.stopPropagation()}
+                        className={cn(
+                          'group/unread flex size-4 shrink-0 cursor-pointer items-center justify-center rounded transition-all',
+                          'hover:bg-accent/80 active:scale-95',
+                          'focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring'
+                        )}
+                        aria-label={translate(
+                          'auto.components.activity.ActivityPrototypePage.59b131fbd9',
+                          'Mark thread unread'
+                        )}
+                      >
+                        <Bell className="size-3 text-muted-foreground/40 can-hover:opacity-0 transition-opacity group-hover:opacity-100 group-hover/unread:opacity-100" />
+                      </button>
+                    </TooltipTrigger>
+                    <TooltipContent side="left">
+                      {translate(
+                        'auto.components.activity.ActivityPrototypePage.59b131fbd9',
+                        'Mark thread unread'
+                      )}
+                    </TooltipContent>
+                  </Tooltip>
                 )}
-              </TooltipContent>
-            </Tooltip>
-          </span>
-        ) : null}
+              </span>
+              <EventTime timestamp={thread.latestTimestamp} />
+            </span>
+          </div>
+        </div>
       </div>
     </div>
   )
@@ -1410,11 +1403,7 @@ export default function ActivityPrototypePage(): React.JSX.Element {
     useState<ActivityTerminalPortalSlotId>('primary')
   const [primaryPortalTargetEl, setPrimaryPortalTargetEl] = useState<HTMLElement | null>(null)
   const [secondaryPortalTargetEl, setSecondaryPortalTargetEl] = useState<HTMLElement | null>(null)
-  // Why (default width): the thread cards are the primary surface in the
-  // Activity view; the terminal is supplementary. A narrow list squeezed the
-  // prompts to truncated single-liners and made the per-card actions feel
-  // cramped. 480px gives prompts room to breathe at line-clamp-3 and leaves
-  // the action buttons clearly readable.
+  // Why (default width): thread cards are the primary surface; 480px lets prompts fill line-clamp-3 and keeps the per-card actions readable.
   const [threadListWidth, setThreadListWidth] = useState(480)
   const {
     containerRef: threadListRef,
@@ -1439,12 +1428,11 @@ export default function ActivityPrototypePage(): React.JSX.Element {
       repoMap: getRepoMapFromState(s),
       acknowledgedAgentsByPaneKey: s.acknowledgedAgentsByPaneKey,
       acknowledgeAgents: s.acknowledgeAgents,
-      unacknowledgeAgents: s.unacknowledgeAgents
+      unacknowledgeAgents: s.unacknowledgeAgents,
+      generatedTitlesEnabled: s.settings?.tabAutoGenerateTitle === true
     }))
   )
-  // Why: agentStatusEpoch is included in the dependency array (but not in the
-  // computation itself) so the memo recomputes when freshness boundaries expire,
-  // even if no new PTY data arrives.
+  // Why: agentStatusEpoch is a dep (not used in the body) so the memo recomputes when freshness boundaries expire even without new PTY data.
   const agentStatusEpoch = useAppStore((s) => s.agentStatusEpoch)
 
   const { events: allEvents, liveAgentByPaneKey } = useMemo(
@@ -1457,10 +1445,7 @@ export default function ActivityPrototypePage(): React.JSX.Element {
         worktreeMap: storeData.worktreeMap,
         repoMap: storeData.repoMap,
         acknowledgedAgentsByPaneKey: storeData.acknowledgedAgentsByPaneKey,
-        // Why: Date.now() is read inside the memo (not as a dep) so stale-decay
-        // recalculates whenever agentStatusEpoch ticks. The epoch bumps when the
-        // freshness boundary crosses, driving re-evaluation without coupling to
-        // wall-clock time directly.
+        // Why: Date.now() is read in the memo body (not a dep) so stale-decay recomputes when agentStatusEpoch ticks, not on wall-clock time.
         now: Date.now()
       }),
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -1468,24 +1453,26 @@ export default function ActivityPrototypePage(): React.JSX.Element {
   )
 
   const allThreads = useMemo(
-    () => buildAgentPaneThreads({ events: allEvents, liveAgentByPaneKey }),
-    [allEvents, liveAgentByPaneKey]
+    () =>
+      buildAgentPaneThreads({
+        events: allEvents,
+        liveAgentByPaneKey,
+        generatedTitlesEnabled: storeData.generatedTitlesEnabled
+      }),
+    [allEvents, liveAgentByPaneKey, storeData.generatedTitlesEnabled]
   )
   const selectedPaneKeyIsLive =
     selectedPaneKey === null || allThreads.some((thread) => thread.paneKey === selectedPaneKey)
   const effectiveSelectedPaneKey = selectedPaneKeyIsLive ? selectedPaneKey : null
   if (!selectedPaneKeyIsLive) {
-    // Why: Activity rows disappear when agent retention or tab state changes;
-    // clear stale selection before detail/portal rendering can target it.
+    // Why: rows disappear when agent retention or tab state changes; clear stale selection before detail/portal rendering targets it.
     setSelectedPaneKey(null)
   }
 
   const visibleThreads = useMemo(() => {
     const normalizedQuery = isActivitySearchQueryTooLarge(query) ? null : query.trim().toLowerCase()
     return allThreads.filter((thread) => {
-      // Why: keep the just-selected thread visible even after auto-mark-read
-      // flips it to read, otherwise clicking a row in unread-only mode makes it
-      // vanish from the left list while staying selected on the right.
+      // Why: keep the just-selected thread visible after auto-mark-read flips it to read, else unread-only mode makes the clicked row vanish from the list.
       if (
         readFilter === 'unread' &&
         !thread.unread &&
@@ -1508,8 +1495,7 @@ export default function ActivityPrototypePage(): React.JSX.Element {
     ? (allThreads.find((thread) => thread.paneKey === effectiveSelectedPaneKey) ?? null)
     : null
   const selectedTabId = selectedThread?.tab.id ?? null
-  // Why: repo-less terminal buckets can still produce Activity rows, but the
-  // workspace Terminal tree only portals real worktrees.
+  // Why: repo-less terminal buckets can produce Activity rows, but the workspace Terminal tree only portals real worktrees.
   const selectedHasLiveTab =
     selectedThread && selectedTabId && storeData.worktreeMap.has(selectedThread.worktree.id)
       ? (storeData.tabsByWorktree[selectedThread.worktree.id] ?? []).some(
@@ -1580,18 +1566,8 @@ export default function ActivityPrototypePage(): React.JSX.Element {
     setSecondaryPortalTargetEl(target)
   }, [])
 
-  // Why (no flash on selection): publish the portal descriptor with the
-  // selected thread's worktreeId+tabId directly, instead of letting Terminal
-  // derive it from activeWorktreeId/activeTabId. selectThread updates the
-  // store in multiple steps (setActiveRepo → setActiveWorktree →
-  // setActiveTabType → setActiveTab) and React commits in between can
-  // briefly reflect the new worktree's stale "last active tab" — that's the
-  // wrong-terminal flash. Anchoring the portal to the selected thread
-  // sidesteps the race entirely.
-  // Why useMemo: keep a stable descriptor identity across unrelated re-renders
-  // so subscribers (Terminal → WorktreeSplitSurface) keep their React.memo
-  // bail-outs. The inactive descriptor is a same-size staging slot: the old
-  // terminal stays visible while the next terminal mounts underneath it.
+  // Why (no flash): anchor the portal to the selected thread's ids; selectThread's multi-step store update can briefly reflect a stale "last active tab" (wrong-terminal flash).
+  // Why useMemo: stable descriptor identity so subscribers keep React.memo bail-outs; inactive descriptor stages the next terminal at the same size.
   const portalDescriptors = useMemo(() => {
     const descriptors: ActivityTerminalPortalTarget[] = []
     if (visibleThread && activePortalTargetEl) {
@@ -1634,8 +1610,7 @@ export default function ActivityPrototypePage(): React.JSX.Element {
       return
     }
     if (stagedThread && (stagedPortalReady || stagedPortalUnavailable)) {
-      // Why: a stale selected pane should replace the old terminal with the
-      // unavailable state, not leave the previous pane visible under the new row.
+      // Why: a stale selected pane must swap to the unavailable state, not leave the previous pane visible under the new row.
       setActivePortalSlotId(inactivePortalSlotId)
       setDisplayedPaneKey(stagedThread.paneKey)
       return
@@ -1654,14 +1629,8 @@ export default function ActivityPrototypePage(): React.JSX.Element {
     visibleThread
   ])
 
-  // Why useLayoutEffect (not useEffect): publish must happen before paint so
-  // Terminal's portal subscriber rerenders in the same commit. With useEffect
-  // the publish runs after paint, so the user briefly sees Terminal's stale
-  // portal target on screen — the "wrong terminal flash" symptom.
-  // Why no cleanup-to-null on every change: clearing on dependency change
-  // forces the portal through a null state on every thread switch (cleanup →
-  // effect within one commit) which can flash the workspace pane behind the
-  // activity slot. We only null on unmount, via a separate effect below.
+  // Why useLayoutEffect (not useEffect): publish before paint so Terminal's portal subscriber rerenders in the same commit, else the stale target flashes on screen.
+  // Why no cleanup-to-null on each change: it forces the portal through null on every switch, flashing the workspace pane; null only on unmount (effect below).
   // oxlint-disable-next-line react-doctor/no-derived-state-effect -- Why: this publishes portal descriptors to Terminal's external portal store before paint.
   useLayoutEffect(() => {
     setActivityTerminalPortals(portalDescriptors)
@@ -1669,8 +1638,7 @@ export default function ActivityPrototypePage(): React.JSX.Element {
 
   const setActivityPageRef = useCallback((node: HTMLDivElement | null): void => {
     if (!node) {
-      // Why: portal cleanup must only happen when the page unmounts; clearing on
-      // descriptor changes flashes the workspace pane behind the activity slot.
+      // Why: portal cleanup must happen only on page unmount; clearing on descriptor changes flashes the workspace pane behind the activity slot.
       setActivityTerminalPortals([])
     }
   }, [])
@@ -1703,9 +1671,7 @@ export default function ActivityPrototypePage(): React.JSX.Element {
     if (!worktree) {
       return
     }
-    // Why: retained-agent threads can outlive their tab. With no live tab, the
-    // right pane shows the empty-state placeholder; reorienting the workspace
-    // and dispatching focus to a dead tab id would just confuse the user.
+    // Why: retained-agent threads can outlive their tab; without a live tab, reorienting the workspace and focusing a dead tab id would just confuse the user.
     const liveTabs = state.tabsByWorktree[worktree.id] ?? []
     const hasLiveTab = liveTabs.some((t) => t.id === thread.tab.id)
     if (!hasLiveTab) {
@@ -1776,11 +1742,7 @@ export default function ActivityPrototypePage(): React.JSX.Element {
     storeData.acknowledgeAgents(unreadKeys)
   }
 
-  // Why (page padding): drop top + horizontal padding so the page extends to
-  // the window's left and right edges (matching how sidebars abut the chrome
-  // elsewhere). The titlebar (ActivityTitlebarControls) already provides the
-  // breathing-room band above; the right pane's title row supplies its own
-  // top padding (pt-2) so the heading isn't pinned to the titlebar.
+  // Why (page padding): no top/horizontal padding so the page reaches the window edges; the titlebar and the right pane's title row (pt-2) supply the top spacing.
   return (
     <div ref={setActivityPageRef} className="flex h-full min-h-0 flex-col bg-background pb-3">
       <main className="flex min-h-0 flex-1 overflow-hidden">
@@ -1873,11 +1835,7 @@ export default function ActivityPrototypePage(): React.JSX.Element {
                   )}
                 </TooltipContent>
               </Tooltip>
-              {/* Why (overflow menu): "Mark all read" is a low-frequency,
-                  destructive-feeling action — parking it behind a `…` keeps
-                  the toolbar focused on the high-frequency Filter + unread
-                  toggle while still giving the action a stable home next to
-                  the list it acts on (rather than the titlebar). */}
+              {/* Why (overflow menu): "Mark all read" is low-frequency and destructive-feeling; behind `…` keeps the toolbar on the frequent Filter + unread toggle. */}
               <ActivityThreadOptionsMenu
                 compactMode={compactMode}
                 hasUnreadThreads={hasUnreadThreads}
@@ -1948,9 +1906,7 @@ export default function ActivityPrototypePage(): React.JSX.Element {
         <section className="min-w-0 flex-1 overflow-hidden">
           {selectedThread ? (
             <div className="flex h-full min-h-0 flex-col">
-              {/* Why (no header action button): per-card hover actions on the
-                  thread list (Mark unread, Open) are the primary controls now,
-                  so the header keeps just the thread identity. */}
+              {/* Why (no header action button): per-card hover actions (Mark unread, Open) are the primary controls now, so the header keeps just the thread identity. */}
               <div className="flex shrink-0 items-start gap-4 border-b border-border px-4 pt-2 pb-3">
                 <div className="min-w-0">
                   <div className="flex min-w-0 items-start gap-2">
@@ -1975,9 +1931,7 @@ export default function ActivityPrototypePage(): React.JSX.Element {
                   </div>
                 </div>
               </div>
-              {/* Why: Terminal stays mounted in the hidden workspace tree while
-                  Activity is open. This target lets that existing TerminalPane
-                  move here instead of creating a second PTY/xterm owner. */}
+              {/* Why: Terminal stays mounted in the hidden workspace tree; this target moves that existing TerminalPane here instead of spawning a second PTY/xterm owner. */}
               {(() => {
                 // Why: retained threads can outlive their tab; portal needs a live TerminalPane to render into.
                 if (!selectedHasLiveTab) {

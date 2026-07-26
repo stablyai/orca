@@ -3,7 +3,8 @@ import {
   projectHostSetupProjectionFromRepos,
   getProjectHostSetupsForProject,
   getProjectHostSetupWorktreeMeta,
-  isGitHubBackedRepo
+  isGitHubBackedRepo,
+  isProjectRemoteIdentityPending
 } from './project-host-setup-projection'
 import type { Repo } from './types'
 
@@ -113,6 +114,72 @@ describe('project host setup projection', () => {
     )
   })
 
+  it('keeps same-named github.com and GHES repositories in separate projects', () => {
+    const projection = projectHostSetupProjectionFromRepos([
+      repo({
+        id: 'dotcom-repo',
+        path: '/work/dotcom',
+        displayName: 'widgets',
+        upstream: { owner: 'acme', repo: 'widgets', host: 'github.com' }
+      }),
+      repo({
+        id: 'enterprise-repo',
+        path: '/work/enterprise',
+        displayName: 'widgets',
+        upstream: { owner: 'acme', repo: 'widgets', host: 'github.acme.test' }
+      })
+    ])
+
+    expect(projection.projects).toHaveLength(2)
+    expect(projection.projects.map((project) => project.id)).toEqual([
+      'github:acme/widgets',
+      'github:github.acme.test/acme/widgets'
+    ])
+    expect(projection.projects[1]?.providerIdentity).toEqual({
+      provider: 'github',
+      owner: 'acme',
+      repo: 'widgets',
+      host: 'github.acme.test'
+    })
+  })
+
+  it('groups GHES icon identities only when their hosts match', () => {
+    const enterpriseIcon = (host: string) => ({
+      type: 'image' as const,
+      src: `https://${host}/acme.png?size=64`,
+      source: 'github' as const,
+      label: 'acme/widgets'
+    })
+    const projection = projectHostSetupProjectionFromRepos([
+      repo({
+        id: 'enterprise-local',
+        path: '/work/local',
+        displayName: 'widgets',
+        repoIcon: enterpriseIcon('github.acme.test')
+      }),
+      repo({
+        id: 'enterprise-ssh',
+        path: '/work/ssh',
+        displayName: 'widgets',
+        connectionId: 'builder',
+        repoIcon: enterpriseIcon('github.acme.test')
+      }),
+      repo({
+        id: 'other-enterprise',
+        path: '/work/other',
+        displayName: 'widgets',
+        repoIcon: enterpriseIcon('github.other.test')
+      })
+    ])
+
+    expect(projection.projects).toHaveLength(2)
+    expect(projection.projects[0]).toMatchObject({
+      id: 'github:github.acme.test/acme/widgets',
+      sourceRepoIds: ['enterprise-local', 'enterprise-ssh']
+    })
+    expect(projection.projects[1]?.id).toBe('github:github.other.test/acme/widgets')
+  })
+
   it('uses GitHub repo icon metadata as a provider identity fallback', () => {
     const projection = projectHostSetupProjectionFromRepos([
       repo({
@@ -183,6 +250,61 @@ describe('project host setup projection', () => {
       sourceRepoIds: ['canonical-local-repo', 'old-branch-checkout'],
       providerIdentity: { provider: 'github', owner: 'stablyai', repo: 'orca' }
     })
+  })
+
+  it('uses a GHES canonical remote identity when the remote URL is unavailable', () => {
+    const projection = projectHostSetupProjectionFromRepos([
+      repo({
+        id: 'enterprise-repo',
+        path: '/work/widgets',
+        displayName: 'widgets',
+        gitRemoteIdentity: {
+          canonicalKey: 'github.acme.test/acme/widgets',
+          remoteName: 'origin',
+          remoteUrl: 'not-a-remote'
+        }
+      })
+    ])
+
+    expect(projection.projects[0]).toMatchObject({
+      id: 'github:github.acme.test/acme/widgets',
+      providerIdentity: {
+        provider: 'github',
+        owner: 'acme',
+        repo: 'widgets',
+        host: 'github.acme.test'
+      }
+    })
+  })
+
+  it('preserves GHES HTTP ports but drops SSH transport ports from remote identity', () => {
+    const projection = projectHostSetupProjectionFromRepos([
+      repo({
+        id: 'https-repo',
+        path: '/work/https',
+        displayName: 'widgets',
+        gitRemoteIdentity: {
+          canonicalKey: 'github.acme.test/acme/widgets',
+          remoteName: 'origin',
+          remoteUrl: 'https://github.acme.test:8443/acme/widgets.git'
+        }
+      }),
+      repo({
+        id: 'ssh-repo',
+        path: '/work/ssh',
+        displayName: 'widgets',
+        gitRemoteIdentity: {
+          canonicalKey: 'github.acme.test/acme/widgets',
+          remoteName: 'origin',
+          remoteUrl: 'ssh://git@github.acme.test:2222/acme/widgets.git'
+        }
+      })
+    ])
+
+    expect(projection.projects.map((project) => project.providerIdentity?.host)).toEqual([
+      'github.acme.test:8443',
+      'github.acme.test'
+    ])
   })
 
   it('does not guess that same-named folders are the same project without identity', () => {
@@ -385,5 +507,38 @@ describe('isGitHubBackedRepo', () => {
 
   it('is false for a plain local repo with no provider signal', () => {
     expect(isGitHubBackedRepo(repo({ id: 'r', path: '/r', displayName: 'r' }))).toBe(false)
+  })
+})
+
+describe('isProjectRemoteIdentityPending', () => {
+  const base = { id: 'r', path: '/r', displayName: 'r' } as const
+
+  it('is true while the background remote probe has not answered', () => {
+    expect(isProjectRemoteIdentityPending(repo({ ...base }))).toBe(true)
+    expect(isProjectRemoteIdentityPending(repo({ ...base, connectionId: 'builder' }))).toBe(true)
+  })
+
+  it('is false once the probe settles on no usable remote', () => {
+    expect(isProjectRemoteIdentityPending(repo({ ...base, gitRemoteIdentity: null }))).toBe(false)
+  })
+
+  it('is false once any provider-neutral identity resolves', () => {
+    expect(
+      isProjectRemoteIdentityPending(
+        repo({
+          ...base,
+          gitRemoteIdentity: {
+            canonicalKey: 'gitlab.example.com/team/orca',
+            remoteName: 'origin',
+            remoteUrl: 'git@gitlab.example.com:team/orca.git'
+          }
+        })
+      )
+    ).toBe(false)
+    expect(
+      isProjectRemoteIdentityPending(
+        repo({ ...base, upstream: { owner: 'stablyai', repo: 'orca' } })
+      )
+    ).toBe(false)
   })
 })

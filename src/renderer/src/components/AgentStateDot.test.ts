@@ -22,8 +22,15 @@ describe('AgentStateDot', () => {
 
     expect(markup).toContain('border-yellow-500')
     expect(markup).toContain('border-t-transparent')
-    expect(markup).toContain('[animation:spin_1s_steps(12,end)_infinite]')
+    // Why: rotation comes from the shared agent-spinner clock (which also
+    // honors prefers-reduced-motion), not a per-element CSS animation that
+    // would keep the compositor awake.
+    expect(markup).toContain('data-agent-spinner')
+    // Why: under reduced motion the top border is filled so the static ring
+    // reads as a complete marker, not a broken partial spinner (#9515).
+    expect(markup).toContain('motion-reduce:border-t-yellow-500')
     expect(markup).not.toContain('animate-spin')
+    expect(markup).not.toContain('animation:spin')
   })
 
   it('renders done as an emerald check icon', () => {
@@ -40,12 +47,14 @@ describe('AgentStateDot', () => {
   })
 
   it.each(['permission', 'waiting'] satisfies AgentDotState[])(
-    'renders %s as an amber attention dot',
+    'renders %s as an amber question glyph',
     (state) => {
-      const classNames = renderDotClassNames(state)
+      const markup = renderMarkup(state)
 
-      expect(classNames).toContain('bg-amber-500')
-      expect(classNames).not.toContain('bg-red-500')
+      expect(markup).toContain('lucide-message-circle-question-mark')
+      expect(markup).toContain('text-amber-500')
+      expect(markup).not.toContain('bg-amber-500')
+      expect(markup).not.toContain('data-agent-spinner')
     }
   )
 

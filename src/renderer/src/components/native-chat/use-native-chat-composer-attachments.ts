@@ -7,6 +7,7 @@ import {
   type NativeChatResolvedTarget
 } from './native-chat-composer-target'
 import type { NativeChatComposerImageAttachment } from './NativeChatComposerField'
+import { setBoundedScopeCacheEntry } from './native-chat-composer-scope-cache'
 
 export type UseNativeChatComposerAttachmentsArgs = {
   attachmentScopeKey: string
@@ -29,7 +30,7 @@ export function useNativeChatComposerAttachments({
 }: UseNativeChatComposerAttachmentsArgs): {
   imageAttachments: NativeChatComposerImageAttachment[]
   appendImageAttachments: (paths: string[]) => void
-  attachLocalPaths: (paths: string[]) => void
+  attachResolvedPaths: (paths: string[]) => void
   clearImageAttachments: () => void
   removeImageAttachment: (id: string) => void
 } {
@@ -100,7 +101,10 @@ export function useNativeChatComposerAttachments({
     [caret, setCaret, setDraft, setNotice, textareaRef]
   )
 
-  const attachLocalPaths = useCallback(
+  // Attach paths the TARGET AGENT can read: local paths for local worktrees,
+  // already-uploaded remote paths for SSH worktrees (the composer uploads
+  // before calling this — see native-chat-attachment-upload.ts).
+  const attachResolvedPaths = useCallback(
     (paths: string[]) => {
       const target = resolveTarget()
       if (!target || nativeChatComposerTargetIsRemote(target.ptyId)) {
@@ -130,7 +134,7 @@ export function useNativeChatComposerAttachments({
   return {
     imageAttachments,
     appendImageAttachments,
-    attachLocalPaths,
+    attachResolvedPaths,
     clearImageAttachments: () => updateImageAttachments(() => []),
     removeImageAttachment: (id) =>
       updateImageAttachments((prev) => prev.filter((attachment) => attachment.id !== id))
@@ -153,7 +157,8 @@ function writeNativeChatAttachmentCache(
     attachmentCache.delete(scopeKey)
     return
   }
-  attachmentCache.set(scopeKey, [...attachments])
+  // LRU-bounded so pending attachments for permanently-removed panes can't accumulate.
+  setBoundedScopeCacheEntry(attachmentCache, scopeKey, [...attachments])
 }
 
 export function clearNativeChatAttachmentCacheForTests(): void {

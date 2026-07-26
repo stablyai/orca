@@ -20,6 +20,7 @@ export const CORE_COMMAND_SPECS: CommandSpec[] = [
   },
   {
     path: ['claude-teams'],
+    argumentMode: 'passthrough',
     summary: 'Start Claude Code Agent Teams in the current Orca terminal',
     usage: 'orca claude-teams [claude args...]',
     allowedFlags: [...GLOBAL_FLAGS],
@@ -110,11 +111,12 @@ export const CORE_COMMAND_SPECS: CommandSpec[] = [
       'By default, Orca records the new worktree as a child of the caller context when it can infer one from the Orca terminal or current directory.',
       'If --repo is omitted, Orca infers the repo from the current Orca-managed worktree.',
       'Use --project with --host to create on a ready project host setup without spelling the backing repo id.',
-      'For related work, use the inferred parent or pass --parent-worktree active, folder:<id>, or worktree:<id> to make the relationship explicit.',
+      'For related work, use the inferred parent or pass --parent-worktree active, folder:<id>, or worktree:<worktreeId> to make the relationship explicit. Worktree ids are the full <repo-id>::<path> values returned by `orca worktree list --json`.',
       'Use --no-parent when the new worktree should be independent of the current context.',
       '--no-parent only affects Orca lineage; omit --base-branch to use the repo default base, or pass the default base ref explicitly for independent top-level work.',
       'By default this creates the worktree and its first terminal without switching the active Orca view.',
       'Pass --agent to launch an agent in the first terminal; --prompt sends initial work to that agent.',
+      'With --agent --json, read the new agent handle from result.agentTerminalHandle; older runtimes return only result.startupTerminal.handle, and may return neither for folder-based repos.',
       'Repo-defined setup hooks follow the repository setup policy; pass --setup run to force them.',
       'Pass --activate when the CLI caller intentionally wants to reveal the new worktree in the app.',
       'Passing --run-hooks is kept as a legacy alias for --setup run and reveals the worktree.'
@@ -157,6 +159,13 @@ export const CORE_COMMAND_SPECS: CommandSpec[] = [
   },
   {
     path: ['worktree', 'rm'],
+    // Why: agents reach for git's `remove`/`delete` verbs; accept them as
+    // aliases so a conventional guess resolves instead of dead-ending.
+    aliases: [
+      ['worktree', 'remove'],
+      ['worktree', 'delete']
+    ],
+    destructive: true,
     summary: 'Remove a worktree from Orca and git',
     usage: 'orca worktree rm --worktree <selector> [--force] [--run-hooks] [--json]',
     allowedFlags: [...GLOBAL_FLAGS, 'worktree', 'force', 'run-hooks'],
@@ -235,24 +244,26 @@ export const CORE_COMMAND_SPECS: CommandSpec[] = [
   },
   {
     path: ['terminal', 'switch'],
+    // Why: `focus` is the legacy verb for this action; keep it working as an
+    // alias rather than a duplicate spec + handler registration.
+    aliases: [['terminal', 'focus']],
     summary: 'Switch to a terminal tab in the UI',
     usage: 'orca terminal switch [--terminal <handle>] [--json]',
     allowedFlags: [...GLOBAL_FLAGS, 'terminal'],
     examples: ['orca terminal switch --terminal term_abc123']
   },
   {
-    path: ['terminal', 'focus'],
-    summary: 'Switch to a terminal tab in the UI (alias for terminal switch)',
-    usage: 'orca terminal focus [--terminal <handle>] [--json]',
-    allowedFlags: [...GLOBAL_FLAGS, 'terminal'],
-    examples: ['orca terminal focus --terminal term_abc123']
-  },
-  {
     path: ['terminal', 'close'],
-    summary: 'Close a terminal tab (kills PTY if running)',
-    usage: 'orca terminal close [--terminal <handle>] [--json]',
-    allowedFlags: [...GLOBAL_FLAGS, 'terminal'],
-    examples: ['orca terminal close --terminal term_abc123']
+    summary: 'Close a terminal pane/session, or its whole tab with --tab',
+    usage: 'orca terminal close [--terminal <handle>] [--tab] [--json]',
+    allowedFlags: [...GLOBAL_FLAGS, 'terminal', 'tab'],
+    notes: [
+      'Without --tab, preserves the existing pane/session close behavior. With --tab, waits until the whole tab is durably removed.'
+    ],
+    examples: [
+      'orca terminal close --terminal term_abc123',
+      'orca terminal close --terminal term_abc123 --tab --json'
+    ]
   },
   {
     path: ['terminal', 'rename'],

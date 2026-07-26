@@ -215,12 +215,51 @@ describe('planCommitMessageGeneration', () => {
     })
   })
 
-  it('appends per-action CLI arguments after the built-in model args for stdin agents', () => {
+  it.each([
+    ['long option', '--model gpt-5.6-luna', ['--model', 'gpt-5.6-luna'], []],
+    ['short option', '-m gpt-5.6-luna', ['-m', 'gpt-5.6-luna'], []],
+    ['equals form', '--model=gpt-5.6-luna', ['--model=gpt-5.6-luna'], []],
+    ['attached short form', '-mgpt-5.6-luna', ['-mgpt-5.6-luna'], []],
+    [
+      'sibling arguments',
+      '--model gpt-5.6-luna --sandbox read-only',
+      ['--model', 'gpt-5.6-luna'],
+      ['--sandbox', 'read-only']
+    ]
+  ])(
+    'lets Codex recipe args override the generated model via %s',
+    (_, agentArgs, overrideArgs, trailingArgs) => {
+      const result = planCommitMessageGeneration(
+        { agentId: 'codex', model: 'gpt-5.4-mini', thinkingLevel: 'medium', agentArgs },
+        'PROMPT'
+      )
+
+      expect(result).toMatchObject({
+        ok: true,
+        plan: {
+          args: [
+            'exec',
+            '--ephemeral',
+            '--skip-git-repo-check',
+            '-s',
+            'read-only',
+            ...overrideArgs,
+            '-c',
+            'model_reasoning_effort=medium',
+            ...trailingArgs
+          ],
+          stdinPayload: 'PROMPT'
+        }
+      })
+    }
+  )
+
+  it('keeps Codex recipe arguments unchanged when they do not override the model', () => {
     const result = planCommitMessageGeneration(
       {
         agentId: 'codex',
         model: 'gpt-5.4-mini',
-        agentArgs: '--model gpt-5.5 --sandbox read-only'
+        agentArgs: '--sandbox workspace-write'
       },
       'PROMPT'
     )
@@ -236,12 +275,38 @@ describe('planCommitMessageGeneration', () => {
           'read-only',
           '--model',
           'gpt-5.4-mini',
-          '--model',
-          'gpt-5.5',
           '--sandbox',
-          'read-only'
-        ],
-        stdinPayload: 'PROMPT'
+          'workspace-write'
+        ]
+      }
+    })
+  })
+
+  it('keeps the generated Codex model when model-like text follows an option terminator', () => {
+    const result = planCommitMessageGeneration(
+      {
+        agentId: 'codex',
+        model: 'gpt-5.4-mini',
+        agentArgs: '-- --model literal'
+      },
+      'PROMPT'
+    )
+
+    expect(result).toMatchObject({
+      ok: true,
+      plan: {
+        args: [
+          'exec',
+          '--ephemeral',
+          '--skip-git-repo-check',
+          '-s',
+          'read-only',
+          '--model',
+          'gpt-5.4-mini',
+          '--',
+          '--model',
+          'literal'
+        ]
       }
     })
   })

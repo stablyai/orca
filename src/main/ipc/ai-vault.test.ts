@@ -1,3 +1,5 @@
+import { homedir } from 'node:os'
+import { join, sep } from 'node:path'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { AiVaultListResult, AiVaultSession } from '../../shared/ai-vault-types'
 import type { IFilesystemProvider } from '../providers/types'
@@ -6,15 +8,18 @@ import { getRemoteHostPlatform } from '../ssh/ssh-remote-platform'
 const mocks = vi.hoisted(() => ({
   scanAiVaultSessions: vi.fn(),
   scanRemoteAiVaultSessions: vi.fn(),
+  listClaudeSubagentSessions: vi.fn(),
+  scanRuntimeAiVaultSessions: vi.fn(),
   getAiVaultWslHomeDirs: vi.fn(),
   getSshFilesystemProvider: vi.fn(),
   getActiveSshAiVaultHostInfo: vi.fn(),
-  getActiveSshAiVaultHostInfos: vi.fn()
+  getActiveSshAiVaultHostInfos: vi.fn(),
+  ipcHandle: vi.fn()
 }))
 
 vi.mock('electron', () => ({
   app: { on: vi.fn() },
-  ipcMain: { handle: vi.fn() }
+  ipcMain: { handle: mocks.ipcHandle }
 }))
 
 vi.mock('../ai-vault/session-scanner', () => ({
@@ -23,6 +28,10 @@ vi.mock('../ai-vault/session-scanner', () => ({
 
 vi.mock('../ai-vault/remote-session-scanner', () => ({
   scanRemoteAiVaultSessions: mocks.scanRemoteAiVaultSessions
+}))
+
+vi.mock('../ai-vault/session-scanner-claude-subagents', () => ({
+  listClaudeSubagentSessions: mocks.listClaudeSubagentSessions
 }))
 
 vi.mock('../wsl', () => ({
@@ -41,7 +50,7 @@ vi.mock('./ssh', () => ({
   getActiveSshAiVaultHostInfos: mocks.getActiveSshAiVaultHostInfos
 }))
 
-const { _internals } = await import('./ai-vault')
+const { _internals, registerAiVaultHandlers } = await import('./ai-vault')
 
 const provider = {} as IFilesystemProvider
 
@@ -51,6 +60,10 @@ beforeEach(() => {
   mocks.scanAiVaultSessions.mockResolvedValue(result([session('local', 'local-session')]))
   mocks.scanRemoteAiVaultSessions.mockResolvedValue(
     result([session('ssh:dev-box', 'remote-session')])
+  )
+  mocks.listClaudeSubagentSessions.mockResolvedValue({ sessions: [], issues: [] })
+  mocks.scanRuntimeAiVaultSessions.mockResolvedValue(
+    result([session('runtime:remote-server', 'runtime-session')])
   )
   mocks.getSshFilesystemProvider.mockReturnValue(provider)
   mocks.getActiveSshAiVaultHostInfo.mockReturnValue(hostInfo('dev-box'))
@@ -96,6 +109,77 @@ describe('listAiVaultSessions host routing', () => {
     expect(result.sessions.map((entry) => entry.executionHostId)).toEqual(['ssh:dev-box', 'local'])
   })
 
+  it('merges paired runtime servers for all hosts', async () => {
+    registerAiVaultHandlers({
+      getActiveRuntimeAiVaultHostInfos: () => [
+        {
+          environmentId: 'remote-server',
+          executionHostId: 'runtime:remote-server'
+        }
+      ],
+      scanRuntimeAiVaultSessions: mocks.scanRuntimeAiVaultSessions
+    })
+
+    const result = await _internals.listAiVaultSessions({ executionHostScope: 'all' })
+
+    expect(mocks.scanRuntimeAiVaultSessions).toHaveBeenCalledWith(
+      'remote-server',
+      {
+        executionHostScope: 'runtime:remote-server'
+      },
+      expect.objectContaining({ timeoutMs: expect.any(Number) })
+    )
+    expect(result.sessions.map((entry) => entry.executionHostId)).toEqual([
+      'runtime:remote-server',
+      'ssh:dev-box',
+      'local'
+    ])
+  })
+
+  it('keeps local and SSH results when runtime host discovery fails', async () => {
+    registerAiVaultHandlers({
+      getActiveRuntimeAiVaultHostInfos: () => {
+        throw new Error('runtime store is invalid')
+      },
+      scanRuntimeAiVaultSessions: mocks.scanRuntimeAiVaultSessions
+    })
+
+    const result = await _internals.listAiVaultSessions({ executionHostScope: 'all' })
+
+    expect(mocks.scanAiVaultSessions).toHaveBeenCalledTimes(1)
+    expect(mocks.scanRemoteAiVaultSessions).toHaveBeenCalledTimes(1)
+    expect(mocks.scanRuntimeAiVaultSessions).not.toHaveBeenCalled()
+    expect(result.sessions.map((entry) => entry.executionHostId)).toEqual(['ssh:dev-box', 'local'])
+    expect(result.issues).toEqual([
+      expect.objectContaining({
+        agent: 'codex',
+        path: 'runtime environments',
+        message: 'runtime store is invalid'
+      })
+    ])
+  })
+
+  it('keeps direct runtime host scans on the normal runtime timeout', async () => {
+    registerAiVaultHandlers({
+      getActiveRuntimeAiVaultHostInfos: () => [],
+      scanRuntimeAiVaultSessions: mocks.scanRuntimeAiVaultSessions
+    })
+
+    await _internals.listAiVaultSessions({
+      executionHostScope: 'runtime:remote-server',
+      force: true
+    })
+
+    expect(mocks.scanRuntimeAiVaultSessions).toHaveBeenCalledWith(
+      'remote-server',
+      {
+        executionHostScope: 'runtime:remote-server',
+        force: true
+      },
+      {}
+    )
+  })
+
   it('returns a scan issue for a disconnected SSH target', async () => {
     mocks.getActiveSshAiVaultHostInfo.mockReturnValue(null)
     mocks.getSshFilesystemProvider.mockReturnValue(undefined)
@@ -120,6 +204,155 @@ describe('listAiVaultSessions host routing', () => {
 
     expect(mocks.scanAiVaultSessions).toHaveBeenCalledTimes(1)
     expect(mocks.scanRemoteAiVaultSessions).toHaveBeenCalledTimes(1)
+  })
+})
+
+describe('prepareSessionResume IPC', () => {
+  it('awaits the host-local targeted resume preparation', async () => {
+    const prepareSessionResume = vi.fn().mockResolvedValue({ useRealCodexHome: true })
+    registerAiVaultHandlers({ prepareSessionResume })
+    const registration = mocks.ipcHandle.mock.calls.find(
+      ([channel]) => channel === 'aiVault:prepareSessionResume'
+    )
+    const handler = registration?.[1] as
+      | ((_event: unknown, args: unknown) => Promise<unknown>)
+      | undefined
+    const args = {
+      agent: 'codex',
+      filePath: '/managed/sessions/2026/07/20/rollout-a.jsonl',
+      codexHome: '/managed',
+      executionHostId: 'local'
+    }
+
+    await expect(handler?.({}, args)).resolves.toEqual({ useRealCodexHome: true })
+    expect(prepareSessionResume).toHaveBeenCalledWith(args)
+  })
+
+  it('prepares saved-runtime sessions on the transcript-owning runtime', async () => {
+    const prepareSessionResume = vi.fn()
+    const prepareRuntimeSessionResume = vi.fn().mockResolvedValue({ useRealCodexHome: true })
+    registerAiVaultHandlers({ prepareSessionResume, prepareRuntimeSessionResume })
+    const args = {
+      agent: 'codex' as const,
+      filePath: '/managed/sessions/2026/07/20/rollout-a.jsonl',
+      codexHome: '/managed',
+      executionHostId: 'runtime:env-123' as const
+    }
+
+    await expect(getPrepareSessionResumeHandler()({}, args)).resolves.toEqual({
+      useRealCodexHome: true
+    })
+    expect(prepareRuntimeSessionResume).toHaveBeenCalledWith('env-123', args)
+    expect(prepareSessionResume).not.toHaveBeenCalled()
+  })
+
+  it('preserves SSH session homes without reading their paths locally', async () => {
+    const prepareSessionResume = vi.fn()
+    const prepareRuntimeSessionResume = vi.fn()
+    registerAiVaultHandlers({ prepareSessionResume, prepareRuntimeSessionResume })
+
+    await expect(
+      getPrepareSessionResumeHandler()(
+        {},
+        {
+          agent: 'codex',
+          filePath: '/managed/sessions/2026/07/20/rollout-a.jsonl',
+          codexHome: '/managed',
+          executionHostId: 'ssh:dev-box'
+        }
+      )
+    ).resolves.toEqual({ useRealCodexHome: false })
+    expect(prepareSessionResume).not.toHaveBeenCalled()
+    expect(prepareRuntimeSessionResume).not.toHaveBeenCalled()
+  })
+})
+
+function getPrepareSessionResumeHandler(): (
+  event: unknown,
+  args: unknown
+) => Promise<{ useRealCodexHome: boolean }> {
+  const registration = mocks.ipcHandle.mock.calls.find(
+    ([channel]) => channel === 'aiVault:prepareSessionResume'
+  )
+  if (!registration) {
+    throw new Error('aiVault:prepareSessionResume was not registered')
+  }
+  return registration[1]
+}
+
+describe('listAiVaultSubagentSessions gating', () => {
+  const claudeRoot = join(homedir(), '.claude', 'projects')
+
+  it('lists subagents for a local Claude session inside the projects root', async () => {
+    const parentFilePath = join(claudeRoot, 'proj', 'sess.jsonl')
+
+    await _internals.listAiVaultSubagentSessions({
+      agent: 'claude',
+      parentFilePath,
+      executionHostId: 'local'
+    })
+
+    expect(mocks.listClaudeSubagentSessions).toHaveBeenCalledWith({ parentFilePath })
+  })
+
+  it('returns empty for a remote Claude session without reading the filesystem', async () => {
+    const result = await _internals.listAiVaultSubagentSessions({
+      agent: 'claude',
+      parentFilePath: join(claudeRoot, 'proj', 'sess.jsonl'),
+      executionHostId: 'ssh:dev-box'
+    })
+
+    expect(result).toEqual({ sessions: [], issues: [] })
+    expect(mocks.listClaudeSubagentSessions).not.toHaveBeenCalled()
+  })
+
+  it('rejects a path outside the Claude projects root', async () => {
+    const result = await _internals.listAiVaultSubagentSessions({
+      agent: 'claude',
+      parentFilePath: '/etc/secrets/subagents',
+      executionHostId: 'local'
+    })
+
+    expect(result).toEqual({ sessions: [], issues: [] })
+    expect(mocks.listClaudeSubagentSessions).not.toHaveBeenCalled()
+  })
+
+  it('rejects a dot-segment traversal out of the Claude projects root', async () => {
+    // Built with sep (not join) so the `..` segments survive into the arg.
+    const traversal = [claudeRoot, '..', '..', '..', 'etc', 'passwd.jsonl'].join(sep)
+
+    const result = await _internals.listAiVaultSubagentSessions({
+      agent: 'claude',
+      parentFilePath: traversal,
+      executionHostId: 'local'
+    })
+
+    expect(result).toEqual({ sessions: [], issues: [] })
+    expect(mocks.listClaudeSubagentSessions).not.toHaveBeenCalled()
+  })
+
+  it('resolves empty for malformed IPC payloads instead of throwing', async () => {
+    const missing = await _internals.listAiVaultSubagentSessions(undefined)
+    const badPath = await _internals.listAiVaultSubagentSessions({
+      agent: 'claude',
+      parentFilePath: 42 as unknown as string,
+      executionHostId: 'local'
+    })
+
+    expect(missing).toEqual({ sessions: [], issues: [] })
+    expect(badPath).toEqual({ sessions: [], issues: [] })
+    expect(mocks.listClaudeSubagentSessions).not.toHaveBeenCalled()
+  })
+
+  it('returns empty for a non-Claude agent', async () => {
+    const result = await _internals.listAiVaultSubagentSessions({
+      agent: 'codex',
+      parentFilePath: join(claudeRoot, 'proj', 'sess.jsonl'),
+      executionHostId: 'local'
+    })
+
+    expect(result).toEqual({ sessions: [], issues: [] })
+    expect(mocks.listClaudeSubagentSessions).not.toHaveBeenCalled()
   })
 })
 
@@ -153,11 +386,18 @@ function session(
     codexHome: null,
     createdAt: null,
     updatedAt:
-      sessionId === 'remote-session' ? '2026-07-04T02:00:00.000Z' : '2026-07-04T01:00:00.000Z',
+      sessionId === 'runtime-session'
+        ? '2026-07-04T03:00:00.000Z'
+        : sessionId === 'remote-session'
+          ? '2026-07-04T02:00:00.000Z'
+          : '2026-07-04T01:00:00.000Z',
     modifiedAt: '2026-07-04T00:00:00.000Z',
     messageCount: 1,
     totalTokens: 0,
     previewMessages: [],
-    resumeCommand: `codex resume ${sessionId}`
+    queuedMessageCount: 0,
+    subagentTranscriptCount: 0,
+    resumeCommand: `codex resume ${sessionId}`,
+    subagent: null
   }
 }

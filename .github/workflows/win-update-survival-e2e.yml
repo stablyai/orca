@@ -1,0 +1,116 @@
+name: Windows Update-Survival E2E (branch build)
+
+# Why: proves the Phase 1 daemon-host relocation actually makes terminal
+# sessions SURVIVE a Windows update. Builds an (unsigned) installer FROM THIS
+# BRANCH, then runs the win-update-e2e harness with --expect survival: install,
+# open a terminal, silently update over it, relaunch, and assert the daemon PID
+# is unchanged and the pre-update terminal is still interactive with no console
+# flashing. Runs from the feature branch via push (workflow_dispatch only works
+# on the default branch); main is never touched. A CI runner is the only safe
+# place to install/update — see the relocation post-mortem.
+
+on:
+  push:
+    branches:
+      - Jinwoo-H/windows-update-survival
+    paths:
+      - 'src/main/daemon/**'
+      - 'src/main/pty/**'
+      - 'tools/win-update-e2e/**'
+      - 'config/electron-builder.config.cjs'
+      - '.github/workflows/win-update-survival-e2e.yml'
+  workflow_dispatch:
+    inputs:
+      expect:
+        description: Expected outcome profile
+        required: true
+        type: choice
+        default: survival
+        options:
+          - survival
+          - cold-restore
+
+permissions:
+  contents: read
+
+concurrency:
+  group: win-update-survival-e2e-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  survival:
+    name: survival (branch build over itself)
+    runs-on: windows-2022
+    timeout-minutes: 50
+    env:
+      EXPECT: ${{ inputs.expect || 'survival' }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+        with:
+          # This job only builds and runs the harness locally; it never pushes.
+          persist-credentials: false
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version-file: package.json
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v6
+        with:
+          run_install: false
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      # Why: cache the built installer keyed on the inputs that affect it, so a
+      # harness-only edit skips the ~20 min electron-builder build. The daemon
+      # relocation code lives under src/, so changing it correctly rebuilds.
+      - name: Cache branch installer
+        id: cache-installer
+        uses: actions/cache@v4
+        with:
+          path: dist/orca-windows-setup.exe
+          key: branch-installer-${{ hashFiles('src/**', 'config/**', 'native/**', 'resources/win32/**', 'package.json', 'pnpm-lock.yaml') }}
+
+      - name: Build Windows installer (unsigned)
+        if: steps.cache-installer.outputs.cache-hit != 'true'
+        run: |
+          node config/scripts/ensure-native-runtime.mjs --runtime=electron
+          pnpm run build:desktop
+          pnpm exec electron-builder --config config/electron-builder.config.cjs --win --publish never
+
+      # Why: install the branch build, open a terminal, update the SAME build
+      # over it, and assert the relocated daemon survives. Same build on both
+      # sides isolates the survival mechanism (NSIS kill sweep + userData daemon
+      # + adoption) from cross-version staleness policy. No --install-dir: a CI
+      # runner has no real Orca to protect.
+      - name: Run survival harness
+        id: harness
+        shell: pwsh
+        env:
+          ORCA_E2E_DIAG_DIR: artifacts/diag
+        run: |
+          New-Item -ItemType Directory -Force artifacts | Out-Null
+          $exe = "dist/orca-windows-setup.exe"
+          if (-not (Test-Path $exe)) { throw "Installer not found at $exe" }
+          $log = "artifacts/survival-output.log"
+          node tools/win-update-e2e/run.mjs `
+            --from "$exe" `
+            --to "$exe" `
+            --expect "$env:EXPECT" `
+            --soak-seconds 60 2>&1 | Tee-Object -FilePath $log
+          exit $LASTEXITCODE
+
+      - name: Upload survival output
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: win-update-survival-output
+          path: |
+            artifacts/survival-output.log
+            artifacts/diag/**
+          retention-days: 7
+          if-no-files-found: warn

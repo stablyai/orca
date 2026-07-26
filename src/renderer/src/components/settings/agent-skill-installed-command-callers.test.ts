@@ -24,12 +24,14 @@ const updateCapableCallers = new Map<string, readonly string[]>([
     ['COMPUTER_USE_SKILL_UPDATE_COMMAND', 'installedCommand={updateCommand}']
   ],
   [
-    'src/renderer/src/components/settings/EphemeralVmsPane.tsx',
-    ['EPHEMERAL_VMS_SKILL_UPDATE_COMMAND', 'installedCommand={updateCommand}']
+    // Why: the Linear settings section shares the update-target resolver so
+    // legacy-only installs keep the command and freshness identity aligned.
+    'src/renderer/src/components/settings/LinearAgentSkillPane.tsx',
+    ['getLinearAgentSkillUpdateTarget', 'installedCommand={updateCommand}']
   ],
   [
-    'src/renderer/src/components/settings/CliAgentSkillSetup.tsx',
-    ['ORCA_CLI_SKILL_UPDATE_COMMAND', 'installedCommand={cliSkillUpdateCommand}']
+    'src/renderer/src/components/settings/EphemeralVmsPane.tsx',
+    ['EPHEMERAL_VMS_SKILL_UPDATE_COMMAND', 'installedCommand={updateCommand}']
   ],
   [
     'src/renderer/src/components/settings/CliSection.tsx',
@@ -48,8 +50,10 @@ const updateCapableCallers = new Map<string, readonly string[]>([
     ['ORCA_CLI_SKILL_UPDATE_COMMAND', 'installedCommand={updateCommand}']
   ],
   [
+    // Why: the single-skill update command selection moved into
+    // getLinearAgentSkillUpdateCommand so the settings install CTA shares it.
     'src/renderer/src/components/sidebar/LinearAgentSkillSetupPrompt.tsx',
-    ['ORCA_LINEAR_SKILL_UPDATE_COMMAND', 'installedCommand={installedCommand}']
+    ['getLinearAgentSkillUpdateCommand', 'installedCommand={installedCommand}']
   ],
   [
     'src/renderer/src/components/sidebar/LinearAgentSkillSetupDialog.tsx',

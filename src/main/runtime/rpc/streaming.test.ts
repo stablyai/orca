@@ -9,6 +9,9 @@ import type { RuntimeTerminalWait } from '../../../shared/runtime-types'
 function stubRuntime(overrides: Partial<OrcaRuntimeService> = {}): OrcaRuntimeService {
   return {
     getRuntimeId: () => 'test-runtime',
+    // Why: subscribe streams register as remote view subscribers for Phase-5
+    // query-authority suppression (terminal-query-authority.md).
+    registerRemoteTerminalViewSubscriber: () => () => {},
     ...overrides
   } as OrcaRuntimeService
 }
@@ -18,6 +21,30 @@ function makeRequest(method: string, params?: unknown): RpcRequest {
 }
 
 describe('RpcDispatcher streaming', () => {
+  it('passes pairing authority to streaming handlers', async () => {
+    const pairing = {
+      getEndpoints: vi.fn(),
+      provisionRelay: vi.fn()
+    }
+    let receivedPairing: unknown
+    const dispatcher = new RpcDispatcher({
+      runtime: stubRuntime(),
+      methods: [
+        defineStreamingMethod({
+          name: 'test.pairing-stream',
+          params: null,
+          handler: async (_params, ctx) => {
+            receivedPairing = ctx.pairing
+          }
+        })
+      ]
+    })
+
+    await dispatcher.dispatchStreaming(makeRequest('test.pairing-stream'), () => {}, { pairing })
+
+    expect(receivedPairing).toBe(pairing)
+  })
+
   it('sends initial scrollback via emit', async () => {
     const messages: string[] = []
     const dispatcher = new RpcDispatcher({
@@ -312,6 +339,9 @@ describe('RpcDispatcher streaming', () => {
     )
 
     await vi.waitFor(() => expect(cleanups.has('terminal-1:desktop-1')).toBe(true))
+    // Cleanup now registers before snapshot work so a disconnect cannot orphan
+    // a desktop width floor; wait for the actual exit waiter before resolving it.
+    await vi.waitFor(() => expect(runtime.waitForTerminal).toHaveBeenCalled())
     resolveExit()
     await dispatchPromise
 

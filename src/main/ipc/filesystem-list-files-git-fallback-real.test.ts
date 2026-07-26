@@ -126,6 +126,18 @@ describe('filesystem-list-files real git fallback', () => {
     ])
   })
 
+  it('bounds a non-git readdir fallback without treating the limit as an error', async () => {
+    checkRgAvailableMock.mockResolvedValue(false)
+    tempDir = await mkdtemp(join(tmpdir(), 'orca-quick-open-bounded-non-git-'))
+    await writeRel(tempDir, 'a.ts')
+    await writeRel(tempDir, 'b.ts')
+
+    const files = await listQuickOpenFiles(tempDir, makeStore(tempDir), undefined, undefined, 1)
+
+    expect(files).toHaveLength(1)
+    expect(['a.ts', 'b.ts']).toContain(files[0])
+  })
+
   it('rejects abnormal git ls-files failures instead of resolving an empty list', async () => {
     checkRgAvailableMock.mockResolvedValue(false)
     tempDir = await mkdtemp(join(tmpdir(), 'orca-quick-open-bad-index-'))

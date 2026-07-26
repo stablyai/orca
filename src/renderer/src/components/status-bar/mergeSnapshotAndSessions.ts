@@ -218,7 +218,8 @@ export function mergeSnapshotAndSessions(
         history: wt.history,
         hasLocalSamples: true,
         isRemote: isRepoRemote(wt.repoId),
-        sessions
+        sessions,
+        browsers: []
       })
     }
   }
@@ -276,7 +277,8 @@ export function mergeSnapshotAndSessions(
         history: [],
         hasLocalSamples: false,
         isRemote: repoIsRemote,
-        sessions: []
+        sessions: [],
+        browsers: []
       }
       repo.worktrees.push(row)
     }
@@ -294,7 +296,35 @@ export function mergeSnapshotAndSessions(
     })
   }
 
-  // ── Step 3: per-repo aggregates. Remote children are identified by the
+  // ── Step 3: add browser resources, including browser-only workspaces.
+  for (const [worktreeId, browsers] of Object.entries(ctx.browserTabsByWorktree ?? {})) {
+    const worktree = ctx.worktreeById?.get(worktreeId)
+    if (!worktree || browsers.length === 0) {
+      continue
+    }
+    const repoName = ctx.repoDisplayNameById.get(worktree.repoId) || worktree.repoId
+    const repo = ensureRepo(worktree.repoId, repoName)
+    let row = findWorktreeRow(repo, worktreeId)
+    if (!row) {
+      row = {
+        worktreeId,
+        worktreeName: worktree.displayName,
+        repoId: worktree.repoId,
+        repoName,
+        cpu: null,
+        memory: null,
+        history: [],
+        hasLocalSamples: false,
+        isRemote: isRepoRemote(worktree.repoId),
+        sessions: [],
+        browsers: []
+      }
+      repo.worktrees.push(row)
+    }
+    row.browsers = browsers
+  }
+
+  // ── Step 4: per-repo aggregates. Remote children are identified by the
   //   repo's connectionId, not by missing data — `!hasLocalSamples` would
   //   mislabel warm-reattached local PTYs. The aggregate still skips rows
   //   we can't sample (worktree.cpu === null) so the numbers stay honest.

@@ -2,7 +2,7 @@
 import { existsSync } from 'node:fs'
 import { readdir, realpath, stat } from 'node:fs/promises'
 import { homedir } from 'node:os'
-import { isAbsolute, join, posix, win32 } from 'node:path'
+import { basename, isAbsolute, join, posix, win32 } from 'node:path'
 import type { Repo } from '../../shared/types'
 import { areWorktreePathsEqual } from '../ipc/worktree-logic'
 import Database from '../sqlite/sync-database'
@@ -119,6 +119,18 @@ export async function listOpenCodeDatabases(): Promise<string[]> {
   } catch {
     return []
   }
+}
+
+function compareOpenCodeClaimPriority(left: string, right: string): number {
+  // Why: the canonical opencode.db is the live database; it must claim
+  // duplicated sessions ahead of stale sibling copies. Remaining ties use
+  // path order so ownership is deterministic across rescans.
+  const leftRank = basename(left).toLowerCase() === 'opencode.db' ? 0 : 1
+  const rightRank = basename(right).toLowerCase() === 'opencode.db' ? 0 : 1
+  if (leftRank !== rightRank) {
+    return leftRank - rightRank
+  }
+  return left < right ? -1 : left > right ? 1 : 0
 }
 
 export async function getProcessedDatabaseInfo(
@@ -831,16 +843,30 @@ function mergeDailyAggregates(
 
 export async function parseOpenCodeUsageDatabase(
   dbPath: string,
-  worktrees: (OpenCodeUsageWorktreeRef & { canonicalPath: string })[]
+  worktrees: (OpenCodeUsageWorktreeRef & { canonicalPath: string })[],
+  options: { claimSession?: (sessionId: string) => boolean } = {}
 ): Promise<OpenCodeUsagePersistedDatabase> {
   const processedDatabase = await getProcessedDatabaseInfo(dbPath)
   const db = new Database(dbPath, { readonly: true, fileMustExist: true })
   try {
     db.pragma('query_only = ON')
     const events: OpenCodeUsageAttributedEvent[] = []
+    const claimedBySessionId = new Map<string, boolean>()
+    let hasDeferredClaims = false
     for (const row of selectUsageRows(db)) {
       const parsed = parseOpenCodeUsageRow(row)
       if (!parsed) {
+        continue
+      }
+      // Why: a stale sibling copy of opencode.db carries the same sessions, so
+      // each session must be counted from exactly one database (#8006).
+      let owned = claimedBySessionId.get(parsed.sessionId)
+      if (owned === undefined) {
+        owned = options.claimSession ? options.claimSession(parsed.sessionId) : true
+        claimedBySessionId.set(parsed.sessionId, owned)
+      }
+      if (!owned) {
+        hasDeferredClaims = true
         continue
       }
       const attributed = await attributeOpenCodeUsageEvent(parsed, worktrees)
@@ -850,7 +876,11 @@ export async function parseOpenCodeUsageDatabase(
     }
     return {
       ...processedDatabase,
-      ...aggregateOpenCodeUsage(events)
+      ...aggregateOpenCodeUsage(events),
+      ownedSessionIds: [...claimedBySessionId.entries()]
+        .filter(([, owned]) => owned)
+        .map(([sessionId]) => sessionId),
+      hasDeferredClaims
     }
   } finally {
     db.close()
@@ -869,27 +899,110 @@ export async function scanOpenCodeUsageDatabases(
   const previousByPath = new Map(
     previousProcessedDatabases.map((database) => [database.path, database])
   )
-  const processedDatabases: OpenCodeUsagePersistedDatabase[] = []
   const worktreesWithCanonicalPaths = await buildWorktreesWithCanonicalPaths(worktrees)
-  const sessionsById = new Map<string, OpenCodeUsageSession>()
-  const dailyByKey = new Map<string, OpenCodeUsageDailyAggregate>()
 
-  for (const [index, dbPath] of dbPaths.entries()) {
+  const currentPaths = new Set(dbPaths)
+  // Why: when a database that owned sessions is deleted, remaining siblings
+  // still contain those sessions but their caches record them as unowned.
+  // Only databases that previously deferred claims can reclaim.
+  const lostOwnerPath = previousProcessedDatabases.some(
+    (database) =>
+      !currentPaths.has(database.path) &&
+      Array.isArray(database.ownedSessionIds) &&
+      database.ownedSessionIds.length > 0
+  )
+
+  const reusedByPath = new Map<string, OpenCodeUsagePersistedDatabase>()
+  const pathsToParse: string[] = []
+  for (const dbPath of dbPaths) {
     const databaseInfo = await getProcessedDatabaseInfo(dbPath)
     const previous = previousByPath.get(dbPath)
+    // When an owner disappears, only deferred-claim databases need reparse.
+    const mustReclaimDeferred = lostOwnerPath && previous?.hasDeferredClaims !== false
     const canReuse =
-      previous && previous.mtimeMs === databaseInfo.mtimeMs && previous.size === databaseInfo.size
-    const processed = canReuse
-      ? previous
-      : await parseOpenCodeUsageDatabase(dbPath, worktreesWithCanonicalPaths)
+      !mustReclaimDeferred &&
+      previous &&
+      previous.mtimeMs === databaseInfo.mtimeMs &&
+      previous.size === databaseInfo.size &&
+      Array.isArray(previous.ownedSessionIds) &&
+      typeof previous.hasDeferredClaims === 'boolean'
+    if (canReuse) {
+      reusedByPath.set(dbPath, previous)
+    } else {
+      pathsToParse.push(dbPath)
+    }
+  }
 
-    processedDatabases.push(processed)
-    mergeSessions(sessionsById, processed.sessions)
-    mergeDailyAggregates(dailyByKey, processed.dailyAggregates)
+  // Why: a sticky backup claim from a scan where opencode.db was missing would
+  // otherwise freeze a still-growing session at the backup snapshot when the
+  // live db reappears. Reparse a lower-priority sibling only when it still owns
+  // sessions a higher-priority path could reclaim; a sibling that owns nothing
+  // (the common case once the live db has claimed every shared session) has no
+  // claim to give back, so reparsing it every time the live db changes is pure
+  // work.
+  const demotedReusePaths: string[] = []
+  for (const [dbPath, reused] of reusedByPath) {
+    if ((reused.ownedSessionIds?.length ?? 0) === 0) {
+      continue
+    }
+    const higherPriorityParsing = pathsToParse.some(
+      (candidate) => compareOpenCodeClaimPriority(candidate, dbPath) < 0
+    )
+    if (higherPriorityParsing) {
+      demotedReusePaths.push(dbPath)
+    }
+  }
+  for (const dbPath of demotedReusePaths) {
+    reusedByPath.delete(dbPath)
+    pathsToParse.push(dbPath)
+  }
+
+  // Why: `opencode-*.db` siblings are typically stale copies of `opencode.db`
+  // (backups), so mergeSessions would double every duplicated session (#8006).
+  // Each session is counted from exactly one database. The canonical live db
+  // claims first so a stale backup cannot freeze a still-growing session at
+  // its snapshot totals; cached databases keep the claims they persisted.
+  const sessionOwnerById = new Map<string, string>()
+  for (const dbPath of [...reusedByPath.keys()].sort(compareOpenCodeClaimPriority)) {
+    const previous = reusedByPath.get(dbPath)
+    for (const sessionId of previous?.ownedSessionIds ?? []) {
+      if (!sessionOwnerById.has(sessionId)) {
+        sessionOwnerById.set(sessionId, dbPath)
+      }
+    }
+  }
+
+  const parsedByPath = new Map<string, OpenCodeUsagePersistedDatabase>()
+  const orderedPathsToParse = [...pathsToParse].sort(compareOpenCodeClaimPriority)
+  for (const [index, dbPath] of orderedPathsToParse.entries()) {
+    const processed = await parseOpenCodeUsageDatabase(dbPath, worktreesWithCanonicalPaths, {
+      claimSession: (sessionId) => {
+        const owner = sessionOwnerById.get(sessionId)
+        if (owner !== undefined && owner !== dbPath) {
+          return false
+        }
+        sessionOwnerById.set(sessionId, dbPath)
+        return true
+      }
+    })
+    parsedByPath.set(dbPath, processed)
 
     if ((index + 1) % YIELD_EVERY_DATABASES === 0) {
       await yieldToEventLoop()
     }
+  }
+
+  const processedDatabases: OpenCodeUsagePersistedDatabase[] = []
+  const sessionsById = new Map<string, OpenCodeUsageSession>()
+  const dailyByKey = new Map<string, OpenCodeUsageDailyAggregate>()
+  for (const dbPath of dbPaths) {
+    const processed = reusedByPath.get(dbPath) ?? parsedByPath.get(dbPath)
+    if (!processed) {
+      continue
+    }
+    processedDatabases.push(processed)
+    mergeSessions(sessionsById, processed.sessions)
+    mergeDailyAggregates(dailyByKey, processed.dailyAggregates)
   }
 
   return {

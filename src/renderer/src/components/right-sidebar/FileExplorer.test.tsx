@@ -19,7 +19,8 @@ import {
   shouldShowFindInFolderAction,
   shouldShowCopyFileAction,
   shouldShowOpenInTerminalAction,
-  shouldShowRemoteDownloadAction
+  shouldShowRemoteDownloadAction,
+  shouldShowViewFileAction
 } from './FileExplorerRow'
 import { FileExplorerVirtualRows } from './FileExplorerVirtualRows'
 import type { TreeNode } from './file-explorer-types'
@@ -581,7 +582,12 @@ describe('FileExplorerRow collapse folder action', () => {
     expect(shouldShowOpenInTerminalAction(fileNode)).toBe(false)
   })
 
-  it('shows remote download only for desktop SSH or Remote Host file-like rows', () => {
+  it('only shows view file for files', () => {
+    expect(shouldShowViewFileAction(fileNode)).toBe(true)
+    expect(shouldShowViewFileAction(directoryNode)).toBe(false)
+  })
+
+  it('shows remote download only for desktop SSH rows and file-like Remote Host rows', () => {
     const runtimeContext = {
       settings: { activeRuntimeEnvironmentId: 'runtime-1' },
       worktreeId: 'wt-1',
@@ -592,7 +598,12 @@ describe('FileExplorerRow collapse folder action', () => {
     expect(shouldShowRemoteDownloadAction({ ...fileNode, isSymlink: true }, 'ssh-1')).toBe(true)
     expect(shouldShowRemoteDownloadAction(fileNode, null, runtimeContext)).toBe(true)
     expect(shouldShowRemoteDownloadAction(fileNode, null)).toBe(false)
+    // Why: directory download defaults fail-closed until the connection advertises
+    // supportsFolderDownload (SFTP); system-SSH and unknown capability stay hidden.
     expect(shouldShowRemoteDownloadAction(directoryNode, 'ssh-1')).toBe(false)
+    expect(shouldShowRemoteDownloadAction(directoryNode, 'ssh-1', null, true)).toBe(true)
+    expect(shouldShowRemoteDownloadAction(directoryNode, 'ssh-1', null, false)).toBe(false)
+    expect(shouldShowRemoteDownloadAction(fileNode, 'ssh-1', null, false)).toBe(true)
     expect(shouldShowRemoteDownloadAction(directoryNode, null, runtimeContext)).toBe(false)
 
     ;(globalThis as { __ORCA_WEB_CLIENT__?: boolean }).__ORCA_WEB_CLIENT__ = true
@@ -702,6 +713,38 @@ describe('FileExplorerRow collapse folder action', () => {
     expect(toastErrorMock).not.toHaveBeenCalled()
   })
 
+  it('calls the preload folder download API for SSH directory rows', async () => {
+    const downloadFolder = vi.fn().mockResolvedValue({
+      canceled: false,
+      destinationPath: '/downloads/src'
+    })
+    const openPath = vi.fn().mockResolvedValue(undefined)
+    ;(
+      globalThis as unknown as {
+        window: {
+          api: {
+            fs: { downloadFolder: typeof downloadFolder }
+            shell: { openPath: typeof openPath }
+          }
+        }
+      }
+    ).window = { api: { fs: { downloadFolder }, shell: { openPath } } }
+
+    await downloadRemoteFile(directoryNode, 'ssh-1')
+
+    expect(downloadFolder).toHaveBeenCalledWith({
+      dirPath: '/repo/src',
+      connectionId: 'ssh-1'
+    })
+    expect(toastSuccessMock).toHaveBeenCalledWith("Downloaded folder 'src'", {
+      action: {
+        label: 'Open',
+        onClick: expect.any(Function)
+      }
+    })
+    expect(toastErrorMock).not.toHaveBeenCalled()
+  })
+
   it('downloads Remote Host rows through the runtime download path', async () => {
     const runtimeContext = {
       settings: { activeRuntimeEnvironmentId: 'runtime-1' },
@@ -775,6 +818,7 @@ describe('FileExplorerRow collapse folder action', () => {
       deleteShortcutLabel: 'Del',
       onClick: vi.fn(),
       onDoubleClick: vi.fn(),
+      onViewFile: vi.fn(),
       onContextMenuSelect: vi.fn(),
       onCopyPaths: vi.fn(),
       onStartNew: vi.fn(),
@@ -827,6 +871,7 @@ describe('FileExplorerRow collapse folder action', () => {
       deleteShortcutLabel: 'Del',
       onClick: vi.fn(),
       onDoubleClick: vi.fn(),
+      onViewFile: vi.fn(),
       onContextMenuSelect: vi.fn(),
       onCopyPaths: vi.fn(),
       onStartNew: vi.fn(),
@@ -879,6 +924,7 @@ describe('FileExplorerRow collapse folder action', () => {
       connectionId: 'ssh-1',
       onClick: vi.fn(),
       onDoubleClick: vi.fn(),
+      onViewFile: vi.fn(),
       onContextMenuSelect: vi.fn(),
       onCopyPaths: vi.fn(),
       onStartNew: vi.fn(),
@@ -930,6 +976,7 @@ describe('FileExplorerRow collapse folder action', () => {
       deleteShortcutLabel: 'Del',
       onClick: vi.fn(),
       onDoubleClick: vi.fn(),
+      onViewFile: vi.fn(),
       onContextMenuSelect: vi.fn(),
       onCopyPaths: vi.fn(),
       onStartNew: vi.fn(),
@@ -956,5 +1003,58 @@ describe('FileExplorerRow collapse folder action', () => {
     ;(row.props.onOpenInTerminal as () => void)()
 
     expect(onOpenInTerminal).toHaveBeenCalledWith(directoryNode)
+  })
+
+  it('passes the row node to the view file handler', () => {
+    const onViewFile = vi.fn()
+    const element = FileExplorerVirtualRows({
+      virtualizer: {
+        getTotalSize: () => 26,
+        getVirtualItems: () => [{ index: 0, key: 'src', start: 0 }],
+        measureElement: vi.fn()
+      } as never,
+      inlineInputIndex: -1,
+      rowProjection: createFileExplorerRowProjection([fileNode]),
+      inlineInput: null,
+      handleInlineSubmit: vi.fn(),
+      dismissInlineInput: vi.fn(),
+      folderStatusByRelativePath: new Map(),
+      statusByRelativePath: new Map(),
+      ignoredByRelativePath: new Set(),
+      expanded: new Set(),
+      dirCache: {},
+      selectedPaths: new Set(),
+      activeFileId: null,
+      flashingPath: null,
+      deleteShortcutLabel: 'Del',
+      onClick: vi.fn(),
+      onDoubleClick: vi.fn(),
+      onViewFile,
+      onContextMenuSelect: vi.fn(),
+      onCopyPaths: vi.fn(),
+      onStartNew: vi.fn(),
+      onStartRename: vi.fn(),
+      onDuplicate: vi.fn(),
+      onAddFolderAsProject: vi.fn(),
+      canAddFolderAsProject: () => false,
+      onOpenInTerminal: vi.fn(),
+      onRequestDelete: vi.fn(),
+      onCollapseFolderSubtree: vi.fn(),
+      onFindInFolder: vi.fn(),
+      onMoveDrop: vi.fn(),
+      onDragTargetChange: vi.fn(),
+      onDragSourceChange: vi.fn(),
+      onDragExpandDir: vi.fn(),
+      onNativeDragTargetChange: vi.fn(),
+      onNativeDragExpandDir: vi.fn(),
+      dropTargetDir: null,
+      dragSourcePath: null,
+      nativeDropTargetDir: null
+    })
+
+    const row = findFileExplorerRow(element)
+    ;(row.props.onViewFile as () => void)()
+
+    expect(onViewFile).toHaveBeenCalledWith(fileNode)
   })
 })

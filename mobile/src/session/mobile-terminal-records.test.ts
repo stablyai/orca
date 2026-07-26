@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import {
   getTerminalRecordsFromSessionTabs,
   mergeTerminalListWithKnownRecords,
+  mergeTerminalRecordsByCurrentOrder,
   mobileSessionTabsEqual,
   type MobileTerminalSessionTab,
   type TerminalRecord
@@ -24,6 +25,17 @@ const darkTheme = {
 }
 
 describe('mobile terminal records', () => {
+  it('keeps the known theme when a session-tab snapshot omits it', () => {
+    const known: TerminalRecord[] = [
+      { handle: 'pty-1', title: 'Old title', terminalTheme: darkTheme, isActive: false }
+    ]
+    const snapshot: TerminalRecord[] = [{ handle: 'pty-1', title: 'Current title', isActive: true }]
+
+    expect(mergeTerminalRecordsByCurrentOrder(snapshot, known)).toEqual([
+      { handle: 'pty-1', title: 'Current title', terminalTheme: darkTheme, isActive: true }
+    ])
+  })
+
   it('keeps session-tab terminal themes when terminal.list omits them', () => {
     const terminalList: TerminalRecord[] = [
       { handle: 'pty-1', title: 'Terminal', isActive: true },

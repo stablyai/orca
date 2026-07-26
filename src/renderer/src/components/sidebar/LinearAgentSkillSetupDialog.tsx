@@ -1,8 +1,9 @@
 import type { ComponentProps } from 'react'
-import { CheckCircle2, Info } from 'lucide-react'
+import { CheckCircle2, EyeOff, Info } from 'lucide-react'
 import { IntegrationStatusPill } from '@/components/integration-status-pill'
 import { AgentSkillSetupPanel } from '@/components/settings/AgentSkillSetupPanel'
 import { Button } from '@/components/ui/button'
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
 import {
   Dialog,
   DialogContent,
@@ -35,7 +36,6 @@ type LinearAgentSkillSetupDialogProps = {
   onRecheck: AgentSkillSetupPanelProps['onRecheck']
   onOpenChange: (open: boolean) => void
   onDismissPermanently: () => void
-  onSnoozeForSession: () => void
   onDone: () => void
 }
 
@@ -55,7 +55,6 @@ export function LinearAgentSkillSetupDialog({
   onRecheck,
   onOpenChange,
   onDismissPermanently,
-  onSnoozeForSession,
   onDone
 }: LinearAgentSkillSetupDialogProps): React.JSX.Element {
   return (
@@ -91,7 +90,7 @@ export function LinearAgentSkillSetupDialog({
           </>
         ) : (
           <>
-            <div className="px-6 pt-6 pr-14">
+            <div className="px-6 pt-6 pr-20">
               <DialogHeader>
                 <DialogTitle className="sr-only">
                   {translate(
@@ -117,7 +116,7 @@ export function LinearAgentSkillSetupDialog({
               </div>
             </div>
             <AgentSkillSetupPanel
-              className="px-6 pt-4 pb-3"
+              className="px-6 pt-4 pb-6"
               variant="inline"
               hideHeader
               title={translate(
@@ -145,23 +144,47 @@ export function LinearAgentSkillSetupDialog({
                 'auto.components.sidebar.LinearAgentSkillSetupPrompt.install',
                 'Install CLI & Skill'
               )}
+              // Why: Install is this modal's sole CTA, so make it the filled primary —
+              // matching the other setup surfaces (filled primary + muted dismiss).
+              installVariant="default"
               preInstallNotice={AGENT_SKILL_CLI_PREREQUISITE_NOTICE}
               getPrerequisiteStatus={getPrerequisiteStatus}
               isPrerequisiteAvailable={isOrcaCliAvailableOnPath}
               onBeforeOpenTerminal={onBeforeOpenTerminal}
               onRecheck={onRecheck}
             />
-            <DialogFooter className="px-6 pb-6">
-              <Button type="button" variant="ghost" size="sm" onClick={onDismissPermanently}>
-                {translate(
-                  'auto.components.sidebar.LinearAgentSkillSetupPrompt.dontShowAgain',
-                  "Don't show again"
-                )}
-              </Button>
-              <Button type="button" variant="outline" size="sm" onClick={onSnoozeForSession}>
-                {translate('auto.components.sidebar.LinearAgentSkillSetupPrompt.notNow', 'Not now')}
-              </Button>
-            </DialogFooter>
+            {/* Why: permanent opt-out as a quiet EyeOff icon next to the × — matching
+                SetupGuideModal's "hide this setup surface" affordance — instead of a
+                footer button that competes with (or gets reflex-clicked over) Install.
+                Rendered last so the dialog's initial focus lands on Install, not here —
+                otherwise Enter-on-open would permanently dismiss. */}
+            <TooltipProvider>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="icon-xs"
+                    aria-label={translate(
+                      'auto.components.sidebar.LinearAgentSkillSetupPrompt.dontShowAgain',
+                      "Don't show again"
+                    )}
+                    onClick={onDismissPermanently}
+                    // Why: top-3 (not top-3.5) so this icon-xs button's centered 16px icon
+                    // lines up with the bare × close icon (top-4) — verified pixel-aligned.
+                    className="absolute top-3 right-10 text-muted-foreground"
+                  >
+                    <EyeOff className="size-4" />
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent side="top" sideOffset={4}>
+                  {translate(
+                    'auto.components.sidebar.LinearAgentSkillSetupPrompt.dontShowAgain',
+                    "Don't show again"
+                  )}
+                </TooltipContent>
+              </Tooltip>
+            </TooltipProvider>
           </>
         )}
       </DialogContent>

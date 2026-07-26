@@ -1,10 +1,3 @@
-// Upstream packaging bug: @xterm/addon-ligatures declares `"main":
-// "lib/addon-ligatures.js"` but ships only the `.mjs` entry, so Vite fails to
-// resolve the bare import. Fixed locally via config/patches/@xterm__addon-ligatures*.
-// Tracking upstream: https://github.com/xtermjs/xterm.js/issues/5822 and
-// https://github.com/xtermjs/xterm.js/pull/5828 — drop the patch once that lands.
-import { LigaturesAddon } from '@xterm/addon-ligatures'
-
 import type { ManagedPaneInternal } from './pane-manager-types'
 import { safeFit } from './pane-tree-ops'
 import {
@@ -12,11 +5,15 @@ import {
   detachPaneFitResizeObserver
 } from './pane-fit-resize-observer'
 import { clearPendingSplitScrollRestore } from './pane-split-scroll'
+import { cancelDeferredScrollRestore } from './pane-scroll'
 import { activateOrcaTerminalUnicodeProvider } from '../../../../shared/terminal-unicode-provider'
 import { attachTerminalMouseWheelMultiplier } from './pane-terminal-mouse-wheel'
-import { attachTerminalScrollIntentTracking } from './terminal-scroll-intent'
+import { attachTerminalScrollIntentTracking } from './terminal-scroll-intent-dom-tracking'
+import { installTerminalLinkifierHoverResetOnWrite } from './terminal-linkifier-hover-reset-on-write'
 import { attachDomRendererFocusClassSync } from './pane-dom-focus-class-sync'
 import { attachWebgl, cancelPendingWebglRefresh, disposeWebgl } from './pane-webgl-renderer'
+import { configureLazyArabicShapingJoiner } from './terminal-arabic-shaping-joiner'
+import { TerminalLigaturesAddon } from './terminal-ligatures-addon'
 import { resolveCursorAgentImeAnchor } from './terminal-ime-anchor'
 
 // ---------------------------------------------------------------------------
@@ -60,6 +57,11 @@ export function openTerminal(pane: ManagedPaneInternal): void {
     xtermContainer,
     pane.leafId
   )
+  // Why: a link streamed into a visible pane under a stationary pointer would
+  // otherwise stay un-underlined/un-clickable until the mouse crosses to a new
+  // line; invalidate the linkifier hover cache when output lands so the next
+  // pointer move re-linkifies it.
+  pane.linkifierHoverResetDisposable = installTerminalLinkifierHoverResetOnWrite(terminal)
 
   // Activate Orca's Unicode 11 width shim *before* any caller-driven write. CJK / emoji /
   // ZWJ codepoints get baked into the buffer at the active unicode version on
@@ -71,6 +73,14 @@ export function openTerminal(pane: ManagedPaneInternal): void {
   // restoreScrollbackBuffers, handleReattachResult) run after openTerminal,
   // so the activation must stay at this position.
   activateOrcaTerminalUnicodeProvider(terminal)
+
+  // Why: any xterm character joiner makes every repaint scan the whole grid.
+  // Defer registration until the first RTL write; replay and live paths both
+  // ensure it before parsing, so restored Arabic still shapes immediately.
+  pane.arabicShapingJoinerCleanup = configureLazyArabicShapingJoiner(
+    terminal,
+    () => pane.webglAddon != null
+  )
 
   // Why: the OS reads the focused textarea's screen rect at compositionstart to
   // decide where to display the IME candidate window. xterm positions that
@@ -162,7 +172,7 @@ export function attachLigatures(pane: ManagedPaneInternal): void {
     return
   }
   try {
-    const ligaturesAddon = new LigaturesAddon()
+    const ligaturesAddon = new TerminalLigaturesAddon()
     pane.terminal.loadAddon(ligaturesAddon)
     pane.ligaturesAddon = ligaturesAddon
     // Why: ligatures can be enabled after rows already rendered, especially
@@ -224,6 +234,15 @@ export function disposePane(
   pane.focusClassSyncCleanup = null
   pane.terminalScrollIntentDisposable?.dispose()
   pane.terminalScrollIntentDisposable = null
+  pane.linkifierHoverResetDisposable?.dispose()
+  pane.linkifierHoverResetDisposable = null
+  // Deregister the RTL shaping joiner: terminal.dispose() below does not.
+  try {
+    pane.arabicShapingJoinerCleanup?.()
+  } catch {
+    /* ignore */
+  }
+  pane.arabicShapingJoinerCleanup = null
   if (pane.compositionHandler) {
     pane.terminal.element?.removeEventListener('compositionstart', pane.compositionHandler)
     pane.terminal.element?.removeEventListener('compositionupdate', pane.compositionHandler)
@@ -231,6 +250,13 @@ export function disposePane(
   }
   try {
     clearPendingSplitScrollRestore(pane)
+  } catch {
+    /* ignore */
+  }
+  try {
+    // Why: fit retries own xterm markers and frame callbacks independently of
+    // split restoration; both must be released before terminal disposal.
+    cancelDeferredScrollRestore(pane.terminal)
   } catch {
     /* ignore */
   }

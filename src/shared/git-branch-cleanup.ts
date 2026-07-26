@@ -1,3 +1,6 @@
+import type { GitCapabilityCache } from './git-capability-cache'
+import { isUnsupportedMergeTreeWriteTreeError } from './git-merge-tree-capability'
+
 export type GitBranchCleanupExec = (
   argv: string[],
   options?: { stdin?: string }
@@ -102,14 +105,26 @@ async function hasBranchOnlyMergeCommits(
 async function branchMergesWithoutTreeChanges(
   runGit: GitBranchCleanupExec,
   targetOid: string,
-  branchRef: string
+  branchRef: string,
+  capabilities: GitCapabilityCache
 ): Promise<boolean> {
-  const mergedTree = await readOptionalGitStdout(runGit, [
-    'merge-tree',
-    '--write-tree',
-    targetOid,
-    branchRef
-  ])
+  const args = ['merge-tree', '--write-tree', targetOid, branchRef]
+  const readMergedTree = async (): Promise<string | null> => {
+    try {
+      return await capabilities.runWithFallback(
+        'merge-tree-write-tree',
+        async () => (await runGit(args)).stdout.trim() || null,
+        async () => null,
+        isUnsupportedMergeTreeWriteTreeError
+      )
+    } catch {
+      return null
+    }
+  }
+  const mergedTree = await readMergedTree()
+  if (!mergedTree) {
+    return false
+  }
   const targetTree = await readOptionalGitStdout(runGit, [
     'rev-parse',
     '--verify',
@@ -159,7 +174,8 @@ async function computeStablePatchId(
 async function branchNetPatchMatchesTargetSquashCommit(
   runGit: GitBranchCleanupExec,
   targetOid: string,
-  branchRef: string
+  branchRef: string,
+  capabilities: GitCapabilityCache
 ): Promise<boolean> {
   const mergeBase = await readOptionalGitStdout(runGit, ['merge-base', targetOid, branchRef])
   if (!mergeBase) {
@@ -198,7 +214,7 @@ async function branchNetPatchMatchesTargetSquashCommit(
     // tree merge proves the branch contributes no additional changes there.
     if (
       commitPatchId === branchPatchId &&
-      (await branchMergesWithoutTreeChanges(runGit, commitOid, branchRef))
+      (await branchMergesWithoutTreeChanges(runGit, commitOid, branchRef, capabilities))
     ) {
       return true
     }
@@ -209,7 +225,8 @@ async function branchNetPatchMatchesTargetSquashCommit(
 export async function branchHasNoUnmergedChangesOnAnyTarget(
   runGit: GitBranchCleanupExec,
   branchName: string,
-  targetRefs: string[]
+  targetRefs: string[],
+  capabilities: GitCapabilityCache
 ): Promise<boolean> {
   const branchRef = `refs/heads/${branchName}`
 
@@ -218,11 +235,13 @@ export async function branchHasNoUnmergedChangesOnAnyTarget(
     if (!targetOid) {
       continue
     }
-    if (await branchMergesWithoutTreeChanges(runGit, targetOid, branchRef)) {
+    if (await branchMergesWithoutTreeChanges(runGit, targetOid, branchRef, capabilities)) {
       return true
     }
     if (await hasBranchOnlyMergeCommits(runGit, targetOid, branchRef)) {
-      if (await branchNetPatchMatchesTargetSquashCommit(runGit, targetOid, branchRef)) {
+      if (
+        await branchNetPatchMatchesTargetSquashCommit(runGit, targetOid, branchRef, capabilities)
+      ) {
         return true
       }
       continue

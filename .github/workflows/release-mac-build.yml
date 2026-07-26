@@ -96,7 +96,10 @@ jobs:
           TAG: ${{ inputs.tag }}
         run: |
           set -euo pipefail
-          if [[ "$TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+-rc\.[0-9]+$ ]]; then
+          # Why the optional trailing identifier: suffixed side-branch RCs
+          # (vX.Y.Z-rc.N.perf) are rc-channel prerelease builds — same telemetry
+          # identity as plain RCs.
+          if [[ "$TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+-rc\.[0-9]+(\.[0-9A-Za-z]+)?$ ]]; then
             identity=rc
           elif [[ "$TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
             identity=stable
@@ -116,6 +119,19 @@ jobs:
           ORCA_BUILD_IDENTITY: ${{ steps.tag-classify.outputs.identity }}
           ORCA_DIAGNOSTICS_TOKEN_URL: https://www.onorca.dev/diagnostics/token
           ORCA_POSTHOG_WRITE_KEY: ${{ secrets.ORCA_POSTHOG_WRITE_KEY }}
+
+      - name: Gate runtime file-watcher process isolation
+        run: |
+          # Why: #8212 is a native-process crash contract. Prove both the Node
+          # host and the exact Electron runtime survive SIGSEGV before packaging.
+          node config/scripts/runtime-file-watcher-fault-harness.mjs
+          ELECTRON_RUN_AS_NODE=1 pnpm exec electron config/scripts/runtime-file-watcher-fault-harness.mjs
+
+      - name: Gate SSH relay watcher process isolation
+        run: |
+          # Why: the remote native watcher shares a daemon with live PTYs.
+          # Kill only its child and require both PTY and watch recovery before packaging.
+          node config/scripts/relay-watcher-fault-harness.mjs
 
       - name: Publish release artifacts (macOS)
         uses: nick-fields/retry@v4

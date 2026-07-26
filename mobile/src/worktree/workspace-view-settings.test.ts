@@ -5,7 +5,8 @@ import {
   groupModeFromDesktop,
   groupModeToDesktop,
   sortModeFromDesktop,
-  type MobileViewState
+  type MobileViewState,
+  type WorkspaceViewSettings
 } from './workspace-view-settings'
 
 const base: MobileViewState = {
@@ -66,46 +67,15 @@ describe('applyDesktopViewSettings', () => {
     expect(next.workspaceStatuses).toBe(DEFAULT_MOBILE_WORKSPACE_STATUSES)
   })
 
-  it('preserves current host visibility when desktop omits host fields', () => {
-    const current: MobileViewState = {
-      ...base,
+  it('ignores desktop workspace host scope so mobile always shows all hosts', () => {
+    // Mobile has no host-scope UI; honoring the synced scope would silently hide
+    // workspaces the user cannot unhide. See mobile-show-all-workspace.
+    const next = applyDesktopViewSettings(base, {
       workspaceHostScope: 'runtime:devbox',
       visibleWorkspaceHostIds: ['local']
-    }
+    } as unknown as WorkspaceViewSettings)
 
-    expect(applyDesktopViewSettings(current, {})).toEqual(current)
-  })
-
-  it('syncs desktop workspace host visibility fields', () => {
-    expect(
-      applyDesktopViewSettings(base, {
-        workspaceHostScope: 'runtime:devbox',
-        visibleWorkspaceHostIds: ['local']
-      })
-    ).toEqual({
-      ...base,
-      workspaceHostScope: 'runtime:devbox',
-      visibleWorkspaceHostIds: ['local']
-    })
-  })
-
-  it('accepts explicit null visible workspace host ids from desktop', () => {
-    const current: MobileViewState = {
-      ...base,
-      workspaceHostScope: 'runtime:devbox',
-      visibleWorkspaceHostIds: ['local']
-    }
-
-    expect(
-      applyDesktopViewSettings(current, {
-        workspaceHostScope: 'all',
-        visibleWorkspaceHostIds: null
-      })
-    ).toEqual({
-      ...base,
-      workspaceHostScope: 'all',
-      visibleWorkspaceHostIds: null
-    })
+    expect(next).toEqual(base)
   })
 
   it('ignores an unrecognized groupBy rather than blanking the mode', () => {

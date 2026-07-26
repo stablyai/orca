@@ -32,12 +32,10 @@ function getRecipeOverrideFieldLabel(field: SourceControlActionRecipeOverrideFie
         'auto.components.settings.SourceControlActionRepoOverrideNote.commandTemplate',
         'Command template'
       )
-    default: {
-      // Fail at compile time if the override-field union grows a new variant.
-      const _exhaustive: never = field
-      return _exhaustive
-    }
   }
+  // Fail at compile time if the override-field union grows a new variant.
+  const _exhaustive: never = field
+  return _exhaustive
 }
 
 function getRecipeOverrideFieldSummary(fields: SourceControlActionRecipeOverrideField[]): string {

@@ -16,8 +16,10 @@ export async function forceStopRelayForTarget(
     '  for sock in "$base"/relay-*/"$sock_name" "$base"/"$sock_name"; do',
     '    [ -S "$sock" ] || continue',
     '    pid=""',
+    // Why: lsof ORs selectors by default; -a prevents reset from targeting
+    // every Unix-socket holder instead of only the per-relay socket (#8762).
     '    if command -v lsof >/dev/null 2>&1; then',
-    '      pid=$(lsof -t -U "$sock" 2>/dev/null | tr "\\n" " ")',
+    '      pid=$(lsof -t -a -U "$sock" 2>/dev/null | tr "\\n" " ")',
     '    fi',
     '    if [ -z "$pid" ] && command -v pgrep >/dev/null 2>&1; then',
     '      pid=$(pgrep -f "$sock_name" 2>/dev/null | ' +

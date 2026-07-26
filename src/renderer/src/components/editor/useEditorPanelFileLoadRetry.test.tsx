@@ -159,7 +159,7 @@ describe('useEditorPanelFileLoadRetry — owner-not-ready bounding (#6648)', () 
     })
     expect(loadFileContent.mock.calls.length).toBe(callsAfterTerminal)
 
-    // Retry (reloadFileContent) clears the attempt budget for a fresh start.
+    // Retry (reloadContent) clears the attempt budget for a fresh start.
     delete attemptsRef.current[file.id]
     expect(attemptsRef.current[file.id]).toBeUndefined()
   })

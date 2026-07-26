@@ -4,7 +4,7 @@ import { AddressPicker, type AddressOption } from '../network/AddressPicker'
 import { parseManualNetworkAddress } from '../../../../shared/network/manual-address'
 import type { MobileNetworkInterface } from '../settings/mobile-network-interface-selection'
 
-// Why: MobileHero (mobile pairing screen) and MobileNetworkInterfaceSection
+// Why: MobileHero (mobile pairing screen) and MobilePairingSetupSection
 // (Settings → Mobile) both need the same network selector. This wraps the
 // generic AddressPicker with the mobile grammar (IPv4, any RFC 1123
 // hostname — including Tailscale *.ts.net and DDNS domains — optionally

@@ -8,6 +8,7 @@ import {
 } from '@/constants/terminal'
 import type { PaneManager } from '@/lib/pane-manager/pane-manager'
 import type { PtyTransport } from './pty-transport'
+import type { IDisposable } from '@xterm/xterm'
 import { handleTerminalFileDrop } from './terminal-drop-handler'
 import { handleFocusTerminalPaneDetail } from './focus-terminal-pane-event'
 import { surfaceStaleAgentRow } from './stale-agent-row'
@@ -21,6 +22,10 @@ import {
   type TerminalHiddenReason
 } from './terminal-visibility-resume'
 import { useTerminalWindowWakeRecovery } from './use-terminal-window-wake-recovery'
+import {
+  releaseRendererPtyVisibilityClaim,
+  setRendererPtyVisibilityClaim
+} from './pty-renderer-delivery-claims'
 
 type UseTerminalPaneGlobalEffectsArgs = {
   tabId: string
@@ -34,6 +39,7 @@ type UseTerminalPaneGlobalEffectsArgs = {
   managerRef: React.RefObject<PaneManager | null>
   containerRef: React.RefObject<HTMLDivElement | null>
   paneTransportsRef: React.RefObject<Map<number, PtyTransport>>
+  panePtyBindingsRef?: React.RefObject<Map<number, IDisposable>>
   isActiveRef: React.RefObject<boolean>
   isVisibleRef: React.RefObject<boolean>
   toggleExpandPane: (paneId: number) => void
@@ -50,7 +56,7 @@ function reportRendererPtyVisibility(
       // renderer-visibility registry, so reporting them here is misleading.
       continue
     }
-    window.api.pty.setRendererPtyVisible?.(ptyId, visible)
+    setRendererPtyVisibilityClaim(transport, ptyId, visible)
   }
 }
 
@@ -66,6 +72,7 @@ export function useTerminalPaneGlobalEffects({
   managerRef,
   containerRef,
   paneTransportsRef,
+  panePtyBindingsRef,
   isActiveRef,
   isVisibleRef,
   toggleExpandPane
@@ -84,6 +91,17 @@ export function useTerminalPaneGlobalEffects({
   const renderingSuspendedByVisibilityRef = useRef(false)
   const hiddenReasonRef = useRef<TerminalHiddenReason | null>(null)
   const rendererVisible = isVisible && isWorktreeActive
+  // Why: the active pane can rebind to a new PTY (deferred reattach / eager
+  // adopt) or switch active leaf without isActive/isVisible/isWorktreeActive
+  // flipping. Derive the active leaf's live PTY reactively from the same
+  // leaf→PTY binding the reattach path writes, so the active-renderer-pty report
+  // below re-fires on rebind — otherwise main keeps the stale id and the live
+  // PTY loses its interactive reserve.
+  const activeLeafPtyId = useAppStore((state) => {
+    const layout = state.terminalLayoutsByTabId[tabId]
+    const activeLeafId = layout?.activeLeafId
+    return activeLeafId ? (layout.ptyIdsByLeafId?.[activeLeafId] ?? null) : null
+  })
   const {
     captureViewportPositions,
     withSuppressedScrollTracking,
@@ -105,13 +123,18 @@ export function useTerminalPaneGlobalEffects({
     isVisible: rendererVisible,
     managerRef,
     isActiveRef,
-    isVisibleRef
+    isVisibleRef,
+    panePtyBindingsRef
   })
 
   useEffect(() => {
     const paneTransports = paneTransportsRef.current
     reportRendererPtyVisibility(paneTransports, rendererVisible)
-    return () => reportRendererPtyVisibility(paneTransports, false)
+    return () => {
+      for (const transport of paneTransports.values()) {
+        releaseRendererPtyVisibilityClaim(transport)
+      }
+    }
   }, [rendererVisible, paneTransportsRef])
 
   useEffect(() => {
@@ -162,19 +185,16 @@ export function useTerminalPaneGlobalEffects({
   }, [isActive, isWorktreeActive, rendererVisible])
 
   useEffect(() => {
-    const manager = managerRef.current
-    const activePane = isActive && isVisible && isWorktreeActive ? manager?.getActivePane() : null
-    const ptyId = activePane
-      ? (paneTransportsRef.current.get(activePane.id)?.getPtyId() ?? null)
-      : null
+    const ptyId = isActive && isVisible && isWorktreeActive ? activeLeafPtyId : null
     if (!ptyId || ptyId.startsWith('remote:')) {
       return
     }
     // Why: main uses this as a scheduler hint only, so the foreground pane's
-    // renderer output gets first chance at the bounded ACK reserve.
+    // renderer output gets first chance at the bounded ACK reserve. The cleanup
+    // reports the old PTY inactive before the effect re-runs for a rebind.
     window.api.pty.setActiveRendererPty?.(ptyId, true)
     return () => window.api.pty.setActiveRendererPty?.(ptyId, false)
-  }, [isActive, isVisible, isWorktreeActive, managerRef, paneTransportsRef])
+  }, [isActive, isVisible, isWorktreeActive, activeLeafPtyId])
 
   useEffect(() => {
     const onToggleExpand = (event: Event): void => {

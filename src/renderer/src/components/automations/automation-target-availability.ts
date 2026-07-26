@@ -96,8 +96,10 @@ export function getAutomationTargetAvailability({
         `Project setup on the selected automation host is ${setup.setupState}.`
       )
     }
+    // Why: projectId is a derived identity that upgrades over time (repo:→git:→github:);
+    // matching on it strands automations created before their repo's identity resolved.
+    // Anchor on repoId/path/host instead — the durable, stable target identity.
     const setupMatchesContext =
-      setup.projectId === automation.runContext.projectId &&
       setup.repoId === automation.runContext.repoId &&
       setup.path === automation.runContext.path &&
       setupHostMatchesRunContext(setup.hostId, automation.runContext.hostId, automationHostTarget)

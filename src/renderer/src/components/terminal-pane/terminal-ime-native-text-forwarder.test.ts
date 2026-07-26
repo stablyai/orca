@@ -1,10 +1,10 @@
 // @vitest-environment happy-dom
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { installTerminalImeNativeTextForwarder } from './terminal-ime-native-text-forwarder'
 import {
-  installTerminalImeNativeTextForwarder,
   isImeNativeTextKeydownCandidate,
   type ImeNativeTextKeyEvent
-} from './terminal-ime-native-text-forwarder'
+} from './terminal-ime-native-text-candidates'
 import type { MacNativeTextInputSourceFeatures } from './terminal-ime-input-source'
 
 const CJK_FEATURES = {

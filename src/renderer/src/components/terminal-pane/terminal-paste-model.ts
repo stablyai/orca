@@ -35,7 +35,9 @@ export type TerminalPastePlan = {
   target: TerminalPasteTarget
   payload: TerminalPastePayload
   mode: 'direct' | 'chunked' | 'bracketed-terminal' | 'reject'
-  newlinePolicy: 'preserve' | 'windows-crlf' | 'posix-lf' | 'target-default'
+  // Why: 'terminal-cr' marks plans whose paste bytes Orca constructs itself, so
+  // every write path applies xterm's native \r?\n -> \r before ConPTY sees LF.
+  newlinePolicy: 'preserve' | 'terminal-cr'
   runtimeKey: string
   maxChunkBytes?: number
   bracketed: boolean

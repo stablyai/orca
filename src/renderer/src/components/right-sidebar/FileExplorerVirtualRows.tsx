@@ -28,8 +28,10 @@ type FileExplorerVirtualRowsProps = {
   deleteShortcutLabel: string
   connectionId?: string | null
   runtimeDownloadContext?: RuntimeFileOperationArgs | null
+  supportsFolderDownload?: boolean
   onClick: (node: TreeNode, event: React.MouseEvent<HTMLButtonElement>) => void
   onDoubleClick: (node: TreeNode) => void
+  onViewFile: (node: TreeNode) => void
   onContextMenuSelect: (node: TreeNode) => void
   onCopyPaths: (node: TreeNode, pathKind: 'absolute' | 'relative') => void
   onStartNew: (type: 'file' | 'folder', parentPath: string, depth: number) => void
@@ -72,8 +74,10 @@ export function FileExplorerVirtualRows(props: FileExplorerVirtualRowsProps): Re
     deleteShortcutLabel,
     connectionId,
     runtimeDownloadContext,
+    supportsFolderDownload = false,
     onClick,
     onDoubleClick,
+    onViewFile,
     onContextMenuSelect,
     onCopyPaths,
     onStartNew,
@@ -174,12 +178,14 @@ export function FileExplorerVirtualRows(props: FileExplorerVirtualRowsProps): Re
               deleteShortcutLabel={deleteShortcutLabel}
               connectionId={connectionId}
               runtimeDownloadContext={runtimeDownloadContext}
+              supportsFolderDownload={supportsFolderDownload}
               canCollapseFolderSubtree={canCollapseFolderSubtree}
               targetDir={n.isDirectory ? n.path : dirname(n.path)}
               targetDepth={n.isDirectory ? n.depth + 1 : n.depth}
               selectionSize={selectedPaths.has(n.path) ? visibleSelectionCount : 1}
               onClick={(event) => onClick(n, event)}
               onDoubleClick={() => onDoubleClick(n)}
+              onViewFile={() => onViewFile(n)}
               onContextMenuSelect={() => onContextMenuSelect(n)}
               onCopyPaths={(pathKind) => onCopyPaths(n, pathKind)}
               onStartNew={onStartNew}

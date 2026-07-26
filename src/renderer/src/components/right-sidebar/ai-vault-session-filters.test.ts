@@ -30,7 +30,10 @@ const baseSession: AiVaultSession = {
   messageCount: 4,
   totalTokens: 1200,
   previewMessages: [],
-  resumeCommand: "cd '/Users/ada/repo/app' && claude --resume 'session-1'"
+  queuedMessageCount: 0,
+  subagentTranscriptCount: 0,
+  resumeCommand: "cd '/Users/ada/repo/app' && claude --resume 'session-1'",
+  subagent: null
 }
 
 describe('filterAiVaultSessions', () => {
@@ -133,6 +136,60 @@ describe('filterAiVaultSessions', () => {
     }).map((session) => session.id)
 
     expect(new Set(shownWhenAllowed)).toEqual(new Set(['claude:1', 'claude:empty']))
+  })
+
+  it('keeps zero-turn sessions that carry recoverable content when hiding empties', () => {
+    const recoverableEmpty: AiVaultSession = {
+      ...baseSession,
+      id: 'claude:recoverable',
+      sessionId: 'recoverable-session',
+      title: 'Claude recoverable-session',
+      messageCount: 0,
+      queuedMessageCount: 4,
+      subagentTranscriptCount: 2
+    }
+    const plainEmpty: AiVaultSession = {
+      ...baseSession,
+      id: 'claude:plain-empty',
+      sessionId: 'plain-empty',
+      title: 'Claude plain-empty',
+      messageCount: 0
+    }
+
+    const shown = filterAiVaultSessions([recoverableEmpty, plainEmpty, baseSession], {
+      query: '',
+      agents: ['claude'],
+      scope: 'all',
+      sort: 'updated',
+      activeWorktreePaths: [],
+      hideEmptySessions: true
+    }).map((session) => session.id)
+
+    expect(new Set(shown)).toEqual(new Set(['claude:1', 'claude:recoverable']))
+  })
+
+  it('keeps zero-count sessions whose previews prove real turns when hiding empties', () => {
+    // Grok-style: the turn count only comes from metadata that may be absent,
+    // but the preview messages prove the conversation exists and is resumable.
+    const previewOnly: AiVaultSession = {
+      ...baseSession,
+      id: 'claude:preview-only',
+      sessionId: 'preview-only',
+      title: 'Claude preview-only',
+      messageCount: 0,
+      previewMessages: [{ role: 'user', text: 'ship the fix', timestamp: null }]
+    }
+
+    const shown = filterAiVaultSessions([previewOnly], {
+      query: '',
+      agents: ['claude'],
+      scope: 'all',
+      sort: 'updated',
+      activeWorktreePaths: [],
+      hideEmptySessions: true
+    }).map((session) => session.id)
+
+    expect(shown).toEqual(['claude:preview-only'])
   })
 
   it('matches visible preview message text', () => {

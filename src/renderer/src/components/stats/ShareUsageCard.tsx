@@ -233,7 +233,7 @@ function ChartHeader(props: {
       <div style={{ display: 'table-cell', verticalAlign: 'bottom', textAlign: 'right' }}>
         <span style={{ fontSize: 10, color: '#444' }}>
           {props.sessions}{' '}
-          {translate('auto.components.stats.ShareUsageCard.4a4c6c79a3', 'sessions ·')}
+          {translate('auto.components.stats.ShareUsageCard.4a4c6c79a3', 'sessions ·')}{' '}
           {props.turnsOrEvents.count} {props.turnsOrEvents.label}
         </span>
       </div>

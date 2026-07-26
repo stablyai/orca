@@ -11,11 +11,10 @@ import { Button } from '@/components/ui/button'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { cn } from '@/lib/utils'
 import { translate } from '@/i18n/i18n'
+import type { WorktreeGitIdentityDisplay } from '@/lib/worktree-git-identity-display'
 import { HostedReviewHeaderLink, HostedReviewIcon } from './hosted-review-header-chrome'
-import {
-  shouldShowSourceControlBranchContextRow,
-  SourceControlBranchContextRow
-} from './source-control-branch-context-row'
+import { SourceControlBranchContextRow } from './source-control-branch-context-row'
+import { shouldShowSourceControlBranchContextChrome } from './source-control-branch-context-stats'
 import { SourceControlHeaderOverflowMenu } from './source-control-header-overflow-menu'
 
 type SourceControlHeaderToolbarProps = {
@@ -39,7 +38,9 @@ type SourceControlHeaderToolbarProps = {
   onExpandNotes: () => void
   branchSummary: GitBranchCompareSummary | null
   compareBaseRef: string | null
+  headDisplay?: WorktreeGitIdentityDisplay | null
   upstreamStatus?: GitUpstreamStatus
+  manualReviewUrl?: string | null
 }
 
 function HostedReviewToolbarLink({
@@ -143,7 +144,9 @@ export function SourceControlHeaderToolbar({
   onExpandNotes,
   branchSummary,
   compareBaseRef,
-  upstreamStatus
+  headDisplay = null,
+  upstreamStatus,
+  manualReviewUrl
 }: SourceControlHeaderToolbarProps): React.JSX.Element {
   const filterInputRef = useRef<HTMLInputElement>(null)
   const normalizedFilter = filterQuery.trim()
@@ -282,12 +285,14 @@ export function SourceControlHeaderToolbar({
         )}
       </div>
 
-      {shouldShowSourceControlBranchContextRow(branchSummary, compareBaseRef) ? (
+      {shouldShowSourceControlBranchContextChrome(branchSummary, compareBaseRef, headDisplay) ? (
         <div className="mt-1">
           <SourceControlBranchContextRow
             summary={branchSummary}
             compareBaseRef={compareBaseRef}
+            headDisplay={headDisplay}
             upstreamStatus={upstreamStatus}
+            manualReviewUrl={manualReviewUrl}
             onChangeBaseRef={onChangeBaseRef}
             onRetry={onRefreshBranchCompare}
           />

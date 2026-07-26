@@ -1,18 +1,13 @@
+import {
+  isDocumentBodyOrNull,
+  refreshTerminalImeInputContext,
+  scheduleNextFrame,
+  type TerminalImeInputContextRefocusScheduler
+} from './terminal-ime-input-context-refresh'
+
 export type TerminalInputFocusSync = (focused: boolean) => void
-export type RefocusScheduler = (callback: () => void) => void
+export type RefocusScheduler = TerminalImeInputContextRefocusScheduler
 export const REGULAR_TERMINAL_INPUT_FOCUSED_ATTRIBUTE = 'data-regular-terminal-input-focused'
-
-function isMacUserAgent(): boolean {
-  return typeof navigator !== 'undefined' && navigator.userAgent.includes('Mac')
-}
-
-function scheduleNextFrame(callback: () => void): void {
-  if (typeof requestAnimationFrame === 'function') {
-    requestAnimationFrame(callback)
-  } else {
-    setTimeout(callback, 0)
-  }
-}
 
 export function isXtermHelperTextarea(target: EventTarget | null): target is HTMLElement {
   return target instanceof HTMLElement && target.classList.contains('xterm-helper-textarea')
@@ -33,10 +28,6 @@ export function getPaneOwnedActiveHelperTextarea(
     return null
   }
   return activeElement
-}
-
-function isDocumentBodyOrNull(activeElement: Element | null, ownerDocument: Document): boolean {
-  return activeElement === null || activeElement === ownerDocument.body
 }
 
 export function releaseTerminalFocusForOutsidePointerDown(args: {
@@ -111,10 +102,7 @@ export function resyncTerminalFocusForWindowFocus(args: {
     }
   }
 
-  args.syncFocused(true)
-
   const reclaimedHelper = helper
-  const isMac = args.isMac ?? isMacUserAgent()
 
   // Why: defer the reclaim refocus to the next frame and only take focus if
   // nothing newer grabbed it — so a click into the sidebar/dialog/rename input
@@ -124,39 +112,52 @@ export function resyncTerminalFocusForWindowFocus(args: {
   if (needsProgrammaticFocus) {
     const schedule = args.scheduleRefocus ?? scheduleNextFrame
     schedule(() => {
+      if (!reclaimedHelper.isConnected) {
+        syncFocusAfterFailedReclaim(reclaimedHelper.ownerDocument.activeElement, args.syncFocused)
+        return
+      }
       const active = reclaimedHelper.ownerDocument.activeElement
       if (
         active === reclaimedHelper ||
         isDocumentBodyOrNull(active, reclaimedHelper.ownerDocument)
       ) {
         reclaimedHelper.focus()
+        if (reclaimedHelper.ownerDocument.activeElement === reclaimedHelper) {
+          args.syncFocused(true)
+        } else {
+          syncFocusAfterFailedReclaim(reclaimedHelper.ownerDocument.activeElement, args.syncFocused)
+        }
+        return
       }
+      syncFocusAfterFailedReclaim(active, args.syncFocused)
     })
     return true
   }
 
-  // Why: on macOS, reactivating the app leaves Chromium's NSTextInputContext
-  // stale on the still-focused helper textarea, so the IME is stranded in ASCII
-  // with no way to switch back to CJK (electron#32307/#34952). Forcing a
-  // blur → next-frame refocus rebuilds the input context so the IME works again.
-  // Other platforms don't hit this and shouldn't pay the flicker cost.
-  if (isMac) {
-    reclaimedHelper.blur()
-    const schedule = args.scheduleRefocus ?? scheduleNextFrame
-    schedule(() => {
-      // Why: only reclaim focus if nothing else grabbed it during the frame, so
-      // a click into another field mid-reactivation isn't yanked back.
-      const active = reclaimedHelper.ownerDocument.activeElement
-      if (
-        active === reclaimedHelper ||
-        isDocumentBodyOrNull(active, reclaimedHelper.ownerDocument)
-      ) {
-        reclaimedHelper.focus()
-      }
-    })
-  }
+  args.syncFocused(true)
+
+  // Why: macOS app reactivation leaves a stale NSTextInputContext on the
+  // still-focused helper (electron#32307/#34952); non-mac returns false inside.
+  refreshTerminalImeInputContext(reclaimedHelper, {
+    isMac: args.isMac,
+    // Why: if another control wins during the refresh frame, the terminal
+    // mirror must follow that owner instead of remaining latched true.
+    onRefocusSkipped: (active) => syncFocusAfterFailedReclaim(active, args.syncFocused),
+    scheduleRefocus: args.scheduleRefocus
+  })
 
   return true
+}
+
+function syncFocusAfterFailedReclaim(
+  activeElement: Element | null,
+  syncFocused: TerminalInputFocusSync
+): void {
+  // Why: a later xterm focusin already published terminal ownership; an older
+  // deferred reclaim must not overwrite that newer process-wide mirror.
+  if (!isXtermHelperTextarea(activeElement)) {
+    syncFocused(false)
+  }
 }
 
 function isNode(value: EventTarget | null): value is Node {

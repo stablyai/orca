@@ -13,6 +13,17 @@ const NotificationUnsubscribeParams = z.object({
     .pipe(z.string().min(1, 'Missing subscriptionId'))
 })
 
+// Why: notifications.getMissedSince is the catch-up RPC for mobile reconnect
+// (#8129). The client passes the highest seq it has already delivered; the
+// runtime returns only notifications dispatched after that seq. Because the
+// desktop assigns a monotonic seq to every dispatched notification, the cut is
+// exact and idempotent — re-requesting with the same watermark can never
+// return an already-delivered event, so reconnects never duplicate local
+// pushes (the adversarial-review gate for #8129).
+const NotificationGetMissedSinceParams = z.object({
+  lastSeenSeq: z.number().int().min(0, 'lastSeenSeq must be a non-negative integer')
+})
+
 // Why: notifications.subscribe streams desktop notification events to mobile
 // clients over WebSocket. The mobile client shows a local push notification
 // for each event. This avoids requiring Firebase/APNs — the existing
@@ -51,6 +62,17 @@ export const NOTIFICATION_METHODS: readonly RpcAnyMethod[] = [
     handler: async (params, { runtime }) => {
       runtime.cleanupSubscription(params.subscriptionId)
       return { unsubscribed: true }
+    }
+  }),
+  defineMethod({
+    name: 'notifications.getMissedSince',
+    params: NotificationGetMissedSinceParams,
+    // Why: returns only notifications with seq > lastSeenSeq. The runtime owns
+    // the monotonic seq, so this is the single source of truth for what the
+    // client missed while its socket was reaped.
+    handler: async (params, { runtime }) => {
+      const missed = runtime.getMissedNotificationsSince(params.lastSeenSeq)
+      return { notifications: missed }
     }
   })
 ]

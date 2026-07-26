@@ -80,6 +80,11 @@ export default function EditorFileTab({
   const isConflictReview = file.mode === 'conflict-review'
   const isCheckDetails = file.mode === 'check-details'
   const isMarkdownPreviewTab = file.mode === 'markdown-preview'
+  // Why: only deleted/renamed mean the file is gone from its path, which is
+  // what strikethrough conveys. 'changed' keeps a normal label — its surface
+  // is the changed-on-disk banner inside the editor.
+  const isMissingFileMutation =
+    file.externalMutation === 'deleted' || file.externalMutation === 'renamed'
   const resolvedLanguage =
     file.mode === 'diff'
       ? detectLanguage(file.relativePath)
@@ -104,8 +109,10 @@ export default function EditorFileTab({
   // user's intent. This flag suppresses the trailing blur-commit.
   const renameCancelledRef = useRef(false)
   // Only on-disk edit tabs are renameable. Diff, conflict-review, and
-  // combined/virtual views don't point at a single concrete file we can safely rename.
-  const canRename = file.mode === 'edit' && !file.diffSource && !file.conflict
+  // combined/virtual views don't point at a single concrete file we can safely
+  // rename. Read-only tabs (AI Vault View Log) also stay unrenameable — rename
+  // would rewrite the agent-owned artifact's backing path.
+  const canRename = file.mode === 'edit' && !file.diffSource && !file.conflict && !file.readOnly
 
   const openRenameInput = (): void => {
     if (!canRename) {
@@ -308,7 +315,7 @@ export default function EditorFileTab({
           />
         ) : (
           <span
-            className={`${TAB_LABEL_WIDTH_CLASSES}${file.isPreview ? ' italic' : ''}${file.externalMutation ? ' line-through' : ''}`}
+            className={`${TAB_LABEL_WIDTH_CLASSES}${file.isPreview ? ' italic' : ''}${isMissingFileMutation ? ' line-through' : ''}`}
             style={tabStatusColor ? { color: tabStatusColor } : undefined}
             onDoubleClick={(e) => {
               if (file.isPreview && onMakePermanent) {
@@ -329,12 +336,12 @@ export default function EditorFileTab({
             {tabLabel}
           </span>
         )}
-        {file.externalMutation && !isRenaming && (
+        {isMissingFileMutation && !isRenaming && (
           <span className="shrink-0 text-[10px] leading-none font-semibold tracking-wide text-muted-foreground">
             {file.externalMutation}
           </span>
         )}
-        {tabStatus && !isRenaming && !file.externalMutation && (
+        {tabStatus && !isRenaming && !isMissingFileMutation && (
           <span
             className="shrink-0 text-[10px] leading-none font-semibold tracking-wide"
             style={{ color: tabStatusColor }}

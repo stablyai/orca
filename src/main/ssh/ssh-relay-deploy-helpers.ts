@@ -1,18 +1,21 @@
 import type { ClientChannel } from 'ssh2'
-import type { SshConnection } from './ssh-connection'
-import { createSshOperationAbortError, type SshExecOptions } from './ssh-connection-utils'
+import { createSshOperationAbortError } from './ssh-connection-utils'
 import { RELAY_SENTINEL, RELAY_SENTINEL_TIMEOUT_MS } from './relay-protocol'
 import type { MultiplexerTransport } from './ssh-channel-multiplexer'
 import { buildRelayVersionMismatchError } from './ssh-relay-handshake-mismatch'
 
 export { uploadFile, uploadDirectory, mkdirSftp } from './sftp-upload'
+export { execCommand, isUnconfirmedSshCommandTermination } from './ssh-relay-exec-command'
 
 // ── Sentinel detection ────────────────────────────────────────────────
 
 const MAX_RELAY_STARTUP_BUFFER_BYTES = 64 * 1024
 const RELAY_SENTINEL_BUFFER = Buffer.from(RELAY_SENTINEL, 'utf-8')
 
-export function waitForSentinel(channel: ClientChannel): Promise<MultiplexerTransport> {
+export function waitForSentinel(
+  channel: ClientChannel,
+  signal?: AbortSignal
+): Promise<MultiplexerTransport> {
   return new Promise<MultiplexerTransport>((resolve, reject) => {
     let sentinelReceived = false
     let settled = false
@@ -39,17 +42,14 @@ export function waitForSentinel(channel: ClientChannel): Promise<MultiplexerTran
 
     const timeout = setTimeout(() => {
       timeoutFired = true
-      channel.close()
       timeoutGraceTimer = setTimeout(() => {
-        if (!settled) {
-          settled = true
-          reject(
-            new Error(
-              `Relay failed to start within ${RELAY_SENTINEL_TIMEOUT_MS / 1000}s.${stderrOutput ? ` stderr: ${stderrOutput.trim()}` : ''}`
-            )
+        rejectStartup(
+          new Error(
+            `Relay failed to start within ${RELAY_SENTINEL_TIMEOUT_MS / 1000}s.${stderrOutput ? ` stderr: ${stderrOutput.trim()}` : ''}`
           )
-        }
+        )
       }, TIMEOUT_GRACE_MS)
+      channel.close()
     }, RELAY_SENTINEL_TIMEOUT_MS)
 
     const cancelTimers = (): void => {
@@ -58,6 +58,31 @@ export function waitForSentinel(channel: ClientChannel): Promise<MultiplexerTran
         clearTimeout(timeoutGraceTimer)
         timeoutGraceTimer = null
       }
+    }
+    const cleanupStartup = (): void => {
+      cancelTimers()
+      signal?.removeEventListener('abort', onAbort)
+    }
+    const rejectStartup = (err: Error): void => {
+      if (settled) {
+        return
+      }
+      settled = true
+      cleanupStartup()
+      reject(err)
+    }
+    const onAbort = (): void => {
+      if (settled) {
+        return
+      }
+      settled = true
+      cleanupStartup()
+      channel.close()
+      reject(createSshOperationAbortError())
+    }
+    signal?.addEventListener('abort', onAbort, { once: true })
+    if (signal?.aborted) {
+      onAbort()
     }
 
     channel.on('exit', (code: number | null) => {
@@ -87,12 +112,8 @@ export function waitForSentinel(channel: ClientChannel): Promise<MultiplexerTran
     }
 
     const failOrClose = (err: Error): void => {
-      cancelTimers()
       if (!sentinelReceived) {
-        if (!settled) {
-          settled = true
-          reject(err)
-        }
+        rejectStartup(err)
         return
       }
       notifyClosed()
@@ -113,9 +134,7 @@ export function waitForSentinel(channel: ClientChannel): Promise<MultiplexerTran
 
     channel.on('close', () => {
       if (!sentinelReceived) {
-        cancelTimers()
         if (!settled) {
-          settled = true
           // Why: a wire-handshake mismatch on the daemon side closes the
           // socket; --connect prints the mismatch detail to stderr and exits
           // with code 42 BEFORE writing the sentinel. Translate that into a
@@ -126,13 +145,13 @@ export function waitForSentinel(channel: ClientChannel): Promise<MultiplexerTran
           // grace window so the close handler can deliver the exit code.
           const versionMismatchError = buildRelayVersionMismatchError(lastExitCode, stderrOutput)
           if (versionMismatchError) {
-            reject(versionMismatchError)
+            rejectStartup(versionMismatchError)
             return
           }
           const timeoutSuffix = timeoutFired
             ? ` (after ${RELAY_SENTINEL_TIMEOUT_MS / 1000}s sentinel timeout)`
             : ''
-          reject(
+          rejectStartup(
             new Error(
               `Relay process exited before ready${timeoutSuffix}.${stderrOutput ? ` stderr: ${stderrOutput.trim()}` : ''}`
             )
@@ -184,7 +203,8 @@ export function waitForSentinel(channel: ClientChannel): Promise<MultiplexerTran
 
       if (sentinelIdx !== -1) {
         sentinelReceived = true
-        cancelTimers()
+        settled = true
+        cleanupStartup()
 
         const afterSentinelOffset =
           sentinelIdx + RELAY_SENTINEL_BUFFER.length - bufferedStdout.length
@@ -193,8 +213,6 @@ export function waitForSentinel(channel: ClientChannel): Promise<MultiplexerTran
         if (afterSentinel.length > 0) {
           pendingAfterSentinel = afterSentinel
         }
-        settled = true
-
         const transport: MultiplexerTransport = {
           write: (buf: Buffer) => channel.stdin.write(buf),
           onData: (cb) => {
@@ -231,99 +249,5 @@ export function waitForSentinel(channel: ClientChannel): Promise<MultiplexerTran
 
       bufferedStdout = bufferedStdout.length === 0 ? data : Buffer.concat([bufferedStdout, data])
     })
-  })
-}
-
-// ── Remote command execution ──────────────────────────────────────────
-
-const EXEC_TIMEOUT_MS = 30_000
-type ExecCommandOptions = SshExecOptions & {
-  timeoutMs?: number
-}
-
-export async function execCommand(
-  conn: SshConnection,
-  command: string,
-  options?: ExecCommandOptions
-): Promise<string> {
-  const { timeoutMs = EXEC_TIMEOUT_MS, ...execOptions } = options ?? {}
-  const signal = options?.signal
-  if (signal?.aborted) {
-    throw createSshOperationAbortError()
-  }
-  const channel = await conn.exec(command, execOptions)
-  return new Promise((resolve, reject) => {
-    let stdout = ''
-    let stderr = ''
-    let settled = false
-
-    const cleanup = (): void => {
-      clearTimeout(timeout)
-      signal?.removeEventListener('abort', onAbort)
-      channel.off('error', fail)
-      channel.stderr.off('error', fail)
-      channel.off('data', onStdoutData)
-      channel.stderr.off('data', onStderrData)
-      channel.off('close', onClose)
-    }
-    const settle = (fn: typeof resolve | typeof reject, val: string | Error): void => {
-      if (settled) {
-        return
-      }
-      settled = true
-      cleanup()
-      fn(val as never)
-    }
-    const fail = (err: Error): void => {
-      settle(reject, abortRequested ? createSshOperationAbortError() : err)
-    }
-    // Why: sshd counts the session against MaxSessions until CHANNEL_CLOSE
-    // completes. Settling on abort before the channel actually closes lets the
-    // concurrent-bootstrap sequential fallback reissue an exec while the slot
-    // is still held, so it gets refused again. Close and settle from onClose.
-    let abortRequested = false
-    const onAbort = (): void => {
-      abortRequested = true
-      channel.close()
-    }
-    const onStdoutData = (data: Buffer): void => {
-      stdout += data.toString('utf-8')
-    }
-    const onStderrData = (data: Buffer): void => {
-      stderr += data.toString('utf-8')
-    }
-    const onClose = (code: number): void => {
-      if (abortRequested) {
-        settle(reject, createSshOperationAbortError())
-      } else if (code !== 0) {
-        // Why: on the system-ssh transport channel.stderr carries local OpenSSH
-        // client noise; preferring it masks the real failure in stdout (2>&1).
-        const output = [stderr.trim(), stdout.trim()].filter(Boolean).join('\n')
-        settle(reject, new Error(`Command "${command}" failed (exit ${code}): ${output}`))
-      } else {
-        settle(resolve, stdout)
-      }
-    }
-    const timeout = setTimeout(() => {
-      channel.close()
-      settle(
-        reject,
-        abortRequested
-          ? createSshOperationAbortError()
-          : new Error(`Command "${command}" timed out after ${timeoutMs / 1000}s`)
-      )
-    }, timeoutMs)
-
-    // Why: remote reboot tears down exec channels with stream errors. Without
-    // scoped listeners, Node treats those as uncaught exceptions.
-    signal?.addEventListener('abort', onAbort, { once: true })
-    channel.on('error', fail)
-    channel.stderr.on('error', fail)
-    channel.on('data', onStdoutData)
-    channel.stderr.on('data', onStderrData)
-    channel.on('close', onClose)
-    if (signal?.aborted) {
-      onAbort()
-    }
   })
 }

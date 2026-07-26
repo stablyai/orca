@@ -5,24 +5,29 @@ const {
   applyElectronProxySettingsMock,
   browserWindowGetAllWindowsMock,
   handleMock,
+  onMock,
   previewGhosttyImportMock,
   previewWarpThemeImportMock,
   prepareLocalWorktreeRootsForReposMock,
+  resolveEnvironmentMock,
   rebuildAppMenuMock
 } = vi.hoisted(() => ({
   applyAppIconMock: vi.fn(),
   applyElectronProxySettingsMock: vi.fn(),
   browserWindowGetAllWindowsMock: vi.fn(),
   handleMock: vi.fn(),
+  onMock: vi.fn(),
   previewGhosttyImportMock: vi.fn(),
   previewWarpThemeImportMock: vi.fn(),
   prepareLocalWorktreeRootsForReposMock: vi.fn(),
+  resolveEnvironmentMock: vi.fn(),
   rebuildAppMenuMock: vi.fn()
 }))
 
 vi.mock('electron', () => ({
+  app: { getPath: vi.fn(() => '/test/user-data') },
   BrowserWindow: { getAllWindows: browserWindowGetAllWindowsMock },
-  ipcMain: { handle: handleMock },
+  ipcMain: { handle: handleMock, on: onMock },
   nativeTheme: { themeSource: 'system' }
 }))
 
@@ -50,6 +55,10 @@ vi.mock('../menu/register-app-menu', () => ({
   rebuildAppMenu: rebuildAppMenuMock
 }))
 
+vi.mock('../../shared/runtime-environment-store', () => ({
+  resolveEnvironment: resolveEnvironmentMock
+}))
+
 import { registerSettingsHandlers } from './settings'
 
 const settingsInvokeEvent = { sender: { id: 1 } }
@@ -70,12 +79,19 @@ const store = {
 describe('registerSettingsHandlers', () => {
   beforeEach(() => {
     handleMock.mockClear()
+    onMock.mockClear()
     applyAppIconMock.mockClear()
     applyElectronProxySettingsMock.mockClear()
     applyElectronProxySettingsMock.mockResolvedValue({ source: 'settings' })
     previewGhosttyImportMock.mockClear()
     previewWarpThemeImportMock.mockClear()
     prepareLocalWorktreeRootsForReposMock.mockReset().mockResolvedValue(undefined)
+    resolveEnvironmentMock.mockReset().mockImplementation((_userDataPath, selector) => {
+      if (selector !== 'windows-2' && selector !== 'Windows 2') {
+        throw new Error('Runtime environment not found')
+      }
+      return { id: 'windows-2' }
+    })
     rebuildAppMenuMock.mockClear()
     browserWindowGetAllWindowsMock.mockReset()
     store.getSettings.mockReset()
@@ -87,6 +103,89 @@ describe('registerSettingsHandlers', () => {
     registerSettingsHandlers(store as never)
     const channels = handleMock.mock.calls.map((call) => call[0])
     expect(channels).toContain('settings:previewGhosttyImport')
+  })
+
+  it('answers the synchronous settings read with the persisted settings', () => {
+    // Why: panes can bind PTYs before async hydration; the side-effect
+    // authority kill switch needs the persisted value synchronously.
+    store.getSettings.mockReturnValue({ terminalMainSideEffectAuthority: false })
+    registerSettingsHandlers(store as never)
+
+    const listener = onMock.mock.calls.find(
+      (call) => call[0] === 'settings:get-sync'
+    )?.[1] as (event: { returnValue: unknown }) => void
+    expect(listener).toBeTypeOf('function')
+
+    const event = { returnValue: undefined as unknown }
+    listener(event)
+    expect(event.returnValue).toEqual({ terminalMainSideEffectAuthority: false })
+  })
+
+  it('rejects durable Active Server writes through generic settings:set', async () => {
+    store.getSettings.mockReturnValue({ activeRuntimeEnvironmentId: null })
+    store.updateSettings.mockReturnValue({ activeRuntimeEnvironmentId: null })
+    registerSettingsHandlers(store as never)
+    const handler = handleMock.mock.calls.find((call) => call[0] === 'settings:set')?.[1] as (
+      event: typeof settingsInvokeEvent,
+      args: { activeRuntimeEnvironmentId: string }
+    ) => Promise<unknown>
+
+    await handler(settingsInvokeEvent, { activeRuntimeEnvironmentId: 'windows-2' })
+
+    expect(store.updateSettings).toHaveBeenCalledWith(
+      {},
+      expect.objectContaining({ originWebContentsId: 1 })
+    )
+  })
+
+  it('persists Active Server only through the dedicated preference channel', () => {
+    store.updateSettings.mockReturnValue({ activeRuntimeEnvironmentId: 'windows-2' })
+    registerSettingsHandlers(store as never)
+    const handler = handleMock.mock.calls.find(
+      (call) => call[0] === 'settings:set-active-runtime-environment-preference'
+    )?.[1] as (event: typeof settingsInvokeEvent, args: { environmentId: string | null }) => unknown
+
+    expect(handler(settingsInvokeEvent, { environmentId: '  windows-2  ' })).toEqual({
+      activeRuntimeEnvironmentId: 'windows-2'
+    })
+    expect(store.updateSettings).toHaveBeenCalledWith(
+      { activeRuntimeEnvironmentId: 'windows-2' },
+      { notifyListeners: true, originWebContentsId: 1 }
+    )
+    handler(settingsInvokeEvent, { environmentId: 'Windows 2' })
+    expect(store.updateSettings).toHaveBeenLastCalledWith(
+      { activeRuntimeEnvironmentId: 'windows-2' },
+      { notifyListeners: true, originWebContentsId: 1 }
+    )
+
+    expect(() => handler(settingsInvokeEvent, { environmentId: 42 as never })).toThrow(
+      'Invalid Active Server preference'
+    )
+    expect(() => handler(settingsInvokeEvent, { environmentId: 'does-not-exist' })).toThrow(
+      'Runtime environment not found'
+    )
+    expect(store.updateSettings).toHaveBeenCalledTimes(2)
+  })
+
+  it('applies bot-author deltas against the authoritative settings snapshot', () => {
+    store.getSettings
+      .mockReturnValueOnce({ prBotAuthorOverrides: ['alice'] })
+      .mockReturnValueOnce({ prBotAuthorOverrides: ['alice', 'bob'] })
+    registerSettingsHandlers(store as never)
+    const handler = handleMock.mock.calls.find(
+      (call) => call[0] === 'settings:update-pr-bot-author-override'
+    )?.[1] as (
+      event: typeof settingsInvokeEvent,
+      args: { author: string; isBot: boolean }
+    ) => unknown
+
+    const result = handler(settingsInvokeEvent, { author: ' Bob ', isBot: true })
+
+    expect(store.updateSettings).toHaveBeenCalledWith(
+      { prBotAuthorOverrides: ['alice', 'bob'] },
+      { notifyListeners: true, originWebContentsId: 1 }
+    )
+    expect(result).toEqual({ prBotAuthorOverrides: ['alice', 'bob'] })
   })
 
   it('registers settings:previewWarpThemeImport handler', () => {
@@ -302,6 +401,24 @@ describe('registerSettingsHandlers', () => {
 
     expect(store.updateSettings).toHaveBeenCalledWith(
       { terminalScrollbackRows: 50_000 },
+      { notifyListeners: true, originWebContentsId: 1 }
+    )
+  })
+
+  it('normalizes terminal line height updates before persistence', async () => {
+    store.getSettings.mockReturnValue({ terminalLineHeight: 1 })
+    store.updateSettings.mockReturnValue({ terminalLineHeight: 1 })
+    registerSettingsHandlers(store as never)
+
+    const handler = handleMock.mock.calls.find((call) => call[0] === 'settings:set')?.[1] as (
+      _event: unknown,
+      args: unknown
+    ) => Promise<unknown>
+
+    await handler(settingsInvokeEvent, { terminalLineHeight: 0.85 })
+
+    expect(store.updateSettings).toHaveBeenCalledWith(
+      { terminalLineHeight: 1 },
       { notifyListeners: true, originWebContentsId: 1 }
     )
   })

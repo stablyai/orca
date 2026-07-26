@@ -131,7 +131,8 @@ export function useRetainedAgentsSync(): void {
       previousAgents: prevAgentsRef.current,
       currentAgents,
       retainedAgentsByPaneKey: retainedNow,
-      retentionSuppressedPaneKeys
+      retentionSuppressedPaneKeys,
+      recentlyClosedAgentStatusTabIds: state.recentlyClosedAgentStatusTabIds
     })
     // Why: batch retention into a single store mutation. Looping retainAgent
     // would trigger N set(...) calls and N subscriber notifications when
@@ -161,6 +162,7 @@ export function collectRetainedAgentsOnDisappear(args: {
   currentAgents: Map<string, { row: DashboardAgentRow; worktreeId: string }>
   retainedAgentsByPaneKey: Record<string, RetainedAgentEntry>
   retentionSuppressedPaneKeys: Record<string, true>
+  recentlyClosedAgentStatusTabIds: Record<string, true>
 }): {
   toRetain: RetainedAgentEntry[]
   consumedSuppressedPaneKeys: string[]
@@ -182,6 +184,11 @@ export function collectRetainedAgentsOnDisappear(args: {
     }
     if (args.retentionSuppressedPaneKeys[paneKey]) {
       consumedSuppressedPaneKeys.push(paneKey)
+      continue
+    }
+    // Why: PTY exit can remove the live row before closeTab plants a suppressor;
+    // the closed-tab marker prevents re-retention.
+    if (args.recentlyClosedAgentStatusTabIds[prev.row.tab.id]) {
       continue
     }
     // Why: only keep a sticky snapshot when the agent finished cleanly

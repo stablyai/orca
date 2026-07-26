@@ -111,7 +111,7 @@ describe('CodexUsageStore', () => {
 
   it('persists a successful refresh with one compact disk write', async () => {
     const store = createStoreWithState({
-      schemaVersion: 3,
+      schemaVersion: 5,
       scanState: {
         enabled: true,
         lastScanStartedAt: null,
@@ -138,7 +138,7 @@ describe('CodexUsageStore', () => {
     const pendingScan = createDeferred<ScanResult>()
     vi.mocked(scanCodexUsageFiles).mockReturnValueOnce(pendingScan.promise)
     const store = createStoreWithState({
-      schemaVersion: 3,
+      schemaVersion: 5,
       scanState: {
         enabled: true,
         lastScanStartedAt: null,
@@ -768,7 +768,7 @@ describe('CodexUsageStore', () => {
     } as unknown as CodexUsagePersistedState)
 
     expect(normalized).toEqual({
-      schemaVersion: 3,
+      schemaVersion: 5,
       worktreeFingerprint: null,
       processedFiles: [],
       sessions: [],

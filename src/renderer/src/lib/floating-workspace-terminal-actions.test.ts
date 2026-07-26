@@ -1,5 +1,3 @@
-/* eslint-disable max-lines -- Focus, shortcut, creation, and switching cases share
- * the same floating-workspace DOM/store fixtures. */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../shared/constants'
 import type { Tab, TerminalTab } from '../../../shared/types'

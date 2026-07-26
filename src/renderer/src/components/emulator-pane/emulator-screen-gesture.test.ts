@@ -5,6 +5,7 @@ import {
   resolveEmulatorWheelDelta,
   resolveEmulatorPointerAction
 } from './emulator-screen-gesture'
+import { resolveVisualStreamGeometry } from './emulator-device-frame-layout'
 
 const rect = {
   left: 10,
@@ -113,5 +114,23 @@ describe('emulator screen gestures', () => {
         height: 100
       })
     ).toBeNull()
+  })
+
+  it('maps the full landscape screen while the stream canvas shape settles', () => {
+    const landscapeRect = {
+      left: 0,
+      top: 0,
+      width: 400,
+      height: 200
+    }
+    const stalePortraitStream = { width: 390, height: 844 }
+
+    expect(
+      mapClientPointToSimulatorScreen(
+        { clientX: 380, clientY: 100 },
+        landscapeRect,
+        resolveVisualStreamGeometry(stalePortraitStream, 'landscape').size
+      )
+    ).toEqual({ x: 0.95, y: 0.5 })
   })
 })

@@ -7,6 +7,7 @@ import type {
 import type { HostedReviewInfo } from '../../../../shared/hosted-review'
 import { isFolderRepo } from '../../../../shared/repo-kind'
 import { getWorktreeGitIdentityDisplay } from '@/lib/worktree-git-identity-display'
+import { compareWorktreeDisplayName } from '@/lib/worktree-display-name-order'
 import {
   getParentPrChecksRefreshIdentity,
   type ParentPrChecksRefreshOutcome
@@ -24,6 +25,7 @@ type FetchHostedReview = (
     linkedBitbucketPR?: number | null
     linkedAzureDevOpsPR?: number | null
     linkedGiteaPR?: number | null
+    currentHeadOid?: string | null
   }
 ) => Promise<HostedReviewInfo | null>
 
@@ -134,6 +136,7 @@ async function refreshParentPrChecksCandidate(
       linkedBitbucketPR: candidate.worktree.linkedBitbucketPR ?? null,
       linkedAzureDevOpsPR: candidate.worktree.linkedAzureDevOpsPR ?? null,
       linkedGiteaPR: candidate.worktree.linkedGiteaPR ?? null,
+      currentHeadOid: candidate.worktree.head ?? null,
       staleWhileRevalidate: true
     })
     if (!review) {
@@ -167,7 +170,7 @@ function compareRefreshCandidates(
   return (
     leftPriority - rightPriority ||
     (right.worktree.lastActivityAt ?? 0) - (left.worktree.lastActivityAt ?? 0) ||
-    left.worktree.displayName.localeCompare(right.worktree.displayName)
+    compareWorktreeDisplayName(left.worktree, right.worktree)
   )
 }
 

@@ -12,6 +12,8 @@ const { clearTokenMock, getClientsMock, isAuthErrorMock, jiraRequestMock } = vi.
 vi.mock('./client', () => ({
   acquire: vi.fn().mockResolvedValue(undefined),
   release: vi.fn(),
+  apiBasePath: (site: { authType?: string }) =>
+    site.authType === 'server' ? '/rest/api/2' : '/rest/api/3',
   clearToken: (...args: unknown[]) => clearTokenMock(...args),
   getClients: (...args: unknown[]) => getClientsMock(...args),
   isAuthError: (...args: unknown[]) => isAuthErrorMock(...args),
@@ -28,6 +30,20 @@ function makeEntry(id = 'site-1'): JiraClientForSite {
       accountId: 'account-1'
     },
     authorization: 'Basic token'
+  }
+}
+
+function makeServerEntry(id = 'server-1'): JiraClientForSite {
+  return {
+    site: {
+      id,
+      siteUrl: 'https://jira.example.com',
+      email: '',
+      displayName: 'Self-hosted Jira',
+      accountId: 'wquintal',
+      authType: 'server'
+    },
+    authorization: 'Bearer pat-token'
   }
 }
 
@@ -58,6 +74,67 @@ describe('Jira issue operations', () => {
         title: 'Fix auth'
       })
     ).rejects.toThrow(error.message)
+  })
+
+  it('uses classic /search and REST v2 for self-hosted sites', async () => {
+    getClientsMock.mockReturnValue([makeServerEntry()])
+    jiraRequestMock.mockResolvedValueOnce({ issues: [] })
+    const { searchIssues } = await import('./issues')
+
+    await searchIssues('project = ALP', 20, 'server-1')
+
+    expect(jiraRequestMock).toHaveBeenCalledWith(
+      expect.objectContaining({ site: expect.objectContaining({ authType: 'server' }) }),
+      '/rest/api/2/search',
+      expect.objectContaining({ method: 'POST' })
+    )
+  })
+
+  it('sends plain-text bodies and v2 paths for self-hosted issue creation', async () => {
+    getClientsMock.mockReturnValue([makeServerEntry()])
+    jiraRequestMock.mockResolvedValueOnce({ id: '1', key: 'ALP-1', self: '' })
+    const { createIssue } = await import('./issues')
+
+    await createIssue({
+      siteId: 'server-1',
+      projectId: '10000',
+      issueTypeId: '10001',
+      title: 'Fix auth',
+      description: 'Body text'
+    })
+
+    const [, path, init] = jiraRequestMock.mock.calls[0]
+    expect(path).toBe('/rest/api/2/issue')
+    const body = JSON.parse((init as { body: string }).body) as {
+      fields: { description: unknown }
+    }
+    // REST v2 rejects ADF documents; the description must stay a plain string.
+    expect(body.fields.description).toBe('Body text')
+  })
+
+  it('assigns by username on self-hosted sites', async () => {
+    getClientsMock.mockReturnValue([makeServerEntry()])
+    jiraRequestMock.mockResolvedValue(null)
+    const { updateIssue } = await import('./issues')
+
+    await updateIssue('ALP-1', { assigneeAccountId: 'wquintal' }, 'server-1')
+
+    expect(jiraRequestMock).toHaveBeenCalledWith(
+      expect.anything(),
+      '/rest/api/2/issue/ALP-1/assignee',
+      expect.objectContaining({ body: JSON.stringify({ name: 'wquintal' }) })
+    )
+  })
+
+  it('lists self-hosted projects from the unpaged /project resource', async () => {
+    getClientsMock.mockReturnValue([makeServerEntry()])
+    jiraRequestMock.mockResolvedValueOnce([{ id: '1', key: 'ALP', name: 'Alpha' }])
+    const { listProjects } = await import('./issues')
+
+    const projects = await listProjects('server-1')
+
+    expect(jiraRequestMock).toHaveBeenCalledWith(expect.anything(), '/rest/api/2/project')
+    expect(projects).toMatchObject([{ key: 'ALP', name: 'Alpha' }])
   })
 
   it('rejects single-site search failures so the UI can surface them', async () => {
@@ -397,5 +474,101 @@ describe('Jira issue operations', () => {
         updatedAt: undefined
       }
     ])
+  })
+
+  describe('getProjectStatusOrder', () => {
+    it('returns an empty order when no clients are available', async () => {
+      getClientsMock.mockReturnValue([])
+      const { getProjectStatusOrder } = await import('./issues')
+
+      await expect(getProjectStatusOrder('ALP', 'site-1')).resolves.toEqual({
+        statusIdsByColumn: []
+      })
+    })
+
+    it('returns an empty order when an omitted site resolves to multiple clients', async () => {
+      getClientsMock.mockReturnValue([makeEntry('site-1'), makeEntry('site-2')])
+      const { getProjectStatusOrder } = await import('./issues')
+
+      await expect(getProjectStatusOrder('ALP')).resolves.toEqual({ statusIdsByColumn: [] })
+      expect(jiraRequestMock).not.toHaveBeenCalled()
+    })
+
+    it('returns an empty order when the project has no accessible board', async () => {
+      jiraRequestMock.mockResolvedValueOnce({ values: [] })
+      const { getProjectStatusOrder } = await import('./issues')
+
+      await expect(getProjectStatusOrder('ALP & OPS', 'site-1')).resolves.toEqual({
+        statusIdsByColumn: []
+      })
+      expect(String(jiraRequestMock.mock.calls[0][1])).toContain(
+        '/rest/agile/1.0/board?projectKeyOrId=ALP+%26+OPS&maxResults=2'
+      )
+    })
+
+    it('keeps alphabetical fallback when a project has multiple boards', async () => {
+      jiraRequestMock.mockResolvedValueOnce({
+        total: 2,
+        values: [{ id: 42 }, { id: 43 }]
+      })
+      const { getProjectStatusOrder } = await import('./issues')
+
+      await expect(getProjectStatusOrder('ALP', 'site-1')).resolves.toEqual({
+        statusIdsByColumn: []
+      })
+      expect(jiraRequestMock).toHaveBeenCalledTimes(1)
+    })
+
+    it('keeps alphabetical fallback when Jira reports another board page', async () => {
+      jiraRequestMock.mockResolvedValueOnce({
+        isLast: false,
+        values: [{ id: 42 }]
+      })
+      const { getProjectStatusOrder } = await import('./issues')
+
+      await expect(getProjectStatusOrder('ALP', 'site-1')).resolves.toEqual({
+        statusIdsByColumn: []
+      })
+      expect(jiraRequestMock).toHaveBeenCalledTimes(1)
+    })
+
+    it('returns status IDs grouped by Jira board column order', async () => {
+      jiraRequestMock
+        .mockResolvedValueOnce({ total: 1, values: [{ id: 42 }] })
+        .mockResolvedValueOnce({
+          columnConfig: {
+            columns: [
+              { statuses: [{ id: '1' }, { id: '2' }] },
+              { statuses: [{ id: '3' }, { id: '2' }] },
+              { statuses: [] }
+            ]
+          }
+        })
+      const { getProjectStatusOrder } = await import('./issues')
+
+      await expect(getProjectStatusOrder('ALP', 'site-1')).resolves.toEqual({
+        statusIdsByColumn: [['1', '2'], ['3']]
+      })
+      expect(jiraRequestMock.mock.calls[1]?.[1]).toBe('/rest/agile/1.0/board/42/configuration')
+    })
+
+    it('clears the token and surfaces credential failures', async () => {
+      const authError = new Error('Unauthorized')
+      isAuthErrorMock.mockReturnValue(true)
+      jiraRequestMock.mockRejectedValueOnce(authError)
+      const { getProjectStatusOrder } = await import('./issues')
+
+      await expect(getProjectStatusOrder('ALP', 'site-1')).rejects.toThrow('Unauthorized')
+      expect(clearTokenMock).toHaveBeenCalledWith('site-1')
+    })
+
+    it('falls back to an empty order on operational errors', async () => {
+      jiraRequestMock.mockRejectedValueOnce(new Error('Service Unavailable'))
+      const { getProjectStatusOrder } = await import('./issues')
+
+      await expect(getProjectStatusOrder('ALP', 'site-1')).resolves.toEqual({
+        statusIdsByColumn: []
+      })
+    })
   })
 })

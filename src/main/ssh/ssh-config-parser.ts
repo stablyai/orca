@@ -14,6 +14,7 @@ export type SshConfigHost = {
   identityFile?: string
   identityAgent?: string
   identitiesOnly?: boolean
+  gssapiAuthentication?: boolean
   proxyCommand?: string
   proxyUseFdpass?: boolean
   proxyJump?: string
@@ -81,7 +82,7 @@ export function parseSshConfig(content: string): SshConfigHost[] {
         break
       case 'port':
         for (const host of current) {
-          host.port = parseInt(value, 10) || 22
+          host.port = Number.parseInt(value, 10) || 22
         }
         break
       case 'user':
@@ -102,6 +103,12 @@ export function parseSshConfig(content: string): SshConfigHost[] {
       case 'identitiesonly':
         for (const host of current) {
           host.identitiesOnly = value.toLowerCase() === 'yes'
+        }
+        break
+      case 'gssapiauthentication':
+        for (const host of current) {
+          // Why: OpenSSH uses the first obtained value for each parameter.
+          host.gssapiAuthentication ??= value.toLowerCase() === 'yes'
         }
         break
       case 'proxycommand':
@@ -249,6 +256,7 @@ export function sshConfigHostsToTargets(
       identityFile: entry.identityFile,
       identityAgent: entry.identityAgent,
       identitiesOnly: entry.identitiesOnly,
+      gssapiAuthentication: entry.gssapiAuthentication,
       proxyCommand: entry.proxyCommand,
       jumpHost: entry.proxyJump
     })

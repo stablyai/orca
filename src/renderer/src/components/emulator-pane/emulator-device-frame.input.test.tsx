@@ -99,6 +99,7 @@ function renderFrame(props?: {
         wsUrl="ws://127.0.0.1:3100/ws"
         loading={false}
         isLive={true}
+        visualOrientation="portrait"
         isActive={true}
         onTap={props?.onTap ?? vi.fn()}
         onGesture={props?.onGesture ?? vi.fn()}

@@ -10,6 +10,11 @@ export type HostedReviewProvider =
 
 export type HostedReviewState = 'open' | 'closed' | 'merged' | 'draft'
 
+/** A linked review is identified by a positive integer PR/MR number. */
+export function isPositiveHostedReviewNumber(value: unknown): value is number {
+  return typeof value === 'number' && Number.isInteger(value) && value > 0
+}
+
 export type HostedReviewInfo = {
   provider: HostedReviewProvider
   number: number
@@ -99,6 +104,10 @@ export type HostedReviewCreationBlockedReason =
   | 'fork_head_unsupported'
   | 'unsupported_provider'
   | 'existing_review'
+  // Why: a stacked worktree's local-only parent base is unresolvable on the
+  // remote; blocked at create-time so the submit fails with actionable copy
+  // instead of the provider's opaque error.
+  | 'base_not_on_remote'
   | null
 
 export type HostedReviewCreationNextAction =
@@ -110,12 +119,21 @@ export type HostedReviewCreationNextAction =
   | 'open_existing_review'
   | null
 
+/**
+ * Records whether the eligibility result observed an authoritative existing-review
+ * lookup. `found` / `not_found` come only from an accepted provider lookup;
+ * `unavailable` marks a local-blocker fallback returned after a swallowed or
+ * skipped lookup, so it can never masquerade as authoritative no-review evidence.
+ */
+export type HostedReviewLookupOutcome = 'found' | 'not_found' | 'unavailable'
+
 export type HostedReviewCreationEligibility = {
   provider: HostedReviewProvider
   review: HostedReviewSummary | null
   canCreate: boolean
   blockedReason: HostedReviewCreationBlockedReason
   nextAction: HostedReviewCreationNextAction
+  reviewLookupOutcome: HostedReviewLookupOutcome
   defaultBaseRef?: string | null
   head?: string | null
   title?: string | null

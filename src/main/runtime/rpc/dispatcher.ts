@@ -10,6 +10,7 @@ import {
   isStreamingMethod,
   type RpcAnyMethod,
   type RpcEnvelopeMeta,
+  type PairingRpcContext,
   type RpcRegistry,
   type RpcRequest,
   type RpcResponse
@@ -101,8 +102,10 @@ export class RpcDispatcher {
       connectionId?: string
       signal?: AbortSignal
       clientId?: string
+      pairedDeviceId?: string
       clientKind?: 'mobile' | 'runtime'
-      sendBinary?: (bytes: Uint8Array<ArrayBufferLike>) => void
+      pairing?: PairingRpcContext
+      sendBinary?: (bytes: Uint8Array<ArrayBufferLike>) => boolean | void
       registerBinaryStreamHandler?: (
         streamId: number,
         handler: (frame: TerminalStreamFrame) => void
@@ -134,7 +137,9 @@ export class RpcDispatcher {
           requestId: request.id,
           connectionId: options?.connectionId,
           clientId: options?.clientId,
+          pairedDeviceId: options?.pairedDeviceId,
           clientKind: options?.clientKind,
+          pairing: options?.pairing,
           sendBinary: options?.sendBinary,
           registerBinaryStreamHandler: options?.registerBinaryStreamHandler
         })
@@ -168,7 +173,9 @@ export class RpcDispatcher {
           requestId: request.id,
           connectionId: options?.connectionId,
           clientId: options?.clientId,
+          pairedDeviceId: options?.pairedDeviceId,
           clientKind: options?.clientKind,
+          pairing: options?.pairing,
           sendBinary: options?.sendBinary,
           registerBinaryStreamHandler: options?.registerBinaryStreamHandler
         },

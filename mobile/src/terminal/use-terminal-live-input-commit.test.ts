@@ -202,6 +202,32 @@ describe('terminal live input commit hook', () => {
     await vi.waitFor(() => expect(sent).toEqual(['a', 'b']))
   })
 
+  it('Given iOS smart-dash text When the change arrives Then the capture echoes the raw field text and the PTY gets normalized bytes', async () => {
+    // Given
+    const { captures, handlers, sent } = createTerminalLiveInputCommitHarness()
+
+    // When: iOS smart punctuation rewrote "--" into an en dash inside the field
+    handlers.handleLiveInputChange('a–')
+
+    // Then: writing "a--" back into the controlled value would kill an active
+    // iOS dictation/IME session, so the capture must keep what iOS produced
+    expect(captures).toEqual(['a–'])
+    await vi.waitFor(() => expect(sent).toEqual(['a--']))
+  })
+
+  it('Given dictation-style hypothesis revisions When changes arrive Then the field is never rewritten and the PTY converges', async () => {
+    // Given
+    const { captures, handlers, sent } = createTerminalLiveInputCommitHarness()
+
+    // When: iOS dictation replaces its hypothesis as recognition refines
+    handlers.handleLiveInputChange('high')
+    handlers.handleLiveInputChange('hi there')
+
+    // Then: captures only echo the field; the mirror repairs the PTY with DELs
+    expect(captures).toEqual(['high', 'hi there'])
+    await vi.waitFor(() => expect(sent).toEqual(['high', '\x7f\x7f there']))
+  })
+
   it('Given a trailing space after Hangul When the change arrives Then the space commits the held syllable', async () => {
     // Given
     const { handlers, sent } = createTerminalLiveInputCommitHarness()

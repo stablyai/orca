@@ -263,9 +263,12 @@ test.describe('Create Workspace', () => {
             }
           )
           ipcMain.removeHandler('worktrees:resolvePrBase')
+          // Why: the fixture repo has no remote and its default branch name
+          // depends on the host's git init.defaultBranch (main vs master), so
+          // resolve the PR base to HEAD, which always exists regardless.
           ipcMain.handle('worktrees:resolvePrBase', () => {
             counters.__smartResolvePrBaseCount += 1
-            return { baseBranch: 'origin/main' }
+            return { baseBranch: 'HEAD' }
           })
         },
         { title, url }
@@ -299,6 +302,10 @@ test.describe('Create Workspace', () => {
       })
       await expect(orcaPage.getByRole('option', { name: url })).toHaveCount(0)
       await expect(orcaPage.getByText('Linked PR #2049')).toBeVisible()
+      // Why: quick create reuses the single GitHub lookup from typing (no
+      // redundant re-fetch), and since #5733 ("Create PR worktrees from the PR
+      // head") it resolves the PR start point exactly once at submit time — so
+      // the base resolves once here rather than being skipped.
       await expect
         .poll(() =>
           electronApp.evaluate(() => {
@@ -312,7 +319,7 @@ test.describe('Create Workspace', () => {
             }
           })
         )
-        .toEqual({ githubLookupCount: 1, resolvePrBaseCount: 0 })
+        .toEqual({ githubLookupCount: 1, resolvePrBaseCount: 1 })
     } finally {
       await orcaPage
         .evaluate(() => {
@@ -358,9 +365,10 @@ test.describe('Create Workspace', () => {
             })
           )
           ipcMain.removeHandler('worktrees:resolvePrBase')
-          // Why: the fixture repo's default branch is master and has no
-          // remote; resolve the PR base to a ref that actually exists.
-          ipcMain.handle('worktrees:resolvePrBase', () => ({ baseBranch: 'master' }))
+          // Why: the fixture repo has no remote and its default branch name
+          // depends on the host's git init.defaultBranch (main vs master), so
+          // resolve the PR base to HEAD, which always exists regardless.
+          ipcMain.handle('worktrees:resolvePrBase', () => ({ baseBranch: 'HEAD' }))
         },
         { title, url }
       )

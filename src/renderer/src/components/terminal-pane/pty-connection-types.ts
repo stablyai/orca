@@ -6,7 +6,13 @@ import type { EventProps } from '../../../../shared/telemetry-events'
 import type { TerminalColorSchemeMode } from '../../../../shared/terminal-color-scheme-protocol'
 import type { StartupCommandDelivery } from '../../../../shared/codex-startup-delivery'
 import type { SetupSplitDirection, TuiAgent } from '../../../../shared/types'
-import type { SleepingAgentLaunchConfig } from '../../../../shared/agent-session-resume'
+import type {
+  AgentProviderSessionMetadata,
+  SleepingAgentLaunchConfig
+} from '../../../../shared/agent-session-resume'
+import type { TerminalKittyKeyboardModeTracker } from '../../../../shared/terminal-kitty-keyboard-mode-tracker'
+import type { PtyTransportRecoveryState } from './pty-transport-types'
+import type { SessionOptionValue } from '../../../../shared/native-chat-session-options'
 
 export type PtyConnectionDeps = {
   tabId: string
@@ -19,10 +25,15 @@ export type PtyConnectionDeps = {
     delivery?: 'terminal-paste'
     startupCommandDelivery?: StartupCommandDelivery
     env?: Record<string, string>
+    envToDelete?: string[]
     launchConfig?: SleepingAgentLaunchConfig
+    resumeProviderSession?: AgentProviderSessionMetadata
     launchToken?: string
     launchAgent?: TuiAgent
+    /** Explicit CLI override for host-owned agent launches; omission uses host settings. */
+    agentArgsOverride?: string | null
     draftPrompt?: string
+    sessionOptions?: Record<string, SessionOptionValue>
     /** Telemetry payload for `agent_started`. Forwarded to `pty:spawn`
      *  so main fires the event only after the spawn succeeds. */
     telemetry?: EventProps<'agent_started'>
@@ -37,19 +48,28 @@ export type PtyConnectionDeps = {
   restoredPtyIdByLeafId?: Record<string, string>
   paneTransportsRef: React.RefObject<Map<number, PtyTransport>>
   paneMode2031Ref: React.RefObject<Map<number, boolean>>
+  /** Per-pane mirror of the kitty keyboard flags the pane's application
+   *  negotiated. Fed from PTY output here; read by the keyboard policy. */
+  paneKittyKeyboardModesRef: React.RefObject<Map<number, TerminalKittyKeyboardModeTracker>>
+
   paneLastThemeModeRef: React.RefObject<Map<number, TerminalColorSchemeMode>>
   replayingPanesRef: ReplayingPanesRef
   restoredViewportBlankingPanesRef?: RestoredViewportBlankingPanesRef
   isActiveRef: React.RefObject<boolean>
   isVisibleRef: React.RefObject<boolean>
   onPtyExitRef: React.RefObject<(ptyId: string) => void>
+  onAgentExitedRef: React.RefObject<(leafId: string) => void>
   onPtyErrorRef?: React.RefObject<(paneId: number, message: string) => void>
+  onPtyRecoveryStateRef?: React.RefObject<
+    (paneId: number, state: PtyTransportRecoveryState | null) => void
+  >
   clearTabPtyId: (tabId: string, ptyId: string) => void
   consumeSuppressedPtyExit: (ptyId: string) => boolean
+  isPtyShutdownPending: (ptyId: string) => boolean
   updateTabTitle: (tabId: string, title: string) => void
   setRuntimePaneTitle: (tabId: string, paneId: number, title: string) => void
   clearRuntimePaneTitle: (tabId: string, paneId: number) => void
-  updateTabPtyId: (tabId: string, ptyId: string) => void
+  updateTabPtyId: (tabId: string, ptyId: string, replacedPtyId?: string) => void
   markWorktreeUnread: (worktreeId: string) => void
   markTerminalTabUnread: (tabId: string) => void
   markTerminalPaneUnread: (paneKey: string) => void
@@ -71,4 +91,10 @@ export type PtyConnectionDeps = {
   setCacheTimerStartedAt: (key: string, ts: number | null) => void
   syncPanePtyLayoutBinding: (paneId: number, ptyId: string | null) => void
   clearExitedPanePtyLayoutBinding: (paneId: number, exitedPtyId: string) => void
+  /** Records a DECSET 2031 subscription answered from main's
+   *  '2031-subscribe' fact, mirroring the xterm CSI handler's registry write
+   *  (paneMode2031 + last replied theme) so later theme flips push CSI 997.
+   *  The reply itself is sent by the fact handler — query authority stays
+   *  with the view (model/view contract invariant 6). */
+  recordPaneMode2031Subscription?: (paneId: number, repliedMode: 'dark' | 'light') => void
 }

@@ -231,14 +231,12 @@ export async function fetchMiniMaxRateLimits(
   }
   const groupId =
     options.groupId?.trim() || extractMiniMaxCookieValue(cookie, 'minimax_group_id_v2')
-  const controller = new AbortController()
-  const timeout = setTimeout(() => controller.abort(), API_TIMEOUT_MS)
   try {
     const fetchResult = await fetchMiniMaxResponse({
       cookie,
       endpoint: options.endpoint ?? MINIMAX_USAGE_ENDPOINT,
       groupId,
-      signal: controller.signal
+      signal: AbortSignal.timeout(API_TIMEOUT_MS)
     })
     const httpError = handleMiniMaxHttpError(fetchResult)
     if (httpError) {
@@ -277,7 +275,5 @@ export async function fetchMiniMaxRateLimits(
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Unknown MiniMax usage error'
     return makeError(redactMiniMaxSecret(message), 'network')
-  } finally {
-    clearTimeout(timeout)
   }
 }

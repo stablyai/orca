@@ -1,9 +1,13 @@
 import { useSyncExternalStore } from 'react'
+import {
+  installWindowVisibilityInterval,
+  type WindowVisibilityIntervalTimer
+} from '@/lib/window-visibility-interval'
 
 type ClockDeps = {
   now: () => number
-  setInterval: (callback: () => void, intervalMs: number) => ReturnType<typeof setInterval>
-  clearInterval: (handle: ReturnType<typeof setInterval>) => void
+  setInterval: (callback: () => void, intervalMs: number) => WindowVisibilityIntervalTimer
+  clearInterval: (handle: WindowVisibilityIntervalTimer) => void
 }
 
 type SharedNowClock = {
@@ -22,7 +26,7 @@ export function createSharedNowClock(
   }
 ): SharedNowClock {
   let now = deps.now()
-  let timer: ReturnType<typeof setInterval> | null = null
+  let stopInterval: (() => void) | null = null
   const listeners = new Set<() => void>()
 
   const tick = (): void => {
@@ -36,18 +40,24 @@ export function createSharedNowClock(
     getSnapshot: () => now,
     subscribe: (listener) => {
       listeners.add(listener)
-      if (!timer) {
-        // Why: all mounted relative-time labels at the same cadence can share
-        // one timer. Refresh immediately on restart so remounted labels don't
-        // display the stale timestamp left from the previous subscriber set.
-        tick()
-        timer = deps.setInterval(tick, intervalMs)
+      if (!stopInterval) {
+        // Why: all mounted relative-time labels at this cadence share one
+        // visibility-gated timer. installWindowVisibilityInterval runs tick
+        // immediately on (re)start — so remounted or newly-visible labels catch
+        // up at once — and pauses the interval while the window is hidden, so
+        // backgrounded agent rows stop re-rendering for ticks no one can see.
+        stopInterval = installWindowVisibilityInterval({
+          run: tick,
+          intervalMs,
+          setIntervalFn: deps.setInterval,
+          clearIntervalFn: deps.clearInterval
+        })
       }
       return () => {
         listeners.delete(listener)
-        if (listeners.size === 0 && timer) {
-          deps.clearInterval(timer)
-          timer = null
+        if (listeners.size === 0 && stopInterval) {
+          stopInterval()
+          stopInterval = null
         }
       }
     }

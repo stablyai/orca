@@ -8,6 +8,7 @@ import { useAppStore } from '@/store'
 type AppStoreState = ReturnType<typeof useAppStore.getState>
 
 const initialTabsByWorktree = useAppStore.getState().tabsByWorktree
+const initialWorktreesByRepo = useAppStore.getState().worktreesByRepo
 const initialGetKnownWorktreeById = useAppStore.getState().getKnownWorktreeById
 const initialPendingIssueCommandSplitByTabId =
   useAppStore.getState().pendingIssueCommandSplitByTabId
@@ -33,6 +34,7 @@ afterEach(() => {
   resetHookCommandDelayedDeliveryForTests()
   useAppStore.setState({
     tabsByWorktree: initialTabsByWorktree,
+    worktreesByRepo: initialWorktreesByRepo,
     getKnownWorktreeById: initialGetKnownWorktreeById,
     pendingIssueCommandSplitByTabId: initialPendingIssueCommandSplitByTabId
   } as Partial<AppStoreState>)
@@ -222,7 +224,17 @@ describe('ensureWorktreeHasInitialTerminal', () => {
     useAppStore.setState((state) => ({
       settings: state.settings
         ? { ...state.settings, activeRuntimeEnvironmentId: 'web-runtime-1' }
-        : ({ activeRuntimeEnvironmentId: 'web-runtime-1' } as unknown as typeof state.settings)
+        : ({ activeRuntimeEnvironmentId: 'web-runtime-1' } as unknown as typeof state.settings),
+      worktreesByRepo: {
+        'repo-1': [
+          {
+            id: 'wt-1',
+            repoId: 'repo-1',
+            hostId: 'local',
+            runtimeOwnerEnvironmentId: 'web-runtime-1'
+          }
+        ] as never
+      }
     }))
     const store = createMockStore()
 
@@ -238,7 +250,17 @@ describe('ensureWorktreeHasInitialTerminal', () => {
     useAppStore.setState((state) => ({
       settings: state.settings
         ? { ...state.settings, activeRuntimeEnvironmentId: 'web-runtime-1' }
-        : ({ activeRuntimeEnvironmentId: 'web-runtime-1' } as unknown as typeof state.settings)
+        : ({ activeRuntimeEnvironmentId: 'web-runtime-1' } as unknown as typeof state.settings),
+      worktreesByRepo: {
+        'repo-1': [
+          {
+            id: 'wt-1',
+            repoId: 'repo-1',
+            hostId: 'local',
+            runtimeOwnerEnvironmentId: 'web-runtime-1'
+          }
+        ] as never
+      }
     }))
     let createdIndex = 1
     const createTab = vi.fn(() => ({ id: `tab-${++createdIndex}` }))
@@ -285,7 +307,17 @@ describe('ensureWorktreeHasInitialTerminal', () => {
     useAppStore.setState((state) => ({
       settings: state.settings
         ? { ...state.settings, activeRuntimeEnvironmentId: 'web-runtime-1' }
-        : ({ activeRuntimeEnvironmentId: 'web-runtime-1' } as unknown as typeof state.settings)
+        : ({ activeRuntimeEnvironmentId: 'web-runtime-1' } as unknown as typeof state.settings),
+      worktreesByRepo: {
+        'repo-1': [
+          {
+            id: 'wt-1',
+            repoId: 'repo-1',
+            hostId: 'local',
+            runtimeOwnerEnvironmentId: 'web-runtime-1'
+          }
+        ] as never
+      }
     }))
     useAppStore.setState({
       tabsByWorktree: {},
@@ -465,6 +497,87 @@ describe('ensureWorktreeHasInitialTerminal', () => {
     })
     expect(store.queueTabStartupCommand).toHaveBeenCalledWith('tab-1', {
       command: 'claude',
+      launchAgent: 'claude'
+    })
+  })
+
+  it('keeps draft startup payloads in terminal mode even when native chat is configured', () => {
+    const store = createMockStore({
+      settings: {
+        experimentalNativeChat: true,
+        openAgentTabsInChatByDefault: true
+      }
+    })
+
+    ensureWorktreeHasInitialTerminal(
+      store,
+      'wt-1',
+      {
+        command: 'claude',
+        launchAgent: 'claude',
+        draftPrompt: 'Review before sending'
+      },
+      undefined,
+      undefined
+    )
+
+    expect(store.createTab).toHaveBeenCalledWith('wt-1', undefined, undefined, {
+      pendingActivationSpawn: true,
+      launchAgent: 'claude'
+    })
+  })
+
+  it('opens the startup default tab in native chat when configured', () => {
+    let createdIndex = 0
+    const createTab = vi.fn(() => ({ id: `tab-${++createdIndex}` }))
+    const store = createMockStore({
+      createTab,
+      settings: {
+        experimentalNativeChat: true,
+        openAgentTabsInChatByDefault: true
+      }
+    })
+
+    ensureWorktreeHasInitialTerminal(
+      store,
+      'wt-1',
+      { command: 'claude', launchAgent: 'claude' },
+      undefined,
+      undefined,
+      { runCommands: true, tabs: [{ title: 'Claude', command: 'claude' }] }
+    )
+
+    expect(createTab).toHaveBeenNthCalledWith(1, 'wt-1', undefined, undefined, {
+      pendingActivationSpawn: true,
+      recordInteraction: false,
+      launchAgent: 'claude',
+      viewMode: 'chat'
+    })
+  })
+
+  it('keeps a draft startup default tab in terminal mode even when native chat is configured', () => {
+    let createdIndex = 0
+    const createTab = vi.fn(() => ({ id: `tab-${++createdIndex}` }))
+    const store = createMockStore({
+      createTab,
+      settings: {
+        experimentalNativeChat: true,
+        openAgentTabsInChatByDefault: true
+      }
+    })
+
+    ensureWorktreeHasInitialTerminal(
+      store,
+      'wt-1',
+      { command: 'claude', launchAgent: 'claude', draftPrompt: 'Review before sending' },
+      undefined,
+      undefined,
+      { runCommands: true, tabs: [{ title: 'Claude', command: 'claude' }] }
+    )
+
+    expect(createTab).toHaveBeenNthCalledWith(1, 'wt-1', undefined, undefined, {
+      pendingActivationSpawn: true,
+      recordInteraction: false,
       launchAgent: 'claude'
     })
   })

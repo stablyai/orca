@@ -217,4 +217,54 @@ describe('updater check failure handling', () => {
     await vi.advanceTimersByTimeAsync(ONE_HOUR_MS - THIRTY_SECONDS_MS)
     expect(autoUpdaterMock.checkForUpdates).toHaveBeenCalledTimes(2)
   })
+
+  it('backs off consecutive failing background retries instead of re-checking hourly forever', async () => {
+    vi.useFakeTimers()
+    makeBenignCheckFailure('Unable to find latest version on GitHub')
+
+    const sendMock = vi.fn()
+    const mainWindow = { webContents: { send: sendMock } }
+
+    const { setupAutoUpdater, checkForUpdates } = await import('./updater')
+
+    setupAutoUpdater(mainWindow as never, { getLastUpdateCheckAt: () => Date.now() })
+    checkForUpdates()
+    await vi.advanceTimersByTimeAsync(0)
+    expect(autoUpdaterMock.checkForUpdates).toHaveBeenCalledTimes(1)
+
+    // First retry keeps the fast 1h cadence (release-publishing windows).
+    await vi.advanceTimersByTimeAsync(ONE_HOUR_MS)
+    expect(autoUpdaterMock.checkForUpdates).toHaveBeenCalledTimes(2)
+
+    // Second retry doubles to 2h: nothing at +1h, fires by +2h.
+    await vi.advanceTimersByTimeAsync(ONE_HOUR_MS)
+    expect(autoUpdaterMock.checkForUpdates).toHaveBeenCalledTimes(2)
+    await vi.advanceTimersByTimeAsync(ONE_HOUR_MS)
+    expect(autoUpdaterMock.checkForUpdates).toHaveBeenCalledTimes(3)
+
+    // Third retry doubles to 4h.
+    await vi.advanceTimersByTimeAsync(2 * ONE_HOUR_MS)
+    expect(autoUpdaterMock.checkForUpdates).toHaveBeenCalledTimes(3)
+    await vi.advanceTimersByTimeAsync(2 * ONE_HOUR_MS)
+    expect(autoUpdaterMock.checkForUpdates).toHaveBeenCalledTimes(4)
+
+    // A completed check resets the backoff to the fast retry.
+    autoUpdaterMock.checkForUpdates.mockImplementation(() => {
+      autoUpdaterMock.emit('checking-for-update')
+      queueMicrotask(() => {
+        autoUpdaterMock.emit('update-not-available', { version: '1.0.51' })
+      })
+      return Promise.resolve(null)
+    })
+    checkForUpdates()
+    await vi.advanceTimersByTimeAsync(0)
+    expect(autoUpdaterMock.checkForUpdates).toHaveBeenCalledTimes(5)
+
+    makeBenignCheckFailure('Unable to find latest version on GitHub')
+    checkForUpdates()
+    await vi.advanceTimersByTimeAsync(0)
+    expect(autoUpdaterMock.checkForUpdates).toHaveBeenCalledTimes(6)
+    await vi.advanceTimersByTimeAsync(ONE_HOUR_MS)
+    expect(autoUpdaterMock.checkForUpdates).toHaveBeenCalledTimes(7)
+  })
 })

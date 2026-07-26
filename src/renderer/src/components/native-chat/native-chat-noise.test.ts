@@ -33,10 +33,12 @@ describe('isNoiseMessage', () => {
 
   it('keeps real user messages', () => {
     expect(isNoiseMessage(msg('user', 'make it work for codex'))).toBe(false)
+    expect(isNoiseMessage(msg('user', '<my-custom-element>pasted code'))).toBe(false)
   })
 
   it('keeps assistant and tool turns', () => {
     expect(isNoiseMessage(msg('assistant', '<system-reminder> in prose'))).toBe(false)
+    expect(isNoiseMessage(msg('system', 'Conversation interrupted'))).toBe(false)
   })
 
   it('keeps a user turn that carries tool results', () => {

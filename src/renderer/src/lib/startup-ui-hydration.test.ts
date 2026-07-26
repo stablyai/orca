@@ -39,7 +39,7 @@ describe('startup UI hydration fallback', () => {
     }
 
     expect(hydratePersistedUI).toHaveBeenCalledTimes(1)
-    expect(hydratePersistedUI).toHaveBeenCalledWith(persistedUI)
+    expect(hydratePersistedUI).toHaveBeenCalledWith(persistedUI, 'startup')
   })
 
   it('returns fallback defaults when startup fails before persisted UI is hydrated', () => {
@@ -51,6 +51,7 @@ describe('startup UI hydration fallback', () => {
     }
 
     expect(hydratePersistedUI).toHaveBeenCalledTimes(1)
+    expect(hydratePersistedUI.mock.calls[0][0].activeView).toBe('terminal')
     expect(hydratePersistedUI.mock.calls[0][0].sidebarWidth).toBe(280)
     expect(hydratePersistedUI.mock.calls[0][0].groupBy).toBe('repo')
     expect(hydratePersistedUI.mock.calls[0][0].sortBy).toBe('name')

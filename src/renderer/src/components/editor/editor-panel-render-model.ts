@@ -22,8 +22,8 @@ type EditorPanelRenderModelParams = {
   activeFile: OpenFile
   fileContents: Record<string, FileContent>
   editorDrafts: StoreState['editorDrafts']
-  gitStatusByWorktree: StoreState['gitStatusByWorktree']
-  gitBranchChangesByWorktree: StoreState['gitBranchChangesByWorktree']
+  gitStatusEntries: StoreState['gitStatusByWorktree'][string] | undefined
+  gitBranchEntries: StoreState['gitBranchChangesByWorktree'][string] | undefined
   markdownViewMode: StoreState['markdownViewMode']
   isChangesMode: boolean
 }
@@ -32,8 +32,8 @@ export function getEditorPanelRenderModel({
   activeFile,
   fileContents,
   editorDrafts,
-  gitStatusByWorktree,
-  gitBranchChangesByWorktree,
+  gitStatusEntries,
+  gitBranchEntries,
   markdownViewMode,
   isChangesMode
 }: EditorPanelRenderModelParams) {
@@ -54,8 +54,16 @@ export function getEditorPanelRenderModel({
     activeFile.mode === 'diff'
       ? detectLanguage(activeFile.relativePath)
       : detectLanguage(activeFile.filePath)
-  const worktreeEntries = gitStatusByWorktree[activeFile.worktreeId] ?? []
-  const branchEntries = gitBranchChangesByWorktree[activeFile.worktreeId] ?? []
+  // Why: an AI Vault View Log tab must show the exact raw bytes read-only. A
+  // rich/preview/mermaid/csv/notebook renderer would depart from raw text (and
+  // can look editable), so neutralize specialized viewers + view-mode chrome
+  // for read-only tabs. `resolvedLanguage` still drives read-only Monaco
+  // tokenization (e.g. jsonl stays colorized); only viewer selection is forced
+  // to a plain source rendering here.
+  const rawReadOnly = activeFile.mode === 'edit' && activeFile.readOnly === true
+  const viewerLanguage = rawReadOnly ? 'plaintext' : resolvedLanguage
+  const worktreeEntries = gitStatusEntries ?? []
+  const branchEntries = gitBranchEntries ?? []
   const matchingWorktreeEntry =
     activeFile.mode === 'diff' &&
     (activeFile.diffSource === 'staged' || activeFile.diffSource === 'unstaged')
@@ -71,14 +79,19 @@ export function getEditorPanelRenderModel({
     activeFile.mode === 'diff' && activeFile.diffSource === 'branch'
       ? (branchEntries.find((entry) => entry.path === activeFile.relativePath) ?? null)
       : null
+  const openFileState = getEditorHeaderOpenFileState(
+    activeFile,
+    matchingWorktreeEntry,
+    matchingBranchEntry
+  )
   const markdownViewModes = getMarkdownViewModes({
-    language: resolvedLanguage,
+    language: viewerLanguage,
     mode: activeFile.mode,
     diffSource: activeFile.diffSource
   })
   const hasViewModeToggle = markdownViewModes.length > 0
   const defaultMarkdownViewMode = getDefaultMarkdownViewMode({
-    language: resolvedLanguage,
+    language: viewerLanguage,
     mode: activeFile.mode,
     diffSource: activeFile.diffSource
   })
@@ -90,7 +103,7 @@ export function getEditorPanelRenderModel({
       ? storedMarkdownViewMode
       : defaultMarkdownViewMode
   const editorToggleModes = getEditorToggleModes({
-    language: resolvedLanguage,
+    language: viewerLanguage,
     mode: activeFile.mode,
     diffSource: activeFile.diffSource
   })
@@ -110,7 +123,7 @@ export function getEditorPanelRenderModel({
       ? (editorDrafts[activeFile.id] ?? fileContents[activeFile.id]?.content ?? null)
       : null
   const shouldShowMarkdownExportAction =
-    resolvedLanguage === 'markdown' &&
+    viewerLanguage === 'markdown' &&
     (activeFile.mode === 'edit' || activeFile.mode === 'markdown-preview')
   const inlineMarkdownRenderMode =
     activeFile.mode === 'edit' && inlineMarkdownContent !== null
@@ -141,16 +154,17 @@ export function getEditorPanelRenderModel({
     isCombinedDiff,
     worktreeEntries,
     resolvedLanguage,
-    openFileState: getEditorHeaderOpenFileState(
-      activeFile,
-      matchingWorktreeEntry,
-      matchingBranchEntry
-    ),
-    isMarkdown: resolvedLanguage === 'markdown',
-    isMermaid: resolvedLanguage === 'mermaid',
-    isCsv: resolvedLanguage === 'csv' || resolvedLanguage === 'tsv',
-    isNotebook: resolvedLanguage === 'notebook',
-    canOpenPreviewToSide: activeFile.mode === 'edit' && canPreviewLanguage(resolvedLanguage),
+    openFileState,
+    isMarkdown: viewerLanguage === 'markdown',
+    isMermaid: viewerLanguage === 'mermaid',
+    isCsv: viewerLanguage === 'csv' || viewerLanguage === 'tsv',
+    isNotebook: viewerLanguage === 'notebook',
+    // Why: the preview renders the on-disk file, so diff surfaces only get it
+    // when the modified side still exists on disk (canOpen excludes deleted
+    // files and commit diffs whose content may not match the working tree).
+    canOpenPreviewToSide:
+      canPreviewLanguage(viewerLanguage) &&
+      (activeFile.mode === 'edit' || (isSingleDiff && openFileState.canOpen)),
     mdViewMode,
     hasViewModeToggle,
     availableEditorToggleModes,
@@ -160,10 +174,10 @@ export function getEditorPanelRenderModel({
     shouldShowMarkdownExportAction,
     canExportMarkdownToPdf,
     canShowMarkdownTableOfContents:
-      resolvedLanguage === 'markdown' &&
+      viewerLanguage === 'markdown' &&
       (hasViewModeToggle || activeFile.mode === 'markdown-preview'),
     canShowMarkdownPreview: canOpenMarkdownPreview({
-      language: resolvedLanguage,
+      language: viewerLanguage,
       mode: activeFile.mode,
       diffSource: activeFile.diffSource
     })

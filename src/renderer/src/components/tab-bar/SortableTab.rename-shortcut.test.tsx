@@ -72,6 +72,18 @@ vi.mock('@dnd-kit/sortable', () => ({
 }))
 
 vi.mock('lucide-react', () => ({
+  ArrowDown: function ArrowDown(props: Record<string, unknown>) {
+    return { type: 'ArrowDown', props }
+  },
+  ArrowLeft: function ArrowLeft(props: Record<string, unknown>) {
+    return { type: 'ArrowLeft', props }
+  },
+  ArrowRight: function ArrowRight(props: Record<string, unknown>) {
+    return { type: 'ArrowRight', props }
+  },
+  ArrowUp: function ArrowUp(props: Record<string, unknown>) {
+    return { type: 'ArrowUp', props }
+  },
   Columns2: function Columns2(props: Record<string, unknown>) {
     return { type: 'Columns2', props }
   },
@@ -84,6 +96,15 @@ vi.mock('lucide-react', () => ({
   PanelRightClose: function PanelRightClose(props: Record<string, unknown>) {
     return { type: 'PanelRightClose', props }
   },
+  ListX: function ListX(props: Record<string, unknown>) {
+    return { type: 'ListX', props }
+  },
+  MessageSquare: function MessageSquare(props: Record<string, unknown>) {
+    return { type: 'MessageSquare', props }
+  },
+  Pencil: function Pencil(props: Record<string, unknown>) {
+    return { type: 'Pencil', props }
+  },
   Pin: function Pin(props: Record<string, unknown>) {
     return { type: 'Pin', props }
   },
@@ -95,6 +116,9 @@ vi.mock('lucide-react', () => ({
   },
   X: function X(props: Record<string, unknown>) {
     return { type: 'X', props }
+  },
+  SquareTerminal: function SquareTerminal(props: Record<string, unknown>) {
+    return { type: 'SquareTerminal', props }
   }
 }))
 

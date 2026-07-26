@@ -121,6 +121,11 @@ describe('worktree removal evicts the per-worktree + per-page maps it previously
         [WT1]: [makeOpenFile({ id: '/path/wt1/closed.ts', worktreeId: WT1 })],
         [WT2]: [makeOpenFile({ id: '/path/wt2/closed.ts', worktreeId: WT2 })]
       },
+      recentlyClosedTerminalTabsByWorktree: {
+        [WT1]: [{ startupCwd: '/path/wt1' }],
+        [WT2]: [{ startupCwd: '/path/wt2' }]
+      },
+      recentlyClosedTabKindsByWorktree: { [WT1]: ['terminal'], [WT2]: ['terminal'] },
       defaultTerminalTabsAppliedByWorktreeId: { [WT1]: true, [WT2]: true }
     })
   }
@@ -135,10 +140,14 @@ describe('worktree removal evicts the per-worktree + per-page maps it previously
     // Evicted for the removed worktree.
     expect(s.remoteStatusesByWorktree[WT1]).toBeUndefined()
     expect(s.recentlyClosedEditorTabsByWorktree[WT1]).toBeUndefined()
+    expect(s.recentlyClosedTerminalTabsByWorktree[WT1]).toBeUndefined()
+    expect(s.recentlyClosedTabKindsByWorktree[WT1]).toBeUndefined()
     expect(s.defaultTerminalTabsAppliedByWorktreeId[WT1]).toBeUndefined()
     // Retained for the surviving worktree (guard over-eviction).
     expect(s.remoteStatusesByWorktree[WT2]).toBeDefined()
     expect(s.recentlyClosedEditorTabsByWorktree[WT2]).toBeDefined()
+    expect(s.recentlyClosedTerminalTabsByWorktree[WT2]).toBeDefined()
+    expect(s.recentlyClosedTabKindsByWorktree[WT2]).toBeDefined()
     expect(s.defaultTerminalTabsAppliedByWorktreeId[WT2]).toBe(true)
   })
 
@@ -152,9 +161,13 @@ describe('worktree removal evicts the per-worktree + per-page maps it previously
     const s = store.getState()
     expect(s.remoteStatusesByWorktree[WT1]).toBeUndefined()
     expect(s.recentlyClosedEditorTabsByWorktree[WT1]).toBeUndefined()
+    expect(s.recentlyClosedTerminalTabsByWorktree[WT1]).toBeUndefined()
+    expect(s.recentlyClosedTabKindsByWorktree[WT1]).toBeUndefined()
     expect(s.defaultTerminalTabsAppliedByWorktreeId[WT1]).toBeUndefined()
     expect(s.remoteStatusesByWorktree[WT2]).toBeDefined()
     expect(s.recentlyClosedEditorTabsByWorktree[WT2]).toBeDefined()
+    expect(s.recentlyClosedTerminalTabsByWorktree[WT2]).toBeDefined()
+    expect(s.recentlyClosedTabKindsByWorktree[WT2]).toBeDefined()
     expect(s.defaultTerminalTabsAppliedByWorktreeId[WT2]).toBe(true)
   })
 
@@ -186,6 +199,73 @@ describe('worktree removal evicts the per-worktree + per-page maps it previously
     expect(getAgentHibernationPaneOutputEpoch(removedPaneKey)).toBe(0)
     // Surviving worktree's pane keeps its epoch (guard over-eviction).
     expect(getAgentHibernationPaneOutputEpoch(survivingPaneKey)).toBe(1)
+  })
+
+  it('bulk purgeWorktreeTerminalState drops native-chat launch prompts for removed tabs only', () => {
+    const store = createTestStore()
+    const TAB1 = 'tab-wt1'
+    const TAB2 = 'tab-wt2'
+    seedStore(store, {
+      worktreesByRepo: {
+        repo1: [
+          makeWorktree({ id: WT1, repoId: 'repo1', path: '/path/wt1' }),
+          makeWorktree({ id: WT2, repoId: 'repo1', path: '/path/wt2' })
+        ]
+      },
+      tabsByWorktree: {
+        [WT1]: [makeTab({ id: TAB1, worktreeId: WT1 })],
+        [WT2]: [makeTab({ id: TAB2, worktreeId: WT2 })]
+      },
+      nativeChatLaunchPromptByTabId: {
+        [TAB1]: { tabId: TAB1, agent: 'codex', text: 'fix wt1', createdAt: 1 },
+        [TAB2]: { tabId: TAB2, agent: 'codex', text: 'fix wt2', createdAt: 2 }
+      }
+    })
+
+    store.getState().purgeWorktreeTerminalState([WT1])
+
+    const s = store.getState()
+    expect(s.nativeChatLaunchPromptByTabId[TAB1]).toBeUndefined()
+    expect(s.nativeChatLaunchPromptByTabId[TAB2]).toEqual({
+      tabId: TAB2,
+      agent: 'codex',
+      text: 'fix wt2',
+      createdAt: 2
+    })
+  })
+
+  it('single removeWorktree drops native-chat launch prompts for removed tabs only', async () => {
+    const store = createTestStore()
+    const TAB1 = 'tab-wt1'
+    const TAB2 = 'tab-wt2'
+    seedStore(store, {
+      worktreesByRepo: {
+        repo1: [
+          makeWorktree({ id: WT1, repoId: 'repo1', path: '/path/wt1' }),
+          makeWorktree({ id: WT2, repoId: 'repo1', path: '/path/wt2' })
+        ]
+      },
+      tabsByWorktree: {
+        [WT1]: [makeTab({ id: TAB1, worktreeId: WT1 })],
+        [WT2]: [makeTab({ id: TAB2, worktreeId: WT2 })]
+      },
+      nativeChatLaunchPromptByTabId: {
+        [TAB1]: { tabId: TAB1, agent: 'claude', text: 'fix wt1', createdAt: 1 },
+        [TAB2]: { tabId: TAB2, agent: 'claude', text: 'fix wt2', createdAt: 2 }
+      }
+    })
+
+    const result = await store.getState().removeWorktree(WT1)
+
+    expect(result).toEqual({ ok: true })
+    const s = store.getState()
+    expect(s.nativeChatLaunchPromptByTabId[TAB1]).toBeUndefined()
+    expect(s.nativeChatLaunchPromptByTabId[TAB2]).toEqual({
+      tabId: TAB2,
+      agent: 'claude',
+      text: 'fix wt2',
+      createdAt: 2
+    })
   })
 
   it('bulk purgeWorktreeTerminalState drops page/workspace-keyed browser maps for the removed worktree only', () => {

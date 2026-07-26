@@ -2,7 +2,12 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import { create } from 'zustand'
 import type { RuntimeStatus } from '../../../../shared/runtime-types'
 import { createCompatibleRuntimeStatusResponse } from '../../runtime/runtime-compatibility-test-fixture'
+import {
+  callRuntimeRpc,
+  clearRuntimeCompatibilityCacheForTests
+} from '../../runtime/runtime-rpc-client'
 import { createRuntimeStatusSlice, type RuntimeStatusSlice } from './runtime-status'
+import { getRuntimeEnvironmentConnectionGeneration } from './runtime-status'
 
 function createSliceStore() {
   return create<RuntimeStatusSlice>()((...a) => ({
@@ -50,6 +55,7 @@ describe('runtime-status slice', () => {
   it('starts with an empty map', () => {
     const store = createSliceStore()
     expect(store.getState().runtimeEnvironments).toEqual([])
+    expect(store.getState().runtimeEnvironmentCatalogHydrated).toBe(false)
     expect(store.getState().runtimeStatusByEnvironmentId.size).toBe(0)
   })
 
@@ -74,8 +80,31 @@ describe('runtime-status slice', () => {
     expect(store.getState().runtimeEnvironments.map((environment) => environment.name)).toEqual([
       'Dev Box'
     ])
+    expect(store.getState().runtimeEnvironmentCatalogHydrated).toBe(true)
     expect(store.getState().runtimeStatusByEnvironmentId.has('keep')).toBe(true)
     expect(store.getState().runtimeStatusByEnvironmentId.has('drop')).toBe(false)
+  })
+
+  it('drops old status and advances generation when the same environment id is re-paired', () => {
+    const store = createSliceStore()
+    const purgeStaleRuntimeHostState = vi.fn()
+    store.setState({ purgeStaleRuntimeHostState } as never)
+    store
+      .getState()
+      .setRuntimeEnvironments([{ id: 'env-a', createdAt: 1, pairingRevision: 1 } as never])
+    store.getState().setRuntimeEnvironmentStatus('env-a', {
+      status: makeStatus({ runtimeId: 'same-runtime' }),
+      checkedAt: 1
+    })
+    const before = getRuntimeEnvironmentConnectionGeneration('env-a')
+
+    store
+      .getState()
+      .setRuntimeEnvironments([{ id: 'env-a', createdAt: 1, pairingRevision: 2 } as never])
+
+    expect(store.getState().runtimeStatusByEnvironmentId.has('env-a')).toBe(false)
+    expect(getRuntimeEnvironmentConnectionGeneration('env-a')).toBe(before + 1)
+    expect(purgeStaleRuntimeHostState).toHaveBeenCalledWith(['env-a'])
   })
 
   it('merges per environment id and produces a new map reference', () => {
@@ -107,7 +136,7 @@ describe('runtime-status slice', () => {
 
     const map = store.getState().runtimeStatusByEnvironmentId
     expect(map.size).toBe(1)
-    expect(map.get('env-a')).toEqual({ status: null, checkedAt: 5 })
+    expect(map.get('env-a')).toEqual({ status: null, checkedAt: 5, connectionGeneration: 1 })
   })
 
   it('clears a single environment entry', () => {
@@ -160,6 +189,146 @@ describe('runtime-status slice', () => {
     expect(store.getState().runtimeStatusByEnvironmentId.get('env-a')?.status?.runtimeId).toBe(
       'runtime-a'
     )
+    expect(store.getState().runtimeStatusByEnvironmentId.get('env-a')?.connectionGeneration).toBe(1)
+  })
+
+  it('advances connection generation after recovery without churning stable status polls', () => {
+    const store = createSliceStore()
+    store.getState().setRuntimeEnvironmentStatus('env-a', {
+      status: makeStatus({ runtimeId: 'runtime-a' }),
+      checkedAt: 1
+    })
+    store.getState().setRuntimeEnvironmentStatus('env-a', {
+      status: makeStatus({ runtimeId: 'runtime-a' }),
+      checkedAt: 2
+    })
+    expect(store.getState().runtimeStatusByEnvironmentId.get('env-a')?.connectionGeneration).toBe(1)
+
+    store.getState().setRuntimeEnvironmentStatus('env-a', { status: null, checkedAt: 3 })
+    store.getState().setRuntimeEnvironmentStatus('env-a', {
+      status: makeStatus({ runtimeId: 'runtime-a' }),
+      checkedAt: 4
+    })
+    expect(store.getState().runtimeStatusByEnvironmentId.get('env-a')?.connectionGeneration).toBe(2)
+  })
+
+  it('drops a recent compatibility failure once a status refresh succeeds', async () => {
+    clearRuntimeCompatibilityCacheForTests()
+    let offline = true
+    const call = vi.fn().mockImplementation(({ method }: { method: string }) => {
+      if (offline || method === 'status.get') {
+        return Promise.resolve(
+          offline
+            ? {
+                id: 'status',
+                ok: false,
+                error: { code: 'runtime_unavailable', message: 'offline' },
+                _meta: { runtimeId: 'runtime-a' }
+              }
+            : createCompatibleRuntimeStatusResponse('runtime-a')
+        )
+      }
+      return Promise.resolve({ id: method, ok: true, result: { ok: true }, _meta: {} })
+    })
+    const getStatus = vi.fn().mockResolvedValue(createCompatibleRuntimeStatusResponse('runtime-a'))
+    vi.stubGlobal('window', { api: { runtimeEnvironments: { getStatus, call } } })
+    const store = createSliceStore()
+    const target = { kind: 'environment', environmentId: 'env-a' } as const
+
+    await expect(
+      callRuntimeRpc(target, 'repo.list', undefined, { reuseRecentCompatibilityFailure: true })
+    ).rejects.toThrow('offline')
+    // Reuse-flagged callers stay pinned to the recent failure until recovery.
+    await expect(
+      callRuntimeRpc(target, 'repo.list', undefined, { reuseRecentCompatibilityFailure: true })
+    ).rejects.toThrow('offline')
+
+    offline = false
+    await store.getState().refreshRuntimeEnvironmentStatus('env-a')
+
+    await expect(
+      callRuntimeRpc(target, 'repo.list', undefined, { reuseRecentCompatibilityFailure: true })
+    ).resolves.toEqual({ ok: true })
+    clearRuntimeCompatibilityCacheForTests()
+  })
+
+  it('drops a recent compatibility failure on a direct non-null status publish', async () => {
+    // Why: paths like Settings "Connect" publish the host online via
+    // setRuntimeEnvironmentStatus directly (not refreshRuntimeEnvironmentStatus)
+    // and then trigger a reuse-flagged repo.list. The stale failure must drop so
+    // that reuse-flagged catalog fetch re-probes the now-reachable host.
+    clearRuntimeCompatibilityCacheForTests()
+    let offline = true
+    const call = vi.fn().mockImplementation(({ method }: { method: string }) => {
+      if (offline || method === 'status.get') {
+        return Promise.resolve(
+          offline
+            ? {
+                id: 'status',
+                ok: false,
+                error: { code: 'runtime_unavailable', message: 'offline' },
+                _meta: { runtimeId: 'runtime-a' }
+              }
+            : createCompatibleRuntimeStatusResponse('runtime-a')
+        )
+      }
+      return Promise.resolve({ id: method, ok: true, result: { ok: true }, _meta: {} })
+    })
+    vi.stubGlobal('window', { api: { runtimeEnvironments: { call } } })
+    const store = createSliceStore()
+    const target = { kind: 'environment', environmentId: 'env-a' } as const
+
+    await expect(
+      callRuntimeRpc(target, 'repo.list', undefined, { reuseRecentCompatibilityFailure: true })
+    ).rejects.toThrow('offline')
+
+    offline = false
+    store.getState().setRuntimeEnvironmentStatus('env-a', { status: makeStatus(), checkedAt: 1 })
+
+    await expect(
+      callRuntimeRpc(target, 'repo.list', undefined, { reuseRecentCompatibilityFailure: true })
+    ).resolves.toEqual({ ok: true })
+    clearRuntimeCompatibilityCacheForTests()
+  })
+
+  it('preserves a recent compatibility failure on a null (offline) status publish', async () => {
+    // Why: recording an unreachable host must not undermine the fanout fix — a
+    // null status is not proof of reachability, so reuse-flagged sweeps keep
+    // reusing the one recent failure instead of re-probing per repo.
+    clearRuntimeCompatibilityCacheForTests()
+    let offline = true
+    const call = vi.fn().mockImplementation(({ method }: { method: string }) => {
+      if (offline || method === 'status.get') {
+        return Promise.resolve(
+          offline
+            ? {
+                id: 'status',
+                ok: false,
+                error: { code: 'runtime_unavailable', message: 'offline' },
+                _meta: { runtimeId: 'runtime-a' }
+              }
+            : createCompatibleRuntimeStatusResponse('runtime-a')
+        )
+      }
+      return Promise.resolve({ id: method, ok: true, result: { ok: true }, _meta: {} })
+    })
+    vi.stubGlobal('window', { api: { runtimeEnvironments: { call } } })
+    const store = createSliceStore()
+    const target = { kind: 'environment', environmentId: 'env-a' } as const
+
+    await expect(
+      callRuntimeRpc(target, 'repo.list', undefined, { reuseRecentCompatibilityFailure: true })
+    ).rejects.toThrow('offline')
+
+    // A null publish (host still unreachable) must keep the failure pinned even
+    // after the transport would answer, so the reuse-flagged caller does not probe.
+    offline = false
+    store.getState().setRuntimeEnvironmentStatus('env-a', { status: null, checkedAt: 1 })
+
+    await expect(
+      callRuntimeRpc(target, 'repo.list', undefined, { reuseRecentCompatibilityFailure: true })
+    ).rejects.toThrow('offline')
+    clearRuntimeCompatibilityCacheForTests()
   })
 
   it('records null and returns false when a runtime refresh fails', async () => {

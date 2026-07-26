@@ -98,9 +98,21 @@ describe('createSshSlice', () => {
         { requestId: 'req-2', targetId: otherTargetId, kind: 'password', detail: 'password' }
       ],
       deferredSshReconnectTargets: [targetId, otherTargetId],
+      transientClearedAgentStatusConnectionIds: {
+        [targetId]: true,
+        [otherTargetId]: true
+      },
       deferredSshSessionIdsByTabId: {
         'tab-ssh': 'legacy-session-without-target-prefix',
         'tab-stale-encoded': toAppSshPtyId(targetId, 'pty-1'),
+        'tab-other': toAppSshPtyId(otherTargetId, 'pty-2')
+      },
+      // Why: a hydrated-but-not-yet-reconnected session for the removed target;
+      // the orphan sweep reads this map as liveness, so removal must clear it or
+      // a dead tab is pinned alive forever (#9911).
+      pendingReconnectPtyIdByTabId: {
+        'tab-ssh': toAppSshPtyId(targetId, 'pty-1'),
+        'tab-stale-encoded': toAppSshPtyId(targetId, 'pty-9'),
         'tab-other': toAppSshPtyId(otherTargetId, 'pty-2')
       }
     })
@@ -116,7 +128,15 @@ describe('createSshSlice', () => {
     expect(state.detectedPortsByConnection[targetId]).toBeUndefined()
     expect(state.sshCredentialQueue.map((req) => req.targetId)).toEqual([otherTargetId])
     expect(state.deferredSshReconnectTargets).toEqual([otherTargetId])
+    expect(state.transientClearedAgentStatusConnectionIds).toEqual({
+      [otherTargetId]: true
+    })
     expect(state.deferredSshSessionIdsByTabId).toEqual({
+      'tab-other': toAppSshPtyId(otherTargetId, 'pty-2')
+    })
+    // Removed target's pending-reconnect sessions cleared (by tab membership and
+    // by target-scoped session id); the surviving target's entry is retained.
+    expect(state.pendingReconnectPtyIdByTabId).toEqual({
       'tab-other': toAppSshPtyId(otherTargetId, 'pty-2')
     })
     expect(state.tabsByWorktree[worktreeId][0]).toMatchObject({ id: 'tab-ssh', ptyId: null })
@@ -146,13 +166,25 @@ describe('createSshSlice', () => {
   it('keeps SSH target label references stable when refreshed metadata is unchanged', () => {
     const store = createTestStore()
     const labels = new Map([['ssh-1', 'Remote']])
-    store.setState({ sshTargetLabels: labels })
+    store.setState({ sshTargetLabels: labels, sshTargetsHydrated: true })
     const previousState = store.getState()
 
     store.getState().setSshTargetsMetadata([{ id: 'ssh-1', label: 'Remote' }])
 
     expect(store.getState()).toBe(previousState)
     expect(store.getState().sshTargetLabels).toBe(labels)
+  })
+
+  it('marks targets hydrated on the first load, even when the list is empty', () => {
+    const store = createTestStore()
+    expect(store.getState().sshTargetsHydrated).toBe(false)
+
+    store.getState().setSshTargetsMetadata([])
+
+    // Why: an empty target set is still positive knowledge — the overlay's
+    // targetRemoved derivation may only trust absence after a real load.
+    expect(store.getState().sshTargetsHydrated).toBe(true)
+    expect(store.getState().sshTargetLabels.size).toBe(0)
   })
 
   it('keeps SSH connection state references stable when duplicate state arrives', () => {
@@ -178,6 +210,53 @@ describe('createSshSlice', () => {
     expect(store.getState().sshConnectedGeneration).toBe(1)
   })
 
+  it('publishes an authoritative SSH connection generation change', () => {
+    const store = createTestStore()
+    store.getState().setSshConnectionState('ssh-1', {
+      targetId: 'ssh-1',
+      status: 'connected',
+      error: null,
+      reconnectAttempt: 0,
+      connectionGeneration: 1
+    })
+    const previousState = store.getState()
+
+    store.getState().setSshConnectionState('ssh-1', {
+      targetId: 'ssh-1',
+      status: 'connected',
+      error: null,
+      reconnectAttempt: 0,
+      connectionGeneration: 2
+    })
+
+    expect(store.getState()).not.toBe(previousState)
+    expect(store.getState().sshConnectionStates.get('ssh-1')?.connectionGeneration).toBe(2)
+  })
+
+  it('publishes a connected-state folder capability change', () => {
+    const store = createTestStore()
+    store.getState().setSshConnectionState('ssh-1', {
+      targetId: 'ssh-1',
+      status: 'connected',
+      error: null,
+      reconnectAttempt: 0,
+      supportsFolderDownload: false
+    })
+    const previousState = store.getState()
+
+    store.getState().setSshConnectionState('ssh-1', {
+      targetId: 'ssh-1',
+      status: 'connected',
+      error: null,
+      reconnectAttempt: 0,
+      supportsFolderDownload: true
+    })
+
+    expect(store.getState()).not.toBe(previousState)
+    expect(store.getState().sshConnectionStates.get('ssh-1')?.supportsFolderDownload).toBe(true)
+    expect(store.getState().sshConnectedGeneration).toBe(1)
+  })
+
   it('does not publish state when cleanup finds no removed SSH target state', () => {
     const store = createTestStore()
     const previousState = store.getState()
@@ -185,6 +264,15 @@ describe('createSshSlice', () => {
     store.getState().clearRemovedSshTargetState('missing-target')
 
     expect(store.getState()).toBe(previousState)
+  })
+
+  it("removes a transient-clear block when it is the target's only remaining state", () => {
+    const store = createTestStore()
+    store.setState({ transientClearedAgentStatusConnectionIds: { 'ssh-1': true } })
+
+    store.getState().clearRemovedSshTargetState('ssh-1')
+
+    expect(store.getState().transientClearedAgentStatusConnectionIds).toEqual({})
   })
 
   it('preserves untouched cleanup slice references while removing deferred target metadata', () => {

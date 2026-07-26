@@ -13,9 +13,10 @@ function getWorktreeSidebarScrollbarPaddingRight(): number {
 }
 
 describe('worktree sidebar resize handle', () => {
-  it('keeps the hover target as wide as the right sidebar handle', () => {
+  it('keeps a wide hit target that straddles the sidebar seam', () => {
     const classes = new Set(WORKTREE_SIDEBAR_RESIZE_HANDLE_CLASS_NAME.split(/\s+/))
-    expect(classes.has('w-1')).toBe(true)
+    expect(classes.has('w-3')).toBe(true)
+    expect(classes.has('-right-1.5')).toBe(true)
     expect(classes.has('w-px')).toBe(false)
   })
 

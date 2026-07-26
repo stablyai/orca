@@ -1,5 +1,4 @@
 import { ipcMain } from 'electron'
-import { getTuiAgentDetectCommands, TUI_AGENT_CONFIG } from '../../shared/tui-agent-config'
 import type { PathSource, ShellHydrationFailureReason } from '../../shared/types'
 import { hydrateShellPath, mergePathSegments } from '../startup/hydrate-shell-path'
 import { getAzureDevOpsAuthStatus } from '../azure-devops/client'
@@ -22,6 +21,11 @@ import {
   detectRemoteWindowsTerminalCapabilities,
   type RemoteWindowsTerminalCapabilities
 } from './preflight-remote-windows-terminal-capabilities'
+import {
+  getTuiAgentDetectionProbeCommands,
+  KNOWN_TUI_AGENT_DETECTION_COMMANDS,
+  resolveDetectedTuiAgentIds
+} from './tui-agent-detection-commands'
 
 export type PreflightStatus = {
   git: { installed: boolean }
@@ -60,13 +64,6 @@ export function _resetPreflightCache(): void {
   cached = null
 }
 
-const KNOWN_AGENT_COMMANDS = Object.entries(TUI_AGENT_CONFIG).flatMap(([id, config]) =>
-  getTuiAgentDetectCommands(config).map((cmd) => ({
-    id,
-    cmd
-  }))
-)
-
 function uniqueAgentIds(ids: Iterable<string>): string[] {
   return [...new Set(ids)]
 }
@@ -92,16 +89,17 @@ export async function detectInstalledAgents(context?: PreflightRuntimeContext): 
   if (wslTarget) {
     const foundCommands = await detectWslCommandsOnPath(
       wslTarget,
-      KNOWN_AGENT_COMMANDS.map(({ cmd }) => cmd)
+      getTuiAgentDetectionProbeCommands(KNOWN_TUI_AGENT_DETECTION_COMMANDS, 'wsl')
     )
-    return uniqueAgentIds(
-      KNOWN_AGENT_COMMANDS.filter(({ cmd }) => foundCommands.has(cmd)).map(({ id }) => id)
-    )
+    return resolveDetectedTuiAgentIds(KNOWN_TUI_AGENT_DETECTION_COMMANDS, foundCommands, 'wsl')
   }
 
+  const probeCommands = getTuiAgentDetectionProbeCommands(
+    KNOWN_TUI_AGENT_DETECTION_COMMANDS,
+    process.platform
+  )
   const pathChecks = await Promise.all(
-    KNOWN_AGENT_COMMANDS.map(async ({ id, cmd }) => ({
-      id,
+    probeCommands.map(async (cmd) => ({
       cmd,
       installedOnPath: await isCommandOnPath(cmd)
     }))
@@ -110,11 +108,16 @@ export async function detectInstalledAgents(context?: PreflightRuntimeContext): 
   // Why: PATH may still be unhydrated on a cold GUI launch; bulk resolution
   // computes user install dirs once instead of blocking once per missed CLI.
   const installDirCommands = detectCommandsInInstallDirs(missedCommands)
-  const checks = pathChecks.map(({ id, cmd, installedOnPath }) => ({
-    id,
-    installed: installedOnPath || installDirCommands.has(cmd)
-  }))
-  return uniqueAgentIds(checks.filter((c) => c.installed).map((c) => c.id))
+  const foundCommands = new Set(
+    pathChecks
+      .filter(({ cmd, installedOnPath }) => installedOnPath || installDirCommands.has(cmd))
+      .map(({ cmd }) => cmd)
+  )
+  return resolveDetectedTuiAgentIds(
+    KNOWN_TUI_AGENT_DETECTION_COMMANDS,
+    foundCommands,
+    process.platform
+  )
 }
 
 export async function detectInstalledAgentsWithShellPathHydration(
@@ -181,7 +184,7 @@ export async function detectRemoteAgents(args: { connectionId: string }): Promis
     return []
   }
   const result = (await mux.request('preflight.detectAgents', {
-    commands: KNOWN_AGENT_COMMANDS
+    commands: KNOWN_TUI_AGENT_DETECTION_COMMANDS
   })) as { agents: string[] }
   return uniqueAgentIds(result.agents)
 }

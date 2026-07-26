@@ -32,12 +32,14 @@ const storeState = {
   allWorktrees: vi.fn(
     () => [] as { id: string; projectId?: string; repoId?: string; displayName?: string }[]
   ),
-  workspacePortScan: null as { result: WorkspacePortScanResult } | null
+  workspacePortScan: null as { result: WorkspacePortScanResult } | null,
+  workspacePortScansByKey: {} as Record<string, WorkspacePortScanResult>
 }
 
 beforeEach(() => {
   vi.clearAllMocks()
   storeState.settings = undefined
+  storeState.workspacePortScansByKey = {}
   registerHttpLinkStoreAccessor(() => storeState)
   vi.stubGlobal('window', {
     api: {
@@ -108,6 +110,106 @@ describe('openHttpLink', () => {
     expect(openUrlMock).toHaveBeenCalledWith('https://example.com/')
     expect(createBrowserTabMock).not.toHaveBeenCalled()
     expect(setActiveWorktreeMock).not.toHaveBeenCalled()
+  })
+
+  it('honors an explicit local document owner despite an unrelated active runtime', () => {
+    storeState.settings = { openLinksInApp: true, activeRuntimeEnvironmentId: 'env-other' }
+
+    openHttpLink('https://example.com/', {
+      worktreeId: 'wt-1',
+      sourceOwner: { kind: 'local' }
+    })
+
+    expect(createBrowserTabMock).toHaveBeenCalledWith('wt-1', 'https://example.com/', {
+      activate: true
+    })
+    expect(openUrlMock).not.toHaveBeenCalled()
+  })
+
+  it('routes explicit runtime and SSH document owners to the exact system URL', () => {
+    storeState.settings = { openLinksInApp: true, localhostWorktreeLabelsEnabled: true }
+
+    openHttpLink('http://localhost:5180/runtime', {
+      worktreeId: 'wt-1',
+      sourceOwner: { kind: 'runtime', runtimeEnvironmentId: 'env-1' }
+    })
+    openHttpLink('http://localhost:5180/ssh', {
+      worktreeId: 'wt-1',
+      sourceOwner: { kind: 'ssh', connectionId: 'ssh-1' }
+    })
+
+    expect(openUrlMock).toHaveBeenNthCalledWith(1, 'http://localhost:5180/runtime')
+    expect(openUrlMock).toHaveBeenNthCalledWith(2, 'http://localhost:5180/ssh')
+    expect(createBrowserTabMock).not.toHaveBeenCalled()
+    expect(registerLocalhostLabelMock).not.toHaveBeenCalled()
+  })
+
+  it('labels explicit local links from the local scan instead of a merged remote port', async () => {
+    storeState.settings = {
+      openLinksInApp: true,
+      activeRuntimeEnvironmentId: 'env-other',
+      localhostWorktreeLabelsEnabled: true
+    }
+    storeState.repos = [
+      { id: 'repo-local', displayName: 'Local' },
+      { id: 'repo-remote', displayName: 'Remote' }
+    ]
+    storeState.worktreesByRepo = {
+      'repo-local': [{ id: 'wt-local', projectId: 'repo-local' }],
+      'repo-remote': [{ id: 'wt-remote', projectId: 'repo-remote' }]
+    }
+    const port = (repoId: string, worktreeId: string, path: string) => ({
+      id: `tcp:5180:${worktreeId}`,
+      kind: 'workspace' as const,
+      port: 5180,
+      protocol: 'http' as const,
+      bindHost: '127.0.0.1',
+      connectHost: 'localhost',
+      owner: {
+        repoId,
+        worktreeId,
+        displayName: worktreeId,
+        path,
+        confidence: 'cwd' as const
+      }
+    })
+    storeState.workspacePortScan = {
+      result: {
+        platform: 'darwin',
+        scannedAt: 2,
+        ports: [port('repo-remote', 'wt-remote', '/remote')]
+      }
+    }
+    storeState.workspacePortScansByKey = {
+      'local:all': {
+        platform: 'darwin',
+        scannedAt: 1,
+        ports: [port('repo-local', 'wt-local', '/local')]
+      }
+    }
+    registerLocalhostLabelMock.mockResolvedValue({ url: 'http://wt-local.orca.localhost:60016/' })
+
+    openHttpLink('http://localhost:5180/', {
+      worktreeId: 'wt-local',
+      sourceOwner: { kind: 'local' }
+    })
+    await Promise.resolve()
+
+    expect(registerLocalhostLabelMock).toHaveBeenCalledWith(
+      expect.objectContaining({ repoId: 'repo-local', worktreeId: 'wt-local' })
+    )
+  })
+
+  it('keeps unresolved document ownership non-actionable', () => {
+    storeState.settings = { openLinksInApp: true }
+
+    openHttpLink('https://example.com/', {
+      worktreeId: 'wt-1',
+      sourceOwner: { kind: 'unknown' }
+    })
+
+    expect(openUrlMock).not.toHaveBeenCalled()
+    expect(createBrowserTabMock).not.toHaveBeenCalled()
   })
 
   it('routes to the system browser when no worktree id is provided', () => {

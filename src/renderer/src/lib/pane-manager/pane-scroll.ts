@@ -1,9 +1,14 @@
 import type { Terminal } from '@xterm/xterm'
 import type { ScrollState } from './pane-manager-types'
+import {
+  captureLogicalLineAnchor,
+  resolveLogicalCellOffsetLine
+} from './terminal-reflow-scroll-anchor'
+import { forceTerminalViewportScrollbarSync } from './terminal-viewport-scrollbar-sync'
 
 const terminalOutputEpochs = new WeakMap<Terminal, number>()
 const deferredScrollRestores = new WeakMap<
-  Terminal,
+  object,
   {
     cancelled: boolean
     rafIds: number[]
@@ -11,6 +16,19 @@ const deferredScrollRestores = new WeakMap<
     timeoutIds: ReturnType<typeof setTimeout>[]
   }
 >()
+const pendingFitScrollRestores = new WeakMap<
+  object,
+  {
+    cancelled: boolean
+    rafId: number | null
+    retryAfterFit: () => boolean
+    shouldRestore: () => boolean
+    state: ScrollState
+  }
+>()
+const FIT_SCROLL_RESTORE_MAX_FRAMES = 2
+
+type ScrollRestoreResult = 'restored' | 'retry' | 'skipped'
 
 export function recordTerminalOutput(terminal: Terminal): void {
   terminalOutputEpochs.set(terminal, getTerminalOutputEpoch(terminal) + 1)
@@ -20,7 +38,8 @@ export function getTerminalOutputEpoch(terminal: Terminal): number {
   return terminalOutputEpochs.get(terminal) ?? 0
 }
 
-export function cancelDeferredScrollRestore(terminal: Terminal): void {
+export function cancelDeferredScrollRestore(terminal: object): void {
+  cancelPendingFitScrollRestore(terminal)
   const pending = deferredScrollRestores.get(terminal)
   if (!pending) {
     return
@@ -42,24 +61,138 @@ export function captureScrollState(terminal: Terminal): ScrollState {
   const buf = terminal.buffer.active
   const viewportY = buf.viewportY
   const wasAtBottom = viewportY >= buf.baseY
+  const logicalAnchor =
+    !wasAtBottom && buf.type === 'normal'
+      ? captureLogicalLineAnchor(terminal, viewportY)
+      : undefined
+  const firstVisibleLineMarker =
+    !wasAtBottom && buf.type === 'normal'
+      ? terminal.registerMarker?.(viewportY - (buf.baseY + buf.cursorY))
+      : undefined
   return {
     bufferType: buf.type,
     wasAtBottom,
     viewportY,
     baseY: buf.baseY,
-    // Why: xterm markers track the same buffer line through resize reflow;
-    // a numeric viewport line alone can point at different content afterward.
-    firstVisibleLineMarker:
-      !wasAtBottom && buf.type === 'normal'
-        ? terminal.registerMarker?.(viewportY - (buf.baseY + buf.cursorY))
-        : undefined
+    // Why: continuation-row markers can be deleted or drift during reflow.
+    // Keep the physical marker for no-reflow ConPTY/cursor-line cases, and
+    // anchor reflowing content at the logical line's stable first row.
+    firstVisibleLineMarker,
+    firstVisibleLogicalLineMarker:
+      logicalAnchor?.lineY === viewportY
+        ? firstVisibleLineMarker
+        : logicalAnchor
+          ? terminal.registerMarker?.(logicalAnchor.lineY - (buf.baseY + buf.cursorY))
+          : undefined,
+    firstVisibleLogicalCellOffset: logicalAnchor?.cellOffset
   }
 }
 
-export function restoreScrollState(terminal: Terminal, state: ScrollState): void {
+export function restoreScrollState(terminal: Terminal, state: ScrollState): boolean {
   cancelDeferredScrollRestore(terminal)
-  restoreScrollStateNow(terminal, state)
-  releaseScrollStateMarker(state)
+  try {
+    return restoreScrollStateNow(terminal, state) === 'restored'
+  } finally {
+    releaseScrollStateMarker(state)
+  }
+}
+
+export function restoreScrollStateAfterFit(
+  terminal: Terminal,
+  state: ScrollState,
+  options: { onRestored: () => void; shouldRestore: () => boolean }
+): void {
+  cancelDeferredScrollRestore(terminal)
+  if (!options.shouldRestore()) {
+    releaseScrollStateMarker(state)
+    return
+  }
+  let initialResult: ScrollRestoreResult
+  try {
+    initialResult = restoreScrollStateNow(terminal, state)
+  } catch (error) {
+    releaseScrollStateMarker(state)
+    throw error
+  }
+  if (initialResult !== 'retry' || typeof requestAnimationFrame !== 'function') {
+    releaseScrollStateMarker(state)
+    if (initialResult === 'restored') {
+      options.onRestored()
+    }
+    return
+  }
+
+  const pending = {
+    cancelled: false,
+    rafId: null as number | null,
+    retryAfterFit: (): boolean => false,
+    shouldRestore: options.shouldRestore,
+    state
+  }
+  let remainingFrames = FIT_SCROLL_RESTORE_MAX_FRAMES
+  const finish = (restored: boolean): void => {
+    if (pending.cancelled) {
+      return
+    }
+    pending.cancelled = true
+    pendingFitScrollRestores.delete(terminal)
+    releaseScrollStateMarker(state)
+    if (restored && options.shouldRestore()) {
+      options.onRestored()
+    }
+  }
+  const retry = (): boolean => {
+    pending.rafId = null
+    if (pending.cancelled || !options.shouldRestore()) {
+      finish(false)
+      return false
+    }
+    let result: ScrollRestoreResult
+    try {
+      result = restoreScrollStateNow(terminal, state)
+    } catch (error) {
+      finish(false)
+      throw error
+    }
+    if (result === 'restored') {
+      finish(true)
+      return true
+    }
+    remainingFrames -= 1
+    if (result !== 'retry') {
+      finish(false)
+      return false
+    }
+    if (remainingFrames <= 0) {
+      // Why: background/WebGL teardown can outlast a bounded frame retry.
+      // Keep the content marker parked for the next real fit/reveal.
+      return true
+    }
+    pending.rafId = requestAnimationFrame(retry)
+    return true
+  }
+  pending.retryAfterFit = () => {
+    if (pending.rafId !== null && typeof cancelAnimationFrame === 'function') {
+      cancelAnimationFrame(pending.rafId)
+      pending.rafId = null
+    }
+    remainingFrames = FIT_SCROLL_RESTORE_MAX_FRAMES + 1
+    return retry()
+  }
+  pendingFitScrollRestores.set(terminal, pending)
+  pending.rafId = requestAnimationFrame(retry)
+}
+
+export function resumePendingFitScrollRestoreAfterFit(terminal: Terminal): boolean {
+  const pending = pendingFitScrollRestores.get(terminal)
+  if (!pending) {
+    return false
+  }
+  if (!pending.shouldRestore()) {
+    cancelPendingFitScrollRestore(terminal)
+    return false
+  }
+  return pending.retryAfterFit()
 }
 
 export function restoreScrollStateAfterLayout(terminal: Terminal, state: ScrollState): void {
@@ -114,13 +247,13 @@ export function restoreScrollStateAfterLayout(terminal: Terminal, state: ScrollS
   deferredScrollRestores.set(terminal, pending)
 }
 
-function restoreScrollStateNow(terminal: Terminal, state: ScrollState): void {
+function restoreScrollStateNow(terminal: Terminal, state: ScrollState): ScrollRestoreResult {
   if (!terminal.element) {
-    return
+    return 'retry'
   }
   const buf = terminal.buffer.active
   if (state.bufferType === 'alternate' || buf.type !== state.bufferType) {
-    return
+    return 'skipped'
   }
 
   // Why: WebGL suspend disposes xterm's render service while leaving
@@ -129,24 +262,42 @@ function restoreScrollStateNow(terminal: Terminal, state: ScrollState): void {
   // window quietly — the next visibility flip re-fits and re-restores.
   if (state.wasAtBottom) {
     if (safeScrollCall(() => terminal.scrollToBottom())) {
-      forceViewportScrollbarSync(terminal)
+      forceTerminalViewportScrollbarSync(terminal)
+      return 'restored'
     }
-    return
+    return 'retry'
   }
 
+  const logicalMarkerLine =
+    state.firstVisibleLogicalLineMarker && !state.firstVisibleLogicalLineMarker.isDisposed
+      ? state.firstVisibleLogicalLineMarker.line
+      : -1
   const markerLine =
     state.firstVisibleLineMarker && !state.firstVisibleLineMarker.isDisposed
       ? state.firstVisibleLineMarker.line
       : -1
-  const targetLine = Math.min(markerLine >= 0 ? markerLine : state.viewportY, buf.baseY)
+  const logicalTargetLine =
+    logicalMarkerLine >= 0 && state.firstVisibleLogicalCellOffset !== undefined
+      ? resolveLogicalCellOffsetLine(
+          terminal,
+          logicalMarkerLine,
+          state.firstVisibleLogicalCellOffset
+        )
+      : null
+  const targetLine = Math.min(
+    logicalTargetLine ?? (markerLine >= 0 ? markerLine : state.viewportY),
+    buf.baseY
+  )
   state.viewportY = targetLine
   // Why: deferred rAF/timeout restores re-invoke this function after xterm
   // reflow settles; keep the marker alive so each call consults the live
   // line. Callers (restoreScrollState, the timeout in
   // restoreScrollStateAfterLayout, cancelDeferredScrollRestore) own disposal.
   if (safeScrollCall(() => terminal.scrollToLine(targetLine))) {
-    forceViewportScrollbarSync(terminal)
+    forceTerminalViewportScrollbarSync(terminal)
+    return 'restored'
   }
+  return 'retry'
 }
 
 function safeScrollCall(fn: () => void): boolean {
@@ -166,23 +317,21 @@ function safeScrollCall(fn: () => void): boolean {
 
 export function releaseScrollStateMarker(state: ScrollState): void {
   state.firstVisibleLineMarker?.dispose()
-  state.firstVisibleLineMarker = undefined
+  if (state.firstVisibleLogicalLineMarker !== state.firstVisibleLineMarker) {
+    state.firstVisibleLogicalLineMarker?.dispose()
+  }
+  state.firstVisibleLineMarker = state.firstVisibleLogicalLineMarker = undefined
 }
 
-// Why: xterm 6 can leave its scrollbar thumb stale when ydisp is unchanged.
-// A synchronous one-line jiggle updates the scrollbar without a visible paint.
-function forceViewportScrollbarSync(terminal: Terminal): void {
-  const buf = terminal.buffer.active
-  if (buf.viewportY >= buf.baseY) {
-    // Why: jiggle-scrolling at bottom makes xterm stop following active output
-    // after split-pane resizes; scrollToBottom already places the thumb there.
+function cancelPendingFitScrollRestore(terminal: object): void {
+  const pending = pendingFitScrollRestores.get(terminal)
+  if (!pending) {
     return
   }
-  if (buf.viewportY > 0) {
-    safeScrollCall(() => terminal.scrollLines(-1))
-    safeScrollCall(() => terminal.scrollLines(1))
-  } else if (buf.viewportY < buf.baseY) {
-    safeScrollCall(() => terminal.scrollLines(1))
-    safeScrollCall(() => terminal.scrollLines(-1))
+  pending.cancelled = true
+  if (pending.rafId !== null && typeof cancelAnimationFrame === 'function') {
+    cancelAnimationFrame(pending.rafId)
   }
+  releaseScrollStateMarker(pending.state)
+  pendingFitScrollRestores.delete(terminal)
 }

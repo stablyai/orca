@@ -5,8 +5,7 @@ export function defaultProjectGroupNameForPath(path: string): string {
     path
       .replace(/[\\/]+$/g, '')
       .split(/[\\/]/)
-      .filter(Boolean)
-      .at(-1) ?? path
+      .findLast(Boolean) ?? path
   )
 }
 

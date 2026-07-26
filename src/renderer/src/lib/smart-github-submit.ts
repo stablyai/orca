@@ -5,12 +5,14 @@ import { getLinkedWorkItemWorkspaceName } from '../../../shared/workspace-name'
 import type { LinkedWorkItemSummary } from './new-workspace'
 import { parseGitHubIssueOrPRLink } from './github-links'
 import { resolveGitHubWorkItemIdentity } from '@/lib/github-work-item-identity'
+import { githubRepoIdentityKey } from '../../../shared/github-repository-identity-key'
 
 export type SmartGitHubSubmitIntent =
   | {
       kind: 'link'
       owner: string
       repo: string
+      host?: string
       number: number
       type: 'issue' | 'pr'
     }
@@ -48,6 +50,7 @@ export type SmartGitHubSubmitLookup = {
     sourceContext?: TaskSourceContext | null
     owner: string
     repo: string
+    host?: string
     number: number
     type: 'issue' | 'pr'
   }) => Promise<GitHubWorkItem | null>
@@ -55,7 +58,7 @@ export type SmartGitHubSubmitLookup = {
 
 const SMART_GITHUB_SUBMIT_LOOKUP_TTL_MS = 60_000
 const SMART_GITHUB_SUBMIT_LOOKUP_CACHE_MAX_ENTRIES = 128
-const GITHUB_ITEM_URL_RE = /https?:\/\/(?:www\.)?github\.com\/\S+/i
+const GITHUB_ITEM_URL_RE = /https?:\/\/[^\s/]+\/\S+/i
 const TRAILING_GITHUB_ITEM_URL_PUNCTUATION_RE = /[),.;\]}]+$/
 
 type SmartGitHubSubmitLookupCacheEntry = {
@@ -92,6 +95,7 @@ export function getSmartGitHubSubmitIntent(input: string): SmartGitHubSubmitInte
       kind: 'link',
       owner: link.slug.owner,
       repo: link.slug.repo,
+      ...(link.slug.host ? { host: link.slug.host } : {}),
       number: link.number,
       type: link.type
     }
@@ -132,9 +136,7 @@ function getSmartGitHubSubmitLookupCacheKey({
   if (intent.kind === 'hash-number') {
     return `${repoScope}:hash:${intent.number}`
   }
-  return `${repoScope}:link:${intent.owner.toLowerCase()}/${intent.repo.toLowerCase()}:${
-    intent.type
-  }:${intent.number}`
+  return `${repoScope}:link:${githubRepoIdentityKey(intent)}:${intent.type}:${intent.number}`
 }
 
 export function lookupSmartGitHubSubmitItem({
@@ -161,6 +163,7 @@ export function lookupSmartGitHubSubmitItem({
           sourceContext,
           owner: intent.owner,
           repo: intent.repo,
+          ...(intent.host ? { host: intent.host } : {}),
           number: intent.number,
           type: intent.type
         })

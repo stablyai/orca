@@ -97,7 +97,7 @@ function encodeRelativePath(path: string): string {
 }
 
 function encodeBitbucketFileLineFragment(path: string, line: number): string {
-  const fileName = path.replaceAll('\\', '/').split('/').filter(Boolean).at(-1)
+  const fileName = path.replaceAll('\\', '/').split('/').findLast(Boolean)
   return fileName ? `#${encodeURIComponent(`${fileName}-${line}`)}` : ''
 }
 

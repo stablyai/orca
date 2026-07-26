@@ -461,14 +461,29 @@ async function main() {
     path.join(userDataDir, 'orca-data.json'),
     `${JSON.stringify(makeCompletedOnboardingProfile(), null, 2)}\n`
   )
-  const { ELECTRON_RUN_AS_NODE, ...cleanEnv } = process.env
+  const {
+    ELECTRON_RUN_AS_NODE,
+    CODEX_HOME: _codexHome,
+    ORCA_CODEX_HOME: _orcaCodexHome,
+    ...cleanEnv
+  } = process.env
   void ELECTRON_RUN_AS_NODE
+  void _codexHome
+  void _orcaCodexHome
+  // Why: real-home rollout work would both contaminate idle measurements and
+  // expose the developer Codex profile to this disposable Electron launch.
+  const isolatedHome = path.join(userDataDir, 'home')
+  mkdirSync(isolatedHome, { recursive: true })
   const app = await electron.launch({
     args: launchArgs(mainPath, options.headful),
     env: {
       ...cleanEnv,
       NODE_ENV: 'development',
       ORCA_E2E_USER_DATA_DIR: userDataDir,
+      HOME: isolatedHome,
+      USERPROFILE: isolatedHome,
+      ORCA_E2E_HOME_DIR: isolatedHome,
+      ORCA_CODEX_SYSTEM_DEFAULT_REAL_HOME: '0',
       ...(options.headful ? { ORCA_E2E_HEADFUL: '1' } : { ORCA_E2E_HEADLESS: '1' })
     }
   })

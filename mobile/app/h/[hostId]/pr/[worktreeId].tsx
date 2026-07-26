@@ -1,30 +1,29 @@
-import { useLocalSearchParams } from 'expo-router'
-import { useHostClient } from '../../../../src/transport/client-context'
-import { useMobilePrBranchContext } from '../../../../src/session/use-mobile-pr-branch-context'
-import { MobilePrViewPanel } from '../../../../src/components/pr-sidebar/MobilePrViewPanel'
+import { Redirect, useLocalSearchParams } from 'expo-router'
+import { firstParam } from '../../../../src/source-control/mobile-source-control-screen-state'
 
-// Narrow-layout full-screen PR route. The standalone panel can't ride on the review
-// screen's diff state, so branch/head SHA are resolved here from git.status + branchCompare.
-export default function MobilePrViewScreen() {
-  const { hostId, worktreeId } = useLocalSearchParams<{ hostId: string; worktreeId: string }>()
-  const { client, state: connState } = useHostClient(hostId)
-  const { branch, headSha, status, isGithubRepo, repoLoaded, loaded } = useMobilePrBranchContext({
-    client,
-    connState,
-    worktreeId
-  })
-
+// The Pull Request view is now a segment of the Source Control hub. This route
+// stays as a thin redirect so existing deep links land on the hub with the Pull
+// Request segment selected. The wide-layout dock opens the same hub with
+// initialTab="pr" (SessionDockColumn), not this route.
+export default function PrRedirect() {
+  const params = useLocalSearchParams<{
+    hostId?: string | string[]
+    worktreeId?: string | string[]
+    name?: string | string[]
+    origin?: string | string[]
+  }>()
   return (
-    <MobilePrViewPanel
-      client={client}
-      connState={connState}
-      worktreeId={worktreeId}
-      branch={branch}
-      headSha={headSha}
-      gitStatus={status}
-      isGithubRepo={isGithubRepo}
-      branchContextLoaded={loaded && repoLoaded}
-      embedded={false}
+    <Redirect
+      href={{
+        pathname: '/h/[hostId]/source-control/[worktreeId]',
+        params: {
+          hostId: firstParam(params.hostId),
+          worktreeId: firstParam(params.worktreeId),
+          name: firstParam(params.name),
+          origin: firstParam(params.origin),
+          tab: 'pr'
+        }
+      }}
     />
   )
 }

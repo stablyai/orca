@@ -3,7 +3,8 @@ import path from 'node:path'
 import { pathToFileURL } from 'node:url'
 import process from 'node:process'
 
-import ts from 'typescript'
+// TypeScript 7 is a native CLI; AST consumers still need the legacy JavaScript API.
+import ts from 'typescript-api'
 
 const SOURCE_EXTENSIONS = new Set(['.ts', '.tsx', '.js', '.jsx', '.mts', '.cts'])
 const SKIP_PATH_PARTS = new Set(['.git', 'dist', 'node_modules', 'out', '__snapshots__', 'assets'])

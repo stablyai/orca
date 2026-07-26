@@ -1,5 +1,3 @@
-/* oxlint-disable max-lines -- Why: keeps the mux protocol lifecycle harness
-   together across request, notification, keepalive, and disposal cases. */
 import { describe, expect, it, vi, beforeEach, afterEach } from 'vitest'
 import { SshChannelMultiplexer, type MultiplexerTransport } from './ssh-channel-multiplexer'
 import { encodeFrame, MessageType, HEADER_LENGTH, encodeKeepAliveFrame } from './relay-protocol'
@@ -69,6 +67,8 @@ type MuxInternals = {
   notificationHandlers: unknown[]
   methodNotificationHandlers: Map<string, Set<unknown>>
   disposeHandlers: unknown[]
+  lastReceivedAt: number
+  unackedTimestamps: Map<number, number>
 }
 
 function getMuxInternals(instance: SshChannelMultiplexer): MuxInternals {
@@ -288,14 +288,16 @@ describe('SshChannelMultiplexer', () => {
   })
 
   describe('keepalive', () => {
-    it('sends keepalive frames periodically', () => {
+    it('sends one keepalive frame per cadence tick', () => {
       const initialWrites = transport.written.length
 
       vi.advanceTimersByTime(5_000)
-      expect(transport.written.length).toBeGreaterThan(initialWrites)
+      expect(transport.written).toHaveLength(initialWrites + 1)
+      expect(transport.written.at(-1)![0]).toBe(MessageType.KeepAlive)
 
-      const lastFrame = transport.written.at(-1)!
-      expect(lastFrame[0]).toBe(MessageType.KeepAlive)
+      vi.advanceTimersByTime(5_000)
+      expect(transport.written).toHaveLength(initialWrites + 2)
+      expect(transport.written.at(-1)![0]).toBe(MessageType.KeepAlive)
     })
 
     it('turns transport write failures into connection loss instead of throwing from the timer', () => {
@@ -306,6 +308,120 @@ describe('SshChannelMultiplexer', () => {
 
       expect(() => vi.advanceTimersByTime(5_000)).not.toThrow()
       expect(mux.isDisposed()).toBe(true)
+    })
+
+    it('drives keepalive sends AND dead-link detection from a single interval', () => {
+      // The keepalive send and the liveness/timeout check were merged from two
+      // 5s intervals into one; there must be exactly one recurring timer.
+      expect(vi.getTimerCount()).toBe(1)
+
+      // Send half: a keepalive is written on the tick.
+      const before = transport.written.length
+      vi.advanceTimersByTime(5_000)
+      expect(transport.written.length).toBeGreaterThan(before)
+      expect(transport.written.at(-1)![0]).toBe(MessageType.KeepAlive)
+      expect(vi.getTimerCount()).toBe(1)
+
+      // Check half: with no inbound frames or acks, the same interval declares
+      // the link dead (no-data + oldest-unacked both exceed the 20s window).
+      expect(mux.isDisposed()).toBe(false)
+      vi.advanceTimersByTime(25_000)
+      expect(mux.isDisposed()).toBe(true)
+    })
+  })
+
+  describe('wake guard (timer pause across system sleep, #7773)', () => {
+    it('sends one fresh probe per link and rebaselines liveness after a wake gap', () => {
+      const secondTransport = createMockTransport()
+      const secondMux = new SshChannelMultiplexer(secondTransport)
+
+      try {
+        // Reach steady state with pending unacked keepalives (<5s old at pause).
+        vi.advanceTimersByTime(5_000)
+        expect(mux.isDisposed()).toBe(false)
+        expect(secondMux.isDisposed()).toBe(false)
+
+        const internals = getMuxInternals(mux)
+        const secondInternals = getMuxInternals(secondMux)
+        const previousReceivedAt = internals.lastReceivedAt
+        const writesBefore = transport.written.length
+        const secondWritesBefore = secondTransport.written.length
+
+        // Simulate sleep/App Nap: wall clock jumps far ahead with no ticks.
+        vi.setSystemTime(Date.now() + 60 * 60 * 1000)
+        vi.advanceTimersByTime(5_000)
+        const resumedAt = Date.now()
+
+        expect(mux.isDisposed()).toBe(false)
+        expect(secondMux.isDisposed()).toBe(false)
+        expect(transport.written).toHaveLength(writesBefore + 1)
+        expect(secondTransport.written).toHaveLength(secondWritesBefore + 1)
+        expect(transport.written.at(-1)![0]).toBe(MessageType.KeepAlive)
+        expect(secondTransport.written.at(-1)![0]).toBe(MessageType.KeepAlive)
+
+        expect(internals.lastReceivedAt).toBe(resumedAt)
+        expect(internals.lastReceivedAt).toBeGreaterThan(previousReceivedAt)
+        expect(new Set(internals.unackedTimestamps.values())).toEqual(new Set([resumedAt]))
+        expect(secondInternals.lastReceivedAt).toBe(resumedAt)
+        expect(new Set(secondInternals.unackedTimestamps.values())).toEqual(new Set([resumedAt]))
+      } finally {
+        secondMux.dispose()
+      }
+    })
+
+    it('keeps the link alive after wake when frames resume', () => {
+      vi.advanceTimersByTime(5_000)
+      vi.setSystemTime(Date.now() + 60 * 60 * 1000)
+      vi.advanceTimersByTime(5_000) // guard tick
+
+      // The relay answers the post-wake probe; the link must stay up.
+      let seq = 1
+      for (let i = 0; i < 8; i++) {
+        vi.advanceTimersByTime(5_000)
+        transport.dataCallbacks[0](encodeKeepAliveFrame(seq++, 0))
+      }
+      expect(mux.isDisposed()).toBe(false)
+    })
+
+    it('still detects a genuinely dead link within the next window after wake', () => {
+      vi.advanceTimersByTime(5_000)
+      vi.setSystemTime(Date.now() + 60 * 60 * 1000)
+      vi.advanceTimersByTime(5_000) // guard tick: reset + probe, no kill
+
+      expect(mux.isDisposed()).toBe(false)
+      // No frames arrive after the guard reset; the honest window expires.
+      vi.advanceTimersByTime(25_000)
+      expect(mux.isDisposed()).toBe(true)
+    })
+  })
+
+  describe('probeLiveness', () => {
+    it('sends a keepalive and resolves true when any frame arrives', async () => {
+      const writesBefore = transport.written.length
+      const probe = mux.probeLiveness(5_000)
+
+      expect(transport.written.length).toBe(writesBefore + 1)
+      expect(transport.written.at(-1)![0]).toBe(MessageType.KeepAlive)
+
+      transport.dataCallbacks[0](encodeKeepAliveFrame(1, 0))
+      await expect(probe).resolves.toBe(true)
+    })
+
+    it('resolves false when no frame arrives before the timeout', async () => {
+      const probe = mux.probeLiveness(5_000)
+      vi.advanceTimersByTime(5_000)
+      await expect(probe).resolves.toBe(false)
+    })
+
+    it('resolves false when the mux is disposed while probing', async () => {
+      const probe = mux.probeLiveness(5_000)
+      mux.dispose()
+      await expect(probe).resolves.toBe(false)
+    })
+
+    it('resolves false immediately on a disposed mux', async () => {
+      mux.dispose()
+      await expect(mux.probeLiveness(5_000)).resolves.toBe(false)
     })
   })
 

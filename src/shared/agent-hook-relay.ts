@@ -80,6 +80,8 @@ export type AgentHookRelayEnvelope = {
   toolAgentType?: string
   /** Provider-owned conversation/session id needed to resume a sleeping agent. */
   providerSession?: AgentProviderSessionMetadata
+  /** True when this envelope updates resume identity without changing turn status. */
+  providerSessionOnly?: boolean
   /** True when the relay is replaying its cache after Orca reconnects. */
   isReplay?: boolean
   /** Forwarded from the agent CLI POST body. The relay default is `remote`,
@@ -105,6 +107,15 @@ export const AGENT_HOOK_REQUEST_REPLAY_METHOD = 'agent_hook.requestReplay' as co
  *  OpenCode/Pi plugin source files to the relay so it can materialize the
  *  overlay dirs on the remote. */
 export const AGENT_HOOK_INSTALL_PLUGINS_METHOD = 'agent_hook.installPlugins' as const
+
+/** JSON-RPC request method that asks the remote relay to install every
+ *  managed hook using its local filesystem instead of WAN-bound SFTP. */
+export const AGENT_HOOK_INSTALL_MANAGED_HOOKS_METHOD = 'agent_hook.installManagedHooks' as const
+
+export type AgentHookInstallManagedHooksParams = {
+  /** SHA-256 fingerprint of the server key negotiated by Orca's SSH transport. */
+  hostKeyFingerprint?: string
+}
 
 /** Feature-flag env var. Read once at process start by Orca and the relay.
  *  Remote agent hooks ship as the default SSH behavior; set "0" to opt out. */

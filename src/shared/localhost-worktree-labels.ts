@@ -89,8 +89,7 @@ function getLocalhostWorktreeShortName(worktreeName: string): string {
     worktreeName
       .split(/[\\/]/)
       .map((part) => part.trim())
-      .filter(Boolean)
-      .at(-1) ?? worktreeName
+      .findLast(Boolean) ?? worktreeName
   )
 }
 

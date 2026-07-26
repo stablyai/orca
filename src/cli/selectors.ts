@@ -1,4 +1,4 @@
-import { isAbsolute, relative, resolve as resolvePath } from 'node:path'
+import { resolve as resolvePath } from 'node:path'
 import type {
   ComputerAppQuery,
   RuntimeWorktreeListResult,
@@ -39,16 +39,8 @@ function assertLocalCwdWorktreeSelector(selector: string, client: RuntimeClient)
   // server, so cwd-derived worktree selectors are only valid locally.
   throw new RuntimeClientError(
     'invalid_argument',
-    `${selector} is a local cwd shortcut and cannot be resolved against a remote runtime. Pass an explicit server-side worktree selector such as id:<id>, name:<displayName>, branch:<branch>, issue:<number>, or path:<absolute-server-path>.`
+    `${selector} is a local cwd shortcut and cannot be resolved against a remote runtime. Pass an explicit server-side worktree selector such as id:<repo-id>::<path>, name:<displayName>, branch:<branch>, issue:<number>, or path:<absolute-server-path>.`
   )
-}
-
-function isWithinPath(parentPath: string, childPath: string): boolean {
-  if (isPathInsideOrEqual(parentPath, childPath)) {
-    return true
-  }
-  const relativePath = relative(parentPath, childPath)
-  return relativePath === '' || (!relativePath.startsWith('..') && !isAbsolute(relativePath))
 }
 
 export async function resolveCurrentWorktreeSelector(
@@ -65,7 +57,10 @@ export async function resolveCurrentWorktreeSelector(
   let enclosingPathLength = -1
   for (const worktree of worktrees.result.worktrees) {
     const worktreePath = resolvePath(worktree.path)
-    if (!isWithinPath(worktreePath, currentPath) || worktreePath.length <= enclosingPathLength) {
+    if (
+      !isPathInsideOrEqual(worktreePath, currentPath) ||
+      worktreePath.length <= enclosingPathLength
+    ) {
       continue
     }
     enclosingWorktree = worktree

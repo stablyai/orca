@@ -8,6 +8,7 @@ import { getProviderRuntimeContextKey } from '@/lib/provider-runtime-context'
 import { useAppStore } from '@/store'
 import { IntegrationCardDetails, IntegrationCardShell } from './integration-card-shell'
 import { useIntegrationSubordinateRowClass } from './integration-card-presentation'
+import { LinearAgentSkillInstallCta } from './linear-agent-skill-install-cta'
 import { getProviderAccountScope } from './provider-account-scope'
 import { ProviderHostScopeControl } from './ProviderHostScopeControl'
 import { translate } from '@/i18n/i18n'
@@ -200,6 +201,7 @@ export function LinearIntegrationCard(): React.JSX.Element {
             </Button>
           </>
         ) : null}
+        <LinearAgentSkillInstallCta settings={settings} />
       </IntegrationCardDetails>
 
       <LinearApiKeyDialog

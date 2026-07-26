@@ -135,14 +135,20 @@ describe('fetchMiniMaxRateLimits', () => {
   })
 
   it('aborts a hung fetch after the timeout and classifies it as network', async () => {
+    // AbortSignal.timeout() uses an internal timer that fake timers cannot
+    // advance, so simulate the timeout firing with an already-aborted signal.
+    vi.spyOn(AbortSignal, 'timeout').mockReturnValue(
+      AbortSignal.abort(new DOMException('The operation timed out.', 'TimeoutError'))
+    )
     netFetchMock.mockImplementation((_url: string, init: { signal: AbortSignal }) => {
       return new Promise((_resolve, reject) => {
         const abort = (): void => {
-          const error = new Error('The operation was aborted')
-          error.name = 'AbortError'
+          const error = new Error('The operation timed out.')
+          error.name = 'TimeoutError'
           reject(error)
         }
-        // The manual-cookie-header fallback receives the already-aborted signal.
+        // Both the session-cookie-jar and manual-cookie-header fetches receive
+        // the already-aborted timeout signal.
         if (init.signal.aborted) {
           abort()
           return
@@ -150,9 +156,7 @@ describe('fetchMiniMaxRateLimits', () => {
         init.signal.addEventListener('abort', abort)
       })
     })
-    const promise = fetchMiniMaxRateLimits({ cookie: FULL_COOKIE })
-    await vi.advanceTimersByTimeAsync(15_000)
-    const result = await promise
+    const result = await fetchMiniMaxRateLimits({ cookie: FULL_COOKIE })
     expect(result.status).toBe('error')
     expect(result.usageMetadata?.failureKind).toBe('network')
   })

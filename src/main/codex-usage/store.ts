@@ -19,7 +19,10 @@ import { loadKnownUsageWorktreesByRepo, type UsageWorktreeRef } from '../usage-w
 import type { CodexUsagePersistedState } from './types'
 import { createWorktreeRefs, scanCodexUsageFiles } from './scanner'
 
-const SCHEMA_VERSION = 3
+// Why: v5 keys Codex ownership on raw token_count identity without session id
+// so forks that rewrite session_meta still match. Older caches used session-
+// scoped keys and can double-count after fork/resume (#8006).
+const SCHEMA_VERSION = 5
 const STALE_MS = 5 * 60_000
 const AUTOMATION_ATTRIBUTION_WINDOW_MS = 5 * 60_000
 

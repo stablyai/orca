@@ -1,7 +1,10 @@
 import { describe, expect, it, vi } from 'vitest'
 
 import { CLIPBOARD_TEXT_MEASURE_YIELD_CODE_UNITS } from '../../../../shared/clipboard-text'
-import { createRemoteRuntimePtyTextBatcher } from './remote-runtime-pty-batching'
+import {
+  createRemoteRuntimePtyTextBatcher,
+  createRemoteRuntimeViewportBatcher
+} from './remote-runtime-pty-batching'
 
 describe('createRemoteRuntimePtyTextBatcher', () => {
   it('coalesces small input until the debounce flush', async () => {
@@ -134,6 +137,45 @@ describe('createRemoteRuntimePtyTextBatcher', () => {
       batcher.flush()
 
       expect(flushes).toEqual([])
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+})
+
+describe('createRemoteRuntimeViewportBatcher', () => {
+  it('drops the queued viewport on clear so a later flush emits nothing', () => {
+    vi.useFakeTimers()
+    try {
+      const resizes: { cols: number; rows: number }[] = []
+      const batcher = createRemoteRuntimeViewportBatcher(33, (cols, rows) => {
+        resizes.push({ cols, rows })
+      })
+
+      batcher.queue(120, 40)
+      batcher.clear()
+      // A stale pending viewport left behind by clear() would leak out here.
+      batcher.flush()
+
+      expect(resizes).toEqual([])
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('does not emit a cleared viewport when the debounce timer would have fired', () => {
+    vi.useFakeTimers()
+    try {
+      const resizes: { cols: number; rows: number }[] = []
+      const batcher = createRemoteRuntimeViewportBatcher(33, (cols, rows) => {
+        resizes.push({ cols, rows })
+      })
+
+      batcher.queue(90, 30)
+      batcher.clear()
+      vi.advanceTimersByTime(100)
+
+      expect(resizes).toEqual([])
     } finally {
       vi.useRealTimers()
     }

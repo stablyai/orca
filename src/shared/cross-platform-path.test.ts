@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import {
   isPathInsideOrEqual,
   isRuntimePathAbsolute,
+  normalizeRuntimePathForComparison,
   relativePathInsideRoot,
   resolveRuntimePath
 } from './cross-platform-path'
@@ -12,6 +13,13 @@ describe('cross-platform path containment', () => {
     expect(isPathInsideOrEqual('/repo/app', '/repo/app/src/index.ts')).toBe(true)
     expect(isPathInsideOrEqual('/repo/app', '/repo/application/src/index.ts')).toBe(false)
     expect(relativePathInsideRoot('/repo/app/', '/repo/app/src/index.ts')).toBe('src/index.ts')
+  })
+
+  it('keeps literal POSIX backslashes distinct from separators', () => {
+    expect(normalizeRuntimePathForComparison('/srv/team\\repo')).toBe('/srv/team\\repo')
+    expect(normalizeRuntimePathForComparison('/srv/team/repo')).toBe('/srv/team/repo')
+    expect(isPathInsideOrEqual('/srv/team\\repo', '/srv/team/repo/file.ts')).toBe(false)
+    expect(relativePathInsideRoot('/srv/repo', '/srv/repo/a\\b.txt')).toBe('a\\b.txt')
   })
 
   it('handles Windows drive roots and sibling drives case-insensitively', () => {
@@ -27,6 +35,39 @@ describe('cross-platform path containment', () => {
       'src'
     )
     expect(isPathInsideOrEqual('\\\\Server\\Share\\Repo', '\\\\server\\share\\repo2')).toBe(false)
+  })
+
+  it('treats WSL UNC aliases as the same case-sensitive filesystem', () => {
+    expect(
+      isPathInsideOrEqual(
+        '\\\\wsl$\\Ubuntu\\home\\Alice\\repo',
+        '\\\\wsl.localhost\\ubuntu\\home\\Alice\\repo\\src'
+      )
+    ).toBe(true)
+    expect(
+      relativePathInsideRoot(
+        '\\\\wsl$\\Ubuntu\\home\\Alice\\repo',
+        '\\\\wsl.localhost\\ubuntu\\home\\Alice\\repo\\Src'
+      )
+    ).toBe('Src')
+    expect(
+      isPathInsideOrEqual(
+        '\\\\wsl$\\Ubuntu\\home\\Alice\\repo',
+        '\\\\wsl.localhost\\ubuntu\\home\\alice\\repo\\src'
+      )
+    ).toBe(false)
+    expect(
+      relativePathInsideRoot(
+        '\\\\wsl$\\Ubuntu\\home\\Alice\\repo',
+        '\\\\wsl.localhost\\ubuntu\\home\\alice\\repo\\src'
+      )
+    ).toBeNull()
+    expect(
+      relativePathInsideRoot(
+        '\\\\wsl$\\Ubuntu\\home\\Alice\\repo',
+        '\\\\wsl.localhost\\ubuntu\\home\\Alice\\repo\\line\nbreak'
+      )
+    ).toBe('line\nbreak')
   })
 
   it('resolves POSIX relative paths without using the process cwd', () => {

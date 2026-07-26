@@ -1,5 +1,3 @@
-/* eslint-disable max-lines -- Why: nested scan behavior is intentionally covered in one
-suite so traversal order, ignore rules, cancellation, and filesystem fixtures stay aligned. */
 import { mkdtemp, mkdir, writeFile, rm, symlink } from 'node:fs/promises'
 import { join } from 'node:path'
 import { tmpdir } from 'node:os'

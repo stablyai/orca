@@ -90,6 +90,7 @@ export const AUTOMATION_COMMAND_SPECS: CommandSpec[] = [
   },
   {
     path: ['automations', 'remove'],
+    destructive: true,
     summary: 'Remove an Orca automation and its run history',
     usage: 'orca automations remove <id> [--json]',
     allowedFlags: [...GLOBAL_FLAGS, 'id'],
