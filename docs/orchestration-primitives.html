@@ -697,9 +697,9 @@
                 <p class="eyebrow">Implemented</p>
                 <h3>Exact structured output with a truthful fallback</h3>
                 <p>
-                  Orca reuses its pane-scoped hook association to read a supported Codex or Claude
-                  transcript. When it cannot prove that source, it returns labeled bounded terminal
-                  output instead of guessing a session.
+                  Orca reuses its pane-scoped hook association to read a supported Codex, Claude,
+                  OpenClaude, or Grok transcript. When it cannot prove that source, it returns
+                  labeled bounded terminal output instead of guessing a session.
                 </p>
               </div>
             </div>
@@ -1831,7 +1831,8 @@ orca orchestration reply --id msg_question_7 --body "Yes; preserve it." --json</
               <p>
                 <code>worker-read --dispatch</code> resolves the worker server and exact process from
                 the Dispatch receipt. Its default <code>auto</code> source returns the exact
-                hook-reported Codex or Claude transcript when Orca can prove that association;
+                hook-reported Codex, Claude, OpenClaude, or Grok transcript when Orca can prove that
+                association;
                 otherwise it returns bounded, explicitly labeled terminal output. Agents never
                 choose a server, provider session ID, or transcript path, and task authority never
                 comes from transcript prose.
@@ -1900,9 +1901,9 @@ orca orchestration worker-read --dispatch dispatch_7 \
                 <h3>Narrow provider readers</h3>
                 <p>
                   Structured reading reuses the existing bounded native transcript decoders only
-                  for exact Codex and Claude associations. Other providers and mixed-version peers
-                  retain terminal fallback; no resume, live-stream control, or universal transcript
-                  framework is added.
+                  for exact Codex, Claude, OpenClaude, and Grok associations. Other providers and
+                  mixed-version peers retain terminal fallback; no resume, live-stream control, or
+                  universal transcript framework is added.
                 </p>
               </div>
             </div>
@@ -2231,9 +2232,9 @@ orca orchestration worker-read --dispatch dispatch_7 \
                   <tr>
                     <td>Structured worker output</td>
                     <td>
-                      The worker-owning server reads an exact hook-reported Codex or Claude
-                      transcript when supported. If the additive federated read method is absent,
-                      <code>auto</code> returns bounded terminal output labeled with
+                      The worker-owning server reads an exact hook-reported Codex, Claude,
+                      OpenClaude, or Grok transcript when supported. If the additive federated read
+                      method is absent, <code>auto</code> returns bounded terminal output labeled with
                       <code>remote_capability_unavailable</code>;
                       <code>transcript</code> returns <code>transcript_required</code>.
                     </td>
@@ -2750,8 +2751,9 @@ orca orchestration worker-show --dispatch dispatch_7 --json
                 <div>
                   <h3>Exact structured worker output</h3>
                   <p>
-                    Reuse Orca's existing pane-scoped hook association and bounded Codex/Claude
-                    transcript decoders. Add <code>auto|transcript|terminal</code> selection,
+                    Reuse Orca's existing pane-scoped hook association and bounded
+                    Codex/Claude/OpenClaude/Grok transcript decoders. Add
+                    <code>auto|transcript|terminal</code> selection,
                     path-free source identity, opaque source-pinned paging, and labeled terminal
                     fallback without adding provider control or a universal transcript layer.
                   </p>

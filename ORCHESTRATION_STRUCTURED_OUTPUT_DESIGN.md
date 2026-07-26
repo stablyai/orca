@@ -316,7 +316,7 @@ Extract or wrap its pure reader behind a small orchestration adapter:
 
 ```ts
 type WorkerTranscriptReader = {
-  provider: 'codex' | 'claude'
+  provider: 'codex' | 'claude' | 'openclaude' | 'grok'
   readPage(input: ExactTranscriptRead): Promise<ExactTranscriptPage>
 }
 ```

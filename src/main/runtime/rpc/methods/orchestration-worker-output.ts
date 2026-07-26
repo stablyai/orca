@@ -11,6 +11,7 @@ import {
   decodeWorkerOutputCursor,
   encodeWorkerOutputCursor
 } from '../../orchestration/worker-output-cursor'
+import { redactWorkerTerminalLines } from '../../orchestration/worker-transcript-payload'
 import { readWorkerTranscript } from '../../orchestration/worker-transcript-read'
 
 export async function readExactWorkerOutput(args: {
@@ -129,6 +130,7 @@ async function readTerminalOutput(
     cursor: cursor?.source === 'terminal' ? cursor.position : undefined,
     limit: args.limit
   })
+  const redactedTerminal = redactWorkerTerminalLines(terminal.tail)
   const position =
     terminal.nextCursor !== null && /^\d+$/.test(terminal.nextCursor)
       ? Number.parseInt(terminal.nextCursor, 10)
@@ -141,11 +143,11 @@ async function readTerminalOutput(
     dispatchId: args.dispatchId,
     source: 'terminal',
     sourceIdentity,
-    terminal,
+    terminal: { ...terminal, tail: redactedTerminal.lines },
     cursor: nextCursor,
     status: { worker: args.workerState, terminal: terminal.status },
     fallbackReason: null,
-    warnings: []
+    warnings: redactedTerminal.warnings
   }
 }
 
@@ -159,7 +161,11 @@ async function fallbackOrThrow(
   }
   const fallback = await readTerminalOutput(args, null)
   return fallback.source === 'terminal'
-    ? { ...fallback, fallbackReason: reason, warnings }
+    ? {
+        ...fallback,
+        fallbackReason: reason,
+        warnings: [...new Set([...fallback.warnings, ...warnings])]
+      }
     : fallback
 }
 

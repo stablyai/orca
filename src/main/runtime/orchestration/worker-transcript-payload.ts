@@ -19,6 +19,22 @@ export function clampWorkerTranscriptLimit(limit: number | undefined): number {
   return Math.min(Math.floor(limit!), MAX_WORKER_TRANSCRIPT_MESSAGE_LIMIT)
 }
 
+export function redactWorkerTerminalLines(lines: readonly string[]): {
+  lines: string[]
+  warnings: string[]
+} {
+  let redacted = false
+  const bounded = lines.map((line) => {
+    const result = replaceDispatchCapabilities(line)
+    redacted ||= result.redacted
+    return result.value
+  })
+  return {
+    lines: bounded,
+    warnings: redacted ? ['Dispatch capability tokens were redacted from terminal output.'] : []
+  }
+}
+
 export function boundWorkerTranscriptMessages(
   messages: readonly NativeChatMessage[],
   transcriptPath?: string
@@ -189,11 +205,22 @@ function boundToolInput(
 }
 
 function redactSensitiveText(value: string, warnings: Set<string>): string {
-  if (!DISPATCH_CAPABILITY_PATTERN.test(value)) {
-    DISPATCH_CAPABILITY_PATTERN.lastIndex = 0
-    return value
+  const result = replaceDispatchCapabilities(value)
+  if (!result.redacted) {
+    return result.value
   }
-  DISPATCH_CAPABILITY_PATTERN.lastIndex = 0
   warnings.add('Dispatch capability tokens were redacted from transcript output.')
-  return value.replace(DISPATCH_CAPABILITY_PATTERN, DISPATCH_CAPABILITY_REDACTION)
+  return result.value
+}
+
+function replaceDispatchCapabilities(value: string): { value: string; redacted: boolean } {
+  DISPATCH_CAPABILITY_PATTERN.lastIndex = 0
+  const redacted = DISPATCH_CAPABILITY_PATTERN.test(value)
+  DISPATCH_CAPABILITY_PATTERN.lastIndex = 0
+  return {
+    value: redacted
+      ? value.replace(DISPATCH_CAPABILITY_PATTERN, DISPATCH_CAPABILITY_REDACTION)
+      : value,
+    redacted
+  }
 }

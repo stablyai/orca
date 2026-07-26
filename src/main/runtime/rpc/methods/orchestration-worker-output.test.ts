@@ -83,6 +83,67 @@ describe('exact orchestration worker output', () => {
     expect(readTerminal).not.toHaveBeenCalled()
   })
 
+  it('reads Grok through the shared Native Chat transcript decoder', async () => {
+    await writeFile(
+      transcriptA,
+      `${JSON.stringify({
+        id: 'grok-a',
+        type: 'assistant',
+        content: 'Grok worker only'
+      })}\n`
+    )
+    providerSession = {
+      ...providerSession!,
+      agent: 'grok',
+      providerSession: {
+        key: 'session_id',
+        id: 'session-grok',
+        transcriptPath: transcriptA
+      }
+    }
+
+    const result = await read()
+
+    expect(result).toMatchObject({
+      source: 'transcript',
+      provider: 'grok',
+      transcript: {
+        messages: [{ role: 'assistant', blocks: [{ type: 'text', text: 'Grok worker only' }] }]
+      }
+    })
+    expect(readTerminal).not.toHaveBeenCalled()
+  })
+
+  it('labels OpenCode as a terminal fallback when no transcript decoder exists', async () => {
+    const capability = `dcap_${'A'.repeat(43)}`
+    readTerminal.mockResolvedValue({
+      handle: 'term_worker',
+      status: 'running',
+      tail: [`opencode --dispatch-capability ${capability}`],
+      truncated: false,
+      nextCursor: '9'
+    })
+    providerSession = {
+      ...providerSession!,
+      agent: 'opencode',
+      providerSession: {
+        key: 'session_id',
+        id: 'session-opencode',
+        transcriptPath: transcriptA
+      }
+    }
+
+    const result = await read()
+
+    expect(result).toMatchObject({
+      source: 'terminal',
+      fallbackReason: 'provider_unsupported',
+      terminal: { tail: ['opencode --dispatch-capability [dispatch capability redacted]'] },
+      warnings: ['Dispatch capability tokens were redacted from terminal output.']
+    })
+    expect(JSON.stringify(result)).not.toContain(capability)
+  })
+
   it('rejects an old cursor after the exact provider session changes', async () => {
     const initial = await read()
     if (initial.source !== 'transcript') {

@@ -170,7 +170,7 @@ Remote `current` and `new-child` are intentionally invalid because those words a
 The follow-up is structured inbox mail, not prompt injection. The worker's next
 `orchestration check` receives it even when the Dispatch is on another connected Orca server.
 
-`worker-read` defaults to `--source auto`: Orca returns the exact hook-reported Codex/Claude transcript when it can prove the worker session, otherwise it returns bounded terminal output with `source: "terminal"` and a typed `fallbackReason`. Continue with the returned top-level `cursor`; it stays pinned to that exact source. If Orca reports `source_changed`, start a fresh read without the old cursor. Never supply or guess a provider session ID or transcript path.
+`worker-read` defaults to `--source auto`: Orca returns the exact hook-reported Codex, Claude, OpenClaude, or Grok transcript when it can prove the worker session, otherwise it returns bounded terminal output with `source: "terminal"` and a typed `fallbackReason`. Continue with the returned top-level `cursor`; it stays pinned to that exact source. If Orca reports `source_changed`, start a fresh read without the old cursor. Never supply or guess a provider session ID or transcript path.
 
 Wait until every expected Dispatch settles, not for a fixed number of batches:
 

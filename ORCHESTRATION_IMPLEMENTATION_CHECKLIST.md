@@ -370,7 +370,8 @@ Explicit non-goals:
 - [x] Reuse Orca's exact pane/process-to-provider-session association; do not create a second status
       system.
 - [x] Keep bounded terminal-read as the universal fallback.
-- [x] Read only Codex/Claude transcripts supported by the existing native-chat decoders.
+- [x] Read only Codex, Claude/OpenClaude, and Grok transcripts supported by the existing
+      Native Chat decoders.
 - [x] Never guess the latest session by current working directory, terminal title, logo, or agent
       type.
 - [x] Pin Dispatch, process, source, and provider session for the full opaque cursor chain.
@@ -1617,6 +1618,37 @@ Append new entries chronologically. Do not rewrite older entries except to corre
 - Next:
   - Run document/skill checks, push the synchronization fix, resolve the review thread, and continue
     branch-head CI monitoring.
+
+### 2026-07-25 — Physical Grok and OpenCode provider dogfood
+
+- Changes:
+  - Reused Native Chat's existing Grok session resolver and transcript decoder in `worker-read`.
+  - Kept OpenCode on the generic terminal fallback because Native Chat has no OpenCode transcript
+    decoder.
+  - Applied Dispatch-capability redaction to terminal fallback lines as well as structured
+    transcript blocks.
+  - Updated the agent-facing skill and proposal to name the current structured provider set.
+- Verification:
+  - An isolated branch-head server started fresh same-worktree Grok and OpenCode workers through
+    `worker-start`; both accepted their injected tasks and returned authenticated successful
+    `worker_done` reports.
+  - Grok returned `source=transcript`, `provider=grok`, the exact marker, opaque message IDs and
+    cursor, and no capability token or transcript path.
+  - OpenCode returned `source=terminal`, `fallbackReason=provider_unsupported`, the exact marker,
+    and a source-pinned opaque cursor; explicitly requiring a transcript returned
+    `transcript_required`.
+  - The first OpenCode read exposed its pane-bound Dispatch capability in terminal text. After the
+    fix and a clean runtime rebuild, the repeated physical read replaced it with
+    `[dispatch capability redacted]`, emitted an explicit warning, and contained no raw token.
+  - Focused Native Chat/orchestration output tests passed 49 tests and Node typecheck passed.
+- Findings:
+  - Provider support and structured-output support remain separate: OpenCode orchestration is fully
+    usable without inventing an OpenCode transcript adapter.
+  - Terminal fallback is an orchestration output boundary and needs the same narrow secret
+    redaction as structured output; this does not change direct terminal-read behavior.
+- Next:
+  - Run the complete orchestration regression selection and repository quality gates, then commit
+    and push the provider dogfood fixes.
 
 ### Entry template
 

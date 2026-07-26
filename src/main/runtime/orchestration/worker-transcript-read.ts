@@ -42,7 +42,7 @@ export async function readWorkerTranscript(args: {
   limit?: number
 }): Promise<WorkerTranscriptReadResult> {
   const transcriptAgent = resolveNativeChatTranscriptAgent(args.agent)
-  if (transcriptAgent !== 'codex' && transcriptAgent !== 'claude') {
+  if (!transcriptAgent) {
     return { ok: false, reason: 'provider_unsupported', warnings: [] }
   }
   const decode = nativeChatLineDecoderForAgent(args.agent)

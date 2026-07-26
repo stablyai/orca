@@ -1,5 +1,8 @@
 import { describe, expect, it } from 'vitest'
-import { boundWorkerTranscriptMessages } from './worker-transcript-payload'
+import {
+  boundWorkerTranscriptMessages,
+  redactWorkerTerminalLines
+} from './worker-transcript-payload'
 
 describe('worker transcript wire bounds', () => {
   it('clips oversized blocks and omits local image paths', () => {
@@ -82,6 +85,17 @@ describe('worker transcript wire bounds', () => {
     expect(JSON.stringify(result.messages)).toContain('[dispatch capability redacted]')
     expect(result.warnings).toContain(
       'Dispatch capability tokens were redacted from transcript output.'
+    )
+  })
+
+  it('redacts dispatch capabilities from terminal fallback lines', () => {
+    const capability = `dcap_${'A'.repeat(43)}`
+
+    expect(redactWorkerTerminalLines([`send --dispatch-capability ${capability}`, 'safe'])).toEqual(
+      {
+        lines: ['send --dispatch-capability [dispatch capability redacted]', 'safe'],
+        warnings: ['Dispatch capability tokens were redacted from terminal output.']
+      }
     )
   })
 })
