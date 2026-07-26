@@ -765,6 +765,84 @@ describe('DaemonPtyAdapter (IPtyProvider)', () => {
     })
   })
 
+  describe('mode 2031 fact compatibility (#9993)', () => {
+    let onEventSpy: ReturnType<typeof vi.spyOn>
+    // Why these tests exist: daemons survive app updates, so a NEW desktop can be
+    // driving a PRESERVED older daemon. Those daemons emit '2031-subscribe' but have
+    // no unsubscribe fact at all. For a gate-managed pane the renderer never sees the
+    // bytes, so main's facts are the only thing that can retire the subscription —
+    // trusting a subscribe that can never be retracted leaves it live forever, and the
+    // next theme flip injects CSI 997 into whatever shell replaced the exited TUI.
+    function captureForwardedFacts(target: DaemonPtyAdapter): {
+      kinds: () => string[]
+      emit: (fact: { kind: string }) => void
+    } {
+      const forwarded: string[] = []
+      target.onBackgroundStreamEvent((payload) => {
+        if (payload.kind === 'transientFact') {
+          forwarded.push((payload.fact as { kind: string }).kind)
+        }
+      })
+      const listeners: ((event: unknown) => void)[] = []
+      onEventSpy = vi.spyOn(DaemonClient.prototype, 'onEvent').mockImplementation((listener) => {
+        listeners.push(listener)
+        return () => {}
+      })
+      return {
+        kinds: () => forwarded,
+        emit: (fact) => {
+          expect(listeners.length).toBeGreaterThan(0)
+          for (const listener of listeners) {
+            // `type: 'event'` is the envelope the routing switch requires.
+            listener({
+              type: 'event',
+              event: 'transientFact',
+              sessionId: 'session-1',
+              payload: fact
+            })
+          }
+        }
+      }
+    }
+
+    it('drops a pre-v29 daemon 2031-subscribe it could never retract', () => {
+      // v28 is the version shipping today, so this is the live upgrade hazard: a v28
+      // daemon preserved across an app update, still holding real sessions.
+      const legacy = new DaemonPtyAdapter({ socketPath, tokenPath, protocolVersion: 28 })
+      try {
+        const captured = captureForwardedFacts(legacy)
+        // Force a fresh wire-up so the spy above is the listener the adapter installs.
+        legacy['removeEventListener'] = null
+        legacy['setupEventRouting']()
+        captured.emit({ kind: '2031-subscribe' })
+        captured.emit({ kind: 'bell' })
+
+        // The unretractable subscribe is withheld; unrelated facts still flow, so the
+        // gate is narrow rather than "ignore this daemon's facts".
+        expect(captured.kinds()).toEqual(['bell'])
+      } finally {
+        legacy.dispose()
+        onEventSpy.mockRestore()
+      }
+    })
+
+    it('forwards 2031 facts from a v29 daemon that can retract them', () => {
+      const current = new DaemonPtyAdapter({ socketPath, tokenPath, protocolVersion: 29 })
+      try {
+        const captured = captureForwardedFacts(current)
+        current['removeEventListener'] = null
+        current['setupEventRouting']()
+        captured.emit({ kind: '2031-subscribe' })
+        captured.emit({ kind: '2031-unsubscribe' })
+
+        expect(captured.kinds()).toEqual(['2031-subscribe', '2031-unsubscribe'])
+      } finally {
+        current.dispose()
+        onEventSpy.mockRestore()
+      }
+    })
+  })
+
   describe('background stream thinning compatibility', () => {
     it('reports authoritative snapshot support only for protocol v20 and newer', () => {
       const legacy = new DaemonPtyAdapter({ socketPath, tokenPath, protocolVersion: 19 })

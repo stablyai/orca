@@ -16,6 +16,7 @@ import {
   AGENT_SESSION_CREATE_OPERATION_DAEMON_PROTOCOL_VERSION,
   GIT_CREDENTIAL_GUARD_HOST_PROTOCOL_VERSION,
   PROTOCOL_VERSION,
+  supportsMode2031UnsubscribeFact,
   supportsPtyStartupIngress,
   type CreateOrAttachResult,
   type DaemonEvent,
@@ -1925,6 +1926,18 @@ export class DaemonPtyAdapter implements IPtyProvider {
             : { sequenceChars: event.payload.sequenceChars })
         })
       } else if (event.event === 'transientFact') {
+        // Why (#9993): a pre-v29 daemon emits '2031-subscribe' but has no unsubscribe
+        // fact, so a subscription it registers can never be retracted — a TUI exiting
+        // while its pane is hidden would leave it live and the next theme flip would
+        // inject CSI 997 into whatever shell replaced it. Dropping the subscribe keeps
+        // those sessions on renderer-scanner authority, which is exactly the pre-fact
+        // behaviour: correct for visible panes, and no worse than today when hidden.
+        if (
+          event.payload.kind === '2031-subscribe' &&
+          !supportsMode2031UnsubscribeFact(this.protocolVersion)
+        ) {
+          return
+        }
         this.emitBackgroundStreamEvent({
           id: event.sessionId,
           kind: 'transientFact',
