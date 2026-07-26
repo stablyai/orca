@@ -13744,7 +13744,16 @@
       "bar": {
         "SortableTabContextMenu": {
           "switchToTerminalView": "terminal ビューに切り替える",
-          "switchToChatView": "チャットビューに切り替える"
+          "switchToChatView": "チャットビューに切り替える",
+          "closeTabsToLeft": "左側のタブを閉じる"
+        },
+        "BrowserTab": {
+          "closeOthers": "その他を閉じる",
+          "closeTabsToLeft": "左側のタブを閉じる"
+        },
+        "EditorFileTabContextMenu": {
+          "closeOthers": "その他を閉じる",
+          "closeTabsToLeft": "左側のタブを閉じる"
         }
       }
     },

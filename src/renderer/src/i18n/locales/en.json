@@ -13767,7 +13767,16 @@
       "bar": {
         "SortableTabContextMenu": {
           "switchToTerminalView": "Switch to terminal view",
-          "switchToChatView": "Switch to chat view"
+          "switchToChatView": "Switch to chat view",
+          "closeTabsToLeft": "Close Tabs To The Left"
+        },
+        "BrowserTab": {
+          "closeOthers": "Close Others",
+          "closeTabsToLeft": "Close Tabs To The Left"
+        },
+        "EditorFileTabContextMenu": {
+          "closeOthers": "Close Others",
+          "closeTabsToLeft": "Close Tabs To The Left"
         }
       }
     },

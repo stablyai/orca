@@ -1414,18 +1414,17 @@ function Terminal(): React.JSX.Element | null {
     [consumeSuppressedPtyExit]
   )
 
-  const handleCloseOthers = useCallback(
-    (tabId: string) => {
+  // Bulk-close for the tab bar: unlike closeUnifiedTab it must route each id to
+  // its backend (web-runtime sessions, terminals, editor files, browser tabs),
+  // skip pinned tabs, and defer dirty editor files to the confirm flow.
+  const closeTabBarTabs = useCallback(
+    (tabIds: string[]) => {
       if (!activeWorktreeId) {
         return
       }
       const state = useAppStore.getState()
-      const order = state.tabBarOrderByWorktree[activeWorktreeId] ?? []
       const dirtyFileIds: string[] = []
-      for (const id of order) {
-        if (id === tabId) {
-          continue
-        }
+      for (const id of tabIds) {
         const unifiedTab = (state.unifiedTabsByWorktree[activeWorktreeId] ?? []).find(
           (candidate) => candidate.id === id || candidate.entityId === id
         )
@@ -1468,6 +1467,10 @@ function Terminal(): React.JSX.Element | null {
         ) {
           destroyWorkspaceWebviews(state.browserPagesByWorkspace, id)
           closeBrowserTab(id)
+        } else if (unifiedTab?.contentType === 'simulator') {
+          // Why: simulator tabs live only in the unified-tab store, so the
+          // entity-store checks above never match them.
+          state.closeUnifiedTab(unifiedTab.id)
         }
       }
       if (dirtyFileIds.length > 0) {
@@ -1477,69 +1480,45 @@ function Terminal(): React.JSX.Element | null {
     [activeWorktreeId, closeBrowserTab, closeFile, closeTab, queueEditorCloseRequests]
   )
 
+  const handleCloseOthers = useCallback(
+    (tabId: string) => {
+      if (!activeWorktreeId) {
+        return
+      }
+      const order = useAppStore.getState().tabBarOrderByWorktree[activeWorktreeId] ?? []
+      closeTabBarTabs(order.filter((id) => id !== tabId))
+    },
+    [activeWorktreeId, closeTabBarTabs]
+  )
+
   const handleCloseTabsToRight = useCallback(
     (tabId: string) => {
       if (!activeWorktreeId) {
         return
       }
-      const state = useAppStore.getState()
-      const currentOrder = state.tabBarOrderByWorktree[activeWorktreeId] ?? []
+      const currentOrder = useAppStore.getState().tabBarOrderByWorktree[activeWorktreeId] ?? []
       const index = currentOrder.indexOf(tabId)
       if (index === -1) {
         return
       }
-      const rightIds = currentOrder.slice(index + 1)
-      const dirtyFileIds: string[] = []
-      for (const id of rightIds) {
-        const unifiedTab = (state.unifiedTabsByWorktree[activeWorktreeId] ?? []).find(
-          (candidate) => candidate.id === id || candidate.entityId === id
-        )
-        if (unifiedTab?.isPinned) {
-          continue
-        }
-        const runtimeEnvironmentId = getActiveWorktreeRuntimeEnvironmentId(activeWorktreeId)
-        if (
-          isWebRuntimeSessionActive(runtimeEnvironmentId) &&
-          (unifiedTab?.contentType === 'terminal' ||
-            (unifiedTab?.contentType === 'browser' &&
-              browserWorkspaceHasRemoteOwner(state, unifiedTab.entityId, runtimeEnvironmentId)))
-        ) {
-          if (unifiedTab.contentType === 'terminal') {
-            // Why: route terminal close through the destructive local lifecycle boundary before the paired-host RPC.
-            closeTerminalTab(unifiedTab.entityId)
-          } else {
-            void closeWebRuntimeSessionTab({
-              worktreeId: activeWorktreeId,
-              tabId: unifiedTab.id,
-              environmentId: runtimeEnvironmentId,
-              reason: 'user'
-            })
-          }
-          continue
-        }
-        if ((state.tabsByWorktree[activeWorktreeId] ?? []).some((tab) => tab.id === id)) {
-          closeTab(id)
-        } else if (
-          state.openFiles.some((file) => file.worktreeId === activeWorktreeId && file.id === id)
-        ) {
-          const file = state.openFiles.find((candidate) => candidate.id === id)
-          if (file?.isDirty) {
-            dirtyFileIds.push(id)
-            continue
-          }
-          closeFile(id)
-        } else if (
-          (state.browserTabsByWorktree[activeWorktreeId] ?? []).some((tab) => tab.id === id)
-        ) {
-          destroyWorkspaceWebviews(state.browserPagesByWorkspace, id)
-          closeBrowserTab(id)
-        }
-      }
-      if (dirtyFileIds.length > 0) {
-        queueEditorCloseRequests(dirtyFileIds)
-      }
+      closeTabBarTabs(currentOrder.slice(index + 1))
     },
-    [activeWorktreeId, closeBrowserTab, closeFile, closeTab, queueEditorCloseRequests]
+    [activeWorktreeId, closeTabBarTabs]
+  )
+
+  const handleCloseTabsToLeft = useCallback(
+    (tabId: string) => {
+      if (!activeWorktreeId) {
+        return
+      }
+      const currentOrder = useAppStore.getState().tabBarOrderByWorktree[activeWorktreeId] ?? []
+      const index = currentOrder.indexOf(tabId)
+      if (index === -1) {
+        return
+      }
+      closeTabBarTabs(currentOrder.slice(0, index))
+    },
+    [activeWorktreeId, closeTabBarTabs]
   )
 
   const handleCloseAllFiles = useCallback(() => {
@@ -2035,6 +2014,7 @@ function Terminal(): React.JSX.Element | null {
             onClose={handleCloseTab}
             onCloseOthers={handleCloseOthers}
             onCloseToRight={handleCloseTabsToRight}
+            onCloseToLeft={handleCloseTabsToLeft}
             onNewTerminalTab={() => handleNewTab()}
             onNewTerminalWithShell={handleNewTab}
             onNewBrowserTab={handleNewBrowserTab}

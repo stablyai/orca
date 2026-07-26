@@ -106,9 +106,13 @@ export default function BrowserTab({
   isActive,
   isPinned,
   hasTabsToRight,
+  hasTabsToLeft,
+  tabCount,
   onActivate,
   onClose,
+  onCloseOthers,
   onCloseToRight,
+  onCloseToLeft,
   onDuplicate,
   onTogglePin,
   dragData,
@@ -119,9 +123,13 @@ export default function BrowserTab({
   isActive: boolean
   isPinned: boolean
   hasTabsToRight: boolean
+  hasTabsToLeft: boolean
+  tabCount: number
   onActivate: () => void
   onClose: () => void
+  onCloseOthers: () => void
   onCloseToRight: () => void
+  onCloseToLeft: () => void
   onDuplicate: () => void
   onTogglePin: () => void
   dragData: TabDragItemData
@@ -300,9 +308,15 @@ export default function BrowserTab({
             <X className="size-3.5" />
             {translate('auto.components.tab.bar.BrowserTab.1611a1324b', 'Close')}
           </DropdownMenuItem>
+          <DropdownMenuItem onSelect={onCloseOthers} disabled={tabCount <= 1}>
+            {translate('components.tab.bar.BrowserTab.closeOthers', 'Close Others')}
+          </DropdownMenuItem>
           <DropdownMenuItem onSelect={onCloseToRight} disabled={!hasTabsToRight}>
             <PanelRightClose className="size-3.5" />
             {translate('auto.components.tab.bar.BrowserTab.9dd880bd56', 'Close Tabs To The Right')}
+          </DropdownMenuItem>
+          <DropdownMenuItem onSelect={onCloseToLeft} disabled={!hasTabsToLeft}>
+            {translate('components.tab.bar.BrowserTab.closeTabsToLeft', 'Close Tabs To The Left')}
           </DropdownMenuItem>
           <DropdownMenuItem
             onSelect={() => void window.api.shell.openUrl(openInBrowserUrl)}

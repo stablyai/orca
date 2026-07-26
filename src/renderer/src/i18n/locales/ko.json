@@ -13744,7 +13744,16 @@
       "bar": {
         "SortableTabContextMenu": {
           "switchToTerminalView": "terminal 보기로 전환",
-          "switchToChatView": "채팅 보기로 전환"
+          "switchToChatView": "채팅 보기로 전환",
+          "closeTabsToLeft": "왼쪽으로 탭 닫기"
+        },
+        "BrowserTab": {
+          "closeOthers": "다른 탭 닫기",
+          "closeTabsToLeft": "왼쪽으로 탭 닫기"
+        },
+        "EditorFileTabContextMenu": {
+          "closeOthers": "다른 탭 닫기",
+          "closeTabsToLeft": "왼쪽으로 탭 닫기"
         }
       }
     },

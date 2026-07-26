@@ -94,12 +94,14 @@ type SortableTabContextMenuProps = {
   point: { x: number; y: number }
   tabCount: number
   hasTabsToRight: boolean
+  hasTabsToLeft: boolean
   isPinned: boolean
   onOpenChange: (open: boolean) => void
   onActivate: (tabId: string) => void
   onClose: (tabId: string) => void
   onCloseOthers: (tabId: string) => void
   onCloseToRight: (tabId: string) => void
+  onCloseToLeft: (tabId: string) => void
   onRenameOpen: () => void
   onSetTabColor: (tabId: string, color: string | null) => void
   onTogglePin: () => void
@@ -122,12 +124,14 @@ export function SortableTabContextMenu({
   point,
   tabCount,
   hasTabsToRight,
+  hasTabsToLeft,
   isPinned,
   onOpenChange,
   onActivate,
   onClose,
   onCloseOthers,
   onCloseToRight,
+  onCloseToLeft,
   onRenameOpen,
   onSetTabColor,
   onTogglePin,
@@ -209,6 +213,12 @@ export function SortableTabContextMenu({
           {translate(
             'auto.components.tab.bar.SortableTabContextMenu.c1ee099c7e',
             'Close Tabs To The Right'
+          )}
+        </DropdownMenuItem>
+        <DropdownMenuItem onSelect={() => onCloseToLeft(tab.id)} disabled={!hasTabsToLeft}>
+          {translate(
+            'components.tab.bar.SortableTabContextMenu.closeTabsToLeft',
+            'Close Tabs To The Left'
           )}
         </DropdownMenuItem>
         <DropdownMenuSeparator />
