@@ -123,6 +123,27 @@ describe('closed-sidebar Cmd+1-9 ordering (#9497)', () => {
     expect(order).not.toEqual(['wt-feature', 'wt-main'])
   })
 
+  it('ignores the agent-send collapse override, which only applies to a mounted list', () => {
+    // WorktreeList expands the send target's group via effectiveCollapsedGroups;
+    // this path reads state.collapsedGroups instead. That is only sound because a
+    // mounted list publishes its order and short-circuits this path entirely.
+    const main = makeMainWorktree('wt-main')
+    const feature = makeWorktree('wt-feature')
+    seedStore([main, feature], {
+      collapsedGroups: new Set(['project:repo:repo1']),
+      agentSendPopoverTargetMode: {
+        worktreeId: 'wt-feature',
+        id: 'send-1',
+        instanceId: 'inst-1'
+      } as AppState['agentSendPopoverTargetMode']
+    })
+
+    expect(getVisibleWorktreeIds()).toEqual([])
+
+    setVisibleWorktreeIds(['wt-feature', 'wt-main'])
+    expect(getVisibleWorktreeIds()).toEqual(['wt-feature', 'wt-main'])
+  })
+
   it('places a pinned workspace per the pinned section under both display policies', () => {
     const main = makeMainWorktree('wt-main')
     const plain = makeWorktree('wt-plain')
