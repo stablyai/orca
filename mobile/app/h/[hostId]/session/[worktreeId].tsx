@@ -175,13 +175,14 @@ import {
 } from '../../../../src/session/mobile-terminal-tab-agent'
 import type { MobileNewTabAgentOption } from '../../../../src/session/mobile-new-tab-agent-options'
 import { loadMobileNewTabAgentOptions } from '../../../../src/session/mobile-new-tab-agent-loader'
-import { useMobileImageAttachment } from '../../../../src/session/use-mobile-image-attachment'
+import { useMobileSessionImageAttachments } from '../../../../src/session/use-mobile-session-image-attachments'
 import { useMobileAttachmentInputLeaseGate } from '../../../../src/session/use-mobile-attachment-input-lease-gate'
 import { useMobileTerminalPaste } from '../../../../src/session/use-mobile-terminal-paste'
 import { useTerminalLiveInputModePreference } from '../../../../src/session/use-terminal-live-input-mode-preference'
 import { MobileTerminalLiveInputStatus } from '../../../../src/session/MobileTerminalLiveInputStatus'
 import { MobileTerminalInputActions } from '../../../../src/session/MobileTerminalInputActions'
 import { resolveMobileFileTabDoc } from '../../../../src/files/mobile-file-tab-doc'
+import { captureMobileFileMutationOwnership } from '../../../../src/files/mobile-file-mutation-ownership'
 import { openMobileTerminalFileTap } from '../../../../src/session/mobile-terminal-file-tap-open'
 import { useLiveWorktreeName } from '../../../../src/session/use-live-worktree-name'
 import {
@@ -208,10 +209,17 @@ import { useMobileNativeChatReadability } from '../../../../src/session/use-mobi
 import { useMobileNativeChatInputLease } from '../../../../src/session/use-mobile-native-chat-input-lease'
 import { getMobileTerminalActionSheetActions } from '../../../../src/session/mobile-terminal-action-sheet-actions'
 import * as nativeChatTerminalStream from '../../../../src/session/mobile-native-chat-terminal-stream'
+import { mobileNativeChatScopeKey } from '../../../../src/session/mobile-native-chat-scope-key'
 import { useMobileNativeChatTerminalStream } from '../../../../src/session/use-mobile-native-chat-terminal-stream'
 import { subscribeMobileTerminalSafely } from '../../../../src/session/mobile-terminal-stream-subscribe'
 import { activateMobileSessionTab } from '../../../../src/session/mobile-session-tab-activation'
 import { MobileTerminalDiagnostics } from '../../../../src/session/mobile-terminal-diagnostics'
+import { runAcceptedMobileSessionTabsEffects } from '../../../../src/session/mobile-session-tabs-accepted-effects'
+import type {
+  SessionTabsApplyOutcome,
+  SessionTabsStreamSource
+} from '../../../../src/session/mobile-session-tabs-stream-health'
+import { useMobileSessionTabsReconciliation } from '../../../../src/session/use-mobile-session-tabs-reconciliation'
 import {
   getRepoIdFromMobileWorktreeId,
   getActiveTabIdForHandle,
@@ -865,6 +873,7 @@ export default function SessionScreen() {
   const sessionTabsRef = useRef<MobileSessionTab[]>([])
   // Why: track the last applied (epoch, version) so a late older snapshot can't overwrite a newer one and resurrect closed tabs (session-tab-snapshot-gate).
   const appliedSnapshotMarkerRef = useRef<AppliedSnapshotMarker>({ epoch: null, version: -1 })
+  const appliedSessionTabsRevisionRef = useRef(0)
   // Why: after an optimistic close, suppress the tab (with expiry) until the publisher confirms, so an in-flight snapshot can't flash it back.
   const closedTabTombstonesRef = useRef<Map<string, number>>(new Map())
   const [terminalsLoaded, setTerminalsLoaded] = useState(false)
@@ -1377,7 +1386,10 @@ export default function SessionScreen() {
         {
           terminal: handle,
           client: { id: deviceTokenRef.current!, type: 'mobile' as const },
-          viewport: viewportRef.current ?? undefined,
+          viewport: nativeChatTerminalStream.mobileNativeChatSubscribeViewport(
+            covered,
+            viewportRef.current
+          ),
           capabilities: nativeChatTerminalStream.mobileNativeChatTerminalCapabilities(covered)
         },
         (result) => {
@@ -1685,12 +1697,13 @@ export default function SessionScreen() {
   )
 
   const applySessionTabs = useCallback(
-    (result: SessionTabsResult) => {
+    (result: SessionTabsResult): SessionTabsApplyOutcome<MobileSessionTab> => {
       const diagnostics = terminalDiagnosticsRef.current
       // Reject stale snapshots; suppress just-closed tabs until the publisher confirms absence — see session-tab-snapshot-gate.
       if (!acceptSessionSnapshot(result, appliedSnapshotMarkerRef.current)) {
-        return
+        return { accepted: false }
       }
+      const applicationRevision = ++appliedSessionTabsRevisionRef.current
       let nextTabs = applyClosedTabTombstones(
         result.tabs,
         closedTabTombstonesRef.current,
@@ -1735,6 +1748,11 @@ export default function SessionScreen() {
         terminalTabs.length
       )
       setTerminalsLoaded(true)
+      const outcome = {
+        accepted: true as const,
+        effectiveTabs: nextTabs,
+        applicationRevision
+      }
 
       const snapshotActive = nextTabs.find((tab) => tab.isActive) ?? nextTabs[0] ?? null
       const pendingActiveSessionTabId = pendingActiveSessionTabIdRef.current
@@ -1787,7 +1805,7 @@ export default function SessionScreen() {
           activeSessionTabTypeRef.current = 'terminal'
           setActiveHandle(pendingActiveTerminalHandle)
           subscribeToTerminal(pendingActiveTerminalHandle)
-          return
+          return outcome
         } else {
           pendingActiveTerminalHandleRef.current = null
         }
@@ -1805,7 +1823,7 @@ export default function SessionScreen() {
           }
           activeHandleRef.current = null
           setActiveHandle(null)
-          return
+          return outcome
         }
         const previous = activeHandleRef.current
         if (previous && previous !== active.terminal) {
@@ -1824,6 +1842,7 @@ export default function SessionScreen() {
         activeHandleRef.current = null
         setActiveHandle(null)
       }
+      return outcome
     },
     [defaultTerminalHandlesToLiveInput, subscribeToTerminal, unsubscribeTerminal]
   )
@@ -2248,48 +2267,70 @@ export default function SessionScreen() {
     [client, markdownDocs, showToast, worktreeId]
   )
 
-  const fetchSessionTabsInFlightRef = useRef(false)
-
-  const fetchSessionTabs = useCallback(async () => {
-    if (!client) {
-      terminalDiagnosticsRef.current.tabsFetchSkipped('no-client')
-      return
-    }
-    if (fetchSessionTabsInFlightRef.current) {
-      terminalDiagnosticsRef.current.tabsFetchSkipped('already-in-flight')
-      return
-    }
-    fetchSessionTabsInFlightRef.current = true
-    terminalDiagnosticsRef.current.tabsFetchStarted(worktreeId)
-    try {
-      const response = await client.sendRequest('session.tabs.list', {
-        worktree: `id:${worktreeId}`
-      })
-      if (!response.ok) {
-        terminalDiagnosticsRef.current.tabsFetchFailed((response as RpcFailure).error.code)
-        return
-      }
-      const result = (response as RpcSuccess).result as SessionTabsResult
-      terminalDiagnosticsRef.current.tabsFetchSucceeded(result)
-      applySessionTabs(result)
-      // Focus a just-opened browser tab when it appears, via the normal activate path so it sticks yet stays switchable.
-      const pendingPageId = pendingBrowserFocusPageIdRef.current
-      if (pendingPageId) {
-        const browserTab = result.tabs.find(
-          (tab) => tab.type === 'browser' && tab.browserPageId === pendingPageId
-        )
-        if (browserTab) {
-          pendingBrowserFocusPageIdRef.current = null
-          switchSessionTabRef.current?.(browserTab)
+  const consumeAcceptedSessionTabs = useCallback(
+    (
+      _result: SessionTabsResult,
+      effectiveTabs: readonly MobileSessionTab[],
+      source: SessionTabsStreamSource
+    ): void => {
+      runAcceptedMobileSessionTabsEffects<MobileSessionTab>({
+        effectiveTabs,
+        source,
+        getPendingBrowserPageId: () => pendingBrowserFocusPageIdRef.current,
+        clearPendingBrowserPageId: (pageId) => {
+          if (pendingBrowserFocusPageIdRef.current === pageId) {
+            pendingBrowserFocusPageIdRef.current = null
+          }
+        },
+        activateBrowserTab: (tab) => switchSessionTabRef.current?.(tab),
+        markActiveMarkdownStale: (tabId) => {
+          setMarkdownDocs((prev) => {
+            const current = prev.get(tabId)
+            if (current?.status !== 'ready' || current.isDirty) {
+              return prev
+            }
+            return new Map(prev).set(tabId, { ...current, stale: true })
+          })
         }
-      }
-    } catch (error) {
-      terminalDiagnosticsRef.current.tabsFetchErrored(error)
-      // Keep the last tab snapshot visible during reconnect/backoff.
-    } finally {
-      fetchSessionTabsInFlightRef.current = false
-    }
-  }, [applySessionTabs, client, worktreeId])
+      })
+    },
+    []
+  )
+  const hasSessionTabsRecoveryNeed = useCallback(
+    () => closedTabTombstonesRef.current.size > 0 || pendingBrowserFocusPageIdRef.current !== null,
+    []
+  )
+  const getSessionTabsApplicationRevision = useCallback(
+    () => appliedSessionTabsRevisionRef.current,
+    []
+  )
+  const reportSessionTabsFetchStarted = useCallback(() => {
+    terminalDiagnosticsRef.current.tabsFetchStarted(worktreeId)
+  }, [worktreeId])
+  const reportSessionTabsFetchSucceeded = useCallback((result: SessionTabsResult) => {
+    terminalDiagnosticsRef.current.tabsFetchSucceeded(result)
+  }, [])
+  const reportSessionTabsFetchFailed = useCallback((code: string) => {
+    terminalDiagnosticsRef.current.tabsFetchFailed(code)
+  }, [])
+  const reportSessionTabsFetchErrored = useCallback((error: unknown) => {
+    terminalDiagnosticsRef.current.tabsFetchErrored(error)
+  }, [])
+  const { fetchSessionTabs, ensureSessionTabs, fetchPendingBrowserSessionTabs } =
+    useMobileSessionTabsReconciliation<SessionTabsResult, MobileSessionTab>({
+      client,
+      connState,
+      worktreeId,
+      applySessionTabs,
+      consumeAcceptedSessionTabs,
+      fetchTerminals,
+      hasRecoveryNeed: hasSessionTabsRecoveryNeed,
+      getApplicationRevision: getSessionTabsApplicationRevision,
+      onFetchStarted: reportSessionTabsFetchStarted,
+      onFetchSucceeded: reportSessionTabsFetchSucceeded,
+      onFetchFailed: reportSessionTabsFetchFailed,
+      onFetchErrored: reportSessionTabsFetchErrored
+    })
 
   useEffect(() => {
     if (connState === 'connected') {
@@ -2455,6 +2496,7 @@ export default function SessionScreen() {
     terminalFrameHeightRef,
     viewportRef,
     viewportMeasuredRef,
+    nativeChatCoveredRef: showNativeChatRef,
     clientRef,
     deviceTokenRef,
     initializedHandlesRef,
@@ -2619,7 +2661,7 @@ export default function SessionScreen() {
       if (disposed) {
         return
       }
-      await fetchSessionTabs().catch(() => null)
+      await ensureSessionTabs().catch(() => null)
       if (disposed) {
         return
       }
@@ -2662,60 +2704,12 @@ export default function SessionScreen() {
     client,
     connState,
     created,
-    fetchSessionTabs,
     fetchTerminals,
+    ensureSessionTabs,
     isFloatingWorkspaceRoute,
     showToast,
     worktreeId
   ])
-
-  useEffect(() => {
-    if (!client || connState !== 'connected') {
-      return
-    }
-    const unsubscribe = client.subscribe(
-      'session.tabs.subscribe',
-      { worktree: `id:${worktreeId}` },
-      (payload) => {
-        const event = payload as { type?: string } & SessionTabsResult
-        if (event.type === 'snapshot' || event.type === 'updated') {
-          applySessionTabs(event)
-          const activeMarkdown = event.tabs.find(
-            (tab): tab is Extract<MobileSessionTab, { type: 'markdown' }> =>
-              tab.type === 'markdown' && tab.isActive
-          )
-          if (activeMarkdown) {
-            setMarkdownDocs((prev) => {
-              const current = prev.get(activeMarkdown.id)
-              if (current?.status === 'ready' && activeMarkdown.isDirty && !current.isDirty) {
-                const next = new Map(prev)
-                next.set(activeMarkdown.id, { ...current, stale: true })
-                return next
-              }
-              return prev
-            })
-          }
-        }
-      }
-    )
-    return () => unsubscribe()
-  }, [applySessionTabs, client, connState, worktreeId])
-
-  useFocusEffect(
-    useCallback(() => {
-      if (connState !== 'connected') {
-        return
-      }
-      void fetchSessionTabs()
-      void fetchTerminals()
-      // Why: live subscription keeps stream ownership, but the fallback list poll should stop while this route is hidden.
-      const interval = setInterval(() => {
-        void fetchSessionTabs()
-        void fetchTerminals()
-      }, 2000)
-      return () => clearInterval(interval)
-    }, [connState, fetchSessionTabs, fetchTerminals])
-  )
 
   // Why: pick up Settings → Terminal text size on return; panes stay mounted and update in place.
   useFocusEffect(
@@ -3624,14 +3618,20 @@ export default function SessionScreen() {
     showToast
   })
 
-  const { attachImage, isAttaching } = useMobileImageAttachment({
+  // Terminal input pastes an attached image straight into the visible terminal;
+  // native chat instead holds it as a composer chip and rides it along on submit.
+  const { attachImage, isAttaching, nativeChatImages } = useMobileSessionImageAttachments({
     client,
     activeHandle,
+    activeHandleRef,
     canSend,
     connState,
     deviceTokenRef,
-    beforeTerminalSend: flushPendingLiveInputBeforeAttachmentSend,
+    nativeChatScopeKey: mobileNativeChatScopeKey(hostId, worktreeId, activeSessionTabId),
+    nativeChatInputLeaseReady,
     getActiveWorktreeConnectionId,
+    beforeTerminalSend: flushPendingLiveInputBeforeAttachmentSend,
+    nativeChatBaseSend: nativeChatController.handleNativeChatSendWithOutcome,
     showToast,
     onSuccess: triggerSelection,
     onError: triggerError
@@ -3886,11 +3886,12 @@ export default function SessionScreen() {
 
     try {
       const worktree = `id:${worktreeId}`
+      const mutationOwnership = await captureMobileFileMutationOwnership(client, worktree)
       for (let attempt = 1; attempt <= 100; attempt += 1) {
         const relativePath = attempt === 1 ? 'untitled.md' : `untitled-${attempt}.md`
         const createResponse = await client.sendRequest(
           'files.createFile',
-          { worktree, relativePath },
+          { worktree, relativePath, ...mutationOwnership },
           { timeoutMs: 15_000 }
         )
         if (!createResponse.ok) {
@@ -3961,8 +3962,8 @@ export default function SessionScreen() {
         pendingBrowserFocusPageIdRef.current = created.browserPageId
       }
       void fetchSessionTabs()
-      scheduleDelayedAction(() => void fetchSessionTabs(), 400)
-      scheduleDelayedAction(() => void fetchSessionTabs(), 1200)
+      scheduleDelayedAction(() => void fetchPendingBrowserSessionTabs(), 400)
+      scheduleDelayedAction(() => void fetchPendingBrowserSessionTabs(), 1200)
       return true
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Failed to create browser'
@@ -4078,6 +4079,9 @@ export default function SessionScreen() {
         reason: 'user'
       })
       if (response.ok) {
+        if (tab.type === 'browser' && tab.browserPageId === pendingBrowserFocusPageIdRef.current) {
+          pendingBrowserFocusPageIdRef.current = null
+        }
         if (tab.type === 'terminal' && typeof tab.terminal === 'string') {
           const terminalHandle = tab.terminal
           unsubscribeTerminal(terminalHandle)
@@ -4364,6 +4368,7 @@ export default function SessionScreen() {
     hostedChecksSupported: prIsGithubRepo
   })
   const showHeaderMoreButton = showAgentSessionHistoryAction || showChecksAction
+  const createTabBusy = creating || creatingBrowser || creatingMarkdown
 
   return (
     <View ref={setMobileSessionRootRef} style={styles.container}>
@@ -4514,14 +4519,24 @@ export default function SessionScreen() {
               >
                 <Plus size={16} color={colors.textSecondary} strokeWidth={2.2} />
               </Pressable>
-              {quickCommandsSupported === true ? (
-                <QuickCommandsTabButton
-                  disabled={
-                    creating || creatingBrowser || creatingMarkdown || connState !== 'connected'
+              {/* Why: stable placement matters, while old hosts must stay gated because they strip agentPrompt. */}
+              <QuickCommandsTabButton
+                disabled={
+                  creating || creatingBrowser || creatingMarkdown || connState !== 'connected'
+                }
+                onPress={() => {
+                  if (quickCommandsSupported === true) {
+                    setShowQuickCommands(true)
+                    return
                   }
-                  onPress={() => setShowQuickCommands(true)}
-                />
-              ) : null}
+                  showToast(
+                    quickCommandsSupported === false
+                      ? 'Desktop update required for quick commands'
+                      : 'Checking desktop capabilities — try again in a moment',
+                    1600
+                  )
+                }}
+              />
             </View>
           )}
         </SafeAreaView>
@@ -4556,24 +4571,16 @@ export default function SessionScreen() {
                   <Pressable
                     style={[
                       styles.createButton,
-                      (creating ||
-                        creatingBrowser ||
-                        creatingMarkdown ||
-                        connState !== 'connected') &&
-                        styles.createButtonDisabled
+                      (createTabBusy || connState !== 'connected') && styles.createButtonDisabled
                     ]}
-                    disabled={
-                      creating || creatingBrowser || creatingMarkdown || connState !== 'connected'
-                    }
+                    disabled={createTabBusy || connState !== 'connected'}
                     onPress={() => {
                       setCreateError('')
                       setShowCreateTabDrawer(true)
                     }}
                   >
                     <Text style={styles.createButtonText}>
-                      {creating || creatingBrowser || creatingMarkdown
-                        ? 'Creating...'
-                        : 'Create Tab'}
+                      {createTabBusy ? 'Creating...' : 'Create Tab'}
                     </Text>
                   </Pressable>
                 </View>
@@ -4690,8 +4697,7 @@ export default function SessionScreen() {
                 ))}
                 <MobileNativeChatOverlay
                   controller={nativeChatController}
-                  onAttachImage={() => void attachImage('library')}
-                  isAttaching={isAttaching}
+                  images={nativeChatImages}
                   onMicPress={handleDictationToggle}
                   micActive={dictation.isRecording}
                   dictationMode={dictationMode}
@@ -5085,8 +5091,8 @@ export default function SessionScreen() {
                 {
                   label: 'Browser',
                   icon: Globe,
+                  closeBeforePress: true,
                   onPress: () => {
-                    setShowCreateTabDrawer(false)
                     if (browserScreencastSupported !== true) {
                       showToast('Desktop update required for mobile browser streaming', 1600)
                       return
@@ -5162,9 +5168,11 @@ export default function SessionScreen() {
           {
             label: 'Refresh',
             icon: RefreshCw,
+            // Why: dirty refresh opens ConfirmModal; wait for this sheet's native
+            // Modal to unmount first (same dual-Modal race as tab Rename, #10331).
+            closeBeforePress: true,
             onPress: () => {
               const target = markdownActionTarget
-              setMarkdownActionTarget(null)
               if (target) {
                 discardMarkdownLocalContent(target)
               }

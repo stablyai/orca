@@ -55,7 +55,7 @@ export async function readNativeChatTranscript(
     if (transcriptAgent === 'grok') {
       return { messages: await readTranscript(filePath, decodeGrokTranscriptLine) }
     }
-    return { error: `Unsupported agent for native chat transcript: ${agent}` }
+    return { error: `Unsupported agent for Chat UI transcript: ${agent}` }
   } catch (err) {
     // Why: ENOENT after a successful resolve is the same first-flush/rotation
     // race as an unresolved path — keep it retry-worthy (#8401).

@@ -66,7 +66,7 @@ vi.mock('./MobilePageContent', () => ({
         Orca Relay
       </button>
       <button type="button" onClick={() => props.handleConnectionModeChange('local-only')}>
-        Local network
+        LAN
       </button>
       <button type="button" onClick={() => props.handleAddressChange('10.0.0.2')}>
         Change address
@@ -131,7 +131,7 @@ describe('MobilePage pairing connection mode', () => {
           resolveRotatedLocalQr = resolve
         })
     )
-    await user.click(screen.getByRole('button', { name: 'Local network' }))
+    await user.click(screen.getByRole('button', { name: 'LAN' }))
     // No rotate flag: the main process rotates exactly once on the policy
     // mismatch, so concurrent windows converge on the same fresh token.
     await waitFor(() =>
@@ -180,15 +180,15 @@ describe('MobilePage pairing connection mode', () => {
     expect(screen.getByTestId('can-generate')).toHaveTextContent('false')
   })
 
-  it('mints a local-only QR when switching to Local network while signed out', async () => {
+  it('mints a local-only QR when switching to LAN while signed out', async () => {
     mocks.storeState.orcaProfileAuthStatus = { state: 'local' }
     const user = userEvent.setup()
     await openPairingStep()
     await new Promise((resolve) => setTimeout(resolve, 20))
     expect(getPairingQR).not.toHaveBeenCalled()
 
-    // Picking Local network is an honest local-only path, so a QR mints.
-    await user.click(screen.getByRole('button', { name: 'Local network' }))
+    // Picking LAN is an honest local-only path, so a QR mints.
+    await user.click(screen.getByRole('button', { name: 'LAN' }))
     await waitFor(() => expect(getPairingQR).toHaveBeenCalledWith({ connectionMode: 'local-only' }))
     await waitFor(() => expect(screen.getByTestId('pairing-qr')).toHaveTextContent('base64,qr'))
     expect(screen.getByTestId('mode')).toHaveTextContent('local-only')
@@ -199,7 +199,7 @@ describe('MobilePage pairing connection mode', () => {
     const user = userEvent.setup()
     await openPairingStep()
 
-    await user.click(screen.getByRole('button', { name: 'Local network' }))
+    await user.click(screen.getByRole('button', { name: 'LAN' }))
     await waitFor(() => expect(screen.getByTestId('pairing-qr')).toHaveTextContent('base64,qr'))
     getPairingQR.mockClear()
 
@@ -272,7 +272,7 @@ describe('MobilePage pairing connection mode', () => {
     await waitFor(() => expect(screen.getByTestId('pairing-qr')).toHaveTextContent('base64,qr'))
 
     getPairingQR.mockRejectedValueOnce(new Error('rotation failed'))
-    await user.click(screen.getByRole('button', { name: 'Local network' }))
+    await user.click(screen.getByRole('button', { name: 'LAN' }))
 
     await waitFor(() => expect(screen.getByTestId('pairing-qr')).toHaveTextContent('none'))
     expect(screen.getByTestId('pairing-url')).toHaveTextContent('none')

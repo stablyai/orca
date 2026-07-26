@@ -8,6 +8,7 @@ import type {
   PtySpawnResult
 } from '../providers/types'
 import type { PtyIncarnationId } from '../../shared/pty-incarnation'
+import type { PtyProcessInspection } from '../providers/pty-process-inspection'
 
 export class DaemonPtyRouter implements IPtyProvider {
   private current: DaemonPtyAdapter
@@ -189,6 +190,10 @@ export class DaemonPtyRouter implements IPtyProvider {
     return this.adapterFor(id).getForegroundProcess(id)
   }
 
+  async inspectProcess(id: string): Promise<PtyProcessInspection> {
+    return this.adapterForInspection(id).inspectProcess(id)
+  }
+
   async confirmForegroundProcess(id: string): Promise<string | null> {
     return this.adapterFor(id).confirmForegroundProcess(id)
   }
@@ -346,6 +351,17 @@ export class DaemonPtyRouter implements IPtyProvider {
 
   private adapterFor(sessionId: string): DaemonPtyAdapter {
     return this.sessionAdapters.get(sessionId) ?? this.current
+  }
+
+  private adapterForInspection(sessionId: string): DaemonPtyAdapter {
+    const adapter =
+      this.sessionAdapters.get(sessionId) ??
+      this.allAdapters().find((candidate) => candidate.hasPty(sessionId))
+    if (!adapter) {
+      throw new Error('terminal_gone')
+    }
+    this.sessionAdapters.set(sessionId, adapter)
+    return adapter
   }
 
   private allAdapters(): DaemonPtyAdapter[] {

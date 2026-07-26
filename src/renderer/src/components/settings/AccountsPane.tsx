@@ -65,6 +65,8 @@ import {
   DialogTitle
 } from '../ui/dialog'
 import { getCodexAccountAuthWarning } from './codex-account-auth-warning'
+import { getCodexConfigSyncWarning } from './codex-config-sync-warning'
+import type { CodexConfigSyncStatus } from '../../../../shared/codex-config-sync-types'
 import {
   getProviderAccountActiveIdForView,
   getProviderAccountRuntime,
@@ -430,6 +432,38 @@ export function AccountsPane({
         authKind: activeCodexAccountId === null ? systemCodexIdentity?.authKind : undefined
       })
     : null
+  // Why: the mirror keeps serving the last synced settings when ~/.codex is
+  // unusable, so without this the user only sees their edits being ignored.
+  const [codexConfigSync, setCodexConfigSync] = useState<CodexConfigSyncStatus | null>(null)
+  useEffect(() => {
+    // Why: the status resolves the host's own ~/.codex and shared runtime home.
+    // A WSL or remote scope mirrors different homes entirely, so showing it there
+    // would name a config file that has nothing to do with the selected runtime.
+    if (isRemoteAccountScope || accountRuntime.runtime !== 'host') {
+      setCodexConfigSync(null)
+      return
+    }
+    let cancelled = false
+    void window.api.codexConfigSync
+      .status()
+      .then((status) => {
+        if (!cancelled) {
+          setCodexConfigSync(status)
+        }
+      })
+      .catch(() => {
+        if (!cancelled) {
+          setCodexConfigSync(null)
+        }
+      })
+    return () => {
+      cancelled = true
+    }
+    // Why: the status resolves whichever home the ACTIVE selection mirrors into
+    // (per-account, shared, or none for the real-home lane), so switching
+    // accounts must refetch or the banner describes the previous account.
+  }, [isRemoteAccountScope, accountRuntime.runtime, activeCodexAccountId, codexAccountsLoaded])
+  const codexConfigSyncWarning = getCodexConfigSyncWarning(codexConfigSync)
   const systemCodexMissingSignIn = activeCodexAuthWarning === 'missing-sign-in'
   const systemCodexNeedsSignIn = activeCodexAccountId === null && Boolean(activeCodexAuthWarning)
   const accountRuntimeUnavailable =
@@ -1098,6 +1132,30 @@ export function AccountsPane({
                         'auto.components.settings.AccountsPane.e4a28e8894',
                         'Codex reported that the {{value0}} login needs a fresh sign-in. Sign in again before starting new Codex sessions.',
                         { value0: accountRuntimeSentenceLabel }
+                      )}
+              </span>
+            </div>
+          ) : null}
+          {codexConfigSyncWarning ? (
+            <div className="flex items-start gap-2 rounded-md border border-destructive/40 bg-destructive/5 px-3 py-2 text-xs text-destructive">
+              <AlertTriangle className="mt-0.5 size-3.5 shrink-0" />
+              <span>
+                {codexConfigSyncWarning === 'missing-source'
+                  ? translate(
+                      'auto.components.settings.AccountsPane.codexConfigSyncMissingSource',
+                      'Codex is still using the settings it last synced because {{value0}} is missing. Restore that file to resume syncing.',
+                      { value0: codexConfigSync?.systemConfigPath ?? '' }
+                    )
+                  : codexConfigSyncWarning === 'blank-source'
+                    ? translate(
+                        'auto.components.settings.AccountsPane.codexConfigSyncBlankSource',
+                        'Codex is still using the settings it last synced because {{value0}} is empty. That is expected while a synced folder finishes downloading.',
+                        { value0: codexConfigSync?.systemConfigPath ?? '' }
+                      )
+                    : translate(
+                        'auto.components.settings.AccountsPane.codexConfigSyncUnreadableSource',
+                        "Codex is still using the settings it last synced because {{value0}} could not be read. Check that file's permissions.",
+                        { value0: codexConfigSync?.systemConfigPath ?? '' }
                       )}
               </span>
             </div>

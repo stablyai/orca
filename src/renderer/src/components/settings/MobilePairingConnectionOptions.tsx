@@ -213,7 +213,7 @@ export function MobilePairingConnectionOptions({
           onSelect={() => onChange('local-only')}
           title={translate(
             'auto.components.settings.MobilePairingConnectionOptions.localTitle',
-            'Local network'
+            'LAN'
           )}
           description={translate(
             'auto.components.settings.MobilePairingConnectionOptions.localDescription',
@@ -264,7 +264,7 @@ export function MobilePairingConnectionOptions({
           <p className="min-w-0 flex-1 text-xs text-muted-foreground">
             {translate(
               'auto.components.settings.MobilePairingConnectionOptions.relayUnavailable',
-              'Orca Relay isn’t available in this build. Use Local network.'
+              'Orca Relay isn’t available in this build. Use LAN.'
             )}
           </p>
           <Badge variant="outline" className="shrink-0">

@@ -11,6 +11,7 @@ import { DashboardAgentRowToolStep } from './DashboardAgentRowToolStep'
 import type { AgentStatusState } from '../../../../shared/agent-status-types'
 import type { DashboardAgentRow as DashboardAgentRowData } from './useDashboardData'
 import { getAgentRowPrimaryText } from '@/lib/agent-row-primary-text'
+import { useAgentRowConversationName } from './use-agent-row-conversation-name'
 
 // Why: narrow the dashboard's rollup states to shared dot states, defaulting unknowns to 'idle' so a row never crashes.
 function asDotState(state: AgentStatusState | 'idle'): AgentDotState {
@@ -155,7 +156,8 @@ const DashboardAgentRow = React.memo(function DashboardAgentRow({
   )
   const startedAt = agent.startedAt > 0 ? agent.startedAt : null
   const doneAt = lastEnteredDoneAt(agent)
-  const prompt = getAgentRowPrimaryText(agent.entry)
+  const conversationName = useAgentRowConversationName(agent)
+  const prompt = conversationName ?? getAgentRowPrimaryText(agent.entry)
   // Why: prompt is '' when unknown, so fall back to the state label to keep the row labeled.
   const displayLabel = prompt || agentStateLabel(asDotState(agent.state))
   const model = agent.entry.model?.trim() ?? ''

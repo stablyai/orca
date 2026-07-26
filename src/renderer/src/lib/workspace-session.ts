@@ -124,6 +124,7 @@ export function buildEditorSessionData(
       language: f.language,
       isPreview: f.isPreview || undefined,
       runtimeEnvironmentId: f.runtimeEnvironmentId,
+      externalSshTargetId: f.externalSshTargetId,
       // Why: persist readOnly only when true; absence is the writable default on restore.
       ...(f.readOnly === true ? { readOnly: true } : {}),
       ...(f.readOnly === true && f.liveTail === true ? { liveTail: true } : {}),

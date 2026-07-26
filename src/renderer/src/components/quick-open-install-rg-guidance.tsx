@@ -5,9 +5,15 @@ import { translate } from '@/i18n/i18n'
 
 export type QuickOpenInstallRgGuidanceParts = {
   reason: string
+  // Why: the fallback runs on whichever host performs the scan. A local scan
+  // must not tell the user to install ripgrep "on the remote"; the location
+  // phrase in the message is the only signal for which wording to render.
+  location: 'local' | 'remote'
   command: string | null
   guidance: string | null
 }
+
+const REMOTE_LOCATION_PHRASE = 'on the remote'
 
 /**
  * Parses the install-ripgrep guidance message produced by the relay's
@@ -23,19 +29,21 @@ export function parseQuickOpenInstallRgGuidance(
   message: string
 ): QuickOpenInstallRgGuidanceParts | null {
   const match = message.match(
-    /^Quick Open scan too large \(([^)]+)\)\. Install ripgrep on the remote to enable fast, gitignore-aware listing: (.+)$/
+    /^Quick Open scan too large \((.+?)\)\. Install ripgrep (on the remote|on the host running the Quick Open scan) to enable fast, gitignore-aware listing: (.+)$/
   )
   if (!match) {
     return null
   }
   const reason = match[1]
-  const tail = match[2].trim()
+  const location = match[2] === REMOTE_LOCATION_PHRASE ? 'remote' : 'local'
+  const tail = match[3].trim()
   // Why: on unknown distros the relay emits prose like "install ripgrep via
   // your package manager (e.g. apt/dnf/pacman)"; there is no single command
   // to copy, so surface it as plain guidance without the code block.
   const looksLikeCommand = /^(sudo\s+)?(brew|apt|dnf|pacman|apk)\s/.test(tail)
   return {
     reason,
+    location,
     command: looksLikeCommand ? tail : null,
     guidance: looksLikeCommand ? null : tail
   }
@@ -43,6 +51,7 @@ export function parseQuickOpenInstallRgGuidance(
 
 export function QuickOpenInstallRgGuidance({
   reason,
+  location,
   command,
   guidance
 }: QuickOpenInstallRgGuidanceParts): React.JSX.Element {
@@ -112,10 +121,15 @@ export function QuickOpenInstallRgGuidance({
         <code className="rounded bg-muted px-1 py-0.5 font-mono text-foreground">
           {translate('auto.components.QuickOpen.5d80dc39bb', 'ripgrep')}
         </code>{' '}
-        {translate(
-          'auto.components.QuickOpen.1cf8561ab4',
-          'on the remote to enable fast, gitignore-aware listing:'
-        )}
+        {location === 'remote'
+          ? translate(
+              'auto.components.QuickOpen.1cf8561ab4',
+              'on the remote to enable fast, gitignore-aware listing:'
+            )
+          : translate(
+              'auto.components.QuickOpen.344f8a48dd',
+              'on the host running the Quick Open scan to enable fast, gitignore-aware listing:'
+            )}
       </p>
       {command ? (
         <div className="flex items-center gap-2 rounded border border-border bg-muted/50 px-3 py-2 font-mono text-xs text-foreground">

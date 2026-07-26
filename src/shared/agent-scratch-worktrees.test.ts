@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import {
   createAgentScratchWorktreePathMatcher,
+  isAgentScratchRepoRootPath,
   isAgentScratchWorktreePath
 } from './agent-scratch-worktrees'
 
@@ -99,5 +100,46 @@ describe('isAgentScratchWorktreePath', () => {
       isAgentScratchWorktreePath('/Users/dev/app', '/Users/dev/.superset/worktrees/app/fix-notes')
     ).toBe(false)
     expect(isAgentScratchWorktreePath('/Users/dev/app', '/orca/workspaces/app/feature')).toBe(false)
+  })
+})
+
+describe('isAgentScratchRepoRootPath', () => {
+  it('matches codex scratch capsule repos', () => {
+    expect(
+      isAgentScratchRepoRootPath('/Users/dev/.codex-tmp/foragent-capsule-b1-repo-zP9Az6')
+    ).toBe(true)
+    expect(isAgentScratchRepoRootPath('/Users/dev/.codex-tmp/rc-fwd-qEXuEq')).toBe(true)
+  })
+
+  it('matches codex vendor imports and claude skills containers', () => {
+    expect(isAgentScratchRepoRootPath('/Users/dev/.codex/vendor_imports/skills')).toBe(true)
+    expect(isAgentScratchRepoRootPath('/Users/dev/.claude/skills/obsidian-second-brain')).toBe(true)
+  })
+
+  it('matches a repo registered at the scratch container itself', () => {
+    expect(isAgentScratchRepoRootPath('/Users/dev/.codex-tmp')).toBe(true)
+    expect(isAgentScratchRepoRootPath('/Users/dev/.codex/vendor_imports')).toBe(true)
+  })
+
+  it('matches scratch worktree containers used as repo roots', () => {
+    expect(isAgentScratchRepoRootPath('/Users/dev/app/.claude/worktrees/agent-a04ccaaa')).toBe(true)
+    expect(isAgentScratchRepoRootPath('/Users/dev/app/.gsd-workspaces/phase-1')).toBe(true)
+  })
+
+  it('matches Windows separators and casing', () => {
+    expect(isAgentScratchRepoRootPath('C:\\Users\\Dev\\.codex-tmp\\Capsule-X')).toBe(true)
+    expect(isAgentScratchRepoRootPath('C:\\Users\\Dev\\.Claude\\Skills\\foo')).toBe(true)
+  })
+
+  it('does not match ordinary user repos', () => {
+    expect(isAgentScratchRepoRootPath('/Users/dev/projects/app')).toBe(false)
+    expect(isAgentScratchRepoRootPath('/Users/dev/codex-tmp/app')).toBe(false)
+    expect(isAgentScratchRepoRootPath('/Users/dev/.codex/checkouts/app')).toBe(false)
+    expect(isAgentScratchRepoRootPath('/Users/dev/skills/.claude-app')).toBe(false)
+  })
+
+  it('does not match partial multi-segment markers', () => {
+    expect(isAgentScratchRepoRootPath('/Users/dev/.claude/config')).toBe(false)
+    expect(isAgentScratchRepoRootPath('/Users/dev/vendor_imports/app')).toBe(false)
   })
 })

@@ -67,6 +67,7 @@ import { formatRateLimitWindowChipLabel } from '@/lib/window-label-formatter'
 import { useResetCountdownClock } from '@/hooks/useResetCountdownClock'
 import { markLiveCodexSessionsForRestart } from '@/lib/codex-session-restart'
 import { UpdateStatusSegment } from './UpdateStatusSegment'
+import { RemoteServerUpdateStatusSegment } from './RemoteServerUpdateStatusSegment'
 import { isStatusBarItemAvailable } from './status-bar-agent-gating'
 import { getVisibleUsageProvider, isUsageEmptyState } from './status-bar-provider-visibility'
 import { StatusBarUsageEmptyCta } from './StatusBarUsageEmptyCta'
@@ -2343,6 +2344,7 @@ function StatusBarInner({ floatingTerminalOpen }: StatusBarProps): React.JSX.Ele
       <div className="flex-1" />
 
       <div className="flex items-center gap-3">
+        <RemoteServerUpdateStatusSegment iconOnly={iconOnly} />
         <UpdateStatusSegment compact={compact} iconOnly={iconOnly} />
         <React.Suspense fallback={null}>
           {petEnabled ? <PetStatusSegment /> : null}

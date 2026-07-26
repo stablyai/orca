@@ -72,6 +72,7 @@ import {
 import type { Store } from '../persistence'
 import {
   getSshFilesystemProvider,
+  onSshFilesystemProviderRegistered,
   SSH_FILESYSTEM_PROVIDER_UNAVAILABLE_MESSAGE
 } from '../providers/ssh-filesystem-dispatch'
 import type { FileStat, IFilesystemProvider } from '../providers/types'
@@ -86,6 +87,8 @@ import {
   RuntimeMobileFilePathSearchCache
 } from './runtime-mobile-file-path-search'
 import { beginWatcherInstall } from '../ipc/watcher-removal-gate'
+import { assertSshMutationExpectation } from '../ssh/ssh-connection-generation'
+import { toSshExecutionHostId } from '../../shared/execution-host'
 
 const MOBILE_FILE_LIST_LIMIT = 5000
 const MOBILE_FILE_PATH_SEARCH_CACHE_LIMIT = 20_000
@@ -97,14 +100,37 @@ const WINDOWS_RUNTIME_FILE_WATCH_DEBOUNCE_MS = 150
 export const WINDOWS_RUNTIME_FILE_WATCH_CLOSE_DEADLINE_MS = 10_000
 const TERMINAL_FILE_GRANT_TTL_MS = 10 * 60 * 1000
 const OPEN_NOFOLLOW = typeof constants.O_NOFOLLOW === 'number' ? constants.O_NOFOLLOW : 0
+const RUNTIME_FILE_MUTATION_UPDATE_REQUIRED =
+  'Remote file changes require a newer Orca client. Update the paired client and try again.'
+
+function assertRuntimeFileMutationExpectation(
+  connectionId: string | undefined,
+  expectedExecutionHostId: string | undefined,
+  expectedSshTargetId: string | undefined,
+  expectedSshConnectionGeneration: number | undefined
+): void {
+  if (!expectedExecutionHostId) {
+    throw new Error(RUNTIME_FILE_MUTATION_UPDATE_REQUIRED)
+  }
+  const actualExecutionHostId = connectionId ? toSshExecutionHostId(connectionId) : 'local'
+  if (expectedExecutionHostId !== actualExecutionHostId) {
+    throw new Error('Workspace host changed; refresh and try again')
+  }
+  assertSshMutationExpectation(connectionId, expectedSshTargetId, expectedSshConnectionGeneration)
+}
 // Why: files.watch cleanup is synchronous RPC; track native Parcel unsubscribes so shutdown can drain them.
 const pendingRuntimeFileWatcherUnsubscribes = new Set<Promise<void>>()
+
 type RuntimeFileWatcherLease = {
   suspend(): Promise<void>
   resume(): Promise<void>
   forget(): void
 }
 const runtimeFileWatcherLeasesByOwnerAndRoot = new Map<string, Set<RuntimeFileWatcherLease>>()
+// Why: the provider's dispose() stops each watch registration without firing its terminal callback,
+// so a dropped SSH transport leaves this watch silently dead — a reconnect's fresh provider is the
+// only signal it can be rebuilt from. Keyed like the leases so worktree removal can drop it.
+const sshFileExplorerWatchRearms = new Map<string, Set<() => void>>()
 const MOBILE_BINARY_EXTENSIONS = new Set([
   '.avif',
   '.bmp',
@@ -202,6 +228,94 @@ function runtimeWatcherReleaseKey(
 ): string {
   // Why: identical absolute paths exist on local and multiple SSH hosts; scope teardown to the host that owns it.
   return JSON.stringify([runtimeId, connectionId ?? null, normalizeRuntimeWatcherRoot(rootPath)])
+}
+
+/**
+ * Keep an SSH file-explorer watch alive across reconnects.
+ *
+ * Why: the previous provider's unwatch handle belongs to the dead transport, so reinstalling on the
+ * fresh provider is the only way the subscription comes back. Callers get an overflow because the
+ * events lost while the watch was down can't be replayed.
+ */
+function armSshFileExplorerWatchRearm(args: {
+  runtimeId: string
+  connectionId: string
+  rootPath: string
+  callback: (events: FsChangeEvent[]) => void
+  onTerminalError: (error: Error) => void
+  signal?: AbortSignal
+  initialUnwatch: () => void
+}): { unsubscribe: () => Promise<void> } {
+  const key = runtimeWatcherReleaseKey(args.runtimeId, args.connectionId, args.rootPath)
+  let currentUnwatch = args.initialUnwatch
+  let stopped = false
+  let reinstalling: Promise<void> | null = null
+
+  const reinstall = async (): Promise<void> => {
+    const provider = getSshFilesystemProvider(args.connectionId)
+    if (stopped || !provider) {
+      return
+    }
+    // Why: the old handle is scoped to the dead transport; closing it here would only risk
+    // unwatching the root we just re-registered on the new one.
+    const nextUnwatch = await provider.watch(args.rootPath, args.callback, {
+      signal: args.signal,
+      onTerminalError: args.onTerminalError
+    })
+    if (stopped) {
+      nextUnwatch()
+      return
+    }
+    currentUnwatch = nextUnwatch
+    args.callback([{ kind: 'overflow', absolutePath: args.rootPath }])
+  }
+
+  const unsubscribeRearm = onSshFilesystemProviderRegistered((registeredId) => {
+    if (registeredId !== args.connectionId || stopped) {
+      return
+    }
+    // Why: reconnect storms can register repeatedly; chain so a second one can't double-install.
+    const attempt = (reinstalling ?? Promise.resolve())
+      .then(reinstall)
+      .catch((error: unknown) => {
+        args.onTerminalError(error instanceof Error ? error : new Error(String(error)))
+      })
+      .finally(() => {
+        if (reinstalling === attempt) {
+          reinstalling = null
+        }
+      })
+    reinstalling = attempt
+  })
+
+  const stop = (): void => {
+    stopped = true
+    unsubscribeRearm()
+    const rearms = sshFileExplorerWatchRearms.get(key)
+    rearms?.delete(stop)
+    if (rearms?.size === 0) {
+      sshFileExplorerWatchRearms.delete(key)
+    }
+  }
+  const rearms = sshFileExplorerWatchRearms.get(key) ?? new Set<() => void>()
+  rearms.add(stop)
+  sshFileExplorerWatchRearms.set(key, rearms)
+
+  return {
+    unsubscribe: () => {
+      stop()
+      const close = async (): Promise<void> => currentUnwatch()
+      // Why: awaiting an absent reinstall costs a microtask, and removal gating relies on the
+      // unwatch being issued on the same turn the lease releases it.
+      return reinstalling ? reinstalling.catch(() => undefined).then(close) : close()
+    }
+  }
+}
+
+function stopSshFileExplorerWatchRearms(key: string): void {
+  for (const stop of Array.from(sshFileExplorerWatchRearms.get(key) ?? [])) {
+    stop()
+  }
 }
 
 function registerRuntimeFileWatcherRelease(
@@ -363,6 +477,9 @@ export function _resetRuntimeFileWatcherLeasesForTests(): void {
   }
   for (const lease of leases) {
     lease.forget()
+  }
+  for (const key of Array.from(sshFileExplorerWatchRearms.keys())) {
+    stopSshFileExplorerWatchRearms(key)
   }
   runtimeFileWatcherLeasesByOwnerAndRoot.clear()
 }
@@ -1184,7 +1301,16 @@ export class RuntimeFileCommands {
           }
           // Why: the RPC layer already threads AbortSignal for local watches; SSH must cancel the remote fs.watch, not wait it out.
           const close = await provider.watch(target.path, callback, { signal, onTerminalError })
-          return { unsubscribe: async () => close(), rootPaths: [target.path] }
+          const rearm = armSshFileExplorerWatchRearm({
+            runtimeId: this.host.getRuntimeId(),
+            connectionId: target.connectionId,
+            rootPath: target.path,
+            callback,
+            onTerminalError,
+            signal,
+            initialUnwatch: close
+          })
+          return { unsubscribe: rearm.unsubscribe, rootPaths: [target.path] }
         }
 
         const rootPath = await resolveAuthorizedPath(target.path, this.host.requireStore())
@@ -1245,6 +1371,9 @@ export class RuntimeFileCommands {
 
   forgetFileExplorerWatchersAfterRemoval(rootPath: string, connectionId?: string): void {
     const key = runtimeWatcherReleaseKey(this.host.getRuntimeId(), connectionId, rootPath)
+    // Why: forget() never runs the lease's unsubscribe, so the re-arm would outlive a deleted
+    // worktree and re-watch it on the next reconnect.
+    stopSshFileExplorerWatchRearms(key)
     const leases = runtimeFileWatcherLeasesByOwnerAndRoot.get(key)
     if (leases) {
       for (const lease of Array.from(leases)) {
@@ -1339,9 +1468,18 @@ export class RuntimeFileCommands {
   async writeFileExplorerFile(
     worktreeSelector: string,
     relativePath: string,
-    content: string
+    content: string,
+    expectedSshConnectionGeneration?: number,
+    expectedSshTargetId?: string,
+    expectedExecutionHostId?: string
   ): Promise<{ ok: true }> {
     const target = await this.resolveFileExplorerPath(worktreeSelector, relativePath)
+    assertRuntimeFileMutationExpectation(
+      target.connectionId,
+      expectedExecutionHostId,
+      expectedSshTargetId,
+      expectedSshConnectionGeneration
+    )
     const provider = target.connectionId ? getSshFilesystemProvider(target.connectionId) : null
     if (target.connectionId) {
       if (!provider) {
@@ -1369,9 +1507,18 @@ export class RuntimeFileCommands {
   async writeFileExplorerFileBase64(
     worktreeSelector: string,
     relativePath: string,
-    contentBase64: string
+    contentBase64: string,
+    expectedSshConnectionGeneration?: number,
+    expectedSshTargetId?: string,
+    expectedExecutionHostId?: string
   ): Promise<{ ok: true }> {
     const target = await this.resolveFileExplorerPath(worktreeSelector, relativePath)
+    assertRuntimeFileMutationExpectation(
+      target.connectionId,
+      expectedExecutionHostId,
+      expectedSshTargetId,
+      expectedSshConnectionGeneration
+    )
     const provider = target.connectionId ? getSshFilesystemProvider(target.connectionId) : null
     const content = Buffer.from(contentBase64, 'base64')
     if (target.connectionId) {
@@ -1392,9 +1539,18 @@ export class RuntimeFileCommands {
     worktreeSelector: string,
     relativePath: string,
     contentBase64: string,
-    append: boolean
+    append: boolean,
+    expectedSshConnectionGeneration?: number,
+    expectedSshTargetId?: string,
+    expectedExecutionHostId?: string
   ): Promise<{ ok: true }> {
     const target = await this.resolveFileExplorerPath(worktreeSelector, relativePath)
+    assertRuntimeFileMutationExpectation(
+      target.connectionId,
+      expectedExecutionHostId,
+      expectedSshTargetId,
+      expectedSshConnectionGeneration
+    )
     const provider = target.connectionId ? getSshFilesystemProvider(target.connectionId) : null
     const content = Buffer.from(contentBase64, 'base64')
     if (target.connectionId) {
@@ -1413,9 +1569,18 @@ export class RuntimeFileCommands {
 
   async createFileExplorerFile(
     worktreeSelector: string,
-    relativePath: string
+    relativePath: string,
+    expectedSshConnectionGeneration?: number,
+    expectedSshTargetId?: string,
+    expectedExecutionHostId?: string
   ): Promise<{ ok: true }> {
     const target = await this.resolveFileExplorerPath(worktreeSelector, relativePath)
+    assertRuntimeFileMutationExpectation(
+      target.connectionId,
+      expectedExecutionHostId,
+      expectedSshTargetId,
+      expectedSshConnectionGeneration
+    )
     const provider = target.connectionId ? getSshFilesystemProvider(target.connectionId) : null
     if (target.connectionId) {
       if (!provider) {
@@ -1437,9 +1602,18 @@ export class RuntimeFileCommands {
 
   async createFileExplorerDir(
     worktreeSelector: string,
-    relativePath: string
+    relativePath: string,
+    expectedSshConnectionGeneration?: number,
+    expectedSshTargetId?: string,
+    expectedExecutionHostId?: string
   ): Promise<{ ok: true }> {
     const target = await this.resolveFileExplorerPath(worktreeSelector, relativePath)
+    assertRuntimeFileMutationExpectation(
+      target.connectionId,
+      expectedExecutionHostId,
+      expectedSshTargetId,
+      expectedSshConnectionGeneration
+    )
     const provider = target.connectionId ? getSshFilesystemProvider(target.connectionId) : null
     if (target.connectionId) {
       if (!provider) {
@@ -1457,9 +1631,18 @@ export class RuntimeFileCommands {
 
   async createFileExplorerDirNoClobber(
     worktreeSelector: string,
-    relativePath: string
+    relativePath: string,
+    expectedSshConnectionGeneration?: number,
+    expectedSshTargetId?: string,
+    expectedExecutionHostId?: string
   ): Promise<{ ok: true }> {
     const target = await this.resolveFileExplorerPath(worktreeSelector, relativePath)
+    assertRuntimeFileMutationExpectation(
+      target.connectionId,
+      expectedExecutionHostId,
+      expectedSshTargetId,
+      expectedSshConnectionGeneration
+    )
     const provider = target.connectionId ? getSshFilesystemProvider(target.connectionId) : null
     if (target.connectionId) {
       if (!provider) {
@@ -1477,10 +1660,21 @@ export class RuntimeFileCommands {
   async commitFileExplorerUpload(
     worktreeSelector: string,
     tempRelativePath: string,
-    finalRelativePath: string
+    finalRelativePath: string,
+    expectedSshConnectionGeneration?: number,
+    expectedSshTargetId?: string,
+    expectedExecutionHostId?: string
   ): Promise<{ ok: true }> {
-    const tempTarget = await this.resolveFileExplorerPath(worktreeSelector, tempRelativePath)
-    const finalTarget = await this.resolveFileExplorerPath(worktreeSelector, finalRelativePath)
+    const [tempTarget, finalTarget] = await this.resolveFileExplorerPaths(worktreeSelector, [
+      tempRelativePath,
+      finalRelativePath
+    ])
+    assertRuntimeFileMutationExpectation(
+      tempTarget.connectionId,
+      expectedExecutionHostId,
+      expectedSshTargetId,
+      expectedSshConnectionGeneration
+    )
     const provider = tempTarget.connectionId
       ? getSshFilesystemProvider(tempTarget.connectionId)
       : null
@@ -1505,10 +1699,21 @@ export class RuntimeFileCommands {
   async renameFileExplorerPath(
     worktreeSelector: string,
     oldRelativePath: string,
-    newRelativePath: string
+    newRelativePath: string,
+    expectedSshConnectionGeneration?: number,
+    expectedSshTargetId?: string,
+    expectedExecutionHostId?: string
   ): Promise<{ ok: true }> {
-    const oldTarget = await this.resolveFileExplorerPath(worktreeSelector, oldRelativePath)
-    const newTarget = await this.resolveFileExplorerPath(worktreeSelector, newRelativePath)
+    const [oldTarget, newTarget] = await this.resolveFileExplorerPaths(worktreeSelector, [
+      oldRelativePath,
+      newRelativePath
+    ])
+    assertRuntimeFileMutationExpectation(
+      oldTarget.connectionId,
+      expectedExecutionHostId,
+      expectedSshTargetId,
+      expectedSshConnectionGeneration
+    )
     const provider = oldTarget.connectionId
       ? getSshFilesystemProvider(oldTarget.connectionId)
       : null
@@ -1531,12 +1736,20 @@ export class RuntimeFileCommands {
   async copyFileExplorerPath(
     worktreeSelector: string,
     sourceRelativePath: string,
-    destinationRelativePath: string
+    destinationRelativePath: string,
+    expectedSshConnectionGeneration?: number,
+    expectedSshTargetId?: string,
+    expectedExecutionHostId?: string
   ): Promise<{ ok: true }> {
-    const sourceTarget = await this.resolveFileExplorerPath(worktreeSelector, sourceRelativePath)
-    const destinationTarget = await this.resolveFileExplorerPath(
+    const [sourceTarget, destinationTarget] = await this.resolveFileExplorerPaths(
       worktreeSelector,
-      destinationRelativePath
+      [sourceRelativePath, destinationRelativePath]
+    )
+    assertRuntimeFileMutationExpectation(
+      sourceTarget.connectionId,
+      expectedExecutionHostId,
+      expectedSshTargetId,
+      expectedSshConnectionGeneration
     )
     const provider = sourceTarget.connectionId
       ? getSshFilesystemProvider(sourceTarget.connectionId)
@@ -1565,9 +1778,18 @@ export class RuntimeFileCommands {
   async deleteFileExplorerPath(
     worktreeSelector: string,
     relativePath: string,
-    recursive?: boolean
+    recursive?: boolean,
+    expectedSshConnectionGeneration?: number,
+    expectedSshTargetId?: string,
+    expectedExecutionHostId?: string
   ): Promise<{ ok: true }> {
     const target = await this.resolveFileExplorerPath(worktreeSelector, relativePath)
+    assertRuntimeFileMutationExpectation(
+      target.connectionId,
+      expectedExecutionHostId,
+      expectedSshTargetId,
+      expectedSshConnectionGeneration
+    )
     const provider = target.connectionId ? getSshFilesystemProvider(target.connectionId) : null
     if (target.connectionId) {
       if (!provider) {
@@ -1768,13 +1990,23 @@ export class RuntimeFileCommands {
     worktreeSelector: string,
     relativePath: string
   ): Promise<{ worktree: ResolvedRuntimeFileWorktree; path: string; connectionId?: string }> {
+    const [target] = await this.resolveFileExplorerPaths(worktreeSelector, [relativePath])
+    return target
+  }
+
+  private async resolveFileExplorerPaths(
+    worktreeSelector: string,
+    relativePaths: readonly string[]
+  ): Promise<{ worktree: ResolvedRuntimeFileWorktree; path: string; connectionId?: string }[]> {
     const target = await this.host.resolveRuntimeFileTarget(worktreeSelector)
-    const normalizedRelativePath = normalizeRuntimeRelativePath(relativePath)
-    return {
+    return relativePaths.map((relativePath) => ({
       worktree: target.worktree,
-      path: joinWorktreeRelativePath(target.worktree.path, normalizedRelativePath),
+      path: joinWorktreeRelativePath(
+        target.worktree.path,
+        normalizeRuntimeRelativePath(relativePath)
+      ),
       connectionId: target.connectionId
-    }
+    }))
   }
 
   private async listRemoteMobileFiles(

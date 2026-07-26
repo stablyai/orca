@@ -42,17 +42,20 @@ import {
   navigationTargetsHost,
   resolveRuntimeNavigationTarget
 } from '../../../../shared/runtime-navigation'
+import {
+  TERMINAL_MULTIPLEX_ACK_STREAM_INITIAL_WINDOW_BYTES,
+  TERMINAL_MULTIPLEX_ACK_STREAM_MAX_WINDOW_BYTES,
+  TERMINAL_MULTIPLEX_ACK_TOTAL_INITIAL_WINDOW_BYTES,
+  TERMINAL_MULTIPLEX_ACK_TOTAL_MAX_WINDOW_BYTES,
+  TERMINAL_MULTIPLEX_MAX_STREAMS_PER_CONNECTION,
+  TERMINAL_MULTIPLEX_PENDING_MAX_BYTES,
+  TERMINAL_OUTPUT_BATCH_MAX_BYTES,
+  TERMINAL_STREAM_CHUNK_BYTES
+} from '../../../../shared/terminal-multiplex-flow-control'
+import { drainTerminalMultiplexRoundRobin } from '../terminal-multiplex-round-robin'
 
 const REQUESTED_SNAPSHOT_BYTE_BUDGET = 2 * 1024 * 1024
-const TERMINAL_STREAM_CHUNK_BYTES = 48 * 1024
 const TERMINAL_OUTPUT_FLUSH_MS = 5
-// Why: output batches become binary stream payloads; byte size is the transport cost.
-const TERMINAL_OUTPUT_BATCH_MAX_BYTES = 64 * 1024
-// Why: remote clients can apply output pressure without pausing runtime PTY ingestion.
-const TERMINAL_MULTIPLEX_ACK_STREAM_HIGH_WATER_BYTES = 512 * 1024
-const TERMINAL_MULTIPLEX_ACK_TOTAL_HIGH_WATER_BYTES = 2 * 1024 * 1024
-// Why: pending output becomes binary frames, so cap encoded payload bytes, not UTF-16 code units.
-const TERMINAL_MULTIPLEX_PENDING_MAX_BYTES = 256 * 1024
 const TERMINAL_QUERY_REPLAY_MAX_CHARS = 16 * 1024
 // Why: bound initial subscribe latency; readiness after this deadline triggers an in-stream recovery snapshot.
 const MOBILE_RENDERER_MOUNT_READY_TIMEOUT_MS = 3_000
@@ -102,6 +105,7 @@ type TerminalMultiplexStream = {
   isMobile: boolean
   ackOutput: boolean
   ackInFlightBytes: number
+  ackWindowBytes: number
   supportsDesktopViewportClaims: boolean
   desktopClaimTail: Promise<boolean>
   // Whether THIS stream registered the width driver, so detach won't release a peer stream's floor.
@@ -831,6 +835,10 @@ const TerminalFocus = TerminalHandle.extend({
 const TerminalListParams = z.object({
   worktree: OptionalString,
   limit: OptionalFiniteNumber,
+  handles: z
+    .array(requiredString('Missing terminal handle').pipe(z.string().max(256)))
+    .max(64)
+    .optional(),
   requireFreshPtyLiveness: z.boolean().optional()
 })
 
@@ -839,7 +847,14 @@ const TerminalResolveActive = z.object({
 })
 
 const TerminalResolvePane = z.object({
-  paneKey: requiredString('Missing pane key')
+  paneKey: requiredString('Missing pane key'),
+  worktreeId: OptionalString
+})
+
+const TerminalRecoverPane = z.object({
+  paneKey: requiredString('Missing pane key'),
+  worktreeId: requiredString('Missing worktree ID'),
+  expectedTerminal: requiredString('Missing expected terminal handle').optional()
 })
 
 const TerminalRead = TerminalHandle.extend({
@@ -920,7 +935,12 @@ const TerminalCreateParams = z.object({
     .object({
       agentCommand: z.string().optional(),
       agentArgs: z.string(),
-      agentEnv: z.record(z.string(), z.string())
+      agentEnv: z.record(z.string(), z.string()),
+      ompResumeFilePath: z
+        .string()
+        .min(1)
+        .max(32 * 1024)
+        .optional()
     })
     .optional(),
   resumeProviderSession: z
@@ -1096,6 +1116,7 @@ export const TERMINAL_METHODS: RpcAnyMethod[] = [
     params: TerminalListParams,
     handler: async (params, { runtime }) =>
       runtime.listTerminals(params.worktree, params.limit, {
+        handles: params.handles,
         requireFreshPtyLiveness: params.requireFreshPtyLiveness
       })
   }),
@@ -1110,7 +1131,18 @@ export const TERMINAL_METHODS: RpcAnyMethod[] = [
     name: 'terminal.resolvePane',
     params: TerminalResolvePane,
     handler: async (params, { runtime }) => ({
-      terminal: runtime.resolveTerminalPane(params.paneKey)
+      terminal: runtime.resolveTerminalPane(params.paneKey, params.worktreeId)
+    })
+  }),
+  defineMethod({
+    name: 'terminal.recoverPane',
+    params: TerminalRecoverPane,
+    handler: async (params, { runtime }) => ({
+      terminal: await runtime.recoverTerminalPane(
+        params.paneKey,
+        params.worktreeId,
+        params.expectedTerminal
+      )
     })
   }),
   defineMethod({
@@ -1580,6 +1612,8 @@ export const TERMINAL_METHODS: RpcAnyMethod[] = [
       const streams = new Map<number, TerminalMultiplexStream>()
       const pendingPtyWaitControllers = new Map<number, Set<AbortController>>()
       let ackTotalInFlightBytes = 0
+      let ackTotalWindowBytes = TERMINAL_MULTIPLEX_ACK_TOTAL_INITIAL_WINDOW_BYTES
+      let ackFlushCursorStreamId: number | null = null
       let resolveMultiplex = (): void => {}
       const multiplexClosed = new Promise<void>((resolve) => {
         resolveMultiplex = resolve
@@ -1596,10 +1630,21 @@ export const TERMINAL_METHODS: RpcAnyMethod[] = [
         // Why: a seq-less Output chunk must carry sentinel 0, not the control-frame cursor, or it poisons the client's frame-drop tracker.
         const resolvedSeq =
           typeof seq === 'number' ? seq : opcode === TerminalStreamOpcode.Output ? 0 : cursor++
-        const sent = sendBinary(
-          encodeTerminalStreamFrame({ opcode, streamId, seq: resolvedSeq, payload })
-        )
-        return sent !== false
+        let sent: boolean | void
+        try {
+          sent = sendBinary(
+            encodeTerminalStreamFrame({ opcode, streamId, seq: resolvedSeq, payload })
+          )
+        } catch {
+          closeMultiplex()
+          return false
+        }
+        if (sent === false) {
+          // Why: false means the transport discarded this frame; reconnect is the only available retry boundary with an authoritative snapshot.
+          closeMultiplex()
+          return false
+        }
+        return true
       }
       const sendStreamError = (streamId: number, message: string): void => {
         sendFrame(streamId, TerminalStreamOpcode.Error, encodeTerminalStreamText(message))
@@ -1627,24 +1672,28 @@ export const TERMINAL_METHODS: RpcAnyMethod[] = [
           return true
         }
         return (
-          stream.ackInFlightBytes + bytes <= TERMINAL_MULTIPLEX_ACK_STREAM_HIGH_WATER_BYTES &&
-          ackTotalInFlightBytes + bytes <= TERMINAL_MULTIPLEX_ACK_TOTAL_HIGH_WATER_BYTES
+          stream.ackInFlightBytes + bytes <= stream.ackWindowBytes &&
+          ackTotalInFlightBytes + bytes <= ackTotalWindowBytes
         )
       }
       const sendAckGatedOutput = (
         stream: TerminalMultiplexStream,
         chunk: TerminalOutputFrameChunk
-      ): void => {
-        sendFrame(
+      ): boolean => {
+        const sent = sendFrame(
           stream.streamId,
           chunk.opcode ?? TerminalStreamOpcode.Output,
           chunk.bytes,
           chunk.seq
         )
+        if (!sent) {
+          return false
+        }
         if (stream.ackOutput) {
           stream.ackInFlightBytes += chunk.bytes.byteLength
           ackTotalInFlightBytes += chunk.bytes.byteLength
         }
+        return true
       }
       const queueOrSendOutput = (
         stream: TerminalMultiplexStream,
@@ -1677,23 +1726,23 @@ export const TERMINAL_METHODS: RpcAnyMethod[] = [
           if (closed || streams.get(stream.streamId) !== stream) {
             return
           }
-          const size = runtime.getTerminalSize(stream.ptyId)
+          if (!serialized) {
+            throw new Error('Remote terminal recovery snapshot unavailable.')
+          }
           const displayMode = runtime.getMobileDisplayMode(stream.ptyId)
           // Why: dropped ACK-pending output breaks live replay; send a fresh snapshot before resuming output.
-          // Why: clients discard truncated snapshots, so mark truncated only when serialization actually failed.
           sendSnapshotFrames((opcode, payload) => sendFrame(stream.streamId, opcode, payload), {
             kind: 'scrollback',
-            cols: serialized?.cols ?? size?.cols ?? 80,
-            rows: serialized?.rows ?? size?.rows ?? 24,
+            cols: serialized.cols,
+            rows: serialized.rows,
             displayMode,
             reason: 'ack-pending-overflow',
-            seq: serialized?.seq,
-            source: serialized?.source,
-            truncated: !serialized,
-            truncatedByByteBudget: serialized?.truncatedByByteBudget,
-            data: serialized?.data ?? ''
+            seq: serialized.seq,
+            source: serialized.source,
+            truncatedByByteBudget: serialized.truncatedByByteBudget,
+            data: serialized.data
           })
-          if (serialized && typeof serialized.seq === 'number') {
+          if (typeof serialized.seq === 'number') {
             // Why: chunks queued before the snapshot serialized are already in it; replaying them would duplicate output.
             const snapshotSeq = serialized.seq
             const retained = stream.ackPendingOutput.filter(
@@ -1711,24 +1760,32 @@ export const TERMINAL_METHODS: RpcAnyMethod[] = [
             stream.streamId,
             error instanceof Error ? error.message : 'Remote terminal recovery snapshot failed.'
           )
+          // Why: retrying the same failed recovery from finally creates an unbounded error loop.
+          detachStream(stream.streamId, true)
         } finally {
           if (streams.get(stream.streamId) === stream) {
             stream.ackRecoverySnapshotInFlight = false
-            flushAckPendingOutput(stream)
+            flushAllAckPendingOutput()
           }
         }
       }
-      const flushAckPendingOutput = (stream: TerminalMultiplexStream): void => {
+      const flushAckPendingOutput = (
+        stream: TerminalMultiplexStream,
+        maxChunks = Number.POSITIVE_INFINITY
+      ): number => {
         if (stream.ackPendingOutputOverflowed) {
           void sendAckRecoverySnapshot(stream)
-          return
+          return 0
         }
         let flushed = 0
         while (
           flushed < stream.ackPendingOutput.length &&
+          flushed < maxChunks &&
           canSendAckGatedOutput(stream, stream.ackPendingOutput[flushed]!.bytes.byteLength)
         ) {
-          sendAckGatedOutput(stream, stream.ackPendingOutput[flushed]!)
+          if (!sendAckGatedOutput(stream, stream.ackPendingOutput[flushed]!)) {
+            return flushed
+          }
           flushed += 1
         }
         if (flushed > 0) {
@@ -1738,17 +1795,38 @@ export const TERMINAL_METHODS: RpcAnyMethod[] = [
             0
           )
         }
+        return flushed
       }
       const flushAllAckPendingOutput = (): void => {
-        for (const stream of streams.values()) {
-          flushAckPendingOutput(stream)
-        }
+        const ordered = Array.from(streams.values())
+        ackFlushCursorStreamId = drainTerminalMultiplexRoundRobin({
+          streams: ordered,
+          cursorStreamId: ackFlushCursorStreamId,
+          canContinue: () => !closed,
+          drainOne: (stream) => {
+            if (streams.get(stream.streamId) !== stream) {
+              return false
+            }
+            if (flushAckPendingOutput(stream, 1) > 0) {
+              return true
+            }
+            return false
+          }
+        })
       }
       const acknowledgeOutput = (stream: TerminalMultiplexStream, bytes: number): void => {
         if (!stream.ackOutput || bytes <= 0) {
           return
         }
         const acknowledged = Math.min(stream.ackInFlightBytes, bytes)
+        stream.ackWindowBytes = Math.min(
+          TERMINAL_MULTIPLEX_ACK_STREAM_MAX_WINDOW_BYTES,
+          stream.ackWindowBytes + acknowledged
+        )
+        ackTotalWindowBytes = Math.min(
+          TERMINAL_MULTIPLEX_ACK_TOTAL_MAX_WINDOW_BYTES,
+          ackTotalWindowBytes + acknowledged
+        )
         stream.ackInFlightBytes -= acknowledged
         ackTotalInFlightBytes = Math.max(0, ackTotalInFlightBytes - acknowledged)
         flushAllAckPendingOutput()
@@ -1968,6 +2046,7 @@ export const TERMINAL_METHODS: RpcAnyMethod[] = [
         stream.pendingOutputOverflowed = false
         stream.buffering = true
         const requestId = request.requestId
+        let sentSnapshotOutputSeq: number | undefined
         try {
           const scrollbackRows = normalizeMultiplexSnapshotScrollbackRows(request.scrollbackRows)
           let serialized = await serializeBudgetedRequestedSnapshot(
@@ -2009,6 +2088,7 @@ export const TERMINAL_METHODS: RpcAnyMethod[] = [
               return
             }
           }
+          sentSnapshotOutputSeq = serialized?.seq
           sendSnapshotFrames((opcode, payload) => sendFrame(stream.streamId, opcode, payload), {
             kind: 'scrollback',
             cols: serialized?.cols ?? size?.cols ?? 80,
@@ -2036,7 +2116,17 @@ export const TERMINAL_METHODS: RpcAnyMethod[] = [
             const pendingOutput = stream.pendingOutput.splice(0)
             if (shouldFlushPendingOutput) {
               for (const chunk of pendingOutput) {
-                stream.outputBatcher.push(chunk.data, chunk.meta)
+                // Why: an untagged reply resets the client to the snapshot's
+                // high-water, so covered bytes would render twice; tagged
+                // snapshots feed a side consumer and the live view still
+                // needs every buffered chunk.
+                const uncoveredData =
+                  typeof requestId === 'number'
+                    ? chunk.data
+                    : getOutputAfterSnapshotSeq(chunk, sentSnapshotOutputSeq)
+                if (uncoveredData) {
+                  stream.outputBatcher.push(uncoveredData, chunk.meta)
+                }
               }
             }
             stream.pendingOutputBytes = 0
@@ -2073,6 +2163,15 @@ export const TERMINAL_METHODS: RpcAnyMethod[] = [
         }
         const request = parsed.data
         detachStream(request.streamId, false)
+        cancelPendingPtyWaits(request.streamId)
+        if (
+          streams.size + pendingPtyWaitControllers.size >=
+          TERMINAL_MULTIPLEX_MAX_STREAMS_PER_CONNECTION
+        ) {
+          sendStreamError(request.streamId, 'terminal_stream_limit_exceeded')
+          emit({ type: 'end', streamId: request.streamId })
+          return
+        }
 
         const isMobile = request.client?.type === 'mobile'
         let leaf: { ptyId: string | null } | null
@@ -2145,6 +2244,7 @@ export const TERMINAL_METHODS: RpcAnyMethod[] = [
           isMobile,
           ackOutput: request.capabilities?.ackOutput === 1,
           ackInFlightBytes: 0,
+          ackWindowBytes: TERMINAL_MULTIPLEX_ACK_STREAM_INITIAL_WINDOW_BYTES,
           supportsDesktopViewportClaims: request.capabilities?.desktopViewportClaims === 1,
           desktopClaimTail: Promise.resolve(true),
           registeredRemoteDesktopDriver: false,
@@ -2540,7 +2640,8 @@ export const TERMINAL_METHODS: RpcAnyMethod[] = [
           .then(() => runtime.cleanupSubscription(subscriptionId))
           .catch(() => runtime.cleanupSubscription(subscriptionId))
         try {
-          await runtime.handleMobileSubscribe(ptyId, clientId, params.viewport)
+          // Why: a lease-only subscriber has no terminal view, so its cached viewport must never phone-fit the PTY.
+          await runtime.handleMobileSubscribe(ptyId, clientId, undefined)
           if (closed || signal?.aborted) {
             // Why: a disconnect can win the awaited subscribe and resurrect mobile presence after cleanup already released it.
             runtime.handleMobileUnsubscribe(ptyId, clientId)

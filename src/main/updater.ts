@@ -2,6 +2,11 @@
 import { app, BrowserWindow, powerMonitor } from 'electron'
 import { is } from '@electron-toolkit/utils'
 import type { UpdateCheckOptions, UpdateStatus } from '../shared/types'
+import type {
+  RemoteServerUpdateInstallResult,
+  RemoteServerUpdaterSnapshot,
+  RemoteServerUpdateSupport
+} from '../shared/remote-server-update'
 import { isWindowsSignatureCheckUnavailableFailure } from '../shared/updater-windows-signature-check'
 import { killAllPty } from './ipc/pty'
 import { withUpdaterSpan } from './observability/instrumentation'
@@ -837,6 +842,80 @@ async function sendCheckFailureStatus(
 
 export function getUpdateStatus(): UpdateStatus {
   return currentStatus
+}
+
+export function getRemoteServerUpdateSupport(): RemoteServerUpdateSupport {
+  if (!app.isPackaged || is.dev) {
+    return {
+      installMode: updateInstallMode,
+      automatic: false,
+      reason: 'unpackaged-build'
+    }
+  }
+  if (!autoUpdaterInitialized) {
+    return {
+      installMode: updateInstallMode,
+      automatic: false,
+      reason: 'updater-unavailable'
+    }
+  }
+  if (updateInstallMode === 'unsupported-headless-serve') {
+    return {
+      installMode: updateInstallMode,
+      automatic: false,
+      reason: 'manual-service-update-required'
+    }
+  }
+  return { installMode: updateInstallMode, automatic: true, reason: 'available' }
+}
+
+export function getRemoteServerUpdaterSnapshot(runtimeId: string): RemoteServerUpdaterSnapshot {
+  return {
+    appVersion: app.getVersion(),
+    runtimeId,
+    support: getRemoteServerUpdateSupport(),
+    status: getUpdateStatus()
+  }
+}
+
+function assertRemoteServerUpdateAvailable(): void {
+  if (!getRemoteServerUpdateSupport().automatic) {
+    throw new Error('remote_update_manual_required')
+  }
+}
+
+export function checkForRemoteServerUpdate(
+  runtimeId: string,
+  options?: UpdateCheckOptions
+): RemoteServerUpdaterSnapshot {
+  assertRemoteServerUpdateAvailable()
+  checkForUpdatesFromMenu(options)
+  return getRemoteServerUpdaterSnapshot(runtimeId)
+}
+
+export function downloadRemoteServerUpdate(runtimeId: string): RemoteServerUpdaterSnapshot {
+  assertRemoteServerUpdateAvailable()
+  if (currentStatus.state !== 'available') {
+    throw new Error('remote_update_not_available')
+  }
+  downloadUpdate()
+  return getRemoteServerUpdaterSnapshot(runtimeId)
+}
+
+export function installRemoteServerUpdate(runtimeId: string): RemoteServerUpdateInstallResult {
+  assertRemoteServerUpdateAvailable()
+  if (currentStatus.state !== 'downloaded') {
+    throw new Error('remote_update_not_downloaded')
+  }
+  const targetVersion = currentStatus.version
+  const result: RemoteServerUpdateInstallResult = {
+    accepted: true,
+    fromVersion: app.getVersion(),
+    targetVersion,
+    runtimeId
+  }
+  quitAndInstall()
+  return result
 }
 
 let consecutiveAutomaticRetrySchedules = 0

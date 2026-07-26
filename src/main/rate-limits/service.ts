@@ -1,11 +1,11 @@
 /* eslint-disable max-lines -- Why: centralizes polling, stale-data handling, account-switch fetch semantics, and renderer push coordination in one place */
 import type { BrowserWindow } from 'electron'
-import { randomUUID } from 'node:crypto'
 import type {
   CodexRateLimitResetResult,
   RateLimitState,
   ProviderRateLimits,
-  InactiveAccountUsage
+  InactiveAccountUsage,
+  RateLimitRuntimeTarget
 } from '../../shared/rate-limit-types'
 import { fetchClaudeRateLimits, fetchManagedAccountUsage } from './claude-fetcher'
 import type { InactiveClaudeAccountInfo } from './claude-fetcher'
@@ -415,25 +415,38 @@ export class RateLimitService {
     return this.getState()
   }
 
-  async consumeCodexRateLimitResetCredit(): Promise<CodexRateLimitResetResult> {
-    const codexTarget = this.codexFetchTarget
-    const codexHomePath = this.codexHomePathResolver?.(codexTarget) ?? null
+  async consumeCodexRateLimitResetCredit(options: {
+    idempotencyKey: string
+    target: RateLimitRuntimeTarget
+    codexHomePath: string | null
+  }): Promise<CodexRateLimitResetResult> {
+    const codexTarget = normalizeCodexAccountSelectionTarget(options.target)
+    const codexHomePath = options.codexHomePath
+    const scopedStateBeforeReset = this.getState()
     const missingWslCodexHome = codexHomePath
       ? null
       : this.getMissingWslCodexHomeResult(codexTarget)
     if (missingWslCodexHome) {
-      await this.fetchCodexOnly({ force: true })
+      if (this.isSameCodexTarget(this.codexFetchTarget, codexTarget)) {
+        await this.fetchCodexOnly({ force: true })
+      }
       throw new Error(missingWslCodexHome.error ?? 'Codex home unavailable')
     }
     try {
       const outcome = await consumeCodexRateLimitResetCredit({
         codexHomePath,
-        idempotencyKey: randomUUID()
+        idempotencyKey: options.idempotencyKey
       })
-      await this.fetchCodexOnly({ force: true })
-      return { outcome, state: this.getState() }
+      const state = await this.fetchCodexResetResultState(
+        codexTarget,
+        codexHomePath,
+        scopedStateBeforeReset
+      )
+      return { outcome, state }
     } catch (error) {
-      await this.fetchCodexOnly({ force: true })
+      if (this.isSameCodexTarget(this.codexFetchTarget, codexTarget)) {
+        await this.fetchCodexOnly({ force: true })
+      }
       throw error
     }
   }
@@ -484,6 +497,17 @@ export class RateLimitService {
     })
     await this.fetchClaudeOnly({ force: true })
     return this.getState()
+  }
+
+  async refreshAfterClaudeLivePtysDrained(): Promise<void> {
+    // Why: "Waiting for Claude session" can only recover once no live claude
+    // owns the credentials. Refetch on the last PTY exit instead of leaving
+    // the stale terminal error up until the failure backoff elapses.
+    if (!this.state.claude?.usageMetadata?.deferredByLiveClaudeSession) {
+      return
+    }
+    this.activeFailureStreakByProvider.claude = 0
+    await this.fetchClaudeOnly({ force: true })
   }
 
   async fetchInactiveClaudeAccountsOnOpen(): Promise<void> {
@@ -1226,6 +1250,54 @@ export class RateLimitService {
     }
   }
 
+  private async fetchCodexResetResultState(
+    target: NormalizedCodexAccountSelectionTarget,
+    codexHomePath: string | null,
+    stateBeforeReset: RateLimitState
+  ): Promise<RateLimitState> {
+    const controller = this.beginFetchCycle()
+    let fresh: ProviderRateLimits
+    try {
+      fresh = await fetchCodexRateLimits({
+        codexHomePath,
+        allowPtyFallback: this.shouldAllowCodexPtyFallback(),
+        signal: controller.signal
+      })
+    } catch (error) {
+      fresh = {
+        provider: 'codex',
+        session: null,
+        weekly: null,
+        updatedAt: Date.now(),
+        error: toErrorMessage(error),
+        status: 'error'
+      }
+    } finally {
+      this.finishFetchCycle(controller)
+    }
+
+    const scopedCodex = this.applyStalePolicy(fresh, stateBeforeReset.codex)
+    const currentHomePath = this.codexHomePathResolver?.(target) ?? null
+    const stillActive =
+      this.isSameCodexTarget(this.codexFetchTarget, target) &&
+      this.getCodexProvenance(target, currentHomePath) ===
+        this.getCodexProvenance(target, codexHomePath)
+    if (stillActive) {
+      // Why: this post-redemption read is newer than every Codex fetch that
+      // started before it, so invalidate those results before publishing it.
+      this.codexFetchGeneration += 1
+      this.trackActiveFailureStreak('codex', fresh)
+      this.updateState({
+        ...this.state,
+        codex: this.applyStalePolicy(fresh, this.state.codex)
+      })
+    }
+
+    // Why: the caller must receive the redeemed target even if the global UI
+    // switched targets while the provider mutation was in flight.
+    return { ...stateBeforeReset, codex: scopedCodex, codexTarget: target }
+  }
+
   private shouldAllowCodexPtyFallback(): boolean {
     // Why: hidden PTY fallback can crash inside ConPTY on Windows; prefer RPC-only degradation there for background quota refresh.
     return process.platform !== 'win32'
@@ -1540,7 +1612,11 @@ export class RateLimitService {
             signal
           }),
         fetchGeminiRateLimits(geminiCliOAuthEnabled),
-        fetchOpenCodeGoRateLimits(cookie, workspaceIdOverride || undefined),
+        fetchOpenCodeGoRateLimits(
+          cookie,
+          workspaceIdOverride || undefined,
+          this.networkProxySettingsResolver?.()
+        ),
         fetchKimiRateLimits(),
         miniMaxConfigResult.error
           ? Promise.resolve(this.getMiniMaxCredentialError(miniMaxConfigResult.error))

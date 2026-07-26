@@ -15,6 +15,7 @@ import {
   resolveTuiAgentLaunchArgs,
   resolveTuiAgentLaunchEnv
 } from '../../../src/shared/tui-agent-launch-defaults'
+import { normalizeAiVaultResumeFilePath } from '../../../src/shared/ai-vault-resume-path'
 import type { TuiAgent } from '../../../src/shared/types'
 import { parseWslUncPath } from '../../../src/shared/wsl-paths'
 import { resolveWindowsShellStartupFamily } from '../../../src/shared/windows-terminal-shell'
@@ -58,7 +59,7 @@ export function buildMobileAiVaultResumeCommand(args: {
     sessionId: args.session.sessionId,
     // Why: OMP resumes by absolute transcript path (custom OMP dir / WSL-store
     // sessions miss on an id lookup), so mobile forwards it like desktop does.
-    resumeFilePath: args.session.filePath,
+    resumeFilePath: normalizeAiVaultResumeFilePath(args.session.filePath, args.hostPlatform),
     cwd: args.session.cwd,
     platform: args.hostPlatform,
     commandOverride: args.commandOverride,
@@ -97,6 +98,7 @@ export function buildMobileAiVaultResumeLaunch(args: {
     args.settings?.agentCmdOverrides
   )
   const commandOverride = cmdOverrides[args.session.agent] ?? null
+  const resumeFilePath = normalizeAiVaultResumeFilePath(args.session.filePath, args.hostPlatform)
   if (isResumableTuiAgent(args.session.agent)) {
     const startupPlan = buildAgentResumeStartupPlan({
       agent: args.session.agent,
@@ -105,17 +107,31 @@ export function buildMobileAiVaultResumeLaunch(args: {
       platform: args.hostPlatform,
       shell,
       agentArgs: resolveTuiAgentLaunchArgs(args.session.agent, args.settings?.agentDefaultArgs),
-      agentEnv: resolveTuiAgentLaunchEnv(args.session.agent, args.settings?.agentDefaultEnv)
+      agentEnv: resolveTuiAgentLaunchEnv(args.session.agent, args.settings?.agentDefaultEnv),
+      ...(args.session.agent === 'omp' && resumeFilePath
+        ? { ompResumeFilePath: resumeFilePath }
+        : {})
     })
     if (startupPlan) {
       return {
-        command: buildAiVaultResumeShellCommand({
-          resumeCommand: startupPlan.launchCommand,
-          cwd: args.session.cwd,
-          platform: args.hostPlatform,
-          codexHome,
-          shell
-        }),
+        command:
+          args.session.agent === 'omp'
+            ? buildMobileAiVaultResumeCommand({
+                session: {
+                  ...args.session,
+                  ...(resumeFilePath ? { filePath: resumeFilePath } : {})
+                },
+                hostPlatform: args.hostPlatform,
+                hostTerminalWindowsShell: args.hostTerminalWindowsShell,
+                commandOverride: startupPlan.launchConfig.agentCommand
+              })
+            : buildAiVaultResumeShellCommand({
+                resumeCommand: startupPlan.launchCommand,
+                cwd: args.session.cwd,
+                platform: args.hostPlatform,
+                codexHome,
+                shell
+              }),
         ...(startupPlan.env ? { env: startupPlan.env } : {}),
         // Why: the resume command is typed into the created pane, so the bare
         // real-home override must strip Codex homes at pane spawn like desktop.

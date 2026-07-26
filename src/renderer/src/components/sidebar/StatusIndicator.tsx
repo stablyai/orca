@@ -1,4 +1,5 @@
 import React from 'react'
+import { MessageCircleQuestion } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { AgentWorkingSpinner } from '@/components/AgentWorkingSpinner'
 import { getWorktreeStatusLabel, type WorktreeStatus } from '@/lib/worktree-status'
@@ -39,6 +40,18 @@ const StatusIndicator = React.memo(function StatusIndicator({
     )
   }
 
+  if (status === 'permission') {
+    return (
+      <span
+        className={cn('inline-flex h-3 w-3 shrink-0 items-center justify-center', className)}
+        title={resolvedTitle}
+        {...rest}
+      >
+        <MessageCircleQuestion className="size-3 text-amber-500" aria-hidden="true" />
+      </span>
+    )
+  }
+
   return (
     <span
       className={cn('inline-flex h-3 w-3 shrink-0 items-center justify-center', className)}
@@ -48,14 +61,12 @@ const StatusIndicator = React.memo(function StatusIndicator({
       <span
         className={cn(
           'block size-2 rounded-full',
-          status === 'permission'
-            ? 'bg-amber-500'
-            : status === 'done' || status === 'active'
-              ? // Green dot for both hook-reported 'done' and the heuristic
-                // 'active' (terminal open, quiet). Working uses a yellow
-                // ring above; 'inactive' stays grey.
-                'bg-emerald-500'
-              : 'bg-neutral-500/40'
+          status === 'done' || status === 'active'
+            ? // Green dot for both hook-reported 'done' and the heuristic
+              // 'active' (terminal open, quiet). Working uses a yellow
+              // ring above; 'inactive' stays grey.
+              'bg-emerald-500'
+            : 'bg-neutral-500/40'
         )}
       />
     </span>

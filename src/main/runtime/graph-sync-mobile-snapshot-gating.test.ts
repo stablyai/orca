@@ -686,8 +686,10 @@ describe('graph-sync mobile snapshot gating', () => {
     ).toBe(true)
 
     // The persisted SSH binding is removed with no renderer-visible change, so
-    // the renderer resends the unchanged version 1 — the tab must still drop.
+    // the renderer resends the unchanged version 1 after the bounded HUB-restart
+    // recovery grace — the tab must still drop.
     setSession(makeSession())
+    vi.advanceTimersByTime(30_001)
     sync([makeRendererSnapshot({ version: 1 })])
     vi.advanceTimersByTime(60)
     expect(
@@ -762,9 +764,10 @@ describe('graph-sync mobile snapshot gating', () => {
         ?.tabs.some((tab) => tab.type === 'terminal' && tab.parentTabId === 'ssh-tab')
     ).toBe(true)
 
-    // Once the SSH binding disappears from persistence (and no live PTY backs
-    // it), the next renderer revision must stop preserving it.
+    // Once the recovery grace expires and the SSH binding disappears from
+    // persistence (with no live PTY), the next revision must stop preserving it.
     setSession(makeSession())
+    vi.advanceTimersByTime(30_001)
     sync([makeRendererSnapshot({ version: 3, title: 'Renamed again' })])
     vi.advanceTimersByTime(60)
     expect(

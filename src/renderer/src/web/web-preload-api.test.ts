@@ -213,6 +213,81 @@ describe('web runtime environment identity', () => {
     ).rejects.toThrow('Unknown Orca runtime environment: web-server-a')
   })
 
+  it('keeps pairing state separate from generic Active Server settings writes', async () => {
+    const globals = installBrowserGlobals('Linux')
+    const { installWebPreloadApi } = await import('./web-preload-api')
+    installWebPreloadApi()
+    const paired = await globals.window.api.runtimeEnvironments.addFromPairingCode({
+      name: 'Windows 2',
+      pairingCode: encodePairingCode({ publicKeyB64: 'windows-2-key' })
+    })
+
+    const settings = await globals.window.api.settings.set({ activeRuntimeEnvironmentId: null })
+
+    await expect(globals.window.api.runtimeEnvironments.list()).resolves.toMatchObject([
+      { id: paired.environment.id, name: 'Windows 2' }
+    ])
+    expect(settings.activeRuntimeEnvironmentId).toBeNull()
+    expect(globals.window.api.settings.getSync()?.activeRuntimeEnvironmentId).toBeNull()
+    expect(JSON.parse(globals.storage.getItem('orca.web.settings.v1') ?? '{}')).not.toHaveProperty(
+      'activeRuntimeEnvironmentId'
+    )
+    await expect(
+      globals.window.api.runtimeEnvironments.remove({ selector: paired.environment.id })
+    ).resolves.toMatchObject({ removed: { id: paired.environment.id } })
+    await expect(globals.window.api.runtimeEnvironments.list()).resolves.toEqual([])
+  })
+
+  it('persists an explicit Active Server choice across unrelated web settings writes', async () => {
+    const globals = installBrowserGlobals('Linux')
+    const { installWebPreloadApi } = await import('./web-preload-api')
+    installWebPreloadApi()
+    const paired = await globals.window.api.runtimeEnvironments.addFromPairingCode({
+      name: 'Windows 2',
+      pairingCode: encodePairingCode({ publicKeyB64: 'windows-2-key' })
+    })
+
+    await globals.window.api.settings.setActiveRuntimeEnvironmentPreference({
+      environmentId: 'Windows 2'
+    })
+    await globals.window.api.settings.set({ terminalFontSize: 15 })
+    expect(JSON.parse(globals.storage.getItem('orca.web.settings.v1') ?? '{}')).toMatchObject({
+      activeRuntimeEnvironmentId: paired.environment.id,
+      terminalFontSize: 15
+    })
+
+    await globals.window.api.settings.setActiveRuntimeEnvironmentPreference({
+      environmentId: null
+    })
+    await globals.window.api.settings.set({ terminalFontSize: 16 })
+    expect(JSON.parse(globals.storage.getItem('orca.web.settings.v1') ?? '{}')).toMatchObject({
+      activeRuntimeEnvironmentId: null,
+      terminalFontSize: 16
+    })
+  })
+
+  it('rejects an unknown explicit Active Server choice without corrupting the preference', async () => {
+    const globals = installBrowserGlobals('Linux')
+    const { installWebPreloadApi } = await import('./web-preload-api')
+    installWebPreloadApi()
+    const paired = await globals.window.api.runtimeEnvironments.addFromPairingCode({
+      name: 'Windows 2',
+      pairingCode: encodePairingCode({ publicKeyB64: 'windows-2-key' })
+    })
+    await globals.window.api.settings.setActiveRuntimeEnvironmentPreference({
+      environmentId: paired.environment.id
+    })
+
+    await expect(
+      globals.window.api.settings.setActiveRuntimeEnvironmentPreference({
+        environmentId: 'unknown-server'
+      })
+    ).rejects.toThrow('Unknown Orca runtime environment: unknown-server')
+    expect(JSON.parse(globals.storage.getItem('orca.web.settings.v1') ?? '{}')).toMatchObject({
+      activeRuntimeEnvironmentId: paired.environment.id
+    })
+  })
+
   it('keeps old selectors only when re-pairing proves the same server key', async () => {
     const globals = installBrowserGlobals('Linux')
     writeStoredRuntimeEnvironment(globals.storage, 'web-server-a')
@@ -431,6 +506,96 @@ describe('web settings preload API', () => {
     expect(settings.terminalCursorStyleDefaultedToBlock).toBe(true)
   })
 
+  it('migrates OSC 52 clipboard writes on for stored web settings once', async () => {
+    // Why: the web store is a second, independent settings store — the constants-level
+    // default flip only reaches profiles that never persisted the old `false` (#10567).
+    const globals = installBrowserGlobals('Linux')
+    globals.storage.setItem(
+      'orca.web.settings.v1',
+      JSON.stringify({ terminalAllowOsc52Clipboard: false })
+    )
+    const { installWebPreloadApi } = await import('./web-preload-api')
+    installWebPreloadApi()
+
+    const settings = await globals.window.api.settings.get()
+    const stored = JSON.parse(globals.storage.getItem('orca.web.settings.v1') ?? '{}') as {
+      terminalAllowOsc52Clipboard?: boolean
+      terminalAllowOsc52ClipboardDefaultedOnForAllUsers?: boolean
+    }
+
+    expect(settings.terminalAllowOsc52Clipboard).toBe(true)
+    expect(settings.terminalAllowOsc52ClipboardDefaultedOnForAllUsers).toBe(true)
+    expect(stored.terminalAllowOsc52Clipboard).toBe(true)
+    expect(stored.terminalAllowOsc52ClipboardDefaultedOnForAllUsers).toBe(true)
+  })
+
+  it('arms the OSC 52 notice in the web UI store when the flip overrides a persisted off', async () => {
+    const globals = installBrowserGlobals('Linux')
+    globals.storage.setItem(
+      'orca.web.settings.v1',
+      JSON.stringify({ terminalAllowOsc52Clipboard: false })
+    )
+    const { installWebPreloadApi } = await import('./web-preload-api')
+    installWebPreloadApi()
+
+    await globals.window.api.settings.get()
+    const storedUi = JSON.parse(globals.storage.getItem('orca.web.ui.v1') ?? '{}') as {
+      osc52ClipboardDefaultOnNoticePending?: boolean
+    }
+
+    expect(storedUi.osc52ClipboardDefaultOnNoticePending).toBe(true)
+  })
+
+  it('does not arm the OSC 52 notice for a web profile with no persisted value', async () => {
+    const globals = installBrowserGlobals('Linux')
+    globals.storage.setItem('orca.web.settings.v1', JSON.stringify({ terminalFontSize: 15 }))
+    const { installWebPreloadApi } = await import('./web-preload-api')
+    installWebPreloadApi()
+
+    await globals.window.api.settings.get()
+    const storedUi = JSON.parse(globals.storage.getItem('orca.web.ui.v1') ?? '{}') as {
+      osc52ClipboardDefaultOnNoticePending?: boolean
+    }
+
+    expect(storedUi.osc52ClipboardDefaultOnNoticePending).not.toBe(true)
+  })
+
+  it('arms the OSC 52 notice when ui.get is the read that runs the migration', async () => {
+    // Why seed after install: readLocalWebUIState must run the settings migration before it
+    // snapshots the UI blob, and only a ui.get that is itself the first settings read can
+    // show that. Reading first returns a pre-arm state every caller then writes back — and
+    // the stamp means nothing can raise the arm again. Another tab populating localStorage
+    // after this one loaded is the shape that reaches it.
+    const globals = installBrowserGlobals('Linux')
+    const { installWebPreloadApi } = await import('./web-preload-api')
+    installWebPreloadApi()
+    globals.storage.setItem(
+      'orca.web.settings.v1',
+      JSON.stringify({ terminalAllowOsc52Clipboard: false })
+    )
+
+    const ui = await globals.window.api.ui.get()
+
+    expect(ui.osc52ClipboardDefaultOnNoticePending).toBe(true)
+  })
+
+  it('preserves OSC 52 clipboard web opt-outs after migration', async () => {
+    const globals = installBrowserGlobals('Linux')
+    globals.storage.setItem(
+      'orca.web.settings.v1',
+      JSON.stringify({
+        terminalAllowOsc52Clipboard: false,
+        terminalAllowOsc52ClipboardDefaultedOnForAllUsers: true
+      })
+    )
+    const { installWebPreloadApi } = await import('./web-preload-api')
+    installWebPreloadApi()
+
+    const settings = await globals.window.api.settings.get()
+    expect(settings.terminalAllowOsc52Clipboard).toBe(false)
+    expect(settings.terminalAllowOsc52ClipboardDefaultedOnForAllUsers).toBe(true)
+  })
+
   it('preserves first-work branch auto-rename web opt-outs after migration', async () => {
     const globals = installBrowserGlobals('Linux')
     globals.storage.setItem(
@@ -479,7 +644,12 @@ describe('web settings preload API', () => {
           return Promise.resolve({
             id: `call-${runtimeCalls.length}`,
             ok: true,
-            result: { settings: { compactWorktreeCards: true } },
+            result: {
+              settings: {
+                compactWorktreeCards: true,
+                activeRuntimeEnvironmentId: 'host-internal-default'
+              }
+            },
             _meta: { runtimeId: 'runtime-1' }
           })
         }
@@ -499,7 +669,9 @@ describe('web settings preload API', () => {
     }
 
     expect(settings.compactWorktreeCards).toBe(true)
+    expect(settings.activeRuntimeEnvironmentId).toBeNull()
     expect(stored.compactWorktreeCards).toBe(true)
+    expect(stored).not.toHaveProperty('activeRuntimeEnvironmentId')
     expect(runtimeCalls).toEqual([{ method: 'settings.get', params: undefined }])
   }, 15_000)
 
@@ -615,7 +787,12 @@ describe('web settings preload API', () => {
           return Promise.resolve({
             id: `call-${runtimeCalls.length}`,
             ok: true,
-            result: { settings: { compactWorktreeCards: true } },
+            result: {
+              settings: {
+                compactWorktreeCards: true,
+                activeRuntimeEnvironmentId: 'host-internal-default'
+              }
+            },
             _meta: { runtimeId: 'runtime-1' }
           })
         }
@@ -636,7 +813,9 @@ describe('web settings preload API', () => {
     }
 
     expect(settings.compactWorktreeCards).toBe(true)
+    expect(settings.activeRuntimeEnvironmentId).toBeNull()
     expect(stored.compactWorktreeCards).toBe(true)
+    expect(stored).not.toHaveProperty('activeRuntimeEnvironmentId')
     expect(runtimeCalls).toEqual([
       { method: 'settings.update', params: { compactWorktreeCards: true } }
     ])
@@ -1761,6 +1940,70 @@ describe('web UI preload API', () => {
     expect(stored.contextualToursSeenIds).toEqual(['tasks', 'browser'])
   })
 
+  it('keeps the local OSC 52 notice armed when ui.get returns an unmigrated host', async () => {
+    vi.doMock('./web-runtime-client', () => ({
+      WebRuntimeClient: class {
+        call(method: string): Promise<RuntimeRpcResponse<unknown>> {
+          return Promise.resolve({
+            id: method,
+            ok: true,
+            // Why false: the host store always projects this key, so a plain spread
+            // would overwrite the arm the web client's own settings migration raised.
+            result: { ui: { osc52ClipboardDefaultOnNoticePending: false } },
+            _meta: { runtimeId: 'runtime-1' }
+          })
+        }
+
+        close(): void {}
+      }
+    }))
+
+    const globals = installBrowserGlobals('Linux')
+    writeStoredRuntimeEnvironment(globals.storage)
+    globals.storage.setItem(
+      'orca.web.ui.v1',
+      JSON.stringify({ osc52ClipboardDefaultOnNoticePending: true })
+    )
+    const { installWebPreloadApi } = await import('./web-preload-api')
+    installWebPreloadApi()
+
+    const ui = await globals.window.api.ui.get()
+    expect(ui.osc52ClipboardDefaultOnNoticePending).toBe(true)
+
+    await globals.window.api.ui.set({ osc52ClipboardDefaultOnNoticePending: false })
+    const cleared = await globals.window.api.ui.get()
+    expect(cleared.osc52ClipboardDefaultOnNoticePending).toBe(false)
+  })
+
+  it('keeps the local OSC 52 notice armed when recordFeatureInteraction returns an unmigrated host', async () => {
+    vi.doMock('./web-runtime-client', () => ({
+      WebRuntimeClient: class {
+        call(method: string): Promise<RuntimeRpcResponse<unknown>> {
+          return Promise.resolve({
+            id: method,
+            ok: true,
+            result: { ui: { osc52ClipboardDefaultOnNoticePending: false } },
+            _meta: { runtimeId: 'runtime-1' }
+          })
+        }
+
+        close(): void {}
+      }
+    }))
+
+    const globals = installBrowserGlobals('Linux')
+    writeStoredRuntimeEnvironment(globals.storage)
+    globals.storage.setItem(
+      'orca.web.ui.v1',
+      JSON.stringify({ osc52ClipboardDefaultOnNoticePending: true })
+    )
+    const { installWebPreloadApi } = await import('./web-preload-api')
+    installWebPreloadApi()
+
+    const ui = await globals.window.api.ui.recordFeatureInteraction('tasks')
+    expect(ui.osc52ClipboardDefaultOnNoticePending).toBe(true)
+  })
+
   it('does not keep a local shadow copy of main-owned feature telemetry markers', async () => {
     vi.doMock('./web-runtime-client', () => ({
       WebRuntimeClient: class {
@@ -2235,6 +2478,12 @@ describe('web worktree preload API', () => {
                     repoId: 'repo-1',
                     path: '/srv/repo',
                     hostId: 'local'
+                  },
+                  {
+                    id: 'repo-2::/ssh/repo',
+                    repoId: 'repo-2',
+                    path: '/ssh/repo',
+                    hostId: 'ssh:hub-private-target'
                   }
                 ]
               },
@@ -2252,7 +2501,16 @@ describe('web worktree preload API', () => {
       installWebPreloadApi()
 
       await expect(globals.window.api.worktrees.list({ repoId: 'repo-1' })).resolves.toMatchObject([
-        { id: 'repo-1::/srv/repo', hostId: `runtime:${environmentId}` }
+        {
+          id: 'repo-1::/srv/repo',
+          hostId: 'local',
+          runtimeOwnerEnvironmentId: environmentId
+        },
+        {
+          id: 'repo-2::/ssh/repo',
+          hostId: 'ssh:hub-private-target',
+          runtimeOwnerEnvironmentId: environmentId
+        }
       ])
     }
   )
@@ -2303,7 +2561,7 @@ describe('web worktree preload API', () => {
       'The paired Orca server changed while the request was in progress.'
     )
     await expect(globals.window.api.worktrees.listAll()).resolves.toMatchObject([
-      { id: 'worktree-b', hostId: `runtime:${paired.environment.id}` }
+      { id: 'worktree-b', runtimeOwnerEnvironmentId: paired.environment.id }
     ])
   })
 
@@ -2372,7 +2630,7 @@ describe('web worktree preload API', () => {
       worktrees: [
         {
           id: worktree.id,
-          hostId: 'runtime:web-env-1',
+          runtimeOwnerEnvironmentId: 'web-env-1',
           ownership: 'orca-managed',
           visible: true
         }

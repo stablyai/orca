@@ -3,6 +3,7 @@ import {
   agentSubagentsEqual,
   parseAgentStatusPayload,
   normalizeAgentStatusPayload,
+  AGENT_STATUS_JSON_STRUCTURE_LIMITS,
   AGENT_STATUS_MAX_FIELD_LENGTH,
   AGENT_STATUS_MAX_SUBAGENTS,
   AGENT_STATUS_TOOL_NAME_MAX_LENGTH,
@@ -53,6 +54,17 @@ describe('parseAgentStatusPayload', () => {
     expect(parseAgentStatusPayload('not json')).toBeNull()
     expect(parseAgentStatusPayload('{broken')).toBeNull()
     expect(parseAgentStatusPayload('')).toBeNull()
+  })
+
+  it('rejects excessive nesting before JSON.parse', () => {
+    const parseSpy = vi.spyOn(JSON, 'parse')
+    const depth = AGENT_STATUS_JSON_STRUCTURE_LIMITS.nestingDepth + 1
+    try {
+      expect(parseAgentStatusPayload(`${'['.repeat(depth)}0${']'.repeat(depth)}`)).toBeNull()
+      expect(parseSpy).not.toHaveBeenCalled()
+    } finally {
+      parseSpy.mockRestore()
+    }
   })
 
   it('returns null for non-object JSON', () => {

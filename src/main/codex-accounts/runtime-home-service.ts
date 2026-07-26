@@ -34,6 +34,7 @@ import { WSL_CODEX_RUNTIME_HOME_SEGMENTS } from '../pty/codex-home-wsl-env'
 import { writeFileAtomically } from './fs-utils'
 import {
   getOrcaManagedCodexHomePath,
+  getOrcaUserDataPath,
   getCodexSessionBackfillStateDirPath,
   getSystemCodexHomePath,
   syncCodexGlobalInstructionsIntoManagedHome,
@@ -1148,6 +1149,27 @@ export class CodexRuntimeHomeService {
 
   private getRuntimeHomePath(): string {
     return getOrcaManagedCodexHomePath()
+  }
+
+  /**
+   * Resolves the managed home the config mirror actually targets for the
+   * current HOST selection, or null when no mirror runs for it.
+   *
+   * Read-only on purpose: unlike the launch and quota-fetch paths this prepares
+   * nothing and creates no directories, so surfacing sync health cannot alter
+   * the state it is reporting on. Returns null for the system default on the
+   * real-home lane, which runs Codex directly against ~/.codex — there is no
+   * mirror there, so there is nothing that can fall behind.
+   */
+  getMirroredHostHomePathForStatus(): string | null {
+    const selfContainedAccount = this.getSelfContainedManagedHostAccount()
+    if (selfContainedAccount) {
+      return this.getTrustedSelfContainedManagedHomePath(selfContainedAccount)
+    }
+    if (this.isHostSystemDefaultRealHome()) {
+      return null
+    }
+    return join(getOrcaUserDataPath(), 'codex-runtime-home', 'home')
   }
 
   private getRuntimeAuthPath(): string {

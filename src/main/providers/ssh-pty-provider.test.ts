@@ -268,6 +268,16 @@ describe('SshPtyProvider', () => {
         env: { [POWERLEVEL10K_WIZARD_DISABLE_ENV]: 'true' }
       })
       expect(result).toEqual({ id: scopedPty1 })
+      expect(provider.hasPty(scopedPty1)).toBe(true)
+    })
+
+    it('keeps a spawned PTY live across an overlapping stale process list', async () => {
+      mux.request.mockResolvedValueOnce({ id: 'pty-new' }).mockResolvedValueOnce([])
+
+      const result = await provider.spawn({ cols: 80, rows: 24 })
+      await provider.listProcesses()
+
+      expect(provider.hasPty(result.id)).toBe(true)
     })
 
     it('gates fresh startup intent with the relay ingress capability version', async () => {
@@ -823,6 +833,18 @@ describe('SshPtyProvider', () => {
     const result = await provider.getForegroundProcess(scopedPty1)
     expect(result).toBe('node')
     expect(mux.request).toHaveBeenCalledWith('pty.getForegroundProcess', { id: 'pty-1' })
+  })
+
+  it('preserves unavailable process inspection', async () => {
+    const inspection = {
+      foregroundProcess: null,
+      hasChildProcesses: true,
+      unavailable: true as const
+    }
+    mux.request.mockResolvedValue(inspection)
+
+    await expect(provider.inspectProcess(scopedPty1)).resolves.toEqual(inspection)
+    expect(mux.request).toHaveBeenCalledWith('pty.inspectProcess', { id: 'pty-1' })
   })
 
   it('serializes scoped app ids using raw relay ids', async () => {

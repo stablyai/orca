@@ -12,6 +12,7 @@ import type { ProjectExecutionRuntimeResolution } from '../../../../shared/proje
 import type { EventProps } from '../../../../shared/telemetry-events'
 import type { TerminalOscColorQueryReplyColors } from '../../../../shared/terminal-osc-color-reply'
 import type { TuiAgent } from '../../../../shared/types'
+import type { ExecutionHostId } from '../../../../shared/execution-host'
 import type { PtyDataMeta } from './pty-dispatcher'
 
 export type PtyBufferSnapshot = {
@@ -49,6 +50,9 @@ export type PtyConnectResult = {
   /** The requested session exited while it had no primary pane handler. Its
    *  buffered final data/exit were delivered, so callers must not fresh-spawn. */
   exitedBeforeAttach?: boolean
+  /** The provider adopted an existing session rather than creating a fresh one.
+   *  Startup commands may be ignored; recovery still requires separate ownership evidence. */
+  isReattach?: boolean
   launchAgent?: TuiAgent
   launchConfig?: SleepingAgentLaunchConfig
   snapshot?: string
@@ -152,6 +156,10 @@ export type PtyTransport = {
   /** The runtime captured by this transport; legacy remote PTY ids do not
    * encode their owner, and current worktree settings may have changed. */
   getRuntimeEnvironmentId?: () => string | null
+  /** Execution host captured at spawn; nested SSH differs from its outer runtime owner. */
+  getExecutionHostId?: () => ExecutionHostId | null
+  /** Host platform captured by the PTY owner; paired-client OS is not authoritative. */
+  getRemotePlatform?: () => NodeJS.Platform | null
   getLocalSessionMetadata?: () => LocalPtySessionMetadata | null
   /** Drop cross-chunk parser carries (partial OSC-9999 prefix). Called when a
    *  model-restore marker reports dropped bytes — a carry spanning the gap
@@ -179,6 +187,7 @@ export type IpcPtyTransportOptions = {
   launchAgent?: TuiAgent
   startupCommandDelivery?: StartupCommandDelivery
   connectionId?: string | null
+  executionHostId?: ExecutionHostId | null
   worktreeId?: string
   tabId?: string
   leafId?: string

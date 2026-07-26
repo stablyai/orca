@@ -1,5 +1,6 @@
 // Why: regression coverage for the install-probe contract — the "node-pty is not available" bug shipped because every guard layer was silent.
 
+import { EventEmitter } from 'node:events'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 vi.mock('electron', () => ({
@@ -46,7 +47,8 @@ vi.mock('./ssh-relay-versioned-install', () => ({
 }))
 
 vi.mock('./ssh-relay-install-lock', () => ({
-  acquireInstallLock: vi.fn().mockResolvedValue(undefined)
+  acquireInstallLock: vi.fn().mockResolvedValue(undefined),
+  RELAY_INSTALL_LOCK_NAME: '.install-lock'
 }))
 
 vi.mock('./ssh-relay-repair-lock', () => ({
@@ -84,37 +86,32 @@ type SftpWriteCapture = {
   execCallCountAtWrite: Record<string, number>
 }
 
+type SftpCallback = (err: Error | null, resolved?: string) => void
+const NO_SUCH_SFTP_FILE = Object.assign(new Error('No such file'), { code: 2 })
+
 function makeMockConnection(capture: SftpWriteCapture): SshConnection {
-  const sftpCreate = (): unknown => ({
-    mkdir: vi.fn((_p: string, cb: (err: Error | null) => void) => cb(null)),
-    on: vi.fn(),
-    once: vi.fn(),
-    createWriteStream: vi.fn().mockImplementation((path: string) => {
-      capture.paths.push(path)
-      let buf = ''
-      let closeCb: (() => void) | undefined
-      const stub = {
-        on: vi.fn((event: string, cb: () => void) => {
-          if (event === 'close') {
-            closeCb = cb
-          }
-        }),
-        end: vi.fn((data?: string) => {
-          if (typeof data === 'string') {
-            buf += data
-          }
-          capture.contents[path] = buf
-          capture.execCallCountAtWrite[path] = vi.mocked(execCommand).mock.calls.length
-          if (closeCb) {
-            setTimeout(closeCb, 0)
-          }
+  // Why: production attaches/removes real listeners (including prependOnceListener), so the fake must be an emitter.
+  const sftpCreate = (): unknown => {
+    const sftp = new EventEmitter()
+    return Object.assign(sftp, {
+      mkdir: vi.fn((_p: string, cb: SftpCallback) => cb(null)),
+      // This host's shell home and SFTP start directory agree, so no namespace redirect is possible.
+      realpath: vi.fn((_p: string, cb: SftpCallback) => cb(null, '/home/u')),
+      lstat: vi.fn((_p: string, cb: SftpCallback) => cb(NO_SUCH_SFTP_FILE)),
+      createWriteStream: vi.fn().mockImplementation((path: string) => {
+        capture.paths.push(path)
+        const ws = new EventEmitter()
+        return Object.assign(ws, {
+          end: vi.fn((data?: string) => {
+            capture.contents[path] = `${capture.contents[path] ?? ''}${data ?? ''}`
+            capture.execCallCountAtWrite[path] = vi.mocked(execCommand).mock.calls.length
+            setTimeout(() => ws.emit('close'), 0)
+          })
         })
-      }
-      // Why: production uses ws.once('close'); the mock delegates 'once' to the same handler table as 'on'.
-      return Object.assign(stub, { once: stub.on })
-    }),
-    end: vi.fn()
-  })
+      }),
+      end: vi.fn(() => setTimeout(() => sftp.emit('close'), 0))
+    })
+  }
   return {
     canRunConcurrentExecCommands: vi.fn().mockReturnValue(false),
     exec: vi.fn().mockResolvedValue({
@@ -694,6 +691,7 @@ describe('installNativeDeps (via deployAndLaunchRelay)', () => {
       '/home/u',
       'ORCA-NATIVE-DEPS-MISSING:@parcel/watcher\nMISSING', // first probe before lock
       'ORCA-NATIVE-DEPS-MISSING:@parcel/watcher\nMISSING', // re-probe after lock
+      '', // SFTP-namespace install-owner marker (repair)
       '', // npm install native deps
       '', // chmod prebuilds
       'ORCA-NPTY-PROBE-OK\n',
@@ -730,6 +728,7 @@ describe('installNativeDeps (via deployAndLaunchRelay)', () => {
       '/home/u',
       'MISSING', // health probe: require() fails
       'MISSING', // re-probe after lock
+      '', // SFTP-namespace install-owner marker (repair)
       { reject: 'npm ERR! network ETIMEDOUT' }, // npm install fails (offline)
       'DEAD',
       'READY'
@@ -752,6 +751,7 @@ describe('installNativeDeps (via deployAndLaunchRelay)', () => {
       .mockResolvedValueOnce('/home/u')
       .mockResolvedValueOnce('MISSING')
       .mockResolvedValueOnce('MISSING')
+      .mockResolvedValueOnce('') // SFTP-namespace install-owner marker (repair)
       .mockRejectedValueOnce(
         Object.assign(new Error('npm termination was not confirmed'), {
           sshChannelCloseConfirmed: false

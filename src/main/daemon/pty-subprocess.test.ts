@@ -1600,27 +1600,43 @@ describe('createPtySubprocess', () => {
     )
   })
 
-  it('rejects daemon automatic agent startup without an explicit cwd', () => {
+  it('falls back to the safe default cwd for daemon agent startup without an explicit cwd', () => {
+    const proc = mockPtyProcess()
+    spawnMock.mockReturnValue(proc)
+    spawnMock.mockClear()
     const platform = Object.getOwnPropertyDescriptor(process, 'platform')
     Object.defineProperty(process, 'platform', { value: 'linux' })
-    spawnMock.mockClear()
+    const origHome = process.env.HOME
+    // Pin HOME so we assert the exact resolved candidate, not just non-root-ness —
+    // catches regressions where resolveSafePtyDefaultCwd picks an unintended home.
+    process.env.HOME = '/home/testuser'
 
     try {
+      // Why: omitted cwd resolves to a safe default home; guard must not reject before fallback (#9578).
       expect(() =>
         createPtySubprocess({
           sessionId: 'test',
           cols: 80,
           rows: 24,
-          command: 'codex'
+          command: 'opencode'
         })
-      ).toThrow(/requires a non-root workspace/)
+      ).not.toThrow()
+
+      expect(spawnMock).toHaveBeenCalledWith(
+        expect.any(String),
+        expect.any(Array),
+        expect.objectContaining({ cwd: '/home/testuser' })
+      )
     } finally {
       if (platform) {
         Object.defineProperty(process, 'platform', platform)
       }
+      if (origHome === undefined) {
+        delete process.env.HOME
+      } else {
+        process.env.HOME = origHome
+      }
     }
-
-    expect(spawnMock).not.toHaveBeenCalled()
   })
 
   it('rejects daemon automatic agent startup at POSIX root', () => {

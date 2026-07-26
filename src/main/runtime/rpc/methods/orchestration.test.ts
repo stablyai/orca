@@ -1,6 +1,6 @@
 /* eslint-disable max-lines -- Why: orchestration tests share a mock runtime factory; splitting by method would duplicate 40 lines of setup per file without improving clarity. */
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { ORCHESTRATION_METHODS } from './orchestration'
+import { ORCHESTRATION_METHODS, clampAskTimeoutMs } from './orchestration'
 import { RpcDispatcher } from '../dispatcher'
 import { buildRegistry, type RpcContext, type RpcRequest } from '../core'
 import { OrchestrationDb } from '../../orchestration/db'
@@ -1790,6 +1790,48 @@ describe('orchestration RPC methods', () => {
 
       expect(result.timedOut).toBe(false)
       expect(result.answer).toBe('correct answer')
+    })
+
+    it('clamps an absurd caller-supplied timeoutMs so the long-poll slot is bounded', async () => {
+      setup()
+      vi.spyOn(runtime, 'deliverPendingMessagesForHandle').mockImplementation(() => {})
+      vi.spyOn(runtime, 'notifyMessageArrived').mockImplementation(() => {})
+      let observedTimeoutMs: number | undefined
+      vi.spyOn(runtime, 'waitForMessage').mockImplementation(async (_handle, options) => {
+        observedTimeoutMs = options?.timeoutMs
+        // End the wait loop so the assertion runs against the first budget slice.
+        const outbound = db.getInbox(10).find((m) => m.type === 'decision_gate')
+        // Why: without a reply the handler's while(true) spins on this mock until vitest times out, hanging instead of failing.
+        expect(outbound).toBeDefined()
+        db.insertMessage({
+          from: 'term_coord',
+          to: 'term_worker',
+          subject: 'Re: Question',
+          body: 'ok',
+          threadId: outbound!.id
+        })
+      })
+
+      const result = (await call('orchestration.ask', {
+        from: 'term_worker',
+        to: 'term_coord',
+        question: 'forever?',
+        timeoutMs: Number.MAX_SAFE_INTEGER
+      })) as { timeoutMs: number }
+
+      expect(observedTimeoutMs).toBeLessThanOrEqual(1_800_000)
+      expect(observedTimeoutMs).toBeGreaterThan(1_700_000)
+      // The clamp must be observable: callers report the budget waited, not the one they asked for.
+      expect(result.timeoutMs).toBe(1_800_000)
+    })
+
+    it('clamps timeoutMs at the exported boundary', () => {
+      expect(clampAskTimeoutMs(undefined)).toBe(600_000)
+      expect(clampAskTimeoutMs(1_000)).toBe(1_000)
+      expect(clampAskTimeoutMs(1_800_000)).toBe(1_800_000)
+      expect(clampAskTimeoutMs(86_400_000)).toBe(1_800_000)
+      expect(clampAskTimeoutMs(Number.MAX_SAFE_INTEGER)).toBe(1_800_000)
+      expect(clampAskTimeoutMs(-5)).toBe(0)
     })
 
     it('parses options CSV with whitespace and empty entries', async () => {

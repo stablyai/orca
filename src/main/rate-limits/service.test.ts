@@ -7,7 +7,7 @@ import { EventEmitter } from 'node:events'
 import type { ProviderRateLimits } from '../../shared/rate-limit-types'
 import { RateLimitService } from './service'
 import { fetchClaudeRateLimits, fetchManagedAccountUsage } from './claude-fetcher'
-import { fetchCodexRateLimits } from './codex-fetcher'
+import { consumeCodexRateLimitResetCredit, fetchCodexRateLimits } from './codex-fetcher'
 import { fetchGeminiRateLimits } from './gemini-usage-fetcher'
 import { fetchKimiRateLimits } from './kimi-fetcher'
 import { fetchMiniMaxRateLimits } from './minimax-fetcher'
@@ -22,6 +22,7 @@ vi.mock('./claude-fetcher', () => ({
 }))
 
 vi.mock('./codex-fetcher', () => ({
+  consumeCodexRateLimitResetCredit: vi.fn(),
   fetchCodexRateLimits: vi.fn()
 }))
 
@@ -1381,6 +1382,11 @@ describe('RateLimitService', () => {
       sessionCookie: 'session=abc123',
       workspaceIdOverride: ''
     }))
+    const networkProxySettings = {
+      httpProxyUrl: 'http://proxy.example:8080',
+      httpProxyBypassRules: 'localhost'
+    }
+    service.setNetworkProxySettingsResolver(() => networkProxySettings)
     service.setGeminiCliOAuthEnabledResolver(() => true)
 
     vi.mocked(fetchClaudeRateLimits).mockResolvedValueOnce(okProvider('claude', 10, Date.now()))
@@ -1405,7 +1411,11 @@ describe('RateLimitService', () => {
     expect(fetchGeminiRateLimits).toHaveBeenCalledTimes(1)
     expect(fetchGeminiRateLimits).toHaveBeenCalledWith(true)
     expect(fetchOpenCodeGoRateLimits).toHaveBeenCalledTimes(1)
-    expect(fetchOpenCodeGoRateLimits).toHaveBeenCalledWith('session=abc123', undefined)
+    expect(fetchOpenCodeGoRateLimits).toHaveBeenCalledWith(
+      'session=abc123',
+      undefined,
+      networkProxySettings
+    )
     expect(fetchGrokRateLimits).toHaveBeenCalledWith({
       signal: expect.any(AbortSignal),
       authReadResult: { status: 'missing' }
@@ -1438,6 +1448,131 @@ describe('RateLimitService', () => {
     expect(fetchCodexRateLimits).toHaveBeenCalledWith(
       expect.objectContaining({ codexHomePath: wslCodexHome })
     )
+  })
+
+  it('reuses a caller-provided idempotency key when consuming a Codex reset credit', async () => {
+    const service = new RateLimitService()
+    const idempotencyKey = '11111111-1111-4111-8111-111111111111'
+    service.setCodexHomePathResolver(() => '/tmp/codex-home')
+    vi.mocked(consumeCodexRateLimitResetCredit).mockResolvedValueOnce('reset')
+    vi.mocked(fetchCodexRateLimits).mockResolvedValueOnce(okProvider('codex', 0, Date.now()))
+
+    await expect(
+      service.consumeCodexRateLimitResetCredit({
+        idempotencyKey,
+        target: { runtime: 'host', wslDistro: null },
+        codexHomePath: '/tmp/codex-home'
+      })
+    ).resolves.toMatchObject({ outcome: 'reset' })
+    expect(consumeCodexRateLimitResetCredit).toHaveBeenCalledWith({
+      codexHomePath: '/tmp/codex-home',
+      idempotencyKey
+    })
+  })
+
+  it('returns a refreshed scoped state without overwriting a target selected during reset', async () => {
+    const service = new RateLimitService()
+    const idempotencyKey = '22222222-2222-4222-8222-222222222222'
+    const consume = vi.mocked(consumeCodexRateLimitResetCredit)
+    let resolveConsume: ((outcome: 'reset') => void) | undefined
+    consume.mockImplementationOnce(
+      () =>
+        new Promise((resolve) => {
+          resolveConsume = resolve
+        })
+    )
+    vi.mocked(fetchCodexRateLimits).mockResolvedValueOnce(okProvider('codex', 0, Date.now()))
+
+    service.setCodexHomePathResolver(() => '/tmp/new-selection')
+    const pending = service.consumeCodexRateLimitResetCredit({
+      idempotencyKey,
+      target: { runtime: 'host', wslDistro: null },
+      codexHomePath: '/tmp/approved-selection'
+    })
+    await vi.waitFor(() => expect(consume).toHaveBeenCalledOnce())
+    service.setCodexFetchTarget({ runtime: 'wsl', wslDistro: 'Ubuntu' })
+    resolveConsume?.('reset')
+
+    await expect(pending).resolves.toMatchObject({
+      outcome: 'reset',
+      state: {
+        codexTarget: { runtime: 'host', wslDistro: null },
+        codex: { session: { usedPercent: 0 } }
+      }
+    })
+    expect(consume).toHaveBeenCalledWith({
+      codexHomePath: '/tmp/approved-selection',
+      idempotencyKey
+    })
+    expect(fetchCodexRateLimits).toHaveBeenCalledWith(
+      expect.objectContaining({
+        codexHomePath: '/tmp/approved-selection',
+        signal: expect.any(AbortSignal)
+      })
+    )
+    expect(service.getState().codexTarget).toEqual({ runtime: 'wsl', wslDistro: 'Ubuntu' })
+    expect(service.getState().codex).toBeNull()
+  })
+
+  it('keeps the reset result scoped when the active target changes during its refresh', async () => {
+    const service = new RateLimitService()
+    const idempotencyKey = '33333333-3333-4333-8333-333333333333'
+    const hostRefresh = deferred<ProviderRateLimits>()
+    service.setCodexHomePathResolver((target) =>
+      target?.runtime === 'wsl' ? '/tmp/wsl-selection' : '/tmp/approved-selection'
+    )
+    vi.mocked(consumeCodexRateLimitResetCredit).mockResolvedValueOnce('reset')
+    vi.mocked(fetchCodexRateLimits)
+      .mockReturnValueOnce(hostRefresh.promise)
+      .mockResolvedValueOnce(okProvider('codex', 73, Date.now()))
+
+    const pendingReset = service.consumeCodexRateLimitResetCredit({
+      idempotencyKey,
+      target: { runtime: 'host', wslDistro: null },
+      codexHomePath: '/tmp/approved-selection'
+    })
+    await vi.waitFor(() => expect(fetchCodexRateLimits).toHaveBeenCalledOnce())
+
+    await service.refreshCodexForTarget({ runtime: 'wsl', wslDistro: 'Ubuntu' })
+    hostRefresh.resolve(okProvider('codex', 0, Date.now()))
+
+    await expect(pendingReset).resolves.toMatchObject({
+      outcome: 'reset',
+      state: {
+        codexTarget: { runtime: 'host', wslDistro: null },
+        codex: { session: { usedPercent: 0 } }
+      }
+    })
+    expect(service.getState()).toMatchObject({
+      codexTarget: { runtime: 'wsl', wslDistro: 'Ubuntu' },
+      codex: { session: { usedPercent: 73 } }
+    })
+  })
+
+  it('does not let an older full refresh overwrite the post-reset Codex state', async () => {
+    const service = new RateLimitService()
+    const slowClaude = deferred<ProviderRateLimits>()
+    service.setCodexHomePathResolver(() => '/tmp/approved-selection')
+    vi.mocked(fetchClaudeRateLimits).mockReturnValueOnce(slowClaude.promise)
+    vi.mocked(fetchCodexRateLimits)
+      .mockResolvedValueOnce(okProvider('codex', 100, Date.now()))
+      .mockResolvedValueOnce(okProvider('codex', 0, Date.now()))
+    vi.mocked(consumeCodexRateLimitResetCredit).mockResolvedValueOnce('reset')
+
+    const olderRefresh = service.refresh()
+    await vi.waitFor(() => expect(fetchCodexRateLimits).toHaveBeenCalledOnce())
+
+    await service.consumeCodexRateLimitResetCredit({
+      idempotencyKey: '44444444-4444-4444-8444-444444444444',
+      target: { runtime: 'host', wslDistro: null },
+      codexHomePath: '/tmp/approved-selection'
+    })
+    expect(service.getState().codex?.session?.usedPercent).toBe(0)
+
+    slowClaude.resolve(okProvider('claude', 20, Date.now()))
+    await olderRefresh
+
+    expect(service.getState().codex?.session?.usedPercent).toBe(0)
   })
 
   it('uses the initialized WSL target for active Codex rate-limit fetches', async () => {
@@ -2140,5 +2275,52 @@ describe('RateLimitService', () => {
     expect(state.minimax?.status).toBe('error')
     expect(state.minimax?.error).toBe('MiniMax session cookie could not be decrypted')
     expect(state.claude?.status).toBe('ok')
+  })
+
+  describe('refreshAfterClaudeLivePtysDrained', () => {
+    function deferredClaudeResult(): ProviderRateLimits {
+      return {
+        ...errorProvider('claude', 'Waiting for Claude session'),
+        usageMetadata: {
+          failureKind: 'deferred-by-live-session',
+          deferredByLiveClaudeSession: true
+        }
+      }
+    }
+
+    it('refetches Claude usage when the current result was deferred by a live session', async () => {
+      const service = new RateLimitService()
+      vi.mocked(fetchClaudeRateLimits).mockResolvedValueOnce(deferredClaudeResult())
+      await service.refresh()
+      expect(service.getState().claude?.usageMetadata?.deferredByLiveClaudeSession).toBe(true)
+      vi.mocked(fetchClaudeRateLimits).mockClear()
+      vi.mocked(fetchClaudeRateLimits).mockResolvedValueOnce(okProvider('claude', 10, Date.now()))
+
+      await service.refreshAfterClaudeLivePtysDrained()
+
+      expect(fetchClaudeRateLimits).toHaveBeenCalledTimes(1)
+      expect(service.getState().claude?.status).toBe('ok')
+    })
+
+    it('does not refetch when the current Claude result was not deferred', async () => {
+      const service = new RateLimitService()
+      vi.mocked(fetchClaudeRateLimits).mockResolvedValueOnce(
+        errorProvider('claude', 'Token expired')
+      )
+      await service.refresh()
+      vi.mocked(fetchClaudeRateLimits).mockClear()
+
+      await service.refreshAfterClaudeLivePtysDrained()
+
+      expect(fetchClaudeRateLimits).not.toHaveBeenCalled()
+    })
+
+    it('does not refetch when there is no Claude state yet', async () => {
+      const service = new RateLimitService()
+
+      await service.refreshAfterClaudeLivePtysDrained()
+
+      expect(fetchClaudeRateLimits).not.toHaveBeenCalled()
+    })
   })
 })

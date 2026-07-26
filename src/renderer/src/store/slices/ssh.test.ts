@@ -106,6 +106,14 @@ describe('createSshSlice', () => {
         'tab-ssh': 'legacy-session-without-target-prefix',
         'tab-stale-encoded': toAppSshPtyId(targetId, 'pty-1'),
         'tab-other': toAppSshPtyId(otherTargetId, 'pty-2')
+      },
+      // Why: a hydrated-but-not-yet-reconnected session for the removed target;
+      // the orphan sweep reads this map as liveness, so removal must clear it or
+      // a dead tab is pinned alive forever (#9911).
+      pendingReconnectPtyIdByTabId: {
+        'tab-ssh': toAppSshPtyId(targetId, 'pty-1'),
+        'tab-stale-encoded': toAppSshPtyId(targetId, 'pty-9'),
+        'tab-other': toAppSshPtyId(otherTargetId, 'pty-2')
       }
     })
 
@@ -124,6 +132,11 @@ describe('createSshSlice', () => {
       [otherTargetId]: true
     })
     expect(state.deferredSshSessionIdsByTabId).toEqual({
+      'tab-other': toAppSshPtyId(otherTargetId, 'pty-2')
+    })
+    // Removed target's pending-reconnect sessions cleared (by tab membership and
+    // by target-scoped session id); the surviving target's entry is retained.
+    expect(state.pendingReconnectPtyIdByTabId).toEqual({
       'tab-other': toAppSshPtyId(otherTargetId, 'pty-2')
     })
     expect(state.tabsByWorktree[worktreeId][0]).toMatchObject({ id: 'tab-ssh', ptyId: null })
@@ -195,6 +208,29 @@ describe('createSshSlice', () => {
     expect(store.getState()).toBe(previousState)
     expect(store.getState().sshConnectionStates).toBe(sshConnectionStates)
     expect(store.getState().sshConnectedGeneration).toBe(1)
+  })
+
+  it('publishes an authoritative SSH connection generation change', () => {
+    const store = createTestStore()
+    store.getState().setSshConnectionState('ssh-1', {
+      targetId: 'ssh-1',
+      status: 'connected',
+      error: null,
+      reconnectAttempt: 0,
+      connectionGeneration: 1
+    })
+    const previousState = store.getState()
+
+    store.getState().setSshConnectionState('ssh-1', {
+      targetId: 'ssh-1',
+      status: 'connected',
+      error: null,
+      reconnectAttempt: 0,
+      connectionGeneration: 2
+    })
+
+    expect(store.getState()).not.toBe(previousState)
+    expect(store.getState().sshConnectionStates.get('ssh-1')?.connectionGeneration).toBe(2)
   })
 
   it('publishes a connected-state folder capability change', () => {

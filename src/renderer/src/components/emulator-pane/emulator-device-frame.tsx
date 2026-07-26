@@ -31,6 +31,7 @@ import { EmulatorScreenSurface } from './emulator-screen-surface'
 import { useEmulatorControlStream } from './use-emulator-control-stream'
 import { useEmulatorPaneSize } from './use-emulator-pane-size'
 import { useEmulatorScreenKeyboard } from './use-emulator-screen-keyboard'
+import { useEmulatorStreamWindowVisible } from './use-emulator-stream-window-visibility'
 
 type EmulatorDeviceFrameProps = {
   previewUrl?: string
@@ -335,9 +336,13 @@ export function EmulatorDeviceFrame({
     setStreamError(true)
   }, [])
 
-  // Why: hidden panes still receive emulator frames, including over SSH, so
-  // parking the stream avoids background decode/IPC churn while staying attached.
-  const showStream = isActive && isLive && Boolean(previewUrl)
+  // Why: a hidden/occluded window (or a background tab) still receives emulator
+  // frames, including over SSH; parking the stream avoids background decode/IPC
+  // churn while staying attached. isActive covers the background-tab case;
+  // windowVisibleForStream additionally parks when the whole window is hidden
+  // (minimize / occlusion / display sleep), which no tab gate catches.
+  const windowVisibleForStream = useEmulatorStreamWindowVisible()
+  const showStream = isActive && isLive && windowVisibleForStream && Boolean(previewUrl)
   const streamAspectRatio = streamSize ? streamSize.width / streamSize.height : 9 / 19
   // Why: serve-sim may keep portrait-sized pixels for portrait-locked apps; the
   // physical frame still follows the last successful rotate request.

@@ -57,6 +57,9 @@ export type DaemonServerOptions = {
   }
   ptySpawnHealthCheck?: () => Promise<void>
   preparePtySpawn?: () => Promise<void>
+  // Why: login-session death detection (#7936) probes on PTY-exit bursts and fresh app connections.
+  onPtySessionExit?: (sessionId: string) => void
+  onAuthenticatedClientPair?: () => void
   log?: DaemonFileLog
   spawnSubprocess: (opts: {
     sessionId: string
@@ -101,6 +104,7 @@ export class DaemonServer {
   private startedAtMs: number | null
   private protocolVersion: number
   private onIdleShutdown: () => void
+  private onAuthenticatedClientPair: () => void
   private ptySpawnHealthCheck: () => Promise<void>
   private preparePtySpawn: () => Promise<void>
   private log: DaemonFileLog
@@ -180,7 +184,11 @@ export class DaemonServer {
       now: () => Date.now()
     }
     this.token = randomUUID()
-    this.host = new TerminalHost({ spawnSubprocess: opts.spawnSubprocess })
+    this.onAuthenticatedClientPair = opts.onAuthenticatedClientPair ?? (() => {})
+    this.host = new TerminalHost({
+      spawnSubprocess: opts.spawnSubprocess,
+      ...(opts.onPtySessionExit ? { onSessionReaped: opts.onPtySessionExit } : {})
+    })
     this.ptySpawnHealthCheck = opts.ptySpawnHealthCheck ?? checkPtySpawnHealth
     this.preparePtySpawn = opts.preparePtySpawn ?? (() => Promise.resolve())
     this.stopStreamBacklogProbe = startDaemonStreamBacklogProbe(() => ({
@@ -481,6 +489,8 @@ export class DaemonServer {
       }
       this.setupStreamSocket(socket, client)
       client.authenticatedPairEstablished = true
+      // Why: one-shot health probes authenticate only a control socket; they are not fresh app activity.
+      this.onAuthenticatedClientPair()
       // A complete app connection (unlike a probe) re-owns the endpoint and cancels pending retirement.
       this.initialAdoptionDeadlineMs = null
       this.retirementRequested = false
@@ -749,6 +759,7 @@ export class DaemonServer {
                   sessionIdSuffix: routedSessionId.slice(-10)
                 })
                 this.transientFactRelay.onSessionExit(routedSessionId)
+                this.streamDataBatcher.refreshSessionDroppability(routedSessionId)
                 this.streamClientIdBySessionId.delete(routedSessionId)
                 this.lastInputAtBySessionId.delete(routedSessionId)
                 this.reevaluateIdleShutdown()
@@ -761,6 +772,7 @@ export class DaemonServer {
         }
         routedSessionId = result.agentSessionEnsure?.owner.ptyId ?? p.sessionId
         this.streamClientIdBySessionId.set(routedSessionId, clientId)
+        this.streamDataBatcher.refreshSessionDroppability(routedSessionId)
         // Why an attach-time marker: background resync can precede this attach, so scan suppression must start at the new stream's head.
         if (this.transientFactRelay.isBackgrounded(routedSessionId)) {
           this.streamDataBatcher.enqueueControlEvent(clientId, routedSessionId, {
@@ -835,7 +847,12 @@ export class DaemonServer {
           sessionIdSuffix: sessionId.slice(-10),
           background
         })
-        if (!this.transientFactRelay.setSessionBackground(sessionId, background)) {
+        const backgroundChanged = this.transientFactRelay.setSessionBackground(
+          sessionId,
+          background
+        )
+        this.streamDataBatcher.refreshSessionDroppability(sessionId)
+        if (!backgroundChanged) {
           return {}
         }
         if (background) {
@@ -898,6 +915,9 @@ export class DaemonServer {
 
       case 'getForegroundProcess':
         return { foregroundProcess: this.host.getForegroundProcess(request.payload.sessionId) }
+
+      case 'inspectProcess':
+        return this.host.inspectProcess(request.payload.sessionId)
 
       case 'confirmForegroundProcess':
         return {

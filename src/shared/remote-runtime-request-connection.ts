@@ -3,7 +3,18 @@ import WebSocket from 'ws'
 import type { PairingOffer } from './pairing'
 import { decrypt, encrypt } from './e2ee-crypto'
 import type { RuntimeRpcResponse } from './runtime-rpc-envelope'
-import { RemoteRuntimeClientError } from './remote-runtime-client'
+import {
+  serializeRemoteRuntimePayload,
+  serializeRemoteRuntimeRpcRequest
+} from './remote-runtime-memory-limits'
+import {
+  prepareRemoteRuntimeRequest,
+  releaseRemoteRuntimePreparedRequest,
+  takeRemoteRuntimePreparedRequest,
+  toRemoteRuntimeRequestError,
+  type RemoteRuntimePendingRequest,
+  type RemoteRuntimePreparedRequest
+} from './remote-runtime-prepared-request-admission'
 import {
   invalidRemoteRuntimeResponseError,
   parseAuthenticatedFrame,
@@ -12,44 +23,49 @@ import {
   remoteRuntimeTimeoutError,
   remoteRuntimeUnavailableError
 } from './remote-runtime-request-frames'
+import {
+  rejectRemoteRuntimeRequestReadyWaiters,
+  resolveRemoteRuntimeRequestReadyWaiters,
+  waitForRemoteRuntimeRequestReady,
+  type RemoteRuntimeRequestReadyWaiter
+} from './remote-runtime-request-ready-waiters'
 import { openRemoteRuntimeWebSocket } from './remote-runtime-request-websocket'
 
 type ConnectionState = 'closed' | 'awaiting_ready' | 'awaiting_authenticated' | 'ready'
 
-type PendingRequest<TResult> = {
-  resolve: (response: RuntimeRpcResponse<TResult>) => void
-  reject: (error: Error) => void
-  timeout: ReturnType<typeof setTimeout>
-}
-
-type ReadyWaiter = {
-  resolve: () => void
-  reject: (error: Error) => void
-}
-
 const IDLE_CLOSE_MS = 60_000
 
 export class RemoteRuntimeRequestConnection {
-  private readonly pairing: PairingOffer
   private state: ConnectionState = 'closed'
   private ws: WebSocket | null = null
   private sharedKey: Uint8Array | null = null
   private socketCleanup: (() => void) | null = null
-  private readonly pendingRequests = new Map<string, PendingRequest<unknown>>()
-  private readonly readyWaiters: ReadyWaiter[] = []
+  private readonly pendingRequests = new Map<string, RemoteRuntimePendingRequest<unknown>>()
+  private readonly readyWaiters: RemoteRuntimeRequestReadyWaiter[] = []
   private idleCloseTimer: ReturnType<typeof setTimeout> | null = null
 
-  constructor(pairing: PairingOffer) {
-    this.pairing = pairing
-  }
+  constructor(private readonly pairing: PairingOffer) {}
 
   request<TResult>(
     method: string,
     params: unknown,
     timeoutMs: number
   ): Promise<RuntimeRpcResponse<TResult>> {
-    this.clearIdleCloseTimer()
     const requestId = randomUUID()
+    let preparedRequest: RemoteRuntimePreparedRequest
+    try {
+      preparedRequest = prepareRemoteRuntimeRequest(this.pendingRequests, () =>
+        serializeRemoteRuntimeRpcRequest({
+          requestId,
+          deviceToken: this.pairing.deviceToken,
+          method,
+          params
+        })
+      )
+    } catch (error) {
+      return Promise.reject(toRemoteRuntimeRequestError(error))
+    }
+    this.clearIdleCloseTimer()
     return new Promise<RuntimeRpcResponse<TResult>>((resolve, reject) => {
       const timeout = setTimeout(() => {
         const pending = this.pendingRequests.get(requestId)
@@ -57,6 +73,7 @@ export class RemoteRuntimeRequestConnection {
           return
         }
         this.pendingRequests.delete(requestId)
+        releaseRemoteRuntimePreparedRequest(pending)
         const error = remoteRuntimeTimeoutError()
         pending.reject(error)
         this.close(error)
@@ -64,12 +81,13 @@ export class RemoteRuntimeRequestConnection {
       this.pendingRequests.set(requestId, {
         resolve: resolve as (response: RuntimeRpcResponse<unknown>) => void,
         reject,
-        timeout
+        timeout,
+        preparedRequest
       })
 
       void this.ensureReady().then(
-        () => this.sendRequest(requestId, method, params),
-        (error) => this.rejectPendingRequest(requestId, toClientError(error))
+        () => this.sendRequest(requestId),
+        (error) => this.rejectPendingRequest(requestId, toRemoteRuntimeRequestError(error))
       )
     })
   }
@@ -77,17 +95,17 @@ export class RemoteRuntimeRequestConnection {
   close(error?: Error): void {
     const ws = this.ws
     const cleanup = this.socketCleanup
-    this.ws = null
-    this.sharedKey = null
+    this.ws = this.sharedKey = null
     this.socketCleanup = null
     this.state = 'closed'
     this.clearIdleCloseTimer()
 
     const closeError = error ?? remoteRuntimeUnavailableError()
-    this.rejectReadyWaiters(closeError)
+    rejectRemoteRuntimeRequestReadyWaiters(this.readyWaiters, closeError)
     for (const [requestId, pending] of this.pendingRequests) {
       clearTimeout(pending.timeout)
       this.pendingRequests.delete(requestId)
+      releaseRemoteRuntimePreparedRequest(pending)
       pending.reject(closeError)
     }
 
@@ -105,12 +123,14 @@ export class RemoteRuntimeRequestConnection {
       return Promise.resolve()
     }
 
-    const promise = new Promise<void>((resolve, reject) => {
-      this.readyWaiters.push({ resolve, reject })
-    })
+    const promise = waitForRemoteRuntimeRequestReady(this.readyWaiters)
 
     if (!ws || ws.readyState === WebSocket.CLOSED || ws.readyState === WebSocket.CLOSING) {
-      this.open()
+      try {
+        this.open()
+      } catch (error) {
+        this.close(toRemoteRuntimeRequestError(error))
+      }
     }
 
     return promise
@@ -183,7 +203,10 @@ export class RemoteRuntimeRequestConnection {
     }
     this.ws?.send(
       encrypt(
-        JSON.stringify({ type: 'e2ee_auth', deviceToken: this.pairing.deviceToken }),
+        serializeRemoteRuntimePayload({
+          type: 'e2ee_auth',
+          deviceToken: this.pairing.deviceToken
+        }),
         sharedKey
       )
     )
@@ -196,7 +219,7 @@ export class RemoteRuntimeRequestConnection {
       return
     }
     this.state = 'ready'
-    this.resolveReadyWaiters()
+    resolveRemoteRuntimeRequestReadyWaiters(this.readyWaiters)
     this.scheduleIdleCloseIfUnused()
   }
 
@@ -217,11 +240,12 @@ export class RemoteRuntimeRequestConnection {
     }
     this.pendingRequests.delete(response.id)
     clearTimeout(pending.timeout)
+    releaseRemoteRuntimePreparedRequest(pending)
     pending.resolve(response)
     this.scheduleIdleCloseIfUnused()
   }
 
-  private sendRequest(requestId: string, method: string, params: unknown): void {
+  private sendRequest(requestId: string): void {
     const pending = this.pendingRequests.get(requestId)
     const ws = this.ws
     const sharedKey = this.sharedKey
@@ -232,17 +256,16 @@ export class RemoteRuntimeRequestConnection {
       this.rejectPendingRequest(requestId, remoteRuntimeUnavailableError())
       return
     }
-    ws.send(
-      encrypt(
-        JSON.stringify({
-          id: requestId,
-          deviceToken: this.pairing.deviceToken,
-          method,
-          params
-        }),
-        sharedKey
-      )
-    )
+    const serializedRequest = takeRemoteRuntimePreparedRequest(pending)
+    if (serializedRequest === null) {
+      this.rejectPendingRequest(requestId, remoteRuntimeUnavailableError())
+      return
+    }
+    try {
+      ws.send(encrypt(serializedRequest, sharedKey))
+    } catch (error) {
+      this.rejectPendingRequest(requestId, toRemoteRuntimeRequestError(error))
+    }
   }
 
   private rejectPendingRequest(requestId: string, error: Error): void {
@@ -252,22 +275,9 @@ export class RemoteRuntimeRequestConnection {
     }
     this.pendingRequests.delete(requestId)
     clearTimeout(pending.timeout)
+    releaseRemoteRuntimePreparedRequest(pending)
     pending.reject(error)
     this.scheduleIdleCloseIfUnused()
-  }
-
-  private resolveReadyWaiters(): void {
-    const waiters = this.readyWaiters.splice(0)
-    for (const waiter of waiters) {
-      waiter.resolve()
-    }
-  }
-
-  private rejectReadyWaiters(error: Error): void {
-    const waiters = this.readyWaiters.splice(0)
-    for (const waiter of waiters) {
-      waiter.reject(error)
-    }
   }
 
   private scheduleIdleCloseIfUnused(): void {
@@ -287,11 +297,4 @@ export class RemoteRuntimeRequestConnection {
       this.idleCloseTimer = null
     }
   }
-}
-
-function toClientError(error: unknown): Error {
-  if (error instanceof Error) {
-    return error
-  }
-  return new RemoteRuntimeClientError('runtime_error', String(error))
 }

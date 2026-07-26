@@ -44,8 +44,8 @@ export function getMobileTerminalActionSheetActions<Target extends { handle: str
     },
     {
       label: 'Rename',
+      closeBeforePress: true,
       onPress: () => {
-        args.onDismiss()
         args.onRename(target)
       }
     },

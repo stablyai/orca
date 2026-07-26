@@ -30,10 +30,7 @@ export type AgentBackgroundSessionTestState = {
     { id: string; repoId: string; projectId: string; path: string; displayName: string }[]
   >
   tabsByWorktree: Record<string, { id: string; title: string }[]>
-  terminalLayoutsByTabId: Record<
-    string,
-    { ptyIdsByLeafId?: Record<string, string | undefined> }
-  >
+  terminalLayoutsByTabId: Record<string, { ptyIdsByLeafId?: Record<string, string | undefined> }>
   ptyIdsByTabId: Record<string, string[]>
   sshConnectionStates: Map<string, { status: string }>
   transientClearedAgentStatusConnectionIds: Record<string, true>

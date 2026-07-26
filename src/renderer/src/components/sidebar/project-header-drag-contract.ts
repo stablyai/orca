@@ -54,7 +54,10 @@ export function isProjectHeaderDragHandleTarget(
   target: EventTarget | null,
   currentTarget: HTMLElement
 ): boolean {
-  if (!(target instanceof HTMLElement)) {
+  // Why: the project icon renders as an <svg>, so pressing it makes the event
+  // target an SVGElement (not an HTMLElement). Match Element so dragging by the
+  // icon still arms the drag; closest/contains work on any Element.
+  if (!(target instanceof Element)) {
     return false
   }
   const dragHandle = target.closest(REPO_HEADER_DRAG_HANDLE_SELECTOR)
@@ -65,7 +68,9 @@ export function isRepoHeaderActionTarget(
   target: EventTarget | null,
   currentTarget: HTMLElement
 ): boolean {
-  if (!(target instanceof HTMLElement) || target === currentTarget) {
+  // Why: an <svg> icon inside an action button is an SVGElement, so match
+  // Element to still treat it as an action target and not arm a drag.
+  if (!(target instanceof Element) || target === currentTarget) {
     return false
   }
   return currentTarget.contains(target) && target.closest(REPO_HEADER_ACTION_SELECTOR) !== null

@@ -60,6 +60,30 @@ describe('AgentKanbanCard', () => {
     expect(screen.queryByText(/\d+d/)).not.toBeInTheDocument()
   })
 
+  it('shows the question glyph once when a summary is available', () => {
+    const attentionCard = card({
+      bucket: 'attention',
+      dotState: 'waiting',
+      askSummary: 'Approve deploy?'
+    })
+    const { container, rerender } = render(
+      <AgentKanbanCard card={attentionCard} now={2_000} onOpenTerminal={vi.fn()} />
+    )
+
+    expect(screen.queryByTestId('state-dot')).not.toBeInTheDocument()
+    expect(container.querySelectorAll('.lucide-message-circle-question-mark')).toHaveLength(1)
+
+    rerender(
+      <AgentKanbanCard
+        card={{ ...attentionCard, askSummary: undefined }}
+        now={2_000}
+        onOpenTerminal={vi.fn()}
+      />
+    )
+    expect(screen.getByTestId('state-dot')).toBeInTheDocument()
+    expect(container.querySelector('.lucide-message-circle-question-mark')).toBeNull()
+  })
+
   it('skips structured-clone rerenders until visible card data or its age changes', () => {
     const onOpenTerminal = vi.fn()
     const initial = card({ startedAt: 1_000 })

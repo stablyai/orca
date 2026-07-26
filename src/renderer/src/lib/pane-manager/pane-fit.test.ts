@@ -2,6 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { recordRendererCrashBreadcrumb } from '@/lib/crash-breadcrumb-recorder'
 import type { ManagedPane, ScrollState } from './pane-manager-types'
 import { safeFit, safeFitAndThen } from './pane-fit'
+import { paneFitClientSizeChanged } from './pane-reveal-fit'
 
 vi.mock('@/lib/crash-breadcrumb-recorder', () => ({
   recordRendererCrashBreadcrumb: vi.fn()
@@ -18,11 +19,18 @@ function flushAnimationFrames(timestamp = 16): void {
   }
 }
 
+type TestPane = ManagedPane & {
+  setRect: (rect: { width: number; height: number }) => void
+  setXtermRect: (rect: { width: number; height: number }) => void
+}
+
 function createPane(options: {
   rect: { width: number; height: number }
   proposed?: () => { cols: number; rows: number } | undefined
-}): ManagedPane & { setRect: (rect: { width: number; height: number }) => void } {
+}): TestPane {
   let rect = options.rect
+  // Why: the reveal gate measures the inner xterm host, which can differ from the outer .pane.
+  let xtermRect: { width: number; height: number } | null = null
   const leafId = '22222222-2222-4222-8222-222222222222'
   const pane = {
     id: 7,
@@ -34,7 +42,10 @@ function createPane(options: {
       getBoundingClientRect: () => ({ width: rect.width, height: rect.height })
     },
     xtermContainer: {
-      getBoundingClientRect: () => ({ width: rect.width, height: rect.height })
+      getBoundingClientRect: () => ({
+        width: (xtermRect ?? rect).width,
+        height: (xtermRect ?? rect).height
+      })
     },
     fitAddon: {
       fit: vi.fn(),
@@ -45,11 +56,12 @@ function createPane(options: {
     pendingSplitScrollState: null as ScrollState | null,
     setRect: (next: { width: number; height: number }) => {
       rect = next
+    },
+    setXtermRect: (next: { width: number; height: number }) => {
+      xtermRect = next
     }
   }
-  return pane as unknown as ManagedPane & {
-    setRect: (rect: { width: number; height: number }) => void
-  }
+  return pane as unknown as TestPane
 }
 
 describe('safeFitAndThen unmeasurable-pane retry', () => {
@@ -165,5 +177,63 @@ describe('safeFitAndThen unmeasurable-pane retry', () => {
     pane.setRect({ width: 800, height: 600 })
     safeFit(pane)
     expect(continuation).not.toHaveBeenCalled()
+  })
+})
+
+describe('paneFitClientSizeChanged (reveal fit gate)', () => {
+  it('treats a pane with no recorded fit size as changed', () => {
+    const pane = createPane({ rect: { width: 800, height: 600 } })
+    expect(paneFitClientSizeChanged(pane)).toBe(true)
+  })
+
+  it('is unchanged after a fit when the container size is the same', () => {
+    const pane = createPane({
+      rect: { width: 800, height: 600 },
+      proposed: () => ({ cols: 80, rows: 24 })
+    })
+    safeFit(pane)
+    expect(paneFitClientSizeChanged(pane)).toBe(false)
+  })
+
+  it('reports changed when the container resized since the last fit', () => {
+    const pane = createPane({
+      rect: { width: 800, height: 600 },
+      proposed: () => ({ cols: 80, rows: 24 })
+    })
+    safeFit(pane)
+    pane.setRect({ width: 640, height: 480 })
+    expect(paneFitClientSizeChanged(pane)).toBe(true)
+  })
+
+  it('ignores sub-pixel jitter at the same rounded size (no reflow on reveal)', () => {
+    const pane = createPane({
+      rect: { width: 800, height: 600 },
+      proposed: () => ({ cols: 80, rows: 24 })
+    })
+    safeFit(pane)
+    pane.setRect({ width: 800.4, height: 599.6 })
+    expect(paneFitClientSizeChanged(pane)).toBe(false)
+  })
+
+  it('counts an unmeasurable (hidden) pane as changed rather than a false no-op', () => {
+    const pane = createPane({
+      rect: { width: 800, height: 600 },
+      proposed: () => ({ cols: 80, rows: 24 })
+    })
+    safeFit(pane)
+    pane.setRect({ width: 0, height: 0 })
+    expect(paneFitClientSizeChanged(pane)).toBe(true)
+  })
+
+  it('reports changed when the inner xterm host shrank but the outer pane did not', () => {
+    // A title bar / restored-session banner reduces the fittable area while the
+    // outer .pane pixels stay constant; the reveal must fit, not skip.
+    const pane = createPane({
+      rect: { width: 800, height: 600 },
+      proposed: () => ({ cols: 80, rows: 24 })
+    })
+    safeFit(pane)
+    pane.setXtermRect({ width: 800, height: 560 })
+    expect(paneFitClientSizeChanged(pane)).toBe(true)
   })
 })

@@ -26,7 +26,7 @@ import {
   shouldSuppressInheritedTerminalStatus
 } from '../../../../shared/agent-status-identity'
 import { isCommandCodeNewTurnWhileWorking } from '../../../../shared/command-code-turn-boundary'
-import type { TerminalTab } from '../../../../shared/types'
+import type { TerminalPaneLayoutNode, TerminalTab } from '../../../../shared/types'
 import {
   getRepoExecutionHostId,
   getWorktreeExecutionHostId
@@ -38,6 +38,7 @@ import {
   isOrcaDispatchPrompt,
   orchestrationLabelsMatchLiveDispatch
 } from '@/lib/agent-row-primary-text'
+import { isCompletedPiCompatibleAgentWithLiveRecoveryRecord } from '@/lib/pi-compatible-live-recovery-record'
 import {
   resolveAgentPaneAuthorityKey,
   retireAgentPaneAuthorityAliases,
@@ -266,6 +267,82 @@ function capRetainedAgents(
     capped[key] = retained[key]
   }
   return capped
+}
+
+// Why: missed pane teardown can leak heavy live rows in any state and amplify every status-map copy (#9872).
+export const MAX_LIVE_AGENT_STATUSES = 500
+
+type PaneLiveness = 'live' | 'dead' | 'unprovable'
+
+// Why: only a rooted tab proves which leaves are mounted; rootless and headless rows may still be live (#2962).
+function classifyPaneKeyLiveness(state: AppState): (paneKey: string) => PaneLiveness {
+  const rootedLeafKeys = new Set<string>()
+  const rootedTabIds = new Set<string>()
+  for (const [tabId, layout] of Object.entries(state.terminalLayoutsByTabId)) {
+    if (!layout?.root) {
+      continue
+    }
+    rootedTabIds.add(tabId)
+    const stack: TerminalPaneLayoutNode[] = [layout.root]
+    while (stack.length > 0) {
+      const node = stack.pop()!
+      if (node.type === 'leaf') {
+        rootedLeafKeys.add(`${tabId}:${node.leafId}`)
+      } else {
+        stack.push(node.first, node.second)
+      }
+    }
+  }
+  return (paneKey) => {
+    if (rootedLeafKeys.has(paneKey)) {
+      return 'live'
+    }
+    const tabId = getTabIdFromPaneKey(paneKey)
+    return tabId !== null && rootedTabIds.has(tabId) ? 'dead' : 'unprovable'
+  }
+}
+
+// Why: mutate the caller-owned spread so eviction does not allocate another heavy-map copy.
+function capLiveAgentStatusesInPlace(
+  freshLive: Record<string, AgentStatusEntry>,
+  protectedPaneKey: string,
+  buildClassifier: () => (paneKey: string) => PaneLiveness,
+  now: number,
+  maxEntries = MAX_LIVE_AGENT_STATUSES
+): string[] {
+  const keys = Object.keys(freshLive)
+  let overflow = keys.length - maxEntries
+  if (overflow <= 0) {
+    return []
+  }
+  const classify = buildClassifier()
+  const evictedPaneKeys: string[] = []
+  const sweep = (canEvict: (liveness: PaneLiveness, entry: AgentStatusEntry) => boolean): void => {
+    for (const key of keys) {
+      if (overflow <= 0) {
+        break
+      }
+      if (key === protectedPaneKey || !(key in freshLive)) {
+        continue
+      }
+      const liveness = classify(key)
+      if (liveness === 'live' || !canEvict(liveness, freshLive[key])) {
+        continue
+      }
+      delete freshLive[key]
+      overflow -= 1
+      evictedPaneKeys.push(key)
+    }
+  }
+  // Prefer rows that are provably dead or too stale to represent a live agent.
+  sweep(
+    (liveness, entry) => liveness === 'dead' || now - entry.updatedAt > AGENT_STATUS_STALE_AFTER_MS
+  )
+  // Shed fresh unprovable rows only when needed; rooted live panes make this a soft cap.
+  if (overflow > 0) {
+    sweep(() => true)
+  }
+  return evictedPaneKeys
 }
 
 function paneKeyMatchesAnyTabPrefix(paneKey: string, tabPrefixes: string[]): boolean {
@@ -520,22 +597,6 @@ function isValidCompletedAgentHibernationEntry(entry: AgentStatusEntry): boolean
   return entry.state === 'done' && entry.interrupted !== true
 }
 
-function isCompletedPiWithLiveRecoveryRecord(
-  entry: AgentStatusEntry | undefined,
-  record: SleepingAgentSessionRecord | undefined
-): record is SleepingAgentSessionRecord {
-  return Boolean(
-    entry?.state === 'done' &&
-    entry.agentType === 'pi' &&
-    entry.providerSession &&
-    record?.agent === 'pi' &&
-    record.origin === 'live' &&
-    (!entry.worktreeId || entry.worktreeId === record.worktreeId) &&
-    agentProviderSessionsEqual('pi', entry.providerSession, record.providerSession) &&
-    getAgentResumeArgv('pi', record.providerSession)
-  )
-}
-
 export function removeSleepingRecordsReplacedByManualWorktreeSleep(
   records: Record<string, SleepingAgentSessionRecord>,
   worktreeId: string,
@@ -582,7 +643,8 @@ export function collectSleepingAgentSessionRecordsForWorktree(
       if (
         existing.worktreeId !== worktreeId ||
         existing.origin !== 'live' ||
-        (liveEntry !== undefined && !isCompletedPiWithLiveRecoveryRecord(liveEntry, existing)) ||
+        (liveEntry !== undefined &&
+          !isCompletedPiCompatibleAgentWithLiveRecoveryRecord(liveEntry, existing)) ||
         (allowedPaneKeys && !allowedPaneKeys.has(existing.paneKey)) ||
         !getAgentResumeArgv(existing.agent, existing.providerSession)
       ) {
@@ -748,7 +810,8 @@ function copyLaunchConfig(config: SleepingAgentLaunchConfig): SleepingAgentLaunc
   return {
     ...(config.agentCommand ? { agentCommand: config.agentCommand } : {}),
     agentArgs: config.agentArgs,
-    agentEnv: { ...config.agentEnv }
+    agentEnv: { ...config.agentEnv },
+    ...(config.ompResumeFilePath ? { ompResumeFilePath: config.ompResumeFilePath } : {})
   }
 }
 
@@ -759,7 +822,11 @@ function launchConfigsEqual(
   if (a === undefined || b === undefined) {
     return a === b
   }
-  if (a.agentCommand !== b.agentCommand || a.agentArgs !== b.agentArgs) {
+  if (
+    a.agentCommand !== b.agentCommand ||
+    a.agentArgs !== b.agentArgs ||
+    a.ompResumeFilePath !== b.ompResumeFilePath
+  ) {
     return false
   }
   const aKeys = Object.keys(a.agentEnv)
@@ -1724,13 +1791,17 @@ export const createAgentStatusSlice: StateCreator<AppState, [], [], AgentStatusS
           ? registryEntry?.launchConfig
           : undefined
         const existingSleepingRecord = s.sleepingAgentSessionsByPaneKey[paneKey]
-        const retainsPiRecoveryIdentity =
+        // Why: a completed turn leaves the TUI session alive and resumable at its prompt for any
+        // resumable agent (Claude/Codex/Pi/…), not just Pi — so keep its persisted recovery anchor
+        // even when done. Else a cold restore after an abrupt app death (macOS logout, #9454) drops
+        // the pane to a bare shell instead of `--resume`-ing the agent logged in.
+        const retainsResumableRecoveryIdentity =
           payload.state === 'done' &&
-          identity.agentType === 'pi' &&
+          isResumableTuiAgent(identity.agentType) &&
           providerSession !== undefined &&
-          getAgentResumeArgv('pi', providerSession) !== null
+          getAgentResumeArgv(identity.agentType, providerSession) !== null
         const matchedSleepingLaunchConfig =
-          (payload.state !== 'done' || retainsPiRecoveryIdentity) &&
+          (payload.state !== 'done' || retainsResumableRecoveryIdentity) &&
           existingSleepingRecord?.launchConfig &&
           existingSleepingRecord.agent === identity.agentType &&
           providerSession &&
@@ -1858,14 +1929,14 @@ export const createAgentStatusSlice: StateCreator<AppState, [], [], AgentStatusS
           (entry) => entry.paneKey === paneKey
         )
         const liveRecoveryWorktreeId =
-          entry.state === 'done' && !retainsPiRecoveryIdentity
+          entry.state === 'done' && !retainsResumableRecoveryIdentity
             ? null
             : (entry.worktreeId ?? findAgentPaneWorktreeId(s, entry.paneKey))
         const liveRecoveryRecord = liveRecoveryWorktreeId
           ? sleepingRecordFromEntry({
               state: s,
-              // Why: a completed Pi turn leaves the TUI session alive — keep resume identity active without representing done as pending work.
-              entry: retainsPiRecoveryIdentity
+              // Why: a completed resumable-agent turn leaves the TUI session alive — keep resume identity active without representing done as pending work.
+              entry: retainsResumableRecoveryIdentity
                 ? { ...entry, state: 'working', prompt: '', lastAssistantMessage: undefined }
                 : entry,
               worktreeId: liveRecoveryWorktreeId,
@@ -1916,19 +1987,35 @@ export const createAgentStatusSlice: StateCreator<AppState, [], [], AgentStatusS
           nextSleepingAgentSessions = { ...s.sleepingAgentSessionsByPaneKey }
           delete nextSleepingAgentSessions[paneKey]
         }
+        const nextLive = { ...s.agentStatusByPaneKey, [paneKey]: entry }
+        // Why: cap the live map so a huge map's per-ping spread copy can't OOM the renderer (#9872).
+        const evictedPaneKeys = capLiveAgentStatusesInPlace(
+          nextLive,
+          paneKey,
+          () => classifyPaneKeyLiveness(s),
+          updatedAt
+        )
+        const evictedOrphans = evictedPaneKeys.length > 0
+        if (evictedOrphans) {
+          const evictedPaneKeySet = new Set(evictedPaneKeys)
+          nextSleepingAgentSessions = removePaneKeys(nextSleepingAgentSessions, evictedPaneKeySet)
+          nextLaunchConfigs = removePaneKeys(nextLaunchConfigs, evictedPaneKeySet)
+        }
         return {
-          agentStatusByPaneKey: { ...s.agentStatusByPaneKey, [paneKey]: entry },
+          agentStatusByPaneKey: nextLive,
           retainedAgentsByPaneKey: nextRetainedAgents,
           sleepingAgentSessionsByPaneKey: nextSleepingAgentSessions,
           agentLaunchConfigByPaneKey: nextLaunchConfigs,
           migrationUnsupportedByPtyId: migrationUnsupported.next,
           retentionSuppressedPaneKeys: nextRetentionSuppressedPaneKeys,
           agentStatusEpoch:
-            retentionRelevantChange || migrationUnsupported.changed
+            retentionRelevantChange || migrationUnsupported.changed || evictedOrphans
               ? s.agentStatusEpoch + 1
               : s.agentStatusEpoch,
           sortEpoch:
-            sortRelevantChange || migrationUnsupported.changed ? s.sortEpoch + 1 : s.sortEpoch
+            sortRelevantChange || migrationUnsupported.changed || evictedOrphans
+              ? s.sortEpoch + 1
+              : s.sortEpoch
         }
       })
       if (suppressedInheritedTerminalStatus) {
@@ -2661,7 +2748,7 @@ export const createAgentStatusSlice: StateCreator<AppState, [], [], AgentStatusS
         for (const entry of Object.values(s.agentStatusByPaneKey)) {
           if (entry.state === 'done') {
             const existing = next[entry.paneKey]
-            if (!isCompletedPiWithLiveRecoveryRecord(entry, existing)) {
+            if (!isCompletedPiCompatibleAgentWithLiveRecoveryRecord(entry, existing)) {
               continue
             }
             if (mode === 'periodic') {

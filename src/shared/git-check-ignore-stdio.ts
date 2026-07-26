@@ -38,5 +38,12 @@ export function splitGitCheckIgnorePathsByStdinBytes(
 }
 
 export function parseGitCheckIgnorePaths(stdout: string): string[] {
-  return stdout.split('\0').filter((path) => path.length > 0)
+  const paths: string[] = []
+  for (const path of iterateNulDelimitedFields(stdout)) {
+    if (path) {
+      paths.push(path)
+    }
+  }
+  return paths
 }
+import { iterateNulDelimitedFields } from './nul-delimited-fields'

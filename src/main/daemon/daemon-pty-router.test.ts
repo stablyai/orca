@@ -80,6 +80,7 @@ function createAdapter(
     acknowledgeDataEvent: vi.fn(),
     hasChildProcesses: vi.fn(async () => false),
     getForegroundProcess: vi.fn(async () => null),
+    inspectProcess: vi.fn(async () => ({ foregroundProcess: null, hasChildProcesses: false })),
     confirmForegroundProcess: vi.fn(async () => `${label}-confirmed`),
     serialize: vi.fn(async () => '{}'),
     revive: vi.fn(async () => {}),
@@ -139,6 +140,35 @@ function createAdapter(
     _writes: writes
   } as unknown as AdapterMock
 }
+
+it('rejects completion inspection when no daemon owns the session', async () => {
+  const router = new DaemonPtyRouter({
+    current: createAdapter('current'),
+    legacy: [createAdapter('legacy')]
+  })
+
+  await expect(router.inspectProcess('unmapped-session')).rejects.toThrow('terminal_gone')
+})
+
+it('preserves unavailable inspection from the owning legacy daemon', async () => {
+  const legacy = createAdapter('legacy', ['legacy-session'])
+  vi.mocked(legacy.inspectProcess).mockResolvedValue({
+    foregroundProcess: null,
+    hasChildProcesses: true,
+    unavailable: true
+  })
+  const router = new DaemonPtyRouter({
+    current: createAdapter('current'),
+    legacy: [legacy]
+  })
+  await router.discoverLegacySessions()
+
+  await expect(router.inspectProcess('legacy-session')).resolves.toEqual({
+    foregroundProcess: null,
+    hasChildProcesses: true,
+    unavailable: true
+  })
+})
 
 describe('DaemonPtyRouter', () => {
   it('reports separate conservative resume and fresh-create boundaries', () => {

@@ -9,6 +9,7 @@ import {
   normalizeOptionalMultilineField,
   normalizePromptField
 } from './agent-status-field-normalization'
+import { assertJsonTextStructureWithinLimits } from './json-text-structure-limit'
 
 export { AGENT_STATUS_MAX_FIELD_LENGTH } from './agent-status-field-normalization'
 
@@ -240,6 +241,10 @@ export const AGENT_MODEL_MAX_LENGTH = 120
 /** Maximum subagent child rows carried per status entry. Bounds per-pane cache
  *  and IPC fanout against a runaway spawner. */
 export const AGENT_STATUS_MAX_SUBAGENTS = 32
+export const AGENT_STATUS_JSON_STRUCTURE_LIMITS = {
+  structuralTokens: 4096,
+  nestingDepth: 16
+} as const
 const AGENT_SUBAGENT_ID_MAX_LENGTH = 64
 
 function normalizeSubagentSnapshot(value: unknown): AgentSubagentSnapshot | null {
@@ -376,6 +381,7 @@ export function normalizeAgentStatusPayload(payload: unknown): ParsedAgentStatus
  */
 export function parseAgentStatusPayload(json: string): ParsedAgentStatusPayload | null {
   try {
+    assertJsonTextStructureWithinLimits(json, AGENT_STATUS_JSON_STRUCTURE_LIMITS)
     return normalizeAgentStatusObject(JSON.parse(json))
   } catch {
     return null

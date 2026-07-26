@@ -236,6 +236,25 @@ describe('renderer breadcrumb IPC routing', () => {
     })
   })
 
+  // Why: park-churn notices are per-tab but the ring is process-wide, so many
+  // tabs churning at once would otherwise evict the pre-crash trail.
+  it('coalesces park-verdict churn notices by name across tabs', () => {
+    emitRendererBreadcrumb({
+      name: 'terminal_park_verdict_churn',
+      data: { tabId: 'tab-1', flips: 12, elapsedMs: 8 }
+    })
+    emitRendererBreadcrumb({
+      name: 'terminal_park_verdict_churn',
+      data: { tabId: 'tab-2', flips: 12, elapsedMs: 9 }
+    })
+
+    expect(recordCrashBreadcrumbMock).not.toHaveBeenCalled()
+    expect(recordCoalescedCrashBreadcrumbMock).toHaveBeenCalledTimes(2)
+    for (const call of recordCoalescedCrashBreadcrumbMock.mock.calls) {
+      expect(call[0]).toMatchObject({ coalesceKey: 'terminal_park_verdict_churn' })
+    }
+  })
+
   it('records non-error renderer breadcrumbs without coalescing', () => {
     emitRendererBreadcrumb({ name: 'renderer_bootstrap_started', data: { dev: true } })
 
