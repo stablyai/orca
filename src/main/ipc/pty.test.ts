@@ -6350,9 +6350,23 @@ describe('registerPtyHandlers', () => {
       cols: 80,
       rows: 24,
       cwd: '/repo',
+      command: 'claude',
       tabId: 'tab-1',
       leafId,
-      worktreeId: 'wt-1'
+      worktreeId: 'wt-1',
+      env: {
+        ORCA_PANE_KEY: `tab-1:${leafId}`,
+        ORCA_TAB_ID: 'tab-1',
+        ORCA_WORKTREE_ID: 'wt-1',
+        ORCA_AGENT_LAUNCH_TOKEN: 'launch-renderer-1'
+      },
+      launchConfig: {
+        agentCommand: 'claude',
+        agentArgs: '',
+        agentEnv: {}
+      },
+      launchToken: 'launch-renderer-1',
+      launchAgent: 'claude'
     })
 
     // Why: #7587 — the runtime can only back a stalled mobile create if the spawn threads {tabId, leafId}.
@@ -6360,7 +6374,18 @@ describe('registerPtyHandlers', () => {
       expect.any(String),
       'wt-1',
       null,
-      { tabId: 'tab-1', leafId, incarnationId: expect.any(String) },
+      {
+        tabId: 'tab-1',
+        leafId,
+        incarnationId: expect.any(String),
+        launchConfig: {
+          agentCommand: 'claude',
+          agentArgs: '',
+          agentEnv: {}
+        },
+        launchToken: 'launch-renderer-1',
+        launchAgent: 'claude'
+      },
       false
     )
   })

@@ -7332,7 +7332,14 @@ export class OrcaRuntimeService {
     ptyId: string,
     worktreeId: string,
     connectionId: string | null = null,
-    binding?: { tabId: string; leafId: string; incarnationId?: PtyIncarnationId },
+    binding?: {
+      tabId: string
+      leafId: string
+      incarnationId?: PtyIncarnationId
+      launchConfig?: SleepingAgentLaunchConfig
+      launchToken?: string
+      launchAgent?: TuiAgent
+    },
     isWsl?: boolean
   ): void {
     this.assertPtyDidNotExitBeforeRegistration(ptyId, binding?.incarnationId)
@@ -7342,13 +7349,20 @@ export class OrcaRuntimeService {
       binding && isValidTerminalTabId(binding.tabId) && isTerminalLeafId(binding.leafId)
         ? makePaneKey(binding.tabId, binding.leafId)
         : null
-    this.recordPtyWorktree(ptyId, worktreeId, {
+    const pty = this.recordPtyWorktree(ptyId, worktreeId, {
       connected: true,
       connectionId,
       ...(isWsl !== undefined ? { isWsl } : {}),
       ...(binding && paneKey ? { tabId: binding.tabId, paneKey } : {}),
       ...(binding?.incarnationId ? { incarnationId: binding.incarnationId } : {})
     })
+    if (binding?.launchConfig && binding.launchToken && paneKey) {
+      // renderer-backed 启动由 renderer 创建 PTY；在注册点把同一启动凭据交还主进程，
+      // 否则子进程虽然拿到 token，服务端却没有可用于消息鉴权的可信副本。
+      pty.launchConfig = copySleepingAgentLaunchConfig(binding.launchConfig)
+      pty.launchToken = binding.launchToken
+      pty.launchAgent = binding.launchAgent ?? null
+    }
     const pendingIncarnation = this.pendingPtyRegistrationIncarnations.get(ptyId)
     if (
       pendingIncarnation === null ||
@@ -21939,6 +21953,9 @@ export class OrcaRuntimeService {
     const launchOpts = workspace
       ? await this.resolveAgentTerminalCreateOptions(workspace, opts)
       : opts
+    const launchToken = launchOpts.launchConfig
+      ? (launchOpts.launchToken ?? randomUUID())
+      : undefined
     const worktreeId = workspace?.id
     const cwd = workspace
       ? this.resolveWorkspaceTerminalStartupCwd(workspace, launchOpts.cwd)
@@ -21980,7 +21997,7 @@ export class OrcaRuntimeService {
         ...(launchOpts.resumeProviderSession
           ? { resumeProviderSession: launchOpts.resumeProviderSession }
           : {}),
-        ...(launchOpts.launchToken ? { launchToken: launchOpts.launchToken } : {}),
+        ...(launchToken ? { launchToken } : {}),
         ...(launchOpts.launchAgent ? { launchAgent: launchOpts.launchAgent } : {}),
         ...(launchOpts.viewMode ? { viewMode: launchOpts.viewMode } : {}),
         startupCommandDelivery: launchOpts.startupCommandDelivery,

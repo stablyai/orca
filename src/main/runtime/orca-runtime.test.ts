@@ -15,11 +15,13 @@ import type {
   ProjectGroup,
   Tab,
   TerminalLayoutSnapshot,
+  TuiAgent,
   WorktreeLineage,
   WorktreeMeta,
   WorkspaceLineage,
   WorkspaceSessionState
 } from '../../shared/types'
+import type { SleepingAgentLaunchConfig } from '../../shared/agent-session-resume'
 import { AGENT_STATUS_STALE_AFTER_MS } from '../../shared/agent-status-types'
 import {
   reviewHeadRemoteRefComponent,
@@ -11473,28 +11475,46 @@ describe('OrcaRuntimeService', () => {
       })
     }
     const runtime = new OrcaRuntimeService(runtimeStore)
+    const rendererLeafId = randomUUID()
 
     const webContents = { send: vi.fn() }
-    webContents.send.mockImplementation((_channel: string, payload: { requestId: string }) => {
-      runtime.syncWindowGraph(1, {
-        tabs: [],
-        leaves: [
-          {
-            tabId: 'tab-renderer',
-            worktreeId: TEST_WORKTREE_ID,
-            leafId: 'pane:1',
-            paneRuntimeId: 1,
-            ptyId: 'pty-renderer',
-            paneTitle: null
-          }
-        ]
-      })
-      ipcMain.emit(
-        'terminal:tabCreateReply',
-        { sender: webContents },
-        { requestId: payload.requestId, tabId: 'tab-renderer', title: 'Codex' }
-      )
-    })
+    webContents.send.mockImplementation(
+      (
+        _channel: string,
+        payload: {
+          requestId: string
+          launchConfig?: SleepingAgentLaunchConfig
+          launchToken?: string
+          launchAgent?: TuiAgent
+        }
+      ) => {
+        runtime.registerPty('pty-renderer', TEST_WORKTREE_ID, null, {
+          tabId: 'tab-renderer',
+          leafId: rendererLeafId,
+          ...(payload.launchConfig ? { launchConfig: payload.launchConfig } : {}),
+          ...(payload.launchToken ? { launchToken: payload.launchToken } : {}),
+          ...(payload.launchAgent ? { launchAgent: payload.launchAgent } : {})
+        })
+        runtime.syncWindowGraph(1, {
+          tabs: [],
+          leaves: [
+            {
+              tabId: 'tab-renderer',
+              worktreeId: TEST_WORKTREE_ID,
+              leafId: rendererLeafId,
+              paneRuntimeId: 1,
+              ptyId: 'pty-renderer',
+              paneTitle: null
+            }
+          ]
+        })
+        ipcMain.emit(
+          'terminal:tabCreateReply',
+          { sender: webContents },
+          { requestId: payload.requestId, tabId: 'tab-renderer', title: 'Codex' }
+        )
+      }
+    )
     runtime.attachWindow(1)
     runtime.syncWindowGraph(1, { tabs: [], leaves: [] })
     electronMocks.BrowserWindow.fromId.mockReturnValue({
@@ -11518,9 +11538,23 @@ describe('OrcaRuntimeService', () => {
           agentCommand: "codex '--dangerously-bypass-approvals-and-sandbox'",
           agentArgs: '--dangerously-bypass-approvals-and-sandbox',
           agentEnv: { CODEX_PROFILE: 'captured' }
-        }
+        },
+        launchToken: expect.stringMatching(UUID_RE)
       })
     )
+    const rendererRequest = webContents.send.mock.calls[0]?.[1] as
+      | { launchToken?: string }
+      | undefined
+    expect(
+      runtime.authenticateOrchestrationSender({
+        claimedHandle: 'term_forged',
+        paneKey: `tab-renderer:${rendererLeafId}`,
+        launchToken: rendererRequest?.launchToken
+      })
+    ).toEqual({
+      handle: expect.stringMatching(/^term_/),
+      paneKey: `tab-renderer:${rendererLeafId}`
+    })
     expect(markCodexProjectTrustedMock).toHaveBeenCalledWith(TEST_WORKTREE_PATH)
     expect(markCodexProjectTrustedMock.mock.invocationCallOrder[0]).toBeLessThan(
       webContents.send.mock.invocationCallOrder[0]!

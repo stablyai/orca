@@ -4146,6 +4146,7 @@ export function registerPtyHandlers(
         command?: string
         commandDelivery?: 'renderer' | 'provider'
         launchConfig?: SleepingAgentLaunchConfig
+        launchToken?: string
         resumeProviderSession?: AgentProviderSessionMetadata
         launchAgent?: TuiAgent
         startupCommandDelivery?: StartupCommandDelivery
@@ -4351,6 +4352,15 @@ export function registerPtyHandlers(
         delete baseEnv.ORCA_WORKTREE_ID
         delete baseEnv.ORCA_AGENT_LAUNCH_TOKEN
       }
+      const trustedLaunchToken =
+        effectiveLaunchConfig &&
+        stablePaneKey &&
+        typeof args.launchToken === 'string' &&
+        args.launchToken.length > 0 &&
+        args.launchToken.length <= 128 &&
+        baseEnv?.ORCA_AGENT_LAUNCH_TOKEN === args.launchToken
+          ? args.launchToken
+          : undefined
       const validatedPaneKey = stablePaneKey
       // Why: SSH can strip ORCA_PANE_KEY when remote hooks are off; IPC tab/leaf metadata still names the pane.
       const reservationPaneKey = metadataPaneKey ?? validatedPaneKey
@@ -4837,7 +4847,14 @@ export function registerPtyHandlers(
               ? {
                   tabId: args.tabId,
                   leafId: metadataLeafId,
-                  ...(result.incarnationId ? { incarnationId: result.incarnationId } : {})
+                  ...(result.incarnationId ? { incarnationId: result.incarnationId } : {}),
+                  ...(!result.isReattach && effectiveLaunchConfig && trustedLaunchToken
+                    ? {
+                        launchConfig: effectiveLaunchConfig,
+                        launchToken: trustedLaunchToken,
+                        ...(isTuiAgent(args.launchAgent) ? { launchAgent: args.launchAgent } : {})
+                      }
+                    : {})
                 }
               : undefined,
             !args.connectionId
