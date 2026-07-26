@@ -171,9 +171,11 @@ function buildIndex(
  *
  * Why: every mounted worktree card subscribes to its own orchestration slice,
  * and Zustand re-runs every subscriber's selector on every store publication.
- * Scanning the whole context map per card made that O(cards x contexts) on
- * traffic that never touched orchestration. The first caller through a given
- * store version pays O(tabs + contexts); the rest are a Map lookup.
+ * Scanning the whole context map per card made that O(cards x contexts). What
+ * this removes is the per-card multiplier, not the rebuild itself: an agent
+ * ping replaces the live map, so the index still rebuilds once per publication.
+ * The first caller through a given store version pays O(tabs + contexts); the
+ * rest are a Map lookup.
  */
 export function selectWorktreeAgentOrchestrationIndex(
   state: OrchestrationIndexState

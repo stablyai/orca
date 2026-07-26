@@ -68,7 +68,10 @@ function legacySelectForWorktree(
 // Why a seeded PRNG: a randomized differential must reproduce exactly when it
 // reports a divergence.
 function createRandom(seed: number): () => number {
-  let state = seed >>> 0 || 1
+  // Why the multiply: xorshift32 needs a high-entropy state. Seeding it with a
+  // small integer keeps the first output under 0.019, so `1 + pick(5)` was 1 for
+  // every seed here and the suite only ever built single-worktree stores.
+  let state = Math.imul(seed >>> 0 || 1, 0x9e37_79b1) >>> 0 || 1
   return () => {
     state ^= state << 13
     state >>>= 0
@@ -127,8 +130,8 @@ describe('selectWorktreeAgentOrchestration', () => {
         const tabCount = pick(3)
         const tabs: TerminalTab[] = []
         for (let tabIndex = 0; tabIndex < tabCount; tabIndex += 1) {
-          // Why a small shared id space: tab ids must sometimes collide across
-          // worktrees, which is the multi-attribution path.
+          // Why a small shared id space: tab ids collide across worktrees on
+          // 131 of these 300 seeds, which is the multi-attribution path.
           const tabId = `tab-${pick(4)}`
           tabs.push(makeTab(tabId))
           tabIds.push(tabId)
