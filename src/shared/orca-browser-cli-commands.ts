@@ -64,7 +64,7 @@ export const ORCA_BROWSER_CLI_COMMAND_KEYS = {
     'tab profile use-default',
     'tab profile clone'
   ],
-  'browser-cookie': ['cookie get', 'cookie set', 'cookie delete'],
+  'browser-cookie': ['cookie get', 'cookie set', 'cookie delete', 'cookie import'],
   'browser-capture': [
     'intercept enable',
     'intercept disable',
