@@ -13491,7 +13491,6 @@ export class OrcaRuntimeService {
     if (!handle) {
       throw new Error('orchestration_sender_unauthenticated')
     }
-    // pane 重铸后可能保留旧 handle；可信 pane 身份必须覆盖客户端路由元数据。
     return { handle, paneKey: args.paneKey }
   }
 

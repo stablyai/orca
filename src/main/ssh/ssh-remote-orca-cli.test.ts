@@ -25,6 +25,12 @@ const LEGACY_FALLBACK_OPTIONS: HostCliPassthroughOptions = {
   entryExists: () => false
 }
 
+const SSH_SENDER_ENV = {
+  ORCA_TERMINAL_HANDLE: 'term_ssh',
+  ORCA_PANE_KEY: 'tab_ssh:leaf_ssh',
+  ORCA_AGENT_LAUNCH_TOKEN: 'launch-token-ssh'
+}
+
 type FakeChild = EventEmitter & {
   stdout: EventEmitter
   stderr: EventEmitter
@@ -93,16 +99,28 @@ describe('runRemoteOrcaCli', () => {
       }),
       getOrchestrationDb: () => db,
       getTerminalPaneKey: () => null,
-      authenticateOrchestrationSender: ({
-        claimedHandle,
-        paneKey
-      }: {
-        claimedHandle?: string
-        paneKey?: string
-      }) => ({
-        handle: claimedHandle ?? 'term_test',
-        paneKey: paneKey ?? 'tab_test:leaf_test'
-      }),
+      authenticateOrchestrationSender: vi.fn(
+        ({
+          claimedHandle: _claimedHandle,
+          paneKey,
+          launchToken
+        }: {
+          claimedHandle?: string
+          paneKey?: string
+          launchToken?: string
+        }) => {
+          if (
+            paneKey !== SSH_SENDER_ENV.ORCA_PANE_KEY ||
+            launchToken !== SSH_SENDER_ENV.ORCA_AGENT_LAUNCH_TOKEN
+          ) {
+            throw new Error('orchestration_sender_unauthenticated')
+          }
+          return {
+            handle: SSH_SENDER_ENV.ORCA_TERMINAL_HANDLE,
+            paneKey: SSH_SENDER_ENV.ORCA_PANE_KEY
+          }
+        }
+      ),
       deliverPendingMessagesForHandle: vi.fn(),
       notifyMessageArrived: vi.fn(),
       linearIssueContext: vi.fn(async (request: unknown) => ({
@@ -146,7 +164,7 @@ describe('runRemoteOrcaCli', () => {
     return { runtime, db }
   }
 
-  it('uses the remote ORCA_TERMINAL_HANDLE as orchestration sender identity', async () => {
+  it('authenticates the remote orchestration sender credentials', async () => {
     const { runtime, db } = createRuntime()
 
     const result = await runRemoteOrcaCli(
@@ -154,7 +172,7 @@ describe('runRemoteOrcaCli', () => {
       {
         argv: ['orchestration', 'send', '--to', 'term_windows', '--subject', 'ping', '--json'],
         cwd: '/home/alice/repo',
-        env: { ORCA_TERMINAL_HANDLE: 'term_ssh' }
+        env: SSH_SENDER_ENV
       },
       LEGACY_FALLBACK_OPTIONS
     )
@@ -163,6 +181,11 @@ describe('runRemoteOrcaCli', () => {
     const payload = JSON.parse(result.stdout) as { ok: boolean }
     expect(payload.ok).toBe(true)
     expect(db.getUnreadMessages('term_windows')[0]?.from_handle).toBe('term_ssh')
+    expect(runtime.authenticateOrchestrationSender).toHaveBeenCalledWith({
+      claimedHandle: 'term_ssh',
+      paneKey: 'tab_ssh:leaf_ssh',
+      launchToken: 'launch-token-ssh'
+    })
   })
 
   it('forwards remote pane identity through the legacy orchestration fallback', async () => {
@@ -173,10 +196,7 @@ describe('runRemoteOrcaCli', () => {
       {
         argv: ['orchestration', 'send', '--to', 'term_windows', '--subject', 'ping', '--json'],
         cwd: '/home/alice/repo',
-        env: {
-          ORCA_TERMINAL_HANDLE: 'term_ssh',
-          ORCA_PANE_KEY: 'tab_ssh:leaf_ssh'
-        }
+        env: SSH_SENDER_ENV
       },
       LEGACY_FALLBACK_OPTIONS
     )
@@ -187,15 +207,61 @@ describe('runRemoteOrcaCli', () => {
     )
   })
 
+  it.each([
+    [
+      'missing pane key',
+      {
+        ORCA_TERMINAL_HANDLE: 'term_ssh',
+        ORCA_AGENT_LAUNCH_TOKEN: 'launch-token-ssh'
+      }
+    ],
+    [
+      'missing launch token',
+      { ORCA_TERMINAL_HANDLE: 'term_ssh', ORCA_PANE_KEY: 'tab_ssh:leaf_ssh' }
+    ],
+    [
+      'invalid launch token',
+      {
+        ORCA_TERMINAL_HANDLE: 'term_ssh',
+        ORCA_PANE_KEY: 'tab_ssh:leaf_ssh',
+        ORCA_AGENT_LAUNCH_TOKEN: 'invalid-token'
+      }
+    ]
+  ])('rejects %s in the legacy orchestration fallback', async (_label, env) => {
+    const { runtime, db } = createRuntime()
+
+    const result = await runRemoteOrcaCli(
+      runtime,
+      {
+        argv: ['orchestration', 'send', '--to', 'term_windows', '--subject', 'ping', '--json'],
+        cwd: '/home/alice/repo',
+        env
+      },
+      LEGACY_FALLBACK_OPTIONS
+    )
+
+    expect(result.exitCode).toBe(1)
+    expect(JSON.parse(result.stdout)).toMatchObject({
+      ok: false,
+      error: { message: 'orchestration_sender_unauthenticated' }
+    })
+    expect(db.insertMessage).not.toHaveBeenCalled()
+  })
+
   it('returns a non-zero status for lifecycle rejection through the legacy fallback', async () => {
     const db = new OrchestrationDb(':memory:')
     const runtime = new OrcaRuntimeService()
     runtime.setOrchestrationDb(db)
     vi.spyOn(runtime, 'authenticateOrchestrationSender').mockImplementation(
-      ({ claimedHandle, paneKey }) => ({
-        handle: claimedHandle ?? 'term_test',
-        paneKey: paneKey ?? 'tab_test:leaf_test'
-      })
+      ({ claimedHandle, paneKey, launchToken }) => {
+        if (!paneKey || !launchToken) {
+          throw new Error('orchestration_sender_unauthenticated')
+        }
+        return {
+          handle: claimedHandle ?? 'term_test',
+          paneKey
+        }
+      }
     )
     vi.spyOn(runtime, 'deliverPendingMessagesForHandle').mockImplementation(() => {})
     vi.spyOn(runtime, 'notifyMessageArrived').mockImplementation(() => {})
@@ -222,7 +288,10 @@ describe('runRemoteOrcaCli', () => {
             '--json'
           ],
           cwd: '/home/alice/repo',
-          env: { ORCA_PANE_KEY: 'tab_foreign:leaf_foreign' }
+          env: {
+            ORCA_PANE_KEY: 'tab_foreign:leaf_foreign',
+            ORCA_AGENT_LAUNCH_TOKEN: 'launch-token-foreign'
+          }
         },
         LEGACY_FALLBACK_OPTIONS
       )
@@ -235,6 +304,11 @@ describe('runRemoteOrcaCli', () => {
           lifecycle: { action: 'rejected', code: 'sender_not_assignee' }
         }
       })
+      expect(runtime.authenticateOrchestrationSender).toHaveBeenCalledWith({
+        claimedHandle: 'term_ssh',
+        paneKey: 'tab_foreign:leaf_foreign',
+        launchToken: 'launch-token-foreign'
+      })
       expect(db.getTask(task.id)?.status).toBe('dispatched')
     } finally {
       db.close()
@@ -246,10 +320,15 @@ describe('runRemoteOrcaCli', () => {
     const runtime = new OrcaRuntimeService()
     runtime.setOrchestrationDb(db)
     vi.spyOn(runtime, 'authenticateOrchestrationSender').mockImplementation(
-      ({ claimedHandle, paneKey }) => ({
-        handle: claimedHandle ?? 'term_test',
-        paneKey: paneKey ?? 'tab_test:leaf_test'
-      })
+      ({ claimedHandle, paneKey, launchToken }) => {
+        if (!paneKey || !launchToken) {
+          throw new Error('orchestration_sender_unauthenticated')
+        }
+        return {
+          handle: claimedHandle ?? 'term_test',
+          paneKey
+        }
+      }
     )
     vi.spyOn(runtime, 'deliverPendingMessagesForHandle').mockImplementation(() => {})
     vi.spyOn(runtime, 'notifyMessageArrived').mockImplementation(() => {})
@@ -280,13 +359,19 @@ describe('runRemoteOrcaCli', () => {
           cwd: '/home/alice/repo',
           env: {
             ORCA_TERMINAL_HANDLE: 'term_ssh',
-            ORCA_PANE_KEY: 'tab_owner:leaf_owner'
+            ORCA_PANE_KEY: 'tab_owner:leaf_owner',
+            ORCA_AGENT_LAUNCH_TOKEN: 'launch-token-owner'
           }
         },
         LEGACY_FALLBACK_OPTIONS
       )
 
       expect(result.exitCode).toBe(0)
+      expect(runtime.authenticateOrchestrationSender).toHaveBeenCalledWith({
+        claimedHandle: 'term_ssh',
+        paneKey: 'tab_owner:leaf_owner',
+        launchToken: 'launch-token-owner'
+      })
       expect(db.getTask(task.id)).toMatchObject({
         status: 'completed',
         result: expect.stringContaining('src/a.ts')
@@ -377,7 +462,7 @@ describe('runRemoteOrcaCli', () => {
           '--json'
         ],
         cwd: '/home/alice/repo',
-        env: { ORCA_TERMINAL_HANDLE: 'term_ssh' }
+        env: SSH_SENDER_ENV
       },
       LEGACY_FALLBACK_OPTIONS
     )

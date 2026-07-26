@@ -83,6 +83,18 @@ function exposeMessageListTimestamps(messages: MessageRow[]): MessageRow[] {
   return messages.map(exposeMessageTimestamps)
 }
 
+type InsertMessageParams = {
+  from: string
+  to: string
+  subject: string
+  body?: string
+  type?: MessageType
+  priority?: MessagePriority
+  threadId?: string
+  payload?: string
+  senderPaneKey?: string
+}
+
 // Schema versions: v2 'heartbeat'+last_heartbeat_at, v3 delivered_at, v4 task-creator terminal, v5 task_title/display_name, v6 pane-identity columns.
 const SCHEMA_VERSION = 6
 
@@ -322,17 +334,7 @@ export class OrchestrationDb {
 
   // ── Messages ──
 
-  insertMessage(msg: {
-    from: string
-    to: string
-    subject: string
-    body?: string
-    type?: MessageType
-    priority?: MessagePriority
-    threadId?: string
-    payload?: string
-    senderPaneKey?: string
-  }): MessageRow {
+  insertMessage(msg: InsertMessageParams): MessageRow {
     const id = generateId('msg')
     const stmt = this.db.prepare(`
       INSERT INTO messages (id, from_handle, to_handle, subject, body, type, priority, thread_id, payload, sender_pane_key)
@@ -353,6 +355,19 @@ export class OrchestrationDb {
     return exposeMessageTimestamps(
       this.db.prepare('SELECT * FROM messages WHERE id = ?').get(id) as MessageRow
     )
+  }
+
+  insertReplyAndMarkRead(originalId: string, reply: InsertMessageParams): MessageRow {
+    this.db.exec('BEGIN IMMEDIATE')
+    try {
+      const inserted = this.insertMessage(reply)
+      this.markAsRead([originalId])
+      this.db.exec('COMMIT')
+      return inserted
+    } catch (err) {
+      this.db.exec('ROLLBACK')
+      throw err
+    }
   }
 
   getUnreadMessages(toHandle: string, types?: MessageType[]): MessageRow[] {

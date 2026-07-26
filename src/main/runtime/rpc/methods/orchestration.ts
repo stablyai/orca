@@ -377,9 +377,7 @@ export const ORCHESTRATION_METHODS: RpcMethod[] = [
         throw new Error('orchestration_sender_identity_mismatch')
       }
 
-      db.markAsRead([original.id])
-
-      const reply = db.insertMessage({
+      const reply = db.insertReplyAndMarkRead(original.id, {
         from: sender.handle,
         to: original.from_handle,
         subject: `Re: ${original.subject}`,
