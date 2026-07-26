@@ -41,6 +41,12 @@ import {
   quotePosixShell
 } from '../../shared/wsl-login-shell-command'
 import { UNTRANSLATED_GIT_OUTPUT_ENV } from '../../shared/git-output-locale'
+import { isNetworkGitCommand } from './git-network-subcommand'
+import {
+  getWslLoginShellPath,
+  primeWslLoginShellPath,
+  wslLoginShellPathShellPrefix
+} from './wsl-login-shell-path'
 import { endSubprocessStdin } from '../../shared/subprocess-stdin-write'
 
 // ─── Core resolution ────────────────────────────────────────────────
@@ -220,6 +226,9 @@ function resolveCommand(
   // named vars), so the untranslated-output locale must ride the command
   // string for git stderr parsers to work inside the distro (issue #7808).
   const localePrefix = command === 'git' ? `${GIT_OUTPUT_LOCALE_SHELL_PREFIX} ` : ''
+  // Why: the non-login shell never sources the profile that put the user's git
+  // on PATH, so replay the login-shell PATH we learned for this distro.
+  const pathPrefix = options.useWslLoginShell ? '' : wslLoginShellPathShellPrefix(wsl.distro)
   const escapedCommand = quotePosixShell(command)
   // Why: shell-escape each argument to prevent word splitting / glob expansion
   // inside the bash -c string. Single quotes are safe for all chars except
@@ -231,9 +240,8 @@ function resolveCommand(
   // supplied a distro override (no cwd), skip the cd entirely — the gh CLI
   // doesn't need a particular cwd for global calls like `api rate_limit`.
   const linuxCwd = cwdWsl?.linuxPath ?? (cwd && wslDistroOverride ? translateArgForWsl(cwd) : null)
-  const shellCmd = linuxCwd
-    ? `cd ${quotePosixShell(linuxCwd)} && ${localePrefix}${escapedCommand} ${escapedArgs.join(' ')}`
-    : `${localePrefix}${escapedCommand} ${escapedArgs.join(' ')}`
+  const invocation = `${pathPrefix}${localePrefix}${escapedCommand} ${escapedArgs.join(' ')}`
+  const shellCmd = linuxCwd ? `cd ${quotePosixShell(linuxCwd)} && ${invocation}` : invocation
 
   if (options.useWslLoginShell) {
     return {
@@ -260,6 +268,65 @@ function resolveCommand(
     cwd: undefined,
     wsl
   }
+}
+
+/**
+ * A WSL non-login shell that could not find git — exit 127, the POSIX
+ * "command not found" status. Narrow on purpose: a real git failure exits with
+ * its own status, so this never masks a genuine error as a retry.
+ */
+function isWslShellCommandNotFound(error: unknown, resolved: ResolvedCommand): boolean {
+  if (!resolved.wsl || resolved.args.includes('-lc') || !error || typeof error !== 'object') {
+    return false
+  }
+  const { code, stderr } = error as { code?: unknown; stderr?: unknown }
+  if (code !== 127) {
+    return false
+  }
+  const text = typeof stderr === 'string' ? stderr : String(stderr ?? '')
+  return text.includes('not found') || text.includes('No such file or directory')
+}
+
+/** The distro a git exec will route through, mirroring resolveCommand. */
+function resolveWslDistroForExec(cwd: string | undefined, override?: string): string | null {
+  if (process.platform !== 'win32') {
+    return null
+  }
+  return (cwd ? parseWslPath(cwd)?.distro : undefined) ?? override ?? null
+}
+
+/**
+ * Whether a WSL-routed git call must pay for a login shell.
+ *
+ * Why: the login shell (`sh -lc` → user shell `-ilc`) sources the full profile
+ * on every call, which measurably dominates status polling. Skipping it is only
+ * safe once we have replayed the PATH that profile sets (see
+ * wsl-login-shell-path.ts) and only for commands that need nothing else from
+ * it. Network commands keep the login shell unconditionally: they depend on
+ * SSH_AUTH_SOCK from the agent the profile starts, on a profile-set
+ * GIT_SSH_COMMAND, and on credential helpers — none of which a PATH replay
+ * restores.
+ */
+function shouldUseWslLoginShell(
+  args: string[],
+  options: { cwd?: string; wslDistro?: string; useWslLoginShell?: boolean; network?: boolean }
+): boolean {
+  if (options.useWslLoginShell !== undefined) {
+    return options.useWslLoginShell
+  }
+  // Why: WSL routing comes from either a UNC cwd or an explicit distro hint, and
+  // the PATH cache is keyed on whichever one resolveCommand will actually use.
+  const distro = resolveWslDistroForExec(options.cwd, options.wslDistro)
+  if (!distro) {
+    return false
+  }
+  if (options.network || isNetworkGitCommand(args)) {
+    return true
+  }
+  // Why: until the probe lands we cannot prove the fast shell can find git, so
+  // stay on today's behavior instead of risking a not-found on every call.
+  primeWslLoginShellPath(distro)
+  return getWslLoginShellPath(distro) === undefined
 }
 
 // ─── Git-specific runners ───────────────────────────────────────────
@@ -816,19 +883,21 @@ export async function gitExecFileAsync(
     { args, ...(options.cwd !== undefined ? { cwd: options.cwd } : {}) },
     async () => {
       const resolved = resolveCommand('git', args, options.cwd, options.wslDistro, {
-        // Why: login-shell startup on WSL is expensive and unnecessary for
-        // read-path commands (status/list/etc.). Keep it opt-in for callers
-        // that need login-shell policy (for example network auth/SSH flows).
-        useWslLoginShell:
-          options.useWslLoginShell ?? Boolean(options.useConfiguredSshCommandForNetwork)
+        useWslLoginShell: shouldUseWslLoginShell(args, {
+          cwd: options.cwd,
+          wslDistro: options.wslDistro,
+          useWslLoginShell: options.useWslLoginShell,
+          network: options.useConfiguredSshCommandForNetwork
+        })
       })
       const policy = options.useConfiguredSshCommandForNetwork
         ? await buildNetworkSshPolicyEnv(options)
         : { env: nonInteractiveGitEnv(options.env), mode: 'default' as const }
-      let result: { stdout: string | Buffer; stderr: string | Buffer }
-      try {
-        result = await execFileCapture(resolved.binary, resolved.args, {
-          cwd: resolved.cwd,
+      const capture = (
+        command: ResolvedCommand
+      ): Promise<{ stdout: string | Buffer; stderr: string | Buffer }> =>
+        execFileCapture(command.binary, command.args, {
+          cwd: command.cwd,
           encoding: (options.encoding ?? 'utf-8') as BufferEncoding,
           maxBuffer: options.maxBuffer,
           timeout: options.timeout,
@@ -838,11 +907,25 @@ export async function gitExecFileAsync(
           env: policy.env,
           signal: options.signal
         })
+      let result: { stdout: string | Buffer; stderr: string | Buffer }
+      try {
+        result = await capture(resolved)
       } catch (error) {
-        if (options.useConfiguredSshCommandForNetwork && error && typeof error === 'object') {
-          Object.assign(error, { gitSshPolicyMode: policy.mode })
+        // Why: the fast shell can only miss a git the login profile would have
+        // put on PATH. Retry once through the login shell so an exotic install
+        // degrades to slow-but-working instead of breaking the workspace.
+        if (isWslShellCommandNotFound(error, resolved)) {
+          result = await capture(
+            resolveCommand('git', args, options.cwd, options.wslDistro, {
+              useWslLoginShell: true
+            })
+          )
+        } else {
+          if (options.useConfiguredSshCommandForNetwork && error && typeof error === 'object') {
+            Object.assign(error, { gitSshPolicyMode: policy.mode })
+          }
+          throw error
         }
-        throw error
       }
       const { stdout, stderr } = result
       return { stdout: stdout as string, stderr: stderr as string }
@@ -902,7 +985,10 @@ export async function gitExecFileAsyncBuffer(
   options: { cwd: string; maxBuffer?: number; wslDistro?: string }
 ): Promise<{ stdout: Buffer }> {
   const resolved = resolveCommand('git', args, options.cwd, options.wslDistro, {
-    useWslLoginShell: Boolean(options.wslDistro)
+    useWslLoginShell: shouldUseWslLoginShell(args, {
+      cwd: options.cwd,
+      wslDistro: options.wslDistro
+    })
   })
   const { stdout } = (await execFileCapture(resolved.binary, resolved.args, {
     cwd: resolved.cwd,
@@ -1110,7 +1196,7 @@ export function gitSpawn(
 ): ChildProcess {
   const { wslDistro, ...spawnOptions } = options
   const resolved = resolveCommand('git', args, options.cwd, wslDistro, {
-    useWslLoginShell: Boolean(wslDistro)
+    useWslLoginShell: shouldUseWslLoginShell(args, { cwd: options.cwd, wslDistro })
   })
   const spawnStartedAt = performance.now()
   const child = spawn(resolved.binary, resolved.args, {
