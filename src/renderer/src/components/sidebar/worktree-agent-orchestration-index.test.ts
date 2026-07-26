@@ -16,10 +16,24 @@ type IndexState = Parameters<typeof selectWorktreeAgentOrchestration>[0]
 
 const EMPTY_RECORD = {}
 
+// Pane keys that reach this selector unvalidated. `__proto__` is the one whose
+// meaning depends on how the output record is built.
+const MALFORMED_RUNTIME_KEYS = ['__proto__', 'constructor', 'toString', 'no-colon', 'a:b:c']
+
+// Why not plain assignment: writing `__proto__` onto an object literal hits the
+// prototype setter, so the fixture itself would lose the key under test.
+function defineKey<T>(map: Record<string, T>, key: string, value: T): void {
+  Object.defineProperty(map, key, { value, enumerable: true, writable: true, configurable: true })
+}
+
 /**
  * The pre-index per-card selector, transcribed from the revision this index
  * replaced. Kept as the oracle so equivalence is asserted against real prior
  * behavior rather than against a restatement of the new implementation.
+ *
+ * One deliberate correction: the original accumulated into `{}`, so a pane key
+ * of `__proto__` hit the prototype setter and vanished. This builds a
+ * null-prototype record so the oracle expresses intended attribution.
  */
 function legacySelectForWorktree(
   state: IndexState,
@@ -27,7 +41,7 @@ function legacySelectForWorktree(
 ): Record<string, AgentStatusOrchestrationContext> {
   const tabs = (state.tabsByWorktree ?? EMPTY_RECORD)[worktreeId] ?? []
   const tabIds = new Set(tabs.map((tab) => tab.id))
-  const out: Record<string, AgentStatusOrchestrationContext> = {}
+  const out: Record<string, AgentStatusOrchestrationContext> = Object.create(null)
   const runtimeAgentOrchestrationByPaneKey =
     state.runtimeAgentOrchestrationByPaneKey ?? EMPTY_RECORD
   const agentStatusByPaneKey = state.agentStatusByPaneKey ?? EMPTY_RECORD
@@ -129,7 +143,14 @@ describe('selectWorktreeAgentOrchestration', () => {
       for (let index = 0; index < contextCount; index += 1) {
         const ownerTabId =
           random() < 0.7 && tabIds.length > 0 ? tabIds[pick(tabIds.length)] : 'tab-orphan'
-        const paneKey = paneKeyFor(ownerTabId, index)
+        // Why malformed runtime keys: a pane key that is not `tab:uuid` reaches
+        // this selector unvalidated, and `__proto__` is the one that changes
+        // meaning depending on how the output record is built.
+        const keyRoll = random()
+        const paneKey =
+          keyRoll < 0.08
+            ? MALFORMED_RUNTIME_KEYS[pick(MALFORMED_RUNTIME_KEYS.length)]
+            : paneKeyFor(ownerTabId, index)
         const parentRoll = random()
         const parentPaneKey =
           parentRoll < 0.3 && tabIds.length > 0
@@ -137,16 +158,24 @@ describe('selectWorktreeAgentOrchestration', () => {
             : parentRoll < 0.4
               ? 'malformed:parent:key'
               : undefined
-        runtimeAgentOrchestrationByPaneKey[paneKey] = {
+        defineKey(runtimeAgentOrchestrationByPaneKey, paneKey, {
           taskId: `task-${index}`,
           dispatchId: `dispatch-${index}`,
           ...(parentPaneKey === undefined ? {} : { parentPaneKey })
-        }
+        })
         if (random() < 0.35) {
-          agentStatusByPaneKey[paneKey] = makeEntry(paneKey, `wt-${pick(worktreeCount + 1)}`)
+          defineKey(
+            agentStatusByPaneKey,
+            paneKey,
+            makeEntry(paneKey, `wt-${pick(worktreeCount + 1)}`)
+          )
         }
         if (random() < 0.25) {
-          retainedAgentsByPaneKey[paneKey] = makeRetained(paneKey, `wt-${pick(worktreeCount + 1)}`)
+          defineKey(
+            retainedAgentsByPaneKey,
+            paneKey,
+            makeRetained(paneKey, `wt-${pick(worktreeCount + 1)}`)
+          )
         }
       }
 
@@ -322,6 +351,51 @@ describe('selectWorktreeAgentOrchestration', () => {
         )
       }
     }
+  })
+
+  it('treats a __proto__ pane key as data instead of a prototype write', () => {
+    // Why: writing this key into a normal object silently drops the entry and
+    // repoints the record's prototype at the orchestration context.
+    const context = { taskId: 't', dispatchId: 'd' }
+    const state = {
+      tabsByWorktree: {},
+      runtimeAgentOrchestrationByPaneKey: Object.fromEntries([['__proto__', context]]),
+      agentStatusByPaneKey: Object.fromEntries([['__proto__', makeEntry('__proto__', 'wt-1')]]),
+      retainedAgentsByPaneKey: {}
+    } as unknown as IndexState
+
+    const record = selectWorktreeAgentOrchestration(state, 'wt-1')
+    expect(Object.keys(record)).toEqual(['__proto__'])
+    expect(record['__proto__']).toBe(context)
+    expect(Object.getPrototypeOf(record)).toBeNull()
+  })
+
+  it('keeps the entries cache warm while the orchestration map is empty', () => {
+    // Why: the empty map is the common case, so re-enumerating it per card is
+    // exactly the per-publication cost this index exists to remove.
+    let enumerations = 0
+    const runtimeAgentOrchestrationByPaneKey = new Proxy(
+      {},
+      {
+        ownKeys(target) {
+          enumerations += 1
+          return Reflect.ownKeys(target)
+        }
+      }
+    )
+    const state = {
+      tabsByWorktree: {},
+      runtimeAgentOrchestrationByPaneKey,
+      agentStatusByPaneKey: {},
+      retainedAgentsByPaneKey: {}
+    } as unknown as IndexState
+
+    for (const worktreeId of ['wt-a', 'wt-b', 'wt-c']) {
+      expect(selectWorktreeAgentOrchestration(state, worktreeId)).toBe(
+        EMPTY_WORKTREE_AGENT_ORCHESTRATION
+      )
+    }
+    expect(enumerations).toBe(1)
   })
 
   it('never mutates a record already handed to a subscriber', () => {

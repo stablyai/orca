@@ -34,11 +34,20 @@ type OrchestrationIndexCache = {
 // like an empty slice while keeping a stable identity for the source cache.
 const EMPTY_SOURCE = {}
 
-export const EMPTY_WORKTREE_AGENT_ORCHESTRATION: RuntimeOrchestrationRecord = {}
+// Why frozen: these are shared by every card, so an accidental write would
+// corrupt unrelated worktrees rather than fail locally.
+export const EMPTY_WORKTREE_AGENT_ORCHESTRATION: RuntimeOrchestrationRecord = Object.freeze({})
 export const EMPTY_WORKTREE_AGENT_ORCHESTRATION_INDEX: ReadonlyMap<
   string,
   RuntimeOrchestrationRecord
 > = new Map()
+
+// Why null-prototype: a pane key of `__proto__` is a plain data key here. On a
+// normal object the first write silently vanishes into the prototype setter,
+// which both drops the entry and repoints the record's prototype.
+function createRecord(): RuntimeOrchestrationRecord {
+  return Object.create(null) as RuntimeOrchestrationRecord
+}
 
 let runtimeEntriesCache: RuntimeEntriesCache | null = null
 let tabMembershipCache: TabMembershipCache | null = null
@@ -137,12 +146,12 @@ function buildIndex(
     }
 
     for (const worktreeId of targets) {
-      const existing = recordsByWorktree.get(worktreeId)
-      if (existing) {
-        existing[paneKey] = orchestration
-      } else {
-        recordsByWorktree.set(worktreeId, { [paneKey]: orchestration })
+      let record = recordsByWorktree.get(worktreeId)
+      if (!record) {
+        record = createRecord()
+        recordsByWorktree.set(worktreeId, record)
       }
+      record[paneKey] = orchestration
     }
   }
 
@@ -184,7 +193,10 @@ export function selectWorktreeAgentOrchestrationIndex(
   // Why here rather than before the enumeration: with no contexts the index is
   // empty whatever the other slices hold, and callers rely on them staying unread.
   if (runtimeEntries.length === 0) {
-    releaseWorktreeAgentOrchestrationIndexCache()
+    // Why the entries cache survives: dropping it would re-enumerate the empty
+    // map once per card, which is the per-publication cost this index removes.
+    tabMembershipCache = null
+    orchestrationIndexCache = null
     return EMPTY_WORKTREE_AGENT_ORCHESTRATION_INDEX
   }
 

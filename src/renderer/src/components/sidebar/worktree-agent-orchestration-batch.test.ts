@@ -403,10 +403,8 @@ describe('selectRuntimeAgentOrchestrationBatch', () => {
     )
 
     expect(Object.keys(actual)).toEqual(Object.keys(expected))
-    // Why the batch still gets the tighter budget: it is told which worktrees
-    // are on screen, so it can skip unrelated tabs entirely. The per-worktree
-    // selector reads a shared index covering every worktree, so it visits all
-    // tabs once — the cost it saves is per *card*, not per worktree.
+    // Why the batch stays tighter: it knows which worktrees are on screen. The
+    // shared index covers all of them, so it saves per *card*, not per worktree.
     expect(batched.counts()).toEqual({
       runtimeEnumerations: 1,
       runtimeValueReads: contextCount,
@@ -487,9 +485,8 @@ describe('selectRuntimeAgentOrchestrationBatch', () => {
     }
     selectRuntimeAgentOrchestrationBatch(batched.state, requested)
 
-    // Why one enumeration for worktreeCount separate calls: the per-worktree
-    // selector reads a shared index, so the first caller builds it and the rest
-    // are Map lookups. Before that index, this cost scaled with mounted cards.
+    // One enumeration for worktreeCount calls: the first builds the shared
+    // index, the rest are Map lookups. This used to scale with mounted cards.
     expect(reference.counts()).toEqual({
       runtimeEnumerations: 1,
       runtimeValueReads: contextCount,
@@ -531,9 +528,8 @@ describe('selectRuntimeAgentOrchestrationBatch', () => {
       tabIdReads: worktreeCount
     })
 
-    // Why: the sidebar's real hot path is every mounted card re-running its own
-    // selector on every publication. Held flat, that is the whole point of the
-    // shared index — it must not scale with cards or with publications.
+    // Publications that change nothing the index reads cost nothing, however
+    // many cards call in.
     const referenceBefore = reference.counts()
     for (let publication = 0; publication < publicationCount; publication += 1) {
       for (const worktreeId of requested) {
@@ -541,5 +537,32 @@ describe('selectRuntimeAgentOrchestrationBatch', () => {
       }
     }
     expect(reference.counts()).toEqual(referenceBefore)
+
+    // Why this is the honest claim: a real live-status ping replaces
+    // agentStatusByPaneKey, so the index does rebuild once per publication. What
+    // the shared index removes is the mounted-card multiplier, not the
+    // per-publication rebuild. Tab reads stay flat because tab membership is
+    // keyed on the tabs slice, which a live-status ping does not replace.
+    const churn = makeCountedState()
+    for (const worktreeId of requested) {
+      selectRuntimeAgentOrchestrationForWorktree(churn.state, worktreeId)
+    }
+    for (let publication = 0; publication < publicationCount; publication += 1) {
+      const published = {
+        ...churn.state,
+        agentStatusByPaneKey: {
+          [`unrelated-${publication}`]: makeEntry(`unrelated-${publication}`, 'elsewhere')
+        }
+      }
+      for (const worktreeId of requested) {
+        selectRuntimeAgentOrchestrationForWorktree(published, worktreeId)
+      }
+    }
+    expect(churn.counts()).toEqual({
+      runtimeEnumerations: 1,
+      runtimeValueReads: contextCount,
+      contextVisits: contextCount * (publicationCount + 1),
+      tabIdReads: worktreeCount
+    })
   })
 })
