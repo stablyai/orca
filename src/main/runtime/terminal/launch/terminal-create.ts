@@ -44,18 +44,15 @@ export abstract class OrcaRuntimeWithCreateTerminal extends OrcaRuntimeWithTermi
       }
       const workspace = await this.resolveTerminalCreateLaunchScope(selector, opts, ...evidence)
       const resolvedLaunchOpts = await this.resolveAgentTerminalCreateOptions(workspace, opts)
-      // Why: wrap bare/agent launch commands through the opt-in shell template so CLI/mobile
-      // createTerminal paths match renderer queueTabStartupCommand (e.g. devenv shell -- $CMD).
-      // Keep claudeAgentTeamsSourceCommand on the unwrapped agent line so teammate-mode
-      // inference still sees `claude` rather than `devenv shell -- claude`.
+      const shellCommandWrapper = this.store?.getSettings?.().shellCommandWrapper
+      // Why: keep command unwrapped through Agent Teams planning/sequencing so a shell
+      // wrapper alone cannot look like setup sequencing (source !== command). Wrap only
+      // the final spawn command. claudeAgentTeamsSourceCommand stays on the bare agent
+      // line so teammate-mode inference still sees `claude`, not `devenv shell -- claude`.
       const launchOpts = {
         ...resolvedLaunchOpts,
         ...(resolvedLaunchOpts.command
           ? {
-              command: applyShellCommandWrapper(
-                this.store?.getSettings?.().shellCommandWrapper,
-                resolvedLaunchOpts.command
-              ),
               claudeAgentTeamsSourceCommand:
                 resolvedLaunchOpts.claudeAgentTeamsSourceCommand ?? resolvedLaunchOpts.command
             }
@@ -135,9 +132,14 @@ export abstract class OrcaRuntimeWithCreateTerminal extends OrcaRuntimeWithTermi
           result = await dependencies.spawnInAdmittedPane(this.store, ptyController, {
             ...initialSize,
             cwd,
-            command: sequencedStartupCommand
-              ? launchOpts.command
-              : (agentTeamsPlan?.command ?? launchOpts.command),
+            // Why: wrap after teams/sequencing so setup-vs-agent distinction stays real and
+            // teammate-enhanced commands still go through the opt-in shell template.
+            command: applyShellCommandWrapper(
+              shellCommandWrapper,
+              sequencedStartupCommand
+                ? launchOpts.command
+                : (agentTeamsPlan?.command ?? launchOpts.command)
+            ),
             launchAgent: launchOpts.launchAgent,
             launchConfig: effectiveLaunchConfig,
             ...(launchToken ? { launchToken } : {}),

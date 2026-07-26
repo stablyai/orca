@@ -54,6 +54,13 @@ describe('applyShellCommandWrapper', () => {
     expect(applyShellCommandWrapper('echo $CMD && $CMD', 'true')).toBe('echo true && true')
   })
 
+  it('replaces every supported placeholder variant in mixed templates', () => {
+    expect(applyShellCommandWrapper('echo $CMD && {command}', 'true')).toBe('echo true && true')
+    expect(applyShellCommandWrapper('log $COMMAND then $CMD then {command}', 'run')).toBe(
+      'log run then run then run'
+    )
+  })
+
   it('exposes placeholders longest-first for callers that mirror the order', () => {
     expect([...SHELL_COMMAND_WRAPPER_PLACEHOLDERS]).toEqual(['$COMMAND', '$CMD', '{command}'])
   })
