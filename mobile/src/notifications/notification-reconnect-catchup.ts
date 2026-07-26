@@ -134,6 +134,14 @@ export type HostNotificationSession = {
   // host. Per host, not per subscription: a reconnect that races the very first
   // AsyncStorage read would otherwise fetch from seq 0 and re-push the buffer.
   watermarkLoaded: boolean
+  // Why (#8591): distinguishes "this device has delivered for this host before"
+  // from a first-ever pairing. Only the former may catch up on a cold open — a
+  // brand-new pairing fetching from seq 0 would push the desktop's whole buffer
+  // at someone who was never subscribed for any of it.
+  hadStoredWatermark: boolean
+  // Resolves once the persisted read has landed, so the first 'ready' can wait for
+  // it instead of deciding catch-up against an unread watermark.
+  watermarkSeeded: Promise<void> | null
 }
 
 const sessionsByHost = new Map<string, HostNotificationSession>()
@@ -146,7 +154,9 @@ export function getHostNotificationSession(hostId: string): HostNotificationSess
       lastDeliveredEpoch: null,
       seen: createSeenNotificationGuard(),
       connectedBefore: false,
-      watermarkLoaded: false
+      watermarkLoaded: false,
+      hadStoredWatermark: false,
+      watermarkSeeded: null
     }
     sessionsByHost.set(hostId, session)
   }
@@ -188,10 +198,16 @@ export function adoptNotificationEpoch(
 // Why: seed the watermark lazily so subscribe() doesn't block on an AsyncStorage read.
 // Only the first subscription for a host needs it; later ones inherit the live value.
 export function seedWatermarkFromStorage(session: HostNotificationSession, hostId: string): void {
-  if (session.watermarkLoaded) {
+  if (session.watermarkLoaded || session.watermarkSeeded) {
     return
   }
-  void loadWatermark(hostId).then(({ seq, epoch }) => {
+  session.watermarkSeeded = loadWatermark(hostId).then(({ seq, epoch }) => {
+    // Why: a stored seq is the proof this device already delivered for this host —
+    // the signal a cold open needs to tell "catch me up" from "first pairing".
+    // Recorded before the epoch check below, which may legitimately zero the seq.
+    if (seq > 0) {
+      session.hadStoredWatermark = true
+    }
     // Why the epoch comparison: this read can land AFTER 'ready' already adopted a
     // live epoch. If the stored watermark belongs to a different (older) counter,
     // applying it here would silently reinstate exactly the stale cut this fixes.

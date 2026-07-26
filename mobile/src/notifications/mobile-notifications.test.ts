@@ -523,11 +523,15 @@ describe('subscribeToDesktopNotifications — reconnect catch-up', () => {
     await flushAsync()
     await flushAsync()
 
-    const missedCall = vi
+    const missedCalls = vi
       .mocked(sub.client.sendRequest)
-      .mock.calls.find((c: unknown[]) => c[0] === 'notifications.getMissedSince')
-    // Watermark reset to 0 and tagged with the live epoch — not the stale 57.
-    expect(missedCall?.[1]).toEqual({ lastSeenSeq: 0, epoch: 'epoch-after-restart' })
+      .mock.calls.filter((c: unknown[]) => c[0] === 'notifications.getMissedSince')
+    // The cold open catches up from its stored watermark against the SAME counter —
+    // 57 is meaningful there, so it is the correct cut (#8591 second pass).
+    expect(missedCalls[0]?.[1]).toEqual({ lastSeenSeq: 57, epoch: 'epoch-before-restart' })
+    // After the restart the watermark is reset to 0 and tagged with the live epoch —
+    // not the stale 57, which would make `57 >= 2` true and kill catch-up silently.
+    expect(missedCalls.at(-1)?.[1]).toEqual({ lastSeenSeq: 0, epoch: 'epoch-after-restart' })
   })
 
   it('refuses to seed a stored watermark that lost the race to a newer live epoch', async () => {
@@ -834,6 +838,88 @@ describe('subscribeToDesktopNotifications — reconnect catch-up', () => {
       .mock.calls.find((c: unknown[]) => c[0] === 'notifications.getMissedSince')
     // Must not be 57: that seq was never shown to belong to this counter.
     expect(missedCall?.[1]).toEqual({ lastSeenSeq: 0, epoch: 'epoch-live' })
+  })
+
+  it('catches up on the FIRST connection after an upgrade, without a second ready', async () => {
+    // Round-2 review finding: catch-up hung off `connectedBefore`, which is false on
+    // the first 'ready' of a process. So a cold app open — post-upgrade, or after the
+    // OS evicted the app — adopted the epoch but never replayed. Everything between
+    // the stored watermark and the next live seq was then lost permanently, because
+    // the first live event advances the watermark past the gap.
+    //
+    // The earlier migration test masked this by emitting a SECOND 'ready'. This one
+    // emits exactly one, which is what a real cold open does.
+    vi.mocked(loadPushNotificationsEnabled).mockResolvedValue(true)
+    vi.mocked(Notifications.getPermissionsAsync).mockResolvedValue({
+      status: 'granted',
+      canAskAgain: true
+    } as never)
+    vi.mocked(Notifications.scheduleNotificationAsync).mockResolvedValue('s')
+    vi.mocked(AsyncStorage.getItem).mockImplementation(async (key: string) =>
+      key.startsWith('orca:mobileNotificationsWatermark:')
+        ? JSON.stringify({ seq: 57, epoch: 'epoch-live' })
+        : null
+    )
+
+    const sub = makeClient()
+    vi.mocked(sub.client.sendRequest).mockImplementation(async (method: string) =>
+      method === 'notifications.getMissedSince'
+        ? {
+            ok: true,
+            result: {
+              epoch: 'epoch-live',
+              notifications: [
+                {
+                  type: 'notification',
+                  notificationId: 'missed-58',
+                  notificationSeq: 58,
+                  notificationEpoch: 'epoch-live',
+                  title: 'while the app was closed',
+                  body: 'b'
+                }
+              ]
+            }
+          }
+        : { ok: true, result: {} }
+    )
+    subscribeToDesktopNotifications(sub.client, 'host-1')
+    sub.onData?.({ type: 'ready', subscriptionId: 'sub-1', epoch: 'epoch-live' })
+    await flushAsync()
+    await flushAsync()
+    await flushAsync()
+
+    const missedCall = vi
+      .mocked(sub.client.sendRequest)
+      .mock.calls.find((c: unknown[]) => c[0] === 'notifications.getMissedSince')
+    // The single 'ready' must replay from the stored watermark, not skip it.
+    expect(missedCall?.[1]).toEqual({ lastSeenSeq: 57, epoch: 'epoch-live' })
+    // And the missed notification must actually reach the user.
+    expect(vi.mocked(Notifications.scheduleNotificationAsync).mock.calls.length).toBe(1)
+  })
+
+  it('does not replay the desktop buffer at a first-ever pairing', async () => {
+    // The other side of the finding above: with nothing stored, this device has never
+    // delivered for this host. Catching up would push the whole retained buffer at a
+    // user who was never subscribed for any of it.
+    vi.mocked(loadPushNotificationsEnabled).mockResolvedValue(true)
+    vi.mocked(Notifications.getPermissionsAsync).mockResolvedValue({
+      status: 'granted',
+      canAskAgain: true
+    } as never)
+    vi.mocked(AsyncStorage.getItem).mockResolvedValue(null)
+
+    const sub = makeClient()
+    subscribeToDesktopNotifications(sub.client, 'host-1')
+    sub.onData?.({ type: 'ready', subscriptionId: 'sub-1', epoch: 'epoch-live' })
+    await flushAsync()
+    await flushAsync()
+    await flushAsync()
+
+    expect(
+      vi
+        .mocked(sub.client.sendRequest)
+        .mock.calls.filter((c: unknown[]) => c[0] === 'notifications.getMissedSince')
+    ).toHaveLength(0)
   })
 
   it('persists seq and epoch as one value so a crash cannot split the pair', async () => {

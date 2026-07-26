@@ -1,6 +1,16 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 const removeHostMock = vi.hoisted(() => vi.fn())
+const asyncStorage = vi.hoisted(() => ({
+  getItem: vi.fn(async () => null),
+  setItem: vi.fn(async () => undefined),
+  // Why removeItem is here: clearWatermark() swallows its own failures, so a mock
+  // missing this method turns the persisted-watermark cleanup into a caught
+  // TypeError — the assertion below would pass even if the call were deleted.
+  removeItem: vi.fn(async () => undefined)
+}))
+
+vi.mock('@react-native-async-storage/async-storage', () => ({ default: asyncStorage }))
 
 vi.mock('./host-store', () => ({
   removeHost: (hostId: string) => removeHostMock(hostId)
@@ -15,6 +25,7 @@ import {
 describe('host removal lifecycle', () => {
   beforeEach(() => {
     removeHostMock.mockReset()
+    asyncStorage.removeItem.mockClear()
     resetHostNotificationSessionsForTests()
   })
 
@@ -62,5 +73,19 @@ describe('host removal lifecycle', () => {
     expect(afterRemoval).not.toBe(session)
     expect(afterRemoval.lastDeliveredSeq).toBe(0)
     expect(afterRemoval.lastDeliveredEpoch).toBeNull()
+  })
+
+  it('erases the persisted watermark, not just the in-memory session', async () => {
+    // Why separately from the test above: the session is process-local, the
+    // watermark is not. Retiring only the session lets a re-pair of the same host
+    // read the old seq off disk and resume against a counter it never saw — the
+    // catch-up would then start above the real cut and drop everything below it.
+    removeHostMock.mockResolvedValue(undefined)
+
+    await removeHostAndCloseClient('host-1', vi.fn())
+    // clearWatermark is fire-and-forget; let its microtask land.
+    await Promise.resolve()
+
+    expect(asyncStorage.removeItem).toHaveBeenCalledWith('orca:mobileNotificationsWatermark:host-1')
   })
 })

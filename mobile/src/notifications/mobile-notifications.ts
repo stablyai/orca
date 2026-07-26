@@ -303,14 +303,27 @@ export function subscribeToDesktopNotifications(client: RpcClient, hostId: strin
         unsubscribeStream()
         return
       }
-      // Why before fetchMissed: adopting the epoch here is what voids a watermark
-      // left over from a previous desktop lifetime, so the catch-up request carries
-      // a watermark that means something against the counter now answering it.
-      adoptNotificationEpoch(session, hostId, (event as SubscribeResult).epoch)
-      // Why: only reconnects fetch missed; watermarkLoaded guards against fetching from a stale 0 (which re-pushes everything).
-      if (isReconnect && session.watermarkLoaded) {
-        void fetchMissed()
-      }
+      const readyEpoch = (event as SubscribeResult).epoch
+      // Why (#8591) the await: on a cold app open the persisted read is still in
+      // flight, so deciding here would see watermarkLoaded false and skip catch-up —
+      // which is precisely the post-upgrade / post-process-death case that loses
+      // every notification between the stored watermark and the next live seq.
+      void (async () => {
+        await session.watermarkSeeded
+        if (disposed) {
+          return
+        }
+        // Why before fetchMissed: adopting the epoch here is what voids a watermark
+        // left over from a previous desktop lifetime, so the catch-up request carries
+        // a watermark that means something against the counter now answering it.
+        adoptNotificationEpoch(session, hostId, readyEpoch)
+        // A reconnect always catches up. A cold open catches up only when this device
+        // has delivered for this host before — a first-ever pairing must not be handed
+        // the desktop's whole retained buffer.
+        if (isReconnect || session.hadStoredWatermark) {
+          await fetchMissed()
+        }
+      })()
       return
     }
     if (event.type === 'end') {
