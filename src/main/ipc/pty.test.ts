@@ -600,6 +600,9 @@ describe('registerPtyHandlers', () => {
     const worktreeId = 'repo-1::/worktree'
     const shutdownStarted = makeDeferred()
     const releaseShutdown = makeDeferred()
+    const exitListeners = new Set<
+      (payload: { id: string; code: number; incarnationId?: string }) => void
+    >()
     setLocalPtyProvider({
       spawn: vi.fn(),
       write: vi.fn(),
@@ -608,6 +611,9 @@ describe('registerPtyHandlers', () => {
       shutdown: vi.fn(async () => {
         shutdownStarted.resolve()
         await releaseShutdown.promise
+        for (const listener of exitListeners) {
+          listener({ id: ptyId, code: 0, incarnationId: oldIncarnationId })
+        }
         throw new Error('daemon unavailable')
       }),
       sendSignal: vi.fn(),
@@ -622,7 +628,10 @@ describe('registerPtyHandlers', () => {
       revive: vi.fn(),
       onData: vi.fn(() => () => {}),
       onReplay: vi.fn(() => () => {}),
-      onExit: vi.fn(() => () => {}),
+      onExit: vi.fn((listener) => {
+        exitListeners.add(listener)
+        return () => exitListeners.delete(listener)
+      }),
       listProcesses: vi.fn(async () => []),
       attach: vi.fn(),
       getDefaultShell: vi.fn(),
@@ -718,6 +727,11 @@ describe('registerPtyHandlers', () => {
 
     await expect(pending).resolves.toMatchObject({ kind: 'archived' })
     expect(runtime.onPtyExit).toHaveBeenCalledWith(ptyId, -1, oldIncarnationId)
+    expect(mainWindow.webContents.send).toHaveBeenCalledWith('pty:exit', {
+      id: ptyId,
+      code: -1,
+      lostWorkerRecovery: { kind: 'archived', archiveId: expect.any(String) }
+    })
     clearProviderPtyState(ptyId)
   })
 
@@ -856,6 +870,149 @@ describe('registerPtyHandlers', () => {
       id: ptyId,
       code: 0,
       incarnationId,
+      lostWorkerRecovery: { kind: 'archived', archiveId: expect.any(String) }
+    })
+    clearProviderPtyState(ptyId)
+  })
+
+  it('does not attach an old archive receipt to a replacement non-SSH exit', async () => {
+    const ptyId = 'daemon-archive-replacement-exit'
+    const oldIncarnationId = 'incarnation-old'
+    const replacementIncarnationId = 'incarnation-replacement'
+    const leafId = '44444444-4444-4444-8444-444444444444'
+    const tabId = 'tab-archive-replacement-exit'
+    const worktreeId = 'repo-1::/worktree'
+    const exitListeners = new Set<
+      (payload: { id: string; code: number; incarnationId?: string }) => void
+    >()
+    setLocalPtyProvider({
+      spawn: vi.fn(),
+      write: vi.fn(),
+      resize: vi.fn(),
+      kill: vi.fn(),
+      shutdown: vi.fn(async () => {
+        restorePtyIncarnation(ptyId, replacementIncarnationId)
+        for (const listener of exitListeners) {
+          listener({ id: ptyId, code: 0, incarnationId: replacementIncarnationId })
+        }
+      }),
+      sendSignal: vi.fn(),
+      getCwd: vi.fn(),
+      getInitialCwd: vi.fn(),
+      clearBuffer: vi.fn(),
+      acknowledgeDataEvent: vi.fn(),
+      hasChildProcesses: vi.fn(),
+      getForegroundProcess: vi.fn(),
+      confirmForegroundProcess: vi.fn(),
+      serialize: vi.fn(),
+      revive: vi.fn(),
+      onData: vi.fn(() => () => {}),
+      onReplay: vi.fn(() => () => {}),
+      onExit: vi.fn((listener) => {
+        exitListeners.add(listener)
+        return () => exitListeners.delete(listener)
+      }),
+      listProcesses: vi.fn(async () => []),
+      attach: vi.fn(),
+      getDefaultShell: vi.fn(),
+      getProfiles: vi.fn()
+    } as never)
+    const session = {
+      ...getDefaultWorkspaceSession(),
+      tabsByWorktree: {
+        [worktreeId]: [
+          {
+            id: tabId,
+            worktreeId,
+            title: 'Worker',
+            customTitle: null,
+            color: null,
+            sortOrder: 0,
+            createdAt: 1,
+            ptyId
+          }
+        ]
+      },
+      terminalLayoutsByTabId: {
+        [tabId]: {
+          root: { type: 'leaf' as const, leafId },
+          activeLeafId: leafId,
+          expandedLeafId: null,
+          ptyIdsByLeafId: { [leafId]: ptyId }
+        }
+      },
+      terminalPtyIncarnationsByPaneKey: { [makePaneKey(tabId, leafId)]: oldIncarnationId },
+      terminalArchiveHintsByPaneKey: {
+        [makePaneKey(tabId, leafId)]: { launchAgent: 'codex' as const, startedAt: 1 }
+      }
+    }
+    let archives = {}
+    const store = {
+      getWorkspaceSession: vi.fn(() => session),
+      createTerminalArchiveStore: vi.fn(
+        (snapshotSource) =>
+          new TerminalArchiveStore(
+            {
+              getTerminalArchives: () => archives,
+              replaceTerminalArchivesAndFlush: (next) => {
+                archives = next
+              },
+              getTerminalArchiveRetentionDays: () => 7,
+              isExecutionHostReachable: () => true,
+              worktreeExists: () => true,
+              isTerminalArchiveRequestOwned: () => true,
+              isTerminalScrollbackSnapshotLive: () => false,
+              commitLostTerminalArchiveAndRetire: (nextArchives) => {
+                archives = nextArchives
+                return { closed: true, ptyIdsToKill: [ptyId], session }
+              }
+            } as never,
+            snapshotSource,
+            () => 100
+          )
+      )
+    }
+    const runtime = {
+      setPtyController: vi.fn(),
+      onPtyExit: vi.fn(),
+      onPtyData: vi.fn()
+    }
+
+    restorePtyIncarnation(ptyId, oldIncarnationId)
+    registerPtyHandlers(
+      mainWindow as never,
+      runtime as never,
+      undefined,
+      undefined,
+      undefined,
+      store as never
+    )
+    const archive = handlers.get('pty:handleLostTerminalCandidate')
+    if (!archive) {
+      throw new Error('missing lost-worker archive handler')
+    }
+
+    await expect(
+      archive(mainWindowIpcEvent, {
+        worktreeId,
+        tabId,
+        leafId,
+        reason: 'daemon-worker-lost',
+        executionHostId: 'local',
+        snapshotsByLeafId: {
+          [leafId]: { buffer: '', source: 'renderer', truncated: false, byteLength: 0 }
+        }
+      })
+    ).resolves.toMatchObject({ kind: 'archived' })
+
+    expect(mainWindow.webContents.send).toHaveBeenNthCalledWith(1, 'pty:exit', {
+      id: ptyId,
+      code: 0,
+      incarnationId: replacementIncarnationId
+    })
+    expect(mainWindow.webContents.send).toHaveBeenNthCalledWith(2, 'pty:exit', {
+      id: ptyId,
+      code: -1,
       lostWorkerRecovery: { kind: 'archived', archiveId: expect.any(String) }
     })
     clearProviderPtyState(ptyId)

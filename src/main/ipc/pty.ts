@@ -3033,17 +3033,30 @@ export function registerPtyHandlers(
   }
 
   const syntheticKillExitPtyIds = new Map<string, NodeJS.Timeout>()
-  const archivedNonSshExitRecoveryByPtyId = new Map<string, string>()
+  const archivedNonSshExitRecoveryByPtyId = new Map<
+    string,
+    { archiveId: string; expectedIncarnationId: string | undefined }
+  >()
   const reversibleStopOwnersByPtyId = new Map<string, number>()
 
-  function beginArchivedNonSshPtyExitRecovery(ptyId: string, archiveId: string): void {
-    archivedNonSshExitRecoveryByPtyId.set(ptyId, archiveId)
+  function beginArchivedNonSshPtyExitRecovery(
+    ptyId: string,
+    archiveId: string,
+    expectedIncarnationId: string | undefined
+  ): void {
+    archivedNonSshExitRecoveryByPtyId.set(ptyId, { archiveId, expectedIncarnationId })
   }
 
-  function takeArchivedNonSshPtyExitRecovery(ptyId: string): string | undefined {
-    const archiveId = archivedNonSshExitRecoveryByPtyId.get(ptyId)
+  function takeArchivedNonSshPtyExitRecovery(
+    ptyId: string,
+    incarnationId: string | undefined
+  ): string | undefined {
+    const receipt = archivedNonSshExitRecoveryByPtyId.get(ptyId)
+    if (!receipt || receipt.expectedIncarnationId !== incarnationId) {
+      return undefined
+    }
     archivedNonSshExitRecoveryByPtyId.delete(ptyId)
-    return archiveId
+    return receipt.archiveId
   }
 
   function rememberSyntheticKillExit(id: string): void {
@@ -3169,7 +3182,8 @@ export function registerPtyHandlers(
     const unsubscribe = provider.onExit((payload) => {
       if (
         payload.id === id &&
-        (!expectedIncarnationId || payload.incarnationId === expectedIncarnationId)
+        (!expectedIncarnationId || payload.incarnationId === expectedIncarnationId) &&
+        isCurrentPtyExit(payload)
       ) {
         providerExitObserved = true
       }
@@ -3198,7 +3212,7 @@ export function registerPtyHandlers(
         if (isSsh) {
           beginArchivedSshPtyExitRecovery(ptyId, args.archiveId)
         } else {
-          beginArchivedNonSshPtyExitRecovery(ptyId, args.archiveId)
+          beginArchivedNonSshPtyExitRecovery(ptyId, args.archiveId, expectedIncarnationId)
         }
         let succeeded = false
         let providerExitObserved = false
@@ -3248,7 +3262,7 @@ export function registerPtyHandlers(
         }
         const recoveryArchiveId = isSsh
           ? takeArchivedSshPtyExitRecovery(ptyId)
-          : takeArchivedNonSshPtyExitRecovery(ptyId)
+          : takeArchivedNonSshPtyExitRecovery(ptyId, expectedIncarnationId)
         if (recoveryArchiveId && !providerExitObserved) {
           rememberSyntheticKillExit(ptyId)
           sendPtyExitToRenderer({
@@ -3440,7 +3454,7 @@ export function registerPtyHandlers(
       if (consumeSyntheticKillExit(payload.id)) {
         return
       }
-      const archiveId = takeArchivedNonSshPtyExitRecovery(payload.id)
+      const archiveId = takeArchivedNonSshPtyExitRecovery(payload.id, payload.incarnationId)
       if (!isLocalProvider) {
         clearProviderPtyState(payload.id)
         ptyOwnership.delete(payload.id)
