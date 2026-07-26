@@ -132,7 +132,12 @@ export type SshMutationExpectation = {
   expectedSshConnectionGeneration?: number
 }
 
-export type SshRemotePtyLeaseState = 'attached' | 'detached' | 'terminated' | 'expired'
+export type SshRemotePtyLeaseState =
+  | 'attached'
+  | 'detached'
+  | 'termination-pending'
+  | 'terminated'
+  | 'expired'
 
 export type SshRemotePtyLease = {
   targetId: string

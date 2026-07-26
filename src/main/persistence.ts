@@ -1547,7 +1547,7 @@ function normalizeSshRemotePtyLease(value: unknown): SshRemotePtyLease | null {
     return null
   }
   const state = raw.state ?? 'detached'
-  if (!['attached', 'detached', 'terminated', 'expired'].includes(state)) {
+  if (!['attached', 'detached', 'termination-pending', 'terminated', 'expired'].includes(state)) {
     return null
   }
   const now = Date.now()
@@ -5874,11 +5874,12 @@ export class Store {
     this.setHostWorkspaceSession(resolved, session)
   }
 
-  /** Retires an already archived tab under the host topology fence, then sync-flushes before kill authority escapes. */
+  /** Retires a tab and records SSH termination intent in one durable mutation before kill authority escapes. */
   retireArchivedTerminalTabAndFlush(args: {
     worktreeId: string
     tabId: string
     executionHostId: ExecutionHostId
+    sshTerminationTargetId?: string
   }): ReturnType<typeof retireArchivedTerminalTab> {
     const hostId = this.resolveHostId(args.executionHostId)
     const session = this.getWorkspaceSession(hostId)
@@ -5896,12 +5897,32 @@ export class Store {
       return { ...retired, closed: false, ptyIdsToKill: [] }
     }
     const previous = cloneWorkspaceSessionState(session)
+    const previousLeases = this.state.sshRemotePtyLeases?.map((lease) => ({ ...lease }))
     if (hostId === LOCAL_EXECUTION_HOST_ID) {
       this.state.workspaceSession = next
     } else {
       this.state.workspaceSessionsByHostId = {
         ...this.state.workspaceSessionsByHostId,
         [hostId]: next
+      }
+    }
+    if (args.sshTerminationTargetId) {
+      const relayPtyIds = new Set(
+        retired.ptyIdsToKill.map((ptyId) =>
+          this.getRelayPtyIdForSshLeaseStorage(args.sshTerminationTargetId!, ptyId)
+        )
+      )
+      const now = Date.now()
+      for (const lease of this.state.sshRemotePtyLeases ?? []) {
+        if (
+          lease.targetId === args.sshTerminationTargetId &&
+          relayPtyIds.has(lease.ptyId) &&
+          lease.state !== 'terminated' &&
+          lease.state !== 'expired'
+        ) {
+          lease.state = 'termination-pending'
+          lease.updatedAt = now
+        }
       }
     }
     try {
@@ -5915,6 +5936,7 @@ export class Store {
           [hostId]: previous
         }
       }
+      this.state.sshRemotePtyLeases = previousLeases
       throw error
     }
     const persisted = this.getWorkspaceSession(hostId)
@@ -6153,7 +6175,12 @@ export class Store {
     const leases = this.state.sshRemotePtyLeases?.filter((entry) =>
       this.sshRemotePtyLeaseMatchesBinding(entry, binding)
     )
-    return !leases?.some((lease) => lease.state === 'terminated' || lease.state === 'expired')
+    return !leases?.some(
+      (lease) =>
+        lease.state === 'termination-pending' ||
+        lease.state === 'terminated' ||
+        lease.state === 'expired'
+    )
   }
 
   private getRelayPtyIdForSshLeaseComparison(targetId: string, ptyId: string): string {
@@ -6204,6 +6231,7 @@ export class Store {
       this.state.sshRemotePtyLeases?.some(
         (lease) =>
           this.sshRemotePtyLeaseMatchesBinding(lease, binding) &&
+          lease.state !== 'termination-pending' &&
           lease.state !== 'terminated' &&
           lease.state !== 'expired'
       ) ?? false

@@ -77,6 +77,10 @@ import type { ArchivedTerminalPane } from '../../shared/terminal-archive-types'
 import { getUtf8ByteLength } from '../../shared/utf8-byte-limits'
 import { archiveLostTerminalWorker } from '../terminal-lost-worker-archive'
 import type { RelayPtyLostEntry } from '../../shared/pty-revive-protocol'
+import {
+  decodeRelayStagedPtySnapshots,
+  type RelayStagedPtySnapshots
+} from '../../shared/relay-staged-pty-snapshots'
 
 export type RelaySessionState = 'idle' | 'deploying' | 'ready' | 'reconnecting' | 'disposed'
 
@@ -411,6 +415,7 @@ export class SshRelaySession {
         throw new Error('Relay connection lost during provider registration')
       }
 
+      await this.retryTerminationPendingPtys()
       await this.reviveStagedPtysAfterProviderRegistration()
 
       // Why: dispose() during registration/attach already cleaned up, but this.mux was reassigned above — clean up the new mux so it doesn't leak.
@@ -996,9 +1001,10 @@ export class SshRelaySession {
     }
     try {
       this.pendingPtyReviveState = await provider.serialize(ptyIds, { formatVersion: 2 })
-    } catch {
+    } catch (error) {
       // The old relay may already be gone; leases and persisted hints remain the only honest fallback.
       this.pendingPtyReviveState = null
+      this.reportLostWorkerArchiveDiagnostic({ stage: 'stage-serialize', error })
     }
   }
 
@@ -1012,20 +1018,64 @@ export class SshRelaySession {
     if (!provider) {
       return
     }
+    const stagedSnapshots = decodeRelayStagedPtySnapshots(state)
     try {
       const revived = await provider.revive(state, { formatVersion: 2 })
       if (revived.mode !== 'typed') {
         return
       }
-      for (const lost of revived.outcome.lost) {
-        await this.archiveRelayLostWorker(lost)
-      }
-    } catch {
+      await this.archiveRelayLostWorkerGroups(revived.outcome.lost, stagedSnapshots)
+    } catch (error) {
       // A malformed capable response is fail-closed in the provider adapter; never retry revive here.
+      this.reportLostWorkerArchiveDiagnostic({ stage: 'revive', error })
     }
   }
 
-  private async archiveRelayLostWorker(lost: RelayPtyLostEntry): Promise<void> {
+  private async archiveRelayLostWorkerGroups(
+    lostEntries: readonly RelayPtyLostEntry[],
+    stagedSnapshots: RelayStagedPtySnapshots
+  ): Promise<void> {
+    const executionHostId = toSshExecutionHostId(this.targetId)
+    const entriesByTab = new Map<string, RelayPtyLostEntry[]>()
+    for (const lost of lostEntries) {
+      if (!lost.worktreeId || !lost.tabId || !lost.paneKey) {
+        continue
+      }
+      const key = `${lost.worktreeId}\u0000${lost.tabId}`
+      const entries = entriesByTab.get(key) ?? []
+      entries.push(lost)
+      entriesByTab.set(key, entries)
+    }
+
+    for (const entries of entriesByTab.values()) {
+      const [first] = entries
+      if (!first?.worktreeId || !first.tabId) {
+        continue
+      }
+      const session = this.store.getWorkspaceSession(executionHostId)
+      const workerEvidence = entries.find((entry) => {
+        const hint = entry.paneKey
+          ? session.terminalArchiveHintsByPaneKey?.[entry.paneKey]
+          : undefined
+        return entry.kind === 'recognized-worker' || classifyLostTerminal(hint).kind === 'worker'
+      })
+      if (!workerEvidence) {
+        continue
+      }
+      await this.archiveRelayLostWorker({
+        lost: workerEvidence,
+        session,
+        stagedSnapshots
+      })
+    }
+  }
+
+  private async archiveRelayLostWorker(args: {
+    lost: RelayPtyLostEntry
+    session: ReturnType<Store['getWorkspaceSession']>
+    stagedSnapshots: RelayStagedPtySnapshots
+  }): Promise<void> {
+    const { lost, session, stagedSnapshots } = args
     const worktreeId = lost.worktreeId
     const tabId = lost.tabId
     const paneKey = lost.paneKey
@@ -1033,11 +1083,6 @@ export class SshRelaySession {
       return
     }
     const executionHostId = toSshExecutionHostId(this.targetId)
-    const session = this.store.getWorkspaceSession(executionHostId)
-    const hint = session.terminalArchiveHintsByPaneKey?.[paneKey]
-    if (lost.kind !== 'recognized-worker' && classifyLostTerminal(hint).kind !== 'worker') {
-      return
-    }
     const captured = captureTerminalArchiveTab({ session, worktreeId, tabId })
     if (!captured) {
       return
@@ -1062,17 +1107,38 @@ export class SshRelaySession {
                 byteLength: getUtf8ByteLength(sidecar)
               }
         }
-        if (makePaneKey(tabId, leafId) !== paneKey || !lost.replayTail) {
+        const expectedSource = captured.sourcePaneIdentityByLeafId[leafId]
+        const staged = expectedSource
+          ? stagedSnapshots.snapshotsByPaneKey.get(expectedSource.paneKey)
+          : undefined
+        if (!staged || staged.sourceIncarnationId !== expectedSource?.incarnationId) {
+          this.reportLostWorkerArchiveDiagnostic({
+            stage:
+              stagedSnapshots.kind === 'legacy'
+                ? 'staged-state-legacy'
+                : stagedSnapshots.kind === 'missing'
+                  ? 'staged-state-missing'
+                  : stagedSnapshots.kind === 'invalid'
+                    ? 'envelope-parse'
+                    : 'archive',
+            tabId,
+            paneKey: expectedSource?.paneKey,
+            error: stagedSnapshots.kind === 'v2' ? undefined : new Error(stagedSnapshots.kind)
+          })
           return { kind: 'unavailable' }
         }
-        return lost.replayTail.data.length === 0
+        const replayTail = staged.replayTail
+        if (!replayTail || (replayTail.data.length === 0 && replayTail.truncated)) {
+          return { kind: 'unavailable' }
+        }
+        return replayTail.data.length === 0
           ? { kind: 'captured-empty' }
           : {
               kind: 'captured-bytes',
-              buffer: lost.replayTail.data,
+              buffer: replayTail.data,
               source: 'relay-tail',
-              truncated: lost.replayTail.truncated,
-              byteLength: lost.replayTail.byteLength
+              truncated: replayTail.truncated,
+              byteLength: replayTail.byteLength
             }
       }
     }
@@ -1083,6 +1149,7 @@ export class SshRelaySession {
         executionHostId,
         worktreeId,
         tabId,
+        sshTerminationTargetId: this.targetId,
         expectedSourcePaneIdentityByLeafId: captured.sourcePaneIdentityByLeafId,
         relayEvidence: lost
       },
@@ -1090,14 +1157,49 @@ export class SshRelaySession {
       snapshotSource
     })
     if (result.kind !== 'archived') {
+      this.reportLostWorkerArchiveDiagnostic({
+        stage: 'archive',
+        tabId,
+        paneKey,
+        error: new Error(result.code)
+      })
       return
     }
-    this.store.markSshRemotePtyLease(
-      this.targetId,
-      toRelaySshPtyId(this.targetId, lost.id),
-      'expired'
-    )
-    for (const ptyId of result.ptyIdsToKill) {
+    await this.shutdownArchivedRelayPtys(result.ptyIdsToKill, result.archive.id, tabId)
+  }
+
+  private async shutdownArchivedRelayPtys(
+    ptyIds: readonly string[],
+    archiveId: string,
+    tabId: string
+  ): Promise<void> {
+    const provider = getSshPtyProvider(this.targetId) as SshPtyProvider | undefined
+    const outcomes = provider
+      ? await Promise.allSettled(
+          ptyIds.map((ptyId) => provider.shutdown(ptyId, { immediate: true, keepHistory: false }))
+        )
+      : ptyIds.map(
+          () => ({ status: 'rejected', reason: new Error('SSH provider unavailable') }) as const
+        )
+    for (const [index, outcome] of outcomes.entries()) {
+      const ptyId = ptyIds[index]
+      if (!ptyId) {
+        continue
+      }
+      const succeeded = outcome.status === 'fulfilled' || isSshPtyNotFoundError(outcome.reason)
+      if (succeeded) {
+        this.store.markSshRemotePtyLease(
+          this.targetId,
+          toRelaySshPtyId(this.targetId, ptyId),
+          'terminated'
+        )
+      } else {
+        this.reportLostWorkerArchiveDiagnostic({
+          stage: 'shutdown',
+          tabId,
+          error: outcome.reason
+        })
+      }
       clearProviderPtyState(ptyId)
       deletePtyOwnership(ptyId)
       routeExternalPtyExit({
@@ -1105,16 +1207,79 @@ export class SshRelaySession {
         code: -1,
         lostWorkerRecovery: {
           kind: 'archived',
-          archiveId: result.archive.id
+          archiveId
         }
       })
     }
   }
 
+  private async retryTerminationPendingPtys(): Promise<void> {
+    const provider = getSshPtyProvider(this.targetId) as SshPtyProvider | undefined
+    if (!provider) {
+      return
+    }
+    const pending = this.store
+      .getSshRemotePtyLeases(this.targetId)
+      .filter((lease) => lease.state === 'termination-pending')
+    const outcomes = await Promise.allSettled(
+      pending.map((lease) =>
+        provider.shutdown(toAppSshPtyId(this.targetId, lease.ptyId), {
+          immediate: true,
+          keepHistory: false
+        })
+      )
+    )
+    for (const [index, outcome] of outcomes.entries()) {
+      const lease = pending[index]
+      if (!lease) {
+        continue
+      }
+      const appPtyId = toAppSshPtyId(this.targetId, lease.ptyId)
+      if (outcome.status === 'fulfilled' || isSshPtyNotFoundError(outcome.reason)) {
+        this.store.markSshRemotePtyLease(this.targetId, lease.ptyId, 'terminated')
+        clearProviderPtyState(appPtyId)
+        deletePtyOwnership(appPtyId)
+      } else {
+        this.reportLostWorkerArchiveDiagnostic({
+          stage: 'shutdown',
+          tabId: lease.tabId,
+          error: outcome.reason
+        })
+      }
+    }
+  }
+
+  private reportLostWorkerArchiveDiagnostic(args: {
+    stage:
+      | 'stage-serialize'
+      | 'staged-state-legacy'
+      | 'staged-state-missing'
+      | 'envelope-parse'
+      | 'revive'
+      | 'archive'
+      | 'shutdown'
+    tabId?: string
+    paneKey?: string
+    error?: unknown
+  }): void {
+    console.warn('[ssh-relay-session] lost-worker archive diagnostic', {
+      targetId: this.targetId,
+      tabId: args.tabId,
+      paneKey: args.paneKey,
+      stage: args.stage,
+      error: args.error instanceof Error ? args.error.message : undefined
+    })
+  }
+
   private async reattachKnownPtys(shouldContinue: () => boolean): Promise<void> {
     const activeLeases = this.store
       .getSshRemotePtyLeases(this.targetId)
-      .filter((lease) => lease.state !== 'terminated' && lease.state !== 'expired')
+      .filter(
+        (lease) =>
+          lease.state !== 'termination-pending' &&
+          lease.state !== 'terminated' &&
+          lease.state !== 'expired'
+      )
     const activeLeaseByPtyId = new Map(activeLeases.map((lease) => [lease.ptyId, lease]))
     const leasedPtyIds = activeLeases.map((lease) => lease.ptyId)
     // Why: pass pane identity so the relay can reject cross-generation id collisions; tabId falls back for pre-leafId leases.

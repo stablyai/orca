@@ -17,6 +17,7 @@ export type TerminalLostWorkerArchiveCandidate = {
   worktreeId: string
   tabId: string
   runtimeEnvironmentId?: string
+  sshTerminationTargetId?: string
   expectedSourcePaneIdentityByLeafId: Record<string, TerminalArchiveSourcePaneIdentity>
   relayEvidence?: Pick<
     RelayPtyLostEntry,
@@ -39,6 +40,7 @@ export type TerminalLostWorkerArchiveOwner = {
     worktreeId: string
     tabId: string
     executionHostId: ExecutionHostId
+    sshTerminationTargetId?: string
   }): { closed: boolean; ptyIdsToKill: string[] }
   createTerminalArchiveStore(snapshotSource: TerminalArchiveSnapshotSource): TerminalArchiveStore
 }
@@ -164,7 +166,10 @@ export async function archiveLostTerminalWorker(args: {
     const retired = args.owner.retireArchivedTerminalTabAndFlush({
       worktreeId: args.candidate.worktreeId,
       tabId: args.candidate.tabId,
-      executionHostId: args.candidate.executionHostId
+      executionHostId: args.candidate.executionHostId,
+      ...(args.candidate.sshTerminationTargetId
+        ? { sshTerminationTargetId: args.candidate.sshTerminationTargetId }
+        : {})
     })
     if (!retired.closed) {
       return { kind: 'error', code: 'stale-source' }

@@ -1009,7 +1009,12 @@ export function registerSshHandlers(
     const provider = getSshPtyProvider(args.targetId)
     const leasedIds = persistedStore!
       .getSshRemotePtyLeases(args.targetId)
-      .filter((lease) => lease.state !== 'terminated' && lease.state !== 'expired')
+      .filter(
+        (lease) =>
+          lease.state !== 'termination-pending' &&
+          lease.state !== 'terminated' &&
+          lease.state !== 'expired'
+      )
       .map((lease) => lease.ptyId)
     const ptyIdsByRelayId = new Map<string, string>()
     for (const ptyId of getPtyIdsForConnection(args.targetId)) {

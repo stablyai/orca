@@ -144,6 +144,7 @@ function configureStagedPtyRevive(args: {
     } as unknown as ReturnType<typeof getSshPtyProvider>)
     .mockReturnValue({
       revive: args.revive,
+      shutdown: vi.fn().mockResolvedValue(undefined),
       attachForReconnect,
       dispose: vi.fn()
     } as unknown as ReturnType<typeof getSshPtyProvider>)
@@ -251,7 +252,7 @@ describe('SshRelaySession lost-worker archive', () => {
     expect(mockStore.markSshRemotePtyLease).toHaveBeenCalledWith(
       'target-1',
       archived ? 'pty-lost' : 'pty-fallback',
-      archived ? 'expired' : 'attached'
+      archived ? 'terminated' : 'attached'
     )
     if (archived) {
       expect(routeExternalPtyExit).toHaveBeenCalledWith({
