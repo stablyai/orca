@@ -65,8 +65,23 @@ const TaskResumeState = z
     githubItemsPreset: z.string().nullable().optional(),
     githubItemsQuery: z.string().optional(),
     githubProjectHiddenFieldIdsByView: z.record(z.string(), z.array(z.string())).optional(),
+    // Why: this schema is strict — every TaskResumeState field the renderer
+    // persists must be listed or paired web/mobile ui.set updates are rejected
+    // wholesale (see shared/types.ts TaskResumeState).
+    linearMode: z.enum(['issues', 'projects', 'views']).optional(),
     linearPreset: z.enum(['assigned', 'created', 'all', 'completed']).optional(),
-    linearQuery: z.string().optional()
+    linearQuery: z.string().optional(),
+    linearContext: z
+      .object({
+        kind: z.enum(['project', 'view']),
+        id: z.string(),
+        workspaceId: z.string(),
+        model: z.enum(['issue', 'project']).optional()
+      })
+      .strict()
+      .optional(),
+    jiraPreset: z.enum(['assigned', 'reported', 'all', 'done']).optional(),
+    jiraQuery: z.string().optional()
   })
   .strict()
 const WorkspaceCleanupDismissal = z
