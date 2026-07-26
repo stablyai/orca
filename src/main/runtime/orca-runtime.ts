@@ -2514,6 +2514,7 @@ export class OrcaRuntimeService {
   // ptyId keeps active TUI redraws independent of the total open terminal count.
   private leavesByPtyId = new Map<string, RuntimeLeafRecord[]>()
   private handles = new Map<string, TerminalHandleRecord>()
+  private historicalPaneKeys = new Map<string, string>()
   private handleByLeafKey = new Map<string, string>()
   private handleByPtyId = new Map<string, string>()
   private controllerTerminalIdentityByPtyId = new Map<
@@ -23941,6 +23942,12 @@ export class OrcaRuntimeService {
     this.graphStatus = 'reloading'
     this.setTerminalSideEffectConsumerAvailable(false)
     this.rememberDetachedPreAllocatedLeaves()
+    // Why: preserve handle->pane mapping before bulk graph teardown for historical pane key recovery
+    for (const [handle, record] of this.handles) {
+      if (isTerminalLeafId(record.leafId)) {
+        this.historicalPaneKeys.set(handle, makePaneKey(record.tabId, record.leafId))
+      }
+    }
     this.handles.clear()
     this.handleByLeafKey.clear()
     // Why: handleByPtyId (pre-allocated CLI handles) survives reloads so CLI agents keep control; adoptPreAllocatedHandle re-links on the new graph.
@@ -23972,6 +23979,12 @@ export class OrcaRuntimeService {
     this.tabs.clear()
     this.leaves.clear()
     this.leavesByPtyId.clear()
+    // Why: preserve handle->pane mapping before bulk graph teardown for historical pane key recovery
+    for (const [handle, record] of this.handles) {
+      if (isTerminalLeafId(record.leafId)) {
+        this.historicalPaneKeys.set(handle, makePaneKey(record.tabId, record.leafId))
+      }
+    }
     this.handles.clear()
     this.handleByLeafKey.clear()
     // Why: pre-allocated CLI handles must survive graph unavailability so they can be re-adopted on reconnect.
@@ -26626,13 +26639,10 @@ export class OrcaRuntimeService {
       return livePty.pty.paneKey
     }
     const record = this.handles.get(handle)
-    if (!record || record.runtimeId !== this.runtimeId) {
-      return null
+    if (record && record.runtimeId === this.runtimeId && isTerminalLeafId(record.leafId)) {
+      return makePaneKey(record.tabId, record.leafId)
     }
-    if (!isTerminalLeafId(record.leafId)) {
-      return null
-    }
-    return makePaneKey(record.tabId, record.leafId)
+    return this.historicalPaneKeys.get(handle) ?? null
   }
 
   private setPtyManagementTitleFromObservedTitle(

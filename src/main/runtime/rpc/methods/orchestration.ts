@@ -204,6 +204,20 @@ const ResetParams = z
     }
   })
 
+function resolveCanonicalHandle(handle: string, runtime: any): string {
+  if (isGroupAddress(handle)) {
+    return handle
+  }
+  const paneKey = runtime.getTerminalPaneKey(handle)
+  if (paneKey) {
+    const liveHandle = runtime.getTerminalHandleForPaneKey(paneKey)
+    if (liveHandle && liveHandle !== handle) {
+      return liveHandle
+    }
+  }
+  return handle
+}
+
 export const ORCHESTRATION_METHODS: RpcMethod[] = [
   defineMethod({
     name: 'orchestration.send',
@@ -213,12 +227,13 @@ export const ORCHESTRATION_METHODS: RpcMethod[] = [
       const from = params.from ?? 'unknown'
       // Why: older shells may lack ORCA_PANE_KEY, but the runtime still knows the pane behind their handle; persist that authority.
       const senderPaneKey = params.senderPaneKey ?? runtime.getTerminalPaneKey(from) ?? undefined
+      const to = resolveCanonicalHandle(params.to, runtime)
 
-      if (!isGroupAddress(params.to)) {
+      if (!isGroupAddress(to)) {
         // Point-to-point — existing single-recipient behavior
         const msg = db.insertMessage({
           from,
-          to: params.to,
+          to,
           subject: params.subject,
           body: params.body,
           type: params.type as MessageType,
@@ -236,24 +251,24 @@ export const ORCHESTRATION_METHODS: RpcMethod[] = [
           }
           if (reconciled.action === 'rejected') {
             const rejection = db.getMessageById(msg.id) ?? msg
-            runtime.deliverPendingMessagesForHandle(params.to)
-            runtime.notifyMessageArrived(params.to, rejection.type)
+            runtime.deliverPendingMessagesForHandle(to)
+            runtime.notifyMessageArrived(to, rejection.type)
             return { message: rejection, lifecycle: reconciled }
           }
         }
-        runtime.deliverPendingMessagesForHandle(params.to)
-        runtime.notifyMessageArrived(params.to, msg.type)
+        runtime.deliverPendingMessagesForHandle(to)
+        runtime.notifyMessageArrived(to, msg.type)
         return { message: msg }
       }
 
       // Why: fan out one message per recipient (independent read-tracking) but share a thread_id for correlation (Section 4.5).
       const { terminals } = await runtime.listTerminals()
-      const handles = resolveGroupAddress(params.to, from, terminals, (handle: string) =>
+      const handles = resolveGroupAddress(to, from, terminals, (handle: string) =>
         runtime.getAgentStatusForHandle(handle)
       )
 
       if (handles.length === 0) {
-        throw new Error(`No recipients resolved for group address: ${params.to}`)
+        throw new Error(`No recipients resolved for group address: ${to}`)
       }
 
       const threadId = params.threadId ?? `thread_${Date.now()}`
@@ -462,15 +477,16 @@ export const ORCHESTRATION_METHODS: RpcMethod[] = [
 
       // Why: dry-run previews the preamble without mutating state, so it skips the ready-status check and uses a placeholder dispatchId.
       if (params.dryRun) {
+        const to = params.to ? resolveCanonicalHandle(params.to, runtime) : undefined
         const preamble = buildDispatchPreamble({
           taskId: task.id,
           dispatchId: 'ctx_dryrun',
           taskSpec: task.spec,
           coordinatorHandle: params.from ?? 'coordinator',
-          workerHandle: params.to ?? 'worker',
+          workerHandle: to ?? 'worker',
           devMode: params.devMode,
-          ...(params.to
-            ? { cliCommand: runtime.getTerminalOrchestrationCliCommand(params.to) }
+          ...(to
+            ? { cliCommand: runtime.getTerminalOrchestrationCliCommand(to) }
             : {})
         })
         return { dispatch: null, injected: false, dryRun: true, preamble }
@@ -479,7 +495,7 @@ export const ORCHESTRATION_METHODS: RpcMethod[] = [
       if (!params.to) {
         throw new Error('Missing --to')
       }
-      const to = params.to
+      const to = resolveCanonicalHandle(params.to, runtime)
 
       if (task.status !== 'ready') {
         throw new Error(`Task ${params.task} is ${task.status}; only ready tasks can be dispatched`)
@@ -580,6 +596,7 @@ export const ORCHESTRATION_METHODS: RpcMethod[] = [
 
       const db = runtime.getOrchestrationDb()
       const from = params.from ?? 'unknown'
+      const to = resolveCanonicalHandle(params.to, runtime)
       // Why: echoed on every return so a clamped caller reports the budget actually waited, not the one it asked for.
       const timeoutMs = clampAskTimeoutMs(params.timeoutMs)
       const options =
@@ -591,14 +608,14 @@ export const ORCHESTRATION_METHODS: RpcMethod[] = [
       const payload = JSON.stringify({ question: params.question, options })
       const outbound = db.insertMessage({
         from,
-        to: params.to,
+        to,
         subject: 'Question',
         body: params.question,
         type: 'decision_gate',
         payload
       })
-      runtime.deliverPendingMessagesForHandle(params.to)
-      runtime.notifyMessageArrived(params.to, outbound.type)
+      runtime.deliverPendingMessagesForHandle(to)
+      runtime.notifyMessageArrived(to, outbound.type)
 
       const threadId = outbound.id
       const deadline = Date.now() + timeoutMs
