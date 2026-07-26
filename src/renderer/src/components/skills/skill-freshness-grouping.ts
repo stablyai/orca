@@ -56,11 +56,21 @@ export function locationChip(installation: SkillFreshnessInstallation): SkillLoc
   }
 }
 
+function placementNeedsDialogAttention(installation: SkillFreshnessInstallation): boolean {
+  // Why: the status pill escalates any non-current placement; the dialog must list
+  // the same set or amber badges have no reachable explanation (#10633).
+  return (
+    installation.status === 'outdated' ||
+    installation.status === 'unrecognized' ||
+    installation.status === 'inaccessible'
+  )
+}
+
 /**
  * Groups installations by skill for the update modal and derives each skill's
- * update disposition. Only skills with an out-of-date official copy are returned —
- * up-to-date, unrecognized-only, and unreadable-only skills have nothing to change
- * here, so they are omitted entirely.
+ * update disposition. Skills with out-of-date official copies, or with placements
+ * the pill marks needs-attention (unrecognized / inaccessible), are returned so
+ * Details never contradicts the amber badge (#10633). Fully-current skills are omitted.
  *
  * `alwaysIncludeNames` overrides that filter. A successful update makes every
  * targeted skill current, which would otherwise drop its row the instant the
@@ -82,7 +92,7 @@ export function groupSkillFreshness(
   }
   const groups: SkillFreshnessGroupModel[] = []
   for (const [name, entries] of byName) {
-    if (!pinned.has(name) && !entries.some((entry) => entry.status === 'outdated')) {
+    if (!pinned.has(name) && !entries.some(placementNeedsDialogAttention)) {
       continue
     }
     const locations = entries

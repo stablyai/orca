@@ -39,16 +39,41 @@ describe('groupSkillFreshness', () => {
     ])
   })
 
-  it('hides skills with nothing out of date (current, unrecognized-only, unreadable-only)', () => {
+  it('hides skills that are fully current with nothing to review', () => {
+    const groups = groupSkillFreshness([placement('orca-cli', { status: 'current' })], [])
+    expect(groups).toEqual([])
+  })
+
+  it('lists unrecognized-only and inaccessible skills so the amber pill has an explanation', () => {
+    // Why: foreign plugin-cache copies (e.g. Codex bundled computer-use) share a
+    // name with Orca skills and light needs-attention; Details must not claim all-clear.
     const groups = groupSkillFreshness(
       [
-        placement('orca-cli', { status: 'current' }),
-        placement('dataviz', { status: 'unrecognized', topology: 'independent-copy' }),
+        placement('computer-use', { status: 'current' }),
+        placement('computer-use', {
+          rootId: 'plugin-cache',
+          unresolvedPath: '/home/.codex/plugins/cache/computer-use/SKILL.md',
+          status: 'unrecognized',
+          topology: 'plugin-cache'
+        }),
         placement('linear-tickets', { status: 'inaccessible' })
       ],
       []
     )
-    expect(groups).toEqual([])
+    expect(groups.map((group) => group.name)).toEqual(['computer-use', 'linear-tickets'])
+    expect(groups[0]?.status).toBe('cannot-update')
+    expect(groups[0]?.locations).toEqual([
+      { id: expect.any(String), path: '/home/.agents/skills/computer-use', chip: 'current' },
+      {
+        id: expect.any(String),
+        path: '/home/.codex/plugins/cache/computer-use/SKILL.md',
+        // Why: status (unrecognized) wins over topology (plugin-cache) in locationChip.
+        chip: 'unrecognized'
+      }
+    ])
+    expect(groups[1]?.locations).toEqual([
+      { id: expect.any(String), path: '/home/.agents/skills/linear-tickets', chip: 'inaccessible' }
+    ])
   })
 
   it('groups a blocked skill and flags the culprit location, not the main copy', () => {

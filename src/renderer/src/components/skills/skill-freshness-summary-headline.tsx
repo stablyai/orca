@@ -21,8 +21,8 @@ export function summarizeInventory(
   if (inventory.eligibleUpdateNames.length > 0) {
     return 'eligible'
   }
-  // Why: a named skill the update can't converge outranks a coverage gap — the gap
-  // says something might be unchecked, the group says something definitely is wrong.
+  // Why: with nothing eligible, blocked groups (outdated-unreachable, unrecognized,
+  // inaccessible) outrank a coverage gap so the amber pill is never explanation-free (#10633).
   if (hasBlockedGroup) {
     return 'attention'
   }
