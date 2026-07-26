@@ -29,20 +29,24 @@ function watermarkStorageKey(hostId: string): string {
 // A null epoch means "the counter this seq came from is unknown" — a legacy
 // watermark, or nothing stored. It can never be assumed to be the live counter.
 export type PersistedWatermark = { seq: number; epoch: string | null }
+// `stored` is the record's existence, independent of its seq: it answers "has this
+// device ever been subscribed to this host", which is what a cold open needs to tell
+// a returning device from a first pairing. A seq of 0 is a real answer, not an absence.
+export type LoadedWatermark = PersistedWatermark & { stored: boolean }
 
 function coerceSeq(value: unknown): number {
   const parsed = typeof value === 'number' ? value : Number(value)
   return Number.isFinite(parsed) && parsed > 0 ? parsed : 0
 }
 
-export async function loadWatermark(hostId: string): Promise<PersistedWatermark> {
+export async function loadWatermark(hostId: string): Promise<LoadedWatermark> {
   try {
     const raw = await AsyncStorage.getItem(watermarkStorageKey(hostId))
     if (raw != null) {
       const parsed = JSON.parse(raw) as { seq?: unknown; epoch?: unknown }
       const epoch =
         typeof parsed.epoch === 'string' && parsed.epoch.length > 0 ? parsed.epoch : null
-      return { seq: coerceSeq(parsed.seq), epoch }
+      return { seq: coerceSeq(parsed.seq), epoch, stored: true }
     }
   } catch {
     // Unreadable or malformed: fall through to the legacy key rather than throw.
@@ -51,18 +55,22 @@ export async function loadWatermark(hostId: string): Promise<PersistedWatermark>
     const legacy = await AsyncStorage.getItem(
       LEGACY_SEQ_STORAGE_KEY_PREFIX + encodeURIComponent(hostId)
     )
-    return { seq: coerceSeq(legacy), epoch: null }
+    return { seq: coerceSeq(legacy), epoch: null, stored: legacy != null }
   } catch {
-    return { seq: 0, epoch: null }
+    return { seq: 0, epoch: null, stored: false }
   }
 }
 
 export async function clearWatermark(hostId: string): Promise<void> {
-  try {
-    await AsyncStorage.removeItem(watermarkStorageKey(hostId))
-  } catch {
-    // Best-effort; a surviving key is re-validated by epoch on the next pair anyway.
-  }
+  // Why both keys: loadWatermark falls back to the legacy one, so removing only the
+  // current key would let a re-paired host resurrect a pre-#8591 seq from a counter
+  // lifetime that is long gone — the exact stale cut this fix removes.
+  await Promise.all([
+    AsyncStorage.removeItem(watermarkStorageKey(hostId)).catch(() => {}),
+    AsyncStorage.removeItem(LEGACY_SEQ_STORAGE_KEY_PREFIX + encodeURIComponent(hostId)).catch(
+      () => {}
+    )
+  ])
 }
 
 export async function saveWatermark(hostId: string, watermark: PersistedWatermark): Promise<void> {
@@ -130,10 +138,6 @@ export type HostNotificationSession = {
   seen: ReturnType<typeof createSeenNotificationGuard>
   // False only until the host's first subscription reaches 'ready' — a true cold open.
   connectedBefore: boolean
-  // Why: gates catch-up until the persisted watermark has been read once for this
-  // host. Per host, not per subscription: a reconnect that races the very first
-  // AsyncStorage read would otherwise fetch from seq 0 and re-push the buffer.
-  watermarkLoaded: boolean
   // Why (#8591): distinguishes "this device has delivered for this host before"
   // from a first-ever pairing. Only the former may catch up on a cold open — a
   // brand-new pairing fetching from seq 0 would push the desktop's whole buffer
@@ -154,7 +158,6 @@ export function getHostNotificationSession(hostId: string): HostNotificationSess
       lastDeliveredEpoch: null,
       seen: createSeenNotificationGuard(),
       connectedBefore: false,
-      watermarkLoaded: false,
       hadStoredWatermark: false,
       watermarkSeeded: null
     }
@@ -198,14 +201,15 @@ export function adoptNotificationEpoch(
 // Why: seed the watermark lazily so subscribe() doesn't block on an AsyncStorage read.
 // Only the first subscription for a host needs it; later ones inherit the live value.
 export function seedWatermarkFromStorage(session: HostNotificationSession, hostId: string): void {
-  if (session.watermarkLoaded || session.watermarkSeeded) {
+  if (session.watermarkSeeded) {
     return
   }
-  session.watermarkSeeded = loadWatermark(hostId).then(({ seq, epoch }) => {
-    // Why: a stored seq is the proof this device already delivered for this host —
-    // the signal a cold open needs to tell "catch me up" from "first pairing".
-    // Recorded before the epoch check below, which may legitimately zero the seq.
-    if (seq > 0) {
+  session.watermarkSeeded = loadWatermark(hostId).then(({ seq, epoch, stored }) => {
+    // Why the record's existence and not `seq > 0`: adoptNotificationEpoch persists
+    // `{seq: 0, epoch}` when it voids a watermark, so a device that HAS delivered for
+    // this host reloads as seq 0. Keying on the seq would read that as a first pairing
+    // and skip catch-up for the whole window the epoch change was meant to recover.
+    if (stored) {
       session.hadStoredWatermark = true
     }
     // Why the epoch comparison: this read can land AFTER 'ready' already adopted a
@@ -219,7 +223,6 @@ export function seedWatermarkFromStorage(session: HostNotificationSession, hostI
         session.lastDeliveredEpoch = epoch
       }
     }
-    session.watermarkLoaded = true
   })
 }
 
