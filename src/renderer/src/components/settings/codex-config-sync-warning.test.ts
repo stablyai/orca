@@ -5,7 +5,9 @@ const systemConfigPath = '/home/user/.codex/config.toml'
 
 describe('getCodexConfigSyncWarning', () => {
   it('stays silent while syncing normally', () => {
-    expect(getCodexConfigSyncWarning({ state: 'synced', reason: null, systemConfigPath })).toBeNull()
+    expect(
+      getCodexConfigSyncWarning({ state: 'synced', reason: null, systemConfigPath })
+    ).toBeNull()
   })
 
   it('stays silent before the status has loaded', () => {

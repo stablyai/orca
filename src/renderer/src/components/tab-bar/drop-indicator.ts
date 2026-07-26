@@ -28,10 +28,14 @@ export function getDropIndicatorClasses(dropIndicator: DropIndicator): string {
 export const ACTIVE_TAB_INDICATOR_CLASSES =
   'pointer-events-none absolute inset-x-0 bottom-0 h-[2px] bg-[color-mix(in_srgb,var(--foreground)_60%,var(--card))] z-10'
 
-export function getTabRootStateClasses(isActive: boolean): string {
-  return isActive
-    ? 'bg-[color-mix(in_srgb,var(--foreground)_6%,var(--card))] text-foreground'
-    : 'bg-card text-muted-foreground hover:text-foreground'
+export function getTabRootStateClasses(isActive: boolean, isSelected?: boolean): string {
+  if (isActive) {
+    return 'bg-[color-mix(in_srgb,var(--foreground)_6%,var(--card))] text-foreground'
+  }
+  if (isSelected) {
+    return 'bg-[color-mix(in_srgb,var(--foreground)_4%,var(--card))] text-foreground'
+  }
+  return 'bg-card text-muted-foreground hover:text-foreground'
 }
 
 export function getTabStripBorderClasses(

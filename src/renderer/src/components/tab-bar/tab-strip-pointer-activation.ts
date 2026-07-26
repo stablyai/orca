@@ -21,7 +21,7 @@ export function useTabStripPointerActivation({
   onActivate,
   disabled = false
 }: {
-  onActivate: () => void
+  onActivate: (event?: PointerEvent) => void
   disabled?: boolean
 }): {
   onPointerDown: (
@@ -68,7 +68,7 @@ export function useTabStripPointerActivation({
         // Why: packaged Chromium can deliver a stale first pointermove after
         // focus; the final release position is the click/drag authority.
         if (!wasDrag) {
-          onActivateRef.current()
+          onActivateRef.current(upEvent)
         }
       }
       const onPointerCancel = (): void => {
