@@ -3183,6 +3183,7 @@ export function registerPtyHandlers(
         const provider = tryGetProviderForPty(ptyId)
         const sshTargetId = parseExecutionHostId(args.executionHostId)
         const isSsh = sshTargetId?.kind === 'ssh'
+        const expectedIncarnationId = ptyIncarnationById.get(ptyId)
         if (isSsh) {
           beginArchivedSshPtyExitRecovery(ptyId, args.archiveId)
         }
@@ -3225,7 +3226,7 @@ export function registerPtyHandlers(
           clearProviderPtyState(ptyId)
           ptyOwnership.delete(ptyId)
           markClaudePtyExited(ptyId)
-          runtime?.onPtyExit(ptyId, -1, ptyIncarnationById.get(ptyId))
+          runtime?.onPtyExit(ptyId, -1, expectedIncarnationId)
         }
         const recoveryArchiveId = isSsh ? takeArchivedSshPtyExitRecovery(ptyId) : args.archiveId
         if (recoveryArchiveId) {

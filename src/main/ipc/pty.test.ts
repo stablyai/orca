@@ -8,7 +8,7 @@ import {
 } from '../../shared/terminal-input'
 import { CLIPBOARD_TEXT_MEASURE_YIELD_CODE_UNITS } from '../../shared/clipboard-text'
 import { redactPtyIdForDiagnostics } from '../../shared/pty-delivery-diagnostics'
-import { FLOATING_TERMINAL_WORKTREE_ID } from '../../shared/constants'
+import { FLOATING_TERMINAL_WORKTREE_ID, getDefaultWorkspaceSession } from '../../shared/constants'
 import type { TuiAgent } from '../../shared/types'
 import type { AgentSessionOwnerBinding } from '../../shared/agent-session-host-authority'
 import { MAX_CLAIMED_AGENT_PTY_OWNER_ENTRIES } from '../../shared/claimed-agent-pty-owner'
@@ -251,6 +251,7 @@ import {
 } from '../providers/ssh-pty-errors'
 import { _resetWslCachesForTests, _setWslCachesForTests } from '../wsl'
 import { acquireWatcherRemovalGate } from './watcher-removal-gate'
+import { TerminalArchiveStore } from '../terminal-archive-store'
 
 const POWERSHELL_OSC133_ARGS = [
   '-NoLogo',
@@ -589,6 +590,136 @@ describe('registerPtyHandlers', () => {
     } as never)
     return spawn
   }
+
+  it('keeps a failed archive shutdown fenced to the incarnation captured before cleanup', async () => {
+    const ptyId = 'daemon-archive-reused'
+    const oldIncarnationId = 'incarnation-old'
+    const replacementIncarnationId = 'incarnation-replacement'
+    const leafId = '11111111-1111-4111-8111-111111111111'
+    const tabId = 'tab-archive-reused'
+    const worktreeId = 'repo-1::/worktree'
+    const shutdownStarted = makeDeferred()
+    const releaseShutdown = makeDeferred()
+    setLocalPtyProvider({
+      spawn: vi.fn(),
+      write: vi.fn(),
+      resize: vi.fn(),
+      kill: vi.fn(),
+      shutdown: vi.fn(async () => {
+        shutdownStarted.resolve()
+        await releaseShutdown.promise
+        throw new Error('daemon unavailable')
+      }),
+      sendSignal: vi.fn(),
+      getCwd: vi.fn(),
+      getInitialCwd: vi.fn(),
+      clearBuffer: vi.fn(),
+      acknowledgeDataEvent: vi.fn(),
+      hasChildProcesses: vi.fn(),
+      getForegroundProcess: vi.fn(),
+      confirmForegroundProcess: vi.fn(),
+      serialize: vi.fn(),
+      revive: vi.fn(),
+      onData: vi.fn(() => () => {}),
+      onReplay: vi.fn(() => () => {}),
+      onExit: vi.fn(() => () => {}),
+      listProcesses: vi.fn(async () => []),
+      attach: vi.fn(),
+      getDefaultShell: vi.fn(),
+      getProfiles: vi.fn()
+    } as never)
+    const session = {
+      ...getDefaultWorkspaceSession(),
+      tabsByWorktree: {
+        [worktreeId]: [
+          {
+            id: tabId,
+            worktreeId,
+            title: 'Worker',
+            customTitle: null,
+            color: null,
+            sortOrder: 0,
+            createdAt: 1,
+            ptyId
+          }
+        ]
+      },
+      terminalLayoutsByTabId: {
+        [tabId]: {
+          root: { type: 'leaf' as const, leafId },
+          activeLeafId: leafId,
+          expandedLeafId: null,
+          ptyIdsByLeafId: { [leafId]: ptyId }
+        }
+      },
+      terminalPtyIncarnationsByPaneKey: { [makePaneKey(tabId, leafId)]: oldIncarnationId },
+      terminalArchiveHintsByPaneKey: {
+        [makePaneKey(tabId, leafId)]: { launchAgent: 'codex' as const, startedAt: 1 }
+      }
+    }
+    let archives = {}
+    const store = {
+      getWorkspaceSession: vi.fn(() => session),
+      createTerminalArchiveStore: vi.fn(
+        (snapshotSource) =>
+          new TerminalArchiveStore(
+            {
+              getTerminalArchives: () => archives,
+              replaceTerminalArchivesAndFlush: (next) => {
+                archives = next
+              },
+              getTerminalArchiveRetentionDays: () => 7,
+              isExecutionHostReachable: () => true,
+              worktreeExists: () => true,
+              isTerminalArchiveRequestOwned: () => true,
+              isTerminalScrollbackSnapshotLive: () => false,
+              commitLostTerminalArchiveAndRetire: (nextArchives) => {
+                archives = nextArchives
+                return { closed: true, ptyIdsToKill: [ptyId], session }
+              }
+            } as never,
+            snapshotSource,
+            () => 100
+          )
+      )
+    }
+    const runtime = {
+      setPtyController: vi.fn(),
+      onPtyExit: vi.fn(),
+      onPtyData: vi.fn()
+    }
+
+    restorePtyIncarnation(ptyId, oldIncarnationId)
+    registerPtyHandlers(
+      mainWindow as never,
+      runtime as never,
+      undefined,
+      undefined,
+      undefined,
+      store as never
+    )
+    const archive = handlers.get('pty:handleLostTerminalCandidate')
+    if (!archive) {
+      throw new Error('missing lost-worker archive handler')
+    }
+    const pending = archive(mainWindowIpcEvent, {
+      worktreeId,
+      tabId,
+      leafId,
+      reason: 'daemon-worker-lost',
+      executionHostId: 'local',
+      snapshotsByLeafId: {
+        [leafId]: { buffer: '', source: 'renderer', truncated: false, byteLength: 0 }
+      }
+    })
+    await shutdownStarted.promise
+    restorePtyIncarnation(ptyId, replacementIncarnationId)
+    releaseShutdown.resolve()
+
+    await expect(pending).resolves.toMatchObject({ kind: 'archived' })
+    expect(runtime.onPtyExit).toHaveBeenCalledWith(ptyId, -1, oldIncarnationId)
+    clearProviderPtyState(ptyId)
+  })
 
   it('guards recognized daemon workers with agent-resume payloads unless the wake is explicitly controlled', async () => {
     const daemonSpawn = installDaemonTestProvider()
