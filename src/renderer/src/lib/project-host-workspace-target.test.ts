@@ -190,6 +190,55 @@ describe('project-host workspace target resolution', () => {
     })
   })
 
+  describe('legacy duplicate repository ids', () => {
+    const localRepo = makeRepo('orca', { path: '/local/orca' })
+    const runtimeRepo = makeRepo('orca', {
+      path: '/runtime/orca',
+      executionHostId: 'runtime:gpu-1'
+    })
+    const project = makeProject('github:stablyai/orca', ['orca'])
+    const projectHostSetups = [
+      makeSetup('runtime-orca', project.id, 'runtime:gpu-1', 'orca'),
+      makeSetup('local-orca', project.id, 'local', 'orca')
+    ]
+
+    it('keeps an explicit legacy repository selection on its first matching host', () => {
+      const resolution = resolveWorkspaceCreationTarget({
+        eligibleRepos: [localRepo, runtimeRepo],
+        projects: [project],
+        projectHostSetups,
+        initialRepoId: 'orca'
+      })
+
+      expect(resolution).toMatchObject({
+        status: 'ready',
+        target: {
+          projectHostSetupId: 'local-orca',
+          hostId: 'local',
+          repo: { path: '/local/orca' }
+        }
+      })
+    })
+
+    it('preserves the focused host selected for a legacy repository id', () => {
+      const resolution = resolveWorkspaceCreationTarget({
+        eligibleRepos: [localRepo, runtimeRepo],
+        projects: [project],
+        projectHostSetups,
+        focusedHostScope: 'runtime:gpu-1'
+      })
+
+      expect(resolution).toMatchObject({
+        status: 'ready',
+        target: {
+          projectHostSetupId: 'runtime-orca',
+          hostId: 'runtime:gpu-1',
+          repo: { path: '/runtime/orca' }
+        }
+      })
+    })
+  })
+
   it('does not merge same-name repos without shared project identity', () => {
     const repos = [
       makeRepo('personal-orca', { displayName: 'orca' }),

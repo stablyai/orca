@@ -6,7 +6,7 @@ import {
 } from '../../../shared/execution-host'
 import { projectHostSetupProjectionFromRepos } from '../../../shared/project-host-setup-projection'
 import type { Project, ProjectHostSetup, Repo } from '../../../shared/types'
-import { resolveComposerRepoId } from './new-workspace-composer-repo'
+import { resolveComposerRepo } from './new-workspace-composer-repo'
 
 export type WorkspaceCreationTarget = {
   projectId: string
@@ -201,15 +201,18 @@ export function resolveWorkspaceCreationTarget(
     }
   }
 
-  const repoId = resolveComposerRepoId(input)
-  const legacyRepo = repoId ? eligibleRepos.find((repo) => repo.id === repoId) : null
+  const legacyRepo = resolveComposerRepo(input)
   if (!legacyRepo) {
     return { status: 'unavailable', reason: 'no-eligible-repo' }
   }
 
   const legacySetup =
-    setups.find((setup) => setup.repoId === legacyRepo.id && isReadySetup(setup)) ??
-    projectHostSetupProjectionFromRepos([legacyRepo]).setups[0]
+    setups.find(
+      (setup) =>
+        setup.repoId === legacyRepo.id &&
+        setup.hostId === getRepoExecutionHostId(legacyRepo) &&
+        isReadySetup(setup)
+    ) ?? projectHostSetupProjectionFromRepos([legacyRepo]).setups[0]
   const legacyTarget = legacySetup ? createTarget(legacySetup, eligibleRepos) : null
   if (!legacyTarget) {
     return { status: 'unavailable', reason: 'setup-not-found' }

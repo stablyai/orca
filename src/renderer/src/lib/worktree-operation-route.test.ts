@@ -60,6 +60,37 @@ describe('resolveWorktreeOperationRouteResult', () => {
     })
   })
 
+  it('merges one paired HUB transport into an exact SSH repository route', () => {
+    expect(
+      resolveWorktreeOperationRouteResult(
+        {
+          repos: [
+            {
+              id: 'repo-1',
+              connectionId: 'builder',
+              executionHostId: 'ssh:builder'
+            },
+            {
+              id: 'repo-1',
+              connectionId: 'builder',
+              executionHostId: 'runtime:hub-a'
+            }
+          ],
+          worktreesByRepo: {
+            'repo-1': [worktree('ssh:builder')]
+          }
+        },
+        WORKTREE_ID
+      )
+    ).toEqual({
+      kind: 'resolved',
+      route: {
+        executionHostId: 'ssh:builder',
+        runtimeEnvironmentId: 'hub-a'
+      }
+    })
+  })
+
   it('uses an exact SSH worktree owner when repository ids overlap across hosts', () => {
     expect(
       resolveWorktreeOperationRouteResult(
@@ -92,6 +123,11 @@ describe('resolveWorktreeOperationRouteResult', () => {
       resolveWorktreeOperationRouteResult(
         {
           repos: [
+            {
+              id: 'repo-1',
+              connectionId: 'shared-target',
+              executionHostId: 'ssh:shared-target'
+            },
             {
               id: 'repo-1',
               connectionId: 'shared-target',

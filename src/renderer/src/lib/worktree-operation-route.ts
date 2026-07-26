@@ -7,6 +7,7 @@ import {
 import { parseWorkspaceKey } from '../../../shared/workspace-scope'
 import { getRepoIdFromWorktreeId } from '@/store/slices/worktree-helpers'
 import { resolveIndexedWorktreeOwner } from './worktree-runtime-owner-index'
+import { resolveRepoRouteForExactSshOwner } from './worktree-exact-ssh-operation-route'
 import {
   findFolderWorkspaceOwner,
   getExecutionHostIdForFolderWorkspace,
@@ -69,32 +70,6 @@ function addRoute(
     return
   }
   routes.set(JSON.stringify(route), route)
-}
-
-function resolveRepoRouteForExactSshOwner(
-  repos: WorktreeOperationRouteState['repos'],
-  owner: WorktreeOperationOwnerRecord
-): WorktreeOperationRouteResolution {
-  const parsedHost = parseExecutionHostId(owner.hostId)
-  if (!repos || parsedHost?.kind !== 'ssh') {
-    return { kind: 'missing' }
-  }
-  const routes = new Map<string, WorktreeOperationRoute>()
-  for (const repo of repos) {
-    if (
-      repo.id !== owner.repoId ||
-      (getRepoExecutionHostId(repo) !== parsedHost.id &&
-        repo.connectionId?.trim() !== parsedHost.targetId)
-    ) {
-      continue
-    }
-    addRoute(routes, routeForOwner({ hostId: getRepoExecutionHostId(repo) }))
-  }
-  const route = routes.values().next().value
-  if (routes.size === 1 && route) {
-    return { kind: 'resolved', route }
-  }
-  return routes.size > 1 ? { kind: 'ambiguous' } : { kind: 'missing' }
 }
 
 function resolveExactWorktreeRoute(

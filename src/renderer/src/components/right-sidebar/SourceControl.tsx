@@ -6321,6 +6321,7 @@ function SourceControlInner(): React.JSX.Element {
         groupId={activeGroupId ?? activeWorktreeId}
         connectionId={activeConnectionId}
         repoId={activeRepo?.id ?? null}
+        repo={activeRepo}
         promptDelivery="submit-after-ready"
         launchPlatform={activeSourceControlLaunchPlatform}
         launchSource="conflict_resolution"

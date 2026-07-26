@@ -2,6 +2,7 @@ import { isRuntimeOwnedSshTargetId, type ExecutionHostScope } from '../../../sha
 import {
   getNewWorkspaceDialogEligibleRepos,
   resolveNewWorkspaceDialogGitRepoId,
+  resolveNewWorkspaceDialogRepo,
   resolveNewWorkspaceDialogRepoId
 } from '../../../shared/new-workspace-dialog-repo'
 import { getProjectIdentityKey } from '../../../shared/project-host-setup-projection'
@@ -54,6 +55,16 @@ export function resolveComposerRepoId({
     activeRepoId,
     focusedHostScope
   })
+}
+
+export function resolveComposerRepo(args: {
+  eligibleRepos: readonly Repo[]
+  draftRepoId?: string | null
+  initialRepoId?: string | null
+  activeRepoId?: string | null
+  focusedHostScope?: ExecutionHostScope | null
+}): Repo | null {
+  return resolveNewWorkspaceDialogRepo(args)
 }
 
 export function resolveComposerGitRepoId(args: {

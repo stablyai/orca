@@ -38,9 +38,22 @@ describe('hosted-review caller host boundaries', () => {
     expectEveryCallToCarryExecutionHost(source, 'createHostedReview')
   })
 
+  it('scopes checks-panel recipe persistence to the active repository host', () => {
+    const source = readSource('ChecksPanel.tsx')
+    const callbackStart = source.indexOf('const saveLaunchActionDefault')
+    const callbackEnd = source.indexOf('const asyncResultKeyRef', callbackStart)
+    const callback = source.slice(callbackStart, callbackEnd)
+
+    expect(callback).toContain('findRepoForHost(state.repos, target.repoId')
+    expect(callback).toContain('hostId: repo ? getRepoExecutionHostId(repo) : undefined')
+    expect(callback).toMatch(/updateRepo\(result\.target\.repoId, result\.update, \{[\s\S]*hostId:/)
+    expect(source).toContain('repo={repo}')
+  })
+
   it('resolves the source-control repo through the active worktree owner and propagates it', () => {
     const source = readSource('SourceControl.tsx')
     expect(source).toContain('findRepoForWorktreeOwner(s.repos, activeWorktree)')
+    expect(source).toContain('repo={activeRepo}')
     expectEveryCallToCarryExecutionHost(source, 'fetchHostedReviewForBranch')
     expectEveryCallToCarryExecutionHost(source, 'getHostedReviewCreationEligibility')
     expectEveryCallToCarryExecutionHost(source, 'createHostedReview')

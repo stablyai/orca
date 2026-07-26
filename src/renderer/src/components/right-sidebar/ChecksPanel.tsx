@@ -22,7 +22,7 @@ import {
 } from '@/store/slices/github'
 import { getGitHubPRCacheKey, getGitHubRepoCacheKey } from '@/store/slices/github-cache-key'
 import { useActiveWorktree } from '@/store/selectors'
-import { findRepoForWorktreeOwner } from '@/store/slices/repo-host-identity'
+import { findRepoForHost, findRepoForWorktreeOwner } from '@/store/slices/repo-host-identity'
 import { getRepoExecutionHostId } from '../../../../shared/execution-host'
 import { useChecksPanelTerminalWorktree } from './use-checks-panel-terminal-worktree'
 import { cn } from '@/lib/utils'
@@ -558,7 +558,10 @@ export default function ChecksPanel(): React.JSX.Element {
       }
       const latestRepo =
         target.type === 'repo'
-          ? (state.repos.find((candidate) => candidate.id === target.repoId) ?? null)
+          ? findRepoForHost(state.repos, target.repoId, {
+              hostId: repo ? getRepoExecutionHostId(repo) : undefined,
+              settings: latestSettings
+            })
           : null
       const result = saveSourceControlActionRecipe({
         target,
@@ -571,9 +574,11 @@ export default function ChecksPanel(): React.JSX.Element {
         await updateSettings({ sourceControlAi: result.sourceControlAi })
         return
       }
-      await updateRepo(result.target.repoId, result.update)
+      await updateRepo(result.target.repoId, result.update, {
+        hostId: repo ? getRepoExecutionHostId(repo) : undefined
+      })
     },
-    [updateRepo, updateSettings]
+    [repo, updateRepo, updateSettings]
   )
   const asyncResultKeyRef = useRef<string>('')
   const refreshRequestKeyRef = useRef<string | null>(null)
@@ -4202,6 +4207,7 @@ export default function ChecksPanel(): React.JSX.Element {
         groupId={activeWorktreeId}
         connectionId={activeConnectionId}
         repoId={repo?.id ?? null}
+        repo={repo}
         promptDelivery="submit-after-ready"
         launchPlatform={activeSourceControlLaunchPlatform}
         launchSource={agentComposerState?.launchSource ?? 'task_page'}
