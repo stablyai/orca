@@ -11,6 +11,7 @@ import {
   DialogTitle
 } from '@/components/ui/dialog'
 import { getRelativePathInsideRoot } from '@/lib/path'
+import { isImeCompositionKeyDown } from '@/lib/ime-composition-keyboard-event'
 import { useMountedRef } from '@/hooks/useMountedRef'
 import { translate } from '@/i18n/i18n'
 
@@ -157,6 +158,9 @@ export function UntitledFileRenameDialog({
                   setError(null)
                 }}
                 onKeyDown={(e) => {
+                  if (isImeCompositionKeyDown(e)) {
+                    return
+                  }
                   if (e.key === 'Enter') {
                     e.preventDefault()
                     handleSubmit()
@@ -186,6 +190,9 @@ export function UntitledFileRenameDialog({
                   setError(null)
                 }}
                 onKeyDown={(e) => {
+                  if (isImeCompositionKeyDown(e)) {
+                    return
+                  }
                   if (e.key === 'Enter') {
                     e.preventDefault()
                     handleSubmit()

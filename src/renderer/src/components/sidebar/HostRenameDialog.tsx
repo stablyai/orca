@@ -11,6 +11,7 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { useAppStore } from '@/store'
+import { isImeCompositionKeyDown } from '@/lib/ime-composition-keyboard-event'
 import { translate } from '@/i18n/i18n'
 import type { ExecutionHostId } from '../../../../shared/execution-host'
 import { applyHostRename, getHostDisplayLabelOverride } from './host-rename-remove'
@@ -78,6 +79,9 @@ export function HostRenameDialog({
             placeholder={derivedLabel}
             onChange={(e) => setValue(e.target.value)}
             onKeyDown={(e) => {
+              if (isImeCompositionKeyDown(e)) {
+                return
+              }
               if (e.key === 'Enter') {
                 e.preventDefault()
                 submit()

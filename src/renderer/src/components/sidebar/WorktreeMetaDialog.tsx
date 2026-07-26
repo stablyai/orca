@@ -18,6 +18,7 @@ import {
 } from './worktree-meta-updates'
 import { useWorktreeIssueLink } from './use-worktree-issue-link'
 import { getScreenSubmitShortcutLabel, isScreenSubmitShortcut } from '@/lib/screen-submit-shortcut'
+import { isImeCompositionKeyDown } from '@/lib/ime-composition-keyboard-event'
 import { ExternalLink, LoaderCircle } from 'lucide-react'
 import { useMountedRef } from '@/hooks/useMountedRef'
 import { translate } from '@/i18n/i18n'
@@ -158,6 +159,9 @@ const WorktreeMetaDialog = React.memo(function WorktreeMetaDialog() {
 
   const handleCommentKeyDown = useCallback(
     (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
+      if (isImeCompositionKeyDown(e)) {
+        return
+      }
       const isPlainEnter = e.key === 'Enter' && !e.shiftKey && !e.altKey && !e.metaKey && !e.ctrlKey
       if (isPlainEnter || isScreenSubmitShortcut(e)) {
         e.preventDefault()
@@ -170,6 +174,9 @@ const WorktreeMetaDialog = React.memo(function WorktreeMetaDialog() {
 
   const handleIssueKeyDown = useCallback(
     (e: React.KeyboardEvent<HTMLInputElement>) => {
+      if (isImeCompositionKeyDown(e)) {
+        return
+      }
       if (e.key === 'Enter') {
         e.preventDefault()
         handleSave()

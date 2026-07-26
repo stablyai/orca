@@ -10,6 +10,7 @@ import {
 } from '@/components/ui/dropdown-menu'
 import { Input } from '@/components/ui/input'
 import { useShortcutLabel } from '@/hooks/useShortcutLabel'
+import { isImeCompositionKeyDown } from '@/lib/ime-composition-keyboard-event'
 import { translate } from '@/i18n/i18n'
 import type { OpenFile } from '@/store/slices/editor'
 import { CLOSE_ALL_CONTEXT_MENUS_EVENT } from '../tab-bar/SortableTab'
@@ -96,6 +97,9 @@ export function EditorPanelHeaderPath({
             onClick={(event) => event.stopPropagation()}
             onDoubleClick={(event) => event.stopPropagation()}
             onKeyDown={(event) => {
+              if (isImeCompositionKeyDown(event)) {
+                return
+              }
               if (event.key === 'Enter') {
                 event.preventDefault()
                 event.stopPropagation()

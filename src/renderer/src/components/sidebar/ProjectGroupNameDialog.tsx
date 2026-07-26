@@ -10,6 +10,7 @@ import {
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
+import { isImeCompositionKeyDown } from '@/lib/ime-composition-keyboard-event'
 import { translate } from '@/i18n/i18n'
 
 type ProjectGroupNameDialogProps = {
@@ -102,6 +103,13 @@ export function ProjectGroupNameDialog({
               ref={inputRef}
               value={name}
               onChange={(event) => setName(event.target.value)}
+              onKeyDown={(event) => {
+                // Why: the form submits implicitly on Enter, and a CJK IME fires one
+                // for the conversion candidate — that must not save a half-typed name.
+                if (event.key === 'Enter' && isImeCompositionKeyDown(event)) {
+                  event.preventDefault()
+                }
+              }}
               className="h-8 text-xs"
             />
           </div>
