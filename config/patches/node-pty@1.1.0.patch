@@ -1,5 +1,5 @@
 diff --git a/binding.gyp b/binding.gyp
-index 5f63978b07ab50aaf7523219a2170ec737a6b5db..b3309a07ef99dea7967d7bdd04b9fc3500acacae 100644
+index 5f63978..b3309a0 100644
 --- a/binding.gyp
 +++ b/binding.gyp
 @@ -5,9 +5,6 @@
@@ -13,12 +13,12 @@ index 5f63978b07ab50aaf7523219a2170ec737a6b5db..b3309a07ef99dea7967d7bdd04b9fc35
              'VCCLCompilerTool': {
                'AdditionalOptions': [
 diff --git a/deps/winpty/src/winpty.gyp b/deps/winpty/src/winpty.gyp
-index 1ac5758bedd8cf54f32280dea4e4aeb5afdee30d..4debd75854 100644
+index 1ac5758..4debd75 100644
 --- a/deps/winpty/src/winpty.gyp
 +++ b/deps/winpty/src/winpty.gyp
 @@ -10,9 +10,10 @@
      #    make -j4 CXX=i686-w64-mingw32-g++ LDFLAGS="-static -static-libgcc -static-libstdc++"
-
+ 
      'variables': {
 -        'WINPTY_COMMIT_HASH%': '<!(cmd /c "cd shared && GetCommitHash.bat")',
 +        'WINPTY_COMMIT_HASH%': '<!(cmd /c "cd shared && .\\GetCommitHash.bat")',
@@ -80,7 +80,7 @@ index 1ac5758bedd8cf54f32280dea4e4aeb5afdee30d..4debd75854 100644
              'msvs_settings': {
                  # Specify this setting here to override a setting from somewhere
 diff --git a/lib/unixTerminal.js b/lib/unixTerminal.js
-index 1ec12f796a822c78fba9ad7f6448c3987e325c23..cec8b67aef02f8199e5606a0d257088bf1865877 100644
+index 1ec12f7..cec8b67 100644
 --- a/lib/unixTerminal.js
 +++ b/lib/unixTerminal.js
 @@ -28,8 +28,12 @@ var native = utils_1.loadNativeModule('pty');
@@ -99,10 +99,10 @@ index 1ec12f796a822c78fba9ad7f6448c3987e325c23..cec8b67aef02f8199e5606a0d257088b
  var DEFAULT_NAME = 'xterm';
  var DESTROY_SOCKET_TIMEOUT_MS = 200;
 diff --git a/lib/conpty_console_list_agent.js b/lib/conpty_console_list_agent.js
-index ccc111c9e03a4a661ccfd5d8e8f0ee699571b5dd..f92c6bef7d46dc35c941c87ef186aa46d8ed9c44 100644
+index 8c4fca9..0a01730 100644
 --- a/lib/conpty_console_list_agent.js
 +++ b/lib/conpty_console_list_agent.js
-@@ -9,7 +9,14 @@ Object.defineProperty(exports, "__esModule", { value: true });
+@@ -10,7 +10,14 @@ Object.defineProperty(exports, "__esModule", { value: true });
  var utils_1 = require("./utils");
  var getConsoleProcessList = utils_1.loadNativeModule('conpty_console_list').module.getConsoleProcessList;
  var shellPid = parseInt(process.argv[2], 10);
@@ -118,11 +118,13 @@ index ccc111c9e03a4a661ccfd5d8e8f0ee699571b5dd..f92c6bef7d46dc35c941c87ef186aa46
  process.send({ consoleProcessList: consoleProcessList });
  process.exit(0);
  //# sourceMappingURL=conpty_console_list_agent.js.map
+\ No newline at end of file
 diff --git a/src/conpty_console_list_agent.ts b/src/conpty_console_list_agent.ts
-index f6a653893e0b9b548c514db29d75599538ee1acb..1d5400489f200ef0161ca687e672e1cc02d29c95 100644
+index 181ccab..67f31fa 100644
 --- a/src/conpty_console_list_agent.ts
 +++ b/src/conpty_console_list_agent.ts
-@@ -11,5 +11,11 @@ import { loadNativeModule } from './utils';
+@@ -10,6 +10,12 @@ import { loadNativeModule } from './utils';
+ 
  const getConsoleProcessList = loadNativeModule('conpty_console_list').module.getConsoleProcessList;
  const shellPid = parseInt(process.argv[2], 10);
 -const consoleProcessList = getConsoleProcessList(shellPid);
@@ -136,7 +138,7 @@ index f6a653893e0b9b548c514db29d75599538ee1acb..1d5400489f200ef0161ca687e672e1cc
  process.send!({ consoleProcessList });
  process.exit(0);
 diff --git a/src/unix/pty.cc b/src/unix/pty.cc
-index 7b4b9e1f990fbf95b51528bb56dc9717f5b87532..61f39f0cbb91faa2c515f35d2ca850564e6368d9 100644
+index 7b4b9e1..8edd6f5 100644
 --- a/src/unix/pty.cc
 +++ b/src/unix/pty.cc
 @@ -23,7 +23,9 @@
@@ -147,11 +149,11 @@ index 7b4b9e1f990fbf95b51528bb56dc9717f5b87532..61f39f0cbb91faa2c515f35d2ca85056
  #include <unistd.h>
 +#include <string>
  #include <thread>
-
+ 
  #include <sys/types.h>
 @@ -237,13 +239,23 @@ pty_getproc(int, char *);
  #endif
-
+ 
  #if defined(__APPLE__) || defined(__OpenBSD__)
 +struct pty_spawn_error {
 +  const char* step;
@@ -172,12 +174,12 @@ index 7b4b9e1f990fbf95b51528bb56dc9717f5b87532..61f39f0cbb91faa2c515f35d2ca85056
 -                int* err);
 +                pty_spawn_error* err);
  #endif
-
+ 
  struct DelBuf {
 @@ -367,10 +379,11 @@ Napi::Value PtyFork(const Napi::CallbackInfo& info) {
      argv[i + 3] = strdup(arg.c_str());
    }
-
+ 
 -  int err = -1;
 -  pty_posix_spawn(argv, env, term, &winp, &master, &pid, &err);
 -  if (err != 0) {
@@ -190,10 +192,12 @@ index 7b4b9e1f990fbf95b51528bb56dc9717f5b87532..61f39f0cbb91faa2c515f35d2ca85056
    }
    if (pty_nonblock(master) == -1) {
      throw Napi::Error::New(napiEnv, "Could not set master fd to nonblocking.");
-@@ -684,15 +697,73 @@ pty_getproc(int fd, char *tty) {
+@@ -683,6 +696,61 @@ pty_getproc(int fd, char *tty) {
+ 
  #endif
-
- #if defined(__APPLE__)
+ 
++#if defined(__APPLE__) || defined(__OpenBSD__)
++// Why: call sites are Apple/OpenBSD-only; keep helpers out of Linux builds (-Werror unused).
 +static const char*
 +pty_errno_name(int errnum) {
 +  switch (errnum) {
@@ -245,10 +249,12 @@ index 7b4b9e1f990fbf95b51528bb56dc9717f5b87532..61f39f0cbb91faa2c515f35d2ca85056
 +
 +  return message;
 +}
++#endif
 +
+ #if defined(__APPLE__)
  static void
  pty_posix_spawn(char** argv, char** env,
-                 const struct termios *termp,
+@@ -690,9 +758,15 @@ pty_posix_spawn(char** argv, char** env,
                  const struct winsize *winp,
                  int* master,
                  pid_t* pid,
@@ -263,10 +269,10 @@ index 7b4b9e1f990fbf95b51528bb56dc9717f5b87532..61f39f0cbb91faa2c515f35d2ca85056
 +  bool acts_initialized = false;
 +  posix_spawnattr_t attrs;
 +  bool attrs_initialized = false;
-
+ 
    for (; count < 3; count++) {
      low_fds[count] = posix_openpt(O_RDWR);
-@@ -706,80 +777,118 @@ pty_posix_spawn(char** argv, char** env,
+@@ -706,80 +780,118 @@ pty_posix_spawn(char** argv, char** env,
                POSIX_SPAWN_SETSID;
    *master = posix_openpt(O_RDWR);
    if (*master == -1) {
@@ -280,7 +286,7 @@ index 7b4b9e1f990fbf95b51528bb56dc9717f5b87532..61f39f0cbb91faa2c515f35d2ca85056
 +    pty_set_spawn_error(err, "grantpt", errno);
 +    goto done;
    }
-
+ 
 -  int res = grantpt(*master) || unlockpt(*master);
 +  res = unlockpt(*master);
    if (res == -1) {
@@ -288,7 +294,7 @@ index 7b4b9e1f990fbf95b51528bb56dc9717f5b87532..61f39f0cbb91faa2c515f35d2ca85056
 +    pty_set_spawn_error(err, "unlockpt", errno);
 +    goto done;
    }
-
+ 
    // Use TIOCPTYGNAME instead of ptsname() to avoid threading problems.
 -  int slave;
    char slave_pty_name[128];
@@ -298,14 +304,14 @@ index 7b4b9e1f990fbf95b51528bb56dc9717f5b87532..61f39f0cbb91faa2c515f35d2ca85056
 +    pty_set_spawn_error(err, "ioctl_TIOCPTYGNAME", errno);
 +    goto done;
    }
-
+ 
    slave = open(slave_pty_name, O_RDWR | O_NOCTTY);
    if (slave == -1) {
 -    return;
 +    pty_set_spawn_error(err, "open_slave", errno, "slave", slave_pty_name);
 +    goto done;
    }
-
+ 
    if (termp) {
      res = tcsetattr(slave, TCSANOW, termp);
      if (res == -1) {
@@ -314,7 +320,7 @@ index 7b4b9e1f990fbf95b51528bb56dc9717f5b87532..61f39f0cbb91faa2c515f35d2ca85056
 +      goto done;
      };
    }
-
+ 
    if (winp) {
      res = ioctl(slave, TIOCSWINSZ, winp);
      if (res == -1) {
@@ -323,7 +329,7 @@ index 7b4b9e1f990fbf95b51528bb56dc9717f5b87532..61f39f0cbb91faa2c515f35d2ca85056
 +      goto done;
      }
    }
-
+ 
 -  posix_spawn_file_actions_t acts;
 -  posix_spawn_file_actions_init(&acts);
 +  res = posix_spawn_file_actions_init(&acts);
@@ -337,7 +343,7 @@ index 7b4b9e1f990fbf95b51528bb56dc9717f5b87532..61f39f0cbb91faa2c515f35d2ca85056
    posix_spawn_file_actions_adddup2(&acts, slave, STDERR_FILENO);
    posix_spawn_file_actions_addclose(&acts, slave);
    posix_spawn_file_actions_addclose(&acts, *master);
-
+ 
 -  posix_spawnattr_t attrs;
 -  posix_spawnattr_init(&attrs);
 -  *err = posix_spawnattr_setflags(&attrs, flags);
@@ -353,7 +359,7 @@ index 7b4b9e1f990fbf95b51528bb56dc9717f5b87532..61f39f0cbb91faa2c515f35d2ca85056
 +    pty_set_spawn_error(err, "posix_spawnattr_setflags", res);
      goto done;
    }
-
+ 
    sigset_t signal_set;
    /* Reset all signal the child to their default behavior */
    sigfillset(&signal_set);
@@ -364,7 +370,7 @@ index 7b4b9e1f990fbf95b51528bb56dc9717f5b87532..61f39f0cbb91faa2c515f35d2ca85056
 +    pty_set_spawn_error(err, "posix_spawnattr_setsigdefault", res);
      goto done;
    }
-
+ 
    /* Reset the signal mask for all signals */
    sigemptyset(&signal_set);
 -  *err = posix_spawnattr_setsigmask(&attrs, &signal_set);
@@ -374,7 +380,7 @@ index 7b4b9e1f990fbf95b51528bb56dc9717f5b87532..61f39f0cbb91faa2c515f35d2ca85056
 +    pty_set_spawn_error(err, "posix_spawnattr_setsigmask", res);
      goto done;
    }
-
+ 
    do
 -    *err = posix_spawn(pid, argv[0], &acts, &attrs, argv, env);
 -  while (*err == EINTR);
@@ -399,7 +405,7 @@ index 7b4b9e1f990fbf95b51528bb56dc9717f5b87532..61f39f0cbb91faa2c515f35d2ca85056
 +    close(*master);
 +    *master = -1;
 +  }
-
+ 
 -  for (; count > 0; count--) {
 -    close(low_fds[count]);
 +  for (size_t i = 0; i <= count && i < 3; i++) {
@@ -410,20 +416,37 @@ index 7b4b9e1f990fbf95b51528bb56dc9717f5b87532..61f39f0cbb91faa2c515f35d2ca85056
  }
  #endif
 diff --git a/lib/windowsPtyAgent.js b/lib/windowsPtyAgent.js
-index a358ffb177..8722bcd166 100644
+index a358ffb..246364a 100644
 --- a/lib/windowsPtyAgent.js
 +++ b/lib/windowsPtyAgent.js
-@@ -29 +29 @@ var WindowsPtyAgent = /** @class */ (function () {
+@@ -26,11 +26,13 @@ var FLUSH_DATA_INTERVAL = 1000;
+  * and winpty.
+  */
+ var WindowsPtyAgent = /** @class */ (function () {
 -    function WindowsPtyAgent(file, args, env, cwd, cols, rows, debug, _useConpty, _useConptyDll, conptyInheritCursor) {
 +    function WindowsPtyAgent(file, args, env, cwd, cols, rows, debug, _useConpty, _useConptyDll, _useConptyJobObject, conptyInheritCursor) {
-@@ -31,0 +32 @@ var WindowsPtyAgent = /** @class */ (function () {
+         var _this = this;
 +        if (_useConptyJobObject === void 0) { _useConptyJobObject = false; }
-@@ -34,0 +36 @@ var WindowsPtyAgent = /** @class */ (function () {
+         if (_useConptyDll === void 0) { _useConptyDll = false; }
+         if (conptyInheritCursor === void 0) { conptyInheritCursor = false; }
+         this._useConpty = _useConpty;
 +        this._useConptyJobObject = _useConptyJobObject;
-@@ -89 +91 @@ var WindowsPtyAgent = /** @class */ (function () {
+         this._useConptyDll = _useConptyDll;
+         this._pid = 0;
+         this._innerPid = 0;
+@@ -86,7 +88,7 @@ var WindowsPtyAgent = /** @class */ (function () {
+         });
+         this._inSocket.setEncoding('utf8');
+         if (this._useConpty) {
 -            var connect = this._ptyNative.connect(this._pty, commandLine, cwd, env, this._useConptyDll, function (c) { return _this._$onProcessExit(c); });
 +            var connect = this._ptyNative.connect(this._pty, commandLine, cwd, env, this._useConptyDll, this._useConptyJobObject, function (c) { return _this._$onProcessExit(c); });
-@@ -137 +139,14 @@ var WindowsPtyAgent = /** @class */ (function () {
+             this._innerPid = connect.pid;
+         }
+     }
+@@ -134,7 +136,20 @@ var WindowsPtyAgent = /** @class */ (function () {
+         var _this = this;
+         // Tell the agent to kill the pty, this releases handles to the process
+         if (this._useConpty) {
 -            if (!this._useConptyDll) {
 +            if (this._useConptyJobObject || this._useConptyDll) {
 +                // Close the input write handle to signal the end of session.
@@ -439,7 +462,13 @@ index a358ffb177..8722bcd166 100644
 +                }
 +            }
 +            else {
-@@ -153,8 +167,0 @@ var WindowsPtyAgent = /** @class */ (function () {
+                 this._inSocket.readable = false;
+                 this._outSocket.readable = false;
+                 this._getConsoleProcessList().then(function (consoleProcessList) {
+@@ -150,14 +165,6 @@ var WindowsPtyAgent = /** @class */ (function () {
+                 this._ptyNative.kill(this._pty, this._useConptyDll);
+                 this._conoutSocketWorker.dispose();
+             }
 -            else {
 -                // Close the input write handle to signal the end of session.
 -                this._inSocket.destroy();
@@ -448,61 +477,93 @@ index a358ffb177..8722bcd166 100644
 -                    _this._conoutSocketWorker.dispose();
 -                });
 -            }
-@@ -320 +327 @@ function xOr(arg1, arg2) {
--//# sourceMappingURL=windowsPtyAgent.js.map
-\ No newline at end of file
-+//# sourceMappingURL=windowsPtyAgent.js.map
+         }
+         else {
+             // Because pty.kill closes the handle, it will kill most processes by itself.
 diff --git a/lib/windowsTerminal.js b/lib/windowsTerminal.js
-index 3c38f89d14..2de1d0c7db 100644
+index 3c38f89..c1aef17 100644
 --- a/lib/windowsTerminal.js
 +++ b/lib/windowsTerminal.js
-@@ -51 +51 @@ var WindowsTerminal = /** @class */ (function (_super) {
+@@ -48,7 +48,7 @@ var WindowsTerminal = /** @class */ (function (_super) {
+         // Functions that need to run after `ready` event is emitted.
+         _this._deferreds = [];
+         // Create new termal.
 -        _this._agent = new windowsPtyAgent_1.WindowsPtyAgent(file, args, parsedEnv, cwd, _this._cols, _this._rows, false, opt.useConpty, opt.useConptyDll, opt.conptyInheritCursor);
 +        _this._agent = new windowsPtyAgent_1.WindowsPtyAgent(file, args, parsedEnv, cwd, _this._cols, _this._rows, false, opt.useConpty, opt.useConptyDll, opt.useConptyJobObject, opt.conptyInheritCursor);
-@@ -199 +199 @@ exports.WindowsTerminal = WindowsTerminal;
--//# sourceMappingURL=windowsTerminal.js.map
-\ No newline at end of file
-+//# sourceMappingURL=windowsTerminal.js.map
+         _this._socket = _this._agent.outSocket;
+         // Not available until `ready` event emitted.
+         _this._pid = _this._agent.innerPid;
 diff --git a/src/interfaces.ts b/src/interfaces.ts
-index a269e77bd2..8b45c785a0 100644
+index a269e77..992be6c 100644
 --- a/src/interfaces.ts
 +++ b/src/interfaces.ts
-@@ -122,0 +123 @@ export interface IWindowsPtyForkOptions extends IBasePtyForkOptions {
+@@ -119,6 +119,7 @@ export interface IPtyForkOptions extends IBasePtyForkOptions {
+ 
+ export interface IWindowsPtyForkOptions extends IBasePtyForkOptions {
+   useConpty?: boolean;
 +  useConptyJobObject?: boolean;
+   useConptyDll?: boolean;
+   conptyInheritCursor?: boolean;
+ }
 diff --git a/src/native.d.ts b/src/native.d.ts
-index c53e086b49..71f493040d 100644
+index c53e086..71f4930 100644
 --- a/src/native.d.ts
 +++ b/src/native.d.ts
-@@ -7 +7 @@ interface IConptyNative {
+@@ -4,7 +4,7 @@
+ 
+ interface IConptyNative {
+   startProcess(file: string, cols: number, rows: number, debug: boolean, pipeName: string, conptyInheritCursor: boolean, useConptyDll: boolean): IConptyProcess;
 -  connect(ptyId: number, commandLine: string, cwd: string, env: string[], useConptyDll: boolean, onExitCallback: (exitCode: number) => void): { pid: number };
 +  connect(ptyId: number, commandLine: string, cwd: string, env: string[], useConptyDll: boolean, useConptyJobObject: boolean, onExitCallback: (exitCode: number) => void): { pid: number; jobAssigned: boolean };
+   resize(ptyId: number, cols: number, rows: number, useConptyDll: boolean): void;
+   clear(ptyId: number, useConptyDll: boolean): void;
+   kill(ptyId: number, useConptyDll: boolean): void;
 diff --git a/src/win/conpty.cc b/src/win/conpty.cc
-index 7b286d3d64..7434bcc994 100644
+index 7b286d3..1bb7c74 100644
 --- a/src/win/conpty.cc
 +++ b/src/win/conpty.cc
-@@ -16,0 +17,3 @@
+@@ -13,6 +13,9 @@
+ #define NODE_ADDON_API_DISABLE_DEPRECATED
+ #include <node_api.h>
+ #include <assert.h>
 +#include <atomic>
 +#include <memory>
 +#include <mutex>
-@@ -47 +50,5 @@ struct pty_baton {
+ #include <Shlwapi.h> // PathCombine, PathIsRelative
+ #include <sstream>
+ #include <iostream>
+@@ -44,40 +47,89 @@ struct pty_baton {
+   HANDLE hOut;
+   HPCON hpc;
+ 
 -  HANDLE hShell;
 +  std::mutex hShellMutex;
 +  HANDLE hShell = nullptr;
 +  std::atomic<HANDLE> hJob{nullptr};
 +  bool jobObjectAssigned = false;
 +  bool jobObjectSetupFailed = false;
-@@ -52 +59,2 @@ struct pty_baton {
+ 
+   pty_baton(int _id, HANDLE _hIn, HANDLE _hOut, HPCON _hpc) : id(_id), hIn(_hIn), hOut(_hOut), hpc(_hpc) {};
+ };
+ 
 -static std::vector<std::unique_ptr<pty_baton>> ptyHandles;
 +static std::vector<std::shared_ptr<pty_baton>> ptyHandles;
 +static std::mutex ptyHandlesMutex;
-@@ -55 +63,2 @@ static volatile LONG ptyCounter;
+ static volatile LONG ptyCounter;
+ 
 -static pty_baton* get_pty_baton(int id) {
 +static std::shared_ptr<pty_baton> get_pty_baton(int id) {
 +  std::lock_guard<std::mutex> lock(ptyHandlesMutex);
-@@ -60 +69 @@ static pty_baton* get_pty_baton(int id) {
+   auto it = std::find_if(ptyHandles.begin(), ptyHandles.end(), [id](const auto& ptyHandle) {
+     return ptyHandle->id == id;
+   });
+   if (it != ptyHandles.end()) {
 -    return it->get();
 +    return *it;
-@@ -65,6 +75,7 @@ static bool remove_pty_baton(int id) {
+   }
+   return nullptr;
+ }
+ 
  static bool remove_pty_baton(int id) {
 +  std::lock_guard<std::mutex> lock(ptyHandlesMutex);
    auto it = std::remove_if(ptyHandles.begin(), ptyHandles.end(), [id](const auto& ptyHandle) {
@@ -511,7 +572,10 @@ index 7b286d3d64..7434bcc994 100644
    if (it != ptyHandles.end()) {
 -    ptyHandles.erase(it);
 +    ptyHandles.erase(it, ptyHandles.end());
-@@ -75,0 +86,42 @@ static bool remove_pty_baton(int id) {
+     return true;
+   }
+   return false;
+ }
 +static HANDLE take_job_handle(const std::shared_ptr<pty_baton>& baton) {
 +  return baton->hJob.exchange(nullptr);
 +}
@@ -554,13 +618,21 @@ index 7b286d3d64..7434bcc994 100644
 +  }
 +}
 +
-@@ -77 +129 @@ struct ExitEvent {
+ 
+ struct ExitEvent {
 -  int exit_code = 0;
 +  DWORD exit_code = 0;
-@@ -80 +132 @@ struct ExitEvent {
+ };
+ 
 -void SetupExitCallback(Napi::Env env, Napi::Function cb, pty_baton* baton) {
 +void SetupExitCallback(Napi::Env env, Napi::Function cb, std::shared_ptr<pty_baton> baton) {
-@@ -101,6 +153,10 @@ void SetupExitCallback(Napi::Env env, Napi::Function cb, pty_baton* baton) {
+   std::thread *th = new std::thread;
+   // Don't use Napi::AsyncWorker which is limited by UV_THREADPOOL_SIZE.
+   auto tsfn = Napi::ThreadSafeFunction::New(
+@@ -98,12 +150,16 @@ void SetupExitCallback(Napi::Env env, Napi::Function cb, pty_baton* baton) {
+ 
+     ExitEvent *exit_event = new ExitEvent;
+     // Wait for process to complete.
 -    WaitForSingleObject(baton->hShell, INFINITE);
 -    // Get process exit code.
 -    GetExitCodeProcess(baton->hShell, (LPDWORD)(&exit_event->exit_code));
@@ -577,18 +649,32 @@ index 7b286d3d64..7434bcc994 100644
 +    const bool removed = remove_pty_baton(baton->id);
 +    assert(removed);
 +    (void)removed;
-@@ -128 +184 @@ void SetupExitCallback(Napi::Env env, Napi::Function cb, pty_baton* baton) {
+ 
+     auto status = tsfn.BlockingCall(exit_event, callback); // In main thread
+     switch (status) {
+@@ -125,12 +181,16 @@ void SetupExitCallback(Napi::Env env, Napi::Function cb, pty_baton* baton) {
+   });
+ }
+ 
 -Napi::Error errorWithCode(const Napi::CallbackInfo& info, const char* text) {
 +Napi::Error errorWithCode(const Napi::CallbackInfo& info, const char* text, DWORD errorCode) {
-@@ -131 +187 @@ Napi::Error errorWithCode(const Napi::CallbackInfo& info, const char* text) {
+   std::stringstream errorText;
+   errorText << text;
 -  errorText << ", error code: " << GetLastError();
 +  errorText << ", error code: " << errorCode;
-@@ -134,0 +191,4 @@ Napi::Error errorWithCode(const Napi::CallbackInfo& info, const char* text) {
+   return Napi::Error::New(info.Env(), errorText.str());
+ }
 +Napi::Error errorWithCode(const Napi::CallbackInfo& info, const char* text) {
 +  return errorWithCode(info, text, GetLastError());
 +}
 +
-@@ -304,2 +364,5 @@ static Napi::Value PtyStartProcess(const Napi::CallbackInfo& info) {
+ 
+ // Returns a new server named pipe.  It has not yet been connected.
+ bool createDataServerPipe(bool write,
+@@ -301,8 +361,11 @@ static Napi::Value PtyStartProcess(const Napi::CallbackInfo& info) {
+     // We were able to instantiate a conpty
+     const int ptyId = InterlockedIncrement(&ptyCounter);
+     marshal.Set("pty", Napi::Number::New(env, ptyId));
 -    ptyHandles.emplace_back(
 -        std::make_unique<pty_baton>(ptyId, hIn, hOut, hpc));
 +    {
@@ -596,27 +682,56 @@ index 7b286d3d64..7434bcc994 100644
 +      ptyHandles.emplace_back(
 +          std::make_shared<pty_baton>(ptyId, hIn, hOut, hpc));
 +    }
-@@ -336 +399 @@ static Napi::Value PtyConnect(const Napi::CallbackInfo& info) {
+   } else {
+     throw Napi::Error::New(env, "Cannot launch conpty");
+   }
+@@ -333,14 +396,15 @@ static Napi::Value PtyConnect(const Napi::CallbackInfo& info) {
+   std::stringstream errorText;
+   BOOL fSuccess = FALSE;
+ 
 -  if (info.Length() != 6 ||
 +  if (info.Length() != 7 ||
-@@ -342,2 +405,3 @@ static Napi::Value PtyConnect(const Napi::CallbackInfo& info) {
+       !info[0].IsNumber() ||
+       !info[1].IsString() ||
+       !info[2].IsString() ||
+       !info[3].IsArray() ||
+       !info[4].IsBoolean() ||
 -      !info[5].IsFunction()) {
 -    throw Napi::Error::New(env, "Usage: pty.connect(id, cmdline, cwd, env, useConptyDll, exitCallback)");
 +      !info[5].IsBoolean() ||
 +      !info[6].IsFunction()) {
 +    throw Napi::Error::New(env, "Usage: pty.connect(id, cmdline, cwd, env, useConptyDll, useConptyJobObject, exitCallback)");
-@@ -351 +415,2 @@ static Napi::Value PtyConnect(const Napi::CallbackInfo& info) {
+   }
+ 
+   const int id = info[0].As<Napi::Number>().Int32Value();
+@@ -348,10 +412,11 @@ static Napi::Value PtyConnect(const Napi::CallbackInfo& info) {
+   const std::wstring cwd(path_util::to_wstring(info[2].As<Napi::String>()));
+   const Napi::Array envValues = info[3].As<Napi::Array>();
+   const bool useConptyDll = info[4].As<Napi::Boolean>().Value();
 -  Napi::Function exitCallback = info[5].As<Napi::Function>();
 +  const bool useConptyJobObject = info[5].As<Napi::Boolean>().Value();
 +  Napi::Function exitCallback = info[6].As<Napi::Function>();
-@@ -354 +419 @@ static Napi::Value PtyConnect(const Napi::CallbackInfo& info) {
+ 
+   // Fetch pty handle from ID and start process
 -  pty_baton* handle = get_pty_baton(id);
 +  std::shared_ptr<pty_baton> handle = get_pty_baton(id);
-@@ -419 +484,2 @@ static Napi::Value PtyConnect(const Napi::CallbackInfo& info) {
+   if (!handle) {
+     throw Napi::Error::New(env, "Invalid pty handle");
+   }
+@@ -416,7 +481,8 @@ static Napi::Value PtyConnect(const Napi::CallbackInfo& info) {
+       nullptr,                      // lpProcessAttributes
+       nullptr,                      // lpThreadAttributes
+       false,                        // bInheritHandles VERY IMPORTANT that this is false
 -      EXTENDED_STARTUPINFO_PRESENT | CREATE_UNICODE_ENVIRONMENT, // dwCreationFlags
 +      EXTENDED_STARTUPINFO_PRESENT | CREATE_UNICODE_ENVIRONMENT |
 +        (useConptyJobObject ? CREATE_SUSPENDED : 0), // dwCreationFlags
-@@ -428,0 +495,44 @@ static Napi::Value PtyConnect(const Napi::CallbackInfo& info) {
+       envArg,                       // lpEnvironment
+       mutableCwd.get(),             // lpCurrentDirectory
+       &siEx.StartupInfo,            // lpStartupInfo
+@@ -425,6 +491,51 @@ static Napi::Value PtyConnect(const Napi::CallbackInfo& info) {
+   if (!fSuccess) {
+     throw errorWithCode(info, "Cannot create process");
+   }
 +  {
 +    std::lock_guard<std::mutex> lock(handle->hShellMutex);
 +    handle->hShell = piClient.hProcess;
@@ -662,22 +777,52 @@ index 7b286d3d64..7434bcc994 100644
 +    CloseHandle(piClient.hThread);
 +  }
 +
-@@ -441,3 +550,0 @@ static Napi::Value PtyConnect(const Napi::CallbackInfo& info) {
+ 
+   HANDLE hLibrary = LoadConptyDll(info, useConptyDll);
+   bool fLoadedDll = hLibrary != nullptr;
+@@ -438,9 +549,6 @@ static Napi::Value PtyConnect(const Napi::CallbackInfo& info) {
+     }
+   }
+ 
 -  // Update handle
 -  handle->hShell = piClient.hProcess;
 -
-@@ -454,0 +562 @@ static Napi::Value PtyConnect(const Napi::CallbackInfo& info) {
+   // Close the thread handle to avoid resource leak
+   CloseHandle(piClient.hThread);
+   // Close the input read and output write handle of the pseudoconsole
+@@ -451,6 +559,7 @@ static Napi::Value PtyConnect(const Napi::CallbackInfo& info) {
+ 
+   // Return
+   auto marshal = Napi::Object::New(env);
 +  marshal.Set("jobAssigned", Napi::Boolean::New(env, jobAssigned));
-@@ -475 +583 @@ static Napi::Value PtyResize(const Napi::CallbackInfo& info) {
+   marshal.Set("pid", Napi::Number::New(env, piClient.dwProcessId));
+   return marshal;
+ }
+@@ -472,7 +581,7 @@ static Napi::Value PtyResize(const Napi::CallbackInfo& info) {
+   SHORT rows = static_cast<SHORT>(info[2].As<Napi::Number>().Uint32Value());
+   const bool useConptyDll = info[3].As<Napi::Boolean>().Value();
+ 
 -  const pty_baton* handle = get_pty_baton(id);
 +  const std::shared_ptr<pty_baton> handle = get_pty_baton(id);
-@@ -516 +624 @@ static Napi::Value PtyClear(const Napi::CallbackInfo& info) {
+ 
+   if (handle != nullptr) {
+     HANDLE hLibrary = LoadConptyDll(info, useConptyDll);
+@@ -513,7 +622,7 @@ static Napi::Value PtyClear(const Napi::CallbackInfo& info) {
+     return env.Undefined();
+   }
+ 
 -  const pty_baton* handle = get_pty_baton(id);
 +  const std::shared_ptr<pty_baton> handle = get_pty_baton(id);
-@@ -547,3 +655,9 @@ static Napi::Value PtyKill(const Napi::CallbackInfo& info) {
+ 
+   if (handle != nullptr) {
+     HANDLE hLibrary = LoadConptyDll(info, useConptyDll);
+@@ -544,9 +653,15 @@ static Napi::Value PtyKill(const Napi::CallbackInfo& info) {
+   int id = info[0].As<Napi::Number>().Int32Value();
+   const bool useConptyDll = info[1].As<Napi::Boolean>().Value();
+ 
 -  const pty_baton* handle = get_pty_baton(id);
 +  const std::shared_ptr<pty_baton> handle = get_pty_baton(id);
-
+ 
    if (handle != nullptr) {
 +    const HANDLE killJobHandle = take_job_handle(handle);
 +    const bool hadJobHandle = killJobHandle != nullptr;
@@ -685,23 +830,47 @@ index 7b286d3d64..7434bcc994 100644
 +      TerminateJobObject(killJobHandle, 1);
 +      CloseHandle(killJobHandle);
 +    }
-@@ -562,2 +676,4 @@ static Napi::Value PtyKill(const Napi::CallbackInfo& info) {
+     HANDLE hLibrary = LoadConptyDll(info, useConptyDll);
+     bool fLoadedDll = hLibrary != nullptr;
+     if (fLoadedDll)
+@@ -559,8 +674,10 @@ static Napi::Value PtyKill(const Napi::CallbackInfo& info) {
+         pfnClosePseudoConsole(handle->hpc);
+       }
+     }
 -    if (useConptyDll) {
 -      TerminateProcess(handle->hShell, 1);
 +    if (!hadJobHandle &&
 +        !handle->jobObjectAssigned &&
 +        (useConptyDll || handle->jobObjectSetupFailed)) {
 +      terminate_shell_process(handle);
+     }
+   }
+ 
 diff --git a/src/windowsPtyAgent.ts b/src/windowsPtyAgent.ts
-index d705444951..0d4fbdd5e5 100644
+index d705444..592a976 100644
 --- a/src/windowsPtyAgent.ts
 +++ b/src/windowsPtyAgent.ts
-@@ -58,0 +59 @@ export class WindowsPtyAgent {
+@@ -55,6 +55,7 @@ export class WindowsPtyAgent {
+     rows: number,
+     debug: boolean,
+     private _useConpty: boolean | undefined,
 +    private _useConptyJobObject: boolean = false,
-@@ -119 +120 @@ export class WindowsPtyAgent {
+     private _useConptyDll: boolean = false,
+     conptyInheritCursor: boolean = false
+   ) {
+@@ -116,7 +117,7 @@ export class WindowsPtyAgent {
+     this._inSocket.setEncoding('utf8');
+ 
+     if (this._useConpty) {
 -      const connect = (this._ptyNative as IConptyNative).connect(this._pty, commandLine, cwd, env, this._useConptyDll, c => this._$onProcessExit(c));
 +      const connect = (this._ptyNative as IConptyNative).connect(this._pty, commandLine, cwd, env, this._useConptyDll, this._useConptyJobObject, c => this._$onProcessExit(c));
-@@ -144 +145,12 @@ export class WindowsPtyAgent {
+       this._innerPid = connect.pid;
+     }
+   }
+@@ -141,7 +142,18 @@ export class WindowsPtyAgent {
+   public kill(): void {
+     // Tell the agent to kill the pty, this releases handles to the process
+     if (this._useConpty) {
 -      if (!this._useConptyDll) {
 +      if (this._useConptyJobObject || this._useConptyDll) {
 +        // Close the input write handle to signal the end of session.
@@ -715,7 +884,13 @@ index d705444951..0d4fbdd5e5 100644
 +          this._conoutSocketWorker.dispose();
 +        }
 +      } else {
-@@ -158,7 +169,0 @@ export class WindowsPtyAgent {
+         this._inSocket.readable = false;
+         this._outSocket.readable = false;
+         this._getConsoleProcessList().then(consoleProcessList => {
+@@ -155,13 +167,6 @@ export class WindowsPtyAgent {
+         });
+         (this._ptyNative as IConptyNative).kill(this._pty, this._useConptyDll);
+         this._conoutSocketWorker.dispose();
 -      } else {
 -        // Close the input write handle to signal the end of session.
 -        this._inSocket.destroy();
@@ -723,18 +898,30 @@ index d705444951..0d4fbdd5e5 100644
 -        this._outSocket.on('data', () => {
 -          this._conoutSocketWorker.dispose();
 -        });
+       }
+     } else {
+       // Because pty.kill closes the handle, it will kill most processes by itself.
 diff --git a/src/windowsTerminal.ts b/src/windowsTerminal.ts
-index 13f6c6dbb3..03c2f3421f 100644
+index 13f6c6d..03c2f34 100644
 --- a/src/windowsTerminal.ts
 +++ b/src/windowsTerminal.ts
-@@ -51 +51 @@ export class WindowsTerminal extends Terminal {
+@@ -48,7 +48,7 @@ export class WindowsTerminal extends Terminal {
+     this._deferreds = [];
+ 
+     // Create new termal.
 -    this._agent = new WindowsPtyAgent(file, args, parsedEnv, cwd, this._cols, this._rows, false, opt.useConpty, opt.useConptyDll, opt.conptyInheritCursor);
 +    this._agent = new WindowsPtyAgent(file, args, parsedEnv, cwd, this._cols, this._rows, false, opt.useConpty, opt.useConptyDll, opt.useConptyJobObject, opt.conptyInheritCursor);
+     this._socket = this._agent.outSocket;
+ 
+     // Not available until `ready` event emitted.
 diff --git a/typings/node-pty.d.ts b/typings/node-pty.d.ts
-index 6f050ff1d9..0b28e5a667 100644
+index 6f050ff..5cdd497 100644
 --- a/typings/node-pty.d.ts
 +++ b/typings/node-pty.d.ts
-@@ -105,0 +106,8 @@ declare module 'node-pty' {
+@@ -102,6 +102,14 @@ declare module 'node-pty' {
+      * Windows. Defaults to false.
+      */
+     useConptyDll?: boolean;
 +    /**
 +     * (EXPERIMENTAL)
 +     *
@@ -743,3 +930,6 @@ index 6f050ff1d9..0b28e5a667 100644
 +     */
 +    useConptyJobObject?: boolean;
 +
+ 
+     /**
+      * Whether to use PSEUDOCONSOLE_INHERIT_CURSOR in conpty.

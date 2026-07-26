@@ -1166,18 +1166,20 @@ export class LocalPtyProvider implements IPtyProvider {
       this.requestTrackedPtyShutdown(id, proc, operation.immediate)
     }
     if (ptyWindowsJobObjectSessionIds.has(id)) {
-      // Why: Windows agent trees are owned by node-pty Job Objects (useConptyJobObject);
-      // killRoot closing the job reaps descendants — taskkill /T is redundant.
+      // Why: Job Object is the primary reaper for native Windows agent trees
+      // (useConptyJobObject); killRoot closes the job and kernel-reaps descendants.
       killRoot()
     } else if (ptyAgentSessionIds.has(id)) {
-      // Why: POSIX needs a pre-kill descendant snapshot so agent/MCP orphans cannot
-      // hold the worktree cwd after shell stop (#10004).
+      // Why: POSIX needs a pre-kill descendant snapshot; non-Job Windows (e.g. WSL)
+      // tree-kills only when the identity probe returns `own` so agent/MCP orphans
+      // cannot hold the worktree cwd (#10004). `unknown`/`foreign`/`absent` skip
+      // taskkill and rely on root close alone (fail-closed, #10484/#10674).
       await killWithDescendantSweep(proc.pid, killRoot, { ownsRoot })
     } else if (process.platform === 'win32' && operation.immediate) {
       // Why: a plain shell's ConPTY teardown doesn't reap orphaned children (useConptyDll
       // skips the console reap), so a live `pnpm i`/`node` keeps the ConPTY console alive and
-      // holds the worktree cwd, failing destructive removal. taskkill /T /F clears the tree so
-      // physical stop is verifiable. POSIX shells reach their child pgroup on forceKill (#10004).
+      // holds the worktree cwd. taskkill is the fallback reaper and runs only when the OS
+      // identity probe returns `own`; otherwise root close alone (#10004/#10484/#10674).
       await killWithDescendantSweep(proc.pid, killRoot, { ownsRoot })
     } else {
       killRoot()
