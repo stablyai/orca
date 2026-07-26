@@ -312,6 +312,8 @@ export class SshRelaySession {
         throw new Error('Session disposed during establish')
       }
 
+      await this.retryTerminationPendingPtys()
+
       // Why: explicit disconnect keeps PTY ownership, so a later manual connect must reattach those remote PTYs.
       await this.reattachKnownPtys(ownsAttempt)
 

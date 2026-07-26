@@ -454,4 +454,44 @@ describe('SshRelaySession lost-worker archive', () => {
       'terminated'
     )
   })
+
+  it('retries termination-pending leases before initial establish can reattach', async () => {
+    const deps = createMockDeps()
+    const shutdown = vi.fn().mockResolvedValue(undefined)
+    const attachForReconnect = vi.fn()
+    vi.mocked(getSshPtyProvider).mockReturnValue({
+      shutdown,
+      attachForReconnect,
+      dispose: vi.fn()
+    } as unknown as ReturnType<typeof getSshPtyProvider>)
+    vi.mocked(deps.mockStore.getSshRemotePtyLeases).mockReturnValue([
+      {
+        targetId: 'target-1',
+        ptyId: 'pty-pending',
+        state: 'termination-pending',
+        worktreeId: REVIVE_WORKTREE_ID,
+        tabId: REVIVE_TAB_ID,
+        leafId: REVIVE_LEAF_ID
+      }
+    ] as ReturnType<typeof deps.mockStore.getSshRemotePtyLeases>)
+    const session = new SshRelaySession(
+      'target-1',
+      deps.getMainWindow,
+      deps.mockStore,
+      deps.mockPortForward
+    )
+
+    await session.establish(deps.mockConn)
+
+    expect(shutdown).toHaveBeenCalledWith('ssh:target-1@@pty-pending', {
+      immediate: true,
+      keepHistory: false
+    })
+    expect(deps.mockStore.markSshRemotePtyLease).toHaveBeenCalledWith(
+      'target-1',
+      'pty-pending',
+      'terminated'
+    )
+    expect(attachForReconnect).not.toHaveBeenCalled()
+  })
 })
