@@ -145,13 +145,7 @@ async function seedAgentStatus(page: Page, pane: RestoredPane): Promise<void> {
 
 async function openPopoutWindow(app: ElectronApplication, page: Page): Promise<Page> {
   await page.evaluate(() =>
-    (
-      window as unknown as {
-        __store: { getState: () => { updateSettings: (patch: unknown) => void } }
-      }
-    ).__store
-      .getState()
-      .updateSettings({ experimentalAgentDashboardPopout: true })
+    window.__store!.getState().updateSettings({ experimentalAgentDashboardPopout: true })
   )
   await page.evaluate(() => window.api.dashboard.openPopout())
   return await app.waitForEvent('window', { timeout: 30_000 })
@@ -241,7 +235,10 @@ test('pop-out dashboard replays a rebooted pane from history', async (// oxlint-
     // history lookup and the frame itself all stay real.
     await seedAgentStatus(secondLaunch.page, restored)
 
-    const card = popout.locator('button').first()
+    // Why not .first(): any control the board grows above the list would take
+    // the click instead, and the wrong click still opens something.
+    const card = popout.locator('button').filter({ hasText: restored.worktreeName })
+    await expect(card).toHaveCount(1, { timeout: 30_000 })
     await card.click({ timeout: 30_000 })
 
     const dialog = popout.locator('[role="dialog"]')
