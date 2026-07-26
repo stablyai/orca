@@ -40,6 +40,8 @@ export const TERMINAL_DIR_LISTING_SIZE_DIM_JS = String.raw`
 
   function clearSizeDimDecorations() {
     for (var i = 0; i < sizeDimDecorations.length; i++) {
+      // Why: IDecoration.dispose leaves the linked IMarker alive in the buffer.
+      try { sizeDimDecorations[i].marker.dispose(); } catch (e) {}
       try { sizeDimDecorations[i].dispose(); } catch (e) {}
     }
     sizeDimDecorations = [];
@@ -52,7 +54,8 @@ export const TERMINAL_DIR_LISTING_SIZE_DIM_JS = String.raw`
     var buf = term.buffer.active;
     var baseY = buf.baseY;
     var cursorY = buf.cursorY;
-    var bg = (document.body && document.body.style && document.body.style.background) ||
+    // Why: body.style.background is empty when the theme is only set via xterm options.
+    var bg = (typeof terminalTheme !== 'undefined' && terminalTheme && terminalTheme.background) ||
       (typeof defaultTheme !== 'undefined' && defaultTheme.background) ||
       '#1a1b26';
     for (var row = 0; row < term.rows; row++) {
