@@ -17,6 +17,8 @@ Diagnostics:
 
 Agent Discovery:
   agent-context             Print the machine-readable command schema for agents
+  agent memory search       Search durable project-scoped agent memory
+  agent memory remember     Record a cited project memory for later tasks
 
 Skills:
   skills list               List version-matched skill guides bundled with this Orca CLI
@@ -401,6 +403,26 @@ export function formatGroupHelp(specs: CommandSpec[], group: string): string {
 
 function formatCommandFlagHelp(flag: string, commandPath: string[]): string {
   const command = commandPath.join(' ')
+  if (command.startsWith('agent memory ')) {
+    const helpByMemoryFlag: Record<string, string> = {
+      title: '--title <text>         Concise memory title',
+      body: '--body <text>          Memory body text',
+      'body-file': '--body-file <path>    Read the body from the selected workspace',
+      source: '--source <ref>         Evidence reference; repeat for multiple sources',
+      tag: '--tag <tag>            Retrieval tag; repeat for multiple tags',
+      kind: '--kind <kind>          architecture|constraint|decision|fact|lesson|task',
+      confidence: '--confidence <level>  low|medium|high (default: medium)',
+      supersedes: '--supersedes <id>      Older memory replaced by this record',
+      query: '--query <text>        Text to search across memory records',
+      id: '--id <memory-id>      Memory identifier returned by remember or search',
+      limit: '--limit <n>            Maximum matches to return (default: 8, max: 32)',
+      'include-superseded': '--include-superseded Include historical records in search results'
+    }
+    const help = helpByMemoryFlag[flag]
+    if (help) {
+      return help
+    }
+  }
   if (command === 'terminal close' && flag === 'tab') {
     return '--tab                  Close the whole tab and wait for durable persistence'
   }
