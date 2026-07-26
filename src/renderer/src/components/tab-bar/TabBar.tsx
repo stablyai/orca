@@ -1084,9 +1084,12 @@ function TabBarInner({
     const selectedItems = orderedItems.filter(
       (it) => effectiveSelectedTabIds.has(it.id) && it.type === 'terminal' && it.data.ptyId
     )
-    for (const item of selectedItems) {
-      onDetachToWindow(item.id)
+    if (selectedItems.length === 0) {
+      return
     }
+    // Why: the popout window architecture supports one tab per window. Detach
+    // only the first selected tab; multi-tab popout windows are not supported.
+    onDetachToWindow(selectedItems[0].id)
   }, [orderedItems, effectiveSelectedTabIds, onDetachToWindow])
 
   const handleMoveSelectedToSplit = useCallback(
