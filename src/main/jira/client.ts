@@ -21,6 +21,7 @@ import type {
   JiraSiteSelection,
   JiraViewer
 } from '../../shared/types'
+import { clearAttachmentImagesForSite } from './attachment-image-cache'
 
 // Why: Atlassian's XSRF filter rejects POST/PUT REST calls that carry a browser
 // User-Agent, failing them with "XSRF check failed" even under API-token auth.
@@ -606,6 +607,9 @@ export function disconnect(siteId?: string): void {
   for (const id of ids) {
     deleteToken(id)
   }
+  // Why: drop cached attachment data URLs for disconnected sites so main does
+  // not retain multi-MB strings after logout.
+  clearAttachmentImagesForSite(siteId)
   writeSiteFile({
     version: 1,
     activeSiteId: file.activeSiteId,

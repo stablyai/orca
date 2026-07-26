@@ -1,12 +1,20 @@
 import type { JiraClientForSite } from './client'
-import { JiraApiError, jiraRequestBinary } from './client'
+import { JiraApiError, apiBasePath, jiraRequestBinary } from './client'
 import type { JiraAdfMediaAttrs, JiraAdfMediaResolver } from './adf-markdown'
+import { escapeMarkdownAlt, unresolvedMediaPlaceholder } from './adf-markdown'
+import { escapeMarkdownLinkDestination } from './adf-media-destination'
+import { loadAttachmentDataUrlWithCache } from './attachment-image-cache'
+import {
+  MAX_IMAGE_BYTES,
+  MAX_IMAGES,
+  MAX_TOTAL_IMAGE_BYTES,
+  parseImageAttachmentMetas,
+  isImageMimeType,
+  type AttachmentMeta
+} from './attachment-meta'
+import { mapWithConcurrency } from '../../shared/map-with-concurrency'
 
-// Why: images are inlined as data URLs over IPC into the renderer. Keep totals
-// modest so a screenshot-heavy ticket cannot balloon process memory.
-const MAX_IMAGE_BYTES = 5 * 1024 * 1024
-const MAX_TOTAL_IMAGE_BYTES = 20 * 1024 * 1024
-const MAX_IMAGES = 12
+const DOWNLOAD_CONCURRENCY = 3
 
 export type JiraImageAttachment = {
   id: string
@@ -14,84 +22,6 @@ export type JiraImageAttachment = {
   mimeType: string
   byteSize: number
   dataUrl: string
-}
-
-type AttachmentMeta = {
-  id: string
-  filename: string
-  mimeType: string
-  size: number
-  contentUrl?: string
-}
-
-function asRecord(value: unknown): Record<string, unknown> {
-  return value && typeof value === 'object' ? (value as Record<string, unknown>) : {}
-}
-
-function asString(value: unknown): string {
-  return typeof value === 'string' ? value : ''
-}
-
-function isImageMimeType(mimeType: string): boolean {
-  const normalized = mimeType.toLowerCase()
-  return (
-    normalized.startsWith('image/') && !normalized.includes('svg') // Why: SVG can carry script; stick to raster screenshots.
-  )
-}
-
-function escapeMarkdownAlt(text: string): string {
-  return text.replace(/[[\]]/g, '')
-}
-
-export function parseImageAttachmentMetas(attachmentField: unknown): AttachmentMeta[] {
-  if (!Array.isArray(attachmentField)) {
-    return []
-  }
-  const metas: AttachmentMeta[] = []
-  for (const item of attachmentField) {
-    const record = asRecord(item)
-    const id = asString(record.id) || (typeof record.id === 'number' ? String(record.id) : '')
-    const filename = asString(record.filename) || `attachment-${id}`
-    const mimeType = asString(record.mimeType)
-    const size = typeof record.size === 'number' && Number.isFinite(record.size) ? record.size : 0
-    if (!id || !isImageMimeType(mimeType)) {
-      continue
-    }
-    if (size > MAX_IMAGE_BYTES) {
-      continue
-    }
-    const contentUrl = asString(record.content)
-    metas.push({
-      id,
-      filename,
-      mimeType,
-      size,
-      ...(contentUrl ? { contentUrl } : {})
-    })
-  }
-  return metas
-}
-
-/** Pull attachment content IDs from Jira rendered HTML in document order. */
-export function extractAttachmentContentIdsFromHtml(html: string | undefined | null): string[] {
-  if (!html) {
-    return []
-  }
-  const ids: string[] = []
-  const seen = new Set<string>()
-  // Matches /rest/api/3/attachment/content/12345 and /secure/attachment/12345/...
-  const pattern =
-    /\/(?:rest\/api\/\d+\/attachment\/content|secure\/attachment)\/(\d+)(?:\/|\b|"|'|\?)/gi
-  let match: RegExpExecArray | null
-  while ((match = pattern.exec(html)) !== null) {
-    const id = match[1]
-    if (!id || seen.has(id)) {
-      continue
-    }
-    seen.add(id)
-    ids.push(id)
-  }
-  return ids
 }
 
 async function downloadImageAttachment(
@@ -102,40 +32,64 @@ async function downloadImageAttachment(
     // Server/DC exposes attachment bytes through the metadata-provided content URI.
     return null
   }
-  try {
-    const contentUrl = meta.contentUrl
-      ? new URL(meta.contentUrl, `${client.site.siteUrl}/`)
-      : new URL(
-          `/rest/api/3/attachment/content/${encodeURIComponent(meta.id)}`,
-          client.site.siteUrl
-        )
-    if (/\/rest\/api\/(?:2|3)\/attachment\/content\/[^/]+$/i.test(contentUrl.pathname)) {
-      contentUrl.searchParams.set('redirect', 'false')
+
+  const dataUrl = await loadAttachmentDataUrlWithCache({
+    siteId: client.site.id,
+    attachmentId: meta.id,
+    load: async () => {
+      try {
+        const contentUrl = meta.contentUrl
+          ? new URL(meta.contentUrl, `${client.site.siteUrl}/`)
+          : // Why: Cloud fallback uses apiBasePath so Server sites that lack contentUrl
+            // still hit /rest/api/2 if ever called; Server still requires content metadata.
+            new URL(
+              `${apiBasePath(client.site)}/attachment/content/${encodeURIComponent(meta.id)}`,
+              client.site.siteUrl
+            )
+        if (/\/rest\/api\/(?:2|3)\/attachment\/content\/[^/]+$/i.test(contentUrl.pathname)) {
+          contentUrl.searchParams.set('redirect', 'false')
+        }
+        const binary = await jiraRequestBinary(client, contentUrl.toString())
+        if (binary.data.byteLength === 0 || binary.data.byteLength > MAX_IMAGE_BYTES) {
+          return null
+        }
+        const contentType = binary.contentType.split(';')[0]?.trim() || meta.mimeType
+        if (!isImageMimeType(contentType) && !isImageMimeType(meta.mimeType)) {
+          return null
+        }
+        const mime = isImageMimeType(contentType) ? contentType : meta.mimeType
+        const base64 = Buffer.from(binary.data).toString('base64')
+        return {
+          dataUrl: `data:${mime};base64,${base64}`,
+          byteSize: binary.data.byteLength
+        }
+      } catch (error) {
+        // Why: one bad attachment should not blank the whole issue description.
+        if (error instanceof JiraApiError && error.status === 404) {
+          return null
+        }
+        console.warn('[jira] attachment image download failed:', meta.id, error)
+        return null
+      }
     }
-    const binary = await jiraRequestBinary(client, contentUrl.toString())
-    if (binary.data.byteLength === 0 || binary.data.byteLength > MAX_IMAGE_BYTES) {
-      return null
-    }
-    const contentType = binary.contentType.split(';')[0]?.trim() || meta.mimeType
-    if (!isImageMimeType(contentType) && !isImageMimeType(meta.mimeType)) {
-      return null
-    }
-    const mime = isImageMimeType(contentType) ? contentType : meta.mimeType
-    const base64 = Buffer.from(binary.data).toString('base64')
-    return {
-      id: meta.id,
-      filename: meta.filename,
-      mimeType: mime,
-      byteSize: binary.data.byteLength,
-      dataUrl: `data:${mime};base64,${base64}`
-    }
-  } catch (error) {
-    // Why: one bad attachment should not blank the whole issue description.
-    if (error instanceof JiraApiError && error.status === 404) {
-      return null
-    }
-    console.warn('[jira] attachment image download failed:', meta.id, error)
+  })
+
+  if (!dataUrl) {
     return null
+  }
+
+  const mimeMatch = /^data:([^;]+);base64,/.exec(dataUrl)
+  const mime = mimeMatch?.[1] || meta.mimeType
+  // Approximate byte size from base64 payload when served from cache.
+  const base64Part = dataUrl.includes(',') ? dataUrl.slice(dataUrl.indexOf(',') + 1) : ''
+  const byteSize = Math.floor((base64Part.length * 3) / 4)
+
+  return {
+    id: meta.id,
+    filename: meta.filename,
+    mimeType: mime,
+    byteSize,
+    dataUrl
   }
 }
 
@@ -161,15 +115,27 @@ export async function loadIssueImageAttachments(
     }
   }
 
-  const images: JiraImageAttachment[] = []
-  let totalBytes = 0
-  // Why: issue details should fetch only images referenced by rendered content,
-  // in document order, without bursting many authenticated downloads at Jira.
+  // Why: pre-select by declared size so concurrent downloads do not fetch bodies
+  // that will be dropped by the total budget after completion.
+  const toDownload: AttachmentMeta[] = []
+  let plannedBytes = 0
   for (const meta of ordered.slice(0, MAX_IMAGES)) {
-    if (meta.size > 0 && totalBytes + meta.size > MAX_TOTAL_IMAGE_BYTES) {
+    if (meta.size > 0 && plannedBytes + meta.size > MAX_TOTAL_IMAGE_BYTES) {
       continue
     }
-    const image = await downloadImageAttachment(client, meta)
+    toDownload.push(meta)
+    if (meta.size > 0) {
+      plannedBytes += meta.size
+    }
+  }
+
+  const downloaded = await mapWithConcurrency(toDownload, DOWNLOAD_CONCURRENCY, (meta) =>
+    downloadImageAttachment(client, meta)
+  )
+
+  const images: JiraImageAttachment[] = []
+  let totalBytes = 0
+  for (const image of downloaded) {
     if (!image) {
       continue
     }
@@ -182,9 +148,15 @@ export async function loadIssueImageAttachments(
   return images
 }
 
+export type MediaResolutionStats = {
+  mediaAttemptCount: number
+  resolvedCount: number
+}
+
 export function createMediaMarkdownResolver(
   images: readonly JiraImageAttachment[],
-  preferredAttachmentIds: readonly string[] = []
+  preferredAttachmentIds: readonly string[] = [],
+  stats?: MediaResolutionStats
 ): JiraAdfMediaResolver {
   const byId = new Map(images.map((image) => [image.id, image]))
   const byFilename = new Map<string, JiraImageAttachment[]>()
@@ -218,41 +190,68 @@ export function createMediaMarkdownResolver(
       return null
     }
     const index = queue.findIndex((entry) => entry.id === image.id)
-    if (index >= 0) {
-      queue.splice(index, 1)
+    // Why: already-consumed images must not re-emit; fall through to positional pairing.
+    if (index < 0) {
+      return null
     }
+    queue.splice(index, 1)
     return `![${escapeMarkdownAlt(image.filename)}](${image.dataUrl})`
   }
 
   return (attrs: JiraAdfMediaAttrs): string | null => {
+    if (stats) {
+      stats.mediaAttemptCount += 1
+    }
+
     if (attrs.id) {
       const cached = resolvedByMediaId.get(attrs.id)
       if (cached) {
+        if (stats) {
+          stats.resolvedCount += 1
+        }
         return cached
       }
     }
     const alt = attrs.alt?.trim() || 'Image'
-    if (attrs.url && /^https?:\/\//i.test(attrs.url)) {
-      return `![${escapeMarkdownAlt(alt)}](${attrs.url})`
+    if (attrs.url) {
+      // Why: return placeholder (not null) so non-http / hostile externals do not
+      // fall through to positional attachment pairing.
+      if (!/^https?:\/\//i.test(attrs.url)) {
+        return unresolvedMediaPlaceholder({ ...attrs, alt })
+      }
+      const safeUrl = escapeMarkdownLinkDestination(attrs.url)
+      if (!safeUrl) {
+        return unresolvedMediaPlaceholder({ ...attrs, alt })
+      }
+      if (stats) {
+        stats.resolvedCount += 1
+      }
+      return `![${escapeMarkdownAlt(alt)}](${safeUrl})`
     }
 
     let resolved: string | null = null
-    if (attrs.id) {
-      resolved = take(byId.get(attrs.id))
-    }
+    // Why: ADF media IDs are Media Service UUIDs, not attachment IDs — skip byId
+    // lookup on attrs.id against attachment map (they never match).
     if (attrs.alt?.trim()) {
       const matches = byFilename.get(attrs.alt.trim().toLowerCase())
       if (matches && matches.length > 0) {
         const stillQueued = matches.find((image) => queue.some((entry) => entry.id === image.id))
-        resolved ??= take(stillQueued ?? matches[0])
+        // Why: only take still-queued matches; never re-emit matches[0] after consume.
+        if (stillQueued) {
+          resolved = take(stillQueued)
+        }
       }
     }
 
-    // Why: ADF media IDs are Media Service UUIDs, not attachment IDs. Pair remaining
-    // inline images to downloaded attachments in rendered/document order.
-    resolved ??= take(queue.shift())
+    // Why: take() removes from queue; do not shift first or membership check fails.
+    if (!resolved && queue.length > 0) {
+      resolved = take(queue[0])
+    }
     if (resolved && attrs.id) {
       resolvedByMediaId.set(attrs.id, resolved)
+    }
+    if (resolved && stats) {
+      stats.resolvedCount += 1
     }
     return resolved
   }

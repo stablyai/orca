@@ -1,3 +1,5 @@
+import { escapeMarkdownLinkDestination } from './adf-media-destination'
+
 type JiraAdfRecord = Record<string, unknown>
 
 type MarkdownBlock = {
@@ -55,7 +57,7 @@ function headingLevel(value: unknown): number {
   return Math.min(Math.max(positiveInteger(value, 1), 1), 6)
 }
 
-function escapeMarkdownAlt(text: string): string {
+export function escapeMarkdownAlt(text: string): string {
   return text.replace(/[[\]]/g, '')
 }
 
@@ -69,11 +71,36 @@ function mediaAttrsFromRecord(record: JiraAdfRecord): JiraAdfMediaAttrs {
   }
 }
 
-function unresolvedMediaPlaceholder(attrs: JiraAdfMediaAttrs): string {
+export function unresolvedMediaPlaceholder(attrs: JiraAdfMediaAttrs): string {
   const label = escapeMarkdownAlt(attrs.alt?.trim() || 'Image')
   // Why: keep a visible marker when media cannot be downloaded so screenshots
   // are not silently dropped from the issue body.
   return `*[${label}]*`
+}
+
+/** Collect media attrs in document order (read-only; separate from adfToMarkdownText). */
+export function collectAdfMediaAttrs(value: unknown): JiraAdfMediaAttrs[] {
+  const collected: JiraAdfMediaAttrs[] = []
+
+  const walk = (node: unknown): void => {
+    if (!node || typeof node !== 'object') {
+      return
+    }
+    if (Array.isArray(node)) {
+      for (const child of node) {
+        walk(child)
+      }
+      return
+    }
+    const record = node as JiraAdfRecord
+    if (record.type === 'media' || record.type === 'mediaInline') {
+      collected.push(mediaAttrsFromRecord(record))
+    }
+    walk(record.content)
+  }
+
+  walk(value)
+  return collected
 }
 
 function renderMediaMarkdown(
@@ -86,7 +113,11 @@ function renderMediaMarkdown(
     return resolved
   }
   if (attrs.url && /^https?:\/\//i.test(attrs.url)) {
-    return `![${escapeMarkdownAlt(attrs.alt?.trim() || 'Image')}](${attrs.url})`
+    const safeUrl = escapeMarkdownLinkDestination(attrs.url)
+    if (!safeUrl) {
+      return unresolvedMediaPlaceholder(attrs)
+    }
+    return `![${escapeMarkdownAlt(attrs.alt?.trim() || 'Image')}](${safeUrl})`
   }
   return unresolvedMediaPlaceholder(attrs)
 }

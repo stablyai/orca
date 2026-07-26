@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
-import { adfToMarkdownText } from './adf-markdown'
+import { adfToMarkdownText, collectAdfMediaAttrs } from './adf-markdown'
+import { escapeMarkdownLinkDestination } from './adf-media-destination'
 
 describe('adfToMarkdownText media', () => {
   it('keeps a placeholder when media cannot be resolved', () => {
@@ -108,5 +109,50 @@ describe('adfToMarkdownText media', () => {
     )
 
     expect(markdown).toBe('See ![icon.png](data:image/png;base64,xyz)')
+  })
+
+  it('escapes markdown-hostile external media destinations', () => {
+    const hostile = 'https://cdn.example/x?a=1)![z](https://evil.example/y'
+    // Pin: encodeURI alone does not encode )
+    expect(encodeURI(hostile)).toContain(')')
+    const safe = escapeMarkdownLinkDestination(hostile)
+    expect(safe).not.toBeNull()
+    expect(safe).not.toContain(')')
+    expect(safe).toContain('%29')
+
+    const markdown = adfToMarkdownText({
+      type: 'doc',
+      version: 1,
+      content: [
+        {
+          type: 'mediaSingle',
+          content: [{ type: 'media', attrs: { type: 'external', url: hostile, alt: 'Image' } }]
+        }
+      ]
+    })
+    expect(markdown).toContain('%29')
+    expect(markdown).not.toContain('](https://evil')
+  })
+
+  it('preserves existing percent-escapes when encoding destinations', () => {
+    const url = 'https://cdn.example/path%20with%20space.png'
+    expect(escapeMarkdownLinkDestination(url)).toBe(url)
+  })
+
+  it('collects media attrs in document order', () => {
+    const attrs = collectAdfMediaAttrs({
+      type: 'doc',
+      content: [
+        { type: 'media', attrs: { id: 'a', alt: 'one.png' } },
+        {
+          type: 'paragraph',
+          content: [{ type: 'mediaInline', attrs: { id: 'b', url: 'https://x.example/y.png' } }]
+        }
+      ]
+    })
+    expect(attrs).toEqual([
+      { id: 'a', alt: 'one.png' },
+      { id: 'b', url: 'https://x.example/y.png' }
+    ])
   })
 })
