@@ -1,10 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
-import type {
-  TabGroup,
-  TerminalLayoutSnapshot,
-  TerminalTab,
-  Worktree
-} from '../../../../shared/types'
+import type { TabGroup, TerminalLayoutSnapshot, TerminalTab } from '../../../../shared/types'
 import {
   captureTerminalTabForWindowDetach,
   reintegrateDetachedTerminalTab
@@ -38,8 +33,16 @@ const makeLayout = (): TerminalLayoutSnapshot => ({
   expandedLeafId: null,
   ptyIdsByLeafId: { [LEAF_1]: 'pty-1' }
 })
-const REPO = { id: 'wt-1', path: '/repo', displayName: 'Repo', badgeColor: '#000', addedAt: 0 }
-const WORKTREE = { id: 'wt-1', repoId: 'wt-1', displayName: 'Repo' } as unknown as Worktree
+
+const REPO = {
+  id: 'wt-1',
+  path: '/repo',
+  displayName: 'Repo',
+  badgeColor: '#000',
+  addedAt: 0,
+  connectionId: null,
+  executionHostId: null
+}
 
 describe('captureTerminalTabForWindowDetach', () => {
   it('builds a seed from the tab, its owning group, and its live layout', () => {
@@ -49,8 +52,7 @@ describe('captureTerminalTabForWindowDetach', () => {
       groupsByWorktree: { 'wt-1': [makeGroup()] },
       terminalLayoutsByTabId: { 'tab-1': layout },
       ptyIdsByTabId: { 'tab-1': ['pty-1'] },
-      repos: [REPO],
-      worktreesByRepo: { 'wt-1': [WORKTREE] }
+      repos: [REPO]
     }
 
     const seed = captureTerminalTabForWindowDetach(store, 'wt-1', 'tab-1')
@@ -61,8 +63,7 @@ describe('captureTerminalTabForWindowDetach', () => {
       tab: makeTab(),
       layout,
       ptyId: 'pty-1',
-      repo: REPO,
-      worktree: WORKTREE
+      repo: REPO
     })
   })
 
@@ -72,8 +73,7 @@ describe('captureTerminalTabForWindowDetach', () => {
       groupsByWorktree: { 'wt-1': [makeGroup()] },
       terminalLayoutsByTabId: {},
       ptyIdsByTabId: {},
-      repos: [REPO],
-      worktreesByRepo: { 'wt-1': [WORKTREE] }
+      repos: [REPO]
     }
     expect(captureTerminalTabForWindowDetach(store, 'wt-1', 'tab-1')).toBeNull()
   })
@@ -84,8 +84,7 @@ describe('captureTerminalTabForWindowDetach', () => {
       groupsByWorktree: { 'wt-1': [makeGroup({ tabOrder: [] })] },
       terminalLayoutsByTabId: { 'tab-1': makeLayout() },
       ptyIdsByTabId: { 'tab-1': ['pty-1'] },
-      repos: [REPO],
-      worktreesByRepo: { 'wt-1': [WORKTREE] }
+      repos: [REPO]
     }
     expect(captureTerminalTabForWindowDetach(store, 'wt-1', 'tab-1')).toBeNull()
   })
@@ -96,20 +95,18 @@ describe('captureTerminalTabForWindowDetach', () => {
       groupsByWorktree: { 'wt-1': [makeGroup()] },
       terminalLayoutsByTabId: {},
       ptyIdsByTabId: { 'tab-1': ['pty-1'] },
-      repos: [REPO],
-      worktreesByRepo: { 'wt-1': [WORKTREE] }
+      repos: [REPO]
     }
     expect(captureTerminalTabForWindowDetach(store, 'wt-1', 'tab-1')).toBeNull()
   })
 
-  it('returns null when repo/worktree metadata is missing', () => {
+  it('returns null when repo metadata is missing', () => {
     const store = {
       tabsByWorktree: { 'wt-1': [makeTab()] },
       groupsByWorktree: { 'wt-1': [makeGroup()] },
       terminalLayoutsByTabId: { 'tab-1': makeLayout() },
       ptyIdsByTabId: { 'tab-1': ['pty-1'] },
-      repos: [],
-      worktreesByRepo: {}
+      repos: []
     }
     expect(captureTerminalTabForWindowDetach(store, 'wt-1', 'tab-1')).toBeNull()
   })
@@ -124,8 +121,7 @@ describe('reintegrateDetachedTerminalTab', () => {
       tab: makeTab({ customTitle: 'My shell', color: '#ef4444' }),
       layout,
       ptyId: 'pty-1',
-      repo: REPO,
-      worktree: WORKTREE
+      repo: REPO
     }
     const store = {
       groupsByWorktree: { 'wt-1': [makeGroup()] },
@@ -155,8 +151,7 @@ describe('reintegrateDetachedTerminalTab', () => {
       tab: makeTab(),
       layout: makeLayout(),
       ptyId: 'pty-1',
-      repo: REPO,
-      worktree: WORKTREE
+      repo: REPO
     }
     const store = {
       groupsByWorktree: { 'wt-1': [makeGroup()] },

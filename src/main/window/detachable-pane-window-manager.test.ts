@@ -123,7 +123,7 @@ vi.mock('./privileged-window-navigation', () => ({
 import { DetachablePaneWindowManager } from './detachable-pane-window-manager'
 import { InvalidDetachablePaneWindowTransitionError } from './detachable-pane-window'
 import type { Store } from '../persistence'
-import type { DetachedTerminalTabSeed, Worktree } from '../../shared/types'
+import type { DetachedTerminalTabSeed } from '../../shared/types'
 
 type FakeWindow = InstanceType<typeof BrowserWindowMock>
 
@@ -134,8 +134,15 @@ function makeSeed(): DetachedTerminalTabSeed {
     ptyId: 'pty-1',
     worktreeId: 'wt-1',
     groupId: 'group-1',
-    repo: { id: 'wt-1', path: '/repo', displayName: 'Repo', badgeColor: '#000', addedAt: 0 },
-    worktree: { id: 'wt-1', repoId: 'wt-1', displayName: 'Repo' } as unknown as Worktree
+    repo: {
+      id: 'wt-1',
+      path: '/repo',
+      displayName: 'Repo',
+      badgeColor: '#000',
+      addedAt: 0,
+      connectionId: null,
+      executionHostId: null
+    }
   }
 }
 
