@@ -182,6 +182,12 @@ test('pop-out dashboard replays a rebooted pane from history', async (// oxlint-
     await waitForPaneCount(firstLaunch.page, 1, 30_000)
 
     const ptyId = await discoverActivePtyId(firstLaunch.page)
+    // Why: the frame captured below is review evidence attached to a public PR,
+    // and the developer's own prompt bakes user@host into every line. Neutralize
+    // it, then clear away the probe lines that already carry it — which also
+    // makes the captured frame identical on every machine.
+    await execInTerminal(firstLaunch.page, ptyId, `PS1='orca-e2e$ '`)
+    await execInTerminal(firstLaunch.page, ptyId, 'clear')
     const marker = `REBOOTED_PANE_${Date.now()}`
     await execInTerminal(firstLaunch.page, ptyId, `echo ${marker}`)
     await waitForTerminalOutput(firstLaunch.page, marker)
