@@ -131,6 +131,18 @@ async function waitFor(predicate: () => boolean, timeoutMs = 2_000): Promise<voi
   }
 }
 
+function seedSupervisedAskWorkers(db: OrchestrationDb, workerHandles: string[]): void {
+  const run = db.createRun({
+    objective: 'Exercise ask admission',
+    coordinatorHandle: 'term_coord',
+    coordinatorPaneKey: 'tab_coord:bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb'
+  })
+  for (const workerHandle of workerHandles) {
+    const task = db.createTask({ spec: 'Wait for coordinator input', runId: run.id })
+    db.createDispatchContext(task.id, workerHandle)
+  }
+}
+
 function connectWs(endpoint: string): Promise<WebSocket> {
   return new Promise((resolve, reject) => {
     const ws = new WebSocket(endpoint)
@@ -1338,6 +1350,7 @@ describe('OrcaRuntimeRpcServer', () => {
     const runtime = new OrcaRuntimeService()
     const db = new OrchestrationDb(':memory:')
     runtime.setOrchestrationDb(db)
+    seedSupervisedAskWorkers(db, ['term_w0', 'term_w1', 'term_w2'])
     // Why: cap 4 → ask sub-cap 2, so the third ask must be shed while waits keep the other half.
     const server = new OrcaRuntimeRpcServer({
       runtime,
@@ -4391,6 +4404,7 @@ describe('OrcaRuntimeRpcServer', () => {
       const runtime = new OrcaRuntimeService()
       const db = new OrchestrationDb(':memory:')
       runtime.setOrchestrationDb(db)
+      seedSupervisedAskWorkers(db, ['term_w0', 'term_w1', 'term_w2', 'term_w3'])
       // Why: cap 4 → ask sub-cap 2, so 4 concurrent asks can only take half the budget.
       const server = new OrcaRuntimeRpcServer({
         runtime,

@@ -1650,6 +1650,22 @@ Append new entries chronologically. Do not rewrite older entries except to corre
   - Run the complete orchestration regression selection and repository quality gates, then commit
     and push the provider dogfood fixes.
 
+### 2026-07-25 — CI ask-admission fixture correction
+
+- Changes:
+  - Updated the WebSocket long-poll admission tests to place each simulated asking worker in a real
+    Run with an active supervised Dispatch.
+  - Kept the production rule that unsupervised workers cannot create blocking questions.
+- Verification:
+  - The complete runtime RPC test file passed 59 tests.
+  - The broader orchestration/RPC/CLI selection passed 23 files and 391 tests.
+  - Node typecheck and `git diff --check` passed.
+- Findings:
+  - The red CI assertions were stale test setup: old arbitrary terminal handles now fail
+    `orchestration.ask` before holding an admission slot, exactly as the new contract requires.
+- Next:
+  - Push the test-only correction and confirm the replacement PR check is green.
+
 ### Entry template
 
 ```text
