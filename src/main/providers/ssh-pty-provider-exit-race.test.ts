@@ -1,14 +1,24 @@
 import { expect, it, vi } from 'vitest'
 import { SshPtyProvider } from './ssh-pty-provider'
 
-it('rejects a fresh SSH PTY whose exit shares the spawn response batch', async () => {
-  const mux = {
+function createMux(): {
+  request: ReturnType<typeof vi.fn>
+  notify: ReturnType<typeof vi.fn>
+  onNotification: ReturnType<typeof vi.fn>
+  dispose: ReturnType<typeof vi.fn>
+  isDisposed: ReturnType<typeof vi.fn>
+} {
+  return {
     request: vi.fn(),
     notify: vi.fn(),
     onNotification: vi.fn(),
     dispose: vi.fn(),
     isDisposed: vi.fn().mockReturnValue(false)
   }
+}
+
+it('rejects a fresh SSH PTY whose exit shares the spawn response batch', async () => {
+  const mux = createMux()
   const provider = new SshPtyProvider('conn-1', mux as never)
   const exitListener = vi.fn()
   provider.onExit(exitListener)
@@ -42,13 +52,7 @@ it('rejects a fresh SSH PTY whose exit shares the spawn response batch', async (
 })
 
 it('rejects an SSH reattach whose matching exit shares the attach reply batch', async () => {
-  const mux = {
-    request: vi.fn(),
-    notify: vi.fn(),
-    onNotification: vi.fn(),
-    dispose: vi.fn(),
-    isDisposed: vi.fn().mockReturnValue(false)
-  }
+  const mux = createMux()
   const provider = new SshPtyProvider('conn-1', mux as never)
   mux.request.mockImplementation(async (method: string) => {
     if (method === 'pty.attach') {
@@ -75,4 +79,74 @@ it('rejects an SSH reattach whose matching exit shares the attach reply batch', 
     incarnationId: 'incarnation-next',
     isReattach: true
   })
+})
+
+// Why: `pty.exit` deletes from livePtyIds during the await, so an unfenced add after
+// it would resurrect a pty the relay already reported dead — the phantom-live state
+// the dead-pty write guard exists to prevent (#9169).
+function createExitDuringAttachMux(incarnationId?: string): ReturnType<typeof createMux> {
+  const mux = createMux()
+  mux.request.mockImplementation(async (method: string) => {
+    if (method === 'pty.attach') {
+      const notify = mux.onNotification.mock.calls[0]?.[0]
+      notify?.('pty.exit', {
+        id: 'pty-1',
+        code: 0,
+        ...(incarnationId ? { incarnationId } : {})
+      })
+      return incarnationId ? { incarnationId } : undefined
+    }
+    return undefined
+  })
+  return mux
+}
+
+it('fails attach() and leaves the pty not live when its exit shares the attach reply batch', async () => {
+  const mux = createExitDuringAttachMux('incarnation-gone')
+  const provider = new SshPtyProvider('conn-1', mux as never)
+
+  await expect(provider.attach('ssh:conn-1@@pty-1')).rejects.toThrow('SSH_SESSION_EXPIRED')
+
+  expect(provider.hasPty('ssh:conn-1@@pty-1')).toBe(false)
+})
+
+it('fences attach() even when the relay reports no incarnation', async () => {
+  const mux = createExitDuringAttachMux()
+  const provider = new SshPtyProvider('conn-1', mux as never)
+
+  await expect(provider.attach('ssh:conn-1@@pty-1')).rejects.toThrow('SSH_SESSION_EXPIRED')
+
+  expect(provider.hasPty('ssh:conn-1@@pty-1')).toBe(false)
+})
+
+it('leaves a reconnect-attached pty not live when its exit shares the attach reply batch', async () => {
+  const mux = createExitDuringAttachMux('incarnation-gone')
+  const provider = new SshPtyProvider('conn-1', mux as never)
+
+  // Why: ssh-relay-session's pending-exit fence needs the incarnation to retire the
+  // pane, so the exit suppresses the liveness add without failing the reattach loop.
+  await expect(provider.attachForReconnect('pty-1')).resolves.toEqual({
+    incarnationId: 'incarnation-gone'
+  })
+
+  expect(provider.hasPty('ssh:conn-1@@pty-1')).toBe(false)
+})
+
+it('still marks an attached pty live when a different incarnation exits mid-attach', async () => {
+  const mux = createMux()
+  const provider = new SshPtyProvider('conn-1', mux as never)
+  mux.request.mockImplementation(async (method: string) => {
+    if (method === 'pty.attach') {
+      const notify = mux.onNotification.mock.calls[0]?.[0]
+      notify?.('pty.exit', { id: 'pty-1', code: 0, incarnationId: 'incarnation-previous' })
+      return { incarnationId: 'incarnation-current' }
+    }
+    return undefined
+  })
+
+  await expect(provider.attachForReconnect('pty-1')).resolves.toEqual({
+    incarnationId: 'incarnation-current'
+  })
+
+  expect(provider.hasPty('ssh:conn-1@@pty-1')).toBe(true)
 })

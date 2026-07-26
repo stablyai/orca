@@ -16,10 +16,14 @@ import {
 } from './ssh-agent-session-create-operation'
 import { mapSshPtyProcessList } from './ssh-agent-session-process-list'
 import {
-  parseSshPtyAttachResult,
   reattachSshPtySessionWithExitFence,
   type SshPtyAttachResult
 } from './ssh-pty-session-reattach'
+import {
+  attachSshPty,
+  attachSshPtyForReconnect,
+  type SshPtyAttachContext
+} from './ssh-pty-attach-exit-fence'
 import { buildSshPtySpawnRequest } from './ssh-pty-spawn-request'
 import { SshPtySpawnExitRaceTracker } from './ssh-pty-spawn-exit-race'
 import { SshAgentSessionCapabilities } from './ssh-agent-session-capabilities'
@@ -197,34 +201,25 @@ export class SshPtyProvider implements IPtyProvider {
     return await this.agentSessionCapabilities.supportsCreateOperations(options)
   }
 
+  private attachContext(): SshPtyAttachContext {
+    return {
+      mux: this.mux,
+      exitRaceTracker: this.spawnExitRaces,
+      livePtyIds: this.livePtyIds,
+      toRelayPtyId: (id) => this.toRelayPtyId(id),
+      toAppPtyId: (id) => this.toAppPtyId(id)
+    }
+  }
+
   async attach(id: string): Promise<void> {
-    await this.mux.request('pty.attach', { id: this.toRelayPtyId(id) })
-    // Why: a resolved attach is the relay asserting it owns this pty; without it
-    // a quiet pty stays absent from livePtyIds until its first frame arrives.
-    this.livePtyIds.add(this.toAppPtyId(id))
+    await attachSshPty(this.attachContext(), id)
   }
 
   async attachForReconnect(
     id: string,
     expected?: { paneKey?: string; tabId?: string }
   ): Promise<SshPtyAttachResult> {
-    // Why: reconnect owns replay delivery so stale/duplicate attach results can
-    // be filtered before they reach the renderer. The expected identity lets the
-    // relay reject a cross-generation id collision instead of reattaching this
-    // lease to a different pane's freshly spawned PTY.
-    const result = parseSshPtyAttachResult(
-      await this.mux.request('pty.attach', {
-        id: this.toRelayPtyId(id),
-        suppressReplayNotification: true,
-        ...(expected?.paneKey ? { expectedPaneKey: expected.paneKey } : {}),
-        ...(expected?.tabId ? { expectedTabId: expected.tabId } : {})
-      })
-    )
-    // Why: reconnect builds a fresh provider with an empty livePtyIds, and a
-    // reattached-but-silent pty emits no frame — mark it live on the attach that
-    // proved it exists, or writes to it report not-written (#9169).
-    this.livePtyIds.add(this.toAppPtyId(id))
-    return result
+    return await attachSshPtyForReconnect(this.attachContext(), id, expected)
   }
 
   write(id: string, data: string): void {
