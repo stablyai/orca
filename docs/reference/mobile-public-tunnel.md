@@ -81,7 +81,8 @@ public key, and E2EE handshake. Treat the pairing QR or pairing URL as a secret.
 
 ## Configure Orca pairing
 
-1. Start Orca and confirm the Mobile RPC runtime is listening on port `6768`.
+1. Start Orca and confirm the Mobile RPC runtime is listening on the configured
+   port (`6768` by default).
 2. In **Settings > Mobile**, choose **Add custom endpoint…**.
 3. Enter `wss://orca.example.com`. Port `443` may be explicit but is not
    required.
@@ -91,7 +92,8 @@ public key, and E2EE handshake. Treat the pairing QR or pairing URL as a secret.
 
 ## Verification
 
-Check local HTTP reachability first:
+Check local HTTP reachability first, replacing `6768` if Orca uses a different
+Mobile RPC port:
 
 ```bash
 curl --fail --show-error --max-time 10 http://127.0.0.1:6768/
