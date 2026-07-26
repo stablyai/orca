@@ -15,7 +15,8 @@ import {
   Play,
   Plus,
   SquareTerminal,
-  X
+  X,
+  ArrowLeftRight
 } from 'lucide-react'
 import {
   DropdownMenu,
@@ -51,6 +52,7 @@ type TerminalContextMenuProps = {
   onPaste: () => void
   onSplitRight: () => void
   onSplitDown: () => void
+  onSwapSession: () => void
   keybindings: KeybindingOverrides
   canEqualizePaneSizes: boolean
   onEqualizePaneSizes: () => void
@@ -88,6 +90,7 @@ export default function TerminalContextMenu({
   onPaste,
   onSplitRight,
   onSplitDown,
+  onSwapSession,
   keybindings,
   canEqualizePaneSizes,
   onEqualizePaneSizes,
@@ -301,6 +304,13 @@ export default function TerminalContextMenu({
           </DropdownMenuItem>
         ) : null}
         <DropdownMenuSeparator />
+        <DropdownMenuItem className="whitespace-nowrap" onSelect={onSwapSession}>
+          <ArrowLeftRight className="size-4" />
+          {translate(
+            'auto.components.terminal.pane.TerminalContextMenu.swapSession',
+            'Swap with Session...'
+          )}
+        </DropdownMenuItem>
         <DropdownMenuItem className="whitespace-nowrap" onSelect={onSplitRight}>
           <PanelRightClose />
           {translate(
@@ -347,30 +357,28 @@ export default function TerminalContextMenu({
         <DropdownMenuSeparator />
         <DropdownMenuItem
           onSelect={() => {
-            // Why: Set Title moves focus into an overlay input. Force-close
-            // before opening it so the menu's focus guards are not still active.
             onOpenChange(false)
             onSetTitle()
           }}
         >
           <Pencil />
           {translate('auto.components.terminal.pane.TerminalContextMenu.39809d152f', 'Set Title…')}
-          {showSetTitleShortcut ? (
+          {showSetTitleShortcut && (
             <DropdownMenuShortcut>{shortcuts.setTitle}</DropdownMenuShortcut>
-          ) : null}
+          )}
         </DropdownMenuItem>
-        {canClearPaneTitle ? (
+        {canClearPaneTitle && (
           <DropdownMenuItem onSelect={onClearPaneTitle}>
             <X />
             {translate(
               'auto.components.terminal.pane.TerminalContextMenu.clearPaneTitle',
               'Clear Pane Title'
             )}
-            {showClearPaneTitleShortcut ? (
+            {showClearPaneTitleShortcut && (
               <DropdownMenuShortcut>{shortcuts.clearPaneTitle}</DropdownMenuShortcut>
-            ) : null}
+            )}
           </DropdownMenuItem>
-        ) : null}
+        )}
         <DropdownMenuItem onSelect={onCopyTerminalId}>
           <Copy />
           {translate(

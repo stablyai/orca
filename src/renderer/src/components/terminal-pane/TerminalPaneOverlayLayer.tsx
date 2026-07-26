@@ -9,6 +9,7 @@ import {
   findActivityTerminalPortal,
   type ActivityTerminalPortalTarget
 } from '../activity/activity-terminal-portal'
+import { SwapTargetOverlay } from './SwapTargetOverlay'
 import TerminalPane from './TerminalPane'
 import { closeTerminalTab } from '../terminal/terminal-tab-actions'
 import { shouldMountBackgroundWorktreeTab } from '../terminal/background-terminal-worktree-mount'
@@ -429,6 +430,7 @@ const TerminalPaneOverlayLayer = memo(function TerminalPaneOverlayLayer({
             />
           )
         })}
+      <SwapTargetOverlay worktreeId={worktreeId} />
     </>
   )
 })

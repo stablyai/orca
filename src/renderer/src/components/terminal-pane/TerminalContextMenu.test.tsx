@@ -61,6 +61,7 @@ function renderMenu(overrides: Record<string, unknown> = {}): void {
     onPaste: vi.fn(),
     onSplitRight: vi.fn(),
     onSplitDown: vi.fn(),
+    onSwapSession: vi.fn(),
     keybindings: {},
     canEqualizePaneSizes: false,
     onEqualizePaneSizes: vi.fn(),

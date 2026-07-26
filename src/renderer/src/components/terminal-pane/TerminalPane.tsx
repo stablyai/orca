@@ -3046,6 +3046,7 @@ export default function TerminalPane({
         onCopy={() => void contextMenu.onCopy()}
         onPaste={() => void contextMenu.onPaste()}
         onSplitRight={contextMenu.onSplitRight}
+        onSwapSession={contextMenu.onSwapSession}
         onSplitDown={contextMenu.onSplitDown}
         keybindings={keybindings}
         onEqualizePaneSizes={contextMenu.onEqualizePaneSizes}
