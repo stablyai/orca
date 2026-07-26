@@ -3033,7 +3033,18 @@ export function registerPtyHandlers(
   }
 
   const syntheticKillExitPtyIds = new Map<string, NodeJS.Timeout>()
+  const archivedNonSshExitRecoveryByPtyId = new Map<string, string>()
   const reversibleStopOwnersByPtyId = new Map<string, number>()
+
+  function beginArchivedNonSshPtyExitRecovery(ptyId: string, archiveId: string): void {
+    archivedNonSshExitRecoveryByPtyId.set(ptyId, archiveId)
+  }
+
+  function takeArchivedNonSshPtyExitRecovery(ptyId: string): string | undefined {
+    const archiveId = archivedNonSshExitRecoveryByPtyId.get(ptyId)
+    archivedNonSshExitRecoveryByPtyId.delete(ptyId)
+    return archiveId
+  }
 
   function rememberSyntheticKillExit(id: string): void {
     const existing = syntheticKillExitPtyIds.get(id)
@@ -3186,8 +3197,11 @@ export function registerPtyHandlers(
         const expectedIncarnationId = ptyIncarnationById.get(ptyId)
         if (isSsh) {
           beginArchivedSshPtyExitRecovery(ptyId, args.archiveId)
+        } else {
+          beginArchivedNonSshPtyExitRecovery(ptyId, args.archiveId)
         }
         let succeeded = false
+        let providerExitObserved = false
         if (!provider) {
           console.warn('[pty] lost-worker archive shutdown diagnostic', {
             reason: args.reason,
@@ -3200,7 +3214,9 @@ export function registerPtyHandlers(
           })
         } else {
           try {
-            await shutdownProviderAndDetectExit(provider, ptyId, { immediate: true })
+            providerExitObserved = await shutdownProviderAndDetectExit(provider, ptyId, {
+              immediate: true
+            })
             succeeded = true
           } catch (error) {
             succeeded = isSshPtyNotFoundError(error)
@@ -3221,15 +3237,19 @@ export function registerPtyHandlers(
             isSsh ? sshTargetId.targetId : undefined,
             store
           )
-          runtime?.onPtyExit(ptyId, -1, incarnationId)
+          if (!providerExitObserved) {
+            runtime?.onPtyExit(ptyId, -1, incarnationId)
+          }
         } else {
           clearProviderPtyState(ptyId)
           ptyOwnership.delete(ptyId)
           markClaudePtyExited(ptyId)
           runtime?.onPtyExit(ptyId, -1, expectedIncarnationId)
         }
-        const recoveryArchiveId = isSsh ? takeArchivedSshPtyExitRecovery(ptyId) : args.archiveId
-        if (recoveryArchiveId) {
+        const recoveryArchiveId = isSsh
+          ? takeArchivedSshPtyExitRecovery(ptyId)
+          : takeArchivedNonSshPtyExitRecovery(ptyId)
+        if (recoveryArchiveId && !providerExitObserved) {
           rememberSyntheticKillExit(ptyId)
           sendPtyExitToRenderer({
             id: ptyId,
@@ -3420,13 +3440,21 @@ export function registerPtyHandlers(
       if (consumeSyntheticKillExit(payload.id)) {
         return
       }
+      const archiveId = takeArchivedNonSshPtyExitRecovery(payload.id)
       if (!isLocalProvider) {
         clearProviderPtyState(payload.id)
         ptyOwnership.delete(payload.id)
         markClaudePtyExited(payload.id)
         runtime?.onPtyExit(payload.id, payload.code, payload.incarnationId)
       }
-      sendPtyExitToRenderer(payload)
+      sendPtyExitToRenderer(
+        archiveId
+          ? {
+              ...payload,
+              lostWorkerRecovery: { kind: 'archived', archiveId }
+            }
+          : payload
+      )
     })
   }
 

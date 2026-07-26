@@ -721,6 +721,146 @@ describe('registerPtyHandlers', () => {
     clearProviderPtyState(ptyId)
   })
 
+  it('delivers the archive receipt with a synchronous non-SSH provider exit', async () => {
+    const ptyId = 'daemon-archive-sync-exit'
+    const incarnationId = 'incarnation-current'
+    const leafId = '33333333-3333-4333-8333-333333333333'
+    const tabId = 'tab-archive-sync-exit'
+    const worktreeId = 'repo-1::/worktree'
+    const exitListeners = new Set<
+      (payload: { id: string; code: number; incarnationId?: string }) => void
+    >()
+    setLocalPtyProvider({
+      spawn: vi.fn(),
+      write: vi.fn(),
+      resize: vi.fn(),
+      kill: vi.fn(),
+      shutdown: vi.fn(async () => {
+        for (const listener of exitListeners) {
+          listener({ id: ptyId, code: 0, incarnationId })
+        }
+      }),
+      sendSignal: vi.fn(),
+      getCwd: vi.fn(),
+      getInitialCwd: vi.fn(),
+      clearBuffer: vi.fn(),
+      acknowledgeDataEvent: vi.fn(),
+      hasChildProcesses: vi.fn(),
+      getForegroundProcess: vi.fn(),
+      confirmForegroundProcess: vi.fn(),
+      serialize: vi.fn(),
+      revive: vi.fn(),
+      onData: vi.fn(() => () => {}),
+      onReplay: vi.fn(() => () => {}),
+      onExit: vi.fn((listener) => {
+        exitListeners.add(listener)
+        return () => exitListeners.delete(listener)
+      }),
+      listProcesses: vi.fn(async () => []),
+      attach: vi.fn(),
+      getDefaultShell: vi.fn(),
+      getProfiles: vi.fn()
+    } as never)
+    const session = {
+      ...getDefaultWorkspaceSession(),
+      tabsByWorktree: {
+        [worktreeId]: [
+          {
+            id: tabId,
+            worktreeId,
+            title: 'Worker',
+            customTitle: null,
+            color: null,
+            sortOrder: 0,
+            createdAt: 1,
+            ptyId
+          }
+        ]
+      },
+      terminalLayoutsByTabId: {
+        [tabId]: {
+          root: { type: 'leaf' as const, leafId },
+          activeLeafId: leafId,
+          expandedLeafId: null,
+          ptyIdsByLeafId: { [leafId]: ptyId }
+        }
+      },
+      terminalPtyIncarnationsByPaneKey: { [makePaneKey(tabId, leafId)]: incarnationId },
+      terminalArchiveHintsByPaneKey: {
+        [makePaneKey(tabId, leafId)]: { launchAgent: 'codex' as const, startedAt: 1 }
+      }
+    }
+    let archives = {}
+    const store = {
+      getWorkspaceSession: vi.fn(() => session),
+      createTerminalArchiveStore: vi.fn(
+        (snapshotSource) =>
+          new TerminalArchiveStore(
+            {
+              getTerminalArchives: () => archives,
+              replaceTerminalArchivesAndFlush: (next) => {
+                archives = next
+              },
+              getTerminalArchiveRetentionDays: () => 7,
+              isExecutionHostReachable: () => true,
+              worktreeExists: () => true,
+              isTerminalArchiveRequestOwned: () => true,
+              isTerminalScrollbackSnapshotLive: () => false,
+              commitLostTerminalArchiveAndRetire: (nextArchives) => {
+                archives = nextArchives
+                return { closed: true, ptyIdsToKill: [ptyId], session }
+              }
+            } as never,
+            snapshotSource,
+            () => 100
+          )
+      )
+    }
+    const runtime = {
+      setPtyController: vi.fn(),
+      onPtyExit: vi.fn(),
+      onPtyData: vi.fn()
+    }
+
+    restorePtyIncarnation(ptyId, incarnationId)
+    registerPtyHandlers(
+      mainWindow as never,
+      runtime as never,
+      undefined,
+      undefined,
+      undefined,
+      store as never
+    )
+    const archive = handlers.get('pty:handleLostTerminalCandidate')
+    if (!archive) {
+      throw new Error('missing lost-worker archive handler')
+    }
+
+    await expect(
+      archive(mainWindowIpcEvent, {
+        worktreeId,
+        tabId,
+        leafId,
+        reason: 'daemon-worker-lost',
+        executionHostId: 'local',
+        snapshotsByLeafId: {
+          [leafId]: { buffer: '', source: 'renderer', truncated: false, byteLength: 0 }
+        }
+      })
+    ).resolves.toMatchObject({ kind: 'archived' })
+
+    expect(runtime.onPtyExit).toHaveBeenCalledOnce()
+    expect(runtime.onPtyExit).toHaveBeenCalledWith(ptyId, 0, incarnationId)
+    expect(mainWindow.webContents.send).toHaveBeenCalledTimes(1)
+    expect(mainWindow.webContents.send).toHaveBeenCalledWith('pty:exit', {
+      id: ptyId,
+      code: 0,
+      incarnationId,
+      lostWorkerRecovery: { kind: 'archived', archiveId: expect.any(String) }
+    })
+    clearProviderPtyState(ptyId)
+  })
+
   it('guards recognized daemon workers with agent-resume payloads unless the wake is explicitly controlled', async () => {
     const daemonSpawn = installDaemonTestProvider()
     daemonSpawn.mockImplementation(async (options: { sessionId?: string }) => ({
