@@ -180,6 +180,37 @@ describe('recordProcessGoneCrash', () => {
         data: expect.objectContaining({ suppressedSinceLast: 699 })
       })
     ])
+    // Why: the ring gets this count from the store itself, so only the span proves
+    // the exported telemetry carries it too.
+    expect(sink.records).toEqual([
+      expect.objectContaining({ name: 'crash.breadcrumb' }),
+      expect.objectContaining({
+        attributes: expect.objectContaining({
+          'breadcrumb.data': expect.objectContaining({ suppressedSinceLast: 699 })
+        })
+      })
+    ])
+  })
+
+  it('keeps suppressions with different exit codes separate', () => {
+    const dedupe = new ProcessGoneDedupe()
+    const utilityCrash = (exitCode: number) =>
+      event({
+        source: 'child',
+        processType: 'Utility',
+        reason: 'crashed',
+        exitCode,
+        details: { serviceName: 'network.mojom.NetworkService' }
+      })
+
+    recordProcessGoneCrash({ record: vi.fn() } as never, utilityCrash(11), dedupe)
+    recordProcessGoneCrash({ record: vi.fn() } as never, utilityCrash(139), dedupe)
+
+    // Why: a clean shutdown code and a segfault are different failures; collapsing
+    // them would hide the second behind the first for a full window.
+    expect(getCrashBreadcrumbSnapshot().map((breadcrumb) => breadcrumb.data?.exitCode)).toEqual([
+      11, 139
+    ])
   })
 
   it('never lets one recoverable service suppress another service evidence', () => {
