@@ -4,7 +4,6 @@ type TerminalQuickCommandAppendEnterSwitchProps = {
   onToggle: () => void
 }
 
-/** Toggle switch for the append-enter quick command option. */
 export function TerminalQuickCommandAppendEnterSwitch({
   appendEnter,
   onToggle

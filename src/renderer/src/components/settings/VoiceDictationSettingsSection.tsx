@@ -11,7 +11,6 @@ type VoiceDictationSettingsSectionProps = {
   onUpdateVoiceSettings: (updates: Partial<VoiceSettings>) => void
 }
 
-/** Settings section for voice dictation configuration. */
 export function VoiceDictationSettingsSection({
   voiceSettings,
   permissionPending,

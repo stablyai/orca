@@ -7,7 +7,6 @@ type AiCommitPrSettingsSwitchProps = {
   onToggle: () => void
 }
 
-/** Toggle switch for AI commit/PR settings. */
 export function AiCommitPrSettingsSwitch({
   checked,
   label,

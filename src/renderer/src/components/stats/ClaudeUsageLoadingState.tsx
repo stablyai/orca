@@ -6,7 +6,6 @@ type ClaudeUsageLoadingStateProps = {
   summaryGridClassName?: string
 }
 
-/** Loading placeholder for the Claude usage pane. */
 export function ClaudeUsageLoadingState({
   title = 'Claude Usage Tracking',
   summaryCardCount = 8,

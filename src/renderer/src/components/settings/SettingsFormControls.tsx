@@ -27,7 +27,6 @@ type SettingsSwitchProps = {
   disabled?: boolean
 }
 
-/** Reusable toggle switch control for settings forms. */
 export function SettingsSwitch({
   checked,
   onChange,

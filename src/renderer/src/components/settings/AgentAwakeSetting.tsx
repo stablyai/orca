@@ -12,7 +12,6 @@ type AgentAwakeSettingProps = {
   updateSettings: (updates: Partial<GlobalSettings>) => void
 }
 
-/** Toggle setting to keep the computer awake during agent runs. */
 export function AgentAwakeSetting({
   settings,
   updateSettings

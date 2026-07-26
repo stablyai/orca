@@ -48,7 +48,6 @@ function readSourceControlSettings(settings: GlobalSettings): SourceControlAiSet
   return normalizeSourceControlAiSettings(settings.sourceControlAi, settings.commitMessageAi)
 }
 
-/** Setting to auto-rename branches based on workspace work. */
 export function AutoRenameBranchFromWorkSetting({
   settings,
   updateSettings,

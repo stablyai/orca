@@ -27,7 +27,6 @@ type ExperimentalPaneProps = {
   hiddenExperimentalUnlocked?: boolean
 }
 
-/** Settings pane for experimental feature toggles. */
 export function ExperimentalPane({
   settings,
   updateSettings,

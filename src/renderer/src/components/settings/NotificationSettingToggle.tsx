@@ -10,7 +10,6 @@ export type NotificationSettingToggleProps = {
   icon?: ReactNode
 }
 
-/** Toggle row with label, description, and switch for notification settings. */
 export function NotificationSettingToggle({
   label,
   description,

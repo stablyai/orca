@@ -10,7 +10,6 @@ type BrowserLinkRoutingSettingProps = {
   updateSettings: (updates: Partial<GlobalSettings>) => void
 }
 
-/** Toggle setting for opening links inside the app. */
 export function BrowserLinkRoutingSetting({
   settings,
   linkRoutingDescription,
