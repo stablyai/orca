@@ -12,6 +12,10 @@ import { resolveTerminalMinimumContrastRatio } from '../../../../shared/terminal
 import { resolveTerminalFontWeights } from '../../../../shared/terminal-fonts'
 import { resolveTerminalLigaturesEnabled } from '../../../../shared/terminal-ligatures'
 import { normalizeTerminalLineHeight } from '../../../../shared/terminal-line-height-settings'
+import {
+  activateOrcaTerminalUnicodeProvider,
+  setTerminalEastAsianAmbiguousWidthMode
+} from '../../../../shared/terminal-unicode-provider'
 import { PREVIEW_BUFFER } from './terminal-preview-content'
 import { SettingsSwitch } from './SettingsFormControls'
 import type { GlobalSettings } from '../../../../shared/global-settings-types'
@@ -143,6 +147,10 @@ export function TerminalSettingsPreview({
 
     try {
       terminal.open(container)
+      // Why: bake ambiguous widths with Orca's provider before the sample write
+      // so wide mode is not stuck on xterm's default narrow tables (#9958).
+      setTerminalEastAsianAmbiguousWidthMode(settings.terminalEastAsianAmbiguousWidth)
+      activateOrcaTerminalUnicodeProvider(terminal)
       terminal.write(PREVIEW_BUFFER)
     } catch (err) {
       terminalRef.current = null
@@ -175,6 +183,8 @@ export function TerminalSettingsPreview({
       settings.terminalFontWeightBold
     )
     terminal.options.fontSize = settings.terminalFontSize
+    // Why: keep shared measurement mode + CJK fallback stack in lockstep with live panes.
+    setTerminalEastAsianAmbiguousWidthMode(settings.terminalEastAsianAmbiguousWidth)
     terminal.options.fontFamily = buildFontFamily(effectiveFontFamily, {
       eastAsianAmbiguousWide: settings.terminalEastAsianAmbiguousWidth === 'wide'
     })
