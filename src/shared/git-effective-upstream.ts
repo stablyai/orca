@@ -64,9 +64,10 @@ const HEADS_REF_PREFIX = 'refs/heads/'
 
 async function getCurrentBranchName(runGit: GitCommandRunner): Promise<string | null> {
   try {
-    // Why: git's `--short` ref abbreviation truncates non-ASCII branch names
-    // mid-codepoint past a fixed buffer length, corrupting the branch name.
-    // Read the full ref and strip the prefix ourselves instead.
+    // Why: `--short` yields the shortest *unambiguous* ref, so a same-named tag
+    // or non-branch ref abbreviates HEAD to `heads/<name>` — which no
+    // `branch.<name>.*` config key or remote-tracking ref matches. Read the
+    // full ref and strip the prefix ourselves so the name stays exact.
     const { stdout } = await runGit(['symbolic-ref', '--quiet', 'HEAD'])
     const ref = stdout.trim()
     if (!ref) {
