@@ -109,6 +109,7 @@ export async function archiveLostTerminalWorker(args: {
   candidate: TerminalLostWorkerArchiveCandidate
   frozenSession: WorkspaceSessionState
   snapshotSource: TerminalArchiveSnapshotSource
+  isCaptureAttemptCurrent?: () => boolean
   completeArchive?: (args: {
     archive: ArchivedTerminalTab
     ptyIdsToKill: readonly string[]
@@ -169,6 +170,7 @@ async function archiveLostTerminalWorkerOnce(args: {
   candidate: TerminalLostWorkerArchiveCandidate
   frozenSession: WorkspaceSessionState
   snapshotSource: TerminalArchiveSnapshotSource
+  isCaptureAttemptCurrent?: () => boolean
   completeArchive?: (args: {
     archive: ArchivedTerminalTab
     ptyIdsToKill: readonly string[]
@@ -176,7 +178,15 @@ async function archiveLostTerminalWorkerOnce(args: {
   captured: NonNullable<ReturnType<typeof captureTerminalArchiveTab>>
   operationId: string
 }): Promise<TerminalLostWorkerArchiveResult> {
-  const archiveStore = args.owner.createTerminalArchiveStore(args.snapshotSource)
+  const snapshotSource = args.isCaptureAttemptCurrent
+    ? {
+        capture: async (pane: Parameters<TerminalArchiveSnapshotSource['capture']>[0]) =>
+          args.isCaptureAttemptCurrent?.()
+            ? args.snapshotSource.capture(pane)
+            : ({ kind: 'unavailable' } as const)
+      }
+    : args.snapshotSource
+  const archiveStore = args.owner.createTerminalArchiveStore(snapshotSource)
   try {
     const archived = await writeLostWorkerTerminalArchive(
       archiveStore,

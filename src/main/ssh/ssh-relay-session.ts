@@ -1100,6 +1100,7 @@ export class SshRelaySession {
     if (!captured) {
       return
     }
+    const reconnectAttempt = this.abortController
     const snapshotSource = createRelayLostWorkerSnapshotSource({
       captureSessionSidecar: (leafId) => {
         const layout = session.terminalLayoutsByTabId[tabId]
@@ -1158,6 +1159,14 @@ export class SshRelaySession {
       },
       frozenSession: session,
       snapshotSource,
+      ...(reconnectAttempt
+        ? {
+            isCaptureAttemptCurrent: () =>
+              this.abortController === reconnectAttempt &&
+              !reconnectAttempt.signal.aborted &&
+              !this.isDisposed()
+          }
+        : {}),
       completeArchive: ({ archive, ptyIdsToKill }) =>
         this.shutdownArchivedRelayPtys(ptyIdsToKill, archive.id, tabId)
     })
