@@ -137,6 +137,9 @@ vi.mock('zustand/react/shallow', () => ({
 }))
 
 vi.mock('lucide-react', () => ({
+  ExternalLink: function ExternalLink() {
+    return null
+  },
   FilePlus: function FilePlus() {
     return null
   },

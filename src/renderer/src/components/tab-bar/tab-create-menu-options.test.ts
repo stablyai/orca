@@ -15,6 +15,7 @@ describe('tab create menu options', () => {
   const defaultOptions = buildTabCreateMenuOptions({
     terminalOnly: false,
     hasNewBrowser: true,
+    hasNewDetachedWindow: false,
     hasNewMarkdown: true,
     hasOpenMarkdown: true,
     hasSimulator: true,
@@ -33,6 +34,7 @@ describe('tab create menu options', () => {
     const options = buildTabCreateMenuOptions({
       terminalOnly: false,
       hasNewBrowser: true,
+      hasNewDetachedWindow: false,
       hasNewMarkdown: true,
       hasOpenMarkdown: false,
       hasSimulator: true,
@@ -57,6 +59,7 @@ describe('tab create menu options', () => {
     const options = buildTabCreateMenuOptions({
       terminalOnly: false,
       hasNewBrowser: false,
+      hasNewDetachedWindow: false,
       hasNewMarkdown: false,
       hasOpenMarkdown: false,
       hasSimulator: false,

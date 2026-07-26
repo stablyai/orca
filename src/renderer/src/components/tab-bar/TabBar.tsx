@@ -5,6 +5,7 @@ import { SortableContext } from '@dnd-kit/sortable'
 import {
   ChevronLeft,
   ChevronRight,
+  ExternalLink,
   FilePlus,
   FileText,
   Globe,
@@ -542,6 +543,7 @@ function TabBarInner({
         terminalOnly,
         windowsShellEntries,
         hasNewBrowser: !terminalOnly,
+        hasNewDetachedWindow: true,
         hasNewMarkdown: !terminalOnly && Boolean(onNewFileTab),
         hasOpenMarkdown: !terminalOnly && Boolean(onOpenFileTab),
         hasSimulator: !terminalOnly && mobileEmulatorEnabled && Boolean(onNewSimulatorTab),
@@ -578,6 +580,9 @@ function TabBarInner({
         break
       case 'new-browser':
         onNewBrowserTab()
+        break
+      case 'new-detached-window':
+        void useAppStore.getState().openNewDetachedTerminalWindow(resolvedGroupId)
         break
       case 'new-markdown':
         onNewFileTab?.()
@@ -695,6 +700,17 @@ function TabBarInner({
       <DropdownMenuShortcut>{newBrowserShortcut}</DropdownMenuShortcut>
     </DropdownMenuItem>
   ) : null
+  const newDetachedWindowMenuItem = !terminalOnly ? (
+    <DropdownMenuItem
+      onSelect={() => {
+        void useAppStore.getState().openNewDetachedTerminalWindow(resolvedGroupId)
+      }}
+      className="gap-2 rounded-[7px] px-2 py-1.5 text-[12px] leading-5 font-medium"
+    >
+      <ExternalLink className="size-4 text-muted-foreground" />
+      {translate('auto.components.tab.bar.TabBar.NEWKEY8', 'New Detached Window')}
+    </DropdownMenuItem>
+  ) : null
   const newSimulatorMenuItem =
     !terminalOnly && mobileEmulatorEnabled && onNewSimulatorTab ? (
       workspaceHasSimulatorTab ? (
@@ -766,6 +782,7 @@ function TabBarInner({
         {openMarkdownMenuItem}
         {defaultTerminalMenuItems}
         {newBrowserMenuItem}
+        {newDetachedWindowMenuItem}
         {newSimulatorMenuItem}
         {mobileEmulatorIntroMenuBlock}
       </>
@@ -773,6 +790,7 @@ function TabBarInner({
       <>
         {defaultTerminalMenuItems}
         {newBrowserMenuItem}
+        {newDetachedWindowMenuItem}
         {newMarkdownMenuItem}
         {openMarkdownMenuItem}
         {newSimulatorMenuItem}

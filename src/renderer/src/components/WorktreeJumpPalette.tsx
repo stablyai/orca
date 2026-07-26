@@ -413,6 +413,7 @@ export default function WorktreeJumpPalette(): React.JSX.Element | null {
   const openNewTerminalTabInActiveWorkspace = useAppStore(
     (s) => s.openNewTerminalTabInActiveWorkspace
   )
+  const openNewDetachedTerminalWindow = useAppStore((s) => s.openNewDetachedTerminalWindow)
   const settingsSections = useSettingsNavigationMetadata()
 
   const [query, setQuery] = useState('')
@@ -939,6 +940,7 @@ export default function WorktreeJumpPalette(): React.JSX.Element | null {
         openNewBrowserTab: openNewBrowserTabInActiveWorkspace,
         openNewMarkdownFile: openNewMarkdownInActiveWorkspace,
         openNewTerminalTab: openNewTerminalTabInActiveWorkspace,
+        openNewDetachedTerminalWindow,
         openCreateWorkspace: openCreateWorkspaceAction,
         deleteActiveWorkspace: deleteActiveWorkspaceAction,
         openAddQuickCommand: openAddQuickCommandAction
@@ -948,6 +950,7 @@ export default function WorktreeJumpPalette(): React.JSX.Element | null {
       openAddQuickCommandAction,
       openCreateWorkspaceAction,
       openNewBrowserTabInActiveWorkspace,
+      openNewDetachedTerminalWindow,
       openNewMarkdownInActiveWorkspace,
       openNewTerminalTabInActiveWorkspace
     ]

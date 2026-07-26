@@ -2986,6 +2986,7 @@
             "aea43b5748": "Open the existing emulator tab.",
             "b426bb2615": "Go to Mobile Emulator",
             "4833fb2cbe": "New Browser Tab",
+            "NEWKEY8": "New Detached Window",
             "d364f3c8d4": "New Terminal",
             "7c1313d237": "New Terminal:",
             "d1afac112b": "WSL",
@@ -3065,7 +3066,11 @@
                   "1baeb07c17": "ios simulator",
                   "8a580f88cf": "iphone",
                   "7ecdc5ef08": "ipad",
-                  "14965cc123": "mobile"
+                  "14965cc123": "mobile",
+                  "NEWKEY9": "detached window",
+                  "NEWKEY10": "detach",
+                  "NEWKEY11": "pop out",
+                  "NEWKEY12": "popout"
                 }
               }
             }
@@ -13438,6 +13443,8 @@
               "25349b66fc": "New Markdown File",
               "784812ca24": "Open a browser tab in the active workspace.",
               "892bfa9339": "New Browser Tab",
+              "NEWKEY1": "New Detached Window",
+              "NEWKEY2": "Open a terminal in a detached window.",
               "verbs": {
                 "newBrowser": "new browser",
                 "newBrowserTab": "new browser tab",
@@ -13460,7 +13467,12 @@
                 "removeWorktree": "remove worktree",
                 "trashWorktree": "trash worktree",
                 "addQuickCommand": "add quick command",
-                "newQuickCommand": "new quick command"
+                "newQuickCommand": "new quick command",
+                "NEWKEY3": "new detached window",
+                "NEWKEY4": "detached window",
+                "NEWKEY5": "detach",
+                "NEWKEY6": "pop out",
+                "NEWKEY7": "popout terminal"
               }
             }
           },

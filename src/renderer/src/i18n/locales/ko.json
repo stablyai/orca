@@ -2945,6 +2945,7 @@
             "aea43b5748": "기존 에뮬레이터 탭을 엽니다.",
             "b426bb2615": "모바일 에뮬레이터로 이동",
             "4833fb2cbe": "새 브라우저 탭",
+            "NEWKEY8": "새 분리 창",
             "d364f3c8d4": "새로운 Terminal",
             "7c1313d237": "새로운 Terminal:",
             "d1afac112b": "WSL",
@@ -3024,7 +3025,11 @@
                   "1baeb07c17": "iOS 시뮬레이터",
                   "8a580f88cf": "iPhone",
                   "7ecdc5ef08": "iPad",
-                  "14965cc123": "모바일"
+                  "14965cc123": "모바일",
+                  "NEWKEY9": "분리 창",
+                  "NEWKEY10": "분리",
+                  "NEWKEY11": "꺼내기",
+                  "NEWKEY12": "팝아웃"
                 }
               }
             }
@@ -13304,6 +13309,8 @@
               "25349b66fc": "새 Markdown 파일",
               "784812ca24": "활성 워크스페이스에서 브라우저 탭을 엽니다.",
               "892bfa9339": "새 브라우저 탭",
+              "NEWKEY1": "새 분리 창",
+              "NEWKEY2": "분리된 창에서 터미널을 엽니다.",
               "verbs": {
                 "newBrowser": "새 브라우저",
                 "newBrowserTab": "새 브라우저 탭",
@@ -13326,7 +13333,12 @@
                 "removeWorktree": "작업 트리 제거",
                 "trashWorktree": "워크트리 휴지통으로 이동",
                 "addQuickCommand": "빠른 명령 추가",
-                "newQuickCommand": "새로운 빠른 명령"
+                "newQuickCommand": "새로운 빠른 명령",
+                "NEWKEY3": "새 분리 창",
+                "NEWKEY4": "분리 창",
+                "NEWKEY5": "분리",
+                "NEWKEY6": "꺼내기",
+                "NEWKEY7": "팝아웃 터미널"
               }
             }
           },
