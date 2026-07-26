@@ -194,6 +194,7 @@ import {
   type WorktreeSidebarDragSession,
   type WorktreeSidebarDragPoint
 } from './worktree-sidebar-drag-autoscroll'
+import { holdWorktreeSidebarDragRects } from './worktree-sidebar-drag-geometry'
 import {
   computeWorktreeSidebarDropPreview,
   resolveWorktreeSidebarStatusDropCommitTarget,
@@ -1404,6 +1405,7 @@ const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktreeViewp
     [worktreeLineageById, worktreeMap]
   )
   const worktreeDragSessionRef = useRef<WorktreeSidebarDragSession | null>(null)
+  const heldStatusDropRectsRef = useRef<Map<string, readonly WorktreeSidebarDragRect[]>>(new Map())
   const worktreePointerDragRef = useRef<WorktreePointerDrag | null>(null)
   const worktreePointerAutoscrollFrameIdRef = useRef<number | null>(null)
   const worktreePointerAutoscrollLastFrameTimeRef = useRef<number | null>(null)
@@ -1593,6 +1595,7 @@ const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktreeViewp
       pointerY: number
       groupKey: string
       rects: readonly WorktreeSidebarDragRect[]
+      liveRects?: readonly WorktreeSidebarDragRect[]
       draggedIds: readonly string[]
       draggingWorktreeId?: string | null
     }): WorktreeSidebarDropPreview | null => {
@@ -1610,6 +1613,7 @@ const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktreeViewp
         containerTop: containerRect.top,
         scrollTop: container.scrollTop,
         rects: args.rects,
+        liveRects: args.liveRects,
         groupIds: group.worktreeIds,
         draggedIds: args.draggedIds,
         draggingWorktreeId: args.draggingWorktreeId
@@ -1627,6 +1631,7 @@ const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktreeViewp
         pointerY,
         groupKey: session.sourceGroupKey,
         rects: session.rects,
+        liveRects: session.liveRects,
         draggedIds: session.reorderUnitDraggedIds,
         draggingWorktreeId: session.draggingWorktreeId
       })
@@ -1644,10 +1649,20 @@ const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktreeViewp
         return null
       }
       const groupKey = getWorkspaceStatusGroupKey(args.status)
+      // Why: cross-group hovers re-measure a group the drag session never
+      // captured, so hold its geometry here too or a card expanding in the
+      // target group jumps the insertion line under a still pointer.
+      const liveRects = getWorktreeSidebarDragRectsForGroup(container, groupKey)
+      const rects = holdWorktreeSidebarDragRects({
+        held: heldStatusDropRectsRef.current.get(groupKey),
+        measured: liveRects
+      })
+      heldStatusDropRectsRef.current.set(groupKey, rects)
       return computeWorktreeDropForGroup({
         pointerY: args.pointerY,
         groupKey,
-        rects: getWorktreeSidebarDragRectsForGroup(container, groupKey),
+        rects,
+        liveRects,
         draggedIds: args.draggedIds,
         draggingWorktreeId: worktreeDragSessionRef.current?.draggingWorktreeId ?? null
       })
@@ -2657,6 +2672,7 @@ const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktreeViewp
     cleanupWorktreePointerDrag()
     cancelWorktreeNativeAutoscroll()
     worktreeDragSessionRef.current = null
+    heldStatusDropRectsRef.current.clear()
     setWorktreeDragState(WORKTREE_ROW_DRAG_INITIAL_STATE)
   }, [cancelWorktreeNativeAutoscroll, cleanupWorktreePointerDrag])
 
@@ -3078,7 +3094,8 @@ const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktreeViewp
         draggedIds: drag.draggedIds,
         reorderDraggedIds: drag.reorderDraggedIds,
         reorderUnitDraggedIds: drag.reorderUnitDraggedIds,
-        rects: drag.rects
+        rects: drag.rects,
+        liveRects: drag.rects
       }
       setWorktreeDragState({
         draggingWorktreeId: drag.worktreeId,
@@ -3493,15 +3510,17 @@ const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktreeViewp
       }
       const reorderDraggedIds = getReorderDraggedIds(draggedIds)
       const reorderUnitDraggedIds = getReorderUnitDraggedIds(sourceGroupKey, reorderDraggedIds)
+      const rects = scrollRef.current
+        ? getWorktreeSidebarDragRectsForGroup(scrollRef.current, sourceGroupKey)
+        : []
       worktreeDragSessionRef.current = {
         draggingWorktreeId: worktreeId,
         sourceGroupKey,
         draggedIds,
         reorderDraggedIds,
         reorderUnitDraggedIds,
-        rects: scrollRef.current
-          ? getWorktreeSidebarDragRectsForGroup(scrollRef.current, sourceGroupKey)
-          : []
+        rects,
+        liveRects: rects
       }
       setWorktreeDragState({
         draggingWorktreeId: worktreeId,
