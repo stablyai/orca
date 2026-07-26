@@ -165,7 +165,7 @@ export const SPEECH_MODEL_CATALOG: SpeechModelManifest[] = [
     id: 'sense-voice-zh-en-ja-ko-yue',
     label: 'SenseVoice',
     description:
-      'Chinese, English, Japanese, Korean, and Cantonese. The only local model with Korean support.',
+      'Chinese, English, Japanese, Korean, and Cantonese with automatic language detection.',
     type: 'senseVoice',
     provider: 'local',
     language: 'multilingual',
