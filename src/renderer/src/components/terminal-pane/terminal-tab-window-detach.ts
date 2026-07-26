@@ -3,12 +3,7 @@ import type { DetachedTerminalTabSeed } from '../../../../shared/types'
 
 type TerminalTabWindowDetachStore = Pick<
   AppState,
-  | 'tabsByWorktree'
-  | 'groupsByWorktree'
-  | 'terminalLayoutsByTabId'
-  | 'ptyIdsByTabId'
-  | 'repos'
-  | 'worktreesByRepo'
+  'tabsByWorktree' | 'groupsByWorktree' | 'terminalLayoutsByTabId' | 'ptyIdsByTabId' | 'repos'
 >
 
 /**
@@ -46,8 +41,7 @@ export function captureTerminalTabForWindowDetach(
   const separatorIdx = worktreeId.indexOf('::')
   const repoId = separatorIdx === -1 ? worktreeId : worktreeId.slice(0, separatorIdx)
   const repo = store.repos.find((r) => r.id === repoId)
-  const worktree = (store.worktreesByRepo[repoId] ?? []).find((w) => w.id === worktreeId)
-  if (!repo || !worktree) {
+  if (!repo) {
     return null
   }
 
@@ -62,9 +56,10 @@ export function captureTerminalTabForWindowDetach(
       path: repo.path,
       displayName: repo.displayName,
       badgeColor: repo.badgeColor,
-      addedAt: repo.addedAt
-    },
-    worktree: { id: worktree.id, repoId: worktree.repoId, displayName: worktree.displayName }
+      addedAt: repo.addedAt,
+      connectionId: repo.connectionId ?? null,
+      executionHostId: repo.executionHostId ?? null
+    }
   }
 }
 

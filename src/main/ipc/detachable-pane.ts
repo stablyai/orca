@@ -29,10 +29,7 @@ function isDetachedTerminalTabSeed(value: unknown): value is DetachedTerminalTab
     typeof candidate.layout === 'object' &&
     !!candidate.repo &&
     typeof candidate.repo === 'object' &&
-    typeof (candidate.repo as Record<string, unknown>).id === 'string' &&
-    !!candidate.worktree &&
-    typeof candidate.worktree === 'object' &&
-    typeof (candidate.worktree as Record<string, unknown>).id === 'string'
+    typeof (candidate.repo as Record<string, unknown>).id === 'string'
   )
 }
 

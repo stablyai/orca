@@ -1,11 +1,11 @@
 import { useAppStore, type AppState } from '@/store'
-import type { DetachedTerminalTabSeed, Worktree } from '../../../../shared/types'
+import type { DetachedTerminalTabSeed } from '../../../../shared/types'
 
 /** Seeds the pop-out window's own store instance with the single tab the main
  *  window handed off, so `TerminalPane` can resolve tab/layout/pty state
  *  exactly as it would in the main window. */
 export function applyDetachedTerminalTabSeed(seed: DetachedTerminalTabSeed): void {
-  const { tab, layout, ptyId, worktreeId, repo, worktree } = seed
+  const { tab, layout, ptyId, worktreeId, repo } = seed
   const effectiveLayout = {
     ...layout,
     ptyIdsByLeafId:
@@ -21,9 +21,8 @@ export function applyDetachedTerminalTabSeed(seed: DetachedTerminalTabSeed): voi
     ptyIdsByTabId: { ...state.ptyIdsByTabId, [tab.id]: ptyId ? [ptyId] : [] },
     activeTabId: tab.id,
     activeTabIdByWorktree: { ...state.activeTabIdByWorktree, [worktreeId]: tab.id },
-    // Why: the terminal route resolver needs repos/worktreesByRepo to resolve
-    // the worktree — without these the popout gets "Workspace identity is ambiguous".
-    repos: [repo as AppState['repos'][number]],
-    worktreesByRepo: { ...state.worktreesByRepo, [repo.id]: [worktree as Worktree] }
+    // Why: the terminal route resolver needs repos to resolve the worktree's
+    // execution host — without this the popout gets "Workspace identity is ambiguous".
+    repos: [repo as AppState['repos'][number]]
   }))
 }

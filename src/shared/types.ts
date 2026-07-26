@@ -1090,11 +1090,13 @@ export type DetachedTerminalTabSeed = {
   /** Source `TabGroup.id` — reintegration re-inserts into this group when it
    *  still exists, so a split-pane group layout survives a round trip. */
   groupId: string
-  /** Minimal repo metadata so the popout store can resolve terminal worktree
-   *  routes (prevents "Workspace identity is ambiguous" on detach). */
-  repo: Pick<Repo, 'id' | 'path' | 'displayName' | 'badgeColor' | 'addedAt'>
-  /** Minimal worktree metadata for the same route resolution. */
-  worktree: Pick<Worktree, 'id' | 'repoId' | 'displayName'>
+  /** Repo metadata so the popout store can resolve terminal worktree routes
+   *  (prevents "Workspace identity is ambiguous" on detach). Includes
+   *  executionHostId/connectionId so the repo-indexed route resolver can match. */
+  repo: Pick<
+    Repo,
+    'id' | 'path' | 'displayName' | 'badgeColor' | 'addedAt' | 'connectionId' | 'executionHostId'
+  >
 }
 
 export type TerminalLayoutSnapshot = {
