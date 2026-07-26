@@ -62,13 +62,14 @@ describe('groupSkillFreshness', () => {
     )
     expect(groups.map((group) => group.name)).toEqual(['computer-use', 'linear-tickets'])
     expect(groups[0]?.status).toBe('cannot-update')
+    expect(groups[1]?.status).toBe('cannot-update')
     expect(groups[0]?.locations).toEqual([
       { id: expect.any(String), path: '/home/.agents/skills/computer-use', chip: 'current' },
       {
         id: expect.any(String),
         path: '/home/.codex/plugins/cache/computer-use/SKILL.md',
-        // Why: status (unrecognized) wins over topology (plugin-cache) in locationChip.
-        chip: 'unrecognized'
+        // Why: unrecognized + plugin-cache maps to the plugin-cache chip on main.
+        chip: 'plugin-cache'
       }
     ])
     expect(groups[1]?.locations).toEqual([
