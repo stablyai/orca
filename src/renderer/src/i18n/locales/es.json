@@ -2945,7 +2945,7 @@
             "aea43b5748": "Abrir la pestaña del emulador existente.",
             "b426bb2615": "Ir al emulador móvil",
             "4833fb2cbe": "Nueva pestaña de navegador",
-            "NEWKEY8": "Nueva ventana separada",
+            "f960fd4b5e": "Nueva ventana separada",
             "d364f3c8d4": "Nuevo terminal",
             "7c1313d237": "Nuevo terminal:",
             "d1afac112b": "WSL",
@@ -3026,10 +3026,10 @@
                   "8a580f88cf": "iPhone",
                   "7ecdc5ef08": "iPad",
                   "14965cc123": "móvil",
-                  "NEWKEY9": "ventana separada",
-                  "NEWKEY10": "separar",
-                  "NEWKEY11": "sacar",
-                  "NEWKEY12": "emergente"
+                  "5f0a17a4fc": "ventana separada",
+                  "b8900ea0d8": "separar",
+                  "db021b066c": "sacar",
+                  "0a69fa0013": "emergente"
                 }
               }
             }
@@ -13309,8 +13309,8 @@
               "25349b66fc": "Nuevo archivo Markdown",
               "784812ca24": "Abre una pestaña del navegador en el workspace activo.",
               "892bfa9339": "Nueva pestaña del navegador",
-              "NEWKEY1": "Nueva ventana separada",
-              "NEWKEY2": "Abre un terminal en una ventana separada.",
+              "b0047b5abe": "Nueva ventana separada",
+              "7f2ee585c7": "Abre un terminal en una ventana separada.",
               "verbs": {
                 "newBrowser": "nuevo navegador",
                 "newBrowserTab": "nueva pestaña del navegador",
@@ -13334,11 +13334,11 @@
                 "trashWorktree": "mandar worktree a la papelera",
                 "addQuickCommand": "agregar comando rápido",
                 "newQuickCommand": "nuevo comando rápido",
-                "NEWKEY3": "nueva ventana separada",
-                "NEWKEY4": "ventana separada",
-                "NEWKEY5": "separar",
-                "NEWKEY6": "sacar",
-                "NEWKEY7": "terminal separado"
+                "b58929770d": "nueva ventana separada",
+                "4a1e515bfb": "ventana separada",
+                "37eddf0a3d": "separar",
+                "05ac8dcf45": "sacar",
+                "f1fa60eaa6": "terminal separado"
               }
             }
           },
@@ -14644,7 +14644,8 @@
     "recoverableError": {
       "title": "El terminal de Orca encontró un error.",
       "description": "El terminal separado no pudo completar la visualización. Reintenta volver a montarlo o vuelve a abrirlo."
-    }
+    },
+    "tabs": "Detached terminals"
   },
   "detachToWindow": {
     "error": "No se pudo separar la pestaña a una nueva ventana"

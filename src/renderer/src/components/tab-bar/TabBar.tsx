@@ -708,7 +708,7 @@ function TabBarInner({
       className="gap-2 rounded-[7px] px-2 py-1.5 text-[12px] leading-5 font-medium"
     >
       <ExternalLink className="size-4 text-muted-foreground" />
-      {translate('auto.components.tab.bar.TabBar.NEWKEY8', 'New Detached Window')}
+      {translate('auto.components.tab.bar.TabBar.f960fd4b5e', 'New Detached Window')}
     </DropdownMenuItem>
   ) : null
   const newSimulatorMenuItem =

@@ -117,16 +117,16 @@ export function buildTabCreateMenuOptions(
   }
 
   if (context.hasNewDetachedWindow) {
-    const label = translate('auto.components.tab.bar.TabBar.NEWKEY8', 'New Detached Window')
+    const label = translate('auto.components.tab.bar.TabBar.f960fd4b5e', 'New Detached Window')
     options.push({
       id: 'new-detached-window',
       kind: 'new-detached-window',
       label,
       keywords: [
-        translate('auto.components.tab.bar.tab.create.menu.options.NEWKEY9', 'detached window'),
-        translate('auto.components.tab.bar.tab.create.menu.options.NEWKEY10', 'detach'),
-        translate('auto.components.tab.bar.tab.create.menu.options.NEWKEY11', 'pop out'),
-        translate('auto.components.tab.bar.tab.create.menu.options.NEWKEY12', 'popout')
+        translate('auto.components.tab.bar.tab.create.menu.options.5f0a17a4fc', 'detached window'),
+        translate('auto.components.tab.bar.tab.create.menu.options.b8900ea0d8', 'detach'),
+        translate('auto.components.tab.bar.tab.create.menu.options.db021b066c', 'pop out'),
+        translate('auto.components.tab.bar.tab.create.menu.options.0a69fa0013', 'popout')
       ]
     })
   }
