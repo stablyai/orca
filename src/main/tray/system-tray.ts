@@ -1,6 +1,7 @@
 import { Menu, Tray, nativeImage, nativeTheme, type NativeImage } from 'electron'
 import menuBarIconPath from '../../../resources/tray/orca-menu-barTemplate.png?asset&asarUnpack'
 import menuBarIconRetinaPath from '../../../resources/tray/orca-menu-barTemplate@2x.png?asset&asarUnpack'
+import type { UpdateCheckOptions } from '../../shared/update-status-types'
 import { deferAppKitSceneMutation } from '../window/desktop-integration/appkit-scene-mutation'
 import { createAppIconImage } from '../window/desktop-integration/app-icon'
 import { translateMain } from '../i18n/main-i18n'
@@ -19,8 +20,8 @@ export type SystemTrayOptions = {
   onOpen: () => void
   /** Restore the main window and open its Settings surface. */
   onOpenSettings: () => void
-  /** Run the existing user-initiated update check. */
-  onCheckForUpdates: () => void
+  /** Run the existing user-initiated update check (same channel routing as the app menu). */
+  onCheckForUpdates: (options: UpdateCheckOptions) => void
   /** Caller must mark quit intent; serve-mode user Quit may close only desktop windows. */
   onQuit: () => void
   /** Confirm, then quit with every terminal session stopped; omitted where the item must not show (serve mode). */
@@ -186,14 +187,28 @@ function stopWatchingMacAppearance(): void {
 }
 
 // Tray/menu listeners lack IPC promise guards; contain action failures rather than throw fatally into main.
-function safeMenuAction(action: () => void): () => void {
-  return () => {
+function safeMenuAction<TArgs extends unknown[]>(
+  action: (...args: TArgs) => void
+): (...args: TArgs) => void {
+  return (...args: TArgs) => {
     try {
-      action()
+      action(...args)
     } catch (error) {
       console.error('[system-tray] menu action failed', error)
     }
   }
+}
+
+// Why: tray and app-menu must share identical RC/perf modifier routing (#10590).
+function updateCheckOptionsFromMenuEvent(
+  event: Electron.KeyboardEvent | undefined
+): UpdateCheckOptions {
+  const modifierClick = event?.triggeredByAccelerator !== true
+  const includePerfPrerelease =
+    modifierClick &&
+    (process.platform === 'darwin' ? event?.metaKey === true : event?.ctrlKey === true)
+  const includePrerelease = modifierClick && event?.shiftKey === true
+  return { includePrerelease, includePerfPrerelease }
 }
 
 /** Create at most one Windows/macOS tray; Linux has none. */
@@ -269,7 +284,9 @@ function buildTrayMenu(opts: SystemTrayOptions): Menu {
                 ? translateMain('menu.checkForUpdatesChannelsMac', '⇧ RC · ⌘ Perf')
                 : translateMain('menu.checkForUpdatesChannels', 'Shift RC · Ctrl Perf')
             })`,
-            click: safeMenuAction(() => opts.onCheckForUpdates())
+            click: safeMenuAction((_menuItem, _window, event) => {
+              opts.onCheckForUpdates(updateCheckOptionsFromMenuEvent(event))
+            })
           },
           { type: 'separator' }
         ] satisfies Electron.MenuItemConstructorOptions[])
