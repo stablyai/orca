@@ -364,6 +364,20 @@ const agentErrorSchema = z
 // Why: daemon start-failure signal (fleet-wide outage like v1.4.129-rc.1); enum-only so raw stderr never reaches the wire.
 const daemonStartFailedSchema = z.object({ error_class: errorClassSchema }).strict()
 
+// Why: surfaces Windows SSH relay node-pty source/version drift (audit follow-up to PR #9638).
+// When the freshly-installed node-pty console-list agent is neither the recognized original nor
+// patched sha, the deploy now skips the ConPTY `AttachConsole` fallback patch and runs unpatched
+// instead of hard-failing every Windows relay deploy. This event makes that otherwise-silent
+// degradation observable. `source_sha_prefix` is a 12-char hex prefix — never the full source.
+const relayNodePtyPatchSkippedSchema = z
+  .object({
+    reason: z.enum(['unexpected_source', 'unexpected_version']),
+    node_pty_version: z.string().max(64),
+    source_sha_prefix: z.string().max(32),
+    relay_platform: z.enum(['win32-x64', 'win32-arm64'])
+  })
+  .strict()
+
 // Rollout signal for granting Codex hook trust via codex app-server RPCs
 // instead of Orca's self-computed trusted_hash. `fallback`/`verify_failed`
 // spikes mean the RPC lane is not taking; steady-state ledger skips are not
@@ -1300,6 +1314,7 @@ export const eventSchemas = {
   agent_hook_unattributed: agentHookUnattributedSchema,
 
   daemon_start_failed: daemonStartFailedSchema,
+  relay_node_pty_patch_skipped: relayNodePtyPatchSkippedSchema,
 
   codex_trust_grant: codexTrustGrantSchema,
 

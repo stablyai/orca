@@ -36,6 +36,7 @@ import {
   waitForRelayGcClaimRelease
 } from './ssh-relay-gc-claim'
 import { NATIVE_DEPS_COMMAND_TIMEOUT_MS, RELAY_DEPLOY_TIMEOUT_MS } from './ssh-relay-deploy-timing'
+import { track } from '../telemetry/client'
 import { createSshOperationAbortError, shellEscape } from './ssh-connection-utils'
 import {
   probeBuildToolchain,
@@ -526,18 +527,101 @@ const RELAY_NATIVE_DEPS = {
 type RelayNativeDepName = keyof typeof RELAY_NATIVE_DEPS
 const RELAY_NATIVE_DEP_NAMES = Object.keys(RELAY_NATIVE_DEPS) as RelayNativeDepName[]
 const NATIVE_DEPS_MISSING_PREFIX = 'ORCA-NATIVE-DEPS-MISSING:'
+// Why: the probe runs inside a remote node one-liner with no telemetry sink; it prints this token so
+// the local (Orca) side that parses the probe output can emit `relay_node_pty_patch_skipped`.
+// Mirrors NATIVE_DEPS_MISSING_PREFIX. Payload: `<prefix><outcome>:<sha12>:<node-pty version>`.
+const NODE_PTY_PATCH_SKIPPED_PREFIX = 'ORCA-NODE-PTY-PATCH-SKIPPED:'
 
 // Why: npm 12 blocks dependency lifecycle scripts unless each exact package version is approved, even with ignore-scripts disabled.
 const RELAY_NATIVE_DEP_SCRIPT_ALLOWLIST = Object.fromEntries(
   Object.entries(RELAY_NATIVE_DEPS).map(([name, version]) => [`${name}@${version}`, true])
 )
 
+// Test surface: the probe one-liner and its output parsers are pure and covered directly.
+export const __nativeDepsProbeTestables = {
+  get NATIVE_DEPS_MISSING_PREFIX(): string {
+    return NATIVE_DEPS_MISSING_PREFIX
+  },
+  get NODE_PTY_PATCH_SKIPPED_PREFIX(): string {
+    return NODE_PTY_PATCH_SKIPPED_PREFIX
+  },
+  nativeDepsProbeJs: (successToken: string): string => nativeDepsProbeJs(successToken),
+  missingNativeDepsFromProbe: (output: string): RelayNativeDepName[] =>
+    missingNativeDepsFromProbe(output),
+  parseNodePtyPatchSkipSignal: (output: string): NodePtyPatchSkipSignal | null =>
+    parseNodePtyPatchSkipSignal(output),
+  reportNodePtyPatchSkipFromProbe: (hostPlatform: RemoteHostPlatform, output: string): void =>
+    reportNodePtyPatchSkipFromProbe(hostPlatform, output)
+}
+
 function nativeDepsProbeJs(successToken: string): string {
   // Why: node-pty's Windows wrapper defers conpty.node until first spawn, so require("node-pty") alone can't prove the binding is healthy.
   const loadNodePty =
-    'require("node-pty"); require("node-pty/lib/utils").loadNativeModule(process.platform==="win32"&&Number(require("os").release().split(".")[2])>=18309?"conpty":"pty");' +
-    `if(process.platform==="win32"){require("./${NODE_PTY_CONSOLE_LIST_PATCH_FILENAME}").assertPatchedNodePtyConsoleListAgent(process.cwd())}`
-  return `(()=>{const missing=[];try{${loadNodePty}}catch{missing.push("node-pty")}try{require("@parcel/watcher")}catch{missing.push("@parcel/watcher")}if(missing.length){console.log("${NATIVE_DEPS_MISSING_PREFIX}"+missing.join(","));process.exitCode=1}else{console.log(${JSON.stringify(successToken)})}})()`
+    'require("node-pty");require("node-pty/lib/utils").loadNativeModule(process.platform==="win32"&&Number(require("os").release().split(".")[2])>=18309?"conpty":"pty");'
+  // Why: classify the ConPTY console-list patch SEPARATELY from the node-pty load so source/version
+  // drift does not fail an otherwise-healthy node-pty. A recognized-but-unpatched original still
+  // counts as node-pty-missing so the repair path re-applies the patch (unchanged behavior); an
+  // UNEXPECTED source/version degrades — node-pty stays available and we print a skip token the
+  // local side turns into telemetry (never a hard failure).
+  const classifyPatch =
+    `try{var c=require("./${NODE_PTY_CONSOLE_LIST_PATCH_FILENAME}").classifyNodePtyConsoleListAgent(process.cwd());` +
+    `if(c.outcome==="unpatched-original"){missing.push("node-pty")}` +
+    `else if(c.outcome!=="patched"&&c.outcome!=="already-patched"){` +
+    `console.log(${JSON.stringify(NODE_PTY_PATCH_SKIPPED_PREFIX)}+c.outcome+":"+c.sha256Prefix+":"+c.version)}}` +
+    `catch{missing.push("node-pty")}`
+  return `(()=>{const missing=[];let nptyOk=false;try{${loadNodePty}nptyOk=true}catch{missing.push("node-pty")}if(nptyOk&&process.platform==="win32"){${classifyPatch}}try{require("@parcel/watcher")}catch{missing.push("@parcel/watcher")}if(missing.length){console.log("${NATIVE_DEPS_MISSING_PREFIX}"+missing.join(","));process.exitCode=1}else{console.log(${JSON.stringify(successToken)})}})()`
+}
+
+type NodePtyPatchSkipSignal = {
+  reason: 'unexpected_source' | 'unexpected_version'
+  sha256Prefix: string
+  version: string
+}
+
+// Parse the skip token the remote probe prints when it degrades to unpatched node-pty. Returns null
+// when no drift was observed (the healthy path). Robust to trailing output on the same line.
+function parseNodePtyPatchSkipSignal(output: string): NodePtyPatchSkipSignal | null {
+  const line = output
+    .split(/\r?\n/)
+    .find((entry) => entry.trim().startsWith(NODE_PTY_PATCH_SKIPPED_PREFIX))
+  if (!line) {
+    return null
+  }
+  const [outcome, sha256Prefix, ...versionParts] = line
+    .trim()
+    .slice(NODE_PTY_PATCH_SKIPPED_PREFIX.length)
+    .split(':')
+  const version = versionParts.join(':')
+  if (!sha256Prefix || !version) {
+    return null
+  }
+  const reason =
+    outcome === 'skipped-unexpected-version' ? 'unexpected_version' : 'unexpected_source'
+  return { reason, sha256Prefix, version }
+}
+
+// Emit `relay_node_pty_patch_skipped` on the local side when the remote probe reported drift. The
+// deploy still succeeds (node-pty runs unpatched); this only makes the degradation observable.
+function reportNodePtyPatchSkipFromProbe(hostPlatform: RemoteHostPlatform, output: string): void {
+  const signal = parseNodePtyPatchSkipSignal(output)
+  if (!signal) {
+    return
+  }
+  const relayPlatform = hostPlatform.relayPlatform
+  console.warn(
+    `[ssh-relay] node-pty ConPTY console-list patch skipped (${signal.reason}) on ${relayPlatform}; ` +
+      `running unpatched. sha=${signal.sha256Prefix} node-pty=${signal.version}`
+  )
+  // Why: the skip token only prints on win32; guard the enum so a malformed value drops cleanly.
+  if (relayPlatform !== 'win32-x64' && relayPlatform !== 'win32-arm64') {
+    return
+  }
+  track('relay_node_pty_patch_skipped', {
+    reason: signal.reason,
+    node_pty_version: signal.version.slice(0, 64),
+    source_sha_prefix: signal.sha256Prefix.slice(0, 32),
+    relay_platform: relayPlatform
+  })
 }
 
 function missingNativeDepsFromProbe(output: string): RelayNativeDepName[] {
@@ -575,6 +659,7 @@ async function probeRequiredNativeDeps(
           `(${escapedNode} -e ${shellEscape(probeJs)} 2>/dev/null || echo MISSING)`
         )
     const probe = await execHostCommand(conn, hostPlatform, command, { signal })
+    reportNodePtyPatchSkipFromProbe(hostPlatform, probe)
     const available = probe.includes('ORCA-NATIVE-DEPS-OK')
     return { available, missing: available ? [] : missingNativeDepsFromProbe(probe) }
   } catch {
@@ -978,6 +1063,7 @@ async function probeInstalledNativeDeps(
         `(${shellEscape(nodePath)} -e ${shellEscape(probeJs)} ${shellEscape(PROBE_OK)} 2>${escapedStderr} || echo MISSING)`
       )
   const probeOutput = await execHostCommand(conn, hostPlatform, probeCommand, { signal })
+  reportNodePtyPatchSkipFromProbe(hostPlatform, probeOutput)
   const remoteStderr =
     probeOutput.includes(PROBE_OK) || isWindowsRemoteHost(hostPlatform)
       ? ''
