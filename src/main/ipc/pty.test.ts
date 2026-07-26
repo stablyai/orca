@@ -741,7 +741,7 @@ describe('registerPtyHandlers', () => {
     const connectionId = 'ssh-1'
     const ptyId = `ssh:${connectionId}@@remote-pty`
     const localProvider = createAgentClaimProvider({})
-    // Why: hasPty=false now blocks writes (#9169); the reconnect assertions need the provider to report this pty live.
+    // Why: the reconnect phase asserts a post-attach provider — the real one marks the pty live in attachForReconnect (#9169).
     const sshProvider = createAgentClaimProvider({ livePtyIds: new Set([ptyId]) })
     setLocalPtyProvider(localProvider as never)
     registerSshPtyProvider(connectionId, sshProvider as never)

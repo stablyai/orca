@@ -706,6 +706,32 @@ describe('SshPtyProvider', () => {
     )
   })
 
+  it('marks a reattached pty live so writes are not reported not-written (#9169)', async () => {
+    // Why: reconnect builds a fresh provider; a silent pty emits no frame to
+    // repopulate livePtyIds, so attach must be what proves liveness.
+    mux.request.mockResolvedValue({ incarnationId: 'incarnation-reconnect' })
+    expect(provider.hasPty(scopedPty1)).toBe(false)
+
+    await provider.attachForReconnect('pty-1')
+
+    expect(provider.hasPty(scopedPty1)).toBe(true)
+  })
+
+  it('marks an attached pty live', async () => {
+    expect(provider.hasPty(scopedPty1)).toBe(false)
+
+    await provider.attach(scopedPty1)
+
+    expect(provider.hasPty(scopedPty1)).toBe(true)
+  })
+
+  it('leaves a failed attach not live', async () => {
+    mux.request.mockRejectedValue(new Error('PTY "pty-1" not found'))
+
+    await expect(provider.attachForReconnect('pty-1')).rejects.toThrow('not found')
+    expect(provider.hasPty(scopedPty1)).toBe(false)
+  })
+
   it('attachForReconnect forwards expected identity when provided', async () => {
     await provider.attachForReconnect(scopedPty1, {
       paneKey: 'tab-a:leaf-a',

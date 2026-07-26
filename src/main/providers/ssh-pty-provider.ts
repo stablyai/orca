@@ -199,6 +199,9 @@ export class SshPtyProvider implements IPtyProvider {
 
   async attach(id: string): Promise<void> {
     await this.mux.request('pty.attach', { id: this.toRelayPtyId(id) })
+    // Why: a resolved attach is the relay asserting it owns this pty; without it
+    // a quiet pty stays absent from livePtyIds until its first frame arrives.
+    this.livePtyIds.add(this.toAppPtyId(id))
   }
 
   async attachForReconnect(
@@ -209,7 +212,7 @@ export class SshPtyProvider implements IPtyProvider {
     // be filtered before they reach the renderer. The expected identity lets the
     // relay reject a cross-generation id collision instead of reattaching this
     // lease to a different pane's freshly spawned PTY.
-    return parseSshPtyAttachResult(
+    const result = parseSshPtyAttachResult(
       await this.mux.request('pty.attach', {
         id: this.toRelayPtyId(id),
         suppressReplayNotification: true,
@@ -217,6 +220,11 @@ export class SshPtyProvider implements IPtyProvider {
         ...(expected?.tabId ? { expectedTabId: expected.tabId } : {})
       })
     )
+    // Why: reconnect builds a fresh provider with an empty livePtyIds, and a
+    // reattached-but-silent pty emits no frame — mark it live on the attach that
+    // proved it exists, or writes to it report not-written (#9169).
+    this.livePtyIds.add(this.toAppPtyId(id))
+    return result
   }
 
   write(id: string, data: string): void {
