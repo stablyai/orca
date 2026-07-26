@@ -13,6 +13,7 @@ const dependencies = vi.hoisted(() => ({
 vi.mock('react-native', () => ({
   ActivityIndicator: 'ActivityIndicator',
   Alert: { alert: vi.fn() },
+  AppState: { currentState: 'active', addEventListener: () => ({ remove: () => {} }) },
   Pressable: 'Pressable',
   RefreshControl: 'RefreshControl',
   ScrollView: 'ScrollView',
@@ -26,10 +27,18 @@ vi.mock('react-native-safe-area-context', () => ({
   useSafeAreaInsets: () => ({ bottom: 0, left: 0, right: 0, top: 0 })
 }))
 
-vi.mock('expo-router', () => ({
-  useLocalSearchParams: () => ({ hostId: 'host-1' }),
-  useRouter: () => ({ back: vi.fn() })
-}))
+vi.mock('expo-router', async () => {
+  const React = await import('react')
+  return {
+    useFocusEffect(effect: () => void | (() => void)): void {
+      React.useEffect(effect, [effect])
+    },
+    useLocalSearchParams: () => ({ hostId: 'host-1' }),
+    useRouter: () => ({ back: vi.fn() })
+  }
+})
+
+vi.mock('expo-crypto', () => ({ randomUUID: vi.fn() }))
 
 vi.mock('lucide-react-native', () => ({
   Check: 'Check',
@@ -40,12 +49,17 @@ vi.mock('lucide-react-native', () => ({
 }))
 
 vi.mock('./transport/host-store', () => ({ loadHosts: dependencies.loadHosts }))
-vi.mock('./transport/client-context', () => ({
-  useHostClient: () => ({
-    client: { sendRequest: vi.fn(), subscribe: dependencies.subscribe },
-    state: 'connected'
-  })
-}))
+vi.mock('./transport/client-context', () => {
+  const client = {
+    sendRequest: vi
+      .fn()
+      .mockResolvedValue({ id: 'status', ok: true, result: { capabilities: [] } }),
+    subscribe: dependencies.subscribe
+  }
+  return {
+    useHostClient: () => ({ client, state: 'connected' })
+  }
+})
 vi.mock('./components/use-visible-usage-providers', () => ({
   useVisibleUsageProviders: () => new Set(['antigravity'])
 }))
