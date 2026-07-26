@@ -33,6 +33,7 @@ export default function FolderWorkspaceWorktreesPanel(): React.JSX.Element {
       activeWorkspaceKey,
       activeWorktreeId,
       folderWorkspaces,
+      repos,
       workspaceLineageByChildKey,
       worktreeLineageById,
       worktreesByRepo

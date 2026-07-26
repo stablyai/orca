@@ -1,12 +1,17 @@
 import { folderWorkspaceKey, parseWorkspaceKey } from '../../../../shared/workspace-scope'
 import type {
   FolderWorkspace,
+  Repo,
   Worktree,
   WorktreeLineage,
   WorkspaceLineage
 } from '../../../../shared/types'
 import { compareWorktreeDisplayName } from '@/lib/worktree-display-name-order'
 import { getProjectedWorktreeLineageChildrenByParentId } from '../sidebar/worktree-lineage-projection'
+import {
+  isPathInsideOrEqual,
+  normalizeRuntimePathForComparison
+} from '../../../../shared/cross-platform-path'
 
 export type AttachedWorktreeResolution = {
   folderWorkspace: FolderWorkspace | null
@@ -19,6 +24,7 @@ type AttachedWorktreeResolverArgs = {
   activeWorkspaceKey: string | null
   activeWorktreeId: string | null
   folderWorkspaces: readonly FolderWorkspace[]
+  repos: readonly Repo[]
   workspaceLineageByChildKey: Record<string, WorkspaceLineage>
   worktreeLineageById: Record<string, WorktreeLineage>
   worktreesByRepo: Record<string, readonly Worktree[]>
@@ -32,6 +38,7 @@ export function getAttachedWorktreesForFolderWorkspace({
   activeWorkspaceKey,
   activeWorktreeId,
   folderWorkspaces,
+  repos,
   workspaceLineageByChildKey,
   worktreeLineageById,
   worktreesByRepo
@@ -54,11 +61,15 @@ export function getAttachedWorktreesForFolderWorkspace({
 
   const folderKey = folderWorkspaceKey(folderWorkspace.id)
   const worktreeById = getWorktreeById(worktreesByRepo)
-  const childWorktrees = Object.values(workspaceLineageByChildKey)
+  const lineageChildWorktrees = Object.values(workspaceLineageByChildKey)
     .filter((lineage) => lineage.parentWorkspaceKey === folderKey)
     .map((lineage) => getLineageChildWorktree(lineage, worktreeById))
     .filter((worktree): worktree is Worktree => worktree !== null)
-    .sort(sortWorktreesByRecentActivity)
+
+  const childWorktrees = mergeUniqueWorktrees([
+    ...lineageChildWorktrees,
+    ...getNestedRegisteredRepoWorktrees(folderWorkspace, repos, worktreesByRepo)
+  ]).sort(sortWorktreesByRecentActivity)
 
   const childWorktreeIds = new Set(childWorktrees.map((worktree) => worktree.id))
   const lineageChildrenByParentId = getLineageChildrenByParentId(
@@ -84,6 +95,42 @@ export function getAttachedWorktreesForFolderWorkspace({
     lineageChildrenByParentId,
     rootChildWorktrees
   }
+}
+
+function getNestedRegisteredRepoWorktrees(
+  folderWorkspace: FolderWorkspace,
+  repos: readonly Repo[],
+  worktreesByRepo: Record<string, readonly Worktree[]>
+): Worktree[] {
+  return repos
+    .filter((repo) => repo.kind !== 'folder')
+    .filter((repo) => sameConnection(repo.connectionId, folderWorkspace.connectionId))
+    .filter((repo) => isNestedPath(folderWorkspace.folderPath, repo.path))
+    .flatMap((repo) =>
+      (worktreesByRepo[repo.id] ?? []).filter(
+        (worktree) =>
+          !worktree.isArchived && isNestedPath(folderWorkspace.folderPath, worktree.path)
+      )
+    )
+}
+
+function mergeUniqueWorktrees(worktrees: readonly Worktree[]): Worktree[] {
+  return [...new Map(worktrees.map((worktree) => [worktree.id, worktree])).values()]
+}
+
+function sameConnection(
+  left: string | null | undefined,
+  right: string | null | undefined
+): boolean {
+  return (left ?? null) === (right ?? null)
+}
+
+function isNestedPath(rootPath: string, candidatePath: string): boolean {
+  return (
+    normalizeRuntimePathForComparison(rootPath) !==
+      normalizeRuntimePathForComparison(candidatePath) &&
+    isPathInsideOrEqual(rootPath, candidatePath)
+  )
 }
 
 export function getLineageChildrenByParentId(
