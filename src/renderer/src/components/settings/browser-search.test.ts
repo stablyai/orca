@@ -1,4 +1,7 @@
-import { describe, expect, it } from 'vitest'
+import { beforeEach, describe, expect, it } from 'vitest'
+
+import ko from '@/i18n/locales/ko.json'
+import { i18n } from '@/i18n/i18n'
 import {
   getBrowserLinkRoutingDescription,
   getBrowserLinkRoutingShortcutLabel,
@@ -42,5 +45,48 @@ describe('browser settings search copy', () => {
     expect(linkRoutingEntry?.description).toBe(description)
     expect(linkRoutingEntry?.keywords).toContain('ctrl')
     expect(linkRoutingEntry?.keywords).not.toContain('cmd')
+  })
+})
+
+// The bug this file guards: the Link Routing description was a bare template
+// literal, so it stayed English in every locale. Asserting only "no {{...}} leaked"
+// cannot catch that — the English literal has no placeholder either.
+describe('Link Routing description localization', () => {
+  const KEY = 'auto.components.settings.browser.search.904ce58440'
+
+  beforeEach(async () => {
+    await i18n.changeLanguage('en')
+  })
+
+  it('renders the Korean copy with the shortcut interpolated', async () => {
+    const koCopy = (
+      ko.auto.components.settings.browser.search as unknown as Record<string, string>
+    )['904ce58440']
+    expect(koCopy).toBeTruthy()
+    expect(koCopy).toContain('{{value0}}')
+
+    i18n.addResourceBundle('ko', 'translation', ko, true, true)
+    await i18n.changeLanguage('ko')
+
+    const description = getBrowserLinkRoutingDescription({ isMac: true })
+    expect(description).toBe(koCopy.replace('{{value0}}', '⇧⌘-click'))
+    expect(description).not.toMatch(/\{\{.+?\}\}/)
+    // Fails when the copy is a hardcoded English literal.
+    expect(description).not.toContain("Orca's built-in browser")
+
+    // The entry title is localized too, so match on the description instead.
+    const entry = getBrowserPaneSearchEntries({ isMac: true }).find(
+      (item) => item.description === description
+    )
+    expect(entry).toBeDefined()
+
+    await i18n.changeLanguage('en')
+    expect(getBrowserLinkRoutingDescription({ isMac: true })).toContain(
+      "Orca's built-in browser"
+    )
+  })
+
+  it('uses the catalog key rather than an inline literal', () => {
+    expect(i18n.exists(KEY)).toBe(true)
   })
 })
