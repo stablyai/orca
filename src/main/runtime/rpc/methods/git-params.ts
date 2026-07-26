@@ -98,6 +98,8 @@ export const GitCommit = WorktreeSelector.extend({
     .pipe(z.string().min(1, 'Missing commit message'))
 })
 
+export const GitAmend = WorktreeSelector.extend({})
+
 const CommitMessageModelCapability = z.object({
   id: z.string(),
   label: z.string(),

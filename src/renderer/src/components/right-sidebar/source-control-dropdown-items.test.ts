@@ -37,6 +37,7 @@ describe('resolveDropdownItems', () => {
       'commit',
       'commit_push',
       'commit_sync',
+      'commit_amend',
       'separator',
       'push',
       'force_push',
@@ -61,6 +62,23 @@ describe('resolveDropdownItems', () => {
     expect(byKind.commit.disabled).toBe(true)
     expect(byKind.commit_push.disabled).toBe(true)
     expect(byKind.commit_sync.disabled).toBe(true)
+    expect(byKind.commit_amend.disabled).toBe(true)
+  })
+
+  it('enables commit_amend without a message since --no-edit reuses the last message', () => {
+    const items = resolveDropdownItems(
+      inputs({
+        stagedCount: 1,
+        hasMessage: false,
+        upstreamStatus: { hasUpstream: true, ahead: 1, behind: 0 }
+      })
+    )
+    const byKind = Object.fromEntries(
+      items.filter((e) => e.kind !== 'separator').map((e) => [e.kind, e])
+    )
+    expect(byKind.commit.disabled).toBe(true)
+    expect(byKind.commit_amend.disabled).toBe(false)
+    expect(byKind.commit_amend.title).toBe('Amend staged changes to the last commit')
   })
 
   it('enables commit actions when staged files also have unstaged changes', () => {

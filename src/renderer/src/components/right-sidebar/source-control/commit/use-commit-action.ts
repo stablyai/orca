@@ -1,6 +1,6 @@
 import { useCallback } from 'react'
 import { getConnectionId } from '@/lib/connection-context'
-import { commitRuntimeGit } from '@/runtime/runtime-git-client'
+import { amendRuntimeGit, commitRuntimeGit } from '@/runtime/runtime-git-client'
 import type { SourceControlOperationTarget } from '../listing/operation-target'
 import type { SourceControlStoreActions } from '../listing/use-store-actions'
 import type { SourceControlWorktreeContext } from '../listing/use-worktree-context'
@@ -159,7 +159,80 @@ export function useSourceControlCommitAction({
     ]
   )
 
-  return { handleCommit }
+  // Why: amend reuses the last commit message (--no-edit), so there is no message param and no draft clearing.
+  const handleAmend = useCallback(async (): Promise<boolean> => {
+    const target =
+      activeWorktreeId && worktreePath
+        ? {
+            settings: activeRepoSettings,
+            worktreeId: activeWorktreeId,
+            worktreePath,
+            connectionId: getConnectionId(activeWorktreeId) ?? undefined
+          }
+        : null
+    if (!target) {
+      return false
+    }
+    if (stagedCount === 0 || unresolvedConflictCount > 0) {
+      return false
+    }
+    if (commitInFlightRef.current[target.worktreeId]) {
+      return false
+    }
+    commitInFlightRef.current[target.worktreeId] = true
+
+    setCommitInFlightByWorktree((prev) => ({ ...prev, [target.worktreeId]: true }))
+    setCommitErrorForWorktree(target.worktreeId, null)
+    try {
+      const result = await amendRuntimeGit({
+        settings: target.settings,
+        worktreeId: target.worktreeId,
+        worktreePath: target.worktreePath,
+        connectionId: target.connectionId
+      })
+      if (!result.success) {
+        setCommitErrorForWorktree(target.worktreeId, result.error ?? 'Amend failed')
+        return false
+      }
+      setCommitErrorForWorktree(target.worktreeId, null)
+      void refreshActiveGitStatusAfterMutation()
+      if (compareBaseRef) {
+        beginGitBranchCompareRequest(
+          target.worktreeId,
+          `${target.worktreeId}:${compareBaseRef}:${Date.now()}:post-amend`,
+          compareBaseRef
+        )
+      }
+      void refreshBranchCompareRef.current()
+      void refreshGitHistoryRef.current()
+      return true
+    } catch (error) {
+      setCommitErrorForWorktree(
+        target.worktreeId,
+        error instanceof Error ? error.message : 'Amend failed'
+      )
+      return false
+    } finally {
+      setCommitInFlightByWorktree((prev) => ({ ...prev, [target.worktreeId]: false }))
+      commitInFlightRef.current[target.worktreeId] = false
+    }
+  }, [
+    activeRepoSettings,
+    activeWorktreeId,
+    beginGitBranchCompareRequest,
+    commitInFlightRef,
+    compareBaseRef,
+    refreshActiveGitStatusAfterMutation,
+    refreshBranchCompareRef,
+    refreshGitHistoryRef,
+    setCommitErrorForWorktree,
+    setCommitInFlightByWorktree,
+    stagedCount,
+    unresolvedConflictCount,
+    worktreePath
+  ])
+
+  return { handleCommit, handleAmend }
 }
 
 export type SourceControlCommitAction = ReturnType<typeof useSourceControlCommitAction>

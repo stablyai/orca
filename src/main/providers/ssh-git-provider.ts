@@ -223,6 +223,17 @@ export class SshGitProvider implements IGitProvider {
     )
   }
 
+  async amend(
+    worktreePath: string
+  ): Promise<{ success: boolean; error?: string }> {
+    return this.runWithDiffDedupeClear(
+      async () =>
+        (await this.mux.request('git.amend', {
+          worktreePath
+        })) as { success: boolean; error?: string }
+    )
+  }
+
   async getStagedCommitContext(worktreePath: string): Promise<CommitMessageDraftContext | null> {
     const branchPromise = this.exec(['branch', '--show-current'], worktreePath).catch(() => ({
       stdout: ''

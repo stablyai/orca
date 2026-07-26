@@ -39,6 +39,7 @@ import { commitCompare as commitCompareOp, commitDiffEntry } from './git-handler
 import {
   areRelayWorktreePathsEqual,
   commitChangesRelay,
+  amendChangesRelay,
   addWorktreeOp,
   removeWorktreeOp,
   worktreeIsCleanOp
@@ -213,6 +214,7 @@ export class GitHandler {
     this.dispatcher.onRequest('git.checkIgnored', (p) => this.checkIgnored(p))
     this.dispatcher.onRequest('git.history', (p) => this.history(p))
     this.dispatcher.onRequest('git.commit', (p) => this.commit(p))
+    this.dispatcher.onRequest('git.amend', (p) => this.amend(p))
     this.dispatcher.onRequest('git.diff', (p, context) => this.getDiff(p, context))
     this.dispatcher.onRequest('git.stage', (p) => this.stage(p))
     this.dispatcher.onRequest('git.unstage', (p) => this.unstage(p))
@@ -525,6 +527,18 @@ export class GitHandler {
     const message = params.message as string
     try {
       return await commitChangesRelay(this.git.bind(this), worktreePath, message)
+    } finally {
+      this.clearGitMutationReadCaches()
+    }
+  }
+
+  private async amend(
+    params: Record<string, unknown>
+  ): Promise<{ success: boolean; error?: string }> {
+    this.clearGitMutationReadCaches()
+    const worktreePath = params.worktreePath as string
+    try {
+      return await amendChangesRelay(this.git.bind(this), worktreePath)
     } finally {
       this.clearGitMutationReadCaches()
     }

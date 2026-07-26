@@ -69,6 +69,7 @@ export function useSourceControlPanelModel() {
   const {
     handleAbortMerge,
     handleAbortRebase,
+    handleAmend,
     handleCommit,
     runCompoundCommitAction,
     runRemoteAction
@@ -105,6 +106,7 @@ export function useSourceControlPanelModel() {
     createPrHeaderAction: actionModel.createPrHeaderAction,
     handleAbortMerge,
     handleAbortRebase,
+    handleAmend,
     handleCommit,
     handleCreatePullRequest,
     handleStageAllPrimary,

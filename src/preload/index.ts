@@ -3556,6 +3556,10 @@ const api = {
       message: string
       connectionId?: string
     }): Promise<{ success: boolean; error?: string }> => ipcRenderer.invoke('git:commit', args),
+    amend: (args: {
+      worktreePath: string
+      connectionId?: string
+    }): Promise<{ success: boolean; error?: string }> => ipcRenderer.invoke('git:amend', args),
     generateCommitMessage: (args: {
       worktreePath: string
       worktreeId?: string

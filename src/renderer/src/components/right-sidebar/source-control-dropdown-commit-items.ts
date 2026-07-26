@@ -9,6 +9,7 @@ export type CommitDropdownItems = {
   commit: DropdownItem
   commitPush: DropdownItem
   commitSync: DropdownItem
+  commitAmend: DropdownItem
 }
 
 export function buildCommitDropdownItems(ctx: DropdownActionContext): CommitDropdownItems {
@@ -25,7 +26,9 @@ export function buildCommitDropdownItems(ctx: DropdownActionContext): CommitDrop
     behind,
     shouldForcePushWithLease,
     commitDisabledReason,
-    canCommit
+    canCommit,
+    stagedCount,
+    hasUnresolvedConflicts
   } = ctx
 
   const commit: DropdownItem = {
@@ -113,5 +116,22 @@ export function buildCommitDropdownItems(ctx: DropdownActionContext): CommitDrop
       commitDisabledReason !== null
   }
 
-  return { commit, commitPush, commitSync }
+  // Why: amend reuses the last commit message (--no-edit), so it doesn't require hasMessage.
+  const amendDisabledReason: string | null =
+    hasUnresolvedConflicts
+      ? 'Resolve conflicts before amending'
+      : stagedCount === 0
+        ? 'Stage at least one file to amend'
+        : null
+  const commitAmend: DropdownItem = {
+    kind: 'commit_amend',
+    label: translate(
+      'auto.components.right.sidebar.source.control.dropdown.items.9c745c2ea7',
+      'Commit & Amend Last Commit'
+    ),
+    title: amendDisabledReason ?? 'Amend staged changes to the last commit',
+    disabled: globalBusy || amendDisabledReason !== null
+  }
+
+  return { commit, commitPush, commitSync, commitAmend }
 }

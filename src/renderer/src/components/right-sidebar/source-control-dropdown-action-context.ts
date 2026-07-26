@@ -35,6 +35,8 @@ export type DropdownActionContext = {
   globalBusy: boolean
   commitDisabledReason: ReturnType<typeof resolveCommitDisabledReason>
   canCommit: boolean
+  stagedCount: number
+  hasUnresolvedConflicts: boolean
 }
 
 export function deriveDropdownActionContext(inputs: DropdownActionInputs): DropdownActionContext {
@@ -134,6 +136,8 @@ export function deriveDropdownActionContext(inputs: DropdownActionInputs): Dropd
     forcePushTitle,
     globalBusy,
     commitDisabledReason,
-    canCommit
+    canCommit,
+    stagedCount,
+    hasUnresolvedConflicts
   }
 }
