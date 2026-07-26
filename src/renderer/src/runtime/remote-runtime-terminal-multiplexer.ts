@@ -43,6 +43,7 @@ type TerminalMultiplexEvent =
       capabilities?: { ackOutputSourceRanges?: 1; outputPause?: 1 }
     }
   | { type: 'end'; streamId: number }
+  | { type: 'exited'; streamId: number; exitCode?: number | null }
   | { type: 'error'; streamId: number; message?: string }
   | {
       type: 'fit-override-changed'
@@ -64,6 +65,9 @@ export type RemoteRuntimeMultiplexedTerminalCallbacks = {
   onSubscribed?: () => void
   onOutputPauseCapability?: () => void
   onEnd?: () => void
+  // Why: a typed host-owned exit frame (distinct from a bare `end`). Fires only
+  // on a genuine PTY death so the transport can retire the tab vs. reattach.
+  onExited?: (exitCode: number | null) => void
   onError?: (message: string) => void
   onFitOverrideChanged?: (event: {
     mode: 'mobile-fit' | 'remote-desktop-fit' | 'desktop-fit'
@@ -661,6 +665,22 @@ class RemoteRuntimeTerminalMultiplexer {
           stream.callbacks.onError?.(TERMINAL_MULTIPLEX_STREAM_LIMIT_ERROR)
         }
       } else {
+        stream.callbacks.onEnd?.()
+      }
+      this.closeIfIdle()
+    } else if (event.type === 'exited') {
+      // Why: a genuine host-adjudicated exit. Delete the stream first so the
+      // trailing `end` frame (the server sends `exited` then `end`) finds no
+      // stream and never also fires onEnd — otherwise one exit would both retire
+      // the tab (onExited) and reattach it (onEnd).
+      clearSnapshot(stream)
+      rejectPendingSnapshotRequest(stream, 'Remote terminal exited.')
+      this.streams.delete(event.streamId)
+      if (stream.callbacks.onExited) {
+        stream.callbacks.onExited(typeof event.exitCode === 'number' ? event.exitCode : null)
+      } else {
+        // Back-compat: consumers that only know `end` (they predate onExited)
+        // still learn of the exit, since the trailing `end` is now swallowed.
         stream.callbacks.onEnd?.()
       }
       this.closeIfIdle()

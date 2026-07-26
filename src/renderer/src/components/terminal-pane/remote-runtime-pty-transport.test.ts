@@ -3465,6 +3465,246 @@ describe('createRemoteRuntimePtyTransport', () => {
     expect(transport.isConnected()).toBe(false)
   })
 
+  it('routes a genuine exited frame to onPtyExit, never onMirrorRetired', async () => {
+    const { createRemoteRuntimePtyTransport } = await import('./remote-runtime-pty-transport')
+    const onPtyExit = vi.fn()
+    const onMirrorRetired = vi.fn()
+    const transport = createRemoteRuntimePtyTransport('env-1', {
+      worktreeId: 'wt-1',
+      tabId: 'tab-1',
+      leafId: 'pane:1',
+      onPtyExit,
+      onMirrorRetired
+    })
+
+    transport.attach({
+      existingPtyId: 'remote:env-1@@terminal-1',
+      cols: 80,
+      rows: 24,
+      callbacks: {}
+    })
+    await vi.waitFor(() => expect(subscriptionSendBinary).toHaveBeenCalled())
+    const { streamId } = latestSubscribePayload()
+
+    subscriptionCallbacks?.onResponse({
+      ok: true,
+      result: { type: 'exited', streamId, exitCode: 5 }
+    })
+
+    expect(onPtyExit).toHaveBeenCalledWith('remote:env-1@@terminal-1')
+    expect(onMirrorRetired).not.toHaveBeenCalled()
+    expect(transport.getPtyId()).toBeNull()
+  })
+
+  it('ignores a trailing end after an exited frame (no double retire)', async () => {
+    const { createRemoteRuntimePtyTransport } = await import('./remote-runtime-pty-transport')
+    const onPtyExit = vi.fn()
+    const onMirrorRetired = vi.fn()
+    const transport = createRemoteRuntimePtyTransport('env-1', {
+      worktreeId: 'wt-1',
+      tabId: 'tab-1',
+      leafId: 'pane:1',
+      onPtyExit,
+      onMirrorRetired
+    })
+
+    transport.attach({
+      existingPtyId: 'remote:env-1@@terminal-1',
+      cols: 80,
+      rows: 24,
+      callbacks: {}
+    })
+    await vi.waitFor(() => expect(subscriptionSendBinary).toHaveBeenCalled())
+    const { streamId } = latestSubscribePayload()
+
+    // The host sends `exited` then `end`; the `end` must not also fire a retire.
+    subscriptionCallbacks?.onResponse({
+      ok: true,
+      result: { type: 'exited', streamId, exitCode: 0 }
+    })
+    subscriptionCallbacks?.onResponse({ ok: true, result: { type: 'end', streamId } })
+
+    expect(onPtyExit).toHaveBeenCalledTimes(1)
+    expect(onMirrorRetired).not.toHaveBeenCalled()
+  })
+
+  it('routes a stale handle without host coords to onMirrorRetired, never onPtyExit', async () => {
+    // Why: when worktree/tab/leaf are present, stale keeps the pane mounted and
+    // resubscribes in place (covered elsewhere). Without those coordinates the
+    // transport cannot re-resolve, so it must retire the mirror — not close the
+    // tab as a genuine process death.
+    const { createRemoteRuntimePtyTransport } = await import('./remote-runtime-pty-transport')
+    const onPtyExit = vi.fn()
+    const onMirrorRetired = vi.fn()
+    const transport = createRemoteRuntimePtyTransport('env-1', {
+      onPtyExit,
+      onMirrorRetired
+    })
+
+    transport.attach({
+      existingPtyId: 'remote:env-1@@terminal-1',
+      cols: 80,
+      rows: 24,
+      callbacks: {}
+    })
+    await vi.waitFor(() => expect(subscriptionSendBinary).toHaveBeenCalled())
+    const { streamId } = latestSubscribePayload()
+
+    subscriptionCallbacks?.onResponse({
+      ok: true,
+      result: { type: 'error', streamId, message: 'terminal_handle_stale' }
+    })
+
+    expect(onMirrorRetired).toHaveBeenCalledWith('remote:env-1@@terminal-1')
+    expect(onPtyExit).not.toHaveBeenCalled()
+    expect(transport.getPtyId()).toBeNull()
+  })
+
+  it('routes a no_connected_pty error to onMirrorRetired, never onPtyExit', async () => {
+    // Why: `no_connected_pty` is a transport-level gone (the host has no live
+    // PTY behind this handle right now), not a genuine process death — the spec
+    // test matrix requires it retire the mirror, never close the tab.
+    const { createRemoteRuntimePtyTransport } = await import('./remote-runtime-pty-transport')
+    const onPtyExit = vi.fn()
+    const onMirrorRetired = vi.fn()
+    const transport = createRemoteRuntimePtyTransport('env-1', {
+      worktreeId: 'wt-1',
+      tabId: 'tab-1',
+      leafId: 'pane:1',
+      onPtyExit,
+      onMirrorRetired
+    })
+
+    transport.attach({
+      existingPtyId: 'remote:env-1@@terminal-1',
+      cols: 80,
+      rows: 24,
+      callbacks: {}
+    })
+    await vi.waitFor(() => expect(subscriptionSendBinary).toHaveBeenCalled())
+    const { streamId } = latestSubscribePayload()
+
+    subscriptionCallbacks?.onResponse({
+      ok: true,
+      result: { type: 'error', streamId, message: 'no_connected_pty' }
+    })
+
+    expect(onMirrorRetired).toHaveBeenCalledWith('remote:env-1@@terminal-1')
+    expect(onPtyExit).not.toHaveBeenCalled()
+    expect(transport.getPtyId()).toBeNull()
+  })
+
+  it('routes a bare stream end to onMirrorRetired, never onPtyExit', async () => {
+    const { createRemoteRuntimePtyTransport } = await import('./remote-runtime-pty-transport')
+    const onPtyExit = vi.fn()
+    const onMirrorRetired = vi.fn()
+    const transport = createRemoteRuntimePtyTransport('env-1', {
+      worktreeId: 'wt-1',
+      tabId: 'tab-1',
+      leafId: 'pane:1',
+      onPtyExit,
+      onMirrorRetired
+    })
+
+    transport.attach({
+      existingPtyId: 'remote:env-1@@terminal-1',
+      cols: 80,
+      rows: 24,
+      callbacks: {}
+    })
+    await vi.waitFor(() => expect(subscriptionSendBinary).toHaveBeenCalled())
+    const { streamId } = latestSubscribePayload()
+
+    subscriptionCallbacks?.onResponse({ ok: true, result: { type: 'end', streamId } })
+
+    expect(onMirrorRetired).toHaveBeenCalledWith('remote:env-1@@terminal-1')
+    expect(onPtyExit).not.toHaveBeenCalled()
+  })
+
+  it('routes a local disconnect to onMirrorRetired, never onPtyExit', async () => {
+    const { createRemoteRuntimePtyTransport } = await import('./remote-runtime-pty-transport')
+    const onPtyExit = vi.fn()
+    const onMirrorRetired = vi.fn()
+    const transport = createRemoteRuntimePtyTransport('env-1', {
+      worktreeId: 'wt-1',
+      tabId: 'tab-1',
+      leafId: 'pane:1',
+      onPtyExit,
+      onMirrorRetired
+    })
+
+    transport.attach({
+      existingPtyId: 'remote:env-1@@terminal-1',
+      cols: 80,
+      rows: 24,
+      callbacks: {}
+    })
+    await vi.waitFor(() => expect(subscriptionSendBinary).toHaveBeenCalled())
+
+    transport.disconnect()
+
+    expect(onMirrorRetired).toHaveBeenCalledWith('remote:env-1@@terminal-1')
+    expect(onPtyExit).not.toHaveBeenCalled()
+  })
+
+  it('closes the tab via onPtyExit when the host snapshot marks the surface exited', async () => {
+    const { createRemoteRuntimePtyTransport } = await import('./remote-runtime-pty-transport')
+    const onPtyExit = vi.fn()
+    const onMirrorRetired = vi.fn()
+    const transport = createRemoteRuntimePtyTransport('env-1', {
+      worktreeId: 'wt-1',
+      tabId: 'web-terminal-tab-1',
+      leafId: 'pane:1',
+      onPtyExit,
+      onMirrorRetired
+    })
+
+    transport.attach({
+      existingPtyId: 'remote:env-1@@terminal-1',
+      cols: 80,
+      rows: 24,
+      callbacks: {}
+    })
+    await vi.waitFor(() => expect(subscriptionSendBinary).toHaveBeenCalled())
+
+    // Host still publishes the surface, but it is marked exited (a genuine death
+    // whose stream exit frame the client missed).
+    runtimeCall.mockImplementation(async (args: { method: string }) =>
+      args.method === 'session.tabs.list'
+        ? {
+            ok: true,
+            result: {
+              worktree: 'wt-1',
+              publicationEpoch: 'epoch-1',
+              snapshotVersion: 3,
+              activeGroupId: null,
+              activeTabId: 'tab-1::pane:1',
+              activeTabType: 'terminal',
+              tabs: [
+                {
+                  type: 'terminal',
+                  id: 'tab-1::pane:1',
+                  parentTabId: 'tab-1',
+                  leafId: 'pane:1',
+                  title: 'Terminal',
+                  isActive: true,
+                  lifecycle: 'exited',
+                  status: 'pending-handle',
+                  terminal: null
+                }
+              ]
+            }
+          }
+        : { ok: true, result: {} }
+    )
+
+    subscriptionCallbacks?.onClose?.()
+
+    await vi.waitFor(() => expect(onPtyExit).toHaveBeenCalledWith('remote:env-1@@terminal-1'))
+    expect(onMirrorRetired).not.toHaveBeenCalled()
+    expect(transport.getPtyId()).toBeNull()
+  })
+
   it('ignores stale stream end after reattaching a newer remote terminal', async () => {
     const { createRemoteRuntimePtyTransport } = await import('./remote-runtime-pty-transport')
     const onPtyExit = vi.fn()

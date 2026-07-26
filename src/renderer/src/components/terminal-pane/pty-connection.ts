@@ -3830,6 +3830,11 @@ export function connectPanePty(
     ...(paneStartup?.launchAgent ? { launchAgent: paneStartup.launchAgent } : {}),
     ...(paneStartup?.telemetry ? { telemetry: paneStartup.telemetry } : {}),
     onPtyExit: onExit,
+    // Why: mirror-retire converges on the same host-adjudicated close as a real
+    // exit (reason 'pty-exit'). A still-live host PTY refuses that close and
+    // republishes its snapshot, which re-inserts and reattaches the leaf; a
+    // genuine death (or an old host with no adjudication) closes the tab.
+    onMirrorRetired: onExit,
     onPtySpawn,
     onPtyRebind,
     ...(mainSideEffectAuthority

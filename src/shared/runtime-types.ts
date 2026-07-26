@@ -190,6 +190,8 @@ export type RuntimeMobileSessionTerminalTab = {
   launchDraft?: string
   /** Identity of the launch draft text, used to retire only the adopted generation. */
   launchDraftCreatedAt?: number
+  /** Host-owned PTY lifecycle for this leaf. Optional + additive (old clients ignore). */
+  lifecycle?: 'live' | 'disconnected' | 'exited'
   isActive: boolean
 }
 

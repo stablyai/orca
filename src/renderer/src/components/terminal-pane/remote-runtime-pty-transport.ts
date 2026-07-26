@@ -98,6 +98,8 @@ type HostHandleReplacementPolicy = 'reuse' | 'prefer-replacement' | 'require-rep
 type HostSessionHandleWaitResult = {
   handle: string | null | undefined
   inventoryFailed: boolean
+  /** Host-adjudicated leaf exit (snapshot lifecycle === 'exited'). */
+  exited: boolean
 }
 
 function stricterReplacementPolicy(
@@ -156,6 +158,7 @@ export function createRemoteRuntimePtyTransport(
     leafId,
     activate,
     onPtyExit,
+    onMirrorRetired,
     onPtySpawn,
     onPtyRebind,
     onTitleChange,
@@ -659,6 +662,18 @@ export function createRemoteRuntimePtyTransport(
     return undefined
   }
 
+  function hostSessionSurfaceExited(
+    snapshot: RuntimeMobileSessionTabsResult,
+    hostTabId: string
+  ): boolean {
+    // Why: the host marks a leaf `exited` once its PTY dies. Reading it here lets
+    // a reattach that missed the stream's exit frame still close the tab instead
+    // of looping reattach against a dead surface.
+    return getHostSessionTerminalSurfaces(snapshot, hostTabId, { matchRequestedLeaf: true }).some(
+      (tab) => tab.lifecycle === 'exited'
+    )
+  }
+
   async function waitForResubscribeHostSessionHandle(
     hostTabId: string,
     previousHandle: string,
@@ -666,7 +681,7 @@ export function createRemoteRuntimePtyTransport(
     recoveryEpoch: number
   ): Promise<HostSessionHandleWaitResult> {
     if (!worktreeId) {
-      return { handle: null, inventoryFailed: false }
+      return { handle: null, inventoryFailed: false, exited: false }
     }
     const worktree = toRuntimeWorktreeSelector(worktreeId)
     const startedAt = Date.now()
@@ -681,7 +696,7 @@ export function createRemoteRuntimePtyTransport(
         getRecoveryReplacementPolicy(previousHandle)
       )
       if (effectivePolicy === 'prefer-replacement' && lastReadyHandle) {
-        return { handle: lastReadyHandle, inventoryFailed: false }
+        return { handle: lastReadyHandle, inventoryFailed: false, exited: false }
       }
       if (lastRequestError) {
         console.warn(
@@ -690,7 +705,7 @@ export function createRemoteRuntimePtyTransport(
         )
       }
       // Why: a bounded wait without removal evidence is unknown liveness; keep the pane for a later snapshot to reattach.
-      return { handle: undefined, inventoryFailed: lastRequestError !== null }
+      return { handle: undefined, inventoryFailed: lastRequestError !== null, exited: false }
     }
     while (
       !destroyed &&
@@ -726,16 +741,19 @@ export function createRemoteRuntimePtyTransport(
         if (nextHandle) {
           lastReadyHandle = nextHandle
         }
+        if (hostSessionSurfaceExited(listed, hostTabId)) {
+          return { handle: null, inventoryFailed: false, exited: true }
+        }
         const effectivePolicy = stricterReplacementPolicy(
           replacementPolicy,
           getRecoveryReplacementPolicy(previousHandle)
         )
         if (nextHandle && (effectivePolicy === 'reuse' || nextHandle !== previousHandle)) {
-          return { handle: nextHandle, inventoryFailed: false }
+          return { handle: nextHandle, inventoryFailed: false, exited: false }
         }
         if (request === 'list') {
           if (!hasHostSessionTerminalSurface(listed, hostTabId)) {
-            return { handle: null, inventoryFailed: false }
+            return { handle: null, inventoryFailed: false, exited: false }
           }
           if (!nextHandle) {
             // Why: the surface is published but unmaterialized, and only activation can mint its PTY.
@@ -761,7 +779,7 @@ export function createRemoteRuntimePtyTransport(
       await new Promise((resolve) => setTimeout(resolve, Math.min(pollMs, remainingMs)))
       pollMs = Math.min(pollMs * 2, HOST_SESSION_REPLACEMENT_POLL_MAX_MS)
     }
-    return { handle: undefined, inventoryFailed: false }
+    return { handle: undefined, inventoryFailed: false, exited: false }
   }
 
   async function attachHostSessionMirror(
@@ -1361,7 +1379,18 @@ export function createRemoteRuntimePtyTransport(
     )
   }
 
-  function retireRemoteTerminalId(): void {
+  // Why: the host owns terminal lifecycle. Genuine exit (typed `exited` frame or
+  // snapshot lifecycle) closes the tab; mirror retire may still have a live remote
+  // PTY and routes to onMirrorRetired (falls back to onPtyExit when not provided).
+  function notifyPtyGone(ptyId: string, reason: 'exit' | 'retire'): void {
+    if (reason === 'exit') {
+      onPtyExit?.(ptyId)
+      return
+    }
+    ;(onMirrorRetired ?? onPtyExit)?.(ptyId)
+  }
+
+  function retireRemoteTerminalId(reason: 'exit' | 'retire' = 'retire'): void {
     recovery.cancel()
     resetRecoveryReplacementPolicy()
     resetSameHandleEndReuse()
@@ -1378,7 +1407,7 @@ export function createRemoteRuntimePtyTransport(
     setAttachmentUnavailable()
     emitRecoveryState()
     if (stalePtyId) {
-      onPtyExit?.(stalePtyId)
+      notifyPtyGone(stalePtyId, reason)
     }
   }
 
@@ -1568,8 +1597,8 @@ export function createRemoteRuntimePtyTransport(
         return
       }
       if (!nextHandle) {
-        // Why: host no longer publishes this surface; retire quietly and let the next session-tabs snapshot drive respawn/removal.
-        retireRemoteTerminalId()
+        // Host-marked exited is genuine death; otherwise surface gone (transport blip).
+        retireRemoteTerminalId(waitResult.exited ? 'exit' : 'retire')
         return
       }
       const effectivePolicy = stricterReplacementPolicy(
@@ -1830,10 +1859,30 @@ export function createRemoteRuntimePtyTransport(
           storedCallbacks.onExit?.(0)
           storedCallbacks.onDisconnect?.()
           if (subscribedPtyId) {
-            onPtyExit?.(subscribedPtyId)
+            notifyPtyGone(subscribedPtyId, 'retire')
           }
         },
-        onError: (message) => {
+                onExited: (exitCode) => {
+          if (!isCurrentSubscription()) {
+            return
+          }
+          outputProcessor.clearAccumulatedState()
+          connected = false
+          connecting = false
+          handle = null
+          remotePtyId = null
+          multiplexedStream = null
+          multiplexedStreamHandle = null
+          clearPendingViewportClaim()
+          setAttachmentUnavailable()
+          terminalEnded = true
+          storedCallbacks.onExit?.(exitCode ?? 0)
+          storedCallbacks.onDisconnect?.()
+          if (subscribedPtyId) {
+            notifyPtyGone(subscribedPtyId, 'exit')
+          }
+        },
+onError: (message) => {
           if (isCurrentSubscription()) {
             handleRemoteTerminalError(message)
           }
@@ -2286,7 +2335,8 @@ export function createRemoteRuntimePtyTransport(
       emitRecoveryState()
       storedCallbacks.onDisconnect?.()
       if (id) {
-        onPtyExit?.(id)
+        // Local transport drop, not a process death — retire and reattach.
+        notifyPtyGone(id, 'retire')
       }
     },
 

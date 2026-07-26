@@ -3858,6 +3858,86 @@ describe('connectPanePty', () => {
     expect(manager.closePane).not.toHaveBeenCalled()
   })
 
+  it('routes a mirror retire on a reattached sole pane through onPtyExitRef, never keeping it mounted', async () => {
+    // Why (B1/B2): mirror-retire now converges on the same host-adjudicated
+    // close as a real exit. A reattached sole pane (no onPtySpawn) whose mirror
+    // retires — stale handle, or a bare stream end from an old host that emits no
+    // exited frame (the version-skew case) — must reach onPtyExitRef with reason
+    // 'pty-exit', not linger mounted with nothing able to rebind the leaf.
+    const { connectPanePty } = await import('./pty-connection')
+    const transport = createMockTransport('tab-pty')
+    transportFactoryQueue.push(transport)
+    const manager = createManager(1)
+    const deps = createDeps()
+
+    connectPanePty(createPane(1) as never, manager as never, deps as never)
+    const onMirrorRetired = createdTransportOptions[0]?.onMirrorRetired as
+      | ((ptyId: string) => void)
+      | undefined
+    expect(onMirrorRetired).toBeTypeOf('function')
+
+    onMirrorRetired?.('tab-pty')
+
+    expect(deps.onPtyExitRef.current).toHaveBeenCalledWith('tab-pty')
+    expect(manager.closePane).not.toHaveBeenCalled()
+  })
+
+  it('keeps the pane mounted when a suppressed restart mirror-retires (suppression still wins)', async () => {
+    // Why: an intentional restart suppresses the exit ahead of time. The shared
+    // suppression check runs before the convergence, so a suppressed mirror
+    // retire still keeps the pane mounted to rebind in place — routing it to the
+    // close path would tear down a deliberately-restarting pane.
+    const { connectPanePty } = await import('./pty-connection')
+    const transport = createMockTransport('pty-pane-2')
+    transportFactoryQueue.push(transport)
+    const manager = createManager(1)
+    const deps = createDeps({
+      consumeSuppressedPtyExit: vi.fn(() => true)
+    })
+
+    connectPanePty(createPane(2) as never, manager as never, deps as never)
+    const onMirrorRetired = createdTransportOptions[0]?.onMirrorRetired as
+      | ((ptyId: string) => void)
+      | undefined
+    expect(onMirrorRetired).toBeTypeOf('function')
+
+    onMirrorRetired?.('pty-pane-2')
+
+    expect(deps.consumeSuppressedPtyExit).toHaveBeenCalledWith('pty-pane-2')
+    expect(deps.onPtyExitRef.current).not.toHaveBeenCalled()
+    expect(manager.closePane).not.toHaveBeenCalled()
+  })
+
+  it('routes a mirror retire on an established split pane through closePane', async () => {
+    // Why: mirror-retire converges on the real-exit flow; a split pane that has
+    // already produced output closes its pane just like a genuine exit does.
+    const { connectPanePty } = await import('./pty-connection')
+    const capturedDataCallback: { current: ((data: string) => void) | null } = { current: null }
+    const transport = createMockTransport('pty-pane-2')
+    transport.connect.mockImplementation(async ({ callbacks }: { callbacks: ConnectCallbacks }) => {
+      capturedDataCallback.current = callbacks.onData ?? null
+      return 'pty-pane-2'
+    })
+    transportFactoryQueue.push(transport)
+    const manager = createManager(2)
+    const deps = createDeps({
+      restoredLeafId: LEAF_2,
+      paneTransportsRef: { current: new Map([[1, createMockTransport('pty-pane-1')]]) }
+    })
+
+    connectPanePty(createPane(2) as never, manager as never, deps as never)
+    const onMirrorRetired = createdTransportOptions[0]?.onMirrorRetired as
+      | ((ptyId: string) => void)
+      | undefined
+    expect(onMirrorRetired).toBeTypeOf('function')
+    expect(capturedDataCallback.current).toBeTypeOf('function')
+
+    capturedDataCallback.current?.('shell prompt')
+    onMirrorRetired?.('pty-pane-2')
+
+    expect(manager.closePane).toHaveBeenCalledWith(2)
+  })
+
   it('closes a split pane when an established PTY exits after output', async () => {
     const { connectPanePty } = await import('./pty-connection')
     const capturedDataCallback: { current: ((data: string) => void) | null } = { current: null }

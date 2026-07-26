@@ -213,6 +213,12 @@ export type IpcPtyTransportOptions = {
   terminalColorQueryReplies?: TerminalOscColorQueryReplyColors
   telemetry?: EventProps<'agent_started'>
   onPtyExit?: (ptyId: string) => void
+  // Why: a mirror retire (stale handle, bare stream end, local disconnect) whose
+  // remote PTY may still be alive. Distinct from onPtyExit so the transport can
+  // classify it, but the consumer routes both through the same host-adjudicated
+  // close — a still-live host PTY refuses it and republishes the snapshot to
+  // reattach. Only the remote transport fires it; omitting it keeps onPtyExit.
+  onMirrorRetired?: (ptyId: string) => void
   onTitleChange?: (title: string, rawTitle: string) => void
   onPtySpawn?: (ptyId: string) => void
   /** Rebind an existing pane after its provider replaces the PTY identity. */
