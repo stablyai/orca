@@ -1,16 +1,15 @@
+import {
+  classifyCodexRateLimitWindows,
+  CODEX_SESSION_WINDOW_MINUTES,
+  CODEX_WEEKLY_WINDOW_MINUTES,
+  type CodexRpcRateWindow,
+  type CodexRpcRateLimits
+} from './codex-rate-limit-window-classification'
 import type { RateLimitBucket, RateLimitWindow } from '../../shared/rate-limit-types'
 
-export type CodexRpcRateWindow = {
-  usedPercent?: number
-  windowDurationMins?: number
-  resetsAt?: number
-}
-
-type CodexRpcRateLimitSnapshot = {
+type CodexRpcRateLimitSnapshot = CodexRpcRateLimits & {
   limitId?: string
   limitName?: string
-  primary?: CodexRpcRateWindow | null
-  secondary?: CodexRpcRateWindow | null
 }
 
 export type CodexRpcRateLimitsPayload = {
@@ -35,30 +34,13 @@ function getWindowMinutes(reportedWindowMinutes: number | undefined, fallback: n
   return reportedWindowMinutes
 }
 
-function getPreferredSnapshot(payload: CodexRpcRateLimitsPayload | undefined): {
-  id: string | null
-  snapshot: CodexRpcRateLimitSnapshot | undefined
-} {
-  // Why: `rateLimits` is the app-server's declared preferred meter; choosing
-  // the first by-id entry can replace compact session/weekly with another plan.
+function getPreferredSnapshotId(payload: CodexRpcRateLimitsPayload | undefined): string | null {
+  // Why: `rateLimits` is the app-server's declared preferred meter; its id
+  // (or the 'codex' default) must not reappear as an extra bucket.
   if (payload?.rateLimits) {
-    return {
-      id: payload.rateLimits.limitId?.trim() || 'codex',
-      snapshot: payload.rateLimits
-    }
+    return payload.rateLimits.limitId?.trim() || 'codex'
   }
-  const byId = payload?.rateLimitsByLimitId
-  if (byId?.codex) {
-    return { id: 'codex', snapshot: byId.codex }
-  }
-  if (byId) {
-    for (const [id, snapshot] of Object.entries(byId)) {
-      if (snapshot) {
-        return { id, snapshot }
-      }
-    }
-  }
-  return { id: null, snapshot: undefined }
+  return null
 }
 
 function getSnapshotName(id: string, snapshot: CodexRpcRateLimitSnapshot): string {
@@ -66,49 +48,44 @@ function getSnapshotName(id: string, snapshot: CodexRpcRateLimitSnapshot): strin
   return name === 'codex' ? 'Session' : name
 }
 
-export function mapCodexRpcRateLimitsPayload(
+export function mapCodexRpcRateLimitBuckets(
   payload: CodexRpcRateLimitsPayload | undefined,
   mapWindow: WindowMapper
-): {
-  session: RateLimitWindow | null
-  weekly: RateLimitWindow | null
-  buckets?: RateLimitBucket[]
-} {
-  const preferred = getPreferredSnapshot(payload)
-  const session = mapWindow(
-    preferred.snapshot?.primary ?? undefined,
-    getWindowMinutes(preferred.snapshot?.primary?.windowDurationMins, 300)
-  )
-  const weekly = mapWindow(
-    preferred.snapshot?.secondary ?? undefined,
-    getWindowMinutes(preferred.snapshot?.secondary?.windowDurationMins, 10080)
-  )
+): RateLimitBucket[] | undefined {
   const byId = payload?.rateLimitsByLimitId
   if (!byId) {
-    return { session, weekly }
+    return undefined
   }
-
+  const preferredId = getPreferredSnapshotId(payload) ?? 'codex'
   const buckets: RateLimitBucket[] = []
   for (const [id, snapshot] of Object.entries(byId)) {
-    if (!snapshot || id === (preferred.id ?? 'codex')) {
+    if (!snapshot || id === preferredId) {
       continue
     }
     const name = getSnapshotName(id, snapshot)
-    const primary = mapWindow(
-      snapshot.primary ?? undefined,
-      getWindowMinutes(snapshot.primary?.windowDurationMins, 300)
+    // Why: classification picks which slot is session vs weekly; the reported
+    // duration stays the bucket's windowMinutes (it needn't be 300/10080).
+    const { session, weekly } = classifyCodexRateLimitWindows(snapshot)
+    const sessionWindow = mapWindow(
+      session ?? undefined,
+      getWindowMinutes(
+        typeof session?.windowDurationMins === 'number' ? session.windowDurationMins : undefined,
+        CODEX_SESSION_WINDOW_MINUTES
+      )
     )
-    if (primary) {
-      buckets.push({ name, ...primary })
+    if (sessionWindow) {
+      buckets.push({ name, ...sessionWindow })
     }
-    const secondary = mapWindow(
-      snapshot.secondary ?? undefined,
-      getWindowMinutes(snapshot.secondary?.windowDurationMins, 10080)
+    const weeklyWindow = mapWindow(
+      weekly ?? undefined,
+      getWindowMinutes(
+        typeof weekly?.windowDurationMins === 'number' ? weekly.windowDurationMins : undefined,
+        CODEX_WEEKLY_WINDOW_MINUTES
+      )
     )
-    if (secondary) {
-      buckets.push({ name: `${name} weekly`, ...secondary })
+    if (weeklyWindow) {
+      buckets.push({ name: `${name} weekly`, ...weeklyWindow })
     }
   }
-
-  return { session, weekly, ...(buckets.length > 0 ? { buckets } : {}) }
+  return buckets.length > 0 ? buckets : undefined
 }

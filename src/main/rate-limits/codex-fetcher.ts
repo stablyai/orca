@@ -46,7 +46,7 @@ import {
   buildCodexRateLimitResetCreditsUrl,
   resolveCodexBackendBaseUrl
 } from './codex-backend-base-url'
-import { mapCodexRpcRateLimitsPayload } from './codex-rpc-rate-limit-mapping'
+import { mapCodexRpcRateLimitBuckets } from './codex-rpc-rate-limit-mapping'
 
 const RPC_TIMEOUT_MS = 10_000
 const WSL_RPC_TIMEOUT_MS = 25_000
@@ -811,8 +811,8 @@ async function fetchViaRpc(options?: FetchCodexRateLimitsOptions): Promise<Provi
             const session = mapRpcWindow(classifiedWindows.session, CODEX_SESSION_WINDOW_MINUTES)
             const weekly = mapRpcWindow(classifiedWindows.weekly, CODEX_WEEKLY_WINDOW_MINUTES)
             // Why: preferred session/weekly stay classification-driven; buckets surface extra meters from rateLimitsByLimitId.
-            const { buckets } = mapCodexRpcRateLimitsPayload(
-              wrapper as Parameters<typeof mapCodexRpcRateLimitsPayload>[0],
+            const buckets = mapCodexRpcRateLimitBuckets(
+              wrapper as Parameters<typeof mapCodexRpcRateLimitBuckets>[0],
               mapRpcWindow
             )
             const rateLimitResetCredits = mapRpcRateLimitResetCredits(
