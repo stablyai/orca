@@ -2,7 +2,11 @@ import type { Worktree, Repo, TerminalTab, WorktreeLineage } from '../../../../s
 import { buildWorktreeComparator, sortWorktreesSmart } from './smart-sort'
 import { getWorktreeIdsWithLiveAgent, isInactiveWorkspace } from '@/lib/worktree-activity-state'
 import { useAppStore } from '@/store'
-import { getAllWorktreesFromState, getRepoMapFromState } from '@/store/selectors'
+import {
+  getAllWorktreesFromState,
+  getRepoMapFromState,
+  getWorktreeMapFromState
+} from '@/store/selectors'
 import { DEFAULT_SHOW_SLEEPING_WORKSPACES } from '../../../../shared/constants'
 import {
   ALL_EXECUTION_HOSTS_SCOPE,
@@ -15,6 +19,7 @@ import {
   getCyclicProjectedWorktreeLineageIds,
   getLineageRenderInfo
 } from './worktree-lineage-projection'
+import { computeRenderedSidebarWorktreeOrder } from './rendered-sidebar-worktree-order'
 
 /**
  * Whether a worktree represents the repo's default-branch row that the
@@ -270,15 +275,19 @@ function addVisibleLineageAncestors(
  * could target a different worktree than what's rendered at that sidebar
  * position. By caching the IDs that WorktreeList actually rendered, the
  * shortcut numbering always matches the sidebar card order.
+ *
+ * Why null vs []: [] is a real rendered order (everything collapsed/filtered);
+ * null means WorktreeList is unmounted.
  */
-let _cachedVisibleIds: string[] = []
+let _publishedVisibleIds: string[] | null = null
 
 /**
  * Called by WorktreeList after computing visible worktrees so the Cmd+1–9
- * handler can read the exact same ordering the user sees on screen.
+ * handler can read the exact same ordering the user sees on screen. Pass null
+ * on unmount.
  */
-export function setVisibleWorktreeIds(ids: string[]): void {
-  _cachedVisibleIds = ids
+export function setVisibleWorktreeIds(ids: string[] | null): void {
+  _publishedVisibleIds = ids
 }
 
 /**
@@ -286,17 +295,16 @@ export function setVisibleWorktreeIds(ids: string[]): void {
  * state. Called by the App-level Cmd+1–9 handler (not a React hook — reads
  * store snapshot at call time).
  *
- * If WorktreeList has rendered at least once, returns the cached IDs so the
- * shortcut numbering matches the sidebar. Falls back to a live recomputation
- * only before WorktreeList's first render (e.g. app startup).
+ * If WorktreeList is mounted, returns the exact IDs it rendered. Otherwise
+ * recomputes the order the sidebar *would* render from the same row pipeline,
+ * so a closed sidebar numbers workspaces the same way an open one does (#9497).
  */
 export function getVisibleWorktreeIds(): string[] {
-  // Prefer the cached IDs that mirror the rendered sidebar order.
-  if (_cachedVisibleIds.length > 0) {
-    return _cachedVisibleIds
+  // Prefer the published IDs that mirror the rendered sidebar order.
+  if (_publishedVisibleIds) {
+    return _publishedVisibleIds
   }
 
-  // Fallback: live recomputation for the window before WorktreeList renders.
   const state = useAppStore.getState()
   const allWorktrees = getAllWorktreesFromState(state).filter((w) => !w.isArchived)
 
@@ -325,7 +333,7 @@ export function getVisibleWorktreeIds(): string[] {
     sortedIds = sorted.map((w) => w.id)
   }
 
-  return computeVisibleWorktreeIds(state.worktreesByRepo, sortedIds, {
+  const visibleIds = computeVisibleWorktreeIds(state.worktreesByRepo, sortedIds, {
     filterRepoIds: state.filterRepoIds,
     showSleepingWorkspaces: state.showSleepingWorkspaces,
     tabsByWorktree: state.tabsByWorktree,
@@ -345,4 +353,11 @@ export function getVisibleWorktreeIds(): string[] {
     defaultHostId: getSettingsFocusedExecutionHostId(state.settings),
     worktreeLineageById: state.worktreeLineageById
   })
+
+  const worktreeMap = getWorktreeMapFromState(state)
+  // Why the row pipeline: grouping, pinning and main-worktree hoisting reorder cards, so a flat sort numbers the wrong workspace.
+  return computeRenderedSidebarWorktreeOrder(
+    state,
+    visibleIds.map((id) => worktreeMap.get(id)).filter((w): w is Worktree => w != null)
+  )
 }

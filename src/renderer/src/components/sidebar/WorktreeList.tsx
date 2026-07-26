@@ -218,7 +218,6 @@ import {
 } from './worktree-multi-selection'
 import { persistWorktreeSortOrderByHost } from '@/lib/worktree-sort-order-persistence'
 import {
-  ALL_EXECUTION_HOSTS_SCOPE,
   getRepoExecutionHostId,
   getSettingsFocusedExecutionHostId,
   getWorktreeExecutionHostId,
@@ -293,9 +292,10 @@ import {
   sidebarWorkspaceStillExists
 } from './worktree-list-folder-reveal'
 import {
+  filterFolderWorkspacesForVisibleHosts,
+  filterProjectGroupsForVisibleHosts,
   getFolderPathStatusRouteOptionsForRows,
-  getFolderWorkspaceExecutionHostIdForRows,
-  getProjectGroupExecutionHostIdForRows
+  getVisibleSidebarHostIdSet
 } from './worktree-list-host-filtering'
 import { getFolderWorkspaceCardPrDisplay } from './folder-workspace-card-pr-display'
 import {
@@ -5596,12 +5596,10 @@ const WorktreeList = React.memo(function WorktreeList({
     worktreeMap
   ])
   const defaultHostId = getSettingsFocusedExecutionHostId(settings)
-  const visibleHostIdSet = useMemo(() => {
-    const visibleHostIds =
-      visibleWorkspaceHostIds ??
-      (workspaceHostScope === ALL_EXECUTION_HOSTS_SCOPE ? null : [workspaceHostScope])
-    return visibleHostIds ? new Set<ExecutionHostId>(visibleHostIds) : null
-  }, [visibleWorkspaceHostIds, workspaceHostScope])
+  const visibleHostIdSet = useMemo(
+    () => getVisibleSidebarHostIdSet(visibleWorkspaceHostIds, workspaceHostScope),
+    [visibleWorkspaceHostIds, workspaceHostScope]
+  )
   const visibleReposForRows = useMemo(() => {
     if (!visibleHostIdSet) {
       return repos
@@ -5612,29 +5610,20 @@ const WorktreeList = React.memo(function WorktreeList({
       return visibleHostIdSet.has(hostId)
     })
   }, [defaultHostId, repos, visibleHostIdSet])
-  const visibleProjectGroupsForRows = useMemo(() => {
-    if (!visibleHostIdSet) {
-      return projectGroups
-    }
-    return projectGroups.filter((group) => {
-      const hostId = getProjectGroupExecutionHostIdForRows(group, defaultHostId)
-      return visibleHostIdSet.has(hostId)
-    })
-  }, [defaultHostId, projectGroups, visibleHostIdSet])
-  const visibleFolderWorkspacesForRows = useMemo(() => {
-    if (!visibleHostIdSet) {
-      return folderWorkspaces
-    }
-    const projectGroupById = new Map(projectGroups.map((group) => [group.id, group]))
-    return folderWorkspaces.filter((folderWorkspace) => {
-      const hostId = getFolderWorkspaceExecutionHostIdForRows({
-        folderWorkspace,
-        projectGroup: projectGroupById.get(folderWorkspace.projectGroupId),
+  const visibleProjectGroupsForRows = useMemo(
+    () => filterProjectGroupsForVisibleHosts(projectGroups, visibleHostIdSet, defaultHostId),
+    [defaultHostId, projectGroups, visibleHostIdSet]
+  )
+  const visibleFolderWorkspacesForRows = useMemo(
+    () =>
+      filterFolderWorkspacesForVisibleHosts(
+        folderWorkspaces,
+        projectGroups,
+        visibleHostIdSet,
         defaultHostId
-      })
-      return visibleHostIdSet.has(hostId)
-    })
-  }, [defaultHostId, folderWorkspaces, projectGroups, visibleHostIdSet])
+      ),
+    [defaultHostId, folderWorkspaces, projectGroups, visibleHostIdSet]
+  )
   const repoOrder = useMemo(() => {
     return getLogicalRepoOrderRankById(repos.map((repo) => repo.id))
   }, [repos])
@@ -5955,8 +5944,8 @@ const WorktreeList = React.memo(function WorktreeList({
   // Why layout effect: the Cmd/Ctrl+1–9 handler can fire right after commit; publishing after paint would leave the shortcut cache stale.
   useLayoutEffect(() => {
     setVisibleWorktreeIds(renderedWorktreeIds)
-    // Why: unmounting the list clears the rendered-order cache so shortcuts fall back to the live store snapshot.
-    return () => setVisibleWorktreeIds([])
+    // Why null, not []: [] is a real rendered order (all collapsed/filtered); null tells shortcuts the list is unmounted.
+    return () => setVisibleWorktreeIds(null)
   }, [renderedWorktreeIds])
 
   const handleCreateForRepo = useCallback(
