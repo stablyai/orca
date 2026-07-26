@@ -13,8 +13,11 @@ export const CLEAN_DISCONNECT_PROTOCOL_VERSION = 24
 // Daemons before this version emit '2031-subscribe' but have no unsubscribe fact
 // at all, so a TUI exiting while hidden would leave the subscription registered
 // forever and the next theme flip would inject CSI 997 into whatever replaced it.
-// Delegating 2031 authority to such a daemon is therefore unsafe; those sessions
-// keep renderer-side scanner authority instead.
+// Scan authority moves to the daemon only while a session is backgrounded, so the
+// gate lives on backgrounding itself (setPtyBackgrounded): a pre-v29 daemon is
+// never asked to thin, and main's scanner — which emits BOTH facts — stays
+// authoritative over the whole stream. Filtering the subscribe fact alone would
+// not help, because the visible-era subscription is registered by main.
 export const MODE_2031_UNSUBSCRIBE_FACT_PROTOCOL_VERSION = 29
 export const PREVIOUS_DAEMON_PROTOCOL_VERSIONS = [
   1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27,

@@ -826,6 +826,59 @@ describe('DaemonPtyAdapter (IPtyProvider)', () => {
       }
     })
 
+    it('never delegates scan authority to a v28 daemon, so a hidden withdrawal is still seen', () => {
+      // The scenario the fact filter alone does NOT cover, and the reason the gate sits
+      // on backgrounding: while the pane is VISIBLE, main's own scanner registers the
+      // 2031 subscribe (bytes transit main either way). Only backgrounding hands scan
+      // authority to the daemon. If a v28 daemon were allowed to take it, the TUI could
+      // exit while hidden with no party able to emit the withdrawal — #9993 via upgrade.
+      const notifySpy = vi.spyOn(DaemonClient.prototype, 'notify')
+      const legacy = new DaemonPtyAdapter({ socketPath, tokenPath, protocolVersion: 28 })
+      try {
+        legacy.setPtyBackgrounded('v28-session', true)
+        expect(notifySpy).toHaveBeenCalledWith('setSessionBackground', {
+          sessionId: 'v28-session',
+          background: false
+        })
+      } finally {
+        legacy.dispose()
+        notifySpy.mockRestore()
+      }
+    })
+
+    it('delegates scan authority to a v29 daemon, which can retract', () => {
+      const notifySpy = vi.spyOn(DaemonClient.prototype, 'notify')
+      const current = new DaemonPtyAdapter({ socketPath, tokenPath, protocolVersion: 29 })
+      try {
+        current.setPtyBackgrounded('v29-session', true)
+        expect(notifySpy).toHaveBeenCalledWith('setSessionBackground', {
+          sessionId: 'v29-session',
+          background: true
+        })
+      } finally {
+        current.dispose()
+        notifySpy.mockRestore()
+      }
+    })
+
+    it('forwards a v28 unsubscribe, which can only retire state main registered', () => {
+      // Asymmetric on purpose: an unretractable subscribe is the hazard, a withdrawal
+      // never is. A stale relay tracker on a preserved daemon must still be able to
+      // clear a subscription rather than be silenced into stranding it.
+      const legacy = new DaemonPtyAdapter({ socketPath, tokenPath, protocolVersion: 28 })
+      try {
+        const captured = captureForwardedFacts(legacy)
+        legacy['removeEventListener'] = null
+        legacy['setupEventRouting']()
+        captured.emit({ kind: '2031-unsubscribe' })
+
+        expect(captured.kinds()).toEqual(['2031-unsubscribe'])
+      } finally {
+        legacy.dispose()
+        onEventSpy.mockRestore()
+      }
+    })
+
     it('forwards 2031 facts from a v29 daemon that can retract them', () => {
       const current = new DaemonPtyAdapter({ socketPath, tokenPath, protocolVersion: 29 })
       try {

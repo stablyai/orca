@@ -786,7 +786,15 @@ export class DaemonPtyAdapter implements IPtyProvider {
       return
     }
     // Why: preserved v19 daemons can thin but can't return the absolute snapshot sequence to recover a gap; clear their stale hint too.
-    const safeBackground = this.supportsAuthoritativeBufferSnapshots && background
+    // Why also gate on 2031 (#9993): backgrounding is what hands transient-fact scan
+    // authority to the daemon. A pre-v29 daemon can announce a 2031 subscribe but never
+    // retract it, so a TUI exiting while hidden would strand the subscription and the
+    // next theme flip would inject CSI 997 into its replacement shell. Declining to
+    // background keeps main's scanner — which emits both facts — authoritative.
+    const safeBackground =
+      this.supportsAuthoritativeBufferSnapshots &&
+      supportsMode2031UnsubscribeFact(this.protocolVersion) &&
+      background
     if (safeBackground) {
       this.backgroundedSessionIds.add(id)
     } else {
@@ -1926,12 +1934,12 @@ export class DaemonPtyAdapter implements IPtyProvider {
             : { sequenceChars: event.payload.sequenceChars })
         })
       } else if (event.event === 'transientFact') {
-        // Why (#9993): a pre-v29 daemon emits '2031-subscribe' but has no unsubscribe
-        // fact, so a subscription it registers can never be retracted — a TUI exiting
-        // while its pane is hidden would leave it live and the next theme flip would
-        // inject CSI 997 into whatever shell replaced it. Dropping the subscribe keeps
-        // those sessions on renderer-scanner authority, which is exactly the pre-fact
-        // behaviour: correct for visible panes, and no worse than today when hidden.
+        // Why (#9993): belt-and-braces behind the setPtyBackgrounded gate. A pre-v29
+        // daemon is never asked to background, so it should emit no transient facts at
+        // all — but one preserved across a reconnect could still have a stale relay
+        // tracker. An unretractable subscribe is the harmful direction, so drop it.
+        // An unsubscribe is always forwarded: retiring a subscription main registered
+        // can only ever help, never strand one.
         if (
           event.payload.kind === '2031-subscribe' &&
           !supportsMode2031UnsubscribeFact(this.protocolVersion)
