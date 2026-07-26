@@ -50,6 +50,13 @@ type AutomationUsageLookupInput = {
 }
 
 const LONG_CONTEXT_THRESHOLD_TOKENS = 200_000
+const SONNET_5_STANDARD_PRICING_START_DAY = '2026-09-01'
+const SONNET_5_STANDARD_PRICING = {
+  input: 3,
+  output: 15,
+  cacheRead: 0.3,
+  cacheWrite: 3.75
+} satisfies ClaudeModelPricing
 const SONNET_LONG_CONTEXT_PRICING = {
   thresholdTokens: LONG_CONTEXT_THRESHOLD_TOKENS,
   inputAboveThreshold: 6,
@@ -255,13 +262,14 @@ function estimateCostUsd(
   inputTokens: number,
   outputTokens: number,
   cacheReadTokens: number,
-  cacheWriteTokens: number
+  cacheWriteTokens: number,
+  day?: string | null
 ): number | null {
   const normalized = normalizeModelForPricing(model)
   if (!normalized) {
     return null
   }
-  const pricing = MODEL_PRICING[normalized]
+  const pricing = resolvePricingForDay(normalized, day)
   return (
     (calculateTieredCost(
       inputTokens,
@@ -291,6 +299,24 @@ function estimateCostUsd(
   )
 }
 
+function resolvePricingForDay(normalizedModel: string, day?: string | null): ClaudeModelPricing {
+  const effectiveDay = day ?? formatLocalDay(new Date())
+  if (
+    normalizedModel === 'claude-sonnet-5' &&
+    effectiveDay >= SONNET_5_STANDARD_PRICING_START_DAY
+  ) {
+    return SONNET_5_STANDARD_PRICING
+  }
+  return MODEL_PRICING[normalizedModel]
+}
+
+function formatLocalDay(date: Date): string {
+  const year = date.getFullYear()
+  const month = String(date.getMonth() + 1).padStart(2, '0')
+  const day = String(date.getDate()).padStart(2, '0')
+  return `${year}-${month}-${day}`
+}
+
 function getRangeCutoff(range: ClaudeUsageRange): string | null {
   if (range === 'all') {
     return null
@@ -299,10 +325,7 @@ function getRangeCutoff(range: ClaudeUsageRange): string | null {
   const now = new Date()
   now.setHours(0, 0, 0, 0)
   now.setDate(now.getDate() - (days - 1))
-  const year = now.getFullYear()
-  const month = String(now.getMonth() + 1).padStart(2, '0')
-  const day = String(now.getDate()).padStart(2, '0')
-  return `${year}-${month}-${day}`
+  return formatLocalDay(now)
 }
 
 function getLocalDay(timestamp: string): string | null {
@@ -310,10 +333,7 @@ function getLocalDay(timestamp: string): string | null {
   if (Number.isNaN(parsed.getTime())) {
     return null
   }
-  const year = parsed.getFullYear()
-  const month = String(parsed.getMonth() + 1).padStart(2, '0')
-  const day = String(parsed.getDate()).padStart(2, '0')
-  return `${year}-${month}-${day}`
+  return formatLocalDay(parsed)
 }
 
 function getWorktreeFingerprint(worktreesByRepo: Map<string, UsageWorktreeRef[]>): string {
@@ -513,7 +533,8 @@ export class ClaudeUsageStore {
         row.inputTokens,
         row.outputTokens,
         row.cacheReadTokens,
-        row.cacheWriteTokens
+        row.cacheWriteTokens,
+        row.day
       )
       if (cost !== null) {
         hasAnyBillableCost = true
@@ -614,6 +635,19 @@ export class ClaudeUsageStore {
       existing.outputTokens += daily.outputTokens
       existing.cacheReadTokens += daily.cacheReadTokens
       existing.cacheWriteTokens += daily.cacheWriteTokens
+      if (kind === 'model') {
+        const cost = estimateCostUsd(
+          daily.model,
+          daily.inputTokens,
+          daily.outputTokens,
+          daily.cacheReadTokens,
+          daily.cacheWriteTokens,
+          daily.day
+        )
+        if (cost !== null) {
+          existing.estimatedCostUsd = (existing.estimatedCostUsd ?? 0) + cost
+        }
+      }
       rows.set(key, existing)
     }
 
@@ -639,18 +673,6 @@ export class ClaudeUsageStore {
         if (row) {
           row.sessions++
         }
-      }
-    }
-
-    for (const row of rows.values()) {
-      if (kind === 'model') {
-        row.estimatedCostUsd = estimateCostUsd(
-          row.key,
-          row.inputTokens,
-          row.outputTokens,
-          row.cacheReadTokens,
-          row.cacheWriteTokens
-        )
       }
     }
 
@@ -814,7 +836,8 @@ export class ClaudeUsageStore {
       totals.inputTokens,
       totals.outputTokens,
       totals.cacheReadTokens,
-      totals.cacheWriteTokens
+      totals.cacheWriteTokens,
+      getLocalDay(session.lastTimestamp)
     )
 
     return {

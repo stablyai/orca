@@ -317,6 +317,95 @@ describe('ClaudeUsageStore', () => {
     ).toBeCloseTo(14.7)
   })
 
+  it('prices Claude Sonnet 5 usage before 2026-09-01 at introductory rates', async () => {
+    const store = createStoreWithState({
+      dailyAggregates: [
+        {
+          day: '2026-08-31',
+          model: 'claude-sonnet-5',
+          projectKey: 'worktree:repo-1::/workspace/repo-a',
+          projectLabel: 'Repo A',
+          repoId: 'repo-1',
+          worktreeId: 'repo-1::/workspace/repo-a',
+          turnCount: 1,
+          zeroCacheReadTurnCount: 0,
+          inputTokens: 1_000_000,
+          outputTokens: 1_000_000,
+          cacheReadTokens: 1_000_000,
+          cacheWriteTokens: 1_000_000
+        }
+      ]
+    })
+
+    const breakdown = await store.getBreakdown('orca', 'all', 'model')
+
+    expect(breakdown[0]?.estimatedCostUsd).toBeCloseTo(14.7)
+  })
+
+  it('prices Claude Sonnet 5 usage from 2026-09-01 at standard rates', async () => {
+    const store = createStoreWithState({
+      dailyAggregates: [
+        {
+          day: '2026-09-01',
+          model: 'claude-sonnet-5',
+          projectKey: 'worktree:repo-1::/workspace/repo-a',
+          projectLabel: 'Repo A',
+          repoId: 'repo-1',
+          worktreeId: 'repo-1::/workspace/repo-a',
+          turnCount: 1,
+          zeroCacheReadTurnCount: 0,
+          inputTokens: 1_000_000,
+          outputTokens: 1_000_000,
+          cacheReadTokens: 1_000_000,
+          cacheWriteTokens: 1_000_000
+        }
+      ]
+    })
+
+    const breakdown = await store.getBreakdown('orca', 'all', 'model')
+
+    expect(breakdown[0]?.estimatedCostUsd).toBeCloseTo(22.05)
+  })
+
+  it('sums Claude Sonnet 5 usage across introductory and standard pricing days', async () => {
+    const store = createStoreWithState({
+      dailyAggregates: [
+        {
+          day: '2026-08-31',
+          model: 'claude-sonnet-5',
+          projectKey: 'worktree:repo-1::/workspace/repo-a',
+          projectLabel: 'Repo A',
+          repoId: 'repo-1',
+          worktreeId: 'repo-1::/workspace/repo-a',
+          turnCount: 1,
+          zeroCacheReadTurnCount: 0,
+          inputTokens: 1_000_000,
+          outputTokens: 1_000_000,
+          cacheReadTokens: 1_000_000,
+          cacheWriteTokens: 1_000_000
+        },
+        {
+          day: '2026-09-01',
+          model: 'claude-sonnet-5',
+          projectKey: 'worktree:repo-1::/workspace/repo-a',
+          projectLabel: 'Repo A',
+          repoId: 'repo-1',
+          worktreeId: 'repo-1::/workspace/repo-a',
+          turnCount: 1,
+          zeroCacheReadTurnCount: 0,
+          inputTokens: 1_000_000,
+          outputTokens: 1_000_000,
+          cacheReadTokens: 1_000_000,
+          cacheWriteTokens: 1_000_000
+        }
+      ]
+    })
+
+    const breakdown = await store.getBreakdown('orca', 'all', 'model')
+
+    expect(breakdown[0]?.estimatedCostUsd).toBeCloseTo(36.75)
+  })
+
   it('prices unknown newer Opus 4 point releases with current Opus rates', async () => {
     const store = createStoreWithState({
       dailyAggregates: [
