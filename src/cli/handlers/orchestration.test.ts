@@ -46,6 +46,7 @@ afterEach(() => {
   } else {
     process.env.ORCA_PANE_KEY = originalPaneKey
   }
+  delete process.env.ORCA_AGENT_LAUNCH_TOKEN
 })
 
 describe('orchestration reset CLI handler', () => {
@@ -94,6 +95,7 @@ describe('orchestration send structured payload flags', () => {
     getTerminalHandleMock.mockReset()
     delete process.env.ORCA_TERMINAL_HANDLE
     delete process.env.ORCA_PANE_KEY
+    delete process.env.ORCA_AGENT_LAUNCH_TOKEN
   })
 
   const invokeSend = (flags: Map<string, string | boolean>) =>
@@ -132,6 +134,8 @@ describe('orchestration send structured payload flags', () => {
         filesModified: ['src/a.ts', 'src/b.ts'],
         reportPath: 'reports/done.md'
       }),
+      senderPaneKey: undefined,
+      senderLaunchToken: undefined,
       devMode: false
     })
   })
@@ -225,6 +229,8 @@ describe('orchestration send structured payload flags', () => {
       priority: undefined,
       threadId: undefined,
       payload: undefined,
+      senderPaneKey: undefined,
+      senderLaunchToken: undefined,
       devMode: false
     })
   })
@@ -250,6 +256,8 @@ describe('orchestration send structured payload flags', () => {
       priority: undefined,
       threadId: undefined,
       payload: undefined,
+      senderPaneKey: undefined,
+      senderLaunchToken: undefined,
       devMode: false
     })
   })
@@ -345,6 +353,7 @@ describe('orchestration dispatch coordinator handle', () => {
     getTerminalHandleMock.mockReset()
     delete process.env.ORCA_TERMINAL_HANDLE
     delete process.env.ORCA_PANE_KEY
+    delete process.env.ORCA_AGENT_LAUNCH_TOKEN
   })
 
   const invokeDispatch = (flags: Map<string, string | boolean>) =>
@@ -683,6 +692,7 @@ describe('orchestration timeout flag validation', () => {
     callMock.mockReset()
     delete process.env.ORCA_TERMINAL_HANDLE
     delete process.env.ORCA_PANE_KEY
+    delete process.env.ORCA_AGENT_LAUNCH_TOKEN
   })
 
   const invokeCheck = (flags: Map<string, string | boolean>) =>
@@ -855,7 +865,9 @@ describe('orchestration timeout flag validation', () => {
         question: 'Proceed?',
         options: undefined,
         timeoutMs: 123,
-        from: 'term_worker'
+        from: 'term_worker',
+        senderPaneKey: undefined,
+        senderLaunchToken: undefined
       },
       { timeoutMs: 5_123 }
     )

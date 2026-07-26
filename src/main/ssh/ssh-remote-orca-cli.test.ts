@@ -93,6 +93,16 @@ describe('runRemoteOrcaCli', () => {
       }),
       getOrchestrationDb: () => db,
       getTerminalPaneKey: () => null,
+      authenticateOrchestrationSender: ({
+        claimedHandle,
+        paneKey
+      }: {
+        claimedHandle?: string
+        paneKey?: string
+      }) => ({
+        handle: claimedHandle ?? 'term_test',
+        paneKey: paneKey ?? 'tab_test:leaf_test'
+      }),
       deliverPendingMessagesForHandle: vi.fn(),
       notifyMessageArrived: vi.fn(),
       linearIssueContext: vi.fn(async (request: unknown) => ({
@@ -181,6 +191,12 @@ describe('runRemoteOrcaCli', () => {
     const db = new OrchestrationDb(':memory:')
     const runtime = new OrcaRuntimeService()
     runtime.setOrchestrationDb(db)
+    vi.spyOn(runtime, 'authenticateOrchestrationSender').mockImplementation(
+      ({ claimedHandle, paneKey }) => ({
+        handle: claimedHandle ?? 'term_test',
+        paneKey: paneKey ?? 'tab_test:leaf_test'
+      })
+    )
     vi.spyOn(runtime, 'deliverPendingMessagesForHandle').mockImplementation(() => {})
     vi.spyOn(runtime, 'notifyMessageArrived').mockImplementation(() => {})
     const task = db.createTask({ spec: 'remote work' })
@@ -229,6 +245,12 @@ describe('runRemoteOrcaCli', () => {
     const db = new OrchestrationDb(':memory:')
     const runtime = new OrcaRuntimeService()
     runtime.setOrchestrationDb(db)
+    vi.spyOn(runtime, 'authenticateOrchestrationSender').mockImplementation(
+      ({ claimedHandle, paneKey }) => ({
+        handle: claimedHandle ?? 'term_test',
+        paneKey: paneKey ?? 'tab_test:leaf_test'
+      })
+    )
     vi.spyOn(runtime, 'deliverPendingMessagesForHandle').mockImplementation(() => {})
     vi.spyOn(runtime, 'notifyMessageArrived').mockImplementation(() => {})
     const task = db.createTask({ spec: 'remote work' })

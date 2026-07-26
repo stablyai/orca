@@ -44,6 +44,8 @@ const RUNTIME_PASSTHROUGH_CODES: ReadonlySet<string> = new Set([
   'terminal_not_writable',
   'terminal_exited',
   'terminal_gone',
+  'orchestration_sender_unauthenticated',
+  'orchestration_sender_identity_mismatch',
   'terminal_tab_close_timeout',
   'terminal_tab_not_found',
   'terminal_tab_pinned',

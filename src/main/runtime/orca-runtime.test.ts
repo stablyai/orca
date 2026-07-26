@@ -11039,6 +11039,23 @@ describe('OrcaRuntimeService', () => {
       tabId: spawnedEnv.ORCA_TAB_ID,
       leafId: spawnedLeafId
     })
+    expect(
+      runtime.authenticateOrchestrationSender({
+        claimedHandle: 'term_forged',
+        paneKey: spawnedEnv.ORCA_PANE_KEY,
+        launchToken: spawnedEnv.ORCA_AGENT_LAUNCH_TOKEN
+      })
+    ).toEqual({
+      handle: result.handle,
+      paneKey: spawnedEnv.ORCA_PANE_KEY
+    })
+    expect(() =>
+      runtime.authenticateOrchestrationSender({
+        claimedHandle: result.handle,
+        paneKey: spawnedEnv.ORCA_PANE_KEY,
+        launchToken: 'forged-token'
+      })
+    ).toThrow('orchestration_sender_unauthenticated')
   })
 
   it('passes cached view colors to background agent spawns for source-owned startup replies', async () => {

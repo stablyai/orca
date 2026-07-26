@@ -13461,6 +13461,26 @@ export class OrcaRuntimeService {
     return this.getPaneKeyForTerminalHandle(handle)
   }
 
+  authenticateOrchestrationSender(args: {
+    claimedHandle?: string
+    paneKey?: string
+    launchToken?: string
+  }): { handle: string; paneKey: string } {
+    if (!args.paneKey || !args.launchToken) {
+      throw new Error('orchestration_sender_unauthenticated')
+    }
+    const pty = this.getPtyRecordForPaneKey(args.paneKey)
+    if (!pty?.launchToken || pty.launchToken !== args.launchToken) {
+      throw new Error('orchestration_sender_unauthenticated')
+    }
+    const handle = this.getTerminalHandleForPaneKey(args.paneKey)
+    if (!handle) {
+      throw new Error('orchestration_sender_unauthenticated')
+    }
+    // pane 重铸后可能保留旧 handle；可信 pane 身份必须覆盖客户端路由元数据。
+    return { handle, paneKey: args.paneKey }
+  }
+
   resolveTerminalPane(paneKey: string, expectedWorktreeId?: string): RuntimeTerminalResolvePane {
     // Why: the renderer context menu only knows the stable pane key; main owns
     // the runtime terminal handle that agents and CLI commands can address.

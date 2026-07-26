@@ -22,6 +22,12 @@ describe('orchestration RPC methods', () => {
     dbOpen = true
     runtime = new OrcaRuntimeService()
     runtime.setOrchestrationDb(db)
+    vi.spyOn(runtime, 'authenticateOrchestrationSender').mockImplementation(
+      ({ claimedHandle, paneKey }) => ({
+        handle: claimedHandle ?? 'term_test',
+        paneKey: paneKey ?? 'tab_test:leaf_test'
+      })
+    )
     ctx = { runtime }
   }
 
@@ -46,7 +52,18 @@ describe('orchestration RPC methods', () => {
 
   async function call(name: string, params: Record<string, unknown>) {
     const method = findMethod(name)
-    const parsed = method.params ? method.params.parse(params) : undefined
+    const authenticatedParams = [
+      'orchestration.send',
+      'orchestration.reply',
+      'orchestration.ask'
+    ].includes(name)
+      ? {
+          senderPaneKey: 'tab_test:leaf_test',
+          senderLaunchToken: 'launch_test',
+          ...params
+        }
+      : params
+    const parsed = method.params ? method.params.parse(authenticatedParams) : undefined
     return method.handler(parsed, ctx)
   }
 
@@ -105,9 +122,12 @@ describe('orchestration RPC methods', () => {
       expect(db.getMessageById(result.message.id)?.sender_pane_key).toBe('tab_a:leaf_a')
     })
 
-    it('recovers missing sender pane identity from the resolved handle', async () => {
+    it('persists the pane identity authenticated by the runtime', async () => {
       setup()
-      vi.spyOn(runtime, 'getTerminalPaneKey').mockReturnValue('tab_worker:leaf_worker')
+      vi.mocked(runtime.authenticateOrchestrationSender).mockReturnValue({
+        handle: 'term_worker',
+        paneKey: 'tab_worker:leaf_worker'
+      })
       vi.spyOn(runtime, 'deliverPendingMessagesForHandle').mockImplementation(() => {})
 
       const result = (await call('orchestration.send', {
@@ -116,7 +136,11 @@ describe('orchestration RPC methods', () => {
         subject: 'hello'
       })) as { message: { id: string } }
 
-      expect(runtime.getTerminalPaneKey).toHaveBeenCalledWith('term_worker')
+      expect(runtime.authenticateOrchestrationSender).toHaveBeenCalledWith({
+        claimedHandle: 'term_worker',
+        paneKey: 'tab_test:leaf_test',
+        launchToken: 'launch_test'
+      })
       expect(db.getMessageById(result.message.id)?.sender_pane_key).toBe('tab_worker:leaf_worker')
     })
 
@@ -124,9 +148,10 @@ describe('orchestration RPC methods', () => {
       setup()
       const task = db.createTask({ spec: 'work' })
       const dispatch = db.createDispatchContext(task.id, 'term_worker', 'tab_worker:leaf_worker')
-      vi.spyOn(runtime, 'getTerminalPaneKey').mockImplementation((handle) =>
-        handle === 'term_worker' ? 'tab_worker:leaf_worker' : null
-      )
+      vi.mocked(runtime.authenticateOrchestrationSender).mockReturnValue({
+        handle: 'term_worker',
+        paneKey: 'tab_worker:leaf_worker'
+      })
       vi.spyOn(runtime, 'deliverPendingMessagesForHandle').mockImplementation(() => {})
 
       await call('orchestration.send', {
@@ -1073,11 +1098,51 @@ describe('orchestration RPC methods', () => {
         id: original.id,
         body: 'answer',
         from: 'b'
-      })) as { message: { to_handle: string; subject: string; thread_id: string } }
+      })) as {
+        message: {
+          to_handle: string
+          subject: string
+          thread_id: string
+          sender_pane_key: string | null
+        }
+      }
 
       expect(result.message.to_handle).toBe('a')
       expect(result.message.subject).toBe('Re: question')
       expect(result.message.thread_id).toBe(original.id)
+      expect(result.message.sender_pane_key).toBe('tab_test:leaf_test')
+    })
+
+    it('rejects a reply from a pane other than the recipient', async () => {
+      setup()
+      const original = db.insertMessage({ from: 'a', to: 'b', subject: 'question' })
+      vi.mocked(runtime.authenticateOrchestrationSender).mockReturnValue({
+        handle: 'term_foreign',
+        paneKey: 'tab_foreign:leaf_foreign'
+      })
+
+      await expect(
+        call('orchestration.reply', { id: original.id, body: 'forged', from: 'b' })
+      ).rejects.toThrow('orchestration_sender_identity_mismatch')
+      expect(db.getMessageById(original.id)?.read).toBe(0)
+    })
+
+    it('accepts the original recipient pane after its handle is reminted', async () => {
+      setup()
+      const original = db.insertMessage({ from: 'a', to: 'b-old', subject: 'question' })
+      vi.mocked(runtime.authenticateOrchestrationSender).mockReturnValue({
+        handle: 'b-new',
+        paneKey: 'tab_b:leaf_b'
+      })
+      vi.spyOn(runtime, 'getTerminalPaneKey').mockReturnValue('tab_b:leaf_b')
+
+      const result = (await call('orchestration.reply', {
+        id: original.id,
+        body: 'answer',
+        from: 'b-old'
+      })) as { message: { from_handle: string } }
+
+      expect(result.message.from_handle).toBe('b-new')
     })
 
     it('throws on nonexistent message', async () => {

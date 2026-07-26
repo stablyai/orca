@@ -350,7 +350,6 @@ export const ORCHESTRATION_HANDLERS: Record<string, CommandHandler> = {
       throwNoActiveSenderTerminal()
     }
 
-    // Why: lifecycle senders keep ORCA_TERMINAL_HANDLE verbatim — no liveness probe (worker_done must survive the mid-restart window) and no remint (older runtimes require from === the stale assignee_handle).
     const from = await resolveOrchestrationTerminalHandle(flags, cwd, client, 'from')
     const result = await client.call<OrchestrationSendResult>('orchestration.send', {
       from,
@@ -363,6 +362,7 @@ export const ORCHESTRATION_HANDLERS: Record<string, CommandHandler> = {
       payload: getOptionalStructuredMessagePayload(flags),
       // Why: pane key is the remint-stable sender identity the runtime verifies lifecycle ownership against; older runtimes strip it.
       senderPaneKey: process.env.ORCA_PANE_KEY || undefined,
+      senderLaunchToken: process.env.ORCA_AGENT_LAUNCH_TOKEN || undefined,
       devMode: isDevCliInvocation()
     })
     if ('message' in result.result && result.result.lifecycle?.action === 'rejected') {
@@ -462,7 +462,9 @@ export const ORCHESTRATION_HANDLERS: Record<string, CommandHandler> = {
     const result = await client.call<{ message: { id: string } }>('orchestration.reply', {
       id: getRequiredStringFlag(flags, 'id'),
       body: getRequiredStringFlag(flags, 'body'),
-      from
+      from,
+      senderPaneKey: process.env.ORCA_PANE_KEY || undefined,
+      senderLaunchToken: process.env.ORCA_AGENT_LAUNCH_TOKEN || undefined
     })
     printResult(result, json, (r) => `Replied ${r.message.id}`)
   },
@@ -626,7 +628,9 @@ export const ORCHESTRATION_HANDLERS: Record<string, CommandHandler> = {
         question: getRequiredStringFlag(flags, 'question'),
         options: getOptionalStringFlag(flags, 'options'),
         timeoutMs: parsedTimeoutMs,
-        from
+        from,
+        senderPaneKey: process.env.ORCA_PANE_KEY || undefined,
+        senderLaunchToken: process.env.ORCA_AGENT_LAUNCH_TOKEN || undefined
       },
       // Why: extend past timeoutMs so the RPC transport's 60s default doesn't abort before the runtime's own timeout resolves.
       { timeoutMs: timeoutMs + 5_000 }

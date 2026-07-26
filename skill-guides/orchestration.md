@@ -87,7 +87,10 @@ orca orchestration inbox [--limit <n>] [--json]
 
 Rules:
 
-- Omit `--from` unless impersonating another terminal; Orca auto-resolves it from the current terminal.
+- Omit `--from` for ordinary use. Managed agent terminals prove their pane with a
+  runtime-issued launch token; the runtime resolves the current handle and records
+  the authenticated pane. `--from` is compatibility routing metadata and never
+  grants permission to impersonate another terminal.
 - `check` and `check --unread` return unread matches and mark them read. Use `--peek` for unread matches without consuming them; use `--all` for read and unread history without consuming anything. If an older CLI rejects `--peek` as an unknown flag, use `--all` and filter unread rows yourself.
 - Message **one** live agent handle per worker. Use `startupTerminal.handle` from the create response when present; if it is missing or later returns `terminal_handle_stale`, re-resolve with `orca terminal list --worktree ... --json` and continue with the replacement only.
 - `orca orchestration check --unread --inject --json` renders unread mail for the agent terminal that runs it; it does not remotely wake another terminal. Use `orchestration dispatch --inject` to deliver a tracked task, or `terminal send` when an existing agent needs a free-form prompt.

@@ -178,7 +178,8 @@ async function dispatchRemoteCli(
         payload: getRemoteOrchestrationPayload(parsed.flags),
         // Why: the legacy in-process bridge must preserve the same pane
         // authority as the full host CLI passthrough.
-        senderPaneKey: env.ORCA_PANE_KEY || undefined
+        senderPaneKey: env.ORCA_PANE_KEY || undefined,
+        senderLaunchToken: env.ORCA_AGENT_LAUNCH_TOKEN || undefined
       })
     }
     case 'orchestration check':
@@ -195,7 +196,9 @@ async function dispatchRemoteCli(
       return await call(dispatcher, 'orchestration.reply', {
         id: requiredRemoteCliString(parsed.flags, 'id'),
         body: requiredRemoteCliString(parsed.flags, 'body'),
-        from: resolveRemoteCliHandle(parsed.flags, env, 'from')
+        from: resolveRemoteCliHandle(parsed.flags, env, 'from'),
+        senderPaneKey: env.ORCA_PANE_KEY || undefined,
+        senderLaunchToken: env.ORCA_AGENT_LAUNCH_TOKEN || undefined
       })
     case 'orchestration inbox':
       return await call(dispatcher, 'orchestration.inbox', {
