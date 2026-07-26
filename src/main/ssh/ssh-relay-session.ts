@@ -69,13 +69,10 @@ import { toSshExecutionHostId, type ExecutionHostId } from '../../shared/executi
 import { isTerminalLeafId, makePaneKey } from '../../shared/stable-pane-id'
 import { isValidTerminalTabId } from '../../shared/terminal-tab-id'
 import { classifyLostTerminal } from '../../shared/terminal-lost-worker-policy'
-import {
-  captureTerminalArchiveTab,
-  type TerminalArchivePaneSnapshotCapture
-} from '../../shared/workspace-session-terminal-archive'
-import type { ArchivedTerminalPane } from '../../shared/terminal-archive-types'
+import { captureTerminalArchiveTab } from '../../shared/workspace-session-terminal-archive'
 import { captureTerminalArchiveBuffer } from '../../shared/terminal-archive-snapshot-capture'
 import { archiveLostTerminalWorker } from '../terminal-lost-worker-archive'
+import { createRelayLostWorkerSnapshotSource } from '../terminal-lost-worker-snapshot-source'
 import type { RelayPtyLostEntry } from '../../shared/pty-revive-protocol'
 import {
   decodeRelayStagedPtySnapshots,
@@ -1102,9 +1099,8 @@ export class SshRelaySession {
     if (!captured) {
       return
     }
-    const snapshotSource = {
-      capture: async (pane: ArchivedTerminalPane): Promise<TerminalArchivePaneSnapshotCapture> => {
-        const leafId = pane.archivedLeafId
+    const snapshotSource = createRelayLostWorkerSnapshotSource({
+      captureSessionSidecar: (leafId) => {
         const layout = session.terminalLayoutsByTabId[tabId]
         const sidecar =
           layout?.buffersByLeafId?.[leafId] ??
@@ -1114,6 +1110,9 @@ export class SshRelaySession {
         if (typeof sidecar === 'string') {
           return captureTerminalArchiveBuffer({ buffer: sidecar, source: 'session-sidecar' })
         }
+        return undefined
+      },
+      captureRelayTail: (leafId) => {
         const expectedSource = captured.sourcePaneIdentityByLeafId[leafId]
         const staged = expectedSource
           ? stagedSnapshots.snapshotsByPaneKey.get(expectedSource.paneKey)
@@ -1144,7 +1143,7 @@ export class SshRelaySession {
           truncated: replayTail.truncated
         })
       }
-    }
+    })
     const result = await archiveLostTerminalWorker({
       owner: this.store,
       candidate: {

@@ -28,6 +28,7 @@ import type {
 import { captureTerminalArchiveBuffer } from '../../shared/terminal-archive-snapshot-capture'
 import { classifyLostTerminal } from '../../shared/terminal-lost-worker-policy'
 import { archiveLostTerminalWorker } from '../terminal-lost-worker-archive'
+import { createDaemonLostWorkerSnapshotSource } from '../terminal-lost-worker-snapshot-source'
 import { workspaceSessionStateSchema } from '../../shared/workspace-session-schema'
 import { makeTerminalArchiveSourcePaneSignature } from '../terminal-archive-source-pane-signature'
 import { LOCAL_EXECUTION_HOST_ID, toSshExecutionHostId } from '../../shared/execution-host'
@@ -1991,37 +1992,32 @@ export function registerPtyHandlers(
       return { kind: 'retryable-error', code: 'capture-unavailable' }
     }
     const receipt = await (async (): Promise<TerminalLostWorkerRendererReceipt> => {
-      const snapshotSource = {
-        capture: async (
-          pane: ArchivedTerminalPane
-        ): Promise<TerminalArchivePaneSnapshotCapture> => {
-          const leafId = pane.archivedLeafId
-          if (leafId === args.leafId) {
-            return captureTerminalArchiveBuffer({
-              buffer: args.coldRestore.scrollback,
-              source: 'daemon-headless'
-            })
-          }
-          const layout = persistedSession.terminalLayoutsByTabId[args.tabId]
+      const layout = persistedSession.terminalLayoutsByTabId[args.tabId]
+      const snapshotSource = createDaemonLostWorkerSnapshotSource({
+        lostLeafId: args.leafId,
+        captureLostLeaf: () =>
+          captureTerminalArchiveBuffer({
+            buffer: args.coldRestore.scrollback,
+            source: 'daemon-headless'
+          }),
+        captureSessionSidecar: (leafId) => {
           const sidecar =
             layout?.buffersByLeafId?.[leafId] ??
             (layout?.scrollbackRefsByLeafId?.[leafId]
               ? store.readTerminalScrollbackSnapshot(layout.scrollbackRefsByLeafId[leafId])
               : null)
-          if (typeof sidecar === 'string') {
-            return captureTerminalArchiveBuffer({ buffer: sidecar, source: 'session-sidecar' })
-          }
+          return typeof sidecar === 'string'
+            ? captureTerminalArchiveBuffer({ buffer: sidecar, source: 'session-sidecar' })
+            : undefined
+        },
+        captureSiblingColdRestore: (leafId) => {
           const ptyId = layout?.ptyIdsByLeafId?.[leafId]
           const probe = ptyId ? args.coldRestore.probeSibling(ptyId) : null
-          if (probe?.kind !== 'valid-snapshot' || probe.truncated) {
-            return { kind: 'unavailable' }
-          }
-          return captureTerminalArchiveBuffer({
-            buffer: probe.scrollback,
-            source: 'daemon-headless'
-          })
+          return probe?.kind === 'valid-snapshot' && !probe.truncated
+            ? captureTerminalArchiveBuffer({ buffer: probe.scrollback, source: 'daemon-headless' })
+            : { kind: 'unavailable' }
         }
-      }
+      })
       const result = await archiveLostTerminalWorker({
         owner: store,
         candidate: {
