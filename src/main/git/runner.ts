@@ -41,7 +41,7 @@ import {
   quotePosixShell
 } from '../../shared/wsl-login-shell-command'
 import { UNTRANSLATED_GIT_OUTPUT_ENV } from '../../shared/git-output-locale'
-import { isNetworkGitCommand } from './git-network-subcommand'
+import { isReadOnlyGitCommand } from './git-read-only-subcommand'
 import {
   getWslLoginShellPath,
   primeWslLoginShellPath,
@@ -302,17 +302,16 @@ function resolveWslDistroForExec(cwd: string | undefined, override?: string): st
  * on every call, which measurably dominates status polling. Skipping it is only
  * safe once we have replayed the PATH that profile sets (see
  * wsl-login-shell-path.ts) and only for commands that need nothing else from
- * it. Network commands keep the login shell unconditionally: they depend on
- * SSH_AUTH_SOCK from the agent the profile starts, on a profile-set
- * GIT_SSH_COMMAND, and on credential helpers — none of which a PATH replay
- * restores.
+ * it. Only an explicit allowlist of local read commands takes the fast path;
+ * network and mutating commands keep the full login environment for SSH agents,
+ * signing tools, hooks, credential helpers, and other profile-set policy.
  */
 function shouldUseWslLoginShell(
   args: string[],
   options: { cwd?: string; wslDistro?: string; useWslLoginShell?: boolean; network?: boolean }
 ): boolean {
-  if (options.useWslLoginShell !== undefined) {
-    return options.useWslLoginShell
+  if (options.useWslLoginShell === true) {
+    return true
   }
   // Why: WSL routing comes from either a UNC cwd or an explicit distro hint, and
   // the PATH cache is keyed on whichever one resolveCommand will actually use.
@@ -320,7 +319,7 @@ function shouldUseWslLoginShell(
   if (!distro) {
     return false
   }
-  if (options.network || isNetworkGitCommand(args)) {
+  if (options.network || !isReadOnlyGitCommand(args)) {
     return true
   }
   // Why: until the probe lands we cannot prove the fast shell can find git, so

@@ -126,17 +126,34 @@ describe('WSL git shell selection', () => {
     })
   })
 
-  it('detects the network subcommand past leading global -c options', async () => {
+  it('finds read subcommands past leading global options', async () => {
     await withPlatform('win32', async () => {
       succeedingExecFile()
       seedWslLoginShellPathForTests(DISTRO, LOGIN_PATH)
 
-      await gitExecFileAsync(['-c', 'gc.auto=0', 'fetch', '--no-tags', 'origin'], {
+      await gitExecFileAsync(['-c', 'core.quotePath=false', 'status', '--short'], {
         cwd: String.raw`C:\repo`,
         wslDistro: DISTRO
       })
 
-      expect(shellArgsOfCall(0).slice(3, 5)).toEqual(['sh', '-lc'])
+      expect(shellArgsOfCall(0).slice(3, 5)).toEqual(['bash', '-c'])
+    })
+  })
+
+  it('keeps login policy for mutating and unclassified commands', async () => {
+    await withPlatform('win32', async () => {
+      succeedingExecFile()
+      seedWslLoginShellPathForTests(DISTRO, LOGIN_PATH)
+
+      for (const args of [
+        ['commit', '-m', 'message'],
+        ['config', '--local', 'user.name', 'Orca'],
+        ['branch', '--show-current']
+      ]) {
+        execFileMock.mockClear()
+        await gitExecFileAsync(args, { cwd: String.raw`C:\repo`, wslDistro: DISTRO })
+        expect(shellArgsOfCall(0).slice(3, 5)).toEqual(['sh', '-lc'])
+      }
     })
   })
 
