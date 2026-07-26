@@ -31,11 +31,22 @@ describe('buildKeybindingConflictWarnings', () => {
     )
 
     expect(warnings.get('terminal.splitRight')).toEqual([
-      '⌘⌥→ conflicts with Worktree History Forward.'
+      '⌘⌥→ was ignored — it conflicts with Worktree History Forward.'
     ])
-    expect(warnings.get('worktree.history.forward')).toEqual([
-      '⌘⌥→ conflicts with Split terminal right.'
-    ])
+  })
+
+  it('leaves the other claimant alone when only the custom binding is dropped', () => {
+    // Why: worktree.history.forward keeps its own default and never stopped
+    // working, so a warning on its row would blame an action the user did not
+    // touch — and calling it "ignored" would be false.
+    const warnings = buildKeybindingConflictWarnings(
+      snapshotWith({ common: { 'terminal.splitRight': ['Mod+Alt+ArrowRight'] } }),
+      'darwin',
+      []
+    )
+
+    expect(warnings.has('worktree.history.forward')).toBe(false)
+    expect([...warnings.keys()]).toEqual(['terminal.splitRight'])
   })
 
   it('names only the other claimants, never the row itself', () => {
