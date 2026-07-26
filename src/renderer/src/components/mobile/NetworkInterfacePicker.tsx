@@ -1,16 +1,15 @@
 import React, { useMemo } from 'react'
 import { translate } from '@/i18n/i18n'
 import { AddressPicker, type AddressOption } from '../network/AddressPicker'
-import { parseManualNetworkAddress } from '../../../../shared/network/manual-address'
+import { parseMobilePairingEndpoint } from '../../../../shared/network/mobile-pairing-endpoint'
 import type { MobileNetworkInterface } from '../settings/mobile-network-interface-selection'
 
 // Why: MobileHero (mobile pairing screen) and MobilePairingSetupSection
 // (Settings → Mobile) both need the same network selector. This wraps the
-// generic AddressPicker with the mobile grammar (IPv4, any RFC 1123
-// hostname — including Tailscale *.ts.net and DDNS domains — optionally
-// with :port) and copy. Discovered interfaces come from the OS; "Add custom
-// address…" opens a dialog for an address the OS didn't surface — the only
-// way to pair across networks.
+// generic AddressPicker with the mobile grammar (IPv4, RFC 1123 hostname,
+// optional port, or a ws(s) origin) and copy. Discovered interfaces come from
+// the OS; "Add custom endpoint…" is the path for addresses and user-managed
+// secure tunnels the OS cannot surface.
 
 export type NetworkInterfacePickerProps = {
   networkInterfaces: readonly MobileNetworkInterface[]
@@ -55,7 +54,7 @@ export function NetworkInterfacePicker({
       }
       addCustomLabel={translate(
         'auto.components.mobile.NetworkInterfacePicker.add-custom',
-        'Add custom address…'
+        'Add custom endpoint…'
       )}
       placeholder={translate(
         'auto.components.settings.MobileNetworkInterfaceSection.b2c384cfd6',
@@ -67,26 +66,26 @@ export function NetworkInterfacePicker({
       )}
       customInputId="custom-network-address-input"
       validateCustom={(input) => {
-        const parsed = parseManualNetworkAddress(input)
-        return parsed.ok ? { ok: true, value: parsed.address } : { ok: false }
+        const parsed = parseMobilePairingEndpoint(input)
+        return parsed.ok ? { ok: true, value: parsed.endpoint } : { ok: false }
       }}
       customDialogCopy={{
         title: translate(
           'auto.components.mobile.CustomNetworkAddressDialog.title',
-          'Custom network address'
+          'Custom direct endpoint'
         ),
         description: translate(
           'auto.components.mobile.CustomNetworkAddressDialog.description',
-          'Advertise an address your phone can reach when it is not on the same Wi-Fi — for example a Tailscale hostname or a static IP.'
+          'Advertise an IP address, hostname, or secure WebSocket tunnel that your phone can reach.'
         ),
         inputLabel: translate('auto.components.mobile.CustomNetworkAddressDialog.label', 'Address'),
         placeholder: translate(
           'auto.components.mobile.CustomNetworkAddressDialog.placeholder',
-          'my-mac.ts.net, home.example.com, or 192.168.1.50'
+          'wss://orca.example.com, my-mac.ts.net, or 192.168.1.50'
         ),
         hint: translate(
           'auto.components.mobile.CustomNetworkAddressDialog.hint',
-          'Enter an IP address or a hostname — a Tailscale MagicDNS name, a DDNS domain, or a LAN hostname — optionally with :port.'
+          'Enter an IP address, hostname, optional :port, or a ws(s):// origin without a path.'
         ),
         cancel: translate('auto.components.mobile.CustomNetworkAddressDialog.cancel', 'Cancel'),
         confirm: translate('auto.components.mobile.CustomNetworkAddressDialog.use', 'Use address')

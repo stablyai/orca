@@ -9359,7 +9359,7 @@
           "step1Title": "Connection",
           "step2Title": "This computer’s address",
           "step2RelayDescription": "Used for a faster direct path when nearby. Relay covers remote access.",
-          "step2LocalDescription": "The phone must be able to reach this address on Wi‑Fi or Tailscale.",
+          "step2LocalDescription": "The phone must be able to reach this address on Wi‑Fi, Tailscale, or a secure WebSocket tunnel.",
           "regenerate": "Regenerate QR code",
           "generate": "Generate QR code",
           "refresh": "Refresh network interfaces"
@@ -11216,18 +11216,18 @@
           }
         },
         "CustomNetworkAddressDialog": {
-          "title": "Custom network address",
-          "description": "Advertise an address your phone can reach when it is not on the same Wi-Fi — for example a Tailscale hostname or a static IP.",
+          "title": "Custom direct endpoint",
+          "description": "Advertise an IP address, hostname, or secure WebSocket tunnel that your phone can reach.",
           "label": "Address",
-          "placeholder": "my-mac.ts.net, home.example.com, or 192.168.1.50",
-          "hint": "Enter an IP address or a hostname — a Tailscale MagicDNS name, a DDNS domain, or a LAN hostname — optionally with :port.",
+          "placeholder": "wss://orca.example.com, my-mac.ts.net, or 192.168.1.50",
+          "hint": "Enter an IP address, hostname, optional :port, or a ws(s):// origin without a path.",
           "cancel": "Cancel",
           "use": "Use address"
         },
         "NetworkInterfacePicker": {
           "trigger-label": "Network address to advertise",
           "custom-option": "{{address}} (custom)",
-          "add-custom": "Add custom address…"
+          "add-custom": "Add custom endpoint…"
         },
         "WindowsFirewallNotice": {
           "repair-success": "Windows Firewall now allows Orca Mobile on private networks",

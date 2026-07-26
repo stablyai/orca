@@ -592,6 +592,36 @@ describe('OrcaRuntimeRpcServer', () => {
     }
   })
 
+  it('preserves secure public-tunnel endpoints in mobile pairing offers', async () => {
+    const userDataPath = mkdtempSync(join(tmpdir(), 'orca-runtime-rpc-'))
+    const server = new OrcaRuntimeRpcServer({
+      runtime: new OrcaRuntimeService(),
+      userDataPath,
+      enableWebSocket: true,
+      wsPort: 0
+    })
+
+    await server.start()
+    try {
+      const offer = await server.createMobilePairingOffer({
+        address: 'wss://orca.example.com',
+        connectionMode: 'local-only',
+        name: 'Public tunnel test'
+      })
+      expect(offer.available).toBe(true)
+      if (!offer.available) {
+        throw new Error('WebSocket pairing unavailable')
+      }
+      expect(offer.endpoint).toBe('wss://orca.example.com')
+      expect(parsePairingCode(offer.pairingUrl)).toMatchObject({
+        endpoint: 'wss://orca.example.com',
+        scope: 'mobile'
+      })
+    } finally {
+      await server.stop()
+    }
+  })
+
   it('adds only the exact optional relay object to GUI mobile pairing offers', async () => {
     const userDataPath = mkdtempSync(join(tmpdir(), 'orca-runtime-rpc-'))
     const server = new OrcaRuntimeRpcServer({

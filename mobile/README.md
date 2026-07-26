@@ -15,7 +15,8 @@ Unless a command says otherwise, run mobile app commands from the `mobile/` dire
 - pnpm
 - Xcode and/or Android Studio tooling for simulator or device builds
 - Expo Go on your phone, or a development client build when native modules are needed
-- Phone and desktop on the same LAN when testing a physical phone
+- Phone and desktop on the same LAN, or connected through Tailscale or a public
+  tunnel, when testing a physical phone
 
 ## Start Desktop Orca
 
@@ -60,6 +61,13 @@ pnpm start --dev-client
 4. Confirm the mobile host endpoint is `ws://<desktop-ip>:6768`.
 
 For the Android emulator, use `ws://10.0.2.2:6768`. For a physical phone, use the desktop LAN IP, for example `ws://192.168.0.179:6768`.
+
+For a TLS-terminated public tunnel, choose **Add custom endpoint…** and enter a
+WebSocket origin such as `wss://orca.example.com`. Cloudflare Tunnel must map
+that public hostname on port `443` to the desktop runtime at
+`http://127.0.0.1:6768`. See
+[Mobile pairing through a public tunnel](../docs/reference/mobile-public-tunnel.md)
+for the Cloudflare route, security boundary, and verification steps.
 
 If the phone has a stale host entry, remove it from the app and pair again.
 

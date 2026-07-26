@@ -84,6 +84,15 @@ describe('MobilePairingSetupSection', () => {
     expect(onSelectedAddressChange).toHaveBeenCalledWith('192.168.1.24')
   })
 
+  it('commits a secure public-tunnel endpoint', async () => {
+    const { user, onSelectedAddressChange } = renderSection()
+    await user.click(screen.getByRole('combobox'))
+    await user.click(screen.getByRole('option', { name: 'Add custom endpoint…' }))
+    await user.type(screen.getByLabelText('Address'), 'wss://orca.example.com')
+    await user.click(screen.getByRole('button', { name: 'Use address' }))
+    expect(onSelectedAddressChange).toHaveBeenCalledWith('wss://orca.example.com')
+  })
+
   it('generates a pairing code', async () => {
     const { user, onGenerateQr } = renderSection()
     await user.click(screen.getByRole('button', { name: 'Generate QR code' }))

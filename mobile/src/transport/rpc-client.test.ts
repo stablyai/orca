@@ -153,6 +153,14 @@ describe('mobile rpc-client connection timeout', () => {
     client.close()
   })
 
+  it('constructs a secure public-tunnel WebSocket without rewriting its endpoint', () => {
+    const client = connect('wss://orca.example.com', 'token', 'server-key')
+
+    expect(mockSockets[0]?.endpoint).toBe('wss://orca.example.com')
+
+    client.close()
+  })
+
   it('ignores stale socket opens after reconnect swaps in a new socket', () => {
     const client = connect('ws://desktop.invalid', 'token', 'server-key')
     const firstSocket = mockSockets[0]!

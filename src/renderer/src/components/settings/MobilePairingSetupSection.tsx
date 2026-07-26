@@ -106,7 +106,7 @@ export function MobilePairingSetupSection({
               )
             : translate(
                 'auto.components.settings.MobilePairingSetupSection.step2LocalDescription',
-                'The phone must be able to reach this address on Wi‑Fi or Tailscale.'
+                'The phone must be able to reach this address on Wi‑Fi, Tailscale, or a secure WebSocket tunnel.'
               )}
         </p>
       </div>
