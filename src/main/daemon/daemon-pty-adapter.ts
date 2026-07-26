@@ -201,6 +201,16 @@ export class DaemonPtyAdapter implements IPtyProvider {
     return this.supportsAuthoritativeBufferSnapshots
   }
 
+  // Why one predicate (#9993): the attach-time clear and setPtyBackgrounded must agree on
+  // which daemons may hold a background hint. Daemons outlive the desktop that set it, so
+  // if these two drift a preserved daemon keeps a hint this process would never grant.
+  private get canDelegateBackgroundToDaemon(): boolean {
+    return (
+      this.supportsAuthoritativeBufferSnapshots &&
+      supportsMode2031UnsubscribeFact(this.protocolVersion)
+    )
+  }
+
   constructor(opts: DaemonPtyAdapterOptions) {
     this.protocolVersion = opts.protocolVersion ?? PROTOCOL_VERSION
     this.socketPath = opts.socketPath
@@ -361,8 +371,10 @@ export class DaemonPtyAdapter implements IPtyProvider {
     }
 
     await this.ensureConnected()
-    // Why before createOrAttach: a preserved v19 daemon may still think this session is backgrounded; clear it before attached bytes get thinned without a recoverable seq.
-    if (!this.supportsAuthoritativeBufferSnapshots) {
+    // Why before createOrAttach: a preserved daemon may still think this session is backgrounded — from
+    // a v19 that thins without a recoverable seq, or (#9993) from a pre-v29 that a previous desktop
+    // handed 2031 scan authority to and can never retract it. Clear it before any bytes are attached.
+    if (!this.canDelegateBackgroundToDaemon) {
       this.setPtyBackgrounded(sessionId, false)
     }
 
@@ -718,7 +730,7 @@ export class DaemonPtyAdapter implements IPtyProvider {
 
   async attach(id: string): Promise<void> {
     await this.ensureConnected()
-    if (!this.supportsAuthoritativeBufferSnapshots) {
+    if (!this.canDelegateBackgroundToDaemon) {
       this.setPtyBackgrounded(id, false)
     }
 
@@ -791,10 +803,7 @@ export class DaemonPtyAdapter implements IPtyProvider {
     // retract it, so a TUI exiting while hidden would strand the subscription and the
     // next theme flip would inject CSI 997 into its replacement shell. Declining to
     // background keeps main's scanner — which emits both facts — authoritative.
-    const safeBackground =
-      this.supportsAuthoritativeBufferSnapshots &&
-      supportsMode2031UnsubscribeFact(this.protocolVersion) &&
-      background
+    const safeBackground = this.canDelegateBackgroundToDaemon && background
     if (safeBackground) {
       this.backgroundedSessionIds.add(id)
     } else {

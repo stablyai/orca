@@ -965,6 +965,67 @@ describe('DaemonPtyAdapter (IPtyProvider)', () => {
       }
     })
 
+    it('clears a preserved v28 background hint before attaching, so scan authority comes home', async () => {
+      // The gate on setPtyBackgrounded only binds THIS process. Daemons outlive the desktop:
+      // a v28 that a previous desktop backgrounded is still scanning when a new desktop
+      // attaches, and this process never called setPtyBackgrounded for it — so without the
+      // pre-attach clear the daemon keeps authority it can never retract (#9993).
+      const ensureConnectedSpy = vi
+        .spyOn(DaemonClient.prototype, 'ensureConnected')
+        .mockResolvedValue()
+      const requestSpy = vi.spyOn(DaemonClient.prototype, 'request').mockResolvedValue({
+        isNew: false,
+        pid: 4242,
+        shellState: 'unsupported',
+        snapshot: null
+      } as never)
+      const notifySpy = vi.spyOn(DaemonClient.prototype, 'notify')
+      const legacy = new DaemonPtyAdapter({ socketPath, tokenPath, protocolVersion: 28 })
+      try {
+        await legacy.attach('preserved-v28-session')
+
+        expect(notifySpy).toHaveBeenCalledWith('setSessionBackground', {
+          sessionId: 'preserved-v28-session',
+          background: false
+        })
+        expect(notifySpy.mock.invocationCallOrder[0]).toBeLessThan(
+          requestSpy.mock.invocationCallOrder[0]
+        )
+      } finally {
+        legacy.dispose()
+        notifySpy.mockRestore()
+        requestSpy.mockRestore()
+        ensureConnectedSpy.mockRestore()
+      }
+    })
+
+    it('leaves a v29 background hint alone on attach, because it can retract on its own', async () => {
+      const ensureConnectedSpy = vi
+        .spyOn(DaemonClient.prototype, 'ensureConnected')
+        .mockResolvedValue()
+      const requestSpy = vi.spyOn(DaemonClient.prototype, 'request').mockResolvedValue({
+        isNew: false,
+        pid: 4242,
+        shellState: 'unsupported',
+        snapshot: null
+      } as never)
+      const notifySpy = vi.spyOn(DaemonClient.prototype, 'notify')
+      const current = new DaemonPtyAdapter({ socketPath, tokenPath, protocolVersion: 29 })
+      try {
+        await current.attach('preserved-v29-session')
+
+        expect(notifySpy).not.toHaveBeenCalledWith(
+          'setSessionBackground',
+          expect.objectContaining({ sessionId: 'preserved-v29-session' })
+        )
+      } finally {
+        current.dispose()
+        notifySpy.mockRestore()
+        requestSpy.mockRestore()
+        ensureConnectedSpy.mockRestore()
+      }
+    })
+
     it('still returns the v19 attach snapshot for a desktop renderer replay', async () => {
       const ensureConnectedSpy = vi
         .spyOn(DaemonClient.prototype, 'ensureConnected')
