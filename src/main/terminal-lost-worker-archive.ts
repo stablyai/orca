@@ -8,6 +8,7 @@ import { makeTerminalArchiveSourcePaneSignature } from './terminal-archive-sourc
 import type { TerminalArchiveSourcePaneIdentity } from './terminal-archive-source-pane-signature'
 import type { TerminalArchiveStore } from './terminal-archive-store'
 import { TerminalArchiveError } from './terminal-archive-failure'
+import { writeLostWorkerTerminalArchive } from './terminal-lost-worker-archive-write'
 
 type LostWorkerArchiveReason = Exclude<TerminalArchiveReason, 'user-close'>
 
@@ -38,12 +39,6 @@ export type TerminalLostWorkerArchiveCandidate = {
 
 export type TerminalLostWorkerArchiveOwner = {
   getWorkspaceSession(hostId: ExecutionHostId): WorkspaceSessionState
-  retireArchivedTerminalTabAndFlush(args: {
-    worktreeId: string
-    tabId: string
-    executionHostId: ExecutionHostId
-    sshTerminationTargetId?: string
-  }): { closed: boolean; ptyIdsToKill: string[] }
   createTerminalArchiveStore(snapshotSource: TerminalArchiveSnapshotSource): TerminalArchiveStore
 }
 
@@ -52,7 +47,6 @@ export type TerminalLostWorkerArchiveReceipt = {
   archive: ArchivedTerminalTab
   operationId: string
   ptyIdsToKill: string[]
-  archiveCompletionOwner: boolean
 }
 
 export type TerminalLostWorkerArchiveResult =
@@ -115,6 +109,10 @@ export async function archiveLostTerminalWorker(args: {
   candidate: TerminalLostWorkerArchiveCandidate
   frozenSession: WorkspaceSessionState
   snapshotSource: TerminalArchiveSnapshotSource
+  completeArchive?: (args: {
+    archive: ArchivedTerminalTab
+    ptyIdsToKill: readonly string[]
+  }) => Promise<void>
 }): Promise<TerminalLostWorkerArchiveResult> {
   if (!relayEvidenceMatchesSource(args.candidate)) {
     return { kind: 'error', code: 'stale-source' }
@@ -149,8 +147,7 @@ export async function archiveLostTerminalWorker(args: {
   const inFlightKey = `${args.candidate.reason}:${args.candidate.executionHostId}:${args.candidate.tabId}:${sourcePaneSignature}`
   const existing = lostWorkerArchiveInFlight.get(inFlightKey)
   if (existing) {
-    const settled = await existing
-    return settled.kind === 'archived' ? { ...settled, archiveCompletionOwner: false } : settled
+    return await existing
   }
   const operation = archiveLostTerminalWorkerOnce({
     ...args,
@@ -172,46 +169,63 @@ async function archiveLostTerminalWorkerOnce(args: {
   candidate: TerminalLostWorkerArchiveCandidate
   frozenSession: WorkspaceSessionState
   snapshotSource: TerminalArchiveSnapshotSource
+  completeArchive?: (args: {
+    archive: ArchivedTerminalTab
+    ptyIdsToKill: readonly string[]
+  }) => Promise<void>
   captured: NonNullable<ReturnType<typeof captureTerminalArchiveTab>>
   operationId: string
 }): Promise<TerminalLostWorkerArchiveResult> {
   const archiveStore = args.owner.createTerminalArchiveStore(args.snapshotSource)
   try {
-    const archive = await archiveStore.archiveTerminalTab({
-      operationId: args.operationId,
-      sourceTabId: args.candidate.tabId,
-      executionHostId: args.candidate.executionHostId,
-      ...(args.candidate.runtimeEnvironmentId
-        ? { runtimeEnvironmentId: args.candidate.runtimeEnvironmentId }
-        : {}),
-      worktreeId: args.candidate.worktreeId,
-      title: args.captured.tab.customTitle || args.captured.tab.title,
-      ...(args.captured.tab.defaultTitle ? { defaultTitle: args.captured.tab.defaultTitle } : {}),
-      ...(args.captured.tab.color !== undefined ? { color: args.captured.tab.color } : {}),
-      layout: args.captured.layout,
-      panesByLeafId: args.captured.panesByLeafId,
-      sourcePaneIdentityByLeafId: args.captured.sourcePaneIdentityByLeafId,
-      reason: args.candidate.reason,
-      createdAt: args.captured.tab.createdAt,
-      capturedAt: Date.now()
-    })
-    const retired = args.owner.retireArchivedTerminalTabAndFlush({
-      worktreeId: args.candidate.worktreeId,
-      tabId: args.candidate.tabId,
-      executionHostId: args.candidate.executionHostId,
-      ...(args.candidate.sshTerminationTargetId
-        ? { sshTerminationTargetId: args.candidate.sshTerminationTargetId }
-        : {})
-    })
-    if (!retired.closed) {
-      return { kind: 'error', code: 'stale-source' }
+    const archived = await writeLostWorkerTerminalArchive(
+      archiveStore,
+      {
+        operationId: args.operationId,
+        sourceTabId: args.candidate.tabId,
+        executionHostId: args.candidate.executionHostId,
+        ...(args.candidate.runtimeEnvironmentId
+          ? { runtimeEnvironmentId: args.candidate.runtimeEnvironmentId }
+          : {}),
+        worktreeId: args.candidate.worktreeId,
+        title: args.captured.tab.customTitle || args.captured.tab.title,
+        ...(args.captured.tab.defaultTitle ? { defaultTitle: args.captured.tab.defaultTitle } : {}),
+        ...(args.captured.tab.color !== undefined ? { color: args.captured.tab.color } : {}),
+        layout: args.captured.layout,
+        panesByLeafId: args.captured.panesByLeafId,
+        sourcePaneIdentityByLeafId: args.captured.sourcePaneIdentityByLeafId,
+        reason: args.candidate.reason,
+        createdAt: args.captured.tab.createdAt,
+        capturedAt: Date.now()
+      },
+      {
+        worktreeId: args.candidate.worktreeId,
+        tabId: args.candidate.tabId,
+        executionHostId: args.candidate.executionHostId,
+        ...(args.candidate.sshTerminationTargetId
+          ? { sshTerminationTargetId: args.candidate.sshTerminationTargetId }
+          : {})
+      }
+    )
+    try {
+      await args.completeArchive?.({
+        archive: archived.archive,
+        ptyIdsToKill: archived.ptyIdsToKill
+      })
+    } catch (error) {
+      // Why: metadata and retirement are already durable, so completion failures cannot reopen the transaction.
+      console.warn('[terminal-lost-worker-archive] completion diagnostic', {
+        reason: args.candidate.reason,
+        executionHostId: args.candidate.executionHostId,
+        tabId: args.candidate.tabId,
+        error: error instanceof Error ? error.message : String(error)
+      })
     }
     return {
       kind: 'archived',
-      archive,
+      archive: archived.archive,
       operationId: args.operationId,
-      ptyIdsToKill: retired.ptyIdsToKill,
-      archiveCompletionOwner: true
+      ptyIdsToKill: archived.ptyIdsToKill
     }
   } catch (error) {
     return { kind: 'error', code: terminalArchiveFailureCode(error) }

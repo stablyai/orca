@@ -73,6 +73,10 @@ import { captureTerminalArchiveTab } from '../../shared/workspace-session-termin
 import { captureTerminalArchiveBuffer } from '../../shared/terminal-archive-snapshot-capture'
 import { archiveLostTerminalWorker } from '../terminal-lost-worker-archive'
 import { createRelayLostWorkerSnapshotSource } from '../terminal-lost-worker-snapshot-source'
+import {
+  beginArchivedSshPtyExitRecovery,
+  takeArchivedSshPtyExitRecovery
+} from './ssh-archived-exit-recovery'
 import type { RelayPtyLostEntry } from '../../shared/pty-revive-protocol'
 import {
   decodeRelayStagedPtySnapshots,
@@ -83,8 +87,6 @@ export type RelaySessionState = 'idle' | 'deploying' | 'ready' | 'reconnecting' 
 
 type SshPtyExitPayload = Parameters<SshPtyExitCallback>[0]
 type PendingPtyReattach = { exits: SshPtyExitPayload[] }
-type PendingArchivedExitRecovery = { archiveId: string; receiptDelivered: boolean }
-
 type RemoteCliBridgeEnv = {
   remoteHome: string
   binDir: string
@@ -163,7 +165,7 @@ export class SshRelaySession {
   private forwardedReattachReplayByPty = new Map<string, ForwardedReplayFingerprint>()
   private pendingPtyReattaches = new Map<string, PendingPtyReattach>()
   private pendingPtyReviveState: string | null = null
-  private archivedExitRecoveryByPtyId = new Map<string, PendingArchivedExitRecovery>()
+  private lostWorkerArchiveAttempt = 0
 
   constructor(
     readonly targetId: string,
@@ -957,24 +959,20 @@ export class SshRelaySession {
 
   private retireExitedPty(payload: SshPtyExitPayload): void {
     const relayPtyId = toRelaySshPtyId(this.targetId, payload.id)
-    const recovery = this.archivedExitRecoveryByPtyId.get(payload.id)
-    this.archivedExitRecoveryByPtyId.delete(payload.id)
+    const archiveId = takeArchivedSshPtyExitRecovery(payload.id)
     clearProviderPtyState(payload.id)
     deletePtyOwnership(payload.id)
     this.forwardedReattachReplayByPty.delete(payload.id)
     this.store.markSshRemotePtyLease(this.targetId, relayPtyId, 'terminated')
     this.runtime?.onPtyExit(payload.id, payload.code, payload.incarnationId)
-    if (recovery?.receiptDelivered) {
-      return
-    }
-    if (!recovery) {
+    if (!archiveId) {
       routeExternalPtyExit(payload)
       return
     }
     routeExternalPtyExit({
       id: payload.id,
       code: payload.code,
-      lostWorkerRecovery: { kind: 'archived', archiveId: recovery.archiveId }
+      lostWorkerRecovery: { kind: 'archived', archiveId }
     })
   }
 
@@ -1011,6 +1009,7 @@ export class SshRelaySession {
     if (!provider || ptyIds.length === 0) {
       return
     }
+    this.lostWorkerArchiveAttempt += 1
     try {
       this.pendingPtyReviveState = await provider.serialize(ptyIds, { formatVersion: 2 })
     } catch (error) {
@@ -1156,7 +1155,9 @@ export class SshRelaySession {
         relayEvidence: lost
       },
       frozenSession: session,
-      snapshotSource
+      snapshotSource,
+      completeArchive: ({ archive, ptyIdsToKill }) =>
+        this.shutdownArchivedRelayPtys(ptyIdsToKill, archive.id, tabId)
     })
     if (result.kind !== 'archived') {
       this.reportLostWorkerArchiveDiagnostic({
@@ -1165,10 +1166,6 @@ export class SshRelaySession {
         paneKey,
         error: new Error(result.code)
       })
-      return
-    }
-    if (result.archiveCompletionOwner) {
-      await this.shutdownArchivedRelayPtys(result.ptyIdsToKill, result.archive.id, tabId)
     }
   }
 
@@ -1180,7 +1177,7 @@ export class SshRelaySession {
     const provider = getSshPtyProvider(this.targetId) as SshPtyProvider | undefined
     for (const ptyId of ptyIds) {
       // Why: shutdown can synchronously emit onExit, which must carry the archive receipt instead of a normal exit.
-      this.archivedExitRecoveryByPtyId.set(ptyId, { archiveId, receiptDelivered: false })
+      beginArchivedSshPtyExitRecovery(ptyId, archiveId)
     }
     const outcomes = provider
       ? await Promise.allSettled(
@@ -1210,15 +1207,14 @@ export class SshRelaySession {
       }
       clearProviderPtyState(ptyId)
       deletePtyOwnership(ptyId)
-      const recovery = this.archivedExitRecoveryByPtyId.get(ptyId)
-      if (recovery && !recovery.receiptDelivered) {
-        recovery.receiptDelivered = true
+      const recoveredArchiveId = takeArchivedSshPtyExitRecovery(ptyId)
+      if (recoveredArchiveId) {
         routeExternalPtyExit({
           id: ptyId,
           code: -1,
           lostWorkerRecovery: {
             kind: 'archived',
-            archiveId: recovery.archiveId
+            archiveId: recoveredArchiveId
           }
         })
       }
@@ -1273,12 +1269,14 @@ export class SshRelaySession {
     tabId?: string
     paneKey?: string
     error?: unknown
+    attempt?: number
   }): void {
     console.warn('[ssh-relay-session] lost-worker archive diagnostic', {
       targetId: this.targetId,
       tabId: args.tabId,
       paneKey: args.paneKey,
       stage: args.stage,
+      attempt: args.attempt ?? this.lostWorkerArchiveAttempt,
       error: args.error instanceof Error ? args.error.message : undefined
     })
   }

@@ -5,11 +5,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { ArchivedTerminalTab } from '../shared/terminal-archive-types'
 import type { TerminalArchiveSnapshotSource } from '../shared/workspace-session-terminal-archive'
 import { TERMINAL_SCROLLBACK_REPLAY_BYTE_LIMIT } from '../shared/terminal-scrollback-limits'
-import {
-  TerminalArchiveStore,
-  type ArchiveTerminalTabRequest,
-  type TerminalArchiveRepository
-} from './terminal-archive-store'
+import { TerminalArchiveStore, type TerminalArchiveRepository } from './terminal-archive-store'
+import type { ArchiveTerminalTabRequest } from './terminal-archive-contracts'
 import { readTerminalScrollbackSnapshotSync } from './terminal-scrollback-snapshots'
 
 const testState = vi.hoisted(() => ({ root: '' }))

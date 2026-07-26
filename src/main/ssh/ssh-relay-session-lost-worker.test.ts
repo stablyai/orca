@@ -3,6 +3,7 @@ import { SshRelaySession } from './ssh-relay-session'
 import { getDefaultWorkspaceSession } from '../../shared/constants'
 import type { RelayPtyLostEntry } from '../../shared/pty-revive-protocol'
 import { decodeRelayStagedPtySnapshots } from '../../shared/relay-staged-pty-snapshots'
+import { takeArchivedSshPtyExitRecovery } from './ssh-archived-exit-recovery'
 import type { WorkspaceSessionState } from '../../shared/types'
 import { createMockDeps, mockDeploySuccess } from './ssh-relay-session-test-fixtures'
 
@@ -179,6 +180,11 @@ type SshRelaySessionArchiveInternals = {
   ) => Promise<void>
   reattachKnownPtys: (shouldContinue: () => boolean) => Promise<void>
   retryTerminationPendingPtys: () => Promise<void>
+  shutdownArchivedRelayPtys: (
+    ptyIds: readonly string[],
+    archiveId: string,
+    tabId: string
+  ) => Promise<void>
 }
 
 function archiveInternals(session: SshRelaySession): SshRelaySessionArchiveInternals {
@@ -236,17 +242,20 @@ describe('SshRelaySession lost-worker archive', () => {
         outcome: { outcomeVersion: 1, revived: [], lost: [lost], diagnostics: [] }
       })
     }
-    archiveLostTerminalWorkerMock.mockResolvedValue(
-      state === 'archive failure'
-        ? { kind: 'error', code: 'durability-failed' }
-        : {
-            kind: 'archived',
-            archive: { id: 'archive-1' },
-            operationId: 'relay-worker-lost:tab-1',
-            ptyIdsToKill: [RELAY_LOST_WORKER.id],
-            archiveCompletionOwner: true
-          }
-    )
+    if (state === 'archive failure') {
+      archiveLostTerminalWorkerMock.mockResolvedValue({ kind: 'error', code: 'durability-failed' })
+    } else {
+      archiveLostTerminalWorkerMock.mockImplementation(async ({ completeArchive }) => {
+        const result = {
+          kind: 'archived' as const,
+          archive: { id: 'archive-1' },
+          operationId: 'relay-worker-lost:tab-1',
+          ptyIdsToKill: [RELAY_LOST_WORKER.id]
+        }
+        await completeArchive?.(result)
+        return result
+      })
+    }
     mockStore.getWorkspaceSession = vi
       .fn()
       .mockReturnValue(
@@ -347,8 +356,7 @@ describe('SshRelaySession lost-worker archive', () => {
       kind: 'archived',
       archive: { id: 'archive-1' },
       operationId: 'relay-worker-lost:tab-1',
-      ptyIdsToKill: [RELAY_LOST_WORKER.id],
-      archiveCompletionOwner: false
+      ptyIdsToKill: [RELAY_LOST_WORKER.id]
     })
     mockStore.getWorkspaceSession = vi.fn().mockReturnValue(workspaceSessionForRelayLostWorker())
     const { shutdown } = configureStagedPtyRevive({ serialize, revive })
@@ -357,6 +365,28 @@ describe('SshRelaySession lost-worker archive', () => {
 
     expect(shutdown).not.toHaveBeenCalled()
     expect(routeExternalPtyExit).not.toHaveBeenCalled()
+  })
+
+  it('releases synthetic archive-exit recovery registrations after routing the receipt', async () => {
+    const { session } = await establishRelaySession()
+    const shutdown = vi.fn().mockResolvedValue(undefined)
+    vi.mocked(getSshPtyProvider).mockReturnValue({
+      shutdown,
+      dispose: vi.fn()
+    } as unknown as ReturnType<typeof getSshPtyProvider>)
+
+    await archiveInternals(session).shutdownArchivedRelayPtys(
+      [RELAY_LOST_WORKER.id],
+      'archive-1',
+      REVIVE_TAB_ID
+    )
+
+    expect(takeArchivedSshPtyExitRecovery(RELAY_LOST_WORKER.id)).toBeUndefined()
+    expect(routeExternalPtyExit).toHaveBeenCalledWith({
+      id: RELAY_LOST_WORKER.id,
+      code: -1,
+      lostWorkerRecovery: { kind: 'archived', archiveId: 'archive-1' }
+    })
   })
 
   it('fails closed with the legacy-envelope diagnostic instead of fabricating a tail', async () => {
@@ -379,7 +409,11 @@ describe('SshRelaySession lost-worker archive', () => {
 
     expect(diagnostic).toHaveBeenCalledWith(
       '[ssh-relay-session] lost-worker archive diagnostic',
-      expect.objectContaining({ stage: 'staged-state-legacy', paneKey: REVIVE_PANE_KEY })
+      expect.objectContaining({
+        stage: 'staged-state-legacy',
+        paneKey: REVIVE_PANE_KEY,
+        attempt: expect.any(Number)
+      })
     )
     diagnostic.mockRestore()
   })

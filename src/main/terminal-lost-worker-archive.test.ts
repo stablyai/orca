@@ -48,7 +48,8 @@ function session(): WorkspaceSessionState {
 function owner(
   sessionState: WorkspaceSessionState,
   beforeArchiveFlush?: () => void,
-  ownership: 'matching' | 'deny' = 'matching'
+  ownership: 'matching' | 'deny' = 'matching',
+  retirement: 'matching' | 'deny' = 'matching'
 ) {
   let archives = {}
   let persistedSession = sessionState
@@ -84,16 +85,31 @@ function owner(
     isTerminalScrollbackSnapshotLive: () => false
   }
   const retireArchivedTerminalTabAndFlush = vi.fn((args: { worktreeId: string; tabId: string }) => {
-    const retired = retireArchivedTerminalTab(persistedSession, args.worktreeId, args.tabId)
+    if (retirement === 'deny') {
+      return {
+        ...retireArchivedTerminalTab(persistedSession, args.worktreeId, args.tabId),
+        closed: false,
+        ptyIdsToKill: [],
+        session: persistedSession
+      }
+    }
+    return retireArchivedTerminalTab(persistedSession, args.worktreeId, args.tabId)
+  })
+  repository.commitLostTerminalArchiveAndRetire = (nextArchives, args) => {
+    const retired = retireArchivedTerminalTabAndFlush(args)
+    if (!retired.closed) {
+      return retired
+    }
+    beforeArchiveFlush?.()
+    archives = nextArchives
     persistedSession = retired.session
     return retired
-  })
+  }
   return {
     archives: () => archives,
     retireArchivedTerminalTabAndFlush,
     value: {
       getWorkspaceSession: () => persistedSession,
-      retireArchivedTerminalTabAndFlush,
       createTerminalArchiveStore: (snapshotSource: TerminalArchiveSnapshotSource) =>
         new TerminalArchiveStore(repository, snapshotSource, () => 100)
     }
@@ -132,7 +148,7 @@ describe('archiveLostTerminalWorker', () => {
     })
   })
 
-  it('deduplicates overlapping relay reconnect attempts and grants kill authority once', async () => {
+  it('deduplicates overlapping relay reconnect attempts and completes physical shutdown once', async () => {
     const frozenSession = session()
     const archiveOwner = owner(frozenSession)
     let releaseCapture: (() => void) | undefined
@@ -154,7 +170,8 @@ describe('archiveLostTerminalWorker', () => {
         }
       },
       frozenSession,
-      snapshotSource: { capture }
+      snapshotSource: { capture },
+      completeArchive: vi.fn().mockResolvedValue(undefined)
     }
 
     const first = archiveLostTerminalWorker(request)
@@ -163,9 +180,114 @@ describe('archiveLostTerminalWorker', () => {
     releaseCapture?.()
 
     await expect(Promise.all([first, second])).resolves.toEqual([
-      expect.objectContaining({ kind: 'archived', archiveCompletionOwner: true }),
-      expect.objectContaining({ kind: 'archived', archiveCompletionOwner: false })
+      expect.objectContaining({ kind: 'archived' }),
+      expect.objectContaining({ kind: 'archived' })
     ])
+    expect(archiveOwner.retireArchivedTerminalTabAndFlush).toHaveBeenCalledOnce()
+    expect(request.completeArchive).toHaveBeenCalledOnce()
+  })
+
+  it('keeps SSH pending retirement and shutdown completion inside the renderer-owned operation', async () => {
+    const frozenSession = session()
+    const archiveOwner = owner(frozenSession)
+    const completeArchive = vi.fn().mockResolvedValue(undefined)
+
+    const result = await archiveLostTerminalWorker({
+      owner: archiveOwner.value,
+      candidate: {
+        reason: 'relay-worker-lost',
+        executionHostId: 'ssh:target-1',
+        worktreeId: WORKTREE_ID,
+        tabId: TAB_ID,
+        sshTerminationTargetId: 'target-1',
+        expectedSourcePaneIdentityByLeafId: {
+          [LEAF_ID]: { paneKey: `${TAB_ID}:${LEAF_ID}`, incarnationId: 'incarnation-1' }
+        }
+      },
+      frozenSession,
+      snapshotSource: { capture: async () => ({ kind: 'captured-empty' }) },
+      completeArchive
+    })
+
+    expect(result).toMatchObject({ kind: 'archived' })
+    expect(archiveOwner.retireArchivedTerminalTabAndFlush).toHaveBeenCalledWith({
+      worktreeId: WORKTREE_ID,
+      tabId: TAB_ID,
+      executionHostId: 'ssh:target-1',
+      sshTerminationTargetId: 'target-1'
+    })
+    expect(completeArchive).toHaveBeenCalledOnce()
+  })
+
+  it('uses the renderer completion when it wins a cross-entry SSH race', async () => {
+    const frozenSession = session()
+    const archiveOwner = owner(frozenSession)
+    let releaseCapture: (() => void) | undefined
+    const capture = vi.fn(
+      async () =>
+        await new Promise<void>((resolve) => {
+          releaseCapture = resolve
+        }).then(() => ({ kind: 'captured-empty' as const }))
+    )
+    const rendererCompletion = vi.fn().mockResolvedValue(undefined)
+    const relayCompletion = vi.fn().mockResolvedValue(undefined)
+    const request = {
+      owner: archiveOwner.value,
+      candidate: {
+        reason: 'relay-worker-lost' as const,
+        executionHostId: 'ssh:target-1' as const,
+        worktreeId: WORKTREE_ID,
+        tabId: TAB_ID,
+        sshTerminationTargetId: 'target-1',
+        expectedSourcePaneIdentityByLeafId: {
+          [LEAF_ID]: { paneKey: `${TAB_ID}:${LEAF_ID}`, incarnationId: 'incarnation-1' }
+        }
+      },
+      frozenSession,
+      snapshotSource: { capture },
+      completeArchive: rendererCompletion
+    }
+
+    const renderer = archiveLostTerminalWorker(request)
+    await vi.waitFor(() => expect(capture).toHaveBeenCalledOnce())
+    const relay = archiveLostTerminalWorker({ ...request, completeArchive: relayCompletion })
+    releaseCapture?.()
+
+    await expect(Promise.all([renderer, relay])).resolves.toEqual([
+      expect.objectContaining({ kind: 'archived' }),
+      expect.objectContaining({ kind: 'archived' })
+    ])
+    expect(rendererCompletion).toHaveBeenCalledOnce()
+    expect(relayCompletion).not.toHaveBeenCalled()
+    expect(archiveOwner.retireArchivedTerminalTabAndFlush).toHaveBeenCalledWith({
+      worktreeId: WORKTREE_ID,
+      tabId: TAB_ID,
+      executionHostId: 'ssh:target-1',
+      sshTerminationTargetId: 'target-1'
+    })
+  })
+
+  it('does not write archive metadata when atomic retirement rejects the source', async () => {
+    const frozenSession = session()
+    const archiveOwner = owner(frozenSession, undefined, 'matching', 'deny')
+
+    const result = await archiveLostTerminalWorker({
+      owner: archiveOwner.value,
+      candidate: {
+        reason: 'daemon-worker-lost',
+        executionHostId: 'local',
+        worktreeId: WORKTREE_ID,
+        tabId: TAB_ID,
+        expectedSourcePaneIdentityByLeafId: {
+          [LEAF_ID]: { paneKey: `${TAB_ID}:${LEAF_ID}`, incarnationId: 'incarnation-1' }
+        }
+      },
+      frozenSession,
+      snapshotSource: { capture: async () => ({ kind: 'captured-empty' }) }
+    })
+
+    expect(result).toEqual({ kind: 'error', code: 'stale-source' })
+    expect(archiveOwner.archives()).toEqual({})
     expect(archiveOwner.retireArchivedTerminalTabAndFlush).toHaveBeenCalledOnce()
   })
 

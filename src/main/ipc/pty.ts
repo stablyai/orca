@@ -28,10 +28,18 @@ import type {
 import { captureTerminalArchiveBuffer } from '../../shared/terminal-archive-snapshot-capture'
 import { classifyLostTerminal } from '../../shared/terminal-lost-worker-policy'
 import { archiveLostTerminalWorker } from '../terminal-lost-worker-archive'
+import {
+  beginArchivedSshPtyExitRecovery,
+  takeArchivedSshPtyExitRecovery
+} from '../ssh/ssh-archived-exit-recovery'
 import { createDaemonLostWorkerSnapshotSource } from '../terminal-lost-worker-snapshot-source'
 import { workspaceSessionStateSchema } from '../../shared/workspace-session-schema'
 import { makeTerminalArchiveSourcePaneSignature } from '../terminal-archive-source-pane-signature'
-import { LOCAL_EXECUTION_HOST_ID, toSshExecutionHostId } from '../../shared/execution-host'
+import {
+  LOCAL_EXECUTION_HOST_ID,
+  parseExecutionHostId,
+  toSshExecutionHostId
+} from '../../shared/execution-host'
 import { normalizeRuntimePathForComparison } from '../../shared/cross-platform-path'
 import { terminalOutputBacklogCapChars } from '../../shared/terminal-scrollback-policy'
 import type {
@@ -1864,6 +1872,9 @@ export function registerPtyHandlers(
       if (!worktreeId || !tabId || !leafId || !reason || !executionHostId) {
         return { kind: 'retryable-error', code: 'contract-invalid' }
       }
+      const parsedExecutionHost = parseExecutionHostId(executionHostId)
+      const sshTerminationTargetId =
+        parsedExecutionHost?.kind === 'ssh' ? parsedExecutionHost.targetId : undefined
       const persistedSession = store.getWorkspaceSession(executionHostId)
       const paneKey = makePaneKey(tabId, leafId)
       if (
@@ -1940,23 +1951,22 @@ export function registerPtyHandlers(
             ...(typeof request.runtimeEnvironmentId === 'string' && request.runtimeEnvironmentId
               ? { runtimeEnvironmentId: request.runtimeEnvironmentId }
               : {}),
+            ...(sshTerminationTargetId ? { sshTerminationTargetId } : {}),
             expectedSourcePaneIdentityByLeafId: captured.sourcePaneIdentityByLeafId
           },
           frozenSession: session,
-          snapshotSource
+          snapshotSource,
+          completeArchive: ({ archive, ptyIdsToKill }) =>
+            shutdownLostWorkerArchivePtys({
+              archiveId: archive.id,
+              ptyIds: ptyIdsToKill,
+              reason,
+              executionHostId,
+              tabId
+            })
         })
         if (result.kind !== 'archived') {
           return { kind: 'retryable-error', code: result.code }
-        }
-        if (result.archiveCompletionOwner) {
-          for (const ptyId of result.ptyIdsToKill) {
-            const provider = tryGetProviderForPty(ptyId)
-            if (provider) {
-              void shutdownProviderAndDetectExit(provider, ptyId, { immediate: true }).catch(
-                () => {}
-              )
-            }
-          }
         }
         return { kind: 'archived', archiveId: result.archive.id }
       })()
@@ -2032,18 +2042,18 @@ export function registerPtyHandlers(
           expectedSourcePaneIdentityByLeafId: captured.sourcePaneIdentityByLeafId
         },
         frozenSession: persistedSession,
-        snapshotSource
+        snapshotSource,
+        completeArchive: ({ archive, ptyIdsToKill }) =>
+          shutdownLostWorkerArchivePtys({
+            archiveId: archive.id,
+            ptyIds: ptyIdsToKill,
+            reason: 'daemon-worker-lost',
+            executionHostId,
+            tabId: args.tabId
+          })
       })
       if (result.kind !== 'archived') {
         return { kind: 'retryable-error', code: result.code }
-      }
-      if (result.archiveCompletionOwner) {
-        for (const ptyId of result.ptyIdsToKill) {
-          const provider = tryGetProviderForPty(ptyId)
-          if (provider) {
-            void shutdownProviderAndDetectExit(provider, ptyId, { immediate: true }).catch(() => {})
-          }
-        }
       }
       return { kind: 'archived', archiveId: result.archive.id }
     })()
@@ -3159,6 +3169,75 @@ export function registerPtyHandlers(
       unsubscribe()
     }
     return providerExitObserved
+  }
+
+  async function shutdownLostWorkerArchivePtys(args: {
+    archiveId: string
+    ptyIds: readonly string[]
+    reason: 'relay-worker-lost' | 'daemon-worker-lost'
+    executionHostId: string
+    tabId: string
+  }): Promise<void> {
+    await Promise.all(
+      args.ptyIds.map(async (ptyId) => {
+        const provider = tryGetProviderForPty(ptyId)
+        const sshTargetId = parseExecutionHostId(args.executionHostId)
+        const isSsh = sshTargetId?.kind === 'ssh'
+        if (isSsh) {
+          beginArchivedSshPtyExitRecovery(ptyId, args.archiveId)
+        }
+        let succeeded = false
+        if (!provider) {
+          console.warn('[pty] lost-worker archive shutdown diagnostic', {
+            reason: args.reason,
+            executionHostId: args.executionHostId,
+            tabId: args.tabId,
+            ptyId,
+            stage: 'shutdown',
+            attempt: 'archive-completion',
+            error: 'provider unavailable'
+          })
+        } else {
+          try {
+            await shutdownProviderAndDetectExit(provider, ptyId, { immediate: true })
+            succeeded = true
+          } catch (error) {
+            succeeded = isSshPtyNotFoundError(error)
+            console.warn('[pty] lost-worker archive shutdown diagnostic', {
+              reason: args.reason,
+              executionHostId: args.executionHostId,
+              tabId: args.tabId,
+              ptyId,
+              stage: 'shutdown',
+              attempt: 'archive-completion',
+              error: error instanceof Error ? error.message : String(error)
+            })
+          }
+        }
+        if (succeeded) {
+          const incarnationId = finishPtyShutdown(
+            ptyId,
+            isSsh ? sshTargetId.targetId : undefined,
+            store
+          )
+          runtime?.onPtyExit(ptyId, -1, incarnationId)
+        } else {
+          clearProviderPtyState(ptyId)
+          ptyOwnership.delete(ptyId)
+          markClaudePtyExited(ptyId)
+          runtime?.onPtyExit(ptyId, -1, ptyIncarnationById.get(ptyId))
+        }
+        const recoveryArchiveId = isSsh ? takeArchivedSshPtyExitRecovery(ptyId) : args.archiveId
+        if (recoveryArchiveId) {
+          rememberSyntheticKillExit(ptyId)
+          sendPtyExitToRenderer({
+            id: ptyId,
+            code: -1,
+            lostWorkerRecovery: { kind: 'archived', archiveId: recoveryArchiveId }
+          })
+        }
+      })
+    )
   }
 
   function routeProviderData(payload: PtyDataEvent, runtimeAlreadyIngested: boolean): void {

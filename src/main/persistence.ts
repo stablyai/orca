@@ -251,6 +251,10 @@ import {
   type TerminalArchiveHintSource
 } from '../shared/terminal-archive-types'
 import { TerminalArchiveStore } from './terminal-archive-store'
+import type {
+  LostTerminalArchiveRetirement,
+  LostTerminalArchiveRetirementResult
+} from './terminal-archive-contracts'
 import {
   mergeTerminalArchiveHintIntoSession,
   moveTerminalArchivePaneDurableState,
@@ -5767,6 +5771,8 @@ export class Store {
         worktreeExists: (worktreeId, hostId) => this.archiveWorktreeExists(worktreeId, hostId),
         isTerminalArchiveRequestOwned: (request) => this.isTerminalArchiveRequestOwned(request),
         isTerminalScrollbackSnapshotLive: (ref) => this.isTerminalScrollbackSnapshotLive(ref),
+        commitLostTerminalArchiveAndRetire: (archives, retirement) =>
+          this.commitLostTerminalArchiveAndRetire(archives, retirement),
         terminalScrollbackSnapshotStorage: this.terminalScrollbackSnapshotStorage
       },
       snapshotSource
@@ -5881,6 +5887,13 @@ export class Store {
     executionHostId: ExecutionHostId
     sshTerminationTargetId?: string
   }): ReturnType<typeof retireArchivedTerminalTab> {
+    return this.commitLostTerminalArchiveAndRetire(this.state.terminalArchivesById, args)
+  }
+
+  private commitLostTerminalArchiveAndRetire(
+    archives: Record<string, ArchivedTerminalTab>,
+    args: LostTerminalArchiveRetirement
+  ): LostTerminalArchiveRetirementResult {
     const hostId = this.resolveHostId(args.executionHostId)
     const session = this.getWorkspaceSession(hostId)
     const retired = retireArchivedTerminalTab(session, args.worktreeId, args.tabId)
@@ -5896,8 +5909,10 @@ export class Store {
     if (tabStillPresent) {
       return { ...retired, closed: false, ptyIdsToKill: [] }
     }
+    const previousArchives = this.state.terminalArchivesById
     const previous = cloneWorkspaceSessionState(session)
     const previousLeases = this.state.sshRemotePtyLeases?.map((lease) => ({ ...lease }))
+    this.state.terminalArchivesById = archives
     if (hostId === LOCAL_EXECUTION_HOST_ID) {
       this.state.workspaceSession = next
     } else {
@@ -5928,6 +5943,7 @@ export class Store {
     try {
       this.flushOrThrow()
     } catch (error) {
+      this.state.terminalArchivesById = previousArchives
       if (hostId === LOCAL_EXECUTION_HOST_ID) {
         this.state.workspaceSession = previous
       } else {
@@ -5939,13 +5955,7 @@ export class Store {
       this.state.sshRemotePtyLeases = previousLeases
       throw error
     }
-    const persisted = this.getWorkspaceSession(hostId)
-    const persistedTabStillPresent =
-      persisted.tabsByWorktree[args.worktreeId]?.some((tab) => tab.id === args.tabId) ||
-      persisted.unifiedTabs?.[args.worktreeId]?.some(
-        (tab) => tab.id === args.tabId || tab.entityId === args.tabId
-      )
-    return persistedTabStillPresent ? { ...retired, closed: false, ptyIdsToKill: [] } : retired
+    return retired
   }
 
   /** Persist a non-'local' host partition; remote hosts skip setLocalWorkspaceSession's local-daemon PTY-binding race guards. */

@@ -5,12 +5,10 @@ import {
   toArchivedTerminalTabSummary
 } from '../shared/terminal-archive-types'
 import type {
-  ArchivedTerminalLayout,
   ArchivedTerminalPane,
   ArchivedTerminalTab,
   ArchivedTerminalTabSummary,
-  RestoreTerminalArchiveResult,
-  TerminalArchiveReason
+  RestoreTerminalArchiveResult
 } from '../shared/terminal-archive-types'
 import type { TerminalArchiveSnapshotSource } from '../shared/workspace-session-terminal-archive'
 import type { ExecutionHostId } from '../shared/execution-host'
@@ -26,39 +24,14 @@ import {
   stageTerminalArchivePaneSnapshot
 } from './terminal-archive-snapshot-staging'
 import { TerminalArchiveError } from './terminal-archive-failure'
-
-export type ArchiveTerminalTabRequest = {
-  operationId: string
-  sourceTabId: string
-  executionHostId: ExecutionHostId
-  runtimeEnvironmentId?: string
-  worktreeId: string
-  title: string
-  defaultTitle?: string
-  color?: string | null
-  layout: ArchivedTerminalLayout
-  panesByLeafId: Record<string, ArchivedTerminalPane>
-  sourcePaneIdentityByLeafId: Record<string, TerminalArchiveSourcePaneIdentity>
-  reason: TerminalArchiveReason
-  createdAt?: number
-  capturedAt?: number
-  /** Ignored so a caller cannot set the archive TTL or GC clock. */
-  archivedAt?: number
-}
-
-export type TerminalArchiveListFilter = {
-  executionHostId?: ExecutionHostId
-  worktreeId?: string
-}
-
-export type TerminalArchiveRestoreTarget = {
-  executionHostId?: ExecutionHostId
-}
-
-export type PruneResult = {
-  prunedIds: string[]
-  deletedSnapshotRefs: string[]
-}
+import type {
+  ArchiveTerminalTabRequest,
+  LostTerminalArchiveRetirement,
+  LostTerminalArchiveRetirementResult,
+  PruneResult,
+  TerminalArchiveListFilter,
+  TerminalArchiveRestoreTarget
+} from './terminal-archive-contracts'
 
 export type TerminalArchiveRepository = {
   getTerminalArchives(): Record<string, ArchivedTerminalTab>
@@ -66,7 +39,6 @@ export type TerminalArchiveRepository = {
   getTerminalArchiveRetentionDays(): number
   isExecutionHostReachable(hostId: ExecutionHostId): boolean
   worktreeExists(worktreeId: string, hostId: ExecutionHostId): boolean
-  /** Must fail closed before and after snapshot capture. */
   isTerminalArchiveRequestOwned(request: {
     executionHostId: ExecutionHostId
     worktreeId: string
@@ -74,6 +46,10 @@ export type TerminalArchiveRepository = {
     sourcePaneIdentityByLeafId: Record<string, TerminalArchiveSourcePaneIdentity>
   }): boolean
   isTerminalScrollbackSnapshotLive(ref: string): boolean
+  commitLostTerminalArchiveAndRetire?(
+    archives: Record<string, ArchivedTerminalTab>,
+    retirement: LostTerminalArchiveRetirement
+  ): LostTerminalArchiveRetirementResult
   terminalScrollbackSnapshotStorage?: TerminalScrollbackSnapshotStorage
 }
 
@@ -93,6 +69,16 @@ export class TerminalArchiveStore {
   }
 
   archiveTerminalTab(request: ArchiveTerminalTabRequest): Promise<ArchivedTerminalTab> {
+    return this.archiveTerminalTabWithCommit(request, (archive, archives) => {
+      this.repository.replaceTerminalArchivesAndFlush(archives)
+      return archive
+    })
+  }
+
+  archiveTerminalTabWithCommit<TResult>(
+    request: ArchiveTerminalTabRequest,
+    commit: (archive: ArchivedTerminalTab, archives: Record<string, ArchivedTerminalTab>) => TResult
+  ): Promise<TResult> {
     return this.runSerial(async () => {
       this.assertRequestOwned(request)
       const now = this.now()
@@ -176,9 +162,8 @@ export class TerminalArchiveStore {
             : {}),
           restoreCount: existing?.restoreCount ?? 0
         }) as ArchivedTerminalTab
-        // Capture awaits external sources, so recheck the exact main-owned fence before commit.
         this.assertRequestOwned(request)
-        this.repository.replaceTerminalArchivesAndFlush({
+        const committed = commit(archive, {
           ...this.repository.getTerminalArchives(),
           [archive.id]: archive
         })
@@ -190,7 +175,7 @@ export class TerminalArchiveStore {
           })
         }
         this.schedulePrune()
-        return archive
+        return committed
       } catch (error) {
         for (const ref of writtenRefs) {
           deleteTerminalScrollbackSnapshotSync(
@@ -201,6 +186,13 @@ export class TerminalArchiveStore {
         throw error
       }
     })
+  }
+
+  commitLostTerminalArchiveAndRetire(
+    archives: Record<string, ArchivedTerminalTab>,
+    retirement: LostTerminalArchiveRetirement
+  ): LostTerminalArchiveRetirementResult | undefined {
+    return this.repository.commitLostTerminalArchiveAndRetire?.(archives, retirement)
   }
 
   listTerminalArchives(
@@ -248,7 +240,6 @@ export class TerminalArchiveStore {
       if (target.executionHostId && target.executionHostId !== archive.executionHostId) {
         return { ok: false, code: 'archive_host_mismatch', archiveId: id }
       }
-      // B2 replaces this metadata preflight with a live execution-host probe.
       if (!this.repository.isExecutionHostReachable(archive.executionHostId)) {
         return { ok: false, code: 'archive_host_unreachable', archiveId: id }
       }
@@ -291,7 +282,6 @@ export class TerminalArchiveStore {
     for (const archive of expired) {
       delete next[archive.id]
     }
-    // Metadata must be durable before removing bytes; a crash can leave only harmless orphans.
     this.repository.replaceTerminalArchivesAndFlush(next)
     const deletedSnapshotRefs = deleteUnreferencedTerminalArchiveSnapshots({
       archives: expired,
