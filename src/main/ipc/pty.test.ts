@@ -305,7 +305,8 @@ describe('registerPtyHandlers', () => {
       send: vi.fn(),
       removeListener: vi.fn(),
       // Why: the did-start-loading reset handler filters to main-frame loads; default true so lifecycle-reset tests reset (a subframe case overrides false).
-      isLoadingMainFrame: vi.fn(() => true)
+      isLoadingMainFrame: vi.fn(() => true),
+      isDestroyed: () => false
     }
   }
   const mainWindowIpcEvent = { sender: mainWindow.webContents }

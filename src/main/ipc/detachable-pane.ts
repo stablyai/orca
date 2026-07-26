@@ -3,6 +3,7 @@ import type { Store } from '../persistence'
 import type { DetachedTerminalTabSeed } from '../../shared/types'
 import { detachablePaneWindowManager } from '../window/detachable-pane-window-manager'
 import { getTrustedUIRendererWindow, isTrustedUIRenderer } from './ui'
+import { registerDetachedPanePtys, unregisterDetachedPanePtys } from './pty'
 
 // A detached pane's own popout renderer is never promoted to the single
 // global trusted-UI-renderer, so it needs its own narrow grant — scoped to
@@ -65,7 +66,15 @@ function finalizeReintegration(paneId: string): void {
     return
   }
   const seed = detachablePaneWindowManager.getPaneSeed(paneId)
+  const ptyIds = seed
+    ? [seed.ptyId, ...(seed.additionalTabs?.map((entry) => entry.ptyId) ?? [])].filter(
+        (id): id is string => typeof id === 'string'
+      )
+    : []
   detachablePaneWindowManager.reintegratePane(paneId)
+  if (ptyIds.length > 0) {
+    unregisterDetachedPanePtys(ptyIds)
+  }
   trustedWindow.webContents.send('pane:returned', { paneId, seed })
 }
 
@@ -100,7 +109,14 @@ export function registerDetachablePaneHandlers(store: Store): void {
     if (!('seed' in args) || !isDetachedTerminalTabSeed(args.seed)) {
       throw new Error('pane:detach requires a valid seed')
     }
-    detachablePaneWindowManager.detachPane(args.paneId, store, args.seed)
+    const paneWindow = detachablePaneWindowManager.detachPane(args.paneId, store, args.seed)
+    const seed = args.seed
+    const ptyIds = [seed.ptyId, ...(seed.additionalTabs?.map((entry) => entry.ptyId) ?? [])].filter(
+      (id): id is string => typeof id === 'string'
+    )
+    if (ptyIds.length > 0) {
+      registerDetachedPanePtys(ptyIds, paneWindow.webContents)
+    }
   })
 
   ipcMain.handle('pane:reintegrate', (event, args: unknown): void => {

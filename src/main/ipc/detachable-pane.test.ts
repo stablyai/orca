@@ -8,7 +8,7 @@ const { ipcHandle, isTrustedUIRenderer, getTrustedUIRendererWindow, mainWindowMo
     getTrustedUIRendererWindow: vi.fn(),
     mainWindowMock: { webContents: { send: vi.fn() } },
     managerMock: {
-      detachPane: vi.fn(),
+      detachPane: vi.fn(() => ({ webContents: { send: vi.fn() } })),
       reintegratePane: vi.fn(),
       getPaneState: vi.fn(() => null),
       getPaneSeed: vi.fn((): DetachedTerminalTabSeed | null => null),
@@ -21,6 +21,10 @@ vi.mock('electron', () => ({ ipcMain: { handle: ipcHandle, removeHandler: vi.fn(
 vi.mock('./ui', () => ({ isTrustedUIRenderer, getTrustedUIRendererWindow }))
 vi.mock('../window/detachable-pane-window-manager', () => ({
   detachablePaneWindowManager: managerMock
+}))
+vi.mock('./pty', () => ({
+  registerDetachedPanePtys: vi.fn(),
+  unregisterDetachedPanePtys: vi.fn()
 }))
 
 import { registerDetachablePaneHandlers } from './detachable-pane'
