@@ -7,7 +7,6 @@ import type {
 import { Image as ImageIcon, ImageOff, X } from 'lucide-react'
 import { translate } from '@/i18n/i18n'
 import { cn } from '@/lib/utils'
-import { useAutosizeTextArea } from '@/hooks/useAutosizeTextArea'
 import { NATIVE_FILE_DROP_TARGET } from '../../../../shared/native-file-drop'
 import { basename } from '@/lib/path'
 import { isNativeChatPastedImagePath } from './native-chat-image-paste'
@@ -98,10 +97,6 @@ export function NativeChatComposerField({
   sessionOptionsSurface,
   sessionOptionsSnapshot
 }: NativeChatComposerFieldProps): React.JSX.Element {
-  // Grow with the draft (and shrink when it's cleared, e.g. after send) up to
-  // 8 lines, then scroll internally. The cap comes from live computed style so
-  // it stays correct if the text size tokens change.
-  useAutosizeTextArea(textareaRef, draft, { maxLines: 8 })
   return (
     <div className="shrink-0 bg-background">
       {/* Extra bottom padding keeps the input box off the window rim. */}
@@ -192,11 +187,13 @@ export function NativeChatComposerField({
               }
               placeholder={nativeChatComposerPlaceholder(hasPty, canSend)}
               // Why: coarse-pointer min-height follows the app's touch target convention.
-              // Max height is the useAutosizeTextArea 8-line clamp, not a utility
-              // class; scrollbar-sleek keeps the overflow gutter from showing the
-              // heavy native scrollbar once the draft exceeds it.
+              // field-sizing:content grows the field with the draft; the 8lh cap (plus
+              // py-1) turns further growth into internal scrolling, and scrollbar-sleek
+              // keeps that gutter off the heavy native scrollbar. Both are layout-driven,
+              // so re-wrap on window/pane resize is handled without a measure pass.
               className={cn(
                 'scrollbar-sleek min-h-12 w-full resize-none bg-transparent px-2 py-1 text-sm outline-none pointer-coarse:min-h-14',
+                '[field-sizing:content] max-h-[calc(8lh+0.5rem)]',
                 'placeholder:text-muted-foreground/60 disabled:cursor-not-allowed disabled:opacity-50'
               )}
             />
