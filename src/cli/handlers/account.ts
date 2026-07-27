@@ -48,10 +48,14 @@ function formatAccountsBlock(label: string, block: AccountsBlock): string {
   return `Managed ${label} accounts (${block.accounts.length}):\n${lines.join('\n')}`
 }
 
-// Why: holds the live login child so an interrupt can stop it before cleanup.
-type LoginSession = { child: ChildProcess | null }
+// Why: `child` lets an interrupt stop the login; `registering` marks the window
+// where the runtime already owns the captured credentials.
+type LoginSession = { child: ChildProcess | null; registering: boolean }
 
-const INTERRUPT_EXIT_CODES: Record<string, number> = { SIGINT: 130, SIGTERM: 143 }
+// Why: SIGHUP is the interrupt that matters most here — this flow exists for
+// headless/SSH hosts, where a dropped connection hangs up the login's terminal.
+const INTERRUPT_EXIT_CODES: Record<string, number> = { SIGHUP: 129, SIGINT: 130, SIGTERM: 143 }
+const INTERRUPT_SIGNALS = Object.keys(INTERRUPT_EXIT_CODES) as NodeJS.Signals[]
 
 /**
  * Runs `add` with `cleanup` guaranteed to run exactly once, including on Ctrl-C.
@@ -64,25 +68,33 @@ async function withInterruptCleanup(
   cleanup: () => Promise<void>,
   add: () => Promise<void>
 ): Promise<void> {
-  let cleanedUp = false
-  const cleanupOnce = async (): Promise<void> => {
-    if (cleanedUp) {
-      return
-    }
-    cleanedUp = true
-    await cleanup()
-  }
+  // Why: memoize rather than latch a boolean — a second signal must await the
+  // in-flight cleanup, not skip it and `process.exit` out of a pending Keychain
+  // call (each up to 3s) that has not restored the user's credentials yet.
+  let cleanupPromise: Promise<void> | null = null
+  const cleanupOnce = (): Promise<void> => (cleanupPromise ??= cleanup())
   const onSignal = (signal: NodeJS.Signals): void => {
     session.child?.kill(signal)
+    if (session.registering) {
+      // Why: sign-in already succeeded and the runtime registers independently of
+      // this process, so an interrupt here cannot be reported as "not added".
+      console.warn(
+        '[account] Interrupted after sign-in completed; the account may still have been registered. Run `orca account list` to check.'
+      )
+    }
     void cleanupOnce().finally(() => process.exit(INTERRUPT_EXIT_CODES[signal] ?? 1))
   }
-  process.once('SIGINT', onSignal)
-  process.once('SIGTERM', onSignal)
+  // Why: `on`, not `once` — with `once` a second Ctrl-C reverts to Node's
+  // terminate-immediately default and kills the process mid-cleanup.
+  for (const signal of INTERRUPT_SIGNALS) {
+    process.on(signal, onSignal)
+  }
   try {
     await add()
   } finally {
-    process.off('SIGINT', onSignal)
-    process.off('SIGTERM', onSignal)
+    for (const signal of INTERRUPT_SIGNALS) {
+      process.off(signal, onSignal)
+    }
     await cleanupOnce()
   }
 }
@@ -164,7 +176,7 @@ async function cleanupClaudeLoginKeychain(
 /** Logs into a Claude account in a temp config dir, then registers it with the local runtime. */
 async function addClaudeAccount({ client, json }: HandlerContext): Promise<void> {
   const configDir = mkdtempSync(join(tmpdir(), 'orca-account-add-claude-'))
-  const session: LoginSession = { child: null }
+  const session: LoginSession = { child: null, registering: false }
   let legacyCredentials: string | null = null
   let restoreLegacyCredentials = false
   await withInterruptCleanup(
@@ -187,6 +199,7 @@ async function addClaudeAccount({ client, json }: HandlerContext): Promise<void>
         json,
         session
       )
+      session.registering = true
       const result = await client.call<ClaudeRateLimitAccountsState>(
         'accounts.addClaudeFromConfigDir',
         { configDir }
@@ -199,7 +212,7 @@ async function addClaudeAccount({ client, json }: HandlerContext): Promise<void>
 /** Logs into a Codex account in a temp CODEX_HOME, then registers it with the local runtime. */
 async function addCodexAccount({ client, json }: HandlerContext): Promise<void> {
   const codexHome = mkdtempSync(join(tmpdir(), 'orca-account-add-codex-'))
-  const session: LoginSession = { child: null }
+  const session: LoginSession = { child: null, registering: false }
   await withInterruptCleanup(
     session,
     async () => {
@@ -215,6 +228,7 @@ async function addCodexAccount({ client, json }: HandlerContext): Promise<void> 
         json,
         session
       )
+      session.registering = true
       const result = await client.call<CodexRateLimitAccountsState>('accounts.addCodexFromHome', {
         sourceHome: codexHome
       })
@@ -227,7 +241,15 @@ async function addCodexAccount({ client, json }: HandlerContext): Promise<void> 
 export const ACCOUNT_HANDLERS: Record<string, CommandHandler> = {
   'account add': async (ctx) => {
     const agentFlag = ctx.flags.get('agent')
-    const agent = typeof agentFlag === 'string' && agentFlag.length > 0 ? agentFlag : 'claude'
+    // Why: a valueless `--agent` parses as boolean true; defaulting it to claude
+    // would silently run a full OAuth login for the provider the user did not ask for.
+    if (agentFlag !== undefined && typeof agentFlag !== 'string') {
+      throw new RuntimeClientError(
+        'invalid_argument',
+        'Missing a value for --agent. Use `--agent claude` or `--agent codex`.'
+      )
+    }
+    const agent = agentFlag ?? 'claude'
     if (agent === 'claude') {
       await addClaudeAccount(ctx)
     } else if (agent === 'codex') {

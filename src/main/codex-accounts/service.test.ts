@@ -1372,6 +1372,12 @@ describe('CodexAccountService config sync', () => {
         wslLinuxHomePath,
         managedHomeRuntime: 'wsl'
       })
+      // Why: a WSL add must sync the WSL runtime home, not the default host lane,
+      // or the account it just selected stays unmaterialized until the next switch.
+      expect(runtimeHome.syncForCurrentSelection).toHaveBeenCalledWith({
+        runtime: 'wsl',
+        wslDistro: 'Debian'
+      })
     } finally {
       Object.defineProperty(process, 'platform', {
         configurable: true,

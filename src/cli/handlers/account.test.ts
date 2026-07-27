@@ -168,6 +168,113 @@ describe('account CLI handlers', () => {
     exitSpy.mockRestore()
   })
 
+  it('cleans up when an SSH hangup ends the login', async () => {
+    // Why: this flow targets headless/SSH hosts, where a dropped connection
+    // delivers SIGHUP — Node's default terminates without running cleanup.
+    const child = Object.assign(new EventEmitter(), { kill: vi.fn() })
+    let codexHome = ''
+    spawnMock.mockImplementation((_command, _args, options: { env: Record<string, string> }) => {
+      codexHome = options.env.CODEX_HOME
+      return child
+    })
+    const exitSpy = vi.spyOn(process, 'exit').mockImplementation((() => undefined) as never)
+
+    const pending = ACCOUNT_HANDLERS['account add'](context('codex')).catch(() => {})
+    await vi.waitFor(() => expect(codexHome).not.toBe(''))
+
+    const onSignal = process.listeners('SIGHUP').at(-1) as (signal: NodeJS.Signals) => void
+    onSignal('SIGHUP')
+
+    await vi.waitFor(() => expect(exitSpy).toHaveBeenCalledWith(129))
+    expect(existsSync(codexHome)).toBe(false)
+
+    child.emit('exit', 1)
+    await pending
+    exitSpy.mockRestore()
+  })
+
+  it('waits for in-flight cleanup when a second signal arrives', async () => {
+    // Why: a boolean latch lets the second signal's process.exit fire while the
+    // first cleanup is still inside a Keychain call, stranding the credentials.
+    Object.defineProperty(process, 'platform', { configurable: true, value: 'darwin' })
+    readKeychainMock.mockResolvedValue('legacy-credentials')
+    let releaseKeychainDelete: (() => void) | undefined
+    deleteKeychainMock.mockImplementationOnce(
+      () =>
+        new Promise<void>((resolvePromise) => {
+          releaseKeychainDelete = () => resolvePromise()
+        })
+    )
+    const child = Object.assign(new EventEmitter(), { kill: vi.fn() })
+    let configDir = ''
+    spawnMock.mockImplementation((_command, _args, options: { env: Record<string, string> }) => {
+      configDir = options.env.CLAUDE_CONFIG_DIR
+      return child
+    })
+    const exitSpy = vi.spyOn(process, 'exit').mockImplementation((() => undefined) as never)
+
+    const pending = ACCOUNT_HANDLERS['account add'](context('claude')).catch(() => {})
+    await vi.waitFor(() => expect(configDir).not.toBe(''))
+
+    const onSigint = process.listeners('SIGINT').at(-1) as (signal: NodeJS.Signals) => void
+    const onSigterm = process.listeners('SIGTERM').at(-1) as (signal: NodeJS.Signals) => void
+    // Why: `rawListeners` exposes the `once` wrapper, so this fails if the handler
+    // is registered with `once` — where a second Ctrl-C falls through to Node's
+    // default and kills the process mid-cleanup.
+    expect(process.rawListeners('SIGINT')).toContain(onSigint)
+
+    onSigint('SIGINT')
+    await vi.waitFor(() => expect(deleteKeychainMock).toHaveBeenCalledWith(configDir))
+    onSigterm('SIGTERM')
+    await new Promise((resolvePromise) => setImmediate(resolvePromise))
+
+    expect(exitSpy).not.toHaveBeenCalled()
+    expect(writeKeychainMock).not.toHaveBeenCalled()
+    expect(existsSync(configDir)).toBe(true)
+
+    releaseKeychainDelete?.()
+    await vi.waitFor(() => expect(exitSpy).toHaveBeenCalled())
+    expect(writeKeychainMock).toHaveBeenCalledWith('legacy-credentials')
+    expect(existsSync(configDir)).toBe(false)
+
+    child.emit('exit', 1)
+    await pending
+    exitSpy.mockRestore()
+  })
+
+  it('warns that the account may already be registered when interrupted mid-RPC', async () => {
+    // Why: the runtime finishes the add independently of this process, so an
+    // interrupt after sign-in cannot honestly be reported as "not added".
+    const child = Object.assign(new EventEmitter(), { kill: vi.fn() })
+    spawnMock.mockImplementation(() => {
+      queueMicrotask(() => child.emit('exit', 0))
+      return child
+    })
+    callMock.mockImplementation(() => new Promise(() => {}))
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    const exitSpy = vi.spyOn(process, 'exit').mockImplementation((() => undefined) as never)
+
+    void ACCOUNT_HANDLERS['account add'](context('codex')).catch(() => {})
+    await vi.waitFor(() => expect(callMock).toHaveBeenCalled())
+
+    const onSignal = process.listeners('SIGINT').at(-1) as (signal: NodeJS.Signals) => void
+    onSignal('SIGINT')
+
+    await vi.waitFor(() => expect(exitSpy).toHaveBeenCalledWith(130))
+    expect(warnSpy).toHaveBeenCalledWith(expect.stringContaining('may still have been registered'))
+    warnSpy.mockRestore()
+    exitSpy.mockRestore()
+  })
+
+  it('rejects `--agent` with no value instead of defaulting to Claude', async () => {
+    // Why: the parser turns a valueless flag into boolean true, so a silent
+    // default would run a full OAuth login for the wrong provider.
+    await expect(
+      ACCOUNT_HANDLERS['account add']({ ...context('claude'), flags: new Map([['agent', true]]) })
+    ).rejects.toThrow('Missing a value for --agent')
+    expect(spawnMock).not.toHaveBeenCalled()
+  })
+
   it('marks an account selected for WSL as active in human output', async () => {
     callMock.mockResolvedValue({
       id: 'test',

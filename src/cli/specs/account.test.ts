@@ -20,7 +20,9 @@ describe('account command specs', () => {
     }
   })
 
-  it('advertises the global flags its usage documents', () => {
+  // Why: named for what it asserts — the rendered Options block, not the `usage`
+  // string, which this test never reads.
+  it('renders --json and --help in its Options block', () => {
     for (const entry of ACCOUNT_COMMAND_SPECS) {
       const help = formatCommandHelp(entry)
       expect(help).toContain('--json')
