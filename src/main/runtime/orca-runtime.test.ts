@@ -7908,6 +7908,61 @@ describe('OrcaRuntimeService', () => {
     }
   })
 
+  it('marks a direct dispatch failed when its worker PTY exits', () => {
+    const runtime = createRuntime()
+    const workerHandle = runtime.preAllocateHandleForPty('pty-1')
+    const failDispatch = vi.fn()
+    const updateTaskStatus = vi.fn()
+    const insertMessage = vi.fn()
+    runtime.setOrchestrationDb({
+      getActiveDispatchForTerminal: vi.fn((handle: string) =>
+        handle === workerHandle ? { id: 'ctx-1', task_id: 'task-1' } : undefined
+      ),
+      failDispatch,
+      getActiveCoordinatorRun: vi.fn(() => undefined),
+      updateTaskStatus,
+      insertMessage
+    } as never)
+    syncSinglePty(runtime)
+
+    runtime.onPtyExit('pty-1', -1)
+
+    expect(failDispatch).toHaveBeenCalledWith('ctx-1', 'Agent exited with code -1', {
+      requeueTask: false
+    })
+    expect(updateTaskStatus).not.toHaveBeenCalled()
+    expect(insertMessage).not.toHaveBeenCalled()
+  })
+
+  it('keeps coordinator-owned dispatches retryable when their worker PTY exits', () => {
+    const runtime = createRuntime()
+    const workerHandle = runtime.preAllocateHandleForPty('pty-1')
+    const failDispatch = vi.fn()
+    const insertMessage = vi.fn()
+    runtime.setOrchestrationDb({
+      getActiveDispatchForTerminal: vi.fn((handle: string) =>
+        handle === workerHandle ? { id: 'ctx-1', task_id: 'task-1' } : undefined
+      ),
+      failDispatch,
+      getActiveCoordinatorRun: vi.fn(() => ({ coordinator_handle: 'term-coordinator' })),
+      insertMessage
+    } as never)
+    syncSinglePty(runtime)
+
+    runtime.onPtyExit('pty-1', 1)
+
+    expect(failDispatch).toHaveBeenCalledWith('ctx-1', 'Agent exited with code 1', {
+      requeueTask: true
+    })
+    expect(insertMessage).toHaveBeenCalledWith(
+      expect.objectContaining({
+        to: 'term-coordinator',
+        type: 'escalation',
+        priority: 'high'
+      })
+    )
+  })
+
   it('keeps stale-title timers isolated per PTY', async () => {
     vi.useFakeTimers()
     try {
