@@ -61,18 +61,22 @@ concurrency:
 
 jobs:
   cut:
-    # Why: this job bumps package.json and fast-forwards main. On a fork with
-    # Actions enabled, the scheduled cut would run against the fork's main and
-    # diverge it (version line) every slot, conflicting every PR back upstream.
-    # Gate to the canonical repo so the workflow no-ops on forks.
-    if: github.repository == 'stablyai/orca'
     runs-on: ubuntu-latest
     timeout-minutes: 15
     outputs:
       tag: ${{ steps.tag.outputs.tag || steps.version.outputs.recovered_tag }}
       should_release: ${{ steps.tag.outputs.tag != '' || steps.version.outputs.recovered_tag != '' }}
-      latest_published_rc_tag: ${{ steps.publish_drafts.outputs.latest_published_tag }}
     steps:
+      - name: Validate release control plane
+        env:
+          REPOSITORY: ${{ github.repository }}
+          WORKFLOW_REF: ${{ github.ref }}
+        run: |
+          if [[ "$REPOSITORY" != 'stablyai/orca' || "$WORKFLOW_REF" != 'refs/heads/main' ]]; then
+            echo "::error::Cut Release must run from stablyai/orca main; use inputs.ref to select source."
+            exit 1
+          fi
+
       # Why inlined (not m-s-abeer/update-gha-summary-with-workflow-inputs):
       # this job runs with contents:write and secret scope, so avoid executing
       # any external (mutable @v1) action here. Surfaces every
@@ -306,21 +310,9 @@ jobs:
           echo "Already ran this slot: ${{ steps.existing.outputs.already_ran }}"
           echo "Reason: ${{ steps.existing.outputs.reason }}"
 
-      - name: Publish complete release-cut RC drafts from prior runs
-        id: publish_drafts
-        # Why: a manual RC dispatch should unstick any complete RC draft before
-        # deciding whether to cut another tag.
-        if: steps.window.outputs.allowed == 'true' && !(github.event_name == 'workflow_dispatch' && inputs.dry_run)
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: node config/scripts/publish-complete-draft-releases.mjs
-
       - name: Compute next version
         id: version
-        # Why: if an RC run only had complete drafts to publish, stop there
-        # instead of immediately cutting another RC after the recovered one.
-        # Stable dispatches should still cut the requested stable release.
-        if: steps.window.outputs.allowed == 'true' && steps.existing.outputs.already_ran != 'true' && !(github.event_name == 'workflow_dispatch' && inputs.dry_run) && !((github.event_name == 'schedule' || inputs.kind == 'rc') && steps.publish_drafts.outputs.published_count != '0' && steps.publish_drafts.outputs.skipped_count == '0')
+        if: steps.window.outputs.allowed == 'true' && steps.existing.outputs.already_ran != 'true' && !(github.event_name == 'workflow_dispatch' && inputs.dry_run)
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           KIND: ${{ github.event_name == 'schedule' && 'rc' || inputs.kind }}
@@ -793,19 +785,50 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v6
         with:
-          ref: refs/tags/${{ needs.cut.outputs.tag }}
+          ref: ${{ github.sha }}
 
       - name: Create draft release with bounded generated notes
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           TAG: ${{ needs.cut.outputs.tag }}
         run: |
-          if gh release view "$TAG" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
-            echo "Release $TAG already exists."
-            exit 0
+          set -euo pipefail
+          releases_json="$(gh api "repos/$GITHUB_REPOSITORY/releases?per_page=100")"
+          release_count="$(jq -r --arg tag "$TAG" '[.[] | select(.tag_name == $tag)] | length' <<<"$releases_json")"
+          if [[ "$release_count" == '0' ]]; then
+            node config/scripts/create-draft-release.mjs "$TAG"
+          elif [[ "$release_count" != '1' ]]; then
+            echo "::error::Expected at most one release for $TAG, found $release_count."
+            exit 1
           fi
 
-          node config/scripts/create-draft-release.mjs "$TAG"
+          releases_json="$(gh api "repos/$GITHUB_REPOSITORY/releases?per_page=100")"
+          draft="$(jq -er --arg tag "$TAG" '
+            map(select(.tag_name == $tag))
+            | if length == 1 and (.[0].draft | type) == "boolean" then (.[0].draft | tostring) else empty end
+          ' <<<"$releases_json")" || {
+            echo "::error::Release $TAG was not found uniquely after draft creation."
+            exit 1
+          }
+          if [[ "$draft" != 'true' ]]; then
+            echo "::error::Release $TAG is already public; refusing to authorize uploads."
+            exit 1
+          fi
+          echo "Release $TAG is draft."
+
+      - name: Record macOS build authorization
+        env:
+          TAG: ${{ needs.cut.outputs.tag }}
+        run: printf '%s\n' "$TAG" > release-mac-build-control.txt
+
+      - name: Upload macOS build authorization
+        uses: actions/upload-artifact@v7
+        with:
+          name: release-mac-build-control-${{ github.run_id }}-${{ needs.cut.outputs.tag }}
+          path: release-mac-build-control.txt
+          if-no-files-found: error
+          overwrite: true
+          retention-days: 1
 
   # Why: tag-scoped E2E gives release visibility, but the suite is flaky enough
   # that publish-release must not depend on it.
@@ -1142,6 +1165,26 @@ jobs:
           # Kill only its child and require both PTY and watch recovery before packaging.
           node config/scripts/relay-watcher-fault-harness.mjs
 
+      - name: Verify release is draft before Linux artifact upload
+        if: matrix.platform == 'linux-x64' || matrix.platform == 'linux-arm64'
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ needs.cut.outputs.tag }}
+        run: |
+          set -euo pipefail
+          draft="$(gh api "repos/$GITHUB_REPOSITORY/releases?per_page=100" | jq -er --arg tag "$TAG" '
+            map(select(.tag_name == $tag))
+            | if length == 1 and (.[0].draft | type) == "boolean" then (.[0].draft | tostring) else empty end
+          ')" || {
+            echo "::error::Release $TAG was not found uniquely before Linux upload."
+            exit 1
+          }
+          if [[ "$draft" != 'true' ]]; then
+            echo "::error::Release $TAG is not draft; refusing Linux artifact upload."
+            exit 1
+          fi
+
       - name: Publish release artifacts (Linux)
         if: matrix.platform == 'linux-x64' || matrix.platform == 'linux-arm64'
         uses: nick-fields/retry@v4
@@ -1151,6 +1194,7 @@ jobs:
           retry_wait_seconds: 30
           command: ${{ matrix.release_command }}
         env:
+          EP_DRAFT: 'true'
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       # Why: SignPath signs GitHub workflow artifacts, so Windows builds must
@@ -1266,11 +1310,9 @@ jobs:
       # Why: SignPath cannot deep-sign inside NSIS installers, so inner PE
       # files (Orca.exe, node-pty *.node, DLLs) are signed via a separate zip
       # request, then the installer is rebuilt from the signed tree before the
-      # existing installer signing request below. Every step in this chain is
-      # fail-open (continue-on-error + outcome gating): any failure ships the
-      # original installer with unsigned inner binaries, exactly like releases
-      # did before this chain existed. Rehearsed end to end in run 28988432001
-      # (.github/workflows/windows-signing-rehearsal.yml).
+      # existing installer signing request below. Intermediate steps preserve
+      # outcomes so the final required evidence gate can report every failure.
+      # Rehearsed end to end in run 28988432001.
 
       # Why: only unsigned PE files go to SignPath. Files that already carry a
       # valid signature (Microsoft's OpenConsole.exe) must keep their signer.
@@ -1376,10 +1418,8 @@ jobs:
           Invoke-RestMethod -Method Post -Uri $env:SLACK_WEBHOOK_URL -ContentType 'application/json' -Body $payload
 
       # Why gate on the notify outcome too: if nobody was told to approve,
-      # don't hold the release for the approval window — fall through and
-      # ship like today instead. The 1h wait (vs the installer's 4h) keeps
-      # both waits plus the build inside the 360-minute job cap; missing it
-      # falls through to today's unsigned-inner flow rather than blocking.
+      # skip the one-hour wait and let the final evidence gate block with the
+      # complete outcome chain.
       - name: Download signed inner binaries from SignPath
         id: download-signed-inner
         if: matrix.platform == 'win' && steps.submit-inner-signing.outcome == 'success' && steps.notify-inner-signing.outcome == 'success'
@@ -1401,8 +1441,8 @@ jobs:
           Expand-Archive -Path signed-inner.zip -DestinationPath signed-inner -Force
 
       # Why: copy back strictly by the staged list so a layout mismatch in the
-      # returned artifact fails loudly (into fail-open) instead of silently
-      # shipping a mix of signed and unsigned binaries.
+      # returned artifact is recorded instead of silently accepting a mixed
+      # signed/unsigned payload.
       - name: Restore signed inner binaries into unpacked app
         id: restore-signed-inner
         if: matrix.platform == 'win' && steps.download-signed-inner.outcome == 'success'
@@ -1442,8 +1482,8 @@ jobs:
       # so later runs may see elevate.exe as already signed and skip staging it —
       # that is fine (the signature is timestamped) and the evidence gate checks
       # elevate.exe in the shipped installer unconditionally. If this ever causes
-      # trouble, delete this step; the only effect is elevate.exe shipping
-      # unsigned again, which the evidence gate will flag.
+      # trouble, delete this step; the required evidence gate will then block
+      # any installer whose elevate.exe lost its signature.
       - name: Replace cached elevate.exe with the signed copy
         id: sign-elevate-cache
         if: matrix.platform == 'win' && steps.restore-signed-inner.outcome == 'success'
@@ -1477,8 +1517,8 @@ jobs:
         continue-on-error: true
         shell: pwsh
         run: |
-          # Why: keep the pre-rebuild artifacts so a failed rebuild can fall
-          # back to shipping them unchanged (fail-open).
+          # Why: keep pre-rebuild artifacts for outer-signing diagnostics; the
+          # final evidence gate blocks publication after a failed rebuild.
           New-Item -ItemType Directory -Path prepack-backup -Force | Out-Null
           Copy-Item 'dist/orca-windows-setup.exe' 'prepack-backup/orca-windows-setup.exe' -Force
           Copy-Item 'dist/latest.yml' 'prepack-backup/latest.yml' -Force
@@ -1496,10 +1536,9 @@ jobs:
           if (Test-Path 'prepack-backup/orca-windows-setup.exe') {
             Copy-Item 'prepack-backup/orca-windows-setup.exe' 'dist/orca-windows-setup.exe' -Force
             Copy-Item 'prepack-backup/latest.yml' 'dist/latest.yml' -Force
-            Write-Warning 'Restored pre-rebuild installer; this release ships with unsigned inner binaries.'
+            Write-Warning 'Restored pre-rebuild installer for diagnostics; the inner-signing evidence gate will block publication.'
           }
       # ── End Windows inner-binary signing ───────────────────────────────
-
       - name: Upload unsigned Windows installer for SignPath
         if: matrix.platform == 'win'
         id: upload-unsigned-windows-installer
@@ -1545,7 +1584,8 @@ jobs:
             $requestUrl = "https://app.signpath.io/Web/$env:SIGNPATH_ORGANIZATION_ID/SigningRequests/$env:SIGNPATH_REQUEST_ID"
           }
 
-          # Why: releases where inner signing fell through have only this one request.
+          # Why: when inner signing did not submit, only the outer request exists;
+          # the required evidence gate later blocks publication.
           $stage = if ($env:INNER_SIGNING_SUBMITTED -eq 'true') { 'installer signing request (2 of 2)' } else { 'signing request' }
           $message = "Orca Windows release $env:TAG $stage is ready for SignPath approval.`n<$requestUrl|Open SignPath signing request>`n<$env:GITHUB_RUN_URL|Open GitHub Actions run>"
           $payload = @{
@@ -1633,29 +1673,47 @@ jobs:
 
       # Why: evidence gate for inner-binary signing (issue #7785, supersedes
       # PR #7170's Orca.exe-only gate — this covers every staged .exe/.dll/.node
-      # by extracting the shipped installer). Warn-only until the flow has been
-      # proven on a real release, then flip ORCA_WINDOWS_INNER_SIGNATURE_REQUIRED
-      # to 'true' so unsigned inner binaries block the release.
+      # plus resources\elevate.exe by extracting the shipped installer).
       - name: Verify Windows inner binary signatures
-        if: matrix.platform == 'win'
+        if: always() && matrix.platform == 'win'
         shell: pwsh
         env:
-          ORCA_WINDOWS_INNER_SIGNATURE_REQUIRED: 'false'
+          ORCA_WINDOWS_INNER_SIGNATURE_REQUIRED: 'true'
+          RELEASE_TAG: ${{ needs.cut.outputs.tag }}
+          STAGE_INNER_OUTCOME: ${{ steps.stage-inner.outcome }}
+          UPLOAD_UNSIGNED_INNER_OUTCOME: ${{ steps.upload-unsigned-inner.outcome }}
+          SUBMIT_INNER_SIGNING_OUTCOME: ${{ steps.submit-inner-signing.outcome }}
+          NOTIFY_INNER_SIGNING_OUTCOME: ${{ steps.notify-inner-signing.outcome }}
+          DOWNLOAD_SIGNED_INNER_OUTCOME: ${{ steps.download-signed-inner.outcome }}
+          RESTORE_SIGNED_INNER_OUTCOME: ${{ steps.restore-signed-inner.outcome }}
+          SIGN_ELEVATE_CACHE_OUTCOME: ${{ steps.sign-elevate-cache.outcome }}
+          REBUILD_NSIS_SIGNED_OUTCOME: ${{ steps.rebuild-nsis-signed.outcome }}
           INNER_SIGNING_COMPLETED: ${{ steps.rebuild-nsis-signed.outcome == 'success' }}
         run: |
           $required = $env:ORCA_WINDOWS_INNER_SIGNATURE_REQUIRED -eq 'true'
+          $report = New-Object System.Collections.Generic.List[string]
+          $report.Add("tag: $env:RELEASE_TAG")
+          $report.Add('inner signing outcomes:')
+          $report.Add("  stage-inner: $env:STAGE_INNER_OUTCOME")
+          $report.Add("  upload-unsigned-inner: $env:UPLOAD_UNSIGNED_INNER_OUTCOME")
+          $report.Add("  submit-inner-signing: $env:SUBMIT_INNER_SIGNING_OUTCOME")
+          $report.Add("  notify-inner-signing: $env:NOTIFY_INNER_SIGNING_OUTCOME")
+          $report.Add("  download-signed-inner: $env:DOWNLOAD_SIGNED_INNER_OUTCOME")
+          $report.Add("  restore-signed-inner: $env:RESTORE_SIGNED_INNER_OUTCOME")
+          $report.Add("  sign-elevate-cache: $env:SIGN_ELEVATE_CACHE_OUTCOME")
+          $report.Add("  rebuild-nsis-signed: $env:REBUILD_NSIS_SIGNED_OUTCOME")
+          Set-Content -Path 'inner-signing-evidence.txt' -Value ($report -join "`n")
+
           if ($env:INNER_SIGNING_COMPLETED -ne 'true') {
-            $message = 'Windows inner-binary signing did not complete; this release ships unsigned inner binaries (fail-open, issue #7785).'
+            $message = 'Windows inner-binary signing did not complete; refusing to publish this release.'
+            $report.Add("failure: $message")
+            Set-Content -Path 'inner-signing-evidence.txt' -Value ($report -join "`n")
             if ($required) { throw $message }
             Write-Host "::warning::$message"
             exit 0
           }
 
-          # Why try/catch: while the gate is warn-only, even an unexpected
-          # script error (extraction hiccup, missing file) must not block
-          # the release — only the flip to required makes failures fatal.
           try {
-            $report = New-Object System.Collections.Generic.List[string]
             $failures = New-Object System.Collections.Generic.List[string]
 
             # Why: verify the files a user actually gets on disk, not the build
@@ -1690,18 +1748,25 @@ jobs:
               }
             }
 
-            Set-Content -Path 'inner-signing-evidence.txt' -Value ($report -join "`n")
             if ($failures.Count -gt 0) {
-              $failures | ForEach-Object { Write-Host "::warning::$_" }
+              $failures | ForEach-Object {
+                Write-Host "::error::$_"
+                $report.Add("failure: $_")
+              }
+              Set-Content -Path 'inner-signing-evidence.txt' -Value ($report -join "`n")
               $message = "Windows inner-binary evidence gate found $($failures.Count) problems."
               if ($required) { throw $message }
-              Write-Host "::warning::$message Fail-open until ORCA_WINDOWS_INNER_SIGNATURE_REQUIRED is 'true'."
+              Write-Host "::warning::$message"
             } else {
+              $report.Add("verified targets: $($targets.Count)")
+              Set-Content -Path 'inner-signing-evidence.txt' -Value ($report -join "`n")
               Write-Host "All $($targets.Count) inner binaries in the shipped installer are signed by SignPath Foundation."
             }
           } catch {
+            $report.Add("error: $($_.Exception.Message)")
+            Set-Content -Path 'inner-signing-evidence.txt' -Value ($report -join "`n")
             if ($required) { throw }
-            Write-Host "::warning::Windows inner-binary evidence gate errored: $_ (fail-open, issue #7785)."
+            Write-Host "::warning::Windows inner-binary evidence gate errored: $_"
           }
 
       - name: Upload Windows inner signing evidence
@@ -1712,11 +1777,31 @@ jobs:
           path: |
             inner-signing-evidence.txt
             inner-signing-list.txt
-          if-no-files-found: ignore
+          if-no-files-found: error
           retention-days: 30
 
+      - name: Verify release is draft before Windows artifact upload
+        if: success() && matrix.platform == 'win'
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ needs.cut.outputs.tag }}
+        run: |
+          set -euo pipefail
+          draft="$(gh api "repos/$GITHUB_REPOSITORY/releases?per_page=100" | jq -er --arg tag "$TAG" '
+            map(select(.tag_name == $tag))
+            | if length == 1 and (.[0].draft | type) == "boolean" then (.[0].draft | tostring) else empty end
+          ')" || {
+            echo "::error::Release $TAG was not found uniquely before Windows upload."
+            exit 1
+          }
+          if [[ "$draft" != 'true' ]]; then
+            echo "::error::Release $TAG is not draft; refusing Windows artifact upload."
+            exit 1
+          fi
+
       - name: Publish signed Windows release artifacts
-        if: matrix.platform == 'win'
+        if: success() && matrix.platform == 'win'
         uses: nick-fields/retry@v4
         with:
           timeout_minutes: 10
@@ -1809,6 +1894,8 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v6
+        with:
+          ref: ${{ github.sha }}
 
       - name: Setup Node.js
         uses: actions/setup-node@v6
@@ -1866,17 +1953,6 @@ jobs:
             --draft=false \
             --prerelease="$prerelease" \
             --repo "$GITHUB_REPOSITORY"
-
-  homebrew-bump-published-rc-draft:
-    needs:
-      - cut
-    # Why: publish-complete-draft-releases can expose a recovered RC without
-    # running the build/publish jobs; still advance the RC cask to that tag.
-    if: ${{ needs.cut.outputs.latest_published_rc_tag != '' }}
-    uses: ./.github/workflows/homebrew-bump.yml
-    with:
-      tag: ${{ needs.cut.outputs.latest_published_rc_tag }}
-    secrets: inherit
 
   homebrew-bump:
     needs:

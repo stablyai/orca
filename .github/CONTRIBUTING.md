@@ -79,12 +79,15 @@ All releases are cut from the **Cut Release** GitHub Actions workflow. There is 
 **To cut a release:**
 
 1. Open [Actions → Cut Release](../../actions/workflows/release-cut.yml).
-2. Click **Run workflow** and pick:
+2. In **Use workflow from**, select `main`. This keeps release policy on the current protected workflow.
+3. Click **Run workflow** and pick:
    - **kind**: one of `rc`, `patch`, `minor`, `major`.
-   - **ref**: the branch, tag, or SHA to build from. Defaults to `main`.
-3. Run it.
+   - **ref**: the branch, tag, or SHA whose source should be built. Defaults to `main` and may select historical or off-main source independently of **Use workflow from**.
+4. Run it.
 
 The workflow resolves the next version from GitHub Releases, bumps `package.json`, tags, pushes, and runs the multi-platform build + publish inline.
+
+Cancel any queued or in-progress **Cut Release** run that started from a workflow definition predating the required Windows inner-signature gate. Never use **Re-run jobs** on such a run; start a fresh run with **Use workflow from** set to `main`.
 
 **How the next version is chosen:**
 
@@ -99,10 +102,11 @@ All stable kinds (`patch`, `minor`, `major`) are computed off the latest _stable
 **Safety guarantees:**
 
 - Stable releases are refused if the new version isn't strictly greater than the latest published stable. This is the only rule `electron-updater` actually needs — it compares semver within the `latest` channel, so a regressing stable is the one thing that breaks auto-update for fresh installs.
-- Complete RC draft releases created by the release workflow are published before cutting a new tag only when the draft tag was built from the current release ref. Stale drafts are skipped so fixes cut a fresh RC instead of exposing old artifacts.
-- If the latest RC tag exists but is still draft-only or missing its GitHub Release, the workflow resumes that tag only when it was built from the current release ref. Otherwise the next RC number is cut.
+- If the latest RC tag exists but is still draft-only or missing its GitHub Release, the workflow reuses that tag only when it was built from the current release ref. The tag is rebuilt through the full signing and evidence graph before publication; otherwise the next RC number is cut.
+- Superseded or off-series drafts that version resolution cannot reach remain private. The workflow never publishes them; maintainers may delete them separately.
+- Windows release publication requires the staged inner `.exe`, `.dll`, and `.node` targets plus `resources\elevate.exe` to pass final installed-payload signature evidence.
 - RC numbering also considers release commits on `main`, so deleting a stale tag does not let a later cut reuse the same RC number.
-- Off-main releases (when `ref` is not the tip of `main`) only push the tag. `main` is never mutated from a non-main ref, so you can safely release an older commit without polluting history.
+- Off-main releases (when the `ref` input is not the tip of `main`) still use the protected `main` workflow as their control plane and only push the tag. `main` is never mutated from a non-main source ref, so you can safely release an older commit without polluting history.
 - When `ref` is the tip of `main`, the version-bump commit is fast-forwarded onto `main` so local `package.json` stays in sync with what's shipped.
 
 **Common scenarios:**
@@ -111,9 +115,6 @@ All stable kinds (`patch`, `minor`, `major`) are computed off the latest _stable
 - **"A bad commit just landed on main, release the commit before it":** `kind=patch`, `ref=<good-sha>`. `main` is left alone; the tag points at the good SHA. Fix forward on `main` afterward.
 - **One-off RC for a feature branch:** `kind=rc`, `ref=<branch-or-sha>`. Produces an RC tag that does not touch `main`.
 - **Minor or major bump:** `kind=minor` or `kind=major`.
-
-The scheduled 2x/day RC cron in [`release-rc.yml`](../../actions/workflows/release-rc.yml) is independent and continues to run automatically from `main`.
-
 
 ## Release Channels
 

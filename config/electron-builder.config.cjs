@@ -424,7 +424,8 @@ module.exports = {
     provider: 'github',
     owner: 'stablyai',
     repo: 'orca',
-    releaseType: 'release'
+    // Why: only release-cut's final publisher may make a release public.
+    releaseType: 'draft'
   }
 }
 

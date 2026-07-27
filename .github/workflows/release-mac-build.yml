@@ -15,20 +15,74 @@ on:
         type: string
 
 permissions:
-  contents: write
+  actions: read
+  contents: read
 
 concurrency:
   group: release-mac-build-${{ inputs.tag }}
   cancel-in-progress: false
 
 jobs:
+  validate-release-control-plane:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Validate release control plane and draft
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          RELEASE_RUN_ID: ${{ inputs.release_run_id }}
+          REPOSITORY: ${{ github.repository }}
+          TAG: ${{ inputs.tag }}
+          WORKFLOW_REF: ${{ github.ref }}
+        run: |
+          set -euo pipefail
+          if [[ "$REPOSITORY" != 'stablyai/orca' || "$WORKFLOW_REF" != 'refs/heads/main' ]]; then
+            echo "::error::Release macOS Build must run from stablyai/orca main."
+            exit 1
+          fi
+
+          run_json="$(gh api "repos/$REPOSITORY/actions/runs/$RELEASE_RUN_ID")"
+          run_path="$(jq -er '.path | strings' <<<"$run_json")"
+          run_branch="$(jq -er '.head_branch | strings' <<<"$run_json")"
+          run_status="$(jq -er '.status | strings' <<<"$run_json")"
+          if [[ "$run_path" != '.github/workflows/release-cut.yml' || "$run_branch" != 'main' || "$run_status" != 'in_progress' ]]; then
+            echo "::error::Release run $RELEASE_RUN_ID is not an active main Cut Release run."
+            exit 1
+          fi
+
+          authorization_name="release-mac-build-control-${RELEASE_RUN_ID}-${TAG}"
+          artifacts_json="$(gh api "repos/$REPOSITORY/actions/runs/$RELEASE_RUN_ID/artifacts?per_page=100")"
+          if ! jq -e --arg name "$authorization_name" '
+            [.artifacts[]? | select(.name == $name and .expired != true)] | length == 1
+          ' <<<"$artifacts_json" >/dev/null; then
+            echo "::error::Release run $RELEASE_RUN_ID did not authorize macOS build $TAG."
+            exit 1
+          fi
+
+          releases_json="$(gh api "repos/$REPOSITORY/releases?per_page=100")"
+          draft="$(jq -er --arg tag "$TAG" '
+            map(select(.tag_name == $tag))
+            | if length == 1 and (.[0].draft | type) == "boolean" then (.[0].draft | tostring) else empty end
+          ' <<<"$releases_json")" || {
+            echo "::error::Release $TAG was not found uniquely in the draft-aware releases list."
+            exit 1
+          }
+          if [[ "$draft" != 'true' ]]; then
+            echo "::error::Release $TAG is not draft; refusing macOS artifact upload."
+            exit 1
+          fi
+
   build-mac:
-    if: github.repository == 'stablyai/orca'
+    needs: validate-release-control-plane
     # Why: this workflow is outside the SignPath signing run, so Blacksmith
     # cannot enter Windows artifact provenance while mac notarization gets the
     # faster runner.
     runs-on: blacksmith-6vcpu-macos-15
     timeout-minutes: 60
+    permissions:
+      actions: read
+      contents: write
     env:
       NODE_OPTIONS: --max-old-space-size=4096
     steps:
@@ -133,6 +187,25 @@ jobs:
           # Kill only its child and require both PTY and watch recovery before packaging.
           node config/scripts/relay-watcher-fault-harness.mjs
 
+      - name: Verify release is draft before macOS artifact upload
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ inputs.tag }}
+        run: |
+          set -euo pipefail
+          draft="$(gh api "repos/$GITHUB_REPOSITORY/releases?per_page=100" | jq -er --arg tag "$TAG" '
+            map(select(.tag_name == $tag))
+            | if length == 1 and (.[0].draft | type) == "boolean" then (.[0].draft | tostring) else empty end
+          ')" || {
+            echo "::error::Release $TAG was not found uniquely before macOS upload."
+            exit 1
+          }
+          if [[ "$draft" != 'true' ]]; then
+            echo "::error::Release $TAG is not draft; refusing macOS artifact upload."
+            exit 1
+          fi
+
       - name: Publish release artifacts (macOS)
         uses: nick-fields/retry@v4
         with:
@@ -141,6 +214,7 @@ jobs:
           retry_wait_seconds: 30
           command: node config/scripts/ensure-native-runtime.mjs --runtime=electron && ORCA_MAC_RELEASE=1 pnpm exec electron-builder --config config/electron-builder.config.cjs --mac --publish always
         env:
+          EP_DRAFT: 'true'
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           CSC_LINK: ${{ secrets.MAC_CERTS }}
           CSC_KEY_PASSWORD: ${{ secrets.MAC_CERTS_PASSWORD }}

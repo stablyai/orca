@@ -364,7 +364,7 @@ describe('Electron runtime package contract', () => {
     expect(installRun).not.toMatch(/throw\s+\$_/)
   })
 
-  it('verifies Windows inner binary signatures fail-open before publishing', () => {
+  it('requires Windows inner binary signature evidence before publishing', () => {
     const releaseWorkflow = readFileSync(
       join(projectDir, '.github/workflows/release-cut.yml'),
       'utf8'
@@ -376,20 +376,14 @@ describe('Electron runtime package contract', () => {
     const innerVerifyIndex = stepNames.indexOf('Verify Windows inner binary signatures')
     const evidenceIndex = stepNames.indexOf('Upload Windows inner signing evidence')
     const publishIndex = stepNames.indexOf('Publish signed Windows release artifacts')
-
     expect(outerVerifyIndex).toBeGreaterThan(-1)
     expect(innerVerifyIndex).toBe(outerVerifyIndex + 1)
     expect(evidenceIndex).toBe(innerVerifyIndex + 1)
-    expect(publishIndex).toBe(evidenceIndex + 1)
+    expect(publishIndex).toBe(evidenceIndex + 2)
+    expect(steps[innerVerifyIndex].env.ORCA_WINDOWS_INNER_SIGNATURE_REQUIRED).toBe('true')
+    expect(steps[evidenceIndex].if).toBe("always() && matrix.platform == 'win'")
+    expect(steps[publishIndex].if).toBe("success() && matrix.platform == 'win'")
 
-    // Why fail-open: unsigned inner binaries must warn, not block, until the
-    // flow is proven on a real release (issue #7785). Flip this to 'true'
-    // together with the workflow env to make the gate required.
-    expect(steps[innerVerifyIndex].env.ORCA_WINDOWS_INNER_SIGNATURE_REQUIRED).toBe('false')
-
-    // Why: every step in the inner-signing chain must be unable to fail the
-    // release — a SignPath outage or timeout falls through to today's
-    // unsigned-inner flow instead of blocking the cut.
     const innerChainStepNames = [
       'Stage unsigned inner PE files for signing',
       'Upload unsigned inner binaries for SignPath',
@@ -503,9 +497,7 @@ describe('Electron runtime package contract', () => {
       "startsWith(needs.cut.outputs.tag, 'v')"
     )
     expect(releaseWorkflow.jobs['homebrew-bump'].if).not.toContain('-rc.')
-    expect(releaseWorkflow.jobs['homebrew-bump-published-rc-draft'].with.tag).toBe(
-      '${{ needs.cut.outputs.latest_published_rc_tag }}'
-    )
+    expect(releaseWorkflow.jobs['homebrew-bump-published-rc-draft']).toBeUndefined()
 
     const resolveCaskStep = homebrewWorkflow.jobs['bump-cask'].steps.find(
       (step) => step.name === 'Resolve cask target'
