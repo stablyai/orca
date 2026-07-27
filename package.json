@@ -193,6 +193,7 @@
     "marked": "^17.0.1",
     "mermaid": "^11.15.0",
     "monaco-editor": "^0.55.1",
+    "node-gyp": "12.3.0",
     "oxfmt": "^0.52.0",
     "oxlint": "^1.71.0",
     "oxlint-plugin-react-doctor": "0.2.10",

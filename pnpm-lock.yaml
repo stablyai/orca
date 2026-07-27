@@ -282,6 +282,9 @@ importers:
       monaco-editor:
         specifier: ^0.55.1
         version: 0.55.1
+      node-gyp:
+        specifier: 12.3.0
+        version: 12.3.0
       oxfmt:
         specifier: ^0.52.0
         version: 0.52.0

@@ -64,6 +64,16 @@ describe('select-changed-e2e-specs', () => {
     ).toEqual([])
   })
 
+  it('rejects leading and trailing whitespace in PR-controlled filenames', () => {
+    expect(
+      selectChangedE2eSpecs([
+        ' tests/e2e/leading.spec.ts',
+        'tests/e2e/trailing.spec.ts ',
+        'tests/e2e/valid.spec.ts'
+      ])
+    ).toEqual(['tests/e2e/valid.spec.ts'])
+  })
+
   it('emits nothing at all when no spec changed, so the workflow can test for empty', () => {
     expect(runSelector('src/main/index.ts\nREADME.md\n')).toBe('')
   })

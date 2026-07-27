@@ -19,7 +19,7 @@ const SPEC_PATH = /^tests\/e2e\/[A-Za-z0-9._-]+(?:\/[A-Za-z0-9._-]+)*\.spec\.ts$
 
 export function selectChangedE2eSpecs(changedFiles) {
   const selected = changedFiles
-    .map((line) => line.trim())
+    // Why: do not normalize PR-controlled filenames before the allowlist test.
     .filter((path) => SPEC_PATH.test(path))
     // Why: `.` and `..` are legal filename characters for the pattern above,
     // so reject traversal explicitly instead of trusting the character class.
