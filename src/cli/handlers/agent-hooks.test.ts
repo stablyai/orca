@@ -227,7 +227,11 @@ describe('agent hooks CLI handler', () => {
     await main(['agent', 'hooks', 'status', '--json'], userDataPath)
 
     expect(process.exitCode).toBe(1)
-    expect(vi.mocked(console.log).mock.calls.flat().join('\n')).toContain('status transport failed')
+    const printed = [
+      ...vi.mocked(console.error).mock.calls.flat(),
+      ...vi.mocked(console.log).mock.calls.flat()
+    ].join('\n')
+    expect(printed).toContain('status transport failed')
   })
 
   it('keeps new card style off when creating offline settings for a fresh profile', async () => {
