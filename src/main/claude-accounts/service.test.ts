@@ -677,6 +677,90 @@ describe('ClaudeAccountService credential capture', () => {
     )
   })
 
+  it('reports the original add failure and still removes managed auth when rollback rematerialization fails', async () => {
+    // Why: this is the desktop add path. Previously the rollback's rematerialize
+    // was unguarded, so when it threw it replaced the real add error and skipped
+    // safeRemoveManagedAuth, leaking the throwaway auth dir.
+    setPlatform('linux')
+    tempDir = CLAUDE_SERVICE_TEST_ROOT
+    rmSync(tempDir, { recursive: true, force: true })
+    const hostAuthPath = join(tempDir, 'claude-accounts', 'host-account', 'auth')
+    mkdirSync(hostAuthPath, { recursive: true })
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    let settings = {
+      claudeManagedAccounts: [
+        {
+          id: 'host-account',
+          email: 'host@example.com',
+          managedAuthPath: hostAuthPath,
+          managedAuthRuntime: 'host',
+          wslDistro: null,
+          wslLinuxAuthPath: null,
+          authMethod: 'subscription-oauth',
+          organizationUuid: null,
+          organizationName: null,
+          createdAt: 1,
+          updatedAt: 1,
+          lastAuthenticatedAt: 1
+        }
+      ],
+      activeClaudeManagedAccountId: 'host-account',
+      activeClaudeManagedAccountIdsByRuntime: { host: 'host-account', wsl: { Ubuntu: null } }
+    }
+    const store = {
+      getSettings: vi.fn(() => settings),
+      updateSettings: vi.fn((updates: Partial<typeof settings>) => {
+        settings = { ...settings, ...updates }
+        return settings
+      })
+    }
+    const runtimeAuth = {
+      clearLastWrittenCredentialsJson: vi.fn(),
+      syncForCurrentSelection: vi.fn(async () => {}),
+      forceMaterializeCurrentSelectionForRollback: vi.fn(async () => {
+        throw new Error('rematerialize failed')
+      })
+    }
+    const rateLimits = {
+      evictInactiveClaudeCache: vi.fn(),
+      refreshForClaudeAccountChange: vi.fn(async () => ({ accounts: [], activeAccountId: null }))
+    }
+    const { ClaudeAccountService } = await import('./service')
+    const service = new ClaudeAccountService(
+      store as never,
+      rateLimits as never,
+      runtimeAuth as never
+    )
+    ;(
+      service as unknown as {
+        runClaudeLoginAndCapture(): Promise<{
+          credentialsJson: string
+          oauthAccount: unknown
+          identity: { email: string; organizationUuid: null; organizationName: null }
+        }>
+      }
+    ).runClaudeLoginAndCapture = vi.fn(async () => ({
+      credentialsJson: '{"new":true}\n',
+      oauthAccount: null,
+      identity: { email: 'new@example.com', organizationUuid: null, organizationName: null }
+    }))
+    ;(service as unknown as { writeManagedAuth(): Promise<void> }).writeManagedAuth = vi.fn(
+      async () => {
+        throw new Error('managed auth write failed')
+      }
+    )
+
+    await expect(service.addAccount({ runtime: 'host' })).rejects.toThrow(
+      'managed auth write failed'
+    )
+
+    expect(runtimeAuth.forceMaterializeCurrentSelectionForRollback).toHaveBeenCalled()
+    expect(settings.claudeManagedAccounts).toHaveLength(1)
+    // Why: the throwaway account directory must be gone even though rollback threw.
+    expect(readdirSync(join(tempDir, 'claude-accounts'))).toEqual(['host-account'])
+    warn.mockRestore()
+  })
+
   it('rejects adding a Claude account whose identity already exists', async () => {
     setPlatform('linux')
     tempDir = CLAUDE_SERVICE_TEST_ROOT

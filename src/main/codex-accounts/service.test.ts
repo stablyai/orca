@@ -804,6 +804,11 @@ describe('CodexAccountService config sync', () => {
 
     expect(spawnMock).toHaveBeenCalledTimes(1)
     expect(runtimeHome.syncForCurrentSelection).toHaveBeenCalledTimes(1)
+    // Why: the desktop add path must pass the new account's selection target, as
+    // reauthenticate and select already do. Called with no argument, a WSL add
+    // syncs the host home that did not change and never materializes the WSL
+    // slot that did.
+    expect(runtimeHome.syncForCurrentSelection).toHaveBeenCalledWith({ runtime: 'host' })
   })
 
   it('does not seed source-home hook trust when adding a self-contained account', async () => {
