@@ -4,6 +4,7 @@ import { ipcMain } from 'electron'
 import { readFile, stat } from 'node:fs/promises'
 import { randomUUID } from 'node:crypto'
 import type { Store } from '../persistence'
+import { persistWorktreeSortOrderSnapshot } from '../worktree-sort-order-snapshot'
 import { isFolderRepo } from '../../shared/repo-kind'
 import { readBranchRenameFailureOutputForDisplay } from '../agent-hooks/branch-rename-failure-output'
 import {
@@ -2094,19 +2095,7 @@ export function registerWorktreeHandlers(
     if (!Array.isArray(args?.orderedIds) || args.orderedIds.length === 0) {
       return
     }
-    const now = Date.now()
-    for (let i = 0; i < args.orderedIds.length; i++) {
-      // Why: a sidebar-order snapshot must only reorder worktrees that already
-      // exist — it must never create one. Without this guard a stale id the
-      // renderer still lists (e.g. a removed repo's `${repoId}::${path}`) gets a
-      // fresh worktreeMeta entry minted here, resurrecting an orphan/duplicate
-      // workspace on the next launch. setWorktreeMeta has no repo-existence check.
-      if (!store.getWorktreeMeta(args.orderedIds[i])) {
-        continue
-      }
-      // Descending timestamps: first item gets highest sortOrder so b - a sorts first-wins on cold start.
-      store.setWorktreeMeta(args.orderedIds[i], { sortOrder: now - i * 1000 })
-    }
+    persistWorktreeSortOrderSnapshot(store, args.orderedIds)
   })
 
   // Why: full failure output lives only in main memory (not worktree metadata), so the dialog pulls it on demand.

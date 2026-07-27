@@ -551,18 +551,20 @@ describe('registerWorktreeHandlers', () => {
   })
 
   it('persistSortOrder only reorders existing worktrees and never mints meta for a stale id', () => {
-    const liveId = 'repo-1::/workspace/repo'
+    const liveIds = ['repo-1::/workspace/repo', 'repo-1::/workspace/feature']
     const staleId = 'removed-repo::/workspace/gone'
-    // Only the live worktree has meta; the stale id (e.g. a removed repo the
+    // Only live worktrees have meta; the stale id (e.g. a removed repo the
     // renderer still lists) has none and must be skipped, not created.
     store.getWorktreeMeta.mockImplementation((id: string) =>
-      id === liveId ? ({ instanceId: 'x' } as never) : undefined
+      liveIds.includes(id) ? ({ instanceId: 'x', sortOrder: 0 } as never) : undefined
     )
 
-    handlers['worktrees:persistSortOrder'](null, { orderedIds: [liveId, staleId] })
+    handlers['worktrees:persistSortOrder'](null, {
+      orderedIds: [liveIds[0], staleId, liveIds[1]]
+    })
 
     const orderedTargets = store.setWorktreeMeta.mock.calls.map((call) => call[0])
-    expect(orderedTargets).toContain(liveId)
+    expect(orderedTargets).toEqual(liveIds)
     expect(orderedTargets).not.toContain(staleId)
   })
 

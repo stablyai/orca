@@ -11,6 +11,7 @@ import {
 } from '../../shared/agent-detection'
 import { extractOscTitleScanTail } from '../../shared/osc-title-scan-tail'
 import { extractLastOsc7Uri, extractOscScanTail } from '../daemon/osc7-uri-extraction'
+import { persistWorktreeSortOrderSnapshot } from '../worktree-sort-order-snapshot'
 import { parseFileUriPathParts } from '../daemon/osc7-file-uri'
 import type { AgentStatus } from '../../shared/agent-detection'
 import type { TerminalOscLinkRange } from '../../shared/terminal-osc-link-ranges'
@@ -20232,17 +20233,9 @@ export class OrcaRuntimeService {
     if (!this.store) {
       throw new Error('runtime_unavailable')
     }
-    const now = Date.now()
-    let updated = 0
-    for (let i = 0; i < orderedIds.length; i++) {
-      // Why: a sort-order snapshot must only reorder existing worktrees, never
-      // mint new meta — a stale id would otherwise resurrect an orphan workspace
-      // (setWorktreeMeta has no repo-existence check).
-      if (!this.store.getWorktreeMeta(orderedIds[i])) {
-        continue
-      }
-      this.store.setWorktreeMeta(orderedIds[i], { sortOrder: now - i * 1000 })
-      updated++
+    const updated = persistWorktreeSortOrderSnapshot(this.store, orderedIds)
+    if (updated === 0) {
+      return { updated }
     }
     this.invalidateResolvedWorktreeCache()
     this.notifyReposChanged()
