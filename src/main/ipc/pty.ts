@@ -2626,6 +2626,25 @@ export function registerPtyHandlers(
     return detachedPtyToRenderer.get(id) ?? mainWindow.webContents
   }
 
+  /** Whether a live detached WebContents target exists for a specific PTY id.
+   *  Used to gate main-window-destroy teardowns: when a detached pane window
+   *  is still alive, delivery state must remain intact so output keeps flowing. */
+  function hasLiveDetachedTarget(id: string): boolean {
+    const target = detachedPtyToRenderer.get(id)
+    return target !== undefined && !target.isDestroyed()
+  }
+
+  /** Whether ANY live detached WebContents target exists across all PTYs.
+   *  Used in global teardown paths where a per-PTY id is not available. */
+  function anyLiveDetachedTarget(): boolean {
+    for (const target of detachedPtyToRenderer.values()) {
+      if (!target.isDestroyed()) {
+        return true
+      }
+    }
+    return false
+  }
+
   function sendPtyDataToRenderer(
     id: string,
     payload: PtyDataPayload,
@@ -2960,7 +2979,7 @@ export function registerPtyHandlers(
 
   function flushPendingData(): void {
     flushTimer = null
-    if (mainWindow.isDestroyed()) {
+    if (mainWindow.isDestroyed() && !anyLiveDetachedTarget()) {
       // Why release now: bookkeeping is being wiped, so no future drain can resume these producers — local shells would wedge.
       producerFlowControl.releaseAll()
       clearDeliveryResyncProbe()
@@ -3272,7 +3291,7 @@ export function registerPtyHandlers(
     const preservesSeq = !payload.transformed && rawLength === payload.data.length
     const startSeq = typeof outputSeq === 'number' ? Math.max(0, outputSeq - rawLength) : undefined
     const projectionId = projection?.identity.projectionSemanticsId
-    if (mainWindow.isDestroyed()) {
+    if (mainWindow.isDestroyed() && !hasLiveDetachedTarget(payload.id)) {
       if (projectionId) {
         sshOutputIntake?.transferProjections([projectionId], 'renderer-destroyed')
       }

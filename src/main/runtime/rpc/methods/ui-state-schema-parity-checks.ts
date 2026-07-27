@@ -10,6 +10,7 @@ import type { AssertNoMissingKeys, AssertNoMissingValues } from './ui-state-sche
 type MainOwnedUIState =
   | 'trayMinimizeNoticeShown'
   | 'dashboardPopoutBounds'
+  | 'detachablePaneBounds'
   | '_expandedWorktreeCardPropertiesDefaulted'
   | '_jiraIssueWorktreeCardPropertyDefaulted'
   | 'starNagBaselineAgents'

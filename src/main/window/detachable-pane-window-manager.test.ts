@@ -482,4 +482,90 @@ describe('DetachablePaneWindowManager', () => {
     )
     expect(manager.getPaneSeed('pane-1')).toBeNull()
   })
+
+  // ── removeTab ─────────────────────────────────────────────────────
+
+  it('removeTab: removes the primary tab and promotes the first additional tab', () => {
+    const seed = makeSeed()
+    const additional = makeSeed()
+    additional.tab = { id: 'tab-2' } as unknown as DetachedTerminalTabSeed['tab']
+    additional.ptyId = 'pty-2'
+    seed.additionalTabs = [additional]
+
+    manager.detachPane('pane-1', makeStore() as unknown as Store, seed)
+
+    const result = manager.removeTab('pane-1', 'tab-1')
+    expect(result.removedPtyId).toBe('pty-1')
+    expect(result.seed).not.toBeNull()
+    expect(result.seed!.tab.id).toBe('tab-2')
+    expect(result.seed!.ptyId).toBe('pty-2')
+    expect(result.seed!.additionalTabs).toBeUndefined()
+
+    // Manager stored seed matches returned seed.
+    expect(manager.getPaneSeed('pane-1')).toEqual(result.seed)
+  })
+
+  it('removeTab: removes an additional tab', () => {
+    const seed = makeSeed()
+    const additional = makeSeed()
+    additional.tab = { id: 'tab-2' } as unknown as DetachedTerminalTabSeed['tab']
+    additional.ptyId = 'pty-2'
+    seed.additionalTabs = [additional]
+
+    manager.detachPane('pane-1', makeStore() as unknown as Store, seed)
+
+    const result = manager.removeTab('pane-1', 'tab-2')
+    expect(result.removedPtyId).toBe('pty-2')
+    expect(result.seed).not.toBeNull()
+    expect(result.seed!.tab.id).toBe('tab-1')
+    expect(result.seed!.additionalTabs).toBeUndefined()
+
+    expect(manager.getPaneSeed('pane-1')).toEqual(result.seed)
+  })
+
+  it('removeTab: returns null seed when the last tab is removed', () => {
+    manager.detachPane('pane-1', makeStore() as unknown as Store, makeSeed())
+
+    const result = manager.removeTab('pane-1', 'tab-1')
+    expect(result.removedPtyId).toBe('pty-1')
+    expect(result.seed).toBeNull()
+    expect(manager.getPaneSeed('pane-1')).toBeNull()
+  })
+
+  it('removeTab: returns null seed and null removedPtyId for unknown paneId', () => {
+    const result = manager.removeTab('nonexistent', 'tab-1')
+    expect(result.seed).toBeNull()
+    expect(result.removedPtyId).toBeNull()
+  })
+
+  it('removeTab: returns null seed and null removedPtyId for unknown tabId', () => {
+    manager.detachPane('pane-1', makeStore() as unknown as Store, makeSeed())
+
+    const result = manager.removeTab('pane-1', 'nonexistent-tab')
+    expect(result.seed).toBeNull()
+    expect(result.removedPtyId).toBeNull()
+    // Seed is unchanged.
+    expect(manager.getPaneSeed('pane-1')).toEqual(makeSeed())
+  })
+
+  it('removeTab: returns null removedPtyId when the removed tab has no PTY', () => {
+    const seed = makeSeed()
+    seed.ptyId = null
+    manager.detachPane('pane-1', makeStore() as unknown as Store, seed)
+
+    const result = manager.removeTab('pane-1', 'tab-1')
+    expect(result.removedPtyId).toBeNull()
+    expect(result.seed).toBeNull()
+  })
+
+  it('removeTab: pane entry survives removeTab so reintegrate still works afterward', () => {
+    manager.detachPane('pane-1', makeStore() as unknown as Store, makeSeed())
+    manager.removeTab('pane-1', 'tab-1')
+
+    // The pane entry still exists (seed is null, but the entry is there for
+    // the lifecycle) — reintegrating should still clean up.
+    expect(manager.getPaneState('pane-1')).toBe('detached')
+    manager.reintegratePane('pane-1')
+    expect(manager.getPaneState('pane-1')).toBeNull()
+  })
 })

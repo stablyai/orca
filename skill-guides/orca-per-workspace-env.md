@@ -399,11 +399,11 @@ printf '%s\n' "$gh_token" | vercel sandbox exec "$name" "${vercel_args[@]}" --ti
     # Load-bearing escaping: \$1 and \$GH_TOKEN must land LITERALLY and resolve at git-runtime. Test after
     # any edit here — reformatting the nested printf/node quoting silently breaks the fetch or leaks the token.
     if [ -n "${GH_TOKEN:-}" ]; then \
-      printf "%s\n" "#!/usr/bin/env bash" "case \"\$1\" in *Username*) echo x-access-token;; *Password*) echo \"\$GH_TOKEN\";; esac" > /tmp/askpass.sh; \
-      chmod 700 /tmp/askpass.sh; export GIT_ASKPASS=/tmp/askpass.sh GIT_TERMINAL_PROMPT=0; fi; \
+      askpass="$(mktemp)"; printf "%s\n" "#!/usr/bin/env bash" "case \"\$1\" in *Username*) echo x-access-token;; *Password*) echo \"\$GH_TOKEN\";; esac" > "$askpass"; \
+      chmod 700 "$askpass"; export GIT_ASKPASS="$askpass" GIT_TERMINAL_PROMPT=0; trap "rm -f \"\$GIT_ASKPASS\"" EXIT; fi; \
     git fetch origin "$ORCA_REPO_REF"; \
-    git checkout -B "$ORCA_REPO_REF" FETCH_HEAD; \
-    rm -f /tmp/askpass.sh; \
+    git checkout -B "$ORCA_REPO_REF" FETCH_HEAD;
+
     c="$(git rev-parse HEAD)"; [ -f .orca-built ] && [ "$(cat .orca-built)" = "$c" ] || { \
       pnpm install --prefer-offline && pnpm run build:cli && \
       node config/scripts/run-electron-vite-build.mjs --config config/electron-vite.vm-serve.config.ts && \
@@ -497,12 +497,13 @@ ssh-keyscan -p "$ssh_port" "$host" >> "$HOME/.ssh/known_hosts" 2>/dev/null || tr
 # 1. ensure the repo is present and at the right commit on the host (NO orca serve here)
 # Why: stream the token via stdin to prevent exposing it in the local and remote process lists (ps aux).
 ssh "${ssh_opts[@]}" "$ssh_target" "bash -lc '
-     set -euo pipefail
      read -r GH_TOKEN
      export GH_TOKEN GIT_TERMINAL_PROMPT=0
+     askpass="$(mktemp)"; printf "%s\n" "#!/usr/bin/env bash" "case \"\$1\" in *Username*) echo x-access-token;; *Password*) echo \"\$GH_TOKEN\";; esac" > "$askpass"; \
+     chmod 700 "$askpass"; export GIT_ASKPASS="$askpass" GIT_TERMINAL_PROMPT=0; trap "rm -f \"\$GIT_ASKPASS\"" EXIT
      [ -d \"$project_root/.git\" ] || git clone \"$repo_url\" \"$project_root\"
      cd \"$project_root\" && git fetch origin \"$repo_ref\" && git checkout -B \"$repo_ref\" FETCH_HEAD
-   '" >&2 <<< "$gh_token"
+
 
 # 2. print the SSH connection block (NO pairingCode, NO orca serve). host/port/username tell Orca's
 #    relay how to dial in; identityFile/jumpHost/proxyCommand/portForwards are emitted when set.

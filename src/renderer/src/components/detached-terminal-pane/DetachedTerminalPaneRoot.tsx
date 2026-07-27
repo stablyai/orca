@@ -136,6 +136,8 @@ export function DetachedTerminalPaneRoot({
       additionalTabs: remaining.slice(1).length > 0 ? remaining.slice(1) : undefined
     }
     setSeed(nextSeed)
+    // Notify the manager so the closed tab stays gone after reintegration.
+    void window.api.pane.removeTab(tabId, activeSeedTab.tab.id)
     // Switch active tab to the first remaining entry without rebuilding the
     // entire store — only the active-tab tracking fields need to move.
     useAppStore.setState((state) => ({

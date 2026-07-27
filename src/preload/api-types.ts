@@ -2479,6 +2479,7 @@ export type PreloadApi = {
   pane: {
     detach: (paneId: string, seed: DetachedTerminalTabSeed) => Promise<void>
     reintegrate: (paneId: string) => Promise<void>
+    removeTab: (paneId: string, tabId: string) => Promise<void>
     getDetachedState: (
       paneId: string
     ) => Promise<'attached' | 'transferring' | 'detached' | 'reintegrating' | 'parked' | null>

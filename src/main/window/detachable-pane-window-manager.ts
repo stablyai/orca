@@ -175,6 +175,53 @@ export class DetachablePaneWindowManager {
     this.#panes.delete(paneId)
   }
 
+  /**
+   * Remove a tab from the stored seed by tab id, then return the updated seed
+   * and the removed tab's ptyId so the caller can tear down the PTY. The
+   * caller (IPC handler) is authoritative for PTY lifecycle; the manager only
+   * mutates the seed.
+   *
+   * If the removed tab was the primary, the first additional tab (if any) is
+   * promoted to primary. Returns the updated seed (null when no tabs remain)
+   * and the removed ptyId (null when the tab had no PTY or was not found).
+   */
+  removeTab(
+    paneId: string,
+    tabId: string
+  ): { seed: DetachedTerminalTabSeed | null; removedPtyId: string | null } {
+    const entry = this.#panes.get(paneId)
+    if (!entry?.seed) {
+      return { seed: null, removedPtyId: null }
+    }
+
+    const seed = entry.seed
+    const additionalTabs = seed.additionalTabs ?? []
+
+    // Primary tab matches — promote the first additional tab if any.
+    if (seed.tab.id === tabId) {
+      const removedPtyId = seed.ptyId ?? null
+      if (additionalTabs.length > 0) {
+        const [nextPrimary, ...rest] = additionalTabs
+        entry.seed = { ...nextPrimary, additionalTabs: rest.length > 0 ? rest : undefined }
+      } else {
+        entry.seed = null
+      }
+      return { seed: entry.seed, removedPtyId }
+    }
+
+    // Search additional tabs for a match.
+    const idx = additionalTabs.findIndex((t) => t.tab.id === tabId)
+    if (idx === -1) {
+      return { seed: null, removedPtyId: null }
+    }
+
+    const removed = additionalTabs[idx]
+    const removedPtyId = removed.ptyId ?? null
+    const remaining = [...additionalTabs.slice(0, idx), ...additionalTabs.slice(idx + 1)]
+    entry.seed = { ...seed, additionalTabs: remaining.length > 0 ? remaining : undefined }
+    return { seed: entry.seed, removedPtyId }
+  }
+
   // ---------------------------------------------------------------------------
   // Internals
   // ---------------------------------------------------------------------------

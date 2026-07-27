@@ -83,9 +83,9 @@ let unsubscribeParked: (() => void) | null = null
 export function registerDetachablePaneHandlers(store: Store): void {
   ipcMain.removeHandler('pane:detach')
   ipcMain.removeHandler('pane:reintegrate')
+  ipcMain.removeHandler('pane:removeTab')
   ipcMain.removeHandler('pane:getDetachedState')
   ipcMain.removeHandler('pane:getDetachedTabSeed')
-
   unsubscribeParked?.()
   unsubscribeParked = detachablePaneWindowManager.onPaneParked((paneId) => {
     finalizeReintegration(paneId)
@@ -166,4 +166,24 @@ export function registerDetachablePaneHandlers(store: Store): void {
       return detachablePaneWindowManager.getPaneSeed(args.paneId)
     }
   )
+
+  ipcMain.handle('pane:removeTab', (event, args: unknown) => {
+    if (
+      !args ||
+      typeof args !== 'object' ||
+      !('paneId' in args) ||
+      typeof args.paneId !== 'string' ||
+      !('tabId' in args) ||
+      typeof args.tabId !== 'string'
+    ) {
+      return
+    }
+    if (!isTrustedForPane(event.sender, args.paneId)) {
+      return
+    }
+    const result = detachablePaneWindowManager.removeTab(args.paneId, args.tabId)
+    if (result.removedPtyId) {
+      unregisterDetachedPanePtys([result.removedPtyId])
+    }
+  })
 }

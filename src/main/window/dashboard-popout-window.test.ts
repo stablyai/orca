@@ -372,6 +372,39 @@ describe('createOrFocusDashboardPopout', () => {
     expect(store.uiChangeUnsubscribe).toHaveBeenCalledTimes(1)
   })
 
+  it('does not broadcast false when a replaced window fires its closed handler', () => {
+    const store = makeStore()
+    const winA = createOrFocusDashboardPopout(store as never) as unknown as FakeWindow
+
+    // A broadcasts open.
+    expect(sendToTrustedUIRendererMock).toHaveBeenCalledWith('dashboard:popoutOpenChanged', true)
+
+    // Simulate the race: A's native close started (destroyed=true) but the
+    // 'closed' handler has not fired yet, so the early-return guard sees a dead
+    // window and allows a replacement B to be created.
+    winA.destroyed = true
+    sendToTrustedUIRendererMock.mockClear()
+
+    const winB = createOrFocusDashboardPopout(store as never) as unknown as FakeWindow
+    expect(instances).toHaveLength(2)
+    expect(winB).not.toBe(winA as never)
+
+    // B broadcast open.
+    expect(sendToTrustedUIRendererMock).toHaveBeenCalledWith('dashboard:popoutOpenChanged', true)
+
+    // A's 'closed' fires — must NOT broadcast false because B is the active singleton.
+    sendToTrustedUIRendererMock.mockClear()
+    winA.emit('closed')
+    expect(sendToTrustedUIRendererMock).not.toHaveBeenCalledWith(
+      'dashboard:popoutOpenChanged',
+      false
+    )
+
+    // B's 'closed' fires — MUST broadcast false for the live singleton.
+    winB.emit('closed')
+    expect(sendToTrustedUIRendererMock).toHaveBeenCalledWith('dashboard:popoutOpenChanged', false)
+  })
+
   it('zoomDashboardPopoutIfFocused steps the popout zoom only while focused', () => {
     expect(zoomDashboardPopoutIfFocused('in')).toBe(false)
 

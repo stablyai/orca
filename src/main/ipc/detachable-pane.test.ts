@@ -10,6 +10,12 @@ const { ipcHandle, isTrustedUIRenderer, getTrustedUIRendererWindow, mainWindowMo
     managerMock: {
       detachPane: vi.fn(() => ({ webContents: { send: vi.fn() } })),
       reintegratePane: vi.fn(),
+      removeTab: vi.fn(
+        (): { seed: DetachedTerminalTabSeed | null; removedPtyId: string | null } => ({
+          seed: null,
+          removedPtyId: null
+        })
+      ),
       getPaneState: vi.fn(() => null),
       getPaneSeed: vi.fn((): DetachedTerminalTabSeed | null => null),
       isPaneWindowSender: vi.fn(() => false),
@@ -28,6 +34,7 @@ vi.mock('./pty', () => ({
 }))
 
 import { registerDetachablePaneHandlers } from './detachable-pane'
+import { unregisterDetachedPanePtys } from './pty'
 import type { Store } from '../persistence'
 
 function getHandler(channel: string): (event: unknown, args: unknown) => unknown {
@@ -225,5 +232,52 @@ describe('registerDetachablePaneHandlers', () => {
     registerDetachablePaneHandlers({} as Store)
     registerDetachablePaneHandlers({} as Store)
     expect(unsubscribe).toHaveBeenCalledTimes(1)
+  })
+
+  // ── pane:removeTab ────────────────────────────────────────────────
+
+  it('registers the pane:removeTab handler', () => {
+    registerDetachablePaneHandlers({} as Store)
+    expect(ipcHandle).toHaveBeenCalledWith('pane:removeTab', expect.any(Function))
+  })
+
+  it('removeTab: calls manager.removeTab with paneId and tabId', () => {
+    managerMock.removeTab = vi.fn(() => ({ seed: null, removedPtyId: null }))
+    registerDetachablePaneHandlers({} as Store)
+    const handler = getHandler('pane:removeTab')
+    handler(trustedEvent, { paneId: 'pane-1', tabId: 'tab-2' })
+
+    expect(managerMock.removeTab).toHaveBeenCalledWith('pane-1', 'tab-2')
+  })
+
+  it('removeTab: calls unregisterDetachedPanePtys when a PTY is removed', () => {
+    managerMock.removeTab = vi.fn(() => ({ seed: validSeed, removedPtyId: 'pty-3' }))
+    registerDetachablePaneHandlers({} as Store)
+    const handler = getHandler('pane:removeTab')
+    handler(trustedEvent, { paneId: 'pane-1', tabId: 'tab-99' })
+
+    expect(unregisterDetachedPanePtys).toHaveBeenCalledWith(['pty-3'])
+  })
+
+  it('removeTab: no-ops for an untrusted sender that does not own the pane', () => {
+    isTrustedUIRenderer.mockReturnValueOnce(false)
+    managerMock.isPaneWindowSender.mockReturnValueOnce(false)
+    managerMock.removeTab = vi.fn()
+    registerDetachablePaneHandlers({} as Store)
+    const handler = getHandler('pane:removeTab')
+    handler({ sender: { id: 2 } }, { paneId: 'pane-1', tabId: 'tab-1' })
+
+    expect(managerMock.removeTab).not.toHaveBeenCalled()
+  })
+
+  it('removeTab: allows a pane window sender even when not trusted UI renderer', () => {
+    isTrustedUIRenderer.mockReturnValueOnce(false)
+    managerMock.isPaneWindowSender.mockReturnValueOnce(true)
+    managerMock.removeTab = vi.fn(() => ({ seed: null, removedPtyId: null }))
+    registerDetachablePaneHandlers({} as Store)
+    const handler = getHandler('pane:removeTab')
+    handler({ sender: { id: 2 } }, { paneId: 'pane-1', tabId: 'tab-1' })
+
+    expect(managerMock.removeTab).toHaveBeenCalledWith('pane-1', 'tab-1')
   })
 })

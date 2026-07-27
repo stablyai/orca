@@ -224,9 +224,9 @@ export function createOrFocusDashboardPopout(
       unsubscribeUIChanged?.()
       if (dashboardPopoutWindow === window) {
         dashboardPopoutWindow = null
-      }
-      if (openBroadcasted) {
-        broadcastPopoutOpenChanged(false)
+        if (openBroadcasted) {
+          broadcastPopoutOpenChanged(false)
+        }
       }
     })
 

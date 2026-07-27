@@ -2310,6 +2310,8 @@ const api = {
       ipcRenderer.invoke('pane:detach', { paneId, seed }),
     reintegrate: (paneId: string): Promise<void> =>
       ipcRenderer.invoke('pane:reintegrate', { paneId }),
+    removeTab: (paneId: string, tabId: string): Promise<void> =>
+      ipcRenderer.invoke('pane:removeTab', { paneId, tabId }),
     getDetachedState: (
       paneId: string
     ): Promise<'attached' | 'transferring' | 'detached' | 'reintegrating' | 'parked' | null> =>
