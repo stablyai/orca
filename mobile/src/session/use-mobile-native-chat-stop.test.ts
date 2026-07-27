@@ -2,6 +2,8 @@ import { createElement } from 'react'
 import { act, create, type ReactTestRenderer } from 'react-test-renderer'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { RpcClient } from '../transport/rpc-client'
+import { markRpcDeliveryUnknown } from '../transport/rpc-delivery-ambiguity'
+import { MOBILE_NATIVE_CHAT_SEND_TIMEOUT_MS } from './mobile-native-chat-send'
 import { useMobileNativeChatStop } from './use-mobile-native-chat-stop'
 
 describe('useMobileNativeChatStop', () => {
@@ -81,5 +83,64 @@ describe('useMobileNativeChatStop', () => {
 
     expect(onSendError).toHaveBeenCalledOnce()
     expect(onSendError).toHaveBeenCalledWith('Stop not sent')
+  })
+
+  it.each([
+    [
+      'an ack lost after the frame was written',
+      () => markRpcDeliveryUnknown(new Error('rpc timeout'))
+    ],
+    ['a logical client cutover', () => new Error('RPC interrupted by connection migration')]
+  ])('reports Stop as unconfirmed after %s', async (_case, makeError) => {
+    sendRequest.mockRejectedValue(makeError())
+    await render(true, 'stream-1')
+
+    act(() => stop?.())
+    await act(async () => {
+      await Promise.resolve()
+      await vi.runAllTimersAsync()
+    })
+
+    // The Escape may have landed; a definite "not sent" invites a second Escape.
+    expect(onSendError).toHaveBeenCalledOnce()
+    expect(onSendError).toHaveBeenCalledWith('Stop unconfirmed — check chat before retrying')
+  })
+
+  it.each([
+    ['second', 0],
+    ['first', 1]
+  ])('stays quiet when the %s Escape fails after its sibling landed', async (_case, failIndex) => {
+    let call = 0
+    sendRequest.mockImplementation(() => {
+      const index = call
+      call += 1
+      return index === failIndex
+        ? Promise.reject(markRpcDeliveryUnknown(new Error('rpc timeout')))
+        : Promise.resolve({ ok: true, result: { send: { accepted: true } } })
+    })
+    await render(true, 'stream-1')
+
+    act(() => stop?.())
+    await act(async () => {
+      await Promise.resolve()
+      await vi.runAllTimersAsync()
+    })
+
+    // Two paced Escapes are one user action: either landing means the agent stopped,
+    // so a straggler's failure must not tell the user to press Stop again.
+    expect(sendRequest).toHaveBeenCalledTimes(2)
+    expect(onSendError).not.toHaveBeenCalled()
+  })
+
+  it('bounds the Escape on a reconnect wait instead of parking forever', async () => {
+    await render(true, 'stream-1')
+
+    act(() => stop?.())
+
+    // The budget covers the reconnect wait too, so a stop can't outlast its ceiling.
+    expect(sendRequest).toHaveBeenCalledWith('terminal.send', expect.anything(), {
+      timeoutMs: MOBILE_NATIVE_CHAT_SEND_TIMEOUT_MS,
+      budgetSpansConnect: true
+    })
   })
 })

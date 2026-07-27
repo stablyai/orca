@@ -11,6 +11,10 @@ import { isRpcResponse } from './rpc-response-shape'
 import type { RpcClient } from './rpc-client'
 import type { ConnectionState, RpcResponse } from './types'
 
+// Why: a connect-wait that consumed the caller's budget still leaves a written
+// frame worth briefly awaiting, rather than arming a ~0ms timer.
+const MIN_RELAY_REQUEST_TIMEOUT_MS = 1_000
+
 type PendingRequest = {
   resolve: (response: RpcResponse) => void
   reject: (error: Error) => void
@@ -75,8 +79,25 @@ export function connectMobileRelayRpcSession(args: {
 
   const client: MobileRelayRpcSession = {
     async sendRequest(method, params, options) {
-      await waitForConnected(options?.timeoutMs)
-      return sendRpc(method, params, options?.timeoutMs)
+      // Why: one deadline across connect-wait + request for callers that opt in;
+      // spending the budget in each phase doubled the caller's stated ceiling. Left
+      // off by default so pre-existing long-running callers keep the post-connect
+      // clock their budgets were sized against.
+      const budgetMs = options?.timeoutMs
+      const deadline =
+        options?.budgetSpansConnect && budgetMs !== undefined ? Date.now() + budgetMs : null
+      await waitForConnected(budgetMs)
+      return sendRpc(
+        method,
+        params,
+        deadline === null
+          ? budgetMs
+          : Math.max(
+              // The floor can never exceed what the caller asked for overall.
+              Math.min(MIN_RELAY_REQUEST_TIMEOUT_MS, budgetMs ?? 0),
+              deadline - Date.now()
+            )
+      )
     },
 
     subscribe(method, params, listener, options) {

@@ -84,6 +84,12 @@ export type AgentHookStatusChangeEntry = {
   observedInCurrentRuntime: boolean
 }
 
+export type AgentHookProviderSessionIdentity = {
+  paneKey: string
+  sessionId: string
+  worktreeId?: string
+}
+
 type StatusChangeListener = (statuses: AgentHookStatusChangeEntry[]) => void
 type PaneStatusClearListener = (clear: AgentStatusClearIpcPayload) => void
 type PaneKeyAliasPersistenceListener = (entries: LegacyPaneKeyAliasEntry[]) => void
@@ -519,6 +525,26 @@ export class AgentHookServer {
     return Array.from(this.state.lastStatusByPaneKey.values(), (entry) =>
       toAgentStatusIpcPayload(entry as EnrichedAgentHookEventPayload)
     )
+  }
+
+  /** Pane → provider-session identity only. Callers watching for resume-identity
+   *  changes (mobile session-tab invalidation) run on every status event, so they
+   *  must not pay `getStatusSnapshot()`'s full payload rebuild per pane to read one
+   *  field. Includes `providerSessionOnly` rows — for Pi that row IS the identity. */
+  getProviderSessionIdentities(): AgentHookProviderSessionIdentity[] {
+    return Array.from(this.state.lastStatusByPaneKey.entries()).flatMap(([paneKey, entry]) => {
+      const enriched = entry as EnrichedAgentHookEventPayload
+      const sessionId = enriched.providerSession?.id
+      return sessionId
+        ? [
+            {
+              paneKey,
+              sessionId,
+              ...(enriched.worktreeId ? { worktreeId: enriched.worktreeId } : {})
+            }
+          ]
+        : []
+    })
   }
 
   inferInterrupt(request: AgentInterruptInferenceRequest): boolean {

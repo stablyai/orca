@@ -188,6 +188,7 @@ import {
 } from './claude-accounts/live-pty-gate'
 import { StarNagService } from './star-nag/service'
 import { agentHookServer } from './agent-hooks/server'
+import { createHookProviderSessionInvalidator } from './agent-hooks/hook-provider-session-invalidation'
 import { wslHookRelayManager } from './agent-hooks/wsl-hook-relay-manager'
 import { maybeAutoRenameBranchOnFirstWork } from './agent-hooks/first-work-branch-rename'
 import { rememberBranchRenameFailureOutput } from './agent-hooks/branch-rename-failure-output'
@@ -1912,8 +1913,19 @@ app.whenReady().then(async () => {
   agentAwakeService.setEnabled(store.getSettings().keepComputerAwakeWhileAgentsRun)
   // Why: start from empty — disk-hydrated status rows are UI continuity only; only this runtime's hook events keep the computer awake.
   agentAwakeService.setStatuses([])
+  const collectChangedProviderSessionWorktrees = createHookProviderSessionInvalidator()
   unsubscribeAgentAwakeStatusChanges = agentHookServer.subscribeStatusChanges((statuses) => {
     agentAwakeService?.setStatuses(statuses)
+    // Why: a phone already streaming `session.tabs` is not polled while the stream is
+    // healthy, so a hook that only now reported its provider session would never reach
+    // it — native chat would sit on `waiting-session` for a transcript the host can
+    // already address. The runtime is created later in this bootstrap; before that
+    // there are no subscribers to invalidate.
+    for (const worktreeId of collectChangedProviderSessionWorktrees(
+      agentHookServer.getProviderSessionIdentities()
+    )) {
+      runtime?.notifyMobileSessionTabsChanged(worktreeId)
+    }
   })
   // Why: telemetry must init before any IPC handler/renderer can call track(); it's a no-op in dev and while TELEMETRY_ENABLED is false, so it's safe early.
   initTelemetry(store)
@@ -2084,6 +2096,10 @@ app.whenReady().then(async () => {
     // Why: worktree.ps pulls hook-reported agent status (same source as the desktop sidebar) at query time so mobile shows the same agents.
     getAgentStatusSnapshot: () =>
       agentHookServer.getStatusSnapshot().filter((entry) => entry.providerSessionOnly !== true),
+    // Why: the filter above hides resume-identity rows from the live-agent views, but
+    // those rows carry the provider session mobile native chat addresses transcripts
+    // by — Pi publishes identity that way and would otherwise be unreachable.
+    getAgentProviderSessionSnapshot: () => agentHookServer.getStatusSnapshot(),
     // Why: source codex-home here (runs in window AND serve) so aiVault.listSessions includes managed-Codex sessions; registerCoreHandlers is window-only.
     getAdditionalAiVaultCodexHomePaths: () =>
       codexRuntimeHome ? codexRuntimeHome.getHostCodexHomePathsForSessionDiscovery() : [],

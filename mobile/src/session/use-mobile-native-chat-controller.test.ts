@@ -2,6 +2,7 @@ import { createElement } from 'react'
 import { act, create, type ReactTestRenderer } from 'react-test-renderer'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { RpcClient } from '../transport/rpc-client'
+import type { ConnectionState } from '../transport/types'
 
 const acceptSend = vi.fn()
 const captureSendOrigin = vi.fn()
@@ -44,7 +45,10 @@ vi.mock('./use-mobile-native-chat-stop', () => ({
 vi.mock('./use-mobile-native-chat-file-search', () => ({
   useMobileNativeChatFileSearch: () => ({ nativeChatFilePaths: [], loadNativeChatFiles: vi.fn() })
 }))
-vi.mock('./mobile-native-chat-send', () => ({
+// Partial: the stale-input heal reaches the real transport through image-send,
+// which must read the REAL timeout constant, not a copy that can silently drift.
+vi.mock('./mobile-native-chat-send', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('./mobile-native-chat-send')>()),
   sendMobileNativeChatMessageWithOutcome: vi.fn()
 }))
 
@@ -73,13 +77,15 @@ describe('useMobileNativeChatController handleNativeChatSend', () => {
   let renderer: ReactTestRenderer | null = null
   let controller: MobileNativeChatController | null = null
   const onSendError = vi.fn()
+  const onSendResolved = vi.fn()
   // Only the stale-input heal reaches the transport directly (the message send
   // itself is mocked above).
   const clientStub = { sendRequest: vi.fn() }
 
-  function Harness(): null {
+  function Harness({ connState = 'connected' }: { connState?: ConnectionState }): null {
     controller = useMobileNativeChatController({
       client: clientStub as unknown as RpcClient,
+      connState,
       hostId: 'h',
       worktreeId: 'w',
       activeSessionTab: null,
@@ -88,7 +94,8 @@ describe('useMobileNativeChatController handleNativeChatSend', () => {
       deviceTokenRef: { current: null },
       nativeChatTranscriptIsLocalReadable: true,
       nativeChatInputLeaseReady: true,
-      onSendError
+      onSendError,
+      onSendResolved
     })
     return null
   }
@@ -176,6 +183,23 @@ describe('useMobileNativeChatController handleNativeChatSend', () => {
     expect(isMobileNativeChatInputStale('term-1')).toBe(true)
   })
 
+  it('retires a held failure banner when a card action is accepted', async () => {
+    // The banner is route-owned and outlives the write that raised it, so an accepted
+    // answer or permission reply must clear it too — not just a composer send.
+    sendWithOutcome.mockResolvedValue('accepted')
+    await act(async () => {
+      await controller!.handleNativeChatCancelAsk()
+    })
+    expect(onSendResolved).toHaveBeenCalled()
+
+    onSendResolved.mockClear()
+    sendWithOutcome.mockResolvedValue('rejected')
+    await act(async () => {
+      await controller!.handleNativeChatCancelAsk()
+    })
+    expect(onSendResolved).not.toHaveBeenCalled()
+  })
+
   it('threads the optimistic-echo image URIs into acceptSend on an accepted send', async () => {
     sendWithOutcome.mockResolvedValue('accepted')
     let accepted = false
@@ -213,6 +237,23 @@ describe('useMobileNativeChatController handleNativeChatSend', () => {
     // collapse into the boolean 'sent' shape (#10228).
     expect(outcome).toBe('unknown')
     expect(holdUnconfirmedSend).toHaveBeenCalledWith(ORIGIN, 'look', expect.any(Function))
+  })
+
+  it('fails a send fast while the socket is down, before spending the heal budget', async () => {
+    // The lease collapses a render after connState, so a question-card answer could
+    // otherwise sit in `sending` for the whole 15s heal+send budget.
+    markMobileNativeChatInputStale('term-1')
+    await act(async () => {
+      renderer?.update(createElement(Harness, { connState: 'connecting' }))
+    })
+    let accepted = true
+    await act(async () => {
+      accepted = await controller!.handleNativeChatSend('answer')
+    })
+    expect(accepted).toBe(false)
+    expect(clientStub.sendRequest).not.toHaveBeenCalled()
+    expect(sendWithOutcome).not.toHaveBeenCalled()
+    expect(onSendError).toHaveBeenCalledWith('Message not sent (disconnected)')
   })
 
   it('reports a rejected send and posts no echo', async () => {

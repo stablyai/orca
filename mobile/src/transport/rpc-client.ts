@@ -43,8 +43,16 @@ type ConnectWaiter = {
   timeout: ReturnType<typeof setTimeout> | null
 }
 
-type SendRequestOptions = {
+export type SendRequestOptions = {
   timeoutMs?: number
+  /** Spend `timeoutMs` across connect-wait AND the request instead of giving each
+   *  phase its own. Interactive chat writes need it: they run as sequential loops
+   *  under one shared budget, so a per-phase clock lets the composer sit `sending`
+   *  for a multiple of the stated ceiling. Off by default — the long-running
+   *  callers (worktree create, dictation finish, credit reset) sized their budgets
+   *  against the post-connect clock, and squeezing them to the floor after a slow
+   *  reconnect would fail sends that used to land. */
+  budgetSpansConnect?: boolean
 }
 
 type SubscribeOptions = {
@@ -101,6 +109,10 @@ const AUTH_RETRY_BUDGET = 3
 // Why: a desktop that regenerated its E2EE keypair sends an e2ee_error we can't decrypt — the 4001 close code is the only surviving auth-failure signal.
 const UNAUTHORIZED_CLOSE_CODE = 4001
 const REQUEST_TIMEOUT_MS = 30_000
+// Why: an explicit `timeoutMs` is one budget for the whole call. If the connect wait
+// ate nearly all of it, still give the written frame a moment to be answered rather
+// than arming a 1ms timer.
+const MIN_REQUEST_TIMEOUT_MS = 1_000
 const CONNECT_TIMEOUT_MS = 12_000
 const HANDSHAKE_TIMEOUT_MS = 5_000
 // Why: RN may not expose WebSocket.readyState constants, but the CONNECTING protocol value (0) is stable across runtimes.
@@ -987,6 +999,13 @@ export function connect(
     ): Promise<RpcResponse> {
       const waitStart = Date.now()
       const wasConnected = state === 'connected'
+      // Why: one deadline spanning connect-wait + request, for callers that opt in.
+      // Restarting the full budget after connecting doubled it, and an image paste
+      // is a sequential loop of these — the composer could sit `sending` for minutes.
+      const deadline =
+        options?.budgetSpansConnect && options.timeoutMs !== undefined
+          ? waitStart + options.timeoutMs
+          : null
       await waitForConnected(options?.timeoutMs)
       if (!wasConnected) {
         console.log('[net] sendRequest waited for connect', {
@@ -997,7 +1016,14 @@ export function connect(
 
       return new Promise((resolve, reject) => {
         const id = nextId()
-        const timeoutMs = options?.timeoutMs ?? REQUEST_TIMEOUT_MS
+        const timeoutMs =
+          deadline === null
+            ? (options?.timeoutMs ?? REQUEST_TIMEOUT_MS)
+            : Math.max(
+                // The floor can never exceed what the caller asked for overall.
+                Math.min(MIN_REQUEST_TIMEOUT_MS, deadline - waitStart),
+                deadline - Date.now()
+              )
         const timeout = setTimeout(() => {
           pending.delete(id)
           console.log('[net] sendRequest TIMEOUT', {
