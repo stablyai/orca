@@ -161,7 +161,7 @@ describe('account CLI handlers', () => {
     await vi.waitFor(() => expect(exitSpy).toHaveBeenCalledWith(130))
     expect(existsSync(codexHome)).toBe(false)
     expect(kill).toHaveBeenCalledWith('SIGINT')
-    expect(callMock).not.toHaveBeenCalled()
+    expect(callMock).not.toHaveBeenCalledWith('accounts.addCodexFromHome', expect.anything())
 
     child.emit('exit', 1)
     await pending
@@ -250,12 +250,24 @@ describe('account CLI handlers', () => {
       queueMicrotask(() => child.emit('exit', 0))
       return child
     })
-    callMock.mockImplementation(() => new Promise(() => {}))
+    // Why: only the registration RPC hangs — the preflight must still resolve.
+    callMock.mockImplementation((method: string) =>
+      method === 'accounts.list'
+        ? Promise.resolve({
+            id: 'test',
+            ok: true,
+            result: { claude: accountState('c@e.com'), codex: accountState('x@e.com') },
+            _meta: { runtimeId: 'test-runtime' }
+          })
+        : new Promise(() => {})
+    )
     const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {})
     const exitSpy = vi.spyOn(process, 'exit').mockImplementation((() => undefined) as never)
 
     void ACCOUNT_HANDLERS['account add'](context('codex')).catch(() => {})
-    await vi.waitFor(() => expect(callMock).toHaveBeenCalled())
+    await vi.waitFor(() =>
+      expect(callMock).toHaveBeenCalledWith('accounts.addCodexFromHome', expect.anything())
+    )
 
     const onSignal = process.listeners('SIGINT').at(-1) as (signal: NodeJS.Signals) => void
     onSignal('SIGINT')
@@ -265,6 +277,63 @@ describe('account CLI handlers', () => {
     warnSpy.mockRestore()
     exitSpy.mockRestore()
   })
+
+  it('stays armed for signals until post-success cleanup finishes', async () => {
+    // Why: detaching the handlers before cleanup leaves the multi-second Keychain
+    // calls covered only by Node's default handling, which kills mid-cleanup.
+    Object.defineProperty(process, 'platform', { configurable: true, value: 'darwin' })
+    readKeychainMock.mockResolvedValue('legacy-credentials')
+    let releaseKeychainDelete: (() => void) | undefined
+    deleteKeychainMock.mockImplementationOnce(
+      () =>
+        new Promise<void>((resolvePromise) => {
+          releaseKeychainDelete = () => resolvePromise()
+        })
+    )
+
+    const listenersBefore = process.listeners('SIGINT').length
+
+    const pending = ACCOUNT_HANDLERS['account add'](context('claude'))
+    await vi.waitFor(() => expect(deleteKeychainMock).toHaveBeenCalled())
+
+    // Why: cleanup is still in flight here, so this add's guard must still be installed.
+    const armed = process.listeners('SIGINT')
+    expect(armed).toHaveLength(listenersBefore + 1)
+    const handler = armed.at(-1)
+
+    releaseKeychainDelete?.()
+    await pending
+    expect(process.listeners('SIGINT')).not.toContain(handler)
+  })
+
+  it('fails before the login when the runtime is unreachable', async () => {
+    // Why: discovering a dead runtime after sign-in wastes a full OAuth round trip.
+    callMock.mockRejectedValue(new Error('runtime not running'))
+
+    await expect(ACCOUNT_HANDLERS['account add'](context('codex'))).rejects.toThrow(
+      'runtime not running'
+    )
+    expect(callMock).toHaveBeenCalledWith('accounts.list', { refreshUsage: false })
+    expect(spawnMock).not.toHaveBeenCalled()
+  })
+
+  it.each(['environment', 'pairing-code'])(
+    'rejects --%s instead of silently ignoring it',
+    async (flag) => {
+      // Why: account commands are pinned to the local runtime, so honoring these
+      // silently would register the account on the wrong host.
+      await expect(
+        ACCOUNT_HANDLERS['account add']({
+          ...context('codex'),
+          flags: new Map<string, string | boolean>([
+            ['agent', 'codex'],
+            [flag, 'homelab']
+          ])
+        })
+      ).rejects.toThrow(`\`--${flag}\` does not retarget`)
+      expect(spawnMock).not.toHaveBeenCalled()
+    }
+  )
 
   it('rejects `--agent` with no value instead of defaulting to Claude', async () => {
     // Why: the parser turns a valueless flag into boolean true, so a silent

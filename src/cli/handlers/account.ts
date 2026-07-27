@@ -92,10 +92,20 @@ async function withInterruptCleanup(
   try {
     await add()
   } finally {
-    for (const signal of INTERRUPT_SIGNALS) {
-      process.off(signal, onSignal)
+    try {
+      await cleanupOnce()
+    } catch (error) {
+      // Why: a cleanup failure (Windows EBUSY on the temp dir) must not replace the
+      // error that actually explains why the add failed.
+      console.warn('[account] Failed to clean up the temporary login directory:', error)
+    } finally {
+      // Why: stay armed until cleanup settles — detaching first leaves the
+      // multi-second Keychain calls below covered only by Node's default handling,
+      // which kills the process mid-cleanup.
+      for (const signal of INTERRUPT_SIGNALS) {
+        process.off(signal, onSignal)
+      }
     }
-    await cleanupOnce()
   }
 }
 
@@ -250,16 +260,26 @@ export const ACCOUNT_HANDLERS: Record<string, CommandHandler> = {
       )
     }
     const agent = agentFlag ?? 'claude'
-    if (agent === 'claude') {
-      await addClaudeAccount(ctx)
-    } else if (agent === 'codex') {
-      await addCodexAccount(ctx)
-    } else {
+    if (agent !== 'claude' && agent !== 'codex') {
       throw new RuntimeClientError(
         'invalid_argument',
         `Unsupported --agent "${agent}". Use "claude" or "codex".`
       )
     }
+    // Why: shouldIgnoreRemoteSelection pins account commands to the local runtime,
+    // so honoring these silently would register the account on the wrong host.
+    for (const flag of ['environment', 'pairing-code']) {
+      if (ctx.flags.has(flag)) {
+        throw new RuntimeClientError(
+          'invalid_argument',
+          `\`--${flag}\` does not retarget \`orca account add\`. Run it on the host whose accounts you want to change.`
+        )
+      }
+    }
+    // Why: the login is a full interactive OAuth round trip. Fail before burning it
+    // if the runtime that has to register the account is not reachable.
+    await ctx.client.call('accounts.list', { refreshUsage: false })
+    await (agent === 'claude' ? addClaudeAccount(ctx) : addCodexAccount(ctx))
   },
   'account list': async ({ client, json }) => {
     // Why: this command renders no usage numbers, so skip the forced provider

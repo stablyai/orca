@@ -1946,6 +1946,42 @@ describe('ClaudeAccountService.addAccountFromConfigDir', () => {
     expect(deps.getSettings().claudeManagedAccounts).toHaveLength(0)
   })
 
+  it('still registers when the daemon cannot spawn `claude auth status`', async () => {
+    // Why: `allowFailure` covers a non-zero exit but not a spawn error, so a daemon
+    // started with a minimal PATH would hard-fail an add the user already signed in for.
+    sourceDir = mkdtempSync(join(tmpdir(), 'orca-claude-source-nostatus-'))
+    writeFileSync(
+      join(sourceDir, '.credentials.json'),
+      '{"claudeAiOauth":{"accessToken":"tok"}}\n',
+      'utf-8'
+    )
+    writeFileSync(
+      join(sourceDir, '.claude.json'),
+      JSON.stringify({ oauthAccount: { emailAddress: 'new@example.com' } }),
+      'utf-8'
+    )
+
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    const deps = makeDeps()
+    const { ClaudeAccountService } = await import('./service')
+    const service = new ClaudeAccountService(
+      deps.store as never,
+      deps.rateLimits as never,
+      deps.runtimeAuth as never
+    )
+    ;(service as unknown as { runClaudeCommand: () => Promise<string> }).runClaudeCommand = vi.fn(
+      async () => {
+        throw Object.assign(new Error('spawn claude ENOENT'), { code: 'ENOENT' })
+      }
+    )
+
+    const result = await service.addAccountFromConfigDir(sourceDir)
+
+    expect(result.accounts[0]?.email).toBe('new@example.com')
+    expect(deps.getSettings().claudeManagedAccounts).toHaveLength(1)
+    warn.mockRestore()
+  })
+
   it('rejects and rolls back when the config dir has no credentials', async () => {
     sourceDir = mkdtempSync(join(tmpdir(), 'orca-claude-source-empty-'))
     const deps = makeDeps()

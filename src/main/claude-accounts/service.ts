@@ -209,12 +209,21 @@ export class ClaudeAccountService {
         `No Claude credentials found in ${resolvedDir}. Run \`claude login\` into this directory first.`
       )
     }
-    const status = await this.runClaudeCommand(
-      ['auth', 'status', '--json'],
-      { windowsPath: resolvedDir, linuxPath: null, wslDistro: null },
-      STATUS_TIMEOUT_MS,
-      { allowFailure: true }
-    )
+    // Why: `allowFailure` covers a non-zero exit but not a spawn error, and unlike
+    // the GUI flow nothing has run `claude` in this process yet — a daemon started
+    // with a minimal PATH (launchd/systemd) would hard-fail an add the user already
+    // signed in for. Identity still resolves from the config dir's oauthAccount.
+    let status = ''
+    try {
+      status = await this.runClaudeCommand(
+        ['auth', 'status', '--json'],
+        { windowsPath: resolvedDir, linuxPath: null, wslDistro: null },
+        STATUS_TIMEOUT_MS,
+        { allowFailure: true }
+      )
+    } catch (error) {
+      console.warn('[claude-accounts] Could not read `claude auth status`:', error)
+    }
     // Why: this post-login RPC did not observe the legacy Keychain value before
     // login, so only a config-scoped credential can be attributed to this flow.
     const currentLegacyKeychain = await readActiveClaudeKeychainCredentialsStrict()

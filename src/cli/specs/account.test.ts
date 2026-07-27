@@ -33,9 +33,21 @@ describe('account command specs', () => {
   it('describes --agent as the account provider, not a terminal agent', () => {
     const help = formatCommandHelp(spec('account add'))
 
-    expect(help).toContain(
-      '--agent <id>          Account provider: claude or codex (default claude)'
-    )
+    expect(help).toContain('Account provider: claude or codex (default claude)')
     expect(help).not.toContain('TUI agent')
+  })
+
+  it('aligns the --agent description with the global flag descriptions', () => {
+    const descriptionColumn = (help: string, flag: string): number => {
+      const line = help.split('\n').find((entry) => entry.startsWith(`  --${flag}`))
+      const match = line?.match(/^(\s*--\S+(?: <[^>]+>)?)(\s+)\S/)
+      if (!match) {
+        throw new Error(`No description found for --${flag}`)
+      }
+      return match[1].length + match[2].length
+    }
+    const help = formatCommandHelp(spec('account add'))
+
+    expect(descriptionColumn(help, 'agent')).toBe(descriptionColumn(help, 'json'))
   })
 })
