@@ -2,8 +2,11 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import * as Notifications from 'expo-notifications'
 import { subscribeToDesktopNotifications } from './mobile-notifications'
 import {
+  adoptNotificationEpoch,
   clearWatermark,
-  resetHostNotificationSessionsForTests
+  getHostNotificationSession,
+  resetHostNotificationSessionsForTests,
+  seedWatermarkFromStorage
 } from './notification-reconnect-catchup'
 import AsyncStorage from '@react-native-async-storage/async-storage'
 import type { RpcClient } from '../transport/rpc-client'
@@ -164,6 +167,26 @@ describe('#8591 watermark seeding races a cold open', () => {
     await flushAsync()
 
     expect(host.getMissedCalls).toEqual([])
+  })
+
+  it('a seed landing after a live epoch is adopted cannot reinstate the dead watermark', async () => {
+    // Ordering invariant on the exported pair, not a path subscribeToDesktopNotifications
+    // can currently take — 'ready' awaits watermarkSeeded before adopting, so the seed
+    // always resolves first today. Pinned anyway because the guard is load-bearing the
+    // moment any caller adopts an epoch before seeding: applying a seq 40 from a counter
+    // that no longer exists would let getMissedSince cut the new counter's 1..40, which
+    // is the original #8591 loss re-entered through the seeding path.
+    const session = getHostNotificationSession('host-1')
+    adoptNotificationEpoch(session, 'host-1', 'epoch-new')
+    await flushAsync()
+
+    storage.set(WATERMARK_KEY, JSON.stringify({ seq: 40, epoch: 'epoch-old' }))
+    seedWatermarkFromStorage(session, 'host-1')
+    await session.watermarkSeeded
+    await flushAsync()
+
+    expect(session.lastDeliveredEpoch).toBe('epoch-new')
+    expect(session.lastDeliveredSeq).toBe(0)
   })
 
   it('clears the legacy seq key too, so an unpaired host cannot resurrect it', async () => {

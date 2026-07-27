@@ -146,4 +146,56 @@ describe('#8591 reconnect catch-up under the real app teardown lifecycle', () =>
     expect(titles).toContain('missed-8')
     expect(titles).toContain('missed-9')
   })
+
+  it('does not re-push a live notification the catch-up replays after a teardown', async () => {
+    // Why: the seen-set lives on the host session precisely so it survives the teardown.
+    // getMissedSince cuts by seq > lastSeenSeq, but a notification delivered live in the
+    // brief window before the drop is still inside the desktop's retained buffer, so the
+    // reconnect fetch returns it again. Only the session-scoped seen-set stops a duplicate
+    // banner for something the user was already shown.
+    const host = makeHostClient()
+
+    const unsub = subscribeToDesktopNotifications(host.client, 'host-1')
+    host.onData?.({ type: 'ready', subscriptionId: 'sub-1' })
+    await flushAsync()
+    host.onData?.({
+      type: 'notification',
+      title: 'live-7',
+      body: 'b',
+      notificationId: 'agent:seven',
+      notificationSeq: 7
+    })
+    await flushAsync()
+
+    unsub()
+    await flushAsync()
+
+    // The desktop replays seq 7 alongside the genuinely-missed seq 8.
+    host.setMissed([
+      {
+        type: 'notification',
+        title: 'live-7',
+        body: 'b',
+        notificationId: 'agent:seven',
+        notificationSeq: 7
+      },
+      {
+        type: 'notification',
+        title: 'missed-8',
+        body: 'b',
+        notificationId: 'agent:m8',
+        notificationSeq: 8
+      }
+    ])
+
+    subscribeToDesktopNotifications(host.client, 'host-1')
+    host.onData?.({ type: 'ready', subscriptionId: 'sub-2' })
+    await flushAsync()
+
+    const titles = vi
+      .mocked(Notifications.scheduleNotificationAsync)
+      .mock.calls.map((c) => (c[0] as { content: { title: string } }).content.title)
+    expect(titles.filter((title) => title === 'live-7')).toHaveLength(1)
+    expect(titles).toContain('missed-8')
+  })
 })
