@@ -30,7 +30,7 @@ type TestRuntime = {
   endpoint: string
   publicKeyB64: string
   deviceToken: string
-  helloFrames: Record<string, unknown>[]
+  authFrames: Record<string, unknown>[]
   close: () => Promise<void>
 }
 
@@ -57,7 +57,7 @@ describe('CLI remote WebSocket transport', () => {
 
     expect(response.ok).toBe(true)
     expect(response.result.runtimeId).toBe('runtime-ws-1')
-    expect(runtime.helloFrames).toContainEqual(
+    expect(runtime.authFrames).toContainEqual(
       expect.objectContaining({
         clientCapabilities: [SESSION_TAB_CLOSE_INTENT_RUNTIME_CAPABILITY]
       })
@@ -190,7 +190,7 @@ async function startTestRuntime(
   const deviceToken = `token-${runtimeId}`
   const httpServer = createServer()
   const wss = new WebSocketServer({ server: httpServer })
-  const helloFrames: Record<string, unknown>[] = []
+  const authFrames: Record<string, unknown>[] = []
 
   wss.on('connection', (ws) => {
     let sharedKey: Uint8Array | null = null
@@ -203,7 +203,6 @@ async function startTestRuntime(
           type?: string
           publicKeyB64?: string
         }
-        helloFrames.push(hello)
         const clientPublicKey = Buffer.from(hello.publicKeyB64 ?? '', 'base64')
         sharedKey = deriveSharedKey(serverKeyPair.secretKey, clientPublicKey)
         ws.send(JSON.stringify({ type: 'e2ee_ready' }))
@@ -216,7 +215,11 @@ async function startTestRuntime(
         return
       }
       if (!authenticated) {
-        const auth = JSON.parse(plaintext) as { type?: string; deviceToken?: string }
+        const auth = JSON.parse(plaintext) as Record<string, unknown> & {
+          type?: string
+          deviceToken?: string
+        }
+        authFrames.push(auth)
         if (auth.type !== 'e2ee_auth' || auth.deviceToken !== deviceToken) {
           ws.send(encrypt(JSON.stringify({ type: 'e2ee_error' }), sharedKey))
           ws.close(4001, 'auth failed')
@@ -272,7 +275,7 @@ async function startTestRuntime(
     endpoint: `ws://127.0.0.1:${address.port}`,
     publicKeyB64: publicKeyToBase64(serverKeyPair.publicKey),
     deviceToken,
-    helloFrames,
+    authFrames,
     close: async () => {
       await new Promise<void>((resolve) => {
         wss.close(() => resolve())

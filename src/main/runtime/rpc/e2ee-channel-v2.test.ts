@@ -173,7 +173,7 @@ describe('E2EEChannel v2', () => {
           v: 2,
           transcriptHashB64,
           deviceToken: 'valid-token',
-          relayDeviceId: 'injected'
+          clientCapabilities: ['session-tabs.close-intent.v1']
         }),
         schedule,
         0n

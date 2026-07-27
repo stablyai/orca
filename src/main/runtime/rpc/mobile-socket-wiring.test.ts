@@ -49,7 +49,11 @@ class FakeTransport implements MobileSocketTransport {
   }
 }
 
-function registryFor(deviceId: string, token: string): DeviceRegistry {
+function registryFor(
+  deviceId: string,
+  token: string,
+  scope: 'mobile' | 'runtime' = 'mobile'
+): DeviceRegistry {
   return {
     validateToken: (candidate: string) =>
       candidate === token
@@ -57,7 +61,7 @@ function registryFor(deviceId: string, token: string): DeviceRegistry {
             deviceId,
             token,
             name: 'Phone',
-            scope: 'mobile' as const,
+            scope,
             pairedAt: 1,
             lastSeenAt: 0
           }
@@ -138,7 +142,7 @@ describe('MobileSocketWiring', () => {
     const onText = vi.fn()
     const onClose = vi.fn()
     const wiring = new MobileSocketWiring({
-      deviceRegistry: registryFor('device-1', 'valid-token'),
+      deviceRegistry: registryFor('device-1', 'valid-token', 'runtime'),
       e2eeKeypair: {
         publicKey: desktop.publicKey,
         secretKey: desktop.secretKey,
@@ -154,21 +158,27 @@ describe('MobileSocketWiring', () => {
       ws,
       JSON.stringify({
         type: 'e2ee_hello',
-        publicKeyB64: Buffer.from(phone.publicKey).toString('base64'),
-        clientCapabilities: ['session-tabs.close-intent.v1']
+        publicKeyB64: Buffer.from(phone.publicKey).toString('base64')
       })
     )
     const sharedKey = deriveSharedKey(phone.secretKey, desktop.publicKey)
     transport.receive(
       ws,
-      encrypt(JSON.stringify({ type: 'e2ee_auth', deviceToken: 'valid-token' }), sharedKey)
+      encrypt(
+        JSON.stringify({
+          type: 'e2ee_auth',
+          deviceToken: 'valid-token',
+          clientCapabilities: ['session-tabs.close-intent.v1']
+        }),
+        sharedKey
+      )
     )
     transport.receive(ws, encrypt('{"id":"rpc-1","method":"status.get"}', sharedKey))
 
     expect(transport.setClientId).toHaveBeenCalledWith(ws, 'valid-token')
     expect(onText).toHaveBeenCalledOnce()
     expect(onText.mock.calls[0]?.[0]).toMatchObject({
-      device: { deviceId: 'device-1', deviceToken: 'valid-token', scope: 'mobile' },
+      device: { deviceId: 'device-1', deviceToken: 'valid-token', scope: 'runtime' },
       clientCapabilities: ['session-tabs.close-intent.v1'],
       transport: { transport: 'direct' }
     })

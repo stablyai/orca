@@ -93,7 +93,8 @@ export async function sendRemoteRuntimeRequest<TResult>(
   const requestId = randomUUID()
   const serializedAuth = serializeRemoteRuntimePayload({
     type: 'e2ee_auth',
-    deviceToken: pairing.deviceToken
+    deviceToken: pairing.deviceToken,
+    clientCapabilities: [SESSION_TAB_CLOSE_INTENT_RUNTIME_CAPABILITY]
   })
   const pendingRequest = {
     preparedRequest: prepareRemoteRuntimeRequest(new Map(), () =>
@@ -192,8 +193,7 @@ export async function sendRemoteRuntimeRequest<TResult>(
       ws?.send(
         JSON.stringify({
           type: 'e2ee_hello',
-          publicKeyB64: publicKeyToBase64(keyPair.publicKey),
-          clientCapabilities: [SESSION_TAB_CLOSE_INTENT_RUNTIME_CAPABILITY]
+          publicKeyB64: publicKeyToBase64(keyPair.publicKey)
         })
       )
     }
@@ -407,7 +407,8 @@ export async function subscribeRemoteRuntimeRequest<TResult>(
   })
   const serializedAuth = serializeRemoteRuntimePayload({
     type: 'e2ee_auth',
-    deviceToken: pairing.deviceToken
+    deviceToken: pairing.deviceToken,
+    clientCapabilities: [SESSION_TAB_CLOSE_INTENT_RUNTIME_CAPABILITY]
   })
   return await new Promise((resolve, reject) => {
     const keyPair = generateKeyPair()
@@ -544,8 +545,7 @@ export async function subscribeRemoteRuntimeRequest<TResult>(
       ws?.send(
         JSON.stringify({
           type: 'e2ee_hello',
-          publicKeyB64: publicKeyToBase64(keyPair.publicKey),
-          clientCapabilities: [SESSION_TAB_CLOSE_INTENT_RUNTIME_CAPABILITY]
+          publicKeyB64: publicKeyToBase64(keyPair.publicKey)
         })
       )
     }

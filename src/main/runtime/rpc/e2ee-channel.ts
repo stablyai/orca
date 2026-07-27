@@ -17,7 +17,6 @@ import { parseRemoteRuntimeJsonText } from '../../../shared/remote-runtime-reque
 import type { MobileE2EEOutboundMemoryBudget } from './mobile-e2ee-outbound-memory-budget'
 import { MobileE2EEDesktopOutboundOwner } from './mobile-e2ee-desktop-outbound-owner'
 import { parseRuntimeClientCapabilities } from './runtime-client-capabilities'
-import type { E2EEAuthenticatedDevice } from './authenticated-e2ee-device'
 import type { RuntimeCapability } from '../../../shared/protocol-version'
 
 const HANDSHAKE_TIMEOUT_MS = 10_000
@@ -31,6 +30,12 @@ export type E2EEChannelOptions = {
   transportContext?: DesktopMobileE2EEV2Context
   requireV2?: boolean
   outboundMemoryBudget?: MobileE2EEOutboundMemoryBudget
+}
+
+export type E2EEAuthenticatedDevice = {
+  deviceId: string
+  deviceToken: string
+  scope: 'mobile' | 'runtime'
 }
 
 export class E2EEChannel {
@@ -212,7 +217,6 @@ export class E2EEChannel {
       this.onError(4001, 'Invalid e2ee_hello')
       return
     }
-    this.clientCapabilities = parseRuntimeClientCapabilities(hello.clientCapabilities)
 
     // Why: derive the shared key from our secret + client's public key.
     // Both sides compute the same shared secret via ECDH.
@@ -245,6 +249,7 @@ export class E2EEChannel {
     }
     const authenticatedDevice = authentication.device
 
+    this.clientCapabilities = parseRuntimeClientCapabilities(authentication.auth.clientCapabilities)
     this.deviceToken = authenticatedDevice.deviceToken
     this.authenticatedDevice = authenticatedDevice
     this.state = 'ready'

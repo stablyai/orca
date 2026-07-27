@@ -17,7 +17,7 @@ type TestServer = {
   wss: WebSocketServer
   pairing: PairingOffer
   requests: unknown[]
-  hellos: unknown[]
+  auths: unknown[]
   connectionCount: () => number
 }
 
@@ -56,7 +56,7 @@ describe('RemoteRuntimeRequestConnection', () => {
       _meta: { runtimeId: 'runtime-test' }
     })
     expect(server.connectionCount()).toBe(1)
-    expect(server.hellos).toContainEqual(
+    expect(server.auths).toContainEqual(
       expect.objectContaining({
         clientCapabilities: [SESSION_TAB_CLOSE_INTENT_RUNTIME_CAPABILITY]
       })
@@ -73,7 +73,7 @@ describe('RemoteRuntimeRequestConnection', () => {
 async function createServer(): Promise<TestServer> {
   const serverKeyPair = generateKeyPair()
   const requests: unknown[] = []
-  const hellos: unknown[] = []
+  const auths: unknown[] = []
   let connectionCount = 0
   const wss = new WebSocketServer({ port: 0 })
   servers.push(wss)
@@ -90,7 +90,6 @@ async function createServer(): Promise<TestServer> {
       const frame = data.toString()
       if (!sharedKey) {
         const hello = JSON.parse(frame) as { type: string; publicKeyB64: string }
-        hellos.push(hello)
         const clientPublicKey = publicKeyFromBase64(hello.publicKeyB64)
         sharedKey = deriveSharedKey(serverKeyPair.secretKey, clientPublicKey)
         ws.send(JSON.stringify({ type: 'e2ee_ready' }))
@@ -103,7 +102,12 @@ async function createServer(): Promise<TestServer> {
       }
       if (!authenticated) {
         const auth = JSON.parse(plaintext) as { type: string; deviceToken: string }
-        expect(auth).toEqual({ type: 'e2ee_auth', deviceToken: 'device-token' })
+        auths.push(auth)
+        expect(auth).toEqual({
+          type: 'e2ee_auth',
+          deviceToken: 'device-token',
+          clientCapabilities: [SESSION_TAB_CLOSE_INTENT_RUNTIME_CAPABILITY]
+        })
         authenticated = true
         sendEncrypted(ws, sharedKey, { type: 'e2ee_authenticated' })
         return
@@ -142,7 +146,7 @@ async function createServer(): Promise<TestServer> {
     wss,
     pairing,
     requests,
-    hellos,
+    auths,
     connectionCount: () => connectionCount
   }
 }

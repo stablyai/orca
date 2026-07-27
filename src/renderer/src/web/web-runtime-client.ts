@@ -406,8 +406,7 @@ export class WebRuntimeClient {
       ws.send(
         JSON.stringify({
           type: 'e2ee_hello',
-          publicKeyB64: publicKeyToBase64(keyPair.publicKey),
-          clientCapabilities: [SESSION_TAB_CLOSE_INTENT_RUNTIME_CAPABILITY]
+          publicKeyB64: publicKeyToBase64(keyPair.publicKey)
         })
       )
       this.handshakeTimer = window.setTimeout(() => {
@@ -452,7 +451,11 @@ export class WebRuntimeClient {
       try {
         const control = JSON.parse(raw) as { type?: unknown }
         if (control.type === 'e2ee_ready') {
-          this.sendEncrypted({ type: 'e2ee_auth', deviceToken: this.pairing.deviceToken })
+          this.sendEncrypted({
+            type: 'e2ee_auth',
+            deviceToken: this.pairing.deviceToken,
+            clientCapabilities: [SESSION_TAB_CLOSE_INTENT_RUNTIME_CAPABILITY]
+          })
           return
         }
       } catch {
