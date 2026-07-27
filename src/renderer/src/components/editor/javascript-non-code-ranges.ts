@@ -59,6 +59,7 @@ export function findJavaScriptNonCodeRanges(content: string): JavaScriptNonCodeR
         if (expressionEnd >= content.length) {
           return expressionEnd
         }
+        // Rewind so the closing `}` remains classified as non-code.
         segmentStart = expressionEnd - 1
         index = expressionEnd
         continue
