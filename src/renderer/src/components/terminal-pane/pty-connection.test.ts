@@ -15528,6 +15528,36 @@ describe('connectPanePty', () => {
     expect(createRemoteRuntimePtyTransport).toHaveBeenCalledWith('hub-a', expect.any(Object))
   })
 
+  it('withholds a local spawn while a repo-backed worktree has no hydrated host', async () => {
+    // Regression: an SSH worktree whose repo row hadn't merged yet resolved to a null
+    // connectionId and spawned on the local daemon with the remote cwd, so the pane never
+    // bound a PTY (Docker SSH watcher-isolation timeout).
+    const { connectPanePty } = await import('./pty-connection')
+    const { createIpcPtyTransport } = await import('./pty-transport')
+    const { createRemoteRuntimePtyTransport } = await import('./remote-runtime-pty-transport')
+    const transport = createMockTransport()
+    transportFactoryQueue.push(transport)
+    mockStoreState = {
+      ...mockStoreState,
+      tabsByWorktree: { 'wt-remote': [{ id: 'tab-1', ptyId: null }] },
+      // Why: the worktree row exists (so the owner is not "ambiguous") but its repo has
+      // not landed yet — exactly the window that used to fail open to local.
+      worktreesByRepo: {
+        repo1: [{ id: 'wt-remote', repoId: 'repo1', path: '/tmp/orca-docker-relay-perf-repo' }]
+      },
+      repos: []
+    } as StoreState
+
+    const deps = createDeps({
+      worktreeId: 'wt-remote',
+      cwd: '/tmp/orca-docker-relay-perf-repo'
+    })
+    connectPanePty(createPane(1) as never, createManager(1) as never, deps as never)
+
+    expect(createIpcPtyTransport).not.toHaveBeenCalled()
+    expect(createRemoteRuntimePtyTransport).not.toHaveBeenCalled()
+  })
+
   it('keeps the floating terminal local even while a runtime is active', async () => {
     const { connectPanePty } = await import('./pty-connection')
     const { createRemoteRuntimePtyTransport } = await import('./remote-runtime-pty-transport')

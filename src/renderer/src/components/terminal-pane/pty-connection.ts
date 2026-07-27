@@ -10,6 +10,8 @@ import { scheduleRuntimeGraphSync } from '@/runtime/sync-runtime-graph'
 import { useAppStore } from '@/store'
 import { getWorktreeMapFromState } from '@/store/selectors'
 import { parseWorkspaceKey } from '../../../../shared/workspace-scope'
+import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../shared/constants'
+import { isEphemeralSetupTerminalWorktreeId } from '../../../../shared/ephemeral-setup-terminal-worktree-id'
 import { TerminalKittyKeyboardModeTracker } from '../../../../shared/terminal-kitty-keyboard-mode-tracker'
 import { isRuntimeOwnedSshTargetId } from '../../../../shared/execution-host'
 import { createTerminalZeroDimensionsMessage } from '../../../../shared/terminal-zero-dimensions-diagnostic'
@@ -3231,10 +3233,16 @@ export function connectPanePty(
     : mirroredRuntimeEnvironmentId
       ? mirroredRuntimeEnvironmentId
       : null
-  // Why: undefined means the backing repo has not hydrated yet. Coalescing to null
-  // would fail-open a remote cwd onto the local daemon (ENOENT on Docker SSH paths).
+  // Why: host-agnostic synthetic ids (floating terminal, inline setup panels) have no repo
+  // row by design, so `undefined` there is resolved-local, not pending hydration (#10151).
+  // For a repo-backed worktree it means the repo hasn't hydrated: coalescing to null would
+  // fail-open a remote cwd onto the local daemon (ENOENT on Docker SSH paths).
   const connectionOwnerHydrating =
-    !terminalOwnerUnresolved && runtimeEnvironmentId === null && worktreeConnectionId === undefined
+    !terminalOwnerUnresolved &&
+    deps.worktreeId !== FLOATING_TERMINAL_WORKTREE_ID &&
+    !isEphemeralSetupTerminalWorktreeId(deps.worktreeId) &&
+    runtimeEnvironmentId === null &&
+    worktreeConnectionId === undefined
   // Why: an SSH host nested under a HUB is execution identity, not permission for the paired client to dial that host.
   const connectionId =
     !terminalOwnerUnresolved && !connectionOwnerHydrating && runtimeEnvironmentId === null
