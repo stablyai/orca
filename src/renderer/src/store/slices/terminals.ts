@@ -113,6 +113,7 @@ import {
 } from './agent-status'
 import {
   buildTerminalTabRetirementPlan,
+  classifyTerminalRetirementWorktree,
   isTerminalTabPresent,
   removeSleepingAgentSessionsForTab,
   type TerminalTabCloseReason,
@@ -1190,8 +1191,11 @@ export const createTerminalSlice: StateCreator<AppState, [], [], TerminalSlice> 
         }
       }
       if (retirementPlan.unroutablePtyIds.length > 0) {
-        console.warn('[terminal-retirement] skipped unroutable runtime handles', {
+        // Why: log the worktree SHAPE, never the id — worktree ids embed absolute paths. The old
+        // "runtime handles" wording described ids that are usually plain local ones, hiding STA-2639.
+        console.warn('[terminal-retirement] skipped PTYs with no resolvable owner', {
           tabId,
+          worktreeKind: classifyTerminalRetirementWorktree(retirementPlan.worktreeId),
           count: retirementPlan.unroutablePtyIds.length
         })
       }
