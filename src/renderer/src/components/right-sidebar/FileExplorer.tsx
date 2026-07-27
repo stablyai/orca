@@ -14,6 +14,10 @@ import {
   shouldResetFileExplorerForVisibleWorktree
 } from './file-explorer-reset'
 import { FileExplorerBackgroundMenu } from './FileExplorerBackgroundMenu'
+import {
+  getPastableClipboardFilePaths,
+  pasteFilesIntoExplorerDirectory
+} from './file-explorer-clipboard-paste'
 import { FileExplorerNameFilter } from './FileExplorerNameFilter'
 import { FileExplorerQueryStrip } from './FileExplorerQueryStrip'
 import { FileExplorerToolbar } from './FileExplorerToolbar'
@@ -551,6 +555,33 @@ function FileExplorerFiles(): React.JSX.Element {
   )
 
   const handleDuplicate = useFileDuplicate({ activeWorktreeId, worktreePath, refreshDir })
+  // Why: copying externally means leaving Orca, so refreshing the pastable
+  // cache on window focus keeps the context-menu Paste item instant instead
+  // of popping in after the slow Windows clipboard probe.
+  useEffect(() => {
+    void getPastableClipboardFilePaths()
+    const refreshPastable = (): void => {
+      void getPastableClipboardFilePaths()
+    }
+    window.addEventListener('focus', refreshPastable)
+    return () => window.removeEventListener('focus', refreshPastable)
+  }, [])
+  const handlePasteFiles = useCallback(
+    (sourcePaths: string[], destinationDir: string) => {
+      if (!activeWorktreeId || !worktreePath) {
+        return
+      }
+      void pasteFilesIntoExplorerDirectory({
+        worktreeId: activeWorktreeId,
+        worktreePath,
+        destinationDir,
+        sourcePaths,
+        refreshDir,
+        setSelectedPath: setSingleSelectedPath
+      })
+    },
+    [activeWorktreeId, worktreePath, refreshDir, setSingleSelectedPath]
+  )
   const handleRowClick = useCallback(
     (node: TreeNode, event: React.MouseEvent<HTMLButtonElement>) =>
       selectRowWithModifiers(node, event, handleClick),
@@ -762,6 +793,7 @@ function FileExplorerFiles(): React.JSX.Element {
                 onContextMenuSelect={preserveSelectionForContextMenu}
                 onCopyPaths={copyPathsForNode}
                 onStartNew={startNew}
+                onPasteFiles={handlePasteFiles}
                 onStartRename={startRename}
                 onDuplicate={handleDuplicate}
                 onAddFolderAsProject={handleAddFolderAsProject}
@@ -810,6 +842,7 @@ function FileExplorerFiles(): React.JSX.Element {
         point={bgMenuPoint}
         worktreePath={worktreePath}
         onStartNew={startNew}
+        onPasteFiles={handlePasteFiles}
       />
     </>
   )

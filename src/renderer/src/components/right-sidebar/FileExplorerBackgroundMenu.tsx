@@ -1,5 +1,5 @@
-import React, { useEffect } from 'react'
-import { FilePlus, FolderPlus } from 'lucide-react'
+import React, { useEffect, useState } from 'react'
+import { ClipboardPaste, FilePlus, FolderPlus } from 'lucide-react'
 import { CLOSE_ALL_CONTEXT_MENUS_EVENT } from '@/components/tab-bar/SortableTab'
 import {
   DropdownMenu,
@@ -8,6 +8,10 @@ import {
   DropdownMenuTrigger
 } from '@/components/ui/dropdown-menu'
 import { translate } from '@/i18n/i18n'
+import {
+  getCachedPastableClipboardFilePaths,
+  getPastableClipboardFilePaths
+} from './file-explorer-clipboard-paste'
 
 function stopRightButtonMenuSelection(event: React.PointerEvent): void {
   if (event.button !== 2) {
@@ -24,19 +28,42 @@ export function FileExplorerBackgroundMenu({
   onOpenChange,
   point,
   worktreePath,
-  onStartNew
+  onStartNew,
+  onPasteFiles
 }: {
   open: boolean
   onOpenChange: (open: boolean) => void
   point: { x: number; y: number }
   worktreePath: string
   onStartNew: (type: 'file' | 'folder', dir: string, depth: number) => void
+  onPasteFiles: (sourcePaths: string[], destinationDir: string) => void
 }): React.JSX.Element {
+  const [pastablePaths, setPastablePaths] = useState<string[]>([])
   useEffect(() => {
     const close = (): void => onOpenChange(false)
     window.addEventListener(CLOSE_ALL_CONTEXT_MENUS_EVENT, close)
     return () => window.removeEventListener(CLOSE_ALL_CONTEXT_MENUS_EVENT, close)
   }, [onOpenChange])
+
+  // Why: render instantly from the warm cache (a fresh Windows probe takes
+  // hundreds of ms), then reconcile when the on-open probe lands. Paste only
+  // appears when the OS clipboard actually holds file references.
+  useEffect(() => {
+    if (!open) {
+      setPastablePaths([])
+      return
+    }
+    setPastablePaths(getCachedPastableClipboardFilePaths())
+    let cancelled = false
+    void getPastableClipboardFilePaths().then((paths) => {
+      if (!cancelled) {
+        setPastablePaths(paths)
+      }
+    })
+    return () => {
+      cancelled = true
+    }
+  }, [open])
 
   return (
     <DropdownMenu open={open} onOpenChange={onOpenChange} modal={false}>
@@ -69,6 +96,21 @@ export function FileExplorerBackgroundMenu({
             'New Folder'
           )}
         </DropdownMenuItem>
+        {pastablePaths.length > 0 ? (
+          <DropdownMenuItem onSelect={() => onPasteFiles(pastablePaths, worktreePath)}>
+            <ClipboardPaste />
+            {pastablePaths.length > 1
+              ? translate(
+                  'auto.components.right.sidebar.FileExplorerBackgroundMenu.pasteFiles',
+                  'Paste {{value0}} Files',
+                  { value0: pastablePaths.length }
+                )
+              : translate(
+                  'auto.components.right.sidebar.FileExplorerBackgroundMenu.paste',
+                  'Paste'
+                )}
+          </DropdownMenuItem>
+        ) : null}
       </DropdownMenuContent>
     </DropdownMenu>
   )
