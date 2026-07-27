@@ -49,6 +49,12 @@ export const styles = StyleSheet.create({
   reasoning: {
     opacity: 0.7
   },
+  reasoningLabel: {
+    color: colors.textMuted,
+    fontFamily: typography.monoFamily,
+    fontSize: MONO_SIZE,
+    fontWeight: '700'
+  },
   toolRun: {
     marginTop: spacing.xs
   },

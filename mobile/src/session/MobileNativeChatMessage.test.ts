@@ -1,6 +1,6 @@
 import { createElement } from 'react'
 import { act, create, type ReactTestInstance, type ReactTestRenderer } from 'react-test-renderer'
-import { afterEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { MAX_TOOL_DETAIL_LENGTH } from '../../../src/shared/native-chat-tool-summary'
 import type { NativeChatMessage } from '../../../src/shared/native-chat-types'
 
@@ -25,6 +25,7 @@ vi.mock('lucide-react-native', () => ({
 }))
 vi.mock('../components/MobileMarkdown', () => ({ MobileMarkdown: 'MobileMarkdown' }))
 
+import * as Clipboard from 'expo-clipboard'
 import { MobileNativeChatMessage } from './MobileNativeChatMessage'
 
 function userMessage(blocks: NativeChatMessage['blocks']): NativeChatMessage {
@@ -33,6 +34,17 @@ function userMessage(blocks: NativeChatMessage['blocks']): NativeChatMessage {
 
 function toolMessage(blocks: NativeChatMessage['blocks']): NativeChatMessage {
   return { id: 'a1', role: 'assistant', blocks, timestamp: null, source: 'transcript' }
+}
+
+function roleMessage(
+  role: NativeChatMessage['role'],
+  blocks: NativeChatMessage['blocks']
+): NativeChatMessage {
+  return { id: 'm1', role, blocks, timestamp: null, source: 'transcript' }
+}
+
+function reasoningMessage(text: string): NativeChatMessage {
+  return roleMessage('reasoning', [{ type: 'text', text }])
 }
 
 describe('MobileNativeChatMessage', () => {
@@ -151,5 +163,136 @@ describe('MobileNativeChatMessage', () => {
     expect(textIn(tree.root).filter((text) => text === input)).toHaveLength(1)
     expect(tree.root.findAllByType('ChevronDown' as never)).toHaveLength(1)
     expect(tree.root.findAllByType('SquareChevronRight' as never)).toHaveLength(1)
+  })
+})
+
+describe('MobileNativeChatMessage reasoning disclosure', () => {
+  let renderer: ReactTestRenderer | null = null
+
+  beforeEach(() => {
+    globalThis.IS_REACT_ACT_ENVIRONMENT = true
+  })
+  afterEach(() => {
+    act(() => renderer?.unmount())
+    renderer = null
+  })
+
+  function render(message: NativeChatMessage, toolsExpanded?: boolean): ReactTestRenderer {
+    const original = console.error
+    const spy = vi.spyOn(console, 'error').mockImplementation((...a) => {
+      if (typeof a[0] === 'string' && a[0].includes('react-test-renderer is deprecated')) {
+        return
+      }
+      original(...a)
+    })
+    try {
+      act(() => {
+        renderer = create(createElement(MobileNativeChatMessage, { message, toolsExpanded }))
+      })
+    } finally {
+      spy.mockRestore()
+    }
+    return renderer!
+  }
+
+  function toggle(tree: ReactTestRenderer): { props: { onPress: () => void } } {
+    return tree.root.find((node) =>
+      String(node.props.accessibilityLabel ?? '').startsWith('Thinking')
+    ) as unknown as {
+      props: { onPress: () => void }
+    }
+  }
+
+  function thinkingRows(tree: ReactTestRenderer): unknown[] {
+    return tree.root.findAll((node) =>
+      String(node.props.accessibilityLabel ?? '').startsWith('Thinking')
+    )
+  }
+
+  it('hides the reasoning prose behind a collapsed disclosure', () => {
+    const tree = render(reasoningMessage('Weighing two approaches\nsecond line'))
+    expect(tree.root.findAllByType('MobileMarkdown' as never)).toHaveLength(0)
+    const texts = tree.root
+      .findAllByType('Text' as never)
+      .map((node) => String(node.children.join('')))
+    expect(texts).toContain('Thinking')
+    expect(texts).toContain('Weighing two approaches')
+    expect(texts.some((text) => text.includes('second line'))).toBe(false)
+  })
+
+  it('reveals the prose when the disclosure is tapped', () => {
+    const tree = render(reasoningMessage('Weighing two approaches'))
+    act(() => toggle(tree).props.onPress())
+    expect(tree.root.findAllByType('MobileMarkdown' as never)).toHaveLength(1)
+  })
+
+  it('drops the preview once expanded so the line is not shown twice', () => {
+    const tree = render(reasoningMessage('Weighing two approaches'))
+    act(() => toggle(tree).props.onPress())
+    const texts = tree.root
+      .findAllByType('Text' as never)
+      .map((node) => String(node.children.join('')))
+    expect(texts.filter((text) => text === 'Weighing two approaches')).toHaveLength(0)
+  })
+
+  it('starts expanded when the toolbar toggle is on', () => {
+    const tree = render(reasoningMessage('Weighing two approaches'), true)
+    expect(tree.root.findAllByType('MobileMarkdown' as never)).toHaveLength(1)
+  })
+
+  it('keeps the copy control reachable while collapsed', () => {
+    const tree = render(reasoningMessage('Weighing two approaches'))
+    expect(
+      tree.root.findAll((node) => node.props.accessibilityLabel === 'Copy message')
+    ).toHaveLength(1)
+  })
+
+  it('renders no disclosure for whitespace-only reasoning', () => {
+    // Codex emits these: transcript-line-decoders-codex.ts guards on `!text`,
+    // not `!text.trim()`, so a blank thought reaches the renderer.
+    const tree = render(reasoningMessage('\n   \n'))
+    expect(thinkingRows(tree)).toHaveLength(0)
+  })
+
+  it('renders no disclosure for a reasoning turn with no blocks', () => {
+    const tree = render(roleMessage('reasoning', []))
+    expect(thinkingRows(tree)).toHaveLength(0)
+  })
+
+  it('keeps assistant prose rendered in full, not collapsed', () => {
+    const tree = render(roleMessage('assistant', [{ type: 'text', text: 'Here is the answer' }]))
+    expect(thinkingRows(tree)).toHaveLength(0)
+    const markdown = tree.root.findAllByType('MobileMarkdown' as never)
+    expect(markdown).toHaveLength(1)
+    expect(markdown[0]!.props.content).toBe('Here is the answer')
+  })
+
+  it('expands and re-collapses the reasoning body on tap', () => {
+    const tree = render(reasoningMessage('Weighing two approaches\nsecond line'))
+    act(() => toggle(tree).props.onPress())
+    expect(tree.root.findAllByType('MobileMarkdown' as never)).toHaveLength(1)
+    act(() => toggle(tree).props.onPress())
+    expect(tree.root.findAllByType('MobileMarkdown' as never)).toHaveLength(0)
+    // Back to the collapsed one-liner, preview and all.
+    const texts = tree.root
+      .findAllByType('Text' as never)
+      .map((node) => String(node.children.join('')))
+    expect(texts).toContain('Weighing two approaches')
+  })
+
+  it('copies the whole reasoning text while collapsed, not the preview line', () => {
+    const setStringAsync = vi.mocked(Clipboard.setStringAsync)
+    setStringAsync.mockClear()
+    const text = 'Weighing two approaches\nsecond line\nthird line\nfourth line'
+    const tree = render(reasoningMessage(text))
+    // Still collapsed: the preview is all that is on screen, but Copy must not
+    // settle for it.
+    expect(tree.root.findAllByType('MobileMarkdown' as never)).toHaveLength(0)
+    const copy = tree.root.find(
+      (node) => node.props.accessibilityLabel === 'Copy message'
+    ) as unknown as { props: { onPress: () => void } }
+    act(() => copy.props.onPress())
+    expect(setStringAsync).toHaveBeenCalledTimes(1)
+    expect(setStringAsync.mock.calls[0]![0]).toBe(text)
   })
 })

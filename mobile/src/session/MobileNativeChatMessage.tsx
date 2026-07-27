@@ -18,6 +18,8 @@ import { colors } from '../theme/mobile-theme'
 import { isRenderableImageUri } from './mobile-native-chat-image-preview'
 import { styles, TEXT_SIZE } from './mobile-native-chat-message-styles'
 import { nativeChatMessageText } from './mobile-native-chat-message-text'
+import { MobileNativeChatReasoningRow } from './MobileNativeChatReasoningRow'
+import { reasoningPreviewLine } from './mobile-native-chat-reasoning-preview'
 
 const MAX_VISIBLE_TOOL_PAIRS = 6
 const MAX_TOOL_RUN_DIFF_ROWS = 240
@@ -337,6 +339,39 @@ function MobileNativeChatMessageImpl({
     />
   ) : null
 
+  const proseNodes = prose.map((block, index) => (
+    <Prose
+      key={index}
+      block={block}
+      invert={isUser}
+      fontScale={fontScale}
+      onOpenFile={onOpenFile}
+    />
+  ))
+
+  // Whitespace-only reasoning exists (decoders emit it), and a row that opens on
+  // nothing is worse than no row.
+  const reasoningPreview = isReasoning ? reasoningPreviewLine(prose) : ''
+  if (reasoningPreview) {
+    // Reasoning turns never carry tool blocks — folding only attaches those to assistant turns.
+    return (
+      <View style={styles.row}>
+        <View style={[styles.content, styles.reasoning, copied && styles.copied]}>
+          <MobileNativeChatReasoningRow
+            // Why: a global toggle intentionally resets all per-row overrides in
+            // one remount, avoiding an effect-driven second render.
+            key={toolsExpanded ? 'expanded' : 'collapsed'}
+            preview={reasoningPreview}
+            defaultExpanded={toolsExpanded}
+            trailing={controls}
+          >
+            {proseNodes}
+          </MobileNativeChatReasoningRow>
+        </View>
+      </View>
+    )
+  }
+
   return (
     <View style={[styles.row, isUser && styles.rowUser]}>
       <View
@@ -347,15 +382,7 @@ function MobileNativeChatMessageImpl({
           copied && styles.copied
         ]}
       >
-        {prose.map((block, index) => (
-          <Prose
-            key={index}
-            block={block}
-            invert={isUser}
-            fontScale={fontScale}
-            onOpenFile={onOpenFile}
-          />
-        ))}
+        {proseNodes}
         {tools.length > 0 ? (
           <ToolRun
             // Why: a global toggle intentionally resets all per-run/per-line
