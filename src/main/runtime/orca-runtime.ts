@@ -35503,6 +35503,7 @@ export class OrcaRuntimeService {
     return agentIdentity ? { agentIdentity } : {}
   }
 
+  /** Builds a terminal summary for a renderer graph leaf, which is always visible. */
   private buildTerminalSummary(
     leaf: RuntimeLeafRecord,
     worktreesById: Map<string, ResolvedWorktree>,
@@ -37683,6 +37684,7 @@ export class OrcaRuntimeService {
     }
   }
 
+  /** Builds a terminal summary for a PTY handle using its current renderer adoption state. */
   private buildPtyTerminalSummary(
     pty: RuntimePtyWorktreeRecord,
     worktreesById: Map<string, ResolvedWorktree>

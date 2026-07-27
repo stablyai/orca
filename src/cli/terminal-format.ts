@@ -18,6 +18,7 @@ import type {
   RuntimeTerminalWait
 } from '../shared/runtime-types'
 
+/** Formats `terminal list`, including each terminal's current visible/background surface. */
 export function formatTerminalList(result: RuntimeTerminalListResult): string {
   const scope = formatTerminalListHostScope(result.hostScope)
   if (result.terminals.length === 0) {
@@ -103,6 +104,7 @@ function formatVisualPaneNode(node: RuntimeTerminalVisualPaneNode, depth: number
   ]
 }
 
+/** Formats `terminal show` with full metadata for one runtime terminal handle. */
 export function formatTerminalShow(result: { terminal: RuntimeTerminalShow }): string {
   const terminal = result.terminal
   return [
