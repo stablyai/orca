@@ -18,6 +18,9 @@ export class SharedControlReconnectScheduler {
     delaysMs: readonly number[]
     open: () => void
   }): void {
+    if (this.timer || args.intentionallyClosed) {
+      return
+    }
     // Why: a passive subscription owns recovery until its caller closes it; roaming outages are unbounded.
     this.pendingOpen = args.open
     const scheduled = scheduleSharedControlReconnect({

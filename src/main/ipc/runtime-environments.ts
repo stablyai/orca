@@ -14,10 +14,8 @@ import type { RuntimeStatus } from '../../shared/runtime-types'
 import type { RuntimeRpcResponse } from '../../shared/runtime-rpc-envelope'
 import type { RemoteRuntimeSubscription } from '../../shared/remote-runtime-client'
 import type { Store } from '../persistence'
-import {
-  closeRemoteRuntimeRequestConnection,
-  retryRemoteRuntimeSharedControlConnectionsNow
-} from './runtime-environment-request-connections'
+import { closeRemoteRuntimeRequestConnection } from './runtime-environment-request-connections'
+import { registerRuntimeEnvironmentRecoveryHandler } from './runtime-environment-recovery-handler'
 import {
   advanceRuntimeEnvironmentTransportGeneration,
   getRuntimeEnvironmentTransportGeneration
@@ -37,7 +35,6 @@ const RUNTIME_ENVIRONMENT_HANDLER_CHANNELS = [
   'runtimeEnvironments:remove',
   'runtimeEnvironments:disconnect',
   'runtimeEnvironments:getStatus',
-  'runtimeEnvironments:retryConnectionsNow',
   'runtimeEnvironments:call',
   'runtimeEnvironments:subscribe',
   'runtimeEnvironments:unsubscribe'
@@ -126,9 +123,7 @@ export function registerRuntimeEnvironmentHandlers(store: Store): void {
       return { disconnected: redactRuntimeEnvironment(environment) }
     }
   )
-  ipcMain.handle('runtimeEnvironments:retryConnectionsNow', () => {
-    retryRemoteRuntimeSharedControlConnectionsNow()
-  })
+  registerRuntimeEnvironmentRecoveryHandler()
   ipcMain.handle(
     'runtimeEnvironments:getStatus',
     async (

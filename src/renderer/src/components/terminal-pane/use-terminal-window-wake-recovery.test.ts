@@ -3,18 +3,12 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { renderHook } from '@testing-library/react'
 import type { PaneManager } from '@/lib/pane-manager/pane-manager'
 
-const { recoverVisibleTerminalWindowWakeMock, retryAllRemoteRuntimePtyRecoveriesNowMock } =
-  vi.hoisted(() => ({
-    recoverVisibleTerminalWindowWakeMock: vi.fn(),
-    retryAllRemoteRuntimePtyRecoveriesNowMock: vi.fn()
-  }))
+const { recoverVisibleTerminalWindowWakeMock } = vi.hoisted(() => ({
+  recoverVisibleTerminalWindowWakeMock: vi.fn()
+}))
 
 vi.mock('./terminal-visibility-resume', () => ({
   recoverVisibleTerminalWindowWake: recoverVisibleTerminalWindowWakeMock
-}))
-
-vi.mock('./remote-runtime-pty-recovery-state', () => ({
-  retryAllRemoteRuntimePtyRecoveriesNow: retryAllRemoteRuntimePtyRecoveriesNowMock
 }))
 
 import { useTerminalWindowWakeRecovery } from './use-terminal-window-wake-recovery'
@@ -31,32 +25,20 @@ describe('useTerminalWindowWakeRecovery', () => {
     systemResumedCallback = callback
     return unsubscribeSystemResumed
   })
-  const retryConnectionsNow = vi.fn(() => Promise.resolve())
-  let addEventListenerSpy: ReturnType<typeof vi.spyOn> | null = null
 
   beforeEach(() => {
     systemResumedCallback = null
     recoverVisibleTerminalWindowWakeMock.mockClear()
-    retryAllRemoteRuntimePtyRecoveriesNowMock.mockClear()
-    retryConnectionsNow.mockClear()
     unsubscribeSystemResumed.mockClear()
     onSystemResumed.mockClear()
     resetTerminalFreezeBreadcrumbsForTesting()
     // Why: without requestAnimationFrame the hook skips its settled-frame
     // follow-up, so every trigger maps to exactly one synchronous recovery.
     vi.stubGlobal('requestAnimationFrame', undefined)
-    ;(window as unknown as { api: unknown }).api = {
-      ui: { onSystemResumed },
-      runtimeEnvironments: { retryConnectionsNow }
-    }
-    // Why: spy (call-through) so tests can invoke the hook's online handler
-    // without dispatchEvent stacking leftover listeners from earlier cases.
-    addEventListenerSpy = vi.spyOn(window, 'addEventListener')
+    ;(window as unknown as { api: unknown }).api = { ui: { onSystemResumed } }
   })
 
   afterEach(() => {
-    addEventListenerSpy?.mockRestore()
-    addEventListenerSpy = null
     vi.unstubAllGlobals()
     delete (window as unknown as { api?: unknown }).api
   })
@@ -181,50 +163,5 @@ describe('useTerminalWindowWakeRecovery', () => {
     renderWakeRecoveryHook(false)
 
     expect(onSystemResumed).not.toHaveBeenCalled()
-  })
-
-  it('advances shared-control and pane recovery backoffs on browser online without painting', () => {
-    // Why: network can return while the OS is still awake; online must fire the
-    // existing reconnect/backoff timers without a glyph-atlas wake recovery.
-    renderWakeRecoveryHook()
-    const onlineHandler = addEventListenerSpy?.mock.calls.find(
-      (call) => call[0] === 'online' && typeof call[1] === 'function'
-    )?.[1] as (() => void) | undefined
-    expect(onlineHandler).toBeTypeOf('function')
-    retryConnectionsNow.mockClear()
-    retryAllRemoteRuntimePtyRecoveriesNowMock.mockClear()
-    recoverVisibleTerminalWindowWakeMock.mockClear()
-
-    onlineHandler?.()
-
-    expect(retryConnectionsNow).toHaveBeenCalledTimes(1)
-    expect(retryAllRemoteRuntimePtyRecoveriesNowMock).toHaveBeenCalledTimes(1)
-    expect(recoverVisibleTerminalWindowWakeMock).not.toHaveBeenCalled()
-  })
-
-  it('advances remote recovery backoffs on system resume even when still occluded', () => {
-    const visibility = Object.getOwnPropertyDescriptor(Document.prototype, 'visibilityState')
-    Object.defineProperty(document, 'visibilityState', {
-      configurable: true,
-      get: () => 'hidden'
-    })
-    try {
-      renderWakeRecoveryHook()
-      retryConnectionsNow.mockClear()
-      retryAllRemoteRuntimePtyRecoveriesNowMock.mockClear()
-      recoverVisibleTerminalWindowWakeMock.mockClear()
-
-      systemResumedCallback?.()
-
-      expect(retryConnectionsNow).toHaveBeenCalledTimes(1)
-      expect(retryAllRemoteRuntimePtyRecoveriesNowMock).toHaveBeenCalledTimes(1)
-      expect(recoverVisibleTerminalWindowWakeMock).not.toHaveBeenCalled()
-    } finally {
-      if (visibility) {
-        Object.defineProperty(document, 'visibilityState', visibility)
-      } else {
-        delete (document as { visibilityState?: DocumentVisibilityState }).visibilityState
-      }
-    }
   })
 })

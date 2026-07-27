@@ -8,12 +8,13 @@ export type RemoteRuntimePtyRecoveryPhase =
   | 'disconnected'
   | 'disposed'
 
-// Why: system resume / network online need to advance in-flight pane recoveries without a second coordinator.
-const activeRecoveries = new Set<RemoteRuntimePtyRecoveryState>()
+// Why: system resume / network online need to advance pending pane backoffs without a second coordinator.
+const scheduledRecoveries = new Set<RemoteRuntimePtyRecoveryState>()
 
 export function retryAllRemoteRuntimePtyRecoveriesNow(): number {
   let advanced = 0
-  for (const recovery of [...activeRecoveries]) {
+  // Why: a synchronous retry failure can schedule the same state again.
+  for (const recovery of Array.from(scheduledRecoveries)) {
     if (recovery.retryNow()) {
       advanced += 1
     }
@@ -59,7 +60,6 @@ export class RemoteRuntimePtyRecoveryState {
     }
     this.clearRetryTimer()
     this.phase = 'recovering'
-    activeRecoveries.add(this)
     this.onChange?.()
     return this.epoch
   }
@@ -82,8 +82,6 @@ export class RemoteRuntimePtyRecoveryState {
     this.attempt += 1
     this.pendingRetry = retry
     this.pendingEpoch = epoch
-    activeRecoveries.add(this)
-    this.onChange?.()
     const timer = setTimeout(() => {
       if (this.retryTimer !== timer || !this.isCurrent(epoch)) {
         return
@@ -91,12 +89,15 @@ export class RemoteRuntimePtyRecoveryState {
       this.retryTimer = null
       this.pendingRetry = null
       this.pendingEpoch = null
+      scheduledRecoveries.delete(this)
       this.phase = 'recovering'
       this.onChange?.()
       retry(epoch)
     }, delayMs)
     timer.unref?.()
     this.retryTimer = timer
+    scheduledRecoveries.add(this)
+    this.onChange?.()
     return true
   }
 
@@ -108,8 +109,6 @@ export class RemoteRuntimePtyRecoveryState {
     const retry = this.pendingRetry
     const epoch = this.pendingEpoch
     this.clearRetryTimer()
-    this.pendingRetry = null
-    this.pendingEpoch = null
     this.phase = 'recovering'
     this.onChange?.()
     retry(epoch)
@@ -123,7 +122,6 @@ export class RemoteRuntimePtyRecoveryState {
     this.clearTimers()
     this.phase = 'idle'
     this.attempt = 0
-    activeRecoveries.delete(this)
     this.onChange?.()
   }
 
@@ -133,7 +131,6 @@ export class RemoteRuntimePtyRecoveryState {
     }
     this.clearTimers()
     this.phase = 'disconnected'
-    activeRecoveries.delete(this)
     this.onChange?.()
   }
 
@@ -145,7 +142,6 @@ export class RemoteRuntimePtyRecoveryState {
     this.clearTimers()
     this.phase = 'idle'
     this.attempt = 0
-    activeRecoveries.delete(this)
     this.onChange?.()
   }
 
@@ -153,7 +149,6 @@ export class RemoteRuntimePtyRecoveryState {
     this.epoch += 1
     this.clearTimers()
     this.phase = 'disposed'
-    activeRecoveries.delete(this)
     this.onChange?.()
   }
 
@@ -166,7 +161,6 @@ export class RemoteRuntimePtyRecoveryState {
       this.deadlineTimer = null
       this.clearRetryTimer()
       this.phase = 'disconnected'
-      activeRecoveries.delete(this)
       this.onChange?.()
     }, REMOTE_RUNTIME_AUTO_RECOVERY_TIMEOUT_MS)
     timer.unref?.()
@@ -185,6 +179,7 @@ export class RemoteRuntimePtyRecoveryState {
     }
     this.pendingRetry = null
     this.pendingEpoch = null
+    scheduledRecoveries.delete(this)
   }
 
   private clearDeadlineTimer(): void {
