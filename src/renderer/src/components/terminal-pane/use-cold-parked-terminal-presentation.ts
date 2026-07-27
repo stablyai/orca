@@ -56,7 +56,7 @@ export function resolveColdParkedPresentation(
       presentedTargetId: null,
       pendingTargetId: null
     }
-    if (entry.pendingTargetId === desiredTargetId) {
+    if (entry.pendingTargetId !== null && entry.pendingTargetId === desiredTargetId) {
       next.set(scopeId, entry)
       continue
     }
