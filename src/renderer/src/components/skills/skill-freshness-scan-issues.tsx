@@ -21,7 +21,7 @@ function issueDescription(issue: SkillFreshnessScanIssue): string {
     case 'manifest-limit':
       return translate(
         'auto.components.skills.SkillFreshnessUpdateDialog.scanManifestLimit',
-        'Orca skipped this plugin manifest because it exceeded the safe read limit.'
+        'Orca skipped this plugin manifest because it exceeded a safe limit.'
       )
     case 'outside-root':
       return translate(

@@ -451,6 +451,40 @@ describe('plugin skill candidate scan', () => {
     expect(result.issues.filter((issue) => issue.reason === 'issue-limit')).toHaveLength(1)
   })
 
+  it('still names a fail-closed candidate once the issue budget is spent', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'orca-plugin-issue-budget-candidate-'))
+    temporaryDirectories.push(root)
+    const packageRoot = join(root, 'zz-package')
+    const candidate = join(packageRoot, 'skills', 'orca-cli')
+    await Promise.all(
+      Array.from({ length: 16 }, (_, index) =>
+        mkdir(
+          join(
+            root,
+            `deep-${index.toString().padStart(2, '0')}`,
+            ...Array.from({ length: 11 }, (_, level) => `level-${level}`)
+          ),
+          { recursive: true }
+        )
+      )
+    )
+    await mkdir(join(packageRoot, '.codex-plugin'), { recursive: true })
+    await mkdir(join(packageRoot, 'skills'), { recursive: true })
+    await writeFile(join(packageRoot, '.codex-plugin', 'plugin.json'), '{"skills":"./skills"}\n')
+    await symlink('missing-target', candidate, 'dir')
+
+    const result = await scanKnownPluginSkillCandidates(root, new Set(['orca-cli']))
+
+    // Why: the depth bounds fill the issue budget first. Dropping this one for budget
+    // would leave the badge amber over a candidate the dialog never mentions.
+    expect(result.candidates).toEqual([{ name: 'orca-cli', path: candidate }])
+    expect(result.issues).toContainEqual({
+      path: candidate,
+      reason: 'io-error',
+      errorCode: 'ENOENT'
+    })
+  })
+
   it('names the path when a dangling known-name symlink is kept as a candidate', async () => {
     const root = await mkdtemp(join(tmpdir(), 'orca-plugin-declared-dangling-symlink-'))
     temporaryDirectories.push(root)

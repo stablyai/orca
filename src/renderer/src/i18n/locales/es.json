@@ -3766,7 +3766,7 @@
           "scanDepthLimit": "Orca alcanzó el límite de profundidad del análisis antes de comprobar esta carpeta.",
           "scanEntryLimit": "Orca alcanzó el límite de entradas del análisis antes de comprobar el resto de esta caché.",
           "scanCandidateLimit": "Orca encontró más carpetas de skills con el mismo nombre de las que puede inspeccionar de forma segura.",
-          "scanManifestLimit": "Orca omitió este manifiesto del plugin porque superaba el límite de lectura segura.",
+          "scanManifestLimit": "Orca omitió este manifiesto del plugin porque superaba un límite seguro.",
           "scanOutsideRoot": "Orca omitió esta ruta del plugin porque apunta fuera de la caché de plugins.",
           "scanIoErrorWithCode": "Orca no pudo leer esta ruta del plugin ({{value0}}).",
           "scanIoError": "Orca no pudo leer esta ruta del plugin.",

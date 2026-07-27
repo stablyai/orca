@@ -53,16 +53,21 @@ export async function scanKnownPluginSkillCandidates(
   let entryCount = 0
   let limitReached = false
 
+  // Why: an issue that explains a candidate is not optional. Dropping it for budget
+  // leaves the badge reacting to a placement the dialog can't account for, which is
+  // the split this change exists to remove — so those are charged past the bound,
+  // itself bounded by the candidate cap.
   function recordIssue(
     path: string,
     reason: KnownPluginSkillScanIssue['reason'],
-    code: string | null = null
+    code: string | null = null,
+    explainsCandidate = false
   ): void {
     const key = `${path}\0${reason}\0${code ?? ''}`
     if (issueKeys.has(key)) {
       return
     }
-    if (issues.length >= MAXIMUM_PLUGIN_SCAN_ISSUES) {
+    if (!explainsCandidate && issues.length >= MAXIMUM_PLUGIN_SCAN_ISSUES) {
       if (!issues.some((issue) => issue.reason === 'issue-limit')) {
         issues.push({
           path: rootPath,
@@ -241,13 +246,12 @@ export async function scanKnownPluginSkillCandidates(
           // such claim and no SKILL.md to read, so inventing a copy would be a guess.
           const claimedSkill = withinDeclaredSkillRoot && knownNames.has(entry.name)
           // Why: a fail-closed candidate reads as inaccessible and raises attention, so
-          // the path has to be named even when it is merely absent. Staying silent is
-          // the badge-says-attention/dialog-says-all-clear split this change removes.
-          if (code !== 'ENOENT' || claimedSkill) {
-            recordIssue(entryPath, 'io-error', code)
-          }
+          // the path has to be named even when it is merely absent.
           if (claimedSkill) {
+            recordIssue(entryPath, 'io-error', code, true)
             recordCandidate(entry.name, entryPath)
+          } else if (code !== 'ENOENT') {
+            recordIssue(entryPath, 'io-error', code)
           }
           continue
         }

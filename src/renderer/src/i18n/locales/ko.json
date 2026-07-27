@@ -3766,7 +3766,7 @@
           "scanDepthLimit": "이 폴더를 확인하기 전에 플러그인 검사 깊이 제한에 도달했습니다.",
           "scanEntryLimit": "이 캐시의 나머지 항목을 확인하기 전에 플러그인 검사 항목 수 제한에 도달했습니다.",
           "scanCandidateLimit": "안전하게 검사할 수 있는 수보다 많은 동명 스킬 폴더가 발견되었습니다.",
-          "scanManifestLimit": "안전한 읽기 제한을 초과한 플러그인 매니페스트를 건너뛰었습니다.",
+          "scanManifestLimit": "안전한 제한을 초과한 플러그인 매니페스트를 건너뛰었습니다.",
           "scanOutsideRoot": "플러그인 캐시 외부를 가리키는 플러그인 경로를 건너뛰었습니다.",
           "scanIoErrorWithCode": "이 플러그인 경로를 읽지 못했습니다({{value0}}).",
           "scanIoError": "이 플러그인 경로를 읽지 못했습니다.",

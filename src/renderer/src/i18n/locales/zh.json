@@ -3766,7 +3766,7 @@
           "scanDepthLimit": "在检查此文件夹之前，Orca 已达到插件扫描深度上限。",
           "scanEntryLimit": "在检查此缓存的其余内容之前，Orca 已达到插件扫描条目数上限。",
           "scanCandidateLimit": "Orca 发现的同名技能文件夹数量超过了可安全检查的上限。",
-          "scanManifestLimit": "此插件清单超出安全读取限制，Orca 已将其跳过。",
+          "scanManifestLimit": "此插件清单超出安全限制，Orca 已将其跳过。",
           "scanOutsideRoot": "此插件路径指向插件缓存之外，Orca 已将其跳过。",
           "scanIoErrorWithCode": "Orca 无法读取此插件路径（{{value0}}）。",
           "scanIoError": "Orca 无法读取此插件路径。",
