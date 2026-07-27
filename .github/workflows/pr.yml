@@ -37,6 +37,9 @@ jobs:
       - name: Check styled scrollbars
         run: pnpm check:styled-scrollbars
 
+      - name: Check quadratic buffer concatenation
+        run: pnpm run check:quadratic-buffer-concat
+
       - name: Check reliability gate manifest
         run: pnpm run check:reliability-gates
 
