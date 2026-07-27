@@ -7,7 +7,7 @@
 // file contents are never read, and dir listings / entry names are never
 // logged.
 
-import { readdirSync, statSync } from 'node:fs'
+import { lstatSync, readdirSync } from 'node:fs'
 import { homedir } from 'node:os'
 import { join } from 'node:path'
 import { CLAUDE_FLAVOR_CONFIG_DIR_PATTERN } from '../../shared/claude-config-dir-label'
@@ -43,7 +43,8 @@ export type LocalClaudeConfigDirFs = {
 
 const localNodeFs: LocalClaudeConfigDirFs = {
   readdirNames: (dirPath) => readdirSync(dirPath),
-  pathIsFile: (path) => statSync(path).isFile()
+  // Why: lstat — presence must not follow a marker symlink out of the dir.
+  pathIsFile: (path) => lstatSync(path).isFile()
 }
 
 /** Discover flavor config dirs in the local home dir. Returns sorted dir
@@ -89,6 +90,12 @@ export type SftpShapedClaudeConfigDirFs = {
     path: string,
     callback: (err: unknown, stats?: { mode?: number; isFile?: () => boolean }) => void
   ): void
+  /** No-follow probe used for markers when available (ssh2 has it); falls
+   *  back to `stat` when absent. */
+  lstat?(
+    path: string,
+    callback: (err: unknown, stats?: { mode?: number; isFile?: () => boolean }) => void
+  ): void
 }
 
 function isRemoteRegularFile(
@@ -107,6 +114,12 @@ function isRemoteRegularFile(
 // Why: mirror installer-utils-remote's per-operation timeout — a wedged SFTP
 // callback must degrade discovery to "no extra dirs", not hang remote startup.
 const REMOTE_DISCOVERY_OPERATION_TIMEOUT_MS = 10_000
+
+// Why: readdir can return an unbounded candidate list and each candidate costs
+// up to three sequential SFTP probes — without these caps a huge or wedged
+// remote home could delay startup arbitrarily.
+const REMOTE_DISCOVERY_MAX_CANDIDATES = 16
+const REMOTE_DISCOVERY_DEADLINE_MS = 15_000
 
 function remoteOperation<T>(
   run: (callback: (err: unknown, value?: T) => void) => void
@@ -161,12 +174,18 @@ export async function discoverRemoteClaudeConfigDirNames(
     .map((entry) => entry.filename)
     .filter(isClaudeFlavorConfigDirName)
     .sort()
+    .slice(0, REMOTE_DISCOVERY_MAX_CANDIDATES)
+  const deadline = Date.now() + REMOTE_DISCOVERY_DEADLINE_MS
+  const markerProbe = sftp.lstat ?? sftp.stat
   const discovered: string[] = []
   for (const name of candidates) {
+    if (Date.now() >= deadline) {
+      break
+    }
     const dirPath = home === '/' ? `/${name}` : `${home}/${name}`
     for (const marker of CLAUDE_CONFIG_DIR_MARKERS) {
       const present = await remoteOperation<boolean>((callback) => {
-        sftp.stat(`${dirPath}/${marker}`, (err, stats) =>
+        markerProbe.call(sftp, `${dirPath}/${marker}`, (err, stats) =>
           callback(null, !err && isRemoteRegularFile(stats))
         )
       }).catch(() => false)

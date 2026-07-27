@@ -172,6 +172,56 @@ describe('discoverRemoteClaudeConfigDirNames', () => {
     }
     await expect(discoverRemoteClaudeConfigDirNames(sftp, '/home/dev')).resolves.toEqual([])
   })
+
+  it('caps the candidate probes so a huge remote home cannot delay startup arbitrarily', async () => {
+    const names = Array.from({ length: 24 }, (_, i) => `.claude-${String(i).padStart(2, '0')}`)
+    const remote = createFakeRemote(
+      names,
+      names.map((name) => `/home/dev/${name}/settings.json`)
+    )
+    const discovered = await discoverRemoteClaudeConfigDirNames(remote.sftp, '/home/dev')
+    expect(discovered).toEqual(names.slice(0, 16))
+    expect(remote.statCalls.length).toBe(16)
+  })
+
+  it('stops probing further candidates once the overall discovery deadline passes', async () => {
+    let now = 1_000_000
+    vi.spyOn(Date, 'now').mockImplementation(() => now)
+    const sftp: SftpShapedClaudeConfigDirFs = {
+      readdir: (_path, callback) =>
+        callback(
+          null,
+          ['.claude-a', '.claude-b', '.claude-c'].map((filename) => ({ filename }))
+        ),
+      stat: (_path, callback) => {
+        // Why: each probe burns past the 15s deadline — only the first
+        // candidate may complete discovery.
+        now += 20_000
+        callback(null, { mode: 0o100644 })
+      }
+    }
+    await expect(discoverRemoteClaudeConfigDirNames(sftp, '/home/dev')).resolves.toEqual([
+      '.claude-a'
+    ])
+  })
+
+  it('probes markers without following symlinks when lstat is available', async () => {
+    const lstatPaths: string[] = []
+    const sftp: SftpShapedClaudeConfigDirFs = {
+      readdir: (_path, callback) => callback(null, [{ filename: '.claude-grok' }]),
+      stat: () => {
+        throw new Error('stat must not be used when lstat is present')
+      },
+      lstat: (path, callback) => {
+        lstatPaths.push(path)
+        callback(null, { mode: 0o100644 })
+      }
+    }
+    await expect(discoverRemoteClaudeConfigDirNames(sftp, '/home/dev')).resolves.toEqual([
+      '.claude-grok'
+    ])
+    expect(lstatPaths).toEqual(['/home/dev/.claude-grok/settings.json'])
+  })
 })
 
 describe('deriveClaudeConfigDirLabel', () => {
