@@ -3783,7 +3783,17 @@
           "terminalDescription": "Review the pre-filled command, then press Enter to run it.",
           "terminalAria": "Orca skill update terminal",
           "checkNow": "Re-check",
-          "close": "Close"
+          "close": "Close",
+          "scanIncomplete": "Orca could not finish checking plugin-managed skills.",
+          "scanIncompleteDescription": "Open Update details to see which plugin folders were skipped.",
+          "scanDepthLimit": "Orca reached its plugin scan depth limit before checking this folder.",
+          "scanEntryLimit": "Orca reached its plugin scan entry limit before checking the rest of this cache.",
+          "scanCandidateLimit": "Orca found more same-named skill folders than it can safely inspect.",
+          "scanManifestLimit": "Orca skipped this plugin manifest because it exceeded the safe read limit.",
+          "scanOutsideRoot": "Orca skipped this plugin path because it points outside the plugin cache.",
+          "scanIoErrorWithCode": "Orca could not read this plugin path ({{value0}}).",
+          "scanIoError": "Orca could not read this plugin path.",
+          "scanIssueLimit": "Orca found too many skipped plugin folders to list individually."
         },
         "SkillFreshnessStatusPill": {
           "updateAvailable": "Update available",

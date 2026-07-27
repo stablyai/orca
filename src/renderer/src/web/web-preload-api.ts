@@ -2790,6 +2790,7 @@ function createSkillsApi(): NonNullable<Partial<PreloadApi>['skills']> {
         schemaVersion: 1,
         installations: [],
         eligibleUpdateNames: [],
+        scanIssues: [],
         scannedAt: Date.now()
       })
   }

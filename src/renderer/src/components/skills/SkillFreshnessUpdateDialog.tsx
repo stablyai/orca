@@ -25,13 +25,20 @@ import { OnboardingInlineCommandTerminal } from '@/components/onboarding/Onboard
 import { TooltipProvider } from '@/components/ui/tooltip'
 import { groupSkillFreshness } from './skill-freshness-grouping'
 import { SkillFreshnessGroup } from './skill-freshness-group'
+import { SkillFreshnessScanIssues } from './skill-freshness-scan-issues'
 import {
   consumeSkillFreshnessUpdateDialogRequest,
   getSkillFreshnessUpdateDialogRequest,
   subscribeSkillFreshnessUpdateDialog
 } from './skill-freshness-update-dialog'
 
-type FreshnessSummaryKind = 'loading' | 'empty' | 'eligible' | 'current' | 'attention'
+type FreshnessSummaryKind =
+  | 'loading'
+  | 'empty'
+  | 'eligible'
+  | 'current'
+  | 'attention'
+  | 'scan-incomplete'
 
 function summarizeInventory(
   inventory: SkillFreshnessInventory | null,
@@ -40,11 +47,14 @@ function summarizeInventory(
   if (!inventory) {
     return 'loading'
   }
-  if (inventory.installations.length === 0) {
-    return 'empty'
-  }
   if (inventory.eligibleUpdateNames.length > 0) {
     return 'eligible'
+  }
+  if (inventory.scanIssues.length > 0) {
+    return 'scan-incomplete'
+  }
+  if (inventory.installations.length === 0) {
+    return 'empty'
   }
   // Why: with nothing eligible, the modal is either genuinely all-clear or has
   // out-of-date skills it can't safely update; the group filter already dropped
@@ -88,6 +98,25 @@ function SummaryHeadline({
           'auto.components.skills.SkillFreshnessUpdateDialog.success',
           'All installed Orca skills are up to date.'
         )}
+      </div>
+    )
+  }
+  if (kind === 'scan-incomplete') {
+    return (
+      <div className="space-y-1">
+        <div className="flex items-center gap-2 text-sm font-medium text-foreground">
+          <AlertTriangle className="size-4 text-amber-600 dark:text-amber-400" />
+          {translate(
+            'auto.components.skills.SkillFreshnessUpdateDialog.scanIncomplete',
+            'Orca could not finish checking plugin-managed skills.'
+          )}
+        </div>
+        <p className="text-xs text-muted-foreground">
+          {translate(
+            'auto.components.skills.SkillFreshnessUpdateDialog.scanIncompleteDescription',
+            'Open Update details to see which plugin folders were skipped.'
+          )}
+        </p>
       </div>
     )
   }
@@ -144,12 +173,14 @@ export function SkillFreshnessUpdateDialog(): React.JSX.Element {
   const inventoryAtTerminalExitRef = useRef<SkillFreshnessInventory | null>(null)
   const inventory = state.inventory
   const eligibleNames = useMemo(() => inventory?.eligibleUpdateNames ?? [], [inventory])
+  const scanIssues = inventory?.scanIssues ?? []
   const groups = useMemo(
     () =>
       inventory ? groupSkillFreshness(inventory.installations, inventory.eligibleUpdateNames) : [],
     [inventory]
   )
-  const hasBlockedGroup = groups.some((group) => group.status === 'cannot-update')
+  const hasBlockedGroup =
+    scanIssues.length > 0 || groups.some((group) => group.status === 'cannot-update')
   const updateCommand = buildTargetedSkillUpdateCommand(eligibleNames)
   const summaryKind = summarizeInventory(inventory, hasBlockedGroup)
   const terminalAuthorizationPending =
@@ -252,7 +283,7 @@ export function SkillFreshnessUpdateDialog(): React.JSX.Element {
     notifyInstalledAgentSkillsChanged()
   }
 
-  const hasVisibleGroups = groups.length > 0
+  const hasVisibleGroups = scanIssues.length > 0 || groups.length > 0
 
   return (
     <Dialog open={open} onOpenChange={handleOpenChange}>
@@ -338,6 +369,7 @@ export function SkillFreshnessUpdateDialog(): React.JSX.Element {
             </CollapsibleTrigger>
             <CollapsibleContent className="mt-1 divide-y divide-border/40 rounded-md border border-border/60 p-3">
               <TooltipProvider>
+                <SkillFreshnessScanIssues issues={scanIssues} />
                 {groups.map((group) => (
                   <SkillFreshnessGroup key={group.name} group={group} />
                 ))}

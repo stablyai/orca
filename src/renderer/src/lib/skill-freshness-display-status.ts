@@ -16,6 +16,9 @@ export function getSkillFreshnessDisplayStatus(
   if (inventory?.eligibleUpdateNames.includes(skillName)) {
     return 'update-available'
   }
+  if (inventory?.scanIssues.length) {
+    return 'needs-attention'
+  }
 
   let hasPlacement = false
   let hasBlockedCopy = false
@@ -48,14 +51,17 @@ export function hasSkillCopyNeedingAttention(
   inventory: SkillFreshnessInventory | null,
   skillName: string
 ): boolean {
-  return (inventory?.installations ?? []).some(
-    (installation) =>
-      installation.name === skillName &&
-      installation.status !== 'current' &&
-      // Why: an out-of-date copy the command converges is ordinary work, not a problem.
-      !(
-        SUPPORTED_GLOBAL_SKILL_TOPOLOGIES.has(installation.topology) &&
-        installation.status === 'outdated'
-      )
+  return (
+    Boolean(inventory?.scanIssues.length) ||
+    (inventory?.installations ?? []).some(
+      (installation) =>
+        installation.name === skillName &&
+        installation.status !== 'current' &&
+        // Why: an out-of-date copy the command converges is ordinary work, not a problem.
+        !(
+          SUPPORTED_GLOBAL_SKILL_TOPOLOGIES.has(installation.topology) &&
+          installation.status === 'outdated'
+        )
+    )
   )
 }

@@ -3760,7 +3760,17 @@
           "terminalDescription": "检查预填的命令，然后按 Enter 键运行。",
           "terminalAria": "Orca 技能更新终端",
           "checkNow": "立即检查",
-          "close": "关闭"
+          "close": "关闭",
+          "scanIncomplete": "Orca 无法完成对插件管理技能的检查。",
+          "scanIncompleteDescription": "打开更新详情，查看哪些插件文件夹被跳过。",
+          "scanDepthLimit": "在检查此文件夹之前，Orca 已达到插件扫描深度上限。",
+          "scanEntryLimit": "在检查此缓存的其余内容之前，Orca 已达到插件扫描条目数上限。",
+          "scanCandidateLimit": "Orca 发现的同名技能文件夹数量超过了可安全检查的上限。",
+          "scanManifestLimit": "此插件清单超出安全读取限制，Orca 已将其跳过。",
+          "scanOutsideRoot": "此插件路径指向插件缓存之外，Orca 已将其跳过。",
+          "scanIoErrorWithCode": "Orca 无法读取此插件路径（{{value0}}）。",
+          "scanIoError": "Orca 无法读取此插件路径。",
+          "scanIssueLimit": "被跳过的插件文件夹过多，Orca 无法逐一列出。"
         },
         "SkillFreshnessStatusPill": {
           "updateAvailable": "有可用更新",

@@ -1,20 +1,29 @@
 import type { Dirent } from 'node:fs'
 import { opendir, realpath, stat } from 'node:fs/promises'
-import { join } from 'node:path'
+import { basename, join } from 'node:path'
+import type { SkillFreshnessScanIssueReason } from '../../shared/skill-freshness'
+import { declaredPluginSkillRoots, isWithinRoot } from './skill-plugin-manifest-roots'
 
 const MAXIMUM_PLUGIN_SCAN_DEPTH = 9
+const MAXIMUM_DECLARED_SKILL_SCAN_DEPTH = 6
 const MAXIMUM_PLUGIN_SCAN_ENTRIES = 4_096
 export const MAXIMUM_PLUGIN_SKILL_CANDIDATES = 64
-const MAXIMUM_PLUGIN_INCOMPLETE_PATHS = 16
+const MAXIMUM_PLUGIN_SCAN_ISSUES = 16
 
 export type KnownPluginSkillCandidate = {
   name: string
   path: string
 }
 
+export type KnownPluginSkillScanIssue = {
+  path: string
+  reason: SkillFreshnessScanIssueReason
+  errorCode: string | null
+}
+
 export type KnownPluginSkillScan = {
   candidates: KnownPluginSkillCandidate[]
-  incompletePaths: string[]
+  issues: KnownPluginSkillScanIssue[]
 }
 
 function errorCode(error: unknown): string | null {
@@ -29,32 +38,57 @@ export async function scanKnownPluginSkillCandidates(
   maximumCandidates = MAXIMUM_PLUGIN_SKILL_CANDIDATES
 ): Promise<KnownPluginSkillScan> {
   const candidates: KnownPluginSkillCandidate[] = []
-  const incompletePaths = new Set<string>()
+  const issues: KnownPluginSkillScanIssue[] = []
+  const issueKeys = new Set<string>()
   const visited = new Set<string>()
+  let resolvedRoot: string | null = null
   let entryCount = 0
   let limitReached = false
 
-  function recordIncomplete(path: string): void {
-    if (incompletePaths.has(path)) {
+  function recordIssue(
+    path: string,
+    reason: KnownPluginSkillScanIssue['reason'],
+    code: string | null = null
+  ): void {
+    const key = `${path}\0${reason}\0${code ?? ''}`
+    if (issueKeys.has(key)) {
       return
     }
-    if (incompletePaths.size >= MAXIMUM_PLUGIN_INCOMPLETE_PATHS) {
-      // Why: each incomplete path expands to one conservative row per official
-      // skill. Collapse a hostile cache into one poison sentinel before IPC/render fanout.
-      incompletePaths.clear()
-      incompletePaths.add(rootPath)
+    if (issues.length >= MAXIMUM_PLUGIN_SCAN_ISSUES) {
+      issues.splice(0, issues.length, {
+        path: rootPath,
+        reason: 'issue-limit',
+        errorCode: null
+      })
       limitReached = true
       return
     }
-    incompletePaths.add(path)
+    issueKeys.add(key)
+    issues.push({ path, reason, errorCode: code })
   }
 
-  async function visit(directory: string, depth: number): Promise<void> {
+  function recordCandidate(name: string, path: string): void {
+    if (candidates.length >= maximumCandidates) {
+      limitReached = true
+      recordIssue(rootPath, 'candidate-limit')
+      return
+    }
+    candidates.push({ name, path })
+  }
+
+  async function visit(
+    directory: string,
+    depth: number,
+    withinDeclaredSkillRoot = false
+  ): Promise<void> {
     if (limitReached) {
       return
     }
-    if (depth > MAXIMUM_PLUGIN_SCAN_DEPTH) {
-      recordIncomplete(directory)
+    const maximumDepth = withinDeclaredSkillRoot
+      ? MAXIMUM_DECLARED_SKILL_SCAN_DEPTH
+      : MAXIMUM_PLUGIN_SCAN_DEPTH
+    if (depth > maximumDepth) {
+      recordIssue(directory, 'depth-limit')
       return
     }
     let resolved: string
@@ -62,8 +96,14 @@ export async function scanKnownPluginSkillCandidates(
       resolved = await realpath(directory)
     } catch (error) {
       if (errorCode(error) !== 'ENOENT') {
-        recordIncomplete(directory)
+        recordIssue(directory, 'io-error', errorCode(error))
       }
+      return
+    }
+    if (resolvedRoot === null) {
+      resolvedRoot = resolved
+    } else if (!isWithinRoot(resolvedRoot, resolved)) {
+      recordIssue(directory, 'outside-root')
       return
     }
     if (visited.has(resolved)) {
@@ -73,9 +113,9 @@ export async function scanKnownPluginSkillCandidates(
 
     let handle: Awaited<ReturnType<typeof opendir>>
     try {
-      handle = await opendir(directory)
-    } catch {
-      recordIncomplete(directory)
+      handle = await opendir(resolved)
+    } catch (error) {
+      recordIssue(directory, 'io-error', errorCode(error))
       return
     }
     const entries: Dirent[] = []
@@ -88,15 +128,54 @@ export async function scanKnownPluginSkillCandidates(
         entryCount += 1
         if (entryCount > MAXIMUM_PLUGIN_SCAN_ENTRIES) {
           limitReached = true
-          recordIncomplete(rootPath)
+          recordIssue(rootPath, 'entry-limit')
           break
         }
         entries.push(entry)
       }
-    } catch {
-      recordIncomplete(directory)
+    } catch (error) {
+      recordIssue(directory, 'io-error', errorCode(error))
     } finally {
       await handle.close().catch(() => undefined)
+    }
+
+    const skillFile = entries.find((entry) => entry.name === 'SKILL.md')
+    if (withinDeclaredSkillRoot && skillFile) {
+      let isSkillFile = skillFile.isFile()
+      if (skillFile.isSymbolicLink()) {
+        try {
+          isSkillFile = (await stat(join(directory, skillFile.name))).isFile()
+        } catch (error) {
+          if (errorCode(error) !== 'ENOENT') {
+            recordIssue(join(directory, skillFile.name), 'io-error', errorCode(error))
+          }
+          isSkillFile = false
+        }
+      }
+      if (isSkillFile) {
+        const name = basename(directory)
+        if (knownNames.has(name)) {
+          recordCandidate(name, directory)
+        }
+      }
+    }
+
+    const skillRoots = await declaredPluginSkillRoots(directory, entries, resolvedRoot, recordIssue)
+    if (limitReached) {
+      return
+    }
+    if (skillRoots) {
+      const skillRootDepth = withinDeclaredSkillRoot ? depth + 1 : 0
+      for (const skillRoot of skillRoots.sort()) {
+        entryCount += 1
+        if (entryCount > MAXIMUM_PLUGIN_SCAN_ENTRIES) {
+          limitReached = true
+          recordIssue(rootPath, 'entry-limit')
+          return
+        }
+        await visit(skillRoot, skillRootDepth, true)
+      }
+      return
     }
 
     entries.sort((left, right) => (left.name === right.name ? 0 : left.name < right.name ? -1 : 1))
@@ -104,19 +183,27 @@ export async function scanKnownPluginSkillCandidates(
       if (limitReached) {
         return
       }
+      if (entry.name === 'node_modules') {
+        continue
+      }
       const entryPath = join(directory, entry.name)
       let directoryEntry = entry.isDirectory()
       if (entry.isSymbolicLink()) {
         try {
           directoryEntry = (await stat(entryPath)).isDirectory()
-        } catch {
-          if (knownNames.has(entry.name)) {
-            if (candidates.length >= maximumCandidates) {
-              limitReached = true
-              recordIncomplete(rootPath)
-              return
+          if (directoryEntry) {
+            const resolvedEntry = await realpath(entryPath)
+            if (resolvedRoot !== null && !isWithinRoot(resolvedRoot, resolvedEntry)) {
+              recordIssue(entryPath, 'outside-root')
+              continue
             }
-            candidates.push({ name: entry.name, path: entryPath })
+          }
+        } catch (error) {
+          if (errorCode(error) !== 'ENOENT') {
+            recordIssue(entryPath, 'io-error', errorCode(error))
+          }
+          if (knownNames.has(entry.name)) {
+            recordCandidate(entry.name, entryPath)
           }
           continue
         }
@@ -124,19 +211,14 @@ export async function scanKnownPluginSkillCandidates(
       if (!directoryEntry) {
         continue
       }
-      if (knownNames.has(entry.name)) {
-        if (candidates.length >= maximumCandidates) {
-          limitReached = true
-          recordIncomplete(rootPath)
-          return
-        }
-        candidates.push({ name: entry.name, path: entryPath })
+      if (!withinDeclaredSkillRoot && knownNames.has(entry.name)) {
+        recordCandidate(entry.name, entryPath)
         continue
       }
-      await visit(entryPath, depth + 1)
+      await visit(entryPath, depth + 1, withinDeclaredSkillRoot)
     }
   }
 
   await visit(rootPath, 0)
-  return { candidates, incompletePaths: [...incompletePaths] }
+  return { candidates, issues }
 }

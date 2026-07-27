@@ -377,4 +377,40 @@ describe('read-only skill freshness inventory', () => {
     // command does not touch, so the limit is reported without blocking the update.
     expect(inventory.eligibleUpdateNames).toEqual(['orca-cli'])
   })
+
+  it('reports incomplete plugin coverage without inventing per-skill installations', async () => {
+    const test = await fixture()
+    await test.writeSkill(join(test.homeDir, '.agents', 'skills'), test.currentMarkdown)
+    const pluginCache = join(test.homeDir, '.codex', 'plugins', 'cache')
+    await mkdir(join(pluginCache, ...Array.from({ length: 11 }, (_, index) => `level-${index}`)), {
+      recursive: true
+    })
+
+    const inventory = await inventorySkillFreshness({
+      currentAppVersion: '2.0.0',
+      homeDir: test.homeDir,
+      repos: [],
+      resourceRoot: test.resourceRoot
+    })
+
+    expect(inventory.installations).toHaveLength(1)
+    expect(inventory.installations[0]).toMatchObject({
+      name: 'orca-cli',
+      status: 'current',
+      topology: 'canonical-copy'
+    })
+    expect(inventory.installations).not.toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ errorCategory: 'plugin-cache-scan-incomplete' })
+      ])
+    )
+    expect(inventory.scanIssues).toEqual([
+      expect.objectContaining({
+        rootId: 'codex-plugin-cache',
+        sourceLabel: 'Codex plugin cache',
+        reason: 'depth-limit',
+        errorCode: null
+      })
+    ])
+  })
 })

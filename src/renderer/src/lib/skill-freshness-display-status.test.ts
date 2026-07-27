@@ -33,9 +33,10 @@ function placement(status: SkillFreshnessStatus, index = 0): SkillFreshnessInsta
 
 function inventory(
   installations: SkillFreshnessInstallation[],
-  eligibleUpdateNames: string[] = []
+  eligibleUpdateNames: string[] = [],
+  scanIssues: SkillFreshnessInventory['scanIssues'] = []
 ): SkillFreshnessInventory {
-  return { schemaVersion: 1, installations, eligibleUpdateNames, scannedAt: 1 }
+  return { schemaVersion: 1, installations, eligibleUpdateNames, scanIssues, scannedAt: 1 }
 }
 
 describe('getSkillFreshnessDisplayStatus', () => {
@@ -74,5 +75,26 @@ describe('getSkillFreshnessDisplayStatus', () => {
     // Why: no eligible update is not proof a copy is fine. Green here would read as
     // all-clear over drift the update command cannot reach and the user cannot see.
     expect(getSkillFreshnessDisplayStatus(value, SKILL_NAME)).toBe('needs-attention')
+  })
+
+  it('reports needs attention when plugin scan coverage is incomplete', () => {
+    expect(
+      getSkillFreshnessDisplayStatus(
+        inventory(
+          [placement('current')],
+          [],
+          [
+            {
+              rootId: 'codex-plugin-cache',
+              sourceLabel: 'Codex plugin cache',
+              path: '/home/.codex/plugins/cache',
+              reason: 'entry-limit',
+              errorCode: null
+            }
+          ]
+        ),
+        SKILL_NAME
+      )
+    ).toBe('needs-attention')
   })
 })

@@ -84,10 +84,28 @@ export type SkillFreshnessInstallation = {
   errorCategory: string | null
 }
 
+export type SkillFreshnessScanIssueReason =
+  | 'depth-limit'
+  | 'entry-limit'
+  | 'candidate-limit'
+  | 'manifest-limit'
+  | 'outside-root'
+  | 'io-error'
+  | 'issue-limit'
+
+export type SkillFreshnessScanIssue = {
+  rootId: string
+  sourceLabel: string
+  path: string
+  reason: SkillFreshnessScanIssueReason
+  errorCode: string | null
+}
+
 export type SkillFreshnessInventory = {
   schemaVersion: 1
   installations: SkillFreshnessInstallation[]
   eligibleUpdateNames: string[]
+  scanIssues: SkillFreshnessScanIssue[]
   scannedAt: number
 }
 

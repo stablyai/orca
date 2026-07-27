@@ -3760,7 +3760,17 @@
           "terminalDescription": "入力済みのコマンドを確認し、Enter キーを押して実行してください。",
           "terminalAria": "Orca スキル更新ターミナル",
           "checkNow": "今すぐ確認",
-          "close": "閉じる"
+          "close": "閉じる",
+          "scanIncomplete": "Orca はプラグインで管理されるスキルの確認を完了できませんでした。",
+          "scanIncompleteDescription": "更新の詳細を開くと、スキップされたプラグインフォルダーを確認できます。",
+          "scanDepthLimit": "このフォルダーを確認する前に、プラグインスキャンの深度上限に達しました。",
+          "scanEntryLimit": "キャッシュの残りを確認する前に、プラグインスキャンのエントリ数上限に達しました。",
+          "scanCandidateLimit": "安全に確認できる数を超える同名のスキルフォルダーが見つかりました。",
+          "scanManifestLimit": "安全な読み取り上限を超えたため、このプラグインマニフェストをスキップしました。",
+          "scanOutsideRoot": "プラグインキャッシュの外部を指しているため、このプラグインパスをスキップしました。",
+          "scanIoErrorWithCode": "このプラグインパスを読み取れませんでした（{{value0}}）。",
+          "scanIoError": "このプラグインパスを読み取れませんでした。",
+          "scanIssueLimit": "スキップされたプラグインフォルダーが多すぎるため、個別に表示できません。"
         },
         "SkillFreshnessStatusPill": {
           "updateAvailable": "更新があります",

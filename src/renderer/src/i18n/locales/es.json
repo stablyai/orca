@@ -3760,7 +3760,17 @@
           "terminalDescription": "Revisa el comando pre-rellenado y pulsa Intro para ejecutarlo.",
           "terminalAria": "Terminal de actualización de skills de Orca",
           "checkNow": "Comprobar ahora",
-          "close": "Cerrar"
+          "close": "Cerrar",
+          "scanIncomplete": "Orca no pudo terminar de comprobar los skills gestionados por plugins.",
+          "scanIncompleteDescription": "Abre los detalles de la actualización para ver qué carpetas de plugins se omitieron.",
+          "scanDepthLimit": "Orca alcanzó el límite de profundidad del análisis antes de comprobar esta carpeta.",
+          "scanEntryLimit": "Orca alcanzó el límite de entradas del análisis antes de comprobar el resto de esta caché.",
+          "scanCandidateLimit": "Orca encontró más carpetas de skills con el mismo nombre de las que puede inspeccionar de forma segura.",
+          "scanManifestLimit": "Orca omitió este manifiesto del plugin porque superaba el límite de lectura segura.",
+          "scanOutsideRoot": "Orca omitió esta ruta del plugin porque apunta fuera de la caché de plugins.",
+          "scanIoErrorWithCode": "Orca no pudo leer esta ruta del plugin ({{value0}}).",
+          "scanIoError": "Orca no pudo leer esta ruta del plugin.",
+          "scanIssueLimit": "Orca encontró demasiadas carpetas de plugins omitidas para mostrarlas por separado."
         },
         "SkillFreshnessStatusPill": {
           "updateAvailable": "Actualización disponible",

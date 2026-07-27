@@ -121,6 +121,7 @@ function eligibleInventory(): SkillFreshnessInventory {
     schemaVersion: 1,
     installations: [placement('orca-cli')],
     eligibleUpdateNames: ['orca-cli'],
+    scanIssues: [],
     scannedAt: 1
   }
 }
@@ -222,6 +223,7 @@ describe('SkillFreshnessUpdateDialog', () => {
         placement('orca-cli', { status: 'current', observedPackageDigest: 'current' })
       ],
       eligibleUpdateNames: [],
+      scanIssues: [],
       scannedAt: 2
     }
     await rerender()
@@ -229,6 +231,37 @@ describe('SkillFreshnessUpdateDialog', () => {
     expect(mocks.terminalCommits).toContainEqual(['npx skills update orca-cli --global', true])
     expect(container?.textContent).toContain('All installed Orca skills are up to date.')
     expect(container?.querySelector('[data-testid="update-terminal"]')).toBeNull()
+  })
+
+  it('shows incomplete plugin coverage without presenting a fabricated skill copy', async () => {
+    mocks.inventory = {
+      schemaVersion: 1,
+      installations: [
+        placement('orca-cli', { status: 'current', observedPackageDigest: 'current' })
+      ],
+      eligibleUpdateNames: [],
+      scanIssues: [
+        {
+          rootId: 'codex-plugin-cache',
+          sourceLabel: 'Codex plugin cache',
+          path: '/home/.codex/plugins/cache/vendor/deep',
+          reason: 'depth-limit',
+          errorCode: null
+        }
+      ],
+      scannedAt: 2
+    }
+    await renderDialog()
+    await openViaRequest()
+
+    expect(container?.textContent).toContain(
+      'Orca could not finish checking plugin-managed skills.'
+    )
+    expect(container?.textContent).toContain('/home/.codex/plugins/cache/vendor/deep')
+    expect(container?.textContent).toContain('scan depth limit')
+    expect(container?.textContent).not.toContain('All installed Orca skills are up to date.')
+    expect(container?.textContent).not.toContain('/home/.codex/plugins/cache/vendor/deep/orca-cli')
+    expect(container?.querySelector('[data-collapsible-open="true"]')).not.toBeNull()
   })
 
   it('auto-expands Details when a rescan changes the result to blocked', async () => {
@@ -240,6 +273,7 @@ describe('SkillFreshnessUpdateDialog', () => {
       schemaVersion: 1,
       installations: [placement('orca-cli', { topology: 'read-only' })],
       eligibleUpdateNames: [],
+      scanIssues: [],
       scannedAt: 2
     }
     await rerender()
@@ -268,6 +302,7 @@ describe('SkillFreshnessUpdateDialog', () => {
         placement('orca-cli', { status: 'current', observedPackageDigest: 'current' })
       ],
       eligibleUpdateNames: [],
+      scanIssues: [],
       scannedAt: 2
     }
     mocks.loading = false
@@ -368,6 +403,7 @@ describe('SkillFreshnessUpdateDialog', () => {
         })
       ],
       eligibleUpdateNames: [],
+      scanIssues: [],
       scannedAt: 1
     }
     await renderDialog()
@@ -385,6 +421,7 @@ describe('SkillFreshnessUpdateDialog', () => {
       schemaVersion: 1,
       installations: [placement('orca-cli', { topology: 'read-only' })],
       eligibleUpdateNames: [],
+      scanIssues: [],
       scannedAt: 1
     }
     await renderDialog()
