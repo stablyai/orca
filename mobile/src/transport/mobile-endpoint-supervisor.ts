@@ -5,7 +5,7 @@ import { RelayLeaseRotationTimer } from './mobile-relay-lease-rotation-timer'
 import { MobileEndpointHysteresis } from './mobile-endpoint-hysteresis'
 import { MobileDirectProbeTimer } from './mobile-direct-probe-timer'
 import { canRecoverMobileRelay } from './mobile-relay-recovery-eligibility'
-import { encodeBase64Url, toError } from './mobile-endpoint-supervisor-support'
+import { encodeBase64Url, logRelayLifecycle, toError } from './mobile-endpoint-supervisor-support'
 import { applyResumeConfirmation } from './mobile-relay-credential-rotation'
 import type { MobileRelayCredentialBundle } from './mobile-relay-credential-bundle'
 import { refreshMobileRelayCredentialIfNeeded } from './mobile-relay-credential-refresh'
@@ -120,6 +120,9 @@ export class MobileEndpointSupervisor {
     if (!bundle) {
       return
     }
+
+    logRelayLifecycle(this.dependencies, 'start', this.logical.getState())
+
     this.operationInFlight = true
     let lastError: Error | null = null
     let retryAfterOperation = false
@@ -139,10 +142,17 @@ export class MobileEndpointSupervisor {
           }
         })
         if (result.ok) {
+          logRelayLifecycle(this.dependencies, 'success')
           retryAfterOperation = this.logical.getState() !== 'connected'
           return
         }
         lastError = result.error
+
+        if (this.logical.getState() === 'connected' && this.logical.getActivePath() !== 'relay') {
+          logRelayLifecycle(this.dependencies, 'cancel')
+          break
+        }
+
         if (this.relayReconnect.shouldTryGraceAfterRelayFailure(result.error)) {
           this.relayReconnect.recordRejectedCredential(credential.version)
         } else {
