@@ -74,5 +74,12 @@ describe('getRateLimitWindowPace', () => {
     expect(
       getRateLimitWindowPace(sessionWindow({ windowMinutes: 0, resetsAt: now + 60_000 }), now)
     ).toBeNull()
+    // NaN passes both relational bounds; it must not render as `left:NaN%`.
+    expect(
+      getRateLimitWindowPace(
+        sessionWindow({ windowMinutes: Number.NaN, resetsAt: now + 60_000 }),
+        now
+      )
+    ).toBeNull()
   })
 })

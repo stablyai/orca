@@ -24,7 +24,11 @@ export function getRateLimitWindowPace(
   if (typeof w.resetsAt !== 'number' || !Number.isFinite(w.resetsAt)) {
     return null
   }
-  if (w.windowMinutes <= 0 || w.windowMinutes > MAX_ROLLING_WINDOW_MINUTES) {
+  if (
+    !Number.isFinite(w.windowMinutes) ||
+    w.windowMinutes <= 0 ||
+    w.windowMinutes > MAX_ROLLING_WINDOW_MINUTES
+  ) {
     return null
   }
   const durationMs = w.windowMinutes * 60_000
