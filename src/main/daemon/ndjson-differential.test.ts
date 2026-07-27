@@ -37,10 +37,14 @@ function createLegacyParser(
           continue
         }
         buffer = next
-        if (!has) return
+        if (!has) {
+          return
+        }
         const line = buffer
         buffer = ''
-        if (line.length === 0) continue
+        if (line.length === 0) {
+          continue
+        }
         try {
           onMessage(JSON.parse(line))
         } catch (e) {
@@ -93,7 +97,9 @@ describe('ndjson parser parity with the pre-slice accumulator', () => {
         for (let m = 0; m < msgCount; m += 1) {
           let s = ''
           const len = Math.floor(rand() * 40)
-          for (let i = 0; i < len; i += 1) s += ALPHABET[Math.floor(rand() * ALPHABET.length)]
+          for (let i = 0; i < len; i += 1) {
+            s += ALPHABET[Math.floor(rand() * ALPHABET.length)]
+          }
           const msg = { method: 'pty.data', params: { id: `pty-${m}`, data: s, seq: m } }
           messages.push(msg)
           wire += `${JSON.stringify(msg)}\n`
