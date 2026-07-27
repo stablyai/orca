@@ -45,7 +45,7 @@ import {
   removeSafeUntrackedDiscardTargets
 } from '../../shared/git-discard-path-safety'
 import { resolveWorktreeAddBaseRef } from '../../shared/worktree-base-ref'
-import { hasWorktreeBaseCommitRef } from './worktree-base-ref-probe'
+import { resolveWorktreeBaseCommitOid } from './worktree-base-ref-probe'
 import { getLargeDiffRenderLimit } from '../../shared/large-diff-render-limit'
 import { InFlightPromiseDedupe, stableInFlightKey } from '../../shared/in-flight-promise-dedupe'
 import type { GitRuntimeOptions } from './git-runtime-options'
@@ -1304,21 +1304,47 @@ export async function getBranchCompare(
     status: 'loading'
   }
 
-  const compareRef = await resolveCompareRef(worktreePath, options)
+  // Why concurrent: compareRef is display-only metadata, HEAD's oid does not depend on
+  // the base ref, and the base-ref probe needs neither. Awaiting them in a chain made
+  // three independent spawns strictly serial before any real work started.
+  // Why capture the probed oid: the probe already prints the commit oid for the ref it
+  // proves, so reusing it removes a fourth spawn that re-resolved the same value.
+  // Why keyed by ref rather than a single slot: resolveWorktreeAddBaseRef returns at its
+  // first successful candidate, so today only one entry is ever recorded and only that
+  // ref is read back. Keying it means adding a candidate, or letting the probe continue
+  // past a hit, cannot silently start returning some other ref's oid.
+  const probedOidByRef = new Map<string, string>()
+  const [compareRef, resolvedBaseRef, headOidResult] = await Promise.all([
+    resolveCompareRef(worktreePath, options),
+    // Why: short refs like "origin/main" can collide with a local branch; use the proven remote-tracking ref.
+    resolveWorktreeAddBaseRef(baseRef, async (qualifiedRef) => {
+      const oid = await resolveWorktreeBaseCommitOid(worktreePath, qualifiedRef, options)
+      if (oid !== null) {
+        probedOidByRef.set(qualifiedRef, oid)
+      }
+      return oid !== null
+    }),
+    resolveRefOid(worktreePath, 'HEAD', options).then(
+      (oid) => ({ ok: true as const, oid }),
+      (error) => ({ ok: false as const, error })
+    )
+  ])
   summary.compareRef = compareRef
-  // Why: short refs like "origin/main" can collide with a local branch; use the proven remote-tracking ref.
-  const resolvedBaseRef = await resolveWorktreeAddBaseRef(baseRef, (qualifiedRef) =>
-    hasWorktreeBaseCommitRef(worktreePath, qualifiedRef, options)
-  )
 
   let headOid = ''
   let baseOid = ''
-  try {
-    headOid = await resolveRefOid(worktreePath, 'HEAD', options)
+  // Why the probe's oid is the same value: it only proves refs/heads and refs/remotes
+  // candidates, where ^{commit} peeling is a no-op. A ref the probe never proved (an
+  // already-qualified refs/... base, or one that failed) still resolves via rev-parse.
+  const resolveBaseOid = async (): Promise<string> =>
+    probedOidByRef.get(resolvedBaseRef) ??
+    (await resolveRefOid(worktreePath, resolvedBaseRef, options))
+  if (headOidResult.ok) {
+    headOid = headOidResult.oid
     summary.headOid = headOid
-  } catch {
+  } else {
     try {
-      baseOid = await resolveRefOid(worktreePath, resolvedBaseRef, options)
+      baseOid = await resolveBaseOid()
       summary.baseOid = baseOid
       // Why: an unborn branch (new remote worktree) has no changes yet; a compare error would look broken.
       summary.changedFiles = 0
@@ -1335,7 +1361,7 @@ export async function getBranchCompare(
   }
 
   try {
-    baseOid = await resolveRefOid(worktreePath, resolvedBaseRef, options)
+    baseOid = await resolveBaseOid()
     summary.baseOid = baseOid
   } catch {
     summary.status = 'invalid-base'
