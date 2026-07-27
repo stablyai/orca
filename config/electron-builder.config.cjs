@@ -252,6 +252,12 @@ module.exports = {
     include: resolve(__dirname, 'nsis', 'daemon-host-uninstall.nsh')
   },
   mac: {
+    // Why: macOS TCC keys permission grants to bundle id + code signature. A
+    // local build carrying the release appId under a different (ad-hoc/local)
+    // signature collides with the installed release's grant identity (#9756),
+    // so non-release packaging gets its own id. Gated on the same env that
+    // enables release signing/notarization, so release artifacts are untouched.
+    ...(isMacRelease ? {} : { appId: 'com.stablyai.orca.local' }),
     icon: 'resources/build/icon.icns',
     entitlements: 'resources/build/entitlements.mac.plist',
     entitlementsInherit: 'resources/build/entitlements.mac.plist',

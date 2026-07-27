@@ -15,7 +15,9 @@ const {
   notificationCtorMock,
   notificationIsSupportedMock,
   getAllWindowsMock,
-  shellOpenExternalMock
+  shellOpenExternalMock,
+  electronAppMock,
+  execFileSyncMock
 } = vi.hoisted(() => {
   const removeHandlerMock = vi.fn()
   const handleMock = vi.fn()
@@ -36,6 +38,12 @@ const {
   const notificationIsSupportedMock = vi.fn(() => true)
   const getAllWindowsMock = vi.fn(() => [])
   const shellOpenExternalMock = vi.fn()
+  const electronAppMock = {
+    focus: vi.fn(),
+    getPath: vi.fn(),
+    isPackaged: false
+  }
+  const execFileSyncMock = vi.fn()
   return {
     removeHandlerMock,
     handleMock,
@@ -47,9 +55,13 @@ const {
     notificationCtorMock,
     notificationIsSupportedMock,
     getAllWindowsMock,
-    shellOpenExternalMock
+    shellOpenExternalMock,
+    electronAppMock,
+    execFileSyncMock
   }
 })
+
+vi.mock('node:child_process', () => ({ execFileSync: execFileSyncMock }))
 
 vi.mock('electron', () => ({
   ipcMain: {
@@ -62,9 +74,7 @@ vi.mock('electron', () => ({
   BrowserWindow: {
     getAllWindows: getAllWindowsMock
   },
-  app: {
-    focus: vi.fn()
-  },
+  app: electronAppMock,
   shell: {
     openExternal: shellOpenExternalMock
   }
@@ -122,6 +132,10 @@ describe('registerNotificationHandlers', () => {
     getAllWindowsMock.mockReset()
     getAllWindowsMock.mockReturnValue([])
     shellOpenExternalMock.mockClear()
+    electronAppMock.focus.mockClear()
+    electronAppMock.getPath.mockReset()
+    electronAppMock.isPackaged = false
+    execFileSyncMock.mockReset()
     setTrayAttentionMock.mockClear()
   })
 
@@ -234,6 +248,100 @@ describe('registerNotificationHandlers', () => {
         delete process.env.ORCA_DEV_MACOS_BUNDLE_ID
       } else {
         process.env.ORCA_DEV_MACOS_BUNDLE_ID = originalBundleId
+      }
+    }
+  })
+
+  it('prefers the packaged bundle id over inherited environment identities', async () => {
+    const originalPlatform = process.platform
+    const originalDevBundleId = process.env.ORCA_DEV_MACOS_BUNDLE_ID
+    const originalLaunchdBundleId = process.env.__CFBundleIdentifier
+    Object.defineProperty(process, 'platform', { value: 'darwin', configurable: true })
+    process.env.ORCA_DEV_MACOS_BUNDLE_ID = 'com.stablyai.orca.dev'
+    process.env.__CFBundleIdentifier = 'com.stablyai.orca'
+    electronAppMock.isPackaged = true
+    electronAppMock.getPath.mockReturnValue('/Applications/Orca Local.app/Contents/MacOS/Orca')
+    execFileSyncMock.mockReturnValue('com.stablyai.orca.local\n')
+    try {
+      registerNotificationHandlers({
+        getSettings: () => ({
+          notifications: {
+            enabled: true,
+            agentTaskComplete: true,
+            terminalBell: true,
+            suppressWhenFocused: true
+          }
+        })
+      } as never)
+
+      const handler = getOpenSystemSettingsHandler()
+      handler({})
+
+      expect(shellOpenExternalMock).toHaveBeenCalledWith(
+        'x-apple.systempreferences:com.apple.Notifications-Settings.extension?id=com.stablyai.orca.local'
+      )
+      expect(execFileSyncMock).toHaveBeenCalledOnce()
+    } finally {
+      Object.defineProperty(process, 'platform', { value: originalPlatform, configurable: true })
+      electronAppMock.isPackaged = false
+      if (originalDevBundleId === undefined) {
+        delete process.env.ORCA_DEV_MACOS_BUNDLE_ID
+      } else {
+        process.env.ORCA_DEV_MACOS_BUNDLE_ID = originalDevBundleId
+      }
+      if (originalLaunchdBundleId === undefined) {
+        delete process.env.__CFBundleIdentifier
+      } else {
+        process.env.__CFBundleIdentifier = originalLaunchdBundleId
+      }
+    }
+  })
+
+  it('reads the packaged bundle id when launchd does not provide one', async () => {
+    const originalPlatform = process.platform
+    const originalDevBundleId = process.env.ORCA_DEV_MACOS_BUNDLE_ID
+    const originalLaunchdBundleId = process.env.__CFBundleIdentifier
+    Object.defineProperty(process, 'platform', { value: 'darwin', configurable: true })
+    delete process.env.ORCA_DEV_MACOS_BUNDLE_ID
+    delete process.env.__CFBundleIdentifier
+    electronAppMock.isPackaged = true
+    electronAppMock.getPath.mockReturnValue('/Applications/Orca.app/Contents/MacOS/Orca')
+    execFileSyncMock.mockReturnValue('com.stablyai.orca.local\n')
+    try {
+      registerNotificationHandlers({
+        getSettings: () => ({
+          notifications: {
+            enabled: true,
+            agentTaskComplete: true,
+            terminalBell: true,
+            suppressWhenFocused: true
+          }
+        })
+      } as never)
+
+      const handler = getOpenSystemSettingsHandler()
+      handler({})
+
+      expect(execFileSyncMock).toHaveBeenCalledWith(
+        '/usr/libexec/PlistBuddy',
+        ['-c', 'Print :CFBundleIdentifier', '/Applications/Orca.app/Contents/Info.plist'],
+        { encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] }
+      )
+      expect(shellOpenExternalMock).toHaveBeenCalledWith(
+        'x-apple.systempreferences:com.apple.Notifications-Settings.extension?id=com.stablyai.orca.local'
+      )
+    } finally {
+      Object.defineProperty(process, 'platform', { value: originalPlatform, configurable: true })
+      electronAppMock.isPackaged = false
+      if (originalDevBundleId === undefined) {
+        delete process.env.ORCA_DEV_MACOS_BUNDLE_ID
+      } else {
+        process.env.ORCA_DEV_MACOS_BUNDLE_ID = originalDevBundleId
+      }
+      if (originalLaunchdBundleId === undefined) {
+        delete process.env.__CFBundleIdentifier
+      } else {
+        process.env.__CFBundleIdentifier = originalLaunchdBundleId
       }
     }
   })

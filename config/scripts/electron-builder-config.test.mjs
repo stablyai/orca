@@ -3,6 +3,13 @@ import { createRequire } from 'node:module'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
+import {
+  MACOS_LOCAL_APP_BUNDLE_ID,
+  MACOS_RELEASE_APP_BUNDLE_ID,
+  resolveMacosComputerUseBundleId,
+  resolveMacosNotificationStatusBundleId,
+  resolveMacosPackageBundleIdentifiers
+} from './macos-package-bundle-identifiers.mjs'
 
 const require = createRequire(import.meta.url)
 const electronBuilderConfig = require('../electron-builder.config.cjs')
@@ -19,6 +26,66 @@ const {
 } = require('../packaged-runtime-node-modules.cjs')
 
 describe('electron-builder config', () => {
+  it('changes only the non-release macOS app id', () => {
+    const configPath = require.resolve('../electron-builder.config.cjs')
+    const original = process.env.ORCA_MAC_RELEASE
+    try {
+      delete require.cache[configPath]
+      delete process.env.ORCA_MAC_RELEASE
+      const localConfig = require('../electron-builder.config.cjs')
+      const localNativeIds = resolveMacosPackageBundleIdentifiers({})
+      expect(localConfig.appId).toBe(MACOS_RELEASE_APP_BUNDLE_ID)
+      expect(localConfig.mac.appId).toBe(MACOS_LOCAL_APP_BUNDLE_ID)
+      expect(localNativeIds).toEqual({
+        appBundleId: localConfig.mac.appId,
+        computerUseBundleId: `${localConfig.mac.appId}.computer-use`
+      })
+
+      delete require.cache[configPath]
+      process.env.ORCA_MAC_RELEASE = '1'
+      const releaseConfig = require('../electron-builder.config.cjs')
+      const releaseNativeIds = resolveMacosPackageBundleIdentifiers({ ORCA_MAC_RELEASE: '1' })
+      expect(releaseConfig.appId).toBe(MACOS_RELEASE_APP_BUNDLE_ID)
+      expect(releaseConfig.mac.appId).toBeUndefined()
+      expect(releaseNativeIds).toEqual({
+        appBundleId: releaseConfig.appId,
+        computerUseBundleId: `${releaseConfig.appId}.computer-use`
+      })
+    } finally {
+      if (original === undefined) {
+        delete process.env.ORCA_MAC_RELEASE
+      } else {
+        process.env.ORCA_MAC_RELEASE = original
+      }
+      delete require.cache[configPath]
+      require('../electron-builder.config.cjs')
+    }
+  })
+
+  it('keeps standalone native builds off release identities by default', () => {
+    expect(resolveMacosComputerUseBundleId({})).toBe(`${MACOS_LOCAL_APP_BUNDLE_ID}.computer-use`)
+    expect(resolveMacosNotificationStatusBundleId(undefined, {})).toBe(MACOS_LOCAL_APP_BUNDLE_ID)
+    expect(resolveMacosComputerUseBundleId({ ORCA_MAC_RELEASE: '1' })).toBe(
+      `${MACOS_RELEASE_APP_BUNDLE_ID}.computer-use`
+    )
+    expect(resolveMacosNotificationStatusBundleId(undefined, { ORCA_MAC_RELEASE: '1' })).toBe(
+      MACOS_RELEASE_APP_BUNDLE_ID
+    )
+    expect(
+      resolveMacosComputerUseBundleId({ ORCA_COMPUTER_MACOS_BUNDLE_ID: ' com.example.computer ' })
+    ).toBe('com.example.computer')
+    expect(resolveMacosNotificationStatusBundleId(' com.example.notification ', {})).toBe(
+      'com.example.notification'
+    )
+    expect(
+      resolveMacosComputerUseBundleId({
+        ORCA_COMPUTER_MACOS_BUNDLE_ID: '  ',
+        ORCA_MAC_RELEASE: '1'
+      })
+    ).toBe(`${MACOS_RELEASE_APP_BUNDLE_ID}.computer-use`)
+    expect(resolveMacosNotificationStatusBundleId('', {})).toBe(MACOS_LOCAL_APP_BUNDLE_ID)
+  })
+
   it('excludes repo-only source trees from app.asar', () => {
     expect(electronBuilderConfig.files).toEqual(
       expect.arrayContaining([

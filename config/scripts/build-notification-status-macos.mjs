@@ -11,6 +11,7 @@ import { execFileSync } from 'node:child_process'
 import { mkdirSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import path from 'node:path'
+import { resolveMacosNotificationStatusBundleId } from './macos-package-bundle-identifiers.mjs'
 
 const repoRoot = path.resolve(import.meta.dirname, '../..')
 const sourcePath = path.join(repoRoot, 'native', 'notification-status-macos', 'main.swift')
@@ -28,7 +29,7 @@ if (process.platform !== 'darwin') {
 }
 
 const args = process.argv.slice(2)
-const bundleId = readArg('--bundle-id') ?? 'com.stablyai.orca'
+const bundleId = resolveMacosNotificationStatusBundleId(readArg('--bundle-id'))
 const outputPath = readArg('--output') ?? defaultOutputPath
 // Why: dev launches only need the host architecture; release builds ship a
 // universal binary matching the app's x64 + arm64 targets.
