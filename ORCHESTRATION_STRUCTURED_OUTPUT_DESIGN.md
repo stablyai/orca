@@ -1,7 +1,7 @@
 # Orchestration Structured Worker Output
 
 Status: implemented; physical local, mixed-version, and Windows-home to Mac-worker validation complete
-Scope: orchestration `worker-read` only  
+Scope: orchestration `worker-read` only
 Last updated: 2026-07-24
 
 ## Summary

@@ -1743,6 +1743,32 @@ Append new entries chronologically. Do not rewrite older entries except to corre
   - Commit and push as `OrcaWin`, then inspect branch-head CI and mark the final remote acceptance
     item only after those checks settle.
 
+### 2026-07-27 — Current-main rebase and CLI registry integration
+
+- Changes:
+  - Rebased the 26 orchestration commits onto current `origin/main`.
+  - Preserved both main's active-worktree plugin context and orchestration's terminal process
+    incarnation and launcher validation in their one overlapping runtime conflict.
+  - Registered the current Run, worker, and retired-coordinator handler keys in main's new lazy CLI
+    handler-group manifest.
+  - Removed one trailing-whitespace artifact from the structured-output design header.
+- Verification:
+  - Conflict-focused runtime, federation, migration, and transport selection: 6 files and 995 tests
+    passed.
+  - Handler manifest, registry parity, and CLI integration: 3 files and 169 tests passed.
+  - Repository suite excluding the independently reproducible system-SSH native-installer timeout:
+    3,586 files and 37,864 tests passed.
+  - Node, CLI, and web typechecks, bundled-skill verification, reliability gates, max-lines
+    ratchet, and conflict-marker audit passed.
+- Findings:
+  - The rebase itself had one additive method-placement conflict; neither behavior needed redesign.
+  - Main's lazy handler manifest is an additional command-registration source of truth, so every new
+    exported orchestration handler must be listed there.
+  - Tests added on main depend on newly patched packages; refreshing from the rebased lockfile was
+    required before their results were meaningful.
+- Next:
+  - Push the rebased branch as `OrcaWin` and inspect replacement branch-head CI.
+
 ### Entry template
 
 ```text
