@@ -1,5 +1,4 @@
 import type { TuiAgent } from './types'
-import { getDetectedTuiAgentExecutable } from './detected-agent-executables'
 import { getOrcaCliCommandNameForPlatform } from './orca-cli-command-name'
 
 export type AgentPromptInjectionMode =
@@ -322,27 +321,6 @@ export function isTuiAgent(value: unknown): value is TuiAgent {
 
 export function getTuiAgentDetectCommands(config: TuiAgentConfig): string[] {
   return [config.detectCmd, ...(config.detectCmdAliases ?? [])]
-}
-
-/**
- * Rewrites the leading executable of an agent CLI command to the form the
- * detected install actually provides (`cursor-agent models` → `cursor agent
- * models`). Returns `command` unchanged when detection matched `detectCmd`,
- * when the agent has no alias mapping, or when nothing has been detected yet.
- */
-export function applyDetectedTuiAgentExecutable(agent: TuiAgent, command: string): string {
-  const config = TUI_AGENT_CONFIG[agent]
-  const detectedCmd = getDetectedTuiAgentExecutable(agent)
-  const launchCmd = detectedCmd ? config.launchCmdByDetectCmd?.[detectedCmd] : undefined
-  if (!launchCmd) {
-    return command
-  }
-  if (command === config.launchCmd) {
-    return launchCmd
-  }
-  return command.startsWith(`${config.launchCmd} `)
-    ? `${launchCmd}${command.slice(config.launchCmd.length)}`
-    : command
 }
 
 export function getTuiAgentLaunchCommand(

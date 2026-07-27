@@ -31,10 +31,15 @@ export function resolveAgentLaunchCommand(args: {
   detectedCmd?: string
 }): ResolvedAgentLaunchCommand {
   const override = args.cmdOverrides[args.agent]
-  // Why: the ambient registry describes this machine's PATH, so a remote launch
-  // must fall back to the static defaults instead of inheriting local aliases.
+  // Why: the ambient registry describes this machine's PATH, so a launch bound
+  // for another runtime (SSH host, WSL distro) must fall back to the static
+  // defaults instead of inheriting local aliases.
   const detectedCmd =
-    args.detectedCmd ?? (args.isRemote ? undefined : getDetectedTuiAgentExecutable(args.agent))
+    args.detectedCmd ??
+    getDetectedTuiAgentExecutable(args.agent, {
+      isRemote: args.isRemote,
+      platform: args.platform
+    })
   const command =
     override ||
     getTuiAgentLaunchCommand(TUI_AGENT_CONFIG[args.agent], args.platform, {

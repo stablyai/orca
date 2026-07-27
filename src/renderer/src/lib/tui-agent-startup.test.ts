@@ -215,6 +215,22 @@ describe('buildAgentStartupPlan', () => {
     ).toBe("cursor-agent 'Review this file'")
   })
 
+  it('ignores Windows-detected Cursor aliases for a WSL launch', () => {
+    // Why: a WSL worktree launches with isRemote=false, so only the platform
+    // mismatch can stop the host's `cursor` from becoming `cursor agent`
+    // inside a distro that has the standalone `cursor-agent`.
+    setDetectedTuiAgentExecutables({ cursor: 'cursor' }, 'win32')
+
+    expect(
+      buildAgentStartupPlan({
+        agent: 'cursor',
+        prompt: 'Review this file',
+        cmdOverrides: {},
+        platform: 'linux'
+      })?.launchCommand
+    ).toBe("cursor-agent 'Review this file'")
+  })
+
   it('lets an explicit command override win over the detected executable', () => {
     setDetectedTuiAgentExecutables({ cursor: 'cursor' })
 

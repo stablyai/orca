@@ -190,6 +190,36 @@ describe('planCommitMessageGeneration', () => {
     })
   })
 
+  it('keeps the standalone binary when the plan runs on a host this process never detected', () => {
+    setDetectedTuiAgentExecutables({ cursor: 'cursor' }, 'darwin')
+
+    // Why: the plan is shipped to an SSH host, whose PATH has nothing to do
+    // with the alias-only Cursor install detected on this machine.
+    const remote = planCommitMessageGeneration({ agentId: 'cursor', model: 'gpt-5.2' }, 'PROMPT', {
+      isRemote: true
+    })
+    // Why: a WSL distro is never "remote", but its PATH is the distro's.
+    const wsl = planCommitMessageGeneration({ agentId: 'cursor', model: 'gpt-5.2' }, 'PROMPT', {
+      platform: 'linux'
+    })
+
+    expect(remote.ok && remote.plan.binary).toBe('cursor-agent')
+    expect(remote.ok && remote.plan.args[0]).toBe('--print')
+    expect(wsl.ok && wsl.plan.binary).toBe('cursor-agent')
+    expect(wsl.ok && wsl.plan.args[0]).toBe('--print')
+  })
+
+  it('still applies the detected alias when the plan runs on the detecting host', () => {
+    setDetectedTuiAgentExecutables({ cursor: 'cursor' }, 'darwin')
+
+    const result = planCommitMessageGeneration({ agentId: 'cursor', model: 'gpt-5.2' }, 'PROMPT', {
+      platform: 'darwin'
+    })
+
+    expect(result.ok && result.plan.binary).toBe('cursor')
+    expect(result.ok && result.plan.args[0]).toBe('agent')
+  })
+
   it('plans Codex exec as non-interactive read-only generation with the prompt on stdin only', () => {
     const result = planCommitMessageGeneration(
       {

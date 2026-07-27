@@ -144,7 +144,7 @@ function publishDetectedAgentExecutables(
     runtime
   )
   hasDetectedAgentExecutables = true
-  setDetectedTuiAgentExecutables(detectedAgentExecutables)
+  setDetectedTuiAgentExecutables(detectedAgentExecutables, runtime)
 }
 
 /** Executables matched by the last local detection; empty for WSL/remote runtimes. */

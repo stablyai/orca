@@ -39,6 +39,7 @@ import {
   type CommitMessagePlan
 } from '../../shared/commit-message-plan'
 import { LOCAL_COMMIT_MESSAGE_HOST_KEY } from '../../shared/commit-message-host-key'
+import type { AgentExecutionRuntime } from '../../shared/detected-agent-executables'
 import {
   resolveSourceControlAiForOperation,
   type ResolvedSourceControlAiGenerationParams
@@ -125,6 +126,23 @@ type InternalTextGenerationResult =
 export type CommitMessageModelDiscoveryLocalOptions = {
   cwd?: string
   wslDistro?: string
+}
+
+/**
+ * Where a planned command will run, so the ambient executable-detection
+ * registry (this process's PATH) is only applied when it actually describes
+ * the host that will spawn the binary.
+ */
+function planRuntimeForTarget(target: CommitMessageGenerationTarget): AgentExecutionRuntime {
+  return target.kind === 'remote'
+    ? { isRemote: true }
+    : planRuntimeForLocalHost(target.wslDistro)
+}
+
+// Why: a WSL distro is not "remote" but has its own PATH, so a Windows-detected
+// `cursor` must not be planned as `cursor agent` for a command run inside it.
+function planRuntimeForLocalHost(wslDistro?: string): AgentExecutionRuntime {
+  return { platform: wslDistro ? 'linux' : process.platform }
 }
 
 export function trimGeneratedCommitMessage(message: string): string {
@@ -276,13 +294,14 @@ function finalizeModelDiscoveryOutput(
 
 function planModelDiscovery(
   spec: NonNullable<ReturnType<typeof getCommitMessageAgentSpec>>,
-  agentCommandOverride?: string
+  agentCommandOverride?: string,
+  runtime?: AgentExecutionRuntime
 ): { ok: true; plan: CommitMessagePlan } | { ok: false; error: string } {
   const modelDiscovery = spec.modelDiscovery
   if (!modelDiscovery) {
     return { ok: false, error: `${spec.label} does not support dynamic model discovery.` }
   }
-  const command = planAgentBinary(modelDiscovery.binary, agentCommandOverride, spec.id)
+  const command = planAgentBinary(modelDiscovery.binary, agentCommandOverride, spec.id, runtime)
   if (!command.ok) {
     return command
   }
@@ -316,7 +335,11 @@ export async function discoverCommitMessageModelsLocal(
     let child: ChildProcess
     const spawnEnv = env ?? process.env
     try {
-      const planned = planModelDiscovery(spec, agentCommandOverride)
+      const planned = planModelDiscovery(
+        spec,
+        agentCommandOverride,
+        planRuntimeForLocalHost(options.wslDistro)
+      )
       if (!planned.ok) {
         resolve({ success: false, error: planned.error })
         return
@@ -446,7 +469,7 @@ export async function discoverCommitMessageModelsRemote(
   if (spec.modelSource === 'static' || !spec.modelDiscovery) {
     return toModelDiscoveryCapability(spec)
   }
-  const planned = planModelDiscovery(spec, agentCommandOverride)
+  const planned = planModelDiscovery(spec, agentCommandOverride, { isRemote: true })
   if (!planned.ok) {
     return { success: false, error: planned.error }
   }
@@ -882,7 +905,7 @@ export async function generateCommitMessageFromContext(
           linkedIssue: formatLinkedIssueTemplateValue(context.linkedIssue)
         })
       : buildCommitMessagePrompt(context, params.customPrompt ?? '')
-  const planned = planCommitMessageGeneration(params, prompt)
+  const planned = planCommitMessageGeneration(params, prompt, planRuntimeForTarget(target))
   if (!planned.ok) {
     return { success: false, error: planned.error }
   }
@@ -955,7 +978,7 @@ export async function generatePullRequestFieldsFromContext(
           linkedIssue: formatLinkedIssueTemplateValue(context.linkedIssue)
         })
       : buildPullRequestFieldsPrompt(context, params.customPrompt ?? '')
-  const planned = planCommitMessageGeneration(params, prompt)
+  const planned = planCommitMessageGeneration(params, prompt, planRuntimeForTarget(target))
   if (!planned.ok) {
     return {
       success: false,
@@ -1006,7 +1029,7 @@ export async function generateBranchNameFromContext(
           assistantMessage: context.assistantMessage ?? ''
         })
       : buildBranchNamePrompt(context, params.customPrompt ?? '')
-  const planned = planCommitMessageGeneration(params, prompt)
+  const planned = planCommitMessageGeneration(params, prompt, planRuntimeForTarget(target))
   if (!planned.ok) {
     return { success: false, error: planned.error }
   }
