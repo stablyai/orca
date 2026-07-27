@@ -3336,6 +3336,14 @@
             "updatedTooltip": "Remote Orca Server updates completed",
             "failedOne": "1 server update failed",
             "updatedOne": "1 server updated"
+          },
+          "resource": {
+            "memory": {
+              "metric": {
+                "workingSetDescription": "ワーキングセット（WS）の合計です。共有ページは複数のプロセスに含まれる場合があります。",
+                "rssDescription": "常駐セットサイズ（RSS）の合計です。共有ページやエイリアスされたページは複数のプロセスに含まれる場合があります。"
+              }
+            }
           }
         }
       },

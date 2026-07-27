@@ -3359,6 +3359,14 @@
             "updatedTooltip": "Remote Orca Server updates completed",
             "failedOne": "1 server update failed",
             "updatedOne": "1 server updated"
+          },
+          "resource": {
+            "memory": {
+              "metric": {
+                "workingSetDescription": "Summed working set (WS). Shared pages can appear in more than one process.",
+                "rssDescription": "Summed resident set size (RSS). Shared or aliased pages can appear in more than one process."
+              }
+            }
           }
         }
       },

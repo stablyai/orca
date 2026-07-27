@@ -3667,6 +3667,10 @@ export type UsageValues = {
   memory: number
 }
 
+export type ProcessMemoryMetric = 'rss' | 'working-set'
+
+export type HostAvailableMemorySource = 'memory-pressure' | 'proc-meminfo' | 'free-memory'
+
 /** The top-level cpu/memory are the sum of main + renderer + other. */
 export type AppMemory = UsageValues & {
   main: UsageValues
@@ -3695,7 +3699,12 @@ export type WorktreeMemory = UsageValues & {
 
 export type HostMemory = {
   totalMemory: number
+  /** Immediately free memory reported by Node's host API. */
   freeMemory: number
+  /** Memory available without material pressure, or freeMemory when unavailable. */
+  availableMemory: number
+  availableMemorySource: HostAvailableMemorySource
+  /** totalMemory - availableMemory. */
   usedMemory: number
   memoryUsagePercent: number
   cpuCoreCount: number
@@ -3706,9 +3715,11 @@ export type MemorySnapshot = {
   app: AppMemory
   worktrees: WorktreeMemory[]
   host: HostMemory
+  /** Per-process byte metric used by app, session, worktree, history, and totalMemory values. */
+  processMemoryMetric: ProcessMemoryMetric
   /** Sum of app + all tracked worktree sessions. Percent of a single core, so may exceed 100 on multi-core machines. */
   totalCpu: number
-  /** Sum of app + all tracked worktree sessions in bytes. NOT the same as host.totalMemory, which is physical RAM. */
+  /** Sum of per-process samples. Shared pages may repeat, so this can exceed host.totalMemory. */
   totalMemory: number
   collectedAt: number
 }
