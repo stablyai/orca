@@ -176,6 +176,28 @@ describe('repo slice runtime routing', () => {
     expect(orcaProfileFindProjectProfiles).not.toHaveBeenCalled()
   })
 
+  it('adds host paths to the caller-provided host instead of the focused runtime', async () => {
+    runtimeEnvironmentCall.mockResolvedValue({
+      id: 'rpc-add-route',
+      ok: true,
+      result: { repo: remoteRepo },
+      _meta: { runtimeId: 'runtime-remote' }
+    })
+    const store = createTestStore()
+
+    await expect(
+      store.getState().addRepoPath('/srv/project', 'folder', { runtimeEnvironmentId: 'env-1' })
+    ).resolves.toEqual({ ...remoteRepo, executionHostId: 'runtime:env-1' })
+
+    expect(runtimeEnvironmentCall).toHaveBeenCalledWith({
+      selector: 'env-1',
+      method: 'repo.add',
+      params: { path: '/srv/project', kind: 'folder' },
+      timeoutMs: 15_000
+    })
+    expect(reposAdd).not.toHaveBeenCalled()
+  })
+
   it('warns when a local project is already present in another profile', async () => {
     reposAdd.mockResolvedValue({ repo: localRepo })
     orcaProfileFindProjectProfiles.mockResolvedValue({

@@ -51,6 +51,8 @@ const AddRepoDialog = React.memo(function AddRepoDialog({
   const [step, setStep] = useState<AddRepoDialogStep>('add')
   const [isAdding, setIsAdding] = useState(false)
   const [addProjectBusyLabel, setAddProjectBusyLabel] = useState<string | null>(null)
+  const hostSelection = useAddRepoHostSelection({ isOpen, setStep })
+  const selectedRuntimeEnvironmentId = hostSelection.selectedRuntimeEnvironmentId
   const {
     nestedScan,
     nestedSelectedPaths,
@@ -70,16 +72,13 @@ const AddRepoDialog = React.memo(function AddRepoDialog({
     handleStopNestedScan,
     resetNestedRepoReviewState
   } = useAddRepoNestedReviewState({
-    activeRuntimeEnvironmentId: settings?.activeRuntimeEnvironmentId,
+    // Why: the dialog's own Host selector owns routing here; the globally focused
+    // runtime would mislabel scans for whichever host the user actually picked.
+    activeRuntimeEnvironmentId: selectedRuntimeEnvironmentId,
     cancelNestedRepoScan,
     setStep
   })
 
-  const hostSelection = useAddRepoHostSelection({ isOpen, setStep })
-  const selectedRuntimeEnvironmentId =
-    hostSelection.selectedParsedHost?.kind === 'runtime'
-      ? hostSelection.selectedParsedHost.environmentId
-      : null
   const { showRemoteNestedRepoReview, trackRemoteNestedScanResult } = useAddRepoRemoteNestedScan({
     setActiveNestedScanId,
     showNestedRepoReview
@@ -199,6 +198,7 @@ const AddRepoDialog = React.memo(function AddRepoDialog({
     closeModal: closeForFolderHandoff,
     fetchWorktrees,
     getNestedRepoRuntimeKind,
+    runtimeEnvironmentId: selectedRuntimeEnvironmentId,
     scanNestedRepos,
     setActiveNestedScanId,
     setNestedScanInProgress,

@@ -26,6 +26,7 @@ export function useAddRepoServerPathFlow({
   closeModal,
   fetchWorktrees,
   getNestedRepoRuntimeKind,
+  runtimeEnvironmentId,
   scanNestedRepos,
   setActiveNestedScanId,
   setNestedScanInProgress,
@@ -33,14 +34,21 @@ export function useAddRepoServerPathFlow({
   onGitRepoReady,
   setAddProjectBusyLabel
 }: {
-  addRepoPath: (path: string, kind?: 'git' | 'folder') => Promise<Repo | null>
+  addRepoPath: (
+    path: string,
+    kind?: 'git' | 'folder',
+    options?: { runtimeEnvironmentId?: string | null }
+  ) => Promise<Repo | null>
   closeModal: () => void
   fetchWorktrees: (repoId: string, options?: { requireAuthoritative?: boolean }) => Promise<unknown>
   getNestedRepoRuntimeKind: (connectionId: string | null) => NestedRepoTelemetryRuntimeKind
+  /** Host picked in the dialog's Host selector, not the globally focused runtime. */
+  runtimeEnvironmentId: string | null | undefined
   scanNestedRepos: (
     path: string,
     connectionId?: string,
-    controls?: { scanId?: string; onProgress?: (scan: NestedRepoScanResult) => void }
+    controls?: { scanId?: string; onProgress?: (scan: NestedRepoScanResult) => void },
+    options?: { runtimeEnvironmentId?: string | null }
   ) => Promise<NestedRepoScanResult | null>
   setActiveNestedScanId: (scanId: string | null) => void
   setNestedScanInProgress: (inProgress: boolean) => void
@@ -71,6 +79,10 @@ export function useAddRepoServerPathFlow({
         return
       }
       const gen = ++serverAddGenRef.current
+      // Why: this step browses the host chosen in the dialog, so every request it
+      // fires must carry that host instead of the globally focused runtime, which
+      // would register the remote path against the wrong filesystem (#6367).
+      const route = { runtimeEnvironmentId: runtimeEnvironmentId?.trim() || null }
       setIsAddingServerPath(true)
       setAddProjectBusyLabel(kind === 'git' ? 'Scanning for repositories...' : 'Opening folder...')
       try {
@@ -108,7 +120,8 @@ export function useAddRepoServerPathFlow({
                     })
                   }
                 }
-              : undefined
+              : undefined,
+            route
           )
           if (gen !== serverAddGenRef.current) {
             return
@@ -138,7 +151,7 @@ export function useAddRepoServerPathFlow({
           }
         }
         setAddProjectBusyLabel(kind === 'git' ? 'Opening project...' : 'Opening folder...')
-        const repo = await addRepoPath(path, kind)
+        const repo = await addRepoPath(path, kind, route)
         if (gen !== serverAddGenRef.current) {
           return
         }
@@ -171,6 +184,7 @@ export function useAddRepoServerPathFlow({
       fetchWorktrees,
       getNestedRepoRuntimeKind,
       onGitRepoReady,
+      runtimeEnvironmentId,
       scanNestedRepos,
       serverPath,
       setActiveNestedScanId,
