@@ -234,7 +234,8 @@ describe('recordAgentProviderSession', () => {
         providerSession,
         connectionId: 'ssh-connection-1',
         state: 'working',
-        origin: 'live'
+        origin: 'live',
+        ...(agent === 'pi' ? { resumeScope: 'pane' } : {})
       })
 
       store.getState().captureAllSleepingAgentSessions('periodic')
@@ -302,7 +303,8 @@ describe('recordAgentProviderSession', () => {
       expect(store.getState().sleepingAgentSessionsByPaneKey['tab-1:leaf-1']).toMatchObject({
         providerSession,
         connectionId: 'ssh-connection-1',
-        origin: 'live'
+        origin: 'live',
+        ...(agent === 'pi' ? { resumeScope: 'pane' } : {})
       })
 
       store.getState().captureAllSleepingAgentSessions('quit')
