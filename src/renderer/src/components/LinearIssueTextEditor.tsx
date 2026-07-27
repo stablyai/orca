@@ -1,8 +1,9 @@
-import React, { useCallback, useEffect, useRef, useState } from 'react'
+import React, { useCallback, useRef, useState } from 'react'
 import { LoaderCircle } from 'lucide-react'
 import { toast } from 'sonner'
 
 import { LinearIssueMarkdownDescriptionEditor } from '@/components/LinearIssueMarkdownDescriptionEditor'
+import { useAutosizeTextArea } from '@/hooks/useAutosizeTextArea'
 import { useMountedRef } from '@/hooks/useMountedRef'
 import { cn } from '@/lib/utils'
 import { useAppStore } from '@/store'
@@ -26,21 +27,6 @@ type LinearIssueTextEditorProps = {
   density?: 'page' | 'drawer'
   fields?: 'all' | 'title' | 'description'
   sourceContext?: TaskSourceContext | null
-}
-
-function useAutosizeTextArea(value: string): React.RefObject<HTMLTextAreaElement | null> {
-  const ref = useRef<HTMLTextAreaElement>(null)
-
-  useEffect(() => {
-    const textarea = ref.current
-    if (!textarea) {
-      return
-    }
-    textarea.style.height = 'auto'
-    textarea.style.height = `${textarea.scrollHeight}px`
-  }, [value])
-
-  return ref
 }
 
 export function LinearIssueTextEditor({
@@ -71,7 +57,8 @@ export function LinearIssueTextEditor({
   const titleDraft = resolvedDraftState.title
   const descriptionDraft = resolvedDraftState.description
   const submitShortcutLabel = getScreenSubmitShortcutLabel()
-  const titleRef = useAutosizeTextArea(titleDraft)
+  const titleRef = useRef<HTMLTextAreaElement>(null)
+  useAutosizeTextArea(titleRef, titleDraft)
   const updateTitleDraft = useCallback(
     (title: string): void => {
       setDraftState((current) => ({

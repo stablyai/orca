@@ -7,6 +7,7 @@ import type {
 import { Image as ImageIcon, ImageOff, X } from 'lucide-react'
 import { translate } from '@/i18n/i18n'
 import { cn } from '@/lib/utils'
+import { useAutosizeTextArea } from '@/hooks/useAutosizeTextArea'
 import { NATIVE_FILE_DROP_TARGET } from '../../../../shared/native-file-drop'
 import { basename } from '@/lib/path'
 import { isNativeChatPastedImagePath } from './native-chat-image-paste'
@@ -97,6 +98,10 @@ export function NativeChatComposerField({
   sessionOptionsSurface,
   sessionOptionsSnapshot
 }: NativeChatComposerFieldProps): React.JSX.Element {
+  // Grow with the draft (and shrink when it's cleared, e.g. after send) up to
+  // 8 lines, then scroll internally. The cap comes from live computed style so
+  // it stays correct if the text size tokens change.
+  useAutosizeTextArea(textareaRef, draft, { maxLines: 8 })
   return (
     <div className="shrink-0 bg-background">
       {/* Extra bottom padding keeps the input box off the window rim. */}
@@ -187,10 +192,11 @@ export function NativeChatComposerField({
               }
               placeholder={nativeChatComposerPlaceholder(hasPty, canSend)}
               // Why: coarse-pointer min-height follows the app's touch target convention.
-              // scrollbar-sleek keeps the overflow gutter from showing the heavy
-              // native scrollbar once the draft exceeds max-height.
+              // Max height is the useAutosizeTextArea 8-line clamp, not a utility
+              // class; scrollbar-sleek keeps the overflow gutter from showing the
+              // heavy native scrollbar once the draft exceeds it.
               className={cn(
-                'scrollbar-sleek min-h-12 max-h-28 w-full resize-none bg-transparent px-2 py-1 text-sm outline-none pointer-coarse:min-h-14',
+                'scrollbar-sleek min-h-12 w-full resize-none bg-transparent px-2 py-1 text-sm outline-none pointer-coarse:min-h-14',
                 'placeholder:text-muted-foreground/60 disabled:cursor-not-allowed disabled:opacity-50'
               )}
             />
