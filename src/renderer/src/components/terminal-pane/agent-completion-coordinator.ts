@@ -811,6 +811,13 @@ export function createAgentCompletionCoordinator(
       return
     }
     if (isCompletionHookState(payload.state)) {
+      if (payload.leadStopWithLiveSubagents) {
+        // Why: a Codex lead Stop raised while its children still run ends no turn (#4375).
+        // It stays `done` for the sidebar, but notifying here is the reported spam. Cancel any
+        // provisional done too — the lead can Stop inside a quiet window opened by an earlier one.
+        clearPendingHookDone()
+        return
+      }
       // Why: the turn is ending, so a debounced attention from an earlier pause must not fire after completion.
       clearPendingCodexAttention()
       if (isRecognizedAgentType(payload.agentType)) {

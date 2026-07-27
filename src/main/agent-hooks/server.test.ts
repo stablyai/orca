@@ -6630,6 +6630,73 @@ describe('Last-status persistence', () => {
     }
   })
 
+  it('never persists leadStopWithLiveSubagents, so a restart cannot re-suppress a completion', async () => {
+    const server = new AgentHookServer()
+    await server.start({ env: 'production', userDataPath })
+    try {
+      await postHookEvent(server, buildBody({ hook_event_name: 'SessionStart' }), '/hook/codex')
+      await postHookEvent(
+        server,
+        buildBody({
+          hook_event_name: 'SubagentStart',
+          agent_id: '11111111-2222-4333-8444-555555555555',
+          agent_type: 'explore'
+        }),
+        '/hook/codex'
+      )
+      await postHookEvent(server, buildBody({ hook_event_name: 'Stop' }), '/hook/codex')
+      server.flushStatusPersistSync()
+      const persisted = JSON.parse(readFileSync(lastStatusPath(), 'utf8'))
+      // Why: the flag describes one live hook delivery. Rehydrating it would make the
+      // notification gate suppress the first real completion after every restart (#4375).
+      expect(persisted.entries[PANE].payload.state).toBe('done')
+      expect(persisted.entries[PANE].payload).not.toHaveProperty('leadStopWithLiveSubagents')
+    } finally {
+      server.stop()
+    }
+  })
+
+  it('strips leadStopWithLiveSubagents on hydrate even if the file already carries it', async () => {
+    // Why: the write-side strip only covers bytes this build wrote. A file from an older
+    // build, a restored backup, or a hand edit would otherwise rehydrate the flag on a
+    // `done` entry — the one state it survives normalization — and re-suppress a real
+    // completion after restart. Enforce the invariant against arbitrary bytes (#4375).
+    mkdirSync(join(userDataPath, 'agent-hooks'), { recursive: true })
+    writeFileSync(
+      lastStatusPath(),
+      JSON.stringify({
+        version: 2,
+        entries: {
+          [PANE]: {
+            paneKey: PANE,
+            tabId: 'tab-1',
+            worktreeId: 'wt-1',
+            receivedAt: recentTs(),
+            stateStartedAt: recentTs(-1000),
+            payload: {
+              state: 'done',
+              prompt: 'injected',
+              agentType: 'codex',
+              leadStopWithLiveSubagents: true
+            }
+          }
+        }
+      }),
+      'utf8'
+    )
+
+    const server = new AgentHookServer()
+    await server.start({ env: 'production', userDataPath })
+    try {
+      const hydrated = server.getStatusSnapshot()[0]
+      // The entry must hydrate (otherwise this asserts nothing about the flag).
+      expect(hydrated?.state).toBe('done')
+      expect(hydrated).not.toHaveProperty('leadStopWithLiveSubagents')
+    } finally {
+      server.stop()
+    }
+  })
+
   it('treats a corrupt file as empty hydration without throwing', async () => {
     mkdirSync(join(userDataPath, 'agent-hooks'), { recursive: true })
     writeFileSync(lastStatusPath(), 'not-json{{', 'utf8')

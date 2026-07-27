@@ -242,6 +242,12 @@ function sanitizeHydratedEntry(
   if (!payload) {
     return null
   }
+  // Why: the write side already strips this, but the state gate in normalizeAgentStatusPayload
+  // preserves it on `done` — the only state it is ever set on. Enforce here too so the invariant
+  // holds against any bytes on disk, not just the ones this process wrote (#4375).
+  if (payload.leadStopWithLiveSubagents) {
+    delete payload.leadStopWithLiveSubagents
+  }
   const providerSession = normalizeAgentProviderSession(record.providerSession) ?? undefined
   const providerSessionOnly = record.providerSessionOnly === true
   if (providerSessionOnly && !isValidPiProviderSessionOnly(providerSession, payload.agentType)) {
@@ -2003,6 +2009,12 @@ export class AgentHookServer {
         continue
       }
       const { promptInteractionKey: _promptInteractionKey, ...persistedPayload } = payload
+      // Why: leadStopWithLiveSubagents describes one live hook delivery, not restorable pane
+      // state — a rehydrated one would re-suppress the first completion after restart (#4375).
+      if (persistedPayload.payload?.leadStopWithLiveSubagents) {
+        const { leadStopWithLiveSubagents: _live, ...inner } = persistedPayload.payload
+        persistedPayload.payload = inner
+      }
       entries[paneKey] = persistedPayload as EnrichedAgentHookEventPayload
     }
     const file: LastStatusFile = { version: LAST_STATUS_FILE_VERSION, entries }

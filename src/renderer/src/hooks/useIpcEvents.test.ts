@@ -4715,6 +4715,7 @@ describe('useIpcEvents agent status snapshot integration', () => {
     toolInput?: string
     lastAssistantMessage?: string
     interrupted?: boolean
+    leadStopWithLiveSubagents?: boolean
     terminalHandle?: string
     launchToken?: string
     providerSession?: { key: 'session_id'; id: string }
@@ -5596,6 +5597,85 @@ describe('useIpcEvents agent status snapshot integration', () => {
     )
     expect(updateTabTitle).toHaveBeenCalledWith('tab-future', 'Codex - action required')
     expect(observeAgentHookCompletionForNotification).toHaveBeenCalledTimes(1)
+  })
+
+  it('forwards leadStopWithLiveSubagents to completion tracking (#4375)', async () => {
+    const setAgentStatus = vi.fn()
+    const updateTabTitle = vi.fn()
+    const observeAgentHookCompletionForNotification = vi.fn()
+    const onSetListenerRef: { current: ((data: AgentStatusSetData) => void) | null } = {
+      current: null
+    }
+
+    const storeState: StoreLike = buildStoreState({
+      setAgentStatus,
+      updateTabTitle,
+      workspaceSessionReady: true,
+      settings: { terminalFontSize: 13, notifications: { enabled: true, agentTaskComplete: true } },
+      tabsByWorktree: {
+        'wt-1': [{ id: 'tab-future', ptyId: 'pty-1', worktreeId: 'wt-1', title: 'Codex' }]
+      },
+      terminalLayoutsByTabId: {
+        'tab-future': {
+          root: { type: 'leaf', leafId: FUTURE_LEAF_ID },
+          activeLeafId: FUTURE_LEAF_ID,
+          expandedLeafId: null
+        }
+      }
+    })
+
+    stubReactSyncEffect()
+    vi.doMock('../store', () => ({
+      useAppStore: {
+        subscribe: vi.fn(() => () => {}),
+        getState: () => storeState
+      }
+    }))
+    vi.doMock('./agent-hook-completion-notifications', () => ({
+      observeAgentHookCompletionForNotification,
+      resetAgentHookCompletionNotificationCoordinators: vi.fn(),
+      syncAgentHookCompletionNotificationsForStoreUpdate: vi.fn()
+    }))
+    stubAuxiliaryModules()
+    vi.stubGlobal(
+      'window',
+      buildWindowApi({
+        onSet: (cb) => {
+          onSetListenerRef.current = cb
+          return () => {}
+        }
+      })
+    )
+
+    const { useIpcEvents } = await import('./useIpcEvents')
+
+    useIpcEvents()
+    await Promise.resolve()
+
+    if (typeof onSetListenerRef.current !== 'function') {
+      throw new Error('Expected agentStatus.onSet listener to be registered')
+    }
+
+    onSetListenerRef.current({
+      paneKey: FUTURE_PANE_KEY,
+      tabId: 'tab-future',
+      worktreeId: 'wt-1',
+      state: 'done',
+      prompt: 'lead stop while children run',
+      agentType: 'codex',
+      leadStopWithLiveSubagents: true,
+      receivedAt: 1_700_000_000_600,
+      stateStartedAt: 1_699_999_999_600
+    })
+
+    // Why: local Codex hooks reach the coordinator only through this path, and the payload is
+    // rebuilt field-by-field on the way. The gate's own tests call observeHookStatus directly,
+    // so they stay green even when the flag is dropped here and the fix is dead in the app.
+    expect(observeAgentHookCompletionForNotification).toHaveBeenCalledWith(
+      expect.objectContaining({
+        payload: expect.objectContaining({ leadStopWithLiveSubagents: true })
+      })
+    )
   })
 
   it('does not send an out-of-order hook event to completion lifecycle tracking', async () => {

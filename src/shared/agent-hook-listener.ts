@@ -3170,12 +3170,17 @@ export function reconcileRemoteCodexState(
   if (payload.subagents) {
     seedCodexSubagentRoster(roster, payload.subagents)
   }
+  let leadStopWithLiveSubagents = false
   if (agentId) {
     if (eventName === 'SubagentStop') {
       finishCodexSubagent(roster, agentId)
     }
   } else {
     const leadState = codexLeadStateForHookEvent(eventName)
+    // Why: same pre-reap capture as the local path — SSH/relay panes reach the notification
+    // coordinator through here, so without it remote Codex leads keep spamming (#4375).
+    leadStopWithLiveSubagents =
+      eventName === 'Stop' && codexRosterEffectiveState(roster, 'done') !== 'done'
     if (eventName === 'SessionStart' || eventName === 'Stop') {
       roster.clear()
     }
@@ -3196,7 +3201,8 @@ export function reconcileRemoteCodexState(
     ...payload,
     state: codexRosterEffectiveState(roster, lead.state),
     model: lead.model ?? payload.model,
-    subagents: codexRosterToSnapshots(roster)
+    subagents: codexRosterToSnapshots(roster),
+    ...(leadStopWithLiveSubagents ? { leadStopWithLiveSubagents: true } : {})
   }
 }
 
@@ -3206,7 +3212,11 @@ function buildCodexStatusPayload(
   promptText: string,
   paneKey: string,
   hookPayload: Record<string, unknown>,
-  options: { stateName: 'working' | 'waiting' | 'done'; updateLead: boolean }
+  options: {
+    stateName: 'working' | 'waiting' | 'done'
+    updateLead: boolean
+    leadStopWithLiveSubagents?: boolean
+  }
 ): ParsedAgentStatusPayload | null {
   const snapshot = options.updateLead
     ? resolveToolState(state, paneKey, extractToolFields('codex', eventName, hookPayload), {
@@ -3226,7 +3236,8 @@ function buildCodexStatusPayload(
     toolInput: snapshot.toolInput,
     interactivePrompt: snapshot.interactivePrompt,
     lastAssistantMessage: snapshot.lastAssistantMessage,
-    subagents: codexRosterToSnapshots(state.codexSubagentRosterByPaneKey.get(paneKey))
+    subagents: codexRosterToSnapshots(state.codexSubagentRosterByPaneKey.get(paneKey)),
+    leadStopWithLiveSubagents: options.leadStopWithLiveSubagents
   })
 }
 
@@ -3320,6 +3331,14 @@ function normalizeCodexEvent(
     return buildCodexChildDrivenStatusPayload(state, eventName, paneKey, hookPayload)
   }
 
+  // Why: the roster is retired below, which makes a lead Stop indistinguishable from the final
+  // SubagentStop (both `done` with no children). Capture whether children were still live BEFORE
+  // the reap so notification can tell a real turn end from a mid-turn one (#4375). SessionStart is
+  // exempt — its roster belongs to the process that just exited.
+  const leadStopWithLiveSubagents =
+    eventName === 'Stop' &&
+    codexRosterEffectiveState(state.codexSubagentRosterByPaneKey.get(paneKey), stateName) !==
+      stateName
   if (eventName === 'SessionStart') {
     // Why: a pane can host a new Codex process after the old one exited without child Stop hooks.
     state.codexSubagentRosterByPaneKey.delete(paneKey)
@@ -3334,13 +3353,17 @@ function normalizeCodexEvent(
       normalizeOptionalField(hookPayload['model'], AGENT_MODEL_MAX_LENGTH) ??
       (eventName === 'SessionStart' ? undefined : previousLead?.model)
   })
+  // Why: read the roster AFTER the reap. A blocked child must still hold the pane at `waiting` on
+  // non-Stop lead events, but on Stop the roster is already empty so this stays `done` — the root
+  // Stop contract in agent-hooks/server.ts depends on that.
   const effectiveState = codexRosterEffectiveState(
     state.codexSubagentRosterByPaneKey.get(paneKey),
     stateName
   )
   return buildCodexStatusPayload(state, eventName, promptText, paneKey, hookPayload, {
     stateName: effectiveState,
-    updateLead: true
+    updateLead: true,
+    leadStopWithLiveSubagents
   })
 }
 

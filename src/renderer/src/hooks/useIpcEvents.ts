@@ -3005,7 +3005,10 @@ export function useIpcEvents(): void {
         lastAssistantMessage: data.lastAssistantMessage,
         interrupted: data.interrupted,
         // Why: same trap as interactivePrompt — this rebuild is a field whitelist, so subagent child rows vanish if omitted.
-        subagents: data.subagents
+        subagents: data.subagents,
+        // Why: local Codex hooks reach the coordinator only through this rebuild; dropping it here
+        // silently disables the #4375 lead-Stop gate in the app while unit tests still pass.
+        leadStopWithLiveSubagents: data.leadStopWithLiveSubagents
       })
       if (!payload) {
         return 'dropped'

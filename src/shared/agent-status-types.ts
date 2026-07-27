@@ -165,6 +165,11 @@ export type AgentStatusPayload = {
   interrupted?: boolean
   /** Live in-process children of the reporting session. See AgentStatusEntry. */
   subagents?: AgentSubagentSnapshot[]
+  /** Live-only: this `done` is a Codex lead Stop raised while subagents were still
+   *  running, so it ends no turn. Set before the roster is retired, which is what
+   *  otherwise makes it identical to the final SubagentStop (#4375). Notification-only —
+   *  `state` stays `done` so sidebar/persistence behavior is unchanged. */
+  leadStopWithLiveSubagents?: boolean
 }
 
 /**
@@ -361,7 +366,10 @@ function normalizeAgentStatusObject(parsed: unknown): ParsedAgentStatusPayload |
     ),
     // Why: only meaningful on `done`; coerce to undefined elsewhere so it can't leak stale truth across transitions.
     interrupted: obj.interrupted === true && state === 'done' ? true : undefined,
-    subagents: normalizeSubagentsField(obj.subagents)
+    subagents: normalizeSubagentsField(obj.subagents),
+    // Why: like `interrupted`, only meaningful on `done`; anywhere else it would be stale truth.
+    leadStopWithLiveSubagents:
+      obj.leadStopWithLiveSubagents === true && state === 'done' ? true : undefined
   }
 }
 
