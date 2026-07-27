@@ -105,6 +105,24 @@ describe('getImportSpecifierLinks', () => {
       './live'
     ])
   })
+
+  it('scans code inside nested template expressions without linking template text', () => {
+    const content = [
+      "const nested = `outer ${flag ? `fake import('./nested-fake')` : await import('./nested-real')}`",
+      "const deep = `outer ${`middle ${await import('./deep-real')}`}`",
+      "const escaped = `text \\` fake require('./escaped-fake')`",
+      "const escapedExpression = `text \\${import('./escaped-expression-fake')}`",
+      "const braced = `outer ${(() => { /* } import('./comment-fake') */ return import('./braced-real') })()}`",
+      "const after = import('./after')"
+    ].join('\n')
+
+    expect(getImportSpecifierLinks(content).map((link) => link.specifier)).toEqual([
+      './nested-real',
+      './deep-real',
+      './braced-real',
+      './after'
+    ])
+  })
 })
 
 describe('findImportSpecifierLinkAt', () => {
@@ -155,7 +173,16 @@ describe('parseTsconfigPathAliases', () => {
 
   it('returns null for unparseable json or missing compilerOptions', () => {
     expect(parseTsconfigPathAliases('not json')).toBeNull()
+    expect(parseTsconfigPathAliases('{"compilerOptions":{"baseUrl":"src",')).toBeNull()
     expect(parseTsconfigPathAliases('{"include":["src"]}')).toBeNull()
+  })
+
+  it('preserves comment-like text and escaped quotes inside jsonc strings', () => {
+    const text = String.raw`{"compilerOptions":{"baseUrl":"src//literal","paths":{"@quoted/*":["say-\"hi\"/*"]}}}`
+    expect(parseTsconfigPathAliases(text)).toEqual({
+      baseUrl: 'src//literal',
+      paths: { '@quoted/*': ['say-"hi"/*'] }
+    })
   })
 })
 

@@ -1,65 +1,14 @@
+import { parse as parseJsonc, type ParseError } from 'jsonc-parser'
+
 export type TsconfigPathAliases = {
   baseUrl: string | null
   paths: Record<string, string[]>
 }
 
-function stripJsonCommentsAndTrailingCommas(text: string): string {
-  let result = ''
-  let inString = false
-  let inLineComment = false
-  let inBlockComment = false
-  for (let index = 0; index < text.length; index += 1) {
-    const char = text[index]
-    const next = text[index + 1]
-    if (inLineComment) {
-      if (char === '\n') {
-        inLineComment = false
-        result += char
-      }
-      continue
-    }
-    if (inBlockComment) {
-      if (char === '*' && next === '/') {
-        inBlockComment = false
-        index += 1
-      }
-      continue
-    }
-    if (inString) {
-      result += char
-      if (char === '\\') {
-        result += next ?? ''
-        index += 1
-      } else if (char === '"') {
-        inString = false
-      }
-      continue
-    }
-    if (char === '"') {
-      inString = true
-      result += char
-      continue
-    }
-    if (char === '/' && next === '/') {
-      inLineComment = true
-      index += 1
-      continue
-    }
-    if (char === '/' && next === '*') {
-      inBlockComment = true
-      index += 1
-      continue
-    }
-    result += char
-  }
-  return result.replace(/,\s*([}\]])/g, '$1')
-}
-
 export function parseTsconfigPathAliases(tsconfigText: string): TsconfigPathAliases | null {
-  let parsed: unknown
-  try {
-    parsed = JSON.parse(stripJsonCommentsAndTrailingCommas(tsconfigText))
-  } catch {
+  const errors: ParseError[] = []
+  const parsed: unknown = parseJsonc(tsconfigText, errors, { allowTrailingComma: true })
+  if (errors.length > 0) {
     return null
   }
   if (typeof parsed !== 'object' || parsed === null) {
