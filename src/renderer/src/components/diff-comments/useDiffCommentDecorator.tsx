@@ -100,6 +100,7 @@ function getRenderSignature(
     url: comment.url ?? null,
     canDelete: comment.canDelete ?? null,
     canEdit: comment.canEdit ?? null,
+    isResolved: comment.isResolved ?? null,
     sendPrompt: formatCommentPrompt ? formatCommentPrompt(comment) : null
   })
 }

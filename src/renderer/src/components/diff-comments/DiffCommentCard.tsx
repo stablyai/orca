@@ -1,5 +1,5 @@
 import { ChevronDown, CornerDownLeft, Pencil, Trash } from 'lucide-react'
-import { useLayoutEffect, useRef, useState, type ReactNode } from 'react'
+import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from 'react'
 import { Button } from '@/components/ui/button'
 import { getDiffCommentLineLabel } from '@/lib/diff-comment-compat'
 import { useMountedRef } from '@/hooks/useMountedRef'
@@ -60,6 +60,11 @@ export function DiffCommentCard({
   const mountedRef = useMountedRef()
   const textareaRef = useRef<HTMLTextAreaElement | null>(null)
   const resizeAfterCloseRef = useRef(false)
+
+  // Why: sync collapsed state when the resolved status changes dynamically so that resolved comments collapse automatically.
+  useEffect(() => {
+    setCollapsed(isResolved ?? false)
+  }, [isResolved])
 
   // Why: stash `onContentResize` in a ref so the layout/resize effects only
   // re-run on `editing` transitions. The decorator passes a fresh arrow every
