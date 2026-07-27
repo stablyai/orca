@@ -116,5 +116,7 @@ describe('groupSkillFreshness', () => {
     expect(chipFor(at('g', { topology: 'repo-scope' }))).toBe('in-a-repo')
     expect(chipFor(at('h', { topology: 'plugin-cache' }))).toBe('plugin-cache')
     expect(chipFor(at('i', { status: 'current', topology: 'provider-alias' }))).toBe('current')
+    // Why: a foreign copy reads as someone else's skill, not as drift in ours.
+    expect(chipFor(at('j', { status: 'foreign', topology: 'plugin-cache' }))).toBe('foreign')
   })
 })

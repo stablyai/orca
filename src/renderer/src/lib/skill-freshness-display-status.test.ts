@@ -4,7 +4,10 @@ import type {
   SkillFreshnessInventory,
   SkillFreshnessStatus
 } from '../../../shared/skill-freshness'
-import { getSkillFreshnessDisplayStatus } from './skill-freshness-display-status'
+import {
+  getSkillFreshnessDisplayStatus,
+  hasSkillCopyNeedingAttention
+} from './skill-freshness-display-status'
 
 const SKILL_NAME = 'orca-cli'
 
@@ -28,6 +31,14 @@ function placement(status: SkillFreshnessStatus, index = 0): SkillFreshnessInsta
     currentAppVersion: '2.0.0',
     observedPackageDigest: status === 'current' ? 'current' : 'other',
     errorCategory: null
+  }
+}
+
+function foreignPlacement(): SkillFreshnessInstallation {
+  return {
+    ...placement('foreign', 9),
+    topology: 'plugin-cache',
+    unresolvedPath: `/home/.codex/plugins/cache/openai-bundled/${SKILL_NAME}`
   }
 }
 
@@ -74,5 +85,26 @@ describe('getSkillFreshnessDisplayStatus', () => {
     // Why: no eligible update is not proof a copy is fine. Green here would read as
     // all-clear over drift the update command cannot reach and the user cannot see.
     expect(getSkillFreshnessDisplayStatus(value, SKILL_NAME)).toBe('needs-attention')
+  })
+
+  it('stays up to date beside another ecosystem’s same-name skill', () => {
+    // Why: the copy belongs to another tool, so no user action exists to clear it.
+    // Amber here is the badge-with-no-exit reported in #10633.
+    expect(
+      getSkillFreshnessDisplayStatus(
+        inventory([placement('current'), foreignPlacement()]),
+        SKILL_NAME
+      )
+    ).toBe('up-to-date')
+    expect(hasSkillCopyNeedingAttention(inventory([foreignPlacement()]), SKILL_NAME)).toBe(false)
+  })
+
+  it('still reports drift in our own copy when a foreign one sits alongside', () => {
+    expect(
+      getSkillFreshnessDisplayStatus(
+        inventory([placement('unrecognized'), foreignPlacement()]),
+        SKILL_NAME
+      )
+    ).toBe('needs-attention')
   })
 })
