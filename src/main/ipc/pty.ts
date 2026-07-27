@@ -292,6 +292,25 @@ export function unregisterDetachedPanePtys(ptyIds: string[]): void {
     }
   }
 }
+
+/** Whether a live detached WebContents target exists for a specific PTY id.
+ *  Used to gate main-window-destroy teardowns: when a detached pane window
+ *  is still alive, delivery state must remain intact so output keeps flowing. */
+export function hasLiveDetachedTarget(id: string): boolean {
+  const target = detachedPtyToRenderer.get(id)
+  return target !== undefined && !target.isDestroyed()
+}
+
+/** Whether ANY live detached WebContents target exists across all PTYs.
+ *  Used in global teardown paths where a per-PTY id is not available. */
+export function anyLiveDetachedTarget(): boolean {
+  for (const target of detachedPtyToRenderer.values()) {
+    if (!target.isDestroyed()) {
+      return true
+    }
+  }
+  return false
+}
 let invalidatePendingPtyDrainPriority = (_id?: string, _schedule?: boolean): void => {}
 let invalidatePendingPtyDrainPolicy = (_id?: string, _schedule?: boolean): void => {}
 const pendingHiddenRendererResizeOutputPtys = new Set<string>()
@@ -2624,25 +2643,6 @@ export function registerPtyHandlers(
 
   function getPtyRendererTarget(id: string): WebContents {
     return detachedPtyToRenderer.get(id) ?? mainWindow.webContents
-  }
-
-  /** Whether a live detached WebContents target exists for a specific PTY id.
-   *  Used to gate main-window-destroy teardowns: when a detached pane window
-   *  is still alive, delivery state must remain intact so output keeps flowing. */
-  function hasLiveDetachedTarget(id: string): boolean {
-    const target = detachedPtyToRenderer.get(id)
-    return target !== undefined && !target.isDestroyed()
-  }
-
-  /** Whether ANY live detached WebContents target exists across all PTYs.
-   *  Used in global teardown paths where a per-PTY id is not available. */
-  function anyLiveDetachedTarget(): boolean {
-    for (const target of detachedPtyToRenderer.values()) {
-      if (!target.isDestroyed()) {
-        return true
-      }
-    }
-    return false
   }
 
   function sendPtyDataToRenderer(

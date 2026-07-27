@@ -232,7 +232,10 @@ import {
   isCurrentPtyExit,
   restorePtyIncarnation,
   type PrepareCodexSessionResume,
-  registerDetachedPanePtys
+  registerDetachedPanePtys,
+  unregisterDetachedPanePtys,
+  hasLiveDetachedTarget,
+  anyLiveDetachedTarget
 } from './pty'
 import { resetMacosLoginShellPreflightForTests } from '../providers/macos-tcc-login-shell'
 import {
@@ -16605,29 +16608,22 @@ describe('registerPtyHandlers', () => {
     // existing daemon-backed PTY tests for the reference pattern.
 
     it('registerDetachedPanePtys populates the detached mapping so gates skip teardown', () => {
-      // The hasLiveDetachedTarget helper checks:
-      //   target = detachedPtyToRenderer.get(id)
-      //   target !== undefined && !target.isDestroyed()
-      //
-      // registerDetachedPanePtys writes to the same module-scope Map that both
-      // helpers consult. Verify the public API is callable with live/destroyed
-      // targets — the gate logic itself is verified by code review.
       const liveWC = { send: vi.fn(), isDestroyed: () => false }
       registerDetachedPanePtys(['pty-live'], liveWC as never)
 
       const deadWC = { send: vi.fn(), isDestroyed: () => true }
       registerDetachedPanePtys(['pty-dead'], deadWC as never)
 
-      // Both calls succeed without throwing → the map accepts entries.
-      // hasLiveDetachedTarget('pty-live') = true  (target exists, not destroyed)
-      // hasLiveDetachedTarget('pty-dead') = false (target exists, IS destroyed)
-      // hasLiveDetachedTarget('pty-unknown') = false (no entry)
-      // anyLiveDetachedTarget() = true (pty-live's target is alive)
+      expect(hasLiveDetachedTarget('pty-live')).toBe(true)
+      expect(hasLiveDetachedTarget('pty-dead')).toBe(false)
+      expect(hasLiveDetachedTarget('pty-unknown')).toBe(false)
+      expect(anyLiveDetachedTarget()).toBe(true)
 
-      // After unregistering pty-live (leaving only pty-dead):
-      // anyLiveDetachedTarget() = false (all remaining targets are destroyed)
-      // → flushPendingData teardown gate fires, clearing global state.
-      expect(true).toBe(true)
+      unregisterDetachedPanePtys(['pty-live'])
+
+      expect(anyLiveDetachedTarget()).toBe(false)
+
+      unregisterDetachedPanePtys(['pty-dead'])
     })
   })
 })
