@@ -15,6 +15,9 @@ import { columnExists, tableExists } from '../opencode-usage/schema-helpers'
 // Why: Hermes 0.19+ migrated session storage to a SQLite database at ~/.hermes/state.db.
 // This module lists and parses individual sessions from the DB into AiVaultSession objects.
 
+/**
+ * Opens a SQLite database at the specified path in read-only mode with query_only pragma.
+ */
 function openReadonlyDatabase(dbPath: string): SyncDatabase {
   const db = new SyncDatabase(dbPath, { readonly: true, fileMustExist: true })
   // Why: query_only prevents accidental writes to the user's Hermes database.
@@ -22,6 +25,9 @@ function openReadonlyDatabase(dbPath: string): SyncDatabase {
   return db
 }
 
+/**
+ * Checks whether the database contains the Hermes sessions table and valid ID column.
+ */
 function canReadHermesSessions(db: SyncDatabase): boolean {
   return (
     tableExists(db, 'sessions') &&
@@ -29,6 +35,9 @@ function canReadHermesSessions(db: SyncDatabase): boolean {
   )
 }
 
+/**
+ * Normalizes an unknown timestamp value (seconds string or number) to milliseconds.
+ */
 function timestampMs(val: unknown): number {
   if (typeof val === 'number') {
     return val < 1e11 ? val * 1000 : val
@@ -60,6 +69,9 @@ type SessionColumns = {
   updatedCol: string
 }
 
+/**
+ * Dynamically maps column names for sessions table based on schema variants.
+ */
 function resolveSessionColumns(db: SyncDatabase): SessionColumns {
   const idCol = columnExists(db, 'sessions', 'id') ? 'id' : 'session_id'
   const titleCol = columnExists(db, 'sessions', 'title') ? 'title' : 'NULL'
@@ -78,6 +90,9 @@ function resolveSessionColumns(db: SyncDatabase): SessionColumns {
   return { idCol, titleCol, cwdCol, modelCol, createdCol, updatedCol }
 }
 
+/**
+ * Builds the SQL SELECT query string used to discover Hermes sessions.
+ */
 function buildSessionListQuery(db: SyncDatabase): string {
   const { idCol, titleCol, cwdCol, modelCol, createdCol, updatedCol } = resolveSessionColumns(db)
 

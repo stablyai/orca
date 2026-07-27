@@ -13,6 +13,9 @@ import { sessionRootDirs } from './session-scanner-roots'
 
 const HERMES_SESSIONS_DIR = join(homedir(), '.hermes', 'sessions')
 
+/**
+ * Resolves candidate Hermes state.db file paths across host and WSL environments.
+ */
 function hermesStateDbPaths(options: AiVaultScanOptions, wslHomeDirs: readonly string[]): string[] {
   if (options.hermesStateDbPaths) {
     return [...options.hermesStateDbPaths]
