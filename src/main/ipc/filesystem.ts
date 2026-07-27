@@ -61,7 +61,6 @@ import {
 } from '../git/status'
 import { getHistory } from '../git/history'
 import {
-  cancelGenerateCommitMessageLocal,
   cancelGeneratePullRequestFieldsLocal,
   discoverCommitMessageModelsLocal,
   discoverCommitMessageModelsRemote,
@@ -78,7 +77,8 @@ import {
   cancelTextGeneration,
   localTextGenerationLane,
   runCancelableTextGenerationRequest,
-  sshTextGenerationLane
+  sshTextGenerationLane,
+  TEXT_GENERATION_CANCELED_RESULT
 } from '../text-generation/text-generation-cancellation'
 import { getUpstreamStatus } from '../git/upstream'
 import { gitFastForward, gitFetch, gitPull, gitPullRebaseFromBase, gitPush } from '../git/remote'
@@ -1383,7 +1383,7 @@ export function registerFilesystemHandlers(
       return runCancelableTextGenerationRequest(
         'commit-message',
         cancellationLane,
-        { success: false, error: 'Generation canceled.', canceled: true },
+        TEXT_GENERATION_CANCELED_RESULT,
         async (cancellation) => {
           const discoveryHostKey = getCommitMessageModelDiscoveryHostKey(args.connectionId ?? null)
           const baseSettings = store.getSettings()
@@ -1405,7 +1405,7 @@ export function registerFilesystemHandlers(
                 await getRepoForSourceControlAi(store, args)
               )
           if (cancellation.isCanceled()) {
-            return { success: false, error: 'Generation canceled.', canceled: true }
+            return TEXT_GENERATION_CANCELED_RESULT
           }
           if (!resolvedSettings.ok) {
             return { success: false, error: resolvedSettings.error }
@@ -1423,7 +1423,7 @@ export function registerFilesystemHandlers(
               context = await provider.getStagedCommitContext(args.worktreePath)
             } catch (error) {
               if (cancellation.isCanceled()) {
-                return { success: false, error: 'Generation canceled.', canceled: true }
+                return TEXT_GENERATION_CANCELED_RESULT
               }
               console.error('[filesystem] Failed to read remote staged commit context:', error)
               return {
@@ -1432,7 +1432,7 @@ export function registerFilesystemHandlers(
               }
             }
             if (cancellation.isCanceled()) {
-              return { success: false, error: 'Generation canceled.', canceled: true }
+              return TEXT_GENERATION_CANCELED_RESULT
             }
             if (!context) {
               return { success: false, error: 'No staged changes to summarize.' }
@@ -1461,7 +1461,7 @@ export function registerFilesystemHandlers(
             context = await getStagedCommitContext(worktreePath, gitOptions)
           } catch (error) {
             if (cancellation.isCanceled()) {
-              return { success: false, error: 'Generation canceled.', canceled: true }
+              return TEXT_GENERATION_CANCELED_RESULT
             }
             console.error('[filesystem] Failed to read staged commit context:', error)
             return {
@@ -1470,7 +1470,7 @@ export function registerFilesystemHandlers(
             }
           }
           if (cancellation.isCanceled()) {
-            return { success: false, error: 'Generation canceled.', canceled: true }
+            return TEXT_GENERATION_CANCELED_RESULT
           }
           if (!context) {
             return { success: false, error: 'No staged changes to summarize.' }
@@ -1485,7 +1485,7 @@ export function registerFilesystemHandlers(
             getLocalAgentRuntimeTarget(gitOptions)
           )
           if (cancellation.isCanceled()) {
-            return { success: false, error: 'Generation canceled.', canceled: true }
+            return TEXT_GENERATION_CANCELED_RESULT
           }
           if (!localEnv.ok) {
             return { success: false, error: localEnv.error }
@@ -1512,10 +1512,7 @@ export function registerFilesystemHandlers(
           return
         }
         await provider.cancelGenerateCommitMessage(args.worktreePath, 'commit-message')
-        return
       }
-      const worktreePath = await resolveRegisteredWorktreePath(args.worktreePath, store)
-      cancelGenerateCommitMessageLocal(worktreePath)
     }
   )
 

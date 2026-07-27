@@ -43,6 +43,7 @@ import {
   beginTextGenerationCancellation,
   cancelTextGeneration,
   localTextGenerationLane,
+  TEXT_GENERATION_CANCELED_RESULT,
   type TextGenerationCancellation,
   type TextGenerationOperation
 } from './text-generation-cancellation'
@@ -567,12 +568,14 @@ async function runLocalPlan(
 ): Promise<InternalTextGenerationResult> {
   const { binary, args, stdinPayload, label } = plan
   return new Promise((resolve) => {
-    const cancellation =
-      requestCancellation ??
-      beginTextGenerationCancellation(operation, localTextGenerationLane(cwd))
+    const ownedCancellation = requestCancellation
+      ? null
+      : beginTextGenerationCancellation(operation, localTextGenerationLane(cwd))
+    const cancellation = requestCancellation ?? ownedCancellation!
+    const finishOwnedCancellation = (): void => ownedCancellation?.finish()
     if (cancellation.isCanceled()) {
-      cancellation.finish()
-      resolve({ success: false, error: 'Generation canceled.', canceled: true })
+      finishOwnedCancellation()
+      resolve(TEXT_GENERATION_CANCELED_RESULT)
       return
     }
     let child: ChildProcess
@@ -601,7 +604,7 @@ async function runLocalPlan(
         })
       }
     } catch (error) {
-      cancellation.finish()
+      finishOwnedCancellation()
       if (error instanceof UnsafeWindowsBatchArgumentsError) {
         resolve({
           success: false,
@@ -638,7 +641,7 @@ async function runLocalPlan(
       }
       detachChildListeners()
       detachCancellation()
-      cancellation.finish()
+      finishOwnedCancellation()
       resolve(result)
     }
 
@@ -647,7 +650,7 @@ async function runLocalPlan(
       killProcessTree(child)
       // Why: cancellation is a user-visible UI command; do not wait for a
       // wedged agent CLI to emit `close` before the request leaves loading.
-      finalize({ success: false, error: 'Generation canceled.', canceled: true })
+      finalize(TEXT_GENERATION_CANCELED_RESULT)
     }
     detachCancellation = cancellation.attach(cancelToken)
 
@@ -694,7 +697,7 @@ async function runLocalPlan(
     }
     const onClose = (code: number | null): void => {
       if (canceledByUser) {
-        finalize({ success: false, error: 'Generation canceled.', canceled: true })
+        finalize(TEXT_GENERATION_CANCELED_RESULT)
         return
       }
       if (outputLimitExceeded) {
@@ -804,16 +807,14 @@ async function runRemotePlan(
 ): Promise<InternalTextGenerationResult> {
   const { binary, label } = plan
   if (target.cancellation?.isCanceled()) {
-    target.cancellation.finish()
-    return { success: false, error: 'Generation canceled.', canceled: true }
+    return TEXT_GENERATION_CANCELED_RESULT
   }
   let result: RemoteCommitMessageExecResult
   try {
     result = await target.execute(plan, target.cwd, GENERATION_TIMEOUT_MS, operation)
   } catch (error) {
     if (target.cancellation?.isCanceled()) {
-      target.cancellation.finish()
-      return { success: false, error: 'Generation canceled.', canceled: true }
+      return TEXT_GENERATION_CANCELED_RESULT
     }
     console.error('[commit-message] Remote generator request failed:', error)
     return {
@@ -822,8 +823,7 @@ async function runRemotePlan(
     }
   }
   if (target.cancellation?.isCanceled()) {
-    target.cancellation.finish()
-    return { success: false, error: 'Generation canceled.', canceled: true }
+    return TEXT_GENERATION_CANCELED_RESULT
   }
   if (result.spawnError) {
     if (result.spawnError === WINDOWS_BATCH_UNSAFE_ARGUMENTS_ERROR) {
@@ -845,7 +845,7 @@ async function runRemotePlan(
     }
   }
   if (result.canceled) {
-    return { success: false, error: 'Generation canceled.', canceled: true }
+    return TEXT_GENERATION_CANCELED_RESULT
   }
   if (result.timedOut) {
     return {

@@ -59,7 +59,6 @@ import {
 } from '../providers/ssh-git-dispatch'
 import { checkIgnoredPaths } from '../git/check-ignored-paths'
 import {
-  cancelGenerateCommitMessageLocal,
   cancelGeneratePullRequestFieldsLocal,
   discoverCommitMessageModelsLocal,
   discoverCommitMessageModelsRemote,
@@ -80,7 +79,8 @@ import {
   cancelTextGeneration,
   localTextGenerationLane,
   runCancelableTextGenerationRequest,
-  sshTextGenerationLane
+  sshTextGenerationLane,
+  TEXT_GENERATION_CANCELED_RESULT
 } from '../text-generation/text-generation-cancellation'
 import { getPullRequestDraftContext } from '../text-generation/pull-request-context'
 import { normalizeRuntimeRelativePath } from './runtime-relative-paths'
@@ -606,7 +606,7 @@ export class RuntimeGitCommands {
     return runCancelableTextGenerationRequest(
       'commit-message',
       cancellationLane,
-      { success: false, error: 'Generation canceled.', canceled: true },
+      TEXT_GENERATION_CANCELED_RESULT,
       async (cancellation) => {
         const discoveryHostKey =
           settingsOverride?.commitMessageDiscoveryHostKey ??
@@ -624,7 +624,7 @@ export class RuntimeGitCommands {
               target.repo ?? null
             )
         if (cancellation.isCanceled()) {
-          return { success: false, error: 'Generation canceled.', canceled: true }
+          return TEXT_GENERATION_CANCELED_RESULT
         }
         if (!resolvedSettings.ok) {
           return { success: false, error: resolvedSettings.error }
@@ -643,13 +643,13 @@ export class RuntimeGitCommands {
             context = await provider.getStagedCommitContext(target.worktree.path)
           } catch (error) {
             if (cancellation.isCanceled()) {
-              return { success: false, error: 'Generation canceled.', canceled: true }
+              return TEXT_GENERATION_CANCELED_RESULT
             }
             console.error('[runtime-git] Failed to read remote staged commit context:', error)
             return { success: false, error: 'Failed to read staged changes.' }
           }
           if (cancellation.isCanceled()) {
-            return { success: false, error: 'Generation canceled.', canceled: true }
+            return TEXT_GENERATION_CANCELED_RESULT
           }
           if (!context) {
             return { success: false, error: 'No staged changes to summarize.' }
@@ -673,13 +673,13 @@ export class RuntimeGitCommands {
           )
         } catch (error) {
           if (cancellation.isCanceled()) {
-            return { success: false, error: 'Generation canceled.', canceled: true }
+            return TEXT_GENERATION_CANCELED_RESULT
           }
           console.error('[runtime-git] Failed to read staged commit context:', error)
           return { success: false, error: 'Failed to read staged changes.' }
         }
         if (cancellation.isCanceled()) {
-          return { success: false, error: 'Generation canceled.', canceled: true }
+          return TEXT_GENERATION_CANCELED_RESULT
         }
         if (!context) {
           return { success: false, error: 'No staged changes to summarize.' }
@@ -691,7 +691,7 @@ export class RuntimeGitCommands {
           localAgentRuntimeTargetForTarget(target)
         )
         if (cancellation.isCanceled()) {
-          return { success: false, error: 'Generation canceled.', canceled: true }
+          return TEXT_GENERATION_CANCELED_RESULT
         }
         if (!localEnv.ok) {
           return { success: false, error: localEnv.error }
@@ -715,7 +715,6 @@ export class RuntimeGitCommands {
       await provider?.cancelGenerateCommitMessage(target.worktree.path, 'commit-message')
       return { ok: true }
     }
-    cancelGenerateCommitMessageLocal(target.worktree.path)
     return { ok: true }
   }
 
