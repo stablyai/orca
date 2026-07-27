@@ -17,7 +17,7 @@ function gitForConfig(config: {
   const merge = config.merge ?? `refs/heads/${branch}`
   return vi.fn(async (args: GitArgs) => {
     if (args[0] === 'symbolic-ref') {
-      return { stdout: `${branch}\n`, stderr: '' }
+      return { stdout: `refs/heads/${branch}\n`, stderr: '' }
     }
     if (args[0] === 'config' && args[2] === `branch.${branch}.pushRemote`) {
       if (config.pushRemote instanceof Error) {
@@ -148,6 +148,36 @@ describe('resolveRelayPushTarget', () => {
     await expect(resolveRelayPushTarget(git, '/repo', undefined)).resolves.toEqual({
       remote: forkUrl,
       refspec: 'HEAD:feature/fix'
+    })
+  })
+
+  it('keeps the fork target when a same-named tag makes the branch ref ambiguous', async () => {
+    // Why: `symbolic-ref --short` abbreviates an ambiguous HEAD to `heads/v1.0`,
+    // so every `branch.<name>.*` lookup missed and the push silently fell back
+    // to origin - sending a contributor's review commits to the wrong repo.
+    const git = vi.fn(async (args: GitArgs) => {
+      if (args[0] === 'symbolic-ref') {
+        expect(args).not.toContain('--short')
+        return { stdout: 'refs/heads/v1.0\n', stderr: '' }
+      }
+      if (args[0] === 'config' && args[2] === 'branch.v1.0.remote') {
+        return { stdout: 'fork\n', stderr: '' }
+      }
+      if (args[0] === 'config' && args[2] === 'branch.v1.0.pushRemote') {
+        return { stdout: 'fork\n', stderr: '' }
+      }
+      if (args[0] === 'config' && args[2] === 'branch.v1.0.merge') {
+        return { stdout: 'refs/heads/v1.0\n', stderr: '' }
+      }
+      if (args[0] === 'config') {
+        throw new Error('missing key')
+      }
+      return { stdout: '', stderr: '' }
+    })
+
+    await expect(resolveRelayPushTarget(git, '/repo', undefined)).resolves.toEqual({
+      remote: 'fork',
+      refspec: 'HEAD:v1.0'
     })
   })
 

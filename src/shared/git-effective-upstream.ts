@@ -1,3 +1,4 @@
+import { readGitCurrentBranchName } from './git-current-branch-name'
 import { isNoUpstreamError } from './git-remote-error'
 import type { GitUpstreamStatus } from './types'
 import {
@@ -55,25 +56,6 @@ async function splitRemoteBranchNameByKnownRemote(
     }
     const branchName = refName.slice(bestRemoteName.length + 1)
     return branchName ? { remoteName: bestRemoteName, branchName } : null
-  } catch {
-    return null
-  }
-}
-
-const HEADS_REF_PREFIX = 'refs/heads/'
-
-async function getCurrentBranchName(runGit: GitCommandRunner): Promise<string | null> {
-  try {
-    // Why: `--short` yields the shortest *unambiguous* ref, so a same-named tag
-    // or non-branch ref abbreviates HEAD to `heads/<name>` — which no
-    // `branch.<name>.*` config key or remote-tracking ref matches. Read the
-    // full ref and strip the prefix ourselves so the name stays exact.
-    const { stdout } = await runGit(['symbolic-ref', '--quiet', 'HEAD'])
-    const ref = stdout.trim()
-    if (!ref) {
-      return null
-    }
-    return ref.startsWith(HEADS_REF_PREFIX) ? ref.slice(HEADS_REF_PREFIX.length) : ref
   } catch {
     return null
   }
@@ -194,14 +176,14 @@ async function resolveEffectiveGitUpstreamForBranch(
 export async function resolveEffectiveGitUpstream(
   runGit: GitCommandRunner
 ): Promise<EffectiveGitUpstream | null> {
-  return resolveEffectiveGitUpstreamForBranch(runGit, await getCurrentBranchName(runGit))
+  return resolveEffectiveGitUpstreamForBranch(runGit, await readGitCurrentBranchName(runGit))
 }
 
 export async function getEffectiveGitUpstreamStatus(
   runGit: GitCommandRunner,
   getBehindCommitsArePatchEquivalent?: (upstreamName: string) => Promise<boolean>
 ): Promise<GitUpstreamStatus> {
-  const currentBranchName = await getCurrentBranchName(runGit)
+  const currentBranchName = await readGitCurrentBranchName(runGit)
   const upstream = await resolveEffectiveGitUpstreamForBranch(runGit, currentBranchName)
   if (!upstream) {
     const hasConfiguredPushTarget = currentBranchName

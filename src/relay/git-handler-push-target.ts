@@ -1,3 +1,7 @@
+import {
+  GIT_CURRENT_BRANCH_REF_ARGS,
+  branchNameFromHeadRef
+} from '../shared/git-current-branch-name'
 import { assertGitPushTargetShape } from '../shared/git-push-target-validation'
 import { gitRefTargetsBranchOnRemote } from '../shared/git-remote-branch-name'
 import type { GitPushTarget } from '../shared/types'
@@ -14,11 +18,8 @@ async function getConfiguredPushTarget(
   worktreePath: string
 ): Promise<ResolvedPushTarget | null> {
   try {
-    const { stdout: branchStdout } = await git(
-      ['symbolic-ref', '--quiet', '--short', 'HEAD'],
-      worktreePath
-    )
-    const branch = branchStdout.trim()
+    const { stdout: branchStdout } = await git([...GIT_CURRENT_BRANCH_REF_ARGS], worktreePath)
+    const branch = branchNameFromHeadRef(branchStdout)
     if (!branch) {
       return null
     }

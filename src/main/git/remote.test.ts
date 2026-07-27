@@ -59,6 +59,38 @@ describe('git remote operations', () => {
     )
   })
 
+  it('keeps the fork push target when a same-named tag makes the branch ref ambiguous', async () => {
+    // Why: `symbolic-ref --short` abbreviates an ambiguous HEAD to `heads/v1.0`,
+    // so every `branch.<name>.*` lookup missed and the push fell back to
+    // `origin HEAD`, publishing review commits to the upstream repository.
+    gitExecFileAsyncMock.mockImplementation(async (args: string[]) => {
+      if (args[0] === 'symbolic-ref') {
+        expect(args).not.toContain('--short')
+        return { stdout: 'refs/heads/v1.0\n', stderr: '' }
+      }
+      if (args[0] === 'config' && args.includes('branch.v1.0.remote')) {
+        return { stdout: 'fork\n', stderr: '' }
+      }
+      if (args[0] === 'config' && args.includes('branch.v1.0.pushRemote')) {
+        return { stdout: 'fork\n', stderr: '' }
+      }
+      if (args[0] === 'config' && args.includes('branch.v1.0.merge')) {
+        return { stdout: 'refs/heads/v1.0\n', stderr: '' }
+      }
+      if (args[0] === 'config') {
+        throw new Error('missing key')
+      }
+      return { stdout: '', stderr: '' }
+    })
+
+    await gitPush('/repo', false)
+
+    expect(gitExecFileAsyncMock).toHaveBeenLastCalledWith(
+      ['push', '--set-upstream', 'fork', 'HEAD:v1.0'],
+      { cwd: '/repo' }
+    )
+  })
+
   it('does not combine remote.pushDefault with a base-branch merge target', async () => {
     gitExecFileAsyncMock.mockImplementation(async (args: string[]) => {
       if (args[0] === 'symbolic-ref') {

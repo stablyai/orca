@@ -1,4 +1,8 @@
 import {
+  GIT_CURRENT_BRANCH_REF_ARGS,
+  branchNameFromHeadRef
+} from '../../shared/git-current-branch-name'
+import {
   normalizeGitErrorMessage,
   runPullWithDivergenceFallback
 } from '../../shared/git-remote-error'
@@ -18,10 +22,10 @@ async function getConfiguredPushTarget(
 ): Promise<{ remote: string; refspec: string } | null> {
   try {
     const { stdout: branchStdout } = await gitExecFileAsync(
-      ['symbolic-ref', '--quiet', '--short', 'HEAD'],
+      [...GIT_CURRENT_BRANCH_REF_ARGS],
       gitOptionsForWorktree(worktreePath, options)
     )
-    const branch = branchStdout.trim()
+    const branch = branchNameFromHeadRef(branchStdout)
     if (!branch) {
       return null
     }

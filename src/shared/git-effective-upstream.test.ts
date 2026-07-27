@@ -1,5 +1,5 @@
 import { execFile } from 'node:child_process'
-import { mkdtemp, rm } from 'node:fs/promises'
+import { mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { promisify } from 'node:util'
@@ -24,9 +24,15 @@ async function createRepoWithPublishedBranch(branchName: string): Promise<GitCom
   tempDirs.push(root)
   const repoPath = join(root, 'repo')
   const remotePath = join(root, 'remote.git')
-  await execFileAsync('git', ['init', '--quiet', '--bare', remotePath])
-  await execFileAsync('git', ['init', '--quiet', repoPath])
-  const runGit: GitCommandRunner = async (args) => execFileAsync('git', args, { cwd: repoPath })
+  const globalConfigPath = join(root, 'global-gitconfig')
+  await writeFile(globalConfigPath, '')
+  // Why: an ambient global gitconfig (commit.gpgsign, hooks, templates) otherwise
+  // fails these commits on developer and CI machines.
+  const env = { ...process.env, GIT_CONFIG_GLOBAL: globalConfigPath, GIT_CONFIG_NOSYSTEM: '1' }
+  await execFileAsync('git', ['init', '--quiet', '--bare', remotePath], { env })
+  await execFileAsync('git', ['init', '--quiet', repoPath], { env })
+  const runGit: GitCommandRunner = async (args) =>
+    execFileAsync('git', args, { cwd: repoPath, env })
   await runGit(['config', 'user.email', 'test@example.com'])
   await runGit(['config', 'user.name', 'Orca Test'])
   await runGit(['commit', '--quiet', '--allow-empty', '-m', 'init'])

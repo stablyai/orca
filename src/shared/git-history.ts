@@ -1,3 +1,4 @@
+import { GIT_CURRENT_BRANCH_REF_ARGS, branchNameFromHeadRef } from './git-current-branch-name'
 import {
   GIT_HISTORY_COMMIT_FORMAT,
   gitHistoryRefFromFullName,
@@ -97,8 +98,8 @@ async function resolveCurrentRef(
   headOid: string
 ): Promise<{ currentRef: GitHistoryItemRef; branchName: string | null }> {
   try {
-    const { stdout } = await git(['symbolic-ref', '--quiet', '--short', 'HEAD'], cwd)
-    const branchName = stdout.trim()
+    const { stdout } = await git([...GIT_CURRENT_BRANCH_REF_ARGS], cwd)
+    const branchName = branchNameFromHeadRef(stdout)
     if (branchName) {
       return {
         branchName,

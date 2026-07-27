@@ -56,7 +56,7 @@ function createHistoryExecutor(limitRecords = 2): {
       return { stdout: `${REMOTE_OID}\n` }
     }
     if (command === 'symbolic-ref') {
-      return { stdout: 'feature\n' }
+      return { stdout: 'refs/heads/feature\n' }
     }
     if (command === 'for-each-ref') {
       return { stdout: 'refs/remotes/origin/feature\0origin/feature\n' }
@@ -183,7 +183,7 @@ describe('git history loader', () => {
         return { stdout: 'refs/remotes/origin/main\n' }
       }
       if (command === 'symbolic-ref') {
-        return { stdout: 'old-workspace\n' }
+        return { stdout: 'refs/heads/old-workspace\n' }
       }
       if (command === 'for-each-ref') {
         return { stdout: 'refs/remotes/origin/main\0origin/main\n' }
