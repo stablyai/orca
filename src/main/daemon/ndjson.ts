@@ -34,6 +34,10 @@ export function createNdjsonParser(
 ): NdjsonParser {
   const buffer = new GrowingByteBuffer()
   let discardingOversizedLine = false
+  // Why: the line is accumulated as UTF-8 bytes, so a chunk boundary that lands between
+  // a surrogate pair would encode each half on its own and yield two replacement chars.
+  // Hold a trailing high surrogate back until its low half arrives.
+  let pendingHighSurrogate = ''
   const maxLineBytes = Math.max(1, options.maxLineBytes ?? NDJSON_MAX_LINE_BYTES)
 
   const clearBuffer = (): void => {
@@ -48,7 +52,13 @@ export function createNdjsonParser(
 
   return {
     feed(chunk: string): void {
-      let remaining = chunk
+      let remaining = pendingHighSurrogate + chunk
+      pendingHighSurrogate = ''
+      const lastCode = remaining.charCodeAt(remaining.length - 1)
+      if (remaining.length > 0 && lastCode >= 0xd800 && lastCode <= 0xdbff) {
+        pendingHighSurrogate = remaining.slice(-1)
+        remaining = remaining.slice(0, -1)
+      }
 
       while (remaining.length > 0) {
         const newlineIndex = remaining.indexOf('\n')
@@ -111,6 +121,7 @@ export function createNdjsonParser(
     reset(): void {
       clearBuffer()
       discardingOversizedLine = false
+      pendingHighSurrogate = ''
     }
   }
 }
