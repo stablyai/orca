@@ -84,6 +84,16 @@ describe('agent-context over the live registry', () => {
     expect(agentContext?.flags).not.toContain('page')
   })
 
+  it('advertises account commands without browser-only flags', () => {
+    const schema = buildAgentContext(COMMAND_SPECS)
+    const accountList = schema.commands.find((command) => command.command === 'account list')
+    const accountUse = schema.commands.find((command) => command.command === 'account use')
+    expect(accountList?.usage).toBe('orca account list [--json]')
+    expect(accountList?.flags).not.toContain('page')
+    expect(accountUse?.flags).toContain('account')
+    expect(accountUse?.flags).not.toContain('page')
+  })
+
   it('marks raw passthrough commands without synthesizing Orca flags', () => {
     const schema = buildAgentContext(COMMAND_SPECS)
     const claudeTeams = schema.commands.find((command) => command.command === 'claude-teams')

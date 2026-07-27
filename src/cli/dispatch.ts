@@ -25,6 +25,7 @@ import { EMULATOR_HANDLERS } from './handlers/emulator'
 import { LINEAR_HANDLERS } from './handlers/linear'
 import { VM_HANDLERS } from './handlers/vm'
 import { SKILL_HANDLERS } from './handlers/skills'
+import { ACCOUNT_HANDLERS } from './handlers/account'
 
 export type HandlerContext = {
   flags: Map<string, string | boolean>
@@ -63,7 +64,8 @@ function buildHandlers(): Map<string, CommandHandler> {
     ENVIRONMENT_HANDLERS,
     LINEAR_HANDLERS,
     VM_HANDLERS,
-    SKILL_HANDLERS
+    SKILL_HANDLERS,
+    ACCOUNT_HANDLERS
   ]
   for (const group of groups) {
     for (const [key, handler] of Object.entries(group)) {

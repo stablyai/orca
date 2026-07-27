@@ -4,6 +4,7 @@ import type { CommandSpec } from './args'
 import {
   REPEATED_FLAG_SEPARATOR,
   findCommandSpec,
+  isCommandGroup,
   normalizeCommandPositionals,
   parseArgs,
   supportsBrowserPageFlag,
@@ -229,8 +230,19 @@ describe('supportsBrowserPageFlag', () => {
     expect(supportsBrowserPageFlag(['orchestration', 'send'])).toBe(false)
   })
 
+  it('does not expose browser page targeting on account commands', () => {
+    expect(supportsBrowserPageFlag(['account', 'list'])).toBe(false)
+    expect(supportsBrowserPageFlag(['account', 'use'])).toBe(false)
+  })
+
   it('does not expose browser page targeting on local agent discovery', () => {
     expect(supportsBrowserPageFlag(['agent-context'])).toBe(false)
+  })
+})
+
+describe('isCommandGroup', () => {
+  it('treats account as a group command for help routing', () => {
+    expect(isCommandGroup(['account'])).toBe(true)
   })
 })
 
