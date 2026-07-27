@@ -167,21 +167,40 @@ export function useFileExplorerHandlers({
   setSelectedPath,
   scrollRef
 }: UseFileExplorerHandlersParams): UseFileExplorerHandlersReturn {
-  const pendingDirToggle = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const pendingDirToggle = useRef<{
+    timer: ReturnType<typeof setTimeout>
+    dirPath: string
+    run: () => void
+  } | null>(null)
 
   const cancelPendingDirToggle = useCallback((): void => {
     if (pendingDirToggle.current === null) {
       return
     }
-    clearTimeout(pendingDirToggle.current)
+    clearTimeout(pendingDirToggle.current.timer)
     pendingDirToggle.current = null
+  }, [])
+
+  // Why: only the row that armed the deferral can retract it (its own second
+  // click becomes a rename). Any other gesture leaves that click's intent
+  // standing, so run it now instead of dropping the folder the user opened.
+  const settlePendingDirToggle = useCallback((retractingDirPath: string | null): void => {
+    const pending = pendingDirToggle.current
+    if (pending === null) {
+      return
+    }
+    clearTimeout(pending.timer)
+    pendingDirToggle.current = null
+    if (pending.dirPath !== retractingDirPath) {
+      pending.run()
+    }
   }, [])
 
   useEffect(() => cancelPendingDirToggle, [cancelPendingDirToggle])
 
   const handleClick = useCallback(
     (node: TreeNode, dirToggle: DirToggleTiming = 'immediate') => {
-      cancelPendingDirToggle()
+      settlePendingDirToggle(node.path)
       if (dirToggle === 'skip' && node.isDirectory) {
         // Why: the rename about to start owns this gesture; selection still applies.
         setSelectedPath(node.path)
@@ -195,10 +214,15 @@ export function useFileExplorerHandlers({
         toggleDir:
           dirToggle === 'deferred'
             ? (worktreeId, dirPath) => {
-                pendingDirToggle.current = setTimeout(() => {
-                  pendingDirToggle.current = null
-                  toggleDir(worktreeId, dirPath)
-                }, DIR_TOGGLE_DOUBLE_CLICK_MS)
+                const run = (): void => toggleDir(worktreeId, dirPath)
+                pendingDirToggle.current = {
+                  dirPath,
+                  run,
+                  timer: setTimeout(() => {
+                    pendingDirToggle.current = null
+                    run()
+                  }, DIR_TOGGLE_DOUBLE_CLICK_MS)
+                }
               }
             : toggleDir,
         canToggleDirectories,
@@ -212,7 +236,7 @@ export function useFileExplorerHandlers({
       activeWorktreeId,
       runtimeEnvironmentId,
       canToggleDirectories,
-      cancelPendingDirToggle,
+      settlePendingDirToggle,
       loadDir,
       markPathAsDirectory,
       openFile,

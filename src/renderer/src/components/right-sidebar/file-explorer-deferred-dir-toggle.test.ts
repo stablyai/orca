@@ -15,6 +15,14 @@ const directoryNode: TreeNode = {
   depth: 1
 }
 
+const siblingDirectoryNode: TreeNode = {
+  name: 'lib',
+  path: '/repo/src/lib',
+  relativePath: 'src/lib',
+  isDirectory: true,
+  depth: 1
+}
+
 function renderHandlers(toggleDir: (worktreeId: string, dirPath: string) => void) {
   return renderHook(() =>
     useFileExplorerHandlers({
@@ -100,6 +108,28 @@ describe('deferred directory toggle', () => {
 
     await flush(DIR_TOGGLE_DOUBLE_CLICK_MS * 2)
     expect(toggleDir).not.toHaveBeenCalled()
+  })
+
+  it('flushes a pending toggle when the next click lands on a different row', async () => {
+    const toggleDir = vi.fn()
+    const { result } = renderHandlers(toggleDir)
+
+    await act(async () => {
+      result.current.handleClick(directoryNode, 'deferred')
+      await Promise.resolve()
+    })
+    // Why: clicking another folder must not silently discard the first folder's
+    // expand — only that row's own second click (the rename) may retract it.
+    await act(async () => {
+      result.current.handleClick(siblingDirectoryNode, 'deferred')
+      await Promise.resolve()
+    })
+
+    expect(toggleDir).toHaveBeenCalledWith('wt-1', directoryNode.path)
+
+    await flush(DIR_TOGGLE_DOUBLE_CLICK_MS)
+    expect(toggleDir).toHaveBeenCalledWith('wt-1', siblingDirectoryNode.path)
+    expect(toggleDir).toHaveBeenCalledTimes(2)
   })
 
   it('drops a pending toggle when the explorer unmounts', async () => {
