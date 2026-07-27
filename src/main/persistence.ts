@@ -72,6 +72,8 @@ import {
   normalizeProjectRuntimePreference
 } from '../shared/project-execution-runtime'
 import { projectHostSetupProjectionFromRepos } from '../shared/project-host-setup-projection'
+import { isDefaultGitHubHost } from '../shared/github-repository-identity-key'
+import { remapHostLessGitHubEnterpriseProjectIds } from './github-enterprise-project-id-remap'
 import type { GitRemoteIdentity } from '../shared/git-remote-identity'
 import {
   buildTaskSourceContextFromRepo,
@@ -1314,10 +1316,18 @@ function sanitizeRepoUpstream(value: unknown): Repo['upstream'] | undefined {
   if (!value || typeof value !== 'object') {
     return undefined
   }
-  const candidate = value as { owner?: unknown; repo?: unknown }
+  const candidate = value as { owner?: unknown; repo?: unknown; host?: unknown }
   const owner = typeof candidate.owner === 'string' ? candidate.owner.trim() : ''
   const repo = typeof candidate.repo === 'string' ? candidate.repo.trim() : ''
-  return owner && repo ? { owner, repo } : undefined
+  // Why: the host is the github.com-vs-GHES boundary that project identity keys
+  // are built from; dropping it re-projects an Enterprise repo onto the
+  // same-named github.com project. github.com itself stays implicit.
+  const rawHost = typeof candidate.host === 'string' ? candidate.host.trim().toLowerCase() : ''
+  const host = rawHost && !isDefaultGitHubHost(rawHost) ? rawHost : undefined
+  if (!owner || !repo) {
+    return undefined
+  }
+  return host ? { owner, repo, host } : { owner, repo }
 }
 
 function sanitizeGitRemoteIdentity(value: unknown): GitRemoteIdentity | null | undefined {
@@ -3449,6 +3459,13 @@ export class Store {
     }
 
     const repos = clearMissingProjectGroupMemberships(result.repos, result.projectGroups ?? [])
+    // Before the compatibility merge: it rebuilds repo-backed rows from `repos`, so a
+    // host-less GHES reference left in place would lose its project row outright.
+    const enterpriseProjectIdRemap = remapHostLessGitHubEnterpriseProjectIds({ ...result, repos })
+    if (enterpriseProjectIdRemap.changed) {
+      this.loadNeedsSave = true
+    }
+    result = enterpriseProjectIdRemap.state
     const projectHostSetupCompatibility = mergeProjectHostSetupCompatibilityState(result, repos)
     if (!projectHostSetupCompatibilityStateEqual(result, projectHostSetupCompatibility)) {
       this.loadNeedsSave = true
@@ -4537,6 +4554,43 @@ export class Store {
       }
     }
     Object.assign(repo, sanitizedUpdates)
+    this.syncProjectHostSetupCompatibilityState()
+    this.scheduleSave()
+    return this.hydrateRepo(repo)
+  }
+
+  /** Rollback-only counterpart to `updateRepo` for the two identity fields. Key presence
+   *  means "restore this field" and an `undefined` value means "back to absent" — which
+   *  `updateRepo` deliberately cannot express, since there `undefined` means "leave alone".
+   *  Kept narrow so undoing a rejected import cannot widen general patch semantics.
+   *
+   *  Callers must snapshot from a hydrated read (`getRepo`/`getRepos`), the same shape this
+   *  writes: a snapshot of the raw record can hold fields hydration would have filled in,
+   *  and restoring those would persist derived state as if the user had set it. */
+  restoreRepoIdentityFields(
+    id: string,
+    restore: Pick<Partial<Repo>, 'upstream' | 'gitRemoteIdentity'>
+  ): Repo | null {
+    const repo = this.state.repos.find((r) => r.id === id)
+    if (!repo) {
+      return null
+    }
+    if ('upstream' in restore) {
+      const upstream = sanitizeRepoUpstream(restore.upstream)
+      if (upstream === undefined) {
+        delete repo.upstream
+      } else {
+        repo.upstream = upstream
+      }
+    }
+    if ('gitRemoteIdentity' in restore) {
+      const gitRemoteIdentity = sanitizeGitRemoteIdentity(restore.gitRemoteIdentity)
+      if (gitRemoteIdentity === undefined) {
+        delete repo.gitRemoteIdentity
+      } else {
+        repo.gitRemoteIdentity = gitRemoteIdentity
+      }
+    }
     this.syncProjectHostSetupCompatibilityState()
     this.scheduleSave()
     return this.hydrateRepo(repo)

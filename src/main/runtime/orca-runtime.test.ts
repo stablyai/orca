@@ -1,11 +1,10 @@
 /* eslint-disable max-lines -- Why: runtime behavior is stateful and cross-cutting, so these tests stay in one file to preserve the end-to-end invariants around handles, waits, and graph sync. */
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, onTestFinished, vi } from 'vitest'
 import type * as GitUsernameModule from '../git/git-username'
 import { performance } from 'node:perf_hooks'
 import { EventEmitter } from 'node:events'
 import { randomUUID } from 'node:crypto'
-import { execFileSync } from 'node:child_process'
-import { mkdirSync } from 'node:fs'
+import { mkdirSync, rmSync } from 'node:fs'
 import { lstat, mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { homedir, tmpdir } from 'node:os'
 import { basename, join, win32 } from 'node:path'
@@ -89,6 +88,7 @@ import {
 } from '../../shared/agent-prompt-injection'
 import { CLIPBOARD_TEXT_MEASURE_YIELD_CODE_UNITS } from '../../shared/clipboard-text'
 import { projectHostSetupProjectionFromRepos } from '../../shared/project-host-setup-projection'
+import { createIsolatedGitEnv, initGitRepoWithOrigin } from './isolated-git-repo-fixture'
 import {
   registerSshFilesystemProvider,
   unregisterSshFilesystemProvider
@@ -1552,6 +1552,65 @@ describe('OrcaRuntimeService.dedupeWorktreeCreate', () => {
     expect(calls).toBe(4)
   })
 })
+
+/** Redirects git config for this test and for the git the runtime spawns itself, so an
+ *  ambient `insteadOf` cannot rewrite the remote URL the assertions depend on. */
+function useIsolatedGitEnv(): void {
+  const { root, entries } = createIsolatedGitEnv()
+  for (const [key, value] of Object.entries(entries)) {
+    vi.stubEnv(key, value)
+  }
+  onTestFinished(() => {
+    vi.unstubAllEnvs()
+    rmSync(root, { recursive: true, force: true })
+  })
+}
+
+/** Store fake for existing-folder setup: real projection over `repos`, plus the narrow
+ *  rollback contract. `sanitize` stands in for persistence sanitizers, which can keep
+ *  less than the caller asked for. */
+function makeProjectSetupRuntimeStore(
+  repos: Record<string, unknown>[],
+  sanitize: (updates: Record<string, unknown>) => Record<string, unknown> = (updates) => updates
+) {
+  return {
+    ...store,
+    getRepos: () => [...repos] as never,
+    addRepo: (repo: Record<string, unknown>) => {
+      repos.push(repo)
+    },
+    getRepo: (id: string) => repos.find((repo) => repo.id === id) as never,
+    updateRepo: (id: string, updates: Record<string, unknown>) => {
+      const target = repos.find((repo) => repo.id === id)
+      if (!target) {
+        return null
+      }
+      Object.assign(target, sanitize(updates))
+      return { ...target } as never
+    },
+    // Mirrors `Store.restoreRepoIdentityFields`: a present key holding `undefined`
+    // clears the field, which `updateRepo` cannot express.
+    restoreRepoIdentityFields: (id: string, restore: Record<string, unknown>) => {
+      const target = repos.find((repo) => repo.id === id)
+      if (!target) {
+        return null
+      }
+      for (const field of ['upstream', 'gitRemoteIdentity']) {
+        if (!(field in restore)) {
+          continue
+        }
+        if (restore[field] === undefined) {
+          delete target[field]
+        } else {
+          target[field] = restore[field]
+        }
+      }
+      return { ...target } as never
+    },
+    getProjects: () => projectHostSetupProjectionFromRepos(repos as never).projects as never,
+    getProjectHostSetups: () => projectHostSetupProjectionFromRepos(repos as never).setups as never
+  }
+}
 
 describe('OrcaRuntimeService', () => {
   it('projects runtime-backed settings to paired clients', () => {
@@ -6831,63 +6890,24 @@ describe('OrcaRuntimeService', () => {
 
   it('sets up an existing folder on a fresh runtime after importing the repo project', async () => {
     const tempRoot = await mkdtemp(join(tmpdir(), 'orca-runtime-project-setup-'))
-    const repos: Record<string, unknown>[] = []
-    getRepoUpstreamMock.mockResolvedValueOnce({ owner: 'stablyai', repo: 'orca' })
-    const runtimeStore = {
-      ...store,
-      getRepos: () => [...repos] as never,
-      addRepo: (repo: Record<string, unknown>) => {
-        repos.push(repo)
-      },
-      getRepo: (id: string) => repos.find((repo) => repo.id === id) as never,
-      updateRepo: (id: string, updates: Record<string, unknown>) => {
-        const index = repos.findIndex((repo) => repo.id === id)
-        if (index === -1) {
-          return null
-        }
-        repos[index] = { ...repos[index], ...updates }
-        return repos[index] as never
-      },
-      getProjects: () =>
-        repos
-          .map((repo) => {
-            const upstream = repo.upstream as { owner: string; repo: string } | undefined
-            if (!upstream) {
-              return null
-            }
-            return {
-              id: `github:${upstream.owner}/${upstream.repo}`,
-              displayName: repo.displayName,
-              badgeColor: repo.badgeColor,
-              providerIdentity: { provider: 'github', owner: upstream.owner, repo: upstream.repo },
-              sourceRepoIds: [repo.id],
-              createdAt: repo.addedAt,
-              updatedAt: repo.addedAt
-            }
-          })
-          .filter(Boolean) as never,
-      getProjectHostSetups: () =>
-        repos.map((repo) => {
-          const upstream = repo.upstream as { owner: string; repo: string } | undefined
-          return {
-            id: repo.id,
-            projectId: upstream ? `github:${upstream.owner}/${upstream.repo}` : repo.id,
-            hostId: 'local',
-            repoId: repo.id,
-            path: repo.path,
-            displayName: repo.displayName,
-            kind: repo.kind,
-            setupState: 'ready',
-            setupMethod: repo.projectHostSetupMethod ?? 'legacy-repo',
-            createdAt: repo.addedAt,
-            updatedAt: repo.addedAt
-          }
-        }) as never
-    }
-    const runtime = new OrcaRuntimeService(runtimeStore as never)
+    // The project exists because another host already imported it; the fresh folder has to
+    // earn the same identity from its own remote, with nothing stamped at add time.
+    const repos: Record<string, unknown>[] = [
+      {
+        id: 'repo-imported',
+        path: '/imported/orca',
+        displayName: 'orca',
+        badgeColor: 'blue',
+        addedAt: 1,
+        kind: 'git',
+        upstream: { owner: 'stablyai', repo: 'orca' }
+      }
+    ]
+    const runtime = new OrcaRuntimeService(makeProjectSetupRuntimeStore(repos) as never)
 
     try {
-      execFileSync('git', ['init'], { cwd: tempRoot, stdio: 'ignore' })
+      useIsolatedGitEnv()
+      initGitRepoWithOrigin(tempRoot, 'https://github.com/stablyai/orca.git')
       const result = await runtime.setupProjectExistingFolder({
         projectId: 'github:stablyai/orca',
         hostId: 'runtime:env-1',
@@ -6900,8 +6920,19 @@ describe('OrcaRuntimeService', () => {
       expect(result.repo.path).toBe(tempRoot)
       expect(result.setup).toMatchObject({
         projectId: 'github:stablyai/orca',
+        hostId: 'runtime:env-1',
         path: tempRoot,
         setupMethod: 'imported-existing-folder'
+      })
+      expect(repos).toHaveLength(2)
+      expect(repos[1]).toMatchObject({
+        path: tempRoot,
+        executionHostId: 'runtime:env-1',
+        gitRemoteIdentity: {
+          canonicalKey: 'github.com/stablyai/orca',
+          remoteName: 'origin',
+          remoteUrl: 'https://github.com/stablyai/orca.git'
+        }
       })
     } finally {
       await rm(tempRoot, { recursive: true, force: true })
@@ -6912,29 +6943,12 @@ describe('OrcaRuntimeService', () => {
     const tempRoot = await mkdtemp(join(tmpdir(), 'orca-runtime-project-host-'))
     const repos: Record<string, unknown>[] = []
     getRepoUpstreamMock.mockResolvedValue({ owner: 'stablyai', repo: 'orca' })
-    const runtimeStore = {
-      ...store,
-      getRepos: () => [...repos] as never,
-      addRepo: (repo: Record<string, unknown>) => {
-        repos.push(repo)
-      },
-      getRepo: (id: string) => repos.find((repo) => repo.id === id) as never,
-      updateRepo: (id: string, updates: Record<string, unknown>) => {
-        const index = repos.findIndex((repo) => repo.id === id)
-        if (index === -1) {
-          return null
-        }
-        repos[index] = { ...repos[index], ...updates }
-        return repos[index] as never
-      },
-      getProjects: () => projectHostSetupProjectionFromRepos(repos as never).projects as never,
-      getProjectHostSetups: () =>
-        projectHostSetupProjectionFromRepos(repos as never).setups as never
-    }
+    const runtimeStore = makeProjectSetupRuntimeStore(repos)
     const runtime = new OrcaRuntimeService(runtimeStore as never)
 
     try {
-      execFileSync('git', ['init'], { cwd: tempRoot, stdio: 'ignore' })
+      useIsolatedGitEnv()
+      initGitRepoWithOrigin(tempRoot)
       const first = await runtime.setupProjectExistingFolder({
         projectId: 'github:stablyai/orca',
         hostId: 'runtime:env-1',
@@ -6982,6 +6996,323 @@ describe('OrcaRuntimeService', () => {
     } finally {
       await rm(tempRoot, { recursive: true, force: true })
     }
+  })
+
+  it('links a stale runtime folder record to a generic Git project by re-probing its remote', async () => {
+    const tempRoot = await mkdtemp(join(tmpdir(), 'orca-runtime-project-remote-'))
+    // Same path, other host: an already-stored record is returned unchanged by addRepo,
+    // so only reconciliation can repair the identity it never had.
+    const otherHostRepo = {
+      id: 'repo-host-a',
+      path: tempRoot,
+      displayName: 'orca',
+      badgeColor: 'blue',
+      addedAt: 1,
+      kind: 'git',
+      executionHostId: 'runtime:env-2',
+      gitRemoteIdentity: {
+        canonicalKey: 'gitlab.example.com/team/orca',
+        remoteName: 'origin',
+        remoteUrl: 'ssh://git@gitlab.example.com/team/orca.git'
+      }
+    }
+    const repos: Record<string, unknown>[] = [
+      otherHostRepo,
+      {
+        id: 'repo-stale',
+        path: tempRoot,
+        displayName: 'orca',
+        badgeColor: 'blue',
+        addedAt: 2,
+        kind: 'git',
+        executionHostId: 'runtime:env-1'
+      }
+    ]
+    const runtime = new OrcaRuntimeService(makeProjectSetupRuntimeStore(repos) as never)
+    const reposChanged = vi.fn()
+    runtime.setNotifier({ reposChanged } as never)
+
+    try {
+      useIsolatedGitEnv()
+      initGitRepoWithOrigin(tempRoot, 'git@gitlab.example.com:team/orca.git')
+      const result = await runtime.setupProjectExistingFolder({
+        projectId: 'git:gitlab.example.com/team/orca',
+        hostId: 'runtime:env-1',
+        path: tempRoot,
+        kind: 'git',
+        setupMethod: 'imported-existing-folder'
+      })
+
+      expect(result.repo.id).toBe('repo-stale')
+      expect(result.setup).toMatchObject({
+        projectId: 'git:gitlab.example.com/team/orca',
+        hostId: 'runtime:env-1',
+        setupMethod: 'imported-existing-folder'
+      })
+      expect(result.repo.gitRemoteIdentity).toEqual({
+        canonicalKey: 'gitlab.example.com/team/orca',
+        remoteName: 'origin',
+        remoteUrl: 'git@gitlab.example.com:team/orca.git'
+      })
+      // The env-2 record shares the path but not the host, so this import must not touch it.
+      expect(repos).toHaveLength(2)
+      expect(repos[0]).toEqual(otherHostRepo)
+      // `addRepo` returned the stored record without announcing, so the identity repair owes
+      // clients the broadcast.
+      expect(reposChanged).toHaveBeenCalled()
+    } finally {
+      await rm(tempRoot, { recursive: true, force: true })
+    }
+  })
+
+  it('rejects a runtime existing folder whose remote belongs to another project', async () => {
+    const tempRoot = await mkdtemp(join(tmpdir(), 'orca-runtime-project-conflict-'))
+    // Both records carry `upstream` so the one-shot fork backfill `setNotifier` starts
+    // finds nothing to write and cannot broadcast over the assertion below.
+    const repos: Record<string, unknown>[] = [
+      {
+        id: 'repo-host-a',
+        path: '/elsewhere/orca',
+        displayName: 'orca',
+        badgeColor: 'blue',
+        addedAt: 1,
+        kind: 'git',
+        executionHostId: 'runtime:env-2',
+        upstream: null,
+        gitRemoteIdentity: {
+          canonicalKey: 'gitlab.example.com/team/orca',
+          remoteName: 'origin',
+          remoteUrl: 'git@gitlab.example.com:team/orca.git'
+        }
+      },
+      {
+        id: 'repo-stale',
+        path: tempRoot,
+        displayName: 'orca',
+        badgeColor: 'blue',
+        addedAt: 2,
+        kind: 'git',
+        executionHostId: 'runtime:env-1',
+        upstream: null
+      }
+    ]
+    const runtime = new OrcaRuntimeService(makeProjectSetupRuntimeStore(repos) as never)
+    const reposChanged = vi.fn()
+    runtime.setNotifier({ reposChanged } as never)
+
+    try {
+      useIsolatedGitEnv()
+      initGitRepoWithOrigin(tempRoot, 'git@gitlab.example.com:other/orca.git')
+
+      await expect(
+        runtime.setupProjectExistingFolder({
+          projectId: 'git:gitlab.example.com/team/orca',
+          hostId: 'runtime:env-1',
+          path: tempRoot,
+          kind: 'git',
+          setupMethod: 'imported-existing-folder'
+        })
+      ).rejects.toThrow('Imported folder does not match the selected project identity.')
+
+      // A rejected import writes nothing: no repaired identity, no setup claim.
+      expect(repos).toHaveLength(2)
+      expect(repos[1]).not.toHaveProperty('projectHostSetupMethod')
+      expect(repos[1]).not.toHaveProperty('gitRemoteIdentity')
+      // Nothing changed, so nothing is announced — the counterpart to the rollback case,
+      // which must announce.
+      expect(reposChanged).not.toHaveBeenCalled()
+    } finally {
+      await rm(tempRoot, { recursive: true, force: true })
+    }
+  })
+
+  it('rolls a rejected runtime import back to absent and re-announces the repos', async () => {
+    const tempRoot = await mkdtemp(join(tmpdir(), 'orca-runtime-project-rollback-'))
+    const repos: Record<string, unknown>[] = [
+      {
+        id: 'repo-host-a',
+        path: '/elsewhere/orca',
+        displayName: 'orca',
+        badgeColor: 'blue',
+        addedAt: 1,
+        kind: 'git',
+        executionHostId: 'runtime:env-2',
+        upstream: { owner: 'acme', repo: 'orca', host: 'git.acme-corp.com' }
+      },
+      {
+        id: 'repo-stale',
+        path: tempRoot,
+        displayName: 'orca',
+        badgeColor: 'blue',
+        addedAt: 2,
+        kind: 'folder',
+        executionHostId: 'runtime:env-1'
+      }
+    ]
+    // A store that drops the Enterprise host lands the folder in the same-named
+    // github.com project, so the write is refused only after it has landed.
+    const runtimeStore = makeProjectSetupRuntimeStore(repos, (updates) =>
+      updates.upstream
+        ? {
+            ...updates,
+            upstream: {
+              owner: (updates.upstream as Record<string, unknown>).owner,
+              repo: (updates.upstream as Record<string, unknown>).repo
+            }
+          }
+        : updates
+    )
+    const runtime = new OrcaRuntimeService(runtimeStore as never)
+    const reposChanged = vi.fn()
+    runtime.setNotifier({ reposChanged } as never)
+
+    try {
+      await expect(
+        runtime.setupProjectExistingFolder({
+          projectId: 'github:git.acme-corp.com/acme/orca',
+          hostId: 'runtime:env-1',
+          path: tempRoot,
+          kind: 'folder',
+          setupMethod: 'imported-existing-folder'
+        })
+      ).rejects.toThrow('Imported folder does not match the selected project identity.')
+
+      // Absent, not `null`: `null` reads as "already resolved" to the fork backfill.
+      expect(repos[1]).not.toHaveProperty('upstream')
+      expect(repos[1]).not.toHaveProperty('projectHostSetupMethod')
+      // The write and its rollback both landed, so clients hold a stale record either way.
+      expect(reposChanged).toHaveBeenCalled()
+    } finally {
+      await rm(tempRoot, { recursive: true, force: true })
+    }
+  })
+
+  it('announces a first-time runtime import once, not once per write', async () => {
+    const tempRoot = await mkdtemp(join(tmpdir(), 'orca-runtime-project-first-import-'))
+    // Backs the project so the projection can resolve it. The imported path is new, so
+    // `addRepo` creates and announces a record whose detected upstream already keys into the
+    // project — reconciliation writes only the setup stamp, which needs no second broadcast.
+    const repos: Record<string, unknown>[] = [
+      {
+        id: 'repo-host-a',
+        path: '/elsewhere/orca',
+        displayName: 'orca',
+        badgeColor: 'blue',
+        addedAt: 1,
+        kind: 'git',
+        executionHostId: 'runtime:env-2',
+        upstream: { owner: 'acme', repo: 'orca' }
+      }
+    ]
+    const runtime = new OrcaRuntimeService(makeProjectSetupRuntimeStore(repos) as never)
+    const reposChanged = vi.fn()
+    runtime.setNotifier({ reposChanged } as never)
+
+    try {
+      useIsolatedGitEnv()
+      initGitRepoWithOrigin(tempRoot, 'git@github.com:acme/orca.git')
+
+      const result = await runtime.setupProjectExistingFolder({
+        projectId: 'github:acme/orca',
+        hostId: 'runtime:env-1',
+        path: tempRoot,
+        kind: 'git',
+        setupMethod: 'imported-existing-folder'
+      })
+
+      expect(result.setup).toMatchObject({ projectId: 'github:acme/orca' })
+      expect(reposChanged).toHaveBeenCalledTimes(1)
+    } finally {
+      await rm(tempRoot, { recursive: true, force: true })
+    }
+  })
+
+  it('refuses to set up an SSH-hosted existing folder from the runtime service', async () => {
+    const repos: Record<string, unknown>[] = [
+      {
+        id: 'repo-host-a',
+        path: '/elsewhere/orca',
+        displayName: 'orca',
+        badgeColor: 'blue',
+        addedAt: 1,
+        kind: 'git',
+        gitRemoteIdentity: {
+          canonicalKey: 'gitlab.example.com/team/orca',
+          remoteName: 'origin',
+          remoteUrl: 'git@gitlab.example.com:team/orca.git'
+        }
+      }
+    ]
+    const runtime = new OrcaRuntimeService(makeProjectSetupRuntimeStore(repos) as never)
+
+    // This service only runs git on its own filesystem: accepting `ssh:` would stamp a
+    // remote host onto a record it validated locally, then probe that remote machine.
+    await expect(
+      runtime.setupProjectExistingFolder({
+        projectId: 'git:gitlab.example.com/team/orca',
+        hostId: 'ssh:conn-1',
+        path: '/srv/orca',
+        kind: 'git',
+        setupMethod: 'imported-existing-folder'
+      })
+    ).rejects.toThrow('desktop projectHostSetups.setupExistingFolder IPC')
+    expect(repos).toHaveLength(1)
+  })
+
+  it('refuses an ssh host before the project clone writes anything', async () => {
+    const destination = await mkdtemp(join(tmpdir(), 'orca-runtime-project-clone-'))
+    const clonePath = join(destination, 'orca')
+    const spawnSpy = vi.spyOn(gitRunner, 'gitSpawn')
+    const repos: Record<string, unknown>[] = []
+    const runtimeStore = makeProjectSetupRuntimeStore(repos)
+    spawnSpy.mockImplementation(() => {
+      const proc = new EventEmitter() as EventEmitter & { stderr: EventEmitter }
+      proc.stderr = new EventEmitter()
+      queueMicrotask(() => {
+        mkdirSync(clonePath, { recursive: true })
+        initGitRepoWithOrigin(clonePath)
+        proc.emit('close', 0, null)
+      })
+      return proc as never
+    })
+    const runtime = new OrcaRuntimeService(runtimeStore as never)
+
+    try {
+      useIsolatedGitEnv()
+      // The clone persists and broadcasts a repo record of its own, so refusing the host
+      // only in `setupProjectExistingFolder` would leave that record and a working copy.
+      await expect(
+        runtime.setupProjectClone({
+          projectId: 'git:gitlab.example.com/team/orca',
+          hostId: 'ssh:conn-1',
+          url: 'https://example.com/orca.git',
+          destination
+        })
+      ).rejects.toThrow('desktop projectHostSetups.setupExistingFolder IPC')
+      expect(spawnSpy).not.toHaveBeenCalled()
+      expect(repos).toHaveLength(0)
+    } finally {
+      spawnSpy.mockRestore()
+      await rm(destination, { recursive: true, force: true })
+    }
+  })
+
+  it('reports runtime_unavailable before adding a repo the store cannot project', async () => {
+    const repos: Record<string, unknown>[] = []
+    const { restoreRepoIdentityFields: _unsupported, ...withoutRollback } =
+      makeProjectSetupRuntimeStore(repos)
+    const runtime = new OrcaRuntimeService(withoutRollback as never)
+
+    await expect(
+      runtime.setupProjectExistingFolder({
+        projectId: 'git:gitlab.example.com/team/orca',
+        hostId: 'runtime:env-1',
+        path: '/work/orca',
+        kind: 'folder'
+      })
+    ).rejects.toThrow('runtime_unavailable')
+    // Checked before the add, or a store that cannot project leaves an orphan record.
+    expect(repos).toHaveLength(0)
   })
 
   it('keeps path-only runtime addRepo reuse working when a host-qualified repo already exists', async () => {
@@ -7103,31 +7434,13 @@ describe('OrcaRuntimeService', () => {
     const spawnSpy = vi.spyOn(gitRunner, 'gitSpawn')
     const repos: Record<string, unknown>[] = []
     getRepoUpstreamMock.mockResolvedValue({ owner: 'stablyai', repo: 'orca' })
-    const runtimeStore = {
-      ...store,
-      getRepos: () => [...repos] as never,
-      addRepo: (repo: Record<string, unknown>) => {
-        repos.push(repo)
-      },
-      getRepo: (id: string) => repos.find((repo) => repo.id === id) as never,
-      updateRepo: (id: string, updates: Record<string, unknown>) => {
-        const index = repos.findIndex((repo) => repo.id === id)
-        if (index === -1) {
-          return null
-        }
-        repos[index] = { ...repos[index], ...updates }
-        return repos[index] as never
-      },
-      getProjects: () => projectHostSetupProjectionFromRepos(repos as never).projects as never,
-      getProjectHostSetups: () =>
-        projectHostSetupProjectionFromRepos(repos as never).setups as never
-    }
+    const runtimeStore = makeProjectSetupRuntimeStore(repos)
     spawnSpy.mockImplementation(() => {
       const proc = new EventEmitter() as EventEmitter & { stderr: EventEmitter }
       proc.stderr = new EventEmitter()
       queueMicrotask(() => {
         mkdirSync(clonePath, { recursive: true })
-        execFileSync('git', ['init'], { cwd: clonePath, stdio: 'ignore' })
+        initGitRepoWithOrigin(clonePath)
         proc.emit('close', 0, null)
       })
       return proc as never
@@ -7135,6 +7448,7 @@ describe('OrcaRuntimeService', () => {
     const runtime = new OrcaRuntimeService(runtimeStore as never)
 
     try {
+      useIsolatedGitEnv()
       const result = await runtime.setupProjectClone({
         projectId: 'github:stablyai/orca',
         hostId: 'runtime:env-1',
@@ -7165,31 +7479,13 @@ describe('OrcaRuntimeService', () => {
     const spawnSpy = vi.spyOn(gitRunner, 'gitSpawn')
     const repos: Record<string, unknown>[] = []
     getRepoUpstreamMock.mockResolvedValue({ owner: 'stablyai', repo: 'orca' })
-    const runtimeStore = {
-      ...store,
-      getRepos: () => [...repos] as never,
-      addRepo: (repo: Record<string, unknown>) => {
-        repos.push(repo)
-      },
-      getRepo: (id: string) => repos.find((repo) => repo.id === id) as never,
-      updateRepo: (id: string, updates: Record<string, unknown>) => {
-        const index = repos.findIndex((repo) => repo.id === id)
-        if (index === -1) {
-          return null
-        }
-        repos[index] = { ...repos[index], ...updates }
-        return repos[index] as never
-      },
-      getProjects: () => projectHostSetupProjectionFromRepos(repos as never).projects as never,
-      getProjectHostSetups: () =>
-        projectHostSetupProjectionFromRepos(repos as never).setups as never
-    }
+    const runtimeStore = makeProjectSetupRuntimeStore(repos)
     spawnSpy.mockImplementation(() => {
       const proc = new EventEmitter() as EventEmitter & { stderr: EventEmitter }
       proc.stderr = new EventEmitter()
       queueMicrotask(() => {
         mkdirSync(clonePath, { recursive: true })
-        execFileSync('git', ['init'], { cwd: clonePath, stdio: 'ignore' })
+        initGitRepoWithOrigin(clonePath)
         proc.emit('close', 0, null)
       })
       return proc as never
@@ -7197,6 +7493,7 @@ describe('OrcaRuntimeService', () => {
     const runtime = new OrcaRuntimeService(runtimeStore as never)
 
     try {
+      useIsolatedGitEnv()
       const cloned = await runtime.cloneRepo('https://example.com/orca.git', destination)
       expect(cloned).toMatchObject({
         path: clonePath
@@ -7245,31 +7542,13 @@ describe('OrcaRuntimeService', () => {
       }
     ]
     getRepoUpstreamMock.mockResolvedValue({ owner: 'stablyai', repo: 'orca' })
-    const runtimeStore = {
-      ...store,
-      getRepos: () => [...repos] as never,
-      addRepo: (repo: Record<string, unknown>) => {
-        repos.push(repo)
-      },
-      getRepo: (id: string) => repos.find((repo) => repo.id === id) as never,
-      updateRepo: (id: string, updates: Record<string, unknown>) => {
-        const index = repos.findIndex((repo) => repo.id === id)
-        if (index === -1) {
-          return null
-        }
-        repos[index] = { ...repos[index], ...updates }
-        return repos[index] as never
-      },
-      getProjects: () => projectHostSetupProjectionFromRepos(repos as never).projects as never,
-      getProjectHostSetups: () =>
-        projectHostSetupProjectionFromRepos(repos as never).setups as never
-    }
+    const runtimeStore = makeProjectSetupRuntimeStore(repos)
     spawnSpy.mockImplementation(() => {
       const proc = new EventEmitter() as EventEmitter & { stderr: EventEmitter }
       proc.stderr = new EventEmitter()
       queueMicrotask(() => {
         mkdirSync(clonePath, { recursive: true })
-        execFileSync('git', ['init'], { cwd: clonePath, stdio: 'ignore' })
+        initGitRepoWithOrigin(clonePath)
         proc.emit('close', 0, null)
       })
       return proc as never
@@ -7277,6 +7556,7 @@ describe('OrcaRuntimeService', () => {
     const runtime = new OrcaRuntimeService(runtimeStore as never)
 
     try {
+      useIsolatedGitEnv()
       const result = await runtime.setupProjectClone({
         projectId: 'github:stablyai/orca',
         hostId: 'runtime:env-2',

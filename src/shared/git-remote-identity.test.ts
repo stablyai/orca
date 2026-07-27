@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { deriveGitRemoteIdentity, normalizeGitRemoteUrl } from './git-remote-identity'
+import { deriveGitRemoteIdentities, normalizeGitRemoteUrl } from './git-remote-identity'
 
 describe('normalizeGitRemoteUrl', () => {
   it('normalizes HTTPS and SSH GitHub remotes to the same canonical key', () => {
@@ -44,35 +44,79 @@ describe('normalizeGitRemoteUrl', () => {
   })
 })
 
-describe('deriveGitRemoteIdentity', () => {
-  it('prefers upstream, then origin, then the first named remote', () => {
+describe('deriveGitRemoteIdentities', () => {
+  it('lists every remote in primary precedence order and drops unusable ones', () => {
     expect(
-      deriveGitRemoteIdentity(
+      deriveGitRemoteIdentities(
+        [
+          'mirror\tC:\\Repos\\sample-app.git (fetch)',
+          'origin\tgit@git.company.test:forks/sample-app.git (fetch)',
+          'upstream\thttps://git.company.test/team/sample-app.git (fetch)'
+        ].join('\r\n')
+      )
+    ).toEqual([
+      {
+        canonicalKey: 'git.company.test/team/sample-app',
+        remoteName: 'upstream',
+        remoteUrl: 'https://git.company.test/team/sample-app.git'
+      },
+      {
+        canonicalKey: 'git.company.test/forks/sample-app',
+        remoteName: 'origin',
+        remoteUrl: 'git@git.company.test:forks/sample-app.git'
+      }
+    ])
+  })
+
+  it('ignores push lines and falls back to the first named remote', () => {
+    expect(
+      deriveGitRemoteIdentities(
         [
           'origin\tgit@git.company.test:forks/sample-app.git (fetch)',
           'origin\tgit@git.company.test:forks/sample-app.git (push)',
           'upstream\thttps://git.company.test/team/sample-app.git (fetch)',
           'upstream\thttps://git.company.test/team/sample-app.git (push)'
         ].join('\n')
+      ).map((remote) => remote.remoteName)
+    ).toEqual(['upstream', 'origin'])
+
+    expect(
+      deriveGitRemoteIdentities('mirror\tgit@git.company.test:team/sample-app.git (fetch)')
+    ).toMatchObject([{ canonicalKey: 'git.company.test/team/sample-app', remoteName: 'mirror' }])
+  })
+
+  it('collapses remote names that share one URL', () => {
+    expect(
+      deriveGitRemoteIdentities(
+        [
+          'origin\tgit@git.company.test:team/sample-app.git (fetch)',
+          'github\tgit@git.company.test:team/sample-app.git (fetch)'
+        ].join('\n')
       )
-    ).toEqual({
-      canonicalKey: 'git.company.test/team/sample-app',
-      remoteName: 'upstream',
-      remoteUrl: 'https://git.company.test/team/sample-app.git'
-    })
+    ).toEqual([
+      {
+        canonicalKey: 'git.company.test/team/sample-app',
+        remoteName: 'origin',
+        remoteUrl: 'git@git.company.test:team/sample-app.git'
+      }
+    ])
+  })
 
-    expect(
-      deriveGitRemoteIdentity('origin\tgit@git.company.test:team/sample-app.git (fetch)')
-    ).toMatchObject({
-      canonicalKey: 'git.company.test/team/sample-app',
-      remoteName: 'origin'
-    })
+  it('keeps two spellings of one canonical key so an endpoint port survives', () => {
+    // The port lives in the URL, not the canonical key, and decides which project a
+    // GHES clone belongs to; collapsing on the key alone would discard the only
+    // spelling that can match a ported project.
+    const remotes = deriveGitRemoteIdentities(
+      [
+        'upstream\tgit@ghe.company.test:team/sample-app.git (fetch)',
+        'origin\thttps://ghe.company.test:8443/team/sample-app.git (fetch)'
+      ].join('\n')
+    )
 
-    expect(
-      deriveGitRemoteIdentity('mirror\tgit@git.company.test:team/sample-app.git (fetch)')
-    ).toMatchObject({
-      canonicalKey: 'git.company.test/team/sample-app',
-      remoteName: 'mirror'
-    })
+    expect(remotes.map((remote) => remote.remoteUrl)).toEqual([
+      'git@ghe.company.test:team/sample-app.git',
+      'https://ghe.company.test:8443/team/sample-app.git'
+    ])
+    expect(new Set(remotes.map((remote) => remote.canonicalKey)).size).toBe(1)
   })
 })

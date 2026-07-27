@@ -8,6 +8,12 @@ import { join } from 'node:path'
 import type * as GitRunner from '../git/runner'
 import type * as RepoModule from '../git/repo'
 import { DEFAULT_REPO_BADGE_COLOR } from '../../shared/constants'
+import { EXISTING_FOLDER_REMOTE_PROBE_TIMEOUT_MS } from '../project-host-existing-folder-reconciliation'
+import {
+  getProjectIdentityKey,
+  projectHostSetupProjectionFromRepos
+} from '../../shared/project-host-setup-projection'
+import type { ProjectHostSetupResult, Repo } from '../../shared/types'
 import { getGitRepoRoot, isGitRepo } from '../git/repo'
 import { clearGitCapabilityStateForTests } from '../git/git-capability-state'
 
@@ -30,9 +36,12 @@ const {
     removeProject: vi.fn(),
     getRepo: vi.fn(),
     updateRepo: vi.fn(),
+    restoreRepoIdentityFields: vi.fn(),
     getProjects: vi.fn().mockReturnValue([]),
     getProjectHostSetups: vi.fn().mockReturnValue([]),
     updateProjectHostSetup: vi.fn(),
+    getAllWorktreeMeta: vi.fn().mockReturnValue({}),
+    setWorktreeMeta: vi.fn(),
     getProjectGroups: vi.fn().mockReturnValue([]),
     createProjectGroup: vi.fn(),
     updateProjectGroup: vi.fn(),
@@ -149,6 +158,54 @@ vi.mock('./ssh', () => ({
 
 import { registerRepoHandlers } from './repos'
 import { clearSubmodulePathsCacheForTests, listSubmodulePaths } from '../git/status'
+
+/** Mirrors the real store, which re-projects repo-backed projects and setups on every
+ *  read. A fixed setup list would let a wrong-project write still look aligned. */
+function useProjectingRepoStore(repos: Repo[]): void {
+  mockStore.getRepos.mockReturnValue(repos)
+  mockStore.getProjects.mockImplementation(
+    () => projectHostSetupProjectionFromRepos(repos).projects
+  )
+  mockStore.getProjectHostSetups.mockImplementation(
+    () => projectHostSetupProjectionFromRepos(repos).setups
+  )
+  mockStore.getRepo.mockImplementation((id: string) => repos.find((repo) => repo.id === id))
+  // A first-time import has to become visible to the projection, or the reconciliation
+  // that runs right after it would be reading a store the new repo never entered.
+  mockStore.addRepo.mockImplementation((repo: Repo) => {
+    repos.push(repo)
+    return repo
+  })
+  mockStore.updateRepo.mockImplementation((id: string, updates: Partial<Repo>) => {
+    const target = repos.find((repo) => repo.id === id)
+    if (!target) {
+      return null
+    }
+    Object.assign(target, updates)
+    return { ...target }
+  })
+  // Mirrors `Store.restoreRepoIdentityFields`: a present key holding `undefined` clears
+  // the field, which `updateRepo` cannot express.
+  mockStore.restoreRepoIdentityFields.mockImplementation(
+    (id: string, restore: Pick<Partial<Repo>, 'upstream' | 'gitRemoteIdentity'>) => {
+      const target = repos.find((repo) => repo.id === id)
+      if (!target) {
+        return null
+      }
+      for (const field of ['upstream', 'gitRemoteIdentity'] as const) {
+        if (!(field in restore)) {
+          continue
+        }
+        if (restore[field] === undefined) {
+          delete target[field]
+        } else {
+          Object.assign(target, { [field]: restore[field] })
+        }
+      }
+      return { ...target }
+    }
+  )
+}
 
 beforeEach(() => {
   clearGitCapabilityStateForTests()
@@ -1705,6 +1762,10 @@ describe('repos:add + repos:clone', () => {
     return root
   }
 
+  /** Duplicate refresh broadcasts make every renderer re-read the whole repo list. */
+  const reposChangedNotifications = (): number =>
+    mockWindow.webContents.send.mock.calls.filter(([channel]) => channel === 'repos:changed').length
+
   beforeEach(() => {
     handlers.clear()
     handleMock.mockReset()
@@ -1713,12 +1774,22 @@ describe('repos:add + repos:clone', () => {
     })
     mockStore.getRepos.mockReset().mockReturnValue([])
     mockStore.addRepo.mockReset()
+    mockStore.getRepo.mockReset()
     mockStore.updateRepo.mockReset()
+    mockStore.restoreRepoIdentityFields.mockReset()
     mockStore.getProjects.mockReset().mockReturnValue([])
     mockStore.getProjectHostSetups.mockReset().mockReturnValue([])
     mockStore.updateProjectHostSetup.mockReset()
     mockWindow.webContents.send.mockReset()
     gitSpawnMock.mockReset()
+    // Reset the history and restore the default: a bare `vi.fn()` here would make every
+    // git call resolve `undefined` and read as a probe failure rather than an empty remote.
+    gitExecFileAsyncMock.mockReset().mockResolvedValue({ stdout: '', stderr: '' })
+    mockGitProvider.exec.mockReset().mockResolvedValue({ stdout: '', stderr: '' })
+    vi.mocked(isGitRepo).mockReset().mockReturnValue(true)
+    vi.mocked(getGitRepoRoot)
+      .mockReset()
+      .mockImplementation((path: string) => path)
     invalidateAuthorizedRootsCacheMock.mockReset()
     prepareLocalWorktreeRootForRepoMock.mockReset().mockResolvedValue(undefined)
     gitSpawnMock.mockImplementation(() => {
@@ -1890,51 +1961,342 @@ describe('repos:add + repos:clone', () => {
       kind: 'git',
       badgeColor: '#22c55e'
     }
-    const existingProject = { id: 'repo:repo-setup-enterprise', displayName: 'Existing' }
-    const selectedProject = {
-      id: 'github:github.acme-corp.com/acme/orca',
-      displayName: 'Enterprise project',
-      providerIdentity: {
-        provider: 'github',
-        owner: 'acme',
-        repo: 'orca',
-        host: 'github.acme-corp.com'
-      }
+    // The selected project exists because another host already backs it.
+    const projectSource = {
+      id: 'repo-enterprise-host-a',
+      path: '/tmp/enterprise-host-a',
+      displayName: 'orca',
+      kind: 'git',
+      badgeColor: '#22c55e',
+      upstream: { owner: 'acme', repo: 'orca', host: 'github.acme-corp.com' }
     }
-    const setup = {
-      id: existing.id,
-      projectId: existingProject.id,
-      repoId: existing.id,
-      hostId: 'local',
-      path: existing.path,
-      displayName: existing.displayName,
-      setupState: 'ready',
-      setupMethod: 'legacy-repo'
-    }
-    let updatedRepo = existing
-    mockStore.getRepos.mockReturnValue([existing])
-    mockStore.getProjects.mockReturnValue([existingProject, selectedProject])
-    mockStore.getProjectHostSetups.mockReturnValue([setup])
-    mockStore.updateRepo.mockImplementation((_repoId, updates) => {
-      updatedRepo = { ...updatedRepo, ...updates }
-      return updatedRepo
-    })
+    const selectedProjectId = 'github:github.acme-corp.com/acme/orca'
+    useProjectingRepoStore([projectSource, existing] as unknown as Repo[])
+    gitExecFileAsyncMock.mockResolvedValue({ stdout: '', stderr: '' })
 
-    await handlers.get('projectHostSetups:setupExistingFolder')!(null, {
-      projectId: selectedProject.id,
+    const result = (await handlers.get('projectHostSetups:setupExistingFolder')!(null, {
+      projectId: selectedProjectId,
       hostId: 'local',
       path: existing.path,
       kind: 'git',
       setupMethod: 'imported-existing-folder'
-    })
+    })) as ProjectHostSetupResult
 
+    // The probe settles this remoteless repo at `null`, which rides along with the
+    // fallback upstream so the accepted import is written exactly once.
     expect(mockStore.updateRepo).toHaveBeenNthCalledWith(1, existing.id, {
+      gitRemoteIdentity: null,
       upstream: {
         owner: 'acme',
         repo: 'orca',
         host: 'github.acme-corp.com'
       }
     })
+    expect(result.setup.projectId).toBe(selectedProjectId)
+    expect(result.project.id).toBe(selectedProjectId)
+  })
+
+  it('links an existing local clone to a generic Git project by re-probing its remote', async () => {
+    const existing = {
+      id: 'repo-setup-generic',
+      path: '/tmp/from-setup-generic',
+      displayName: 'orca',
+      kind: 'git',
+      badgeColor: '#22c55e'
+    }
+    const projectSource = {
+      id: 'repo-generic-host-a',
+      path: '/tmp/generic-host-a',
+      displayName: 'orca',
+      kind: 'git',
+      badgeColor: '#22c55e',
+      gitRemoteIdentity: {
+        canonicalKey: 'gitlab.example.com/team/orca',
+        remoteName: 'origin',
+        remoteUrl: 'ssh://git@gitlab.example.com/team/orca.git'
+      }
+    }
+    const selectedProjectId = 'git:gitlab.example.com/team/orca'
+    useProjectingRepoStore([projectSource, existing] as unknown as Repo[])
+    gitExecFileAsyncMock.mockResolvedValue({
+      stdout: 'origin\tgit@gitlab.example.com:team/orca.git (fetch)\n',
+      stderr: ''
+    })
+
+    const result = (await handlers.get('projectHostSetups:setupExistingFolder')!(null, {
+      projectId: selectedProjectId,
+      hostId: 'local',
+      path: existing.path,
+      kind: 'git',
+      setupMethod: 'imported-existing-folder'
+    })) as ProjectHostSetupResult
+
+    expect(gitExecFileAsyncMock).toHaveBeenCalledWith(['remote', '-v'], {
+      cwd: existing.path,
+      timeout: EXISTING_FOLDER_REMOTE_PROBE_TIMEOUT_MS
+    })
+    expect(mockStore.updateRepo).toHaveBeenNthCalledWith(1, existing.id, {
+      gitRemoteIdentity: {
+        canonicalKey: 'gitlab.example.com/team/orca',
+        remoteName: 'origin',
+        remoteUrl: 'git@gitlab.example.com:team/orca.git'
+      }
+    })
+    expect(mockStore.updateRepo).toHaveBeenNthCalledWith(2, existing.id, {
+      projectHostSetupMethod: 'imported-existing-folder'
+    })
+    expect(result.setup.projectId).toBe(selectedProjectId)
+    expect(prepareLocalWorktreeRootForRepoMock).toHaveBeenCalledWith(mockStore, result.repo)
+  })
+
+  it('rejects a mismatched existing folder without writing or preparing anything', async () => {
+    const existing = {
+      id: 'repo-setup-conflict',
+      path: '/tmp/from-setup-conflict',
+      displayName: 'orca',
+      kind: 'git',
+      badgeColor: '#22c55e'
+    }
+    const projectSource = {
+      id: 'repo-conflict-host-a',
+      path: '/tmp/conflict-host-a',
+      displayName: 'orca',
+      kind: 'git',
+      badgeColor: '#22c55e',
+      gitRemoteIdentity: {
+        canonicalKey: 'gitlab.example.com/team/orca',
+        remoteName: 'origin',
+        remoteUrl: 'git@gitlab.example.com:team/orca.git'
+      }
+    }
+    const selectedProjectId = 'git:gitlab.example.com/team/orca'
+    useProjectingRepoStore([projectSource, existing] as unknown as Repo[])
+    gitExecFileAsyncMock.mockResolvedValue({
+      stdout: 'origin\tgit@gitlab.example.com:other/orca.git (fetch)\n',
+      stderr: ''
+    })
+
+    await expect(
+      handlers.get('projectHostSetups:setupExistingFolder')!(null, {
+        projectId: selectedProjectId,
+        hostId: 'local',
+        path: existing.path,
+        kind: 'git',
+        setupMethod: 'imported-existing-folder'
+      })
+    ).rejects.toThrow('Imported folder does not match the selected project identity.')
+
+    expect(mockStore.updateRepo).not.toHaveBeenCalled()
+    expect(prepareLocalWorktreeRootForRepoMock).not.toHaveBeenCalled()
+    // The store never changed, so the renderer must not be told it did.
+    expect(mockWindow.webContents.send).not.toHaveBeenCalledWith('repos:changed')
+  })
+
+  it('links a first-time imported folder that only the GitHub fallback can place', async () => {
+    const projectSource = {
+      id: 'repo-new-import-host-a',
+      path: '/tmp/new-import-host-a',
+      displayName: 'orca',
+      kind: 'git',
+      badgeColor: '#22c55e',
+      upstream: { owner: 'acme', repo: 'orca', host: 'git.acme-corp.com' }
+    }
+    const selectedProjectId = 'github:git.acme-corp.com/acme/orca'
+    useProjectingRepoStore([projectSource] as unknown as Repo[])
+
+    // A folder record has no remote to detect, so it lands at `repo:<id>` and only the
+    // project's own GitHub identity can place it.
+    const result = (await handlers.get('projectHostSetups:setupExistingFolder')!(null, {
+      projectId: selectedProjectId,
+      hostId: 'local',
+      path: '/tmp/from-setup-new-import',
+      kind: 'folder',
+      setupMethod: 'imported-existing-folder'
+    })) as ProjectHostSetupResult
+
+    expect(mockStore.addRepo).toHaveBeenCalledWith(
+      expect.objectContaining({ path: '/tmp/from-setup-new-import', kind: 'folder' })
+    )
+    expect(gitExecFileAsyncMock).not.toHaveBeenCalled()
+    expect(result.setup.projectId).toBe(selectedProjectId)
+    expect(result.repo.upstream).toEqual({ owner: 'acme', repo: 'orca', host: 'git.acme-corp.com' })
+    // The add path already prepared the new record's root, so the handler must not repeat it,
+    // and both have to be done before any client is told to re-read.
+    expect(prepareLocalWorktreeRootForRepoMock).toHaveBeenCalledTimes(1)
+    expect(prepareLocalWorktreeRootForRepoMock).toHaveBeenCalledWith(
+      mockStore,
+      expect.objectContaining({ path: '/tmp/from-setup-new-import' })
+    )
+    expect(mockStore.addRepo.mock.invocationCallOrder[0]).toBeLessThan(
+      prepareLocalWorktreeRootForRepoMock.mock.invocationCallOrder[0]
+    )
+    expect(prepareLocalWorktreeRootForRepoMock.mock.invocationCallOrder[0]).toBeLessThan(
+      invalidateAuthorizedRootsCacheMock.mock.invocationCallOrder[0]
+    )
+    // §7 notify-after-reconciliation: the last identity write precedes the broadcast, so a
+    // client that refetches on it can never read a half-linked record.
+    expect(mockStore.updateRepo.mock.invocationCallOrder.at(-1)).toBeLessThan(
+      mockWindow.webContents.send.mock.invocationCallOrder[0]
+    )
+    expect(invalidateAuthorizedRootsCacheMock.mock.invocationCallOrder[0]).toBeLessThan(
+      mockWindow.webContents.send.mock.invocationCallOrder[0]
+    )
+    expect(reposChangedNotifications()).toBe(1)
+  })
+
+  it('still announces the new record when a first-time import is rejected', async () => {
+    const projectSource = {
+      id: 'repo-new-reject-host-a',
+      path: '/tmp/new-reject-host-a',
+      displayName: 'orca',
+      kind: 'git',
+      badgeColor: '#22c55e',
+      gitRemoteIdentity: {
+        canonicalKey: 'gitlab.example.com/team/orca',
+        remoteName: 'origin',
+        remoteUrl: 'git@gitlab.example.com:team/orca.git'
+      }
+    }
+    const repos = [projectSource] as unknown as Repo[]
+    useProjectingRepoStore(repos)
+    gitExecFileAsyncMock.mockResolvedValue({
+      stdout: 'origin\tgit@gitlab.example.com:other/orca.git (fetch)\n',
+      stderr: ''
+    })
+
+    await expect(
+      handlers.get('projectHostSetups:setupExistingFolder')!(null, {
+        projectId: 'git:gitlab.example.com/team/orca',
+        hostId: 'local',
+        path: '/tmp/from-setup-new-reject',
+        kind: 'git',
+        setupMethod: 'imported-existing-folder'
+      })
+    ).rejects.toThrow('Imported folder does not match the selected project identity.')
+
+    // The add path already created the record, so the renderer must learn about it even
+    // though the project link was refused.
+    expect(mockStore.addRepo).toHaveBeenCalled()
+    expect(reposChangedNotifications()).toBe(1)
+    // Refusing the link does not un-add the folder: the record keeps the stamp the add path
+    // writes and lands in the project its own remote names, never the one that refused it.
+    const created = repos.find((repo) => repo.path === '/tmp/from-setup-new-reject')
+    expect(created).toMatchObject({ projectHostSetupMethod: 'imported-existing-folder' })
+    expect(getProjectIdentityKey(created!)).toBe('git:gitlab.example.com/other/orca')
+    expect(mockStore.updateRepo).not.toHaveBeenCalled()
+    expect(prepareLocalWorktreeRootForRepoMock).toHaveBeenCalledTimes(1)
+  })
+
+  it('announces a rejection that wrote and rolled back an existing record', async () => {
+    const existing = {
+      id: 'repo-setup-rollback',
+      path: '/tmp/from-setup-rollback',
+      displayName: 'orca',
+      kind: 'git',
+      badgeColor: '#22c55e'
+    }
+    const projectSource = {
+      id: 'repo-rollback-host-a',
+      path: '/tmp/rollback-host-a',
+      displayName: 'orca',
+      kind: 'git',
+      badgeColor: '#22c55e',
+      upstream: { owner: 'acme', repo: 'orca', host: 'git.acme-corp.com' }
+    }
+    const repos = [projectSource, existing] as unknown as Repo[]
+    useProjectingRepoStore(repos)
+    // A store that drops the Enterprise host lands the folder in the same-named
+    // github.com project, so the write is rejected only after it has landed.
+    mockStore.updateRepo.mockImplementation((id: string, updates: Partial<Repo>) => {
+      const target = repos.find((repo) => repo.id === id)
+      if (!target) {
+        return null
+      }
+      Object.assign(target, updates)
+      if (target.upstream) {
+        target.upstream = { owner: target.upstream.owner, repo: target.upstream.repo }
+      }
+      return { ...target }
+    })
+
+    await expect(
+      handlers.get('projectHostSetups:setupExistingFolder')!(null, {
+        projectId: 'github:git.acme-corp.com/acme/orca',
+        hostId: 'local',
+        path: existing.path,
+        kind: 'git',
+        setupMethod: 'imported-existing-folder'
+      })
+    ).rejects.toThrow('Imported folder does not match the selected project identity.')
+
+    expect(mockStore.addRepo).not.toHaveBeenCalled()
+    // The write landed and was undone, so clients still hold a record that changed twice.
+    expect(mockStore.restoreRepoIdentityFields).toHaveBeenCalledWith('repo-setup-rollback', {
+      upstream: undefined
+    })
+    expect(reposChangedNotifications()).toBe(1)
+    // Byte-identical, not merely mismatch-free: `toStrictEqual` fails on an `upstream: undefined`
+    // key, which would persist a state the record never had.
+    expect(existing).toStrictEqual({
+      id: 'repo-setup-rollback',
+      path: '/tmp/from-setup-rollback',
+      displayName: 'orca',
+      kind: 'git',
+      badgeColor: '#22c55e'
+    })
+    expect(prepareLocalWorktreeRootForRepoMock).not.toHaveBeenCalled()
+  })
+
+  it('probes an SSH-hosted existing folder over its connection, never local git', async () => {
+    const existing = {
+      id: 'repo-setup-ssh',
+      path: '/srv/orca',
+      connectionId: 'conn-1',
+      displayName: 'orca',
+      kind: 'git',
+      badgeColor: '#22c55e',
+      addedAt: 1000
+    }
+    const projectSource = {
+      id: 'repo-ssh-host-a',
+      path: '/tmp/ssh-host-a',
+      displayName: 'orca',
+      kind: 'git',
+      badgeColor: '#22c55e',
+      gitRemoteIdentity: {
+        canonicalKey: 'gitlab.example.com/team/orca',
+        remoteName: 'origin',
+        remoteUrl: 'git@gitlab.example.com:team/orca.git'
+      }
+    }
+    const selectedProjectId = 'git:gitlab.example.com/team/orca'
+    useProjectingRepoStore([projectSource, existing] as unknown as Repo[])
+    mockGitProvider.exec.mockResolvedValue({
+      stdout: 'origin\tgit@gitlab.example.com:team/orca.git (fetch)\n',
+      stderr: ''
+    })
+
+    const result = (await handlers.get('projectHostSetups:setupExistingFolder')!(null, {
+      projectId: selectedProjectId,
+      hostId: 'ssh:conn-1',
+      path: existing.path,
+      kind: 'git',
+      setupMethod: 'imported-existing-folder'
+    })) as ProjectHostSetupResult
+
+    expect(mockGitProvider.exec).toHaveBeenCalledWith(['remote', '-v'], '/srv/orca', {
+      timeoutMs: EXISTING_FOLDER_REMOTE_PROBE_TIMEOUT_MS
+    })
+    expect(gitExecFileAsyncMock).not.toHaveBeenCalled()
+    expect(mockStore.updateRepo).toHaveBeenNthCalledWith(1, existing.id, {
+      gitRemoteIdentity: {
+        canonicalKey: 'gitlab.example.com/team/orca',
+        remoteName: 'origin',
+        remoteUrl: 'git@gitlab.example.com:team/orca.git'
+      }
+    })
+    expect(result.setup.projectId).toBe(selectedProjectId)
+    expect(result.setup.hostId).toBe('ssh:conn-1')
   })
 
   it('prepares and invalidates roots when repos:update changes worktree base path', () => {

@@ -85,11 +85,16 @@ import { getCohortAtEmit } from '../telemetry/cohort-classifier'
 import type { RepoMethod } from '../../shared/telemetry-events'
 import { detectRepoIconAndUpstream } from '../repo-icon-autodetect'
 import { enrichMissingRepoGitRemoteIdentities } from '../repo-git-remote-identity-enrichment'
-import { getProjectHostSetupForRepo } from '../../shared/project-host-setup-projection'
+import {
+  didReconciliationChangeStore,
+  reconcileExistingFolderProjectIdentity
+} from '../project-host-existing-folder-reconciliation'
 import {
   getRepoExecutionHostId,
   normalizeExecutionHostId,
   parseExecutionHostId,
+  toSshExecutionHostId,
+  LOCAL_EXECUTION_HOST_ID,
   type ExecutionHostId
 } from '../../shared/execution-host'
 import { joinRemotePath } from '../ssh/ssh-remote-platform'
@@ -117,51 +122,6 @@ function emitRepoAdded(method: RepoMethod, alreadyExisted: boolean, isGitRepo?: 
     ...getCohortAtEmit()
   }
   track('repo_added', props)
-}
-
-function buildProjectHostSetupResult(store: Store, repo: Repo): ProjectHostSetupResult {
-  const setup = getProjectHostSetupForRepo(store.getProjectHostSetups(), repo)
-  const project = store.getProjects().find((entry) => entry.id === setup.projectId)
-  if (!project) {
-    throw new Error(`Project setup was created without a project record: ${setup.projectId}`)
-  }
-  return { project, setup, repo }
-}
-
-function alignRepoWithRequestedProject(
-  store: Store,
-  repo: Repo,
-  projectId: string,
-  setupMethod: ProjectHostSetupExistingFolderArgs['setupMethod'] = 'imported-existing-folder'
-): ProjectHostSetupResult {
-  let setup = getProjectHostSetupForRepo(store.getProjectHostSetups(), repo)
-  if (setup.projectId !== projectId) {
-    const project = store.getProjects().find((entry) => entry.id === projectId)
-    if (!project?.providerIdentity || project.providerIdentity.provider !== 'github') {
-      throw new Error('Imported folder does not match the selected project identity.')
-    }
-    // Why: stamp the selected project's provider identity when the folder lacks upstream, so projection can merge it.
-    const updated = store.updateRepo(repo.id, {
-      upstream: {
-        owner: project.providerIdentity.owner,
-        repo: project.providerIdentity.repo,
-        ...(project.providerIdentity.host ? { host: project.providerIdentity.host } : {})
-      }
-    })
-    if (!updated) {
-      throw new Error(`Project setup repo disappeared before it could be linked: ${repo.id}`)
-    }
-    repo = updated
-    setup = getProjectHostSetupForRepo(store.getProjectHostSetups(), repo)
-  }
-  const updated = store.updateRepo(repo.id, { projectHostSetupMethod: setupMethod })
-  if (!updated) {
-    throw new Error(
-      `Project setup repo disappeared before setup metadata could be linked: ${repo.id}`
-    )
-  }
-  repo = updated
-  return buildProjectHostSetupResult(store, repo)
 }
 
 async function addLocalRepoFromPath(
@@ -1290,15 +1250,33 @@ export function registerRepoHandlers(mainWindow: BrowserWindow, store: Store): v
       if ('error' in result) {
         throw new Error(result.error)
       }
+      emitRepoAdded('folder_picker', result.alreadyExisted)
+      let aligned: ProjectHostSetupResult
+      try {
+        aligned = await reconcileExistingFolderProjectIdentity({
+          store,
+          repo: result.repo,
+          projectId: args.projectId,
+          ...(args.setupMethod ? { setupMethod: args.setupMethod } : {}),
+          ownedExecutionHostId:
+            parsedHost.kind === 'ssh'
+              ? toSshExecutionHostId(parsedHost.targetId)
+              : LOCAL_EXECUTION_HOST_ID
+        })
+      } catch (error) {
+        // A rejected import usually leaves the store untouched, so notify only for a
+        // real change: the repo record the add path just created, or an identity write
+        // that landed before the rejection and was rolled back underneath it.
+        if (!result.alreadyExisted || didReconciliationChangeStore(error)) {
+          invalidateAuthorizedRootsCache()
+          notifyReposChanged(mainWindow)
+        }
+        throw error
+      }
+      // Reconciliation can move the repo between projects, so notify only once the
+      // membership it reports is the one the store actually holds.
       invalidateAuthorizedRootsCache()
       notifyReposChanged(mainWindow)
-      emitRepoAdded('folder_picker', result.alreadyExisted)
-      const aligned = alignRepoWithRequestedProject(
-        store,
-        result.repo,
-        args.projectId,
-        args.setupMethod
-      )
       if (result.alreadyExisted) {
         await prepareLocalWorktreeRootForRepo(store, aligned.repo)
       }

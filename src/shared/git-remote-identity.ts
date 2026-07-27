@@ -81,7 +81,12 @@ function primaryRemoteSortKey(entry: GitRemoteEntry): number {
   return 2
 }
 
-export function deriveGitRemoteIdentity(stdout: string): GitRemoteIdentity | null {
+/** Every remote with a usable canonical key, in primary-remote precedence order — so
+ *  `[0]` is the probe's primary `identity`. Only byte-identical URLs
+ *  collapse: the canonical key alone is too coarse, because a GHES endpoint port lives
+ *  in the URL and not in the key, so two spellings of one repo can still belong to two
+ *  different projects. */
+export function deriveGitRemoteIdentities(stdout: string): GitRemoteIdentity[] {
   const entries = parseGitRemoteVerboseOutput(stdout)
     .map((entry) => ({
       ...entry,
@@ -92,12 +97,17 @@ export function deriveGitRemoteIdentity(stdout: string): GitRemoteIdentity | nul
       const priority = primaryRemoteSortKey(left) - primaryRemoteSortKey(right)
       return priority === 0 ? left.name.localeCompare(right.name) : priority
     })
-  const selected = entries[0]
-  return selected
-    ? {
-        canonicalKey: selected.canonicalKey,
-        remoteName: selected.name,
-        remoteUrl: selected.url
-      }
-    : null
+  const bySpelling = new Map<string, GitRemoteIdentity>()
+  for (const entry of entries) {
+    // `\0`, never a raw NUL byte: a raw NUL makes git treat this source file as binary.
+    const spelling = `${entry.canonicalKey}\0${entry.url}`
+    if (!bySpelling.has(spelling)) {
+      bySpelling.set(spelling, {
+        canonicalKey: entry.canonicalKey,
+        remoteName: entry.name,
+        remoteUrl: entry.url
+      })
+    }
+  }
+  return [...bySpelling.values()]
 }

@@ -16,14 +16,59 @@ describe('probeGitRemoteIdentity', () => {
   it('resolves the canonical identity for a non-GitHub remote', async () => {
     vi.mocked(gitExecFileAsync).mockResolvedValue({ stdout: gitlabRemote, stderr: '' })
 
+    const identity = {
+      canonicalKey: 'gitlab.example.com/team/orca',
+      remoteName: 'origin',
+      remoteUrl: 'git@gitlab.example.com:team/orca.git'
+    }
     await expect(probeGitRemoteIdentity('/repos/orca')).resolves.toEqual({
       status: 'resolved',
-      identity: {
-        canonicalKey: 'gitlab.example.com/team/orca',
-        remoteName: 'origin',
-        remoteUrl: 'git@gitlab.example.com:team/orca.git'
-      }
+      identity,
+      remotes: [identity]
     })
+  })
+
+  it('returns every canonical remote of a fork checkout, primary first', async () => {
+    vi.mocked(gitExecFileAsync).mockResolvedValue({
+      stdout: [
+        'origin\tgit@gitlab.example.com:ava/orca.git (fetch)',
+        'origin\tgit@gitlab.example.com:ava/orca.git (push)',
+        'upstream\tgit@gitlab.example.com:team/orca.git (fetch)',
+        'mirror\tgit@gitlab.example.com:team/orca.git (fetch)',
+        ''
+      ].join('\n'),
+      stderr: ''
+    })
+
+    const probe = await probeGitRemoteIdentity('/repos/orca')
+
+    expect(probe.status).toBe('resolved')
+    // `upstream` outranks `origin`, and the duplicate `mirror` URL is deduped away.
+    expect(
+      probe.status === 'resolved' && probe.remotes.map((remote) => remote.canonicalKey)
+    ).toEqual(['gitlab.example.com/team/orca', 'gitlab.example.com/ava/orca'])
+    expect(probe.status === 'resolved' && probe.identity.remoteName).toBe('upstream')
+  })
+
+  it('bounds the local probe when a timeout is requested', async () => {
+    vi.mocked(gitExecFileAsync).mockResolvedValue({ stdout: gitlabRemote, stderr: '' })
+
+    await probeGitRemoteIdentity('/repos/orca', null, { timeoutMs: 3000 })
+
+    expect(gitExecFileAsync).toHaveBeenCalledWith(['remote', '-v'], {
+      cwd: '/repos/orca',
+      timeout: 3000
+    })
+  })
+
+  it('bounds the SSH probe and degrades a timeout to unavailable', async () => {
+    const exec = vi.fn().mockRejectedValue(new Error('command timed out'))
+    vi.mocked(getSshGitProvider).mockReturnValue({ exec } as never)
+
+    await expect(
+      probeGitRemoteIdentity('/repos/orca', 'builder', { timeoutMs: 3000 })
+    ).resolves.toEqual({ status: 'unavailable' })
+    expect(exec).toHaveBeenCalledWith(['remote', '-v'], '/repos/orca', { timeoutMs: 3000 })
   })
 
   it('settles on no-remote when git answers with nothing usable', async () => {

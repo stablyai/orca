@@ -24,7 +24,11 @@ const remoteIdentity: GitRemoteIdentity = {
   remoteUrl: 'git@git.company.test:team/sample-app.git'
 }
 
-const resolvedProbe: GitRemoteIdentityProbe = { status: 'resolved', identity: remoteIdentity }
+const resolvedProbe: GitRemoteIdentityProbe = {
+  status: 'resolved',
+  identity: remoteIdentity,
+  remotes: [remoteIdentity]
+}
 
 function makeRepo(overrides: Partial<Repo> = {}): Repo {
   return {

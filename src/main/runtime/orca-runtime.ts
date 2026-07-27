@@ -173,6 +173,7 @@ import { assertWorktreeUnlockedForRemoval } from '../../shared/worktree-removal'
 import {
   LOCAL_EXECUTION_HOST_ID,
   getRepoExecutionHostId,
+  normalizeExecutionHostId,
   parseExecutionHostId,
   toSshExecutionHostId,
   type ExecutionHostId
@@ -236,10 +237,12 @@ import {
   splitWorktreeId,
   splitWorktreeIdForFilesystem
 } from '../../shared/worktree-id'
+import { getProjectHostSetupWorktreeMeta } from '../../shared/project-host-setup-projection'
 import {
-  getProjectHostSetupForRepo,
-  getProjectHostSetupWorktreeMeta
-} from '../../shared/project-host-setup-projection'
+  didReconciliationChangeRepoIdentity,
+  didReconciliationChangeStore,
+  reconcileExistingFolderProjectIdentity
+} from '../project-host-existing-folder-reconciliation'
 import { parsePtySessionId } from '../../shared/pty-session-id-format'
 import { clampLinearIssueListLimit } from '../../shared/linear-issue-read-limits'
 import { isFolderRepo } from '../../shared/repo-kind'
@@ -964,6 +967,7 @@ type RuntimeStore = {
   getRepo: Store['getRepo']
   addRepo: Store['addRepo']
   updateRepo: Store['updateRepo']
+  restoreRepoIdentityFields?: Store['restoreRepoIdentityFields']
   getProjects?: Store['getProjects']
   updateProject?: Store['updateProject']
   getProjectHostSetups?: Store['getProjectHostSetups']
@@ -14923,54 +14927,98 @@ export class OrcaRuntimeService {
     return result
   }
 
+  /** The checks both project-setup entry points must pass before anything is written.
+   *  `setupProjectClone` clones first, so leaving them to `setupProjectExistingFolder`
+   *  would refuse only after a full working copy and a persisted, broadcast repo record
+   *  stamped with the refused host had already landed. */
+  private requireOwnedProjectSetupHost(hostId: ExecutionHostId): {
+    store: RuntimeStore
+    restoreRepoIdentityFields: NonNullable<RuntimeStore['restoreRepoIdentityFields']>
+    ownedExecutionHostId: ExecutionHostId
+  } {
+    const store = this.store
+    // A store without project capabilities projects no projects at all. Check it before
+    // `addRepo` so a missing capability cannot leave an orphan repo record behind.
+    if (!store?.getProjects || !store.getProjectHostSetups || !store.restoreRepoIdentityFields) {
+      throw new Error('runtime_unavailable')
+    }
+    // This service only ever runs git on its own filesystem, so it owns exactly the host
+    // it was addressed as — but it can never be an SSH host: `addRepo` validates and
+    // reads the path locally, so accepting `ssh:` would stamp a remote host onto a record
+    // inspected here and then send the identity probe to that remote machine.
+    const ownedExecutionHostId = normalizeExecutionHostId(hostId) ?? LOCAL_EXECUTION_HOST_ID
+    if (parseExecutionHostId(ownedExecutionHostId)?.kind === 'ssh') {
+      throw new Error(
+        'SSH hosts must be set up through the desktop projectHostSetups.setupExistingFolder IPC.'
+      )
+    }
+    return {
+      store,
+      restoreRepoIdentityFields: store.restoreRepoIdentityFields.bind(store),
+      ownedExecutionHostId
+    }
+  }
+
   async setupProjectExistingFolder(
     args: ProjectHostSetupExistingFolderArgs
   ): Promise<ProjectHostSetupResult> {
-    if (!this.store) {
-      throw new Error('runtime_unavailable')
+    const { store, restoreRepoIdentityFields, ownedExecutionHostId } =
+      this.requireOwnedProjectSetupHost(args.hostId)
+    const knownRepoHostsById = new Map(
+      store.getRepos().map((entry) => [entry.id, entry.executionHostId ?? null])
+    )
+    const repo = await this.addRepo(
+      args.path,
+      args.kind === 'folder' ? 'folder' : 'git',
+      args.hostId
+    )
+    // `addRepo` broadcasts when it creates or host-adopts a record; broadcasting again on
+    // success would force a second full renderer repo/project refresh for nothing.
+    const addRepoNotified =
+      !knownRepoHostsById.has(repo.id) ||
+      knownRepoHostsById.get(repo.id) !== (repo.executionHostId ?? null)
+    const reconciliationStore = {
+      getProjects: () => this.listProjects(),
+      getProjectHostSetups: () => this.listProjectHostSetups(),
+      getRepo: (id: string) => store.getRepo(id),
+      updateRepo: (id: string, updates: Parameters<Store['updateRepo']>[1]) =>
+        store.updateRepo(id, updates),
+      restoreRepoIdentityFields,
+      getAllWorktreeMeta: () => store.getAllWorktreeMeta(),
+      setWorktreeMeta: (worktreeId: string, meta: Partial<WorktreeMeta>) =>
+        store.setWorktreeMeta(worktreeId, meta)
     }
-    let repo = await this.addRepo(args.path, args.kind === 'folder' ? 'folder' : 'git', args.hostId)
-    let setup = getProjectHostSetupForRepo(this.listProjectHostSetups(), repo)
-    if (setup.projectId !== args.projectId) {
-      const existingProject = this.listProjects().find((project) => project.id === args.projectId)
-      if (
-        !existingProject?.providerIdentity ||
-        existingProject.providerIdentity.provider !== 'github'
-      ) {
-        throw new Error('Imported folder does not match the selected project identity.')
-      }
-      const updated = this.store.updateRepo(repo.id, {
-        upstream: {
-          owner: existingProject.providerIdentity.owner,
-          repo: existingProject.providerIdentity.repo,
-          ...(existingProject.providerIdentity.host
-            ? { host: existingProject.providerIdentity.host }
-            : {})
-        }
+    let result: ProjectHostSetupResult
+    try {
+      result = await reconcileExistingFolderProjectIdentity({
+        store: reconciliationStore,
+        repo,
+        projectId: args.projectId,
+        ...(args.setupMethod ? { setupMethod: args.setupMethod } : {}),
+        ownedExecutionHostId
       })
-      if (!updated) {
-        throw new Error(`Project setup repo disappeared before it could be linked: ${repo.id}`)
+    } catch (error) {
+      // `addRepo` already notified for a brand-new record, but a rejection that still
+      // mutated the store leaves every client holding a stale repo without a second one.
+      if (didReconciliationChangeStore(error)) {
+        this.invalidateResolvedWorktreeCache()
+        this.notifyReposChanged()
       }
-      repo = updated
-      setup = getProjectHostSetupForRepo(this.listProjectHostSetups(), repo)
+      throw error
     }
-    const setupMethod = args.setupMethod ?? 'imported-existing-folder'
-    const updated = this.store.updateRepo(repo.id, { projectHostSetupMethod: setupMethod })
-    if (!updated) {
-      throw new Error(
-        `Project setup repo disappeared before setup metadata could be linked: ${repo.id}`
-      )
+    this.invalidateResolvedWorktreeCache()
+    // Reconciliation can move the repo between projects, and only an identity write does
+    // that — the setup-method stamp it always writes is already in the returned result.
+    if (!addRepoNotified || didReconciliationChangeRepoIdentity(repo, result.repo)) {
+      this.notifyReposChanged()
     }
-    repo = updated
-    setup = getProjectHostSetupForRepo(this.listProjectHostSetups(), repo)
-    const project = this.listProjects().find((entry) => entry.id === setup.projectId)
-    if (!project) {
-      throw new Error(`Project setup was created without a project record: ${setup.projectId}`)
-    }
-    return { project, setup, repo }
+    return result
   }
 
   async setupProjectClone(args: ProjectHostSetupCloneArgs): Promise<ProjectHostSetupResult> {
+    // `cloneRepo` writes and broadcasts a repo record of its own, so the host has to be
+    // refused here rather than by the `setupProjectExistingFolder` call below.
+    this.requireOwnedProjectSetupHost(args.hostId)
     const repo = await this.cloneRepo(args.url, args.destination, args.hostId)
     return await this.setupProjectExistingFolder({
       projectId: args.projectId,

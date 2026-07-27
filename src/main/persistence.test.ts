@@ -594,6 +594,36 @@ describe('Store', () => {
     })
   })
 
+  it('remaps a host-less GitHub Enterprise project reference on load', async () => {
+    writeDataFile({
+      ...getDefaultPersistedState(testState.dir),
+      repos: [
+        makeRepo({
+          id: 'r1',
+          upstream: { owner: 'acme', repo: 'orca', host: 'git.acme-corp.com' }
+        })
+      ],
+      worktreeMeta: {
+        'r1::/repo': {
+          projectId: 'github:acme/orca',
+          projectHostSetupId: 'github:acme/orca::local'
+        }
+      }
+    })
+
+    const store = await createStore()
+
+    expect(store.getWorktreeMeta('r1::/repo')).toMatchObject({
+      projectId: 'github:git.acme-corp.com/acme/orca',
+      projectHostSetupId: 'github:git.acme-corp.com/acme/orca::local'
+    })
+    // Derived at load, so it has to reach disk without an explicit mutation.
+    store.flush()
+    expect((readDataFile() as PersistedState).worktreeMeta['r1::/repo']?.projectId).toBe(
+      'github:git.acme-corp.com/acme/orca'
+    )
+  })
+
   it('migrates legacy WSL agent settings into the global Windows runtime default', async () => {
     writeDataFile({
       schemaVersion: 1,
@@ -4531,6 +4561,31 @@ describe('Store', () => {
     expect(reloaded.getRepo('r1')!.upstream).toBeNull()
   })
 
+  it('updateRepo keeps the Enterprise host on repo upstream metadata', async () => {
+    const store = await createStore()
+    store.addRepo(makeRepo())
+
+    // Why: the host is what separates `github:git.acme-corp.com/acme/orca` from
+    // `github:acme/orca`; dropping it silently re-projects the repo into the
+    // wrong project when existing-folder setup stamps a GHES project identity.
+    const updated = store.updateRepo('r1', {
+      upstream: { owner: 'acme', repo: 'orca', host: ' Git.Acme-Corp.com ' }
+    })
+    expect(updated!.upstream).toEqual({
+      owner: 'acme',
+      repo: 'orca',
+      host: 'git.acme-corp.com'
+    })
+
+    store.flush()
+    const reloaded = await createStore()
+    expect(reloaded.getRepo('r1')!.upstream).toEqual({
+      owner: 'acme',
+      repo: 'orca',
+      host: 'git.acme-corp.com'
+    })
+  })
+
   it('updateRepo persists the resolved no-usable-remote identity marker', async () => {
     const store = await createStore()
     store.addRepo(makeRepo())
@@ -4552,6 +4607,85 @@ describe('Store', () => {
     store.flush()
     const reloaded = await createStore()
     expect(reloaded.getRepo('r1')!.gitRemoteIdentity).toBeNull()
+  })
+
+  it('updateRepo cannot clear the identity fields back to absent', async () => {
+    const store = await createStore()
+    store.addRepo(makeRepo())
+    store.updateRepo('r1', { gitRemoteIdentity: null, upstream: { owner: 'acme', repo: 'orca' } })
+
+    // `undefined` means "leave alone" for every other caller, so it must stay a no-op here.
+    const updated = store.updateRepo('r1', { gitRemoteIdentity: undefined, upstream: undefined })
+
+    expect(updated!.gitRemoteIdentity).toBeNull()
+    expect(updated!.upstream).toEqual({ owner: 'acme', repo: 'orca' })
+  })
+
+  it('restoreRepoIdentityFields clears the identity fields back to absent', async () => {
+    const store = await createStore()
+    store.addRepo(makeRepo())
+    store.updateRepo('r1', { gitRemoteIdentity: null, upstream: { owner: 'acme', repo: 'orca' } })
+
+    // Absent is a distinct state from the `null` markers: rolling a rejected import back
+    // to `null` would falsely settle "no remote" and suppress the fork-upstream backfill.
+    const restored = store.restoreRepoIdentityFields('r1', {
+      gitRemoteIdentity: undefined,
+      upstream: undefined
+    })
+
+    expect('gitRemoteIdentity' in restored!).toBe(false)
+    expect('upstream' in restored!).toBe(false)
+    store.flush()
+    const reloaded = await createStore()
+    expect('gitRemoteIdentity' in reloaded.getRepo('r1')!).toBe(false)
+    expect('upstream' in reloaded.getRepo('r1')!).toBe(false)
+  })
+
+  it('restoreRepoIdentityFields restores previous values and leaves omitted fields alone', async () => {
+    const identity = {
+      canonicalKey: 'gitlab.example.com/ava/orca',
+      remoteName: 'origin',
+      remoteUrl: 'git@gitlab.example.com:ava/orca.git'
+    }
+    const store = await createStore()
+    store.addRepo(makeRepo())
+    store.updateRepo('r1', {
+      gitRemoteIdentity: {
+        canonicalKey: 'gitlab.example.com/team/orca',
+        remoteName: 'origin',
+        remoteUrl: 'git@gitlab.example.com:team/orca.git'
+      },
+      upstream: { owner: 'acme', repo: 'orca' }
+    })
+
+    const restored = store.restoreRepoIdentityFields('r1', { gitRemoteIdentity: identity })
+
+    expect(restored!.gitRemoteIdentity).toEqual(identity)
+    expect(restored!.upstream).toEqual({ owner: 'acme', repo: 'orca' })
+    store.flush()
+    const reloaded = await createStore()
+    expect(reloaded.getRepo('r1')!.gitRemoteIdentity).toEqual(identity)
+  })
+
+  it('restoreRepoIdentityFields restores the no-usable-remote marker', async () => {
+    const store = await createStore()
+    store.addRepo(makeRepo())
+    store.updateRepo('r1', {
+      gitRemoteIdentity: {
+        canonicalKey: 'gitlab.example.com/team/orca',
+        remoteName: 'origin',
+        remoteUrl: 'git@gitlab.example.com:team/orca.git'
+      }
+    })
+
+    expect(
+      store.restoreRepoIdentityFields('r1', { gitRemoteIdentity: null })!.gitRemoteIdentity
+    ).toBeNull()
+  })
+
+  it('restoreRepoIdentityFields returns null for nonexistent id', async () => {
+    const store = await createStore()
+    expect(store.restoreRepoIdentityFields('nope', { upstream: undefined })).toBeNull()
   })
 
   it('getRepo does not expose invalid persisted repo upstream metadata', async () => {
