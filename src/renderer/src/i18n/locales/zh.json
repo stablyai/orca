@@ -297,6 +297,7 @@
       }
     },
     "lib": {
+      "monaco": { "peek": { "path": { "copy": { "copyPath": "复制路径" } } } },
       "agent": {
         "catalog": {
           "5dff448636": "OpenClaw",
@@ -12145,7 +12146,8 @@
         "MonacoEditor": {
           "68cb83f4a7": "在选定的文本上添加注释",
           "fd68ae03b3": "在文件中搜索",
-          "largePasteTooLarge": "粘贴内容过大。"
+          "largePasteTooLarge": "粘贴内容过大。",
+          "openImportedFile": "打开导入的文件"
         },
         "MonacoGutterContextMenu": {
           "7b57b1b468": "复制远程 URL",

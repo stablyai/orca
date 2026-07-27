@@ -320,6 +320,7 @@
       }
     },
     "lib": {
+      "monaco": { "peek": { "path": { "copy": { "copyPath": "Copy path" } } } },
       "agent": {
         "catalog": {
           "5dff448636": "OpenClaw",
@@ -12168,7 +12169,8 @@
         "MonacoEditor": {
           "68cb83f4a7": "Add note on selected text",
           "fd68ae03b3": "Search in Files",
-          "largePasteTooLarge": "Paste is too large."
+          "largePasteTooLarge": "Paste is too large.",
+          "openImportedFile": "Open imported file"
         },
         "MonacoGutterContextMenu": {
           "7b57b1b468": "Copy Remote URL",

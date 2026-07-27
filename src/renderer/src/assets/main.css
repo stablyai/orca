@@ -2008,6 +2008,54 @@
   text-underline-offset: 2px;
 }
 
+/* Copy-path button injected into the peek (references) widget title. */
+.monaco-editor .peekview-title .orca-peek-copy-path {
+  display: inline-flex;
+  align-items: center;
+  margin-left: 6px;
+  padding: 2px;
+  border: none;
+  border-radius: 3px;
+  background: transparent;
+  color: inherit;
+  opacity: 0.65;
+  cursor: pointer;
+  vertical-align: middle;
+}
+
+.monaco-editor .peekview-title .orca-peek-copy-path:hover {
+  opacity: 1;
+  background: color-mix(in srgb, currentColor 14%, transparent);
+}
+
+.monaco-editor .peekview-title .orca-peek-copy-path .orca-peek-copy-path-check {
+  display: none;
+}
+
+.monaco-editor
+  .peekview-title
+  .orca-peek-copy-path.orca-peek-copy-path--copied
+  .orca-peek-copy-path-check {
+  display: inline;
+}
+
+.monaco-editor
+  .peekview-title
+  .orca-peek-copy-path.orca-peek-copy-path--copied
+  .orca-peek-copy-path-icon {
+  display: none;
+}
+
+/* Why: import links advertise clickability only while ⌘/Ctrl is held, so a plain
+   click keeps behaving as caret placement (same affordance as markdown links). */
+.monaco-import-links-mod-held .monaco-editor .monaco-import-file-link {
+  color: #58a6ff !important;
+  text-decoration: underline;
+  text-decoration-color: color-mix(in srgb, currentColor 45%, transparent);
+  text-underline-offset: 2px;
+  cursor: pointer;
+}
+
 /* Why: Monaco's faded scrollbar uses the class `invisible`, which collides with
    Tailwind's `.invisible` utility (visibility: hidden) — so also restore visibility. */
 .monaco-editor
