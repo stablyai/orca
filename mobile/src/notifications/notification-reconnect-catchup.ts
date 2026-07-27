@@ -146,6 +146,11 @@ export type HostNotificationSession = {
   // Resolves once the persisted read has landed, so the first 'ready' can wait for
   // it instead of deciding catch-up against an unread watermark.
   watermarkSeeded: Promise<void> | null
+  // Tail of the per-host delivery chain; see enqueueHostDelivery.
+  deliveryTail: Promise<void>
+  // notificationIds with a show queued or in flight on that chain; see
+  // shouldQueueShowForNotificationId.
+  queuedShowIds: Set<string>
 }
 
 const sessionsByHost = new Map<string, HostNotificationSession>()
@@ -159,11 +164,74 @@ export function getHostNotificationSession(hostId: string): HostNotificationSess
       seen: createSeenNotificationGuard(),
       connectedBefore: false,
       hadStoredWatermark: false,
-      watermarkSeeded: null
+      watermarkSeeded: null,
+      deliveryTail: Promise.resolve(),
+      queuedShowIds: new Set<string>()
     }
     sessionsByHost.set(hostId, session)
   }
   return session
+}
+
+/**
+ * Run `task` after every delivery already queued for this host, and return a
+ * promise for its completion.
+ *
+ * Why (#8591): the watermark is persisted by whichever delivery advances it, so
+ * replay and live delivery running concurrently can persist out of order. A live
+ * seq 11 handled while catch-up is still showing seq 6 writes watermark 11, and a
+ * process death before 7..10 are shown loses them permanently — the next launch
+ * asks the desktop for seq > 11. Serializing per host makes the watermark's
+ * monotonic advance mean "everything up to here was actually delivered".
+ *
+ * A rejected task does not break the chain: the tail swallows the failure so a
+ * single bad notification cannot wedge the host's queue forever.
+ */
+export function enqueueHostDelivery(
+  session: HostNotificationSession,
+  task: () => Promise<void>
+): Promise<void> {
+  const run = session.deliveryTail.then(task)
+  session.deliveryTail = run.catch(() => {})
+  return run
+}
+
+/**
+ * Claim a notificationId for a queued show, returning false if one is already
+ * queued or in flight for it.
+ *
+ * Why this exists (#8591): showLocalNotification deduped two same-id events by
+ * observing that the first was still pending when the second arrived. Serializing
+ * deliveries removed that overlap — the first now COMPLETES before the second
+ * starts, so the second reads no pending state and schedules a second banner for
+ * the same notification. The dedup has to happen where concurrency is still
+ * visible, which after serialization is enqueue time rather than delivery time.
+ *
+ * Only shows are tracked. A dismiss for the same id must still run: it is the
+ * mechanism that retires the notification the show created.
+ */
+export function shouldQueueShowForNotificationId(
+  session: HostNotificationSession,
+  notificationId: string | undefined
+): boolean {
+  if (notificationId == null) {
+    return true
+  }
+  if (session.queuedShowIds.has(notificationId)) {
+    return false
+  }
+  session.queuedShowIds.add(notificationId)
+  return true
+}
+
+/** Release the claim taken by shouldQueueShowForNotificationId once the show settles. */
+export function releaseQueuedShowNotificationId(
+  session: HostNotificationSession,
+  notificationId: string | undefined
+): void {
+  if (notificationId != null) {
+    session.queuedShowIds.delete(notificationId)
+  }
 }
 
 /** Test-only: drop per-host session state so each test starts from a cold open. */
@@ -200,11 +268,40 @@ export function adoptNotificationEpoch(
 
 // Why: seed the watermark lazily so subscribe() doesn't block on an AsyncStorage read.
 // Only the first subscription for a host needs it; later ones inherit the live value.
+/**
+ * Ms the persisted read may block catch-up and live delivery before they proceed
+ * without it. AsyncStorage normally answers in single-digit ms; a read that has
+ * not landed by now is assumed wedged.
+ *
+ * Why a bound at all (#8591): every delivery awaits this promise, so a read that
+ * never settles silently disables notifications for the host for the whole app
+ * lifetime — no error, no banner, nothing to see. Proceeding unseeded is strictly
+ * better: the watermark stays 0, so catch-up over-fetches and the seen-set
+ * de-duplicates, which costs a redundant request instead of every notification.
+ */
+const WATERMARK_SEED_TIMEOUT_MS = 3000
+
+function withTimeout(promise: Promise<void>, ms: number): Promise<void> {
+  return new Promise<void>((resolve) => {
+    const timer = setTimeout(resolve, ms)
+    void promise.then(
+      () => {
+        clearTimeout(timer)
+        resolve()
+      },
+      () => {
+        clearTimeout(timer)
+        resolve()
+      }
+    )
+  })
+}
+
 export function seedWatermarkFromStorage(session: HostNotificationSession, hostId: string): void {
   if (session.watermarkSeeded) {
     return
   }
-  session.watermarkSeeded = loadWatermark(hostId).then(({ seq, epoch, stored }) => {
+  const seeded = loadWatermark(hostId).then(({ seq, epoch, stored }) => {
     // Why the record's existence and not `seq > 0`: adoptNotificationEpoch persists
     // `{seq: 0, epoch}` when it voids a watermark, so a device that HAS delivered for
     // this host reloads as seq 0. Keying on the seq would read that as a first pairing
@@ -224,6 +321,9 @@ export function seedWatermarkFromStorage(session: HostNotificationSession, hostI
       }
     }
   })
+  // The late seed still applies when it eventually lands; the timeout only stops it
+  // from holding delivery hostage. `seeded` never rejects into the awaiters.
+  session.watermarkSeeded = withTimeout(seeded, WATERMARK_SEED_TIMEOUT_MS)
 }
 
 // Why (#8591): sessions live at module scope so they survive the subscription

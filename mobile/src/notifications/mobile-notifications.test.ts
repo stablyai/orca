@@ -73,10 +73,14 @@ describe('subscribeToDesktopNotifications', () => {
     vi.clearAllMocks()
   })
 
-  async function flushAsync(): Promise<void> {
-    for (let i = 0; i < 10; i += 1) {
-      await Promise.resolve()
-    }
+  // Why the macrotask and not N microtask ticks (#8591): deliveries now run through
+  // the per-host serialization queue, so a delivery is several more `await` hops deep
+  // than it used to be and a fixed tick count silently under-drains. Yielding to the
+  // macrotask queue drains whatever depth the chain happens to have.
+  function flushAsync(): Promise<void> {
+    return new Promise((resolve) => {
+      setTimeout(resolve, 0)
+    })
   }
 
   function makeDeferred<T>(): { promise: Promise<T>; resolve: (value: T) => void } {

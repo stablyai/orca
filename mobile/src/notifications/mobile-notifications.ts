@@ -15,10 +15,13 @@ import {
 } from './local-notification-scheduling'
 import {
   adoptNotificationEpoch,
+  enqueueHostDelivery,
   getHostNotificationSession,
+  releaseQueuedShowNotificationId,
   saveWatermark,
   seedWatermarkFromStorage,
-  seenKeyForEvent
+  seenKeyForEvent,
+  shouldQueueShowForNotificationId
 } from './notification-reconnect-catchup'
 
 type SubscribeResult = {
@@ -38,11 +41,55 @@ export function subscribeToDesktopNotifications(client: RpcClient, hostId: strin
   // socket drop, so a reconnect still knows its watermark and that it reconnected.
   const session = getHostNotificationSession(hostId)
 
-  function deliverLive(
+  /**
+   * Queue one delivery on the host chain, dropping a show whose notificationId
+   * already has one queued.
+   *
+   * Why the claim is taken HERE and not inside deliverLive (#8591): the point of
+   * the dedup is to notice a second event arriving while the first is still
+   * outstanding. Inside the queued task the first has already finished, so the
+   * overlap is no longer observable — it has to be checked before enqueueing.
+   */
+  function queueDelivery(
+    type: 'notification' | 'dismiss',
+    event: NotificationEvent | DismissNotificationEvent
+  ): Promise<void> {
+    if (
+      type === 'notification' &&
+      !shouldQueueShowForNotificationId(session, event.notificationId)
+    ) {
+      return Promise.resolve()
+    }
+    return enqueueHostDelivery(session, async () => {
+      try {
+        await deliverLive(type, event)
+      } finally {
+        if (type === 'notification') {
+          releaseQueuedShowNotificationId(session, event.notificationId)
+        }
+      }
+    })
+  }
+
+  async function deliverLive(
     type: 'notification' | 'dismiss',
     event: NotificationEvent | DismissNotificationEvent
   ): Promise<void> {
     adoptNotificationEpoch(session, hostId, event.notificationEpoch)
+    // Why (#8129): mark seen on the live path too, so a later replay of an already-pushed id dedups instead of double-pushing.
+    const key = seenKeyForEvent(event)
+    if (key) {
+      session.seen.add(key)
+    }
+    if (type === 'notification') {
+      await showLocalNotification(event as NotificationEvent, hostId)
+    } else {
+      await dismissLocalNotification(event as DismissNotificationEvent, hostId)
+    }
+    // Why after the await (#8591): the watermark is a promise that everything up
+    // to this seq has been shown. Advancing it before the local notification lands
+    // means a process death in between silently drops it — the next launch asks the
+    // desktop for seq greater than one the user never saw.
     if (event.notificationSeq != null && event.notificationSeq > session.lastDeliveredSeq) {
       session.lastDeliveredSeq = event.notificationSeq
       // Persisted as a pair: a seq is only trustworthy alongside the epoch it indexes.
@@ -51,15 +98,6 @@ export function subscribeToDesktopNotifications(client: RpcClient, hostId: strin
         epoch: session.lastDeliveredEpoch
       })
     }
-    // Why (#8129): mark seen on the live path too, so a later replay of an already-pushed id dedups instead of double-pushing.
-    const key = seenKeyForEvent(event)
-    if (key) {
-      session.seen.add(key)
-    }
-    if (type === 'notification') {
-      return showLocalNotification(event as NotificationEvent, hostId)
-    }
-    return dismissLocalNotification(event as DismissNotificationEvent, hostId)
   }
 
   // Why: desktop cuts by seq > lastSeenSeq, so re-fetching from the watermark is idempotent (session.seen guards residual overlap).
@@ -83,21 +121,42 @@ export function subscribeToDesktopNotifications(client: RpcClient, hostId: strin
         return Array.isArray(result?.notifications) ? result.notifications : []
       })
       .catch(() => [])
-    for (const raw of missed) {
-      const event = raw as NotificationEvent | DismissNotificationEvent
-      const key = seenKeyForEvent(event)
-      if (key && session.seen.has(key)) {
-        continue
+    // Why the whole batch is ONE queue entry (#8591): awaiting per event returns to
+    // the event loop between replays, so a live seq 11 slots into the chain between
+    // seq 6 and 7 and persists a watermark past a notification still unshown. Why the
+    // request stays OUTSIDE the queue: sendRequest waits up to 30s, and holding the
+    // chain for that would stall live delivery on a slow link.
+    await enqueueHostDelivery(session, async () => {
+      for (const raw of missed) {
+        // Re-checked per event: the batch can start before a teardown and still be
+        // draining after it, and a torn-down host must stop pushing.
+        if (disposed) {
+          return
+        }
+        const event = raw as NotificationEvent | DismissNotificationEvent
+        const key = seenKeyForEvent(event)
+        if (key && session.seen.has(key)) {
+          continue
+        }
+        if (key) {
+          session.seen.add(key)
+        }
+        // Claimed inline rather than via queueDelivery: the batch is already one
+        // queue entry, and re-enqueueing per item is what let a live event cut in.
+        if (event.type === 'notification') {
+          if (!shouldQueueShowForNotificationId(session, event.notificationId)) {
+            continue
+          }
+          try {
+            await deliverLive('notification', event)
+          } finally {
+            releaseQueuedShowNotificationId(session, event.notificationId)
+          }
+        } else if (event.type === 'dismiss') {
+          await deliverLive('dismiss', event)
+        }
       }
-      if (key) {
-        session.seen.add(key)
-      }
-      if (event.type === 'notification') {
-        await deliverLive('notification', event)
-      } else if (event.type === 'dismiss') {
-        await deliverLive('dismiss', event)
-      }
-    }
+    })
   }
 
   seedWatermarkFromStorage(session, hostId)
@@ -169,11 +228,12 @@ export function subscribeToDesktopNotifications(client: RpcClient, hostId: strin
       if (disposed) {
         return
       }
-      if (liveEvent.type === 'notification') {
-        await deliverLive('notification', liveEvent as NotificationEvent)
-      } else {
-        await deliverLive('dismiss', liveEvent as DismissNotificationEvent)
-      }
+      // Why the queue (#8591): a live event must not overtake an in-flight
+      // catch-up replay, or it persists a watermark past seqs still unshown.
+      await queueDelivery(
+        liveEvent.type === 'notification' ? 'notification' : 'dismiss',
+        liveEvent as NotificationEvent | DismissNotificationEvent
+      )
     })()
   })
 
