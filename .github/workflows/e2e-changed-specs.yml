@@ -1,0 +1,121 @@
+name: E2E (changed specs)
+
+# Why: e2e.yml is reachable only from schedule and release-cut's workflow_call,
+# so a PR that adds an E2E regression test never runs that test — it runs for
+# the first time on main, where nobody is gating on it (#10518). This gate runs
+# exactly the specs the PR touched: it closes the "test lands red" hole without
+# putting the full 22-minute sharded suite on every pull request.
+on:
+  pull_request:
+    types:
+      - opened
+      - synchronize
+      - reopened
+      - ready_for_review
+
+# Why: a force-push should not leave the previous Electron run burning a runner.
+concurrency:
+  group: e2e-changed-specs-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  changed-specs:
+    name: e2e changed specs
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      contents: read
+      pull-requests: read
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+
+      # Why: the PR's file list comes from the API rather than a git diff — the
+      # default PR checkout is shallow, and its merge ref would need extra
+      # fetches to produce the same answer.
+      - name: Select changed E2E specs
+        id: select
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          gh api --paginate \
+            "repos/${{ github.repository }}/pulls/${{ github.event.pull_request.number }}/files" \
+            -q '.[] | select(.status != "removed") | .filename' > changed-files.txt
+          node config/scripts/select-changed-e2e-specs.mjs < changed-files.txt > changed-specs.txt
+          {
+            echo 'specs<<SPECS_EOF'
+            cat changed-specs.txt
+            echo 'SPECS_EOF'
+          } >> "$GITHUB_OUTPUT"
+          if [ -s changed-specs.txt ]; then
+            {
+              echo '### E2E specs this PR changed'
+              echo
+              sed 's/^/- `/; s/$/`/' changed-specs.txt
+            } >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo 'No E2E spec changed — nothing to run.' >> "$GITHUB_STEP_SUMMARY"
+          fi
+
+      - name: Install native build and headless UI tools
+        if: steps.select.outputs.specs != ''
+        run: sudo apt-get update && sudo apt-get install -y build-essential python3 xvfb
+
+      - name: Setup Node.js
+        if: steps.select.outputs.specs != ''
+        uses: actions/setup-node@v6
+        with:
+          node-version-file: package.json
+
+      - name: Setup pnpm
+        if: steps.select.outputs.specs != ''
+        uses: pnpm/action-setup@v6
+        with:
+          run_install: false
+
+      # Why: same Linux-only node-gyp pin as e2e.yml and pr.yml — pnpm's bundled
+      # gyp_main.py ships without execute permission and breaks node-pty.
+      - name: Use external node-gyp to avoid pnpm's bundled copy (Linux only)
+        if: steps.select.outputs.specs != '' && runner.os == 'Linux'
+        run: |
+          npm install -g node-gyp@11.5.0
+          echo "npm_config_node_gyp=$(npm root -g)/node-gyp/bin/node-gyp.js" >> "$GITHUB_ENV"
+
+      - name: Install dependencies
+        if: steps.select.outputs.specs != ''
+        run: pnpm install --frozen-lockfile
+
+      # Why: mirrors e2e.yml's build job so Playwright's globalSetup reuses the
+      # output (SKIP_BUILD=1) instead of building inside the test run.
+      - name: Build Electron app for E2E
+        if: steps.select.outputs.specs != ''
+        run: npx electron-vite build --mode e2e
+
+      # Why: the selected paths are PR-controlled, so they are read into an array
+      # from the file the selector wrote and expanded as separate argv entries —
+      # never interpolated into the command string.
+      - name: Run changed E2E specs
+        id: run
+        if: steps.select.outputs.specs != ''
+        shell: bash
+        run: |
+          set -euo pipefail
+          SPECS=()
+          while IFS= read -r spec; do SPECS+=("$spec"); done < changed-specs.txt
+          printf 'Running %d changed spec(s):\n' "${#SPECS[@]}"
+          printf '  %s\n' "${SPECS[@]}"
+          xvfb-run --auto-servernum env SKIP_BUILD=1 ORCA_E2E_FORWARD_APP_LOGS=1 \
+            pnpm run test:e2e --pass-with-no-tests "${SPECS[@]}"
+
+      - name: Upload Playwright traces
+        if: failure()
+        uses: actions/upload-artifact@v7
+        with:
+          name: playwright-traces-changed-specs
+          path: test-results/
+          retention-days: 7
+          if-no-files-found: ignore
