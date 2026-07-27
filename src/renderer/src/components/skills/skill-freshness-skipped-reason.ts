@@ -73,11 +73,7 @@ export function skippedReason(locations: readonly SkillLocationRow[]): string {
         'auto.components.skills.SkillFreshnessRow.skippedReasonDuplicate',
         'This is a separate copy, so the update won’t reach it — the command only refreshes the main copy. Remove this copy, then reinstall the skill so this location follows the main one.'
       )
-    // Why: 'current' and 'foreign' are non-blocking — neither is a copy the update
-    // was withheld from — and an empty priority list is possible; all fall through
-    // to the generic skipped message.
     case 'current':
-    case 'foreign':
     case undefined:
       return translate(
         'auto.components.skills.SkillFreshnessRow.cantUpdateReason',

@@ -5,7 +5,6 @@ export type SkillGroupStatus = 'update-available' | 'cannot-update'
 export type SkillLocationChip =
   | 'current'
   | 'unrecognized'
-  | 'foreign'
   | 'inaccessible'
   | 'duplicate'
   | 'external-link'
@@ -27,13 +26,11 @@ export type SkillFreshnessGroupModel = {
 }
 
 export function locationChip(installation: SkillFreshnessInstallation): SkillLocationChip | null {
-  // Why: a location's own status wins over its topology — "the contents don't
-  // match" is more useful to the user than "it's a duplicate".
+  if (installation.status === 'unrecognized' && installation.topology === 'plugin-cache') {
+    return 'plugin-cache'
+  }
   if (installation.status === 'unrecognized') {
     return 'unrecognized'
-  }
-  if (installation.status === 'foreign') {
-    return 'foreign'
   }
   if (installation.status === 'inaccessible') {
     return 'inaccessible'

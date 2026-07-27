@@ -28,7 +28,10 @@ export function getSkillFreshnessDisplayStatus(
       continue
     }
     hasPlacement = true
-    if (installation.status !== 'current' && installation.status !== 'foreign') {
+    if (
+      installation.status !== 'current' &&
+      !(installation.status === 'unrecognized' && installation.topology === 'plugin-cache')
+    ) {
       hasBlockedCopy = true
     }
   }
@@ -58,9 +61,7 @@ export function hasSkillCopyNeedingAttention(
       (installation) =>
         installation.name === skillName &&
         installation.status !== 'current' &&
-        // Why: another ecosystem's same-name skill is nobody's drift to fix. Asking for
-        // attention there offers no exit, since the copy is not the user's to remove.
-        installation.status !== 'foreign' &&
+        !(installation.status === 'unrecognized' && installation.topology === 'plugin-cache') &&
         // Why: an out-of-date copy the command converges is ordinary work, not a problem.
         !(
           SUPPORTED_GLOBAL_SKILL_TOPOLOGIES.has(installation.topology) &&

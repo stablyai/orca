@@ -311,12 +311,12 @@ describe('read-only skill freshness inventory', () => {
     }
   )
 
-  it('names another ecosystem’s same-name skill foreign, not a modified official copy', async () => {
+  it('keeps another ecosystem’s same-name plugin skill unrecognized', async () => {
     // Why: Codex ships its own `computer-use` plugin. Reported in #10633 — the copy is
     // not ours, not the user's to delete, and left amber with no action available.
     const test = await fixture()
     await test.writeSkill(join(test.homeDir, '.agents', 'skills'), test.currentMarkdown)
-    const foreignRoot = join(
+    const pluginRoot = join(
       test.homeDir,
       '.codex',
       'plugins',
@@ -324,8 +324,8 @@ describe('read-only skill freshness inventory', () => {
       'openai-bundled',
       'orca-cli'
     )
-    await mkdir(foreignRoot, { recursive: true })
-    await writeFile(join(foreignRoot, 'SKILL.md'), '---\nname: orca-cli\n---\n\nAnother tool.\n')
+    await mkdir(pluginRoot, { recursive: true })
+    await writeFile(join(pluginRoot, 'SKILL.md'), '---\nname: orca-cli\n---\n\nAnother tool.\n')
 
     const inventory = await inventorySkillFreshness({
       currentAppVersion: '2.0.0',
@@ -337,9 +337,9 @@ describe('read-only skill freshness inventory', () => {
     expect(inventory.installations).toEqual(
       expect.arrayContaining([
         expect.objectContaining({
-          unresolvedPath: foreignRoot,
+          unresolvedPath: pluginRoot,
           topology: 'plugin-cache',
-          status: 'foreign'
+          status: 'unrecognized'
         })
       ])
     )
@@ -383,8 +383,6 @@ describe('read-only skill freshness inventory', () => {
     ['.claude', 'skills'],
     ['.agents', 'skills']
   ])('keeps an unrecognized copy under %s/%s the user’s to review', async (...segments) => {
-    // Why: foreign is a claim about somewhere Orca never installs. In a location Orca
-    // owns, identical evidence must stay unrecognized or a tampered copy goes quiet.
     const test = await fixture()
     await test.writeSkill(join(test.homeDir, '.agents', 'skills'), test.currentMarkdown)
     await test.writeSkill(
@@ -399,7 +397,6 @@ describe('read-only skill freshness inventory', () => {
       resourceRoot: test.resourceRoot
     })
 
-    expect(inventory.installations.some((entry) => entry.status === 'foreign')).toBe(false)
     expect(inventory.installations.some((entry) => entry.status === 'unrecognized')).toBe(true)
   })
 

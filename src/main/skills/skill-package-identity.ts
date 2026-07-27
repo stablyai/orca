@@ -227,15 +227,3 @@ export function matchingKnownSnapshot(
   }
   return null
 }
-
-export function sharesKnownFileIdentity(
-  observed: ObservedSkillPackage,
-  snapshots: readonly SkillKnownSnapshot[]
-): boolean {
-  return snapshots.some((snapshot) =>
-    snapshot.files.some((expected) => {
-      const actual = observed.files.find((file) => file.path === expected.path)
-      return actual ? matchesFileIdentity(actual, expected) : false
-    })
-  )
-}

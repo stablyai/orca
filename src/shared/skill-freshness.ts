@@ -44,9 +44,6 @@ export type SkillFreshnessStatus =
   | 'outdated'
   | 'newer-known'
   | 'unrecognized'
-  // Why: a same-name skill from another ecosystem is not a drifted copy of ours.
-  // Only 'unrecognized' is the user's to fix; this one is theirs to leave alone.
-  | 'foreign'
   | 'inaccessible'
 
 export type SkillInstallationTopology =

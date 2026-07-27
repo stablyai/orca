@@ -4,17 +4,11 @@ import type {
   SkillCurrentBundleEntry,
   SkillFreshnessInstallation,
   SkillFreshnessStatus,
-  SkillInstallationTopology,
   SkillKnownSnapshot
 } from '../../shared/skill-freshness'
 import type { SkillScanRoot } from './skill-discovery-sources'
 import type { SkillBundleArtifacts } from './skill-bundle-artifacts'
-import {
-  matchingKnownSnapshot,
-  observeSkillPackage,
-  sharesKnownFileIdentity,
-  type ObservedSkillPackage
-} from './skill-package-identity'
+import { matchingKnownSnapshot, observeSkillPackage } from './skill-package-identity'
 import {
   classifyHomeSkillTopology,
   classifyUnsupportedSkillTopology,
@@ -36,26 +30,6 @@ function freshnessStatus(
     return 'newer-known'
   }
   return snapshot.packageDigest === current.packageDigest ? 'current' : 'outdated'
-}
-
-/**
- * Whether an unrecognized package is another ecosystem's skill rather than a drifted
- * copy of ours. Both axes demand positive evidence, so absence of proof never downgrades
- * a warning: only a plugin cache, which Orca never installs into, and only with files
- * read that show no descent from any release. Everywhere Orca owns — canonical copy,
- * aliases, duplicates, project copies — unrecognized stays the user's to review, so a
- * tampered official copy can never be waved through as somebody else's.
- */
-function isForeignSameNameSkill(
-  topology: SkillInstallationTopology,
-  observed: ObservedSkillPackage,
-  snapshots: readonly SkillKnownSnapshot[]
-): boolean {
-  return (
-    topology === 'plugin-cache' &&
-    observed.files.length > 0 &&
-    !sharesKnownFileIdentity(observed, snapshots)
-  )
 }
 
 function errorCategory(error: unknown, fallback: string): string {
@@ -120,20 +94,17 @@ export async function observeSkillFreshnessInstallation(args: {
 
   try {
     const observed = await observeSkillPackage(args.topology.resolvedPath)
-    const snapshots = knownSnapshots(args.artifacts, args.current)
-    const matchedSnapshot = matchingKnownSnapshot(observed, snapshots)
+    const matchedSnapshot = matchingKnownSnapshot(
+      observed,
+      knownSnapshots(args.artifacts, args.current)
+    )
     // Why: a later release can reintroduce identical bytes. Exact current
     // identity is still current, and cannot honestly be attributed to the later tag.
     const snapshot =
       observed.observedDigest === args.current.packageDigest ? args.current : matchedSnapshot
-    const status = freshnessStatus(snapshot, args.current)
     return {
       ...base,
-      status:
-        status === 'unrecognized' &&
-        isForeignSameNameSkill(args.topology.topology, observed, snapshots)
-          ? 'foreign'
-          : status,
+      status: freshnessStatus(snapshot, args.current),
       installedReleaseRevision: snapshot?.releaseRevision ?? null,
       // Why: the current revision may be unreleased (or trail the newest tag),
       // so its label is the running build's version; only historical revisions

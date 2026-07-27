@@ -47,9 +47,11 @@ function placement(status: SkillFreshnessStatus, index = 0): SkillFreshnessInsta
   }
 }
 
-function foreignPlacement(): SkillFreshnessInstallation {
+function pluginCachePlacement(
+  status: SkillFreshnessStatus = 'unrecognized'
+): SkillFreshnessInstallation {
   return {
-    ...placement('foreign', 9),
+    ...placement(status, 9),
     topology: 'plugin-cache',
     unresolvedPath: `/home/.codex/plugins/cache/openai-bundled/${SKILL_NAME}`
   }
@@ -135,20 +137,29 @@ describe('getSkillFreshnessDisplayStatus', () => {
     // Amber here is the badge-with-no-exit reported in #10633.
     expect(
       getSkillFreshnessDisplayStatus(
-        inventory([placement('current'), foreignPlacement()]),
+        inventory([placement('current'), pluginCachePlacement()]),
         SKILL_NAME
       )
     ).toBe('up-to-date')
-    expect(hasSkillCopyNeedingAttention(inventory([foreignPlacement()]), SKILL_NAME)).toBe(false)
+    expect(hasSkillCopyNeedingAttention(inventory([pluginCachePlacement()]), SKILL_NAME)).toBe(
+      false
+    )
   })
 
-  it('still reports drift in our own copy when a foreign one sits alongside', () => {
+  it('still reports drift in our own copy when a plugin-managed one sits alongside', () => {
     expect(
       getSkillFreshnessDisplayStatus(
-        inventory([placement('unrecognized'), foreignPlacement()]),
+        inventory([placement('unrecognized'), pluginCachePlacement()]),
         SKILL_NAME
       )
     ).toBe('needs-attention')
+  })
+
+  it('reports attention when a plugin-cache copy is inaccessible', () => {
+    const value = inventory([pluginCachePlacement('inaccessible')])
+
+    expect(getSkillFreshnessDisplayStatus(value, SKILL_NAME)).toBe('needs-attention')
+    expect(hasSkillCopyNeedingAttention(value, SKILL_NAME)).toBe(true)
   })
 })
 
