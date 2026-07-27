@@ -139,6 +139,35 @@ describe('account CLI handlers', () => {
     expect(existsSync(configDir)).toBe(false)
   })
 
+  it('removes the temp login dir and stops the child when interrupted mid-login', async () => {
+    // Why: Node terminates on SIGINT without unwinding `finally`, so without the
+    // signal guard an interrupted login strands OAuth credentials in the temp dir.
+    const kill = vi.fn()
+    const child = Object.assign(new EventEmitter(), { kill })
+    let codexHome = ''
+    spawnMock.mockImplementation((_command, _args, options: { env: Record<string, string> }) => {
+      codexHome = options.env.CODEX_HOME
+      return child
+    })
+    const exitSpy = vi.spyOn(process, 'exit').mockImplementation((() => undefined) as never)
+
+    const pending = ACCOUNT_HANDLERS['account add'](context('codex')).catch(() => {})
+    await vi.waitFor(() => expect(codexHome).not.toBe(''))
+    expect(existsSync(codexHome)).toBe(true)
+
+    const onSignal = process.listeners('SIGINT').at(-1) as (signal: NodeJS.Signals) => void
+    onSignal('SIGINT')
+
+    await vi.waitFor(() => expect(exitSpy).toHaveBeenCalledWith(130))
+    expect(existsSync(codexHome)).toBe(false)
+    expect(kill).toHaveBeenCalledWith('SIGINT')
+    expect(callMock).not.toHaveBeenCalled()
+
+    child.emit('exit', 1)
+    await pending
+    exitSpy.mockRestore()
+  })
+
   it('marks an account selected for WSL as active in human output', async () => {
     callMock.mockResolvedValue({
       id: 'test',

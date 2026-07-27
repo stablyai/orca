@@ -1,4 +1,4 @@
-import { spawn } from 'node:child_process'
+import { spawn, type ChildProcess } from 'node:child_process'
 import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -48,6 +48,45 @@ function formatAccountsBlock(label: string, block: AccountsBlock): string {
   return `Managed ${label} accounts (${block.accounts.length}):\n${lines.join('\n')}`
 }
 
+// Why: holds the live login child so an interrupt can stop it before cleanup.
+type LoginSession = { child: ChildProcess | null }
+
+const INTERRUPT_EXIT_CODES: Record<string, number> = { SIGINT: 130, SIGTERM: 143 }
+
+/**
+ * Runs `add` with `cleanup` guaranteed to run exactly once, including on Ctrl-C.
+ * Node's default signal handling terminates without unwinding `finally`, which
+ * would strand the temp dir's OAuth credentials on disk and, on macOS, leave the
+ * swapped Keychain item in place — an interactive login is interrupted often.
+ */
+async function withInterruptCleanup(
+  session: LoginSession,
+  cleanup: () => Promise<void>,
+  add: () => Promise<void>
+): Promise<void> {
+  let cleanedUp = false
+  const cleanupOnce = async (): Promise<void> => {
+    if (cleanedUp) {
+      return
+    }
+    cleanedUp = true
+    await cleanup()
+  }
+  const onSignal = (signal: NodeJS.Signals): void => {
+    session.child?.kill(signal)
+    void cleanupOnce().finally(() => process.exit(INTERRUPT_EXIT_CODES[signal] ?? 1))
+  }
+  process.once('SIGINT', onSignal)
+  process.once('SIGTERM', onSignal)
+  try {
+    await add()
+  } finally {
+    process.off('SIGINT', onSignal)
+    process.off('SIGTERM', onSignal)
+    await cleanupOnce()
+  }
+}
+
 /**
  * Runs the real agent login attached to the user's terminal so the OAuth
  * URL/device-code prompt is visible and the code can be pasted back — the desktop
@@ -57,7 +96,8 @@ async function runAgentLoginInTerminal(
   command: string,
   args: string[],
   extraEnv: Record<string, string>,
-  json: boolean
+  json: boolean,
+  session: LoginSession
 ): Promise<void> {
   await new Promise<void>((resolvePromise, rejectPromise) => {
     const resolvedCommand = resolveCliCommand(command)
@@ -69,6 +109,7 @@ async function runAgentLoginInTerminal(
       stdio: ['inherit', json ? process.stderr : 'inherit', 'inherit'],
       env
     })
+    session.child = child
     child.once('error', (error) =>
       rejectPromise(
         new RuntimeClientError(
@@ -79,16 +120,19 @@ async function runAgentLoginInTerminal(
         )
       )
     )
-    child.once('exit', (code) =>
-      code === 0
-        ? resolvePromise()
-        : rejectPromise(
-            new RuntimeClientError(
-              'internal',
-              `\`${command} ${args.join(' ')}\` exited with code ${code ?? 'null'}.`
-            )
-          )
-    )
+    child.once('exit', (code) => {
+      session.child = null
+      if (code === 0) {
+        resolvePromise()
+        return
+      }
+      rejectPromise(
+        new RuntimeClientError(
+          'internal',
+          `\`${command} ${args.join(' ')}\` exited with code ${code ?? 'null'}.`
+        )
+      )
+    })
   })
 }
 
@@ -120,51 +164,63 @@ async function cleanupClaudeLoginKeychain(
 /** Logs into a Claude account in a temp config dir, then registers it with the local runtime. */
 async function addClaudeAccount({ client, json }: HandlerContext): Promise<void> {
   const configDir = mkdtempSync(join(tmpdir(), 'orca-account-add-claude-'))
+  const session: LoginSession = { child: null }
   let legacyCredentials: string | null = null
   let restoreLegacyCredentials = false
-  try {
-    if (process.platform === 'darwin') {
-      legacyCredentials = await readActiveClaudeKeychainCredentialsStrict()
-      restoreLegacyCredentials = true
+  await withInterruptCleanup(
+    session,
+    async () => {
+      await cleanupClaudeLoginKeychain(configDir, legacyCredentials, restoreLegacyCredentials)
+      rmSync(configDir, { recursive: true, force: true })
+    },
+    async () => {
+      if (process.platform === 'darwin') {
+        legacyCredentials = await readActiveClaudeKeychainCredentialsStrict()
+        restoreLegacyCredentials = true
+      }
+      await runAgentLoginInTerminal(
+        'claude',
+        ['auth', 'login', '--claudeai'],
+        {
+          CLAUDE_CONFIG_DIR: configDir
+        },
+        json,
+        session
+      )
+      const result = await client.call<ClaudeRateLimitAccountsState>(
+        'accounts.addClaudeFromConfigDir',
+        { configDir }
+      )
+      printResult(result, json, (state) => formatAccountsBlock('Claude', state))
     }
-    await runAgentLoginInTerminal(
-      'claude',
-      ['auth', 'login', '--claudeai'],
-      {
-        CLAUDE_CONFIG_DIR: configDir
-      },
-      json
-    )
-    const result = await client.call<ClaudeRateLimitAccountsState>(
-      'accounts.addClaudeFromConfigDir',
-      { configDir }
-    )
-    printResult(result, json, (state) => formatAccountsBlock('Claude', state))
-  } finally {
-    await cleanupClaudeLoginKeychain(configDir, legacyCredentials, restoreLegacyCredentials)
-    rmSync(configDir, { recursive: true, force: true })
-  }
+  )
 }
 
 /** Logs into a Codex account in a temp CODEX_HOME, then registers it with the local runtime. */
 async function addCodexAccount({ client, json }: HandlerContext): Promise<void> {
   const codexHome = mkdtempSync(join(tmpdir(), 'orca-account-add-codex-'))
-  try {
-    // Why: plain OAuth binds a loopback callback the user's browser cannot reach
-    // on a headless/SSH host; device auth is explicitly designed for this flow.
-    await runAgentLoginInTerminal(
-      'codex',
-      ['login', '--device-auth'],
-      { CODEX_HOME: codexHome },
-      json
-    )
-    const result = await client.call<CodexRateLimitAccountsState>('accounts.addCodexFromHome', {
-      sourceHome: codexHome
-    })
-    printResult(result, json, (state) => formatAccountsBlock('Codex', state))
-  } finally {
-    rmSync(codexHome, { recursive: true, force: true })
-  }
+  const session: LoginSession = { child: null }
+  await withInterruptCleanup(
+    session,
+    async () => {
+      rmSync(codexHome, { recursive: true, force: true })
+    },
+    async () => {
+      // Why: plain OAuth binds a loopback callback the user's browser cannot reach
+      // on a headless/SSH host; device auth is explicitly designed for this flow.
+      await runAgentLoginInTerminal(
+        'codex',
+        ['login', '--device-auth'],
+        { CODEX_HOME: codexHome },
+        json,
+        session
+      )
+      const result = await client.call<CodexRateLimitAccountsState>('accounts.addCodexFromHome', {
+        sourceHome: codexHome
+      })
+      printResult(result, json, (state) => formatAccountsBlock('Codex', state))
+    }
+  )
 }
 
 /** CLI handlers for `orca account add [--agent claude|codex]` and `orca account list`. */

@@ -819,7 +819,6 @@ export class CodexAccountService {
       // Why: pass the account's selection target so a WSL account syncs the WSL
       // runtime home instead of the default host target.
       this.runtimeHome.syncForCurrentSelection(targetSelection)
-
     } catch (error) {
       // Why: settings were already written; if a post-write step fails, restore the
       // previous account/selection so the caller's managed-home cleanup cannot leave
