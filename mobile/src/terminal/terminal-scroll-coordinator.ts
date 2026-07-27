@@ -26,7 +26,13 @@ export type TerminalScrollEvent =
   | { type: 'replay-committed'; generation: number }
   | { type: 'output-started'; generation: number }
   | { type: 'output-committed'; generation: number }
-  | { type: 'user-scroll-lines'; generation: number; lines: number }
+  | {
+      type: 'user-scroll-lines'
+      generation: number
+      lines: number
+      clientX?: number
+      clientY?: number
+    }
   | {
       type: 'user-scroll-pixels'
       generation: number

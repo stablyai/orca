@@ -4,14 +4,20 @@ import type { MobileNativeChatSendOrigin } from './mobile-native-chat-draft-cont
 type Drafts = Record<string, string>
 type DraftUpdater = (update: (previous: Drafts) => Drafts) => void
 
+export function isDraftRev(
+  revisions: Record<string, number>,
+  origin: Pick<MobileNativeChatSendOrigin, 'draftKey' | 'draftEditRevision'>
+) {
+  return (revisions[origin.draftKey] ?? 0) === origin.draftEditRevision
+}
+
 export function clearMobileNativeChatDraftForSend(
   drafts: Drafts,
   revisions: Record<string, number>,
   origin: MobileNativeChatSendOrigin,
   text: string
 ): Drafts {
-  return (revisions[origin.draftKey] ?? 0) === origin.draftEditRevision &&
-    (drafts[origin.draftKey] ?? '').trim() === text.trim()
+  return isDraftRev(revisions, origin) && (drafts[origin.draftKey] ?? '').trim() === text.trim()
     ? { ...drafts, [origin.draftKey]: '' }
     : drafts
 }
@@ -22,8 +28,7 @@ export function restoreRejectedMobileNativeChatDraft(
   origin: MobileNativeChatSendOrigin,
   text: string
 ): Drafts {
-  return (revisions[origin.draftKey] ?? 0) === origin.draftEditRevision &&
-    (drafts[origin.draftKey] ?? '') === ''
+  return isDraftRev(revisions, origin) && (drafts[origin.draftKey] ?? '') === ''
     ? { ...drafts, [origin.draftKey]: text }
     : drafts
 }

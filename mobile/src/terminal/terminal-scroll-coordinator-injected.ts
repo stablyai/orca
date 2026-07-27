@@ -6,7 +6,7 @@ function createTerminalScrollCoordinator(adapter) {
     distanceFromBottom: 0
   };
   var pendingViewportTransition = null;
-  var pendingOutputViewportY = null;
+  var pendingOutputDistanceFromBottom = null;
   var pixelRemainder = 0;
   var phase = 'replaying';
 
@@ -66,7 +66,9 @@ function createTerminalScrollCoordinator(adapter) {
       if (pendingViewportTransition) {
         pendingViewportTransition.intent = state.intent;
       }
-      if (pendingOutputViewportY !== null) pendingOutputViewportY = after.viewportY;
+      if (pendingOutputDistanceFromBottom !== null) {
+        pendingOutputDistanceFromBottom = Math.max(0, after.baseY - after.viewportY);
+      }
     }
     adapter.revealIndicator();
     return true;
@@ -88,7 +90,7 @@ function createTerminalScrollCoordinator(adapter) {
       state.intent = preserveHistory ? 'reading-history' : 'following-output';
       state.distanceFromBottom = distanceFromBottom;
       pendingViewportTransition = null;
-      pendingOutputViewportY = null;
+      pendingOutputDistanceFromBottom = null;
       pixelRemainder = 0;
       phase = 'replaying';
       return true;
@@ -101,28 +103,35 @@ function createTerminalScrollCoordinator(adapter) {
     }
     if (event.type === 'output-started') {
       var metrics = readNormalMetrics();
-      pendingOutputViewportY =
+      pendingOutputDistanceFromBottom =
         phase === 'live' && state.intent === 'reading-history' && metrics
-          ? metrics.viewportY
+          ? Math.max(0, metrics.baseY - metrics.viewportY)
           : null;
       return true;
     }
     if (event.type === 'output-committed') {
       if (phase === 'replaying') return true;
       if (pendingViewportTransition) {
-        pendingOutputViewportY = null;
+        pendingOutputDistanceFromBottom = null;
         return true;
       }
       if (state.intent === 'following-output' && readNormalMetrics()) {
         adapter.scrollToBottom();
-      } else if (pendingOutputViewportY !== null && readNormalMetrics()) {
-        adapter.scrollToLine(pendingOutputViewportY);
+      } else {
+        var outputMetrics = readNormalMetrics();
+        if (pendingOutputDistanceFromBottom !== null && outputMetrics) {
+          adapter.scrollToLine(
+            Math.max(0, outputMetrics.baseY - pendingOutputDistanceFromBottom)
+          );
+        }
       }
-      pendingOutputViewportY = null;
+      pendingOutputDistanceFromBottom = null;
       updateHistoryDistance();
       return true;
     }
-    if (event.type === 'user-scroll-lines') return scrollLines(event.lines);
+    if (event.type === 'user-scroll-lines') {
+      return scrollLines(event.lines, event.clientX, event.clientY);
+    }
     if (event.type === 'user-scroll-pixels') {
       if (event.deltaY === 0 || event.pixelsPerLine <= 0) return false;
       pixelRemainder += event.deltaY;
@@ -142,7 +151,7 @@ function createTerminalScrollCoordinator(adapter) {
       if (pendingViewportTransition) {
         pendingViewportTransition.intent = 'following-output';
       }
-      pendingOutputViewportY = null;
+      pendingOutputDistanceFromBottom = null;
       pixelRemainder = 0;
       if (readNormalMetrics()) adapter.scrollToBottom();
       return true;
@@ -152,7 +161,7 @@ function createTerminalScrollCoordinator(adapter) {
       pendingViewportTransition = {
         intent: state.intent
       };
-      pendingOutputViewportY = null;
+      pendingOutputDistanceFromBottom = null;
       adapter.changeViewport(event.change);
       return true;
     }

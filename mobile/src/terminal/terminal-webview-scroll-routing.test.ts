@@ -182,6 +182,10 @@ describe('TerminalWebView scroll routing', () => {
     expect(startBlock.indexOf("type: 'user-scroll-lines'")).toBeLessThan(
       startBlock.indexOf('syncEdgeScrollSelectionEndpoint();')
     )
+    expect(startBlock).toContain('clientX: edgeScrollClientX')
+    expect(startBlock).toContain('clientY: edgeScrollClientY')
+    expect(startBlock).toContain('var routedToTerminalInput = shouldRouteScrollToTerminalInput();')
+    expect(startBlock).toContain('if (!routedToTerminalInput && beforeY === afterY)')
 
     const dragMoveBlock = sliceBetween(
       'function handleDragMove(handle, clientX, clientY)',

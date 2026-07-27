@@ -12,7 +12,7 @@ import {
   type MobileNativeChatPendingMessage,
   type MobileNativeChatSendOrigin
 } from './mobile-native-chat-draft-contract'
-import { useMobileNativeChatDraftMutations } from './mobile-native-chat-draft-state'
+import { isDraftRev, useMobileNativeChatDraftMutations } from './mobile-native-chat-draft-state'
 import { mobileNativeChatScopeKey } from './mobile-native-chat-scope-key'
 
 export type { MobileNativeChatPendingMessage } from './mobile-native-chat-draft-contract'
@@ -163,7 +163,7 @@ export function useMobileNativeChatDrafts(args: {
     (entry: UnconfirmedSend) => {
       if (entry.text.length > 0) {
         updateDrafts((previous) =>
-          (draftEditRevisionsRef.current[entry.draftKey] ?? 0) === entry.draftEditRevision &&
+          isDraftRev(draftEditRevisionsRef.current, entry) &&
           (previous[entry.draftKey] ?? '') === ''
             ? { ...previous, [entry.draftKey]: entry.text }
             : previous
@@ -195,7 +195,7 @@ export function useMobileNativeChatDrafts(args: {
       }
       // Hide an ack-lost draft until its echo fails to arrive without overwriting newer edits.
       updateDrafts((previous) =>
-        (draftEditRevisionsRef.current[origin.draftKey] ?? 0) === origin.draftEditRevision &&
+        isDraftRev(draftEditRevisionsRef.current, origin) &&
         (previous[origin.draftKey] ?? '').trim() === text.trim()
           ? { ...previous, [origin.draftKey]: '' }
           : previous
@@ -266,7 +266,7 @@ export function useMobileNativeChatDrafts(args: {
         clearTimeout(entry.deadline)
       }
       updateDrafts((previous) =>
-        (draftEditRevisionsRef.current[entry.draftKey] ?? 0) === entry.draftEditRevision &&
+        isDraftRev(draftEditRevisionsRef.current, entry) &&
         (previous[entry.draftKey] ?? '').trim() === entry.text.trim()
           ? { ...previous, [entry.draftKey]: '' }
           : previous

@@ -46,8 +46,8 @@ function makeHarness(initial: Partial<TerminalScrollMetrics> = {}) {
     changeViewport(change) {
       calls.push(`viewport:${change.reason}`)
     },
-    routeTerminalInput(lines) {
-      calls.push(`input:${lines}`)
+    routeTerminalInput(lines, clientX, clientY) {
+      calls.push(`input:${lines}:${clientX ?? ''}:${clientY ?? ''}`)
     },
     shouldRouteToTerminalInput: () => metrics.bufferMode === 'alternate',
     revealIndicator() {
@@ -280,7 +280,7 @@ describe('terminal scroll coordinator', () => {
     })
   })
 
-  it('restores the latest reader viewport if xterm moves during an async write', () => {
+  it('restores the latest reader distance if xterm moves during an async write', () => {
     const { adapter, calls, metrics } = makeHarness({ baseY: 100, viewportY: 70 })
     const coordinator = createTerminalScrollCoordinator(adapter)
     coordinator.dispatch({ type: 'begin-generation', generation: 1, preserveScroll: true })
@@ -293,11 +293,31 @@ describe('terminal scroll coordinator', () => {
     metrics.viewportY = 101
     coordinator.dispatch({ type: 'output-committed', generation: 1 })
 
-    expect(metrics.viewportY).toBe(65)
-    expect(calls).toEqual(['lines:-5', 'indicator', 'line:65'])
+    expect(metrics.viewportY).toBe(66)
+    expect(calls).toEqual(['lines:-5', 'indicator', 'line:66'])
     expect(coordinator.getState()).toMatchObject({
       intent: 'reading-history',
-      distanceFromBottom: 36
+      distanceFromBottom: 35
+    })
+  })
+
+  it('keeps a history anchor relative to the trimmed scrollback base', () => {
+    const { adapter, calls, metrics } = makeHarness({ baseY: 100, viewportY: 70 })
+    const coordinator = createTerminalScrollCoordinator(adapter)
+    coordinator.dispatch({ type: 'begin-generation', generation: 1, preserveScroll: true })
+    coordinator.dispatch({ type: 'replay-committed', generation: 1 })
+    calls.length = 0
+
+    coordinator.dispatch({ type: 'output-started', generation: 1 })
+    metrics.baseY = 90
+    metrics.viewportY = 90
+    coordinator.dispatch({ type: 'output-committed', generation: 1 })
+
+    expect(metrics.viewportY).toBe(60)
+    expect(calls).toEqual(['line:60'])
+    expect(coordinator.getState()).toMatchObject({
+      intent: 'reading-history',
+      distanceFromBottom: 30
     })
   })
 
@@ -419,9 +439,15 @@ describe('terminal scroll coordinator', () => {
     const coordinator = createTerminalScrollCoordinator(adapter)
     coordinator.dispatch({ type: 'begin-generation', generation: 1, preserveScroll: false })
 
-    coordinator.dispatch({ type: 'user-scroll-lines', generation: 1, lines: -3 })
+    coordinator.dispatch({
+      type: 'user-scroll-lines',
+      generation: 1,
+      lines: -3,
+      clientX: 123,
+      clientY: 456
+    })
 
-    expect(calls).toEqual(['input:-3'])
+    expect(calls).toEqual(['input:-3:123:456'])
     expect(coordinator.getState().intent).toBe('following-output')
   })
 })

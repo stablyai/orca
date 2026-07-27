@@ -1594,13 +1594,16 @@ ${TERMINAL_WEBGL_RECOVERY_JS}
     edgeScrollTimer = setInterval(function() {
       if (!term || edgeScrollDir === 0) return;
       var beforeY = term.buffer.active.viewportY;
+      var routedToTerminalInput = shouldRouteScrollToTerminalInput();
       scrollCoordinator.dispatch({
         type: 'user-scroll-lines',
         generation: terminalGeneration,
-        lines: edgeScrollDir
+        lines: edgeScrollDir,
+        clientX: edgeScrollClientX,
+        clientY: edgeScrollClientY
       });
       var afterY = term.buffer.active.viewportY;
-      if (beforeY === afterY) {
+      if (!routedToTerminalInput && beforeY === afterY) {
         notify({ type: 'haptic', kind: 'edge-bump' });
         stopEdgeScroll();
         return;
