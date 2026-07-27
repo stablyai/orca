@@ -56,6 +56,8 @@ export class StatsCollector {
   private aggregates: StatsAggregates
   private liveAgents = new Map<string, number>() // ptyId → startTimestamp
   private writeTimer: ReturnType<typeof setTimeout> | null = null
+  private asyncWriteTail: Promise<void> = Promise.resolve()
+  private asyncWriteEpoch = 0
   // Monotonic id stamped on each prepared payload; the highest committed one
   // wins so a slow in-flight async write can't clobber a newer sync flush.
   private writeGeneration = 0
@@ -154,6 +156,7 @@ export class StatsCollector {
       this.onAgentStop(ptyId, now)
     }
     this.cancelPendingSave()
+    this.asyncWriteEpoch += 1
     this.writeToDiskSync()
   }
 
@@ -237,10 +240,18 @@ export class StatsCollector {
       // A chatty multi-agent session re-arms this every 5s; a fully-sync write
       // is a recurring main-thread stall. Shutdown flush() stays synchronous;
       // the generation guard keeps the two paths race-safe.
-      void this.writeToDiskAsync().catch((err) => {
-        console.error('[stats] Failed to write stats:', err)
-      })
+      this.enqueueAsyncWrite()
     }, DEBOUNCE_MS)
+  }
+
+  private enqueueAsyncWrite(): void {
+    const epoch = this.asyncWriteEpoch
+    const attempt = this.asyncWriteTail.then(() =>
+      epoch === this.asyncWriteEpoch ? this.writeToDiskAsync() : undefined
+    )
+    this.asyncWriteTail = attempt.catch((err) => {
+      console.error('[stats] Failed to write stats:', err)
+    })
   }
 
   private cancelPendingSave(): void {
@@ -294,9 +305,6 @@ export class StatsCollector {
 
   private async writeToDiskAsync(): Promise<void> {
     const dir = dirname(getStatsFile())
-    if (!existsSync(dir)) {
-      await mkdir(dir, { recursive: true })
-    }
     const { statsFile, tmpFile, json, generation } = this.prepareWritePayload()
     // Only the ~900KB tmp write moves off the main thread; stringify stayed sync
     // above (torn-snapshot constraint). The rename is a trivial metadata op done
@@ -306,12 +314,18 @@ export class StatsCollector {
     // later debounce OR the shutdown flush) already committed while we were
     // writing; the check + rename run with no await between them, so the sync
     // flush cannot interleave.
-    await writeFile(tmpFile, json, 'utf-8')
-    if (this.lastCommittedGeneration >= generation) {
+    try {
+      if (!existsSync(dir)) {
+        await mkdir(dir, { recursive: true })
+      }
+      await writeFile(tmpFile, json, 'utf-8')
+      if (this.lastCommittedGeneration >= generation) {
+        return
+      }
+      renameSync(tmpFile, statsFile)
+      this.lastCommittedGeneration = generation
+    } finally {
       await rm(tmpFile, { force: true }).catch(() => {})
-      return
     }
-    renameSync(tmpFile, statsFile)
-    this.lastCommittedGeneration = generation
   }
 }

@@ -153,6 +153,7 @@ describe('PtyHandler', () => {
     expect(methods).toContain('pty.hasChildProcesses')
     expect(methods).toContain('pty.getForegroundProcess')
     expect(methods).toContain('pty.inspectProcess')
+    expect(methods).toContain('pty.listSessionIds')
     expect(methods).toContain('pty.listProcesses')
     expect(methods).toContain('pty.getDefaultShell')
 
@@ -208,6 +209,21 @@ describe('PtyHandler', () => {
     expect(result).toEqual({ id: 'pty-1', incarnationId: expect.any(String) })
     expect(mockPtySpawn).toHaveBeenCalled()
     expect(handler.activePtyCount).toBe(1)
+  })
+
+  it('lists live PTY IDs without foreground-process inspection', async () => {
+    const foregroundSpy = vi
+      .spyOn(ptyShellUtils, 'getForegroundProcessName')
+      .mockResolvedValue('shell')
+    await spawnPty({ cols: 80, rows: 24 })
+    await spawnPty({ cols: 80, rows: 24 })
+
+    await expect(dispatcher.callRequest('pty.listSessionIds', {})).resolves.toEqual([
+      'pty-1',
+      'pty-2'
+    ])
+    expect(foregroundSpy).not.toHaveBeenCalled()
+    foregroundSpy.mockRestore()
   })
 
   it("does not forward Orca's own NODE_ENV into the spawned shell", async () => {

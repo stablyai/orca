@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import { useMountedRef } from '@/hooks/useMountedRef'
 import {
   EMPTY_DAEMON_SESSION_INVENTORY,
+  inventoryFromSessionIds,
   inventoryFromSessions,
   removeSessionFromInventory,
   removeSessionsFromInventory,
@@ -23,9 +24,14 @@ type ResourceSessionInventoryState = {
   sessionsError: boolean
 }
 
-export function useResourceSessionInventory(ready: boolean): ResourceSessionInventory {
+export function useResourceSessionInventory(
+  ready: boolean,
+  detailsEnabled: boolean
+): ResourceSessionInventory {
   const mountedRef = useMountedRef()
   const refreshGenerationRef = useRef(0)
+  const sessionIdRefreshRef = useRef<{ generation: number; promise: Promise<void> } | null>(null)
+  const previousDetailsEnabledRef = useRef(detailsEnabled)
   const lifecycleRevisionRef = useRef(0)
   const removedAtRevisionRef = useRef(new Map<string, number>())
   const knownSessionIdsRef = useRef(new Set<string>())
@@ -48,6 +54,66 @@ export function useResourceSessionInventory(ready: boolean): ResourceSessionInve
     setStoredState(state)
   }
 
+  const commitInventory = useCallback(
+    (
+      generation: number,
+      lifecycleRevision: number,
+      sessionIds: readonly string[],
+      sessions?: readonly DaemonSessionInventory['sessions'][number][]
+    ): void => {
+      if (!mountedRef.current || generation !== refreshGenerationRef.current) {
+        return
+      }
+      const currentRemovedAtRevision = removedAtRevisionRef.current
+      const liveIds = sessionIds.filter(
+        (id) => (currentRemovedAtRevision.get(id) ?? 0) <= lifecycleRevision
+      )
+      const liveIdSet = new Set(liveIds)
+      for (const [id, removedAtRevision] of currentRemovedAtRevision) {
+        if (removedAtRevision <= lifecycleRevision) {
+          currentRemovedAtRevision.delete(id)
+        }
+      }
+      knownSessionIdsRef.current = liveIdSet
+      setStoredState({
+        ready: true,
+        sessionInventory: sessions
+          ? inventoryFromSessions(sessions.filter(({ id }) => liveIdSet.has(id)))
+          : inventoryFromSessionIds(liveIds),
+        sessionsError: false
+      })
+    },
+    [mountedRef]
+  )
+
+  const refreshSessionIds = useCallback((): Promise<void> => {
+    if (!ready) {
+      return Promise.resolve()
+    }
+    const currentRefresh = sessionIdRefreshRef.current
+    if (currentRefresh?.generation === refreshGenerationRef.current) {
+      return currentRefresh.promise
+    }
+    const generation = ++refreshGenerationRef.current
+    const lifecycleRevision = lifecycleRevisionRef.current
+    const refresh = (async (): Promise<void> => {
+      try {
+        const sessionIds = await window.api.pty.listSessionIds()
+        commitInventory(generation, lifecycleRevision, sessionIds)
+      } catch {
+        if (mountedRef.current && generation === refreshGenerationRef.current) {
+          setStoredState((current) => ({ ...current, sessionsError: true }))
+        }
+      }
+    })().finally(() => {
+      if (sessionIdRefreshRef.current?.promise === refresh) {
+        sessionIdRefreshRef.current = null
+      }
+    })
+    sessionIdRefreshRef.current = { generation, promise: refresh }
+    return refresh
+  }, [commitInventory, mountedRef, ready])
+
   const refreshSessions = useCallback(async (): Promise<void> => {
     if (!ready) {
       return
@@ -56,34 +122,18 @@ export function useResourceSessionInventory(ready: boolean): ResourceSessionInve
     const lifecycleRevision = lifecycleRevisionRef.current
     try {
       const sessions = await window.api.pty.listSessions()
-      // Why: an exit or newer refresh can land while the global provider list
-      // is in flight; stale results must not resurrect dead sessions.
-      if (!mountedRef.current || generation !== refreshGenerationRef.current) {
-        return
-      }
-      const currentRemovedAtRevision = removedAtRevisionRef.current
-      const liveSessions = sessions.filter(
-        ({ id }) => (currentRemovedAtRevision.get(id) ?? 0) <= lifecycleRevision
+      commitInventory(
+        generation,
+        lifecycleRevision,
+        sessions.map(({ id }) => id),
+        sessions
       )
-      // Tombstones at or before this request cannot suppress later ID reuse;
-      // only exits that raced this request must survive to the next refresh.
-      for (const [id, removedAtRevision] of currentRemovedAtRevision) {
-        if (removedAtRevision <= lifecycleRevision) {
-          currentRemovedAtRevision.delete(id)
-        }
-      }
-      knownSessionIdsRef.current = new Set(liveSessions.map(({ id }) => id))
-      setStoredState({
-        ready: true,
-        sessionInventory: inventoryFromSessions(liveSessions),
-        sessionsError: false
-      })
     } catch {
       if (mountedRef.current && generation === refreshGenerationRef.current) {
         setStoredState((current) => ({ ...current, sessionsError: true }))
       }
     }
-  }, [mountedRef, ready])
+  }, [commitInventory, mountedRef, ready])
 
   const clearSessionsError = useCallback((): void => {
     setStoredState((current) => ({ ...current, sessionsError: false }))
@@ -115,13 +165,22 @@ export function useResourceSessionInventory(ready: boolean): ResourceSessionInve
 
   useEffect(() => {
     refreshGenerationRef.current += 1
+    sessionIdRefreshRef.current = null
     if (!ready) {
       removedAtRevisionRef.current.clear()
       knownSessionIdsRef.current.clear()
       return
     }
-    void refreshSessions()
-  }, [ready, refreshSessions])
+    void refreshSessionIds()
+  }, [ready, refreshSessionIds])
+
+  useEffect(() => {
+    const wasEnabled = previousDetailsEnabledRef.current
+    previousDetailsEnabledRef.current = detailsEnabled
+    if (ready && wasEnabled && !detailsEnabled) {
+      void refreshSessionIds()
+    }
+  }, [detailsEnabled, ready, refreshSessionIds])
 
   useEffect(() => {
     if (!ready) {
@@ -141,7 +200,7 @@ export function useResourceSessionInventory(ready: boolean): ResourceSessionInve
           return
         }
         pendingSpawnIds.clear()
-        const refresh = refreshSessions()
+        const refresh = detailsEnabled ? refreshSessions() : refreshSessionIds()
         lifecycleRefresh = refresh
         void refresh.finally(() => {
           if (disposed || lifecycleRefresh !== refresh) {
@@ -183,7 +242,7 @@ export function useResourceSessionInventory(ready: boolean): ResourceSessionInve
       unsubscribeSpawned()
       unsubscribeExit()
     }
-  }, [ready, refreshSessions, removeSession])
+  }, [detailsEnabled, ready, refreshSessionIds, refreshSessions, removeSession])
 
   return {
     sessionInventory: state.sessionInventory,

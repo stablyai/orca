@@ -64,6 +64,7 @@ import {
   PtyProcessListAdmission,
   visitPtyProcessListingsInBatches
 } from '../providers/pty-process-list-admission'
+import { collectPtySessionIdListings } from '../providers/pty-session-id-list-admission'
 import type { StartupCommandDelivery } from '../../shared/codex-startup-delivery'
 import {
   SSH_SESSION_EXPIRED_ERROR,
@@ -1632,6 +1633,7 @@ export function registerPtyHandlers(
   // Remove prior handlers so re-registration (e.g. macOS re-activate creating a new window) doesn't double-register.
   ipcMain.removeHandler('pty:spawn')
   ipcMain.removeHandler('pty:kill')
+  ipcMain.removeHandler('pty:listSessionIds')
   ipcMain.removeHandler('pty:listSessions')
   ipcMain.removeHandler('pty:hasPty')
   ipcMain.removeHandler('pty:hasChildProcesses')
@@ -2400,6 +2402,10 @@ export function registerPtyHandlers(
     return extracted.statelessQueryData + extracted.statefulQueryData + extracted.oscColorQueryData
   }
 
+  function fitDroppedPtyQueryBytes(data: string, maxChars: number): string {
+    return extractDroppedPtyQueryBytes(extractDroppedPtyQueryBytes(data).slice(0, maxChars))
+  }
+
   function dropOversizedPendingPtyData(id: string, pending: PendingPtyData): PendingPtyData {
     const capChars = pendingDataCapChars()
     if (pending.droppedOutput === true || pending.data.length <= capChars) {
@@ -2422,7 +2428,7 @@ export function registerPtyHandlers(
     pendingDroppedChars += pending.data.length
     // Why no trimmed content tail: a mid-stream gap would corrupt the pane; the droppedOutput sentinel repaints from the snapshot and realigns by sequence (only query bytes ride along).
     return {
-      data: extractDroppedPtyQueryBytes(pending.data).slice(0, DROPPED_QUERY_SALVAGE_MAX_CHARS),
+      data: fitDroppedPtyQueryBytes(pending.data, DROPPED_QUERY_SALVAGE_MAX_CHARS),
       droppedOutput: true
     }
   }
@@ -2442,7 +2448,8 @@ export function registerPtyHandlers(
       if (existing.data.length >= DROPPED_QUERY_SALVAGE_MAX_CHARS) {
         return existing
       }
-      const salvaged = extractDroppedPtyQueryBytes(data)
+      const remaining = DROPPED_QUERY_SALVAGE_MAX_CHARS - existing.data.length
+      const salvaged = fitDroppedPtyQueryBytes(data, remaining)
       return salvaged ? { ...existing, data: existing.data + salvaged } : existing
     }
     const nextContainsBackgroundOutput =
@@ -5505,6 +5512,21 @@ export function registerPtyHandlers(
       sendPtyExitToRenderer({ id: args.id, code: -1 })
     }
   })
+
+  ipcMain.handle(
+    'pty:listSessionIds',
+    async (): Promise<string[]> =>
+      await collectPtySessionIdListings(
+        registeredPtyProviders(),
+        async ({ provider, connectionId }) => {
+          const load = async (): Promise<string[]> =>
+            provider.listSessionIds
+              ? await provider.listSessionIds()
+              : (await provider.listProcesses()).map(({ id }) => id)
+          return connectionId === null ? await load() : await load().catch(() => [])
+        }
+      )
+  )
 
   ipcMain.handle(
     'pty:listSessions',

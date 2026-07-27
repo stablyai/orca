@@ -1331,6 +1331,10 @@ export class LocalPtyProvider implements IPtyProvider {
     /* re-spawning handles local revival */
   }
 
+  async listSessionIds(): Promise<string[]> {
+    return Array.from(ptyProcesses.keys())
+  }
+
   async listProcesses(): Promise<PtyProcessInfo[]> {
     return Array.from(ptyProcesses.entries()).map(([id, proc]) => ({
       id,

@@ -1384,6 +1384,7 @@ export type PreloadApi = {
     confirmForegroundProcess: (id: string) => Promise<string | null>
     getCwd: (id: string) => Promise<string>
     getSize: (id: string) => Promise<{ cols: number; rows: number } | null>
+    listSessionIds: () => Promise<string[]>
     listSessions: () => Promise<{ id: string; cwd: string; title: string }[]>
     getAuthoritativeBufferSnapshotCapabilities?: (
       ids: string[]

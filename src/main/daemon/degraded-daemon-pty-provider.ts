@@ -5,6 +5,7 @@ import { inspectPtyProviderProcess } from '../providers/pty-process-inspection'
 import type { IPtyProvider, PtyBackgroundStreamEvent } from '../providers/types'
 import type { PtyDataEvent, PtyProviderBufferSnapshot } from '../providers/types'
 import type { PtyProcessInfo, PtySpawnOptions, PtySpawnResult } from '../providers/types'
+import { listUniquePtyProviderSessionIds } from '../providers/pty-session-id-list-admission'
 
 export class DegradedDaemonPtyProvider implements IPtyProvider {
   readonly routesFreshSpawnsToLocalProvider = true
@@ -177,6 +178,8 @@ export class DegradedDaemonPtyProvider implements IPtyProvider {
     )
     return results.flat()
   }
+
+  listSessionIds = (): Promise<string[]> => listUniquePtyProviderSessionIds(this.allProviders())
 
   async getDefaultShell(): Promise<string> {
     return this.fallback.getDefaultShell()

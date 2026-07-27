@@ -638,6 +638,7 @@ export class PtyHandler {
       agentSessionClaimVersion: AGENT_SESSION_EXECUTION_OWNER_PROTOCOL_VERSION,
       agentSessionCreateOperationVersion: AGENT_SESSION_CREATE_OPERATION_PROTOCOL_VERSION
     }))
+    this.dispatcher.onRequest('pty.listSessionIds', async () => this.listSessionIds())
     this.dispatcher.onRequest('pty.listProcesses', () => this.listProcesses())
     this.dispatcher.onRequest('pty.getDefaultShell', async () => resolveDefaultShell())
     this.dispatcher.onRequest('pty.serialize', (p) => this.serialize(p))
@@ -1441,6 +1442,16 @@ export class PtyHandler {
       })
     }
     return results
+  }
+
+  private listSessionIds(): string[] {
+    const ids: string[] = []
+    for (const [id, managed] of this.ptys) {
+      if (!managed.disposed) {
+        ids.push(id)
+      }
+    }
+    return ids
   }
 
   private async serialize(params: Record<string, unknown>): Promise<string> {

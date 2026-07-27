@@ -24,6 +24,7 @@ import { buildSshPtySpawnRequest } from './ssh-pty-spawn-request'
 import { SshPtySpawnExitRaceTracker } from './ssh-pty-spawn-exit-race'
 import { SshAgentSessionCapabilities } from './ssh-agent-session-capabilities'
 import type { PtyProcessInspection } from './pty-process-inspection'
+import { SshPtySessionIdLister } from './ssh-pty-session-id-listing'
 
 // Why: sequential relay teardown calls share one absolute budget; convert to the mux-relative timeout only at dispatch.
 function relayTimeoutOptions(deadlineMs: number | undefined): { timeoutMs: number } | undefined {
@@ -32,7 +33,6 @@ function relayTimeoutOptions(deadlineMs: number | undefined): { timeoutMs: numbe
 
 /** Remote PTY provider that proxies IPtyProvider operations through the relay. */
 export class SshPtyProvider implements IPtyProvider {
-  private mux: SshChannelMultiplexer
   private connectionId: string
   private dataListeners = new Set<SshPtyDataCallback>()
   private replayListeners = new Set<SshPtyReplayCallback>()
@@ -42,17 +42,18 @@ export class SshPtyProvider implements IPtyProvider {
   private unsubscribeNotifications: (() => void) | null = null
   readonly getAppliedSize: NonNullable<IPtyProvider['getAppliedSize']>
   private readonly agentSessionCapabilities: SshAgentSessionCapabilities
+  private readonly sessionIdLister: SshPtySessionIdLister
   private spawnExitRaces = new SshPtySpawnExitRaceTracker()
 
   constructor(
     connectionId: string,
-    mux: SshChannelMultiplexer,
+    private mux: SshChannelMultiplexer,
     private readonly remoteCliBridgeEnv?: RemoteCliBridgeEnv
   ) {
     this.connectionId = connectionId
-    this.mux = mux
     this.agentSessionCapabilities = new SshAgentSessionCapabilities(mux)
     this.getAppliedSize = createSshPtyAppliedSizeReader(mux, connectionId)
+    this.sessionIdLister = new SshPtySessionIdLister(connectionId, mux)
 
     this.unsubscribeNotifications = subscribeSshPtyNotifications({
       mux,
@@ -311,6 +312,8 @@ export class SshPtyProvider implements IPtyProvider {
     }
     return processes
   }
+
+  listSessionIds = (): Promise<string[]> => this.sessionIdLister.list()
 
   hasPty(id: string): boolean {
     return this.livePtyIds.has(id)

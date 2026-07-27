@@ -36,6 +36,57 @@ describe('SshPtyProvider', () => {
     expect(provider.getConnectionId()).toBe('conn-1')
   })
 
+  describe('listSessionIds', () => {
+    it('uses and validates the cheap relay method', async () => {
+      mux.request.mockResolvedValue(['pty-1', 'pty-2'])
+
+      await expect(provider.listSessionIds()).resolves.toEqual([
+        'ssh:conn-1@@pty-1',
+        'ssh:conn-1@@pty-2'
+      ])
+      expect(mux.request).toHaveBeenCalledWith('pty.listSessionIds')
+      expect(mux.request).not.toHaveBeenCalledWith('pty.listProcesses', expect.anything())
+    })
+
+    it('coalesces and caches only a method-not-found fallback', async () => {
+      const methodNotFound = Object.assign(new Error('Method not found'), { code: -32601 })
+      let rejectProbe!: (error: Error) => void
+      const probe = new Promise<unknown>((_resolve, reject) => {
+        rejectProbe = reject
+      })
+      mux.request.mockImplementation((method: string) => {
+        if (method === 'pty.listSessionIds') {
+          return probe
+        }
+        return Promise.resolve([{ id: 'pty-legacy', cwd: '/remote', title: 'shell' }])
+      })
+
+      const requests = [provider.listSessionIds(), provider.listSessionIds()]
+      rejectProbe(methodNotFound)
+
+      await expect(Promise.all(requests)).resolves.toEqual([
+        ['ssh:conn-1@@pty-legacy'],
+        ['ssh:conn-1@@pty-legacy']
+      ])
+      await expect(provider.listSessionIds()).resolves.toEqual(['ssh:conn-1@@pty-legacy'])
+      const methods = mux.request.mock.calls.map(([method]) => method)
+      expect(methods.filter((method) => method === 'pty.listSessionIds')).toHaveLength(1)
+      expect(methods.filter((method) => method === 'pty.listProcesses')).toHaveLength(2)
+    })
+
+    it('does not cache transport or payload failures', async () => {
+      mux.request
+        .mockRejectedValueOnce(new Error('connection lost'))
+        .mockResolvedValueOnce([''])
+        .mockResolvedValueOnce(['pty-recovered'])
+
+      await expect(provider.listSessionIds()).rejects.toThrow('connection lost')
+      await expect(provider.listSessionIds()).rejects.toThrow('invalid_pty_session_id_list')
+      await expect(provider.listSessionIds()).resolves.toEqual(['ssh:conn-1@@pty-recovered'])
+      expect(mux.request).toHaveBeenCalledTimes(3)
+    })
+  })
+
   it('keeps a shared claim probe alive when one waiter disconnects', async () => {
     let finishProbe!: (result: { agentSessionClaimVersion: number }) => void
     mux.request.mockReturnValueOnce(

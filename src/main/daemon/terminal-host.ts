@@ -14,7 +14,10 @@ import { createOrAttachClaimedAgentSession } from './terminal-host-agent-session
 import { TerminalHostAgentSessionGenerations } from './terminal-host-agent-session-generations'
 import { resolveTerminalHostSessionCwd } from './terminal-host-session-cwd'
 import { TerminalHostTombstones } from './terminal-host-tombstones'
-import { listLiveTerminalHostSessions } from './terminal-host-session-listing'
+import {
+  listLiveTerminalHostSessionIds,
+  listLiveTerminalHostSessions
+} from './terminal-host-session-listing'
 import { createOrAttachTerminalSession } from './terminal-host-session-create'
 import { isShellProcess } from '../../shared/agent-detection'
 
@@ -216,6 +219,10 @@ export class TerminalHost {
 
   listSessions(): SessionInfo[] {
     return listLiveTerminalHostSessions(this.sessions, this.agentSessionOwners)
+  }
+
+  listSessionIds(): string[] {
+    return listLiveTerminalHostSessionIds(this.sessions)
   }
 
   dispose(): Promise<void> {

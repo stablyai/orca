@@ -2,6 +2,16 @@ import type { ClaimedAgentPtyOwnerRegistry } from '../../shared/claimed-agent-pt
 import type { Session } from './session'
 import type { SessionInfo } from './types'
 
+export function listLiveTerminalHostSessionIds(sessions: ReadonlyMap<string, Session>): string[] {
+  const ids: string[] = []
+  for (const session of sessions.values()) {
+    if (session.isAlive) {
+      ids.push(session.sessionId)
+    }
+  }
+  return ids
+}
+
 export function listLiveTerminalHostSessions(
   sessions: ReadonlyMap<string, Session>,
   agentSessionOwners: ClaimedAgentPtyOwnerRegistry

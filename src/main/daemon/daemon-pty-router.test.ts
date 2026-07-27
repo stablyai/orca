@@ -61,6 +61,7 @@ function createAdapter(
         title: label
       }))
     ),
+    listSessionIds: vi.fn(async () => [...sessions]),
     hasPty: vi.fn((id: string) => sessions.includes(id)),
     write: vi.fn((id: string, data: string) => {
       writes.push({ id, data })
@@ -209,6 +210,16 @@ it('preserves unavailable inspection from the owning legacy daemon', async () =>
 })
 
 describe('DaemonPtyRouter', () => {
+  it('deduplicates ID-only listings across current and preserved daemons', async () => {
+    const current = createAdapter('current', ['shared', 'current'])
+    const legacy = createAdapter('legacy', ['shared', 'legacy'])
+    const router = new DaemonPtyRouter({ current, legacy: [legacy] })
+
+    await expect(router.listSessionIds()).resolves.toEqual(['shared', 'current', 'legacy'])
+    expect(current.listProcesses).not.toHaveBeenCalled()
+    expect(legacy.listProcesses).not.toHaveBeenCalled()
+  })
+
   it('reports separate conservative resume and fresh-create boundaries', () => {
     const current = createAdapter(
       'current',

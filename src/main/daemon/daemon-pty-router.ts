@@ -216,6 +216,13 @@ export class DaemonPtyRouter implements IPtyProvider {
     return results.flat()
   }
 
+  async listSessionIds(): Promise<string[]> {
+    const listings = await Promise.all(
+      this.allAdapters().map((adapter) => adapter.listSessionIds())
+    )
+    return Array.from(new Set(listings.flat()))
+  }
+
   async getDefaultShell(): Promise<string> {
     return this.current.getDefaultShell()
   }

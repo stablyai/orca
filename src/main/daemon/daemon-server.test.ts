@@ -408,6 +408,9 @@ describe('DaemonServer', () => {
 
       const result = await c.request<{ sessions: unknown[] }>('listSessions', undefined)
       expect(result.sessions).toHaveLength(1)
+
+      const ids = await c.request<{ sessionIds: string[] }>('listSessionIds', undefined)
+      expect(ids.sessionIds).toEqual(['test-session'])
     })
 
     it('handles ping health checks', async () => {

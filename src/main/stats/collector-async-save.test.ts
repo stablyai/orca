@@ -1,4 +1,5 @@
 import { mkdtempSync, readdirSync, readFileSync, rmSync } from 'node:fs'
+import type * as Fs from 'node:fs'
 import type * as FsPromises from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -21,17 +22,43 @@ vi.mock('electron', () => ({
 const gate = vi.hoisted(() => ({
   blocked: false,
   waiters: [] as (() => void)[],
-  writeFileCalls: 0
+  writeFileCalls: 0,
+  activeWriteFileCalls: 0,
+  maxActiveWriteFileCalls: 0,
+  failAfterWriteOnce: false,
+  failRenameOnce: false
 }))
+
+vi.mock('node:fs', async () => {
+  const actual = await vi.importActual<typeof Fs>('node:fs')
+  const renameSync = ((...args: Parameters<typeof actual.renameSync>) => {
+    if (gate.failRenameOnce) {
+      gate.failRenameOnce = false
+      throw new Error('injected rename failure')
+    }
+    return actual.renameSync(...args)
+  }) as typeof actual.renameSync
+  return { ...actual, renameSync }
+})
 
 vi.mock('node:fs/promises', async () => {
   const actual = await vi.importActual<typeof FsPromises>('node:fs/promises')
   const writeFile = (async (...args: Parameters<typeof actual.writeFile>) => {
     gate.writeFileCalls += 1
-    if (gate.blocked) {
-      await new Promise<void>((resolve) => gate.waiters.push(resolve))
+    gate.activeWriteFileCalls += 1
+    gate.maxActiveWriteFileCalls = Math.max(gate.maxActiveWriteFileCalls, gate.activeWriteFileCalls)
+    try {
+      if (gate.blocked) {
+        await new Promise<void>((resolve) => gate.waiters.push(resolve))
+      }
+      await actual.writeFile(...args)
+      if (gate.failAfterWriteOnce) {
+        gate.failAfterWriteOnce = false
+        throw new Error('injected partial write failure')
+      }
+    } finally {
+      gate.activeWriteFileCalls -= 1
     }
-    return actual.writeFile(...args)
   }) as typeof actual.writeFile
   return { ...actual, writeFile }
 })
@@ -46,6 +73,10 @@ describe('StatsCollector async debounced save', () => {
     gate.blocked = false
     gate.waiters = []
     gate.writeFileCalls = 0
+    gate.activeWriteFileCalls = 0
+    gate.maxActiveWriteFileCalls = 0
+    gate.failAfterWriteOnce = false
+    gate.failRenameOnce = false
     vi.resetModules()
   })
 
@@ -89,6 +120,94 @@ describe('StatsCollector async debounced save', () => {
     // Synchronous: the file exists immediately with no awaiting.
     const parsed = JSON.parse(readFileSync(statsPath(), 'utf-8'))
     expect(parsed.aggregates.totalAgentsSpawned).toBe(1)
+  })
+
+  it('serializes debounced writes while a prior temp write is in flight', async () => {
+    vi.useFakeTimers()
+    const { StatsCollector, initStatsPath } = await importCollector()
+    initStatsPath()
+    const collector = new StatsCollector()
+
+    gate.blocked = true
+    collector.onAgentStart('pty-first', 1_000)
+    await vi.advanceTimersByTimeAsync(5_000)
+    await vi.waitFor(() => expect(gate.writeFileCalls).toBe(1))
+
+    collector.onAgentStart('pty-second', 2_000)
+    await vi.advanceTimersByTimeAsync(5_000)
+    expect(gate.writeFileCalls).toBe(1)
+    expect(gate.maxActiveWriteFileCalls).toBe(1)
+
+    gate.blocked = false
+    gate.waiters.splice(0).forEach((resolve) => resolve())
+    await vi.waitFor(() => expect(gate.writeFileCalls).toBe(2))
+    await vi.waitFor(() =>
+      expect(JSON.parse(readFileSync(statsPath(), 'utf-8')).aggregates.totalAgentsSpawned).toBe(2)
+    )
+    expect(gate.maxActiveWriteFileCalls).toBe(1)
+  })
+
+  it('cleans a partial temp write and allows the next debounced save', async () => {
+    vi.useFakeTimers()
+    const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
+    const { StatsCollector, initStatsPath } = await importCollector()
+    initStatsPath()
+    const collector = new StatsCollector()
+
+    gate.failAfterWriteOnce = true
+    collector.onAgentStart('pty-failed', 1_000)
+    await vi.advanceTimersByTimeAsync(5_000)
+    await vi.waitFor(() => expect(errorSpy).toHaveBeenCalled())
+    expect(readdirSync(userDataDir).filter((file) => file.endsWith('.tmp'))).toHaveLength(0)
+
+    collector.onAgentStart('pty-retry', 2_000)
+    await vi.advanceTimersByTimeAsync(5_000)
+    await vi.waitFor(() =>
+      expect(JSON.parse(readFileSync(statsPath(), 'utf-8')).aggregates.totalAgentsSpawned).toBe(2)
+    )
+    expect(readdirSync(userDataDir).filter((file) => file.endsWith('.tmp'))).toHaveLength(0)
+    errorSpy.mockRestore()
+  })
+
+  it('flush cancels a debounced attempt queued behind an in-flight write', async () => {
+    vi.useFakeTimers()
+    const { StatsCollector, initStatsPath } = await importCollector()
+    initStatsPath()
+    const collector = new StatsCollector()
+
+    gate.blocked = true
+    collector.onAgentStart('pty-a', 1_000)
+    await vi.advanceTimersByTimeAsync(5_000)
+    await vi.waitFor(() => expect(gate.writeFileCalls).toBe(1))
+
+    collector.onAgentStart('pty-b', 1_000)
+    await vi.advanceTimersByTimeAsync(5_000)
+    collector.onAgentStop('pty-a', 5_000)
+    collector.onAgentStop('pty-b', 5_000)
+    collector.flush()
+
+    gate.blocked = false
+    gate.waiters.splice(0).forEach((resolve) => resolve())
+    await vi.waitFor(() => expect(gate.activeWriteFileCalls).toBe(0))
+    await vi.waitFor(() =>
+      expect(readdirSync(userDataDir).filter((file) => file.endsWith('.tmp'))).toHaveLength(0)
+    )
+
+    expect(gate.writeFileCalls).toBe(1)
+    expect(JSON.parse(readFileSync(statsPath(), 'utf-8')).aggregates.totalAgentTimeMs).toBe(8_000)
+  })
+
+  it('cleans the temp file when the async rename fails', async () => {
+    const { StatsCollector, initStatsPath } = await importCollector()
+    initStatsPath()
+    const collector = new StatsCollector()
+    const internals = collector as unknown as { writeToDiskAsync: () => Promise<void> }
+
+    collector.onAgentStart('pty-rename', 1_000)
+    gate.failRenameOnce = true
+
+    await expect(internals.writeToDiskAsync()).rejects.toThrow('injected rename failure')
+    expect(readdirSync(userDataDir).filter((file) => file.endsWith('.tmp'))).toHaveLength(0)
   })
 
   it('an in-flight async write is vetoed by a shutdown flush (no data-loss clobber)', async () => {

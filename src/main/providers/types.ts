@@ -197,6 +197,8 @@ export type IPtyProvider = {
   confirmForegroundProcess?: (id: string) => Promise<string | null>
   serialize(ids: string[]): Promise<string>
   revive(state: string): Promise<void>
+  /** Cheap live-session inventory for badge/count paths. */
+  listSessionIds?: () => Promise<string[]>
   // Why: deadlineMs bounds the underlying RPC exactly like shutdown's deadlineMs.
   listProcesses(opts?: { deadlineMs?: number }): Promise<PtyProcessInfo[]>
   getDefaultShell(): Promise<string>

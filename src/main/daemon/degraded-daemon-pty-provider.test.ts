@@ -51,6 +51,7 @@ function createProvider(
     confirmForegroundProcess: vi.fn(async () => `${label}-confirmed`),
     serialize: vi.fn(async () => '{}'),
     revive: vi.fn(async () => {}),
+    listSessionIds: vi.fn(async () => [...sessions]),
     listProcesses: vi.fn(async () => sessions.map((id) => ({ id, cwd: '', title: label }))),
     getDefaultShell: vi.fn(async () => '/bin/zsh'),
     getProfiles: vi.fn(async () => []),
@@ -185,6 +186,17 @@ it('preserves unavailable inspection from an owning daemon', async () => {
 })
 
 describe('DegradedDaemonPtyProvider', () => {
+  it('deduplicates cheap IDs and falls back only for providers without the method', async () => {
+    const current = createDaemonAdapter('daemon', ['shared', 'daemon'])
+    const fallback = createProvider('fallback', ['shared', 'fallback'])
+    fallback.listSessionIds = undefined
+    const provider = new DegradedDaemonPtyProvider({ current, legacy: [], fallback })
+
+    await expect(provider.listSessionIds()).resolves.toEqual(['shared', 'fallback', 'daemon'])
+    expect(current.listProcesses).not.toHaveBeenCalled()
+    expect(fallback.listProcesses).toHaveBeenCalledTimes(1)
+  })
+
   it('only delegates owner-listing authority to the provider that owns the id', async () => {
     const current = createDaemonAdapter('daemon', ['daemon-session'])
     const fallback = createProvider('fallback', [], true)

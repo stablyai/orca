@@ -17,6 +17,7 @@ function deferred<T>(): { promise: Promise<T>; resolve: (value: T) => void } {
 }
 
 describe('useResourceSessionInventory', () => {
+  const listSessionIds = vi.fn<() => Promise<string[]>>()
   const listSessions = vi.fn<() => Promise<DaemonSession[]>>()
   const unsubscribeSpawned = vi.fn()
   const unsubscribeExit = vi.fn()
@@ -26,11 +27,13 @@ describe('useResourceSessionInventory', () => {
   beforeEach(() => {
     spawnedCallback = null
     exitCallback = null
+    listSessionIds.mockReset()
     listSessions.mockReset()
     unsubscribeSpawned.mockReset()
     unsubscribeExit.mockReset()
     ;(window as unknown as { api: unknown }).api = {
       pty: {
+        listSessionIds,
         listSessions,
         onSpawned: (callback: (data: { id: string }) => void) => {
           spawnedCallback = callback
@@ -48,29 +51,30 @@ describe('useResourceSessionInventory', () => {
     delete (window as unknown as { api?: unknown }).api
   })
 
-  it('seeds from the daemon inventory and resets when session restore is not ready', async () => {
-    listSessions.mockResolvedValue([session('one'), session('two')])
-    const { result, rerender } = renderHook(({ ready }) => useResourceSessionInventory(ready), {
-      initialProps: { ready: false }
-    })
+  it('seeds the closed badge from IDs without listing details and resets with readiness', async () => {
+    listSessionIds.mockResolvedValue(['one', 'two'])
+    const { result, rerender } = renderHook(
+      ({ ready }) => useResourceSessionInventory(ready, false),
+      { initialProps: { ready: false } }
+    )
 
-    expect(result.current.sessionInventory.count).toBe(0)
-    expect(listSessions).not.toHaveBeenCalled()
-
+    expect(listSessionIds).not.toHaveBeenCalled()
     rerender({ ready: true })
     await waitFor(() => expect(result.current.sessionInventory.count).toBe(2))
-    expect(listSessions).toHaveBeenCalledTimes(1)
+
+    expect(result.current.sessionInventory.sessions).toEqual([])
+    expect(listSessionIds).toHaveBeenCalledTimes(1)
+    expect(listSessions).not.toHaveBeenCalled()
 
     rerender({ ready: false })
     expect(result.current.sessionInventory.count).toBe(0)
     expect(result.current.sessionsError).toBe(false)
   })
 
-  it('recovers inventory and clears the error after a failed readiness seed', async () => {
-    listSessions
-      .mockRejectedValueOnce(new Error('daemon unavailable'))
-      .mockResolvedValueOnce([session('recovered')])
-    const { result } = renderHook(() => useResourceSessionInventory(true))
+  it('recovers a failed ID seed through an explicit detail refresh', async () => {
+    listSessionIds.mockRejectedValue(new Error('daemon unavailable'))
+    listSessions.mockResolvedValue([session('recovered')])
+    const { result } = renderHook(() => useResourceSessionInventory(true, true))
 
     await waitFor(() => expect(result.current.sessionsError).toBe(true))
     await act(async () => {
@@ -81,182 +85,159 @@ describe('useResourceSessionInventory', () => {
     expect(result.current.sessionsError).toBe(false)
   })
 
-  it('refreshes for background spawns without depending on mounted pane state', async () => {
-    listSessions
-      .mockResolvedValueOnce([session('one')])
-      .mockResolvedValue([session('one'), session('background')])
-    const { result } = renderHook(() => useResourceSessionInventory(true))
+  it('uses only ID inventory for closed lifecycle signals and ignores known reattaches', async () => {
+    listSessionIds
+      .mockResolvedValueOnce(['one'])
+      .mockResolvedValueOnce(['one', 'background', 'background-2'])
+    const { result } = renderHook(() => useResourceSessionInventory(true, false))
     await waitFor(() => expect(result.current.sessionInventory.count).toBe(1))
 
-    await act(async () => {
+    act(() => {
       spawnedCallback?.({ id: 'one' })
+    })
+    expect(listSessionIds).toHaveBeenCalledTimes(1)
+
+    await act(async () => {
       spawnedCallback?.({ id: 'background' })
       spawnedCallback?.({ id: 'background-2' })
       await new Promise((resolve) => window.setTimeout(resolve, 0))
     })
-
-    await waitFor(() => expect(result.current.sessionInventory.count).toBe(2))
-    expect(listSessions).toHaveBeenCalledTimes(2)
-  })
-
-  it('does not inventory again when an existing session reattaches', async () => {
-    listSessions.mockResolvedValue([session('one')])
-    const { result } = renderHook(() => useResourceSessionInventory(true))
-    await waitFor(() => expect(result.current.sessionInventory.count).toBe(1))
-
-    act(() => {
-      spawnedCallback?.({ id: 'one' })
-    })
-
-    expect(listSessions).toHaveBeenCalledTimes(1)
-  })
-
-  it('does not overlap provider-wide inventory reads for spawns during a slow refresh', async () => {
-    listSessions.mockResolvedValueOnce([session('one')])
-    const { result } = renderHook(() => useResourceSessionInventory(true))
-    await waitFor(() => expect(result.current.sessionInventory.count).toBe(1))
-
-    const inFlight = deferred<DaemonSession[]>()
-    listSessions.mockReturnValueOnce(inFlight.promise)
-    await act(async () => {
-      spawnedCallback?.({ id: 'background-one' })
-      await new Promise((resolve) => window.setTimeout(resolve, 0))
-    })
-    expect(listSessions).toHaveBeenCalledTimes(2)
-
-    await act(async () => {
-      spawnedCallback?.({ id: 'background-two' })
-      await new Promise((resolve) => window.setTimeout(resolve, 0))
-    })
-    expect(listSessions).toHaveBeenCalledTimes(2)
-
-    await act(async () => {
-      inFlight.resolve([session('one'), session('background-one'), session('background-two')])
-      await inFlight.promise
-    })
     await waitFor(() => expect(result.current.sessionInventory.count).toBe(3))
-    expect(listSessions).toHaveBeenCalledTimes(2)
+
+    expect(listSessionIds).toHaveBeenCalledTimes(2)
+    expect(listSessions).not.toHaveBeenCalled()
   })
 
-  it('reconciles once when an in-flight inventory misses a later spawn', async () => {
-    listSessions.mockResolvedValueOnce([session('one')])
-    const { result } = renderHook(() => useResourceSessionInventory(true))
-    await waitFor(() => expect(result.current.sessionInventory.count).toBe(1))
+  it('coalesces an ID seed and runs one cheap follow-up when it misses a later spawn', async () => {
+    const seed = deferred<string[]>()
+    listSessionIds
+      .mockReturnValueOnce(seed.promise)
+      .mockResolvedValueOnce(['one', 'background-one', 'background-two'])
+    const { result } = renderHook(() => useResourceSessionInventory(true, false))
 
-    const inFlight = deferred<DaemonSession[]>()
-    listSessions
-      .mockReturnValueOnce(inFlight.promise)
-      .mockResolvedValueOnce([session('one'), session('background-one'), session('background-two')])
     await act(async () => {
       spawnedCallback?.({ id: 'background-one' })
       await new Promise((resolve) => window.setTimeout(resolve, 0))
     })
+    expect(listSessionIds).toHaveBeenCalledTimes(1)
+
     act(() => {
       spawnedCallback?.({ id: 'background-two' })
     })
-
     await act(async () => {
-      inFlight.resolve([session('one'), session('background-one')])
-      await inFlight.promise
+      seed.resolve(['one', 'background-one'])
+      await seed.promise
     })
+
     await waitFor(() => expect(result.current.sessionInventory.count).toBe(3))
-    expect(listSessions).toHaveBeenCalledTimes(3)
+    expect(listSessionIds).toHaveBeenCalledTimes(2)
+    expect(listSessions).not.toHaveBeenCalled()
   })
 
-  it('cancels a queued inventory read when the unknown session exits first', async () => {
-    listSessions.mockResolvedValueOnce([session('one')])
-    const { result } = renderHook(() => useResourceSessionInventory(true))
-    await waitFor(() => expect(result.current.sessionInventory.count).toBe(1))
+  it('does not resurrect an exit that races the ID seed', async () => {
+    const seed = deferred<string[]>()
+    listSessionIds.mockReturnValue(seed.promise)
+    const { result } = renderHook(() => useResourceSessionInventory(true, false))
 
-    act(() => {
-      spawnedCallback?.({ id: 'short-lived' })
-      exitCallback?.({ id: 'short-lived', code: 0 })
-    })
-    await new Promise((resolve) => window.setTimeout(resolve, 0))
-
-    expect(listSessions).toHaveBeenCalledTimes(1)
-    expect(result.current.sessionInventory.count).toBe(1)
-  })
-
-  it('does not schedule follow-up inventory after unmount', async () => {
-    listSessions.mockResolvedValueOnce([session('one')])
-    const { result, unmount } = renderHook(() => useResourceSessionInventory(true))
-    await waitFor(() => expect(result.current.sessionInventory.count).toBe(1))
-
-    const inFlight = deferred<DaemonSession[]>()
-    listSessions.mockReturnValueOnce(inFlight.promise)
-    await act(async () => {
-      spawnedCallback?.({ id: 'background-one' })
-      await new Promise((resolve) => window.setTimeout(resolve, 0))
-    })
-    act(() => {
-      spawnedCallback?.({ id: 'background-two' })
-    })
-    unmount()
-
-    inFlight.resolve([session('one'), session('background-one')])
-    await inFlight.promise
-    await new Promise((resolve) => window.setTimeout(resolve, 0))
-
-    expect(listSessions).toHaveBeenCalledTimes(2)
-  })
-
-  it('filters an exit from an in-flight list without losing other new sessions', async () => {
-    listSessions.mockResolvedValueOnce([session('one'), session('exited')])
-    const { result } = renderHook(() => useResourceSessionInventory(true))
-    await waitFor(() => expect(result.current.sessionInventory.count).toBe(2))
-
-    const stale = deferred<DaemonSession[]>()
-    listSessions.mockReturnValueOnce(stale.promise)
-    let refresh!: Promise<void>
-    act(() => {
-      refresh = result.current.refreshSessions()
-    })
     act(() => {
       exitCallback?.({ id: 'exited', code: 0 })
     })
-    expect(result.current.sessionInventory.sessions.map(({ id }) => id)).toEqual(['one'])
-
     await act(async () => {
-      stale.resolve([session('one'), session('exited'), session('background')])
-      await refresh
+      seed.resolve(['live', 'exited'])
+      await seed.promise
     })
-    expect(result.current.sessionInventory.sessions.map(({ id }) => id)).toEqual([
-      'one',
-      'background'
-    ])
+
+    expect(result.current.sessionInventory.sessionIds).toEqual(['live'])
+    expect(result.current.sessionInventory.count).toBe(1)
   })
 
-  it('keeps the newest result when refreshes resolve out of order', async () => {
-    listSessions.mockResolvedValueOnce([session('one')])
-    const { result } = renderHook(() => useResourceSessionInventory(true))
+  it('uses full details for lifecycle refreshes while open', async () => {
+    listSessionIds.mockResolvedValue(['one'])
+    listSessions.mockResolvedValue([session('one'), session('background')])
+    const { result } = renderHook(() => useResourceSessionInventory(true, true))
     await waitFor(() => expect(result.current.sessionInventory.count).toBe(1))
 
-    const older = deferred<DaemonSession[]>()
-    const newer = deferred<DaemonSession[]>()
-    listSessions.mockReturnValueOnce(older.promise).mockReturnValueOnce(newer.promise)
-    let olderRefresh!: Promise<void>
-    let newerRefresh!: Promise<void>
+    await act(async () => {
+      spawnedCallback?.({ id: 'background' })
+      await new Promise((resolve) => window.setTimeout(resolve, 0))
+    })
+    await waitFor(() => expect(result.current.sessionInventory.sessions).toHaveLength(2))
+
+    expect(listSessionIds).toHaveBeenCalledTimes(1)
+    expect(listSessions).toHaveBeenCalledTimes(1)
+  })
+
+  it('re-seeds IDs when closing cancels a queued detail refresh', async () => {
+    listSessionIds
+      .mockResolvedValueOnce(['one'])
+      .mockResolvedValueOnce(['one', 'queued-before-close'])
+    const { result, rerender } = renderHook(
+      ({ detailsEnabled }) => useResourceSessionInventory(true, detailsEnabled),
+      { initialProps: { detailsEnabled: true } }
+    )
+    await waitFor(() => expect(result.current.sessionInventory.count).toBe(1))
+
     act(() => {
-      olderRefresh = result.current.refreshSessions()
-      newerRefresh = result.current.refreshSessions()
+      spawnedCallback?.({ id: 'queued-before-close' })
+      rerender({ detailsEnabled: false })
     })
+    await waitFor(() => expect(result.current.sessionInventory.count).toBe(2))
+
+    expect(listSessionIds).toHaveBeenCalledTimes(2)
+    expect(listSessions).not.toHaveBeenCalled()
+  })
+
+  it('starts a fresh close seed when a detail refresh superseded the first ID seed', async () => {
+    const staleSeed = deferred<string[]>()
+    const detailRefresh = deferred<DaemonSession[]>()
+    listSessionIds
+      .mockReturnValueOnce(staleSeed.promise)
+      .mockResolvedValueOnce(['one', 'queued-before-close'])
+    listSessions.mockReturnValue(detailRefresh.promise)
+    const { result, rerender } = renderHook(
+      ({ detailsEnabled }) => useResourceSessionInventory(true, detailsEnabled),
+      { initialProps: { detailsEnabled: true } }
+    )
+    await waitFor(() => expect(listSessionIds).toHaveBeenCalledTimes(1))
+
+    let details!: Promise<void>
+    act(() => {
+      details = result.current.refreshSessions()
+      spawnedCallback?.({ id: 'queued-before-close' })
+      rerender({ detailsEnabled: false })
+    })
+    await waitFor(() => expect(result.current.sessionInventory.count).toBe(2))
 
     await act(async () => {
-      newer.resolve([session('one'), session('two')])
-      await newerRefresh
+      detailRefresh.resolve([session('one')])
+      staleSeed.resolve(['one'])
+      await Promise.all([details, staleSeed.promise])
+    })
+    expect(result.current.sessionInventory.sessionIds).toEqual(['one', 'queued-before-close'])
+    expect(listSessionIds).toHaveBeenCalledTimes(2)
+  })
+
+  it('keeps the newer detail result when an older ID seed resolves later', async () => {
+    const seed = deferred<string[]>()
+    listSessionIds.mockReturnValue(seed.promise)
+    listSessions.mockResolvedValue([session('one'), session('newer')])
+    const { result } = renderHook(() => useResourceSessionInventory(true, true))
+
+    await act(async () => {
+      await result.current.refreshSessions()
     })
     await act(async () => {
-      older.resolve([session('one')])
-      await olderRefresh
+      seed.resolve(['one'])
+      await seed.promise
     })
 
+    expect(result.current.sessionInventory.sessions).toEqual([session('one'), session('newer')])
     expect(result.current.sessionInventory.count).toBe(2)
   })
 
   it('unsubscribes from lifecycle events on unmount', () => {
-    listSessions.mockResolvedValue([])
-    const { unmount } = renderHook(() => useResourceSessionInventory(true))
+    listSessionIds.mockResolvedValue([])
+    const { unmount } = renderHook(() => useResourceSessionInventory(true, false))
 
     unmount()
 

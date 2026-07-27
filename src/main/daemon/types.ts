@@ -32,6 +32,7 @@ export {
   PREVIOUS_DAEMON_PROTOCOL_VERSIONS,
   PROTOCOL_VERSION,
   PTY_STARTUP_INGRESS_PROTOCOL_VERSION,
+  SESSION_ID_LIST_PROTOCOL_VERSION,
   supportsPtyStartupIngress
 } from './daemon-protocol-version'
 
@@ -301,6 +302,7 @@ export type DaemonRequest =
   | SetSessionBackgroundRequest
   | KillRequest
   | SignalRequest
+  | { id: string; type: 'listSessionIds' }
   | ListSessionsRequest
   | ShutdownIfIdleRequest
   | DetachRequest

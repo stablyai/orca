@@ -928,6 +928,9 @@ export class DaemonServer {
         this.host.clearScrollback(request.payload.sessionId)
         return {}
 
+      case 'listSessionIds':
+        return { sessionIds: this.host.listSessionIds() }
+
       case 'listSessions':
         return { sessions: this.host.listSessions() }
 

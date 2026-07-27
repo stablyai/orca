@@ -1170,6 +1170,26 @@ describe('DaemonPtyAdapter (IPtyProvider)', () => {
     })
   })
 
+  describe('listSessionIds', () => {
+    it('uses the ID-only RPC on the current protocol', async () => {
+      const first = await adapter.spawn({ cols: 80, rows: 24 })
+      const second = await adapter.spawn({ cols: 80, rows: 24 })
+
+      await expect(adapter.listSessionIds()).resolves.toEqual([first.id, second.id])
+    })
+
+    it('uses the full process fallback for preserved protocols', async () => {
+      const legacy = new DaemonPtyAdapter({ socketPath, tokenPath, protocolVersion: 28 })
+      const listProcesses = vi
+        .spyOn(legacy, 'listProcesses')
+        .mockResolvedValue([{ id: 'legacy-id', cwd: '', title: 'shell' }])
+
+      await expect(legacy.listSessionIds()).resolves.toEqual(['legacy-id'])
+      expect(listProcesses).toHaveBeenCalledTimes(1)
+      legacy.dispose()
+    })
+  })
+
   describe('hasChildProcesses / getForegroundProcess', () => {
     it('returns false for shell foreground processes', async () => {
       const { id } = await adapter.spawn({ cols: 80, rows: 24 })

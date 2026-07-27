@@ -16,6 +16,7 @@ import {
   AGENT_SESSION_CREATE_OPERATION_DAEMON_PROTOCOL_VERSION,
   GIT_CREDENTIAL_GUARD_HOST_PROTOCOL_VERSION,
   PROTOCOL_VERSION,
+  SESSION_ID_LIST_PROTOCOL_VERSION,
   supportsPtyStartupIngress,
   type CreateOrAttachResult,
   type DaemonEvent,
@@ -1195,6 +1196,15 @@ export class DaemonPtyAdapter implements IPtyProvider {
       )
     }
     return processes
+  }
+
+  async listSessionIds(): Promise<string[]> {
+    if (this.protocolVersion < SESSION_ID_LIST_PROTOCOL_VERSION) {
+      return (await this.listProcesses()).map(({ id }) => id)
+    }
+    await this.ensureConnected()
+    const result = await this.client.request<{ sessionIds: string[] }>('listSessionIds', undefined)
+    return result.sessionIds
   }
 
   private validatedAgentSessionOwners(

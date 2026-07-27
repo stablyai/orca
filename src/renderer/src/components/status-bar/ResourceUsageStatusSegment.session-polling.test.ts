@@ -13,8 +13,9 @@ describe('ResourceUsageStatusSegment session inventory', () => {
     expect(source).not.toContain('installWindowVisibilityInterval')
     expect(source).not.toContain('SESSIONS_POLL_MS')
     expect(inventoryHookSource).not.toContain('setInterval')
-    // Why: every seed/action/lifecycle refresh shares one guarded inventory
-    // read, and the closed path never installs a polling interval.
+    // Why: the closed seed uses the cheap ID path while open/action refreshes
+    // retain one guarded detail read.
+    expect(inventoryHookSource.match(/window\.api\.pty\.listSessionIds\(\)/g) ?? []).toHaveLength(1)
     expect(inventoryHookSource.match(/window\.api\.pty\.listSessions\(\)/g) ?? []).toHaveLength(1)
 
     const openEffectIndex = source.indexOf('if (!open)')
@@ -34,6 +35,7 @@ describe('ResourceUsageStatusSegment session inventory', () => {
     expect(source).toContain('sessionInventory.count')
     expect(inventoryHookSource).toContain('window.api.pty.onSpawned')
     expect(inventoryHookSource).toContain('window.api.pty.onExit')
+    expect(inventoryHookSource).toContain('window.api.pty.listSessionIds')
     expect(source).not.toContain('createClosedResourceSessionCountSelector')
     expect(source).not.toContain('boundPtyIds.size')
     expect(source).not.toContain('closedSessionCount')

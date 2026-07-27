@@ -5454,6 +5454,52 @@ describe('registerPtyHandlers', () => {
     })
   })
 
+  it('lists bounded unique IDs without loading supported provider details', async () => {
+    const local = getLocalPtyProvider()
+    const localListSessionIds = vi
+      .spyOn(local, 'listSessionIds')
+      .mockResolvedValue(['shared-pty', 'local-pty'])
+    const localListProcesses = vi.spyOn(local, 'listProcesses')
+    const sshListSessionIds = vi.fn(async () => ['shared-pty', 'remote-pty'])
+    const sshListProcesses = vi.fn(async () => {
+      throw new Error('full listing should not run')
+    })
+    registerPtyHandlers(mainWindow as never)
+    registerSshPtyProvider('ssh-1', {
+      listSessionIds: sshListSessionIds,
+      listProcesses: sshListProcesses,
+      onData: vi.fn(() => () => {}),
+      onExit: vi.fn(() => () => {})
+    } as never)
+
+    await expect(handlers.get('pty:listSessionIds')!(null, undefined)).resolves.toEqual([
+      'shared-pty',
+      'local-pty',
+      'remote-pty'
+    ])
+    expect(localListSessionIds).toHaveBeenCalledTimes(1)
+    expect(sshListSessionIds).toHaveBeenCalledTimes(1)
+    expect(localListProcesses).not.toHaveBeenCalled()
+    expect(sshListProcesses).not.toHaveBeenCalled()
+  })
+
+  it('ignores unavailable SSH ID inventories without hiding local IDs', async () => {
+    vi.spyOn(getLocalPtyProvider(), 'listSessionIds').mockResolvedValue(['local-pty'])
+    registerPtyHandlers(mainWindow as never)
+    registerSshPtyProvider('ssh-1', {
+      listSessionIds: vi.fn(async () => {
+        throw new Error('relay unavailable')
+      }),
+      listProcesses: vi.fn(),
+      onData: vi.fn(() => () => {}),
+      onExit: vi.fn(() => () => {})
+    } as never)
+
+    await expect(handlers.get('pty:listSessionIds')!(null, undefined)).resolves.toEqual([
+      'local-pty'
+    ])
+  })
+
   it('starts local and SSH session inventories concurrently', async () => {
     let resolveLocal!: (sessions: { id: string; cwd: string; title: string }[]) => void
     const localSessions = new Promise<{ id: string; cwd: string; title: string }[]>((resolve) => {
@@ -10777,6 +10823,87 @@ describe('registerPtyHandlers', () => {
       expect(mainWindow.webContents.send).toHaveBeenCalledWith('pty:data', {
         id: spawn.id,
         data: '\x1b[6n\x1b[0c',
+        droppedOutput: true
+      })
+    } finally {
+      errorSpy.mockRestore()
+      vi.useRealTimers()
+    }
+  })
+
+  it('caps a final dropped-output query chunk to the remaining salvage allowance', async () => {
+    vi.useFakeTimers()
+    const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
+    const mockProc = createMockProc()
+    spawnMock.mockReturnValue(mockProc.proc)
+
+    try {
+      registerPtyHandlers(mainWindow as never)
+      const spawn = (await handlers.get('pty:spawn')!(null, {
+        cols: 80,
+        rows: 24,
+        cwd: '/tmp'
+      })) as { id: string }
+      const ackData = getPtyAckDataListener()
+      const query = '\x1b[6n'
+      mainWindow.webContents.send.mockClear()
+
+      mockProc.emitData('x'.repeat(600 * 1024))
+      vi.advanceTimersByTime(2)
+      for (let index = 0; index < 32; index++) {
+        vi.advanceTimersByTime(1)
+      }
+
+      mockProc.emitData(`${'y'.repeat(3 * 1024 * 1024)}${query.repeat(1_023)}`)
+      mockProc.emitData(query.repeat(2))
+
+      mainWindow.webContents.send.mockClear()
+      ackData(null, { id: spawn.id, charCount: 512 * 1024 })
+      vi.advanceTimersByTime(2)
+      expect(mainWindow.webContents.send).toHaveBeenCalledWith('pty:data', {
+        id: spawn.id,
+        data: query.repeat(1_024),
+        droppedOutput: true
+      })
+    } finally {
+      errorSpy.mockRestore()
+      vi.useRealTimers()
+    }
+  })
+
+  it('does not split a terminal query at the dropped-output salvage boundary', async () => {
+    vi.useFakeTimers()
+    const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
+    const mockProc = createMockProc()
+    spawnMock.mockReturnValue(mockProc.proc)
+
+    try {
+      registerPtyHandlers(mainWindow as never)
+      const spawn = (await handlers.get('pty:spawn')!(null, {
+        cols: 80,
+        rows: 24,
+        cwd: '/tmp'
+      })) as { id: string }
+      const ackData = getPtyAckDataListener()
+      const almostFull = `${'\x1b[6n'.repeat(1_021)}${'\x1b[14t'.repeat(2)}`
+      const extractedAlmostFull = `${'\x1b[14t'.repeat(2)}${'\x1b[6n'.repeat(1_021)}`
+
+      mockProc.emitData('x'.repeat(600 * 1024))
+      vi.advanceTimersByTime(2)
+      for (let index = 0; index < 32; index++) {
+        vi.advanceTimersByTime(1)
+      }
+      mockProc.emitData(`${'y'.repeat(3 * 1024 * 1024)}${almostFull}`)
+      mockProc.emitData('\x1b[6n')
+
+      mainWindow.webContents.send.mockClear()
+      ackData(null, { id: spawn.id, charCount: 512 * 1024 })
+      vi.advanceTimersByTime(2)
+
+      expect(almostFull).toHaveLength(4_094)
+      expect(mainWindow.webContents.send).toHaveBeenCalledWith('pty:data', {
+        id: spawn.id,
+        data: extractedAlmostFull,
         droppedOutput: true
       })
     } finally {

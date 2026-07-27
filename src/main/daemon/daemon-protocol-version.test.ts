@@ -5,18 +5,20 @@ import {
   COMPLETION_PROCESS_INSPECTION_PROTOCOL_VERSION,
   GET_FOREGROUND_PROCESS_PROTOCOL_VERSION,
   PREVIOUS_DAEMON_PROTOCOL_VERSIONS,
-  PROTOCOL_VERSION
+  PROTOCOL_VERSION,
+  SESSION_ID_LIST_PROTOCOL_VERSION
 } from './daemon-protocol-version'
 
 describe('daemon protocol version', () => {
-  it('ships preflight-cache replacement after completion inspection', () => {
-    expect(PROTOCOL_VERSION).toBe(28)
+  it('ships session-ID listing after preflight-cache replacement', () => {
+    expect(PROTOCOL_VERSION).toBe(29)
+    expect(SESSION_ID_LIST_PROTOCOL_VERSION).toBe(29)
     expect(COMPLETION_PROCESS_INSPECTION_PROTOCOL_VERSION).toBe(27)
     expect(GET_FOREGROUND_PROCESS_PROTOCOL_VERSION).toBe(11)
     expect(AGENT_SESSION_CLAIM_DAEMON_PROTOCOL_VERSION).toBe(26)
     expect(AGENT_SESSION_CREATE_OPERATION_DAEMON_PROTOCOL_VERSION).toBe(26)
     expect(PREVIOUS_DAEMON_PROTOCOL_VERSIONS).toEqual(
-      Array.from({ length: 27 }, (_, index) => index + 1)
+      Array.from({ length: 28 }, (_, index) => index + 1)
     )
   })
 })

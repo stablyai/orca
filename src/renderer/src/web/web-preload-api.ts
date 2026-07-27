@@ -2954,6 +2954,7 @@ function createPtyApi(): NonNullable<Partial<PreloadApi>['pty']> {
     confirmForegroundProcess: () => Promise.resolve(null),
     getCwd: () => Promise.resolve('~'),
     getSize: () => Promise.resolve(null),
+    listSessionIds: () => Promise.resolve([]),
     listSessions: () => Promise.resolve([]),
     getAuthoritativeBufferSnapshotCapabilities: (ids) =>
       ids.map((id) => ({ id, authoritative: false })),
