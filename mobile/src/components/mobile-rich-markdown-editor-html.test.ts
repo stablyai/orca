@@ -79,6 +79,8 @@ describe('mobile rich markdown editor HTML', () => {
     const lightVars = mobileRichMarkdownEditorThemeVars(lightColors)
     expect(darkVars['--background']).toBe(darkColors.bgBase)
     expect(lightVars['--background']).toBe(lightColors.bgBase)
+    expect(darkVars['--editor-surface']).toBe(darkColors.editorSurface)
+    expect(lightVars['--editor-surface']).toBe(lightColors.editorSurface)
     expect(lightVars['--foreground']).toBe(lightColors.textPrimary)
     expect(Object.keys(darkVars).sort()).toEqual(Object.keys(lightVars).sort())
   })

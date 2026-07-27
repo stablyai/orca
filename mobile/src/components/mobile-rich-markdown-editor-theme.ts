@@ -6,7 +6,7 @@ export function mobileRichMarkdownEditorThemeVars(
 ): Readonly<Record<string, string>> {
   return {
     '--background': colors.bgBase,
-    '--editor-surface': colors.bgBase,
+    '--editor-surface': colors.editorSurface,
     '--foreground': colors.textPrimary,
     '--muted-foreground': colors.textSecondary,
     '--muted': colors.bgRaised,

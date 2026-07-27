@@ -18,7 +18,7 @@ export function buildMobileRichMarkdownEditorHtml(
     :root {
       color-scheme: ${colorScheme};
       --background: ${colors.bgBase};
-      --editor-surface: ${colors.bgBase};
+      --editor-surface: ${colors.editorSurface};
       --foreground: ${colors.textPrimary};
       --muted-foreground: ${colors.textSecondary};
       --muted: ${colors.bgRaised};

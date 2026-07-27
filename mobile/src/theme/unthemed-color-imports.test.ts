@@ -98,9 +98,12 @@ function listFactoryLiterals(): string[] {
     const src = fs.readFileSync(file, 'utf8')
     const rel = path.relative(MOBILE_ROOT, file).split(path.sep).join('/')
     FACTORY_DECL.lastIndex = 0
-    let declaration: RegExpExecArray | null
-    while ((declaration = FACTORY_DECL.exec(src))) {
-      const body = sheetBodyAfter(src, declaration.index)
+    const declarations = [...src.matchAll(FACTORY_DECL)]
+    for (const [i, declaration] of declarations.entries()) {
+      // Why the slice bound: a factory that returns a spread instead of its
+      // own StyleSheet.create must not adopt the NEXT factory's sheet.
+      const nextIndex = declarations[i + 1]?.index ?? src.length
+      const body = sheetBodyAfter(src.slice(0, nextIndex), declaration.index)
       if (!body) {
         continue
       }
