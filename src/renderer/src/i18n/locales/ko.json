@@ -5570,13 +5570,13 @@
           "agentDashboard": {
             "title": "Agent Dashboard",
             "description": "Kanban board for monitoring agents across worktrees, in-window or as a pop-out.",
-            "copy": "Adds an Agent Dashboard entry to the left sidebar. Open it to monitor attention, working, and idle agents and jump into their live terminals.",
-            "toggleLabel": "Toggle Agent Dashboard",
-            "modeLabel": "Open as",
-            "modeCopy": "Show the dashboard as an in-window board beside the sidebar or a separate pop-out window.",
-            "modeAriaLabel": "Agent Dashboard open mode",
-            "modeInWindow": "In-window",
-            "modePopout": "Pop-out"
+            "copy": "왼쪽 사이드바에 Agent Dashboard 항목을 추가합니다. 여기서 확인이 필요한 agent, 작업 중인 agent, 유휴 상태인 agent를 한눈에 보고 실행 중인 terminal로 바로 이동할 수 있습니다.",
+            "toggleLabel": "Agent Dashboard 표시/숨기기",
+            "modeLabel": "열기 방식",
+            "modeCopy": "대시보드를 사이드바 옆에 붙여서 볼지, 별도 창으로 띄울지 선택합니다.",
+            "modeAriaLabel": "Agent Dashboard 열기 방식",
+            "modeInWindow": "현재 창",
+            "modePopout": "별도 창"
           }
         },
         "FloatingWorkspacePane": {
@@ -7941,8 +7941,8 @@
             "4497e2e2bb": "리치 Markdown을 편집하는 동안 브라우저 맞춤법 밑줄과 제안을 표시합니다.",
             "e61157e926": "편집기 자동 줄 바꿈",
             "005be5c699": "가로 스크롤 대신 파일 편집기에서 긴 줄을 자동으로 줄 바꿈합니다.",
-            "editorFontFamily": "Editor Font Family",
-            "editorFontFamilyDesc": "Font used by file editors and diff views. Leave empty to follow the terminal font."
+            "editorFontFamily": "편집기 글꼴",
+            "editorFontFamilyDesc": "파일 편집기와 diff 보기에 사용할 글꼴입니다. 비워 두면 terminal 글꼴을 따릅니다."
           }
         },
         "git": {
@@ -9668,9 +9668,9 @@
           "notice": "Orca Relay is in beta."
         },
         "EditorFontFamilySetting": {
-          "title": "Editor Font Family",
-          "description": "Font used by file editors and diff views. Leave empty to follow the terminal font.",
-          "placeholder": "Same as terminal font"
+          "title": "편집기 글꼴",
+          "description": "파일 편집기와 diff 보기에 사용할 글꼴입니다. 비워 두면 terminal 글꼴을 따릅니다.",
+          "placeholder": "terminal 글꼴과 동일"
         },
         "GeneralRemoteServerUpdates": {
           "serverCount": "{{value0}} paired servers",
