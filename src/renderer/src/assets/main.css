@@ -2008,6 +2008,30 @@
   text-underline-offset: 2px;
 }
 
+/* Why: the hover card stacks rows from every provider in registration order;
+   flex ordering pins Orca's "open import target" link row below TS quick info
+   and the ctrl+hover definition excerpt regardless of provider order. */
+.monaco-editor .monaco-hover-content {
+  display: flex;
+  flex-direction: column;
+}
+
+.monaco-editor .monaco-hover-content .hover-row:has(a[data-href^='command:orca.openImportTarget']) {
+  order: 99;
+}
+
+/* Peek title filename/dirname open the shown file on click. */
+.monaco-editor .peekview-title .orca-peek-open-target {
+  cursor: pointer;
+}
+
+.monaco-editor .peekview-title .orca-peek-open-target:hover {
+  color: #58a6ff;
+  text-decoration: underline;
+  text-decoration-color: color-mix(in srgb, currentColor 45%, transparent);
+  text-underline-offset: 2px;
+}
+
 /* Copy-path button injected into the peek (references) widget title. */
 .monaco-editor .peekview-title .orca-peek-copy-path {
   display: inline-flex;

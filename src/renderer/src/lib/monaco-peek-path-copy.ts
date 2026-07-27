@@ -1,7 +1,7 @@
 import { ReferenceWidget as MonacoReferenceWidget } from 'monaco-editor/esm/vs/editor/contrib/gotoSymbol/browser/peek/referencesWidget.js'
 import { translate } from '@/i18n/i18n'
 
-type PeekReferenceUri = { authority?: string; path: string }
+type PeekReferenceUri = { scheme?: string; authority?: string; path: string }
 
 type ReferenceWidgetInstance = {
   _headElement?: HTMLElement
@@ -18,12 +18,16 @@ export const PEEK_COPY_PATH_BUTTON_CLASS = 'orca-peek-copy-path'
 export const PEEK_COPY_PATH_COPIED_CLASS = 'orca-peek-copy-path--copied'
 const PEEK_COPY_PATH_COPIED_FEEDBACK_MS = 1200
 
-// Monaco model URIs keep posix-style paths ('/C:/repo/x.ts', '/home/user/x.ts',
-// authority-qualified for UNC/WSL). Map them back to the filesystem form the
-// user would paste elsewhere; never let Uri.fsPath backslash a remote posix path.
-export function getPeekReferenceCopyPath(uri: PeekReferenceUri): string {
+// Orca creates editor models via Uri.parse(filePath), so a Windows path like
+// 'c:/repo/x.ts' arrives with its drive letter swallowed as the URI scheme.
+// Rebuild the filesystem path exactly as Orca stores it (openFiles.filePath),
+// and never let Uri.fsPath backslash a remote posix path.
+export function getPeekReferenceFilePath(uri: PeekReferenceUri): string {
   if (uri.authority) {
     return `\\\\${uri.authority}${uri.path.replace(/\//g, '\\')}`
+  }
+  if (uri.scheme && /^[A-Za-z]$/.test(uri.scheme)) {
+    return `${uri.scheme}:${uri.path}`
   }
   const windowsMatch = /^\/([A-Za-z]:)(\/.*)?$/.exec(uri.path)
   if (windowsMatch) {
@@ -32,7 +36,10 @@ export function getPeekReferenceCopyPath(uri: PeekReferenceUri): string {
   return uri.path
 }
 
-function createSvgIcon(className: string, shapes: Record<string, string>[]): SVGSVGElement {
+export function createPeekSvgIcon(
+  className: string,
+  shapes: Record<string, string>[]
+): SVGSVGElement {
   const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg')
   svg.setAttribute('class', className)
   svg.setAttribute('viewBox', '0 0 24 24')
@@ -62,13 +69,13 @@ function createPeekCopyPathButton(): HTMLButtonElement {
   button.title = label
   button.setAttribute('aria-label', label)
   button.appendChild(
-    createSvgIcon('orca-peek-copy-path-icon', [
+    createPeekSvgIcon('orca-peek-copy-path-icon', [
       { tag: 'rect', x: '9', y: '9', width: '13', height: '13', rx: '2' },
       { tag: 'path', d: 'M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1' }
     ])
   )
   button.appendChild(
-    createSvgIcon('orca-peek-copy-path-check', [{ tag: 'polyline', points: '20 6 9 17 4 12' }])
+    createPeekSvgIcon('orca-peek-copy-path-check', [{ tag: 'polyline', points: '20 6 9 17 4 12' }])
   )
   // Why: peek closes when its embedded editor loses focus, so the button must
   // not steal focus on mousedown — copy happens on click without a focus swap.
@@ -130,7 +137,7 @@ export function installMonacoPeekPathCopyButton(
   ): Promise<unknown> {
     const reference = args[0] as { uri?: PeekReferenceUri } | undefined
     if (reference?.uri && typeof reference.uri.path === 'string') {
-      ensurePeekCopyPathButton(this, getPeekReferenceCopyPath(reference.uri))
+      ensurePeekCopyPathButton(this, getPeekReferenceFilePath(reference.uri))
     }
     return originalRevealReference.apply(this, args)
   }

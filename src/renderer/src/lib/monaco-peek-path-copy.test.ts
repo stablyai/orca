@@ -2,7 +2,7 @@
 
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import {
-  getPeekReferenceCopyPath,
+  getPeekReferenceFilePath,
   installMonacoPeekPathCopyButton,
   PEEK_COPY_PATH_BUTTON_CLASS,
   PEEK_COPY_PATH_COPIED_CLASS
@@ -42,22 +42,35 @@ afterEach(() => {
   vi.useRealTimers()
 })
 
-describe('getPeekReferenceCopyPath', () => {
+describe('getPeekReferenceFilePath', () => {
   it('converts windows drive model uris back to backslash paths', () => {
-    expect(getPeekReferenceCopyPath({ path: '/C:/github/orca/src/x.ts' })).toBe(
+    expect(getPeekReferenceFilePath({ path: '/C:/github/orca/src/x.ts' })).toBe(
       'C:\\github\\orca\\src\\x.ts'
     )
   })
 
+  it('restores the drive letter swallowed as URI scheme by Uri.parse', () => {
+    expect(getPeekReferenceFilePath({ scheme: 'c', path: '/github/jh-portfolio/src/x.tsx' })).toBe(
+      'c:/github/jh-portfolio/src/x.tsx'
+    )
+    expect(getPeekReferenceFilePath({ scheme: 'D', path: '/work/a.ts' })).toBe('D:/work/a.ts')
+  })
+
+  it('leaves multi-letter schemes alone', () => {
+    expect(getPeekReferenceFilePath({ scheme: 'file', path: '/home/user/x.ts' })).toBe(
+      '/home/user/x.ts'
+    )
+  })
+
   it('keeps posix paths untouched for remote/SSH files', () => {
-    expect(getPeekReferenceCopyPath({ path: '/home/lucian/project/page.tsx' })).toBe(
+    expect(getPeekReferenceFilePath({ path: '/home/lucian/project/page.tsx' })).toBe(
       '/home/lucian/project/page.tsx'
     )
   })
 
   it('rebuilds UNC form for authority-qualified uris (WSL)', () => {
     expect(
-      getPeekReferenceCopyPath({ authority: 'wsl.localhost', path: '/Ubuntu/home/x.ts' })
+      getPeekReferenceFilePath({ authority: 'wsl.localhost', path: '/Ubuntu/home/x.ts' })
     ).toBe('\\\\wsl.localhost\\Ubuntu\\home\\x.ts')
   })
 })

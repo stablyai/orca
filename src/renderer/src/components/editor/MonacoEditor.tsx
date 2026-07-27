@@ -36,11 +36,8 @@ import {
 } from './monaco-markdown-doc-link-decorations'
 import {
   createImportFileLinkController,
-  getImportLinkButtonPlacement,
   IMPORT_LINKS_MOD_HELD_CLASS,
-  openImportFileTarget,
-  type ImportFileLinkController,
-  type ResolvedImportLinkTarget
+  type ImportFileLinkController
 } from './monaco-import-file-links'
 import { useModifierHeldClass } from './useModifierHeldClass'
 import { isMacPlatform } from '../terminal-pane/terminal-link-open-hints'
@@ -61,7 +58,7 @@ import {
   installEditorSaveShortcut,
   installMonacoEditorFindShortcut
 } from './editor-shortcuts'
-import { ArrowUpRight, Plus } from 'lucide-react'
+import { Plus } from 'lucide-react'
 import {
   getMonacoMarkdownSelectionAnnotationTarget,
   type MonacoMarkdownSelectionAnnotationTarget
@@ -135,9 +132,6 @@ export default function MonacoEditor({
   languageRef.current = language
   const markdownDocLinkDecorationsRef = useRef<MarkdownDocLinkDecorationController | null>(null)
   const importFileLinksRef = useRef<ImportFileLinkController | null>(null)
-  const [importLinkButton, setImportLinkButton] = useState<
-    (ResolvedImportLinkTarget & { top: number; left: number }) | null
-  >(null)
   // Why: import links only advertise clickability while ⌘/Ctrl is held, matching
   // the markdown-editor link affordance so a plain click still just places the caret.
   useModifierHeldClass(editorContainerRef, isMacPlatform(), IMPORT_LINKS_MOD_HELD_CLASS)
@@ -384,21 +378,7 @@ export default function MonacoEditor({
         getLanguageId: () => languageRef.current,
         getFilePath: () => filePath,
         getFileId: () => fileId,
-        getWorktreeId: () => worktreeId,
-        onTargetResolved: (target) => {
-          const placement = getImportLinkButtonPlacement(
-            editorInstance.getScrolledVisiblePosition({
-              lineNumber: target.lineNumber,
-              column: target.column
-            }),
-            editorInstance.getLayoutInfo().height
-          )
-          if (!placement) {
-            return
-          }
-          setImportLinkButton({ ...target, ...placement })
-        },
-        onTargetCleared: () => setImportLinkButton(null)
+        getWorktreeId: () => worktreeId
       })
       ensureMarkdownDocCompletionProvider(monaco)
       updateMarkdownCompletionDocuments()
@@ -779,37 +759,6 @@ export default function MonacoEditor({
     importFileLinksRef.current?.refresh()
   }, [content, language])
 
-  // Why: the "open imported file" button anchors to a text position, so it must
-  // follow that position across scroll/layout and hide once it leaves the viewport.
-  const importLinkLine = importLinkButton?.lineNumber
-  const importLinkColumn = importLinkButton?.column
-  useEffect(() => {
-    if (!mountedEditor || importLinkLine === undefined || importLinkColumn === undefined) {
-      return
-    }
-    const update = (): void => {
-      const placement = getImportLinkButtonPlacement(
-        mountedEditor.getScrolledVisiblePosition({
-          lineNumber: importLinkLine,
-          column: importLinkColumn
-        }),
-        mountedEditor.getLayoutInfo().height
-      )
-      setImportLinkButton((prev) => {
-        if (!prev) {
-          return prev
-        }
-        return placement ? { ...prev, ...placement } : null
-      })
-    }
-    const scrollSub = mountedEditor.onDidScrollChange(update)
-    const layoutSub = mountedEditor.onDidLayoutChange(update)
-    return () => {
-      scrollSub.dispose()
-      layoutSub.dispose()
-    }
-  }, [mountedEditor, importLinkLine, importLinkColumn])
-
   useEffect(() => {
     const ed = mountedEditor
     if (!ed) {
@@ -905,34 +854,6 @@ export default function MonacoEditor({
           }}
         >
           <Plus className="size-3" />
-        </button>
-      ) : null}
-      {importLinkButton ? (
-        <button
-          type="button"
-          className="absolute z-30 flex max-w-72 items-center gap-1 rounded-md border border-border bg-popover px-2 py-1 text-xs text-popover-foreground shadow-md hover:bg-accent hover:text-accent-foreground"
-          style={{ top: importLinkButton.top, left: importLinkButton.left }}
-          title={translate(
-            'auto.components.editor.MonacoEditor.openImportedFile',
-            'Open imported file'
-          )}
-          aria-label={translate(
-            'auto.components.editor.MonacoEditor.openImportedFile',
-            'Open imported file'
-          )}
-          onMouseDown={(event) => {
-            event.preventDefault()
-            event.stopPropagation()
-          }}
-          onClick={(event) => {
-            event.preventDefault()
-            event.stopPropagation()
-            openImportFileTarget(importLinkButton.targetPath, { worktreeId, fileId })
-            setImportLinkButton(null)
-          }}
-        >
-          <ArrowUpRight className="size-3 shrink-0" />
-          <span className="truncate">{importLinkButton.targetLabel}</span>
         </button>
       ) : null}
       <Editor

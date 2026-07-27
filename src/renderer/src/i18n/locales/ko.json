@@ -297,7 +297,12 @@
       }
     },
     "lib": {
-      "monaco": { "peek": { "path": { "copy": { "copyPath": "경로 복사" } } } },
+      "monaco": {
+        "peek": {
+          "open": { "file": { "openFile": "클릭하여 파일 열기" } },
+          "path": { "copy": { "copyPath": "경로 복사" } }
+        }
+      },
       "agent": {
         "catalog": {
           "5dff448636": "OpenClaw",

@@ -297,7 +297,12 @@
       }
     },
     "lib": {
-      "monaco": { "peek": { "path": { "copy": { "copyPath": "パスをコピー" } } } },
+      "monaco": {
+        "peek": {
+          "open": { "file": { "openFile": "クリックしてファイルを開く" } },
+          "path": { "copy": { "copyPath": "パスをコピー" } }
+        }
+      },
       "agent": {
         "catalog": {
           "5dff448636": "OpenClaw",
