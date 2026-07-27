@@ -1,4 +1,4 @@
-import { chmod, mkdir, readFile, rename, rm, writeFile } from 'node:fs/promises'
+import { chmod, copyFile, mkdir, readFile, rename, rm, stat, writeFile } from 'node:fs/promises'
 import { accessSync, constants, existsSync } from 'node:fs'
 import { homedir } from 'node:os'
 import { delimiter, dirname, join } from 'node:path'
@@ -21,6 +21,10 @@ export async function ensureClaudeAgentTeamsShimDir(root = defaultShimRoot()): P
   await writeIfChanged(join(root, 'tmux'), unixShimScript())
   if (process.platform === 'win32') {
     await writeIfChanged(join(root, 'tmux.cmd'), windowsShimScript())
+    const bundled = resolveBundledTmuxShimPath()
+    if (bundled) {
+      await copyIfChanged(bundled, join(root, 'tmux.exe'))
+    }
   }
   return root
 }
@@ -157,4 +161,54 @@ async function writeIfChanged(path: string, content: string): Promise<void> {
       await rm(tmp, { force: true })
     }
   }
+}
+
+async function copyIfChanged(sourcePath: string, targetPath: string): Promise<boolean> {
+  let sourceStat: { size: number; mtimeMs: number }
+  try {
+    sourceStat = await stat(sourcePath)
+  } catch {
+    // Source missing — skip silently
+    return false
+  }
+  try {
+    const targetStat = await stat(targetPath)
+    if (targetStat.size === sourceStat.size && targetStat.mtimeMs === sourceStat.mtimeMs) {
+      return false
+    }
+  } catch {
+    // Target missing — copy below
+  }
+  await mkdir(dirname(targetPath), { recursive: true })
+  const tmp = `${targetPath}.${process.pid}.${Date.now()}.tmp`
+  let renamed = false
+  try {
+    await copyFile(sourcePath, tmp)
+    await rename(tmp, targetPath)
+    renamed = true
+    return true
+  } catch (err) {
+    console.warn('[claude-agent-teams-shim-env] failed to copy shim:', err)
+    return false
+  } finally {
+    if (!renamed) {
+      await rm(tmp, { force: true })
+    }
+  }
+}
+
+function resolveBundledTmuxShimPath(): string | null {
+  if (process.resourcesPath) {
+    const packaged = join(process.resourcesPath, 'bin', 'agent-teams', 'tmux.exe')
+    if (existsSync(packaged)) {
+      return packaged
+    }
+    // resourcesPath was set but the packaged shim is not there — do not fall back to dev
+    return null
+  }
+  const dev = join(process.cwd(), 'native', 'windows-cli-launcher', '.build', 'tmux.exe')
+  if (existsSync(dev)) {
+    return dev
+  }
+  return null
 }
