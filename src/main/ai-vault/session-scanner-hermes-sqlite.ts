@@ -51,7 +51,16 @@ type SessionRow = {
   updated_at: unknown
 }
 
-function buildSessionListQuery(db: SyncDatabase): string {
+type SessionColumns = {
+  idCol: string
+  titleCol: string
+  cwdCol: string
+  modelCol: string
+  createdCol: string
+  updatedCol: string
+}
+
+function resolveSessionColumns(db: SyncDatabase): SessionColumns {
   const idCol = columnExists(db, 'sessions', 'id') ? 'id' : 'session_id'
   const titleCol = columnExists(db, 'sessions', 'title') ? 'title' : 'NULL'
   const cwdCol = columnExists(db, 'sessions', 'cwd') ? 'cwd' : 'NULL'
@@ -66,6 +75,11 @@ function buildSessionListQuery(db: SyncDatabase): string {
     : columnExists(db, 'sessions', 'last_updated')
       ? 'last_updated'
       : createdCol
+  return { idCol, titleCol, cwdCol, modelCol, createdCol, updatedCol }
+}
+
+function buildSessionListQuery(db: SyncDatabase): string {
+  const { idCol, titleCol, cwdCol, modelCol, createdCol, updatedCol } = resolveSessionColumns(db)
 
   // Why: filter out zero-turn empty sessions that have no recorded messages in the messages table
   // so empty session shells created by CLI startup do not clutter the AI Vault session list.
@@ -166,20 +180,7 @@ export async function parseHermesSqliteSession(args: {
       return null
     }
 
-    const idCol = columnExists(db, 'sessions', 'id') ? 'id' : 'session_id'
-    const titleCol = columnExists(db, 'sessions', 'title') ? 'title' : 'NULL'
-    const cwdCol = columnExists(db, 'sessions', 'cwd') ? 'cwd' : 'NULL'
-    const modelCol = columnExists(db, 'sessions', 'model') ? 'model' : 'NULL'
-    const createdCol = columnExists(db, 'sessions', 'created_at')
-      ? 'created_at'
-      : columnExists(db, 'sessions', 'session_start')
-        ? 'session_start'
-        : 'NULL'
-    const updatedCol = columnExists(db, 'sessions', 'updated_at')
-      ? 'updated_at'
-      : columnExists(db, 'sessions', 'last_updated')
-        ? 'last_updated'
-        : createdCol
+    const { idCol, titleCol, cwdCol, modelCol, createdCol, updatedCol } = resolveSessionColumns(db)
 
     const query = `SELECT ${idCol} AS id,
                           ${titleCol} AS title,

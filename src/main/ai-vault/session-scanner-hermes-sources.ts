@@ -9,16 +9,9 @@ import type {
   FileWithMtime,
   SessionFileDiscovery
 } from './session-scanner-types'
+import { sessionRootDirs } from './session-scanner-roots'
 
 const HERMES_SESSIONS_DIR = join(homedir(), '.hermes', 'sessions')
-
-function sessionRootDirs(
-  hostRootDir: string,
-  wslHomeDirs: readonly string[],
-  segments: readonly string[]
-): string[] {
-  return [hostRootDir, ...wslHomeDirs.map((homeDir) => join(homeDir, ...segments))]
-}
 
 function hermesStateDbPaths(options: AiVaultScanOptions, wslHomeDirs: readonly string[]): string[] {
   if (options.hermesStateDbPaths) {

@@ -1,4 +1,4 @@
-import { mkdtempSync } from 'node:fs'
+import { mkdtempSync, rmSync } from 'node:fs'
 import { mkdir, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -14,7 +14,9 @@ describe('Hermes 0.19 SQLite support & legacy backwards compatibility', () => {
   const cleanupDirs: string[] = []
 
   afterEach(() => {
-    cleanupDirs.splice(0)
+    for (const dir of cleanupDirs.splice(0)) {
+      rmSync(dir, { recursive: true, force: true })
+    }
   })
 
   function createTestDb(dbPath: string) {
