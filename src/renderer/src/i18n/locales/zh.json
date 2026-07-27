@@ -3336,6 +3336,14 @@
             "updatedTooltip": "Remote Orca Server updates completed",
             "failedOne": "1 server update failed",
             "updatedOne": "1 server updated"
+          },
+          "resource": {
+            "memory": {
+              "metric": {
+                "workingSetDescription": "工作集 (WS) 的总和。共享页可能会出现在多个进程中。",
+                "rssDescription": "驻留集大小 (RSS) 的总和。共享页或别名映射页可能会出现在多个进程中。"
+              }
+            }
           }
         }
       },

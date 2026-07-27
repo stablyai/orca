@@ -9,11 +9,15 @@ export function useMobileNativeChatInputLease(args: {
   readyRef: { readonly current: boolean }
   lockReason: MobileNativeChatInputLockReason | null
   markReady: (handle: string) => void
-  clear: (handle?: string) => void
+  /** Returns whether the clear actually dropped a lease — callers use a no-op clear
+   *  to detect a teardown React would otherwise never see (#10681). */
+  clear: (handle?: string) => boolean
 } {
   const [readyHandles, setReadyHandles] = useState<Set<string>>(new Set())
   const activeHandleRef = useRef(args.activeHandle)
   const connectedRef = useRef(args.connected)
+  // Mirrors the state so `clear` can report synchronously whether it changed anything.
+  const readyHandlesRef = useRef(readyHandles)
   const ready = args.connected && args.activeHandle != null && readyHandles.has(args.activeHandle)
   // Why: absence of an acknowledgement proves only that setup is still pending;
   // the protocol does not report evidence that another client owns the floor.
@@ -26,39 +30,53 @@ export function useMobileNativeChatInputLease(args: {
   activeHandleRef.current = args.activeHandle
   connectedRef.current = args.connected
   readyRef.current = ready
+  const replace = useCallback((next: Set<string>) => {
+    readyHandlesRef.current = next
+    setReadyHandles(next)
+  }, [])
   useEffect(() => {
     if (!args.connected) {
       readyRef.current = false
-      setReadyHandles(new Set())
-    }
-  }, [args.connected])
-  const markReady = useCallback((handle: string) => {
-    if (connectedRef.current && activeHandleRef.current === handle) {
-      readyRef.current = true
-    }
-    setReadyHandles((current) => {
-      if (current.has(handle)) {
-        return current
+      if (readyHandlesRef.current.size > 0) {
+        replace(new Set())
       }
-      return new Set(current).add(handle)
-    })
-  }, [])
-  const clear = useCallback((handle?: string) => {
-    if (handle === undefined || activeHandleRef.current === handle) {
-      readyRef.current = false
     }
-    setReadyHandles((current) => {
+  }, [args.connected, replace])
+  const markReady = useCallback(
+    (handle: string) => {
+      if (connectedRef.current && activeHandleRef.current === handle) {
+        readyRef.current = true
+      }
+      if (readyHandlesRef.current.has(handle)) {
+        return
+      }
+      replace(new Set(readyHandlesRef.current).add(handle))
+    },
+    [replace]
+  )
+  const clear = useCallback(
+    (handle?: string): boolean => {
+      const current = readyHandlesRef.current
+      if (handle === undefined || activeHandleRef.current === handle) {
+        readyRef.current = false
+      }
       if (handle === undefined) {
-        return new Set()
+        if (current.size === 0) {
+          return false
+        }
+        replace(new Set())
+        return true
       }
       if (!current.has(handle)) {
-        return current
+        return false
       }
       const next = new Set(current)
       next.delete(handle)
-      return next
-    })
-  }, [])
+      replace(next)
+      return true
+    },
+    [replace]
+  )
   return {
     ready,
     readyRef,

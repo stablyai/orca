@@ -10,8 +10,10 @@ import { scheduleRuntimeGraphSync } from '@/runtime/sync-runtime-graph'
 import { useAppStore } from '@/store'
 import { getWorktreeMapFromState } from '@/store/selectors'
 import { parseWorkspaceKey } from '../../../../shared/workspace-scope'
+import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../shared/constants'
+import { isEphemeralSetupTerminalWorktreeId } from '../../../../shared/ephemeral-setup-terminal-worktree-id'
 import { TerminalKittyKeyboardModeTracker } from '../../../../shared/terminal-kitty-keyboard-mode-tracker'
-import { isRuntimeOwnedSshTargetId } from '../../../../shared/execution-host'
+import { isRuntimeOwnedSshTargetId, parseExecutionHostId } from '../../../../shared/execution-host'
 import { createTerminalZeroDimensionsMessage } from '../../../../shared/terminal-zero-dimensions-diagnostic'
 import { isWorktreeRemovalFenceError } from '../../../../shared/worktree-removal-fence-error'
 import { parseTerminalOscColorQuery } from '../../../../shared/terminal-osc-color-reply'
@@ -38,6 +40,7 @@ import { toAgentLaunchPreferences } from '@/runtime/agent-session-create-operati
 import { createUnresolvedOwnerPtyTransport } from './unresolved-owner-pty-transport'
 import { resolveTerminalWorktreeRoute } from '@/lib/terminal-worktree-route'
 import { getConnectionId } from '@/lib/connection-context'
+import { recordTerminalTabParkedOnUnresolvedHost } from '@/lib/parked-terminal-host-hydration'
 import { getLocalProjectExecutionRuntimeContext } from '@/lib/local-preflight-context'
 import {
   getCachedWindowsTerminalCapabilities,
@@ -84,6 +87,7 @@ import {
   registerTerminalPaneRecoveryInstance,
   requestTerminalPaneRecovery
 } from './terminal-pane-recovery'
+import { shouldDropQuarantinedTerminalInput } from './terminal-input-quarantine'
 import {
   isDocumentVisibilityProvenStale,
   registerStaleDocumentVisibilityRecovery
@@ -3231,9 +3235,24 @@ export function connectPanePty(
     : mirroredRuntimeEnvironmentId
       ? mirroredRuntimeEnvironmentId
       : null
+  // Why: host-agnostic synthetic ids (floating terminal, inline setup panels) have no repo
+  // row by design, and a worktree row stamped 'local' proves its host on its own — both are
+  // resolved-local, not pending hydration (#10151). Only when nothing names the host does
+  // `undefined` mean the repo hasn't merged yet; coalescing that to null would fail-open a
+  // remote cwd onto the local daemon (ENOENT on Docker SSH paths).
+  const hostAgnosticTerminalWorktree =
+    deps.worktreeId === FLOATING_TERMINAL_WORKTREE_ID ||
+    isEphemeralSetupTerminalWorktreeId(deps.worktreeId)
+  const worktreeProvesLocalHost = parseExecutionHostId(worktree?.hostId)?.kind === 'local'
+  const connectionOwnerHydrating =
+    !terminalOwnerUnresolved &&
+    !hostAgnosticTerminalWorktree &&
+    !worktreeProvesLocalHost &&
+    runtimeEnvironmentId === null &&
+    worktreeConnectionId === undefined
   // Why: an SSH host nested under a HUB is execution identity, not permission for the paired client to dial that host.
   const connectionId =
-    !terminalOwnerUnresolved && runtimeEnvironmentId === null
+    !terminalOwnerUnresolved && !connectionOwnerHydrating && runtimeEnvironmentId === null
       ? (worktreeConnectionId ?? null)
       : null
   const shellOverride = tab?.shellOverride
@@ -3518,13 +3537,21 @@ export function connectPanePty(
         }
       : {})
   }
-  const transport = terminalOwnerUnresolved
-    ? createUnresolvedOwnerPtyTransport(
-        'Workspace identity is ambiguous across hosts. Refresh projects and try again.'
-      )
-    : runtimeEnvironmentId
-      ? createRemoteRuntimePtyTransport(runtimeEnvironmentId, transportOptions)
-      : createIpcPtyTransport(transportOptions)
+  if (connectionOwnerHydrating) {
+    // Why: this pane holds an inert transport until its host resolves; register it so
+    // the repos:changed handler remounts it instead of leaving the terminal blank.
+    recordTerminalTabParkedOnUnresolvedHost(deps.worktreeId, deps.tabId)
+  }
+  const transport =
+    terminalOwnerUnresolved || connectionOwnerHydrating
+      ? createUnresolvedOwnerPtyTransport(
+          terminalOwnerUnresolved
+            ? 'Workspace identity is ambiguous across hosts. Refresh projects and try again.'
+            : 'Workspace host is still loading. Retry when the project finishes hydrating.'
+        )
+      : runtimeEnvironmentId
+        ? createRemoteRuntimePtyTransport(runtimeEnvironmentId, transportOptions)
+        : createIpcPtyTransport(transportOptions)
   const canSendDesktopQueryReply = (): boolean => {
     const ptyId = transport.getPtyId()
     return !ptyId || !isPtyLocked(ptyId)
@@ -3636,7 +3663,11 @@ export function connectPanePty(
       // and a disconnected remote pane would otherwise remount-churn on every
       // cooldown window while typing. Local panes keep the lenient gate.
       requireAuthoritativeLiveness:
-        Boolean(transport.getConnectionId?.()) || isRemoteRuntimePtyId(undeliverablePtyId)
+        Boolean(transport.getConnectionId?.()) || isRemoteRuntimePtyId(undeliverablePtyId),
+      // Why only the rejected path: it is the only one whose remount can land on
+      // a fresh shell. A stalled-pipeline remount always reattaches to the same
+      // shell, so its half-typed line is still on screen and intact.
+      endpointReplaced: providerRejected
     })
   }
   // Why: the write-pipeline health watch (scheduler stall probe, replay-guard
@@ -3715,6 +3746,15 @@ export function connectPanePty(
     // so a real keystroke never reaches this branch.
     if (isTerminalQueryReply(data)) {
       sendDesktopQueryReplyImmediate(data)
+      return
+    }
+    // Why after the query-reply branch: device replies are not user input and
+    // must always reach the shell, or a program querying during reattach hangs.
+    // Why at all: a replaced endpoint reattaches to a fresh shell, so the tail
+    // of the interrupted line would be submitted by the user's own Enter and a
+    // compound command could run its surviving half (#10065 follow-up).
+    if (shouldDropQuarantinedTerminalInput(deps.tabId, data)) {
+      clearPendingTerminalInputIntent()
       return
     }
     const intent = pendingTerminalInputIntent

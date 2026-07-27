@@ -84,7 +84,15 @@ export type AgentHookStatusChangeEntry = {
   observedInCurrentRuntime: boolean
 }
 
+export type AgentHookProviderSessionIdentity = {
+  paneKey: string
+  sessionId: string
+  transcriptPath?: string
+  worktreeId?: string
+}
+
 type StatusChangeListener = (statuses: AgentHookStatusChangeEntry[]) => void
+type ProviderSessionChangeListener = (providerSessions: AgentHookProviderSessionIdentity[]) => void
 type PaneStatusClearListener = (clear: AgentStatusClearIpcPayload) => void
 type PaneKeyAliasPersistenceListener = (entries: LegacyPaneKeyAliasEntry[]) => void
 type PaneKeyAliasEntry = {
@@ -456,6 +464,7 @@ export class AgentHookServer {
   private onClaudeStatusLine: ((event: ClaudeStatusLineRateLimits) => void) | null = null
   private onPaneStatusCleared: PaneStatusClearListener | null = null
   private statusChangeListeners = new Set<StatusChangeListener>()
+  private providerSessionChangeListeners = new Set<ProviderSessionChangeListener>()
   // Why: set via start()'s userDataPath so the class has no direct Electron dependency (mockable in vitest node env).
   private endpointDir: string | null = null
   private endpointFilePathCache: string | null = null
@@ -509,6 +518,13 @@ export class AgentHookServer {
     }
   }
 
+  subscribeProviderSessionChanges(listener: ProviderSessionChangeListener): () => void {
+    this.providerSessionChangeListeners.add(listener)
+    return () => {
+      this.providerSessionChangeListeners.delete(listener)
+    }
+  }
+
   setPaneStatusClearListener(listener: PaneStatusClearListener | null): void {
     this.onPaneStatusCleared = listener
   }
@@ -519,6 +535,16 @@ export class AgentHookServer {
     return Array.from(this.state.lastStatusByPaneKey.values(), (entry) =>
       toAgentStatusIpcPayload(entry as EnrichedAgentHookEventPayload)
     )
+  }
+
+  /** Provider-session identities, including Pi's metadata-only rows. */
+  getProviderSessionIdentities(): AgentHookProviderSessionIdentity[] {
+    return this.buildStatusChangeNotification().providerSessions
+  }
+
+  getStatusSnapshotForPane(paneKey: string): AgentStatusIpcPayload[] {
+    const entry = this.state.lastStatusByPaneKey.get(paneKey)
+    return entry ? [toAgentStatusIpcPayload(entry as EnrichedAgentHookEventPayload)] : []
   }
 
   inferInterrupt(request: AgentInterruptInferenceRequest): boolean {
@@ -652,30 +678,55 @@ export class AgentHookServer {
   }
 
   getStatusChangeSnapshot(): AgentHookStatusChangeEntry[] {
-    return Array.from(this.state.lastStatusByPaneKey.entries()).flatMap(([paneKey, entry]) => {
+    return this.buildStatusChangeNotification().statuses
+  }
+
+  private buildStatusChangeNotification(): {
+    statuses: AgentHookStatusChangeEntry[]
+    providerSessions: AgentHookProviderSessionIdentity[]
+  } {
+    const statuses: AgentHookStatusChangeEntry[] = []
+    const providerSessions: AgentHookProviderSessionIdentity[] = []
+    for (const [paneKey, entry] of this.state.lastStatusByPaneKey) {
       const enriched = entry as EnrichedAgentHookEventPayload
-      return enriched.providerSessionOnly
-        ? []
-        : [
-            {
-              state: enriched.payload.state,
-              receivedAt: enriched.receivedAt,
-              observedInCurrentRuntime: this.runtimeObservedStatusPaneKeys.has(paneKey)
-            }
-          ]
-    })
+      if (enriched.providerSession) {
+        providerSessions.push({
+          paneKey,
+          sessionId: enriched.providerSession.id,
+          ...(enriched.providerSession.transcriptPath
+            ? { transcriptPath: enriched.providerSession.transcriptPath }
+            : {}),
+          ...(enriched.worktreeId ? { worktreeId: enriched.worktreeId } : {})
+        })
+      }
+      if (!enriched.providerSessionOnly) {
+        statuses.push({
+          state: enriched.payload.state,
+          receivedAt: enriched.receivedAt,
+          observedInCurrentRuntime: this.runtimeObservedStatusPaneKeys.has(paneKey)
+        })
+      }
+    }
+    return { statuses, providerSessions }
   }
 
   private notifyStatusChangeListeners(): void {
-    if (this.statusChangeListeners.size === 0) {
+    if (this.statusChangeListeners.size === 0 && this.providerSessionChangeListeners.size === 0) {
       return
     }
-    const snapshot = this.getStatusChangeSnapshot()
+    const { statuses, providerSessions } = this.buildStatusChangeNotification()
     for (const listener of this.statusChangeListeners) {
       try {
-        listener(snapshot)
+        listener(statuses)
       } catch (err) {
         console.error('[agent-hooks] status-change listener threw', err)
+      }
+    }
+    for (const listener of this.providerSessionChangeListeners) {
+      try {
+        listener(providerSessions)
+      } catch (err) {
+        console.error('[agent-hooks] provider-session listener threw', err)
       }
     }
   }

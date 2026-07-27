@@ -93,10 +93,78 @@ export function claimsCodexRolloutLayout(transcriptPath: string | undefined): bo
   return CODEX_ROLLOUT_LAYOUT_PATH.test(persistedPath.replace(/\\/g, '/'))
 }
 
+/**
+ * Orders trusted homes for the legacy id rescan, lowest wins.
+ *
+ * The winning home becomes the resumed pane's CODEX_HOME, so it picks the
+ * account. Rank the currently selected account's own home first — once the same
+ * rollout sits in several homes the id alone no longer names an account, and
+ * resuming under the account the user has selected is what
+ * they asked for. The real system home ranks next because codex refreshes it
+ * directly. Everything else is ordered by normalized path so no winner ever
+ * depends on the order accounts happen to sit in settings.
+ *
+ * The shared runtime mirror ranks above the remaining homes because winning is
+ * not inert for it: with no account selected it is the only home that triggers
+ * the legacy migration into the real system home
+ * (prepareLegacySharedCodexSessionResume, which also requires the system-default
+ * selection), and that migration is how such a resume lands on ~/.codex instead
+ * of some account's home. Letting a per-account home outrank it by mere path
+ * order would silently route that selection to an account the user did not pick.
+ * With an account selected the migration cannot fire either way, so this tier
+ * just preserves the pre-ranking order rather than inventing a new winner.
+ *
+ * All inputs are required, not optional: a caller that forgot one would
+ * silently degrade to pure path order, which is the accident this exists to
+ * remove. The selection arrives as a thunk because resolving it stats the
+ * account's ownership marker, and the far more common provenance-present
+ * resume never reaches the ranking at all.
+ */
+function rankTrustedCodexHomesForRescan(args: {
+  trustedCodexHomes: readonly string[]
+  getSelectedAccountCodexHome: () => string | null
+  systemCodexHomePath: string | null
+  sharedRuntimeCodexHomePath: string | null
+}): string[] {
+  const toComparisonHome = (value: string | null | undefined): string | null => {
+    const trimmed = value?.trim()
+    return trimmed ? normalizeRuntimePathForComparison(trimmed) : null
+  }
+  const selectedComparison = toComparisonHome(args.getSelectedAccountCodexHome())
+  const systemComparison = toComparisonHome(args.systemCodexHomePath)
+  const sharedRuntimeComparison = toComparisonHome(args.sharedRuntimeCodexHomePath)
+  const rankOf = (comparisonHome: string): number => {
+    if (selectedComparison && comparisonHome === selectedComparison) {
+      return 0
+    }
+    if (systemComparison && comparisonHome === systemComparison) {
+      return 1
+    }
+    return sharedRuntimeComparison && comparisonHome === sharedRuntimeComparison ? 2 : 3
+  }
+  return args.trustedCodexHomes
+    .map((homePath) => ({ homePath, comparisonHome: normalizeRuntimePathForComparison(homePath) }))
+    .sort((left, right) => {
+      const rankDelta = rankOf(left.comparisonHome) - rankOf(right.comparisonHome)
+      if (rankDelta !== 0) {
+        return rankDelta
+      }
+      return left.comparisonHome < right.comparisonHome
+        ? -1
+        : left.comparisonHome > right.comparisonHome
+          ? 1
+          : 0
+    })
+    .map((entry) => entry.homePath)
+}
+
 export async function findTrustedCodexSessionResume(args: {
   sessionId: string
   transcriptPath: string | undefined
   trustedCodexHomes: readonly string[]
+  getSelectedAccountCodexHome: () => string | null
+  systemCodexHomePath: string | null
+  sharedRuntimeCodexHomePath: string | null
   fileIsRegular?: (filePath: string) => boolean
   listSessionFiles?: (sessionsRoot: string) => AsyncIterable<string>
 }): Promise<{ homePath: string; transcriptPath: string } | null> {
@@ -118,7 +186,7 @@ export async function findTrustedCodexSessionResume(args: {
       listCodexSessionRolloutFilesIncrementally(sessionsRoot, { batchSize: 64, yieldMs: 0 }))
   const expectedSuffix = `-${args.sessionId}.jsonl`.toLowerCase()
   const seenHomes = new Set<string>()
-  for (const homePath of args.trustedCodexHomes) {
+  for (const homePath of rankTrustedCodexHomesForRescan(args)) {
     const comparisonHome = normalizeRuntimePathForComparison(homePath)
     if (seenHomes.has(comparisonHome)) {
       continue

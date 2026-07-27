@@ -29,6 +29,7 @@ import {
 } from './rpc-client-terminal-subscription'
 import { describeSocketEvent } from './socket-event-debug'
 import { markRpcDeliveryUnknown } from './rpc-delivery-ambiguity'
+import { openRpcRequestBudget, resolvePostConnectRequestTimeout } from './rpc-request-budget'
 import { isRpcResponse } from './rpc-response-shape'
 import { websocketPayloadToUint8 } from './websocket-payload-bytes'
 
@@ -43,8 +44,16 @@ type ConnectWaiter = {
   timeout: ReturnType<typeof setTimeout> | null
 }
 
-type SendRequestOptions = {
+export type SendRequestOptions = {
   timeoutMs?: number
+  /** Spend `timeoutMs` across connect-wait AND the request instead of giving each
+   *  phase its own. Interactive chat writes need it: they run as sequential loops
+   *  under one shared budget, so a per-phase clock lets the composer sit `sending`
+   *  for a multiple of the stated ceiling. Off by default — the long-running
+   *  callers (worktree create, dictation finish, credit reset) sized their budgets
+   *  against the post-connect clock, and squeezing them to the floor after a slow
+   *  reconnect would fail sends that used to land. */
+  budgetSpansConnect?: boolean
 }
 
 type SubscribeOptions = {
@@ -101,6 +110,9 @@ const AUTH_RETRY_BUDGET = 3
 // Why: a desktop that regenerated its E2EE keypair sends an e2ee_error we can't decrypt — the 4001 close code is the only surviving auth-failure signal.
 const UNAUTHORIZED_CLOSE_CODE = 4001
 const REQUEST_TIMEOUT_MS = 30_000
+// Why: an explicit `timeoutMs` is one budget for the whole call. If the connect wait
+// ate nearly all of it, still give the written frame a moment to be answered rather
+// than arming a 1ms timer.
 const CONNECT_TIMEOUT_MS = 12_000
 const HANDSHAKE_TIMEOUT_MS = 5_000
 // Why: RN may not expose WebSocket.readyState constants, but the CONNECTING protocol value (0) is stable across runtimes.
@@ -985,7 +997,8 @@ export function connect(
       params?: unknown,
       options?: SendRequestOptions
     ): Promise<RpcResponse> {
-      const waitStart = Date.now()
+      const budget = openRpcRequestBudget(options)
+      const waitStart = budget.startedAt
       const wasConnected = state === 'connected'
       await waitForConnected(options?.timeoutMs)
       if (!wasConnected) {
@@ -997,7 +1010,7 @@ export function connect(
 
       return new Promise((resolve, reject) => {
         const id = nextId()
-        const timeoutMs = options?.timeoutMs ?? REQUEST_TIMEOUT_MS
+        const timeoutMs = resolvePostConnectRequestTimeout(budget, REQUEST_TIMEOUT_MS)
         const timeout = setTimeout(() => {
           pending.delete(id)
           console.log('[net] sendRequest TIMEOUT', {

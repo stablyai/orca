@@ -10,6 +10,13 @@ import {
 
 const tempRoots: string[] = []
 
+// Why: the ranking inputs are required by design; cases below that never reach the rescan stay neutral.
+const withoutHomeRanking = {
+  getSelectedAccountCodexHome: (): string | null => null,
+  systemCodexHomePath: null,
+  sharedRuntimeCodexHomePath: null
+}
+
 afterEach(() => {
   for (const root of tempRoots.splice(0)) {
     rmSync(root, { recursive: true, force: true })
@@ -116,7 +123,8 @@ describe('resolveTrustedCodexSessionResumeHome', () => {
       findTrustedCodexSessionResume({
         sessionId: 'session-a',
         transcriptPath: plainPath,
-        trustedCodexHomes: [homePath]
+        trustedCodexHomes: [homePath],
+        ...withoutHomeRanking
       })
     ).resolves.toEqual({ homePath, transcriptPath: compressedPath })
 
@@ -125,7 +133,8 @@ describe('resolveTrustedCodexSessionResumeHome', () => {
       findTrustedCodexSessionResume({
         sessionId: 'session-a',
         transcriptPath: compressedPath,
-        trustedCodexHomes: [homePath]
+        trustedCodexHomes: [homePath],
+        ...withoutHomeRanking
       })
     ).resolves.toEqual({ homePath, transcriptPath: plainPath })
   })
@@ -149,7 +158,8 @@ describe('resolveTrustedCodexSessionResumeHome', () => {
       findTrustedCodexSessionResume({
         sessionId,
         transcriptPath: undefined,
-        trustedCodexHomes: [homePath]
+        trustedCodexHomes: [homePath],
+        ...withoutHomeRanking
       })
     ).resolves.toEqual({ homePath, transcriptPath: compressedPath })
   })
@@ -169,6 +179,7 @@ describe('resolveTrustedCodexSessionResumeHome', () => {
         sessionId,
         transcriptPath: undefined,
         trustedCodexHomes: ['/Users/example/.codex', '/managed/account/home'],
+        ...withoutHomeRanking,
         listSessionFiles
       })
     ).resolves.toEqual({ homePath: '/managed/account/home', transcriptPath: rolloutPath })
@@ -186,6 +197,7 @@ describe('resolveTrustedCodexSessionResumeHome', () => {
         sessionId: 'session-a',
         transcriptPath,
         trustedCodexHomes: ['/managed/account/home'],
+        ...withoutHomeRanking,
         fileIsRegular: () => true,
         listSessionFiles
       })
@@ -204,6 +216,7 @@ describe('resolveTrustedCodexSessionResumeHome', () => {
         sessionId,
         transcriptPath: `/managed/origin/home/sessions/2026/07/20/rollout-${sessionId}.jsonl`,
         trustedCodexHomes: ['/managed/origin/home', '/managed/other/home'],
+        ...withoutHomeRanking,
         fileIsRegular: () => false,
         listSessionFiles
       })
@@ -220,9 +233,189 @@ describe('resolveTrustedCodexSessionResumeHome', () => {
         sessionId: '../session',
         transcriptPath: undefined,
         trustedCodexHomes: ['/Users/example/.codex'],
+        ...withoutHomeRanking,
         listSessionFiles
       })
     ).resolves.toBeNull()
+  })
+})
+
+describe('findTrustedCodexSessionResume legacy-rescan home ranking', () => {
+  const sessionId = '019f81b9-19a9-7651-a8d1-352d9420bd11'
+  const systemHome = join('/Users', 'example', '.codex')
+  const sharedMirror = join('/userData', 'codex-runtime-home', 'home')
+  const accountAHome = join('/userData', 'codex-accounts', 'account-a', 'home')
+  const accountBHome = join('/userData', 'codex-accounts', 'account-b', 'home')
+
+  const rolloutIn = (homePath: string): string =>
+    join(homePath, 'sessions', '2026', '07', '20', `rollout-2026-07-20T15-50-19-${sessionId}.jsonl`)
+
+  // Why: one id already lives in several homes on main — the one-shot migrateLegacySessions copies
+  // each per-account rollout into the shared mirror and leaves the original. #10770 widens this to
+  // every managed home. Either way the id alone stops naming an account.
+  const listRolloutInEveryHome = async function* (sessionsRoot: string): AsyncIterable<string> {
+    yield join(sessionsRoot, '2026', '07', '20', `rollout-2026-07-20T15-50-19-${sessionId}.jsonl`)
+  }
+
+  const listRolloutIn = (...homePaths: string[]) =>
+    async function* (sessionsRoot: string): AsyncIterable<string> {
+      if (homePaths.some((homePath) => sessionsRoot === join(homePath, 'sessions'))) {
+        yield* listRolloutInEveryHome(sessionsRoot)
+      }
+    }
+
+  it('resumes into the selected account home whatever order the homes arrive in', async () => {
+    for (const trustedCodexHomes of [
+      [systemHome, sharedMirror, accountAHome, accountBHome],
+      [systemHome, sharedMirror, accountBHome, accountAHome],
+      [accountBHome, accountAHome, sharedMirror, systemHome]
+    ]) {
+      await expect(
+        findTrustedCodexSessionResume({
+          sessionId,
+          transcriptPath: undefined,
+          trustedCodexHomes,
+          getSelectedAccountCodexHome: () => accountBHome,
+          systemCodexHomePath: systemHome,
+          sharedRuntimeCodexHomePath: sharedMirror,
+          listSessionFiles: listRolloutInEveryHome
+        })
+      ).resolves.toEqual({ homePath: accountBHome, transcriptPath: rolloutIn(accountBHome) })
+    }
+  })
+
+  it('falls back to the real system home when no account home is selected', async () => {
+    await expect(
+      findTrustedCodexSessionResume({
+        sessionId,
+        transcriptPath: undefined,
+        trustedCodexHomes: [sharedMirror, accountAHome, systemHome],
+        getSelectedAccountCodexHome: () => null,
+        systemCodexHomePath: systemHome,
+        sharedRuntimeCodexHomePath: sharedMirror,
+        listSessionFiles: listRolloutInEveryHome
+      })
+    ).resolves.toEqual({ homePath: systemHome, transcriptPath: rolloutIn(systemHome) })
+  })
+
+  // Why: `/Users/…` already wins the tier-3 byte order, so the case above cannot tell the
+  // system-home tier apart from the path tie-break. Pin it with a home that sorts last.
+  it('ranks the real system home above the others even when its path sorts last', async () => {
+    const lateSortingSystemHome = join('/var', 'lib', 'orca', '.codex')
+    await expect(
+      findTrustedCodexSessionResume({
+        sessionId,
+        transcriptPath: undefined,
+        trustedCodexHomes: [sharedMirror, accountAHome, lateSortingSystemHome],
+        getSelectedAccountCodexHome: () => null,
+        systemCodexHomePath: lateSortingSystemHome,
+        sharedRuntimeCodexHomePath: sharedMirror,
+        listSessionFiles: listRolloutInEveryHome
+      })
+    ).resolves.toEqual({
+      homePath: lateSortingSystemHome,
+      transcriptPath: rolloutIn(lateSortingSystemHome)
+    })
+  })
+
+  it('orders the remaining homes by path so insertion order never decides', async () => {
+    for (const trustedCodexHomes of [
+      [accountBHome, accountAHome],
+      [accountAHome, accountBHome]
+    ]) {
+      await expect(
+        findTrustedCodexSessionResume({
+          sessionId,
+          transcriptPath: undefined,
+          trustedCodexHomes,
+          getSelectedAccountCodexHome: () => null,
+          systemCodexHomePath: systemHome,
+          sharedRuntimeCodexHomePath: sharedMirror,
+          listSessionFiles: listRolloutInEveryHome
+        })
+      ).resolves.toEqual({ homePath: accountAHome, transcriptPath: rolloutIn(accountAHome) })
+    }
+  })
+
+  // Why: the mirror is the only home whose win migrates the rollout into ~/.codex
+  // (prepareLegacySharedCodexSessionResume), which is how a system-default selection resumes on the
+  // real home. 'codex-accounts' sorts before 'codex-runtime-home', so path order alone would hand
+  // that selection to an arbitrary account instead. One-shot legacy migration already copies
+  // per-account rollouts into the mirror, so both really do hold the id.
+  it('prefers the shared mirror over a per-account home when the system home lacks the id', async () => {
+    await expect(
+      findTrustedCodexSessionResume({
+        sessionId,
+        transcriptPath: undefined,
+        trustedCodexHomes: [systemHome, accountAHome, sharedMirror],
+        getSelectedAccountCodexHome: () => null,
+        systemCodexHomePath: systemHome,
+        sharedRuntimeCodexHomePath: sharedMirror,
+        listSessionFiles: listRolloutIn(sharedMirror, accountAHome)
+      })
+    ).resolves.toEqual({ homePath: sharedMirror, transcriptPath: rolloutIn(sharedMirror) })
+  })
+
+  it('ranks Windows homes case-insensitively and keeps the caller path spelling', async () => {
+    const windowsRoot = 'C:\\Users\\Example'
+    const windowsSystemHome = `${windowsRoot}\\.codex`
+    const windowsAccountAHome = `${windowsRoot}\\AppData\\Roaming\\Orca\\codex-accounts\\a\\home`
+    const windowsAccountBHome = `${windowsRoot}\\AppData\\Roaming\\Orca\\codex-accounts\\b\\home`
+    const windowsRolloutIn = (homePath: string): string =>
+      `${join(homePath, 'sessions')}\\2026\\07\\20\\rollout-2026-07-20T15-50-19-${sessionId}.jsonl`
+    const listSessionFiles = async function* (sessionsRoot: string): AsyncIterable<string> {
+      yield `${sessionsRoot}\\2026\\07\\20\\rollout-2026-07-20T15-50-19-${sessionId}.jsonl`
+    }
+
+    await expect(
+      findTrustedCodexSessionResume({
+        sessionId,
+        transcriptPath: undefined,
+        trustedCodexHomes: [windowsSystemHome, windowsAccountAHome, windowsAccountBHome],
+        // Why: settings and discovery can disagree on drive/segment case; the selection must still match.
+        getSelectedAccountCodexHome: () => windowsAccountBHome.toLowerCase(),
+        systemCodexHomePath: windowsSystemHome,
+        sharedRuntimeCodexHomePath: null,
+        listSessionFiles
+      })
+    ).resolves.toEqual({
+      homePath: windowsAccountBHome,
+      transcriptPath: windowsRolloutIn(windowsAccountBHome)
+    })
+  })
+
+  it('still resumes the only home holding the id, selected or not', async () => {
+    await expect(
+      findTrustedCodexSessionResume({
+        sessionId,
+        transcriptPath: undefined,
+        trustedCodexHomes: [systemHome, sharedMirror, accountAHome, accountBHome],
+        getSelectedAccountCodexHome: () => accountAHome,
+        systemCodexHomePath: systemHome,
+        sharedRuntimeCodexHomePath: sharedMirror,
+        listSessionFiles: listRolloutIn(accountBHome)
+      })
+    ).resolves.toEqual({ homePath: accountBHome, transcriptPath: rolloutIn(accountBHome) })
+  })
+
+  it('does not rescan into the selected account home when transcript provenance was rejected', async () => {
+    const listSessionFiles = vi.fn((): AsyncIterable<string> => {
+      throw new Error('must not scan')
+    })
+
+    await expect(
+      findTrustedCodexSessionResume({
+        sessionId,
+        transcriptPath: rolloutIn(accountBHome),
+        trustedCodexHomes: [systemHome, accountAHome, accountBHome],
+        getSelectedAccountCodexHome: () => accountAHome,
+        systemCodexHomePath: systemHome,
+        sharedRuntimeCodexHomePath: sharedMirror,
+        fileIsRegular: () => false,
+        listSessionFiles
+      })
+    ).resolves.toBeNull()
+    expect(listSessionFiles).not.toHaveBeenCalled()
   })
 })
 

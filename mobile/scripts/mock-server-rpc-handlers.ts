@@ -11,6 +11,7 @@ import type { TerminalQuickCommand } from '../../src/shared/types'
 import { handleMockFilePreviewRequest } from './mock-server-file-preview-data'
 import { handleMockGitRequest } from './mock-server-git-state'
 import { handleMockAccountRequest } from './mock-server-account-rpc'
+import { handleMockNativeChatRequest } from './mock-server-native-chat-scenario'
 import {
   createMockTerminals,
   FAKE_SCROLLBACK,
@@ -118,13 +119,13 @@ export function handleRequest(
     send(response)
   }
 
-  if (handleMockGitRequest(request, respond, success)) {
-    return
-  }
-  if (handleMockFilePreviewRequest(request, respond, success, error)) {
-    return
-  }
-  if (handleMockAccountRequest(request, respond, success, error)) {
+  // Each returns false for methods it does not own; first owner wins.
+  if (
+    handleMockGitRequest(request, respond, success) ||
+    handleMockFilePreviewRequest(request, respond, success, error) ||
+    handleMockAccountRequest(request, respond, success, error) ||
+    handleMockNativeChatRequest(request, respond, success, error, ws)
+  ) {
     return
   }
 

@@ -35,6 +35,7 @@ export type MobileNativeChatController = {
   handleNativeChatSend: (text: string, images?: string[]) => Promise<boolean>
   handleNativeChatSendWithOutcome: (
     text: string,
-    images?: string[]
+    images?: string[],
+    deadline?: number
   ) => Promise<MobileNativeChatSendOutcome>
 }

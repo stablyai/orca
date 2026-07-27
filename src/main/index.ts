@@ -4,7 +4,6 @@ import { isAbsolute, join } from 'node:path'
 import os from 'node:os'
 import { app, BrowserWindow, dialog, ipcMain, nativeTheme, type Tray } from 'electron'
 import { electronApp, is } from '@electron-toolkit/utils'
-import * as QRCode from 'qrcode'
 import {
   Store,
   initDataPath,
@@ -176,7 +175,7 @@ import {
   claimsCodexRolloutLayout,
   findTrustedCodexSessionResume
 } from './codex/codex-session-resume-home'
-import { getSystemCodexHomePath } from './codex/codex-home-paths'
+import { getOrcaManagedCodexHomePath, getSystemCodexHomePath } from './codex/codex-home-paths'
 import { normalizeRuntimePathForComparison } from '../shared/cross-platform-path'
 import type { AgentProviderSessionMetadata } from '../shared/agent-session-resume'
 import { getDefaultWslDistro } from './wsl'
@@ -188,7 +187,8 @@ import {
   seedLiveClaudePtysFromPersistence
 } from './claude-accounts/live-pty-gate'
 import { StarNagService } from './star-nag/service'
-import { agentHookServer } from './agent-hooks/server'
+import { agentHookServer, type AgentHookProviderSessionIdentity } from './agent-hooks/server'
+import { createHookProviderSessionInvalidator } from './agent-hooks/hook-provider-session-invalidation'
 import { wslHookRelayManager } from './agent-hooks/wsl-hook-relay-manager'
 import { maybeAutoRenameBranchOnFirstWork } from './agent-hooks/first-work-branch-rename'
 import { rememberBranchRenameFailureOutput } from './agent-hooks/branch-rename-failure-output'
@@ -852,7 +852,15 @@ async function prepareCodexSessionResumeForLaunch(args: {
   const sessionSource = await findTrustedCodexSessionResume({
     sessionId: args.providerSession.id,
     transcriptPath: args.providerSession.transcriptPath,
-    trustedCodexHomes: trustedHomes
+    trustedCodexHomes: trustedHomes,
+    // Why: the legacy id rescan's winning home becomes this pane's CODEX_HOME, i.e. its account;
+    // rank it by the current selection so settings insertion order can never decide the account.
+    // Lazy: only the legacy branch ranks, so a provenance-present resume never stats the marker.
+    getSelectedAccountCodexHome: () => codexRuntimeHome!.getSelectedHostAccountCodexHomePath(),
+    systemCodexHomePath: systemHomePath,
+    // Why: the mirror winning is what triggers the migration into ~/.codex below, so it must
+    // outrank the path-sorted account homes or a system-default selection resumes as an account.
+    sharedRuntimeCodexHomePath: getOrcaManagedCodexHomePath()
   })
   if (!sessionSource) {
     // Why: an unverifiable Codex rollout still blocks; only paths that never claimed Codex
@@ -1559,6 +1567,9 @@ function getBundledWebClientRoot(): string | undefined {
 }
 
 async function renderTerminalPairingQr(pairingUrl: string): Promise<string | null> {
+  // Why dynamic: qrcode is only reachable from mobile pairing, so launch should
+  // not parse it for the majority who never pair a device.
+  const QRCode = await import('qrcode')
   try {
     return await QRCode.toString(pairingUrl, { type: 'terminal', small: true })
   } catch {
@@ -1902,9 +1913,32 @@ app.whenReady().then(async () => {
   agentAwakeService.setEnabled(store.getSettings().keepComputerAwakeWhileAgentsRun)
   // Why: start from empty — disk-hydrated status rows are UI continuity only; only this runtime's hook events keep the computer awake.
   agentAwakeService.setStatuses([])
-  unsubscribeAgentAwakeStatusChanges = agentHookServer.subscribeStatusChanges((statuses) => {
+  const collectChangedProviderSessionWorktrees = createHookProviderSessionInvalidator()
+  const publishProviderSessionChanges = (identities: AgentHookProviderSessionIdentity[]): void => {
+    const ownedIdentities = identities.map((identity) => ({
+      ...identity,
+      worktreeId:
+        identity.worktreeId ??
+        runtime?.getTerminalWorktreeIdForPaneKey(identity.paneKey) ??
+        undefined
+    }))
+    for (const worktreeId of collectChangedProviderSessionWorktrees(ownedIdentities)) {
+      runtime?.notifyMobileSessionTabsChanged(worktreeId)
+    }
+  }
+  const unsubscribeStatusChanges = agentHookServer.subscribeStatusChanges((statuses) => {
     agentAwakeService?.setStatuses(statuses)
   })
+  const unsubscribeProviderSessionChanges = agentHookServer.subscribeProviderSessionChanges(
+    (sessions) => {
+      // Healthy session.tabs streams need a push when transcript identity changes.
+      publishProviderSessionChanges(sessions)
+    }
+  )
+  unsubscribeAgentAwakeStatusChanges = () => {
+    unsubscribeStatusChanges()
+    unsubscribeProviderSessionChanges()
+  }
   // Why: telemetry must init before any IPC handler/renderer can call track(); it's a no-op in dev and while TELEMETRY_ENABLED is false, so it's safe early.
   initTelemetry(store)
   // Why: the trust-grant module is bundled into plain-node CLI entries where
@@ -2074,6 +2108,12 @@ app.whenReady().then(async () => {
     // Why: worktree.ps pulls hook-reported agent status (same source as the desktop sidebar) at query time so mobile shows the same agents.
     getAgentStatusSnapshot: () =>
       agentHookServer.getStatusSnapshot().filter((entry) => entry.providerSessionOnly !== true),
+    // Why: the filter above hides resume-identity rows from the live-agent views, but
+    // those rows carry the provider session mobile native chat addresses transcripts
+    // by — Pi publishes identity that way and would otherwise be unreachable.
+    getAgentProviderSessionSnapshot: () => agentHookServer.getStatusSnapshot(),
+    getAgentProviderSessionRowsForPane: (paneKey) =>
+      agentHookServer.getStatusSnapshotForPane(paneKey),
     // Why: source codex-home here (runs in window AND serve) so aiVault.listSessions includes managed-Codex sessions; registerCoreHandlers is window-only.
     getAdditionalAiVaultCodexHomePaths: () =>
       codexRuntimeHome ? codexRuntimeHome.getHostCodexHomePathsForSessionDiscovery() : [],
@@ -2086,6 +2126,7 @@ app.whenReady().then(async () => {
       isAgentStatusHooksEnabled(store?.getSettings()) ? agentHookServer.buildPtyEnv() : {}
   })
   runtime = runtimeService
+  publishProviderSessionChanges(agentHookServer.getProviderSessionIdentities())
   browserManager.setBrowserGuestStateChangedListener((worktreeId) => {
     runtimeService.notifyMobileSessionTabsChanged(worktreeId)
   })

@@ -4803,6 +4803,42 @@ describe('connectPanePty', () => {
     _resetTerminalPaneRecoveryForTests()
   })
 
+  it('quarantines the interrupted line after a write-unavailable remount, but never device replies', async () => {
+    const { connectPanePty } = await import('./pty-connection')
+    const { _resetTerminalPaneRecoveryForTests } = await import('./terminal-pane-recovery')
+    _resetTerminalPaneRecoveryForTests()
+    const remountTerminalTabForRecovery = vi.fn<(tabId: string) => boolean>(() => true)
+    mockStoreState = { ...mockStoreState, remountTerminalTabForRecovery } as StoreState
+    const transport = createMockTransport('daemon-pty')
+    let writeUnavailable: (() => void) | undefined
+    transport.connect.mockImplementation(async ({ callbacks }: { callbacks: ConnectCallbacks }) => {
+      writeUnavailable = callbacks.onWriteUnavailable
+      return { id: 'daemon-pty' }
+    })
+    transportFactoryQueue.push(transport)
+    const pane = createPane(1)
+
+    connectPanePty(pane as never, createManager(1) as never, createDeps() as never)
+    await flushAsyncTicks(6)
+    writeUnavailable?.()
+    await flushAsyncTicks(6)
+    expect(remountTerminalTabForRecovery).toHaveBeenCalledWith('tab-1')
+
+    // The surviving tail of `echo hi; rm -rf x`: reaching the fresh shell would
+    // let the user's own Enter run `rm -rf x` (#10065 follow-up).
+    sendTerminalInputThroughPane(pane, 'cho hi; rm -rf x')
+    expect(transport.sendInput).not.toHaveBeenCalledWith('cho hi; rm -rf x')
+    // A program that queries during reattach hangs if its reply is dropped.
+    sendTerminalInputThroughPane(pane, '\x1b[3;1R')
+    expect(transport.sendInputImmediate).toHaveBeenCalledWith('\x1b[3;1R')
+    sendTerminalInputThroughPane(pane, '\r')
+    expect(transport.sendInput).not.toHaveBeenCalledWith('\r')
+    // The terminator disarmed it, so the next real command reaches the shell.
+    sendTerminalInputThroughPane(pane, 'ls\r')
+    expect(transport.sendInput).toHaveBeenCalledWith('ls\r')
+    _resetTerminalPaneRecoveryForTests()
+  })
+
   it('recovers a wedged write pipeline after accepted input without renderer output', async () => {
     vi.useFakeTimers()
     const { connectPanePty } = await import('./pty-connection')
@@ -15551,6 +15587,61 @@ describe('connectPanePty', () => {
     )
 
     expect(createRemoteRuntimePtyTransport).toHaveBeenCalledWith('hub-a', expect.any(Object))
+  })
+
+  it('still spawns locally when the worktree row itself proves a local host', async () => {
+    // The hydration guard must key off "nothing names the host", not "no repo row" — a
+    // worktree stamped hostId 'local' is resolved even before its repo merges.
+    const { connectPanePty } = await import('./pty-connection')
+    const { createIpcPtyTransport } = await import('./pty-transport')
+    const transport = createMockTransport()
+    transportFactoryQueue.push(transport)
+    mockStoreState = {
+      ...mockStoreState,
+      tabsByWorktree: { 'wt-local': [{ id: 'tab-1', ptyId: null }] },
+      worktreesByRepo: {
+        repo1: [{ id: 'wt-local', repoId: 'repo1', path: '/tmp/wt-local', hostId: 'local' }]
+      },
+      repos: []
+    } as StoreState
+
+    connectPanePty(
+      createPane(1) as never,
+      createManager(1) as never,
+      createDeps({ worktreeId: 'wt-local', cwd: '/tmp/wt-local' }) as never
+    )
+
+    expect(createIpcPtyTransport).toHaveBeenCalled()
+  })
+
+  it('withholds a local spawn while a repo-backed worktree has no hydrated host', async () => {
+    // Regression: an SSH worktree whose repo row hadn't merged yet resolved to a null
+    // connectionId and spawned on the local daemon with the remote cwd, so the pane never
+    // bound a PTY (Docker SSH watcher-isolation timeout).
+    const { connectPanePty } = await import('./pty-connection')
+    const { createIpcPtyTransport } = await import('./pty-transport')
+    const { createRemoteRuntimePtyTransport } = await import('./remote-runtime-pty-transport')
+    const transport = createMockTransport()
+    transportFactoryQueue.push(transport)
+    mockStoreState = {
+      ...mockStoreState,
+      tabsByWorktree: { 'wt-remote': [{ id: 'tab-1', ptyId: null }] },
+      // Why: the worktree row exists (so the owner is not "ambiguous") but its repo has
+      // not landed yet — exactly the window that used to fail open to local.
+      worktreesByRepo: {
+        repo1: [{ id: 'wt-remote', repoId: 'repo1', path: '/tmp/orca-docker-relay-perf-repo' }]
+      },
+      repos: []
+    } as StoreState
+
+    const deps = createDeps({
+      worktreeId: 'wt-remote',
+      cwd: '/tmp/orca-docker-relay-perf-repo'
+    })
+    connectPanePty(createPane(1) as never, createManager(1) as never, deps as never)
+
+    expect(createIpcPtyTransport).not.toHaveBeenCalled()
+    expect(createRemoteRuntimePtyTransport).not.toHaveBeenCalled()
   })
 
   it('keeps the floating terminal local even while a runtime is active', async () => {

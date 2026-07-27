@@ -66,6 +66,7 @@ import {
   getResourceManagerAriaLabel,
   getResourceManagerTooltipLines
 } from './resource-manager-terminal-copy'
+import { getResourceMemoryMetricCopy } from './resource-memory-metric-copy'
 import {
   buildResourceSessionBindingIndex,
   countUnboundDaemonSessions,
@@ -98,10 +99,6 @@ function formatMemory(bytes: number): string {
 
 function formatCpu(percent: number): string {
   return `${percent.toFixed(1)}%`
-}
-
-function formatPercent(value: number): string {
-  return `${value.toFixed(0)}%`
 }
 
 function formatMetricCpu(value: Metric): string {
@@ -962,14 +959,15 @@ export function ResourceUsageStatusSegment({
   // closed path used boundPtyIds (wake hints) and inflated the chip to 60+.
   const triggerSessionCount = sessionInventory.count
 
-  const { totalMemory, totalCpu, hostShare, memBadgeLabel } = useMemo(() => {
+  const memoryMetricCopy = getResourceMemoryMetricCopy(
+    resourceSnapshot?.processMemoryMetric ?? 'rss'
+  )
+  const { totalMemory, totalCpu, memBadgeLabel } = useMemo(() => {
     const memory = resourceSnapshot?.totalMemory ?? 0
     const cpu = resourceSnapshot?.totalCpu ?? 0
-    const hostTotal = resourceSnapshot?.host.totalMemory ?? 0
     return {
       totalMemory: memory,
       totalCpu: cpu,
-      hostShare: hostTotal > 0 ? (memory / hostTotal) * 100 : 0,
       memBadgeLabel: resourceSnapshot ? formatMemory(memory) : '—'
     }
   }, [resourceSnapshot])
@@ -979,7 +977,9 @@ export function ResourceUsageStatusSegment({
   // Why: sessions IPC can fail while snapshot IPC works; flag it so the empty session list isn't mistaken for healthy.
   const sessionsOnlyError = sessionsError && memorySnapshotError === null
   const resourceManagerTooltipLines = getResourceManagerTooltipLines({
-    memoryLabel: memBadgeLabel,
+    memoryLabel: resourceSnapshot
+      ? `${memBadgeLabel} · ${memoryMetricCopy.summaryLabel}`
+      : memBadgeLabel,
     sessionCount: triggerSessionCount,
     spaceScanReady
   })
@@ -1334,35 +1334,14 @@ export function ResourceUsageStatusSegment({
                     tabIndex={0}
                     className="font-medium text-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring focus-visible:rounded"
                   >
-                    {formatMemory(totalMemory)}
+                    {formatMemory(totalMemory)}{' '}
+                    <span className="font-normal text-muted-foreground">
+                      {memoryMetricCopy.summaryLabel}
+                    </span>
                   </span>
                 </TooltipTrigger>
                 <TooltipContent side="top" sideOffset={6} className="z-[70] max-w-xs">
-                  {translate(
-                    'auto.components.status.bar.ResourceUsageStatusSegment.9e2525c89f',
-                    "Resident memory held by Orca plus the processes under each worktree's terminals."
-                  )}
-                </TooltipContent>
-              </Tooltip>
-              <span className="text-muted-foreground/50">·</span>
-              <Tooltip delayDuration={200}>
-                <TooltipTrigger asChild>
-                  <span
-                    tabIndex={0}
-                    className="text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring focus-visible:rounded"
-                  >
-                    {formatPercent(hostShare)}{' '}
-                    {translate(
-                      'auto.components.status.bar.ResourceUsageStatusSegment.e7ccce7e87',
-                      'of system RAM'
-                    )}
-                  </span>
-                </TooltipTrigger>
-                <TooltipContent side="top" sideOffset={6} className="z-[70] max-w-xs">
-                  {translate(
-                    'auto.components.status.bar.ResourceUsageStatusSegment.6449a95c78',
-                    "How much of this machine's physical RAM the Orca-tracked processes are sitting on."
-                  )}
+                  {memoryMetricCopy.description}
                 </TooltipContent>
               </Tooltip>
             </div>
@@ -1439,10 +1418,7 @@ export function ResourceUsageStatusSegment({
                     )}
                     aria-pressed={sortOption === 'memory'}
                   >
-                    {translate(
-                      'auto.components.status.bar.ResourceUsageStatusSegment.1b24a32d3a',
-                      'Memory'
-                    )}
+                    {memoryMetricCopy.columnLabel}
                   </button>
                 </div>
                 {/* Why: empty trailing gutter keeps CPU/Memory header cells aligned with rows that reserve this width for the kill-X. */}

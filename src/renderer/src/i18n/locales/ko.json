@@ -3336,6 +3336,14 @@
             "updatedTooltip": "Remote Orca Server updates completed",
             "failedOne": "1 server update failed",
             "updatedOne": "1 server updated"
+          },
+          "resource": {
+            "memory": {
+              "metric": {
+                "workingSetDescription": "작업 집합(WS)의 합계입니다. 공유 페이지가 여러 프로세스에 포함될 수 있습니다.",
+                "rssDescription": "상주 집합 크기(RSS)의 합계입니다. 공유되거나 별칭으로 매핑된 페이지가 여러 프로세스에 포함될 수 있습니다."
+              }
+            }
           }
         }
       },

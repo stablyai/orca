@@ -3733,11 +3733,14 @@ describe('orca cli worktree awareness', () => {
         host: {
           totalMemory: 8 * 1024 * 1024,
           freeMemory: 2 * 1024 * 1024,
+          availableMemory: 2 * 1024 * 1024,
+          availableMemorySource: 'free-memory',
           usedMemory: 6 * 1024 * 1024,
           memoryUsagePercent: 75,
           cpuCoreCount: 8,
           loadAverage1m: 1.25
         },
+        processMemoryMetric: 'rss',
         totalCpu: 3.75,
         totalMemory: 2 * 1024 * 1024,
         collectedAt: 1000
@@ -3750,6 +3753,8 @@ describe('orca cli worktree awareness', () => {
     expect(callMock).toHaveBeenCalledWith('diagnostics.memory')
     const output = logSpy.mock.calls.flat().join('\n')
     expect(output).toContain('totalMemory: 2.0 MB')
+    expect(output).toContain('processMemoryMetric: summed RSS; shared or aliased pages may repeat')
+    expect(output).toContain('hostAvailable: 2.0 MB (free-memory)')
     expect(output).toContain('app: 1.0 MB')
     expect(output).toContain('- feature  1.0 MB  2.5%  1 session')
   })

@@ -543,11 +543,12 @@ describe('getDiff', () => {
 
     const reads = Array.from({ length: 8 }, () => getDiff('/repo', 'src/file.ts', true))
 
-    await waitForMockCalls(gitExecFileAsyncBufferMock, 1)
-    expect(gitExecFileAsyncBufferMock).toHaveBeenCalledTimes(1)
+    // Why both up front: the two sides are independent spawns issued concurrently,
+    // so 8 identical reads still collapse to exactly 2 — one per side, not per read.
+    await waitForMockCalls(gitExecFileAsyncBufferMock, 2)
+    expect(gitExecFileAsyncBufferMock).toHaveBeenCalledTimes(2)
 
     leftBlob.resolve()
-    await waitForMockCalls(gitExecFileAsyncBufferMock, 2)
     rightBlob.resolve()
 
     const results = await Promise.all(reads)

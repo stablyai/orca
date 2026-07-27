@@ -1469,6 +1469,39 @@ describe('AgentHookServer listener replay', () => {
     ])
   })
 
+  it('notifies provider-session subscribers without changing status listener arguments', () => {
+    const server = new AgentHookServer()
+    const statuses = vi.fn()
+    const sessions = vi.fn()
+    server.subscribeStatusChanges(statuses)
+    server.subscribeProviderSessionChanges(sessions)
+
+    server.ingestRemote(
+      {
+        paneKey: PANE,
+        worktreeId: 'wt-1',
+        providerSession: {
+          key: 'session_id',
+          id: 'pi-session-1',
+          transcriptPath: '/tmp/pi-session-1.jsonl'
+        },
+        providerSessionOnly: true,
+        payload: { state: 'done', agentType: 'pi' }
+      },
+      'conn-1'
+    )
+
+    expect(statuses).toHaveBeenCalledWith([])
+    expect(sessions).toHaveBeenCalledWith([
+      {
+        paneKey: PANE,
+        sessionId: 'pi-session-1',
+        transcriptPath: '/tmp/pi-session-1.jsonl',
+        worktreeId: 'wt-1'
+      }
+    ])
+  })
+
   it('keeps status-change subscribers when renderer fanout listener is cleared', () => {
     const server = new AgentHookServer()
     const statusChangeListener = vi.fn()

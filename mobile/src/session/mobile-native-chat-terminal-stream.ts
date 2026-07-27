@@ -1,6 +1,6 @@
 export { createMobileNativeChatInputRecovery } from './mobile-native-chat-input-recovery'
 
-export type MobileNativeChatTerminalStreamAction = 'pause' | 'resume' | 'none'
+export type MobileNativeChatTerminalStreamAction = 'pause' | 'resume' | 'rearm' | 'none'
 
 /** Decides whether the active mobile terminal stream should run while native chat
  *  covers its WebView. Resume is allowed only once the mounted WebView is ready. */
@@ -16,7 +16,13 @@ export function resolveMobileNativeChatTerminalStreamAction(args: {
     return 'none'
   }
   if (args.showNativeChat) {
-    return !args.streamCovered ? 'pause' : 'none'
+    if (!args.streamCovered) {
+      return 'pause'
+    }
+    // Why: the covered stream IS the input lease. Anything that tore it down
+    // (terminal.list churn, a client swap, an `end` frame) would otherwise leave
+    // the composer locked forever — nothing else re-subscribes a covered handle.
+    return args.streamActive ? 'none' : 'rearm'
   }
   return (args.streamCovered || !args.streamActive) && args.webViewReady ? 'resume' : 'none'
 }

@@ -74,6 +74,13 @@ type Props = {
   onMicPressIn?: () => void
   onMicPressOut?: () => void
   inputLockReason?: MobileNativeChatInputLockReason | null
+  /** Route-reported send failure (answer cards, permission replies, stop). Shares the
+   *  inline banner with a rejected composer send, so one failure paints once. The
+   *  route routes these here only while this view is mounted, and falls back to its
+   *  toast otherwise — a deferred failure must not land on an unmounted banner. */
+  sendErrorMessage?: string | null
+  /** Clears `sendErrorMessage` once a later send is accepted. */
+  onClearSendError?: () => void
   filePaths?: string[]
   onNeedFiles?: (query: string) => void
   /** A pending agent question/permission detected from live status, shown as a
@@ -121,6 +128,8 @@ export function MobileNativeChatView({
   onMicPressIn,
   onMicPressOut,
   inputLockReason,
+  sendErrorMessage,
+  onClearSendError,
   filePaths,
   onNeedFiles,
   ask,
@@ -144,16 +153,6 @@ export function MobileNativeChatView({
   // Lift the composer clear of the keyboard, plus the bottom safe-area so it
   // never sits under the home indicator / nav bar (mirrors the terminal dock).
   const { fontScale, pinchGesture } = useMobileNativeChatPinchGesture()
-  // Surface a rejected send inline above the composer — a bottom toast gets hidden
-  // behind the keyboard (the case that prompted this). Auto-dismisses after a beat.
-  const [sendFailed, setSendFailed] = useState(false)
-  useEffect(() => {
-    if (!sendFailed) {
-      return
-    }
-    const t = setTimeout(() => setSendFailed(false), 4000)
-    return () => clearTimeout(t)
-  }, [sendFailed])
 
   const pendingIds = useMemo(() => new Set(pending.map((p) => p.id)), [pending])
   // `data` is the list source: folded transcript + synthetic streaming bubble +
@@ -184,14 +183,13 @@ export function MobileNativeChatView({
     async (text: string): Promise<boolean> => {
       const accepted = await onSend(text)
       if (!accepted) {
-        setSendFailed(true)
         return false
       }
-      setSendFailed(false)
+      onClearSendError?.()
       followLatest()
       return true
     },
-    [followLatest, onSend]
+    [followLatest, onClearSendError, onSend]
   )
 
   const onScroll = useCallback(
@@ -403,13 +401,13 @@ export function MobileNativeChatView({
             </Pressable>
           ) : null}
         </View>
-        {sendFailed ? (
-          <View style={styles.sendError}>
-            <Text style={styles.sendErrorText}>
-              {rawLockReason === 'disconnected'
-                ? t('chat.messageNotSentReconnecting')
-                : t('chat.messageNotSent')}
-            </Text>
+        {sendErrorMessage ? (
+          <View
+            style={styles.sendError}
+            accessibilityRole="alert"
+            accessibilityLiveRegion="assertive"
+          >
+            <Text style={styles.sendErrorText}>{sendErrorMessage}</Text>
           </View>
         ) : null}
         <MobileNativeChatComposer
