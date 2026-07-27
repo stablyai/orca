@@ -1044,7 +1044,7 @@
       ],
       "platforms": ["macos", "linux", "windows"],
       "providers": ["daemon", "runtime", "ssh", "wsl"],
-      "coveredPlatforms": ["macos", "windows"],
+      "coveredPlatforms": ["linux", "macos", "windows"],
       "coveredProviders": ["daemon", "runtime"],
       "coverageNotes": "Recorded native Windows evidence covers the v21/v22/v23/v24/v25 named-pipe matrix. The deterministic daemon harness covers capable and legacy paired-runtime request shapes against live v25/v26 PTYs in separate worktrees, plus an unrelated control. Host/renderer tests cover old servers, missing liveness, stale publications, reused claims, split parents, explicit user intent, cross-profile isolation, remote runtime clients, SSH-provider routing, and WSL boundaries. A headed host paired to a separate live client, headless serve parity, Linux, SSH, and WSL remain explicit gaps.",
       "motivatingLinks": [
@@ -1163,13 +1163,13 @@
       ],
       "evidenceRuns": [
         {
-          "date": "2026-07-22",
-          "runner": "local",
-          "platform": "macos",
+          "date": "2026-07-27",
+          "runner": "ci",
+          "platform": "linux",
           "command": "pnpm exec playwright test tests/e2e/daemon-generation-legacy-close-safety.spec.ts --config tests/playwright.config.ts --project electron-headless --workers=1",
           "result": "passed",
-          "durationSeconds": 28.9,
-          "summary": "Baseline evidence: current main and PR #10013 route a legacy viewer's two reasonless requests to immediate shutdown, killing exact v25/v26 roots and descendants. The prior hard-refusal candidate kept them alive but regressed legacy intentional close. The capability-gated combined oracle supersedes that candidate result and is pending GitHub CI."
+          "durationSeconds": 5.1,
+          "summary": "Current-head capability-gated oracle passed in E2E run https://github.com/stablyai/orca/actions/runs/30250731941/job/89928386794: capable v25/v26 roots and descendants survived with snapshot republish and post-close I/O, byte-identical legacy closes retained current-main shutdown behavior, and the unrelated fifth-worktree control survived."
         },
         {
           "date": "2026-07-21",
@@ -1190,8 +1190,8 @@
         "evidence": "Local deterministic Windows evidence includes the final two-scenario pass and a separate 25-burst stress pass; CI and 14-day soak history are absent."
       },
       "redGreenEvidence": {
-        "status": "partial",
-        "evidence": "Current main and PR #10013 each route two reasonless legacy-viewer requests to immediate shutdown, emit real session-killed events in v25/v26, and terminate both exact roots and descendants. The revised oracle requires that same result for a non-capable viewer and requires survival only for a capable viewer; its GitHub CI result is pending. Existing Windows red/green evidence separately covers evidence-bearing lifecycle closes."
+        "status": "complete",
+        "evidence": "Current main and PR #10013 route both reasonless viewer sequences to immediate shutdown, while the prior global-refusal candidate incorrectly preserves the legacy sequence. The capability-gated candidate passed the combined GitHub oracle: capable v25/v26 PTYs survive and answer input, legacy PTYs retain current-main shutdown behavior, and the unrelated control survives. Existing Windows red/green evidence separately covers evidence-bearing lifecycle closes."
       },
       "performanceBudget": {
         "required": true,
