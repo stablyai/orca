@@ -13,7 +13,7 @@ import { parseWorkspaceKey } from '../../../../shared/workspace-scope'
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../shared/constants'
 import { isEphemeralSetupTerminalWorktreeId } from '../../../../shared/ephemeral-setup-terminal-worktree-id'
 import { TerminalKittyKeyboardModeTracker } from '../../../../shared/terminal-kitty-keyboard-mode-tracker'
-import { isRuntimeOwnedSshTargetId } from '../../../../shared/execution-host'
+import { isRuntimeOwnedSshTargetId, parseExecutionHostId } from '../../../../shared/execution-host'
 import { createTerminalZeroDimensionsMessage } from '../../../../shared/terminal-zero-dimensions-diagnostic'
 import { isWorktreeRemovalFenceError } from '../../../../shared/worktree-removal-fence-error'
 import { parseTerminalOscColorQuery } from '../../../../shared/terminal-osc-color-reply'
@@ -3234,13 +3234,18 @@ export function connectPanePty(
       ? mirroredRuntimeEnvironmentId
       : null
   // Why: host-agnostic synthetic ids (floating terminal, inline setup panels) have no repo
-  // row by design, so `undefined` there is resolved-local, not pending hydration (#10151).
-  // For a repo-backed worktree it means the repo hasn't hydrated: coalescing to null would
-  // fail-open a remote cwd onto the local daemon (ENOENT on Docker SSH paths).
+  // row by design, and a worktree row stamped 'local' proves its host on its own — both are
+  // resolved-local, not pending hydration (#10151). Only when nothing names the host does
+  // `undefined` mean the repo hasn't merged yet; coalescing that to null would fail-open a
+  // remote cwd onto the local daemon (ENOENT on Docker SSH paths).
+  const hostAgnosticTerminalWorktree =
+    deps.worktreeId === FLOATING_TERMINAL_WORKTREE_ID ||
+    isEphemeralSetupTerminalWorktreeId(deps.worktreeId)
+  const worktreeProvesLocalHost = parseExecutionHostId(worktree?.hostId)?.kind === 'local'
   const connectionOwnerHydrating =
     !terminalOwnerUnresolved &&
-    deps.worktreeId !== FLOATING_TERMINAL_WORKTREE_ID &&
-    !isEphemeralSetupTerminalWorktreeId(deps.worktreeId) &&
+    !hostAgnosticTerminalWorktree &&
+    !worktreeProvesLocalHost &&
     runtimeEnvironmentId === null &&
     worktreeConnectionId === undefined
   // Why: an SSH host nested under a HUB is execution identity, not permission for the paired client to dial that host.

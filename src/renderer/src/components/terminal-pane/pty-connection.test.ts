@@ -15528,6 +15528,31 @@ describe('connectPanePty', () => {
     expect(createRemoteRuntimePtyTransport).toHaveBeenCalledWith('hub-a', expect.any(Object))
   })
 
+  it('still spawns locally when the worktree row itself proves a local host', async () => {
+    // The hydration guard must key off "nothing names the host", not "no repo row" — a
+    // worktree stamped hostId 'local' is resolved even before its repo merges.
+    const { connectPanePty } = await import('./pty-connection')
+    const { createIpcPtyTransport } = await import('./pty-transport')
+    const transport = createMockTransport()
+    transportFactoryQueue.push(transport)
+    mockStoreState = {
+      ...mockStoreState,
+      tabsByWorktree: { 'wt-local': [{ id: 'tab-1', ptyId: null }] },
+      worktreesByRepo: {
+        repo1: [{ id: 'wt-local', repoId: 'repo1', path: '/tmp/wt-local', hostId: 'local' }]
+      },
+      repos: []
+    } as StoreState
+
+    connectPanePty(
+      createPane(1) as never,
+      createManager(1) as never,
+      createDeps({ worktreeId: 'wt-local', cwd: '/tmp/wt-local' }) as never
+    )
+
+    expect(createIpcPtyTransport).toHaveBeenCalled()
+  })
+
   it('withholds a local spawn while a repo-backed worktree has no hydrated host', async () => {
     // Regression: an SSH worktree whose repo row hadn't merged yet resolved to a null
     // connectionId and spawned on the local daemon with the remote cwd, so the pane never
