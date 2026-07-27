@@ -12,7 +12,6 @@ import type { SkillBundleArtifacts } from './skill-bundle-artifacts'
 import {
   matchingKnownSnapshot,
   observeSkillPackage,
-  sharesKnownSnapshotFileIdentity,
   type ObservedSkillPackage
 } from './skill-package-identity'
 import {
@@ -48,14 +47,9 @@ function freshnessStatus(
  */
 function isForeignSameNameSkill(
   topology: SkillInstallationTopology,
-  observed: ObservedSkillPackage,
-  snapshots: readonly SkillKnownSnapshot[]
+  observed: ObservedSkillPackage
 ): boolean {
-  return (
-    topology === 'plugin-cache' &&
-    observed.files.length > 0 &&
-    !sharesKnownSnapshotFileIdentity(observed, snapshots)
-  )
+  return topology === 'plugin-cache' && observed.files.length > 0
 }
 
 function errorCategory(error: unknown, fallback: string): string {
@@ -130,8 +124,7 @@ export async function observeSkillFreshnessInstallation(args: {
     return {
       ...base,
       status:
-        status === 'unrecognized' &&
-        isForeignSameNameSkill(args.topology.topology, observed, snapshots)
+        status === 'unrecognized' && isForeignSameNameSkill(args.topology.topology, observed)
           ? 'foreign'
           : status,
       installedReleaseRevision: snapshot?.releaseRevision ?? null,
