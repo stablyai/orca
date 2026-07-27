@@ -145,6 +145,7 @@ export function createPaneDOM(
     compositionHandler: null,
     focusClassSyncCleanup: null,
     terminalScrollIntentDisposable: null,
+    linkifierMouseLeaveResetDisposable: null,
     arabicShapingJoinerCleanup: null,
     pendingSplitScrollState: null,
     pendingSplitScrollRafIds: [],
