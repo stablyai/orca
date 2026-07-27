@@ -638,6 +638,22 @@ describe('Store', () => {
     expect(persisted.localAccountRuntimeDefaultedToAutoForAllUsers).toBe(true)
   })
 
+  it('backfills appFontWeight for settings files saved before it existed', async () => {
+    writeDataFile({
+      schemaVersion: 1,
+      repos: [],
+      worktreeMeta: {},
+      settings: {
+        appFontFamily: 'Inter'
+      }
+    })
+
+    const store = await createStore()
+
+    expect(store.getSettings().appFontWeight).toBe(400)
+    expect(store.getSettings().appFontFamily).toBe('Inter')
+  })
+
   it('preserves an explicit WSL account-runtime pin through the migration', async () => {
     writeDataFile({
       schemaVersion: 1,

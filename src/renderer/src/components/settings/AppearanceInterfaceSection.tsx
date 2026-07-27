@@ -221,7 +221,7 @@ export function AppearanceInterfaceSection({
           min={APP_FONT_WEIGHT_MIN}
           max={APP_FONT_WEIGHT_MAX}
           step={APP_FONT_WEIGHT_STEP}
-          suffix="100-900"
+          suffix={`${APP_FONT_WEIGHT_MIN}-${APP_FONT_WEIGHT_MAX}`}
           onChange={(value) => updateSettings({ appFontWeight: normalizeAppFontWeight(value) })}
         />
       </SearchableSetting>
