@@ -5,8 +5,7 @@ import {
   OPEN_IMPORT_TARGET_COMMAND_ID,
   provideImportLinkHover,
   registerImportHoverContext,
-  resolveImportHoverTargetWithCache,
-  unregisterImportHoverContext
+  resolveImportHoverTargetWithCache
 } from './monaco-import-hover-link'
 import { getImportSpecifierLinks } from './import-specifier-links'
 import type { ResolvedImportLinkTarget } from './import-link-target-resolution'
@@ -22,8 +21,8 @@ const target: ResolvedImportLinkTarget = {
   column: 21
 }
 
-function registerContext(): void {
-  registerImportHoverContext(MODEL_KEY, {
+function registerContext(): () => void {
+  return registerImportHoverContext(MODEL_KEY, {
     getLinks: () => getImportSpecifierLinks('import { cn } from "@utils/cn"'),
     getSource: () => ({ filePath: 'c:/repo/src/a.ts', fileId: 'a', worktreeId: 'wt1' })
   })
@@ -40,7 +39,7 @@ describe('buildImportHoverCommandUri', () => {
 
 describe('provideImportLinkHover', () => {
   it('returns a trusted command link for a position on an import link', async () => {
-    registerContext()
+    const dispose = registerContext()
     try {
       const resolve = vi.fn(async () => target)
       const hover = await provideImportLinkHover(model, { lineNumber: 1, column: 22 }, resolve)
@@ -50,16 +49,18 @@ describe('provideImportLinkHover', () => {
         endLineNumber: 1,
         endColumn: 30
       })
-      expect(hover?.contents[0].isTrusted).toBe(true)
+      expect(hover?.contents[0].isTrusted).toEqual({
+        enabledCommands: [OPEN_IMPORT_TARGET_COMMAND_ID]
+      })
       expect(hover?.contents[0].value).toContain('src/utils/cn.ts')
       expect(hover?.contents[0].value).toContain(`command:${OPEN_IMPORT_TARGET_COMMAND_ID}?`)
     } finally {
-      unregisterImportHoverContext(MODEL_KEY)
+      dispose()
     }
   })
 
   it('returns null off-link, when unresolved, or for unregistered models', async () => {
-    registerContext()
+    const dispose = registerContext()
     try {
       const resolve = vi.fn(async () => target)
       expect(await provideImportLinkHover(model, { lineNumber: 1, column: 2 }, resolve)).toBeNull()
@@ -68,7 +69,7 @@ describe('provideImportLinkHover', () => {
         await provideImportLinkHover(model, { lineNumber: 1, column: 22 }, unresolved)
       ).toBeNull()
     } finally {
-      unregisterImportHoverContext(MODEL_KEY)
+      dispose()
     }
     expect(
       await provideImportLinkHover(
@@ -77,6 +78,51 @@ describe('provideImportLinkHover', () => {
         vi.fn(async () => target)
       )
     ).toBeNull()
+  })
+
+  it.each(['first', 'second'] as const)(
+    'keeps hover registered when the %s split pane is disposed',
+    async (disposedPane) => {
+      const disposeFirst = registerContext()
+      const disposeSecond = registerContext()
+      const disposed = disposedPane === 'first' ? disposeFirst : disposeSecond
+      const remaining = disposedPane === 'first' ? disposeSecond : disposeFirst
+      disposed()
+      try {
+        const hover = await provideImportLinkHover(
+          model,
+          { lineNumber: 1, column: 22 },
+          vi.fn(async () => target)
+        )
+        expect(hover?.contents[0].value).toContain('src/utils/cn.ts')
+      } finally {
+        remaining()
+      }
+    }
+  )
+
+  it('escapes the target label and trusts only the open-import command', async () => {
+    const dispose = registerContext()
+    try {
+      const injectedTarget = {
+        ...target,
+        targetLabel: 'src/evil](command:workbench.action.deleteFile)[x.ts'
+      }
+      const hover = await provideImportLinkHover(
+        model,
+        { lineNumber: 1, column: 22 },
+        vi.fn(async () => injectedTarget)
+      )
+      const markdown = hover?.contents[0]
+
+      expect(markdown?.value).not.toContain('](command:workbench.action.deleteFile)')
+      expect(markdown?.value).toContain(
+        String.raw`src/evil\]\(command:workbench.action.deleteFile\)\[x.ts`
+      )
+      expect(markdown?.isTrusted).toEqual({ enabledCommands: [OPEN_IMPORT_TARGET_COMMAND_ID] })
+    } finally {
+      dispose()
+    }
   })
 })
 
@@ -87,10 +133,18 @@ describe('import hover resolution cache', () => {
     const source = { filePath: '/repo/a.ts', fileId: 'a', worktreeId: 'wt1' }
     const modelKey = 'cache-cleanup-model'
 
+    const disposeFirst = registerImportHoverContext(modelKey, {
+      getLinks: () => [link],
+      getSource: () => source
+    })
     await resolveImportHoverTargetWithCache(modelKey, link, source, resolve)
-    unregisterImportHoverContext(modelKey)
+    disposeFirst()
+    const disposeSecond = registerImportHoverContext(modelKey, {
+      getLinks: () => [link],
+      getSource: () => source
+    })
     await resolveImportHoverTargetWithCache(modelKey, link, source, resolve)
-    unregisterImportHoverContext(modelKey)
+    disposeSecond()
 
     expect(resolve).toHaveBeenCalledTimes(2)
   })
@@ -100,17 +154,11 @@ describe('import hover resolution cache', () => {
     const link = getImportSpecifierLinks('import x from "./x"')[0]
     const source = { filePath: '/repo/a.ts', fileId: 'a', worktreeId: 'wt1' }
 
-    try {
-      for (let index = 0; index <= IMPORT_HOVER_RESOLUTION_CACHE_MAX; index += 1) {
-        await resolveImportHoverTargetWithCache(`cache-model-${index}`, link, source, resolve)
-      }
-      await resolveImportHoverTargetWithCache('cache-model-0', link, source, resolve)
-
-      expect(resolve).toHaveBeenCalledTimes(IMPORT_HOVER_RESOLUTION_CACHE_MAX + 2)
-    } finally {
-      for (let index = 0; index <= IMPORT_HOVER_RESOLUTION_CACHE_MAX; index += 1) {
-        unregisterImportHoverContext(`cache-model-${index}`)
-      }
+    for (let index = 0; index <= IMPORT_HOVER_RESOLUTION_CACHE_MAX; index += 1) {
+      await resolveImportHoverTargetWithCache(`cache-model-${index}`, link, source, resolve)
     }
+    await resolveImportHoverTargetWithCache('cache-model-0', link, source, resolve)
+
+    expect(resolve).toHaveBeenCalledTimes(IMPORT_HOVER_RESOLUTION_CACHE_MAX + 2)
   })
 })

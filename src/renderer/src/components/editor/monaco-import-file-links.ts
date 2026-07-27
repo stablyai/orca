@@ -3,8 +3,7 @@ import type { editor, IDisposable } from 'monaco-editor'
 import { isMacPlatform } from '../terminal-pane/terminal-link-open-hints'
 import {
   ensureImportHoverLinkProvider,
-  registerImportHoverContext,
-  unregisterImportHoverContext
+  registerImportHoverContext
 } from './monaco-import-hover-link'
 import {
   findImportSpecifierLinkAt,
@@ -51,16 +50,16 @@ export function createImportFileLinkController(
   let refreshTimer: ReturnType<typeof setTimeout> | null = null
 
   const modelKey = editorInstance.getModel()?.uri.toString() ?? null
-  if (modelKey) {
-    registerImportHoverContext(modelKey, {
-      getLinks: () => links,
-      getSource: () => ({
-        filePath: deps.getFilePath(),
-        fileId: deps.getFileId(),
-        worktreeId: deps.getWorktreeId()
+  const unregisterHoverContext = modelKey
+    ? registerImportHoverContext(modelKey, {
+        getLinks: () => links,
+        getSource: () => ({
+          filePath: deps.getFilePath(),
+          fileId: deps.getFileId(),
+          worktreeId: deps.getWorktreeId()
+        })
       })
-    })
-  }
+    : null
 
   const cancelPendingRefresh = (): void => {
     if (refreshTimer !== null) {
@@ -128,9 +127,7 @@ export function createImportFileLinkController(
       cancelPendingRefresh()
       contentListener.dispose()
       mouseUpListener.dispose()
-      if (modelKey) {
-        unregisterImportHoverContext(modelKey)
-      }
+      unregisterHoverContext?.()
       collection.clear()
     }
   }

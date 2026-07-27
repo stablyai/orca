@@ -20,18 +20,37 @@ type ImportHoverContext = {
   getSource: () => ImportHoverSource
 }
 
-const hoverContextsByModel = new Map<string, ImportHoverContext>()
+type ImportHoverRegistration = { context: ImportHoverContext }
 
-export function registerImportHoverContext(modelKey: string, context: ImportHoverContext): void {
-  hoverContextsByModel.set(modelKey, context)
-}
+const hoverRegistrationsByModel = new Map<string, Set<ImportHoverRegistration>>()
 
-export function unregisterImportHoverContext(modelKey: string): void {
-  hoverContextsByModel.delete(modelKey)
+function clearImportHoverResolutionCache(modelKey: string): void {
   const cachePrefix = `${modelKey}\0`
   for (const cacheKey of resolutionCache.keys()) {
     if (cacheKey.startsWith(cachePrefix)) {
       resolutionCache.delete(cacheKey)
+    }
+  }
+}
+
+export function registerImportHoverContext(
+  modelKey: string,
+  context: ImportHoverContext
+): () => void {
+  const registration = { context }
+  const registrations = hoverRegistrationsByModel.get(modelKey) ?? new Set()
+  registrations.add(registration)
+  hoverRegistrationsByModel.set(modelKey, registrations)
+  let registered = true
+  return () => {
+    if (!registered) {
+      return
+    }
+    registered = false
+    registrations.delete(registration)
+    if (registrations.size === 0 && hoverRegistrationsByModel.get(modelKey) === registrations) {
+      hoverRegistrationsByModel.delete(modelKey)
+      clearImportHoverResolutionCache(modelKey)
     }
   }
 }
@@ -87,13 +106,21 @@ export function buildImportHoverCommandUri(
   return `command:${OPEN_IMPORT_TARGET_COMMAND_ID}?${encodeURIComponent(JSON.stringify(args))}`
 }
 
+const MARKDOWN_LINK_LABEL_DELIMITERS = new Set(['\\', '[', ']', '(', ')'])
+
+function escapeMarkdownLinkLabel(label: string): string {
+  return Array.from(label, (character) =>
+    MARKDOWN_LINK_LABEL_DELIMITERS.has(character) ? `\\${character}` : character
+  ).join('')
+}
+
 export async function provideImportLinkHover(
   model: Pick<editor.ITextModel, 'uri'>,
   position: Pick<Position, 'lineNumber' | 'column'>,
   resolve: typeof resolveImportHoverTargetWithCache = resolveImportHoverTargetWithCache
 ): Promise<languages.Hover | null> {
   const modelKey = model.uri.toString()
-  const context = hoverContextsByModel.get(modelKey)
+  const context = hoverRegistrationsByModel.get(modelKey)?.values().next().value?.context
   if (!context) {
     return null
   }
@@ -110,8 +137,8 @@ export async function provideImportLinkHover(
     range: link.range,
     contents: [
       {
-        isTrusted: true,
-        value: `[↗ ${target.targetLabel}](${buildImportHoverCommandUri(target, source)})`
+        isTrusted: { enabledCommands: [OPEN_IMPORT_TARGET_COMMAND_ID] },
+        value: `[↗ ${escapeMarkdownLinkLabel(target.targetLabel)}](${buildImportHoverCommandUri(target, source)})`
       }
     ]
   }
