@@ -11,6 +11,7 @@ import { getLegacyLoadingPatch, getSupersededDetectPatch } from './local-agent-l
 import { createEmptyLocalDetectedAgentState } from './local-detected-agent-store-state'
 import type { LocalDetectedAgentState } from './local-detected-agent-store-state'
 import { setDetectedTuiAgentExecutables } from '../../../../shared/detected-agent-executables'
+import { CLIENT_PLATFORM } from '@/lib/client-platform'
 import type { PreflightRuntimeContext } from '../../../../preload/api-types'
 
 type LocalDetectedAgentStateCreator = StateCreator<AppState, [], [], LocalDetectedAgentState>
@@ -21,7 +22,10 @@ type LocalDetectedAgentStateCreator = StateCreator<AppState, [], [], LocalDetect
 function publishDetectedAgentExecutables(context?: PreflightRuntimeContext): void {
   void window.api.preflight
     .detectAgentExecutables?.(context)
-    .then((executables) => setDetectedTuiAgentExecutables(executables ?? {}))
+    // Why: main only ever publishes this host's detection (WSL/remote return
+    // empty), so stamping the client platform lets the launch path drop the
+    // registry for commands bound elsewhere.
+    .then((executables) => setDetectedTuiAgentExecutables(executables ?? {}, CLIENT_PLATFORM))
     .catch(() => {
       // Why: alias resolution is an enhancement; on failure the static
       // launchCmd defaults still work for the primary install layout.

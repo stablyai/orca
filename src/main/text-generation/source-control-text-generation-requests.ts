@@ -19,7 +19,9 @@ import {
   planCommitMessageGeneration,
   type CommitMessagePlan
 } from '../../shared/commit-message-plan'
+import type { AgentExecutionRuntime } from '../../shared/detected-agent-executables'
 import type { ResolvedSourceControlAiGenerationParams } from '../../shared/source-control-ai'
+import { planRuntimeForLocalHost } from './commit-message-model-discovery-policy'
 import { formatLinkedIssueTemplateValue } from '../../shared/source-control-ai-action-variables'
 import { renderSourceControlActionCommandTemplate } from '../../shared/source-control-ai-actions'
 import { captureAgentGenerationFailureOutput } from './agent-failure-output'
@@ -39,6 +41,15 @@ type GenerateParams = ResolvedSourceControlAiGenerationParams
 
 export function trimGeneratedCommitMessage(message: string): string {
   return message.replace(/\s+$/, '')
+}
+
+/**
+ * Where a planned command will run, so the ambient executable-detection
+ * registry (this process's PATH) is only applied when it actually describes
+ * the host that will spawn the binary.
+ */
+function planRuntimeForTarget(target: CommitMessageGenerationTarget): AgentExecutionRuntime {
+  return target.kind === 'remote' ? { isRemote: true } : planRuntimeForLocalHost(target.wslDistro)
 }
 
 export function commandBackslashMode(
@@ -93,7 +104,8 @@ export async function generateCommitMessage(input: {
       : buildCommitMessagePrompt(context, params.customPrompt ?? '')
   const planned = planCommitMessageGeneration(
     { ...params, backslash: commandBackslashMode(target) },
-    prompt
+    prompt,
+    planRuntimeForTarget(target)
   )
   if (!planned.ok) {
     return { success: false, error: planned.error }
@@ -142,7 +154,8 @@ export async function generatePullRequestFields(input: {
       : buildPullRequestFieldsPrompt(context, params.customPrompt ?? '')
   const planned = planCommitMessageGeneration(
     { ...params, backslash: commandBackslashMode(target) },
-    prompt
+    prompt,
+    planRuntimeForTarget(target)
   )
   if (!planned.ok) {
     return {
@@ -199,7 +212,8 @@ export async function generateBranchName(input: {
       : buildBranchNamePrompt(context, params.customPrompt ?? '')
   const planned = planCommitMessageGeneration(
     { ...params, backslash: commandBackslashMode(target) },
-    prompt
+    prompt,
+    planRuntimeForTarget(target)
   )
   if (!planned.ok) {
     return { success: false, error: planned.error }

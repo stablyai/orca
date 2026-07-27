@@ -2,6 +2,7 @@ import type { CommandTemplateBackslash } from '../../shared/commit-message-promp
 import type { CommitMessagePlan } from '../../shared/commit-message-plan'
 import { planAgentBinary } from '../../shared/commit-message-plan'
 import type { AgentModelProbeSpec } from '../../shared/agent-model-probe-spec'
+import type { AgentExecutionRuntime } from '../../shared/detected-agent-executables'
 import { formatAgentCliFailureMessage } from './source-control-agent-failure'
 import type { DiscoverCommitMessageModelsResult } from './source-control-text-generation-types'
 
@@ -63,16 +64,29 @@ export function finalizeModelDiscoveryOutput(
   return staticModelDiscoveryResult(spec, models, defaultModelId, 'probe')
 }
 
+// Why: a WSL distro is not "remote" but has its own PATH, so a Windows-detected
+// `cursor` must not be planned as `cursor agent` for a command run inside it.
+export function planRuntimeForLocalHost(wslDistro?: string): AgentExecutionRuntime {
+  return { platform: wslDistro ? 'linux' : process.platform }
+}
+
 export function planModelDiscovery(
   spec: AgentModelProbeSpec,
   agentCommandOverride?: string,
-  backslash: CommandTemplateBackslash = 'escape'
+  backslash: CommandTemplateBackslash = 'escape',
+  runtime?: AgentExecutionRuntime
 ): { ok: true; plan: CommitMessagePlan } | { ok: false; error: string } {
   const modelDiscovery = spec.modelDiscovery
   if (!modelDiscovery) {
     return { ok: false, error: `${spec.label} does not support dynamic model discovery.` }
   }
-  const command = planAgentBinary(modelDiscovery.binary, agentCommandOverride, backslash, spec.id)
+  const command = planAgentBinary(
+    modelDiscovery.binary,
+    agentCommandOverride,
+    backslash,
+    spec.id,
+    runtime
+  )
   if (!command.ok) {
     return command
   }

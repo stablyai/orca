@@ -8,6 +8,7 @@ import { WINDOWS_BATCH_UNSAFE_ARGUMENTS_ERROR } from '../win32-utils'
 import {
   finalizeModelDiscoveryOutput,
   planModelDiscovery,
+  planRuntimeForLocalHost,
   staticModelDiscoveryResult
 } from './commit-message-model-discovery-policy'
 import { userFacingUnsafeWindowsBatchArgs } from './source-control-agent-failure'
@@ -53,7 +54,12 @@ export async function discoverModelsLocal(input: {
     })
     const result = new Promise<DiscoverCommitMessageModelsResult>((resolve) => {
       let child: SpawnedSourceControlAgentProcess
-      const planned = planModelDiscovery(spec, input.agentCommandOverride, input.backslash)
+      const planned = planModelDiscovery(
+        spec,
+        input.agentCommandOverride,
+        input.backslash,
+        planRuntimeForLocalHost(input.options.wslDistro)
+      )
       if (!planned.ok) {
         markProcessClosed()
         resolve({ success: false, error: planned.error })
@@ -195,7 +201,9 @@ export async function discoverModelsRemote(input: {
   if (spec.modelSource === 'static' || !spec.modelDiscovery) {
     return staticModelDiscoveryResult(spec)
   }
-  const planned = planModelDiscovery(spec, input.agentCommandOverride)
+  const planned = planModelDiscovery(spec, input.agentCommandOverride, undefined, {
+    isRemote: true
+  })
   if (!planned.ok) {
     return { success: false, error: planned.error }
   }
