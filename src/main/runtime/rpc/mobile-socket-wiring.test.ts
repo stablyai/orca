@@ -116,7 +116,8 @@ describe('MobileSocketWiring', () => {
       ws,
       JSON.stringify({
         type: 'e2ee_hello',
-        publicKeyB64: Buffer.from(phone.publicKey).toString('base64')
+        publicKeyB64: Buffer.from(phone.publicKey).toString('base64'),
+        clientCapabilities: ['session-tabs.close-intent.v1']
       })
     )
     const sharedKey = deriveSharedKey(phone.secretKey, desktop.publicKey)
@@ -130,6 +131,7 @@ describe('MobileSocketWiring', () => {
     expect(onText).toHaveBeenCalledOnce()
     expect(onText.mock.calls[0]?.[0]).toMatchObject({
       device: { deviceId: 'device-1', deviceToken: 'valid-token', scope: 'mobile' },
+      clientCapabilities: ['session-tabs.close-intent.v1'],
       transport: { transport: 'direct' }
     })
 

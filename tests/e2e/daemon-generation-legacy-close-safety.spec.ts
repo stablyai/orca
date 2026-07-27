@@ -21,7 +21,16 @@ import {
 } from './helpers/daemon-generation-processes'
 
 type LegacyCloseReport = {
-  initiator: {
+  capableInitiator: {
+    clientKind: 'runtime'
+    clientId: string
+    pairedDeviceId: string
+    connectionId: string
+    clientCapabilities: string[]
+    callSite: string
+    wireReason: null
+  }
+  legacyInitiator: {
     clientKind: 'runtime'
     clientId: string
     pairedDeviceId: string
@@ -38,10 +47,12 @@ type LegacyCloseReport = {
     closeRequestCount: number
   }
   observerBefore: Record<string, unknown>[]
+  observerAfterCapable: Record<string, unknown>[]
   observerAfter: Record<string, unknown>[]
   postClosePing: Record<string, boolean>
   calls: Record<string, unknown>[]
-  responses: Record<string, unknown>[]
+  capableResponses: Record<string, unknown>[]
+  legacyResponses: Record<string, unknown>[]
 }
 
 function killEvents(generation: DaemonGeneration, sessionId: string): Record<string, unknown>[] {
@@ -53,14 +64,15 @@ function killEvents(generation: DaemonGeneration, sessionId: string): Record<str
 function launchLegacyCloseClient(options: {
   runtime: DaemonGenerationRuntime
   generations: readonly DaemonGeneration[]
-  targetCanaries: readonly GenerationCanary[]
+  capableCanaries: readonly GenerationCanary[]
+  legacyCanaries: readonly GenerationCanary[]
 }): {
   child: ChildProcess
   ready: Promise<LegacyCloseReport>
   finish(): void
   output(): string
 } {
-  const { runtime, generations, targetCanaries } = options
+  const { runtime, generations, capableCanaries, legacyCanaries } = options
   const configPath = path.join(runtime.rootDir, 'legacy-close-client-config.json')
   writeFileSync(
     configPath,
@@ -74,12 +86,13 @@ function launchLegacyCloseClient(options: {
       daemonDir: runtime.daemonDir,
       historyDir: path.join(runtime.userDataDir, 'terminal-history'),
       cwd: runtime.rootDir,
-      sessions: targetCanaries.map((canary, index) => ({
+      sessions: [...capableCanaries, ...legacyCanaries].map((canary, index) => ({
         protocolVersion: canary.generation.protocolVersion,
         sessionId: canary.sessionId,
         rootPid: canary.rootIdentity.pid,
         worktreeId: canary.worktreeId,
-        tabId: `legacy-close-tab-${index + 1}`
+        tabId: `legacy-close-tab-${index + 1}`,
+        closeContract: index < capableCanaries.length ? 'capable' : 'legacy'
       }))
     })}\n`
   )
@@ -155,7 +168,8 @@ function writeReconstruction(options: {
   generations: readonly DaemonGeneration[]
   canaries: readonly GenerationCanary[]
   report: LegacyCloseReport
-  targetSessionIds: ReadonlySet<string>
+  capableSessionIds: ReadonlySet<string>
+  legacySessionIds: ReadonlySet<string>
   before: Record<number, boolean>
   after: Record<number, boolean>
   postClosePing: Record<string, boolean>
@@ -165,7 +179,8 @@ function writeReconstruction(options: {
     generations,
     canaries,
     report,
-    targetSessionIds,
+    capableSessionIds,
+    legacySessionIds,
     before,
     after,
     postClosePing
@@ -175,23 +190,40 @@ function writeReconstruction(options: {
     `${JSON.stringify(
       {
         capturedAt: new Date().toISOString(),
-        invariant: 'A reasonless legacy viewer lifecycle echo cannot kill an authoritative PTY',
-        authoritativeBoundary:
-          report.calls.length > 0
-            ? 'session.tabs.close -> closeMobileSessionTab -> RuntimeNotifier.closeTerminalTab'
-            : 'session.tabs.close -> refuseUnattributedMobileSessionTabClose -> snapshot republish',
-        initiator: report.initiator,
+        invariant:
+          'Strict close attribution activates only for a capable authenticated viewer; legacy peers retain current-main behavior',
+        authoritativeBoundary: {
+          capable:
+            'session.tabs.close -> refuseUnattributedMobileSessionTabClose -> snapshot republish',
+          legacy: 'session.tabs.close -> closeMobileSessionTab -> RuntimeNotifier.closeTerminalTab'
+        },
+        capableInitiator: report.capableInitiator,
+        legacyInitiator: report.legacyInitiator,
         observer: report.observer,
         observerBefore: report.observerBefore,
+        observerAfterCapable: report.observerAfterCapable,
         observerAfter: report.observerAfter,
-        requestOrder: report.responses.map((response, index) => ({
-          sequence: index + 1,
-          response,
-          call: report.calls[index] ?? null
-        })),
+        requestOrder: [
+          ...report.capableResponses.map((response, index) => ({
+            sequence: index + 1,
+            contract: 'capable',
+            response,
+            call: null
+          })),
+          ...report.legacyResponses.map((response, index) => ({
+            sequence: report.capableResponses.length + index + 1,
+            contract: 'legacy',
+            response,
+            call: report.calls[index] ?? null
+          }))
+        ],
         sessions: canaries.map((canary, index) => ({
           sequence: index + 1,
-          targeted: targetSessionIds.has(canary.sessionId),
+          closeContract: capableSessionIds.has(canary.sessionId)
+            ? 'capable'
+            : legacySessionIds.has(canary.sessionId)
+              ? 'legacy'
+              : 'control',
           worktreeId: canary.worktreeId,
           sessionId: canary.sessionId,
           daemon: {
@@ -225,7 +257,7 @@ function writeReconstruction(options: {
   )
 }
 
-test('legacy viewer lifecycle echoes cannot burst-close live PTYs across worktrees and daemon generations', async (// oxlint-disable-next-line no-empty-pattern -- Playwright requires the fixture argument before testInfo.
+test('close-intent negotiation preserves legacy behavior while protecting capable viewers across daemon generations', async (// oxlint-disable-next-line no-empty-pattern -- Playwright requires the fixture argument before testInfo.
 {}, testInfo) => {
   test.setTimeout(120_000)
   const runtime = await createDaemonGenerationRuntime(testInfo)
@@ -251,6 +283,16 @@ test('legacy viewer lifecycle echoes cannot burst-close live PTYs across worktre
         })
       )
     }
+    for (const generation of generations) {
+      canaries.push(
+        await spawnGenerationCanary({
+          runtime,
+          generation,
+          role: 'live',
+          worktreeId: `legacy-compatible-worktree-v${generation.protocolVersion}`
+        })
+      )
+    }
     canaries.push(
       await spawnGenerationCanary({
         runtime,
@@ -259,8 +301,11 @@ test('legacy viewer lifecycle echoes cannot burst-close live PTYs across worktre
         worktreeId: 'legacy-close-unrelated-worktree'
       })
     )
-    const targetCanaries = canaries.slice(0, 2)
-    const targetSessionIds = new Set(targetCanaries.map((canary) => canary.sessionId))
+    const capableCanaries = canaries.slice(0, 2)
+    const legacyCanaries = canaries.slice(2, 4)
+    const controlCanary = canaries[4]!
+    const capableSessionIds = new Set(capableCanaries.map((canary) => canary.sessionId))
+    const legacySessionIds = new Set(legacyCanaries.map((canary) => canary.sessionId))
     const identities = canaries.flatMap((canary) => [
       canary.rootIdentity,
       canary.descendantIdentity
@@ -271,7 +316,12 @@ test('legacy viewer lifecycle echoes cannot burst-close live PTYs across worktre
     )
     expect(Object.values(before).every(Boolean)).toBe(true)
 
-    client = launchLegacyCloseClient({ runtime, generations, targetCanaries })
+    client = launchLegacyCloseClient({
+      runtime,
+      generations,
+      capableCanaries,
+      legacyCanaries
+    })
     const report = await client.ready
     const afterMap = await processIdentityLiveness(identities)
     const after = Object.fromEntries(identities.map(({ pid }) => [pid, afterMap.get(pid) === true]))
@@ -280,13 +330,23 @@ test('legacy viewer lifecycle echoes cannot burst-close live PTYs across worktre
       generations,
       canaries,
       report,
-      targetSessionIds,
+      capableSessionIds,
+      legacySessionIds,
       before,
       after,
       postClosePing: report.postClosePing
     })
 
-    expect(report.initiator).toEqual({
+    expect(report.capableInitiator).toEqual({
+      clientKind: 'runtime',
+      clientId: 'capable-viewer',
+      pairedDeviceId: 'capable-viewer',
+      connectionId: 'capable-viewer-generation-2',
+      clientCapabilities: ['session-tabs.close-intent.v1'],
+      callSite: 'capable-viewer:stale-pty-exit-cleanup',
+      wireReason: null
+    })
+    expect(report.legacyInitiator).toEqual({
       clientKind: 'runtime',
       clientId: 'legacy-viewer',
       pairedDeviceId: 'legacy-viewer',
@@ -298,24 +358,31 @@ test('legacy viewer lifecycle echoes cannot burst-close live PTYs across worktre
       clientKind: 'runtime',
       clientId: 'current-viewer',
       pairedDeviceId: 'current-viewer',
-      connectionId: 'current-viewer-generation-2',
-      requestCount: targetCanaries.length * 2,
+      connectionId: 'observer-generation-3',
+      requestCount: (capableCanaries.length + legacyCanaries.length) * 3,
       closeRequestCount: 0
     })
-    expect(report.observerBefore).toHaveLength(targetCanaries.length)
-    expect(report.observerAfter).toHaveLength(targetCanaries.length)
+    expect(report.observerBefore).toHaveLength(capableCanaries.length + legacyCanaries.length)
+    expect(report.observerAfterCapable).toHaveLength(capableCanaries.length + legacyCanaries.length)
+    expect(report.observerAfter).toHaveLength(capableCanaries.length + legacyCanaries.length)
     expect(
-      [...report.observerBefore, ...report.observerAfter].every((response) => response.ok === true)
+      [...report.observerBefore, ...report.observerAfterCapable, ...report.observerAfter].every(
+        (response) => response.ok === true
+      )
     ).toBe(true)
     expect(
-      report.observerAfter.every((response, index) => {
+      report.observerAfterCapable.every((response, index) => {
         const result = response.result as { tabs?: { ptyId?: string | null }[] } | undefined
-        return result?.tabs?.some((tab) => tab.ptyId === targetCanaries[index]!.sessionId) === true
+        return (
+          result?.tabs?.some(
+            (tab) => tab.ptyId === [...capableCanaries, ...legacyCanaries][index]!.sessionId
+          ) === true
+        )
       })
     ).toBe(true)
-    expect(report.responses).toHaveLength(targetCanaries.length)
+    expect(report.capableResponses).toHaveLength(capableCanaries.length)
     expect(
-      report.responses.every((response) => {
+      report.capableResponses.every((response) => {
         const result = response.result as Record<string, unknown> | undefined
         return (
           response.ok === true &&
@@ -325,13 +392,31 @@ test('legacy viewer lifecycle echoes cannot burst-close live PTYs across worktre
         )
       })
     ).toBe(true)
-    expect(report.calls).toHaveLength(0)
-    expect(Object.values(after).every(Boolean)).toBe(true)
-    expect(Object.values(report.postClosePing)).toHaveLength(targetCanaries.length)
-    expect(Object.values(report.postClosePing).every(Boolean)).toBe(true)
+    expect(report.legacyResponses).toHaveLength(legacyCanaries.length)
     expect(
-      canaries.every((canary) => killEvents(canary.generation, canary.sessionId).length === 0)
+      report.legacyResponses.every((response) => {
+        const result = response.result as Record<string, unknown> | undefined
+        return response.ok === true && result?.refused !== true
+      })
     ).toBe(true)
+    expect(report.calls.map((call) => call.sessionId)).toEqual(
+      legacyCanaries.map((canary) => canary.sessionId)
+    )
+    for (const canary of capableCanaries) {
+      expect(after[canary.rootIdentity.pid]).toBe(true)
+      expect(after[canary.descendantIdentity.pid]).toBe(true)
+      expect(report.postClosePing[canary.sessionId]).toBe(true)
+      expect(killEvents(canary.generation, canary.sessionId)).toHaveLength(0)
+    }
+    for (const canary of legacyCanaries) {
+      expect(after[canary.rootIdentity.pid]).toBe(false)
+      expect(after[canary.descendantIdentity.pid]).toBe(false)
+      expect(report.postClosePing[canary.sessionId]).toBe(false)
+      expect(killEvents(canary.generation, canary.sessionId)).toHaveLength(1)
+    }
+    expect(after[controlCanary.rootIdentity.pid]).toBe(true)
+    expect(after[controlCanary.descendantIdentity.pid]).toBe(true)
+    expect(killEvents(controlCanary.generation, controlCanary.sessionId)).toHaveLength(0)
     assertionsComplete = true
   } finally {
     if (client) {

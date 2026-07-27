@@ -905,7 +905,7 @@
     },
     {
       "id": "terminal-session.daemon-generation-reconnect-safety",
-      "title": "Reconnect lifecycle echoes cannot kill live daemon-generation terminals",
+      "title": "Negotiated close intent protects live daemon-generation terminals",
       "maturity": "experimental",
       "protection": "partial",
       "owner": "terminal-runtime",
@@ -921,7 +921,7 @@
       "providers": ["daemon", "runtime", "ssh", "wsl"],
       "coveredPlatforms": ["macos", "windows"],
       "coveredProviders": ["daemon", "runtime"],
-      "coverageNotes": "Recorded native Windows evidence covers the v21/v22/v23/v24/v25 named-pipe matrix. Deterministic macOS evidence covers an old paired-runtime request shape against live v25/v26 daemon PTYs in two worktrees. Host/renderer tests cover old servers, missing liveness, stale publications, reused claims, split parents, explicit current and legacy-mobile intent, cross-profile isolation, remote runtime clients, SSH-provider routing, and WSL boundaries. A headed host paired to a separate live client, headless serve parity, Linux, SSH, and WSL remain explicit gaps.",
+      "coverageNotes": "Recorded native Windows evidence covers the v21/v22/v23/v24/v25 named-pipe matrix. The deterministic daemon harness covers capable and legacy paired-runtime request shapes against live v25/v26 PTYs in separate worktrees, plus an unrelated control. Host/renderer tests cover old servers, missing liveness, stale publications, reused claims, split parents, explicit user intent, cross-profile isolation, remote runtime clients, SSH-provider routing, and WSL boundaries. A headed host paired to a separate live client, headless serve parity, Linux, SSH, and WSL remain explicit gaps.",
       "motivatingLinks": [
         "https://github.com/stablyai/orca/issues/9749",
         "https://github.com/stablyai/orca/issues/9949",
@@ -929,10 +929,10 @@
         "https://github.com/stablyai/orca/issues/9138",
         "https://github.com/stablyai/orca/issues/9229"
       ],
-      "invariant": "Reconnect, replay, or lifecycle observations must never kill a live PTY. Destructive close requires explicit user intent; reasonless runtime-viewer closes are ambiguous and must keep and republish, while legacy mobile closes retain their authenticated user-intent compatibility. Lifecycle close requires the exact observed publication, terminal, environment, and authoritative liveness, never signals a process, and leaves renderer-owned or partial-split retirement to its owner. Legacy daemon hello and warm reattachment remain non-destructive.",
-      "oracle": "Start isolated v25 and v26 daemon generations, attach one live PTY root/descendant canary in each of two target worktrees plus an unaddressed control PTY in a third worktree, route the targets through the production desktop scanner, runtime, RPC dispatcher, renderer-close relay, and daemon router, then issue sequential reasonless closes from one legacy runtime-viewer connection while a second viewer lists both snapshots before and after but issues zero closes. Require both close responses to refuse and republish, both authoritative tabs to remain listed, zero renderer-close/router-shutdown calls, every target and control process incarnation alive, both targets responsive to post-close input, and zero session-killed events. The Windows matrix separately reconnects six daemon generations and repeats evidence-bearing lifecycle closes. Unit contracts require ambiguous runtime closes to refuse, explicit current and legacy-mobile user closes to remain destructive, and old-server lifecycle calls never to fall back.",
+      "invariant": "Reconnect, replay, or lifecycle observations from a viewer that negotiated explicit close intent must never kill a live PTY. A capable reasonless close must keep and republish; a legacy paired viewer must retain current-main behavior because its intentional close and cleanup echo are wire-identical. Lifecycle close requires the exact observed publication, terminal, environment, and authoritative liveness, never signals a process, and leaves renderer-owned or partial-split retirement to its owner. Legacy daemon hello and warm reattachment remain non-destructive.",
+      "oracle": "Start isolated v25 and v26 daemon generations with one capable-viewer PTY and one legacy-viewer PTY per generation in four target worktrees plus an unaddressed control PTY in a fifth worktree. Route them through the production desktop scanner, runtime, RPC dispatcher, renderer-close relay, and daemon router. First issue sequential reasonless closes from an authenticated capable connection and require refusal, snapshot republish, zero shutdown calls, exact process survival, and post-close I/O. Then issue the byte-identical requests without the negotiated capability and require current-main behavior: two ordered immediate shutdowns, session-killed events, and exact root/descendant death, while capable and control PTYs survive. An observer lists all targets before, between, and after while issuing zero closes. Unit contracts also require in-process reasonless refusal, legacy runtime/mobile compatibility, explicit user closes, client hello advertisement, and old-server lifecycle calls never to fall back.",
       "commands": [
-        "pnpm exec vitest run --config config/vitest.config.ts src/main/runtime/orca-runtime.test.ts src/main/runtime/rpc/methods/session-tabs.test.ts src/main/runtime/rpc/methods/session-tabs-schemas.test.ts src/renderer/src/runtime/web-runtime-session.test.ts src/renderer/src/runtime/web-session-close-intent.test.ts src/renderer/src/runtime/web-session-tabs-sync.test.ts src/renderer/src/components/terminal/terminal-tab-actions.test.ts src/renderer/src/components/terminal/terminal-close-incarnation.test.ts src/renderer/src/components/terminal-pane/terminal-parked-tab-watchers.test.ts",
+        "pnpm exec vitest run --config config/vitest.config.ts src/main/runtime/orca-runtime.test.ts src/main/runtime/rpc/methods/session-tabs.test.ts src/main/runtime/rpc/methods/session-tabs-schemas.test.ts src/main/runtime/rpc/mobile-socket-wiring.test.ts src/cli/runtime/websocket-transport.test.ts src/renderer/src/runtime/web-runtime-session.test.ts src/renderer/src/runtime/web-session-close-intent.test.ts src/renderer/src/runtime/web-session-tabs-sync.test.ts src/renderer/src/components/terminal/terminal-tab-actions.test.ts src/renderer/src/components/terminal/terminal-close-incarnation.test.ts src/renderer/src/components/terminal-pane/terminal-parked-tab-watchers.test.ts",
         "pnpm exec playwright test tests/e2e/daemon-generation-reconnect-safety.spec.ts --config tests/playwright.config.ts --project electron-headless --workers=1",
         "pnpm exec playwright test tests/e2e/daemon-generation-legacy-close-safety.spec.ts --config tests/playwright.config.ts --project electron-headless --workers=1"
       ],
@@ -940,6 +940,8 @@
         "src/main/runtime/orca-runtime.test.ts",
         "src/main/runtime/rpc/methods/session-tabs.test.ts",
         "src/main/runtime/rpc/methods/session-tabs-schemas.test.ts",
+        "src/main/runtime/rpc/mobile-socket-wiring.test.ts",
+        "src/cli/runtime/websocket-transport.test.ts",
         "src/renderer/src/runtime/web-runtime-session.test.ts",
         "src/renderer/src/runtime/web-session-close-intent.test.ts",
         "src/renderer/src/runtime/web-session-tabs-sync.test.ts",
@@ -953,10 +955,11 @@
         {
           "file": "tests/e2e/daemon-generation-legacy-close-safety.spec.ts",
           "assertions": [
-            "one identified legacy viewer issues sequential reasonless closes while an identified current viewer lists both authoritative tabs before and after but issues zero closes",
-            "live v25 and v26 PTY root/descendant incarnations in separate worktrees survive, answer post-close input, and produce zero renderer-close calls and zero daemon session-killed events",
-            "an unaddressed third-worktree PTY root and descendant survive with zero kill events, excluding global fanout",
-            "the JSON reconstruction records request order, viewer connection, worktree/tab/PTY ids, daemon PID/protocol, call site, and exact before/after process liveness"
+            "one identified capable viewer and one legacy viewer issue byte-identical sequential reasonless closes while a third viewer lists every target before, between, and after but issues zero closes",
+            "capable v25/v26 PTY root/descendant incarnations in separate worktrees survive, answer post-close input, and produce zero shutdown calls and zero daemon session-killed events",
+            "legacy v25/v26 PTY root/descendant incarnations die through ordered immediate shutdown calls with one daemon session-killed event each, matching current-main behavior",
+            "an unaddressed fifth-worktree PTY root and descendant survive with zero kill events, excluding global fanout",
+            "the JSON reconstruction records request order, negotiated capabilities, viewer connection, worktree/tab/PTY ids, daemon PID/protocol, call site, and exact before/after process liveness"
           ]
         },
         {
@@ -968,11 +971,28 @@
           ]
         },
         {
+          "file": "src/main/runtime/rpc/mobile-socket-wiring.test.ts",
+          "assertions": [
+            "the optional client capability is captured from the legacy encrypted hello and bound to the authenticated socket identity"
+          ]
+        },
+        {
+          "file": "src/cli/runtime/websocket-transport.test.ts",
+          "assertions": [
+            "updated paired runtime clients advertise close-intent support in a hello shape accepted by legacy servers"
+          ]
+        },
+        {
           "file": "src/main/runtime/orca-runtime.test.ts",
           "assertions": [
             "live, unknown, stale, missing-intent, non-owner, and inventory-proven but not yet pane-bound lifecycle closes invoke neither PTY kill nor renderer close",
-            "dead whole-headless retirement removes stale state without signalling a retained PTY id",
-            "explicit current and authenticated legacy-mobile user closes remain destructive while ambiguous legacy-runtime closes refuse and republish"
+            "dead whole-headless retirement removes stale state without signalling a retained PTY id"
+          ]
+        },
+        {
+          "file": "src/main/runtime/rpc/methods/session-tabs.test.ts",
+          "assertions": [
+            "in-process and capable-runtime reasonless closes refuse while legacy runtime/mobile and explicit current user closes retain current-main destructive semantics"
           ]
         },
         {
@@ -1003,7 +1023,7 @@
           "command": "pnpm exec playwright test tests/e2e/daemon-generation-legacy-close-safety.spec.ts --config tests/playwright.config.ts --project electron-headless --workers=1",
           "result": "passed",
           "durationSeconds": 28.9,
-          "summary": "The unchanged safety oracle failed on current main and on PR #10013's executing-path attribution change: one legacy viewer caused two immediate shutdowns and exact v25/v26 PTY roots and descendants died in separate worktrees. With ambiguous runtime closes refused, both requests republished authoritative snapshots, no shutdown occurred, all four process incarnations survived, and both daemons recorded zero kills."
+          "summary": "Baseline evidence: current main and PR #10013 route a legacy viewer's two reasonless requests to immediate shutdown, killing exact v25/v26 roots and descendants. The prior hard-refusal candidate kept them alive but regressed legacy intentional close. The capability-gated combined oracle supersedes that candidate result and is pending GitHub CI."
         },
         {
           "date": "2026-07-21",
@@ -1024,12 +1044,12 @@
         "evidence": "Local deterministic Windows evidence includes the final two-scenario pass and a separate 25-burst stress pass; CI and 14-day soak history are absent."
       },
       "redGreenEvidence": {
-        "status": "complete",
-        "evidence": "Current main and PR #10013 each routed two reasonless legacy-viewer requests to immediate shutdown, emitted real session-killed events in v25/v26, and terminated both exact roots and descendants. The fix-reverted oracle reproduces those deaths; the fixed oracle refuses both requests, republishes both snapshots, makes zero shutdown calls, and preserves every incarnation with zero kill events. Existing Windows red/green evidence separately covers evidence-bearing lifecycle closes."
+        "status": "partial",
+        "evidence": "Current main and PR #10013 each route two reasonless legacy-viewer requests to immediate shutdown, emit real session-killed events in v25/v26, and terminate both exact roots and descendants. The revised oracle requires that same result for a non-capable viewer and requires survival only for a capable viewer; its GitHub CI result is pending. Existing Windows red/green evidence separately covers evidence-bearing lifecycle closes."
       },
       "performanceBudget": {
         "required": true,
-        "evidence": "Production adds one constant-time client-kind branch and no polling, subprocess, provider listing, retry, timer, or process-per-session work. Refusal reuses the existing single-worktree snapshot republish. Test-only inventory and cleanup are bounded."
+        "evidence": "Production adds one bounded client-capability parse during the authenticated connection handshake and one constant-time membership branch per close. It adds no polling, subprocess, provider listing, retry, timer, or process-per-session work. Refusal reuses the existing single-worktree snapshot republish. Test-only inventory and cleanup are bounded."
       },
       "promotionCriteria": [
         "Collect 100 clean native-Windows runs over 14 days with zero unexplained flakes.",
@@ -1039,7 +1059,7 @@
       "knownGaps": [
         "The strongest proof is Electron-as-Node over real daemon PTYs, not a packaged headed Orca host paired to a separate old client; that is the primary live E2E still required.",
         "Headless orca serve parity, live Linux, Linux SSH relay, and Windows WSL reconnect are not exercised; Docker SSH would cover only the SSH provider and cannot substitute for paired Orca-server evidence.",
-        "Pre-contract paired desktop viewers can no longer intentionally close host tabs because their click is wire-identical to a stale lifecycle echo; they must upgrade, while legacy mobile user closes remain supported.",
+        "A topology containing any pre-contract paired desktop viewer remains vulnerable to that viewer's stale reasonless close storm; preserving its intentional-close behavior makes this unavoidable until the viewer upgrades.",
         "Cross-profile daemon inventory and generation handoff/retirement remain the separate #9138/#9229 design.",
         "A dead split leaf stays with its authoritative owner rather than being remotely pruned."
       ],

@@ -3,6 +3,7 @@ import process from 'node:process'
 import { OrcaRuntimeService } from '../../../src/main/runtime/orca-runtime'
 import { RpcDispatcher } from '../../../src/main/runtime/rpc/dispatcher'
 import { SESSION_TAB_METHODS } from '../../../src/main/runtime/rpc/methods/session-tabs'
+import { SESSION_TAB_CLOSE_INTENT_RUNTIME_CAPABILITY } from '../../../src/shared/protocol-version'
 import type { RuntimeMobileSessionTabsSnapshot } from '../../../src/shared/runtime-types'
 import { createDesktopDiscoveredDaemonRouter } from './daemon-generation-desktop-discovery'
 
@@ -12,6 +13,7 @@ type FixtureSession = {
   rootPid: number
   worktreeId: string
   tabId: string
+  closeContract: 'capable' | 'legacy'
 }
 
 type FixtureConfig = {
@@ -34,7 +36,7 @@ async function waitFor(description: string, predicate: () => boolean): Promise<v
   throw new Error(`Timed out waiting for ${description}`)
 }
 
-const VIEWER = {
+const LEGACY_VIEWER = {
   clientKind: 'runtime' as const,
   clientId: 'legacy-viewer',
   pairedDeviceId: 'legacy-viewer',
@@ -42,11 +44,20 @@ const VIEWER = {
   callSite: 'legacy-viewer:stale-pty-exit-cleanup',
   wireReason: null
 }
+const CAPABLE_VIEWER = {
+  clientKind: 'runtime' as const,
+  clientId: 'capable-viewer',
+  pairedDeviceId: 'capable-viewer',
+  connectionId: 'capable-viewer-generation-2',
+  clientCapabilities: [SESSION_TAB_CLOSE_INTENT_RUNTIME_CAPABILITY],
+  callSite: 'capable-viewer:stale-pty-exit-cleanup',
+  wireReason: null
+}
 const OBSERVER = {
   clientKind: 'runtime' as const,
   clientId: 'current-viewer',
   pairedDeviceId: 'current-viewer',
-  connectionId: 'current-viewer-generation-2'
+  connectionId: 'observer-generation-3'
 }
 
 function readConfig(): FixtureConfig {
@@ -58,12 +69,13 @@ function readConfig(): FixtureConfig {
   return JSON.parse(readFileSync(configPath, 'utf8')) as FixtureConfig
 }
 
-async function dispatchLegacyClose(
+async function dispatchReasonlessClose(
   dispatcher: RpcDispatcher,
   session: FixtureSession,
-  sequence: number
+  sequence: number,
+  viewer: typeof LEGACY_VIEWER | typeof CAPABLE_VIEWER
 ): Promise<Record<string, unknown>> {
-  const requestId = `legacy-close-${sequence}`
+  const requestId = `${session.closeContract}-close-${sequence}`
   return await new Promise((resolve, reject) => {
     void dispatcher
       .dispatchStreaming(
@@ -74,7 +86,7 @@ async function dispatchLegacyClose(
           params: { worktree: `id:${session.worktreeId}`, tabId: session.tabId }
         },
         (serialized) => resolve(JSON.parse(serialized) as Record<string, unknown>),
-        VIEWER
+        viewer
       )
       .catch(reject)
   })
@@ -217,13 +229,29 @@ async function main(): Promise<void> {
     for (const [index, session] of config.sessions.entries()) {
       observerBefore.push(await dispatchObserverList(dispatcher, session, index + 1))
     }
-    const responses: Record<string, unknown>[] = []
+    const capableResponses: Record<string, unknown>[] = []
+    for (const [index, session] of config.sessions
+      .filter((candidate) => candidate.closeContract === 'capable')
+      .entries()) {
+      capableResponses.push(
+        await dispatchReasonlessClose(dispatcher, session, index + 1, CAPABLE_VIEWER)
+      )
+    }
+    const observerAfterCapable: Record<string, unknown>[] = []
     for (const [index, session] of config.sessions.entries()) {
-      responses.push(await dispatchLegacyClose(dispatcher, session, index + 1))
+      observerAfterCapable.push(await dispatchObserverList(dispatcher, session, index + 101))
+    }
+    const legacyResponses: Record<string, unknown>[] = []
+    for (const [index, session] of config.sessions
+      .filter((candidate) => candidate.closeContract === 'legacy')
+      .entries()) {
+      legacyResponses.push(
+        await dispatchReasonlessClose(dispatcher, session, index + 1, LEGACY_VIEWER)
+      )
     }
     const observerAfter: Record<string, unknown>[] = []
     for (const [index, session] of config.sessions.entries()) {
-      observerAfter.push(await dispatchObserverList(dispatcher, session, index + 101))
+      observerAfter.push(await dispatchObserverList(dispatcher, session, index + 201))
     }
     const postClosePing: Record<string, boolean> = {}
     for (const [index, session] of config.sessions.entries()) {
@@ -249,17 +277,20 @@ async function main(): Promise<void> {
     }
     process.send?.({
       type: 'legacy-close-complete',
-      initiator: VIEWER,
+      capableInitiator: CAPABLE_VIEWER,
+      legacyInitiator: LEGACY_VIEWER,
       observer: {
         ...OBSERVER,
-        requestCount: observerBefore.length + observerAfter.length,
+        requestCount: observerBefore.length + observerAfterCapable.length + observerAfter.length,
         closeRequestCount: 0
       },
       observerBefore,
+      observerAfterCapable,
       observerAfter,
       postClosePing,
       calls,
-      responses
+      capableResponses,
+      legacyResponses
     })
     await waitForFinish()
   } finally {

@@ -29,6 +29,7 @@ import {
 import { ALL_RPC_METHODS } from './methods'
 import { emulatorProbe, emulatorProbeError } from '../../emulator/emulator-probe'
 import type { OrcaRuntimeService } from '../orca-runtime'
+import type { RuntimeCapability } from '../../../shared/protocol-version'
 
 export type DispatcherOptions = {
   runtime: OrcaRuntimeService
@@ -104,6 +105,7 @@ export class RpcDispatcher {
       clientId?: string
       pairedDeviceId?: string
       clientKind?: 'mobile' | 'runtime'
+      clientCapabilities?: readonly RuntimeCapability[]
       pairing?: PairingRpcContext
       sendBinary?: (bytes: Uint8Array<ArrayBufferLike>) => boolean | void
       registerBinaryStreamHandler?: (
@@ -139,6 +141,7 @@ export class RpcDispatcher {
           clientId: options?.clientId,
           pairedDeviceId: options?.pairedDeviceId,
           clientKind: options?.clientKind,
+          clientCapabilities: options?.clientCapabilities,
           pairing: options?.pairing,
           sendBinary: options?.sendBinary,
           registerBinaryStreamHandler: options?.registerBinaryStreamHandler
@@ -175,6 +178,7 @@ export class RpcDispatcher {
           clientId: options?.clientId,
           pairedDeviceId: options?.pairedDeviceId,
           clientKind: options?.clientKind,
+          clientCapabilities: options?.clientCapabilities,
           pairing: options?.pairing,
           sendBinary: options?.sendBinary,
           registerBinaryStreamHandler: options?.registerBinaryStreamHandler

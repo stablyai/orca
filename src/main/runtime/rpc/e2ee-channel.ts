@@ -15,6 +15,8 @@ import {
 } from './mobile-e2ee-v2-desktop-outbound'
 import { handleDesktopMobileE2EEV2Inbound } from './mobile-e2ee-v2-desktop-inbound'
 import { isValidMobileE2EEAuthVersion, type MobileE2EEAuth } from './mobile-e2ee-auth-validation'
+import { parseRuntimeClientCapabilities } from './runtime-client-capabilities'
+import type { E2EEAuthenticatedDevice } from './authenticated-e2ee-device'
 
 type ChannelState = 'awaiting_hello' | 'awaiting_auth' | 'ready'
 
@@ -29,12 +31,6 @@ export type E2EEChannelOptions = {
   onError: (code: number, reason: string) => void
   transportContext?: DesktopMobileE2EEV2Context
   requireV2?: boolean
-}
-
-export type E2EEAuthenticatedDevice = {
-  deviceId: string
-  deviceToken: string
-  scope: 'mobile' | 'runtime'
 }
 
 export class E2EEChannel {
@@ -68,6 +64,7 @@ export class E2EEChannel {
 
   deviceToken: string | null = null
   authenticatedDevice: E2EEAuthenticatedDevice | null = null
+  clientCapabilities: readonly string[] = []
 
   constructor(ws: WebSocket, options: E2EEChannelOptions) {
     this.ws = ws
@@ -212,6 +209,7 @@ export class E2EEChannel {
       this.onError(4001, 'Invalid e2ee_hello')
       return
     }
+    this.clientCapabilities = parseRuntimeClientCapabilities(hello.clientCapabilities)
 
     // Why: derive the shared key from our secret + client's public key.
     // Both sides compute the same shared secret via ECDH.

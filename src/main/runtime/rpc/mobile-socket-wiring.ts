@@ -2,7 +2,8 @@ import { randomBytes } from 'node:crypto'
 import type { WebSocket } from 'ws'
 import type { DeviceEntry, DeviceRegistry } from '../device-registry'
 import type { E2EEKeypair } from '../e2ee-keypair'
-import { E2EEChannel, type E2EEAuthenticatedDevice } from './e2ee-channel'
+import { E2EEChannel } from './e2ee-channel'
+import type { E2EEAuthenticatedDevice } from './authenticated-e2ee-device'
 
 type MobileSocketPayload = string | Uint8Array<ArrayBufferLike>
 
@@ -35,6 +36,7 @@ export type AuthenticatedMobileSocket = {
   ws: WebSocket
   connectionId: string
   device: E2EEAuthenticatedDevice
+  clientCapabilities: readonly string[]
   transport: MobileSocketTransportMetadata
 }
 
@@ -147,8 +149,14 @@ export class MobileSocketWiring {
           }
           return toAuthenticatedDevice(device)
         },
-        onReady: (_channel, device) => {
-          const socket = { ws, connectionId, device, transport: metadata }
+        onReady: (channel, device) => {
+          const socket = {
+            ws,
+            connectionId,
+            device,
+            clientCapabilities: channel.clientCapabilities,
+            transport: metadata
+          }
           this.authenticatedSockets.set(ws, socket)
           transport.setClientId(ws, device.deviceToken)
           this.deviceRegistry.updateLastSeen(device.deviceId)
