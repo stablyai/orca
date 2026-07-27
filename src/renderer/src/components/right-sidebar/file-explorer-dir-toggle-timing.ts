@@ -1,8 +1,12 @@
 /** Marks the filename text, which doubles as the double-click-to-rename hotspot. */
 export const RENAME_HOTSPOT_ATTR = 'data-file-explorer-row-name'
 
-/** Roughly the platform double-click threshold; long enough to catch the second click. */
-export const DIR_TOGGLE_DOUBLE_CLICK_MS = 250
+/**
+ * Matches Chromium/Electron's double-click window (`kDoubleClickTimeMS`), so a
+ * deferred toggle can't fire before the second click of a slow double-click
+ * arrives and turns the gesture into a rename.
+ */
+export const DIR_TOGGLE_DOUBLE_CLICK_MS = 500
 
 export type DirToggleTiming = 'immediate' | 'deferred' | 'skip'
 
