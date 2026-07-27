@@ -36,7 +36,7 @@ export type CodexEventLabel =
   | 'stop'
 
 export type CodexTrustEntry = {
-  /** Path on disk to the hooks.json that declares the hook (the "key_source"). */
+  /** Path to the config.toml or hooks.json declaration (the "key_source"). */
   sourcePath: string
   /** Codex event label (snake_case). */
   eventLabel: CodexEventLabel
@@ -44,7 +44,7 @@ export type CodexTrustEntry = {
   groupIndex: number
   /** 0-based index of the handler within the matcher group's `hooks` array. */
   handlerIndex: number
-  /** The exact `command` string written to hooks.json. */
+  /** The exact `command` string in the hook declaration. */
   command: string
   /** Effective timeout in seconds; defaults to 600 when undefined, explicit values clamped to a minimum of 1. */
   timeoutSec?: number

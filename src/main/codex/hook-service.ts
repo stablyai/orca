@@ -81,6 +81,7 @@ import {
 } from './codex-managed-trust-reconciliation'
 import type { CodexTrustGrantLedgerHome } from './codex-trust-grant-ledger'
 import { mutateRealHomeHooksPreservingUserTrust } from './codex-user-hook-trust-rebase'
+import { readSystemCodexHookAuthority } from './system-hook-authority'
 
 // Why: Pre/PostToolUse feed the live in-flight-tool readout; PermissionRequest exits with no decision so Codex still shows its approval UI while Orca flips the pane to waiting.
 const CODEX_EVENTS = [
@@ -304,18 +305,22 @@ function getRuntimeHooksWithSystemUserHooks(
     return { hooks: { ...runtimeHooks }, trustEntries: [] }
   }
 
-  const systemConfig = readHooksJson(systemConfigPath)
-  if (!systemConfig?.hooks) {
+  const authority = readSystemCodexHookAuthority(getSystemCodexHomePath(), (error) => {
+    // Why: a hand-broken system config must not prevent Orca's managed status
+    // hook from installing. Legacy hooks.json remains the compatibility source.
+    console.warn('[codex-hook-service] failed to read inline system hooks', error)
+  })
+  if (!authority) {
     return { hooks: {}, trustEntries: [] }
   }
 
   const nextHooks: Record<string, HookDefinition[]> = {}
   const trustedSystemHookSignatures = getTrustedSystemUserHookSignatures(
-    systemConfigPath,
-    systemConfig.hooks,
+    authority.sourcePath,
+    authority.hooks,
     isManagedCommand
   )
-  for (const [eventName, systemDefinitions] of Object.entries(systemConfig.hooks)) {
+  for (const [eventName, systemDefinitions] of Object.entries(authority.hooks)) {
     if (!Array.isArray(systemDefinitions)) {
       continue
     }
@@ -327,7 +332,9 @@ function getRuntimeHooksWithSystemUserHooks(
       continue
     }
 
-    // Why: rebuild from system hooks; reusing old runtime copies would keep deleted/edited ~/.codex/hooks.json entries alive for new sessions.
+    // Why: runtime hooks are derived from the user's system hooks plus Orca's
+    // managed hooks. Reusing old runtime user-hook copies would keep deleted or
+    // edited system hook entries alive for new Orca-launched sessions.
     nextHooks[eventName] = dedupeHookDefinitions(systemUserDefinitions)
   }
 

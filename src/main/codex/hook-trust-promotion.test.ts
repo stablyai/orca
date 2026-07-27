@@ -83,12 +83,16 @@ function runtimeHomeDir(): string {
 function writeSystemUserHook(commands: string[] = [USER_HOOK_COMMAND]): void {
   mkdirSync(systemCodexDir(), { recursive: true })
   writeFileSync(
-    join(systemCodexDir(), 'hooks.json'),
-    JSON.stringify({
-      hooks: {
-        Stop: commands.map((command) => ({ hooks: [{ type: 'command', command }] }))
-      }
-    })
+    join(systemCodexDir(), 'config.toml'),
+    commands
+      .flatMap((command) => [
+        '[[hooks.Stop]]',
+        '[[hooks.Stop.hooks]]',
+        'type = "command"',
+        `command = ${JSON.stringify(command)}`,
+        ''
+      ])
+      .join('\n')
   )
 }
 
@@ -116,12 +120,16 @@ function runtimeUserStopEntry(): CodexTrustEntry {
 
 function systemUserStopEntry(groupIndex = 0): CodexTrustEntry {
   return {
-    sourcePath: join(systemCodexDir(), 'hooks.json'),
+    sourcePath: join(systemCodexDir(), 'config.toml'),
     eventLabel: 'stop',
     groupIndex,
     handlerIndex: 0,
     command: USER_HOOK_COMMAND
   }
+}
+
+function inlineSystemUserStopEntry(): CodexTrustEntry {
+  return systemUserStopEntry()
 }
 
 function readSystemToml(): string {
@@ -138,7 +146,7 @@ describe('codex hook trust write-back promotion', () => {
     const systemEntry = systemUserStopEntry()
     writeFileSync(
       join(systemCodexDir(), 'config.toml'),
-      upsertHookTrustEntriesInContent('', [systemEntry])
+      upsertHookTrustEntriesInContent(readSystemToml(), [systemEntry])
     )
 
     expect(new CodexHookService().install().state).toBe('installed')
@@ -167,7 +175,7 @@ describe('codex hook trust write-back promotion', () => {
 
     // Approval survives the relaunch instead of being wiped as stale…
     expect(readHookTrustEntries(runtimeTomlPath).get(approvalKey)?.trustedHash).toBe(approvedHash)
-    // …and is promoted into the user's real config keyed to their hooks.json.
+    // …and is promoted into the user's real config keyed to config.toml.
     const systemState = readHookTrustEntries(join(systemCodexDir(), 'config.toml')).get(
       computeTrustKey(systemUserStopEntry())
     )
@@ -180,6 +188,27 @@ describe('codex hook trust write-back promotion', () => {
     service.install()
     expect(readSystemToml()).toBe(systemTomlAfterPromotion)
     expect(readFileSync(runtimeTomlPath, 'utf-8')).toBe(runtimeTomlAfterPromotion)
+  })
+
+  it('promotes an approval to inline config.toml hooks without recreating hooks.json', () => {
+    writeSystemUserHook()
+    const service = new CodexHookService()
+    service.install()
+
+    simulateCodexApproval(runtimeUserStopEntry())
+    const approvedHash = computeTrustedHash(runtimeUserStopEntry())
+
+    service.install()
+
+    const systemTomlPath = join(systemCodexDir(), 'config.toml')
+    expect(
+      readHookTrustEntries(systemTomlPath).get(computeTrustKey(inlineSystemUserStopEntry()))
+        ?.trustedHash
+    ).toBe(approvedHash)
+    expect(existsSync(join(systemCodexDir(), 'hooks.json'))).toBe(false)
+    expect(readFileSync(join(runtimeHomeDir(), 'config.toml'), 'utf-8')).not.toContain(
+      '[[hooks.Stop]]'
+    )
   })
 
   it('never promotes trust for the Orca-managed status hook into ~/.codex', () => {
@@ -216,7 +245,10 @@ describe('codex hook trust write-back promotion', () => {
     writeSystemUserHook()
     // Pre-trust the hook in the system config, as a terminal Codex session would.
     const systemTomlPath = join(systemCodexDir(), 'config.toml')
-    writeFileSync(systemTomlPath, upsertHookTrustEntriesInContent('', [systemUserStopEntry()]))
+    writeFileSync(
+      systemTomlPath,
+      upsertHookTrustEntriesInContent(readSystemToml(), [systemUserStopEntry()])
+    )
 
     const service = new CodexHookService()
     service.install()
@@ -226,7 +258,7 @@ describe('codex hook trust write-back promotion', () => {
     expect(readHookTrustEntries(runtimeTomlPath).get(approvalKey)).toBeDefined()
 
     // User revokes in the system config; the runtime copy must not win.
-    writeFileSync(systemTomlPath, '')
+    writeSystemUserHook()
     service.install()
 
     expect(readHookTrustEntries(runtimeTomlPath).get(approvalKey)).toBeUndefined()
@@ -236,7 +268,10 @@ describe('codex hook trust write-back promotion', () => {
   it('promotes an in-Orca disable of a mirrored user hook back to the system config', () => {
     writeSystemUserHook()
     const systemTomlPath = join(systemCodexDir(), 'config.toml')
-    writeFileSync(systemTomlPath, upsertHookTrustEntriesInContent('', [systemUserStopEntry()]))
+    writeFileSync(
+      systemTomlPath,
+      upsertHookTrustEntriesInContent(readSystemToml(), [systemUserStopEntry()])
+    )
 
     const service = new CodexHookService()
     service.install()
@@ -306,7 +341,10 @@ describe('codex hook trust write-back promotion', () => {
     // sit out this launch and leave the system config byte-identical.
     writeSystemUserHook()
     const systemTomlPath = join(systemCodexDir(), 'config.toml')
-    writeFileSync(systemTomlPath, upsertHookTrustEntriesInContent('', [systemUserStopEntry()]))
+    writeFileSync(
+      systemTomlPath,
+      upsertHookTrustEntriesInContent(readSystemToml(), [systemUserStopEntry()])
+    )
     const service = new CodexHookService()
     service.install()
     rmSync(join(runtimeHomeDir(), '.orca-hook-trust-provenance.json'), { force: true })
@@ -323,11 +361,14 @@ describe('codex hook trust write-back promotion', () => {
     // build. The stale runtime mirror must not be mistaken for an approval.
     writeSystemUserHook()
     const systemTomlPath = join(systemCodexDir(), 'config.toml')
-    writeFileSync(systemTomlPath, upsertHookTrustEntriesInContent('', [systemUserStopEntry()]))
+    writeFileSync(
+      systemTomlPath,
+      upsertHookTrustEntriesInContent(readSystemToml(), [systemUserStopEntry()])
+    )
     const service = new CodexHookService()
     service.install()
     rmSync(join(runtimeHomeDir(), '.orca-hook-trust-provenance.json'), { force: true })
-    writeFileSync(systemTomlPath, '')
+    writeSystemUserHook()
 
     service.install()
 
@@ -344,13 +385,18 @@ describe('codex hook trust write-back promotion', () => {
     // enabled = false in ~/.codex/config.toml and upgraded to this build.
     writeSystemUserHook()
     const systemTomlPath = join(systemCodexDir(), 'config.toml')
-    writeFileSync(systemTomlPath, upsertHookTrustEntriesInContent('', [systemUserStopEntry()]))
+    writeFileSync(
+      systemTomlPath,
+      upsertHookTrustEntriesInContent(readSystemToml(), [systemUserStopEntry()])
+    )
     const service = new CodexHookService()
     service.install()
     rmSync(join(runtimeHomeDir(), '.orca-hook-trust-provenance.json'), { force: true })
     writeFileSync(
       systemTomlPath,
-      upsertHookTrustEntriesInContent('', [{ ...systemUserStopEntry(), enabled: false }])
+      upsertHookTrustEntriesInContent(readSystemToml(), [
+        { ...systemUserStopEntry(), enabled: false }
+      ])
     )
 
     service.install()
@@ -379,14 +425,14 @@ describe('codex hook trust write-back promotion', () => {
     expect(systemTrust.get(computeTrustKey(systemUserStopEntry(1)))?.trustedHash).toBe(approvedHash)
   })
 
-  it('skips promotion when the approved hook no longer exists in ~/.codex/hooks.json', () => {
+  it('skips promotion when the approved hook no longer exists in config.toml', () => {
     writeSystemUserHook()
     const service = new CodexHookService()
     service.install()
 
     simulateCodexApproval(runtimeUserStopEntry())
-    // User deletes the hook from their system hooks.json before relaunching.
-    writeFileSync(join(systemCodexDir(), 'hooks.json'), JSON.stringify({ hooks: {} }))
+    // User deletes the inline hook from their system config before relaunching.
+    writeFileSync(join(systemCodexDir(), 'config.toml'), 'model = "gpt-5"\n')
 
     service.install()
 

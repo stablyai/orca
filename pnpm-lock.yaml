@@ -80,6 +80,9 @@ importers:
       sherpa-onnx:
         specifier: 1.12.37
         version: 1.12.37
+      smol-toml:
+        specifier: 1.6.1
+        version: 1.6.1
       ssh2:
         specifier: ^1.17.0
         version: 1.17.0

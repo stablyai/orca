@@ -26,6 +26,7 @@ import {
   joinTomlBlocks,
   stripRuntimeOwnedTomlSections
 } from './config-toml-runtime-owned-sections'
+import { stripInlineCodexHookSections } from './config-toml-hooks'
 
 export function syncSystemConfigIntoManagedCodexHome(
   homes: CodexSettingsPromotionHomes = {
@@ -136,7 +137,7 @@ export function resolveCodexConfigMirrorSourceDirectory(systemHomePath: string):
 
 function prepareSystemConfigForRuntimeMirror(config: string, systemConfigDir: string): string {
   return rewriteRelativePathConfigValues(
-    normalizeDeprecatedCodexHookFeatureFlag(config),
+    stripInlineCodexHookSections(normalizeDeprecatedCodexHookFeatureFlag(config)),
     systemConfigDir
   )
 }

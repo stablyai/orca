@@ -15,12 +15,14 @@ import { join } from 'node:path'
 import { spawn } from 'node:child_process'
 import { createServer } from 'node:http'
 import type { AddressInfo } from 'node:net'
+import { stringify } from 'smol-toml'
 import { createManagedCommandMatcher, wrapPosixHookCommand } from '../agent-hooks/installer-utils'
 import {
   computeTrustedHash,
   getCodexExplicitHomeHookSourcePath,
   normalizeCodexHookSourcePath,
-  upsertHookTrustEntriesInContent
+  upsertHookTrustEntriesInContent,
+  type CodexTrustEntry
 } from './config-toml-trust'
 
 const { getPathMock, homedirMock } = vi.hoisted(() => ({
@@ -127,6 +129,32 @@ function localManagedCodexEvents(): string[] {
     'SubagentStop',
     'UserPromptSubmit'
   ]
+}
+
+function writeLegacyFixtureAsInline(
+  systemCodexHome: string,
+  systemHooksPath: string,
+  trustEntries: CodexTrustEntry[],
+  baseConfig = 'model = "system-model"\n'
+): string {
+  const legacy = JSON.parse(readFileSync(systemHooksPath, 'utf-8')) as {
+    hooks: Record<string, unknown>
+  }
+  const systemTomlPath = join(systemCodexHome, 'config.toml')
+  const inlineConfig = `${baseConfig.trimEnd()}\n\n${stringify({ hooks: legacy.hooks })}`
+  // Why: trust-key canonicalization uses realpath when the declaration exists.
+  // Seed the file first so fixtures under macOS /var -> /private/var match the
+  // same key spelling a running Codex process writes.
+  writeFileSync(systemTomlPath, inlineConfig, 'utf-8')
+  writeFileSync(
+    systemTomlPath,
+    upsertHookTrustEntriesInContent(
+      inlineConfig,
+      trustEntries.map((entry) => ({ ...entry, sourcePath: systemTomlPath }))
+    ),
+    'utf-8'
+  )
+  return systemTomlPath
 }
 
 describe('CodexHookService', () => {
@@ -466,23 +494,19 @@ describe('CodexHookService', () => {
       )}\n`,
       'utf-8'
     )
-    writeFileSync(
-      join(systemCodexHome, 'config.toml'),
-      upsertHookTrustEntriesInContent('model = "system-model"\n', [
-        {
-          sourcePath: systemHooksPath,
-          eventLabel: 'stop',
-          groupIndex: 0,
-          handlerIndex: 0,
-          command: 'user-hook',
-          timeoutSec: 12,
-          async: true,
-          matcher: '*',
-          statusMessage: 'Running user hook'
-        }
-      ]),
-      'utf-8'
-    )
+    writeLegacyFixtureAsInline(systemCodexHome, systemHooksPath, [
+      {
+        sourcePath: systemHooksPath,
+        eventLabel: 'stop',
+        groupIndex: 0,
+        handlerIndex: 0,
+        command: 'user-hook',
+        timeoutSec: 12,
+        async: true,
+        matcher: '*',
+        statusMessage: 'Running user hook'
+      }
+    ])
 
     expect(new CodexHookService().install().state).toBe('installed')
 
@@ -504,6 +528,57 @@ describe('CodexHookService', () => {
     expect(runtimeToml).not.toContain(hookTrustHeader(`${systemHooksPath}:stop:0:0`, true))
   })
 
+  it('mirrors inline system hooks into runtime hooks.json without keeping a second representation', () => {
+    const systemCodexHome = join(tmpHome, '.codex')
+    const systemTomlPath = join(systemCodexHome, 'config.toml')
+    mkdirSync(systemCodexHome, { recursive: true })
+    const inlineConfig = [
+      'model = "system-model"',
+      '',
+      '[[hooks.Stop]]',
+      'matcher = "*"',
+      '',
+      '[[hooks.Stop.hooks]]',
+      'type = "command"',
+      'command = "inline-user-hook"',
+      'timeout = 12',
+      'statusMessage = "Running inline hook"',
+      ''
+    ].join('\n')
+    writeFileSync(
+      systemTomlPath,
+      upsertHookTrustEntriesInContent(inlineConfig, [
+        {
+          sourcePath: systemTomlPath,
+          eventLabel: 'stop',
+          groupIndex: 0,
+          handlerIndex: 0,
+          command: 'inline-user-hook',
+          timeoutSec: 12,
+          matcher: '*',
+          statusMessage: 'Running inline hook'
+        }
+      ]),
+      'utf-8'
+    )
+
+    expect(new CodexHookService().install().state).toBe('installed')
+
+    const managedCodexHome = join(userDataDir, 'codex-runtime-home', 'home')
+    const managedHooksPath = join(managedCodexHome, 'hooks.json')
+    const runtimeHooks = JSON.parse(readFileSync(managedHooksPath, 'utf-8')) as {
+      hooks: Record<string, { matcher?: string; hooks?: { command?: string }[] }[]>
+    }
+    expect(runtimeHooks.hooks.Stop?.[1]?.matcher).toBe('*')
+    expect(runtimeHooks.hooks.Stop?.[1]?.hooks?.[0]?.command).toBe('inline-user-hook')
+
+    const runtimeToml = readFileSync(join(managedCodexHome, 'config.toml'), 'utf-8')
+    expect(runtimeToml).not.toContain('[[hooks.Stop]]')
+    expect(runtimeToml).not.toContain('[[hooks.Stop.hooks]]')
+    expect(runtimeToml).toContain(hookTrustHeader(`${managedHooksPath}:stop:1:0`))
+    expect(runtimeToml).not.toContain(hookTrustHeader(`${systemTomlPath}:stop:0:0`))
+  })
+
   it('runs managed PostToolUse status before mirrored user hooks', () => {
     const systemCodexHome = join(tmpHome, '.codex')
     const systemHooksPath = join(systemCodexHome, 'hooks.json')
@@ -517,19 +592,15 @@ describe('CodexHookService', () => {
       })}\n`,
       'utf-8'
     )
-    writeFileSync(
-      join(systemCodexHome, 'config.toml'),
-      upsertHookTrustEntriesInContent('model = "system-model"\n', [
-        {
-          sourcePath: systemHooksPath,
-          eventLabel: 'post_tool_use',
-          groupIndex: 0,
-          handlerIndex: 0,
-          command: 'slow-user-post-tool-hook'
-        }
-      ]),
-      'utf-8'
-    )
+    writeLegacyFixtureAsInline(systemCodexHome, systemHooksPath, [
+      {
+        sourcePath: systemHooksPath,
+        eventLabel: 'post_tool_use',
+        groupIndex: 0,
+        handlerIndex: 0,
+        command: 'slow-user-post-tool-hook'
+      }
+    ])
 
     expect(new CodexHookService().install().state).toBe('installed')
 
@@ -572,26 +643,22 @@ describe('CodexHookService', () => {
       )}\n`,
       'utf-8'
     )
-    writeFileSync(
-      join(systemCodexHome, 'config.toml'),
-      upsertHookTrustEntriesInContent('model = "system-model"\n', [
-        {
-          sourcePath: systemHooksPath,
-          eventLabel: 'stop',
-          groupIndex: 0,
-          handlerIndex: 0,
-          command: 'second-stop-hook'
-        },
-        {
-          sourcePath: systemHooksPath,
-          eventLabel: 'stop',
-          groupIndex: 1,
-          handlerIndex: 0,
-          command: 'first-stop-hook'
-        }
-      ]),
-      'utf-8'
-    )
+    writeLegacyFixtureAsInline(systemCodexHome, systemHooksPath, [
+      {
+        sourcePath: systemHooksPath,
+        eventLabel: 'stop',
+        groupIndex: 0,
+        handlerIndex: 0,
+        command: 'second-stop-hook'
+      },
+      {
+        sourcePath: systemHooksPath,
+        eventLabel: 'stop',
+        groupIndex: 1,
+        handlerIndex: 0,
+        command: 'first-stop-hook'
+      }
+    ])
 
     expect(new CodexHookService().install().state).toBe('installed')
 
@@ -640,26 +707,22 @@ describe('CodexHookService', () => {
       )}\n`,
       'utf-8'
     )
-    writeFileSync(
-      join(systemCodexHome, 'config.toml'),
-      upsertHookTrustEntriesInContent('model = "system-model"\n', [
-        ...pluginCommands.map((command, handlerIndex) => ({
-          sourcePath: systemHooksPath,
-          eventLabel: stopEventLabel,
-          groupIndex: 0,
-          handlerIndex,
-          command
-        })),
-        {
-          sourcePath: systemHooksPath,
-          eventLabel: stopEventLabel,
-          groupIndex: 0,
-          handlerIndex: pluginCommands.length,
-          command: userCommand
-        }
-      ]),
-      'utf-8'
-    )
+    writeLegacyFixtureAsInline(systemCodexHome, systemHooksPath, [
+      ...pluginCommands.map((command, handlerIndex) => ({
+        sourcePath: systemHooksPath,
+        eventLabel: stopEventLabel,
+        groupIndex: 0,
+        handlerIndex,
+        command
+      })),
+      {
+        sourcePath: systemHooksPath,
+        eventLabel: stopEventLabel,
+        groupIndex: 0,
+        handlerIndex: pluginCommands.length,
+        command: userCommand
+      }
+    ])
 
     expect(new CodexHookService().install().state).toBe('installed')
 
@@ -707,8 +770,7 @@ describe('CodexHookService', () => {
       )}\n`,
       'utf-8'
     )
-    const disabledPostCompactHeader = hookTrustHeader(`${systemHooksPath}:post_compact:0:0`, true)
-    const systemToml = upsertHookTrustEntriesInContent('model = "system-model"\n', [
+    const systemTomlPath = writeLegacyFixtureAsInline(systemCodexHome, systemHooksPath, [
       {
         sourcePath: systemHooksPath,
         eventLabel: 'pre_compact',
@@ -724,9 +786,16 @@ describe('CodexHookService', () => {
         command: 'post-compact-disabled'
       }
     ])
+    const disabledPostCompactHeader = hookTrustHeader(
+      `${systemTomlPath}:post_compact:0:0`,
+      true
+    )
     writeFileSync(
-      join(systemCodexHome, 'config.toml'),
-      markHookTrustDisabled(systemToml, disabledPostCompactHeader),
+      systemTomlPath,
+      markHookTrustDisabled(
+        readFileSync(systemTomlPath, 'utf-8'),
+        disabledPostCompactHeader
+      ),
       'utf-8'
     )
 
@@ -762,19 +831,15 @@ describe('CodexHookService', () => {
       })}\n`,
       'utf-8'
     )
-    writeFileSync(
-      join(systemCodexHome, 'config.toml'),
-      upsertHookTrustEntriesInContent('model = "system-model"\n', [
-        {
-          sourcePath: systemHooksPath,
-          eventLabel: 'stop',
-          groupIndex: 0,
-          handlerIndex: 0,
-          command: 'user-hook'
-        }
-      ]),
-      'utf-8'
-    )
+    writeLegacyFixtureAsInline(systemCodexHome, systemHooksPath, [
+      {
+        sourcePath: systemHooksPath,
+        eventLabel: 'stop',
+        groupIndex: 0,
+        handlerIndex: 0,
+        command: 'user-hook'
+      }
+    ])
     const service = new CodexHookService()
 
     expect(service.install().state).toBe('installed')
@@ -841,8 +906,7 @@ describe('CodexHookService', () => {
       })}\n`,
       'utf-8'
     )
-    const disabledStopHeader = hookTrustHeader(`${systemHooksPath}:stop:0:0`, true)
-    const systemToml = upsertHookTrustEntriesInContent('model = "system-model"\n', [
+    const systemTomlPath = writeLegacyFixtureAsInline(systemCodexHome, systemHooksPath, [
       {
         sourcePath: systemHooksPath,
         eventLabel: 'stop',
@@ -851,9 +915,10 @@ describe('CodexHookService', () => {
         command: 'user-stop-hook'
       }
     ])
+    const disabledStopHeader = hookTrustHeader(`${systemTomlPath}:stop:0:0`, true)
     writeFileSync(
-      join(systemCodexHome, 'config.toml'),
-      markHookTrustDisabled(systemToml, disabledStopHeader),
+      systemTomlPath,
+      markHookTrustDisabled(readFileSync(systemTomlPath, 'utf-8'), disabledStopHeader),
       'utf-8'
     )
 
@@ -1189,27 +1254,29 @@ describe('CodexHookService', () => {
       )}\n`,
       'utf-8'
     )
+    const inlineConfig = `${[
+      'model = "system-model"',
+      '',
+      '[features]',
+      'codex_hooks = true',
+      ''
+    ].join('\n')}\n${stringify({
+      hooks: {
+        Stop: [{ hooks: [{ type: 'command', command: userCommand }] }]
+      }
+    })}`
+    writeFileSync(systemTomlPath, inlineConfig, 'utf-8')
     writeFileSync(
       systemTomlPath,
-      upsertHookTrustEntriesInContent(
-        ['model = "system-model"', '', '[features]', 'codex_hooks = true', ''].join('\n'),
-        [
-          {
-            sourcePath: systemHooksPath,
-            eventLabel: 'stop',
-            groupIndex: 0,
-            handlerIndex: 0,
-            command: userCommand
-          },
-          {
-            sourcePath: systemHooksPath,
-            eventLabel: 'session_start',
-            groupIndex: 0,
-            handlerIndex: 0,
-            command: legacyCommand
-          }
-        ]
-      ),
+      upsertHookTrustEntriesInContent(inlineConfig, [
+        {
+          sourcePath: systemTomlPath,
+          eventLabel: 'stop',
+          groupIndex: 0,
+          handlerIndex: 0,
+          command: userCommand
+        }
+      ]),
       'utf-8'
     )
     writeFileSync(

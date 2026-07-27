@@ -22,6 +22,7 @@ import {
   getCodexHookTrustSignature,
   getCodexManagedScriptFileName
 } from './codex-hook-identity'
+import { readSystemCodexHookAuthority } from './system-hook-authority'
 
 // Why: ~/.codex/config.toml is the single source of truth for user-hook
 // trust, but the Codex TUI can only write approvals into the runtime
@@ -111,7 +112,7 @@ export function snapshotCodexRuntimeHookTrustProvenance(
 /**
  * Promotes hook approvals the user made inside Orca-launched Codex (written
  * by Codex into the runtime config.toml) into ~/.codex/config.toml, keyed to
- * the user's own hooks.json. Runs before the config mirror so the promoted
+ * the system hook authority. Runs before the config mirror so the promoted
  * trust is mirrored back on the same launch.
  */
 export function promoteCodexRuntimeHookApprovalsToSystem(
@@ -131,7 +132,12 @@ function promoteCodexRuntimeHookApprovalsToSystemUnsafe(runtimeHomePath: string)
   const runtimeHooksPath = join(runtimeHomePath, 'hooks.json')
   const systemHooksPath = join(systemHomePath, 'hooks.json')
   const canonicalRuntimeHooksPath = getCodexExplicitHomeHookSourcePath(runtimeHooksPath)
-  if (canonicalRuntimeHooksPath === normalizeCodexHookSourcePath(systemHooksPath)) {
+  if (
+    codexHookSourcePathsEqual(
+      canonicalRuntimeHooksPath,
+      getCodexExplicitHomeHookSourcePath(systemHooksPath)
+    )
+  ) {
     return
   }
   const runtimeTomlPath = join(runtimeHomePath, 'config.toml')
@@ -156,8 +162,17 @@ function promoteCodexRuntimeHookApprovalsToSystemUnsafe(runtimeHomePath: string)
   // against — the one still on disk from the previous launch — so it must run
   // before install() rewrites the runtime hooks.json.
   const runtimeConfig = readHooksJson(runtimeHooksPath)
-  const systemConfig = readHooksJson(systemHooksPath)
-  if (!runtimeConfig?.hooks || !systemConfig?.hooks) {
+  if (!runtimeConfig?.hooks) {
+    return
+  }
+  const systemAuthority = readSystemCodexHookAuthority(systemHomePath)
+  if (
+    !systemAuthority ||
+    codexHookSourcePathsEqual(
+      canonicalRuntimeHooksPath,
+      normalizeCodexHookSourcePath(systemAuthority.sourcePath)
+    )
+  ) {
     return
   }
   const isManagedCommand = createManagedCommandMatcher(getCodexManagedScriptFileName())
@@ -207,8 +222,8 @@ function promoteCodexRuntimeHookApprovalsToSystemUnsafe(runtimeHomePath: string)
     }
     collectSystemPromotionTargets(
       promotions,
-      systemHooksPath,
-      systemConfig.hooks,
+      systemAuthority.sourcePath,
+      systemAuthority.hooks,
       eventName,
       getCodexHookTrustSignature(runtimeEntry),
       isManagedCommand,
@@ -226,7 +241,7 @@ function promoteCodexRuntimeHookApprovalsToSystemUnsafe(runtimeHomePath: string)
 // and one runtime hook can map to several identical system entries.
 function collectSystemPromotionTargets(
   promotions: CodexTrustEntry[],
-  systemHooksPath: string,
+  systemSourcePath: string,
   systemHooks: Record<string, HookDefinition[]>,
   eventName: string,
   signature: string,
@@ -245,7 +260,7 @@ function collectSystemPromotionTargets(
         return
       }
       const systemEntry = createCodexHookTrustEntry(
-        systemHooksPath,
+        systemSourcePath,
         eventName,
         groupIndex,
         handlerIndex,
