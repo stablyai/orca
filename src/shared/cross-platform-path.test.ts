@@ -117,6 +117,16 @@ describe('cross-platform path containment', () => {
     // A UNC-shaped candidate under POSIX root '/' used to yield a leading slash,
     // which is not a relative path.
     expect(relativePathInsideRoot('/', '//server/share/x')).toBe('server/share/x')
+
+    // WSL suffixes must stay decomposed: they name files on a Linux filesystem,
+    // where NFD and NFC are distinct entries.
+    const decomposed = '프로젝트'.normalize('NFD')
+    expect(
+      relativePathInsideRoot(
+        '\\\\wsl$\\Ubuntu\\home\\ada\\repo',
+        `\\\\wsl.localhost\\Ubuntu\\home\\ada\\repo\\${decomposed}\\a.ts`
+      )
+    ).toBe(`${decomposed}/a.ts`)
   })
 
   it('resolves POSIX relative paths without using the process cwd', () => {

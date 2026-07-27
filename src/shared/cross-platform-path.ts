@@ -96,52 +96,44 @@ export function relativePathInsideRoot(rootPath: string, candidatePath: string):
   if (!comparisonCandidate.startsWith(comparisonPrefix)) {
     return null
   }
-  // WSL comparison keys fold the UNC alias but preserve Linux path casing, so
-  // their suffix is both aligned across aliases and safe to return directly.
-  const suffixSource = comparisonRoot.startsWith('//wsl/')
-    ? comparisonCandidate
-    : normalizedCandidate
-  return sliceAfterSegments(suffixSource, countPathSegments(comparisonRoot))
+  // Why: the WSL alias fold makes the comparison key a different length than the
+  // raw path, so every branch must skip whole segments rather than characters.
+  return sliceCandidatePastRootSegments(comparisonRoot, normalizedCandidate)
 }
 
 /**
  * Why: skip the root's segments by position, not by prefix length. Comparison
- * folding (NFC, case, UNC aliasing) is not length-preserving, so a length taken
- * from the folded root would cut the raw candidate mid-character and fabricate a
- * path. Positions survive every fold and keep the suffix byte-exact, which the
- * callers that rejoin it and hit the filesystem depend on. Scanning rather than
- * splitting keeps watcher event storms allocation-free.
+ * folding is not length-preserving, so a length taken from the folded root would
+ * cut the raw candidate mid-character and fabricate a path. Scanning keeps the
+ * suffix byte-exact — which callers that rejoin it and hit the filesystem depend
+ * on — and keeps watcher event storms allocation-free.
  */
-function sliceAfterSegments(value: string, skipCount: number): string {
-  let seen = 0
+function sliceCandidatePastRootSegments(root: string, candidate: string): string {
+  let remainingRootSegments = 0
+  let inRootSegment = false
+  for (let index = 0; index < root.length; index++) {
+    if (root[index] === '/') {
+      inRootSegment = false
+    } else if (!inRootSegment) {
+      inRootSegment = true
+      remainingRootSegments++
+    }
+  }
+
   let inSegment = false
-  for (let index = 0; index < value.length; index++) {
-    if (value[index] === '/') {
+  for (let index = 0; index < candidate.length; index++) {
+    if (candidate[index] === '/') {
       inSegment = false
       continue
     }
     if (!inSegment) {
       inSegment = true
-      if (seen++ === skipCount) {
-        return value.slice(index)
+      if (remainingRootSegments-- === 0) {
+        return candidate.slice(index)
       }
     }
   }
   return ''
-}
-
-function countPathSegments(value: string): number {
-  let count = 0
-  let inSegment = false
-  for (let index = 0; index < value.length; index++) {
-    if (value[index] === '/') {
-      inSegment = false
-    } else if (!inSegment) {
-      inSegment = true
-      count++
-    }
-  }
-  return count
 }
 
 function trimRuntimePathTrailingSlash(value: string): string {

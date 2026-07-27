@@ -36,7 +36,7 @@ export type WatchedRoot = {
 
 export type WslWatcherDeps = {
   ignoreDirs: string[]
-  scheduleBatchFlush: (rootKey: string, root: WatchedRoot) => void
+  scheduleBatchFlush: (root: WatchedRoot) => void
   watchedRoots: Map<string, WatchedRoot>
 }
 
@@ -194,7 +194,7 @@ export async function createWslWatcher(
     }
     stopped = true
     markOverflowWithoutUncStat(root)
-    deps.scheduleBatchFlush(rootKey, root)
+    deps.scheduleBatchFlush(root)
     deps.watchedRoots.delete(rootKey)
   }
 
@@ -210,7 +210,7 @@ export async function createWslWatcher(
 
     if (events.length > 0) {
       queueWatcherEvents(root.batch, events)
-      deps.scheduleBatchFlush(rootKey, root)
+      deps.scheduleBatchFlush(root)
     }
   }
 
@@ -229,7 +229,7 @@ export async function createWslWatcher(
         if (streamBuffer.length > MAX_STREAM_BUFFER_CHARS) {
           streamBuffer = ''
           markOverflowWithoutUncStat(root)
-          deps.scheduleBatchFlush(rootKey, root)
+          deps.scheduleBatchFlush(root)
         }
         return
       }

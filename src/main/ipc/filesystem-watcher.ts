@@ -331,8 +331,7 @@ async function flushBatch(root: WatchedRoot): Promise<void> {
   }
 }
 
-// Why: rootKey is unused but fixed by the WslWatcherDeps.scheduleBatchFlush contract.
-function scheduleBatchFlush(_rootKey: string, root: WatchedRoot): void {
+function scheduleBatchFlush(root: WatchedRoot): void {
   const now = Date.now()
 
   if (root.batch.firstEventAt === 0) {
@@ -381,7 +380,7 @@ async function createWatcher(
 
     const markWatcherInterrupted = (): void => {
       root.batch.overflowed = true
-      scheduleBatchFlush(rootKey, root)
+      scheduleBatchFlush(root)
     }
 
     // Why: fork the watcher process (issue #7547 — watcher.node teardown races crash the host); onInterruption marks overflow to refresh past the gap.
@@ -407,7 +406,7 @@ async function createWatcher(
         }
 
         queueWatcherEvents(root.batch, events)
-        scheduleBatchFlush(rootKey, root)
+        scheduleBatchFlush(root)
       },
       watcherOptions,
       {
