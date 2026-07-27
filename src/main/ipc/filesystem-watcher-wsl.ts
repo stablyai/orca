@@ -29,7 +29,9 @@ export type WatchedRoot = {
   subscription: WatcherSubscription
   listeners: Map<number, WebContents>
   batch: DebouncedBatch
-  rootPath?: string
+  // Why: the real on-disk path. Never substitute the watcher's rootKey — that is
+  // a comparison key (case/Unicode folded) and would reach the renderer as a path.
+  rootPath: string
 }
 
 export type WslWatcherDeps = {

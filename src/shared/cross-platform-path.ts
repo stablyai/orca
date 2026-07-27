@@ -10,7 +10,19 @@ export function normalizeRuntimePathSeparators(value: string): string {
   return normalized
 }
 
-export function normalizeRuntimePathForComparison(value: string): string {
+/**
+ * Comparison key only — never return this as, or splice it into, a real path.
+ *
+ * Why NFC: macOS file pickers and on-disk names yield NFD, while agents such as
+ * Claude Code record cwd and encode their project directory names in NFC. Both
+ * spell the same file, so a non-ASCII workspace otherwise never matches its own
+ * sessions (#10832). Folding here knowingly treats canonically equivalent names
+ * as one, which is exact on APFS but permissive on byte-exact Linux/SSH hosts —
+ * an acceptable trade, since only comparison keys are affected.
+ */
+export function normalizeRuntimePathForComparison(rawValue: string): string {
+  // Normalize before any folding so the WSL alias branch below is covered too.
+  const value = rawValue.normalize('NFC')
   const isWindowsPath = isWindowsAbsolutePathLike(value)
   // Why: backslash is a valid POSIX filename character; fold it only when the
   // path itself proves Windows drive/UNC semantics.
@@ -84,11 +96,18 @@ export function relativePathInsideRoot(rootPath: string, candidatePath: string):
   if (!comparisonCandidate.startsWith(comparisonPrefix)) {
     return null
   }
+  // Why: count segments rather than slice by prefix length. Comparison folding
+  // (NFC, case, UNC aliasing) is not length-preserving, so a length taken from
+  // the folded root would cut the raw candidate mid-character and fabricate a
+  // path. Segment counts survive every fold, and the suffix stays byte-exact —
+  // which callers that rejoin it and hit the filesystem depend on.
+  const rootSegmentCount = comparisonRoot.split('/').filter(Boolean).length
   // WSL comparison keys fold the UNC alias but preserve Linux path casing, so
   // their suffix is both aligned across aliases and safe to return directly.
-  return comparisonRoot.startsWith('//wsl/')
-    ? comparisonCandidate.slice(comparisonPrefix.length)
-    : normalizedCandidate.slice(comparisonPrefix.length)
+  const suffixSource = comparisonRoot.startsWith('//wsl/')
+    ? comparisonCandidate
+    : normalizedCandidate
+  return suffixSource.split('/').filter(Boolean).slice(rootSegmentCount).join('/')
 }
 
 function trimRuntimePathTrailingSlash(value: string): string {

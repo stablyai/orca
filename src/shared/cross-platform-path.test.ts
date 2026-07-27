@@ -70,6 +70,48 @@ describe('cross-platform path containment', () => {
     ).toBe('line\nbreak')
   })
 
+  it('matches macOS NFD paths against agent-recorded NFC paths', () => {
+    // Regression for #10832: macOS file pickers hand Orca decomposed (NFD) paths
+    // while Claude Code records cwd and names its project dirs in NFC, so a
+    // non-ASCII workspace never matched its own sessions.
+    const nfc = '/Users/ada/내 드라이브/프로젝트'
+    const nfd = nfc.normalize('NFD')
+    expect(nfd).not.toBe(nfc)
+
+    expect(normalizeRuntimePathForComparison(nfd)).toBe(normalizeRuntimePathForComparison(nfc))
+    expect(isPathInsideOrEqual(nfd, `${nfc}/src`)).toBe(true)
+    expect(isPathInsideOrEqual(nfc, `${nfd}/src`)).toBe(true)
+
+    // The Claude project-dir name is this key with every non-alphanumeric run
+    // mapped to '-', so divergent forms produced divergent dash counts.
+    const encodeProjectDir = (value: string): string =>
+      normalizeRuntimePathForComparison(value).replace(/[^a-zA-Z0-9]/g, '-')
+    expect(encodeProjectDir(nfd)).toBe(encodeProjectDir(nfc))
+
+    // WSL UNC keys return before the trailing fold, so they need NFC too.
+    expect(
+      normalizeRuntimePathForComparison(
+        `\\\\wsl$\\Ubuntu\\home\\ada\\${'프로젝트'.normalize('NFD')}`
+      )
+    ).toBe(normalizeRuntimePathForComparison(`\\\\wsl.localhost\\Ubuntu\\home\\ada\\프로젝트`))
+  })
+
+  it('returns a byte-exact suffix when comparison folding changes length', () => {
+    // Comparison folding (NFC, case) is not length-preserving, so slicing the raw
+    // candidate by the folded root's length would cut mid-character and fabricate
+    // a path — callers rejoin this suffix and hit the filesystem with it.
+    const nfc = '/Users/ada/프로젝트'
+    const nfd = nfc.normalize('NFD')
+    for (const root of [nfc, nfd]) {
+      for (const candidate of [nfc, nfd]) {
+        expect(relativePathInsideRoot(root, `${candidate}/src/index.ts`)).toBe('src/index.ts')
+      }
+    }
+
+    // Pre-existing over-slice: toLowerCase expands U+0130 to two UTF-16 units.
+    expect(relativePathInsideRoot('C:\\İş', 'C:\\İş\\src\\a.ts')).toBe('src/a.ts')
+  })
+
   it('resolves POSIX relative paths without using the process cwd', () => {
     expect(resolveRuntimePath('/repos/app/repo', '../worktrees/feature')).toBe(
       '/repos/app/worktrees/feature'
