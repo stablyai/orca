@@ -505,6 +505,64 @@ test.describe('Browser Tab', () => {
     }
   })
 
+  test('reloading one browser tab does not adopt another tab zoom', async ({ orcaPage }) => {
+    const formServer = await startBrowserFormServer()
+    try {
+      const worktreeId = (await getActiveWorktreeId(orcaPage))!
+      const tabA = await createBrowserTab(orcaPage, worktreeId, formServer.url('Zoom A'), 'Zoom A')
+      const tabB = await createBrowserTab(orcaPage, worktreeId, formServer.url('Zoom B'), 'Zoom B')
+      expect(tabA?.id).toBeTruthy()
+      expect(tabB?.id).toBeTruthy()
+      for (const tab of [tabA, tabB]) {
+        await expect
+          .poll(async () => readBrowserInputValue(orcaPage, tab!.id), { timeout: 5_000 })
+          .not.toBeNull()
+      }
+
+      const levels = await orcaPage.evaluate(
+        async ({ tabAId, tabBId, pageBId }) => {
+          const webviewFor = (id: string): Electron.WebviewTag => {
+            const slot = document.querySelector(`[data-browser-overlay-tab-id="${id}"]`)
+            const webview = slot?.querySelector('webview') as Electron.WebviewTag | null
+            if (!webview) {
+              throw new Error(`Missing webview for browser tab ${id}`)
+            }
+            return webview
+          }
+          const webviewA = webviewFor(tabAId)
+          const webviewB = webviewFor(tabBId)
+
+          // Zoom only tab B through the real renderer zoom path (also writes the shared setting).
+          for (let step = 0; step < 2; step += 1) {
+            window.dispatchEvent(
+              new CustomEvent('orca:browser-page-zoom', {
+                detail: { browserPageId: pageBId, direction: 'in' }
+              })
+            )
+            await new Promise((resolve) => setTimeout(resolve, 100))
+          }
+          const zoomedB = webviewB.getZoomLevel()
+          const untouchedA = webviewA.getZoomLevel()
+
+          await new Promise<void>((resolve) => {
+            webviewA.addEventListener('dom-ready', () => resolve(), { once: true })
+            webviewA.reload()
+          })
+
+          return { zoomedB, untouchedA, reloadedA: webviewA.getZoomLevel() }
+        },
+        { tabAId: tabA!.id, tabBId: tabB!.id, pageBId: tabB!.pageId ?? tabB!.id }
+      )
+
+      expect(levels.zoomedB).toBeGreaterThan(0)
+      expect(levels.untouchedA).toBe(0)
+      // Regression: reasserting the shared default would drag tab A to tab B's zoom.
+      expect(levels.reloadedA).toBe(0)
+    } finally {
+      await formServer.close()
+    }
+  })
+
   test('plain links stay current while explicit new-tab gestures activate Orca tabs', async ({
     electronApp,
     orcaPage

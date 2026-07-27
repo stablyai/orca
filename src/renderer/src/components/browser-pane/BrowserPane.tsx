@@ -2827,8 +2827,10 @@ function BrowserPagePane({
   const setBrowserDefaultZoomLevel = useAppStore((state) => state.setBrowserDefaultZoomLevel)
   const normalizedBrowserDefaultZoomLevel = normalizeBrowserPageZoomLevel(browserDefaultZoomLevel)
   const browserDefaultZoomPercent = browserPageZoomLevelToPercent(normalizedBrowserDefaultZoomLevel)
-  const browserDefaultZoomLevelRef = useRef(normalizedBrowserDefaultZoomLevel)
-  browserDefaultZoomLevelRef.current = normalizedBrowserDefaultZoomLevel
+  // Why: the level THIS pane should hold. Seeded once from the configured default ("applied to newly
+  // opened browser tabs") and moved only by zooming this pane, so a reload can't broadcast another
+  // tab's zoom through the shared setting.
+  const paneZoomLevelRef = useRef(normalizedBrowserDefaultZoomLevel)
   const grabElementShortcut = useShortcutLabel('browser.grabElement')
   const faviconUrlRef = useRef<string | null>(browserTab.faviconUrl)
   const initialBrowserUrlRef = useRef(browserTab.url)
@@ -3560,12 +3562,10 @@ function BrowserPagePane({
       if (!isActiveRef.current) {
         return
       }
-      const nextLevel = applyBrowserPageZoom(
-        webviewRef.current,
-        direction,
-        browserDefaultZoomLevelRef.current
-      )
+      // Why: reset targets 100% like Chromium; the configured default is a new-tab seed, not a reset target.
+      const nextLevel = applyBrowserPageZoom(webviewRef.current, direction)
       if (nextLevel !== null) {
+        paneZoomLevelRef.current = nextLevel
         setBrowserDefaultZoomLevel(nextLevel)
         showBrowserZoomFeedback(nextLevel)
       }
@@ -3742,8 +3742,10 @@ function BrowserPagePane({
       if (!queuedAnnotationViewportBridgeSync) {
         syncBrowserAnnotationViewportBridge()
       }
-      // Why: Chromium can restore per-origin zoom on reload, so enforce Orca's configured level after every guest load.
-      const appliedLevel = setBrowserPageZoomLevel(webview, browserDefaultZoomLevelRef.current)
+      // Why: Chromium restores per-origin zoom on reload/navigation, so reassert THIS pane's level after
+      // every guest load. Uses the pane-local level, not the shared setting, so reloading one tab never
+      // adopts a zoom the user applied to a different tab.
+      const appliedLevel = setBrowserPageZoomLevel(webview, paneZoomLevelRef.current)
       if (appliedLevel !== null) {
         setBrowserZoomPercent(browserPageZoomLevelToPercent(appliedLevel))
       }
