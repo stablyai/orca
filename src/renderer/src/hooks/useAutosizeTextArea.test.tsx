@@ -90,6 +90,31 @@ describe('useAutosizeTextArea', () => {
     expect(textareaRef.current!.style.height).toBe('168px')
   })
 
+  it('measures a textarea that mounts after the first render with an unchanged value', () => {
+    // ref.current mutations don't retrigger dep-based effects, so a late mount
+    // (e.g. LinearIssueTextEditor switching fields to 'all') must still size.
+    const proto = HTMLTextAreaElement.prototype
+    Object.defineProperty(proto, 'scrollHeight', { configurable: true, get: () => 96 })
+    vi.spyOn(window, 'getComputedStyle').mockReturnValue({
+      lineHeight: '20px',
+      paddingTop: '4px',
+      paddingBottom: '4px'
+    } as CSSStyleDeclaration)
+    try {
+      const textareaRef = createRef<HTMLTextAreaElement>()
+      function Conditional({ show }: { show: boolean }): React.JSX.Element | null {
+        useAutosizeTextArea(textareaRef, 'unchanged', { maxLines: 8 })
+        return show ? <textarea ref={textareaRef} value="unchanged" readOnly /> : null
+      }
+      const view = render(<Conditional show={false} />)
+      expect(textareaRef.current).toBeNull()
+      view.rerender(<Conditional show />)
+      expect(textareaRef.current!.style.height).toBe('96px')
+    } finally {
+      Reflect.deleteProperty(proto, 'scrollHeight')
+    }
+  })
+
   it('shrinks back when the draft is cleared (e.g. after send)', () => {
     const textareaRef = createRef<HTMLTextAreaElement>()
     const scrollHeight = { value: 48 }

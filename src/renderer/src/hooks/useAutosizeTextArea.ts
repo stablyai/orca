@@ -1,7 +1,7 @@
 /** Auto-grow a textarea to fit its content. Height tracks the value (not just
  *  change events), so clearing or deleting text shrinks it back. An optional
  *  line cap converts growth into internal scrolling past that many lines. */
-import { useLayoutEffect } from 'react'
+import { useLayoutEffect, useRef } from 'react'
 import type { RefObject } from 'react'
 
 export type AutosizeTextAreaOptions = {
@@ -38,11 +38,26 @@ export function useAutosizeTextArea(
   value: string,
   { maxLines }: AutosizeTextAreaOptions = {}
 ): void {
+  // Why no dep array: ref.current mutations don't retrigger dep-based effects,
+  // so a textarea mounted after the first render (conditional render, element
+  // swap) would keep its initial height until the next edit. The guard keeps
+  // the every-commit effect from re-measuring when nothing relevant changed.
+  const lastMeasured = useRef<{
+    textarea: HTMLTextAreaElement
+    value: string
+    maxLines: number | undefined
+  } | null>(null)
   useLayoutEffect(() => {
     const textarea = ref.current
     if (!textarea) {
+      lastMeasured.current = null
       return
     }
+    const last = lastMeasured.current
+    if (last?.textarea === textarea && last.value === value && last.maxLines === maxLines) {
+      return
+    }
+    lastMeasured.current = { textarea, value, maxLines }
     // Collapse first so deletions re-measure instead of keeping the old height.
     textarea.style.height = 'auto'
     const maxHeightPx =
@@ -50,5 +65,5 @@ export function useAutosizeTextArea(
         ? null
         : autosizeTextAreaMaxHeightPx(getComputedStyle(textarea), maxLines)
     textarea.style.height = `${clampAutosizeTextAreaHeight(textarea.scrollHeight, maxHeightPx)}px`
-  }, [ref, value, maxLines])
+  })
 }
