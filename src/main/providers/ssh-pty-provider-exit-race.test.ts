@@ -84,7 +84,9 @@ it('rejects an SSH reattach whose matching exit shares the attach reply batch', 
 // Why: `pty.exit` deletes from livePtyIds during the await, so an unfenced add after
 // it would resurrect a pty the relay already reported dead — the phantom-live state
 // the dead-pty write guard exists to prevent (#9169).
-function createExitDuringAttachMux(incarnationId?: string): ReturnType<typeof createMux> {
+function createExitDuringAttachMux(
+  incarnations: { exitIncarnationId?: string; resultIncarnationId?: string } = {}
+): ReturnType<typeof createMux> {
   const mux = createMux()
   mux.request.mockImplementation(async (method: string) => {
     if (method === 'pty.attach') {
@@ -92,9 +94,11 @@ function createExitDuringAttachMux(incarnationId?: string): ReturnType<typeof cr
       notify?.('pty.exit', {
         id: 'pty-1',
         code: 0,
-        ...(incarnationId ? { incarnationId } : {})
+        ...(incarnations.exitIncarnationId ? { incarnationId: incarnations.exitIncarnationId } : {})
       })
-      return incarnationId ? { incarnationId } : undefined
+      return incarnations.resultIncarnationId
+        ? { incarnationId: incarnations.resultIncarnationId }
+        : undefined
     }
     return undefined
   })
@@ -102,7 +106,10 @@ function createExitDuringAttachMux(incarnationId?: string): ReturnType<typeof cr
 }
 
 it('fails attach() and leaves the pty not live when its exit shares the attach reply batch', async () => {
-  const mux = createExitDuringAttachMux('incarnation-gone')
+  const mux = createExitDuringAttachMux({
+    exitIncarnationId: 'incarnation-gone',
+    resultIncarnationId: 'incarnation-gone'
+  })
   const provider = new SshPtyProvider('conn-1', mux as never)
 
   await expect(provider.attach('ssh:conn-1@@pty-1')).rejects.toThrow('SSH_SESSION_EXPIRED')
@@ -120,7 +127,10 @@ it('fences attach() even when the relay reports no incarnation', async () => {
 })
 
 it('leaves a reconnect-attached pty not live when its exit shares the attach reply batch', async () => {
-  const mux = createExitDuringAttachMux('incarnation-gone')
+  const mux = createExitDuringAttachMux({
+    exitIncarnationId: 'incarnation-gone',
+    resultIncarnationId: 'incarnation-gone'
+  })
   const provider = new SshPtyProvider('conn-1', mux as never)
 
   // Why: ssh-relay-session's pending-exit fence needs the incarnation to retire the
@@ -133,16 +143,11 @@ it('leaves a reconnect-attached pty not live when its exit shares the attach rep
 })
 
 it('still marks an attached pty live when a different incarnation exits mid-attach', async () => {
-  const mux = createMux()
-  const provider = new SshPtyProvider('conn-1', mux as never)
-  mux.request.mockImplementation(async (method: string) => {
-    if (method === 'pty.attach') {
-      const notify = mux.onNotification.mock.calls[0]?.[0]
-      notify?.('pty.exit', { id: 'pty-1', code: 0, incarnationId: 'incarnation-previous' })
-      return { incarnationId: 'incarnation-current' }
-    }
-    return undefined
+  const mux = createExitDuringAttachMux({
+    exitIncarnationId: 'incarnation-previous',
+    resultIncarnationId: 'incarnation-current'
   })
+  const provider = new SshPtyProvider('conn-1', mux as never)
 
   await expect(provider.attachForReconnect('pty-1')).resolves.toEqual({
     incarnationId: 'incarnation-current'
