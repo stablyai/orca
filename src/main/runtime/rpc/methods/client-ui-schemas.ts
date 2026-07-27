@@ -13,7 +13,9 @@ import { isTaskProvider } from '../../../../shared/task-providers'
 import { normalizeDisabledTuiAgents } from '../../../../shared/tui-agent-selection'
 import { normalizePRBotAuthorOverrides } from '../../../../shared/pr-bot-author-overrides'
 import { normalizeWorktreeCardProperties } from '../../../../shared/worktree-card-properties'
-import type { TaskProvider } from '../../../../shared/types'
+import type { PersistedUIState, TaskProvider } from '../../../../shared/types'
+import { TaskResumeState } from './task-resume-state-schema'
+import type { AssertNoMissingKeys } from './ui-state-schema-parity'
 
 const NullableString = z.string().nullable()
 const StringArray = z.array(z.string())
@@ -59,31 +61,6 @@ const WorkspaceStatusDefinition = z.object({
   color: z.string().optional(),
   icon: z.string().optional()
 })
-const TaskResumeState = z
-  .object({
-    githubMode: z.enum(['items', 'project']).optional(),
-    githubItemsPreset: z.string().nullable().optional(),
-    githubItemsQuery: z.string().optional(),
-    githubProjectHiddenFieldIdsByView: z.record(z.string(), z.array(z.string())).optional(),
-    // Why: this schema is strict — every TaskResumeState field the renderer
-    // persists must be listed or paired web/mobile ui.set updates are rejected
-    // wholesale (see shared/types.ts TaskResumeState).
-    linearMode: z.enum(['issues', 'projects', 'views']).optional(),
-    linearPreset: z.enum(['assigned', 'created', 'all', 'completed']).optional(),
-    linearQuery: z.string().optional(),
-    linearContext: z
-      .object({
-        kind: z.enum(['project', 'view']),
-        id: z.string(),
-        workspaceId: z.string(),
-        model: z.enum(['issue', 'project']).optional()
-      })
-      .strict()
-      .optional(),
-    jiraPreset: z.enum(['assigned', 'reported', 'all', 'done']).optional(),
-    jiraQuery: z.string().optional()
-  })
-  .strict()
 const WorkspaceCleanupDismissal = z
   .object({
     worktreeId: z.string(),
@@ -188,6 +165,21 @@ export const UiUpdate = z
   .object({
     lastActiveRepoId: NullableString.optional(),
     lastActiveWorktreeId: NullableString.optional(),
+    // Why: App.tsx persists this on every top-level view switch (#9002). Desktop
+    // hydration ignores it on 'sync' broadcasts, so accepting it cannot yank a
+    // paired window's current view — it only restores the view on next startup.
+    activeView: z
+      .enum([
+        'terminal',
+        'settings',
+        'tasks',
+        'activity',
+        'automations',
+        'space',
+        'skills',
+        'mobile'
+      ])
+      .optional(),
     sidebarWidth: z.number().finite().optional(),
     rightSidebarOpen: z.boolean().optional(),
     rightSidebarTab: z
@@ -212,6 +204,9 @@ export const UiUpdate = z
       .optional(),
     hideDefaultBranchWorkspace: z.boolean().optional(),
     hideAutomationGeneratedWorkspaces: z.boolean().optional(),
+    // Why: rides App.tsx's debounced writer, so omitting it rejected that entire
+    // payload (sidebar widths, filters, agent acks) for every paired client.
+    showDotfilesByWorktree: z.record(z.string(), z.boolean()).optional(),
     filterRepoIds: StringArray.optional(),
     collapsedGroups: StringArray.optional(),
     uiZoomLevel: z.number().finite().optional(),
@@ -266,6 +261,14 @@ export const UiUpdate = z
     _inlineAgentsDefaultedForAllUsers: z.boolean().optional(),
     trustedOrcaHooks: z.record(z.string(), z.unknown()).optional(),
     setupScriptPromptDismissedRepoIds: StringArray.optional(),
+    // Why: one-shot dismissals the renderer writes through ui.set; each was a
+    // whole-payload rejection for paired clients while unlisted.
+    setupGuideSidebarDismissed: z.boolean().optional(),
+    setupGuideBrowserMilestoneMigrated: z.boolean().optional(),
+    setupGuideBrowserMilestoneLegacyComplete: z.boolean().optional(),
+    browserImportHintHidden: z.boolean().optional(),
+    mobileEmulatorTabIntroDismissed: z.boolean().optional(),
+    mobileEmulatorAgentSetupDismissed: z.boolean().optional(),
     projectOrderManualDefaultNoticeDismissed: z.boolean().optional(),
     usagePercentageDisplayChangeNoticeDismissed: z.boolean().optional(),
     usageEmptyStateDismissed: z.boolean().optional(),
@@ -286,3 +289,23 @@ export const UiUpdate = z
   })
   .strict()
   .default({})
+
+// Why: state only the main process ever writes (store.updateUI, star-nag's own
+// IPC, window lifecycle). Clients never send these, so keeping them out of the
+// strict schema is deliberate — but it must stay deliberate rather than
+// forgotten, which is what the parity assertion below enforces.
+type MainOwnedUIState =
+  | 'trayMinimizeNoticeShown'
+  | 'dashboardPopoutBounds'
+  | '_expandedWorktreeCardPropertiesDefaulted'
+  | 'starNagBaselineAgents'
+  | 'starNagAppVersion'
+  | 'starNagNextThreshold'
+  | 'starNagCompleted'
+  | 'starNagDeferredUntil'
+  | 'starNagAgentValueMomentAppVersion'
+const _uiUpdateParity: AssertNoMissingKeys<
+  Omit<PersistedUIState, MainOwnedUIState>,
+  z.infer<typeof UiUpdate>
+> = true
+void _uiUpdateParity
