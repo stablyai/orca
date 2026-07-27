@@ -1,5 +1,6 @@
 /* eslint-disable max-lines -- Why: the CDP bridge owns debugger lifecycle, ref map management, command serialization, and all browser interaction logic in one module so the browser automation boundary stays coherent. */
 import { webContents } from 'electron'
+import { captureHostFocus, restoreHostFocus } from './host-focus-guard'
 import type {
   BrowserCaptureStartResult,
   BrowserCaptureStopResult,
@@ -180,6 +181,10 @@ export class CdpBridge {
       const localCenter = await this.getElementCenter(refSender, node.backendDOMNodeId)
       const { cx, cy } = await this.getPageCoordinates(guest, node, localCenter.cx, localCenter.cy)
 
+      // Why: the synthetic press hands native focus to the guest, so remember who
+      // owned it and give it back (#8139).
+      const hostFocus = captureHostFocus(guest.id)
+
       // Why: mouseMoved fires mouseenter/mouseover so sites reveal hover-dependent menus/targets before the click lands.
       await sender('Input.dispatchMouseEvent', { type: 'mouseMoved', x: cx, y: cy })
       await sender('Input.dispatchMouseEvent', {
@@ -196,6 +201,8 @@ export class CdpBridge {
         button: 'left',
         clickCount: 1
       })
+
+      restoreHostFocus(hostFocus)
 
       return { clicked: element }
     })
@@ -236,6 +243,10 @@ export class CdpBridge {
       const toLocal = await this.getElementCenter(toSender, toNode.backendDOMNodeId)
       const to = await this.getPageCoordinates(guest, toNode, toLocal.cx, toLocal.cy)
 
+      // Why: the synthetic press hands native focus to the guest, so remember who
+      // owned it and give it back (#8139).
+      const hostFocus = captureHostFocus(guest.id)
+
       // Why: interpolate the drag so intermediate elements fire dragenter/dragover, which many drag-and-drop libs require.
       await sender('Input.dispatchMouseEvent', { type: 'mouseMoved', x: from.cx, y: from.cy })
       await sender('Input.dispatchMouseEvent', {
@@ -259,6 +270,8 @@ export class CdpBridge {
         y: to.cy,
         button: 'left'
       })
+
+      restoreHostFocus(hostFocus)
 
       return { dragged: { from: fromElement, to: toElement } }
     })
@@ -457,6 +470,10 @@ export class CdpBridge {
       })) as { result: { value: boolean } }
 
       if (currentState.value !== checked) {
+        // Why: the synthetic press hands native focus to the guest, so remember who
+        // owned it and give it back (#8139).
+        const hostFocus = captureHostFocus(guest.id)
+
         await this.scrollIntoView(refSender, node.backendDOMNodeId)
         const localCenter = await this.getElementCenter(refSender, node.backendDOMNodeId)
         const { cx, cy } = await this.getPageCoordinates(
@@ -480,6 +497,8 @@ export class CdpBridge {
           button: 'left',
           clickCount: 1
         })
+
+        restoreHostFocus(hostFocus)
 
         // Why: custom checkboxes may not toggle from a coordinate click; verify state and fall back to programmatic .click().
         try {
