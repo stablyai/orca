@@ -10,6 +10,8 @@ function chipLabel(chip: SkillLocationChip): string {
       return translate('auto.components.skills.SkillFreshnessRow.chipCurrent', 'Current')
     case 'unrecognized':
       return translate('auto.components.skills.SkillFreshnessRow.chipUnrecognized', 'Unrecognized')
+    case 'foreign':
+      return translate('auto.components.skills.SkillFreshnessRow.chipForeign', 'Different skill')
     case 'inaccessible':
       return translate('auto.components.skills.SkillFreshnessRow.chipInaccessible', 'Inaccessible')
     case 'duplicate':
@@ -40,6 +42,11 @@ function chipTooltip(chip: SkillLocationChip): string {
       return translate(
         'auto.components.skills.SkillFreshnessRow.tipUnrecognized',
         'This copy doesn’t match any official version — it may be modified, or a different skill with the same name.'
+      )
+    case 'foreign':
+      return translate(
+        'auto.components.skills.SkillFreshnessRow.tipForeign',
+        'A different skill that happens to share this name, installed by another tool. It isn’t Orca’s to update, and you don’t need to remove it.'
       )
     case 'inaccessible':
       return translate(

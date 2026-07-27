@@ -5,6 +5,7 @@ export type SkillGroupStatus = 'update-available' | 'cannot-update'
 export type SkillLocationChip =
   | 'current'
   | 'unrecognized'
+  | 'foreign'
   | 'inaccessible'
   | 'duplicate'
   | 'external-link'
@@ -30,6 +31,9 @@ export function locationChip(installation: SkillFreshnessInstallation): SkillLoc
   // match" is more useful to the user than "it's a duplicate".
   if (installation.status === 'unrecognized') {
     return 'unrecognized'
+  }
+  if (installation.status === 'foreign') {
+    return 'foreign'
   }
   if (installation.status === 'inaccessible') {
     return 'inaccessible'

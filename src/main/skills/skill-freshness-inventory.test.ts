@@ -311,6 +311,84 @@ describe('read-only skill freshness inventory', () => {
     }
   )
 
+  it('names another ecosystem’s same-name skill foreign, not a modified official copy', async () => {
+    // Why: Codex ships its own `computer-use` plugin. Reported in #10633 — the copy is
+    // not ours, not the user's to delete, and left amber with no action available.
+    const test = await fixture()
+    await test.writeSkill(join(test.homeDir, '.agents', 'skills'), test.currentMarkdown)
+    const foreignRoot = join(
+      test.homeDir,
+      '.codex',
+      'plugins',
+      'cache',
+      'openai-bundled',
+      'orca-cli'
+    )
+    await mkdir(foreignRoot, { recursive: true })
+    await writeFile(join(foreignRoot, 'SKILL.md'), '---\nname: orca-cli\n---\n\nAnother tool.\n')
+
+    const inventory = await inventorySkillFreshness({
+      currentAppVersion: '2.0.0',
+      homeDir: test.homeDir,
+      repos: [],
+      resourceRoot: test.resourceRoot
+    })
+
+    expect(inventory.installations).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          unresolvedPath: foreignRoot,
+          topology: 'plugin-cache',
+          status: 'foreign'
+        })
+      ])
+    )
+    expect(inventory.eligibleUpdateNames).toEqual([])
+  })
+
+  it.each([
+    ['.claude', 'skills'],
+    ['.agents', 'skills']
+  ])('keeps an unrecognized copy under %s/%s the user’s to review', async (...segments) => {
+    // Why: foreign is a claim about somewhere Orca never installs. In a location Orca
+    // owns, identical evidence must stay unrecognized or a tampered copy goes quiet.
+    const test = await fixture()
+    await test.writeSkill(join(test.homeDir, '.agents', 'skills'), test.currentMarkdown)
+    await test.writeSkill(
+      join(test.homeDir, ...segments),
+      '---\nname: orca-cli\n---\n\nAnother tool.\n'
+    )
+
+    const inventory = await inventorySkillFreshness({
+      currentAppVersion: '2.0.0',
+      homeDir: test.homeDir,
+      repos: [],
+      resourceRoot: test.resourceRoot
+    })
+
+    expect(inventory.installations.some((entry) => entry.status === 'foreign')).toBe(false)
+    expect(inventory.installations.some((entry) => entry.status === 'unrecognized')).toBe(true)
+  })
+
+  it('treats an empty plugin-cache directory as unknown rather than foreign', async () => {
+    // Why: foreign needs positive evidence. No files read is absence of evidence.
+    const test = await fixture()
+    await test.writeSkill(join(test.homeDir, '.agents', 'skills'), test.currentMarkdown)
+    const emptyRoot = join(test.homeDir, '.codex', 'plugins', 'cache', 'vendor', 'orca-cli')
+    await mkdir(emptyRoot, { recursive: true })
+
+    const inventory = await inventorySkillFreshness({
+      currentAppVersion: '2.0.0',
+      homeDir: test.homeDir,
+      repos: [],
+      resourceRoot: test.resourceRoot
+    })
+
+    expect(
+      inventory.installations.find((entry) => entry.unresolvedPath === emptyRoot)?.status
+    ).toBe('unrecognized')
+  })
+
   it('accepts CRLF as the same official text identity', async () => {
     const test = await fixture()
     await test.writeSkill(

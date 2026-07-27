@@ -6,8 +6,10 @@ import {
   describeObservedSkillFile,
   matchingKnownSnapshot,
   observeSkillPackage,
+  sharesKnownSnapshotFileIdentity,
   skillPackageDigest
 } from './skill-package-identity'
+import type { SkillKnownSnapshot } from '../../shared/skill-freshness'
 
 const temporaryDirectories: string[] = []
 
@@ -88,5 +90,53 @@ describe('skill package identity', () => {
     await chmod(script, 0o755)
     const observed = await observeSkillPackage(root)
     expect(observed.files[0]?.executable).toBe(true)
+  })
+})
+
+describe('sharesKnownSnapshotFileIdentity', () => {
+  function officialFile(path: string, text: string) {
+    return describeObservedSkillFile(path, Buffer.from(text), false)
+  }
+
+  function officialSnapshot(files: ReturnType<typeof officialFile>[]): SkillKnownSnapshot {
+    return {
+      releaseRevision: 1,
+      packageDigest: skillPackageDigest(files),
+      gitTreeSha: '0'.repeat(40),
+      files
+    }
+  }
+
+  const snapshots = [
+    officialSnapshot([
+      officialFile('SKILL.md', 'official guide'),
+      officialFile('run.sh', 'echo hi')
+    ])
+  ]
+
+  it('keeps an edited official copy attributable through its untouched files', async () => {
+    const root = await temporarySkill()
+    await writeFile(join(root, 'SKILL.md'), 'official guide, with my notes')
+    await writeFile(join(root, 'run.sh'), 'echo hi')
+    expect(sharesKnownSnapshotFileIdentity(await observeSkillPackage(root), snapshots)).toBe(true)
+  })
+
+  it('finds no descent in a package that shares only the name', async () => {
+    const root = await temporarySkill()
+    await writeFile(join(root, 'SKILL.md'), 'a different tool’s skill')
+    await writeFile(join(root, 'client.mjs'), 'export const run = () => {}')
+    expect(sharesKnownSnapshotFileIdentity(await observeSkillPackage(root), snapshots)).toBe(false)
+  })
+
+  it('requires the same path, so identical bytes filed elsewhere are not descent', async () => {
+    const root = await temporarySkill()
+    await writeFile(join(root, 'COPIED.md'), 'official guide')
+    expect(sharesKnownSnapshotFileIdentity(await observeSkillPackage(root), snapshots)).toBe(false)
+  })
+
+  it('reports nothing shared for an empty package', async () => {
+    expect(
+      sharesKnownSnapshotFileIdentity(await observeSkillPackage(await temporarySkill()), snapshots)
+    ).toBe(false)
   })
 })

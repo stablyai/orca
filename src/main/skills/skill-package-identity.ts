@@ -208,6 +208,30 @@ export async function observeSkillPackage(
   return { files, observedDigest: skillPackageDigest(files) }
 }
 
+/**
+ * Whether a package carries any byte-level descent from an official release — one file
+ * identical, at the same path, to that file in some known snapshot.
+ *
+ * This is the evidence that separates "you edited ours" from "someone else's skill
+ * happens to share the name". Editing a copy leaves its untouched files intact, so
+ * kinship survives; an unrelated package shares nothing. It is deliberately a
+ * one-file floor: any overlap at all keeps a package attributable to us.
+ */
+export function sharesKnownSnapshotFileIdentity(
+  observed: ObservedSkillPackage,
+  snapshots: readonly SkillKnownSnapshot[]
+): boolean {
+  const knownByPath = new Map<string, Set<string>>()
+  for (const snapshot of snapshots) {
+    for (const file of snapshot.files) {
+      const identities = knownByPath.get(file.path) ?? new Set<string>()
+      identities.add(file.identitySha256)
+      knownByPath.set(file.path, identities)
+    }
+  }
+  return observed.files.some((file) => knownByPath.get(file.path)?.has(file.identitySha256))
+}
+
 export function matchingKnownSnapshot(
   observed: ObservedSkillPackage,
   snapshots: readonly SkillKnownSnapshot[]

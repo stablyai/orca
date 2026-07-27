@@ -47,6 +47,14 @@ function placement(status: SkillFreshnessStatus, index = 0): SkillFreshnessInsta
   }
 }
 
+function foreignPlacement(): SkillFreshnessInstallation {
+  return {
+    ...placement('foreign', 9),
+    topology: 'plugin-cache',
+    unresolvedPath: `/home/.codex/plugins/cache/openai-bundled/${SKILL_NAME}`
+  }
+}
+
 function inventory(
   installations: SkillFreshnessInstallation[],
   eligibleUpdateNames: string[] = [],
@@ -121,6 +129,27 @@ describe('getSkillFreshnessDisplayStatus', () => {
       ).toBe('needs-attention')
     }
   )
+
+  it('stays up to date beside another ecosystem’s same-name skill', () => {
+    // Why: the copy belongs to another tool, so no user action exists to clear it.
+    // Amber here is the badge-with-no-exit reported in #10633.
+    expect(
+      getSkillFreshnessDisplayStatus(
+        inventory([placement('current'), foreignPlacement()]),
+        SKILL_NAME
+      )
+    ).toBe('up-to-date')
+    expect(hasSkillCopyNeedingAttention(inventory([foreignPlacement()]), SKILL_NAME)).toBe(false)
+  })
+
+  it('still reports drift in our own copy when a foreign one sits alongside', () => {
+    expect(
+      getSkillFreshnessDisplayStatus(
+        inventory([placement('unrecognized'), foreignPlacement()]),
+        SKILL_NAME
+      )
+    ).toBe('needs-attention')
+  })
 })
 
 describe('hasSkillCopyNeedingAttention', () => {
