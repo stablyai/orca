@@ -17,7 +17,6 @@ import { translate } from './i18n/i18n'
 
 recordRendererCrashBreadcrumb('renderer_bootstrap_started', { dev: import.meta.env.DEV })
 installRendererCrashDiagnostics()
-// Why: must wrap store.subscribe before React mounts, so the census can count listeners.
 installTypingLatencyDiagnostic()
 
 if (

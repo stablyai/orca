@@ -69,36 +69,4 @@ export function countMountedAgentRows(): number | null {
   }
 }
 
-let storeListenerCount: number | null = null
-
-export function readStoreListenerCount(): number | null {
-  return storeListenerCount
-}
-
-/** Zustand exposes no listener-count accessor, so count through a subscribe wrapper installed before React mounts. */
-export function trackStoreListenerCount(): void {
-  try {
-    const store = useAppStore as unknown as {
-      subscribe: (listener: (state: unknown, previous: unknown) => void) => () => void
-    }
-    const originalSubscribe = store.subscribe.bind(store)
-    let live = 0
-    storeListenerCount = 0
-    store.subscribe = (listener) => {
-      live += 1
-      storeListenerCount = live
-      const unsubscribe = originalSubscribe(listener)
-      let released = false
-      return () => {
-        if (!released) {
-          released = true
-          live -= 1
-          storeListenerCount = live
-        }
-        unsubscribe()
-      }
-    }
-  } catch {
-    storeListenerCount = null
-  }
-}
+export { readStoreListenerCount } from '@/store/store-listener-census'

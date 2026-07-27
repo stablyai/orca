@@ -16,8 +16,7 @@ import {
   countMountedAgentRows,
   readFocusedPaneCensus,
   readProbeStoreState,
-  readStoreListenerCount,
-  trackStoreListenerCount
+  readStoreListenerCount
 } from './typing-latency-census-probe'
 import {
   detachPaneEcho,
@@ -200,6 +199,5 @@ export function installTypingLatencyDiagnostic(): void {
   if (target.__orcaTypingDiagnostic) {
     return
   }
-  trackStoreListenerCount()
   target.__orcaTypingDiagnostic = { start: startProbe, stop: stopProbe, report: reportProbe }
 }
