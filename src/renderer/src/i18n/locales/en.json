@@ -2760,6 +2760,13 @@
                 "context": {
                   "menu": {
                     "a29b9faa01": "Pane ID copied",
+                    "pane": {
+                      "id": {
+                        "copy": {
+                          "failed": "Unable to copy pane ID"
+                        }
+                      }
+                    },
                     "terminal": {
                       "id": {
                         "copied": "Terminal ID copied",
