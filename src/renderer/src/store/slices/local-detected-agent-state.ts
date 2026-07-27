@@ -10,27 +10,9 @@ import * as contextEviction from './local-agent-context-eviction'
 import { getLegacyLoadingPatch, getSupersededDetectPatch } from './local-agent-legacy-loading'
 import { createEmptyLocalDetectedAgentState } from './local-detected-agent-store-state'
 import type { LocalDetectedAgentState } from './local-detected-agent-store-state'
-import { setDetectedTuiAgentExecutables } from '../../../../shared/detected-agent-executables'
-import { CLIENT_PLATFORM } from '@/lib/client-platform'
-import type { PreflightRuntimeContext } from '../../../../preload/api-types'
+import { publishDetectedAgentExecutables } from './detected-agent-executable-publication'
 
 type LocalDetectedAgentStateCreator = StateCreator<AppState, [], [], LocalDetectedAgentState>
-
-// Why: launch commands are built synchronously all over the renderer, so the
-// matched executable per agent is published to a module registry instead of
-// being threaded through every buildAgentStartupPlan() call site.
-function publishDetectedAgentExecutables(context?: PreflightRuntimeContext): void {
-  void window.api.preflight
-    .detectAgentExecutables?.(context)
-    // Why: main only ever publishes this host's detection (WSL/remote return
-    // empty), so stamping the client platform lets the launch path drop the
-    // registry for commands bound elsewhere.
-    .then((executables) => setDetectedTuiAgentExecutables(executables ?? {}, CLIENT_PLATFORM))
-    .catch(() => {
-      // Why: alias resolution is an enhancement; on failure the static
-      // launchCmd defaults still work for the primary install layout.
-    })
-}
 
 export const createLocalDetectedAgentState: LocalDetectedAgentStateCreator = (set, get) => {
   const detectPromises = new Map<string, Promise<TuiAgent[]>>()
@@ -103,12 +85,15 @@ export const createLocalDetectedAgentState: LocalDetectedAgentStateCreator = (se
       }))
       const pending = window.api.preflight
         .detectAgents(context)
-        .then((ids) => {
+        .then(async (ids) => {
           const typed = ids as TuiAgent[]
-          if (
+          const isCurrent = (): boolean =>
             requestGeneration === localDetectionGeneration &&
             detectPromises.get(contextKey) === pending
-          ) {
+          if (isCurrent()) {
+            await publishDetectedAgentExecutables(context, isCurrent)
+          }
+          if (isCurrent()) {
             failedDetectContextKeys.delete(contextKey)
             const exposeToLegacy = legacyDetectContextKey === contextKey
             if (exposeToLegacy) {
@@ -126,7 +111,6 @@ export const createLocalDetectedAgentState: LocalDetectedAgentStateCreator = (se
                 contextKey
               )
             }))
-            publishDetectedAgentExecutables(context)
           }
           return typed
         })
@@ -208,12 +192,15 @@ export const createLocalDetectedAgentState: LocalDetectedAgentStateCreator = (se
       }))
       const pending = window.api.preflight
         .refreshAgents(context)
-        .then((result) => {
+        .then(async (result) => {
           const typed = result.agents as TuiAgent[]
-          if (
+          const isCurrent = (): boolean =>
             requestGeneration === localDetectionGeneration &&
             refreshPromises.get(contextKey) === pending
-          ) {
+          if (isCurrent()) {
+            await publishDetectedAgentExecutables(context, isCurrent)
+          }
+          if (isCurrent()) {
             failedDetectContextKeys.delete(contextKey)
             const exposeToLegacy = legacyRefreshContextKey === contextKey
             if (exposeToLegacy) {
@@ -238,7 +225,6 @@ export const createLocalDetectedAgentState: LocalDetectedAgentStateCreator = (se
                 contextKey
               )
             }))
-            publishDetectedAgentExecutables(context)
           }
           return typed
         })
