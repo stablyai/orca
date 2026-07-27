@@ -115,6 +115,11 @@ export function getActiveSshAiVaultHostInfos(): SshRelayAiVaultHostInfo[] {
   })
 }
 
+/** Lists managed-hook install reports collected from active SSH relay sessions.
+ *
+ * Host-aware `agent hooks status` (#8711) needs the remote host result instead
+ * of substituting the desktop's local install state.
+ */
 export function getActiveSshAgentHookInstallReports(): RemoteAgentHookInstallReport[] {
   return [...activeSessions.values()].flatMap((session) => {
     const report = session.getAgentHookInstallReport()

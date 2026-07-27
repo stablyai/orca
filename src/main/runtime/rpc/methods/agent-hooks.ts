@@ -17,6 +17,7 @@ const PrepareCodexForWslPaneParams = z
   })
   .strict()
 
+/** RPC methods that expose local and SSH-host managed-hook install state. */
 export const AGENT_HOOK_METHODS: readonly RpcMethod[] = [
   defineMethod({
     // Why: SSH hook state belongs to the host running the agent. Only the

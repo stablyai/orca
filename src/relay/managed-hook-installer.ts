@@ -48,6 +48,7 @@ function loadManagedHookRuntime(): ManagedHookRuntime {
   return managedHookRuntime
 }
 
+/** Registers the relay request handler that installs managed hooks on the remote host. */
 export function registerManagedHookInstaller(
   dispatcher: Pick<RelayDispatcher, 'onRequest'>,
   loadRuntime: () => ManagedHookRuntime = loadManagedHookRuntime

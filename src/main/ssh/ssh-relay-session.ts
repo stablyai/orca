@@ -443,7 +443,11 @@ export class SshRelaySession {
     }
   }
 
-  // Why: SSH agents read host-side hooks, so the CLI must not substitute local install state (#8711).
+  /** Returns the latest managed-hook install result for this SSH host.
+   *
+   * SSH agents read host-side hooks, so the CLI must not substitute local
+   * install state when reporting remote status (#8711).
+   */
   getAgentHookInstallReport(): RemoteAgentHookInstallReport | null {
     return this.agentHookInstallReport
   }
@@ -1380,6 +1384,7 @@ export class SshRelaySession {
     }
   }
 
+  /** Stores a remote hook install report while guarding against stale reconnects. */
   private recordAgentHookInstallReport(
     remoteHome: string | null,
     state: RemoteAgentHookInstallReport['state'],

@@ -38,7 +38,10 @@ export type AgentHookInstallStatus = {
   skipReason?: AgentHookInstallSkipReason
 }
 
-// Why: SSH hook state belongs to the executing host, not the desktop's local install (#8711).
+/** Managed-hook install state for one SSH host.
+ *
+ * SSH hook state belongs to the executing host, not the desktop's local install (#8711).
+ */
 export type RemoteAgentHookInstallReport = {
   targetId: string
   remoteHome: string | null

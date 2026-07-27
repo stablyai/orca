@@ -199,6 +199,7 @@ function formatAgentHookCommandResult(result: AgentHookCommandResult): string {
   return lines.join('\n')
 }
 
+/** Formats one remote host's managed-hook install report for human CLI output. */
 function formatRemoteReport(remote: RemoteAgentHookInstallReport): string {
   const header = `ssh:${remote.targetId}: ${remote.state}${remote.detail ? ` — ${remote.detail}` : ''}`
   const agentLines = remote.statuses.map((status) => {
@@ -243,7 +244,11 @@ async function setAgentHooksEnabled(
   }
 }
 
-// Why: only a reachable runtime knows SSH-host state; transport failures must surface instead of printing a false local green.
+/** Reads hook status from the runtime when it is reachable.
+ *
+ * Only a reachable runtime knows SSH-host state; transport failures must
+ * surface instead of printing a false local green.
+ */
 async function fetchRuntimeHookStatuses(client: RuntimeClient): Promise<{
   local: AgentHookInstallStatus[]
   remotes: RemoteAgentHookInstallReport[]
