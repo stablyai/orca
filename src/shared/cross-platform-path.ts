@@ -82,8 +82,12 @@ export function isPathInsideOrEqual(rootPath: string, candidatePath: string): bo
 }
 
 export function relativePathInsideRoot(rootPath: string, candidatePath: string): string | null {
+  // Why: decide Windows-ness on the same NFC form the comparison key uses, or the
+  // two disagree (U+212A folds to 'K', making only one side a drive path) and the
+  // segment counts desync. Only the branch test sees NFC — the sliced string stays
+  // raw so the returned suffix remains byte-exact.
   const normalizedCandidate = trimRuntimePathTrailingSlash(
-    isWindowsAbsolutePathLike(candidatePath)
+    isWindowsAbsolutePathLike(candidatePath.normalize('NFC'))
       ? normalizeRuntimePathSeparators(candidatePath)
       : candidatePath.replace(/\/+/g, '/')
   )

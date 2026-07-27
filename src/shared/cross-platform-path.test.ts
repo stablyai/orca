@@ -82,12 +82,6 @@ describe('cross-platform path containment', () => {
     expect(isPathInsideOrEqual(nfd, `${nfc}/src`)).toBe(true)
     expect(isPathInsideOrEqual(nfc, `${nfd}/src`)).toBe(true)
 
-    // The Claude project-dir name is this key with every non-alphanumeric run
-    // mapped to '-', so divergent forms produced divergent dash counts.
-    const encodeProjectDir = (value: string): string =>
-      normalizeRuntimePathForComparison(value).replace(/[^a-zA-Z0-9]/g, '-')
-    expect(encodeProjectDir(nfd)).toBe(encodeProjectDir(nfc))
-
     // WSL UNC keys return before the trailing fold, so they need NFC too.
     expect(
       normalizeRuntimePathForComparison(
@@ -110,6 +104,12 @@ describe('cross-platform path containment', () => {
 
     // Pre-existing over-slice: toLowerCase expands U+0130 to two UTF-16 units.
     expect(relativePathInsideRoot('C:\\İş', 'C:\\İş\\src\\a.ts')).toBe('src/a.ts')
+
+    // U+212A KELVIN SIGN folds to 'K', so the root and candidate must agree on
+    // Windows-ness or their segment counts desync and the suffix comes back ''.
+    expect(relativePathInsideRoot('\u212A:/a\\b', '\u212A:/a\\b/c')).toBe(
+      relativePathInsideRoot('K:/a\\b', 'K:/a\\b/c')
+    )
 
     // Astral characters must not be cut mid-surrogate-pair.
     expect(relativePathInsideRoot('/repo/🚀app', '/repo/🚀app/src/🎉file.ts')).toBe('src/🎉file.ts')

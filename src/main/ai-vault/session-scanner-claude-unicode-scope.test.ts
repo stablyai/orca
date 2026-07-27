@@ -14,9 +14,11 @@ afterEach(async () => {
   resetProjectDirCwdCacheForTests()
 })
 
-// Claude names its project dir after the cwd with every non-alphanumeric run
-// mapped to '-', so an NFD workspace path yields 2-3x the dashes of Claude's
-// NFC-derived name and can never prefix-match it.
+// Claude's own rule, deliberately spelled out rather than imported from the
+// production encoder: these tests exist to catch Orca drifting away from how
+// Claude actually names its directories, which a shared helper would hide.
+// Claude maps every non-alphanumeric character of the raw cwd to '-', keeping
+// case, and records the cwd it was launched with (NFC on macOS).
 function claudeProjectDirName(cwd: string): string {
   return cwd.normalize('NFC').replace(/[^a-zA-Z0-9]/g, '-')
 }
