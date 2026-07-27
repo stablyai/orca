@@ -37,4 +37,40 @@ describe('JSON text structure admission', () => {
       })
     ).not.toThrow()
   })
+
+  // The scan skips string bodies wholesale, so a backslash run that ends a string on an even
+  // count — and one that escapes the quote on an odd count — must resolve the same way.
+  it.each([
+    ['{"value":"\\\\"}', 'even backslash run closes the string'],
+    ['{"value":"\\\\\\\\"}', 'longer even backslash run closes the string'],
+    ['{"value":"\\""}', 'escaped quote does not close the string'],
+    ['{"a":"}","b":"]"}', 'structural characters inside adjacent strings'],
+    ['{"emoji":"💥{[,:"}', 'astral-plane characters inside a string']
+  ])('tracks string boundaries through %s', (content) => {
+    expect(() =>
+      assertJsonTextStructureWithinLimits(content, {
+        structuralTokens: 1_000,
+        nestingDepth: 8
+      })
+    ).not.toThrow()
+  })
+
+  it('stops scanning at an unterminated string instead of counting its contents', () => {
+    expect(() =>
+      assertJsonTextStructureWithinLimits('{"value":"[[[[[[[[[[', {
+        structuralTokens: 2,
+        nestingDepth: 1
+      })
+    ).not.toThrow()
+  })
+
+  it('rejects a deeply nested line before it becomes an object graph', () => {
+    const depth = 1_024
+    expect(() =>
+      assertJsonTextStructureWithinLimits(`${'['.repeat(depth)}${']'.repeat(depth)}`, {
+        structuralTokens: 1_000_000,
+        nestingDepth: 128
+      })
+    ).toThrowError(new JsonTextStructureCapacityError('nestingDepth', 128))
+  })
 })
