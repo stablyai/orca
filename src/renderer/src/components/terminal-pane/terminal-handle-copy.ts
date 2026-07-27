@@ -1,31 +1,35 @@
-import type { RuntimeRpcResponse } from '../../../../shared/runtime-rpc-envelope'
+import type { RuntimeClientTarget } from '@/runtime/runtime-client-target'
 import { makePaneKey } from '../../../../shared/stable-pane-id'
 
 type CopyTerminalHandleDeps = {
   tabId: string
   leafId: string
-  callRuntime: (request: {
-    method: 'terminal.resolvePane'
+  // Why: a pane rendered from a paired runtime exists only in that runtime's
+  // pane table, so resolvePane has to be addressed to the owner. Defaulting to
+  // the local runtime made "Copy Terminal ID" fail for every remote pane.
+  runtimeEnvironmentId?: string | null
+  callRuntime: (
+    target: RuntimeClientTarget,
+    method: 'terminal.resolvePane',
     params: { paneKey: string }
-  }) => Promise<RuntimeRpcResponse<unknown>>
+  ) => Promise<unknown>
   writeClipboardText: (text: string) => Promise<void>
 }
 
 export async function copyTerminalHandleForPane({
   tabId,
   leafId,
+  runtimeEnvironmentId,
   callRuntime,
   writeClipboardText
 }: CopyTerminalHandleDeps): Promise<string> {
   const paneKey = makePaneKey(tabId, leafId)
-  const response = await callRuntime({
-    method: 'terminal.resolvePane',
-    params: { paneKey }
-  })
-  if (!response.ok) {
-    throw new Error(response.error.message)
-  }
-  const handle = readResolvedTerminalHandle(response.result)
+  const environmentId = runtimeEnvironmentId?.trim()
+  const target: RuntimeClientTarget = environmentId
+    ? { kind: 'environment', environmentId }
+    : { kind: 'local' }
+  const result = await callRuntime(target, 'terminal.resolvePane', { paneKey })
+  const handle = readResolvedTerminalHandle(result)
   if (!handle) {
     throw new Error('Terminal ID unavailable')
   }

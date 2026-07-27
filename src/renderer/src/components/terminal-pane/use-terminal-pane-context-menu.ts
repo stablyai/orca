@@ -6,6 +6,7 @@ import type { ManagedPane, PaneManager } from '@/lib/pane-manager/pane-manager'
 import type { PtyTransport } from './pty-transport'
 import { getConnectionId } from '@/lib/connection-context'
 import { getRuntimeEnvironmentIdForWorktree } from '@/lib/worktree-runtime-owner'
+import { callRuntimeRpc } from '@/runtime/runtime-rpc-client'
 import type { PaneCwdMap } from './resolve-split-cwd'
 import type { TerminalQuickCommand } from '../../../../shared/types'
 import { isTerminalAgentQuickCommand } from '../../../../shared/terminal-quick-commands'
@@ -269,7 +270,11 @@ export function useTerminalPaneContextMenu({
       await copyTerminalHandleForPane({
         tabId,
         leafId: pane.leafId,
-        callRuntime: window.api.runtime.call,
+        runtimeEnvironmentId: getRuntimeEnvironmentIdForWorktree(
+          useAppStore.getState(),
+          worktreeId
+        ),
+        callRuntime: (target, method, params) => callRuntimeRpc(target, method, params),
         writeClipboardText: window.api.ui.writeClipboardText
       })
       toast.success(
