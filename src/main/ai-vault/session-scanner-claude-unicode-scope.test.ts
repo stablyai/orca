@@ -76,4 +76,53 @@ describe('scanAiVaultSessions — non-ASCII scope paths', () => {
 
     expect(result.sessions.map((session) => session.sessionId)).toContain('korean-session')
   })
+
+  it('lists Claude sessions for a Windows workspace whose path has uppercase segments', async () => {
+    // Claude derives the dir name from the raw cwd, so it keeps 'C--Users-Ada-repo'.
+    // Encoding from the lowercased comparison key produced 'c--users-ada-repo',
+    // which never matched — scoped discovery was dead on Windows entirely.
+    const root = await mkdtemp(join(tmpdir(), 'orca-ai-vault-win-scope-'))
+    tempRoots.push(root)
+    const roots = isolatedScanRoots(root)
+
+    const workspace = 'C:\\Users\\Ada\\repo'
+    const projectDir = join(roots.claudeProjectsDir, claudeProjectDirName(workspace))
+    await mkdir(projectDir, { recursive: true })
+    await writeFile(
+      join(projectDir, 'windows-session.jsonl'),
+      jsonLines([
+        {
+          type: 'user',
+          sessionId: 'windows-session',
+          timestamp: '2026-05-01T10:00:00.000Z',
+          cwd: workspace,
+          gitBranch: 'main',
+          message: { role: 'user', content: 'hello' }
+        }
+      ])
+    )
+    await mkdir(join(roots.claudeProjectsDir, '-Users-ada-other'), { recursive: true })
+    await writeFile(
+      join(roots.claudeProjectsDir, '-Users-ada-other', 'recent-session.jsonl'),
+      jsonLines([
+        {
+          type: 'user',
+          sessionId: 'recent-session',
+          timestamp: '2026-06-01T10:00:00.000Z',
+          cwd: '/Users/ada/other',
+          gitBranch: 'main',
+          message: { role: 'user', content: 'newer' }
+        }
+      ])
+    )
+
+    const result = await scanAiVaultSessions({
+      ...roots,
+      platform: 'win32',
+      limit: 1,
+      scopePaths: [workspace]
+    })
+
+    expect(result.sessions.map((session) => session.sessionId)).toContain('windows-session')
+  })
 })

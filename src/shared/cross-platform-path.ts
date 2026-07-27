@@ -96,44 +96,10 @@ export function relativePathInsideRoot(rootPath: string, candidatePath: string):
   if (!comparisonCandidate.startsWith(comparisonPrefix)) {
     return null
   }
-  // Why: the WSL alias fold makes the comparison key a different length than the
-  // raw path, so every branch must skip whole segments rather than characters.
-  return sliceCandidatePastRootSegments(comparisonRoot, normalizedCandidate)
-}
-
-/**
- * Why: skip the root's segments by position, not by prefix length. Comparison
- * folding is not length-preserving, so a length taken from the folded root would
- * cut the raw candidate mid-character and fabricate a path. Scanning keeps the
- * suffix byte-exact — which callers that rejoin it and hit the filesystem depend
- * on — and keeps watcher event storms allocation-free.
- */
-function sliceCandidatePastRootSegments(root: string, candidate: string): string {
-  let remainingRootSegments = 0
-  let inRootSegment = false
-  for (let index = 0; index < root.length; index++) {
-    if (root[index] === '/') {
-      inRootSegment = false
-    } else if (!inRootSegment) {
-      inRootSegment = true
-      remainingRootSegments++
-    }
-  }
-
-  let inSegment = false
-  for (let index = 0; index < candidate.length; index++) {
-    if (candidate[index] === '/') {
-      inSegment = false
-      continue
-    }
-    if (!inSegment) {
-      inSegment = true
-      if (remainingRootSegments-- === 0) {
-        return candidate.slice(index)
-      }
-    }
-  }
-  return ''
+  // Why: fold changes length (NFC, case, UNC alias), so skip whole root segments
+  // rather than a character count, keeping the returned suffix byte-exact.
+  const rootSegments = comparisonRoot.split('/').filter(Boolean).length
+  return normalizedCandidate.split('/').filter(Boolean).slice(rootSegments).join('/')
 }
 
 function trimRuntimePathTrailingSlash(value: string): string {
