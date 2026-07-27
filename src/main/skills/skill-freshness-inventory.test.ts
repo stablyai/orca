@@ -370,8 +370,7 @@ describe('read-only skill freshness inventory', () => {
     expect(inventory.installations.some((entry) => entry.status === 'unrecognized')).toBe(true)
   })
 
-  it('treats an empty plugin-cache directory as unknown rather than foreign', async () => {
-    // Why: foreign needs positive evidence. No files read is absence of evidence.
+  it('does not classify an empty plugin-cache directory as a skill', async () => {
     const test = await fixture()
     await test.writeSkill(join(test.homeDir, '.agents', 'skills'), test.currentMarkdown)
     const emptyRoot = join(test.homeDir, '.codex', 'plugins', 'cache', 'vendor', 'orca-cli')
@@ -384,9 +383,7 @@ describe('read-only skill freshness inventory', () => {
       resourceRoot: test.resourceRoot
     })
 
-    expect(
-      inventory.installations.find((entry) => entry.unresolvedPath === emptyRoot)?.status
-    ).toBe('unrecognized')
+    expect(inventory.installations.some((entry) => entry.unresolvedPath === emptyRoot)).toBe(false)
   })
 
   it('accepts CRLF as the same official text identity', async () => {
