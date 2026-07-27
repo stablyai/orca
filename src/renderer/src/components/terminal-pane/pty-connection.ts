@@ -40,6 +40,7 @@ import { toAgentLaunchPreferences } from '@/runtime/agent-session-create-operati
 import { createUnresolvedOwnerPtyTransport } from './unresolved-owner-pty-transport'
 import { resolveTerminalWorktreeRoute } from '@/lib/terminal-worktree-route'
 import { getConnectionId } from '@/lib/connection-context'
+import { recordTerminalTabParkedOnUnresolvedHost } from '@/lib/parked-terminal-host-hydration'
 import { getLocalProjectExecutionRuntimeContext } from '@/lib/local-preflight-context'
 import {
   getCachedWindowsTerminalCapabilities,
@@ -3534,6 +3535,11 @@ export function connectPanePty(
           }
         }
       : {})
+  }
+  if (connectionOwnerHydrating) {
+    // Why: this pane holds an inert transport until its host resolves; register it so
+    // the repos:changed handler remounts it instead of leaving the terminal blank.
+    recordTerminalTabParkedOnUnresolvedHost(deps.worktreeId, deps.tabId)
   }
   const transport =
     terminalOwnerUnresolved || connectionOwnerHydrating
