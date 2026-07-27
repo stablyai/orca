@@ -13,8 +13,9 @@ if (process.platform !== 'win32') {
 }
 
 const repoRoot = resolve(import.meta.dirname, '../..')
-const sourcePath = join(repoRoot, 'native', 'windows-cli-launcher', 'OrcaCliLauncher.cs')
-const outputPath = readArg('--output') ?? defaultOutputPath(repoRoot)
+const target = readArg('--target') ?? 'orca'
+const outputPath = readArg('--output') ?? defaultOutputPath(repoRoot, target)
+const sourceFiles = sourceFilesForTarget(target, repoRoot)
 const compilerPath = findFrameworkCompiler(process.env)
 
 if (!compilerPath) {
@@ -24,7 +25,7 @@ if (!compilerPath) {
 mkdirSync(dirname(outputPath), { recursive: true })
 const result = spawnSync(
   compilerPath,
-  ['/nologo', '/target:exe', '/optimize+', '/warnaserror+', `/out:${outputPath}`, sourcePath],
+  ['/nologo', '/target:exe', '/optimize+', '/warnaserror+', `/out:${outputPath}`, ...sourceFiles],
   { cwd: repoRoot, stdio: 'inherit' }
 )
 
@@ -38,8 +39,20 @@ if (result.status !== 0) {
   process.exit(result.status ?? 1)
 }
 
-function defaultOutputPath(projectRoot) {
-  return join(projectRoot, 'native', 'windows-cli-launcher', '.build', 'orca.exe')
+function defaultOutputPath(projectRoot, target) {
+  return join(projectRoot, 'native', 'windows-cli-launcher', '.build', `${target}.exe`)
+}
+
+function sourceFilesForTarget(target, projectRoot) {
+  const base = join(projectRoot, 'native', 'windows-cli-launcher')
+  switch (target) {
+    case 'orca':
+      return [join(base, 'OrcaCliLauncher.cs'), join(base, 'WindowsCommandLine.cs')]
+    case 'tmux':
+      return [join(base, 'OrcaTmuxShim.cs'), join(base, 'WindowsCommandLine.cs')]
+    default:
+      throw new Error(`Unknown target: ${target}. Expected 'orca' or 'tmux'.`)
+  }
 }
 
 function findFrameworkCompiler(env) {

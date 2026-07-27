@@ -56,6 +56,7 @@
     "build:computer-macos": "node config/scripts/build-computer-macos.mjs",
     "build:notification-status-macos": "node config/scripts/build-notification-status-macos.mjs",
     "build:native": "node config/scripts/build-native-for-platform.mjs",
+    "build:windows-shims": "node config/scripts/build-windows-cli-launcher.mjs --target orca && node config/scripts/build-windows-cli-launcher.mjs --target tmux",
     "smoke:computer": "node config/scripts/computer-use-smoke.mjs",
     "verify:computer-native": "node config/scripts/verify-computer-native.mjs",
     "verify:cli-bin": "node config/scripts/verify-cli-bin.mjs",

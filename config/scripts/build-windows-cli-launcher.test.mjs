@@ -1,4 +1,4 @@
-import { copyFileSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { copyFileSync, existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { dirname, join, resolve } from 'node:path'
 import { spawnSync } from 'node:child_process'
@@ -26,6 +26,40 @@ describe('Windows CLI launcher', () => {
       expect(result.status).not.toBe(0)
       expect(result.stderr).toContain('Windows CLI launcher')
       expect(result.stderr).toContain('Windows host')
+    } finally {
+      rmSync(outputRoot, { recursive: true, force: true })
+    }
+  })
+
+  itWindows('builds the tmux shim to the requested output', () => {
+    const outputRoot = mkdtempSync(join(tmpdir(), 'orca tmux shim build '))
+    try {
+      const tmuxOutputPath = join(outputRoot, 'tmux.exe')
+      const build = spawnSync(
+        process.execPath,
+        [
+          'config/scripts/build-windows-cli-launcher.mjs',
+          '--target',
+          'tmux',
+          '--output',
+          tmuxOutputPath
+        ],
+        { cwd: projectRoot, encoding: 'utf8' }
+      )
+      expect(build.status, `${build.stdout}\n${build.stderr}`).toBe(0)
+      expect(existsSync(tmuxOutputPath), 'tmux.exe should exist at the output path').toBe(true)
+      const stats = require('node:fs').statSync(tmuxOutputPath)
+      expect(stats.size, 'tmux.exe must be a non-empty PE file').toBeGreaterThan(0)
+      // Verify it is a Windows PE by checking the MZ header
+      const fd = require('node:fs').openSync(tmuxOutputPath, 'r')
+      const header = Buffer.alloc(2)
+      require('node:fs').readSync(fd, header, 0, 2, 0)
+      require('node:fs').closeSync(fd)
+      expect(header[0] === 0x4d && header[1] === 0x5a, 'must have MZ PE header').toBe(true)
+      // Verify it contains the tmux shim version sentinel (UTF-16 LE in .NET metadata)
+      const content = require('node:fs').readFileSync(tmuxOutputPath)
+      const utf16tmux34 = Buffer.from([0x74, 0x00, 0x6d, 0x00, 0x75, 0x00, 0x78, 0x00, 0x20, 0x00, 0x33, 0x00, 0x2e, 0x00, 0x34, 0x00])
+      expect(content.indexOf(utf16tmux34), 'tmux.exe must embed the tmux shim version sentinel').toBeGreaterThan(-1)
     } finally {
       rmSync(outputRoot, { recursive: true, force: true })
     }

@@ -86,52 +86,12 @@ internal static class OrcaCliLauncher
 
     private static string BuildArguments(string cliPath, string[] args)
     {
-        StringBuilder commandLine = new StringBuilder(QuoteArgument(cliPath));
+        StringBuilder commandLine = new StringBuilder(WindowsCommandLine.Quote(cliPath));
         foreach (string arg in args)
         {
             commandLine.Append(' ');
-            commandLine.Append(QuoteArgument(arg));
+            commandLine.Append(WindowsCommandLine.Quote(arg));
         }
         return commandLine.ToString();
-    }
-
-    private static string QuoteArgument(string value)
-    {
-        bool requiresQuotes = value.Length == 0;
-        for (int index = 0; index < value.Length && !requiresQuotes; index += 1)
-        {
-            requiresQuotes = value[index] == '"' || Char.IsWhiteSpace(value[index]);
-        }
-        if (!requiresQuotes)
-        {
-            return value;
-        }
-
-        StringBuilder quoted = new StringBuilder("\"");
-        int backslashCount = 0;
-        foreach (char character in value)
-        {
-            if (character == '\\')
-            {
-                backslashCount += 1;
-                continue;
-            }
-
-            if (character == '"')
-            {
-                quoted.Append('\\', backslashCount * 2 + 1);
-                quoted.Append('"');
-            }
-            else
-            {
-                quoted.Append('\\', backslashCount);
-                quoted.Append(character);
-            }
-            backslashCount = 0;
-        }
-
-        quoted.Append('\\', backslashCount * 2);
-        quoted.Append('"');
-        return quoted.ToString();
     }
 }
