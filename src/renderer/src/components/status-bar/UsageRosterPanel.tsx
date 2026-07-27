@@ -15,6 +15,7 @@ import { barColor, formatResetCountdown, getWindowSections, ProviderIcon } from 
 import { getProviderDisplayName } from './usage-error-copy'
 import { formatPlanLabel, usageTextColorClass } from './usage-roster-formatting'
 import { getUsageRosterRowState, type UsageRosterRowState } from './usage-roster-row-state'
+import { WindowPaceMarker } from './window-pace-marker'
 import type { StatusBarUsageMode } from '../../../../shared/status-bar-usage-mode'
 
 type ProviderId = ProviderRateLimits['provider']
@@ -136,11 +137,14 @@ export function UsageRow({
             return (
               <span key={s.label} className="flex items-center gap-1.5">
                 <span className="text-[10px] text-muted-foreground">{shortLabel(p, s)}</span>
-                <span className="h-[5px] w-7 overflow-hidden rounded-full bg-muted">
-                  <span
-                    className={`block h-full rounded-full ${barColor(used)}`}
-                    style={{ width: `${shown}%` }}
-                  />
+                <span className="relative flex">
+                  <span className="h-[5px] w-7 overflow-hidden rounded-full bg-muted">
+                    <span
+                      className={`block h-full rounded-full ${barColor(used)}`}
+                      style={{ width: `${shown}%` }}
+                    />
+                  </span>
+                  <WindowPaceMarker w={s.window} now={now} display={display} />
                 </span>
                 <span className={`tabular-nums text-[11px] ${usageTextColorClass(used)}`}>
                   {shown}%
