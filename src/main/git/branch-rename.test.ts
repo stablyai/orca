@@ -16,7 +16,7 @@ describe('probeBranchUpstream', () => {
   it('reports has-upstream when @{u} resolves to a tracking ref', async () => {
     const exec: GitExec = vi.fn(async (args: string[]) => {
       if (args[0] === 'symbolic-ref') {
-        return { stdout: 'feature\n', stderr: '' }
+        return { stdout: 'refs/heads/feature\n', stderr: '' }
       }
       if (args[0] === 'rev-parse' && args.includes('HEAD@{u}')) {
         return { stdout: 'origin/feature\n', stderr: '' }
@@ -29,7 +29,7 @@ describe('probeBranchUpstream', () => {
   it('reports no-upstream when there is no upstream', async () => {
     const exec: GitExec = vi.fn(async (args: string[]) => {
       if (args[0] === 'symbolic-ref') {
-        return { stdout: 'feature\n', stderr: '' }
+        return { stdout: 'refs/heads/feature\n', stderr: '' }
       }
       if (args[0] === 'rev-parse' && args.includes('HEAD@{u}')) {
         throw noUpstreamError
@@ -45,7 +45,7 @@ describe('probeBranchUpstream', () => {
   it('reports has-upstream when a same-name origin tracking ref exists without configured upstream', async () => {
     const exec: GitExec = vi.fn(async (args: string[]) => {
       if (args[0] === 'symbolic-ref') {
-        return { stdout: 'feature\n', stderr: '' }
+        return { stdout: 'refs/heads/feature\n', stderr: '' }
       }
       if (args[0] === 'rev-parse' && args.includes('HEAD@{u}')) {
         throw noUpstreamError
@@ -84,7 +84,7 @@ describe('probeBranchUpstream', () => {
     // A gettext-enabled git under de_DE translates even the `fatal:` prefix.
     const exec: GitExec = vi.fn(async (args: string[]) => {
       if (args[0] === 'symbolic-ref') {
-        return { stdout: 'feature\n', stderr: '' }
+        return { stdout: 'refs/heads/feature\n', stderr: '' }
       }
       throw new Error(
         'Command failed: git rev-parse --abbrev-ref HEAD@{u}\n' +

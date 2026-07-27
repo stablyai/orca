@@ -61,8 +61,13 @@ describe('branchNameFromHeadRef', () => {
     expect(branchNameFromHeadRef('refs/heads/wip/refs/heads/x\n')).toBe('wip/refs/heads/x')
   })
 
-  it('passes a HEAD symref outside refs/heads/ through unmangled', () => {
-    expect(branchNameFromHeadRef('refs/custom/thing\n')).toBe('refs/custom/thing')
+  it('treats a HEAD symref outside refs/heads/ as detached', () => {
+    // Callers key branch config and ref paths by this value; returning the raw
+    // symref fabricates lookups like refs/heads/refs/custom/thing and can match
+    // a bogus upstream. git rejects the state too: "HEAD not found below refs/heads!".
+    expect(branchNameFromHeadRef('refs/custom/thing\n')).toBeNull()
+    expect(branchNameFromHeadRef('refs/tags/v1.0\n')).toBeNull()
+    expect(branchNameFromHeadRef('refs/heads/\n')).toBeNull()
   })
 
   it('treats empty output as no branch', () => {

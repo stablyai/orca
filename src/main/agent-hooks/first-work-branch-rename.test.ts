@@ -463,7 +463,7 @@ describe('maybeAutoRenameBranchOnFirstWork', () => {
         throw noUpstreamError
       }
       if (args[0] === 'symbolic-ref') {
-        return { stdout: 'you/Nautilus\n', stderr: '' }
+        return { stdout: 'refs/heads/you/Nautilus\n', stderr: '' }
       }
       if (args[0] === 'rev-parse' && args.includes('refs/remotes/origin/you/Nautilus')) {
         throw new Error('not found')
@@ -486,7 +486,7 @@ describe('maybeAutoRenameBranchOnFirstWork', () => {
         return { stdout: 'you/Nautilus\n', stderr: '' }
       }
       if (args[0] === 'symbolic-ref') {
-        return { stdout: 'you/Nautilus\n', stderr: '' }
+        return { stdout: 'refs/heads/you/Nautilus\n', stderr: '' }
       }
       if (args[0] === 'rev-parse' && args.some((arg) => arg.includes('@{u}'))) {
         upstreamReadCount += 1

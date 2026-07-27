@@ -16,12 +16,14 @@ export const GIT_CURRENT_BRANCH_REF_ARGS: readonly string[] = ['symbolic-ref', '
  */
 export function branchNameFromHeadRef(headRefStdout: string): string | null {
   const ref = headRefStdout.trim()
-  if (!ref) {
+  if (!ref.startsWith(HEADS_REF_PREFIX)) {
+    // Why: HEAD can point outside refs/heads/ (`git symbolic-ref HEAD refs/custom/thing`).
+    // Every caller keys a branch config or ref path by this value, so passing it through
+    // fabricates lookups like refs/heads/refs/custom/thing. git itself refuses the state
+    // ("HEAD not found below refs/heads!"), so treat it as detached.
     return null
   }
-  // Why conditional: a HEAD symref outside refs/heads/ passes through unmangled
-  // rather than being silently reinterpreted as a branch name.
-  return ref.startsWith(HEADS_REF_PREFIX) ? ref.slice(HEADS_REF_PREFIX.length) : ref
+  return ref.slice(HEADS_REF_PREFIX.length) || null
 }
 
 /**

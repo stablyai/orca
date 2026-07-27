@@ -65,7 +65,7 @@ describe('local upstream negative cache', () => {
         }
       }
       if (args[0] === 'symbolic-ref' && args.includes('HEAD')) {
-        return { stdout: 'feature\n' }
+        return { stdout: 'refs/heads/feature\n' }
       }
       if (args[0] === 'rev-parse' && args.includes('HEAD@{u}')) {
         throw new Error('fatal: no upstream configured for branch feature')
@@ -112,7 +112,7 @@ describe('local upstream negative cache', () => {
         }
       }
       if (args[0] === 'symbolic-ref' && args.includes('HEAD')) {
-        return { stdout: 'feature\n' }
+        return { stdout: 'refs/heads/feature\n' }
       }
       if (args[0] === 'rev-parse' && args.includes('HEAD@{u}')) {
         throw new Error('fatal: no upstream configured for branch feature')
@@ -175,7 +175,7 @@ describe('local upstream negative cache', () => {
         }
       }
       if (args[0] === 'symbolic-ref' && args.includes('HEAD')) {
-        return { stdout: `${currentBranch}\n` }
+        return { stdout: `refs/heads/${currentBranch}\n` }
       }
       if (args[0] === 'rev-parse' && args.includes('HEAD@{u}')) {
         throw new Error(`fatal: no upstream configured for branch ${currentBranch}`)
@@ -239,7 +239,7 @@ describe('local upstream negative cache', () => {
         }
       }
       if (args[0] === 'symbolic-ref' && args.includes('HEAD')) {
-        return { stdout: `${currentBranch}\n` }
+        return { stdout: `refs/heads/${currentBranch}\n` }
       }
       if (args[0] === 'rev-parse' && args.includes('HEAD@{u}')) {
         throw new Error(`fatal: no upstream configured for branch ${currentBranch}`)
@@ -297,7 +297,7 @@ describe('local upstream negative cache', () => {
         }
       }
       if (args[0] === 'symbolic-ref' && args.includes('HEAD')) {
-        return { stdout: `${currentBranch}\n` }
+        return { stdout: `refs/heads/${currentBranch}\n` }
       }
       if (args[0] === 'rev-parse' && args.includes('HEAD@{u}')) {
         throw new Error(`fatal: no upstream configured for branch ${currentBranch}`)
@@ -331,7 +331,7 @@ describe('local upstream negative cache', () => {
         }
       }
       if (args[0] === 'symbolic-ref' && args.includes('HEAD')) {
-        return { stdout: `${currentBranch}\n` }
+        return { stdout: `refs/heads/${currentBranch}\n` }
       }
       if (args[0] === 'rev-parse' && args.includes('HEAD@{u}')) {
         throw new Error(`fatal: no upstream configured for branch ${currentBranch}`)

@@ -243,7 +243,7 @@ describe('getStatusOp', () => {
         return { stdout: buildBranchStatusOutput('abc123', 'feature'), stderr: '' }
       }
       if (args[0] === 'symbolic-ref') {
-        return { stdout: 'feature\n', stderr: '' }
+        return { stdout: 'refs/heads/feature\n', stderr: '' }
       }
       if (args[0] === 'rev-parse' && args.includes('HEAD@{u}')) {
         throw new Error('fatal: no upstream configured for branch feature')
@@ -276,7 +276,7 @@ describe('getStatusOp', () => {
         return { stdout: buildBranchStatusOutput('abc123', 'feature'), stderr: '' }
       }
       if (args[0] === 'symbolic-ref') {
-        return { stdout: 'feature\n', stderr: '' }
+        return { stdout: 'refs/heads/feature\n', stderr: '' }
       }
       if (args[0] === 'rev-parse' && args.includes('HEAD@{u}')) {
         throw new Error('fatal: no upstream configured for branch feature')
@@ -302,7 +302,7 @@ describe('getStatusOp', () => {
         return { stdout: buildBranchStatusOutput('abc123', 'feature'), stderr: '' }
       }
       if (args[0] === 'symbolic-ref') {
-        return { stdout: 'feature\n', stderr: '' }
+        return { stdout: 'refs/heads/feature\n', stderr: '' }
       }
       if (args[0] === 'rev-parse' && args.includes('HEAD@{u}')) {
         await Promise.resolve()
@@ -338,7 +338,7 @@ describe('getStatusOp', () => {
         return { stdout: buildBranchStatusOutput('abc123', branch), stderr: '' }
       }
       if (args[0] === 'symbolic-ref') {
-        return { stdout: `${branch}\n`, stderr: '' }
+        return { stdout: `refs/heads/${branch}\n`, stderr: '' }
       }
       if (args[0] === 'rev-parse' && args.includes('HEAD@{u}')) {
         throw new Error(`fatal: no upstream configured for branch ${branch}`)
@@ -369,7 +369,7 @@ describe('getStatusOp', () => {
         return { stdout: buildBranchStatusOutput('abc123', 'feature/fix'), stderr: '' }
       }
       if (args[0] === 'symbolic-ref') {
-        return { stdout: 'feature/fix\n', stderr: '' }
+        return { stdout: 'refs/heads/feature/fix\n', stderr: '' }
       }
       if (args[0] === 'rev-parse' && args.includes('HEAD@{u}')) {
         throw new Error('fatal: no upstream configured for branch feature/fix')

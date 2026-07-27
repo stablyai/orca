@@ -28,7 +28,7 @@ describe('relay upstream negative cache', () => {
     let originBranchExists = false
     const runGit = vi.fn(async (args: string[]): Promise<{ stdout: string }> => {
       if (args[0] === 'symbolic-ref') {
-        return { stdout: 'feature\n' }
+        return { stdout: 'refs/heads/feature\n' }
       }
       if (args[0] === 'rev-parse' && args.includes('HEAD@{u}')) {
         throw new Error('fatal: no upstream configured for branch feature')
@@ -71,7 +71,7 @@ describe('relay upstream negative cache', () => {
     let deferredOriginReject: ((error: Error) => void) | null = null
     const runGit = vi.fn(async (args: string[]) => {
       if (args[0] === 'symbolic-ref') {
-        return { stdout: 'feature\n' }
+        return { stdout: 'refs/heads/feature\n' }
       }
       if (args[0] === 'rev-parse' && args.includes('HEAD@{u}')) {
         throw new Error('fatal: no upstream configured for branch feature')
@@ -123,7 +123,7 @@ describe('relay upstream negative cache', () => {
     let deferredOriginReject: ((error: Error) => void) | null = null
     const runGit = vi.fn(async (args: string[]): Promise<{ stdout: string }> => {
       if (args[0] === 'symbolic-ref') {
-        return { stdout: 'feature\n' }
+        return { stdout: 'refs/heads/feature\n' }
       }
       if (args[0] === 'rev-parse' && args.includes('HEAD@{u}')) {
         throw new Error('fatal: no upstream configured for branch feature')
@@ -159,7 +159,7 @@ describe('relay upstream negative cache', () => {
         { worktreePath: '/repo', branchName },
         async (args) => {
           if (args[0] === 'symbolic-ref') {
-            return { stdout: `${branchName}\n` }
+            return { stdout: `refs/heads/${branchName}\n` }
           }
           if (args[0] === 'rev-parse' && args.includes('HEAD@{u}')) {
             throw new Error(`fatal: no upstream configured for branch ${branchName}`)
@@ -200,7 +200,7 @@ describe('relay upstream negative cache', () => {
     let deferredOriginReject: ((error: Error) => void) | null = null
     const runGit = vi.fn(async (args: string[]): Promise<{ stdout: string }> => {
       if (args[0] === 'symbolic-ref') {
-        return { stdout: 'feature\n' }
+        return { stdout: 'refs/heads/feature\n' }
       }
       if (args[0] === 'rev-parse' && args.includes('HEAD@{u}')) {
         throw new Error('fatal: no upstream configured for branch feature')
@@ -234,7 +234,7 @@ describe('relay upstream negative cache', () => {
         { worktreePath: '/repo', branchName },
         async (args) => {
           if (args[0] === 'symbolic-ref') {
-            return { stdout: `${branchName}\n` }
+            return { stdout: `refs/heads/${branchName}\n` }
           }
           if (args[0] === 'rev-parse' && args.includes('HEAD@{u}')) {
             throw new Error(`fatal: no upstream configured for branch ${branchName}`)
@@ -276,7 +276,7 @@ describe('relay upstream negative cache', () => {
         { worktreePath: '/repo', branchName },
         async (args) => {
           if (args[0] === 'symbolic-ref') {
-            return { stdout: `${branchName}\n` }
+            return { stdout: `refs/heads/${branchName}\n` }
           }
           if (args[0] === 'rev-parse' && args.includes('HEAD@{u}')) {
             throw new Error(`fatal: no upstream configured for branch ${branchName}`)
@@ -303,7 +303,7 @@ describe('relay upstream negative cache', () => {
         { worktreePath: '/repo', branchName },
         async (args) => {
           if (args[0] === 'symbolic-ref') {
-            return { stdout: `${branchName}\n` }
+            return { stdout: `refs/heads/${branchName}\n` }
           }
           if (args[0] === 'rev-parse' && args.includes('HEAD@{u}')) {
             throw new Error(`fatal: no upstream configured for branch ${branchName}`)
@@ -330,7 +330,7 @@ describe('relay upstream negative cache', () => {
   it('coalesces no-upstream config reads into one snapshot subprocess', async () => {
     const runGit = vi.fn(async (args: string[]): Promise<{ stdout: string }> => {
       if (args[0] === 'symbolic-ref') {
-        return { stdout: 'feature\n' }
+        return { stdout: 'refs/heads/feature\n' }
       }
       if (args[0] === 'rev-parse' && args.includes('HEAD@{u}')) {
         throw new Error('fatal: no upstream configured for branch feature')
