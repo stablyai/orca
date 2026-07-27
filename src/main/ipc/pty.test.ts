@@ -1683,6 +1683,28 @@ describe('registerPtyHandlers', () => {
       expect(env.LANG).toBe('fr_FR.UTF-8')
     })
 
+    it('strips inherited Claude child-session stamps from a local spawn env', async () => {
+      // Why: the local provider spreads main's process.env, so a GUI launched from
+      // inside a Claude session would stamp every pane as a nested child and Claude
+      // would silently disable transcript persistence. Not gated on isDaemonHostSpawn.
+      const env = await spawnAndGetEnv(undefined, {
+        CLAUDE_CODE_CHILD_SESSION: '1',
+        CLAUDE_CODE_SESSION_ID: '85935aed-98a7-4094-89a8-85c75e1a5a95',
+        CLAUDE_CODE_BRIDGE_SESSION_ID: 'session_01UCkWN5nDXNyD1V7cfamCxa'
+      })
+      expect(env.CLAUDE_CODE_CHILD_SESSION).toBeUndefined()
+      expect(env.CLAUDE_CODE_SESSION_ID).toBeUndefined()
+      expect(env.CLAUDE_CODE_BRIDGE_SESSION_ID).toBeUndefined()
+    })
+
+    it('keeps an explicitly requested Claude child-session stamp on a local spawn', async () => {
+      const env = await spawnAndGetEnv(
+        { CLAUDE_CODE_CHILD_SESSION: '1' },
+        { CLAUDE_CODE_CHILD_SESSION: '1' }
+      )
+      expect(env.CLAUDE_CODE_CHILD_SESSION).toBe('1')
+    })
+
     it('always sets TERM and COLORTERM regardless of env', async () => {
       const env = await spawnAndGetEnv()
       expect(env.TERM).toBe('xterm-256color')
@@ -3014,6 +3036,84 @@ describe('registerPtyHandlers', () => {
         )
         expect(spawnOptions.env.ORCA_AGENT_HOOK_PORT).toBe('5678')
         expect(spawnOptions.env.ORCA_AGENT_HOOK_TOKEN).toBe('agent-token')
+      })
+
+      it('strips inherited Claude child-session stamps from runtime-created PTYs', async () => {
+        // Why: the runtime controller is the `orca` CLI / automation spawn path and
+        // assembles envToDelete separately from the renderer's pty:spawn handler;
+        // without its own case the two paths can silently drift apart.
+        type RuntimeSpawnController = {
+          spawn(args: {
+            cols: number
+            rows: number
+            worktreeId?: string
+            env?: Record<string, string>
+          }): Promise<{ id: string }>
+        }
+        const daemonSpawn = setupDaemonAdapter()
+        const runtime = {
+          setPtyController: vi.fn(),
+          registerPty: vi.fn(),
+          noteTerminalSpawnCommand: vi.fn(),
+          onPtySpawned: vi.fn(),
+          onPtyExit: vi.fn(),
+          onPtyData: vi.fn()
+        }
+        handlers.clear()
+        registerPtyHandlers(mainWindow as never, runtime as never)
+        const controller = runtime.setPtyController.mock.calls[0]?.[0] as RuntimeSpawnController
+
+        await controller.spawn({ cols: 80, rows: 24, worktreeId: 'wt-runtime', env: {} })
+
+        const spawnOptions = daemonSpawn.mock.calls.at(-1)?.[0] as DaemonSpawnCall
+        expect(spawnOptions.envToDelete).toEqual(
+          expect.arrayContaining([
+            'CLAUDE_CODE_CHILD_SESSION',
+            'CLAUDE_CODE_SESSION_ID',
+            'CLAUDE_CODE_BRIDGE_SESSION_ID'
+          ])
+        )
+      })
+
+      it('strips inherited Claude child-session stamps from a local runtime-created PTY', async () => {
+        // Why: the runtime strip is deliberately not gated on isDaemonHostSpawn, so
+        // the local provider — which spreads main's own process.env — needs its own
+        // case; a daemon-only test would still pass if someone added that gate.
+        type RuntimeSpawnController = {
+          spawn(args: {
+            cols: number
+            rows: number
+            worktreeId?: string
+            env?: Record<string, string>
+          }): Promise<{ id: string }>
+        }
+        const runtime = {
+          setPtyController: vi.fn(),
+          registerPty: vi.fn(),
+          noteTerminalSpawnCommand: vi.fn(),
+          onPtySpawned: vi.fn(),
+          onPtyExit: vi.fn(),
+          onPtyData: vi.fn(),
+          preAllocateHandleForPty: vi.fn(() => 'handle-runtime-local')
+        }
+        const saved = process.env.CLAUDE_CODE_CHILD_SESSION
+        process.env.CLAUDE_CODE_CHILD_SESSION = '1'
+        try {
+          handlers.clear()
+          registerPtyHandlers(mainWindow as never, runtime as never)
+          const controller = runtime.setPtyController.mock.calls[0]?.[0] as RuntimeSpawnController
+
+          await controller.spawn({ cols: 80, rows: 24, env: {} })
+
+          const env = spawnMock.mock.calls.at(-1)![2].env as Record<string, string>
+          expect(env.CLAUDE_CODE_CHILD_SESSION).toBeUndefined()
+        } finally {
+          if (saved === undefined) {
+            delete process.env.CLAUDE_CODE_CHILD_SESSION
+          } else {
+            process.env.CLAUDE_CODE_CHILD_SESSION = saved
+          }
+        }
       })
 
       it('threads the validated pane identity into registerPty for a runtime-created daemon PTY (#7587)', async () => {
