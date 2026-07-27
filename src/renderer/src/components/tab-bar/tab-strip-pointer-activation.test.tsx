@@ -4,6 +4,7 @@ import { act, renderHook } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { TAB_DRAG_ACTIVATION_DISTANCE_PX } from '../tab-group/useTabDragSplit'
 import { useTabStripPointerActivation } from './tab-strip-pointer-activation'
+import { isTabStripPointerGestureActive } from './tab-strip-pointer-gesture'
 
 function pointerDownEvent(clientX: number, clientY: number, button = 0): React.PointerEvent {
   return { button, clientX, clientY } as unknown as React.PointerEvent
@@ -109,14 +110,44 @@ describe('useTabStripPointerActivation', () => {
     expect(onActivate).toHaveBeenCalledTimes(1)
   })
 
-  it('flushes a pending press on window focus', () => {
+  it('flushes gesture state on window focus without dropping the click', () => {
     const onActivate = vi.fn()
     const { result } = renderHook(() => useTabStripPointerActivation({ onActivate }))
 
     act(() => result.current.onPointerDown(pointerDownEvent(10, 10)))
+    expect(isTabStripPointerGestureActive()).toBe(true)
+
+    // Why: a browser-pane <webview> returning focus to the host fires window
+    // focus mid-press. #7316 wanted the scroll-suppression token released here,
+    // but cancelling also swallowed the click that caused the focus change.
     act(() => window.dispatchEvent(new Event('focus')))
+    expect(isTabStripPointerGestureActive()).toBe(false)
+
+    firePointer('pointerup', 10, 10)
+    expect(onActivate).toHaveBeenCalledTimes(1)
+  })
+
+  it('activates the first tab click after a focused webview hands focus back', () => {
+    const onActivate = vi.fn()
+    const { result } = renderHook(() => useTabStripPointerActivation({ onActivate }))
+
+    // Real ordering captured over CDP with a focused browser-pane guest.
+    act(() => result.current.onPointerDown(pointerDownEvent(320, 19)))
+    act(() => window.dispatchEvent(new Event('focus')))
+    firePointer('pointerup', 320, 19)
+
+    expect(onActivate).toHaveBeenCalledTimes(1)
+  })
+
+  it('still suppresses activation when the window blurs mid-press', () => {
+    const onActivate = vi.fn()
+    const { result } = renderHook(() => useTabStripPointerActivation({ onActivate }))
+
+    act(() => result.current.onPointerDown(pointerDownEvent(10, 10)))
+    act(() => window.dispatchEvent(new Event('blur')))
     firePointer('pointerup', 10, 10)
 
     expect(onActivate).not.toHaveBeenCalled()
+    expect(isTabStripPointerGestureActive()).toBe(false)
   })
 })

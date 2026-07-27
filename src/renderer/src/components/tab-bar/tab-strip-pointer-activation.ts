@@ -56,7 +56,7 @@ export function useTabStripPointerActivation({
         window.removeEventListener('pointerup', onPointerUp)
         window.removeEventListener('pointercancel', onPointerCancel)
         window.removeEventListener('blur', onPointerCancel)
-        window.removeEventListener('focus', onPointerCancel)
+        window.removeEventListener('focus', onWindowFocus)
         releaseTabStripPointerGesture()
         cleanupRef.current = null
       }
@@ -74,11 +74,18 @@ export function useTabStripPointerActivation({
       const onPointerCancel = (): void => {
         cleanup()
       }
+      // Why: clicking a tab while a browser-pane <webview> holds focus fires
+      // window focus between this press's pointerdown and pointerup. Cancelling
+      // there dropped that click entirely, so only flush the scroll-suppression
+      // token #7316 wanted released and let the release still judge click-vs-drag.
+      const onWindowFocus = (): void => {
+        releaseTabStripPointerGesture()
+      }
 
       window.addEventListener('pointerup', onPointerUp)
       window.addEventListener('pointercancel', onPointerCancel)
       window.addEventListener('blur', onPointerCancel)
-      window.addEventListener('focus', onPointerCancel)
+      window.addEventListener('focus', onWindowFocus)
       cleanupRef.current = cleanup
     },
     [disabled]
