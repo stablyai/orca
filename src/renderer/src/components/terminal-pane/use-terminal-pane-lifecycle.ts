@@ -32,6 +32,11 @@ import {
   installFilePathLinkClickFallback
 } from './terminal-link-handlers'
 import { createTerminalHandleLinkProvider } from './terminal-handle-links'
+import {
+  createRememberedOsc8LinkProvider,
+  installTerminalOsc8LinkMemory,
+  type TerminalOsc8LinkMemory
+} from './terminal-osc8-link-memory'
 import type { LinkHandlerDeps } from './terminal-link-handlers'
 import { handleOscLink } from './terminal-osc-link-routing'
 import { handleTerminalWebLinkClick } from './terminal-web-link-click'
@@ -568,6 +573,8 @@ export function useTerminalPaneLifecycle({
   const terminalHandleLinkDisposablesRef = useRef(new Map<number, IDisposable>())
   const fileLinkClickFallbackDisposablesRef = useRef(new Map<number, IDisposable>())
   const httpLinkClickFallbackDisposablesRef = useRef(new Map<number, IDisposable>())
+  const osc8LinkMemoriesRef = useRef(new Map<number, TerminalOsc8LinkMemory>())
+  const osc8LinkProviderDisposablesRef = useRef(new Map<number, IDisposable>())
   // Why: read settingsRef at fire time so toggling "copy on select" applies without recreating panes.
   const selectionDisposablesRef = useRef(new Map<number, IDisposable>())
   const selectionCaptureTimersRef = useRef(new Map<number, number>())
@@ -1017,6 +1024,31 @@ export function useTerminalPaneLifecycle({
           requestOpenLinksInAppPreference
         })
         httpLinkClickFallbackDisposables.set(pane.id, httpLinkClickFallbackDisposable)
+        // Why: revealing a hidden pane replays the output queued while it was
+        // hidden, and those frames erase the rows they repaint — dropping xterm's
+        // OSC 8 entry for links a TUI never re-emits. Registered last so xterm's
+        // own provider still wins whenever the live hyperlink survives.
+        const osc8LinkMemory = installTerminalOsc8LinkMemory(pane.terminal)
+        osc8LinkMemoriesRef.current.set(pane.id, osc8LinkMemory)
+        const osc8LinkProviderDisposable = pane.terminal.registerLinkProvider(
+          createRememberedOsc8LinkProvider({
+            getMemory: () => osc8LinkMemoriesRef.current.get(pane.id) ?? null,
+            linkTooltip: pane.linkTooltip,
+            openLinkHint: urlOpenLinkHint,
+            activate: (uri, event) => {
+              const handled = handleOscLink(uri, event, {
+                ...linkDeps,
+                startupCwd: getPaneLinkCwd(pane.id),
+                runtimeEnvironmentId: linkDeps.getRuntimeEnvironmentIdForPane?.(pane.id) ?? null,
+                requestOpenLinksInAppPreference
+              })
+              if (handled) {
+                pane.terminal.clearSelection()
+              }
+            }
+          })
+        )
+        osc8LinkProviderDisposablesRef.current.set(pane.id, osc8LinkProviderDisposable)
         seedStartupSessionRestoredBanner(ptyDeps.startup, pane.id, onShowSessionRestoredBanner)
         // Why: skip empty selections so click-to-deselect doesn't clobber whatever the user last copied.
         const selectionDisposable = pane.terminal.onSelectionChange(() => {
@@ -1159,6 +1191,16 @@ export function useTerminalPaneLifecycle({
         if (httpLinkClickFallbackDisposable) {
           httpLinkClickFallbackDisposable.dispose()
           httpLinkClickFallbackDisposables.delete(paneId)
+        }
+        const osc8LinkProviderDisposable = osc8LinkProviderDisposablesRef.current.get(paneId)
+        if (osc8LinkProviderDisposable) {
+          osc8LinkProviderDisposable.dispose()
+          osc8LinkProviderDisposablesRef.current.delete(paneId)
+        }
+        const osc8LinkMemory = osc8LinkMemoriesRef.current.get(paneId)
+        if (osc8LinkMemory) {
+          osc8LinkMemory.dispose()
+          osc8LinkMemoriesRef.current.delete(paneId)
         }
         const selectionDisposable = selectionDisposablesRef.current.get(paneId)
         if (selectionDisposable) {
@@ -1614,6 +1656,14 @@ export function useTerminalPaneLifecycle({
         disposable.dispose()
       }
       httpLinkClickFallbackDisposables.clear()
+      for (const disposable of osc8LinkProviderDisposablesRef.current.values()) {
+        disposable.dispose()
+      }
+      osc8LinkProviderDisposablesRef.current.clear()
+      for (const memory of osc8LinkMemoriesRef.current.values()) {
+        memory.dispose()
+      }
+      osc8LinkMemoriesRef.current.clear()
       for (const disposable of selectionDisposables.values()) {
         disposable.dispose()
       }
