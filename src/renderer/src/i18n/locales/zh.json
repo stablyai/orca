@@ -616,6 +616,16 @@
             "triageFollowupsPrompt": "Use {{value0}} to triage the linked Linear issue — set priority and estimate — and create a parented follow-up ticket for the deferred cleanup."
           }
         }
+      },
+      "browser": {
+        "cookie": {
+          "import": {
+            "toast": {
+              "restartFallbackUnavailableNone": "无法加载这 {{value0}} 个 Cookie 中的任何一个，且重启回退机制不可用。此配置文件之前的 Cookie 已被替换。请重试导入。",
+              "restartFallbackUnavailablePartial": "已导入 {{value1}} 个 Cookie 中的 {{value0}} 个。其余 Cookie 无法加载，且重启回退机制不可用。请重试导入。"
+            }
+          }
+        }
       }
     },
     "hooks": {

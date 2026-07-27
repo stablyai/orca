@@ -629,7 +629,11 @@ describe('importCookiesFromBrowser Chromium', () => {
       expect(clearPendingCookieImportMock).toHaveBeenCalledWith('persist:test')
       expect(readdirSync(join(tmpDir, 'userData', 'cookie-import-staging'))).toEqual([])
       // Why: the jar was cleared and nothing replaced it, so this must not read as a clean success.
-      expect(result.ok && result.summary?.warning).toMatch(/restart fallback was unavailable/)
+      expect(result.ok && result.summary?.warning).toEqual({
+        code: 'restart-fallback-unavailable',
+        loadedCookies: 0,
+        failedCookies: 1
+      })
     } finally {
       platformSpy.mockRestore()
     }
