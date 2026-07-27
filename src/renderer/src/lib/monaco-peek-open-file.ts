@@ -106,7 +106,11 @@ export function installMonacoPeekOpenFile(
   ): Promise<unknown> {
     const reference = args[0] as { uri?: PeekReferenceUri } | undefined
     if (reference?.uri && typeof reference.uri.path === 'string') {
-      ensureOpenableTitle(this, getPeekReferenceFilePath(reference.uri), openTarget)
+      try {
+        ensureOpenableTitle(this, getPeekReferenceFilePath(reference.uri), openTarget)
+      } catch {
+        // Optional title enhancement must not break Monaco's reveal.
+      }
     }
     return originalRevealReference.apply(this, args)
   }

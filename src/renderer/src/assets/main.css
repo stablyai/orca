@@ -98,6 +98,7 @@
   --color-terminal-pane-title-on-light-input-bg: var(--terminal-pane-title-on-light-input-bg);
   --color-terminal-pane-title-on-light-separator: var(--terminal-pane-title-on-light-separator);
   --color-ai-action-accent: var(--ai-action-accent);
+  --color-editor-link: var(--editor-link);
   --color-status-success: var(--status-success);
   --color-status-success-background: var(--status-success-background);
   --color-status-success-border: var(--status-success-border);
@@ -151,6 +152,7 @@
   --input: #e5e5e5;
   --ring: #a1a1a1;
   --terminal-pane-locate: var(--color-blue-600);
+  --editor-link: var(--color-blue-600);
   --ai-action-accent: var(--color-violet-500);
   --status-success: #15803d;
   --status-success-background: color-mix(in srgb, var(--status-success) 10%, transparent);
@@ -237,6 +239,7 @@
   --input: rgb(255 255 255 / 0.15);
   --ring: #737373;
   --terminal-pane-locate: var(--color-blue-400);
+  --editor-link: var(--color-blue-400);
   --ai-action-accent: var(--color-violet-400);
   --status-success: #86efac;
   --status-success-background: color-mix(in srgb, var(--status-success) 10%, transparent);
@@ -2002,7 +2005,7 @@
 }
 
 .monaco-editor .monaco-markdown-doc-link {
-  color: #58a6ff !important;
+  color: var(--editor-link) !important;
   text-decoration: underline;
   text-decoration-color: color-mix(in srgb, currentColor 45%, transparent);
   text-underline-offset: 2px;
@@ -2026,7 +2029,7 @@
 }
 
 .monaco-editor .peekview-title .orca-peek-open-target:hover {
-  color: #58a6ff;
+  color: var(--editor-link);
   text-decoration: underline;
   text-decoration-color: color-mix(in srgb, currentColor 45%, transparent);
   text-underline-offset: 2px;
@@ -2073,7 +2076,7 @@
 /* Why: import links advertise clickability only while ⌘/Ctrl is held, so a plain
    click keeps behaving as caret placement (same affordance as markdown links). */
 .monaco-import-links-mod-held .monaco-editor .monaco-import-file-link {
-  color: #58a6ff !important;
+  color: var(--editor-link) !important;
   text-decoration: underline;
   text-decoration-color: color-mix(in srgb, currentColor 45%, transparent);
   text-underline-offset: 2px;

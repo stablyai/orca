@@ -83,14 +83,18 @@ function createPeekCopyPathButton(): HTMLButtonElement {
     event.preventDefault()
     event.stopPropagation()
   })
-  button.addEventListener('click', (event) => {
+  button.addEventListener('click', async (event) => {
     event.preventDefault()
     event.stopPropagation()
     const path = button.dataset.orcaCopyPath
     if (!path) {
       return
     }
-    void window.api.ui.writeClipboardText(path).catch(() => undefined)
+    try {
+      await window.api.ui.writeClipboardText(path)
+    } catch {
+      return
+    }
     button.classList.add(PEEK_COPY_PATH_COPIED_CLASS)
     window.setTimeout(() => {
       button.classList.remove(PEEK_COPY_PATH_COPIED_CLASS)
@@ -137,7 +141,11 @@ export function installMonacoPeekPathCopyButton(
   ): Promise<unknown> {
     const reference = args[0] as { uri?: PeekReferenceUri } | undefined
     if (reference?.uri && typeof reference.uri.path === 'string') {
-      ensurePeekCopyPathButton(this, getPeekReferenceFilePath(reference.uri))
+      try {
+        ensurePeekCopyPathButton(this, getPeekReferenceFilePath(reference.uri))
+      } catch {
+        // Optional copy affordance must not break Monaco's reveal.
+      }
     }
     return originalRevealReference.apply(this, args)
   }

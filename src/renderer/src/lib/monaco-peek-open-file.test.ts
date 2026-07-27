@@ -85,4 +85,20 @@ describe('installMonacoPeekOpenFile', () => {
       widgetConstructor.prototype._revealReference?.call({}, { uri: { path: '/x.ts' } })
     ).resolves.toBe('revealed')
   })
+
+  it('preserves the original reveal when title enhancement throws', async () => {
+    const widgetConstructor = createReferenceWidgetConstructor()
+    installMonacoPeekOpenFile(widgetConstructor, vi.fn())
+    const head = document.createElement('div')
+    vi.spyOn(head, 'querySelector').mockImplementation(() => {
+      throw new Error('unsupported Monaco title markup')
+    })
+
+    await expect(
+      widgetConstructor.prototype._revealReference?.call(
+        { _headElement: head },
+        { uri: { path: '/x.ts' } }
+      )
+    ).resolves.toBe('revealed')
+  })
 })

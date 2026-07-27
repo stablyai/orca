@@ -97,7 +97,9 @@ describe('installMonacoPeekPathCopyButton', () => {
 
     button?.dispatchEvent(new MouseEvent('click', { bubbles: true }))
     expect(writeClipboardText).toHaveBeenCalledWith('/home/lucian/project/page.tsx')
-    expect(button?.classList.contains(PEEK_COPY_PATH_COPIED_CLASS)).toBe(true)
+    await vi.waitFor(() =>
+      expect(button?.classList.contains(PEEK_COPY_PATH_COPIED_CLASS)).toBe(true)
+    )
   })
 
   it('reuses one button across reveals and retargets its path', async () => {
@@ -122,6 +124,27 @@ describe('installMonacoPeekPathCopyButton', () => {
     expect(widgetConstructor.reveal).toHaveBeenCalledTimes(2)
   })
 
+  it('shows copied feedback only after the clipboard write succeeds', async () => {
+    const writeClipboardText = vi.fn(async () => {
+      throw new Error('clipboard unavailable')
+    })
+    Object.assign(window, { api: { ui: { writeClipboardText } } })
+    const widgetConstructor = createReferenceWidgetConstructor()
+    installMonacoPeekPathCopyButton(widgetConstructor)
+    const instance: FakeReferenceWidgetInstance = { _headElement: createPeekHead() }
+    await widgetConstructor.prototype._revealReference?.call(instance, {
+      uri: { path: '/home/user/a.ts' }
+    })
+    const button = instance._headElement?.querySelector<HTMLButtonElement>(
+      `.${PEEK_COPY_PATH_BUTTON_CLASS}`
+    )
+
+    button?.dispatchEvent(new MouseEvent('click', { bubbles: true }))
+    await vi.waitFor(() => expect(writeClipboardText).toHaveBeenCalled())
+
+    expect(button?.classList.contains(PEEK_COPY_PATH_COPIED_CLASS)).toBe(false)
+  })
+
   it('leaves the widget untouched when the head is missing and does not double-install', async () => {
     const widgetConstructor = createReferenceWidgetConstructor()
     installMonacoPeekPathCopyButton(widgetConstructor)
@@ -134,6 +157,22 @@ describe('installMonacoPeekPathCopyButton', () => {
       widgetConstructor.prototype._revealReference?.call(instance, {
         uri: { path: '/C:/repo/a.ts' }
       })
+    ).resolves.toBe('revealed')
+  })
+
+  it('preserves the original reveal when copy-button injection throws', async () => {
+    const widgetConstructor = createReferenceWidgetConstructor()
+    installMonacoPeekPathCopyButton(widgetConstructor)
+    const head = document.createElement('div')
+    vi.spyOn(head, 'querySelector').mockImplementation(() => {
+      throw new Error('unsupported Monaco title markup')
+    })
+
+    await expect(
+      widgetConstructor.prototype._revealReference?.call(
+        { _headElement: head },
+        { uri: { path: '/x.ts' } }
+      )
     ).resolves.toBe('revealed')
   })
 })
