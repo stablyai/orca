@@ -1,3 +1,5 @@
+const SLASH_CHAR_CODE = '/'.charCodeAt(0)
+
 export function isWindowsAbsolutePathLike(value: string): boolean {
   return /^[A-Za-z]:[\\/]/.test(value) || value.startsWith('\\\\') || value.startsWith('//')
 }
@@ -96,10 +98,42 @@ export function relativePathInsideRoot(rootPath: string, candidatePath: string):
   if (!comparisonCandidate.startsWith(comparisonPrefix)) {
     return null
   }
-  // Why: fold changes length (NFC, case, UNC alias), so skip whole root segments
-  // rather than a character count, keeping the returned suffix byte-exact.
-  const rootSegments = comparisonRoot.split('/').filter(Boolean).length
-  return normalizedCandidate.split('/').filter(Boolean).slice(rootSegments).join('/')
+  return sliceCandidatePastRootSegments(comparisonRoot, normalizedCandidate)
+}
+
+/**
+ * Why: skip whole root segments rather than a character count. Comparison
+ * folding (NFC, case, UNC alias) changes length, so a folded-prefix length would
+ * cut the raw candidate mid-character and fabricate a path; segment positions
+ * survive every fold and keep the suffix byte-exact. Scanning rather than
+ * splitting keeps watcher event storms allocation-free.
+ */
+function sliceCandidatePastRootSegments(root: string, candidate: string): string {
+  let remainingRootSegments = 0
+  let inRootSegment = false
+  for (let index = 0; index < root.length; index++) {
+    if (root.charCodeAt(index) === SLASH_CHAR_CODE) {
+      inRootSegment = false
+    } else if (!inRootSegment) {
+      inRootSegment = true
+      remainingRootSegments++
+    }
+  }
+
+  let inSegment = false
+  for (let index = 0; index < candidate.length; index++) {
+    if (candidate.charCodeAt(index) === SLASH_CHAR_CODE) {
+      inSegment = false
+      continue
+    }
+    if (!inSegment) {
+      inSegment = true
+      if (remainingRootSegments-- === 0) {
+        return candidate.slice(index)
+      }
+    }
+  }
+  return ''
 }
 
 function trimRuntimePathTrailingSlash(value: string): string {
