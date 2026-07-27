@@ -458,6 +458,33 @@ describe('OrcaRuntimeRpcServer', () => {
     }
   })
 
+  it('propagates the resolved bound WS port to the runtime after start (not the pre-bind request)', async () => {
+    const userDataPath = mkdtempSync(join(tmpdir(), 'orca-runtime-rpc-'))
+    const runtime = new OrcaRuntimeService()
+    const setServePortSpy = vi.spyOn(runtime, 'setServePort')
+    const server = new OrcaRuntimeRpcServer({
+      runtime,
+      userDataPath,
+      enableWebSocket: true,
+      wsPort: 0,
+      webClientRoot: userDataPath
+    })
+
+    await server.start()
+
+    try {
+      // Why: wsPort 0 asks the OS to assign a port. Regression guard for the
+      // port-lifecycle bug — the runtime must receive the actual bound port
+      // (wsTransport.resolvedPort, > 0) after listen, never the pre-bind
+      // request (0). `serve stats` reads exactly this value.
+      const lastPort = setServePortSpy.mock.calls.at(-1)?.[0]
+      expect(lastPort).toEqual(expect.any(Number))
+      expect(lastPort).toBeGreaterThan(0)
+    } finally {
+      await server.stop()
+    }
+  })
+
   it('includes a web client URL when the web bundle is served by the runtime', async () => {
     const userDataPath = mkdtempSync(join(tmpdir(), 'orca-runtime-rpc-'))
     const runtime = new OrcaRuntimeService()

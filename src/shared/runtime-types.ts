@@ -122,6 +122,24 @@ export type CliStatusResult = {
   }
 }
 
+// Why: live current-state counts for `orca serve stats --json`. Deliberately
+// NOT StatsSummary (that is lifetime-cumulative "fun stats"). This shape is a
+// stable contract once shipped — scripts/MOPs parse it, so version it if it
+// must change.
+export type RuntimeServeStatsResult = {
+  version: string
+  uptimeSeconds: number
+  // Why: the bound WebSocket serve port, or null when no WS listener is active
+  // (WS disabled, or it failed to bind — e.g. a Unix-socket-only serve).
+  port: number | null
+  counts: {
+    agents: number
+    tasks: number
+    terminals: number
+    worktrees: number
+  }
+}
+
 export type RuntimeSyncedTab = {
   tabId: string
   worktreeId: string

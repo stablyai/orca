@@ -131,3 +131,86 @@ describe('orca claude-teams CLI handler', () => {
     }
   )
 })
+
+describe('orca serve stats CLI handler', () => {
+  const callMock = vi.fn()
+  const client = { call: callMock } as unknown as RuntimeClient
+
+  beforeEach(() => {
+    callMock.mockReset()
+  })
+
+  afterEach(() => {
+    vi.restoreAllMocks()
+  })
+
+  it('calls serve.stats and prints human-readable factory counts', async () => {
+    callMock.mockResolvedValue({
+      id: 'req-stats',
+      ok: true,
+      result: {
+        version: '1.4.156-test',
+        uptimeSeconds: 99,
+        port: 6768,
+        counts: { agents: 1, tasks: 2, terminals: 3, worktrees: 4 }
+      },
+      _meta: { runtimeId: 'rt-1' }
+    })
+    const log = vi.spyOn(console, 'log').mockImplementation(() => {})
+
+    await CORE_HANDLERS['serve stats']({
+      flags: new Map(),
+      client,
+      cwd: '/tmp',
+      json: false
+    })
+
+    expect(callMock).toHaveBeenCalledWith('serve.stats')
+    const out = String(log.mock.calls.map((c) => c[0]).join('\n'))
+    expect(out).toContain('version: 1.4.156-test')
+    expect(out).toContain('uptimeSeconds: 99')
+    expect(out).toContain('port: 6768')
+    expect(out).toContain('agents: 1')
+    expect(out).toContain('tasks: 2')
+    expect(out).toContain('terminals: 3')
+    expect(out).toContain('worktrees: 4')
+  })
+
+  it('prints JSON when --json is set and renders null port as none in human mode', async () => {
+    callMock.mockResolvedValue({
+      id: 'req-stats-json',
+      ok: true,
+      result: {
+        version: '1.4.156-test',
+        uptimeSeconds: 1,
+        port: null,
+        counts: { agents: 0, tasks: 0, terminals: 0, worktrees: 0 }
+      },
+      _meta: { runtimeId: 'rt-1' }
+    })
+    const log = vi.spyOn(console, 'log').mockImplementation(() => {})
+
+    await CORE_HANDLERS['serve stats']({
+      flags: new Map(),
+      client,
+      cwd: '/tmp',
+      json: true
+    })
+
+    const parsed = JSON.parse(String(log.mock.calls[0]?.[0])) as {
+      result: { port: number | null; counts: { agents: number } }
+    }
+    expect(parsed.result.port).toBeNull()
+    expect(parsed.result.counts.agents).toBe(0)
+
+    log.mockClear()
+    await CORE_HANDLERS['serve stats']({
+      flags: new Map(),
+      client,
+      cwd: '/tmp',
+      json: false
+    })
+    const human = String(log.mock.calls.map((c) => c[0]).join('\n'))
+    expect(human).toContain('port: none')
+  })
+})

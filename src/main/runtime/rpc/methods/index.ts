@@ -12,6 +12,7 @@ import { BROWSER_SCREENCAST_METHODS } from './browser-screencast'
 import { ORCHESTRATION_METHODS } from './orchestration'
 import { NOTIFICATION_METHODS } from './notifications'
 import { STATS_METHODS } from './stats'
+import { SERVE_STATS_METHODS } from './serve-stats'
 import { DIAGNOSTICS_METHODS } from './diagnostics'
 import { ACCOUNT_METHODS } from './accounts'
 import { PREFLIGHT_METHODS } from './preflight'
@@ -57,6 +58,7 @@ export const ALL_RPC_METHODS: readonly RpcAnyMethod[] = [
   ...ORCHESTRATION_METHODS,
   ...NOTIFICATION_METHODS,
   ...STATS_METHODS,
+  ...SERVE_STATS_METHODS,
   ...DIAGNOSTICS_METHODS,
   ...ACCOUNT_METHODS,
   ...PREFLIGHT_METHODS,
