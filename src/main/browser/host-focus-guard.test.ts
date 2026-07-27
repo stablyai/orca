@@ -89,6 +89,27 @@ describe('host focus guard', () => {
       expect(focusedMock).not.toHaveBeenCalled()
     })
 
+    it('still restores when the dispatch that stole focus rejected', async () => {
+      const host = makeContents(1)
+      const guest = makeContents(42)
+      focusedMock.mockReturnValue(asWebContents(guest))
+
+      // Why: callers wrap the mouse dispatch in try/finally so a rejected or
+      // timed-out press cannot strand focus on the guest (#8139).
+      const captured = asWebContents(host)
+      await expect(
+        (async () => {
+          try {
+            throw new Error('Input.dispatchMouseEvent timed out')
+          } finally {
+            restoreHostFocus(captured)
+          }
+        })()
+      ).rejects.toThrow('timed out')
+
+      expect(host.focus).toHaveBeenCalledTimes(1)
+    })
+
     it('restores when focus landed on some third view', () => {
       const host = makeContents(1)
       focusedMock.mockReturnValue(asWebContents(makeContents(7)))
