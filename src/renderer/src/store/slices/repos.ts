@@ -622,8 +622,13 @@ function mergeProjectHostSetupCompatibility(
   fetched: ProjectHostSetupProjection
 ): Pick<RepoSlice, 'projects' | 'projectHostSetups'> {
   const fetchedSetupOwners = new Set(fetched.setups.map(getProjectHostSetupOwnerKey))
+  // Why: setupWithFetchedOwner rewrites hostId/executionHostId/runtimeOwnerEnvironmentId, so a
+  // derived row never matches its own fetched copy by owner key and both survive as duplicates;
+  // the setup id is the stable identity across that rewrite.
+  const fetchedSetupIds = new Set(fetched.setups.map((setup) => setup.id))
   const derivedSetups = derived.projectHostSetups.filter(
-    (setup) => !fetchedSetupOwners.has(getProjectHostSetupOwnerKey(setup))
+    (setup) =>
+      !fetchedSetupOwners.has(getProjectHostSetupOwnerKey(setup)) && !fetchedSetupIds.has(setup.id)
   )
   const projectHostSetups = mergeProjectHostSetupsByOwner(derivedSetups, fetched.setups)
   const setupProjectIds = new Set(projectHostSetups.map((setup) => setup.projectId))
