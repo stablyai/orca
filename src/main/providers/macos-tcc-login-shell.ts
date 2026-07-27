@@ -6,6 +6,7 @@ import {
   runMacosLoginSessionPtyProbe,
   type LoginPreflightOutcome
 } from './macos-login-session-pty-probe'
+import { resolveMacosTccDisclaimShimPath } from './macos-tcc-disclaim-exec'
 
 export type { LoginPreflightOutcome } from './macos-login-session-pty-probe'
 
@@ -314,6 +315,10 @@ export async function probeMacosLoginSessionAlive(
  *
  * No-op off macOS, when already wrapped, when disabled via {@link DISABLE_ENV_VAR},
  * or when the login(1) PAM preflight rejects this process's user.
+ *
+ * Behind the default-off `ORCA_MACOS_TCC_DISCLAIM` rollout flag, the disclaim
+ * exec shim replaces the login(1) wrap at this seam (see
+ * ./macos-tcc-disclaim-exec.ts); the login(1) machinery stays the live default.
  */
 export function wrapShellSpawnForMacosTccAttribution(
   file: string,
@@ -325,6 +330,21 @@ export function wrapShellSpawnForMacosTccAttribution(
   }
   if (file === MACOS_LOGIN_PATH || isDisabledByEnv()) {
     return { file, args }
+  }
+  // Why: rollout flag (ORCA_MACOS_TCC_DISCLAIM, default off) swaps the login(1)
+  // wrap for the disclaim exec shim at the same drop-in seam — no PAM preflight
+  // needed; a missing shim falls through to the login(1) path below.
+  const disclaimShimPath = resolveMacosTccDisclaimShimPath()
+  if (disclaimShimPath !== null) {
+    if (file === disclaimShimPath) {
+      return { file, args }
+    }
+    // Why: SETEXEC leaves no process-tree trace, so this is the only in-app
+    // signal that the rollout flag took the disclaim path. Reaches a console
+    // only for in-process (dev/degraded) spawns — the daemon forks stdout to
+    // 'ignore'; see the shim README for the rootless per-process check.
+    console.log(`[pty] macOS TCC disclaim shim wrap engaged: ${disclaimShimPath}`)
+    return { file: disclaimShimPath, args: [file, ...args] }
   }
   if (!existsSync(MACOS_LOGIN_PATH)) {
     return { file, args }

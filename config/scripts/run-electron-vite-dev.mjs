@@ -131,7 +131,8 @@ function prepareMacDevElectronApp() {
   // v6: bundle the notification-status helper (real permission readout) and
   // ad-hoc re-sign after plist edits so Notification Center accepts the
   // bundle; bumping forces stale cached copies to be recreated.
-  const bundleLayoutVersion = 'dock-title-app-preserve-framework-symlinks-v6'
+  // v7: bundle the flag-gated tcc-disclaim exec shim next to the executable.
+  const bundleLayoutVersion = 'dock-title-app-preserve-framework-symlinks-v7'
   const hash = createHash('sha1')
     .update(
       `${sourceAppPath}\0${electronVersion ?? ''}\0${title}\0${identityKey}\0${bundleLayoutVersion}`
@@ -231,6 +232,27 @@ function prepareMacDevElectronApp() {
   } catch (error) {
     console.warn(
       `[orca-dev] notification-status helper build failed (permission card falls back to probes): ${error?.message ?? error}`
+    )
+  }
+
+  // Why no --bundle-id: unlike the notification helper (which must carry the
+  // dev app id), the shim keeps its own dedicated identifier in both dev and
+  // packaged builds. Non-fatal: the wrap is flag-gated
+  // (ORCA_MACOS_TCC_DISCLAIM) and falls back to login(1) when the shim is absent.
+  try {
+    execFileSync(
+      process.execPath,
+      [
+        path.join(repoRoot, 'config', 'scripts', 'build-tcc-disclaim-macos.mjs'),
+        '--single-arch',
+        '--output',
+        path.join(appPath, 'Contents', 'MacOS', 'orca-tcc-disclaim-exec')
+      ],
+      { stdio: 'inherit' }
+    )
+  } catch (error) {
+    console.warn(
+      `[orca-dev] tcc-disclaim shim build failed (flagged disclaim wrap falls back to login(1)): ${error?.message ?? error}`
     )
   }
 

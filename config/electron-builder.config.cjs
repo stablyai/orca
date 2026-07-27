@@ -1,6 +1,6 @@
 const { chmodSync, existsSync, readdirSync } = require('node:fs')
 const { execFileSync } = require('node:child_process')
-const { join, resolve } = require('node:path')
+const { basename, join, resolve } = require('node:path')
 const electronBuilderNativeRebuild = require('./scripts/electron-builder-native-rebuild.cjs')
 const {
   assertPackagedDaemonEntryExists,
@@ -207,8 +207,12 @@ module.exports = {
     }
     if (context.electronPlatformName === 'darwin') {
       await signMacComputerUseHelper(join(resourcesDir, 'Orca Computer Use.app'), context.packager)
-      await signMacNotificationStatusHelper(
+      await signMacStandaloneHelperBinary(
         join(resourcesDir, '..', 'MacOS', 'orca-notification-status'),
+        context.packager
+      )
+      await signMacStandaloneHelperBinary(
+        join(resourcesDir, '..', 'MacOS', 'orca-tcc-disclaim-exec'),
         context.packager
       )
     }
@@ -315,6 +319,13 @@ module.exports = {
       {
         from: 'native/notification-status-macos/.build/release/orca-notification-status',
         to: 'MacOS/orca-notification-status'
+      },
+      // Why Contents/MacOS: the shim is a real executable the PTY layer spawns,
+      // so it belongs beside the app binary (where the runtime resolves it from
+      // process.execPath), not in the Resources asset tree.
+      {
+        from: 'native/tcc-disclaim-macos/.build/release/orca-tcc-disclaim-exec',
+        to: 'MacOS/orca-tcc-disclaim-exec'
       }
     ],
     target: [
@@ -487,10 +498,11 @@ async function signMacComputerUseHelper(helperAppPath, packager) {
   })
 }
 
-async function signMacNotificationStatusHelper(helperPath, packager) {
+async function signMacStandaloneHelperBinary(helperPath, packager) {
+  const helperName = basename(helperPath)
   if (!existsSync(helperPath)) {
     if (isMacRelease) {
-      throw new Error(`Missing orca-notification-status helper at ${helperPath}`)
+      throw new Error(`Missing ${helperName} helper at ${helperPath}`)
     }
     return
   }
@@ -503,12 +515,14 @@ async function signMacNotificationStatusHelper(helperPath, packager) {
     findInstalledMacSigningIdentity(codeSigningInfo?.keychainFile) ??
     (isMacRelease ? null : '-')
   if (!identity) {
-    throw new Error('Missing signing identity for orca-notification-status helper')
+    throw new Error(`Missing signing identity for ${helperName} helper`)
   }
-  // Why: macOS keys notification records to the code-signing identifier; the
-  // binary embeds the app's CFBundleIdentifier in __TEXT,__info_plist so this
-  // (and any later) `codesign --force` derives the correct identifier. Sign
-  // before the outer Orca.app is sealed, like the computer-use helper.
+  // Why: each helper embeds a CFBundleIdentifier in __TEXT,__info_plist so this
+  // (and any later) `codesign --force` derives a stable identifier instead of
+  // codesign's filename-plus-content-hash default. Which identifier differs per
+  // helper: orca-notification-status deliberately carries the *app's* id (macOS
+  // keys notification records to it), the disclaim shim its own. Sign before the
+  // outer Orca.app is sealed, like the computer-use helper.
   const args = ['--force', '--sign', identity]
   if (isMacRelease) {
     args.push('--options', 'runtime', '--timestamp')
