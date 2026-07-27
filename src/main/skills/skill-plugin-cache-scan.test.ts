@@ -231,9 +231,9 @@ describe('plugin skill candidate scan', () => {
     temporaryDirectories.push(root)
     const packageRoot = join(root, 'vendor', 'plugin', '1.0.0')
     const skillRoot = join(packageRoot, 'skills', 'sites-building')
-    await mkdir(join(packageRoot, '.cursor-plugin'), { recursive: true })
+    await mkdir(join(packageRoot, '.claude-plugin'), { recursive: true })
     await mkdir(join(skillRoot, 'templates', 'orca-cli'), { recursive: true })
-    await writeFile(join(packageRoot, '.cursor-plugin', 'plugin.json'), '{"skills":"./skills"}\n')
+    await writeFile(join(packageRoot, '.claude-plugin', 'plugin.json'), '{"skills":"./skills"}\n')
     await writeFile(join(skillRoot, 'SKILL.md'), '# Sites building\n')
     await writeFile(join(skillRoot, 'templates', 'orca-cli', 'SKILL.md'), '# Orca CLI\n')
 
@@ -449,6 +449,34 @@ describe('plugin skill candidate scan', () => {
       errorCode: null
     })
     expect(result.issues.filter((issue) => issue.reason === 'issue-limit')).toHaveLength(1)
+  })
+
+  it('keeps scanning past the issue budget', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'orca-plugin-issue-budget-coverage-'))
+    temporaryDirectories.push(root)
+    const candidate = join(root, 'zz-package', 'skills', 'orca-cli')
+    await Promise.all(
+      Array.from({ length: 20 }, (_, index) =>
+        mkdir(
+          join(
+            root,
+            `deep-${index.toString().padStart(2, '0')}`,
+            ...Array.from({ length: 11 }, (_, level) => `level-${level}`)
+          ),
+          { recursive: true }
+        )
+      )
+    )
+    await mkdir(candidate, { recursive: true })
+    await writeFile(join(candidate, 'SKILL.md'), '# Orca CLI\n')
+
+    const result = await scanKnownPluginSkillCandidates(root, new Set(['orca-cli']))
+
+    // Why: the issue budget bounds what the dialog lists, not how far the walk reaches.
+    // Ending the scan there would drop real copies and still report all-clear, because
+    // none of the bounds that filled the budget raise attention.
+    expect(result.candidates).toEqual([{ name: 'orca-cli', path: candidate }])
+    expect(result.issues).toContainEqual({ path: root, reason: 'issue-limit', errorCode: null })
   })
 
   it('still names a fail-closed candidate once the issue budget is spent', async () => {

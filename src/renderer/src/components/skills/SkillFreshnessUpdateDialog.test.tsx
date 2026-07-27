@@ -266,6 +266,35 @@ describe('SkillFreshnessUpdateDialog', () => {
     expect(container?.querySelector('[data-collapsible-open="true"]')).not.toBeNull()
   })
 
+  // Why: the walk stopped early here, so claiming every copy is up to date would assert
+  // a completeness the scan did not reach — green dishonesty in place of amber.
+  it('does not report all-clear when a bound ended the scan early', async () => {
+    mocks.inventory = {
+      schemaVersion: 1,
+      installations: [
+        placement('orca-cli', { status: 'current', observedPackageDigest: 'current' })
+      ],
+      eligibleUpdateNames: [],
+      scanIssues: [
+        {
+          rootId: 'codex-plugin-cache',
+          sourceLabel: 'Codex plugin cache',
+          path: '/home/.codex/plugins/cache',
+          reason: 'entry-limit',
+          errorCode: null
+        }
+      ],
+      scannedAt: 2
+    }
+    await renderDialog()
+    await openViaRequest()
+
+    expect(container?.textContent).not.toContain('All installed Orca skills are up to date.')
+    expect(container?.textContent).toContain(
+      'Orca could not finish checking plugin-managed skills.'
+    )
+  })
+
   // Why: Orca's own traversal bounds are not the user's to act on. Headlining them
   // would put a permanent warning on any ordinary large plugin cache while every
   // skill badge stayed green — the same unclearable amber, moved into the dialog.

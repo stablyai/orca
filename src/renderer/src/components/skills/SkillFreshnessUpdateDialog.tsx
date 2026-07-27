@@ -10,7 +10,8 @@ import { AlertTriangle, CheckCircle2, ChevronDown, Loader2, RefreshCw } from 'lu
 import type { SkillFreshnessInventory } from '../../../../shared/skill-freshness'
 import {
   buildTargetedSkillUpdateCommand,
-  isSkillScanIssueNeedingAttention
+  isSkillScanIssueNeedingAttention,
+  isSkillScanIssueTruncatingScan
 } from '../../../../shared/skill-freshness'
 import { useSkillFreshness } from '@/hooks/useSkillFreshness'
 import { notifyInstalledAgentSkillsChanged } from '@/hooks/useInstalledAgentSkills'
@@ -46,7 +47,7 @@ type FreshnessSummaryKind =
 function summarizeInventory(
   inventory: SkillFreshnessInventory | null,
   hasBlockedGroup: boolean,
-  hasActionableScanIssue: boolean
+  hasIncompleteScan: boolean
 ): FreshnessSummaryKind {
   if (!inventory) {
     return 'loading'
@@ -59,11 +60,10 @@ function summarizeInventory(
   if (hasBlockedGroup) {
     return 'attention'
   }
-  // Why: only faults on the user's disk headline. Orca's own traversal bounds would
-  // otherwise put a permanent warning on any ordinary large plugin cache, which is
-  // the same unclearable amber this change exists to remove — see
-  // SKILL_SCAN_ATTENTION_REASONS.
-  if (hasActionableScanIssue) {
+  // Why: a fault on the user's disk, or a bound that ended the walk early. Skipping a
+  // single folder is not either one — headlining that would put a permanent warning on
+  // any ordinary large plugin cache, the unclearable amber this change removes.
+  if (hasIncompleteScan) {
     return 'scan-incomplete'
   }
   if (inventory.installations.length === 0) {
@@ -189,13 +189,15 @@ export function SkillFreshnessUpdateDialog(): React.JSX.Element {
       inventory ? groupSkillFreshness(inventory.installations, inventory.eligibleUpdateNames) : [],
     [inventory]
   )
-  const hasActionableScanIssue = scanIssues.some(isSkillScanIssueNeedingAttention)
+  const hasIncompleteScan = scanIssues.some(
+    (issue) => isSkillScanIssueNeedingAttention(issue) || isSkillScanIssueTruncatingScan(issue)
+  )
   const hasBlockedGroup = groups.some((group) => group.status === 'cannot-update')
-  // Why: what the user must read before the dialog is useful. Orca's own bounds are
-  // listed but never force the panel open — they are not the user's to act on.
-  const requiresDetails = hasBlockedGroup || hasActionableScanIssue
+  // Why: what the user must read before the dialog is useful. A single skipped folder
+  // is still listed, but never forces the panel open.
+  const requiresDetails = hasBlockedGroup || hasIncompleteScan
   const updateCommand = buildTargetedSkillUpdateCommand(eligibleNames)
-  const summaryKind = summarizeInventory(inventory, hasBlockedGroup, hasActionableScanIssue)
+  const summaryKind = summarizeInventory(inventory, hasBlockedGroup, hasIncompleteScan)
   const terminalAuthorizationPending =
     terminalCommand !== null &&
     !terminalSubmittedRef.current &&

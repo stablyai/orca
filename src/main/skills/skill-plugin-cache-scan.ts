@@ -67,6 +67,9 @@ export async function scanKnownPluginSkillCandidates(
     if (issueKeys.has(key)) {
       return
     }
+    // Why: this budget bounds what the dialog lists, not how far the scan reaches.
+    // Ending the walk here would truncate coverage over a display limit — and since
+    // Orca's own bounds no longer raise attention, it would do so silently.
     if (!explainsCandidate && issues.length >= MAXIMUM_PLUGIN_SCAN_ISSUES) {
       if (!issues.some((issue) => issue.reason === 'issue-limit')) {
         issues.push({
@@ -75,7 +78,6 @@ export async function scanKnownPluginSkillCandidates(
           errorCode: null
         })
       }
-      limitReached = true
       return
     }
     issueKeys.add(key)

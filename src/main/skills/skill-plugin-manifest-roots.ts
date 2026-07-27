@@ -8,7 +8,10 @@ const MAXIMUM_PLUGIN_MANIFEST_BYTES = 256 * 1024
 // bypass the dirent walk the entry budget bounds — so one manifest could otherwise spend
 // the whole scan on paths that don't exist. No real plugin declares this many.
 const MAXIMUM_DECLARED_SKILL_ROOTS = 64
-const PLUGIN_MANIFEST_DIRECTORIES = ['.codex-plugin', '.claude-plugin', '.cursor-plugin'] as const
+// Why: only formats whose skill layout is known. Treating an unverified manifest as a
+// declaration prunes the rest of that plugin, so a wrong guess hides real skills; with
+// no manifest the ordinary walk still finds them.
+const PLUGIN_MANIFEST_DIRECTORIES = ['.codex-plugin', '.claude-plugin'] as const
 const MANIFEST_OPEN_FLAGS =
   constants.O_RDONLY |
   (process.platform === 'win32' ? 0 : constants.O_NONBLOCK | constants.O_NOFOLLOW)

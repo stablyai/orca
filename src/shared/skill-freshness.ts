@@ -113,6 +113,18 @@ export function isSkillScanIssueNeedingAttention(issue: SkillFreshnessScanIssue)
   return SKILL_SCAN_ATTENTION_REASONS.has(issue.reason)
 }
 
+// Why: these are the bounds that end the walk rather than skip one folder. They are
+// still not the user's to act on, so they raise no pill — but a scan that stopped
+// early cannot be reported as proof every copy is up to date.
+const SKILL_SCAN_TRUNCATING_REASONS = new Set<SkillFreshnessScanIssueReason>([
+  'entry-limit',
+  'candidate-limit'
+])
+
+export function isSkillScanIssueTruncatingScan(issue: SkillFreshnessScanIssue): boolean {
+  return SKILL_SCAN_TRUNCATING_REASONS.has(issue.reason)
+}
+
 export type SkillFreshnessInventory = {
   schemaVersion: 1
   installations: SkillFreshnessInstallation[]
