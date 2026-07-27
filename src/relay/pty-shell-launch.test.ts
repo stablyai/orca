@@ -166,6 +166,7 @@ describe('getRelayShellLaunchConfig', () => {
       expect(config.env).toEqual({})
       expect(bashRc).toContain('printf "\\033]133;D;%s\\007"')
       expect(bashRc).toContain('printf "\\033]133;C\\007"')
+      expect(bashRc).toContain('return "$exit_code"')
     }
   )
 
@@ -211,7 +212,7 @@ describe('getRelayShellLaunchConfig', () => {
     writeFileSync(
       join(homeDir, '.bash_profile'),
       [
-        'PROMPT_COMMAND=\'AFTER_FIRST_PROMPT=1; printf "PROMPT_HOOK\\n"\'',
+        'PROMPT_COMMAND=\'printf "PROMPT_STATUS:%s\\n" "$?"; AFTER_FIRST_PROMPT=1; printf "PROMPT_HOOK\\n"\'',
         'trap \'if [[ -n "${AFTER_FIRST_PROMPT:-}" ]]; then\n  printf "USER_DEBUG_AFTER\\n"\nfi\' DEBUG'
       ].join('\n')
     )
@@ -219,6 +220,7 @@ describe('getRelayShellLaunchConfig', () => {
     const output = runInteractiveBashRcfile(config.args[1] as string, homeDir)
 
     expect(output).toContain('PROMPT_HOOK')
+    expect(output).toContain('PROMPT_STATUS:1')
     expect(output).toContain('USER_DEBUG_AFTER')
     expectBashOsc133Lifecycle(output)
   })

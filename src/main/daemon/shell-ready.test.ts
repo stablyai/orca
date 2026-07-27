@@ -489,6 +489,7 @@ describePosix('daemon shell-ready launch config', () => {
 
     expect(bashRc).toContain('printf "\\033]133;D;%s\\007"')
     expect(bashRc).toContain('printf "\\033]133;C\\007"')
+    expect(bashRc).toContain('return "$exit_code"')
     // precmd is prepended (captures $? first), epilogue appended last, so a framework needing last position stays between them.
     expect(bashRc).toContain(
       'PROMPT_COMMAND="__orca_osc133_precmd${PROMPT_COMMAND:+;${PROMPT_COMMAND}};__orca_osc133_epilogue"'
@@ -499,6 +500,7 @@ describePosix('daemon shell-ready launch config', () => {
     )
     expect(zshrc).toContain('printf "\\033]133;D;%s\\007"')
     expect(zshrc).toContain('printf "\\033]133;C\\007"')
+    expect(zshrc).toContain('return "$exit_code"')
   })
 
   itWithBash(
@@ -519,7 +521,7 @@ describePosix('daemon shell-ready launch config', () => {
       writeFileSync(
         join(userDataPath, '.bash_profile'),
         [
-          'PROMPT_COMMAND=\'AFTER_FIRST_PROMPT=1; printf "PROMPT_HOOK\\n"\'',
+          'PROMPT_COMMAND=\'printf "PROMPT_STATUS:%s\\n" "$?"; AFTER_FIRST_PROMPT=1; printf "PROMPT_HOOK\\n"\'',
           'trap \'if [[ -n "${AFTER_FIRST_PROMPT:-}" ]]; then\n  printf "USER_DEBUG_AFTER\\n"\nfi\' DEBUG'
         ].join('\n')
       )
@@ -527,6 +529,7 @@ describePosix('daemon shell-ready launch config', () => {
       const output = runInteractiveBashRcfile(getDaemonBashShellReadyRcfileContent(), userDataPath)
 
       expect(output).toContain('PROMPT_HOOK')
+      expect(output).toContain('PROMPT_STATUS:1')
       expect(output).toContain('USER_DEBUG_AFTER')
       expectBashOsc133Lifecycle(output)
     }
