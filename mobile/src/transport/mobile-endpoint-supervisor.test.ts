@@ -782,4 +782,69 @@ describe('mobile endpoint supervisor', () => {
     expect(logical.getActivePath()).toBe('relay')
     supervisor.stop()
   })
+
+  describe('observability', () => {
+    it('logs when relay recovery begins from pending', async () => {
+      const logical = new FakeLogicalClient('connecting', 'direct')
+      const deps = dependencies()
+      const supervisor = new MobileEndpointSupervisor(logical, host, deps)
+      await supervisor.start()
+      await vi.advanceTimersByTimeAsync(0)
+
+      expect(deps.onLog).toHaveBeenCalledWith(
+        expect.objectContaining({
+          level: 'info',
+          message: 'Recovering via Relay',
+          detail: 'Direct connection is connecting'
+        })
+      )
+
+      const logText = JSON.stringify(deps.onLog.mock.calls)
+      expect(logText).not.toContain(host.endpoint)
+      expect(logText).not.toContain(host.deviceToken)
+      expect(logText).not.toContain(host.publicKeyB64)
+      expect(logText).not.toContain(host.relay!.relayHostId)
+    })
+
+    it('logs when relay migration succeeds', async () => {
+      const logical = new FakeLogicalClient('connecting', 'direct')
+      const deps = dependencies()
+      const supervisor = new MobileEndpointSupervisor(logical, host, deps)
+      await supervisor.start()
+      await vi.advanceTimersByTimeAsync(0)
+
+      expect(deps.onLog).toHaveBeenCalledWith(
+        expect.objectContaining({
+          level: 'success',
+          message: 'Connected via Relay'
+        })
+      )
+    })
+
+    it('logs when relay migration is cancelled by direct', async () => {
+      const logical = new FakeLogicalClient('connecting', 'direct')
+      logical.setMigrateDelay()
+      const relaySession = new FakeRelaySession('connecting')
+      const deps = dependencies({
+        openRelay: vi.fn(() => relaySession)
+      })
+      const supervisor = new MobileEndpointSupervisor(logical, host, deps)
+
+      const startPromise = supervisor.start()
+      await vi.advanceTimersByTimeAsync(0)
+
+      logical.publishState('connected')
+      relaySession.publishState('connected')
+
+      await startPromise
+
+      expect(deps.onLog).toHaveBeenCalledWith(
+        expect.objectContaining({
+          level: 'warn',
+          message: 'Relay migration cancelled',
+          detail: 'Direct connection became active'
+        })
+      )
+    })
+  })
 })

@@ -24,6 +24,12 @@ export class FakeSession implements RpcClient {
   constructor(private state: ConnectionState) {}
 
   getState = () => this.state
+  setState = (state: ConnectionState) => {
+    this.state = state
+    for (const listener of this.listeners) {
+      listener(state)
+    }
+  }
   getReconnectAttempt = () => 0
   getLastConnectedAt = () => null
   onStateChange = (listener: (state: ConnectionState) => void) => {
@@ -163,6 +169,7 @@ export function dependencies(
     randomBytes: (length) => new Uint8Array(length).fill(1),
     setTimer: setTimeout,
     clearTimer: clearTimeout,
+    onLog: vi.fn(),
     ...overrides
   }
 }
