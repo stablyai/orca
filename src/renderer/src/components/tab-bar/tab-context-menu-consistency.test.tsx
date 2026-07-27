@@ -22,6 +22,18 @@ function readSource(fileName: string): string {
   return readFileSync(join(__dirname, fileName), 'utf8')
 }
 
+/** Opening tags of each menu/submenu surface, so props can be asserted directly. */
+function menuSurfaceTags(source: string): { name: string; tag: string }[] {
+  const tags: { name: string; tag: string }[] = []
+  const opening = /<(DropdownMenuContent|DropdownMenuSubContent)\b/g
+  let match: RegExpExecArray | null
+  while ((match = opening.exec(source)) !== null) {
+    const end = source.indexOf('>', match.index)
+    tags.push({ name: match[1], tag: source.slice(match.index, end === -1 ? undefined : end + 1) })
+  }
+  return tags
+}
+
 /** Item bodies, minus the color swatches which are deliberately icon-free. */
 function actionItemBodies(source: string): string[] {
   const bodies: string[] = []
@@ -50,14 +62,27 @@ describe('tab context menu consistency', () => {
     }
   })
 
-  it.each(TAB_MENU_SOURCES)('sizes menu surfaces from the shared rule in %s', (fileName) => {
+  it.each(TAB_MENU_SOURCES)('sizes every menu surface from the shared rule in %s', (fileName) => {
     const source = readSource(fileName)
-    if (!source.includes('DropdownMenuContent') && !source.includes('DropdownMenuSubContent')) {
+    const surfaces = menuSurfaceTags(source)
+    if (surfaces.length === 0) {
       return
     }
-    expect(source).toContain('tab-context-menu-sizing')
-    // Why: a fixed `w-*` reintroduces wrapping once a label or shortcut grows.
-    expect(source).not.toMatch(/className="w-\d+"/)
+
+    for (const { tag, name } of surfaces) {
+      const expected =
+        name === 'DropdownMenuSubContent'
+          ? 'TAB_CONTEXT_SUBMENU_CONTENT_CLASS'
+          : 'TAB_CONTEXT_MENU_CONTENT_CLASS'
+      expect(tag, `<${name}> in ${fileName} does not apply ${expected}:\n${tag}`).toContain(
+        expected
+      )
+      // Why: a fixed `w-*` on the surface reintroduces wrapping once a label or
+      // shortcut grows, and it survives merging with the shared rule.
+      expect(tag, `<${name}> in ${fileName} pins a fixed width:\n${tag}`).not.toMatch(
+        /(?:^|[\s'"`])w-(?:\d+|\[)/
+      )
+    }
   })
 
   it('keeps labels on one line and bounded by the viewport', () => {
