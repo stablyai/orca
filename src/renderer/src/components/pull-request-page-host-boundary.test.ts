@@ -249,9 +249,15 @@ describe('PullRequestPage host boundaries', () => {
     expect(checksSection).toContain(
       'repo: getGitHubRuntimeRepoId(sourceContext, repoId ?? item.repoId)'
     )
-    expect(checksSection).toContain('window.api.gh.prChecks({')
-    expect(checksSection).toContain('window.api.gh.rerunPRChecks({')
-    expect(checksSection).toContain('prCheckDetails({')
+    expect(checksSection).toMatch(
+      /window\.api\.gh\.prChecks\(\{[\s\S]{0,300}executionHostId: checksRepoExecutionHostId/
+    )
+    expect(checksSection).toMatch(
+      /window\.api\.gh\.rerunPRChecks\(\{[\s\S]{0,300}executionHostId: checksRepoExecutionHostId/
+    )
+    expect(checksSection).toMatch(
+      /window\.api\.gh\.prCheckDetails\(\{[\s\S]{0,300}executionHostId: checksRepoExecutionHostId/
+    )
   })
 
   it('scopes checks configuration and reviewer callbacks to the PR execution host', () => {

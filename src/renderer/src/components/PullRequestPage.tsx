@@ -4663,6 +4663,7 @@ function ChecksTab({
         : window.api.gh.prChecks({
             repoPath: repoPath ?? '',
             repoId: repoId ?? undefined,
+            executionHostId: checksRepoExecutionHostId,
             sourceContext,
             prNumber: item.number,
             headSha,
@@ -4684,6 +4685,7 @@ function ChecksTab({
     }
   }, [
     canUseChecksRepoContext,
+    checksRepoExecutionHostId,
     headSha,
     item.number,
     item.repoId,
@@ -4718,6 +4720,7 @@ function ChecksTab({
           : await window.api.gh.rerunPRChecks({
               repoPath: repoPath ?? '',
               repoId: repoId ?? undefined,
+              executionHostId: checksRepoExecutionHostId,
               sourceContext,
               prNumber: item.number,
               headSha,
@@ -4746,6 +4749,7 @@ function ChecksTab({
     },
     [
       canUseChecksRepoContext,
+      checksRepoExecutionHostId,
       handleRefresh,
       headSha,
       item.number,
@@ -4847,6 +4851,7 @@ function ChecksTab({
         : window.api.gh.prCheckDetails({
             repoPath: repoPath ?? '',
             repoId: repoId ?? undefined,
+            executionHostId: checksRepoExecutionHostId,
             sourceContext,
             checkRunId: check.checkRunId,
             workflowRunId: check.workflowRunId,
@@ -4882,6 +4887,7 @@ function ChecksTab({
     },
     [
       canUseChecksRepoContext,
+      checksRepoExecutionHostId,
       detailsByCheckKey,
       item.repoId,
       mountedRef,
