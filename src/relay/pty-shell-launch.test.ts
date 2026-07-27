@@ -220,7 +220,13 @@ describe('getRelayShellLaunchConfig', () => {
     const output = runInteractiveBashRcfile(config.args[1] as string, homeDir)
 
     expect(output).toContain('PROMPT_HOOK')
-    expect(output).toContain('PROMPT_STATUS:1')
+    // Why: #10940 — pre-fix the precmd returned its own printf status, so the
+    // downstream hook saw 0,0,0 and a real failure looked like success.
+    expect([...output.matchAll(/PROMPT_STATUS:(\d+)/g)].map((match) => match[1])).toEqual([
+      '0',
+      '0',
+      '1'
+    ])
     expect(output).toContain('USER_DEBUG_AFTER')
     expectBashOsc133Lifecycle(output)
   })
