@@ -292,22 +292,31 @@ describe('plugin skill candidate scan', () => {
     })
   })
 
-  it('counts declared skill roots against the scan entry budget', async () => {
+  it('bounds how many skill roots one manifest can declare', async () => {
     const root = await mkdtemp(join(tmpdir(), 'orca-plugin-manifest-budget-'))
     temporaryDirectories.push(root)
     const packageRoot = join(root, 'vendor', 'plugin', '1.0.0')
+    const manifestPath = join(packageRoot, '.codex-plugin', 'plugin.json')
+    const candidate = join(packageRoot, 'r0000', 'orca-cli')
     await mkdir(join(packageRoot, '.codex-plugin'), { recursive: true })
+    await mkdir(candidate, { recursive: true })
+    await writeFile(join(candidate, 'SKILL.md'), '# Orca CLI\n')
     await writeFile(
-      join(packageRoot, '.codex-plugin', 'plugin.json'),
+      manifestPath,
       JSON.stringify({
-        skills: Array.from({ length: 16_385 }, (_, index) => `./m${index}`)
+        skills: Array.from({ length: 4096 }, (_, index) => `./r${String(index).padStart(4, '0')}`)
       })
     )
 
     const result = await scanKnownPluginSkillCandidates(root, new Set(['orca-cli']))
 
-    expect(result.candidates).toEqual([])
-    expect(result.issues).toEqual([{ path: root, reason: 'entry-limit', errorCode: null }])
+    // Why: resolving declared roots bypasses the entry budget, so without this cap the
+    // manifest alone decides how long the scan runs. Falling back to the bounded walk
+    // still finds the skill, so the cap costs coverage nothing.
+    expect(result.candidates).toEqual([{ name: 'orca-cli', path: candidate }])
+    expect(result.issues).toEqual([
+      { path: manifestPath, reason: 'manifest-limit', errorCode: null }
+    ])
   })
 
   it('keeps valid roots when a skills array contains an invalid value', async () => {
@@ -442,7 +451,7 @@ describe('plugin skill candidate scan', () => {
     expect(result.issues.filter((issue) => issue.reason === 'issue-limit')).toHaveLength(1)
   })
 
-  it('keeps a dangling known-name symlink from a declared skill root as a candidate', async () => {
+  it('names the path when a dangling known-name symlink is kept as a candidate', async () => {
     const root = await mkdtemp(join(tmpdir(), 'orca-plugin-declared-dangling-symlink-'))
     temporaryDirectories.push(root)
     const packageRoot = join(root, 'vendor', 'plugin')
@@ -454,9 +463,12 @@ describe('plugin skill candidate scan', () => {
 
     const result = await scanKnownPluginSkillCandidates(root, new Set(['orca-cli']))
 
+    // Why: this candidate resolves to nothing, so it reads as inaccessible and raises
+    // attention. Without the issue the dialog would report all-clear against a badge
+    // that says otherwise, and nothing would ever name the broken link.
     expect(result).toEqual({
       candidates: [{ name: 'orca-cli', path: candidate }],
-      issues: []
+      issues: [{ path: candidate, reason: 'io-error', errorCode: 'ENOENT' }]
     })
   })
 

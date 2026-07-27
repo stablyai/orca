@@ -4,6 +4,10 @@ import { isAbsolute, join, relative, sep } from 'node:path'
 import type { SkillFreshnessScanIssueReason } from '../../shared/skill-freshness'
 
 const MAXIMUM_PLUGIN_MANIFEST_BYTES = 256 * 1024
+// Why: every declared root costs a resolve before it can be rejected, and those resolves
+// bypass the dirent walk the entry budget bounds — so one manifest could otherwise spend
+// the whole scan on paths that don't exist. No real plugin declares this many.
+const MAXIMUM_DECLARED_SKILL_ROOTS = 64
 const PLUGIN_MANIFEST_DIRECTORIES = ['.codex-plugin', '.claude-plugin', '.cursor-plugin'] as const
 const MANIFEST_OPEN_FLAGS =
   constants.O_RDONLY |
@@ -107,13 +111,24 @@ export async function declaredPluginSkillRoots(
         return []
       }
       const values = Array.isArray(skills) ? skills : [skills]
-      const roots = values
-        .map((value) => resolveManifestSkillPath(directory, value))
-        .filter((value): value is string => value !== null)
+      const roots = [
+        ...new Set(
+          values
+            .map((value) => resolveManifestSkillPath(directory, value))
+            .filter((value): value is string => value !== null)
+        )
+      ].sort()
       if (roots.length === 0) {
         return null
       }
-      return [...new Set(roots)]
+      // Why: fall back to the ordinary walk rather than a truncated root list. The walk
+      // is bounded by depth and entries, so it costs less than resolving the declared
+      // roots one by one and still reaches skills a truncation would have dropped.
+      if (roots.length > MAXIMUM_DECLARED_SKILL_ROOTS) {
+        recordIssue(manifestPath, 'manifest-limit')
+        return null
+      }
+      return roots
     } catch (error) {
       if (!(error instanceof SyntaxError)) {
         recordIssue(manifestPath, 'io-error', errorCode(error))

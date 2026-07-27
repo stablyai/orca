@@ -17,10 +17,6 @@ export function getSkillFreshnessDisplayStatus(
   if (inventory?.eligibleUpdateNames.includes(skillName)) {
     return 'update-available'
   }
-  if (inventory?.scanIssues.some(isSkillScanIssueNeedingAttention)) {
-    return 'needs-attention'
-  }
-
   let hasPlacement = false
   let hasBlockedCopy = false
   for (const installation of inventory?.installations ?? []) {
@@ -40,6 +36,12 @@ export function getSkillFreshnessDisplayStatus(
   if (!hasPlacement) {
     return 'installed'
   }
+  // Why: an unreadable plugin path could hide a copy of any known skill, so it stays
+  // fail-closed — but only for skills Orca actually found somewhere. Flagging a skill
+  // that isn't installed at all blames it for a fault in someone else's plugin.
+  if (inventory?.scanIssues.some(isSkillScanIssueNeedingAttention)) {
+    return 'needs-attention'
+  }
   // Why: no eligible update is not proof a copy is fine — it can equally mean a copy
   // is out of date somewhere the update command cannot reach. Saying "Installed" there
   // reads as all-clear and hides real drift, so that case gets its own attention state.
@@ -55,11 +57,14 @@ export function hasSkillCopyNeedingAttention(
   inventory: SkillFreshnessInventory | null,
   skillName: string
 ): boolean {
+  const placements = (inventory?.installations ?? []).filter(
+    (installation) => installation.name === skillName
+  )
   return (
-    Boolean(inventory?.scanIssues.some(isSkillScanIssueNeedingAttention)) ||
-    (inventory?.installations ?? []).some(
+    (placements.length > 0 &&
+      Boolean(inventory?.scanIssues.some(isSkillScanIssueNeedingAttention))) ||
+    placements.some(
       (installation) =>
-        installation.name === skillName &&
         installation.status !== 'current' &&
         !(installation.status === 'unrecognized' && installation.topology === 'plugin-cache') &&
         // Why: an out-of-date copy the command converges is ordinary work, not a problem.

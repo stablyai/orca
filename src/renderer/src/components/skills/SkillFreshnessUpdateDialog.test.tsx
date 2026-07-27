@@ -244,9 +244,9 @@ describe('SkillFreshnessUpdateDialog', () => {
         {
           rootId: 'codex-plugin-cache',
           sourceLabel: 'Codex plugin cache',
-          path: '/home/.codex/plugins/cache/vendor/deep',
-          reason: 'depth-limit',
-          errorCode: null
+          path: '/home/.codex/plugins/cache/vendor/locked',
+          reason: 'io-error',
+          errorCode: 'EACCES'
         }
       ],
       scannedAt: 2
@@ -257,11 +257,46 @@ describe('SkillFreshnessUpdateDialog', () => {
     expect(container?.textContent).toContain(
       'Orca could not finish checking plugin-managed skills.'
     )
+    expect(container?.textContent).toContain('/home/.codex/plugins/cache/vendor/locked')
+    expect(container?.textContent).toContain('EACCES')
+    expect(container?.textContent).not.toContain('All installed Orca skills are up to date.')
+    expect(container?.textContent).not.toContain(
+      '/home/.codex/plugins/cache/vendor/locked/orca-cli'
+    )
+    expect(container?.querySelector('[data-collapsible-open="true"]')).not.toBeNull()
+  })
+
+  // Why: Orca's own traversal bounds are not the user's to act on. Headlining them
+  // would put a permanent warning on any ordinary large plugin cache while every
+  // skill badge stayed green — the same unclearable amber, moved into the dialog.
+  it('lists a traversal bound without headlining it or forcing Details open', async () => {
+    mocks.inventory = {
+      schemaVersion: 1,
+      installations: [
+        placement('orca-cli', { status: 'current', observedPackageDigest: 'current' })
+      ],
+      eligibleUpdateNames: [],
+      scanIssues: [
+        {
+          rootId: 'codex-plugin-cache',
+          sourceLabel: 'Codex plugin cache',
+          path: '/home/.codex/plugins/cache/vendor/deep',
+          reason: 'depth-limit',
+          errorCode: null
+        }
+      ],
+      scannedAt: 2
+    }
+    await renderDialog()
+    await openViaRequest()
+
+    expect(container?.textContent).toContain('All installed Orca skills are up to date.')
+    expect(container?.textContent).not.toContain(
+      'Orca could not finish checking plugin-managed skills.'
+    )
+    expect(container?.querySelector('[data-collapsible-open="false"]')).not.toBeNull()
     expect(container?.textContent).toContain('/home/.codex/plugins/cache/vendor/deep')
     expect(container?.textContent).toContain('scan depth limit')
-    expect(container?.textContent).not.toContain('All installed Orca skills are up to date.')
-    expect(container?.textContent).not.toContain('/home/.codex/plugins/cache/vendor/deep/orca-cli')
-    expect(container?.querySelector('[data-collapsible-open="true"]')).not.toBeNull()
   })
 
   it('auto-expands Details when a rescan changes the result to blocked', async () => {

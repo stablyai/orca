@@ -235,13 +235,18 @@ export async function scanKnownPluginSkillCandidates(
             }
           }
         } catch (error) {
-          if (errorCode(error) !== 'ENOENT') {
-            recordIssue(entryPath, 'io-error', errorCode(error))
-          }
+          const code = errorCode(error)
           // Why: inside a declared skill root the plugin itself claims this name is a
           // skill, so an uninspectable link stays fail-closed. Outside one there is no
           // such claim and no SKILL.md to read, so inventing a copy would be a guess.
-          if (withinDeclaredSkillRoot && knownNames.has(entry.name)) {
+          const claimedSkill = withinDeclaredSkillRoot && knownNames.has(entry.name)
+          // Why: a fail-closed candidate reads as inaccessible and raises attention, so
+          // the path has to be named even when it is merely absent. Staying silent is
+          // the badge-says-attention/dialog-says-all-clear split this change removes.
+          if (code !== 'ENOENT' || claimedSkill) {
+            recordIssue(entryPath, 'io-error', code)
+          }
+          if (claimedSkill) {
             recordCandidate(entry.name, entryPath)
           }
           continue

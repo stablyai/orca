@@ -178,4 +178,14 @@ describe('hasSkillCopyNeedingAttention', () => {
       )
     ).toBe(true)
   })
+
+  // Why: an unreadable plugin path could hide a copy of anything, but a skill Orca
+  // never found anywhere is not the one to blame for it — that reads as a problem
+  // with a skill the user has not installed.
+  it('does not blame a skill with no placement for a fault elsewhere in the cache', () => {
+    const value = inventory([], [], [scanIssue('io-error')])
+
+    expect(getSkillFreshnessDisplayStatus(value, SKILL_NAME)).toBe('installed')
+    expect(hasSkillCopyNeedingAttention(value, SKILL_NAME)).toBe(false)
+  })
 })

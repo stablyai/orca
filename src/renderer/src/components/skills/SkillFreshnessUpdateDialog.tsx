@@ -8,7 +8,10 @@ import {
 } from 'react'
 import { AlertTriangle, CheckCircle2, ChevronDown, Loader2, RefreshCw } from 'lucide-react'
 import type { SkillFreshnessInventory } from '../../../../shared/skill-freshness'
-import { buildTargetedSkillUpdateCommand } from '../../../../shared/skill-freshness'
+import {
+  buildTargetedSkillUpdateCommand,
+  isSkillScanIssueNeedingAttention
+} from '../../../../shared/skill-freshness'
 import { useSkillFreshness } from '@/hooks/useSkillFreshness'
 import { notifyInstalledAgentSkillsChanged } from '@/hooks/useInstalledAgentSkills'
 import { translate } from '@/i18n/i18n'
@@ -42,7 +45,8 @@ type FreshnessSummaryKind =
 
 function summarizeInventory(
   inventory: SkillFreshnessInventory | null,
-  hasBlockedGroup: boolean
+  hasBlockedGroup: boolean,
+  hasActionableScanIssue: boolean
 ): FreshnessSummaryKind {
   if (!inventory) {
     return 'loading'
@@ -50,16 +54,22 @@ function summarizeInventory(
   if (inventory.eligibleUpdateNames.length > 0) {
     return 'eligible'
   }
-  if (inventory.scanIssues.length > 0) {
+  // Why: a named skill the update can't converge outranks a coverage gap — the gap
+  // says something might be unchecked, the group says something definitely is wrong.
+  if (hasBlockedGroup) {
+    return 'attention'
+  }
+  // Why: only faults on the user's disk headline. Orca's own traversal bounds would
+  // otherwise put a permanent warning on any ordinary large plugin cache, which is
+  // the same unclearable amber this change exists to remove — see
+  // SKILL_SCAN_ATTENTION_REASONS.
+  if (hasActionableScanIssue) {
     return 'scan-incomplete'
   }
   if (inventory.installations.length === 0) {
     return 'empty'
   }
-  // Why: with nothing eligible, the modal is either genuinely all-clear or has
-  // out-of-date skills it can't safely update; the group filter already dropped
-  // the up-to-date and unrecognized-only noise, so a blocked group is the signal.
-  return hasBlockedGroup ? 'attention' : 'current'
+  return 'current'
 }
 
 function SummaryHeadline({
@@ -179,10 +189,13 @@ export function SkillFreshnessUpdateDialog(): React.JSX.Element {
       inventory ? groupSkillFreshness(inventory.installations, inventory.eligibleUpdateNames) : [],
     [inventory]
   )
-  const hasBlockedGroup =
-    scanIssues.length > 0 || groups.some((group) => group.status === 'cannot-update')
+  const hasActionableScanIssue = scanIssues.some(isSkillScanIssueNeedingAttention)
+  const hasBlockedGroup = groups.some((group) => group.status === 'cannot-update')
+  // Why: what the user must read before the dialog is useful. Orca's own bounds are
+  // listed but never force the panel open — they are not the user's to act on.
+  const requiresDetails = hasBlockedGroup || hasActionableScanIssue
   const updateCommand = buildTargetedSkillUpdateCommand(eligibleNames)
-  const summaryKind = summarizeInventory(inventory, hasBlockedGroup)
+  const summaryKind = summarizeInventory(inventory, hasBlockedGroup, hasActionableScanIssue)
   const terminalAuthorizationPending =
     terminalCommand !== null &&
     !terminalSubmittedRef.current &&
@@ -352,7 +365,7 @@ export function SkillFreshnessUpdateDialog(): React.JSX.Element {
         {/* Why: Radix reads defaultOpen only on mount. Remount when a scan
             becomes blocked so the required diagnostic details actually open. */}
         {hasVisibleGroups ? (
-          <Collapsible key={hasBlockedGroup ? 'blocked' : 'default'} defaultOpen={hasBlockedGroup}>
+          <Collapsible key={requiresDetails ? 'blocked' : 'default'} defaultOpen={requiresDetails}>
             <CollapsibleTrigger asChild>
               <Button
                 type="button"
