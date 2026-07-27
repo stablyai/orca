@@ -10,4 +10,8 @@ describe('shouldAutoCreateInitialTerminal', () => {
     expect(shouldAutoCreateInitialTerminal(1)).toBe(false)
     expect(shouldAutoCreateInitialTerminal(2)).toBe(false)
   })
+
+  it('leaves an empty workspace terminal-free when automatic creation is disabled', () => {
+    expect(shouldAutoCreateInitialTerminal(0, false)).toBe(false)
+  })
 })

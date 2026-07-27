@@ -24,6 +24,9 @@ import {
   DialogTitle
 } from '@/components/ui/dialog'
 import { Button } from '@/components/ui/button'
+import { ShortcutKeyCombo } from '@/components/ShortcutKeyCombo'
+import { FileText, Globe, TerminalSquare } from 'lucide-react'
+import { useShortcutKeyDetails } from '@/hooks/useShortcutLabel'
 import TabBar from './tab-bar/TabBar'
 import TerminalPane from './terminal-pane/TerminalPane'
 import {
@@ -268,6 +271,9 @@ function Terminal(): React.JSX.Element | null {
   const tabsByWorktree = useAppStore((s) => s.tabsByWorktree)
   const pendingStartupByTabId = useAppStore((s) => s.pendingStartupByTabId)
   const terminalParkingEnabled = useAppStore((s) => s.settings?.terminalHiddenViewParking !== false)
+  const autoCreateTerminalOnWorkspaceActivation = useAppStore(
+    (s) => s.settings?.autoCreateTerminalOnWorkspaceActivation !== false
+  )
   const terminalTitleSnapshotAuthorityEnabled = useAppStore((s) =>
     isMainTerminalSideEffectAuthorityForPty({
       settings: s.settings,
@@ -1161,7 +1167,9 @@ function Terminal(): React.JSX.Element | null {
 
     // Why: give a newly activated worktree a focusable surface when nothing renders, without recreating one after the user closes the last visible tab.
     const { renderableTabCount } = reconcileWorktreeTabModel(activeWorktreeId)
-    if (!shouldAutoCreateInitialTerminal(renderableTabCount)) {
+    const automaticCreationEnabled =
+      useAppStore.getState().settings?.autoCreateTerminalOnWorkspaceActivation !== false
+    if (!shouldAutoCreateInitialTerminal(renderableTabCount, automaticCreationEnabled)) {
       return
     }
     // Why: tag this never-visited-worktree tab so its PTY spawn doesn't count as activity and reshuffle the sidebar (explicit New Tab still bumps).
@@ -2139,6 +2147,17 @@ function Terminal(): React.JSX.Element | null {
         <>
           {/* Why: render only one surface model — legacy panes mounted alongside split-group panes race two React trees over one PTY/webview; gate on !anyMountedWorktreeHasLayout too so shutdown-from-focused doesn't respawn PTYs and re-light the sidebar dot. */}
           {/* Terminal panes container - hidden when editor tab active */}
+          {renderedActiveWorktreeId !== null &&
+            tabs.length === 0 &&
+            worktreeFiles.length === 0 &&
+            worktreeBrowserTabs.length === 0 &&
+            autoCreateTerminalOnWorkspaceActivation === false && (
+              <WorkspaceEmptyState
+                onNewTerminal={handleNewTab}
+                onNewBrowser={handleNewBrowserTab}
+                onNewMarkdown={handleNewFile}
+              />
+            )}
           <div
             className={`relative flex-1 min-h-0 overflow-hidden ${
               // Why: only hide the terminal when another tab type has content; else a stale activeTabType (e.g. 'editor' with no files after restore) blanks the screen.
@@ -2471,5 +2490,80 @@ const WorktreeSplitSurface = React.memo(function WorktreeSplitSurface({
     </div>
   )
 })
+
+function WorkspaceEmptyState({
+  onNewTerminal,
+  onNewBrowser,
+  onNewMarkdown
+}: {
+  onNewTerminal: () => void
+  onNewBrowser: () => void
+  onNewMarkdown: () => void
+}): React.JSX.Element {
+  const newTerminalShortcut = useShortcutKeyDetails('tab.newTerminal')
+  const newBrowserShortcut = useShortcutKeyDetails('tab.newBrowser')
+  const newMarkdownShortcut = useShortcutKeyDetails('tab.newMarkdown')
+
+  return (
+    <div className="absolute inset-0 flex items-center justify-center">
+      <div className="flex w-[360px] flex-col items-center gap-1.5">
+        <Button
+          type="button"
+          variant="ghost"
+          className="grid h-8 w-full grid-cols-[1rem_minmax(0,1fr)_auto] items-center gap-2.5 rounded-md px-3 py-0 text-sm font-normal text-foreground hover:bg-muted/40 hover:text-foreground"
+          onClick={onNewTerminal}
+        >
+          <TerminalSquare className="size-3.5 opacity-90" />
+          <span className="truncate text-left leading-none">
+            {translate('auto.components.Terminal.workspaceEmptyState.newTerminal', 'New Terminal')}
+          </span>
+          {newTerminalShortcut.keys.length > 0 ? (
+            <ShortcutKeyCombo
+              keys={newTerminalShortcut.keys}
+              doubleTap={newTerminalShortcut.doubleTap}
+            />
+          ) : null}
+        </Button>
+        <Button
+          type="button"
+          variant="ghost"
+          className="grid h-8 w-full grid-cols-[1rem_minmax(0,1fr)_auto] items-center gap-2.5 rounded-md px-3 py-0 text-sm font-normal text-foreground hover:bg-muted/40 hover:text-foreground"
+          onClick={onNewMarkdown}
+        >
+          <FileText className="size-3.5 opacity-90" />
+          <span className="truncate text-left leading-none">
+            {translate(
+              'auto.components.Terminal.workspaceEmptyState.newMarkdown',
+              'New Markdown Note'
+            )}
+          </span>
+          {newMarkdownShortcut.keys.length > 0 ? (
+            <ShortcutKeyCombo
+              keys={newMarkdownShortcut.keys}
+              doubleTap={newMarkdownShortcut.doubleTap}
+            />
+          ) : null}
+        </Button>
+        <Button
+          type="button"
+          variant="ghost"
+          className="grid h-8 w-full grid-cols-[1rem_minmax(0,1fr)_auto] items-center gap-2.5 rounded-md px-3 py-0 text-sm font-normal text-foreground hover:bg-muted/40 hover:text-foreground"
+          onClick={onNewBrowser}
+        >
+          <Globe className="size-3.5 opacity-90" />
+          <span className="truncate text-left leading-none">
+            {translate('auto.components.Terminal.workspaceEmptyState.newBrowser', 'New Browser')}
+          </span>
+          {newBrowserShortcut.keys.length > 0 ? (
+            <ShortcutKeyCombo
+              keys={newBrowserShortcut.keys}
+              doubleTap={newBrowserShortcut.doubleTap}
+            />
+          ) : null}
+        </Button>
+      </div>
+    </div>
+  )
+}
 
 export default React.memo(Terminal)

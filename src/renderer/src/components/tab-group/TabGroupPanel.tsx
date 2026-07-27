@@ -19,6 +19,7 @@ import { resolveGroupTabFromVisibleId } from './tab-group-visible-id'
 import { getTabPaneBodyDroppableId, type HoveredTabInsertion } from './useTabDragSplit'
 import { tabGroupBodyAnchorName } from './tab-group-body-anchor'
 import { translate } from '@/i18n/i18n'
+import { TabGroupEmptyState } from './TabGroupEmptyState'
 
 const EditorPanel = lazy(() => import('../editor/EditorPanel'))
 
@@ -55,6 +56,9 @@ export default function TabGroupPanel({
 }): React.JSX.Element {
   const rightSidebarOpen = useAppStore((state) => state.rightSidebarOpen)
   const sidebarOpen = useAppStore((state) => state.sidebarOpen)
+  const autoCreateTerminalOnWorkspaceActivation = useAppStore(
+    (state) => state.settings?.autoCreateTerminalOnWorkspaceActivation !== false
+  )
 
   const model = useTabGroupWorkspaceModel({ groupId, worktreeId })
   const { activeTab, browserItems, commands, editorItems, tabBarOrder, terminalTabs } = model
@@ -330,6 +334,17 @@ export default function TabGroupPanel({
           )}
 
         {/* Why: terminal/browser/simulator panes render at the worktree level (overlay layers); per-group rendering remounted xterm/webview/simulator on split moves. */}
+        {activeTab === null &&
+          terminalTabs.length === 0 &&
+          editorItems.length === 0 &&
+          browserItems.length === 0 &&
+          !autoCreateTerminalOnWorkspaceActivation && (
+            <TabGroupEmptyState
+              onNewTerminal={commands.newTerminalTab}
+              onNewMarkdown={commands.newFileTab}
+              onNewBrowser={commands.newBrowserTab}
+            />
+          )}
       </div>
     </div>
   )

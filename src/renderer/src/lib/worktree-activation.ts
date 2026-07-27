@@ -142,7 +142,12 @@ type WorktreeActivationStore = Partial<WorktreeRuntimeOwnerState> & {
     startup: { command: string; env?: Record<string, string> }
   ) => void
   queueTabInitialCwd: (tabId: string, cwd: string) => void
-  settings?: Pick<GlobalSettings, 'experimentalNativeChat' | 'openAgentTabsInChatByDefault'> | null
+  settings?: Pick<
+    GlobalSettings,
+    | 'autoCreateTerminalOnWorkspaceActivation'
+    | 'experimentalNativeChat'
+    | 'openAgentTabsInChatByDefault'
+  > | null
 }
 
 /**
@@ -158,7 +163,8 @@ export type ActivateAndRevealResult = {
 
 function ensureFolderWorkspaceInitialTerminal(
   folderWorkspace: FolderWorkspace,
-  startup?: WorktreeStartupPayload
+  startup?: WorktreeStartupPayload,
+  automaticCreationEnabled = true
 ): string | null {
   const state = useAppStore.getState()
   const workspaceKey = folderWorkspaceKey(folderWorkspace.id)
@@ -168,7 +174,8 @@ function ensureFolderWorkspaceInitialTerminal(
     startup,
     undefined,
     undefined,
-    undefined
+    undefined,
+    { automaticCreationEnabled }
   )
   return primaryTabId
 }
@@ -218,7 +225,13 @@ export function activateAndRevealFolderWorkspace(
     state.recordWorktreeVisit(workspaceKey)
   }
   resumeSleepingAgentSessionsForWorktree(workspaceKey)
-  const primaryTabId = ensureFolderWorkspaceInitialTerminal(folderWorkspace, opts?.startup)
+  const automaticCreationEnabled =
+    Boolean(opts?.startup) || state.settings?.autoCreateTerminalOnWorkspaceActivation !== false
+  const primaryTabId = ensureFolderWorkspaceInitialTerminal(
+    folderWorkspace,
+    opts?.startup,
+    automaticCreationEnabled
+  )
 
   if (opts?.sidebarRevealBehavior) {
     state.revealWorktreeInSidebar(workspaceKey, { behavior: opts.sidebarRevealBehavior })
@@ -300,6 +313,9 @@ export function activateAndRevealWorktree(
   const hasActivationWork = Boolean(
     opts?.startup || opts?.setup || opts?.defaultTabs || opts?.issueCommand
   )
+  const hasTerminalLaunchWork = Boolean(hasActivationWork || opts?.initialCwd)
+  const automaticCreationEnabled =
+    hasTerminalLaunchWork || state.settings?.autoCreateTerminalOnWorkspaceActivation !== false
   // Why: a plain reselect should still reveal the sidebar row but must not restamp focus recency or wake persistence.
   const isPlainAlreadyActiveTerminal =
     !hasActivationWork &&
@@ -346,10 +362,11 @@ export function activateAndRevealWorktree(
   const primaryTabId = ensureWorktreeHasInitialTerminal(
     useAppStore.getState(),
     worktreeId,
-    opts?.startup ?? buildCreatedAgentReopenStartup(wt),
+    opts?.startup ?? (automaticCreationEnabled ? buildCreatedAgentReopenStartup(wt) : undefined),
     opts?.setup,
     opts?.issueCommand,
-    opts?.defaultTabs
+    opts?.defaultTabs,
+    { automaticCreationEnabled }
   )
   if (primaryTabId && opts?.initialCwd) {
     useAppStore.getState().queueTabInitialCwd(primaryTabId, opts.initialCwd)
@@ -382,13 +399,16 @@ export function activateAndRevealWorktree(
   }
 
   if (opts?.notifyHostRuntime !== false) {
-    ensureWebRuntimeWorktreeTerminalAfterWake(worktreeId)
+    ensureWebRuntimeWorktreeTerminalAfterWake(worktreeId, { automaticCreationEnabled })
   }
 
   return { primaryTabId }
 }
 
-export function ensureWebRuntimeWorktreeTerminalAfterWake(worktreeId: string): void {
+export function ensureWebRuntimeWorktreeTerminalAfterWake(
+  worktreeId: string,
+  opts?: { automaticCreationEnabled?: boolean }
+): void {
   const state = useAppStore.getState()
   const worktree = state.getKnownWorktreeById(worktreeId)
   if (!worktree) {
@@ -412,6 +432,11 @@ export function ensureWebRuntimeWorktreeTerminalAfterWake(worktreeId: string): v
   }
 
   if (getLastKnownHostTerminalTabCount(runtimeEnvironmentId, worktreeId) > 0) {
+    return
+  }
+
+  // Why: the preference suppresses only a first terminal, not restoration of preserved dead tabs.
+  if (tabs.length === 0 && opts?.automaticCreationEnabled === false) {
     return
   }
 
@@ -442,7 +467,7 @@ export function ensureWorktreeHasInitialTerminal(
   setup?: WorktreeSetupLaunch,
   issueCommand?: IssueCommandLaunch,
   defaultTabs?: WorktreeDefaultTabsLaunch,
-  opts?: { activateCreatedTabs?: boolean }
+  opts?: { activateCreatedTabs?: boolean; automaticCreationEnabled?: boolean }
 ): string | null {
   const { renderableTabCount } = store.reconcileWorktreeTabModel(worktreeId)
   // Why: creating a terminal just because the legacy terminal slice is empty gives editor/browser-only worktrees an unexpected extra tab.
@@ -505,7 +530,9 @@ export function ensureWorktreeHasInitialTerminal(
     return null
   }
 
-  if (!shouldAutoCreateInitialTerminal(renderableTabCount)) {
+  if (
+    !shouldAutoCreateInitialTerminal(renderableTabCount, opts?.automaticCreationEnabled !== false)
+  ) {
     const existingTerminalTabId = store.tabsByWorktree[worktreeId]?.[0]?.id
     if (existingTerminalTabId && (setup || issueCommand)) {
       // Why: main may have adopted the startup tab but failed to spawn setup; renderer must still launch the returned fallback setup.
