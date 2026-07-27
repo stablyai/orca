@@ -2,10 +2,9 @@
 // Why: standalone mock WebSocket server for developing the mobile app without
 // a running Orca desktop instance. Responds to the same RPC methods the real
 // runtime exposes, with realistic fake data. Supports E2EE handshake.
-import { chmodSync, readFileSync, writeFileSync } from 'node:fs'
 import { WebSocketServer, type WebSocket } from 'ws'
-import nacl from 'tweetnacl'
 import { deriveSharedKey, e2eeDecrypt, e2eeEncrypt, type E2EEState } from './mock-server-encryption'
+import { loadOrCreateMockServerKeyPair } from './mock-server-key-pair'
 import {
   error,
   handleRequest,
@@ -20,36 +19,8 @@ const AUTH_TOKEN = 'mock-device-token'
 // The public key is printed at startup so it can be used in pairing QR data.
 // MOCK_SERVER_KEY_FILE reuses one across restarts so a paired device (which
 // pins the public key) survives a server restart.
-const serverKeyPair = loadOrCreateServerKeyPair()
+const serverKeyPair = loadOrCreateMockServerKeyPair(process.env.MOCK_SERVER_KEY_FILE)
 const serverPublicKeyB64 = Buffer.from(serverKeyPair.publicKey).toString('base64')
-
-function loadOrCreateServerKeyPair(): nacl.BoxKeyPair {
-  const keyFile = process.env.MOCK_SERVER_KEY_FILE
-  if (!keyFile) {
-    return nacl.box.keyPair()
-  }
-  let reason = 'unreadable'
-  try {
-    const secretKey = Uint8Array.from(Buffer.from(readFileSync(keyFile, 'utf-8').trim(), 'base64'))
-    if (secretKey.length === nacl.box.secretKeyLength) {
-      return nacl.box.keyPair.fromSecretKey(secretKey)
-    }
-    reason = secretKey.length === 0 ? 'empty' : `wrong length (${secretKey.length} bytes)`
-  } catch (err) {
-    reason = (err as NodeJS.ErrnoException).code === 'ENOENT' ? 'missing' : 'unreadable'
-  }
-  // Why: a silent re-key breaks the paired device's key pin with no signal but a changed printout.
-  console.warn(
-    `[mock] Key file ${keyFile} is ${reason} — minting a fresh key; paired devices must re-pair`
-  )
-  const created = nacl.box.keyPair()
-  // `mode` applies only on create; an existing file keeps its own permissions.
-  writeFileSync(keyFile, Buffer.from(created.secretKey).toString('base64'), { mode: 0o600 })
-  if (process.platform !== 'win32') {
-    chmodSync(keyFile, 0o600)
-  }
-  return created
-}
 
 const wss = new WebSocketServer({ port: PORT })
 

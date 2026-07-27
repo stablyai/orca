@@ -138,13 +138,16 @@ describe('MobileNativeChatView send-error banner', () => {
   })
 
   it('does not duplicate the route banner when the composer rejects', async () => {
+    const onClearSendError = vi.fn()
     await render({
       onSend: vi.fn().mockResolvedValue(false),
       inputLockReason: 'disconnected',
-      sendErrorMessage: 'Stop failed'
+      sendErrorMessage: 'Stop failed',
+      onClearSendError
     })
     await pressSend()
 
+    expect(onClearSendError).not.toHaveBeenCalled()
     expect(banners()).toHaveLength(1)
     expect(bannerText()).toContain('Stop failed')
     expect(bannerText()).toBe('Stop failed')
