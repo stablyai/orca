@@ -88,6 +88,7 @@ vi.mock('../gitea/client', () => ({
 
 import {
   _resetPreflightCache,
+  detectInstalledAgentExecutables,
   detectInstalledAgents,
   detectInstalledAgentsWithShellPathHydration,
   registerPreflightHandlers,
@@ -782,6 +783,15 @@ describe('preflight', () => {
       detectInstalledAgentsWithShellPathHydration({ wslDistro: 'Ubuntu' })
     ).resolves.toEqual(['claude'])
     expect(hydrateShellPathMock).not.toHaveBeenCalled()
+  })
+
+  it('does not expose WSL detection as a host executable snapshot', async () => {
+    Object.defineProperty(process, 'platform', {
+      configurable: true,
+      value: 'win32'
+    })
+
+    await expect(detectInstalledAgentExecutables({ wslDistro: 'Ubuntu' })).resolves.toBeNull()
   })
 
   it('does not report Claude Agent Teams from WSL agent detection', async () => {

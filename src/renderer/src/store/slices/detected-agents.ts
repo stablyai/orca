@@ -48,6 +48,7 @@ let detectPromise: { key: string; promise: Promise<TuiAgent[]> } | null = null
 let refreshPromise: { key: string; promise: Promise<TuiAgent[]> } | null = null
 let detectedContextKey: string | null = null
 let localDetectionGeneration = 0
+let localDetectionRequestKey: string | null = null
 const remoteDetectPromises = new Map<string, Promise<TuiAgent[]>>()
 const remoteRefreshPromises = new Map<string, Promise<TuiAgent[]>>()
 
@@ -58,17 +59,37 @@ export function _getRemoteDetectPromiseCountForTest(): number {
 // Why: launch commands are built synchronously all over the renderer, so the
 // matched executable per agent is published to a module registry instead of
 // being threaded through every buildAgentStartupPlan() call site.
-function publishDetectedAgentExecutables(context?: PreflightRuntimeContext): void {
-  void window.api.preflight
-    .detectAgentExecutables?.(context)
-    // Why: main only ever publishes this host's detection (WSL/remote return
-    // empty), so stamping the client platform lets the launch path drop the
-    // registry for commands bound elsewhere.
-    .then((executables) => setDetectedTuiAgentExecutables(executables ?? {}, CLIENT_PLATFORM))
-    .catch(() => {
-      // Why: alias resolution is an enhancement; on failure the static
-      // launchCmd defaults still work for the primary install layout.
-    })
+async function publishDetectedAgentExecutables(
+  context: PreflightRuntimeContext | undefined,
+  request: { contextKey: string; generation: number }
+): Promise<void> {
+  try {
+    const executables = await window.api.preflight.detectAgentExecutables?.(context)
+    if (
+      executables === null ||
+      executables === undefined ||
+      request.generation !== localDetectionGeneration ||
+      request.contextKey !== localDetectionRequestKey
+    ) {
+      return
+    }
+    setDetectedTuiAgentExecutables(executables, CLIENT_PLATFORM)
+  } catch {
+    // Why: alias resolution is optional; static launch commands remain valid.
+  }
+}
+
+function beginLocalDetection(contextKey: string): { contextKey: string; generation: number } {
+  localDetectionGeneration += 1
+  localDetectionRequestKey = contextKey
+  return { contextKey, generation: localDetectionGeneration }
+}
+
+function isCurrentLocalDetection(request: { contextKey: string; generation: number }): boolean {
+  return (
+    request.generation === localDetectionGeneration &&
+    request.contextKey === localDetectionRequestKey
+  )
 }
 
 export const createDetectedAgentsSlice: StateCreator<AppState, [], [], DetectedAgentsSlice> = (
@@ -96,22 +117,24 @@ export const createDetectedAgentsSlice: StateCreator<AppState, [], [], DetectedA
       detectedAgentIds: contextChanged ? null : get().detectedAgentIds,
       isDetectingAgents: true
     })
-    const requestGeneration = localDetectionGeneration
+    const request = beginLocalDetection(contextKey)
     const pending = window.api.preflight
       .detectAgents(context)
-      .then((ids) => {
+      .then(async (ids) => {
         const typed = ids as TuiAgent[]
-        if (requestGeneration === localDetectionGeneration) {
-          set({ detectedAgentIds: typed, isDetectingAgents: false })
+        if (isCurrentLocalDetection(request)) {
+          await publishDetectedAgentExecutables(context, request)
+        }
+        if (isCurrentLocalDetection(request)) {
           detectedContextKey = contextKey
-          publishDetectedAgentExecutables(context)
+          set({ detectedAgentIds: typed, isDetectingAgents: false })
         }
         return typed
       })
       .catch(() => {
         // Why: allow a retry on the next call if detection blew up (IPC timeout
         // during cold start). Do not cache the failure or show stale context.
-        if (requestGeneration === localDetectionGeneration) {
+        if (isCurrentLocalDetection(request)) {
           detectPromise = null
           set({
             detectedAgentIds: contextChanged ? [] : get().detectedAgentIds,
@@ -135,12 +158,15 @@ export const createDetectedAgentsSlice: StateCreator<AppState, [], [], DetectedA
       detectedAgentIds: contextChanged ? null : get().detectedAgentIds,
       isRefreshingAgents: true
     })
-    const requestGeneration = localDetectionGeneration
+    const request = beginLocalDetection(contextKey)
     const pending = window.api.preflight
       .refreshAgents(context)
-      .then((result) => {
+      .then(async (result) => {
         const typed = result.agents as TuiAgent[]
-        if (requestGeneration === localDetectionGeneration) {
+        if (isCurrentLocalDetection(request)) {
+          await publishDetectedAgentExecutables(context, request)
+        }
+        if (isCurrentLocalDetection(request)) {
           set({
             detectedAgentIds: typed,
             isRefreshingAgents: false,
@@ -151,13 +177,12 @@ export const createDetectedAgentsSlice: StateCreator<AppState, [], [], DetectedA
           // snapshot so `ensureDetectedAgents` short-circuits.
           detectedContextKey = contextKey
           detectPromise = { key: contextKey, promise: Promise.resolve(typed) }
-          publishDetectedAgentExecutables(context)
         }
         return typed
       })
       .catch(() => {
         const fallback = contextChanged ? [] : (get().detectedAgentIds ?? [])
-        if (requestGeneration === localDetectionGeneration) {
+        if (isCurrentLocalDetection(request)) {
           set({
             detectedAgentIds: fallback,
             isRefreshingAgents: false
@@ -176,6 +201,7 @@ export const createDetectedAgentsSlice: StateCreator<AppState, [], [], DetectedA
 
   clearLocalDetectedAgents: () => {
     localDetectionGeneration += 1
+    localDetectionRequestKey = null
     detectPromise = null
     refreshPromise = null
     detectedContextKey = null

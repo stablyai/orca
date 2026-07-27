@@ -712,7 +712,9 @@ export type PreflightRuntimeContext = {
 export type PreflightApi = {
   check: (args?: PreflightRuntimeContext & { force?: boolean }) => Promise<PreflightStatus>
   detectAgents: (args?: PreflightRuntimeContext) => Promise<string[]>
-  detectAgentExecutables: (args?: PreflightRuntimeContext) => Promise<DetectedAgentExecutables>
+  detectAgentExecutables: (
+    args?: PreflightRuntimeContext
+  ) => Promise<DetectedAgentExecutables | null>
   refreshAgents: (args?: PreflightRuntimeContext) => Promise<RefreshAgentsResult>
   detectRemoteAgents: (args: { connectionId: string }) => Promise<string[]>
   detectRemoteWindowsTerminalCapabilities: (args: { connectionId: string }) => Promise<{

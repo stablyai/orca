@@ -2154,7 +2154,9 @@ const api = {
     }> => ipcRenderer.invoke('preflight:check', args),
     detectAgents: (args?: PreflightRuntimeContext): Promise<string[]> =>
       ipcRenderer.invoke('preflight:detectAgents', args),
-    detectAgentExecutables: (args?: PreflightRuntimeContext): Promise<DetectedAgentExecutables> =>
+    detectAgentExecutables: (
+      args?: PreflightRuntimeContext
+    ): Promise<DetectedAgentExecutables | null> =>
       ipcRenderer.invoke('preflight:detectAgentExecutables', args),
     refreshAgents: (args?: PreflightRuntimeContext): Promise<RefreshAgentsResult> =>
       ipcRenderer.invoke('preflight:refreshAgents', args),

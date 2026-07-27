@@ -147,12 +147,12 @@ function publishDetectedAgentExecutables(
   setDetectedTuiAgentExecutables(detectedAgentExecutables, runtime)
 }
 
-/** Executables matched by the last local detection; empty for WSL/remote runtimes. */
+/** Executables matched by the last host detection; null for WSL runtimes. */
 export async function detectInstalledAgentExecutables(
   context?: PreflightRuntimeContext
-): Promise<DetectedAgentExecutables> {
+): Promise<DetectedAgentExecutables | null> {
   if (getPreflightWslTarget(context)) {
-    return {}
+    return null
   }
   if (!hasDetectedAgentExecutables) {
     await detectInstalledAgents(context)
