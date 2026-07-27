@@ -96,18 +96,52 @@ export function relativePathInsideRoot(rootPath: string, candidatePath: string):
   if (!comparisonCandidate.startsWith(comparisonPrefix)) {
     return null
   }
-  // Why: count segments rather than slice by prefix length. Comparison folding
-  // (NFC, case, UNC aliasing) is not length-preserving, so a length taken from
-  // the folded root would cut the raw candidate mid-character and fabricate a
-  // path. Segment counts survive every fold, and the suffix stays byte-exact —
-  // which callers that rejoin it and hit the filesystem depend on.
-  const rootSegmentCount = comparisonRoot.split('/').filter(Boolean).length
   // WSL comparison keys fold the UNC alias but preserve Linux path casing, so
   // their suffix is both aligned across aliases and safe to return directly.
   const suffixSource = comparisonRoot.startsWith('//wsl/')
     ? comparisonCandidate
     : normalizedCandidate
-  return suffixSource.split('/').filter(Boolean).slice(rootSegmentCount).join('/')
+  return sliceAfterSegments(suffixSource, countPathSegments(comparisonRoot))
+}
+
+/**
+ * Why: skip the root's segments by position, not by prefix length. Comparison
+ * folding (NFC, case, UNC aliasing) is not length-preserving, so a length taken
+ * from the folded root would cut the raw candidate mid-character and fabricate a
+ * path. Positions survive every fold and keep the suffix byte-exact, which the
+ * callers that rejoin it and hit the filesystem depend on. Scanning rather than
+ * splitting keeps watcher event storms allocation-free.
+ */
+function sliceAfterSegments(value: string, skipCount: number): string {
+  let seen = 0
+  let inSegment = false
+  for (let index = 0; index < value.length; index++) {
+    if (value[index] === '/') {
+      inSegment = false
+      continue
+    }
+    if (!inSegment) {
+      inSegment = true
+      if (seen++ === skipCount) {
+        return value.slice(index)
+      }
+    }
+  }
+  return ''
+}
+
+function countPathSegments(value: string): number {
+  let count = 0
+  let inSegment = false
+  for (let index = 0; index < value.length; index++) {
+    if (value[index] === '/') {
+      inSegment = false
+    } else if (!inSegment) {
+      inSegment = true
+      count++
+    }
+  }
+  return count
 }
 
 function trimRuntimePathTrailingSlash(value: string): string {
