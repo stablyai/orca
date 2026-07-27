@@ -6058,6 +6058,140 @@ describe('worktree unread (show-until-interact)', () => {
     )
   })
 
+  it('routes multi-host project unread persistence by the worktree host (#10634)', () => {
+    const store = createTestStore()
+    const wt = makeWorktree({
+      id: 'repo-shared::/home/user/wt',
+      repoId: 'repo-shared',
+      path: '/home/user/wt',
+      hostId: 'ssh:ssh-1'
+    })
+    store.setState({
+      repos: [
+        { id: 'repo-shared', path: '/local', displayName: 'Local', badgeColor: '#000', addedAt: 0 },
+        {
+          id: 'repo-shared',
+          path: '/home/user/repo',
+          displayName: 'SSH',
+          badgeColor: '#111',
+          addedAt: 1,
+          connectionId: 'ssh-1'
+        }
+      ],
+      worktreesByRepo: { 'repo-shared': [wt] }
+    } as Partial<AppState>)
+
+    expect(() => store.getState().markWorktreeUnread(wt.id)).not.toThrow()
+
+    expect(store.getState().worktreesByRepo['repo-shared'][0].isUnread).toBe(true)
+    expect(mockApi.worktrees.updateMeta).toHaveBeenCalledWith(
+      expect.objectContaining({
+        worktreeId: wt.id,
+        updates: expect.objectContaining({ isUnread: true })
+      })
+    )
+  })
+
+  it('keeps unread state local instead of throwing for genuinely ambiguous owners (#10634)', () => {
+    const store = createTestStore()
+    const worktreeId = 'repo-shared::/same/path'
+    store.setState({
+      settings: { activeRuntimeEnvironmentId: 'hub-c' } as never,
+      worktreesByRepo: {
+        'repo-shared': [
+          makeWorktree({
+            id: worktreeId,
+            repoId: 'repo-shared',
+            hostId: 'ssh:ssh-a',
+            runtimeOwnerEnvironmentId: 'hub-a'
+          }),
+          makeWorktree({
+            id: worktreeId,
+            repoId: 'repo-shared',
+            hostId: 'ssh:ssh-b',
+            runtimeOwnerEnvironmentId: 'hub-b'
+          })
+        ]
+      }
+    } as Partial<AppState>)
+
+    expect(() => store.getState().markWorktreeUnread(worktreeId)).not.toThrow()
+
+    expect(store.getState().worktreesByRepo['repo-shared'][0].isUnread).toBe(true)
+    expect(mockApi.worktrees.updateMeta).not.toHaveBeenCalled()
+    expect(runtimeEnvironmentCall).not.toHaveBeenCalled()
+  })
+
+  it('never throws from any passive path for a genuinely ambiguous owner (#10634)', () => {
+    // Why every passive path, not just markWorktreeUnread: each one runs from a background
+    // notification, so any that still throws reproduces the uncaught renderer error.
+    const worktreeId = 'repo-shared::/same/path'
+    const ambiguousState = (): Partial<AppState> =>
+      ({
+        settings: { activeRuntimeEnvironmentId: 'hub-c' } as never,
+        worktreesByRepo: {
+          'repo-shared': [
+            makeWorktree({
+              id: worktreeId,
+              repoId: 'repo-shared',
+              hostId: 'ssh:ssh-a',
+              runtimeOwnerEnvironmentId: 'hub-a',
+              isUnread: true
+            }),
+            makeWorktree({
+              id: worktreeId,
+              repoId: 'repo-shared',
+              hostId: 'ssh:ssh-b',
+              runtimeOwnerEnvironmentId: 'hub-b',
+              isUnread: true
+            })
+          ]
+        }
+      }) as Partial<AppState>
+
+    for (const [label, run] of [
+      ['clearWorktreeUnread', (s: AppState) => s.clearWorktreeUnread(worktreeId)],
+      ['bumpWorktreeActivity', (s: AppState) => s.bumpWorktreeActivity(worktreeId)]
+    ] as const) {
+      const store = createTestStore()
+      store.setState(ambiguousState())
+      mockApi.worktrees.updateMeta.mockClear()
+
+      expect(() => run(store.getState()), `${label} threw for an ambiguous owner`).not.toThrow()
+      expect(
+        mockApi.worktrees.updateMeta,
+        `${label} persisted to a guessed host`
+      ).not.toHaveBeenCalled()
+    }
+  })
+
+  it('warns once per workspace rather than on every activity event (#10634)', () => {
+    // Why: activity bumps fire on every PTY event; an unbounded warn would flood the console.
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    try {
+      const worktreeId = 'repo-spam::/same/path'
+      const store = createTestStore()
+      store.setState({
+        settings: { activeRuntimeEnvironmentId: 'hub-c' } as never,
+        worktreesByRepo: {
+          'repo-spam': [
+            makeWorktree({ id: worktreeId, repoId: 'repo-spam', hostId: 'ssh:ssh-a' }),
+            makeWorktree({ id: worktreeId, repoId: 'repo-spam', hostId: 'ssh:ssh-b' })
+          ]
+        }
+      } as Partial<AppState>)
+
+      const before = warn.mock.calls.length
+      for (let i = 0; i < 5; i++) {
+        store.getState().bumpWorktreeActivity(worktreeId)
+      }
+
+      expect(warn.mock.calls.length - before).toBe(1)
+    } finally {
+      warn.mockRestore()
+    }
+  })
+
   it('clearWorktreeUnread clears isUnread and persists the change', async () => {
     const store = createTestStore()
     const wt = makeWorktree({

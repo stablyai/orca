@@ -104,6 +104,9 @@ export class RemoteRuntimeSharedControlConnection {
     this.closeSocket(error)
   }
 
+  // Why: pending timers only exist while a logical subscription owns reconnect.
+  readonly retryNow = (): boolean => this.reconnect.retryNow()
+
   getDiagnostics(): RemoteRuntimeSharedConnectionDiagnostics {
     return sharedControlState.buildSharedControlDiagnostics({
       state: this.state,

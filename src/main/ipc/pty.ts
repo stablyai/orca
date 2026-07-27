@@ -175,6 +175,7 @@ import {
 import { getSshFilesystemProvider } from '../providers/ssh-filesystem-dispatch'
 import { resolveLocalProjectRuntimeForWorktreeId } from '../local-project-runtime-resolution'
 import { isPtyIncarnationId } from '../../shared/pty-incarnation'
+import type { PtyListedSession } from '../../shared/pty-listed-session'
 
 // ─── Provider Registry ──────────────────────────────────────────────
 // Routes PTY operations by connectionId (null = local provider).
@@ -5506,33 +5507,37 @@ export function registerPtyHandlers(
     }
   })
 
-  ipcMain.handle(
-    'pty:listSessions',
-    async (): Promise<{ id: string; cwd: string; title: string }[]> => {
-      const deduped = new Map<string, { id: string; cwd: string; title: string }>()
-      const admission = new PtyProcessListAdmission()
-      await visitPtyProcessListingsInBatches(
-        registeredPtyProviders(),
-        ({ provider, connectionId }) =>
-          connectionId === null
-            ? provider.listProcesses()
-            : provider.listProcesses().catch(() => []),
-        ({ connectionId }, sessions) => {
-          for (const rawSession of sessions) {
-            const session = admission.admit(rawSession)
-            // Why: kill actions only send back the PTY id, so rebuild ownership while listing to keep reconnect-discovered remote sessions routed to their provider.
-            ptyOwnership.set(session.id, connectionId)
-            deduped.set(session.id, {
-              id: session.id,
-              cwd: session.cwd,
-              title: session.title
-            })
-          }
+  ipcMain.handle('pty:listSessions', async (): Promise<PtyListedSession[]> => {
+    const deduped = new Map<string, PtyListedSession>()
+    const admission = new PtyProcessListAdmission()
+    await visitPtyProcessListingsInBatches(
+      registeredPtyProviders(),
+      ({ provider, connectionId }) =>
+        connectionId === null ? provider.listProcesses() : provider.listProcesses().catch(() => []),
+      ({ provider, connectionId }, sessions) => {
+        for (const rawSession of sessions) {
+          const session = admission.admit(rawSession)
+          // Why: kill actions only send back the PTY id, so rebuild ownership while listing to keep reconnect-discovered remote sessions routed to their provider.
+          ptyOwnership.set(session.id, connectionId)
+          deduped.set(session.id, {
+            id: session.id,
+            cwd: session.cwd,
+            title: session.title,
+            // Why: the renderer's binding map is empty during restore, so ownership is the only
+            // liveness evidence it has. Absence is authoritative only from a provider that
+            // serializes claims — otherwise it is 'unknown', never 'absent' (#8459).
+            agentOwnership:
+              (session.agentSessionOwners?.length ?? 0) > 0
+                ? 'present'
+                : provider.providesAgentSessionOwnerListings?.(session.id) === true
+                  ? 'absent'
+                  : 'unknown'
+          })
         }
-      )
-      return Array.from(deduped.values())
-    }
-  )
+      }
+    )
+    return Array.from(deduped.values())
+  })
 
   ipcMain.on(
     'pty:getAuthoritativeBufferSnapshotCapabilitiesSync',

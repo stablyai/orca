@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "updatedAt": "2026-07-25",
+  "updatedAt": "2026-07-26",
   "policy": {
     "maturityLevels": [
       "experimental",
@@ -140,6 +140,108 @@
         "Background-to-foreground recovery remains covered by existing supervisor tests but lacks a physical sleep/wake run."
       ],
       "demotionRule": "Keep experimental or demote if focused tests flake, HOST_OFFLINE can park indefinitely, direct probes serialize configured endpoints, loser cleanup leaks clients, or physical-device radio cost exceeds the measured budget."
+    },
+    {
+      "id": "desktop-relay.assignment-backpressure",
+      "title": "Desktop relay drain recovery cannot amplify a director outage",
+      "maturity": "experimental",
+      "protection": "partial",
+      "owner": "desktop-runtime",
+      "layer": "main-relay-state-machine",
+      "surfaces": [
+        "desktop relay drain recovery",
+        "director assignment overload",
+        "relay broker shutdown"
+      ],
+      "platforms": [
+        "macos",
+        "linux",
+        "windows"
+      ],
+      "providers": [
+        "cloud-relay"
+      ],
+      "coveredPlatforms": [
+        "macos"
+      ],
+      "coveredProviders": [
+        "cloud-relay"
+      ],
+      "coverageNotes": "Deterministic main-process tests cover duplicate drain notifications, full-jitter backoff, Retry-After during initial setup and drain recovery, successful recovery, and broker-close cleanup. Packaged desktop, mixed-version fleets, GFE, and production Cloud SQL remain live-test gaps.",
+      "motivatingLinks": [
+        "https://github.com/stablyai/orca-cloud/actions/runs/30223521062"
+      ],
+      "invariant": "One relay host may have at most one assignment attempt or retry timer per recovery path. Sustained director failure must increase the retry window up to five minutes, a bounded Retry-After must be respected during initial setup and drain recovery, shutdown must cancel pending work, and recovery must activate the authoritative assigned origin.",
+      "oracle": "Inject duplicate drain events, deterministic randomness, fake time, repeated assignment failures, a 30-second Retry-After during initial setup and drain recovery, broker close, and eventual director recovery. Count every assignment call, require 500 ms then 1,000 ms retry windows, reject duplicate fanout, require no pre-hint retry or post-close work, and prove the recovered cell becomes authoritative.",
+      "commands": [
+        "pnpm exec vitest run --config config/vitest.config.ts src/main/runtime/relay/relay-session-broker.test.ts src/main/runtime/relay/relay-http-client.test.ts src/main/runtime/relay/relay-auth-coordinator-recovery.test.ts --reporter=dot"
+      ],
+      "testFiles": [
+        "src/main/runtime/relay/relay-session-broker.test.ts",
+        "src/main/runtime/relay/relay-http-client.test.ts",
+        "src/main/runtime/relay/relay-auth-coordinator-recovery.test.ts"
+      ],
+      "assertionRefs": [
+        {
+          "file": "src/main/runtime/relay/relay-session-broker.test.ts",
+          "assertions": [
+            "duplicate drain notifications share one exponentially backed-off retry schedule",
+            "Retry-After suppresses early assignment requests",
+            "broker close prevents retry resurrection",
+            "a later successful assignment activates the new origin"
+          ]
+        },
+        {
+          "file": "src/main/runtime/relay/relay-http-client.test.ts",
+          "assertions": [
+            "assignment overload preserves a bounded Retry-After hint"
+          ]
+        },
+        {
+          "file": "src/main/runtime/relay/relay-auth-coordinator-recovery.test.ts",
+          "assertions": [
+            "initial relay setup does not retry before Retry-After expires"
+          ]
+        }
+      ],
+      "evidenceRuns": [
+        {
+          "date": "2026-07-26",
+          "runner": "local",
+          "platform": "macos",
+          "command": "pnpm exec vitest run --config config/vitest.config.ts src/main/runtime/relay/relay-session-broker.test.ts src/main/runtime/relay/relay-http-client.test.ts src/main/runtime/relay/relay-auth-coordinator-recovery.test.ts --reporter=dot",
+          "result": "passed",
+          "durationSeconds": 0.49,
+          "summary": "Three focused relay files passed with 25 assertions."
+        }
+      ],
+      "runtimeBudget": {
+        "p95Seconds": 5,
+        "scope": "focused desktop relay state-machine tests"
+      },
+      "flakeHistory": {
+        "status": "unknown",
+        "evidence": "One deterministic local run exists; CI and soak history are not yet available."
+      },
+      "redGreenEvidence": {
+        "status": "complete",
+        "evidence": "The prior fixed-delay implementation issued a duplicate assignment within 499 ms and ignored Retry-After, while the candidate passes the byte-identical timer and call-count oracle."
+      },
+      "performanceBudget": {
+        "required": true,
+        "evidence": "One host retains at most one assignment attempt or retry timer, retry windows grow to a five-minute cap, duplicate drain events add no calls, and close leaves no timer-driven work."
+      },
+      "promotionCriteria": [
+        "Collect 100 consecutive CI passes or 14 days of soak history.",
+        "Run a mixed-version load test with at least the incident-scale desktop population.",
+        "Verify production director request rate decays during an injected assignment outage."
+      ],
+      "knownGaps": [
+        "No packaged desktop or physical phone was exercised.",
+        "The deterministic seam does not measure production GFE, carrier NAT, DNS, TLS, or Cloud SQL behavior.",
+        "Legacy desktop versions remain dependent on server-side overload protection."
+      ],
+      "demotionRule": "Keep experimental or demote if assignment calls overlap, duplicate drain events bypass backoff, Retry-After is ignored, close resurrects work, or mixed-version request rate exceeds the reviewed director budget."
     },
     {
       "id": "git-worktree.refresh-event-semantics",
