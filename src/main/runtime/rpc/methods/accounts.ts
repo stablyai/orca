@@ -68,6 +68,13 @@ const AddCodexFromHomeParams = z.object({
   wslDistro: z.string().nullish()
 })
 
+// Why: `orca account list` prints only emails and the active ids, so it opts out
+// of the forced all-provider usage refresh below — that lane bypasses the poll
+// throttle and Retry-After gate and costs one serial round-trip per account.
+const ListAccountsParams = z.object({
+  refreshUsage: z.boolean().default(true)
+})
+
 const AccountsUnsubscribeParams = z.object({
   subscriptionId: z
     .unknown()
@@ -86,13 +93,15 @@ const AccountsUnsubscribeParams = z.object({
 export const ACCOUNT_METHODS: readonly RpcAnyMethod[] = [
   defineMethod({
     name: 'accounts.list',
-    params: null,
-    handler: async (_params, { runtime }) => {
+    params: ListAccountsParams,
+    handler: async (params, { runtime }) => {
       // Why: ensure the snapshot reflects the latest provider state before
       // returning. Desktop polling pauses when the window is unfocused and
       // inactive-account caches only fill on AccountsPane open, so without
       // this the mobile UI would render stale nulls / zeroes.
-      await runtime.refreshAccountsForMobile()
+      if (params.refreshUsage) {
+        await runtime.refreshAccountsForMobile()
+      }
       return runtime.getAccountsSnapshot()
     }
   }),

@@ -240,7 +240,11 @@ export const ACCOUNT_HANDLERS: Record<string, CommandHandler> = {
     }
   },
   'account list': async ({ client, json }) => {
-    const result = await client.call<AccountsListSnapshot>('accounts.list')
+    // Why: this command renders no usage numbers, so skip the forced provider
+    // refresh — it is one serial network round-trip per managed account.
+    const result = await client.call<AccountsListSnapshot>('accounts.list', {
+      refreshUsage: false
+    })
     printResult(
       result,
       json,

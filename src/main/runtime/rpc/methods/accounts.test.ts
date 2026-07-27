@@ -76,8 +76,26 @@ describe('account RPC methods', () => {
       throw new Error('accounts.list must be a request method')
     }
 
-    await expect(list.handler(undefined, { runtime })).resolves.toBe(snapshot)
+    // Why: clients that send no params (mobile, web) must keep the forced lane.
+    await expect(list.handler(list.params?.parse({}), { runtime })).resolves.toBe(snapshot)
     expect(runtime.refreshAccountsForMobile).toHaveBeenCalledOnce()
+  })
+
+  it('skips the forced provider refresh when the caller opts out', async () => {
+    const snapshot = { claude: null, codex: null }
+    const runtime = {
+      refreshAccountsForMobile: vi.fn().mockResolvedValue(undefined),
+      getAccountsSnapshot: vi.fn(() => snapshot)
+    } as unknown as OrcaRuntimeService
+    const list = method('accounts.list')
+    if (isStreamingMethod(list)) {
+      throw new Error('accounts.list must be a request method')
+    }
+
+    await expect(
+      list.handler(list.params?.parse({ refreshUsage: false }), { runtime })
+    ).resolves.toBe(snapshot)
+    expect(runtime.refreshAccountsForMobile).not.toHaveBeenCalled()
   })
 
   it('forwards a client idempotency key when consuming a Codex reset credit', async () => {
