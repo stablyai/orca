@@ -1035,6 +1035,8 @@ export type BrowserCookieImportSummary = {
   importedCookies: number
   skippedCookies: number
   domains: string[]
+  // Why: a degraded import still returns ok, so callers need the partial-failure text to warn instead of claiming success.
+  warning?: string
 }
 
 export type BrowserCookieImportResult =
