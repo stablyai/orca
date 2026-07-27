@@ -6,9 +6,17 @@ import { declaredPluginSkillRoots, isWithinRoot } from './skill-plugin-manifest-
 
 const MAXIMUM_PLUGIN_SCAN_DEPTH = 9
 const MAXIMUM_DECLARED_SKILL_SCAN_DEPTH = 6
-const MAXIMUM_PLUGIN_SCAN_ENTRIES = 4_096
+// Why: a skill package's own payload (templates, fixtures, sample apps) is not a skill
+// tree, and it is what drives ordinary caches past the depth and entry bounds. Descend
+// far enough to still find a skill grouped under a package, then stop.
+const MAXIMUM_NESTED_SKILL_DEPTH = 2
+// Why: sized against a real multi-vendor cache, which reads ~7k entries once payload is
+// pruned. The bound still exists to stop a hostile or runaway tree; it is not a budget
+// ordinary installs are meant to exhaust.
+const MAXIMUM_PLUGIN_SCAN_ENTRIES = 16_384
 export const MAXIMUM_PLUGIN_SKILL_CANDIDATES = 64
 const MAXIMUM_PLUGIN_SCAN_ISSUES = 16
+const SKILL_FILE_NAME = 'SKILL.md'
 
 export type KnownPluginSkillCandidate = {
   name: string
@@ -76,10 +84,32 @@ export async function scanKnownPluginSkillCandidates(
     candidates.push({ name, path })
   }
 
+  // Why: a directory only proves it is a skill by carrying SKILL.md. Matching a known
+  // name alone would promote any same-named plugin or vendor folder into an installation
+  // Orca never verified.
+  async function hasSkillFile(directory: string, entries: readonly Dirent[]): Promise<boolean> {
+    const skillFile = entries.find((entry) => entry.name === SKILL_FILE_NAME)
+    if (!skillFile) {
+      return false
+    }
+    if (!skillFile.isSymbolicLink()) {
+      return skillFile.isFile()
+    }
+    try {
+      return (await stat(join(directory, skillFile.name))).isFile()
+    } catch (error) {
+      if (errorCode(error) !== 'ENOENT') {
+        recordIssue(join(directory, skillFile.name), 'io-error', errorCode(error))
+      }
+      return false
+    }
+  }
+
   async function visit(
     directory: string,
     depth: number,
-    withinDeclaredSkillRoot = false
+    withinDeclaredSkillRoot = false,
+    payloadDepth: number | null = null
   ): Promise<void> {
     if (limitReached) {
       return
@@ -139,25 +169,19 @@ export async function scanKnownPluginSkillCandidates(
       await handle.close().catch(() => undefined)
     }
 
-    const skillFile = entries.find((entry) => entry.name === 'SKILL.md')
-    if (withinDeclaredSkillRoot && skillFile) {
-      let isSkillFile = skillFile.isFile()
-      if (skillFile.isSymbolicLink()) {
-        try {
-          isSkillFile = (await stat(join(directory, skillFile.name))).isFile()
-        } catch (error) {
-          if (errorCode(error) !== 'ENOENT') {
-            recordIssue(join(directory, skillFile.name), 'io-error', errorCode(error))
-          }
-          isSkillFile = false
-        }
+    const isSkillPackage = await hasSkillFile(directory, entries)
+    if (isSkillPackage) {
+      const name = basename(directory)
+      if (knownNames.has(name)) {
+        recordCandidate(name, directory)
       }
-      if (isSkillFile) {
-        const name = basename(directory)
-        if (knownNames.has(name)) {
-          recordCandidate(name, directory)
-        }
-      }
+    }
+
+    // Why: pruning payload is a topology decision, not a coverage failure, so it stays
+    // silent — recording it would put Orca's own traversal rules in the user's dialog.
+    const nextPayloadDepth = isSkillPackage ? 0 : payloadDepth === null ? null : payloadDepth + 1
+    if (nextPayloadDepth !== null && nextPayloadDepth > MAXIMUM_NESTED_SKILL_DEPTH) {
+      return
     }
 
     const skillRoots = await declaredPluginSkillRoots(directory, entries, resolvedRoot, recordIssue)
@@ -202,7 +226,10 @@ export async function scanKnownPluginSkillCandidates(
           if (errorCode(error) !== 'ENOENT') {
             recordIssue(entryPath, 'io-error', errorCode(error))
           }
-          if (knownNames.has(entry.name)) {
+          // Why: inside a declared skill root the plugin itself claims this name is a
+          // skill, so an uninspectable link stays fail-closed. Outside one there is no
+          // such claim and no SKILL.md to read, so inventing a copy would be a guess.
+          if (withinDeclaredSkillRoot && knownNames.has(entry.name)) {
             recordCandidate(entry.name, entryPath)
           }
           continue
@@ -211,11 +238,7 @@ export async function scanKnownPluginSkillCandidates(
       if (!directoryEntry) {
         continue
       }
-      if (!withinDeclaredSkillRoot && knownNames.has(entry.name)) {
-        recordCandidate(entry.name, entryPath)
-        continue
-      }
-      await visit(entryPath, depth + 1, withinDeclaredSkillRoot)
+      await visit(entryPath, depth + 1, withinDeclaredSkillRoot, nextPayloadDepth)
     }
   }
 

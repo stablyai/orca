@@ -18,13 +18,81 @@ describe('plugin skill candidate scan', () => {
     const root = await mkdtemp(join(tmpdir(), 'orca-plugin-skill-scan-'))
     temporaryDirectories.push(root)
     await Promise.all(
-      ['one', 'two'].map((vendor) => mkdir(join(root, vendor, 'orca-cli'), { recursive: true }))
+      ['one', 'two'].map(async (vendor) => {
+        await mkdir(join(root, vendor, 'orca-cli'), { recursive: true })
+        await writeFile(join(root, vendor, 'orca-cli', 'SKILL.md'), '# Orca CLI\n')
+      })
     )
 
     const result = await scanKnownPluginSkillCandidates(root, new Set(['orca-cli']), 1)
 
     expect(result.candidates).toHaveLength(1)
     expect(result.issues).toEqual([{ path: root, reason: 'candidate-limit', errorCode: null }])
+  })
+
+  it('completes a real-shaped Codex cache without reporting coverage issues', async () => {
+    // Mirrors ~/.codex/plugins/cache: <vendor>/<plugin>/<version>/.codex-plugin, with the
+    // skill's own payload nesting well past the raw traversal depth (issue #10659).
+    const root = await mkdtemp(join(tmpdir(), 'orca-plugin-real-shape-'))
+    temporaryDirectories.push(root)
+    const packageRoot = join(root, 'openai-bundled', 'sites', '0.1.31')
+    const skill = join(packageRoot, 'skills', 'orca-cli')
+    await mkdir(join(packageRoot, '.codex-plugin'), { recursive: true })
+    await mkdir(
+      join(skill, 'templates', 'vinext-starter', 'examples', 'd1', 'app', 'api', 'deep'),
+      { recursive: true }
+    )
+    await writeFile(join(packageRoot, '.codex-plugin', 'plugin.json'), '{"skills":"./skills/"}\n')
+    await writeFile(join(skill, 'SKILL.md'), '# Orca CLI\n')
+
+    const result = await scanKnownPluginSkillCandidates(root, new Set(['orca-cli']))
+
+    expect(result).toEqual({ candidates: [{ name: 'orca-cli', path: skill }], issues: [] })
+  })
+
+  it('does not emit a plugin directory that only shares a skill name', async () => {
+    // The cached plugin is itself called orca-cli. Only the SKILL.md below it is a skill.
+    const root = await mkdtemp(join(tmpdir(), 'orca-plugin-name-collision-'))
+    temporaryDirectories.push(root)
+    const packageRoot = join(root, 'openai-bundled', 'orca-cli', '1.0.0')
+    const skill = join(packageRoot, 'skills', 'orca-cli')
+    await mkdir(join(packageRoot, '.codex-plugin'), { recursive: true })
+    await mkdir(skill, { recursive: true })
+    await writeFile(join(packageRoot, '.codex-plugin', 'plugin.json'), '{"skills":"./skills/"}\n')
+    await writeFile(join(skill, 'SKILL.md'), '# Orca CLI\n')
+
+    const result = await scanKnownPluginSkillCandidates(root, new Set(['orca-cli']))
+
+    expect(result).toEqual({ candidates: [{ name: 'orca-cli', path: skill }], issues: [] })
+  })
+
+  it('does not emit a bare known-name directory that carries no SKILL.md', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'orca-plugin-bare-name-'))
+    temporaryDirectories.push(root)
+    await mkdir(join(root, 'vendor', 'orca-cli', 'assets'), { recursive: true })
+
+    const result = await scanKnownPluginSkillCandidates(root, new Set(['orca-cli']))
+
+    expect(result).toEqual({ candidates: [], issues: [] })
+  })
+
+  it('stops descending once a skill package payload exceeds the nested skill budget', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'orca-plugin-payload-prune-'))
+    temporaryDirectories.push(root)
+    const packageRoot = join(root, 'vendor', 'plugin', '1.0.0')
+    const skill = join(packageRoot, 'skills', 'sites-building')
+    const buried = join(skill, 'templates', 'starter', 'examples', 'orca-cli')
+    await mkdir(join(packageRoot, '.codex-plugin'), { recursive: true })
+    await mkdir(buried, { recursive: true })
+    await writeFile(join(packageRoot, '.codex-plugin', 'plugin.json'), '{"skills":"./skills"}\n')
+    await writeFile(join(skill, 'SKILL.md'), '# Sites building\n')
+    await writeFile(join(buried, 'SKILL.md'), '# Orca CLI\n')
+
+    const result = await scanKnownPluginSkillCandidates(root, new Set(['orca-cli']))
+
+    // Why: pruning payload is a topology decision, so it must stay silent rather than
+    // surface as a coverage issue the user is asked to act on.
+    expect(result).toEqual({ candidates: [], issues: [] })
   })
 
   it('reports a depth-truncated subtree as scan coverage instead of a skill candidate', async () => {
@@ -179,7 +247,7 @@ describe('plugin skill candidate scan', () => {
     await writeFile(
       join(packageRoot, '.codex-plugin', 'plugin.json'),
       JSON.stringify({
-        skills: Array.from({ length: 4_097 }, (_, index) => `./missing-${index}`)
+        skills: Array.from({ length: 16_385 }, (_, index) => `./m${index}`)
       })
     )
 

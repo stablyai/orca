@@ -2,11 +2,27 @@ import { describe, expect, it } from 'vitest'
 import type {
   SkillFreshnessInstallation,
   SkillFreshnessInventory,
+  SkillFreshnessScanIssueReason,
   SkillFreshnessStatus
 } from '../../../shared/skill-freshness'
-import { getSkillFreshnessDisplayStatus } from './skill-freshness-display-status'
+import {
+  getSkillFreshnessDisplayStatus,
+  hasSkillCopyNeedingAttention
+} from './skill-freshness-display-status'
 
 const SKILL_NAME = 'orca-cli'
+
+function scanIssue(
+  reason: SkillFreshnessScanIssueReason
+): SkillFreshnessInventory['scanIssues'][number] {
+  return {
+    rootId: 'codex-plugin-cache',
+    sourceLabel: 'Codex plugin cache',
+    path: '/home/.codex/plugins/cache',
+    reason,
+    errorCode: reason === 'io-error' ? 'EACCES' : null
+  }
+}
 
 function placement(status: SkillFreshnessStatus, index = 0): SkillFreshnessInstallation {
   return {
@@ -77,24 +93,49 @@ describe('getSkillFreshnessDisplayStatus', () => {
     expect(getSkillFreshnessDisplayStatus(value, SKILL_NAME)).toBe('needs-attention')
   })
 
-  it('reports needs attention when plugin scan coverage is incomplete', () => {
+  it.each([
+    ['depth-limit'],
+    ['entry-limit'],
+    ['candidate-limit'],
+    ['manifest-limit'],
+    ['issue-limit']
+  ] as const)('does not report attention for the %s traversal bound', (reason) => {
+    // Why: these are Orca's own bounds. A large but healthy plugin cache would
+    // otherwise pin every skill amber with nothing the user could do about it.
     expect(
       getSkillFreshnessDisplayStatus(
-        inventory(
-          [placement('current')],
-          [],
-          [
-            {
-              rootId: 'codex-plugin-cache',
-              sourceLabel: 'Codex plugin cache',
-              path: '/home/.codex/plugins/cache',
-              reason: 'entry-limit',
-              errorCode: null
-            }
-          ]
-        ),
+        inventory([placement('current')], [], [scanIssue(reason)]),
         SKILL_NAME
       )
-    ).toBe('needs-attention')
+    ).toBe('up-to-date')
+  })
+
+  it.each([['outside-root'], ['io-error']] as const)(
+    'reports needs attention for the %s scan fault',
+    (reason) => {
+      expect(
+        getSkillFreshnessDisplayStatus(
+          inventory([placement('current')], [], [scanIssue(reason)]),
+          SKILL_NAME
+        )
+      ).toBe('needs-attention')
+    }
+  )
+})
+
+describe('hasSkillCopyNeedingAttention', () => {
+  it('ignores a traversal bound but keeps a real scan fault', () => {
+    expect(
+      hasSkillCopyNeedingAttention(
+        inventory([placement('current')], [], [scanIssue('entry-limit')]),
+        SKILL_NAME
+      )
+    ).toBe(false)
+    expect(
+      hasSkillCopyNeedingAttention(
+        inventory([placement('current')], [], [scanIssue('io-error')]),
+        SKILL_NAME
+      )
+    ).toBe(true)
   })
 })

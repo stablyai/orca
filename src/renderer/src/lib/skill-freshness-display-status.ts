@@ -1,4 +1,5 @@
 import {
+  isSkillScanIssueNeedingAttention,
   SUPPORTED_GLOBAL_SKILL_TOPOLOGIES,
   type SkillFreshnessInventory
 } from '../../../shared/skill-freshness'
@@ -16,7 +17,7 @@ export function getSkillFreshnessDisplayStatus(
   if (inventory?.eligibleUpdateNames.includes(skillName)) {
     return 'update-available'
   }
-  if (inventory?.scanIssues.length) {
+  if (inventory?.scanIssues.some(isSkillScanIssueNeedingAttention)) {
     return 'needs-attention'
   }
 
@@ -52,7 +53,7 @@ export function hasSkillCopyNeedingAttention(
   skillName: string
 ): boolean {
   return (
-    Boolean(inventory?.scanIssues.length) ||
+    Boolean(inventory?.scanIssues.some(isSkillScanIssueNeedingAttention)) ||
     (inventory?.installations ?? []).some(
       (installation) =>
         installation.name === skillName &&

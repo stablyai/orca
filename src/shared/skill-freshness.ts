@@ -101,6 +101,18 @@ export type SkillFreshnessScanIssue = {
   errorCode: string | null
 }
 
+// Why: a real read failure or an escaping path is a fact about the user's disk and
+// stays actionable. Orca's own traversal bounds are not — reporting them as attention
+// turns an ordinary large plugin cache into a permanent amber pill on every skill.
+const SKILL_SCAN_ATTENTION_REASONS = new Set<SkillFreshnessScanIssueReason>([
+  'outside-root',
+  'io-error'
+])
+
+export function isSkillScanIssueNeedingAttention(issue: SkillFreshnessScanIssue): boolean {
+  return SKILL_SCAN_ATTENTION_REASONS.has(issue.reason)
+}
+
 export type SkillFreshnessInventory = {
   schemaVersion: 1
   installations: SkillFreshnessInstallation[]

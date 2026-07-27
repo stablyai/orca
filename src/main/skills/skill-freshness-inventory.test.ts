@@ -378,6 +378,45 @@ describe('read-only skill freshness inventory', () => {
     expect(inventory.eligibleUpdateNames).toEqual(['orca-cli'])
   })
 
+  it('scans a real-shaped plugin cache completely and leaves eligibility unchanged', async () => {
+    const test = await fixture()
+    await test.writeSkill(join(test.homeDir, '.agents', 'skills'), test.oldMarkdown)
+    const packageRoot = join(
+      test.homeDir,
+      '.codex',
+      'plugins',
+      'cache',
+      'openai-bundled',
+      'orca-cli',
+      '1.0.0'
+    )
+    await mkdir(join(packageRoot, '.codex-plugin'), { recursive: true })
+    await writeFile(join(packageRoot, '.codex-plugin', 'plugin.json'), '{"skills":"./skills/"}\n')
+    const pluginSkill = await test.writeSkill(join(packageRoot, 'skills'), test.currentMarkdown)
+    await mkdir(join(pluginSkill, 'templates', 'starter', 'examples', 'd1', 'app', 'api'), {
+      recursive: true
+    })
+
+    const inventory = await inventorySkillFreshness({
+      currentAppVersion: '2.0.0',
+      homeDir: test.homeDir,
+      repos: [],
+      resourceRoot: test.resourceRoot
+    })
+
+    // The plugin copy is real and reported at its own path — never at a joined path,
+    // and never at the same-named plugin directory two levels above it.
+    expect(inventory.scanIssues).toEqual([])
+    expect(inventory.installations).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ topology: 'plugin-cache', unresolvedPath: pluginSkill })
+      ])
+    )
+    // Why: a plugin-cache copy is not convergent, so it neither grants nor withholds
+    // the update. The outdated canonical copy alone decides, exactly as before.
+    expect(inventory.eligibleUpdateNames).toEqual(['orca-cli'])
+  })
+
   it('reports incomplete plugin coverage without inventing per-skill installations', async () => {
     const test = await fixture()
     await test.writeSkill(join(test.homeDir, '.agents', 'skills'), test.currentMarkdown)
