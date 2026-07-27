@@ -197,4 +197,22 @@ describe('stable logical RPC client', () => {
     expect(client.getActivePath()).toBe('lan')
     expect(client.getGeneration()).toBe(1)
   })
+
+  it('preserves direct path if it connects while relay replacement authenticates', async () => {
+    const lanSession = new FakeSession('connecting')
+    const relaySession = new FakeSession('connecting')
+    const client = createStableLogicalRpcClient(lanSession, 'lan')
+    const migrating = client.migrateTo(relaySession, 'relay')
+
+    lanSession.setState('connected')
+    relaySession.setState('connected')
+
+    await expect(migrating).rejects.toThrow(
+      'session migration cancelled: active path already connected'
+    )
+    expect(relaySession.close).toHaveBeenCalledOnce()
+    expect(lanSession.close).not.toHaveBeenCalled()
+    expect(client.getActivePath()).toBe('lan')
+    expect(client.getGeneration()).toBe(1)
+  })
 })

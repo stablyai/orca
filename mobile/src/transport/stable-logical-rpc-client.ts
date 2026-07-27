@@ -184,6 +184,9 @@ export function createStableLogicalRpcClient(
         nextSession.close()
         throw new Error('Client closed')
       }
+      // Why: snapshot before wait so the post-wait guard can detect a
+      // transition that happened during the replacement's authentication.
+      const wasConnected = state === 'connected'
       try {
         await waitForAuthenticated(nextSession, timeoutMs)
       } catch (error) {
@@ -193,6 +196,12 @@ export function createStableLogicalRpcClient(
       if (closed) {
         nextSession.close()
         throw new Error('Client closed')
+      }
+      // Why: if the active session connected on a non-relay path while the
+      // replacement was authenticating, the active route is already viable.
+      if (!wasConnected && state === 'connected' && activePath !== 'relay' && path === 'relay') {
+        nextSession.close()
+        throw new Error('session migration cancelled: active path already connected')
       }
       const previous = activeSession
       const previousStateUnsubscribe = activeStateUnsubscribe
