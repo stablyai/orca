@@ -45,6 +45,7 @@ import {
 } from '@/lib/workspace-file-drag'
 import type { GitFileStatus } from '../../../../shared/types'
 import { STATUS_LABELS } from './status-display'
+import { RENAME_HOTSPOT_ATTR } from './file-explorer-dir-toggle-timing'
 import type { TreeNode } from './file-explorer-types'
 import { useFileExplorerRowDrag } from './useFileExplorerRowDrag'
 import { isLocalPathOpenBlocked, showLocalPathOpenBlockedToast } from '@/lib/local-path-open-guard'
@@ -626,6 +627,9 @@ export function FileExplorerRow({
             </>
           )}
           <span
+            // Why: marks the rename hotspot so the row's click handler can hold
+            // back the directory toggle until the double-click window closes.
+            {...{ [RENAME_HOTSPOT_ATTR]: '' }}
             className={cn(
               'truncate',
               isSelected && !nodeStatus && !isIgnored && 'text-accent-foreground',
@@ -642,10 +646,8 @@ export function FileExplorerRow({
                   : undefined
             }
             onDoubleClick={(e) => {
-              // Why: the row itself swallows double-click for "pin preview" /
-              // directory toggle. Scope rename to the filename text only so
-              // those behaviors stay intact on the icon and empty row area,
-              // matching VS Code's rename hotspot.
+              // Why: scope rename to the filename text so "pin preview" and the
+              // directory toggle stay reachable on the icon and empty row area.
               e.stopPropagation()
               onStartRename(node)
             }}
