@@ -11,6 +11,7 @@ import {
 } from '../shared/agent-process-recognition'
 import { getFirstCommandToken } from '../shared/command-token-scanner'
 import { getProcessTableSnapshot, type ProcessTableRow } from '../shared/process-table-snapshot'
+import { isTmuxProcessCommand, resolveTmuxPaneForegroundProcess } from '../shared/tmux-pane-process'
 import {
   resolveOuterWrapperForegroundProcess,
   shouldInspectOuterWrapperForegroundProcess
@@ -224,13 +225,6 @@ function processCommandToken(command: string): string {
   return getFirstCommandToken(command)
 }
 
-function candidateMatchesFallbackWrapper(
-  candidate: ProcessTableRow,
-  fallbackProcess: string
-): boolean {
-  return isExpectedAgentProcess(processCommandToken(candidate.command), fallbackProcess)
-}
-
 async function getRecognizedForegroundDescendant(
   pid: number,
   fallbackProcess?: string | null
@@ -249,20 +243,21 @@ async function getRecognizedForegroundDescendant(
     const foregroundCandidates = foregroundIsKnown
       ? candidates.filter((candidate) => candidate.stat.includes('+'))
       : candidates
-    const inspectionCandidates =
-      fallbackProcess && isAgentForegroundWrapperProcess(fallbackProcess)
-        ? foregroundCandidates.filter((candidate) =>
-            candidateMatchesFallbackWrapper(candidate, fallbackProcess)
-          )
-        : foregroundCandidates
-    if (
-      fallbackProcess &&
-      isAgentForegroundWrapperProcess(fallbackProcess) &&
-      inspectionCandidates.length !== 1
-    ) {
+    const fallbackIsWrapper =
+      typeof fallbackProcess === 'string' && isAgentForegroundWrapperProcess(fallbackProcess)
+    const inspectionCandidates = fallbackIsWrapper
+      ? foregroundCandidates.filter((candidate) =>
+          isExpectedAgentProcess(processCommandToken(candidate.command), fallbackProcess)
+        )
+      : foregroundCandidates
+    if (fallbackIsWrapper && inspectionCandidates.length !== 1) {
       return null
     }
     for (const candidate of inspectionCandidates) {
+      const tmuxForeground = await resolveTmuxPaneForegroundProcess(rows, candidate)
+      if (tmuxForeground) {
+        return tmuxForeground
+      }
       const recognized = recognizeAgentProcessFromCommandLine(candidate.command)
       if (recognized) {
         // Why: return the outer wrapper (omp) rather than the deeper wrapped child
@@ -310,7 +305,11 @@ export async function getForegroundProcessName(
         (await resolveWindowsAgentForegroundProcess(pid, fallbackProcess, {})) ?? fallbackProcess
       )
     }
-    if (!isShellProcess(fallbackProcess) && !isAgentForegroundWrapperProcess(fallbackProcess)) {
+    const inspectFallback =
+      isShellProcess(fallbackProcess) ||
+      isAgentForegroundWrapperProcess(fallbackProcess) ||
+      isTmuxProcessCommand(fallbackProcess)
+    if (!inspectFallback) {
       return fallbackProcess
     }
   }

@@ -6,6 +6,10 @@ import {
   type ProcessTableRow
 } from '../../shared/process-table-snapshot'
 import {
+  isTmuxProcessCommand,
+  resolveTmuxPaneForegroundProcess
+} from '../../shared/tmux-pane-process'
+import {
   resolveWindowsAgentForegroundProcessWithAvailability,
   shouldInspectWindowsAgentForeground,
   type AgentForegroundResolutionOptions
@@ -99,7 +103,7 @@ export async function resolveAgentForegroundProcessWithAvailability(
     }
     return {
       available: true,
-      processName: resolveAgentForegroundProcessFromPs(rows, shellPid) ?? fallbackProcess
+      processName: (await resolveAgentForegroundProcessFromPs(rows, shellPid)) ?? fallbackProcess
     }
   } catch {
     // Why: a failed scan cannot prove fallback ownership; callers retain the last recognized agent.
@@ -107,10 +111,10 @@ export async function resolveAgentForegroundProcessWithAvailability(
   }
 }
 
-function resolveAgentForegroundProcessFromPs(
+async function resolveAgentForegroundProcessFromPs(
   rows: ProcessTableRow[],
   shellPid: number
-): string | null {
+): Promise<string | null> {
   const shellRow = rows.find((row) => row.pid === shellPid)
   const candidates = collectDescendants(rows, shellPid).sort(
     (a, b) => candidateScore(b) - candidateScore(a)
@@ -124,6 +128,12 @@ function resolveAgentForegroundProcessFromPs(
   for (const candidate of candidates) {
     if (foregroundIsKnown && !candidate.stat.includes('+')) {
       continue
+    }
+    if (isTmuxProcessCommand(candidate.command)) {
+      const tmuxForeground = await resolveTmuxPaneForegroundProcess(rows, candidate)
+      if (tmuxForeground) {
+        return tmuxForeground
+      }
     }
     const recognized = recognizeAgentProcessFromCommandLine(candidate.command)
     if (recognized) {

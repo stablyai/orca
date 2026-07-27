@@ -304,6 +304,30 @@ describe('getForegroundProcessName', () => {
     })
   })
 
+  it('recognizes an agent in the active tmux pane on an SSH relay', async () => {
+    await withProcessPlatform('linux', async () => {
+      mockExecFile((command, args) => {
+        if (command === 'ps' && args[0] === '-axo') {
+          return {
+            stdout: [
+              '100 99 Ss   bash -l',
+              '101 100 S+   tmux -L work attach',
+              '500 400 Ss   zsh',
+              '501 500 S+   node /home/dev/.local/bin/codex'
+            ].join('\n')
+          }
+        }
+        if (command === 'tmux') {
+          expect(args.slice(0, 2)).toEqual(['-L', 'work'])
+          return { stdout: '101\t500\tcodex\n' }
+        }
+        return new Error('unexpected command')
+      })
+
+      await expect(getForegroundProcessName(100, 'tmux')).resolves.toBe('codex')
+    })
+  })
+
   it('recognizes Windows SSH relay shell-rooted agent descendants', async () => {
     await withProcessPlatform('win32', async () => {
       mockExecFile((command) => {
