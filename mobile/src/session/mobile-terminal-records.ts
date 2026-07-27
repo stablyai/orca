@@ -1,5 +1,6 @@
 import type { MobileTerminalTheme } from '../terminal/terminal-webview-contract'
 import type { AgentStatusEntry } from '../../../src/shared/agent-status-types'
+import { agentStatusEntriesEqual, terminalThemesEqual } from './mobile-terminal-record-equality'
 
 export type TerminalRecord = {
   handle: string
@@ -84,8 +85,8 @@ function mobileSessionTabEqual(
         a.leafId === b.leafId &&
         a.status === b.status &&
         a.terminal === b.terminal &&
-        JSON.stringify(a.agentStatus ?? null) === JSON.stringify(b.agentStatus ?? null) &&
-        JSON.stringify(a.terminalTheme ?? null) === JSON.stringify(b.terminalTheme ?? null)
+        agentStatusEntriesEqual(a.agentStatus, b.agentStatus) &&
+        terminalThemesEqual(a.terminalTheme, b.terminalTheme)
       )
     case 'markdown':
       return (
@@ -202,8 +203,7 @@ export function terminalRecordsEqual(
       (terminal, index) =>
         terminal.handle === b[index]?.handle &&
         terminal.title === b[index]?.title &&
-        JSON.stringify(terminal.terminalTheme ?? null) ===
-          JSON.stringify(b[index]?.terminalTheme ?? null) &&
+        terminalThemesEqual(terminal.terminalTheme, b[index]?.terminalTheme) &&
         terminal.isActive === b[index]?.isActive
     )
   )

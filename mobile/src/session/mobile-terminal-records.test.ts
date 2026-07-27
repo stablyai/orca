@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import {
   getTerminalRecordsFromSessionTabs,
   mergeTerminalListWithKnownRecords,
@@ -124,5 +124,53 @@ describe('mobile terminal records', () => {
         ]
       )
     ).toBe(false)
+  })
+
+  it('compares large unchanged snapshots without serializing status or theme data', () => {
+    const history = Array.from({ length: 20 }, (_, index) => ({
+      state: index % 2 === 0 ? ('working' as const) : ('waiting' as const),
+      prompt: `prompt-${index}`,
+      startedAt: index
+    }))
+    const tabs: MobileTerminalSessionTab[] = Array.from({ length: 40 }, (_, index) => ({
+      type: 'terminal',
+      id: `term-${index}::leaf-${index}`,
+      parentTabId: `term-${index}`,
+      leafId: `leaf-${index}`,
+      title: 'Claude',
+      status: 'ready',
+      terminal: `pty-${index}`,
+      terminalTheme: index % 2 === 0 ? lightTheme : darkTheme,
+      isActive: index === 0,
+      agentStatus: {
+        state: 'working',
+        prompt: 'ship it',
+        updatedAt: 1,
+        stateStartedAt: 1,
+        agentType: 'claude',
+        paneKey: `term-${index}:leaf-${index}`,
+        terminalHandle: `pty-${index}`,
+        stateHistory: history,
+        interactivePrompt: 'q'.repeat(16_000),
+        lastAssistantMessage: 'a'.repeat(8_000)
+      }
+    }))
+    const copy = JSON.parse(JSON.stringify(tabs)) as MobileTerminalSessionTab[]
+    const originalStringify = JSON.stringify
+    let serializedCalls = 0
+    let serializedChars = 0
+    const stringifySpy = vi.spyOn(JSON, 'stringify').mockImplementation((...args) => {
+      serializedCalls += 1
+      const result = originalStringify(...args)
+      serializedChars += result?.length ?? 0
+      return result
+    })
+
+    const equal = mobileSessionTabsEqual(tabs, copy)
+    stringifySpy.mockRestore()
+
+    expect(equal).toBe(true)
+    expect(serializedCalls).toBe(0)
+    expect(serializedChars).toBe(0)
   })
 })
