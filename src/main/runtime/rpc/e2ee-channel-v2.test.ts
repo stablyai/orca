@@ -156,7 +156,7 @@ describe('E2EEChannel v2', () => {
     })
   })
 
-  it('rejects legacy downgrade and injected auth metadata when v2 is required', () => {
+  it('rejects legacy downgrade and runtime-only capability metadata when mobile v2 is required', () => {
     const legacy = setup()
     legacy.channel.handleRawMessage(
       JSON.stringify({ type: 'e2ee_hello', publicKeyB64: 'legacy-key' })
@@ -180,6 +180,7 @@ describe('E2EEChannel v2', () => {
       )
     )
     expect(ctx.resolveAuthenticatedDevice).not.toHaveBeenCalled()
+    expect(ctx.onError).toHaveBeenCalledWith(4001, 'Invalid e2ee_auth')
   })
 
   it('rejects a captured auth frame replayed onto a fresh desktop nonce', () => {

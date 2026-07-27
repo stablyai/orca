@@ -17,6 +17,7 @@ export function isValidMobileE2EEAuthVersion(
   if (!v2Session) {
     return auth.v === undefined && auth.transcriptHashB64 === undefined
   }
+  // Why: mobile v2 keeps an exact transcript-bound shape; runtime capabilities use legacy paired-runtime auth.
   return (
     Object.keys(auth).sort().join(',') === 'deviceToken,transcriptHashB64,type,v' &&
     auth.v === 2 &&
