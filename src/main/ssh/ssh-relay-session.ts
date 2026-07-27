@@ -705,7 +705,8 @@ export class SshRelaySession {
       await mux.request(AGENT_HOOK_INSTALL_PLUGINS_METHOD, {
         opencodePluginSource: openCodeInternals.getOpenCodePluginSource(),
         piExtensionSource: getPiAgentStatusExtensionSource('pi'),
-        ompExtensionSource: getPiAgentStatusExtensionSource('omp')
+        ompExtensionSource: getPiAgentStatusExtensionSource('omp'),
+        senpiExtensionSource: getPiAgentStatusExtensionSource('senpi')
       })
     } catch (err) {
       // Why: -32601 = older relay without the handler; CONNECTION_LOST/DISPOSED = routine mid-flight teardown — swallow both.

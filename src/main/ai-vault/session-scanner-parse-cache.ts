@@ -60,7 +60,8 @@ function resumableStateFactoryFor(
       return () => createDroidSessionResumeState(candidate.file)
     case 'openclaw':
     case 'pi':
-    case 'omp': {
+    case 'omp':
+    case 'senpi': {
       const agent = candidate.agent
       return () => createMessageGraphSessionResumeState(agent, candidate.file)
     }

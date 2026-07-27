@@ -32,6 +32,10 @@ const OMP_SESSIONS_DIR = normalizeAgentSessionsDir(
   process.env.OMP_CODING_AGENT_DIR?.trim() || join(homedir(), '.omp', 'agent', 'sessions'),
   '.omp'
 )
+const SENPI_SESSIONS_DIR = normalizeAgentSessionsDir(
+  process.env.SENPI_CODING_AGENT_DIR?.trim() || join(homedir(), '.senpi', 'agent', 'sessions'),
+  '.senpi'
+)
 // Why: Devin ATIF transcripts are stored under <DEVIN_HOME>/transcripts.
 const DEVIN_TRANSCRIPTS_DIR = join(
   process.env.DEVIN_HOME?.trim() || join(homedir(), '.local', 'share', 'devin', 'cli'),
@@ -143,7 +147,8 @@ function standardDiscoveries(
     ...hermesDiscoveries(options, wslHomeDirs, limit, issues),
     ...rovoDiscoveries(options, wslHomeDirs, limit, issues),
     ...piDiscoveries(options, wslHomeDirs, limit, issues),
-    ...ompDiscoveries(options, wslHomeDirs, limit, issues)
+    ...ompDiscoveries(options, wslHomeDirs, limit, issues),
+    ...senpiDiscoveries(options, wslHomeDirs, limit, issues)
   ]
 }
 
@@ -277,6 +282,21 @@ function ompDiscoveries(
     'sessions'
   ]).map((rootDir) =>
     discoverFiles({ rootDir, limit, agent: 'omp', issues, extensions: ['.jsonl'] })
+  )
+}
+
+function senpiDiscoveries(
+  options: AiVaultScanOptions,
+  wslHomeDirs: readonly string[],
+  limit: number,
+  issues: AiVaultScanIssue[]
+): Promise<SessionFileDiscovery>[] {
+  return sessionRootDirs(options.senpiSessionsDir ?? SENPI_SESSIONS_DIR, wslHomeDirs, [
+    '.senpi',
+    'agent',
+    'sessions'
+  ]).map((rootDir) =>
+    discoverFiles({ rootDir, limit, agent: 'senpi', issues, extensions: ['.jsonl'] })
   )
 }
 

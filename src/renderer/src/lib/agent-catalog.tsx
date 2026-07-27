@@ -10,7 +10,8 @@ import {
   KiloIcon,
   OmpIcon,
   OpenCodeIcon,
-  PiIcon
+  PiIcon,
+  SenpiIcon
 } from './agent-icon-glyphs'
 import { translate } from '@/i18n/i18n'
 import { createLocalizedCatalog } from '@/i18n/localized-catalog'
@@ -117,6 +118,13 @@ export const getAgentCatalog = createLocalizedCatalog((): AgentCatalogEntry[] =>
     // Why: no faviconDomain — omp renders the hand-authored OmpIcon glyph, so a
     // favicon fallback would never be reached.
     homepageUrl: 'https://omp.sh'
+  },
+  {
+    id: 'senpi',
+    label: translate('auto.lib.agent.catalog.senpi', 'Senpi'),
+    cmd: 'senpi',
+    // Why: no faviconDomain — senpi renders the hand-authored SenpiIcon glyph.
+    homepageUrl: 'https://github.com/code-yeongyu/senpi'
   },
   {
     id: 'gemini',
@@ -328,6 +336,9 @@ export function AgentIcon({
   }
   if (agent === 'omp') {
     return <OmpIcon size={size} />
+  }
+  if (agent === 'senpi') {
+    return <SenpiIcon size={size} />
   }
   if (agent === 'aider') {
     return <AiderIcon size={size} />

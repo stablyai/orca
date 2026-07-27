@@ -2489,6 +2489,7 @@ export type TuiAgent =
   | 'mimo-code'
   | 'pi' // Pi (pi.dev)
   | 'omp' // OMP (omp.sh)
+  | 'senpi' // Senpi (github.com/code-yeongyu/senpi)
   | 'gemini' // Gemini CLI
   | 'antigravity' // Google Antigravity CLI
   | 'aider' // Aider

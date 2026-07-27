@@ -42,6 +42,7 @@ export type AgentHookSource =
   | 'cursor'
   | 'pi'
   | 'omp'
+  | 'senpi'
   | 'droid'
   | 'command-code'
   | 'grok'

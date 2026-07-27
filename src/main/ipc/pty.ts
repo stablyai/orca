@@ -831,9 +831,24 @@ function resolvePiAgentSourceDir(
   baseEnv: Record<string, string>,
   kind: PiAgentKind
 ): string | undefined {
-  const sourceKey = kind === 'omp' ? 'ORCA_OMP_SOURCE_AGENT_DIR' : 'ORCA_PI_SOURCE_AGENT_DIR'
-  const overlayKey = kind === 'omp' ? 'ORCA_OMP_CODING_AGENT_DIR' : 'ORCA_PI_CODING_AGENT_DIR'
-  const otherOverlayKey = kind === 'omp' ? 'ORCA_PI_CODING_AGENT_DIR' : 'ORCA_OMP_CODING_AGENT_DIR'
+  const sourceKey =
+    kind === 'omp'
+      ? 'ORCA_OMP_SOURCE_AGENT_DIR'
+      : kind === 'senpi'
+        ? 'ORCA_SENPI_SOURCE_AGENT_DIR'
+        : 'ORCA_PI_SOURCE_AGENT_DIR'
+  const overlayKey =
+    kind === 'omp'
+      ? 'ORCA_OMP_CODING_AGENT_DIR'
+      : kind === 'senpi'
+        ? 'ORCA_SENPI_CODING_AGENT_DIR'
+        : 'ORCA_PI_CODING_AGENT_DIR'
+  const foreignOverlayKeys =
+    kind === 'omp'
+      ? ['ORCA_PI_CODING_AGENT_DIR', 'ORCA_SENPI_CODING_AGENT_DIR']
+      : kind === 'senpi'
+        ? ['ORCA_PI_CODING_AGENT_DIR', 'ORCA_OMP_CODING_AGENT_DIR']
+        : ['ORCA_OMP_CODING_AGENT_DIR', 'ORCA_SENPI_CODING_AGENT_DIR']
 
   const sourceDir = readEnvWithProcessFallback(baseEnv, sourceKey)
   if (sourceDir) {
@@ -842,9 +857,9 @@ function resolvePiAgentSourceDir(
 
   const publicDir = readEnvWithProcessFallback(baseEnv, 'PI_CODING_AGENT_DIR')
   const ownOverlayDir = readEnvWithProcessFallback(baseEnv, overlayKey)
-  const otherOverlayDir = readEnvWithProcessFallback(baseEnv, otherOverlayKey)
+  const foreignOverlayDirs = foreignOverlayKeys.map((key) => readEnvWithProcessFallback(baseEnv, key))
   // Why: if PI_CODING_AGENT_DIR is a restored Orca overlay with no source shadow, remirroring leaks another agent's overlay tree; fall through to defaults.
-  if (publicDir && publicDir !== ownOverlayDir && publicDir !== otherOverlayDir) {
+  if (publicDir && publicDir !== ownOverlayDir && !foreignOverlayDirs.includes(publicDir)) {
     return publicDir
   }
 
@@ -859,7 +874,12 @@ function resolveScopedPiAgentSourceDir(
   baseEnv: Record<string, string>,
   kind: PiAgentKind
 ): string | undefined {
-  const sourceKey = kind === 'omp' ? 'ORCA_OMP_SOURCE_AGENT_DIR' : 'ORCA_PI_SOURCE_AGENT_DIR'
+  const sourceKey =
+    kind === 'omp'
+      ? 'ORCA_OMP_SOURCE_AGENT_DIR'
+      : kind === 'senpi'
+        ? 'ORCA_SENPI_SOURCE_AGENT_DIR'
+        : 'ORCA_PI_SOURCE_AGENT_DIR'
   return readEnvWithProcessFallback(baseEnv, sourceKey)
 }
 
@@ -868,6 +888,12 @@ function clearPiAgentShadowEnv(baseEnv: Record<string, string>, kind: PiAgentKin
     delete baseEnv.ORCA_OMP_CODING_AGENT_DIR
     delete baseEnv.ORCA_OMP_SOURCE_AGENT_DIR
     delete baseEnv.ORCA_OMP_STATUS_EXTENSION
+    return
+  }
+  if (kind === 'senpi') {
+    delete baseEnv.ORCA_SENPI_CODING_AGENT_DIR
+    delete baseEnv.ORCA_SENPI_SOURCE_AGENT_DIR
+    delete baseEnv.ORCA_SENPI_STATUS_EXTENSION
     return
   }
   delete baseEnv.ORCA_PI_CODING_AGENT_DIR
@@ -890,6 +916,20 @@ function exposePiManagedExtensionEnv(
       baseEnv.ORCA_OMP_STATUS_EXTENSION = managedEnv.ORCA_OMP_STATUS_EXTENSION
     } else {
       delete baseEnv.ORCA_OMP_STATUS_EXTENSION
+    }
+    return
+  }
+  if (kind === 'senpi') {
+    delete baseEnv.ORCA_SENPI_CODING_AGENT_DIR
+    if (managedEnv.ORCA_SENPI_SOURCE_AGENT_DIR) {
+      baseEnv.ORCA_SENPI_SOURCE_AGENT_DIR = managedEnv.ORCA_SENPI_SOURCE_AGENT_DIR
+    } else {
+      delete baseEnv.ORCA_SENPI_SOURCE_AGENT_DIR
+    }
+    if (managedEnv.ORCA_SENPI_STATUS_EXTENSION) {
+      baseEnv.ORCA_SENPI_STATUS_EXTENSION = managedEnv.ORCA_SENPI_STATUS_EXTENSION
+    } else {
+      delete baseEnv.ORCA_SENPI_STATUS_EXTENSION
     }
     return
   }
@@ -1018,12 +1058,17 @@ export function buildPtyHostEnv(
   })
 
   const shouldPrepareOmpShadow = piAgentKind === 'omp' || !hasLaunchCommand
+  const shouldPrepareSenpiShadow = piAgentKind === 'senpi' || !hasLaunchCommand
   // Why: source shadows are agent-scoped; trusting the other kind's source reintroduces Pi/OMP extension-state shadowing.
   const preexistingPiAgentDir = resolvePiAgentSourceDir(baseEnv, 'pi')
   const preexistingOmpAgentDir =
     piAgentKind === 'omp'
       ? resolvePiAgentSourceDir(baseEnv, 'omp')
       : resolveScopedPiAgentSourceDir(baseEnv, 'omp')
+  const preexistingSenpiAgentDir =
+    piAgentKind === 'senpi'
+      ? resolvePiAgentSourceDir(baseEnv, 'senpi')
+      : resolveScopedPiAgentSourceDir(baseEnv, 'senpi')
 
   if (opts.agentStatusHooksEnabled) {
     // Why: OPENCODE_CONFIG_DIR is a single path, not a colon-list; mirror the user's value into an overlay so their plugins and Orca's status plugin coexist. See docs/opencode-config-dir-collision.md.
@@ -1096,10 +1141,17 @@ export function buildPtyHostEnv(
   if (opts.agentStatusHooksEnabled) {
     clearPiAgentShadowEnv(baseEnv, 'pi')
     clearPiAgentShadowEnv(baseEnv, 'omp')
+    clearPiAgentShadowEnv(baseEnv, 'senpi')
     if (piAgentKind === 'pi') {
       const piEnv = piTitlebarExtensionService.buildPtyEnv(id, preexistingPiAgentDir, 'pi')
       Object.assign(baseEnv, piEnv)
       exposePiManagedExtensionEnv(baseEnv, 'pi', piEnv)
+    }
+
+    if (shouldPrepareSenpiShadow) {
+      const senpiEnv = piTitlebarExtensionService.buildPtyEnv(id, preexistingSenpiAgentDir, 'senpi')
+      Object.assign(baseEnv, senpiEnv)
+      exposePiManagedExtensionEnv(baseEnv, 'senpi', senpiEnv)
     }
 
     if (shouldPrepareOmpShadow) {
@@ -1119,7 +1171,13 @@ export function buildPtyHostEnv(
       overlay: 'ORCA_OMP_CODING_AGENT_DIR',
       source: 'ORCA_OMP_SOURCE_AGENT_DIR'
     })
+    restoreOrStripOverlayEnv(baseEnv, {
+      primary: 'PI_CODING_AGENT_DIR',
+      overlay: 'ORCA_SENPI_CODING_AGENT_DIR',
+      source: 'ORCA_SENPI_SOURCE_AGENT_DIR'
+    })
     delete baseEnv.ORCA_OMP_STATUS_EXTENSION
+    delete baseEnv.ORCA_SENPI_STATUS_EXTENSION
   }
 
   // Why: keep the Codex home override PTY-scoped so dev/prod Orcas don't share hooks through ~/.codex.
