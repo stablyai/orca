@@ -1,6 +1,7 @@
 import { RelayOuterError } from './mobile-relay-e2ee-link'
 import { MobileE2EEAuthenticationError } from './mobile-e2ee-v2-physical-channel'
-import type { HostProfile } from './types'
+import type { MobileEndpointSupervisorDependencies } from './mobile-endpoint-supervisor-contract'
+import type { ConnectionState, HostProfile } from './types'
 import type { MobileRelayEndpoint } from '../../../src/shared/mobile-relay-credential-contract'
 
 export function isDirectorResolutionFailure(error: Error): boolean {
@@ -41,4 +42,32 @@ export function encodeBase64Url(value: Uint8Array): string {
 
 export function toError(error: unknown): Error {
   return error instanceof Error ? error : new Error(String(error))
+}
+
+export function logRelayLifecycle(
+  dependencies: Pick<MobileEndpointSupervisorDependencies, 'onLog' | 'now' | 'randomBytes'>,
+  event: 'start' | 'success' | 'cancel',
+  state?: ConnectionState
+): void {
+  const id = `relay-${event}-${dependencies.randomBytes(8).join('')}`
+  const ts = dependencies.now()
+  if (event === 'start') {
+    dependencies.onLog({
+      id,
+      ts,
+      level: 'info',
+      message: 'Recovering via Relay',
+      detail: `Direct connection is ${state}`
+    })
+  } else if (event === 'success') {
+    dependencies.onLog({ id, ts, level: 'success', message: 'Connected via Relay' })
+  } else {
+    dependencies.onLog({
+      id,
+      ts,
+      level: 'warn',
+      message: 'Relay migration cancelled',
+      detail: 'Direct connection became active'
+    })
+  }
 }
