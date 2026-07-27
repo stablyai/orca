@@ -1401,6 +1401,46 @@ describe('TabsSlice', () => {
     })
   })
 
+  // ─── closeTabsToLeft ──────────────────────────────────────────────
+
+  describe('closeTabsToLeft', () => {
+    it('closes unpinned tabs to the left of target', () => {
+      const t1 = store.getState().createUnifiedTab(WT, 'terminal')
+      const t2 = store.getState().createUnifiedTab(WT, 'terminal')
+      const t3 = store.getState().createUnifiedTab(WT, 'terminal')
+      const t4 = store.getState().createUnifiedTab(WT, 'terminal')
+
+      store.getState().pinTab(t2.id)
+
+      const closed = store.getState().closeTabsToLeft(t4.id)
+
+      expect(closed).toEqual([t1.id, t3.id])
+      const tabs = store.getState().unifiedTabsByWorktree[WT]
+      expect(tabs.map((t) => t.id)).toEqual([t2.id, t4.id])
+    })
+
+    it('returns empty when target is the leftmost tab', () => {
+      const t1 = store.getState().createUnifiedTab(WT, 'terminal')
+      store.getState().createUnifiedTab(WT, 'terminal')
+
+      const closed = store.getState().closeTabsToLeft(t1.id)
+
+      expect(closed).toEqual([])
+      expect(store.getState().unifiedTabsByWorktree[WT]).toHaveLength(2)
+    })
+
+    it('activates target if active tab was closed', () => {
+      store.getState().createUnifiedTab(WT, 'terminal')
+      const t2 = store.getState().createUnifiedTab(WT, 'terminal')
+      const t3 = store.getState().createUnifiedTab(WT, 'terminal')
+      store.getState().activateTab(t2.id)
+
+      store.getState().closeTabsToLeft(t3.id)
+
+      expect(store.getState().groupsByWorktree[WT][0].activeTabId).toBe(t3.id)
+    })
+  })
+
   // ─── getActiveTab / getTab ────────────────────────────────────────
 
   describe('getActiveTab / getTab', () => {
@@ -1829,6 +1869,45 @@ describe('TabsSlice', () => {
       expect(store.getState().unifiedTabsByWorktree[WT]).toEqual([])
       expect(store.getState().groupsByWorktree[WT][0].tabOrder).toEqual([])
       expect(store.getState().groupsByWorktree[WT][0].activeTabId).toBeNull()
+    })
+
+    // Regression for #9911: a reconnecting terminal (ptyId/ptyIdsByTabId cleared
+    // on SSH-relay drop or hydration, live session held in a reconnect map) whose
+    // unified entry is transiently absent must not be hard-deleted by the orphan
+    // sweep before reconnect rebinds it.
+    it('keeps a reconnecting terminal whose live session survives only in a reconnect map', () => {
+      store.setState({
+        tabsByWorktree: {
+          [WT]: [
+            {
+              id: 'reconnecting-terminal',
+              ptyId: null,
+              worktreeId: WT,
+              title: 'claude',
+              customTitle: null,
+              color: null,
+              sortOrder: 0,
+              createdAt: 1
+            }
+          ]
+        },
+        ptyIdsByTabId: { 'reconnecting-terminal': [] },
+        pendingReconnectPtyIdByTabId: { 'reconnecting-terminal': 'session-live' },
+        unifiedTabsByWorktree: { [WT]: [] },
+        groupsByWorktree: {},
+        activeGroupIdByWorktree: {}
+      })
+
+      const result = store.getState().reconcileWorktreeTabModel(WT)
+      const state = store.getState()
+
+      // The live tab survives the sweep…
+      expect(state.tabsByWorktree[WT].map((tab) => tab.id)).toContain('reconnecting-terminal')
+      // …and is re-migrated into the unified model so it renders and can reattach.
+      expect(state.unifiedTabsByWorktree[WT].map((tab) => tab.entityId)).toContain(
+        'reconnecting-terminal'
+      )
+      expect(result.renderableTabCount).toBe(1)
     })
 
     it('keeps simulator tabs because they reconnect their own backing stream', () => {

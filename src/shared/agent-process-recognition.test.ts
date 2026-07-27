@@ -212,6 +212,24 @@ describe('agent process recognition', () => {
     expect(recognizeAgentProcessFromCommandLine('node /usr/local/bin/orca status')).toBeNull()
   })
 
+  it('recognizes the versioned Cursor Node wrapper without accepting generic agent processes', () => {
+    const cursorEntrypoint = String.raw`C:\Users\dev\AppData\Local\cursor-agent\versions\2026.07.09-a3815c0\index.js`
+
+    expect(recognizeAgentProcessFromCommandLine(`node.exe ${cursorEntrypoint}`)).toEqual({
+      agent: 'cursor',
+      processName: 'cursor-agent'
+    })
+    expect(
+      recognizeAgentProcessFromCommandLine(`node.exe ${cursorEntrypoint} worker-server`)
+    ).toEqual({ agent: 'cursor', processName: 'cursor-agent' })
+    expect(
+      recognizeAgentProcessFromCommandLine(String.raw`node.exe C:\repo\cursor-agent\index.js`)
+    ).toBeNull()
+    expect(
+      recognizeAgentProcessFromCommandLine(String.raw`C:\Users\dev\.grok\bin\agent.exe`)
+    ).toBeNull()
+  })
+
   it('does not classify prompt text as a wrapped agent command', () => {
     expect(
       recognizeAgentProcessFromCommandLine(

@@ -7,6 +7,7 @@ import { DaemonServer } from './daemon-server'
 import { getDaemonPidPath, serializeDaemonPidFile } from './daemon-spawner'
 import {
   checkDaemonHealth,
+  E2E_FORCE_DAEMON_HEALTH_UNREACHABLE_ENV,
   getProcessStartedAtMs,
   healthCheckDaemon,
   killStaleDaemon,
@@ -125,6 +126,25 @@ describe('daemon health', () => {
   it('fails when the token file is missing', async () => {
     await expect(checkDaemonHealth(socketPath, tokenPath)).resolves.toBe('unreachable')
     await expect(healthCheckDaemon(socketPath, tokenPath)).resolves.toBe(false)
+  })
+
+  it('returns unreachable when the e2e force-health-failure env is set', async () => {
+    // Why: prove the e2e seam short-circuits even when a real daemon would
+    // otherwise pass — not the already-covered missing-socket path.
+    const server = new DaemonServer({
+      socketPath,
+      tokenPath,
+      spawnSubprocess: () => createMockSubprocess()
+    })
+    await server.start()
+    vi.stubEnv(E2E_FORCE_DAEMON_HEALTH_UNREACHABLE_ENV, '1')
+    try {
+      await expect(checkDaemonHealth(socketPath, tokenPath)).resolves.toBe('unreachable')
+      await expect(healthCheckDaemon(socketPath, tokenPath)).resolves.toBe(false)
+    } finally {
+      vi.unstubAllEnvs()
+      await server.shutdown()
+    }
   })
 
   it('classifies a hello-rejected daemon as rejected, not unreachable', async () => {

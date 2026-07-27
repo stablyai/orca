@@ -50,6 +50,9 @@ export type PtyConnectResult = {
   /** The requested session exited while it had no primary pane handler. Its
    *  buffered final data/exit were delivered, so callers must not fresh-spawn. */
   exitedBeforeAttach?: boolean
+  /** The provider adopted an existing session rather than creating a fresh one.
+   *  Startup commands may be ignored; recovery still requires separate ownership evidence. */
+  isReattach?: boolean
   launchAgent?: TuiAgent
   launchConfig?: SleepingAgentLaunchConfig
   snapshot?: string
@@ -77,6 +80,7 @@ type PtyCallbacks = {
   onStatus?: (shell: string) => void
   onError?: (message: string, errors?: string[]) => void
   onExit?: (code: number) => void
+  onWriteUnavailable?: () => void
   onRecoveryStateChange?: (state: PtyTransportRecoveryState) => void
 }
 

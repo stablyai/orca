@@ -155,7 +155,8 @@
       "fe21e8f6f5": "Go back ({{value0}})",
       "064bd07810": "Go back",
       "ce37cf5279": "Toggle sidebar ({{value0}})",
-      "e4b9e7dff7": "Toggle sidebar"
+      "e4b9e7dff7": "Toggle sidebar",
+      "pluginCommandFailed": "Could not run the plugin command."
     },
     "web": {
       "WebConnect": {
@@ -615,6 +616,9 @@
           }
         }
       },
+      "pluginCommandKeybindings": {
+        "group": "Plugins"
+      },
       "linear": {
         "usage": {
           "examples": {
@@ -757,6 +761,8 @@
         "devSearchKeywordSonner": "sonner",
         "devSearchKeywordError": "error",
         "devSearchKeywordNotification": "notification",
+        "pluginsTitle": "Plugins",
+        "pluginsDescription": "Install and manage experimental Orca plugins.",
         "projectHostsSummary": "{{value0}} hosts",
         "linearTitle": "Linear",
         "linearDescription": "Give agents the skill to read and update your linked Linear tickets."
@@ -1937,7 +1943,8 @@
         "workspaceTabMissing": "Tab no longer exists",
         "projectsGroupsHeader": "Projects & Groups",
         "projectBadge": "Project",
-        "repoGroupBadge": "Repo group"
+        "repoGroupBadge": "Repo group",
+        "pluginCommandFailed": "Could not run the plugin command."
       },
       "github": {
         "pr": {
@@ -2670,8 +2677,17 @@
               "blocked": {
                 "toast": {
                   "97c98f1afe": "Open Setting",
-                  "7cf51f74fd": "Enable TUI clipboard writes in Terminal settings to copy from SSH, tmux, Neovim, fzf, or Grok.",
+                  "7cf51f74fd": "Enable TUI clipboard writes in Terminal settings to copy from SSH, Zellij, tmux, Neovim, fzf, or Grok.",
                   "89eaa3e80b": "Terminal clipboard write blocked"
+                }
+              },
+              "default": {
+                "on": {
+                  "notice": {
+                    "title": "TUI clipboard writes are now on by default",
+                    "description": "Zellij, tmux, Neovim and other terminal programs can now copy to your clipboard. Turn it off in Terminal settings.",
+                    "action": "Open Setting"
+                  }
                 }
               }
             }
@@ -2928,7 +2944,8 @@
                   "5a9c83c04b": "Open any file, URL, agent, ...",
                   "90eb94dc48": "Enter an http:// or https:// URL.",
                   "5553b283ce": "Enter a URL or file path.",
-                  "queryTooLarge": "Search text is too large."
+                  "queryTooLarge": "Search text is too large.",
+                  "absolutePathRemoteBlocked": "Absolute paths require a local workspace."
                 }
               },
               "menu": {
@@ -3350,6 +3367,14 @@
             "updatedTooltip": "Remote Orca Server updates completed",
             "failedOne": "1 server update failed",
             "updatedOne": "1 server updated"
+          },
+          "resource": {
+            "memory": {
+              "metric": {
+                "workingSetDescription": "Summed working set (WS). Shared pages can appear in more than one process.",
+                "rssDescription": "Summed resident set size (RSS). Shared or aliased pages can appear in more than one process."
+              }
+            }
           }
         }
       },
@@ -3680,7 +3705,8 @@
           "SourceControlActionVariableChips": {
             "1b77798d5f": "Variables",
             "6b921a0ac2": "Example",
-            "4bf6d88039": "(empty)"
+            "4bf6d88039": "(empty)",
+            "7377483644": "This workspace"
           }
         }
       },
@@ -3748,7 +3774,8 @@
           "tipBrokenLink": "A shortcut to something that no longer exists.",
           "tipReadOnly": "This copy is in a read-only location.",
           "tipInRepo": "This copy lives inside a project, not your global skills.",
-          "tipPluginCache": "This copy is managed by a plugin."
+          "tipPluginCache": "This copy is managed by a plugin.",
+          "skippedReasonDuplicate": "This is a separate copy, so the update won’t reach it — the command only refreshes the main copy. Remove this copy, then reinstall the skill so this location follows the main one."
         },
         "SkillFreshnessUpdateDialog": {
           "title": "Update skills",
@@ -3769,7 +3796,9 @@
         "SkillFreshnessStatusPill": {
           "updateAvailable": "Update available",
           "upToDate": "Up to date",
-          "installed": "Installed"
+          "installed": "Installed",
+          "details": "Details",
+          "needsAttention": "Needs attention"
         }
       },
       "sidebar": {
@@ -4111,7 +4140,9 @@
           "75405270ed": "Edit filters ({{value0}} active)",
           "489d1c8c9f": "Search projects...",
           "ee240a39eb": "Edit filters",
-          "automationCreated": "Hide automation-created"
+          "automationCreated": "Hide automation-created",
+          "cliCreated": "Hide CLI-created",
+          "detachedHead": "Hide detached HEAD"
         },
         "SidebarHeader": {
           "25a95899c9": "Add Project",
@@ -4174,7 +4205,9 @@
           "c3fa13dc2e": "Hide default branch",
           "ed1611b65b": "Hide sleeping",
           "82594419ba": "Filters",
-          "automationCreated": "Hide automation-created"
+          "automationCreated": "Hide automation-created",
+          "cliCreated": "Hide CLI-created",
+          "detachedHead": "Hide detached HEAD"
         },
         "sidebarHostOptions": {
           "3e102f111c": "All hosts",
@@ -4237,7 +4270,8 @@
           "2d74665a56": "Ports",
           "65a9820bd1": "Agent statuses",
           "219ebf1961": "Branch name",
-          "folderPathIdentity": "Branch / folder path"
+          "folderPathIdentity": "Branch / folder path",
+          "cli": "Orca CLI"
         },
         "SshDisconnectedDialog": {
           "ca4a7892af": "Connecting...",
@@ -4358,7 +4392,12 @@
           "checkingAutomationAvailability": "Checking automation availability...",
           "automationMissing": "Automation no longer available.",
           "automationRunMissing": "Run history no longer available.",
-          "automationAvailabilityUnavailable": "Automation availability could not be checked."
+          "automationAvailabilityUnavailable": "Automation availability could not be checked.",
+          "cliHeader": "Orca CLI",
+          "cliCreatedFromAgent": "Created by an agent via `orca worktree create`",
+          "cliCreatedFromShell": "Created via `orca worktree create`",
+          "cliStartupAgent": "Started with {{value0}}",
+          "cliCreated": "Created by Orca CLI"
         },
         "WorktreeCardMetadataStatusBadges": {
           "fe188062a1": "State: Open",
@@ -5064,11 +5103,17 @@
           "remoteServerFallback": "the remote server",
           "loadAccountsFailed": "Could not load provider accounts.",
           "remoteScopeAccounts": "Showing accounts managed by {{value0}}. Add or re-authenticate accounts on that server.",
+          "accountScopePrefix": "Account scope",
+          "accountScopeRemoteServerUnnamed": "Remote server",
+          "remoteScopeLocalAccountsKept": "Accounts managed on this desktop are unchanged. Switch the default runtime back to Local desktop to view them.",
           "remoteScopeAuthContext": "Each account keeps its own sign-in context on {{value0}}.",
           "remoteEmptyClaudeAccounts": "No managed Claude accounts on {{value0}}. It uses its system default Claude login; add accounts on that server.",
           "remoteEmptyCodexAccounts": "No managed Codex accounts on {{value0}}. It uses its system default Codex login; add accounts on that server.",
           "codexSystemDefaultCustomProvider": "Custom provider — no usage tracked.",
-          "codexSystemDefaultNeedsSignIn": "No Codex sign-in was found for {{value0}}."
+          "codexSystemDefaultNeedsSignIn": "No Codex sign-in was found for {{value0}}.",
+          "codexConfigSyncMissingSource": "Codex is still using the settings it last synced because {{value0}} is missing. Restore that file to resume syncing.",
+          "codexConfigSyncBlankSource": "Codex is still using the settings it last synced because {{value0}} is empty. That is expected while a synced folder finishes downloading.",
+          "codexConfigSyncUnreadableSource": "Codex is still using the settings it last synced because {{value0}} could not be read. Check that file's permissions."
         },
         "AdvancedPane": {
           "40b29e0bf3": "Restart",
@@ -5508,7 +5553,7 @@
           "dfbc12c8c8": "Hardware debugging and device tools that talk to USB devices.",
           "bf51e4a542": "USB Devices",
           "f903bf20b5": "Discovery and access for development servers on your network.",
-          "e7bb06007c": "Local Network",
+          "e7bb06007c": "LAN",
           "4a73f5217a": "Apple Events for scripts that control other local apps.",
           "e119f0d66b": "Automation",
           "7ca17b62c8": "Recommended when projects, worktrees, or symlinked files touch macOS-protected folders.",
@@ -5564,9 +5609,14 @@
           },
           "agentDashboard": {
             "title": "Agent Dashboard",
-            "description": "Pop-out Kanban board for monitoring agents across worktrees.",
-            "copy": "Adds an Agent Dashboard entry to the left sidebar. Open it to monitor attention, working, and idle agents in a separate window and jump into their live terminals.",
-            "toggleLabel": "Toggle Agent Dashboard"
+            "description": "Kanban board for monitoring agents across worktrees, in-window or as a pop-out.",
+            "copy": "Adds an Agent Dashboard entry to the left sidebar. Open it to monitor attention, working, and idle agents and jump into their live terminals.",
+            "toggleLabel": "Toggle Agent Dashboard",
+            "modeLabel": "Open as",
+            "modeCopy": "Show the dashboard as an in-window board beside the sidebar or a separate pop-out window.",
+            "modeAriaLabel": "Agent Dashboard open mode",
+            "modeInWindow": "In-window",
+            "modePopout": "Pop-out"
           }
         },
         "FloatingWorkspacePane": {
@@ -5757,6 +5807,11 @@
         },
         "YamlThemeImportButton": {
           "label": "Import from YAML"
+        },
+        "BranchPrefixFeedback": {
+          "6c40c0908f": "Prefix cannot contain spaces or special characters like ~ ^ : ? * [ \\",
+          "64d70b156a": "Branches will be named {{example}}",
+          "808f9a726e": "No prefix will be applied"
         },
         "GitPane": {
           "d2eede4c54": "Add Orca attribution to commits, PRs, and issues.",
@@ -6016,7 +6071,7 @@
           "668016be7a": "on your computer and phone.",
           "1dc87a7fbc": "Tailscale",
           "51d29927eb": "Install",
-          "9fc5d203ff": "Orca Mobile connects directly to this computer. To use it away from the same local network, put your computer and phone on the same private overlay network, then generate the QR code with that network address selected.",
+          "9fc5d203ff": "Orca Mobile connects directly to this computer. To use it away from the same LAN, put your computer and phone on the same private overlay network, then generate the QR code with that network address selected.",
           "39fad211d9": "Connect outside your Wi-Fi with a tailnet",
           "a9db5d771d": "Refresh network interfaces",
           "b2c384cfd6": "No interfaces found",
@@ -6047,7 +6102,7 @@
           "6436e56546": "QR Code for mobile pairing",
           "1b1b70279a": "No devices paired yet.",
           "1592afcc7a": "No devices paired yet. Scan the QR code with the Orca mobile app.",
-          "relayDegradedNotice": "Relay couldn’t be reached — this code only works on your local network. Regenerate to try again."
+          "relayDegradedNotice": "Relay couldn’t be reached — this code only works on your LAN or Tailscale. Regenerate to try again."
         },
         "MobileSettingsPane": {
           "9a3c280e49": "GitHub Releases",
@@ -6360,6 +6415,7 @@
           "removeSetup": "Remove",
           "hostSetupBlockedVersion": "Orca server version is incompatible",
           "hostSetupMissingCapability": "Update Orca on this host to set up projects",
+          "hostSetupConnectionRequired": "Connect this host before importing or cloning the project",
           "setupProjectOnHost": "Set up on another host",
           "setupProjectOnHostHelp": "Choose a host, then import an existing checkout, clone the repository there, or track a setup that will be provisioned later.",
           "setupExistingFolder": "Import existing folder",
@@ -6716,7 +6772,8 @@
           "25b0004fbf": "Terminal active",
           "781cb74d22": "Runs from terminal panes.",
           "cb02e00202": "Terminal",
-          "d8c988dab4": "~/.orca/keybindings.json"
+          "d8c988dab4": "~/.orca/keybindings.json",
+          "shortcutUnavailable": "Shortcut is no longer available."
         },
         "SourceControlAiActionRecipeDefaults": {
           "2576299196": "args",
@@ -6986,9 +7043,9 @@
           "d23b43c5be": "Setup Script Location",
           "34a0dfa06e": "Where the repository setup script runs when a new workspace is created.",
           "21f8da2078": "Workspace Setup Script",
-          "6e6480a7df": "Let programs in the terminal (Grok, tmux, Neovim, fzf, SSH) copy to your system clipboard.",
+          "6e6480a7df": "Let programs in the terminal (Zellij, tmux, Neovim, fzf, Grok, SSH) copy to your system clipboard.",
           "3338dcf8c1": "Allow TUI Clipboard Writes (OSC 52)",
-          "69c64a479c": "Let Grok, tmux, Neovim, and fzf copy to the system clipboard over the PTY (including over SSH).",
+          "69c64a479c": "Let Zellij, tmux, Neovim, fzf, and Grok copy to the system clipboard over the PTY (including over SSH).",
           "4729c645fc": "Automatically copy terminal selections to the clipboard.",
           "902f5dee1f": "Copy on Select",
           "9129b7e805": "Hovering a terminal pane activates it without needing to click.",
@@ -7680,14 +7737,15 @@
         "developer": {
           "permissions": {
             "search": {
-              "3363889768": "Local Network, USB, and Bluetooth",
+              "3363889768": "LAN, USB, and Bluetooth",
               "6c82846f66": "device",
               "11653d3f42": "mdns",
               "78a10b826f": "bonjour",
               "e3fbc48083": "bluetooth",
               "c4a4a02ea4": "usb",
               "fa3239cd42": "local network",
-              "acad3d4743": "Allow device and local-network tools used from terminal sessions.",
+              "87620e6416": "lan",
+              "acad3d4743": "Allow device tools and LAN access used from terminal sessions.",
               "3e0131e45d": "icloud",
               "ce07159ff5": "desktop",
               "a0c19119fb": "downloads",
@@ -7791,7 +7849,7 @@
             },
             "agentDashboard": {
               "title": "Agent Dashboard",
-              "description": "Pop-out Kanban board for monitoring agents across worktrees."
+              "description": "Kanban board for monitoring agents across worktrees, in-window or as a pop-out."
             }
           }
         },
@@ -8625,7 +8683,6 @@
             "10f9fb6fea": "settings",
             "2ade3ea490": "config",
             "fd752b3cac": "import",
-            "82b63d07fe": "ghostty",
             "73e9422f19": "One-time import of supported Ghostty terminal settings.",
             "a979df0083": "Import from Ghostty",
             "warp_import": {
@@ -9214,7 +9271,7 @@
           "copy": "Copy",
           "copied": "Copied",
           "recipes": "Recipes",
-          "recipesHelp": "Recipes your agent adds to orca.yaml show up here, ready to launch a workspace on.",
+          "recipesHelp": "Recipes from orca.yaml and enabled plugins show up here, ready to launch a workspace on.",
           "refresh": "Refresh ephemeral VM recipes",
           "checking": "Checking recipes...",
           "none": "No recipes found yet."
@@ -9286,6 +9343,285 @@
           "567633ff50": "Right-click pastes the clipboard into the terminal. Control-click to open the context menu.",
           "c64497148a": "Right-click pastes the clipboard. Control-click opens the context menu."
         },
+        "PluginConsentDialog": {
+          "workerTrust": "Background worker — runs its own process",
+          "panelTrust": "Panel or host-integrated content — no worker process",
+          "decisionFailed": "Could not save the permission decision. Try again.",
+          "title": "Review permissions",
+          "mixedTitle": "Review access and content",
+          "instructionalTitle": "Review plugin content",
+          "subtitle": "{{value0}} v{{value1}} · {{value2}}",
+          "reconsent": "Permissions, the worker trust tier, or instructional content changed since you last reviewed this plugin. Review it again before it can run.",
+          "source": "Source",
+          "unknownSource": "Not available",
+          "commit": "Commit",
+          "localCommit": "Not available (local folder)",
+          "trust": "Trust tier",
+          "capabilities": "This plugin can",
+          "warning": "These permissions limit how the plugin uses Orca's API. Its worker still runs as a normal process on your computer with full access to your files, network, and other processes.",
+          "enable": "Enable plugin",
+          "keepDisabled": "Keep Disabled",
+          "panelWarning": "These permissions limit how the plugin uses Orca's API. This plugin has no background worker.",
+          "instructionalWarning": "This plugin has no worker process. Its instructional content can still cause actions when you or an agent use it. Review the instructions and commands below before enabling it.",
+          "capability": {
+            "workspaceRead": "Read the name, branch, and terminal list of your focused worktree",
+            "terminalSend": "Type text into a terminal you can see (always a specific terminal)",
+            "notificationsShow": "Show desktop notifications labeled with the plugin name",
+            "storage": "Store data in the plugin's own storage folder",
+            "secrets": "Store and read secrets in the plugin's own encrypted vault",
+            "eventsSubscribe": "Get notified when worktrees are created or removed and when agent status changes",
+            "settingsOwn": "Read and change the plugin's own settings"
+          },
+          "skillWarning": "This plugin installs instructional skills. Agents read those instructions and may act on them with the full authority you give the agent.",
+          "instructionalTrust": "Instructional content — runs later under user or agent authority",
+          "declarativeTrust": "Declarative content — no plugin code",
+          "reviewTitle": "Review plugin",
+          "declarativeWarning": "This plugin contributes validated content only. It does not run a background worker or receive access to Orca's API.",
+          "trustShortWorker": "Worker",
+          "trustShortInstructional": "Instructional",
+          "trustShortPanel": "Panel",
+          "trustShortDeclarative": "Declarative"
+        },
+        "PluginDevelopmentSection": {
+          "pathRequired": "Enter a plugin folder path.",
+          "title": "Development",
+          "help": "Load plugins directly from folders on this computer while you develop them. Dev plugins still require permission review. Workers run on this desktop host; SSH workspace actions route through Orca, so paths here are desktop paths.",
+          "remove": "Remove",
+          "placeholder": "/Users/you/plugins/my-plugin or C:\\Users\\you\\plugins\\my-plugin",
+          "add": "Add path",
+          "saveFailed": "Could not save development plugin paths.",
+          "pathLabel": "Development plugin folder path"
+        },
+        "PluginInstallDialog": {
+          "localRequired": "Enter the plugin folder path.",
+          "gitUrlRequired": "Enter a repository URL.",
+          "gitRefRequired": "Add an explicit #ref (tag or commit) so the install is pinned — for example #v0.1.0.",
+          "installFailed": "Plugin installation failed. Check the source and try again.",
+          "title": "Install plugin",
+          "description": "Installing copies the plugin into Orca and shows its permissions for review. No plugin code runs until you enable it.",
+          "source": "Install source",
+          "localTab": "Local folder",
+          "gitTab": "Git URL",
+          "localLabel": "Plugin folder path",
+          "localPlaceholder": "/Users/you/plugins/my-plugin or C:\\Users\\you\\plugins\\my-plugin",
+          "localHelp": "Full path to a folder containing orca-plugin.json on this computer. The path is used exactly as entered.",
+          "gitLabel": "Repository URL with #ref",
+          "gitPlaceholder": "https://git.example/acme/orca-notes#v0.1.0",
+          "gitHelp": "Append an explicit #ref — a tag or commit — so the install is pinned. Works with GitHub, GitLab, and any git host.",
+          "cancel": "Cancel",
+          "installing": "Installing…",
+          "install": "Install",
+          "gitUrlInvalid": "Use an HTTPS or SSH Git URL. Executable Git helper protocols are not allowed."
+        },
+        "PluginRemoveDialog": {
+          "title": "Remove plugin?",
+          "description": "This removes {{value0}} and its stored plugin data from this computer. You can install it again later.",
+          "cancel": "Cancel",
+          "remove": "Remove plugin"
+        },
+        "PluginSettingsRow": {
+          "needsReview": "Needs review",
+          "invalid": "Invalid",
+          "error": "Error",
+          "disabled": "Disabled",
+          "running": "Running",
+          "enabled": "Enabled",
+          "workerTier": "background worker",
+          "panelTier": "panel only",
+          "loadingLogs": "Loading logs…",
+          "noLogs": "No log lines recorded.",
+          "logCount": "Last {{value0}} of up to 200 retained lines",
+          "dev": "Dev",
+          "review": "Review permissions",
+          "moreActions": "More actions for {{value0}}",
+          "hideLogs": "Hide logs",
+          "viewLogs": "View logs",
+          "remove": "Remove",
+          "enableLabel": "Enable {{value0}}",
+          "restartCount": " · {{value0}} restarts",
+          "restarting": "Restarting",
+          "invalidPluginError": "The plugin manifest or installed files are invalid. Fix the plugin, then refresh.",
+          "runtimeError": "The plugin stopped after an activation or worker error.",
+          "disableLabel": "Disable {{value0}}",
+          "blocked": "Blocked",
+          "official": "Official",
+          "bundled": "Bundled",
+          "killListMessage": "Orca's safety list disabled this plugin: {{value0}}",
+          "viewAdvisory": "View advisory",
+          "rollback": "Roll back",
+          "noDescription": "No description provided.",
+          "reviewAndEnable": "Review & enable"
+        },
+        "PluginsSettingsSection": {
+          "loadFailed": "Could not load plugins.",
+          "logsFailed": "Could not load plugin logs.",
+          "title": "Plugins",
+          "experimental": "Experimental",
+          "description": "Install and manage Orca plugins. Plugins run on this computer, even for SSH workspaces.",
+          "install": "Install plugin",
+          "systemLabel": "Plugin system",
+          "systemDescription": "Discovers installed plugins and lets you enable them individually. Nothing runs until you review and enable it. Workers always run on this computer; SSH workspace actions route through Orca.",
+          "featureOff": "Turn on the plugin system to see and manage installed plugins. Anything already installed stays on disk and stays disabled while the system is off.",
+          "loading": "Loading plugins…",
+          "installed": "Installed",
+          "refresh": "Refresh",
+          "tryAgain": "Try again",
+          "empty": "No plugins installed. Use Install plugin to add one from a local folder or a pinned git ref.",
+          "settingsUpdateFailed": "Could not save plugin settings.",
+          "rollbackFailed": "Could not roll back this plugin. A previous immutable version may not be available.",
+          "noInstalledResults": "No installed plugins match this search.",
+          "noInstalledResultsTitle": "No matching plugins",
+          "emptyTitle": "No plugins installed yet"
+        },
+        "plugins": {
+          "search": {
+            "title": "Plugins",
+            "description": "Install and manage experimental Orca plugins.",
+            "install": "install plugin",
+            "permissions": "plugin permissions",
+            "logs": "plugin logs",
+            "development": "development plugins"
+          }
+        },
+        "pluginError": {
+          "installManifestMissing": "No readable orca-plugin.json was found. Choose the plugin's root folder.",
+          "installManifestInvalid": "orca-plugin.json is invalid. Ask the plugin author to fix the manifest.",
+          "incompatible": "This plugin requires a different Orca version.",
+          "installUnsafePath": "The plugin contains an unsafe file path or symlink and was not installed.",
+          "installLimit": "The plugin exceeds Orca's install size or file-count limits.",
+          "installGit": "Orca could not fetch the pinned Git revision. Check the URL, #ref, access, and system Git setup.",
+          "invalidManifestMissing": "The plugin root is missing orca-plugin.json. Add it, then refresh plugins.",
+          "invalidManifest": "orca-plugin.json is invalid. Fix it, then refresh plugins.",
+          "invalidArtifact": "A declared worker or panel file is missing or unsafe. Fix the plugin files, then refresh.",
+          "consentChanged": "The plugin changed while you were reviewing it. Close this dialog and review the updated permissions."
+        },
+        "PluginVmRecipeConsentPreview": {
+          "create": "Create",
+          "suspend": "Suspend",
+          "resume": "Resume",
+          "destroy": "Destroy",
+          "warning": "This plugin installs VM recipes. Orca runs the commands below on your local desktop host when you use the matching lifecycle action.",
+          "commandLabel": "{{value0}} · {{value1}} command",
+          "heading": "VM recipe commands"
+        },
+        "PluginKeybindingConsentPreview": {
+          "warning": "This plugin adds keyboard shortcuts. Plugin shortcuts take priority over matching Orca shortcuts while the plugin is enabled.",
+          "heading": "Keyboard shortcuts",
+          "worktree": "Runs only while a workspace is active.",
+          "global": "Runs in the app without requiring an active workspace.",
+          "shadows": "Replaces: {{value0}}"
+        },
+        "PluginMarketplaceBrowser": {
+          "loadFailed": "Could not load marketplace plugins.",
+          "refreshFailed": "Could not refresh marketplaces. Cached listings remain available.",
+          "previewFailed": "Could not prepare this plugin for review. Refresh the marketplace and try again.",
+          "installFailed": "Could not install this plugin. The reviewed source may have changed.",
+          "heading": "Marketplace",
+          "manageSources": "Manage sources",
+          "refreshing": "Refreshing…",
+          "refresh": "Refresh",
+          "loading": "Loading marketplace plugins…",
+          "searchLabel": "Search marketplace plugins",
+          "searchPlaceholder": "Search plugins, categories, or publishers",
+          "tryAgain": "Try again",
+          "noSources": "Add an official, community, or private Git marketplace to browse plugins.",
+          "addSource": "Add marketplace",
+          "noResults": "No marketplace plugins match this search.",
+          "empty": "The configured marketplaces do not list any plugins.",
+          "noInstalled": "No plugins installed.",
+          "noInstalledTitle": "No plugins installed",
+          "noSourcesTitle": "No marketplaces configured",
+          "noResultsTitle": "No matching plugins",
+          "clearSearch": "Clear search",
+          "emptyTitle": "Nothing listed yet"
+        },
+        "PluginMarketplaceListingRow": {
+          "official": "Official",
+          "bundled": "Bundled",
+          "installed": "Installed",
+          "marketplace": "{{value0}} · {{value1}}",
+          "blocked": "Blocked by Orca's safety list: {{value0}}",
+          "blockedAction": "Blocked",
+          "checkUpdate": "Check for update",
+          "installedAction": "Installed",
+          "review": "Review",
+          "noDescription": "No description provided.",
+          "install": "Install"
+        },
+        "PluginMarketplacePreviewDialog": {
+          "languagePacks": "{{value0}} language packs",
+          "commands": "{{value0}} commands",
+          "keybindings": "{{value0}} keyboard shortcuts",
+          "vmRecipes": "{{value0}} VM recipes",
+          "panels": "{{value0}} panels",
+          "events": "{{value0}} event subscriptions",
+          "worker": "Background worker",
+          "official": "Official",
+          "bundled": "Bundled",
+          "subtitle": "{{value0}} v{{value1}} · {{value2}}",
+          "source": "Plugin source",
+          "commit": "Pinned commit",
+          "marketplaceCommit": "Index commit",
+          "includes": "Includes",
+          "noContributions": "Manifest metadata only",
+          "capabilities": "Requested access",
+          "workerWarning": "Capabilities limit how this plugin uses Orca's API. Its worker still runs as a normal process on this computer with full access to your files, network, and other processes.",
+          "blocked": "Orca's safety list blocks this plugin: {{value0}}",
+          "current": "This exact plugin content is already installed.",
+          "cancel": "Cancel",
+          "update": "Update plugin",
+          "install": "Install plugin",
+          "provenance": "Reviewed source",
+          "close": "Close",
+          "upToDate": "Up to date",
+          "languagePacksOne": "1 language pack",
+          "commandsOne": "1 command",
+          "keybindingsOne": "1 keyboard shortcut",
+          "vmRecipesOne": "1 VM recipe",
+          "panelsOne": "1 panel",
+          "eventsOne": "1 event subscription",
+          "versionLine": "v{{value0}} · {{value1}}"
+        },
+        "PluginMarketplaceSourceDialog": {
+          "addFailed": "Could not add this marketplace. Check the Git URL, ref, and your Git credentials.",
+          "refreshFailed": "Could not refresh this marketplace. Its last valid cached index is still available.",
+          "removeFailed": "Could not remove this marketplace.",
+          "title": "Marketplace sources",
+          "description": "Marketplaces are pinned Git repositories. Orca uses your existing system Git credentials for private repositories.",
+          "urlLabel": "Git URL",
+          "urlDescription": "Use an HTTPS or SSH repository URL containing orca-marketplace.json.",
+          "refLabel": "Git ref",
+          "refDescription": "Choose a branch, tag, or commit. Every fetched index is recorded at an exact commit.",
+          "adding": "Adding…",
+          "add": "Add source",
+          "configured": "Configured sources",
+          "empty": "No marketplace sources configured.",
+          "owner": "Owner: {{value0}}",
+          "pinnedCommit": "Pinned at {{value0}}",
+          "stale": "Refresh failed. Browsing the last valid cached index.",
+          "refreshLabel": "Refresh {{value0}}",
+          "removeLabel": "Remove {{value0}}",
+          "done": "Done",
+          "urlPlaceholder": "https://git.example.com/team/plugins.git",
+          "official": "Official"
+        },
+        "PluginRollbackDialog": {
+          "title": "Roll back plugin?",
+          "description": "This deactivates {{value0}} and restores its previous immutable version. If that version requests different access or instructional content, Orca will require another review.",
+          "cancel": "Cancel",
+          "confirm": "Roll back plugin"
+        },
+        "PluginConsentProvenance": {
+          "official": "Official",
+          "bundled": "Bundled with Orca",
+          "local": "Local folder",
+          "community": "Community",
+          "source": "Source",
+          "sourceLabel": "Source",
+          "commit": "Pinned commit",
+          "localCommit": "Local folder — no commit",
+          "indexCommit": "Index commit"
+        },
         "MobileRelayStatusSection": {
           "registered": "Registered",
           "connecting": "Connecting",
@@ -9310,10 +9646,10 @@
           "anywhereTitle": "Orca Relay",
           "anywhereDescription": "Phone can be on cellular or any Wi‑Fi. Sign-in required.",
           "signInRequired": "Sign in to use Orca Mobile Relay.",
-          "relayUnavailable": "Orca Relay isn’t available in this build. Use Local network.",
+          "relayUnavailable": "Orca Relay isn’t available in this build. Use LAN.",
           "signIn": "Sign in",
           "signInAgain": "Sign in again",
-          "localTitle": "Local network",
+          "localTitle": "LAN",
           "localDescription": "Phone must be on this Wi‑Fi or your Tailscale. No sign-in."
         },
         "MobilePairingSetupSection": {
@@ -9892,7 +10228,6 @@
             "b715ef615b": "{{value0}} commits ahead of {{value1}}",
             "c1a8f3e204": "1 commit behind {{value0}}",
             "d2b9g4f315": "{{value0}} commits behind {{value1}}",
-            "e9c2a5d416": "Even with {{value0}}",
             "4b4a7de138": "Open review page in browser",
             "createPrIntentCommitBlockedSummary": "Commit blocked: {{value0}} Fix the issue, then retry Create PR.",
             "pushRecovery": {
@@ -9910,7 +10245,11 @@
               "834cb3f23d": "Fix with AI",
               "783a808870": "Close"
             },
-            "97e7124eac": "Could not refresh Source Control. Try again."
+            "97e7124eac": "Could not refresh Source Control. Try again.",
+            "b8c2e1a904": "{{value0}} → {{value1}}",
+            "a4e93c21d7": "Current branch: {{value0}}",
+            "c7d4e2f801": "Change base ref: {{value0}}",
+            "f3a1b8c204": "upstream"
           },
           "SourceControlAgentActionDialog": {
             "8e856842d1": "Could not start the selected agent.",
@@ -10259,6 +10598,12 @@
             "aiVaultSessionHistory": "Agents",
             "folderWorkspaces": "Attached worktrees",
             "parentPrChecks": "PR Checks"
+          },
+          "PluginPanel": {
+            "loading": "Loading plugin panel...",
+            "unavailable": "This plugin panel is no longer available.",
+            "loadFailed": "The plugin panel could not be loaded.",
+            "unresponsive": "This plugin panel stopped responding and was suspended."
           },
           "right": {
             "panel": {
@@ -10665,6 +11010,9 @@
             "notAuthorized": "Couldn't open log — path not authorized.",
             "alreadyEditable": "Log is already open for editing."
           },
+          "activityBar": {
+            "error": "Error"
+          },
           "github": {
             "refresh": {
               "error": {
@@ -11060,7 +11408,7 @@
             "preview": "Preview",
             "stable": "Stable"
           },
-          "relayDegradedNotice": "Relay couldn’t be reached — this code only works on your local network."
+          "relayDegradedNotice": "Relay couldn’t be reached — this code only works on your LAN or Tailscale."
         },
         "MobilePage": {
           "e17393c6a3": "Phone preview",
@@ -12647,6 +12995,10 @@
                 "project": "Project"
               }
             }
+          },
+          "pluginQuickActions": {
+            "description": "{{value0}} plugin command",
+            "keyword": "plugin command"
           }
         }
       },
@@ -13270,6 +13622,11 @@
             "noPr": "No PR",
             "unavailable": "Unavailable"
           }
+        },
+        "pluginPanelBridgeHost": {
+          "actionsUnavailable": "Plugin actions are not available in this client.",
+          "messageTooLarge": "Message exceeds the size limit.",
+          "tooManyRequests": "Too many requests."
         }
       },
       "link": {
@@ -13547,6 +13904,17 @@
         "searchAssignee": "Filter assignee…",
         "back": "Back"
       },
+      "pluginCatalog": {
+        "PluginCatalogLayout": {
+          "title": "Plugins",
+          "description": "Browse available plugins or manage the ones installed in Orca.",
+          "filter": "Plugin filter",
+          "all": "All",
+          "installed": "Installed",
+          "searchLabel": "Search plugins",
+          "searchPlaceholder": "Search plugins, categories, or publishers"
+        }
+      },
       "browser-pane": {
         "markup": {
           "cancel": "Cancel",
@@ -13730,7 +14098,16 @@
       "bar": {
         "SortableTabContextMenu": {
           "switchToTerminalView": "Switch to terminal view",
-          "switchToChatView": "Switch to chat view"
+          "switchToChatView": "Switch to chat view",
+          "closeTabsToLeft": "Close Tabs To The Left"
+        },
+        "BrowserTab": {
+          "closeOthers": "Close Others",
+          "closeTabsToLeft": "Close Tabs To The Left"
+        },
+        "EditorFileTabContextMenu": {
+          "closeOthers": "Close Others",
+          "closeTabsToLeft": "Close Tabs To The Left"
         }
       }
     },
@@ -13789,6 +14166,9 @@
     },
     "title": "Agents",
     "total": "{{count}} total",
+    "close": "Close dashboard",
+    "settings": "Agent Dashboard settings",
+    "settingsTooltip": "Board settings",
     "card": {
       "you": "You",
       "time": {

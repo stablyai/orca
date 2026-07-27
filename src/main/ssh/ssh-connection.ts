@@ -40,6 +40,10 @@ import {
   type SshConnectionCallbacks
 } from './ssh-connection-utils'
 import type { RemoteHostPlatform } from './ssh-remote-platform'
+import {
+  resolveSftpTransferPathIfMapped,
+  type SftpNamespacePathMapping
+} from './sftp-namespace-resolution'
 import type { FileUploadSession } from '../providers/types'
 import { isSshSessionLimitError } from './ssh-session-limit-error'
 import {
@@ -50,6 +54,8 @@ export type { SshConnectionCallbacks } from './ssh-connection-utils'
 
 type SshRemoteFileOptions = {
   hostPlatform?: RemoteHostPlatform
+  // Only uploadDirectory and writeFile honor this, and only on the non-Windows ssh2 branch.
+  sftpNamespace?: SftpNamespacePathMapping
 }
 
 // Upper bound on waiting for an aborted channel's open/close to settle before rejecting anyway.
@@ -64,6 +70,36 @@ function cloneResolvedConfig(config: SshResolvedConfig | null): SshResolvedConfi
     return null
   }
   return { ...config, identityFile: [...config.identityFile] }
+}
+
+function isGitHubRestrictedShellProbeSuccess(
+  target: SshTarget,
+  resolvedConfig: SshResolvedConfig | null,
+  code: number | null,
+  stderr: string
+): boolean {
+  if (code !== 1) {
+    return false
+  }
+
+  const effectiveUser = (target.username?.trim() || resolvedConfig?.user?.trim())?.toLowerCase()
+  if (effectiveUser !== 'git') {
+    return false
+  }
+
+  // GitHub appends git:// advisory lines after the invalid-command line (issue #6988), so match the first line only.
+  const firstLine = stderr.split('\n', 1)[0]?.trim()
+  if (firstLine !== 'Invalid command: echo ORCA-SYSTEM-SSH-OK') {
+    return false
+  }
+
+  const resolvedHost = resolvedConfig?.hostname?.trim()
+  const hostCandidates = resolvedHost ? [resolvedHost] : [target.host, target.configHost]
+
+  return hostCandidates.some((host) => {
+    const normalizedHost = host?.trim().toLowerCase()
+    return normalizedHost === 'github.com' || normalizedHost === 'ssh.github.com'
+  })
 }
 
 export class SshConnection {
@@ -393,15 +429,17 @@ export class SshConnection {
         sftp.on('error', swallowLateSftpError)
         sftp.once('close', () => sftp.removeListener('error', swallowLateSftpError))
         try {
-          const { uploadDirectory } = await import('./ssh-relay-deploy-helpers')
-          await raceSftpFileTransferWithAbort(
-            uploadDirectory(sftp, localDir, remoteDir),
-            linkedSignal.signal,
-            (onClose) => {
-              sftp.once('close', onClose)
-              endSftp()
-            }
-          )
+          // Why: resolve on the same session that transfers — a later session is not authoritative for this one's namespace.
+          const transfer = (async (): Promise<void> => {
+            const targetDir = await resolveSftpTransferPathIfMapped(sftp, remoteDir, options)
+            linkedSignal.signal.throwIfAborted()
+            const { uploadDirectory } = await import('./ssh-relay-deploy-helpers')
+            await uploadDirectory(sftp, localDir, targetDir)
+          })()
+          await raceSftpFileTransferWithAbort(transfer, linkedSignal.signal, (onClose) => {
+            sftp.once('close', onClose)
+            endSftp()
+          })
         } finally {
           endSftp()
         }
@@ -489,35 +527,13 @@ export class SshConnection {
         sftp.on('error', swallowLateSftpError)
         sftp.once('close', () => sftp.removeListener('error', swallowLateSftpError))
         try {
-          const write = new Promise<void>((resolve, reject) => {
-            const ws = sftp.createWriteStream(remotePath)
-            let settled = false
-            const cleanup = (): void => {
-              sftp.removeListener('error', onError)
-              ws.removeListener('close', onClose)
-              ws.removeListener('error', onError)
-            }
-            const onClose = (): void => {
-              if (settled) {
-                return
-              }
-              settled = true
-              cleanup()
-              resolve()
-            }
-            const onError = (err: Error): void => {
-              if (settled) {
-                return
-              }
-              settled = true
-              cleanup()
-              reject(err)
-            }
-            sftp.prependOnceListener('error', onError)
-            ws.once('close', onClose)
-            ws.once('error', onError)
-            ws.end(contents)
-          })
+          // Why: resolve on the same session that writes — a later session is not authoritative for this one's namespace.
+          const write = (async (): Promise<void> => {
+            const targetPath = await resolveSftpTransferPathIfMapped(sftp, remotePath, options)
+            linkedSignal.signal.throwIfAborted()
+            const { writeStringViaSftp } = await import('./sftp-upload')
+            await writeStringViaSftp(sftp, targetPath, contents)
+          })()
           await raceSftpFileTransferWithAbort(write, linkedSignal.signal, (onClose) => {
             sftp.once('close', onClose)
             endSftp()
@@ -847,16 +863,24 @@ export class SshConnection {
               reject(new Error('SSH connection attempt was cancelled'))
               return
             }
-            if (code !== 0 || !stdout.includes('ORCA-SYSTEM-SSH-OK')) {
-              reject(
-                new Error(
-                  `System SSH probe failed${code != null ? ` (exit ${code})` : ''}.${stderr ? ` stderr: ${stderr.trim()}` : ''}`
-                )
+            if (
+              (code === 0 && stdout.includes('ORCA-SYSTEM-SSH-OK')) ||
+              isGitHubRestrictedShellProbeSuccess(
+                this.target,
+                this.systemSshResolvedConfig,
+                code,
+                stderr
               )
+            ) {
+              this.setState('connected')
+              resolve()
               return
             }
-            this.setState('connected')
-            resolve()
+            reject(
+              new Error(
+                `System SSH probe failed${code != null ? ` (exit ${code})` : ''}.${stderr ? ` stderr: ${stderr.trim()}` : ''}`
+              )
+            )
           })
         }
         const timeout = setTimeout(() => {

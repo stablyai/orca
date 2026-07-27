@@ -1,7 +1,11 @@
 import { join } from 'node:path'
+import { assertJsonTextStructureWithinLimits } from './json-text-structure-limit'
 
 export const SERVE_UPDATE_HANDOFF_PATH_ENV = 'ORCA_SERVE_UPDATE_HANDOFF_PATH'
 export const SERVE_UPDATE_HANDOFF_FILE = 'serve-update-handoff.json'
+export const MAX_SERVE_UPDATE_HANDOFF_FILE_BYTES = 64 * 1024
+export const MAX_SERVE_UPDATE_HANDOFF_JSON_STRUCTURAL_TOKENS = 16 * 1024
+export const MAX_SERVE_UPDATE_HANDOFF_JSON_NESTING_DEPTH = 32
 
 export type ServeUpdateHandoffState =
   | {
@@ -59,6 +63,14 @@ export function parseServeUpdateHandoffState(value: unknown): ServeUpdateHandoff
     return null
   }
   return state as ServeUpdateHandoffState
+}
+
+export function parseServeUpdateHandoffJson(serialized: string): ServeUpdateHandoffState | null {
+  assertJsonTextStructureWithinLimits(serialized, {
+    structuralTokens: MAX_SERVE_UPDATE_HANDOFF_JSON_STRUCTURAL_TOKENS,
+    nestingDepth: MAX_SERVE_UPDATE_HANDOFF_JSON_NESTING_DEPTH
+  })
+  return parseServeUpdateHandoffState(JSON.parse(serialized))
 }
 
 export function parseServeSupervisorMessage(value: unknown): ServeSupervisorMessage | null {

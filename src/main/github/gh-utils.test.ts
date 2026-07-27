@@ -3,10 +3,13 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
-const { gitExecFileAsyncMock, getSshGitProviderMock } = vi.hoisted(() => ({
-  gitExecFileAsyncMock: vi.fn(),
-  getSshGitProviderMock: vi.fn()
-}))
+const { gitExecFileAsyncMock, getSshGitProviderGenerationMock, getSshGitProviderMock } = vi.hoisted(
+  () => ({
+    gitExecFileAsyncMock: vi.fn(),
+    getSshGitProviderGenerationMock: vi.fn(() => 0),
+    getSshGitProviderMock: vi.fn()
+  })
+)
 
 vi.mock('../git/runner', () => ({
   gitExecFileAsync: gitExecFileAsyncMock,
@@ -14,6 +17,7 @@ vi.mock('../git/runner', () => ({
 }))
 
 vi.mock('../providers/ssh-git-dispatch', () => ({
+  getSshGitProviderGeneration: getSshGitProviderGenerationMock,
   getSshGitProvider: getSshGitProviderMock
 }))
 
@@ -38,6 +42,8 @@ import {
 describe('github owner/repo resolution', () => {
   beforeEach(() => {
     gitExecFileAsyncMock.mockReset()
+    getSshGitProviderGenerationMock.mockReset()
+    getSshGitProviderGenerationMock.mockReturnValue(0)
     getSshGitProviderMock.mockReset()
     _resetOwnerRepoCache()
     __resetLocalGitConfigSignatureCacheForTests()

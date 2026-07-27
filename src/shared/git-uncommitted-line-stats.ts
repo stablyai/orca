@@ -1,8 +1,10 @@
-import { lstat, readFile } from 'node:fs/promises'
+import { lstat } from 'node:fs/promises'
 import * as path from 'node:path'
 import { isBinaryBuffer } from './binary-buffer'
 import { decodeGitCQuotedPath } from './git-cquoted-path'
 import { DEFAULT_GIT_STATUS_LIMIT } from './git-status-limit'
+import { iterateNulDelimitedFields } from './nul-delimited-fields'
+import { readNodeFileWithinLimit } from './node-bounded-file-reader'
 
 export type GitLineStats = { added?: number; removed?: number }
 
@@ -78,9 +80,9 @@ export function parseNumstat(stdout: string): Map<string, GitLineStats> {
 
 function parseNulDelimitedNumstat(stdout: string): Map<string, GitLineStats> {
   const stats = new Map<string, GitLineStats>()
-  const records = stdout.split('\0')
-  for (let i = 0; i < records.length; i += 1) {
-    const record = records[i]
+  const records = iterateNulDelimitedFields(stdout)[Symbol.iterator]()
+  for (let next = records.next(); !next.done; next = records.next()) {
+    const record = next.value
     if (!record) {
       continue
     }
@@ -89,9 +91,9 @@ function parseNulDelimitedNumstat(stdout: string): Map<string, GitLineStats> {
     let path = rawPath
     if (!path) {
       // Git -z emits rename paths as: "added<TAB>removed<TAB>\0old\0new\0".
-      // The split record has an empty path in the header; the postimage is next.
-      i += 2
-      path = records[i] ?? ''
+      // The empty header path is followed by the preimage and postimage.
+      records.next()
+      path = records.next().value ?? ''
     }
     if (!path) {
       continue
@@ -127,7 +129,7 @@ async function countFileAdditions(absolutePath: string): Promise<GitLineStats> {
     if (!fileStat.isFile() || fileStat.size > MAX_UNTRACKED_LINE_COUNT_BYTES) {
       return rememberUntrackedStats(absolutePath, fileStat, {})
     }
-    const buffer = await readFile(absolutePath)
+    const { buffer } = await readNodeFileWithinLimit(absolutePath, MAX_UNTRACKED_LINE_COUNT_BYTES)
     if (isBinaryBuffer(buffer)) {
       return rememberUntrackedStats(absolutePath, fileStat, {})
     }

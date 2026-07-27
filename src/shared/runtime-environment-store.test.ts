@@ -1,4 +1,4 @@
-import { mkdtempSync, rmSync } from 'node:fs'
+import { mkdtempSync, rmSync, truncateSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
@@ -6,7 +6,9 @@ import { encodePairingOffer } from './pairing'
 import {
   RuntimeEnvironmentStoreError,
   addEnvironmentFromPairingCode,
+  getEnvironmentStorePath,
   listEnvironments,
+  MAX_RUNTIME_ENVIRONMENT_STORE_FILE_BYTES,
   markEnvironmentUsed,
   updateEnvironmentFromPairingCode
 } from './runtime-environment-store'
@@ -124,5 +126,32 @@ describe('runtime environment store', () => {
       lastUsedAt: 2_000,
       runtimeId: 'runtime-2'
     })
+  })
+
+  it('rejects an oversized sparse environment store before parsing it', () => {
+    const userDataPath = mkdtempSync(join(tmpdir(), 'orca-runtime-env-store-bound-'))
+    tempDirs.push(userDataPath)
+    const path = getEnvironmentStorePath(userDataPath)
+    writeFileSync(path, '{"version":1,"environments":[]}')
+    truncateSync(path, MAX_RUNTIME_ENVIRONMENT_STORE_FILE_BYTES + 1)
+
+    expect(() => listEnvironments(userDataPath)).toThrow(RuntimeEnvironmentStoreError)
+  })
+
+  it('rejects an oversized write without replacing the durable environment list', () => {
+    const userDataPath = mkdtempSync(join(tmpdir(), 'orca-runtime-env-store-write-bound-'))
+    tempDirs.push(userDataPath)
+    const first = addEnvironmentFromPairingCode(userDataPath, {
+      name: 'dev box',
+      pairingCode: pairingCode()
+    })
+
+    expect(() =>
+      addEnvironmentFromPairingCode(userDataPath, {
+        name: 'x'.repeat(MAX_RUNTIME_ENVIRONMENT_STORE_FILE_BYTES),
+        pairingCode: pairingCode('ws://192.0.2.10:6768')
+      })
+    ).toThrow(RuntimeEnvironmentStoreError)
+    expect(listEnvironments(userDataPath)).toEqual([first])
   })
 })

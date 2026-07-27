@@ -8,7 +8,12 @@ import {
 } from '../flags'
 import { RuntimeClientError } from '../runtime-client'
 import { getTerminalHandle } from '../selectors'
+import {
+  clampOrchestrationAskTimeoutMs,
+  resolveOrchestrationAskClientTimeoutMs
+} from '../../shared/orchestration-ask-timeout'
 import { abbreviateOrchestrationTasks } from '../../shared/orchestration-task-summary'
+import { parsePositiveSafeIntegerText } from '../../shared/timer-delay'
 
 // Why: 15 s is well under Claude Code's ~2 min Bash-tool silence budget while keeping log volume low. See design doc §3.4.
 const DEFAULT_KEEPALIVE_INTERVAL_MS = 15_000
@@ -319,11 +324,11 @@ function getOptionalPositiveIntegerValueFlag(
   if (typeof raw !== 'string' || raw.length === 0) {
     throw new RuntimeClientError('invalid_argument', `Missing value for --${name}.`)
   }
-  const value = Number(raw)
-  if (!Number.isFinite(value) || !Number.isInteger(value) || value <= 0) {
+  const value = parsePositiveSafeIntegerText(raw)
+  if (value === null) {
     throw new RuntimeClientError(
       'invalid_argument',
-      `Invalid positive integer for --${name}: ${raw}`
+      `Invalid positive safe integer for --${name}: ${raw}`
     )
   }
   return value
@@ -611,24 +616,25 @@ export const ORCHESTRATION_HANDLERS: Record<string, CommandHandler> = {
 
   'orchestration ask': async ({ flags, client, cwd, json }) => {
     const parsedTimeoutMs = getOptionalPositiveIntegerValueFlag(flags, 'timeout-ms')
+    const timeoutMs = clampOrchestrationAskTimeoutMs(parsedTimeoutMs)
     const from = await resolveOrchestrationTerminalHandle(flags, cwd, client, 'from')
-    const timeoutMs = parsedTimeoutMs ?? 600_000
     const result = await client.call<{
       answer: string | null
       messageId: string | null
       threadId: string
       timedOut: boolean
+      timeoutMs?: number
     }>(
       'orchestration.ask',
       {
         to: getRequiredStringFlag(flags, 'to'),
         question: getRequiredStringFlag(flags, 'question'),
         options: getOptionalStringFlag(flags, 'options'),
-        timeoutMs: parsedTimeoutMs,
+        timeoutMs: parsedTimeoutMs === undefined ? undefined : timeoutMs,
         from
       },
       // Why: extend past timeoutMs so the RPC transport's 60s default doesn't abort before the runtime's own timeout resolves.
-      { timeoutMs: timeoutMs + 5_000 }
+      { timeoutMs: resolveOrchestrationAskClientTimeoutMs(parsedTimeoutMs) }
     )
     // Why: bypass printResult so --json emits a bare JSON object (no envelope) pipeable via `jq -r .answer`, unlike other verbs.
     if (json) {
@@ -638,7 +644,9 @@ export const ORCHESTRATION_HANDLERS: Record<string, CommandHandler> = {
     }
     if (result.result.timedOut) {
       if (!json) {
-        console.error(`ask timeout after ${timeoutMs}ms (thread ${result.result.threadId})`)
+        // Why: report the server's effective budget — it clamps large values, so the requested one would overstate the wait.
+        const waitedMs = result.result.timeoutMs ?? timeoutMs
+        console.error(`ask timeout after ${waitedMs}ms (thread ${result.result.threadId})`)
       }
       process.exitCode = 1
     }

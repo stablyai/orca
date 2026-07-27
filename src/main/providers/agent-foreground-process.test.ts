@@ -289,6 +289,55 @@ describe('resolveAgentForegroundProcess', () => {
     await expect(resolveAgentForegroundProcess(100, 'powershell.exe')).resolves.toBe('codex')
   })
 
+  it('recognizes the native Windows Cursor launcher process tree', async () => {
+    Object.defineProperty(process, 'platform', { value: 'win32' })
+    mockPs(
+      windowsProcessJsonRows([
+        {
+          CommandLine: 'powershell.exe',
+          Name: 'powershell.exe',
+          ParentProcessId: 99,
+          ProcessId: 100
+        },
+        {
+          CommandLine: 'cmd.exe /c cursor-agent.cmd',
+          Name: 'cmd.exe',
+          ParentProcessId: 100,
+          ProcessId: 101
+        },
+        {
+          CommandLine:
+            'powershell.exe -File C:\\Users\\dev\\AppData\\Local\\cursor-agent\\cursor-agent.ps1',
+          Name: 'powershell.exe',
+          ParentProcessId: 101,
+          ProcessId: 102
+        },
+        {
+          CommandLine:
+            'node.exe C:\\Users\\dev\\AppData\\Local\\cursor-agent\\versions\\2026.07.09-a3815c0\\index.js',
+          Name: 'node.exe',
+          ParentProcessId: 102,
+          ProcessId: 103
+        },
+        {
+          CommandLine:
+            'node.exe C:\\Users\\dev\\AppData\\Local\\cursor-agent\\versions\\2026.07.09-a3815c0\\index.js worker-server',
+          Name: 'node.exe',
+          ParentProcessId: 103,
+          ProcessId: 104
+        },
+        {
+          CommandLine: 'C:\\Users\\dev\\.grok\\bin\\agent.exe',
+          Name: 'agent.exe',
+          ParentProcessId: 100,
+          ProcessId: 105
+        }
+      ])
+    )
+
+    await expect(resolveAgentForegroundProcess(100, 'powershell.exe')).resolves.toBe('cursor-agent')
+  })
+
   it('recognizes Windows Git Bash shell-rooted agent launches', async () => {
     Object.defineProperty(process, 'platform', { value: 'win32' })
     execFileMock.mockImplementation(

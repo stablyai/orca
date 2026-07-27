@@ -2,6 +2,13 @@ import type { AppState } from '@/store'
 import { useAppStore } from '@/store'
 import { inspectRuntimeTerminalProcess } from '@/runtime/runtime-terminal-inspection'
 
+// Why: prompt integrations such as Starship can outlast the daemon's 300ms
+// Codex fast-path timeout; account restarts must wait until the shell accepts input.
+export const CODEX_ACCOUNT_RESTART_STARTUP = {
+  command: 'codex',
+  startupCommandDelivery: 'shell-ready'
+} as const
+
 function normalizeProcessName(processName: string | null): string | null {
   if (!processName) {
     return null

@@ -9,7 +9,6 @@ export function showOsc52ClipboardBlockedToast(): void {
   if (hasShownOsc52ClipboardBlockedToast) {
     return
   }
-  hasShownOsc52ClipboardBlockedToast = true
 
   toast.info(
     translate(
@@ -19,7 +18,7 @@ export function showOsc52ClipboardBlockedToast(): void {
     {
       description: translate(
         'auto.components.terminal.pane.osc52.clipboard.blocked.toast.7cf51f74fd',
-        'Enable TUI clipboard writes in Terminal settings to copy from SSH, tmux, Neovim, fzf, or Grok.'
+        'Enable TUI clipboard writes in Terminal settings to copy from SSH, Zellij, tmux, Neovim, fzf, or Grok.'
       ),
       duration: 12_000,
       action: {
@@ -42,4 +41,7 @@ export function showOsc52ClipboardBlockedToast(): void {
       }
     }
   )
+  // Why latch after: a throw above would otherwise burn the session's one notice
+  // without ever showing it, leaving the opted-out user with silent failures.
+  hasShownOsc52ClipboardBlockedToast = true
 }

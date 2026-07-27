@@ -145,6 +145,9 @@ export type ManagedPaneInternal = {
   // value means "currently disabled".
   ligaturesAddon: LigaturesAddon | null
   fitResizeObserver: ResizeObserver | null
+  // Why: fit-element pixel size at the last successful fit; the reveal fit compares
+  // against it to tell a real hidden-time resize from a transient cell-metric wobble.
+  lastFitClientSize?: { width: number; height: number }
   // Stored so disposePane() can cancel the first post-open fit if a pane closes before paint.
   pendingInitialFitRafId?: number | null
   // Stored so disposePane() can cancel the post-WebGL-teardown refresh frame.

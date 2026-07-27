@@ -54,6 +54,7 @@ describe('EphemeralVmsPane', () => {
     globalThis.IS_REACT_ACT_ENVIRONMENT = true
     toastMocks.error.mockClear()
     storeMocks.openModal.mockClear()
+    let pluginChangeListener: ((event: { contentPacksChanged: boolean }) => void) | null = null
     Object.assign(globalThis.window, {
       api: {
         ephemeralVm: {
@@ -94,6 +95,15 @@ describe('EphemeralVmsPane', () => {
         },
         ui: {
           writeClipboardText: vi.fn().mockResolvedValue(undefined)
+        },
+        plugins: {
+          onChanged: vi.fn((listener) => {
+            pluginChangeListener = listener
+            return () => {
+              pluginChangeListener = null
+            }
+          }),
+          emitContentChanged: () => pluginChangeListener?.({ contentPacksChanged: true })
         }
       }
     })
@@ -128,5 +138,70 @@ describe('EphemeralVmsPane', () => {
       initialEphemeralVmRecipeId: 'cloud-sandbox',
       telemetrySource: 'settings'
     })
+  })
+
+  it('refreshes the catalog when plugin content changes', async () => {
+    const listRecipeCatalog = window.api.ephemeralVm.listRecipeCatalog as ReturnType<typeof vi.fn>
+    const container = await renderPane()
+    await vi.waitFor(() => expect(container.textContent).toContain('Cloud Sandbox'))
+    listRecipeCatalog.mockResolvedValueOnce([
+      {
+        repoId: 'repo-1',
+        repoName: 'Repo',
+        repoPath: '/repo',
+        diagnostics: [],
+        recipes: [{ id: 'plugin-recipe', name: 'Plugin Recipe', create: 'create' }]
+      }
+    ])
+
+    await act(async () => {
+      ;(window.api.plugins as never as { emitContentChanged: () => void }).emitContentChanged()
+    })
+
+    await vi.waitFor(() => expect(container.textContent).toContain('Plugin Recipe'))
+    expect(listRecipeCatalog).toHaveBeenCalledTimes(2)
+  })
+
+  it('ignores an older refresh that finishes after a plugin-content refresh', async () => {
+    const listRecipeCatalog = window.api.ephemeralVm.listRecipeCatalog as ReturnType<typeof vi.fn>
+    let resolveInitial!: (catalog: unknown[]) => void
+    listRecipeCatalog
+      .mockReset()
+      .mockReturnValueOnce(
+        new Promise((resolve) => {
+          resolveInitial = resolve
+        })
+      )
+      .mockResolvedValueOnce([
+        {
+          repoId: 'repo-1',
+          repoName: 'Repo',
+          repoPath: '/repo',
+          diagnostics: [],
+          recipes: [{ id: 'new', name: 'Newest Recipe', create: 'create' }]
+        }
+      ])
+
+    const container = await renderPane()
+    await act(async () => {
+      ;(window.api.plugins as never as { emitContentChanged: () => void }).emitContentChanged()
+    })
+    await vi.waitFor(() => expect(container.textContent).toContain('Newest Recipe'))
+
+    await act(async () => {
+      resolveInitial([
+        {
+          repoId: 'repo-1',
+          repoName: 'Repo',
+          repoPath: '/repo',
+          diagnostics: [],
+          recipes: [{ id: 'stale', name: 'Stale Recipe', create: 'create' }]
+        }
+      ])
+      await Promise.resolve()
+    })
+
+    expect(container.textContent).toContain('Newest Recipe')
+    expect(container.textContent).not.toContain('Stale Recipe')
   })
 })

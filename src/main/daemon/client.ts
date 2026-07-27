@@ -216,14 +216,16 @@ export class DaemonClient {
     })
   }
 
-  notify(type: string, payload: unknown): void {
+  // Why: fire-and-forget writes need a local delivery signal to trigger dead-endpoint recovery.
+  notify(type: string, payload: unknown): boolean {
     if (!this.connected || !this.controlSocket) {
-      return
+      return false
     }
 
     const id = `${NOTIFY_PREFIX}${++this.requestCounter}`
     const msg = { id, type, ...(payload !== undefined ? { payload } : {}) }
     this.controlSocket.write(encodeNdjson(msg))
+    return true
   }
 
   onEvent(listener: (event: unknown) => void): () => void {

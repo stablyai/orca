@@ -51,6 +51,7 @@ import { NotificationsPane } from './NotificationsPane'
 import { VoicePane } from './VoicePane'
 import { SshPane } from './SshPane'
 import { ExperimentalPane } from './ExperimentalPane'
+import { PluginsSettingsSection } from './PluginsSettingsSection'
 import { AgentsPane } from './AgentsPane'
 import { OrchestrationPane } from './OrchestrationPane'
 import { LinearAgentSkillPane } from './LinearAgentSkillPane'
@@ -280,6 +281,7 @@ function Settings(): React.JSX.Element {
   const settings = useAppStore((s) => s.settings)
   const keybindings = useAppStore((s) => s.keybindings)
   const updateSettings = useAppStore((s) => s.updateSettings)
+  const updateSettingsOrThrow = useAppStore((s) => s.updateSettingsOrThrow)
   const setActiveRuntimeEnvironmentPreference = useAppStore(
     (s) => s.setActiveRuntimeEnvironmentPreference
   )
@@ -645,7 +647,7 @@ function Settings(): React.JSX.Element {
     }
     pendingNavSectionRef.current = paneSectionId
     pendingScrollTargetRef.current = settingsNavigationTarget.sectionId ?? paneSectionId
-    // Why: force Appearance's collapsed status-bar accordion open before scrolling so the row is visible.
+    // Why: ensure Appearance's nested status-bar section is open before scrolling so the row is visible.
     if (settingsNavigationTarget.pane === 'appearance') {
       const accordion = resolveAppearanceAccordionDeepLink(settingsNavigationTarget.sectionId)
       if (accordion) {
@@ -974,7 +976,7 @@ function Settings(): React.JSX.Element {
     const scrollTargetId = pendingScrollTargetRef.current
     const pendingNavSectionId = pendingNavSectionRef.current
 
-    // Why: subsection deep links clear a stale filter that could hide the target row; pane-level links keep it to force-open the matching accordion.
+    // Why: subsection deep links clear a stale filter that could hide the target row; pane-level links keep it to force-open the matching section.
     if (
       scrollTargetId &&
       pendingNavSectionId &&
@@ -1723,6 +1725,14 @@ function Settings(): React.JSX.Element {
                     />
                   ) : null}
                 </SettingsSection>
+
+                {showDesktopOnlySettings ? (
+                  <PluginsSettingsSection
+                    mounted={isSectionMounted('plugins')}
+                    settings={settings}
+                    updateSettings={updateSettingsOrThrow}
+                  />
+                ) : null}
 
                 {settingsProjectList.map((settingsProject) => {
                   const repoSectionId = `repo-${settingsProject.representativeRepoId}`

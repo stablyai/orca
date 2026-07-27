@@ -27,7 +27,11 @@ on:
       - 'config/patches/**'
       - 'config/scripts/ensure-native-runtime.mjs'
       - 'config/scripts/rebuild-native-deps.mjs'
+      - 'config/scripts/verify-packaged-plugin-resources.cjs'
       - 'native/**'
+      # Byte-hashed at package time, and CRLF-sensitive on Windows.
+      - '.gitattributes'
+      - 'resources/plugins/**'
       - 'resources/win32/**'
       - 'src/main/daemon/**'
       - 'src/main/index.ts'

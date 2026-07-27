@@ -132,7 +132,8 @@
       "fe21e8f6f5": "돌아가기({{value0}})",
       "064bd07810": "돌아가기",
       "ce37cf5279": "사이드바 표시/숨기기({{value0}})",
-      "e4b9e7dff7": "사이드바 표시/숨기기"
+      "e4b9e7dff7": "사이드바 표시/숨기기",
+      "pluginCommandFailed": "플러그인 명령을 실행할 수 없습니다."
     },
     "web": {
       "WebConnect": {
@@ -592,6 +593,9 @@
           }
         }
       },
+      "pluginCommandKeybindings": {
+        "group": "Plugins"
+      },
       "linear": {
         "usage": {
           "examples": {
@@ -734,6 +738,8 @@
         "devSearchKeywordSonner": "sonner",
         "devSearchKeywordError": "error",
         "devSearchKeywordNotification": "notification",
+        "pluginsTitle": "플러그인",
+        "pluginsDescription": "실험적인 Orca 플러그인을 설치하고 관리합니다.",
         "projectHostsSummary": "호스트 {{value0}}개",
         "linearTitle": "Linear",
         "linearDescription": "Give agents the skill to read and update your linked Linear tickets."
@@ -1914,7 +1920,8 @@
         "workspaceTabMissing": "탭이 더 이상 존재하지 않습니다",
         "projectsGroupsHeader": "프로젝트 및 그룹",
         "projectBadge": "프로젝트",
-        "repoGroupBadge": "리포지토리 그룹"
+        "repoGroupBadge": "리포지토리 그룹",
+        "pluginCommandFailed": "플러그인 명령을 실행할 수 없습니다."
       },
       "github": {
         "pr": {
@@ -2647,8 +2654,17 @@
               "blocked": {
                 "toast": {
                   "97c98f1afe": "설정 열기",
-                  "7cf51f74fd": "SSH, tmux, Neovim, fzf 또는 Grok에서 복사하려면 Terminal 설정에서 TUI 클립보드 쓰기를 활성화하세요.",
+                  "7cf51f74fd": "SSH, Zellij, tmux, Neovim, fzf 또는 Grok에서 복사하려면 Terminal 설정에서 TUI 클립보드 쓰기를 활성화하세요.",
                   "89eaa3e80b": "Terminal 클립보드 쓰기가 차단되었습니다."
+                }
+              },
+              "default": {
+                "on": {
+                  "notice": {
+                    "title": "TUI 클립보드 쓰기가 이제 기본으로 켜져 있습니다",
+                    "description": "Zellij, tmux, Neovim 등 터미널 프로그램이 클립보드에 복사할 수 있습니다. Terminal 설정에서 끌 수 있습니다.",
+                    "action": "설정 열기"
+                  }
                 }
               }
             }
@@ -2905,7 +2921,8 @@
                   "5a9c83c04b": "모든 파일, URL, agent를 엽니다...",
                   "90eb94dc48": "http:// 또는 https:// URL을 입력하세요.",
                   "5553b283ce": "URL 또는 파일 경로를 입력하세요.",
-                  "queryTooLarge": "검색 텍스트가 너무 큽니다."
+                  "queryTooLarge": "검색 텍스트가 너무 큽니다.",
+                  "absolutePathRemoteBlocked": "절대 경로에는 로컬 워크스페이스가 필요합니다."
                 }
               },
               "menu": {
@@ -3327,6 +3344,14 @@
             "updatedTooltip": "Remote Orca Server updates completed",
             "failedOne": "1 server update failed",
             "updatedOne": "1 server updated"
+          },
+          "resource": {
+            "memory": {
+              "metric": {
+                "workingSetDescription": "작업 집합(WS)의 합계입니다. 공유 페이지가 여러 프로세스에 포함될 수 있습니다.",
+                "rssDescription": "상주 집합 크기(RSS)의 합계입니다. 공유되거나 별칭으로 매핑된 페이지가 여러 프로세스에 포함될 수 있습니다."
+              }
+            }
           }
         }
       },
@@ -3657,7 +3682,8 @@
           "SourceControlActionVariableChips": {
             "1b77798d5f": "변수",
             "6b921a0ac2": "예",
-            "4bf6d88039": "(비어 있음)"
+            "4bf6d88039": "(비어 있음)",
+            "7377483644": "이 워크스페이스"
           }
         }
       },
@@ -3725,7 +3751,8 @@
           "skippedReasonInRepo": "This is a project skill, not a global one — Orca only updates your global skills, so it left this out of the update.",
           "skippedReasonPluginCache": "A plugin manages this skill, so Orca left it out of the update — update the plugin instead.",
           "skippedReasonExternalLink": "This copy is a shortcut pointing outside Orca’s skill folders, so Orca left it out of the update.",
-          "skippedReasonBrokenLink": "This copy is a shortcut to something that no longer exists, so Orca left it out — you can safely delete it."
+          "skippedReasonBrokenLink": "This copy is a shortcut to something that no longer exists, so Orca left it out — you can safely delete it.",
+          "skippedReasonDuplicate": "This is a separate copy, so the update won’t reach it — the command only refreshes the main copy. Remove this copy, then reinstall the skill so this location follows the main one."
         },
         "SkillFreshnessUpdateDialog": {
           "title": "스킬 업데이트",
@@ -3746,7 +3773,9 @@
         "SkillFreshnessStatusPill": {
           "updateAvailable": "업데이트 가능",
           "upToDate": "최신 상태",
-          "installed": "설치됨"
+          "installed": "설치됨",
+          "details": "Details",
+          "needsAttention": "Needs attention"
         }
       },
       "sidebar": {
@@ -4054,7 +4083,9 @@
           "75405270ed": "필터 편집({{value0}} 활성)",
           "489d1c8c9f": "프로젝트 검색...",
           "ee240a39eb": "필터 편집",
-          "automationCreated": "자동화로 생성된 워크스페이스 숨기기"
+          "automationCreated": "자동화로 생성된 워크스페이스 숨기기",
+          "cliCreated": "Hide CLI-created",
+          "detachedHead": "분리된 HEAD 숨기기"
         },
         "SidebarHeader": {
           "92154beb7e": "새로운 워크스페이스",
@@ -4117,7 +4148,9 @@
           "c3fa13dc2e": "기본 브랜치 숨기기",
           "ed1611b65b": "슬립 중인 항목 숨기기",
           "82594419ba": "필터",
-          "automationCreated": "자동화로 생성된 워크스페이스 숨기기"
+          "automationCreated": "자동화로 생성된 워크스페이스 숨기기",
+          "cliCreated": "Hide CLI-created",
+          "detachedHead": "분리된 HEAD 숨기기"
         },
         "SidebarWorkspaceOptionsMenu": {
           "95c9754653": "Agent 활동 레이아웃",
@@ -4172,7 +4205,8 @@
           "65a9820bd1": "Agent 상태",
           "219ebf1961": "브랜치 이름",
           "automation": "자동화",
-          "folderPathIdentity": "브랜치 / 폴더 경로"
+          "folderPathIdentity": "브랜치 / 폴더 경로",
+          "cli": "Orca CLI"
         },
         "SshDisconnectedDialog": {
           "ca4a7892af": "연결 중...",
@@ -4293,7 +4327,12 @@
           "copyLinkSuccess": "{{value0}} 복사됨",
           "copyLinkFailure": "링크 복사 실패",
           "issueLinkLabel": "이슈 링크",
-          "reviewLinkLabel": "{{value0}} 링크"
+          "reviewLinkLabel": "{{value0}} 링크",
+          "cliHeader": "Orca CLI",
+          "cliCreatedFromAgent": "Created by an agent via `orca worktree create`",
+          "cliCreatedFromShell": "Created via `orca worktree create`",
+          "cliStartupAgent": "Started with {{value0}}",
+          "cliCreated": "Created by Orca CLI"
         },
         "WorktreeCardMetadataStatusBadges": {
           "fe188062a1": "상태: 열림",
@@ -5026,11 +5065,17 @@
           "remoteServerFallback": "원격 서버",
           "loadAccountsFailed": "프로바이더 계정을 불러오지 못했습니다.",
           "remoteScopeAccounts": "{{value0}}에서 관리하는 계정을 표시하고 있습니다. 계정 추가나 재인증은 해당 서버에서 진행하세요.",
+          "accountScopePrefix": "계정 범위",
+          "accountScopeRemoteServerUnnamed": "원격 서버",
+          "remoteScopeLocalAccountsKept": "이 데스크탑에서 관리되는 계정은 그대로 유지됩니다. 기본 런타임을 로컬 데스크탑으로 다시 전환하면 확인할 수 있습니다.",
           "remoteScopeAuthContext": "각 계정은 {{value0}}에 자체 로그인 컨텍스트를 유지합니다.",
           "remoteEmptyClaudeAccounts": "{{value0}}에 관리되는 Claude 계정이 없습니다. 해당 서버의 시스템 기본 Claude 로그인을 사용하며, 계정 추가는 그 서버에서 진행하세요.",
           "remoteEmptyCodexAccounts": "{{value0}}에 관리되는 Codex 계정이 없습니다. 해당 서버의 시스템 기본 Codex 로그인을 사용하며, 계정 추가는 그 서버에서 진행하세요.",
           "codexSystemDefaultCustomProvider": "사용자 지정 제공업체 — 사용량을 추적하지 않습니다.",
-          "codexSystemDefaultNeedsSignIn": "{{value0}}에 대한 Codex 로그인을 찾을 수 없습니다."
+          "codexSystemDefaultNeedsSignIn": "{{value0}}에 대한 Codex 로그인을 찾을 수 없습니다.",
+          "codexConfigSyncMissingSource": "Codex is still using the settings it last synced because {{value0}} is missing. Restore that file to resume syncing.",
+          "codexConfigSyncBlankSource": "Codex is still using the settings it last synced because {{value0}} is empty. That is expected while a synced folder finishes downloading.",
+          "codexConfigSyncUnreadableSource": "Codex is still using the settings it last synced because {{value0}} could not be read. Check that file's permissions."
         },
         "AdvancedPane": {
           "40b29e0bf3": "다시 시작",
@@ -5470,7 +5515,7 @@
           "dfbc12c8c8": "USB 장치와 통신하는 하드웨어 디버깅 및 장치 도구입니다.",
           "bf51e4a542": "USB 장치",
           "f903bf20b5": "네트워크의 개발 서버를 검색하고 액세스합니다.",
-          "e7bb06007c": "로컬 네트워크",
+          "e7bb06007c": "LAN",
           "4a73f5217a": "다른 로컬 앱을 제어하는 ​​스크립트를 위한 Apple 이벤트.",
           "e119f0d66b": "자동화",
           "7ca17b62c8": "프로젝트, 워크트리 또는 심볼릭 링크된 파일이 macOS 보호 폴더에 닿을 때 권장됩니다.",
@@ -5526,9 +5571,14 @@
           },
           "agentDashboard": {
             "title": "Agent Dashboard",
-            "description": "Pop-out Kanban board for monitoring agents across worktrees.",
-            "copy": "Adds an Agent Dashboard entry to the left sidebar. Open it to monitor attention, working, and idle agents in a separate window and jump into their live terminals.",
-            "toggleLabel": "Toggle Agent Dashboard"
+            "description": "Kanban board for monitoring agents across worktrees, in-window or as a pop-out.",
+            "copy": "Adds an Agent Dashboard entry to the left sidebar. Open it to monitor attention, working, and idle agents and jump into their live terminals.",
+            "toggleLabel": "Toggle Agent Dashboard",
+            "modeLabel": "Open as",
+            "modeCopy": "Show the dashboard as an in-window board beside the sidebar or a separate pop-out window.",
+            "modeAriaLabel": "Agent Dashboard open mode",
+            "modeInWindow": "In-window",
+            "modePopout": "Pop-out"
           }
         },
         "FloatingWorkspacePane": {
@@ -5682,6 +5732,11 @@
           "d2f33670a9": "Ghostty에서 가져오기",
           "273e7e81fe": "구성",
           "1f744a72f4": "구성"
+        },
+        "BranchPrefixFeedback": {
+          "6c40c0908f": "접두사에는 공백이나 ~ ^ : ? * [ \\ 같은 특수 문자를 사용할 수 없습니다",
+          "64d70b156a": "브랜치 이름은 {{example}}(으)로 지정됩니다",
+          "808f9a726e": "접두사가 적용되지 않습니다"
         },
         "GitPane": {
           "d2eede4c54": "commits, PR 및 이슈에 Orca 속성을 추가합니다.",
@@ -5941,7 +5996,7 @@
           "668016be7a": "컴퓨터와 휴대폰에서.",
           "1dc87a7fbc": "Tailscale",
           "51d29927eb": "설치",
-          "9fc5d203ff": "Orca Mobile은 이 컴퓨터에 직접 연결됩니다. 동일한 로컬 네트워크가 아닌 곳에서 사용하려면 컴퓨터와 휴대폰을 동일한 개인 오버레이 네트워크에 놓은 다음 해당 네트워크 주소를 선택하여 QR 코드를 생성하세요.",
+          "9fc5d203ff": "Orca Mobile은 이 컴퓨터에 직접 연결됩니다. 동일한 LAN이 아닌 곳에서 사용하려면 컴퓨터와 휴대폰을 동일한 개인 오버레이 네트워크에 놓은 다음 해당 네트워크 주소를 선택하여 QR 코드를 생성하세요.",
           "39fad211d9": "tailnet을 사용하여 Wi-Fi 외부에서 연결",
           "a9db5d771d": "네트워크 인터페이스 새로 고침",
           "b2c384cfd6": "인터페이스를 찾을 수 없습니다.",
@@ -5972,7 +6027,7 @@
           "6436e56546": "모바일 페어링을 위한 QR 코드",
           "1b1b70279a": "아직 페어링된 기기가 없습니다.",
           "1592afcc7a": "아직 페어링된 기기가 없습니다. Orca 모바일 앱으로 QR 코드를 스캔하세요.",
-          "relayDegradedNotice": "Relay couldn’t be reached — this code only works on your local network. Regenerate to try again."
+          "relayDegradedNotice": "Relay에 연결할 수 없습니다 — 이 코드는 LAN 또는 Tailscale에서만 작동합니다. 다시 생성해 보세요."
         },
         "MobileSettingsPane": {
           "9a3c280e49": "GitHub 릴리스",
@@ -6286,6 +6341,7 @@
           "removeSetup": "제거",
           "hostSetupBlockedVersion": "Orca 서버 버전이 호환되지 않습니다.",
           "hostSetupMissingCapability": "프로젝트를 설정하려면 이 호스트의 Orca를 업데이트하세요.",
+          "hostSetupConnectionRequired": "프로젝트를 가져오거나 클론하기 전에 이 호스트에 연결하세요.",
           "setupProjectOnHost": "다른 호스트에 설정",
           "setupProjectOnHostHelp": "호스트를 선택한 뒤 기존 체크아웃을 가져오거나, repos를 클론하거나, 나중에 준비될 설정을 추적합니다.",
           "setupExistingFolder": "기존 폴더 가져오기",
@@ -6593,8 +6649,8 @@
           "4e11f87ca6": "표시 중",
           "fbb428db98": "선택됨:",
           "fac59213fc": "내장 테마 검색",
-          "cb330ef7f8": "{{value0}} 중",
-          "c822571b2e": "\"{{value0}}\"과(와) 일치",
+          "cb330ef7f8": "/{{value0}}",
+          "c822571b2e": " \"{{value0}}\"과(와) 일치",
           "3119c012a5": "문자열",
           "builtin_themes": "기본 제공",
           "imported_from": "{{value0}}에서 가져옴",
@@ -6641,7 +6697,8 @@
           "25b0004fbf": "Terminal 활성",
           "781cb74d22": "terminal 패널에서 실행됩니다.",
           "cb02e00202": "터미널",
-          "d8c988dab4": "~/.orca/keybindings.json"
+          "d8c988dab4": "~/.orca/keybindings.json",
+          "shortcutUnavailable": "단축키를 더 이상 사용할 수 없습니다."
         },
         "SourceControlAiActionRecipeDefaults": {
           "2576299196": "인수",
@@ -6911,9 +6968,9 @@
           "d23b43c5be": "설정 스크립트 위치",
           "34a0dfa06e": "새 워크스페이스를 만들 때 repos 설정 스크립트를 실행할 위치입니다.",
           "21f8da2078": "워크스페이스 설정 스크립트",
-          "6e6480a7df": "terminal의 프로그램(Grok, tmux, Neovim, fzf, SSH)이 시스템 클립보드에 복사할 수 있게 합니다.",
+          "6e6480a7df": "terminal의 프로그램(Zellij, tmux, Neovim, fzf, Grok, SSH)이 시스템 클립보드에 복사할 수 있게 합니다.",
           "3338dcf8c1": "TUI 클립보드 쓰기 허용(OSC 52)",
-          "69c64a479c": "Grok, tmux, Neovim 및 fzf가 PTY(SSH 포함)를 통해 시스템 클립보드에 복사하도록 합니다.",
+          "69c64a479c": "Zellij, tmux, Neovim, fzf 및 Grok이 PTY(SSH 포함)를 통해 시스템 클립보드에 복사하도록 합니다.",
           "4729c645fc": "terminal 선택 사항을 클립보드에 자동으로 복사합니다.",
           "902f5dee1f": "선택 시 복사",
           "9129b7e805": "terminal 패널에 마우스를 가리키면 클릭하지 않고도 활성화됩니다.",
@@ -7605,14 +7662,15 @@
         "developer": {
           "permissions": {
             "search": {
-              "3363889768": "로컬 네트워크, USB 및 블루투스",
+              "3363889768": "LAN, USB 및 블루투스",
               "6c82846f66": "장치",
               "11653d3f42": "mdns",
               "78a10b826f": "Bonjour",
               "e3fbc48083": "블루투스",
               "c4a4a02ea4": "USB",
               "fa3239cd42": "로컬 네트워크",
-              "acad3d4743": "terminal 세션에서 사용되는 장치 및 로컬 네트워크 도구를 허용합니다.",
+              "87620e6416": "LAN",
+              "acad3d4743": "terminal 세션에서 사용되는 장치 도구와 LAN 액세스를 허용합니다.",
               "3e0131e45d": "icloud",
               "ce07159ff5": "데스크탑",
               "a0c19119fb": "다운로드",
@@ -7716,7 +7774,7 @@
             },
             "agentDashboard": {
               "title": "Agent Dashboard",
-              "description": "Pop-out Kanban board for monitoring agents across worktrees."
+              "description": "Kanban board for monitoring agents across worktrees, in-window or as a pop-out."
             }
           }
         },
@@ -8550,7 +8608,6 @@
             "10f9fb6fea": "설정",
             "2ade3ea490": "구성",
             "fd752b3cac": "가져오기",
-            "82b63d07fe": "ghostty",
             "73e9422f19": "지원되는 Ghostty terminal 설정을 한 번만 가져옵니다.",
             "a979df0083": "Ghostty에서 가져오기",
             "4cec42dbf7": "국제",
@@ -9191,7 +9248,7 @@
           "copy": "복사",
           "copied": "복사됨",
           "recipes": "조리법",
-          "recipesHelp": "agent가 orca.yaml에 추가하는 레시피가 여기에 표시되어 워크스페이스를 시작할 준비가 됩니다.",
+          "recipesHelp": "orca.yaml과 활성화된 플러그인의 레시피가 여기에 표시되어 워크스페이스를 시작할 수 있습니다.",
           "refresh": "임시 VM 레시피 새로 고침",
           "checking": "레시피 확인 중...",
           "none": "아직 레시피를 찾을 수 없습니다."
@@ -9263,6 +9320,285 @@
           "567633ff50": "우클릭하면 클립보드 내용을 터미널에 붙여넣습니다. 컨텍스트 메뉴를 열려면 Control 클릭하세요.",
           "c64497148a": "우클릭하면 클립보드를 붙여넣습니다. Control 클릭으로 컨텍스트 메뉴를 엽니다."
         },
+        "PluginConsentDialog": {
+          "workerTrust": "백그라운드 워커 — 별도 프로세스에서 실행",
+          "panelTrust": "패널 또는 호스트 통합 콘텐츠 — 백그라운드 워커 없음",
+          "decisionFailed": "권한 결정을 저장할 수 없습니다. 다시 시도하세요.",
+          "title": "권한 검토",
+          "mixedTitle": "액세스 및 콘텐츠 검토",
+          "instructionalTitle": "플러그인 콘텐츠 검토",
+          "subtitle": "{{value0}} v{{value1}} · {{value2}}",
+          "reconsent": "이 플러그인을 마지막으로 검토한 후 권한, 워커 신뢰 수준 또는 지침 콘텐츠가 변경되었습니다. 실행하기 전에 다시 검토하세요.",
+          "source": "소스",
+          "unknownSource": "사용할 수 없음",
+          "commit": "커밋",
+          "localCommit": "사용할 수 없음(로컬 폴더)",
+          "trust": "신뢰 수준",
+          "capabilities": "이 플러그인이 할 수 있는 작업",
+          "warning": "이 권한은 플러그인이 Orca API를 사용하는 방식을 제한합니다. 워커는 컴퓨터에서 일반 프로세스로 실행되므로 파일, 네트워크 및 다른 프로세스에 모두 접근할 수 있습니다.",
+          "enable": "플러그인 활성화",
+          "keepDisabled": "비활성화 유지",
+          "panelWarning": "이 권한은 플러그인이 Orca API를 사용하는 방식을 제한합니다. 이 플러그인에는 백그라운드 워커가 없습니다.",
+          "instructionalWarning": "이 플러그인에는 워커 프로세스가 없습니다. 하지만 사용자나 에이전트가 사용할 때 지침 콘텐츠로 인해 작업이 실행될 수 있습니다. 활성화하기 전에 아래 지침과 명령을 검토하세요.",
+          "capability": {
+            "workspaceRead": "선택한 워크트리의 이름, 브랜치 및 터미널 목록 읽기",
+            "terminalSend": "표시된 특정 터미널에 텍스트 입력",
+            "notificationsShow": "플러그인 이름이 표시된 데스크톱 알림 보기",
+            "storage": "플러그인 전용 저장소 폴더에 데이터 저장",
+            "secrets": "플러그인 전용 암호화 보관소에서 비밀 정보 저장 및 읽기",
+            "eventsSubscribe": "워크트리가 생성 또는 제거되거나 에이전트 상태가 변경될 때 알림 받기",
+            "settingsOwn": "플러그인 자체 설정 읽기 및 변경"
+          },
+          "skillWarning": "이 플러그인은 지침이 포함된 스킬을 설치합니다. 에이전트는 해당 지침을 읽고 사용자가 부여한 모든 권한으로 작업할 수 있습니다.",
+          "instructionalTrust": "지침 콘텐츠 — 나중에 사용자 또는 에이전트 권한으로 실행",
+          "declarativeTrust": "Declarative content — no plugin code",
+          "reviewTitle": "Review plugin",
+          "declarativeWarning": "This plugin contributes validated content only. It does not run a background worker or receive access to Orca's API.",
+          "trustShortWorker": "Worker",
+          "trustShortInstructional": "Instructional",
+          "trustShortPanel": "Panel",
+          "trustShortDeclarative": "Declarative"
+        },
+        "PluginDevelopmentSection": {
+          "pathRequired": "플러그인 폴더 경로를 입력하세요.",
+          "title": "개발",
+          "help": "개발하는 동안 이 컴퓨터의 폴더에서 플러그인을 직접 불러옵니다. 개발용 플러그인도 권한 검토가 필요합니다. 워커는 이 데스크톱 호스트에서 실행되고 SSH 워크스페이스 작업은 Orca를 통해 라우팅되므로 여기에 데스크톱 경로를 입력하세요.",
+          "remove": "제거",
+          "placeholder": "/Users/you/plugins/my-plugin or C:\\Users\\you\\plugins\\my-plugin",
+          "add": "경로 추가",
+          "saveFailed": "개발용 플러그인 경로를 저장할 수 없습니다.",
+          "pathLabel": "개발 플러그인 폴더 경로"
+        },
+        "PluginInstallDialog": {
+          "localRequired": "플러그인 폴더 경로를 입력하세요.",
+          "gitUrlRequired": "저장소 URL을 입력하세요.",
+          "gitRefRequired": "설치를 고정하려면 명시적인 #ref(태그 또는 커밋)를 추가하세요. 예: #v0.1.0.",
+          "installFailed": "플러그인을 설치하지 못했습니다. 소스를 확인하고 다시 시도하세요.",
+          "title": "플러그인 설치",
+          "description": "설치하면 플러그인이 Orca에 복사되고 검토할 권한이 표시됩니다. 활성화하기 전에는 플러그인 코드가 실행되지 않습니다.",
+          "source": "설치 소스",
+          "localTab": "로컬 폴더",
+          "gitTab": "Git URL",
+          "localLabel": "플러그인 폴더 경로",
+          "localPlaceholder": "/Users/you/plugins/my-plugin or C:\\Users\\you\\plugins\\my-plugin",
+          "localHelp": "이 컴퓨터에서 orca-plugin.json이 들어 있는 폴더의 전체 경로입니다. 입력한 경로를 그대로 사용합니다.",
+          "gitLabel": "#ref가 포함된 저장소 URL",
+          "gitPlaceholder": "https://git.example/acme/orca-notes#v0.1.0",
+          "gitHelp": "명시적인 #ref(태그 또는 커밋)를 추가해 설치를 고정하세요. GitHub, GitLab 및 모든 Git 호스트에서 사용할 수 있습니다.",
+          "cancel": "취소",
+          "installing": "설치 중…",
+          "install": "설치",
+          "gitUrlInvalid": "HTTPS 또는 SSH Git URL을 사용하세요. 실행 가능한 Git 도우미 프로토콜은 허용되지 않습니다."
+        },
+        "PluginRemoveDialog": {
+          "title": "플러그인을 제거하시겠습니까?",
+          "description": "{{value0}} 및 이 컴퓨터에 저장된 플러그인 데이터를 제거합니다. 나중에 다시 설치할 수 있습니다.",
+          "cancel": "취소",
+          "remove": "플러그인 제거"
+        },
+        "PluginSettingsRow": {
+          "needsReview": "검토 필요",
+          "invalid": "유효하지 않음",
+          "error": "오류",
+          "disabled": "비활성화됨",
+          "running": "실행 중",
+          "enabled": "활성화됨",
+          "workerTier": "백그라운드 워커",
+          "panelTier": "패널 전용",
+          "loadingLogs": "로그 불러오는 중…",
+          "noLogs": "기록된 로그 줄이 없습니다.",
+          "logCount": "보관된 최대 200줄 중 최근 {{value0}}줄",
+          "dev": "개발",
+          "review": "권한 검토",
+          "moreActions": "{{value0}}의 추가 작업",
+          "hideLogs": "로그 숨기기",
+          "viewLogs": "로그 보기",
+          "remove": "제거",
+          "enableLabel": "{{value0}} 활성화",
+          "restartCount": " · {{value0}}회 다시 시작",
+          "restarting": "다시 시작 중",
+          "invalidPluginError": "플러그인 매니페스트 또는 설치된 파일이 올바르지 않습니다. 수정한 후 새로 고치세요.",
+          "runtimeError": "활성화 또는 워커 오류 후 플러그인이 중지되었습니다.",
+          "disableLabel": "{{value0}} 비활성화",
+          "blocked": "차단됨",
+          "official": "공식",
+          "bundled": "번들",
+          "killListMessage": "Orca 안전 목록에서 이 플러그인을 비활성화했습니다: {{value0}}",
+          "viewAdvisory": "권고 보기",
+          "rollback": "롤백",
+          "noDescription": "No description provided.",
+          "reviewAndEnable": "Review & enable"
+        },
+        "PluginsSettingsSection": {
+          "loadFailed": "플러그인을 불러올 수 없습니다.",
+          "logsFailed": "플러그인 로그를 불러올 수 없습니다.",
+          "title": "플러그인",
+          "experimental": "실험적",
+          "description": "Orca 플러그인을 설치하고 관리합니다. SSH 워크스페이스에서도 플러그인은 이 컴퓨터에서 실행됩니다.",
+          "install": "플러그인 설치",
+          "systemLabel": "플러그인 시스템",
+          "systemDescription": "설치된 플러그인을 찾아 개별적으로 활성화할 수 있습니다. 검토하고 활성화하기 전에는 아무것도 실행되지 않습니다. 워커는 항상 이 컴퓨터에서 실행되고 SSH 워크스페이스 작업은 Orca를 통해 라우팅됩니다.",
+          "featureOff": "플러그인 시스템을 켜서 설치된 플러그인을 보고 관리하세요. 이미 설치된 항목은 디스크에 남으며 시스템이 꺼져 있는 동안 비활성화 상태를 유지합니다.",
+          "loading": "플러그인 불러오는 중…",
+          "installed": "설치됨",
+          "refresh": "새로 고침",
+          "tryAgain": "다시 시도",
+          "empty": "설치된 플러그인이 없습니다. 플러그인 설치를 사용해 로컬 폴더 또는 고정된 Git ref에서 추가하세요.",
+          "settingsUpdateFailed": "플러그인 설정을 저장할 수 없습니다.",
+          "rollbackFailed": "이 플러그인을 롤백하지 못했습니다. 이전 불변 버전을 사용할 수 없을 수 있습니다.",
+          "noInstalledResults": "No installed plugins match this search.",
+          "noInstalledResultsTitle": "No matching plugins",
+          "emptyTitle": "No plugins installed yet"
+        },
+        "plugins": {
+          "search": {
+            "title": "플러그인",
+            "description": "실험적인 Orca 플러그인을 설치하고 관리합니다.",
+            "install": "플러그인 설치",
+            "permissions": "플러그인 권한",
+            "logs": "플러그인 로그",
+            "development": "개발용 플러그인"
+          }
+        },
+        "pluginError": {
+          "installManifestMissing": "읽을 수 있는 orca-plugin.json을 찾지 못했습니다. 플러그인의 루트 폴더를 선택하세요.",
+          "installManifestInvalid": "orca-plugin.json이 올바르지 않습니다. 플러그인 작성자에게 매니페스트 수정을 요청하세요.",
+          "incompatible": "이 플러그인에는 다른 버전의 Orca가 필요합니다.",
+          "installUnsafePath": "플러그인에 안전하지 않은 파일 경로 또는 심볼릭 링크가 있어 설치하지 않았습니다.",
+          "installLimit": "플러그인이 Orca의 설치 크기 또는 파일 수 제한을 초과합니다.",
+          "installGit": "고정된 Git 리비전을 가져오지 못했습니다. URL, #ref, 접근 권한 및 시스템 Git 설정을 확인하세요.",
+          "invalidManifestMissing": "플러그인 루트에 orca-plugin.json이 없습니다. 추가한 후 플러그인을 새로 고치세요.",
+          "invalidManifest": "orca-plugin.json이 올바르지 않습니다. 수정한 후 플러그인을 새로 고치세요.",
+          "invalidArtifact": "선언된 워커 또는 패널 파일이 없거나 안전하지 않습니다. 파일을 수정한 후 새로 고치세요.",
+          "consentChanged": "검토하는 동안 플러그인이 변경되었습니다. 이 대화상자를 닫고 업데이트된 권한을 검토하세요."
+        },
+        "PluginVmRecipeConsentPreview": {
+          "create": "생성",
+          "suspend": "일시 중지",
+          "resume": "재개",
+          "destroy": "삭제",
+          "warning": "이 플러그인은 VM 레시피를 설치합니다. 해당 수명 주기 작업을 사용하면 Orca가 아래 명령을 로컬 데스크톱 호스트에서 실행합니다.",
+          "commandLabel": "{{value0}} · {{value1}} 명령",
+          "heading": "VM 레시피 명령"
+        },
+        "PluginKeybindingConsentPreview": {
+          "warning": "이 플러그인은 키보드 단축키를 추가합니다. 플러그인이 활성화된 동안 일치하는 Orca 단축키보다 플러그인 단축키가 우선합니다.",
+          "heading": "키보드 단축키",
+          "worktree": "워크스페이스가 활성화된 동안에만 실행됩니다.",
+          "global": "활성 워크스페이스 없이 앱에서 실행됩니다.",
+          "shadows": "대체 항목: {{value0}}"
+        },
+        "PluginMarketplaceBrowser": {
+          "loadFailed": "마켓플레이스 플러그인을 불러오지 못했습니다.",
+          "refreshFailed": "마켓플레이스를 새로 고치지 못했습니다. 캐시된 목록은 계속 사용할 수 있습니다.",
+          "previewFailed": "검토할 플러그인을 준비하지 못했습니다. 마켓플레이스를 새로 고친 후 다시 시도하세요.",
+          "installFailed": "이 플러그인을 설치하지 못했습니다. 검토한 소스가 변경되었을 수 있습니다.",
+          "heading": "마켓플레이스",
+          "manageSources": "소스 관리",
+          "refreshing": "새로 고치는 중…",
+          "refresh": "새로 고침",
+          "loading": "마켓플레이스 플러그인 불러오는 중…",
+          "searchLabel": "마켓플레이스 플러그인 검색",
+          "searchPlaceholder": "플러그인, 카테고리 또는 게시자 검색",
+          "tryAgain": "다시 시도",
+          "noSources": "공식, 커뮤니티 또는 비공개 Git 마켓플레이스를 추가하여 플러그인을 찾아보세요.",
+          "addSource": "마켓플레이스 추가",
+          "noResults": "검색과 일치하는 마켓플레이스 플러그인이 없습니다.",
+          "empty": "구성된 마켓플레이스에 등록된 플러그인이 없습니다.",
+          "noInstalled": "No plugins installed.",
+          "noInstalledTitle": "No plugins installed",
+          "noSourcesTitle": "No marketplaces configured",
+          "noResultsTitle": "No matching plugins",
+          "clearSearch": "Clear search",
+          "emptyTitle": "Nothing listed yet"
+        },
+        "PluginMarketplaceListingRow": {
+          "official": "공식",
+          "bundled": "번들",
+          "installed": "설치됨",
+          "marketplace": "{{value0}} · {{value1}}",
+          "blocked": "Orca 안전 목록에서 차단됨: {{value0}}",
+          "blockedAction": "차단됨",
+          "checkUpdate": "업데이트 확인",
+          "installedAction": "설치됨",
+          "review": "검토",
+          "noDescription": "No description provided.",
+          "install": "Install"
+        },
+        "PluginMarketplacePreviewDialog": {
+          "languagePacks": "언어 팩 {{value0}}개",
+          "commands": "명령 {{value0}}개",
+          "keybindings": "키보드 단축키 {{value0}}개",
+          "vmRecipes": "VM 레시피 {{value0}}개",
+          "panels": "패널 {{value0}}개",
+          "events": "이벤트 구독 {{value0}}개",
+          "worker": "백그라운드 워커",
+          "official": "공식",
+          "bundled": "번들",
+          "subtitle": "{{value0}} v{{value1}} · {{value2}}",
+          "source": "플러그인 소스",
+          "commit": "고정된 커밋",
+          "marketplaceCommit": "인덱스 커밋",
+          "includes": "포함 항목",
+          "noContributions": "매니페스트 메타데이터만 포함",
+          "capabilities": "요청한 접근 권한",
+          "workerWarning": "기능 권한은 이 플러그인이 Orca API를 사용하는 방식을 제한합니다. 하지만 워커는 이 컴퓨터에서 일반 프로세스로 실행되며 파일, 네트워크 및 다른 프로세스에 완전히 접근할 수 있습니다.",
+          "blocked": "Orca 안전 목록에서 이 플러그인을 차단했습니다: {{value0}}",
+          "current": "이 플러그인과 정확히 동일한 콘텐츠가 이미 설치되어 있습니다.",
+          "cancel": "취소",
+          "update": "플러그인 업데이트",
+          "install": "플러그인 설치",
+          "provenance": "Reviewed source",
+          "close": "Close",
+          "upToDate": "Up to date",
+          "languagePacksOne": "1 language pack",
+          "commandsOne": "1 command",
+          "keybindingsOne": "1 keyboard shortcut",
+          "vmRecipesOne": "1 VM recipe",
+          "panelsOne": "1 panel",
+          "eventsOne": "1 event subscription",
+          "versionLine": "v{{value0}} · {{value1}}"
+        },
+        "PluginMarketplaceSourceDialog": {
+          "addFailed": "이 마켓플레이스를 추가하지 못했습니다. Git URL, ref 및 Git 자격 증명을 확인하세요.",
+          "refreshFailed": "이 마켓플레이스를 새로 고치지 못했습니다. 마지막으로 유효한 캐시 인덱스는 계속 사용할 수 있습니다.",
+          "removeFailed": "이 마켓플레이스를 제거하지 못했습니다.",
+          "title": "마켓플레이스 소스",
+          "description": "마켓플레이스는 고정된 Git 저장소입니다. Orca는 비공개 저장소에 기존 시스템 Git 자격 증명을 사용합니다.",
+          "urlLabel": "Git URL",
+          "urlDescription": "orca-marketplace.json이 포함된 저장소의 HTTPS 또는 SSH URL을 사용하세요.",
+          "refLabel": "Git ref",
+          "refDescription": "브랜치, 태그 또는 커밋을 선택하세요. 가져온 각 인덱스는 정확한 커밋으로 기록됩니다.",
+          "adding": "추가하는 중…",
+          "add": "소스 추가",
+          "configured": "구성된 소스",
+          "empty": "구성된 마켓플레이스 소스가 없습니다.",
+          "owner": "소유자: {{value0}}",
+          "pinnedCommit": "{{value0}}에 고정",
+          "stale": "새로 고침에 실패했습니다. 마지막으로 유효한 캐시 인덱스를 표시합니다.",
+          "refreshLabel": "{{value0}} 새로 고침",
+          "removeLabel": "{{value0}} 제거",
+          "done": "완료",
+          "urlPlaceholder": "https://git.example.com/team/plugins.git",
+          "official": "공식"
+        },
+        "PluginRollbackDialog": {
+          "title": "플러그인을 롤백할까요?",
+          "description": "{{value0}}을(를) 비활성화하고 이전 불변 버전을 복원합니다. 해당 버전에서 다른 접근 권한이나 지시형 콘텐츠를 요청하면 Orca가 다시 검토하도록 요구합니다.",
+          "cancel": "취소",
+          "confirm": "플러그인 롤백"
+        },
+        "PluginConsentProvenance": {
+          "official": "Official",
+          "bundled": "Bundled with Orca",
+          "local": "Local folder",
+          "community": "Community",
+          "source": "Source",
+          "sourceLabel": "Source",
+          "commit": "Pinned commit",
+          "localCommit": "Local folder — no commit",
+          "indexCommit": "Index commit"
+        },
         "MobileRelayStatusSection": {
           "registered": "Registered",
           "connecting": "Connecting",
@@ -9289,9 +9625,9 @@
           "anywhereTitle": "Orca Relay",
           "anywhereDescription": "휴대폰이 모바일 네트워크 또는 모든 Wi‑Fi에서 연결 가능합니다. 로그인이 필요합니다.",
           "signInRequired": "Orca Mobile Relay를 사용하려면 로그인하세요.",
-          "relayUnavailable": "이 빌드에서는 Orca Relay를 사용할 수 없습니다. 로컬 네트워크를 사용하세요.",
+          "relayUnavailable": "이 빌드에서는 Orca Relay를 사용할 수 없습니다. LAN을 사용하세요.",
           "signInAgain": "다시 로그인",
-          "localTitle": "로컬 네트워크"
+          "localTitle": "LAN"
         },
         "MobilePairingSetupSection": {
           "title": "휴대폰 페어링",
@@ -9869,7 +10205,6 @@
             "b715ef615b": "{{value1}}보다 {{value0}} commits 앞서 있음",
             "c1a8f3e204": "{{value0}}보다 1 commit 뒤처짐",
             "d2b9g4f315": "{{value1}}보다 {{value0}} commits 뒤처짐",
-            "e9c2a5d416": "{{value0}}와 동일한 상태",
             "4b4a7de138": "브라우저에서 검토 페이지 열기",
             "createPrIntentCommitBlockedSummary": "커밋이 차단됨: {{value0}} 이슈를 수정한 후 PR 만들기를 다시 시도하세요.",
             "pushRecovery": {
@@ -9887,7 +10222,11 @@
               "834cb3f23d": "AI로 수정",
               "783a808870": "닫기"
             },
-            "97e7124eac": "Source Control을 새로 고칠 수 없습니다. 다시 시도하세요."
+            "97e7124eac": "Source Control을 새로 고칠 수 없습니다. 다시 시도하세요.",
+            "b8c2e1a904": "{{value0}} → {{value1}}",
+            "a4e93c21d7": "현재 브랜치: {{value0}}",
+            "c7d4e2f801": "베이스 ref 변경: {{value0}}",
+            "f3a1b8c204": "upstream"
           },
           "SourceControlAgentActionDialog": {
             "8e856842d1": "선택한 agent를 시작할 수 없습니다.",
@@ -10642,6 +10981,15 @@
             "notAuthorized": "로그를 열 수 없습니다 — 경로가 승인되지 않았습니다.",
             "alreadyEditable": "로그가 이미 편집용으로 열려 있습니다."
           },
+          "PluginPanel": {
+            "loading": "플러그인 패널 불러오는 중...",
+            "unavailable": "이 플러그인 패널은 더 이상 사용할 수 없습니다.",
+            "loadFailed": "플러그인 패널을 불러올 수 없습니다.",
+            "unresponsive": "플러그인 패널이 응답하지 않아 일시 중단되었습니다."
+          },
+          "activityBar": {
+            "error": "오류"
+          },
           "github": {
             "refresh": {
               "error": {
@@ -11037,7 +11385,7 @@
             "preview": "미리 보기",
             "stable": "안정 버전"
           },
-          "relayDegradedNotice": "Relay couldn’t be reached — this code only works on your local network."
+          "relayDegradedNotice": "Relay에 연결할 수 없습니다 — 이 코드는 LAN 또는 Tailscale에서만 작동합니다."
         },
         "MobilePage": {
           "e17393c6a3": "휴대폰 미리보기",
@@ -12624,6 +12972,10 @@
                 "project": "프로젝트"
               }
             }
+          },
+          "pluginQuickActions": {
+            "description": "{{value0}} 플러그인 명령",
+            "keyword": "플러그인 명령"
           }
         }
       },
@@ -13247,6 +13599,11 @@
             "noPr": "PR 없음",
             "unavailable": "사용 불가"
           }
+        },
+        "pluginPanelBridgeHost": {
+          "actionsUnavailable": "이 클라이언트에서는 플러그인 작업을 사용할 수 없습니다.",
+          "messageTooLarge": "메시지가 크기 제한을 초과합니다.",
+          "tooManyRequests": "요청이 너무 많습니다."
         }
       },
       "link": {
@@ -13524,6 +13881,17 @@
         "searchAssignee": "담당자 필터…",
         "back": "뒤로"
       },
+      "pluginCatalog": {
+        "PluginCatalogLayout": {
+          "title": "Plugins",
+          "description": "Browse available plugins or manage the ones installed in Orca.",
+          "filter": "Plugin filter",
+          "all": "All",
+          "installed": "Installed",
+          "searchLabel": "Search plugins",
+          "searchPlaceholder": "Search plugins, categories, or publishers"
+        }
+      },
       "browser-pane": {
         "markup": {
           "cancel": "취소",
@@ -13707,7 +14075,16 @@
       "bar": {
         "SortableTabContextMenu": {
           "switchToTerminalView": "terminal 보기로 전환",
-          "switchToChatView": "채팅 보기로 전환"
+          "switchToChatView": "채팅 보기로 전환",
+          "closeTabsToLeft": "왼쪽으로 탭 닫기"
+        },
+        "BrowserTab": {
+          "closeOthers": "다른 탭 닫기",
+          "closeTabsToLeft": "왼쪽으로 탭 닫기"
+        },
+        "EditorFileTabContextMenu": {
+          "closeOthers": "다른 탭 닫기",
+          "closeTabsToLeft": "왼쪽으로 탭 닫기"
         }
       }
     },
@@ -13779,7 +14156,10 @@
       "closed": "No live terminal — this agent's pane has closed.",
       "focusWorktree": "Focus worktree",
       "close": "Close"
-    }
+    },
+    "close": "Close dashboard",
+    "settings": "Agent Dashboard settings",
+    "settingsTooltip": "Board settings"
   },
   "dashboard": {
     "sidebar": {

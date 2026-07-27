@@ -1,5 +1,8 @@
 import { lstat, realpath } from 'node:fs/promises'
 import * as path from 'node:path'
+import { forEachWithConcurrency } from './map-with-concurrency'
+
+const DISCARD_PATH_VALIDATION_CONCURRENCY = 16
 
 function isENOENT(error: unknown): boolean {
   return (
@@ -111,16 +114,16 @@ export async function removeSafeUntrackedDiscardTargets(
   removePaths: (filePaths: readonly string[]) => Promise<void>,
   beforeRemove?: () => Promise<void>
 ): Promise<void> {
-  await Promise.all(
-    filePaths.map((filePath) => validateUntrackedDiscardTarget(worktreePath, filePath))
-  )
+  await forEachWithConcurrency(filePaths, DISCARD_PATH_VALIDATION_CONCURRENCY, async (filePath) => {
+    await validateUntrackedDiscardTarget(worktreePath, filePath)
+  })
 
   // Why: bulk discard must validate every untracked path before mutating
   // tracked files, then recheck before the caller's Git-bounded cleanup runs.
   await beforeRemove?.()
 
-  await Promise.all(
-    filePaths.map((filePath) => validateUntrackedDiscardTarget(worktreePath, filePath))
-  )
+  await forEachWithConcurrency(filePaths, DISCARD_PATH_VALIDATION_CONCURRENCY, async (filePath) => {
+    await validateUntrackedDiscardTarget(worktreePath, filePath)
+  })
   await removePaths(filePaths)
 }

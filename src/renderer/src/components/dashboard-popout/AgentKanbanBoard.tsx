@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
+import { XIcon } from 'lucide-react'
 import {
   DASHBOARD_BUCKET_ORDER,
   type DashboardBucket,
@@ -8,9 +9,23 @@ import {
 import { cn } from '@/lib/utils'
 import { installWindowVisibilityInterval } from '@/lib/window-visibility-interval'
 import { AgentKanbanCard } from './AgentKanbanCard'
-import { AgentTerminalDialog } from './AgentTerminalDialog'
+import { AgentTerminalDialog, type AgentRevealArgs } from './AgentTerminalDialog'
 import './agent-board-transitions.css'
 import { translate } from '@/i18n/i18n'
+
+/** Ack an agent in the pop-out window: relayed over IPC to the main renderer.
+ *  ?. shields dialog-opening from dev-HMR preload skew (renderer updates hot,
+ *  the preload only on app restart) — acks just no-op until restart. */
+function ackAgentViaPopoutRelay(paneKey: string): void {
+  void window.api.dashboard.ackAgent?.(paneKey)
+}
+
+/** Reveal an agent from the pop-out window: raise the main window and route it
+ *  to the agent's pane via IPC. Same `?.` HMR-skew guard as the ack relay —
+ *  both channels ship together, so a stale preload lacks both. */
+function revealAgentViaPopoutRelay(args: AgentRevealArgs): void {
+  void window.api.dashboard.revealAgent?.(args)
+}
 
 function bucketLabel(bucket: DashboardBucket): string {
   switch (bucket) {
@@ -87,8 +102,36 @@ function KanbanColumn({
   )
 }
 
-/** The pop-out agent board: status columns fed by the relayed snapshot. */
-export function AgentKanbanBoard({ snapshot }: { snapshot: DashboardSnapshot }): React.JSX.Element {
+type AgentKanbanBoardProps = {
+  snapshot: DashboardSnapshot
+  /** Sizing for the outermost container. The pop-out fills the window
+   *  (h-screen w-screen); the in-window drawer fills its host (h-full w-full). */
+  containerClassName?: string
+  /** Marks an agent as seen. Defaults to the pop-out IPC relay; the in-window
+   *  host acks the store directly. */
+  onAckAgent?: (paneKey: string) => void
+  /** Focuses the agent's pane. Defaults to the pop-out IPC relay; the in-window
+   *  host activates the worktree/pane locally and closes the overlay. */
+  onRevealAgent?: (args: AgentRevealArgs) => void
+  /** When provided, renders a close control in the header (in-window mode). The
+   *  pop-out relies on its native window controls, so it omits this. */
+  onClose?: () => void
+  /** Header controls rendered before the close button. The in-window host
+   *  passes its settings menu; the pop-out renderer has no store to drive it. */
+  headerActions?: React.ReactNode
+}
+
+/** The agent board: status columns fed by a snapshot. Shared by the pop-out
+ *  window and the in-window drawer — the two differ only in sizing and
+ *  how ack/reveal are routed. */
+export function AgentKanbanBoard({
+  snapshot,
+  containerClassName = 'h-screen w-screen',
+  onAckAgent = ackAgentViaPopoutRelay,
+  onRevealAgent = revealAgentViaPopoutRelay,
+  onClose,
+  headerActions
+}: AgentKanbanBoardProps): React.JSX.Element {
   const grouped = useMemo(() => groupByBucket(snapshot.cards), [snapshot.cards])
   const hasRelativeTimestamps = useMemo(
     () => snapshot.cards.some((card) => (card.finishedAt ?? card.startedAt) > 0),
@@ -131,24 +174,25 @@ export function AgentKanbanBoard({ snapshot }: { snapshot: DashboardSnapshot }):
   }, [])
 
   // Seen-state is the app-wide ack map (same signal as the sidebar's bold/mute
-  // rows): opening a dialog acks the agent in the main renderer via the relay,
-  // and the next snapshot comes back with unseen=false.
-  // ?. shields dialog-opening from dev-HMR preload skew (renderer updates
-  // hot, the preload only on app restart) — acks just no-op until restart.
-  const handleOpenTerminal = useCallback((card: DashboardCard) => {
-    void window.api.dashboard.ackAgent?.(card.paneKey)
-    setOpenedCard(card)
-  }, [])
+  // rows): opening a dialog acks the agent, and the next snapshot comes back
+  // with unseen=false.
+  const handleOpenTerminal = useCallback(
+    (card: DashboardCard) => {
+      onAckAgent(card.paneKey)
+      setOpenedCard(card)
+    },
+    [onAckAgent]
+  )
   // Watching the open dialog counts as seeing state changes as they happen —
   // without this, an agent finishing while you watch would re-flag its card.
   useEffect(() => {
     if (dialogCard?.unseen) {
-      void window.api.dashboard.ackAgent?.(dialogCard.paneKey)
+      onAckAgent(dialogCard.paneKey)
     }
-  }, [dialogCard?.unseen, dialogCard?.paneKey])
+  }, [dialogCard?.unseen, dialogCard?.paneKey, onAckAgent])
 
   return (
-    <div className="flex h-screen w-screen flex-col bg-background text-foreground">
+    <div className={cn('flex flex-col bg-background text-foreground', containerClassName)}>
       <div className="flex shrink-0 items-center gap-2 border-b border-border px-4 py-2.5">
         <h1 className="text-[13px] font-semibold">
           {translate('dashboardPopout.title', 'Agents')}
@@ -158,6 +202,21 @@ export function AgentKanbanBoard({ snapshot }: { snapshot: DashboardSnapshot }):
             count: snapshot.cards.length
           })}
         </span>
+        {headerActions || onClose ? (
+          <div className="ml-auto flex items-center gap-1">
+            {headerActions}
+            {onClose ? (
+              <button
+                type="button"
+                onClick={onClose}
+                aria-label={translate('dashboardPopout.close', 'Close dashboard')}
+                className="rounded-sm p-1 text-muted-foreground opacity-70 transition-opacity hover:opacity-100 focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
+              >
+                <XIcon className="size-4" />
+              </button>
+            ) : null}
+          </div>
+        ) : null}
       </div>
       <div className="scrollbar-sleek flex min-h-0 flex-1 overflow-x-auto p-3">
         {/* Why: columns share the window width up to a readable cap; mx-auto
@@ -176,7 +235,11 @@ export function AgentKanbanBoard({ snapshot }: { snapshot: DashboardSnapshot }):
           ))}
         </div>
       </div>
-      <AgentTerminalDialog card={dialogCard} onOpenChange={handleDialogOpenChange} />
+      <AgentTerminalDialog
+        card={dialogCard}
+        onOpenChange={handleDialogOpenChange}
+        onReveal={onRevealAgent}
+      />
     </div>
   )
 }

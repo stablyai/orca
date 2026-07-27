@@ -139,7 +139,7 @@ describe('HeroFlow height', () => {
       relayDegraded: true
     })
     const notice = screen.getByTestId('relay-degraded-notice')
-    expect(notice).toHaveTextContent('only works on your local network')
+    expect(notice).toHaveTextContent('only works on your LAN or Tailscale')
     // Why: wrap-capable text item inside the fixed QR track (#9700); bare text
     // nodes in a flex row cannot shrink below max-content and overflow the track.
     expect(notice.querySelector('.min-w-0')).not.toBeNull()

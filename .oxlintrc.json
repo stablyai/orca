@@ -49,6 +49,23 @@
     ],
     "curly": "error",
     "no-unneeded-ternary": "error",
+    "no-restricted-imports": [
+      "error",
+      {
+        "paths": [
+          {
+            "name": "@linear/sdk",
+            "allowTypeImports": true,
+            "message": "Value-importing @linear/sdk hoists its ~2.6MB CJS bundle into the eager top-level require block and defeats the lazy loader. Use `import type` plus loadLinearSdk() from src/main/linear/linear-sdk.ts."
+          },
+          {
+            "name": "qrcode",
+            "allowTypeImports": true,
+            "message": "qrcode is only reachable from mobile pairing; a static import parses it at launch for everyone. Use `import type` plus `await import('qrcode')` at the call site."
+          }
+        ]
+      }
+    ],
     "no-useless-return": "error",
     "prefer-template": "error",
     "unicorn/consistent-empty-array-spread": "error",

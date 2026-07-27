@@ -3,6 +3,7 @@ import { randomUUID } from 'node:crypto'
 import { findTransport, type RuntimeMetadata } from '../../shared/runtime-bootstrap'
 import { isKeepaliveFrame, RuntimeRpcEnvelopeSchema } from './envelope-schema'
 import { RuntimeClientError, type RuntimeRpcResponse } from './types'
+import { MAX_TIMER_DELAY_MS, isSafeTimerDelayMs } from '../../shared/timer-delay'
 
 export async function sendRequest<TResult>(
   metadata: RuntimeMetadata,
@@ -10,6 +11,12 @@ export async function sendRequest<TResult>(
   params: unknown,
   timeoutMs: number
 ): Promise<RuntimeRpcResponse<TResult>> {
+  if (!isSafeTimerDelayMs(timeoutMs)) {
+    throw new RuntimeClientError(
+      'invalid_argument',
+      `Runtime request timeout must be an integer between 0 and ${MAX_TIMER_DELAY_MS}ms.`
+    )
+  }
   return await new Promise((resolve, reject) => {
     const transport = findTransport(metadata, 'unix', 'named-pipe')
     if (!transport) {

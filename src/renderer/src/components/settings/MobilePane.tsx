@@ -351,7 +351,7 @@ export function MobilePane(): React.JSX.Element {
           <p className="text-xs text-muted-foreground">
             {translate(
               'auto.components.settings.MobilePane.relayDegradedNotice',
-              'Relay couldn’t be reached — this code only works on your local network. Regenerate to try again.'
+              'Relay couldn’t be reached — this code only works on your LAN or Tailscale. Regenerate to try again.'
             )}
           </p>
         </div>

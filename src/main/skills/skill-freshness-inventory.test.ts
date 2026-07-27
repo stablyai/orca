@@ -192,7 +192,7 @@ describe('read-only skill freshness inventory', () => {
   )
 
   it.runIf(process.platform !== 'win32')(
-    'deduplicates aliases within an unsupported topology without hiding its poison',
+    'deduplicates aliases within an unsupported topology while still updating the canonical copy',
     async () => {
       const test = await fixture()
       await test.writeSkill(join(test.homeDir, '.agents', 'skills'), test.oldMarkdown)
@@ -217,11 +217,11 @@ describe('read-only skill freshness inventory', () => {
       expect(
         inventory.installations.filter((entry) => entry.topology === 'repo-scope')
       ).toHaveLength(1)
-      expect(inventory.eligibleUpdateNames).toEqual([])
+      expect(inventory.eligibleUpdateNames).toEqual(['orca-cli'])
     }
   )
 
-  it('keeps inaccessible placements visible and lets them poison the name', async () => {
+  it('keeps an unreadable foreign-home placement visible without withholding the update', async () => {
     const test = await fixture()
     await test.writeSkill(join(test.homeDir, '.agents', 'skills'), test.oldMarkdown)
     const inaccessiblePath = join(test.homeDir, '.codex', 'skills', 'orca-cli')
@@ -243,7 +243,9 @@ describe('read-only skill freshness inventory', () => {
       'outdated',
       'inaccessible'
     ])
-    expect(inventory.eligibleUpdateNames).toEqual([])
+    // Why: `--global` never writes another agent's home, so an unreadable copy there
+    // cannot be harmed by the update and must not withhold it from the canonical copy.
+    expect(inventory.eligibleUpdateNames).toEqual(['orca-cli'])
   })
 
   it('does not lose an inaccessible known repository placement', async () => {
@@ -274,14 +276,14 @@ describe('read-only skill freshness inventory', () => {
         })
       ])
     )
-    expect(inventory.eligibleUpdateNames).toEqual([])
+    expect(inventory.eligibleUpdateNames).toEqual(['orca-cli'])
   })
 
   it.each([
     ['repo', 'repo-scope'],
     ['plugin', 'plugin-cache']
   ] as const)(
-    'keeps an official %s placement informational and name-poisoning',
+    'keeps an official %s placement informational without withholding the update',
     async (kind, topology) => {
       const test = await fixture()
       await test.writeSkill(join(test.homeDir, '.agents', 'skills'), test.oldMarkdown)
@@ -305,7 +307,7 @@ describe('read-only skill freshness inventory', () => {
       })
 
       expect(inventory.installations.some((entry) => entry.topology === topology)).toBe(true)
-      expect(inventory.eligibleUpdateNames).toEqual([])
+      expect(inventory.eligibleUpdateNames).toEqual(['orca-cli'])
     }
   )
 
@@ -351,7 +353,7 @@ describe('read-only skill freshness inventory', () => {
     })
   })
 
-  it('withholds updates when stored repositories exceed the probe budget', async () => {
+  it('reports the repository scan limit without withholding the global update', async () => {
     const test = await fixture()
     await test.writeSkill(join(test.homeDir, '.agents', 'skills'), test.oldMarkdown)
     const repos = Array.from(
@@ -371,6 +373,8 @@ describe('read-only skill freshness inventory', () => {
         expect.objectContaining({ errorCategory: 'repository-scan-limit', status: 'inaccessible' })
       ])
     )
-    expect(inventory.eligibleUpdateNames).toEqual([])
+    // Why: unscanned repositories only ever hold project skills, which the global
+    // command does not touch, so the limit is reported without blocking the update.
+    expect(inventory.eligibleUpdateNames).toEqual(['orca-cli'])
   })
 })

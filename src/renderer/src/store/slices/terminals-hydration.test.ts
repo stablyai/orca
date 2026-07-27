@@ -481,6 +481,54 @@ describe('hydrateWorkspaceSession', () => {
     })
   })
 
+  it('stops deferring a session once its SSH target is known-absent, but keeps deferring present targets', async () => {
+    // #9911: a repo can outlive its SSH target (removed out of band). Once the
+    // authoritative target list has loaded, its persisted session is dead — don't
+    // re-defer it. A stranded deferred id reads as liveness in the orphan sweep, so
+    // after a later missing-target pane mount clears ptyIdsByTabId it would pin the
+    // dead tab forever. A present (merely disconnected) target must still defer.
+    const store = createTestStore()
+    const goneWt = 'repo-gone::/home/user/remote-gone'
+    const liveWt = 'repo-live::/home/user/remote-live'
+    seedStore(store, {
+      repos: [
+        { ...TEST_REPO, id: 'repo-gone', connectionId: 'ssh-target-removed' },
+        { ...TEST_REPO, id: 'repo-live', connectionId: 'ssh-target-present' }
+      ],
+      worktreesByRepo: {},
+      // Authoritative target list is loaded and lists only the present target.
+      sshTargetsHydrated: true,
+      sshTargetLabels: new Map([['ssh-target-present', 'Present']])
+    })
+
+    const session: WorkspaceSessionState = {
+      activeRepoId: 'repo-live',
+      activeWorktreeId: liveWt,
+      activeTabId: 'tab-live',
+      tabsByWorktree: {
+        [goneWt]: [makeTab({ id: 'tab-gone', worktreeId: goneWt, ptyId: null })],
+        [liveWt]: [makeTab({ id: 'tab-live', worktreeId: liveWt, ptyId: null })]
+      },
+      terminalLayoutsByTabId: {},
+      activeWorktreeIdsOnShutdown: [goneWt, liveWt],
+      remoteSessionIdsByTabId: {
+        'tab-gone': 'ssh:ssh-target-removed@@pty-7',
+        'tab-live': 'ssh:ssh-target-present@@pty-8'
+      }
+    }
+
+    store.getState().hydrateWorkspaceSession(session)
+    await store.getState().reconnectPersistedTerminals()
+
+    // Removed target: no stranded deferred/pending reconnect evidence.
+    expect(store.getState().deferredSshSessionIdsByTabId['tab-gone']).toBeUndefined()
+    expect(store.getState().pendingReconnectPtyIdByTabId['tab-gone']).toBeUndefined()
+    // Present-but-disconnected target: still deferred for a normal reconnect.
+    expect(store.getState().deferredSshSessionIdsByTabId['tab-live']).toBe(
+      'ssh:ssh-target-present@@pty-8'
+    )
+  })
+
   it('resets persisted agent titles to the fallback label on hydration', () => {
     const store = createTestStore()
     const worktreeId = 'repo1::/wt-1'

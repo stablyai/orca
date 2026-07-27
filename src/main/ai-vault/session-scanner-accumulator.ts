@@ -187,16 +187,23 @@ export function updateLatestLocation(
   accumulator: SessionAccumulator,
   record: Record<string, unknown>
 ): void {
+  // Why: a session's representative cwd is its START directory, not its latest.
+  // `claude --resume <id>` only finds the transcript under the project dir keyed
+  // by the start cwd, and history grouping/filtering key off the session origin;
+  // a later drifted cwd broke resume for sessions that changed directory (#9361).
+  // Transcripts are append-only, so the first record carrying a cwd is the start.
+  if (accumulator.cwd === null) {
+    const startCwd = extractString(record.cwd)
+    if (startCwd) {
+      accumulator.cwd = startCwd
+    }
+  }
   const timestamp = extractString(record.timestamp)
   const parsed = timestamp ? Date.parse(timestamp) : accumulator.latestTimestampMs
   if (!Number.isFinite(parsed) || parsed < accumulator.latestTimestampMs) {
     return
   }
-  const cwd = extractString(record.cwd)
   const branch = extractString(record.gitBranch)
-  if (cwd) {
-    accumulator.cwd = cwd
-  }
   if (branch) {
     accumulator.branch = branch
   }
