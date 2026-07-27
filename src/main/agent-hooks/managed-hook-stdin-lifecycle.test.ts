@@ -82,6 +82,7 @@ import {
   wrapWindowsGitBashHookCommand,
   wrapWindowsHookCommand
 } from './installer-utils'
+import { POSIX_HOOK_STDIN_READER } from './hook-stdin-contract'
 import { createAgentHookMemorySftp } from './agent-hook-memory-sftp.test-fixture'
 
 const REMOTE_HOME = '/home/dev'
@@ -274,7 +275,9 @@ describe('Windows managed hook stdin structure', () => {
         copilot.indexOf('if (-not $env:ORCA_AGENT_HOOK_PORT')
       )
       const kimi = readFileSync(join(hooksDir, 'kimi-hook.sh'), 'utf8')
-      expect(kimi.indexOf('payload=$(cat)')).toBeLessThan(kimi.indexOf('exit 0'))
+      expect(kimi.indexOf(`payload=$(${POSIX_HOOK_STDIN_READER})`)).toBeLessThan(
+        kimi.indexOf('exit 0')
+      )
     } finally {
       homedirMock.mockImplementation(() => process.env.HOME ?? tmpdir())
       if (previousGrokHome === undefined) {
@@ -370,7 +373,7 @@ describe.skipIf(process.platform === 'win32')('managed hook stdin lifecycle', ()
   it('captures stdin before every possible whole-script success exit', async () => {
     const scripts = await generatePosixScripts()
     for (const [agent, script] of scripts) {
-      const captureIndex = script.indexOf('payload=$(cat)')
+      const captureIndex = script.indexOf(`payload=$(${POSIX_HOOK_STDIN_READER})`)
       const firstExitIndex = script.indexOf('exit 0')
       expect(captureIndex, `${agent} payload capture`).toBeGreaterThanOrEqual(0)
       expect(firstExitIndex, `${agent} first success exit`).toBeGreaterThan(captureIndex)
@@ -391,6 +394,19 @@ describe.skipIf(process.platform === 'win32')('managed hook stdin lifecycle', ()
       expect(result.exitCode, `${agent} exit code`).toBe(0)
       expect(result.stdinErrors, `${agent} stdin errors`).toHaveLength(0)
     }
+  })
+
+  it('does not need PATH to capture or drain POSIX hook stdin', async () => {
+    const scripts = await generatePosixScripts()
+    for (const [agent, script] of scripts) {
+      const result = await runPosixHook(script, { PATH: '' })
+      expect(result.exitCode, `${agent} exit code`).toBe(0)
+      expect(result.stdinErrors, `${agent} stdin errors`).toHaveLength(0)
+    }
+
+    const missing = await runPosixHook(wrapPosixHookCommand('/missing/orca-hook.sh'), { PATH: '' })
+    expect(missing.exitCode, 'missing script launcher exit code').toBe(0)
+    expect(missing.stdinErrors, 'missing script launcher stdin errors').toHaveLength(0)
   })
 
   it('drains before Claude skips hooks imported by Devin', async () => {
