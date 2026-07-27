@@ -145,7 +145,14 @@ describe('PTY provider dispatch', () => {
       cols: 80,
       rows: 24,
       cwd: undefined,
-      env: undefined
+      env: undefined,
+      // Why: the relay host can be launched from a Claude session too, so the stamps
+      // are stripped on the SSH path as well; pinned exactly so nothing else leaks in.
+      envToDelete: [
+        'CLAUDE_CODE_CHILD_SESSION',
+        'CLAUDE_CODE_SESSION_ID',
+        'CLAUDE_CODE_BRIDGE_SESSION_ID'
+      ]
     })
 
     unregisterSshPtyProvider('conn-123')
