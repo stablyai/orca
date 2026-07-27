@@ -100,11 +100,20 @@ export async function declaredPluginSkillRoots(
         return null
       }
       const skills = (parsed as Record<string, unknown>).skills
+      if (skills === undefined) {
+        return [join(directory, 'skills')]
+      }
+      if (Array.isArray(skills) && skills.length === 0) {
+        return []
+      }
       const values = Array.isArray(skills) ? skills : [skills]
       const roots = values
         .map((value) => resolveManifestSkillPath(directory, value))
         .filter((value): value is string => value !== null)
-      return roots.length > 0 ? [...new Set(roots)] : [join(directory, 'skills')]
+      if (roots.length === 0) {
+        return null
+      }
+      return [...new Set(roots)]
     } catch (error) {
       if (!(error instanceof SyntaxError)) {
         recordIssue(manifestPath, 'io-error', errorCode(error))

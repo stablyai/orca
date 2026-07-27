@@ -63,11 +63,13 @@ export async function scanKnownPluginSkillCandidates(
       return
     }
     if (issues.length >= MAXIMUM_PLUGIN_SCAN_ISSUES) {
-      issues.splice(0, issues.length, {
-        path: rootPath,
-        reason: 'issue-limit',
-        errorCode: null
-      })
+      if (!issues.some((issue) => issue.reason === 'issue-limit')) {
+        issues.push({
+          path: rootPath,
+          reason: 'issue-limit',
+          errorCode: null
+        })
+      }
       limitReached = true
       return
     }

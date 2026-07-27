@@ -173,6 +173,59 @@ describe('plugin skill candidate scan', () => {
     })
   })
 
+  it('falls back to traversal when a manifest skills path is invalid', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'orca-plugin-invalid-declared-root-'))
+    temporaryDirectories.push(root)
+    const packageRoot = join(root, 'vendor', 'plugin', '1.0.0')
+    const candidate = join(packageRoot, 'custom-skills', 'orca-cli')
+    await mkdir(join(packageRoot, '.codex-plugin'), { recursive: true })
+    await mkdir(candidate, { recursive: true })
+    await writeFile(
+      join(packageRoot, '.codex-plugin', 'plugin.json'),
+      '{"skills":"custom-skills"}\n'
+    )
+    await writeFile(join(candidate, 'SKILL.md'), '# Orca CLI\n')
+
+    const result = await scanKnownPluginSkillCandidates(root, new Set(['orca-cli']))
+
+    expect(result).toEqual({
+      candidates: [{ name: 'orca-cli', path: candidate }],
+      issues: []
+    })
+  })
+
+  it('does not traverse plugin payload when the default skills root is missing', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'orca-plugin-missing-default-root-'))
+    temporaryDirectories.push(root)
+    const packageRoot = join(root, 'vendor', 'plugin', '1.0.0')
+    await mkdir(join(packageRoot, '.codex-plugin'), { recursive: true })
+    await mkdir(
+      join(packageRoot, 'commands', ...Array.from({ length: 11 }, (_, index) => `level-${index}`)),
+      { recursive: true }
+    )
+    await writeFile(join(packageRoot, '.codex-plugin', 'plugin.json'), '{"name":"plugin"}\n')
+
+    const result = await scanKnownPluginSkillCandidates(root, new Set(['orca-cli']))
+
+    expect(result).toEqual({ candidates: [], issues: [] })
+  })
+
+  it('does not traverse plugin payload when the manifest declares no skill roots', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'orca-plugin-empty-skill-roots-'))
+    temporaryDirectories.push(root)
+    const packageRoot = join(root, 'vendor', 'plugin', '1.0.0')
+    await mkdir(join(packageRoot, '.codex-plugin'), { recursive: true })
+    await mkdir(
+      join(packageRoot, 'commands', ...Array.from({ length: 11 }, (_, index) => `level-${index}`)),
+      { recursive: true }
+    )
+    await writeFile(join(packageRoot, '.codex-plugin', 'plugin.json'), '{"skills":[]}\n')
+
+    const result = await scanKnownPluginSkillCandidates(root, new Set(['orca-cli']))
+
+    expect(result).toEqual({ candidates: [], issues: [] })
+  })
+
   it('discovers nested skill packages recursively within declared roots', async () => {
     const root = await mkdtemp(join(tmpdir(), 'orca-plugin-skill-boundary-'))
     temporaryDirectories.push(root)
@@ -192,7 +245,7 @@ describe('plugin skill candidate scan', () => {
     })
   })
 
-  it('rejects Windows parent traversal and falls back to the default skills root', async () => {
+  it('rejects Windows parent traversal without hiding the default skills root', async () => {
     const root = await mkdtemp(join(tmpdir(), 'orca-plugin-windows-parent-'))
     temporaryDirectories.push(root)
     const packageRoot = join(root, 'vendor', 'plugin', '1.0.0')
@@ -358,6 +411,35 @@ describe('plugin skill candidate scan', () => {
       reason: 'io-error',
       errorCode: 'ELOOP'
     })
+  })
+
+  it('preserves read failures when the scan issue limit is reached', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'orca-plugin-issue-limit-'))
+    temporaryDirectories.push(root)
+    await Promise.all(
+      Array.from({ length: 16 }, async (_, index) => {
+        const name = `loop-${index.toString().padStart(2, '0')}`
+        await symlink(name, join(root, name), 'dir')
+      })
+    )
+    const packageRoot = join(root, 'zz-package')
+    await mkdir(join(packageRoot, '.codex-plugin'), { recursive: true })
+    await symlink('SKILL.md', join(packageRoot, 'SKILL.md'), 'file')
+    await symlink('plugin.json', join(packageRoot, '.codex-plugin', 'plugin.json'), 'file')
+
+    const result = await scanKnownPluginSkillCandidates(root, new Set(['orca-cli']))
+
+    expect(result.issues).toContainEqual({
+      path: join(root, 'loop-00'),
+      reason: 'io-error',
+      errorCode: 'ELOOP'
+    })
+    expect(result.issues).toContainEqual({
+      path: root,
+      reason: 'issue-limit',
+      errorCode: null
+    })
+    expect(result.issues.filter((issue) => issue.reason === 'issue-limit')).toHaveLength(1)
   })
 
   it('keeps a dangling known-name symlink from a declared skill root as a candidate', async () => {
