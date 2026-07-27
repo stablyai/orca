@@ -397,6 +397,25 @@ describe('plugin skill candidate scan', () => {
     })
   })
 
+  it('does not follow a SKILL.md symlink outside the plugin cache', async () => {
+    const parent = await mkdtemp(join(tmpdir(), 'orca-plugin-skill-file-outside-'))
+    temporaryDirectories.push(parent)
+    const root = join(parent, 'cache')
+    const skill = join(root, 'vendor', 'orca-cli')
+    const outsideSkillFile = join(parent, 'outside', 'SKILL.md')
+    await mkdir(skill, { recursive: true })
+    await mkdir(join(parent, 'outside'), { recursive: true })
+    await writeFile(outsideSkillFile, '# Orca CLI\n')
+    await symlink(outsideSkillFile, join(skill, 'SKILL.md'), 'file')
+
+    const result = await scanKnownPluginSkillCandidates(root, new Set(['orca-cli']))
+
+    expect(result).toEqual({
+      candidates: [],
+      issues: [{ path: join(skill, 'SKILL.md'), reason: 'outside-root', errorCode: null }]
+    })
+  })
+
   it('does not read manifest symlinks outside the plugin cache', async () => {
     const parent = await mkdtemp(join(tmpdir(), 'orca-plugin-manifest-outside-'))
     temporaryDirectories.push(parent)

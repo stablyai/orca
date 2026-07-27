@@ -346,6 +346,39 @@ describe('read-only skill freshness inventory', () => {
     expect(inventory.eligibleUpdateNames).toEqual([])
   })
 
+  it('keeps a plugin-cache copy with known official files unrecognized', async () => {
+    const test = await fixture()
+    await test.writeSkill(join(test.homeDir, '.agents', 'skills'), test.currentMarkdown)
+    const modifiedRoot = join(
+      test.homeDir,
+      '.codex',
+      'plugins',
+      'cache',
+      'openai-bundled',
+      'modified',
+      'orca-cli'
+    )
+    await mkdir(modifiedRoot, { recursive: true })
+    await writeFile(join(modifiedRoot, 'SKILL.md'), test.currentMarkdown)
+    await writeFile(join(modifiedRoot, 'README.md'), 'Modified official package\n')
+
+    const inventory = await inventorySkillFreshness({
+      currentAppVersion: '2.0.0',
+      homeDir: test.homeDir,
+      repos: [],
+      resourceRoot: test.resourceRoot
+    })
+
+    expect(inventory.installations).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          unresolvedPath: modifiedRoot,
+          status: 'unrecognized'
+        })
+      ])
+    )
+  })
+
   it.each([
     ['.claude', 'skills'],
     ['.agents', 'skills']

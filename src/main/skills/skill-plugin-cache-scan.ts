@@ -87,7 +87,11 @@ export async function scanKnownPluginSkillCandidates(
   // Why: a directory only proves it is a skill by carrying SKILL.md. Matching a known
   // name alone would promote any same-named plugin or vendor folder into an installation
   // Orca never verified.
-  async function hasSkillFile(directory: string, entries: readonly Dirent[]): Promise<boolean> {
+  async function hasSkillFile(
+    directory: string,
+    entries: readonly Dirent[],
+    resolvedDirectory: string
+  ): Promise<boolean> {
     const skillFile = entries.find((entry) => entry.name === SKILL_FILE_NAME)
     if (!skillFile) {
       return false
@@ -96,7 +100,13 @@ export async function scanKnownPluginSkillCandidates(
       return skillFile.isFile()
     }
     try {
-      return (await stat(join(directory, skillFile.name))).isFile()
+      const skillFilePath = join(directory, skillFile.name)
+      const resolvedSkillFile = await realpath(skillFilePath)
+      if (!isWithinRoot(resolvedRoot ?? resolvedDirectory, resolvedSkillFile)) {
+        recordIssue(skillFilePath, 'outside-root')
+        return false
+      }
+      return (await stat(resolvedSkillFile)).isFile()
     } catch (error) {
       if (errorCode(error) !== 'ENOENT') {
         recordIssue(join(directory, skillFile.name), 'io-error', errorCode(error))
@@ -169,7 +179,7 @@ export async function scanKnownPluginSkillCandidates(
       await handle.close().catch(() => undefined)
     }
 
-    const isSkillPackage = await hasSkillFile(directory, entries)
+    const isSkillPackage = await hasSkillFile(directory, entries, resolved)
     if (isSkillPackage) {
       const name = basename(directory)
       if (knownNames.has(name)) {
