@@ -13530,6 +13530,38 @@ describe('OrcaRuntimeService', () => {
     expect(revealedLaunchConfig?.agentEnv.ORCA_AGENT_TEAMS_TOKEN).not.toBe('stale-token')
   })
 
+  it('applies native-panes-shim mode on Windows for direct Claude launches', async () => {
+    setPlatform('win32')
+    const spawn = vi.fn().mockResolvedValue({ id: 'pty-bg' })
+    const runtimeStore = {
+      ...store,
+      getSettings: () => ({
+        ...store.getSettings(),
+        claudeAgentTeamsMode: 'native-panes-shim' as const
+      })
+    }
+    const runtime = new OrcaRuntimeService(runtimeStore)
+    runtime.setPtyController({
+      spawn,
+      write: () => true,
+      kill: () => true,
+      getForegroundProcess: async () => null
+    })
+
+    await runtime.createTerminal(`path:${TEST_WORKTREE_PATH}`, {
+      command: "claude 'hello'"
+    })
+
+    const directClaude = spawn.mock.calls[0]?.[0] as {
+      command?: string
+      env?: Record<string, string>
+    }
+
+    expect(directClaude.command).toBe("claude --teammate-mode auto 'hello'")
+    expect(directClaude.env?.CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS).toBe('1')
+    expect(directClaude.env?.TMUX_PANE).toBeDefined()
+  })
+
   it('does not apply current Agent Teams mode to captured plain Claude resumes', async () => {
     const spawn = vi.fn().mockResolvedValue({ id: 'pty-bg' })
     const revealTerminalSession = vi.fn().mockResolvedValue({ tabId: 'tab-bg' })

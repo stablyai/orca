@@ -24589,7 +24589,7 @@ export class OrcaRuntimeService {
             ? {
                 ...launchOpts.launchConfig,
                 agentCommand: launchOpts.launchConfig.agentCommand
-                  ? effectiveClaudeAgentTeamsMode === 'in-process' || process.platform === 'win32'
+                  ? effectiveClaudeAgentTeamsMode === 'in-process'
                     ? addClaudeTeammateModeInProcess(launchOpts.launchConfig.agentCommand)
                     : addClaudeTeammateModeAuto(launchOpts.launchConfig.agentCommand)
                   : agentTeamsPlan.command,

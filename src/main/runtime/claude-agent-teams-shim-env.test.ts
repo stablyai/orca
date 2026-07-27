@@ -1,7 +1,7 @@
 import { chmod, mkdir, mkdtemp, readFile, rm, stat, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { afterEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, describe, expect, it } from 'vitest'
 import {
   buildClaudeAgentTeamsLaunchPlan,
   ensureClaudeAgentTeamsShimDir,
@@ -29,15 +29,12 @@ describe('claude agent teams shim env', () => {
     await expect(readFile(join(root, 'tmux'), 'utf8')).resolves.toContain('agent-teams-tmux "$@"')
   })
 
-  it('builds native shim env only for direct Claude commands', async () => {
+  it('builds native shim env on Windows', async () => {
+    setProcessProp('platform', 'win32')
     const root = await mkdtemp(join(tmpdir(), 'orca-agent-teams-cli-'))
     roots.push(root)
-    const cliName = process.platform === 'win32' ? 'orca-dev.cmd' : 'orca-dev'
-    const cliPath = join(root, cliName)
-    await writeFile(cliPath, '#!/usr/bin/env sh\n', 'utf8')
-    if (process.platform !== 'win32') {
-      await chmod(cliPath, 0o755)
-    }
+    const cliPath = join(root, 'orca-dev.cmd')
+    await writeFile(cliPath, '@echo off\n', 'utf8')
 
     let capturedShimBin = ''
     const plan = await buildClaudeAgentTeamsLaunchPlan({
@@ -47,29 +44,55 @@ describe('claude agent teams shim env', () => {
       createTeamEnv: (shimDir, shimBin) => {
         capturedShimBin = shimBin
         return {
-          PATH: `${shimDir}:/usr/bin`,
+          PATH: `${shimDir};C:\\Windows\\System32`,
           TMUX: '/tmp/orca/fake,0,0',
           TMUX_PANE: '%1'
         }
       }
     })
 
-    if (process.platform === 'win32') {
-      expect(plan).toMatchObject({
-        command: "claude --teammate-mode in-process 'hello'",
-        env: { CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS: '1' }
-      })
-      expect(plan?.envToDelete).toBeUndefined()
-      expect(capturedShimBin).toBe('')
-    } else {
-      expect(plan).toMatchObject({
-        command: "claude --teammate-mode auto 'hello'",
-        env: expect.objectContaining({ TMUX_PANE: '%1' }),
-        envToDelete: ['TERM_PROGRAM', 'ORCA_ATTRIBUTION_SHIM_DIR']
-      })
-      expect(capturedShimBin).toBe(cliPath)
-    }
+    expect(plan).toMatchObject({
+      command: "claude --teammate-mode auto 'hello'",
+      env: expect.objectContaining({ TMUX_PANE: '%1' }),
+      envToDelete: ['TERM_PROGRAM', 'ORCA_ATTRIBUTION_SHIM_DIR']
+    })
+    expect(capturedShimBin).toBe(cliPath)
+  })
 
+  it('honors explicit in-process on Windows', async () => {
+    setProcessProp('platform', 'win32')
+
+    const plan = await buildClaudeAgentTeamsLaunchPlan({
+      command: "claude 'hello'",
+      mode: 'in-process',
+      baseEnv: {},
+      createTeamEnv: (shimDir, _shimBin) => ({ PATH: shimDir })
+    })
+
+    expect(plan).toMatchObject({
+      command: "claude --teammate-mode in-process 'hello'",
+      env: { CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS: '1' }
+    })
+    expect(plan?.envToDelete).toBeUndefined()
+  })
+
+  it('prepends the shim dir with a semicolon on Windows', async () => {
+    setProcessProp('platform', 'win32')
+    let capturedTeamEnv: Record<string, string> = {}
+    await buildClaudeAgentTeamsLaunchPlan({
+      command: "claude 'hello'",
+      mode: 'native-panes-shim',
+      baseEnv: { ORCA_AGENT_TEAMS_SHIM_BIN: 'C:\\Shim\\orca.exe' },
+      createTeamEnv: (shimDir, _shimBin) => {
+        capturedTeamEnv = { PATH: `${shimDir};C:\\Windows\\System32` }
+        return capturedTeamEnv
+      }
+    })
+
+    expect(capturedTeamEnv.PATH).toMatch(/^[^;]+;C:\\Windows\\System32$/)
+  })
+
+  it('builds native shim env only for direct Claude commands', async () => {
     await expect(
       buildClaudeAgentTeamsLaunchPlan({
         command: "echo ok; claude 'hello'",

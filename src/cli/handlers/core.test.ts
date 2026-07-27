@@ -40,7 +40,6 @@ function mockClaudeChild(): { once: (event: string, cb: (...args: unknown[]) => 
 }
 
 describe('orca claude-teams CLI handler', () => {
-  const isWindows = process.platform === 'win32'
   let previousRunAsNode: string | undefined
   let previousPaneKey: string | undefined
   let previousExitCode: typeof process.exitCode
@@ -91,43 +90,54 @@ describe('orca claude-teams CLI handler', () => {
     process.exitCode = previousExitCode
   })
 
-  // Guarded to non-Windows: the handler early-returns unsupported_platform on
-  // win32, so the leak path never runs there.
-  it.skipIf(isWindows)(
-    'does not leak ELECTRON_RUN_AS_NODE into the spawned claude child',
-    async () => {
+  it('does not leak ELECTRON_RUN_AS_NODE into the spawned claude child', async () => {
+    await runClaudeTeams()
+
+    expect(spawnMock).toHaveBeenCalledWith('claude', expect.any(Array), expect.any(Object))
+    const spawnEnv = spawnMock.mock.calls.at(-1)?.[2].env as SpawnEnv
+    expect(spawnEnv.ELECTRON_RUN_AS_NODE).toBeUndefined()
+
+    // The prepareLaunch request env is built from the same helper, so it must
+    // be sanitized too.
+    const prepareLaunchEnv = (callMock.mock.calls[0][1] as { env: SpawnEnv }).env
+    expect(prepareLaunchEnv.ELECTRON_RUN_AS_NODE).toBeUndefined()
+  })
+
+  it('still forwards non-Electron parent env and prepareLaunch env to claude', async () => {
+    const previousMarker = process.env.ORCA_TEST_MARKER
+    process.env.ORCA_TEST_MARKER = 'keep-me'
+    try {
       await runClaudeTeams()
-
-      expect(spawnMock).toHaveBeenCalledWith('claude', expect.any(Array), expect.any(Object))
-      const spawnEnv = spawnMock.mock.calls.at(-1)?.[2].env as SpawnEnv
-      expect(spawnEnv.ELECTRON_RUN_AS_NODE).toBeUndefined()
-
-      // The prepareLaunch request env is built from the same helper, so it must
-      // be sanitized too.
-      const prepareLaunchEnv = (callMock.mock.calls[0][1] as { env: SpawnEnv }).env
-      expect(prepareLaunchEnv.ELECTRON_RUN_AS_NODE).toBeUndefined()
-    }
-  )
-
-  it.skipIf(isWindows)(
-    'still forwards non-Electron parent env and prepareLaunch env to claude',
-    async () => {
-      const previousMarker = process.env.ORCA_TEST_MARKER
-      process.env.ORCA_TEST_MARKER = 'keep-me'
-      try {
-        await runClaudeTeams()
-      } finally {
-        if (previousMarker === undefined) {
-          delete process.env.ORCA_TEST_MARKER
-        } else {
-          process.env.ORCA_TEST_MARKER = previousMarker
-        }
+    } finally {
+      if (previousMarker === undefined) {
+        delete process.env.ORCA_TEST_MARKER
+      } else {
+        process.env.ORCA_TEST_MARKER = previousMarker
       }
-
-      const spawnEnv = spawnMock.mock.calls.at(-1)?.[2].env as SpawnEnv
-      expect(spawnEnv.ORCA_TEST_MARKER).toBe('keep-me')
-      expect(spawnEnv.CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS).toBe('1')
-      expect(spawnEnv.PATH).toBe('/shim:/usr/bin')
     }
-  )
+
+    const spawnEnv = spawnMock.mock.calls.at(-1)?.[2].env as SpawnEnv
+    expect(spawnEnv.ORCA_TEST_MARKER).toBe('keep-me')
+    expect(spawnEnv.CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS).toBe('1')
+    expect(spawnEnv.PATH).toBe('/shim:/usr/bin')
+  })
+
+  it('claude-teams no longer rejects Windows', async () => {
+    await runClaudeTeams()
+
+    expect(callMock).toHaveBeenCalledWith(
+      'agentTeams.prepareLaunch',
+      expect.objectContaining({ paneKey: 'tab-1:leaf-1' })
+    )
+    expect(spawnMock).toHaveBeenCalledWith(
+      'claude',
+      expect.arrayContaining(['--teammate-mode', 'auto']),
+      expect.any(Object)
+    )
+  })
+
+  it('claude-teams still requires an Orca terminal', async () => {
+    delete process.env.ORCA_PANE_KEY
+    await expect(runClaudeTeams()).rejects.toMatchObject({ code: 'invalid_environment' })
+  })
 })

@@ -39,7 +39,7 @@ export async function buildClaudeAgentTeamsLaunchPlan(args: {
   if (!args.command || mode === 'off' || !isDirectClaudeCommand(args.command)) {
     return null
   }
-  if (mode === 'in-process' || process.platform === 'win32') {
+  if (mode === 'in-process') {
     return {
       command: addClaudeTeammateModeInProcess(args.command),
       env: { CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS: '1' }
