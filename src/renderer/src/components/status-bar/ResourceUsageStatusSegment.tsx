@@ -5,7 +5,6 @@ import {
   ChevronDown,
   ChevronRight,
   Globe,
-  GripHorizontal,
   LoaderCircle,
   MemoryStick,
   RotateCw,
@@ -913,7 +912,10 @@ export function ResourceUsageStatusSegment({
 
   const handleFloatingDragStart = useCallback(
     (event: React.PointerEvent<HTMLElement>): void => {
-      if (event.button !== 0) {
+      if (
+        event.button !== 0 ||
+        (event.target instanceof Element && event.target.closest('button'))
+      ) {
         return
       }
       const origin = floatingPositionRef.current ?? { x: 0, y: 0 }
@@ -990,10 +992,13 @@ export function ResourceUsageStatusSegment({
     [applyFloatingPosition, stopDragEvent]
   )
 
-  // Why: the grip is the only way to move the panel, so it needs a keyboard
-  // path. Arrow steps commit straight to state — there is no drag to coalesce.
+  // Why: the draggable header also needs a keyboard path. Arrow steps commit
+  // straight to state because there is no pointer stream to coalesce.
   const handleFloatingDragKeyDown = useCallback(
     (event: React.KeyboardEvent<HTMLElement>): void => {
+      if (event.target !== event.currentTarget) {
+        return
+      }
       const step =
         FLOATING_KEYBOARD_STEP_PX * (event.shiftKey ? FLOATING_KEYBOARD_COARSE_FACTOR : 1)
       const delta = FLOATING_KEYBOARD_DELTAS[event.key]
@@ -1008,6 +1013,30 @@ export function ResourceUsageStatusSegment({
       )
     },
     [applyFloatingPosition]
+  )
+
+  const resetFloatingPosition = useCallback((): void => {
+    if (floatingDragFrameRef.current !== null) {
+      cancelAnimationFrame(floatingDragFrameRef.current)
+      floatingDragFrameRef.current = null
+    }
+    floatingDragRef.current = null
+    pendingFloatingPositionRef.current = null
+    floatingPositionRef.current = null
+    floatingPanelRef.current?.style.setProperty('--resource-manager-x', '0px')
+    floatingPanelRef.current?.style.setProperty('--resource-manager-y', '0px')
+    setFloatingDragging(false)
+    setFloatingPosition(null)
+  }, [])
+
+  const setResourceManagerOpen = useCallback(
+    (nextOpen: boolean): void => {
+      if (!nextOpen) {
+        resetFloatingPosition()
+      }
+      setOpen(nextOpen)
+    },
+    [resetFloatingPosition]
   )
 
   useEffect(() => {
@@ -1241,31 +1270,34 @@ export function ResourceUsageStatusSegment({
     (tabId: string, paneKey: string | null) => {
       navigateResourceSessionToTab(tabId, paneKey, {
         tabsByWorktree,
-        setOpen,
+        setOpen: setResourceManagerOpen,
         setActiveView,
         activateAndRevealWorktree,
         activateTabAndFocusPane
       })
     },
-    [tabsByWorktree, setActiveView]
+    [setActiveView, setResourceManagerOpen, tabsByWorktree]
   )
 
-  const deleteWorktree = useCallback((worktreeId: string): void => {
-    const target = resolveResourceManagerWorktreeTarget(
-      worktreeId,
-      getAllWorktreesFromState(useAppStore.getState())
-    )
-    if (!target) {
-      return
-    }
-    setOpen(false)
-    runWorktreeDelete(worktreeId, { expectedHostId: target.hostId })
-  }, [])
+  const deleteWorktree = useCallback(
+    (worktreeId: string): void => {
+      const target = resolveResourceManagerWorktreeTarget(
+        worktreeId,
+        getAllWorktreesFromState(useAppStore.getState())
+      )
+      if (!target) {
+        return
+      }
+      setResourceManagerOpen(false)
+      runWorktreeDelete(worktreeId, { expectedHostId: target.hostId })
+    },
+    [setResourceManagerOpen]
+  )
 
   const handleOpenWorkspaceCleanup = useCallback((): void => {
-    setOpen(false)
+    setResourceManagerOpen(false)
     queueMicrotask(() => openModal('workspace-cleanup'))
-  }, [openModal])
+  }, [openModal, setResourceManagerOpen])
 
   const handleKillSession = useCallback(
     (session: UnifiedSessionRow): void => {
@@ -1334,9 +1366,9 @@ export function ResourceUsageStatusSegment({
   }, [cancelPopoverBodyFocusFrame, killConfirm, mountedRef, refreshSessions, removeSession])
 
   const openSpaceResults = useCallback((): void => {
-    setOpen(false)
+    setResourceManagerOpen(false)
     openSpacePage()
-  }, [openSpacePage])
+  }, [openSpacePage, setResourceManagerOpen])
 
   return (
     <Popover
@@ -1345,7 +1377,7 @@ export function ResourceUsageStatusSegment({
         if (nextOpen) {
           recordFeatureInteraction('resource-manager')
         }
-        setOpen(nextOpen)
+        setResourceManagerOpen(nextOpen)
       }}
     >
       <Tooltip delayDuration={150}>
@@ -1429,34 +1461,28 @@ export function ResourceUsageStatusSegment({
         // Why: activating a tab focuses xterm's DOM node; Radix would read that as focus-outside and close. Outside-click and Escape still close.
         onFocusOutside={(event) => event.preventDefault()}
       >
-        <div className="flex items-center justify-between gap-2 border-b border-border px-3 py-1.5">
+        <div
+          role="group"
+          tabIndex={0}
+          aria-label={translate(
+            'auto.components.status.bar.ResourceUsageStatusSegment.0f41c4e8d1',
+            'Move Resource Manager'
+          )}
+          title={translate(
+            'auto.components.status.bar.ResourceUsageStatusSegment.0f41c4e8d1',
+            'Move Resource Manager'
+          )}
+          onPointerDown={handleFloatingDragStart}
+          onPointerMove={handleFloatingDragMove}
+          onPointerUp={handleFloatingDragEnd}
+          onPointerCancel={handleFloatingDragEnd}
+          onKeyDown={handleFloatingDragKeyDown}
+          className={cn(
+            'flex touch-none select-none items-center justify-between gap-2 border-b border-border px-3 py-1.5 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-inset focus-visible:ring-ring [&_button]:cursor-pointer [&_button:disabled]:cursor-not-allowed',
+            floatingDragging ? 'cursor-grabbing' : 'cursor-grab'
+          )}
+        >
           <div className="flex min-w-0 items-center gap-1.5 text-[11px] font-medium text-foreground">
-            <button
-              type="button"
-              aria-label={translate(
-                'auto.components.status.bar.ResourceUsageStatusSegment.0f41c4e8d1',
-                'Move Resource Manager'
-              )}
-              title={translate(
-                'auto.components.status.bar.ResourceUsageStatusSegment.0f41c4e8d1',
-                'Move Resource Manager'
-              )}
-              onPointerDown={handleFloatingDragStart}
-              onPointerMove={handleFloatingDragMove}
-              onPointerUp={handleFloatingDragEnd}
-              onPointerCancel={handleFloatingDragEnd}
-              onKeyDown={handleFloatingDragKeyDown}
-              onClick={(event) => {
-                event.stopPropagation()
-                event.preventDefault()
-              }}
-              className={cn(
-                'inline-flex size-5 shrink-0 touch-none select-none items-center justify-center rounded text-muted-foreground transition-colors hover:bg-accent hover:text-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring',
-                floatingDragging ? 'cursor-grabbing' : 'cursor-grab'
-              )}
-            >
-              <GripHorizontal className="size-3" />
-            </button>
             <MemoryStick className="size-3 shrink-0 text-muted-foreground" />
             <span className="truncate">
               {translate('auto.components.status.bar.StatusBar.d1e1a7a6bf', 'Resource Manager')}
@@ -1469,7 +1495,7 @@ export function ResourceUsageStatusSegment({
                 <TooltipTrigger asChild>
                   <button
                     type="button"
-                    onClick={() => setFloatingPosition(null)}
+                    onClick={resetFloatingPosition}
                     aria-label={translate(
                       'auto.components.status.bar.ResourceUsageStatusSegment.b2f6b4c0b4',
                       'Reset Resource Manager position'
@@ -1535,7 +1561,7 @@ export function ResourceUsageStatusSegment({
               <TooltipTrigger asChild>
                 <button
                   type="button"
-                  onClick={() => setOpen(false)}
+                  onClick={() => setResourceManagerOpen(false)}
                   aria-label={translate(
                     'auto.components.status.bar.ResourceUsageStatusSegment.17a6a2c4f3',
                     'Close Resource Manager'
