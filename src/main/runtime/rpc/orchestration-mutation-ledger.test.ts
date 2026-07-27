@@ -4,6 +4,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { z } from 'zod'
 import { afterEach, describe, expect, it, vi } from 'vitest'
+import { ORCHESTRATION_CONTRACT_VERSION } from '../../../shared/protocol-version'
 import { OrcaRuntimeService } from '../orca-runtime'
 import { OrchestrationDb } from '../orchestration/db'
 import { defineMethod, type RpcRequest } from './core'
@@ -23,6 +24,7 @@ function request(params: {
     authToken: params.authToken ?? 'caller-token',
     method: 'orchestration.send',
     params: { subject: params.subject },
+    orchestrationContractVersion: ORCHESTRATION_CONTRACT_VERSION,
     orchestrationRequestId: params.mutationId
   }
 }
@@ -230,6 +232,7 @@ describe('durable orchestration mutation ledger', () => {
       authToken: 'caller-token',
       method: 'orchestration.workerStart',
       params,
+      orchestrationContractVersion: ORCHESTRATION_CONTRACT_VERSION,
       orchestrationRequestId: 'mutation_worker_start'
     })
 
@@ -279,6 +282,7 @@ describe('durable orchestration mutation ledger', () => {
       method: 'orchestration.ask',
       params: { from: 'term_worker', question: 'Proceed?', timeoutMs: 60_000 },
       orchestrationCapability: capability,
+      orchestrationContractVersion: ORCHESTRATION_CONTRACT_VERSION,
       orchestrationRequestId: 'mutation_ask'
     }
     const controller = new AbortController()

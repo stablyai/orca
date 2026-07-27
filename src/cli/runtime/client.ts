@@ -1,6 +1,10 @@
 import { randomUUID } from 'node:crypto'
 import type { CliStatusResult, RuntimeStatus } from '../../shared/runtime-types'
 import type { RuntimeOrchestrationEnvelope } from '../../shared/runtime-rpc-envelope'
+import {
+  isOrchestrationMutation,
+  orchestrationMigrationData
+} from '../../shared/orchestration-rpc-contract'
 import { parsePairingCode, type PairingOffer } from '../../shared/pairing'
 import { launchOrcaApp } from './launch'
 import { getDefaultUserDataPath, readMetadata } from './metadata'
@@ -12,6 +16,8 @@ import { markEnvironmentUsed, resolveEnvironmentPairingOffer } from './environme
 import { describeRuntimeCompatBlock, evaluateRuntimeCompat } from '../../shared/protocol-compat'
 import {
   MIN_COMPATIBLE_RUNTIME_SERVER_VERSION,
+  ORCHESTRATION_CONTRACT_RUNTIME_CAPABILITY,
+  ORCHESTRATION_CONTRACT_VERSION,
   RUNTIME_PROTOCOL_VERSION
 } from '../../shared/protocol-version'
 
@@ -29,6 +35,7 @@ export class RuntimeClient {
   private readonly remotePairing: PairingOffer | null
   private readonly environmentSelector: string | null
   private remoteCompatChecked = false
+  private orchestrationContractCheck: Promise<void> | null = null
 
   // Why: browser commands trigger first-time session init (agent-browser connect +
   // CDP proxy setup) which can take 15-30s. 60s accommodates cold start without
@@ -55,11 +62,18 @@ export class RuntimeClient {
     options?: { timeoutMs?: number } & RuntimeOrchestrationEnvelope
   ): Promise<RuntimeRpcSuccess<TResult>> {
     const effectiveTimeoutMs = options?.timeoutMs ?? this.resolveMethodTimeoutMs(method, params)
-    const orchestrationRequestId = isOrchestrationMutation(method, params)
+    const orchestrationMutation = isOrchestrationMutation(method, params)
+    if (orchestrationMutation) {
+      await this.ensureOrchestrationContractCompatible(effectiveTimeoutMs)
+    }
+    const orchestrationRequestId = orchestrationMutation
       ? (options?.orchestrationRequestId ?? randomUUID())
       : undefined
     const envelope = {
       orchestrationCapability: options?.orchestrationCapability,
+      orchestrationContractVersion: method.startsWith('orchestration.')
+        ? ORCHESTRATION_CONTRACT_VERSION
+        : undefined,
       orchestrationRequestId
     }
     if (this.remotePairing) {
@@ -183,6 +197,28 @@ export class RuntimeClient {
     }
   }
 
+  private async ensureOrchestrationContractCompatible(timeoutMs: number): Promise<void> {
+    if (!this.orchestrationContractCheck) {
+      this.orchestrationContractCheck = this.checkOrchestrationContractCompatibility(timeoutMs)
+    }
+    await this.orchestrationContractCheck
+  }
+
+  private async checkOrchestrationContractCompatibility(timeoutMs: number): Promise<void> {
+    const response = await this.call<RuntimeStatus>('status.get', undefined, { timeoutMs })
+    if (this.remotePairing) {
+      this.assertRemoteRuntimeStatusCompatible(response.result)
+      this.remoteCompatChecked = true
+    }
+    if (!response.result.capabilities?.includes(ORCHESTRATION_CONTRACT_RUNTIME_CAPABILITY)) {
+      throw new RuntimeClientError(
+        'orchestration_migration_required',
+        'The connected Orca runtime does not support the current orchestration contract. No effects were applied.',
+        orchestrationMigrationData('runtime_capability_missing')
+      )
+    }
+  }
+
   private assertRemoteRuntimeStatusCompatible(status: RuntimeStatus): void {
     const verdict = evaluateRuntimeCompat({
       clientProtocolVersion: RUNTIME_PROTOCOL_VERSION,
@@ -229,41 +265,6 @@ export class RuntimeClient {
       'Timed out waiting for an Orca desktop window. The runtime may still be running headlessly.'
     )
   }
-}
-
-const ORCHESTRATION_MUTATION_METHODS = new Set([
-  'orchestration.runCreate',
-  'orchestration.runUse',
-  'orchestration.send',
-  'orchestration.reply',
-  'orchestration.taskCreate',
-  'orchestration.taskUpdate',
-  'orchestration.dispatch',
-  'orchestration.workerStart',
-  'orchestration.workerStop',
-  'orchestration.workerAbandon',
-  'orchestration.ask',
-  'orchestration.gateCreate',
-  'orchestration.gateResolve',
-  'orchestration.reset'
-])
-
-function isOrchestrationMutation(method: string, params: unknown): boolean {
-  if (method === 'orchestration.check') {
-    // Why: a plain check is read-only, while acknowledging a Delivery durably consumes it.
-    return Boolean(
-      params && typeof params === 'object' && typeof (params as { ack?: unknown }).ack === 'string'
-    )
-  }
-  if (method === 'orchestration.dispatch') {
-    // Why: dry-run validates dispatch intent without creating a Dispatch or injecting input.
-    return !(
-      params &&
-      typeof params === 'object' &&
-      (params as { dryRun?: unknown }).dryRun === true
-    )
-  }
-  return ORCHESTRATION_MUTATION_METHODS.has(method)
 }
 
 function attachMutationRecovery(error: unknown, requestId: string | undefined): unknown {

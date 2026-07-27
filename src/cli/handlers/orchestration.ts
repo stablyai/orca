@@ -21,6 +21,10 @@ import type {
 } from '../../shared/orchestration-worker-output'
 import type { NativeChatMessage } from '../../shared/native-chat-types'
 import type { RuntimeTerminalRead } from '../../shared/runtime-types'
+import {
+  orchestrationMigrationData,
+  orchestrationSkillRecoveryData
+} from '../../shared/orchestration-rpc-contract'
 
 // Why: 15 s is well under Claude Code's ~2 min Bash-tool silence budget while keeping log volume low. See design doc §3.4.
 const DEFAULT_KEEPALIVE_INTERVAL_MS = 15_000
@@ -475,7 +479,8 @@ export const ORCHESTRATION_HANDLERS: Record<string, CommandHandler> = {
     if (type === 'worker_done' && outcome === undefined && !flags.has('payload')) {
       throw new RuntimeClientError(
         'invalid_argument',
-        'worker_done requires --outcome succeeded or --outcome failed.'
+        'worker_done requires --outcome succeeded or --outcome failed. No effects were applied.',
+        orchestrationSkillRecoveryData()
       )
     }
     if (type !== 'worker_done' && outcome !== undefined) {
@@ -718,6 +723,8 @@ export const ORCHESTRATION_HANDLERS: Record<string, CommandHandler> = {
         spec_truncated?: boolean
       }[]
       count: number
+      runId?: string
+      legacyReadOnly?: boolean
     }>('orchestration.taskList', {
       status: getOptionalStringFlag(flags, 'status'),
       ready: flags.has('ready') ? true : undefined,
@@ -736,9 +743,9 @@ export const ORCHESTRATION_HANDLERS: Record<string, CommandHandler> = {
       : result
     printResult(output, json, (r) => {
       if (r.count === 0) {
-        return 'No tasks.'
+        return r.legacyReadOnly ? 'No legacy tasks (read-only).' : 'No tasks.'
       }
-      return r.tasks
+      const tasks = r.tasks
         .map((t) => {
           const label = t.display_name ?? t.task_title ?? t.spec
           const head = `${t.id} [${t.status}] ${label.slice(0, 60)}`
@@ -748,6 +755,7 @@ export const ORCHESTRATION_HANDLERS: Record<string, CommandHandler> = {
           return head
         })
         .join('\n')
+      return r.legacyReadOnly ? `Legacy Run ${r.runId} (read-only)\n${tasks}` : tasks
     })
   },
 
@@ -1015,27 +1023,20 @@ export const ORCHESTRATION_HANDLERS: Record<string, CommandHandler> = {
     })
   },
 
-  'orchestration coordinator-start': async ({ flags, client, cwd, json }) => {
-    const from = await resolveCoordinatorTerminalHandle(flags, cwd, client)
-    const result = await client.call<{
-      runId: string
-      status: string
-    }>('orchestration.run', {
-      spec: getRequiredStringFlag(flags, 'spec'),
-      from,
-      pollIntervalMs: getOptionalPositiveIntegerFlag(flags, 'poll-interval-ms'),
-      maxConcurrent: getOptionalPositiveIntegerFlag(flags, 'max-concurrent'),
-      worktree: getOptionalStringFlag(flags, 'worktree')
-    })
-    printResult(result, json, (r) => `Run ${r.runId} started (${r.status})`)
+  'orchestration coordinator-start': async () => {
+    throw new RuntimeClientError(
+      'orchestration_migration_required',
+      'The legacy automatic coordinator command is retired. No effects were applied.',
+      orchestrationMigrationData('command_retired')
+    )
   },
 
-  'orchestration coordinator-stop': async ({ client, json }) => {
-    const result = await client.call<{
-      runId: string
-      stopped: boolean
-    }>('orchestration.runStop', {})
-    printResult(result, json, (r) => `Run ${r.runId} stopped`)
+  'orchestration coordinator-stop': async () => {
+    throw new RuntimeClientError(
+      'orchestration_migration_required',
+      'The legacy automatic coordinator command is retired. No effects were applied.',
+      orchestrationMigrationData('command_retired')
+    )
   },
 
   'orchestration gate-create': async ({ flags, client, json }) => {

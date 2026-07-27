@@ -51,6 +51,32 @@ Do not use orchestration merely because the user says "hand off", "handoff", "ha
 - The orchestration experimental feature must be enabled in Settings > Experimental.
 - `orca orchestration` commands are RPC calls to the running Orca runtime.
 
+## Contract Migration
+
+Orca uses a hard cutover for orchestration mutations. It does not run a legacy scheduler, translate old writes, or drain pre-upgrade orchestration work.
+
+If a command returns `orchestration_migration_required`, `run_required`, or a lifecycle validation error with `nextCommandArgs`:
+
+1. Confirm `effectsApplied` is `false`.
+2. Using the same CLI executable that returned the error, run the returned arguments: `skills get orchestration --full`.
+3. Read the guide completely. Do not retry the rejected command unchanged.
+4. Create or bind a lightweight Run, then restart the work using Run -> Task -> `worker-start`.
+5. Inspect any pre-upgrade terminal before creating replacement work.
+
+The arguments intentionally omit an executable name so this works with `orca`, `orca-ide`, `orca-dev`, or another configured Orca CLI command.
+
+Pre-upgrade terminals and agents are not killed during upgrade, but they are no longer supervised: old heartbeat, question, completion, scheduler, and mutation calls are rejected before effects. Legacy database rows remain available only for explicit inspection:
+
+```bash
+orca orchestration run-list --json
+orca orchestration run-show --id run_legacy_local --json
+orca orchestration task-list --run run_legacy_local --json
+orca orchestration inbox --full --json
+orca orchestration check --terminal <legacy_handle> --peek --json
+```
+
+Read-only inspection never consumes legacy mail. Do not use actionable `check`, acknowledgment, send, retry, or task updates against the legacy Run.
+
 ## Ownership
 
 New orchestration messages and tasks belong to one explicitly bound Run. A Run is only a durable namespace and coordinator inbox; it never schedules or places workers. Lifecycle authority comes from the active Dispatch, and terminal handles remain routing metadata rather than durable identity. Send `worker_done` and `heartbeat` from the worker's own terminal; Orca routes them to that Dispatch's Run.
@@ -205,17 +231,17 @@ Recovery is conditional, never a fixed destructive sequence:
 
 Low-level `worktree create`, `terminal create`, and `dispatch --inject` remain valid recipes for custom argv or topology that `worker-start` does not express.
 
-## Gates And Legacy Coordinator
+## Gates And Legacy Inspection
 
 ```bash
 orca orchestration gate-create --task <task_id> --question <text> [--options <json_array>] [--json]
 orca orchestration gate-resolve --id <gate_id> --resolution <text> [--json]
 orca orchestration gate-list [--task <task_id>] [--status <status>] [--json]
-orca orchestration coordinator-start --spec <text> [--from <handle>] [--poll-interval-ms <n>] [--max-concurrent <n>] [--worktree <selector>] [--json]
-orca orchestration coordinator-stop [--json]
 ```
 
-`coordinator-start` is the legacy automatic scheduler loop; it is not the lightweight Run namespace in the new primitives proposal. Prefer the explicit task/dispatch/wait loop. The deprecated `run` and `run-stop` aliases remain temporarily for compatibility. Use `ask` for worker-to-coordinator questions; it creates a `question` message that the coordinator answers with `reply`. Use `gate-create` only for coordinator-managed task DAG decisions, not for answering a worker's `ask`.
+Use `ask` for worker-to-coordinator questions; it creates a `question` message that the coordinator answers with `reply`. Use `gate-create` only for coordinator-managed task DAG decisions, not for answering a worker's `ask`.
+
+`coordinator-start`, `coordinator-stop`, `run`, and `run-stop` are retired scheduler commands. They perform no effects and return the current-skill recovery action. They are not aliases for lightweight Run creation or binding.
 
 Recovery only: `orca orchestration reset --tasks|--messages|--all --json` clears the selected local orchestration database state. Do not run it during active coordination unless explicitly abandoning that state.
 
@@ -335,6 +361,6 @@ orca orchestration check --wait --types worker_done,escalation,question --timeou
 
 ## Next Action
 
-Coordinator: confirm `orca status --json`, create or bind a Run, inspect `task-list`/`dispatch-show` if inheriting state, then use the explicit supervised loop (`task-create` -> `worker-start` -> `check --wait`). Use low-level terminal creation plus `dispatch --inject` only when the composed start does not express the needed topology. Use `coordinator-start` only when deliberately opting into the legacy automatic loop.
+Coordinator: confirm `orca status --json`, create or bind a Run, inspect `task-list`/`dispatch-show` if inheriting state, then use the explicit supervised loop (`task-create` -> `worker-start` -> `check --wait`). Use low-level terminal creation plus `dispatch --inject` only when the composed start does not express the needed topology.
 
 Worker: if the current prompt contains a live dispatch preamble, do the task, use `ask` for blocking questions, and send `worker_done` once with the required payload. If the preamble is stale or absent, do not send lifecycle messages; inspect state or treat the prompt as an ordinary handoff.

@@ -1,5 +1,6 @@
 import { createHash } from 'node:crypto'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { ORCHESTRATION_CONTRACT_VERSION } from '../../../../shared/protocol-version'
 import { OrcaRuntimeService } from '../../orca-runtime'
 import { OrchestrationDb } from '../../orchestration/db'
 import { RpcDispatcher } from '../dispatcher'
@@ -503,6 +504,7 @@ describe('orchestration new-worktree workers', () => {
     const request: RpcRequest = {
       id: 'rpc_worker_start',
       authToken: 'caller-token',
+      orchestrationContractVersion: ORCHESTRATION_CONTRACT_VERSION,
       orchestrationRequestId: 'worker_start_request',
       method: 'orchestration.workerStart',
       params: {

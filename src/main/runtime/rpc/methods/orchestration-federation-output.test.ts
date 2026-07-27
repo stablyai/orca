@@ -3,6 +3,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { RuntimeRpcResponse } from '../../../../shared/runtime-rpc-envelope'
+import { ORCHESTRATION_CONTRACT_VERSION } from '../../../../shared/protocol-version'
 import { OrcaRuntimeService } from '../../orca-runtime'
 import { OrchestrationDb } from '../../orchestration/db'
 import type { OrchestrationEnvironmentTransport } from '../../orchestration/environment-transport'
@@ -58,6 +59,7 @@ describe('orchestration federated worker output', () => {
           authToken: 'run-home-device-token',
           method,
           params,
+          orchestrationContractVersion: envelope?.orchestrationContractVersion,
           orchestrationRequestId: envelope?.orchestrationRequestId,
           orchestrationCapability: envelope?.orchestrationCapability
         })) as RuntimeRpcResponse<unknown>
@@ -97,6 +99,7 @@ describe('orchestration federated worker output', () => {
     return {
       id: 'rpc_worker_start',
       authToken: 'coordinator-token',
+      orchestrationContractVersion: ORCHESTRATION_CONTRACT_VERSION,
       orchestrationRequestId: 'request_windows_worker',
       method: 'orchestration.workerStart',
       params: {

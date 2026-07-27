@@ -202,7 +202,7 @@ export const ORCHESTRATION_COMMAND_SPECS: CommandSpec[] = [
   {
     path: ['orchestration', 'coordinator-start'],
     aliases: [['orchestration', 'run']],
-    summary: 'Start the legacy automatic coordinator loop',
+    summary: 'Retired: load the current orchestration skill',
     usage:
       'orca orchestration coordinator-start --spec <text> [--from <handle>] [--poll-interval-ms <n>] [--max-concurrent <n>] [--worktree <selector>] [--json]',
     allowedFlags: [
@@ -214,16 +214,19 @@ export const ORCHESTRATION_COMMAND_SPECS: CommandSpec[] = [
       'worktree'
     ],
     notes: [
-      '`orchestration run` is a deprecated compatibility alias. This command is the legacy automatic loop, not the lightweight Run used by run-create/use/current/list/show.'
+      'This command performs no effects and returns the exact `skills get orchestration --full` recovery action.',
+      'Use the lightweight Run, Task, and worker-start primitives described by the current skill.'
     ]
   },
   {
     path: ['orchestration', 'coordinator-stop'],
     aliases: [['orchestration', 'run-stop']],
-    summary: 'Stop the legacy automatic coordinator loop',
+    summary: 'Retired: load the current orchestration skill',
     usage: 'orca orchestration coordinator-stop [--json]',
     allowedFlags: [...GLOBAL_FLAGS],
-    notes: ['`orchestration run-stop` is a deprecated compatibility alias.']
+    notes: [
+      'This command performs no effects and returns the exact `skills get orchestration --full` recovery action.'
+    ]
   },
   {
     path: ['orchestration', 'gate-create'],

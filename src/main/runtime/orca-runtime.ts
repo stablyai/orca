@@ -102,6 +102,10 @@ import {
   createSetupCompletionScanner
 } from './orchestration/setup-completion-signal'
 import type { RuntimeOrchestrationEnvelope } from '../../shared/runtime-rpc-envelope'
+import {
+  isOrchestrationMutation,
+  orchestrationMigrationData
+} from '../../shared/orchestration-rpc-contract'
 import type {
   OrchestrationEnvironmentTransport,
   OrchestrationWorkerServer
@@ -345,6 +349,8 @@ import {
   BROWSER_HEADLESS_RUNTIME_CAPABILITY,
   BROWSER_CERTIFICATE_TRUST_RUNTIME_CAPABILITY,
   MIN_COMPATIBLE_RUNTIME_CLIENT_VERSION,
+  ORCHESTRATION_CONTRACT_RUNTIME_CAPABILITY,
+  ORCHESTRATION_CONTRACT_VERSION,
   REMOTE_RUNTIME_SHARED_CONTROL_CAPABILITY,
   RUNTIME_CAPABILITIES,
   RUNTIME_PROTOCOL_VERSION,
@@ -3485,12 +3491,37 @@ export class OrcaRuntimeService {
         'Connected-server orchestration is unavailable in this runtime.'
       )
     }
+    if (isOrchestrationMutation(method, params)) {
+      const statusResponse = await this.orchestrationEnvironmentTransport.call(
+        selector,
+        'status.get',
+        undefined,
+        timeoutMs
+      )
+      if (statusResponse.ok === false) {
+        throw new OrchestrationError(
+          statusResponse.error.code,
+          statusResponse.error.message,
+          statusResponse.error.data
+        )
+      }
+      const status = statusResponse.result as RuntimeStatus
+      if (!status.capabilities?.includes(ORCHESTRATION_CONTRACT_RUNTIME_CAPABILITY)) {
+        throw new OrchestrationError(
+          'orchestration_migration_required',
+          'The connected worker server does not support the current orchestration contract. No effects were applied.',
+          orchestrationMigrationData('runtime_capability_missing')
+        )
+      }
+    }
     const response = await this.orchestrationEnvironmentTransport.call(
       selector,
       method,
       params,
       timeoutMs,
-      envelope
+      method.startsWith('orchestration.')
+        ? { ...envelope, orchestrationContractVersion: ORCHESTRATION_CONTRACT_VERSION }
+        : envelope
     )
     if (response.ok === false) {
       throw new OrchestrationError(response.error.code, response.error.message, response.error.data)

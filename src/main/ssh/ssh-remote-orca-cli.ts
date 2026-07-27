@@ -1,5 +1,6 @@
 import type { CliStatusResult, RuntimeStatus } from '../../shared/runtime-types'
 import type { RuntimeOrchestrationEnvelope } from '../../shared/runtime-rpc-envelope'
+import { ORCHESTRATION_CONTRACT_VERSION } from '../../shared/protocol-version'
 import { RpcDispatcher } from '../runtime/rpc/dispatcher'
 import type { RpcResponse } from '../runtime/rpc/core'
 import type { OrcaRuntimeService } from '../runtime/orca-runtime'
@@ -234,6 +235,9 @@ async function call(
     method,
     params,
     orchestrationCapability: envelope?.orchestrationCapability,
+    orchestrationContractVersion: method.startsWith('orchestration.')
+      ? ORCHESTRATION_CONTRACT_VERSION
+      : undefined,
     orchestrationRequestId: envelope?.orchestrationRequestId
   })
 }

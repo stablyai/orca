@@ -76,6 +76,7 @@ export type RuntimeRpcResponse<TResult> = RuntimeRpcSuccess<TResult> | RuntimeRp
 
 export type RuntimeOrchestrationEnvelope = {
   orchestrationCapability?: string
+  orchestrationContractVersion?: number
   orchestrationRequestId?: string
 }
 

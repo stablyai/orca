@@ -1,8 +1,8 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { RuntimeRpcResponse } from '../../../../shared/runtime-rpc-envelope'
 import {
-  ORCHESTRATION_FEDERATION_CONTROL_MAIL_RUNTIME_CAPABILITY,
-  ORCHESTRATION_FEDERATION_RUNTIME_CAPABILITY
+  ORCHESTRATION_CONTRACT_VERSION,
+  ORCHESTRATION_FEDERATION_CONTROL_MAIL_RUNTIME_CAPABILITY
 } from '../../../../shared/protocol-version'
 import { OrcaRuntimeService } from '../../orca-runtime'
 import { OrchestrationDb } from '../../orchestration/db'
@@ -56,6 +56,7 @@ describe('orchestration federation', () => {
           authToken: 'run-home-device-token',
           method,
           params,
+          orchestrationContractVersion: envelope?.orchestrationContractVersion,
           orchestrationRequestId: envelope?.orchestrationRequestId,
           orchestrationCapability: envelope?.orchestrationCapability
         })) as RuntimeRpcResponse<unknown>
@@ -100,6 +101,7 @@ describe('orchestration federation', () => {
     return {
       id: 'rpc_worker_start',
       authToken: 'coordinator-token',
+      orchestrationContractVersion: ORCHESTRATION_CONTRACT_VERSION,
       orchestrationRequestId: 'request_windows_worker',
       method: 'orchestration.workerStart',
       params: {
@@ -295,23 +297,6 @@ describe('orchestration federation', () => {
     expect(workerRuntime.sendTerminalAgentPrompt).not.toHaveBeenCalled()
   })
 
-  it('fails capability negotiation before Task or Dispatch mutation', async () => {
-    workerCapabilities = workerCapabilities.filter(
-      (capability) => capability !== ORCHESTRATION_FEDERATION_RUNTIME_CAPABILITY
-    )
-    const task = createHomeTask()
-
-    const response = await homeDispatcher.dispatch(startRequest(task.id))
-
-    expect(response).toMatchObject({
-      ok: false,
-      error: { code: 'capability_unsupported' }
-    })
-    expect(homeDb.getTask(task.id)?.status).toBe('ready')
-    expect(homeDb.getDispatchContext(task.id)).toBeUndefined()
-    expect(workerRuntime.createManagedWorktree).not.toHaveBeenCalled()
-  })
-
   it('rejects control mail before queueing when the worker lacks that capability', async () => {
     workerCapabilities = workerCapabilities.filter(
       (capability) => capability !== ORCHESTRATION_FEDERATION_CONTROL_MAIL_RUNTIME_CAPABILITY
@@ -324,6 +309,7 @@ describe('orchestration federation', () => {
     const sent = await homeDispatcher.dispatch({
       id: 'send-control-to-old-worker',
       authToken: 'coordinator-token',
+      orchestrationContractVersion: ORCHESTRATION_CONTRACT_VERSION,
       orchestrationRequestId: 'send-control-to-old-worker-request',
       method: 'orchestration.send',
       params: {
@@ -354,6 +340,7 @@ describe('orchestration federation', () => {
     const sent = await workerDispatcher.dispatch({
       id: 'rpc_worker_done',
       authToken: 'worker-local-token',
+      orchestrationContractVersion: ORCHESTRATION_CONTRACT_VERSION,
       orchestrationRequestId: 'worker_done_request',
       orchestrationCapability: capability,
       method: 'orchestration.send',
@@ -407,6 +394,7 @@ describe('orchestration federation', () => {
     const ask = workerDispatcher.dispatch({
       id: 'rpc_remote_ask',
       authToken: 'worker-local-token',
+      orchestrationContractVersion: ORCHESTRATION_CONTRACT_VERSION,
       orchestrationRequestId: 'remote_question_request',
       orchestrationCapability: capability,
       method: 'orchestration.ask',
@@ -438,6 +426,7 @@ describe('orchestration federation', () => {
     const reply = await homeDispatcher.dispatch({
       id: 'rpc_home_reply',
       authToken: 'coordinator-token',
+      orchestrationContractVersion: ORCHESTRATION_CONTRACT_VERSION,
       orchestrationRequestId: 'home_reply_request',
       method: 'orchestration.reply',
       params: {
@@ -474,6 +463,7 @@ describe('orchestration federation', () => {
     const timedOut = await workerDispatcher.dispatch({
       id: 'rpc_remote_ask_timeout',
       authToken: 'worker-local-token',
+      orchestrationContractVersion: ORCHESTRATION_CONTRACT_VERSION,
       orchestrationRequestId: 'remote_question_timeout_request',
       orchestrationCapability: capability,
       method: 'orchestration.ask',
@@ -493,6 +483,7 @@ describe('orchestration federation', () => {
     await homeDispatcher.dispatch({
       id: 'rpc_home_late_reply',
       authToken: 'coordinator-token',
+      orchestrationContractVersion: ORCHESTRATION_CONTRACT_VERSION,
       orchestrationRequestId: 'home_late_reply_request',
       method: 'orchestration.reply',
       params: { id: questionId, body: 'yes', from: 'term_coord' }
@@ -501,6 +492,7 @@ describe('orchestration federation', () => {
     const resumed = workerDispatcher.dispatch({
       id: 'rpc_remote_ask_resume',
       authToken: 'worker-local-token',
+      orchestrationContractVersion: ORCHESTRATION_CONTRACT_VERSION,
       orchestrationRequestId: 'remote_question_resume_request',
       orchestrationCapability: capability,
       method: 'orchestration.ask',
@@ -523,6 +515,7 @@ describe('orchestration federation', () => {
     await workerDispatcher.dispatch({
       id: 'rpc_remote_status',
       authToken: 'worker-local-token',
+      orchestrationContractVersion: ORCHESTRATION_CONTRACT_VERSION,
       orchestrationRequestId: 'remote_status_request',
       orchestrationCapability: capability,
       method: 'orchestration.send',
@@ -637,6 +630,7 @@ describe('orchestration federation', () => {
     await workerDispatcher.dispatch({
       id: 'rpc_restart_status',
       authToken: 'worker-local-token',
+      orchestrationContractVersion: ORCHESTRATION_CONTRACT_VERSION,
       orchestrationRequestId: 'restart_status_request',
       orchestrationCapability: capability,
       method: 'orchestration.send',
@@ -696,6 +690,7 @@ describe('orchestration federation', () => {
     const stopped = await homeDispatcher.dispatch({
       id: 'rpc_remote_stop',
       authToken: 'coordinator-token',
+      orchestrationContractVersion: ORCHESTRATION_CONTRACT_VERSION,
       orchestrationRequestId: 'request_remote_stop',
       method: 'orchestration.workerStop',
       params: { dispatch: dispatch.id }
@@ -742,6 +737,7 @@ describe('orchestration federation', () => {
     const stopped = await homeDispatcher.dispatch({
       id: 'rpc_changed_peer_stop',
       authToken: 'coordinator-token',
+      orchestrationContractVersion: ORCHESTRATION_CONTRACT_VERSION,
       orchestrationRequestId: 'request_changed_peer_stop',
       method: 'orchestration.workerStop',
       params: { dispatch: dispatch.id }
@@ -816,6 +812,7 @@ describe('orchestration federation', () => {
     const stopped = await homeDispatcher.dispatch({
       id: 'rpc_disconnected_stop',
       authToken: 'coordinator-token',
+      orchestrationContractVersion: ORCHESTRATION_CONTRACT_VERSION,
       orchestrationRequestId: 'request_disconnected_stop',
       method: 'orchestration.workerStop',
       params: { dispatch: dispatch.id }
@@ -846,6 +843,7 @@ describe('orchestration federation', () => {
     const stopped = await homeDispatcher.dispatch({
       id: 'rpc_replacement_stop',
       authToken: 'coordinator-token',
+      orchestrationContractVersion: ORCHESTRATION_CONTRACT_VERSION,
       orchestrationRequestId: 'request_replacement_stop',
       method: 'orchestration.workerStop',
       params: { dispatch: dispatch.id }

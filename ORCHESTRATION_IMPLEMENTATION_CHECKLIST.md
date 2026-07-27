@@ -34,6 +34,8 @@ Status meanings:
 - [x] Phase 4 structured worker output is implemented with passing automated coverage and physical
       local, mixed-version, restart, disconnect, and Windows-home to Mac-worker evidence; optional
       symmetric acceptance checks remain tracked below.
+- [x] Hard-cutover migration fence implemented and locally verified; branch-head CI remains the
+      final remote check.
 
 ## Scope invariants
 
@@ -391,6 +393,48 @@ Explicit non-goals:
 - [ ] Physically verify exact structured Mac-to-Windows and Windows-to-Mac reads after both worker
       servers run the new additive method.
 - [x] Do not add resume, live-stream control, session exclusivity, or a universal transcript ontology.
+
+## Migration — Hard cutover from pre-Run orchestration
+
+### Contract and effect fence
+
+- [x] Add one orchestration contract version and one advertised runtime capability without changing
+      the global runtime protocol.
+- [x] Keep one shared mutation/read classifier for CLI, runtime dispatch, durable receipts, and
+      connected-server calls.
+- [x] Require the contract before parameter parsing, mutation receipts, database writes, prompt
+      injection, process actions, or connected-server mutations.
+- [x] Preflight local and paired runtime capabilities before a new CLI sends a mutation.
+- [x] Carry the contract through native Unix/named-pipe, WebSocket, and connected-server envelopes.
+- [x] Retire `coordinator-start`, `coordinator-stop`, `run`, and `run-stop` before RPC effects.
+- [x] Do not add a compatibility executor, automatic rewrite, legacy scheduler, or in-flight drain.
+
+### Agent recovery and legacy inspection
+
+- [x] Return `effectsApplied=false`, structured guide metadata, and executable argument-only
+      `skills get orchestration --full` recovery.
+- [x] Attach the same guide recovery to no-bound-Run and missing worker outcome errors.
+- [x] Preserve explicit read-only Run, task, inbox, Dispatch, gate, and terminal inspection.
+- [x] Allow `task-list --run run_legacy_local` without binding the legacy Run.
+- [x] Keep default/actionable check and acknowledgment fenced; only explicit peek/all history reads
+      may inspect legacy mail.
+- [x] Document that active pre-upgrade agents keep running as processes but are unsupervised and
+      must be inspected before replacement.
+- [x] Remove the legacy scheduler recipe from the version-matched full orchestration guide.
+
+### Migration acceptance
+
+- [x] Missing/wrong contract rejects every classified mutation before parsing, receipt, and effect.
+- [x] Current-contract mutations still execute and retain durable retry receipts.
+- [x] Read-only inspection works without a contract and does not consume legacy data.
+- [x] Local and remote clients reject a runtime missing the contract capability before mutation.
+- [x] Native and encrypted WebSocket transports preserve the contract field.
+- [x] Old `worker_done` leaves message, Task, and Dispatch state unchanged.
+- [x] Human and JSON errors preserve no-effects and guide-reload recovery.
+- [x] `skills get orchestration --full` remains runtime-independent and generated guides stay in
+      sync.
+- [ ] Branch-head CI passes after the verified migration commit is pushed. Local orchestration,
+      repository tests, typechecks, reliability gates, and production builds pass.
 
 ## Cross-cutting quality gates
 
@@ -1665,6 +1709,39 @@ Append new entries chronologically. Do not rewrite older entries except to corre
     `orchestration.ask` before holding an admission slot, exactly as the new contract requires.
 - Next:
   - Push the test-only correction and confirm the replacement PR check is green.
+
+### 2026-07-26 — Hard orchestration contract cutover
+
+- Changes:
+  - Added one shared orchestration contract version, runtime capability, and mutation classifier.
+  - Fenced old, missing, and wrong-contract mutations before parsing, durable receipts, database
+    writes, process actions, prompt injection, and connected-server effects.
+  - Propagated the contract through Unix/named-pipe, WebSocket, connected-server, and SSH CLI
+    transports, with capability preflight before local or federated mutations.
+  - Retired the legacy scheduler commands locally and at RPC dispatch, preserving only explicit
+    read-only legacy inspection.
+  - Returned no-effects plus argument-only full-skill recovery and documented that pre-upgrade
+    worker processes continue unsupervised until inspected.
+- Verification:
+  - Focused orchestration/federation selection: 56 files and 721 tests passed.
+  - Repository suite excluding the independently reproducible system-SSH native-installer timeout:
+    3,479 files and 37,181 tests passed.
+  - Node, CLI, and web typechecks passed.
+  - Relay, CLI, Electron/Vite, and web production builds passed.
+  - Bundled-skill verification, reliability gates, max-lines ratchet, and `git diff --check` passed.
+  - The newer tracked HTML contains no named references to the audited orchestration projects; the
+    older redesign HTML remains ignored and untracked.
+- Findings:
+  - A hard version fence plus executable skill recovery is simpler and safer than maintaining a
+    legacy executor or draining in-flight legacy state.
+  - Existing pre-upgrade processes are deliberately left alive, but rejected lifecycle calls
+    cannot mutate current Task, Dispatch, or inbox state.
+  - Full lint still reports the pre-existing localization audit for six unchanged `Ghostty`
+    keyword strings; the excluded system-SSH test independently times out while installing native
+    dependencies. Neither baseline issue is changed by this migration.
+- Next:
+  - Commit and push as `OrcaWin`, then inspect branch-head CI and mark the final remote acceptance
+    item only after those checks settle.
 
 ### Entry template
 

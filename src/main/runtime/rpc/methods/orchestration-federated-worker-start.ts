@@ -1,10 +1,12 @@
 import { isTuiAgent } from '../../../../shared/tui-agent-config'
 import type { RuntimeStatus } from '../../../../shared/runtime-types'
 import {
+  ORCHESTRATION_CONTRACT_RUNTIME_CAPABILITY,
   ORCHESTRATION_FEDERATION_CONTROL_MAIL_PROTOCOL_VERSION,
   ORCHESTRATION_FEDERATION_CONTROL_MAIL_RUNTIME_CAPABILITY,
   ORCHESTRATION_FEDERATION_RUNTIME_CAPABILITY
 } from '../../../../shared/protocol-version'
+import { orchestrationMigrationData } from '../../../../shared/orchestration-rpc-contract'
 import type { OrcaRuntimeService } from '../../orca-runtime'
 import type { OrchestrationDb } from '../../orchestration/db'
 import { OrchestrationError } from '../../orchestration/orchestration-error'
@@ -47,6 +49,13 @@ export async function startFederatedWorker(args: {
     undefined,
     params.timeoutMs
   )) as RuntimeStatus
+  if (!status.capabilities?.includes(ORCHESTRATION_CONTRACT_RUNTIME_CAPABILITY)) {
+    throw new OrchestrationError(
+      'orchestration_migration_required',
+      `Connected server ${server.name} does not support the current orchestration contract. No effects were applied.`,
+      orchestrationMigrationData('runtime_capability_missing')
+    )
+  }
   if (!status.capabilities?.includes(ORCHESTRATION_FEDERATION_RUNTIME_CAPABILITY)) {
     throw new OrchestrationError(
       'capability_unsupported',

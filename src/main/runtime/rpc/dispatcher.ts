@@ -34,6 +34,7 @@ import {
   authenticatedCallerFingerprint,
   type DurableMutationInvocation
 } from './orchestration-mutation-executor'
+import { orchestrationMigrationFence } from './orchestration-contract-fence'
 import { getRuntimeFeatureInteractionId } from './runtime-feature-interaction'
 
 export type DispatcherOptions = {
@@ -62,6 +63,11 @@ export class RpcDispatcher {
         'method_not_found',
         `Unknown method: ${request.method}`
       )
+    }
+
+    const migrationFence = orchestrationMigrationFence(request, meta)
+    if (migrationFence) {
+      return migrationFence
     }
 
     const parsedParams = this.parseParams(request, method, meta)
@@ -135,6 +141,12 @@ export class RpcDispatcher {
           errorResponse(request.id, meta, 'method_not_found', `Unknown method: ${request.method}`)
         )
       )
+      return
+    }
+
+    const migrationFence = orchestrationMigrationFence(request, meta)
+    if (migrationFence) {
+      reply(JSON.stringify(migrationFence))
       return
     }
 

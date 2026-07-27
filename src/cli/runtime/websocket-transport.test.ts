@@ -162,6 +162,29 @@ describe('CLI remote WebSocket transport', () => {
       message: expect.stringContaining('server is too old')
     })
   })
+
+  it('blocks orchestration mutations when a remote runtime lacks the contract capability', async () => {
+    const runtime = await startTestRuntime('runtime-old-orchestration', { capabilities: [] })
+    servers.push(runtime)
+    const client = new RuntimeClient(
+      '/tmp/unused',
+      5_000,
+      encodePairingOffer({
+        v: 2,
+        endpoint: runtime.endpoint,
+        deviceToken: runtime.deviceToken,
+        publicKeyB64: runtime.publicKeyB64
+      })
+    )
+
+    await expect(client.call('orchestration.send', { subject: 'hello' })).rejects.toMatchObject({
+      code: 'orchestration_migration_required',
+      data: {
+        reason: 'runtime_capability_missing',
+        effectsApplied: false
+      }
+    })
+  })
 })
 
 async function startTestRuntime(

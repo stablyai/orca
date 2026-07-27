@@ -256,6 +256,7 @@ describe('sendRemoteRuntimeRequest', () => {
       1000,
       {
         orchestrationCapability: 'capability',
+        orchestrationContractVersion: 1,
         orchestrationRequestId: 'mutation_1'
       }
     )
@@ -264,6 +265,7 @@ describe('sendRemoteRuntimeRequest', () => {
       method: 'orchestration.federationControl',
       params: { dispatch: 'ctx_1' },
       orchestrationCapability: 'capability',
+      orchestrationContractVersion: 1,
       orchestrationRequestId: 'mutation_1'
     })
   })

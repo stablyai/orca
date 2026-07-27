@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { ORCHESTRATION_CONTRACT_VERSION } from '../../../../shared/protocol-version'
 import type { RuntimeRpcResponse } from '../../../../shared/runtime-rpc-envelope'
 import { OrcaRuntimeService } from '../../orca-runtime'
 import { OrchestrationDb } from '../../orchestration/db'
@@ -46,11 +47,20 @@ describe('orchestration federation control mail', () => {
         peerFingerprint: workerPeerFingerprint
       }),
       call: async (_selector, method, params, _timeoutMs, envelope) => {
+        if (method === 'status.get') {
+          return {
+            id: 'status',
+            ok: true,
+            result: workerRuntime.getStatus(),
+            _meta: { runtimeId: workerRuntime.getRuntimeId() }
+          }
+        }
         const response = (await workerDispatcher.dispatch({
           id: `remote_${method}`,
           authToken: homeToken,
           method,
           params,
+          orchestrationContractVersion: envelope?.orchestrationContractVersion,
           orchestrationRequestId: envelope?.orchestrationRequestId
         })) as RuntimeRpcResponse<unknown>
         return response
@@ -130,6 +140,7 @@ describe('orchestration federation control mail', () => {
     const sent = await homeDispatcher.dispatch({
       id: 'send-control',
       authToken: 'coordinator-token',
+      orchestrationContractVersion: ORCHESTRATION_CONTRACT_VERSION,
       orchestrationRequestId: 'send-control-request',
       method: 'orchestration.send',
       params: {
@@ -205,6 +216,7 @@ describe('orchestration federation control mail', () => {
     await homeDispatcher.dispatch({
       id: 'send-stale-control',
       authToken: 'coordinator-token',
+      orchestrationContractVersion: ORCHESTRATION_CONTRACT_VERSION,
       orchestrationRequestId: 'send-stale-control-request',
       method: 'orchestration.send',
       params: {
@@ -285,6 +297,7 @@ describe('orchestration federation control mail', () => {
     return {
       id,
       authToken: workerToken,
+      orchestrationContractVersion: ORCHESTRATION_CONTRACT_VERSION,
       method: 'orchestration.check',
       params: {
         terminal: 'term_worker',
@@ -304,6 +317,7 @@ describe('orchestration federation control mail', () => {
     return {
       id,
       authToken: homeToken,
+      orchestrationContractVersion: ORCHESTRATION_CONTRACT_VERSION,
       method: 'orchestration.federationImport',
       params: {
         dispatchId,

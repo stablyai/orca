@@ -14,6 +14,7 @@ vi.mock('../selectors', () => ({ getTerminalHandle: getTerminalHandleMock }))
 
 import { ORCHESTRATION_HANDLERS } from './orchestration'
 import { RuntimeClientError } from '../runtime-client'
+import { printResult } from '../format'
 
 function staleHandleError(): RuntimeClientError {
   return new RuntimeClientError('terminal_handle_stale', 'terminal_handle_stale')
@@ -469,29 +470,18 @@ describe('orchestration dispatch coordinator handle', () => {
     })
   })
 
-  it('uses a live coordinator handle for orchestration runs', async () => {
-    process.env.ORCA_TERMINAL_HANDLE = 'term_stale_coord'
-    process.env.ORCA_PANE_KEY = 'tab_coord:leaf_coord'
-    stubStaleHandleRemint('term_live_coord', {
-      result: { runId: 'run_1', status: 'running' }
+  it('retires the legacy coordinator command without runtime effects', async () => {
+    await expect(
+      invokeRun(new Map<string, string | boolean>([['spec', 'run the plan']]))
+    ).rejects.toMatchObject({
+      code: 'orchestration_migration_required',
+      data: {
+        reason: 'command_retired',
+        effectsApplied: false,
+        nextCommandArgs: ['skills', 'get', 'orchestration', '--full']
+      }
     })
-    getTerminalHandleMock.mockRejectedValue(new Error('active terminal fallback is unsafe'))
-
-    await invokeRun(new Map<string, string | boolean>([['spec', 'run the plan']]))
-
-    expect(callMock).toHaveBeenNthCalledWith(1, 'terminal.show', {
-      terminal: 'term_stale_coord'
-    })
-    expect(callMock).toHaveBeenNthCalledWith(2, 'terminal.resolvePane', {
-      paneKey: 'tab_coord:leaf_coord'
-    })
-    expect(callMock).toHaveBeenNthCalledWith(3, 'orchestration.run', {
-      spec: 'run the plan',
-      from: 'term_live_coord',
-      pollIntervalMs: undefined,
-      maxConcurrent: undefined,
-      worktree: undefined
-    })
+    expect(callMock).not.toHaveBeenCalled()
   })
 })
 

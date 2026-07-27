@@ -45,6 +45,7 @@ export type RpcRequest = {
   method: string
   params?: unknown
   orchestrationCapability?: string
+  orchestrationContractVersion?: number
   orchestrationRequestId?: string
 }
 

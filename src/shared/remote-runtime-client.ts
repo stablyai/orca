@@ -104,6 +104,7 @@ export async function sendRemoteRuntimeRequest<TResult>(
         method,
         params,
         orchestrationCapability: envelope?.orchestrationCapability,
+        orchestrationContractVersion: envelope?.orchestrationContractVersion,
         orchestrationRequestId: envelope?.orchestrationRequestId
       })
     )

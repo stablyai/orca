@@ -1,4 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
+import { ORCHESTRATION_CONTRACT_VERSION } from '../../../../shared/protocol-version'
 import { OrcaRuntimeService } from '../../orca-runtime'
 import { OrchestrationDb } from '../../orchestration/db'
 import type { RpcRequest } from '../core'
@@ -94,6 +95,7 @@ function request(
   return {
     id: `rpc_${id}`,
     authToken: 'worker-token',
+    orchestrationContractVersion: ORCHESTRATION_CONTRACT_VERSION,
     orchestrationRequestId: `request_${id}`,
     orchestrationCapability: capability,
     method,

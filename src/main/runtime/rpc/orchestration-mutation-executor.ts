@@ -1,4 +1,5 @@
 import { createHash } from 'node:crypto'
+import { isOrchestrationMutation } from '../../../shared/orchestration-rpc-contract'
 import type { OrcaRuntimeService } from '../orca-runtime'
 import { OrchestrationError } from '../orchestration/orchestration-error'
 import type { RpcRequest } from './core'
@@ -24,7 +25,7 @@ export class OrchestrationMutationExecutor {
     invoke: (mutation?: DurableMutationInvocation) => Promise<unknown> | unknown
   ): Promise<unknown> {
     const requestId = request.orchestrationRequestId
-    if (!requestId || !isDurableOrchestrationMutation(request.method, params)) {
+    if (!requestId || !isOrchestrationMutation(request.method, params)) {
       return await invoke()
     }
     const callerFingerprint = authenticatedCallerFingerprint(request)
@@ -107,43 +108,6 @@ export function authenticatedCallerFingerprint(request: RpcRequest): string {
     (request as RpcRequest & { deviceToken?: string }).deviceToken ||
     'authenticated_transport'
   return createHash('sha256').update(callerToken).digest('hex')
-}
-
-const DURABLE_ORCHESTRATION_MUTATIONS = new Set([
-  'orchestration.runCreate',
-  'orchestration.runUse',
-  'orchestration.send',
-  'orchestration.reply',
-  'orchestration.taskCreate',
-  'orchestration.taskUpdate',
-  'orchestration.dispatch',
-  'orchestration.workerStart',
-  'orchestration.workerStop',
-  'orchestration.workerAbandon',
-  'orchestration.federationAttachStart',
-  'orchestration.federationAck',
-  'orchestration.federationImport',
-  'orchestration.federationStop',
-  'orchestration.ask',
-  'orchestration.gateCreate',
-  'orchestration.gateResolve',
-  'orchestration.reset'
-])
-
-function isDurableOrchestrationMutation(method: string, params: unknown): boolean {
-  if (method === 'orchestration.check') {
-    return Boolean(
-      params && typeof params === 'object' && typeof (params as { ack?: unknown }).ack === 'string'
-    )
-  }
-  if (method === 'orchestration.dispatch') {
-    return !(
-      params &&
-      typeof params === 'object' &&
-      (params as { dryRun?: unknown }).dryRun === true
-    )
-  }
-  return DURABLE_ORCHESTRATION_MUTATIONS.has(method)
 }
 
 function canonicalize(value: unknown): unknown {

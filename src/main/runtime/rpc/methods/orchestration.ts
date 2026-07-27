@@ -9,6 +9,7 @@ import { formatMessageBanner } from '../../orchestration/formatter'
 import { isGroupAddress, resolveGroupAddress } from '../../orchestration/groups'
 import { reconcileLifecycleMessage } from '../../orchestration/lifecycle-reconciliation'
 import { abbreviateOrchestrationTasks } from '../../../../shared/orchestration-task-summary'
+import { orchestrationSkillRecoveryData } from '../../../../shared/orchestration-rpc-contract'
 import { clampOrchestrationAskTimeoutMs } from '../../../../shared/orchestration-ask-timeout'
 import { ORCHESTRATION_GATE_METHODS } from './orchestration-gates'
 import { ORCHESTRATION_RUN_METHODS } from './orchestration-runs'
@@ -249,7 +250,8 @@ function resolveRunScope(
   if (!params.callerTerminalHandle) {
     throw new OrchestrationError(
       'run_required',
-      'No Run is bound. Use orchestration run-create or run-use first.'
+      'No Run is bound. Use orchestration run-create or run-use first. No effects were applied.',
+      orchestrationSkillRecoveryData()
     )
   }
   const paneKey = runtime.getTerminalPaneKey(params.callerTerminalHandle)
@@ -269,7 +271,8 @@ function resolveRunScope(
     }
     throw new OrchestrationError(
       'run_required',
-      'No Run is bound. Use orchestration run-create or run-use first.'
+      'No Run is bound. Use orchestration run-create or run-use first. No effects were applied.',
+      orchestrationSkillRecoveryData()
     )
   }
   if (explicit && current.id !== explicit.id) {
@@ -472,7 +475,8 @@ export const ORCHESTRATION_METHODS: RpcMethod[] = [
       if (!to) {
         throw new OrchestrationError(
           'run_required',
-          'No recipient or active Dispatch Run could be resolved.'
+          'No recipient or active Dispatch Run could be resolved. No effects were applied.',
+          orchestrationSkillRecoveryData()
         )
       }
 
@@ -999,11 +1003,15 @@ export const ORCHESTRATION_METHODS: RpcMethod[] = [
     params: TaskListParams,
     handler: (params, { runtime }) => {
       const db = runtime.getOrchestrationDb()
-      const run = resolveRunScope(runtime, {
-        runId: params.run,
-        callerTerminalHandle: params.callerTerminalHandle,
-        requireCurrentConsumer: params.run === undefined
-      })
+      const explicitRun = params.run ? db.getRun(params.run) : undefined
+      const run =
+        explicitRun?.legacy === 1
+          ? explicitRun
+          : resolveRunScope(runtime, {
+              runId: params.run,
+              callerTerminalHandle: params.callerTerminalHandle,
+              requireCurrentConsumer: params.run === undefined
+            })
       // Why: listTasksWithDispatch adds assignee_handle + dispatch_id (NULL for non-dispatched), so legacy-shape consumers are unaffected.
       const joined = db.listTasksWithDispatch({
         status: params.status as TaskStatus,
@@ -1018,6 +1026,8 @@ export const ORCHESTRATION_METHODS: RpcMethod[] = [
         return base
       })
       return {
+        runId: run.id,
+        legacyReadOnly: run.legacy === 1,
         tasks: params.brief ? abbreviateOrchestrationTasks(tasks) : tasks,
         count: tasks.length
       }
@@ -1385,7 +1395,7 @@ async function askRemoteRunHome(args: {
   taskId: string
 }): Promise<unknown> {
   const db = args.runtime.getOrchestrationDb()
-  const timeoutMs = clampAskTimeoutMs(args.params.timeoutMs)
+  const timeoutMs = clampOrchestrationAskTimeoutMs(args.params.timeoutMs)
   if (
     !db.verifyRemoteAttachmentAuthority({
       dispatchId: args.dispatchId,

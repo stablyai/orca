@@ -187,6 +187,7 @@ export async function sendRequest<TResult>(
           method,
           params,
           orchestrationCapability: envelope?.orchestrationCapability,
+          orchestrationContractVersion: envelope?.orchestrationContractVersion,
           orchestrationRequestId: envelope?.orchestrationRequestId
         })}\n`
       )

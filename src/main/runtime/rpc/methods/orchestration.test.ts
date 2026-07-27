@@ -8,6 +8,7 @@ import { reconcileLifecycleMessage } from '../../orchestration/lifecycle-reconci
 import { OrcaRuntimeService } from '../../orca-runtime'
 import type { RuntimeTerminalSummary } from '../../../../shared/runtime-types'
 import { ORCHESTRATION_ASK_MAX_TIMEOUT_MS } from '../../../../shared/orchestration-ask-timeout'
+import { ORCHESTRATION_CONTRACT_VERSION } from '../../../../shared/protocol-version'
 
 function lifecycleGroupRecipientError(type: 'worker_done' | 'heartbeat'): string {
   return `${type} messages belong to one exact Dispatch and cannot target a group address.`
@@ -86,7 +87,13 @@ describe('orchestration RPC methods', () => {
   }
 
   function makeRequest(method: string, params: Record<string, unknown>): RpcRequest {
-    return { id: 'req_1', authToken: 'token', method, params }
+    return {
+      id: 'req_1',
+      authToken: 'token',
+      method,
+      params,
+      orchestrationContractVersion: ORCHESTRATION_CONTRACT_VERSION
+    }
   }
 
   it('registers all expected methods', () => {
@@ -197,7 +204,13 @@ describe('orchestration RPC methods', () => {
           spec: 'must not become global',
           callerTerminalHandle: 'term_coord'
         })
-      ).rejects.toMatchObject({ code: 'run_required' })
+      ).rejects.toMatchObject({
+        code: 'run_required',
+        data: {
+          effectsApplied: false,
+          nextCommandArgs: ['skills', 'get', 'orchestration', '--full']
+        }
+      })
       expect(db.listTasks()).toHaveLength(0)
     })
 

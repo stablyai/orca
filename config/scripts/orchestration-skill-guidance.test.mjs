@@ -34,7 +34,9 @@ describe('orchestration skill guidance', () => {
     expect(toolBoundary).toContain('preferred `orca orchestration worker-start` composition')
     expect(toolBoundary).toContain('low-level `orca orchestration dispatch --inject` path')
     expect(toolBoundary).not.toContain('or `orca orchestration run`')
-    expect(skill).toContain('`coordinator-start` is the legacy automatic scheduler loop')
+    expect(skill).toContain(
+      '`coordinator-start`, `coordinator-stop`, `run`, and `run-stop` are retired scheduler commands'
+    )
     expect(toolBoundary).toContain(
       'Do not substitute non-Orca subagent tools, generic agent-spawn APIs, or chat-only parallel worker features'
     )
@@ -47,6 +49,20 @@ describe('orchestration skill guidance', () => {
     expect(toolBoundary).toContain(
       'do not retroactively describe the external worker as orchestrated'
     )
+  })
+
+  it('teaches the hard cutover without reviving a legacy executor', () => {
+    const skill = readSkill()
+    const migration = getSection(skill, 'Contract Migration')
+
+    expect(migration).toContain('hard cutover')
+    expect(migration).toContain('effectsApplied')
+    expect(migration).toContain('skills get orchestration --full')
+    expect(migration).toContain('Do not retry the rejected command unchanged')
+    expect(migration).toContain('no longer supervised')
+    expect(migration).toContain('task-list --run run_legacy_local')
+    expect(migration).toContain('Read-only inspection never consumes legacy mail')
+    expect(migration).toContain('does not run a legacy scheduler, translate old writes, or drain')
   })
 
   it('treats long-running worker waits as liveness checkpoints, not failures', () => {
