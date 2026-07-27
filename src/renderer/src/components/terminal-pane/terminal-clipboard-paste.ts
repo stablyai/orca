@@ -21,6 +21,7 @@ type PasteTerminalClipboardDeps = {
   ) => boolean | void | Promise<boolean | void>
   connectionId?: string | null
   runtimeEnvironmentId?: string | null
+  isCursorAgent?: boolean
   forceBracketedMultilineTextPaste?: boolean
   onTextPasteError?: (error: unknown) => void
   onImagePasteError?: (error: unknown) => void
@@ -39,12 +40,21 @@ export type TerminalClipboardPasteResult =
         | 'text-too-large'
     }
 
+function formatCursorImagePath(filePath: string, isCursorAgent: boolean): string {
+  if (!isCursorAgent) {
+    return filePath
+  }
+  // Why: Cursor recognizes pasted image paths only after a whitespace boundary; it keeps the space before the image token.
+  return ` ${filePath}`
+}
+
 export async function pasteTerminalClipboard({
   readClipboardText,
   saveClipboardImageAsTempFile,
   pasteText,
   connectionId,
   runtimeEnvironmentId,
+  isCursorAgent = false,
   forceBracketedMultilineTextPaste = false,
   onTextPasteError,
   onImagePasteError
@@ -80,7 +90,8 @@ export async function pasteTerminalClipboard({
     if (!filePath) {
       return { status: 'skipped', reason: 'empty' }
     }
-    const result = await pasteText(filePath, {
+    const formattedFilePath = formatCursorImagePath(filePath, isCursorAgent)
+    const result = await pasteText(formattedFilePath, {
       // Why: a generated clipboard-image path is terminal image injection, not
       // ordinary one-line text. Keep it off the Ctrl+C stale-text paste path.
       forceBracketedPaste: true,

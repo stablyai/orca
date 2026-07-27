@@ -26,6 +26,24 @@ describe('terminal clipboard paste', () => {
     )
   })
 
+  it('adds a boundary before Cursor image paths adjacent to prompt text', async () => {
+    const pasteText = vi.fn()
+
+    await pasteTerminalClipboard({
+      readClipboardText: vi.fn().mockResolvedValue(''),
+      saveClipboardImageAsTempFile: vi
+        .fn()
+        .mockResolvedValue('/tmp/orca-paste-1760000000000-id.png'),
+      pasteText,
+      isCursorAgent: true
+    })
+
+    expect(pasteText).toHaveBeenCalledWith(' /tmp/orca-paste-1760000000000-id.png', {
+      forceBracketedPaste: true,
+      recoverImagePasteWebglAtlas: true
+    })
+  })
+
   it('forces generated image paste onto the native bracketed-paste path after Ctrl+C', async () => {
     const observedIgnoreBracketedPasteMode: boolean[] = []
     const terminal = {
@@ -131,7 +149,7 @@ describe('terminal clipboard paste', () => {
     })
   })
 
-  it('bracket-pastes generated image paths without relying on agent detection', async () => {
+  it('keeps raw generated image paths for non-Cursor agents', async () => {
     const pasteText = vi.fn()
 
     await pasteTerminalClipboard({

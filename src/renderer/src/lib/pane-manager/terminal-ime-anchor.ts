@@ -10,6 +10,30 @@ const CURSOR_AGENT_INPUT_MARKER = '→'
 const CURSOR_AGENT_EMPTY_PROMPT = 'Plan, search, build anything'
 const CURSOR_AGENT_HEADER_SCAN_ROWS = 6
 
+export function isCursorAgentVisibleScreen(buffer: IBuffer, rows: number): boolean {
+  let headerRow = -1
+  for (let row = 0; row < rows; row++) {
+    if (getVisibleLine(buffer, row)?.translateToString(true).trim() === CURSOR_AGENT_HEADER) {
+      headerRow = row
+    }
+  }
+  if (headerRow === -1) {
+    return false
+  }
+  // Why: requiring a later live prompt rejects shell output that merely mentions Cursor Agent.
+  for (let row = headerRow + 1; row < rows; row++) {
+    if (
+      getVisibleLine(buffer, row)
+        ?.translateToString(true)
+        .trim()
+        .startsWith(CURSOR_AGENT_INPUT_MARKER)
+    ) {
+      return true
+    }
+  }
+  return false
+}
+
 export function resolveCursorAgentImeAnchor(args: {
   buffer: IBuffer
   rows: number

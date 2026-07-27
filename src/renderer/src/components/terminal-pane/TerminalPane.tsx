@@ -217,6 +217,7 @@ import {
   getCachedUnifiedTerminalTabForWorktree
 } from './terminal-unified-tab-lookup'
 import { resolveNativeChatLeafTitleAgent } from './native-chat-leaf-title-agent'
+import { isCursorAgentVisibleScreen } from '@/lib/pane-manager/terminal-ime-anchor'
 import { useRepoById } from '@/store/selectors'
 import {
   isXtermHelperTextarea,
@@ -2015,6 +2016,7 @@ export default function TerminalPane({
         saveClipboardImageAsTempFile: window.api.ui.saveClipboardImageAsTempFile,
         connectionId,
         runtimeEnvironmentId,
+        isCursorAgent: isCursorAgentVisibleScreen(pane.terminal.buffer.active, pane.terminal.rows),
         forceBracketedMultilineTextPaste,
         pasteText: (text, options) =>
           executePanePasteText(pane, source, activeElementAtDispatch, text, options),
@@ -2162,6 +2164,7 @@ export default function TerminalPane({
         saveClipboardImageAsTempFile: window.api.ui.saveClipboardImageAsTempFile,
         connectionId,
         runtimeEnvironmentId,
+        isCursorAgent: isCursorAgentVisibleScreen(pane.terminal.buffer.active, pane.terminal.rows),
         forceBracketedMultilineTextPaste,
         pasteText: (text, options) =>
           executePanePasteText(pane, 'app-menu', activeElementAtDispatch, text, options),
