@@ -3,6 +3,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { createServer, type Socket } from 'node:net'
 import { afterEach, describe, expect, it, vi } from 'vitest'
+import { ORCHESTRATION_CONTRACT_RUNTIME_CAPABILITY } from '../shared/protocol-version'
 import { RuntimeClient, RuntimeRpcFailureError } from './runtime-client'
 import { launchOrcaApp } from './runtime/launch'
 
@@ -74,6 +75,87 @@ function findUnusedPid(seed = 200_000): number {
 // Windows does not support Unix domain sockets in the same way, causing
 // EACCES errors on listen(), so the suite is skipped on that platform.
 describe.skipIf(process.platform === 'win32')('RuntimeClient', () => {
+  it('adds an opaque durable request ID only to orchestration mutations', async () => {
+    const userDataPath = mkdtempSync(join(tmpdir(), 'orca-runtime-client-'))
+    const endpoint = join(userDataPath, 'runtime.sock')
+    const requests: Record<string, unknown>[] = []
+    const server = createServer((socket) => {
+      sockets.add(socket)
+      socket.once('close', () => sockets.delete(socket))
+      socket.once('data', (data) => {
+        const request = JSON.parse(String(data).trim()) as Record<string, unknown>
+        requests.push(request)
+        const result =
+          request.method === 'status.get'
+            ? { capabilities: [ORCHESTRATION_CONTRACT_RUNTIME_CAPABILITY] }
+            : {}
+        socket.write(
+          `${JSON.stringify({
+            id: request.id,
+            ok: true,
+            result,
+            _meta: { runtimeId: 'runtime-1' }
+          })}\n`
+        )
+      })
+    })
+    servers.add(server)
+    await new Promise<void>((resolve) => server.listen(endpoint, resolve))
+    writeMetadata(userDataPath, endpoint)
+
+    const client = new RuntimeClient(userDataPath, 500)
+    await client.call(
+      'orchestration.send',
+      { subject: 'hello' },
+      {
+        orchestrationRequestId: 'mutation_explicit'
+      }
+    )
+    await client.call('orchestration.taskList', {})
+
+    expect(requests[0]?.method).toBe('status.get')
+    expect(requests[1]?.orchestrationRequestId).toBe('mutation_explicit')
+    expect(requests[1]?.orchestrationContractVersion).toBe(1)
+    expect(requests[2]?.orchestrationRequestId).toBeUndefined()
+  })
+
+  it('rejects an old local runtime before sending an orchestration mutation', async () => {
+    const userDataPath = mkdtempSync(join(tmpdir(), 'orca-runtime-client-'))
+    const endpoint = join(userDataPath, 'runtime.sock')
+    const requests: Record<string, unknown>[] = []
+    const server = createServer((socket) => {
+      sockets.add(socket)
+      socket.once('close', () => sockets.delete(socket))
+      socket.once('data', (data) => {
+        const request = JSON.parse(String(data).trim()) as Record<string, unknown>
+        requests.push(request)
+        socket.write(
+          `${JSON.stringify({
+            id: request.id,
+            ok: true,
+            result: { capabilities: [] },
+            _meta: { runtimeId: 'runtime-1' }
+          })}\n`
+        )
+      })
+    })
+    servers.add(server)
+    await new Promise<void>((resolve) => server.listen(endpoint, resolve))
+    writeMetadata(userDataPath, endpoint)
+
+    const client = new RuntimeClient(userDataPath, 500)
+    await expect(client.call('orchestration.send', { subject: 'hello' })).rejects.toMatchObject({
+      code: 'orchestration_migration_required',
+      data: {
+        reason: 'runtime_capability_missing',
+        effectsApplied: false,
+        nextCommandArgs: ['skills', 'get', 'orchestration', '--full']
+      }
+    })
+    expect(requests).toHaveLength(1)
+    expect(requests[0]?.method).toBe('status.get')
+  })
+
   it('returns the full RPC envelope for successful calls', async () => {
     const userDataPath = mkdtempSync(join(tmpdir(), 'orca-runtime-client-'))
     const endpoint = join(userDataPath, 'runtime.sock')

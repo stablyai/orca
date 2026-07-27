@@ -72,6 +72,7 @@ import {
   normalizeProjectRuntimePreference
 } from '../shared/project-execution-runtime'
 import { projectHostSetupProjectionFromRepos } from '../shared/project-host-setup-projection'
+import { isPluginPanelTabKey } from '../shared/plugins/plugin-manifest'
 import type { GitRemoteIdentity } from '../shared/git-remote-identity'
 import {
   buildTaskSourceContextFromRepo,
@@ -781,16 +782,22 @@ function normalizeProjectOrderBy(projectOrderBy: unknown): PersistedState['ui'][
   return getDefaultUIState().projectOrderBy
 }
 
-function normalizeRightSidebarTab(tab: unknown): PersistedState['ui']['rightSidebarTab'] {
+export function normalizeRightSidebarTab(tab: unknown): PersistedState['ui']['rightSidebarTab'] {
   if (
     tab === 'explorer' ||
     tab === 'search' ||
     tab === 'vault' ||
     tab === 'workspaces' ||
+    tab === 'pr-checks' ||
     tab === 'source-control' ||
     tab === 'checks' ||
     tab === 'ports'
   ) {
+    return tab
+  }
+  // Why: plugin tabs are open-ended `plugin:<publisher>.<id>/<panel>` keys; validate the
+  // shape so a persisted plugin tab doesn't reset to Explorer on restart.
+  if (typeof tab === 'string' && isPluginPanelTabKey(tab)) {
     return tab
   }
   return getDefaultUIState().rightSidebarTab

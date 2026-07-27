@@ -132,7 +132,8 @@
       "fe21e8f6f5": "返回 ({{value0}})",
       "064bd07810": "返回",
       "ce37cf5279": "切换侧边栏 ({{value0}})",
-      "e4b9e7dff7": "切换侧边栏"
+      "e4b9e7dff7": "切换侧边栏",
+      "pluginCommandFailed": "无法运行插件命令。"
     },
     "web": {
       "WebConnect": {
@@ -592,6 +593,9 @@
           }
         }
       },
+      "pluginCommandKeybindings": {
+        "group": "Plugins"
+      },
       "linear": {
         "usage": {
           "examples": {
@@ -734,6 +738,8 @@
         "devSearchKeywordSonner": "sonner",
         "devSearchKeywordError": "error",
         "devSearchKeywordNotification": "notification",
+        "pluginsTitle": "插件",
+        "pluginsDescription": "安装和管理实验性 Orca 插件。",
         "projectHostsSummary": "{{value0}} 个主机",
         "linearTitle": "Linear",
         "linearDescription": "Give agents the skill to read and update your linked Linear tickets."
@@ -1913,7 +1919,8 @@
         "workspaceTabMissing": "标签页不再存在",
         "projectsGroupsHeader": "项目和分组",
         "projectBadge": "项目",
-        "repoGroupBadge": "仓库组"
+        "repoGroupBadge": "仓库组",
+        "pluginCommandFailed": "无法运行插件命令。"
       },
       "github": {
         "pr": {
@@ -6688,7 +6695,8 @@
           "25b0004fbf": "终端活跃",
           "781cb74d22": "从终端窗格运行。",
           "cb02e00202": "终端",
-          "d8c988dab4": "~/.orca/keybindings.json"
+          "d8c988dab4": "~/.orca/keybindings.json",
+          "shortcutUnavailable": "此快捷键已不再可用。"
         },
         "SourceControlAiActionRecipeDefaults": {
           "2576299196": "参数",
@@ -9238,7 +9246,7 @@
           "copy": "复制",
           "copied": "已复制",
           "recipes": "环境模板",
-          "recipesHelp": "智能体添加到 orca.yaml 的环境模板会显示在这里，可用于启动工作区。",
+          "recipesHelp": "orca.yaml 和已启用插件中的配方会显示在这里，可用于启动工作区。",
           "refresh": "刷新临时 VM 环境模板",
           "checking": "正在检查环境模板...",
           "none": "还没有找到环境模板。"
@@ -9309,6 +9317,285 @@
         "TerminalInteractionSection": {
           "567633ff50": "右键点击将剪贴板内容粘贴到终端。按住 Control 键点击以打开上下文菜单。",
           "c64497148a": "右键点击粘贴剪贴板内容。按住 Control 键点击打开上下文菜单。"
+        },
+        "PluginConsentDialog": {
+          "workerTrust": "后台工作进程 — 在独立进程中运行",
+          "panelTrust": "面板或主机集成内容 — 无后台工作进程",
+          "decisionFailed": "无法保存权限决定。请重试。",
+          "title": "检查权限",
+          "mixedTitle": "检查访问权限和内容",
+          "instructionalTitle": "检查插件内容",
+          "subtitle": "{{value0}} v{{value1}} · {{value2}}",
+          "reconsent": "自你上次检查此插件以来，权限、工作进程信任级别或指令内容已更改。请在运行前重新检查。",
+          "source": "来源",
+          "unknownSource": "不可用",
+          "commit": "提交",
+          "localCommit": "不可用（本地文件夹）",
+          "trust": "信任级别",
+          "capabilities": "此插件可以",
+          "warning": "这些权限限制插件使用 Orca API 的方式。其工作进程仍作为普通进程在你的计算机上运行，可以完全访问文件、网络和其他进程。",
+          "enable": "启用插件",
+          "keepDisabled": "保持禁用",
+          "panelWarning": "这些权限限制插件使用 Orca API 的方式。此插件没有后台工作进程。",
+          "instructionalWarning": "此插件没有工作进程。但当你或智能体使用其指令内容时，仍可能触发操作。启用前请检查以下指令和命令。",
+          "capability": {
+            "workspaceRead": "读取当前工作树的名称、分支和终端列表",
+            "terminalSend": "在可见的指定终端中输入文本",
+            "notificationsShow": "显示带有插件名称的桌面通知",
+            "storage": "在插件自己的存储文件夹中保存数据",
+            "secrets": "在插件自己的加密保管库中保存和读取机密信息",
+            "eventsSubscribe": "在创建或移除工作树以及智能体状态变化时接收通知",
+            "settingsOwn": "读取和更改插件自己的设置"
+          },
+          "skillWarning": "此插件会安装包含指令的技能。智能体会读取这些指令，并可能使用你授予智能体的全部权限执行操作。",
+          "instructionalTrust": "指令内容 — 稍后以用户或智能体权限运行",
+          "declarativeTrust": "Declarative content — no plugin code",
+          "reviewTitle": "Review plugin",
+          "declarativeWarning": "This plugin contributes validated content only. It does not run a background worker or receive access to Orca's API.",
+          "trustShortWorker": "Worker",
+          "trustShortInstructional": "Instructional",
+          "trustShortPanel": "Panel",
+          "trustShortDeclarative": "Declarative"
+        },
+        "PluginDevelopmentSection": {
+          "pathRequired": "请输入插件文件夹路径。",
+          "title": "开发",
+          "help": "开发插件时，可直接从此计算机上的文件夹加载。开发插件仍需检查权限。工作进程在此桌面主机上运行；SSH 工作区操作通过 Orca 路由，因此这里填写桌面端路径。",
+          "remove": "移除",
+          "placeholder": "/Users/you/plugins/my-plugin or C:\\Users\\you\\plugins\\my-plugin",
+          "add": "添加路径",
+          "saveFailed": "无法保存开发插件路径。",
+          "pathLabel": "开发插件文件夹路径"
+        },
+        "PluginInstallDialog": {
+          "localRequired": "请输入插件文件夹路径。",
+          "gitUrlRequired": "请输入仓库 URL。",
+          "gitRefRequired": "请添加明确的 #ref（标签或提交）以固定安装版本，例如 #v0.1.0。",
+          "installFailed": "插件安装失败。请检查来源后重试。",
+          "title": "安装插件",
+          "description": "安装会将插件复制到 Orca，并显示其权限供你检查。启用插件之前，不会运行任何插件代码。",
+          "source": "安装来源",
+          "localTab": "本地文件夹",
+          "gitTab": "Git URL",
+          "localLabel": "插件文件夹路径",
+          "localPlaceholder": "/Users/you/plugins/my-plugin or C:\\Users\\you\\plugins\\my-plugin",
+          "localHelp": "此计算机上包含 orca-plugin.json 的文件夹完整路径。系统会完全按输入内容使用该路径。",
+          "gitLabel": "带 #ref 的仓库 URL",
+          "gitPlaceholder": "https://git.example/acme/orca-notes#v0.1.0",
+          "gitHelp": "附加明确的 #ref（标签或提交）以固定安装版本。适用于 GitHub、GitLab 和任何 Git 主机。",
+          "cancel": "取消",
+          "installing": "正在安装…",
+          "install": "安装",
+          "gitUrlInvalid": "请使用 HTTPS 或 SSH Git URL。不允许使用可执行的 Git 辅助协议。"
+        },
+        "PluginRemoveDialog": {
+          "title": "移除插件？",
+          "description": "这会从此计算机中移除 {{value0}} 及其保存的插件数据。你可以稍后重新安装。",
+          "cancel": "取消",
+          "remove": "移除插件"
+        },
+        "PluginSettingsRow": {
+          "needsReview": "需要检查",
+          "invalid": "无效",
+          "error": "错误",
+          "disabled": "已禁用",
+          "running": "正在运行",
+          "enabled": "已启用",
+          "workerTier": "后台工作进程",
+          "panelTier": "仅面板",
+          "loadingLogs": "正在加载日志…",
+          "noLogs": "没有记录日志行。",
+          "logCount": "最多保留 200 行，显示最近 {{value0}} 行",
+          "dev": "开发",
+          "review": "检查权限",
+          "moreActions": "{{value0}} 的更多操作",
+          "hideLogs": "隐藏日志",
+          "viewLogs": "查看日志",
+          "remove": "移除",
+          "enableLabel": "启用 {{value0}}",
+          "restartCount": " · 重启 {{value0}} 次",
+          "restarting": "正在重新启动",
+          "invalidPluginError": "插件清单或已安装文件无效。请修复插件后刷新。",
+          "runtimeError": "插件在激活或工作进程出错后停止。",
+          "disableLabel": "停用 {{value0}}",
+          "blocked": "已阻止",
+          "official": "官方",
+          "bundled": "内置",
+          "killListMessage": "Orca 安全列表已禁用此插件：{{value0}}",
+          "viewAdvisory": "查看公告",
+          "rollback": "回滚",
+          "noDescription": "No description provided.",
+          "reviewAndEnable": "Review & enable"
+        },
+        "PluginsSettingsSection": {
+          "loadFailed": "无法加载插件。",
+          "logsFailed": "无法加载插件日志。",
+          "title": "插件",
+          "experimental": "实验性",
+          "description": "安装和管理 Orca 插件。即使使用 SSH 工作区，插件也在此计算机上运行。",
+          "install": "安装插件",
+          "systemLabel": "插件系统",
+          "systemDescription": "发现已安装的插件，并允许逐个启用。检查并启用之前不会运行任何内容。工作进程始终在此计算机上运行；SSH 工作区操作通过 Orca 路由。",
+          "featureOff": "开启插件系统以查看和管理已安装的插件。已安装的内容会保留在磁盘上，并在系统关闭时保持禁用。",
+          "loading": "正在加载插件…",
+          "installed": "已安装",
+          "refresh": "刷新",
+          "tryAgain": "重试",
+          "empty": "尚未安装插件。使用“安装插件”从本地文件夹或固定的 Git ref 添加插件。",
+          "settingsUpdateFailed": "无法保存插件设置。",
+          "rollbackFailed": "无法回滚此插件。可能没有可用的上一不可变版本。",
+          "noInstalledResults": "No installed plugins match this search.",
+          "noInstalledResultsTitle": "No matching plugins",
+          "emptyTitle": "No plugins installed yet"
+        },
+        "plugins": {
+          "search": {
+            "title": "插件",
+            "description": "安装和管理实验性 Orca 插件。",
+            "install": "安装插件",
+            "permissions": "插件权限",
+            "logs": "插件日志",
+            "development": "开发插件"
+          }
+        },
+        "pluginError": {
+          "installManifestMissing": "未找到可读取的 orca-plugin.json。请选择插件的根文件夹。",
+          "installManifestInvalid": "orca-plugin.json 无效。请让插件作者修复清单。",
+          "incompatible": "此插件需要其他版本的 Orca。",
+          "installUnsafePath": "插件包含不安全的文件路径或符号链接，因此未安装。",
+          "installLimit": "插件超出 Orca 的安装大小或文件数量限制。",
+          "installGit": "Orca 无法获取固定的 Git 修订。请检查 URL、#ref、访问权限和系统 Git 配置。",
+          "invalidManifestMissing": "插件根目录缺少 orca-plugin.json。请添加后刷新插件。",
+          "invalidManifest": "orca-plugin.json 无效。请修复后刷新插件。",
+          "invalidArtifact": "声明的工作进程或面板文件缺失或不安全。请修复插件文件后刷新。",
+          "consentChanged": "插件在你查看时发生了更改。请关闭此对话框并查看更新后的权限。"
+        },
+        "PluginVmRecipeConsentPreview": {
+          "create": "创建",
+          "suspend": "暂停",
+          "resume": "恢复",
+          "destroy": "销毁",
+          "warning": "此插件会安装 VM 配方。当你使用对应的生命周期操作时，Orca 会在本地桌面主机上运行以下命令。",
+          "commandLabel": "{{value0}} · {{value1}}命令",
+          "heading": "VM 配方命令"
+        },
+        "PluginKeybindingConsentPreview": {
+          "warning": "此插件会添加键盘快捷键。插件启用期间，插件快捷键优先于相同的 Orca 快捷键。",
+          "heading": "键盘快捷键",
+          "worktree": "仅在有活动工作区时运行。",
+          "global": "无需活动工作区即可在应用中运行。",
+          "shadows": "替代：{{value0}}"
+        },
+        "PluginMarketplaceBrowser": {
+          "loadFailed": "无法加载插件市场中的插件。",
+          "refreshFailed": "无法刷新插件市场。仍可使用缓存的列表。",
+          "previewFailed": "无法准备此插件以供审核。请刷新插件市场后重试。",
+          "installFailed": "无法安装此插件。审核过的源可能已更改。",
+          "heading": "插件市场",
+          "manageSources": "管理源",
+          "refreshing": "正在刷新…",
+          "refresh": "刷新",
+          "loading": "正在加载插件市场中的插件…",
+          "searchLabel": "搜索插件市场中的插件",
+          "searchPlaceholder": "搜索插件、类别或发布者",
+          "tryAgain": "重试",
+          "noSources": "添加官方、社区或私有 Git 插件市场以浏览插件。",
+          "addSource": "添加插件市场",
+          "noResults": "没有与此搜索匹配的插件市场插件。",
+          "empty": "已配置的插件市场未列出任何插件。",
+          "noInstalled": "No plugins installed.",
+          "noInstalledTitle": "No plugins installed",
+          "noSourcesTitle": "No marketplaces configured",
+          "noResultsTitle": "No matching plugins",
+          "clearSearch": "Clear search",
+          "emptyTitle": "Nothing listed yet"
+        },
+        "PluginMarketplaceListingRow": {
+          "official": "官方",
+          "bundled": "内置",
+          "installed": "已安装",
+          "marketplace": "{{value0}} · {{value1}}",
+          "blocked": "已被 Orca 安全列表阻止：{{value0}}",
+          "blockedAction": "已阻止",
+          "checkUpdate": "检查更新",
+          "installedAction": "已安装",
+          "review": "审核",
+          "noDescription": "No description provided.",
+          "install": "Install"
+        },
+        "PluginMarketplacePreviewDialog": {
+          "languagePacks": "{{value0}} 个语言包",
+          "commands": "{{value0}} 个命令",
+          "keybindings": "{{value0}} 个键盘快捷键",
+          "vmRecipes": "{{value0}} 个虚拟机方案",
+          "panels": "{{value0}} 个面板",
+          "events": "{{value0}} 个事件订阅",
+          "worker": "后台工作进程",
+          "official": "官方",
+          "bundled": "内置",
+          "subtitle": "{{value0}} v{{value1}} · {{value2}}",
+          "source": "插件源",
+          "commit": "固定的提交",
+          "marketplaceCommit": "索引提交",
+          "includes": "包含",
+          "noContributions": "仅包含清单元数据",
+          "capabilities": "请求的访问权限",
+          "workerWarning": "权限会限制此插件使用 Orca API 的方式，但其工作进程仍会作为此计算机上的普通进程运行，并可完全访问你的文件、网络和其他进程。",
+          "blocked": "Orca 安全列表已阻止此插件：{{value0}}",
+          "current": "已安装内容完全相同的插件。",
+          "cancel": "取消",
+          "update": "更新插件",
+          "install": "安装插件",
+          "provenance": "Reviewed source",
+          "close": "Close",
+          "upToDate": "Up to date",
+          "languagePacksOne": "1 language pack",
+          "commandsOne": "1 command",
+          "keybindingsOne": "1 keyboard shortcut",
+          "vmRecipesOne": "1 VM recipe",
+          "panelsOne": "1 panel",
+          "eventsOne": "1 event subscription",
+          "versionLine": "v{{value0}} · {{value1}}"
+        },
+        "PluginMarketplaceSourceDialog": {
+          "addFailed": "无法添加此插件市场。请检查 Git URL、ref 和 Git 凭据。",
+          "refreshFailed": "无法刷新此插件市场。仍可使用上次有效的缓存索引。",
+          "removeFailed": "无法移除此插件市场。",
+          "title": "插件市场源",
+          "description": "插件市场是固定版本的 Git 仓库。对于私有仓库，Orca 会使用现有的系统 Git 凭据。",
+          "urlLabel": "Git URL",
+          "urlDescription": "使用包含 orca-marketplace.json 的仓库 HTTPS 或 SSH URL。",
+          "refLabel": "Git ref",
+          "refDescription": "选择分支、标签或提交。每次获取的索引都会记录到准确的提交。",
+          "adding": "正在添加…",
+          "add": "添加源",
+          "configured": "已配置的源",
+          "empty": "未配置插件市场源。",
+          "owner": "所有者：{{value0}}",
+          "pinnedCommit": "固定于 {{value0}}",
+          "stale": "刷新失败。正在浏览上次有效的缓存索引。",
+          "refreshLabel": "刷新 {{value0}}",
+          "removeLabel": "移除 {{value0}}",
+          "done": "完成",
+          "urlPlaceholder": "https://git.example.com/team/plugins.git",
+          "official": "官方"
+        },
+        "PluginRollbackDialog": {
+          "title": "回滚插件？",
+          "description": "这会停用 {{value0}} 并恢复其上一个不可变版本。如果该版本请求不同的访问权限或指令内容，Orca 将要求再次审核。",
+          "cancel": "取消",
+          "confirm": "回滚插件"
+        },
+        "PluginConsentProvenance": {
+          "official": "Official",
+          "bundled": "Bundled with Orca",
+          "local": "Local folder",
+          "community": "Community",
+          "source": "Source",
+          "sourceLabel": "Source",
+          "commit": "Pinned commit",
+          "localCommit": "Local folder — no commit",
+          "indexCommit": "Index commit"
         },
         "MobileRelayStatusSection": {
           "registered": "已注册",
@@ -10691,6 +10978,15 @@
             "workspaceGone": "无法打开日志 — 工作区已不可用。",
             "notAuthorized": "无法打开日志 — 路径未授权。",
             "alreadyEditable": "日志已处于编辑状态。"
+          },
+          "PluginPanel": {
+            "loading": "正在加载插件面板...",
+            "unavailable": "此插件面板已不可用。",
+            "loadFailed": "无法加载插件面板。",
+            "unresponsive": "插件面板停止响应，已被暂停。"
+          },
+          "activityBar": {
+            "error": "错误"
           },
           "github": {
             "refresh": {
@@ -12674,6 +12970,10 @@
                 "project": "项目"
               }
             }
+          },
+          "pluginQuickActions": {
+            "description": "{{value0}} 插件命令",
+            "keyword": "插件命令"
           }
         }
       },
@@ -13297,6 +13597,11 @@
             "noPr": "无 PR",
             "unavailable": "不可用"
           }
+        },
+        "pluginPanelBridgeHost": {
+          "actionsUnavailable": "此客户端不支持插件操作。",
+          "messageTooLarge": "消息超过大小限制。",
+          "tooManyRequests": "请求过多。"
         }
       },
       "link": {
@@ -13573,6 +13878,17 @@
         "searchLabels": "筛选标签…",
         "searchAssignee": "筛选负责人…",
         "back": "返回"
+      },
+      "pluginCatalog": {
+        "PluginCatalogLayout": {
+          "title": "Plugins",
+          "description": "Browse available plugins or manage the ones installed in Orca.",
+          "filter": "Plugin filter",
+          "all": "All",
+          "installed": "Installed",
+          "searchLabel": "Search plugins",
+          "searchPlaceholder": "Search plugins, categories, or publishers"
+        }
       },
       "browser-pane": {
         "markup": {

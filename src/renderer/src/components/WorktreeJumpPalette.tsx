@@ -110,6 +110,8 @@ import { buildWorktreeChecksReviewIndex } from '@/components/cmd-j/worktree-chec
 import { resolvePaletteFocusRestoreTarget } from '@/components/cmd-j/palette-focus-restore-target'
 import { selectWorktreePaletteCacheInputs } from '@/components/cmd-j/worktree-palette-cache-inputs'
 import { getRepoHostIdentity } from '@/store/slices/repo-host-identity'
+import { buildPluginQuickActions } from '@/components/cmd-j/plugin-quick-actions'
+import { usePluginCommands } from '@/store/plugin-panels'
 import {
   getComposerEligibleRepos,
   resolveComposerGitRepoId
@@ -342,6 +344,7 @@ export default function WorktreeJumpPalette(): React.JSX.Element | null {
   const projectHostSetups = useAppStore((s) => s.projectHostSetups)
   const detectedWorktreesByRepo = useAppStore((s) => s.detectedWorktreesByRepo)
   const pendingWorktreeCreations = useAppStore((s) => s.pendingWorktreeCreations)
+  const pluginCommands = usePluginCommands()
   // Why: keep status maps subscribed through the close animation — dropping them while CommandDialog fades out would flash rows empty mid-animation.
   const [statusInputsLingering, setStatusInputsLingering] = useState(false)
   useEffect(() => {
@@ -824,7 +827,14 @@ export default function WorktreeJumpPalette(): React.JSX.Element | null {
     () => buildCmdJSettingsResults(settingsSections),
     [settingsSections]
   )
-  const actionResults = useMemo(() => buildCmdJActionResults(getCmdJQuickActions()), [])
+  const actionResults = useMemo(
+    () =>
+      buildCmdJActionResults([
+        ...getCmdJQuickActions(),
+        ...buildPluginQuickActions(pluginCommands)
+      ]),
+    [pluginCommands]
+  )
   // Why: only offer project jumps the sidebar can reveal — archived-only repos are excluded from navigation.
   const renderableProjectRepoIds = useMemo(() => {
     const ids = new Set<string>()
@@ -1391,17 +1401,30 @@ export default function WorktreeJumpPalette(): React.JSX.Element | null {
       closeModal()
       setSelectedItemId('')
       const ctx = buildQuickActionContext()
-      void action.run(ctx).then((result) => {
-        if (result.status === 'unavailable') {
-          toast.error(getUnavailableQuickActionMessage(action.title, result.reason))
-          return
-        }
-        if (action.id === 'create-workspace') {
-          recordFeatureInteraction('cmd-j-create-workspace')
-          return
-        }
-        recordFeatureInteraction('cmd-j-quick-action')
-      })
+      void action
+        .run(ctx)
+        .then((result) => {
+          if (result.status === 'unavailable') {
+            toast.error(getUnavailableQuickActionMessage(action.title, result.reason))
+            return
+          }
+          if (action.id === 'create-workspace') {
+            recordFeatureInteraction('cmd-j-create-workspace')
+            return
+          }
+          recordFeatureInteraction('cmd-j-quick-action')
+        })
+        .catch((error: unknown) => {
+          if (!action.id.startsWith('plugin:')) {
+            throw error
+          }
+          toast.error(
+            translate(
+              'auto.components.WorktreeJumpPalette.pluginCommandFailed',
+              'Could not run the plugin command.'
+            )
+          )
+        })
     },
     [buildQuickActionContext, closeModal, recordFeatureInteraction]
   )

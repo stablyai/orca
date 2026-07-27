@@ -1,13 +1,20 @@
+import { randomUUID } from 'node:crypto'
 import type { CliStatusResult, RuntimeStatus } from '../../shared/runtime-types'
 import type {
   RemoteServerUpdateInstallResult,
   RemoteServerUpdaterSnapshot,
   RemoteServerUpdaterWaitResult
 } from '../../shared/remote-server-update'
+import type { RuntimeOrchestrationEnvelope } from '../../shared/runtime-rpc-envelope'
+import {
+  isOrchestrationMutation,
+  orchestrationMigrationData
+} from '../../shared/orchestration-rpc-contract'
 import { parsePairingCode, type PairingOffer } from '../../shared/pairing'
 import { launchOrcaApp } from './launch'
 import { getDefaultUserDataPath, readMetadata } from './metadata'
-import { getCliStatus, resolveDesktopWindowStatus } from './status'
+import { getCliStatus } from './status'
+import { buildRemoteCliStatusResult } from './remote-cli-status'
 import { sendRequest } from './transport'
 import { RuntimeClientError, RuntimeRpcFailureError, type RuntimeRpcSuccess } from './types'
 import { sendWebSocketRequest } from './websocket-transport'
@@ -15,6 +22,8 @@ import { markEnvironmentUsed, resolveEnvironmentPairingOffer } from './environme
 import { describeRuntimeCompatBlock, evaluateRuntimeCompat } from '../../shared/protocol-compat'
 import {
   MIN_COMPATIBLE_RUNTIME_SERVER_VERSION,
+  ORCHESTRATION_CONTRACT_RUNTIME_CAPABILITY,
+  ORCHESTRATION_CONTRACT_VERSION,
   RUNTIME_PROTOCOL_VERSION
 } from '../../shared/protocol-version'
 
@@ -32,6 +41,7 @@ export class RuntimeClient {
   private readonly remotePairing: PairingOffer | null
   private readonly environmentSelector: string | null
   private remoteCompatChecked = false
+  private orchestrationContractCheck: Promise<void> | null = null
 
   // Why: browser commands trigger first-time session init (agent-browser connect +
   // CDP proxy setup) which can take 15-30s. 60s accommodates cold start without
@@ -55,21 +65,39 @@ export class RuntimeClient {
   async call<TResult>(
     method: string,
     params?: unknown,
-    options?: {
-      timeoutMs?: number
-    }
+    options?: { timeoutMs?: number } & RuntimeOrchestrationEnvelope
   ): Promise<RuntimeRpcSuccess<TResult>> {
     const effectiveTimeoutMs = options?.timeoutMs ?? this.resolveMethodTimeoutMs(method, params)
+    const orchestrationMutation = isOrchestrationMutation(method, params)
+    if (orchestrationMutation) {
+      await this.ensureOrchestrationContractCompatible(effectiveTimeoutMs)
+    }
+    const orchestrationRequestId = orchestrationMutation
+      ? (options?.orchestrationRequestId ?? randomUUID())
+      : undefined
+    const envelope = {
+      orchestrationCapability: options?.orchestrationCapability,
+      orchestrationContractVersion: method.startsWith('orchestration.')
+        ? ORCHESTRATION_CONTRACT_VERSION
+        : undefined,
+      orchestrationRequestId
+    }
     if (this.remotePairing) {
       if (method !== 'status.get') {
         await this.ensureRemoteRuntimeCompatible(effectiveTimeoutMs)
       }
-      const response = await sendWebSocketRequest<TResult>(
-        this.remotePairing,
-        method,
-        params,
-        effectiveTimeoutMs
-      )
+      let response
+      try {
+        response = await sendWebSocketRequest<TResult>(
+          this.remotePairing,
+          method,
+          params,
+          effectiveTimeoutMs,
+          envelope
+        )
+      } catch (error) {
+        throw attachMutationRecovery(error, orchestrationRequestId)
+      }
       if (response.ok === false) {
         throw new RuntimeRpcFailureError(response)
       }
@@ -81,7 +109,12 @@ export class RuntimeClient {
       return response
     }
     const metadata = readMetadata(this.userDataPath)
-    const response = await sendRequest<TResult>(metadata, method, params, effectiveTimeoutMs)
+    let response
+    try {
+      response = await sendRequest<TResult>(metadata, method, params, effectiveTimeoutMs, envelope)
+    } catch (error) {
+      throw attachMutationRecovery(error, orchestrationRequestId)
+    }
     if (response.ok === false) {
       throw new RuntimeRpcFailureError(response)
     }
@@ -112,39 +145,7 @@ export class RuntimeClient {
       const response = await this.call<RuntimeStatus>('status.get')
       this.assertRemoteRuntimeStatusCompatible(response.result)
       this.remoteCompatChecked = true
-      const graphState = response.result.graphStatus
-      return {
-        id: response.id,
-        ok: true,
-        result: {
-          // Why: remote status proves the paired runtime is reachable, not
-          // that this client machine has a local Orca desktop process.
-          app: {
-            running: false,
-            pid: null,
-            // Why: reuse the shared resolver so remote status honors the same
-            // authoritativeWindowId fallback as local status for old runtimes.
-            ...(() => {
-              const desktopWindowStatus = resolveDesktopWindowStatus(response.result)
-              return desktopWindowStatus ? { desktopWindowStatus } : {}
-            })()
-          },
-          runtime: {
-            state: graphState === 'ready' ? 'ready' : 'graph_not_ready',
-            reachable: true,
-            runtimeId: response.result.runtimeId,
-            ...(response.result.appVersion ? { appVersion: response.result.appVersion } : {}),
-            ...(response.result.remoteUpdateSupport
-              ? { remoteUpdateSupport: response.result.remoteUpdateSupport }
-              : {}),
-            ...(response.result.capabilities ? { capabilities: response.result.capabilities } : {})
-          },
-          graph: {
-            state: graphState
-          }
-        },
-        _meta: response._meta
-      }
+      return buildRemoteCliStatusResult(response)
     }
     return getCliStatus(this.userDataPath)
   }
@@ -201,6 +202,28 @@ export class RuntimeClient {
     }
   }
 
+  private async ensureOrchestrationContractCompatible(timeoutMs: number): Promise<void> {
+    if (!this.orchestrationContractCheck) {
+      this.orchestrationContractCheck = this.checkOrchestrationContractCompatibility(timeoutMs)
+    }
+    await this.orchestrationContractCheck
+  }
+
+  private async checkOrchestrationContractCompatibility(timeoutMs: number): Promise<void> {
+    const response = await this.call<RuntimeStatus>('status.get', undefined, { timeoutMs })
+    if (this.remotePairing) {
+      this.assertRemoteRuntimeStatusCompatible(response.result)
+      this.remoteCompatChecked = true
+    }
+    if (!response.result.capabilities?.includes(ORCHESTRATION_CONTRACT_RUNTIME_CAPABILITY)) {
+      throw new RuntimeClientError(
+        'orchestration_migration_required',
+        'The connected Orca runtime does not support the current orchestration contract. No effects were applied.',
+        orchestrationMigrationData('runtime_capability_missing')
+      )
+    }
+  }
+
   private assertRemoteRuntimeStatusCompatible(status: RuntimeStatus): void {
     const verdict = evaluateRuntimeCompat({
       clientProtocolVersion: RUNTIME_PROTOCOL_VERSION,
@@ -247,6 +270,20 @@ export class RuntimeClient {
       'Timed out waiting for an Orca desktop window. The runtime may still be running headlessly.'
     )
   }
+}
+
+function attachMutationRecovery(error: unknown, requestId: string | undefined): unknown {
+  if (!requestId || !(error instanceof RuntimeClientError)) {
+    return error
+  }
+  return new RuntimeClientError(
+    error.code,
+    `${error.message} Orchestration mutation request ID: ${requestId}.`,
+    {
+      ...(error.data && typeof error.data === 'object' ? error.data : {}),
+      orchestrationRequestId: requestId
+    }
+  )
 }
 
 function throwDesktopActivationBlocked(): never {

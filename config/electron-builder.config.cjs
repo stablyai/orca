@@ -12,6 +12,7 @@ const {
   verifyPackagedMainRuntimeDeps
 } = require('./packaged-runtime-node-modules.cjs')
 const { verifyLinuxGlibcFloor } = require('./scripts/verify-linux-glibc-floor.cjs')
+const { verifyPackagedPluginResources } = require('./scripts/verify-packaged-plugin-resources.cjs')
 
 const isMacRelease = process.env.ORCA_MAC_RELEASE === '1'
 const isLinuxArm64Release = process.env.ORCA_LINUX_ARM64_RELEASE === '1'
@@ -32,11 +33,17 @@ const relayExtraResource = {
   from: 'out/relay',
   to: 'relay'
 }
+// Why: bundled plugins are immutable install inputs and must remain ordinary
+// directories so the startup bootstrap can verify and publish exact bytes.
+const bundledPluginResources = {
+  from: 'resources/plugins/launch',
+  to: 'plugins/launch'
+}
 // Why: the main bundle, packaged CLI, SSH paths, and speech worker all execute
 // from package directories where pnpm's symlink farm is absent. Copy the exact
 // runtime dependency closure to Resources/node_modules so bare require() calls
 // do not fall through to a developer checkout's node_modules.
-const commonExtraResources = [relayExtraResource, skillFreshnessResources]
+const commonExtraResources = [relayExtraResource, bundledPluginResources, skillFreshnessResources]
 const macSpeechNativeResource = {
   from: 'node_modules/sherpa-onnx-darwin-${arch}',
   to: 'node_modules/sherpa-onnx-darwin-${arch}'
@@ -79,6 +86,8 @@ module.exports = {
     '!Casks{,/**/*}',
     '!{AGENTS.md,CLAUDE.md,DEVELOPING.md,bundle-size-progress.md}',
     '!out/**/*.test.js',
+    // Why: Vite's manifest is only used to project the paired web client.
+    '!out/renderer/.vite{,/**/*}',
     '!electron.vite.config.{js,ts,mjs,cjs}',
     '!{.eslintcache,eslint.config.mjs,.prettierignore,.prettierrc.yaml,CHANGELOG.md,README.md}',
     '!{.env,.env.*,.npmrc,pnpm-lock.yaml}',
@@ -87,6 +96,9 @@ module.exports = {
     // it from process.resourcesPath; exclude the source copy from app.asar.
     '!resources/onboarding/feature-wall/**',
     '!resources/skills/**',
+    // Why: bundled plugins ship via extraResources to resources/plugins/launch;
+    // packing the source tree into app.asar would duplicate those exact bytes.
+    '!resources/plugins/launch/**',
     // Why: the Windows CLI shim ships via extraResources to resources/bin/orca.cmd
     // (beside the native resources/bin/orca.exe). Packing the source tree into
     // app.asar too lets asarUnpack:['resources/**'] extract a second copy at
@@ -129,6 +141,7 @@ module.exports = {
     'out/main/hermes/**',
     'out/main/win32-utils.js',
     'out/main/daemon-entry.js',
+    'out/main/plugin-host-entry.js',
     'out/main/computer-sidecar.js',
     'out/main/parcel-watcher-process-entry.js',
     'out/main/chunks/**',
@@ -178,6 +191,9 @@ module.exports = {
         `[verify-packaged-daemon-entry] skipped boot on cross-arch slice (target ${context.arch}, host ${process.arch})`
       )
     }
+    // Why: inspect electron-builder's real output so a broken extraResources
+    // mapping fails packaging before bundled content reaches users.
+    verifyPackagedPluginResources(resourcesDir)
     chmodUnixCliLaunchers(resourcesDir, context.electronPlatformName)
     chmodMacServeSimHelpers(resourcesDir, context.electronPlatformName)
     for (const filename of readdirSync(resourcesDir)) {

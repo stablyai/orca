@@ -23,7 +23,7 @@ import { registerSshHandlers } from '../ipc/ssh'
 import { registerRemoteWorkspaceHandlers } from '../ipc/remote-workspace'
 import { browserManager } from '../browser/browser-manager'
 import { hasSystemMediaAccess, requestSystemMediaAccess } from '../browser/browser-media-access'
-import type { OrcaRuntimeService } from '../runtime/orca-runtime'
+import type { OrcaRuntimeService, RuntimeWorktreeLifecycleEvent } from '../runtime/orca-runtime'
 import {
   checkForUpdatesFromMenu,
   downloadUpdate,
@@ -84,11 +84,14 @@ export function attachMainWindowServices(
     isRecoveryReloadInFlight?: (webContentsId: number) => boolean
     onBeforeUpdateQuit?: () => void | Promise<void>
     updateInstallMode?: UpdateInstallMode
+    onWorktreeLifecycle?: (event: RuntimeWorktreeLifecycleEvent) => void
   }
 ): void {
   registerAppReloadHandler(mainWindow, options?.onBeforeRendererReload)
   registerRepoHandlers(mainWindow, store)
-  registerWorktreeHandlers(mainWindow, store, runtime)
+  registerWorktreeHandlers(mainWindow, store, runtime, {
+    onWorktreeLifecycle: options?.onWorktreeLifecycle
+  })
   // Why: repo/settings mutations resync watchers through this attached main-window context.
   setWorktreeBaseDirectoryWatcherSyncContext(store, mainWindow)
   scheduleWorktreeBaseDirectoryWatcherSync(store, mainWindow)

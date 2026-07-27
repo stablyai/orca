@@ -1,0 +1,34 @@
+{
+  "manifestVersion": 1,
+  "id": "orca-navigation-shortcuts",
+  "publisher": "stablyai",
+  "name": "Orca Navigation Shortcuts",
+  "version": "1.0.0",
+  "description": "Command aliases and optional shortcuts for frequent Orca views.",
+  "repository": "https://github.com/stablyai/orca-navigation-shortcuts",
+  "engines": { "orca": ">=1.4.0" },
+  "pluginApi": 1,
+  "contributes": {
+    "commands": [
+      { "id": "open-tasks", "title": "Open Tasks", "context": "global", "action": "view.tasks" },
+      {
+        "id": "toggle-search",
+        "title": "Toggle Search",
+        "context": "global",
+        "action": "sidebar.search.toggle"
+      },
+      {
+        "id": "toggle-source-control",
+        "title": "Toggle Source Control",
+        "context": "global",
+        "action": "sidebar.sourceControl.toggle"
+      }
+    ],
+    "keybindings": [
+      { "command": "open-tasks", "key": "Mod+Alt+T", "when": "global" },
+      { "command": "toggle-search", "key": "Mod+Alt+F", "when": "global" },
+      { "command": "toggle-source-control", "key": "Mod+Alt+G", "when": "global" }
+    ]
+  },
+  "capabilities": []
+}

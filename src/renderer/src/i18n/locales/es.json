@@ -132,7 +132,8 @@
       "fe21e8f6f5": "Volver ({{value0}})",
       "064bd07810": "Volver",
       "ce37cf5279": "Alternar barra lateral ({{value0}})",
-      "e4b9e7dff7": "Alternar barra lateral"
+      "e4b9e7dff7": "Alternar barra lateral",
+      "pluginCommandFailed": "No se pudo ejecutar el comando del plugin."
     },
     "web": {
       "WebConnect": {
@@ -592,6 +593,9 @@
           }
         }
       },
+      "pluginCommandKeybindings": {
+        "group": "Plugins"
+      },
       "linear": {
         "usage": {
           "examples": {
@@ -734,6 +738,8 @@
         "devSearchKeywordSonner": "sonner",
         "devSearchKeywordError": "error",
         "devSearchKeywordNotification": "notification",
+        "pluginsTitle": "Plugins",
+        "pluginsDescription": "Instala y administra plugins experimentales de Orca.",
         "projectHostsSummary": "{{value0}} hosts",
         "linearTitle": "Linear",
         "linearDescription": "Give agents the skill to read and update your linked Linear tickets."
@@ -1913,7 +1919,8 @@
         "workspaceTabMissing": "La pestaña ya no existe",
         "projectsGroupsHeader": "Proyectos y grupos",
         "projectBadge": "Proyecto",
-        "repoGroupBadge": "Grupo de repositorios"
+        "repoGroupBadge": "Grupo de repositorios",
+        "pluginCommandFailed": "No se pudo ejecutar el comando del plugin."
       },
       "github": {
         "pr": {
@@ -6703,7 +6710,8 @@
           "25b0004fbf": "Terminal activa",
           "781cb74d22": "Se ejecuta desde paneles de terminal.",
           "cb02e00202": "Terminal",
-          "d8c988dab4": "~/.orca/keybindings.json"
+          "d8c988dab4": "~/.orca/keybindings.json",
+          "shortcutUnavailable": "El atajo ya no está disponible."
         },
         "SourceControlAiActionRecipeDefaults": {
           "2576299196": "argumentos",
@@ -9238,7 +9246,7 @@
           "copy": "Copiar",
           "copied": "Copiado",
           "recipes": "Recetas",
-          "recipesHelp": "Las recetas que tu agente agrega a orca.yaml aparecen aquí, listas para iniciar un espacio de trabajo.",
+          "recipesHelp": "Las recetas de orca.yaml y de los plugins activados aparecen aquí, listas para iniciar un espacio de trabajo.",
           "refresh": "Actualizar recetas de VMs efímeras",
           "checking": "Comprobando recetas…",
           "none": "Aún no se han encontrado recetas."
@@ -9309,6 +9317,285 @@
         "TerminalInteractionSection": {
           "567633ff50": "Right-click pastes the clipboard into the terminal. Control-click to open the context menu.",
           "c64497148a": "Right-click pastes the clipboard. Control-click opens the context menu."
+        },
+        "PluginConsentDialog": {
+          "workerTrust": "Proceso en segundo plano — se ejecuta en su propio proceso",
+          "panelTrust": "Panel o contenido integrado con el host — sin proceso en segundo plano",
+          "decisionFailed": "No se pudo guardar la decisión sobre los permisos. Inténtalo de nuevo.",
+          "title": "Revisar permisos",
+          "mixedTitle": "Revisar acceso y contenido",
+          "instructionalTitle": "Revisar el contenido del plugin",
+          "subtitle": "{{value0}} v{{value1}} · {{value2}}",
+          "reconsent": "Los permisos, el nivel de confianza del proceso o el contenido instructivo cambiaron desde la última revisión de este plugin. Revísalo de nuevo antes de ejecutarlo.",
+          "source": "Origen",
+          "unknownSource": "No disponible",
+          "commit": "Commit",
+          "localCommit": "No disponible (carpeta local)",
+          "trust": "Nivel de confianza",
+          "capabilities": "Este plugin puede",
+          "warning": "Estos permisos limitan cómo usa el plugin la API de Orca. Su proceso se ejecuta como un proceso normal en tu equipo, con acceso completo a tus archivos, red y otros procesos.",
+          "enable": "Activar plugin",
+          "keepDisabled": "Mantener desactivado",
+          "panelWarning": "Estos permisos limitan cómo usa el plugin la API de Orca. Este plugin no tiene ningún proceso en segundo plano.",
+          "instructionalWarning": "Este plugin no tiene ningún proceso en segundo plano. Aun así, su contenido instructivo puede provocar acciones cuando tú o un agente lo usen. Revisa las instrucciones y los comandos siguientes antes de habilitarlo.",
+          "capability": {
+            "workspaceRead": "Leer el nombre, la rama y la lista de terminales del worktree seleccionado",
+            "terminalSend": "Escribir texto en una terminal visible (siempre en una terminal específica)",
+            "notificationsShow": "Mostrar notificaciones de escritorio con el nombre del plugin",
+            "storage": "Guardar datos en la carpeta de almacenamiento propia del plugin",
+            "secrets": "Guardar y leer secretos en la bóveda cifrada propia del plugin",
+            "eventsSubscribe": "Recibir avisos cuando se creen o eliminen worktrees y cuando cambie el estado de un agente",
+            "settingsOwn": "Leer y cambiar la configuración propia del plugin"
+          },
+          "skillWarning": "Este plugin instala habilidades con instrucciones. Los agentes leen esas instrucciones y pueden actuar con toda la autoridad que les concedas.",
+          "instructionalTrust": "Contenido instructivo — se ejecuta más tarde con la autoridad del usuario o del agente",
+          "declarativeTrust": "Declarative content — no plugin code",
+          "reviewTitle": "Review plugin",
+          "declarativeWarning": "This plugin contributes validated content only. It does not run a background worker or receive access to Orca's API.",
+          "trustShortWorker": "Worker",
+          "trustShortInstructional": "Instructional",
+          "trustShortPanel": "Panel",
+          "trustShortDeclarative": "Declarative"
+        },
+        "PluginDevelopmentSection": {
+          "pathRequired": "Introduce la ruta de una carpeta de plugin.",
+          "title": "Desarrollo",
+          "help": "Carga plugins directamente desde carpetas de este equipo mientras los desarrollas. Los plugins de desarrollo también requieren revisar los permisos. Sus procesos se ejecutan en este equipo; las acciones de espacios de trabajo SSH se enrutan mediante Orca, por lo que estas rutas son rutas del equipo local.",
+          "remove": "Eliminar",
+          "placeholder": "/Users/you/plugins/my-plugin or C:\\Users\\you\\plugins\\my-plugin",
+          "add": "Añadir ruta",
+          "saveFailed": "No se pudieron guardar las rutas de plugins de desarrollo.",
+          "pathLabel": "Ruta de la carpeta del plugin de desarrollo"
+        },
+        "PluginInstallDialog": {
+          "localRequired": "Introduce la ruta de la carpeta del plugin.",
+          "gitUrlRequired": "Introduce una URL de repositorio.",
+          "gitRefRequired": "Añade una #ref explícita (etiqueta o commit) para fijar la instalación; por ejemplo, #v0.1.0.",
+          "installFailed": "No se pudo instalar el plugin. Comprueba el origen e inténtalo de nuevo.",
+          "title": "Instalar plugin",
+          "description": "La instalación copia el plugin en Orca y muestra sus permisos para que los revises. No se ejecuta ningún código del plugin hasta que lo actives.",
+          "source": "Origen de instalación",
+          "localTab": "Carpeta local",
+          "gitTab": "Git URL",
+          "localLabel": "Ruta de la carpeta del plugin",
+          "localPlaceholder": "/Users/you/plugins/my-plugin or C:\\Users\\you\\plugins\\my-plugin",
+          "localHelp": "Ruta completa a una carpeta de este equipo que contenga orca-plugin.json. La ruta se usa exactamente como se introduce.",
+          "gitLabel": "URL del repositorio con #ref",
+          "gitPlaceholder": "https://git.example/acme/orca-notes#v0.1.0",
+          "gitHelp": "Añade una #ref explícita —una etiqueta o commit— para fijar la instalación. Funciona con GitHub, GitLab y cualquier servidor Git.",
+          "cancel": "Cancelar",
+          "installing": "Instalando…",
+          "install": "Instalar",
+          "gitUrlInvalid": "Usa una URL de Git HTTPS o SSH. No se permiten protocolos auxiliares ejecutables de Git."
+        },
+        "PluginRemoveDialog": {
+          "title": "¿Eliminar plugin?",
+          "description": "Esto elimina {{value0}} y los datos guardados del plugin en este equipo. Puedes volver a instalarlo más adelante.",
+          "cancel": "Cancelar",
+          "remove": "Eliminar plugin"
+        },
+        "PluginSettingsRow": {
+          "needsReview": "Requiere revisión",
+          "invalid": "No válido",
+          "error": "Error",
+          "disabled": "Desactivado",
+          "running": "En ejecución",
+          "enabled": "Activado",
+          "workerTier": "proceso en segundo plano",
+          "panelTier": "solo panel",
+          "loadingLogs": "Cargando registros…",
+          "noLogs": "No hay líneas de registro.",
+          "logCount": "Últimas {{value0}} de hasta 200 líneas conservadas",
+          "dev": "Desarrollo",
+          "review": "Revisar permisos",
+          "moreActions": "Más acciones para {{value0}}",
+          "hideLogs": "Ocultar registros",
+          "viewLogs": "Ver registros",
+          "remove": "Eliminar",
+          "enableLabel": "Activar {{value0}}",
+          "restartCount": " · {{value0}} reinicios",
+          "restarting": "Reiniciando",
+          "invalidPluginError": "El manifiesto o los archivos instalados del plugin no son válidos. Corrige el plugin y actualiza.",
+          "runtimeError": "El plugin se detuvo tras un error de activación o del proceso.",
+          "disableLabel": "Desactivar {{value0}}",
+          "blocked": "Bloqueado",
+          "official": "Oficial",
+          "bundled": "Incluido",
+          "killListMessage": "La lista de seguridad de Orca desactivó este plugin: {{value0}}",
+          "viewAdvisory": "Ver aviso",
+          "rollback": "Revertir",
+          "noDescription": "No description provided.",
+          "reviewAndEnable": "Review & enable"
+        },
+        "PluginsSettingsSection": {
+          "loadFailed": "No se pudieron cargar los plugins.",
+          "logsFailed": "No se pudieron cargar los registros del plugin.",
+          "title": "Plugins",
+          "experimental": "Experimental",
+          "description": "Instala y administra plugins de Orca. Los plugins se ejecutan en este equipo, incluso en espacios de trabajo SSH.",
+          "install": "Instalar plugin",
+          "systemLabel": "Sistema de plugins",
+          "systemDescription": "Descubre los plugins instalados y permite activarlos por separado. Nada se ejecuta hasta que lo revises y actives. Sus procesos siempre se ejecutan en este equipo; las acciones de espacios de trabajo SSH se enrutan mediante Orca.",
+          "featureOff": "Activa el sistema de plugins para ver y administrar los plugins instalados. Todo lo que ya esté instalado permanece en el disco y desactivado mientras el sistema esté apagado.",
+          "loading": "Cargando plugins…",
+          "installed": "Instalados",
+          "refresh": "Actualizar",
+          "tryAgain": "Intentar de nuevo",
+          "empty": "No hay plugins instalados. Usa Instalar plugin para añadir uno desde una carpeta local o una referencia Git fijada.",
+          "settingsUpdateFailed": "No se pudo guardar la configuración de plugins.",
+          "rollbackFailed": "No se pudo revertir este plugin. Es posible que no haya una versión inmutable anterior disponible.",
+          "noInstalledResults": "No installed plugins match this search.",
+          "noInstalledResultsTitle": "No matching plugins",
+          "emptyTitle": "No plugins installed yet"
+        },
+        "plugins": {
+          "search": {
+            "title": "Plugins",
+            "description": "Instala y administra plugins experimentales de Orca.",
+            "install": "instalar plugin",
+            "permissions": "permisos de plugins",
+            "logs": "registros de plugins",
+            "development": "plugins de desarrollo"
+          }
+        },
+        "pluginError": {
+          "installManifestMissing": "No se encontró un orca-plugin.json legible. Elige la carpeta raíz del plugin.",
+          "installManifestInvalid": "orca-plugin.json no es válido. Pide al autor del plugin que corrija el manifiesto.",
+          "incompatible": "Este plugin requiere otra versión de Orca.",
+          "installUnsafePath": "El plugin contiene una ruta de archivo o un enlace simbólico no seguros y no se instaló.",
+          "installLimit": "El plugin supera los límites de tamaño o cantidad de archivos de Orca.",
+          "installGit": "Orca no pudo obtener la revisión Git fijada. Comprueba la URL, la #ref, el acceso y la configuración de Git del sistema.",
+          "invalidManifestMissing": "A la raíz del plugin le falta orca-plugin.json. Añádelo y actualiza los plugins.",
+          "invalidManifest": "orca-plugin.json no es válido. Corrígelo y actualiza los plugins.",
+          "invalidArtifact": "Falta un archivo de proceso o panel declarado, o no es seguro. Corrige los archivos del plugin y actualiza.",
+          "consentChanged": "El plugin cambió mientras lo revisabas. Cierra este diálogo y revisa los permisos actualizados."
+        },
+        "PluginVmRecipeConsentPreview": {
+          "create": "Crear",
+          "suspend": "Suspender",
+          "resume": "Reanudar",
+          "destroy": "Destruir",
+          "warning": "Este plugin instala recetas de VM. Orca ejecuta los comandos siguientes en el equipo local cuando usas la acción de ciclo de vida correspondiente.",
+          "commandLabel": "{{value0}} · comando de {{value1}}",
+          "heading": "Comandos de recetas de VM"
+        },
+        "PluginKeybindingConsentPreview": {
+          "warning": "Este plugin añade atajos de teclado. Los atajos del plugin tienen prioridad sobre los atajos coincidentes de Orca mientras el plugin está activado.",
+          "heading": "Atajos de teclado",
+          "worktree": "Solo se ejecuta mientras hay un espacio de trabajo activo.",
+          "global": "Se ejecuta en la aplicación sin requerir un espacio de trabajo activo.",
+          "shadows": "Reemplaza: {{value0}}"
+        },
+        "PluginMarketplaceBrowser": {
+          "loadFailed": "No se pudieron cargar los plugins del marketplace.",
+          "refreshFailed": "No se pudieron actualizar los marketplaces. Los listados en caché siguen disponibles.",
+          "previewFailed": "No se pudo preparar este plugin para revisarlo. Actualiza el marketplace e inténtalo de nuevo.",
+          "installFailed": "No se pudo instalar este plugin. Es posible que la fuente revisada haya cambiado.",
+          "heading": "Marketplace",
+          "manageSources": "Gestionar fuentes",
+          "refreshing": "Actualizando…",
+          "refresh": "Actualizar",
+          "loading": "Cargando plugins del marketplace…",
+          "searchLabel": "Buscar plugins del marketplace",
+          "searchPlaceholder": "Buscar plugins, categorías o editores",
+          "tryAgain": "Intentar de nuevo",
+          "noSources": "Añade un marketplace de Git oficial, comunitario o privado para explorar plugins.",
+          "addSource": "Añadir marketplace",
+          "noResults": "Ningún plugin del marketplace coincide con esta búsqueda.",
+          "empty": "Los marketplaces configurados no incluyen ningún plugin.",
+          "noInstalled": "No plugins installed.",
+          "noInstalledTitle": "No plugins installed",
+          "noSourcesTitle": "No marketplaces configured",
+          "noResultsTitle": "No matching plugins",
+          "clearSearch": "Clear search",
+          "emptyTitle": "Nothing listed yet"
+        },
+        "PluginMarketplaceListingRow": {
+          "official": "Oficial",
+          "bundled": "Incluido",
+          "installed": "Instalado",
+          "marketplace": "{{value0}} · {{value1}}",
+          "blocked": "Bloqueado por la lista de seguridad de Orca: {{value0}}",
+          "blockedAction": "Bloqueado",
+          "checkUpdate": "Buscar actualización",
+          "installedAction": "Instalado",
+          "review": "Revisar",
+          "noDescription": "No description provided.",
+          "install": "Install"
+        },
+        "PluginMarketplacePreviewDialog": {
+          "languagePacks": "{{value0}} paquetes de idioma",
+          "commands": "{{value0}} comandos",
+          "keybindings": "{{value0}} atajos de teclado",
+          "vmRecipes": "{{value0}} recetas de VM",
+          "panels": "{{value0}} paneles",
+          "events": "{{value0}} suscripciones a eventos",
+          "worker": "Proceso en segundo plano",
+          "official": "Oficial",
+          "bundled": "Incluido",
+          "subtitle": "{{value0}} v{{value1}} · {{value2}}",
+          "source": "Fuente del plugin",
+          "commit": "Commit fijado",
+          "marketplaceCommit": "Commit del índice",
+          "includes": "Incluye",
+          "noContributions": "Solo metadatos del manifiesto",
+          "capabilities": "Acceso solicitado",
+          "workerWarning": "Las capacidades limitan cómo usa este plugin la API de Orca. Su proceso sigue ejecutándose como un proceso normal en este ordenador, con acceso completo a tus archivos, red y otros procesos.",
+          "blocked": "La lista de seguridad de Orca bloquea este plugin: {{value0}}",
+          "current": "Este contenido exacto del plugin ya está instalado.",
+          "cancel": "Cancelar",
+          "update": "Actualizar plugin",
+          "install": "Instalar plugin",
+          "provenance": "Reviewed source",
+          "close": "Close",
+          "upToDate": "Up to date",
+          "languagePacksOne": "1 language pack",
+          "commandsOne": "1 command",
+          "keybindingsOne": "1 keyboard shortcut",
+          "vmRecipesOne": "1 VM recipe",
+          "panelsOne": "1 panel",
+          "eventsOne": "1 event subscription",
+          "versionLine": "v{{value0}} · {{value1}}"
+        },
+        "PluginMarketplaceSourceDialog": {
+          "addFailed": "No se pudo añadir este marketplace. Comprueba la URL de Git, la referencia y tus credenciales de Git.",
+          "refreshFailed": "No se pudo actualizar este marketplace. Su último índice válido en caché sigue disponible.",
+          "removeFailed": "No se pudo eliminar este marketplace.",
+          "title": "Fuentes de marketplace",
+          "description": "Los marketplaces son repositorios de Git fijados. Orca usa tus credenciales existentes del Git del sistema para los repositorios privados.",
+          "urlLabel": "Git URL",
+          "urlDescription": "Usa la URL HTTPS o SSH de un repositorio que contenga orca-marketplace.json.",
+          "refLabel": "Referencia de Git",
+          "refDescription": "Elige una rama, etiqueta o commit. Cada índice obtenido se registra en un commit exacto.",
+          "adding": "Añadiendo…",
+          "add": "Añadir fuente",
+          "configured": "Fuentes configuradas",
+          "empty": "No hay fuentes de marketplace configuradas.",
+          "owner": "Propietario: {{value0}}",
+          "pinnedCommit": "Fijado en {{value0}}",
+          "stale": "La actualización falló. Se muestra el último índice válido en caché.",
+          "refreshLabel": "Actualizar {{value0}}",
+          "removeLabel": "Eliminar {{value0}}",
+          "done": "Listo",
+          "urlPlaceholder": "https://git.example.com/team/plugins.git",
+          "official": "Oficial"
+        },
+        "PluginRollbackDialog": {
+          "title": "¿Revertir el plugin?",
+          "description": "Esto desactiva {{value0}} y restaura su versión inmutable anterior. Si esa versión solicita otro acceso o contenido instructivo, Orca requerirá una nueva revisión.",
+          "cancel": "Cancelar",
+          "confirm": "Revertir plugin"
+        },
+        "PluginConsentProvenance": {
+          "official": "Official",
+          "bundled": "Bundled with Orca",
+          "local": "Local folder",
+          "community": "Community",
+          "source": "Source",
+          "sourceLabel": "Source",
+          "commit": "Pinned commit",
+          "localCommit": "Local folder — no commit",
+          "indexCommit": "Index commit"
         },
         "MobileRelayStatusSection": {
           "registered": "Registered",
@@ -10691,6 +10978,15 @@
             "workspaceGone": "Couldn't open log — workspace is no longer available.",
             "notAuthorized": "Couldn't open log — path not authorized.",
             "alreadyEditable": "Log is already open for editing."
+          },
+          "PluginPanel": {
+            "loading": "Cargando el panel del plugin...",
+            "unavailable": "Este panel de plugin ya no está disponible.",
+            "loadFailed": "No se pudo cargar el panel del plugin.",
+            "unresponsive": "El panel del plugin dejó de responder y se suspendió."
+          },
+          "activityBar": {
+            "error": "Error"
           },
           "github": {
             "refresh": {
@@ -12674,6 +12970,10 @@
                 "project": "Proyecto"
               }
             }
+          },
+          "pluginQuickActions": {
+            "description": "Comando del plugin {{value0}}",
+            "keyword": "comando del plugin"
           }
         }
       },
@@ -13297,6 +13597,11 @@
             "noPr": "Sin PR",
             "unavailable": "No disponible"
           }
+        },
+        "pluginPanelBridgeHost": {
+          "actionsUnavailable": "Las acciones de plugins no están disponibles en este cliente.",
+          "messageTooLarge": "El mensaje supera el límite de tamaño.",
+          "tooManyRequests": "Demasiadas solicitudes."
         }
       },
       "link": {
@@ -13573,6 +13878,17 @@
         "searchLabels": "Filtrar etiquetas…",
         "searchAssignee": "Filtrar asignatario…",
         "back": "Atrás"
+      },
+      "pluginCatalog": {
+        "PluginCatalogLayout": {
+          "title": "Plugins",
+          "description": "Browse available plugins or manage the ones installed in Orca.",
+          "filter": "Plugin filter",
+          "all": "All",
+          "installed": "Installed",
+          "searchLabel": "Search plugins",
+          "searchPlaceholder": "Search plugins, categories, or publishers"
+        }
       },
       "browser-pane": {
         "markup": {

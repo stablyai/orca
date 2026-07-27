@@ -132,7 +132,8 @@
       "fe21e8f6f5": "돌아가기({{value0}})",
       "064bd07810": "돌아가기",
       "ce37cf5279": "사이드바 표시/숨기기({{value0}})",
-      "e4b9e7dff7": "사이드바 표시/숨기기"
+      "e4b9e7dff7": "사이드바 표시/숨기기",
+      "pluginCommandFailed": "플러그인 명령을 실행할 수 없습니다."
     },
     "web": {
       "WebConnect": {
@@ -592,6 +593,9 @@
           }
         }
       },
+      "pluginCommandKeybindings": {
+        "group": "Plugins"
+      },
       "linear": {
         "usage": {
           "examples": {
@@ -734,6 +738,8 @@
         "devSearchKeywordSonner": "sonner",
         "devSearchKeywordError": "error",
         "devSearchKeywordNotification": "notification",
+        "pluginsTitle": "플러그인",
+        "pluginsDescription": "실험적인 Orca 플러그인을 설치하고 관리합니다.",
         "projectHostsSummary": "호스트 {{value0}}개",
         "linearTitle": "Linear",
         "linearDescription": "Give agents the skill to read and update your linked Linear tickets."
@@ -1913,7 +1919,8 @@
         "workspaceTabMissing": "탭이 더 이상 존재하지 않습니다",
         "projectsGroupsHeader": "프로젝트 및 그룹",
         "projectBadge": "프로젝트",
-        "repoGroupBadge": "리포지토리 그룹"
+        "repoGroupBadge": "리포지토리 그룹",
+        "pluginCommandFailed": "플러그인 명령을 실행할 수 없습니다."
       },
       "github": {
         "pr": {
@@ -6688,7 +6695,8 @@
           "25b0004fbf": "Terminal 활성",
           "781cb74d22": "terminal 패널에서 실행됩니다.",
           "cb02e00202": "터미널",
-          "d8c988dab4": "~/.orca/keybindings.json"
+          "d8c988dab4": "~/.orca/keybindings.json",
+          "shortcutUnavailable": "단축키를 더 이상 사용할 수 없습니다."
         },
         "SourceControlAiActionRecipeDefaults": {
           "2576299196": "인수",
@@ -9238,7 +9246,7 @@
           "copy": "복사",
           "copied": "복사됨",
           "recipes": "조리법",
-          "recipesHelp": "agent가 orca.yaml에 추가하는 레시피가 여기에 표시되어 워크스페이스를 시작할 준비가 됩니다.",
+          "recipesHelp": "orca.yaml과 활성화된 플러그인의 레시피가 여기에 표시되어 워크스페이스를 시작할 수 있습니다.",
           "refresh": "임시 VM 레시피 새로 고침",
           "checking": "레시피 확인 중...",
           "none": "아직 레시피를 찾을 수 없습니다."
@@ -9309,6 +9317,285 @@
         "TerminalInteractionSection": {
           "567633ff50": "우클릭하면 클립보드 내용을 터미널에 붙여넣습니다. 컨텍스트 메뉴를 열려면 Control 클릭하세요.",
           "c64497148a": "우클릭하면 클립보드를 붙여넣습니다. Control 클릭으로 컨텍스트 메뉴를 엽니다."
+        },
+        "PluginConsentDialog": {
+          "workerTrust": "백그라운드 워커 — 별도 프로세스에서 실행",
+          "panelTrust": "패널 또는 호스트 통합 콘텐츠 — 백그라운드 워커 없음",
+          "decisionFailed": "권한 결정을 저장할 수 없습니다. 다시 시도하세요.",
+          "title": "권한 검토",
+          "mixedTitle": "액세스 및 콘텐츠 검토",
+          "instructionalTitle": "플러그인 콘텐츠 검토",
+          "subtitle": "{{value0}} v{{value1}} · {{value2}}",
+          "reconsent": "이 플러그인을 마지막으로 검토한 후 권한, 워커 신뢰 수준 또는 지침 콘텐츠가 변경되었습니다. 실행하기 전에 다시 검토하세요.",
+          "source": "소스",
+          "unknownSource": "사용할 수 없음",
+          "commit": "커밋",
+          "localCommit": "사용할 수 없음(로컬 폴더)",
+          "trust": "신뢰 수준",
+          "capabilities": "이 플러그인이 할 수 있는 작업",
+          "warning": "이 권한은 플러그인이 Orca API를 사용하는 방식을 제한합니다. 워커는 컴퓨터에서 일반 프로세스로 실행되므로 파일, 네트워크 및 다른 프로세스에 모두 접근할 수 있습니다.",
+          "enable": "플러그인 활성화",
+          "keepDisabled": "비활성화 유지",
+          "panelWarning": "이 권한은 플러그인이 Orca API를 사용하는 방식을 제한합니다. 이 플러그인에는 백그라운드 워커가 없습니다.",
+          "instructionalWarning": "이 플러그인에는 워커 프로세스가 없습니다. 하지만 사용자나 에이전트가 사용할 때 지침 콘텐츠로 인해 작업이 실행될 수 있습니다. 활성화하기 전에 아래 지침과 명령을 검토하세요.",
+          "capability": {
+            "workspaceRead": "선택한 워크트리의 이름, 브랜치 및 터미널 목록 읽기",
+            "terminalSend": "표시된 특정 터미널에 텍스트 입력",
+            "notificationsShow": "플러그인 이름이 표시된 데스크톱 알림 보기",
+            "storage": "플러그인 전용 저장소 폴더에 데이터 저장",
+            "secrets": "플러그인 전용 암호화 보관소에서 비밀 정보 저장 및 읽기",
+            "eventsSubscribe": "워크트리가 생성 또는 제거되거나 에이전트 상태가 변경될 때 알림 받기",
+            "settingsOwn": "플러그인 자체 설정 읽기 및 변경"
+          },
+          "skillWarning": "이 플러그인은 지침이 포함된 스킬을 설치합니다. 에이전트는 해당 지침을 읽고 사용자가 부여한 모든 권한으로 작업할 수 있습니다.",
+          "instructionalTrust": "지침 콘텐츠 — 나중에 사용자 또는 에이전트 권한으로 실행",
+          "declarativeTrust": "Declarative content — no plugin code",
+          "reviewTitle": "Review plugin",
+          "declarativeWarning": "This plugin contributes validated content only. It does not run a background worker or receive access to Orca's API.",
+          "trustShortWorker": "Worker",
+          "trustShortInstructional": "Instructional",
+          "trustShortPanel": "Panel",
+          "trustShortDeclarative": "Declarative"
+        },
+        "PluginDevelopmentSection": {
+          "pathRequired": "플러그인 폴더 경로를 입력하세요.",
+          "title": "개발",
+          "help": "개발하는 동안 이 컴퓨터의 폴더에서 플러그인을 직접 불러옵니다. 개발용 플러그인도 권한 검토가 필요합니다. 워커는 이 데스크톱 호스트에서 실행되고 SSH 워크스페이스 작업은 Orca를 통해 라우팅되므로 여기에 데스크톱 경로를 입력하세요.",
+          "remove": "제거",
+          "placeholder": "/Users/you/plugins/my-plugin or C:\\Users\\you\\plugins\\my-plugin",
+          "add": "경로 추가",
+          "saveFailed": "개발용 플러그인 경로를 저장할 수 없습니다.",
+          "pathLabel": "개발 플러그인 폴더 경로"
+        },
+        "PluginInstallDialog": {
+          "localRequired": "플러그인 폴더 경로를 입력하세요.",
+          "gitUrlRequired": "저장소 URL을 입력하세요.",
+          "gitRefRequired": "설치를 고정하려면 명시적인 #ref(태그 또는 커밋)를 추가하세요. 예: #v0.1.0.",
+          "installFailed": "플러그인을 설치하지 못했습니다. 소스를 확인하고 다시 시도하세요.",
+          "title": "플러그인 설치",
+          "description": "설치하면 플러그인이 Orca에 복사되고 검토할 권한이 표시됩니다. 활성화하기 전에는 플러그인 코드가 실행되지 않습니다.",
+          "source": "설치 소스",
+          "localTab": "로컬 폴더",
+          "gitTab": "Git URL",
+          "localLabel": "플러그인 폴더 경로",
+          "localPlaceholder": "/Users/you/plugins/my-plugin or C:\\Users\\you\\plugins\\my-plugin",
+          "localHelp": "이 컴퓨터에서 orca-plugin.json이 들어 있는 폴더의 전체 경로입니다. 입력한 경로를 그대로 사용합니다.",
+          "gitLabel": "#ref가 포함된 저장소 URL",
+          "gitPlaceholder": "https://git.example/acme/orca-notes#v0.1.0",
+          "gitHelp": "명시적인 #ref(태그 또는 커밋)를 추가해 설치를 고정하세요. GitHub, GitLab 및 모든 Git 호스트에서 사용할 수 있습니다.",
+          "cancel": "취소",
+          "installing": "설치 중…",
+          "install": "설치",
+          "gitUrlInvalid": "HTTPS 또는 SSH Git URL을 사용하세요. 실행 가능한 Git 도우미 프로토콜은 허용되지 않습니다."
+        },
+        "PluginRemoveDialog": {
+          "title": "플러그인을 제거하시겠습니까?",
+          "description": "{{value0}} 및 이 컴퓨터에 저장된 플러그인 데이터를 제거합니다. 나중에 다시 설치할 수 있습니다.",
+          "cancel": "취소",
+          "remove": "플러그인 제거"
+        },
+        "PluginSettingsRow": {
+          "needsReview": "검토 필요",
+          "invalid": "유효하지 않음",
+          "error": "오류",
+          "disabled": "비활성화됨",
+          "running": "실행 중",
+          "enabled": "활성화됨",
+          "workerTier": "백그라운드 워커",
+          "panelTier": "패널 전용",
+          "loadingLogs": "로그 불러오는 중…",
+          "noLogs": "기록된 로그 줄이 없습니다.",
+          "logCount": "보관된 최대 200줄 중 최근 {{value0}}줄",
+          "dev": "개발",
+          "review": "권한 검토",
+          "moreActions": "{{value0}}의 추가 작업",
+          "hideLogs": "로그 숨기기",
+          "viewLogs": "로그 보기",
+          "remove": "제거",
+          "enableLabel": "{{value0}} 활성화",
+          "restartCount": " · {{value0}}회 다시 시작",
+          "restarting": "다시 시작 중",
+          "invalidPluginError": "플러그인 매니페스트 또는 설치된 파일이 올바르지 않습니다. 수정한 후 새로 고치세요.",
+          "runtimeError": "활성화 또는 워커 오류 후 플러그인이 중지되었습니다.",
+          "disableLabel": "{{value0}} 비활성화",
+          "blocked": "차단됨",
+          "official": "공식",
+          "bundled": "번들",
+          "killListMessage": "Orca 안전 목록에서 이 플러그인을 비활성화했습니다: {{value0}}",
+          "viewAdvisory": "권고 보기",
+          "rollback": "롤백",
+          "noDescription": "No description provided.",
+          "reviewAndEnable": "Review & enable"
+        },
+        "PluginsSettingsSection": {
+          "loadFailed": "플러그인을 불러올 수 없습니다.",
+          "logsFailed": "플러그인 로그를 불러올 수 없습니다.",
+          "title": "플러그인",
+          "experimental": "실험적",
+          "description": "Orca 플러그인을 설치하고 관리합니다. SSH 워크스페이스에서도 플러그인은 이 컴퓨터에서 실행됩니다.",
+          "install": "플러그인 설치",
+          "systemLabel": "플러그인 시스템",
+          "systemDescription": "설치된 플러그인을 찾아 개별적으로 활성화할 수 있습니다. 검토하고 활성화하기 전에는 아무것도 실행되지 않습니다. 워커는 항상 이 컴퓨터에서 실행되고 SSH 워크스페이스 작업은 Orca를 통해 라우팅됩니다.",
+          "featureOff": "플러그인 시스템을 켜서 설치된 플러그인을 보고 관리하세요. 이미 설치된 항목은 디스크에 남으며 시스템이 꺼져 있는 동안 비활성화 상태를 유지합니다.",
+          "loading": "플러그인 불러오는 중…",
+          "installed": "설치됨",
+          "refresh": "새로 고침",
+          "tryAgain": "다시 시도",
+          "empty": "설치된 플러그인이 없습니다. 플러그인 설치를 사용해 로컬 폴더 또는 고정된 Git ref에서 추가하세요.",
+          "settingsUpdateFailed": "플러그인 설정을 저장할 수 없습니다.",
+          "rollbackFailed": "이 플러그인을 롤백하지 못했습니다. 이전 불변 버전을 사용할 수 없을 수 있습니다.",
+          "noInstalledResults": "No installed plugins match this search.",
+          "noInstalledResultsTitle": "No matching plugins",
+          "emptyTitle": "No plugins installed yet"
+        },
+        "plugins": {
+          "search": {
+            "title": "플러그인",
+            "description": "실험적인 Orca 플러그인을 설치하고 관리합니다.",
+            "install": "플러그인 설치",
+            "permissions": "플러그인 권한",
+            "logs": "플러그인 로그",
+            "development": "개발용 플러그인"
+          }
+        },
+        "pluginError": {
+          "installManifestMissing": "읽을 수 있는 orca-plugin.json을 찾지 못했습니다. 플러그인의 루트 폴더를 선택하세요.",
+          "installManifestInvalid": "orca-plugin.json이 올바르지 않습니다. 플러그인 작성자에게 매니페스트 수정을 요청하세요.",
+          "incompatible": "이 플러그인에는 다른 버전의 Orca가 필요합니다.",
+          "installUnsafePath": "플러그인에 안전하지 않은 파일 경로 또는 심볼릭 링크가 있어 설치하지 않았습니다.",
+          "installLimit": "플러그인이 Orca의 설치 크기 또는 파일 수 제한을 초과합니다.",
+          "installGit": "고정된 Git 리비전을 가져오지 못했습니다. URL, #ref, 접근 권한 및 시스템 Git 설정을 확인하세요.",
+          "invalidManifestMissing": "플러그인 루트에 orca-plugin.json이 없습니다. 추가한 후 플러그인을 새로 고치세요.",
+          "invalidManifest": "orca-plugin.json이 올바르지 않습니다. 수정한 후 플러그인을 새로 고치세요.",
+          "invalidArtifact": "선언된 워커 또는 패널 파일이 없거나 안전하지 않습니다. 파일을 수정한 후 새로 고치세요.",
+          "consentChanged": "검토하는 동안 플러그인이 변경되었습니다. 이 대화상자를 닫고 업데이트된 권한을 검토하세요."
+        },
+        "PluginVmRecipeConsentPreview": {
+          "create": "생성",
+          "suspend": "일시 중지",
+          "resume": "재개",
+          "destroy": "삭제",
+          "warning": "이 플러그인은 VM 레시피를 설치합니다. 해당 수명 주기 작업을 사용하면 Orca가 아래 명령을 로컬 데스크톱 호스트에서 실행합니다.",
+          "commandLabel": "{{value0}} · {{value1}} 명령",
+          "heading": "VM 레시피 명령"
+        },
+        "PluginKeybindingConsentPreview": {
+          "warning": "이 플러그인은 키보드 단축키를 추가합니다. 플러그인이 활성화된 동안 일치하는 Orca 단축키보다 플러그인 단축키가 우선합니다.",
+          "heading": "키보드 단축키",
+          "worktree": "워크스페이스가 활성화된 동안에만 실행됩니다.",
+          "global": "활성 워크스페이스 없이 앱에서 실행됩니다.",
+          "shadows": "대체 항목: {{value0}}"
+        },
+        "PluginMarketplaceBrowser": {
+          "loadFailed": "마켓플레이스 플러그인을 불러오지 못했습니다.",
+          "refreshFailed": "마켓플레이스를 새로 고치지 못했습니다. 캐시된 목록은 계속 사용할 수 있습니다.",
+          "previewFailed": "검토할 플러그인을 준비하지 못했습니다. 마켓플레이스를 새로 고친 후 다시 시도하세요.",
+          "installFailed": "이 플러그인을 설치하지 못했습니다. 검토한 소스가 변경되었을 수 있습니다.",
+          "heading": "마켓플레이스",
+          "manageSources": "소스 관리",
+          "refreshing": "새로 고치는 중…",
+          "refresh": "새로 고침",
+          "loading": "마켓플레이스 플러그인 불러오는 중…",
+          "searchLabel": "마켓플레이스 플러그인 검색",
+          "searchPlaceholder": "플러그인, 카테고리 또는 게시자 검색",
+          "tryAgain": "다시 시도",
+          "noSources": "공식, 커뮤니티 또는 비공개 Git 마켓플레이스를 추가하여 플러그인을 찾아보세요.",
+          "addSource": "마켓플레이스 추가",
+          "noResults": "검색과 일치하는 마켓플레이스 플러그인이 없습니다.",
+          "empty": "구성된 마켓플레이스에 등록된 플러그인이 없습니다.",
+          "noInstalled": "No plugins installed.",
+          "noInstalledTitle": "No plugins installed",
+          "noSourcesTitle": "No marketplaces configured",
+          "noResultsTitle": "No matching plugins",
+          "clearSearch": "Clear search",
+          "emptyTitle": "Nothing listed yet"
+        },
+        "PluginMarketplaceListingRow": {
+          "official": "공식",
+          "bundled": "번들",
+          "installed": "설치됨",
+          "marketplace": "{{value0}} · {{value1}}",
+          "blocked": "Orca 안전 목록에서 차단됨: {{value0}}",
+          "blockedAction": "차단됨",
+          "checkUpdate": "업데이트 확인",
+          "installedAction": "설치됨",
+          "review": "검토",
+          "noDescription": "No description provided.",
+          "install": "Install"
+        },
+        "PluginMarketplacePreviewDialog": {
+          "languagePacks": "언어 팩 {{value0}}개",
+          "commands": "명령 {{value0}}개",
+          "keybindings": "키보드 단축키 {{value0}}개",
+          "vmRecipes": "VM 레시피 {{value0}}개",
+          "panels": "패널 {{value0}}개",
+          "events": "이벤트 구독 {{value0}}개",
+          "worker": "백그라운드 워커",
+          "official": "공식",
+          "bundled": "번들",
+          "subtitle": "{{value0}} v{{value1}} · {{value2}}",
+          "source": "플러그인 소스",
+          "commit": "고정된 커밋",
+          "marketplaceCommit": "인덱스 커밋",
+          "includes": "포함 항목",
+          "noContributions": "매니페스트 메타데이터만 포함",
+          "capabilities": "요청한 접근 권한",
+          "workerWarning": "기능 권한은 이 플러그인이 Orca API를 사용하는 방식을 제한합니다. 하지만 워커는 이 컴퓨터에서 일반 프로세스로 실행되며 파일, 네트워크 및 다른 프로세스에 완전히 접근할 수 있습니다.",
+          "blocked": "Orca 안전 목록에서 이 플러그인을 차단했습니다: {{value0}}",
+          "current": "이 플러그인과 정확히 동일한 콘텐츠가 이미 설치되어 있습니다.",
+          "cancel": "취소",
+          "update": "플러그인 업데이트",
+          "install": "플러그인 설치",
+          "provenance": "Reviewed source",
+          "close": "Close",
+          "upToDate": "Up to date",
+          "languagePacksOne": "1 language pack",
+          "commandsOne": "1 command",
+          "keybindingsOne": "1 keyboard shortcut",
+          "vmRecipesOne": "1 VM recipe",
+          "panelsOne": "1 panel",
+          "eventsOne": "1 event subscription",
+          "versionLine": "v{{value0}} · {{value1}}"
+        },
+        "PluginMarketplaceSourceDialog": {
+          "addFailed": "이 마켓플레이스를 추가하지 못했습니다. Git URL, ref 및 Git 자격 증명을 확인하세요.",
+          "refreshFailed": "이 마켓플레이스를 새로 고치지 못했습니다. 마지막으로 유효한 캐시 인덱스는 계속 사용할 수 있습니다.",
+          "removeFailed": "이 마켓플레이스를 제거하지 못했습니다.",
+          "title": "마켓플레이스 소스",
+          "description": "마켓플레이스는 고정된 Git 저장소입니다. Orca는 비공개 저장소에 기존 시스템 Git 자격 증명을 사용합니다.",
+          "urlLabel": "Git URL",
+          "urlDescription": "orca-marketplace.json이 포함된 저장소의 HTTPS 또는 SSH URL을 사용하세요.",
+          "refLabel": "Git ref",
+          "refDescription": "브랜치, 태그 또는 커밋을 선택하세요. 가져온 각 인덱스는 정확한 커밋으로 기록됩니다.",
+          "adding": "추가하는 중…",
+          "add": "소스 추가",
+          "configured": "구성된 소스",
+          "empty": "구성된 마켓플레이스 소스가 없습니다.",
+          "owner": "소유자: {{value0}}",
+          "pinnedCommit": "{{value0}}에 고정",
+          "stale": "새로 고침에 실패했습니다. 마지막으로 유효한 캐시 인덱스를 표시합니다.",
+          "refreshLabel": "{{value0}} 새로 고침",
+          "removeLabel": "{{value0}} 제거",
+          "done": "완료",
+          "urlPlaceholder": "https://git.example.com/team/plugins.git",
+          "official": "공식"
+        },
+        "PluginRollbackDialog": {
+          "title": "플러그인을 롤백할까요?",
+          "description": "{{value0}}을(를) 비활성화하고 이전 불변 버전을 복원합니다. 해당 버전에서 다른 접근 권한이나 지시형 콘텐츠를 요청하면 Orca가 다시 검토하도록 요구합니다.",
+          "cancel": "취소",
+          "confirm": "플러그인 롤백"
+        },
+        "PluginConsentProvenance": {
+          "official": "Official",
+          "bundled": "Bundled with Orca",
+          "local": "Local folder",
+          "community": "Community",
+          "source": "Source",
+          "sourceLabel": "Source",
+          "commit": "Pinned commit",
+          "localCommit": "Local folder — no commit",
+          "indexCommit": "Index commit"
         },
         "MobileRelayStatusSection": {
           "registered": "Registered",
@@ -10691,6 +10978,15 @@
             "workspaceGone": "로그를 열 수 없습니다 — 워크스페이스를 더 이상 사용할 수 없습니다.",
             "notAuthorized": "로그를 열 수 없습니다 — 경로가 승인되지 않았습니다.",
             "alreadyEditable": "로그가 이미 편집용으로 열려 있습니다."
+          },
+          "PluginPanel": {
+            "loading": "플러그인 패널 불러오는 중...",
+            "unavailable": "이 플러그인 패널은 더 이상 사용할 수 없습니다.",
+            "loadFailed": "플러그인 패널을 불러올 수 없습니다.",
+            "unresponsive": "플러그인 패널이 응답하지 않아 일시 중단되었습니다."
+          },
+          "activityBar": {
+            "error": "오류"
           },
           "github": {
             "refresh": {
@@ -12674,6 +12970,10 @@
                 "project": "프로젝트"
               }
             }
+          },
+          "pluginQuickActions": {
+            "description": "{{value0}} 플러그인 명령",
+            "keyword": "플러그인 명령"
           }
         }
       },
@@ -13297,6 +13597,11 @@
             "noPr": "PR 없음",
             "unavailable": "사용 불가"
           }
+        },
+        "pluginPanelBridgeHost": {
+          "actionsUnavailable": "이 클라이언트에서는 플러그인 작업을 사용할 수 없습니다.",
+          "messageTooLarge": "메시지가 크기 제한을 초과합니다.",
+          "tooManyRequests": "요청이 너무 많습니다."
         }
       },
       "link": {
@@ -13573,6 +13878,17 @@
         "searchLabels": "레이블 필터…",
         "searchAssignee": "담당자 필터…",
         "back": "뒤로"
+      },
+      "pluginCatalog": {
+        "PluginCatalogLayout": {
+          "title": "Plugins",
+          "description": "Browse available plugins or manage the ones installed in Orca.",
+          "filter": "Plugin filter",
+          "all": "All",
+          "installed": "Installed",
+          "searchLabel": "Search plugins",
+          "searchPlaceholder": "Search plugins, categories, or publishers"
+        }
       },
       "browser-pane": {
         "markup": {

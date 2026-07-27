@@ -211,6 +211,24 @@ describe('CommentMarkdown', () => {
     expect(markup).not.toContain('mermaid-block')
   })
 
+  it('renders headings as block elements with hierarchy in the document variant', () => {
+    const markup = renderToStaticMarkup(
+      <CommentMarkdown variant="document" content={'## Problem to solve\n\nSome body text.'} />
+    )
+
+    expect(markup).toContain('<h2')
+    expect(markup).toContain('Problem to solve')
+  })
+
+  it('flattens headings to inline text in the compact variant', () => {
+    const markup = renderToStaticMarkup(
+      <CommentMarkdown content={'## Problem to solve\n\nSome body text.'} />
+    )
+
+    expect(markup).not.toContain('<h2')
+    expect(markup).toContain('Problem to solve')
+  })
+
   it('contains long PR body markdown inside its available width', () => {
     const markup = renderToStaticMarkup(
       <CommentMarkdown
