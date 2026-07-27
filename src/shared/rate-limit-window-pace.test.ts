@@ -53,6 +53,18 @@ describe('getRateLimitWindowPace', () => {
     expect(getRateLimitWindowPace(sessionWindow({ resetsAt: now }), now)).toBeNull()
   })
 
+  it('returns null for calendar billing windows longer than 7 days', () => {
+    const now = 1_000_000
+    // Monthly periods last 28–31 days; a nominal 30d duration would fabricate
+    // the window start, so no pace is reported.
+    expect(
+      getRateLimitWindowPace(
+        sessionWindow({ windowMinutes: 43200, resetsAt: now + 15 * 24 * 60 * 60_000 }),
+        now
+      )
+    ).toBeNull()
+  })
+
   it('returns null when reset and duration are inconsistent', () => {
     const now = 1_000_000
     // Derived Codex/MiniMax window lengths can disagree with resetsAt.

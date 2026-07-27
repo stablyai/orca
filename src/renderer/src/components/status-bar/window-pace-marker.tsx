@@ -25,8 +25,9 @@ export function WindowPaceMarker({
   }
   // In "remaining" display the fill shows % left, so the tick marks time left.
   const positionPercent = display === 'remaining' ? 100 - pace.elapsedPercent : pace.elapsedPercent
-  // Ring matches the surface behind the bar so the tick reads over any fill color.
-  const ringClass = inverted ? 'ring-foreground' : 'ring-background'
+  // Ring matches the surface behind the bar so the tick reads over any fill
+  // color; non-inverted callers all render on popover surfaces.
+  const ringClass = inverted ? 'ring-foreground' : 'ring-popover'
   return (
     <span
       aria-hidden

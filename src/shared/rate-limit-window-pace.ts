@@ -8,6 +8,11 @@ export type RateLimitWindowPace = {
   overPace: boolean
 }
 
+// Monthly windows are calendar billing periods (28–31 days), so a fixed
+// nominal duration would fabricate the start; pace only applies to rolling
+// windows up to 7 days whose duration is authoritative.
+const MAX_ROLLING_WINDOW_MINUTES = 10080
+
 // Windows only report their end (`resetsAt`); the start is derived from the
 // fixed duration. Pace is undefined when the reset is unknown, already passed
 // (stale snapshot), or further away than one window length — derived
@@ -16,7 +21,10 @@ export function getRateLimitWindowPace(
   w: RateLimitWindow,
   now: number
 ): RateLimitWindowPace | null {
-  if (typeof w.resetsAt !== 'number' || !Number.isFinite(w.resetsAt) || w.windowMinutes <= 0) {
+  if (typeof w.resetsAt !== 'number' || !Number.isFinite(w.resetsAt)) {
+    return null
+  }
+  if (w.windowMinutes <= 0 || w.windowMinutes > MAX_ROLLING_WINDOW_MINUTES) {
     return null
   }
   const durationMs = w.windowMinutes * 60_000
