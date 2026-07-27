@@ -35,7 +35,8 @@ import {
   adfToMarkdownText,
   collectAdfMediaAttrs,
   textToAdf,
-  type AdfToMarkdownOptions
+  type AdfToMarkdownOptions,
+  type JiraAdfMediaAttrs
 } from './adf-markdown'
 import {
   extractAttachmentContentIdsFromHtml,
@@ -759,7 +760,7 @@ async function collectCommentMediaRequest(
 ): Promise<MediaRequest | undefined> {
   const htmlIds: string[] = []
   const seen = new Set<string>()
-  const mediaAttrs = []
+  const mediaAttrs: JiraAdfMediaAttrs[] = []
   for (const comment of comments) {
     for (const id of extractAttachmentContentIdsFromHtml(asString(comment.renderedBody))) {
       if (!seen.has(id)) {
@@ -773,8 +774,9 @@ async function collectCommentMediaRequest(
   const needingCount = mediaAttrs.filter(
     (attrs) => !(attrs.url && /^https?:\/\//i.test(attrs.url))
   ).length
-  // Why: skip the extra attachment metadata request when no comment media needs it.
-  if (htmlIds.length === 0 && needingCount === 0) {
+  // Why: selectPreferredAttachmentIds yields nothing without attachment-needing media, so
+  // HTML ids alone can never produce a download — skip the extra metadata request entirely.
+  if (needingCount === 0) {
     return undefined
   }
 
