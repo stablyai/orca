@@ -110,6 +110,13 @@ describe('cross-platform path containment', () => {
 
     // Pre-existing over-slice: toLowerCase expands U+0130 to two UTF-16 units.
     expect(relativePathInsideRoot('C:\\İş', 'C:\\İş\\src\\a.ts')).toBe('src/a.ts')
+
+    // Astral characters must not be cut mid-surrogate-pair.
+    expect(relativePathInsideRoot('/repo/🚀app', '/repo/🚀app/src/🎉file.ts')).toBe('src/🎉file.ts')
+
+    // A UNC-shaped candidate under POSIX root '/' used to yield a leading slash,
+    // which is not a relative path.
+    expect(relativePathInsideRoot('/', '//server/share/x')).toBe('server/share/x')
   })
 
   it('resolves POSIX relative paths without using the process cwd', () => {
