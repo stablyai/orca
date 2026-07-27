@@ -44,6 +44,8 @@ type EditorFileTabContextMenuProps = {
   isPinned: boolean
   isRenaming: boolean
   hasTabsToRight: boolean
+  hasTabsToLeft: boolean
+  tabCount: number
   canRename: boolean
   canShowMarkdownPreview: boolean
   resolvedLanguage: string
@@ -54,8 +56,10 @@ type EditorFileTabContextMenuProps = {
   onOpenRenameInput: () => void
   onTogglePin: () => void
   onClose: () => void
+  onCloseOthers: () => void
   onCloseAll: () => void
   onCloseToRight: () => void
+  onCloseToLeft: () => void
   onOpenMarkdownPreview: (
     file: {
       filePath: string
@@ -77,6 +81,8 @@ export function EditorFileTabContextMenu({
   isPinned,
   isRenaming,
   hasTabsToRight,
+  hasTabsToLeft,
+  tabCount,
   canRename,
   canShowMarkdownPreview,
   resolvedLanguage,
@@ -87,8 +93,10 @@ export function EditorFileTabContextMenu({
   onOpenRenameInput,
   onTogglePin,
   onClose,
+  onCloseOthers,
   onCloseAll,
   onCloseToRight,
+  onCloseToLeft,
   onOpenMarkdownPreview
 }: EditorFileTabContextMenuProps): React.JSX.Element {
   const renameShortcut = useOptionalShortcutLabel('tab.rename')
@@ -147,6 +155,9 @@ export function EditorFileTabContextMenu({
           {translate('auto.components.tab.bar.EditorFileTabContextMenu.1ba8492c5b', 'Close')}
           {closeShortcut ? <DropdownMenuShortcut>{closeShortcut}</DropdownMenuShortcut> : null}
         </DropdownMenuItem>
+        <DropdownMenuItem onSelect={onCloseOthers} disabled={tabCount <= 1}>
+          {translate('components.tab.bar.EditorFileTabContextMenu.closeOthers', 'Close Others')}
+        </DropdownMenuItem>
         <DropdownMenuItem onSelect={onCloseAll}>
           <ListX className="size-3.5" />
           {translate(
@@ -162,6 +173,12 @@ export function EditorFileTabContextMenu({
           {translate(
             'auto.components.tab.bar.EditorFileTabContextMenu.e5ff31ccaf',
             'Close Tabs To The Right'
+          )}
+        </DropdownMenuItem>
+        <DropdownMenuItem onSelect={onCloseToLeft} disabled={!hasTabsToLeft}>
+          {translate(
+            'components.tab.bar.EditorFileTabContextMenu.closeTabsToLeft',
+            'Close Tabs To The Left'
           )}
         </DropdownMenuItem>
         <DropdownMenuSeparator />

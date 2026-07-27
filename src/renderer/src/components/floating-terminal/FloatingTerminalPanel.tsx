@@ -805,8 +805,8 @@ export function FloatingTerminalPanel({
     [activeGroup, closeFloatingItems]
   )
 
-  const closeToRight = useCallback(
-    (visibleId: string) => {
+  const closeToSide = useCallback(
+    (visibleId: string, side: 'left' | 'right') => {
       const state = useAppStore.getState()
       const currentGroup = activeGroup
         ? state.groupsByWorktree[FLOATING_TERMINAL_WORKTREE_ID]?.find(
@@ -826,15 +826,29 @@ export function FloatingTerminalPanel({
       if (index === -1) {
         return
       }
+      const sideIds =
+        side === 'right'
+          ? currentGroup.tabOrder.slice(index + 1)
+          : currentGroup.tabOrder.slice(0, index)
       const tabById = new Map(currentGroupTabs.map((tab) => [tab.id, tab]))
       closeFloatingItems(
-        currentGroup.tabOrder.slice(index + 1).filter((tabId) => {
+        sideIds.filter((tabId) => {
           const tab = tabById.get(tabId)
           return tab ? !tab.isPinned : false
         })
       )
     },
     [activeGroup, closeFloatingItems]
+  )
+
+  const closeToRight = useCallback(
+    (visibleId: string) => closeToSide(visibleId, 'right'),
+    [closeToSide]
+  )
+
+  const closeToLeft = useCallback(
+    (visibleId: string) => closeToSide(visibleId, 'left'),
+    [closeToSide]
   )
 
   const closeAllFiles = useCallback(() => {
@@ -1453,8 +1467,9 @@ export function FloatingTerminalPanel({
   }, [])
 
   return (
-    // Why: root notification cards use z-40; keep the floating workspace below
-    // them so alerts are never hidden behind an open terminal panel.
+    // Why: sit above the z-40 notification cards so the floating workspace is
+    // never buried behind them, but stay under the z-50 modal layer so its own
+    // orchestration/save dialogs (and every app modal) still open above it.
     // Drop shadow on the outer shell, border on an inner shell — mixing both on
     // one rounded node made corners look stubby. Floating tabs skip their top
     // border so the titlebar curve stays clean.
@@ -1463,7 +1478,7 @@ export function FloatingTerminalPanel({
       data-floating-terminal-panel
       aria-hidden={!open}
       tabIndex={-1}
-      className={`fixed z-30 flex min-h-[280px] min-w-[420px] rounded-lg bg-transparent text-card-foreground shadow-[0_4px_12px_rgba(0,0,0,0.16),0_24px_64px_rgba(0,0,0,0.32)] outline-none dark:shadow-[0_8px_20px_rgba(0,0,0,0.35),0_28px_72px_rgba(0,0,0,0.58)] ${open ? 'opacity-100' : 'invisible pointer-events-none opacity-0'}`}
+      className={`fixed z-[45] flex min-h-[280px] min-w-[420px] rounded-lg bg-transparent text-card-foreground shadow-[0_4px_12px_rgba(0,0,0,0.16),0_24px_64px_rgba(0,0,0,0.32)] outline-none dark:shadow-[0_8px_20px_rgba(0,0,0,0.35),0_28px_72px_rgba(0,0,0,0.58)] ${open ? 'opacity-100' : 'invisible pointer-events-none opacity-0'}`}
       style={{
         visibility: open ? 'visible' : 'hidden',
         left: bounds.left,
@@ -1508,6 +1523,7 @@ export function FloatingTerminalPanel({
               onClose={closeFloatingItem}
               onCloseOthers={closeOthers}
               onCloseToRight={closeToRight}
+              onCloseToLeft={closeToLeft}
               onNewTerminalTab={() => createFloatingTerminalTab()}
               onNewTerminalWithShell={createFloatingTerminalTab}
               onNewBrowserTab={createFloatingBrowserTab}

@@ -1,5 +1,7 @@
 import { execFile, execFileSync } from 'node:child_process'
-import { parseWslUncPath } from '../shared/wsl-paths'
+import { parseWslUncPath, toWindowsWslPath } from '../shared/wsl-paths'
+
+export { toWindowsWslPath } from '../shared/wsl-paths'
 
 export type WslPathInfo = {
   distro: string
@@ -87,26 +89,6 @@ export function toLinuxPath(windowsPath: string): string {
   const driveLetter = driveMatch[1].toLowerCase()
   const rest = driveMatch[2].replace(/\\/g, '/')
   return `/mnt/${driveLetter}/${rest}`
-}
-
-/**
- * Convert a Linux path inside a WSL distro to a Windows path.
- *
- * Why two forms: paths under /mnt/<drive>/... are Windows-native filesystem
- * paths that WSL exposes via the DrvFs mount. These map back to their native
- * Windows form (e.g. /mnt/c/Users → C:\Users). All other paths live on the
- * WSL virtual filesystem and use the UNC form (\\wsl.localhost\Distro\...).
- */
-export function toWindowsWslPath(linuxPath: string, distro: string): string {
-  // /mnt/c/Users/... → C:\Users\...
-  const mntMatch = linuxPath.match(/^\/mnt\/([a-z])(\/.*)?$/)
-  if (mntMatch) {
-    const driveLetter = mntMatch[1].toUpperCase()
-    const rest = (mntMatch[2] || '').replace(/\//g, '\\')
-    return `${driveLetter}:${rest || '\\'}`
-  }
-
-  return `\\\\wsl.localhost\\${distro}${linuxPath.replace(/\//g, '\\')}`
 }
 
 // ─── WSL home directory resolution ──────────────────────────────────

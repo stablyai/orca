@@ -366,7 +366,7 @@ describe('startParkedTerminalByteWatcher', () => {
       expect.objectContaining({
         url: 'https://github.com/orca-dev/orca/pull/421',
         number: 421,
-        slug: { owner: 'orca-dev', repo: 'orca' }
+        slug: { owner: 'orca-dev', repo: 'orca', host: 'github.com' }
       })
     )
     dispose()

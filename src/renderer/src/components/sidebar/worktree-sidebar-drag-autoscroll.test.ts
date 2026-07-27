@@ -21,7 +21,8 @@ const SESSION: WorktreeSidebarDragSession = {
   draggedIds: ['b'],
   reorderDraggedIds: ['b'],
   reorderUnitDraggedIds: ['b'],
-  rects: [{ worktreeId: 'b', groupIndex: 1, top: 48, bottom: 88 }]
+  rects: [{ worktreeId: 'b', groupIndex: 1, top: 48, bottom: 88 }],
+  liveRects: [{ worktreeId: 'b', groupIndex: 1, top: 48, bottom: 88 }]
 }
 
 describe('getWorktreeSidebarDragAutoscroll', () => {
@@ -158,7 +159,8 @@ describe('refreshWorktreeSidebarDragSession', () => {
         ],
         rects
       })
-    ).toEqual({ ...SESSION, rects })
+      // Why: the row set changed ('a' mounted), so the fresh measurement is adopted.
+    ).toEqual({ ...SESSION, rects, liveRects: rects })
   })
 
   it('clears when the source group is missing', () => {
@@ -199,7 +201,7 @@ describe('refreshWorktreeSidebarDragSession', () => {
         unitGroups: [{ key: 'repo:one', worktreeIds: ['a', 'b'], units: [] }],
         rects: []
       })
-    ).toEqual({ ...SESSION, rects: [] })
+    ).toEqual({ ...SESSION, rects: [], liveRects: [] })
   })
 
   it('keeps child-card reorder drags even when the child is not a top-level unit', () => {
@@ -232,7 +234,7 @@ describe('refreshWorktreeSidebarDragSession', () => {
         ],
         rects
       })
-    ).toEqual({ ...childSession, rects })
+    ).toEqual({ ...childSession, rects, liveRects: rects })
   })
 })
 

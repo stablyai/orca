@@ -99,11 +99,84 @@ describe('terminal-fit-restore', () => {
     await expect(restoreTerminalFitToDesktop('pty-local', undefined)).resolves.toBe(false)
   })
 
+  it('fails a local restore whose invoke never resolves instead of hanging', async () => {
+    vi.useFakeTimers()
+    try {
+      vi.mocked(getRemoteRuntimeTerminalHandle).mockReturnValue(null)
+      // Why: models a wedged runtime/daemon after system sleep (#9447) — the
+      // IPC invoke stays pending forever.
+      restoreTerminalFit.mockReturnValue(new Promise(() => {}))
+
+      let settled: boolean | null = null
+      const pending = restoreTerminalFitToDesktop('pty-local', undefined).then((restored) => {
+        settled = restored
+      })
+      await vi.advanceTimersByTimeAsync(14_999)
+      expect(settled).toBeNull()
+      await vi.advanceTimersByTimeAsync(1)
+      await pending
+      expect(settled).toBe(false)
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('gives restores started later only the remainder of the shared bulk deadline', async () => {
+    vi.useFakeTimers()
+    try {
+      vi.mocked(getRemoteRuntimeTerminalHandle).mockReturnValue(null)
+      restoreTerminalFit.mockImplementation(
+        (ptyId: string) =>
+          new Promise((resolve) => {
+            if (ptyId === 'pty-0') {
+              setTimeout(() => resolve({ restored: false }), 10_000)
+            }
+          })
+      )
+      const ptyIds = Array.from({ length: 100 }, (_, index) => `pty-${index}`)
+
+      const pending = restoreTerminalFitsToDesktop(ptyIds, undefined)
+      expect(restoreTerminalFit).toHaveBeenCalledTimes(8)
+      await vi.advanceTimersByTimeAsync(10_000)
+      expect(restoreTerminalFit).toHaveBeenCalledTimes(9)
+      await vi.advanceTimersByTimeAsync(4_999)
+      let settled = false
+      void pending.then(() => {
+        settled = true
+      })
+      expect(settled).toBe(false)
+      await vi.advanceTimersByTimeAsync(1)
+
+      await expect(pending).resolves.toBe(false)
+      expect(restoreTerminalFit).toHaveBeenCalledTimes(9)
+      expect(vi.getTimerCount()).toBe(0)
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
   it('treats failed remote RPC restore transport as not restored', async () => {
     vi.mocked(getRemoteRuntimeTerminalHandle).mockReturnValue('terminal-fail')
     vi.mocked(getRemoteRuntimePtyEnvironmentId).mockReturnValue('env-fail')
     vi.mocked(callRuntimeRpc).mockRejectedValue(new Error('RPC failed'))
 
     await expect(restoreTerminalFitToDesktop('remote:pty-fail', undefined)).resolves.toBe(false)
+  })
+
+  it('bounds a remote restore even when the RPC client does not enforce its timeout', async () => {
+    vi.useFakeTimers()
+    try {
+      vi.mocked(getRemoteRuntimeTerminalHandle).mockReturnValue('terminal-stuck')
+      vi.mocked(getRemoteRuntimePtyEnvironmentId).mockReturnValue('env-stuck')
+      vi.mocked(callRuntimeRpc).mockReturnValue(new Promise(() => {}))
+
+      const pending = restoreTerminalFitToDesktop('remote:pty-stuck', undefined)
+      await vi.advanceTimersByTimeAsync(15_000)
+
+      await expect(pending).resolves.toBe(false)
+      expect(vi.getTimerCount()).toBe(0)
+    } finally {
+      vi.useRealTimers()
+    }
   })
 })

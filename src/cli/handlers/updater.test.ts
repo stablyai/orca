@@ -1,9 +1,20 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import type { UpdateStatus, UpdateStatusSnapshot, UpdateStatusWaitResult } from '../../shared/types'
+import type {
+  RemoteServerUpdaterSnapshot,
+  RemoteServerUpdaterWaitResult,
+  RemoteServerUpdateSupport
+} from '../../shared/remote-server-update'
+import type { UpdateStatus } from '../../shared/types'
 import type { HandlerContext } from '../dispatch'
 import { RuntimeClientError, type RuntimeRpcSuccess } from '../runtime-client'
 import type { RuntimeClient } from '../runtime-client'
 import { UPDATER_HANDLERS } from './updater'
+
+const AUTOMATIC_SUPPORT: RemoteServerUpdateSupport = {
+  installMode: 'interactive',
+  automatic: true,
+  reason: 'available'
+}
 
 function success<T>(result: T): RuntimeRpcSuccess<T> {
   return {
@@ -14,25 +25,41 @@ function success<T>(result: T): RuntimeRpcSuccess<T> {
   }
 }
 
-function snapshot(status: UpdateStatus, revision = 1): RuntimeRpcSuccess<UpdateStatusSnapshot> {
-  return success({ revision, status })
+function snap(
+  status: UpdateStatus,
+  opts: { revision?: number; support?: RemoteServerUpdateSupport; appVersion?: string } = {}
+): RemoteServerUpdaterSnapshot {
+  return {
+    appVersion: opts.appVersion ?? '1.4.0',
+    runtimeId: 'runtime-1',
+    support: opts.support ?? AUTOMATIC_SUPPORT,
+    status,
+    revision: opts.revision ?? 1
+  }
+}
+
+function snapshot(
+  status: UpdateStatus,
+  opts?: { revision?: number; support?: RemoteServerUpdateSupport; appVersion?: string }
+): RuntimeRpcSuccess<RemoteServerUpdaterSnapshot> {
+  return success(snap(status, opts))
 }
 
 function changedStatus(
   status: UpdateStatus,
   revision = 2
-): RuntimeRpcSuccess<UpdateStatusWaitResult> {
-  return success({ revision, status, timedOut: false })
+): RuntimeRpcSuccess<RemoteServerUpdaterWaitResult> {
+  return success({ ...snap(status, { revision }), timedOut: false })
 }
 
 describe('updater CLI handlers', () => {
-  const getAppVersion = vi.fn()
+  const getUpdateStatus = vi.fn()
   const checkForUpdate = vi.fn()
   const downloadUpdate = vi.fn()
   const waitForUpdateStatus = vi.fn()
   const installUpdate = vi.fn()
   const client = {
-    getAppVersion,
+    getUpdateStatus,
     checkForUpdate,
     downloadUpdate,
     waitForUpdateStatus,
@@ -58,8 +85,17 @@ describe('updater CLI handlers', () => {
     stdoutIsTtyDescriptor = Object.getOwnPropertyDescriptor(process.stdout, 'isTTY')
     process.exitCode = undefined
     log = vi.spyOn(console, 'log').mockImplementation(() => {})
-    getAppVersion.mockResolvedValue(success({ version: '1.4.0' }))
-    installUpdate.mockResolvedValue(success({ ok: true }))
+    // Why: `orca update` reads the snapshot first to gate on install support, so a
+    // permissive automatic snapshot is the default for the happy-path tests.
+    getUpdateStatus.mockResolvedValue(snapshot({ state: 'idle' }))
+    installUpdate.mockResolvedValue(
+      success({
+        accepted: true as const,
+        fromVersion: '1.4.0',
+        targetVersion: '1.5.0',
+        runtimeId: 'runtime-1'
+      })
+    )
   })
 
   afterEach(() => {
@@ -74,6 +110,8 @@ describe('updater CLI handlers', () => {
   })
 
   it('reports the app version as plain text', async () => {
+    getUpdateStatus.mockResolvedValue(snapshot({ state: 'idle' }, { appVersion: '1.4.0' }))
+
     await UPDATER_HANDLERS.version({
       client,
       flags: new Map(),
@@ -81,7 +119,7 @@ describe('updater CLI handlers', () => {
       json: false
     })
 
-    expect(getAppVersion).toHaveBeenCalledOnce()
+    expect(getUpdateStatus).toHaveBeenCalledOnce()
     expect(log).toHaveBeenCalledWith('1.4.0')
   })
 
@@ -180,6 +218,50 @@ describe('updater CLI handlers', () => {
     })
   })
 
+  it('reports manual-update guidance for a headless serve host without checking', async () => {
+    getUpdateStatus.mockResolvedValue(
+      snapshot(
+        { state: 'idle' },
+        {
+          support: {
+            installMode: 'unsupported-headless-serve',
+            automatic: false,
+            reason: 'manual-service-update-required'
+          }
+        }
+      )
+    )
+
+    await invokeUpdate()
+
+    expect(checkForUpdate).not.toHaveBeenCalled()
+    expect(downloadUpdate).not.toHaveBeenCalled()
+    expect(installUpdate).not.toHaveBeenCalled()
+    expect(JSON.parse(String(log.mock.calls.at(-1)?.[0])).result).toMatchObject({
+      operation: 'update',
+      installRequested: false,
+      support: { reason: 'manual-service-update-required' }
+    })
+    expect(process.exitCode).toBeUndefined()
+  })
+
+  it('reports that a development build cannot self-update', async () => {
+    getUpdateStatus.mockResolvedValue(
+      snapshot(
+        { state: 'idle' },
+        { support: { installMode: 'interactive', automatic: false, reason: 'unpackaged-build' } }
+      )
+    )
+
+    await invokeUpdate(new Map([['check', true]]))
+
+    expect(checkForUpdate).not.toHaveBeenCalled()
+    expect(JSON.parse(String(log.mock.calls.at(-1)?.[0])).result).toMatchObject({
+      operation: 'check',
+      support: { reason: 'unpackaged-build' }
+    })
+  })
+
   it('reports that Orca is up to date', async () => {
     checkForUpdate.mockResolvedValue(snapshot({ state: 'not-available' }))
 
@@ -205,7 +287,7 @@ describe('updater CLI handlers', () => {
   })
 
   it('adds actionable recovery when the app is unreachable', async () => {
-    checkForUpdate.mockRejectedValue(
+    getUpdateStatus.mockRejectedValue(
       new RuntimeClientError('runtime_unavailable', 'Could not connect to Orca.')
     )
 
@@ -236,7 +318,7 @@ describe('updater CLI handlers', () => {
       snapshot({ state: 'available', version: '1.5.0', changelog: null })
     )
     downloadUpdate.mockResolvedValue(
-      snapshot({ state: 'downloading', version: '1.5.0', percent: 1 }, 2)
+      snapshot({ state: 'downloading', version: '1.5.0', percent: 1 }, { revision: 2 })
     )
     waitForUpdateStatus
       .mockResolvedValueOnce(
@@ -260,11 +342,9 @@ describe('updater CLI handlers', () => {
       snapshot({ state: 'available', version: '1.5.0', changelog: null })
     )
     downloadUpdate.mockResolvedValue(
-      snapshot({ state: 'downloading', version: '1.5.0', percent: 1 }, 2)
+      snapshot({ state: 'downloading', version: '1.5.0', percent: 1 }, { revision: 2 })
     )
-    waitForUpdateStatus.mockResolvedValue(
-      changedStatus({ state: 'downloaded', version: '1.5.0' }, 3)
-    )
+    waitForUpdateStatus.mockResolvedValue(changedStatus({ state: 'downloaded', version: '1.5.0' }, 3))
 
     await invokeUpdate(new Map(), false)
 
@@ -279,11 +359,9 @@ describe('updater CLI handlers', () => {
       snapshot({ state: 'available', version: '1.5.0', changelog: null })
     )
     downloadUpdate.mockResolvedValue(
-      snapshot({ state: 'downloading', version: '1.5.0', percent: 1 }, 2)
+      snapshot({ state: 'downloading', version: '1.5.0', percent: 1 }, { revision: 2 })
     )
-    waitForUpdateStatus.mockResolvedValue(
-      changedStatus({ state: 'downloaded', version: '1.5.0' }, 3)
-    )
+    waitForUpdateStatus.mockResolvedValue(changedStatus({ state: 'downloaded', version: '1.5.0' }, 3))
 
     await invokeUpdate()
 

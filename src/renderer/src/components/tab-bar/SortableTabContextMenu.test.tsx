@@ -110,12 +110,14 @@ function renderMenu(overrides: Partial<ComponentProps<typeof SortableTabContextM
         point={{ x: 0, y: 0 }}
         tabCount={2}
         hasTabsToRight
+        hasTabsToLeft
         isPinned={false}
         onOpenChange={vi.fn()}
         onActivate={onActivate}
         onClose={vi.fn()}
         onCloseOthers={vi.fn()}
         onCloseToRight={vi.fn()}
+        onCloseToLeft={vi.fn()}
         onRenameOpen={vi.fn()}
         onSetTabColor={vi.fn()}
         onTogglePin={vi.fn()}
@@ -235,6 +237,29 @@ describe('SortableTabContextMenu', () => {
       groupId: 'group-1',
       splitDirection: 'right'
     })
+  })
+
+  it('routes the directional close actions to their handlers with the tab id', () => {
+    const onCloseOthers = vi.fn()
+    const onCloseToRight = vi.fn()
+    const onCloseToLeft = vi.fn()
+    const { container } = renderMenu({ onCloseOthers, onCloseToRight, onCloseToLeft })
+
+    act(() => getButton(container, 'Close Others').click())
+    expect(onCloseOthers).toHaveBeenCalledWith('term-1')
+
+    act(() => getButton(container, 'Close Tabs To The Right').click())
+    expect(onCloseToRight).toHaveBeenCalledWith('term-1')
+
+    act(() => getButton(container, 'Close Tabs To The Left').click())
+    expect(onCloseToLeft).toHaveBeenCalledWith('term-1')
+  })
+
+  it('disables directional closes when no tabs exist on that side', () => {
+    const { container } = renderMenu({ hasTabsToLeft: false, hasTabsToRight: false })
+
+    expect(getButton(container, 'Close Tabs To The Left').disabled).toBe(true)
+    expect(getButton(container, 'Close Tabs To The Right').disabled).toBe(true)
   })
 
   it('hides move-tab split actions for a single-tab group', () => {

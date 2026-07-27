@@ -1,178 +1,83 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { RpcDispatcher } from '../dispatcher'
-import type { RpcRequest } from '../core'
-import type { OrcaRuntimeService } from '../../orca-runtime'
-
-const updaterMocks = vi.hoisted(() => ({
-  checkForUpdatesFromMenu: vi.fn(),
-  downloadUpdate: vi.fn(),
-  getUpdateStatus: vi.fn(),
-  getUpdateStatusSnapshot: vi.fn(),
-  waitForUpdateStatusChange: vi.fn(),
-  quitAndInstall: vi.fn(),
-  getVersion: vi.fn()
-}))
-
-vi.mock('electron', () => ({ app: { getVersion: updaterMocks.getVersion } }))
-vi.mock('../../../updater', () => ({
-  checkForUpdatesFromMenu: updaterMocks.checkForUpdatesFromMenu,
-  downloadUpdate: updaterMocks.downloadUpdate,
-  getUpdateStatus: updaterMocks.getUpdateStatus,
-  getUpdateStatusSnapshot: updaterMocks.getUpdateStatusSnapshot,
-  waitForUpdateStatusChange: updaterMocks.waitForUpdateStatusChange,
-  quitAndInstall: updaterMocks.quitAndInstall
-}))
-
+import { configureRemoteServerUpdater } from '../../remote-server-updater'
+import { STATUS_METHODS } from './status'
 import { UPDATER_METHODS } from './updater'
 
-function makeRequest(method: string, params?: unknown): RpcRequest {
-  return { id: 'req-1', authToken: 'tok', method, params }
+const snapshot = {
+  appVersion: '1.5.0',
+  runtimeId: 'runtime-rpc',
+  support: { installMode: 'interactive', automatic: true, reason: 'available' },
+  status: { state: 'available', version: '1.5.1', changelog: null },
+  revision: 2
+} as const
+
+function handler(methods: typeof UPDATER_METHODS, name: string) {
+  const method = methods.find((candidate) => candidate.name === name)
+  if (!method) {
+    throw new Error(`Missing method ${name}`)
+  }
+  return method.handler
 }
 
-function makeDispatcher(): RpcDispatcher {
-  const runtime = { getRuntimeId: () => 'test-runtime' } as unknown as OrcaRuntimeService
-  return new RpcDispatcher({ runtime, methods: UPDATER_METHODS })
-}
+describe('runtime updater RPC methods', () => {
+  const getSnapshot = vi.fn(() => snapshot)
+  const wait = vi.fn(async () => ({ ...snapshot, timedOut: false }))
+  const check = vi.fn(() => snapshot)
+  const download = vi.fn(() => snapshot)
+  const install = vi.fn(() => ({
+    accepted: true as const,
+    fromVersion: '1.5.0',
+    targetVersion: '1.5.1',
+    runtimeId: 'runtime-rpc'
+  }))
+  const runtime = {
+    getRuntimeId: () => 'runtime-rpc',
+    getStatus: () => ({ runtimeId: 'runtime-rpc', liveTabCount: 2, liveLeafCount: 3 })
+  }
 
-describe('updater RPC methods', () => {
   beforeEach(() => {
     vi.clearAllMocks()
-    updaterMocks.getVersion.mockReturnValue('1.2.3')
-    updaterMocks.getUpdateStatus.mockReturnValue({ state: 'idle' })
-    updaterMocks.getUpdateStatusSnapshot.mockReturnValue({
-      revision: 1,
-      status: { state: 'idle' }
+    configureRemoteServerUpdater({ getSnapshot, wait, check, download, install })
+  })
+
+  it('exposes status and each update transition', async () => {
+    const context = { runtime } as never
+    expect(await handler(UPDATER_METHODS, 'updater.getStatus')(undefined, context)).toBe(snapshot)
+    expect(
+      await handler(UPDATER_METHODS, 'updater.check')(
+        { includePrerelease: false, includePerfPrerelease: true },
+        context
+      )
+    ).toBe(snapshot)
+    expect(await handler(UPDATER_METHODS, 'updater.download')(undefined, context)).toBe(snapshot)
+    expect(await handler(UPDATER_METHODS, 'updater.install')(undefined, context)).toMatchObject({
+      accepted: true,
+      runtimeId: 'runtime-rpc'
     })
-    updaterMocks.waitForUpdateStatusChange.mockResolvedValue({
-      revision: 1,
-      status: { state: 'idle' },
-      timedOut: true
+    expect(check).toHaveBeenCalledWith('runtime-rpc', {
+      includePrerelease: false,
+      includePerfPrerelease: true
     })
   })
 
-  it('reports the app version', async () => {
-    const response = await makeDispatcher().dispatch(makeRequest('updater.getVersion'))
-
-    expect(response).toMatchObject({ ok: true, result: { version: '1.2.3' } })
-  })
-
-  it('returns the current updater status', async () => {
-    updaterMocks.getUpdateStatusSnapshot.mockReturnValue({
-      revision: 2,
-      status: { state: 'downloading', percent: 42, version: '2' }
-    })
-
-    const response = await makeDispatcher().dispatch(makeRequest('updater.getStatus'))
-
-    expect(response).toMatchObject({
-      ok: true,
-      result: {
-        revision: 2,
-        status: { state: 'downloading', percent: 42, version: '2' }
-      }
-    })
-  })
-
-  it('waits for a status revision with the request abort signal', async () => {
-    const controller = new AbortController()
-    const response = await makeDispatcher().dispatch(
-      makeRequest('updater.wait', { afterRevision: 1, timeoutMs: 25_000 }),
-      { signal: controller.signal }
+  it('long-polls for the next status revision, forwarding the abort signal', async () => {
+    const context = { runtime, signal: undefined } as never
+    const result = await handler(UPDATER_METHODS, 'updater.wait')(
+      { afterRevision: 2, timeoutMs: 25_000 },
+      context
     )
-
-    expect(updaterMocks.waitForUpdateStatusChange).toHaveBeenCalledWith(
-      1,
-      25_000,
-      controller.signal
-    )
-    expect(response).toMatchObject({ ok: true, result: { timedOut: true } })
+    expect(result).toMatchObject({ timedOut: false, revision: 2 })
+    expect(wait).toHaveBeenCalledWith('runtime-rpc', 2, 25_000, undefined)
   })
 
-  it('starts a prerelease check and returns its immediate status', async () => {
-    updaterMocks.getUpdateStatusSnapshot
-      .mockReturnValueOnce({ revision: 1, status: { state: 'idle' } })
-      .mockReturnValueOnce({
-        revision: 2,
-        status: { state: 'checking', userInitiated: true }
-      })
-
-    const response = await makeDispatcher().dispatch(
-      makeRequest('updater.check', { includePrerelease: true })
-    )
-
-    expect(updaterMocks.checkForUpdatesFromMenu).toHaveBeenCalledWith({
-      includePrerelease: true
+  it('enriches status.get without changing the runtime status source', async () => {
+    const result = await handler(STATUS_METHODS, 'status.get')(undefined, { runtime } as never)
+    expect(result).toEqual({
+      runtimeId: 'runtime-rpc',
+      liveTabCount: 2,
+      liveLeafCount: 3,
+      appVersion: '1.5.0',
+      remoteUpdateSupport: snapshot.support
     })
-    expect(response).toMatchObject({
-      ok: true,
-      result: { revision: 2, status: { state: 'checking' } }
-    })
-  })
-
-  it.each(['downloading', 'downloaded'] as const)(
-    'does not replace an existing %s state with a new check',
-    async (state) => {
-      const status =
-        state === 'downloading'
-          ? { state, percent: 42, version: '2.0.0' }
-          : { state, version: '2.0.0' }
-      updaterMocks.getUpdateStatusSnapshot.mockReturnValue({ revision: 3, status })
-
-      const response = await makeDispatcher().dispatch(makeRequest('updater.check', {}))
-
-      expect(updaterMocks.checkForUpdatesFromMenu).not.toHaveBeenCalled()
-      expect(response).toMatchObject({ ok: true, result: { revision: 3, status } })
-    }
-  )
-
-  it('accepts an omitted check options object and rejects invalid params', async () => {
-    const dispatcher = makeDispatcher()
-
-    await dispatcher.dispatch(makeRequest('updater.check'))
-    const invalidResponse = await dispatcher.dispatch(
-      makeRequest('updater.check', { includePrerelease: 'yes' })
-    )
-
-    expect(updaterMocks.checkForUpdatesFromMenu).toHaveBeenCalledWith({})
-    expect(invalidResponse).toMatchObject({
-      ok: false,
-      error: { code: 'invalid_argument' }
-    })
-  })
-
-  it('starts a download and returns the resulting status', async () => {
-    updaterMocks.getUpdateStatusSnapshot.mockReturnValue({
-      revision: 2,
-      status: { state: 'downloading', percent: 0, version: '2.0.0' }
-    })
-
-    const response = await makeDispatcher().dispatch(makeRequest('updater.download'))
-
-    expect(updaterMocks.downloadUpdate).toHaveBeenCalledOnce()
-    expect(response).toMatchObject({
-      ok: true,
-      result: { revision: 2, status: { state: 'downloading' } }
-    })
-  })
-
-  it('requests installation', async () => {
-    updaterMocks.getUpdateStatus.mockReturnValue({ state: 'downloaded', version: '2.0.0' })
-    const response = await makeDispatcher().dispatch(makeRequest('updater.install'))
-
-    expect(updaterMocks.quitAndInstall).toHaveBeenCalledOnce()
-    expect(response).toMatchObject({ ok: true, result: { ok: true } })
-  })
-
-  it('rejects installation before the update is downloaded', async () => {
-    updaterMocks.getUpdateStatus.mockReturnValue({
-      state: 'downloading',
-      percent: 80,
-      version: '2.0.0'
-    })
-
-    const response = await makeDispatcher().dispatch(makeRequest('updater.install'))
-
-    expect(updaterMocks.quitAndInstall).not.toHaveBeenCalled()
-    expect(response).toMatchObject({ ok: false, error: { code: 'invalid_argument' } })
   })
 })

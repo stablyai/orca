@@ -1,4 +1,4 @@
-import { useEffect, useId, useMemo, useRef, useState } from 'react'
+import { useEffect, useId, useMemo, useRef } from 'react'
 import { useShallow } from 'zustand/react/shallow'
 import { RefreshCw } from 'lucide-react'
 import { Button } from '@/components/ui/button'
@@ -6,11 +6,7 @@ import { useAppStore } from '../store'
 import { selectCodexRestartInputs } from './codex-restart-chip-inputs'
 import { translate } from '@/i18n/i18n'
 import { shouldFocusMobileDriverAction } from './terminal-pane/mobile-driver-overlay-focus'
-import {
-  buildCodexRestartNoticeKey,
-  createCodexRestartOverlayCollapseState,
-  getCodexRestartOverlayCollapseState
-} from './codex-restart-overlay-collapse'
+import { buildCodexRestartNoticeKey } from './codex-restart-notice-key'
 
 const EMPTY_TABS: { id: string }[] = []
 
@@ -99,16 +95,6 @@ export default function CodexRestartChip({
   const clearCodexRestartNotice = useAppStore((s) => s.clearCodexRestartNotice)
 
   const noticeKey = restartNotice ? buildCodexRestartNoticeKey(restartNotice) : null
-  const [collapseState, setCollapseState] = useState(() =>
-    createCodexRestartOverlayCollapseState(noticeKey)
-  )
-
-  const currentCollapseState = getCodexRestartOverlayCollapseState(collapseState, noticeKey)
-  useEffect(() => {
-    // Why: a new account switch must reopen loud mode without updating state
-    // during render, which can trip React's external-store snapshot guard.
-    setCollapseState((state) => getCodexRestartOverlayCollapseState(state, noticeKey))
-  }, [noticeKey])
 
   if (staleWorktreePtyIds.length === 0 || !restartNotice) {
     return null
@@ -122,22 +108,11 @@ export default function CodexRestartChip({
     dismissStaleWorktreePtyIds(staleWorktreePtyIds, clearCodexRestartNotice)
   }
 
-  if (currentCollapseState.collapsed) {
-    return (
-      <CollapsedRestartChip
-        restartNotice={restartNotice}
-        onExpand={() => setCollapseState(createCodexRestartOverlayCollapseState(noticeKey))}
-        onRestart={handleRestart}
-      />
-    )
-  }
-
   return (
     <LoudRestartOverlay
       isVisible={isVisible}
       noticeKey={noticeKey}
       restartNotice={restartNotice}
-      onCollapse={() => setCollapseState({ noticeKey, collapsed: true })}
       onDismiss={handleDismiss}
       onRestart={handleRestart}
     />
@@ -148,14 +123,12 @@ function LoudRestartOverlay({
   isVisible,
   noticeKey,
   restartNotice,
-  onCollapse,
   onDismiss,
   onRestart
 }: {
   isVisible: boolean
   noticeKey: string | null
   restartNotice: RestartNotice
-  onCollapse: () => void
   onDismiss: () => void
   onRestart: () => void
 }): React.JSX.Element {
@@ -218,53 +191,12 @@ function LoudRestartOverlay({
           <Button type="button" variant="outline" size="sm" onClick={onDismiss}>
             {translate('auto.components.CodexRestartChip.6133594b12', 'Keep old account')}
           </Button>
-          <Button type="button" variant="outline" size="sm" onClick={onCollapse}>
-            {translate('auto.components.CodexRestartChip.b9000fe511', 'Not now')}
-          </Button>
           <Button ref={restartRef} type="button" variant="default" size="sm" onClick={onRestart}>
             <RefreshCw />
             {translate('auto.components.CodexRestartChip.c72a5fb234', 'Restart')}
           </Button>
         </div>
       </div>
-    </div>
-  )
-}
-
-function CollapsedRestartChip({
-  restartNotice,
-  onExpand,
-  onRestart
-}: {
-  restartNotice: RestartNotice
-  onExpand: () => void
-  onRestart: () => void
-}): React.JSX.Element {
-  return (
-    <div
-      className="absolute right-2 top-2 z-50 flex max-w-[min(100%-1rem,24rem)] items-center gap-1.5 rounded-full border border-border bg-card px-2 py-1 text-xs font-medium text-card-foreground shadow-xs"
-      role="status"
-      aria-live="polite"
-    >
-      <RefreshCw className="size-3 shrink-0 text-foreground" aria-hidden="true" />
-      <Button
-        type="button"
-        variant="ghost"
-        size="xs"
-        className="min-w-0 max-w-[10rem] px-1 font-medium"
-        onClick={onExpand}
-      >
-        <span className="truncate">
-          {translate(
-            'auto.components.CodexRestartChip.a4c8e1b2f7',
-            'Codex is still signed in as {{value0}}',
-            { value0: restartNotice.previousAccountLabel }
-          )}
-        </span>
-      </Button>
-      <Button type="button" variant="default" size="xs" onClick={onRestart}>
-        {translate('auto.components.CodexRestartChip.c72a5fb234', 'Restart')}
-      </Button>
     </div>
   )
 }

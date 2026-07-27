@@ -353,26 +353,31 @@ export function seedLegacyTabSwitchBindings(
     return { seeded: false, snapshot: current }
   }
 
-  // Why: never freeze the one-shot after dropping a pin — a normalization
-  // failure must throw so the cohort stays pending and a fixed build retries.
-  const pins = toSeed.map((actionId) => {
+  // Why: seed every pin that normalizes, but never freeze the one-shot if any
+  // pin was dropped — throw after writing good pins so the cohort stays pending
+  // and a fixed build retries the failed action without wiping the others.
+  const pins: (readonly [KeybindingActionId, string[]])[] = []
+  const failedActionIds: KeybindingActionId[] = []
+  for (const actionId of toSeed) {
     const normalized = normalizeKeybindingArrayForAction(actionId, legacyBindings[actionId] ?? [])
     if (!Array.isArray(normalized)) {
-      throw new Error(`Could not normalize legacy binding for "${actionId}".`)
+      failedActionIds.push(actionId)
+      continue
     }
-    return [actionId, normalized] as const
-  })
-  const snapshot = writeActivePlatformSection(
-    path,
-    platform,
-    current.commonOverrides,
-    (activePlatform) => {
-      for (const [actionId, normalized] of pins) {
-        activePlatform[actionId] = normalized
-      }
-    }
-  )
-  return { seeded: true, snapshot }
+    pins.push([actionId, normalized])
+  }
+  const snapshot =
+    pins.length > 0
+      ? writeActivePlatformSection(path, platform, current.commonOverrides, (activePlatform) => {
+          for (const [actionId, normalized] of pins) {
+            activePlatform[actionId] = normalized
+          }
+        })
+      : current
+  if (failedActionIds.length > 0) {
+    throw new Error(`Could not normalize legacy binding for "${failedActionIds.join('", "')}".`)
+  }
+  return { seeded: pins.length > 0, snapshot }
 }
 
 // Why: the one-shot seed migration and Settings writes must produce the same

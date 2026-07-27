@@ -112,16 +112,29 @@ const JSON_INSTALLERS = [
 ] as const
 
 const MANAGED_HOOKS_DIR_NEEDLE = '/.orca/agent-hooks/'
+// Why: statusLine is not a hook — Claude's schema has no timeout field (type/command/padding/refreshInterval), and a slow statusline can't block agent turns.
+const STATUSLINE_SCRIPT_NEEDLE = '-statusline.'
 
 // Walk the parsed config and assert every Orca-managed command carrier (a node
 // with a `command`/`bash`/`powershell` string pointing at the managed script
 // dir) has a positive config-level timeout sibling (`timeout` or the
 // provider-specific `timeoutSec`). Returns the count of managed carriers found
 // so callers can assert the scan was not vacuous.
-function countManagedCarriersWithTimeout(node: unknown, expectedTimeout: number): number {
+function countManagedCarriersWithTimeout(
+  node: unknown,
+  expectedTimeout: number,
+  isManagedCarrier = (value: string): boolean => {
+    const normalized = value.replaceAll('\\', '/')
+    return (
+      normalized.includes(MANAGED_HOOKS_DIR_NEEDLE) &&
+      !normalized.includes(STATUSLINE_SCRIPT_NEEDLE)
+    )
+  }
+): number {
   if (Array.isArray(node)) {
     return node.reduce<number>(
-      (sum, child) => sum + countManagedCarriersWithTimeout(child, expectedTimeout),
+      (sum, child) =>
+        sum + countManagedCarriersWithTimeout(child, expectedTimeout, isManagedCarrier),
       0
     )
   }
@@ -131,8 +144,7 @@ function countManagedCarriersWithTimeout(node: unknown, expectedTimeout: number)
   const record = node as Record<string, unknown>
   let found = 0
   const carrier = [record.command, record.bash, record.powershell].find(
-    (value): value is string =>
-      typeof value === 'string' && value.includes(MANAGED_HOOKS_DIR_NEEDLE)
+    (value): value is string => typeof value === 'string' && isManagedCarrier(value)
   )
   if (carrier !== undefined) {
     const timeout = typeof record.timeout === 'number' ? record.timeout : record.timeoutSec
@@ -143,7 +155,7 @@ function countManagedCarriersWithTimeout(node: unknown, expectedTimeout: number)
     found += 1
   }
   for (const value of Object.values(record)) {
-    found += countManagedCarriersWithTimeout(value, expectedTimeout)
+    found += countManagedCarriersWithTimeout(value, expectedTimeout, isManagedCarrier)
   }
   return found
 }
@@ -182,7 +194,13 @@ describe('managed agent hook timeouts', () => {
       const status = new DroidHookService().install()
       expect(status.state).toBe('installed')
       const config = JSON.parse(readFileSync(join(homeDir, '.factory', 'settings.json'), 'utf8'))
-      const carriers = countManagedCarriersWithTimeout(config, MANAGED_HOOK_TIMEOUT_SECONDS)
+      const carriers = countManagedCarriersWithTimeout(
+        config,
+        MANAGED_HOOK_TIMEOUT_SECONDS,
+        (command) =>
+          command.replaceAll('\\', '/').includes(MANAGED_HOOKS_DIR_NEEDLE) ||
+          (process.platform === 'win32' && command.includes('-EncodedCommand'))
+      )
       expect(carriers).toBeGreaterThan(0)
     } finally {
       homedirMock.mockImplementation(() => process.env.HOME ?? tmpdir())

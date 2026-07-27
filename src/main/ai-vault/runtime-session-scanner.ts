@@ -9,6 +9,10 @@ import {
 import { normalizeExecutionHostId, toRuntimeExecutionHostId } from '../../shared/execution-host'
 import { listEnvironments } from '../../shared/runtime-environment-store'
 import { callRuntimeEnvironment } from '../ipc/runtime-environment-transport-routing'
+import type {
+  AiVaultPrepareSessionResumeArgs,
+  AiVaultPrepareSessionResumeResult
+} from '../../shared/ai-vault-resume-preparation'
 
 export type RuntimeAiVaultHostInfo = {
   environmentId: string
@@ -71,6 +75,8 @@ const aiVaultListResultSchema = z.object({
       messageCount: z.number(),
       totalTokens: z.number(),
       previewMessages: z.array(aiVaultSessionPreviewMessageSchema),
+      // Optional keeps paired hosts on older builds compatible.
+      lastUserPrompt: z.string().nullable().optional(),
       // Default keeps remote hosts running an older build (no recoverable-signal
       // fields) parseable; they simply report no recoverable-empty sessions.
       queuedMessageCount: z.number().default(0),
@@ -98,6 +104,8 @@ const aiVaultListResultSchema = z.object({
   ),
   scannedAt: z.string()
 })
+
+const aiVaultPrepareSessionResumeResultSchema = z.object({ useRealCodexHome: z.boolean() })
 
 export function getSavedRuntimeAiVaultHostInfos(
   userDataPath: string
@@ -149,6 +157,29 @@ export async function scanRuntimeAiVaultSessions(
     environmentId,
     message: response.error.message
   })
+}
+
+export async function prepareRuntimeAiVaultSessionResume(
+  userDataPath: string,
+  environmentId: string,
+  args: AiVaultPrepareSessionResumeArgs
+): Promise<AiVaultPrepareSessionResumeResult> {
+  const response = await callRuntimeEnvironment(
+    userDataPath,
+    environmentId,
+    'aiVault.prepareSessionResume',
+    args
+  )
+  if (response.ok !== true) {
+    throw new Error(response.error.message)
+  }
+  const parsed = aiVaultPrepareSessionResumeResultSchema.safeParse(response.result)
+  if (!parsed.success) {
+    throw new Error(
+      `Invalid aiVault.prepareSessionResume response: ${parsed.error.issues[0]?.message ?? 'unexpected result shape'}`
+    )
+  }
+  return parsed.data
 }
 
 function withRuntimeExecutionHost(

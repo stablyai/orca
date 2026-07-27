@@ -81,6 +81,7 @@ describe('Codex backend rate-limit requests', () => {
         availableCount: 1,
         nextExpiresAt: Date.parse('2027-01-15T12:00:00Z')
       },
+      planType: 'plus',
       status: 'ok'
     })
 

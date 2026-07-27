@@ -2,9 +2,22 @@ import { mkdtemp, mkdir, rm, writeFile } from 'node:fs/promises'
 import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { afterEach, describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import { scanAiVaultSessions } from './session-scanner'
 import Database from '../sqlite/sync-database'
+
+// Why: this source-level integration suite has no built worker entry. Keep its
+// SQLite fixtures inline explicitly; production fails closed if the bundle is absent.
+vi.mock('./session-scanner-opencode-sqlite-worker-spawn', async () => {
+  const [{ listOpenCodeSqliteSessions }, { parseOpenCodeSqliteSession }] = await Promise.all([
+    import('./session-scanner-opencode-sqlite-list'),
+    import('./session-scanner-opencode-sqlite')
+  ])
+  return {
+    listOpenCodeSqliteSessionsViaWorker: listOpenCodeSqliteSessions,
+    parseOpenCodeSqliteSessionViaWorker: parseOpenCodeSqliteSession
+  }
+})
 
 let tempRoots: string[] = []
 let tempDbDirs: string[] = []

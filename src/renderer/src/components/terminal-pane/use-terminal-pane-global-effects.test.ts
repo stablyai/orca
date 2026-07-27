@@ -30,7 +30,8 @@ const mocks = vi.hoisted(() => ({
 
 const reactRefState = vi.hoisted(() => ({
   slots: [] as { current: unknown }[],
-  index: 0
+  index: 0,
+  effectPhase: null as 'layout' | 'passive' | null
 }))
 
 function beginHookRender(): void {
@@ -48,7 +49,21 @@ vi.mock('react', async (importOriginal) => {
     ...actual,
     useCallback: <T extends (...args: never[]) => unknown>(callback: T) => callback,
     useEffect: (effect: () => void | (() => void)) => {
-      effect()
+      reactRefState.effectPhase = 'passive'
+      try {
+        effect()
+      } finally {
+        reactRefState.effectPhase = null
+      }
+    },
+    // macOS visibility suspend/resume runs here before reveal paint.
+    useLayoutEffect: (effect: () => void | (() => void)) => {
+      reactRefState.effectPhase = 'layout'
+      try {
+        effect()
+      } finally {
+        reactRefState.effectPhase = null
+      }
     },
     useRef: <T>(value: T) => {
       const index = reactRefState.index
@@ -141,7 +156,8 @@ function useMountForFileDrop(
     isWorktreeActive?: boolean
     isSyncFitEnabled?: boolean
     paneCount?: number
-  } = {}
+  } = {},
+  useGlobalEffects: typeof useTerminalPaneGlobalEffects = useTerminalPaneGlobalEffects
 ): {
   onFileDrop: DropCallback
   manager: {
@@ -152,8 +168,10 @@ function useMountForFileDrop(
     scheduleRevealPresent: ReturnType<typeof vi.fn>
     suspendRendering: ReturnType<typeof vi.fn>
     getActivePane: ReturnType<typeof vi.fn>
+    fitAllRevealedPanes: ReturnType<typeof vi.fn>
   }
   paneTransports: Map<number, never>
+  renderingEffectPhases: ('layout' | 'passive' | null)[]
 } {
   let onFileDrop: DropCallback = () => {
     throw new Error('onFileDrop callback was not registered')
@@ -162,19 +180,21 @@ function useMountForFileDrop(
     onFileDrop = callback
     return vi.fn()
   })
+  const renderingEffectPhases: ('layout' | 'passive' | null)[] = []
   const manager = {
     getPanes: vi.fn(() => []),
-    resumeRendering: vi.fn(),
+    resumeRendering: vi.fn(() => renderingEffectPhases.push(reactRefState.effectPhase)),
     resetWebglTextureAtlases: vi.fn(),
     scheduleRevealRepaint: vi.fn(),
     scheduleRevealPresent: vi.fn(),
     suspendRendering: vi.fn(),
-    getActivePane: vi.fn(() => null)
+    getActivePane: vi.fn(() => null),
+    fitAllRevealedPanes: vi.fn()
   }
   const paneTransports = new Map<number, never>()
 
   beginHookRender()
-  useTerminalPaneGlobalEffects({
+  useGlobalEffects({
     tabId: options.tabId ?? 'tab-1',
     worktreeId: options.worktreeId ?? 'wt-1',
     cwd: options.cwd,
@@ -191,7 +211,7 @@ function useMountForFileDrop(
     toggleExpandPane: vi.fn()
   })
 
-  return { onFileDrop, manager, paneTransports }
+  return { onFileDrop, manager, paneTransports, renderingEffectPhases }
 }
 
 describe('useTerminalPaneGlobalEffects', () => {
@@ -224,6 +244,26 @@ describe('useTerminalPaneGlobalEffects', () => {
     ;(globalThis as unknown as { ResizeObserver: unknown }).ResizeObserver = MockResizeObserver
   })
 
+  it.each([
+    ['darwin', 'layout'],
+    ['win32', 'passive'],
+    ['linux', 'passive']
+  ] as const)('runs visibility transitions in the %s effect phase', async (platform, phase) => {
+    window.api.platform = {
+      get: () => ({ platform, osRelease: 'test', displayServer: null })
+    }
+    vi.resetModules()
+    const { useTerminalPaneGlobalEffects: usePlatformTerminalPaneGlobalEffects } =
+      await import('./use-terminal-pane-global-effects')
+
+    const { renderingEffectPhases } = useMountForFileDrop(
+      { isActive: true, isVisible: true },
+      usePlatformTerminalPaneGlobalEffects
+    )
+
+    expect(renderingEffectPhases).toEqual([phase])
+  })
+
   afterEach(() => {
     for (const manager of registeredManagers.splice(0)) {
       unregisterLivePaneManager(manager)
@@ -234,7 +274,9 @@ describe('useTerminalPaneGlobalEffects', () => {
     delete (globalThis as unknown as { ResizeObserver?: unknown }).ResizeObserver
   })
 
-  it('flushes visible terminal panes before resuming rendering and fitting', () => {
+  it('resumes WebGL and fits before flushing backlog so paint is GPU and grid is stable', () => {
+    // On macOS resume before flush avoids DOM bold flash; fit before flush avoids
+    // writing backlog onto the transient DOM↔WebGL one-column-off grid.
     const order: string[] = []
     const terminalA = { name: 'terminal-a' }
     const terminalB = { name: 'terminal-b' }
@@ -250,6 +292,7 @@ describe('useTerminalPaneGlobalEffects', () => {
       refreshAllPanes: vi.fn(() => order.push('refresh')),
       suspendRendering: vi.fn(),
       fitAllPanes: vi.fn(),
+      fitAllRevealedPanes: vi.fn(() => order.push('fit-reveal')),
       getActivePane: vi.fn(() => null),
       setActivePane: vi.fn()
     }
@@ -296,18 +339,23 @@ describe('useTerminalPaneGlobalEffects', () => {
     expect(order).toEqual([
       'capture:terminal-a',
       'capture:terminal-b',
+      'resume',
+      'fit-reveal',
+      'intent:terminal-a',
+      'intent:terminal-b',
       'recover:terminal-a',
       'flush:terminal-a',
       'recover:terminal-b',
       'flush:terminal-b',
-      'resume',
-      'fit-focus',
       'intent:terminal-a',
       'intent:terminal-b',
       'reset-atlas',
       'refresh',
       'reveal-repaint'
     ])
+    // Why: flush must not land between resume and the corrective reveal fit.
+    expect(order.indexOf('resume')).toBeLessThan(order.indexOf('fit-reveal'))
+    expect(order.indexOf('fit-reveal')).toBeLessThan(order.indexOf('flush:terminal-a'))
     expect(mocks.restoreScrollStateAfterLayout).not.toHaveBeenCalled()
     expect(mocks.flushTerminalOutput).toHaveBeenNthCalledWith(1, terminalA, {
       maxChars: 256 * 1024
@@ -318,6 +366,62 @@ describe('useTerminalPaneGlobalEffects', () => {
     expect(mocks.fitPanes).not.toHaveBeenCalled()
     expect(isActiveRef.current).toBe(true)
     expect(isVisibleRef.current).toBe(true)
+  })
+
+  it('records mount-visible completion before PaneManager exists so first tab hide stays light', () => {
+    // Why: PaneManager is created in a passive lifecycle effect after this layout
+    // pass. Bookkeeping must still mark hasCompletedVisibleResume so the first
+    // intra-worktree hide does not take the !hasCompleted suspend branch.
+    const terminal = { name: 'terminal-a' }
+    const manager = {
+      getPanes: vi.fn(() => [{ id: 1, terminal }]),
+      resumeRendering: vi.fn(),
+      resetWebglTextureAtlases: vi.fn(),
+      scheduleRevealRepaint: vi.fn(),
+      scheduleRevealPresent: vi.fn(),
+      refreshAllPanes: vi.fn(),
+      suspendRendering: vi.fn(),
+      fitAllPanes: vi.fn(),
+      fitAllRevealedPanes: vi.fn(),
+      getActivePane: vi.fn(() => null),
+      setActivePane: vi.fn()
+    }
+    registerManagerForReset(manager)
+    const managerRef: { current: typeof manager | null } = { current: null }
+    const baseArgs = {
+      tabId: 'tab-1',
+      worktreeId: 'wt-1',
+      managerRef: managerRef as never,
+      containerRef: { current: null },
+      paneTransportsRef: { current: new Map() },
+      isActiveRef: { current: false },
+      isVisibleRef: { current: false },
+      paneCount: 0,
+      isSyncFitEnabled: true,
+      isWorktreeActive: true,
+      toggleExpandPane: vi.fn()
+    }
+
+    // Mount visible before the manager exists (layout before passive create).
+    beginHookRender()
+    useTerminalPaneGlobalEffects({
+      ...baseArgs,
+      isActive: true,
+      isVisible: true
+    })
+    expect(manager.resumeRendering).not.toHaveBeenCalled()
+
+    // Manager appears; visibility unchanged so the layout effect does not re-run.
+    // First hide still must keep WebGL (light path).
+    managerRef.current = manager
+    beginHookRender()
+    useTerminalPaneGlobalEffects({
+      ...baseArgs,
+      paneCount: 1,
+      isActive: false,
+      isVisible: false
+    })
+    expect(manager.suspendRendering).not.toHaveBeenCalled()
   })
 
   it('uses a light resume for tab switches while the worktree stays active', () => {
@@ -339,6 +443,7 @@ describe('useTerminalPaneGlobalEffects', () => {
       refreshAllPanes: vi.fn(),
       suspendRendering: vi.fn(),
       fitAllPanes: vi.fn(),
+      fitAllRevealedPanes: vi.fn(),
       getActivePane: vi.fn(() => null),
       setActivePane: vi.fn()
     }
@@ -420,6 +525,7 @@ describe('useTerminalPaneGlobalEffects', () => {
       refreshAllPanes: vi.fn(),
       suspendRendering: vi.fn(),
       fitAllPanes: vi.fn(),
+      fitAllRevealedPanes: vi.fn(),
       getActivePane: vi.fn(() => null),
       setActivePane: vi.fn()
     }
@@ -483,6 +589,7 @@ describe('useTerminalPaneGlobalEffects', () => {
       refreshAllPanes: vi.fn(),
       suspendRendering: vi.fn(),
       fitAllPanes: vi.fn(),
+      fitAllRevealedPanes: vi.fn(),
       getActivePane: vi.fn(() => null),
       setActivePane: vi.fn()
     }
@@ -538,6 +645,7 @@ describe('useTerminalPaneGlobalEffects', () => {
       refreshAllPanes: vi.fn(),
       suspendRendering: vi.fn(),
       fitAllPanes: vi.fn(),
+      fitAllRevealedPanes: vi.fn(),
       getActivePane: vi.fn(() => null),
       setActivePane: vi.fn()
     }
@@ -587,7 +695,9 @@ describe('useTerminalPaneGlobalEffects', () => {
     manager.resumeRendering.mockClear()
     manager.resetWebglTextureAtlases.mockClear()
     manager.refreshAllPanes.mockClear()
+    manager.fitAllRevealedPanes.mockClear()
     mocks.fitAndFocusPanes.mockClear()
+    mocks.focusActivePane.mockClear()
     mocks.flushTerminalOutput.mockClear()
     mocks.requestTerminalBacklogRecovery.mockClear()
 
@@ -602,7 +712,11 @@ describe('useTerminalPaneGlobalEffects', () => {
     expect(mocks.requestTerminalBacklogRecovery).toHaveBeenCalledWith(terminal)
     expect(mocks.flushTerminalOutput).toHaveBeenCalledWith(terminal, { maxChars: 256 * 1024 })
     expect(manager.resumeRendering).toHaveBeenCalledTimes(1)
-    expect(mocks.fitAndFocusPanes).toHaveBeenCalledWith(manager)
+    // Reveal must route through fitAllRevealedPanes, never the sync fitAllPanes.
+    expect(manager.fitAllRevealedPanes).toHaveBeenCalledTimes(1)
+    expect(manager.fitAllPanes).not.toHaveBeenCalled()
+    expect(mocks.focusActivePane).toHaveBeenCalledWith(manager)
+    expect(mocks.fitAndFocusPanes).not.toHaveBeenCalled()
     expect(manager.resetWebglTextureAtlases).toHaveBeenCalledTimes(1)
     expect(manager.refreshAllPanes).toHaveBeenCalledTimes(1)
   })
@@ -627,6 +741,7 @@ describe('useTerminalPaneGlobalEffects', () => {
     scheduleRevealRepaint: ReturnType<typeof vi.fn>
     scheduleRevealPresent: ReturnType<typeof vi.fn>
     suspendRendering: ReturnType<typeof vi.fn>
+    fitAllRevealedPanes: ReturnType<typeof vi.fn>
     getActivePane: ReturnType<typeof vi.fn>
   } {
     return {
@@ -636,6 +751,7 @@ describe('useTerminalPaneGlobalEffects', () => {
       scheduleRevealRepaint: vi.fn(),
       scheduleRevealPresent: vi.fn(),
       suspendRendering: vi.fn(),
+      fitAllRevealedPanes: vi.fn(),
       getActivePane: vi.fn(() => ({ id: 1, terminal: { name: 'terminal-a' } }))
     }
   }
@@ -729,6 +845,7 @@ describe('useTerminalPaneGlobalEffects', () => {
       scheduleRevealPresent: vi.fn(),
       suspendRendering: vi.fn(),
       fitAllPanes: vi.fn(),
+      fitAllRevealedPanes: vi.fn(),
       getActivePane: vi.fn(() => null),
       setActivePane: vi.fn()
     }
@@ -788,6 +905,7 @@ describe('useTerminalPaneGlobalEffects', () => {
       scheduleRevealRepaint: vi.fn(),
       scheduleRevealPresent: vi.fn(),
       suspendRendering: vi.fn(),
+      fitAllRevealedPanes: vi.fn(),
       getActivePane: vi.fn(() => null)
     }
 
@@ -847,6 +965,7 @@ describe('useTerminalPaneGlobalEffects', () => {
       scheduleRevealPresent: vi.fn(),
       refreshAllPanes: vi.fn(),
       suspendRendering: vi.fn(),
+      fitAllRevealedPanes: vi.fn(),
       getActivePane: vi.fn(() => ({ id: 1, terminal }))
     }
 
@@ -883,7 +1002,9 @@ describe('useTerminalPaneGlobalEffects', () => {
     // focus event, not the initial visibility resume.
     manager.scheduleRevealRepaint.mockClear()
     manager.scheduleRevealPresent.mockClear()
+    manager.fitAllRevealedPanes.mockClear()
     mocks.fitAndFocusPanes.mockClear()
+    mocks.focusActivePane.mockClear()
     mocks.flushTerminalOutput.mockClear()
     mocks.requestTerminalBacklogRecovery.mockClear()
 
@@ -892,7 +1013,10 @@ describe('useTerminalPaneGlobalEffects', () => {
     expect(mocks.requestTerminalBacklogRecovery).toHaveBeenCalledWith(terminal)
     expect(mocks.flushTerminalOutput).toHaveBeenCalledWith(terminal, { maxChars: 64 * 1024 })
     expect(manager.resumeRendering).toHaveBeenCalledTimes(1)
-    expect(mocks.fitAndFocusPanes).toHaveBeenCalledWith(manager)
+    // Refocus recovery uses the same wobble-resistant reveal fit path.
+    expect(manager.fitAllRevealedPanes).toHaveBeenCalledTimes(1)
+    expect(mocks.focusActivePane).toHaveBeenCalledWith(manager)
+    expect(mocks.fitAndFocusPanes).not.toHaveBeenCalled()
     // Why: refocus recovery is atlas-preserving — no shared-atlas reset, no
     // registry-wide repaint, and no atlas-clearing reveal repaint; the
     // atlas-preserving present covers stale pixels.
@@ -911,6 +1035,7 @@ describe('useTerminalPaneGlobalEffects', () => {
       scheduleRevealPresent: vi.fn(),
       refreshAllPanes: vi.fn(),
       suspendRendering: vi.fn(),
+      fitAllRevealedPanes: vi.fn(),
       getActivePane: vi.fn(() => null)
     }
     const captured: { onSystemResumed: (() => void) | null } = { onSystemResumed: null }
@@ -969,6 +1094,7 @@ describe('useTerminalPaneGlobalEffects', () => {
       scheduleRevealRepaint: vi.fn(),
       scheduleRevealPresent: vi.fn(),
       suspendRendering: vi.fn(),
+      fitAllRevealedPanes: vi.fn(),
       getActivePane: vi.fn(() => null)
     }
     const siblingManager = {
@@ -1025,6 +1151,7 @@ describe('useTerminalPaneGlobalEffects', () => {
       scheduleRevealRepaint: vi.fn(),
       scheduleRevealPresent: vi.fn(),
       suspendRendering: vi.fn(),
+      fitAllRevealedPanes: vi.fn(),
       getActivePane: vi.fn(() => null)
     }
     const useMountForVisibilityRecovery = (options: {
@@ -1072,6 +1199,7 @@ describe('useTerminalPaneGlobalEffects', () => {
       scheduleRevealRepaint: vi.fn(),
       scheduleRevealPresent: vi.fn(),
       suspendRendering: vi.fn(),
+      fitAllRevealedPanes: vi.fn(),
       getActivePane: vi.fn(() => pane)
     }
     const transport = {
@@ -1129,6 +1257,7 @@ describe('useTerminalPaneGlobalEffects', () => {
       scheduleRevealRepaint: vi.fn(),
       scheduleRevealPresent: vi.fn(),
       suspendRendering: vi.fn(),
+      fitAllRevealedPanes: vi.fn(),
       getActivePane: vi.fn(() => pane)
     }
     const transport = {
@@ -1247,6 +1376,7 @@ describe('useTerminalPaneGlobalEffects', () => {
       scheduleRevealPresent: vi.fn(),
       suspendRendering: vi.fn(),
       fitAllPanes: vi.fn(),
+      fitAllRevealedPanes: vi.fn(),
       getActivePane: vi.fn(() => null)
     }
 
@@ -1282,6 +1412,7 @@ describe('useTerminalPaneGlobalEffects', () => {
       scheduleRevealPresent: vi.fn(),
       suspendRendering: vi.fn(),
       fitAllPanes: vi.fn(),
+      fitAllRevealedPanes: vi.fn(),
       getActivePane: vi.fn(() => null)
     }
 

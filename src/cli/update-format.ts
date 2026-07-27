@@ -1,3 +1,4 @@
+import type { RemoteServerUpdateSupport } from '../shared/remote-server-update'
 import type { UpdateStatus } from '../shared/types'
 
 export type UpdateCommandResult = {
@@ -5,6 +6,7 @@ export type UpdateCommandResult = {
   status: UpdateStatus
   installRequested: boolean
   timedOut?: boolean
+  support?: RemoteServerUpdateSupport
 }
 
 /** Renders the `orca version` result as the bare version string for humans. */
@@ -13,16 +15,23 @@ export function formatAppVersion(result: { version: string }): string {
 }
 
 /**
- * Renders the final human-readable line for `orca update` / `orca update --check`,
- * covering every terminal updater state plus the timed-out case.
+ * Renders the final human-readable line for `orca update` / `orca update --check`.
+ * Covers timeouts, the SSH/headless/dev cases where the app can't self-update, and
+ * every terminal updater state.
  */
 export function formatUpdateResult(result: UpdateCommandResult): string {
-  const { status } = result
+  const { status, support } = result
   if (result.timedOut) {
     if (status.state === 'downloading') {
       return `Timed out waiting for Orca ${status.version} to download (${formatPercent(status.percent)}).`
     }
     return 'Timed out waiting for Orca to finish checking for updates.'
+  }
+
+  // Why: when the running Orca can't drive its own updater (dev build, headless
+  // serve, updater not ready), report why with next steps instead of a raw state.
+  if (support && !support.automatic) {
+    return formatUnavailableSupport(support)
   }
 
   switch (status.state) {
@@ -42,6 +51,22 @@ export function formatUpdateResult(result: UpdateCommandResult): string {
       return 'Checking for Orca updates...'
     case 'idle':
       return 'The Orca updater is idle.'
+  }
+}
+
+/** Explains why the running Orca can't update itself, per the support reason. */
+function formatUnavailableSupport(support: RemoteServerUpdateSupport): string {
+  switch (support.reason) {
+    case 'unpackaged-build':
+      return 'Updates are unavailable in a development build of Orca.'
+    case 'updater-unavailable':
+      return 'The Orca updater is not ready yet. Try again in a moment.'
+    case 'manual-service-update-required':
+      return 'This Orca runs as a headless service it cannot update itself. Update it through its service manager (e.g. redeploy or restart the orca serve process).'
+    case 'available':
+      // Why: 'available' pairs with automatic=true, so this branch is unreachable;
+      // kept exhaustive so a future reason can't silently fall through.
+      return 'Orca cannot update itself right now.'
   }
 }
 

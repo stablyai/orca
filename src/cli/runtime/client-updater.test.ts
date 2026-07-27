@@ -9,19 +9,17 @@ describe('RuntimeClient updater methods', () => {
     call.mockReset().mockResolvedValue({
       id: 'req-1',
       ok: true,
-      result: { state: 'idle' },
+      result: { status: { state: 'idle' }, revision: 0 },
       _meta: { runtimeId: 'runtime-1' }
     })
   })
 
-  it('maps the version and status methods', async () => {
-    await client.getAppVersion()
+  it('reads the snapshot and long-polls for status changes', async () => {
     await client.getUpdateStatus()
     await client.waitForUpdateStatus(4, 25_000)
 
-    expect(call).toHaveBeenNthCalledWith(1, 'updater.getVersion')
-    expect(call).toHaveBeenNthCalledWith(2, 'updater.getStatus')
-    expect(call).toHaveBeenNthCalledWith(3, 'updater.wait', {
+    expect(call).toHaveBeenNthCalledWith(1, 'updater.getStatus')
+    expect(call).toHaveBeenNthCalledWith(2, 'updater.wait', {
       afterRevision: 4,
       timeoutMs: 25_000
     })

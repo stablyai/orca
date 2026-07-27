@@ -46,10 +46,7 @@ describe('OpenCode hook plugin source', () => {
   })
 
   it('resolves hook coords from the endpoint file before falling back to process.env', () => {
-    // Why: a long-running OpenCode session was fork()ed with the prior Orca's
-    // PORT/TOKEN frozen into process.env. The plugin must prefer the on-disk
-    // endpoint file (rewritten on every Orca start()) over env, otherwise it
-    // keeps posting to a dead port after an Orca restart.
+    // Why: a forked session freezes the prior Orca's PORT/TOKEN in env; prefer the on-disk endpoint file or it posts to a dead port after restart.
     const source = _internals.getOpenCodePluginSource()
 
     expect(source).toContain('function readEndpointFile()')
@@ -71,12 +68,7 @@ describe('OpenCode hook plugin source', () => {
   })
 
   it('caches the parsed endpoint file on mtime+size+inode to skip re-reads per post', () => {
-    // Why: message.part.updated fires many times per second during a streaming
-    // assistant reply. Each post() calls resolveHookCoords() which reads the
-    // endpoint file — without the cache we'd readFileSync + parse on every
-    // streamed Part. The cache key combines mtime + size + inode so renameSync
-    // (writeEndpointFile's atomic swap) invalidates the cache via the ino
-    // change even when mtime resolution is coarse and size happens to match.
+    // Why: cache the parse to avoid a read per streamed Part; inode in the key lets renameSync invalidate it even when mtime/size collide.
     const source = _internals.getOpenCodePluginSource()
 
     expect(source).toContain('let cachedEndpointKey = "";')
@@ -91,14 +83,7 @@ describe('OpenCode hook plugin source', () => {
   })
 
   it('forwards question.asked as AskUserQuestion so the pane flips to waiting', () => {
-    // Why: OpenCode exposes two separate plugin events for human-in-the-loop
-    // moments — `permission.asked` (blocks on tool approval) and
-    // `question.asked` (the agent called an ask-the-user tool). The plugin
-    // must forward both so the server-side normalizer can map each to
-    // `waiting` and render the red indicator. Dropping `question.asked`
-    // leaves the pane stuck in `working` while the agent is actually idle,
-    // waiting on a human reply — exactly the bug other OpenCode integrations
-    // also handle.
+    // Why: forward question.asked too (not just permission.asked), else the pane stays "working" while the agent idles on a human reply.
     const source = _internals.getOpenCodePluginSource()
 
     expect(source).toContain('if (event.type === "question.asked")')
@@ -118,10 +103,7 @@ describe('OpenCode hook plugin source', () => {
   })
 
   it('guards endpoint-file parse warnings with a process-lifetime latch', () => {
-    // Why: ENOENT is the normal pre-install case and must stay silent, but a
-    // malformed/unreadable file (EACCES, EIO, parse error) would otherwise
-    // spam stderr once per hook post. The latch keeps the warning to once per
-    // OpenCode process — mirrors server.ts's warnedVersions/warnedEnvs intent.
+    // Why: ENOENT is normal pre-install (stay silent), but a bad file would spam stderr per post; latch warns once per process.
     const source = _internals.getOpenCodePluginSource()
 
     expect(source).toContain('let warnedBadEndpoint = false;')
@@ -132,11 +114,7 @@ describe('OpenCode hook plugin source', () => {
 
 describe('OpenCode id safety guard', () => {
   it('accepts the daemon-path sessionId shape (worktreeId@@uuid with ::/...)', () => {
-    // Why: after the daemon-parity refactor (#1148) pty.ts mints sessionIds
-    // like `<worktreeId>@@<uuid>` where worktreeId contains "::" and a
-    // filesystem path. The previous strict regex rejected every real id and
-    // silently dropped OPENCODE_CONFIG_DIR. Lock in that such ids are now
-    // accepted so the plugin dir is actually written.
+    // Why: after #1148 pty.ts mints sessionIds like <worktreeId>@@<uuid> with "::" and a path; the old strict regex rejected every real id.
     const daemonSessionId =
       '50c010a2-bc8e-4eb1-8847-5812133ad6df::/Users/thebr/ghostx/workspaces/noqa/autoheal@@a1b2c3d4'
     expect(isUsableId(daemonSessionId)).toBe(true)
@@ -152,8 +130,7 @@ describe('OpenCode id safety guard', () => {
   })
 
   it('rejects non-string runtime values even though the type says string', () => {
-    // Why: the typeof guard is defense-in-depth for any-typed callers;
-    // without a test, a future refactor could delete the guard silently.
+    // Why: the typeof guard is defense-in-depth for any-typed callers; a test keeps a refactor from silently deleting it.
     expect(isUsableId(undefined as unknown as string)).toBe(false)
     expect(isUsableId(null as unknown as string)).toBe(false)
     expect(isUsableId(42 as unknown as string)).toBe(false)
@@ -176,11 +153,7 @@ describe('OpenCode id safety guard', () => {
 })
 
 describe('OpenCodeHookService buildPtyEnv / clearPty round-trip', () => {
-  // Why: the primitives above only prove the helpers work in isolation. This
-  // suite exercises the public surface against a real filesystem so a future
-  // regression — e.g. re-tightening the id guard or desyncing the path used by
-  // writeLegacyPluginConfig vs clearPty — fails loudly. Before #1148 the service
-  // silently returned {} for daemon-shaped ids; these tests lock that in.
+  // Why: exercise the public surface against a real filesystem so regressions fail loudly (before #1148 daemon-shaped ids silently returned {}).
   const daemonSessionId =
     '50c010a2-bc8e-4eb1-8847-5812133ad6df::/Users/thebr/ghostx/workspaces/noqa/autoheal@@a1b2c3d4'
   const plainUuidId = 'c0ffee00-0000-4000-8000-000000000000'
@@ -244,9 +217,7 @@ describe('OpenCodeHookService buildPtyEnv / clearPty round-trip', () => {
   })
 
   it('buildPtyEnv preserves a user-set OPENCODE_CONFIG_DIR when the id is unusable', () => {
-    // Why: defense-in-depth — if the bounds guard rejects the id, we still
-    // must not blow away the user's own OPENCODE_CONFIG_DIR. The status
-    // plugin is forfeited, but the user's plugins/auth/keymap keep loading.
+    // Why: even when the id is rejected, don't blow away the user's own OPENCODE_CONFIG_DIR.
     const service = new OpenCodeHookService()
     const userDir = mkdtempSync(join(tmpdir(), 'orca-opencode-userdir-'))
     try {
@@ -271,11 +242,7 @@ describe('OpenCodeHookService buildPtyEnv / clearPty round-trip', () => {
 })
 
 describe('OpenCodeHookService overlay mode (user OPENCODE_CONFIG_DIR set)', () => {
-  // Why: locks in docs/opencode-config-dir-collision.md — when the user has
-  // their own OPENCODE_CONFIG_DIR (e.g. a company-wide opencode config repo),
-  // Orca must mirror it into a source-scoped overlay rather than `delete` its
-  // own injection or overwrite the user's value. The user's auth/models/keymap
-  // and Orca's status plugin both load via a single OPENCODE_CONFIG_DIR.
+  // Why: with a user-set OPENCODE_CONFIG_DIR, mirror it into an overlay rather than overwrite it (docs/opencode-config-dir-collision.md).
   const ptyId = 'overlay-pty-1'
   let userDataDir: string
   let userConfigDir: string
@@ -350,18 +317,14 @@ describe('OpenCodeHookService overlay mode (user OPENCODE_CONFIG_DIR set)', () =
   it.skipIf(process.platform === 'win32')(
     'mirrors top-level entries via symlinks so plugins/ is a real directory',
     () => {
-      // Why: only the plugins/ subtree needs entry-by-entry mirroring so Orca
-      // can drop a sibling file alongside the user's plugins. Other top-level
-      // entries (auth.json, opencode.json) are mirrored as a single symlink so
-      // user edits propagate live on POSIX.
+      // Why: only plugins/ needs per-entry mirroring (Orca drops a sibling); other entries are single symlinks so user edits propagate live.
       const service = new OpenCodeHookService()
       const env = service.buildPtyEnv(ptyId, userConfigDir)
 
       const overlay = env.OPENCODE_CONFIG_DIR!
       expect(lstatSync(join(overlay, 'opencode.json')).isSymbolicLink()).toBe(true)
       expect(lstatSync(join(overlay, 'auth.json')).isSymbolicLink()).toBe(true)
-      // plugins/ must be a real directory in the overlay so Orca can write
-      // its sibling status plugin into it.
+      // plugins/ must be a real dir in the overlay so Orca can drop its sibling plugin.
       expect(lstatSync(join(overlay, 'plugins')).isDirectory()).toBe(true)
       expect(lstatSync(join(overlay, 'plugins')).isSymbolicLink()).toBe(false)
       // user-plugin.js inside plugins/ is mirrored entry-by-entry.
@@ -370,11 +333,7 @@ describe('OpenCodeHookService overlay mode (user OPENCODE_CONFIG_DIR set)', () =
   )
 
   it("does not overwrite a user plugin file with the same filename as Orca's plugin", () => {
-    // Why: the failure mode this guards against — a user-owned plugin file
-    // happens to be named orca-opencode-status.js. Without the per-entry
-    // skip in mirrorUserConfig, the file would be linked into the overlay
-    // and Orca's writeFileSync would write through the symlink, destroying
-    // the user's content on their real filesystem.
+    // Why: a user plugin named orca-opencode-status.js must not be symlinked into the overlay, or writeFileSync would clobber it.
     const userOrcaSentinel = 'USER OWNED ORCA-NAMED PLUGIN — DO NOT CLOBBER'
     writeFileSync(join(userConfigDir, 'plugins', 'orca-opencode-status.js'), userOrcaSentinel)
 
@@ -399,15 +358,12 @@ describe('OpenCodeHookService overlay mode (user OPENCODE_CONFIG_DIR set)', () =
   it.skipIf(process.platform === 'win32')(
     'does not write through a symlinked plugins/ directory into the user filesystem',
     () => {
-      // Why: if plugins/ is a symlink (common dotfiles pattern), writing Orca's
-      // status plugin through it would land in the user's real filesystem —
-      // exactly the failure mode docs/opencode-config-dir-collision.md rejects.
+      // Why: writing Orca's plugin through a symlinked plugins/ would leak into the user's fs (docs/opencode-config-dir-collision.md).
       const realPluginsDir = mkdtempSync(join(tmpdir(), 'orca-real-plugins-'))
       try {
         writeFileSync(join(realPluginsDir, 'real-plugin.js'), 'REAL USER PLUGIN')
 
-        // Replace the userConfigDir/plugins dir created by beforeEach with a
-        // symlink pointing at the external "real" plugins dir.
+        // Swap plugins/ for a symlink to the external "real" dir (dotfiles pattern).
         rmSync(join(userConfigDir, 'plugins'), { recursive: true, force: true })
         symlinkSync(realPluginsDir, join(userConfigDir, 'plugins'), 'dir')
 
@@ -416,15 +372,13 @@ describe('OpenCodeHookService overlay mode (user OPENCODE_CONFIG_DIR set)', () =
 
         // The user's real filesystem must NOT receive Orca's status plugin.
         expect(existsSync(join(realPluginsDir, 'orca-opencode-status.js'))).toBe(false)
-        // Overlay's plugins/ must be a real directory, not a symlink that
-        // would write through to the user's filesystem.
+        // Overlay's plugins/ must be a real dir, else writes leak into the user's filesystem.
         expect(lstatSync(join(env.OPENCODE_CONFIG_DIR!, 'plugins')).isSymbolicLink()).toBe(false)
         // Orca's status plugin lands in the overlay only.
         expect(
           existsSync(join(env.OPENCODE_CONFIG_DIR!, 'plugins', 'orca-opencode-status.js'))
         ).toBe(true)
-        // The user's sentinel plugin is reachable through the overlay (mirrored
-        // entry-by-entry after resolving the symlink target).
+        // User's real plugin is reachable via the overlay (plugins mirrored entry-by-entry after resolving the symlink target).
         expect(
           readFileSync(join(env.OPENCODE_CONFIG_DIR!, 'plugins', 'real-plugin.js'), 'utf8')
         ).toBe('REAL USER PLUGIN')
@@ -435,10 +389,7 @@ describe('OpenCodeHookService overlay mode (user OPENCODE_CONFIG_DIR set)', () =
   )
 
   it("preserves the user's OPENCODE_CONFIG_DIR when the path does not exist", () => {
-    // Why: typoed user path — overriding it with an Orca-owned dir would let
-    // Orca's status plugin "succeed" while silently hiding the user's typo.
-    // The design rejects that: leave the user's value alone and let OpenCode
-    // surface the typo on its own.
+    // Why: leave a nonexistent user path alone so OpenCode surfaces the typo instead of Orca silently hiding it.
     const service = new OpenCodeHookService()
     const missingPath = join(tmpdir(), `orca-opencode-nope-${Date.now()}`)
     expect(existsSync(missingPath)).toBe(false)
@@ -456,11 +407,7 @@ describe('OpenCodeHookService overlay mode (user OPENCODE_CONFIG_DIR set)', () =
   })
 
   it("preserves the user's OPENCODE_CONFIG_DIR when the mirror step fails", async () => {
-    // Why: mock the shared mirrorEntry helper to throw on the first symlink
-    // (e.g. Windows without developer mode → EPERM). The hook service must
-    // catch and fall back to { OPENCODE_CONFIG_DIR: existingConfigDir } —
-    // the user's plugins/auth/models keep loading; only Orca's status plugin
-    // is forfeited.
+    // Why: if mirroring fails (e.g. Windows EPERM), fall back to the user's OPENCODE_CONFIG_DIR so their config still loads.
     const overlayMirror = await import('../pty/overlay-mirror')
     const mirrorSpy = vi.spyOn(overlayMirror, 'mirrorEntry').mockImplementation(() => {
       throw new Error('simulated EPERM on symlink')
@@ -469,8 +416,7 @@ describe('OpenCodeHookService overlay mode (user OPENCODE_CONFIG_DIR set)', () =
       const service = new OpenCodeHookService()
       const env = service.buildPtyEnv(ptyId, userConfigDir)
       expect(env).toEqual({ OPENCODE_CONFIG_DIR: userConfigDir })
-      // Overlay cleanup is deliberately not on the fallback path; it may hold
-      // OpenCode-created runtime files on Windows.
+      // Overlay cleanup is deliberately off the fallback path; it may hold OpenCode runtime files on Windows.
       const overlayDir = join(
         userDataDir,
         'opencode-config-overlays',
@@ -486,8 +432,7 @@ describe('OpenCodeHookService overlay mode (user OPENCODE_CONFIG_DIR set)', () =
   it.skipIf(process.platform === 'win32')(
     'clearPty leaves the source overlay off the teardown hot path',
     () => {
-      // Why: OpenCode may populate OPENCODE_CONFIG_DIR with runtime files.
-      // PTY teardown must not recursively delete that tree on Electron main.
+      // Why: OpenCode may fill the overlay with runtime files; PTY teardown must not recursively delete it on Electron main.
       const service = new OpenCodeHookService()
       service.buildPtyEnv(ptyId, userConfigDir)
 
@@ -509,10 +454,7 @@ describe('OpenCodeHookService overlay mode (user OPENCODE_CONFIG_DIR set)', () =
   )
 
   it('rebuilding the overlay for the same ptyId does not corrupt the user dir', () => {
-    // Mirrors the daemon cold-restore code path that calls buildPtyEnv with
-    // the same sessionId across restarts. Each rebuild must refresh the prior
-    // overlay safely (no symlink-walk into user data) and keep both user files
-    // and Orca's plugin reachable.
+    // Mirrors daemon cold-restore: rebuilding for the same sessionId must refresh the overlay without symlink-walking into user data.
     const service = new OpenCodeHookService()
     service.buildPtyEnv(ptyId, userConfigDir)
     service.buildPtyEnv(ptyId, userConfigDir)

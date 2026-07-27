@@ -1,17 +1,20 @@
 import { describe, expect, it } from 'vitest'
 import { mobileDiffImageDataUri } from './mobile-diff-image-preview'
 
+const PNG_BASE64 =
+  'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAFgwJ/l8sm7wAAAABJRU5ErkJggg=='
+
 describe('mobileDiffImageDataUri', () => {
   it('renders a modified image diff from the post-change bytes', () => {
     expect(
       mobileDiffImageDataUri({
         kind: 'binary',
-        originalContent: 'b2xk',
-        modifiedContent: 'bmV3',
+        originalContent: PNG_BASE64,
+        modifiedContent: PNG_BASE64,
         isImage: true,
         mimeType: 'image/png'
       })
-    ).toBe('data:image/png;base64,bmV3')
+    ).toBe(`data:image/png;base64,${PNG_BASE64}`)
   })
 
   it('renders an added image diff (no original) from the modified bytes', () => {
@@ -19,26 +22,26 @@ describe('mobileDiffImageDataUri', () => {
       mobileDiffImageDataUri({
         kind: 'binary',
         originalContent: '',
-        modifiedContent: 'bmV3',
+        modifiedContent: PNG_BASE64,
         isImage: true,
         mimeType: 'image/png'
       })
-    ).toBe('data:image/png;base64,bmV3')
+    ).toBe(`data:image/png;base64,${PNG_BASE64}`)
   })
 
   it('falls back to the original bytes for a proven deletion (modifiedDeleted)', () => {
     expect(
       mobileDiffImageDataUri({
         kind: 'binary',
-        originalContent: 'b2xk',
+        originalContent: PNG_BASE64,
         originalIsBinary: true,
         modifiedContent: '',
         modifiedIsBinary: false,
         modifiedDeleted: true,
         isImage: true,
-        mimeType: 'image/jpeg'
+        mimeType: 'image/png'
       })
-    ).toBe('data:image/jpeg;base64,b2xk')
+    ).toBe(`data:image/png;base64,${PNG_BASE64}`)
   })
 
   // The reviewer's read-failure case: a relay/SSH read returns an empty modified

@@ -47,6 +47,16 @@ const windowsProcessRowsReader = createProcessTableSnapshotReader<WindowsProcess
   now: () => Date.now()
 })
 
+/**
+ * Rows from a scan that starts after this call. PID-identity checks in teardown
+ * must not reuse a cached row — it can predate the very recycle it detects — but
+ * they must still dedupe: a worktree delete tears down PTYs 32-wide, so a bypass
+ * would fork that many powershell cold-starts. Rejects when both probes fail.
+ */
+export function queryWindowsProcessRowsFresh(): Promise<WindowsProcessRow[]> {
+  return windowsProcessRowsReader.getFreshSnapshot()
+}
+
 export async function queryWindowsProcessDescendants(
   rootPid: number,
   options: { fresh?: boolean } = {}

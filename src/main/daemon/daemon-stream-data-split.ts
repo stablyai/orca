@@ -9,18 +9,26 @@ import type { Socket } from 'node:net'
 export function encodeStreamDataEvent(
   sessionId: string,
   data: string,
-  sequenceChars?: number
+  rawLength?: number,
+  seq?: number,
+  transformed?: boolean
 ): string {
   return encodeNdjson({
     type: 'event',
     event: 'data',
     sessionId,
-    payload: { data, ...(sequenceChars === undefined ? {} : { sequenceChars }) }
+    payload: {
+      data,
+      ...(seq === undefined ? {} : { seq }),
+      ...(rawLength === undefined ? {} : { rawLength }),
+      ...(rawLength === undefined ? {} : { sequenceChars: rawLength }),
+      ...(transformed ? { transformed: true } : {})
+    }
   })
 }
 
-function streamDataEventLineBytes(sessionId: string, data: string, sequenceChars?: number): number {
-  return Buffer.byteLength(encodeStreamDataEvent(sessionId, data, sequenceChars), 'utf8')
+function streamDataEventLineBytes(sessionId: string, data: string, rawLength?: number): number {
+  return Buffer.byteLength(encodeStreamDataEvent(sessionId, data, rawLength), 'utf8')
 }
 
 function isHighSurrogate(value: number): boolean {
@@ -100,15 +108,27 @@ export function writeStreamDataEvents(
   sessionId: string,
   data: string,
   maxLineBytes: number,
-  sequenceChars = data.length
+  rawLength = data.length,
+  seq?: number,
+  transformed = false
 ): void {
-  const explicitSequenceChars = sequenceChars === data.length ? undefined : sequenceChars
-  for (const chunk of splitStreamDataForNdjson(
+  const explicitRawLength = rawLength === data.length ? undefined : rawLength
+  if (transformed) {
+    streamSocket.write(encodeStreamDataEvent(sessionId, data, rawLength, seq, true))
+    return
+  }
+  const carriesMetadata = explicitRawLength !== undefined || seq !== undefined
+  const chunks = splitStreamDataForNdjson(
     sessionId,
     data,
-    maxLineBytes,
-    explicitSequenceChars
-  )) {
-    streamSocket.write(encodeStreamDataEvent(sessionId, chunk, explicitSequenceChars))
+    carriesMetadata ? Math.max(1, maxLineBytes - 96) : maxLineBytes,
+    explicitRawLength
+  )
+  let consumed = 0
+  for (const chunk of chunks) {
+    consumed += chunk.length
+    const chunkEndSeq = seq === undefined ? undefined : seq - (data.length - consumed)
+    const chunkRawLength = explicitRawLength === 0 ? 0 : carriesMetadata ? chunk.length : undefined
+    streamSocket.write(encodeStreamDataEvent(sessionId, chunk, chunkRawLength, chunkEndSeq))
   }
 }

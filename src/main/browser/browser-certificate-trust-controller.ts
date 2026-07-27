@@ -107,7 +107,11 @@ export class BrowserCertificateTrustController {
         })
       }
       answer(false)
-    } catch {
+    } catch (error) {
+      // Why: fail closed, but log first — a throw in challenge recording would
+      // otherwise present as "the cert prompt never appears" with no trace,
+      // matching the logging catch in browser-manager's guest-state notifier.
+      console.error('[browser-certificate-trust-controller] handleCertificateError failed', error)
       answer(false)
     }
   }

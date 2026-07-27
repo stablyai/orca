@@ -1,4 +1,4 @@
-import { BrowserWindow, ipcMain, nativeTheme } from 'electron'
+import { app, BrowserWindow, ipcMain, nativeTheme } from 'electron'
 import type { Store } from '../persistence'
 import type { GlobalSettings, PersistedState } from '../../shared/types'
 import { listSystemFontFamilies } from '../system-fonts'
@@ -22,6 +22,7 @@ import { normalizeTerminalLineHeight } from '../../shared/terminal-line-height-s
 import { prepareLocalWorktreeRootsForRepos } from '../worktree-root-preparation'
 import { scheduleCurrentWorktreeBaseDirectoryWatcherSync } from './worktree-base-directory-watcher'
 import { applyPRBotAuthorOverride } from '../../shared/pr-bot-author-overrides'
+import { resolveEnvironment } from '../../shared/runtime-environment-store'
 
 // Why: the whitelist is the source-of-truth for which keys we emit on. Casting
 // to a Set once at module load lets the IPC handler's per-key membership
@@ -92,6 +93,9 @@ export function registerSettingsHandlers(
 
   ipcMain.handle('settings:set', async (event, args: Partial<GlobalSettings>) => {
     const sanitizedArgs = sanitizeRendererSettingsUpdate(args)
+    // Why: connection/navigation code receives the generic settings writer; the
+    // durable server preference has a dedicated Advanced-control boundary.
+    delete sanitizedArgs.activeRuntimeEnvironmentId
     // Why: Floating Workspace grants are trusted only when written by the
     // main-process directory picker, never by renderer-provided settings IPC.
     delete sanitizedArgs.floatingTerminalTrustedCwds
@@ -204,6 +208,23 @@ export function registerSettingsHandlers(
 
     return result
   })
+
+  ipcMain.handle(
+    'settings:set-active-runtime-environment-preference',
+    (event, args: { environmentId?: unknown }): GlobalSettings => {
+      const requestedEnvironmentId = args?.environmentId
+      if (requestedEnvironmentId !== null && typeof requestedEnvironmentId !== 'string') {
+        throw new Error('Invalid Active Server preference')
+      }
+      const requestedId = requestedEnvironmentId?.trim() || null
+      const environmentId =
+        requestedId === null ? null : resolveEnvironment(app.getPath('userData'), requestedId).id
+      return store.updateSettings(
+        { activeRuntimeEnvironmentId: environmentId },
+        { notifyListeners: true, originWebContentsId: event.sender.id }
+      )
+    }
+  )
 
   ipcMain.handle('settings:listFonts', () => {
     return listSystemFontFamilies()

@@ -1,10 +1,4 @@
 // Wire-level handshake helpers for the Orca relay.
-//
-// Why this lives in its own module: oxlint enforces a 300-line limit (with
-// blanks/comments stripped) on .ts files, and relay.ts already runs near that
-// limit. Splitting the version-handshake plumbing into a sibling module keeps
-// relay.ts focused on the daemon-lifecycle wiring and makes the handshake
-// independently unit-testable.
 
 import { dirname, join } from 'node:path'
 import { existsSync, readFileSync, realpathSync } from 'node:fs'
@@ -19,21 +13,10 @@ import {
 } from './protocol'
 import { relayLogLine } from './relay-diagnostic-log'
 
-// Why: a unique exit code reserved for the wire-level version-mismatch terminal
-// condition. The client (waitForSentinel + ssh.ts) maps this exit code to a
-// non-retryable RelayVersionMismatchError so _onRelayLost skips the backoff
-// loop. Any other non-zero exit is treated as a transient transport error.
+// Why: client maps this exit code to a non-retryable error so it skips reconnect backoff; other non-zero exits are treated as transient.
 export const EXIT_CODE_VERSION_MISMATCH = 42
 
-// Why: the deploy step writes a content-hashed version marker (e.g.
-// "0.1.0+0a5fe134d020") into ${remoteDir}/.version next to relay.js. Read it
-// from the directory the running script lives in (NOT process.cwd()) so test
-// spawns from arbitrary working dirs still report a coherent version. We
-// resolve symlinks via realpathSync so a daemon launched indirectly (e.g.
-// `node /tmp/symlink-to-relay.js`) still finds .version next to the real
-// script. Falls back to bare RELAY_VERSION only if the file truly cannot be
-// read; the wire handshake then refuses a fresh content-hashed client and
-// the user gets a clean typed error rather than a silent stale-daemon loop.
+// Why: read .version next to the resolved script path (realpathSync, not cwd) so arbitrary-cwd or symlink-launched spawns still report a coherent version.
 export function readLaunchVersion(): string {
   try {
     const entry = process.argv[1]
@@ -65,21 +48,12 @@ export function readLaunchVersion(): string {
 // ── Daemon side ─────────────────────────────────────────────────────
 
 export type DaemonHandshakeCallbacks = {
-  // Why: leftover is any bytes the FrameDecoder buffered AFTER the handshake
-  // frame (e.g. the bridge wrote handshake + a JSON-RPC frame in the same
-  // TCP send). The caller MUST feed leftover into the dispatcher before
-  // attaching the new 'data' listener, otherwise those bytes are silently
-  // lost.
+  // leftover: bytes buffered after the handshake frame; caller must feed the dispatcher before attaching the data listener or they're lost.
   onAccepted: (sock: Socket, leftover: Buffer) => void
   launchVersion: string
 }
 
-// Why: pre-dispatcher version handshake. The daemon reads exactly one
-// Handshake-typed frame off this freshly-accepted socket BEFORE the JSON-RPC
-// dispatcher pipe is attached. Mismatch means the connecting bridge was
-// launched against a different relay.js version than the daemon was; we close
-// the socket so the bridge exits 42 and the client surfaces a typed error
-// instead of looping over the dispatcher.
+// Why: read one handshake frame before attaching the dispatcher; version mismatch closes the socket so the bridge exits 42.
 export function setupDaemonHandshake(sock: Socket, cb: DaemonHandshakeCallbacks): void {
   let handshakeResolved = false
   const decoder: FrameDecoder = new FrameDecoder(
@@ -168,22 +142,11 @@ function handleDaemonHandshakeFrame(
 // ── --connect side ──────────────────────────────────────────────────
 
 export type ConnectHandshakeCallbacks = {
-  // Why: leftover is any bytes the FrameDecoder buffered AFTER the
-  // handshake-ok frame. The caller MUST forward leftover to process.stdout
-  // (the SSH stdout pipe) before attaching the raw bridge, otherwise daemon
-  // bytes coalesced into the same TCP send as handshake-ok are silently
-  // dropped.
+  // leftover: bytes buffered after handshake-ok; caller must forward to stdout before attaching the bridge or they're dropped.
   onAccepted: (leftover: Buffer) => void
 }
 
-// Why: the wire-level version handshake from the bridge side. Before we attach
-// the bidirectional pipe (and before we write RELAY_SENTINEL to stdout to
-// unblock the client), we send a Handshake-typed frame carrying our version
-// and wait for the daemon's Handshake response. This is defense-in-depth on
-// top of the versioned-install-dir layout: a corrupt/missing .version, hash
-// collision, or legacy-fallback path would otherwise let a v2 bridge drive a
-// v1 daemon. VS Code's remoteExtensionHostAgentServer.ts:340 does the same
-// check.
+// Why: bridge-side version handshake; defense-in-depth so a bad .version can't let a v2 bridge drive a v1 daemon (cf. VS Code remoteExtensionHostAgentServer.ts:340).
 export function runConnectHandshake(
   sock: Socket,
   myVersion: string,
@@ -222,10 +185,7 @@ export function runConnectHandshake(
         return
       }
       if (msg.type === 'orca-relay-handshake-mismatch') {
-        // Why: explicit stderr flush + exit so the diagnostic line is
-        // delivered to the client BEFORE the process exits. Without this,
-        // process.stderr writes can be buffered/async on pipe transports
-        // and parseHandshakeMismatchStderr loses the version detail.
+        // Why: exit inside the write callback; stderr is async on pipe transports, so exiting early drops the version detail.
         process.stderr.write(
           `[relay-connect] Handshake mismatch: expected=${msg.expected}, daemon=${msg.got}; exiting ${EXIT_CODE_VERSION_MISMATCH}\n`,
           () => {

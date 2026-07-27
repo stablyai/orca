@@ -1,14 +1,52 @@
 import { createHash } from 'node:crypto'
 import { homedir } from 'node:os'
-import { basename, join } from 'node:path'
-import type { SkillDiscoverySource, SkillProvider, SkillSourceKind } from '../../shared/skills'
+import { basename, join, type posix } from 'node:path'
+import type {
+  DiscoveredSkill,
+  SkillDiscoverySource,
+  SkillProvider,
+  SkillSourceKind
+} from '../../shared/skills'
+import type { AgentType } from '../../shared/agent-status-types'
 import type { Repo } from '../../shared/types'
 import { getRepoExecutionHostId, LOCAL_EXECUTION_HOST_ID } from '../../shared/execution-host'
 
 export type SkillScanRoot = Omit<SkillDiscoverySource, 'exists' | 'skippedReason'>
+type SkillDiscoveryPathApi = Pick<typeof posix, 'basename' | 'join'>
 
 export function stablePathId(pathValue: string): string {
   return createHash('sha1').update(pathValue).digest('hex').slice(0, 16)
+}
+
+// Skill classification and ordering are identical for native and WSL discovery;
+// only the path arithmetic differs (node:path vs pathPosix), so both callers
+// share these and pass the matching path adapter.
+type SkillRelativePathApi = { relative: (from: string, to: string) => string; sep: string }
+
+export function sourceKindForSkill(
+  root: SkillScanRoot,
+  skillFilePath: string,
+  pathApi: SkillRelativePathApi
+): SkillSourceKind {
+  if (
+    root.sourceKind === 'home' &&
+    pathApi.relative(root.path, skillFilePath).split(pathApi.sep)[0] === '.system'
+  ) {
+    return 'bundled'
+  }
+  return root.sourceKind
+}
+
+export function sourceLabelForSkill(root: SkillScanRoot, sourceKind: SkillSourceKind): string {
+  return sourceKind === 'bundled' ? `${root.label} bundled` : root.label
+}
+
+export function compareSkills(a: DiscoveredSkill, b: DiscoveredSkill): number {
+  return (
+    a.name.localeCompare(b.name, undefined, { sensitivity: 'base' }) ||
+    a.sourceLabel.localeCompare(b.sourceLabel, undefined, { sensitivity: 'base' }) ||
+    a.skillFilePath.localeCompare(b.skillFilePath)
+  )
 }
 
 function source(
@@ -16,9 +54,10 @@ function source(
   label: string,
   path: string,
   sourceKind: SkillSourceKind,
-  providers: SkillProvider[]
+  providers: SkillProvider[],
+  owner: AgentType | null
 ): SkillScanRoot {
-  return { id, label, path, sourceKind, providers }
+  return { id, label, path, sourceKind, providers, owner }
 }
 
 export function buildSkillDiscoverySources(
@@ -27,39 +66,95 @@ export function buildSkillDiscoverySources(
     cwd?: string
     repos?: Repo[]
     includeCwd?: boolean
+    pathApi?: SkillDiscoveryPathApi
   } = {}
 ): SkillScanRoot[] {
+  const pathApi = args.pathApi ?? { basename, join }
   const home = args.homeDir ?? homedir()
   const cwd = args.cwd ?? process.cwd()
   const roots: SkillScanRoot[] = [
-    source('home-codex', 'Codex home', join(home, '.codex', 'skills'), 'home', ['codex']),
-    source('home-agents', 'Agent skills home', join(home, '.agents', 'skills'), 'home', [
-      'agent-skills'
-    ]),
-    source('home-claude', 'Claude home', join(home, '.claude', 'skills'), 'home', ['claude']),
+    source(
+      'home-codex',
+      'Codex home',
+      pathApi.join(home, '.codex', 'skills'),
+      'home',
+      ['codex'],
+      'codex'
+    ),
+    source(
+      'home-agents',
+      'Agent skills home',
+      pathApi.join(home, '.agents', 'skills'),
+      'home',
+      ['agent-skills'],
+      null
+    ),
+    source(
+      'home-claude',
+      'Claude home',
+      pathApi.join(home, '.claude', 'skills'),
+      'home',
+      ['claude'],
+      'claude'
+    ),
     source(
       'codex-plugin-cache',
       'Codex plugin cache',
-      join(home, '.codex', 'plugins', 'cache'),
+      pathApi.join(home, '.codex', 'plugins', 'cache'),
       'plugin',
-      ['codex', 'agent-skills']
+      ['codex', 'agent-skills'],
+      'codex'
     ),
     // Why: `npx skills add --global` writes into each agent's own home skills
     // directory, so coverage misses them unless we scan every provider root.
-    source('home-grok', 'Grok home', join(home, '.grok', 'skills'), 'home', ['agent-skills']),
-    source('home-opencode', 'OpenCode home', join(home, '.config', 'opencode', 'skills'), 'home', [
-      'agent-skills'
-    ]),
-    source('home-pi', 'Pi home', join(home, '.pi', 'agent', 'skills'), 'home', ['agent-skills']),
-    source('home-gemini', 'Gemini home', join(home, '.gemini', 'skills'), 'home', ['agent-skills']),
+    source(
+      'home-grok',
+      'Grok home',
+      pathApi.join(home, '.grok', 'skills'),
+      'home',
+      ['agent-skills'],
+      'grok'
+    ),
+    source(
+      'home-opencode',
+      'OpenCode home',
+      pathApi.join(home, '.config', 'opencode', 'skills'),
+      'home',
+      ['agent-skills'],
+      'opencode'
+    ),
+    source(
+      'home-pi',
+      'Pi home',
+      pathApi.join(home, '.pi', 'agent', 'skills'),
+      'home',
+      ['agent-skills'],
+      'pi'
+    ),
+    source(
+      'home-gemini',
+      'Gemini home',
+      pathApi.join(home, '.gemini', 'skills'),
+      'home',
+      ['agent-skills'],
+      'gemini'
+    ),
     source(
       'home-antigravity',
       'Antigravity home',
-      join(home, '.gemini', 'antigravity', 'skills'),
+      pathApi.join(home, '.gemini', 'antigravity', 'skills'),
       'home',
-      ['agent-skills']
+      ['agent-skills'],
+      'antigravity'
     ),
-    source('home-cursor', 'Cursor home', join(home, '.cursor', 'skills'), 'home', ['agent-skills'])
+    source(
+      'home-cursor',
+      'Cursor home',
+      pathApi.join(home, '.cursor', 'skills'),
+      'home',
+      ['agent-skills'],
+      'cursor'
+    )
   ]
 
   const projectPaths = new Set<string>()
@@ -76,21 +171,23 @@ export function buildSkillDiscoverySources(
   }
 
   for (const repoPath of projectPaths) {
-    const label = `Repo ${basename(repoPath)}`
+    const label = `Repo ${pathApi.basename(repoPath)}`
     roots.push(
       source(
         `repo-agents-${stablePathId(repoPath)}`,
         `${label} .agents`,
-        join(repoPath, '.agents', 'skills'),
+        pathApi.join(repoPath, '.agents', 'skills'),
         'repo',
-        ['agent-skills']
+        ['agent-skills'],
+        null
       ),
       source(
         `repo-claude-${stablePathId(repoPath)}`,
         `${label} .claude`,
-        join(repoPath, '.claude', 'skills'),
+        pathApi.join(repoPath, '.claude', 'skills'),
         'repo',
-        ['claude']
+        ['claude'],
+        'claude'
       )
     )
   }

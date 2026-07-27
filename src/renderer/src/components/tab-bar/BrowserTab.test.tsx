@@ -165,9 +165,13 @@ async function renderBrowserTab(tab: BrowserTabState): Promise<unknown> {
     isActive: true,
     isPinned: false,
     hasTabsToRight: false,
+    hasTabsToLeft: false,
+    tabCount: 1,
     onActivate: () => {},
     onClose: () => {},
+    onCloseOthers: () => {},
     onCloseToRight: () => {},
+    onCloseToLeft: () => {},
     onDuplicate: () => {},
     onTogglePin: () => {},
     dragData: {

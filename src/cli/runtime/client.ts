@@ -1,5 +1,9 @@
 import type { CliStatusResult, RuntimeStatus } from '../../shared/runtime-types'
-import type { UpdateStatusSnapshot, UpdateStatusWaitResult } from '../../shared/types'
+import type {
+  RemoteServerUpdateInstallResult,
+  RemoteServerUpdaterSnapshot,
+  RemoteServerUpdaterWaitResult
+} from '../../shared/remote-server-update'
 import { parsePairingCode, type PairingOffer } from '../../shared/pairing'
 import { launchOrcaApp } from './launch'
 import { getDefaultUserDataPath, readMetadata } from './metadata'
@@ -128,7 +132,12 @@ export class RuntimeClient {
           runtime: {
             state: graphState === 'ready' ? 'ready' : 'graph_not_ready',
             reachable: true,
-            runtimeId: response.result.runtimeId
+            runtimeId: response.result.runtimeId,
+            ...(response.result.appVersion ? { appVersion: response.result.appVersion } : {}),
+            ...(response.result.remoteUpdateSupport
+              ? { remoteUpdateSupport: response.result.remoteUpdateSupport }
+              : {}),
+            ...(response.result.capabilities ? { capabilities: response.result.capabilities } : {})
           },
           graph: {
             state: graphState
@@ -140,38 +149,33 @@ export class RuntimeClient {
     return getCliStatus(this.userDataPath)
   }
 
-  /** Returns the running Orca app's version (the CLI ships inside it). */
-  async getAppVersion(): Promise<RuntimeRpcSuccess<{ version: string }>> {
-    return await this.call('updater.getVersion')
-  }
-
-  /** Reads the app's current updater status without triggering a new check. */
-  async getUpdateStatus(): Promise<RuntimeRpcSuccess<UpdateStatusSnapshot>> {
+  /** Reads the updater snapshot (app version, install support, status, revision) without triggering a check. */
+  async getUpdateStatus(): Promise<RuntimeRpcSuccess<RemoteServerUpdaterSnapshot>> {
     return await this.call('updater.getStatus')
   }
 
-  /** Waits until the updater status changes or the bounded server wait expires. */
+  /** Long-polls until the updater status changes past `afterRevision` or the bounded server wait expires. */
   async waitForUpdateStatus(
     afterRevision: number,
     timeoutMs: number
-  ): Promise<RuntimeRpcSuccess<UpdateStatusWaitResult>> {
+  ): Promise<RuntimeRpcSuccess<RemoteServerUpdaterWaitResult>> {
     return await this.call('updater.wait', { afterRevision, timeoutMs })
   }
 
   /** Asks the app to start an update check. */
   async checkForUpdate(
     includePrerelease = false
-  ): Promise<RuntimeRpcSuccess<UpdateStatusSnapshot>> {
+  ): Promise<RuntimeRpcSuccess<RemoteServerUpdaterSnapshot>> {
     return await this.call('updater.check', { includePrerelease })
   }
 
   /** Asks the app to begin downloading the available update. */
-  async downloadUpdate(): Promise<RuntimeRpcSuccess<UpdateStatusSnapshot>> {
+  async downloadUpdate(): Promise<RuntimeRpcSuccess<RemoteServerUpdaterSnapshot>> {
     return await this.call('updater.download')
   }
 
-  /** Asks the app to quit and install the downloaded update. */
-  async installUpdate(): Promise<RuntimeRpcSuccess<{ ok: true }>> {
+  /** Requests quit-and-install of the downloaded update. */
+  async installUpdate(): Promise<RuntimeRpcSuccess<RemoteServerUpdateInstallResult>> {
     return await this.call('updater.install')
   }
 

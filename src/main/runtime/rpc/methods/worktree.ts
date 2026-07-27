@@ -3,7 +3,9 @@ import {
   releaseAutomationWorkspaceProvenanceRequest,
   resolveAutomationWorkspaceProvenance
 } from '../../../automations/workspace-provenance'
+import { buildCliWorkspaceProvenance } from '../../../../shared/cli-workspace-provenance'
 import { defineMethod, type RpcMethod } from '../core'
+import { resolveRuntimeNavigationTarget } from '../../../../shared/runtime-navigation'
 import {
   WorktreeCreate,
   WorktreeDetectedListParams,
@@ -64,7 +66,12 @@ export const WORKTREE_METHODS: RpcMethod[] = [
       // wake to phones so web/desktop activation behavior is unchanged.
       runtime.activateManagedWorktree(params.worktree, {
         notifyClients: params.notifyClients !== false,
-        clientKind
+        clientKind,
+        navigation: resolveRuntimeNavigationTarget({
+          navigation: params.navigation,
+          notifyClients: params.notifyClients,
+          clientKind
+        })
       })
   }),
   defineMethod({
@@ -113,6 +120,10 @@ export const WORKTREE_METHODS: RpcMethod[] = [
             setupDecision: params.setupDecision,
             createdWithAgent: params.createdWithAgent ?? params.startupAgent,
             automationProvenance,
+            cliProvenance: buildCliWorkspaceProvenance(params.cliProvenanceRequest, {
+              startupAgent: params.startupAgent ?? params.createdWithAgent,
+              createdAt: Date.now()
+            }),
             startup: params.startupCommand
               ? {
                   command: params.startupCommand,

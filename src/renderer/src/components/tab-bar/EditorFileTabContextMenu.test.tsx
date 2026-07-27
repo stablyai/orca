@@ -216,6 +216,8 @@ async function renderMenu(): Promise<unknown> {
     isPinned: false,
     isRenaming: false,
     hasTabsToRight: false,
+    hasTabsToLeft: false,
+    tabCount: 1,
     canRename: true,
     canShowMarkdownPreview: false,
     resolvedLanguage: 'typescript',
@@ -226,8 +228,10 @@ async function renderMenu(): Promise<unknown> {
     onOpenRenameInput: vi.fn(),
     onTogglePin: vi.fn(),
     onClose: vi.fn(),
+    onCloseOthers: vi.fn(),
     onCloseAll: vi.fn(),
     onCloseToRight: vi.fn(),
+    onCloseToLeft: vi.fn(),
     onOpenMarkdownPreview: vi.fn()
   })
 }
@@ -283,6 +287,17 @@ describe('EditorFileTabContextMenu close-all shortcut', () => {
     }
 
     expect(findElementsByType(tree, 'DropdownMenuShortcut')).toHaveLength(3)
+  })
+
+  it('renders Close Others and both directional close items', async () => {
+    const tree = expandNode(await renderMenu())
+    const labels = findElementsByType(tree, 'DropdownMenuItem').map((item) =>
+      extractText(item.props.children)
+    )
+
+    expect(labels).toContain('Close Others')
+    expect(labels.some((label) => label.includes('Close Tabs To The Right'))).toBe(true)
+    expect(labels.some((label) => label.includes('Close Tabs To The Left'))).toBe(true)
   })
 
   it('hides the shortcut chip when close-all is unassigned', async () => {

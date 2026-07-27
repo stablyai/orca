@@ -1,4 +1,5 @@
-import type { UpdateStatus, UpdateStatusSnapshot } from '../../shared/types'
+import type { RemoteServerUpdaterSnapshot } from '../../shared/remote-server-update'
+import type { UpdateStatus } from '../../shared/types'
 import type { CommandHandler } from '../dispatch'
 import { printResult } from '../format'
 import { RuntimeClientError, type RuntimeRpcSuccess } from '../runtime-client'
@@ -15,7 +16,7 @@ const DOWNLOAD_TIMEOUT_MS = 10 * 60_000
 const STATUS_WAIT_SLICE_MS = 25_000
 
 type PollResult = {
-  response: RuntimeRpcSuccess<UpdateStatusSnapshot>
+  response: RuntimeRpcSuccess<RemoteServerUpdaterSnapshot>
   timedOut: boolean
 }
 
@@ -26,8 +27,12 @@ type PollResult = {
 export const UPDATER_HANDLERS: Record<string, CommandHandler> = {
   /** `orca version` — reports the running app's version. */
   version: async ({ client, json }) => {
-    const response = await withUpdaterRecovery(() => client.getAppVersion())
-    printResult(response, json, formatAppVersion)
+    const response = await withUpdaterRecovery(() => client.getUpdateStatus())
+    const versionResponse: RuntimeRpcSuccess<{ version: string }> = {
+      ...response,
+      result: { version: response.result.appVersion }
+    }
+    printResult(versionResponse, json, formatAppVersion)
   },
   /**
    * `orca update [--check] [--prerelease]` — checks for an update and, unless
@@ -37,6 +42,19 @@ export const UPDATER_HANDLERS: Record<string, CommandHandler> = {
     const checkOnly = flags.get('check') === true
     if (!json) {
       console.log('Checking for Orca updates...')
+    }
+
+    // Why: getStatus never rejects on support grounds, so read it first — this
+    // surfaces headless-serve/dev/unavailable cases with guidance instead of the
+    // check/download/install RPCs throwing `remote_update_manual_required`.
+    const initial = await withUpdaterRecovery(() => client.getUpdateStatus())
+    if (!initial.result.support.automatic) {
+      finishUpdateCommand(initial, json, {
+        operation: checkOnly ? 'check' : 'update',
+        installRequested: false,
+        timedOut: false
+      })
+      return
     }
 
     const initialCheck = await withUpdaterRecovery(() =>
@@ -57,10 +75,11 @@ export const UPDATER_HANDLERS: Record<string, CommandHandler> = {
       CHECK_TIMEOUT_MS
     )
 
-    const checkState = check.response.result.status.state
-    const downloadInProgress = checkState === 'downloading' || checkState === 'downloaded'
+    const checkStatus = check.response.result.status
+    const downloadInProgress =
+      checkStatus.state === 'downloading' || checkStatus.state === 'downloaded'
 
-    if (checkOnly || check.timedOut || (checkState !== 'available' && !downloadInProgress)) {
+    if (checkOnly || check.timedOut || (checkStatus.state !== 'available' && !downloadInProgress)) {
       finishUpdateCommand(check.response, json, {
         operation: checkOnly ? 'check' : 'update',
         installRequested: false,
@@ -69,12 +88,12 @@ export const UPDATER_HANDLERS: Record<string, CommandHandler> = {
       return
     }
 
-    if (!json && checkState === 'available') {
-      console.log(`Update available: Orca ${check.response.result.status.version}. Downloading...`)
+    if (!json && checkStatus.state === 'available') {
+      console.log(`Update available: Orca ${checkStatus.version}. Downloading...`)
     }
     // Why: attach to an existing download rather than kicking off a redundant one.
     const initialDownload =
-      checkState === 'available'
+      checkStatus.state === 'available'
         ? await withUpdaterRecovery(() => client.downloadUpdate())
         : check.response
     let lastProgress = ''
@@ -132,10 +151,11 @@ export const UPDATER_HANDLERS: Record<string, CommandHandler> = {
 /**
  * Waits for updater status events until `isTerminal` matches or the phase timeout
  * expires, invoking `onStatus` for the initial response and each changed status.
+ * Uses revision-based long-polls so it stays efficient over local and remote runtimes.
  */
 async function waitForStatus(
   client: RuntimeClient,
-  initialResponse: RuntimeRpcSuccess<UpdateStatusSnapshot>,
+  initialResponse: RuntimeRpcSuccess<RemoteServerUpdaterSnapshot>,
   isTerminal: (status: UpdateStatus) => boolean,
   timeoutMs: number,
   onStatus?: (status: UpdateStatus) => void
@@ -157,7 +177,13 @@ async function waitForStatus(
     )
     response = {
       ...next,
-      result: { revision: next.result.revision, status: next.result.status }
+      result: {
+        appVersion: next.result.appVersion,
+        runtimeId: next.result.runtimeId,
+        support: next.result.support,
+        status: next.result.status,
+        revision: next.result.revision
+      }
     }
     if (next.result.timedOut) {
       continue
@@ -175,15 +201,16 @@ async function waitForStatus(
  * the run timed out or ended in an updater error.
  */
 function finishUpdateCommand(
-  response: RuntimeRpcSuccess<UpdateStatusSnapshot>,
+  response: RuntimeRpcSuccess<RemoteServerUpdaterSnapshot>,
   json: boolean,
-  details: Omit<UpdateCommandResult, 'status'>
+  details: Omit<UpdateCommandResult, 'status' | 'support'>
 ): void {
+  const snapshot = response.result
   const result: RuntimeRpcSuccess<UpdateCommandResult> = {
     ...response,
-    result: { ...details, status: response.result.status }
+    result: { ...details, status: snapshot.status, support: snapshot.support }
   }
-  if (details.timedOut || response.result.status.state === 'error') {
+  if (details.timedOut || snapshot.status.state === 'error') {
     process.exitCode = 1
   }
   printResult(result, json, formatUpdateResult)

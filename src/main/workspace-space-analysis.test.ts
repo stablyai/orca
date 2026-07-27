@@ -5,13 +5,17 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { Repo } from '../shared/types'
 import type { Store } from './persistence'
 
-const { listRepoWorktreesMock, getSshFilesystemProviderMock, getSshGitProviderMock } = vi.hoisted(
-  () => ({
-    listRepoWorktreesMock: vi.fn(),
-    getSshFilesystemProviderMock: vi.fn(),
-    getSshGitProviderMock: vi.fn()
-  })
-)
+const {
+  listRepoWorktreesMock,
+  getLocalProjectWorktreeGitOptionsMock,
+  getSshFilesystemProviderMock,
+  getSshGitProviderMock
+} = vi.hoisted(() => ({
+  listRepoWorktreesMock: vi.fn(),
+  getLocalProjectWorktreeGitOptionsMock: vi.fn(),
+  getSshFilesystemProviderMock: vi.fn(),
+  getSshGitProviderMock: vi.fn()
+}))
 
 vi.mock('./repo-worktrees', () => ({
   createFolderWorktree: (repo: Repo) => ({
@@ -30,6 +34,10 @@ vi.mock('./providers/ssh-filesystem-dispatch', () => ({
 
 vi.mock('./providers/ssh-git-dispatch', () => ({
   getSshGitProvider: getSshGitProviderMock
+}))
+
+vi.mock('./project-runtime-git-options', () => ({
+  getLocalProjectWorktreeGitOptions: getLocalProjectWorktreeGitOptionsMock
 }))
 
 import { analyzeWorkspaceSpace, WorkspaceSpaceScanCancelledError } from './workspace-space-analysis'
@@ -58,6 +66,7 @@ describe('analyzeWorkspaceSpace', () => {
     vi.setSystemTime(new Date('2026-05-14T12:00:00Z'))
     tempDir = await mkdtemp(join(tmpdir(), 'orca-space-'))
     listRepoWorktreesMock.mockReset()
+    getLocalProjectWorktreeGitOptionsMock.mockReset().mockReturnValue({})
     getSshFilesystemProviderMock.mockReset()
     getSshGitProviderMock.mockReset()
   })
@@ -229,6 +238,71 @@ describe('analyzeWorkspaceSpace', () => {
       analyzeWorkspaceSpace(createStore([repo]), { signal: controller.signal })
     ).rejects.toBeInstanceOf(WorkspaceSpaceScanCancelledError)
     expect(listRepoWorktreesMock).not.toHaveBeenCalled()
+  })
+
+  it('aborts every in-flight local worktree list when the scan is cancelled', async () => {
+    const repos: Repo[] = [
+      {
+        id: 'repo-1',
+        path: join(tempDir!, 'repo-1'),
+        displayName: 'one',
+        badgeColor: '#000',
+        addedAt: 0
+      },
+      {
+        id: 'repo-2',
+        path: join(tempDir!, 'repo-2'),
+        displayName: 'two',
+        badgeColor: '#000',
+        addedAt: 0
+      }
+    ]
+    const capturedSignals: AbortSignal[] = []
+    let markBothStarted!: () => void
+    const bothStarted = new Promise<void>((resolve) => {
+      markBothStarted = resolve
+    })
+    listRepoWorktreesMock.mockImplementation((_repo: Repo, options?: { signal?: AbortSignal }) => {
+      const signal = options?.signal
+      if (!signal) {
+        throw new Error('expected cancellation signal')
+      }
+      capturedSignals.push(signal)
+      if (capturedSignals.length === repos.length) {
+        markBothStarted()
+      }
+      return new Promise<never>((_resolve, reject) => {
+        signal.addEventListener('abort', () => reject(signal.reason), { once: true })
+      })
+    })
+    const controller = new AbortController()
+
+    const scan = analyzeWorkspaceSpace(createStore(repos), { signal: controller.signal })
+    await bothStarted
+    controller.abort()
+
+    await expect(scan).rejects.toBeInstanceOf(WorkspaceSpaceScanCancelledError)
+    expect(capturedSignals).toHaveLength(2)
+    expect(capturedSignals.every((signal) => signal.aborted)).toBe(true)
+  })
+
+  it('routes local worktree listing through the selected WSL distro', async () => {
+    const repo: Repo = {
+      id: 'repo-1',
+      path: tempDir!,
+      displayName: 'orca',
+      badgeColor: '#000',
+      addedAt: 0
+    }
+    getLocalProjectWorktreeGitOptionsMock.mockReturnValue({ wslDistro: 'Ubuntu' })
+    listRepoWorktreesMock.mockResolvedValue([])
+
+    await analyzeWorkspaceSpace(createStore([repo]))
+
+    expect(listRepoWorktreesMock).toHaveBeenCalledWith(repo, {
+      wslDistro: 'Ubuntu',
+      signal: undefined
+    })
   })
 
   it('isolates missing worktrees as row-level scan failures', async () => {

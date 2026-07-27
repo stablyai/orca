@@ -191,7 +191,10 @@ describe('command aliases dispatch to the canonical handler', () => {
 
     await main(['terminal', 'focus', '--terminal', 'term_abc', '--json'], '/tmp/repo')
 
-    expect(callMock).toHaveBeenCalledWith('terminal.focus', expect.objectContaining({}))
+    expect(callMock).toHaveBeenCalledWith(
+      'terminal.focus',
+      expect.objectContaining({ navigation: 'host' })
+    )
   })
 
   it('serves `agent-context --json` without contacting the runtime', async () => {
@@ -381,6 +384,7 @@ describe('orca root help', () => {
     expect(issueHelp).toContain('orca linear issue [<id>]')
     expect(issueHelp).toContain('--comments             Include threaded Linear comments')
     expect(issueHelp).toContain('--attachments          Include attachment metadata and URLs')
+    expect(issueHelp).toContain('--activity             Include issue field-change history')
     expect(issueHelp).toContain('--workspace <id>      Connected Linear workspace id')
     expect(issueHelp).toContain('--id <id>             Linear issue key, id, or URL')
 
@@ -391,6 +395,16 @@ describe('orca root help', () => {
     expect(searchHelp).toContain('orca linear search <query>')
     expect(searchHelp).toContain('--workspace <id|all>  Connected Linear workspace id, or all')
     expect(searchHelp).toContain('--query <text>        Text to search across Linear issues')
+
+    logSpy.mockClear()
+    await main(['linear', 'list-issues', '--help'], '/tmp/repo')
+
+    const listIssuesHelp = String(logSpy.mock.calls[0][0])
+    expect(listIssuesHelp).toContain(
+      '--cursor <cursor>      Opaque cursor returned by a previous list-issues page'
+    )
+    expect(listIssuesHelp).toContain('--workspace <id|all>  Connected Linear workspace id, or all')
+    expect(listIssuesHelp).not.toContain('Line cursor from a previous read')
     expect(callMock).not.toHaveBeenCalled()
   })
 
@@ -1149,7 +1163,8 @@ describe('orca cli worktree awareness', () => {
       parentWorktree: undefined,
       cwdParentWorktree: 'id:repo-1::/tmp/repo',
       noParent: false,
-      callerTerminalHandle: undefined
+      callerTerminalHandle: undefined,
+      cliProvenanceRequest: {}
     })
   })
 
@@ -1197,7 +1212,8 @@ describe('orca cli worktree awareness', () => {
       activate: false,
       parentWorktree: undefined,
       noParent: true,
-      callerTerminalHandle: undefined
+      callerTerminalHandle: undefined,
+      cliProvenanceRequest: {}
     })
   })
 
@@ -1316,7 +1332,8 @@ describe('orca cli worktree awareness', () => {
       parentWorktree: undefined,
       cwdParentWorktree: 'id:repo-1::/tmp/repo',
       noParent: false,
-      callerTerminalHandle: undefined
+      callerTerminalHandle: undefined,
+      cliProvenanceRequest: {}
     })
   })
 
@@ -1386,7 +1403,8 @@ describe('orca cli worktree awareness', () => {
       activate: false,
       parentWorktree: undefined,
       noParent: true,
-      callerTerminalHandle: undefined
+      callerTerminalHandle: undefined,
+      cliProvenanceRequest: {}
     })
   })
 
@@ -1525,7 +1543,8 @@ describe('orca cli worktree awareness', () => {
       activate: false,
       parentWorktree: 'id:repo-1::/tmp/repo/parent',
       noParent: false,
-      callerTerminalHandle: undefined
+      callerTerminalHandle: undefined,
+      cliProvenanceRequest: {}
     })
   })
 
@@ -1570,7 +1589,8 @@ describe('orca cli worktree awareness', () => {
       activate: false,
       parentWorktree: 'branch:feature/parent',
       noParent: false,
-      callerTerminalHandle: undefined
+      callerTerminalHandle: undefined,
+      cliProvenanceRequest: {}
     })
   })
 
@@ -1637,7 +1657,8 @@ describe('orca cli worktree awareness', () => {
         parentWorktree: undefined,
         parentWorkspace: testCase.parentWorkspace,
         noParent: false,
-        callerTerminalHandle: undefined
+        callerTerminalHandle: undefined,
+        cliProvenanceRequest: {}
       })
     }
   })
@@ -1681,7 +1702,8 @@ describe('orca cli worktree awareness', () => {
       envParentWorkspace: 'folder:folder-1',
       cwdParentWorktree: 'id:repo-1::/tmp/repo',
       noParent: false,
-      callerTerminalHandle: undefined
+      callerTerminalHandle: undefined,
+      cliProvenanceRequest: {}
     })
   })
 
@@ -1723,7 +1745,8 @@ describe('orca cli worktree awareness', () => {
       activate: false,
       parentWorktree: 'id:repo-1::/tmp/repo/parent',
       noParent: false,
-      callerTerminalHandle: undefined
+      callerTerminalHandle: undefined,
+      cliProvenanceRequest: {}
     })
   })
 
@@ -1784,7 +1807,8 @@ describe('orca cli worktree awareness', () => {
         parentWorktree: undefined,
         parentWorkspace: 'folder:folder-1',
         noParent: false,
-        callerTerminalHandle: undefined
+        callerTerminalHandle: undefined,
+        cliProvenanceRequest: {}
       })
     }
   })
@@ -1931,7 +1955,8 @@ describe('orca cli worktree awareness', () => {
       parentWorktree: undefined,
       parentWorkspace: 'folder:missing',
       noParent: false,
-      callerTerminalHandle: undefined
+      callerTerminalHandle: undefined,
+      cliProvenanceRequest: {}
     })
     expect(output).toContain('"ok": false')
     expect(output).toContain('Parent selector was not found.')
@@ -1971,7 +1996,8 @@ describe('orca cli worktree awareness', () => {
       activate: false,
       parentWorktree: undefined,
       noParent: true,
-      callerTerminalHandle: undefined
+      callerTerminalHandle: undefined,
+      cliProvenanceRequest: {}
     })
   })
 
@@ -2006,8 +2032,35 @@ describe('orca cli worktree awareness', () => {
       parentWorktree: undefined,
       cwdParentWorktree: 'id:repo-1::/tmp/repo',
       noParent: false,
-      callerTerminalHandle: 'term_parent'
+      callerTerminalHandle: 'term_parent',
+      cliProvenanceRequest: { callerTerminalHandle: 'term_parent' }
     })
+  })
+
+  it('marks every worktree.create as CLI-created even from an external shell', async () => {
+    // Why: the sidebar badge/filter must catch hand-typed creates too, so the
+    // provenance request is sent with no terminal handle rather than omitted.
+    delete process.env.ORCA_TERMINAL_HANDLE
+    queueFixtures(
+      callMock,
+      okFixture('req_create_external', {
+        worktree: buildWorktree('/tmp/repo/child', 'child', 'abc', 'repo-1'),
+        lineage: null,
+        warnings: []
+      })
+    )
+    vi.spyOn(console, 'log').mockImplementation(() => {})
+    vi.spyOn(console, 'error').mockImplementation(() => {})
+
+    await main(
+      ['worktree', 'create', '--repo', 'id:repo-1', '--name', 'child', '--no-parent', '--json'],
+      '/tmp/repo'
+    )
+
+    expect(callMock).toHaveBeenCalledWith(
+      'worktree.create',
+      expect.objectContaining({ cliProvenanceRequest: {} })
+    )
   })
 
   it('starts a foreground headless server through `serve`', async () => {
@@ -2752,7 +2805,8 @@ describe('orca cli worktree awareness', () => {
       parentWorktree: undefined,
       cwdParentWorktree: 'id:repo-1::/tmp/repo',
       noParent: false,
-      callerTerminalHandle: undefined
+      callerTerminalHandle: undefined,
+      cliProvenanceRequest: {}
     })
   })
 
@@ -2800,6 +2854,7 @@ describe('orca cli worktree awareness', () => {
       cwdParentWorktree: 'id:repo-1::/tmp/repo',
       noParent: false,
       callerTerminalHandle: undefined,
+      cliProvenanceRequest: {},
       startupAgent: 'codex',
       startupPrompt: 'hi'
     })
@@ -2844,6 +2899,7 @@ describe('orca cli worktree awareness', () => {
       cwdParentWorktree: 'id:repo-1::/tmp/repo',
       noParent: false,
       callerTerminalHandle: undefined,
+      cliProvenanceRequest: {},
       startupAgent: 'codex',
       startupPrompt: 'hi'
     })
@@ -3677,11 +3733,14 @@ describe('orca cli worktree awareness', () => {
         host: {
           totalMemory: 8 * 1024 * 1024,
           freeMemory: 2 * 1024 * 1024,
+          availableMemory: 2 * 1024 * 1024,
+          availableMemorySource: 'free-memory',
           usedMemory: 6 * 1024 * 1024,
           memoryUsagePercent: 75,
           cpuCoreCount: 8,
           loadAverage1m: 1.25
         },
+        processMemoryMetric: 'rss',
         totalCpu: 3.75,
         totalMemory: 2 * 1024 * 1024,
         collectedAt: 1000
@@ -3694,6 +3753,8 @@ describe('orca cli worktree awareness', () => {
     expect(callMock).toHaveBeenCalledWith('diagnostics.memory')
     const output = logSpy.mock.calls.flat().join('\n')
     expect(output).toContain('totalMemory: 2.0 MB')
+    expect(output).toContain('processMemoryMetric: summed RSS; shared or aliased pages may repeat')
+    expect(output).toContain('hostAvailable: 2.0 MB (free-memory)')
     expect(output).toContain('app: 1.0 MB')
     expect(output).toContain('- feature  1.0 MB  2.5%  1 session')
   })

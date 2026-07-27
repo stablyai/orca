@@ -13,7 +13,8 @@ vi.mock('fs/promises', () => ({ stat: vi.fn() }))
 vi.mock('@parcel/watcher', () => ({ subscribe: vi.fn() }))
 vi.mock('./filesystem-watcher-wsl', () => ({ createWslWatcher: vi.fn() }))
 vi.mock('../providers/ssh-filesystem-dispatch', () => ({
-  getSshFilesystemProvider: getSshFilesystemProviderMock
+  getSshFilesystemProvider: getSshFilesystemProviderMock,
+  onSshFilesystemProviderRegistered: () => () => {}
 }))
 
 import { closeAllWatchers, registerFilesystemWatcherHandlers } from './filesystem-watcher'

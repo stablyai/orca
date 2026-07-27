@@ -38,4 +38,30 @@ describe('updater CLI formatting', () => {
       'Downloading Orca 1.5.0… 42%'
     )
   })
+
+  it('explains a headless-serve host that must be updated through its service manager', () => {
+    expect(
+      formatUpdateResult({
+        operation: 'update',
+        status: { state: 'idle' },
+        installRequested: false,
+        support: {
+          installMode: 'unsupported-headless-serve',
+          automatic: false,
+          reason: 'manual-service-update-required'
+        }
+      })
+    ).toContain('service manager')
+  })
+
+  it('explains a development build cannot self-update', () => {
+    expect(
+      formatUpdateResult({
+        operation: 'update',
+        status: { state: 'idle' },
+        installRequested: false,
+        support: { installMode: 'interactive', automatic: false, reason: 'unpackaged-build' }
+      })
+    ).toBe('Updates are unavailable in a development build of Orca.')
+  })
 })
