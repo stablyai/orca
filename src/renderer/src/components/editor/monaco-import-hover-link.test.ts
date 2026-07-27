@@ -1,9 +1,11 @@
 import { describe, expect, it, vi } from 'vitest'
 import {
   buildImportHoverCommandUri,
+  IMPORT_HOVER_RESOLUTION_CACHE_MAX,
   OPEN_IMPORT_TARGET_COMMAND_ID,
   provideImportLinkHover,
   registerImportHoverContext,
+  resolveImportHoverTargetWithCache,
   unregisterImportHoverContext
 } from './monaco-import-hover-link'
 import { getImportSpecifierLinks } from './import-specifier-links'
@@ -75,5 +77,40 @@ describe('provideImportLinkHover', () => {
         vi.fn(async () => target)
       )
     ).toBeNull()
+  })
+})
+
+describe('import hover resolution cache', () => {
+  it('drops a model resolution when its hover context is unregistered', async () => {
+    const resolve = vi.fn(async () => target)
+    const link = getImportSpecifierLinks('import x from "./x"')[0]
+    const source = { filePath: '/repo/a.ts', fileId: 'a', worktreeId: 'wt1' }
+    const modelKey = 'cache-cleanup-model'
+
+    await resolveImportHoverTargetWithCache(modelKey, link, source, resolve)
+    unregisterImportHoverContext(modelKey)
+    await resolveImportHoverTargetWithCache(modelKey, link, source, resolve)
+    unregisterImportHoverContext(modelKey)
+
+    expect(resolve).toHaveBeenCalledTimes(2)
+  })
+
+  it('evicts the oldest resolution when the cache reaches its size limit', async () => {
+    const resolve = vi.fn(async () => target)
+    const link = getImportSpecifierLinks('import x from "./x"')[0]
+    const source = { filePath: '/repo/a.ts', fileId: 'a', worktreeId: 'wt1' }
+
+    try {
+      for (let index = 0; index <= IMPORT_HOVER_RESOLUTION_CACHE_MAX; index += 1) {
+        await resolveImportHoverTargetWithCache(`cache-model-${index}`, link, source, resolve)
+      }
+      await resolveImportHoverTargetWithCache('cache-model-0', link, source, resolve)
+
+      expect(resolve).toHaveBeenCalledTimes(IMPORT_HOVER_RESOLUTION_CACHE_MAX + 2)
+    } finally {
+      for (let index = 0; index <= IMPORT_HOVER_RESOLUTION_CACHE_MAX; index += 1) {
+        unregisterImportHoverContext(`cache-model-${index}`)
+      }
+    }
   })
 })

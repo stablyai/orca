@@ -13,10 +13,10 @@ import {
 } from '../terminal-pane/terminal-file-open-routing'
 import {
   buildImportTargetCandidates,
-  parseTsconfigPathAliases,
-  type ImportSpecifierLink,
-  type TsconfigPathAliases
+  isRelativeSpecifier,
+  type ImportSpecifierLink
 } from './import-specifier-links'
+import { parseTsconfigPathAliases, type TsconfigPathAliases } from './tsconfig-path-aliases'
 
 export type ResolvedImportLinkTarget = {
   specifier: string
@@ -147,9 +147,8 @@ export async function resolveImportLinkTarget(
     source.worktreeId,
     source.fileId
   )
-  const isRelative = /^\.\.?([\\/]|$)/.test(link.specifier)
   const aliases =
-    !isRelative && worktreeRoot
+    !isRelativeSpecifier(link.specifier) && worktreeRoot
       ? await loadTsconfigAliases(fileContext, worktreeId, worktreeRoot)
       : null
   const candidates = buildImportTargetCandidates(

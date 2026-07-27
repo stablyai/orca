@@ -3,9 +3,9 @@ import {
   buildImportTargetCandidates,
   findImportSpecifierLinkAt,
   getImportSpecifierLinks,
-  parseTsconfigPathAliases,
   supportsImportSpecifierLinks
 } from './import-specifier-links'
+import { parseTsconfigPathAliases } from './tsconfig-path-aliases'
 
 describe('supportsImportSpecifierLinks', () => {
   it('accepts the Monaco ts/js language ids and rejects the rest', () => {
@@ -89,6 +89,21 @@ describe('getImportSpecifierLinks', () => {
 
   it('returns nothing for content without imports', () => {
     expect(getImportSpecifierLinks('const from = 1\nlet importCount = 2')).toEqual([])
+  })
+
+  it('ignores import-like text inside comments and string literals', () => {
+    const content = [
+      "// import { line } from './line-comment'",
+      "/* require('./block-comment') */",
+      `const quoted = "import('./quoted')"`,
+      "const templated = `export { value } from './template'`",
+      "import { live /* ignored binding */ } from './live'"
+    ].join('\n')
+
+    expect(getImportSpecifierLinks(content).map((link) => link.specifier)).toEqual([
+      './live',
+      './live'
+    ])
   })
 })
 

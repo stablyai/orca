@@ -1,12 +1,12 @@
 import type { IRange } from 'monaco-editor'
 import { dirname, joinPath } from '@/lib/path'
+import {
+  findJavaScriptNonCodeRanges,
+  isOffsetInJavaScriptNonCodeRange
+} from './javascript-non-code-ranges'
+import type { TsconfigPathAliases } from './tsconfig-path-aliases'
 
 export type ImportSpecifierLink = { range: IRange; specifier: string }
-
-export type TsconfigPathAliases = {
-  baseUrl: string | null
-  paths: Record<string, string[]>
-}
 
 const IMPORT_LINK_LANGUAGE_IDS = new Set(['typescript', 'javascript'])
 
@@ -59,10 +59,14 @@ function offsetToRange(lineStarts: number[], startOffset: number, length: number
 
 export function getImportSpecifierLinks(content: string): ImportSpecifierLink[] {
   const lineStarts = buildLineStarts(content)
+  const nonCodeRanges = findJavaScriptNonCodeRanges(content)
   const links: ImportSpecifierLink[] = []
 
   SPECIFIER_PATTERN.lastIndex = 0
   for (const match of content.matchAll(SPECIFIER_PATTERN)) {
+    if (isOffsetInJavaScriptNonCodeRange(match.index, nonCodeRanges)) {
+      continue
+    }
     const specifier = match[3]
     const startOffset = match.index + match[1].length + 1
     links.push({ range: offsetToRange(lineStarts, startOffset, specifier.length), specifier })
@@ -70,13 +74,22 @@ export function getImportSpecifierLinks(content: string): ImportSpecifierLink[] 
 
   CLAUSE_PATTERN.lastIndex = 0
   for (const match of content.matchAll(CLAUSE_PATTERN)) {
+    if (isOffsetInJavaScriptNonCodeRange(match.index, nonCodeRanges)) {
+      continue
+    }
     const clause = match[2]
     const specifier = match[4]
     // 6 = length of both `import` and `export`.
     const clauseStart = match.index + 6 + (match[1]?.length ?? 0)
+    if (isOffsetInJavaScriptNonCodeRange(clauseStart + clause.length, nonCodeRanges)) {
+      continue
+    }
     IDENTIFIER_PATTERN.lastIndex = 0
     for (const identifier of clause.matchAll(IDENTIFIER_PATTERN)) {
-      if (CLAUSE_KEYWORDS.has(identifier[0])) {
+      if (
+        CLAUSE_KEYWORDS.has(identifier[0]) ||
+        isOffsetInJavaScriptNonCodeRange(clauseStart + identifier.index, nonCodeRanges)
+      ) {
         continue
       }
       links.push({
@@ -101,90 +114,6 @@ export function findImportSpecifierLinkAt(
         position.column <= link.range.endColumn
     ) ?? null
   )
-}
-
-function stripJsonCommentsAndTrailingCommas(text: string): string {
-  let result = ''
-  let inString = false
-  let inLineComment = false
-  let inBlockComment = false
-  for (let index = 0; index < text.length; index += 1) {
-    const char = text[index]
-    const next = text[index + 1]
-    if (inLineComment) {
-      if (char === '\n') {
-        inLineComment = false
-        result += char
-      }
-      continue
-    }
-    if (inBlockComment) {
-      if (char === '*' && next === '/') {
-        inBlockComment = false
-        index += 1
-      }
-      continue
-    }
-    if (inString) {
-      result += char
-      if (char === '\\') {
-        result += next ?? ''
-        index += 1
-      } else if (char === '"') {
-        inString = false
-      }
-      continue
-    }
-    if (char === '"') {
-      inString = true
-      result += char
-      continue
-    }
-    if (char === '/' && next === '/') {
-      inLineComment = true
-      index += 1
-      continue
-    }
-    if (char === '/' && next === '*') {
-      inBlockComment = true
-      index += 1
-      continue
-    }
-    result += char
-  }
-  return result.replace(/,\s*([}\]])/g, '$1')
-}
-
-export function parseTsconfigPathAliases(tsconfigText: string): TsconfigPathAliases | null {
-  let parsed: unknown
-  try {
-    parsed = JSON.parse(stripJsonCommentsAndTrailingCommas(tsconfigText))
-  } catch {
-    return null
-  }
-  if (typeof parsed !== 'object' || parsed === null) {
-    return null
-  }
-  const compilerOptions = (parsed as { compilerOptions?: unknown }).compilerOptions
-  if (typeof compilerOptions !== 'object' || compilerOptions === null) {
-    return null
-  }
-  const { baseUrl, paths } = compilerOptions as { baseUrl?: unknown; paths?: unknown }
-  const aliases: TsconfigPathAliases = {
-    baseUrl: typeof baseUrl === 'string' ? baseUrl : null,
-    paths: {}
-  }
-  if (typeof paths === 'object' && paths !== null) {
-    for (const [pattern, targets] of Object.entries(paths)) {
-      if (Array.isArray(targets)) {
-        const valid = targets.filter((target): target is string => typeof target === 'string')
-        if (valid.length > 0) {
-          aliases.paths[pattern] = valid
-        }
-      }
-    }
-  }
-  return aliases
 }
 
 function collapseDotSegments(path: string): string {
@@ -233,7 +162,7 @@ const EMITTED_TO_SOURCE_EXTENSIONS: Record<string, string[]> = {
 
 const MAX_TARGET_CANDIDATES = 24
 
-function isRelativeSpecifier(specifier: string): boolean {
+export function isRelativeSpecifier(specifier: string): boolean {
   return specifier === '.' || specifier === '..' || /^\.\.?[\\/]/.test(specifier)
 }
 
