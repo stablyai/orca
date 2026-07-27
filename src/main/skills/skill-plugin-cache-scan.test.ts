@@ -189,25 +189,26 @@ describe('plugin skill candidate scan', () => {
     expect(result.issues).toEqual([{ path: root, reason: 'entry-limit', errorCode: null }])
   })
 
-  it('falls back to the default root when a skills array contains an invalid value', async () => {
+  it('keeps valid roots when a skills array contains an invalid value', async () => {
     const root = await mkdtemp(join(tmpdir(), 'orca-plugin-invalid-root-array-'))
     temporaryDirectories.push(root)
     const packageRoot = join(root, 'vendor', 'plugin', '1.0.0')
-    const candidate = join(packageRoot, 'skills', 'orca-cli')
+    const defaultCandidate = join(packageRoot, 'skills', 'orca-cli')
+    const declaredCandidate = join(packageRoot, 'custom-skills', 'orca-cli')
     await mkdir(join(packageRoot, '.codex-plugin'), { recursive: true })
-    await mkdir(candidate, { recursive: true })
-    await mkdir(join(packageRoot, 'custom-skills', 'orca-cli'), { recursive: true })
+    await mkdir(defaultCandidate, { recursive: true })
+    await mkdir(declaredCandidate, { recursive: true })
     await writeFile(
       join(packageRoot, '.codex-plugin', 'plugin.json'),
       '{"skills":["./custom-skills",7]}\n'
     )
-    await writeFile(join(candidate, 'SKILL.md'), '# Orca CLI\n')
-    await writeFile(join(packageRoot, 'custom-skills', 'orca-cli', 'SKILL.md'), '# Wrong root\n')
+    await writeFile(join(defaultCandidate, 'SKILL.md'), '# Wrong root\n')
+    await writeFile(join(declaredCandidate, 'SKILL.md'), '# Orca CLI\n')
 
     const result = await scanKnownPluginSkillCandidates(root, new Set(['orca-cli']))
 
     expect(result).toEqual({
-      candidates: [{ name: 'orca-cli', path: candidate }],
+      candidates: [{ name: 'orca-cli', path: declaredCandidate }],
       issues: []
     })
   })

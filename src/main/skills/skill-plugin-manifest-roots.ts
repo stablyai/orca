@@ -101,10 +101,10 @@ export async function declaredPluginSkillRoots(
       }
       const skills = (parsed as Record<string, unknown>).skills
       const values = Array.isArray(skills) ? skills : [skills]
-      const roots = values.map((value) => resolveManifestSkillPath(directory, value))
-      return roots.length > 0 && roots.every((value): value is string => value !== null)
-        ? [...new Set(roots)]
-        : [join(directory, 'skills')]
+      const roots = values
+        .map((value) => resolveManifestSkillPath(directory, value))
+        .filter((value): value is string => value !== null)
+      return roots.length > 0 ? [...new Set(roots)] : [join(directory, 'skills')]
     } catch (error) {
       if (!(error instanceof SyntaxError)) {
         recordIssue(manifestPath, 'io-error', errorCode(error))
