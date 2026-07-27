@@ -167,7 +167,7 @@ describe('claude-subagent-roster', () => {
   })
 
   it('reads only agent-typed background_tasks entries', () => {
-    const { present, tasks } = readClaudeBackgroundAgentTasks({
+    const { present, tasks, hasRunningNonAgentTask } = readClaudeBackgroundAgentTasks({
       background_tasks: [
         {
           id: 'a1',
@@ -183,6 +183,7 @@ describe('claude-subagent-roster', () => {
       ]
     })
     expect(present).toBe(true)
+    expect(hasRunningNonAgentTask).toBe(true)
     expect(tasks).toEqual([
       {
         id: 'a1',
@@ -204,6 +205,18 @@ describe('claude-subagent-roster', () => {
   it('reports background_tasks as absent when missing or malformed', () => {
     expect(readClaudeBackgroundAgentTasks({}).present).toBe(false)
     expect(readClaudeBackgroundAgentTasks({ background_tasks: 'nope' }).present).toBe(false)
+  })
+
+  it('recognizes running monitors without treating them as agent rows', () => {
+    const result = readClaudeBackgroundAgentTasks({
+      background_tasks: [
+        { id: 'm1', type: 'monitor', status: 'running', description: 'watch deploy' },
+        { id: 's1', type: 'shell', status: 'completed', description: 'build' }
+      ]
+    })
+
+    expect(result.hasRunningNonAgentTask).toBe(true)
+    expect(result.tasks).toEqual([])
   })
 
   it('marks a background task inventory truncated after the snapshot cap', () => {

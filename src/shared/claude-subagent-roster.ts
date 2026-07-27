@@ -139,19 +139,26 @@ export function readClaudeBackgroundAgentTasks(hookPayload: Record<string, unkno
   present: boolean
   tasks: ClaudeBackgroundAgentTask[]
   truncated: boolean
+  hasRunningNonAgentTask: boolean
 } {
   const raw = hookPayload['background_tasks']
   if (!Array.isArray(raw)) {
-    return { present: false, tasks: [], truncated: false }
+    return { present: false, tasks: [], truncated: false, hasRunningNonAgentTask: false }
   }
   const tasks: ClaudeBackgroundAgentTask[] = []
   let truncated = false
+  let hasRunningNonAgentTask = false
   for (const item of raw) {
     if (typeof item !== 'object' || item === null) {
       continue
     }
     const obj = item as Record<string, unknown>
     if (obj.type !== 'subagent' && obj.type !== 'teammate') {
+      // Why: persistent shells and monitors keep the parent task alive even
+      // though they are not agent rows. Their presence must still gate Stop.
+      if ((obj.type === 'shell' || obj.type === 'monitor') && obj.status === 'running') {
+        hasRunningNonAgentTask = true
+      }
       continue
     }
     if (typeof obj.id !== 'string' || obj.id.trim().length === 0) {
@@ -171,7 +178,7 @@ export function readClaudeBackgroundAgentTasks(hookPayload: Record<string, unkno
       teammate: obj.type === 'teammate'
     })
   }
-  return { present: true, tasks, truncated }
+  return { present: true, tasks, truncated, hasRunningNonAgentTask }
 }
 
 /** Fold a lead Stop's `background_tasks` into the lifecycle-tracked roster.

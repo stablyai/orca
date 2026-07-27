@@ -2549,6 +2549,15 @@ function normalizeClaudeEvent(
   // Treat that PreToolUse as waiting so the sidebar shows amber attention, not a spinner that decays to grey. Mirrors normalizeKimiEvent.
   const isAskUserQuestion =
     eventName === 'PreToolUse' && isAskUserQuestionTool(readString(hookPayload, 'tool_name'))
+  const previousLead = state.claudeLeadStateByPaneKey.get(paneKey)
+  const interrupted =
+    eventName === 'Stop' && hookPayload['is_interrupt'] === true ? true : undefined
+  const permissionMode =
+    readString(hookPayload, 'permission_mode') ?? readString(hookPayload, 'permissionMode')
+  const keepWaitingOnStop =
+    eventName === 'Stop' &&
+    !interrupted &&
+    (previousLead?.state === 'waiting' || permissionMode?.toLowerCase() === 'plan')
   const stateName =
     eventName === 'UserPromptSubmit' ||
     eventName === 'PostToolUse' ||
@@ -2558,7 +2567,9 @@ function normalizeClaudeEvent(
       : eventName === 'PermissionRequest' || isAskUserQuestion
         ? 'waiting'
         : eventName === 'Stop' || eventName === 'StopFailure'
-          ? 'done'
+          ? keepWaitingOnStop
+            ? 'waiting'
+            : 'done'
           : null
 
   if (!stateName) {
@@ -2613,11 +2624,13 @@ function normalizeClaudeEvent(
     return buildClaudeChildDrivenStatusPayload(state, eventName, paneKey, hookPayload)
   }
 
+  let hasRunningNonAgentTask = false
   if (eventName === 'Stop' || eventName === 'StopFailure') {
     // Why: background_tasks is trusted only where unambiguous (see foldClaudeBackgroundTasksIntoRoster) — teammates report "running" here even while idle.
     // Older Claude builds without the field keep the incrementally tracked roster.
     const backgroundTasks = readClaudeBackgroundAgentTasks(hookPayload)
     if (backgroundTasks.present) {
+      hasRunningNonAgentTask = backgroundTasks.hasRunningNonAgentTask
       foldClaudeBackgroundTasksIntoRoster(
         getOrCreateClaudeSubagentRoster(state, paneKey),
         backgroundTasks.tasks,
@@ -2626,10 +2639,7 @@ function normalizeClaudeEvent(
       )
     }
   }
-  const interrupted =
-    eventName === 'Stop' && hookPayload['is_interrupt'] === true ? true : undefined
   // Why: a child-induced wait displaces the lead state; stash it so clearing restores reality (lead may be done). A 2nd child wait carries the ORIGINAL stash, not the intermediate waiting state.
-  const previousLead = state.claudeLeadStateByPaneKey.get(paneKey)
   const stateBeforeWait =
     isWaitingInducing && eventAgentId && previousLead
       ? previousLead.state === 'waiting'
@@ -2639,17 +2649,22 @@ function normalizeClaudeEvent(
             ...(previousLead.interrupted ? { interrupted: true as const } : {})
           }
       : undefined
-  state.claudeLeadStateByPaneKey.set(paneKey, {
-    state: stateName,
-    ...(interrupted ? { interrupted } : {}),
-    ...(isWaitingInducing && eventAgentId ? { waitingAgentId: eventAgentId } : {}),
-    ...(stateBeforeWait ? { stateBeforeWait } : {})
-  })
+  if (!keepWaitingOnStop || previousLead?.state !== 'waiting') {
+    state.claudeLeadStateByPaneKey.set(paneKey, {
+      state: stateName,
+      ...(interrupted ? { interrupted } : {}),
+      ...(isWaitingInducing && eventAgentId ? { waitingAgentId: eventAgentId } : {}),
+      ...(stateBeforeWait ? { stateBeforeWait } : {})
+    })
+  }
 
   // Why: a lead Stop isn't "done" while subagents/teammates run (would show a finished row mid-flight); Claude re-wakes the lead, so a later empty-roster Stop resolves to done.
   const roster = state.claudeSubagentRosterByPaneKey.get(paneKey)
   const effectiveState =
-    stateName === 'done' && claudeRosterHasWorkingSubagent(roster) ? 'working' : stateName
+    stateName === 'done' &&
+    (claudeRosterHasWorkingSubagent(roster) || hasRunningNonAgentTask)
+      ? 'working'
+      : stateName
 
   return buildClaudeStatusPayload(state, eventName, promptText, paneKey, hookPayload, {
     stateName: effectiveState,

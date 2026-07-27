@@ -3008,6 +3008,55 @@ describe('shared agent-hook-listener', () => {
       expect(stop?.payload.subagents).toBeUndefined()
     })
 
+    it.each(['shell', 'monitor'])(
+      'reports Stop as working while a background %s is still running',
+      (type) => {
+        claudeEvent({ hook_event_name: 'UserPromptSubmit', prompt: 'watch the job' })
+        const stop = claudeEvent({
+          hook_event_name: 'Stop',
+          background_tasks: [
+            { id: `${type}-1`, type, status: 'running', description: 'wait for completion' }
+          ]
+        })
+
+        expect(stop?.payload.state).toBe('working')
+        expect(stop?.payload.subagents).toBeUndefined()
+      }
+    )
+
+    it('keeps an unresolved permission request waiting across Stop', () => {
+      claudeEvent({ hook_event_name: 'UserPromptSubmit', prompt: 'deploy it' })
+      claudeEvent({
+        hook_event_name: 'PermissionRequest',
+        tool_name: 'Bash',
+        tool_input: { command: 'git push' }
+      })
+
+      const stop = claudeEvent({ hook_event_name: 'Stop' })
+      expect(stop?.payload.state).toBe('waiting')
+      expect(stop?.payload.toolName).toBe('Bash')
+
+      const resumed = claudeEvent({ hook_event_name: 'UserPromptSubmit', prompt: 'skip deploy' })
+      expect(resumed?.payload.state).toBe('working')
+    })
+
+    it('reports a plan-mode Stop as waiting for confirmation', () => {
+      claudeEvent({ hook_event_name: 'UserPromptSubmit', prompt: 'make a plan' })
+      const stop = claudeEvent({ hook_event_name: 'Stop', permission_mode: 'plan' })
+      expect(stop?.payload.state).toBe('waiting')
+    })
+
+    it('lets an interrupt finish a pending plan-mode turn', () => {
+      claudeEvent({ hook_event_name: 'UserPromptSubmit', prompt: 'make a plan' })
+      const stop = claudeEvent({
+        hook_event_name: 'Stop',
+        permission_mode: 'plan',
+        is_interrupt: true
+      })
+      expect(stop?.payload.state).toBe('done')
+      expect(stop?.payload.interrupted).toBe(true)
+    })
+
     it('reports Stop as working while a background subagent is still running', () => {
       claudeEvent({ hook_event_name: 'UserPromptSubmit', prompt: 'review the PR' })
       claudeEvent({
