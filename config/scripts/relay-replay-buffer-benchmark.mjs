@@ -34,8 +34,14 @@ const capMatch = HANDLER_SOURCE.match(/REPLAY_BUFFER_MAX = ([\d *]+)/)
 if (!capMatch) {
   throw new Error('REPLAY_BUFFER_MAX not found; this benchmark is stale')
 }
-// eslint-disable-next-line no-eval -- reading a numeric literal expression out of source
-const REPLAY_BUFFER_MAX = Number(eval(capMatch[1]))
+// The regex admits only digits, spaces, and `*`, so the literal is a plain product.
+const REPLAY_BUFFER_MAX = capMatch[1]
+  .split('*')
+  .map((factor) => Number(factor.trim()))
+  .reduce((product, factor) => product * factor, 1)
+if (!Number.isSafeInteger(REPLAY_BUFFER_MAX) || REPLAY_BUFFER_MAX <= 0) {
+  throw new Error(`could not read REPLAY_BUFFER_MAX from source, got ${capMatch[1]}`)
+}
 
 // Pre-fix: rolling string, re-sliced once over the cap.
 function appendString(state, data) {

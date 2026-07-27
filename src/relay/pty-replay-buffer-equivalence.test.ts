@@ -116,9 +116,21 @@ describe('relay replay buffer equivalence', () => {
   // Why surrogates: trimming by code unit can split a pair, and the string form did
   // exactly the same thing. The deque must not "fix" it into a different tail.
   it('splits surrogate pairs identically to the rolling string', () => {
-    const emoji = '\u{1F600}'.repeat(REPLAY_BUFFER_MAX)
-    const { deque, reference } = replayEquals([emoji])
+    // Why the trailing unit: the cap is even and a pair is 2 units, so an emoji run
+    // alone always cuts on a pair boundary. One odd unit shifts the cut mid-pair.
+    const { deque, reference } = replayEquals([`${'\u{1F600}'.repeat(REPLAY_BUFFER_MAX)}z`])
     expect(deque).toBe(reference)
     expect(deque.length).toBe(REPLAY_BUFFER_MAX)
+    const leadUnit = deque.charCodeAt(0)
+    expect(leadUnit).toBeGreaterThanOrEqual(0xdc00)
+    expect(leadUnit).toBeLessThanOrEqual(0xdfff)
+  })
+
+  it('keeps a pair-aligned tail intact when the cut lands on a boundary', () => {
+    const { deque, reference } = replayEquals(['\u{1F600}'.repeat(REPLAY_BUFFER_MAX)])
+    expect(deque).toBe(reference)
+    const leadUnit = deque.charCodeAt(0)
+    expect(leadUnit).toBeGreaterThanOrEqual(0xd800)
+    expect(leadUnit).toBeLessThanOrEqual(0xdbff)
   })
 })
