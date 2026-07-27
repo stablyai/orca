@@ -28,6 +28,7 @@ export type MobileNativeChatSendOutcome = 'accepted' | 'rejected' | 'unknown'
  *  the composer holds `sending` (send arrow dimmed, no error) for as long as it
  *  pends. Chat writes are interactive: fail them so the user can retry. */
 export const MOBILE_NATIVE_CHAT_SEND_TIMEOUT_MS = 15_000
+export const MOBILE_NATIVE_CHAT_MIN_WRITE_TIMEOUT_MS = 2_000
 
 /** Opens a budget for one user action. Multi-write actions (heal → paste → text, a
  *  paced selector answer) must share one so the composer's `sending` window stays
@@ -41,9 +42,8 @@ export async function sendMobileNativeChatMessageWithOutcome(
 ): Promise<MobileNativeChatSendOutcome> {
   const timeoutMs =
     args.deadline === undefined ? MOBILE_NATIVE_CHAT_SEND_TIMEOUT_MS : args.deadline - Date.now()
-  // A write scheduled after the shared budget expired can only overrun it. Nothing
-  // was put on the wire, so this is a definite non-send, not delivery-ambiguous.
-  if (timeoutMs <= 0) {
+  // Starting an underfunded final write risks delivery followed by a false timeout.
+  if (timeoutMs < MOBILE_NATIVE_CHAT_MIN_WRITE_TIMEOUT_MS) {
     return 'rejected'
   }
   try {

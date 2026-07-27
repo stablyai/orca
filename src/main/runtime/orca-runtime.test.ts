@@ -19036,7 +19036,7 @@ describe('OrcaRuntimeService', () => {
 
     // Guards the assertion below from passing vacuously on a one-tab projection.
     expect(result.tabs.filter((tab) => tab.type === 'terminal').length).toBeGreaterThan(1)
-    expect(snapshotReads).toBeLessThanOrEqual(1)
+    expect(snapshotReads).toBe(1)
   })
 
   it('publishes hook-only identity for a pane that never emitted an agent title', async () => {
@@ -19099,31 +19099,7 @@ describe('OrcaRuntimeService', () => {
     }
     const now = Date.now()
     const runtime = new OrcaRuntimeService(store, undefined, {
-      getAgentStatusSnapshot: () => [
-        {
-          paneKey,
-          state: 'done',
-          prompt: 'Hi',
-          agentType: 'pi',
-          connectionId: null,
-          receivedAt: now,
-          stateStartedAt: now,
-          tabId: 'pi-tab',
-          worktreeId: TEST_WORKTREE_ID
-        }
-      ],
       getAgentProviderSessionSnapshot: () => [
-        {
-          paneKey,
-          state: 'done',
-          prompt: 'Hi',
-          agentType: 'pi',
-          connectionId: null,
-          receivedAt: now,
-          stateStartedAt: now,
-          tabId: 'pi-tab',
-          worktreeId: TEST_WORKTREE_ID
-        },
         {
           paneKey,
           state: 'done',
@@ -19148,7 +19124,6 @@ describe('OrcaRuntimeService', () => {
     await runtime.createTerminal(`id:${TEST_WORKTREE_ID}`, {
       tabId: 'pi-tab',
       leafId: HEADLESS_LEAF_ID,
-      launchAgent: 'pi',
       title: 'Terminal'
     })
 
@@ -19157,7 +19132,52 @@ describe('OrcaRuntimeService', () => {
     expect(result.tabs[0]).toEqual(
       expect.objectContaining({
         type: 'terminal',
-        agentStatus: expect.objectContaining({ providerSession })
+        agentStatus: expect.objectContaining({ agentType: 'pi', providerSession })
+      })
+    )
+  })
+
+  it('does not let stale Pi resume metadata claim a plain terminal', async () => {
+    const paneKey = makePaneKey('stale-pi-tab', HEADLESS_LEAF_ID)
+    const runtime = new OrcaRuntimeService(store, undefined, {
+      getAgentProviderSessionSnapshot: () => [
+        {
+          paneKey,
+          state: 'done',
+          prompt: '',
+          agentType: 'pi',
+          connectionId: null,
+          receivedAt: Date.now() - AGENT_STATUS_STALE_AFTER_MS - 1,
+          stateStartedAt: Date.now() - AGENT_STATUS_STALE_AFTER_MS - 1,
+          tabId: 'stale-pi-tab',
+          worktreeId: TEST_WORKTREE_ID,
+          providerSession: {
+            key: 'session_id',
+            id: '/sessions/stale-pi.json',
+            transcriptPath: '/sessions/stale-pi.json'
+          },
+          providerSessionOnly: true
+        }
+      ]
+    })
+    runtime.setPtyController({
+      spawn: vi.fn().mockResolvedValue({ id: 'pty-stale-pi' }),
+      write: () => true,
+      kill: () => true,
+      getForegroundProcess: async () => null
+    })
+    await runtime.createTerminal(`id:${TEST_WORKTREE_ID}`, {
+      tabId: 'stale-pi-tab',
+      leafId: HEADLESS_LEAF_ID,
+      title: 'Terminal'
+    })
+
+    const result = await runtime.listMobileSessionTabs(`id:${TEST_WORKTREE_ID}`)
+
+    expect(result.tabs[0]).toEqual(
+      expect.objectContaining({
+        type: 'terminal',
+        agentStatus: expect.not.objectContaining({ agentType: 'pi' })
       })
     )
   })

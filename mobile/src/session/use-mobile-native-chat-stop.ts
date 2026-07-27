@@ -3,7 +3,7 @@ import type { RpcClient } from '../transport/rpc-client'
 import { isRpcDeliveryUnknown } from '../transport/rpc-delivery-ambiguity'
 import { isLogicalClientCutoverError } from '../transport/stable-logical-rpc-client'
 import { isTerminalSendRpcAccepted } from '../terminal/terminal-send-rpc-response'
-import { MOBILE_NATIVE_CHAT_SEND_TIMEOUT_MS } from './mobile-native-chat-send'
+import { openMobileNativeChatSendBudget } from './mobile-native-chat-send'
 
 export function useMobileNativeChatStop(args: {
   client: RpcClient | null
@@ -17,6 +17,7 @@ export function useMobileNativeChatStop(args: {
   const { client, enabled, handleRef, deviceTokenRef, streamIdentity, cancelPending, onSendError } =
     args
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const generationRef = useRef(0)
   /** Settles the paced second Escape when it is cancelled rather than sent, so a
    *  first-Escape failure still reports instead of waiting on a write that will
    *  never happen. */
@@ -32,7 +33,13 @@ export function useMobileNativeChatStop(args: {
     dropSecondEscapeRef.current = null
     drop?.()
   }, [])
-  useEffect(() => cancelSecondEscape, [cancelSecondEscape, client, enabled, streamIdentity])
+  useEffect(
+    () => () => {
+      generationRef.current += 1
+      cancelSecondEscape()
+    },
+    [cancelSecondEscape, client, enabled, streamIdentity]
+  )
   return useCallback(() => {
     const handle = handleRef.current
     if (!client || !handle || !enabled) {
@@ -40,8 +47,11 @@ export function useMobileNativeChatStop(args: {
       return
     }
     cancelPending()
+    generationRef.current += 1
+    const generation = generationRef.current
     cancelSecondEscape()
     const stopStreamIdentity = streamIdentity
+    const deadline = openMobileNativeChatSendBudget()
     // Why: the two paced Escapes are one user action. Reporting the first one's
     // failure the moment it lands told the user a stop failed that the second
     // Escape then completed — and a second Stop press writes into changed prompt
@@ -52,7 +62,12 @@ export function useMobileNativeChatStop(args: {
     let sawUnknown = false
     let sawRejected = false
     const reportIfSettled = (): void => {
-      if (pending > 0 || sawAccepted || (!sawUnknown && !sawRejected)) {
+      if (
+        generationRef.current !== generation ||
+        pending > 0 ||
+        sawAccepted ||
+        (!sawUnknown && !sawRejected)
+      ) {
         return
       }
       // Why: an ack lost after the frame was written (or a logical cutover) may
@@ -71,6 +86,13 @@ export function useMobileNativeChatStop(args: {
         return
       }
       pending += 1
+      const timeoutMs = deadline - Date.now()
+      if (timeoutMs <= 0) {
+        sawRejected = true
+        pending -= 1
+        reportIfSettled()
+        return
+      }
       void client
         .sendRequest(
           'terminal.send',
@@ -84,10 +106,14 @@ export function useMobileNativeChatStop(args: {
           // Why: without this the call parks indefinitely on reconnect, so "Stop not
           // sent" never appears and a stale Escape can land minutes later — into a
           // composer that by then holds fresh text.
-          { timeoutMs: MOBILE_NATIVE_CHAT_SEND_TIMEOUT_MS, budgetSpansConnect: true }
+          { timeoutMs, budgetSpansConnect: true }
         )
         .then((response) => {
-          sawAccepted ||= isTerminalSendRpcAccepted(response)
+          if (isTerminalSendRpcAccepted(response)) {
+            sawAccepted = true
+          } else {
+            sawRejected = true
+          }
         })
         // Why: disconnect can race either fire-and-forget Escape; record one verdict
         // instead of leaking an unhandled RPC rejection.

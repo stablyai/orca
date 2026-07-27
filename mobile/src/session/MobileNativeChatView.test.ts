@@ -137,20 +137,7 @@ describe('MobileNativeChatView send-error banner', () => {
     expect(bannerText()).toContain('Permission reply failed')
   })
 
-  it('names the disconnected transport when the composer send is rejected', async () => {
-    await render({
-      onSend: vi.fn().mockResolvedValue(false),
-      inputLockReason: 'disconnected'
-    })
-    expect(banners()).toHaveLength(0)
-
-    await pressSend()
-
-    expect(banners()).toHaveLength(1)
-    expect(bannerText()).toContain('Message not sent — reconnecting…')
-  })
-
-  it('paints one banner, the route message, when both failures are live', async () => {
+  it('does not duplicate the route banner when the composer rejects', async () => {
     await render({
       onSend: vi.fn().mockResolvedValue(false),
       inputLockReason: 'disconnected',
@@ -160,32 +147,7 @@ describe('MobileNativeChatView send-error banner', () => {
 
     expect(banners()).toHaveLength(1)
     expect(bannerText()).toContain('Stop failed')
-    expect(bannerText()).not.toContain('Message not sent')
-  })
-
-  it('restarts the auto-dismiss hold when a second send fails', async () => {
-    vi.useFakeTimers()
-    try {
-      await render({ onSend: vi.fn().mockResolvedValue(false) })
-      await pressSend()
-      // Most of the 4s hold is gone; the repeat failure must not inherit its timer.
-      await act(async () => {
-        await vi.advanceTimersByTimeAsync(3500)
-      })
-      await pressSend()
-      await act(async () => {
-        await vi.advanceTimersByTimeAsync(3500)
-      })
-
-      expect(banners()).toHaveLength(1)
-
-      await act(async () => {
-        await vi.advanceTimersByTimeAsync(1000)
-      })
-      expect(banners()).toHaveLength(0)
-    } finally {
-      vi.useRealTimers()
-    }
+    expect(bannerText()).toBe('Stop failed')
   })
 
   it('retires the route-owned banner once a send is accepted', async () => {

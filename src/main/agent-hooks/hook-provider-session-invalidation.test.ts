@@ -5,8 +5,6 @@ describe('createHookProviderSessionInvalidator', () => {
   it('names the worktree the first time a pane reports a provider session', () => {
     const collect = createHookProviderSessionInvalidator()
 
-    // A phone already streaming session.tabs is not polled while its stream is
-    // healthy, so this transition is the only chance to reach it.
     expect(collect([{ paneKey: 'tab:leaf', sessionId: 's1', worktreeId: 'w1' }])).toEqual(['w1'])
   })
 
@@ -15,8 +13,6 @@ describe('createHookProviderSessionInvalidator', () => {
     const rows = [{ paneKey: 'tab:leaf', sessionId: 's1', worktreeId: 'w1' }]
     collect(rows)
 
-    // Hook events fire per tool call; re-projecting the workspace each time would
-    // undo the coalescing the tab publish path relies on.
     expect(collect(rows)).toEqual([])
   })
 
@@ -31,8 +27,37 @@ describe('createHookProviderSessionInvalidator', () => {
     const collect = createHookProviderSessionInvalidator()
     collect([{ paneKey: 'tab:leaf', sessionId: 's1', worktreeId: 'w1' }])
 
-    // Native chat must stop offering a transcript that is no longer addressable.
     expect(collect([])).toEqual(['w1'])
+  })
+
+  it('names both worktrees when a pane moves without changing session', () => {
+    const collect = createHookProviderSessionInvalidator()
+    collect([{ paneKey: 'tab:leaf', sessionId: 's1', worktreeId: 'w1' }])
+
+    expect(collect([{ paneKey: 'tab:leaf', sessionId: 's1', worktreeId: 'w2' }])).toEqual([
+      'w1',
+      'w2'
+    ])
+  })
+
+  it('invalidates when Pi keeps its session id but changes transcript path', () => {
+    const collect = createHookProviderSessionInvalidator()
+    collect([
+      { paneKey: 'tab:leaf', sessionId: 's1', transcriptPath: '/pi/a.jsonl', worktreeId: 'w1' }
+    ])
+
+    expect(
+      collect([
+        { paneKey: 'tab:leaf', sessionId: 's1', transcriptPath: '/pi/b.jsonl', worktreeId: 'w1' }
+      ])
+    ).toEqual(['w1'])
+  })
+
+  it('retains the known worktree when a later hook omits it', () => {
+    const collect = createHookProviderSessionInvalidator()
+    collect([{ paneKey: 'tab:leaf', sessionId: 's1', worktreeId: 'w1' }])
+
+    expect(collect([{ paneKey: 'tab:leaf', sessionId: 's2' }])).toEqual(['w1'])
   })
 
   it('ignores a session with no worktree to invalidate', () => {

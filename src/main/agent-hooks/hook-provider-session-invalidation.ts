@@ -1,19 +1,8 @@
 import type { AgentHookProviderSessionIdentity } from './server'
 
-type KnownSession = { sessionId: string; worktreeId: string }
+type KnownSession = { sessionId: string; transcriptPath?: string; worktreeId: string }
 
-/** Tracks hook-reported provider sessions across status events and names the
- *  worktrees whose set just changed.
- *
- *  Why this exists: on headless `orca serve` there is no renderer to publish
- *  `tab.agentStatus`, so the hook row is the only carrier of a pane's provider
- *  session — and a phone already subscribed to `session.tabs` is not polled while
- *  its stream is healthy. Without a push, native chat sits on `waiting-session`
- *  until some unrelated tab event happens to re-run the projection.
- *
- *  Only provider-session transitions are reported: every other hook field already
- *  reaches mobile through paths that notify, and invalidating on each status ping
- *  would re-project the whole workspace on every tool call. */
+/** Names worktrees whose hook-reported resume identity changed. */
 export function createHookProviderSessionInvalidator(): (
   identities: readonly AgentHookProviderSessionIdentity[]
 ) => string[] {
@@ -22,19 +11,27 @@ export function createHookProviderSessionInvalidator(): (
     const next = new Map<string, KnownSession>()
     const changedWorktrees = new Set<string>()
     for (const identity of identities) {
-      if (!identity.worktreeId) {
+      const previous = known.get(identity.paneKey)
+      const worktreeId = identity.worktreeId ?? previous?.worktreeId
+      if (!worktreeId) {
         continue
       }
       next.set(identity.paneKey, {
         sessionId: identity.sessionId,
-        worktreeId: identity.worktreeId
+        ...(identity.transcriptPath ? { transcriptPath: identity.transcriptPath } : {}),
+        worktreeId
       })
-      if (known.get(identity.paneKey)?.sessionId !== identity.sessionId) {
-        changedWorktrees.add(identity.worktreeId)
+      if (
+        previous?.sessionId !== identity.sessionId ||
+        previous?.transcriptPath !== identity.transcriptPath ||
+        previous?.worktreeId !== worktreeId
+      ) {
+        if (previous?.worktreeId !== worktreeId) {
+          changedWorktrees.add(previous?.worktreeId ?? worktreeId)
+        }
+        changedWorktrees.add(worktreeId)
       }
     }
-    // A pane whose session went away (agent exited, row evicted) is a change too:
-    // native chat must stop offering a transcript that is no longer addressable.
     for (const [paneKey, previous] of known) {
       if (!next.has(paneKey)) {
         changedWorktrees.add(previous.worktreeId)

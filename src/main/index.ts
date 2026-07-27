@@ -187,7 +187,7 @@ import {
   seedLiveClaudePtysFromPersistence
 } from './claude-accounts/live-pty-gate'
 import { StarNagService } from './star-nag/service'
-import { agentHookServer } from './agent-hooks/server'
+import { agentHookServer, type AgentHookProviderSessionIdentity } from './agent-hooks/server'
 import { createHookProviderSessionInvalidator } from './agent-hooks/hook-provider-session-invalidation'
 import { wslHookRelayManager } from './agent-hooks/wsl-hook-relay-manager'
 import { maybeAutoRenameBranchOnFirstWork } from './agent-hooks/first-work-branch-rename'
@@ -1914,19 +1914,31 @@ app.whenReady().then(async () => {
   // Why: start from empty — disk-hydrated status rows are UI continuity only; only this runtime's hook events keep the computer awake.
   agentAwakeService.setStatuses([])
   const collectChangedProviderSessionWorktrees = createHookProviderSessionInvalidator()
-  unsubscribeAgentAwakeStatusChanges = agentHookServer.subscribeStatusChanges((statuses) => {
-    agentAwakeService?.setStatuses(statuses)
-    // Why: a phone already streaming `session.tabs` is not polled while the stream is
-    // healthy, so a hook that only now reported its provider session would never reach
-    // it — native chat would sit on `waiting-session` for a transcript the host can
-    // already address. The runtime is created later in this bootstrap; before that
-    // there are no subscribers to invalidate.
-    for (const worktreeId of collectChangedProviderSessionWorktrees(
-      agentHookServer.getProviderSessionIdentities()
-    )) {
+  const publishProviderSessionChanges = (identities: AgentHookProviderSessionIdentity[]): void => {
+    const ownedIdentities = identities.map((identity) => ({
+      ...identity,
+      worktreeId:
+        identity.worktreeId ??
+        runtime?.getTerminalWorktreeIdForPaneKey(identity.paneKey) ??
+        undefined
+    }))
+    for (const worktreeId of collectChangedProviderSessionWorktrees(ownedIdentities)) {
       runtime?.notifyMobileSessionTabsChanged(worktreeId)
     }
+  }
+  const unsubscribeStatusChanges = agentHookServer.subscribeStatusChanges((statuses) => {
+    agentAwakeService?.setStatuses(statuses)
   })
+  const unsubscribeProviderSessionChanges = agentHookServer.subscribeProviderSessionChanges(
+    (sessions) => {
+      // Healthy session.tabs streams need a push when transcript identity changes.
+      publishProviderSessionChanges(sessions)
+    }
+  )
+  unsubscribeAgentAwakeStatusChanges = () => {
+    unsubscribeStatusChanges()
+    unsubscribeProviderSessionChanges()
+  }
   // Why: telemetry must init before any IPC handler/renderer can call track(); it's a no-op in dev and while TELEMETRY_ENABLED is false, so it's safe early.
   initTelemetry(store)
   // Why: the trust-grant module is bundled into plain-node CLI entries where
@@ -2100,6 +2112,8 @@ app.whenReady().then(async () => {
     // those rows carry the provider session mobile native chat addresses transcripts
     // by — Pi publishes identity that way and would otherwise be unreachable.
     getAgentProviderSessionSnapshot: () => agentHookServer.getStatusSnapshot(),
+    getAgentProviderSessionRowsForPane: (paneKey) =>
+      agentHookServer.getStatusSnapshotForPane(paneKey),
     // Why: source codex-home here (runs in window AND serve) so aiVault.listSessions includes managed-Codex sessions; registerCoreHandlers is window-only.
     getAdditionalAiVaultCodexHomePaths: () =>
       codexRuntimeHome ? codexRuntimeHome.getHostCodexHomePathsForSessionDiscovery() : [],
@@ -2112,6 +2126,7 @@ app.whenReady().then(async () => {
       isAgentStatusHooksEnabled(store?.getSettings()) ? agentHookServer.buildPtyEnv() : {}
   })
   runtime = runtimeService
+  publishProviderSessionChanges(agentHookServer.getProviderSessionIdentities())
   browserManager.setBrowserGuestStateChangedListener((worktreeId) => {
     runtimeService.notifyMobileSessionTabsChanged(worktreeId)
   })

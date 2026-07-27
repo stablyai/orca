@@ -15,7 +15,10 @@ describe('useMobileNativeChatStop', () => {
   beforeEach(() => {
     vi.useFakeTimers()
     globalThis.IS_REACT_ACT_ENVIRONMENT = true
-    sendRequest.mockReset().mockResolvedValue({ ok: true })
+    sendRequest.mockReset().mockResolvedValue({
+      ok: true,
+      result: { send: { accepted: true } }
+    })
     onSendError.mockReset()
   })
 
@@ -86,6 +89,20 @@ describe('useMobileNativeChatStop', () => {
   })
 
   it.each([
+    ['RPC failure', { ok: false, error: { code: 'stale', message: 'stale' } }],
+    ['non-accepted send', { ok: true, result: { send: { accepted: false } } }]
+  ])('reports Stop not sent after a resolved %s', async (_case, response) => {
+    sendRequest.mockResolvedValue(response)
+    await render(true, 'stream-1')
+
+    act(() => stop?.())
+    await act(async () => vi.runAllTimersAsync())
+
+    expect(onSendError).toHaveBeenCalledOnce()
+    expect(onSendError).toHaveBeenCalledWith('Stop not sent')
+  })
+
+  it.each([
     [
       'an ack lost after the frame was written',
       () => markRpcDeliveryUnknown(new Error('rpc timeout'))
@@ -138,9 +155,34 @@ describe('useMobileNativeChatStop', () => {
     act(() => stop?.())
 
     // The budget covers the reconnect wait too, so a stop can't outlast its ceiling.
-    expect(sendRequest).toHaveBeenCalledWith('terminal.send', expect.anything(), {
-      timeoutMs: MOBILE_NATIVE_CHAT_SEND_TIMEOUT_MS,
-      budgetSpansConnect: true
+    expect(sendRequest).toHaveBeenCalledWith(
+      'terminal.send',
+      expect.anything(),
+      expect.objectContaining({
+        timeoutMs: MOBILE_NATIVE_CHAT_SEND_TIMEOUT_MS,
+        budgetSpansConnect: true
+      })
+    )
+  })
+
+  it('suppresses an older Stop verdict after a newer Stop succeeds', async () => {
+    let rejectFirst!: (error: Error) => void
+    const first = new Promise((_, reject) => {
+      rejectFirst = reject
     })
+    sendRequest
+      .mockReturnValueOnce(first)
+      .mockResolvedValue({ ok: true, result: { send: { accepted: true } } })
+    await render(true, 'stream-1')
+
+    act(() => stop?.())
+    act(() => stop?.())
+    await act(async () => vi.runAllTimersAsync())
+    await act(async () => {
+      rejectFirst(new Error('late failure'))
+      await Promise.resolve()
+    })
+
+    expect(onSendError).not.toHaveBeenCalled()
   })
 })

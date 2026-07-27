@@ -1,4 +1,6 @@
 import { readFileSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
 import type { WebSocket } from 'ws'
 import type { AgentStatusEntry } from '../../src/shared/agent-status-types'
 import type {
@@ -11,16 +13,18 @@ import type { RpcRequest, RpcResponse } from './mock-server-rpc-handlers'
 // and a terminal send path whose acceptance can be flipped mid-session.
 // Restarting the server re-keys E2EE (forcing a re-pair), so send behaviour is
 // read from a control file on every request instead of an env var.
-const SEND_MODE_FILE = process.env.MOCK_SEND_MODE_FILE ?? '/tmp/orca-mock-send-mode'
+const SEND_MODE_FILE = process.env.MOCK_SEND_MODE_FILE ?? join(tmpdir(), 'orca-mock-send-mode')
 const TERMINAL_LIST_MODE_FILE =
-  process.env.MOCK_TERMINAL_LIST_MODE_FILE ?? '/tmp/orca-mock-terminal-list-mode'
+  process.env.MOCK_TERMINAL_LIST_MODE_FILE ?? join(tmpdir(), 'orca-mock-terminal-list-mode')
 // Write `dead` here to reproduce a gone PTY: the host answers with `subscribed`
 // then `end`, which is the shape the rearm bound and terminal prune react to.
 const TERMINAL_STREAM_MODE_FILE =
-  process.env.MOCK_TERMINAL_STREAM_MODE_FILE ?? '/tmp/orca-mock-terminal-stream-mode'
+  process.env.MOCK_TERMINAL_STREAM_MODE_FILE ?? join(tmpdir(), 'orca-mock-terminal-stream-mode')
 const TERMINAL_HANDLE = 'chat-term-1'
 const TAB_ID = 'chat-tab-1'
 const SESSION_ID = 'mock-chat-session'
+const TRANSCRIPT_PATH = join(tmpdir(), 'mock-transcript.jsonl')
+const MOCK_IMAGE_PATH = join(tmpdir(), 'mock-image.png')
 
 function readControl(file: string): string {
   try {
@@ -44,7 +48,7 @@ const agentStatus: AgentStatusEntry = {
   providerSession: {
     key: 'session_id',
     id: SESSION_ID,
-    transcriptPath: '/tmp/mock-transcript.jsonl'
+    transcriptPath: TRANSCRIPT_PATH
   }
 }
 
@@ -258,7 +262,7 @@ export function handleMockNativeChatRequest(
 
     case 'clipboard.commitImageUpload':
     case 'clipboard.saveImageAsTempFile':
-      respond(success(request.id, '/tmp/mock-image.png'))
+      respond(success(request.id, MOCK_IMAGE_PATH))
       return true
 
     case 'clipboard.abortImageUpload':

@@ -29,6 +29,7 @@ import {
 } from './rpc-client-terminal-subscription'
 import { describeSocketEvent } from './socket-event-debug'
 import { markRpcDeliveryUnknown } from './rpc-delivery-ambiguity'
+import { openRpcRequestBudget, resolvePostConnectRequestTimeout } from './rpc-request-budget'
 import { isRpcResponse } from './rpc-response-shape'
 import { websocketPayloadToUint8 } from './websocket-payload-bytes'
 
@@ -112,7 +113,6 @@ const REQUEST_TIMEOUT_MS = 30_000
 // Why: an explicit `timeoutMs` is one budget for the whole call. If the connect wait
 // ate nearly all of it, still give the written frame a moment to be answered rather
 // than arming a 1ms timer.
-const MIN_REQUEST_TIMEOUT_MS = 1_000
 const CONNECT_TIMEOUT_MS = 12_000
 const HANDSHAKE_TIMEOUT_MS = 5_000
 // Why: RN may not expose WebSocket.readyState constants, but the CONNECTING protocol value (0) is stable across runtimes.
@@ -997,15 +997,9 @@ export function connect(
       params?: unknown,
       options?: SendRequestOptions
     ): Promise<RpcResponse> {
-      const waitStart = Date.now()
+      const budget = openRpcRequestBudget(options)
+      const waitStart = budget.startedAt
       const wasConnected = state === 'connected'
-      // Why: one deadline spanning connect-wait + request, for callers that opt in.
-      // Restarting the full budget after connecting doubled it, and an image paste
-      // is a sequential loop of these — the composer could sit `sending` for minutes.
-      const deadline =
-        options?.budgetSpansConnect && options.timeoutMs !== undefined
-          ? waitStart + options.timeoutMs
-          : null
       await waitForConnected(options?.timeoutMs)
       if (!wasConnected) {
         console.log('[net] sendRequest waited for connect', {
@@ -1016,14 +1010,7 @@ export function connect(
 
       return new Promise((resolve, reject) => {
         const id = nextId()
-        const timeoutMs =
-          deadline === null
-            ? (options?.timeoutMs ?? REQUEST_TIMEOUT_MS)
-            : Math.max(
-                // The floor can never exceed what the caller asked for overall.
-                Math.min(MIN_REQUEST_TIMEOUT_MS, deadline - waitStart),
-                deadline - Date.now()
-              )
+        const timeoutMs = resolvePostConnectRequestTimeout(budget, REQUEST_TIMEOUT_MS)
         const timeout = setTimeout(() => {
           pending.delete(id)
           console.log('[net] sendRequest TIMEOUT', {

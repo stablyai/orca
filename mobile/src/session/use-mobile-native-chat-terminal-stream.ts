@@ -30,8 +30,7 @@ export function useMobileNativeChatTerminalStream(args: {
 }): {
   notifyWebReady: (handle: string, wasAlreadyReady: boolean) => void
   notifyListedHandles: (liveHandles: ReadonlySet<string>) => void
-  /** True once per exhaustion when the covered handle is both out of rearm budget
-   *  and gone from `terminal.list`. Feeds the session-tabs reconciler. */
+  /** True while an exhausted, absent handle still needs a replacement tab snapshot. */
   hasTabsRecoveryNeed: () => boolean
 } {
   const coveredHandleRef = useRef<string | null>(null)
@@ -39,9 +38,6 @@ export function useMobileNativeChatTerminalStream(args: {
   /** Handles `terminal.list` has omitted since we last saw them. Only a handle that
    *  actually went away and came back earns a fresh rearm budget. */
   const absentSinceExhaustionRef = useRef<Set<string>>(new Set())
-  /** Handles whose exhaustion already asked the reconciler for a fresh tab snapshot,
-   *  so one dead handle can't turn the 2s poll into a `session.tabs` fetch loop. */
-  const tabsRecoveryRequestedRef = useRef<Set<string>>(new Set())
   /** Pending proof that a rearmed stream outlived the dead-PTY teardown window. */
   const healthyStreamProofRef = useRef<{
     handle: string
@@ -52,7 +48,6 @@ export function useMobileNativeChatTerminalStream(args: {
   const forgetRearmState = useCallback((handle: string) => {
     rearmAttemptsRef.current.delete(handle)
     absentSinceExhaustionRef.current.delete(handle)
-    tabsRecoveryRequestedRef.current.delete(handle)
   }, [])
   const cancelHealthyStreamProof = useCallback(() => {
     if (healthyStreamProofRef.current) {
@@ -102,21 +97,14 @@ export function useMobileNativeChatTerminalStream(args: {
     [forgetRearmState]
   )
   const hasTabsRecoveryNeed = useCallback((): boolean => {
-    // Why: a handle the host stopped listing AND refuses to rearm is gone for real
-    // (a graph reload reminted its id). No resubscribe can reach it, so the only
-    // thing that can hand the composer a live handle is a fresh tab snapshot — ask
-    // for one, once, instead of holding the composer locked until leave-chat.
+    // Keep polling until a replacement handle arrives; an equal cached snapshot
+    // must not consume recovery and strand the composer on the dead handle.
     const handle = coveredHandleRef.current
-    if (
-      handle == null ||
-      !absentSinceExhaustionRef.current.has(handle) ||
-      (rearmAttemptsRef.current.get(handle) ?? 0) < MAX_REARM_ATTEMPTS ||
-      tabsRecoveryRequestedRef.current.has(handle)
-    ) {
-      return false
-    }
-    tabsRecoveryRequestedRef.current.add(handle)
-    return true
+    return (
+      handle != null &&
+      absentSinceExhaustionRef.current.has(handle) &&
+      (rearmAttemptsRef.current.get(handle) ?? 0) >= MAX_REARM_ATTEMPTS
+    )
   }, [])
   useEffect(() => {
     const handle = args.activeHandle

@@ -152,20 +152,6 @@ export function MobileNativeChatView({
   const [atBottom, setAtBottom] = useState(true)
   const sendScrollTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const { fontScale, pinchGesture } = useMobileNativeChatPinchGesture()
-  // Surface a rejected send inline above the composer — a bottom toast gets hidden
-  // behind the keyboard (the case that prompted this). Auto-dismisses after a beat.
-  // A monotonic generation, not a boolean: a second failure while the banner is up
-  // must restart the auto-dismiss timer instead of being a no-op set.
-  const [sendFailedGeneration, setSendFailedGeneration] = useState(0)
-  const sendFailed = sendFailedGeneration > 0
-  useEffect(() => {
-    if (sendFailedGeneration === 0) {
-      return
-    }
-    const t = setTimeout(() => setSendFailedGeneration(0), 4000)
-    return () => clearTimeout(t)
-  }, [sendFailedGeneration])
-
   useEffect(
     () => () => {
       if (sendScrollTimerRef.current) {
@@ -201,10 +187,8 @@ export function MobileNativeChatView({
     async (text: string): Promise<boolean> => {
       const accepted = await onSend(text)
       if (!accepted) {
-        setSendFailedGeneration((generation) => generation + 1)
         return false
       }
-      setSendFailedGeneration(0)
       // The route-owned banner outlives this send; a success must retire it too,
       // or a stale "Message not sent" sits above the delivered message.
       onClearSendError?.()
@@ -412,19 +396,14 @@ export function MobileNativeChatView({
           </Pressable>
         ) : null}
       </View>
-      {sendFailed || sendErrorMessage ? (
+      {sendErrorMessage ? (
         // This banner is the only channel for a send failure — announce it.
         <View
           style={styles.sendError}
           accessibilityRole="alert"
           accessibilityLiveRegion="assertive"
         >
-          <Text style={styles.sendErrorText}>
-            {sendErrorMessage ??
-              (rawLockReason === 'disconnected'
-                ? 'Message not sent — reconnecting…'
-                : 'Message not sent')}
-          </Text>
+          <Text style={styles.sendErrorText}>{sendErrorMessage}</Text>
         </View>
       ) : null}
       <MobileNativeChatComposer

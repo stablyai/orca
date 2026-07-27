@@ -213,7 +213,7 @@ describe('sendMobileNativeChatMessage', () => {
     expect(options.timeoutMs).toBeLessThanOrEqual(4_000)
   })
 
-  it('refuses a write scheduled after the shared budget expired', async () => {
+  it('refuses a write whose shared budget cannot fund the final acknowledgement', async () => {
     const client = clientWithResponse({
       id: 'request',
       ok: true,
@@ -227,7 +227,7 @@ describe('sendMobileNativeChatMessage', () => {
         client,
         terminal: 'term',
         text: 'hi',
-        deadline: Date.now() - 1
+        deadline: Date.now() + 400
       })
     ).resolves.toBe('rejected')
     expect(client.sendRequest).not.toHaveBeenCalled()

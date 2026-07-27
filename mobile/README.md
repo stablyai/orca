@@ -190,9 +190,9 @@ Connect from the app using endpoint `ws://localhost:6768` and token `mock-device
 
 Read on every request, so behaviour can be flipped mid-session without a restart (a restart would re-key E2EE and force a re-pair). Write the mode into the file, or delete it for the default.
 
-- `MOCK_SEND_MODE_FILE` (default `/tmp/orca-mock-send-mode`) — `accept` (default) accepts the send, `error` fails it with `mobile_input_floor_unavailable`, anything else reports the send as rejected.
-- `MOCK_TERMINAL_LIST_MODE_FILE` (default `/tmp/orca-mock-terminal-list-mode`) — `omit` returns an empty terminal list, `other` returns a list that omits the chat handle, anything else lists it.
-- `MOCK_TERMINAL_STREAM_MODE_FILE` (default `/tmp/orca-mock-terminal-stream-mode`) — `dead` answers a subscribe with `subscribed` then `end` (a gone PTY), which is what exercises the rearm bound and terminal prune; anything else streams normally.
+- `MOCK_SEND_MODE_FILE` (default `orca-mock-send-mode` in the system temporary directory) — `accept` (default) accepts the send, `error` fails it with `mobile_input_floor_unavailable`, anything else reports the send as rejected.
+- `MOCK_TERMINAL_LIST_MODE_FILE` (default `orca-mock-terminal-list-mode` in the system temporary directory) — `omit` returns an empty terminal list, `other` returns a list that omits the chat handle, anything else lists it.
+- `MOCK_TERMINAL_STREAM_MODE_FILE` (default `orca-mock-terminal-stream-mode` in the system temporary directory) — `dead` answers a subscribe with `subscribed` then `end` (a gone PTY), which is what exercises the rearm bound and terminal prune; anything else streams normally.
 
 ## Connecting to Real Orca
 

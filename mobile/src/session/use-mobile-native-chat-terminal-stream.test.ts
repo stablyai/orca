@@ -34,17 +34,19 @@ describe('useMobileNativeChatTerminalStream', () => {
 
   function Harness({
     showNativeChat,
+    activeHandle = 'terminal-1',
     leaseReady = true,
     streamRevision = 0
   }: {
     showNativeChat: boolean
+    activeHandle?: string
     leaseReady?: boolean
     streamRevision?: number
   }): null {
     harnessRenderCount += 1
     const stream = useMobileNativeChatTerminalStream({
       showNativeChat,
-      activeHandle: 'terminal-1',
+      activeHandle,
       activeTabType: 'terminal',
       leaseReady,
       streamRevision,
@@ -373,7 +375,7 @@ describe('useMobileNativeChatTerminalStream', () => {
     expect(subscribe).toHaveBeenCalledWith('terminal-1')
   })
 
-  it('asks the tab snapshot for a replacement once a gone handle stops rearming', async () => {
+  it('keeps asking until a tab snapshot replaces the exhausted handle', async () => {
     await act(async () => {
       renderer = create(createElement(Harness, { showNativeChat: true }))
     })
@@ -392,7 +394,19 @@ describe('useMobileNativeChatTerminalStream', () => {
       notifyListedHandlesRef.current(new Set(['terminal-2']))
     })
     expect(hasTabsRecoveryNeedRef.current()).toBe(true)
-    // One ask per exhaustion — otherwise the 2s poll becomes a session.tabs loop.
+    // An equal cached tab snapshot must leave recovery pending.
+    expect(hasTabsRecoveryNeedRef.current()).toBe(true)
+
+    await act(async () => {
+      renderer?.update(
+        createElement(Harness, {
+          showNativeChat: true,
+          activeHandle: 'terminal-2',
+          leaseReady: false,
+          streamRevision: 4
+        })
+      )
+    })
     expect(hasTabsRecoveryNeedRef.current()).toBe(false)
   })
 

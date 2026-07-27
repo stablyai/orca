@@ -2908,6 +2908,9 @@ export class OrcaRuntimeService {
   private terminalSideEffectConsumerAvailable = false
   private readonly getAgentStatusSnapshotFn: (() => AgentStatusIpcPayload[]) | null
   private readonly getAgentProviderSessionSnapshotFn: (() => AgentStatusIpcPayload[]) | null
+  private readonly getAgentProviderSessionRowsForPaneFn:
+    | ((paneKey: string) => AgentStatusIpcPayload[])
+    | null
   private readonly buildAgentHookPtyEnv: (() => Record<string, string>) | null
   private readonly getDesktopWindowStatusFn: () => RuntimeDesktopWindowStatus
   private readonly prepareAiVaultSessionResumeFn:
@@ -2949,6 +2952,7 @@ export class OrcaRuntimeService {
        *  them: for an agent that publishes identity separately (Pi), that row is the
        *  only carrier of the provider session a transcript is addressed by. */
       getAgentProviderSessionSnapshot?: () => AgentStatusIpcPayload[]
+      getAgentProviderSessionRowsForPane?: (paneKey: string) => AgentStatusIpcPayload[]
       // Why: codex-home paths for the Agent Session History scan must be sourced
       // here, not via the window-only registerCoreHandlers path — that path never
       // runs under `orca serve`, so remote/SSH hosts would silently drop
@@ -2978,6 +2982,7 @@ export class OrcaRuntimeService {
     this.getAgentStatusSnapshotFn = deps?.getAgentStatusSnapshot ?? null
     this.getAgentProviderSessionSnapshotFn =
       deps?.getAgentProviderSessionSnapshot ?? deps?.getAgentStatusSnapshot ?? null
+    this.getAgentProviderSessionRowsForPaneFn = deps?.getAgentProviderSessionRowsForPane ?? null
     // Why: configure the shared AiVault scan cache from a serve-mode-reachable
     // seam so the aiVault.listSessions RPC includes managed-Codex + WSL sessions
     // even on headless `orca serve` hosts where registerCoreHandlers never runs.
@@ -13468,6 +13473,12 @@ export class OrcaRuntimeService {
   // dispatch still works for handles without a resolvable pane.
   getTerminalPaneKey(handle: string): string | null {
     return this.getPaneKeyForTerminalHandle(handle)
+  }
+
+  getTerminalWorktreeIdForPaneKey(paneKey: string): string | null {
+    const parsed = parsePaneKey(paneKey)
+    const leaf = parsed ? this.leaves.get(this.getLeafKey(parsed.tabId, parsed.leafId)) : null
+    return leaf?.worktreeId ?? this.getPtyRecordForPaneKey(paneKey)?.worktreeId ?? null
   }
 
   resolveTerminalPane(paneKey: string, expectedWorktreeId?: string): RuntimeTerminalResolvePane {
@@ -26092,17 +26103,26 @@ export class OrcaRuntimeService {
   ): RuntimeMobileSessionTabsResult {
     const tabs: RuntimeMobileSessionClientTab[] = []
     const liveBrowserTabsByPageId = this.getLiveBrowserTabsByPageId(snapshot.worktree)
-    // Why: the snapshot getter rebuilds and refilters every known pane's payload on
-    // each call. Reading it once per tab made a projection O(tabs × panes) of pure
-    // garbage — worst in headless serve, where no renderer publishes `tab.agentStatus`
-    // so every terminal tab takes the fallback. Index it once, lazily: a workspace
-    // with no fallback tabs should still pay nothing.
+    // Production reads hook rows by pane; the snapshot fallback remains for tests
+    // and embedders that have not adopted the narrow getter.
     let hookRowsByPaneKey: Map<string, AgentStatusIpcPayload[]> | null = null
-    const getHookRowsByPaneKey = (): Map<string, AgentStatusIpcPayload[]> => {
+    const hookRowsForPane = new Map<string, AgentStatusIpcPayload[]>()
+    const getHookRowsForPane = (paneKey: string): AgentStatusIpcPayload[] => {
+      const cached = hookRowsForPane.get(paneKey)
+      if (cached) {
+        return cached
+      }
+      const direct = this.getAgentProviderSessionRowsForPaneFn?.(paneKey)
+      if (direct) {
+        hookRowsForPane.set(paneKey, direct)
+        return direct
+      }
       hookRowsByPaneKey ??= indexAgentStatusRowsByPaneKey(
         this.getAgentProviderSessionSnapshotFn?.() ?? []
       )
-      return hookRowsByPaneKey
+      const rows = hookRowsByPaneKey.get(paneKey) ?? []
+      hookRowsForPane.set(paneKey, rows)
+      return rows
     }
     // Why: a live PTY backs one surface; claim each once so two leaves resolving to it can't emit duplicate React keys and crash the client.
     const claimedLivePtyIds = new Set<string>()
@@ -26243,7 +26263,7 @@ export class OrcaRuntimeService {
             tab,
             terminalHandle,
             retainedAgentStatus,
-            getHookRowsByPaneKey
+            getHookRowsForPane
           )),
         ...(tab.parentLayout ? { parentLayout: tab.parentLayout } : {}),
         ...(tab.startupCwd ? { startupCwd: tab.startupCwd } : {}),
@@ -26301,19 +26321,19 @@ export class OrcaRuntimeService {
     tab: RuntimeMobileSessionTerminalTab,
     terminalHandle: string | null,
     retained: RuntimeAgentRowSnapshot | null,
-    getHookRowsByPaneKey: () => Map<string, AgentStatusIpcPayload[]>
+    getHookRowsForPane: (paneKey: string) => AgentStatusIpcPayload[]
   ): { agentStatus: AgentStatusEntry } | Record<string, never> {
     const paneKey = this.getMobileTerminalPaneKey(tab)
     // Why: neither the OSC-retained row nor a title-derived status can carry a
     // provider session — only the hook payload does, and headless serve has no
     // renderer to publish `tab.agentStatus`. Without it mobile native chat has no
     // transcript to address and sits on the empty state forever.
-    const hookRow = this.getHookAgentRowForPane(paneKey, getHookRowsByPaneKey())
+    const hookRow = this.getHookAgentRowForPane(getHookRowsForPane(paneKey))
     // Why: the hook row is evidence in its own right. Returning early on a missing
     // PTY status/retained row put this check ahead of the only headless carrier, so
     // an agent that reported its session but never emitted a recognized title got no
     // `agentStatus` at all — exactly the hook-only case the fallback exists for.
-    if (!pty?.lastAgentStatus && !retained && !hookRow.agentType) {
+    if (!pty?.lastAgentStatus && !retained && !hookRow.agentType && !hookRow.providerSession) {
       return {}
     }
     const providerSession = hookRow.providerSession
@@ -26342,7 +26362,7 @@ export class OrcaRuntimeService {
         // that reports over HTTP need never set a title this gate would recognize.
         // Scoped to panes with no PTY status at all, so it cannot revive a spinner:
         // this branch publishes `done`. It only keeps the transcript addressable.
-        (!pty?.lastAgentStatus && hookRow.agentType != null)
+        (!pty?.lastAgentStatus && (hookRow.agentType != null || hookRow.providerSession != null))
       if (!hasLiveHookSignal) {
         return {}
       }
@@ -26419,10 +26439,10 @@ export class OrcaRuntimeService {
    *  because it is the signal that claims an agent owns the pane at all. A user who
    *  exits the agent leaves `pty.lastAgentStatus` behind forever, so an unbounded
    *  read would keep offering native chat for what is now a plain shell. */
-  private getHookAgentRowForPane(
-    paneKey: string,
-    rowsByPaneKey: Map<string, AgentStatusIpcPayload[]>
-  ): { providerSession: AgentProviderSessionMetadata | null; agentType: string | null } {
+  private getHookAgentRowForPane(rows: readonly AgentStatusIpcPayload[]): {
+    providerSession: AgentProviderSessionMetadata | null
+    agentType: string | null
+  } {
     let session: AgentStatusIpcPayload | null = null
     let agent: AgentStatusIpcPayload | null = null
     const agentTypeFreshAfter = Date.now() - AGENT_STATUS_STALE_AFTER_MS
@@ -26430,16 +26450,14 @@ export class OrcaRuntimeService {
     // matched. `toAgentStatusIpcPayload` does not emit the field on the hook path
     // (only the renderer's own store stamps it, and headless serve has no renderer),
     // and because it is optional TypeScript could not flag the dead comparison.
-    for (const entry of rowsByPaneKey.get(paneKey) ?? []) {
+    for (const entry of rows) {
       if (entry.providerSession && (!session || entry.receivedAt > session.receivedAt)) {
         session = entry
       }
-      // Why skip resume-identity rows here: their status-shaped fields are transport
-      // placeholders, so letting one claim `agentType` would keep offering native
-      // chat for a pane whose agent already exited.
       if (
         entry.agentType &&
-        entry.providerSessionOnly !== true &&
+        (entry.providerSessionOnly !== true ||
+          (entry.agentType === 'pi' && entry.providerSession != null)) &&
         entry.receivedAt >= agentTypeFreshAfter &&
         (!agent || entry.receivedAt > agent.receivedAt)
       ) {

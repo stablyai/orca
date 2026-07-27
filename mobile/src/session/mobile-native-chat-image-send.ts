@@ -1,6 +1,9 @@
 import type { RpcClient } from '../transport/rpc-client'
 import { buildMobileImagePastePayload } from './mobile-clipboard-image'
-import { openMobileNativeChatSendBudget } from './mobile-native-chat-send'
+import {
+  MOBILE_NATIVE_CHAT_MIN_WRITE_TIMEOUT_MS,
+  openMobileNativeChatSendBudget
+} from './mobile-native-chat-send'
 import { isTerminalSendRpcAccepted } from '../terminal/terminal-send-rpc-response'
 
 // Give the agent TUI a beat to register each bracketed image paste before the
@@ -12,11 +15,6 @@ export const MOBILE_NATIVE_CHAT_IMAGE_SETTLE_MS = 300
 // after a rejected body/Enter can't leave a stale image paste that then rides along
 // with (and duplicates) the next attempt — matches desktop clearUnsubmittedAgentInput.
 const MOBILE_NATIVE_CHAT_CLEAR_UNSUBMITTED_INPUT = '\x15'
-
-// A write given less than this has no realistic chance of completing, so the
-// sequence gives up rather than starting one — flooring it instead would push the
-// paste past the budget it is supposed to be bounded by.
-const MOBILE_NATIVE_CHAT_MIN_WRITE_TIMEOUT_MS = 2_000
 
 type MobileTerminalClient = { id: string; type: 'mobile' }
 
