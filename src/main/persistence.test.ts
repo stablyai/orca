@@ -680,6 +680,7 @@ describe('Store', () => {
     expect(settings.theme).toBe('system')
     expect(settings.appIcon).toBe('classic')
     expect(settings.appFontFamily).toBe('Geist')
+    expect(settings.appFontWeight).toBe(400)
     expect(settings.editorAutoSave).toBe(false)
     expect(settings.editorAutoSaveDelayMs).toBe(1000)
     expect(settings.terminalFontSize).toBe(14)
@@ -5113,6 +5114,7 @@ describe('Store', () => {
       editorAutoSave: true,
       editorAutoSaveDelayMs: 1500,
       appFontFamily: 'Inter',
+      appFontWeight: 350,
       terminalFontSize: 16,
       terminalFontWeight: 600
     })
@@ -5120,6 +5122,7 @@ describe('Store', () => {
     expect(updated.editorAutoSave).toBe(true)
     expect(updated.editorAutoSaveDelayMs).toBe(1500)
     expect(updated.appFontFamily).toBe('Inter')
+    expect(updated.appFontWeight).toBe(350)
     expect(updated.terminalFontSize).toBe(16)
     expect(updated.terminalFontWeight).toBe(600)
     // Other fields preserved

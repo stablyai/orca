@@ -2649,6 +2649,8 @@ export type GlobalSettings = {
   uiLanguage: UiLanguage
   appIcon: AppIconId
   appFontFamily: string
+  /** Base weight for interface text; optional for profiles saved before it existed. */
+  appFontWeight?: number
   editorAutoSave: boolean
   editorAutoSaveDelayMs: number
   editorMinimapEnabled: boolean
