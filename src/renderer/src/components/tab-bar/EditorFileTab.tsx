@@ -1,12 +1,10 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { useSortable } from '@dnd-kit/sortable'
-import { GitCompareArrows, Eye, ShieldAlert, Pin, ListChecks } from 'lucide-react'
-import { Input } from '@/components/ui/input'
+import { Pin } from 'lucide-react'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { basename, normalizeRelativePath } from '@/lib/path'
 import { getEditorDisplayLabel } from '@/components/editor/editor-labels'
 import { renameFileOnDisk } from '@/lib/rename-file'
-import { isImeCompositionKeyDown } from '@/lib/ime-composition-keyboard-event'
 import { detectLanguage } from '@/lib/language-detect'
 import { getFileTypeIcon } from '@/lib/file-type-icons'
 import { useRepoById, useWorktreeById } from '@/store/selectors'
@@ -28,9 +26,10 @@ import {
 import type { TabSplitDirection } from '../../store/slices/tabs'
 import { canOpenMarkdownPreview } from '@/components/editor/markdown-preview-controls'
 import { EditorFileTabContextMenu } from './EditorFileTabContextMenu'
-import { translate } from '@/i18n/i18n'
 import { TAB_CONTAINER_WIDTH_CLASSES, TAB_LABEL_WIDTH_CLASSES } from './tab-width-rules'
 import { EditorFileTabCloseButton } from './EditorFileTabCloseButton'
+import { EditorFileTabIcon } from './EditorFileTabIcon'
+import { EditorFileTabRenameInput } from './EditorFileTabRenameInput'
 import { useTabStripPointerActivation } from './tab-strip-pointer-activation'
 export default function EditorFileTab({
   file,
@@ -100,8 +99,6 @@ export default function EditorFileTab({
 
   const isDiff = file.mode === 'diff'
   const isConflictReview = file.mode === 'conflict-review'
-  const isCheckDetails = file.mode === 'check-details'
-  const isMarkdownPreviewTab = file.mode === 'markdown-preview'
   const isMissingFileMutation =
     file.externalMutation === 'deleted' || file.externalMutation === 'renamed'
   const resolvedLanguage = isDiff
@@ -245,7 +242,11 @@ export default function EditorFileTab({
         )
       }
       onDoubleClick={() => file.isPreview && onMakePermanent && onMakePermanent()}
-      onMouseDown={(e) => e.button === 1 && preventMiddleButtonDefault(e, onClose)}
+      onMouseDown={(e) => {
+        if (e.button === 1) {
+          e.preventDefault()
+        }
+      }}
       onMouseUp={preventMiddleButtonDefault}
       onAuxClick={(e) => {
         if (e.button === 1) {
@@ -259,65 +260,18 @@ export default function EditorFileTab({
       }}
     >
       {isActive && <span className={ACTIVE_TAB_INDICATOR_CLASSES} aria-hidden />}
-      {isConflictReview ? (
-        <ShieldAlert
-          className={`w-3 h-3 mr-1 shrink-0 ${isActive ? 'text-orange-400' : 'text-orange-400/70'}`}
-        />
-      ) : isCheckDetails ? (
-        <ListChecks
-          className={`w-3 h-3 mr-1 shrink-0 ${isActive ? 'text-foreground' : 'text-muted-foreground'}`}
-        />
-      ) : isDiff ? (
-        <GitCompareArrows
-          className={`w-3 h-3 mr-1 shrink-0 ${isActive ? 'text-foreground' : 'text-muted-foreground'}`}
-        />
-      ) : isMarkdownPreviewTab ? (
-        <Eye
-          className={`w-3.5 h-3.5 mr-1.5 shrink-0 ${isActive ? 'text-foreground' : 'text-muted-foreground'}`}
-        />
-      ) : (
-        <FileIcon
-          className={`w-3 h-3 mr-1 shrink-0 ${isActive ? 'text-foreground' : 'text-muted-foreground'}`}
-        />
-      )}
+      <EditorFileTabIcon mode={file.mode} isActive={isActive} FileIcon={FileIcon} />
       {isPinned && <Pin className="mr-1 size-3 shrink-0 text-muted-foreground" aria-hidden />}
       <span className="mr-1 flex min-w-0 flex-1 items-baseline gap-1">
         {isRenaming ? (
-          <Input
-            ref={setRenameInputElement}
-            data-tab-rename-input="true"
-            aria-label={translate(
-              'auto.components.tab.bar.EditorFileTab.3da7445c84',
-              'Rename file {{value0}}',
-              { value0: basename(file.filePath) }
-            )}
-            defaultValue={basename(file.filePath)}
-            // Why: keep the inline field compact enough for the titlebar while
-            // giving filenames a little more room than the static tab label.
-            className="mr-1 h-5 w-[12ch] min-w-[72px] max-w-[132px] rounded-sm bg-input/40 px-1 py-0 text-xs text-foreground md:text-xs focus-visible:ring-[1px]"
-            spellCheck={false}
-            onPointerDown={(e) => e.stopPropagation()}
-            onMouseDown={(e) => e.stopPropagation()}
-            onClick={(e) => e.stopPropagation()}
-            onDoubleClick={(e) => e.stopPropagation()}
-            onKeyDown={(e) => {
-              // Why: an Enter that only confirms a CJK IME candidate must not
-              // commit the rename; wait for a non-composition Enter.
-              if (isImeCompositionKeyDown(e)) {
-                return
-              }
-              if (e.key === 'Enter') {
-                e.preventDefault()
-                e.stopPropagation()
-                commitRename()
-              } else if (e.key === 'Escape') {
-                e.preventDefault()
-                e.stopPropagation()
-                renameCancelledRef.current = true
-                setIsRenaming(false)
-              }
+          <EditorFileTabRenameInput
+            filePath={file.filePath}
+            setInputElement={setRenameInputElement}
+            onCommit={commitRename}
+            onCancel={() => {
+              renameCancelledRef.current = true
+              setIsRenaming(false)
             }}
-            onBlur={commitRename}
           />
         ) : (
           <span
@@ -364,7 +318,11 @@ export default function EditorFileTab({
           <span className="absolute size-1.5 rounded-full bg-foreground/60 group-hover:hidden group-focus-within:hidden" />
         )}
         {!isPinned && (
-          <EditorFileTabCloseButton showsSelectionChrome={isActive} onClose={onClose} />
+          <EditorFileTabCloseButton
+            fileIsDirty={file.isDirty}
+            showsSelectionChrome={isActive}
+            onClose={onClose}
+          />
         )}
       </div>
     </div>
