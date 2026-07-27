@@ -548,12 +548,19 @@ describe('DaemonClient', () => {
       client = new DaemonClient({ socketPath, tokenPath })
       await client.ensureConnected()
 
-      client.notify('write', { sessionId: 'session-1', data: 'hello' })
+      const delivered = client.notify('write', { sessionId: 'session-1', data: 'hello' })
+      expect(delivered).toBe(true)
 
       await waitFor(() => received.length > 0)
       const msg = received[0] as { id: string; type: string }
       expect(msg.id).toMatch(/^notify_/)
       expect(msg.type).toBe('write')
+    })
+
+    it('reports a dropped delivery when not connected', () => {
+      // Why: STA-2373 relies on this false to detect a write silently swallowed by a dead socket.
+      client = new DaemonClient({ socketPath, tokenPath })
+      expect(client.notify('write', { sessionId: 'session-1', data: 'hello' })).toBe(false)
     })
   })
 })

@@ -3950,11 +3950,14 @@ function createEmptyMemorySnapshot(): MemorySnapshot {
     host: {
       totalMemory: 0,
       freeMemory: 0,
+      availableMemory: 0,
+      availableMemorySource: 'free-memory',
       usedMemory: 0,
       memoryUsagePercent: 0,
       cpuCoreCount: navigator.hardwareConcurrency || 1,
       loadAverage1m: 0
     },
+    processMemoryMetric: getBrowserPlatform() === 'win32' ? 'working-set' : 'rss',
     totalCpu: 0,
     totalMemory: 0,
     collectedAt: Date.now()

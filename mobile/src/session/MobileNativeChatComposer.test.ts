@@ -114,6 +114,31 @@ describe('MobileNativeChatComposer', () => {
     expect(onSend).not.toHaveBeenCalled()
   })
 
+  it('keeps the text input editable while the send is locked', async () => {
+    const restore = suppressRendererWarning()
+    try {
+      await act(async () => {
+        renderer = create(
+          createElement(MobileNativeChatComposer, {
+            value: 'half-typed',
+            onChangeText: vi.fn(),
+            onSend: vi.fn().mockResolvedValue(true),
+            disabled: true
+          })
+        )
+      })
+    } finally {
+      restore()
+    }
+    // Revoking `editable` on a focused field resigns first responder on iOS and
+    // yanks the keyboard mid-typing (#10681) — the lock may only gate sending.
+    const input = renderer!.root.find((node) => node.type === 'TextInput') as {
+      props: { editable?: boolean }
+    }
+    expect(input.props.editable).not.toBe(false)
+    expect(sendButton().props).toMatchObject({ disabled: true })
+  })
+
   it('renders a removable thumbnail for each pending image attachment', async () => {
     const onRemoveAttachment = vi.fn()
     const restore = suppressRendererWarning()

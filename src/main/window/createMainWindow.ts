@@ -50,6 +50,7 @@ import { closeDashboardPopout } from './dashboard-popout-window'
 import { installPrivilegedWindowNavigationPolicy } from './privileged-window-navigation'
 import { isMacosTahoeOrNewer } from './macos-tahoe-release'
 import { reflowRendererViewport } from './renderer-viewport-reflow'
+import { registerPluginPanelNavigationGuard } from '../plugins/plugin-panel-navigation-guard'
 
 // Why: show/restore/resume can overlap before the size nudge resets; never capture the temporary width as the next baseline.
 const activeRepaintJiggles = new WeakSet<BrowserWindow>()
@@ -253,14 +254,10 @@ export function createMainWindow(
     return false
   })
   const blur = settings?.windowBackgroundBlur ?? false
-  // Why: blur uses platform APIs (macOS vibrancy+transparent, Windows backgroundMaterial, Linux none) and only applies at creation, needs restart.
-  const platformBlurOptions = blur
-    ? process.platform === 'darwin'
-      ? { vibrancy: 'under-window' as const, transparent: true }
-      : process.platform === 'win32'
-        ? { backgroundMaterial: 'acrylic' as const }
-        : {}
-    : {}
+  // Why: only Windows acrylic is ever visible; macOS vibrancy+transparent sat behind our opaque background yet
+  // forced per-frame WindowServer alpha compositing (#8482). Applies at creation only, so it needs a restart.
+  const platformBlurOptions =
+    blur && process.platform === 'win32' ? { backgroundMaterial: 'acrylic' as const } : {}
 
   const mainWindow = new BrowserWindow({
     width: savedBounds?.width ?? defaultBounds.width,
@@ -445,6 +442,9 @@ export function createMainWindow(
   })
 
   installPrivilegedWindowNavigationPolicy(mainWindow.webContents)
+  // Why: containment must be listening before any plugin panel frame is created,
+  // so register it with the window's other navigation policy.
+  registerPluginPanelNavigationGuard(mainWindow.webContents)
 
   mainWindow.webContents.on('will-attach-webview', (event, webPreferences, params) => {
     const src = typeof params.src === 'string' ? params.src : ''

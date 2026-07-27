@@ -104,7 +104,10 @@ function parseAgentStatusPaneKey(paneKey: string): { tabId: string; paneId: stri
 const EMPTY_PANE_IDS: ReadonlySet<string> = new Set()
 
 type TerminalTabActivityInput = {
-  tab: Pick<TerminalTab, 'id' | 'title'>
+  // Why: launchAgent is read, not just carried — the status gate needs it to attribute a
+  // bare spinner title to an agent (#9040). Narrowing it away here compiles (it is optional)
+  // but silently drops the tab-bar dot back to the pre-#9040 behavior.
+  tab: Pick<TerminalTab, 'id' | 'title' | 'launchAgent'>
   agentStatusByPaneKey?: Record<string, AgentStatusEntry>
   // Why: the store bumps this at the 30m stale boundary without replacing the
   // pane-status map; it is the flag cache's invalidation key (see above).

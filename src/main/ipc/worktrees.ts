@@ -17,6 +17,7 @@ import { projectResolvedWorktreeLineage } from '../../shared/resolved-worktree-l
 import { deleteWorktreeHistoryDir } from '../terminal-history'
 import type {
   AutomationWorkspaceProvenance,
+  CliWorkspaceProvenance,
   CreateWorktreeArgs,
   CreateWorktreeResult,
   DetectedWorktree,
@@ -94,7 +95,7 @@ import {
   isENOENT,
   registerWorktreeRootsForRepo
 } from './filesystem-auth'
-import type { OrcaRuntimeService } from '../runtime/orca-runtime'
+import type { OrcaRuntimeService, RuntimeWorktreeLifecycleEvent } from '../runtime/orca-runtime'
 import { killAllProcessesForWorktree } from '../runtime/worktree-teardown'
 import { clearProviderPtyState, getLocalPtyProvider, getSshPtyProvider } from './pty'
 import { findExistingWorktreeSymlinkPaths, removeWorktreeLinkedPaths } from './worktree-symlinks'
@@ -110,6 +111,7 @@ import { shouldEmitBoundedWarning } from './bounded-warning-dedupe'
 
 type CreateWorktreeArgsWithSystemProvenance = CreateWorktreeArgs & {
   automationProvenance?: AutomationWorkspaceProvenance
+  cliProvenance?: CliWorkspaceProvenance
 }
 
 type RemoveWorktreeArgs = {
@@ -841,6 +843,7 @@ function mergeFolderWorkspace(repo: Repo, worktreeId: string, meta: WorktreeMeta
     ...(meta.automationProvenance !== undefined
       ? { automationProvenance: meta.automationProvenance }
       : {}),
+    ...(meta.cliProvenance !== undefined ? { cliProvenance: meta.cliProvenance } : {}),
     ...(meta.priorWorktreeIds !== undefined ? { priorWorktreeIds: meta.priorWorktreeIds } : {}),
     workspaceStatus: meta.workspaceStatus ?? DEFAULT_WORKSPACE_STATUS_ID,
     diffComments: meta.diffComments,
@@ -931,6 +934,7 @@ function createFolderWorkspace(
     orcaCreatedAt: now,
     orcaCreationSource: 'desktop',
     ...(args.automationProvenance ? { automationProvenance: args.automationProvenance } : {}),
+    ...(args.cliProvenance ? { cliProvenance: args.cliProvenance } : {}),
     ...(args.createdWithAgent ? { createdWithAgent: args.createdWithAgent } : {}),
     ...(args.linkedIssue !== undefined ? { linkedIssue: args.linkedIssue } : {}),
     ...(args.linkedPR !== undefined ? { linkedPR: args.linkedPR } : {}),
@@ -983,7 +987,8 @@ function buildDisconnectedDetectedWorktrees(
 export function registerWorktreeHandlers(
   mainWindow: BrowserWindow,
   store: Store,
-  runtime: OrcaRuntimeService
+  runtime: OrcaRuntimeService,
+  options?: { onWorktreeLifecycle?: (event: RuntimeWorktreeLifecycleEvent) => void }
 ): void {
   // Remove previously registered handlers so re-register works when macOS re-activates and creates a new window.
   ipcMain.removeHandler('worktrees:listAll')
@@ -1280,6 +1285,13 @@ export function registerWorktreeHandlers(
         if (isFolderRepo(repo)) {
           notifyWorktreesChanged(mainWindow, repo.id)
         }
+
+        options?.onWorktreeLifecycle?.({
+          kind: 'created',
+          worktreeId: result.worktree.id,
+          path: result.worktree.path,
+          branch: result.worktree.branch
+        })
 
         return result
       })
@@ -1898,7 +1910,13 @@ export function registerWorktreeHandlers(
       })()
       worktreeRemovalsInFlight.set(inFlightKey, { optionsKey, promise: removal })
       try {
-        return await removal
+        const result = await removal
+        options?.onWorktreeLifecycle?.({
+          kind: 'removed',
+          worktreeId: args.worktreeId,
+          path: parseWorktreeId(args.worktreeId).worktreePath
+        })
+        return result
       } finally {
         if (worktreeRemovalsInFlight.get(inFlightKey)?.promise === removal) {
           worktreeRemovalsInFlight.delete(inFlightKey)

@@ -180,8 +180,23 @@ describe('WorktreeCard quick actions', () => {
     )
 
     expect(markup).toContain('data-worktree-card-active="secondary"')
-    expect(markup).toContain('bg-sidebar-accent/45')
     expect(markup).not.toContain('bg-black/[0.08]')
+    expect(markup).not.toContain('dark:bg-white/[0.10]')
+    expect(markup).not.toContain('bg-sidebar-accent/45')
+    expect(markup).not.toContain('border-sidebar-ring/25')
+    expect(markup).not.toContain('ring-sidebar-ring/15')
+  })
+
+  it('marks the primary active workspace for token-driven selected styling', () => {
+    const markup = renderToStaticMarkup(
+      <WorktreeCard worktree={makeWorktree()} repo={makeRepo()} isActive />
+    )
+
+    expect(markup).toContain('data-worktree-card-active="primary"')
+    expect(markup).toContain('data-worktree-card-surface="true"')
+    expect(markup).not.toContain('bg-black/[0.08]')
+    expect(markup).not.toContain('dark:bg-white/[0.10]')
+    expect(markup).not.toContain('border-black/[0.015]')
   })
 
   it('renders folder directory name in the detailed metadata row without a Folder badge', () => {

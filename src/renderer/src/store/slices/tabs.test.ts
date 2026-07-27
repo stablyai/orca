@@ -1401,6 +1401,46 @@ describe('TabsSlice', () => {
     })
   })
 
+  // ─── closeTabsToLeft ──────────────────────────────────────────────
+
+  describe('closeTabsToLeft', () => {
+    it('closes unpinned tabs to the left of target', () => {
+      const t1 = store.getState().createUnifiedTab(WT, 'terminal')
+      const t2 = store.getState().createUnifiedTab(WT, 'terminal')
+      const t3 = store.getState().createUnifiedTab(WT, 'terminal')
+      const t4 = store.getState().createUnifiedTab(WT, 'terminal')
+
+      store.getState().pinTab(t2.id)
+
+      const closed = store.getState().closeTabsToLeft(t4.id)
+
+      expect(closed).toEqual([t1.id, t3.id])
+      const tabs = store.getState().unifiedTabsByWorktree[WT]
+      expect(tabs.map((t) => t.id)).toEqual([t2.id, t4.id])
+    })
+
+    it('returns empty when target is the leftmost tab', () => {
+      const t1 = store.getState().createUnifiedTab(WT, 'terminal')
+      store.getState().createUnifiedTab(WT, 'terminal')
+
+      const closed = store.getState().closeTabsToLeft(t1.id)
+
+      expect(closed).toEqual([])
+      expect(store.getState().unifiedTabsByWorktree[WT]).toHaveLength(2)
+    })
+
+    it('activates target if active tab was closed', () => {
+      store.getState().createUnifiedTab(WT, 'terminal')
+      const t2 = store.getState().createUnifiedTab(WT, 'terminal')
+      const t3 = store.getState().createUnifiedTab(WT, 'terminal')
+      store.getState().activateTab(t2.id)
+
+      store.getState().closeTabsToLeft(t3.id)
+
+      expect(store.getState().groupsByWorktree[WT][0].activeTabId).toBe(t3.id)
+    })
+  })
+
   // ─── getActiveTab / getTab ────────────────────────────────────────
 
   describe('getActiveTab / getTab', () => {

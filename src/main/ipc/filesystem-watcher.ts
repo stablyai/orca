@@ -274,8 +274,8 @@ async function tryStatIsDirectory(filePath: string): Promise<boolean | undefined
 
 // ── Flush and emit ───────────────────────────────────────────────────
 
-function emitOverflowPayload(rootKey: string, root: WatchedRoot): void {
-  const rootPath = root.rootPath ?? rootKey
+function emitOverflowPayload(root: WatchedRoot): void {
+  const { rootPath } = root
   const payload: FsChangedPayload = {
     worktreePath: rootPath,
     events: [{ kind: 'overflow', absolutePath: rootPath }]
@@ -287,7 +287,7 @@ function emitOverflowPayload(rootKey: string, root: WatchedRoot): void {
   }
 }
 
-async function flushBatch(rootKey: string, root: WatchedRoot): Promise<void> {
+async function flushBatch(root: WatchedRoot): Promise<void> {
   const overflowed = root.batch.overflowed
   const rawEvents = root.batch.events.splice(0)
   root.batch.overflowed = false
@@ -300,7 +300,7 @@ async function flushBatch(rootKey: string, root: WatchedRoot): Promise<void> {
 
   if (overflowed || rawEvents.length > MAX_BATCHED_WATCHER_EVENTS) {
     // Why: deletion storms can be too large to coalesce/stat per path; one overflow asks the renderer for the same conservative refresh.
-    emitOverflowPayload(rootKey, root)
+    emitOverflowPayload(root)
     return
   }
 
@@ -320,7 +320,7 @@ async function flushBatch(rootKey: string, root: WatchedRoot): Promise<void> {
   )
 
   const payload: FsChangedPayload = {
-    worktreePath: root.rootPath ?? rootKey,
+    worktreePath: root.rootPath,
     events
   }
 
@@ -331,7 +331,7 @@ async function flushBatch(rootKey: string, root: WatchedRoot): Promise<void> {
   }
 }
 
-function scheduleBatchFlush(rootKey: string, root: WatchedRoot): void {
+function scheduleBatchFlush(root: WatchedRoot): void {
   const now = Date.now()
 
   if (root.batch.firstEventAt === 0) {
@@ -343,7 +343,7 @@ function scheduleBatchFlush(rootKey: string, root: WatchedRoot): void {
     if (root.batch.timer) {
       clearTimeout(root.batch.timer)
     }
-    void flushBatch(rootKey, root)
+    void flushBatch(root)
     return
   }
 
@@ -351,7 +351,7 @@ function scheduleBatchFlush(rootKey: string, root: WatchedRoot): void {
   if (root.batch.timer) {
     clearTimeout(root.batch.timer)
   }
-  root.batch.timer = setTimeout(() => void flushBatch(rootKey, root), DEBOUNCE_TRAILING_MS)
+  root.batch.timer = setTimeout(() => void flushBatch(root), DEBOUNCE_TRAILING_MS)
 }
 
 // ── Watcher creation ─────────────────────────────────────────────────
@@ -380,7 +380,7 @@ async function createWatcher(
 
     const markWatcherInterrupted = (): void => {
       root.batch.overflowed = true
-      scheduleBatchFlush(rootKey, root)
+      scheduleBatchFlush(root)
     }
 
     // Why: fork the watcher process (issue #7547 — watcher.node teardown races crash the host); onInterruption marks overflow to refresh past the gap.
@@ -390,7 +390,7 @@ async function createWatcher(
         if (err) {
           // Why: treat watcher errors as overflow so the renderer conservatively refreshes rather than trusting possibly-invalid caches (§7.2, §7.3).
           console.error(`[filesystem-watcher] error for ${rootKey}:`, err)
-          emitOverflowPayload(rootKey, root)
+          emitOverflowPayload(root)
           // Why: after an error the native subscription may be invalid (deleted root); tear down the dead watcher so it doesn't dangle (§7.3).
           if (root.batch.timer) {
             clearTimeout(root.batch.timer)
@@ -406,7 +406,7 @@ async function createWatcher(
         }
 
         queueWatcherEvents(root.batch, events)
-        scheduleBatchFlush(rootKey, root)
+        scheduleBatchFlush(root)
       },
       watcherOptions,
       {

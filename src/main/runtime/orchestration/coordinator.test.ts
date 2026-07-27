@@ -98,6 +98,7 @@ function insertWorkerDone(
     payload: JSON.stringify({
       taskId: params.taskId,
       dispatchId,
+      outcome: 'succeeded',
       ...(params.filesModified ? { filesModified: params.filesModified } : {})
     }),
     senderPaneKey:
@@ -192,7 +193,7 @@ describe('Coordinator', () => {
       to: 'coord',
       subject: 'Done',
       type: 'worker_done',
-      payload: JSON.stringify({ taskId: task.id, dispatchId: dispatch.id })
+      payload: JSON.stringify({ taskId: task.id, dispatchId: dispatch.id, outcome: 'succeeded' })
     })
 
     reconcileLifecycleMessage(db, msg)
@@ -214,7 +215,11 @@ describe('Coordinator', () => {
 
     const task = db.createTask({ spec: 'duplicate completion' })
     const dispatch = db.createDispatchContext(task.id, 'term_a')
-    const payload = JSON.stringify({ taskId: task.id, dispatchId: dispatch.id })
+    const payload = JSON.stringify({
+      taskId: task.id,
+      dispatchId: dispatch.id,
+      outcome: 'succeeded'
+    })
     const first = db.insertMessage({
       from: 'term_a',
       to: 'coord',
@@ -569,7 +574,11 @@ describe('Coordinator', () => {
       to: 'coord',
       subject: 'Late done',
       type: 'worker_done',
-      payload: JSON.stringify({ taskId: task.id, dispatchId: staleCtx.id })
+      payload: JSON.stringify({
+        taskId: task.id,
+        dispatchId: staleCtx.id,
+        outcome: 'succeeded'
+      })
     })
 
     const staleCoordinator = new Coordinator(db, runtime, {
@@ -621,7 +630,7 @@ describe('Coordinator', () => {
       to: 'coord',
       subject: 'Done after restart',
       type: 'worker_done',
-      payload: JSON.stringify({ taskId: task.id, dispatchId: ctx.id }),
+      payload: JSON.stringify({ taskId: task.id, dispatchId: ctx.id, outcome: 'succeeded' }),
       senderPaneKey: `tab_after:${leafId}`
     })
 

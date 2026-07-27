@@ -79,7 +79,9 @@ export function AgentTerminalDialog({
           }}
         >
           <div className="flex items-center gap-1.5 px-2.5 py-2">
-            <AgentIcon agent={agentTypeToIconAgent(card.agentType)} size={13} />
+            <span className="inline-flex shrink-0">
+              <AgentIcon agent={agentTypeToIconAgent(card.agentType)} size={13} />
+            </span>
             <DialogTitle className="text-[12px] leading-normal font-semibold">
               {card.worktreeName}
             </DialogTitle>

@@ -362,6 +362,22 @@ export class CodexRuntimeHomeService {
     return homes.filter((home, index) => homes.indexOf(home) === index)
   }
 
+  /**
+   * The account-owned CODEX_HOME the current HOST selection runs against, or
+   * null when the selection is not routed to one (system default, or the
+   * flag-OFF shared mirror, which every account hot-swaps and so names no
+   * account).
+   *
+   * Read-only on purpose: session discovery ranks homes with this before any
+   * launch prep, so it must create no directories and sync no auth.
+   */
+  getSelectedHostAccountCodexHomePath(): string | null {
+    const selfContainedAccount = this.getSelfContainedManagedHostAccount()
+    return selfContainedAccount
+      ? this.getTrustedSelfContainedManagedHomePath(selfContainedAccount)
+      : null
+  }
+
   // Why: the real-home hook installer flips this gate off when the trust-grant
   // client reports the host incapable, keeping that host byte-identical to the
   // managed lane instead of shipping status-blind panes.

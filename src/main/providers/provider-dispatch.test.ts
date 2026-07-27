@@ -141,12 +141,20 @@ describe('PTY provider dispatch', () => {
     })) as { id: string }
 
     expect(result.id).toBe('ssh-pty-1')
-    expect(mockSshProvider.spawn).toHaveBeenCalledWith({
-      cols: 80,
-      rows: 24,
-      cwd: undefined,
-      env: undefined
-    })
+    // Why: the relay host can be launched from a Claude session too, so the stamps are
+    // stripped on the SSH path as well. Compared as a set — envToDelete is consumed by
+    // membership only, so a reordering of the merge sources must not fail this.
+    const sshSpawnArgs = vi.mocked(mockSshProvider.spawn).mock.calls.at(-1)![0]
+    expect([...(sshSpawnArgs.envToDelete ?? [])].sort()).toEqual(
+      [
+        'CLAUDE_CODE_CHILD_SESSION',
+        'CLAUDE_CODE_SESSION_ID',
+        'CLAUDE_CODE_BRIDGE_SESSION_ID'
+      ].sort()
+    )
+    expect(mockSshProvider.spawn).toHaveBeenCalledWith(
+      expect.objectContaining({ cols: 80, rows: 24, cwd: undefined, env: undefined })
+    )
 
     unregisterSshPtyProvider('conn-123')
   })

@@ -311,6 +311,59 @@ describe('createMainWindow', () => {
     }
   })
 
+  it('never requests macOS vibrancy or transparency when window blur is enabled (#8482)', () => {
+    for (const [platform, expected] of [
+      ['darwin', { backgroundMaterial: undefined }],
+      ['win32', { backgroundMaterial: 'acrylic' }],
+      ['linux', { backgroundMaterial: undefined }]
+    ] satisfies [NodeJS.Platform, { backgroundMaterial: string | undefined }][]) {
+      browserWindowMock.mockReset()
+      const webContents = {
+        on: vi.fn(),
+        setZoomLevel: vi.fn(),
+        setBackgroundThrottling: vi.fn(),
+        invalidate: vi.fn(),
+        setWindowOpenHandler: vi.fn(),
+        send: vi.fn(),
+        isDevToolsOpened: vi.fn(),
+        openDevTools: vi.fn(),
+        closeDevTools: vi.fn()
+      }
+      const browserWindowInstance = {
+        webContents,
+        on: vi.fn(),
+        isDestroyed: vi.fn(() => false),
+        isMaximized: vi.fn(() => false),
+        isFullScreen: vi.fn(() => false),
+        getSize: vi.fn(() => [1200, 800]),
+        getBounds: vi.fn(() => ({ x: 10, y: 20, width: 1000, height: 700 })),
+        setSize: vi.fn(),
+        setWindowButtonPosition: vi.fn(),
+        maximize: vi.fn(),
+        show: vi.fn(),
+        loadFile: vi.fn(),
+        loadURL: vi.fn()
+      }
+      browserWindowMock.mockImplementation(function () {
+        return browserWindowInstance
+      })
+
+      withPlatform(platform, () =>
+        createMainWindow({
+          getUI: () => ({}),
+          getSettings: () => ({ windowBackgroundBlur: true }),
+          updateUI: vi.fn()
+        } as never)
+      )
+
+      const browserWindowOptions = browserWindowMock.mock.calls[0]?.[0]
+      expect(browserWindowOptions.vibrancy).toBeUndefined()
+      expect(browserWindowOptions.transparent).toBeUndefined()
+      expect(browserWindowOptions.backgroundMaterial).toBe(expected.backgroundMaterial)
+      expect(browserWindowOptions.backgroundColor).toBe('#ffffff')
+    }
+  })
+
   it('keeps main-window background throttling enabled while repainting macOS visibility transitions', () => {
     vi.useFakeTimers()
     const windowHandlers = new Map<string, ((...args: any[]) => void)[]>()

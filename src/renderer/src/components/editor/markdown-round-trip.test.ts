@@ -281,6 +281,31 @@ describe('rich markdown round trip', () => {
     )
   })
 
+  it('preserves aligned task-item continuations before nested bullets', () => {
+    const input = [
+      '- [ ] Complete the provider action map used by the',
+      '      unchanged UI:',
+      '  - review creation and eligibility;',
+      '  - merge and auto-merge.',
+      '- [ ] Keep provider behavior explicit.'
+    ].join('\n')
+
+    expect(roundTripMarkdown(input)).toBe(
+      [
+        '- [ ] Complete the provider action map used by the',
+        '',
+        '  unchanged UI:',
+        '  - review creation and eligibility;',
+        '  - merge and auto-merge.',
+        '- [ ] Keep provider behavior explicit.'
+      ].join('\n')
+    )
+  })
+
+  it('preserves blank-separated indented code inside task items', () => {
+    expect(roundTripMarkdown('- [ ] Run this:\n\n      echo ok\n')).toContain('```')
+  })
+
   it('preserves doc links', () => {
     expect(roundTripMarkdown('See [[setup-guide]] for details\n')).toBe(
       'See [[setup-guide]] for details'

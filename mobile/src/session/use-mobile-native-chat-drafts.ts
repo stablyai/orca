@@ -46,6 +46,10 @@ export function useMobileNativeChatDrafts(args: {
   setComposerText: Dispatch<SetStateAction<string>>
   pending: MobileNativeChatPendingMessage[]
   captureSendOrigin: (text: string) => MobileNativeChatSendOrigin | null
+  /** Clear the composer at send time, before the RPC settles. */
+  clearDraftForSend: (origin: MobileNativeChatSendOrigin, text: string) => void
+  /** Put the text back after a definite rejection, unless newer edits exist. */
+  restoreRejectedDraft: (origin: MobileNativeChatSendOrigin, text: string) => void
   acceptSend: (origin: MobileNativeChatSendOrigin, text: string, images?: string[]) => void
   holdUnconfirmedSend: (
     origin: MobileNativeChatSendOrigin,
@@ -101,17 +105,28 @@ export function useMobileNativeChatDrafts(args: {
     [draftKey, pendingKey]
   )
 
+  // Why: over relay the send RPC can take seconds (or lose only its ack), and a
+  // composer that waits for settlement to empty reads as "my prompt didn't
+  // send". Clear at send time; a definite rejection restores the text below.
+  const clearDraftForSend = useCallback((origin: MobileNativeChatSendOrigin, text: string) => {
+    setDrafts((previous) =>
+      (previous[origin.draftKey] ?? '').trim() === text.trim()
+        ? { ...previous, [origin.draftKey]: '' }
+        : previous
+    )
+  }, [])
+
+  const restoreRejectedDraft = useCallback((origin: MobileNativeChatSendOrigin, text: string) => {
+    // Why: never clobber text the user typed while the rejection was in flight.
+    setDrafts((previous) =>
+      (previous[origin.draftKey] ?? '') === '' ? { ...previous, [origin.draftKey]: text } : previous
+    )
+  }, [])
+
   const acceptSend = useCallback(
     (origin: MobileNativeChatSendOrigin, text: string, images?: string[]) => {
-      // Why: an RPC may settle after a tab switch; mutate only the tab that
-      // originated the send, without erasing edits typed after it began.
-      setDrafts((previous) =>
-        (previous[origin.draftKey] ?? '').trim() === text.trim()
-          ? { ...previous, [origin.draftKey]: '' }
-          : previous
-      )
       // Why: the first prompt can be sent before the provider reports a session
-      // id; clear its draft, but wait for an id before keying an optimistic echo.
+      // id; wait for an id before keying an optimistic echo.
       if (!origin.pendingKey) {
         return
       }
@@ -151,8 +166,9 @@ export function useMobileNativeChatDrafts(args: {
 
   // Why: a relay drop mid-send loses only the ack in the common case — the
   // desktop already delivered the message. Hold the send instead of claiming
-  // failure (which baits a duplicate): clear the draft when the transcript echo
+  // failure (which baits a duplicate): stay quiet when the transcript echo
   // lands, and surface the uncertainty if the deadline passes without one.
+  // The composer was already cleared at send time, so this never touches drafts.
   const unconfirmedRef = useRef<UnconfirmedSend[]>([])
   const holdUnconfirmedSend = useCallback(
     (origin: MobileNativeChatSendOrigin, text: string, onUnconfirmed: () => void) => {
@@ -175,11 +191,6 @@ export function useMobileNativeChatDrafts(args: {
         isActiveTranscript &&
         findLandedUnconfirmedSends(messagesRef.current, [entry]).length > 0
       ) {
-        setDrafts((previous) =>
-          (previous[origin.draftKey] ?? '').trim() === text.trim()
-            ? { ...previous, [origin.draftKey]: '' }
-            : previous
-        )
         return
       }
       entry.deadline = setTimeout(() => {
@@ -210,12 +221,6 @@ export function useMobileNativeChatDrafts(args: {
       if (entry.deadline !== null) {
         clearTimeout(entry.deadline)
       }
-      // Same guard as acceptSend: never erase edits typed after the send began.
-      setDrafts((previous) =>
-        (previous[entry.draftKey] ?? '').trim() === entry.text.trim()
-          ? { ...previous, [entry.draftKey]: '' }
-          : previous
-      )
     }
   }, [messages, draftKey, pendingKey])
 
@@ -278,6 +283,8 @@ export function useMobileNativeChatDrafts(args: {
     setComposerText,
     pending,
     captureSendOrigin,
+    clearDraftForSend,
+    restoreRejectedDraft,
     acceptSend,
     holdUnconfirmedSend
   }

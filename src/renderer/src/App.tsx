@@ -181,6 +181,11 @@ import {
   type KeybindingContext,
   type PhysicalModifierToken
 } from '../../shared/keybindings'
+import { PLUGIN_COMMAND_ALIAS_ACTION_IDS } from '../../shared/plugins/plugin-command-actions'
+import { registerAppCommandDispatcher } from '@/lib/app-command-dispatch'
+import { executePluginCommand } from '@/lib/plugin-command-execution'
+import { findPluginCommandForKeybinding } from '@/lib/plugin-command-keybindings'
+import { usePluginCommands } from '@/store/plugin-panels'
 import {
   getRepoExecutionHostId,
   isRuntimeOwnedSshTargetId,
@@ -203,6 +208,7 @@ import {
   hasRequestedBackgroundTerminalWorktreeMount,
   subscribeBackgroundTerminalWorktreeMountRequests
 } from './components/terminal/background-terminal-worktree-mount'
+import { useRemoteRuntimeRecoveryTriggers } from './runtime/use-remote-runtime-recovery-triggers'
 
 // Why: bound the resume-record loss window on a hard kill to ~1 min; capture skips unchanged records so per-tick cost is negligible.
 const SLEEPING_AGENT_RESUME_CAPTURE_INTERVAL_MS = 60_000
@@ -506,6 +512,7 @@ function App(): React.JSX.Element {
     hasRequestedBackgroundTerminalWorktreeMount
   )
   const keybindings = useAppStore((s) => s.keybindings)
+  const pluginCommands = usePluginCommands()
   const updateStatus = useAppStore((s) => s.updateStatus)
   const activeContextualTourId = useAppStore((s) => s.activeContextualTourId)
   const leftSidebarShortcutLabel = useShortcutLabel('sidebar.left.toggle')
@@ -638,6 +645,8 @@ function App(): React.JSX.Element {
   const showSleepingWorkspaces = useAppStore((s) => s.showSleepingWorkspaces)
   const hideDefaultBranchWorkspace = useAppStore((s) => s.hideDefaultBranchWorkspace)
   const hideAutomationGeneratedWorkspaces = useAppStore((s) => s.hideAutomationGeneratedWorkspaces)
+  const hideCliCreatedWorkspaces = useAppStore((s) => s.hideCliCreatedWorkspaces)
+  const hideDetachedHeadWorkspaces = useAppStore((s) => s.hideDetachedHeadWorkspaces)
   const showDotfilesByWorktree = useAppStore((s) => s.showDotfilesByWorktree)
   const filterRepoIds = useAppStore((s) => s.filterRepoIds)
   const acknowledgedAgentsByPaneKey = useAppStore((s) => s.acknowledgedAgentsByPaneKey)
@@ -666,6 +675,7 @@ function App(): React.JSX.Element {
     settings?.primarySelectionMiddleClickPaste
   )
   usePrimarySelectionPaste(primarySelectionMiddleClickPaste)
+
   useAppMenuPaste()
   useLargeTextControlPaste()
   const petEnabled = useAppStore((s) => s.settings?.experimentalPet === true)
@@ -722,6 +732,7 @@ function App(): React.JSX.Element {
 
   // Subscribe to IPC push events
   useIpcEvents()
+  useRemoteRuntimeRecoveryTriggers()
   useAutomationDispatchEvents()
   // Why: retention runs at App level (in <RetainedAgentsSyncGate />, a null leaf) so "done" agents survive card collapse and its high-churn subscriptions don't re-render App.
   // Why: git polling lives at App level (RightSidebar unmounts when closed, stranding stale Rebasing/Merging badges); gate on workspaceSessionReady so it doesn't compete with first paint.
@@ -1337,6 +1348,8 @@ function App(): React.JSX.Element {
         showSleepingWorkspaces,
         hideDefaultBranchWorkspace,
         hideAutomationGeneratedWorkspaces,
+        hideCliCreatedWorkspaces,
+        hideDetachedHeadWorkspaces,
         showDotfilesByWorktree,
         filterRepoIds,
         // Why (#9002): activeView is deliberately NOT included here. It used to
@@ -1367,6 +1380,8 @@ function App(): React.JSX.Element {
     showSleepingWorkspaces,
     hideDefaultBranchWorkspace,
     hideAutomationGeneratedWorkspaces,
+    hideCliCreatedWorkspaces,
+    hideDetachedHeadWorkspaces,
     showDotfilesByWorktree,
     filterRepoIds,
     acknowledgedAgentsByPaneKey
@@ -1488,6 +1503,7 @@ function App(): React.JSX.Element {
     floatingTerminalOpen,
     floatingVisibleTabCount,
     keybindings,
+    pluginCommands,
     terminalShortcutPolicy: settings?.terminalShortcutPolicy,
     setFloatingTerminalOpenWithFocus,
     workspaceChromeActive,
@@ -1502,6 +1518,7 @@ function App(): React.JSX.Element {
     floatingTerminalOpen,
     floatingVisibleTabCount,
     keybindings,
+    pluginCommands,
     terminalShortcutPolicy: settings?.terminalShortcutPolicy,
     setFloatingTerminalOpenWithFocus,
     workspaceChromeActive,
@@ -1510,6 +1527,196 @@ function App(): React.JSX.Element {
 
   useEffect(() => {
     const doubleTapDetector = new ModifierDoubleTapDetector()
+
+    const createRegisteredCommandHandlers = (
+      input?: ShortcutDispatchInput,
+      keybindingContext: KeybindingContext = 'app'
+    ): Map<KeybindingActionId, () => boolean> => {
+      const {
+        activeView,
+        activeWorktreeId,
+        actions,
+        floatingTerminalEnabled,
+        floatingTerminalOpen,
+        terminalShortcutPolicy,
+        keybindings,
+        setFloatingTerminalOpenWithFocus,
+        workspaceChromeActive,
+        creationLayoutActive
+      } = globalShortcutStateRef.current
+      const floatingWorkspaceFocused = isFloatingWorkspacePanelFocused()
+      const canRevealRightSidebar = !creationLayoutActive && canShowRightSidebarForView(activeView)
+      const claim = (actionId: KeybindingActionId, run: () => void): boolean => {
+        input?.preventDefault()
+        if (
+          input &&
+          keybindingContext === 'terminal' &&
+          (terminalShortcutPolicy ?? 'orca-first') === 'orca-first'
+        ) {
+          showTerminalShortcutCaptureNotification({
+            actionId,
+            platform: shortcutPlatform,
+            keybindings
+          })
+        }
+        run()
+        return true
+      }
+
+      return new Map<KeybindingActionId, () => boolean>([
+        [
+          'worktree.history.back',
+          () => {
+            if (creationLayoutActive || !shouldShowWorktreeHistoryControls(activeView)) {
+              return false
+            }
+            return claim('worktree.history.back', () => useAppStore.getState().goBackWorktree())
+          }
+        ],
+        [
+          'worktree.history.forward',
+          () => {
+            if (creationLayoutActive || !shouldShowWorktreeHistoryControls(activeView)) {
+              return false
+            }
+            return claim('worktree.history.forward', () =>
+              useAppStore.getState().goForwardWorktree()
+            )
+          }
+        ],
+        ['sidebar.left.toggle', () => claim('sidebar.left.toggle', () => actions.toggleSidebar())],
+        [
+          'sidebar.sleepingWorkspaces.toggle',
+          () =>
+            claim('sidebar.sleepingWorkspaces.toggle', () => {
+              const store = useAppStore.getState()
+              const nextShowSleeping = !store.showSleepingWorkspaces
+              store.setShowSleepingWorkspaces(nextShowSleeping)
+              if (nextShowSleeping) {
+                store.setSidebarOpen(true)
+              }
+            })
+        ],
+        [
+          'floatingWorkspace.maximize',
+          () => {
+            if (floatingTerminalOpen || !floatingTerminalEnabled) {
+              return false
+            }
+            return claim('floatingWorkspace.maximize', () => {
+              requestFloatingTerminalOpenMaximized()
+              setFloatingTerminalOpenWithFocus(true)
+            })
+          }
+        ],
+        [
+          'tab.rename',
+          () => {
+            const store = useAppStore.getState()
+            if (
+              !workspaceChromeActive ||
+              floatingWorkspaceFocused ||
+              store.activeTabType !== 'terminal' ||
+              !store.activeTabId
+            ) {
+              return false
+            }
+            return claim('tab.rename', () => store.setRenamingTabId(store.activeTabId!))
+          }
+        ],
+        [
+          'workspace.rename',
+          () => {
+            if (!workspaceChromeActive || floatingWorkspaceFocused || !activeWorktreeId) {
+              return false
+            }
+            return claim('workspace.rename', () => {
+              useAppStore.getState().setSidebarOpen(true)
+              requestScrollToCurrentWorkspaceRevealAndRename()
+            })
+          }
+        ],
+        [
+          'workspace.openBoard',
+          () => {
+            if (activeView === 'settings') {
+              return false
+            }
+            return claim('workspace.openBoard', () => {
+              useAppStore.getState().setSidebarOpen(true)
+              window.dispatchEvent(new CustomEvent(OPEN_WORKSPACE_BOARD_EVENT))
+            })
+          }
+        ],
+        [
+          'view.tasks',
+          () => {
+            const store = useAppStore.getState()
+            if (activeView === 'settings' || !store.repos.some((repo) => isGitRepoKind(repo))) {
+              return false
+            }
+            return claim('view.tasks', () => store.openTaskPage())
+          }
+        ],
+        [
+          'sidebar.right.toggle',
+          () =>
+            canRevealRightSidebar
+              ? claim('sidebar.right.toggle', () => actions.toggleRightSidebar())
+              : false
+        ],
+        [
+          'sidebar.explorer.toggle',
+          () =>
+            canRevealRightSidebar
+              ? claim('sidebar.explorer.toggle', () => actions.showRightSidebarFiles())
+              : false
+        ],
+        [
+          'sidebar.search.toggle',
+          () =>
+            canRevealRightSidebar
+              ? claim('sidebar.search.toggle', () => actions.showRightSidebarSearch())
+              : false
+        ],
+        [
+          'sidebar.sourceControl.toggle',
+          () => {
+            if (!canRevealRightSidebar || document.querySelector('[data-terminal-search-root]')) {
+              return false
+            }
+            return claim('sidebar.sourceControl.toggle', () => {
+              actions.setRightSidebarTab('source-control')
+              actions.setRightSidebarOpen(true)
+            })
+          }
+        ],
+        [
+          'sidebar.checks.toggle',
+          () =>
+            canRevealRightSidebar
+              ? claim('sidebar.checks.toggle', () => {
+                  actions.setRightSidebarTab('checks')
+                  actions.setRightSidebarOpen(true)
+                })
+              : false
+        ],
+        [
+          'sidebar.ports.toggle',
+          () =>
+            canRevealRightSidebar
+              ? claim('sidebar.ports.toggle', () => {
+                  actions.setRightSidebarTab('ports')
+                  actions.setRightSidebarOpen(true)
+                })
+              : false
+        ]
+      ])
+    }
+
+    const unregisterAppCommandDispatcher = registerAppCommandDispatcher((actionId) =>
+      (createRegisteredCommandHandlers().get(actionId) ?? (() => false))()
+    )
 
     const dispatchShortcutInput = (input: ShortcutDispatchInput): void => {
       const {
@@ -1520,9 +1727,9 @@ function App(): React.JSX.Element {
         floatingTerminalOpen,
         floatingVisibleTabCount,
         keybindings,
+        pluginCommands,
         terminalShortcutPolicy,
         setFloatingTerminalOpenWithFocus,
-        workspaceChromeActive,
         creationLayoutActive
       } = globalShortcutStateRef.current
 
@@ -1624,22 +1831,6 @@ function App(): React.JSX.Element {
         return
       }
 
-      // Cmd/Ctrl+Alt+Arrow worktree history — kept before right-sidebar shortcuts because it's navigation, not sidebar reveal.
-      if (matchShortcut('worktree.history.back') || matchShortcut('worktree.history.forward')) {
-        // Back/Forward is live wherever the titlebar cluster shows (worktree + page visits), but suppressed in Settings.
-        if (creationLayoutActive || !shouldShowWorktreeHistoryControls(activeView)) {
-          return
-        }
-        input.preventDefault()
-        const store = useAppStore.getState()
-        if (matchShortcut('worktree.history.back')) {
-          store.goBackWorktree()
-        } else {
-          store.goForwardWorktree()
-        }
-        return
-      }
-
       // Only short-circuit chords the floating panel itself claims; suppressing others here would silently no-op them when focus is in the panel.
       const floatingWorkspaceFocused = isFloatingWorkspacePanelFocused()
       if (floatingWorkspaceFocused) {
@@ -1653,138 +1844,41 @@ function App(): React.JSX.Element {
         }
       }
 
-      // Cmd/Ctrl+B — toggle left sidebar
-      if (matchShortcut('sidebar.left.toggle')) {
-        input.preventDefault()
-        notifyTerminalCapture('sidebar.left.toggle')
-        actions.toggleSidebar()
-        return
-      }
-
-      // Toggle the sleeping-workspaces filter without the filters menu (issue #5209); open the sidebar when revealing so they're reachable.
-      if (matchShortcut('sidebar.sleepingWorkspaces.toggle')) {
-        input.preventDefault()
-        notifyTerminalCapture('sidebar.sleepingWorkspaces.toggle')
-        const store = useAppStore.getState()
-        const nextShowSleeping = !store.showSleepingWorkspaces
-        store.setShowSleepingWorkspaces(nextShowSleeping)
-        if (nextShowSleeping) {
-          store.setSidebarOpen(true)
-        }
-        return
-      }
-
-      // Cmd+R renames the active terminal tab — free here because the browser pane owns its own reload; non-terminal tabs fall through (no inline title editor).
-      if (workspaceChromeActive && !floatingWorkspaceFocused && matchShortcut('tab.rename')) {
-        const store = useAppStore.getState()
-        if (store.activeTabType === 'terminal' && store.activeTabId) {
+      // Plugin chords are user-reviewed instructional content. They win over
+      // built-in defaults only in app focus; terminal/editor/browser handlers
+      // retain their own shortcut authority.
+      if (context === 'app') {
+        const pluginCommand = findPluginCommandForKeybinding(
+          pluginCommands,
+          input,
+          shortcutPlatform,
+          keybindings,
+          Boolean(activeWorktreeId)
+        )
+        if (pluginCommand) {
           input.preventDefault()
-          notifyTerminalCapture('tab.rename')
-          store.setRenamingTabId(store.activeTabId)
+          void executePluginCommand(pluginCommand, 'plugin-keybinding').catch(() => {
+            toast.error(
+              translate('auto.App.pluginCommandFailed', 'Could not run the plugin command.')
+            )
+          })
           return
         }
       }
 
-      // Open/reveal the worktree card first so its inline title editor is mounted even when filters or collapse state would hide it.
-      if (
-        workspaceChromeActive &&
-        !floatingWorkspaceFocused &&
-        matchShortcut('workspace.rename') &&
-        activeWorktreeId
-      ) {
-        input.preventDefault()
-        notifyTerminalCapture('workspace.rename')
-        const store = useAppStore.getState()
-        store.setSidebarOpen(true)
-        requestScrollToCurrentWorkspaceRevealAndRename()
-        return
-      }
-
-      if (matchShortcut('workspace.openBoard') && activeView !== 'settings') {
-        input.preventDefault()
-        notifyTerminalCapture('workspace.openBoard')
-        const store = useAppStore.getState()
-        store.setSidebarOpen(true)
-        window.dispatchEvent(new CustomEvent(OPEN_WORKSPACE_BOARD_EVENT))
-        return
-      }
-
-      // Cmd/Ctrl+N is handled in the main-process before-input-event allowlist (window-shortcut-policy.ts), not here, so it fires even inside editors/browser guests.
-
-      // Full-page navigation surfaces own the whole content area, so don't reveal the right sidebar.
-      if (matchShortcut('view.tasks') && activeView !== 'settings') {
-        const store = useAppStore.getState()
-        if (store.repos.some((repo) => isGitRepoKind(repo))) {
-          input.preventDefault()
-          notifyTerminalCapture('view.tasks')
-          store.openTaskPage()
-        }
-        return
-      }
-
-      if (!canRevealRightSidebar) {
-        return
-      }
-
-      // Cmd/Ctrl+L — toggle right sidebar
-      if (matchShortcut('sidebar.right.toggle')) {
-        input.preventDefault()
-        notifyTerminalCapture('sidebar.right.toggle')
-        actions.toggleRightSidebar()
-        return
-      }
-
-      // Cmd/Ctrl+Shift+E — toggle right sidebar / explorer tab
-      if (matchShortcut('sidebar.explorer.toggle')) {
-        input.preventDefault()
-        notifyTerminalCapture('sidebar.explorer.toggle')
-        actions.showRightSidebarFiles()
-        return
-      }
-
-      // Cmd/Ctrl+Shift+F — toggle right sidebar / search tab
-      if (matchShortcut('sidebar.search.toggle')) {
-        input.preventDefault()
-        notifyTerminalCapture('sidebar.search.toggle')
-        openSearchSidebar(null)
-        return
-      }
-
-      // Cmd/Ctrl+Shift+G — source control tab; skip when terminal search is open (there it means "find previous"). DOM check because capture-phase order varies.
-      if (matchShortcut('sidebar.sourceControl.toggle')) {
-        if (document.querySelector('[data-terminal-search-root]')) {
+      const handlers = createRegisteredCommandHandlers(input, context)
+      for (const actionId of PLUGIN_COMMAND_ALIAS_ACTION_IDS) {
+        if (matchShortcut(actionId) && handlers.get(actionId)?.()) {
           return
         }
-        input.preventDefault()
-        notifyTerminalCapture('sidebar.sourceControl.toggle')
-        actions.setRightSidebarTab('source-control')
-        actions.setRightSidebarOpen(true)
-        return
       }
 
-      // Unbound by default; opens the active worktree's Source Control notes send picker. Only consumes the chord when there are unsent notes.
-      if (matchShortcut('sourceControl.sendReviewNotes')) {
+      // Unbound by default, so it runs after the built-in alias handlers above; only consumes the chord when the active worktree has unsent notes.
+      if (canRevealRightSidebar && matchShortcut('sourceControl.sendReviewNotes')) {
         if (actions.openDiffNotesSendMenuForActiveWorktree()) {
           input.preventDefault()
           notifyTerminalCapture('sourceControl.sendReviewNotes')
-          return
         }
-      }
-
-      if (matchShortcut('sidebar.checks.toggle')) {
-        input.preventDefault()
-        notifyTerminalCapture('sidebar.checks.toggle')
-        actions.setRightSidebarTab('checks')
-        actions.setRightSidebarOpen(true)
-        return
-      }
-
-      // Cmd+Shift+I — ports tab (macOS only); Ctrl+Shift+I is the DevTools accelerator on Windows/Linux.
-      if (matchShortcut('sidebar.ports.toggle')) {
-        input.preventDefault()
-        notifyTerminalCapture('sidebar.ports.toggle')
-        actions.setRightSidebarTab('ports')
-        actions.setRightSidebarOpen(true)
       }
     }
 
@@ -1850,6 +1944,7 @@ function App(): React.JSX.Element {
     window.addEventListener('keyup', onKeyUp, { capture: true })
     window.addEventListener('blur', onBlur)
     return () => {
+      unregisterAppCommandDispatcher()
       window.removeEventListener('keydown', onKeyDown, { capture: true })
       window.removeEventListener('keyup', onKeyUp, { capture: true })
       window.removeEventListener('blur', onBlur)

@@ -325,7 +325,16 @@ jobs:
 
           # Extract the signed installer and verify the files a user actually
           # gets on disk — including the exact file from issue #7785.
-          $7za = 'node_modules/7zip-bin/win/x64/7za.exe'
+          # electron-builder 26.9+ removed the bundled 7zip-bin package (#6487).
+          $7zaOutput = node config/scripts/resolve-7za-path.mjs
+          $7zaExitCode = $LASTEXITCODE
+          if ($7zaExitCode -ne 0) {
+            throw "The 7za resolver exited with code $7zaExitCode for the signing rehearsal."
+          }
+          $7za = ($7zaOutput | Out-String).Trim()
+          if ([string]::IsNullOrWhiteSpace($7za) -or -not (Test-Path -LiteralPath $7za -PathType Leaf)) {
+            throw "The 7za resolver returned an invalid path for the signing rehearsal: $7za"
+          }
           New-Item -ItemType Directory -Path extracted-app -Force | Out-Null
           & $7za x 'dist/orca-windows-setup.exe' '-oextracted-app' -y | Out-Null
 

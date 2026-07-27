@@ -255,6 +255,49 @@ describe('renderer breadcrumb IPC routing', () => {
     }
   })
 
+  // Why: every hidden pane is 0x0, so one post-reload reattach wave exhausts
+  // the fit budget once per mounted pane inside ~60ms. Windows crash
+  // F0BKR84AHEH lost 26-90% of its 30-entry ring to two such bursts.
+  it('coalesces fit-retry exhaustion by name, not by pane', () => {
+    emitRendererBreadcrumb({
+      name: 'terminal_safe_fit_retry_exhausted',
+      data: { paneId: 1, leafId: 'leaf-a' }
+    })
+    emitRendererBreadcrumb({
+      name: 'terminal_safe_fit_retry_exhausted',
+      data: { paneId: 1, leafId: 'leaf-b' }
+    })
+
+    expect(recordCrashBreadcrumbMock).not.toHaveBeenCalled()
+    expect(recordCoalescedCrashBreadcrumbMock).toHaveBeenCalledTimes(2)
+    for (const call of recordCoalescedCrashBreadcrumbMock.mock.calls) {
+      expect(call[0]).toMatchObject({ coalesceKey: 'terminal_safe_fit_retry_exhausted' })
+    }
+  })
+
+  // Why kind-scoped: a routine post-wake atlas reset must never suppress the
+  // context-loss crumb that says the driver gave up on this renderer.
+  it('coalesces WebGL diagnostics per kind so one kind cannot mask another', () => {
+    emitRendererBreadcrumb({
+      name: 'terminal_webgl_diagnostic',
+      data: { kind: 'webgl-context-loss', paneId: 1 }
+    })
+    emitRendererBreadcrumb({
+      name: 'terminal_webgl_diagnostic',
+      data: { kind: 'webgl-atlas-reset', managers: 3 }
+    })
+
+    expect(recordCrashBreadcrumbMock).not.toHaveBeenCalled()
+    expect(
+      recordCoalescedCrashBreadcrumbMock.mock.calls.map(
+        (call) => (call[0] as { coalesceKey: string }).coalesceKey
+      )
+    ).toEqual([
+      'terminal_webgl_diagnostic:webgl-context-loss',
+      'terminal_webgl_diagnostic:webgl-atlas-reset'
+    ])
+  })
+
   it('records non-error renderer breadcrumbs without coalescing', () => {
     emitRendererBreadcrumb({ name: 'renderer_bootstrap_started', data: { dev: true } })
 

@@ -20,7 +20,6 @@ import { isAbsolute, join } from 'node:path'
 import {
   AGENT_MODEL_MAX_LENGTH,
   normalizeAgentStatusPayload,
-  parseAgentStatusPayload,
   type AgentStatusState,
   type AgentSubagentSnapshot,
   type ParsedAgentStatusPayload
@@ -836,6 +835,7 @@ function extractToolResponseText(toolResponse: unknown): string | undefined {
 
 const TRANSCRIPT_CHUNK_BYTES = 64 * 1024
 const TRANSCRIPT_MAX_SCAN_BYTES = 4 * 1024 * 1024
+const EMPTY_TRANSCRIPT_REGION = Buffer.alloc(0)
 const AMP_THREAD_ID_MAX_LENGTH = 256
 const AMP_MAX_SCOPED_THREAD_CACHE_KEYS = 32
 const GROK_SESSION_CWD_MAX_LENGTH = 4096
@@ -960,7 +960,32 @@ function hashInteractionKeyPart(value: string): string {
   return createHash('sha256').update(value).digest('hex').slice(0, 12)
 }
 
-function readLastCommandCodeUserPromptEntryFromTranscript(
+// Why byte offsets: the caller's interactionKey embeds the prompt's absolute
+// position, so the backward scan has to report the same offset the old
+// read-everything-then-take-the-last-match pass produced.
+function findLastCommandCodePromptInRegion(
+  region: Buffer
+): { prompt: string; byteOffset: number } | undefined {
+  let lineEnd = region.length
+  for (let index = region.length - 1; index >= -1; index--) {
+    if (index >= 0 && region[index] !== 0x0a) {
+      continue
+    }
+    const lineStart = index + 1
+    if (lineEnd > lineStart) {
+      const prompt = extractCommandCodeUserPromptFromLine(
+        region.subarray(lineStart, lineEnd).toString('utf8').trim()
+      )
+      if (prompt !== undefined) {
+        return { prompt, byteOffset: lineStart }
+      }
+    }
+    lineEnd = index
+  }
+  return undefined
+}
+
+export function readLastCommandCodeUserPromptEntryFromTranscript(
   transcriptPath: unknown
 ): { text: string; interactionKey: string } | undefined {
   if (typeof transcriptPath !== 'string' || transcriptPath.length === 0) {
@@ -972,69 +997,84 @@ function readLastCommandCodeUserPromptEntryFromTranscript(
     if (size <= 0) {
       return undefined
     }
-    const bytesToRead = Math.min(size, TRANSCRIPT_MAX_SCAN_BYTES)
-    const position = size - bytesToRead
     const fd = openSync(transcriptPath, 'r')
     try {
-      const buffer = Buffer.alloc(bytesToRead)
-      let filled = 0
-      while (filled < bytesToRead) {
-        const n = readSync(fd, buffer, filled, bytesToRead - filled, position + filled)
-        if (n === 0) {
+      // Why scan backward: the answer is the LAST user line, so walking up from
+      // EOF returns on the first hit instead of parsing every line of a
+      // multi-megabyte transcript on every hook event.
+      // Why a chunk list: carry holds a partial line, and re-concatenating it per
+      // block made one oversized line (a big tool result) cost O(line^2).
+      let carryChunks: Buffer[] = []
+      let bytesRead = 0
+      let scanEnd = size
+      while (scanEnd > 0 && bytesRead < TRANSCRIPT_MAX_SCAN_BYTES) {
+        const chunkSize = Math.min(
+          scanEnd,
+          TRANSCRIPT_CHUNK_BYTES,
+          TRANSCRIPT_MAX_SCAN_BYTES - bytesRead
+        )
+        const position = scanEnd - chunkSize
+        const buffer = Buffer.alloc(chunkSize)
+        let filled = 0
+        while (filled < chunkSize) {
+          const n = readSync(fd, buffer, filled, chunkSize - filled, position + filled)
+          if (n === 0) {
+            break
+          }
+          filled += n
+        }
+        // Why bail on a short read: the file shrank under us, so the bytes above
+        // this block no longer line up and any stitched offset would be wrong.
+        if (filled < chunkSize) {
           break
         }
-        filled += n
-      }
-      let text = buffer.subarray(0, filled).toString('utf8')
-      let textBasePosition = position
-      if (position > 0) {
-        const firstNewline = text.indexOf('\n')
-        textBasePosition += firstNewline + 1
-        text = firstNewline === -1 ? '' : text.slice(firstNewline + 1)
-      }
-      let lastPrompt: string | undefined
-      let lastPromptOffset = 0
-      for (const { line, byteOffset } of iterateTranscriptLinesWithByteOffsets(text)) {
-        const prompt = extractCommandCodeUserPromptFromLine(line.trim())
-        if (prompt !== undefined) {
-          lastPrompt = prompt
-          lastPromptOffset = textBasePosition + byteOffset
+        bytesRead += filled
+        scanEnd = position
+        // Why search only the new block: carry is always the run before a newline,
+        // so it holds none of its own.
+        const firstNewline = buffer.indexOf(0x0a)
+        // Why only at a true file start: a scan that stops on the size cap must
+        // discard its leading partial line, exactly as the capped read did.
+        const atStart = position === 0
+        let completeRegion: Buffer
+        let regionPosition: number
+        if (atStart) {
+          completeRegion =
+            carryChunks.length === 0 ? buffer : Buffer.concat([buffer, ...carryChunks])
+          regionPosition = position
+          carryChunks = []
+        } else if (firstNewline === -1) {
+          completeRegion = EMPTY_TRANSCRIPT_REGION
+          regionPosition = position
+          carryChunks.unshift(buffer)
+        } else {
+          const afterNewline = buffer.subarray(firstNewline + 1)
+          completeRegion =
+            carryChunks.length === 0 ? afterNewline : Buffer.concat([afterNewline, ...carryChunks])
+          regionPosition = position + firstNewline + 1
+          carryChunks = [buffer.subarray(0, firstNewline)]
+        }
+        if (completeRegion.length > 0) {
+          const found = findLastCommandCodePromptInRegion(completeRegion)
+          if (found) {
+            return {
+              text: found.prompt,
+              interactionKey: [
+                'command-code-transcript',
+                hashInteractionKeyPart(transcriptPath),
+                String(regionPosition + found.byteOffset),
+                hashInteractionKeyPart(found.prompt)
+              ].join('-')
+            }
+          }
         }
       }
-      return lastPrompt
-        ? {
-            text: lastPrompt,
-            interactionKey: [
-              'command-code-transcript',
-              hashInteractionKeyPart(transcriptPath),
-              String(lastPromptOffset),
-              hashInteractionKeyPart(lastPrompt)
-            ].join('-')
-          }
-        : undefined
+      return undefined
     } finally {
       closeSync(fd)
     }
   } catch {
     return undefined
-  }
-}
-
-function* iterateTranscriptLinesWithByteOffsets(
-  text: string
-): Generator<{ line: string; byteOffset: number }> {
-  let lineStart = 0
-  let byteOffset = 0
-
-  for (let index = 0; index <= text.length; index++) {
-    if (index < text.length && text.charCodeAt(index) !== 10) {
-      continue
-    }
-
-    const line = text.slice(lineStart, index)
-    yield { line, byteOffset }
-    byteOffset += Buffer.byteLength(line, 'utf8') + (index < text.length ? 1 : 0)
-    lineStart = index + 1
   }
 }
 
@@ -1297,11 +1337,14 @@ function readLastTextFromTranscriptOnce(
     }
     const fd = openSync(transcriptPath, 'r')
     try {
-      let carryBytes: Buffer = Buffer.alloc(0)
+      // Why a chunk list: carry holds a partial line, and re-joining it per block
+      // made one oversized line (a big tool result or pasted prompt) cost O(line^2).
+      let carryChunks: Buffer[] = []
       let bytesRead = 0
-      while (bytesRead < size && bytesRead < TRANSCRIPT_MAX_SCAN_BYTES) {
-        const chunkSize = Math.min(size - bytesRead, TRANSCRIPT_CHUNK_BYTES)
-        const position = size - bytesRead - chunkSize
+      let scanEnd = size
+      while (scanEnd > 0 && bytesRead < TRANSCRIPT_MAX_SCAN_BYTES) {
+        const chunkSize = Math.min(scanEnd, TRANSCRIPT_CHUNK_BYTES)
+        const position = scanEnd - chunkSize
         const buffer = Buffer.alloc(chunkSize)
         let filled = 0
         while (filled < chunkSize) {
@@ -1311,25 +1354,30 @@ function readLastTextFromTranscriptOnce(
           }
           filled += n
         }
-        const n = filled
-        bytesRead += n
-        if (n === 0) {
+        // Why bail on a short read: the file shrank under us, so the bytes above
+        // this block no longer line up with what the earlier ones assumed.
+        if (filled < chunkSize) {
           break
         }
-        const combined = Buffer.concat([buffer.subarray(0, n), carryBytes])
-        const atStart = bytesRead >= size
-        const firstNewline = combined.indexOf(0x0a)
+        bytesRead += filled
+        scanEnd = position
+        // Why search only the new block: carry is always the run before a newline,
+        // so it holds none of its own.
+        const firstNewline = buffer.indexOf(0x0a)
+        const atStart = position === 0
         let completeRegion: Buffer
-        let nextCarry: Buffer
         if (atStart) {
-          completeRegion = combined
-          nextCarry = Buffer.alloc(0)
+          completeRegion =
+            carryChunks.length === 0 ? buffer : Buffer.concat([buffer, ...carryChunks])
+          carryChunks = []
         } else if (firstNewline === -1) {
-          completeRegion = Buffer.alloc(0)
-          nextCarry = combined
+          completeRegion = EMPTY_TRANSCRIPT_REGION
+          carryChunks.unshift(buffer)
         } else {
-          nextCarry = combined.subarray(0, firstNewline)
-          completeRegion = combined.subarray(firstNewline + 1)
+          const afterNewline = buffer.subarray(firstNewline + 1)
+          completeRegion =
+            carryChunks.length === 0 ? afterNewline : Buffer.concat([afterNewline, ...carryChunks])
+          carryChunks = [buffer.subarray(0, firstNewline)]
         }
         if (completeRegion.length > 0) {
           const extracted = findLastExtractedTranscriptLineText(
@@ -1340,7 +1388,6 @@ function readLastTextFromTranscriptOnce(
             return extracted
           }
         }
-        carryBytes = nextCarry
       }
       return undefined
     } finally {
@@ -2684,20 +2731,18 @@ function normalizeDevinEvent(
   const interrupted =
     eventName === 'Stop' && hookPayload['is_interrupt'] === true ? true : undefined
 
-  return parseAgentStatusPayload(
-    JSON.stringify({
-      state: stateName,
-      prompt: resolvePrompt(state, paneKey, promptText, {
-        resetOnNewTurn: isNewTurnEvent('devin', eventName)
-      }),
-      agentType: 'devin',
-      toolName: snapshot.toolName,
-      toolInput: snapshot.toolInput,
-      interactivePrompt: snapshot.interactivePrompt,
-      lastAssistantMessage: snapshot.lastAssistantMessage,
-      interrupted
-    })
-  )
+  return normalizeAgentStatusPayload({
+    state: stateName,
+    prompt: resolvePrompt(state, paneKey, promptText, {
+      resetOnNewTurn: isNewTurnEvent('devin', eventName)
+    }),
+    agentType: 'devin',
+    toolName: snapshot.toolName,
+    toolInput: snapshot.toolInput,
+    interactivePrompt: snapshot.interactivePrompt,
+    lastAssistantMessage: snapshot.lastAssistantMessage,
+    interrupted
+  })
 }
 
 // Why: Kimi's auto-allowed AskUserQuestion emits PreToolUse (not PermissionRequest) while awaiting an answer; treat as waiting so the UI shows the attention icon, not a spinner.
@@ -2744,19 +2789,17 @@ function normalizeKimiEvent(
   const interrupted =
     eventName === 'Stop' && hookPayload['is_interrupt'] === true ? true : undefined
 
-  return parseAgentStatusPayload(
-    JSON.stringify({
-      state: stateName,
-      prompt: resolvePrompt(state, paneKey, promptText, {
-        resetOnNewTurn: isNewTurnEvent('kimi', eventName)
-      }),
-      agentType: 'kimi',
-      toolName: snapshot.toolName,
-      toolInput: snapshot.toolInput,
-      lastAssistantMessage: snapshot.lastAssistantMessage,
-      interrupted
-    })
-  )
+  return normalizeAgentStatusPayload({
+    state: stateName,
+    prompt: resolvePrompt(state, paneKey, promptText, {
+      resetOnNewTurn: isNewTurnEvent('kimi', eventName)
+    }),
+    agentType: 'kimi',
+    toolName: snapshot.toolName,
+    toolInput: snapshot.toolInput,
+    lastAssistantMessage: snapshot.lastAssistantMessage,
+    interrupted
+  })
 }
 
 function normalizeGeminiEvent(
@@ -2789,19 +2832,17 @@ function normalizeGeminiEvent(
     { resetOnNewTurn: isNewTurnEvent('gemini', eventName) }
   )
 
-  return parseAgentStatusPayload(
-    JSON.stringify({
-      state: stateName,
-      prompt: resolvePrompt(state, paneKey, promptText, {
-        resetOnNewTurn: isNewTurnEvent('gemini', eventName)
-      }),
-      agentType: 'gemini',
-      toolName: snapshot.toolName,
-      toolInput: snapshot.toolInput,
-      interactivePrompt: snapshot.interactivePrompt,
-      lastAssistantMessage: snapshot.lastAssistantMessage
-    })
-  )
+  return normalizeAgentStatusPayload({
+    state: stateName,
+    prompt: resolvePrompt(state, paneKey, promptText, {
+      resetOnNewTurn: isNewTurnEvent('gemini', eventName)
+    }),
+    agentType: 'gemini',
+    toolName: snapshot.toolName,
+    toolInput: snapshot.toolInput,
+    interactivePrompt: snapshot.interactivePrompt,
+    lastAssistantMessage: snapshot.lastAssistantMessage
+  })
 }
 
 function isAntigravityFeedbackTool(toolName: string | undefined): boolean {
@@ -2863,19 +2904,17 @@ function normalizeAntigravityEvent(
     { resetOnNewTurn: resetsTurn }
   )
 
-  const payload = parseAgentStatusPayload(
-    JSON.stringify({
-      state: stateName,
-      prompt: resolvePrompt(state, paneKey, effectivePrompt, {
-        resetOnNewTurn: resetsTurn
-      }),
-      agentType: 'antigravity',
-      toolName: snapshot.toolName,
-      toolInput: snapshot.toolInput,
-      interactivePrompt: snapshot.interactivePrompt,
-      lastAssistantMessage: snapshot.lastAssistantMessage
-    })
-  )
+  const payload = normalizeAgentStatusPayload({
+    state: stateName,
+    prompt: resolvePrompt(state, paneKey, effectivePrompt, {
+      resetOnNewTurn: resetsTurn
+    }),
+    agentType: 'antigravity',
+    toolName: snapshot.toolName,
+    toolInput: snapshot.toolInput,
+    interactivePrompt: snapshot.interactivePrompt,
+    lastAssistantMessage: snapshot.lastAssistantMessage
+  })
   // Why: Antigravity can emit Stop with fullyIdle=false between tool steps; only a fully idle Stop is terminal, else the sidebar bounces done -> working and ignores later tool updates.
   if (eventName === 'Stop' && !stopStillBusy && transcriptPath) {
     state.antigravityCompletedTranscriptByPaneKey.set(paneKey, transcriptPath)
@@ -2941,21 +2980,19 @@ function normalizeAmpEvent(
     (eventName === 'agent.end' && !state.lastPromptByPaneKey.has(ampCacheKey))
   const ampPromptText = explicitPrompt ?? (canUseMessageAsPrompt ? promptText : '')
 
-  const normalized = parseAgentStatusPayload(
-    JSON.stringify({
-      state: stateName,
-      // Why: Amp tool/result events may use `message` for tool output; only lifecycle events may treat it as the turn prompt.
-      prompt: resolvePrompt(state, ampCacheKey, ampPromptText, {
-        resetOnNewTurn: isNewTurnEvent('amp', eventName)
-      }),
-      agentType: 'amp',
-      toolName: snapshot.toolName,
-      toolInput: snapshot.toolInput,
-      interactivePrompt: snapshot.interactivePrompt,
-      lastAssistantMessage: snapshot.lastAssistantMessage,
-      interrupted
-    })
-  )
+  const normalized = normalizeAgentStatusPayload({
+    state: stateName,
+    // Why: Amp tool/result events may use `message` for tool output; only lifecycle events may treat it as the turn prompt.
+    prompt: resolvePrompt(state, ampCacheKey, ampPromptText, {
+      resetOnNewTurn: isNewTurnEvent('amp', eventName)
+    }),
+    agentType: 'amp',
+    toolName: snapshot.toolName,
+    toolInput: snapshot.toolInput,
+    interactivePrompt: snapshot.interactivePrompt,
+    lastAssistantMessage: snapshot.lastAssistantMessage,
+    interrupted
+  })
   if (normalized && eventName === 'agent.end') {
     state.ampCompletedCacheKeys.add(ampCacheKey)
   }
@@ -3335,19 +3372,17 @@ function normalizeOpenCodeFamilyEvent(
     { resetOnNewTurn: isNewTurnEvent(source, eventName) }
   )
 
-  return parseAgentStatusPayload(
-    JSON.stringify({
-      state: stateName,
-      prompt: resolvePrompt(state, paneKey, promptText, {
-        resetOnNewTurn: isNewTurnEvent(source, eventName)
-      }),
-      agentType: source,
-      toolName: snapshot.toolName,
-      toolInput: snapshot.toolInput,
-      interactivePrompt: snapshot.interactivePrompt,
-      lastAssistantMessage: snapshot.lastAssistantMessage
-    })
-  )
+  return normalizeAgentStatusPayload({
+    state: stateName,
+    prompt: resolvePrompt(state, paneKey, promptText, {
+      resetOnNewTurn: isNewTurnEvent(source, eventName)
+    }),
+    agentType: source,
+    toolName: snapshot.toolName,
+    toolInput: snapshot.toolInput,
+    interactivePrompt: snapshot.interactivePrompt,
+    lastAssistantMessage: snapshot.lastAssistantMessage
+  })
 }
 
 function normalizeCursorEvent(
@@ -3395,20 +3430,18 @@ function normalizeCursorEvent(
       ? true
       : undefined
 
-  return parseAgentStatusPayload(
-    JSON.stringify({
-      state: stateName,
-      prompt: resolvePrompt(state, paneKey, promptText, {
-        resetOnNewTurn: isNewTurnEvent('cursor', eventName)
-      }),
-      agentType: 'cursor',
-      toolName: snapshot.toolName,
-      toolInput: snapshot.toolInput,
-      interactivePrompt: snapshot.interactivePrompt,
-      lastAssistantMessage: snapshot.lastAssistantMessage,
-      interrupted
-    })
-  )
+  return normalizeAgentStatusPayload({
+    state: stateName,
+    prompt: resolvePrompt(state, paneKey, promptText, {
+      resetOnNewTurn: isNewTurnEvent('cursor', eventName)
+    }),
+    agentType: 'cursor',
+    toolName: snapshot.toolName,
+    toolInput: snapshot.toolInput,
+    interactivePrompt: snapshot.interactivePrompt,
+    lastAssistantMessage: snapshot.lastAssistantMessage,
+    interrupted
+  })
 }
 
 // Why: Copilot PermissionRequest fires before allow/ask/deny (stays working); ask_user and notification prompts are the real blocked signals.
@@ -3458,19 +3491,17 @@ function normalizeCopilotEvent(
 
   const effectivePrompt = normalizedEventName === 'Notification' ? '' : promptText
 
-  return parseAgentStatusPayload(
-    JSON.stringify({
-      state: stateName,
-      prompt: resolvePrompt(state, paneKey, effectivePrompt, {
-        resetOnNewTurn: isNewTurnEvent('copilot', normalizedEventName)
-      }),
-      agentType: 'copilot',
-      toolName: snapshot.toolName,
-      toolInput: snapshot.toolInput,
-      interactivePrompt: snapshot.interactivePrompt,
-      lastAssistantMessage: snapshot.lastAssistantMessage
-    })
-  )
+  return normalizeAgentStatusPayload({
+    state: stateName,
+    prompt: resolvePrompt(state, paneKey, effectivePrompt, {
+      resetOnNewTurn: isNewTurnEvent('copilot', normalizedEventName)
+    }),
+    agentType: 'copilot',
+    toolName: snapshot.toolName,
+    toolInput: snapshot.toolInput,
+    interactivePrompt: snapshot.interactivePrompt,
+    lastAssistantMessage: snapshot.lastAssistantMessage
+  })
 }
 
 function normalizePiCompatibleEvent(
@@ -3517,19 +3548,17 @@ function normalizePiCompatibleEvent(
     { resetOnNewTurn: isNewTurnEvent(agentType, eventName) }
   )
 
-  return parseAgentStatusPayload(
-    JSON.stringify({
-      state: stateName,
-      prompt: resolvePrompt(state, paneKey, promptText, {
-        resetOnNewTurn: isNewTurnEvent(agentType, eventName)
-      }),
-      agentType,
-      toolName: snapshot.toolName,
-      toolInput: snapshot.toolInput,
-      interactivePrompt: snapshot.interactivePrompt,
-      lastAssistantMessage: snapshot.lastAssistantMessage
-    })
-  )
+  return normalizeAgentStatusPayload({
+    state: stateName,
+    prompt: resolvePrompt(state, paneKey, promptText, {
+      resetOnNewTurn: isNewTurnEvent(agentType, eventName)
+    }),
+    agentType,
+    toolName: snapshot.toolName,
+    toolInput: snapshot.toolInput,
+    interactivePrompt: snapshot.interactivePrompt,
+    lastAssistantMessage: snapshot.lastAssistantMessage
+  })
 }
 
 function normalizeDroidEvent(
@@ -3584,19 +3613,17 @@ function normalizeDroidEvent(
   // Why: Droid Notification.message is status text, not the prompt; '' keeps resolvePrompt's cached UserPromptSubmit value.
   const effectivePrompt = eventName === 'Notification' ? '' : promptText
 
-  return parseAgentStatusPayload(
-    JSON.stringify({
-      state: stateName,
-      prompt: resolvePrompt(state, paneKey, effectivePrompt, {
-        resetOnNewTurn: isNewTurnEvent('droid', eventName)
-      }),
-      agentType: 'droid',
-      toolName: snapshot.toolName,
-      toolInput: snapshot.toolInput,
-      interactivePrompt: snapshot.interactivePrompt,
-      lastAssistantMessage: snapshot.lastAssistantMessage
-    })
-  )
+  return normalizeAgentStatusPayload({
+    state: stateName,
+    prompt: resolvePrompt(state, paneKey, effectivePrompt, {
+      resetOnNewTurn: isNewTurnEvent('droid', eventName)
+    }),
+    agentType: 'droid',
+    toolName: snapshot.toolName,
+    toolInput: snapshot.toolInput,
+    interactivePrompt: snapshot.interactivePrompt,
+    lastAssistantMessage: snapshot.lastAssistantMessage
+  })
 }
 
 function normalizeCommandCodeEvent(
@@ -3623,19 +3650,17 @@ function normalizeCommandCodeEvent(
     { resetOnNewTurn: isNewTurnEvent('command-code', eventName) }
   )
 
-  return parseAgentStatusPayload(
-    JSON.stringify({
-      state: stateName,
-      prompt: resolvePrompt(state, paneKey, promptText, {
-        resetOnNewTurn: isNewTurnEvent('command-code', eventName)
-      }),
-      agentType: 'command-code',
-      toolName: snapshot.toolName,
-      toolInput: snapshot.toolInput,
-      interactivePrompt: snapshot.interactivePrompt,
-      lastAssistantMessage: snapshot.lastAssistantMessage
-    })
-  )
+  return normalizeAgentStatusPayload({
+    state: stateName,
+    prompt: resolvePrompt(state, paneKey, promptText, {
+      resetOnNewTurn: isNewTurnEvent('command-code', eventName)
+    }),
+    agentType: 'command-code',
+    toolName: snapshot.toolName,
+    toolInput: snapshot.toolInput,
+    interactivePrompt: snapshot.interactivePrompt,
+    lastAssistantMessage: snapshot.lastAssistantMessage
+  })
 }
 
 function normalizeGrokEvent(
@@ -3709,19 +3734,17 @@ function normalizeGrokEvent(
     ? ''
     : stripGrokUserQueryWrapper(promptText)
 
-  return parseAgentStatusPayload(
-    JSON.stringify({
-      state: stateName,
-      prompt: resolvePrompt(state, paneKey, effectivePrompt, {
-        resetOnNewTurn: isNewTurnEvent('grok', eventName)
-      }),
-      agentType: 'grok',
-      toolName: snapshot.toolName,
-      toolInput: snapshot.toolInput,
-      interactivePrompt: snapshot.interactivePrompt,
-      lastAssistantMessage: snapshot.lastAssistantMessage
-    })
-  )
+  return normalizeAgentStatusPayload({
+    state: stateName,
+    prompt: resolvePrompt(state, paneKey, effectivePrompt, {
+      resetOnNewTurn: isNewTurnEvent('grok', eventName)
+    }),
+    agentType: 'grok',
+    toolName: snapshot.toolName,
+    toolInput: snapshot.toolInput,
+    interactivePrompt: snapshot.interactivePrompt,
+    lastAssistantMessage: snapshot.lastAssistantMessage
+  })
 }
 
 function normalizeHermesEvent(
@@ -3758,19 +3781,17 @@ function normalizeHermesEvent(
     { resetOnNewTurn: isNewTurnEvent('hermes', eventName) }
   )
 
-  return parseAgentStatusPayload(
-    JSON.stringify({
-      state: stateName,
-      prompt: resolvePrompt(state, paneKey, promptText, {
-        resetOnNewTurn: isNewTurnEvent('hermes', eventName)
-      }),
-      agentType: 'hermes',
-      toolName: snapshot.toolName,
-      toolInput: snapshot.toolInput,
-      interactivePrompt: snapshot.interactivePrompt,
-      lastAssistantMessage: snapshot.lastAssistantMessage
-    })
-  )
+  return normalizeAgentStatusPayload({
+    state: stateName,
+    prompt: resolvePrompt(state, paneKey, promptText, {
+      resetOnNewTurn: isNewTurnEvent('hermes', eventName)
+    }),
+    agentType: 'hermes',
+    toolName: snapshot.toolName,
+    toolInput: snapshot.toolInput,
+    interactivePrompt: snapshot.interactivePrompt,
+    lastAssistantMessage: snapshot.lastAssistantMessage
+  })
 }
 
 function readStringField(record: Record<string, unknown>, key: string): string | undefined {

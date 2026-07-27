@@ -2,6 +2,7 @@ import type { AppState } from '@/store/types'
 import {
   getRepoExecutionHostId,
   parseExecutionHostId,
+  toSshExecutionHostId,
   type ExecutionHostId
 } from '../../../shared/execution-host'
 import { parseWorkspaceKey } from '../../../shared/workspace-scope'
@@ -71,6 +72,31 @@ function addRoute(
   routes.set(JSON.stringify(route), route)
 }
 
+function resolveRepoRouteForSshOwner(
+  repos: WorktreeOperationRouteState['repos'],
+  owner: WorktreeOperationOwnerRecord
+): WorktreeOperationRouteResolution {
+  if (!repos || !owner.hostId) {
+    return { kind: 'missing' }
+  }
+  const routes = new Map<string, WorktreeOperationRoute>()
+  for (const repo of repos) {
+    if (repo.id !== owner.repoId) {
+      continue
+    }
+    const connectionHostId = repo.connectionId ? toSshExecutionHostId(repo.connectionId) : null
+    if (getRepoExecutionHostId(repo) !== owner.hostId && connectionHostId !== owner.hostId) {
+      continue
+    }
+    addRoute(routes, routeForOwner({ hostId: getRepoExecutionHostId(repo) }))
+  }
+  const route = routes.values().next().value
+  if (routes.size === 1 && route) {
+    return { kind: 'resolved', route }
+  }
+  return routes.size > 1 ? { kind: 'ambiguous' } : { kind: 'missing' }
+}
+
 function resolveExactWorktreeRoute(
   state: WorktreeOperationRouteState,
   owner: WorktreeOperationOwnerRecord
@@ -82,7 +108,8 @@ function resolveExactWorktreeRoute(
   if (route.runtimeEnvironmentId || parseExecutionHostId(route.executionHostId)?.kind !== 'ssh') {
     return { kind: 'resolved', route }
   }
-  const repoRoute = resolveIndexedRepoOperationRoute(state.repos, owner.repoId)
+  // Recover an optional HUB transport only from the repo setup matching the worktree's SSH host.
+  const repoRoute = resolveRepoRouteForSshOwner(state.repos, owner)
   if (repoRoute.kind === 'ambiguous') {
     return repoRoute
   }

@@ -207,6 +207,8 @@ export const UiUpdate = z
     // Why: rides App.tsx's debounced writer, so omitting it rejected that entire
     // payload (sidebar widths, filters, agent acks) for every paired client.
     showDotfilesByWorktree: z.record(z.string(), z.boolean()).optional(),
+    hideCliCreatedWorkspaces: z.boolean().optional(),
+    hideDetachedHeadWorkspaces: z.boolean().optional(),
     filterRepoIds: StringArray.optional(),
     collapsedGroups: StringArray.optional(),
     uiZoomLevel: z.number().finite().optional(),

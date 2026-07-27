@@ -2,7 +2,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { hostname, tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { mkdtempSync, mkdirSync, rmSync, existsSync, readFileSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdtempSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { DaemonClient } from './client'
 import { DaemonProtocolError } from './daemon-errors'
 import { DaemonPtyAdapter } from './daemon-pty-adapter'
@@ -19,6 +19,7 @@ import type { SubprocessHandle } from './session'
 import type { DaemonFileLog } from './daemon-file-log'
 import type * as DaemonHealthModule from './daemon-health'
 import { getDaemonSocketPath } from './daemon-spawner'
+import { PtyWriteUnavailableError } from '../providers/pty-write-unavailable-error'
 
 const { getMacDaemonSystemResolverHealthMock } = vi.hoisted(() => ({
   getMacDaemonSystemResolverHealthMock: vi.fn(async () => 'unknown')
@@ -39,6 +40,7 @@ function createTestDir(): string {
 }
 
 function createMockSubprocess(dataOnSubscribe?: string): SubprocessHandle & {
+  write: ReturnType<typeof vi.fn<(data: string) => void>>
   pause: ReturnType<typeof vi.fn<() => void>>
   resume: ReturnType<typeof vi.fn<() => void>>
   _simulateData: (data: string) => void
@@ -503,6 +505,262 @@ describe('DaemonPtyAdapter (IPtyProvider)', () => {
         expect(notifySpy).toHaveBeenCalledWith('resumePty', { sessionId: id })
       } finally {
         notifySpy.mockRestore()
+      }
+    })
+  })
+
+  describe('dead-endpoint write respawn (STA-2373)', () => {
+    function restartServerOnRespawn(): void {
+      server = new DaemonServer({
+        socketPath,
+        tokenPath,
+        log: daemonLog,
+        spawnSubprocess: (opts) => {
+          lastSpawnOpts = opts
+          lastSubprocess = createMockSubprocess()
+          return lastSubprocess
+        }
+      })
+    }
+
+    it('rejects stale input until createOrAttach remounts the pane onto the new daemon', async () => {
+      let respawnServer: DaemonServer | undefined
+      let respawnSubprocess: ReturnType<typeof createMockSubprocess> | undefined
+      const respawn = vi.fn(async () => {
+        respawnServer = new DaemonServer({
+          socketPath,
+          tokenPath,
+          spawnSubprocess: () => {
+            respawnSubprocess = createMockSubprocess()
+            return respawnSubprocess
+          }
+        })
+        await respawnServer.start()
+      })
+      const healingAdapter = new DaemonPtyAdapter({ socketPath, tokenPath, respawn })
+      try {
+        const { id } = await healingAdapter.spawn({ cols: 80, rows: 24 })
+        const internals = healingAdapter as unknown as {
+          sessionsAwaitingDaemonRecovery: Set<string>
+        }
+
+        await server.shutdown()
+        await waitFor(() => internals.sessionsAwaitingDaemonRecovery.has(id))
+
+        expect(() => healingAdapter.write(id, 'first')).toThrow(PtyWriteUnavailableError)
+        expect(() => healingAdapter.write(id, 'second')).toThrow(PtyWriteUnavailableError)
+        await waitFor(() => respawn.mock.calls.length === 1)
+
+        expect(respawnSubprocess).toBeUndefined()
+        expect(() => healingAdapter.write(id, 'still-stale')).toThrow(PtyWriteUnavailableError)
+
+        await healingAdapter.spawn({ sessionId: id, cols: 80, rows: 24 })
+        expect(() => healingAdapter.write(id, 'rebound')).not.toThrow()
+        await waitFor(
+          () =>
+            respawnSubprocess !== undefined &&
+            vi.mocked(respawnSubprocess.write).mock.calls.length === 1
+        )
+        expect(respawnSubprocess?.write).toHaveBeenCalledWith('rebound')
+        expect(respawn).toHaveBeenCalledTimes(1)
+      } finally {
+        healingAdapter.dispose()
+        await respawnServer?.shutdown()
+      }
+    })
+
+    it('requires createOrAttach before writing to a session that survives a socket disconnect', async () => {
+      const respawn = vi.fn(async () => {})
+      const healingAdapter = new DaemonPtyAdapter({ socketPath, tokenPath, respawn })
+      try {
+        const { id } = await healingAdapter.spawn({ cols: 80, rows: 24 })
+        const client = (healingAdapter as unknown as { client: DaemonClient }).client
+
+        client.disconnect()
+        expect(() => healingAdapter.write(id, 'stale')).toThrow(PtyWriteUnavailableError)
+        await waitFor(() => client.isConnected())
+        expect(() => healingAdapter.write(id, 'still-stale')).toThrow(PtyWriteUnavailableError)
+
+        await healingAdapter.spawn({ sessionId: id, cols: 80, rows: 24 })
+        healingAdapter.write(id, 'rebound')
+        await waitFor(() => lastSubprocess.write.mock.calls.length > 0)
+        expect(lastSubprocess.write.mock.calls).toEqual([['rebound']])
+        expect(healingAdapter.hasPty(id)).toBe(true)
+        expect(respawn).not.toHaveBeenCalled()
+      } finally {
+        healingAdapter.dispose()
+      }
+    })
+
+    it('does not spawn a daemon per keystroke after respawn fails', async () => {
+      const respawn = vi.fn(async () => {
+        throw new Error('daemon unavailable')
+      })
+      const healingAdapter = new DaemonPtyAdapter({ socketPath, tokenPath, respawn })
+      const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+      try {
+        const { id } = await healingAdapter.spawn({ cols: 80, rows: 24 })
+        const client = (healingAdapter as unknown as { client: DaemonClient }).client
+        await server.shutdown()
+        await waitFor(() => !client.isConnected())
+
+        expect(() => healingAdapter.write(id, 'a')).toThrow(PtyWriteUnavailableError)
+        await waitFor(() => respawn.mock.calls.length === 1)
+        for (let i = 0; i < 100; i += 1) {
+          expect(() => healingAdapter.write(id, 'b')).toThrow(PtyWriteUnavailableError)
+        }
+
+        expect(respawn).toHaveBeenCalledTimes(1)
+      } finally {
+        warn.mockRestore()
+        healingAdapter.dispose()
+      }
+    })
+
+    it('joins a request-path respawn instead of forking a second daemon', async () => {
+      let releaseRespawn!: () => void
+      const respawn = vi.fn(async () => {
+        await new Promise<void>((resolve) => {
+          releaseRespawn = resolve
+        })
+        restartServerOnRespawn()
+        await server.start()
+      })
+      const healingAdapter = new DaemonPtyAdapter({ socketPath, tokenPath, respawn })
+      try {
+        const { id } = await healingAdapter.spawn({ cols: 80, rows: 24 })
+        const client = (healingAdapter as unknown as { client: DaemonClient }).client
+        await server.shutdown()
+        await waitFor(() => !client.isConnected())
+
+        const newSpawn = healingAdapter.spawn({
+          sessionId: 'request-path-session',
+          cols: 80,
+          rows: 24
+        })
+        await waitFor(() => releaseRespawn !== undefined)
+        expect(() => healingAdapter.write(id, 'queued')).toThrow(PtyWriteUnavailableError)
+        releaseRespawn()
+
+        await expect(newSpawn).resolves.toMatchObject({ id: 'request-path-session' })
+        expect(respawn).toHaveBeenCalledTimes(1)
+      } finally {
+        healingAdapter.dispose()
+      }
+    })
+
+    it('does not respawn when a dropped write targets no active session', async () => {
+      const respawn = vi.fn(async () => {
+        restartServerOnRespawn()
+        await server.start()
+      })
+      const idleAdapter = new DaemonPtyAdapter({ socketPath, tokenPath, respawn })
+      try {
+        const client = (idleAdapter as unknown as { client: DaemonClient }).client
+        await idleAdapter.listProcesses()
+
+        await server.shutdown()
+        await waitFor(() => !client.isConnected())
+
+        idleAdapter.write('never-attached-session', 'ls\n')
+
+        await new Promise((r) => setTimeout(r, 50))
+        expect(respawn).not.toHaveBeenCalled()
+      } finally {
+        idleAdapter.dispose()
+      }
+    })
+
+    it('signals every active pane to recover when one pane hits the dead endpoint', async () => {
+      const respawn = vi.fn(async () => {})
+      const healingAdapter = new DaemonPtyAdapter({ socketPath, tokenPath, respawn })
+      const recovered: string[] = []
+      healingAdapter.onWriteUnavailable(({ id }) => recovered.push(id))
+      try {
+        const { id: a } = await healingAdapter.spawn({ sessionId: 'pane-a', cols: 80, rows: 24 })
+        const { id: b } = await healingAdapter.spawn({ sessionId: 'pane-b', cols: 80, rows: 24 })
+        const client = (healingAdapter as unknown as { client: DaemonClient }).client
+
+        await server.shutdown()
+        await waitFor(() => !client.isConnected())
+
+        // Only pane A is written; pane B is a passive sibling the user never typed into.
+        expect(() => healingAdapter.write(a, 'typed-into-a')).toThrow(PtyWriteUnavailableError)
+
+        // Why revert-sensitive: a dead endpoint takes down EVERY session on the
+        // daemon, so both panes must be told to remount + re-attach. Without the
+        // fan-out, only the written pane (a) recovers and sibling b stays frozen
+        // with silently dropped input (STA-2373 sibling-freeze regression).
+        expect(recovered).toContain(a)
+        expect(recovered).toContain(b)
+      } finally {
+        healingAdapter.dispose()
+      }
+    })
+
+    it('keeps dropping writes silently on an adapter that cannot respawn', async () => {
+      // Why revert-sensitive: legacy adapters are built with no respawn, so a remount
+      // reattaches to nothing and rebuilds the pane EMPTY, losing scrollback the user
+      // could still read. Rejecting the write is only an improvement where the endpoint
+      // can actually come back, so an unrecoverable one must keep the old silent drop.
+      const legacyAdapter = new DaemonPtyAdapter({ socketPath, tokenPath })
+      const recovered: string[] = []
+      legacyAdapter.onWriteUnavailable(({ id }) => recovered.push(id))
+      try {
+        const { id } = await legacyAdapter.spawn({ sessionId: 'legacy-pane', cols: 80, rows: 24 })
+        const client = (legacyAdapter as unknown as { client: DaemonClient }).client
+
+        await server.shutdown()
+        await waitFor(() => !client.isConnected())
+
+        expect(() => legacyAdapter.write(id, 'typed')).not.toThrow()
+        expect(recovered).toEqual([])
+      } finally {
+        legacyAdapter.dispose()
+      }
+    })
+
+    it('re-arms recovery for a second daemon death when a background session never rebinds', async () => {
+      const respawn = vi.fn(async () => {
+        restartServerOnRespawn()
+        await server.start()
+      })
+      const healingAdapter = new DaemonPtyAdapter({ socketPath, tokenPath, respawn })
+      const recovered: string[] = []
+      healingAdapter.onWriteUnavailable(({ id }) => recovered.push(id))
+      try {
+        await healingAdapter.spawn({ sessionId: 'pane-a', cols: 80, rows: 24 })
+        // A backgrounded session: no pane is mounted for it, so nothing in the
+        // renderer ever calls createOrAttach to rebind it after a daemon death.
+        await healingAdapter.spawn({ sessionId: 'background-b', cols: 80, rows: 24 })
+        const client = (healingAdapter as unknown as { client: DaemonClient }).client
+
+        await server.shutdown()
+        await waitFor(() => !client.isConnected())
+        expect(() => healingAdapter.write('pane-a', 'first-death')).toThrow(
+          PtyWriteUnavailableError
+        )
+        await waitFor(() => respawn.mock.calls.length === 1)
+        await waitFor(() => client.isConnected())
+
+        // Only the mounted pane rebinds; background-b keeps the awaiting set non-empty.
+        await healingAdapter.spawn({ sessionId: 'pane-a', cols: 80, rows: 24 })
+        recovered.length = 0
+
+        await server.shutdown()
+        await waitFor(() => !client.isConnected())
+
+        // Why revert-sensitive: the storm latch is otherwise only released when the
+        // awaiting set empties, which a never-rebinding background session prevents
+        // forever. That silently downgrades the fix to one-shot — every daemon death
+        // after the first would respawn nothing and leave siblings frozen again.
+        expect(() => healingAdapter.write('pane-a', 'second-death')).toThrow(
+          PtyWriteUnavailableError
+        )
+        expect(recovered).toContain('pane-a')
+        await waitFor(() => respawn.mock.calls.length === 2)
+      } finally {
+        healingAdapter.dispose()
       }
     })
   })
@@ -2389,7 +2647,8 @@ describe('DaemonPtyAdapter (IPtyProvider)', () => {
       // Next spawn should detect the dead socket, call respawn, and succeed
       const r2 = await respawnAdapter.spawn({ cols: 80, rows: 24 })
       expect(r2.id).toBeDefined()
-      expect(respawnFn).toHaveBeenCalledOnce()
+      expect(respawnFn).toHaveBeenCalledTimes(1)
+      expect(respawnFn).toHaveBeenCalledWith('daemon_died')
 
       respawnAdapter.dispose()
       await respawnServer?.shutdown()
@@ -2428,7 +2687,8 @@ describe('DaemonPtyAdapter (IPtyProvider)', () => {
       try {
         const result = await respawnAdapter.spawn({ cols: 80, rows: 24 })
         expect(result.id).toBeDefined()
-        expect(respawnFn).toHaveBeenCalledOnce()
+        expect(respawnFn).toHaveBeenCalledTimes(1)
+        expect(respawnFn).toHaveBeenCalledWith('daemon_died')
       } finally {
         ensureConnectedSpy.mockRestore()
         respawnAdapter.dispose()
@@ -2461,7 +2721,8 @@ describe('DaemonPtyAdapter (IPtyProvider)', () => {
       ])
       expect(r1.id).toBeDefined()
       expect(r2.id).toBeDefined()
-      expect(respawnFn).toHaveBeenCalledOnce()
+      expect(respawnFn).toHaveBeenCalledTimes(1)
+      expect(respawnFn).toHaveBeenCalledWith('daemon_died')
 
       respawnAdapter.dispose()
       await respawnServer?.shutdown()
@@ -2536,7 +2797,8 @@ describe('DaemonPtyAdapter (IPtyProvider)', () => {
         tokenPath,
         respawnAdapter.protocolVersion
       )
-      expect(respawnFn).toHaveBeenCalledOnce()
+      expect(respawnFn).toHaveBeenCalledTimes(1)
+      expect(respawnFn).toHaveBeenCalledWith('unhealthy_resolver')
       expect(exits).toEqual([])
       expect(replacement.id).toBeDefined()
 

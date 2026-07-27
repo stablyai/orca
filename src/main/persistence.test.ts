@@ -7072,6 +7072,7 @@ describe('Store', () => {
       'linear-issue',
       'pr',
       'automation',
+      'cli',
       'comment',
       'ports',
       'inline-agents'

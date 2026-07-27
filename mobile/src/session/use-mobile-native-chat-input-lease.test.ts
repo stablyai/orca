@@ -54,4 +54,36 @@ describe('useMobileNativeChatInputLease', () => {
       consoleSpy.mockRestore()
     }
   })
+
+  it('reports whether a clear actually dropped a lease', async () => {
+    const original = console.error
+    const consoleSpy = vi.spyOn(console, 'error').mockImplementation((...args) => {
+      if (typeof args[0] === 'string' && args[0].includes('react-test-renderer is deprecated')) {
+        return
+      }
+      original(...args)
+    })
+    try {
+      await act(async () => {
+        renderer = create(createElement(Harness, { connected: true }))
+      })
+      // The route reads this to tell a real teardown from one React never sees.
+      expect(lease?.clear('terminal')).toBe(false)
+      expect(lease?.clear()).toBe(false)
+
+      act(() => lease?.markReady('terminal'))
+      let dropped: boolean | undefined
+      act(() => {
+        dropped = lease?.clear('terminal')
+      })
+      expect(dropped).toBe(true)
+      expect(lease?.ready).toBe(false)
+      expect(lease?.clear('terminal')).toBe(false)
+
+      act(() => lease?.markReady('other'))
+      expect(lease?.clear()).toBe(true)
+    } finally {
+      consoleSpy.mockRestore()
+    }
+  })
 })

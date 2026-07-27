@@ -532,7 +532,7 @@ describe('registerCoreHandlers', () => {
     expect(registerFilesystemHandlersMock).toHaveBeenCalledWith(store)
     expect(registerRuntimeHandlersMock).toHaveBeenCalledWith(runtime)
     expect(registerRuntimeEnvironmentHandlersMock).toHaveBeenCalledWith(store)
-    expect(registerEphemeralVmHandlersMock).toHaveBeenCalledWith(store)
+    expect(registerEphemeralVmHandlersMock).toHaveBeenCalledWith(store, undefined)
     expect(registerAiVaultHandlersMock).toHaveBeenCalledWith(
       expect.objectContaining({
         getAdditionalCodexHomePaths: getAdditionalAiVaultCodexHomePaths,

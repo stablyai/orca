@@ -19,6 +19,9 @@ export function getMobileTerminalActionSheetActions<Target extends { handle: str
   onRename: (target: Target) => void
   onClear: (target: Target) => void
   onClose: (target: Target) => void
+  /** Appended after Close; receives the pressed tab's id so the session route's
+   *  bulk-close builder can resolve the anchor itself. */
+  bulkCloseActions?: (anchorTabId: string | undefined, dismiss: () => void) => ActionSheetAction[]
 }): ActionSheetAction[] {
   const { target } = args
   if (!target) {
@@ -64,6 +67,10 @@ export function getMobileTerminalActionSheetActions<Target extends { handle: str
         args.onDismiss()
         args.onClose(target)
       }
-    }
+    },
+    ...(args.bulkCloseActions?.(
+      args.tabs.find((tab) => tab.terminal === target.handle)?.id,
+      args.onDismiss
+    ) ?? [])
   ]
 }

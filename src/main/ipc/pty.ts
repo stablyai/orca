@@ -58,6 +58,7 @@ import { detectPiAgentKindFromCommand, type PiAgentKind } from '../../shared/pi-
 import { isPwshAvailable } from '../pwsh'
 import { LocalPtyProvider } from '../providers/local-pty-provider'
 import type { IPtyProvider, PtySpawnOptions, PtySpawnResult } from '../providers/types'
+import { isPtyWriteUnavailableError } from '../providers/pty-write-unavailable-error'
 import { inspectPtyProviderProcess } from '../providers/pty-process-inspection'
 import {
   PtyProcessListAdmission,
@@ -174,6 +175,7 @@ import {
 import { getSshFilesystemProvider } from '../providers/ssh-filesystem-dispatch'
 import { resolveLocalProjectRuntimeForWorktreeId } from '../local-project-runtime-resolution'
 import { isPtyIncarnationId } from '../../shared/pty-incarnation'
+import type { PtyListedSession } from '../../shared/pty-listed-session'
 
 // ─── Provider Registry ──────────────────────────────────────────────
 // Routes PTY operations by connectionId (null = local provider).
@@ -234,6 +236,13 @@ const AGENT_HOOK_RUNTIME_ENV_KEYS = [
   'ORCA_AGENT_HOOK_ENDPOINT',
   // Why: PR 2778 briefly exported this path; keep deleting stale inherited values so older PTYs can't leak the reverted path.
   'ORCA_CLAUDE_AGENT_STATUS_SETTINGS'
+] as const
+
+// Why: Orca never sets these, so an inherited value means a pty host launched from inside a Claude session — Claude reads it as a nested child and silently stops persisting the transcript.
+const CLAUDE_CHILD_SESSION_STAMP_ENV_KEYS = [
+  'CLAUDE_CODE_CHILD_SESSION',
+  'CLAUDE_CODE_SESSION_ID',
+  'CLAUDE_CODE_BRIDGE_SESSION_ID'
 ] as const
 
 export function getPtyIdForPaneKey(paneKey: string): string | undefined {
@@ -900,14 +909,15 @@ function exposePiManagedExtensionEnv(
   }
 }
 
+// Why: variadic because a nested call per source made intermediate `string[] | undefined` collide with the parameter type.
 function mergePtyEnvDeletions(
   existingKeys: string[] | undefined,
-  additionalKeys: readonly string[]
+  ...additionalKeyGroups: readonly (readonly string[])[]
 ): string[] | undefined {
-  if (!existingKeys && additionalKeys.length === 0) {
+  if (!existingKeys && additionalKeyGroups.every((keys) => keys.length === 0)) {
     return undefined
   }
-  return Array.from(new Set([...(existingKeys ?? []), ...additionalKeys]))
+  return Array.from(new Set([...(existingKeys ?? []), ...additionalKeyGroups.flat()]))
 }
 
 function removeCodexHomeDeletionRequests(keys: string[] | undefined): string[] | undefined {
@@ -922,6 +932,15 @@ function getInheritedAgentHookEnvKeysToDelete(
   const env = spawnEnv ?? {}
   // Why: providers merge process.env after cleanup; delete stale hook keys without dropping fresh coordinates buildPtyHostEnv set.
   return AGENT_HOOK_RUNTIME_ENV_KEYS.filter((key) => env[key] === undefined)
+}
+
+function getInheritedClaudeSessionStampEnvKeysToDelete(
+  spawnEnv: Record<string, string> | undefined
+): string[] {
+  const env = spawnEnv ?? {}
+  // Why: strip only values inherited from the pty host; a caller that explicitly
+  // provides a stamp (deliberately spawning a nested Claude child) keeps it.
+  return CLAUDE_CHILD_SESSION_STAMP_ENV_KEYS.filter((key) => env[key] === undefined)
 }
 
 // Why: a nested terminal can inherit prior OpenCode/Pi/OMP overlay env; restore the user's recorded source dir, else strip only Orca-owned values.
@@ -1375,6 +1394,7 @@ export function restorePtyIncarnation(id: string, incarnationId: string): void {
 let localDataUnsub: (() => void) | null = null
 let localExitUnsub: (() => void) | null = null
 let localBackgroundStreamUnsub: (() => void) | null = null
+let localWriteUnavailableUnsub: (() => void) | null = null
 let didFinishLoadHandler: (() => void) | null = null
 let didFinishLoadWebContents: WebContents | null = null
 let rendererLifecycleResetWebContents: WebContents | null = null
@@ -1579,9 +1599,11 @@ export function unbindLocalProviderListeners(): void {
   localDataUnsub?.()
   localExitUnsub?.()
   localBackgroundStreamUnsub?.()
+  localWriteUnavailableUnsub?.()
   localDataUnsub = null
   localExitUnsub = null
   localBackgroundStreamUnsub = null
+  localWriteUnavailableUnsub = null
 }
 
 // ─── IPC Registration ───────────────────────────────────────────────
@@ -2754,6 +2776,27 @@ export function registerPtyHandlers(
     localDataUnsub?.()
     localExitUnsub?.()
     localBackgroundStreamUnsub?.()
+    localWriteUnavailableUnsub?.()
+
+    // Why: a daemon death takes down every session at once. The provider signals
+    // each affected pane here so background panes remount + re-attach too, not
+    // just the pane whose write happened to detect the dead endpoint (STA-2373).
+    // Typed at the call site (not on the capped IPtyProvider): only respawnable
+    // endpoints like the daemon adapter implement it.
+    const writeUnavailableSource = localProvider as {
+      onWriteUnavailable?: (callback: (payload: { id: string }) => void) => () => void
+    }
+    localWriteUnavailableUnsub =
+      writeUnavailableSource.onWriteUnavailable?.((payload) => {
+        if (
+          mainWindow.isDestroyed() ||
+          (typeof mainWindow.webContents.isDestroyed === 'function' &&
+            mainWindow.webContents.isDestroyed())
+        ) {
+          return
+        }
+        mainWindow.webContents.send('pty:writeUnavailable', { id: payload.id })
+      }) ?? null
 
     // Daemon keep-tail thinning facts, in byte order with onData: markers flip transient-fact scan authority; a gap forces renderer restore from the snapshot.
     localBackgroundStreamUnsub =
@@ -3302,8 +3345,11 @@ export function registerPtyHandlers(
         args.onPtySpawnCommitted?.()
       }
       spawnOptions.envToDelete = mergePtyEnvDeletions(
-        mergePtyEnvDeletions(authEnvToDelete, args.envToDelete ?? []),
-        isDaemonHostSpawn ? getInheritedAgentHookEnvKeysToDelete(env) : []
+        authEnvToDelete,
+        args.envToDelete ?? [],
+        isDaemonHostSpawn ? getInheritedAgentHookEnvKeysToDelete(env) : [],
+        // Why: ungated, unlike the agent-hook keys — the local provider and the relay host also spread their own process.env into every spawn.
+        getInheritedClaudeSessionStampEnvKeysToDelete(env)
       )
       if (skipCodexHomeEnv) {
         spawnOptions.envToDelete = mergePtyEnvDeletions(
@@ -4447,16 +4493,12 @@ export function registerPtyHandlers(
         ? [...CLAUDE_AUTH_ENV_VARS, 'ANTHROPIC_CUSTOM_HEADERS']
         : undefined
       let combinedEnvToDelete = mergePtyEnvDeletions(
-        mergePtyEnvDeletions(
-          mergePtyEnvDeletions(
-            mergePtyEnvDeletions(
-              mergePtyEnvDeletions(envToDelete, args.envToDelete ?? []),
-              agentTeamsEnvToDelete ?? []
-            ),
-            isDaemonHostSpawn ? getInheritedAgentHookEnvKeysToDelete(spawnEnv) : []
-          ),
-          skipCodexHomeEnv ? CODEX_HOME_ENV_KEYS : []
-        ),
+        envToDelete,
+        args.envToDelete ?? [],
+        agentTeamsEnvToDelete ?? [],
+        isDaemonHostSpawn ? getInheritedAgentHookEnvKeysToDelete(spawnEnv) : [],
+        getInheritedClaudeSessionStampEnvKeysToDelete(spawnEnv),
+        skipCodexHomeEnv ? CODEX_HOME_ENV_KEYS : [],
         // Why: the persistent daemon compares its own merged CODEX_HOME pair;
         // main cannot safely decide ownership for a process it may not parent.
         stripInheritedOrcaCodexHome ? ['ORCA_CODEX_HOME'] : []
@@ -4950,6 +4992,18 @@ export function registerPtyHandlers(
     }
   )
 
+  const reportUnavailablePtyWrite = (id: string, error: unknown): void => {
+    if (
+      !isPtyWriteUnavailableError(error) ||
+      mainWindow.isDestroyed() ||
+      (typeof mainWindow.webContents.isDestroyed === 'function' &&
+        mainWindow.webContents.isDestroyed())
+    ) {
+      return
+    }
+    mainWindow.webContents.send('pty:writeUnavailable', { id })
+  }
+
   const writePtyProviderInputWithinLimit = (
     provider: IPtyProvider,
     id: string,
@@ -4981,8 +5035,12 @@ export function registerPtyHandlers(
       }
       return tooLarge
         .then((result) => (result ? false : writePtyProviderInputWithinLimit(provider, id, data)))
-        .catch(() => false)
-    } catch {
+        .catch((error) => {
+          reportUnavailablePtyWrite(id, error)
+          return false
+        })
+    } catch (error) {
+      reportUnavailablePtyWrite(id, error)
       return false
     }
   }
@@ -5006,7 +5064,8 @@ export function registerPtyHandlers(
         nextChunk = chunks.next()
       }
       return true
-    } catch {
+    } catch (error) {
+      reportUnavailablePtyWrite(id, error)
       return false
     }
   }
@@ -5464,33 +5523,37 @@ export function registerPtyHandlers(
     }
   })
 
-  ipcMain.handle(
-    'pty:listSessions',
-    async (): Promise<{ id: string; cwd: string; title: string }[]> => {
-      const deduped = new Map<string, { id: string; cwd: string; title: string }>()
-      const admission = new PtyProcessListAdmission()
-      await visitPtyProcessListingsInBatches(
-        registeredPtyProviders(),
-        ({ provider, connectionId }) =>
-          connectionId === null
-            ? provider.listProcesses()
-            : provider.listProcesses().catch(() => []),
-        ({ connectionId }, sessions) => {
-          for (const rawSession of sessions) {
-            const session = admission.admit(rawSession)
-            // Why: kill actions only send back the PTY id, so rebuild ownership while listing to keep reconnect-discovered remote sessions routed to their provider.
-            ptyOwnership.set(session.id, connectionId)
-            deduped.set(session.id, {
-              id: session.id,
-              cwd: session.cwd,
-              title: session.title
-            })
-          }
+  ipcMain.handle('pty:listSessions', async (): Promise<PtyListedSession[]> => {
+    const deduped = new Map<string, PtyListedSession>()
+    const admission = new PtyProcessListAdmission()
+    await visitPtyProcessListingsInBatches(
+      registeredPtyProviders(),
+      ({ provider, connectionId }) =>
+        connectionId === null ? provider.listProcesses() : provider.listProcesses().catch(() => []),
+      ({ provider, connectionId }, sessions) => {
+        for (const rawSession of sessions) {
+          const session = admission.admit(rawSession)
+          // Why: kill actions only send back the PTY id, so rebuild ownership while listing to keep reconnect-discovered remote sessions routed to their provider.
+          ptyOwnership.set(session.id, connectionId)
+          deduped.set(session.id, {
+            id: session.id,
+            cwd: session.cwd,
+            title: session.title,
+            // Why: the renderer's binding map is empty during restore, so ownership is the only
+            // liveness evidence it has. Absence is authoritative only from a provider that
+            // serializes claims — otherwise it is 'unknown', never 'absent' (#8459).
+            agentOwnership:
+              (session.agentSessionOwners?.length ?? 0) > 0
+                ? 'present'
+                : provider.providesAgentSessionOwnerListings?.(session.id) === true
+                  ? 'absent'
+                  : 'unknown'
+          })
         }
-      )
-      return Array.from(deduped.values())
-    }
-  )
+      }
+    )
+    return Array.from(deduped.values())
+  })
 
   ipcMain.on(
     'pty:getAuthoritativeBufferSnapshotCapabilitiesSync',
