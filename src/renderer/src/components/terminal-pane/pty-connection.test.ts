@@ -18122,11 +18122,12 @@ describe('connectPanePty', () => {
   })
 
   it.each([
-    ['Claude', 'claude', '✳ Compacted'],
-    ['Codex', 'codex', '* Codex done']
+    ['Claude', 'claude', '✳ Compacted', 1],
+    ['Codex', 'codex', '* Codex done', 1],
+    ['Claude with equal hook/title timestamps', 'claude', '✳ Compacted', 0]
   ] as const)(
     'ignores %s compact title completion while hook state remains on the previous turn',
-    async (_label, agentType, idleTitle) => {
+    async (_label, agentType, idleTitle, titleWorkingDelayMs) => {
       const { connectPanePty } = await import('./pty-connection')
       const transport = createMockTransport(`pty-${agentType}`)
       transportFactoryQueue.push(transport)
@@ -18159,7 +18160,7 @@ describe('connectPanePty', () => {
         throw new Error('Expected working and idle handlers to be registered')
       }
 
-      vi.advanceTimersByTime(1)
+      vi.advanceTimersByTime(titleWorkingDelayMs)
       workingHandler()
       vi.advanceTimersByTime(1_000)
       idleHandler(idleTitle)

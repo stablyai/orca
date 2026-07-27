@@ -1444,7 +1444,7 @@ export function connectPanePty(
     if (
       titleWorkingStartedAt === null ||
       hookStatus?.state !== 'done' ||
-      hookStatus.updatedAt >= titleWorkingStartedAt ||
+      hookStatus.updatedAt > titleWorkingStartedAt ||
       (hookStatus.agentType !== 'claude' && hookStatus.agentType !== 'codex')
     ) {
       return false
