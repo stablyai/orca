@@ -3,7 +3,7 @@
 import { createServer, type IncomingMessage, type ServerResponse } from 'node:http'
 import { createHash, randomBytes, randomUUID } from 'node:crypto'
 import { chmodSync, mkdirSync, readFileSync, renameSync, unlinkSync, writeFileSync } from 'node:fs'
-import { join } from 'node:path'
+import { basename, dirname, join } from 'node:path'
 
 import { track } from '../telemetry/client'
 import { getCohortAtEmit } from '../telemetry/cohort-classifier'
@@ -299,6 +299,103 @@ function equivalentParsedAgentStatusPayload(
   )
 }
 
+// Why: one binding per spawn-pinned Claude session; generous headroom over
+// any realistic live-session count while bounding a leaky caller.
+const MAX_PROVIDER_SESSION_PANES = 512
+
+// Why: a UserPromptSubmit hook fires within moments of the user pressing
+// Enter, so keyboard input older than this cannot belong to that submit.
+// Bounds the rebind signal so headless/automated prompts do not steal a pane
+// the user merely touched earlier.
+const CLAUDE_PANE_INPUT_REBIND_WINDOW_MS = 5_000
+
+type HookBodyClaudeMeta = {
+  sessionId: string | null
+  eventName: string | null
+  transcriptPath: string | null
+}
+
+// Why: hook bodies carry the provider payload as a JSON string (or object on
+// some relays); session_id inside it is the only daemon-proof identity a
+// Claude hook event carries. Parse defensively — attribution must fail open.
+function readHookBodyClaudeMeta(record: Record<string, unknown>): HookBodyClaudeMeta {
+  const empty: HookBodyClaudeMeta = { sessionId: null, eventName: null, transcriptPath: null }
+  const rawPayload = record.payload
+  let payload: unknown = rawPayload
+  if (typeof rawPayload === 'string') {
+    try {
+      payload = JSON.parse(rawPayload)
+    } catch {
+      return empty
+    }
+  }
+  if (typeof payload !== 'object' || payload === null) {
+    return empty
+  }
+  const p = payload as Record<string, unknown>
+  const readString = (value: unknown): string | null =>
+    typeof value === 'string' && value.trim().length > 0 ? value.trim() : null
+  return {
+    sessionId: readString(p.session_id),
+    eventName:
+      readString(p.hook_event_name) ??
+      readString(p.hookEventName) ??
+      readString(record.hook_event_name) ??
+      readString(record.hookEventName),
+    transcriptPath: readString(p.transcript_path) ?? readString(p.transcriptPath)
+  }
+}
+
+// Why: `--resume`/`--continue` FORK the session id, so the forked id has no
+// spawn-time binding. Claude's daemon records each fork's parent in
+// <configDir>/daemon/roster.json (dispatch.launch.sessionId names the parent
+// transcript), and the hook payload's transcript_path locates configDir —
+// so lineage resolves without knowing the user's CLAUDE_CONFIG_DIR.
+function resolveClaudeForkParentSessionId(
+  sessionId: string,
+  transcriptPath: string | null
+): string | null {
+  if (!transcriptPath) {
+    return null
+  }
+  const projectsDir = dirname(dirname(transcriptPath))
+  if (basename(projectsDir) !== 'projects') {
+    return null
+  }
+  const rosterPath = join(dirname(projectsDir), 'daemon', 'roster.json')
+  let workers: Record<string, unknown>
+  try {
+    const parsed = JSON.parse(readFileSync(rosterPath, 'utf8')) as Record<string, unknown>
+    if (typeof parsed.workers !== 'object' || parsed.workers === null) {
+      return null
+    }
+    workers = parsed.workers as Record<string, unknown>
+  } catch {
+    return null
+  }
+  for (const worker of Object.values(workers)) {
+    if (typeof worker !== 'object' || worker === null) {
+      continue
+    }
+    const w = worker as Record<string, unknown>
+    if (w.sessionId !== sessionId) {
+      continue
+    }
+    const launch = ((w.dispatch as Record<string, unknown> | undefined)?.launch ?? {}) as Record<
+      string,
+      unknown
+    >
+    const ref = launch.sessionId ?? launch.transcriptPath
+    const base = typeof ref === 'string' ? basename(ref) : ''
+    if (base.endsWith('.jsonl')) {
+      const parent = base.slice(0, -'.jsonl'.length)
+      return parent !== sessionId ? parent : null
+    }
+    return null
+  }
+  return null
+}
+
 function trackEmptyPaneKeyHook(body: unknown): void {
   if (typeof body !== 'object' || body === null) {
     return
@@ -478,6 +575,18 @@ export class AgentHookServer {
   // Why: hydrated rows give UI continuity but aren't evidence of live agent work in this runtime.
   private runtimeObservedStatusPaneKeys = new Set<string>()
   private legacyPaneKeyAliases = new Map<string, PaneKeyAliasEntry>()
+  // Why: Claude Code >=2.1.206 runs sessions in a shared daemon whose hook
+  // commands inherit the daemon's stale ORCA_PANE_KEY. Spawn-time pinning
+  // (pinClaudeSessionIdForPaneAttribution) records the true pane per session
+  // id here; incoming hook posts matching a pinned session are re-attributed
+  // to the recorded pane regardless of the env-derived key they carry.
+  private providerSessionPanes = new Map<string, { paneKey: string; ptyId: string }>()
+  // Why: injected by the PTY layer (which owns keyboard-input timing and the
+  // live-Claude-PTY set) so an unbound session's first prompt can bind to the
+  // pane the user just typed in. Kept as a probe to avoid a module cycle.
+  private claudePaneInputProbe:
+    | ((windowMs: number) => { paneKey: string; ptyId: string } | null)
+    | null = null
   private paneKeyAliasPersistenceListener: PaneKeyAliasPersistenceListener | null = null
   // Why: on-disk last-status cache path; null without a userDataPath (tests), where persistence is a no-op and only in-memory replay applies.
   private lastStatusFilePath: string | null = null
@@ -1352,6 +1461,86 @@ export class AgentHookServer {
     return this.legacyPaneKeyAliases.get(paneKey)?.stablePaneKey ?? paneKey
   }
 
+  registerProviderSessionPane(sessionId: string, paneKey: string, ptyId: string): void {
+    if (!sessionId || !isValidPaneKey(paneKey)) {
+      return
+    }
+    // Why: bounded — one entry per spawn-pinned session; re-registration on
+    // re-attach moves the session to its current pane.
+    this.providerSessionPanes.set(sessionId, { paneKey, ptyId })
+    while (this.providerSessionPanes.size > MAX_PROVIDER_SESSION_PANES) {
+      const oldest = this.providerSessionPanes.keys().next().value
+      if (oldest === undefined) {
+        break
+      }
+      this.providerSessionPanes.delete(oldest)
+    }
+  }
+
+  clearProviderSessionPanesForPty(ptyId: string): void {
+    for (const [sessionId, entry] of this.providerSessionPanes) {
+      if (entry.ptyId === ptyId) {
+        this.providerSessionPanes.delete(sessionId)
+      }
+    }
+  }
+
+  setClaudePaneInputProbe(
+    probe: ((windowMs: number) => { paneKey: string; ptyId: string } | null) | null
+  ): void {
+    this.claudePaneInputProbe = probe
+  }
+
+  private normalizeHookBodyProviderSessionPane(body: unknown): unknown {
+    if (typeof body !== 'object' || body === null) {
+      return body
+    }
+    const record = body as Record<string, unknown>
+    const meta = readHookBodyClaudeMeta(record)
+    if (!meta.sessionId) {
+      return body
+    }
+    // Why: resume/continue fork the session id, so the fork arrives unbound.
+    // The daemon roster names the fork's parent — inherit the parent's pane.
+    // Deterministic, so it runs before the input heuristic below.
+    if (!this.providerSessionPanes.has(meta.sessionId)) {
+      const parent = resolveClaudeForkParentSessionId(meta.sessionId, meta.transcriptPath)
+      const parentBinding = parent ? this.providerSessionPanes.get(parent) : undefined
+      if (parentBinding) {
+        this.registerProviderSessionPane(
+          meta.sessionId,
+          parentBinding.paneKey,
+          parentBinding.ptyId
+        )
+      }
+    }
+    // Why: fleet-view/`/resume` attach swaps the session inside an existing
+    // client — no spawn, no fork, no binding. The submit follows the user's
+    // Enter by moments, so the Claude pane with the freshest keyboard input
+    // names the owning pane. Only unbound sessions may claim it (bindings
+    // clear on PTY exit, so stale ones do not block), and only at turn start.
+    // Known ceiling: a headless prompt to an unbound session that lands
+    // within the input window of unrelated typing can misbind until the next
+    // interactive turn corrects it.
+    if (
+      meta.eventName === 'UserPromptSubmit' &&
+      !this.providerSessionPanes.has(meta.sessionId)
+    ) {
+      const pane = this.claudePaneInputProbe?.(CLAUDE_PANE_INPUT_REBIND_WINDOW_MS) ?? null
+      if (pane) {
+        this.registerProviderSessionPane(meta.sessionId, pane.paneKey, pane.ptyId)
+      }
+    }
+    const pinned = this.providerSessionPanes.get(meta.sessionId)
+    if (!pinned || record.paneKey === pinned.paneKey) {
+      return body
+    }
+    // Why: daemon-hosted Claude workers post the daemon's env-derived pane
+    // key; the spawn-time session binding names the pane that actually owns
+    // this session, so trust it over the posted key.
+    return { ...record, paneKey: pinned.paneKey, tabId: parsePaneKey(pinned.paneKey)?.tabId }
+  }
+
   private normalizeHookBodyPaneKeyAlias(body: unknown): unknown {
     if (typeof body !== 'object' || body === null) {
       return body
@@ -1622,7 +1811,8 @@ export class AgentHookServer {
         }
 
         trackEmptyPaneKeyHook(body)
-        const aliasedBody = this.normalizeHookBodyPaneKeyAlias(body)
+        const sessionAttributedBody = this.normalizeHookBodyProviderSessionPane(body)
+        const aliasedBody = this.normalizeHookBodyPaneKeyAlias(sessionAttributedBody)
         const normalized = normalizeHookPayload(this.state, source, aliasedBody, this.env)
         if (normalized && !this.shouldSuppressClosedTabStatus(normalized.paneKey)) {
           const enriched = this.applyNormalizedStatus(normalized)

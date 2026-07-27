@@ -85,6 +85,7 @@ import type { ClaudeAccountSelectionTarget } from '../claude-accounts/runtime-se
 import { CLAUDE_AUTH_ENV_VARS, hasClaudeAuthEnvConflict } from '../claude-accounts/environment'
 import {
   isClaudeAuthSwitchInProgress,
+  isLiveClaudePty,
   markClaudePtyExited,
   markClaudePtySpawned
 } from '../claude-accounts/live-pty-gate'
@@ -227,6 +228,30 @@ const KEEP_HISTORY_STOP_POLL_MS = 100
 const ptyPaneKey = new Map<string, string>()
 // Why: reverse of ptyPaneKey — callers with a paneKey from outside the PTY lifecycle (e.g. agent-hook status routing) need the ptyId; kept in lock-step via the same sites.
 const paneKeyPtyId = new Map<string, string>()
+
+// Why: fleet-view/`/resume` attach swaps a Claude session inside an existing
+// client with no spawn, so the hook server sees an unbound session id at the
+// next UserPromptSubmit. The Claude pane the user typed in most recently
+// (within windowMs) names the owner. Ambiguity (no candidate) returns null —
+// attribution then falls back to the posted key. lastInputAtByPty uses
+// performance.now(), so the window compares against the same clock.
+agentHookServer.setClaudePaneInputProbe((windowMs) => {
+  const now = performance.now()
+  let best: { paneKey: string; ptyId: string; at: number } | null = null
+  for (const [ptyId, at] of lastInputAtByPty) {
+    if (now - at > windowMs || !isLiveClaudePty(ptyId)) {
+      continue
+    }
+    const paneKey = ptyPaneKey.get(ptyId)
+    if (!paneKey) {
+      continue
+    }
+    if (!best || at > best.at) {
+      best = { paneKey, ptyId, at }
+    }
+  }
+  return best ? { paneKey: best.paneKey, ptyId: best.ptyId } : null
+})
 
 const AGENT_HOOK_RUNTIME_ENV_KEYS = [
   'ORCA_AGENT_HOOK_PORT',
@@ -1192,6 +1217,37 @@ function isClaudeLaunchCommand(command: string | undefined): boolean {
   )
 }
 
+// Why: Claude Code >=2.1.206 hosts new TUI sessions in a shared background
+// daemon whose workers inherit the DAEMON's env, so hook posts carry a stale
+// ORCA_PANE_KEY. Pinning --session-id at spawn gives the hook listener a
+// spawn-time sessionId→paneKey binding to attribute against instead.
+const CLAUDE_SESSION_LIFECYCLE_FLAG_RE =
+  /(^|\s)(--session-id|--resume|--continue|--fork-session|-r|-c)(\s|=|$)/
+// Why: only a lone claude invocation whose first argument is a flag or a
+// quoted prompt can safely take an appended flag — compound commands would
+// hand it to the wrong word, and bare-word subcommands (`claude daemon
+// status`, `claude mcp list`) reject unknown flags.
+const APPENDABLE_CLAUDE_COMMAND_RE =
+  /^(?:[A-Za-z_][A-Za-z0-9_]*=(?:'[^']*'|"[^"]*"|[^\s'"`;&|<>()]*)\s+)*(?:[^\s;&|('"`]*[\\/])?claude(?:\.cmd|\.exe)?(?:\s+['"-][^;&|<>`()]*)?$/i
+
+function pinClaudeSessionIdForPaneAttribution(command: string | undefined): {
+  command: string | undefined
+  pinnedSessionId: string | null
+} {
+  if (!command || !isClaudeLaunchCommand(command)) {
+    return { command, pinnedSessionId: null }
+  }
+  const trimmed = command.trim()
+  if (
+    CLAUDE_SESSION_LIFECYCLE_FLAG_RE.test(trimmed) ||
+    !APPENDABLE_CLAUDE_COMMAND_RE.test(trimmed)
+  ) {
+    return { command, pinnedSessionId: null }
+  }
+  const pinnedSessionId = randomUUID()
+  return { command: `${trimmed} --session-id ${pinnedSessionId}`, pinnedSessionId }
+}
+
 function routesFreshSpawnsToLocalProvider(
   provider: IPtyProvider
 ): provider is FreshLocalFallbackProvider {
@@ -1296,6 +1352,9 @@ export function clearProviderPtyState(
   piTitlebarExtensionService.clearPty(id)
   // Why: SSH exit/teardown paths bypass pty.ts's local onExit but still must release Claude account-switch guards.
   markClaudePtyExited(id)
+  // Why: a dead PTY's pinned session binding must not re-route a future
+  // session that happens to reuse the id space.
+  agentHookServer.clearProviderSessionPanesForPty(id)
   ptySizes.delete(id)
   ptyIncarnationById.delete(id)
   lastInputAtByPty.delete(id)
@@ -3154,6 +3213,9 @@ export function registerPtyHandlers(
       const cwd = resolvePtySpawnStartupCwd(args.worktreeId, args.cwd)
       const provider = getProvider(args.connectionId)
       const isClaudeLaunch = !args.connectionId && isClaudeLaunchCommand(args.command)
+      const claudePin = isClaudeLaunch
+        ? pinClaudeSessionIdForPaneAttribution(args.command)
+        : { command: args.command, pinnedSessionId: null }
       if (isClaudeLaunch && isClaudeAuthSwitchInProgress()) {
         throw new Error('A Claude account switch is in progress. Try again after it finishes.')
       }
@@ -3348,8 +3410,8 @@ export function registerPtyHandlers(
       }
       deleteRequestedEnvKeys(env, spawnOptions.envToDelete)
       promoteAgentTeamsShimPath(env, requestedAgentTeamsPath)
-      if (args.command !== undefined) {
-        spawnOptions.command = args.command
+      if (claudePin.command !== undefined) {
+        spawnOptions.command = claudePin.command
       }
       if (args.commandDelivery !== undefined) {
         spawnOptions.commandDelivery = args.commandDelivery
@@ -3762,6 +3824,13 @@ export function registerPtyHandlers(
         }
         // Why: runtime-owned CLI PTYs bypass the renderer pty:spawn handler; record paneKey here too since hook titles and cache cleanup need this reverse lookup.
         const paneKey = rememberPaneKeyForPty(result.id, env?.ORCA_PANE_KEY)
+        if (claudePin.pinnedSessionId && paneKey) {
+          agentHookServer.registerProviderSessionPane(
+            claudePin.pinnedSessionId,
+            paneKey,
+            result.id
+          )
+        }
         const pendingSerializer = paneKey ? pendingByPaneKey.get(paneKey) : undefined
         const inheritRendererReadiness =
           result.isReattach === true &&
@@ -4224,6 +4293,9 @@ export function registerPtyHandlers(
       spawnTiming.mark('preflight')
       const provider = getProvider(args.connectionId)
       const isClaudeLaunch = !args.connectionId && isClaudeLaunchCommand(args.command)
+      const claudePin = isClaudeLaunch
+        ? pinClaudeSessionIdForPaneAttribution(args.command)
+        : { command: args.command, pinnedSessionId: null }
       if (isClaudeLaunch && isClaudeAuthSwitchInProgress()) {
         throw new Error('A Claude account switch is in progress. Try again after it finishes.')
       }
@@ -4505,8 +4577,8 @@ export function registerPtyHandlers(
       if (combinedEnvToDelete) {
         spawnOptions.envToDelete = combinedEnvToDelete
       }
-      if (args.command !== undefined) {
-        spawnOptions.command = args.command
+      if (claudePin.command !== undefined) {
+        spawnOptions.command = claudePin.command
       }
       if (args.commandDelivery !== undefined) {
         spawnOptions.commandDelivery = args.commandDelivery
@@ -4888,6 +4960,13 @@ export function registerPtyHandlers(
         const rememberedPaneKey = validatedPaneKey
           ? rememberPaneKeyForPty(result.id, validatedPaneKey)
           : null
+        if (claudePin.pinnedSessionId && rememberedPaneKey) {
+          agentHookServer.registerProviderSessionPane(
+            claudePin.pinnedSessionId,
+            rememberedPaneKey,
+            result.id
+          )
+        }
         if (legacySpawnPaneKey && migrationUnsupportedPaneKey) {
           agentHookServer.registerPaneKeyAlias(
             legacySpawnPaneKey.paneKey,
