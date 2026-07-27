@@ -18,9 +18,19 @@ export function subscribeSshPtyNotifications(args: {
   recordExit: (relayPtyId: string, incarnationId: unknown) => void
 }): () => void {
   return args.mux.onNotification((method, params) => {
-    const id = args.toAppPtyId(params.id as string)
+    // Why: mux delivers every method to generic handlers; non-PTY payloads
+    // (workspace.changed, fs.changed, …) have no `id` and must not reach
+    // toAppPtyId → startsWith.
+    if (method !== 'pty.exit' && method !== 'pty.data' && method !== 'pty.replay') {
+      return
+    }
+    if (typeof params.id !== 'string' || params.id.length === 0) {
+      return
+    }
+    const relayPtyId = params.id
+    const id = args.toAppPtyId(relayPtyId)
     if (method === 'pty.exit') {
-      args.recordExit(params.id as string, params.incarnationId)
+      args.recordExit(relayPtyId, params.incarnationId)
       args.livePtyIds.delete(id)
       for (const listener of args.exitListeners) {
         listener({
@@ -31,9 +41,6 @@ export function subscribeSshPtyNotifications(args: {
             : {})
         })
       }
-      return
-    }
-    if (method !== 'pty.data' && method !== 'pty.replay') {
       return
     }
     args.livePtyIds.add(id)

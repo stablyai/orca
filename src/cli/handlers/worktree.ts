@@ -246,6 +246,9 @@ export const WORKTREE_HANDLERS: Record<string, CommandHandler> = {
       ...(cwdParentWorktree ? { cwdParentWorktree } : {}),
       noParent,
       callerTerminalHandle,
+      // Why: marks the workspace as CLI-created so the sidebar can badge and
+      // filter it. Sent on every `worktree create` — hand-typed or agent-run.
+      cliProvenanceRequest: callerTerminalHandle ? { callerTerminalHandle } : {},
       ...(startupAgent
         ? {
             startupAgent,

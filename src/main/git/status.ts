@@ -1244,21 +1244,29 @@ async function loadDiff(
   let modifiedDeleted = false
 
   try {
-    const leftBlob = staged
-      ? await readGitBlobAtOidPath(worktreePath, 'HEAD', filePath, options)
-      : compareAgainstHead
-        ? await readGitBlobAtOidPath(worktreePath, 'HEAD', filePath, options)
-        : await readUnstagedLeftBlob(worktreePath, filePath, options)
-    originalContent = leftBlob.content
-    originalIsBinary = leftBlob.isBinary
-
     if (staged) {
-      const rightBlob = await readGitBlobAtIndexPath(worktreePath, filePath, options)
+      // Why concurrent: HEAD and the index are independent `git show` spawns.
+      // Only this branch qualifies — the unstaged left read chains index→HEAD.
+      const [leftBlob, rightBlob] = await Promise.all([
+        readGitBlobAtOidPath(worktreePath, 'HEAD', filePath, options),
+        readGitBlobAtIndexPath(worktreePath, filePath, options)
+      ])
+      originalContent = leftBlob.content
+      originalIsBinary = leftBlob.isBinary
       modifiedContent = rightBlob.content
       modifiedIsBinary = rightBlob.isBinary
       modifiedDeleted = !rightBlob.exists
     } else {
-      const workingTreeBlob = await readWorkingTreeFile(path.join(worktreePath, filePath))
+      // The left chain (index→HEAD) is sequential within itself, but the working
+      // tree read is a plain fs read that does not depend on it.
+      const [leftBlob, workingTreeBlob] = await Promise.all([
+        compareAgainstHead
+          ? readGitBlobAtOidPath(worktreePath, 'HEAD', filePath, options)
+          : readUnstagedLeftBlob(worktreePath, filePath, options),
+        readWorkingTreeFile(path.join(worktreePath, filePath))
+      ])
+      originalContent = leftBlob.content
+      originalIsBinary = leftBlob.isBinary
       modifiedContent = workingTreeBlob.content
       modifiedIsBinary = workingTreeBlob.isBinary
       modifiedDeleted = !workingTreeBlob.exists
@@ -1397,8 +1405,12 @@ async function loadBranchDiff(
 ): Promise<GitDiffResult> {
   try {
     const leftPath = args.oldPath ?? args.filePath
-    const leftBlob = await readGitBlobAtOidPath(worktreePath, args.mergeBase, leftPath, options)
-    const rightBlob = await readGitBlobAtOidPath(worktreePath, args.headOid, args.filePath, options)
+    // Why concurrent: the two sides are independent `git show` spawns, so awaiting
+    // them in series doubles the latency of every diff the review panel opens.
+    const [leftBlob, rightBlob] = await Promise.all([
+      readGitBlobAtOidPath(worktreePath, args.mergeBase, leftPath, options),
+      readGitBlobAtOidPath(worktreePath, args.headOid, args.filePath, options)
+    ])
 
     return buildDiffResult(
       leftBlob.content,
@@ -1510,15 +1522,14 @@ async function loadCommitDiff(
 ): Promise<GitDiffResult> {
   try {
     const leftPath = args.oldPath ?? args.filePath
-    const leftBlob = args.parentOid
-      ? await readGitBlobAtOidPath(worktreePath, args.parentOid, leftPath, options)
-      : { content: '', isBinary: false }
-    const rightBlob = await readGitBlobAtOidPath(
-      worktreePath,
-      args.commitOid,
-      args.filePath,
-      options
-    )
+    // Why concurrent: the two sides are independent `git show` spawns. A root
+    // commit has no parent to read, so that side resolves without a spawn.
+    const [leftBlob, rightBlob] = await Promise.all([
+      args.parentOid
+        ? readGitBlobAtOidPath(worktreePath, args.parentOid, leftPath, options)
+        : Promise.resolve({ content: '', isBinary: false }),
+      readGitBlobAtOidPath(worktreePath, args.commitOid, args.filePath, options)
+    ])
 
     return buildDiffResult(
       leftBlob.content,

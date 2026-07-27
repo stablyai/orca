@@ -1,8 +1,11 @@
 import { randomUUID } from 'node:crypto'
-import { existsSync, readFileSync } from 'node:fs'
+import { existsSync } from 'node:fs'
 import { join } from 'node:path'
+import { JsonStringifyByteLimitError } from './node-bounded-json-stringify'
+import { readNodeFileSyncWithinLimit } from './node-bounded-file-reader'
 import { parsePairingCode, type PairingOffer } from './pairing'
-import { hardenExistingSecureFile, writeSecureJsonFile } from './secure-file'
+import { writeSecureJsonFileWithinLimit } from './bounded-secure-json-file'
+import { hardenExistingSecureFile } from './secure-file'
 import {
   createEnvironmentFromPairingOffer,
   getPreferredPairingOffer,
@@ -14,6 +17,7 @@ import {
 } from './runtime-environments'
 
 const ENVIRONMENTS_FILE = 'orca-environments.json'
+export const MAX_RUNTIME_ENVIRONMENT_STORE_FILE_BYTES = 1024 * 1024
 
 export type RuntimeEnvironmentStoreErrorCode = 'invalid_argument' | 'runtime_error'
 
@@ -200,7 +204,13 @@ function readEnvironmentStore(userDataPath: string): RuntimeEnvironmentStore {
   }
   try {
     hardenExistingSecureFile(path)
-    const parsed = RuntimeEnvironmentStoreSchema.parse(JSON.parse(readFileSync(path, 'utf8')))
+    const parsed = RuntimeEnvironmentStoreSchema.parse(
+      JSON.parse(
+        readNodeFileSyncWithinLimit(path, MAX_RUNTIME_ENVIRONMENT_STORE_FILE_BYTES).buffer.toString(
+          'utf8'
+        )
+      )
+    )
     return {
       version: 1,
       environments: parsed.environments
@@ -217,5 +227,19 @@ function readEnvironmentStore(userDataPath: string): RuntimeEnvironmentStore {
 
 function writeEnvironmentStore(userDataPath: string, store: RuntimeEnvironmentStore): void {
   const path = getEnvironmentStorePath(userDataPath)
-  writeSecureJsonFile(path, RuntimeEnvironmentStoreSchema.parse(store))
+  try {
+    writeSecureJsonFileWithinLimit(
+      path,
+      RuntimeEnvironmentStoreSchema.parse(store),
+      MAX_RUNTIME_ENVIRONMENT_STORE_FILE_BYTES
+    )
+  } catch (error) {
+    if (error instanceof JsonStringifyByteLimitError) {
+      throw new RuntimeEnvironmentStoreError(
+        'runtime_error',
+        `Could not write Orca environments at ${path}; the store exceeds its durable capacity.`
+      )
+    }
+    throw error
+  }
 }

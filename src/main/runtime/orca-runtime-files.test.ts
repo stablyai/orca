@@ -93,6 +93,7 @@ vi.mock('../ipc/local-worktree-runtime-options', () => ({
 
 vi.mock('../providers/ssh-filesystem-dispatch', () => ({
   getSshFilesystemProvider: vi.fn(),
+  onSshFilesystemProviderRegistered: () => () => undefined,
   SSH_FILESYSTEM_PROVIDER_UNAVAILABLE_MESSAGE:
     'Remote connection dropped. Click Reconnect on the SSH target before retrying.'
 }))

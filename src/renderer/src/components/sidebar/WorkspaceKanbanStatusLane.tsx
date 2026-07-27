@@ -1,6 +1,11 @@
 import React from 'react'
 import { Plus } from 'lucide-react'
-import type { Repo, WorkspaceStatusDefinition, Worktree } from '../../../../shared/types'
+import type {
+  Repo,
+  WorkspaceStatus,
+  WorkspaceStatusDefinition,
+  Worktree
+} from '../../../../shared/types'
 import {
   WORKSPACE_BOARD_COLUMN_WIDTH_MAX,
   WORKSPACE_BOARD_COLUMN_WIDTH_MIN
@@ -33,6 +38,7 @@ type WorkspaceKanbanStatusLaneProps = {
     event: React.MouseEvent<HTMLElement>,
     worktree: Worktree
   ) => readonly Worktree[]
+  onAssignWorkspaceStatus?: (worktreeIds: readonly string[], status: WorkspaceStatus) => void
   onCreateWorktree: (statusId: string) => void
   onColumnResizeStart: (event: React.PointerEvent<HTMLElement>) => void
   onColumnResizeKeyDown: (event: React.KeyboardEvent<HTMLElement>) => void
@@ -56,6 +62,7 @@ export default function WorkspaceKanbanStatusLane({
   onActivate,
   onSelectionGesture,
   onContextMenuSelect,
+  onAssignWorkspaceStatus,
   onCreateWorktree,
   onColumnResizeStart,
   onColumnResizeKeyDown
@@ -166,6 +173,7 @@ export default function WorkspaceKanbanStatusLane({
                   onActivate={onActivate}
                   onSelectionGesture={onSelectionGesture}
                   onContextMenuSelect={onContextMenuSelect}
+                  onAssignWorkspaceStatus={onAssignWorkspaceStatus}
                 />
               )
             })}

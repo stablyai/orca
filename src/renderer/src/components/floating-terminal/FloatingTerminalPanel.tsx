@@ -805,8 +805,8 @@ export function FloatingTerminalPanel({
     [activeGroup, closeFloatingItems]
   )
 
-  const closeToRight = useCallback(
-    (visibleId: string) => {
+  const closeToSide = useCallback(
+    (visibleId: string, side: 'left' | 'right') => {
       const state = useAppStore.getState()
       const currentGroup = activeGroup
         ? state.groupsByWorktree[FLOATING_TERMINAL_WORKTREE_ID]?.find(
@@ -826,15 +826,29 @@ export function FloatingTerminalPanel({
       if (index === -1) {
         return
       }
+      const sideIds =
+        side === 'right'
+          ? currentGroup.tabOrder.slice(index + 1)
+          : currentGroup.tabOrder.slice(0, index)
       const tabById = new Map(currentGroupTabs.map((tab) => [tab.id, tab]))
       closeFloatingItems(
-        currentGroup.tabOrder.slice(index + 1).filter((tabId) => {
+        sideIds.filter((tabId) => {
           const tab = tabById.get(tabId)
           return tab ? !tab.isPinned : false
         })
       )
     },
     [activeGroup, closeFloatingItems]
+  )
+
+  const closeToRight = useCallback(
+    (visibleId: string) => closeToSide(visibleId, 'right'),
+    [closeToSide]
+  )
+
+  const closeToLeft = useCallback(
+    (visibleId: string) => closeToSide(visibleId, 'left'),
+    [closeToSide]
   )
 
   const closeAllFiles = useCallback(() => {
@@ -1509,6 +1523,7 @@ export function FloatingTerminalPanel({
               onClose={closeFloatingItem}
               onCloseOthers={closeOthers}
               onCloseToRight={closeToRight}
+              onCloseToLeft={closeToLeft}
               onNewTerminalTab={() => createFloatingTerminalTab()}
               onNewTerminalWithShell={createFloatingTerminalTab}
               onNewBrowserTab={createFloatingBrowserTab}

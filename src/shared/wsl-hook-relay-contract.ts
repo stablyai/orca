@@ -44,10 +44,25 @@ export const WSL_HOOK_FS_METHODS = {
   mkdir: 'wslfs.mkdir'
 } as const
 
+/** Hard guest-side ceilings. Host requests may lower them but cannot raise them. */
+export const WSL_HOOK_FS_MAX_READ_BYTES = 64 * 1024 * 1024
+export const WSL_HOOK_FS_MAX_DIRECTORY_ENTRIES = 10_000
+export const WSL_HOOK_FS_MAX_DIRECTORY_RETAINED_BYTES = 2 * 1024 * 1024
+
+export type WslHookFsDirectoryLimits = {
+  maxEntries: number
+  maxRetainedBytes: number
+}
+
 /** Result envelope for every fs-bridge method. Errors travel as data (not
  *  JSON-RPC faults) so the host adapter can map POSIX errno onto the ssh2
  *  status codes the shared installer error-classifiers already understand. */
-export type WslFsFailure = { ok: false; errno: string; message: string }
+export type WslFsFailure = {
+  ok: false
+  errno: string
+  message: string
+  fileCapacity?: { observedBytes: number; maxBytes: number }
+}
 export type WslFsResult<T extends object = object> = ({ ok: true } & T) | WslFsFailure
 
 /** Where the guest relay publishes its endpoint file. Keyed by the stable

@@ -69,8 +69,12 @@ describe('createPaneDOM link tooltips', () => {
       vi.fn()
     )
 
-    expect(pane.linkTooltip.style.left).toBe('0px')
-    expect(pane.linkTooltip.style.bottom).toBe('0px')
+    // Why: corner offsets live in .pane-link-tooltip (terminal.css); JS only
+    // toggles visibility so padding/offset cannot drift back into inline styles.
+    expect(pane.linkTooltip.classList.contains('pane-link-tooltip')).toBe(true)
+    expect(pane.linkTooltip.style.left).toBe('')
+    expect(pane.linkTooltip.style.bottom).toBe('')
+    expect(pane.linkTooltip.style.display).toBe('none')
   })
 
   it('uses desktop modifier-click text for WebLinks hover hints', () => {

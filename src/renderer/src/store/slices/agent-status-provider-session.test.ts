@@ -4,6 +4,16 @@ import type { AppState } from '../types'
 import { getProviderSessionClaimKey } from '../../lib/sleeping-agent-pane-ownership'
 import { createTestStore, makeTab } from './store-test-helpers'
 
+const PI_COMPATIBLE_CASES = [
+  { agent: 'pi' as const, label: 'Pi' },
+  { agent: 'omp' as const, label: 'OMP' }
+]
+
+function makePiCompatibleProviderSession(agent: 'pi' | 'omp') {
+  const session = { key: 'session_id' as const, id: `${agent}-session-1` }
+  return agent === 'pi' ? { ...session, transcriptPath: '/tmp/pi-session-1.jsonl' } : session
+}
+
 describe('recordAgentProviderSession', () => {
   it('preserves the root session while a child permission hook moves Codex to waiting', () => {
     const store = createTestStore()
@@ -172,140 +182,138 @@ describe('recordAgentProviderSession', () => {
     ).toBeUndefined()
   })
 
-  it('keeps a completed Pi session resumable through manual worktree sleep', async () => {
-    const store = createTestStore()
-    store.setState({
-      tabsByWorktree: {
-        'wt-1': [makeTab({ id: 'tab-1', worktreeId: 'wt-1' })]
-      }
-    } as Partial<AppState>)
-    const providerSession = {
-      key: 'session_id' as const,
-      id: 'pi-session-1',
-      transcriptPath: '/tmp/pi-session-1.jsonl'
-    }
+  it.each(PI_COMPATIBLE_CASES)(
+    'keeps a completed $label session resumable through manual worktree sleep',
+    async ({ agent, label }) => {
+      const store = createTestStore()
+      store.setState({
+        tabsByWorktree: {
+          'wt-1': [makeTab({ id: 'tab-1', worktreeId: 'wt-1' })]
+        }
+      } as Partial<AppState>)
+      const providerSession = makePiCompatibleProviderSession(agent)
 
-    store
-      .getState()
-      .recordAgentProviderSession(
-        'tab-1:leaf-1',
-        'pi',
+      store
+        .getState()
+        .recordAgentProviderSession(
+          'tab-1:leaf-1',
+          agent,
+          providerSession,
+          { updatedAt: 10 },
+          { tabId: 'tab-1', worktreeId: 'wt-1', connectionId: 'ssh-connection-1' }
+        )
+      store
+        .getState()
+        .setAgentStatus(
+          'tab-1:leaf-1',
+          { state: 'working', prompt: 'finish the task', agentType: agent },
+          label,
+          { updatedAt: 20, stateStartedAt: 20 },
+          { tabId: 'tab-1', worktreeId: 'wt-1' },
+          { providerSession }
+        )
+      store
+        .getState()
+        .setAgentStatus(
+          'tab-1:leaf-1',
+          { state: 'done', prompt: 'finish the task', agentType: agent },
+          label,
+          { updatedAt: 30, stateStartedAt: 30 },
+          { tabId: 'tab-1', worktreeId: 'wt-1' },
+          { providerSession }
+        )
+
+      expect(store.getState().agentStatusByPaneKey['tab-1:leaf-1']?.state).toBe('done')
+      const liveRecord = store.getState().sleepingAgentSessionsByPaneKey['tab-1:leaf-1']
+      expect(liveRecord).toMatchObject({
+        agent,
         providerSession,
-        { updatedAt: 10 },
-        { tabId: 'tab-1', worktreeId: 'wt-1', connectionId: 'ssh-connection-1' }
-      )
-    store
-      .getState()
-      .setAgentStatus(
-        'tab-1:leaf-1',
-        { state: 'working', prompt: 'finish the task', agentType: 'pi' },
-        'Pi',
-        { updatedAt: 20, stateStartedAt: 20 },
-        { tabId: 'tab-1', worktreeId: 'wt-1' },
-        { providerSession }
-      )
-    store
-      .getState()
-      .setAgentStatus(
-        'tab-1:leaf-1',
-        { state: 'done', prompt: 'finish the task', agentType: 'pi' },
-        'Pi',
-        { updatedAt: 30, stateStartedAt: 30 },
-        { tabId: 'tab-1', worktreeId: 'wt-1' },
-        { providerSession }
-      )
+        connectionId: 'ssh-connection-1',
+        state: 'working',
+        origin: 'live'
+      })
 
-    expect(store.getState().agentStatusByPaneKey['tab-1:leaf-1']?.state).toBe('done')
-    const liveRecord = store.getState().sleepingAgentSessionsByPaneKey['tab-1:leaf-1']
-    expect(liveRecord).toMatchObject({
-      agent: 'pi',
-      providerSession,
-      connectionId: 'ssh-connection-1',
-      state: 'working',
-      origin: 'live'
-    })
+      store.getState().captureAllSleepingAgentSessions('periodic')
+      expect(store.getState().sleepingAgentSessionsByPaneKey['tab-1:leaf-1']).toBe(liveRecord)
 
-    store.getState().captureAllSleepingAgentSessions('periodic')
-    expect(store.getState().sleepingAgentSessionsByPaneKey['tab-1:leaf-1']).toBe(liveRecord)
+      await store.getState().shutdownWorktreeTerminals('wt-1', {
+        keepIdentifiers: true,
+        shutdownReason: 'manual-sleep',
+        sleepingPaneKeys: ['tab-1:leaf-1']
+      })
 
-    await store.getState().shutdownWorktreeTerminals('wt-1', {
-      keepIdentifiers: true,
-      shutdownReason: 'manual-sleep',
-      sleepingPaneKeys: ['tab-1:leaf-1']
-    })
-
-    expect(store.getState().agentStatusByPaneKey['tab-1:leaf-1']).toBeUndefined()
-    expect(store.getState().sleepingAgentSessionsByPaneKey['tab-1:leaf-1']).toMatchObject({
-      agent: 'pi',
-      providerSession,
-      connectionId: 'ssh-connection-1',
-      state: 'working',
-      origin: 'worktree-sleep'
-    })
-  })
-
-  it('keeps a completed Pi session resumable through quit capture', () => {
-    const store = createTestStore()
-    store.setState({
-      tabsByWorktree: {
-        'wt-1': [makeTab({ id: 'tab-1', worktreeId: 'wt-1' })]
-      }
-    } as Partial<AppState>)
-    const providerSession = {
-      key: 'session_id' as const,
-      id: 'pi-session-1',
-      transcriptPath: '/tmp/pi-session-1.jsonl'
-    }
-
-    store
-      .getState()
-      .recordAgentProviderSession(
-        'tab-1:leaf-1',
-        'pi',
+      expect(store.getState().agentStatusByPaneKey['tab-1:leaf-1']).toBeUndefined()
+      expect(store.getState().sleepingAgentSessionsByPaneKey['tab-1:leaf-1']).toMatchObject({
+        agent,
         providerSession,
-        { updatedAt: 10 },
-        { tabId: 'tab-1', worktreeId: 'wt-1', connectionId: 'ssh-connection-1' }
-      )
-    store
-      .getState()
-      .setAgentStatus(
-        'tab-1:leaf-1',
-        { state: 'working', prompt: 'finish the task', agentType: 'pi' },
-        'Pi',
-        { updatedAt: 20, stateStartedAt: 20 },
-        { tabId: 'tab-1', worktreeId: 'wt-1' },
-        { providerSession }
-      )
-    store
-      .getState()
-      .setAgentStatus(
-        'tab-1:leaf-1',
-        { state: 'done', prompt: 'finish the task', agentType: 'pi' },
-        'Pi',
-        { updatedAt: 30, stateStartedAt: 30 },
-        { tabId: 'tab-1', worktreeId: 'wt-1' },
-        { providerSession }
-      )
+        connectionId: 'ssh-connection-1',
+        state: 'working',
+        origin: 'worktree-sleep'
+      })
+    }
+  )
 
-    store.getState().captureAllSleepingAgentSessions('periodic')
-    expect(store.getState().sleepingAgentSessionsByPaneKey['tab-1:leaf-1']).toMatchObject({
-      providerSession,
-      connectionId: 'ssh-connection-1',
-      origin: 'live'
-    })
+  it.each(PI_COMPATIBLE_CASES)(
+    'keeps a completed $label session resumable through quit capture',
+    ({ agent, label }) => {
+      const store = createTestStore()
+      store.setState({
+        tabsByWorktree: {
+          'wt-1': [makeTab({ id: 'tab-1', worktreeId: 'wt-1' })]
+        }
+      } as Partial<AppState>)
+      const providerSession = makePiCompatibleProviderSession(agent)
 
-    store.getState().captureAllSleepingAgentSessions('quit')
+      store
+        .getState()
+        .recordAgentProviderSession(
+          'tab-1:leaf-1',
+          agent,
+          providerSession,
+          { updatedAt: 10 },
+          { tabId: 'tab-1', worktreeId: 'wt-1', connectionId: 'ssh-connection-1' }
+        )
+      store
+        .getState()
+        .setAgentStatus(
+          'tab-1:leaf-1',
+          { state: 'working', prompt: 'finish the task', agentType: agent },
+          label,
+          { updatedAt: 20, stateStartedAt: 20 },
+          { tabId: 'tab-1', worktreeId: 'wt-1' },
+          { providerSession }
+        )
+      store
+        .getState()
+        .setAgentStatus(
+          'tab-1:leaf-1',
+          { state: 'done', prompt: 'finish the task', agentType: agent },
+          label,
+          { updatedAt: 30, stateStartedAt: 30 },
+          { tabId: 'tab-1', worktreeId: 'wt-1' },
+          { providerSession }
+        )
 
-    const quitRecord = store.getState().sleepingAgentSessionsByPaneKey['tab-1:leaf-1']
-    expect(quitRecord).toMatchObject({
-      agent: 'pi',
-      providerSession,
-      connectionId: 'ssh-connection-1',
-      state: 'working',
-      origin: 'quit'
-    })
+      store.getState().captureAllSleepingAgentSessions('periodic')
+      expect(store.getState().sleepingAgentSessionsByPaneKey['tab-1:leaf-1']).toMatchObject({
+        providerSession,
+        connectionId: 'ssh-connection-1',
+        origin: 'live'
+      })
 
-    store.getState().captureAllSleepingAgentSessions('periodic')
-    expect(store.getState().sleepingAgentSessionsByPaneKey['tab-1:leaf-1']).toBe(quitRecord)
-  })
+      store.getState().captureAllSleepingAgentSessions('quit')
+
+      const quitRecord = store.getState().sleepingAgentSessionsByPaneKey['tab-1:leaf-1']
+      expect(quitRecord).toMatchObject({
+        agent,
+        providerSession,
+        connectionId: 'ssh-connection-1',
+        state: 'working',
+        origin: 'quit'
+      })
+
+      store.getState().captureAllSleepingAgentSessions('periodic')
+      expect(store.getState().sleepingAgentSessionsByPaneKey['tab-1:leaf-1']).toBe(quitRecord)
+    }
+  )
 })

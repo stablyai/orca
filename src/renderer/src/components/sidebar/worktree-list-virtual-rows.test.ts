@@ -127,6 +127,45 @@ describe('getActiveStickyIndexesForScroll', () => {
       })
     ).toEqual({ hostIndex: null, groupIndex: 0 })
   })
+
+  it('does not pin a Project header whose virtual item is not mounted yet (#10088)', () => {
+    // Why: after scrollToIndex/reveal, rangeStart can sit on group-b1 while
+    // TanStack has only mounted host-b (and maybe a later item) this frame.
+    const partialItems = [virtualItem(4, 400), virtualItem(6, 600)]
+    const result = getActiveStickyIndexesForScroll({
+      rows,
+      rangeStartIndex: 5,
+      scrollOffset: 500,
+      stickyHeaderIndexes,
+      virtualItems: partialItems
+    })
+    expect(result.hostIndex).toBe(4)
+    // group-b1 (index 5) must not become sticky without geometry — that is what
+    // paints the project label across the host card.
+    expect(result.groupIndex).toBeNull()
+  })
+
+  it('keeps the previous mounted Project sticky when the next group is unmounted', () => {
+    const multiGroupRows: RenderRow[] = [
+      hostRow('a'),
+      groupRow('a1'),
+      itemStub('wt-1'),
+      groupRow('a2'),
+      itemStub('wt-2')
+    ]
+    const multiSticky = getStickyHeaderIndexes(multiGroupRows)
+    // rangeStart points at a2 (index 3) but only host + a1 + item are mounted.
+    const partialItems = [virtualItem(0, 0), virtualItem(1, 100), virtualItem(2, 200)]
+    const result = getActiveStickyIndexesForScroll({
+      rows: multiGroupRows,
+      rangeStartIndex: 3,
+      scrollOffset: 250,
+      stickyHeaderIndexes: multiSticky,
+      virtualItems: partialItems
+    })
+    expect(result.hostIndex).toBe(0)
+    expect(result.groupIndex).toBe(1)
+  })
 })
 
 describe('extractWorktreeVirtualRowIndexes', () => {

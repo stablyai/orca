@@ -1,4 +1,5 @@
 import { join } from 'node:path'
+import { assertJsonTextStructureWithinLimits } from './json-text-structure-limit'
 
 export type RuntimeTransportMetadata =
   | {
@@ -20,6 +21,18 @@ export type RuntimeMetadata = {
   transports: RuntimeTransportMetadata[]
   authToken: string | null
   startedAt: number
+}
+
+export const MAX_RUNTIME_METADATA_FILE_BYTES = 64 * 1024
+export const MAX_RUNTIME_METADATA_JSON_STRUCTURAL_TOKENS = 16 * 1024
+export const MAX_RUNTIME_METADATA_JSON_NESTING_DEPTH = 32
+
+export function parseRuntimeMetadataJson(serialized: string): RuntimeMetadata {
+  assertJsonTextStructureWithinLimits(serialized, {
+    structuralTokens: MAX_RUNTIME_METADATA_JSON_STRUCTURAL_TOKENS,
+    nestingDepth: MAX_RUNTIME_METADATA_JSON_NESTING_DEPTH
+  })
+  return JSON.parse(serialized) as RuntimeMetadata
 }
 
 // Why: the CLI must handle metadata files written by older Orca versions that

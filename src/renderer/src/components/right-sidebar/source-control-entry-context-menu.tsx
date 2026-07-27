@@ -24,6 +24,7 @@ import {
 type SourceControlEntryContextMenuProps = {
   currentWorktreeId: string
   absolutePath?: string
+  relativePath?: string
   connectionId?: string | null
   onView?: () => void
   onRevealInExplorer: (worktreeId: string, absolutePath: string) => void
@@ -34,6 +35,7 @@ type SourceControlEntryContextMenuProps = {
 export function SourceControlEntryContextMenu({
   currentWorktreeId,
   absolutePath,
+  relativePath,
   connectionId,
   onView,
   onRevealInExplorer,
@@ -54,6 +56,13 @@ export function SourceControlEntryContextMenu({
     }
     void window.api.ui.writeClipboardText(absolutePath)
   }, [absolutePath])
+
+  const handleCopyRelativePath = useCallback(() => {
+    if (!relativePath) {
+      return
+    }
+    void window.api.ui.writeClipboardText(relativePath)
+  }, [relativePath])
 
   const handleRevealInOrcaExplorer = useCallback(() => {
     if (!absolutePath) {
@@ -92,6 +101,13 @@ export function SourceControlEntryContextMenu({
         <ContextMenuItem onSelect={handleCopyPath} disabled={!absolutePath}>
           <Copy className="size-3.5" />
           {translate('auto.components.right.sidebar.FileExplorerRow.b5d436aa30', 'Copy Path')}
+        </ContextMenuItem>
+        <ContextMenuItem onSelect={handleCopyRelativePath} disabled={!relativePath}>
+          <Copy className="size-3.5" />
+          {translate(
+            'auto.components.right.sidebar.FileExplorerRow.66a29dde82',
+            'Copy Relative Path'
+          )}
         </ContextMenuItem>
         <ContextMenuSeparator />
         <ContextMenuSub>

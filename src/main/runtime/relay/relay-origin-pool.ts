@@ -4,7 +4,8 @@ import type { MobileSocketWiring } from '../rpc/mobile-socket-wiring'
 import { RelayControlOrigin } from './relay-control-origin'
 import type { RelayControlClient } from './relay-control-client'
 import type { RelayDrainMessage } from './relay-control-protocol'
-import { requestRelayAssignment, type RelayAssignment } from './relay-http-client'
+import { RelayDrainRetrySchedule } from './relay-drain-retry-schedule'
+import { RelayHttpError, requestRelayAssignment, type RelayAssignment } from './relay-http-client'
 import type { RelayBrokerStatus, RelayIdentity } from './relay-session-broker-contract'
 
 type RelayOriginPoolOptions = {
@@ -34,10 +35,12 @@ export class RelayOriginPool {
   private relayJwt: string | null = null
   private rotationTimer: ReturnType<typeof setTimeout> | null = null
   private rotationPromise: Promise<void> | null = null
+  private readonly drainRetry: RelayDrainRetrySchedule
   private closed = false
 
   constructor(options: RelayOriginPoolOptions) {
     this.options = options
+    this.drainRetry = new RelayDrainRetrySchedule(options.random)
   }
 
   get activeAssignment(): RelayAssignment | null {
@@ -79,6 +82,7 @@ export class RelayOriginPool {
       clearTimeout(this.rotationTimer)
       this.rotationTimer = null
     }
+    this.drainRetry.cancel()
     for (const timer of this.drainTimers.values()) {
       clearTimeout(timer)
     }
@@ -135,7 +139,7 @@ export class RelayOriginPool {
     origin.markDraining()
     this.drainingOrigins.add(origin)
     this.options.onStatus('draining')
-    if (!this.rotationPromise) {
+    if (!this.rotationPromise && !this.drainRetry.pending) {
       this.rotationPromise = this.resolveDrainTarget(origin, message).finally(() => {
         this.rotationPromise = null
       })
@@ -178,11 +182,12 @@ export class RelayOriginPool {
         await this.activateTarget(origin, assignment, this.relayJwt, message.graceMs)
       }
       this.options.onStatus('registered')
+      this.drainRetry.reset()
       this.scheduleControlRotation()
-    } catch {
-      if (this.isCurrent()) {
-        const random = this.options.random ?? Math.random
-        setTimeout(() => this.handleDrain(origin, message), 250 + Math.floor(random() * 751))
+    } catch (error) {
+      if (this.isCurrent() && origin === this.activeOrigin) {
+        const retryAfterMs = error instanceof RelayHttpError ? (error.retryAfterMs ?? 0) : 0
+        this.drainRetry.schedule(retryAfterMs, () => this.handleDrain(origin, message))
       }
     }
   }

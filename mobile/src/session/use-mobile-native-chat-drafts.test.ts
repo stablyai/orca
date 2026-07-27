@@ -85,6 +85,11 @@ describe('useMobileNativeChatDrafts', () => {
     act(() => state?.setComposerText('from a'))
     const originA = state?.captureSendOrigin('from a')
     expect(originA).not.toBeNull()
+    act(() => {
+      if (originA) {
+        state?.clearDraftForSend(originA, 'from a')
+      }
+    })
 
     await switchTo('b')
     act(() => state?.setComposerText('from b'))
@@ -99,6 +104,99 @@ describe('useMobileNativeChatDrafts', () => {
     await switchTo('a')
     expect(state?.composerText).toBe('')
     expect(state?.pending.map((pending) => pending.text)).toEqual(['from a'])
+  })
+
+  it('clears the composer at send time, before the RPC settles', async () => {
+    await mount('a')
+    act(() => state?.setComposerText('ping'))
+    const origin = state?.captureSendOrigin('ping')
+    act(() => {
+      if (origin) {
+        state?.clearDraftForSend(origin, 'ping')
+      }
+    })
+    expect(state?.composerText).toBe('')
+  })
+
+  it('restores the text on a definite rejection', async () => {
+    await mount('a')
+    act(() => state?.setComposerText('ping'))
+    const origin = state?.captureSendOrigin('ping')
+    act(() => {
+      if (origin) {
+        state?.clearDraftForSend(origin, 'ping')
+        state?.restoreRejectedDraft(origin, 'ping')
+      }
+    })
+    expect(state?.composerText).toBe('ping')
+  })
+
+  it('does not clobber newer edits when restoring a rejected send', async () => {
+    await mount('a')
+    act(() => state?.setComposerText('ping'))
+    const origin = state?.captureSendOrigin('ping')
+    act(() => {
+      if (origin) {
+        state?.clearDraftForSend(origin, 'ping')
+      }
+    })
+    act(() => state?.setComposerText('newer edit'))
+    act(() => {
+      if (origin) {
+        state?.restoreRejectedDraft(origin, 'ping')
+      }
+    })
+    expect(state?.composerText).toBe('newer edit')
+  })
+
+  it('restores a rejected send onto its originating tab only', async () => {
+    await mount('a')
+    act(() => state?.setComposerText('from a'))
+    const originA = state?.captureSendOrigin('from a')
+    act(() => {
+      if (originA) {
+        state?.clearDraftForSend(originA, 'from a')
+      }
+    })
+
+    await switchTo('b')
+    act(() => {
+      if (originA) {
+        state?.restoreRejectedDraft(originA, 'from a')
+      }
+    })
+    expect(state?.composerText).toBe('')
+
+    await switchTo('a')
+    expect(state?.composerText).toBe('from a')
+  })
+
+  it('keeps the composer clear when the echo lands after the unconfirmed deadline', async () => {
+    vi.useFakeTimers()
+    try {
+      await mount('a')
+      act(() => state?.setComposerText('ping'))
+      const origin = state?.captureSendOrigin('ping')
+      act(() => {
+        if (origin) {
+          state?.clearDraftForSend(origin, 'ping')
+          state?.holdUnconfirmedSend(origin, 'ping', vi.fn())
+        }
+      })
+      expect(state?.composerText).toBe('')
+
+      // A relay drop can stall the transcript stream past the deadline; the
+      // delivered prompt must not reappear in the composer when it recovers.
+      act(() => vi.advanceTimersByTime(25_000))
+      await act(async () =>
+        renderer?.update(
+          createElement(Harness, { tabId: 'a', messages: [userTextMessage('m1', 'ping')] })
+        )
+      )
+      expect(state?.composerText).toBe('')
+    } finally {
+      vi.useRealTimers()
+    }
   })
 
   it('clears one pending per landed message so duplicate sends are not all dropped', async () => {
@@ -118,6 +216,126 @@ describe('useMobileNativeChatDrafts', () => {
       )
     )
     expect(state?.pending.map((pending) => pending.text)).toEqual(['ping'])
+  })
+
+  it('keeps an image-only echo through an agent reply, clearing only when the user turn lands', async () => {
+    await mount('a')
+    await act(async () =>
+      renderer?.update(
+        createElement(Harness, { tabId: 'a', messages: [assistantTextMessage('a1', 'hi')] })
+      )
+    )
+    const origin = state?.captureSendOrigin('')
+    act(() => {
+      if (origin) {
+        state?.acceptSend(origin, '', ['file:///a.jpg'])
+      }
+    })
+    // The echo carries the preview thumbnail and has no text to match against.
+    expect(state?.pending.map((pending) => pending.images)).toEqual([['file:///a.jpg']])
+
+    // An agent reply grows the transcript but must NOT clear the photo echo early.
+    await act(async () =>
+      renderer?.update(
+        createElement(Harness, {
+          tabId: 'a',
+          messages: [assistantTextMessage('a1', 'hi'), assistantTextMessage('a2', 'nice photo')]
+        })
+      )
+    )
+    expect(state?.pending.map((pending) => pending.images)).toEqual([['file:///a.jpg']])
+
+    // The user's own image echo landing (Claude records it as an
+    // `[Image: source: …]` turn) clears it.
+    await act(async () =>
+      renderer?.update(
+        createElement(Harness, {
+          tabId: 'a',
+          messages: [
+            assistantTextMessage('a1', 'hi'),
+            assistantTextMessage('a2', 'nice photo'),
+            userTextMessage('u1', '[Image: source: /tmp/a.png]')
+          ]
+        })
+      )
+    )
+    expect(state?.pending).toEqual([])
+  })
+
+  it("keeps an image-only echo when an unrelated text send's echo lands", async () => {
+    await mount('a')
+    await act(async () =>
+      renderer?.update(
+        createElement(Harness, { tabId: 'a', messages: [assistantTextMessage('a1', 'hi')] })
+      )
+    )
+    const textOrigin = state?.captureSendOrigin('ping')
+    const imageOrigin = state?.captureSendOrigin('')
+    act(() => {
+      if (textOrigin && imageOrigin) {
+        state?.acceptSend(textOrigin, 'ping')
+        state?.acceptSend(imageOrigin, '', ['file:///a.jpg'])
+      }
+    })
+    expect(state?.pending).toHaveLength(2)
+
+    // The text echo lands first: it must clear only the text pending — a user
+    // turn that is not an image echo cannot reconcile the photo.
+    await act(async () =>
+      renderer?.update(
+        createElement(Harness, {
+          tabId: 'a',
+          messages: [assistantTextMessage('a1', 'hi'), userTextMessage('u1', 'ping')]
+        })
+      )
+    )
+    expect(state?.pending.map((pending) => pending.images)).toEqual([['file:///a.jpg']])
+
+    await act(async () =>
+      renderer?.update(
+        createElement(Harness, {
+          tabId: 'a',
+          messages: [
+            assistantTextMessage('a1', 'hi'),
+            userTextMessage('u1', 'ping'),
+            userTextMessage('u2', '[Image: source: /tmp/a.png]')
+          ]
+        })
+      )
+    )
+    expect(state?.pending).toEqual([])
+  })
+
+  it('reconciles a captioned image echo that carries the [Image #N] marker', async () => {
+    await mount('a')
+    await act(async () =>
+      renderer?.update(
+        createElement(Harness, { tabId: 'a', messages: [assistantTextMessage('a1', 'hi')] })
+      )
+    )
+    const origin = state?.captureSendOrigin('look at this')
+    act(() => {
+      if (origin) {
+        state?.acceptSend(origin, 'look at this', ['file:///a.jpg'])
+      }
+    })
+    expect(state?.pending).toHaveLength(1)
+
+    // Claude echoes a captioned image send as two turns: the source marker and
+    // the caption prefixed with `[Image #1] ` — the pending must still match.
+    await act(async () =>
+      renderer?.update(
+        createElement(Harness, {
+          tabId: 'a',
+          messages: [
+            assistantTextMessage('a1', 'hi'),
+            userTextMessage('u1', '[Image: source: /tmp/a.png]'),
+            userTextMessage('u2', '[Image #1] look at this')
+          ]
+        })
+      )
+    )
+    expect(state?.pending).toEqual([])
   })
 
   it('does not reconcile a repeated send against an older identical turn', async () => {
@@ -159,25 +377,24 @@ describe('useMobileNativeChatDrafts', () => {
     expect(state?.pending).toEqual([])
   })
 
-  it('does not erase newer edits when an older send settles', async () => {
+  it('does not erase newer edits when an older send clears', async () => {
     await mount('a')
     act(() => state?.setComposerText('submitted'))
     const origin = state?.captureSendOrigin('submitted')
     act(() => state?.setComposerText('new edit'))
     act(() => {
       if (origin) {
-        state?.acceptSend(origin, 'submitted')
+        state?.clearDraftForSend(origin, 'submitted')
       }
     })
 
     expect(state?.composerText).toBe('new edit')
   })
 
-  it('clears the draft when an unconfirmed send lands in the transcript', async () => {
+  it('stays quiet when an unconfirmed send lands in the transcript', async () => {
     vi.useFakeTimers()
     try {
       await mount('a')
-      act(() => state?.setComposerText('ping'))
       const origin = state?.captureSendOrigin('ping')
       const onUnconfirmed = vi.fn()
       act(() => {
@@ -185,14 +402,12 @@ describe('useMobileNativeChatDrafts', () => {
           state?.holdUnconfirmedSend(origin, 'ping', onUnconfirmed)
         }
       })
-      expect(state?.composerText).toBe('ping')
 
       await act(async () =>
         renderer?.update(
           createElement(Harness, { tabId: 'a', messages: [userTextMessage('m1', 'ping')] })
         )
       )
-      expect(state?.composerText).toBe('')
 
       act(() => vi.advanceTimersByTime(30_000))
       expect(onUnconfirmed).not.toHaveBeenCalled()
@@ -201,11 +416,88 @@ describe('useMobileNativeChatDrafts', () => {
     }
   })
 
-  it('clears immediately when the transcript echo beat the ambiguous RPC rejection', async () => {
+  it('reconciles an image-only unconfirmed send against the next user turn (no false warning)', async () => {
     vi.useFakeTimers()
     try {
       await mount('a')
-      act(() => state?.setComposerText('ping'))
+      await act(async () =>
+        renderer?.update(
+          createElement(Harness, { tabId: 'a', messages: [assistantTextMessage('a1', 'hi')] })
+        )
+      )
+      // Image-only send: empty text, so it can only reconcile against a new user turn.
+      const origin = state?.captureSendOrigin('')
+      const onUnconfirmed = vi.fn()
+      act(() => {
+        if (origin) {
+          state?.holdUnconfirmedSend(origin, '', onUnconfirmed)
+        }
+      })
+
+      // An agent reply must not confirm it...
+      await act(async () =>
+        renderer?.update(
+          createElement(Harness, {
+            tabId: 'a',
+            messages: [assistantTextMessage('a1', 'hi'), assistantTextMessage('a2', 'ok')]
+          })
+        )
+      )
+      // ...but the user's own turn landing does, so the deadline never warns.
+      await act(async () =>
+        renderer?.update(
+          createElement(Harness, {
+            tabId: 'a',
+            messages: [
+              assistantTextMessage('a1', 'hi'),
+              assistantTextMessage('a2', 'ok'),
+              userTextMessage('u1', '')
+            ]
+          })
+        )
+      )
+      act(() => vi.advanceTimersByTime(30_000))
+      expect(onUnconfirmed).not.toHaveBeenCalled()
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('clears image-only echoes one per landed user turn, not all at once', async () => {
+    await mount('a')
+    await act(async () =>
+      renderer?.update(
+        createElement(Harness, { tabId: 'a', messages: [assistantTextMessage('a1', 'hi')] })
+      )
+    )
+    const origin = state?.captureSendOrigin('')
+    act(() => {
+      if (origin) {
+        state?.acceptSend(origin, '', ['file:///a.jpg'])
+        state?.acceptSend(origin, '', ['file:///b.jpg'])
+      }
+    })
+    expect(state?.pending).toHaveLength(2)
+
+    // Only one image echo has landed — exactly one photo reconciles.
+    await act(async () =>
+      renderer?.update(
+        createElement(Harness, {
+          tabId: 'a',
+          messages: [
+            assistantTextMessage('a1', 'hi'),
+            userTextMessage('u1', '[Image: source: /tmp/a.png]')
+          ]
+        })
+      )
+    )
+    expect(state?.pending.map((pending) => pending.images)).toEqual([['file:///b.jpg']])
+  })
+
+  it('registers no deadline when the transcript echo beat the ambiguous RPC rejection', async () => {
+    vi.useFakeTimers()
+    try {
+      await mount('a')
       const origin = state?.captureSendOrigin('ping')
       const onUnconfirmed = vi.fn()
 
@@ -220,7 +512,6 @@ describe('useMobileNativeChatDrafts', () => {
         }
       })
 
-      expect(state?.composerText).toBe('')
       expect(vi.getTimerCount()).toBe(0)
       act(() => vi.advanceTimersByTime(30_000))
       expect(onUnconfirmed).not.toHaveBeenCalled()
@@ -229,11 +520,10 @@ describe('useMobileNativeChatDrafts', () => {
     }
   })
 
-  it('surfaces uncertainty and keeps the draft when no echo lands before the deadline', async () => {
+  it('surfaces uncertainty when no echo lands before the deadline', async () => {
     vi.useFakeTimers()
     try {
       await mount('a')
-      act(() => state?.setComposerText('ping'))
       const origin = state?.captureSendOrigin('ping')
       const onUnconfirmed = vi.fn()
       act(() => {
@@ -246,7 +536,6 @@ describe('useMobileNativeChatDrafts', () => {
       expect(onUnconfirmed).not.toHaveBeenCalled()
       act(() => vi.advanceTimersByTime(1))
       expect(onUnconfirmed).toHaveBeenCalledTimes(1)
-      expect(state?.composerText).toBe('ping')
     } finally {
       vi.useRealTimers()
     }
@@ -433,6 +722,7 @@ describe('useMobileNativeChatDrafts', () => {
     expect(origin).toMatchObject({ pendingKey: null })
     act(() => {
       if (origin) {
+        state?.clearDraftForSend(origin, 'start the session')
         state?.acceptSend(origin, 'start the session')
       }
     })

@@ -6,6 +6,7 @@ import { buildRegistry, type RpcContext, type RpcRequest } from '../core'
 import { OrchestrationDb } from '../../orchestration/db'
 import { OrcaRuntimeService } from '../../orca-runtime'
 import type { RuntimeTerminalSummary } from '../../../../shared/runtime-types'
+import { ORCHESTRATION_ASK_MAX_TIMEOUT_MS } from '../../../../shared/orchestration-ask-timeout'
 
 function lifecycleGroupRecipientError(type: 'worker_done' | 'heartbeat'): string {
   return `${type} messages must be sent to a concrete coordinator terminal handle, not a group address.`
@@ -1790,6 +1791,55 @@ describe('orchestration RPC methods', () => {
 
       expect(result.timedOut).toBe(false)
       expect(result.answer).toBe('correct answer')
+    })
+
+    it.each<[number | undefined, number]>([
+      [undefined, 600_000],
+      [ORCHESTRATION_ASK_MAX_TIMEOUT_MS, ORCHESTRATION_ASK_MAX_TIMEOUT_MS],
+      [Number.MAX_SAFE_INTEGER, ORCHESTRATION_ASK_MAX_TIMEOUT_MS]
+    ])('applies effective timeout %s at the RPC handler boundary', async (requested, expected) => {
+      setup()
+      vi.spyOn(runtime, 'deliverPendingMessagesForHandle').mockImplementation(() => {})
+      vi.spyOn(runtime, 'notifyMessageArrived').mockImplementation(() => {})
+      let observedTimeoutMs: number | undefined
+      vi.spyOn(runtime, 'waitForMessage').mockImplementation(async (_handle, options) => {
+        observedTimeoutMs = options?.timeoutMs
+        const outbound = db.getInbox(10).find((m) => m.type === 'decision_gate')
+        expect(outbound).toBeDefined()
+        db.insertMessage({
+          from: 'term_coord',
+          to: 'term_worker',
+          subject: 'Re: Question',
+          body: 'ok',
+          threadId: outbound!.id
+        })
+      })
+
+      const result = (await call('orchestration.ask', {
+        from: 'term_worker',
+        to: 'term_coord',
+        question: 'bounded?',
+        timeoutMs: requested
+      })) as { timeoutMs: number }
+
+      expect(observedTimeoutMs).toBeLessThanOrEqual(expected)
+      expect(observedTimeoutMs).toBeGreaterThan(expected - 1_000)
+      expect(result.timeoutMs).toBe(expected)
+    })
+
+    it('returns a zero effective timeout without entering the waiter', async () => {
+      setup()
+      const waitForMessage = vi.spyOn(runtime, 'waitForMessage')
+
+      const result = (await call('orchestration.ask', {
+        from: 'term_worker',
+        to: 'term_coord',
+        question: 'negative?',
+        timeoutMs: -5
+      })) as { timedOut: boolean; timeoutMs: number }
+
+      expect(waitForMessage).not.toHaveBeenCalled()
+      expect(result).toMatchObject({ timedOut: true, timeoutMs: 0 })
     })
 
     it('parses options CSV with whitespace and empty entries', async () => {

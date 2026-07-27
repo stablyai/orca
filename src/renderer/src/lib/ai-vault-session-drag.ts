@@ -68,7 +68,8 @@ function isLaunchConfig(value: unknown): value is SleepingAgentLaunchConfig {
   return (
     (config.agentCommand === undefined || typeof config.agentCommand === 'string') &&
     typeof config.agentArgs === 'string' &&
-    isStringRecord(config.agentEnv)
+    isStringRecord(config.agentEnv) &&
+    (config.ompResumeFilePath === undefined || isNonEmptyString(config.ompResumeFilePath))
   )
 }
 

@@ -40,6 +40,7 @@ import {
 } from './worktree-manual-order'
 import type { WorkspaceStatus, WorktreeMeta } from '../../../../shared/types'
 import { makeWorkspaceStatusId } from '../../../../shared/workspace-statuses'
+import { STATUS_BAR_RESERVE_HEIGHT, WORKSPACE_TOP_CHROME_HEIGHT } from './workspace-chrome-metrics'
 import { useContextualTour } from '@/components/contextual-tours/use-contextual-tour'
 import { translate } from '@/i18n/i18n'
 
@@ -52,9 +53,6 @@ type WorkspaceKanbanDrawerProps = {
   onOpenChange: (open: boolean) => void
   onMenuOpenChange: (open: boolean) => void
 }
-
-const WORKSPACE_TOP_CHROME_HEIGHT = 36
-const STATUS_BAR_RESERVE_HEIGHT = 24
 
 function formatTaskStatusSyncMessage(message: WorkspaceBoardTaskStatusSyncMessage): string {
   switch (message.kind) {
@@ -287,6 +285,30 @@ export default function WorkspaceKanbanDrawer({
       maybeSyncWorkspaceBoardTaskStatuses([worktreeId], status)
     },
     [maybeSyncWorkspaceBoardTaskStatuses, updateWorktreeMeta, workspaceStatuses, worktreeById]
+  )
+  // Why: the board's context-menu "Move to Status" must funnel through the same
+  // local-first + Linear-sync path as drag-and-drop. Without this callback the
+  // menu only writes the local status and silently drops the Linear sync.
+  const moveWorktreesToStatus = useCallback(
+    (worktreeIds: readonly string[], status: WorkspaceStatus) => {
+      const updates = new Map<string, Partial<WorktreeMeta>>()
+      const changedIds: string[] = []
+      for (const worktreeId of worktreeIds) {
+        const current = worktreeById.get(worktreeId)
+        if (!current || getWorkspaceStatus(current, workspaceStatuses) === status) {
+          continue
+        }
+        changedIds.push(worktreeId)
+        updates.set(worktreeId, { workspaceStatus: status })
+      }
+      if (changedIds.length === 0) {
+        return
+      }
+      useAppStore.getState().recordFeatureInteraction('workspace-board-actions')
+      void updateWorktreesMeta(updates)
+      maybeSyncWorkspaceBoardTaskStatuses(changedIds, status)
+    },
+    [maybeSyncWorkspaceBoardTaskStatuses, updateWorktreesMeta, workspaceStatuses, worktreeById]
   )
   const getSourceStatusKeys = useCallback(
     (worktreeIds: readonly string[]): WorkspaceStatus[] =>
@@ -775,6 +797,7 @@ export default function WorkspaceKanbanDrawer({
               onActivate={handleWorktreeActivate}
               onSelectionGesture={updateSelectionForGesture}
               onContextMenuSelect={selectForContextMenu}
+              onAssignWorkspaceStatus={moveWorktreesToStatus}
               onCreateWorktree={createWorktreeForStatus}
               onColumnResizeStart={onColumnResizeStart}
               onColumnResizeKeyDown={onColumnResizeKeyDown}
