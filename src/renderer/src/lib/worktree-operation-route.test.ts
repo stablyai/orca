@@ -220,4 +220,114 @@ describe('resolveWorktreeOperationRouteResult', () => {
       route: { executionHostId: 'local', runtimeEnvironmentId: null }
     })
   })
+
+  describe('folder workspaces', () => {
+    const FOLDER_WORKSPACE_ID = 'aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee'
+    const FOLDER_KEY = `folder:${FOLDER_WORKSPACE_ID}`
+
+    function folderWorkspace(connectionId: string | null = null) {
+      return { id: FOLDER_WORKSPACE_ID, projectGroupId: 'group-1', connectionId }
+    }
+
+    it('routes a local folder workspace to the local runtime (#10251)', () => {
+      expect(
+        resolveWorktreeOperationRouteResult(
+          {
+            repos: [{ id: 'repo-1' } as never],
+            folderWorkspaces: [folderWorkspace()],
+            projectGroups: [{ id: 'group-1', connectionId: null, executionHostId: null } as never],
+            runtimeEnvironments: [],
+            runtimeEnvironmentCatalogHydrated: true
+          },
+          FOLDER_KEY
+        )
+      ).toEqual({
+        kind: 'resolved',
+        route: { executionHostId: 'local', runtimeEnvironmentId: null }
+      })
+    })
+
+    it('preserves SSH ownership for a connected folder workspace', () => {
+      expect(
+        resolveWorktreeOperationRouteResult(
+          { folderWorkspaces: [folderWorkspace('ssh-target-1')] },
+          FOLDER_KEY
+        )
+      ).toEqual({
+        kind: 'resolved',
+        route: { executionHostId: 'ssh:ssh-target-1', runtimeEnvironmentId: null }
+      })
+    })
+
+    it('routes a runtime-owned project group folder workspace to its runtime', () => {
+      expect(
+        resolveWorktreeOperationRouteResult(
+          {
+            folderWorkspaces: [folderWorkspace()],
+            projectGroups: [
+              { id: 'group-1', connectionId: null, executionHostId: 'runtime:hub-a' } as never
+            ]
+          },
+          FOLDER_KEY
+        )
+      ).toEqual({
+        kind: 'resolved',
+        route: { executionHostId: 'runtime:hub-a', runtimeEnvironmentId: 'hub-a' }
+      })
+    })
+
+    it('scopes an ownerless folder workspace to the single focused runtime', () => {
+      expect(
+        resolveWorktreeOperationRouteResult(
+          {
+            settings: { activeRuntimeEnvironmentId: 'hub-a' } as never,
+            runtimeEnvironments: [{ id: 'hub-a' }],
+            folderWorkspaces: [folderWorkspace()]
+          },
+          FOLDER_KEY
+        )
+      ).toEqual({
+        kind: 'resolved',
+        route: { executionHostId: 'runtime:hub-a', runtimeEnvironmentId: 'hub-a' }
+      })
+    })
+
+    it('keeps a local folder workspace local when unrelated runtimes exist (#10251)', () => {
+      const state = {
+        folderWorkspaces: [folderWorkspace()],
+        projectGroups: [{ id: 'group-1', connectionId: null, executionHostId: null } as never],
+        settings: { activeRuntimeEnvironmentId: 'hub-a' } as never,
+        runtimeEnvironments: [{ id: 'hub-a' }, { id: 'hub-b' }],
+        runtimeEnvironmentCatalogHydrated: true
+      }
+      expect(resolveWorktreeOperationRouteResult(state, FOLDER_KEY)).toEqual({
+        kind: 'resolved',
+        route: { executionHostId: 'local', runtimeEnvironmentId: null }
+      })
+      // Why: the folder record is positive identity evidence, so it routes where an unknown
+      // worktree in the same multi-runtime state still fails closed.
+      expect(resolveWorktreeOperationRouteResult(state, 'repo-x::/tmp/unknown')).toEqual({
+        kind: 'missing'
+      })
+    })
+
+    it('routes a folder workspace to its restored runtime host during catalog hydration', () => {
+      expect(
+        resolveWorktreeOperationRouteResult(
+          {
+            folderWorkspaces: [folderWorkspace()],
+            restoredRuntimeHostIdByWorkspaceSessionKey: { [FOLDER_KEY]: 'runtime:hub-a' }
+          },
+          FOLDER_KEY
+        )
+      ).toEqual({
+        kind: 'resolved',
+        route: { executionHostId: 'runtime:hub-a', runtimeEnvironmentId: 'hub-a' }
+      })
+    })
+
+    it('fails an unknown folder workspace id closed', () => {
+      expect(resolveWorktreeOperationRouteResult({}, FOLDER_KEY)).toEqual({ kind: 'missing' })
+    })
+  })
 })

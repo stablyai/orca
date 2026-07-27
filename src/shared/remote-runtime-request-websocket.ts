@@ -11,6 +11,7 @@ import {
   invalidRemoteRuntimeResponseError,
   remoteRuntimeUnavailableError
 } from './remote-runtime-request-frames'
+import { SESSION_TAB_CLOSE_INTENT_RUNTIME_CAPABILITY } from './protocol-version'
 
 export type RemoteRuntimeWebSocket = {
   ws: WebSocket
@@ -45,7 +46,8 @@ export function openRemoteRuntimeWebSocket(
     ws.send(
       JSON.stringify({
         type: 'e2ee_hello',
-        publicKeyB64: publicKeyToBase64(keyPair.publicKey)
+        publicKeyB64: publicKeyToBase64(keyPair.publicKey),
+        clientCapabilities: [SESSION_TAB_CLOSE_INTENT_RUNTIME_CAPABILITY]
       })
     )
   }

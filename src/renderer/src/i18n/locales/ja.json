@@ -132,7 +132,8 @@
       "fe21e8f6f5": "戻る ({{value0}})",
       "064bd07810": "戻る",
       "ce37cf5279": "サイドバーの切り替え ({{value0}})",
-      "e4b9e7dff7": "サイドバーの切り替え"
+      "e4b9e7dff7": "サイドバーの切り替え",
+      "pluginCommandFailed": "プラグインのコマンドを実行できませんでした。"
     },
     "web": {
       "WebConnect": {
@@ -592,6 +593,9 @@
           }
         }
       },
+      "pluginCommandKeybindings": {
+        "group": "Plugins"
+      },
       "linear": {
         "usage": {
           "examples": {
@@ -734,6 +738,8 @@
         "devSearchKeywordSonner": "sonner",
         "devSearchKeywordError": "error",
         "devSearchKeywordNotification": "notification",
+        "pluginsTitle": "プラグイン",
+        "pluginsDescription": "試験的な Orca プラグインをインストールして管理します。",
         "projectHostsSummary": "{{value0}} 台のホスト",
         "linearTitle": "Linear",
         "linearDescription": "Give agents the skill to read and update your linked Linear tickets."
@@ -1463,7 +1469,8 @@
         "4725b0e931": "クイック オープン スキャンが大きすぎます (",
         "b227d88520": "{{value0}} ファイルが見つかりました",
         "995be8ea22": "コピー",
-        "cf144856dc": "コピーされました"
+        "cf144856dc": "コピーされました",
+        "344f8a48dd": "on the host running the Quick Open scan to enable fast, gitignore-aware listing:"
       },
       "SelectedTextCopyMenu": {
         "9b40d7b018": "コピー"
@@ -1912,7 +1919,8 @@
         "workspaceTabMissing": "タブはもう存在しません",
         "projectsGroupsHeader": "プロジェクトとグループ",
         "projectBadge": "プロジェクト",
-        "repoGroupBadge": "リポジトリグループ"
+        "repoGroupBadge": "リポジトリグループ",
+        "pluginCommandFailed": "プラグインのコマンドを実行できませんでした。"
       },
       "github": {
         "pr": {
@@ -2645,8 +2653,17 @@
               "blocked": {
                 "toast": {
                   "97c98f1afe": "設定を開く",
-                  "7cf51f74fd": "SSH、tmux、Neovim、fzf、または Grok からコピーするには、Terminal 設定で TUI クリップボードへの書き込みを有効にします。",
+                  "7cf51f74fd": "SSH、Zellij、tmux、Neovim、fzf、または Grok からコピーするには、Terminal 設定で TUI クリップボードへの書き込みを有効にします。",
                   "89eaa3e80b": "Terminal のクリップボードへの書き込みがブロックされました"
+                }
+              },
+              "default": {
+                "on": {
+                  "notice": {
+                    "title": "TUI からのクリップボードへの書き込みがデフォルトで有効になりました",
+                    "description": "Zellij、tmux、Neovim などのターミナルプログラムがクリップボードにコピーできるようになりました。Terminal 設定で無効にできます。",
+                    "action": "設定を開く"
+                  }
                 }
               }
             }
@@ -2903,7 +2920,8 @@
                   "5a9c83c04b": "任意のファイル、URL、agent などを開きます...",
                   "90eb94dc48": "http:// または https:// URL を入力します。",
                   "5553b283ce": "URL またはファイル パスを入力します。",
-                  "queryTooLarge": "検索テキストが大きすぎます。"
+                  "queryTooLarge": "検索テキストが大きすぎます。",
+                  "absolutePathRemoteBlocked": "絶対パスにはローカル ワークスペースが必要です。"
                 }
               },
               "menu": {
@@ -3325,6 +3343,14 @@
             "updatedTooltip": "Remote Orca Server updates completed",
             "failedOne": "1 server update failed",
             "updatedOne": "1 server updated"
+          },
+          "resource": {
+            "memory": {
+              "metric": {
+                "workingSetDescription": "ワーキングセット（WS）の合計です。共有ページは複数のプロセスに含まれる場合があります。",
+                "rssDescription": "常駐セットサイズ（RSS）の合計です。共有ページやエイリアスされたページは複数のプロセスに含まれる場合があります。"
+              }
+            }
           }
         }
       },
@@ -3655,7 +3681,8 @@
           "SourceControlActionVariableChips": {
             "1b77798d5f": "変数",
             "6b921a0ac2": "例",
-            "4bf6d88039": "（空の）"
+            "4bf6d88039": "（空の）",
+            "7377483644": "このワークスペース"
           }
         }
       },
@@ -3723,7 +3750,8 @@
           "skippedReasonInRepo": "This is a project skill, not a global one — Orca only updates your global skills, so it left this out of the update.",
           "skippedReasonPluginCache": "A plugin manages this skill, so Orca left it out of the update — update the plugin instead.",
           "skippedReasonExternalLink": "This copy is a shortcut pointing outside Orca’s skill folders, so Orca left it out of the update.",
-          "skippedReasonBrokenLink": "This copy is a shortcut to something that no longer exists, so Orca left it out — you can safely delete it."
+          "skippedReasonBrokenLink": "This copy is a shortcut to something that no longer exists, so Orca left it out — you can safely delete it.",
+          "skippedReasonDuplicate": "This is a separate copy, so the update won’t reach it — the command only refreshes the main copy. Remove this copy, then reinstall the skill so this location follows the main one."
         },
         "SkillFreshnessUpdateDialog": {
           "title": "スキルを更新",
@@ -3744,7 +3772,9 @@
         "SkillFreshnessStatusPill": {
           "updateAvailable": "更新があります",
           "upToDate": "最新です",
-          "installed": "インストール済み"
+          "installed": "インストール済み",
+          "details": "Details",
+          "needsAttention": "Needs attention"
         }
       },
       "sidebar": {
@@ -4052,7 +4082,9 @@
           "75405270ed": "フィルターの編集 ({{value0}} がアクティブ)",
           "489d1c8c9f": "プロジェクトを検索...",
           "ee240a39eb": "フィルターの編集",
-          "automationCreated": "自動化で作成されたワークスペースを非表示"
+          "automationCreated": "自動化で作成されたワークスペースを非表示",
+          "cliCreated": "Hide CLI-created",
+          "detachedHead": "分離HEADを非表示"
         },
         "SidebarHeader": {
           "92154beb7e": "新規ワークスペース",
@@ -4115,7 +4147,9 @@
           "c3fa13dc2e": "デフォルトのブランチを非表示にする",
           "ed1611b65b": "スリープ中を非表示",
           "82594419ba": "フィルター",
-          "automationCreated": "自動化で作成されたワークスペースを非表示"
+          "automationCreated": "自動化で作成されたワークスペースを非表示",
+          "cliCreated": "Hide CLI-created",
+          "detachedHead": "分離HEADを非表示"
         },
         "SidebarWorkspaceOptionsMenu": {
           "95c9754653": "Agent アクティビティのレイアウト",
@@ -4170,7 +4204,8 @@
           "65a9820bd1": "Agent ステータス",
           "219ebf1961": "ブランチ名",
           "automation": "自動化",
-          "folderPathIdentity": "ブランチ / フォルダパス"
+          "folderPathIdentity": "ブランチ / フォルダパス",
+          "cli": "Orca CLI"
         },
         "SshDisconnectedDialog": {
           "ca4a7892af": "接続中...",
@@ -4291,7 +4326,12 @@
           "copyLinkSuccess": "{{value0}} をコピーしました",
           "copyLinkFailure": "リンクのコピーに失敗しました",
           "issueLinkLabel": "Issue リンク",
-          "reviewLinkLabel": "{{value0}} リンク"
+          "reviewLinkLabel": "{{value0}} リンク",
+          "cliHeader": "Orca CLI",
+          "cliCreatedFromAgent": "Created by an agent via `orca worktree create`",
+          "cliCreatedFromShell": "Created via `orca worktree create`",
+          "cliStartupAgent": "Started with {{value0}}",
+          "cliCreated": "Created by Orca CLI"
         },
         "WorktreeCardMetadataStatusBadges": {
           "fe188062a1": "状態: オープン",
@@ -5023,11 +5063,17 @@
           "remoteServerFallback": "リモートサーバー",
           "loadAccountsFailed": "プロバイダーアカウントを読み込めませんでした。",
           "remoteScopeAccounts": "{{value0}} が管理するアカウントを表示しています。アカウントの追加や再認証はそのサーバー上で行ってください。",
+          "accountScopePrefix": "アカウントのスコープ",
+          "accountScopeRemoteServerUnnamed": "リモートサーバー",
+          "remoteScopeLocalAccountsKept": "このデスクトップで管理されているアカウントはそのまま残っています。デフォルトランタイムをローカルデスクトップに戻すと表示されます。",
           "remoteScopeAuthContext": "各アカウントは {{value0}} 上に独自のサインインコンテキストを保持します。",
           "remoteEmptyClaudeAccounts": "{{value0}} に管理対象の Claude アカウントはありません。システム既定の Claude ログインを使用します。アカウントの追加はそのサーバー上で行ってください。",
           "remoteEmptyCodexAccounts": "{{value0}} に管理対象の Codex アカウントはありません。システム既定の Codex ログインを使用します。アカウントの追加はそのサーバー上で行ってください。",
           "codexSystemDefaultCustomProvider": "カスタムプロバイダー — 使用量は追跡されません。",
-          "codexSystemDefaultNeedsSignIn": "{{value0}} の Codex サインインが見つかりません。"
+          "codexSystemDefaultNeedsSignIn": "{{value0}} の Codex サインインが見つかりません。",
+          "codexConfigSyncMissingSource": "Codex is still using the settings it last synced because {{value0}} is missing. Restore that file to resume syncing.",
+          "codexConfigSyncBlankSource": "Codex is still using the settings it last synced because {{value0}} is empty. That is expected while a synced folder finishes downloading.",
+          "codexConfigSyncUnreadableSource": "Codex is still using the settings it last synced because {{value0}} could not be read. Check that file's permissions."
         },
         "AdvancedPane": {
           "40b29e0bf3": "再起動",
@@ -5467,7 +5513,7 @@
           "dfbc12c8c8": "ハードウェア デバッグおよび USB デバイスと通信するデバイス ツール。",
           "bf51e4a542": "USB デバイス",
           "f903bf20b5": "ネットワーク上の開発サーバーを検出してアクセスします。",
-          "e7bb06007c": "ローカルネットワーク",
+          "e7bb06007c": "LAN",
           "4a73f5217a": "他のローカル アプリを制御するスクリプトの Apple Events。",
           "e119f0d66b": "オートメーション",
           "7ca17b62c8": "プロジェクト、worktree、またはシンボリックリンクされたファイルが macOS の保護フォルダーに触れる場合に推奨されます。",
@@ -5523,9 +5569,14 @@
           },
           "agentDashboard": {
             "title": "Agent Dashboard",
-            "description": "Pop-out Kanban board for monitoring agents across worktrees.",
-            "copy": "Adds an Agent Dashboard entry to the left sidebar. Open it to monitor attention, working, and idle agents in a separate window and jump into their live terminals.",
-            "toggleLabel": "Toggle Agent Dashboard"
+            "description": "Kanban board for monitoring agents across worktrees, in-window or as a pop-out.",
+            "copy": "Adds an Agent Dashboard entry to the left sidebar. Open it to monitor attention, working, and idle agents and jump into their live terminals.",
+            "toggleLabel": "Toggle Agent Dashboard",
+            "modeLabel": "Open as",
+            "modeCopy": "Show the dashboard as an in-window board beside the sidebar or a separate pop-out window.",
+            "modeAriaLabel": "Agent Dashboard open mode",
+            "modeInWindow": "In-window",
+            "modePopout": "Pop-out"
           }
         },
         "FloatingWorkspacePane": {
@@ -5716,6 +5767,11 @@
         },
         "YamlThemeImportButton": {
           "label": "YAML からインポート"
+        },
+        "BranchPrefixFeedback": {
+          "6c40c0908f": "プレフィックスにスペースや ~ ^ : ? * [ \\ などの特殊文字は使用できません",
+          "64d70b156a": "ブランチ名は {{example}} になります",
+          "808f9a726e": "プレフィックスは適用されません"
         },
         "GitPane": {
           "d2eede4c54": "Orca の帰属を commits、PR、Issue に追加します。",
@@ -5975,7 +6031,7 @@
           "668016be7a": "コンピューターとスマートフォンで。",
           "1dc87a7fbc": "Tailscale",
           "51d29927eb": "インストール",
-          "9fc5d203ff": "Orca Mobile はこのコンピュータに直接接続します。同じローカル ネットワークから離れた場所で使用するには、コンピューターとスマートフォンを同じプライベート オーバーレイ ネットワーク上に配置し、そのネットワーク アドレスを選択して QR コードを生成します。",
+          "9fc5d203ff": "Orca Mobile はこのコンピュータに直接接続します。同じ LAN から離れた場所で使用するには、コンピューターとスマートフォンを同じプライベート オーバーレイ ネットワーク上に配置し、そのネットワーク アドレスを選択して QR コードを生成します。",
           "39fad211d9": "テールネットを使用して Wi-Fi の外部に接続する",
           "a9db5d771d": "ネットワークインターフェースを更新する",
           "b2c384cfd6": "インターフェースが見つかりません",
@@ -6006,7 +6062,7 @@
           "6436e56546": "モバイルペアリング用のQRコード",
           "1b1b70279a": "まだデバイスがペアリングされていません。",
           "1592afcc7a": "まだデバイスがペアリングされていません。 Orca モバイル アプリで QR コードをスキャンします。",
-          "relayDegradedNotice": "Relay couldn’t be reached — this code only works on your local network. Regenerate to try again."
+          "relayDegradedNotice": "Relay に接続できませんでした — このコードは LAN または Tailscale でのみ動作します。再生成してからお試しください。"
         },
         "MobileSettingsPane": {
           "9a3c280e49": "GitHub リリース",
@@ -6320,6 +6376,7 @@
           "removeSetup": "削除",
           "hostSetupBlockedVersion": "Orca server version is incompatible",
           "hostSetupMissingCapability": "Update Orca on this host to set up projects",
+          "hostSetupConnectionRequired": "プロジェクトをインポートまたはクローンする前に、このホストに接続してください",
           "setupProjectOnHost": "別のホストで設定",
           "setupProjectOnHostHelp": "Choose a host, then import an existing checkout, clone the repository there, or track a setup that will be provisioned later.",
           "setupExistingFolder": "既存フォルダをインポート",
@@ -6631,8 +6688,8 @@
           "fbb428db98": "選択済み:",
           "fac59213fc": "組み込みテーマを検索する",
           "search_terminal_themes": "terminal テーマを検索",
-          "cb330ef7f8": "{{value0}}の",
-          "c822571b2e": "「{{value0}}」に一致",
+          "cb330ef7f8": "/{{value0}}",
+          "c822571b2e": " 「{{value0}}」に一致",
           "3119c012a5": "文字列"
         },
         "SettingsSidebar": {
@@ -6675,7 +6732,8 @@
           "25b0004fbf": "Terminal がアクティブです",
           "781cb74d22": "terminal ペインから実行します。",
           "cb02e00202": "ターミナル",
-          "d8c988dab4": "~/.orca/keybindings.json"
+          "d8c988dab4": "~/.orca/keybindings.json",
+          "shortcutUnavailable": "ショートカットは利用できなくなりました。"
         },
         "SourceControlAiActionRecipeDefaults": {
           "2576299196": "引数",
@@ -6945,9 +7003,9 @@
           "d23b43c5be": "セットアップスクリプトの場所",
           "34a0dfa06e": "新規ワークスペースの作成時に repos セットアップ スクリプトが実行される場所。",
           "21f8da2078": "ワークスペースセットアップスクリプト",
-          "6e6480a7df": "terminal 内のプログラム (Grok、tmux、Neovim、fzf、SSH) をシステムのクリップボードにコピーします。",
+          "6e6480a7df": "terminal 内のプログラム (Zellij、tmux、Neovim、fzf、Grok、SSH) をシステムのクリップボードにコピーします。",
           "3338dcf8c1": "TUI クリップボードへの書き込みを許可する (OSC 52)",
-          "69c64a479c": "Grok、tmux、Neovim、および fzf が PTY 経由 (SSH 経由を含む) でシステム クリップボードにコピーできるようにします。",
+          "69c64a479c": "Zellij、tmux、Neovim、fzf、および Grok が PTY 経由 (SSH 経由を含む) でシステム クリップボードにコピーできるようにします。",
           "4729c645fc": "terminal の選択内容をクリップボードに自動的にコピーします。",
           "902f5dee1f": "選択時にコピー",
           "9129b7e805": "terminal ペインにマウスを移動すると、クリックしなくても terminal ペインがアクティブになります。",
@@ -7639,14 +7697,15 @@
         "developer": {
           "permissions": {
             "search": {
-              "3363889768": "ローカルネットワーク、USB、Bluetooth",
+              "3363889768": "LAN、USB、Bluetooth",
               "6c82846f66": "デバイス",
               "11653d3f42": "MDNS",
               "78a10b826f": "ボンジュール",
               "e3fbc48083": "ブルートゥース",
               "c4a4a02ea4": "USB",
               "fa3239cd42": "ローカルネットワーク",
-              "acad3d4743": "terminal セッションから使用されるデバイスおよびローカル ネットワーク ツールを許可します。",
+              "87620e6416": "LAN",
+              "acad3d4743": "terminal セッションから使用されるデバイス ツールと LAN アクセスを許可します。",
               "3e0131e45d": "icloud",
               "ce07159ff5": "デスクトップ",
               "a0c19119fb": "ダウンロード",
@@ -7750,7 +7809,7 @@
             },
             "agentDashboard": {
               "title": "Agent Dashboard",
-              "description": "Pop-out Kanban board for monitoring agents across worktrees."
+              "description": "Kanban board for monitoring agents across worktrees, in-window or as a pop-out."
             }
           }
         },
@@ -8584,7 +8643,6 @@
             "10f9fb6fea": "設定",
             "2ade3ea490": "構成",
             "fd752b3cac": "インポート",
-            "82b63d07fe": "ghostty",
             "73e9422f19": "サポートされている Ghostty terminal 設定の 1 回限りのインポート。",
             "a979df0083": "Ghostty からインポート",
             "warp_import": {
@@ -9188,7 +9246,7 @@
           "copy": "コピー",
           "copied": "コピーされました",
           "recipes": "レシピ",
-          "recipesHelp": "agent が orca.yaml に追加したレシピがここに表示され、ワー​​クスペースを起動できるようになります。",
+          "recipesHelp": "orca.yaml と有効なプラグインのレシピがここに表示され、ワークスペースを起動できます。",
           "refresh": "一時的な VM レシピを更新する",
           "checking": "レシピを確認中...",
           "none": "レシピはまだ見つかりません。"
@@ -9260,6 +9318,285 @@
           "567633ff50": "Right-click pastes the clipboard into the terminal. Control-click to open the context menu.",
           "c64497148a": "Right-click pastes the clipboard. Control-click opens the context menu."
         },
+        "PluginConsentDialog": {
+          "workerTrust": "バックグラウンドワーカー — 独自のプロセスで実行",
+          "panelTrust": "パネルまたはホスト統合コンテンツ — バックグラウンドワーカーなし",
+          "decisionFailed": "権限の選択を保存できませんでした。再試行してください。",
+          "title": "権限を確認",
+          "mixedTitle": "アクセスとコンテンツを確認",
+          "instructionalTitle": "プラグインのコンテンツを確認",
+          "subtitle": "{{value0}} v{{value1}} · {{value2}}",
+          "reconsent": "前回このプラグインを確認してから、権限、ワーカーの信頼レベル、または指示コンテンツが変更されました。実行する前にもう一度確認してください。",
+          "source": "ソース",
+          "unknownSource": "利用不可",
+          "commit": "コミット",
+          "localCommit": "利用不可（ローカルフォルダー）",
+          "trust": "信頼レベル",
+          "capabilities": "このプラグインに許可する操作",
+          "warning": "これらの権限は、プラグインによる Orca API の使用を制限します。ただしワーカーはコンピューター上の通常のプロセスとして実行され、ファイル、ネットワーク、ほかのプロセスに完全にアクセスできます。",
+          "enable": "プラグインを有効化",
+          "keepDisabled": "無効のままにする",
+          "panelWarning": "これらの権限は、プラグインによる Orca API の使用を制限します。このプラグインにはバックグラウンドワーカーがありません。",
+          "instructionalWarning": "このプラグインにはワーカープロセスがありません。ただし、その指示コンテンツは、あなたやエージェントが使用したときに操作を実行させる可能性があります。有効にする前に、以下の指示とコマンドを確認してください。",
+          "capability": {
+            "workspaceRead": "選択中のワークツリーの名前、ブランチ、ターミナル一覧を読み取る",
+            "terminalSend": "表示中の特定のターミナルにテキストを入力する",
+            "notificationsShow": "プラグイン名を付けたデスクトップ通知を表示する",
+            "storage": "プラグイン専用の保存フォルダーにデータを保存する",
+            "secrets": "プラグイン専用の暗号化保管庫にシークレットを保存し、読み取る",
+            "eventsSubscribe": "ワークツリーの作成・削除やエージェント状態の変更時に通知を受け取る",
+            "settingsOwn": "プラグイン自身の設定を読み取り、変更する"
+          },
+          "skillWarning": "このプラグインは指示を含むスキルをインストールします。エージェントはその指示を読み、付与されたすべての権限で操作する場合があります。",
+          "instructionalTrust": "指示コンテンツ — 後でユーザーまたはエージェントの権限で実行",
+          "declarativeTrust": "Declarative content — no plugin code",
+          "reviewTitle": "Review plugin",
+          "declarativeWarning": "This plugin contributes validated content only. It does not run a background worker or receive access to Orca's API.",
+          "trustShortWorker": "Worker",
+          "trustShortInstructional": "Instructional",
+          "trustShortPanel": "Panel",
+          "trustShortDeclarative": "Declarative"
+        },
+        "PluginDevelopmentSection": {
+          "pathRequired": "プラグインフォルダーのパスを入力してください。",
+          "title": "開発",
+          "help": "開発中のプラグインを、このコンピューター上のフォルダーから直接読み込みます。開発用プラグインにも権限の確認が必要です。ワーカーはこのデスクトップホストで実行され、SSH ワークスペースの操作は Orca 経由で処理されるため、ここにはデスクトップ側のパスを指定します。",
+          "remove": "削除",
+          "placeholder": "/Users/you/plugins/my-plugin or C:\\Users\\you\\plugins\\my-plugin",
+          "add": "パスを追加",
+          "saveFailed": "開発用プラグインのパスを保存できませんでした。",
+          "pathLabel": "開発用プラグインのフォルダーパス"
+        },
+        "PluginInstallDialog": {
+          "localRequired": "プラグインフォルダーのパスを入力してください。",
+          "gitUrlRequired": "リポジトリ URL を入力してください。",
+          "gitRefRequired": "インストールを固定するため、明示的な #ref（タグまたはコミット）を追加してください。例: #v0.1.0。",
+          "installFailed": "プラグインをインストールできませんでした。ソースを確認して再試行してください。",
+          "title": "プラグインをインストール",
+          "description": "インストールするとプラグインが Orca にコピーされ、確認する権限が表示されます。有効にするまでプラグインのコードは実行されません。",
+          "source": "インストール元",
+          "localTab": "ローカルフォルダー",
+          "gitTab": "Git URL",
+          "localLabel": "プラグインフォルダーのパス",
+          "localPlaceholder": "/Users/you/plugins/my-plugin or C:\\Users\\you\\plugins\\my-plugin",
+          "localHelp": "このコンピューター上で orca-plugin.json を含むフォルダーへのフルパスです。入力したパスがそのまま使用されます。",
+          "gitLabel": "#ref 付きリポジトリ URL",
+          "gitPlaceholder": "https://git.example/acme/orca-notes#v0.1.0",
+          "gitHelp": "明示的な #ref（タグまたはコミット）を付けてインストールを固定します。GitHub、GitLab、その他の Git ホストに対応しています。",
+          "cancel": "キャンセル",
+          "installing": "インストール中…",
+          "install": "インストール",
+          "gitUrlInvalid": "HTTPS または SSH の Git URL を使用してください。実行可能な Git ヘルパープロトコルは使用できません。"
+        },
+        "PluginRemoveDialog": {
+          "title": "プラグインを削除しますか？",
+          "description": "{{value0}} と、このコンピューターに保存されたプラグインデータを削除します。後で再インストールできます。",
+          "cancel": "キャンセル",
+          "remove": "プラグインを削除"
+        },
+        "PluginSettingsRow": {
+          "needsReview": "確認が必要",
+          "invalid": "無効",
+          "error": "エラー",
+          "disabled": "無効",
+          "running": "実行中",
+          "enabled": "有効",
+          "workerTier": "バックグラウンドワーカー",
+          "panelTier": "パネルのみ",
+          "loadingLogs": "ログを読み込み中…",
+          "noLogs": "記録されたログ行はありません。",
+          "logCount": "保持されている最大 200 行のうち最新 {{value0}} 行",
+          "dev": "開発",
+          "review": "権限を確認",
+          "moreActions": "{{value0}} のその他の操作",
+          "hideLogs": "ログを非表示",
+          "viewLogs": "ログを表示",
+          "remove": "削除",
+          "enableLabel": "{{value0}} を有効化",
+          "restartCount": " · {{value0}} 回再起動",
+          "restarting": "再起動中",
+          "invalidPluginError": "プラグインのマニフェストまたはインストール済みファイルが無効です。修正してから更新してください。",
+          "runtimeError": "有効化またはワーカーのエラー後にプラグインが停止しました。",
+          "disableLabel": "{{value0}}を無効にする",
+          "blocked": "ブロック済み",
+          "official": "公式",
+          "bundled": "同梱",
+          "killListMessage": "Orca の安全リストにより、このプラグインは無効化されました：{{value0}}",
+          "viewAdvisory": "勧告を表示",
+          "rollback": "ロールバック",
+          "noDescription": "No description provided.",
+          "reviewAndEnable": "Review & enable"
+        },
+        "PluginsSettingsSection": {
+          "loadFailed": "プラグインを読み込めませんでした。",
+          "logsFailed": "プラグインのログを読み込めませんでした。",
+          "title": "プラグイン",
+          "experimental": "試験的",
+          "description": "Orca プラグインをインストールして管理します。SSH ワークスペースの場合も、プラグインはこのコンピューターで実行されます。",
+          "install": "プラグインをインストール",
+          "systemLabel": "プラグインシステム",
+          "systemDescription": "インストール済みプラグインを検出し、個別に有効化できます。確認して有効にするまでは何も実行されません。ワーカーは常にこのコンピューターで実行され、SSH ワークスペースの操作は Orca 経由で処理されます。",
+          "featureOff": "インストール済みプラグインを表示・管理するには、プラグインシステムを有効にしてください。すでにインストールされているものはディスクに残り、システムがオフの間は無効のままです。",
+          "loading": "プラグインを読み込み中…",
+          "installed": "インストール済み",
+          "refresh": "更新",
+          "tryAgain": "再試行",
+          "empty": "プラグインはインストールされていません。「プラグインをインストール」から、ローカルフォルダーまたは固定された Git ref を追加してください。",
+          "settingsUpdateFailed": "プラグイン設定を保存できませんでした。",
+          "rollbackFailed": "このプラグインをロールバックできませんでした。以前の不変バージョンが存在しない可能性があります。",
+          "noInstalledResults": "No installed plugins match this search.",
+          "noInstalledResultsTitle": "No matching plugins",
+          "emptyTitle": "No plugins installed yet"
+        },
+        "plugins": {
+          "search": {
+            "title": "プラグイン",
+            "description": "試験的な Orca プラグインをインストールして管理します。",
+            "install": "プラグインをインストール",
+            "permissions": "プラグインの権限",
+            "logs": "プラグインのログ",
+            "development": "開発用プラグイン"
+          }
+        },
+        "pluginError": {
+          "installManifestMissing": "読み取り可能なorca-plugin.jsonが見つかりません。プラグインのルートフォルダーを選択してください。",
+          "installManifestInvalid": "orca-plugin.jsonが無効です。プラグインの作成者にマニフェストの修正を依頼してください。",
+          "incompatible": "このプラグインには別のバージョンのOrcaが必要です。",
+          "installUnsafePath": "プラグインに安全でないファイルパスまたはシンボリックリンクが含まれているため、インストールされませんでした。",
+          "installLimit": "プラグインがOrcaのインストールサイズまたはファイル数の上限を超えています。",
+          "installGit": "固定されたGitリビジョンを取得できませんでした。URL、#ref、アクセス権、システムGitの設定を確認してください。",
+          "invalidManifestMissing": "プラグインのルートにorca-plugin.jsonがありません。追加してからプラグインを更新してください。",
+          "invalidManifest": "orca-plugin.jsonが無効です。修正してからプラグインを更新してください。",
+          "invalidArtifact": "宣言されたワーカーまたはパネルのファイルがないか、安全ではありません。ファイルを修正してから更新してください。",
+          "consentChanged": "確認中にプラグインが変更されました。このダイアログを閉じて、更新された権限を確認してください。"
+        },
+        "PluginVmRecipeConsentPreview": {
+          "create": "作成",
+          "suspend": "一時停止",
+          "resume": "再開",
+          "destroy": "破棄",
+          "warning": "このプラグインは VM レシピをインストールします。対応するライフサイクル操作を使用すると、Orca は以下のコマンドをローカルのデスクトップホストで実行します。",
+          "commandLabel": "{{value0}} · {{value1}}コマンド",
+          "heading": "VM レシピのコマンド"
+        },
+        "PluginKeybindingConsentPreview": {
+          "warning": "このプラグインはキーボードショートカットを追加します。有効な間は、一致する Orca のショートカットよりプラグインのショートカットが優先されます。",
+          "heading": "キーボードショートカット",
+          "worktree": "ワークスペースがアクティブな場合のみ実行されます。",
+          "global": "アクティブなワークスペースがなくてもアプリで実行されます。",
+          "shadows": "置き換える操作: {{value0}}"
+        },
+        "PluginMarketplaceBrowser": {
+          "loadFailed": "マーケットプレイスのプラグインを読み込めませんでした。",
+          "refreshFailed": "マーケットプレイスを更新できませんでした。キャッシュ済みの一覧は引き続き利用できます。",
+          "previewFailed": "このプラグインをレビュー用に準備できませんでした。マーケットプレイスを更新して、もう一度お試しください。",
+          "installFailed": "このプラグインをインストールできませんでした。レビューしたソースが変更された可能性があります。",
+          "heading": "マーケットプレイス",
+          "manageSources": "ソースを管理",
+          "refreshing": "更新中…",
+          "refresh": "更新",
+          "loading": "マーケットプレイスのプラグインを読み込み中…",
+          "searchLabel": "マーケットプレイスのプラグインを検索",
+          "searchPlaceholder": "プラグイン、カテゴリ、発行元を検索",
+          "tryAgain": "再試行",
+          "noSources": "公式、コミュニティ、またはプライベートの Git マーケットプレイスを追加してプラグインを参照できます。",
+          "addSource": "マーケットプレイスを追加",
+          "noResults": "この検索に一致するマーケットプレイスのプラグインはありません。",
+          "empty": "設定済みのマーケットプレイスにプラグインは登録されていません。",
+          "noInstalled": "No plugins installed.",
+          "noInstalledTitle": "No plugins installed",
+          "noSourcesTitle": "No marketplaces configured",
+          "noResultsTitle": "No matching plugins",
+          "clearSearch": "Clear search",
+          "emptyTitle": "Nothing listed yet"
+        },
+        "PluginMarketplaceListingRow": {
+          "official": "公式",
+          "bundled": "同梱",
+          "installed": "インストール済み",
+          "marketplace": "{{value0}} · {{value1}}",
+          "blocked": "Orca の安全リストによりブロックされています：{{value0}}",
+          "blockedAction": "ブロック済み",
+          "checkUpdate": "更新を確認",
+          "installedAction": "インストール済み",
+          "review": "レビュー",
+          "noDescription": "No description provided.",
+          "install": "Install"
+        },
+        "PluginMarketplacePreviewDialog": {
+          "languagePacks": "{{value0}} 件の言語パック",
+          "commands": "{{value0}} 件のコマンド",
+          "keybindings": "{{value0}} 件のキーボードショートカット",
+          "vmRecipes": "{{value0}} 件の VM レシピ",
+          "panels": "{{value0}} 件のパネル",
+          "events": "{{value0}} 件のイベント購読",
+          "worker": "バックグラウンドワーカー",
+          "official": "公式",
+          "bundled": "同梱",
+          "subtitle": "{{value0}} v{{value1}} · {{value2}}",
+          "source": "プラグインのソース",
+          "commit": "固定コミット",
+          "marketplaceCommit": "インデックスのコミット",
+          "includes": "内容",
+          "noContributions": "マニフェストのメタデータのみ",
+          "capabilities": "要求するアクセス権",
+          "workerWarning": "権限は、このプラグインによる Orca API の使用方法を制限します。ただしワーカーはこのコンピューター上で通常のプロセスとして実行され、ファイル、ネットワーク、ほかのプロセスに完全にアクセスできます。",
+          "blocked": "Orca の安全リストにより、このプラグインはブロックされています：{{value0}}",
+          "current": "このプラグインと完全に同じ内容がすでにインストールされています。",
+          "cancel": "キャンセル",
+          "update": "プラグインを更新",
+          "install": "プラグインをインストール",
+          "provenance": "Reviewed source",
+          "close": "Close",
+          "upToDate": "Up to date",
+          "languagePacksOne": "1 language pack",
+          "commandsOne": "1 command",
+          "keybindingsOne": "1 keyboard shortcut",
+          "vmRecipesOne": "1 VM recipe",
+          "panelsOne": "1 panel",
+          "eventsOne": "1 event subscription",
+          "versionLine": "v{{value0}} · {{value1}}"
+        },
+        "PluginMarketplaceSourceDialog": {
+          "addFailed": "このマーケットプレイスを追加できませんでした。Git URL、ref、Git 認証情報を確認してください。",
+          "refreshFailed": "このマーケットプレイスを更新できませんでした。最後に有効だったキャッシュ済みインデックスは引き続き利用できます。",
+          "removeFailed": "このマーケットプレイスを削除できませんでした。",
+          "title": "マーケットプレイスのソース",
+          "description": "マーケットプレイスは固定された Git リポジトリです。プライベートリポジトリには、システム Git の既存の認証情報を Orca が使用します。",
+          "urlLabel": "Git URL",
+          "urlDescription": "orca-marketplace.json を含むリポジトリの HTTPS または SSH URL を使用してください。",
+          "refLabel": "Git ref",
+          "refDescription": "ブランチ、タグ、またはコミットを選択します。取得した各インデックスは正確なコミットで記録されます。",
+          "adding": "追加中…",
+          "add": "ソースを追加",
+          "configured": "設定済みのソース",
+          "empty": "マーケットプレイスのソースは設定されていません。",
+          "owner": "所有者：{{value0}}",
+          "pinnedCommit": "{{value0}} に固定",
+          "stale": "更新に失敗しました。最後に有効だったキャッシュ済みインデックスを表示しています。",
+          "refreshLabel": "{{value0}} を更新",
+          "removeLabel": "{{value0}} を削除",
+          "done": "完了",
+          "urlPlaceholder": "https://git.example.com/team/plugins.git",
+          "official": "公式"
+        },
+        "PluginRollbackDialog": {
+          "title": "プラグインをロールバックしますか？",
+          "description": "{{value0}} を無効化し、以前の不変バージョンを復元します。そのバージョンが異なるアクセス権または指示コンテンツを要求する場合、Orca は再レビューを求めます。",
+          "cancel": "キャンセル",
+          "confirm": "プラグインをロールバック"
+        },
+        "PluginConsentProvenance": {
+          "official": "Official",
+          "bundled": "Bundled with Orca",
+          "local": "Local folder",
+          "community": "Community",
+          "source": "Source",
+          "sourceLabel": "Source",
+          "commit": "Pinned commit",
+          "localCommit": "Local folder — no commit",
+          "indexCommit": "Index commit"
+        },
         "MobileRelayStatusSection": {
           "registered": "Registered",
           "connecting": "Connecting",
@@ -9286,9 +9623,9 @@
           "anywhereTitle": "Orca Relay",
           "anywhereDescription": "スマートフォンはモバイル回線または Wi‑Fi から接続できます。サインインが必要です。",
           "signInRequired": "Orca Mobile Relay を使用するにはサインインしてください。",
-          "relayUnavailable": "このビルドでは Orca Relay を利用できません。ローカルネットワークをご利用ください。",
+          "relayUnavailable": "このビルドでは Orca Relay を利用できません。LAN をご利用ください。",
           "signInAgain": "再サインイン",
-          "localTitle": "ローカルネットワーク"
+          "localTitle": "LAN"
         },
         "MobilePairingSetupSection": {
           "title": "スマートフォンをペアリング",
@@ -9866,7 +10203,6 @@
             "b715ef615b": "{{value1}}より{{value0}}commits 進んでいます",
             "c1a8f3e204": "{{value0}}より1commit 遅れています",
             "d2b9g4f315": "{{value1}}より{{value0}}commits 遅れています",
-            "e9c2a5d416": "{{value0}}と同じ状態",
             "4b4a7de138": "ブラウザでレビューページを開く",
             "createPrIntentCommitBlockedSummary": "コミットがブロックされました：{{value0}} イシューを修正して、PR作成を再試行してください。",
             "pushRecovery": {
@@ -9884,7 +10220,11 @@
               "834cb3f23d": "AIで修正",
               "783a808870": "閉じる"
             },
-            "97e7124eac": "Source Control を更新できませんでした。もう一度お試しください。"
+            "97e7124eac": "Source Control を更新できませんでした。もう一度お試しください。",
+            "b8c2e1a904": "{{value0}} → {{value1}}",
+            "a4e93c21d7": "現在のブランチ: {{value0}}",
+            "c7d4e2f801": "ベース ref を変更: {{value0}}",
+            "f3a1b8c204": "upstream"
           },
           "SourceControlAgentActionDialog": {
             "8e856842d1": "選択した agent を開始できませんでした。",
@@ -10639,6 +10979,15 @@
             "notAuthorized": "Couldn't open log — path not authorized.",
             "alreadyEditable": "Log is already open for editing."
           },
+          "PluginPanel": {
+            "loading": "プラグインパネルを読み込み中...",
+            "unavailable": "このプラグインパネルは利用できなくなりました。",
+            "loadFailed": "プラグインパネルを読み込めませんでした。",
+            "unresponsive": "プラグインパネルが応答しなくなったため停止しました。"
+          },
+          "activityBar": {
+            "error": "エラー"
+          },
           "github": {
             "refresh": {
               "error": {
@@ -11034,7 +11383,7 @@
             "preview": "プレビュー",
             "stable": "安定版"
           },
-          "relayDegradedNotice": "Relay couldn’t be reached — this code only works on your local network."
+          "relayDegradedNotice": "Relay に接続できませんでした — このコードは LAN または Tailscale でのみ動作します。"
         },
         "MobilePage": {
           "e17393c6a3": "スマートフォンプレビュー",
@@ -12621,6 +12970,10 @@
                 "project": "プロジェクト"
               }
             }
+          },
+          "pluginQuickActions": {
+            "description": "{{value0}} プラグインのコマンド",
+            "keyword": "プラグインのコマンド"
           }
         }
       },
@@ -13244,6 +13597,11 @@
             "noPr": "PR なし",
             "unavailable": "利用不可"
           }
+        },
+        "pluginPanelBridgeHost": {
+          "actionsUnavailable": "このクライアントではプラグイン操作を利用できません。",
+          "messageTooLarge": "メッセージがサイズ制限を超えています。",
+          "tooManyRequests": "リクエストが多すぎます。"
         }
       },
       "link": {
@@ -13521,6 +13879,17 @@
         "searchAssignee": "担当者をフィルター…",
         "back": "戻る"
       },
+      "pluginCatalog": {
+        "PluginCatalogLayout": {
+          "title": "Plugins",
+          "description": "Browse available plugins or manage the ones installed in Orca.",
+          "filter": "Plugin filter",
+          "all": "All",
+          "installed": "Installed",
+          "searchLabel": "Search plugins",
+          "searchPlaceholder": "Search plugins, categories, or publishers"
+        }
+      },
       "browser-pane": {
         "markup": {
           "cancel": "キャンセル",
@@ -13704,7 +14073,16 @@
       "bar": {
         "SortableTabContextMenu": {
           "switchToTerminalView": "terminal ビューに切り替える",
-          "switchToChatView": "チャットビューに切り替える"
+          "switchToChatView": "チャットビューに切り替える",
+          "closeTabsToLeft": "左側のタブを閉じる"
+        },
+        "BrowserTab": {
+          "closeOthers": "その他を閉じる",
+          "closeTabsToLeft": "左側のタブを閉じる"
+        },
+        "EditorFileTabContextMenu": {
+          "closeOthers": "その他を閉じる",
+          "closeTabsToLeft": "左側のタブを閉じる"
         }
       }
     },
@@ -13776,7 +14154,10 @@
       "closed": "No live terminal — this agent's pane has closed.",
       "focusWorktree": "Focus worktree",
       "close": "Close"
-    }
+    },
+    "close": "Close dashboard",
+    "settings": "Agent Dashboard settings",
+    "settingsTooltip": "Board settings"
   },
   "dashboard": {
     "sidebar": {

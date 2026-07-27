@@ -11,6 +11,7 @@ import { RELAY_REMOTE_DIR } from './relay-protocol'
 import { execCommand } from './ssh-relay-deploy-helpers'
 import { probeInstallLockExistsCommand } from './ssh-relay-install-lock-commands'
 import { isRelayInstallLockStale, RELAY_INSTALL_LOCK_NAME } from './ssh-relay-install-lock'
+import { relayRemoteDirSegments } from './ssh-relay-install-namespace'
 import {
   isRelayGcClaimOwned,
   releaseRelayGcClaimWithRetry,
@@ -100,7 +101,8 @@ export function computeRemoteRelayDir(
     pathFlavor === 'windows'
       ? getRemoteHostPlatform('win32-x64')
       : getRemoteHostPlatform('linux-x64')
-  return joinRemotePath(host, remoteHome, RELAY_REMOTE_DIR, `relay-${fullVersion}`)
+  // Why: shell and SFTP-relative builders must derive the same validated segments or the namespaces diverge.
+  return joinRemotePath(host, remoteHome, ...relayRemoteDirSegments(fullVersion, pathFlavor))
 }
 
 /**

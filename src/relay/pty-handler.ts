@@ -60,6 +60,17 @@ import {
   type AgentSessionOwnerBinding
 } from '../shared/agent-session-host-authority'
 
+// Why: only Linux compiles node-pty (no prebuilt), so the build-tools remedy is a closable setup gap
+// there and wrong advice anywhere node-pty ships one. The relay only sees an unloadable binding, never
+// why — a skipped compile and a later Node/ABI flip look identical here — so Linux hedges both causes.
+export function formatNodePtyUnavailableMessage(platform: NodeJS.Platform): string {
+  const remedy =
+    platform === 'linux'
+      ? "node-pty's native binding is not loadable on this host. If it is missing the C/C++ build tools needed to compile node-pty, install make, a C++ compiler, and python3 on the remote host, then reconnect. Otherwise reconnect to reinstall the relay's native modules, and check that the remote Node.js version and architecture match the installed binding."
+      : "node-pty's native binding failed to load on this host. Reconnect to reinstall the relay's native modules; if it persists, check that the remote Node.js version and architecture match the installed binding."
+  return `Remote terminals are unavailable: ${remedy}`
+}
+
 function isMissingNodePtyNativeBinding(error: unknown): boolean {
   return (
     error instanceof Error &&
@@ -621,6 +632,7 @@ export class PtyHandler {
     this.dispatcher.onRequest('pty.clearBuffer', (p) => this.clearBuffer(p))
     this.dispatcher.onRequest('pty.hasChildProcesses', (p) => this.hasChildProcesses(p))
     this.dispatcher.onRequest('pty.getForegroundProcess', (p) => this.getForegroundProcess(p))
+    this.dispatcher.onRequest('pty.inspectProcess', (p) => this.inspectProcess(p))
     this.dispatcher.onRequest('pty.getCapabilities', async () => ({
       startupIngressVersion: PTY_STARTUP_INGRESS_VERSION,
       agentSessionClaimVersion: AGENT_SESSION_EXECUTION_OWNER_PROTOCOL_VERSION,
@@ -722,11 +734,18 @@ export class PtyHandler {
 
   private flushPendingOutput(): void {
     this.outputFlushTimer = null
-    let writes = 0
-    for (const [id, pending] of Array.from(this.pendingOutputByPty.entries())) {
-      if (writes >= PTY_OUTPUT_FLUSH_MAX_WRITES) {
+    // Why batch before the first send: a re-entrant sink must read the values a whole-map snapshot
+    // would have frozen. Why the raw iterator: `for...of` would consume one entry past the limit.
+    const pendingEntries = this.pendingOutputByPty[Symbol.iterator]()
+    const batch: [string, PendingPtyOutput][] = []
+    while (batch.length < PTY_OUTPUT_FLUSH_MAX_WRITES) {
+      const next = pendingEntries.next()
+      if (next.done === true) {
         break
       }
+      batch.push(next.value)
+    }
+    for (const [id, pending] of batch) {
       this.pendingOutputByPty.delete(id)
       const chunk = pending.transformed
         ? pending.data
@@ -753,9 +772,8 @@ export class PtyHandler {
         ...(chunkRawLength === undefined ? {} : { rawLength: chunkRawLength }),
         ...(pending.transformed ? { transformed: true } : {})
       })
-      writes++
     }
-    if (this.pendingOutputByPty.size > 0 && writes > 0) {
+    if (this.pendingOutputByPty.size > 0 && batch.length > 0) {
       // Why: yield between slices of a large chunk so client input and control frames can interleave.
       this.scheduleOutputFlush(PTY_OUTPUT_DRAIN_CONTINUE_MS)
     }
@@ -990,7 +1008,7 @@ export class PtyHandler {
   ): Promise<{ id: string; incarnationId: string }> {
     const pty = await this.loadPty()
     if (!pty) {
-      throw new Error('node-pty is not available on this remote host')
+      throw new Error(formatNodePtyUnavailableMessage(process.platform))
     }
 
     const cols = (params.cols as number) || 80
@@ -1071,7 +1089,7 @@ export class PtyHandler {
       // Why: Windows loads conpty.node only on first spawn, so handle that late binding failure here.
       if (isMissingNodePtyNativeBinding(error)) {
         this.invalidatePtyModuleAfterBindingFailure()
-        throw new Error('node-pty is not available on this remote host')
+        throw new Error(formatNodePtyUnavailableMessage(process.platform))
       }
       throw error
     }
@@ -1384,6 +1402,25 @@ export class PtyHandler {
       return null
     }
     return await getForegroundProcessName(managed.pty.pid, managed.pty.process || null)
+  }
+
+  private async inspectProcess(params: Record<string, unknown>): Promise<{
+    foregroundProcess: string | null
+    hasChildProcesses: boolean
+  }> {
+    const id = params.id as string
+    const managed = this.ptys.get(id)
+    if (!managed || managed.disposed) {
+      throw new Error('terminal_gone')
+    }
+    const foregroundProcess = await getForegroundProcessName(
+      managed.pty.pid,
+      managed.pty.process || null
+    )
+    return {
+      foregroundProcess,
+      hasChildProcesses: await processHasChildren(managed.pty.pid)
+    }
   }
 
   private async listProcesses(): Promise<PtyProcessSummary[]> {

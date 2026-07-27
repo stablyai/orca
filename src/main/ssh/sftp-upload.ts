@@ -125,6 +125,43 @@ export function uploadBuffer(
   })
 }
 
+export function writeStringViaSftp(
+  sftp: SFTPWrapper,
+  remotePath: string,
+  contents: string
+): Promise<void> {
+  return new Promise((resolve, reject) => {
+    const ws = sftp.createWriteStream(remotePath)
+    let settled = false
+    const cleanup = (): void => {
+      sftp.removeListener('error', onError)
+      ws.removeListener('close', onClose)
+      ws.removeListener('error', onError)
+    }
+    const onClose = (): void => {
+      if (settled) {
+        return
+      }
+      settled = true
+      cleanup()
+      resolve()
+    }
+    const onError = (err: Error): void => {
+      if (settled) {
+        return
+      }
+      settled = true
+      cleanup()
+      reject(err)
+    }
+    // Why: prepend so a session error settles this write before a late-error swallower sees it.
+    sftp.prependOnceListener('error', onError)
+    ws.once('close', onClose)
+    ws.once('error', onError)
+    ws.end(contents)
+  })
+}
+
 export async function uploadDirectory(
   sftp: SFTPWrapper,
   localDir: string,

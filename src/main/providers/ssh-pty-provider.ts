@@ -23,6 +23,7 @@ import {
 import { buildSshPtySpawnRequest } from './ssh-pty-spawn-request'
 import { SshPtySpawnExitRaceTracker } from './ssh-pty-spawn-exit-race'
 import { SshAgentSessionCapabilities } from './ssh-agent-session-capabilities'
+import type { PtyProcessInspection } from './pty-process-inspection'
 
 // Why: sequential relay teardown calls share one absolute budget; convert to the mux-relative timeout only at dispatch.
 function relayTimeoutOptions(deadlineMs: number | undefined): { timeoutMs: number } | undefined {
@@ -279,6 +280,12 @@ export class SshPtyProvider implements IPtyProvider {
   async getForegroundProcess(id: string): Promise<string | null> {
     const result = await this.mux.request('pty.getForegroundProcess', { id: this.toRelayPtyId(id) })
     return result as string | null
+  }
+
+  async inspectProcess(id: string): Promise<PtyProcessInspection> {
+    return (await this.mux.request('pty.inspectProcess', {
+      id: this.toRelayPtyId(id)
+    })) as PtyProcessInspection
   }
 
   async serialize(ids: string[]): Promise<string> {

@@ -14,6 +14,7 @@ import {
   publicKeyFromBase64,
   publicKeyToBase64
 } from './web-e2ee'
+import { SESSION_TAB_CLOSE_INTENT_RUNTIME_CAPABILITY } from '../../../shared/protocol-version'
 
 type WebRuntimeConnectionState =
   | 'disconnected'
@@ -405,7 +406,8 @@ export class WebRuntimeClient {
       ws.send(
         JSON.stringify({
           type: 'e2ee_hello',
-          publicKeyB64: publicKeyToBase64(keyPair.publicKey)
+          publicKeyB64: publicKeyToBase64(keyPair.publicKey),
+          clientCapabilities: [SESSION_TAB_CLOSE_INTENT_RUNTIME_CAPABILITY]
         })
       )
       this.handshakeTimer = window.setTimeout(() => {

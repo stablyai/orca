@@ -13,7 +13,6 @@ import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router'
 import { ChevronLeft, Check, RefreshCw, User } from 'lucide-react-native'
 import { loadHosts } from '../../../src/transport/host-store'
 import { useHostClient } from '../../../src/transport/client-context'
-import type { RpcSuccess } from '../../../src/transport/types'
 import { colors, spacing } from '../../../src/theme/mobile-theme'
 import { styles } from './accounts-screen-styles'
 import { useNow } from '../../../src/hooks/use-now'
@@ -21,6 +20,7 @@ import { ClaudeIcon, OpenAIIcon } from '../../../src/components/AgentIcons'
 import {
   type AccountsSnapshot,
   type ProviderKey,
+  decodeAccountsSnapshot,
   getActiveProviderRateLimits,
   getInactiveProviderUsage,
   getUsageBarState,
@@ -28,6 +28,12 @@ import {
   hasActiveProviderUsage,
   UsageBar
 } from '../../../src/components/AccountUsage'
+import {
+  getActiveCodexAccountIdForRateLimitTarget,
+  getCodexResetCreditSummary
+} from '../../../src/components/codex-reset-credit'
+import { CodexResetCreditAction } from '../../../src/components/CodexResetCreditAction'
+import { useCodexResetCreditAction } from '../../../src/components/use-codex-reset-credit-action'
 
 export default function AccountsScreen() {
   const router = useRouter()
@@ -42,6 +48,31 @@ export default function AccountsScreen() {
   const [refreshing, setRefreshing] = useState(false)
   const [busyAccountId, setBusyAccountId] = useState<string | null>(null)
   const [clockEnabled, setClockEnabled] = useState(false)
+
+  const acceptSnapshot = useCallback((nextSnapshot: AccountsSnapshot) => {
+    setSnapshot(nextSnapshot)
+    setError(null)
+  }, [])
+  const rejectInvalidSnapshot = useCallback(() => {
+    // Why: a stale snapshot can expose a finite reset action for the wrong
+    // account; fail closed if a host sends a shape this mobile cannot prove.
+    setSnapshot(null)
+    setError('Invalid accounts snapshot from host')
+  }, [])
+  const {
+    supported: codexResetSupported,
+    resetting: resettingCodex,
+    resetScope,
+    scopeLabel: resetScopeLabel,
+    confirmReset: confirmCodexReset
+  } = useCodexResetCreditAction({
+    client,
+    connected: connState === 'connected',
+    hostId,
+    snapshot,
+    accountMutationBusy: busyAccountId !== null,
+    onSnapshot: acceptSnapshot
+  })
 
   useFocusEffect(
     useCallback(() => {
@@ -85,14 +116,17 @@ export default function AccountsScreen() {
       if (!payload || typeof payload !== 'object') {
         return
       }
-      const evt = payload as { type?: string; snapshot?: AccountsSnapshot }
-      if ((evt.type === 'ready' || evt.type === 'snapshot') && evt.snapshot) {
-        setSnapshot(evt.snapshot)
-        setError(null)
+      const evt = payload as { type?: string; snapshot?: unknown }
+      if (evt.type === 'ready' || evt.type === 'snapshot') {
+        try {
+          acceptSnapshot(decodeAccountsSnapshot(evt.snapshot))
+        } catch {
+          rejectInvalidSnapshot()
+        }
       }
     })
     return unsubscribe
-  }, [client, connState])
+  }, [acceptSnapshot, client, connState, rejectInvalidSnapshot])
 
   const refresh = useCallback(async () => {
     if (!client) {
@@ -102,27 +136,43 @@ export default function AccountsScreen() {
     try {
       const res = await client.sendRequest('accounts.list')
       if (res.ok) {
-        setSnapshot((res as RpcSuccess).result as AccountsSnapshot)
-        setError(null)
+        acceptSnapshot(decodeAccountsSnapshot(res.result))
       } else {
         setError(res.error.message)
       }
     } catch (e) {
-      setError(e instanceof Error ? e.message : String(e))
+      if (e instanceof Error && e.message === 'Invalid accounts snapshot from host') {
+        rejectInvalidSnapshot()
+      } else {
+        setError(e instanceof Error ? e.message : String(e))
+      }
     } finally {
       setRefreshing(false)
     }
-  }, [client])
+  }, [acceptSnapshot, client, rejectInvalidSnapshot])
 
   const selectAccount = useCallback(
     async (provider: ProviderKey, accountId: string | null) => {
       if (!client) {
         return
       }
+      const codexTarget = provider === 'codex' ? snapshot?.rateLimits.codexTarget : null
+      if (provider === 'codex' && !codexTarget) {
+        return
+      }
       setBusyAccountId(accountId ?? `${provider}:default`)
-      const method = provider === 'claude' ? 'accounts.selectClaude' : 'accounts.selectCodex'
+      const method =
+        provider === 'claude'
+          ? 'accounts.selectClaude'
+          : codexTarget?.runtime === 'wsl'
+            ? 'accounts.selectCodexForTarget'
+            : 'accounts.selectCodex'
       try {
-        const res = await client.sendRequest(method, { accountId })
+        // Why: old hosts silently strip unknown target fields. Use the distinct
+        // targeted RPC for WSL so version skew fails before mutating host state.
+        const params =
+          codexTarget?.runtime === 'wsl' ? { accountId, target: codexTarget } : { accountId }
+        const res = await client.sendRequest(method, params)
         if (!res.ok) {
           Alert.alert('Could not switch account', res.error.message)
         } else {
@@ -137,7 +187,7 @@ export default function AccountsScreen() {
         setBusyAccountId(null)
       }
     },
-    [client, refresh]
+    [client, refresh, snapshot]
   )
 
   const renderProviderSection = (provider: ProviderKey, title: string) => {
@@ -145,9 +195,14 @@ export default function AccountsScreen() {
       return null
     }
     const state = provider === 'claude' ? snapshot.claude : snapshot.codex
+    const activeAccountId =
+      provider === 'codex' && snapshot.codex.activeAccountIdsByRuntime
+        ? getActiveCodexAccountIdForRateLimitTarget(snapshot)
+        : state.activeAccountId
     const activeUsage = getActiveProviderRateLimits(snapshot, provider)
     const activeSessionBar = getUsageBarState(activeUsage, 'session')
     const activeWeeklyBar = getUsageBarState(activeUsage, 'weekly')
+    const resetCredit = provider === 'codex' ? getCodexResetCreditSummary(activeUsage, now) : null
     const Icon = provider === 'claude' ? ClaudeIcon : OpenAIIcon
     return (
       <View style={styles.section}>
@@ -160,7 +215,7 @@ export default function AccountsScreen() {
           <Pressable
             style={({ pressed }) => [styles.row, pressed && styles.rowPressed]}
             onPress={() => selectAccount(provider, null)}
-            disabled={busyAccountId !== null || connState !== 'connected'}
+            disabled={busyAccountId !== null || resettingCodex || connState !== 'connected'}
           >
             <View style={styles.rowMain}>
               <Text style={styles.rowTitle}>System default</Text>
@@ -168,7 +223,7 @@ export default function AccountsScreen() {
               {/* Why: when system default is the active selection, activeUsage
                   holds the system-default login's rate limits — surface them
                   here so non-managed users still see their usage. */}
-              {state.activeAccountId === null && hasActiveProviderUsage(activeUsage) ? (
+              {activeAccountId === null && hasActiveProviderUsage(activeUsage) ? (
                 <View style={styles.usageRow}>
                   <UsageBar
                     label="5h"
@@ -188,7 +243,7 @@ export default function AccountsScreen() {
               ) : null}
             </View>
             <View style={styles.rowTrailing}>
-              {state.activeAccountId === null ? (
+              {activeAccountId === null ? (
                 <Check size={16} color={colors.accentBlue} />
               ) : busyAccountId === `${provider}:default` ? (
                 <ActivityIndicator size="small" color={colors.textSecondary} />
@@ -197,7 +252,7 @@ export default function AccountsScreen() {
           </Pressable>
 
           {state.accounts.map((account) => {
-            const isActive = state.activeAccountId === account.id
+            const isActive = activeAccountId === account.id
             const inactiveEntry = !isActive
               ? getInactiveProviderUsage(snapshot, provider, account.id)
               : null
@@ -213,7 +268,12 @@ export default function AccountsScreen() {
                 <Pressable
                   style={({ pressed }) => [styles.row, pressed && styles.rowPressed]}
                   onPress={() => selectAccount(provider, account.id)}
-                  disabled={busyAccountId !== null || connState !== 'connected' || isActive}
+                  disabled={
+                    busyAccountId !== null ||
+                    resettingCodex ||
+                    connState !== 'connected' ||
+                    isActive
+                  }
                 >
                   <View style={styles.rowMain}>
                     <Text style={styles.rowTitle} numberOfLines={1}>
@@ -252,6 +312,15 @@ export default function AccountsScreen() {
               </View>
             )
           })}
+          {resetCredit && codexResetSupported && resetScope && connState === 'connected' ? (
+            <CodexResetCreditAction
+              summary={resetCredit}
+              scopeLabel={resetScopeLabel}
+              busy={resettingCodex}
+              disabled={resettingCodex || busyAccountId !== null || connState !== 'connected'}
+              onPress={confirmCodexReset}
+            />
+          ) : null}
         </View>
       </View>
     )

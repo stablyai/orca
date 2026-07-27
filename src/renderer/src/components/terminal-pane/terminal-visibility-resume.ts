@@ -13,7 +13,7 @@ import {
   isTerminalLinkifierHoverActive,
   resetTerminalLinkifierHoverState
 } from '@/lib/pane-manager/terminal-linkifier-hover-reset'
-import { fitAndFocusPanes, fitPanes, focusActivePane } from './pane-helpers'
+import { focusActivePane } from './pane-helpers'
 import { scheduleTabRevealWebglAtlasRecovery } from './terminal-webgl-atlas-recovery'
 
 const VISIBLE_RESUME_FLUSH_CHARS = 256 * 1024
@@ -28,6 +28,10 @@ type ResumeTerminalVisibilityArgs = {
   shouldUseLightTabResume: boolean
   captureViewportPositions: (useRememberedSnapshots: boolean) => Map<number, ScrollState>
   withSuppressedScrollTracking: (callback: () => void) => void
+}
+
+export type TerminalVisibilityPostPaintRecovery = {
+  run: (manager: PaneManager) => void
 }
 
 type HideTerminalVisibilityArgs = {
@@ -57,7 +61,7 @@ export function resumeTerminalVisibility({
   shouldUseLightTabResume,
   captureViewportPositions,
   withSuppressedScrollTracking
-}: ResumeTerminalVisibilityArgs): void {
+}: ResumeTerminalVisibilityArgs): TerminalVisibilityPostPaintRecovery | null {
   // Why: hiding the surface fired mouseleave, which cleared xterm's current
   // link but left its hover cell cache; without this reset a link stays dead
   // until a scroll when the pointer returns to the same cell on reveal.
@@ -85,19 +89,28 @@ export function resumeTerminalVisibility({
         focusActivePane(manager)
       }
     } else {
-      resumeTerminalVisibilityHeavy(manager, isActive)
+      resumeTerminalVisibilityBeforePaint(manager, isActive)
     }
     enforceTerminalViewportIntents(manager)
-    if (!shouldUseLightTabResume) {
-      // Why: this clear wipes the glyph atlas shared with other same-config
-      // terminals; refresh after reset so rebuilt atlases repaint from xterm.
-      resetAndRefreshAllTerminalWebglAtlases()
+    if (shouldUseLightTabResume) {
+      manager.scheduleRevealRepaint()
     }
-    // Why: the synchronous recovery above can fire before the revealed pane is
-    // attached and laid out, where the WebGL renderer drops redraw requests
-    // without retry. Follow up with a settled-frame, pane-scoped repaint.
-    manager.scheduleRevealRepaint()
   })
+  if (shouldUseLightTabResume) {
+    return null
+  }
+  return {
+    run: (currentManager) => {
+      withSuppressedScrollTracking(() => {
+        drainVisibleTerminalBacklog(currentManager)
+        enforceTerminalViewportIntents(currentManager)
+        // Why: the shared atlas reset repaints every live manager, so keep it
+        // out of the reveal's pre-paint critical path.
+        resetAndRefreshAllTerminalWebglAtlases()
+        currentManager.scheduleRevealRepaint()
+      })
+    }
+  }
 }
 
 export function hideTerminalVisibility({
@@ -115,8 +128,6 @@ export function hideTerminalVisibility({
     captureViewportPositions(false)
   }
   if (!isWorktreeActive && (wasVisible || surfaceBecameHidden)) {
-    // Suspend WebGL when going hidden. xterm.write() continues to land in the
-    // DOM-renderer fallback terminal; the suspend is purely a GPU resource decision.
     manager.suspendRendering()
     return { hiddenReason: 'surface', renderingSuspended: true }
   }
@@ -143,6 +154,13 @@ export function recoverVisibleTerminalWindowWake({
 }: RecoverVisibleTerminalWindowWakeArgs): void {
   // Why: macOS screensaver/display wake can leave xterm visible but with a
   // stale renderer/input surface; Orca's own hidden-state resume never runs.
+  // Order: latch intent → resume WebGL → fit metrics → drain → enforce.
+  // Intent must be captured before resume/fit (they can move viewportY and
+  // would re-latch a pin as followOutput). Fit must precede flush so backlog
+  // does not land on the transient DOM↔WebGL one-column-off grid.
+  syncTerminalViewportIntents(manager)
+  manager.resumeRendering()
+  manager.fitAllRevealedPanes()
   for (const pane of manager.getPanes()) {
     requestTerminalBacklogRecovery(pane.terminal)
     flushTerminalOutput(pane.terminal, { maxChars: WINDOW_WAKE_FLUSH_CHARS })
@@ -154,12 +172,12 @@ export function recoverVisibleTerminalWindowWake({
       resetTerminalLinkifierHoverState(pane.terminal)
     }
   }
-  syncTerminalViewportIntents(manager)
-  manager.resumeRendering()
+  // Why no post-flush re-sync: flushTerminalOutput only submits terminal.write and
+  // returns before parse callbacks, so a same-tick re-sync would read pre-parse
+  // geometry (possibly disturbed by resume/fit) and overwrite the pre-resume pin.
+  // Enforce the pre-resume latched intent instead.
   if (isActive) {
-    fitAndFocusPanes(manager)
-  } else {
-    fitPanes(manager)
+    focusActivePane(manager)
   }
   enforceTerminalViewportIntents(manager)
   if (clearGlyphAtlases) {
@@ -183,28 +201,18 @@ function requestLightTabBacklogRecovery(manager: PaneManager): void {
   }
 }
 
-function resumeTerminalVisibilityHeavy(manager: PaneManager, isActive: boolean): void {
-  // Why: hidden panes can accumulate large PTY bursts while Chromium is
-  // occluded. Drain a bounded slice before fitting; the scheduler keeps
-  // ordering and continues the rest asynchronously so return-to-app does
-  // not beachball behind an entire backlog.
+function resumeTerminalVisibilityBeforePaint(manager: PaneManager, isActive: boolean): void {
+  manager.resumeRendering()
+  manager.fitAllRevealedPanes()
+  if (isActive) {
+    focusActivePane(manager)
+  }
+}
+
+function drainVisibleTerminalBacklog(manager: PaneManager): void {
   for (const pane of manager.getPanes()) {
     requestTerminalBacklogRecovery(pane.terminal)
     flushTerminalOutput(pane.terminal, { maxChars: VISIBLE_RESUME_FLUSH_CHARS })
-  }
-  syncTerminalViewportIntents(manager)
-  // Resume WebGL immediately so the terminal shows its last-known state
-  // on the first painted frame. macOS context creation is ~5 ms; on
-  // Windows (ANGLE -> D3D11) it can be 100-500 ms but a deferred resume
-  // would paint a stretched DOM-fallback flash, which is worse UX.
-  manager.resumeRendering()
-  // Single fit on resume. Background bytes have been pushed into xterm
-  // above, so this fit only absorbs container dimension changes that
-  // happened while hidden (e.g. sidebar toggle on another worktree).
-  if (isActive) {
-    fitAndFocusPanes(manager)
-  } else {
-    fitPanes(manager)
   }
 }
 

@@ -4,6 +4,8 @@ import type { DeviceEntry, DeviceRegistry } from '../device-registry'
 import type { E2EEKeypair } from '../e2ee-keypair'
 import { E2EEChannel } from './e2ee-channel'
 import type { E2EEAuthenticatedDevice } from './authenticated-e2ee-device'
+import { createMobileE2EEOutboundMemoryBudget } from './mobile-e2ee-outbound-memory-budget'
+import type { RuntimeCapability } from '../../../shared/protocol-version'
 
 type MobileSocketPayload = string | Uint8Array<ArrayBufferLike>
 
@@ -36,7 +38,7 @@ export type AuthenticatedMobileSocket = {
   ws: WebSocket
   connectionId: string
   device: E2EEAuthenticatedDevice
-  clientCapabilities: readonly string[]
+  clientCapabilities: readonly RuntimeCapability[]
   transport: MobileSocketTransportMetadata
 }
 
@@ -76,6 +78,7 @@ export class MobileSocketWiring {
   private readonly connectionIds = new Map<WebSocket, string>()
   private readonly authenticatedSockets = new Map<WebSocket, AuthenticatedMobileSocket>()
   private readonly transports = new Set<MobileSocketTransport>()
+  private readonly outboundMemoryBudget = createMobileE2EEOutboundMemoryBudget()
 
   constructor(options: MobileSocketWiringOptions) {
     this.deviceRegistry = options.deviceRegistry
@@ -92,12 +95,20 @@ export class MobileSocketWiring {
     getMetadata: (ws: WebSocket) => MobileSocketTransportMetadata = () => ({
       transport: 'direct'
     })
-  ): void {
+  ): () => void {
     this.transports.add(transport)
     transport.onMessage((message, _reply, ws) => {
       this.handleRawMessage(transport, ws, message, getMetadata(ws))
     })
     transport.onConnectionClose((_clientId, ws) => this.handleClose(ws))
+    let attached = true
+    return () => {
+      if (!attached) {
+        return
+      }
+      attached = false
+      this.transports.delete(transport)
+    }
   }
 
   getConnectionId(ws: WebSocket): string | undefined {
@@ -137,6 +148,7 @@ export class MobileSocketWiring {
             ? { transport: 'relay', relayHostId: metadata.relayHostId }
             : { transport: 'direct' },
         requireV2: metadata.transport === 'relay',
+        outboundMemoryBudget: this.outboundMemoryBudget,
         resolveAuthenticatedDevice: (token) => {
           const device = this.deviceRegistry.validateToken(token)
           if (!device) {

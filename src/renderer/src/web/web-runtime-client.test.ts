@@ -11,6 +11,7 @@ import {
   encryptBytes as encryptSharedBytes
 } from '../../../shared/e2ee-crypto'
 import type { RuntimeRpcResponse } from '../../../shared/runtime-rpc-envelope'
+import { SESSION_TAB_CLOSE_INTENT_RUNTIME_CAPABILITY } from '../../../shared/protocol-version'
 
 const fakeSockets: FakeWebSocket[] = []
 
@@ -49,6 +50,27 @@ describe('WebRuntimeClient', () => {
 
   afterEach(() => {
     vi.unstubAllGlobals()
+  })
+
+  it('advertises explicit close intent support in the pairing handshake', async () => {
+    const client = new WebRuntimeClient({
+      v: 2,
+      endpoint: 'ws://127.0.0.1:6768',
+      deviceToken: 'token',
+      publicKeyB64: Buffer.alloc(32).toString('base64')
+    })
+    const call = client.call('status.get', {})
+    const socket = fakeSockets[0]!
+    socket.readyState = FakeWebSocket.OPEN
+    socket.onopen?.()
+
+    expect(JSON.parse(String(socket.send.mock.calls[0]?.[0]))).toMatchObject({
+      type: 'e2ee_hello',
+      clientCapabilities: [SESSION_TAB_CLOSE_INTENT_RUNTIME_CAPABILITY]
+    })
+
+    client.close()
+    await expect(call).rejects.toThrow('Remote Orca runtime connection closed.')
   })
 
   it('closes child subscription clients when the owning client closes', () => {

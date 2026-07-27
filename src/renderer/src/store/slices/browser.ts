@@ -52,6 +52,7 @@ import {
   addAdditionalValidWorkspaceKeys,
   type WorkspaceSessionHydrationOptions
 } from '@/lib/workspace-session-hydration-keys'
+import { buildValidWorktreeIdsForSessionHydration } from './degraded-repo-worktree-validity'
 
 type CreateBrowserTabOptions = {
   activate?: boolean
@@ -1582,10 +1583,9 @@ export const createBrowserSlice: StateCreator<AppState, [], [], BrowserSlice> = 
   hydrateBrowserSession: (session, options) => {
     const persistedTabsByWorktree = session.browserTabsByWorktree ?? {}
     const currentState = get()
-    const validWorktreeIdsForCleanup = new Set(
-      Object.values(currentState.worktreesByRepo)
-        .flat()
-        .map((worktree) => worktree.id)
+    const validWorktreeIdsForCleanup = buildValidWorktreeIdsForSessionHydration(
+      currentState,
+      Object.keys(persistedTabsByWorktree)
     )
     validWorktreeIdsForCleanup.add(FLOATING_TERMINAL_WORKTREE_ID)
     for (const workspace of currentState.folderWorkspaces) {
@@ -1610,10 +1610,9 @@ export const createBrowserSlice: StateCreator<AppState, [], [], BrowserSlice> = 
       const persistedPagesByWorkspace = session.browserPagesByWorkspace ?? {}
       const persistedActiveBrowserTabIdByWorktree = session.activeBrowserTabIdByWorktree ?? {}
       const persistedActiveTabTypeByWorktree = session.activeTabTypeByWorktree ?? {}
-      const validWorktreeIds = new Set(
-        Object.values(s.worktreesByRepo)
-          .flat()
-          .map((worktree) => worktree.id)
+      const validWorktreeIds = buildValidWorktreeIdsForSessionHydration(
+        s,
+        Object.keys(persistedTabsByWorktree)
       )
       validWorktreeIds.add(FLOATING_TERMINAL_WORKTREE_ID)
       for (const workspace of s.folderWorkspaces) {

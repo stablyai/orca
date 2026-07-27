@@ -335,6 +335,75 @@ describe('Store', () => {
     expect(store.getRepos()).toEqual([])
   }, 15_000)
 
+  it('clone-reads and synchronously persists the main-owned Codex reset ledger', async () => {
+    const store = await createStore()
+    const ledger = {
+      version: 1 as const,
+      attempts: [
+        {
+          idempotencyKey: '11111111-1111-4111-8111-111111111111',
+          expectedScope: {
+            target: { runtime: 'host' as const, wslDistro: null },
+            accountId: 'account-host',
+            accountRevision: 42,
+            offerRevision: 'v1:offer'
+          },
+          state: 'providerPending' as const
+        }
+      ]
+    }
+
+    store.replaceCodexResetCreditAttemptLedgerAndFlush(ledger)
+    const firstRead = store.getCodexResetCreditAttemptLedger()
+    firstRead.attempts.splice(0, 1)
+
+    expect(store.getCodexResetCreditAttemptLedger()).toEqual(ledger)
+    expect((readDataFile() as PersistedState).codexResetCreditAttemptLedger).toEqual(ledger)
+  })
+
+  it('rolls the in-memory Codex reset ledger back when its sync flush fails', async () => {
+    const store = await createStore()
+    const before = store.getCodexResetCreditAttemptLedger()
+    vi.spyOn(store, 'flushOrThrow').mockImplementationOnce(() => {
+      throw new Error('disk full')
+    })
+
+    expect(() =>
+      store.replaceCodexResetCreditAttemptLedgerAndFlush({
+        version: 1,
+        attempts: [
+          {
+            idempotencyKey: '11111111-1111-4111-8111-111111111111',
+            expectedScope: {
+              target: { runtime: 'host', wslDistro: null },
+              accountId: 'account-host',
+              accountRevision: 42,
+              offerRevision: 'v1:offer'
+            },
+            state: 'providerPending'
+          }
+        ]
+      })
+    ).toThrow('disk full')
+
+    expect(store.getCodexResetCreditAttemptLedger()).toEqual(before)
+  })
+
+  it('preserves a corrupt Codex reset ledger as a fail-closed read error', async () => {
+    writeDataFile({
+      ...getDefaultPersistedState(testState.dir),
+      codexResetCreditAttemptLedger: {
+        version: 1,
+        attempts: [{ state: 'providerPending' }]
+      }
+    })
+
+    const store = await createStore()
+    expect(() => store.getCodexResetCreditAttemptLedger()).toThrow(
+      'Codex reset-credit attempt ledger is corrupt'
+    )
+  })
+
   it('does not restore a terminal tab after its durable close flush returns', async () => {
     const store = await createStore()
     const worktreeId = 'repo-1::/tmp/worktree-1'
@@ -2803,6 +2872,151 @@ describe('Store', () => {
     expect(store.getSettings().floatingTerminalDefaultedForAllUsers).toBe(true)
   })
 
+  it('migrates the legacy OSC 52 clipboard disabled default to enabled', async () => {
+    // Why this migration exists: the old off default was persisted for every
+    // profile, so without the one-shot flip #10567 would only fix new installs.
+    writeDataFile({
+      schemaVersion: 1,
+      repos: [],
+      worktreeMeta: {},
+      settings: { terminalAllowOsc52Clipboard: false },
+      ui: {},
+      githubCache: { pr: {}, issue: {} },
+      workspaceSession: {}
+    })
+
+    const store = await createStore()
+    expect(store.getSettings().terminalAllowOsc52Clipboard).toBe(true)
+    expect(store.getSettings().terminalAllowOsc52ClipboardDefaultedOnForAllUsers).toBe(true)
+  })
+
+  it('persists the OSC 52 clipboard migration stamp back to disk', async () => {
+    // Why round-trip a store first: on a bare legacy profile ~30 other migrations also
+    // set loadNeedsSave, so the save happens regardless and this migration's own dirty
+    // flag goes untested. Re-loading a profile the new build already wrote leaves OSC 52
+    // as the only unmigrated key — which is exactly the upgrade case that matters.
+    // Why no flush(): flush() writes unconditionally, so only the debounced load-path
+    // save proves this migration marked the state dirty by itself.
+    writeDataFile({
+      schemaVersion: 1,
+      repos: [],
+      worktreeMeta: {},
+      settings: {},
+      ui: {},
+      githubCache: { pr: {}, issue: {} },
+      workspaceSession: {}
+    })
+    const migrated = await createStore()
+    migrated.flush()
+
+    const settled = readDataFile() as { settings: Record<string, unknown> }
+    settled.settings.terminalAllowOsc52Clipboard = false
+    delete settled.settings.terminalAllowOsc52ClipboardDefaultedOnForAllUsers
+    writeDataFile(settled)
+
+    vi.useFakeTimers()
+    try {
+      const store = await createStore()
+      // Why over-advance: the debounce is exactly 1000ms, so an exact-fit advance turns a
+      // future debounce raise into a confusing no-write instead of a loud failure.
+      vi.advanceTimersByTime(5000)
+      await store.waitForPendingWrite()
+    } finally {
+      vi.useRealTimers()
+    }
+
+    const persisted = readDataFile() as {
+      settings?: {
+        terminalAllowOsc52Clipboard?: boolean
+        terminalAllowOsc52ClipboardDefaultedOnForAllUsers?: boolean
+      }
+    }
+
+    expect(persisted.settings?.terminalAllowOsc52Clipboard).toBe(true)
+    expect(persisted.settings?.terminalAllowOsc52ClipboardDefaultedOnForAllUsers).toBe(true)
+  })
+
+  it('preserves a post-migration OSC 52 clipboard opt-out', async () => {
+    writeDataFile({
+      schemaVersion: 1,
+      repos: [],
+      worktreeMeta: {},
+      settings: {
+        terminalAllowOsc52Clipboard: false,
+        terminalAllowOsc52ClipboardDefaultedOnForAllUsers: true
+      },
+      ui: {},
+      githubCache: { pr: {}, issue: {} },
+      workspaceSession: {}
+    })
+
+    const store = await createStore()
+    expect(store.getSettings().terminalAllowOsc52Clipboard).toBe(false)
+    expect(store.getSettings().terminalAllowOsc52ClipboardDefaultedOnForAllUsers).toBe(true)
+  })
+
+  it('arms the one-shot notice when the OSC 52 flip overrides a persisted off', async () => {
+    writeDataFile({
+      schemaVersion: 1,
+      repos: [],
+      worktreeMeta: {},
+      settings: { terminalAllowOsc52Clipboard: false },
+      ui: {},
+      githubCache: { pr: {}, issue: {} },
+      workspaceSession: {}
+    })
+
+    const store = await createStore()
+    expect(store.getUI().osc52ClipboardDefaultOnNoticePending).toBe(true)
+  })
+
+  it('leaves the OSC 52 notice disarmed for a profile with no persisted value', async () => {
+    // Why: the notice explains an overridden choice; a fresh profile made no choice.
+    writeDataFile({
+      schemaVersion: 1,
+      repos: [],
+      worktreeMeta: {},
+      settings: {},
+      ui: {},
+      githubCache: { pr: {}, issue: {} },
+      workspaceSession: {}
+    })
+
+    const store = await createStore()
+    expect(store.getUI().osc52ClipboardDefaultOnNoticePending).toBe(false)
+  })
+
+  it('keeps the OSC 52 notice armed on disk until the renderer clears it', async () => {
+    // Why the disk assertion: the flip happens during load, before any window exists, and
+    // once the settings stamp lands the arming predicate is false forever — so the on-disk
+    // ui flag is the only thing that survives a crash before the toast renders.
+    writeDataFile({
+      schemaVersion: 1,
+      repos: [],
+      worktreeMeta: {},
+      settings: { terminalAllowOsc52Clipboard: false },
+      ui: {},
+      githubCache: { pr: {}, issue: {} },
+      workspaceSession: {}
+    })
+
+    const armed = await createStore()
+    armed.flush()
+    const armedOnDisk = readDataFile() as {
+      ui?: { osc52ClipboardDefaultOnNoticePending?: boolean }
+    }
+    expect(armedOnDisk.ui?.osc52ClipboardDefaultOnNoticePending).toBe(true)
+
+    const reloaded = await createStore()
+    expect(reloaded.getUI().osc52ClipboardDefaultOnNoticePending).toBe(true)
+
+    reloaded.updateUI({ osc52ClipboardDefaultOnNoticePending: false })
+    reloaded.flush()
+    const cleared = await createStore()
+    // Why re-check after the stamp: a cleared notice must not be resurrected by a later load.
+    expect(cleared.getUI().osc52ClipboardDefaultOnNoticePending).toBe(false)
+  })
+
   it('migrates the legacy Linux primary-selection default to enabled', async () => {
     await withPlatform('linux', async () => {
       writeDataFile({
@@ -3436,6 +3650,47 @@ describe('Store', () => {
     expect(store.getWorkspaceSession().terminalTopologyRevisionByRepoId).toEqual({})
   })
 
+  it('removeProject prunes the repo worktrees from workspace session state', async () => {
+    const store = await createStore()
+    store.addRepo(makeRepo({ id: 'r1' }))
+    store.addRepo(makeRepo({ id: 'r2', path: '/repo2' }))
+
+    store.setWorktreeMeta('r1::/path/wt1', { displayName: 'wt1' })
+    store.setWorktreeMeta('r2::/other', { displayName: 'other' })
+
+    store.setWorkspaceSession({
+      ...getDefaultWorkspaceSession(),
+      lastVisitedAtByWorktreeId: { 'r1::/path/wt1': 111, 'r2::/other': 222 }
+    })
+
+    store.removeProject('r1')
+
+    const session = store.getWorkspaceSession()
+    expect(session.lastVisitedAtByWorktreeId?.['r1::/path/wt1']).toBeUndefined()
+    expect(session.lastVisitedAtByWorktreeId?.['r2::/other']).toBe(222)
+  })
+
+  it('removeProject prunes the repo worktrees from per-host workspace session partitions', async () => {
+    const store = await createStore()
+    store.addRepo(makeRepo({ id: 'r1' }))
+
+    store.setWorktreeMeta('r1::/path/wt1', { displayName: 'wt1' })
+
+    const hostId = 'ssh:host-a'
+    store.setWorkspaceSession(
+      {
+        ...getDefaultWorkspaceSession(),
+        lastVisitedAtByWorktreeId: { 'r1::/path/wt1': 333 }
+      },
+      hostId
+    )
+
+    store.removeProject('r1')
+
+    const hostSession = store.getWorkspaceSession(hostId)
+    expect(hostSession.lastVisitedAtByWorktreeId?.['r1::/path/wt1']).toBeUndefined()
+  })
+
   it('removeProject removes the derived project host setup compatibility record', async () => {
     const store = await createStore()
     store.addRepo(makeRepo({ id: 'r1' }))
@@ -3509,6 +3764,132 @@ describe('Store', () => {
     // Local worktree meta survives; the SSH host's meta is pruned.
     expect(store.getWorktreeMeta('shared::/local/repo/wt')).toBeDefined()
     expect(store.getWorktreeMeta('shared::/remote/repo/wt')).toBeUndefined()
+  })
+
+  it('removeProjectForHost keeps the surviving host session for a shared repo id + path', async () => {
+    const store = await createStore()
+    // Same repo id AND same path on both local and an SSH host, so the owner key
+    // `shared::/repo` is identical across hosts. The host-scoped prune must only
+    // touch the removed host's session partition.
+    store.addRepo(makeRepo({ id: 'shared', path: '/repo' }))
+    store.addRepo(
+      makeRepo({
+        id: 'shared',
+        path: '/repo',
+        connectionId: 'ssh-a',
+        executionHostId: 'ssh:ssh-a'
+      })
+    )
+    store.setWorktreeMeta('shared::/repo', { displayName: 'local', hostId: 'local' })
+
+    store.setWorkspaceSession({
+      ...getDefaultWorkspaceSession(),
+      lastVisitedAtByWorktreeId: { 'shared::/repo': 111 }
+    })
+    store.setWorkspaceSession(
+      {
+        ...getDefaultWorkspaceSession(),
+        lastVisitedAtByWorktreeId: { 'shared::/repo': 222 }
+      },
+      'ssh:ssh-a'
+    )
+
+    store.removeProjectForHost('shared', 'ssh:ssh-a')
+
+    // The removed SSH host's session is pruned; the surviving local session stays.
+    expect(
+      store.getWorkspaceSession('ssh:ssh-a').lastVisitedAtByWorktreeId?.['shared::/repo']
+    ).toBeUndefined()
+    expect(store.getWorkspaceSession().lastVisitedAtByWorktreeId?.['shared::/repo']).toBe(111)
+  })
+
+  it('removeProjectForHost on the local host keeps a surviving SSH host session', async () => {
+    const store = await createStore()
+    store.addRepo(makeRepo({ id: 'shared', path: '/repo' }))
+    store.addRepo(
+      makeRepo({
+        id: 'shared',
+        path: '/repo',
+        connectionId: 'ssh-a',
+        executionHostId: 'ssh:ssh-a'
+      })
+    )
+    store.setWorktreeMeta('shared::/repo', { displayName: 'local', hostId: 'local' })
+
+    store.setWorkspaceSession({
+      ...getDefaultWorkspaceSession(),
+      lastVisitedAtByWorktreeId: { 'shared::/repo': 111 }
+    })
+    store.setWorkspaceSession(
+      {
+        ...getDefaultWorkspaceSession(),
+        lastVisitedAtByWorktreeId: { 'shared::/repo': 222 }
+      },
+      'ssh:ssh-a'
+    )
+
+    store.removeProjectForHost('shared', 'local')
+
+    expect(store.getWorkspaceSession().lastVisitedAtByWorktreeId?.['shared::/repo']).toBeUndefined()
+    expect(
+      store.getWorkspaceSession('ssh:ssh-a').lastVisitedAtByWorktreeId?.['shared::/repo']
+    ).toBe(222)
+  })
+
+  it('removeProjectForHost prunes only the removed host when a third host also shares the owner key', async () => {
+    const store = await createStore()
+    // Same repo id + path on local and two SSH hosts, so the owner key
+    // `shared::/repo` is identical across all three. Removing one non-local host
+    // must prune only that host's partition and leave both the local session and
+    // the other surviving SSH host intact.
+    store.addRepo(makeRepo({ id: 'shared', path: '/repo' }))
+    store.addRepo(
+      makeRepo({
+        id: 'shared',
+        path: '/repo',
+        connectionId: 'ssh-a',
+        executionHostId: 'ssh:ssh-a'
+      })
+    )
+    store.addRepo(
+      makeRepo({
+        id: 'shared',
+        path: '/repo',
+        connectionId: 'ssh-b',
+        executionHostId: 'ssh:ssh-b'
+      })
+    )
+    store.setWorktreeMeta('shared::/repo', { displayName: 'local', hostId: 'local' })
+
+    store.setWorkspaceSession({
+      ...getDefaultWorkspaceSession(),
+      lastVisitedAtByWorktreeId: { 'shared::/repo': 111 }
+    })
+    store.setWorkspaceSession(
+      {
+        ...getDefaultWorkspaceSession(),
+        lastVisitedAtByWorktreeId: { 'shared::/repo': 222 }
+      },
+      'ssh:ssh-a'
+    )
+    store.setWorkspaceSession(
+      {
+        ...getDefaultWorkspaceSession(),
+        lastVisitedAtByWorktreeId: { 'shared::/repo': 333 }
+      },
+      'ssh:ssh-b'
+    )
+
+    store.removeProjectForHost('shared', 'ssh:ssh-a')
+
+    // Only the removed host's partition is pruned; local and the other SSH host survive.
+    expect(
+      store.getWorkspaceSession('ssh:ssh-a').lastVisitedAtByWorktreeId?.['shared::/repo']
+    ).toBeUndefined()
+    expect(store.getWorkspaceSession().lastVisitedAtByWorktreeId?.['shared::/repo']).toBe(111)
+    expect(
+      store.getWorkspaceSession('ssh:ssh-b').lastVisitedAtByWorktreeId?.['shared::/repo']
+    ).toBe(333)
   })
 
   it('reorderReposForHost independently reorders local and SSH rows with shared ids', async () => {
@@ -4148,6 +4529,29 @@ describe('Store', () => {
     store.flush()
     const reloaded = await createStore()
     expect(reloaded.getRepo('r1')!.upstream).toBeNull()
+  })
+
+  it('updateRepo persists the resolved no-usable-remote identity marker', async () => {
+    const store = await createStore()
+    store.addRepo(makeRepo())
+
+    const updated = store.updateRepo('r1', {
+      gitRemoteIdentity: {
+        canonicalKey: 'gitlab.example.com/team/orca',
+        remoteName: 'origin',
+        remoteUrl: 'git@gitlab.example.com:team/orca.git'
+      }
+    })
+    expect(updated!.gitRemoteIdentity).toEqual({
+      canonicalKey: 'gitlab.example.com/team/orca',
+      remoteName: 'origin',
+      remoteUrl: 'git@gitlab.example.com:team/orca.git'
+    })
+
+    store.updateRepo('r1', { gitRemoteIdentity: null })
+    store.flush()
+    const reloaded = await createStore()
+    expect(reloaded.getRepo('r1')!.gitRemoteIdentity).toBeNull()
   })
 
   it('getRepo does not expose invalid persisted repo upstream metadata', async () => {
@@ -6668,6 +7072,7 @@ describe('Store', () => {
       'linear-issue',
       'pr',
       'automation',
+      'cli',
       'comment',
       'ports',
       'inline-agents'

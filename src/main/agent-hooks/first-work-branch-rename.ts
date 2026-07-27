@@ -264,6 +264,9 @@ async function runAutoRename(
   const newBranch = await resolveUniqueBranchName(
     exec,
     slug,
+    // Use the non-throwing builder here: the prefix was already validated at
+    // worktree-create time, and this best-effort background rename has its own
+    // retry/stop handling, so it must not throw on prefix issues.
     (slugLeaf) => computeBranchName(slugLeaf, settings, username),
     currentBranch
   )

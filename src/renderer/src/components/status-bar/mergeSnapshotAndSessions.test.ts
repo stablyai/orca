@@ -27,11 +27,14 @@ function makeSnapshot(worktrees: WorktreeMemory[]): MemorySnapshot {
     host: {
       totalMemory: 16e9,
       freeMemory: 8e9,
+      availableMemory: 8e9,
+      availableMemorySource: 'free-memory',
       usedMemory: 8e9,
       memoryUsagePercent: 50,
       cpuCoreCount: 8,
       loadAverage1m: 0
     },
+    processMemoryMetric: 'rss',
     totalCpu: worktrees.reduce((s, w) => s + w.cpu, 0),
     totalMemory: worktrees.reduce((s, w) => s + w.memory, 0),
     collectedAt: 0

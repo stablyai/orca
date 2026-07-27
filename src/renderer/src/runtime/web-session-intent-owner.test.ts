@@ -40,7 +40,9 @@ describe('web session intent ownership', () => {
   it('isolates focus intents across runtimes and same-id re-pairs', () => {
     recordWebSessionFocusIntent(OWNER_A, WORKTREE_ID, 'host-tab')
 
-    expect(peekWebSessionFocusIntent(OWNER_A, WORKTREE_ID)).toBe('host-tab')
+    expect(peekWebSessionFocusIntent(OWNER_A, WORKTREE_ID)).toEqual({
+      hostTabId: 'host-tab'
+    })
     expect(peekWebSessionFocusIntent(OWNER_A_REPAIRED, WORKTREE_ID)).toBeNull()
     expect(peekWebSessionFocusIntent(OWNER_B, WORKTREE_ID)).toBeNull()
   })

@@ -23,7 +23,11 @@ type UseFileExplorerHandlersParams = {
       mode: 'edit'
       runtimeEnvironmentId?: string | null
     },
-    options?: { preview?: boolean; suppressActiveRuntimeFallback?: boolean }
+    options?: {
+      preview?: boolean
+      suppressActiveRuntimeFallback?: boolean
+      focusEditor?: boolean
+    }
   ) => void
   makePreviewFilePermanent: (filePath: string) => void
   toggleDir: (worktreeId: string, dirPath: string) => void
@@ -137,6 +141,9 @@ export async function activateFileExplorerNode(args: {
     },
     {
       preview: true,
+      // Why: activating an Explorer file is a focus handoff even if the rich
+      // editor finishes mounting after the row receives browser focus.
+      focusEditor: true,
       // Why: explicit local opens must not inherit the active runtime, so we
       // encode "no runtime owner" via the fallback-suppression option.
       suppressActiveRuntimeFallback: fileRuntimeEnvironmentId === null

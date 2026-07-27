@@ -2,9 +2,12 @@ import { describe, expect, it } from 'vitest'
 import { buildDashboardSnapshot, type DashboardSnapshotState } from './build-dashboard-snapshot'
 import {
   AGENT_STATUS_STALE_AFTER_MS,
-  type AgentStatusEntry
+  type AgentStatusEntry,
+  type AgentStatusOrchestrationContext
 } from '../../../../shared/agent-status-types'
 import { makePaneKey } from '../../../../shared/stable-pane-id'
+import type { TerminalTab, Worktree } from '../../../../shared/types'
+import { selectRuntimeAgentOrchestrationBatch } from '../sidebar/worktree-agent-orchestration-batch'
 
 const NOW = 1_000_000_000
 const TAB_ID = 'tab1'
@@ -27,11 +30,11 @@ function entry(overrides: Partial<AgentStatusEntry>): AgentStatusEntry {
   }
 }
 
-function tab(): unknown {
+function tab(id = TAB_ID, worktreeId = 'w1'): TerminalTab {
   return {
-    id: TAB_ID,
+    id,
     ptyId: 'pty1',
-    worktreeId: 'w1',
+    worktreeId,
     title: 'agent',
     customTitle: null,
     color: null,
@@ -40,10 +43,32 @@ function tab(): unknown {
   }
 }
 
+function worktree(id = 'w1', displayName = 'wt-one'): Worktree {
+  return {
+    id,
+    repoId: 'r1',
+    path: `/r1/${id}`,
+    head: 'abc123',
+    branch: 'main',
+    isBare: false,
+    isMainWorktree: false,
+    displayName,
+    comment: '',
+    linkedIssue: null,
+    linkedPR: null,
+    linkedLinearIssue: null,
+    isArchived: false,
+    isUnread: false,
+    isPinned: false,
+    sortOrder: 0,
+    lastActivityAt: NOW
+  }
+}
+
 function baseState(overrides: Partial<DashboardSnapshotState>): DashboardSnapshotState {
   return {
     repos: [{ id: 'r1', path: '/r1', displayName: 'Repo One', badgeColor: '#000' }],
-    worktreesByRepo: { r1: [{ id: 'w1', displayName: 'wt-one', isArchived: false }] },
+    worktreesByRepo: { r1: [worktree()] },
     tabsByWorktree: { w1: [tab()] },
     agentStatusByPaneKey: {},
     retainedAgentsByPaneKey: {},
@@ -182,5 +207,124 @@ describe('buildDashboardSnapshot', () => {
     const done = snapshot.cards.find((c) => c.dotState === 'done')
     expect(done).toBeDefined()
     expect(done?.bucket).toBe('idle')
+  })
+
+  it('attaches batched runtime orchestration metadata to dashboard rows', () => {
+    const snapshot = buildDashboardSnapshot(
+      baseState({
+        worktreesByRepo: { r1: [worktree(), worktree('w2')] },
+        tabsByWorktree: {
+          w1: [tab()],
+          w2: [tab('tab2', 'w2')]
+        },
+        agentStatusByPaneKey: {
+          [PANE_KEY]: entry({})
+        },
+        runtimeAgentOrchestrationByPaneKey: {
+          [PANE_KEY]: {
+            taskId: 'task-1',
+            dispatchId: 'dispatch-1',
+            taskTitle: 'Batched orchestration task'
+          }
+        }
+      }),
+      NOW
+    )
+
+    expect(snapshot.cards).toHaveLength(1)
+    expect(snapshot.cards[0].task).toBe('Batched orchestration task')
+  })
+
+  it('releases stale batch references when production moves from multi to singleton to zero', () => {
+    const secondLeafId = '77777777-7777-4777-8777-777777777777'
+    const firstPaneKey = makePaneKey('tab-w1', LEAF_ID)
+    const secondPaneKey = makePaneKey('tab-w2', secondLeafId)
+    const runtimeAgentOrchestrationByPaneKey = {
+      [firstPaneKey]: {
+        taskId: 'task-1',
+        dispatchId: 'dispatch-1'
+      },
+      [secondPaneKey]: {
+        taskId: 'task-2',
+        dispatchId: 'dispatch-2'
+      }
+    }
+    const multiState = baseState({
+      worktreesByRepo: { r1: [worktree('w1'), worktree('w2')] },
+      tabsByWorktree: {
+        w1: [tab('tab-w1', 'w1')],
+        w2: [tab('tab-w2', 'w2')]
+      },
+      runtimeAgentOrchestrationByPaneKey
+    })
+    const requested = ['w1', 'w2']
+    const firstBatch = selectRuntimeAgentOrchestrationBatch(multiState, requested)
+    const firstW1 = firstBatch.get('w1')
+
+    buildDashboardSnapshot(
+      baseState({
+        worktreesByRepo: { r1: [worktree('w1')] },
+        tabsByWorktree: multiState.tabsByWorktree,
+        runtimeAgentOrchestrationByPaneKey
+      }),
+      NOW
+    )
+    const afterSingleton = selectRuntimeAgentOrchestrationBatch(multiState, requested)
+    expect(afterSingleton).not.toBe(firstBatch)
+    expect(afterSingleton.get('w1')).not.toBe(firstW1)
+
+    buildDashboardSnapshot(baseState({ repos: [], worktreesByRepo: {} }), NOW)
+    const afterZero = selectRuntimeAgentOrchestrationBatch(multiState, requested)
+    expect(afterZero).not.toBe(afterSingleton)
+    expect(afterZero.get('w1')).not.toBe(afterSingleton.get('w1'))
+  })
+
+  it('scans orchestration runtime once for a dashboard snapshot', () => {
+    const worktreeCount = 24
+    const contextCount = 128
+    let runtimeEnumerations = 0
+    let contextVisits = 0
+    const runtimeRecords: Record<string, AgentStatusOrchestrationContext> = {}
+
+    for (let index = 0; index < contextCount; index += 1) {
+      const paneKey = makePaneKey(
+        `tab-${index % worktreeCount}`,
+        `33333333-3333-4333-8333-${index.toString(16).padStart(12, '0')}`
+      )
+      runtimeRecords[paneKey] = {
+        taskId: `task-${index}`,
+        dispatchId: `dispatch-${index}`,
+        get parentPaneKey() {
+          contextVisits += 1
+          return undefined
+        }
+      }
+    }
+
+    const runtimeAgentOrchestrationByPaneKey = new Proxy(runtimeRecords, {
+      ownKeys(target) {
+        runtimeEnumerations += 1
+        return Reflect.ownKeys(target)
+      }
+    })
+    const worktrees = Array.from({ length: worktreeCount }, (_, index) =>
+      worktree(`w${index}`, `wt-${index}`)
+    )
+    const tabsByWorktree = Object.fromEntries(
+      worktrees.map((worktree, index) => [worktree.id, [tab(`tab-${index}`, worktree.id)]])
+    )
+
+    const snapshot = buildDashboardSnapshot(
+      baseState({
+        worktreesByRepo: { r1: worktrees },
+        tabsByWorktree,
+        runtimeAgentOrchestrationByPaneKey
+      }),
+      NOW
+    )
+
+    expect(snapshot.cards).toEqual([])
+    expect(runtimeEnumerations).toBe(1)
+    expect(contextVisits).toBe(contextCount)
   })
 })

@@ -15,6 +15,8 @@ const RELAY_BACKOFF_MIN_MS = 250
 const RELAY_BACKOFF_BASE_MS = 500
 const RELAY_BACKOFF_CEILING_MS = 30_000
 const RELAY_STABLE_CONNECTION_MS = RELAY_BACKOFF_CEILING_MS
+const RELAY_HOST_OFFLINE_RETRY_MIN_MS = 5_000
+const RELAY_HOST_OFFLINE_RETRY_MAX_MS = 15_000
 
 export type RelayReconnectDependencies = {
   now: () => number
@@ -186,16 +188,11 @@ export class RelayReconnectController {
     // only an authenticated relay that survived the stability window resets the streak.
     this.activeRelayConnectedAt = null
     this.consecutiveFailures += 1
-    const delay = this.delayMs()
+    const delay =
+      recovery?.kind === 'retry-after-host-offline' ? this.hostOfflineDelayMs() : this.delayMs()
     this.nextAttemptAt = now + delay
     if (error instanceof MobileE2EEAuthenticationError) {
       // Why: pairing state cannot change on a timer; polling only wakes the radio.
-      this.recoveryGate = 'external-signal'
-      this.clearTimer()
-      return
-    }
-    if (recovery?.kind === 'wait-for-host-revival') {
-      // Why: retrying HOST_OFFLINE without a revival signal is polling a known-negative state.
       this.recoveryGate = 'external-signal'
       this.clearTimer()
       return
@@ -205,6 +202,10 @@ export class RelayReconnectController {
       this.recoveryGate = 'fresh-credential'
       this.clearTimer()
       return
+    }
+    if (recovery?.kind === 'retry-after-host-offline') {
+      // A prior transport timer must not bypass the slower known-offline retry.
+      this.clearTimer()
     }
     this.recoveryGate = null
     if (!scheduleRetry) {
@@ -267,6 +268,11 @@ export class RelayReconnectController {
     const cap = Math.min(RELAY_BACKOFF_CEILING_MS, RELAY_BACKOFF_BASE_MS * 2 ** exponent)
     // Full jitter (uniform in [0, cap)), floored so retries never busy-loop.
     return Math.max(RELAY_BACKOFF_MIN_MS, Math.floor(cap * this.jitterFraction()))
+  }
+
+  private hostOfflineDelayMs(): number {
+    const range = RELAY_HOST_OFFLINE_RETRY_MAX_MS - RELAY_HOST_OFFLINE_RETRY_MIN_MS
+    return RELAY_HOST_OFFLINE_RETRY_MIN_MS + Math.floor(range * this.jitterFraction())
   }
 
   private jitterFraction(): number {

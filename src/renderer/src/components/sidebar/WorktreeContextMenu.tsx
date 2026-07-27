@@ -35,7 +35,12 @@ import { useAppStore } from '@/store'
 import type { AppState } from '@/store/types'
 import { useAllWorktrees, useRepoById, useRepoMap, useWorktreeMap } from '@/store/selectors'
 import { cn } from '@/lib/utils'
-import type { Repo, Worktree } from '../../../../shared/types'
+import type {
+  Repo,
+  Worktree,
+  WorkspaceStatus,
+  WorkspaceStatusDefinition
+} from '../../../../shared/types'
 import { runWorktreeBatchDelete, runWorktreeDelete } from './delete-worktree-flow'
 import { runSleepWorktrees } from './sleep-worktree-flow'
 import { activateAndRevealWorktree } from '@/lib/worktree-activation'
@@ -65,6 +70,7 @@ type Props = {
   contentClassName?: string
   selectedWorktrees?: readonly Worktree[]
   onContextMenuSelect?: (event: React.MouseEvent<HTMLElement>) => readonly Worktree[]
+  onAssignWorkspaceStatus?: (worktreeIds: readonly string[], status: WorkspaceStatus) => void
   onOpenChange?: (open: boolean) => void
 }
 
@@ -278,12 +284,36 @@ function preserveDeleteSiblingPosition(scope: HTMLElement | null): () => void {
   }
 }
 
+export type WorkspaceStatusAssignmentPlan =
+  | { readonly kind: 'board-sync'; readonly worktreeIds: readonly string[] }
+  | { readonly kind: 'local-only'; readonly localWriteIds: readonly string[] }
+
+// Why: the context-menu "Move to Status" routes to the board's local-first +
+// Linear-sync path when the board wired a callback, else a local-only write of
+// only the status-changed worktrees. Extracted pure so the routing and the
+// no-op filter stay unit-testable without opening the Radix menu.
+export function planWorkspaceStatusAssignment(
+  worktrees: readonly Worktree[],
+  status: WorkspaceStatus,
+  workspaceStatuses: readonly WorkspaceStatusDefinition[],
+  boardSyncEnabled: boolean
+): WorkspaceStatusAssignmentPlan {
+  if (boardSyncEnabled) {
+    return { kind: 'board-sync', worktreeIds: worktrees.map((item) => item.id) }
+  }
+  const localWriteIds = worktrees
+    .filter((item) => getWorkspaceStatus(item, workspaceStatuses) !== status)
+    .map((item) => item.id)
+  return { kind: 'local-only', localWriteIds }
+}
+
 const WorktreeContextMenu = React.memo(function WorktreeContextMenu({
   worktree,
   children,
   contentClassName,
   selectedWorktrees,
   onContextMenuSelect,
+  onAssignWorkspaceStatus,
   onOpenChange
 }: Props) {
   const defaultSelectedWorktrees = useMemo(() => [worktree], [worktree])
@@ -504,15 +534,29 @@ const WorktreeContextMenu = React.memo(function WorktreeContextMenu({
   const handleAssignWorkspaceStatus = useCallback(
     (status: string) => {
       setMenuOpenState(false)
+      const plan = planWorkspaceStatusAssignment(
+        activeContextWorktrees,
+        status,
+        workspaceStatuses,
+        Boolean(onAssignWorkspaceStatus)
+      )
+      if (plan.kind === 'board-sync') {
+        onAssignWorkspaceStatus?.(plan.worktreeIds, status)
+        return
+      }
+      // Why: outside the workspace board (e.g. the sidebar list) status changes
+      // are local-only; Linear sync is scoped to board moves like drag-and-drop.
       void Promise.all(
-        activeContextWorktrees.map((item) =>
-          getWorkspaceStatus(item, workspaceStatuses) === status
-            ? Promise.resolve()
-            : updateWorktreeMeta(item.id, { workspaceStatus: status })
-        )
+        plan.localWriteIds.map((id) => updateWorktreeMeta(id, { workspaceStatus: status }))
       )
     },
-    [activeContextWorktrees, setMenuOpenState, updateWorktreeMeta, workspaceStatuses]
+    [
+      activeContextWorktrees,
+      onAssignWorkspaceStatus,
+      setMenuOpenState,
+      updateWorktreeMeta,
+      workspaceStatuses
+    ]
   )
 
   const handleRename = useCallback(() => {
