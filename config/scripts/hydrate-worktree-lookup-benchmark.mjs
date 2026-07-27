@@ -141,8 +141,10 @@ console.log(
   `${pad('repos', 6)} ${pad('worktrees', 10)} ${pad('ids', 5)} ${pad('flatten', 11)} ${pad('indexed', 11)} ${pad('speedup', 9)}`
 )
 
-// Sizes from a real orca-data.json on a heavy machine: 10 repos / 423 worktrees, with
-// 188 pending reconnect. The small rows are an ordinary one- or two-repo session.
+// Row shapes are synthetic, sized against a real orca-data.json on a heavy machine
+// (10 repos / 423 worktrees / 188 pending reconnect). They are not that dataset: the
+// generator spreads worktrees evenly and injects one duplicate id, so treat the counts
+// as "about this scale", not a replay.
 for (const [repoCount, worktreesPerRepo, idCount] of [
   [1, 5, 5],
   [3, 20, 20],
@@ -162,12 +164,15 @@ for (const [repoCount, worktreesPerRepo, idCount] of [
   if (!flattenResult.some((value) => value === null)) {
     throw new Error(`fixture had no absent ids at ${repoCount} repos`)
   }
+  // Count the generated rows rather than multiplying: makeStore injects a duplicate
+  // id for multi-repo cases, so the product would misreport the fixture by one.
+  const worktreeCount = Object.values(worktreesByRepo).reduce((sum, rows) => sum + rows.length, 0)
   const { flattenMs, indexMs } = measure(worktreesByRepo, ids)
   console.log(
-    `${pad(repoCount, 6)} ${pad(repoCount * worktreesPerRepo, 10)} ${pad(idCount, 5)} ${pad(`${flattenMs.toFixed(4)} ms`, 11)} ${pad(`${indexMs.toFixed(4)} ms`, 11)} ${pad(`${(flattenMs / indexMs).toFixed(1)}x`, 9)}`
+    `${pad(repoCount, 6)} ${pad(worktreeCount, 10)} ${pad(idCount, 5)} ${pad(`${flattenMs.toFixed(4)} ms`, 11)} ${pad(`${indexMs.toFixed(4)} ms`, 11)} ${pad(`${(flattenMs / indexMs).toFixed(1)}x`, 9)}`
   )
 }
 
 console.log(
-  '\nThis times one of the four lookup sites. A one-repo session sees almost nothing;\nthe win scales with worktrees x pending ids, and lands on the cold-start path that\ngates terminal pane mounting.'
+  '\nFixtures are synthetic at real-world scale, not a replay of a real session.\nThis times one of the four lookup sites. A one-repo session sees almost nothing;\nthe win scales with worktrees x pending ids, and lands on the cold-start path that\ngates terminal pane mounting.'
 )
