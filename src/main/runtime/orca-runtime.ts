@@ -96,7 +96,23 @@ import { mkdir, readFile, readdir, rm, stat } from 'node:fs/promises'
 import { resolveWorktreeCreateBase } from '../worktree-create-base'
 import { resolveWorktreeAddBaseRef } from '../../shared/worktree-base-ref'
 import { OrchestrationDb } from './orchestration/db'
+import { OrchestrationError } from './orchestration/orchestration-error'
+import {
+  buildObservedSetupCommand,
+  createSetupCompletionScanner
+} from './orchestration/setup-completion-signal'
+import type { RuntimeOrchestrationEnvelope } from '../../shared/runtime-rpc-envelope'
+import {
+  isOrchestrationMutation,
+  orchestrationMigrationData
+} from '../../shared/orchestration-rpc-contract'
+import type {
+  OrchestrationEnvironmentTransport,
+  OrchestrationWorkerServer
+} from './orchestration/environment-transport'
+import { syncFederatedDispatch } from './orchestration/federation-sync'
 import { formatMessagesForInjection } from './orchestration/formatter'
+import { selectExactWorkerProviderSession } from './orchestration/worker-provider-session'
 import type {
   Automation,
   AutomationCreateInput,
@@ -183,6 +199,7 @@ import type {
   AgentProviderSessionMetadata,
   SleepingAgentLaunchConfig
 } from '../../shared/agent-session-resume'
+import type { ExactWorkerProviderSession } from '../../shared/orchestration-worker-output'
 import type { RuntimeClientEvent } from '../../shared/runtime-client-events'
 import { toRuntimeActivateWorktreeEvent } from '../../shared/runtime-client-events'
 import {
@@ -332,6 +349,8 @@ import {
   BROWSER_HEADLESS_RUNTIME_CAPABILITY,
   BROWSER_CERTIFICATE_TRUST_RUNTIME_CAPABILITY,
   MIN_COMPATIBLE_RUNTIME_CLIENT_VERSION,
+  ORCHESTRATION_CONTRACT_RUNTIME_CAPABILITY,
+  ORCHESTRATION_CONTRACT_VERSION,
   REMOTE_RUNTIME_SHARED_CONTROL_CAPABILITY,
   RUNTIME_CAPABILITIES,
   RUNTIME_PROTOCOL_VERSION,
@@ -1698,10 +1717,12 @@ type TerminalWaiter = {
 type MessageWaiter = {
   handle: string
   typeFilter: string[] | undefined
-  resolve: (result: void) => void
+  resolve: (result: MessageWaitResult) => void
   timeout: NodeJS.Timeout | null
   abortCleanup: (() => void) | null
 }
+
+export type MessageWaitResult = 'notified' | 'timed_out' | 'cancelled' | 'waiter_exists'
 
 function omitUndefinedProperties<T extends Record<string, unknown>>(value: T): Partial<T> {
   return Object.fromEntries(
@@ -2438,6 +2459,10 @@ export class OrcaRuntimeService {
   private readonly runtimeId = randomUUID()
   private readonly startedAt = Date.now()
   private readonly store: RuntimeStore | null
+  private readonly orchestrationEnvironmentTransport: OrchestrationEnvironmentTransport | null
+  private readonly orchestrationFederationTimers = new Map<string, ReturnType<typeof setInterval>>()
+  private readonly orchestrationFederationSyncs = new Map<string, Promise<void>>()
+  private readonly orchestrationFederationWarnings = new Set<string>()
   private rendererGraphEpoch = 0
   private graphStatus: RuntimeGraphStatus = 'unavailable'
   private authoritativeWindowId: number | null = null
@@ -2563,6 +2588,7 @@ export class OrcaRuntimeService {
   // Why: startup draft paste can subscribe after the agent already emitted its
   // ready marker. Keep a bounded raw buffer so fast startup output is replayed.
   private recentPtyOutputById = new Map<string, RecentPtyOutputBuffer>()
+  private setupCompletionTokenByPtyId = new Map<string, string>()
   // Why: mobile clients need to know when the desktop restores a terminal
   // from mobile-fit so they can update their UI. These listeners are
   // invoked from resizeForClient and onClientDisconnected/onPtyExit.
@@ -2969,6 +2995,7 @@ export class OrcaRuntimeService {
       buildAgentHookPtyEnv?: () => Record<string, string>
       getDesktopWindowStatus?: () => RuntimeDesktopWindowStatus
       agentSessionClaimSigner?: AgentSessionClaimSigner
+      orchestrationEnvironmentTransport?: OrchestrationEnvironmentTransport
     }
   ) {
     this.store = store
@@ -2980,6 +3007,7 @@ export class OrcaRuntimeService {
     this.clientSessionTabSelections.setPersistListener((state) => {
       this.store?.setMobileClientTabSelections?.(state)
     })
+    this.orchestrationEnvironmentTransport = deps?.orchestrationEnvironmentTransport ?? null
     if (stats) {
       this.stats = stats
       this.agentDetector = new AgentDetector(stats)
@@ -3438,6 +3466,136 @@ export class OrcaRuntimeService {
 
   getRuntimeId(): string {
     return this.runtimeId
+  }
+
+  resolveOrchestrationWorkerServer(selector: string): OrchestrationWorkerServer {
+    if (!this.orchestrationEnvironmentTransport) {
+      throw new OrchestrationError(
+        'server_required',
+        'Connected-server orchestration is unavailable in this runtime.'
+      )
+    }
+    return this.orchestrationEnvironmentTransport.resolve(selector)
+  }
+
+  async callOrchestrationWorkerServer(
+    selector: string,
+    method: string,
+    params: unknown,
+    timeoutMs?: number,
+    envelope?: RuntimeOrchestrationEnvelope
+  ): Promise<unknown> {
+    if (!this.orchestrationEnvironmentTransport) {
+      throw new OrchestrationError(
+        'server_required',
+        'Connected-server orchestration is unavailable in this runtime.'
+      )
+    }
+    if (isOrchestrationMutation(method, params)) {
+      const statusResponse = await this.orchestrationEnvironmentTransport.call(
+        selector,
+        'status.get',
+        undefined,
+        timeoutMs
+      )
+      if (statusResponse.ok === false) {
+        throw new OrchestrationError(
+          statusResponse.error.code,
+          statusResponse.error.message,
+          statusResponse.error.data
+        )
+      }
+      const status = statusResponse.result as RuntimeStatus
+      if (!status.capabilities?.includes(ORCHESTRATION_CONTRACT_RUNTIME_CAPABILITY)) {
+        throw new OrchestrationError(
+          'orchestration_migration_required',
+          'The connected worker server does not support the current orchestration contract. No effects were applied.',
+          orchestrationMigrationData('runtime_capability_missing')
+        )
+      }
+    }
+    const response = await this.orchestrationEnvironmentTransport.call(
+      selector,
+      method,
+      params,
+      timeoutMs,
+      method.startsWith('orchestration.')
+        ? { ...envelope, orchestrationContractVersion: ORCHESTRATION_CONTRACT_VERSION }
+        : envelope
+    )
+    if (response.ok === false) {
+      throw new OrchestrationError(response.error.code, response.error.message, response.error.data)
+    }
+    return response.result
+  }
+
+  async syncOrchestrationFederation(runId?: string): Promise<void> {
+    if (!this.orchestrationEnvironmentTransport) {
+      return
+    }
+    const dispatches = this.getOrchestrationDb().listActiveFederatedDispatches(runId)
+    await Promise.allSettled(
+      dispatches.map((dispatch) => this.syncOrchestrationFederatedDispatch(dispatch.dispatch_id))
+    )
+  }
+
+  private syncOrchestrationFederatedDispatch(dispatchId: string): Promise<void> {
+    const current = this.orchestrationFederationSyncs.get(dispatchId)
+    if (current) {
+      return current
+    }
+    const sync = syncFederatedDispatch(this, dispatchId)
+      .then(() => {
+        this.orchestrationFederationWarnings.delete(dispatchId)
+      })
+      .catch((error: unknown) => {
+        if (!this.orchestrationFederationWarnings.has(dispatchId)) {
+          console.warn(`[orchestration] Federation sync failed for ${dispatchId}:`, error)
+          this.orchestrationFederationWarnings.add(dispatchId)
+        }
+        throw error
+      })
+      .finally(() => {
+        this.orchestrationFederationSyncs.delete(dispatchId)
+      })
+    this.orchestrationFederationSyncs.set(dispatchId, sync)
+    return sync
+  }
+
+  ensureOrchestrationFederationRelay(runId?: string): void {
+    if (!this.orchestrationEnvironmentTransport) {
+      return
+    }
+    for (const dispatch of this.getOrchestrationDb().listActiveFederatedDispatches(runId)) {
+      if (this.orchestrationFederationTimers.has(dispatch.dispatch_id)) {
+        continue
+      }
+      const tick = () => {
+        const worker = this.getOrchestrationDb().getWorkerDispatch(dispatch.dispatch_id)
+        if (!worker || !['starting', 'ready', 'stopping'].includes(worker.state)) {
+          const activeTimer = this.orchestrationFederationTimers.get(dispatch.dispatch_id)
+          if (activeTimer) {
+            clearInterval(activeTimer)
+          }
+          this.orchestrationFederationTimers.delete(dispatch.dispatch_id)
+          this.orchestrationFederationWarnings.delete(dispatch.dispatch_id)
+          return
+        }
+        void this.syncOrchestrationFederatedDispatch(dispatch.dispatch_id).catch(() => undefined)
+      }
+      const timer = setInterval(tick, 1_000)
+      timer.unref?.()
+      this.orchestrationFederationTimers.set(dispatch.dispatch_id, timer)
+      tick()
+    }
+  }
+
+  stopOrchestrationFederationRelay(): void {
+    for (const timer of this.orchestrationFederationTimers.values()) {
+      clearInterval(timer)
+    }
+    this.orchestrationFederationTimers.clear()
+    this.orchestrationFederationWarnings.clear()
   }
 
   getStartedAt(): number {
@@ -10901,6 +11059,7 @@ export class OrcaRuntimeService {
     this.resizeListeners.delete(ptyId)
     this.lastRendererSizes.delete(ptyId)
     this.recentPtyOutputById.delete(ptyId)
+    this.setupCompletionTokenByPtyId.delete(ptyId)
     this.clearWaitBlockedCheckState(ptyId)
     this.recentPtyPathCandidatesById.delete(ptyId)
     this.ptyOutputSequenceById.delete(ptyId)
@@ -13568,6 +13727,64 @@ export class OrcaRuntimeService {
     }
   }
 
+  getTerminalProcessIncarnation(handle: string): string | null {
+    const live = this.getLivePtyForHandle(handle)
+    const record = live?.record ?? this.handles.get(handle)
+    if (!record?.ptyId) {
+      return null
+    }
+    const incarnationId = live?.pty.incarnationId ?? this.ptysById.get(record.ptyId)?.incarnationId
+    if (incarnationId) {
+      return `${record.ptyId}:${incarnationId}`
+    }
+    // Why: legacy providers may omit process incarnation; retain the prior restart-degraded fence.
+    return `${this.runtimeId}:${record.ptyId}:${record.ptyGeneration}`
+  }
+
+  getExactWorkerProviderSession(
+    handle: string,
+    observedAfter: number
+  ): ExactWorkerProviderSession | null {
+    const paneKey = this.getTerminalPaneKey(handle)
+    const processIncarnation = this.getTerminalProcessIncarnation(handle)
+    if (!paneKey || !processIncarnation) {
+      return null
+    }
+    let connectionId: string | null | undefined
+    let launchToken: string | null | undefined
+    try {
+      const ptyId = this.getTerminalAgentStatusPtyId(handle)
+      const pty = this.ptysById.get(ptyId)
+      connectionId = pty?.connectionId ?? null
+      launchToken = pty?.launchToken ?? null
+    } catch {
+      // Exact worker validation rejects this in production; test/legacy providers may not expose PTY metadata.
+      connectionId = undefined
+      launchToken = undefined
+    }
+    return selectExactWorkerProviderSession({
+      paneKey,
+      processIncarnation,
+      connectionId,
+      launchToken,
+      observedAfter,
+      statuses: this.getAgentStatusSnapshotFn?.() ?? []
+    })
+  }
+
+  validateOrchestrationAgentLauncher(agent: TuiAgent): void {
+    const settings = this.store?.getSettings()
+    if (!settings) {
+      throw new Error('runtime_unavailable')
+    }
+    if (!isTuiAgentEnabled(agent, settings.disabledTuiAgents)) {
+      throw new OrchestrationError(
+        'agent_unconfigured',
+        `Agent launcher ${agent} is disabled or unavailable.`
+      )
+    }
+  }
+
   resolveTerminalPane(paneKey: string, expectedWorktreeId?: string): RuntimeTerminalResolvePane {
     // Why: the renderer context menu only knows the stable pane key; main owns
     // the runtime terminal handle that agents and CLI commands can address.
@@ -14481,6 +14698,62 @@ export class OrcaRuntimeService {
       } catch (error) {
         this.removeWaiter(waiter)
         reject(error instanceof Error ? error : new Error(String(error)))
+      }
+    })
+  }
+
+  async waitForSetupTerminalCompletion(handle: string): Promise<{ exitCode: number | null }> {
+    const ptyId = this.getLivePtyForHandle(handle)?.pty.ptyId
+    if (!ptyId) {
+      throw new Error('terminal_handle_stale')
+    }
+    const completionToken = this.setupCompletionTokenByPtyId.get(ptyId)
+    const exitAbort = new AbortController()
+    return await new Promise<{ exitCode: number | null }>((resolve, reject) => {
+      let settled = false
+      let unsubscribe: (() => void) | null = null
+      const cleanup = (): void => {
+        unsubscribe?.()
+        exitAbort.abort()
+      }
+      const finish = (exitCode: number | null): void => {
+        if (settled) {
+          return
+        }
+        settled = true
+        cleanup()
+        this.setupCompletionTokenByPtyId.delete(ptyId)
+        resolve({ exitCode })
+      }
+      const fail = (error: unknown): void => {
+        if (settled) {
+          return
+        }
+        settled = true
+        cleanup()
+        reject(error)
+      }
+      const scanner = completionToken ? createSetupCompletionScanner(completionToken, finish) : null
+
+      if (scanner) {
+        unsubscribe = this.subscribeToTerminalData(ptyId, scanner.scan)
+      }
+      // Why: setup can finish before the observer is registered on fast local worktrees.
+      const replay = this.recentPtyOutputById.get(ptyId)?.read()
+      if (scanner && replay) {
+        scanner.scan(replay)
+      }
+      if (!settled) {
+        void this.waitForTerminal(handle, {
+          condition: 'exit',
+          signal: exitAbort.signal
+        })
+          .then((wait) => {
+            if (wait.satisfied && wait.condition === 'exit' && wait.status === 'exited') {
+              finish(wait.exitCode)
+            }
+          })
+          .catch(fail)
       }
     })
   }
@@ -18172,16 +18445,18 @@ export class OrcaRuntimeService {
     primaryTerminalHandle?: string | null
     hasStartupTerminal: boolean
     setupCommandPlatform: 'windows' | 'posix'
+    observeSetupCompletion?: boolean
     // Why: when the agent startup is sequenced to wait for setup
     // (waitForAgentStartup), the startup PTY runs a wrapper that already embeds
     // the setup command. Pass that wrapped command through so the Setup tab runs
     // the same script the agent is waiting on instead of a bare runner.
     wrappedSetupCommand?: string
-  }): Promise<{ setupSpawned: boolean }> {
+  }): Promise<{ setupSpawned: boolean; setupTerminalHandle: string | null }> {
     if (!this.ptyController?.spawn) {
-      return { setupSpawned: false }
+      return { setupSpawned: false, setupTerminalHandle: null }
     }
     let setupSpawned = false
+    let setupTerminalHandle: string | null = null
     try {
       const defaultTabHandles = await this.createDefaultTabTerminals(
         args.worktreeSelector,
@@ -18200,25 +18475,41 @@ export class OrcaRuntimeService {
         primaryTerminalHandle = terminal.handle
       }
       if (args.setup) {
+        const completionToken =
+          args.observeSetupCompletion && !args.wrappedSetupCommand ? randomUUID() : null
+        const observedCommand = completionToken
+          ? buildObservedSetupCommand(
+              args.setup.runnerScriptPath,
+              args.setupCommandPlatform,
+              completionToken
+            )
+          : null
         const setupCommand =
           args.wrappedSetupCommand ??
+          observedCommand?.command ??
           buildSetupRunnerCommand(args.setup.runnerScriptPath, args.setupCommandPlatform)
+        const setupEnv = { ...args.setup.envVars, ...observedCommand?.env }
         const shouldSplitSetup =
           primaryTerminalHandle &&
           (setupLaunchMode === 'split-vertical' || setupLaunchMode === 'split-horizontal')
-        await (shouldSplitSetup
+        const setupTerminal = await (shouldSplitSetup
           ? this.splitTerminal(primaryTerminalHandle!, {
               direction: setupLaunchMode === 'split-horizontal' ? 'horizontal' : 'vertical',
               command: setupCommand,
-              env: args.setup.envVars,
+              env: setupEnv,
               activate: false
             })
           : this.createTerminal(args.worktreeSelector, {
               title: 'Setup',
               command: setupCommand,
-              env: args.setup.envVars
+              env: setupEnv
             }))
+        setupTerminalHandle = setupTerminal.handle
         setupSpawned = true
+        const ptyId = this.getLivePtyForHandle(setupTerminal.handle)?.pty.ptyId
+        if (completionToken && ptyId) {
+          this.setupCompletionTokenByPtyId.set(ptyId, completionToken)
+        }
       }
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err)
@@ -18226,7 +18517,7 @@ export class OrcaRuntimeService {
         `[worktree-create] Failed to create setup/default terminals for ${args.worktreePath}: ${message}`
       )
     }
-    return { setupSpawned }
+    return { setupSpawned, setupTerminalHandle }
   }
 
   private async waitForStartupFollowupReady(
@@ -18360,6 +18651,8 @@ export class OrcaRuntimeService {
     runHooks?: boolean
     activate?: boolean
     setupDecision?: 'run' | 'skip' | 'inherit'
+    awaitTerminalProvisioning?: boolean
+    observeSetupCompletion?: boolean
     createdWithAgent?: TuiAgent
     startupAgent?: TuiAgent
     startupPrompt?: string
@@ -19160,6 +19453,7 @@ export class OrcaRuntimeService {
     // RPC return value must omit setup so the client does not spawn it a second
     // time. Mirrors the wait-for-agent setup contract from #6298.
     let didSpawnSetup = false
+    let setupTerminalHandle: string | null = null
     let startupTerminalHandle: string | null = null
     let startupTerminalTabId: string | null = null
     let startupTerminalPaneKey: string | null = null
@@ -19250,11 +19544,13 @@ export class OrcaRuntimeService {
               ? 'windows'
               : 'posix'
             : 'posix',
+          observeSetupCompletion: args.observeSetupCompletion,
           // Why: carry the wait-for-agent wrapped setup command (#6298) so the
           // Setup tab runs the same script the sequenced agent waits on.
           ...(wrappedSetupCommandStr ? { wrappedSetupCommand: wrappedSetupCommandStr } : {})
         })
         didSpawnSetup = provisioned.setupSpawned
+        setupTerminalHandle = provisioned.setupTerminalHandle
       }
       // Why: when runtime spawned setup, omit it from activation. When setup
       // spawn failed, fall through with the wrapped command so renderer
@@ -19290,7 +19586,7 @@ export class OrcaRuntimeService {
     } else if (this.ptyController?.spawn && (setup || defaultTabs || didSpawnStartup)) {
       // Why: inactive terminal materialization matches normal worktree creation,
       // but setup/default tab failures must not gate automation dispatch.
-      void this.provisionManagedWorktreeTerminals({
+      const provisioning = this.provisionManagedWorktreeTerminals({
         worktreeSelector: `id:${worktree.id}`,
         worktreeId: worktree.id,
         worktreePath,
@@ -19303,12 +19599,20 @@ export class OrcaRuntimeService {
             ? 'windows'
             : 'posix'
           : 'posix',
+        observeSetupCompletion: args.observeSetupCompletion,
         ...(wrappedSetupCommandStr ? { wrappedSetupCommand: wrappedSetupCommandStr } : {})
       })
       // Why: runtime owns setup spawning here, so the RPC result must omit setup
       // to keep the headless/mobile caller from launching it a second time.
-      if (setup) {
-        didSpawnSetup = true
+      if (args.awaitTerminalProvisioning) {
+        const provisioned = await provisioning
+        didSpawnSetup = provisioned.setupSpawned
+        setupTerminalHandle = provisioned.setupTerminalHandle
+      } else {
+        void provisioning
+        if (setup) {
+          didSpawnSetup = true
+        }
       }
     } else if (this.ptyController?.spawn) {
       try {
@@ -19348,6 +19652,25 @@ export class OrcaRuntimeService {
       },
       ...(lineageInput ? { lineage, workspaceLineage, warnings: lineageWarnings } : {}),
       ...(returnedSetup ? { setup: returnedSetup } : {}),
+      ...(args.awaitTerminalProvisioning
+        ? {
+            setupReceipt: {
+              requested: effectiveDecision,
+              hookFound: Boolean(hooks?.scripts.setup),
+              startupPolicy: setup?.waitForAgentStartup
+                ? ('wait-for-setup' as const)
+                : ('start-immediately' as const),
+              state: !hooks?.scripts.setup
+                ? ('not_configured' as const)
+                : effectiveDecision === 'skip' || !shouldRunSetup
+                  ? ('skipped' as const)
+                  : didSpawnSetup
+                    ? ('running' as const)
+                    : ('spawn_failed' as const),
+              ...(setupTerminalHandle ? { terminalHandle: setupTerminalHandle } : {})
+            }
+          }
+        : {}),
       ...(defaultTabs ? { defaultTabs } : {}),
       ...(warning ? { warning } : {}),
       ...(addResult.localBaseRefRefresh
@@ -19397,6 +19720,8 @@ export class OrcaRuntimeService {
       runHooks?: boolean
       activate?: boolean
       setupDecision?: 'run' | 'skip' | 'inherit'
+      awaitTerminalProvisioning?: boolean
+      observeSetupCompletion?: boolean
       createdWithAgent?: TuiAgent
       pendingFirstAgentMessageRename?: boolean
       automationProvenance?: AutomationWorkspaceProvenance
@@ -19474,6 +19799,7 @@ export class OrcaRuntimeService {
     // Why: same no-double-spawn contract as the local path — once runtime
     // provisions setup, omit it from activation and the RPC result.
     let didSpawnSetup = false
+    let setupTerminalHandle: string | null = null
     let startupTerminalHandle: string | null = null
     let startupTerminalTabId: string | null = null
     let startupTerminalPaneKey: string | null = null
@@ -19557,11 +19883,13 @@ export class OrcaRuntimeService {
               ? 'windows'
               : 'posix'
             : 'posix',
+          observeSetupCompletion: args.observeSetupCompletion,
           // Why: carry the wait-for-agent wrapped setup command (#6298) so the
           // remote Setup tab runs the same script the sequenced agent waits on.
           ...(wrappedSetupCommandStr ? { wrappedSetupCommand: wrappedSetupCommandStr } : {})
         })
         didSpawnSetup = provisioned.setupSpawned
+        setupTerminalHandle = provisioned.setupTerminalHandle
       }
       // Why: omit setup from activation when runtime spawned it; on spawn
       // failure fall through with the wrapped command so renderer retries.
@@ -19602,7 +19930,7 @@ export class OrcaRuntimeService {
     ) {
       // Why: inactive terminal materialization matches normal worktree creation,
       // but setup/default tab failures must not gate automation dispatch.
-      void this.provisionManagedWorktreeTerminals({
+      const provisioning = this.provisionManagedWorktreeTerminals({
         worktreeSelector: `path:${result.worktree.path}`,
         worktreeId: result.worktree.id,
         worktreePath: result.worktree.path,
@@ -19615,12 +19943,20 @@ export class OrcaRuntimeService {
             ? 'windows'
             : 'posix'
           : 'posix',
+        observeSetupCompletion: args.observeSetupCompletion,
         ...(wrappedSetupCommandStr ? { wrappedSetupCommand: wrappedSetupCommandStr } : {})
       })
       // Why: runtime owns setup spawning here, so omit setup from the RPC result
       // to keep the headless/mobile caller from launching it a second time.
-      if (result.setup) {
-        didSpawnSetup = true
+      if (args.awaitTerminalProvisioning) {
+        const provisioned = await provisioning
+        didSpawnSetup = provisioned.setupSpawned
+        setupTerminalHandle = provisioned.setupTerminalHandle
+      } else {
+        void provisioning
+        if (result.setup) {
+          didSpawnSetup = true
+        }
       }
     } else if (!shouldActivate && this.ptyController?.spawn) {
       try {
@@ -19665,7 +20001,27 @@ export class OrcaRuntimeService {
           }
         : resultForRenderer
 
-    return warning ? { ...resultWithStartupTerminal, warning } : resultWithStartupTerminal
+    const requestedSetupDecision = args.runHooks ? 'run' : (args.setupDecision ?? 'inherit')
+    const setupReceipt = {
+      requested: requestedSetupDecision,
+      hookFound: Boolean(result.setup),
+      startupPolicy: result.setup?.waitForAgentStartup
+        ? ('wait-for-setup' as const)
+        : ('start-immediately' as const),
+      state:
+        requestedSetupDecision === 'skip'
+          ? ('skipped' as const)
+          : !result.setup
+            ? ('not_configured' as const)
+            : didSpawnSetup
+              ? ('running' as const)
+              : ('spawn_failed' as const),
+      ...(setupTerminalHandle ? { terminalHandle: setupTerminalHandle } : {})
+    }
+    const resultWithSetupReceipt = args.awaitTerminalProvisioning
+      ? { ...resultWithStartupTerminal, setupReceipt }
+      : resultWithStartupTerminal
+    return warning ? { ...resultWithSetupReceipt, warning } : resultWithSetupReceipt
   }
 
   /**
@@ -25598,6 +25954,7 @@ export class OrcaRuntimeService {
     this.advancePtyLifecycleGeneration(ptyId)
     this.ptysById.delete(ptyId)
     this.recentPtyOutputById.delete(ptyId)
+    this.setupCompletionTokenByPtyId.delete(ptyId)
     this.clearWaitBlockedCheckState(ptyId)
     this.recentPtyPathCandidatesById.delete(ptyId)
     this.ptyOutputSequenceById.delete(ptyId)
@@ -27057,15 +27414,25 @@ export class OrcaRuntimeService {
       if (messageType && waiter.typeFilter && !waiter.typeFilter.includes(messageType)) {
         continue
       }
-      this.resolveMessageWaiter(waiter)
+      this.resolveMessageWaiter(waiter, 'notified')
     }
   }
 
   waitForMessage(
     handle: string,
-    options?: { typeFilter?: string[]; timeoutMs?: number; signal?: AbortSignal }
-  ): Promise<void> {
+    options?: {
+      typeFilter?: string[]
+      timeoutMs?: number
+      signal?: AbortSignal
+      exclusive?: boolean
+    }
+  ): Promise<MessageWaitResult> {
     return new Promise((resolve) => {
+      const currentWaiters = this.messageWaitersByHandle.get(handle)
+      if (options?.exclusive && currentWaiters && currentWaiters.size > 0) {
+        resolve('waiter_exists')
+        return
+      }
       const timeoutMs = options?.timeoutMs ?? MESSAGE_WAIT_DEFAULT_TIMEOUT_MS
 
       const waiter: MessageWaiter = {
@@ -27080,11 +27447,11 @@ export class OrcaRuntimeService {
       const signal = options?.signal
       const onAbort = (): void => {
         this.removeMessageWaiter(waiter)
-        resolve()
+        resolve('cancelled')
       }
       if (signal) {
         if (signal.aborted) {
-          resolve()
+          resolve('cancelled')
           return
         }
         waiter.abortCleanup = () => signal.removeEventListener('abort', onAbort)
@@ -27093,7 +27460,7 @@ export class OrcaRuntimeService {
 
       waiter.timeout = setTimeout(() => {
         this.removeMessageWaiter(waiter)
-        resolve()
+        resolve('timed_out')
       }, timeoutMs)
 
       let waiters = this.messageWaitersByHandle.get(handle)
@@ -27105,9 +27472,19 @@ export class OrcaRuntimeService {
     })
   }
 
-  private resolveMessageWaiter(waiter: MessageWaiter): void {
+  cancelMessageWaiters(handle: string): void {
+    const waiters = this.messageWaitersByHandle.get(handle)
+    if (!waiters) {
+      return
+    }
+    for (const waiter of [...waiters]) {
+      this.resolveMessageWaiter(waiter, 'cancelled')
+    }
+  }
+
+  private resolveMessageWaiter(waiter: MessageWaiter, result: MessageWaitResult): void {
     this.removeMessageWaiter(waiter)
-    waiter.resolve()
+    waiter.resolve(result)
   }
 
   private removeMessageWaiter(waiter: MessageWaiter): void {

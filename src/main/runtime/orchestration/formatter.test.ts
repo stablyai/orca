@@ -5,6 +5,7 @@ import type { MessageRow } from './types'
 function makeMessage(overrides: Partial<MessageRow> = {}): MessageRow {
   return {
     id: 'msg_test1',
+    run_id: 'run_test',
     from_handle: 'term_abc123',
     to_handle: 'term_coord',
     subject: 'Auth API implementation complete',

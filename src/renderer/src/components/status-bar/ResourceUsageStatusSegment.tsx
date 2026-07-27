@@ -52,6 +52,7 @@ import {
 import {
   getResourceUsageAllWorktrees,
   getResourceUsageBrowserTabsByWorktree,
+  getResourceUsageDeferredSshSessionIdsByTabId,
   getResourceUsagePtyIdsByTabId,
   getResourceUsageRepos,
   getResourceUsageRuntimePaneTitlesByTabId,
@@ -67,9 +68,10 @@ import {
   getResourceManagerTooltipLines
 } from './resource-manager-terminal-copy'
 import { getResourceMemoryMetricCopy } from './resource-memory-metric-copy'
+import { requiresKillConfirmation } from './resource-session-kill-confirmation'
 import {
-  buildResourceSessionBindingIndex,
   countUnboundDaemonSessions,
+  selectUnboundDaemonSessions,
   type ResourceSessionBindingInputs
 } from './resource-session-bindings'
 import { useResourceSessionInventory } from './use-resource-session-inventory'
@@ -771,6 +773,10 @@ export function ResourceUsageStatusSegment({
   // Why: full binding maps stay behind open sentinels so unchanged counts don't rerender the closed segment.
   const ptyIdsByTabId = useAppStore((s) => getResourceUsagePtyIdsByTabId(s, open))
   const terminalLayoutsByTabId = useAppStore((s) => getResourceUsageTerminalLayoutsByTabId(s, open))
+  // Why: sessions awaiting SSH reattach are live on the remote host with no other binding.
+  const deferredSshSessionIdsByTabId = useAppStore((s) =>
+    getResourceUsageDeferredSshSessionIdsByTabId(s, open)
+  )
   const resourceSnapshot = snapshot
   // Why: ptyIdsByTabId tracks mounted/live panes only; Resource Manager reads restored wake hints only for classification.
   const resourceSessionBindings = useMemo<ResourceSessionBindingInputs>(
@@ -778,9 +784,16 @@ export function ResourceUsageStatusSegment({
       ptyIdsByTabId,
       tabsByWorktree,
       terminalLayoutsByTabId,
+      deferredSshSessionIdsByTabId,
       workspaceSessionReady
     }),
-    [ptyIdsByTabId, tabsByWorktree, terminalLayoutsByTabId, workspaceSessionReady]
+    [
+      ptyIdsByTabId,
+      tabsByWorktree,
+      terminalLayoutsByTabId,
+      deferredSshSessionIdsByTabId,
+      workspaceSessionReady
+    ]
   )
 
   // Why: after a kill unmounts the session, focus would fall to <body>; park a ref on the popover body to restore it stably for keyboard users.
@@ -918,11 +931,11 @@ export function ResourceUsageStatusSegment({
     () =>
       open
         ? mergeSnapshotAndSessions(resourceSnapshot, sessions, {
-            tabsByWorktree,
-            ptyIdsByTabId,
-            terminalLayoutsByTabId,
+            // Why spread: the rows and the bulk selector must classify from the identical binding
+            // inputs. Re-listing them here let the row path miss deferred SSH sessions, so their
+            // single-row kill skipped confirmation while bulk cleanup correctly spared them (#8459).
+            ...resourceSessionBindings,
             runtimePaneTitlesByTabId,
-            workspaceSessionReady,
             repoDisplayNameById,
             repoConnectionIdById,
             repoRuntimeScopedById,
@@ -934,11 +947,8 @@ export function ResourceUsageStatusSegment({
       open,
       resourceSnapshot,
       sessions,
-      tabsByWorktree,
-      ptyIdsByTabId,
-      terminalLayoutsByTabId,
+      resourceSessionBindings,
       runtimePaneTitlesByTabId,
-      workspaceSessionReady,
       repoDisplayNameById,
       repoConnectionIdById,
       repoRuntimeScopedById,
@@ -1045,8 +1055,7 @@ export function ResourceUsageStatusSegment({
 
   const handleKillSession = useCallback(
     (session: UnifiedSessionRow): void => {
-      // Why: orphan sessions have no tab here (no unsaved work to lose), so skip the confirm dialog; bound sessions still confirm.
-      if (!session.bound) {
+      if (!requiresKillConfirmation(session)) {
         removeSession(session.sessionId)
         // Why: await the kill before refreshing, else the refresh re-reads the daemon list before the kill lands and re-adds the row.
         void (async () => {
@@ -1068,8 +1077,9 @@ export function ResourceUsageStatusSegment({
     if (!workspaceSessionReady) {
       return
     }
-    const bound = buildResourceSessionBindingIndex(resourceSessionBindings).boundPtyIds
-    const orphans = sessions.filter((s) => !bound.has(s.id))
+    // Why the shared selector: the button's count comes from the same function, so the set killed
+    // is exactly the set advertised. Filtering separately here is how live sessions got killed.
+    const orphans = selectUnboundDaemonSessions(sessions, resourceSessionBindings)
     if (orphans.length === 0) {
       return
     }

@@ -241,6 +241,35 @@ describe('sendRemoteRuntimeRequest', () => {
     })
   })
 
+  it('sends orchestration authentication fields in the admitted encrypted request', async () => {
+    let receivedRequest: Record<string, unknown> | null = null
+    const server = await createOneShotServer({
+      onRequest: (request) => {
+        receivedRequest = request
+      }
+    })
+
+    await sendRemoteRuntimeRequest(
+      server.pairing,
+      'orchestration.federationControl',
+      { dispatch: 'ctx_1' },
+      1000,
+      {
+        orchestrationCapability: 'capability',
+        orchestrationContractVersion: 1,
+        orchestrationRequestId: 'mutation_1'
+      }
+    )
+
+    expect(receivedRequest).toMatchObject({
+      method: 'orchestration.federationControl',
+      params: { dispatch: 'ctx_1' },
+      orchestrationCapability: 'capability',
+      orchestrationContractVersion: 1,
+      orchestrationRequestId: 'mutation_1'
+    })
+  })
+
   it('detaches one-shot socket listeners after a successful response', async () => {
     const offSpy = vi.spyOn(WebSocketClient.prototype, 'off')
     try {
@@ -387,6 +416,7 @@ async function createClosingServer(
 async function createOneShotServer(
   options: {
     response?: (requestId: string) => unknown
+    onRequest?: (request: Record<string, unknown>) => void
   } = {}
 ): Promise<{ pairing: PairingOffer }> {
   const serverKeyPair = generateKeyPair()
@@ -422,7 +452,8 @@ async function createOneShotServer(
         return
       }
 
-      const request = JSON.parse(plaintext) as { id: string }
+      const request = JSON.parse(plaintext) as { id: string } & Record<string, unknown>
+      options.onRequest?.(request)
       const key = sharedKey
       const keepalive = setInterval(() => {
         sendEncrypted(ws, key, { _keepalive: true })
