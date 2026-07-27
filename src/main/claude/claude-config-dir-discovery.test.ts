@@ -3,7 +3,7 @@
 // the stat-only privacy posture (these dirs hold credentials), and the fail-
 // open behavior — all against an injected fs so the real home dir is never
 // touched.
-import { join } from 'node:path'
+import { join, sep } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import {
@@ -85,7 +85,9 @@ describe('discoverLocalClaudeConfigDirNames', () => {
     const markerNames = new Set<string>(CLAUDE_CONFIG_DIR_MARKERS)
     for (const probed of home.probedPaths) {
       const relative = probed.slice(HOME.length + 1)
-      const [dirName, ...rest] = relative.split('/')
+      // Why sep: the impl builds probes with path.join, so on Windows the
+      // relative path is backslash-separated.
+      const [dirName, ...rest] = relative.split(sep)
       expect(['.claude-grok', '.claude.vertex', '.claude-empty', '.claude-file']).toContain(dirName)
       expect(markerNames.has(rest.join('/'))).toBe(true)
     }

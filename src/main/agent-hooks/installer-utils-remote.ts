@@ -214,5 +214,17 @@ async function writeOneShotBackup(
     }
   }
   const mode = await getRemoteFileModeOrDefault(sftp, remotePath, DEFAULT_REMOTE_CONFIG_MODE)
-  await writeFile(sftp, backupPath, content, mode)
+  // Why: tmp + rename so a dropped connection mid-backup cannot leave a
+  // truncated .orca-backup that would then block every later pristine backup.
+  const tmp = `${backupPath}.${randomUUID()}.tmp`
+  try {
+    await writeFile(sftp, tmp, content, mode)
+    await rename(sftp, tmp, backupPath)
+  } finally {
+    try {
+      await unlink(sftp, tmp)
+    } catch {
+      // already gone or never created
+    }
+  }
 }

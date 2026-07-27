@@ -3,6 +3,7 @@ import type { AgentHookInstallStatus, AgentHookTarget } from '../../shared/agent
 import { ampHookService } from '../amp/hook-service'
 import { claudeHookService, createClaudeConfigDirHookService } from '../claude/hook-service'
 import { discoverRemoteClaudeConfigDirNames } from '../claude/claude-config-dir-discovery'
+import { getRemoteConfigPath } from '../claude/hook-settings'
 import { codexHookService } from '../codex/hook-service'
 import { geminiHookService } from '../gemini/hook-service'
 import { antigravityHookService } from '../antigravity/hook-service'
@@ -101,7 +102,10 @@ async function installRemoteDiscoveredClaudeConfigDirHooks(
       result = {
         agent: 'claude',
         state: 'error',
-        configPath: dirName,
+        configPath: getRemoteConfigPath(remoteHome, {
+          configDirName: dirName,
+          scriptBaseName: 'claude-hook'
+        }),
         managedHooksPresent: false,
         detail: error instanceof Error ? error.message : String(error)
       }

@@ -17,7 +17,10 @@ function getAgentIdentityLabel(agent: DashboardAgentRowData): string {
   const base = formatAgentTypeLabel(agent.agentType)
   // Why: a non-default CLAUDE_CONFIG_DIR flavor (e.g. ~/.claude-grok) renders
   // as "Claude · grok" so parallel Claude variants stay distinguishable.
-  const flavor = deriveClaudeConfigDirLabel(agent.entry.configDir)
+  // Claude-only: configDir is Claude-specific — a child row whose agentType is
+  // a task name (e.g. pr-reviewer) must not inherit the pane's flavor label.
+  const flavor =
+    agent.agentType === 'claude' ? deriveClaudeConfigDirLabel(agent.entry.configDir) : null
   return flavor ? `${base} · ${flavor}` : base
 }
 

@@ -68,20 +68,22 @@ export function readRawHooksFile(configPath: string): string | null {
 /** Read-modify-write a hooks settings file with a stale check: if another
  *  writer (the agent CLI itself, a second Orca instance) changed the file
  *  between our read and our replace, the attempt is discarded and re-run
- *  against the fresh content so no concurrent keys are lost. The final
- *  attempt drops the guard so install still converges under a pathological
- *  writer. `mutate` may return null to signal "nothing to change" — the file
- *  is then left untouched (not created, not reformatted, no .bak roll).
+ *  against the fresh content so no concurrent keys are lost. `mutate` may
+ *  return null to signal "nothing to change" — the file is then left
+ *  untouched (not created, not reformatted, no .bak roll).
  *  Returns the written (or unchanged) config, or null when the file is
- *  unparseable. */
+ *  unparseable or retries are exhausted. Pass `onOutcome` to tell the two
+ *  failure modes apart: 'unparseable' | 'retry-exhausted'. */
 export function updateHooksJsonWithRetry(
   configPath: string,
   mutate: (config: HooksConfig) => HooksConfig | null,
-  maxAttempts = 3
+  maxAttempts = 3,
+  onOutcome?: (outcome: 'unparseable' | 'retry-exhausted') => void
 ): HooksConfig | null {
   for (let attempt = 1; attempt <= maxAttempts; attempt++) {
     const { raw: baseline, config } = readHooksJsonWithRaw(resolveHooksJsonWritePath(configPath))
     if (!config) {
+      onOutcome?.('unparseable')
       return null
     }
     const next = mutate(config)
@@ -96,6 +98,7 @@ export function updateHooksJsonWithRetry(
       return next
     }
   }
+  onOutcome?.('retry-exhausted')
   return null
 }
 

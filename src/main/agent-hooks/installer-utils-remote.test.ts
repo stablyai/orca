@@ -222,6 +222,23 @@ describe('installer-utils-remote', () => {
     expect(fs.files.get(`${path}.orca-backup`)).toBe(original)
   })
 
+  it('cleans up the backup tmp file after an atomic backup write', async () => {
+    const { sftp, fs } = createFakeSftp()
+    const path = '/home/u/.claude/settings.json'
+    fs.files.set(path, `${JSON.stringify({ hooks: {} }, null, 2)}\n`)
+
+    await writeHooksJsonRemote(sftp, path, {
+      hooks: { Stop: [{ hooks: [{ type: 'command', command: 'first' }] }] }
+    })
+
+    expect(fs.files.has(`${path}.orca-backup`)).toBe(true)
+    expect(
+      Array.from(fs.files.keys()).some(
+        (key) => key.includes('.orca-backup.') && key.endsWith('.tmp')
+      )
+    ).toBe(false)
+  })
+
   it('preserves an existing settings file when its pre-write read fails', async () => {
     const { sftp, fs } = createFakeSftp()
     const path = '/home/u/.claude/settings.json'
@@ -275,7 +292,9 @@ describe('installer-utils-remote', () => {
       hooks: { Stop: [{ hooks: [{ type: 'command', command: 'new' }] }] }
     })
 
-    expect(fs.openSshRenameCount).toBe(1)
+    // Why: 2 not 1 — the one-shot pristine backup rename also lands via the
+    // overwrite-rename extension now that the backup write is atomic.
+    expect(fs.openSshRenameCount).toBe(2)
     expect(JSON.parse(fs.files.get(path)!).hooks.Stop[0].hooks[0].command).toBe('new')
   })
 

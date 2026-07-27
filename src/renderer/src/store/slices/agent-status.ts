@@ -1925,7 +1925,8 @@ export const createAgentStatusSlice: StateCreator<AppState, [], [], AgentStatusS
             entry.orchestration !== existing.orchestration ||
             entry.subagents !== existing.subagents ||
             entry.providerSession !== existing.providerSession ||
-            entry.interrupted !== existing.interrupted)
+            entry.interrupted !== existing.interrupted ||
+            entry.configDir !== existing.configDir)
         const retentionRelevantChange =
           sortRelevantChange || attributionChanged || doneRetentionFieldsChanged
         // Why: a fresh status means the agent is live again — lift its one-shot retention suppressor.

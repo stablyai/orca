@@ -2,7 +2,6 @@ import { existsSync, rmSync, writeFileSync } from 'node:fs'
 import type { SFTPWrapper } from 'ssh2'
 import type { AgentHookInstallState, AgentHookInstallStatus } from '../../shared/agent-hook-types'
 import {
-  buildWindowsAgentHookCurlPostCommand,
   readHooksJson,
   updateHooksJsonWithRetry,
   writeManagedScript,
@@ -13,12 +12,7 @@ import {
   writeHooksJsonRemote,
   writeManagedScriptRemote
 } from '../agent-hooks/installer-utils-remote'
-import {
-  buildPosixHookPayloadCapture,
-  buildWindowsHookEnvironmentGuardLines,
-  buildWindowsHookStdinDrainEpilogue,
-  WINDOWS_HOOK_STDIN_DRAIN_LABEL
-} from '../agent-hooks/hook-stdin-contract'
+import { getManagedScript } from './managed-hook-script'
 import { getManagedStatusLineScript } from './statusline-script'
 import {
   applyManagedHooks,
@@ -52,76 +46,6 @@ const DEFAULT_CLAUDE_HOOK_SERVICE_OPTIONS: ClaudeHookServiceOptions = {
   agent: 'claude',
   displayName: 'Claude',
   settings: CLAUDE_HOOK_SETTINGS
-}
-
-function getManagedScript(
-  target: 'local' | 'posix' = 'local',
-  options: { skipWhenDevinImportsClaude?: boolean } = {}
-): string {
-  if (target === 'local' && process.platform === 'win32') {
-    return [
-      '@echo off',
-      'setlocal',
-      ...(options.skipWhenDevinImportsClaude
-        ? [
-            // Why: Devin imports only the default Claude hooks; alternate config-dir launches still need their own status.
-            'if "%DEVIN_PROJECT_DIR%"=="" goto :orca_devin_guard_done',
-            `if "%CLAUDE_CONFIG_DIR%"=="" goto :${WINDOWS_HOOK_STDIN_DRAIN_LABEL}`,
-            `for %%I in ("%CLAUDE_CONFIG_DIR%") do if /I "%%~nxI"==".claude" goto :${WINDOWS_HOOK_STDIN_DRAIN_LABEL}`,
-            ':orca_devin_guard_done'
-          ]
-        : []),
-      // Why: call the endpoint file to refresh port/token — a PTY that survived an Orca restart carries stale env; falls through to PTY env if missing.
-      'if defined ORCA_AGENT_HOOK_ENDPOINT if exist "%ORCA_AGENT_HOOK_ENDPOINT%" call "%ORCA_AGENT_HOOK_ENDPOINT%" 2>nul',
-      ...buildWindowsHookEnvironmentGuardLines(),
-      // Why: avoid a second PowerShell startup and identify the config-dir flavor without exposing credentials.
-      buildWindowsAgentHookCurlPostCommand('claude', ['configDir=%CLAUDE_CONFIG_DIR%']),
-      'exit /b 0',
-      ...buildWindowsHookStdinDrainEpilogue(),
-      ''
-    ].join('\r\n')
-  }
-
-  return [
-    '#!/bin/sh',
-    ...buildPosixHookPayloadCapture(),
-    ...(options.skipWhenDevinImportsClaude
-      ? [
-          // Why: Devin imports only the default Claude hooks; alternate config-dir launches still need their own status.
-          'orca_claude_config_dir=${CLAUDE_CONFIG_DIR%/}',
-          'if [ -n "$DEVIN_PROJECT_DIR" ] && { [ -z "$orca_claude_config_dir" ] || [ "${orca_claude_config_dir##*/}" = ".claude" ]; }; then',
-          '  exit 0',
-          'fi'
-        ]
-      : []),
-    // Why: source the endpoint file to refresh port/token — a PTY that survived an Orca restart carries stale env; falls back to PTY env if missing.
-    // Why: suppress stderr / || : so a stray parse error (TOCTOU or CRLF) can't leak into hook output or trip an outer set -e.
-    'if [ -n "$ORCA_AGENT_HOOK_ENDPOINT" ] && [ -r "$ORCA_AGENT_HOOK_ENDPOINT" ]; then',
-    '  . "$ORCA_AGENT_HOOK_ENDPOINT" 2>/dev/null || :',
-    'fi',
-    'if [ -z "$ORCA_AGENT_HOOK_PORT" ] || [ -z "$ORCA_AGENT_HOOK_TOKEN" ] || [ -z "$ORCA_PANE_KEY" ]; then',
-    '  exit 0',
-    'fi',
-    // Why: paths can hold quotes/newlines, so hand-building JSON in shell is unsafe; post the raw payload + metadata as form fields for the receiver to parse.
-    // Why: pipe payload to curl stdin (`payload@-`), not an inline arg, so large tool output stays off the command line (EDR false positives).
-    'printf \'%s\' "$payload" | curl -sS -X POST "http://127.0.0.1:${ORCA_AGENT_HOOK_PORT}/hook/claude" \\',
-    '  --connect-timeout 0.5 --max-time 1.5 \\',
-    '  -H "Content-Type: application/x-www-form-urlencoded" \\',
-    '  -H "X-Orca-Agent-Hook-Token: ${ORCA_AGENT_HOOK_TOKEN}" \\',
-    '  --data-urlencode "paneKey=${ORCA_PANE_KEY}" \\',
-    '  --data-urlencode "tabId=${ORCA_TAB_ID}" \\',
-    '  --data-urlencode "launchToken=${ORCA_AGENT_LAUNCH_TOKEN}" \\',
-    '  --data-urlencode "worktreeId=${ORCA_WORKTREE_ID}" \\',
-    '  --data-urlencode "env=${ORCA_AGENT_HOOK_ENV}" \\',
-    '  --data-urlencode "version=${ORCA_AGENT_HOOK_VERSION}" \\',
-    // Why: identifies which CLAUDE_CONFIG_DIR flavor posted (path string only —
-    // never tokens). Empty for default installs and ignored by the server;
-    // pre-update scripts that omit the field behave identically.
-    '  --data-urlencode "configDir=${CLAUDE_CONFIG_DIR}" \\',
-    '  --data-urlencode "payload@-" >/dev/null 2>&1 || true',
-    'exit 0',
-    ''
-  ].join('\n')
 }
 
 export class ClaudeHookService {
@@ -200,25 +124,36 @@ export class ClaudeHookService {
     // Why: settings.json is also rewritten by the CLI itself; the retry helper
     // re-merges on concurrent change instead of clobbering it (last-writer-wins
     // previously lost keys written between our read and our replace).
-    const updated = updateHooksJsonWithRetry(configPath, (current) => {
-      let nextConfig = applyManagedHooks(
-        current,
-        command,
-        getManagedScriptFileName(this.options.settings)
-      )
-      // Why: the statusline usage feed is Claude-only — OpenClaude data would be misattributed to the Claude provider.
-      if (this.options.agent === 'claude') {
-        nextConfig = this.installManagedStatusLine(nextConfig)
+    let retryOutcome: 'unparseable' | 'retry-exhausted' | null = null
+    const updated = updateHooksJsonWithRetry(
+      configPath,
+      (current) => {
+        let nextConfig = applyManagedHooks(
+          current,
+          command,
+          getManagedScriptFileName(this.options.settings)
+        )
+        // Why: the statusline usage feed is Claude-only — OpenClaude data would be misattributed to the Claude provider.
+        if (this.options.agent === 'claude') {
+          nextConfig = this.installManagedStatusLine(nextConfig)
+        }
+        return nextConfig
+      },
+      3,
+      (outcome) => {
+        retryOutcome = outcome
       }
-      return nextConfig
-    })
+    )
     if (!updated) {
       return {
         agent: this.options.agent,
         state: 'error',
         configPath,
         managedHooksPresent: false,
-        detail: `Could not parse ${this.options.displayName} settings.json`
+        detail:
+          retryOutcome === 'retry-exhausted'
+            ? `${this.options.displayName} settings.json keeps changing under us — retry`
+            : `Could not parse ${this.options.displayName} settings.json`
       }
     }
     return this.getStatus()
@@ -317,24 +252,35 @@ export class ClaudeHookService {
     // between our read and replace must be re-merged, not overwritten. The
     // null return keeps the no-op guarantee: nothing managed present means no
     // write at all (no file/dir creation, no reformat, no .bak roll).
-    const updated = updateHooksJsonWithRetry(configPath, (current) => {
-      const { config: hooksRemoved, changed: hooksChanged } = removeManagedHooks(
-        current,
-        getManagedScriptFileName(this.options.settings)
-      )
-      const { config: nextConfig, changed: statusLineChanged } = removeManagedStatusLine(
-        hooksRemoved,
-        getStatusLineScriptFileName(this.options.settings)
-      )
-      return hooksChanged || statusLineChanged ? nextConfig : null
-    })
+    let retryOutcome: 'unparseable' | 'retry-exhausted' | null = null
+    const updated = updateHooksJsonWithRetry(
+      configPath,
+      (current) => {
+        const { config: hooksRemoved, changed: hooksChanged } = removeManagedHooks(
+          current,
+          getManagedScriptFileName(this.options.settings)
+        )
+        const { config: nextConfig, changed: statusLineChanged } = removeManagedStatusLine(
+          hooksRemoved,
+          getStatusLineScriptFileName(this.options.settings)
+        )
+        return hooksChanged || statusLineChanged ? nextConfig : null
+      },
+      3,
+      (outcome) => {
+        retryOutcome = outcome
+      }
+    )
     if (!updated) {
       return {
         agent: this.options.agent,
         state: 'error',
         configPath,
         managedHooksPresent: false,
-        detail: `Could not parse ${this.options.displayName} settings.json`
+        detail:
+          retryOutcome === 'retry-exhausted'
+            ? `${this.options.displayName} settings.json keeps changing under us — retry`
+            : `Could not parse ${this.options.displayName} settings.json`
       }
     }
     if (this.options.agent === 'claude') {
