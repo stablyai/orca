@@ -2,7 +2,7 @@
 // matrix catches an unread early exit without duplicating template assertions.
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { spawn } from 'node:child_process'
-import { existsSync, mkdtempSync, readFileSync, readdirSync, rmSync } from 'node:fs'
+import { existsSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import type { SFTPWrapper } from 'ssh2'
@@ -156,6 +156,7 @@ const LOCAL_INSTALLERS = [
 type HookRun = {
   exitCode: number | null
   stdinErrors: NodeJS.ErrnoException[]
+  stdout: string
 }
 
 function runHookProcess(
@@ -164,8 +165,9 @@ function runHookProcess(
   env: NodeJS.ProcessEnv
 ): Promise<HookRun> {
   return new Promise((resolve, reject) => {
-    const child = spawn(executable, args, { env, stdio: ['pipe', 'ignore', 'ignore'] })
+    const child = spawn(executable, args, { env, stdio: ['pipe', 'pipe', 'ignore'] })
     const stdinErrors: NodeJS.ErrnoException[] = []
+    let stdout = ''
     const timeout = setTimeout(() => {
       child.kill('SIGKILL')
       reject(new Error('hook did not finish after stdin closed'))
@@ -174,10 +176,13 @@ function runHookProcess(
       clearTimeout(timeout)
       reject(error)
     })
+    child.stdout.on('data', (chunk: Buffer) => {
+      stdout += chunk.toString()
+    })
     child.stdin.on('error', (error: NodeJS.ErrnoException) => stdinErrors.push(error))
     child.on('close', (exitCode) => {
       clearTimeout(timeout)
-      resolve({ exitCode, stdinErrors })
+      resolve({ exitCode, stdinErrors, stdout })
     })
     child.stdin.end(LARGE_PAYLOAD)
   })
@@ -407,6 +412,37 @@ describe.skipIf(process.platform === 'win32')('managed hook stdin lifecycle', ()
     const missing = await runPosixHook(wrapPosixHookCommand('/missing/orca-hook.sh'), { PATH: '' })
     expect(missing.exitCode, 'missing script launcher exit code').toBe(0)
     expect(missing.stdinErrors, 'missing script launcher stdin errors').toHaveLength(0)
+  })
+
+  // Why: an unread stdin still exits 0, so exit codes alone cannot prove the
+  // reader consumed the payload. Assert the captured byte count directly.
+  it.each([
+    ['empty PATH', ''],
+    // Why: /bin/cat is absent on NixOS-style hosts, so an absolute path alone is
+    // not enough; the reader must fall back to the shell's default PATH.
+    ['PATH without coreutils', '/nonexistent'],
+    // Why: a worktree-local `cat` must never receive the hook payload.
+    ['PATH whose first cat is a decoy', '']
+  ])('captures the whole payload with %s', async (label, pathValue) => {
+    const decoyDir = mkdtempSync(join(tmpdir(), 'orca-hook-stdin-decoy-'))
+    try {
+      let effectivePath = pathValue
+      if (label === 'PATH whose first cat is a decoy') {
+        const decoy = join(decoyDir, 'cat')
+        writeFileSync(decoy, '#!/bin/sh\nexit 0\n', { mode: 0o755 })
+        effectivePath = decoyDir
+      }
+      const result = await runHookProcess(
+        '/bin/sh',
+        ['-c', `payload=$(${POSIX_HOOK_STDIN_READER}); printf '%s' "${'${#payload}'}"`],
+        { ...hookEnvironment(), PATH: effectivePath }
+      )
+      expect(result.exitCode, `${label} exit code`).toBe(0)
+      expect(result.stdinErrors, `${label} stdin errors`).toHaveLength(0)
+      expect(result.stdout, `${label} captured bytes`).toBe(String(LARGE_PAYLOAD.length))
+    } finally {
+      rmSync(decoyDir, { recursive: true, force: true })
+    }
   })
 
   it('drains before Claude skips hooks imported by Devin', async () => {

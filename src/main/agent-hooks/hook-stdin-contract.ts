@@ -1,6 +1,10 @@
 export type PosixHookEmptyPayloadPolicy = 'exit' | 'empty-object'
 
-export const POSIX_HOOK_STDIN_READER = '{ /bin/cat 2>/dev/null || cat; }'
+// Why: a stripped PATH must not stop a hook from consuming stdin, or the agent
+// sees exit 127 and a broken pipe mid-write (#8110). `command -p` resolves from
+// the shell's built-in default PATH, so it also survives hosts without /bin/cat
+// (NixOS) and ignores a worktree-local `cat` that could capture the payload.
+export const POSIX_HOOK_STDIN_READER = '{ command -p cat 2>/dev/null || cat; }'
 export const POSIX_HOOK_STDIN_DRAIN_COMMAND = `${POSIX_HOOK_STDIN_READER} >/dev/null 2>&1 || :`
 
 // Why: every POSIX hook must own stdin before any no-op exit; sharing this
