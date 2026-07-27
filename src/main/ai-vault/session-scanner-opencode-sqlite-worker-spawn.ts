@@ -60,6 +60,15 @@ export function listOpenCodeSqliteSessionsViaWorker(args: {
   return getSharedClient().list(args)
 }
 
+export function listHermesSqliteSessionsViaWorker(args: {
+  dbPaths: readonly string[]
+  limit?: number
+  issues: AiVaultScanIssue[]
+  profileNames?: readonly (string | null)[]
+}): Promise<SessionFileCandidate[]> {
+  return getSharedClient().listHermes(args)
+}
+
 /**
  * Parse one OpenCode SQLite session through the shared worker client.
  * @param args.dbPath - Absolute path to the opencode.db file.
@@ -73,4 +82,13 @@ export function parseOpenCodeSqliteSessionViaWorker(args: {
   platform: NodeJS.Platform
 }): Promise<AiVaultSession | null> {
   return getSharedClient().parse(args)
+}
+
+export function parseHermesSqliteSessionViaWorker(args: {
+  dbPath: string
+  sessionId: string
+  platform: NodeJS.Platform
+  profileName?: string | null
+}): Promise<AiVaultSession | null> {
+  return getSharedClient().parseHermes(args)
 }

@@ -10,6 +10,7 @@ import type { AiVaultScanOptions, SessionFileDiscovery } from './session-scanner
 import { normalizeAgentSessionsDir } from './session-scanner-values'
 import { resolveGrokSessionsDir } from '../../shared/grok-session-paths'
 import { antigravityDiscoveries } from './session-scanner-antigravity-sources'
+import { hermesDiscoveries } from './session-scanner-hermes-sources'
 
 const CLAUDE_PROJECTS_DIR = join(homedir(), '.claude', 'projects')
 export const DEFAULT_CODEX_HOME_DIR = join(homedir(), '.codex')
@@ -22,7 +23,6 @@ const COPILOT_SESSIONS_DIR = join(
 )
 const CURSOR_PROJECTS_DIR = join(homedir(), '.cursor', 'projects')
 const GROK_SESSIONS_DIR = resolveGrokSessionsDir()
-const HERMES_SESSIONS_DIR = join(homedir(), '.hermes', 'sessions')
 const ROVO_SESSIONS_DIR = join(homedir(), '.rovodev', 'sessions')
 const OPENCLAW_STATE_DIR = process.env.OPENCLAW_STATE_DIR?.trim() || join(homedir(), '.openclaw')
 const PI_SESSIONS_DIR = normalizeAgentSessionsDir(
@@ -204,27 +204,6 @@ function devinDiscoveries(
     'transcripts'
   ]).map((rootDir) =>
     discoverFiles({ rootDir, limit, agent: 'devin', issues, extensions: ['.json'] })
-  )
-}
-
-function hermesDiscoveries(
-  options: AiVaultScanOptions,
-  wslHomeDirs: readonly string[],
-  limit: number,
-  issues: AiVaultScanIssue[]
-): Promise<SessionFileDiscovery>[] {
-  return sessionRootDirs(options.hermesSessionsDir ?? HERMES_SESSIONS_DIR, wslHomeDirs, [
-    '.hermes',
-    'sessions'
-  ]).map((rootDir) =>
-    discoverFiles({
-      rootDir,
-      limit,
-      agent: 'hermes',
-      issues,
-      extensions: ['.json'],
-      filePredicate: (path) => basename(path).startsWith('session_')
-    })
   )
 }
 

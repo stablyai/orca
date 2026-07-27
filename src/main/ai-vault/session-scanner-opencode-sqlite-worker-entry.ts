@@ -2,6 +2,8 @@ import { parentPort } from 'node:worker_threads'
 import type { AiVaultScanIssue } from '../../shared/ai-vault-types'
 import { listOpenCodeSqliteSessions } from './session-scanner-opencode-sqlite-list'
 import { parseOpenCodeSqliteSession } from './session-scanner-opencode-sqlite'
+import { listHermesSqliteSessions } from './session-scanner-hermes-sqlite-list'
+import { parseHermesSqliteSession } from './session-scanner-hermes-sqlite'
 import type {
   OpenCodeSqliteWorkerRequest,
   OpenCodeSqliteWorkerResponse
@@ -23,18 +25,34 @@ async function handleRequest(
   try {
     if (request.kind === 'list') {
       const issues: AiVaultScanIssue[] = []
-      const candidates = await listOpenCodeSqliteSessions({
-        dbPaths: request.dbPaths,
-        limit: request.limit,
-        issues
-      })
+      const candidates =
+        request.source === 'hermes'
+          ? await listHermesSqliteSessions({
+              dbPaths: request.dbPaths,
+              limit: request.limit,
+              profileNames: request.profileNames,
+              issues
+            })
+          : await listOpenCodeSqliteSessions({
+              dbPaths: request.dbPaths,
+              limit: request.limit,
+              issues
+            })
       return { id: request.id, ok: true, value: { candidates, issues } }
     }
-    const session = await parseOpenCodeSqliteSession({
-      dbPath: request.dbPath,
-      sessionId: request.sessionId,
-      platform: request.platform
-    })
+    const session =
+      request.source === 'hermes'
+        ? await parseHermesSqliteSession({
+            dbPath: request.dbPath,
+            sessionId: request.sessionId,
+            platform: request.platform,
+            profileName: request.profileName
+          })
+        : await parseOpenCodeSqliteSession({
+            dbPath: request.dbPath,
+            sessionId: request.sessionId,
+            platform: request.platform
+          })
     return { id: request.id, ok: true, value: session }
   } catch (err) {
     return { id: request.id, ok: false, error: err instanceof Error ? err.message : String(err) }

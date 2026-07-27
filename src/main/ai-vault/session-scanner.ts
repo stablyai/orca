@@ -32,6 +32,7 @@ import {
   DEFAULT_CODEX_HOME_DIR,
   discoverAiVaultSessionSources
 } from './session-scanner-source-discovery'
+import { canonicalizeCandidates, dedupeSessions } from './session-scanner-hermes-canonicalization'
 import type {
   AiVaultScanOptions,
   SessionFileCandidate,
@@ -75,34 +76,35 @@ export async function scanAiVaultSessions(
     await ensureSessionParseCacheLoaded()
     const discoveries = await discoverAiVaultSessionSources({ options, limitPerAgent, issues })
 
-    const candidates = dedupeCodexRolloutFileAliases(
-      discoveries
-        .flatMap((discovery) =>
-          discovery.files.map(
-            (file): SessionFileCandidate => ({
-              agent: discovery.agent,
-              file,
-              codexHome:
-                discovery.agent === 'codex'
-                  ? codexHomeForSessionsDir(
-                      discovery.rootDir,
-                      options.defaultCodexHomeDir ?? DEFAULT_CODEX_HOME_DIR
-                    )
-                  : null,
-              antigravityHistoryPath:
-                discovery.agent === 'antigravity'
-                  ? antigravityHistoryPathForBrainDir(discovery.rootDir)
-                  : undefined
-            })
-          )
+    const discoveredCandidates = discoveries
+      .flatMap((discovery) =>
+        discovery.files.map(
+          (file): SessionFileCandidate => ({
+            agent: discovery.agent,
+            file,
+            profileName: discovery.profileNamesByFilePath?.[file.path] ?? discovery.profileName,
+            codexHome:
+              discovery.agent === 'codex'
+                ? codexHomeForSessionsDir(
+                    discovery.rootDir,
+                    options.defaultCodexHomeDir ?? DEFAULT_CODEX_HOME_DIR
+                  )
+                : null,
+            antigravityHistoryPath:
+              discovery.agent === 'antigravity'
+                ? antigravityHistoryPathForBrainDir(discovery.rootDir)
+                : undefined
+          })
         )
-        .sort((left, right) => right.file.mtimeMs - left.file.mtimeMs),
-      {
+      )
+      .sort((left, right) => right.file.mtimeMs - left.file.mtimeMs)
+    const candidates = canonicalizeCandidates(
+      dedupeCodexRolloutFileAliases(discoveredCandidates, {
         isCodex: (candidate) => candidate.agent === 'codex',
         getFilePath: (candidate) => candidate.file.path,
         getCodexHome: (candidate) => candidate.codexHome,
         getHardlinkIdentity: (candidate) => codexRolloutHardlinkIdentity(candidate.file)
-      }
+      })
     )
 
     const parsedSessions = await parseSessionCandidates({
@@ -115,7 +117,8 @@ export async function scanAiVaultSessions(
       antigravityWorkspaceResolver
     })
 
-    const cappedSessions = dedupeCodexSessionsBySessionId(parsedSessions)
+    const canonicalSessions = dedupeSessions(dedupeCodexSessionsBySessionId(parsedSessions))
+    const cappedSessions = canonicalSessions
       .sort((left, right) => sessionSortTime(right) - sessionSortTime(left))
       .slice(0, limit)
 
@@ -146,24 +149,13 @@ export async function scanAiVaultSessions(
   })
 }
 
-// In-scope sessions are guaranteed regardless of the recency cap, so the global
-// (already capped) result and the scope result are unioned and de-duplicated by
-// session id, then re-sorted DESC.
 function mergeSessions(
   cappedSessions: AiVaultSession[],
   scopeSessions: AiVaultSession[]
 ): AiVaultSession[] {
-  if (scopeSessions.length === 0) {
-    return cappedSessions
-  }
-  const byId = new Map<string, AiVaultSession>()
-  for (const session of cappedSessions) {
-    byId.set(session.id, session)
-  }
-  for (const session of scopeSessions) {
-    byId.set(session.id, session)
-  }
-  return [...byId.values()].sort((left, right) => sessionSortTime(right) - sessionSortTime(left))
+  return dedupeSessions(dedupeCodexSessionsBySessionId([...cappedSessions, ...scopeSessions])).sort(
+    (left, right) => sessionSortTime(right) - sessionSortTime(left)
+  )
 }
 
 async function scanInScopeSessions(args: {

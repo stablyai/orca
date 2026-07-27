@@ -15,7 +15,9 @@ vi.mock('./session-scanner-opencode-sqlite-worker-spawn', async () => {
   ])
   return {
     listOpenCodeSqliteSessionsViaWorker: listOpenCodeSqliteSessions,
-    parseOpenCodeSqliteSessionViaWorker: parseOpenCodeSqliteSession
+    parseOpenCodeSqliteSessionViaWorker: parseOpenCodeSqliteSession,
+    listHermesSqliteSessionsViaWorker: vi.fn(async () => []),
+    parseHermesSqliteSessionViaWorker: vi.fn(async () => null)
   }
 })
 
