@@ -82,14 +82,34 @@ describe('DECSET 2031 replies follow the chunk-final state (#9993)', () => {
     expect(recorded.subscribes).toBe(1)
   })
 
-  it('treats an unsubscribe that lands in the next chunk as unsubscribed', () => {
+  it('does not answer a subscribe whose withdrawal straddles the chunk boundary', () => {
     const recorded = trackerRecording()
 
-    // The toggle pair straddles the boundary; only the second chunk resolves it.
+    // Same bytes as FISH_PROMPT_HANDOFF, just cut mid-withdrawal by the kernel.
+    // A reply cannot be recalled, so chunk 1 must hold rather than answer-then-regret.
     recorded.tracker.handleChunk(`${ESC}[?2031h prompt ${ESC}[?20`)
     recorded.tracker.handleChunk('31l')
 
-    // Chunk 1 genuinely ended subscribed, so one reply is correct there.
+    expect(recorded.subscribes).toBe(0)
+  })
+
+  it('defers only while the tail could still be 2031, not for any partial sequence', () => {
+    const recorded = trackerRecording()
+
+    // '\x1b[?25' (cursor hide) can never become 2031, so the subscribe that
+    // already landed in this chunk must still be answered immediately.
+    recorded.tracker.handleChunk(`${ESC}[?2031h drawing ${ESC}[?25`)
+
+    expect(recorded.subscribes).toBe(1)
+  })
+
+  it('answers the re-subscribe once when a split toggle resolves back to h', () => {
+    const recorded = trackerRecording()
+
+    recorded.tracker.handleChunk(`${ESC}[?2031h p ${ESC}[?2031l${ESC}[?20`)
+    recorded.tracker.handleChunk('31h')
+
+    // Chunk 1 ends unsubscribed-then-pending, chunk 2 resolves to subscribed.
     expect(recorded.subscribes).toBe(1)
   })
 })

@@ -209,8 +209,17 @@ export function createTerminalTitleTracker(
         // Why finalState, not the sticky subscribe flag: fish toggles 2031 on
         // and off around every prompt, so a chunk that ends unsubscribed must
         // not be answered — the reply would land as text at the prompt (#9993).
+        //
+        // Why the tail check: a withdrawal can straddle a chunk boundary
+        // ("…?2031h…\x1b[?20" | "31l"). Answering the first chunk emits a reply
+        // that the next bytes retract, and a sent reply cannot be recalled — so
+        // hold the decision one chunk while the tail could still resolve to 2031.
+        // Only a subscribe is deferred; withdrawals are safe to apply eagerly
+        // because retiring a subscription writes nothing to the pty.
         if (mode2031Scan.finalState === 'subscribed') {
-          onMode2031Subscribe?.()
+          if (!mode2031Scan.tailMayResolveToMode2031) {
+            onMode2031Subscribe?.()
+          }
         } else if (mode2031Scan.finalState === 'unsubscribed') {
           // null finalState means the chunk carried no 2031 bytes at all, so this
           // fires only on a real withdrawal — not once per ordinary chunk.

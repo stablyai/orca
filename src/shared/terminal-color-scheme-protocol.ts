@@ -24,13 +24,19 @@ export type Mode2031ScanResult = {
   unsubscribe: boolean
   finalState: 'subscribed' | 'unsubscribed' | null
   tail: string
+  /**
+   * The retained tail is a private-mode sequence still capable of resolving to
+   * 2031 once the next chunk arrives — so `finalState` is provisional, not final.
+   */
+  tailMayResolveToMode2031: boolean
 }
 
 const NO_MODE_2031_SEQUENCE: Mode2031ScanResult = {
   subscribe: false,
   unsubscribe: false,
   finalState: null,
-  tail: ''
+  tail: '',
+  tailMayResolveToMode2031: false
 }
 
 export function scanMode2031Sequences(previousTail: string, data: string): Mode2031ScanResult {
@@ -38,11 +44,13 @@ export function scanMode2031Sequences(previousTail: string, data: string): Mode2
     return NO_MODE_2031_SEQUENCE
   }
   const input = `${previousTail}${data}`
+  const tail = extractPrivateModeScanTail(input)
   const result: Mode2031ScanResult = {
     subscribe: false,
     unsubscribe: false,
     finalState: null,
-    tail: extractPrivateModeScanTail(input)
+    tail,
+    tailMayResolveToMode2031: tailCouldStillBeMode2031(tail)
   }
   // oxlint-disable-next-line no-control-regex -- terminal escape sequences require control chars
   const privateModeRe = /\x1b\[\?([0-9;]+)([hl])|\x9b\?([0-9;]+)([hl])/g
@@ -90,4 +98,27 @@ function extractPrivateModeScanTail(input: string): string {
 
 function isIncompletePrivateModeParams(params: string): boolean {
   return /^[0-9;]*$/.test(params)
+}
+
+/**
+ * Whether a retained (incomplete) private-mode tail could still turn out to be a
+ * 2031 toggle. Lets the caller hold a provisional decision for one chunk instead
+ * of answering a subscribe that the very next bytes withdraw (#9993).
+ */
+function tailCouldStillBeMode2031(tail: string): boolean {
+  if (!tail) {
+    return false
+  }
+  // No parameters seen yet ('\x1b', '\x1b[', '\x9b'), so anything is still possible.
+  if (!tail.startsWith('\x1b[?') && !tail.startsWith('\x9b?')) {
+    return true
+  }
+  const params = tail.startsWith('\x1b[?') ? tail.slice(3) : tail.slice(2)
+  const segments = params.split(';')
+  // A already-complete 2031 in the list still decides the toggle once h/l lands.
+  if (segments.slice(0, -1).some((segment) => Number(segment) === 2031)) {
+    return true
+  }
+  // The trailing segment is mid-write: '20' can still become 2031, '1049' cannot.
+  return '2031'.startsWith(segments.at(-1) ?? '')
 }
