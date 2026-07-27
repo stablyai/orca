@@ -64,8 +64,11 @@ describe('PR workflow lint parity', () => {
     const { scripts } = JSON.parse(readFileSync('package.json', 'utf8'))
     const workflow = parse(readFileSync('.github/workflows/pr.yml', 'utf8'))
 
+    // Scan every job: which one hosts the lint steps is an organizational
+    // detail that has already been renamed once (verify -> static_analysis).
     const workflowCommands = new Set(
-      workflow.jobs.verify.steps
+      Object.values(workflow.jobs)
+        .flatMap((job) => job.steps ?? [])
         .filter((step) => typeof step.run === 'string')
         .flatMap((step) => resolveLeafCommands(step.run, scripts))
     )
