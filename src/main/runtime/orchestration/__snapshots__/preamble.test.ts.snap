@@ -19,7 +19,12 @@ Slack, GitHub comments, or any other channel to reach a human during the run.
   # payload.reportPath so the coordinator can find it without a file search.
   #
   # RULE: send worker_done exactly once. Failure is still a worker_done
-  # with subject like "Failed: <reason>" — never silently exit.
+  # with subject like "Failed: <reason>" — never silently exit. That
+  # marks the task failed, not completed. Do not send worker_done for
+  # blocked / decision-required / unresolved-escalation / remaining-gate
+  # outcomes unless the durable task spec explicitly defines a
+  # code-complete / activation-gate split; use escalation or status plus
+  # a continuation task (or coordinator reclassification) instead.
   # Include BOTH taskId and dispatchId in the payload so a late completion
   # from a failed retry cannot complete the current dispatch.
   orca orchestration send --to term_COORD --from term_WORKER \\
