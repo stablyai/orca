@@ -1988,6 +1988,7 @@ describe('getBranchCompare', () => {
       branch: 'main\n',
       probe: { 'refs/remotes/origin/main^{commit}': 'base-oid\n' },
       headOid: 'head-oid\n',
+      baseOid: 'base-oid\n',
       mergeBase: 'merge-base-oid\n',
       nameStatus: 'M\tfile-a.ts\nR100\told-name.ts\tnew-name.ts\nC100\told-copy.ts\tnew-copy.ts\n',
       numstat:
@@ -2052,7 +2053,8 @@ describe('getBranchCompare', () => {
     mockBranchCompareGit({
       branch: 'feature\n',
       probe: { 'refs/remotes/origin/main^{commit}': 'base-oid\n' },
-      headOid: new Error('unborn')
+      headOid: new Error('unborn'),
+      baseOid: 'base-oid\n'
     })
 
     const result = await getBranchCompare('/repo', 'origin/main')
@@ -2075,6 +2077,7 @@ describe('getBranchCompare', () => {
       branch: 'main\n',
       probe: { 'refs/remotes/origin/main^{commit}': 'base-oid\n' },
       headOid: 'head-oid\n',
+      baseOid: 'base-oid\n',
       mergeBase: new Error('no merge base')
     })
 
@@ -2090,6 +2093,7 @@ describe('getBranchCompare', () => {
       branch: 'main\n',
       probe: { 'refs/remotes/origin/main^{commit}': 'base-oid\n' },
       headOid: 'head-oid\n',
+      baseOid: 'base-oid\n',
       mergeBase: 'merge-base-oid\n',
       nameStatus: 'M\tdocs/日本語/sample.md\n',
       numstat: '2\t1\tdocs/日本語/sample.md\n',
@@ -2179,7 +2183,7 @@ describe('getBranchCompare', () => {
     })
   })
 
-  it('compares short remote labels through fully qualified remote-tracking refs', async () => {
+  it('resolves remote-tracking refs separately after probing their commit target', async () => {
     gitExecFileAsyncMock.mockImplementation((args: string[]) => {
       if (args[0] === 'branch') {
         return Promise.resolve({ stdout: 'feature\n' })
@@ -2189,13 +2193,13 @@ describe('getBranchCompare', () => {
         args.includes('--quiet') &&
         args.includes('refs/remotes/origin/main^{commit}')
       ) {
-        return Promise.resolve({ stdout: 'remote-base-oid\n' })
+        return Promise.resolve({ stdout: 'peeled-base-oid\n' })
       }
       if (args[0] === 'rev-parse' && args.includes('HEAD')) {
         return Promise.resolve({ stdout: 'head-oid\n' })
       }
       if (args[0] === 'rev-parse' && args.includes('refs/remotes/origin/main')) {
-        throw new Error('base oid should come from the probe, not a second rev-parse')
+        return Promise.resolve({ stdout: 'raw-base-oid\n' })
       }
       if (args[0] === 'merge-base') {
         return Promise.resolve({ stdout: 'merge-base-oid\n' })
@@ -2214,16 +2218,17 @@ describe('getBranchCompare', () => {
 
     const result = await getBranchCompare('/repo', 'origin/main')
 
-    // Why the probe's oid: it already resolved refs/remotes/origin/main^{commit}, and
-    // re-resolving the same ref was a redundant spawn. The mock above fails loudly if
-    // that second rev-parse comes back.
     expect(result.summary).toMatchObject({
       baseRef: 'origin/main',
-      baseOid: 'remote-base-oid',
+      baseOid: 'raw-base-oid',
       status: 'ready'
     })
     expect(gitExecFileAsyncMock).toHaveBeenCalledWith(
       ['rev-parse', '--verify', '--quiet', 'refs/remotes/origin/main^{commit}'],
+      { cwd: '/repo' }
+    )
+    expect(gitExecFileAsyncMock).toHaveBeenCalledWith(
+      ['rev-parse', '--verify', '--end-of-options', 'refs/remotes/origin/main'],
       { cwd: '/repo' }
     )
   })

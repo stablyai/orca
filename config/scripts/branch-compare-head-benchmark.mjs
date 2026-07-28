@@ -3,9 +3,9 @@
 //
 // Four spawns ran strictly in series before any compare work started: branch
 // --show-current, the base-ref probe, rev-parse HEAD, and rev-parse <base>. compareRef is
-// display-only metadata and HEAD's oid does not depend on the base ref, so three of them
-// are independent. The fourth was redundant outright: the probe already prints the commit
-// oid for the ref it proves, and that value was discarded and re-resolved.
+// display-only metadata and HEAD's oid does not depend on the base ref, so the first three
+// can overlap. The probe oid also replaces the fourth spawn when it proves refs/heads/*;
+// remote-tracking refs require a raw rev-parse because they may store annotated tags.
 //
 // This spawns the real git binary against this repo, so it measures actual process-launch
 // cost rather than a model of it. Over SSH these are host-local spawns inside the relay,
@@ -15,9 +15,9 @@
 //
 // Run with:  node config/scripts/branch-compare-head-benchmark.mjs
 import { execFile } from 'node:child_process'
-import { readFileSync } from 'node:fs'
 import { performance } from 'node:perf_hooks'
 import { fileURLToPath } from 'node:url'
+import { readBranchCompareHead } from '../../src/shared/git-branch-compare-head.ts'
 
 const REPO_ROOT = fileURLToPath(new URL('../..', import.meta.url))
 const ITERATIONS = Number(process.env.ORCA_BRANCH_COMPARE_BENCH_ITERATIONS ?? '8')
@@ -30,16 +30,6 @@ for (const [name, value] of [
 ]) {
   if (!Number.isSafeInteger(value) || value <= 0) {
     throw new Error(`${name} must be a positive integer, received ${value}`)
-  }
-}
-
-// Why re-read the source: this benchmark's claim is that the four reads now run
-// concurrently and the probe's oid is reused. If either reverts, the numbers stop
-// meaning what the header says.
-const STATUS_SOURCE = readFileSync(new URL('../../src/main/git/status.ts', import.meta.url), 'utf8')
-for (const marker of ['resolveWorktreeBaseCommitOid', 'probedOidByRef']) {
-  if (!STATUS_SOURCE.includes(marker)) {
-    throw new Error(`status.ts no longer contains ${marker}; this benchmark is stale`)
   }
 }
 
@@ -80,10 +70,10 @@ async function readSerial(baseRef) {
   return { compareRef, resolvedBaseRef, headOid, baseOid }
 }
 
-// Post-fix: mirrors the current implementation.
+// Production head reader: overlaps independent reads and reuses only safe probe oids.
 async function readConcurrent(baseRef) {
-  const probedOidByRef = new Map()
-  const resolveBase = async () => {
+  const reusableProbedOidByRef = new Map()
+  const resolveBaseRef = async () => {
     if (baseRef.startsWith('refs/')) {
       return baseRef
     }
@@ -93,23 +83,40 @@ async function readConcurrent(baseRef) {
     for (const candidate of candidates) {
       const oid = await probeOid(candidate)
       if (oid !== null) {
-        probedOidByRef.set(candidate, oid)
+        if (candidate.startsWith('refs/heads/')) {
+          reusableProbedOidByRef.set(candidate, oid)
+        }
         return candidate
       }
     }
     return baseRef
   }
-  const [compareRef, resolvedBaseRef, headOid] = await Promise.all([
-    git(['branch', '--show-current'])
-      .then((out) => out || 'HEAD')
-      .catch(() => 'HEAD'),
-    resolveBase(),
-    git(['rev-parse', '--verify', '--end-of-options', 'HEAD'])
-  ])
-  const baseOid =
-    probedOidByRef.get(resolvedBaseRef) ??
-    (await git(['rev-parse', '--verify', '--end-of-options', resolvedBaseRef]))
-  return { compareRef, resolvedBaseRef, headOid, baseOid }
+  const result = await readBranchCompareHead({
+    readCompareRef: () =>
+      git(['branch', '--show-current'])
+        .then((out) => out || 'HEAD')
+        .catch(() => 'HEAD'),
+    resolveBaseRef,
+    readHeadOid: () => git(['rev-parse', '--verify', '--end-of-options', 'HEAD']),
+    readBaseOid: (resolvedBaseRef) => {
+      const reusableOid = reusableProbedOidByRef.get(resolvedBaseRef)
+      return reusableOid === undefined
+        ? git(['rev-parse', '--verify', '--end-of-options', resolvedBaseRef])
+        : Promise.resolve(reusableOid)
+    }
+  })
+  if (!result.headOidResult.ok) {
+    throw result.headOidResult.error
+  }
+  if (!result.baseOidResult.ok) {
+    throw result.baseOidResult.error
+  }
+  return {
+    compareRef: result.compareRef,
+    resolvedBaseRef: result.resolvedBaseRef,
+    headOid: result.headOidResult.oid,
+    baseOid: result.baseOidResult.oid
+  }
 }
 
 function median(samples) {
@@ -179,5 +186,5 @@ for (const baseRef of baseRefs) {
 }
 
 console.log(
-  '\nThe already-qualified refs/... row skips the probe by design, so it only shows the\nconcurrency half. This times the head-of-chain reads, not the whole compare; the\ndiff and rev-list that follow are unchanged.'
+  '\nThe already-qualified refs/... row skips the probe by design, so it only shows the\nconcurrency half. This times the native/WSL head-of-chain reads, not the whole compare;\nthe relay path has separate production-concurrency coverage.'
 )
