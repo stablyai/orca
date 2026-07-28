@@ -219,10 +219,7 @@ export async function readPersistedWindowsPathSegmentsAsync(
     if (!useProductionCache) {
       return segments
     }
-    return cachePersistedWindowsPathSegments(
-      segments,
-      reads.filter((read) => read.failed).length
-    )
+    return cachePersistedWindowsPathSegments(segments, reads.filter((read) => read.failed).length)
   })
 
   if (!useProductionCache) {

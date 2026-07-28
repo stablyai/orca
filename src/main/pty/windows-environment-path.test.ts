@@ -223,9 +223,10 @@ describe('readPersistedWindowsPathSegments', () => {
         'C:\\User'
       ])
       expect(defaultExecFileMock).toHaveBeenCalledTimes(2)
-      await expect(
-        readPersistedWindowsPathSegmentsAsync({ forceRefresh: true })
-      ).resolves.toEqual(['C:\\Machine', 'C:\\User'])
+      await expect(readPersistedWindowsPathSegmentsAsync({ forceRefresh: true })).resolves.toEqual([
+        'C:\\Machine',
+        'C:\\User'
+      ])
       await expect(readPersistedWindowsPathSegmentsAsync()).resolves.toEqual([
         'C:\\Machine',
         'C:\\User'
