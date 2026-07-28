@@ -389,7 +389,7 @@ export default function BrowserAddressBar({
               // spans it edge to edge (matching its px-3) instead of the few
               // pixels the squeezed slot has left.
               overlay
-                ? 'absolute inset-x-3 top-1/2 z-30 -translate-y-1/2 shadow-md'
+                ? 'absolute inset-x-3 top-1/2 z-30 -translate-y-1/2 shadow-[0_10px_24px_rgba(0,0,0,0.18)]'
                 : 'min-w-0 flex-1'
             )}
             // Why: when squeezed the input is zero-width, so clicks land on the
