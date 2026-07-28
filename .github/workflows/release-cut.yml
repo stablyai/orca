@@ -1499,7 +1499,6 @@ jobs:
             Write-Warning 'Restored pre-rebuild installer; this release ships with unsigned inner binaries.'
           }
       # ── End Windows inner-binary signing ───────────────────────────────
-
       - name: Upload unsigned Windows installer for SignPath
         if: matrix.platform == 'win'
         id: upload-unsigned-windows-installer
@@ -1644,8 +1643,41 @@ jobs:
           INNER_SIGNING_COMPLETED: ${{ steps.rebuild-nsis-signed.outcome == 'success' }}
         run: |
           $required = $env:ORCA_WINDOWS_INNER_SIGNATURE_REQUIRED -eq 'true'
+
+          # Why: a fail-open gate that writes nothing is indistinguishable from a
+          # gate that passed. Always leave a verdict in the evidence artifact and
+          # the job summary so a silent degradation is visible (#6487).
+          # Why best-effort: while warn-only, a disk-full or permission error
+          # writing the verdict must not become the thing that fails the release.
+          function Add-GateEvidence([string]$line) {
+            try {
+              Add-Content -Path 'inner-signing-evidence.txt' -Value "`n$line" -ErrorAction Stop
+            } catch {
+              Write-Host "::warning::Could not append to the inner-signing evidence file: $_"
+            }
+          }
+
+          function Add-GateSummary([string]$verdict) {
+            if (-not $env:GITHUB_STEP_SUMMARY) { return }
+            try {
+              Add-Content -Path $env:GITHUB_STEP_SUMMARY -Value "**Windows inner-binary signing:** $verdict" -ErrorAction Stop
+            } catch {
+              Write-Host "::warning::Could not write inner-signing verdict to the job summary: $_"
+            }
+          }
+
+          function Write-GateVerdict([string]$verdict) {
+            try {
+              Set-Content -Path 'inner-signing-evidence.txt' -Value $verdict -ErrorAction Stop
+            } catch {
+              Write-Host "::warning::Could not persist inner-signing verdict: $_"
+            }
+            Add-GateSummary $verdict
+          }
+
           if ($env:INNER_SIGNING_COMPLETED -ne 'true') {
             $message = 'Windows inner-binary signing did not complete; this release ships unsigned inner binaries (fail-open, issue #7785).'
+            Write-GateVerdict "NOT VERIFIED — $message"
             if ($required) { throw $message }
             Write-Host "::warning::$message"
             exit 0
@@ -1654,13 +1686,28 @@ jobs:
           # Why try/catch: while the gate is warn-only, even an unexpected
           # script error (extraction hiccup, missing file) must not block
           # the release — only the flip to required makes failures fatal.
+          # Why tracked separately: a required-mode signature failure must not be
+          # rewritten as ERRORED by the catch below, which would replace the
+          # per-file report with an exception string and lose the diagnostics.
+          $policyFailure = $null
+
           try {
             $report = New-Object System.Collections.Generic.List[string]
             $failures = New-Object System.Collections.Generic.List[string]
 
             # Why: verify the files a user actually gets on disk, not the build
             # tree — 7z parses the NSIS exe directly as its embedded payload.
-            $7za = 'node_modules/7zip-bin/win/x64/7za.exe'
+            # Resolve 7za via app-builder-lib; electron-builder 26.9+ dropped the
+            # bundled 7zip-bin package the old hardcoded path relied on (#6487).
+            $7zaOutput = node config/scripts/resolve-7za-path.mjs
+            $7zaExitCode = $LASTEXITCODE
+            if ($7zaExitCode -ne 0) {
+              throw "The 7za resolver exited with code $7zaExitCode for the inner-binary evidence gate."
+            }
+            $7za = ($7zaOutput | Out-String).Trim()
+            if ([string]::IsNullOrWhiteSpace($7za) -or -not (Test-Path -LiteralPath $7za -PathType Leaf)) {
+              throw "The 7za resolver returned an invalid path for the inner-binary evidence gate: $7za"
+            }
             New-Item -ItemType Directory -Path inner-evidence-extract -Force | Out-Null
             & $7za x 'dist/orca-windows-setup.exe' '-oinner-evidence-extract' -y | Out-Null
 
@@ -1694,15 +1741,31 @@ jobs:
             if ($failures.Count -gt 0) {
               $failures | ForEach-Object { Write-Host "::warning::$_" }
               $message = "Windows inner-binary evidence gate found $($failures.Count) problems."
-              if ($required) { throw $message }
-              Write-Host "::warning::$message Fail-open until ORCA_WINDOWS_INNER_SIGNATURE_REQUIRED is 'true'."
+              # Why assigned before any I/O: a write that throws here would reach
+              # the catch with $policyFailure still null, so a required-mode
+              # signature failure would be re-reported as ERRORED and the per-file
+              # report overwritten — the exact masking the hoist exists to prevent.
+              if ($required) {
+                $policyFailure = $message
+              } else {
+                Write-Host "::warning::$message Fail-open until ORCA_WINDOWS_INNER_SIGNATURE_REQUIRED is 'true'."
+              }
+              Add-GateEvidence "VERDICT: FAILED — $message"
+              Add-GateSummary "FAILED — $message"
             } else {
-              Write-Host "All $($targets.Count) inner binaries in the shipped installer are signed by SignPath Foundation."
+              $ok = "All $($targets.Count) inner binaries in the shipped installer are signed by SignPath Foundation."
+              Add-GateEvidence "VERDICT: PASSED — $ok"
+              Add-GateSummary "PASSED — $ok"
+              Write-Host $ok
             }
           } catch {
+            Write-GateVerdict "ERRORED — $_"
             if ($required) { throw }
             Write-Host "::warning::Windows inner-binary evidence gate errored: $_ (fail-open, issue #7785)."
           }
+
+          # Outside the catch so the FAILED evidence report survives intact.
+          if ($policyFailure) { throw $policyFailure }
 
       - name: Upload Windows inner signing evidence
         if: always() && matrix.platform == 'win'

@@ -527,7 +527,7 @@ describe('Electron runtime package contract', () => {
   it('installs the Electron package binary in PR checks without changing native module ABI', () => {
     const prWorkflow = readFileSync(join(projectDir, '.github/workflows/pr.yml'), 'utf8')
     const parsedWorkflow = parse(prWorkflow)
-    const installStep = parsedWorkflow.jobs.verify.steps.find(
+    const installStep = parsedWorkflow.jobs.test.steps.find(
       (step) => step.name === 'Install Electron package binary for tests'
     )
 
@@ -537,7 +537,7 @@ describe('Electron runtime package contract', () => {
   it('smokes the packaged CLI from outside the checkout in PR checks', () => {
     const prWorkflow = readFileSync(join(projectDir, '.github/workflows/pr.yml'), 'utf8')
     const parsedWorkflow = parse(prWorkflow)
-    const smokeStep = parsedWorkflow.jobs.verify.steps.find(
+    const smokeStep = parsedWorkflow.jobs.package.steps.find(
       (step) => step.name === 'Smoke packaged CLI'
     )
 

@@ -1,6 +1,7 @@
 import { useCallback, type MutableRefObject } from 'react'
 import type { RpcClient } from '../transport/rpc-client'
 import {
+  openMobileNativeChatSendBudget,
   sendMobileNativeChatMessageWithOutcome,
   type MobileNativeChatSendOutcome
 } from './mobile-native-chat-send'
@@ -11,8 +12,14 @@ export type MobileNativeChatMessageSend = {
   /** Composer send that syncs the draft (clear on send, restore on rejection). */
   send: (text: string, images?: string[]) => Promise<boolean>
   /** Outcome-preserving variant: callers that pasted terminal input beforehand
-   *  (image sends) must see 'unknown' to heal a possibly-orphaned paste. */
-  sendWithOutcome: (text: string, images?: string[]) => Promise<MobileNativeChatSendOutcome>
+   *  (image sends) must see 'unknown' to heal a possibly-orphaned paste. Such a
+   *  caller passes its own `deadline` so the paste it already spent and this text
+   *  body share one budget instead of holding the composer for two. */
+  sendWithOutcome: (
+    text: string,
+    images?: string[],
+    deadline?: number
+  ) => Promise<MobileNativeChatSendOutcome>
   /** Answer to an agent question — never touches the composer draft. */
   answerQuestion: (text: string) => Promise<boolean>
 }
@@ -52,10 +59,14 @@ export function useMobileNativeChatMessageSend(args: {
     async (
       text: string,
       images: string[] | undefined,
-      syncComposer: boolean
+      syncComposer: boolean,
+      sharedDeadline?: number
     ): Promise<MobileNativeChatSendOutcome> => {
       const handle = handleRef.current
       const origin = captureSendOrigin(text)
+      // Why: the lease collapses one render after `connState`, so a question-card
+      // answer (which reaches this send directly) would otherwise burn the whole
+      // 15s heal+send budget waiting on a socket that is already gone.
       if (!client || !handle || !origin || !enabled) {
         onSendError('Message not sent (disconnected)')
         return 'rejected'
@@ -64,7 +75,16 @@ export function useMobileNativeChatMessageSend(args: {
       // send (#10228); submitting on top of it would glue the image onto this
       // message. Healed before the draft clear so a failed heal — which sends
       // nothing — leaves the composer exactly as the user left it.
-      const healArgs = { client, terminal: handle, deviceToken: deviceTokenRef.current }
+      // One budget for the whole action: a hung heal must eat into the text send's
+      // time, not hand it a fresh timeout and pin the composer for twice as long.
+      // An image send already opened one covering its paste — keep spending that.
+      const deadline = sharedDeadline ?? openMobileNativeChatSendBudget()
+      const healArgs = {
+        client,
+        terminal: handle,
+        deviceToken: deviceTokenRef.current,
+        deadline
+      }
       if (!(await healMobileNativeChatStaleInput(healArgs))) {
         onSendError('Message not sent')
         return 'rejected'
@@ -79,6 +99,7 @@ export function useMobileNativeChatMessageSend(args: {
         client,
         terminal: handle,
         text,
+        deadline,
         ...(deviceTokenRef.current
           ? { mobileClient: { id: deviceTokenRef.current, type: 'mobile' } }
           : {})
@@ -118,7 +139,8 @@ export function useMobileNativeChatMessageSend(args: {
   )
 
   const sendWithOutcome = useCallback(
-    (text: string, images?: string[]) => sendMessage(text, images, true),
+    (text: string, images?: string[], deadline?: number) =>
+      sendMessage(text, images, true, deadline),
     [sendMessage]
   )
 

@@ -126,7 +126,7 @@ describe('resumeTerminalVisibility reveal repaint', () => {
   })
 
   it('defers backlog and shared atlas recovery until after resume and fit', async () => {
-    // Why: resume before flush avoids DOM bold flash; fit before flush avoids
+    // On macOS resume before flush avoids DOM bold flash; fit before flush avoids
     // writing TUI backlog onto the transient DOM↔WebGL one-column-off grid.
     const order: string[] = []
     const manager = createManager(order)

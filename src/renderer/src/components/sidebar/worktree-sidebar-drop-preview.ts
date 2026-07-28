@@ -3,11 +3,21 @@ import {
   getWorktreeSidebarBoundaryDrop,
   type WorktreeSidebarDragRect
 } from './worktree-sidebar-drag-autoscroll'
+import {
+  getWorktreeSidebarDragReferenceY,
+  getWorktreeSidebarDropAnchorId,
+  resolveWorktreeSidebarDropAnchorIndex,
+  type WorktreeSidebarDragGrab,
+  type WorktreeSidebarDropAnchor
+} from './worktree-sidebar-drag-geometry'
 
 export type WorktreeSidebarDropPreview = {
   dropIndex: number
   dropIndicatorY: number
   previewOffsetsByWorktreeId: ReadonlyMap<string, number>
+  // Identity of the unit the drop inserts before, so the next frame can hold this
+  // decision through a card resize instead of re-deciding from moved geometry.
+  dropAnchorId: string | null
   lineageParentId?: string
 }
 
@@ -92,10 +102,28 @@ export function resolveWorktreeSidebarStatusDropCommitTarget(args: {
     : { target: args.currentTarget, preview: args.currentPreview }
 }
 
+/**
+ * Why: the line must mark the gap the row previews actually open, not the old top
+ * of whatever card happens to sit at `dropIndex`. Those differ by a full card
+ * height whenever the drop shifts that card, and by the tall card's height when
+ * an expanded agent session is involved — which is the line landing "in the wrong
+ * spot". `placeholderTop` is the replayed layout's slot for the dragged card, so
+ * prefer it and fall back only when the drop is a no-op.
+ */
 function getWorktreeSidebarDropIndicatorY(args: {
   rects: readonly WorktreeSidebarDragRect[]
   dropIndex: number
+  placeholderTop: number | null
+  activeRect: WorktreeSidebarDragRect | null
 }): number {
+  if (args.placeholderTop !== null) {
+    return Math.max(0, args.placeholderTop - 3)
+  }
+  // A no-op drop leaves the card where it is; park the line on its own top edge
+  // rather than jumping to a neighbour that never moves.
+  if (args.activeRect) {
+    return Math.max(0, args.activeRect.top - 3)
+  }
   const target = args.rects.find((rect) => rect.groupIndex === args.dropIndex)
   if (target) {
     return Math.max(0, target.top - 3)
@@ -104,18 +132,58 @@ function getWorktreeSidebarDropIndicatorY(args: {
   return last ? last.bottom + 3 : 0
 }
 
+/**
+ * Why: with uniform rows, "first midpoint below the pointer" and "closest center
+ * to the dragged card" agree. With a 116px card next to a 404px expanded one they
+ * do not: the tall card's midpoint sits ~200px from its own top edge, so crossing
+ * it requires dragging far past where the card visually lands. Closest-center
+ * against the dragged card's projected rect is the model sortable lists use, and
+ * it keeps every slot reachable regardless of neighbour heights.
+ */
+function getWorktreeSidebarClosestCenterDropIndex(args: {
+  referenceY: number
+  rects: readonly WorktreeSidebarDragRect[]
+  activeIndex: number
+}): number {
+  let overIndex = args.rects[0]!.groupIndex
+  let bestDistance = Number.POSITIVE_INFINITY
+  for (const rect of args.rects) {
+    const distance = Math.abs((rect.top + rect.bottom) / 2 - args.referenceY)
+    if (distance < bestDistance) {
+      bestDistance = distance
+      overIndex = rect.groupIndex
+    }
+  }
+  // Dropping onto a slot below the dragged card means landing after it.
+  return overIndex > args.activeIndex ? overIndex + 1 : overIndex
+}
+
+function getWorktreeSidebarPointerDropIndex(args: {
+  referenceY: number
+  rects: readonly WorktreeSidebarDragRect[]
+}): number {
+  for (const rect of args.rects) {
+    if (args.referenceY < (rect.top + rect.bottom) / 2) {
+      return rect.groupIndex
+    }
+  }
+  return args.rects.at(-1)!.groupIndex + 1
+}
+
 export function computeWorktreeSidebarDropPreview(args: {
   pointerY: number
   containerTop: number
   scrollTop: number
   rects: readonly WorktreeSidebarDragRect[]
-  // Why: `rects` are held stable so resizing cards cannot move the drop target
-  // under a still pointer. The indicator and row previews still draw from live
-  // geometry, so a card growing mid-drag does not strand them at stale tops.
-  liveRects?: readonly WorktreeSidebarDragRect[]
   groupIds: readonly string[]
   draggedIds: readonly string[]
   draggingWorktreeId?: string | null
+  // Where the card was grabbed, so the drop follows the card rather than the bare
+  // pointer. Omitted for native HTML5 drags, which have no reliable grab offset.
+  grab?: WorktreeSidebarDragGrab | null
+  // A held decision from the previous frame; honoured while the pointer is still
+  // so a resizing card cannot move the target under it.
+  anchor?: WorktreeSidebarDropAnchor | null
 }): WorktreeSidebarDropPreview | null {
   const rects = getWorktreeSidebarDragUnitRects({
     rects: args.rects,
@@ -124,14 +192,18 @@ export function computeWorktreeSidebarDropPreview(args: {
   if (rects.length === 0 || args.groupIds.length === 0) {
     return null
   }
-  const liveUnitRects = args.liveRects
-    ? getWorktreeSidebarDragUnitRects({ rects: args.liveRects, groupIds: args.groupIds })
-    : rects
-  // Why: an empty live measurement (rows unmounted by virtualization) would
-  // collapse the indicator to the top of the list; keep the held geometry then.
-  const renderRects = liveUnitRects.length === rects.length ? liveUnitRects : rects
 
   const localY = args.pointerY - args.containerTop + args.scrollTop
+  const activeIndex = args.draggingWorktreeId
+    ? rects.findIndex((rect) => rect.worktreeId === args.draggingWorktreeId)
+    : -1
+  const activeRect = activeIndex >= 0 ? rects[activeIndex]! : null
+  const referenceY = getWorktreeSidebarDragReferenceY({
+    localY,
+    grab: args.grab ?? null,
+    activeRect
+  })
+
   const first = rects[0]!
   const last = rects.at(-1)!
   const boundaryDrop = getWorktreeSidebarBoundaryDrop({
@@ -144,25 +216,36 @@ export function computeWorktreeSidebarDropPreview(args: {
     return null
   }
 
-  let dropIndex = last.groupIndex + 1
-  if (boundaryDrop.kind === 'drop') {
+  const heldIndex = args.anchor
+    ? resolveWorktreeSidebarDropAnchorIndex({ anchor: args.anchor, rects })
+    : null
+  let dropIndex: number
+  if (heldIndex !== null) {
+    dropIndex = heldIndex
+  } else if (boundaryDrop.kind === 'drop') {
     dropIndex = boundaryDrop.dropIndex
+  } else if (activeRect) {
+    dropIndex = getWorktreeSidebarClosestCenterDropIndex({ referenceY, rects, activeIndex })
   } else {
-    for (const rect of rects) {
-      const mid = (rect.top + rect.bottom) / 2
-      if (localY < mid) {
-        dropIndex = rect.groupIndex
-        break
-      }
-    }
+    dropIndex = getWorktreeSidebarPointerDropIndex({ referenceY, rects })
   }
-  const indicatorY = getWorktreeSidebarDropIndicatorY({ rects: renderRects, dropIndex })
-  const previewOffsetsByWorktreeId = buildWorktreeDragPreviewOffsets({
+
+  const { offsets, placeholderTop } = buildWorktreeDragPreviewOffsets({
     groupIds: args.groupIds,
     draggedIds: args.draggedIds,
     draggingWorktreeId: args.draggingWorktreeId,
     dropIndex,
-    rects: renderRects
+    rects
   })
-  return { dropIndex, dropIndicatorY: indicatorY, previewOffsetsByWorktreeId }
+  return {
+    dropIndex,
+    dropIndicatorY: getWorktreeSidebarDropIndicatorY({
+      rects,
+      dropIndex,
+      placeholderTop,
+      activeRect
+    }),
+    previewOffsetsByWorktreeId: offsets,
+    dropAnchorId: getWorktreeSidebarDropAnchorId({ rects, dropIndex })
+  }
 }

@@ -1,5 +1,6 @@
 import { parseAuthenticatedFrame, parseReadyFrame } from './remote-runtime-request-frames'
 import type { RemoteRuntimeClientError } from './remote-runtime-client-error'
+import { SESSION_TAB_CLOSE_INTENT_RUNTIME_CAPABILITY } from './protocol-version'
 import { dispatchSharedControlFrame } from './remote-runtime-shared-control-frame-dispatch'
 import { parseSharedControlFrame } from './remote-runtime-shared-control-protocol'
 import { resolveSharedControlReadyWaiters } from './remote-runtime-shared-control-state'
@@ -32,7 +33,11 @@ export function handleSharedControlTextFrame(args: {
       return
     }
     args.setState('awaiting_authenticated')
-    args.sendEncrypted({ type: 'e2ee_auth', deviceToken: args.deviceToken })
+    args.sendEncrypted({
+      type: 'e2ee_auth',
+      deviceToken: args.deviceToken,
+      clientCapabilities: [SESSION_TAB_CLOSE_INTENT_RUNTIME_CAPABILITY]
+    })
     return
   }
 

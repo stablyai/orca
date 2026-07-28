@@ -136,7 +136,6 @@ export type ManagedPaneInternal = {
   gpuRenderingEnabled: boolean
   webglAttachmentDeferred: boolean
   webglDisabledAfterContextLoss: boolean
-  webglRebuildDeferred?: boolean
   // Why: expose complex-output diagnostics without changing renderer choice;
   // auto renderer fallback is reserved for platform or WebGL failures.
   hasComplexScriptOutput: boolean
@@ -170,6 +169,8 @@ export type ManagedPaneInternal = {
   // Stored so disposePane() can detach the streamed-output hover-cache reset
   // that keeps freshly printed links linkifiable without a scroll.
   linkifierHoverResetDisposable?: IDisposable | null
+  // Stored because mouseleave does not bubble from xterm's screen.
+  linkifierMouseLeaveResetDisposable?: IDisposable | null
   // Stored so disposePane() can deregister the joiner; terminal.dispose()
   // does not remove registered character joiners.
   arabicShapingJoinerCleanup?: (() => void) | null

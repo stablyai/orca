@@ -26,6 +26,13 @@ import {
   releaseRendererPtyVisibilityClaim,
   setRendererPtyVisibilityClaim
 } from './pty-renderer-delivery-claims'
+import { getRendererAppPlatform } from '@/lib/renderer-app-platform'
+import { getTerminalVisibilityEffectPhase } from './terminal-visibility-effect-phase'
+
+const useTerminalVisibilityEffect =
+  getTerminalVisibilityEffectPhase(getRendererAppPlatform()) === 'layout'
+    ? useLayoutEffect
+    : useEffect
 
 type UseTerminalPaneGlobalEffectsArgs = {
   tabId: string
@@ -130,8 +137,8 @@ export function useTerminalPaneGlobalEffects({
     }
   }, [rendererVisible, paneTransportsRef])
 
-  // Why layout: pre-paint WebGL resume avoids one-frame DOM bold flash on reveal.
-  useLayoutEffect(() => {
+  // macOS can rebuild WebGL pre-paint without blocking reveal on slow ANGLE paths.
+  useTerminalVisibilityEffect(() => {
     isActiveRef.current = isActive
     isVisibleRef.current = rendererVisible
     postPaintVisibilityRecoveryRef.current = applyTerminalVisibilityTransition({

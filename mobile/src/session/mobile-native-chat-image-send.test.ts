@@ -68,4 +68,36 @@ describe('pasteMobileNativeChatImagePaths', () => {
     expect(client.calls[1]?.params.text).toBe('\x1b[200~/tmp/a.png\x1b[201~')
     expect(client.calls[0]?.params).not.toHaveProperty('client')
   })
+
+  it('aborts rather than scheduling a write past the shared paste deadline', async () => {
+    vi.useFakeTimers()
+    try {
+      const responses = [sendResult(true), sendResult(true), sendResult(true)]
+      const calls: { timeoutMs: unknown }[] = []
+      // Each write burns 10s, so the 15s sequence budget is spent by the third.
+      const client = {
+        sendRequest: vi.fn(async (_method: string, _params?: unknown, options?: unknown) => {
+          calls.push({ timeoutMs: (options as { timeoutMs: number }).timeoutMs })
+          vi.advanceTimersByTime(10_000)
+          return responses.shift()!
+        })
+      }
+
+      const ok = await pasteMobileNativeChatImagePaths({
+        client,
+        terminal: 'term-1',
+        deviceToken: null,
+        imagePaths: ['/tmp/a.png', '/tmp/b.png']
+      })
+
+      expect(ok).toBe(false)
+      // Clear + first image only; the second image is never written.
+      expect(calls).toHaveLength(2)
+      expect(calls[0]?.timeoutMs).toBe(15_000)
+      // Positive-but-small remainder still gets the floor.
+      expect(calls[1]?.timeoutMs).toBe(5_000)
+    } finally {
+      vi.useRealTimers()
+    }
+  })
 })

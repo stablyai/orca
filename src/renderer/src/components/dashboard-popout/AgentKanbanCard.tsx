@@ -86,7 +86,10 @@ export const AgentKanbanCard = memo(
         )}
       >
         <div className="flex items-center gap-1.5">
-          <AgentIcon agent={agentTypeToIconAgent(card.agentType)} size={14} />
+          {/* Why: a bare <svg> flex item shrinks with the row — long worktree names squashed the icon. */}
+          <span className="inline-flex shrink-0">
+            <AgentIcon agent={agentTypeToIconAgent(card.agentType)} size={14} />
+          </span>
           <span
             // Why: same unvisited treatment as the sidebar's DashboardAgentRow —
             // bold+bright until acked, normal+muted after — so both surfaces

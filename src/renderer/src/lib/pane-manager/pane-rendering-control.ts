@@ -4,16 +4,10 @@ import {
   attachWebgl,
   clearTerminalWebglAttachBackoff,
   disposeWebgl,
-  isPaneWebglContextLost,
   markComplexScriptOutput,
   resetWebglTextureAtlas
 } from './pane-webgl-renderer'
-import {
-  releaseRetainedWebglPane,
-  retainSuspendedWebglPane,
-  shouldRetainSuspendedWebglContexts
-} from './pane-webgl-context-retention'
-import { rebuildAttachedWebgl, reattachWebglIfNeeded } from './pane-webgl-reattach'
+import { reattachWebglIfNeeded } from './pane-webgl-reattach'
 
 export function setPaneGpuRenderingState(
   panes: Map<number, ManagedPaneInternal>,
@@ -49,17 +43,9 @@ export function markPaneComplexScriptOutput(
 }
 
 export function suspendPaneRendering(panes: Iterable<ManagedPaneInternal>): void {
-  const retainLiveContexts = shouldRetainSuspendedWebglContexts()
   for (const pane of panes) {
     pane.webglAttachmentDeferred = true
-    if (!retainLiveContexts) {
-      disposeWebgl(pane)
-      continue
-    }
-    const evicted = retainSuspendedWebglPane(pane)
-    if (evicted) {
-      disposeWebgl(evicted)
-    }
+    disposeWebgl(pane)
   }
 }
 
@@ -69,31 +55,8 @@ export function resumePaneRendering(panes: Iterable<ManagedPaneInternal>): void 
   // loss, and bounding retries to resume events cannot loop on live loss.
   clearTerminalWebglAttachBackoff()
   for (const pane of panes) {
-    releaseRetainedWebglPane(pane)
-    const wasDeferred = pane.webglAttachmentDeferred
-    const rebuildDeferred = pane.webglRebuildDeferred === true
     pane.webglAttachmentDeferred = false
     pane.webglDisabledAfterContextLoss = false
-    pane.webglRebuildDeferred = false
-    const contextLost = Boolean(pane.webglAddon && isPaneWebglContextLost(pane))
-    if (wasDeferred && pane.webglAddon && !contextLost) {
-      if (rebuildDeferred) {
-        rebuildAttachedWebgl(pane)
-        continue
-      }
-      // Shared-atlas recovery skips deferred panes, so repaint the retained model now.
-      try {
-        if (pane.terminal.rows > 0) {
-          pane.terminal.refresh(0, pane.terminal.rows - 1)
-        }
-      } catch {
-        /* ignore — pane may be tearing down during resume */
-      }
-      continue
-    }
-    if (contextLost) {
-      disposeWebgl(pane)
-    }
     reattachWebglIfNeeded(pane)
   }
 }

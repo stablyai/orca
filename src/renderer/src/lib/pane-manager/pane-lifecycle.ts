@@ -9,6 +9,7 @@ import { cancelDeferredScrollRestore } from './pane-scroll'
 import { activateOrcaTerminalUnicodeProvider } from '../../../../shared/terminal-unicode-provider'
 import { attachTerminalMouseWheelMultiplier } from './pane-terminal-mouse-wheel'
 import { attachTerminalScrollIntentTracking } from './terminal-scroll-intent-dom-tracking'
+import { installTerminalLinkifierHoverResetOnMouseLeave } from './terminal-linkifier-hover-reset-on-mouseleave'
 import { installTerminalLinkifierHoverResetOnWrite } from './terminal-linkifier-hover-reset-on-write'
 import { attachDomRendererFocusClassSync } from './pane-dom-focus-class-sync'
 import { attachWebgl, cancelPendingWebglRefresh, disposeWebgl } from './pane-webgl-renderer'
@@ -62,6 +63,7 @@ export function openTerminal(pane: ManagedPaneInternal): void {
   // line; invalidate the linkifier hover cache when output lands so the next
   // pointer move re-linkifies it.
   pane.linkifierHoverResetDisposable = installTerminalLinkifierHoverResetOnWrite(terminal)
+  pane.linkifierMouseLeaveResetDisposable = installTerminalLinkifierHoverResetOnMouseLeave(terminal)
 
   // Activate Orca's Unicode 11 width shim *before* any caller-driven write. CJK / emoji /
   // ZWJ codepoints get baked into the buffer at the active unicode version on
@@ -167,18 +169,6 @@ export function disposeLigatures(pane: ManagedPaneInternal): void {
   }
 }
 
-function rebuildWebglAfterLigatureChange(pane: ManagedPaneInternal): void {
-  if (!pane.webglAddon) {
-    return
-  }
-  if (pane.webglAttachmentDeferred) {
-    pane.webglRebuildDeferred = true
-    return
-  }
-  disposeWebgl(pane)
-  attachWebgl(pane)
-}
-
 export function attachLigatures(pane: ManagedPaneInternal): void {
   if (pane.ligaturesAddon) {
     return
@@ -189,15 +179,16 @@ export function attachLigatures(pane: ManagedPaneInternal): void {
     pane.ligaturesAddon = ligaturesAddon
     // Why: ligatures can be enabled after rows already rendered, especially
     // from Settings. Force existing glyph runs to be recomputed immediately.
-    if (!pane.webglAttachmentDeferred) {
-      pane.terminal.refresh(0, pane.terminal.rows - 1)
-    }
+    pane.terminal.refresh(0, pane.terminal.rows - 1)
     // Why: the WebGL renderer builds its glyph texture atlas at activation
     // time, so `font-feature-settings` applied after WebGL loaded won't
     // reach the GPU-rendered cells until the atlas is rebuilt. The upstream
     // docs call this out explicitly — reactivating WebGL after ligatures
     // forces a fresh atlas that includes the ligated glyphs.
-    rebuildWebglAfterLigatureChange(pane)
+    if (pane.webglAddon) {
+      disposeWebgl(pane)
+      attachWebgl(pane)
+    }
   } catch (err) {
     console.warn('[terminal] ligatures addon failed to attach for pane', pane.id, err)
     pane.ligaturesAddon = null
@@ -214,7 +205,10 @@ export function setLigaturesEnabled(pane: ManagedPaneInternal, enabled: boolean)
     // Why: ligatures lived inside the WebGL atlas, so after disposing the
     // addon the atlas still holds the ligated glyphs. Rebuild it so text
     // renders as the non-ligated fallback immediately.
-    rebuildWebglAfterLigatureChange(pane)
+    if (pane.webglAddon) {
+      disposeWebgl(pane)
+      attachWebgl(pane)
+    }
   }
 }
 
@@ -244,6 +238,8 @@ export function disposePane(
   pane.terminalScrollIntentDisposable = null
   pane.linkifierHoverResetDisposable?.dispose()
   pane.linkifierHoverResetDisposable = null
+  pane.linkifierMouseLeaveResetDisposable?.dispose()
+  pane.linkifierMouseLeaveResetDisposable = null
   // Deregister the RTL shaping joiner: terminal.dispose() below does not.
   try {
     pane.arabicShapingJoinerCleanup?.()

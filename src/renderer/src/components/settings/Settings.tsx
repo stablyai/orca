@@ -51,6 +51,7 @@ import { NotificationsPane } from './NotificationsPane'
 import { VoicePane } from './VoicePane'
 import { SshPane } from './SshPane'
 import { ExperimentalPane } from './ExperimentalPane'
+import { PluginsSettingsSection } from './PluginsSettingsSection'
 import { AgentsPane } from './AgentsPane'
 import { OrchestrationPane } from './OrchestrationPane'
 import { LinearAgentSkillPane } from './LinearAgentSkillPane'
@@ -280,6 +281,7 @@ function Settings(): React.JSX.Element {
   const settings = useAppStore((s) => s.settings)
   const keybindings = useAppStore((s) => s.keybindings)
   const updateSettings = useAppStore((s) => s.updateSettings)
+  const updateSettingsOrThrow = useAppStore((s) => s.updateSettingsOrThrow)
   const setActiveRuntimeEnvironmentPreference = useAppStore(
     (s) => s.setActiveRuntimeEnvironmentPreference
   )
@@ -1723,6 +1725,14 @@ function Settings(): React.JSX.Element {
                     />
                   ) : null}
                 </SettingsSection>
+
+                {showDesktopOnlySettings ? (
+                  <PluginsSettingsSection
+                    mounted={isSectionMounted('plugins')}
+                    settings={settings}
+                    updateSettings={updateSettingsOrThrow}
+                  />
+                ) : null}
 
                 {settingsProjectList.map((settingsProject) => {
                   const repoSectionId = `repo-${settingsProject.representativeRepoId}`

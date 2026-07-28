@@ -48,6 +48,7 @@ import { registerTelemetryHandlers } from './telemetry'
 import { registerBrowserHandlers } from './browser'
 import { registerShellHandlers } from './shell'
 import { registerPetHandlers } from './pet'
+import { registerPluginHandlers } from './plugins'
 import { registerUIHandlers, setTrustedUIRendererWebContentsId } from './ui'
 import { registerEmulatorFrameStreamHandlers } from './emulator-frame-stream'
 import { registerEmulatorVideoStreamHandlers } from './emulator-video-stream'
@@ -86,6 +87,8 @@ import {
   prepareRuntimeAiVaultSessionResume,
   scanRuntimeAiVaultSessions
 } from '../ai-vault/runtime-session-scanner'
+import type { PluginService } from '../plugins/plugin-service'
+import type { PluginMarketplaceHandlerServices } from './plugin-marketplaces'
 
 let registered = false
 
@@ -115,7 +118,9 @@ export function registerCoreHandlers(
   agentAwakeService?: AgentAwakeService,
   crashReports?: CrashReportStore,
   keybindings?: KeybindingService,
-  lifecycleOptions: CoreHandlerLifecycleOptions = {}
+  lifecycleOptions: CoreHandlerLifecycleOptions = {},
+  pluginService?: PluginService,
+  marketplaceServices?: PluginMarketplaceHandlerServices
 ): void {
   // Why: on macOS the app can stay alive after all windows close, then
   // openMainWindow() is called again on 'activate'. ipcMain.handle() throws
@@ -175,7 +180,12 @@ export function registerCoreHandlers(
     registerAutomationHandlers(store, automations)
   }
   if (keybindings) {
-    registerKeybindingHandlers(keybindings)
+    registerKeybindingHandlers(keybindings, () => {
+      void pluginService?.reconcileActivationState()
+    })
+  }
+  if (pluginService) {
+    registerPluginHandlers(store, pluginService, runtime, marketplaceServices)
   }
   registerTelemetryHandlers(store)
   registerOrcaProfileHandlers(store, {
@@ -201,7 +211,7 @@ export function registerCoreHandlers(
   registerFilesystemWatcherHandlers()
   registerRuntimeHandlers(runtime)
   registerRuntimeEnvironmentHandlers(store)
-  registerEphemeralVmHandlers(store)
+  registerEphemeralVmHandlers(store, pluginService)
   registerAiVaultHandlers({
     getAdditionalCodexHomePaths: lifecycleOptions.getAdditionalAiVaultCodexHomePaths,
     prepareSessionResume: lifecycleOptions.prepareAiVaultSessionResume,

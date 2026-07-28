@@ -353,6 +353,15 @@ describe('orca root help', () => {
     expect(logSpy.mock.calls[0][0]).toContain(
       'orca terminal create --worktree active --command "codex"'
     )
+    expect(logSpy.mock.calls[0][0]).toContain(
+      'orchestration worker-start Start a supervised worker locally or on a connected Orca server'
+    )
+    expect(logSpy.mock.calls[0][0]).toContain(
+      'orchestration ask         Ask the coordinator a blocking question'
+    )
+    expect(logSpy.mock.calls[0][0]).toContain(
+      'orchestration worker-abandon Fence an uncertain worker without claiming it stopped'
+    )
     expect(callMock).not.toHaveBeenCalled()
   })
 
@@ -405,6 +414,20 @@ describe('orca root help', () => {
     )
     expect(listIssuesHelp).toContain('--workspace <id|all>  Connected Linear workspace id, or all')
     expect(listIssuesHelp).not.toContain('Line cursor from a previous read')
+    expect(callMock).not.toHaveBeenCalled()
+  })
+
+  it('describes worker-read cursors as opaque', async () => {
+    const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {})
+    logSpy.mockClear()
+
+    await main(['orchestration', 'worker-read', '--help'], '/tmp/repo')
+
+    const help = String(logSpy.mock.calls[0][0])
+    expect(help).toContain(
+      '--cursor <cursor>      Opaque cursor returned by a previous worker-read page'
+    )
+    expect(help).not.toContain('Line cursor from a previous read')
     expect(callMock).not.toHaveBeenCalled()
   })
 
@@ -501,6 +524,7 @@ describe('orca root help', () => {
 describe('orca cli worktree awareness', () => {
   const originalTerminalHandle = process.env.ORCA_TERMINAL_HANDLE
   const originalUserDataPath = process.env.ORCA_USER_DATA_PATH
+  const originalDevCliInvocation = process.env.ORCA_DEV_CLI_INVOCATION
   const originalPairingCode = process.env.ORCA_PAIRING_CODE
   const originalRemotePairing = process.env.ORCA_REMOTE_PAIRING
   const originalEnvironment = process.env.ORCA_ENVIRONMENT
@@ -511,6 +535,7 @@ describe('orca cli worktree awareness', () => {
     callMock.mockReset()
     delete process.env.ORCA_TERMINAL_HANDLE
     delete process.env.ORCA_USER_DATA_PATH
+    delete process.env.ORCA_DEV_CLI_INVOCATION
     delete process.env.ORCA_WORKSPACE_ID
     delete process.env.ORCA_WORKTREE_ID
     // Isolate the pane key so claude-teams tests that set it don't leak a
@@ -554,6 +579,11 @@ describe('orca cli worktree awareness', () => {
       delete process.env.ORCA_USER_DATA_PATH
     } else {
       process.env.ORCA_USER_DATA_PATH = originalUserDataPath
+    }
+    if (originalDevCliInvocation === undefined) {
+      delete process.env.ORCA_DEV_CLI_INVOCATION
+    } else {
+      process.env.ORCA_DEV_CLI_INVOCATION = originalDevCliInvocation
     }
     if (originalPairingCode === undefined) {
       delete process.env.ORCA_PAIRING_CODE
@@ -3489,17 +3519,11 @@ describe('orca cli worktree awareness', () => {
     expect(logSpy).toHaveBeenCalledWith('Sent 2 messages to 2 recipients')
   })
 
-  it('passes all reset scope explicitly for no-flag orchestration reset', async () => {
-    callMock.mockResolvedValueOnce(okFixture('req_reset', { reset: 'all' }))
-    vi.spyOn(console, 'log').mockImplementation(() => {})
-
+  it('rejects no-flag orchestration reset before calling the runtime', async () => {
     await main(['orchestration', 'reset'], '/tmp/repo')
 
-    expect(callMock).toHaveBeenCalledWith('orchestration.reset', {
-      all: true,
-      tasks: undefined,
-      messages: undefined
-    })
+    expect(callMock).not.toHaveBeenCalled()
+    expect(process.exitCode).toBe(1)
   })
 
   it.each([
@@ -3517,16 +3541,6 @@ describe('orca cli worktree awareness', () => {
       args: ['orchestration', 'reset', '--messages'],
       params: { all: undefined, tasks: undefined, messages: true },
       reset: 'messages'
-    },
-    {
-      args: ['orchestration', 'reset', '--tasks', '--messages'],
-      params: { all: undefined, tasks: true, messages: true },
-      reset: 'tasks'
-    },
-    {
-      args: ['orchestration', 'reset', '--all', '--tasks'],
-      params: { all: true, tasks: true, messages: undefined },
-      reset: 'all'
     }
   ])('passes explicit reset flags through for $args', async ({ args, params, reset }) => {
     callMock.mockResolvedValueOnce(okFixture('req_reset', { reset }))
@@ -3535,6 +3549,16 @@ describe('orca cli worktree awareness', () => {
     await main(args, '/tmp/repo')
 
     expect(callMock).toHaveBeenCalledWith('orchestration.reset', params)
+  })
+
+  it.each([
+    ['orchestration', 'reset', '--tasks', '--messages'],
+    ['orchestration', 'reset', '--all', '--tasks']
+  ])('rejects conflicting reset scopes for $args', async (...args) => {
+    await main(args, '/tmp/repo')
+
+    expect(callMock).not.toHaveBeenCalled()
+    expect(process.exitCode).toBe(1)
   })
 
   it('rejects unknown task-update status with an enum-aware error', async () => {
@@ -3627,6 +3651,33 @@ describe('orca cli worktree awareness', () => {
       inject: true,
       devMode: true
     })
+  })
+
+  it('passes dev mode from an explicit dev CLI marker with a custom profile path', async () => {
+    process.env.ORCA_TERMINAL_HANDLE = 'term_sender'
+    process.env.ORCA_USER_DATA_PATH = '/tmp/federation-acceptance-profile'
+    process.env.ORCA_DEV_CLI_INVOCATION = '1'
+    callMock.mockResolvedValueOnce({
+      id: 'req_dispatch',
+      ok: true,
+      result: {
+        dispatch: { id: 'ctx_1', task_id: 'task_1', status: 'dispatched' }
+      },
+      _meta: {
+        runtimeId: 'runtime-1'
+      }
+    })
+    vi.spyOn(console, 'log').mockImplementation(() => {})
+
+    await main(
+      ['orchestration', 'dispatch', '--task', 'task_1', '--to', 'term_worker', '--inject'],
+      '/tmp/repo'
+    )
+
+    expect(callMock).toHaveBeenCalledWith(
+      'orchestration.dispatch',
+      expect.objectContaining({ devMode: true })
+    )
   })
 
   it('uses the resolved enclosing worktree for terminal consumers', async () => {
@@ -3733,11 +3784,14 @@ describe('orca cli worktree awareness', () => {
         host: {
           totalMemory: 8 * 1024 * 1024,
           freeMemory: 2 * 1024 * 1024,
+          availableMemory: 2 * 1024 * 1024,
+          availableMemorySource: 'free-memory',
           usedMemory: 6 * 1024 * 1024,
           memoryUsagePercent: 75,
           cpuCoreCount: 8,
           loadAverage1m: 1.25
         },
+        processMemoryMetric: 'rss',
         totalCpu: 3.75,
         totalMemory: 2 * 1024 * 1024,
         collectedAt: 1000
@@ -3750,6 +3804,8 @@ describe('orca cli worktree awareness', () => {
     expect(callMock).toHaveBeenCalledWith('diagnostics.memory')
     const output = logSpy.mock.calls.flat().join('\n')
     expect(output).toContain('totalMemory: 2.0 MB')
+    expect(output).toContain('processMemoryMetric: summed RSS; shared or aliased pages may repeat')
+    expect(output).toContain('hostAvailable: 2.0 MB (free-memory)')
     expect(output).toContain('app: 1.0 MB')
     expect(output).toContain('- feature  1.0 MB  2.5%  1 session')
   })

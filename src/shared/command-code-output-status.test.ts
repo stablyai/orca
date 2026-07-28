@@ -315,3 +315,36 @@ function maxStringContextLength(contexts: unknown[]): number {
     ...contexts.map((context) => (typeof context === 'string' ? context.length : 0))
   )
 }
+
+describe('terminal control stripping', () => {
+  function promptFrom(raw: string): string | null {
+    let captured: string | null = null
+    const detector = createCommandCodeOutputStatusDetector({
+      startupCommand: 'command-code',
+      onWorking: (prompt) => {
+        captured = prompt
+      }
+    })
+    detector.observe(raw)
+    return captured
+  }
+
+  it('strips control bytes wherever they sit around the prompt text', () => {
+    expect(promptFrom('❯ plain prompt\r\n\x1b[35m✻ Thinking...\x1b[0m')).toBe('plain prompt')
+    expect(promptFrom('\x07❯ leading control\r\n\x1b[35m✻ Thinking...\x1b[0m')).toBe(
+      'leading control'
+    )
+    expect(promptFrom('❯ trailing control\x07\r\n\x1b[35m✻ Thinking...\x1b[0m')).toBe(
+      'trailing control'
+    )
+    expect(promptFrom('❯ adjacent\x07\x01\x02controls\r\n\x1b[35m✻ Thinking...\x1b[0m')).toBe(
+      'adjacentcontrols'
+    )
+  })
+
+  it('preserves multi-byte text and newlines while stripping', () => {
+    expect(promptFrom('❯ 日本語 \u{1f389} prompt\r\n\x1b[35m✻ Thinking...\x1b[0m')).toBe(
+      '日本語 \u{1f389} prompt'
+    )
+  })
+})

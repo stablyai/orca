@@ -6,6 +6,7 @@ import { UpdateCard } from './UpdateCard'
 
 const openUrl = vi.fn()
 const download = vi.fn()
+const check = vi.fn()
 
 function renderAfterAvailableStatus(): void {
   useAppStore.setState({
@@ -26,6 +27,7 @@ beforeEach(() => {
   useAppStore.setState(useAppStore.getInitialState(), true)
   openUrl.mockReset()
   download.mockReset()
+  check.mockReset()
   Object.defineProperty(window, 'api', {
     configurable: true,
     value: {
@@ -34,7 +36,7 @@ beforeEach(() => {
       shell: { openUrl },
       ui: { set: vi.fn().mockResolvedValue(undefined) },
       updater: {
-        check: vi.fn(),
+        check,
         dismissNudge: vi.fn(),
         download,
         quitAndInstall: vi.fn().mockResolvedValue(undefined)
@@ -92,5 +94,39 @@ describe('UpdateCard Windows signature failures', () => {
     expect(screen.getByRole('button', { name: 'Hide details' }).getAttribute('aria-expanded')).toBe(
       'true'
     )
+  })
+})
+
+describe('UpdateCard local builds', () => {
+  it('does not link local versions to GitHub release downloads', () => {
+    useAppStore.setState({
+      updateStatus: {
+        state: 'available',
+        version: '1.4.100-local.1.abc',
+        changelog: null,
+        source: 'local'
+      },
+      updateChangelog: null,
+      dismissedUpdateVersion: null,
+      updateCardCollapsed: false,
+      updateReassuranceSeen: true
+    })
+    render(<UpdateCard />)
+
+    expect(screen.queryByText('Release notes')).toBeNull()
+    fireEvent.click(screen.getByRole('button', { name: 'Update' }))
+    expect(download).toHaveBeenCalledTimes(1)
+
+    act(() =>
+      useAppStore.getState().setUpdateStatus({
+        state: 'error',
+        message: 'signature rejected',
+        source: 'local'
+      })
+    )
+    expect(screen.getByText('Local Build Error')).toBeTruthy()
+    expect(screen.queryByRole('button', { name: 'Download Manually' })).toBeNull()
+    fireEvent.click(screen.getByRole('button', { name: 'Choose Another Build' }))
+    expect(check).toHaveBeenCalledWith({ localBuild: true })
   })
 })

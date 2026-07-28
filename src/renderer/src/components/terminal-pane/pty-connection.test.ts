@@ -4803,6 +4803,42 @@ describe('connectPanePty', () => {
     _resetTerminalPaneRecoveryForTests()
   })
 
+  it('quarantines the interrupted line after a write-unavailable remount, but never device replies', async () => {
+    const { connectPanePty } = await import('./pty-connection')
+    const { _resetTerminalPaneRecoveryForTests } = await import('./terminal-pane-recovery')
+    _resetTerminalPaneRecoveryForTests()
+    const remountTerminalTabForRecovery = vi.fn<(tabId: string) => boolean>(() => true)
+    mockStoreState = { ...mockStoreState, remountTerminalTabForRecovery } as StoreState
+    const transport = createMockTransport('daemon-pty')
+    let writeUnavailable: (() => void) | undefined
+    transport.connect.mockImplementation(async ({ callbacks }: { callbacks: ConnectCallbacks }) => {
+      writeUnavailable = callbacks.onWriteUnavailable
+      return { id: 'daemon-pty' }
+    })
+    transportFactoryQueue.push(transport)
+    const pane = createPane(1)
+
+    connectPanePty(pane as never, createManager(1) as never, createDeps() as never)
+    await flushAsyncTicks(6)
+    writeUnavailable?.()
+    await flushAsyncTicks(6)
+    expect(remountTerminalTabForRecovery).toHaveBeenCalledWith('tab-1')
+
+    // The surviving tail of `echo hi; rm -rf x`: reaching the fresh shell would
+    // let the user's own Enter run `rm -rf x` (#10065 follow-up).
+    sendTerminalInputThroughPane(pane, 'cho hi; rm -rf x')
+    expect(transport.sendInput).not.toHaveBeenCalledWith('cho hi; rm -rf x')
+    // A program that queries during reattach hangs if its reply is dropped.
+    sendTerminalInputThroughPane(pane, '\x1b[3;1R')
+    expect(transport.sendInputImmediate).toHaveBeenCalledWith('\x1b[3;1R')
+    sendTerminalInputThroughPane(pane, '\r')
+    expect(transport.sendInput).not.toHaveBeenCalledWith('\r')
+    // The terminator disarmed it, so the next real command reaches the shell.
+    sendTerminalInputThroughPane(pane, 'ls\r')
+    expect(transport.sendInput).toHaveBeenCalledWith('ls\r')
+    _resetTerminalPaneRecoveryForTests()
+  })
+
   it('recovers a wedged write pipeline after accepted input without renderer output', async () => {
     vi.useFakeTimers()
     const { connectPanePty } = await import('./pty-connection')
@@ -5869,6 +5905,88 @@ describe('connectPanePty', () => {
     expect(resolveMockPaneWindowsShiftEnterEncoding(mockStoreState, paneKey)).toBe('alt-enter')
   })
 
+  it('disarms stale TUI modes in the emulator after a confirmed return to shell', async () => {
+    vi.useFakeTimers()
+    const { connectPanePty } = await import('./pty-connection')
+    vi.mocked(window.api.pty.confirmForegroundProcess).mockResolvedValue('bash')
+    const dataCallbackRef: { current: ((data: string) => void) | null } = { current: null }
+    const ptyId = 'pty-stale-mode-disarm'
+    const transport = createMockTransport(ptyId)
+    transport.connect.mockImplementation(async ({ callbacks }: { callbacks: ConnectCallbacks }) => {
+      dataCallbackRef.current = callbacks.onData ?? null
+      return { id: ptyId }
+    })
+    transportFactoryQueue.push(transport)
+    const paneKey = makePaneKey('tab-1', LEAF_1)
+    const pane = createPane(1)
+    const { writes } = captureCallbackTerminalWrites(pane)
+
+    connectPanePty(
+      pane as never,
+      createManager(1) as never,
+      createDeps({ isVisibleRef: { current: false } }) as never
+    )
+    await vi.advanceTimersByTimeAsync(20)
+    await flushAsyncTicks()
+    mockStoreState.agentLaunchConfigByPaneKey[paneKey] = {
+      launchConfig: { agentArgs: '', agentEnv: {} },
+      identity: { agentType: 'droid' }
+    }
+
+    // A SIGKILLed agent emits no mode teardown; only the shell's next prompt
+    // mark arrives. The bare 133;D must not disarm yet — the foreground read
+    // has not confirmed the agent is gone.
+    dataCallbackRef.current?.('\x1b]133;D;0\x07')
+    expect(writes.some((w) => w.includes(POST_REPLAY_REATTACH_RESET))).toBe(false)
+
+    await vi.advanceTimersByTimeAsync(350)
+    await flushAsyncTicks()
+
+    const disarm = writes.find((w) => w.includes(POST_REPLAY_REATTACH_RESET))
+    expect(disarm).toBeDefined()
+    // The live shell re-arms bracketed paste at its prompt before the disarm
+    // fires; the reset must not strip it.
+    expect(disarm).not.toContain('\x1b[?2004l')
+  })
+
+  it('keeps armed modes while the agent still owns the foreground after a leaked 133;D', async () => {
+    vi.useFakeTimers()
+    const { connectPanePty } = await import('./pty-connection')
+    vi.mocked(window.api.pty.confirmForegroundProcess).mockResolvedValue('droid')
+    const dataCallbackRef: { current: ((data: string) => void) | null } = { current: null }
+    const ptyId = 'pty-stale-mode-live-agent'
+    const transport = createMockTransport(ptyId)
+    transport.connect.mockImplementation(async ({ callbacks }: { callbacks: ConnectCallbacks }) => {
+      dataCallbackRef.current = callbacks.onData ?? null
+      return { id: ptyId }
+    })
+    transportFactoryQueue.push(transport)
+    const paneKey = makePaneKey('tab-1', LEAF_1)
+    const pane = createPane(1)
+    const { writes } = captureCallbackTerminalWrites(pane)
+
+    connectPanePty(
+      pane as never,
+      createManager(1) as never,
+      createDeps({ isVisibleRef: { current: false } }) as never
+    )
+    await vi.advanceTimersByTimeAsync(20)
+    await flushAsyncTicks()
+    mockStoreState.agentLaunchConfigByPaneKey[paneKey] = {
+      launchConfig: { agentArgs: '', agentEnv: {} },
+      identity: { agentType: 'droid' }
+    }
+
+    // A full-screen agent's nested command shell leaks a 133;D onto the main
+    // PTY; the confirming read republishes the live agent, so its armed
+    // mouse/kitty modes must survive untouched.
+    dataCallbackRef.current?.('\x1b]133;D;0\x07')
+    await vi.advanceTimersByTimeAsync(350 + 1200 + 6000)
+    await flushAsyncTicks()
+
+    expect(writes.some((w) => w.includes(POST_REPLAY_REATTACH_RESET))).toBe(false)
+  })
+
   it('retires stale routing after unavailable command-finish reads without asserting shell', async () => {
     vi.useFakeTimers()
     const { connectPanePty } = await import('./pty-connection')
@@ -6269,6 +6387,53 @@ describe('connectPanePty', () => {
       expect.objectContaining({ sessionId: otherTabPtyId })
     )
     expect(deps.updateTabPtyId).not.toHaveBeenCalledWith('tab-1', otherTabPtyId)
+  })
+
+  it('fresh-spawns a shell into any PTY-less tab, so agent launches must never publish one', async () => {
+    // Why: #2989 depends on PTY-less tabs taking this legitimate fresh-shell path.
+    const { connectPanePty } = await import('./pty-connection')
+    const transport = createMockTransport()
+    transport.connect.mockImplementation(async (opts: { sessionId?: string }) => {
+      if (opts.sessionId) {
+        return { id: opts.sessionId }
+      }
+      const onPtySpawn = createdTransportOptions[0]?.onPtySpawn as
+        | ((ptyId: string) => void)
+        | undefined
+      onPtySpawn?.('stray-shell-pty')
+      return 'stray-shell-pty'
+    })
+    transportFactoryQueue.push(transport)
+    // Reproduce the pre-fix gap between createTab and PTY binding.
+    mockStoreState = {
+      ...mockStoreState,
+      tabsByWorktree: { 'wt-1': [{ id: 'tab-1', ptyId: null }] },
+      ptyIdsByTabId: { 'tab-1': [] },
+      terminalLayoutsByTabId: {
+        'tab-1': {
+          root: { type: 'leaf', leafId: LEAF_1 },
+          activeLeafId: LEAF_1,
+          expandedLeafId: null
+        }
+      },
+      agentLaunchConfigByPaneKey: {
+        [`tab-1:${LEAF_1}`]: {
+          launchConfig: { agentCommand: 'claude', agentArgs: '', agentEnv: {} },
+          identity: { agentType: 'claude' }
+        }
+      }
+    } as StoreState
+    const deps = createDeps()
+
+    const pane = createPane(1)
+    connectPanePty(pane as never, createManager(1) as never, deps as never)
+    await flushAsyncTicks()
+
+    // Launch registration alone cannot identify a PTY to attach.
+    expect(transport.connect).toHaveBeenCalledWith(
+      expect.objectContaining({ url: '', cols: expect.any(Number) })
+    )
+    expect(deps.updateTabPtyId).toHaveBeenCalledWith('tab-1', 'stray-shell-pty')
   })
 
   it('spawns a fresh PTY when a restored daemon split session cannot reattach', async () => {
@@ -15781,6 +15946,61 @@ describe('connectPanePty', () => {
     )
 
     expect(createRemoteRuntimePtyTransport).toHaveBeenCalledWith('hub-a', expect.any(Object))
+  })
+
+  it('still spawns locally when the worktree row itself proves a local host', async () => {
+    // The hydration guard must key off "nothing names the host", not "no repo row" — a
+    // worktree stamped hostId 'local' is resolved even before its repo merges.
+    const { connectPanePty } = await import('./pty-connection')
+    const { createIpcPtyTransport } = await import('./pty-transport')
+    const transport = createMockTransport()
+    transportFactoryQueue.push(transport)
+    mockStoreState = {
+      ...mockStoreState,
+      tabsByWorktree: { 'wt-local': [{ id: 'tab-1', ptyId: null }] },
+      worktreesByRepo: {
+        repo1: [{ id: 'wt-local', repoId: 'repo1', path: '/tmp/wt-local', hostId: 'local' }]
+      },
+      repos: []
+    } as StoreState
+
+    connectPanePty(
+      createPane(1) as never,
+      createManager(1) as never,
+      createDeps({ worktreeId: 'wt-local', cwd: '/tmp/wt-local' }) as never
+    )
+
+    expect(createIpcPtyTransport).toHaveBeenCalled()
+  })
+
+  it('withholds a local spawn while a repo-backed worktree has no hydrated host', async () => {
+    // Regression: an SSH worktree whose repo row hadn't merged yet resolved to a null
+    // connectionId and spawned on the local daemon with the remote cwd, so the pane never
+    // bound a PTY (Docker SSH watcher-isolation timeout).
+    const { connectPanePty } = await import('./pty-connection')
+    const { createIpcPtyTransport } = await import('./pty-transport')
+    const { createRemoteRuntimePtyTransport } = await import('./remote-runtime-pty-transport')
+    const transport = createMockTransport()
+    transportFactoryQueue.push(transport)
+    mockStoreState = {
+      ...mockStoreState,
+      tabsByWorktree: { 'wt-remote': [{ id: 'tab-1', ptyId: null }] },
+      // Why: the worktree row exists (so the owner is not "ambiguous") but its repo has
+      // not landed yet — exactly the window that used to fail open to local.
+      worktreesByRepo: {
+        repo1: [{ id: 'wt-remote', repoId: 'repo1', path: '/tmp/orca-docker-relay-perf-repo' }]
+      },
+      repos: []
+    } as StoreState
+
+    const deps = createDeps({
+      worktreeId: 'wt-remote',
+      cwd: '/tmp/orca-docker-relay-perf-repo'
+    })
+    connectPanePty(createPane(1) as never, createManager(1) as never, deps as never)
+
+    expect(createIpcPtyTransport).not.toHaveBeenCalled()
+    expect(createRemoteRuntimePtyTransport).not.toHaveBeenCalled()
   })
 
   it('keeps the floating terminal local even while a runtime is active', async () => {

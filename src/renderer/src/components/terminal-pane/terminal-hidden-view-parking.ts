@@ -107,6 +107,26 @@ export function canParkTerminalWorktreeRenderers(args: {
   })
 }
 
+export function canManuallyParkTerminalWorktreeRenderers(args: {
+  worktreeId: string
+  terminalTabs: readonly ColdParkableTerminalTab[]
+  pendingStartupByTabId: Readonly<Record<string, unknown>>
+  parkingEnabled: boolean
+}): boolean {
+  return (
+    args.terminalTabs.length > 0 &&
+    canParkTerminalWorktreeRenderers({
+      ...args,
+      isVisible: false,
+      shouldMeasureHiddenWorktree: false,
+      hasActivityTerminalPortal: false,
+      hiddenSinceMs: 0,
+      nowMs: 0,
+      coldParkDelayMs: 0
+    })
+  )
+}
+
 export function canParkTerminalTabRenderer(args: {
   worktreeId: string
   terminalTab: TerminalTabColdParkCandidate

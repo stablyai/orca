@@ -36,7 +36,8 @@ import {
   IMMEDIATE_PTY_EXIT_TIMEOUT_MS,
   MAX_RELAY_PTY_SESSIONS,
   PtyHandler,
-  attachIdentityMismatches
+  attachIdentityMismatches,
+  formatNodePtyUnavailableMessage
 } from './pty-handler'
 import type { RelayDispatcher } from './dispatcher'
 
@@ -373,6 +374,24 @@ describe('PtyHandler', () => {
     expect(mockPtySpawn).toHaveBeenCalledOnce()
   })
 
+  it('hedges both causes on Linux and offers the build-tools remedy nowhere else', () => {
+    const linux = formatNodePtyUnavailableMessage('linux')
+    expect(linux).toContain('Remote terminals are unavailable')
+    // Conditional, not asserted: a host with build-essential can still hit an ABI/Node-version flip.
+    expect(linux).toMatch(/If it is missing the C\/C\+\+ build tools/)
+    expect(linux).toContain('python3')
+    expect(linux).toContain('version and architecture match the installed binding')
+
+    // Windows/macOS ship node-pty prebuilds, so "install make/g++/python3" sends the user chasing nothing.
+    for (const platform of ['win32', 'darwin'] as const) {
+      const message = formatNodePtyUnavailableMessage(platform)
+      expect(message).toContain('Remote terminals are unavailable')
+      expect(message).not.toContain('build tools')
+      expect(message).not.toContain('python3')
+      expect(message).toMatch(/reconnect/i)
+    }
+  })
+
   it('normalizes a missing native binding as degraded node-pty availability', async () => {
     mockPtySpawn.mockImplementationOnce(() => {
       throw new Error(
@@ -381,7 +400,7 @@ describe('PtyHandler', () => {
     })
 
     await expect(dispatcher.callRequest('pty.spawn', {})).rejects.toThrow(
-      'node-pty is not available on this remote host'
+      'Remote terminals are unavailable'
     )
     expect(handler.activePtyCount).toBe(0)
   })
