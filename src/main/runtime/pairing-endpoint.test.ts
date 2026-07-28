@@ -1,5 +1,10 @@
 import { describe, expect, it } from 'vitest'
 import { resolveAdvertisedPairingEndpoint } from './pairing-endpoint'
+import {
+  PAIRING_ENDPOINT_MAX_CHARACTERS,
+  PAIRING_OFFER_VERSION,
+  PairingOfferSchema
+} from '../../shared/mobile-relay-pairing-offer'
 
 describe('resolveAdvertisedPairingEndpoint', () => {
   const bound = 'ws://0.0.0.0:6768'
@@ -49,5 +54,25 @@ describe('resolveAdvertisedPairingEndpoint', () => {
       ok: false,
       reason: 'invalid_advertised_endpoint'
     })
+  })
+
+  it('matches the pairing-offer endpoint length boundary', () => {
+    const prefix = 'wss://example.test/'
+    const atLimit = `${prefix}${'a'.repeat(PAIRING_ENDPOINT_MAX_CHARACTERS - prefix.length)}`
+    const aboveLimit = `${atLimit}a`
+    const offer = (endpoint: string) => ({
+      v: PAIRING_OFFER_VERSION,
+      endpoint,
+      deviceToken: 'token',
+      publicKeyB64: 'key'
+    })
+
+    expect(resolveAdvertisedPairingEndpoint(bound, atLimit)).toEqual({
+      ok: true,
+      endpoint: atLimit
+    })
+    expect(PairingOfferSchema.safeParse(offer(atLimit)).success).toBe(true)
+    expect(resolveAdvertisedPairingEndpoint(bound, aboveLimit).ok).toBe(false)
+    expect(PairingOfferSchema.safeParse(offer(aboveLimit)).success).toBe(false)
   })
 })

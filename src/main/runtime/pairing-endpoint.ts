@@ -1,4 +1,5 @@
 import { isIP } from 'node:net'
+import { PAIRING_ENDPOINT_MAX_CHARACTERS } from '../../shared/mobile-relay-pairing-offer'
 
 export const INVALID_PAIRING_ENDPOINT_GUIDANCE =
   'Use a reachable hostname, host:port, IPv4/IPv6 literal, or ws(s):// URL. HTTP(S) URLs are normalized to WebSocket URLs.'
@@ -39,6 +40,9 @@ export function resolveAdvertisedPairingEndpoint(
 }
 
 function resolveFullUrl(value: string): PairingEndpointResolution {
+  if (value.length > PAIRING_ENDPOINT_MAX_CHARACTERS) {
+    return invalid()
+  }
   let endpoint: URL
   try {
     endpoint = new URL(value)
@@ -118,6 +122,9 @@ function formatWebSocketUrl(url: URL): string {
 }
 
 function valid(endpoint: string): PairingEndpointResolution {
+  if (endpoint.length > PAIRING_ENDPOINT_MAX_CHARACTERS) {
+    return invalid()
+  }
   return { ok: true, endpoint }
 }
 

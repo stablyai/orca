@@ -1,3 +1,5 @@
+import { PAIRING_ENDPOINT_MAX_CHARACTERS } from '../mobile-relay-pairing-offer'
+
 // Why: pairing entry points must accept the same endpoint forms as the main process.
 const IPV4_OCTET = '(?:25[0-5]|2[0-4][0-9]|1[0-9][0-9]|[1-9]?[0-9])'
 const IPV4 = `(?:${IPV4_OCTET}\\.){3}${IPV4_OCTET}`
@@ -20,7 +22,7 @@ export type ParseManualAddressResult = { ok: true; address: string } | { ok: fal
 
 export function parseManualNetworkAddress(input: string): ParseManualAddressResult {
   const trimmed = input.trim()
-  if (trimmed === '') {
+  if (trimmed === '' || trimmed.length > PAIRING_ENDPOINT_MAX_CHARACTERS) {
     return { ok: false, error: ERROR_MESSAGE }
   }
   if (/\s/.test(trimmed)) {
@@ -65,11 +67,7 @@ export function parseManualNetworkAddress(input: string): ParseManualAddressResu
   return { ok: false, error: ERROR_MESSAGE }
 }
 
-// Why: mirrors `parsePairingAddressOverride` in src/main/runtime/runtime-rpc.ts
-// so the UI only accepts what the main process's pairing endpoint resolution
-// can already handle. IPv6 stays out of scope (same as that function), so a
-// second colon is left in `host` and fails the grammar checks below instead
-// of being misparsed as a port.
+// Why: only a single colon can separate a hostname and port; IPv6 is parsed first.
 function splitHostPort(value: string): { host: string; port: string | null } {
   const firstColon = value.indexOf(':')
   if (firstColon === -1 || value.includes(':', firstColon + 1)) {
@@ -93,7 +91,7 @@ function isValidPairingUrl(value: string): boolean {
   try {
     const url = new URL(value)
     const hostname = url.hostname.replace(/^\[|\]$/g, '').toLowerCase()
-    return (
+    const validShape =
       ['http:', 'https:', 'ws:', 'wss:'].includes(url.protocol) &&
       hostname !== '' &&
       hostname !== '*' &&
@@ -103,7 +101,18 @@ function isValidPairingUrl(value: string): boolean {
       url.password === '' &&
       url.hash === '' &&
       url.port !== '0'
-    )
+    if (!validShape) {
+      return false
+    }
+    if (url.protocol === 'http:') {
+      url.protocol = 'ws:'
+    } else if (url.protocol === 'https:') {
+      url.protocol = 'wss:'
+    }
+    const normalized = url.toString()
+    const endpoint =
+      url.pathname === '/' && !url.search ? normalized.replace(/\/$/, '') : normalized
+    return endpoint.length <= PAIRING_ENDPOINT_MAX_CHARACTERS
   } catch {
     return false
   }

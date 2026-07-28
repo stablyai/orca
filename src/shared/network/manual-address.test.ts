@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest'
 import { parseManualNetworkAddress } from './manual-address'
+import { PAIRING_ENDPOINT_MAX_CHARACTERS } from '../mobile-relay-pairing-offer'
 
 describe('parseManualNetworkAddress', () => {
   describe('IPv4', () => {
@@ -226,6 +227,17 @@ describe('parseManualNetworkAddress', () => {
   })
 
   describe('length and whitespace', () => {
+    it('matches the shared pairing endpoint length boundary', () => {
+      const prefix = 'wss://example.com/'
+      const atLimit = `${prefix}${'a'.repeat(PAIRING_ENDPOINT_MAX_CHARACTERS - prefix.length)}`
+      const aboveLimit = `${atLimit}a`
+
+      expect(atLimit).toHaveLength(PAIRING_ENDPOINT_MAX_CHARACTERS)
+      expect(parseManualNetworkAddress(atLimit)).toEqual({ ok: true, address: atLimit })
+      expect(aboveLimit).toHaveLength(PAIRING_ENDPOINT_MAX_CHARACTERS + 1)
+      expect(parseManualNetworkAddress(aboveLimit).ok).toBe(false)
+    })
+
     it('rejects inputs longer than 253 chars', () => {
       const long = `${'a'.repeat(250)}.ts.net`
       expect(long.length).toBeGreaterThan(253)
