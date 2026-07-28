@@ -147,6 +147,7 @@ export function normalizeAgentSessionsDir(
   return normalized
 }
 
+/** Return a positive integer or the provided fallback. */
 export function clampPositiveInteger(value: number | undefined, fallback: number): number {
   return typeof value === 'number' && Number.isInteger(value) && value > 0 ? value : fallback
 }
