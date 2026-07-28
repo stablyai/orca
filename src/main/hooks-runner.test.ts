@@ -57,7 +57,9 @@ describe('createSetupRunnerScript', () => {
           ORCA_ROOT_PATH: '/test/repo',
           ORCA_WORKTREE_PATH: 'C:\\repo\\feature\\',
           ORCA_WORKSPACE_NAME: 'feature'
-        })
+        }),
+        // Why: native Windows worktrees without a configured setup shell keep the cmd runner.
+        shell: { family: 'cmd' }
       })
       expect(vi.mocked(fs.writeFileSync)).toHaveBeenCalledWith(
         'C:\\repo\\.git\\worktrees\\feature\\orca\\setup-runner.cmd',

@@ -427,15 +427,17 @@ export function createSetupRunnerScript(
   projectRuntime?: ProjectExecutionRuntimeResolution | HookRuntimeTarget,
   setupShell?: SetupRunnerShell
 ): WorktreeSetupLaunch {
-  return createWorktreeRunnerScript(
+  return createWorktreeRunnerScript({
     repo,
     worktreePath,
     script,
-    'setup-runner',
-    getHookRuntimeTarget(projectRuntime),
-    shouldWaitForSetupBeforeAgentStartup(repo.hookSettings?.setupAgentStartupPolicy),
+    runnerBaseName: 'setup-runner',
+    runtimeTarget: getHookRuntimeTarget(projectRuntime),
+    waitForAgentStartup: shouldWaitForSetupBeforeAgentStartup(
+      repo.hookSettings?.setupAgentStartupPolicy
+    ),
     setupShell
-  )
+  })
 }
 
 export function getSetupRunnerEnvVars(repo: Repo, worktreePath: string): Record<string, string> {
@@ -478,24 +480,33 @@ export function createIssueCommandRunnerScript(
   projectRuntime?: ProjectExecutionRuntimeResolution | HookRuntimeTarget
 ): WorktreeSetupLaunch {
   // Why: writing long commands into a runner script avoids the PTY line editor wrapping/truncating them.
-  return createWorktreeRunnerScript(
+  return createWorktreeRunnerScript({
     repo,
     worktreePath,
-    command,
-    'issue-command-runner',
-    getHookRuntimeTarget(projectRuntime)
-  )
+    script: command,
+    runnerBaseName: 'issue-command-runner',
+    runtimeTarget: getHookRuntimeTarget(projectRuntime)
+  })
 }
 
-function createWorktreeRunnerScript(
-  repo: Repo,
-  worktreePath: string,
-  script: string,
-  runnerBaseName: 'setup-runner' | 'issue-command-runner',
-  runtimeTarget?: HookRuntimeTarget,
-  waitForAgentStartup?: boolean,
+function createWorktreeRunnerScript(args: {
+  repo: Repo
+  worktreePath: string
+  script: string
+  runnerBaseName: 'setup-runner' | 'issue-command-runner'
+  runtimeTarget?: HookRuntimeTarget
+  waitForAgentStartup?: boolean
   setupShell?: SetupRunnerShell
-): WorktreeSetupLaunch {
+}): WorktreeSetupLaunch {
+  const {
+    repo,
+    worktreePath,
+    script,
+    runnerBaseName,
+    runtimeTarget,
+    waitForAgentStartup,
+    setupShell
+  } = args
   const envVars = getSetupRunnerEnvVars(repo, worktreePath)
   // Why: WSL worktrees are Linux fs even though process.platform is 'win32'; use bash for WSL, .cmd for native Windows.
   const wslWorktree = isWslPath(worktreePath) || Boolean(runtimeTarget?.wslDistro)
