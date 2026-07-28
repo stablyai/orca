@@ -38,8 +38,11 @@ export function resolveAutomationAgentSessionFingerprint(
  * Returns true only when this sample should finalize the run.
  *
  * Why: nested `claude -p` (SessionStart plugins) shares the parent paneKey but has a
- * different provider session id. Binding the first live session after dispatch and
- * requiring done to match prevents early finalization / kill of the real agent (#10999).
+ * different provider session id. Bind the first *working* session after dispatch and
+ * require done to match so nested short sessions cannot finalize/kill the primary (#10999).
+ *
+ * Full launcher-identity bind (session id from launchAgentBackgroundSession) is deferred;
+ * until then, never bind from done and ignore fingerprint-bearing done before any working.
  */
 export function noteAutomationAgentStatus(
   tracker: AutomationAgentSessionTracker,
@@ -52,9 +55,8 @@ export function noteAutomationAgentStatus(
 
   if (isLive) {
     if (fingerprint) {
-      // First live session after dispatch is the primary agent; later nested
-      // sessions on the same pane must not rebind.
-      if (tracker.boundFingerprint === null) {
+      // Bind only from working so blocked/waiting noise cannot steal primary identity.
+      if (identity.state === 'working' && tracker.boundFingerprint === null) {
         tracker.boundFingerprint = fingerprint
       }
       if (tracker.boundFingerprint === fingerprint) {
@@ -67,6 +69,12 @@ export function noteAutomationAgentStatus(
   }
 
   if (identity.state !== 'done') {
+    return false
+  }
+
+  // Nested short sessions often emit only done with a foreign session id. Never bind
+  // from done, and do not finalize until a working sample has established primary.
+  if (fingerprint && tracker.boundFingerprint === null) {
     return false
   }
 

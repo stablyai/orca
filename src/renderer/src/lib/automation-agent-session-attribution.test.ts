@@ -130,4 +130,59 @@ describe('noteAutomationAgentStatus', () => {
 
     expect(noteAutomationAgentStatus(tracker, { state: 'done' })).toBe(false)
   })
+
+  it('does not bind fingerprint from blocked or waiting', () => {
+    const tracker = createAutomationAgentSessionTracker()
+
+    expect(
+      noteAutomationAgentStatus(tracker, {
+        state: 'blocked',
+        providerSession: { key: 'session_id', id: 'nested-blocked' }
+      })
+    ).toBe(false)
+    expect(tracker.boundFingerprint).toBeNull()
+
+    expect(
+      noteAutomationAgentStatus(tracker, {
+        state: 'waiting',
+        providerSession: { key: 'session_id', id: 'nested-waiting' }
+      })
+    ).toBe(false)
+    expect(tracker.boundFingerprint).toBeNull()
+
+    noteAutomationAgentStatus(tracker, {
+      state: 'working',
+      providerSession: { key: 'session_id', id: 'primary' }
+    })
+    expect(tracker.boundFingerprint).toBe('session_id:primary')
+  })
+
+  it('ignores fingerprint-bearing done before any working bind', () => {
+    const tracker = createAutomationAgentSessionTracker()
+
+    expect(
+      noteAutomationAgentStatus(tracker, {
+        state: 'done',
+        providerSession: { key: 'session_id', id: 'nested-only-done' }
+      })
+    ).toBe(false)
+    expect(tracker.boundFingerprint).toBeNull()
+
+    noteAutomationAgentStatus(tracker, {
+      state: 'working',
+      providerSession: { key: 'session_id', id: 'primary' }
+    })
+    expect(
+      noteAutomationAgentStatus(tracker, {
+        state: 'done',
+        providerSession: { key: 'session_id', id: 'nested-only-done' }
+      })
+    ).toBe(false)
+    expect(
+      noteAutomationAgentStatus(tracker, {
+        state: 'done',
+        providerSession: { key: 'session_id', id: 'primary' }
+      })
+    ).toBe(true)
+  })
 })
