@@ -127,13 +127,10 @@ export async function handleAutomationDispatchRequest({
             if (!submitted) {
               completion.cleanupRunObservers()
             } else {
-              let reuseSawWorking = false
-              const handleReusableAgentStatus = (payload: { state: string }): void => {
-                if (payload.state === 'working') {
-                  reuseSawWorking = true
-                  return
-                }
-                if (payload.state === 'done' && reuseSawWorking) {
+              const handleReusableAgentStatus = (payload: {
+                state: 'working' | 'blocked' | 'waiting' | 'done'
+              }): void => {
+                if (completion.noteReusableOscAgentStatus(payload)) {
                   completion.handleAgentDone()
                 }
               }
@@ -197,7 +194,7 @@ export async function handleAutomationDispatchRequest({
       onAgentStatus: (payload) => {
         completion.captureAssistantMessage(payload.lastAssistantMessage)
         // Why: session-boundary done = launch connect, not run completion (see observeAgentStatus).
-        if (payload.state !== 'done' || payload.sessionBoundary === true) {
+        if (!completion.noteFreshOscAgentStatus(payload)) {
           return
         }
         completion.handleAgentDone()
