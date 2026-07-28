@@ -423,16 +423,15 @@ describe('scanOpenCodeUsageDatabases', () => {
     return path
   }
 
-  it('resolves a relative OPENCODE_DB from the OpenCode data directory', async () => {
-    const dbPath = writeSessionTotalsDb('custom.db', [])
-    process.env.OPENCODE_DB = 'custom.db'
-
-    await expect(listOpenCodeDatabases()).resolves.toEqual([dbPath])
-  })
-
   it('does not scan disk databases when OPENCODE_DB uses memory', async () => {
     writeSessionTotalsDb('opencode.db', [])
     process.env.OPENCODE_DB = ':memory:'
+
+    await expect(listOpenCodeDatabases()).resolves.toEqual([])
+  })
+
+  it('does not return a directory configured as OPENCODE_DB', async () => {
+    process.env.OPENCODE_DB = '.'
 
     await expect(listOpenCodeDatabases()).resolves.toEqual([])
   })

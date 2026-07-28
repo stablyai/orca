@@ -1,5 +1,4 @@
 /* eslint-disable max-lines -- Why: OpenCode usage analytics need to normalize multiple local DB schema generations, attribute worktrees, and build persisted projections in one auditable pipeline. */
-import { existsSync } from 'node:fs'
 import { readdir, realpath, stat } from 'node:fs/promises'
 import { basename, isAbsolute, join, posix, win32 } from 'node:path'
 import { yieldToEventLoop } from '../../shared/event-loop-yield'
@@ -103,7 +102,14 @@ export async function listOpenCodeDatabases(): Promise<string[]> {
   const dataDirectory = resolveOpenCodeDataDirectory()
   const databaseOverride = getOpenCodeDatabaseOverride(dataDirectory)
   if (databaseOverride.isConfigured) {
-    return databaseOverride.path && existsSync(databaseOverride.path) ? [databaseOverride.path] : []
+    if (!databaseOverride.path) {
+      return []
+    }
+    try {
+      return (await stat(databaseOverride.path)).isFile() ? [databaseOverride.path] : []
+    } catch {
+      return []
+    }
   }
 
   try {
