@@ -307,7 +307,7 @@ export function buildDashboardSnapshot(
           rowConversationName(
             row,
             generatedTitlesEnabled,
-            state.terminalLayoutsByTabId?.[tabId]?.root?.type === 'split'
+            terminalLayoutsByTabId[tabId]?.root?.type === 'split'
           )
         ),
         ...(terminalInput ? { terminalInput } : {})
