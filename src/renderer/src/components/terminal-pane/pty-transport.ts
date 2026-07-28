@@ -804,17 +804,26 @@ export function createIpcPtyTransport(opts: IpcPtyTransportOptions = {}): PtyTra
             sessionExpired: spawnResult.sessionExpired,
             coldRestore: spawnResult.coldRestore,
             replay: spawnResult.replay,
-            pendingEscapeTailAnsi: spawnResult.pendingEscapeTailAnsi
+            pendingEscapeTailAnsi: spawnResult.pendingEscapeTailAnsi,
+            // Why: the cold-restore path re-runs the launch command, so it needs the
+            // same "main declined the resume" signal the fresh-spawn path gets.
+            ...(spawnResult.agentResumeUnavailable ? { agentResumeUnavailable: true as const } : {})
           } satisfies PtyConnectResult
         }
-        if (resultLaunchAgent || spawnResult.launchConfig || spawnResult.startupCwdFallback) {
+        if (
+          resultLaunchAgent ||
+          spawnResult.launchConfig ||
+          spawnResult.startupCwdFallback ||
+          spawnResult.agentResumeUnavailable
+        ) {
           return {
             id: spawnResult.id,
             ...(resultLaunchAgent ? { launchAgent: resultLaunchAgent } : {}),
             ...(spawnResult.launchConfig ? { launchConfig: spawnResult.launchConfig } : {}),
             ...(spawnResult.startupCwdFallback
               ? { startupCwdFallback: spawnResult.startupCwdFallback }
-              : {})
+              : {}),
+            ...(spawnResult.agentResumeUnavailable ? { agentResumeUnavailable: true as const } : {})
           } satisfies PtyConnectResult
         }
         return spawnResult.id

@@ -179,6 +179,7 @@ test.describe('Resource Manager unbound-session safety', () => {
       if (secondApp) {
         await session.close(secondApp).catch(() => {})
       }
+      await session.dispose()
     }
   })
 })

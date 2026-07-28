@@ -84,10 +84,59 @@ export type SkillFreshnessInstallation = {
   errorCategory: string | null
 }
 
+export type SkillFreshnessScanIssueReason =
+  | 'depth-limit'
+  | 'entry-limit'
+  | 'candidate-limit'
+  | 'manifest-limit'
+  | 'outside-root'
+  | 'io-error'
+  | 'issue-limit'
+
+export type SkillFreshnessScanIssue = {
+  rootId: string
+  sourceLabel: string
+  path: string
+  reason: SkillFreshnessScanIssueReason
+  errorCode: string | null
+}
+
+// Why: a real read failure is a fact about the user's disk and stays actionable. Orca's
+// own traversal bounds are not — reporting them as attention turns an ordinary large
+// plugin cache into a permanent amber pill on every skill.
+//
+// 'outside-root' is deliberately NOT here. A plugin that links its skills out of the
+// cache (a content-addressed store, a dev-linked package) is a packaging choice by the
+// vendor, not a fault the user can clear: deleting the link only makes their package
+// manager recreate it. Flagging it turned an install that is clean on main into amber on
+// every installed skill. It is still listed in Details, like the other bounds.
+const SKILL_SCAN_ATTENTION_REASONS = new Set<SkillFreshnessScanIssueReason>(['io-error'])
+
+export function isSkillScanIssueNeedingAttention(issue: SkillFreshnessScanIssue): boolean {
+  return SKILL_SCAN_ATTENTION_REASONS.has(issue.reason)
+}
+
+// Why: these are the bounds that end the walk rather than skip one folder. They are
+// still not the user's to act on, so they raise no pill — but a scan that stopped
+// early cannot be reported as proof every copy is up to date.
+const SKILL_SCAN_TRUNCATING_REASONS = new Set<SkillFreshnessScanIssueReason>([
+  'entry-limit',
+  'candidate-limit'
+])
+
+export function isTruncatingSkillScanReason(reason: SkillFreshnessScanIssueReason): boolean {
+  return SKILL_SCAN_TRUNCATING_REASONS.has(reason)
+}
+
+export function isSkillScanIssueTruncatingScan(issue: SkillFreshnessScanIssue): boolean {
+  return isTruncatingSkillScanReason(issue.reason)
+}
+
 export type SkillFreshnessInventory = {
   schemaVersion: 1
   installations: SkillFreshnessInstallation[]
   eligibleUpdateNames: string[]
+  scanIssues: SkillFreshnessScanIssue[]
   scannedAt: number
 }
 

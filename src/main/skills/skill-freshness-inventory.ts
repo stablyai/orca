@@ -123,8 +123,8 @@ export async function inventorySkillFreshness(args: {
       scan: await scanKnownPluginSkillCandidates(root.path, new Set(currentByName.keys()))
     }))
   )
-  const pluginTasks = pluginScans.flatMap(({ root, scan }) => [
-    ...scan.candidates.flatMap((candidate) => {
+  const pluginTasks = pluginScans.flatMap(({ root, scan }) =>
+    scan.candidates.flatMap((candidate) => {
       const current = currentByName.get(candidate.name)
       return current
         ? [
@@ -139,31 +139,15 @@ export async function inventorySkillFreshness(args: {
               })
           ]
         : []
-    }),
-    // Why: unreadable plugin subtrees could hide any official name. An
-    // incomplete scan must conservatively poison every name rather than imply absence.
-    ...scan.incompletePaths.flatMap((incompletePath) =>
-      artifacts.manifest.skills.map(
-        (current) => () =>
-          observeSkillFreshnessInstallation({
-            current,
-            currentAppVersion: args.currentAppVersion,
-            artifacts,
-            rootId: root.id,
-            providers: root.providers,
-            sourceKind: 'plugin',
-            sourceLabel: root.label,
-            unresolvedPath: join(incompletePath, current.name),
-            topology: {
-              topology: 'plugin-cache',
-              resolvedPath: null,
-              identity: null,
-              errorCategory: 'plugin-cache-scan-incomplete'
-            }
-          })
-      )
-    )
-  ])
+    })
+  )
+  const scanIssues = pluginScans.flatMap(({ root, scan }) =>
+    scan.issues.map((issue) => ({
+      rootId: root.id,
+      sourceLabel: root.label,
+      ...issue
+    }))
+  )
   const unsupportedInstallations = (
     await runSkillCandidateTasks([...repoTasks, ...omittedRepoTasks, ...pluginTasks])
   ).filter((installation): installation is SkillFreshnessInstallation => installation !== null)
@@ -180,6 +164,7 @@ export async function inventorySkillFreshness(args: {
     schemaVersion: 1,
     installations,
     eligibleUpdateNames: eligibleSkillUpdateNames(installations),
+    scanIssues,
     scannedAt: Date.now()
   }
 }

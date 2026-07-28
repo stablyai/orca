@@ -3,28 +3,23 @@ import type {
   CodexManagedAccountRuntimeSelection,
   GlobalSettings
 } from '../../shared/types'
+// Why: the renderer's switch-time lane guard has to key panes the same way a
+// launch does, so the lane vocabulary lives in shared rather than in main.
+import {
+  getWslSelectionKey,
+  normalizeCodexAccountSelectionTarget,
+  type CodexAccountSelectionTarget
+} from '../../shared/codex-selection-lane'
 
-export type CodexAccountSelectionTarget = {
-  runtime?: 'host' | 'wsl'
-  wslDistro?: string | null
-}
-
-export type NormalizedCodexAccountSelectionTarget = {
-  runtime: 'host' | 'wsl'
-  wslDistro: string | null
-}
-
-export function normalizeCodexAccountSelectionTarget(
-  target?: CodexAccountSelectionTarget | null
-): NormalizedCodexAccountSelectionTarget {
-  if (target?.runtime === 'wsl') {
-    return {
-      runtime: 'wsl',
-      wslDistro: normalizeWslDistro(target.wslDistro)
-    }
-  }
-  return { runtime: 'host', wslDistro: null }
-}
+export {
+  getCodexSelectionLaneKey,
+  getWslSelectionKey,
+  normalizeCodexAccountSelectionTarget
+} from '../../shared/codex-selection-lane'
+export type {
+  CodexAccountSelectionTarget,
+  NormalizedCodexAccountSelectionTarget
+} from '../../shared/codex-selection-lane'
 
 export function normalizeCodexRuntimeSelection(
   settings: Pick<
@@ -134,19 +129,4 @@ export function getCodexSelectionTargetForAccount(
     return { runtime: 'wsl', wslDistro: account.wslDistro ?? null }
   }
   return { runtime: 'host' }
-}
-
-/** Stable identifier for the selection lane a launch resolves its account from. */
-export function getCodexSelectionLaneKey(target?: CodexAccountSelectionTarget | null): string {
-  const normalized = normalizeCodexAccountSelectionTarget(target)
-  return normalized.runtime === 'host' ? 'host' : `wsl:${getWslSelectionKey(normalized.wslDistro)}`
-}
-
-export function getWslSelectionKey(wslDistro: string | null | undefined): string {
-  return normalizeWslDistro(wslDistro) ?? '__default__'
-}
-
-function normalizeWslDistro(wslDistro: string | null | undefined): string | null {
-  const trimmed = wslDistro?.trim()
-  return trimmed ? trimmed : null
 }

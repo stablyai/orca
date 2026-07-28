@@ -7404,6 +7404,11 @@ export class OrcaRuntimeService {
     listener: (snapshot: RuntimeMobileSessionTabsResult) => void,
     clientNavigationId?: string
   ): () => void {
+    // Why: a notify coalesced before this subscriber existed is already folded
+    // into the initial snapshot it was just sent. Draining it here — before the
+    // listener joins — keeps that pending timer from landing as a redundant
+    // `updated` frame carrying pre-subscribe state. Mirrors the unsubscribe flush.
+    this.mobileSessionTabsNotifyCoalescer.flushAll()
     const subscription = { listener, clientNavigationId }
     this.mobileSessionTabListeners.add(subscription)
     return () => {

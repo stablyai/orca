@@ -1486,6 +1486,7 @@ export type PreloadApi = {
       sessionExpired?: boolean
       coldRestore?: { scrollback: string; cwd: string; cols?: number; rows?: number }
       startupCwdFallback?: { kind: 'worktree'; cwd: string }
+      agentResumeUnavailable?: true
     }>
     write: (id: string, data: string) => void
     writeAccepted: (id: string, data: string) => Promise<boolean>
@@ -2355,6 +2356,8 @@ export type PreloadApi = {
     }) => Promise<
       { ptyId: string; launchAccountId: string | null; activeAccountId: string | null }[]
     >
+    /** The selection lane each PTY launched from, keyed by pty id; unrecorded panes are absent. */
+    listRecordedPaneLanes: (args: { ptyIds: string[] }) => Promise<Record<string, string>>
     /** Drops launch records so a dismissed prompt stays dismissed across restarts. */
     forgetStalePanes: (args: { ptyIds: string[] }) => Promise<void>
   }

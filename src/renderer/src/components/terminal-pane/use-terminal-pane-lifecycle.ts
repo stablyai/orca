@@ -130,7 +130,10 @@ import {
 import { acquireWebviewsDragPassthrough } from '../browser-pane/webview-registry'
 import { recordCreatedTerminalPaneSplit } from './terminal-pane-split-completion'
 import { closeTerminalTab } from '../terminal/terminal-tab-actions'
-import { seedStartupSessionRestoredBanner } from './session-restored-banner-pane-state'
+import {
+  seedStartupSessionRestoredBanner,
+  type SessionRestoredBannerReason
+} from './session-restored-banner-pane-state'
 import {
   resolveTabTitleAfterPaneClose,
   shouldClearLaunchAgentForClosedPane
@@ -280,7 +283,7 @@ type UseTerminalPaneLifecycleDeps = {
   clearWorktreeUnread: (worktreeId: string) => void
   clearTerminalTabUnread: (tabId: string) => void
   clearTerminalPaneUnread: (paneKey: string) => void
-  onShowSessionRestoredBanner: (paneId: number) => void
+  onShowSessionRestoredBanner: (paneId: number, reason?: SessionRestoredBannerReason) => void
   dispatchNotification: (event: {
     source: 'terminal-bell' | 'agent-task-complete'
     terminalTitle?: string

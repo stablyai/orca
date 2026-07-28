@@ -157,19 +157,35 @@ describe('scanWorkspaceSpaceEntryTree', () => {
     ])
   })
 
-  it('fails closed when a deep chain crosses the cumulative entry cap', async () => {
+  // Why: the cap bounds entries held at once. A deep walk retires each listing
+  // as it descends, so total tree size must not decide the outcome.
+  it('scans a chain far longer than the cap because listings are released', async () => {
+    const depth = 50
     const directories = new Map<string, readonly Entry[]>()
     let path = '/root'
-    for (let index = 0; index < 5; index += 1) {
+    for (let index = 0; index < depth; index += 1) {
       const name = `directory-${index}`
       directories.set(path, [{ name }])
       path = `${path}/${name}`
     }
     directories.set(path, [])
 
-    const scan = makeTraversal(directories, async () => ({ kind: 'directory', sizeBytes: 1 }), {
-      maxEntries: 4
-    })
+    const result = await makeTraversal(
+      directories,
+      async () => ({ kind: 'directory', sizeBytes: 1 }),
+      { maxEntries: 4 }
+    )
+
+    expect(result.sizeBytes).toBe(depth + 1)
+  })
+
+  it('still fails closed when one directory holds more entries than the cap', async () => {
+    const entries = Array.from({ length: 12 }, (_, index) => ({ name: `entry-${index}` }))
+    const scan = makeTraversal(
+      new Map([['/root', entries]]),
+      async (path) => ({ kind: path === '/root' ? 'directory' : 'file', sizeBytes: 1 }),
+      { maxEntries: 4 }
+    )
 
     await expect(scan).rejects.toBeInstanceOf(WorkspaceSpaceScanCapacityError)
   })

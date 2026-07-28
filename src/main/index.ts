@@ -178,10 +178,8 @@ import { startCodexSessionIndexHealInBackground } from './codex/codex-session-in
 import { createCodexSessionMigrationScheduler } from './codex/codex-session-migration-scheduler'
 import { prepareLegacySharedCodexSessionResume } from './codex/codex-legacy-session-resume'
 import { resolveHostCodexSessionSourceHome } from './codex/codex-session-source-home'
-import {
-  claimsCodexRolloutLayout,
-  findTrustedCodexSessionResume
-} from './codex/codex-session-resume-home'
+import type { CodexSessionResumePreparation } from './codex/codex-session-resume-home'
+import { prepareCodexSessionResume } from './codex/codex-session-resume-preparation'
 import { getOrcaManagedCodexHomePath, getSystemCodexHomePath } from './codex/codex-home-paths'
 import { normalizeRuntimePathForComparison } from '../shared/cross-platform-path'
 import type { AgentProviderSessionMetadata } from '../shared/agent-session-resume'
@@ -873,7 +871,7 @@ async function prepareCodexSessionResumeForLaunch(args: {
   target: CodexAccountSelectionTarget
   launchEnv?: NodeJS.ProcessEnv
   workspacePath?: string
-}): Promise<{ codexHomePath: string | null } | null> {
+}): Promise<CodexSessionResumePreparation | null> {
   if (args.target.runtime === 'wsl' || !codexRuntimeHome || !store) {
     return null
   }
@@ -883,7 +881,10 @@ async function prepareCodexSessionResumeForLaunch(args: {
     systemHomePath,
     ...codexRuntimeHome.getHostCodexHomePathsForSessionDiscovery()
   ]
-  const sessionSource = await findTrustedCodexSessionResume({
+  const settingsStore = store
+  // Why: a `fresh` outcome must skip migration, trust and hook repair entirely — there is
+  // no verified origin home to prepare, so the PTY layer drops the resume argv (#10793).
+  return prepareCodexSessionResume({
     sessionId: args.providerSession.id,
     transcriptPath: args.providerSession.transcriptPath,
     trustedCodexHomes: trustedHomes,
@@ -894,66 +895,57 @@ async function prepareCodexSessionResumeForLaunch(args: {
     systemCodexHomePath: systemHomePath,
     // Why: the mirror winning is what triggers the migration into ~/.codex below, so it must
     // outrank the path-sorted account homes or a system-default selection resumes as an account.
-    sharedRuntimeCodexHomePath: getOrcaManagedCodexHomePath()
-  })
-  if (!sessionSource) {
-    // Why: an unverifiable Codex rollout still blocks; only paths that never claimed Codex
-    // provenance (e.g. ~/.claude/… on a pane mislabeled "codex") fall through to a normal launch.
-    if (claimsCodexRolloutLayout(args.providerSession.transcriptPath)) {
-      throw new Error(
-        'Orca could not verify the originating Codex session file, so automatic resume was stopped to avoid using a different account.'
-      )
-    }
-    return null
-  }
-
-  let migrated = { useRealCodexHome: false }
-  try {
-    migrated = await prepareLegacySharedCodexSessionResume(
-      {
-        agent: 'codex',
-        executionHostId: 'local',
-        filePath: sessionSource.transcriptPath,
-        codexHome: sessionSource.homePath
-      },
-      {
-        isHostSystemDefaultRealHome: () => codexRuntimeHome!.isHostSystemDefaultRealHome(),
-        systemCodexHomePath: systemHomePath
+    sharedRuntimeCodexHomePath: getOrcaManagedCodexHomePath(),
+    resolveVerifiedResumeHome: async (sessionSource) => {
+      let migrated = { useRealCodexHome: false }
+      try {
+        migrated = await prepareLegacySharedCodexSessionResume(
+          {
+            agent: 'codex',
+            executionHostId: 'local',
+            filePath: sessionSource.transcriptPath,
+            codexHome: sessionSource.homePath
+          },
+          {
+            isHostSystemDefaultRealHome: () => codexRuntimeHome!.isHostSystemDefaultRealHome(),
+            systemCodexHomePath: systemHomePath
+          }
+        )
+      } catch (error) {
+        // Why: migration is a compatibility repair; its failure must not prevent the PTY from resuming from its trusted origin home.
+        console.warn(
+          '[codex-session-resume] Legacy rollout migration failed; using origin home:',
+          error
+        )
       }
-    )
-  } catch (error) {
-    // Why: migration is a compatibility repair; its failure must not prevent the PTY from resuming from its trusted origin home.
-    console.warn(
-      '[codex-session-resume] Legacy rollout migration failed; using origin home:',
-      error
-    )
-  }
-  const resumeHome = migrated.useRealCodexHome ? systemHomePath : sessionSource.homePath
+      const resumeHome = migrated.useRealCodexHome ? systemHomePath : sessionSource.homePath
 
-  if (args.workspacePath) {
-    try {
-      markCodexProjectTrusted(args.workspacePath)
-    } catch (error) {
-      console.warn('[codex-project-trust] failed to pre-mark resumed workspace:', error)
+      if (args.workspacePath) {
+        try {
+          markCodexProjectTrusted(args.workspacePath)
+        } catch (error) {
+          console.warn('[codex-project-trust] failed to pre-mark resumed workspace:', error)
+        }
+      }
+      const isSystemHome =
+        normalizeRuntimePathForComparison(resumeHome) ===
+        normalizeRuntimePathForComparison(systemHomePath)
+      const hooksEnabled = isAgentStatusHooksEnabled(settingsStore.getSettings())
+      try {
+        if (isSystemHome) {
+          ensureRealHomeCodexHookState({ hooksEnabled, userDataPath: app.getPath('userData') })
+        } else if (hooksEnabled) {
+          codexHookService.install(resumeHome)
+        } else {
+          codexHookService.refreshRuntimeUserHooks(resumeHome)
+        }
+      } catch (error) {
+        // Why: hook repair is best-effort; session provenance must still win over the currently selected home.
+        console.warn('[codex-hook-service] failed to prepare automatic resume home:', error)
+      }
+      return resumeHome
     }
-  }
-  const isSystemHome =
-    normalizeRuntimePathForComparison(resumeHome) ===
-    normalizeRuntimePathForComparison(systemHomePath)
-  const hooksEnabled = isAgentStatusHooksEnabled(store.getSettings())
-  try {
-    if (isSystemHome) {
-      ensureRealHomeCodexHookState({ hooksEnabled, userDataPath: app.getPath('userData') })
-    } else if (hooksEnabled) {
-      codexHookService.install(resumeHome)
-    } else {
-      codexHookService.refreshRuntimeUserHooks(resumeHome)
-    }
-  } catch (error) {
-    // Why: hook repair is best-effort; session provenance must still win over the currently selected home.
-    console.warn('[codex-hook-service] failed to prepare automatic resume home:', error)
-  }
-  return { codexHomePath: resumeHome }
+  })
 }
 
 // Why: restore the window the close handler may have hidden to tray, or reopen it (dock-reactivation style) if fully torn down.

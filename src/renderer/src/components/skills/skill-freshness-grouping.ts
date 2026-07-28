@@ -26,8 +26,9 @@ export type SkillFreshnessGroupModel = {
 }
 
 export function locationChip(installation: SkillFreshnessInstallation): SkillLocationChip | null {
-  // Why: a location's own status wins over its topology — "the contents don't
-  // match" is more useful to the user than "it's a duplicate".
+  if (installation.status === 'unrecognized' && installation.topology === 'plugin-cache') {
+    return 'plugin-cache'
+  }
   if (installation.status === 'unrecognized') {
     return 'unrecognized'
   }

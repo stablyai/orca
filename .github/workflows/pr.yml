@@ -24,6 +24,7 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v6
         with:
+          fetch-depth: 0
           persist-credentials: false
 
       - uses: ./.github/actions/install-node-dependencies
@@ -33,6 +34,15 @@ jobs:
 
       - name: Check switch exhaustiveness
         run: pnpm run lint:switch-exhaustiveness
+
+      - name: Enforce changed-code quality
+        run: pnpm run check:code-quality:changed -- "${{ github.event.pull_request.base.sha }}"
+
+      - name: Enforce React Doctor on changed lines
+        run: pnpm run check:react-doctor:changed -- "${{ github.event.pull_request.base.sha }}"
+
+      - name: Check Zustand selector fan-out budget
+        run: pnpm run check:zustand-selector-fanout
 
       - name: Check styled scrollbars
         run: pnpm check:styled-scrollbars

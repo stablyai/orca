@@ -1,4 +1,5 @@
 import type { PtyTransport } from './pty-transport'
+import type { SessionRestoredBannerReason } from './session-restored-banner-pane-state'
 import type { ReplayingPanesRef } from './replay-guard'
 import type { RestoredViewportBlankingPanesRef } from './terminal-restored-viewport'
 import type { AgentCompletionStatusSnapshot } from './agent-completion-coordinator-types'
@@ -76,7 +77,7 @@ export type PtyConnectionDeps = {
   clearWorktreeUnread: (worktreeId: string) => void
   clearTerminalTabUnread: (tabId: string) => void
   clearTerminalPaneUnread: (paneKey: string) => void
-  onShowSessionRestoredBanner: (paneId: number) => void
+  onShowSessionRestoredBanner: (paneId: number, reason?: SessionRestoredBannerReason) => void
   // Why: the renderer dispatches two notification sources — BEL from the PTY
   // byte stream and agent-task-complete on the working→idle title transition.
   // shared/types.ts keeps a wider NotificationEventSource union because the

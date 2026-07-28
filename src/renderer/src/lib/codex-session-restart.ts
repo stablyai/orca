@@ -3,6 +3,13 @@ import { useAppStore } from '@/store'
 import { inspectRuntimeTerminalProcess } from '@/runtime/runtime-terminal-inspection'
 import { translate } from '@/i18n/i18n'
 import { isCodexRestartEligiblePane } from './codex-pane-restart-eligibility'
+import {
+  getCodexAccountSwitchLaneMatcher,
+  isForeignMachineCodexPtyId,
+  isLocalCodexSelectionLaneKey,
+  resolveCodexPaneSelectionLane
+} from './codex-pane-selection-lane'
+import type { CodexAccountSelectionTarget } from '../../../shared/codex-selection-lane'
 
 // Why: prompt integrations such as Starship can outlast the daemon's 300ms
 // Codex fast-path timeout; account restarts must wait until the shell accepts input.
@@ -21,52 +28,131 @@ export type CodexPaneScanResult = {
   launchedCodex: boolean
   /** A restart notice was raised for this pane by this scan. */
   notified: boolean
+  /** The lane this pane was filtered on. */
+  laneKey: string
+  /** Whether that lane came from main's spawn record or the renderer's derivation. */
+  laneSource: 'recorded' | 'derived'
 }
 
+/**
+ * Asks main which lane each pane actually launched from.
+ *
+ * Why failure is silent: the answer only upgrades the derivation's accuracy, so
+ * an older preload, a web client, or a missing registry must degrade to the
+ * derivation rather than lose every pane's restart notice.
+ */
+async function readRecordedCodexPaneLanes(
+  ptyIds: readonly string[]
+): Promise<Record<string, string>> {
+  // Why filtered: main only records daemon host spawns, so asking about a
+  // remote or SSH pane is a guaranteed miss.
+  const localPtyIds = ptyIds.filter((ptyId) => !isForeignMachineCodexPtyId(ptyId))
+  if (localPtyIds.length === 0) {
+    return {}
+  }
+  const listRecordedPaneLanes = window.api.codexAccounts.listRecordedPaneLanes
+  // Why the shape check: a preload older than this handler has no such method,
+  // and reaching that case must read as "no records", not as a scan failure.
+  if (typeof listRecordedPaneLanes !== 'function') {
+    return {}
+  }
+  return await listRecordedPaneLanes({ ptyIds: localPtyIds }).catch(() => ({}))
+}
+
+/**
+ * Reports which panes are running Codex, skipping any outside the caller's lane.
+ *
+ * Why the lane filter runs BEFORE inspection rather than after: an out-of-lane
+ * answer cannot change the outcome, and the inspection is not free — a pane on a
+ * relay environment costs a 15s-timeout RPC per look. Skipping first is also
+ * what keeps a restart notice (which drops every keystroke in the pane) off a
+ * remote Codex session that no local account change can possibly strand.
+ */
 async function scanCodexPanes(
   state: AppState,
-  ptyIdFilter: ReadonlySet<string> | null
+  args: {
+    ptyIdFilter: ReadonlySet<string> | null
+    isLaneInScope: (laneKey: string) => boolean
+  }
 ): Promise<CodexPaneScanResult[]> {
-  const tabs = Object.values(state.tabsByWorktree).flat()
-  const scans = await Promise.all(
-    tabs.map(async (tab) => {
-      const ptyIds = (state.ptyIdsByTabId[tab.id] ?? []).filter(
-        (ptyId) => ptyIdFilter === null || ptyIdFilter.has(ptyId)
+  const panes = Object.values(state.tabsByWorktree)
+    .flat()
+    .flatMap((tab) =>
+      (state.ptyIdsByTabId[tab.id] ?? [])
+        .filter((ptyId) => args.ptyIdFilter === null || args.ptyIdFilter.has(ptyId))
+        .map((ptyId) => ({ tab, ptyId }))
+    )
+  const recordedLanes = await readRecordedCodexPaneLanes(panes.map((pane) => pane.ptyId))
+
+  // Why: Codex sessions are not reliably discoverable from tab labels. Tabs keep
+  // fallback names until a CLI emits an OSC title, and Codex does not always do
+  // that. The live process tree plus the tab's recorded launchAgent are the
+  // stable evidence that this pane is running Codex.
+  return Promise.all(
+    panes.map(async ({ tab, ptyId }) => {
+      const lane = resolveCodexPaneSelectionLane({
+        state,
+        tab,
+        ptyId,
+        recordedLaneKey: recordedLanes[ptyId]
+      })
+      if (!args.isLaneInScope(lane.laneKey)) {
+        // Why not inconclusive: a pane's lane is fixed at spawn, so this is a
+        // final answer and the sweep must not spend a retry rung re-asking.
+        return {
+          ptyId,
+          eligible: false,
+          inconclusive: false,
+          launchedCodex: false,
+          notified: false,
+          laneKey: lane.laneKey,
+          laneSource: lane.source
+        }
+      }
+      const inspection = await inspectRuntimeTerminalProcess(state.settings, ptyId).then(
+        (result) => result,
+        // Why: one stale remote pane must not hide restart notices for other confirmed Codex panes.
+        () => null
       )
-      // Why: Codex sessions are not reliably discoverable from tab labels.
-      // Tabs keep fallback names until a CLI emits an OSC title, and Codex
-      // does not always do that. The live process tree plus the tab's recorded
-      // launchAgent are the stable evidence that this pane is running Codex.
-      return Promise.all(
-        ptyIds.map(async (ptyId) => {
-          const inspection = await inspectRuntimeTerminalProcess(state.settings, ptyId).then(
-            (result) => result,
-            // Why: one stale remote pane must not hide restart notices for other confirmed Codex panes.
-            () => null
-          )
-          return {
-            ptyId,
-            eligible:
-              inspection !== null &&
-              isCodexRestartEligiblePane({ inspection, launchAgent: tab.launchAgent }),
-            inconclusive: inspection === null || inspection.unavailable === true,
-            launchedCodex: tab.launchAgent === 'codex',
-            notified: false
-          }
-        })
-      )
+      return {
+        ptyId,
+        eligible:
+          inspection !== null &&
+          isCodexRestartEligiblePane({ inspection, launchAgent: tab.launchAgent }),
+        inconclusive: inspection === null || inspection.unavailable === true,
+        launchedCodex: tab.launchAgent === 'codex',
+        notified: false,
+        laneKey: lane.laneKey,
+        laneSource: lane.source
+      }
     })
   )
-
-  return scans.flat()
 }
 
+/**
+ * Prompts the panes a just-applied account change stranded.
+ *
+ * `target` names the selection slot the change wrote. Panes outside that lane —
+ * a WSL pane on a host switch, or anything running on a relay/SSH machine —
+ * never had this account injected, so a notice there is pure damage: it mutes a
+ * terminal that is working correctly.
+ */
 export async function markLiveCodexSessionsForRestart(args: {
   previousAccountLabel: string
   nextAccountLabel: string
+  target?: CodexAccountSelectionTarget | null
+  /** Set when the change cleared the selection rather than pointing it somewhere. */
+  clearsEveryWslDistro?: boolean
 }): Promise<void> {
   const state = useAppStore.getState()
-  const scans = await scanCodexPanes(state, null)
+  const scans = await scanCodexPanes(state, {
+    ptyIdFilter: null,
+    isLaneInScope: getCodexAccountSwitchLaneMatcher({
+      settings: state.settings,
+      target: args.target,
+      clearsEveryWslDistro: args.clearsEveryWslDistro
+    })
+  })
   const liveCodexSessionPtyIds = scans.filter((scan) => scan.eligible).map((scan) => scan.ptyId)
   if (liveCodexSessionPtyIds.length === 0) {
     return
@@ -91,12 +177,20 @@ export async function markLiveCodexSessionsForRestart(args: {
  *
  * Returns one result per inspected pane so the bind-driven sweep can tell an
  * answered pane from one whose PTY has not reported a usable process yet.
+ *
+ * Scoped to the local host/WSL lanes because the pane-account registry only
+ * records daemon host spawns: a relay or SSH pane can never be listed stale, so
+ * inspecting one is a guaranteed-fruitless RPC. listStalePanes then does the
+ * host-vs-WSL check itself, against each pane's own recorded lane.
  */
 export async function markRestoredStaleCodexSessionsForRestart(args?: {
   ptyIds?: readonly string[]
 }): Promise<CodexPaneScanResult[]> {
   const state = useAppStore.getState()
-  const scans = await scanCodexPanes(state, args?.ptyIds ? new Set(args.ptyIds) : null)
+  const scans = await scanCodexPanes(state, {
+    ptyIdFilter: args?.ptyIds ? new Set(args.ptyIds) : null,
+    isLaneInScope: isLocalCodexSelectionLaneKey
+  })
   const liveCodexSessionPtyIds = scans.filter((scan) => scan.eligible).map((scan) => scan.ptyId)
   if (liveCodexSessionPtyIds.length === 0) {
     return scans

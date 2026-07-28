@@ -321,8 +321,14 @@
   left: 8px;
   z-index: 5;
   height: var(--orca-pane-title-height);
-  display: flex;
-  align-items: center;
+  /* Why: block + line-height (not flex) so the single line can ellipsize like
+     .pane-title-text — an overflowing banner would wrap onto the terminal grid. */
+  display: block;
+  line-height: var(--orca-pane-title-height);
+  max-width: calc(100% - 16px);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
   font-family: var(--font-mono);
   font-size: 12px;
   color: var(--orca-pane-title-fg);

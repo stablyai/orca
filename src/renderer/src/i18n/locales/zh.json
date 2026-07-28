@@ -2745,6 +2745,13 @@
                           "failed": "无法复制终端 ID"
                         }
                       }
+                    },
+                    "pane": {
+                      "id": {
+                        "copy": {
+                          "failed": "Unable to copy pane ID"
+                        }
+                      }
                     }
                   }
                 }
@@ -3823,7 +3830,16 @@
           "done": "Done",
           "stop": "Stop",
           "stopping": "Stopping…",
-          "stoppingHeadline": "Stopping the update…"
+          "stoppingHeadline": "Stopping the update…",
+          "scanIncomplete": "Orca 无法完成对插件管理技能的检查。",
+          "scanDepthLimit": "在检查此文件夹之前，Orca 已达到插件扫描深度上限。",
+          "scanEntryLimit": "在检查此缓存的其余内容之前，Orca 已达到插件扫描条目数上限。",
+          "scanCandidateLimit": "Orca 发现的同名技能文件夹数量超过了可安全检查的上限。",
+          "scanManifestLimit": "此插件清单超出安全限制，Orca 已将其跳过。",
+          "scanOutsideRoot": "此插件路径指向插件缓存之外，Orca 已将其跳过。",
+          "scanIoErrorWithCode": "Orca 无法读取此插件路径（{{value0}}）。",
+          "scanIoError": "Orca 无法读取此插件路径。",
+          "scanIssueLimit": "被跳过的插件文件夹过多，Orca 无法逐一列出。"
         },
         "SkillFreshnessStatusPill": {
           "updateAvailable": "有可用更新",

@@ -2745,6 +2745,13 @@
                           "failed": "No se pudo copiar el ID de terminal"
                         }
                       }
+                    },
+                    "pane": {
+                      "id": {
+                        "copy": {
+                          "failed": "Unable to copy pane ID"
+                        }
+                      }
                     }
                   }
                 }
@@ -3823,7 +3830,16 @@
           "done": "Done",
           "stop": "Stop",
           "stopping": "Stopping…",
-          "stoppingHeadline": "Stopping the update…"
+          "stoppingHeadline": "Stopping the update…",
+          "scanIncomplete": "Orca no pudo terminar de comprobar los skills gestionados por plugins.",
+          "scanDepthLimit": "Orca alcanzó el límite de profundidad del análisis antes de comprobar esta carpeta.",
+          "scanEntryLimit": "Orca alcanzó el límite de entradas del análisis antes de comprobar el resto de esta caché.",
+          "scanCandidateLimit": "Orca encontró más carpetas de skills con el mismo nombre de las que puede inspeccionar de forma segura.",
+          "scanManifestLimit": "Orca omitió este manifiesto del plugin porque superaba un límite seguro.",
+          "scanOutsideRoot": "Orca omitió esta ruta del plugin porque apunta fuera de la caché de plugins.",
+          "scanIoErrorWithCode": "Orca no pudo leer esta ruta del plugin ({{value0}}).",
+          "scanIoError": "Orca no pudo leer esta ruta del plugin.",
+          "scanIssueLimit": "Orca encontró demasiadas carpetas de plugins omitidas para mostrarlas por separado."
         },
         "SkillFreshnessStatusPill": {
           "updateAvailable": "Actualización disponible",

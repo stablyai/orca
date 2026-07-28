@@ -118,6 +118,7 @@ function eligibleInventory(): SkillFreshnessInventory {
     schemaVersion: 1,
     installations: [placement('orca-cli')],
     eligibleUpdateNames: ['orca-cli'],
+    scanIssues: [],
     scannedAt: 1
   }
 }
@@ -263,6 +264,7 @@ describe('SkillFreshnessUpdateDialog', () => {
       schemaVersion: 1,
       installations: [placement('orca-cli'), placement('orchestration')],
       eligibleUpdateNames: ['orca-cli', 'orchestration'],
+      scanIssues: [],
       scannedAt: 1
     }
     await renderDialog()
@@ -304,6 +306,7 @@ describe('SkillFreshnessUpdateDialog', () => {
       schemaVersion: 1,
       installations: [placement('orca-cli', { status: 'current', installedReleaseRevision: 2 })],
       eligibleUpdateNames: [],
+      scanIssues: [],
       scannedAt: 5
     }
     await emitRun({ state: 'success', names: ['orca-cli'], finishedAt: 2, output: 'done' })
@@ -325,6 +328,7 @@ describe('SkillFreshnessUpdateDialog', () => {
         })
       ],
       eligibleUpdateNames: ['orca-cli'],
+      scanIssues: [],
       scannedAt: 1
     }
     await renderDialog()
@@ -383,6 +387,7 @@ describe('SkillFreshnessUpdateDialog', () => {
       schemaVersion: 1,
       installations: [placement('orca-cli', { status: 'current', installedReleaseRevision: 2 })],
       eligibleUpdateNames: [],
+      scanIssues: [],
       scannedAt: 2
     }
     await renderDialog()
@@ -397,6 +402,7 @@ describe('SkillFreshnessUpdateDialog', () => {
       schemaVersion: 1,
       installations: [placement('computer-use', { topology: 'repo-scope' })],
       eligibleUpdateNames: [],
+      scanIssues: [],
       scannedAt: 3
     }
     await renderDialog()
@@ -548,5 +554,105 @@ describe('SkillFreshnessUpdateDialog', () => {
     expect(container?.textContent).toContain('Missing canonical agent skills root')
     expect(container?.querySelector('[data-skill-row="orca-cli"]')).toBeNull()
     expect(findButton('Update 1 skill')).toBeUndefined()
+  })
+  it('shows incomplete plugin coverage without presenting a fabricated skill copy', async () => {
+    mocks.inventory = {
+      schemaVersion: 1,
+      installations: [
+        placement('orca-cli', { status: 'current', observedPackageDigest: 'current' })
+      ],
+      eligibleUpdateNames: [],
+      scanIssues: [
+        {
+          rootId: 'codex-plugin-cache',
+          sourceLabel: 'Codex plugin cache',
+          path: '/home/.codex/plugins/cache/vendor/locked',
+          reason: 'io-error',
+          errorCode: 'EACCES'
+        }
+      ],
+      scannedAt: 2
+    }
+    await renderDialog()
+    await openViaRequest()
+
+    expect(container?.textContent).toContain(
+      'Orca could not finish checking plugin-managed skills.'
+    )
+    expect(container?.textContent).toContain('/home/.codex/plugins/cache/vendor/locked')
+    expect(container?.textContent).toContain('EACCES')
+    expect(container?.textContent).not.toContain('All installed Orca skills are up to date.')
+    // Why: the fabricated per-skill path is exactly what this change removed — the
+    // unreadable folder must never be rendered as a copy of a named skill.
+    expect(container?.textContent).not.toContain(
+      '/home/.codex/plugins/cache/vendor/locked/orca-cli'
+    )
+  })
+
+  // Why: the walk stopped early here, so claiming every copy is up to date would assert
+  // a completeness the scan did not reach — green dishonesty in place of amber.
+  it.each(['entry-limit', 'candidate-limit'] as const)(
+    'does not report all-clear when %s ended the scan early',
+    async (reason) => {
+      mocks.inventory = {
+        schemaVersion: 1,
+        installations: [
+          placement('orca-cli', { status: 'current', observedPackageDigest: 'current' })
+        ],
+        eligibleUpdateNames: [],
+        scanIssues: [
+          {
+            rootId: 'codex-plugin-cache',
+            sourceLabel: 'Codex plugin cache',
+            path: '/home/.codex/plugins/cache',
+            reason: reason,
+            errorCode: null
+          }
+        ],
+        scannedAt: 2
+      }
+      await renderDialog()
+      await openViaRequest()
+
+      expect(container?.textContent).not.toContain('All installed Orca skills are up to date.')
+      expect(container?.textContent).toContain(
+        'Orca could not finish checking plugin-managed skills.'
+      )
+      // Why: the headline alone would pass with the folder list gone, leaving the user
+      // told the scan stopped but never told where. Assert the diagnostic renders too.
+      expect(container?.textContent).toContain('/home/.codex/plugins/cache')
+    }
+  )
+
+  // Why: Orca's own traversal bounds are not the user's to act on. Headlining them
+  // would put a permanent warning on any ordinary large plugin cache while every
+  // skill badge stayed green — the same unclearable amber, moved into the dialog.
+  it('lists a traversal bound without headlining it', async () => {
+    mocks.inventory = {
+      schemaVersion: 1,
+      installations: [
+        placement('orca-cli', { status: 'current', observedPackageDigest: 'current' })
+      ],
+      eligibleUpdateNames: [],
+      scanIssues: [
+        {
+          rootId: 'codex-plugin-cache',
+          sourceLabel: 'Codex plugin cache',
+          path: '/home/.codex/plugins/cache/vendor/deep',
+          reason: 'depth-limit',
+          errorCode: null
+        }
+      ],
+      scannedAt: 2
+    }
+    await renderDialog()
+    await openViaRequest()
+
+    expect(container?.textContent).toContain('All installed Orca skills are up to date.')
+    expect(container?.textContent).not.toContain(
+      'Orca could not finish checking plugin-managed skills.'
+    )
+    expect(container?.textContent).toContain('/home/.codex/plugins/cache/vendor/deep')
+    expect(container?.textContent).toContain('scan depth limit')
   })
 })

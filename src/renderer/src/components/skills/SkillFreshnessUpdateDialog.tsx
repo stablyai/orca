@@ -2,6 +2,8 @@ import { useMemo, useRef, useState, useSyncExternalStore } from 'react'
 import { AlertTriangle, CheckCircle2, ChevronDown, Copy, Loader2, RefreshCw } from 'lucide-react'
 import {
   buildTargetedSkillUpdateCommand,
+  isSkillScanIssueNeedingAttention,
+  isSkillScanIssueTruncatingScan,
   type SkillFreshnessInventory
 } from '../../../../shared/skill-freshness'
 import { useSkillFreshness } from '@/hooks/useSkillFreshness'
@@ -18,6 +20,7 @@ import {
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible'
 import { TooltipProvider } from '@/components/ui/tooltip'
 import { groupSkillFreshness } from './skill-freshness-grouping'
+import { SkillFreshnessScanIssues } from './skill-freshness-scan-issues'
 import { SkillUpdateRow } from './SkillUpdateRow'
 import { SummaryHeadline, summarizeInventory } from './skill-freshness-summary-headline'
 import {
@@ -102,11 +105,20 @@ export function SkillFreshnessUpdateDialog(): React.JSX.Element {
   )
   const hasBlockedGroup = groups.some((group) => group.status === 'cannot-update')
   const blockedCount = groups.filter((group) => group.status === 'cannot-update').length
+  // Retained: the list keeps the last known folders on screen through a re-scan, the
+  // same way the rows above stay put rather than blanking.
+  const scanIssues = inventory?.scanIssues ?? []
   // Why: the headline reads the LIVE snapshot, not the retained one — the two
   // disagree for the whole loading window, and pairing a retained "eligible" with
   // a live count of 0 renders "0 updates available" over rows badged "Update
   // available". Live means it says "Checking…" over the rows it kept on screen.
-  const summaryKind = summarizeInventory(state.inventory, hasBlockedGroup)
+  const summaryKind = summarizeInventory(
+    state.inventory,
+    hasBlockedGroup,
+    (state.inventory?.scanIssues ?? []).some(
+      (issue) => isSkillScanIssueNeedingAttention(issue) || isSkillScanIssueTruncatingScan(issue)
+    )
+  )
 
   // Why: one row list for every state. The rows are identical objects across the
   // transition, so pressing Update changes each row's leading icon in place
@@ -297,6 +309,14 @@ export function SkillFreshnessUpdateDialog(): React.JSX.Element {
                 <SkillUpdateRow key={row.group.name} group={row.group} state={row.state} />
               ))}
             </TooltipProvider>
+          </div>
+        ) : null}
+
+        {/* Why: folders, not skills — a plugin path Orca could not read says nothing
+            about which skill lives there, so it cannot be a row above. */}
+        {scanIssues.length > 0 ? (
+          <div className="min-w-0 border-t border-border/60 pt-3">
+            <SkillFreshnessScanIssues issues={scanIssues} />
           </div>
         ) : null}
 

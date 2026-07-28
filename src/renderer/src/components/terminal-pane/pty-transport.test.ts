@@ -480,6 +480,30 @@ describe('createIpcPtyTransport', () => {
     transport.disconnect()
   })
 
+  it('forwards the declined-resume signal on fresh and cold-restore spawns alike', async () => {
+    const { createIpcPtyTransport } = await import('./pty-transport')
+    const spawn = window.api.pty.spawn as unknown as ReturnType<typeof vi.fn>
+    spawn.mockResolvedValueOnce({ id: 'pty-1', agentResumeUnavailable: true })
+
+    const freshTransport = createIpcPtyTransport({})
+    await expect(freshTransport.connect({ url: '', callbacks: {} })).resolves.toEqual({
+      id: 'pty-1',
+      agentResumeUnavailable: true
+    })
+    freshTransport.disconnect()
+
+    spawn.mockResolvedValueOnce({
+      id: 'pty-2',
+      coldRestore: { scrollback: 'recovered', cwd: '/repo/app' },
+      agentResumeUnavailable: true
+    })
+    const coldTransport = createIpcPtyTransport({})
+    await expect(coldTransport.connect({ url: '', callbacks: {} })).resolves.toEqual(
+      expect.objectContaining({ id: 'pty-2', agentResumeUnavailable: true })
+    )
+    coldTransport.disconnect()
+  })
+
   it('defers title side effects until after terminal data is delivered', async () => {
     const { createIpcPtyTransport } = await import('./pty-transport')
     const onTitleChange = vi.fn()
