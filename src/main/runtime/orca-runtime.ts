@@ -25483,16 +25483,24 @@ export class OrcaRuntimeService {
     result: RuntimeWorktreeScanResult,
     promise: Promise<RuntimeWorktreeScanResult>
   ): void {
-    // Only cache a successful, still-current result; always (re)schedule so a
-    // transient failure backs off on the curve instead of hot-looping.
-    if (
-      result.ok &&
-      generation === (this.worktreeScanGenerations.get(repoId) ?? 0) &&
-      this.worktreeScanInFlight.get(repoId)?.promise === promise
-    ) {
+    const isCurrent = this.isWorktreeScanCurrent(repoId, generation, promise)
+    if (result.ok && isCurrent) {
       this.worktreeScanCache.set(repoId, { generation, runtimeKey, result })
     }
-    this.worktreeScanSchedule.recordRefresh(repoId, this.isRepoHotForScan(repoId))
+    if (isCurrent) {
+      this.worktreeScanSchedule.recordRefresh(repoId, this.isRepoHotForScan(repoId))
+    }
+  }
+
+  private isWorktreeScanCurrent(
+    repoId: string,
+    generation: number,
+    promise: Promise<RuntimeWorktreeScanResult>
+  ): boolean {
+    return (
+      generation === (this.worktreeScanGenerations.get(repoId) ?? 0) &&
+      this.worktreeScanInFlight.get(repoId)?.promise === promise
+    )
   }
 
   private async refreshWorktreeScanInBackground(
@@ -25509,10 +25517,13 @@ export class OrcaRuntimeService {
     try {
       const result = await promise
       this.commitWorktreeScanResult(repo.id, generation, runtimeKey, result, promise)
-    } catch {
-      // Best-effort: keep serving the prior cached result, but reschedule so a
-      // failing repo doesn't re-attempt on every access.
-      this.worktreeScanSchedule.recordRefresh(repo.id, this.isRepoHotForScan(repo.id))
+    } catch (error) {
+      console.error(`[runtime] Background worktree scan failed for ${repo.id}:`, error)
+      if (this.isWorktreeScanCurrent(repo.id, generation, promise)) {
+        // Best-effort: keep serving the prior cached result, but reschedule so a
+        // failing repo doesn't re-attempt on every access.
+        this.worktreeScanSchedule.recordRefresh(repo.id, this.isRepoHotForScan(repo.id))
+      }
     } finally {
       if (this.worktreeScanInFlight.get(repo.id)?.promise === promise) {
         this.worktreeScanInFlight.delete(repo.id)

@@ -31645,6 +31645,40 @@ describe('OrcaRuntimeService', () => {
     }
   })
 
+  it('worktree scan cache: discarded background results do not re-arm an invalidated schedule', async () => {
+    vi.mocked(listWorktrees).mockClear()
+    vi.useFakeTimers({ now: 0 })
+    try {
+      const backgroundScan = deferred<ReturnType<typeof makeWorktreeInfo>[]>()
+      vi.mocked(listWorktrees)
+        .mockResolvedValueOnce([makeWorktreeInfo(TEST_WORKTREE_PATH)])
+        .mockReturnValueOnce(backgroundScan.promise)
+      const runtime = createRuntime()
+
+      await runtime.listDetectedManagedWorktrees(`id:${TEST_REPO_ID}`)
+      await vi.advanceTimersByTimeAsync(2 * 60 * 60_000)
+      await runtime.listDetectedManagedWorktrees(`id:${TEST_REPO_ID}`)
+      await Promise.resolve()
+      expect(listWorktrees).toHaveBeenCalledTimes(2)
+
+      runtime.notifyBranchRenamed(TEST_REPO_ID)
+      const schedule = (
+        runtime as unknown as {
+          worktreeScanSchedule: { recordRefresh: (repoId: string, isHot: boolean) => void }
+        }
+      ).worktreeScanSchedule
+      const recordRefresh = vi.spyOn(schedule, 'recordRefresh')
+
+      backgroundScan.resolve([makeWorktreeInfo(TEST_WORKTREE_PATH)])
+      await vi.advanceTimersByTimeAsync(0)
+      await Promise.resolve()
+
+      expect(recordRefresh).not.toHaveBeenCalled()
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
   it('worktree scan cache: does not cache non-authoritative scan failures', async () => {
     vi.mocked(listWorktrees).mockClear()
     const runtime = createRuntime()
