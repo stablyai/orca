@@ -69,6 +69,32 @@ describe('source-control-manual-refresh', () => {
     ).toBe(false)
   })
 
+  it('reloads edit-mode tabs that are actively displaying Changes', () => {
+    const editChanges = openFile({
+      id: '/repo/readme.md',
+      worktreeId: 'wt-1',
+      mode: 'edit'
+    })
+    expect(
+      isManualRefreshReloadableDiffFile(editChanges, 'wt-1', {
+        '/repo/readme.md': 'changes'
+      })
+    ).toBe(true)
+    expect(isManualRefreshReloadableDiffFile(editChanges, 'wt-1', {})).toBe(false)
+    expect(
+      isManualRefreshReloadableDiffFile(editChanges, 'wt-1', {
+        '/repo/readme.md': 'edit'
+      })
+    ).toBe(false)
+    expect(
+      isManualRefreshReloadableDiffFile(
+        openFile({ id: '/repo/other.md', worktreeId: 'wt-1', mode: 'edit' }),
+        'wt-1',
+        { '/repo/readme.md': 'changes' }
+      )
+    ).toBe(false)
+  })
+
   it('bumps diffContentReloadNonce only for matching open diffs', () => {
     const files = [
       openFile({
@@ -101,16 +127,25 @@ describe('source-control-manual-refresh', () => {
         id: 'edit',
         worktreeId: 'wt-1',
         mode: 'edit'
+      }),
+      openFile({
+        id: '/repo/readme.md',
+        worktreeId: 'wt-1',
+        mode: 'edit',
+        diffContentReloadNonce: 1
       })
     ]
 
-    const next = applyManualSourceControlDiffReload(files, 'wt-1')
+    const next = applyManualSourceControlDiffReload(files, 'wt-1', {
+      '/repo/readme.md': 'changes'
+    })
 
     expect(next[0]?.diffContentReloadNonce).toBe(3)
     expect(next[1]?.diffContentReloadNonce).toBe(1)
     expect(next[2]?.diffContentReloadNonce).toBe(4)
     expect(next[3]?.diffContentReloadNonce).toBeUndefined()
     expect(next[4]?.diffContentReloadNonce).toBeUndefined()
+    expect(next[5]?.diffContentReloadNonce).toBe(2)
     expect(next).not.toBe(files)
   })
 
@@ -119,6 +154,6 @@ describe('source-control-manual-refresh', () => {
       openFile({ id: 'edit', worktreeId: 'wt-1', mode: 'edit' }),
       openFile({ id: 'branch', worktreeId: 'wt-1', mode: 'diff', diffSource: 'branch' })
     ]
-    expect(applyManualSourceControlDiffReload(files, 'wt-1')).toBe(files)
+    expect(applyManualSourceControlDiffReload(files, 'wt-1', { edit: 'edit' })).toBe(files)
   })
 })
