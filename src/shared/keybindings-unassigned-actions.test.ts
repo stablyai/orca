@@ -1,7 +1,32 @@
 import { describe, expect, it } from 'vitest'
-import { getEffectiveKeybindingsForAction, keybindingMatchesAction } from './keybindings'
+import {
+  getEffectiveKeybindingsForAction,
+  getKeybindingDefinition,
+  keybindingMatchesAction
+} from './keybindings'
 
 describe('keybindings', () => {
+  it('registers unbound Toggle Diff Viewer under Editors', () => {
+    const definition = getKeybindingDefinition('editor.toggleDiffViewer')
+    expect(definition).toMatchObject({
+      id: 'editor.toggleDiffViewer',
+      title: 'Toggle Diff Viewer',
+      group: 'Editors',
+      scope: 'editor'
+    })
+    expect(definition?.searchKeywords).toEqual(
+      expect.arrayContaining(['diff', 'viewer', 'changes', 'edit', 'toggle'])
+    )
+    expect(getEffectiveKeybindingsForAction('editor.toggleDiffViewer', 'darwin')).toEqual([])
+    expect(getEffectiveKeybindingsForAction('editor.toggleDiffViewer', 'linux')).toEqual([])
+    expect(getEffectiveKeybindingsForAction('editor.toggleDiffViewer', 'win32')).toEqual([])
+    expect(
+      getEffectiveKeybindingsForAction('editor.toggleDiffViewer', 'darwin', {
+        'editor.toggleDiffViewer': ['Mod+Shift+D']
+      })
+    ).toEqual(['Mod+Shift+D'])
+  })
+
   it('binds immediate workspace delete without claiming terminal split right', () => {
     const binding = {
       key: 'Backspace',
