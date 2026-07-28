@@ -32,6 +32,8 @@ export type RpcClientContextValue = {
   forceReconnect: (hostId: string) => Promise<void>
   closeHost: (hostId: string) => void
   getState: (hostId: string) => ConnectionState
+  // Why: lets screens resolve the live client during render instead of via an effect handoff.
+  getClient: (hostId: string) => RpcClient | null
   getReconnectAttempt: (hostId: string) => number
   // Why: ms-epoch of the last 'connected' (null if never this session); UI escalates "Reconnecting…" into a re-pair prompt.
   getLastConnectedAt: (hostId: string) => number | null
@@ -221,6 +223,8 @@ export function RpcClientProvider({ children }: { children: ReactNode }) {
     return storeRef.current.get(hostId)?.state ?? 'disconnected'
   }, [])
 
+  const getClient = useCallback((id: string) => storeRef.current.get(id)?.client ?? null, [])
+
   const getReconnectAttempt = useCallback((hostId: string): number => {
     return storeRef.current.get(hostId)?.client.getReconnectAttempt() ?? 0
   }, [])
@@ -298,6 +302,7 @@ export function RpcClientProvider({ children }: { children: ReactNode }) {
       forceReconnect,
       closeHost: closeEntry,
       getState,
+      getClient,
       getReconnectAttempt,
       getLastConnectedAt,
       getActivePath,
@@ -312,6 +317,7 @@ export function RpcClientProvider({ children }: { children: ReactNode }) {
       forceReconnect,
       closeEntry,
       getState,
+      getClient,
       getReconnectAttempt,
       getLastConnectedAt,
       getActivePath,
@@ -340,20 +346,18 @@ export function useHostClient(hostId: string | undefined): {
 } {
   const ctx = useRpcClientContext()
   const [, force] = useState(0)
-  const [state, setState] = useState<ConnectionState>(() =>
+  const [, setState] = useState<ConnectionState>(() =>
     hostId ? ctx.getState(hostId) : 'disconnected'
   )
+  // Why: not the render source — only a change detector so client swaps trigger a re-render.
   const clientRef = useRef<RpcClient | null>(null)
-  const clientHostIdRef = useRef<string | undefined>(hostId)
 
   useEffect(() => {
     if (!hostId) {
       clientRef.current = null
-      clientHostIdRef.current = undefined
       setState('disconnected')
       return
     }
-    clientHostIdRef.current = hostId
     let cancelled = false
     // Subscribe before acquire so any state change during open is captured.
     const unsub = ctx.subscribeHostState(hostId, (next) => {
@@ -384,14 +388,14 @@ export function useHostClient(hostId: string | undefined): {
       unsub()
       ctx.release(hostId)
       clientRef.current = null
-      clientHostIdRef.current = undefined
     }
   }, [ctx, hostId])
 
-  // Why: Expo can reuse the screen before effects bind the next host; never expose the prior host's client or state in that render.
-  const bound = clientHostIdRef.current === hostId
-  const boundState = bound ? state : hostId ? ctx.getState(hostId) : 'disconnected'
-  return { client: bound ? clientRef.current : null, state: boundState }
+  // Why: read the store at render, not the effect-written ref — a consumer that missed that
+  // handoff stayed null forever, since a settled host emits no state change to wake it
+  // (#10914). Keying on the current hostId also hides a reused screen's prior host.
+  const live = hostId ? ctx.getClient(hostId) : null
+  return { client: live, state: hostId ? ctx.getState(hostId) : 'disconnected' }
 }
 
 // Why: refcounting prevents a double-open when a host-detail screen shares one of these hosts.

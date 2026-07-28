@@ -9216,7 +9216,10 @@ export default function MobileTasksScreen() {
         </View>
       ) : null}
 
-      {!tasksSupported ? (
+      {/* Why: support lands before hydration finishes, so rendering the list in that window
+          showed an empty result indistinguishable from "no tasks" (#10914). Spin only while
+          there is nothing to show, so a re-hydration keeps existing rows instead of flashing. */}
+      {!tasksSupported || (!taskStateHydrated && items.length === 0 && !githubProjectTable) ? (
         tasksUnsupported ? (
           <View style={styles.centered}>
             <Text style={styles.emptyText}>Update Orca desktop</Text>

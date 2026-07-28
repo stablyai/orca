@@ -172,6 +172,56 @@ describe('useHostClient', () => {
     }
   })
 
+  // Why: the client used to come from a ref written only by the mount effect, so a consumer
+  // that missed that handoff stayed null forever — an already-connected host never emits
+  // another state change to wake it, which blanked Tasks opened from the home card (#10914).
+  it('hands a late consumer the live client on its first render', async () => {
+    const client = makeFakeClient('connected')
+    connectMock.mockReturnValue(client)
+    loadHostsMock.mockResolvedValue([HOST])
+
+    const lateRenders: Array<RpcClient | null> = []
+    let renderer: ReactTestRenderer | null = null
+
+    function Primary(): null {
+      useHostClient(HOST.id)
+      return null
+    }
+    function Late(): null {
+      lateRenders.push(useHostClient(HOST.id).client)
+      return null
+    }
+
+    const restore = suppressReactTestRendererDeprecationWarning()
+    try {
+      await act(async () => {
+        renderer = create(createElement(RpcClientProvider, null, createElement(Primary)))
+        await Promise.resolve()
+      })
+
+      // Mount a second consumer against the already-open, already-connected host.
+      await act(async () => {
+        renderer?.update(
+          createElement(
+            RpcClientProvider,
+            null,
+            createElement(Primary),
+            createElement(Late, { key: 'late' })
+          )
+        )
+        await Promise.resolve()
+      })
+
+      expect(lateRenders.length).toBeGreaterThan(0)
+      // The very first render must already expose the client — no effect round-trip, and no
+      // reliance on a future state change that a settled host will never emit.
+      expect(lateRenders[0]).toBe(client)
+    } finally {
+      restore()
+      act(() => renderer?.unmount())
+    }
+  })
+
   it('stays disconnected while a reused screen resolves an uncached host', async () => {
     const client = makeFakeClient('connected')
     connectMock.mockReturnValue(client)
