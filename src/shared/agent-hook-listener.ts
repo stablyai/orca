@@ -63,7 +63,7 @@ import {
   resolveGrokSessionsDir
 } from './grok-session-paths'
 import { sweepStaleAgentHookEndpointTemps } from './agent-hook-endpoint-temp-cleanup'
-import { assertJsonTextStructureWithinLimits } from './json-text-structure-limit'
+import { assertJsonTextStructureWithinLimits } from './memory-safety/json-text-structure-limit'
 
 /** Maximum request body size accepted by the listener (1 MB). */
 export const HOOK_REQUEST_MAX_BYTES = 1_000_000

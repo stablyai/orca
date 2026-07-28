@@ -1,4 +1,4 @@
-import { measureUtf8ByteLength } from './utf8-byte-limits'
+import { measureUtf8ByteLength } from './memory-safety/utf8-byte-limits'
 
 export const SETUP_SCRIPT_IMPORT_FILE_MAX_BYTES = 256 * 1024
 export const SETUP_SCRIPT_IMPORT_MAX_CODE_UNITS = 256 * 1024

@@ -10,8 +10,8 @@ import {
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
-import { NodeFileReadTooLargeError } from './node-bounded-file-reader'
-import { JsonStringifyByteLimitError } from './node-bounded-json-stringify'
+import { NodeFileReadTooLargeError } from './memory-safety/node-bounded-file-reader'
+import { JsonStringifyByteLimitError } from './memory-safety/node-bounded-json-stringify'
 import {
   PersistedStateSecretCapacityError,
   assertPersistedStateSecretWithinLimit,

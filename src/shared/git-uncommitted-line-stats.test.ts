@@ -7,7 +7,7 @@ const { lstatMock, readFileMock } = vi.hoisted(() => ({
 
 vi.mock('fs/promises', () => ({ lstat: lstatMock }))
 
-vi.mock('./node-bounded-file-reader', () => ({
+vi.mock('./memory-safety/node-bounded-file-reader', () => ({
   readNodeFileWithinLimit: async (path: string) => ({
     buffer: await readFileMock(path),
     stats: mockFileStat(0)

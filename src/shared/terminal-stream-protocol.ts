@@ -1,4 +1,4 @@
-import { assertJsonTextStructureWithinLimits } from './json-text-structure-limit'
+import { assertJsonTextStructureWithinLimits } from './memory-safety/json-text-structure-limit'
 
 const TERMINAL_STREAM_KIND = 0x74
 const TERMINAL_STREAM_VERSION = 1

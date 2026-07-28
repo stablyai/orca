@@ -2,7 +2,7 @@ import { mkdtempSync, rmSync, truncateSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
-import { NodeFileReadTooLargeError } from '../shared/node-bounded-file-reader'
+import { NodeFileReadTooLargeError } from '../shared/memory-safety/node-bounded-file-reader'
 import {
   MAX_AGENT_STATE_FILE_BYTES,
   MAX_AGENT_STATE_JSON_NESTING_DEPTH,

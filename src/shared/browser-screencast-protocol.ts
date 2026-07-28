@@ -1,4 +1,4 @@
-import { assertJsonTextStructureWithinLimits } from './json-text-structure-limit'
+import { assertJsonTextStructureWithinLimits } from './memory-safety/json-text-structure-limit'
 
 const BROWSER_SCREENCAST_KIND = 0x62
 const BROWSER_SCREENCAST_VERSION = 1

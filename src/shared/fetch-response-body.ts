@@ -1,7 +1,7 @@
 import {
   assertJsonTextStructureWithinLimits,
   type JsonTextStructureLimits
-} from './json-text-structure-limit'
+} from './memory-safety/json-text-structure-limit'
 
 const INITIAL_RESPONSE_CAPACITY_BYTES = 64 * 1024
 

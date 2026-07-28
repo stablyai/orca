@@ -1,8 +1,8 @@
 import { existsSync } from 'node:fs'
 import { join } from 'node:path'
-import { JsonStringifyByteLimitError } from './node-bounded-json-stringify'
-import { readNodeFileSyncWithinLimit } from './node-bounded-file-reader'
-import { writeSecureJsonFileWithinLimit } from './bounded-secure-json-file'
+import { JsonStringifyByteLimitError } from './memory-safety/node-bounded-json-stringify'
+import { readNodeFileSyncWithinLimit } from './memory-safety/node-bounded-file-reader'
+import { writeSecureJsonFileWithinLimit } from './memory-safety/bounded-secure-json-file'
 import { hardenExistingSecureFile } from './secure-file'
 import {
   EphemeralVmRuntimeRecordSchema,

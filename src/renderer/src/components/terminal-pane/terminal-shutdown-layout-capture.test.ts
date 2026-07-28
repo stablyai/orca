@@ -1,7 +1,7 @@
 import { beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
 import { TERMINAL_SCROLLBACK_SESSION_BUFFER_BYTE_LIMIT } from '../../../../shared/terminal-scrollback-limits'
 import type { TerminalLayoutSnapshot } from '../../../../shared/types'
-import { getUtf8ByteLength } from '../../../../shared/utf8-byte-limits'
+import { getUtf8ByteLength } from '../../../../shared/memory-safety/utf8-byte-limits'
 
 const LEAF_ID = '11111111-1111-4111-8111-111111111111' as const
 const LEAF_ID_2 = '22222222-2222-4222-8222-222222222222' as const

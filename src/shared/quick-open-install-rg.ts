@@ -1,4 +1,4 @@
-import { readNodeFileWithinLimit } from './node-bounded-file-reader'
+import { readNodeFileWithinLimit } from './memory-safety/node-bounded-file-reader'
 import { getProcessOutputFields, iterateProcessOutputLines } from './process-output-field-scanner'
 
 const GENERIC_LINUX_RIPGREP_INSTALL =

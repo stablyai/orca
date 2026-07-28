@@ -1,5 +1,5 @@
 import { join } from 'node:path'
-import { assertJsonTextStructureWithinLimits } from './json-text-structure-limit'
+import { assertJsonTextStructureWithinLimits } from './memory-safety/json-text-structure-limit'
 
 export const SERVE_UPDATE_HANDOFF_PATH_ENV = 'ORCA_SERVE_UPDATE_HANDOFF_PATH'
 export const SERVE_UPDATE_HANDOFF_FILE = 'serve-update-handoff.json'

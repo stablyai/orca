@@ -1,6 +1,6 @@
 import type { TuiAgent } from './types'
 import { isTuiAgentEnabled } from './tui-agent-selection'
-import { assertJsonTextStructureWithinLimits } from './json-text-structure-limit'
+import { assertJsonTextStructureWithinLimits } from './memory-safety/json-text-structure-limit'
 
 /* eslint-disable max-lines -- Why: this is the single registry for non-interactive commit-message agents, their model discovery parsers, and UI capabilities. */
 

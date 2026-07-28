@@ -11,7 +11,7 @@
  * Design doc: docs/design/share-text-search.md.
  */
 import { posix, win32 } from 'node:path'
-import { assertJsonTextStructureWithinLimits } from './json-text-structure-limit'
+import { assertJsonTextStructureWithinLimits } from './memory-safety/json-text-structure-limit'
 import { normalizeSearchResult } from './search-match-count'
 import { escapeRegex } from './string-utils'
 import type { SearchFileResult, SearchMatch, SearchOptions, SearchResult } from './types'

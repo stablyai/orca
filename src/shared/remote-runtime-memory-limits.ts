@@ -1,7 +1,7 @@
 import {
   JsonStringifyByteLimitError,
   stringifyJsonWithinByteLimit
-} from './node-bounded-json-stringify'
+} from './memory-safety/node-bounded-json-stringify'
 import { RemoteRuntimeClientError } from './remote-runtime-client-error'
 
 export const REMOTE_RUNTIME_MAX_OUTBOUND_JSON_BYTES = 4 * 1024 * 1024

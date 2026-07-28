@@ -9,7 +9,7 @@ import {
   normalizeOptionalMultilineField,
   normalizePromptField
 } from './agent-status-field-normalization'
-import { assertJsonTextStructureWithinLimits } from './json-text-structure-limit'
+import { assertJsonTextStructureWithinLimits } from './memory-safety/json-text-structure-limit'
 
 export { AGENT_STATUS_MAX_FIELD_LENGTH } from './agent-status-field-normalization'
 

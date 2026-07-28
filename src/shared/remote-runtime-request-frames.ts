@@ -4,7 +4,7 @@ import {
   isKeepaliveFrame
 } from './runtime-rpc-envelope'
 import { RemoteRuntimeClientError } from './remote-runtime-client-error'
-import { assertJsonTextStructureWithinLimits } from './json-text-structure-limit'
+import { assertJsonTextStructureWithinLimits } from './memory-safety/json-text-structure-limit'
 
 export const REMOTE_RUNTIME_JSON_STRUCTURE_LIMITS = {
   structuralTokens: 256 * 1024,

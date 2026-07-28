@@ -5,15 +5,15 @@ import {
   NodeFileReadTooLargeError,
   readNodeFileSyncWithinLimit,
   type BoundedNodeFileRead
-} from './node-bounded-file-reader'
+} from './memory-safety/node-bounded-file-reader'
 import {
   JsonStringifyByteLimitError,
   stringifyJsonWithinByteLimit
-} from './node-bounded-json-stringify'
+} from './memory-safety/node-bounded-json-stringify'
 import {
   assertJsonTextStructureWithinLimits,
   type JsonTextStructureLimits
-} from './json-text-structure-limit'
+} from './memory-safety/json-text-structure-limit'
 
 export const ORCA_PERSISTED_STATE_MAX_BYTES = 64 * 1024 * 1024
 export const ORCA_PERSISTED_STATE_SECRET_MAX_BYTES = 4 * 1024 * 1024

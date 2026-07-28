@@ -1,4 +1,4 @@
-import { readNodeFileSyncWithinLimit } from './node-bounded-file-reader'
+import { readNodeFileSyncWithinLimit } from './memory-safety/node-bounded-file-reader'
 
 export const RELAY_VERSION_MARKER_MAX_BYTES = 4 * 1024
 

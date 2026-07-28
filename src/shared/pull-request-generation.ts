@@ -1,5 +1,5 @@
 import { truncateDiffForPrompt } from './commit-message-prompt'
-import { assertJsonTextStructureWithinLimits } from './json-text-structure-limit'
+import { assertJsonTextStructureWithinLimits } from './memory-safety/json-text-structure-limit'
 
 export const GENERATED_PULL_REQUEST_JSON_STRUCTURE_LIMITS = {
   structuralTokens: 64,

@@ -1,4 +1,4 @@
-import { measureUtf8ByteLength } from './utf8-byte-limits'
+import { measureUtf8ByteLength } from './memory-safety/utf8-byte-limits'
 
 export const MCP_CONFIG_INSPECTION_MAX_BYTES = 256 * 1024
 export const MCP_CONFIG_INSPECTION_MAX_CODE_UNITS = 256 * 1024

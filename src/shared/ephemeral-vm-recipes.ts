@@ -5,7 +5,7 @@ import {
   MAX_SSH_RELAY_GRACE_PERIOD_SECONDS,
   MIN_SSH_RELAY_GRACE_PERIOD_SECONDS
 } from './ssh-types'
-import { assertJsonTextStructureWithinLimits } from './json-text-structure-limit'
+import { assertJsonTextStructureWithinLimits } from './memory-safety/json-text-structure-limit'
 // Why: ephemeral-vm-recipe-doctor imports Node's fs/path, so it must NOT be
 // re-exported through this barrel — the renderer/web-client imports this module
 // and would otherwise pull Node built-ins into the browser bundle (build fails).

@@ -4,7 +4,7 @@ import { isBinaryBuffer } from './binary-buffer'
 import { decodeGitCQuotedPath } from './git-cquoted-path'
 import { DEFAULT_GIT_STATUS_LIMIT } from './git-status-limit'
 import { iterateNulDelimitedFields } from './nul-delimited-fields'
-import { readNodeFileWithinLimit } from './node-bounded-file-reader'
+import { readNodeFileWithinLimit } from './memory-safety/node-bounded-file-reader'
 
 export type GitLineStats = { added?: number; removed?: number }
 

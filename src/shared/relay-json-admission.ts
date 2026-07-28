@@ -1,4 +1,4 @@
-import { assertJsonTextStructureWithinLimits } from './json-text-structure-limit'
+import { assertJsonTextStructureWithinLimits } from './memory-safety/json-text-structure-limit'
 
 export const RELAY_JSON_MAX_STRUCTURAL_TOKENS = 1_000_000
 export const RELAY_JSON_MAX_NESTING_DEPTH = 128

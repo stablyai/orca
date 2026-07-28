@@ -6,7 +6,7 @@ import {
   SETUP_SCRIPT_IMPORT_MAX_TOML_LINES,
   SETUP_SCRIPT_IMPORT_MAX_UNSUPPORTED_FIELDS
 } from './setup-script-import-limits'
-import { measureUtf8ByteLength } from './utf8-byte-limits'
+import { measureUtf8ByteLength } from './memory-safety/utf8-byte-limits'
 
 const CODEX_ENVIRONMENT_PATH = '.codex/environments/environment.toml'
 

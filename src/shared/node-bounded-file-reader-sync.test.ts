@@ -2,7 +2,10 @@ import { closeSync, ftruncateSync, mkdtempSync, openSync, rmSync, writeFileSync 
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
-import { NodeFileReadTooLargeError, readNodeFileSyncWithinLimit } from './node-bounded-file-reader'
+import {
+  NodeFileReadTooLargeError,
+  readNodeFileSyncWithinLimit
+} from './memory-safety/node-bounded-file-reader'
 
 const tempDirectories: string[] = []
 

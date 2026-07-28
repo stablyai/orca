@@ -1,7 +1,7 @@
 /* eslint-disable max-lines -- Why: git status/discard/chunking behavior is verified together here to keep the command contract readable in one place. */
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type * as NodeFs from 'node:fs'
-import type * as BoundedFileReader from '../../shared/node-bounded-file-reader'
+import type * as BoundedFileReader from '../../shared/memory-safety/node-bounded-file-reader'
 import path from 'node:path'
 import {
   MAX_RENDERED_DIFF_COMBINED_CHARACTERS,
@@ -63,7 +63,7 @@ vi.mock('fs', () => ({
   existsSync: existsSyncMock
 }))
 
-vi.mock('../../shared/node-bounded-file-reader', async (importOriginal) => {
+vi.mock('../../shared/memory-safety/node-bounded-file-reader', async (importOriginal) => {
   const actual = await importOriginal<typeof BoundedFileReader>()
   return {
     ...actual,

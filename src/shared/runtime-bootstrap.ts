@@ -1,5 +1,5 @@
 import { join } from 'node:path'
-import { assertJsonTextStructureWithinLimits } from './json-text-structure-limit'
+import { assertJsonTextStructureWithinLimits } from './memory-safety/json-text-structure-limit'
 
 export type RuntimeTransportMetadata =
   | {

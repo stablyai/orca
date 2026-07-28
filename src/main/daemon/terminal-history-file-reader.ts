@@ -1,7 +1,7 @@
 import {
   readNodeFileSyncWithinLimit,
   readNodeFileWithinLimit
-} from '../../shared/node-bounded-file-reader'
+} from '../../shared/memory-safety/node-bounded-file-reader'
 
 export function readTerminalHistoryBuffer(filePath: string, maxBytes: number): Buffer {
   return readNodeFileSyncWithinLimit(filePath, maxBytes).buffer

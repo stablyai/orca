@@ -1,4 +1,4 @@
-import { measureUtf8ByteLength } from './utf8-byte-limits'
+import { measureUtf8ByteLength } from './memory-safety/utf8-byte-limits'
 
 export const HTML_TO_PDF_MAX_INPUT_BYTES = 32 * 1024 * 1024
 export const HTML_TO_PDF_MEMORY_LIMIT_ERROR = 'HTML export exceeds the PDF memory limit'
