@@ -12,7 +12,6 @@ export {
 export {
   DEFAULT_GITLAB_HOSTS,
   _getProjectRefCacheSize,
-  _resetKnownHostsCache,
   _resetProjectRefCache,
   getGlabKnownHosts,
   getIssueProjectRef,
@@ -22,7 +21,8 @@ export {
   glabRepoExecOptions,
   parseGlabAuthStatusHosts,
   parseGitLabProjectRef,
-  resolveIssueSource
+  resolveIssueSource,
+  setConfiguredGitLabUrl
 } from './gitlab-project-ref-resolution'
 export type {
   LocalGitExecOptions,

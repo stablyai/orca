@@ -3,42 +3,14 @@ import type { GitLabProjectRef } from '../../shared/gitlab-types'
 export type ProjectRef = GitLabProjectRef
 export const DEFAULT_GITLAB_HOSTS = ['gitlab.com'] as const
 
-/** A GitLab instance is opt-in; an empty setting disables GitLab routing. */
-export function normalizeGitLabUrl(value: unknown): string {
-  if (typeof value !== 'string' || !value.trim()) {
-    return ''
-  }
-  try {
-    const url = new URL(value.trim())
-    if (
-      !['http:', 'https:'].includes(url.protocol.toLowerCase()) ||
-      url.username ||
-      url.password ||
-      url.search ||
-      url.hash
-    ) {
-      return ''
-    }
-    url.pathname = ''
-    return url.toString().replace(/\/$/, '').toLowerCase()
-  } catch {
-    return ''
-  }
-}
-
-export function gitLabHostFromUrl(value: unknown): string {
-  const normalized = normalizeGitLabUrl(value)
-  return normalized ? new URL(normalized).host : ''
-}
-
 export function normalizeGitLabHost(value: string): string {
   return value.trim().toLowerCase()
 }
 
 // Why: host recognition is port-aware so two services on the same hostname
 // but different ports (e.g. a GitLab on :8080 and a Gitea on :3030) are not
-// conflated. The hostname (port-less) part is kept for legacy known-host
-// entries that were recorded without a port.
+// conflated. The hostname (port-less) part is kept so port-less ssh remotes
+// can still be mapped onto a configured host that carries a port.
 function hostnameOf(host: string): string {
   // `host` may be `name` or `name:port`. Strip a trailing `:digits` port.
   return host.replace(/:\d+$/, '')
@@ -74,26 +46,12 @@ function makeProjectRefForTrustedHost(host: string, path: string): ProjectRef | 
 }
 
 /**
- * Does `urlHost` (which may include a `:port`) match a known-host entry?
- * - An exact match (including any port) always counts.
- * - A known entry WITHOUT a port also matches a URL host on the same
- *   hostname regardless of the URL's port — this preserves recognition for
- *   legacy `gitlab.com` / bare-hostname known entries.
- * - A known entry WITH a port only matches a URL host with the exact same
- *   port, so `gitlab.example.com:8443` does not accept a
- *   `gitea.example.com:3000` (or same-host different-port) remote.
+ * Resolve a remote's host+path against the known hosts. Host recognition is
+ * exact: a configured `gitlab.example.com` and a remote on
+ * `gitlab.example.com:3030` are different endpoints, and routing the latter
+ * through `glab --hostname` would target an instance the user never
+ * configured.
  */
-function knownHostMatches(urlHost: string, knownHost: string): boolean {
-  if (urlHost === knownHost) {
-    return true
-  }
-  if (hostnameOf(knownHost) === knownHost) {
-    // Known entry has no port — match on hostname alone.
-    return hostnameOf(urlHost) === knownHost
-  }
-  return false
-}
-
 function makeProjectRef(
   host: string,
   path: string,
@@ -102,14 +60,15 @@ function makeProjectRef(
 ): ProjectRef | null {
   const normalizedHost = normalizeGitLabHost(host)
   const normalizedKnownHosts = knownHosts.map(normalizeGitLabHost)
-  const matchedHost = normalizedKnownHosts.find((knownHost) =>
-    knownHostMatches(normalizedHost, knownHost)
-  )
-  if (matchedHost) return makeProjectRefForTrustedHost(normalizedHost, path)
+  if (normalizedKnownHosts.includes(normalizedHost)) {
+    return makeProjectRefForTrustedHost(normalizedHost, path)
+  }
+  // Why: ssh/scp remotes carry no web port, so they can never match a single
+  // configured host that has one. Map them onto it by hostname instead.
   const configuredHost = normalizedKnownHosts.length === 1 ? normalizedKnownHosts[0] : null
   if (
     allowConfiguredPortMapping &&
-    configuredHost?.includes(':') &&
+    configuredHost &&
     hostnameOf(configuredHost) === normalizedHost
   ) {
     return makeProjectRefForTrustedHost(configuredHost, path)

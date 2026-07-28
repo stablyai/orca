@@ -1,7 +1,6 @@
 import { app, BrowserWindow, ipcMain, nativeTheme } from 'electron'
 import type { Store } from '../persistence'
-import type { GlobalSettings } from '../../shared/global-settings-types'
-import type { PersistedState } from '../../shared/persisted-state-types'
+import type { GlobalSettings, PersistedState } from '../../shared/types'
 import { listSystemFontFamilies } from '../system-fonts'
 import { previewGhosttyImport } from '../ghostty/index'
 import { previewWarpThemeImport } from '../warp-themes'
@@ -12,10 +11,7 @@ import { SETTINGS_CHANGED_WHITELIST, type SettingsChangedKey } from '../../share
 import type { AgentAwakeService } from '../agent-awake-service'
 import { sanitizeFloatingWorkspaceDirectorySetting } from './floating-workspace-directory'
 import { applyAgentStatusHooksEnabled } from '../agent-hooks/managed-agent-hook-controls'
-import { recordManagedHookInstallFailure } from '../agent-hooks/install-telemetry'
 import { applyElectronProxySettings } from '../network/proxy-settings'
-import { applyBrowserSessionProxies } from '../browser/browser-session-proxy'
-import { browserSessionRegistry } from '../browser/browser-session-registry'
 import { normalizeProxyBypassRules, normalizeProxyUrl } from '../../shared/network-proxy'
 import { normalizeAppIconId } from '../../shared/app-icon'
 import { normalizeUiLanguage } from '../../shared/ui-language'
@@ -27,15 +23,7 @@ import { prepareLocalWorktreeRootsForRepos } from '../worktree-root-preparation'
 import { scheduleCurrentWorktreeBaseDirectoryWatcherSync } from './worktree-base-directory-watcher'
 import { applyPRBotAuthorOverride } from '../../shared/pr-bot-author-overrides'
 import { resolveEnvironment } from '../../shared/runtime-environment-store'
-import { haveSameDisabledTuiAgents } from '../../shared/tui-agent-selection'
-import {
-  normalizeMobilePairingCustomAddress,
-  normalizeMobilePairingCustomAddresses
-} from '../../shared/mobile-pairing-custom-address'
-import {
-  computerAwakeSettingsForMode,
-  normalizeComputerAwakeMode
-} from '../../shared/computer-awake-mode'
+import { normalizeGitLabUrl } from '../../shared/gitlab-instance-url'
 
 // Why: the whitelist is the source-of-truth for which keys we emit on. Casting
 // to a Set once at module load lets the IPC handler's per-key membership
@@ -72,18 +60,6 @@ export function registerSettingsHandlers(
   store: Store,
   agentAwakeService?: AgentAwakeService
 ): void {
-  ipcMain.handle(
-    'agentAwake:getStatus',
-    () => agentAwakeService?.getStatus() ?? { mode: 'off', active: false }
-  )
-  agentAwakeService?.subscribe?.((status) => {
-    for (const window of BrowserWindow.getAllWindows()) {
-      if (!window.isDestroyed()) {
-        window.webContents.send('agentAwake:changed', status)
-      }
-    }
-  })
-
   store.onSettingsChanged((updates, _settings, originWebContentsId) => {
     for (const window of BrowserWindow.getAllWindows()) {
       const isOrigin =
@@ -128,22 +104,6 @@ export function registerSettingsHandlers(
     // Why: Floating Workspace grants are trusted only when written by the
     // main-process directory picker, never by renderer-provided settings IPC.
     delete sanitizedArgs.floatingTerminalTrustedCwds
-    if ('computerAwakeMode' in sanitizedArgs) {
-      Object.assign(
-        sanitizedArgs,
-        computerAwakeSettingsForMode(
-          normalizeComputerAwakeMode(
-            sanitizedArgs.computerAwakeMode,
-            sanitizedArgs.keepComputerAwakeWhileAgentsRun
-          )
-        )
-      )
-    } else if ('keepComputerAwakeWhileAgentsRun' in sanitizedArgs) {
-      Object.assign(
-        sanitizedArgs,
-        computerAwakeSettingsForMode(sanitizedArgs.keepComputerAwakeWhileAgentsRun ? 'auto' : 'off')
-      )
-    }
     if (typeof args.floatingTerminalCwd === 'string') {
       sanitizedArgs.floatingTerminalCwd = await sanitizeFloatingWorkspaceDirectorySetting(
         store,
@@ -174,15 +134,8 @@ export function registerSettingsHandlers(
     if ('uiLanguage' in args) {
       sanitizedArgs.uiLanguage = normalizeUiLanguage(args.uiLanguage)
     }
-    if ('mobilePairingCustomAddress' in args) {
-      sanitizedArgs.mobilePairingCustomAddress = normalizeMobilePairingCustomAddress(
-        args.mobilePairingCustomAddress
-      )
-    }
-    if ('mobilePairingCustomAddresses' in args) {
-      sanitizedArgs.mobilePairingCustomAddresses = normalizeMobilePairingCustomAddresses(
-        args.mobilePairingCustomAddresses
-      )
+    if ('gitlabUrl' in args) {
+      sanitizedArgs.gitlabUrl = normalizeGitLabUrl(args.gitlabUrl)
     }
     if (args.theme) {
       nativeTheme.themeSource = args.theme
@@ -196,57 +149,17 @@ export function registerSettingsHandlers(
       notifyListeners: true,
       originWebContentsId: event.sender.id
     })
-    const proxySettingsChanged =
-      ('httpProxyUrl' in sanitizedArgs && before.httpProxyUrl !== result.httpProxyUrl) ||
-      ('httpProxyBypassRules' in sanitizedArgs &&
-        before.httpProxyBypassRules !== result.httpProxyBypassRules)
-    if (proxySettingsChanged) {
-      // Start both authorities before yielding so requests cannot enter between their barriers.
-      const defaultSessionApply = applyElectronProxySettings(result)
-      const browserSessionsApply = applyBrowserSessionProxies(
-        browserSessionRegistry.listProfiles(),
-        result
-      )
-      const [defaultSessionResult, browserSessionsResult] = await Promise.allSettled([
-        defaultSessionApply,
-        browserSessionsApply
-      ])
-      if (defaultSessionResult.status === 'rejected') {
-        console.warn('[settings] failed to apply network proxy settings')
-      }
-      if (browserSessionsResult.status === 'rejected') {
-        console.warn('[settings] failed to apply network proxy settings to browser sessions')
-      }
+    if ('keepComputerAwakeWhileAgentsRun' in sanitizedArgs) {
+      agentAwakeService?.setEnabled(result.keepComputerAwakeWhileAgentsRun)
     }
     if (
-      'computerAwakeMode' in sanitizedArgs ||
-      'keepComputerAwakeWhileAgentsRun' in sanitizedArgs
+      'agentStatusHooksEnabled' in sanitizedArgs &&
+      before.agentStatusHooksEnabled !== result.agentStatusHooksEnabled
     ) {
-      agentAwakeService?.setMode(
-        normalizeComputerAwakeMode(result.computerAwakeMode, result.keepComputerAwakeWhileAgentsRun)
-      )
-    }
-    const hookSettingChanged =
-      ('agentStatusHooksEnabled' in sanitizedArgs &&
-        before.agentStatusHooksEnabled !== result.agentStatusHooksEnabled) ||
-      ('disabledTuiAgents' in sanitizedArgs &&
-        !haveSameDisabledTuiAgents(before.disabledTuiAgents, result.disabledTuiAgents))
-    if (hookSettingChanged) {
       try {
-        await applyAgentStatusHooksEnabled(result.agentStatusHooksEnabled, result, {
-          userInitiated: true,
-          shouldHydrateShellPath: app.isPackaged,
-          onInstallError: recordManagedHookInstallFailure,
-          shouldContinue: (agent) => {
-            const settings = store.getSettings()
-            return (
-              settings.agentStatusHooksEnabled !== false &&
-              !settings.disabledTuiAgents.includes(agent)
-            )
-          }
-        })
+        applyAgentStatusHooksEnabled(result.agentStatusHooksEnabled)
       } catch (error) {
-        console.warn('[settings] failed to reconcile managed agent hooks:', error)
+        console.warn('[settings] failed to apply agentStatusHooksEnabled:', error)
       }
     }
     if ('uiLanguage' in sanitizedArgs && before.uiLanguage !== result.uiLanguage) {
@@ -262,6 +175,13 @@ export function registerSettingsHandlers(
     }
     if (APPEARANCE_MENU_KEYS.some((key) => key in sanitizedArgs)) {
       rebuildAppMenu()
+    }
+    if ('httpProxyUrl' in sanitizedArgs || 'httpProxyBypassRules' in sanitizedArgs) {
+      try {
+        await applyElectronProxySettings(result)
+      } catch {
+        console.warn('[settings] failed to apply network proxy settings')
+      }
     }
     if ('appIcon' in sanitizedArgs && before.appIcon !== result.appIcon) {
       applyAppIcon(result.appIcon)

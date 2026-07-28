@@ -1,27 +1,6 @@
 import { describe, expect, it } from 'vitest'
-import {
-  gitLabHostFromUrl,
-  normalizeGitLabUrl,
-  parseGitLabProjectRef,
-  parseRemoteProjectRefCandidate
-} from './project-ref-parser'
-
-describe('GitLab instance setting', () => {
-  it('normalizes configured URLs and preserves non-default ports', () => {
-    expect(normalizeGitLabUrl('  HTTPS://GitLab.Example.com:8443/// ')).toBe(
-      'https://gitlab.example.com:8443'
-    )
-    expect(gitLabHostFromUrl('https://gitlab.example.com:8443')).toBe(
-      'gitlab.example.com:8443'
-    )
-  })
-
-  it('rejects invalid or credential-bearing URLs without selecting a host', () => {
-    expect(normalizeGitLabUrl('not a url')).toBe('')
-    expect(normalizeGitLabUrl('https://token@gitlab.example.com')).toBe('')
-    expect(gitLabHostFromUrl('')).toBe('')
-  })
-})
+import { gitLabHostFromUrl } from '../../shared/gitlab-instance-url'
+import { parseGitLabProjectRef, parseRemoteProjectRefCandidate } from './project-ref-parser'
 
 describe('gitlab project ref parsing', () => {
   it('parses HTTPS and SSH GitLab.com remotes', () => {
@@ -95,15 +74,13 @@ describe('gitlab project ref parsing', () => {
     ).toEqual({ host: 'gitlab.example.com:8443', path: 'team/api' })
   })
 
-  it('matches a port-bearing http remote against a port-less legacy known host', () => {
-    // Why: a known host recorded without a port (legacy/bare entry) still
-    // recognizes a remote on any port of the same hostname.
+  it('rejects a port-bearing http remote when the configured host has no port', () => {
+    // Why: `https://gitlab.example.com` and `https://gitlab.example.com:8443`
+    // are different endpoints. Matching loosely would hand `glab --hostname`
+    // a host the user never configured and can't be authenticated against.
     expect(
-      parseGitLabProjectRef('https://gitlab.example.com:8443/team/api.git', [
-        'gitlab.com',
-        'gitlab.example.com'
-      ])
-    ).toEqual({ host: 'gitlab.example.com:8443', path: 'team/api' })
+      parseGitLabProjectRef('https://gitlab.example.com:8443/team/api.git', ['gitlab.example.com'])
+    ).toBeNull()
   })
 
   it('distinguishes two services on the same host by port — only the GitLab one matches', () => {
