@@ -225,6 +225,7 @@ export type FileReadResult = {
   isBinary: boolean
   isImage?: boolean
   mimeType?: string
+  imageDimensions?: { width: number; height: number }
 }
 
 export type IFilesystemProvider = {
