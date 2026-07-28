@@ -97,18 +97,22 @@ export const TUI_AGENT_CONFIG: Record<TuiAgent, TuiAgentConfig> = {
     promptInjectionMode: 'stdin-after-start'
   },
   trae: {
-    // Why: the published trae-cli binary is installed under this name (with
-    // `traecli`/`trae-agent` as documented aliases for the same binary).
-    // Excludes the CLI's third documented alias `ta` — too generic a
-    // 2-letter name to safely treat as a PATH-existence signal for Trae;
-    // it would false-positive on unrelated tools users already have there.
-    detectCmd: 'trae-cli',
-    detectCmdAliases: ['traecli', 'trae-agent'],
-    launchCmd: 'trae-cli',
-    expectedProcess: 'trae-cli',
-    // Why: `trae-cli [prompt]` accepts the initial task as a positional argv,
-    // same contract as Claude/Codex, so Orca can launch straight into the
-    // composed prompt instead of pasting after startup.
+    // Why: the TRAE CN CLI's own installer symlinks its `trae-cli` binary to
+    // three names — `trae-cli`, `traecli`, `trae-agent` — but the bare
+    // `trae-cli` name collides with the unrelated, more widely installed
+    // open-source `bytedance/trae-agent` (whose `pyproject.toml` registers
+    // that exact same console-script name). Detect/launch on `traecli`
+    // instead: still documented and installed by TRAE CN's own installer,
+    // but not a name the other project ships, so PATH detection can't
+    // false-positive onto it. `trae-agent` is dropped entirely — it's the
+    // other project's literal repo name, the highest-false-positive string
+    // available. `ta` was never included (too generic a 2-letter name).
+    detectCmd: 'traecli',
+    launchCmd: 'traecli',
+    expectedProcess: 'traecli',
+    // Why: `traecli [prompt]` accepts the initial task as a positional argv,
+    // same contract as Claude/Codex — verified locally by running the real
+    // CLI end-to-end (it submits immediately on launch).
     promptInjectionMode: 'argv'
   },
   opencode: {

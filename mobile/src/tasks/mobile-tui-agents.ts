@@ -86,7 +86,7 @@ export const MOBILE_TUI_AGENT_FAVICON_DOMAINS: Partial<Record<TuiAgent, string>>
   opencode: 'opencode.ai',
   'mimo-code': 'mimo.xiaomi.com',
   ante: 'antigma.ai',
-  trae: 'docs.trae.cn',
+  trae: 'www.trae.cn',
   omp: 'omp.sh',
   gemini: 'gemini.google.com',
   antigravity: 'antigravity.google',

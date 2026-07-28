@@ -125,10 +125,10 @@ describe('buildAgentStartupPlan', () => {
       })
     ).toEqual({
       agent: 'trae',
-      launchCommand: "trae-cli 'Summarize the failing tests'",
-      expectedProcess: 'trae-cli',
+      launchCommand: "traecli 'Summarize the failing tests'",
+      expectedProcess: 'traecli',
       followupPrompt: null,
-      launchConfig: emptyLaunchConfig('trae-cli')
+      launchConfig: emptyLaunchConfig('traecli')
     })
   })
 

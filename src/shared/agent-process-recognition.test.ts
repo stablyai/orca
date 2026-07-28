@@ -130,39 +130,37 @@ describe('agent process recognition', () => {
     })
   })
 
-  it('recognizes Trae by its primary binary and documented aliases', () => {
-    expect(recognizeAgentProcess('trae-cli')).toEqual({
-      agent: 'trae',
-      processName: 'trae-cli'
-    })
+  it('recognizes Trae by its traecli binary, not the ambiguous trae-cli name', () => {
     expect(recognizeAgentProcess('traecli')).toEqual({
       agent: 'trae',
       processName: 'traecli'
     })
-    expect(recognizeAgentProcess('trae-agent')).toEqual({
+    expect(recognizeAgentProcess('/Users/dev/.local/bin/traecli')).toEqual({
       agent: 'trae',
-      processName: 'trae-agent'
+      processName: 'traecli'
     })
-    expect(recognizeAgentProcess('/Users/dev/.local/bin/trae-cli')).toEqual({
-      agent: 'trae',
-      processName: 'trae-cli'
-    })
-    expect(isExpectedAgentProcess('/Users/dev/.local/bin/trae-cli', 'trae-cli')).toBe(true)
-    expect(isRecognizedAgentType('trae-cli')).toBe(true)
+    expect(isExpectedAgentProcess('/Users/dev/.local/bin/traecli', 'traecli')).toBe(true)
+    expect(isRecognizedAgentType('traecli')).toBe(true)
+    // Why: `trae-cli` is also the console-script name of the unrelated,
+    // more widely installed open-source `bytedance/trae-agent` project.
+    // Detecting on it would false-positive onto that project's installs, so
+    // neither `trae-cli` nor its repo-name alias `trae-agent` count here.
+    expect(recognizeAgentProcess('trae-cli')).toBeNull()
+    expect(recognizeAgentProcess('trae-agent')).toBeNull()
   })
 
   it('does not recognize Trae headless one-shot commands as interactive agents', () => {
-    expect(recognizeAgentProcessFromCommandLine('trae-cli -p "summarize this diff"')).toBeNull()
-    expect(recognizeAgentProcessFromCommandLine('trae-cli --print "review this"')).toBeNull()
+    expect(recognizeAgentProcessFromCommandLine('traecli -p "summarize this diff"')).toBeNull()
+    expect(recognizeAgentProcessFromCommandLine('traecli --print "review this"')).toBeNull()
     expect(
-      recognizeAgentProcessFromCommandLine('trae-cli --output-format json "review this"')
+      recognizeAgentProcessFromCommandLine('traecli --output-format json "review this"')
     ).toBeNull()
     expect(
-      recognizeAgentProcessFromCommandLine('trae-cli --output-format=stream-json review')
+      recognizeAgentProcessFromCommandLine('traecli --output-format=stream-json review')
     ).toBeNull()
-    expect(recognizeAgentProcessFromCommandLine('trae-cli --resume AUTO')).toEqual({
+    expect(recognizeAgentProcessFromCommandLine('traecli --resume AUTO')).toEqual({
       agent: 'trae',
-      processName: 'trae-cli'
+      processName: 'traecli'
     })
   })
 
