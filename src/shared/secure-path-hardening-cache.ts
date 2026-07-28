@@ -1,74 +1,49 @@
+import { BoundedMap } from './memory-safety/bounded-map'
+
 export type SecurePathHardeningCacheBounds = {
   maxEntries: number
   maxKeyBytes: number
   maxTotalKeyBytes: number
 }
 
-type RetainedSecurePath<T> = {
-  value: T
-  keyBytes: number
-}
-
+// Key-byte-weighted LRU over the shared BoundedMap. The wrapper keeps two behaviors a generic map
+// does not model: a path over EITHER the per-key or the aggregate ceiling is rejected, and the cache
+// is disabled outright when maxEntries <= 0.
 export class SecurePathHardeningCache<T> {
-  private readonly entries = new Map<string, RetainedSecurePath<T>>()
-  private retainedKeyBytes = 0
+  private readonly disabled: boolean
+  private readonly map: BoundedMap<string, T>
 
-  constructor(private readonly bounds: SecurePathHardeningCacheBounds) {}
+  constructor(bounds: SecurePathHardeningCacheBounds) {
+    this.disabled = bounds.maxEntries <= 0
+    this.map = new BoundedMap<string, T>({
+      maxEntries: Math.max(1, bounds.maxEntries),
+      maxBytes: bounds.maxTotalKeyBytes,
+      maxEntryBytes: Math.min(bounds.maxKeyBytes, bounds.maxTotalKeyBytes),
+      sizeOf: (_value, path) => Buffer.byteLength(path, 'utf8')
+    })
+  }
 
   get(path: string): T | undefined {
-    const retained = this.entries.get(path)
-    if (!retained) {
-      return undefined
-    }
-    this.entries.delete(path)
-    this.entries.set(path, retained)
-    return retained.value
+    return this.map.get(path)
   }
 
   set(path: string, value: T): boolean {
-    const keyBytes = Buffer.byteLength(path, 'utf8')
-    this.delete(path)
-    if (
-      keyBytes > this.bounds.maxKeyBytes ||
-      keyBytes > this.bounds.maxTotalKeyBytes ||
-      this.bounds.maxEntries <= 0
-    ) {
-      return false
-    }
-    while (
-      this.entries.size >= this.bounds.maxEntries ||
-      this.retainedKeyBytes + keyBytes > this.bounds.maxTotalKeyBytes
-    ) {
-      const oldest = this.entries.keys().next().value
-      if (oldest === undefined) {
-        return false
-      }
-      this.delete(oldest)
-    }
-    this.entries.set(path, { value, keyBytes })
-    this.retainedKeyBytes += keyBytes
-    return true
+    return this.disabled ? false : this.map.set(path, value)
   }
 
   delete(path: string): void {
-    const retained = this.entries.get(path)
-    if (!retained) {
-      return
-    }
-    this.entries.delete(path)
-    this.retainedKeyBytes -= retained.keyBytes
+    this.map.delete(path)
   }
 
   clear(): void {
-    this.entries.clear()
-    this.retainedKeyBytes = 0
+    this.map.clear()
   }
 
   state(): { entries: number; keyBytes: number; paths: string[] } {
     return {
-      entries: this.entries.size,
-      keyBytes: this.retainedKeyBytes,
-      paths: [...this.entries.keys()]
+      entries: this.map.size,
+      keyBytes: this.map.retainedBytes,
+      paths: this.map.keys()
     }
   }
 }
