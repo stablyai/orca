@@ -16,6 +16,7 @@ import { PREVIEW_BUFFER } from './terminal-preview-content'
 import { SettingsSwitch } from './SettingsFormControls'
 import type { GlobalSettings } from '../../../../shared/types'
 import { translate } from '@/i18n/i18n'
+import { usePluginTerminalThemeStore } from '@/store/plugin-terminal-themes'
 
 // Why: pinned so PREVIEW_BUFFER never wraps; 36 cols fits the 32-char longest line + margin (larger fonts clip, not wrap).
 const PREVIEW_COLS = 36
@@ -72,6 +73,7 @@ export function TerminalSettingsPreview({
     resolveAppMode(settings, systemPrefersDark)
   )
   const [previewPaneDividerVisible, setPreviewPaneDividerVisible] = useState(false)
+  const pluginTerminalThemes = usePluginTerminalThemeStore.getState().themes
 
   // Why: recomputed each render so plain previews (no override/toggle) track live app-theme changes.
   const effectiveMode: PreviewMode =
@@ -92,6 +94,7 @@ export function TerminalSettingsPreview({
       settings.terminalUseSeparateLightTheme,
       settings.terminalDividerColorDark,
       settings.terminalDividerColorLight,
+      pluginTerminalThemes,
       systemPrefersDark
     ]
   )

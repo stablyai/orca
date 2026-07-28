@@ -4,10 +4,12 @@ import {
   FileText,
   Loader2,
   MoreHorizontal,
+  Palette,
   RotateCcw,
   Trash2
 } from 'lucide-react'
 import type { PluginHostListEntry, PluginHostLogLine } from '../../../../preload/api-types'
+import type { PluginTerminalThemeRegistration } from '../../../../shared/plugins/plugin-terminal-theme-artifact'
 import { translate } from '@/i18n/i18n'
 import { PluginCatalogAvatar } from '../plugin-catalog/PluginCatalogAvatar'
 import { invalidPluginErrorMessage } from './plugin-error-presentation'
@@ -38,6 +40,9 @@ type PluginSettingsRowProps = {
   onToggleLogs: (pluginKey: string) => void
   onRollbackRequest: (pluginKey: string) => void
   onRemoveRequest: (pluginKey: string) => void
+  terminalTheme?: PluginTerminalThemeRegistration
+  terminalThemeActive?: boolean
+  onApplyTerminalTheme?: (theme: PluginTerminalThemeRegistration) => void
 }
 
 function statusPresentation(plugin: PluginHostListEntry): { label: string; className: string } {
@@ -136,7 +141,10 @@ export function PluginSettingsRow({
   onToggleEnabled,
   onToggleLogs,
   onRollbackRequest,
-  onRemoveRequest
+  onRemoveRequest,
+  terminalTheme,
+  terminalThemeActive = false,
+  onApplyTerminalTheme
 }: PluginSettingsRowProps): React.JSX.Element {
   const status = statusPresentation(plugin)
   const needsReview = plugin.needsReconsent || plugin.status === 'pending'
@@ -148,9 +156,27 @@ export function PluginSettingsRow({
   const switchDisabled =
     busy || needsReview || plugin.status === 'invalid' || Boolean(plugin.blockedByKillList)
 
-  // Why: the wide primary action ("Review & enable") renders on its own footer
-  // row so it never wraps the compact toggle + overflow cluster to an
-  // inconsistent position between card types.
+  // Why: the wide primary action ("Review & enable" / "Use theme" / "In use")
+  // renders on its own footer row so it never wraps the compact toggle +
+  // overflow cluster to an inconsistent position between card types.
+  const themeAction =
+    !needsReview && enabled && terminalTheme && onApplyTerminalTheme ? (
+      terminalThemeActive ? (
+        <Badge variant="secondary">
+          {translate('auto.components.settings.PluginSettingsRow.inUse', 'In use')}
+        </Badge>
+      ) : (
+        <Button
+          variant="outline"
+          size="sm"
+          disabled={busy}
+          onClick={() => onApplyTerminalTheme(terminalTheme)}
+        >
+          <Palette />
+          {translate('auto.components.settings.PluginSettingsRow.useTheme', 'Use theme')}
+        </Button>
+      )
+    ) : null
   const reviewAction = needsReview ? (
     <Button
       variant="secondary"
@@ -161,7 +187,7 @@ export function PluginSettingsRow({
       {translate('auto.components.settings.PluginSettingsRow.reviewAndEnable', 'Review & enable')}
     </Button>
   ) : null
-  const footerAction = reviewAction
+  const footerAction = reviewAction ?? themeAction
 
   return (
     <article

@@ -2,12 +2,18 @@ import { z } from 'zod'
 import { pluginCapabilitySchema } from './plugin-capabilities'
 import {
   PLUGIN_AGENT_PROFILE_LIMIT,
+  PLUGIN_ICON_THEME_LIMIT,
   PLUGIN_KEYBINDING_LIMIT,
   PLUGIN_LANGUAGE_PACK_LIMIT,
+  PLUGIN_THEME_LIMIT,
+  PLUGIN_TERMINAL_THEME_LIMIT,
   PLUGIN_VM_RECIPE_LIMIT,
   pluginAgentProfileContributionSchema,
+  pluginIconThemeContributionSchema,
   pluginKeybindingContributionSchema,
   pluginLanguagePackContributionSchema,
+  pluginThemeContributionSchema,
+  pluginTerminalThemeContributionSchema,
   pluginVmRecipeContributionSchema
 } from './plugin-content-pack-contributions'
 import {
@@ -101,6 +107,15 @@ export const pluginManifestSchema = z
         panels: z.array(panelContributionSchema).max(PLUGIN_PANEL_LIMIT).default([]),
         commands: z.array(commandContributionSchema).max(PLUGIN_COMMAND_LIMIT).default([]),
         events: z.array(eventContributionSchema).max(PLUGIN_EVENT_SUBSCRIPTION_LIMIT).default([]),
+        themes: z.array(pluginThemeContributionSchema).max(PLUGIN_THEME_LIMIT).default([]),
+        iconThemes: z
+          .array(pluginIconThemeContributionSchema)
+          .max(PLUGIN_ICON_THEME_LIMIT)
+          .default([]),
+        terminalThemes: z
+          .array(pluginTerminalThemeContributionSchema)
+          .max(PLUGIN_TERMINAL_THEME_LIMIT)
+          .default([]),
         languagePacks: z
           .array(pluginLanguagePackContributionSchema)
           .max(PLUGIN_LANGUAGE_PACK_LIMIT)
@@ -123,6 +138,9 @@ export const pluginManifestSchema = z
         panels: [],
         commands: [],
         events: [],
+        themes: [],
+        iconThemes: [],
+        terminalThemes: [],
         languagePacks: [],
         keybindings: [],
         vmRecipes: [],

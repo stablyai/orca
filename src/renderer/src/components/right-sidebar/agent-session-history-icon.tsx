@@ -1,10 +1,11 @@
 import React from 'react'
+import { PluginIconSlot } from '@/components/PluginIconSlot'
 
-export function AgentSessionHistoryIcon({
-  size = 16,
+function AgentSessionHistoryFallback({
+  size,
   className
 }: {
-  size?: number
+  size: number
   className?: string
 }): React.JSX.Element {
   return (
@@ -28,5 +29,22 @@ export function AgentSessionHistoryIcon({
       <path d="M17 17m-3 0a3 3 0 1 0 6 0a3 3 0 1 0 -6 0" />
       <path d="M7 7m-3 0a3 3 0 1 0 6 0a3 3 0 1 0 -6 0" />
     </svg>
+  )
+}
+
+export function AgentSessionHistoryIcon({
+  size = 16,
+  className
+}: {
+  size?: number
+  className?: string
+}): React.JSX.Element {
+  return (
+    <PluginIconSlot
+      slot="agent.default"
+      size={size}
+      className={className}
+      fallback={<AgentSessionHistoryFallback size={size} className={className} />}
+    />
   )
 }

@@ -1,5 +1,7 @@
 // @vitest-environment happy-dom
 
+import { act } from 'react'
+import { createRoot } from 'react-dom/client'
 import { renderToStaticMarkup } from 'react-dom/server'
 import { Bot, Mic, Network, Puzzle } from 'lucide-react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
@@ -8,6 +10,8 @@ import { SettingsSidebar } from './SettingsSidebar'
 import { TooltipProvider } from '../ui/tooltip'
 import type { SettingsSetupGuideProgress } from './settings-setup-guide-progress'
 import type { GlobalSettings } from '../../../../shared/types'
+import { usePluginIconThemeStore } from '@/store/plugin-icon-themes'
+import { usePluginTerminalThemeStore } from '@/store/plugin-terminal-themes'
 
 const mocks = vi.hoisted(() => ({
   useSettingsSetupGuideProgress: vi.fn()
@@ -106,6 +110,13 @@ describe('SettingsSidebar', () => {
   beforeEach(() => {
     mocks.useSettingsSetupGuideProgress.mockReset()
     mocks.useSettingsSetupGuideProgress.mockReturnValue(makeSetupGuideProgress())
+    usePluginIconThemeStore.setState({
+      themes: [],
+      activeId: null,
+      activeTheme: null,
+      loaded: true
+    })
+    usePluginTerminalThemeStore.setState({ themes: [], loaded: true })
   })
 
   afterEach(() => {
@@ -171,5 +182,100 @@ describe('SettingsSidebar', () => {
 
     expect(markup).toContain('aria-current="page"')
     expect(markup).toContain('Onboarding checklist')
+  })
+
+  it('uses the plugin-specific settings navigation icon slot', async () => {
+    const dataUrl = 'data:image/svg+xml;base64,cGx1Z2lucw=='
+    usePluginIconThemeStore.setState({
+      activeId: 'plugin:acme.icons/main',
+      activeTheme: {
+        id: 'plugin:acme.icons/main',
+        pluginKey: 'acme.icons',
+        label: 'Acme',
+        icons: { 'sidebar.plugins': { dataUrl, rendering: 'image' } },
+        fileNames: {},
+        fileExtensions: {}
+      }
+    })
+
+    const container = document.createElement('div')
+    document.body.appendChild(container)
+    const root = createRoot(container)
+    await act(async () =>
+      root.render(
+        <TooltipProvider>
+          <SettingsSidebar
+            activeSectionId="plugins"
+            settings={getDefaultSettings('/tmp')}
+            generalGroups={[
+              {
+                id: 'plugins',
+                title: 'Extensions',
+                sections: [{ id: 'plugins', title: 'Plugins', icon: Puzzle }]
+              }
+            ]}
+            repoSections={[]}
+            hasRepos={false}
+            searchQuery=""
+            onBack={vi.fn()}
+            onSearchChange={vi.fn()}
+            onSelectSection={vi.fn()}
+          />
+        </TooltipProvider>
+      )
+    )
+
+    expect(container.querySelector('img')?.getAttribute('src')).toBe(dataUrl)
+    await act(async () => root.unmount())
+  })
+
+  it('reacts when a selected plugin terminal theme changes', async () => {
+    const container = document.createElement('div')
+    document.body.appendChild(container)
+    const root = createRoot(container)
+    const settings = {
+      ...getDefaultSettings('/tmp'),
+      theme: 'dark' as const,
+      leftSidebarAppearanceMode: 'match-terminal' as const,
+      terminalThemeDark: 'plugin:acme.terminal/night',
+      terminalThemeLight: 'plugin:acme.terminal/night'
+    }
+
+    await act(async () =>
+      root.render(
+        <TooltipProvider>
+          <SettingsSidebar
+            activeSectionId="plugins"
+            settings={settings}
+            generalGroups={[]}
+            repoSections={[]}
+            hasRepos={false}
+            searchQuery=""
+            onBack={vi.fn()}
+            onSearchChange={vi.fn()}
+            onSelectSection={vi.fn()}
+          />
+        </TooltipProvider>
+      )
+    )
+    expect(container.querySelector('aside')?.getAttribute('style')).not.toContain('#123456')
+
+    await act(async () =>
+      usePluginTerminalThemeStore.setState({
+        themes: [
+          {
+            id: 'plugin:acme.terminal/night',
+            pluginKey: 'acme.terminal',
+            label: 'Night',
+            mode: 'dark',
+            terminal: { background: '#123456', foreground: '#abcdef', black: '#000000' }
+          }
+        ],
+        loaded: true
+      })
+    )
+
+    expect(container.querySelector('aside')?.getAttribute('style')).toContain('#123456')
+    await act(async () => root.unmount())
   })
 })

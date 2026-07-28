@@ -540,7 +540,11 @@ const api = {
 
   plugins: {
     list: (): Promise<PluginHostListEntry[]> => ipcRenderer.invoke('plugins:list'),
+    listThemes: () => ipcRenderer.invoke('plugins:listThemes'),
     listLanguagePacks: () => ipcRenderer.invoke('plugins:listLanguagePacks'),
+    listIconThemes: () => ipcRenderer.invoke('plugins:listIconThemes'),
+    loadIconTheme: (id) => ipcRenderer.invoke('plugins:loadIconTheme', id),
+    listTerminalThemes: () => ipcRenderer.invoke('plugins:listTerminalThemes'),
     consent: (args: PluginConsentRequest): Promise<PluginHostListEntry[]> =>
       ipcRenderer.invoke('plugins:consent', args),
     setEnabled: (args: { pluginKey: string; enabled: boolean }): Promise<PluginHostListEntry[]> =>

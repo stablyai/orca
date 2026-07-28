@@ -166,6 +166,7 @@ function installApi(overrides: Record<string, unknown> = {}): {
         remove: vi.fn().mockResolvedValue([]),
         getLogs: vi.fn().mockResolvedValue([]),
         consent: vi.fn().mockResolvedValue([plugin]),
+        listTerminalThemes: vi.fn().mockResolvedValue([]),
         install: vi.fn(),
         rollbackMarketplacePlugin: vi.fn().mockResolvedValue({
           ok: true,
@@ -282,6 +283,46 @@ describe('PluginsSettingsSection lifecycle', () => {
     }
     await act(async () => click(confirm))
     expect(window.api.plugins.remove).toHaveBeenCalledWith({ pluginKey: plugin.pluginKey })
+  })
+
+  it('applies a sole terminal theme when its plugin is approved', async () => {
+    const pendingThemePlugin: PluginHostListEntry = {
+      ...plugin,
+      pluginKey: 'acme.terminal-theme',
+      name: 'Acme Terminal',
+      status: 'pending',
+      capabilities: []
+    }
+    const themeId = 'plugin:acme.terminal-theme/main' as const
+    installApi({
+      list: vi.fn().mockResolvedValue([pendingThemePlugin]),
+      consent: vi.fn().mockResolvedValue([{ ...pendingThemePlugin, status: 'idle' }]),
+      listTerminalThemes: vi.fn().mockResolvedValue([
+        {
+          id: themeId,
+          pluginKey: pendingThemePlugin.pluginKey,
+          label: 'Acme Terminal',
+          mode: 'dark',
+          terminal: { background: '#000000', foreground: '#ffffff', red: '#ff0000' }
+        }
+      ])
+    })
+    const updateSettings = vi.fn().mockResolvedValue(undefined)
+    const settings = {
+      ...getDefaultSettings('/tmp'),
+      pluginSystemEnabled: true,
+      theme: 'dark' as const
+    }
+    const { container } = await renderSection(settings, updateSettings)
+    const findButton = (label: string): HTMLButtonElement | undefined =>
+      Array.from(container.querySelectorAll('button')).find(
+        (button) => button.textContent?.trim() === label
+      )
+
+    await act(async () => click(findButton('Review & enable')!))
+    await act(async () => click(findButton('Approve')!))
+
+    expect(updateSettings).toHaveBeenCalledWith({ terminalThemeDark: themeId })
   })
 
   it('confirms marketplace rollback before invoking plugin IPC', async () => {

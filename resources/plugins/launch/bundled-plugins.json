@@ -2,6 +2,11 @@
   "version": 1,
   "plugins": [
     {
+      "pluginKey": "stablyai.orca-midnight-theme",
+      "path": "stablyai.orca-midnight-theme",
+      "contentHash": "9a2c495cc0cf132941e43386988175ebd36b59cb04a87472c57a2a9cdcdb7027"
+    },
+    {
       "pluginKey": "stablyai.orca-navigation-shortcuts",
       "path": "stablyai.orca-navigation-shortcuts",
       "contentHash": "ce3a146bae9e121a18cb86a710973422be749a25da5a1c21a8911e2e98cc3a77"

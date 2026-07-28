@@ -181,9 +181,9 @@ describe('PluginMarketplaceService', () => {
       owner: 'community',
       plugins: [
         {
-          id: 'community.midnight',
-          source: { kind: 'git', url: 'https://github.com/community/midnight.git', ref: 'v1' },
-          categories: ['themes', 'official']
+          id: 'community.tricks',
+          source: { kind: 'git', url: 'https://github.com/community/tricks.git', ref: 'v1' },
+          categories: ['skills', 'official']
         },
         {
           id: 'community.recipes',
@@ -199,14 +199,14 @@ describe('PluginMarketplaceService', () => {
 
     const added = await service.addSource(source())
 
-    // The theme pack is filtered out; only the supported recipe listing remains.
+    // The skills pack is filtered out; only the supported recipe listing remains.
     await expect(service.listPlugins()).resolves.toEqual([
       expect.objectContaining({ pluginKey: 'community.recipes' })
     ])
 
     // Preview and install resolve by key, so an unsupported pack must be
     // unreachable that way too — otherwise the dead install just moves later.
-    await expect(service.findPlugin(added.id, 'community.midnight')).resolves.toBeNull()
+    await expect(service.findPlugin(added.id, 'community.tricks')).resolves.toBeNull()
     await expect(service.findPlugin(added.id, 'community.recipes')).resolves.toEqual(
       expect.objectContaining({ pluginKey: 'community.recipes' })
     )

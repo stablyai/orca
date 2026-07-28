@@ -183,6 +183,12 @@ vi.mock('@/lib/file-type-icons', () => ({
     }
 }))
 
+vi.mock('@/components/FileTypeIcon', () => ({
+  FileTypeIcon: function FileTypeIcon(props: Record<string, unknown>) {
+    return { type: 'FileTypeIcon', props }
+  }
+}))
+
 vi.mock('@/store/selectors', () => ({
   useRepoById: () => ({ connectionId: null }),
   useWorktreeById: () => ({ path: '/repo', repoId: 'repo-1' })

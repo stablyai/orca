@@ -2,7 +2,7 @@ import type React from 'react'
 import { ChevronDown, Folder, FolderOpen } from 'lucide-react'
 import { STATUS_COLORS, STATUS_LABELS } from '@/components/right-sidebar/status-display'
 import type { SourceControlTreeNode } from '@/components/right-sidebar/source-control-tree'
-import { getFileTypeIcon } from '@/lib/file-type-icons'
+import { FileTypeIcon } from '@/components/FileTypeIcon'
 import { basename, dirname, joinPath } from '@/lib/path'
 import { cn } from '@/lib/utils'
 import { WORKSPACE_FILE_PATH_MIME } from '@/lib/workspace-file-drag'
@@ -84,7 +84,6 @@ export function CombinedDiffFileTreeRow({
   }
 
   const sectionKey = getCombinedDiffFileTreeSectionKey(mode, node.entry)
-  const FileIcon = getFileTypeIcon(node.entry.path)
   const fileName = basename(node.entry.path)
   const parentDir = dirname(node.entry.path)
   const dirPath = parentDir === '.' ? '' : parentDir
@@ -116,7 +115,11 @@ export function CombinedDiffFileTreeRow({
       }}
       onClick={() => onNavigate(node.entry)}
     >
-      <FileIcon className="size-3.5 shrink-0" style={{ color: STATUS_COLORS[status] }} />
+      <FileTypeIcon
+        filePath={node.entry.path}
+        className="size-3.5 shrink-0"
+        style={{ color: STATUS_COLORS[status] }}
+      />
       <span className="min-w-0 flex-1 truncate">
         <span className="text-foreground">{fileName}</span>
         {dirPath && <span className="ml-1.5 text-[11px] text-muted-foreground">{dirPath}</span>}

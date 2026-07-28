@@ -116,9 +116,27 @@ export function registerPluginHandlers(
   // Why: startup discovery is fire-and-forget; every handler awaits it so an
   // early renderer fetch can't observe the empty pre-discovery list.
   ipcMain.handle('plugins:list', async () => listPluginsForClients(pluginService))
+  ipcMain.handle('plugins:listThemes', async () => {
+    await pluginService.whenReady()
+    return pluginService.contentPacks.themes.list()
+  })
   ipcMain.handle('plugins:listLanguagePacks', async () => {
     await pluginService.whenReady()
     return pluginService.contentPacks.languagePacks.list()
+  })
+  ipcMain.handle('plugins:listIconThemes', async () => {
+    await pluginService.whenReady()
+    return pluginService.contentPacks.iconThemes.list()
+  })
+  ipcMain.handle('plugins:loadIconTheme', async (_event, id: unknown) => {
+    await pluginService.whenReady()
+    return pluginService.contentPacks.iconThemes.load(
+      z.string().startsWith('plugin:').max(256).parse(id)
+    )
+  })
+  ipcMain.handle('plugins:listTerminalThemes', async () => {
+    await pluginService.whenReady()
+    return pluginService.contentPacks.terminalThemes.list()
   })
   ipcMain.handle('plugins:consent', async (event, args: unknown) => {
     await pluginService.whenReady()

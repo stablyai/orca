@@ -177,12 +177,14 @@ describe('marketplace provenance contracts', () => {
     ).toBe(false)
   })
 
-  it('marks listings with a deferred contribution category as unsupported', () => {
+  it('marks listings with a dropped contribution category as unsupported', () => {
     expect(isMarketplaceListingSupported(['vm-recipes', 'official'])).toBe(true)
     expect(isMarketplaceListingSupported(['keybindings'])).toBe(true)
     expect(isMarketplaceListingSupported([])).toBe(true)
-    for (const deferred of ['themes', 'icons', 'icon-themes', 'terminal-themes', 'skills']) {
-      expect(isMarketplaceListingSupported([deferred, 'official'])).toBe(false)
+    // Theming is restored in this pass, so only skills stay unreachable.
+    for (const restored of ['themes', 'icons', 'icon-themes', 'terminal-themes']) {
+      expect(isMarketplaceListingSupported([restored, 'official'])).toBe(true)
     }
+    expect(isMarketplaceListingSupported(['skills', 'official'])).toBe(false)
   })
 })

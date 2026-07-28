@@ -147,7 +147,10 @@ import {
 } from './startup/startup-diagnostics'
 import { reconnectSshTargetForRendererStartup } from './startup/ssh-startup-reconnect'
 import { shouldRenderPetOverlay } from './components/pet/pet-overlay-visibility'
-import { applyDocumentTheme } from './lib/document-theme'
+import { applyDocumentTheme, applyPluginAppTheme } from './lib/document-theme'
+import { usePluginThemes } from './store/plugin-themes'
+import { usePluginIconThemes, usePluginIconThemeStore } from './store/plugin-icon-themes'
+import { usePluginTerminalThemes } from './store/plugin-terminal-themes'
 import { getSystemPrefersDark } from './lib/terminal-theme'
 import { publishTerminalViewAttributesAtAppStart } from './components/terminal-pane/terminal-appearance'
 import { isEditableTarget } from './lib/editable-target'
@@ -662,10 +665,18 @@ function App(): React.JSX.Element {
   const rightSidebarExplorerView = useAppStore((s) => s.rightSidebarExplorerView)
   const isFullScreen = useAppStore((s) => s.isFullScreen)
   const settings = useAppStore((s) => s.settings)
+  const pluginThemes = usePluginThemes()
+  usePluginIconThemes()
+  const pluginTerminalThemes = usePluginTerminalThemes()
+  const setActivePluginIconTheme = usePluginIconThemeStore((state) => state.setActiveId)
+  const activePluginTheme = useMemo(
+    () => pluginThemes.find((theme) => theme.id === settings?.pluginAppTheme) ?? null,
+    [pluginThemes, settings?.pluginAppTheme]
+  )
   const systemPrefersDark = useSystemPrefersDark()
   const leftSidebarStyle = useMemo(
-    () => resolveLeftSidebarStyleVariables(settings, systemPrefersDark),
-    [settings, systemPrefersDark]
+    () => resolveLeftSidebarStyleVariables(settings, systemPrefersDark, pluginTerminalThemes),
+    [settings, systemPrefersDark, pluginTerminalThemes]
   ) as React.CSSProperties | undefined
   const dictationState = useAppStore((s) => s.dictationState)
   const hasSshCredentialRequest = useAppStore((s) => s.sshCredentialQueue.length > 0)
@@ -676,6 +687,16 @@ function App(): React.JSX.Element {
   )
   usePrimarySelectionPaste(primarySelectionMiddleClickPaste)
 
+  useEffect(() => {
+    setActivePluginIconTheme(settings?.pluginIconTheme ?? null)
+  }, [setActivePluginIconTheme, settings?.pluginIconTheme])
+
+  useEffect(() => {
+    // Why: plugin palette changes do not mutate settings, but paired clients
+    // and hidden terminals still need the newly effective terminal colors.
+    publishTerminalViewAttributesAtAppStart(useAppStore.getState().settings, getSystemPrefersDark())
+    scheduleRuntimeGraphSync()
+  }, [pluginTerminalThemes])
   useAppMenuPaste()
   useLargeTextControlPaste()
   const petEnabled = useAppStore((s) => s.settings?.experimentalPet === true)
@@ -1402,10 +1423,12 @@ function App(): React.JSX.Element {
       return
     }
 
-    if (settings.theme === 'dark') {
+    applyPluginAppTheme(activePluginTheme)
+    const themePreference = activePluginTheme?.base ?? settings.theme
+    if (themePreference === 'dark') {
       applyDocumentTheme('dark')
       return undefined
-    } else if (settings.theme === 'light') {
+    } else if (themePreference === 'light') {
       applyDocumentTheme('light')
       return undefined
     } else {
@@ -1420,7 +1443,7 @@ function App(): React.JSX.Element {
       mq.addEventListener('change', handler)
       return () => mq.removeEventListener('change', handler)
     }
-  }, [settings])
+  }, [activePluginTheme, settings])
 
   useEffect(() => {
     document.documentElement.style.setProperty(

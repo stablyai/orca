@@ -19,13 +19,24 @@ describe('PluginContentPackRegistry', () => {
   it('activates all contributions from a plugin atomically', async () => {
     const rootDir = await mkdtemp(join(tmpdir(), 'orca-plugin-content-pack-registry-'))
     roots.push(rootDir)
-    await mkdir(join(rootDir, 'locales'))
+    await Promise.all([mkdir(join(rootDir, 'icons')), mkdir(join(rootDir, 'terminal'))])
     await Promise.all([
       writeFile(
-        join(rootDir, 'locales', 'invalid.json'),
-        JSON.stringify({ settings: { title: 42 } })
+        join(rootDir, 'icons', 'invalid.json'),
+        JSON.stringify({ schemaVersion: 1, icons: { file: 42 } })
       ),
-      writeFile(join(rootDir, 'locales', 'valid.json'), JSON.stringify({ settings: 'Ajustes' }))
+      writeFile(
+        join(rootDir, 'terminal', 'valid.json'),
+        JSON.stringify({
+          schemaVersion: 1,
+          mode: 'dark',
+          terminal: {
+            background: '#101010',
+            foreground: '#f0f0f0',
+            black: '#000000'
+          }
+        })
+      )
     ])
     const manifest = pluginManifestSchema.parse({
       manifestVersion: 1,
@@ -36,10 +47,8 @@ describe('PluginContentPackRegistry', () => {
       engines: { orca: '>=1.0.0' },
       pluginApi: 1,
       contributes: {
-        languagePacks: [
-          { locale: 'es', path: 'locales/valid.json' },
-          { locale: 'pt-BR', path: 'locales/invalid.json' }
-        ]
+        iconThemes: [{ id: 'broken', label: 'Broken', path: 'icons/invalid.json' }],
+        terminalThemes: [{ id: 'valid', label: 'Valid', path: 'terminal/valid.json' }]
       },
       capabilities: []
     })
@@ -55,16 +64,24 @@ describe('PluginContentPackRegistry', () => {
 
     await registry.reconcile([plugin], () => true)
 
-    expect(registry.error(plugin.pluginKey)).toContain('string or object')
-    expect(registry.languagePacks.list()).toEqual([])
+    expect(registry.error(plugin.pluginKey)).toContain('number')
+    expect(registry.iconThemes.list()).toEqual([])
+    expect(registry.terminalThemes.list()).toEqual([])
   })
 
   it('rolls back valid packs when a VM recipe from the same plugin is invalid', async () => {
     const rootDir = await mkdtemp(join(tmpdir(), 'orca-plugin-content-pack-vm-'))
     roots.push(rootDir)
-    await Promise.all([mkdir(join(rootDir, 'locales')), mkdir(join(rootDir, 'recipes'))])
+    await Promise.all([mkdir(join(rootDir, 'terminal')), mkdir(join(rootDir, 'recipes'))])
     await Promise.all([
-      writeFile(join(rootDir, 'locales', 'valid.json'), JSON.stringify({ settings: 'Ajustes' })),
+      writeFile(
+        join(rootDir, 'terminal', 'valid.json'),
+        JSON.stringify({
+          schemaVersion: 1,
+          mode: 'dark',
+          terminal: { background: '#101010', foreground: '#f0f0f0', black: '#000000' }
+        })
+      ),
       writeFile(
         join(rootDir, 'recipes', 'invalid.json'),
         JSON.stringify({ schemaVersion: 1, id: 'bad', name: 'Bad', create: 'create', resume: 'up' })
@@ -79,7 +96,7 @@ describe('PluginContentPackRegistry', () => {
       engines: { orca: '>=1.0.0' },
       pluginApi: 1,
       contributes: {
-        languagePacks: [{ locale: 'es', path: 'locales/valid.json' }],
+        terminalThemes: [{ id: 'valid', label: 'Valid', path: 'terminal/valid.json' }],
         vmRecipes: [{ path: 'recipes/invalid.json' }]
       },
       capabilities: []
@@ -102,7 +119,7 @@ describe('PluginContentPackRegistry', () => {
     await registry.reconcile([plugin], () => true)
 
     expect(registry.error(plugin.pluginKey)).toContain('suspend and resume')
-    expect(registry.languagePacks.list()).toEqual([])
+    expect(registry.terminalThemes.list()).toEqual([])
     expect(registry.vmRecipes.list()).toEqual([])
   })
 })

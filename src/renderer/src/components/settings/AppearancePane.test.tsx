@@ -99,6 +99,7 @@ vi.mock('../ui/select', async () => {
 
 import { AppearancePane } from './AppearancePane'
 import { TooltipProvider } from '../ui/tooltip'
+import { usePluginIconThemeStore } from '../../store/plugin-icon-themes'
 
 const mountedRoots: Root[] = []
 
@@ -220,6 +221,12 @@ describe('AppearancePane', () => {
     mocks.state.settingsSearchQuery = 'automations'
     mocks.state.appearanceAccordionDeepLink = null
     mocks.state.usagePercentageDisplay = 'used'
+    usePluginIconThemeStore.setState({
+      themes: [],
+      activeId: null,
+      activeTheme: null,
+      loaded: true
+    })
     // UIZoomControl reads window.api.ui on mount; the inline-expansion pane can
     // render the full Interface section, so provide a minimal renderer bridge
     // without clobbering happy-dom's window.location.
@@ -326,6 +333,33 @@ describe('AppearancePane', () => {
     expect(interfaceToggle?.getAttribute('aria-expanded')).toBe('false')
     // Summary is only rendered on the collapsed toggle (children stay mounted but hidden).
     expect(interfaceToggle?.textContent).toContain('Dark · 中文（简体） · Inter')
+  })
+
+  it('selects a qualified icon theme contributed by an enabled plugin', async () => {
+    mocks.state.settingsSearchQuery = 'icon theme'
+    const updateSettings = vi.fn()
+    usePluginIconThemeStore.setState({
+      loaded: true,
+      themes: [
+        {
+          id: 'plugin:acme.icons/main',
+          pluginKey: 'acme.icons',
+          label: 'Acme Icons'
+        }
+      ]
+    })
+
+    const container = await renderAppearancePane(getDefaultSettings('/tmp'), updateSettings)
+    const option = container.querySelector<HTMLButtonElement>(
+      '[data-slot="select-item"][data-value="plugin:acme.icons/main"]'
+    )
+    expect(option?.textContent).toContain('Acme Icons')
+
+    await act(async () => {
+      option?.dispatchEvent(new MouseEvent('click', { bubbles: true }))
+    })
+
+    expect(updateSettings).toHaveBeenCalledWith({ pluginIconTheme: 'plugin:acme.icons/main' })
   })
 
   it('updates the left sidebar appearance from sidebar settings', async () => {

@@ -24,6 +24,11 @@ import {
   Smartphone,
   type LucideIcon
 } from 'lucide-react'
+import type {
+  PluginIconThemeImage,
+  PluginIconThemeRegistration
+} from '../../../shared/plugins/plugin-icon-theme-artifact'
+import { isPluginIconThemeImage } from './plugin-icon-theme'
 
 const FILE_ICON_BY_NAME: Record<string, LucideIcon> = {
   '.babelrc': FileSliders,
@@ -333,4 +338,20 @@ export function getFileTypeIcon(filePath: string | undefined | null): LucideIcon
   // Why: filename/extension matching keeps icons deterministic for SSH worktrees
   // where OS-native file associations are not available.
   return FILE_ICON_BY_EXTENSION[getExtension(filename)] ?? File
+}
+
+export function getPluginFileTypeIconImage(
+  theme: PluginIconThemeRegistration | null | undefined,
+  filePath: string | undefined | null
+): PluginIconThemeImage | null {
+  if (!theme) {
+    return null
+  }
+  const filename = getFilename(filePath).toLowerCase()
+  if (!filename) {
+    return null
+  }
+  const image =
+    theme.fileNames[filename] ?? theme.fileExtensions[getExtension(filename)] ?? theme.icons.file
+  return isPluginIconThemeImage(image) ? image : null
 }

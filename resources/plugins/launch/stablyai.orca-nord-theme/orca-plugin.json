@@ -1,0 +1,15 @@
+{
+  "manifestVersion": 1,
+  "id": "orca-nord-theme",
+  "publisher": "stablyai",
+  "name": "Nord for Orca",
+  "version": "1.0.0",
+  "description": "A cool, low-contrast application theme inspired by arctic colors.",
+  "repository": "https://github.com/stablyai/orca-nord-theme",
+  "engines": { "orca": ">=1.4.0" },
+  "pluginApi": 1,
+  "contributes": {
+    "themes": [{ "id": "nord", "label": "Nord", "path": "themes/nord.json" }]
+  },
+  "capabilities": []
+}

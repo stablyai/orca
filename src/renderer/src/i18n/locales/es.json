@@ -6755,7 +6755,9 @@
           "builtin_themes": "Integrados",
           "imported_from": "Importado desde {{value0}}",
           "imported_themes": "Importados",
-          "search_terminal_themes": "Buscar temas de terminal"
+          "search_terminal_themes": "Buscar temas de terminal",
+          "plugin_themes": "Plugin themes",
+          "contributed_by": "Contributed by {{value0}}"
         },
         "SettingsSidebar": {
           "e0900f83e7": "SSH",
@@ -9666,7 +9668,13 @@
           "close": "Close",
           "cancel": "Cancel",
           "update": "Update plugin",
-          "install": "Install plugin"
+          "install": "Install plugin",
+          "themesOne": "1 app theme",
+          "themes": "{{value0}} app themes",
+          "iconThemesOne": "1 icon theme",
+          "iconThemes": "{{value0}} icon themes",
+          "terminalThemesOne": "1 terminal theme",
+          "terminalThemes": "{{value0}} terminal themes"
         },
         "PluginMarketplaceSourceDialog": {
           "addFailed": "Could not add this marketplace. Check the Git URL, ref, and your Git credentials.",
@@ -9719,7 +9727,8 @@
           "experimental": "Experimental",
           "description": "Install and manage Orca plugins. Plugins run on this computer, even for SSH workspaces.",
           "logsFailed": "Could not load plugin logs.",
-          "rollbackFailed": "Could not roll back this plugin. A previous immutable version may not be available."
+          "rollbackFailed": "Could not roll back this plugin. A previous immutable version may not be available.",
+          "themeApplyFailed": "The plugin was enabled, but Orca could not apply its terminal theme."
         },
         "PluginSettingsRow": {
           "blocked": "Blocked",
@@ -9749,7 +9758,9 @@
           "remove": "Remove",
           "disableLabel": "Disable {{value0}}",
           "enableLabel": "Enable {{value0}}",
-          "invalidPluginError": "The plugin manifest or installed files are invalid. Fix the plugin, then refresh."
+          "invalidPluginError": "The plugin manifest or installed files are invalid. Fix the plugin, then refresh.",
+          "inUse": "In use",
+          "useTheme": "Use theme"
         },
         "PluginVmRecipeConsentPreview": {
           "create": "Create",
@@ -9779,6 +9790,18 @@
             "permissions": "plugin permissions",
             "logs": "plugin logs",
             "development": "development plugins"
+          }
+        },
+        "AppearanceInterfaceSection": {
+          "pluginTheme": {
+            "title": "Plugin theme",
+            "description": "Apply a theme from an enabled Orca plugin.",
+            "builtIn": "Use built-in theme"
+          },
+          "pluginIconTheme": {
+            "title": "Icon theme",
+            "description": "Use file, folder, sidebar, and agent icons from an enabled Orca plugin.",
+            "builtIn": "Use built-in icons"
           }
         }
       },

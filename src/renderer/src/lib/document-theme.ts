@@ -1,4 +1,5 @@
 import type { GlobalSettings } from '../../../shared/types'
+import type { PluginThemeRegistration } from '../../../shared/plugins/plugin-theme-artifact'
 
 export type DocumentThemePreference = GlobalSettings['theme']
 
@@ -16,6 +17,11 @@ type ThemeRoot = {
   classList: ThemeClassList
 }
 
+type PluginThemeRoot = ThemeRoot & {
+  style: Pick<CSSStyleDeclaration, 'setProperty' | 'removeProperty'>
+  dataset?: DOMStringMap
+}
+
 type ThemeMediaMatcher = (query: string) => Pick<MediaQueryList, 'matches'>
 type ThemeAnimationFrame = (callback: FrameRequestCallback) => number
 type ThemeCancelAnimationFrame = (handle: number) => void
@@ -29,6 +35,7 @@ type ApplyDocumentThemeOptions = {
 }
 
 let pendingTransitionDisableFrames: number[] = []
+const appliedPluginTokens = new WeakMap<object, Set<string>>()
 
 function cancelPendingTransitionDisableFrames(cancelFrame: ThemeCancelAnimationFrame): void {
   for (const frameId of pendingTransitionDisableFrames) {
@@ -96,4 +103,28 @@ export function applyDocumentTheme(
     pendingTransitionDisableFrames.push(secondFrame)
   })
   pendingTransitionDisableFrames.push(firstFrame)
+}
+
+export function applyPluginAppTheme(
+  theme: PluginThemeRegistration | null,
+  root: PluginThemeRoot = document.documentElement
+): void {
+  const previous = appliedPluginTokens.get(root) ?? new Set<string>()
+  const next = new Set(Object.keys(theme?.tokens ?? {}))
+  for (const token of previous) {
+    if (!next.has(token)) {
+      root.style.removeProperty(token)
+    }
+  }
+  for (const [token, value] of Object.entries(theme?.tokens ?? {})) {
+    root.style.setProperty(token, value)
+  }
+  appliedPluginTokens.set(root, next)
+  if (root.dataset) {
+    if (theme) {
+      root.dataset.orcaPluginTheme = theme.id
+    } else {
+      delete root.dataset.orcaPluginTheme
+    }
+  }
 }

@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import {
   applyDocumentTheme,
+  applyPluginAppTheme,
   resolveDocumentTheme,
   THEME_TRANSITION_DISABLED_CLASS
 } from './document-theme'
@@ -39,6 +40,24 @@ class FakeClassList {
 
   contains(token: string): boolean {
     return this.tokens.has(token)
+  }
+}
+
+class FakeStyle {
+  private readonly values = new Map<string, string>()
+
+  setProperty(name: string, value: string): void {
+    this.values.set(name, value)
+  }
+
+  removeProperty(name: string): string {
+    const previous = this.values.get(name) ?? ''
+    this.values.delete(name)
+    return previous
+  }
+
+  get(name: string): string | undefined {
+    return this.values.get(name)
   }
 }
 
@@ -151,5 +170,32 @@ describe('document theme', () => {
     frames.flushNextFrame()
     expect(root.classList.contains(THEME_TRANSITION_DISABLED_CLASS)).toBe(false)
     expect(frames.pendingCount()).toBe(0)
+  })
+
+  it('applies and fully removes plugin token overlays', () => {
+    const root = {
+      classList: new FakeClassList(),
+      style: new FakeStyle(),
+      dataset: {} as DOMStringMap
+    }
+    applyPluginAppTheme(
+      {
+        id: 'plugin:orca-samples.themes/nord',
+        pluginKey: 'orca-samples.themes',
+        contributionId: 'nord',
+        label: 'Nord',
+        base: 'dark',
+        tokens: { '--background': '#111', '--foreground': '#eee' }
+      },
+      root
+    )
+
+    expect(root.style.get('--background')).toBe('#111')
+    expect(root.dataset.orcaPluginTheme).toBe('plugin:orca-samples.themes/nord')
+
+    applyPluginAppTheme(null, root)
+    expect(root.style.get('--background')).toBeUndefined()
+    expect(root.style.get('--foreground')).toBeUndefined()
+    expect(root.dataset.orcaPluginTheme).toBeUndefined()
   })
 })

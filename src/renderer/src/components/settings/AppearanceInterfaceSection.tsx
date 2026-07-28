@@ -32,7 +32,9 @@ import {
 import { translate } from '@/i18n/i18n'
 import type { UiLanguage } from '../../../../shared/ui-language'
 import { matchesSettingsSearch, normalizeSettingsSearchQuery } from './settings-search'
+import { usePluginThemes } from '@/store/plugin-themes'
 import { usePluginLanguagePacks } from '@/store/plugin-language-packs'
+import { usePluginIconThemes } from '@/store/plugin-icon-themes'
 
 type AppearanceInterfaceSectionProps = {
   settings: GlobalSettings
@@ -56,6 +58,8 @@ export function AppearanceInterfaceSection({
   forceVisiblePrimary = false
 }: AppearanceInterfaceSectionProps): React.JSX.Element {
   const searchQuery = useAppStore((state) => state.settingsSearchQuery)
+  const pluginThemes = usePluginThemes()
+  const pluginIconThemes = usePluginIconThemes()
   const pluginLanguagePacks = usePluginLanguagePacks()
   const isSearching = normalizeSettingsSearchQuery(searchQuery).length > 0
   const zoomInKeyCombos = useShortcutKeyComboDetails('zoom.in')
@@ -139,6 +143,116 @@ export function AppearanceInterfaceSection({
                   {pluginLanguagePacks.map((pack) => (
                     <SelectItem key={pack.id} value={pack.id}>
                       {pack.locale} — {pack.pluginKey}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            }
+          />
+        </SearchableSetting>
+      ) : null}
+
+      {pluginThemes.length > 0 ? (
+        <SearchableSetting
+          title={translate(
+            'auto.components.settings.AppearanceInterfaceSection.pluginTheme.title',
+            'Plugin theme'
+          )}
+          description={translate(
+            'auto.components.settings.AppearanceInterfaceSection.pluginTheme.description',
+            'Apply a theme from an enabled Orca plugin.'
+          )}
+          keywords={['plugin', 'theme', 'appearance']}
+          forceVisible={forceVisiblePrimary}
+        >
+          <SettingsRow
+            label={translate(
+              'auto.components.settings.AppearanceInterfaceSection.pluginTheme.title',
+              'Plugin theme'
+            )}
+            control={
+              <Select
+                value={settings.pluginAppTheme ?? 'built-in'}
+                onValueChange={(value) => {
+                  updateSettings({
+                    pluginAppTheme: value === 'built-in' ? null : (value as `plugin:${string}`)
+                  })
+                }}
+              >
+                <SelectTrigger
+                  className="w-48"
+                  aria-label={translate(
+                    'auto.components.settings.AppearanceInterfaceSection.pluginTheme.title',
+                    'Plugin theme'
+                  )}
+                >
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="built-in">
+                    {translate(
+                      'auto.components.settings.AppearanceInterfaceSection.pluginTheme.builtIn',
+                      'Use built-in theme'
+                    )}
+                  </SelectItem>
+                  {pluginThemes.map((theme) => (
+                    <SelectItem key={theme.id} value={theme.id}>
+                      {theme.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            }
+          />
+        </SearchableSetting>
+      ) : null}
+
+      {pluginIconThemes.length > 0 ? (
+        <SearchableSetting
+          title={translate(
+            'auto.components.settings.AppearanceInterfaceSection.pluginIconTheme.title',
+            'Icon theme'
+          )}
+          description={translate(
+            'auto.components.settings.AppearanceInterfaceSection.pluginIconTheme.description',
+            'Use file, folder, sidebar, and agent icons from an enabled Orca plugin.'
+          )}
+          keywords={['plugin', 'file', 'folder', 'sidebar', 'agent', 'icon', 'theme', 'appearance']}
+          forceVisible={forceVisiblePrimary}
+        >
+          <SettingsRow
+            label={translate(
+              'auto.components.settings.AppearanceInterfaceSection.pluginIconTheme.title',
+              'Icon theme'
+            )}
+            control={
+              <Select
+                value={settings.pluginIconTheme ?? 'built-in'}
+                onValueChange={(value) => {
+                  updateSettings({
+                    pluginIconTheme: value === 'built-in' ? null : (value as `plugin:${string}`)
+                  })
+                }}
+              >
+                <SelectTrigger
+                  className="w-48"
+                  aria-label={translate(
+                    'auto.components.settings.AppearanceInterfaceSection.pluginIconTheme.title',
+                    'Icon theme'
+                  )}
+                >
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="built-in">
+                    {translate(
+                      'auto.components.settings.AppearanceInterfaceSection.pluginIconTheme.builtIn',
+                      'Use built-in icons'
+                    )}
+                  </SelectItem>
+                  {pluginIconThemes.map((theme) => (
+                    <SelectItem key={theme.id} value={theme.id}>
+                      {theme.label}
                     </SelectItem>
                   ))}
                 </SelectContent>

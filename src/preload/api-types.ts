@@ -73,7 +73,13 @@ import type {
   PluginPanelEntry
 } from '../shared/plugins/plugin-panel-bridge'
 import type { PluginConsentRequest } from '../shared/plugins/plugin-consent-request'
+import type { PluginThemeRegistration } from '../shared/plugins/plugin-theme-artifact'
 import type { PluginLanguagePackRegistration } from '../shared/plugins/plugin-language-pack-artifact'
+import type {
+  PluginIconThemeMetadata,
+  PluginIconThemeRegistration
+} from '../shared/plugins/plugin-icon-theme-artifact'
+import type { PluginTerminalThemeRegistration } from '../shared/plugins/plugin-terminal-theme-artifact'
 import type { PluginChangeEvent } from '../shared/plugins/plugin-change-event'
 import type { PluginManifest } from '../shared/plugins/plugin-manifest'
 import type { PluginMarketplaceGitSource } from '../shared/plugins/plugin-marketplace'
@@ -3414,7 +3420,11 @@ export type PreloadApi = {
   }
   plugins: {
     list: () => Promise<PluginHostListEntry[]>
+    listThemes: () => Promise<PluginThemeRegistration[]>
     listLanguagePacks: () => Promise<PluginLanguagePackRegistration[]>
+    listIconThemes: () => Promise<PluginIconThemeMetadata[]>
+    loadIconTheme: (id: string) => Promise<PluginIconThemeRegistration | null>
+    listTerminalThemes: () => Promise<PluginTerminalThemeRegistration[]>
     /** Records the consent-dialog answer; approval is keyed to the plugin's
      *  current capability and trusted-worker fingerprint. */
     consent: (args: PluginConsentRequest) => Promise<PluginHostListEntry[]>

@@ -32,8 +32,47 @@ function contributionSummary(
 ): { key: string; label: string }[] {
   const { contributes } = preview.manifest
   // Why: two static keys per kind (not one dynamic key) so the localization
-  // catalog sync can extract them, and "1 language packs" never renders.
+  // catalog sync can extract them, and "1 icon themes" never renders.
   const entries: { key: string; count: number; one: string; many: string }[] = [
+    {
+      key: 'themes',
+      count: contributes.themes.length,
+      one: translate(
+        'auto.components.settings.PluginMarketplacePreviewDialog.themesOne',
+        '1 app theme'
+      ),
+      many: translate(
+        'auto.components.settings.PluginMarketplacePreviewDialog.themes',
+        '{{value0}} app themes',
+        { value0: contributes.themes.length }
+      )
+    },
+    {
+      key: 'iconThemes',
+      count: contributes.iconThemes.length,
+      one: translate(
+        'auto.components.settings.PluginMarketplacePreviewDialog.iconThemesOne',
+        '1 icon theme'
+      ),
+      many: translate(
+        'auto.components.settings.PluginMarketplacePreviewDialog.iconThemes',
+        '{{value0}} icon themes',
+        { value0: contributes.iconThemes.length }
+      )
+    },
+    {
+      key: 'terminalThemes',
+      count: contributes.terminalThemes.length,
+      one: translate(
+        'auto.components.settings.PluginMarketplacePreviewDialog.terminalThemesOne',
+        '1 terminal theme'
+      ),
+      many: translate(
+        'auto.components.settings.PluginMarketplacePreviewDialog.terminalThemes',
+        '{{value0}} terminal themes',
+        { value0: contributes.terminalThemes.length }
+      )
+    },
     {
       key: 'languagePacks',
       count: contributes.languagePacks.length,

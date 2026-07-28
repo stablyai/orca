@@ -71,25 +71,28 @@ describe('private Git marketplace integration', () => {
   it('uses the caller SSH environment for marketplace preview and install', async () => {
     const root = await mkdtemp(join(tmpdir(), 'orca-private-marketplace-'))
     temporaryRoots.push(root)
-    const pluginKey = 'private.private-locale'
-    const pluginUrl = 'ssh://git@example.invalid/private/locale.git'
+    const pluginKey = 'private.private-theme'
+    const pluginUrl = 'ssh://git@example.invalid/private/theme.git'
     const marketplaceUrl = 'ssh://git@example.invalid/private/marketplace.git'
-    const pluginRepository = await createGitRepository(root, 'locale-source', {
+    const pluginRepository = await createGitRepository(root, 'theme-source', {
       'orca-plugin.json': JSON.stringify({
         manifestVersion: 1,
-        id: 'private-locale',
+        id: 'private-theme',
         publisher: 'private',
-        name: 'Private Locale',
+        name: 'Private Theme',
         version: '1.0.0',
         engines: { orca: '>=1.4.0' },
         pluginApi: 1,
         contributes: {
-          languagePacks: [{ locale: 'pt-BR', path: 'locale.json' }]
+          themes: [{ id: 'private', label: 'Private', path: 'theme.json' }]
         },
         capabilities: []
       }),
-      'locale.json': JSON.stringify({
-        settings: { title: 'Ajustes' }
+      'theme.json': JSON.stringify({
+        id: 'private',
+        label: 'Private',
+        base: 'dark',
+        tokens: { '--background': '#111111', '--foreground': '#eeeeee' }
       })
     })
     const marketplaceRepository = await createGitRepository(root, 'marketplace-source', {
@@ -100,7 +103,7 @@ describe('private Git marketplace integration', () => {
           {
             id: pluginKey,
             source: { kind: 'git', url: pluginUrl, ref: 'main' },
-            categories: ['languages']
+            categories: ['themes']
           }
         ]
       })
@@ -114,7 +117,7 @@ describe('private Git marketplace integration', () => {
     process.env.GIT_SSH_COMMAND = `${shellQuote(process.execPath.replaceAll('\\', '/'))} ${shellQuote(sshShim.replaceAll('\\', '/'))}`
     process.env.GIT_SSH_VARIANT = 'ssh'
     process.env.ORCA_TEST_SSH_REPOSITORIES = JSON.stringify({
-      '/private/locale.git': pluginRepository,
+      '/private/theme.git': pluginRepository,
       '/private/marketplace.git': marketplaceRepository
     })
 

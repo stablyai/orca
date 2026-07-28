@@ -19,6 +19,11 @@ describe('content-pack manifest contributions', () => {
   it('accepts the documented P1 contribution set without a worker', () => {
     const parsed = pluginManifestSchema.parse(
       manifest({
+        themes: [{ id: 'nord', label: 'Nord', path: 'themes/nord.json' }],
+        iconThemes: [{ id: 'minimal', path: 'icons/minimal.json' }],
+        terminalThemes: [
+          { id: 'nord-terminal', label: 'Nord Terminal', path: 'terminal/nord.json' }
+        ],
         languagePacks: [{ locale: 'pt-BR', path: 'locales/pt-BR.json' }],
         commands: [
           {
@@ -46,6 +51,9 @@ describe('content-pack manifest contributions', () => {
       panels: [],
       commands: [],
       events: [],
+      themes: [],
+      iconThemes: [],
+      terminalThemes: [],
       languagePacks: [],
       keybindings: [],
       vmRecipes: [],
@@ -119,8 +127,9 @@ describe('content-pack manifest contributions', () => {
   })
 
   it.each([
+    ['theme', { themes: [{ id: 'bad', label: 'Bad', path: '../outside.json' }] }],
+    ['icon theme', { iconThemes: [{ id: 'bad', path: '/tmp/icons.json' }] }],
     ['language pack', { languagePacks: [{ locale: 'en_US', path: 'locale.json' }] }],
-    ['language pack path', { languagePacks: [{ locale: 'pt-BR', path: '../outside.json' }] }],
     ['VM recipe', { vmRecipes: [{ path: '\\\\server\\recipe.json' }] }],
     ['agent profile', { agents: [{ path: 'agents/../profile.json' }] }]
   ])('rejects unsafe or malformed %s contributions', (_label, contributes) => {
@@ -130,6 +139,10 @@ describe('content-pack manifest contributions', () => {
   it('rejects duplicate ids, locales, paths, and bindings', () => {
     const parsed = pluginManifestSchema.safeParse(
       manifest({
+        themes: [
+          { id: 'same', label: 'One', path: 'one.json' },
+          { id: 'same', label: 'Two', path: 'two.json' }
+        ],
         languagePacks: [
           { locale: 'pt-BR', path: 'pt-br.json' },
           { locale: 'pt-br', path: 'other.json' }
@@ -146,6 +159,7 @@ describe('content-pack manifest contributions', () => {
     if (!parsed.success) {
       expect(parsed.error.issues.map((issue) => issue.message)).toEqual(
         expect.arrayContaining([
+          'duplicate themes id: same',
           'duplicate language pack locale: pt-br',
           'duplicate keybinding: mod+t'
         ])

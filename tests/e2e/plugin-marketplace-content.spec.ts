@@ -1,7 +1,7 @@
 /**
  * Invariant: a fresh profile discovers the managed official marketplace and
- * completes the Phase 1 language, VM-recipe, and keybinding journey through
- * production Git paths.
+ * completes the Phase 1/P2 theme, language, VM-recipe, and keybinding journey
+ * through production Git paths.
  */
 
 import { execFile } from 'node:child_process'
@@ -106,6 +106,12 @@ async function createMarketplaceFixture(): Promise<MarketplaceFixture> {
   const gitEnvironment = await configureFixtureGit(home, repositories)
   await copyLaunchPlugin(
     repositories,
+    'orca-nord-theme',
+    'stablyai.orca-nord-theme',
+    gitEnvironment
+  )
+  await copyLaunchPlugin(
+    repositories,
     'orca-portuguese',
     'stablyai.orca-portuguese',
     gitEnvironment
@@ -132,6 +138,7 @@ async function createMarketplaceFixture(): Promise<MarketplaceFixture> {
         name: 'Orca Plugins',
         owner: 'stablyai',
         plugins: [
+          ['stablyai.orca-nord-theme', 'orca-nord-theme', 'themes'],
           ['stablyai.orca-portuguese', 'orca-portuguese', 'languages'],
           ['stablyai.orca-multipass-recipes', 'orca-multipass-recipes', 'vm-recipes'],
           ['stablyai.orca-navigation-shortcuts', 'orca-navigation-shortcuts', 'keybindings']
@@ -203,7 +210,8 @@ async function enableInstalledPluginThroughUi(
   await expect(consent).toBeHidden()
 }
 
-async function applyInstalledLanguage(page: Page): Promise<void> {
+async function applyInstalledThemeAndLanguage(page: Page): Promise<void> {
+  const themeId = 'plugin:stablyai.orca-nord-theme/nord'
   const languageId = 'plugin:stablyai.orca-portuguese/pt-BR'
   await page.evaluate(() => {
     const state = window.__store?.getState()
@@ -213,6 +221,12 @@ async function applyInstalledLanguage(page: Page): Promise<void> {
     state.openSettingsTarget({ pane: 'appearance', repoId: null })
   })
   await expect(page.locator('[data-settings-section="appearance"]')).toBeVisible()
+  await page.getByRole('combobox', { name: 'Plugin theme' }).click()
+  await page.getByRole('option', { name: 'Nord', exact: true }).click()
+  await expect
+    .poll(() => page.evaluate(() => document.documentElement.dataset.orcaPluginTheme))
+    .toBe(themeId)
+
   await page.evaluate(() => window.__store?.setState({ settingsSearchQuery: 'Language' }))
   await page.getByRole('combobox', { name: 'Language' }).click()
   await page.getByRole('option', { name: 'pt-BR — stablyai.orca-portuguese', exact: true }).click()
@@ -239,8 +253,12 @@ async function runMarketplaceJourney(page: Page): Promise<void> {
     .toMatchObject({
       sources: [expect.objectContaining({ official: true, stale: false })],
       listings: expect.arrayContaining([
+        expect.objectContaining({ pluginKey: 'stablyai.orca-nord-theme', official: true }),
         expect.objectContaining({ pluginKey: 'stablyai.orca-portuguese', official: true }),
-        expect.objectContaining({ pluginKey: 'stablyai.orca-multipass-recipes', official: true }),
+        expect.objectContaining({
+          pluginKey: 'stablyai.orca-multipass-recipes',
+          official: true
+        }),
         expect.objectContaining({
           pluginKey: 'stablyai.orca-navigation-shortcuts',
           official: true
@@ -248,6 +266,12 @@ async function runMarketplaceJourney(page: Page): Promise<void> {
       ])
     })
 
+  await installMarketplacePluginThroughUi(
+    page,
+    'stablyai.orca-nord-theme',
+    'Nord for Orca',
+    'Review plugin'
+  )
   await installMarketplacePluginThroughUi(
     page,
     'stablyai.orca-portuguese',
@@ -266,7 +290,7 @@ async function runMarketplaceJourney(page: Page): Promise<void> {
     'Review plugin content'
   )
 
-  await applyInstalledLanguage(page)
+  await applyInstalledThemeAndLanguage(page)
   expect(Date.now() - startedAt).toBeLessThan(120_000)
 }
 

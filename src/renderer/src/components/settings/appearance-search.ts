@@ -31,6 +31,25 @@ export const getThemeEntries = createLocalizedCatalog((): SettingsSearchEntry[] 
   }
 ])
 
+export const getPluginIconThemeEntries = createLocalizedCatalog((): SettingsSearchEntry[] => [
+  {
+    title: translate(
+      'auto.components.settings.AppearanceInterfaceSection.pluginIconTheme.title',
+      'Icon theme'
+    ),
+    description: translate(
+      'auto.components.settings.AppearanceInterfaceSection.pluginIconTheme.description',
+      'Use file, folder, sidebar, and agent icons from an enabled Orca plugin.'
+    ),
+    keywords: [
+      ...translateSearchKeyword('auto.components.settings.appearance.search.plugin', 'plugin'),
+      ...translateSearchKeyword('auto.components.settings.appearance.search.file', 'file'),
+      ...translateSearchKeyword('auto.components.settings.appearance.search.icon', 'icon'),
+      ...translateSearchKeyword('auto.components.settings.appearance.search.0ce176909a', 'theme')
+    ]
+  }
+])
+
 export const getLanguageEntries = createLocalizedCatalog((): SettingsSearchEntry[] => [
   {
     title: translate('settings.appearance.language.title', 'Language'),

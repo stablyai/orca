@@ -86,7 +86,7 @@ import {
   canStageStatusEntry,
   canUnstageStatusEntry
 } from './source-control-entry-actions'
-import { getFileTypeIcon } from '@/lib/file-type-icons'
+import { FileTypeIcon } from '@/components/FileTypeIcon'
 import {
   buildGitStatusSourceControlTree,
   buildSourceControlTree,
@@ -7834,7 +7834,6 @@ const UncommittedEntryRow = React.memo(function UncommittedEntryRow({
   // When set, the row is a dirty submodule: clicking toggles lazy expansion instead of opening an uninformative gitlink diff.
   submoduleExpansion?: { isExpanded: boolean; onToggle: () => void }
 }): React.JSX.Element {
-  const FileIcon = getFileTypeIcon(entry.path)
   const fileName = basename(entry.path)
   const parentDir = dirname(entry.path)
   const dirPath = parentDir === '.' ? '' : parentDir
@@ -7918,7 +7917,11 @@ const UncommittedEntryRow = React.memo(function UncommittedEntryRow({
             )}
           />
         )}
-        <FileIcon className="size-3.5 shrink-0" style={{ color: STATUS_COLORS[entry.status] }} />
+        <FileTypeIcon
+          filePath={entry.path}
+          className="size-3.5 shrink-0"
+          style={{ color: STATUS_COLORS[entry.status] }}
+        />
         <div className="min-w-0 flex-1 text-xs">
           <span className="min-w-0 block truncate">
             <span className="text-foreground">{fileName}</span>
@@ -8095,7 +8098,6 @@ function BranchEntryRow({
   commentCount: number
   showPathHint?: boolean
 }): React.JSX.Element {
-  const FileIcon = getFileTypeIcon(entry.path)
   const fileName = basename(entry.path)
   const parentDir = dirname(entry.path)
   const dirPath = parentDir === '.' ? '' : parentDir
@@ -8123,7 +8125,11 @@ function BranchEntryRow({
         onClick={(e) => onOpen(e)}
         onDoubleClick={(e) => onOpen(toPermanentSourceControlRowOpenEvent(e))}
       >
-        <FileIcon className="size-3.5 shrink-0" style={{ color: STATUS_COLORS[entry.status] }} />
+        <FileTypeIcon
+          filePath={entry.path}
+          className="size-3.5 shrink-0"
+          style={{ color: STATUS_COLORS[entry.status] }}
+        />
         <span className="min-w-0 flex-1 truncate text-xs">
           <span className="text-foreground">{fileName}</span>
           {showPathHint && dirPath && (

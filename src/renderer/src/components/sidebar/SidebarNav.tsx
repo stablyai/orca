@@ -8,6 +8,7 @@ import {
   Search,
   Smartphone
 } from 'lucide-react'
+import { PluginIconSlot } from '@/components/PluginIconSlot'
 import { useTranslation } from 'react-i18next'
 import { useAppStore } from '@/store'
 import { cn } from '@/lib/utils'
@@ -315,9 +316,15 @@ const SidebarNav = React.memo(function SidebarNav() {
         )}
         className="group relative flex h-7 w-full items-center rounded-md border border-worktree-sidebar-border/70 bg-worktree-sidebar-foreground/5 pl-7 pr-1.5 text-left text-[12px] font-medium tracking-tight text-worktree-sidebar-foreground/45 transition-colors hover:border-worktree-sidebar-border hover:bg-worktree-sidebar-foreground/8 hover:text-worktree-sidebar-foreground/60 focus-visible:outline-none focus-visible:ring-[3px] focus-visible:ring-worktree-sidebar-ring/50"
       >
-        <Search
+        <PluginIconSlot
+          slot="sidebar.search"
           className="pointer-events-none absolute left-2 top-1/2 size-3 -translate-y-1/2 text-worktree-sidebar-foreground/30"
-          strokeWidth={1.75}
+          fallback={
+            <Search
+              className="pointer-events-none absolute left-2 top-1/2 size-3 -translate-y-1/2 text-worktree-sidebar-foreground/30"
+              strokeWidth={1.75}
+            />
+          }
         />
         <span className="min-w-0 flex-1 truncate">
           {translate('auto.components.sidebar.SidebarNav.80611a8b10', 'Search')}

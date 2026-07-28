@@ -1,0 +1,18 @@
+{
+  "schemaVersion": 1,
+  "icons": {
+    "file": "icons/file.svg",
+    "folder": "icons/folder.svg",
+    "folder-open": "icons/folder-open.svg"
+  },
+  "fileNames": {
+    "package.json": "icons/package.svg",
+    "orca-plugin.json": "icons/plugin.svg"
+  },
+  "fileExtensions": {
+    "ts": "icons/typescript.svg",
+    "tsx": "icons/typescript.svg",
+    "md": "icons/markdown.svg",
+    "json": "icons/json.svg"
+  }
+}

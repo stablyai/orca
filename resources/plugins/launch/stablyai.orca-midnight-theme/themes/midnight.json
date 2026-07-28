@@ -1,0 +1,29 @@
+{
+  "base": "dark",
+  "tokens": {
+    "--background": "#101216",
+    "--editor-surface": "#0c0e12",
+    "--foreground": "#e8eaf0",
+    "--card": "#161920",
+    "--card-foreground": "#e8eaf0",
+    "--popover": "#181b22",
+    "--popover-foreground": "#e8eaf0",
+    "--primary": "#e8eaf0",
+    "--primary-foreground": "#101216",
+    "--secondary": "#242832",
+    "--secondary-foreground": "#e8eaf0",
+    "--muted": "#20242c",
+    "--muted-foreground": "#a7adbb",
+    "--accent": "#292e39",
+    "--accent-foreground": "#f4f5f8",
+    "--border": "#343a47",
+    "--input": "#1b1e26",
+    "--ring": "#9ca7bd",
+    "--sidebar": "#13161b",
+    "--sidebar-foreground": "#dfe2e9",
+    "--sidebar-accent": "#252a34",
+    "--sidebar-accent-foreground": "#f4f5f8",
+    "--sidebar-border": "#303642",
+    "--sidebar-ring": "#9ca7bd"
+  }
+}

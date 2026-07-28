@@ -14,9 +14,9 @@ import {
 } from './plugin-panel-bridge-host'
 import { createPanelWatchdog } from './plugin-panel-watchdog'
 import { buildPanelDesignTokenCss, currentPanelColorScheme } from './plugin-panel-design-token-css'
-import { usePluginPanelThemeRevision } from './use-plugin-panel-theme-revision'
 import { usePluginPanels, usePluginPanelsStore } from '@/store/plugin-panels'
 import { translate } from '@/i18n/i18n'
+import { usePluginPanelThemeRevision } from './use-plugin-panel-theme-revision'
 
 type PluginPanelProps = {
   tabKey: string
@@ -48,6 +48,7 @@ function fillPanelShell(html: string): string {
 function PluginPanel({ tabKey }: PluginPanelProps): React.JSX.Element {
   const panels = usePluginPanels()
   const setPanelHealth = usePluginPanelsStore((state) => state.setPanelHealth)
+  const themeRevision = usePluginPanelThemeRevision()
   const panel = isPluginPanelTabKey(tabKey)
     ? (panels.find((entry) => entry.tabKey === tabKey) ?? null)
     : null
@@ -55,14 +56,11 @@ function PluginPanel({ tabKey }: PluginPanelProps): React.JSX.Element {
   const [sessionToken, setSessionToken] = useState<string | null>(null)
   const [loadedFrameKey, setLoadedFrameKey] = useState<string | null>(null)
   const iframeRef = useRef<HTMLIFrameElement | null>(null)
-  const themeRevision = usePluginPanelThemeRevision()
 
   const pluginKey = panel?.pluginKey ?? null
   const panelId = panel?.id ?? null
   const panelShell = entryState.status === 'ready' ? entryState.shellHtml : null
   const panelDocument = panelShell ? fillPanelShell(panelShell) : null
-  // Why: the shell bakes Orca's color scheme + design tokens into srcdoc, so the
-  // frame must be rebuilt when the app theme changes, not only when the document does.
   const panelFrameKey =
     entryState.status === 'ready'
       ? `${tabKey}:${entryState.documentRevision}:${themeRevision}`

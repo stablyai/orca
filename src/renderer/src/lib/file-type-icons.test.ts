@@ -20,6 +20,7 @@ import {
 } from 'lucide-react'
 import { describe, expect, it } from 'vitest'
 import { getFileTypeIcon } from './file-type-icons'
+import { getPluginFileTypeIconImage } from './file-type-icons'
 
 describe('getFileTypeIcon', () => {
   it('prefers known filenames over generic extensions', () => {
@@ -57,5 +58,47 @@ describe('getFileTypeIcon', () => {
 
   it('falls back to the generic file icon for unknown files', () => {
     expect(getFileTypeIcon('unknown.customtype')).toBe(File)
+  })
+
+  it('resolves plugin file-name and extension mappings before the generic plugin icon', () => {
+    const theme = {
+      id: 'plugin:acme.icons/main' as const,
+      pluginKey: 'acme.icons',
+      label: 'Acme',
+      icons: {
+        file: { dataUrl: 'data:image/svg+xml;base64,ZmlsZQ==', rendering: 'image' as const }
+      },
+      fileNames: {
+        'readme.md': {
+          dataUrl: 'data:image/svg+xml;base64,cmVhZG1l',
+          rendering: 'image' as const
+        }
+      },
+      fileExtensions: {
+        ts: { dataUrl: 'data:image/svg+xml;base64,dHM=', rendering: 'image' as const }
+      }
+    }
+
+    expect(getPluginFileTypeIconImage(theme, '/repo/README.md')?.dataUrl).toContain('cmVhZG1l')
+    expect(getPluginFileTypeIconImage(theme, 'src/index.ts')?.dataUrl).toContain('dHM=')
+    expect(getPluginFileTypeIconImage(theme, 'unknown.bin')?.dataUrl).toContain('ZmlsZQ==')
+  })
+
+  it('rejects unexpected plugin icon URLs and preserves built-in fallback', () => {
+    expect(
+      getPluginFileTypeIconImage(
+        {
+          id: 'plugin:acme.icons/main',
+          pluginKey: 'acme.icons',
+          label: 'Acme',
+          icons: {
+            file: { dataUrl: 'https://example.com/icon.svg', rendering: 'image' }
+          },
+          fileNames: {},
+          fileExtensions: {}
+        },
+        'unknown.bin'
+      )
+    ).toBeNull()
   })
 })

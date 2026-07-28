@@ -3,6 +3,26 @@
   "owner": "stablyai",
   "plugins": [
     {
+      "id": "stablyai.orca-midnight-theme",
+      "source": {
+        "kind": "git",
+        "url": "https://github.com/stablyai/orca-midnight-theme.git",
+        "ref": "v1.0.0"
+      },
+      "description": "A quiet dark theme tuned for long coding sessions.",
+      "categories": ["themes", "official"]
+    },
+    {
+      "id": "stablyai.orca-nord-theme",
+      "source": {
+        "kind": "git",
+        "url": "https://github.com/stablyai/orca-nord-theme.git",
+        "ref": "v1.0.0"
+      },
+      "description": "A cool, low-contrast application theme inspired by arctic colors.",
+      "categories": ["themes", "official"]
+    },
+    {
       "id": "stablyai.orca-portuguese",
       "source": {
         "kind": "git",
@@ -11,6 +31,26 @@
       },
       "description": "Brazilian Portuguese translations for common Orca navigation.",
       "categories": ["languages", "official"]
+    },
+    {
+      "id": "stablyai.orca-minimal-icons",
+      "source": {
+        "kind": "git",
+        "url": "https://github.com/stablyai/orca-minimal-icons.git",
+        "ref": "v1.0.0"
+      },
+      "description": "A compact monochrome icon theme for common source files.",
+      "categories": ["icons", "official"]
+    },
+    {
+      "id": "stablyai.orca-solarized-terminal",
+      "source": {
+        "kind": "git",
+        "url": "https://github.com/stablyai/orca-solarized-terminal.git",
+        "ref": "v1.0.0"
+      },
+      "description": "Solarized Dark terminal colors packaged for Orca.",
+      "categories": ["terminal-themes", "official"]
     },
     {
       "id": "stablyai.orca-multipass-recipes",

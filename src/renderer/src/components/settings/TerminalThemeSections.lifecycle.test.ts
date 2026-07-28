@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { GlobalSettings } from '../../../../shared/types'
 import type { UseWarpThemeImportReturn } from './useWarpThemeImport'
+import { usePluginTerminalThemeStore } from '../../store/plugin-terminal-themes'
 
 let themeTarget: 'dark' | 'light' | undefined = 'dark'
 
@@ -177,6 +178,7 @@ describe('TerminalThemeCatalogSection', () => {
     themeTarget = 'dark'
     resetTerminalThemeTargetMemoryForTests()
     vi.clearAllMocks()
+    usePluginTerminalThemeStore.setState({ themes: [], loaded: true })
   })
 
   it('renders one theme picker and one preview for the active target', () => {
@@ -289,6 +291,34 @@ describe('TerminalThemeCatalogSection', () => {
     selectTheme('Builtin Solarized Dark')
 
     expect(updateSettings).toHaveBeenCalledWith({ terminalThemeDark: 'Builtin Solarized Dark' })
+  })
+
+  it('offers and selects qualified terminal themes from enabled plugins', () => {
+    usePluginTerminalThemeStore.setState({
+      loaded: true,
+      themes: [
+        {
+          id: 'plugin:acme.terminal/nord',
+          pluginKey: 'acme.terminal',
+          label: 'Nord',
+          mode: 'dark',
+          terminal: { background: '#101010', foreground: '#eeeeee', black: '#000000' }
+        }
+      ]
+    })
+    const updateSettings = vi.fn()
+    const element = renderCatalog(makeSettings(), updateSettings, 'dark')
+    const picker = findElementByTypeName(element, 'ThemePicker')
+    const options = picker?.props?.themeOptions as readonly { value: string; group: string }[]
+    const selectTheme = picker?.props?.onSelectTheme as (theme: string) => void
+
+    expect(options).toContainEqual(
+      expect.objectContaining({ value: 'plugin:acme.terminal/nord', group: 'plugin' })
+    )
+    selectTheme('plugin:acme.terminal/nord')
+    expect(updateSettings).toHaveBeenCalledWith({
+      terminalThemeDark: 'plugin:acme.terminal/nord'
+    })
   })
 
   it('updates the light theme from the catalog when the light target is active', () => {

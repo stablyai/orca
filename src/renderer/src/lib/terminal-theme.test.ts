@@ -9,6 +9,7 @@ import {
   resolveOpaqueTerminalBackground,
   resolveEffectiveTerminalAppearance
 } from './terminal-theme'
+import { usePluginTerminalThemeStore } from '../store/plugin-terminal-themes'
 
 // Mirrors Codex instruction block gray so the dark selection cannot disappear into it.
 const INSTRUCTION_BLOCK_BACKGROUND = '#3e4451'
@@ -55,6 +56,7 @@ function contrastRatio(first: string, second: string): number {
 
 afterEach(() => {
   vi.restoreAllMocks()
+  usePluginTerminalThemeStore.setState({ themes: [], loaded: true })
 })
 
 describe('resolveEffectiveTerminalAppearance', () => {
@@ -236,6 +238,39 @@ describe('resolveEffectiveTerminalAppearance', () => {
         sourceLabel: 'Warp'
       })
     )
+  })
+
+  it('resolves plugin palettes and lists qualified plugin picker options', () => {
+    usePluginTerminalThemeStore.setState({
+      loaded: true,
+      themes: [
+        {
+          id: 'plugin:acme.terminal/nord',
+          pluginKey: 'acme.terminal',
+          label: 'Nord',
+          mode: 'dark',
+          terminal: { background: '#101010', foreground: '#eeeeee', black: '#000000' }
+        }
+      ]
+    })
+
+    expect(getTerminalThemePreview('plugin:acme.terminal/nord')?.background).toBe('#101010')
+    expect(getAvailableTerminalThemeOptions({ terminalCustomThemes: [] })).toContainEqual(
+      expect.objectContaining({
+        value: 'plugin:acme.terminal/nord',
+        group: 'plugin',
+        sourceLabel: 'acme.terminal'
+      })
+    )
+  })
+
+  it('falls back to the mode-appropriate built-in when a plugin theme disappears', () => {
+    const selection = 'plugin:acme.terminal/missing'
+    const dark = getTerminalThemePreview(selection, undefined, 'dark')
+    const light = getTerminalThemePreview(selection, undefined, 'light')
+
+    expect(dark).toEqual(getTerminalThemePreview(DEFAULT_TERMINAL_THEME_DARK))
+    expect(light).toEqual(getTerminalThemePreview(DEFAULT_TERMINAL_THEME_LIGHT))
   })
 })
 
