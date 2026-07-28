@@ -95,15 +95,38 @@ export function fastGetViaSftp(
   )
 }
 
-export function readDirViaSftp(
+export async function* readDirectoryEntriesViaSftp(
   sftp: SFTPWrapper,
   dirPath: string,
   options?: { signal?: AbortSignal }
-): Promise<FileEntryWithStats[]> {
-  return waitForSftpCallback<FileEntryWithStats[]>(
-    (callback) => sftp.readdir(dirPath, callback),
+): AsyncGenerator<FileEntryWithStats> {
+  const handle = await waitForSftpCallback<Buffer>(
+    (callback) => sftp.opendir(dirPath, callback),
     options
   )
+  try {
+    for (;;) {
+      const entries = await waitForSftpCallback<FileEntryWithStats[] | false>(
+        (callback) =>
+          sftp.readdir(handle, (error, value) => {
+            if ((error as { code?: number } | undefined)?.code === 1) {
+              callback(null, false)
+              return
+            }
+            callback(error, value && value.length > 0 ? value : false)
+          }),
+        options
+      )
+      if (entries === false) {
+        break
+      }
+      yield* entries
+    }
+  } finally {
+    await waitForSftpCallback<void>((callback) => sftp.close(handle, callback), options).catch(
+      () => undefined
+    )
+  }
 }
 
 export function statViaSftp(

@@ -29,6 +29,29 @@ function sftpEntry(filename: string, kind: SftpEntryKind) {
   return { filename, longname: filename, attrs: sftpStats(kind) }
 }
 
+function createSftpDirectoryHandleMethods(
+  readEntries: (remotePath: string) => ReturnType<typeof sftpEntry>[]
+) {
+  const completedPaths = new Set<string>()
+  return {
+    opendir: vi.fn((remotePath: string, callback: (error: undefined, handle: Buffer) => void) =>
+      callback(undefined, Buffer.from(remotePath))
+    ),
+    readdir: vi.fn(
+      (handle: Buffer, callback: (error?: Error & { code?: number }, value?: unknown) => void) => {
+        const remotePath = handle.toString('utf8')
+        if (completedPaths.has(remotePath)) {
+          callback(Object.assign(new Error('EOF'), { code: 1 }))
+          return
+        }
+        completedPaths.add(remotePath)
+        callback(undefined, readEntries(remotePath))
+      }
+    ),
+    close: vi.fn((_handle: Buffer, callback: (error?: Error) => void) => callback())
+  }
+}
+
 function createMockMux() {
   return {
     request: vi.fn(),
@@ -69,14 +92,10 @@ describe('SshFilesystemProvider downloadFolder', () => {
         (remotePath: string, callback: (err: Error | undefined, value: unknown) => void) =>
           callback(undefined, sftpStats(remotePath === '/remote/src' ? 'directory' : 'file'))
       ),
-      readdir: vi.fn(
-        (remotePath: string, callback: (err: Error | undefined, value: unknown) => void) =>
-          callback(
-            undefined,
-            remotePath === '/remote/src'
-              ? [sftpEntry('index.ts', 'file'), sftpEntry('lib', 'directory')]
-              : [sftpEntry('a.ts', 'file')]
-          )
+      ...createSftpDirectoryHandleMethods((remotePath) =>
+        remotePath === '/remote/src'
+          ? [sftpEntry('index.ts', 'file'), sftpEntry('lib', 'directory')]
+          : [sftpEntry('a.ts', 'file')]
       ),
       fastGet: vi.fn((_source: string, _destination: string, callback: (err?: Error) => void) =>
         callback()
@@ -95,6 +114,7 @@ describe('SshFilesystemProvider downloadFolder', () => {
       ['/remote/src/lib/a.ts', join(destination, 'lib', 'a.ts')]
     ])
     await expect(stat(join(destination, 'lib'))).resolves.toMatchObject({})
+    expect(sftp.close).toHaveBeenCalledTimes(2)
     expect(sftp.end).toHaveBeenCalledTimes(1)
     expect(mux.request).not.toHaveBeenCalled()
   })
@@ -107,9 +127,7 @@ describe('SshFilesystemProvider downloadFolder', () => {
         (remotePath: string, callback: (err: Error | undefined, value: unknown) => void) =>
           callback(undefined, sftpStats(remotePath === '/remote/src' ? 'directory' : 'directory'))
       ),
-      readdir: vi.fn((_path: string, callback: (err: Error | undefined, value: unknown) => void) =>
-        callback(undefined, [sftpEntry('linked-dir', 'symlink')])
-      ),
+      ...createSftpDirectoryHandleMethods(() => [sftpEntry('linked-dir', 'symlink')]),
       fastGet: vi.fn(),
       end: vi.fn()
     }
@@ -120,6 +138,7 @@ describe('SshFilesystemProvider downloadFolder', () => {
     )
 
     expect(sftp.fastGet).not.toHaveBeenCalled()
+    expect(sftp.close).toHaveBeenCalledTimes(1)
     expect(sftp.end).toHaveBeenCalledTimes(1)
   })
 
@@ -130,9 +149,10 @@ describe('SshFilesystemProvider downloadFolder', () => {
       stat: vi.fn((_path: string, callback: (err: Error | undefined, value: unknown) => void) =>
         callback(undefined, sftpStats('directory'))
       ),
-      readdir: vi.fn((_path: string, callback: (err: Error | undefined, value: unknown) => void) =>
-        callback(undefined, [sftpEntry('a:b.txt', 'file'), sftpEntry('a?b.txt', 'file')])
-      ),
+      ...createSftpDirectoryHandleMethods(() => [
+        sftpEntry('a:b.txt', 'file'),
+        sftpEntry('a?b.txt', 'file')
+      ]),
       fastGet: vi.fn(),
       end: vi.fn()
     }
@@ -143,6 +163,7 @@ describe('SshFilesystemProvider downloadFolder', () => {
     )
 
     expect(sftp.fastGet).not.toHaveBeenCalled()
+    expect(sftp.close).toHaveBeenCalledTimes(1)
     expect(sftp.end).toHaveBeenCalledTimes(1)
   })
 

@@ -4,6 +4,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
 import { downloadFolderViaSftp } from './ssh-filesystem-download'
+import { SSH_DIRECTORY_TRANSFER_LIMITS } from '../ssh/ssh-directory-transfer-budget'
 
 type SftpEntryKind = 'directory' | 'file' | 'symlink' | 'fifo'
 
@@ -27,6 +28,31 @@ function sftpStats(kind: SftpEntryKind) {
 
 function sftpEntry(filename: string, kind: SftpEntryKind) {
   return { filename, longname: filename, attrs: sftpStats(kind) }
+}
+
+function withDirectoryHandles(sftp: Record<string, unknown>): unknown {
+  if (typeof sftp.opendir === 'function' && typeof sftp.close === 'function') {
+    return sftp
+  }
+  const readDirectory = sftp.readdir as (
+    path: string,
+    callback: (error?: Error, value?: unknown) => void
+  ) => void
+  const completed = new Set<string>()
+  return Object.assign(sftp, {
+    opendir: (path: string, callback: (error: undefined, handle: Buffer) => void) =>
+      callback(undefined, Buffer.from(path)),
+    readdir: (handle: Buffer, callback: (error?: Error, value?: unknown) => void) => {
+      const path = handle.toString('utf8')
+      if (completed.has(path)) {
+        callback(undefined, false)
+        return
+      }
+      completed.add(path)
+      readDirectory(path, callback)
+    },
+    close: (_handle: Buffer, callback: (error?: Error) => void) => callback()
+  })
 }
 
 describe('downloadFolderViaSftp', () => {
@@ -64,7 +90,11 @@ describe('downloadFolderViaSftp', () => {
     }
 
     await expect(
-      downloadFolderViaSftp(async () => sftp as never, '/remote/src', destination)
+      downloadFolderViaSftp(
+        async () => withDirectoryHandles(sftp) as never,
+        '/remote/src',
+        destination
+      )
     ).rejects.toThrow("Remote entries map to the same local name 'a.txt'")
     expect(sftp.fastGet).toHaveBeenCalledTimes(1)
   })
@@ -83,7 +113,11 @@ describe('downloadFolderViaSftp', () => {
     }
 
     await expect(
-      downloadFolderViaSftp(async () => sftp as never, '/remote/src', destination)
+      downloadFolderViaSftp(
+        async () => withDirectoryHandles(sftp) as never,
+        '/remote/src',
+        destination
+      )
     ).rejects.toThrow("Cannot download unsupported remote entry 'build.pipe'")
     expect(sftp.fastGet).not.toHaveBeenCalled()
   })
@@ -103,7 +137,11 @@ describe('downloadFolderViaSftp', () => {
     }
 
     await expect(
-      downloadFolderViaSftp(async () => sftp as never, '/remote/src', destination)
+      downloadFolderViaSftp(
+        async () => withDirectoryHandles(sftp) as never,
+        '/remote/src',
+        destination
+      )
     ).rejects.toThrow("Cannot download symbolic link 'creds'")
     // The link target could be /etc/passwd; rejecting from directory-entry
     // metadata means it is never followed with stat or opened by fastGet.
@@ -125,7 +163,11 @@ describe('downloadFolderViaSftp', () => {
     }
 
     await expect(
-      downloadFolderViaSftp(async () => sftp as never, '/remote/src', destination)
+      downloadFolderViaSftp(
+        async () => withDirectoryHandles(sftp) as never,
+        '/remote/src',
+        destination
+      )
     ).rejects.toThrow("Remote entries map to the same local name 'download'")
     expect(sftp.fastGet).not.toHaveBeenCalled()
   })
@@ -146,9 +188,12 @@ describe('downloadFolderViaSftp', () => {
       end: vi.fn()
     }
 
-    await downloadFolderViaSftp(async () => sftp as never, sourcePath, destination, {
-      windowsRemotePaths: false
-    })
+    await downloadFolderViaSftp(
+      async () => withDirectoryHandles(sftp) as never,
+      sourcePath,
+      destination,
+      { windowsRemotePaths: false }
+    )
 
     expect(sftp.fastGet).toHaveBeenCalledWith(
       '/remote/parent\\literal/..\\secret.txt',
@@ -171,9 +216,12 @@ describe('downloadFolderViaSftp', () => {
     }
 
     await expect(
-      downloadFolderViaSftp(async () => sftp as never, 'C:/remote/src', destination, {
-        windowsRemotePaths: true
-      })
+      downloadFolderViaSftp(
+        async () => withDirectoryHandles(sftp) as never,
+        'C:/remote/src',
+        destination,
+        { windowsRemotePaths: true }
+      )
     ).rejects.toThrow("Invalid remote directory entry '..\\secret.txt'")
     expect(sftp.fastGet).not.toHaveBeenCalled()
   })
@@ -195,9 +243,12 @@ describe('downloadFolderViaSftp', () => {
     }
     const controller = new AbortController()
 
-    const result = downloadFolderViaSftp(async () => sftp as never, '/remote/src', destination, {
-      signal: controller.signal
-    })
+    const result = downloadFolderViaSftp(
+      async () => withDirectoryHandles(sftp) as never,
+      '/remote/src',
+      destination,
+      { signal: controller.signal }
+    )
     await vi.waitFor(() => expect(sftp.fastGet).toHaveBeenCalledTimes(1))
     controller.abort(new Error('renderer closed'))
 
@@ -222,27 +273,71 @@ describe('downloadFolderViaSftp', () => {
   it('cancels a pending SFTP directory read', async () => {
     const destination = await createDestination()
     let readDirCallback: ((error?: Error) => void) | undefined
+    const readdir = vi.fn((_path: string, callback: (error?: Error) => void) => {
+      readDirCallback = callback
+    })
     const sftp = {
       stat: vi.fn((_path: string, callback: (err: Error | undefined, value: unknown) => void) =>
         callback(undefined, sftpStats('directory'))
       ),
-      readdir: vi.fn((_path: string, callback: (error?: Error) => void) => {
-        readDirCallback = callback
-      }),
+      readdir,
       fastGet: vi.fn(),
       end: vi.fn()
     }
     const controller = new AbortController()
 
-    const result = downloadFolderViaSftp(async () => sftp as never, '/remote/src', destination, {
-      signal: controller.signal
-    })
-    await vi.waitFor(() => expect(sftp.readdir).toHaveBeenCalledTimes(1))
+    const result = downloadFolderViaSftp(
+      async () => withDirectoryHandles(sftp) as never,
+      '/remote/src',
+      destination,
+      { signal: controller.signal }
+    )
+    await vi.waitFor(() => expect(readdir).toHaveBeenCalledTimes(1))
     controller.abort(new Error('renderer closed'))
     readDirCallback?.(new Error('channel closed'))
 
     await expect(result).rejects.toThrow('renderer closed')
     expect(sftp.fastGet).not.toHaveBeenCalled()
     expect(sftp.end).toHaveBeenCalledTimes(1)
+  })
+
+  it('streams directory chunks and stops at the retained entry budget', async () => {
+    const destination = await createDestination()
+    const handle = Buffer.from('handle')
+    const chunks = [
+      [sftpEntry('one.txt', 'file'), sftpEntry('two.txt', 'file')],
+      [sftpEntry('three.txt', 'file')],
+      false
+    ]
+    const sftp = {
+      stat: vi.fn((_path: string, callback: (err: Error | undefined, value: unknown) => void) =>
+        callback(undefined, sftpStats('directory'))
+      ),
+      opendir: vi.fn((_path: string, callback: (err: Error | undefined, value: Buffer) => void) =>
+        callback(undefined, handle)
+      ),
+      readdir: vi.fn(
+        (_handle: Buffer, callback: (err: Error | undefined, value: unknown) => void) =>
+          callback(undefined, chunks.shift())
+      ),
+      close: vi.fn((_handle: Buffer, callback: (err?: Error) => void) => callback()),
+      fastGet: vi.fn(),
+      end: vi.fn()
+    }
+
+    await expect(
+      downloadFolderViaSftp(
+        async () => withDirectoryHandles(sftp) as never,
+        '/remote/src',
+        destination,
+        {
+          limits: { ...SSH_DIRECTORY_TRANSFER_LIMITS, maximumEntries: 2 }
+        }
+      )
+    ).rejects.toThrow('SSH directory transfer exceeds the entries limit')
+
+    expect(sftp.readdir).toHaveBeenCalledTimes(2)
+    expect(sftp.close).toHaveBeenCalledWith(handle, expect.any(Function))
+    expect(sftp.fastGet).not.toHaveBeenCalled()
   })
 })
