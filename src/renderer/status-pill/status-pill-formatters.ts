@@ -36,12 +36,17 @@ export function pickInitials(agentType: string): string {
     aider: 'Ai',
     droid: 'Dr',
     amp: 'Am',
-    grok: 'Gr'
+    grok: 'Gr',
+    hermes: 'He',
+    antigravity: 'Ag',
+    kimi: 'Ki'
   }
   return map[lower] ?? agentType.slice(0, 2).toUpperCase()
 }
 
-/** CSS class for the agent's avatar color (av-claude / av-codex / av-default). */
+/** CSS class for the agent's avatar color. Each known agent maps to a brand
+ *  color class (av-claude, av-codex, …); unknown agents fall back to a neutral
+ *  avatar so custom agents still render legibly. */
 export function pickAvatarClass(agentType: string): string {
   const lower = agentType.toLowerCase()
   const map: Record<string, string> = {
@@ -49,7 +54,16 @@ export function pickAvatarClass(agentType: string): string {
     openclaude: 'av-claude',
     codex: 'av-codex',
     gemini: 'av-gemini',
-    cursor: 'av-cursor'
+    cursor: 'av-cursor',
+    copilot: 'av-copilot',
+    opencode: 'av-opencode',
+    aider: 'av-aider',
+    droid: 'av-droid',
+    amp: 'av-amp',
+    grok: 'av-grok',
+    hermes: 'av-hermes',
+    antigravity: 'av-antigravity',
+    kimi: 'av-kimi'
   }
   return map[lower] ?? 'av-default'
 }

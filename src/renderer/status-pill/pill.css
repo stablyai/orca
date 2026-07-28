@@ -352,15 +352,17 @@ body {
 .agent-avatar {
   width: 22px;
   height: 22px;
-  border-radius: 6px;
+  border-radius: 7px;
   flex-shrink: 0;
   display: flex;
   align-items: center;
   justify-content: center;
   font-size: 11px;
   font-weight: 600;
-  color: #0f172a;
   letter-spacing: -0.02em;
+  /* Why: a hairline inner ring keeps brand-color avatars crisp against both
+     light and dark glass backgrounds, matching the rest of the pill edges. */
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.14);
 }
 
 .av-claude {
@@ -378,6 +380,42 @@ body {
 .av-cursor {
   background: #a78bfa;
   color: #1a103d;
+}
+.av-copilot {
+  background: #6366f1;
+  color: #1e1b4b;
+}
+.av-opencode {
+  background: #14b8a6;
+  color: #042f2e;
+}
+.av-aider {
+  background: #eab308;
+  color: #422006;
+}
+.av-droid {
+  background: #06b6d4;
+  color: #083344;
+}
+.av-amp {
+  background: #84cc16;
+  color: #1a2e05;
+}
+.av-grok {
+  background: #0f172a;
+  color: #e2e8f0;
+}
+.av-hermes {
+  background: #f59e0b;
+  color: #451a03;
+}
+.av-antigravity {
+  background: #ec4899;
+  color: #500724;
+}
+.av-kimi {
+  background: #0ea5e9;
+  color: #082f49;
 }
 .av-default {
   background: var(--muted-foreground);
