@@ -1,8 +1,16 @@
 import type { AppState } from '@/store'
 import { useAppStore } from '@/store'
-import { inspectRuntimeTerminalProcess } from '@/runtime/runtime-terminal-inspection'
+import {
+  confirmRuntimeTerminalForegroundProcess,
+  inspectRuntimeTerminalProcess,
+  type RuntimeTerminalProcessInspection
+} from '@/runtime/runtime-terminal-inspection'
 import { translate } from '@/i18n/i18n'
-import { isCodexRestartEligiblePane } from './codex-pane-restart-eligibility'
+import { isShellProcess } from '../../../shared/shell-process-detection'
+import {
+  isCodexForegroundProcess,
+  isCodexRestartEligiblePane
+} from './codex-pane-restart-eligibility'
 import {
   getCodexAccountSwitchLaneMatcher,
   isForeignMachineCodexPtyId,
@@ -10,6 +18,7 @@ import {
   resolveCodexPaneSelectionLane
 } from './codex-pane-selection-lane'
 import type { CodexAccountSelectionTarget } from '../../../shared/codex-selection-lane'
+import type { TuiAgent } from '../../../shared/types'
 
 // Why: prompt integrations such as Starship can outlast the daemon's 300ms
 // Codex fast-path timeout; account restarts must wait until the shell accepts input.
@@ -57,6 +66,36 @@ async function readRecordedCodexPaneLanes(
     return {}
   }
   return await listRecordedPaneLanes({ ptyIds: localPtyIds }).catch(() => ({}))
+}
+
+/**
+ * Re-checks a shell reading with a fresh, uncached scan before trusting it.
+ *
+ * Why: the cached foreground read can flap to the pane's shell for a live Codex
+ * session (#11064), and a spurious shell here silently skips the restart card —
+ * no error, no retry. Mirrors main's terminalHasShellForegroundProcess, which
+ * already refuses to conclude "agent done" from an unconfirmed shell reading.
+ * Gated to Orca-launched Codex panes so an account switch never spends the
+ * expensive fresh scan on ordinary shell terminals, and only an affirmative
+ * codex answer flips the decision: a confirmed shell (user exited Codex) and a
+ * null (scan failed or unsupported) both keep today's ineligible outcome.
+ */
+async function isConfirmedCodexForegroundDespiteShellReading(
+  state: AppState,
+  ptyId: string,
+  launchAgent: TuiAgent | undefined,
+  inspection: RuntimeTerminalProcessInspection
+): Promise<boolean> {
+  if (
+    launchAgent !== 'codex' ||
+    inspection.unavailable === true ||
+    inspection.foregroundProcess === null ||
+    !isShellProcess(inspection.foregroundProcess)
+  ) {
+    return false
+  }
+  const confirmed = await confirmRuntimeTerminalForegroundProcess(state.settings, ptyId)
+  return isCodexForegroundProcess(confirmed)
 }
 
 /**
@@ -114,11 +153,18 @@ async function scanCodexPanes(
         // Why: one stale remote pane must not hide restart notices for other confirmed Codex panes.
         () => null
       )
+      const eligible =
+        inspection !== null &&
+        (isCodexRestartEligiblePane({ inspection, launchAgent: tab.launchAgent }) ||
+          (await isConfirmedCodexForegroundDespiteShellReading(
+            state,
+            ptyId,
+            tab.launchAgent,
+            inspection
+          )))
       return {
         ptyId,
-        eligible:
-          inspection !== null &&
-          isCodexRestartEligiblePane({ inspection, launchAgent: tab.launchAgent }),
+        eligible,
         inconclusive: inspection === null || inspection.unavailable === true,
         launchedCodex: tab.launchAgent === 'codex',
         notified: false,

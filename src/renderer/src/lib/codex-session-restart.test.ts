@@ -48,6 +48,9 @@ describe('markLiveCodexSessionsForRestart', () => {
       return createCompatibleRuntimeStatusResponseIfNeeded(args) ?? runtimeEnvironmentCall(args)
     })
     useAppStore.setState({
+      // Why: a prior test's remote-runtime selection must not silently move
+      // every later local pane out of the switch's lane.
+      settings: null as never,
       tabsByWorktree: {
         wt1: [
           {
@@ -78,7 +81,8 @@ describe('markLiveCodexSessionsForRestart', () => {
           ...originalWindow?.api?.pty,
           getForegroundProcess: vi.fn(),
           hasChildProcesses: vi.fn().mockResolvedValue(false),
-          inspectProcess: vi.fn()
+          inspectProcess: vi.fn(),
+          confirmForegroundProcess: vi.fn().mockResolvedValue(null)
         },
         codexAccounts: {
           ...originalWindow?.api?.codexAccounts,
@@ -760,7 +764,8 @@ describe('markRestoredStaleCodexSessionsForRestart', () => {
           hasChildProcesses: vi.fn().mockResolvedValue(false),
           inspectProcess: vi
             .fn()
-            .mockResolvedValue({ foregroundProcess: 'codex', hasChildProcesses: false })
+            .mockResolvedValue({ foregroundProcess: 'codex', hasChildProcesses: false }),
+          confirmForegroundProcess: vi.fn().mockResolvedValue(null)
         },
         codexAccounts: {
           ...originalWindow?.api?.codexAccounts,
