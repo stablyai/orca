@@ -78,15 +78,16 @@ class HardwareKeyboardCaptureView(context: Context, appContext: AppContext) :
     return true
   }
 
-  // Shift and Caps Lock change case but do not indicate alternate-layout text.
+  // Compare Alt with the same case modifiers so shifted AltGr text stays layout-owned.
   private fun producesAlternateLayoutText(event: KeyEvent): Boolean {
-    val altOnly = event.metaState and KeyEvent.META_ALT_MASK
-    if (altOnly == 0) {
+    val metaWithoutCtrl = event.metaState and KeyEvent.META_CTRL_MASK.inv()
+    if ((metaWithoutCtrl and KeyEvent.META_ALT_MASK) == 0) {
       return false
     }
-    val alternateCharacter = event.getUnicodeChar(altOnly)
-    val unmodifiedCharacter = event.getUnicodeChar(0)
-    return alternateCharacter != 0 && alternateCharacter != unmodifiedCharacter
+    val metaWithoutCtrlOrAlt = metaWithoutCtrl and KeyEvent.META_ALT_MASK.inv()
+    val alternateCharacter = event.getUnicodeChar(metaWithoutCtrl)
+    val baseCharacter = event.getUnicodeChar(metaWithoutCtrlOrAlt)
+    return alternateCharacter != 0 && alternateCharacter != baseCharacter
   }
 
   private fun canonicalKey(event: KeyEvent): String? {

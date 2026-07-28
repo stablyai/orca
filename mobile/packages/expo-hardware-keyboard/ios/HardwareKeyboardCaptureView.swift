@@ -69,9 +69,8 @@ public class HardwareKeyboardCaptureView: ExpoView {
       UIKeyCommand.inputRightArrow,
       UIKeyCommand.inputEscape,
       "\t",
-      "\u{8}",
+      UIKeyCommand.inputDelete,
       "\u{7f}",
-      UIKeyCommand.inputDelete
     ]
 
     var homeEndPage: [String] = []
@@ -142,8 +141,8 @@ public class HardwareKeyboardCaptureView: ExpoView {
     case UIKeyCommand.inputRightArrow: return "ArrowRight"
     case UIKeyCommand.inputEscape: return "Escape"
     case "\t": return "Tab"
-    case "\u{8}", "\u{7f}": return "Backspace"
-    case UIKeyCommand.inputDelete: return "Delete"
+    case UIKeyCommand.inputDelete: return "Backspace"
+    case "\u{7f}": return "Delete"
     case UIKeyCommand.f1: return "F1"
     case UIKeyCommand.f2: return "F2"
     case UIKeyCommand.f3: return "F3"

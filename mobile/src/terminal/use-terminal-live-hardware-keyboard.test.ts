@@ -85,13 +85,14 @@ describe('useTerminalLiveHardwareKeyboard soft focus latch', () => {
     expect(blur).not.toHaveBeenCalled()
   })
 
-  it('Given a modal blurred input When it closes Then only a terminal switch restores silent focus', async () => {
+  it('Given a modal opens When it closes Then only a terminal switch restores silent focus', async () => {
     vi.useFakeTimers()
     const focus = vi.fn()
+    const blur = vi.fn()
     const liveInputRef: RefObject<TextInput | null> = {
       current: {
         focus,
-        blur: vi.fn(),
+        blur,
         isFocused: vi.fn(() => false)
       } as unknown as TextInput
     }
@@ -126,12 +127,14 @@ describe('useTerminalLiveHardwareKeyboard soft focus latch', () => {
       throw new Error('hardware keyboard hook did not render')
     }
     expect(api?.hardwareCaptureEnabled).toBe(false)
+    expect(blur).toHaveBeenCalledOnce()
 
     modalOpen = false
     act(() => renderer?.update(createElement(Harness)))
     await act(async () => vi.runAllTimersAsync())
     expect(api?.hardwareCaptureEnabled).toBe(true)
     expect(focus).not.toHaveBeenCalled()
+    expect(blur).toHaveBeenCalledOnce()
 
     focusScopeKey = 'terminal-b'
     act(() => renderer?.update(createElement(Harness)))

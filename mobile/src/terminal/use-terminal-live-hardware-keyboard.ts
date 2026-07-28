@@ -130,7 +130,8 @@ export function useTerminalLiveHardwareKeyboard({
     }
     clearTerminalLiveInputFocusTimer(liveInputFocusTimerRef)
     setWantSoftKeyboard(false)
-  }, [liveInputFocusTimerRef, modalOpen])
+    liveInputRef.current?.blur()
+  }, [liveInputFocusTimerRef, liveInputRef, modalOpen])
 
   const onHardwareKey = useCallback(
     (event: { nativeEvent: TerminalLiveHardwareKeyEvent }) => {

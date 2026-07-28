@@ -48,14 +48,21 @@ describe('terminal live hardware key native contract', () => {
   it('leaves Android AltGr printable input to TextInput and the active layout', () => {
     expect(androidSource).toContain('KeyEvent.META_ALT_RIGHT_ON')
     expect(androidSource).toContain('ctrl && !isAlternateLayoutPrintable')
-    expect(androidSource).toContain('event.getUnicodeChar(altOnly)')
+    expect(androidSource).toContain('event.getUnicodeChar(metaWithoutCtrl)')
   })
 
-  it('scopes Android alternate-layout detection to Alt so Shift/CapsLock cannot suppress Ctrl', () => {
-    // Full meta-state comparison made Shift/Caps Lock suppress Ctrl+letter.
-    expect(android).toContain('val altOnly = event.metaState and KeyEvent.META_ALT_MASK')
-    expect(android).toContain('if (altOnly == 0) { return false }')
-    expect(androidSource).not.toContain('KeyEvent.META_CTRL_MASK.inv()')
+  it('compares Android Alt text with the same Shift/Caps state', () => {
+    expect(android).toContain(
+      'val metaWithoutCtrl = event.metaState and KeyEvent.META_CTRL_MASK.inv()'
+    )
+    expect(android).toContain(
+      'if ((metaWithoutCtrl and KeyEvent.META_ALT_MASK) == 0) { return false }'
+    )
+    expect(android).toContain(
+      'val metaWithoutCtrlOrAlt = metaWithoutCtrl and KeyEvent.META_ALT_MASK.inv()'
+    )
+    expect(android).toContain('val alternateCharacter = event.getUnicodeChar(metaWithoutCtrl)')
+    expect(android).toContain('val baseCharacter = event.getUnicodeChar(metaWithoutCtrlOrAlt)')
   })
 
   it('keeps iOS Command input system-owned', () => {
@@ -76,6 +83,12 @@ describe('terminal live hardware key native contract', () => {
     expect(iosSource).not.toContain('UIKeyCommand(input: " ", modifierFlags: .control')
     // The handler must refuse Ctrl+Space even if UIKit supplies it.
     expect(ios).toContain('if sender.modifierFlags.contains(.control) && input == " " { return }')
+  })
+
+  it('keeps iOS Backspace and forward Delete distinct', () => {
+    expect(ios).toContain('case UIKeyCommand.inputDelete: return "Backspace"')
+    expect(ios).toContain('case "\\u{7f}": return "Delete"')
+    expect(ios).not.toContain('case "\\u{8}", "\\u{7f}": return "Backspace"')
   })
 
   it('builds the iOS key-command list once instead of per keystroke', () => {
