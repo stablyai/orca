@@ -59,6 +59,22 @@ describe('hookCwdContradictsWorktree', () => {
     expect(hookCwdContradictsWorktree(windowsWorktree, 'C:/Users/dev/agent')).toBe(true)
   })
 
+  it('resolves dot segments so a path cannot pose as being inside the worktree', () => {
+    // Why: `…/api/../agent` starts with the worktree path as plain text but resolves outside it.
+    expect(hookCwdContradictsWorktree(WORKTREE, '/Users/dev/projects/api/../agent')).toBe(true)
+    expect(
+      hookCwdContradictsWorktree(`${REPO}::C:\\Users\\dev\\api`, 'C:\\Users\\dev\\api\\..\\agent')
+    ).toBe(true)
+    // Dot segments that stay inside, or that only spell the worktree a longer way, are not conflicts.
+    expect(hookCwdContradictsWorktree(WORKTREE, '/Users/dev/projects/api/./src')).toBe(false)
+    expect(hookCwdContradictsWorktree(WORKTREE, '/Users/dev/projects/api/src/../lib')).toBe(false)
+    expect(
+      hookCwdContradictsWorktree(`${REPO}::/Users/dev/projects/x/../api`, '/Users/dev/projects/api')
+    ).toBe(false)
+    // Popping past the root lands on the root, which every worktree sits under.
+    expect(hookCwdContradictsWorktree(WORKTREE, '/../../..')).toBe(false)
+  })
+
   it('refuses to judge across notations a single host can express two ways', () => {
     // WSL reports the POSIX mount for a drive-rooted worktree, and UNC paths name the distro.
     expect(hookCwdContradictsWorktree(`${REPO}::C:\\Users\\dev\\api`, '/mnt/c/Users/dev/api')).toBe(

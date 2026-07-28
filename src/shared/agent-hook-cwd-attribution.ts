@@ -18,17 +18,35 @@ export function readHookPayloadCwd(hookPayload: unknown): string | undefined {
   return undefined
 }
 
+/** Resolve `.` and `..` lexically so a path can't pose as living under another. */
+function collapseDotSegments(absolutePath: string): string {
+  const driveRoot = DRIVE_ROOTED.test(absolutePath) ? absolutePath.slice(0, 2) : ''
+  const segments: string[] = []
+  for (const segment of absolutePath.slice(driveRoot.length).split('/')) {
+    if (segment === '' || segment === '.') {
+      continue
+    }
+    if (segment === '..') {
+      // Why: `/..` is the root itself, so an over-popping prefix must not escape it.
+      segments.pop()
+      continue
+    }
+    segments.push(segment)
+  }
+  return segments.length > 0 ? `${driveRoot}/${segments.join('/')}` : driveRoot || '/'
+}
+
+/** Reduce a path to a comparable form, or null when it has no root this can compare. */
 function normalizeComparablePath(raw: string): string | null {
-  const slashed = raw.trim().replace(/\\/g, '/')
-  const lowered = slashed.toLowerCase()
+  const lowered = raw.trim().replace(/\\/g, '/').toLowerCase()
   // Why: UNC (`//wsl$/…`) and relative paths have no comparable root — unknown, not conflicting.
   if (lowered.startsWith('//') || (!lowered.startsWith('/') && !DRIVE_ROOTED.test(lowered))) {
     return null
   }
-  const trimmed = lowered.replace(/\/+$/, '')
-  return trimmed.length > 0 ? trimmed : '/'
+  return collapseDotSegments(lowered)
 }
 
+/** True when `inner` is `outer` itself or sits beneath it. */
 function isSameOrInside(inner: string, outer: string): boolean {
   return inner === outer || inner.startsWith(outer === '/' ? '/' : `${outer}/`)
 }
