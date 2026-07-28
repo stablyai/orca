@@ -19,41 +19,24 @@ export function parseOllamaCloudFromPageText(text: string): ParsedOllamaCloudUsa
     return null
   }
 
-  const usageRe = /(\d+(?:\.\d+)?)%\s*used/gi
-  const usageMatches = [...text.matchAll(usageRe)]
+  // Why: ollama.com/settings renders usage as aria-label="Session usage X% used"
+  // and aria-label="Weekly usage X% used". Match the full label for reliable
+  // disambiguation instead of searching for bare percentages.
+  const sessionRe = /aria-label="Session usage\s+(\d+(?:\.\d+)?)%\s*used"/i
+  const weeklyRe = /aria-label="Weekly usage\s+(\d+(?:\.\d+)?)%\s*used"/i
 
-  if (usageMatches.length === 0) {
+  const sessionMatch = text.match(sessionRe)
+  const weeklyMatch = text.match(weeklyRe)
+
+  if (!sessionMatch && !weeklyMatch) {
     return null
   }
 
-  let sessionPct: number | undefined
-  let weeklyPct: number | undefined
+  const sessionPct = sessionMatch ? Number.parseFloat(sessionMatch[1]) : 0
+  const weeklyPct = weeklyMatch ? Number.parseFloat(weeklyMatch[1]) : 0
 
-  for (const match of usageMatches) {
-    const pct = Number.parseFloat(match[1])
-    if (!Number.isFinite(pct)) continue
-
-    const pos = match.index!
-    const context = text.slice(Math.max(0, pos - 500), pos).toLowerCase()
-
-    if (context.includes('session')) {
-      sessionPct = pct
-    } else if (context.includes('weekly')) {
-      weeklyPct = pct
-    }
-  }
-
-  // Fallback to positional if context matching failed
-  if (sessionPct === undefined || weeklyPct === undefined) {
-    const uniquePcts = [
-      ...new Set(
-        usageMatches
-          .map((m) => Number.parseFloat(m[1]))
-          .filter((n) => !Number.isNaN(n))
-      )
-    ]
-    if (sessionPct === undefined) sessionPct = uniquePcts[0] ?? 0
-    if (weeklyPct === undefined) weeklyPct = uniquePcts[1] ?? uniquePcts[0] ?? 0
+  if (!Number.isFinite(sessionPct) || !Number.isFinite(weeklyPct)) {
+    return null
   }
 
   // Parse reset times from data-time attributes on local-time elements
@@ -75,7 +58,9 @@ export function parseOllamaCloudFromPageText(text: string): ParsedOllamaCloudUsa
 function isoToSecondsFromNow(iso: string): number | null {
   try {
     const target = new Date(iso).getTime()
-    if (Number.isNaN(target)) return null
+    if (Number.isNaN(target)) {
+      return null
+    }
     const diff = Math.max(0, target - Date.now())
     return Math.round(diff / 1000)
   } catch {

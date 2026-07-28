@@ -25,11 +25,9 @@ export function normalizeCookieInput(raw: string): string {
   if (trimmed.includes(';') || /^__Secure-session=/i.test(trimmed)) {
     return trimmed
   }
-  // Only wrap if it looks like a reasonable bare token.
-  if (/^[a-zA-Z0-9.\\-_]+$/.test(trimmed)) {
-    return `__Secure-session=${trimmed}`
-  }
-  return trimmed
+  // Wrap any non-empty value with __Secure-session= — the user may have
+  // pasted just the token, the full header, or even JSON format.
+  return `__Secure-session=${trimmed}`
 }
 
 function parseAuthCookies(raw: string): { name: string; value: string }[] {
@@ -87,7 +85,8 @@ export async function fetchOllamaCloudRateLimits(
       session: null,
       weekly: null,
       updatedAt: Date.now(),
-      error: 'No __Secure-session cookie found — paste the full Cookie header from ollama.com DevTools',
+      error:
+        'No __Secure-session cookie found — paste the full Cookie header from ollama.com DevTools',
       status: 'error'
     }
   }
