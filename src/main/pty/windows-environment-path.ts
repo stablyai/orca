@@ -93,11 +93,11 @@ function cachePersistedWindowsPathSegments(segments: string[], failedReads: numb
 function readRegistryPathAsync(
   run: ExecFile,
   executable: string,
-  key: string,
-  valueName: string,
+  registryValue: readonly [key: string, valueName: string],
   env: NodeJS.ProcessEnv,
   pathDelimiter: string
 ): Promise<RegistryPathRead> {
+  const [key, valueName] = registryValue
   return new Promise((resolve) => {
     run(
       executable,
@@ -211,8 +211,8 @@ export async function readPersistedWindowsPathSegmentsAsync(
   const pathDelimiter = getPathDelimiter(platform)
   const executable = getRegExePath(env)
   const refresh = Promise.all(
-    WINDOWS_PATH_REGISTRY_KEYS.map(([key, valueName]) =>
-      readRegistryPathAsync(run, executable, key, valueName, env, pathDelimiter)
+    WINDOWS_PATH_REGISTRY_KEYS.map((registryValue) =>
+      readRegistryPathAsync(run, executable, registryValue, env, pathDelimiter)
     )
   ).then((reads) => {
     const segments = reads.flatMap((read) => read.segments)
