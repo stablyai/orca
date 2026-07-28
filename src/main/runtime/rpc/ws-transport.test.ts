@@ -531,7 +531,13 @@ describe('WebSocketTransport', () => {
     const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {})
     const tryListenSpy = vi.spyOn(privateTransport, 'tryListen')
     tryListenSpy
-      .mockRejectedValueOnce(Object.assign(new Error('listen EACCES'), { code: 'EACCES' }))
+      .mockRejectedValueOnce(
+        Object.assign(new Error('listen EACCES'), {
+          code: 'EACCES',
+          syscall: 'listen',
+          port: 6769
+        })
+      )
       .mockImplementation((port) => originalTryListen(port))
 
     try {
@@ -711,17 +717,24 @@ describe('WebSocketTransport', () => {
       expect(transport.resolvedPort).toBe(preferredPort)
     })
 
-    it('still throws when the preferred port fails with a non-EADDRINUSE error', async () => {
+    it('still throws when EACCES did not come from listening on the preferred port', async () => {
+      const preferredPort = await reserveFreePort()
       const transport = new WebSocketTransport({
         host: '127.0.0.1',
-        port: await reserveFreePort()
+        port: preferredPort
       })
       transports.push(transport)
       const withListen = transport as unknown as { tryListen(port: number): Promise<void> }
       withListen.tryListen = () =>
-        Promise.reject(Object.assign(new Error('listen EACCES'), { code: 'EACCES' }))
+        Promise.reject(
+          Object.assign(new Error('open EACCES'), {
+            code: 'EACCES',
+            syscall: 'open',
+            port: preferredPort
+          })
+        )
 
-      await expect(transport.start()).rejects.toThrow('listen EACCES')
+      await expect(transport.start()).rejects.toThrow('open EACCES')
     })
 
     it('retries the persisted fallback port before an OS-assigned one', async () => {

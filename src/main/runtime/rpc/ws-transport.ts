@@ -148,10 +148,10 @@ export class WebSocketTransport implements RpcTransport {
         await this.tryListen(port)
         return
       } catch (error: unknown) {
-        // Why: a persisted fallback may fail for any reason, while configured ports fall through only when occupied or Windows-reserved.
+        // Why: a persisted fallback may fail for any reason, while configured ports fall through only when their listen is occupied or denied.
         if (
           port !== persistedFallbackPort &&
-          (!isPortListenFallbackError(error) || port === 0)
+          (!isPortListenFallbackError(error, port) || port === 0)
         ) {
           throw error
         }
@@ -330,10 +330,18 @@ export class WebSocketTransport implements RpcTransport {
   }
 }
 
-function isPortListenFallbackError(error: unknown): boolean {
+function isPortListenFallbackError(error: unknown, port: number): boolean {
+  if (!(error instanceof Error) || !('code' in error)) {
+    return false
+  }
+  if (error.code === 'EADDRINUSE') {
+    return true
+  }
   return (
-    error instanceof Error &&
-    'code' in error &&
-    (error.code === 'EADDRINUSE' || error.code === 'EACCES')
+    error.code === 'EACCES' &&
+    'syscall' in error &&
+    error.syscall === 'listen' &&
+    'port' in error &&
+    error.port === port
   )
 }
