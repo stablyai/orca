@@ -163,6 +163,23 @@ describe('useAgentRowConversationName', () => {
     expect(useAgentRowConversationName(paneB)).toBe('Redis cache')
   })
 
+  it('yields no name until an agent sets a real title, so fresh rows keep their own prompt', () => {
+    // Why: before the first turn both panes carry the identity echo, which is
+    // rejected — rows fall back to their per-pane prompt and look correct. The
+    // shared-name symptom only appears once a real title reaches the tab.
+    storeState.current = {
+      settings: {},
+      tabsByWorktree: {
+        'wt-1': [{ id: 'tab-1', worktreeId: 'wt-1', customTitle: null, title: '✳ Claude Code' }]
+      }
+    }
+    const freshPane = makeAgent({
+      tab: { id: 'tab-1', worktreeId: 'wt-1', customTitle: null, title: '✳ Claude Code' },
+      entry: { prompt: 'p', terminalTitle: '✳ Claude Code' }
+    } as Partial<DashboardAgentRow>)
+    expect(useAgentRowConversationName(freshPane)).toBeNull()
+  })
+
   it('honors the generated-titles setting for generated names', () => {
     const agent = makeAgent({
       tab: { customTitle: null, title: '', generatedTitle: 'Fix intake flow' }
