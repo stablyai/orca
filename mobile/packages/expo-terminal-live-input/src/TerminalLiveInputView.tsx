@@ -165,7 +165,9 @@ export const TerminalLiveInputView = forwardRef<
         onCommittedText?.(text)
       }}
       onKeyPress={(event: NativeSyntheticEvent<TextInputKeyPressEventData>) => {
-        onKeyPress?.(event as TerminalLiveInputKeyPressEvent)
+        if (event.nativeEvent.key !== 'Enter') {
+          onKeyPress?.(event as TerminalLiveInputKeyPressEvent)
+        }
       }}
       onSubmitEditing={() => {
         onTerminalEnter?.()
