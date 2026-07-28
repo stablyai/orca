@@ -227,9 +227,7 @@ import {
   setRegularTerminalInputFocusAttribute
 } from './regular-terminal-focus-ownership'
 import { refreshTerminalImeInputContext } from './terminal-ime-input-context-refresh'
-import TerminalWebviewHost, {
-  isTerminalProcessIsolationEnabled
-} from './TerminalWebviewHost'
+import TerminalWebviewHost, { isTerminalProcessIsolationEnabled } from './TerminalWebviewHost'
 
 type TerminalPaneProps = {
   tabId: string
@@ -311,6 +309,9 @@ export default function TerminalPane(props: TerminalPaneProps): React.JSX.Elemen
         tabId={props.tabId}
         worktreeId={props.worktreeId}
         cwd={props.cwd}
+        isActive={props.isActive}
+        isVisible={props.isVisible ?? true}
+        isWorktreeActive={props.isWorktreeActive ?? props.isVisible ?? true}
         onPtyExit={props.onPtyExit}
       />
     )

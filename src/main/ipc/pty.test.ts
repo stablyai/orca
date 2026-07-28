@@ -5777,6 +5777,62 @@ describe('registerPtyHandlers', () => {
     }
   })
 
+  it('routes daemon output emitted before spawn resolves to the isolated renderer', async () => {
+    vi.useFakeTimers()
+    const runtime = {
+      setPtyController: vi.fn(),
+      registerPty: vi.fn(),
+      noteTerminalSpawnCommand: vi.fn(),
+      onPtySpawned: vi.fn(),
+      onPtyExit: vi.fn(),
+      onPtyData: vi.fn(() => 1),
+      createPreAllocatedTerminalHandle: vi.fn(() => 'terminal-handle-isolated'),
+      registerPreAllocatedHandleForPty: vi.fn()
+    }
+    const isolatedRenderer = {
+      hostWebContents: mainWindow.webContents,
+      isDestroyed: vi.fn(() => false),
+      once: vi.fn(),
+      send: vi.fn()
+    }
+    const spawnBarrier = makeDeferred()
+
+    try {
+      const daemon = installObservableDaemonTestProvider()
+      daemon.spawn.mockImplementation(async (options: { sessionId?: string }) => {
+        daemon.emitData(options.sessionId ?? 'daemon-pty', 'early output')
+        await spawnBarrier.promise
+        return { id: options.sessionId ?? 'daemon-pty' }
+      })
+      registerPtyHandlers(mainWindow as never, runtime as never)
+
+      const pendingSpawn = handlers.get('pty:spawn')!(
+        { sender: isolatedRenderer },
+        {
+          cols: 80,
+          rows: 24,
+          sessionId: 'isolated-daemon-session'
+        }
+      ) as Promise<{ id: string }>
+      await vi.advanceTimersByTimeAsync(50)
+      spawnBarrier.resolve()
+      await pendingSpawn
+
+      expect(isolatedRenderer.send).toHaveBeenCalledWith('pty:data', {
+        id: 'isolated-daemon-session',
+        data: 'early output',
+        seq: 'early output'.length,
+        rawLength: 'early output'.length
+      })
+      expect(mainWindow.webContents.send).not.toHaveBeenCalledWith(
+        'pty:data',
+        expect.objectContaining({ id: 'isolated-daemon-session' })
+      )
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
   // Why: the cap/flag must never fire in the common case (renderer keeps up), so small output carries no droppedBacklog.
   it('does not flag droppedBacklog for ordinary small output under the cap', async () => {
     vi.useFakeTimers()

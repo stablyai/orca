@@ -22,11 +22,22 @@ type TerminalWebviewHostProps = {
   tabId: string
   worktreeId: string
   cwd?: string
+  isActive: boolean
+  isVisible: boolean
+  isWorktreeActive: boolean
   onPtyExit: (ptyId: string) => void
 }
 
 export function isTerminalProcessIsolationEnabled(): boolean {
   return window.api?.pty?.processIsolationEnabled === true
+}
+
+export function shouldFocusTerminalWebview(args: {
+  isActive: boolean
+  isVisible: boolean
+  isWorktreeActive: boolean
+}): boolean {
+  return args.isActive && args.isVisible && args.isWorktreeActive
 }
 
 type PendingStartup = AppState['pendingStartupByTabId'][string]
@@ -69,8 +80,16 @@ function buildTerminalHostUrl(args: {
   url.searchParams.set('tabId', args.tabId)
   url.searchParams.set('leafId', args.leafId)
   if (args.startup) {
-    const { command, env, envToDelete, launchConfig, resumeProviderSession, launchToken, launchAgent, startupCommandDelivery } =
-      args.startup
+    const {
+      command,
+      env,
+      envToDelete,
+      launchConfig,
+      resumeProviderSession,
+      launchToken,
+      launchAgent,
+      startupCommandDelivery
+    } = args.startup
     url.searchParams.set(
       'startup',
       JSON.stringify({
@@ -119,6 +138,9 @@ export default function TerminalWebviewHost({
   tabId,
   worktreeId,
   cwd,
+  isActive,
+  isVisible,
+  isWorktreeActive,
   onPtyExit
 }: TerminalWebviewHostProps): React.JSX.Element {
   const containerRef = useRef<HTMLDivElement>(null)
@@ -129,6 +151,8 @@ export default function TerminalWebviewHost({
   const consumeTabStartupCommand = useAppStore((store) => store.consumeTabStartupCommand)
   const onPtyExitRef = useRef(onPtyExit)
   onPtyExitRef.current = onPtyExit
+  const focusStateRef = useRef({ isActive, isVisible, isWorktreeActive })
+  focusStateRef.current = { isActive, isVisible, isWorktreeActive }
 
   useEffect(() => {
     if (startup) {
@@ -193,9 +217,9 @@ export default function TerminalWebviewHost({
 
     const handleDomReady = (): void => {
       domReady = true
-      // Why: the guest's xterm can only receive keys once the webview element
-      // itself has focus; hand it over as soon as the guest page is ready.
-      webview.focus()
+      if (shouldFocusTerminalWebview(focusStateRef.current)) {
+        webview.focus()
+      }
       // Baseline so only future settings changes are pushed as diffs.
       lastSentAppearance = JSON.stringify(composeAppearance(useAppStore.getState().settings))
     }

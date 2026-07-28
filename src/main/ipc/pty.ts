@@ -2368,14 +2368,17 @@ export function registerPtyHandlers(
   function adoptIsolatedPtyRenderer(
     sender: Electron.WebContents | null | undefined,
     id: string
-  ): void {
+  ): boolean {
     // Only webview guests hosted by the main window are isolated terminal renderers.
     if (
       !sender ||
       sender === mainWindow.webContents ||
       sender.hostWebContents !== mainWindow.webContents
     ) {
-      return
+      return false
+    }
+    if (isolatedPtyRenderers.get(id) === sender) {
+      return true
     }
     isolatedPtyRenderers.set(id, sender)
     sender.once('destroyed', () => {
@@ -2383,6 +2386,7 @@ export function registerPtyHandlers(
         isolatedPtyRenderers.delete(id)
       }
     })
+    return true
   }
 
   function getPtyRendererWebContents(id: string): Electron.WebContents {
@@ -4832,6 +4836,7 @@ export function registerPtyHandlers(
       let result: PtySpawnResult
       let rejectedRegistrationCandidate: PtySpawnResult | null = null
       let pendingRegistrationPtyId: string | null = null
+      let pendingIsolatedPtyRendererId: string | null = null
       let preparedProvisionalExecutionContext = false
       let releaseWorktreeSpawn: (() => void) | undefined
       try {
@@ -4842,6 +4847,9 @@ export function registerPtyHandlers(
           }
           spawnTiming.mark('options')
           const expectedPtyId = effectiveSessionAppId ?? effectiveSessionId
+          if (expectedPtyId && adoptIsolatedPtyRenderer(event?.sender, expectedPtyId)) {
+            pendingIsolatedPtyRendererId = expectedPtyId
+          }
           if (expectedPtyId) {
             runtime?.beginPtyRegistration?.(expectedPtyId)
             pendingRegistrationPtyId = expectedPtyId
@@ -4857,6 +4865,13 @@ export function registerPtyHandlers(
             ? (runtime?.getPtyOutputSequence?.(expectedPtyId) ?? 0)
             : 0
           result = await provider.spawn(spawnOptions)
+          if (pendingIsolatedPtyRendererId && pendingIsolatedPtyRendererId !== result.id) {
+            if (isolatedPtyRenderers.get(pendingIsolatedPtyRendererId) === event?.sender) {
+              isolatedPtyRenderers.delete(pendingIsolatedPtyRendererId)
+            }
+            adoptIsolatedPtyRenderer(event?.sender, result.id)
+            pendingIsolatedPtyRendererId = result.id
+          }
           rejectedRegistrationCandidate = result
           if (pendingRegistrationPtyId !== result.id) {
             if (pendingRegistrationPtyId) {
@@ -4884,6 +4899,12 @@ export function registerPtyHandlers(
           )
           spawnTiming.mark('provider_spawn')
         } catch (err) {
+          if (
+            pendingIsolatedPtyRendererId &&
+            isolatedPtyRenderers.get(pendingIsolatedPtyRendererId) === event?.sender
+          ) {
+            isolatedPtyRenderers.delete(pendingIsolatedPtyRendererId)
+          }
           if ((isMintedSessionId || preparedProvisionalExecutionContext) && effectiveSessionAppId) {
             runtime?.preparePtyExecutionContext?.(effectiveSessionAppId, null, {
               resetIncarnation: true
