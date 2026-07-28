@@ -17,6 +17,7 @@ import { resolveSshHostRemoval } from '../sidebar/ssh-host-remove-resolution'
 import { getAllWorktreesFromState } from '@/store/selectors'
 import { toSshExecutionHostId } from '../../../../shared/execution-host'
 import { translate } from '@/i18n/i18n'
+import { reportSshConfigImport, reportSshConfigSyncTruncation } from './ssh-config-import-report'
 import { useSshAddTargetIntent } from './use-ssh-add-target-intent'
 export { getSshPaneSearchEntries } from './ssh-search'
 
@@ -75,6 +76,7 @@ export function SshPane({ addTargetIntentSignal }: SshPaneProps): React.JSX.Elem
       try {
         const result = await window.api.ssh.importConfig()
         useAppStore.getState().recordSshRepoReadoptions(result.repoReadoptions)
+        reportSshConfigSyncTruncation(result)
       } catch {
         // Surfaced on demand via the explicit Import button; ignore here.
       }
@@ -306,17 +308,7 @@ export function SshPane({ addTargetIntentSignal }: SshPaneProps): React.JSX.Elem
       useAppStore.getState().recordSshRepoReadoptions(result.repoReadoptions)
       recordFeatureInteraction('ssh')
       if (mountedRef.current) {
-        if (result.targets.length === 0) {
-          toast('~/.ssh/config already in sync')
-        } else {
-          toast.success(
-            translate(
-              'auto.components.settings.SshPane.f8050f6307',
-              'Synced {{value0}} server{{value1}}',
-              { value0: result.targets.length, value1: result.targets.length > 1 ? 's' : '' }
-            )
-          )
-        }
+        reportSshConfigImport(result)
       }
       await loadTargets()
     } catch (err) {

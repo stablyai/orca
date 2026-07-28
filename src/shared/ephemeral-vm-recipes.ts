@@ -6,16 +6,6 @@ import {
   MIN_SSH_RELAY_GRACE_PERIOD_SECONDS
 } from './ssh-types'
 import { assertJsonTextStructureWithinLimits } from './memory-safety/json-text-structure-limit'
-// Why: ephemeral-vm-recipe-doctor imports Node's fs/path, so it must NOT be
-// re-exported through this barrel — the renderer/web-client imports this module
-// and would otherwise pull Node built-ins into the browser bundle (build fails).
-// Node callers import doctorEphemeralVmRecipe directly from the doctor module.
-export {
-  getEphemeralVmRecipeResultWarnings,
-  redactEphemeralVmRecipeDiagnosticText,
-  redactEphemeralVmRecipeResultForDiagnostics
-} from './ephemeral-vm-recipe-diagnostics'
-export type { EphemeralVmRecipeResultWarning } from './ephemeral-vm-recipe-diagnostics'
 
 const JsonValueSchema: z.ZodType<JsonValue> = z.lazy(() =>
   z.union([

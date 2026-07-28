@@ -205,7 +205,10 @@ vi.mock('../codex/codex-pane-account-registry', () => ({
   recordCodexPaneAccount: recordCodexPaneAccountMock,
   forgetCodexPaneAccount: forgetCodexPaneAccountMock
 }))
-import { LocalPtyProvider } from '../providers/local-pty-provider'
+import {
+  LocalPtyProvider,
+  _resetLocalPtyProviderStateForTest
+} from '../providers/local-pty-provider'
 import { makePaneKey } from '../../shared/stable-pane-id'
 import { SETUP_AGENT_SEQUENCE_STARTUP_COMMAND_ENV } from '../../shared/setup-agent-sequencing'
 import {
@@ -228,7 +231,6 @@ import {
   restorePtyIncarnation,
   type PrepareCodexSessionResume
 } from './pty'
-import { _resetLocalPtyProviderStateForTest } from '../providers/local-pty-provider'
 import { resetMacosLoginShellPreflightForTests } from '../providers/macos-tcc-login-shell'
 import {
   _resetHiddenRendererPtyDeliveryGateForTest,

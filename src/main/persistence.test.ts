@@ -47,7 +47,9 @@ const testState = { dir: '' }
 
 // Stub the ~/.ssh/config parser so the SSH-import test drives the real Store with deterministic hosts, not the operator's actual ~/.ssh/config.
 const { loadUserSshConfigMock, sshConfigHostsToTargetsMock } = vi.hoisted(() => ({
-  loadUserSshConfigMock: vi.fn(),
+  loadUserSshConfigMock: vi.fn<() => { hosts: { host: string }[]; truncatedBy: string[] | null }>(
+    () => ({ hosts: [], truncatedBy: null })
+  ),
   sshConfigHostsToTargetsMock: vi.fn()
 }))
 
@@ -1549,7 +1551,7 @@ describe('Store', () => {
   })
 
   it('upserts ~/.ssh/config through the real store: rotated port updates in place and persists', async () => {
-    loadUserSshConfigMock.mockReturnValue([{ host: 'cluster' }])
+    loadUserSshConfigMock.mockReturnValue({ hosts: [{ host: 'cluster' }], truncatedBy: null })
     const candidate = (port: number, id: string) => [
       { id, label: 'cluster', configHost: 'cluster', host: '10.0.0.5', port, username: 'dev' }
     ]

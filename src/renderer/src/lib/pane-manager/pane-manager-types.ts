@@ -1,5 +1,4 @@
-import type { IDisposable, IMarker, Terminal } from '@xterm/xterm'
-import type { ITerminalOptions } from '@xterm/xterm'
+import type { IDisposable, IMarker, Terminal, ITerminalOptions } from '@xterm/xterm'
 import type { FitAddon } from '@xterm/addon-fit'
 import type { LigaturesAddon } from '@xterm/addon-ligatures'
 import type { SearchAddon } from '@xterm/addon-search'

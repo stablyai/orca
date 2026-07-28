@@ -3,6 +3,7 @@ import { join } from 'node:path'
 import { homedir } from 'node:os'
 import type { SshTarget } from '../../shared/ssh-types'
 import { expandSshConfigIncludes } from './ssh-config-include-expander'
+import type { SshConfigTruncationReason } from './ssh-config-expansion-budget'
 import { resolveSshConfigHomePath } from './ssh-config-path-expansion'
 export { parseSshGOutput, resolveWithSshG, type SshResolvedConfig } from './ssh-g-config-resolution'
 
@@ -213,19 +214,29 @@ function splitOpenSshArguments(input: string): string[] {
   return args
 }
 
-/** Read and parse the user's ~/.ssh/config file. Returns empty array if not found. */
-export function loadUserSshConfig(): SshConfigHost[] {
+export type SshConfigLoadResult = {
+  hosts: SshConfigHost[]
+  /**
+   * Non-null when an include ceiling dropped part of the configuration, so the
+   * hosts below are a prefix rather than the whole file. Callers must surface
+   * this — a silently partial import looks identical to a complete one.
+   */
+  truncatedBy: SshConfigTruncationReason[] | null
+}
+
+/** Read and parse the user's ~/.ssh/config file. Returns no hosts if not found. */
+export function loadUserSshConfig(): SshConfigLoadResult {
   const configPath = join(homedir(), '.ssh', 'config')
   if (!existsSync(configPath)) {
-    return []
+    return { hosts: [], truncatedBy: null }
   }
 
   try {
-    const content = expandSshConfigIncludes(configPath)
-    return parseSshConfig(content)
+    const expansion = expandSshConfigIncludes(configPath)
+    return { hosts: parseSshConfig(expansion.content), truncatedBy: expansion.truncatedBy }
   } catch {
     console.warn(`[ssh] Failed to read SSH config at ${configPath}`)
-    return []
+    return { hosts: [], truncatedBy: null }
   }
 }
 

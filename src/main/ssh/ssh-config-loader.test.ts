@@ -66,7 +66,7 @@ describe('loadUserSshConfig', () => {
       'Host included\n  HostName included.example.com\n  User deploy\n'
     )
 
-    expect(loadUserSshConfig()).toEqual([
+    expect(loadUserSshConfig().hosts).toEqual([
       {
         host: 'included',
         hostname: 'included.example.com',
@@ -89,7 +89,7 @@ describe('loadUserSshConfig', () => {
     writeFile(home, '.ssh/extras/dev.conf', 'Host dev\n  HostName dev.example.com\n')
     writeFile(home, '.ssh/quoted configs/team ssh.conf', 'Host team\n  HostName team.example.com\n')
 
-    expect(loadUserSshConfig().map((host) => host.host)).toEqual(['orb', 'dev', 'team'])
+    expect(loadUserSshConfig().hosts.map((host) => host.host)).toEqual(['orb', 'dev', 'team'])
   })
 
   it('expands glob includes in lexical order', () => {
@@ -98,7 +98,7 @@ describe('loadUserSshConfig', () => {
     writeFile(home, '.ssh/conf.d/20-second.conf', 'Host second\n  HostName second.example.com\n')
     writeFile(home, '.ssh/conf.d/10-first.conf', 'Host first\n  HostName first.example.com\n')
 
-    expect(loadUserSshConfig().map((host) => host.host)).toEqual(['first', 'second'])
+    expect(loadUserSshConfig().hosts.map((host) => host.host)).toEqual(['first', 'second'])
   })
 
   it('supports relative includes, ${VAR}, and local % tokens', () => {
@@ -120,7 +120,7 @@ describe('loadUserSshConfig', () => {
     writeFile(home, '.ssh/testuser/1001.conf', 'Host by-user-id\n  HostName token.example.com\n')
     writeFile(home, '.ssh/%literal.conf', 'Host literal\n  HostName literal.example.com\n')
 
-    expect(loadUserSshConfig().map((host) => host.host)).toEqual([
+    expect(loadUserSshConfig().hosts.map((host) => host.host)).toEqual([
       'relative',
       'env',
       'from-home',
@@ -151,7 +151,7 @@ describe('loadUserSshConfig', () => {
       'Host matched\n  HostName matched.example.com\n'
     )
 
-    expect(loadUserSshConfig().map((host) => host.host)).toEqual([
+    expect(loadUserSshConfig().hosts.map((host) => host.host)).toEqual([
       'base',
       'inner',
       'matched',
@@ -168,7 +168,7 @@ describe('loadUserSshConfig', () => {
     )
     writeFile(home, '.ssh/large.conf', '\n'.repeat(LARGE_INCLUDE_LINE_COUNT))
 
-    expect(loadUserSshConfig()).toEqual([
+    expect(loadUserSshConfig().hosts).toEqual([
       {
         host: 'after',
         hostname: 'after.example.com'
@@ -185,7 +185,7 @@ describe('loadUserSshConfig', () => {
     )
     writeFile(home, '.ssh/valid.conf', 'Host valid\n  HostName valid.example.com\n')
 
-    expect(loadUserSshConfig().map((host) => host.host)).toEqual(['valid'])
+    expect(loadUserSshConfig().hosts.map((host) => host.host)).toEqual(['valid'])
   })
 
   it('terminates recursive includes and re-evaluates repeated includes', () => {
@@ -203,7 +203,7 @@ describe('loadUserSshConfig', () => {
       'Include recursive.conf\nHost nested\n  HostName nested.example.com\n'
     )
 
-    expect(loadUserSshConfig().map((host) => host.host)).toEqual([
+    expect(loadUserSshConfig().hosts.map((host) => host.host)).toEqual([
       'shared',
       'shared',
       'nested',
@@ -213,6 +213,6 @@ describe('loadUserSshConfig', () => {
 
   it('returns an empty array when the user config does not exist', () => {
     makeHome()
-    expect(loadUserSshConfig()).toEqual([])
+    expect(loadUserSshConfig().hosts).toEqual([])
   })
 })

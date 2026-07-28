@@ -1,7 +1,6 @@
 // @vitest-environment happy-dom
 
-import React, { type ReactNode } from 'react'
-import { act } from 'react'
+import React, { type ReactNode, act } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { AgentSessionContinuationRequest } from '@/lib/agent-session-continuation'

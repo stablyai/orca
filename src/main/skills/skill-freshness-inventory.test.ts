@@ -58,6 +58,21 @@ async function fixture() {
     ...snapshots[1]
   }
   await Promise.all([
+    mkdir(join(homeDir, '.agents'), { recursive: true }).then(() =>
+      writeFile(
+        join(homeDir, '.agents', '.skill-lock.json'),
+        `${JSON.stringify({
+          version: 3,
+          skills: {
+            'orca-cli': {
+              skillFolderHash: 'tracked-old-hash',
+              skillPath: 'skills/orca-cli/SKILL.md',
+              source: 'stablyai/orca'
+            }
+          }
+        })}\n`
+      )
+    ),
     writeFile(
       join(skillResourceRoot, 'current-manifest.json'),
       `${JSON.stringify({ schemaVersion: 2, skills: [current] }, null, 2)}\n`
@@ -119,6 +134,26 @@ describe('read-only skill freshness inventory', () => {
     expect(inventory.installations.map((entry) => entry.status)).toEqual(['outdated'])
     expect(inventory.installations[0]?.installedAppVersion).toBe('1.0.0')
     expect(inventory.eligibleUpdateNames).toEqual(['orca-cli'])
+  })
+
+  it('does not offer an older copied bundle the external updater has never registered (#10791)', async () => {
+    const test = await fixture()
+    await test.writeSkill(join(test.homeDir, '.agents', 'skills'), test.oldMarkdown)
+    await rm(join(test.homeDir, '.agents', '.skill-lock.json'))
+
+    const inventory = await inventorySkillFreshness({
+      currentAppVersion: '2.0.0',
+      homeDir: test.homeDir,
+      repos: [],
+      resourceRoot: test.resourceRoot,
+      stateHome: null
+    })
+
+    expect(inventory.installations[0]).toMatchObject({
+      topology: 'canonical-copy',
+      status: 'outdated'
+    })
+    expect(inventory.eligibleUpdateNames).toEqual([])
   })
 
   it('labels newer known and unrecognized bytes honestly without calling them modified', async () => {

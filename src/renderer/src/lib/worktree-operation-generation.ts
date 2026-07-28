@@ -1,6 +1,8 @@
 import { parseExecutionHostId } from '../../../shared/execution-host'
-import { getEnvironmentSshStateGeneration } from '@/store/slices/runtime-environment-ssh'
-import { getEnvironmentSshTargetConnectionGeneration } from '@/store/slices/runtime-environment-ssh'
+import {
+  getEnvironmentSshStateGeneration,
+  getEnvironmentSshTargetConnectionGeneration
+} from '@/store/slices/runtime-environment-ssh'
 import { getLocalSshTargetConnectionGeneration } from '@/store/slices/ssh'
 import { getRuntimeEnvironmentConnectionGeneration } from '@/store/slices/runtime-status'
 import { getRuntimeEnvironmentRevision } from '@/runtime/runtime-environment-revision'

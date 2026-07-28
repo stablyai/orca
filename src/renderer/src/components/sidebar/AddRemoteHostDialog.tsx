@@ -10,6 +10,7 @@ import {
 } from '@/components/ui/dialog'
 import { Button } from '@/components/ui/button'
 import { translate } from '@/i18n/i18n'
+import { getSshConfigImportOutcome } from '@/lib/ssh-config-import-truncation-notice'
 import { useAppStore } from '@/store'
 import {
   EMPTY_FORM,
@@ -151,7 +152,12 @@ export function AddRemoteHostDialog({
       recordSshRepoReadoptions(result.repoReadoptions)
       await refreshSshTargetMetadata()
       recordFeatureInteraction('ssh')
-      if (synced.length === 0) {
+      // Why: an include ceiling makes the import partial. Warn instead of reporting
+      // success, and keep the dialog open so the user can still add the missing host.
+      const outcome = getSshConfigImportOutcome(result)
+      if (outcome.kind === 'truncated') {
+        toast.warning(outcome.message)
+      } else if (outcome.kind === 'in-sync') {
         toast(
           translate(
             'auto.components.sidebar.AddRemoteHostDialog.sshImportAlreadySynced',

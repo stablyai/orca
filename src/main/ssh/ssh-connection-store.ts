@@ -2,6 +2,7 @@ import type { Store } from '../persistence'
 import type { SshRepoReadoption, SshTarget } from '../../shared/ssh-types'
 import { RUNTIME_OWNED_SSH_TARGET_ID_PREFIX } from '../../shared/execution-host'
 import { loadUserSshConfig, sshConfigHostsToTargets } from './ssh-config-parser'
+import type { SshConfigTruncationReason } from './ssh-config-expansion-budget'
 import {
   buildRemovedSshTargetTombstone,
   readoptOrphanedWorkspacesForTarget
@@ -51,6 +52,9 @@ export class SshConnectionStore {
 
   /** Exact migrations from the most recent add/import operation. */
   lastRepoReadoptions: SshRepoReadoption[] = []
+
+  /** Ceilings that dropped configuration during the most recent config import. */
+  lastConfigTruncation: SshConfigTruncationReason[] | null = null
 
   upsertRuntimeOwnedTarget(
     runtimeId: string,
@@ -127,7 +131,11 @@ export class SshConnectionStore {
       this.store.clearDeletedSshConfigAliases()
     }
     const deletedAliases = new Set(this.store.getDeletedSshConfigAliases())
-    const configHosts = loadUserSshConfig()
+    const { hosts: configHosts, truncatedBy } = loadUserSshConfig()
+    // Why: the include ceilings drop configuration silently — the hosts above are
+    // a prefix, so a host defined in a dropped include simply never appears. Carry
+    // the reason out so the import surface can say the result is incomplete.
+    this.lastConfigTruncation = truncatedBy
     const existingTargets = this.store.getSshTargets()
     // Map config-managed targets (and legacy targets that strongly look like
     // prior imports) by their config alias so a repeat import reconciles instead

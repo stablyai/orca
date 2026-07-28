@@ -3,7 +3,8 @@ import { ipcMain, powerMonitor, type BrowserWindow } from 'electron'
 import { appendFileSync } from 'node:fs'
 import type { Store } from '../persistence'
 import { SshConnectionStore } from '../ssh/ssh-connection-store'
-import { SshConnectionManager, type SshConnectionCallbacks } from '../ssh/ssh-connection'
+import type { SshConnectionCallbacks } from '../ssh/ssh-connection'
+import { SshConnectionManager } from '../ssh/ssh-connection-manager'
 import type { SshChannelMultiplexer } from '../ssh/ssh-channel-multiplexer'
 import { SshRelaySession, type SshRelayAiVaultHostInfo } from '../ssh/ssh-relay-session'
 import { SshPortForwardManager } from '../ssh/ssh-port-forward'
@@ -816,7 +817,9 @@ export function registerSshHandlers(
   ipcMain.handle('ssh:importConfig', (_event, args?: { reAdopt?: boolean }) => {
     const targets = sshStore!.importFromSshConfig(args)
     const repoReadoptions = takeRepoReadoptions()
-    return { targets, repoReadoptions }
+    // Why: include ceilings can drop part of ~/.ssh/config, so a "synced N hosts"
+    // report would understate what the user actually has. Pass the reason through.
+    return { targets, repoReadoptions, truncatedBy: sshStore!.lastConfigTruncation }
   })
 
   // ── Connection lifecycle ───────────────────────────────────────────

@@ -14248,5 +14248,16 @@
     "sidebar": {
       "label": "Agent Dashboard"
     }
+  },
+  "lib": {
+    "sshConfigImportTruncation": {
+      "summary": "Some hosts were skipped because {{reasons}}. Imported hosts may be incomplete.",
+      "expandedOutput": "it is too large",
+      "fileBytes": "an included file is too large",
+      "fileCount": "it includes too many files",
+      "globMatches": "an include pattern matched too many files",
+      "nestingDepth": "its includes nest too deeply",
+      "sourceBytes": "its included files total too much data"
+    }
   }
 }

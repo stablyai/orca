@@ -12,7 +12,7 @@ import { randomUUID } from 'node:crypto'
 const testState = { dir: '' }
 
 vi.mock('./ssh/ssh-config-parser', () => ({
-  loadUserSshConfig: vi.fn(),
+  loadUserSshConfig: vi.fn(() => ({ hosts: [], truncatedBy: null })),
   sshConfigHostsToTargets: vi.fn()
 }))
 

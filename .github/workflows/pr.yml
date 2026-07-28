@@ -32,6 +32,9 @@ jobs:
       - name: Lint
         run: pnpm exec oxlint --format github
 
+      - name: Enforce full code-quality baseline
+        run: pnpm run audit:code-quality:native && pnpm run audit:code-quality:type-aware
+
       - name: Check switch exhaustiveness
         run: pnpm run lint:switch-exhaustiveness
 

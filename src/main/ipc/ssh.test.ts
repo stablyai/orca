@@ -34,7 +34,8 @@ const {
       oldTargetId: string
       newTargetId: string
       repoIds: string[]
-    }[]
+    }[],
+    lastConfigTruncation: null as string[] | null
   },
   mockConnectionManager: {
     connect: vi.fn(),
@@ -106,7 +107,7 @@ vi.mock('../ssh/ssh-connection-store', () => ({
   }
 }))
 
-vi.mock('../ssh/ssh-connection', () => ({
+vi.mock('../ssh/ssh-connection-manager', () => ({
   SshConnectionManager: class MockSshConnectionManager {
     constructor(callbacks: unknown) {
       const manager = (mockNextConnectionManagers.shift() ??
@@ -305,6 +306,7 @@ describe('SSH IPC handlers', () => {
     mockSshStore.removeTarget.mockReset()
     mockSshStore.importFromSshConfig.mockReset().mockReturnValue([])
     mockSshStore.lastRepoReadoptions = []
+    mockSshStore.lastConfigTruncation = null
     mockWindow.webContents.send.mockReset()
     mockStore.getSshRemotePtyLeases.mockReset().mockReturnValue([])
     mockStore.markSshRemotePtyLease.mockReset()
@@ -471,7 +473,16 @@ describe('SSH IPC handlers', () => {
     mockSshStore.importFromSshConfig.mockReturnValue(imported)
 
     const result = await handlers.get('ssh:importConfig')!(null, {})
-    expect(result).toEqual({ targets: imported, repoReadoptions: [] })
+    expect(result).toEqual({ targets: imported, repoReadoptions: [], truncatedBy: null })
+  })
+
+  // Why: without this the renderer reports a partial import as a plain success.
+  it('ssh:importConfig forwards the truncation reason for a partial config', async () => {
+    mockSshStore.importFromSshConfig.mockReturnValue([])
+    mockSshStore.lastConfigTruncation = ['expanded-output']
+
+    const result = await handlers.get('ssh:importConfig')!(null, {})
+    expect(result).toMatchObject({ truncatedBy: ['expanded-output'] })
   })
 
   it('ssh:connect throws for unknown targetId', async () => {

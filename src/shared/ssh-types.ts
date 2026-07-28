@@ -87,9 +87,23 @@ export type SshTargetAddResult = {
   repoReadoptions: SshRepoReadoption[]
 }
 
+/** Which include ceiling dropped configuration during an import. */
+export type SshConfigTruncationReason =
+  | 'expanded-output'
+  | 'file-bytes'
+  | 'file-count'
+  | 'glob-matches'
+  | 'nesting-depth'
+  | 'source-bytes'
+
 export type SshConfigImportResult = {
   targets: SshTarget[]
   repoReadoptions: SshRepoReadoption[]
+  /**
+   * Non-null when include ceilings dropped part of ~/.ssh/config, so `targets`
+   * may be missing hosts. The import surface warns instead of reporting success.
+   */
+  truncatedBy?: SshConfigTruncationReason[] | null
 }
 
 export type SavedPortForward = {

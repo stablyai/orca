@@ -354,7 +354,7 @@ export class FrameDecoder {
 export function parseJsonRpcMessage(payload: Buffer): JsonRpcMessage {
   const msg = parseRelayJsonText<JsonRpcMessage>(payload.toString('utf-8'))
   if (msg.jsonrpc !== '2.0') {
-    throw new Error(`Invalid JSON-RPC version: ${(msg as Record<string, unknown>).jsonrpc}`)
+    throw new Error(`Invalid JSON-RPC version: ${String((msg as Record<string, unknown>).jsonrpc)}`)
   }
   return msg
 }
