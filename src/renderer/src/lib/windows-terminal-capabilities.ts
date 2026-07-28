@@ -277,10 +277,11 @@ export function isWindowsTerminalCapabilityHost(args: {
 
 export function useLocalWindowsTerminalCapabilities(
   enabled: boolean,
-  forceRefreshOnMount = false
+  forceRefreshOnMount = false,
+  ownerKey = 'local'
 ): WindowsTerminalCapabilities {
   // Why: desktop-owned defaults must not follow the active remote environment.
-  return useWindowsTerminalCapabilities(enabled, forceRefreshOnMount, 'local', { kind: 'local' })
+  return useWindowsTerminalCapabilities(enabled, forceRefreshOnMount, ownerKey, { kind: 'local' })
 }
 
 export function resetWindowsTerminalCapabilitiesForTests(): void {

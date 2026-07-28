@@ -10,6 +10,7 @@ import { AgentsPane } from '@/components/settings/AgentsPane'
 import { useAppStore } from '@/store'
 import { translate } from '@/i18n/i18n'
 import {
+  getWindowsTerminalCapabilityOwnerKey,
   isWindowsTerminalCapabilityHost,
   useLocalWindowsTerminalCapabilities
 } from '@/lib/windows-terminal-capabilities'
@@ -29,9 +30,13 @@ export default function AgentSettingsDialog({
   const isWindowsRenderer =
     typeof navigator !== 'undefined' && navigator.userAgent.includes('Windows')
   const isWebClient = isWebClientLocation()
+  const localCapabilityOwnerKey = isWebClient
+    ? getWindowsTerminalCapabilityOwnerKey(settings?.activeRuntimeEnvironmentId)
+    : 'local'
   const localWindowsTerminalCapabilities = useLocalWindowsTerminalCapabilities(
     open && (isWindowsRenderer || isWebClient),
-    false
+    false,
+    localCapabilityOwnerKey
   )
   const wslSupportedPlatform = isWindowsTerminalCapabilityHost({
     isWindowsRenderer,

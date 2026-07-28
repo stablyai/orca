@@ -43,9 +43,13 @@ import AgentSettingsDialog from './AgentSettingsDialog'
 
 function installCapabilityTransports(localHostPlatform: NodeJS.Platform = 'win32'): {
   localWslAvailable: ReturnType<typeof vi.fn>
+  localWslDistros: ReturnType<typeof vi.fn>
+  runtimeGetStatus: ReturnType<typeof vi.fn>
   runtimeEnvironmentCall: ReturnType<typeof vi.fn>
 } {
   const localWslAvailable = vi.fn().mockResolvedValue(true)
+  const localWslDistros = vi.fn().mockResolvedValue(['Ubuntu'])
+  const runtimeGetStatus = vi.fn().mockResolvedValue({ hostPlatform: localHostPlatform })
   const runtimeEnvironmentCall = vi.fn(async (args: { method: string }) => ({
     id: args.method,
     ok: true,
@@ -66,15 +70,15 @@ function installCapabilityTransports(localHostPlatform: NodeJS.Platform = 'win32
     value: {
       wsl: {
         isAvailable: localWslAvailable,
-        listDistros: vi.fn().mockResolvedValue(['Ubuntu'])
+        listDistros: localWslDistros
       },
       pwsh: { isAvailable: vi.fn().mockResolvedValue(true) },
       gitBash: { isAvailable: vi.fn().mockResolvedValue(false) },
-      runtime: { getStatus: vi.fn().mockResolvedValue({ hostPlatform: localHostPlatform }) },
+      runtime: { getStatus: runtimeGetStatus },
       runtimeEnvironments: { call: runtimeEnvironmentCall }
     } as unknown as Window['api']
   })
-  return { localWslAvailable, runtimeEnvironmentCall }
+  return { localWslAvailable, localWslDistros, runtimeGetStatus, runtimeEnvironmentCall }
 }
 
 describe('AgentSettingsDialog', () => {
@@ -168,5 +172,66 @@ describe('AgentSettingsDialog', () => {
     expect(localWslAvailable).toHaveBeenCalledTimes(1)
     expect(runtimeEnvironmentCall).not.toHaveBeenCalled()
     expect(testState.agentsPaneProps).toMatchObject({ wslSupportedPlatform: false })
+  })
+
+  it.each([
+    {
+      name: 'Windows to Linux',
+      firstPlatform: 'win32' as const,
+      firstAvailable: true,
+      firstDistros: ['Ubuntu'],
+      secondPlatform: 'linux' as const,
+      secondAvailable: false,
+      secondDistros: []
+    },
+    {
+      name: 'Linux to Windows',
+      firstPlatform: 'linux' as const,
+      firstAvailable: false,
+      firstDistros: [],
+      secondPlatform: 'win32' as const,
+      secondAvailable: true,
+      secondDistros: ['Debian']
+    }
+  ])('refreshes paired-server capabilities after re-pairing: $name', async (args) => {
+    vi.stubGlobal('navigator', { userAgent: 'Macintosh' })
+    testState.isWebClient = true
+    const { localWslAvailable, localWslDistros, runtimeGetStatus } = installCapabilityTransports(
+      args.firstPlatform
+    )
+    localWslAvailable.mockResolvedValue(args.firstAvailable)
+    localWslDistros.mockResolvedValue(args.firstDistros)
+
+    await act(async () => {
+      root.render(createElement(AgentSettingsDialog, { open: true, onOpenChange: vi.fn() }))
+      await Promise.resolve()
+      await Promise.resolve()
+    })
+    expect(testState.agentsPaneProps).toMatchObject({
+      wslSupportedPlatform: args.firstPlatform === 'win32',
+      wslAvailable: args.firstAvailable,
+      wslDistros: args.firstDistros
+    })
+
+    testState.settings = {
+      ...testState.settings!,
+      activeRuntimeEnvironmentId: 'remote-b'
+    }
+    localWslAvailable.mockResolvedValue(args.secondAvailable)
+    localWslDistros.mockResolvedValue(args.secondDistros)
+    runtimeGetStatus.mockResolvedValue({ hostPlatform: args.secondPlatform })
+    await act(async () => {
+      root.render(createElement(AgentSettingsDialog, { open: true, onOpenChange: vi.fn() }))
+      await Promise.resolve()
+      await Promise.resolve()
+    })
+
+    expect(testState.agentsPaneProps).toMatchObject({
+      wslSupportedPlatform: args.secondPlatform === 'win32',
+      wslAvailable: args.secondAvailable,
+      wslDistros: args.secondDistros
+    })
+    expect(localWslAvailable).toHaveBeenCalledTimes(2)
+    expect(runtimeGetStatus).toHaveBeenCalledTimes(2)
   })
 })

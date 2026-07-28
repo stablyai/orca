@@ -840,6 +840,10 @@ function Settings(): React.JSX.Element {
     settings?.activeRuntimeEnvironmentId
   )
   const runtimeTarget = useMemo(() => getActiveRuntimeTarget(settings), [settings])
+  const capabilityLoadTarget = useMemo(
+    () => (isWebClient ? { kind: 'local' as const } : runtimeTarget),
+    [isWebClient, runtimeTarget]
+  )
   const hasActiveRuntimeEnvironment = Boolean(settings?.activeRuntimeEnvironmentId?.trim())
   const needsRepoWindowsRuntimeCapabilities = [...neededSectionIds].some((sectionId) =>
     sectionId.startsWith('repo-')
@@ -859,15 +863,16 @@ function Settings(): React.JSX.Element {
     shouldLoadWindowsTerminalCapabilities,
     true,
     windowsTerminalCapabilityOwnerKey,
-    runtimeTarget
+    capabilityLoadTarget
   )
   // Why: global agent and project defaults belong to the desktop, not its active remote.
   const remoteViewLocalWindowsRuntimeCapabilities = useLocalWindowsTerminalCapabilities(
-    needsLocalWindowsRuntimeCapabilities && runtimeTarget.kind === 'environment',
-    true
+    needsLocalWindowsRuntimeCapabilities && runtimeTarget.kind === 'environment' && !isWebClient,
+    true,
+    'local'
   )
   const localWindowsRuntimeCapabilities =
-    runtimeTarget.kind === 'local'
+    runtimeTarget.kind === 'local' || isWebClient
       ? windowsTerminalCapabilities
       : remoteViewLocalWindowsRuntimeCapabilities
   // Why: only supported-but-unavailable WSL (Windows) should render disabled controls, not unsupported WSL (macOS/Linux).

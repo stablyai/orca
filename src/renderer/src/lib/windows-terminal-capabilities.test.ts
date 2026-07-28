@@ -12,6 +12,7 @@ import {
   refreshWindowsTerminalCapabilities,
   resetWindowsTerminalCapabilitiesForTests,
   selectWindowsTerminalCapabilitiesForOwner,
+  useLocalWindowsTerminalCapabilities,
   useWindowsTerminalCapabilities
 } from './windows-terminal-capabilities'
 
@@ -555,6 +556,92 @@ describe('windows terminal capabilities', () => {
     })
 
     expect(detectRemoteWindowsTerminalCapabilities).toHaveBeenCalledTimes(1)
+  })
+
+  it.each([
+    {
+      name: 'Windows to Linux',
+      firstPlatform: 'win32' as const,
+      firstAvailable: true,
+      firstDistros: ['Ubuntu'],
+      secondPlatform: 'linux' as const,
+      secondAvailable: false,
+      secondDistros: []
+    },
+    {
+      name: 'Linux to Windows',
+      firstPlatform: 'linux' as const,
+      firstAvailable: false,
+      firstDistros: [],
+      secondPlatform: 'win32' as const,
+      secondAvailable: true,
+      secondDistros: ['Debian']
+    }
+  ])('re-probes the local transport when the paired owner changes: $name', async (args) => {
+    const wslIsAvailable = vi
+      .fn()
+      .mockResolvedValueOnce(args.firstAvailable)
+      .mockResolvedValueOnce(args.secondAvailable)
+    const wslListDistros = vi
+      .fn()
+      .mockResolvedValueOnce(args.firstDistros)
+      .mockResolvedValueOnce(args.secondDistros)
+    const runtimeGetStatus = vi
+      .fn()
+      .mockResolvedValueOnce({ hostPlatform: args.firstPlatform })
+      .mockResolvedValueOnce({ hostPlatform: args.secondPlatform })
+    vi.stubGlobal('window', {
+      api: {
+        wsl: { isAvailable: wslIsAvailable, listDistros: wslListDistros },
+        pwsh: { isAvailable: vi.fn().mockResolvedValue(false) },
+        gitBash: { isAvailable: vi.fn().mockResolvedValue(false) },
+        runtime: { getStatus: runtimeGetStatus }
+      }
+    })
+    let ownerKey = 'runtime:paired-a'
+    let latest: ReturnType<typeof useLocalWindowsTerminalCapabilities> | null = null
+
+    function HookProbe(): null {
+      latest = useLocalWindowsTerminalCapabilities(true, false, ownerKey)
+      return null
+    }
+
+    const container = document.createElement('div')
+    document.body.appendChild(container)
+    const root = createRoot(container)
+    hookRoots.push(root)
+
+    await act(async () => {
+      root.render(createElement(HookProbe))
+      await Promise.resolve()
+      await Promise.resolve()
+    })
+    expect(latest).toMatchObject({
+      hostPlatform: args.firstPlatform,
+      wslAvailable: args.firstAvailable,
+      wslDistros: args.firstDistros
+    })
+
+    ownerKey = 'runtime:paired-b'
+    await act(async () => {
+      root.render(createElement(HookProbe))
+      await Promise.resolve()
+      await Promise.resolve()
+    })
+
+    expect(latest).toMatchObject({
+      hostPlatform: args.secondPlatform,
+      wslAvailable: args.secondAvailable,
+      wslDistros: args.secondDistros
+    })
+    expect(wslIsAvailable).toHaveBeenCalledTimes(2)
+    expect(runtimeGetStatus).toHaveBeenCalledTimes(2)
+    expect(getCachedWindowsTerminalCapabilities('runtime:paired-a')).toMatchObject({
+      hostPlatform: args.firstPlatform
+    })
+    expect(getCachedWindowsTerminalCapabilities('runtime:paired-b')).toMatchObject({
+      hostPlatform: args.secondPlatform
+    })
   })
 
   it('prunes expired runtime owner capability caches', async () => {

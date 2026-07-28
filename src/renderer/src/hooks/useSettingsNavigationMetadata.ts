@@ -79,7 +79,6 @@ import { isWebClientLocation } from '@/lib/web-client-location'
 import {
   getWindowsTerminalCapabilityOwnerKey,
   isWindowsTerminalCapabilityHost,
-  useLocalWindowsTerminalCapabilities,
   useWindowsTerminalCapabilities
 } from '@/lib/windows-terminal-capabilities'
 import { getActiveRuntimeTarget } from '@/runtime/runtime-rpc-client'
@@ -631,18 +630,21 @@ export function useSettingsNavigationMetadata(): SettingsNavSection[] {
     settings?.activeRuntimeEnvironmentId
   )
   const runtimeTarget = getActiveRuntimeTarget(settings)
+  const capabilityLoadTarget = isWebClient ? { kind: 'local' as const } : runtimeTarget
   const windowsTerminalCapabilities = useWindowsTerminalCapabilities(
     isWindows || isWebClient || runtimeTarget.kind === 'environment',
     false,
     windowsTerminalCapabilityOwnerKey,
-    runtimeTarget
+    capabilityLoadTarget
   )
-  const localWindowsTerminalCapabilities = useLocalWindowsTerminalCapabilities(isWebClient)
   const isLocalWindowsHost = isWindowsTerminalCapabilityHost({
     isWindowsRenderer: isWindows,
     isWebClient,
     target: { kind: 'local' },
-    hostPlatform: localWindowsTerminalCapabilities.hostPlatform
+    hostPlatform:
+      isWebClient || runtimeTarget.kind === 'local'
+        ? windowsTerminalCapabilities.hostPlatform
+        : null
   })
   const isWindowsTerminalHost = isWindowsTerminalCapabilityHost({
     isWindowsRenderer: isWindows,
