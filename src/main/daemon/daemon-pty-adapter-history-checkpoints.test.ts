@@ -828,5 +828,39 @@ describe('DaemonPtyAdapter (IPtyProvider)', () => {
       await historyAdapter.spawn({ cols: 80, rows: 24, sessionId })
       expect(await historyAdapter.readColdRestoreSnapshot(sessionId)).toBeNull()
     })
+
+    // Why: spawn() registers its pending operation before the async
+    // create/attach resolves. A preview landing inside that window would
+    // otherwise be served disk history and mark a reopening pane read-only.
+    it('treats an in-flight spawn as live, not as a cold-restore candidate', async () => {
+      const sessionId = 'preview-deferred-spawn'
+      const sessionDir = join(historyDir, getHistorySessionDirName(sessionId))
+      mkdirSync(sessionDir, { recursive: true })
+      writeFileSync(
+        join(sessionDir, 'meta.json'),
+        JSON.stringify({
+          cwd: '/projects/reopening',
+          cols: 120,
+          rows: 40,
+          startedAt: '2026-04-15T10:00:00Z',
+          endedAt: null,
+          exitCode: null
+        })
+      )
+      writeFileSync(join(sessionDir, 'scrollback.bin'), 'stale frame from before\r\n')
+
+      historyAdapter = new DaemonPtyAdapter({ socketPath, tokenPath, historyPath: historyDir })
+
+      // Before the spawn starts, history is the only frame available.
+      expect(await historyAdapter.readColdRestoreSnapshot(sessionId)).not.toBeNull()
+
+      const spawnPromise = historyAdapter.spawn({ cols: 80, rows: 24, sessionId })
+      // Mid-flight: the pane is reopening, so the preview must not fall back to disk.
+      const duringSpawn = await historyAdapter.readColdRestoreSnapshot(sessionId)
+      await spawnPromise
+
+      expect(duringSpawn).toBeNull()
+      expect(await historyAdapter.readColdRestoreSnapshot(sessionId)).toBeNull()
+    })
   })
 })

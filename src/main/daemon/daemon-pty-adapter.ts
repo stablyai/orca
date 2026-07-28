@@ -1042,7 +1042,16 @@ export class DaemonPtyAdapter implements IPtyProvider {
     sessionId: string,
     opts?: { scrollbackRows?: number }
   ): Promise<ColdRestoreInfo | null> {
-    if (this.hasPty(sessionId) || !this.historyReader?.hasRestorableHistory(sessionId)) {
+    // Why pending spawns count as live here but not in hasPty(): spawn()
+    // registers its operation before the async create/attach completes, so a
+    // concurrent preview would otherwise serve disk history for a pane that is
+    // reopening and mark it read-only. hasPty() itself must stay attach-only —
+    // it also feeds pane liveness, where an authoritative false closes panes.
+    if (
+      this.hasPty(sessionId) ||
+      this.pendingSpawnOperationsBySessionId.has(sessionId) ||
+      !this.historyReader?.hasRestorableHistory(sessionId)
+    ) {
       return null
     }
     return await this.historyReader.detectColdRestore(sessionId, {
