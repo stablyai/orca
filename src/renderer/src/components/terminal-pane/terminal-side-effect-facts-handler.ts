@@ -86,6 +86,9 @@ export type TerminalSideEffectFactConsumerCallbacks = {
    *  hidden-delivery-gated consumers (their bytes never arrive); the theme
    *  reply is sent renderer-side — query authority stays with the view. */
   onMode2031Subscribe?: () => void
+  /** DECSET 2031 withdrawal observed by main's tracker. Clears the pane's
+   *  subscription registry so later theme flips stop pushing CSI 997. */
+  onMode2031Unsubscribe?: () => void
 }
 
 type ConsumerEntry = {
@@ -137,6 +140,9 @@ function applyLiveFact(entry: ConsumerEntry, fact: TerminalSideEffectFact, seq: 
       return
     case '2031-subscribe':
       entry.callbacks.onMode2031Subscribe?.()
+      return
+    case '2031-unsubscribe':
+      entry.callbacks.onMode2031Unsubscribe?.()
   }
 }
 

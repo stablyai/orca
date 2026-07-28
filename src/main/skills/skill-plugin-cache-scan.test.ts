@@ -4,7 +4,10 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { promisify } from 'node:util'
 import { afterEach, describe, expect, it } from 'vitest'
-import { scanKnownPluginSkillCandidates } from './skill-plugin-cache-scan'
+import {
+  MAXIMUM_PLUGIN_SCAN_ISSUES,
+  scanKnownPluginSkillCandidates
+} from './skill-plugin-cache-scan'
 
 const temporaryDirectories: string[] = []
 const execFileAsync = promisify(execFile)
@@ -407,49 +410,58 @@ describe('plugin skill candidate scan', () => {
     })
   })
 
-  it('reports a symlink target that cannot be inspected', async () => {
-    const root = await mkdtemp(join(tmpdir(), 'orca-plugin-symlink-error-'))
-    temporaryDirectories.push(root)
-    const linkPath = join(root, 'loop')
-    await symlink('loop', linkPath, 'dir')
+  // Why (this and every other skipIf below): creating a symlink on Windows needs
+  // elevation or Developer Mode, so these would fail EPERM in setup rather than
+  // exercise the behavior under test. The non-symlink cases still run there.
+  it.skipIf(process.platform === 'win32')(
+    'reports a symlink target that cannot be inspected',
+    async () => {
+      const root = await mkdtemp(join(tmpdir(), 'orca-plugin-symlink-error-'))
+      temporaryDirectories.push(root)
+      const linkPath = join(root, 'loop')
+      await symlink('loop', linkPath, 'dir')
 
-    const result = await scanKnownPluginSkillCandidates(root, new Set(['orca-cli']))
+      const result = await scanKnownPluginSkillCandidates(root, new Set(['orca-cli']))
 
-    expect(result.issues).toContainEqual({
-      path: linkPath,
-      reason: 'io-error',
-      errorCode: 'ELOOP'
-    })
-  })
-
-  it('preserves read failures when the scan issue limit is reached', async () => {
-    const root = await mkdtemp(join(tmpdir(), 'orca-plugin-issue-limit-'))
-    temporaryDirectories.push(root)
-    await Promise.all(
-      Array.from({ length: 16 }, async (_, index) => {
-        const name = `loop-${index.toString().padStart(2, '0')}`
-        await symlink(name, join(root, name), 'dir')
+      expect(result.issues).toContainEqual({
+        path: linkPath,
+        reason: 'io-error',
+        errorCode: 'ELOOP'
       })
-    )
-    const packageRoot = join(root, 'zz-package')
-    await mkdir(join(packageRoot, '.codex-plugin'), { recursive: true })
-    await symlink('SKILL.md', join(packageRoot, 'SKILL.md'), 'file')
-    await symlink('plugin.json', join(packageRoot, '.codex-plugin', 'plugin.json'), 'file')
+    }
+  )
 
-    const result = await scanKnownPluginSkillCandidates(root, new Set(['orca-cli']))
+  it.skipIf(process.platform === 'win32')(
+    'preserves read failures when the scan issue limit is reached',
+    async () => {
+      const root = await mkdtemp(join(tmpdir(), 'orca-plugin-issue-limit-'))
+      temporaryDirectories.push(root)
+      await Promise.all(
+        Array.from({ length: 16 }, async (_, index) => {
+          const name = `loop-${index.toString().padStart(2, '0')}`
+          await symlink(name, join(root, name), 'dir')
+        })
+      )
+      const packageRoot = join(root, 'zz-package')
+      await mkdir(join(packageRoot, '.codex-plugin'), { recursive: true })
+      await symlink('SKILL.md', join(packageRoot, 'SKILL.md'), 'file')
+      await symlink('plugin.json', join(packageRoot, '.codex-plugin', 'plugin.json'), 'file')
 
-    expect(result.issues).toContainEqual({
-      path: join(root, 'loop-00'),
-      reason: 'io-error',
-      errorCode: 'ELOOP'
-    })
-    expect(result.issues).toContainEqual({
-      path: root,
-      reason: 'issue-limit',
-      errorCode: null
-    })
-    expect(result.issues.filter((issue) => issue.reason === 'issue-limit')).toHaveLength(1)
-  })
+      const result = await scanKnownPluginSkillCandidates(root, new Set(['orca-cli']))
+
+      expect(result.issues).toContainEqual({
+        path: join(root, 'loop-00'),
+        reason: 'io-error',
+        errorCode: 'ELOOP'
+      })
+      expect(result.issues).toContainEqual({
+        path: root,
+        reason: 'issue-limit',
+        errorCode: null
+      })
+      expect(result.issues.filter((issue) => issue.reason === 'issue-limit')).toHaveLength(1)
+    }
+  )
 
   it('reports the bound that ended the walk even with the issue budget spent', async () => {
     const root = await mkdtemp(join(tmpdir(), 'orca-plugin-truncating-issue-'))
@@ -475,6 +487,13 @@ describe('plugin skill candidate scan', () => {
 
     const result = await scanKnownPluginSkillCandidates(root, new Set(['orca-cli']), 1)
 
+    // Why: the deep trees above exist to spend the display budget, so assert it is full —
+    // otherwise this passes with budget to spare and stops covering the case it is named
+    // for. Not 'issue-limit': that only appears when a non-required issue is dropped, and
+    // the truncating bound below bypasses the budget instead of being dropped by it.
+    expect(result.issues.filter((issue) => issue.reason === 'depth-limit')).toHaveLength(
+      MAXIMUM_PLUGIN_SCAN_ISSUES
+    )
     // Why: losing this one to the display budget is what lets a scan that stopped early
     // report all-clear — the bounds that merely skipped a folder say nothing about it.
     expect(result.issues).toContainEqual({ path: root, reason: 'candidate-limit', errorCode: null })
@@ -508,116 +527,131 @@ describe('plugin skill candidate scan', () => {
     expect(result.issues).toContainEqual({ path: root, reason: 'issue-limit', errorCode: null })
   })
 
-  it('still names a fail-closed candidate once the issue budget is spent', async () => {
-    const root = await mkdtemp(join(tmpdir(), 'orca-plugin-issue-budget-candidate-'))
-    temporaryDirectories.push(root)
-    const packageRoot = join(root, 'zz-package')
-    const candidate = join(packageRoot, 'skills', 'orca-cli')
-    await Promise.all(
-      Array.from({ length: 16 }, (_, index) =>
-        mkdir(
-          join(
-            root,
-            `deep-${index.toString().padStart(2, '0')}`,
-            ...Array.from({ length: 11 }, (_, level) => `level-${level}`)
-          ),
-          { recursive: true }
+  it.skipIf(process.platform === 'win32')(
+    'still names a fail-closed candidate once the issue budget is spent',
+    async () => {
+      const root = await mkdtemp(join(tmpdir(), 'orca-plugin-issue-budget-candidate-'))
+      temporaryDirectories.push(root)
+      const packageRoot = join(root, 'zz-package')
+      const candidate = join(packageRoot, 'skills', 'orca-cli')
+      await Promise.all(
+        Array.from({ length: 16 }, (_, index) =>
+          mkdir(
+            join(
+              root,
+              `deep-${index.toString().padStart(2, '0')}`,
+              ...Array.from({ length: 11 }, (_, level) => `level-${level}`)
+            ),
+            { recursive: true }
+          )
         )
       )
-    )
-    await mkdir(join(packageRoot, '.codex-plugin'), { recursive: true })
-    await mkdir(join(packageRoot, 'skills'), { recursive: true })
-    await writeFile(join(packageRoot, '.codex-plugin', 'plugin.json'), '{"skills":"./skills"}\n')
-    await symlink('missing-target', candidate, 'dir')
+      await mkdir(join(packageRoot, '.codex-plugin'), { recursive: true })
+      await mkdir(join(packageRoot, 'skills'), { recursive: true })
+      await writeFile(join(packageRoot, '.codex-plugin', 'plugin.json'), '{"skills":"./skills"}\n')
+      await symlink('missing-target', candidate, 'dir')
 
-    const result = await scanKnownPluginSkillCandidates(root, new Set(['orca-cli']))
+      const result = await scanKnownPluginSkillCandidates(root, new Set(['orca-cli']))
 
-    // Why: the depth bounds fill the issue budget first. Dropping this one for budget
-    // would leave the badge amber over a candidate the dialog never mentions.
-    expect(result.candidates).toEqual([{ name: 'orca-cli', path: candidate }])
-    expect(result.issues).toContainEqual({
-      path: candidate,
-      reason: 'io-error',
-      errorCode: 'ENOENT'
-    })
-  })
+      // Why: the depth bounds fill the issue budget first. Dropping this one for budget
+      // would leave the badge amber over a candidate the dialog never mentions.
+      expect(result.candidates).toEqual([{ name: 'orca-cli', path: candidate }])
+      expect(result.issues).toContainEqual({
+        path: candidate,
+        reason: 'io-error',
+        errorCode: 'ENOENT'
+      })
+    }
+  )
 
-  it('names the path when a dangling known-name symlink is kept as a candidate', async () => {
-    const root = await mkdtemp(join(tmpdir(), 'orca-plugin-declared-dangling-symlink-'))
-    temporaryDirectories.push(root)
-    const packageRoot = join(root, 'vendor', 'plugin')
-    const candidate = join(packageRoot, 'skills', 'orca-cli')
-    await mkdir(join(packageRoot, '.codex-plugin'), { recursive: true })
-    await mkdir(join(packageRoot, 'skills'), { recursive: true })
-    await writeFile(join(packageRoot, '.codex-plugin', 'plugin.json'), '{"skills":"./skills"}\n')
-    await symlink('missing-target', candidate, 'dir')
+  it.skipIf(process.platform === 'win32')(
+    'names the path when a dangling known-name symlink is kept as a candidate',
+    async () => {
+      const root = await mkdtemp(join(tmpdir(), 'orca-plugin-declared-dangling-symlink-'))
+      temporaryDirectories.push(root)
+      const packageRoot = join(root, 'vendor', 'plugin')
+      const candidate = join(packageRoot, 'skills', 'orca-cli')
+      await mkdir(join(packageRoot, '.codex-plugin'), { recursive: true })
+      await mkdir(join(packageRoot, 'skills'), { recursive: true })
+      await writeFile(join(packageRoot, '.codex-plugin', 'plugin.json'), '{"skills":"./skills"}\n')
+      await symlink('missing-target', candidate, 'dir')
 
-    const result = await scanKnownPluginSkillCandidates(root, new Set(['orca-cli']))
+      const result = await scanKnownPluginSkillCandidates(root, new Set(['orca-cli']))
 
-    // Why: this candidate resolves to nothing, so it reads as inaccessible and raises
-    // attention. Without the issue the dialog would report all-clear against a badge
-    // that says otherwise, and nothing would ever name the broken link.
-    expect(result).toEqual({
-      candidates: [{ name: 'orca-cli', path: candidate }],
-      issues: [{ path: candidate, reason: 'io-error', errorCode: 'ENOENT' }]
-    })
-  })
+      // Why: this candidate resolves to nothing, so it reads as inaccessible and raises
+      // attention. Without the issue the dialog would report all-clear against a badge
+      // that says otherwise, and nothing would ever name the broken link.
+      expect(result).toEqual({
+        candidates: [{ name: 'orca-cli', path: candidate }],
+        issues: [{ path: candidate, reason: 'io-error', errorCode: 'ENOENT' }]
+      })
+    }
+  )
 
-  it('does not follow directory symlinks outside the plugin cache', async () => {
-    const parent = await mkdtemp(join(tmpdir(), 'orca-plugin-symlink-outside-'))
-    temporaryDirectories.push(parent)
-    const root = join(parent, 'cache')
-    const outside = join(parent, 'outside')
-    const linkPath = join(root, 'vendor')
-    await mkdir(join(outside, 'orca-cli'), { recursive: true })
-    await mkdir(root, { recursive: true })
-    await writeFile(join(outside, 'orca-cli', 'SKILL.md'), '# Orca CLI\n')
-    await symlink(outside, linkPath, 'dir')
+  it.skipIf(process.platform === 'win32')(
+    'does not follow directory symlinks outside the plugin cache',
+    async () => {
+      const parent = await mkdtemp(join(tmpdir(), 'orca-plugin-symlink-outside-'))
+      temporaryDirectories.push(parent)
+      const root = join(parent, 'cache')
+      const outside = join(parent, 'outside')
+      const linkPath = join(root, 'vendor')
+      await mkdir(join(outside, 'orca-cli'), { recursive: true })
+      await mkdir(root, { recursive: true })
+      await writeFile(join(outside, 'orca-cli', 'SKILL.md'), '# Orca CLI\n')
+      await symlink(outside, linkPath, 'dir')
 
-    const result = await scanKnownPluginSkillCandidates(root, new Set(['orca-cli']))
+      const result = await scanKnownPluginSkillCandidates(root, new Set(['orca-cli']))
 
-    expect(result).toEqual({
-      candidates: [],
-      issues: [{ path: linkPath, reason: 'outside-root', errorCode: null }]
-    })
-  })
+      expect(result).toEqual({
+        candidates: [],
+        issues: [{ path: linkPath, reason: 'outside-root', errorCode: null }]
+      })
+    }
+  )
 
-  it('does not follow a SKILL.md symlink outside the plugin cache', async () => {
-    const parent = await mkdtemp(join(tmpdir(), 'orca-plugin-skill-file-outside-'))
-    temporaryDirectories.push(parent)
-    const root = join(parent, 'cache')
-    const skill = join(root, 'vendor', 'orca-cli')
-    const outsideSkillFile = join(parent, 'outside', 'SKILL.md')
-    await mkdir(skill, { recursive: true })
-    await mkdir(join(parent, 'outside'), { recursive: true })
-    await writeFile(outsideSkillFile, '# Orca CLI\n')
-    await symlink(outsideSkillFile, join(skill, 'SKILL.md'), 'file')
+  it.skipIf(process.platform === 'win32')(
+    'does not follow a SKILL.md symlink outside the plugin cache',
+    async () => {
+      const parent = await mkdtemp(join(tmpdir(), 'orca-plugin-skill-file-outside-'))
+      temporaryDirectories.push(parent)
+      const root = join(parent, 'cache')
+      const skill = join(root, 'vendor', 'orca-cli')
+      const outsideSkillFile = join(parent, 'outside', 'SKILL.md')
+      await mkdir(skill, { recursive: true })
+      await mkdir(join(parent, 'outside'), { recursive: true })
+      await writeFile(outsideSkillFile, '# Orca CLI\n')
+      await symlink(outsideSkillFile, join(skill, 'SKILL.md'), 'file')
 
-    const result = await scanKnownPluginSkillCandidates(root, new Set(['orca-cli']))
+      const result = await scanKnownPluginSkillCandidates(root, new Set(['orca-cli']))
 
-    expect(result).toEqual({
-      candidates: [],
-      issues: [{ path: join(skill, 'SKILL.md'), reason: 'outside-root', errorCode: null }]
-    })
-  })
+      expect(result).toEqual({
+        candidates: [],
+        issues: [{ path: join(skill, 'SKILL.md'), reason: 'outside-root', errorCode: null }]
+      })
+    }
+  )
 
-  it('does not read manifest symlinks outside the plugin cache', async () => {
-    const parent = await mkdtemp(join(tmpdir(), 'orca-plugin-manifest-outside-'))
-    temporaryDirectories.push(parent)
-    const root = join(parent, 'cache')
-    const outsideManifest = join(parent, 'plugin.json')
-    const manifestPath = join(root, '.codex-plugin', 'plugin.json')
-    await mkdir(join(root, '.codex-plugin'), { recursive: true })
-    await writeFile(outsideManifest, '{"skills":"./outside"}\n')
-    await symlink(outsideManifest, manifestPath, 'file')
+  it.skipIf(process.platform === 'win32')(
+    'does not read manifest symlinks outside the plugin cache',
+    async () => {
+      const parent = await mkdtemp(join(tmpdir(), 'orca-plugin-manifest-outside-'))
+      temporaryDirectories.push(parent)
+      const root = join(parent, 'cache')
+      const outsideManifest = join(parent, 'plugin.json')
+      const manifestPath = join(root, '.codex-plugin', 'plugin.json')
+      await mkdir(join(root, '.codex-plugin'), { recursive: true })
+      await writeFile(outsideManifest, '{"skills":"./outside"}\n')
+      await symlink(outsideManifest, manifestPath, 'file')
 
-    const result = await scanKnownPluginSkillCandidates(root, new Set(['orca-cli']))
+      const result = await scanKnownPluginSkillCandidates(root, new Set(['orca-cli']))
 
-    expect(result).toEqual({
-      candidates: [],
-      issues: [{ path: manifestPath, reason: 'outside-root', errorCode: null }]
-    })
-  })
+      expect(result).toEqual({
+        candidates: [],
+        issues: [{ path: manifestPath, reason: 'outside-root', errorCode: null }]
+      })
+    }
+  )
 
   it.skipIf(process.platform === 'win32')(
     'does not block on a manifest FIFO',

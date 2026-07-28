@@ -17,6 +17,11 @@ import {
   encodeTerminalStreamText,
   type TerminalStreamFrame
 } from '../../../../shared/terminal-stream-protocol'
+import {
+  iterateTerminalOutputFrameChunks,
+  type TerminalOutputFrameChunk,
+  type TerminalOutputMeta
+} from '../terminal-output-frame-chunks'
 import { TERMINAL_PANE_SPLIT_SOURCES } from '../../../../shared/feature-education-telemetry'
 import type { TerminalOscLinkRange } from '../../../../shared/terminal-osc-link-ranges'
 import {
@@ -24,7 +29,11 @@ import {
   TERMINAL_INPUT_TOO_LARGE_ERROR,
   isTerminalInputTooLargeWithYield
 } from '../../../../shared/terminal-input'
-import { measureClipboardTextByteLength } from '../../../../shared/clipboard-text'
+import {
+  measureTerminalStreamByteLength,
+  terminalStreamByteLength,
+  terminalStreamByteLengthExceeds
+} from '../terminal-stream-byte-length'
 import { isTuiAgent } from '../../../../shared/tui-agent-config'
 import { isTerminalQueryReply } from '../../../../shared/terminal-query-reply'
 import {
@@ -49,8 +58,7 @@ import {
   TERMINAL_MULTIPLEX_ACK_TOTAL_MAX_WINDOW_BYTES,
   TERMINAL_MULTIPLEX_MAX_STREAMS_PER_CONNECTION,
   TERMINAL_MULTIPLEX_PENDING_MAX_BYTES,
-  TERMINAL_OUTPUT_BATCH_MAX_BYTES,
-  TERMINAL_STREAM_CHUNK_BYTES
+  TERMINAL_OUTPUT_BATCH_MAX_BYTES
 } from '../../../../shared/terminal-multiplex-flow-control'
 import { drainTerminalMultiplexRoundRobin } from '../terminal-multiplex-round-robin'
 
@@ -139,19 +147,6 @@ type TerminalOutputChunk = {
   meta?: TerminalOutputMeta
 }
 
-type TerminalOutputMeta = {
-  seq?: number
-  rawLength?: number
-  transformed?: boolean
-  cwd?: string
-}
-
-type TerminalOutputFrameChunk = {
-  bytes: Uint8Array<ArrayBufferLike>
-  seq?: number
-  opcode?: TerminalStreamOpcode
-}
-
 function createTerminalOutputBatcher(onFlush: (data: string, meta?: TerminalOutputMeta) => void): {
   push: (data: string, meta?: TerminalOutputMeta) => void
   flush: () => void
@@ -237,82 +232,6 @@ function createTerminalOutputBatcher(onFlush: (data: string, meta?: TerminalOutp
       bytes = 0
       pendingRawLength = 0
     }
-  }
-}
-
-function* iterateTerminalOutputFrameChunks(
-  data: string,
-  meta?: TerminalOutputMeta
-): Generator<TerminalOutputFrameChunk> {
-  const rawLength = meta?.rawLength ?? data.length
-  if (meta?.transformed || rawLength !== data.length) {
-    yield {
-      opcode: TerminalStreamOpcode.OutputSpan,
-      bytes: encodeTerminalStreamJson({ data, rawLength, transformed: true }),
-      seq: meta?.seq
-    }
-    return
-  }
-  if (!terminalStreamByteLengthExceeds(data, TERMINAL_STREAM_CHUNK_BYTES)) {
-    yield { bytes: encodeTerminalStreamText(data), seq: meta?.seq }
-    return
-  }
-  const canPreserveChunkSeq = typeof meta?.seq === 'number' && rawLength === data.length
-  const shouldDelayFinalSeq = !canPreserveChunkSeq && typeof meta?.seq === 'number'
-  const startSeq = canPreserveChunkSeq ? meta.seq! - rawLength : undefined
-  let chunk = ''
-  let chunkBytes = 0
-  let chunkStartOffset = 0
-  let offset = 0
-  let delayedChunk: { text: string; seq?: number } | null = null
-
-  const takeChunk = (): { text: string; seq?: number } | null => {
-    if (!chunk) {
-      return null
-    }
-    const chunkSeq = canPreserveChunkSeq ? startSeq! + chunkStartOffset + chunk.length : undefined
-    const current = { text: chunk, seq: chunkSeq }
-    chunk = ''
-    chunkBytes = 0
-    chunkStartOffset = offset
-    return current
-  }
-
-  for (const part of data) {
-    const partBytes = terminalStreamByteLength(part)
-    if (chunkBytes > 0 && chunkBytes + partBytes > TERMINAL_STREAM_CHUNK_BYTES) {
-      const nextChunk = takeChunk()
-      if (nextChunk) {
-        if (shouldDelayFinalSeq) {
-          if (delayedChunk) {
-            yield { bytes: encodeTerminalStreamText(delayedChunk.text) }
-          }
-          delayedChunk = nextChunk
-        } else {
-          yield { bytes: encodeTerminalStreamText(nextChunk.text), seq: nextChunk.seq }
-        }
-      }
-    }
-    chunk += part
-    chunkBytes += partBytes
-    offset += part.length
-  }
-  const finalChunk = takeChunk()
-  if (shouldDelayFinalSeq) {
-    // Why: only the final frame can safely carry the high-water mark when rawLength can't map back to UTF-16 offsets.
-    if (finalChunk) {
-      if (delayedChunk) {
-        yield { bytes: encodeTerminalStreamText(delayedChunk.text) }
-      }
-      delayedChunk = finalChunk
-    }
-    if (delayedChunk) {
-      yield { bytes: encodeTerminalStreamText(delayedChunk.text), seq: meta.seq }
-    }
-    return
-  }
-  if (finalChunk) {
-    yield { bytes: encodeTerminalStreamText(finalChunk.text), seq: finalChunk.seq }
   }
 }
 
@@ -541,13 +460,6 @@ function trimPendingOutputToBudget(
   return { bytes: pendingOutputBytes, overflowed: omittedChunkCount > 0 }
 }
 
-function measureTerminalStreamByteLength(
-  data: string,
-  options: { stopAfterBytes?: number } = {}
-): { byteLength: number; exceededLimit: boolean } {
-  return measureClipboardTextByteLength(data, options)
-}
-
 function trimPendingOutputCoveredBySnapshot(
   pendingOutput: TerminalOutputChunk[],
   snapshotSeq: number | undefined
@@ -583,14 +495,6 @@ function trimPendingOutputCoveredBySnapshot(
     bytes += slicedBytes
   }
   return { chunks, bytes }
-}
-
-function terminalStreamByteLength(data: string): number {
-  return measureTerminalStreamByteLength(data).byteLength
-}
-
-function terminalStreamByteLengthExceeds(data: string, maxBytes: number): boolean {
-  return measureTerminalStreamByteLength(data, { stopAfterBytes: maxBytes }).exceededLimit
 }
 
 function* iterateTerminalStreamTextPayloads(data: string): Generator<Uint8Array<ArrayBufferLike>> {

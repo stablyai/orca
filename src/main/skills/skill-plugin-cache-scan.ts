@@ -18,7 +18,7 @@ const MAXIMUM_NESTED_SKILL_DEPTH = 2
 // ordinary installs are meant to exhaust.
 const MAXIMUM_PLUGIN_SCAN_ENTRIES = 16_384
 export const MAXIMUM_PLUGIN_SKILL_CANDIDATES = 64
-const MAXIMUM_PLUGIN_SCAN_ISSUES = 16
+export const MAXIMUM_PLUGIN_SCAN_ISSUES = 16
 const SKILL_FILE_NAME = 'SKILL.md'
 
 export type KnownPluginSkillCandidate = {

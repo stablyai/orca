@@ -136,6 +136,12 @@ export function getCodexSelectionTargetForAccount(
   return { runtime: 'host' }
 }
 
+/** Stable identifier for the selection lane a launch resolves its account from. */
+export function getCodexSelectionLaneKey(target?: CodexAccountSelectionTarget | null): string {
+  const normalized = normalizeCodexAccountSelectionTarget(target)
+  return normalized.runtime === 'host' ? 'host' : `wsl:${getWslSelectionKey(normalized.wslDistro)}`
+}
+
 export function getWslSelectionKey(wslDistro: string | null | undefined): string {
   return normalizeWslDistro(wslDistro) ?? '__default__'
 }

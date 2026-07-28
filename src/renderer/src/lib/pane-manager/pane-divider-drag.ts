@@ -220,9 +220,12 @@ export function attachDividerDrag(
 
   // Why: WSLg's RDP input path reports press/release as a `mouse` pointer but
   // streams motion as a `pen` pointer with a different pointerId, so a strict
-  // pointerId match drops every move. Any primary pointer continues the drag.
+  // pointerId match drops every move. Any primary pointer continues the drag,
+  // except touch: each pointer type has its own primary, so a stray finger
+  // would otherwise hijack an in-flight mouse/pen drag. A touch-started drag
+  // still matches by pointerId.
   const isActiveDragPointer = (e: PointerEvent): boolean =>
-    e.pointerId === activePointerId || e.isPrimary
+    e.pointerId === activePointerId || (e.isPrimary && e.pointerType !== 'touch')
 
   const onPointerMove = (e: PointerEvent): void => {
     if (!dragging || !isActiveDragPointer(e) || !prevEl || !nextEl) {

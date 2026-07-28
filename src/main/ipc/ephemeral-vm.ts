@@ -1,6 +1,5 @@
 import { app, ipcMain } from 'electron'
 import type { Store } from '../persistence'
-import { loadHooks } from '../hooks'
 import {
   getEphemeralVmRecipeResultConnection,
   getEphemeralVmRecipeResultWarnings,
@@ -27,9 +26,12 @@ import {
   getRecipeRepo,
   listRecipeCatalog,
   listRecipes,
+  resolveRecipeForRepo,
   type EphemeralVmRecipeCatalogEntry
 } from './ephemeral-vm-recipe-context'
 import { registerEphemeralVmRuntimeHandlers } from './ephemeral-vm-runtime-handlers'
+import type { PluginService } from '../plugins/plugin-service'
+import { getApprovedPluginVmRecipes } from '../plugins/plugin-approved-vm-recipes'
 
 const activeProvisionControllers = new Map<string, AbortController>()
 
@@ -57,7 +59,7 @@ export type EphemeralVmProvisionIpcResult =
       stdout: string
     }
 
-export function registerEphemeralVmHandlers(store: Store): void {
+export function registerEphemeralVmHandlers(store: Store, pluginService?: PluginService): void {
   ipcMain.removeHandler('ephemeralVm:listRecipes')
   ipcMain.removeHandler('ephemeralVm:listRecipeCatalog')
   ipcMain.removeHandler('ephemeralVm:doctor')
@@ -65,25 +67,32 @@ export function registerEphemeralVmHandlers(store: Store): void {
   ipcMain.removeHandler('ephemeralVm:cancelProvision')
   registerEphemeralVmRuntimeHandlers(store)
 
-  ipcMain.handle('ephemeralVm:listRecipes', (_event, args: { repoId: string }) => {
-    return listRecipes(store, args.repoId)
-  })
-
-  ipcMain.handle('ephemeralVm:listRecipeCatalog', (): EphemeralVmRecipeCatalogEntry[] => {
-    return listRecipeCatalog(store)
+  ipcMain.handle('ephemeralVm:listRecipes', async (_event, args: { repoId: string }) => {
+    return listRecipes(store, args.repoId, await getApprovedPluginVmRecipes(pluginService))
   })
 
   ipcMain.handle(
+    'ephemeralVm:listRecipeCatalog',
+    async (): Promise<EphemeralVmRecipeCatalogEntry[]> => {
+      return listRecipeCatalog(store, await getApprovedPluginVmRecipes(pluginService))
+    }
+  )
+
+  ipcMain.handle(
     'ephemeralVm:doctor',
-    (_event, args: { repoId: string; recipeId: string }): EphemeralVmRecipeDoctorResult => {
+    async (
+      _event,
+      args: { repoId: string; recipeId: string }
+    ): Promise<EphemeralVmRecipeDoctorResult> => {
       const repo = getRecipeRepo(store, args.repoId)
       if (!repo.ok) {
         return repo.doctor(args.recipeId)
       }
+      const pluginRecipes = await getApprovedPluginVmRecipes(pluginService)
       return doctorEphemeralVmRecipe({
         repoPath: repo.repo.path,
         recipeId: args.recipeId,
-        recipes: loadHooks(repo.repo.path)?.environmentRecipes ?? [],
+        recipes: listRecipes(store, args.repoId, pluginRecipes).recipes,
         localExecutionSupported: true
       })
     }
@@ -106,8 +115,10 @@ export function registerEphemeralVmHandlers(store: Store): void {
       if (!repo.ok) {
         return { ok: false, error: repo.message, stdout: '', stderr: '' }
       }
-      const recipe = (loadHooks(repo.repo.path)?.environmentRecipes ?? []).find(
-        (entry) => entry.id === args.recipeId
+      const recipe = resolveRecipeForRepo(
+        repo.repo.path,
+        args.recipeId,
+        await getApprovedPluginVmRecipes(pluginService)
       )
       if (!recipe) {
         return { ok: false, error: `Recipe not found: ${args.recipeId}`, stdout: '', stderr: '' }

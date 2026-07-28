@@ -140,6 +140,70 @@ beforeEach(() => {
   })
 })
 
+describe('createSettingsSlice checked persistence', () => {
+  it('stores the authoritative settings after a successful checked update', async () => {
+    const authoritativeSettings = {
+      pluginSystemEnabled: true,
+      notifications: {}
+    } as unknown as NonNullable<AppState['settings']>
+    settingsSet.mockResolvedValueOnce(authoritativeSettings)
+    const store = createTestStore()
+    store.setState({
+      settings: {
+        pluginSystemEnabled: false,
+        notifications: {}
+      } as unknown as AppState['settings']
+    })
+
+    await expect(
+      store.getState().updateSettingsOrThrow({ pluginSystemEnabled: true })
+    ).resolves.toBeUndefined()
+
+    expect(settingsSet).toHaveBeenCalledWith({ pluginSystemEnabled: true })
+    expect(store.getState().settings).toBe(authoritativeSettings)
+  })
+
+  it('rejects a failed checked update without changing local settings', async () => {
+    const persistenceError = new Error('settings IPC failed')
+    const currentSettings = {
+      pluginSystemEnabled: false,
+      notifications: {}
+    } as unknown as NonNullable<AppState['settings']>
+    settingsSet.mockRejectedValueOnce(persistenceError)
+    const store = createTestStore()
+    store.setState({ settings: currentSettings })
+
+    await expect(
+      store.getState().updateSettingsOrThrow({ pluginSystemEnabled: true })
+    ).rejects.toBe(persistenceError)
+
+    expect(store.getState().settings).toBe(currentSettings)
+  })
+
+  it('keeps the existing update action best-effort and logs persistence failures', async () => {
+    const persistenceError = new Error('settings IPC failed')
+    const currentSettings = {
+      pluginSystemEnabled: false,
+      notifications: {}
+    } as unknown as NonNullable<AppState['settings']>
+    settingsSet.mockRejectedValueOnce(persistenceError)
+    const consoleError = vi.spyOn(console, 'error').mockImplementation(() => undefined)
+    const store = createTestStore()
+    store.setState({ settings: currentSettings })
+
+    try {
+      await expect(
+        store.getState().updateSettings({ pluginSystemEnabled: true })
+      ).resolves.toBeUndefined()
+
+      expect(consoleError).toHaveBeenCalledWith('Failed to update settings:', persistenceError)
+      expect(store.getState().settings).toBe(currentSettings)
+    } finally {
+      consoleError.mockRestore()
+    }
+  })
+})
+
 describe('createSettingsSlice runtime switching', () => {
   it('repairs drifted task provider settings before sending updates', async () => {
     settingsSet.mockResolvedValueOnce({

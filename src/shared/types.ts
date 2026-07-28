@@ -1035,6 +1035,11 @@ export type BrowserCookieImportSummary = {
   importedCookies: number
   skippedCookies: number
   domains: string[]
+  warning?: {
+    code: 'restart-fallback-unavailable'
+    loadedCookies: number
+    failedCookies: number
+  }
 }
 
 export type BrowserCookieImportResult =
@@ -2251,6 +2256,13 @@ export type CreateWorktreeResult = {
   workspaceLineage?: WorkspaceLineage | null
   warnings?: WorktreeLineageWarning[]
   setup?: WorktreeSetupLaunch
+  setupReceipt?: {
+    requested: 'run' | 'skip' | 'inherit'
+    hookFound: boolean
+    startupPolicy: 'start-immediately' | 'wait-for-setup'
+    state: 'running' | 'skipped' | 'not_configured' | 'spawn_failed'
+    terminalHandle?: string
+  }
   defaultTabs?: WorktreeDefaultTabsLaunch
   warning?: string
   initialBaseStatus?: WorktreeBaseStatusEvent
@@ -2333,9 +2345,12 @@ export type ChangelogData = {
 export type UpdateCheckOptions = {
   includePrerelease?: boolean
   includePerfPrerelease?: boolean
+  localBuild?: boolean
 }
 
-export type UpdateStatus =
+export type UpdateSource = 'local'
+
+export type UpdateStatus = (
   | { state: 'idle' }
   | { state: 'checking'; userInitiated?: boolean }
   | {
@@ -2358,6 +2373,7 @@ export type UpdateStatus =
   | { state: 'downloading'; percent: number; version: string; activeNudgeId?: string }
   | { state: 'downloaded'; version: string; releaseUrl?: string; activeNudgeId?: string }
   | { state: 'error'; message: string; userInitiated?: boolean; activeNudgeId?: string }
+) & { source?: UpdateSource }
 
 // ─── Settings ────────────────────────────────────────────────────────
 export type NotificationSettings = {
@@ -2844,6 +2860,19 @@ export type GlobalSettings = {
   defaultTuiAgent: TuiAgent | 'blank' | null
   /** Agents hidden from picker/auto-launch; detection stays a raw PATH snapshot. */
   disabledTuiAgents: TuiAgent[]
+  /** Master switch for the experimental plugin system. Off by default: no
+   *  discovery, no panels, no plugin code paths run at all. */
+  pluginSystemEnabled: boolean
+  /** Qualified plugin keys (`publisher.id`) the user disabled. Discovered
+   *  plugins stay listed but are not activated. */
+  disabledPlugins: string[]
+  /** Consent records: qualified plugin key → capability/worker-trust fingerprint.
+   *  A plugin whose current fingerprint differs is pending again, so an update
+   *  crossing either trust boundary re-prompts before code runs. Absent key =
+   *  never consented. */
+  pluginConsents: Record<string, string>
+  /** Local directories loaded as dev-mode plugins (manifest hot-reload). */
+  devPluginPaths: string[]
   /** One-shot guard: start Claude Agent Teams hidden for existing profiles without overriding later opt-ins. */
   claudeAgentTeamsDefaultDisabledMigrated?: boolean
   /** Why: worktree deletion is destructive (rm -rf of the working dir), so confirm by default. */
@@ -3205,6 +3234,9 @@ export type RightSidebarTab =
   | 'source-control'
   | 'checks'
   | 'ports'
+  // Plugin-contributed panels are keyed `plugin:<pluginId>/<panelId>` so the
+  // static union stays closed while plugin tabs remain type-representable.
+  | `plugin:${string}`
 export type ActiveRightSidebarTab = Exclude<RightSidebarTab, 'search'>
 export type RightSidebarExplorerView = 'files' | 'search'
 

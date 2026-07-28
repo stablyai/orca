@@ -4,11 +4,13 @@
 import { describe, expect, it } from 'vitest'
 import {
   agentTabActionId,
+  findKeybindingActionsForBinding,
   getKeybindingDefinition,
   findKeybindingConflicts,
   formatKeybinding,
   formatKeybindingList,
   getEffectiveKeybindingsForAction,
+  isKeybindingActionId,
   isDigitIndexActionId,
   isDoubleTapBinding,
   keybindingFromInput,
@@ -26,6 +28,14 @@ import type { KeybindingActionId, KeybindingPlatform } from './keybindings'
 import { ALL_TUI_AGENTS } from './tui-agent-display-names'
 
 describe('keybindings', () => {
+  it('accepts bounded plugin command action IDs and rejects malformed variants', () => {
+    expect(isKeybindingActionId('plugin:orca-samples.tasks/open')).toBe(true)
+    expect(isKeybindingActionId('plugin:orca-samples.tasks/task.open-latest')).toBe(true)
+    expect(isKeybindingActionId('plugin:tasks/open')).toBe(false)
+    expect(isKeybindingActionId('plugin:orca-samples.tasks/../open')).toBe(false)
+    expect(isKeybindingActionId(`plugin:orca-samples.tasks/${'a'.repeat(401)}`)).toBe(false)
+  })
+
   it('normalizes editable shortcut input and rejects unsafe bindings', () => {
     expect(normalizeKeybinding(' ctrl + shift + p ')).toEqual({
       ok: true,
@@ -356,6 +366,16 @@ describe('keybindings', () => {
       binding: 'Mod+0',
       actionIds: expect.arrayContaining(['zoom.reset', 'sidebar.focusWorktreeList'])
     })
+  })
+
+  it('finds app-level owners of a prospective plugin chord with overrides', () => {
+    expect(findKeybindingActionsForBinding('Mod+P', 'darwin')).toContain('worktree.quickOpen')
+    expect(
+      findKeybindingActionsForBinding('Mod+Alt+T', 'linux', {
+        'view.tasks': ['Mod+Alt+T']
+      })
+    ).toContain('view.tasks')
+    expect(findKeybindingActionsForBinding('Mod+F', 'darwin')).not.toContain('editor.find')
   })
 
   it('reports quick-command menu conflicts with global shortcuts and digit ranges', () => {

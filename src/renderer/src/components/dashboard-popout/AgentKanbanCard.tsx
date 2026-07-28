@@ -4,8 +4,11 @@ import { MessageCircleQuestion } from 'lucide-react'
 import { AgentIcon } from '@/lib/agent-catalog'
 import { agentTypeToIconAgent, formatAgentTypeLabel } from '@/lib/agent-status'
 import { AgentStateDot } from '@/components/AgentStateDot'
+import { RepoIconGlyph } from '@/components/repo/repo-icon'
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { cn } from '@/lib/utils'
 import type { DashboardCard } from '../../../../shared/dashboard-snapshot'
+import type { RepoIcon } from '../../../../shared/repo-icon'
 import { translate } from '@/i18n/i18n'
 
 /** Compact "started N ago" (the card is glanceable — coarse units are fine). */
@@ -53,12 +56,34 @@ function sameCard(a: DashboardCard, b: DashboardCard): boolean {
     a.finishedAt === b.finishedAt &&
     a.stateChangedAt === b.stateChangedAt &&
     a.unseen === b.unseen &&
-    a.askSummary === b.askSummary
+    a.askSummary === b.askSummary &&
+    a.conversationName === b.conversationName
   )
+}
+
+/** Structural — the icon arrives inside a fresh structured clone each publish,
+ *  so identity alone would re-render every card several times a second. */
+function sameRepoIcon(a: RepoIcon | null | undefined, b: RepoIcon | null | undefined): boolean {
+  if (a === b) {
+    return true
+  }
+  if (!a || !b || a.type !== b.type) {
+    return false
+  }
+  if (a.type === 'lucide') {
+    return a.name === (b as typeof a).name
+  }
+  if (a.type === 'emoji') {
+    return a.emoji === (b as typeof a).emoji
+  }
+  const image = b as typeof a
+  return a.src === image.src && a.source === image.source && a.label === image.label
 }
 
 type AgentKanbanCardProps = {
   card: DashboardCard
+  /** The card repo's icon. null renders the default folder glyph. */
+  repoIcon?: RepoIcon | null
   now: number
   /** Opens the board-level terminal dialog. The dialog is NOT owned by the
    *  card: bucket moves remount the card, and an embedded dialog would close
@@ -68,8 +93,23 @@ type AgentKanbanCardProps = {
 
 /** One agent on the kanban board. Clicking opens the board's live terminal dialog. */
 export const AgentKanbanCard = memo(
-  function AgentKanbanCard({ card, now, onOpenTerminal }: AgentKanbanCardProps): React.JSX.Element {
+  function AgentKanbanCard({
+    card,
+    repoIcon = null,
+    now,
+    onOpenTerminal
+  }: AgentKanbanCardProps): React.JSX.Element {
     useTranslation()
+    // Why: the two outcomes worth scanning for get a tinted card — amber for
+    // "answer me", green for "finished, look at it". Everything else stays
+    // neutral so the tint keeps meaning something.
+    const needsYou = card.bucket === 'attention'
+    const isDone = card.dotState === 'done'
+    // Why: the session's own name heads the card. Without one the worktree is
+    // the best heading left — and then the footer drops it rather than say it
+    // twice.
+    const heading = card.conversationName ?? card.worktreeName
+    const worktreeInFooter = card.conversationName !== undefined
 
     return (
       <button
@@ -80,13 +120,20 @@ export const AgentKanbanCard = memo(
         // paneKey has ':'/'/' which aren't valid in a custom-ident, so slugify.
         style={{ viewTransitionName: `agentcard-${card.paneKey.replace(/[^a-zA-Z0-9]/g, '-')}` }}
         className={cn(
-          'group flex w-full flex-col gap-1.5 rounded-lg border border-border/60 bg-card p-2.5 text-left',
-          'transition-colors hover:border-border hover:bg-accent/40',
-          'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring'
+          'group flex w-full flex-col gap-1.5 rounded-lg border p-2.5 text-left',
+          'transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
+          needsYou
+            ? 'border-amber-500/40 bg-amber-500/[0.06] hover:border-amber-500/60 hover:bg-amber-500/10'
+            : isDone
+              ? 'border-emerald-500/40 bg-emerald-500/[0.06] hover:border-emerald-500/60 hover:bg-emerald-500/10'
+              : 'border-border/60 bg-card hover:border-border hover:bg-accent/40'
         )}
       >
         <div className="flex items-center gap-1.5">
-          <AgentIcon agent={agentTypeToIconAgent(card.agentType)} size={14} />
+          {/* Why: a bare <svg> flex item shrinks with the row — long worktree names squashed the icon. */}
+          <span className="inline-flex shrink-0">
+            <AgentIcon agent={agentTypeToIconAgent(card.agentType)} size={14} />
+          </span>
           <span
             // Why: same unvisited treatment as the sidebar's DashboardAgentRow —
             // bold+bright until acked, normal+muted after — so both surfaces
@@ -96,7 +143,7 @@ export const AgentKanbanCard = memo(
               card.unseen ? 'font-semibold text-foreground' : 'font-normal text-muted-foreground'
             )}
           >
-            {card.worktreeName}
+            {heading}
           </span>
           {/* The summary pill already carries the attention glyph. */}
           {card.askSummary ? null : <AgentStateDot state={card.dotState} className="ml-auto" />}
@@ -106,6 +153,7 @@ export const AgentKanbanCard = memo(
           <div className="flex flex-col gap-0.5">
             {card.lastUserMessage ? (
               <div className="line-clamp-1 text-[11px] leading-snug text-muted-foreground">
+                {/* Why: plain "You" again — the session's name now heads the card. */}
                 <span className="font-medium text-foreground/45">
                   {translate('dashboardPopout.card.you', 'You')}
                 </span>{' '}
@@ -125,17 +173,34 @@ export const AgentKanbanCard = memo(
           <div className="line-clamp-2 text-xs leading-snug text-foreground/90">{card.task}</div>
         ) : null}
 
+        {/* Why: the card behind it is amber now, so the pill needs its own edge
+            to stay a distinct chip instead of a flat block of tint. */}
         {card.askSummary ? (
-          <div className="flex items-start gap-1 rounded-md bg-amber-500/10 px-1.5 py-1 text-[11px] text-amber-600 dark:text-amber-400">
+          <div className="flex items-start gap-1 rounded-md bg-amber-500/15 px-1.5 py-1 text-[11px] text-amber-600 ring-1 ring-inset ring-amber-500/25 dark:text-amber-400">
             <MessageCircleQuestion className="mt-px size-3 shrink-0" aria-hidden />
             <span className="line-clamp-2">{card.askSummary}</span>
           </div>
         ) : null}
 
-        <div className="flex items-center gap-2 text-[11px] text-muted-foreground">
-          <span className="truncate font-mono">{card.repoName}</span>
+        <div className="flex items-center gap-1.5 text-[11px] text-muted-foreground">
+          {/* Why: the project reads as an icon so its name can't crowd the
+              worktree sitting next to it; the name lives in the tooltip. */}
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <span
+                className="inline-flex size-[18px] shrink-0 items-center justify-center rounded-[5px] bg-muted-foreground/10 text-muted-foreground transition-colors group-hover:text-foreground"
+                aria-label={card.repoName}
+              >
+                <RepoIconGlyph repoIcon={repoIcon} className="size-3" iconClassName="size-3" />
+              </span>
+            </TooltipTrigger>
+            <TooltipContent side="top" sideOffset={4}>
+              {card.repoName}
+            </TooltipContent>
+          </Tooltip>
+          {worktreeInFooter ? <span className="truncate">{card.worktreeName}</span> : null}
           {displayTimestamp(card) > 0 ? (
-            <span className="ml-auto shrink-0 tabular-nums">
+            <span className="ml-auto shrink-0 pl-1 tabular-nums">
               {formatStartedAgo(displayTimestamp(card), now)}
             </span>
           ) : null}
@@ -146,6 +211,7 @@ export const AgentKanbanCard = memo(
   (previous, next) =>
     previous.onOpenTerminal === next.onOpenTerminal &&
     sameCard(previous.card, next.card) &&
+    sameRepoIcon(previous.repoIcon, next.repoIcon) &&
     (displayTimestamp(previous.card) <= 0 ||
       formatStartedAgo(displayTimestamp(previous.card), previous.now) ===
         formatStartedAgo(displayTimestamp(next.card), next.now))

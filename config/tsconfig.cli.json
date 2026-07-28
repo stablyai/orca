@@ -27,6 +27,7 @@
     "../src/main/codex/codex-config-settings-removal.ts",
     "../src/main/codex/codex-config-settings-upsert.ts",
     "../src/main/codex/codex-home-paths.ts",
+    "../src/main/codex/codex-managed-home-resource-copy-marker.ts",
     "../src/main/codex/codex-hook-identity.ts",
     "../src/main/codex/codex-hook-trust-grant.ts",
     "../src/main/codex/codex-managed-trust-reconciliation.ts",

@@ -2,10 +2,12 @@ import { resolveAgentTypeFromTerminalTitle } from '@/components/sidebar/worktree
 import { classifyTitleActivity } from '@/lib/pane-agent-evidence'
 import { tabHasLivePty } from '@/lib/tab-has-live-pty'
 import { resolveRuntimePaneTitleLeafIdFromRoot } from '@/lib/runtime-pane-title-leaf-id'
+import { containsBrailleSpinner } from '../../../shared/agent-title-core'
 import type {
   TerminalLayoutSnapshot,
   TerminalPaneLayoutNode,
-  TerminalTab
+  TerminalTab,
+  TuiAgent
 } from '../../../shared/types'
 import type { LiveAgentWorktreeStatus } from './worktree-activity-state'
 
@@ -27,7 +29,7 @@ const STATUS_LABELS: Record<WorktreeStatus, string> = {
 }
 
 export function getWorktreeStatus(
-  tabs: readonly Pick<TerminalTab, 'id' | 'title'>[],
+  tabs: readonly Pick<TerminalTab, 'id' | 'title' | 'launchAgent'>[],
   browserTabs: readonly { id: string }[],
   ptyIdsByTabId: Record<string, string[]>,
   runtimePaneTitlesByTabId: Record<string, Record<number, string>> = {},
@@ -54,7 +56,7 @@ export function getWorktreeStatus(
 }
 
 function tabHasStatus(
-  tab: Pick<TerminalTab, 'id' | 'title'>,
+  tab: Pick<TerminalTab, 'id' | 'title' | 'launchAgent'>,
   runtimePaneTitlesByTabId: Record<string, Record<number, string>>,
   status: 'permission' | 'working',
   options: WorktreeStatusHeuristicOptions
@@ -77,7 +79,10 @@ function tabHasStatus(
       ) {
         continue
       }
-      if (classifyTitleActivity(title) === status && titleStatusIsAgentAttributable(title)) {
+      if (
+        classifyTitleActivity(title) === status &&
+        titleStatusIsAgentAttributable(title, tab.launchAgent)
+      ) {
         return true
       }
     }
@@ -87,12 +92,21 @@ function tabHasStatus(
   if (agentStatusPaneIds && agentStatusPaneIds.size > 0) {
     return false
   }
-  return classifyTitleActivity(tab.title) === status && titleStatusIsAgentAttributable(tab.title)
+  return (
+    classifyTitleActivity(tab.title) === status &&
+    titleStatusIsAgentAttributable(tab.title, tab.launchAgent)
+  )
 }
 
 // Why: require agent attribution so a bare never-cleared spinner title can't spin the dot "0 agents" forever with no matching sidebar row.
-function titleStatusIsAgentAttributable(title: string): boolean {
-  return resolveAgentTypeFromTerminalTitle(title) !== null
+function titleStatusIsAgentAttributable(title: string, launchAgent?: TuiAgent | null): boolean {
+  if (resolveAgentTypeFromTerminalTitle(title) !== null) {
+    return true
+  }
+  // Why: a spinner proves activity but not identity (Claude's thinking title has no provider
+  // token, #9040); the tab's launch identity supplies it, mirroring the row builder's spinner
+  // fallback (#9647) so the dot and the sidebar row agree.
+  return containsBrailleSpinner(title) && Boolean(launchAgent)
 }
 
 export function getWorktreeStatusLabel(status: WorktreeStatus): string {
@@ -109,7 +123,7 @@ export function getWorktreeStatusLabel(status: WorktreeStatus): string {
  * `hasRetainedDone` is a retained-agent snapshot scoped to this worktreeId.
  */
 export function resolveWorktreeStatus(args: {
-  tabs: readonly Pick<TerminalTab, 'id' | 'title'>[]
+  tabs: readonly Pick<TerminalTab, 'id' | 'title' | 'launchAgent'>[]
   browserTabs: readonly { id: string }[]
   ptyIdsByTabId: Record<string, string[]>
   runtimePaneTitlesByTabId?: Record<string, Record<number, string>>

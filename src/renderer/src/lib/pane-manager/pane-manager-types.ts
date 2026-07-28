@@ -169,6 +169,8 @@ export type ManagedPaneInternal = {
   // Stored so disposePane() can detach the streamed-output hover-cache reset
   // that keeps freshly printed links linkifiable without a scroll.
   linkifierHoverResetDisposable?: IDisposable | null
+  // Stored because mouseleave does not bubble from xterm's screen.
+  linkifierMouseLeaveResetDisposable?: IDisposable | null
   // Stored so disposePane() can deregister the joiner; terminal.dispose()
   // does not remove registered character joiners.
   arabicShapingJoinerCleanup?: (() => void) | null

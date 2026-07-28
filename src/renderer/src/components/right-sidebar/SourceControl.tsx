@@ -97,6 +97,7 @@ import {
   namespaceSourceControlTreeDirectoryKeys,
   type SourceControlTreeNode
 } from './source-control-tree'
+import { compareGitStatusEntries } from './source-control-status-sort'
 import {
   collectListSelectionEntries,
   getSubmoduleExpansionKey,
@@ -8212,21 +8213,4 @@ export function ActionButton({
       </TooltipContent>
     </Tooltip>
   )
-}
-
-function compareGitStatusEntries(a: GitStatusEntry, b: GitStatusEntry): number {
-  return (
-    getConflictSortRank(a) - getConflictSortRank(b) ||
-    a.path.localeCompare(b.path, undefined, { numeric: true })
-  )
-}
-
-function getConflictSortRank(entry: GitStatusEntry): number {
-  if (entry.conflictStatus === 'unresolved') {
-    return 0
-  }
-  if (entry.conflictStatus === 'resolved_locally') {
-    return 1
-  }
-  return 2
 }

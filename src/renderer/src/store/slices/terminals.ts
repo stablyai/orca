@@ -34,6 +34,7 @@ import {
   parsePaneKey
 } from '../../../../shared/stable-pane-id'
 import { isValidHostTerminalTabId, isValidTerminalTabId } from '../../../../shared/terminal-tab-id'
+import { buildByIdIndex, buildWorktreeByIdIndex } from './worktree-by-id-index'
 import {
   getRepoIdFromWorktreeId,
   splitWorktreeIdForFilesystem
@@ -461,6 +462,19 @@ export type AutomaticAgentResumeClaim = {
   providerSession: AgentProviderSessionMetadata
 }
 
+export type CodexRestartNotice = {
+  previousAccountLabel: string
+  nextAccountLabel: string
+  /** Set once the user asks for the restart. The record outlives the prompt
+   *  because `previousAccountLabel` is the only memory of the account this pane
+   *  actually launched under, which drives the A -> B -> A collapse. */
+  restartRequested?: true
+  /** Set when the user answers "Keep old account". Same reason the record has to
+   *  survive: deleting it erased the launch account, so re-selecting it looked
+   *  like a fresh switch and raised an inverted prompt that killed pane input. */
+  dismissed?: true
+}
+
 export type TerminalSlice = {
   tabsByWorktree: Record<string, TerminalTab[]>
   activeTabId: string | null
@@ -480,10 +494,7 @@ export type TerminalSlice = {
   /** Reference-counted so overlapping shutdowns retain renderer PTY bindings until every owner settles. */
   pendingPtyShutdownIds: Record<string, number>
   pendingCodexPaneRestartIds: Record<string, true>
-  codexRestartNoticeByPtyId: Record<
-    string,
-    { previousAccountLabel: string; nextAccountLabel: string }
-  >
+  codexRestartNoticeByPtyId: Record<string, CodexRestartNotice>
   expandedPaneByTabId: Record<string, boolean>
   canExpandPaneByTabId: Record<string, boolean>
   terminalLayoutsByTabId: Record<string, TerminalLayoutSnapshot>
@@ -643,6 +654,7 @@ export type TerminalSlice = {
     notices: { ptyId: string; previousAccountLabel: string; nextAccountLabel: string }[]
   ) => void
   clearCodexRestartNotice: (ptyId: string) => void
+  dismissCodexRestartNotices: (ptyIds: string[]) => void
   setTabPaneExpanded: (tabId: string, expanded: boolean) => void
   setTabCanExpandPane: (tabId: string, canExpand: boolean) => void
   setTabLayout: (tabId: string, layout: TerminalLayoutSnapshot | null) => void
@@ -2809,12 +2821,29 @@ export const createTerminalSlice: StateCreator<AppState, [], [], TerminalSlice> 
     if (ptyIds.length === 0) {
       return
     }
-    set((s) => ({
-      pendingCodexPaneRestartIds: {
-        ...s.pendingCodexPaneRestartIds,
-        ...Object.fromEntries(ptyIds.map((ptyId) => [ptyId, true] as const))
+    set((s) => {
+      // Why: the prompt is answered the moment the user asks for a restart. A
+      // pane whose tab isn't mounted can only restart when it next mounts, and
+      // leaving the prompt up re-showed a button that now does nothing.
+      const nextCodexRestartNoticeByPtyId = { ...s.codexRestartNoticeByPtyId }
+      for (const ptyId of ptyIds) {
+        const notice = nextCodexRestartNoticeByPtyId[ptyId]
+        if (notice) {
+          // Why: mirror of the strip in dismissCodexRestartNotices. A queued
+          // restart leaves the pane on the old account until it relaunches, so
+          // it must re-block input that an earlier dismissal had freed.
+          const { dismissed: _dismissed, ...kept } = notice
+          nextCodexRestartNoticeByPtyId[ptyId] = { ...kept, restartRequested: true }
+        }
       }
-    }))
+      return {
+        pendingCodexPaneRestartIds: {
+          ...s.pendingCodexPaneRestartIds,
+          ...Object.fromEntries(ptyIds.map((ptyId) => [ptyId, true] as const))
+        },
+        codexRestartNoticeByPtyId: nextCodexRestartNoticeByPtyId
+      }
+    })
   },
 
   consumePendingCodexPaneRestart: (ptyId) => {
@@ -2851,7 +2880,18 @@ export const createTerminalSlice: StateCreator<AppState, [], [], TerminalSlice> 
 
         next[notice.ptyId] = {
           previousAccountLabel,
-          nextAccountLabel: notice.nextAccountLabel
+          nextAccountLabel: notice.nextAccountLabel,
+          // Why: a queued restart relaunches under whatever account is selected
+          // when it runs, so a later switch does not reopen an answered prompt.
+          ...(existing?.restartRequested ? { restartRequested: true as const } : {}),
+          // Why: a dismissal answered one question — "keep the launch account
+          // instead of this one". Only a genuinely different target re-asks it,
+          // so a later C reopens the prompt while adding an account or
+          // reauthenticating the active one (both re-mark live panes with the
+          // selection unchanged) must not resurrect it and re-mute the pane.
+          ...(existing?.dismissed && existing.nextAccountLabel === notice.nextAccountLabel
+            ? { dismissed: true as const }
+            : {})
         }
       }
       return {
@@ -2870,6 +2910,34 @@ export const createTerminalSlice: StateCreator<AppState, [], [], TerminalSlice> 
       const nextPendingCodexPaneRestartIds = { ...s.pendingCodexPaneRestartIds }
       delete next[ptyId]
       delete nextPendingCodexPaneRestartIds[ptyId]
+      return {
+        codexRestartNoticeByPtyId: next,
+        pendingCodexPaneRestartIds: nextPendingCodexPaneRestartIds
+      }
+    })
+  },
+
+  dismissCodexRestartNotices: (ptyIds) => {
+    set((s) => {
+      // Why: keeping the old account is an answer, not a restart — the record
+      // stays so `previousAccountLabel` still names the pane's launch account,
+      // but every consumer treats it as answered (prompt hidden, input freed).
+      const next = { ...s.codexRestartNoticeByPtyId }
+      const nextPendingCodexPaneRestartIds = { ...s.pendingCodexPaneRestartIds }
+      let changed = false
+      for (const ptyId of ptyIds) {
+        const notice = next[ptyId]
+        if (!notice || notice.dismissed) {
+          continue
+        }
+        const { restartRequested: _restartRequested, ...kept } = notice
+        next[ptyId] = { ...kept, dismissed: true }
+        delete nextPendingCodexPaneRestartIds[ptyId]
+        changed = true
+      }
+      if (!changed) {
+        return {}
+      }
       return {
         codexRestartNoticeByPtyId: next,
         pendingCodexPaneRestartIds: nextPendingCodexPaneRestartIds
@@ -3210,13 +3278,13 @@ export const createTerminalSlice: StateCreator<AppState, [], [], TerminalSlice> 
 
       // Why: preserve each tab's prior ptyId so reconnect passes it as sessionId to the daemon's createOrAttach, triggering reattach instead of a fresh spawn.
       const pendingReconnectPtyIdByTabId: Record<string, string> = {}
+      const placeholderWorktreeById = buildWorktreeByIdIndex(
+        runtimeSessionPlaceholders.worktreesByRepo
+      )
+      const placeholderRepoById = buildByIdIndex(runtimeSessionPlaceholders.repos)
       for (const worktreeId of pendingReconnectWorktreeIds) {
-        const worktree = Object.values(runtimeSessionPlaceholders.worktreesByRepo)
-          .flat()
-          .find((entry) => entry.id === worktreeId)
-        const repo = worktree
-          ? runtimeSessionPlaceholders.repos.find((entry) => entry.id === worktree.repoId)
-          : null
+        const worktree = placeholderWorktreeById.get(worktreeId)
+        const repo = worktree ? placeholderRepoById.get(worktree.repoId) : null
         if (repo?.connectionId) {
           continue
         }
@@ -3304,6 +3372,11 @@ export const createTerminalSlice: StateCreator<AppState, [], [], TerminalSlice> 
         nextEverActivated.add(activeWorktreeId)
       }
 
+      // Why indexed: the layout map below looks up a tab per persisted layout, and
+      // re-flattening tabsByWorktree per entry is O(tabs x layouts).
+      const allTabs = Object.values(tabsByWorktree).flat()
+      const tabById = buildByIdIndex(allTabs)
+
       return {
         activeRepoId,
         activeWorktreeId,
@@ -3328,11 +3401,7 @@ export const createTerminalSlice: StateCreator<AppState, [], [], TerminalSlice> 
         // Why: seed nav history with the hydrated active worktree so the first activation has a Back target; hydration bypasses recordWorktreeVisit, so otherwise Back stays disabled until a second click.
         worktreeNavHistory: activeWorktreeId ? [activeWorktreeId] : [],
         worktreeNavHistoryIndex: activeWorktreeId ? 0 : -1,
-        ptyIdsByTabId: Object.fromEntries(
-          Object.values(tabsByWorktree)
-            .flat()
-            .map((tab) => [tab.id, []] as const)
-        ),
+        ptyIdsByTabId: Object.fromEntries(allTabs.map((tab) => [tab.id, []] as const)),
         // Why: daemon ptyIds survive app restart; preserve ptyIdsByLeafId so reconnect can reattach each split-pane leaf to its own session, not just the tab-level ptyId.
         terminalLayoutsByTabId: Object.fromEntries(
           Object.entries(session.terminalLayoutsByTabId)
@@ -3340,9 +3409,7 @@ export const createTerminalSlice: StateCreator<AppState, [], [], TerminalSlice> 
             .map(([tabId, layout]) => {
               // Why: old sessions can contain renderer-local pane:1-style leaf ids; normalize before runtime/mobile surfaces read them.
               const normalized = normalizeTerminalLayoutSnapshot(layout).snapshot
-              const tab = Object.values(tabsByWorktree)
-                .flat()
-                .find((entry) => entry.id === tabId)
+              const tab = tabById.get(tabId)
               const sanitized = tab ? sanitizeTerminalLayoutPaneTitles(normalized, tab) : normalized
               const activeLeafId = sanitized.root
                 ? resolvePtyBoundActiveLeafId({
@@ -3382,12 +3449,14 @@ export const createTerminalSlice: StateCreator<AppState, [], [], TerminalSlice> 
     // Why: defer daemon createOrAttach to connectPanePty (real fitAddon dims) instead of eager-spawning at 80×24 and garbling on flush; this loop only records the session IDs to reattach.
     let reconnectedTabsByWorktree: Record<string, TerminalTab[]> | null = null
     let reconnectedPtyIdsByTabId: Record<string, string[]> | null = null
+    // Why indexed: the loop neither sets state nor awaits, so one index over the
+    // whole store snapshot serves every iteration.
+    const worktreeById = buildWorktreeByIdIndex(get().worktreesByRepo)
+    const repoById = buildByIdIndex(get().repos)
     for (const worktreeId of ids) {
       const tabs = tabsByWorktree[worktreeId] ?? []
-      const worktree = Object.values(get().worktreesByRepo)
-        .flat()
-        .find((entry) => entry.id === worktreeId)
-      const repo = worktree ? get().repos.find((entry) => entry.id === worktree.repoId) : null
+      const worktree = worktreeById.get(worktreeId)
+      const repo = worktree ? (repoById.get(worktree.repoId) ?? null) : null
       // Why: only allow deferred reattach when the SSH connection is active; reattaching to a not-yet-connected relay (deferred/passphrase targets) would fail.
       const sshState = repo?.connectionId ? get().sshConnectionStates.get(repo.connectionId) : null
       const sshConnected = repo?.connectionId != null && sshState?.status === 'connected'
@@ -3441,12 +3510,10 @@ export const createTerminalSlice: StateCreator<AppState, [], [], TerminalSlice> 
     // Why: deferred SSH targets haven't connected yet, so their ptyIds weren't restored above; stash session IDs in a map that survives cleanup for pty-connection.ts's deferred reconnect.
     const deferredSshSessionIdsByTabId: Record<string, string> = {}
     for (const worktreeId of ids) {
-      const worktree = Object.values(get().worktreesByRepo)
-        .flat()
-        .find((entry) => entry.id === worktreeId)
+      const worktree = worktreeById.get(worktreeId)
       // Why: SSH worktrees aren't in worktreesByRepo at cold start; fall back to the repo id in the composite worktree id so sessions still reach the deferred map.
       const repoId = worktree?.repoId ?? getRepoIdFromWorktreeId(worktreeId)
-      const repo = repoId ? get().repos.find((entry) => entry.id === repoId) : null
+      const repo = repoId ? (repoById.get(repoId) ?? null) : null
       if (!repo?.connectionId) {
         continue
       }
