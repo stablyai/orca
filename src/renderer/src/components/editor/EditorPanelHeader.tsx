@@ -38,6 +38,7 @@ type EditorPanelHeaderProps = {
   showMarkdownTableOfContents: boolean
   canShowMarkdownFrontmatterToggle: boolean
   markdownFrontmatterVisible: boolean
+  canReloadFromDisk: boolean
   sideBySide: boolean
   openFileState: EditorHeaderOpenFileState
   onCopyPath: () => void
@@ -50,6 +51,7 @@ type EditorPanelHeaderProps = {
   onToggleMarkdownTableOfContents: () => void
   onToggleMarkdownFrontmatter: () => void
   onExportMarkdownToPdf: () => void
+  onReloadFromDisk: () => void
 }
 
 export function EditorPanelHeader({
@@ -72,6 +74,7 @@ export function EditorPanelHeader({
   showMarkdownTableOfContents,
   canShowMarkdownFrontmatterToggle,
   markdownFrontmatterVisible,
+  canReloadFromDisk,
   sideBySide,
   openFileState,
   onCopyPath,
@@ -83,7 +86,8 @@ export function EditorPanelHeader({
   onEditorToggleChange,
   onToggleMarkdownTableOfContents,
   onToggleMarkdownFrontmatter,
-  onExportMarkdownToPdf
+  onExportMarkdownToPdf,
+  onReloadFromDisk
 }: EditorPanelHeaderProps): React.JSX.Element {
   const diffComments = useAppStore((s) =>
     selectWorktreeDiffCommentsOrEmpty(s, activeFile.worktreeId)
@@ -320,10 +324,12 @@ export function EditorPanelHeader({
         canExportMarkdownToPdf={canExportMarkdownToPdf}
         canShowMarkdownFrontmatterToggle={canShowMarkdownFrontmatterToggle}
         markdownFrontmatterVisible={markdownFrontmatterVisible}
+        canReloadFromDisk={canReloadFromDisk}
         onToggleDiffWordWrap={() => void updateSettings({ diffWordWrap: !diffWordWrap })}
         onToggleEditorWordWrap={() => void updateSettings({ editorWordWrap: !editorWordWrap })}
         onToggleMarkdownFrontmatter={onToggleMarkdownFrontmatter}
         onExportMarkdownToPdf={onExportMarkdownToPdf}
+        onReloadFromDisk={onReloadFromDisk}
       />
     </div>
   )

@@ -87,6 +87,7 @@ export type KeybindingActionId =
   | 'editor.find'
   | 'editor.replace'
   | 'editor.save'
+  | 'editor.reloadFromDisk'
   | 'editor.markdownPreview'
   | 'editor.toggleWordWrap'
   | 'editor.copyContext'
@@ -798,6 +799,14 @@ export const KEYBINDING_DEFINITIONS: readonly KeybindingDefinition[] = [
     scope: 'editor',
     searchKeywords: ['shortcut', 'editor', 'save'],
     defaultBindings: platformBindings(['Mod+S'])
+  },
+  {
+    id: 'editor.reloadFromDisk',
+    title: 'Reload from Disk',
+    group: 'Editors',
+    scope: 'editor',
+    searchKeywords: ['shortcut', 'editor', 'reload', 'revert', 'disk'],
+    defaultBindings: platformBindings([])
   },
   {
     id: 'editor.markdownPreview',
