@@ -1015,26 +1015,40 @@ export function ResourceUsageStatusSegment({
     [applyFloatingPosition]
   )
 
-  const resetFloatingPosition = useCallback((): void => {
+  const cancelFloatingDrag = useCallback((): void => {
     if (floatingDragFrameRef.current !== null) {
       cancelAnimationFrame(floatingDragFrameRef.current)
       floatingDragFrameRef.current = null
     }
     floatingDragRef.current = null
     pendingFloatingPositionRef.current = null
+    setFloatingDragging(false)
+  }, [])
+
+  const resetFloatingPosition = useCallback((): void => {
+    cancelFloatingDrag()
     floatingPositionRef.current = null
     floatingPanelRef.current?.style.setProperty('--resource-manager-x', '0px')
     floatingPanelRef.current?.style.setProperty('--resource-manager-y', '0px')
-    setFloatingDragging(false)
     setFloatingPosition(null)
-  }, [])
+  }, [cancelFloatingDrag])
 
   const setResourceManagerOpen = useCallback(
     (nextOpen: boolean): void => {
       if (!nextOpen) {
-        resetFloatingPosition()
+        cancelFloatingDrag()
       }
       setOpen(nextOpen)
+    },
+    [cancelFloatingDrag]
+  )
+
+  const handleFloatingExitAnimationEnd = useCallback(
+    (event: React.AnimationEvent<HTMLDivElement>): void => {
+      if (event.target !== event.currentTarget || event.currentTarget.dataset.state !== 'closed') {
+        return
+      }
+      resetFloatingPosition()
     },
     [resetFloatingPosition]
   )
@@ -1457,6 +1471,7 @@ export function ResourceUsageStatusSegment({
         style={{
           transform: 'translate(var(--resource-manager-x, 0px), var(--resource-manager-y, 0px))'
         }}
+        onAnimationEnd={handleFloatingExitAnimationEnd}
         onOpenAutoFocus={(event) => event.preventDefault()}
         // Why: activating a tab focuses xterm's DOM node; Radix would read that as focus-outside and close. Outside-click and Escape still close.
         onFocusOutside={(event) => event.preventDefault()}
