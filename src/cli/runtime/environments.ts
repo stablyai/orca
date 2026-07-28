@@ -13,7 +13,8 @@ import type {
   KnownRuntimeEnvironment,
   PublicKnownRuntimeEnvironment
 } from '../../shared/runtime-environments'
-import type { PairingOffer } from '../../shared/pairing'
+import { parsePairingCode, type PairingOffer } from '../../shared/pairing'
+import { resolveAdvertisedPairingEndpoint } from '../../main/runtime/pairing-endpoint'
 import { RuntimeClientError } from './types'
 
 export type EnvironmentAddResult = {
@@ -32,9 +33,38 @@ export { getEnvironmentStorePath, listEnvironments }
 
 export function addEnvironmentFromPairingCode(
   userDataPath: string,
-  args: { name: string; pairingCode: string; now?: number }
+  args: { name: string; pairingCode: string; now?: number; endpointAddress?: string }
 ): KnownRuntimeEnvironment {
-  return translateStoreError(() => addEnvironmentFromPairingCodeInStore(userDataPath, args))
+  const { endpointAddress, ...rest } = args
+  const endpoint = endpointAddress
+    ? resolveEndpointOverride(args.pairingCode, endpointAddress)
+    : null
+  return translateStoreError(() =>
+    addEnvironmentFromPairingCodeInStore(userDataPath, {
+      ...rest,
+      ...(endpoint ? { endpoint } : {})
+    })
+  )
+}
+
+// Why: reuse the host's advertise grammar so --endpoint accepts the same hosts,
+// host:port, and ws(s):// forms the "Share this Orca server" address field does.
+function resolveEndpointOverride(pairingCode: string, address: string): string {
+  const offer = parsePairingCode(pairingCode)
+  if (!offer) {
+    throw new RuntimeClientError(
+      'invalid_argument',
+      'Invalid pairing code. Expected an orca://pair?... URL or bare pairing payload.'
+    )
+  }
+  const resolved = resolveAdvertisedPairingEndpoint(offer.endpoint, address)
+  if (!resolved.ok) {
+    throw new RuntimeClientError(
+      'invalid_argument',
+      `Invalid --endpoint "${address}". ${resolved.guidance}`
+    )
+  }
+  return resolved.endpoint
 }
 
 export function removeEnvironment(userDataPath: string, selector: string): KnownRuntimeEnvironment {

@@ -5,9 +5,15 @@ export const ENVIRONMENT_COMMAND_SPECS: CommandSpec[] = [
   {
     path: ['environment', 'add'],
     summary: 'Save a remote Orca runtime environment from a pairing code',
-    usage: 'orca environment add --name <name> --pairing-code <code> [--json]',
-    allowedFlags: [...GLOBAL_FLAGS, 'name'],
-    examples: ['orca environment add --name work-laptop --pairing-code orca://pair?code=...']
+    usage: 'orca environment add --name <name> --pairing-code <code> [--endpoint <host>] [--json]',
+    allowedFlags: [...GLOBAL_FLAGS, 'name', 'endpoint'],
+    examples: [
+      'orca environment add --name work-laptop --pairing-code orca://pair?code=...',
+      'orca environment add --name work-laptop --pairing-code orca://pair?code=... --endpoint 100.64.0.2'
+    ],
+    notes: [
+      'Use --endpoint when the host advertised an address this machine cannot reach (for example a 127.0.0.1 link generated for a LAN or Tailscale peer). It accepts a host, host:port, or ws(s):// URL and keeps the port from the pairing code when omitted.'
+    ]
   },
   {
     path: ['environment', 'list'],
