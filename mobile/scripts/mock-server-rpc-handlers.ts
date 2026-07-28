@@ -12,6 +12,7 @@ import { handleMockFilePreviewRequest } from './mock-server-file-preview-data'
 import { handleMockGitRequest } from './mock-server-git-state'
 import { handleMockAccountRequest } from './mock-server-account-rpc'
 import { handleMockNativeChatRequest } from './mock-server-native-chat-scenario'
+import { handleMockSessionTabsRequest } from './mock-server-session-tabs-fixture'
 import {
   createMockTerminals,
   FAKE_SCROLLBACK,
@@ -124,7 +125,8 @@ export function handleRequest(
     handleMockGitRequest(request, respond, success) ||
     handleMockFilePreviewRequest(request, respond, success, error) ||
     handleMockAccountRequest(request, respond, success, error) ||
-    handleMockNativeChatRequest(request, respond, success, error, ws)
+    handleMockNativeChatRequest(request, respond, success, error, ws) ||
+    handleMockSessionTabsRequest(request, respond, success)
   ) {
     return
   }
@@ -306,27 +308,6 @@ export function handleRequest(
       }, 500)
       break
     }
-
-    case 'session.tabs.list':
-      respond(
-        success(request.id, {
-          worktree: request.params?.worktree ?? 'id:mock',
-          snapshotVersion: 1,
-          tabs: [
-            {
-              type: 'terminal',
-              id: 'tab-1',
-              title: 'zsh',
-              status: 'ready',
-              terminal: 'term-1',
-              isActive: true
-            }
-          ],
-          activeTabId: 'tab-1',
-          activeTabType: 'terminal'
-        })
-      )
-      break
 
     case 'terminal.send':
       respond(success(request.id, { send: { handle: 'term-1', ok: true } }))
