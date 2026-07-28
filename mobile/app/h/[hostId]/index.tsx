@@ -94,7 +94,10 @@ import {
 import { useWorkspaceSections } from '../../../src/worktree/use-workspace-sections'
 import { getMobileWorkspaceLineageGroupKey } from '../../../src/worktree/mobile-workspace-lineage'
 import { areWorktreeListsEqual } from '../../../src/worktree/worktree-list-snapshot'
-import { createWorktreeRemovalTracker } from '../../../src/worktree/worktree-removal'
+import {
+  getWorktreeRemovalTracker,
+  STALE_SNAPSHOT_GENERATION
+} from '../../../src/worktree/worktree-removal'
 import { repoColor } from '../../../src/worktree/repo-color'
 import {
   WORKSPACE_GROUP_OPTIONS as GROUP_OPTIONS,
@@ -147,7 +150,7 @@ export function HostScreen({
   const repoMetadataFetchedAtRef = useRef(0)
   const newWorktreeModalRef = useRef<{ open: () => void }>(null)
   const newWorktreeModalVisibleRef = useRef(false)
-  const worktreeRemovalRef = useRef(createWorktreeRemovalTracker())
+  const worktreeRemoval = getWorktreeRemovalTracker(hostId ?? '')
   const closeHostClient = useCloseHost()
   const forceReconnectHost = useForceReconnect()
   const [worktrees, setWorktrees] = useState<Worktree[]>(initialCache ?? [])
@@ -325,8 +328,10 @@ export function HostScreen({
     // Why: useState initializer runs only on first mount, so re-seed the cache when Expo Router reuses this screen for a new hostId.
     const freshCache = hostId ? (getCachedWorktrees(hostId) as Worktree[] | null) : null
     if (freshCache) {
-      setWorktrees(freshCache)
-      setLastKnownWorktrees(freshCache)
+      // A replayed cache proves nothing about a pending delete, so it never settles one.
+      const seeded = worktreeRemoval.reconcile(freshCache, STALE_SNAPSHOT_GENERATION)
+      setWorktrees(seeded)
+      setLastKnownWorktrees(seeded)
       setWorktreesLoaded(true)
     } else {
       setWorktreesLoaded(false)
@@ -423,6 +428,7 @@ export function HostScreen({
       fetchWorktreesInFlightRef.current = true
       const requestClient = client
       const requestHostId = hostId
+      const generation = worktreeRemoval.beginSnapshot()
 
       try {
         // Why: worktree.ps silently truncates at 200; use a high cap so large hosts don't drop workspaces.
@@ -435,8 +441,9 @@ export function HostScreen({
         }
         if (response.ok) {
           const result = (response as RpcSuccess).result as { worktrees: Worktree[] }
-          // Why: a poll in flight when a delete lands still lists the deleted worktree; without this the row comes back.
-          const snapshot = worktreeRemovalRef.current.reconcile(result.worktrees)
+          // Why: the host keeps reporting a worktree until its removal finishes, so a read
+          // issued before the delete landed would otherwise resurrect the row.
+          const snapshot = worktreeRemoval.reconcile(result.worktrees, generation)
           // Why: reuse the existing array on identical snapshots to keep SectionList/sort rebuilds off the tap path.
           setWorktrees((current) => (areWorktreeListsEqual(current, snapshot) ? current : snapshot))
           setLastKnownWorktrees((current) =>
@@ -485,7 +492,7 @@ export function HostScreen({
         fetchWorktreesInFlightRef.current = false
       }
     },
-    [client, connState, hostId]
+    [client, connState, hostId, worktreeRemoval]
   )
 
   useFocusEffect(
@@ -579,10 +586,14 @@ export function HostScreen({
       if (!client) {
         return
       }
-      await worktreeRemovalRef.current.remove({
+      await worktreeRemoval.remove({
         worktree: item,
         client,
         updateWorktreeLists: (updater) => {
+          // Why: this screen is reused across hostIds, so a late rollback must not edit another host's list.
+          if (clientRef.current !== client) {
+            return
+          }
           setWorktrees(updater)
           setLastKnownWorktrees(updater)
         },
@@ -591,7 +602,7 @@ export function HostScreen({
         onFailure: (message) => Alert.alert('Could not delete workspace', message)
       })
     },
-    [client, fetchWorktrees]
+    [client, fetchWorktrees, worktreeRemoval]
   )
 
   const handleRemoveHost = useCallback(async () => {

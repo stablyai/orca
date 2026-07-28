@@ -3,9 +3,12 @@ import { markRpcDeliveryUnknown } from '../transport/rpc-delivery-ambiguity'
 import type { RpcResponse } from '../transport/types'
 import type { Worktree } from './workspace-list-types'
 import {
-  WORKTREE_REMOVAL_TOMBSTONE_TTL_MS,
+  STALE_SNAPSHOT_GENERATION,
+  WORKTREE_REMOVAL_AMBIGUOUS_GRACE_MS,
   WORKTREE_REMOVE_TIMEOUT_MS,
-  createWorktreeRemovalTracker
+  createWorktreeRemovalTracker,
+  getWorktreeRemovalTracker,
+  type RemoveWorktreeArgs
 } from './worktree-removal'
 
 function worktree(worktreeId: string): Worktree {
@@ -25,8 +28,8 @@ function worktree(worktreeId: string): Worktree {
   }
 }
 
-function success(result: unknown = { removed: true }): RpcResponse {
-  return { id: '1', ok: true, result, _meta: { runtimeId: 'runtime-1' } }
+function success(): RpcResponse {
+  return { id: '1', ok: true, result: { removed: true }, _meta: { runtimeId: 'runtime-1' } }
 }
 
 function failure(message: string): RpcResponse {
@@ -38,11 +41,15 @@ function failure(message: string): RpcResponse {
   }
 }
 
+function timeout(): Error {
+  return markRpcDeliveryUnknown(new Error('Request timed out: worktree.rm'))
+}
+
 function listHarness(initial: Worktree[]) {
   let list = initial
   return {
-    get current(): Worktree[] {
-      return list
+    get ids(): string[] {
+      return list.map((entry) => entry.worktreeId)
     },
     update: (updater: (value: Worktree[]) => Worktree[]) => {
       list = updater(list)
@@ -50,84 +57,159 @@ function listHarness(initial: Worktree[]) {
   }
 }
 
-describe('createWorktreeRemovalTracker', () => {
-  it('sends worktree.rm with the desktop-sized timeout and keeps the row hidden', async () => {
+type RemoveOverrides = Partial<RemoveWorktreeArgs> & { response?: RpcResponse; rejectWith?: Error }
+
+function removeArgs(worktreeId: string, overrides: RemoveOverrides = {}): RemoveWorktreeArgs {
+  const { response, rejectWith, ...rest } = overrides
+  const sendRequest = rejectWith
+    ? vi.fn().mockRejectedValue(rejectWith)
+    : vi.fn().mockResolvedValue(response ?? success())
+  return {
+    worktree: worktree(worktreeId),
+    client: { sendRequest },
+    updateWorktreeLists: () => {},
+    refresh: () => {},
+    onFailure: () => {},
+    ...rest
+  }
+}
+
+describe('worktree removal tracker', () => {
+  it('sends worktree.rm with the desktop-sized timeout and drops the row', async () => {
     const tracker = createWorktreeRemovalTracker()
     const lists = listHarness([worktree('wt-1'), worktree('wt-2')])
     const sendRequest = vi.fn().mockResolvedValue(success())
-    const refresh = vi.fn()
     const onFailure = vi.fn()
+    const refresh = vi.fn()
 
-    await tracker.remove({
-      worktree: worktree('wt-1'),
-      client: { sendRequest },
-      updateWorktreeLists: lists.update,
-      refresh,
-      onFailure
-    })
+    await tracker.remove(
+      removeArgs('wt-1', {
+        client: { sendRequest },
+        updateWorktreeLists: lists.update,
+        onFailure,
+        refresh
+      })
+    )
 
     expect(sendRequest).toHaveBeenCalledWith(
       'worktree.rm',
       { worktree: 'id:wt-1', force: true },
       { timeoutMs: WORKTREE_REMOVE_TIMEOUT_MS }
     )
-    expect(lists.current.map((entry) => entry.worktreeId)).toEqual(['wt-2'])
-    expect(refresh).toHaveBeenCalledTimes(1)
+    expect(lists.ids).toEqual(['wt-2'])
     expect(onFailure).not.toHaveBeenCalled()
+    expect(refresh).toHaveBeenCalledTimes(1)
   })
 
-  it('drops a deleted worktree from a snapshot the host took before the delete landed', async () => {
+  it('hides the worktree in a read issued before the delete landed', async () => {
     const tracker = createWorktreeRemovalTracker()
-    const lists = listHarness([worktree('wt-1'), worktree('wt-2')])
+    // The poll that was already in flight when the user confirmed the delete.
+    const inFlight = tracker.beginSnapshot()
 
-    await tracker.remove({
-      worktree: worktree('wt-1'),
-      client: { sendRequest: vi.fn().mockResolvedValue(success()) },
-      updateWorktreeLists: lists.update,
-      refresh: () => {},
-      onFailure: () => {},
-      now: () => 1000
-    })
+    await tracker.remove(removeArgs('wt-1'))
 
     const stale = [worktree('wt-1'), worktree('wt-2')]
-    expect(tracker.reconcile(stale, 1500).map((entry) => entry.worktreeId)).toEqual(['wt-2'])
+    expect(tracker.reconcile(stale, inFlight).map((entry) => entry.worktreeId)).toEqual(['wt-2'])
   })
 
-  it('stops hiding a worktree once the host confirms it is gone', async () => {
+  it('hides the worktree for the whole delete, not just one poll', async () => {
     const tracker = createWorktreeRemovalTracker()
+    let settle = (_: RpcResponse) => {}
+    const sendRequest = vi.fn().mockReturnValue(
+      new Promise<RpcResponse>((resolve) => {
+        settle = resolve
+      })
+    )
+    const removal = tracker.remove(removeArgs('wt-1', { client: { sendRequest } }))
 
-    await tracker.remove({
-      worktree: worktree('wt-1'),
-      client: { sendRequest: vi.fn().mockResolvedValue(success()) },
-      updateWorktreeLists: () => {},
-      refresh: () => {},
-      onFailure: () => {},
-      now: () => 1000
-    })
+    // The host truthfully keeps reporting the worktree until the removal finishes.
+    for (let poll = 0; poll < 5; poll += 1) {
+      const snapshot = [worktree('wt-1')]
+      expect(tracker.reconcile(snapshot, tracker.beginSnapshot())).toHaveLength(0)
+    }
 
-    expect(tracker.reconcile([worktree('wt-2')], 1500)).toHaveLength(1)
-    // The worktree id is untracked again, so a same-id workspace recreated later shows up.
-    const recreated = [worktree('wt-1'), worktree('wt-2')]
-    expect(tracker.reconcile(recreated, 1600)).toBe(recreated)
+    settle(success())
+    await removal
   })
 
-  it('stops hiding a worktree the host keeps reporting past the tombstone TTL', async () => {
+  it('stops hiding a worktree recreated at the same path after the delete', async () => {
+    const tracker = createWorktreeRemovalTracker()
+    // Why (regression): ids are path-derived and reused. Clearing only when the host stops
+    // reporting the id hid a freshly recreated workspace until the grace period lapsed.
+    await tracker.remove(removeArgs('wt-1'))
+
+    const recreated = [worktree('wt-1')]
+    expect(tracker.reconcile(recreated, tracker.beginSnapshot())).toBe(recreated)
+  })
+
+  it('keeps hiding a confirmed delete across reads issued before it resolved', async () => {
+    const tracker = createWorktreeRemovalTracker()
+    const stale = tracker.beginSnapshot()
+
+    await tracker.remove(removeArgs('wt-1'))
+
+    expect(tracker.reconcile([worktree('wt-1')], stale)).toHaveLength(0)
+  })
+
+  it('never lets a replayed cache settle a pending delete', async () => {
     const tracker = createWorktreeRemovalTracker()
 
-    await tracker.remove({
-      worktree: worktree('wt-1'),
-      client: { sendRequest: vi.fn().mockResolvedValue(success()) },
-      updateWorktreeLists: () => {},
-      refresh: () => {},
-      onFailure: () => {},
-      now: () => 1000
+    await tracker.remove(removeArgs('wt-1'))
+
+    const cached = [worktree('wt-1')]
+    expect(tracker.reconcile(cached, STALE_SNAPSHOT_GENERATION)).toHaveLength(0)
+  })
+
+  it('keeps the row hidden for the grace period after an rm times out', async () => {
+    const tracker = createWorktreeRemovalTracker()
+    const lists = listHarness([worktree('wt-1')])
+    const onFailure = vi.fn()
+    // Why (regression): the timeout fires a full WORKTREE_REMOVE_TIMEOUT_MS after the
+    // request starts. A grace period measured from the request would already be spent,
+    // so the row reappeared the instant the delete timed out.
+    let clock = 1000
+    const sendRequest = vi.fn().mockImplementation(() => {
+      clock += WORKTREE_REMOVE_TIMEOUT_MS
+      return Promise.reject(timeout())
     })
+
+    await tracker.remove(
+      removeArgs('wt-1', {
+        client: { sendRequest },
+        updateWorktreeLists: lists.update,
+        onFailure,
+        now: () => clock
+      })
+    )
 
     const stubborn = [worktree('wt-1')]
-    expect(tracker.reconcile(stubborn, 1000 + WORKTREE_REMOVAL_TOMBSTONE_TTL_MS - 1)).toHaveLength(
-      0
-    )
-    expect(tracker.reconcile(stubborn, 1000 + WORKTREE_REMOVAL_TOMBSTONE_TTL_MS)).toBe(stubborn)
+    expect(lists.ids).toEqual([])
+    expect(onFailure).not.toHaveBeenCalled()
+    expect(tracker.reconcile(stubborn, tracker.beginSnapshot(), clock)).toHaveLength(0)
+    expect(
+      tracker.reconcile(
+        stubborn,
+        tracker.beginSnapshot(),
+        clock + WORKTREE_REMOVAL_AMBIGUOUS_GRACE_MS - 1
+      )
+    ).toHaveLength(0)
+    expect(
+      tracker.reconcile(
+        stubborn,
+        tracker.beginSnapshot(),
+        clock + WORKTREE_REMOVAL_AMBIGUOUS_GRACE_MS
+      )
+    ).toBe(stubborn)
+  })
+
+  it('leaves an ambiguous delete gone once the host confirms it', async () => {
+    const tracker = createWorktreeRemovalTracker()
+
+    await tracker.remove(removeArgs('wt-1', { rejectWith: timeout(), now: () => 1000 }))
+
+    expect(tracker.reconcile([worktree('wt-2')], tracker.beginSnapshot(), 1500)).toHaveLength(1)
+    const recreated = [worktree('wt-1')]
+    expect(tracker.reconcile(recreated, tracker.beginSnapshot(), 1600)).toBe(recreated)
   })
 
   it('restores the row and reports the host error when the delete is rejected', async () => {
@@ -135,17 +217,37 @@ describe('createWorktreeRemovalTracker', () => {
     const lists = listHarness([worktree('wt-1')])
     const onFailure = vi.fn()
 
-    await tracker.remove({
-      worktree: worktree('wt-1'),
-      client: { sendRequest: vi.fn().mockResolvedValue(failure('worktree is locked')) },
-      updateWorktreeLists: lists.update,
-      refresh: () => {},
-      onFailure
-    })
+    await tracker.remove(
+      removeArgs('wt-1', {
+        response: failure('worktree is locked'),
+        updateWorktreeLists: lists.update,
+        onFailure
+      })
+    )
 
-    expect(lists.current.map((entry) => entry.worktreeId)).toEqual(['wt-1'])
+    expect(lists.ids).toEqual(['wt-1'])
     expect(onFailure).toHaveBeenCalledWith('worktree is locked')
-    expect(tracker.reconcile([worktree('wt-1')])).toHaveLength(1)
+    expect(tracker.reconcile([worktree('wt-1')], tracker.beginSnapshot())).toHaveLength(1)
+  })
+
+  it('restores the row once, even if a poll already put it back', async () => {
+    const tracker = createWorktreeRemovalTracker()
+    const lists = listHarness([worktree('wt-1')])
+
+    await tracker.remove(
+      removeArgs('wt-1', {
+        response: failure('worktree is locked'),
+        updateWorktreeLists: (updater) => {
+          lists.update(updater)
+          // A poll resolving between the optimistic drop and the rollback.
+          lists.update((list) =>
+            list.some((entry) => entry.worktreeId === 'wt-1') ? list : [...list, worktree('wt-1')]
+          )
+        }
+      })
+    )
+
+    expect(lists.ids).toEqual(['wt-1'])
   })
 
   it('restores the row and reports the message when the request throws', async () => {
@@ -153,52 +255,23 @@ describe('createWorktreeRemovalTracker', () => {
     const lists = listHarness([worktree('wt-1')])
     const onFailure = vi.fn()
 
-    await tracker.remove({
-      worktree: worktree('wt-1'),
-      client: { sendRequest: vi.fn().mockRejectedValue(new Error('repo_not_found')) },
-      updateWorktreeLists: lists.update,
-      refresh: () => {},
-      onFailure
-    })
+    await tracker.remove(
+      removeArgs('wt-1', {
+        rejectWith: new Error('repo_not_found'),
+        updateWorktreeLists: lists.update,
+        onFailure
+      })
+    )
 
-    expect(lists.current).toHaveLength(1)
+    expect(lists.ids).toEqual(['wt-1'])
     expect(onFailure).toHaveBeenCalledWith('repo_not_found')
   })
 
-  it('keeps the row hidden when delivery is unknown, since the host may still be deleting', async () => {
-    const tracker = createWorktreeRemovalTracker()
-    const lists = listHarness([worktree('wt-1')])
-    const onFailure = vi.fn()
-
-    await tracker.remove({
-      worktree: worktree('wt-1'),
-      client: {
-        sendRequest: vi
-          .fn()
-          .mockRejectedValue(markRpcDeliveryUnknown(new Error('Request timed out: worktree.rm')))
-      },
-      updateWorktreeLists: lists.update,
-      refresh: () => {},
-      onFailure,
-      now: () => 1000
-    })
-
-    expect(lists.current).toHaveLength(0)
-    expect(onFailure).not.toHaveBeenCalled()
-    expect(tracker.reconcile([worktree('wt-1')], 1500)).toHaveLength(0)
-  })
-
-  it('refreshes after both outcomes so a rolled-back list re-sorts from the host', async () => {
+  it('refreshes after every outcome so the list re-sorts from the host', async () => {
     const tracker = createWorktreeRemovalTracker()
     const refresh = vi.fn()
 
-    await tracker.remove({
-      worktree: worktree('wt-1'),
-      client: { sendRequest: vi.fn().mockRejectedValue(new Error('boom')) },
-      updateWorktreeLists: () => {},
-      refresh,
-      onFailure: () => {}
-    })
+    await tracker.remove(removeArgs('wt-1', { rejectWith: new Error('boom'), refresh }))
 
     expect(refresh).toHaveBeenCalledTimes(1)
   })
@@ -207,6 +280,22 @@ describe('createWorktreeRemovalTracker', () => {
     const tracker = createWorktreeRemovalTracker()
     const snapshot = [worktree('wt-1')]
 
-    expect(tracker.reconcile(snapshot)).toBe(snapshot)
+    expect(tracker.reconcile(snapshot, tracker.beginSnapshot())).toBe(snapshot)
+  })
+
+  it('keeps one host cached tracker per hostId so a remount remembers a pending delete', async () => {
+    // Why: worktree ids are only unique per host, and the list screen unmounts on
+    // navigation and is reused across hostIds.
+    const removal = getWorktreeRemovalTracker('host-a').remove(removeArgs('wt-1'))
+    await removal
+
+    const remounted = getWorktreeRemovalTracker('host-a')
+    expect(remounted).toBe(getWorktreeRemovalTracker('host-a'))
+    expect(remounted.reconcile([worktree('wt-1')], STALE_SNAPSHOT_GENERATION)).toHaveLength(0)
+
+    const otherHost = [worktree('wt-1')]
+    expect(
+      getWorktreeRemovalTracker('host-b').reconcile(otherHost, STALE_SNAPSHOT_GENERATION)
+    ).toBe(otherHost)
   })
 })

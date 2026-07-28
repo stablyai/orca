@@ -6,11 +6,23 @@ import type { Worktree } from './workspace-list-types'
 // large node_modules deletes routinely outrun the generic 30s mobile RPC timeout.
 export const WORKTREE_REMOVE_TIMEOUT_MS = 60_000
 
-// Why: a removed worktree stays hidden only until worktree.ps stops reporting it;
-// the TTL keeps a half-removed workspace from being invisible forever.
-export const WORKTREE_REMOVAL_TOMBSTONE_TTL_MS = 60_000
+// Why: a timed-out or socket-dropped rm may still be running on the host. Hide the row
+// this long past the failure, then let the host's own answer stand. Measured from the
+// failure, not the request, or the delete timeout would consume the whole window.
+export const WORKTREE_REMOVAL_AMBIGUOUS_GRACE_MS = 60_000
+
+// Snapshots that cannot settle a removal: replayed caches, not a fresh worktree.ps read.
+export const STALE_SNAPSHOT_GENERATION = 0
 
 const WORKTREE_REMOVE_FAILURE_FALLBACK = 'The host could not delete this workspace.'
+
+type PendingRemoval = {
+  // Snapshot generation past which the host's answer is authoritative. Null while the rm
+  // is in flight and for ambiguous outcomes, where no snapshot can settle the question.
+  authoritativeAfter: number | null
+  // Deadline for an ambiguous outcome; null when the outcome is known.
+  revealAt: number | null
+}
 
 export type WorktreeListUpdate = (updater: (list: Worktree[]) => Worktree[]) => void
 
@@ -25,34 +37,46 @@ export type RemoveWorktreeArgs = {
 }
 
 export type WorktreeRemovalTracker = {
-  /** Drops rows this client already deleted from a host snapshot taken before the delete landed. */
-  reconcile: (snapshot: Worktree[], now?: number) => Worktree[]
+  /** Stamps a worktree.ps read so reconcile can tell pre-delete snapshots from post-delete ones. */
+  beginSnapshot: () => number
+  /** Drops rows this client already deleted from a snapshot that predates the delete. */
+  reconcile: (snapshot: Worktree[], generation: number, now?: number) => Worktree[]
   remove: (args: RemoveWorktreeArgs) => Promise<void>
 }
 
 /**
- * Tracks worktrees this client asked the host to delete. `worktree.ps` polls every
- * 3s, so a snapshot requested before the delete resolves still lists the worktree and
- * would otherwise resurrect the row the user just removed.
+ * Tracks worktrees this client asked the host to delete. `worktree.ps` polls every 3s and
+ * the host keeps reporting a worktree until the removal finishes, so without this a poll
+ * issued before the delete landed resurrects the row the user just removed.
  */
 export function createWorktreeRemovalTracker(): WorktreeRemovalTracker {
-  const removedAtById = new Map<string, number>()
+  const pending = new Map<string, PendingRemoval>()
+  let snapshotGeneration = STALE_SNAPSHOT_GENERATION
 
-  function reconcile(snapshot: Worktree[], now = Date.now()): Worktree[] {
-    if (removedAtById.size === 0) {
+  function beginSnapshot(): number {
+    snapshotGeneration += 1
+    return snapshotGeneration
+  }
+
+  function reconcile(snapshot: Worktree[], generation: number, now = Date.now()): Worktree[] {
+    if (pending.size === 0) {
       return snapshot
     }
     const reported = new Set(snapshot.map((entry) => entry.worktreeId))
     // Deleting the current entry mid-iteration is safe for a Map.
-    for (const [worktreeId, removedAt] of removedAtById) {
-      if (!reported.has(worktreeId) || now - removedAt >= WORKTREE_REMOVAL_TOMBSTONE_TTL_MS) {
-        removedAtById.delete(worktreeId)
+    for (const [worktreeId, removal] of pending) {
+      const settled =
+        !reported.has(worktreeId) ||
+        (removal.authoritativeAfter !== null && generation > removal.authoritativeAfter) ||
+        (removal.revealAt !== null && now >= removal.revealAt)
+      if (settled) {
+        pending.delete(worktreeId)
       }
     }
-    if (removedAtById.size === 0) {
+    if (pending.size === 0) {
       return snapshot
     }
-    return snapshot.filter((entry) => !removedAtById.has(entry.worktreeId))
+    return snapshot.filter((entry) => !pending.has(entry.worktreeId))
   }
 
   async function remove({
@@ -64,11 +88,11 @@ export function createWorktreeRemovalTracker(): WorktreeRemovalTracker {
     now = Date.now
   }: RemoveWorktreeArgs): Promise<void> {
     const { worktreeId } = worktree
-    removedAtById.set(worktreeId, now())
+    pending.set(worktreeId, { authoritativeAfter: null, revealAt: null })
     updateWorktreeLists((list) => list.filter((entry) => entry.worktreeId !== worktreeId))
 
     const restore = (message: string): void => {
-      removedAtById.delete(worktreeId)
+      pending.delete(worktreeId)
       updateWorktreeLists((list) =>
         list.some((entry) => entry.worktreeId === worktreeId) ? list : [...list, worktree]
       )
@@ -81,13 +105,21 @@ export function createWorktreeRemovalTracker(): WorktreeRemovalTracker {
         { worktree: `id:${worktreeId}`, force: true },
         { timeoutMs: WORKTREE_REMOVE_TIMEOUT_MS }
       )
-      if (!response.ok) {
+      if (response.ok) {
+        // Why: worktree ids are path-derived and get reused, so stop hiding as soon as a
+        // read issued after the delete answers — otherwise a workspace recreated at the
+        // same path stays invisible.
+        pending.set(worktreeId, { authoritativeAfter: snapshotGeneration, revealAt: null })
+      } else {
         restore(response.error.message || WORKTREE_REMOVE_FAILURE_FALLBACK)
       }
     } catch (error) {
-      // Why: a timed-out or socket-dropped rm may still be running on the host, so
-      // keep the row hidden and let the next snapshot (or the TTL) settle it.
-      if (!isRpcDeliveryUnknown(error)) {
+      if (isRpcDeliveryUnknown(error)) {
+        pending.set(worktreeId, {
+          authoritativeAfter: null,
+          revealAt: now() + WORKTREE_REMOVAL_AMBIGUOUS_GRACE_MS
+        })
+      } else {
         restore(error instanceof Error ? error.message : WORKTREE_REMOVE_FAILURE_FALLBACK)
       }
     } finally {
@@ -95,5 +127,20 @@ export function createWorktreeRemovalTracker(): WorktreeRemovalTracker {
     }
   }
 
-  return { reconcile, remove }
+  return { beginSnapshot, reconcile, remove }
+}
+
+// Why: the list screen unmounts on navigation and is reused across hostIds, so per-mount
+// state would forget an in-flight delete — and leak one host's ids onto another's list,
+// since worktree ids are only unique per host.
+const trackersByHostId = new Map<string, WorktreeRemovalTracker>()
+
+export function getWorktreeRemovalTracker(hostId: string): WorktreeRemovalTracker {
+  const existing = trackersByHostId.get(hostId)
+  if (existing) {
+    return existing
+  }
+  const tracker = createWorktreeRemovalTracker()
+  trackersByHostId.set(hostId, tracker)
+  return tracker
 }
