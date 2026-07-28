@@ -130,13 +130,15 @@ function repo(overrides: Partial<Repo> = {}): Repo {
 function storeWithRepos(
   repos: Repo[],
   projects: ReturnType<Store['getProjects']> = []
-): Pick<Store, 'getRepos' | 'getRepo' | 'getProjects' | 'getSettings'> {
+): Pick<Store, 'getRepos' | 'getRepo' | 'getProjects' | 'getSettings' | 'onSettingsChanged'> {
   return {
     getRepos: () => repos,
     getRepo: (id: string) => repos.find((candidate) => candidate.id === id),
     getProjects: () => projects,
+    onSettingsChanged: () => () => {},
     getSettings: () =>
       ({
+        gitlabUrl: 'https://gitlab.com',
         localWindowsRuntimeDefault: { kind: 'windows-host' }
       }) as ReturnType<Store['getSettings']>
   }
@@ -242,7 +244,9 @@ describe('GitLab IPC handlers', () => {
       20,
       undefined,
       'fix login',
-      null
+      null,
+      {},
+      'https://gitlab.com'
     )
     expect(listWorkItemsMock).toHaveBeenCalledWith(
       '/local/orca',
@@ -271,7 +275,9 @@ describe('GitLab IPC handlers', () => {
       20,
       undefined,
       undefined,
-      null
+      null,
+      {},
+      'https://gitlab.com'
     )
   })
 
@@ -429,7 +435,8 @@ describe('GitLab IPC handlers', () => {
       undefined,
       undefined,
       null,
-      localGitOptions
+      localGitOptions,
+      'https://gitlab.com'
     )
     expect(issueListResult).toMatchObject({ totalPages: 3 })
     expect(listWorkItemsMock).toHaveBeenCalledWith(

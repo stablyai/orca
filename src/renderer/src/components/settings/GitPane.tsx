@@ -23,6 +23,7 @@ import {
 } from './keep-local-main-up-to-date-setting'
 import { translate } from '@/i18n/i18n'
 import { SettingsRow, SettingsSegmentedControl } from './SettingsFormControls'
+import { GitLabUrlSetting, gitLabUrlSettingMatchesSearch } from './GitLabUrlSetting'
 
 export { getGitPaneSearchEntries }
 
@@ -240,6 +241,9 @@ export function GitPane({
         )}
         {isBranchPrefixInputMode && <BranchPrefixFeedback rawPrefix={branchPrefixInputValue} />}
       </SearchableSetting>
+    ) : null,
+    gitLabUrlSettingMatchesSearch(searchQuery) ? (
+      <GitLabUrlSetting key="gitlab-url" settings={settings} updateSettings={updateSettings} />
     ) : null,
     matchesSettingsSearch(searchQuery, {
       title: keepLocalMainUpToDateTitle,

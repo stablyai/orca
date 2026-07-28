@@ -1,5 +1,27 @@
 import { describe, expect, it } from 'vitest'
-import { parseGitLabProjectRef, parseRemoteProjectRefCandidate } from './project-ref-parser'
+import {
+  gitLabHostFromUrl,
+  normalizeGitLabUrl,
+  parseGitLabProjectRef,
+  parseRemoteProjectRefCandidate
+} from './project-ref-parser'
+
+describe('GitLab instance setting', () => {
+  it('normalizes configured URLs and preserves non-default ports', () => {
+    expect(normalizeGitLabUrl('  HTTPS://GitLab.Example.com:8443/// ')).toBe(
+      'https://gitlab.example.com:8443'
+    )
+    expect(gitLabHostFromUrl('https://gitlab.example.com:8443')).toBe(
+      'gitlab.example.com:8443'
+    )
+  })
+
+  it('rejects invalid or credential-bearing URLs without selecting a host', () => {
+    expect(normalizeGitLabUrl('not a url')).toBe('')
+    expect(normalizeGitLabUrl('https://token@gitlab.example.com')).toBe('')
+    expect(gitLabHostFromUrl('')).toBe('')
+  })
+})
 
 describe('gitlab project ref parsing', () => {
   it('parses HTTPS and SSH GitLab.com remotes', () => {
@@ -22,6 +44,19 @@ describe('gitlab project ref parsing', () => {
       host: 'gitlab.com',
       path: 'g1/g2/g3/proj'
     })
+  })
+
+  it('accepts only the configured GitLab host', () => {
+    const configuredHost = [gitLabHostFromUrl('https://gitlab.internal:8443')]
+    expect(
+      parseGitLabProjectRef('https://gitlab.internal:8443/team/api.git', configuredHost)
+    ).toEqual({ host: 'gitlab.internal:8443', path: 'team/api' })
+    expect(parseGitLabProjectRef('git@gitlab.internal:team/api.git', configuredHost)).toEqual({
+      host: 'gitlab.internal:8443',
+      path: 'team/api'
+    })
+    expect(parseGitLabProjectRef('https://gitlab.com/team/api.git', configuredHost)).toBeNull()
+    expect(parseGitLabProjectRef('https://gitlab.internal/team/api.git', configuredHost)).toBeNull()
   })
 
   it('returns null for non-GitLab hosts when host not in knownHosts', () => {
