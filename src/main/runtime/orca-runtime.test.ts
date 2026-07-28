@@ -31611,14 +31611,11 @@ describe('OrcaRuntimeService', () => {
     expect(listWorktrees).toHaveBeenCalledTimes(1)
   })
 
-  it('worktree scan cache: expires scans per repo without coupling sibling repos', async () => {
+  it('worktree scan cache: serves stale within the interval, refreshes in background after it', async () => {
     vi.mocked(listWorktrees).mockClear()
     vi.useFakeTimers({ now: 0 })
     try {
-      const repos = [
-        { ...store.getRepos()[0], id: 'repo-a', path: '/tmp/repo-a' },
-        { ...store.getRepos()[0], id: 'repo-b', path: '/tmp/repo-b' }
-      ]
+      const repos = [{ ...store.getRepos()[0], id: 'repo-a', path: '/tmp/repo-a' }]
       const runtime = new OrcaRuntimeService({
         ...store,
         getRepos: () => repos,
@@ -31626,15 +31623,57 @@ describe('OrcaRuntimeService', () => {
       } as never)
       vi.mocked(listWorktrees).mockImplementation(async (repoPath) => [makeWorktreeInfo(repoPath)])
 
+      // Cold start scans synchronously.
       await runtime.listDetectedManagedWorktrees('id:repo-a')
-      await vi.advanceTimersByTimeAsync(10_000)
-      await runtime.listDetectedManagedWorktrees('id:repo-b')
-      await vi.advanceTimersByTimeAsync(20_000)
-      await runtime.listDetectedManagedWorktrees('id:repo-a')
-      await runtime.listDetectedManagedWorktrees('id:repo-b')
+      expect(listWorktrees).toHaveBeenCalledTimes(1)
 
-      expect(listWorktrees).toHaveBeenCalledTimes(3)
-      expect(listWorktrees).toHaveBeenNthCalledWith(3, '/tmp/repo-a')
+      // Within the adaptive interval: stale-while-revalidate serves cache, no rescan.
+      await runtime.listDetectedManagedWorktrees('id:repo-a')
+      expect(listWorktrees).toHaveBeenCalledTimes(1)
+
+      // Past the cold cap (max jittered interval is 75min): the next access serves
+      // cache immediately and kicks a background refresh.
+      await vi.advanceTimersByTimeAsync(2 * 60 * 60_000)
+      await runtime.listDetectedManagedWorktrees('id:repo-a')
+      // Flush the fire-and-forget background scan.
+      await vi.advanceTimersByTimeAsync(0)
+      await Promise.resolve()
+      expect(listWorktrees).toHaveBeenCalledTimes(2)
+      expect(listWorktrees).toHaveBeenNthCalledWith(2, '/tmp/repo-a')
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('worktree scan cache: discarded background results do not re-arm an invalidated schedule', async () => {
+    vi.mocked(listWorktrees).mockClear()
+    vi.useFakeTimers({ now: 0 })
+    try {
+      const backgroundScan = deferred<ReturnType<typeof makeWorktreeInfo>[]>()
+      vi.mocked(listWorktrees)
+        .mockResolvedValueOnce([makeWorktreeInfo(TEST_WORKTREE_PATH)])
+        .mockReturnValueOnce(backgroundScan.promise)
+      const runtime = createRuntime()
+
+      await runtime.listDetectedManagedWorktrees(`id:${TEST_REPO_ID}`)
+      await vi.advanceTimersByTimeAsync(2 * 60 * 60_000)
+      await runtime.listDetectedManagedWorktrees(`id:${TEST_REPO_ID}`)
+      await Promise.resolve()
+      expect(listWorktrees).toHaveBeenCalledTimes(2)
+
+      runtime.notifyBranchRenamed(TEST_REPO_ID)
+      const schedule = (
+        runtime as unknown as {
+          worktreeScanSchedule: { recordRefresh: (repoId: string, isHot: boolean) => void }
+        }
+      ).worktreeScanSchedule
+      const recordRefresh = vi.spyOn(schedule, 'recordRefresh')
+
+      backgroundScan.resolve([makeWorktreeInfo(TEST_WORKTREE_PATH)])
+      await vi.advanceTimersByTimeAsync(0)
+      await Promise.resolve()
+
+      expect(recordRefresh).not.toHaveBeenCalled()
     } finally {
       vi.useRealTimers()
     }
@@ -38578,9 +38617,10 @@ describe('resolveWorktreeScanCacheTtlMs', () => {
     ).toBe(BASE_TTL_MS)
   })
 
-  it('keeps a scratch repo scan cached past the base TTL while normal repos rescan', async () => {
-    // Why: the whole fix lives in the cache-stamp call site; pin the wiring so
-    // a revert to the flat TTL fails CI, not just the pure-function tests.
+  it('serves cached scans stale-while-revalidate and rescans only when the adaptive schedule is due', async () => {
+    // Why: cache lifetime is driven by the adaptive WorktreeScanSchedule (60s hot
+    // floor, exponential idle backoff, ±25% jitter), not the flat TTL; pin the
+    // call-site wiring so a revert to synchronous TTL rescans fails CI.
     vi.useFakeTimers()
     // Why: the shared listWorktrees stub keeps call history across this file's
     // tests; absolute counts need a clean baseline.
@@ -38608,13 +38648,19 @@ describe('resolveWorktreeScanCacheTtlMs', () => {
       expect(scanCallsFor('/tmp/repo')).toBe(1)
       expect(scanCallsFor(scratchPath)).toBe(1)
 
+      // Inside the first scheduled interval (>=90s even with full downward
+      // jitter for an idle repo): serve the cache, no rescan for either repo.
       vi.advanceTimersByTime(BASE_TTL_MS + 1_000)
       await internals.listResolvedWorktrees()
-      expect(scanCallsFor('/tmp/repo')).toBe(2)
+      expect(scanCallsFor('/tmp/repo')).toBe(1)
       expect(scanCallsFor(scratchPath)).toBe(1)
 
-      vi.advanceTimersByTime(SCRATCH_TTL_MS)
+      // Past the max jittered first interval (150s): both repos come due and
+      // refresh in the background while the cached scan is still served.
+      vi.advanceTimersByTime(150_000)
       await internals.listResolvedWorktrees()
+      await vi.advanceTimersByTimeAsync(0)
+      expect(scanCallsFor('/tmp/repo')).toBe(2)
       expect(scanCallsFor(scratchPath)).toBe(2)
     } finally {
       vi.useRealTimers()

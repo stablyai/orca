@@ -476,8 +476,15 @@ function getPreservedBranchCleanupTarget(
 const loggedUnavailableSshGitProviders = new Set<string>()
 const loggedWorktreeListFailures = new Set<string>()
 const loggedMalformedWorktreeMetaKeys = new Set<string>()
-// Why: absorb renderer polling bursts while bounding external worktree-change lag to one short refresh window.
-const DETECTED_WORKTREE_SCAN_CACHE_TTL_MS = 5_000
+// Why: this is now a coarse backstop, not the freshness mechanism. Real
+// worktree add/remove is delivered promptly by the base-directory poller (2s,
+// with a 30s full-scan backstop) and by Orca's own worktree ops, both of which
+// call invalidateDetectedWorktreeScanCache. A short TTL here just re-ran
+// `git worktree list` across every repo on each renderer poll even when nothing
+// changed — the dominant steady-state freeze on multi-worktree profiles (#7576:
+// `git worktree` bursts of 8+ spawns caused recurring 250ms+ stalls). Hold long
+// so idle polls hit cache; event invalidation keeps it correct.
+export const DETECTED_WORKTREE_SCAN_CACHE_TTL_MS = 5 * 60_000
 
 type DetectedWorktreeScanCacheEntry = {
   expiresAt: number
