@@ -161,8 +161,8 @@ export function WorktreeTitleInlineRename({
       return
     }
     setValue(displayName)
-    setEditing(true)
-  }, [beginEditing, disabled, editing, displayName, onBeginEditingConsumed])
+    setEditingMode(true)
+  }, [beginEditing, disabled, editing, displayName, onBeginEditingConsumed, setEditingMode])
 
   const stopCardEvent = useCallback((event: React.SyntheticEvent) => {
     event.stopPropagation()
@@ -245,7 +245,8 @@ export function WorktreeTitleInlineRename({
   if (editing) {
     return (
       <span
-        key={`editing:${titleElementKey}`}
+        // Why: a title/unread change must not remount the open editor — the input ref would refocus and reselect mid-edit.
+        key="editing"
         ref={handleRootRef}
         className={cn(
           'relative grid min-w-0 truncate leading-tight text-foreground',
