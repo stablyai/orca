@@ -60,6 +60,9 @@ export type CreateStatusPillWindowOptions = {
   /** Persist a new pill position after the user drags it. The factory debounces
    *  writes from the drag stream. */
   persistPosition?: (position: { x: number; y: number }) => void
+  /** Disable the pill (context-menu "Hide pill"). Coordinator wires this to
+   *  flipping the setting off. */
+  onHidePill: () => void
   /** Optional logger; defaults to console.warn. */
   warn?: (message: string, error?: unknown) => void
   /** Scheduler overrides for tests. */
@@ -223,6 +226,7 @@ export function createStatusPillWindow(
     getSummary,
     getRows,
     runtime: options.runtime,
+    onHidePill: options.onHidePill,
     warn,
     // Why: the renderer drives manual dragging (mousedown → mousemove). It
     // reads the window's screen origin on pointer down and pushes the new

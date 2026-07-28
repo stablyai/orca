@@ -26,6 +26,9 @@ export type StatusPillCoordinatorOptions = {
    *  can mount in tests without a live runtime; answer attempts return
    *  `send_failed` when absent. */
   runtime?: StatusPillRuntime
+  /** Disable the pill (context-menu "Hide pill"). Defaults to flipping the
+   *  setting off, which the coordinator reacts to by closing the window. */
+  onHidePill?: () => void
   /** Fired once per batch when an agent newly enters a waiting/blocked state
    *  with a live question (after cooldown). The main index turns this into a
    *  dock bounce + tray attention + OS notification. Optional so tests can
@@ -44,6 +47,7 @@ export class StatusPillCoordinator {
   private readonly onFocusMainWindow: () => void
   private readonly onFocusPane: (target: StatusPillFocusTarget) => void
   private readonly onAttentionNeeded?: (transition: StatusPillAttentionTransition) => void
+  private readonly onHidePill: () => void
   private readonly runtime?: StatusPillRuntime
   private readonly warn: (message: string, error?: unknown) => void
   private handle: StatusPillWindowHandle | null = null
@@ -65,6 +69,11 @@ export class StatusPillCoordinator {
     this.onAttentionNeeded = options.onAttentionNeeded
     this.runtime = options.runtime
     this.warn = options.warn ?? defaultWarn
+    this.onHidePill =
+      options.onHidePill ??
+      (() => {
+        this.store.updateSettings({ experimentalFloatingStatusPill: false })
+      })
 
     // Why: react to live toggles so the user sees the pill appear/disappear
     // immediately when they flip the Settings switch (mirrors the
@@ -181,6 +190,7 @@ export class StatusPillCoordinator {
       persistPosition: (position) => {
         this.store.updateUI({ statusPillPosition: position })
       },
+      onHidePill: this.onHidePill,
       warn: this.warn
     })
     // Why: seed the previous snapshot with the current state so panes already

@@ -19,6 +19,10 @@ export type StatusPillIpcArgs = {
   getSummary: () => StatusPillSummary
   getRows: () => StatusPillAgentRow[]
   runtime?: StatusPillRuntime
+  /** Disable the pill (called by the "Hide pill" context-menu item). Main
+   *  wires this to flipping experimentalFloatingStatusPill=false, which the
+   *  coordinator reacts to by destroying the window. */
+  onHidePill: () => void
   /** Read the pill window's current screen origin (for the drag start point). */
   getWindowPosition: () => { x: number; y: number }
   /** Move the pill window to a screen origin and (debounced) persist it. */
@@ -46,10 +50,11 @@ export function attachStatusPillIpcListeners(args: StatusPillIpcArgs): () => voi
         {
           label: 'Hide pill',
           click: () => {
-            // Why: send a self-message so the renderer can animate out before
-            // the window is destroyed by the settings change.
+            // Why: flip the setting off rather than message the renderer — the
+            // coordinator reacts to the settings change and tears the window
+            // down, and the choice persists across restarts.
             try {
-              args.window.webContents.send('statusPill:requestHide')
+              args.onHidePill()
             } catch {
               // Best-effort.
             }
