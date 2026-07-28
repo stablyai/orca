@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import type { GlobalSettings } from '../../../../shared/types'
+import { normalizeGitLabUrl } from '../../../../shared/gitlab-instance-url'
 import { translate } from '@/i18n/i18n'
 import { Input } from '../ui/input'
 import { Label } from '../ui/label'
@@ -9,9 +10,6 @@ import { matchesSettingsSearch } from './settings-search'
 const GITLAB_URL_TITLE = 'GitLab URL'
 const GITLAB_URL_DESCRIPTION = 'Orca uses this single URL for GitLab operations.'
 const GITLAB_URL_KEYWORDS = ['gitlab', 'gitlab url', 'self-hosted', 'instance', 'server']
-
-type GitLabSettings = GlobalSettings & { gitlabUrl?: string }
-type GitLabSettingsPatch = Partial<GlobalSettings> & { gitlabUrl?: string }
 
 type GitLabUrlSettingProps = {
   settings: GlobalSettings
@@ -35,6 +33,9 @@ export function GitLabUrlSetting({
     'auto.components.settings.GitLabUrlSetting.description',
     GITLAB_URL_DESCRIPTION
   )
+  const gitlabUrl = settings.gitlabUrl ?? ''
+  // Why: commit on blur, not per keystroke — a half-typed URL would otherwise
+  // be persisted and re-route every GitLab request while the user is typing.
   const [draft, setDraft] = useState(gitlabUrl)
   useEffect(() => setDraft(gitlabUrl), [gitlabUrl])
 
@@ -58,8 +59,13 @@ export function GitLabUrlSetting({
         className="max-w-md"
         onChange={(event) => setDraft(event.target.value)}
         onBlur={() => {
-          const patch: GitLabSettingsPatch = { gitlabUrl: draft }
-          void updateSettings(patch)
+          // Why: show the stored value back, so a URL the main process
+          // rejects doesn't linger in the field looking saved.
+          const normalized = normalizeGitLabUrl(draft)
+          setDraft(normalized)
+          if (normalized !== gitlabUrl) {
+            void updateSettings({ gitlabUrl: normalized })
+          }
         }}
       />
     </SearchableSetting>

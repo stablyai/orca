@@ -241,7 +241,7 @@ describe('gitlab client — viewer & paste-URL lookup', () => {
 
       expect(getProjectRefMock).toHaveBeenCalledWith('/repo', ['gitlab.com'], null, localGitOptions)
       expect(glabExecFileAsyncMock).toHaveBeenCalledWith(
-        ['api', 'todos?state=pending&per_page=50'],
+        ['api', '--hostname', 'gitlab.com', 'todos?state=pending&per_page=50'],
         { cwd: '/repo', wslDistro: 'Ubuntu' }
       )
     })

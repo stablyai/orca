@@ -245,8 +245,7 @@ describe('GitLab IPC handlers', () => {
       undefined,
       'fix login',
       null,
-      {},
-      'https://gitlab.com'
+      {}
     )
     expect(listWorkItemsMock).toHaveBeenCalledWith(
       '/local/orca',
@@ -276,8 +275,7 @@ describe('GitLab IPC handlers', () => {
       undefined,
       undefined,
       null,
-      {},
-      'https://gitlab.com'
+      {}
     )
   })
 
@@ -435,8 +433,7 @@ describe('GitLab IPC handlers', () => {
       undefined,
       undefined,
       null,
-      localGitOptions,
-      'https://gitlab.com'
+      localGitOptions
     )
     expect(issueListResult).toMatchObject({ totalPages: 3 })
     expect(listWorkItemsMock).toHaveBeenCalledWith(
