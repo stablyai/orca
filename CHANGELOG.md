@@ -4,7 +4,7 @@
 
 ### Revisioned mobile IME input and acknowledged delivery
 
-- Prepared a draft replacement for #10162 without the timer-window and corrective-DEL design:
+- Opened Draft PR #11136 as a replacement for #10162 without the timer-window and corrective-DEL design:
   - `mobile/packages/expo-terminal-live-input/` publishes monotonic editor revisions and native iOS marked-text / Android composing-span ranges.
   - `mobile/src/terminal/terminal-editor-transaction-reconciler.ts` holds unstable composition, ignores stale revisions, preserves grapheme boundaries, and flushes causally before Enter or external input.
   - `mobile/src/terminal/terminal-input-queue.ts` serializes deliberate terminal input, retries ambiguous delivery with the same queue sequence, and advances only on an exact host acknowledgement.
