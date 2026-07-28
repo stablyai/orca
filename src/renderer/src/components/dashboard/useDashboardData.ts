@@ -36,6 +36,12 @@ export type DashboardAgentRow = {
     isLastSibling: boolean
     childCount: number
   }
+  /** Display-only note that this live agent reports working in a sibling
+   *  worktree of the same repo. Never changes activation or row ownership. */
+  liveWorktreeMismatch?: {
+    destinationWorktreeId: string
+    destinationLabel: string
+  }
 }
 
 // Why: the shape here is deliberately minimal. The per-card rendering pipeline

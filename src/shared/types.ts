@@ -674,11 +674,19 @@ export type DetectedWorktree = Worktree & {
   visible: boolean
 }
 
+export type DetectedWorktreeAuthorityRecord = {
+  authoritative: boolean
+  source: DetectedWorktreeListSource
+}
+
 export type DetectedWorktreeListResult = {
   repoId: string
+  /** Describes only the most recent refresh; use `authorityByHostId` per scope. */
   authoritative: boolean
   source: DetectedWorktreeListSource
   worktrees: DetectedWorktree[]
+  /** Latest authority per refresh `ExecutionHostId`, since merged rows span scopes. */
+  authorityByHostId?: Record<string, DetectedWorktreeAuthorityRecord>
 }
 
 export type WorktreeLineageOrigin = 'orchestration' | 'cli' | 'manual'

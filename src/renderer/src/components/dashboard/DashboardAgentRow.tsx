@@ -12,6 +12,7 @@ import type { AgentStatusState } from '../../../../shared/agent-status-types'
 import type { DashboardAgentRow as DashboardAgentRowData } from './useDashboardData'
 import { getAgentRowPrimaryText } from '@/lib/agent-row-primary-text'
 import { useAgentRowConversationName } from './use-agent-row-conversation-name'
+import { translate } from '@/i18n/i18n'
 
 // Why: narrow the dashboard's rollup states to shared dot states, defaulting unknowns to 'idle' so a row never crashes.
 function asDotState(state: AgentStatusState | 'idle'): AgentDotState {
@@ -160,6 +161,12 @@ const DashboardAgentRow = React.memo(function DashboardAgentRow({
   const prompt = conversationName ?? getAgentRowPrimaryText(agent.entry)
   // Why: prompt is '' when unknown, so fall back to the state label to keep the row labeled.
   const displayLabel = prompt || agentStateLabel(asDotState(agent.state))
+  // Why: display-only note; the row still activates its own pane in this worktree.
+  const mismatchLabel = agent.liveWorktreeMismatch
+    ? translate('auto.components.dashboard.DashboardAgentRow.a80ac3eb20', 'in {{value0}}', {
+        value0: agent.liveWorktreeMismatch.destinationLabel
+      })
+    : ''
   const model = agent.entry.model?.trim() ?? ''
   // Why: gate tool fields on 'working' — a stale tool line on a done row reads as still-running.
   const isWorking = agent.state === 'working'
@@ -282,9 +289,15 @@ const DashboardAgentRow = React.memo(function DashboardAgentRow({
             // Why: the selected-row fill washes out muted text — keep it readable.
             isFocusedPane && !isUnvisited && 'text-foreground/90'
           )}
-          title={displayLabel}
+          title={mismatchLabel ? `${displayLabel} ${mismatchLabel}` : displayLabel}
         >
           {displayLabel}
+          {mismatchLabel ? (
+            <span data-agent-live-worktree-mismatch className="text-muted-foreground/70">
+              {' '}
+              {mismatchLabel}
+            </span>
+          ) : null}
         </span>
         {model && (
           <span

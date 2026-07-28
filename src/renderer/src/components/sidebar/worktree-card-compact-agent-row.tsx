@@ -127,6 +127,14 @@ export const CompactAgentRow = React.memo(function CompactAgentRow({
   const model = agent.entry.model?.trim() ?? ''
   const shortTime = getCompactAgentTime(agent, now)
   const cacheTimer = usePromptCacheCountdownForPane(agent.paneKey, cacheTimerActive)
+  // Why: display-only note; the row still activates its own pane in this worktree.
+  const mismatchLabel = agent.liveWorktreeMismatch
+    ? translate(
+        'auto.components.sidebar.worktree.card.compact.agent.row.fb10950068',
+        'in {{value0}}',
+        { value0: agent.liveWorktreeMismatch.destinationLabel }
+      )
+    : ''
 
   const handleActivate = useCallback(
     (e: React.MouseEvent) => {
@@ -208,6 +216,15 @@ export const CompactAgentRow = React.memo(function CompactAgentRow({
         <span className={isFocusedPane ? 'text-foreground' : 'text-muted-foreground/90'}>
           {primary}
         </span>
+        {mismatchLabel && (
+          <span
+            data-agent-live-worktree-mismatch
+            className={isFocusedPane ? 'text-foreground/70' : 'text-muted-foreground/65'}
+          >
+            {' · '}
+            {mismatchLabel}
+          </span>
+        )}
         {secondary && (
           <span className={isFocusedPane ? 'text-foreground/70' : 'text-muted-foreground/65'}>
             {' '}
@@ -274,7 +291,10 @@ export const CompactAgentRow = React.memo(function CompactAgentRow({
       role={agent.lineage ? 'treeitem' : undefined}
       aria-level={agent.lineage ? agent.lineage.depth + 1 : undefined}
       aria-expanded={hasChildDisclosure ? childAgentsExpanded : undefined}
-      title={sendTargetDisabledReason ?? `${primary}${secondary ? ` - ${secondary}` : ''}`}
+      title={
+        sendTargetDisabledReason ??
+        `${primary}${mismatchLabel ? ` · ${mismatchLabel}` : ''}${secondary ? ` - ${secondary}` : ''}`
+      }
     >
       {rowBody}
     </div>

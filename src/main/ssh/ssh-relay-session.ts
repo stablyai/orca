@@ -762,6 +762,7 @@ export class SshRelaySession {
         isReplay?: unknown
         providerSession?: unknown
         providerSessionOnly?: unknown
+        reportedCwd?: unknown
         payload?: unknown
       }
       if (typeof envelope.paneKey !== 'string') {
@@ -790,6 +791,8 @@ export class SshRelaySession {
           isReplay: envelope.isReplay === true ? true : undefined,
           providerSession: envelope.providerSession,
           providerSessionOnly: envelope.providerSessionOnly === true ? true : undefined,
+          // Why: forward verbatim — ingestRemote revalidates it at the trust boundary.
+          reportedCwd: envelope.reportedCwd,
           payload: envelope.payload
         },
         this.targetId

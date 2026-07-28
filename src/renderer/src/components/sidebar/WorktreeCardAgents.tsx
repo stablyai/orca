@@ -14,6 +14,7 @@ import { useWorktreeAgentRows } from './useWorktreeAgentRows'
 import { cn } from '@/lib/utils'
 import type { DashboardAgentRow as DashboardAgentRowData } from '@/components/dashboard/useDashboardData'
 import { parsePaneKey } from '../../../../shared/stable-pane-id'
+import type { Repo, Worktree } from '../../../../shared/types'
 import { dismissStaleAgentRowByKey } from '../terminal-pane/stale-agent-row'
 import { useFocusedAgentPaneKey } from './focused-agent-row-highlight'
 import {
@@ -46,6 +47,8 @@ function revealCompactAgentCard(agentListRoot: HTMLElement | null): void {
 type Props = {
   worktreeId: string
   agents?: DashboardAgentRowData[]
+  /** Concrete owner records for live-worktree-mismatch resolution. */
+  owner?: { worktree: Worktree; repo: Repo }
   /** Spacing from the card body above; parent decides whether a divider is appropriate. */
   className?: string
 }
@@ -54,9 +57,10 @@ type Props = {
 const WorktreeCardAgents = React.memo(function WorktreeCardAgents({
   worktreeId,
   agents: precomputedAgents,
+  owner,
   className
 }: Props) {
-  const selectedAgents = useWorktreeAgentRows(worktreeId, precomputedAgents === undefined)
+  const selectedAgents = useWorktreeAgentRows(worktreeId, precomputedAgents === undefined, owner)
   const agents = precomputedAgents ?? selectedAgents
   if (agents.length === 0) {
     return null

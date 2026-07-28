@@ -25,6 +25,7 @@ import {
   resolveAgentStatusIdentity,
   shouldSuppressInheritedTerminalStatus
 } from '../../../../shared/agent-status-identity'
+import { resolveAcceptedRootReportedCwd } from '../../../../shared/agent-reported-cwd'
 import { isCommandCodeNewTurnWhileWorking } from '../../../../shared/command-code-turn-boundary'
 import type { TerminalPaneLayoutNode, TerminalTab } from '../../../../shared/types'
 import {
@@ -166,6 +167,8 @@ export type AgentStatusSlice = {
       providerSession?: AgentProviderSessionMetadata
       launchConfig?: SleepingAgentLaunchConfig
       launchToken?: string
+      /** Tri-state agent-reported cwd from main; absent leaves the cached location alone. */
+      reportedCwd?: string | null
     }
   ) => void
 
@@ -484,8 +487,11 @@ function retainedAgentEntryFromLive(
 ): RetainedAgentEntry {
   const tab =
     findTabForAgentEntry(state, worktreeId, entry) ?? getRetainedFallbackTab(entry, worktreeId)
+  // Why: a retained row outlives the process that reported the path; keeping it
+  // would show a stale destination with nothing live to correct it.
+  const { reportedCwd: _reportedCwd, ...retainedEntry } = entry
   return {
-    entry,
+    entry: retainedEntry,
     worktreeId,
     tab,
     agentType,
@@ -1740,6 +1746,13 @@ export const createAgentStatusSlice: StateCreator<AppState, [], [], AgentStatusS
           return s
         }
 
+        const reportedCwd = resolveAcceptedRootReportedCwd({
+          previous: existing?.reportedCwd,
+          update: metadata?.reportedCwd,
+          inheritedFromActivePane: identity.inheritedFromActivePane,
+          rootAgentChanged: Boolean(existing) && existing?.agentType !== identity.agentType
+        })
+
         // Why: tool/assistant fields arrive pre-merged and authoritative from main (resolveToolState
         // in server.ts), so write them through directly — no fallback — so UserPromptSubmit clears stale tool lines.
         const runtimeOrchestration = s.runtimeAgentOrchestrationByPaneKey[paneKey]
@@ -1859,6 +1872,7 @@ export const createAgentStatusSlice: StateCreator<AppState, [], [], AgentStatusS
             : payload.subagents,
           ...(providerSession ? { providerSession } : {}),
           ...(promptInteractionKey ? { promptInteractionKey } : {}),
+          ...(reportedCwd ? { reportedCwd } : {}),
           // Why: `interrupted` is done-only; parseAgentStatusPayload already clamps it for non-done states, so write it through directly.
           interrupted: payload.interrupted
         }

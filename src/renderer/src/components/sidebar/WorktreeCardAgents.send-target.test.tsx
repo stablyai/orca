@@ -235,4 +235,40 @@ describe('WorktreeCardAgents send targets', () => {
     expect(markup).not.toContain('data-agent-send-target="disabled"')
     expect(markup).not.toContain('title="Agent is working"')
   })
+
+  it('keeps every compact send target visible instead of summarizing panes elsewhere', async () => {
+    const now = Date.now()
+    mockAgents = [
+      {
+        ...(agentRow(READY_PANE_KEY, 'done', now) as Record<string, unknown>),
+        rowSource: 'live',
+        liveWorktreeMismatch: {
+          destinationWorktreeId: 'wt-scratch',
+          destinationLabel: 'scratch-fix'
+        }
+      },
+      {
+        ...(agentRow(WORKING_PANE_KEY, 'working', now) as Record<string, unknown>),
+        rowSource: 'live',
+        liveWorktreeMismatch: {
+          destinationWorktreeId: 'wt-other',
+          destinationLabel: 'other-fix'
+        }
+      }
+    ]
+    mockStoreState = {
+      ...targetStoreState(now),
+      agentActivityDisplayMode: 'compact',
+      agentSendPopoverTargetMode: activeTargetMode()
+    }
+    const { default: WorktreeCardAgents } = await import('./WorktreeCardAgents')
+
+    const markup = renderToStaticMarkup(<WorktreeCardAgents worktreeId="wt-1" />)
+
+    // Why: target selection lists every pane, so a collapsed "N elsewhere" badge would hide choices.
+    expect(markup).not.toContain('data-agent-live-worktree-mismatch-summary')
+    expect(markup).not.toContain('elsewhere')
+    expect(markup).toContain('in scratch-fix')
+    expect(markup).toContain('in other-fix')
+  })
 })

@@ -382,7 +382,14 @@ describe('fetchWorktrees', () => {
     mockApi.worktrees.listDetected.mockResolvedValueOnce(detected)
     store.setState({
       worktreesByRepo: { repo1: [existing] },
-      detectedWorktreesByRepo: { repo1: detected },
+      // Why: a committed refresh always carries the per-host authority record, so an
+      // unchanged payload only stays unchanged when the seed carries it too.
+      detectedWorktreesByRepo: {
+        repo1: {
+          ...detected,
+          authorityByHostId: { local: { authoritative: true, source: 'git' } }
+        }
+      },
       sortEpoch: 7
     } as Partial<AppState>)
 
@@ -918,6 +925,85 @@ describe('fetchWorktrees', () => {
       expect.objectContaining({ id: sshWorktree.id, hostId: 'ssh:ssh-1' })
     ])
     expect(mockApi.worktrees.listDetected).toHaveBeenCalledTimes(1)
+  })
+
+  it('records a detected-worktree authority verdict per refresh host', async () => {
+    const store = createTestStore()
+    const repo = {
+      id: 'repo-multi',
+      path: '/repo',
+      displayName: 'Multi Host Repo',
+      badgeColor: '#000',
+      addedAt: 0
+    }
+    store.setState({ repos: [repo] } as Partial<AppState>)
+    mockApi.worktrees.listDetected.mockResolvedValueOnce(
+      makeDetectedResult(
+        'repo-multi',
+        [makeWorktree({ id: 'repo-multi::/repo', repoId: 'repo-multi', path: '/repo' })],
+        { authoritative: true, source: 'git' }
+      )
+    )
+    await store.getState().fetchDetectedWorktrees('repo-multi')
+
+    // Why: the same repo can be rescanned over SSH, whose verdict must not
+    // retroactively authorize (or de-authorize) the local scan's rows.
+    store.setState({ repos: [{ ...repo, connectionId: 'ssh-1' }] } as Partial<AppState>)
+    mockApi.worktrees.listDetected.mockResolvedValueOnce(
+      makeDetectedResult(
+        'repo-multi',
+        [
+          makeWorktree({
+            id: 'repo-multi::/home/orca/wt1',
+            repoId: 'repo-multi',
+            path: '/home/orca/wt1'
+          })
+        ],
+        { authoritative: false, source: 'session-fallback' }
+      )
+    )
+    await store.getState().fetchDetectedWorktrees('repo-multi')
+
+    expect(store.getState().detectedWorktreesByRepo['repo-multi']?.authorityByHostId).toEqual({
+      local: { authoritative: true, source: 'git' },
+      'ssh:ssh-1': { authoritative: false, source: 'session-fallback' }
+    })
+  })
+
+  it('commits a refresh whose only change is the per-host authority record', async () => {
+    const store = createTestStore()
+    store.setState({
+      repos: [
+        {
+          id: 'repo-authority',
+          path: '/repo',
+          displayName: 'Authority Repo',
+          badgeColor: '#000',
+          addedAt: 0
+        }
+      ]
+    } as Partial<AppState>)
+    const detected = makeDetectedResult(
+      'repo-authority',
+      [makeWorktree({ id: 'repo-authority::/repo', repoId: 'repo-authority', path: '/repo' })],
+      { authoritative: true, source: 'git' }
+    )
+    mockApi.worktrees.listDetected.mockResolvedValueOnce(detected).mockResolvedValueOnce(detected)
+    await store.getState().fetchDetectedWorktrees('repo-authority')
+
+    const committed = store.getState().detectedWorktreesByRepo['repo-authority']!
+    // Why: a session persisted before per-host authority existed rehydrates without
+    // the map; an otherwise identical refresh still has to write it back.
+    const { authorityByHostId: _dropped, ...withoutAuthority } = committed
+    store.setState({
+      detectedWorktreesByRepo: { 'repo-authority': withoutAuthority }
+    } as Partial<AppState>)
+
+    await store.getState().fetchDetectedWorktrees('repo-authority')
+
+    expect(store.getState().detectedWorktreesByRepo['repo-authority']?.authorityByHostId).toEqual({
+      local: { authoritative: true, source: 'git' }
+    })
   })
 
   it('purges remembered right sidebar tabs for worktrees removed by a committed refresh', async () => {

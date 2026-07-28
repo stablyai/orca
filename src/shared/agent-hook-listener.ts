@@ -24,6 +24,7 @@ import {
   type AgentSubagentSnapshot,
   type ParsedAgentStatusPayload
 } from './agent-status-types'
+import { extractAgentReportedCwdUpdate } from './agent-reported-cwd'
 import { normalizeOptionalField } from './agent-status-field-normalization'
 import { isAskUserQuestionTool } from './agent-question-answered-intent'
 import {
@@ -309,6 +310,8 @@ export type AgentHookEventPayload = {
   providerSessionOnly?: boolean
   /** True when this event is a relay cache replay rather than a live hook. */
   isReplay?: boolean
+  /** Tri-state agent-reported cwd: path replaces, `null` clears, absent preserves. */
+  reportedCwd?: string | null
   payload: ParsedAgentStatusPayload
 }
 
@@ -4025,6 +4028,7 @@ export function normalizeHookPayload(
       : extractAgentProviderSession(source, hookPayloadRecord)
   const providerSessionOnly =
     source === 'pi' && eventName === 'session_start' && providerSession !== null
+  const reportedCwdUpdate = extractAgentReportedCwdUpdate(hookPayloadRecord)
   // Why: Pi session_start carries resume identity while idle; providerSessionOnly makes receivers discard the placeholder row.
   const transportPayload =
     payload ??
@@ -4055,6 +4059,13 @@ export function normalizeHookPayload(
         toolUseId: readFirstString(hookPayloadRecord, ['tool_use_id', 'toolUseId']),
         toolAgentId: readFirstString(hookPayloadRecord, ['agent_id', 'agentId']),
         toolAgentType: readString(hookPayloadRecord, 'agent_type'),
+        // Why: a session-identity-only event replaces the visible row, so its
+        // absent cwd is a clear rather than a preserve.
+        ...(providerSessionOnly
+          ? { reportedCwd: null }
+          : reportedCwdUpdate === undefined
+            ? {}
+            : { reportedCwd: reportedCwdUpdate }),
         ...(providerSession ? { providerSession } : {}),
         ...(providerSessionOnly ? { providerSessionOnly: true } : {}),
         payload: transportPayload

@@ -134,6 +134,9 @@ export type AgentStatusEntry = {
   providerSession?: AgentProviderSessionMetadata
   /** Live-only Command Code turn boundary key; not persisted to last-status.json. */
   promptInteractionKey?: string
+  /** Merged agent-reported working directory for this pane's accepted root agent.
+   *  Display-only and live-only: never persisted, retained, or sent to mobile. */
+  reportedCwd?: string
 }
 
 export type MigrationUnsupportedPtyEntry = {
@@ -197,6 +200,9 @@ export type AgentStatusIpcPayload = ParsedAgentStatusPayload & {
   providerSessionOnly?: boolean
   /** Live-only Command Code turn boundary key; not persisted to last-status.json. */
   promptInteractionKey?: string
+  /** Tri-state agent-reported cwd already merged by main: path sets, `null`
+   *  clears, absent leaves the renderer's cached location untouched. */
+  reportedCwd?: string | null
 }
 
 /** Wire shape for ordinary pane teardown or a stamped SSH disconnect batch. */

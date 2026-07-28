@@ -100,7 +100,13 @@ export class RelayAgentHookServer {
   // Invariant: keys mirror state.lastStatusByPaneKey, populated/cleared in lockstep.
   private lastEnvelopeMetaByPaneKey: Map<
     string,
-    { source: AgentHookSource; env?: string; version?: string }
+    {
+      source: AgentHookSource
+      env?: string
+      version?: string
+      /** Carried-forward tri-state cwd; lives here so the cached event object stays identity-stable for assistant-message retries. */
+      reportedCwd?: string | null
+    }
   > = new Map()
   private assistantMessageRetryTimers = new Map<string, ReturnType<typeof setTimeout>>()
   private codexSubagentPollTimers = new Map<string, ReturnType<typeof setTimeout>>()
@@ -214,7 +220,10 @@ export class RelayAgentHookServer {
       if (!meta) {
         continue
       }
-      this.forwardEvent(event, meta.source, meta.env, meta.version, { isReplay: true })
+      this.forwardEvent(event, meta.source, meta.env, meta.version, {
+        isReplay: true,
+        reportedCwd: meta.reportedCwd
+      })
       count++
     }
     return count
@@ -301,7 +310,7 @@ export class RelayAgentHookServer {
     source: AgentHookSource,
     env?: string,
     version?: string,
-    options: { isReplay?: boolean } = {}
+    options: { isReplay?: boolean; reportedCwd?: string | null } = {}
   ): void {
     const envelope: AgentHookRelayEnvelope = {
       source,
@@ -318,6 +327,7 @@ export class RelayAgentHookServer {
       toolAgentType: event.toolAgentType,
       ...(event.providerSession ? { providerSession: event.providerSession } : {}),
       ...(event.providerSessionOnly ? { providerSessionOnly: true } : {}),
+      ...(options.reportedCwd === undefined ? {} : { reportedCwd: options.reportedCwd }),
       isReplay: options.isReplay === true ? true : undefined,
       env,
       version,
@@ -335,11 +345,20 @@ export class RelayAgentHookServer {
     if (event.payload.state !== 'done' || event.payload.lastAssistantMessage) {
       this.clearAssistantMessageRetry(event.paneKey)
     }
+    const previousMeta = this.lastEnvelopeMetaByPaneKey.get(event.paneKey)
+    // Why: replay must restore the latest known location, but a source change is
+    // a different agent process — never inherit a cwd across it.
+    const reportedCwd =
+      event.reportedCwd !== undefined
+        ? event.reportedCwd
+        : previousMeta?.source === source
+          ? previousMeta.reportedCwd
+          : undefined
     // Why: delete-then-set makes Map insertion order = recency, so the cap below evicts the longest-idle pane.
     this.state.lastStatusByPaneKey.delete(event.paneKey)
     this.state.lastStatusByPaneKey.set(event.paneKey, event)
     this.lastEnvelopeMetaByPaneKey.delete(event.paneKey)
-    this.lastEnvelopeMetaByPaneKey.set(event.paneKey, { source, env, version })
+    this.lastEnvelopeMetaByPaneKey.set(event.paneKey, { source, env, version, reportedCwd })
     while (this.state.lastStatusByPaneKey.size > MAX_CACHED_PANES) {
       const oldest = this.state.lastStatusByPaneKey.keys().next().value
       if (oldest === undefined) {
@@ -347,7 +366,7 @@ export class RelayAgentHookServer {
       }
       this.clearPaneState(oldest)
     }
-    this.forwardEvent(event, source, env, version)
+    this.forwardEvent(event, source, env, version, { reportedCwd })
   }
 
   private clearAssistantMessageRetry(paneKey: string): void {

@@ -15,6 +15,18 @@ import { translate } from '@/i18n/i18n'
 
 export { CompactAgentRow } from './worktree-card-compact-agent-row'
 
+// Why: count panes, not rows — a pane can contribute several rows, and only
+// live rows backed by a real pane ever carry a reported location.
+function countAgentPanesInAnotherWorktree(agents: DashboardAgentRowData[]): number {
+  const paneKeys = new Set<string>()
+  for (const agent of agents) {
+    if (agent.rowSource === 'live' && agent.liveWorktreeMismatch) {
+      paneKeys.add(agent.paneKey)
+    }
+  }
+  return paneKeys.size
+}
+
 function stopActivationKeyPropagation(e: React.KeyboardEvent): void {
   // Why: the surrounding worktree list handles Enter/Space as row activation.
   // Focused nested buttons need those keys to stay local.
@@ -87,6 +99,20 @@ export function CompactAgentSummaryButton({
     .slice(visibleGroups.length)
     .reduce((count, group) => count + group.agents.length, 0)
   const agentIdentitySummary = summarizeAgentIdentities(agents)
+  const elsewhereCount = countAgentPanesInAnotherWorktree(agents)
+  const elsewhereExplanation =
+    elsewhereCount === 0
+      ? ''
+      : elsewhereCount === 1
+        ? translate(
+            'auto.components.sidebar.worktree.card.compact.agents.5f635f3525',
+            '1 agent in another worktree'
+          )
+        : translate(
+            'auto.components.sidebar.worktree.card.compact.agents.b1ec4f92ab',
+            '{{value0}} agents in another worktree',
+            { value0: elsewhereCount }
+          )
   const stopPointerPropagation = useCallback((e: React.SyntheticEvent) => {
     e.stopPropagation()
   }, [])
@@ -122,11 +148,16 @@ export function CompactAgentSummaryButton({
               'Collapse {{value0}}',
               { value0: subjectLabel }
             )
-          : translate(
-              'auto.components.sidebar.worktree.card.compact.agents.289a1d2ca7',
-              'Expand {{value0}}. {{value1}}',
-              { value0: summary, value1: agentIdentitySummary }
-            )
+          : [
+              translate(
+                'auto.components.sidebar.worktree.card.compact.agents.289a1d2ca7',
+                'Expand {{value0}}. {{value1}}',
+                { value0: summary, value1: agentIdentitySummary }
+              ),
+              elsewhereExplanation
+            ]
+              .filter(Boolean)
+              .join('. ')
       }
       aria-expanded={expanded}
       onClick={handleToggle}
@@ -175,6 +206,19 @@ export function CompactAgentSummaryButton({
           {hiddenGroupAgentCount > 0 && (
             <span className="shrink-0 text-[10px] tabular-nums text-muted-foreground/70">
               +{hiddenGroupAgentCount}
+            </span>
+          )}
+          {elsewhereCount > 0 && (
+            <span
+              data-agent-live-worktree-mismatch-summary
+              className="shrink-0 truncate text-[10px] text-muted-foreground/70"
+              aria-hidden
+            >
+              {translate(
+                'auto.components.sidebar.worktree.card.compact.agents.2901be82fe',
+                '{{value0}} elsewhere',
+                { value0: elsewhereCount }
+              )}
             </span>
           )}
         </>

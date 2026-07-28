@@ -544,4 +544,76 @@ describe('RelayAgentHookServer', () => {
       server.stop()
     }
   })
+  it('carries a same-source cwd through omitted events and replay', async () => {
+    const forward = vi.fn<(envelope: AgentHookRelayEnvelope) => void>()
+    const server = new RelayAgentHookServer({ endpointDir: dir, forward })
+    await server.start()
+    try {
+      const { port, token } = server.getCoordinates()
+      const post = (source: string, payload: Record<string, unknown>): Promise<Response> =>
+        fetch(`http://127.0.0.1:${port}/hook/${source}`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'X-Orca-Agent-Hook-Token': token
+          },
+          body: JSON.stringify({ paneKey: PANE_KEY, tabId: 'tab-1', env: 'remote', payload })
+        })
+
+      await post('claude', {
+        hook_event_name: 'UserPromptSubmit',
+        prompt: 'first',
+        cwd: '/repo/scratch'
+      })
+      expect(forward.mock.calls.at(-1)?.[0].reportedCwd).toBe('/repo/scratch')
+
+      // Why: an omitted cwd on a later same-source event must not blank the location.
+      await post('claude', { hook_event_name: 'PreToolUse', tool_name: 'Bash' })
+      expect(forward.mock.calls.at(-1)?.[0].reportedCwd).toBe('/repo/scratch')
+
+      forward.mockClear()
+      expect(server.replayCachedPayloadsForPanes()).toBe(1)
+      expect(forward.mock.calls[0][0].reportedCwd).toBe('/repo/scratch')
+      expect(forward.mock.calls[0][0].isReplay).toBe(true)
+
+      // Why: a present-but-invalid cwd is a clear, and the clear must stick.
+      await post('claude', { hook_event_name: 'Stop', cwd: 'relative' })
+      expect(forward.mock.calls.at(-1)?.[0].reportedCwd).toBeNull()
+      await post('claude', { hook_event_name: 'UserPromptSubmit', prompt: 'second' })
+      expect(forward.mock.calls.at(-1)?.[0].reportedCwd).toBeNull()
+    } finally {
+      server.stop()
+    }
+  })
+
+  it('does not inherit a cached cwd across a source change on the same pane', async () => {
+    const forward = vi.fn<(envelope: AgentHookRelayEnvelope) => void>()
+    const server = new RelayAgentHookServer({ endpointDir: dir, forward })
+    await server.start()
+    try {
+      const { port, token } = server.getCoordinates()
+      const post = (source: string, payload: Record<string, unknown>): Promise<Response> =>
+        fetch(`http://127.0.0.1:${port}/hook/${source}`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'X-Orca-Agent-Hook-Token': token
+          },
+          body: JSON.stringify({ paneKey: PANE_KEY, tabId: 'tab-1', env: 'remote', payload })
+        })
+
+      await post('claude', {
+        hook_event_name: 'UserPromptSubmit',
+        prompt: 'first',
+        cwd: '/repo/scratch'
+      })
+      await post('gemini', { hook_event_name: 'BeforeTool', tool_name: 'read_file' })
+
+      const last = forward.mock.calls.at(-1)?.[0]
+      expect(last?.source).toBe('gemini')
+      expect(last?.reportedCwd).toBeUndefined()
+    } finally {
+      server.stop()
+    }
+  })
 })

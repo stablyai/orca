@@ -20,6 +20,11 @@ import {
   createWorktreeAgentFreshnessSelector,
   EMPTY_WORKTREE_AGENT_FRESHNESS_SIGNATURE
 } from './worktree-agent-freshness-selector'
+import {
+  attachAgentLiveWorktreeMismatch,
+  buildAgentLiveWorktreeMismatchCandidates
+} from './agent-live-worktree-mismatch'
+import type { Repo, Worktree } from '../../../../shared/types'
 
 export { buildWorktreeAgentRows } from './worktree-agent-rows'
 export {
@@ -39,7 +44,12 @@ export {
  * store slice and then shared by every visible card, avoiding O(cards × agents)
  * selector work on high-frequency agent status pings.
  */
-export function useWorktreeAgentRows(worktreeId: string, active = true): DashboardAgentRow[] {
+export function useWorktreeAgentRows(
+  worktreeId: string,
+  active = true,
+  /** Concrete owner records; IDs alone can collide across hosts. */
+  owner?: { worktree: Worktree; repo: Repo }
+): DashboardAgentRow[] {
   const selectAgentFreshness = useMemo(
     () => createWorktreeAgentFreshnessSelector(worktreeId),
     [worktreeId]
@@ -77,8 +87,31 @@ export function useWorktreeAgentRows(worktreeId: string, active = true): Dashboa
   const agentFreshnessSignature = useAppStore((s) =>
     active ? selectAgentFreshness(s) : EMPTY_WORKTREE_AGENT_FRESHNESS_SIGNATURE
   )
+  // Why: scope catalog subscriptions to the owner repo so scratch-worktree
+  // discovery recomputes this card without polling or a global status listener.
+  const ownerRepoId = owner?.repo.id
+  const visibleWorktrees = useAppStore((s) =>
+    active && ownerRepoId ? s.worktreesByRepo[ownerRepoId] : undefined
+  )
+  const detectedWorktrees = useAppStore((s) =>
+    active && ownerRepoId ? s.detectedWorktreesByRepo[ownerRepoId] : undefined
+  )
+  const ownerWorktree = owner?.worktree
+  const ownerRepo = owner?.repo
+  const mismatchCandidates = useMemo(
+    () =>
+      ownerWorktree && ownerRepo
+        ? buildAgentLiveWorktreeMismatchCandidates({
+            ownerWorktree,
+            ownerRepo,
+            visibleWorktrees,
+            detected: detectedWorktrees
+          })
+        : [],
+    [ownerWorktree, ownerRepo, visibleWorktrees, detectedWorktrees]
+  )
 
-  return useMemo<DashboardAgentRow[]>(() => {
+  const rows = useMemo<DashboardAgentRow[]>(() => {
     if (!active) {
       return []
     }
@@ -120,4 +153,16 @@ export function useWorktreeAgentRows(worktreeId: string, active = true): Dashboa
     runtimeAgentOrchestrationByPaneKey,
     agentFreshnessSignature
   ])
+
+  return useMemo(
+    () =>
+      ownerWorktree && ownerRepo && mismatchCandidates.length > 0
+        ? attachAgentLiveWorktreeMismatch(rows, {
+            ownerWorktree,
+            ownerRepo,
+            candidates: mismatchCandidates
+          })
+        : rows,
+    [rows, ownerWorktree, ownerRepo, mismatchCandidates]
+  )
 }

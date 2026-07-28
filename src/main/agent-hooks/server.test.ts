@@ -6209,6 +6209,94 @@ describe('Endpoint file lifecycle', () => {
   })
 })
 
+describe('AgentHookServer reported cwd merge', () => {
+  const remote = (
+    server: AgentHookServer,
+    envelope: Record<string, unknown>,
+    connectionId = 'conn-1'
+  ): void => {
+    server.ingestRemote(envelope as Parameters<AgentHookServer['ingestRemote']>[0], connectionId)
+  }
+  const workingPayload = (overrides: Record<string, unknown> = {}) => ({
+    state: 'working',
+    prompt: 'work',
+    agentType: 'claude',
+    ...overrides
+  })
+
+  it('revalidates a remote cwd and keeps the status transition when it is invalid', () => {
+    const server = new AgentHookServer()
+    remote(server, { paneKey: PANE, reportedCwd: '/repo/scratch', payload: workingPayload() })
+    expect(server.getStatusSnapshot()[0]?.reportedCwd).toBe('/repo/scratch')
+
+    remote(server, {
+      paneKey: PANE,
+      reportedCwd: 'relative/path',
+      payload: workingPayload({ state: 'done', prompt: '' })
+    })
+    const cleared = server.getStatusSnapshot()[0]
+    expect(cleared?.reportedCwd).toBeNull()
+    expect(cleared?.state).toBe('done')
+  })
+
+  it('preserves the location across a same-root transition that omits it', () => {
+    const server = new AgentHookServer()
+    remote(server, { paneKey: PANE, reportedCwd: '/repo/scratch', payload: workingPayload() })
+    remote(server, { paneKey: PANE, payload: workingPayload({ state: 'done', prompt: '' }) })
+    expect(server.getStatusSnapshot()[0]?.reportedCwd).toBe('/repo/scratch')
+  })
+
+  it('clears the location when a different root agent takes the pane', () => {
+    const server = new AgentHookServer()
+    remote(server, { paneKey: PANE, reportedCwd: '/repo/scratch', payload: workingPayload() })
+    // Why: a root swap is only accepted once the previous root stopped running.
+    remote(server, { paneKey: PANE, payload: workingPayload({ state: 'done', prompt: '' }) })
+    remote(server, {
+      paneKey: PANE,
+      payload: workingPayload({ agentType: 'codex', prompt: 'other root' })
+    })
+    expect(server.getStatusSnapshot()[0]?.agentType).toBe('codex')
+    expect(server.getStatusSnapshot()[0]?.reportedCwd).toBeNull()
+  })
+
+  it('ignores a nested child event inherited from the live root pane', () => {
+    const server = new AgentHookServer()
+    remote(server, { paneKey: PANE, reportedCwd: '/repo/scratch', payload: workingPayload() })
+    remote(server, {
+      paneKey: PANE,
+      reportedCwd: '/repo/child-cwd',
+      payload: workingPayload({ agentType: 'codex', prompt: 'nested child' })
+    })
+    const entry = server.getStatusSnapshot()[0]
+    expect(entry?.agentType).toBe('claude')
+    expect(entry?.reportedCwd).toBe('/repo/scratch')
+  })
+
+  it('clears the location on a provider-session-only event', () => {
+    const server = new AgentHookServer()
+    remote(server, { paneKey: PANE, reportedCwd: '/repo/scratch', payload: workingPayload() })
+    remote(server, {
+      paneKey: PANE,
+      providerSessionOnly: true,
+      providerSession: {
+        key: 'session_id',
+        id: 'session-2',
+        transcriptPath: '/tmp/pi-session-2.jsonl'
+      },
+      reportedCwd: '/repo/other',
+      payload: workingPayload({ state: 'done', prompt: '', agentType: 'pi' })
+    })
+    expect(server.getStatusSnapshot()[0]?.reportedCwd).toBeNull()
+  })
+
+  it('drops the location when the pane status is cleared', () => {
+    const server = new AgentHookServer()
+    remote(server, { paneKey: PANE, reportedCwd: '/repo/scratch', payload: workingPayload() })
+    server.clearStatusEntriesForConnection('conn-1')
+    expect(server.getStatusSnapshot()).toHaveLength(0)
+  })
+})
+
 describe('Last-status persistence', () => {
   let userDataPath: string
 
@@ -6271,6 +6359,44 @@ describe('Last-status persistence', () => {
       })
     } finally {
       server.stop()
+    }
+  })
+
+  it('delivers a reported cwd over IPC but never persists or hydrates it', async () => {
+    const server = new AgentHookServer()
+    const listener = vi.fn()
+    server.setListener(listener)
+    await server.start({ env: 'production', userDataPath })
+    try {
+      await postHookEvent(
+        server,
+        buildBody({
+          hook_event_name: 'UserPromptSubmit',
+          prompt: 'persist me',
+          cwd: '/repo/.claude/worktrees/scratch'
+        })
+      )
+      expect(listener.mock.calls.at(-1)?.[0]).toMatchObject({
+        paneKey: PANE,
+        reportedCwd: '/repo/.claude/worktrees/scratch'
+      })
+      expect(server.getStatusSnapshot()[0]?.reportedCwd).toBe('/repo/.claude/worktrees/scratch')
+
+      server.flushStatusPersistSync()
+      const file = JSON.parse(readFileSync(lastStatusPath(), 'utf8'))
+      expect(file.entries[PANE].reportedCwd).toBeUndefined()
+      expect(file.entries[PANE].payload.state).toBe('working')
+    } finally {
+      server.stop()
+    }
+
+    const restarted = new AgentHookServer()
+    await restarted.start({ env: 'production', userDataPath })
+    try {
+      // Why: location is live process evidence, so a restart starts unknown.
+      expect(restarted.getStatusSnapshot()[0]?.reportedCwd).toBeNull()
+    } finally {
+      restarted.stop()
     }
   })
 

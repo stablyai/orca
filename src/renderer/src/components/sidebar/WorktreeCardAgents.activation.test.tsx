@@ -413,4 +413,52 @@ describe('WorktreeCardAgents activation', () => {
     act(() => root.unmount())
     host.remove()
   })
+
+  it('activates the owning pane even when the row reports another worktree', async () => {
+    mockAgentActivityDisplayMode = 'compact'
+    const tabId = 'mismatch-tab'
+    const paneKey = makePaneKey(tabId, LEAF_B)
+    mockAgents = [
+      {
+        ...mockAgent({
+          paneKey,
+          tabId,
+          agentType: 'claude',
+          prompt: 'Editing elsewhere',
+          worktreeId: 'wt-1'
+        }),
+        // Why: the note is display-only; it must not redirect activation.
+        liveWorktreeMismatch: {
+          destinationWorktreeId: 'wt-scratch',
+          destinationLabel: 'scratch-fix'
+        }
+      } as DashboardAgentRowData
+    ]
+    mockAgentStatusByPaneKey = { [paneKey]: { worktreeId: 'wt-1' } }
+    mockTabsByWorktree = { 'wt-1': [{ id: tabId }] }
+    const host = document.createElement('div')
+    document.body.append(host)
+    const root: Root = createRoot(host)
+    const { default: WorktreeCardAgents } = await import('./WorktreeCardAgents')
+
+    await act(async () => {
+      root.render(<WorktreeCardAgents worktreeId="wt-1" />)
+    })
+    const row = host.querySelector('.compact-agent-row')
+    expect(row?.textContent).toContain('in scratch-fix')
+
+    await act(async () => {
+      row?.dispatchEvent(new MouseEvent('click', { bubbles: true }))
+    })
+
+    expect(activationMocks.activateAndRevealWorktree).toHaveBeenCalledWith('wt-1')
+    expect(activationMocks.activateAndRevealWorktree).not.toHaveBeenCalledWith('wt-scratch')
+    expect(activationMocks.activateTabAndFocusPane).toHaveBeenCalledWith(tabId, LEAF_B, {
+      ackPaneKeyOnSuccess: paneKey,
+      flashFocusedPane: true,
+      scrollToBottomIfOutputSinceLastView: true
+    })
+    act(() => root.unmount())
+    host.remove()
+  })
 })

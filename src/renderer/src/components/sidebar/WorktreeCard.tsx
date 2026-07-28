@@ -1059,9 +1059,14 @@ const WorktreeCard = React.memo(function WorktreeCard({
   const metaCliProvenance = showCli ? worktree.cliProvenance : null
   const metaComment = showComment ? hoverComment : null
   const showInlineAgentList = cardProps.includes('inline-agents') && (newCardStyle || !compactCards)
+  const agentRowsOwner = React.useMemo(
+    () => (repo ? { worktree, repo } : undefined),
+    [worktree, repo]
+  )
   const compactInlineAgentRows = useWorktreeAgentRows(
     worktree.id,
-    showInlineAgentList && agentActivityDisplayMode === 'compact'
+    showInlineAgentList && agentActivityDisplayMode === 'compact',
+    agentRowsOwner
   )
   const compactInlineAgentRowsVisible =
     showInlineAgentList &&
@@ -1743,6 +1748,7 @@ const WorktreeCard = React.memo(function WorktreeCard({
           <WorktreeCardAgents
             worktreeId={worktree.id}
             agents={agentActivityDisplayMode === 'compact' ? compactInlineAgentRows : undefined}
+            owner={agentRowsOwner}
             className={hasMetaRow || remoteBranchConflict ? 'mt-0' : '-mt-1'}
           />
         )}

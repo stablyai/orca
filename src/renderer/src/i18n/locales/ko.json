@@ -4714,7 +4714,15 @@
               "agents": {
                 "a128d7006b": "{{value0}} {{value1}} 하위 {{value2}}",
                 "289a1d2ca7": "{{value0}}을 확장합니다. {{value1}}",
-                "0c1debfe84": "{{value0}} 접기"
+                "0c1debfe84": "{{value0}} 접기",
+                "5f635f3525": "1 agent in another worktree",
+                "b1ec4f92ab": "{{value0}} agents in another worktree",
+                "2901be82fe": "{{value0}} elsewhere"
+              },
+              "agent": {
+                "row": {
+                  "fb10950068": "in {{value0}}"
+                }
               }
             }
           },
@@ -12935,7 +12943,8 @@
           "b06e13fcf7": "agent 닫기",
           "0272969e28": "이 agent에게 보내기",
           "92a7017987": "전송 중",
-          "019b74d93a": "전송 가능"
+          "019b74d93a": "전송 가능",
+          "a80ac3eb20": "in {{value0}}"
         },
         "DashboardAgentRowMessage": {
           "0a01046763": "중단됨",

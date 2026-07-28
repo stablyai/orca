@@ -317,6 +317,22 @@ function areWorktreesEqual(current: Worktree[] | undefined, next: Worktree[]): b
   })
 }
 
+function areDetectedWorktreeAuthorityMapsEqual(
+  current: DetectedWorktreeListResult['authorityByHostId'],
+  next: DetectedWorktreeListResult['authorityByHostId']
+): boolean {
+  const currentKeys = Object.keys(current ?? {})
+  const nextKeys = Object.keys(next ?? {})
+  if (currentKeys.length !== nextKeys.length) {
+    return false
+  }
+  return currentKeys.every((key) => {
+    const a = current?.[key]
+    const b = next?.[key]
+    return a?.authoritative === b?.authoritative && a?.source === b?.source
+  })
+}
+
 function areDetectedWorktreeResultsEqual(
   current: DetectedWorktreeListResult | undefined,
   next: DetectedWorktreeListResult
@@ -326,6 +342,7 @@ function areDetectedWorktreeResultsEqual(
     current.repoId === next.repoId &&
     current.authoritative === next.authoritative &&
     current.source === next.source &&
+    areDetectedWorktreeAuthorityMapsEqual(current.authorityByHostId, next.authorityByHostId) &&
     areWorktreesEqual(current.worktrees, next.worktrees) &&
     current.worktrees.every((worktree, index) => {
       const candidate = next.worktrees[index]
@@ -565,7 +582,13 @@ function mergeDetectedWorktreesForHost(
   ).map((worktree) => withRepoHostOwnership(worktree, hostId, setup))
   return {
     ...refreshed,
-    worktrees: mergeWorktreesForHost(current?.worktrees, refreshedForHost, hostId, options)
+    worktrees: mergeWorktreesForHost(current?.worktrees, refreshedForHost, hostId, options),
+    // Why: merged rows span refresh scopes, so the top-level bits can't authorize
+    // another scope's hidden rows; keep the latest verdict per refresh host.
+    authorityByHostId: {
+      ...current?.authorityByHostId,
+      [hostId]: { authoritative: refreshed.authoritative, source: refreshed.source }
+    }
   }
 }
 

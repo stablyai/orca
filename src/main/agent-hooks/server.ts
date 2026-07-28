@@ -55,6 +55,10 @@ import {
   shouldSuppressInheritedTerminalStatus
 } from '../../shared/agent-status-identity'
 import {
+  normalizeAgentReportedCwdUpdate,
+  resolveAcceptedRootReportedCwd
+} from '../../shared/agent-reported-cwd'
+import {
   isAgentInterruptInputIntent,
   type AgentInterruptInferenceRequest
 } from '../../shared/agent-interrupt-intent'
@@ -280,6 +284,9 @@ function toAgentStatusIpcPayload(entry: EnrichedAgentHookEventPayload): AgentSta
     ...(entry.providerSession ? { providerSession: entry.providerSession } : {}),
     ...(entry.providerSessionOnly ? { providerSessionOnly: true } : {}),
     ...(entry.promptInteractionKey ? { promptInteractionKey: entry.promptInteractionKey } : {}),
+    // Why: main owns the merge, so hook-driven IPC is always authoritative —
+    // `null` clears a renderer location that main no longer holds.
+    reportedCwd: entry.reportedCwd ?? null,
     ...entry.payload
   }
 }
@@ -899,7 +906,11 @@ export class AgentHookServer {
     }
     if (payload.providerSessionOnly) {
       // Why: Pi session_start replaces stale turn state and survives replay, but must not emit prompt telemetry or a fabricated status.
-      const enriched = this.attachStatusTiming(payload, now)
+      const enriched: EnrichedAgentHookEventPayload = {
+        ...this.attachStatusTiming(payload, now),
+        // Why: this event swaps the live row for sleeping metadata, so any cached location is stale.
+        reportedCwd: undefined
+      }
       this.clearAssistantMessageRetry(enriched.paneKey)
       this.runtimeObservedStatusPaneKeys.delete(enriched.paneKey)
       this.state.lastStatusByPaneKey.set(enriched.paneKey, enriched)
@@ -1012,7 +1023,15 @@ export class AgentHookServer {
     if (!identity.inheritedFromActivePane) {
       this.maybeTrackAgentPromptSent(effectivePayload, previous)
     }
-    const enriched = this.attachStatusTiming(effectivePayload, now)
+    const enriched: EnrichedAgentHookEventPayload = {
+      ...this.attachStatusTiming(effectivePayload, now),
+      reportedCwd: resolveAcceptedRootReportedCwd({
+        previous: previous?.reportedCwd ?? undefined,
+        update: effectivePayload.reportedCwd,
+        inheritedFromActivePane: identity.inheritedFromActivePane,
+        rootAgentChanged: Boolean(previous) && previous?.payload.agentType !== identity.agentType
+      })
+    }
     this.runtimeObservedStatusPaneKeys.add(enriched.paneKey)
     this.state.lastStatusByPaneKey.set(enriched.paneKey, enriched)
     this.scheduleStatusPersist()
@@ -1491,6 +1510,7 @@ export class AgentHookServer {
       providerSession?: unknown
       providerSessionOnly?: unknown
       isReplay?: boolean
+      reportedCwd?: unknown
       payload: unknown
     },
     connectionId: string
@@ -1585,6 +1605,12 @@ export class AgentHookServer {
       env: envelope.env,
       expectedEnv: this.env
     })
+    // Why: the relay is a trust boundary; a remote cwd is revalidated here, and a
+    // session-identity-only envelope always clears rather than preserves.
+    const reportedCwd =
+      envelope.providerSessionOnly === true
+        ? null
+        : normalizeAgentReportedCwdUpdate(envelope.reportedCwd)
     const event: AgentHookEventPayload = {
       paneKey,
       launchToken: envelope.launchToken,
@@ -1600,6 +1626,7 @@ export class AgentHookServer {
       providerSession,
       providerSessionOnly: envelope.providerSessionOnly === true ? true : undefined,
       isReplay: envelope.isReplay === true ? true : undefined,
+      ...(reportedCwd === undefined ? {} : { reportedCwd }),
       payload: normalizedPayload
     }
     this.applyNormalizedStatus(event)
@@ -2062,7 +2089,12 @@ export class AgentHookServer {
       if (!isValidPaneKey(paneKey)) {
         continue
       }
-      const { promptInteractionKey: _promptInteractionKey, ...persistedPayload } = payload
+      // Why: reportedCwd is live process evidence, not durable workspace data.
+      const {
+        promptInteractionKey: _promptInteractionKey,
+        reportedCwd: _reportedCwd,
+        ...persistedPayload
+      } = payload
       entries[paneKey] = persistedPayload as EnrichedAgentHookEventPayload
     }
     const file: LastStatusFile = { version: LAST_STATUS_FILE_VERSION, entries }

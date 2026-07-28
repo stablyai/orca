@@ -3606,4 +3606,67 @@ describe('shared agent-hook-listener', () => {
       expect(clearClaudeAnsweredQuestionWait(state, PANE_KEY)).toEqual({ state: 'working' })
     })
   })
+
+  describe('agent reported cwd', () => {
+    it('carries a native Claude cwd on the normalized event', () => {
+      const event = normalizeHookPayload(
+        state,
+        'claude',
+        {
+          paneKey: PANE_KEY,
+          payload: {
+            hook_event_name: 'UserPromptSubmit',
+            prompt: 'hello',
+            cwd: '/repo/.claude/worktrees/10572-live-repro'
+          }
+        },
+        'production'
+      )
+      expect(event?.reportedCwd).toBe('/repo/.claude/worktrees/10572-live-repro')
+      expect(event?.payload.state).toBe('working')
+    })
+
+    it('clears on an invalid cwd without dropping the status transition', () => {
+      const event = normalizeHookPayload(
+        state,
+        'claude',
+        {
+          paneKey: PANE_KEY,
+          payload: { hook_event_name: 'Stop', cwd: 'relative/path' }
+        },
+        'production'
+      )
+      expect(event?.reportedCwd).toBeNull()
+      expect(event?.payload.state).toBe('done')
+    })
+
+    it('omits the field entirely when the payload carries no location', () => {
+      const event = normalizeHookPayload(
+        state,
+        'claude',
+        { paneKey: PANE_KEY, payload: { hook_event_name: 'Stop' } },
+        'production'
+      )
+      expect(event).not.toBeNull()
+      expect('reportedCwd' in (event as object)).toBe(false)
+    })
+
+    it('clears the location on a provider-session-only event', () => {
+      const event = normalizeHookPayload(
+        state,
+        'pi',
+        {
+          paneKey: PANE_KEY,
+          payload: {
+            hook_event_name: 'session_start',
+            session_id: 'pi-session-cwd',
+            session_file: '/tmp/pi-session-cwd.jsonl'
+          }
+        },
+        'production'
+      )
+      expect(event?.providerSessionOnly).toBe(true)
+      expect(event?.reportedCwd).toBeNull()
+    })
+  })
 })

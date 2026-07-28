@@ -84,6 +84,9 @@ export type AgentHookRelayEnvelope = {
   providerSessionOnly?: boolean
   /** True when the relay is replaying its cache after Orca reconnects. */
   isReplay?: boolean
+  /** Tri-state agent-reported cwd: path replaces, `null` clears, absent preserves.
+   *  Orca revalidates it in `ingestRemote` at the SSH trust boundary. */
+  reportedCwd?: string | null
   /** Forwarded from the agent CLI POST body. The relay default is `remote`,
    *  which marks transport location rather than dev/prod build env. */
   env?: string

@@ -4779,7 +4779,15 @@
               "agents": {
                 "a128d7006b": "{{value0}} {{value1}} child {{value2}}",
                 "289a1d2ca7": "Expand {{value0}}. {{value1}}",
-                "0c1debfe84": "Collapse {{value0}}"
+                "0c1debfe84": "Collapse {{value0}}",
+                "5f635f3525": "1 agent in another worktree",
+                "b1ec4f92ab": "{{value0}} agents in another worktree",
+                "2901be82fe": "{{value0}} elsewhere"
+              },
+              "agent": {
+                "row": {
+                  "fb10950068": "in {{value0}}"
+                }
               }
             }
           },
@@ -12958,7 +12966,8 @@
           "b06e13fcf7": "Dismiss agent",
           "0272969e28": "Send to this agent",
           "92a7017987": "sending",
-          "019b74d93a": "eligible"
+          "019b74d93a": "eligible",
+          "a80ac3eb20": "in {{value0}}"
         },
         "DashboardAgentRowMessage": {
           "0a01046763": "interrupted",

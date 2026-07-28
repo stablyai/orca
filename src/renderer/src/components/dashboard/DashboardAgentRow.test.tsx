@@ -417,4 +417,31 @@ describe('DashboardAgentRow', () => {
     expect(classTokens(markup)).toContain('worktree-agent-lineage-parent-row')
     expect(markup).toContain('aria-label="Show 2 child agents"')
   })
+
+  it('notes the destination worktree beside the prompt without displacing the row', () => {
+    const markup = renderRow(
+      makeAgent({
+        liveWorktreeMismatch: {
+          destinationWorktreeId: 'wt-scratch',
+          destinationLabel: 'scratch-fix'
+        }
+      })
+    )
+
+    expect(markup).toContain('data-agent-live-worktree-mismatch')
+    expect(markup).toContain('in scratch-fix')
+    expect(markup).toContain('Fix hover scope')
+    expect(markup).toContain('title="Fix hover scope in scratch-fix"')
+    expect(markup).toContain('aria-label="Dismiss agent"')
+    expect(classTokensForTaggedElement(markup, 'data-agent-live-worktree-mismatch')).toContain(
+      'text-muted-foreground/70'
+    )
+  })
+
+  it('omits the destination note when the agent runs in its own worktree', () => {
+    const markup = renderRow(makeAgent())
+
+    expect(markup).not.toContain('data-agent-live-worktree-mismatch')
+    expect(markup).toContain('title="Fix hover scope"')
+  })
 })
