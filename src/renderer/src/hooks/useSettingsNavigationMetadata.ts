@@ -78,6 +78,7 @@ import { buildSettingsProjectList } from '@/components/settings/settings-project
 import { isWebClientLocation } from '@/lib/web-client-location'
 import {
   getWindowsTerminalCapabilityOwnerKey,
+  isWindowsTerminalCapabilityHost,
   useLocalWindowsTerminalCapabilities,
   useWindowsTerminalCapabilities
 } from '@/lib/windows-terminal-capabilities'
@@ -637,8 +638,18 @@ export function useSettingsNavigationMetadata(): SettingsNavSection[] {
     runtimeTarget
   )
   const localWindowsTerminalCapabilities = useLocalWindowsTerminalCapabilities(isWebClient)
-  const isLocalWindowsHost = isWindows || localWindowsTerminalCapabilities.hostPlatform === 'win32'
-  const isWindowsTerminalHost = isWindows || windowsTerminalCapabilities.hostPlatform === 'win32'
+  const isLocalWindowsHost = isWindowsTerminalCapabilityHost({
+    isWindowsRenderer: isWindows,
+    isWebClient,
+    target: { kind: 'local' },
+    hostPlatform: localWindowsTerminalCapabilities.hostPlatform
+  })
+  const isWindowsTerminalHost = isWindowsTerminalCapabilityHost({
+    isWindowsRenderer: isWindows,
+    isWebClient,
+    target: runtimeTarget,
+    hostPlatform: windowsTerminalCapabilities.hostPlatform
+  })
 
   // Why: Settings and Cmd+J share this metadata so platform/runtime visibility
   // and search entries cannot drift. Keep this hook free of Settings pane UI

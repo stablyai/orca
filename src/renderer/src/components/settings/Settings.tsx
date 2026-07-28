@@ -78,6 +78,7 @@ import { registerWindowCloseGuard } from '../window-close-request-coordinator'
 import { checkRuntimeHooks } from '@/runtime/runtime-hooks-client'
 import {
   getWindowsTerminalCapabilityOwnerKey,
+  isWindowsTerminalCapabilityHost,
   useLocalWindowsTerminalCapabilities,
   useWindowsTerminalCapabilities
 } from '@/lib/windows-terminal-capabilities'
@@ -870,11 +871,19 @@ function Settings(): React.JSX.Element {
       ? windowsTerminalCapabilities
       : remoteViewLocalWindowsRuntimeCapabilities
   // Why: only supported-but-unavailable WSL (Windows) should render disabled controls, not unsupported WSL (macOS/Linux).
-  const runtimeWslSupportedPlatform =
-    isWindows || windowsTerminalCapabilities.hostPlatform === 'win32'
-  const localWslSupportedPlatform =
-    isWindows || localWindowsRuntimeCapabilities.hostPlatform === 'win32'
-  const isWindowsTerminalHost = isWindows || windowsTerminalCapabilities.hostPlatform === 'win32'
+  const runtimeWslSupportedPlatform = isWindowsTerminalCapabilityHost({
+    isWindowsRenderer: isWindows,
+    isWebClient,
+    target: runtimeTarget,
+    hostPlatform: windowsTerminalCapabilities.hostPlatform
+  })
+  const localWslSupportedPlatform = isWindowsTerminalCapabilityHost({
+    isWindowsRenderer: isWindows,
+    isWebClient,
+    target: { kind: 'local' },
+    hostPlatform: localWindowsRuntimeCapabilities.hostPlatform
+  })
+  const isWindowsTerminalHost = runtimeWslSupportedPlatform
 
   if ([...neededSectionIds].some((id) => !mountedSectionIds.has(id))) {
     // Why: record newly needed sections during render so panes don't wait for a follow-up Effect.

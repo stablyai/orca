@@ -41,7 +41,7 @@ vi.mock('@/lib/web-client-location', () => ({
 
 import AgentSettingsDialog from './AgentSettingsDialog'
 
-function installCapabilityTransports(): {
+function installCapabilityTransports(localHostPlatform: NodeJS.Platform = 'win32'): {
   localWslAvailable: ReturnType<typeof vi.fn>
   runtimeEnvironmentCall: ReturnType<typeof vi.fn>
 } {
@@ -70,7 +70,7 @@ function installCapabilityTransports(): {
       },
       pwsh: { isAvailable: vi.fn().mockResolvedValue(true) },
       gitBash: { isAvailable: vi.fn().mockResolvedValue(false) },
-      runtime: { getStatus: vi.fn().mockResolvedValue({ hostPlatform: 'win32' }) },
+      runtime: { getStatus: vi.fn().mockResolvedValue({ hostPlatform: localHostPlatform }) },
       runtimeEnvironments: { call: runtimeEnvironmentCall }
     } as unknown as Window['api']
   })
@@ -152,5 +152,21 @@ describe('AgentSettingsDialog', () => {
       wslAvailable: true,
       wslDistros: ['Ubuntu']
     })
+  })
+
+  it('ignores a Windows browser user agent when the paired server is Linux', async () => {
+    vi.stubGlobal('navigator', { userAgent: 'Windows' })
+    testState.isWebClient = true
+    const { localWslAvailable, runtimeEnvironmentCall } = installCapabilityTransports('linux')
+
+    await act(async () => {
+      root.render(createElement(AgentSettingsDialog, { open: true, onOpenChange: vi.fn() }))
+      await Promise.resolve()
+      await Promise.resolve()
+    })
+
+    expect(localWslAvailable).toHaveBeenCalledTimes(1)
+    expect(runtimeEnvironmentCall).not.toHaveBeenCalled()
+    expect(testState.agentsPaneProps).toMatchObject({ wslSupportedPlatform: false })
   })
 })

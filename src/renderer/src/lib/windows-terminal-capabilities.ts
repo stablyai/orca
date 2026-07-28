@@ -263,6 +263,18 @@ export function useWindowsTerminalCapabilities(
   return selectWindowsTerminalCapabilitiesForOwner(state, enabled, resolvedOwnerKey)
 }
 
+export function isWindowsTerminalCapabilityHost(args: {
+  isWindowsRenderer: boolean
+  isWebClient: boolean
+  target: WindowsTerminalCapabilityLoadTarget
+  hostPlatform: NodeJS.Platform | null
+}): boolean {
+  return (
+    args.hostPlatform === 'win32' ||
+    (!args.isWebClient && args.target.kind === 'local' && args.isWindowsRenderer)
+  )
+}
+
 export function useLocalWindowsTerminalCapabilities(
   enabled: boolean,
   forceRefreshOnMount = false

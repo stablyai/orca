@@ -9,7 +9,10 @@ import {
 import { AgentsPane } from '@/components/settings/AgentsPane'
 import { useAppStore } from '@/store'
 import { translate } from '@/i18n/i18n'
-import { useLocalWindowsTerminalCapabilities } from '@/lib/windows-terminal-capabilities'
+import {
+  isWindowsTerminalCapabilityHost,
+  useLocalWindowsTerminalCapabilities
+} from '@/lib/windows-terminal-capabilities'
 import { isWebClientLocation } from '@/lib/web-client-location'
 
 type AgentSettingsDialogProps = {
@@ -30,8 +33,12 @@ export default function AgentSettingsDialog({
     open && (isWindowsRenderer || isWebClient),
     false
   )
-  const wslSupportedPlatform =
-    isWindowsRenderer || localWindowsTerminalCapabilities.hostPlatform === 'win32'
+  const wslSupportedPlatform = isWindowsTerminalCapabilityHost({
+    isWindowsRenderer,
+    isWebClient,
+    target: { kind: 'local' },
+    hostPlatform: localWindowsTerminalCapabilities.hostPlatform
+  })
 
   if (!settings) {
     return null
