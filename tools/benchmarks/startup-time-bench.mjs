@@ -401,6 +401,18 @@ function killProcessTree(proc) {
 }
 
 function parseStartupLine(line) {
+  // Why: the main-thread churn probe (ORCA_MAIN_THREAD_DIAGNOSTICS=1) emits a
+  // different prefix with a JSON payload. Its per-command spawn attribution
+  // (spawns[cmd].blockMsTotal) is the only signal that names which binary held
+  // the main thread, so capture it here instead of dropping the line.
+  const mainThreadMatch = /^\[main-thread\] (\{.*\})$/.exec(line)
+  if (mainThreadMatch) {
+    try {
+      return { event: 'main-thread', details: JSON.parse(mainThreadMatch[1]) }
+    } catch {
+      return null
+    }
+  }
   const match = /^\[startup\] (\S+)(.*)$/.exec(line)
   if (!match) {
     return null
