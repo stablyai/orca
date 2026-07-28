@@ -8,6 +8,12 @@ import {
   MAX_QUICK_COMMAND_TERMINAL_TEXT_LENGTH
 } from '../../../../shared/terminal-quick-commands'
 import type { PersistedUIState } from '../../../../shared/types'
+import {
+  MAX_JIRA_SAVED_FILTERS,
+  MAX_JIRA_SAVED_FILTER_ID_LENGTH,
+  MAX_JIRA_SAVED_FILTER_JQL_LENGTH,
+  MAX_JIRA_SAVED_FILTER_NAME_LENGTH
+} from '../../../../shared/jira-saved-filters'
 import type { OrcaRuntimeService } from '../../orca-runtime'
 import type { RpcRequest } from '../core'
 import { RpcDispatcher } from '../dispatcher'
@@ -446,7 +452,9 @@ describe('client UI RPC methods', () => {
           model: 'project'
         },
         jiraPreset: 'assigned',
-        jiraQuery: 'ENG'
+        jiraQuery: 'ENG',
+        jiraSavedFilters: [{ id: 'filter-1', name: 'My work', jql: 'project = ENG' }],
+        jiraActiveSavedFilterId: 'filter-1'
       },
       workspaceCleanup: {
         dismissals: {
@@ -497,7 +505,9 @@ describe('client UI RPC methods', () => {
           model: 'project'
         },
         jiraPreset: 'assigned',
-        jiraQuery: 'ENG'
+        jiraQuery: 'ENG',
+        jiraSavedFilters: [{ id: 'filter-1', name: 'My work', jql: 'project = ENG' }],
+        jiraActiveSavedFilterId: 'filter-1'
       },
       workspaceCleanup: {
         dismissals: {
@@ -544,6 +554,18 @@ describe('client UI RPC methods', () => {
     ],
     ['taskResumeState.jiraPreset', { taskResumeState: { jiraPreset: 'assigned' } }],
     ['taskResumeState.jiraQuery', { taskResumeState: { jiraQuery: 'ENG' } }],
+    [
+      'taskResumeState.jiraSavedFilters',
+      {
+        taskResumeState: {
+          jiraSavedFilters: [{ id: 'filter-1', name: 'My work', jql: 'project = ENG' }]
+        }
+      }
+    ],
+    [
+      'taskResumeState.jiraActiveSavedFilterId',
+      { taskResumeState: { jiraActiveSavedFilterId: null } }
+    ],
     ['activeView', { activeView: 'tasks' }],
     ['showDotfilesByWorktree', { showDotfilesByWorktree: { 'repo::/worktree': true } }],
     ['setupGuideSidebarDismissed', { setupGuideSidebarDismissed: true }],
@@ -630,6 +652,64 @@ describe('client UI RPC methods', () => {
 
     const response = await dispatcher.dispatch(
       makeRequest('ui.set', { showActiveOnly: 'yes', unknownField: true })
+    )
+
+    expect(response).toMatchObject({ ok: false, error: { code: 'invalid_argument' } })
+    expect(runtime.updateUIState).not.toHaveBeenCalled()
+  })
+
+  it.each([
+    [
+      'too many saved filters',
+      Array.from({ length: MAX_JIRA_SAVED_FILTERS + 1 }, (_, index) => ({
+        id: `filter-${index}`,
+        name: `Filter ${index}`,
+        jql: `project = P${index}`
+      }))
+    ],
+    [
+      'an oversized id',
+      [
+        {
+          id: 'x'.repeat(MAX_JIRA_SAVED_FILTER_ID_LENGTH + 1),
+          name: 'My work',
+          jql: 'project = ENG'
+        }
+      ]
+    ],
+    [
+      'an oversized name',
+      [
+        {
+          id: 'filter-1',
+          name: 'x'.repeat(MAX_JIRA_SAVED_FILTER_NAME_LENGTH + 1),
+          jql: 'project = ENG'
+        }
+      ]
+    ],
+    [
+      'oversized JQL',
+      [
+        {
+          id: 'filter-1',
+          name: 'My work',
+          jql: 'x'.repeat(MAX_JIRA_SAVED_FILTER_JQL_LENGTH + 1)
+        }
+      ]
+    ],
+    [
+      'an unknown nested field',
+      [{ id: 'filter-1', name: 'My work', jql: 'project = ENG', unknown: true }]
+    ]
+  ])('rejects Jira saved filters with %s', async (_label, jiraSavedFilters) => {
+    const runtime = {
+      getRuntimeId: () => 'test-runtime',
+      updateUIState: vi.fn()
+    } as unknown as OrcaRuntimeService
+    const dispatcher = new RpcDispatcher({ runtime, methods: CLIENT_UI_METHODS })
+
+    const response = await dispatcher.dispatch(
+      makeRequest('ui.set', { taskResumeState: { jiraSavedFilters } })
     )
 
     expect(response).toMatchObject({ ok: false, error: { code: 'invalid_argument' } })

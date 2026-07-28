@@ -1617,7 +1617,14 @@ describe('createUISlice hydratePersistedUI', () => {
           linearPreset: 'completed',
           linearQuery: 'label:bug',
           jiraPreset: 'reported',
-          jiraQuery: 99
+          jiraQuery: 'project = KEEP',
+          jiraSavedFilters: [
+            { id: 'filter-1', name: 'My work', jql: 'assignee = currentUser()' },
+            { id: 'filter-1', name: 'Duplicate id', jql: 'project = DUPLICATE' },
+            { id: 'filter-2', name: 'my WORK', jql: 'project = DUPLICATE_NAME' },
+            { id: '', name: 'Invalid', jql: 'project = INVALID' }
+          ],
+          jiraActiveSavedFilterId: 'missing'
         } as unknown as PersistedUIState['taskResumeState']
       })
     )
@@ -1626,7 +1633,30 @@ describe('createUISlice hydratePersistedUI', () => {
       githubMode: 'project',
       linearPreset: 'completed',
       linearQuery: 'label:bug',
-      jiraPreset: 'reported'
+      jiraPreset: 'reported',
+      jiraQuery: 'project = KEEP',
+      jiraSavedFilters: [{ id: 'filter-1', name: 'My work', jql: 'assignee = currentUser()' }]
+    })
+  })
+
+  it.each([
+    ['matching id', 'filter-1', 'filter-1'],
+    ['explicit null', null, null]
+  ])('hydrates saved Jira filters with %s active selection', (_label, activeId, expected) => {
+    const store = createUIStore()
+
+    store.getState().hydratePersistedUI(
+      makePersistedUI({
+        taskResumeState: {
+          jiraSavedFilters: [{ id: ' filter-1 ', name: ' My work ', jql: ' project = ENG ' }],
+          jiraActiveSavedFilterId: activeId
+        }
+      })
+    )
+
+    expect(store.getState().taskResumeState).toEqual({
+      jiraSavedFilters: [{ id: 'filter-1', name: 'My work', jql: 'project = ENG' }],
+      jiraActiveSavedFilterId: expected
     })
   })
 
@@ -1812,9 +1842,19 @@ describe('createUISlice hydratePersistedUI', () => {
     const store = createUIStore()
 
     store.setState({ taskResumeState: { githubMode: 'project', linearPreset: 'all' } })
-    store.getState().setTaskResumeState({ githubItemsPreset: 'my-prs' })
+    store.getState().setTaskResumeState({
+      githubItemsPreset: 'my-prs',
+      jiraSavedFilters: [{ id: 'filter-1', name: 'My work', jql: 'project = ENG' }],
+      jiraActiveSavedFilterId: 'filter-1'
+    })
 
-    const expected = { githubMode: 'project', linearPreset: 'all', githubItemsPreset: 'my-prs' }
+    const expected = {
+      githubMode: 'project',
+      linearPreset: 'all',
+      githubItemsPreset: 'my-prs',
+      jiraSavedFilters: [{ id: 'filter-1', name: 'My work', jql: 'project = ENG' }],
+      jiraActiveSavedFilterId: 'filter-1'
+    }
     expect(store.getState().taskResumeState).toEqual(expected)
     expect(setUI).toHaveBeenCalledWith({ taskResumeState: expected })
   })

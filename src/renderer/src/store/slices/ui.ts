@@ -35,6 +35,10 @@ import {
   applyManualRepoOrder,
   normalizeManualRepoOrder
 } from '../../../../shared/manual-repo-order'
+import {
+  MAX_JIRA_SAVED_FILTER_ID_LENGTH,
+  normalizeJiraSavedFilters
+} from '../../../../shared/jira-saved-filters'
 import { isTopLevelView } from '../../../../shared/top-level-view'
 import type { UsagePercentageDisplay } from '../../../../shared/usage-percentage-display'
 import {
@@ -578,6 +582,22 @@ function sanitizeTaskResumeState(value: unknown): TaskResumeState | undefined {
   }
   if (typeof input.jiraQuery === 'string') {
     next.jiraQuery = input.jiraQuery
+  }
+  const jiraSavedFilters = normalizeJiraSavedFilters(input.jiraSavedFilters)
+  if (Array.isArray(input.jiraSavedFilters)) {
+    next.jiraSavedFilters = jiraSavedFilters
+  }
+  if (input.jiraActiveSavedFilterId === null) {
+    next.jiraActiveSavedFilterId = null
+  } else if (typeof input.jiraActiveSavedFilterId === 'string') {
+    const activeId = input.jiraActiveSavedFilterId.trim()
+    if (
+      activeId.length > 0 &&
+      activeId.length <= MAX_JIRA_SAVED_FILTER_ID_LENGTH &&
+      jiraSavedFilters.some((filter) => filter.id === activeId)
+    ) {
+      next.jiraActiveSavedFilterId = activeId
+    }
   }
 
   return Object.keys(next).length > 0 ? next : undefined
