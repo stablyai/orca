@@ -19,6 +19,10 @@ export type StatusPillIpcArgs = {
   getSummary: () => StatusPillSummary
   getRows: () => StatusPillAgentRow[]
   runtime?: StatusPillRuntime
+  /** Read the pill window's current screen origin (for the drag start point). */
+  getWindowPosition: () => { x: number; y: number }
+  /** Move the pill window to a screen origin and (debounced) persist it. */
+  setWindowPosition: (position: { x: number; y: number }) => void
   warn: (message: string, error?: unknown) => void
 }
 
@@ -65,6 +69,17 @@ export function attachStatusPillIpcListeners(args: StatusPillIpcArgs): () => voi
     // with this preference snapshot.
     prefersReducedMotion: false
   })
+  const windowPositionHandler = (): { x: number; y: number } => args.getWindowPosition()
+  const setWindowPositionHandler = (payload: unknown): void => {
+    if (!payload || typeof payload !== 'object') {
+      return
+    }
+    const { x, y } = payload as { x?: unknown; y?: unknown }
+    if (typeof x !== 'number' || typeof y !== 'number') {
+      return
+    }
+    args.setWindowPosition({ x, y })
+  }
   const answerHandler = async (payload: unknown): Promise<StatusPillAnswerResult> =>
     answerAgentFromPill(payload, args)
   // Why: validate the focus target against the live rows so a stale or
@@ -91,18 +106,22 @@ export function attachStatusPillIpcListeners(args: StatusPillIpcArgs): () => voi
   ipcMain.on('statusPill:click', clickHandler)
   ipcMain.on('statusPill:contextMenu', contextMenuHandler)
   ipcMain.on('statusPill:focusPane', focusPaneHandler)
+  ipcMain.on('statusPill:setWindowPosition', setWindowPositionHandler)
   ipcMain.handle('statusPill:getSnapshot', snapshotHandler)
   ipcMain.handle('statusPill:getAgentRows', rowsHandler)
   ipcMain.handle('statusPill:getInitialPreferences', prefsHandler)
+  ipcMain.handle('statusPill:getWindowPosition', windowPositionHandler)
   ipcMain.handle('statusPill:answerAgent', answerHandler)
 
   return () => {
     ipcMain.removeListener('statusPill:click', clickHandler)
     ipcMain.removeListener('statusPill:contextMenu', contextMenuHandler)
     ipcMain.removeListener('statusPill:focusPane', focusPaneHandler)
+    ipcMain.removeListener('statusPill:setWindowPosition', setWindowPositionHandler)
     ipcMain.removeHandler('statusPill:getSnapshot')
     ipcMain.removeHandler('statusPill:getAgentRows')
     ipcMain.removeHandler('statusPill:getInitialPreferences')
+    ipcMain.removeHandler('statusPill:getWindowPosition')
     ipcMain.removeHandler('statusPill:answerAgent')
   }
 }

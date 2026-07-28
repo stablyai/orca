@@ -3,6 +3,7 @@ import { join } from 'node:path'
 import { is } from '@electron-toolkit/utils'
 import {
   computeStatusPillPlacement,
+  computeStatusPillPlacementForPoint,
   getCursorScreenPointSafe,
   pickDisplayForCursor
 } from './placement'
@@ -52,6 +53,13 @@ export type CreateStatusPillWindowOptions = {
   /** Runtime, used to resolve paneKey → terminal handle and to write the
    *  answer bytes when the user answers a pending question from the pill. */
   runtime?: StatusPillRuntime
+  /** Read the user's last dragged pill position (screen coords), or null when
+   *  the pill has never been dragged. Drives restore + re-clamp on display
+   *  changes so the pill stays where the user put it. */
+  getPersistedPosition?: () => { x: number; y: number } | null
+  /** Persist a new pill position after the user drags it. The factory debounces
+   *  writes from the drag stream. */
+  persistPosition?: (position: { x: number; y: number }) => void
   /** Optional logger; defaults to console.warn. */
   warn?: (message: string, error?: unknown) => void
   /** Scheduler overrides for tests. */
@@ -158,13 +166,34 @@ export function createStatusPillWindow(
     }
   }
 
-  const initialPlacement = computePlacementForActiveDisplay(warn)
+  const initialPlacement = computePlacementForActiveDisplay(warn, options.getPersistedPosition?.())
   if (initialPlacement) {
     try {
       window.setBounds(initialPlacement, false)
     } catch (error) {
       warn('[status-pill] failed to set initial bounds', error)
     }
+  }
+
+  // Why: debounce position writes so a fluid drag (many setPosition calls) only
+  // hits the store once after the user stops moving. 400ms mirrors the main
+  // window's bounds-save debounce.
+  let persistTimer: NodeJS.Timeout | null = null
+  const persistPositionDebounced = (position: { x: number; y: number }): void => {
+    if (!options.persistPosition) {
+      return
+    }
+    if (persistTimer) {
+      clearTimeout(persistTimer)
+    }
+    persistTimer = setTimeout(() => {
+      persistTimer = null
+      try {
+        options.persistPosition?.(position)
+      } catch (error) {
+        warn('[status-pill] failed to persist position', error)
+      }
+    }, 400)
   }
 
   const broadcaster = new StatusPillBroadcaster({
@@ -194,7 +223,29 @@ export function createStatusPillWindow(
     getSummary,
     getRows,
     runtime: options.runtime,
-    warn
+    warn,
+    // Why: the renderer drives manual dragging (mousedown → mousemove). It
+    // reads the window's screen origin on pointer down and pushes the new
+    // origin on each move; main persists the final position (debounced).
+    getWindowPosition: () => {
+      try {
+        const [x, y] = window.getPosition()
+        return { x, y }
+      } catch {
+        return { x: 0, y: 0 }
+      }
+    },
+    setWindowPosition: (position) => {
+      if (window.isDestroyed()) {
+        return
+      }
+      try {
+        window.setPosition(Math.round(position.x), Math.round(position.y), false)
+        persistPositionDebounced(position)
+      } catch (error) {
+        warn('[status-pill] failed to set window position', error)
+      }
+    }
   })
 
   // Why: push the initial snapshot as soon as the renderer signals it is
@@ -220,7 +271,10 @@ export function createStatusPillWindow(
     if (window.isDestroyed()) {
       return
     }
-    const next = computePlacementForActiveDisplay(warn)
+    // Why: re-read the persisted position so a display-metrics / display-added
+    // event re-clamps the pill in place instead of teleporting it back to the
+    // cursor's display (the pre-drag behavior).
+    const next = computePlacementForActiveDisplay(warn, options.getPersistedPosition?.())
     if (!next) {
       return
     }
@@ -232,6 +286,10 @@ export function createStatusPillWindow(
   }
 
   function destroy(): void {
+    if (persistTimer) {
+      clearTimeout(persistTimer)
+      persistTimer = null
+    }
     detachDisplayListeners()
     detachIpc()
     broadcaster.destroy()
@@ -248,7 +306,8 @@ export function createStatusPillWindow(
   }
 
   function computePlacementForActiveDisplay(
-    warnFn: (m: string, e?: unknown) => void
+    warnFn: (m: string, e?: unknown) => void,
+    persisted?: { x: number; y: number } | null
   ): Rectangle | null {
     let displays: Display[] = []
     try {
@@ -259,6 +318,18 @@ export function createStatusPillWindow(
     }
     if (displays.length === 0) {
       return null
+    }
+    // Why: when the user has dragged the pill, keep it where they put it. The
+    // pinned-point helper re-clamps into the display that contains the point
+    // (falling back to the primary when that monitor is gone) so the pill can
+    // never land off-screen.
+    if (persisted) {
+      return computeStatusPillPlacementForPoint({
+        displays,
+        point: persisted,
+        pillWidth: PILL_WIDTH,
+        pillHeight: PILL_HEIGHT
+      })
     }
     const cursor = getCursorScreenPointSafe(screen)
     const display = pickDisplayForCursor(displays, cursor)

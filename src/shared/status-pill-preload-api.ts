@@ -164,6 +164,12 @@ export type StatusPillPreloadApi = {
   focusPane: (target: StatusPillFocusTarget) => void
   /** Resolve the initial theme + reduced-motion preferences for first paint. */
   getInitialPreferences: () => Promise<StatusPillPreferences>
+  /** Read the pill window's current screen origin. The renderer uses it as the
+   *  anchor point when the user starts dragging the pill. */
+  getWindowPosition: () => Promise<{ x: number; y: number }>
+  /** Move the pill window to a screen origin. Called on each pointermove
+   *  during a drag; main debounces the persisted write. */
+  setWindowPosition: (position: { x: number; y: number }) => void
   /** Send raw bytes (option number, label text, Escape, …) to the agent PTY
    *  that asked the currently-pending question. Returns whether the write
    *  reached a live terminal. Main resolves the paneKey → terminal handle →

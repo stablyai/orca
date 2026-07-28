@@ -713,6 +713,22 @@ function migrateAgentYoloDefaults(
   }
 }
 
+/** Coerce a persisted status-pill position into a clean `{x, y}` or null so a
+ *  corrupted/legacy value can never leak a non-numeric position into placement. */
+function normalizeStatusPillPosition(value: unknown): { x: number; y: number } | null {
+  if (
+    value !== null &&
+    typeof value === 'object' &&
+    !Array.isArray(value) &&
+    Number.isFinite((value as { x?: unknown }).x) &&
+    Number.isFinite((value as { y?: unknown }).y)
+  ) {
+    const v = value as { x: number; y: number }
+    return { x: v.x, y: v.y }
+  }
+  return null
+}
+
 function normalizeGroupBy(groupBy: unknown): PersistedState['ui']['groupBy'] {
   if (
     groupBy === 'none' ||
@@ -5490,7 +5506,8 @@ export class Store {
       ),
       featureTipsSeenIds: normalizeFeatureTipIds(this.state.ui?.featureTipsSeenIds),
       contextualToursSeenIds: normalizeContextualTourIds(this.state.ui?.contextualToursSeenIds),
-      featureInteractions: normalizeFeatureInteractions(this.state.ui?.featureInteractions)
+      featureInteractions: normalizeFeatureInteractions(this.state.ui?.featureInteractions),
+      statusPillPosition: normalizeStatusPillPosition(this.state.ui?.statusPillPosition)
     }
   }
 

@@ -129,6 +129,13 @@ export class StatusPillCoordinator {
       onFocusMainWindow: this.onFocusMainWindow,
       onFocusPane: this.onFocusPane,
       runtime: this.runtime,
+      // Why: read/write the pill position on UI state (same store region as
+      // windowBounds) so the pill restores where the user last dragged it and
+      // survives app restarts.
+      getPersistedPosition: () => this.store.getUI().statusPillPosition ?? null,
+      persistPosition: (position) => {
+        this.store.updateUI({ statusPillPosition: position })
+      },
       warn: this.warn
     })
   }

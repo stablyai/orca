@@ -1,6 +1,6 @@
 import './pill.css'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { createRoot } from 'react-dom/client'
 import type {
   StatusPillAgentRow,
@@ -192,7 +192,9 @@ function StatusPill(): React.JSX.Element {
 }
 
 /** Resting capsule: indicator dot + counts + activity label. Keyboard-
- *  operable (Enter / Space) per the WAI-ARIA button pattern. */
+ *  operable (Enter / Space) per the WAI-ARIA button pattern. The body is also
+ *  draggable: a pointer down + move repositions the pill window, while a click
+ *  without movement still focuses the Orca main window. */
 function PillBody({
   tone,
   pulse,
@@ -215,15 +217,94 @@ function PillBody({
       onClick()
     }
   }
+  const dragState = useRef<{
+    startScreenX: number
+    startScreenY: number
+    startWinX: number
+    startWinY: number
+    ready: boolean
+    moved: boolean
+  } | null>(null)
+  // Why: persists across the mouseup→click sequence so onClick can tell a real
+  // click apart from the tail of a drag and avoid focusing the main window
+  // right after the user repositioned the pill.
+  const didDragRef = useRef(false)
+  const [dragging, setDragging] = useState(false)
+
+  const onMouseDown = (event: React.MouseEvent<HTMLDivElement>): void => {
+    // Why: only the primary button starts a drag; the secondary button is the
+    // context menu and should not begin repositioning.
+    if (event.button !== 0) {
+      return
+    }
+    const api = window.api
+    if (!api) {
+      return
+    }
+    const state = {
+      startScreenX: event.screenX,
+      startScreenY: event.screenY,
+      startWinX: 0,
+      startWinY: 0,
+      ready: false,
+      moved: false
+    }
+    dragState.current = state
+    void api.getWindowPosition().then((pos) => {
+      // Why: only adopt the start origin if this pointer is still the active
+      // one — a later pointer down must not be overwritten by a stale resolve.
+      if (dragState.current === state) {
+        state.startWinX = pos.x
+        state.startWinY = pos.y
+        state.ready = true
+      }
+    })
+    const onMove = (ev: MouseEvent): void => {
+      const s = dragState.current
+      if (!s || !s.ready) {
+        return
+      }
+      const dx = ev.screenX - s.startScreenX
+      const dy = ev.screenY - s.startScreenY
+      // Why: ignore sub-pixel jitter so a static click never becomes a drag.
+      if (!s.moved) {
+        if (Math.hypot(dx, dy) < 4) {
+          return
+        }
+        s.moved = true
+        didDragRef.current = true
+        setDragging(true)
+      }
+      window.api?.setWindowPosition({ x: s.startWinX + dx, y: s.startWinY + dy })
+    }
+    const onUp = (): void => {
+      window.removeEventListener('mousemove', onMove)
+      window.removeEventListener('mouseup', onUp)
+      dragState.current = null
+      setDragging(false)
+    }
+    window.addEventListener('mousemove', onMove)
+    window.addEventListener('mouseup', onUp)
+  }
+
+  const handleClick = (): void => {
+    if (didDragRef.current) {
+      didDragRef.current = false
+      return
+    }
+    onClick()
+  }
+
   return (
     <div
       role="button"
       tabIndex={0}
       aria-label="Orca agent status"
-      onClick={onClick}
+      onClick={handleClick}
+      onMouseDown={onMouseDown}
       onContextMenu={onContextMenu}
       onKeyDown={onKeyDown}
-      className={`pill pill-${tone} ${pulse ? 'pill-pulse' : ''}`}
+      className={`pill pill-${tone} ${pulse ? 'pill-pulse' : ''} ${dragging ? 'pill-dragging' : ''}`}
     >
       <span className="indicator" aria-hidden="true">
         <span className="indicator-ring" />

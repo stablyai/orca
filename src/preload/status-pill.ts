@@ -40,6 +40,11 @@ const api: StatusPillPreloadApi = {
   },
   getInitialPreferences: (): Promise<StatusPillPreferences> =>
     ipcRenderer.invoke('statusPill:getInitialPreferences'),
+  getWindowPosition: (): Promise<{ x: number; y: number }> =>
+    ipcRenderer.invoke('statusPill:getWindowPosition'),
+  setWindowPosition: (position: { x: number; y: number }): void => {
+    ipcRenderer.send('statusPill:setWindowPosition', position)
+  },
   answerQuestion: (paneKey: string, raw: string): Promise<StatusPillAnswerResult> =>
     ipcRenderer.invoke('statusPill:answerAgent', { paneKey, raw })
 }

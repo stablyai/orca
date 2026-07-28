@@ -3482,6 +3482,10 @@ export type PersistedUIState = {
   windowBounds?: { x: number; y: number; width: number; height: number } | null
   /** Whether the window was maximized when it was last closed. */
   windowMaximized?: boolean
+  /** Last user-dragged position of the floating status pill, in screen coords.
+   *  Null until the user drags the pill; the placement module re-clamps it to a
+   *  valid display on restore so an unplugged monitor never strands it. */
+  statusPillPosition?: { x: number; y: number } | null
   /** One-shot migration flag: 'recent' used to mean the weighted smart sort
    *  (v1→v2 rename). When this flag is absent and sortBy is 'recent', the
    *  main-process load() migrates it to 'smart' and sets this flag so the
