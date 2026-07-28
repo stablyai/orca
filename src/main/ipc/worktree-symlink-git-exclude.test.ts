@@ -53,6 +53,14 @@ describe('sharedSymlinkExcludePattern', () => {
     expect(sharedSymlinkExcludePattern('node_modules\n/etc/passwd')).toBeNull()
     expect(sharedSymlinkExcludePattern('')).toBeNull()
   })
+
+  it('escapes gitignore metacharacters and spaces as literal names', () => {
+    expect(sharedSymlinkExcludePattern('cache*')).toBe('/cache\\*')
+    expect(sharedSymlinkExcludePattern('foo?bar')).toBe('/foo\\?bar')
+    expect(sharedSymlinkExcludePattern('br[ack]ets')).toBe('/br\\[ack\\]ets')
+    expect(sharedSymlinkExcludePattern('has space')).toBe('/has\\ space')
+    expect(sharedSymlinkExcludePattern('trailing  ')).toBe('/trailing\\ \\ ')
+  })
 })
 
 describe('ensureWorktreeSharedSymlinkExclude', () => {
@@ -88,6 +96,27 @@ describe('ensureWorktreeSharedSymlinkExclude', () => {
 
     // check-ignore exits 0 when ignored.
     git(worktree, ['check-ignore', '-q', 'node_modules'])
+  })
+
+  posixIt('excludes a symlink whose basename has gitignore metacharacters', async () => {
+    const primary = join(root, 'primary')
+    initRepoWithCommit(primary)
+    const worktree = join(root, 'worktree-meta')
+    git(primary, ['worktree', 'add', '--quiet', '-b', 'feature-meta', worktree])
+
+    const sharedName = 'cache*'
+    mkdirSync(join(primary, sharedName))
+    writeFileSync(join(primary, sharedName, 'pkg.js'), 'x')
+    symlinkSync(join(primary, sharedName), join(worktree, sharedName))
+
+    expect(() => git(worktree, ['check-ignore', '-q', sharedName])).toThrow()
+
+    await ensureWorktreeSharedSymlinkExclude(worktree, [sharedName])
+
+    const commonDir = await resolveWorktreeGitCommonDir(worktree)
+    const exclude = readFileSync(join(commonDir!, 'info', 'exclude'), 'utf8')
+    expect(exclude).toContain('/cache\\*\n')
+    git(worktree, ['check-ignore', '-q', sharedName])
   })
 
   posixIt('is a no-op when the pattern is already listed', async () => {

@@ -8,8 +8,10 @@ import { basename, dirname, isAbsolute, join, resolve } from 'node:path'
  * worktree shared-dir symlink Git treats as a file, so `git add -A` can stage a
  * mode-120000 blob whose content is the absolute primary path (issue #11077).
  */
-export function sharedSymlinkExcludePattern(relativePath: string): string | null {
-  const rel = relativePath.trim().replace(/\\/g, '/').replace(/^\/+/, '').replace(/\/+$/, '')
+/** Normalize a worktree-relative shared path for filesystem lookup. */
+function normalizeSharedRelativePath(relativePath: string): string | null {
+  // Why: do not trim trailing spaces — they can be part of a real basename.
+  const rel = relativePath.replace(/\\/g, '/').replace(/^[\s/]+/, '').replace(/\/+$/, '')
   if (
     !rel ||
     isAbsolute(rel) ||
@@ -20,7 +22,26 @@ export function sharedSymlinkExcludePattern(relativePath: string): string | null
   ) {
     return null
   }
-  return `/${rel}`
+  return rel
+}
+
+/** Escape one path segment so Git treats it as a literal exclude entry. */
+function escapeGitignoreLiteralSegment(segment: string): string {
+  // Why: gitignore strips unescaped trailing spaces and treats *,?,[] as globs.
+  // Shared symlink basenames can contain those characters; exclude must match
+  // the literal filesystem name only.
+  return segment
+    .replace(/\\/g, '\\\\')
+    .replace(/([*?[\]])/g, '\\$1')
+    .replace(/ /g, '\\ ')
+}
+
+export function sharedSymlinkExcludePattern(relativePath: string): string | null {
+  const rel = normalizeSharedRelativePath(relativePath)
+  if (!rel) {
+    return null
+  }
+  return `/${rel.split('/').map(escapeGitignoreLiteralSegment).join('/')}`
 }
 
 function excludePatternAlreadyListed(content: string, pattern: string): boolean {
@@ -75,11 +96,14 @@ async function collectSymlinkExcludePatterns(
   const patterns: string[] = []
   const seen = new Set<string>()
   for (const rawPath of relativePaths) {
+    const rel = normalizeSharedRelativePath(rawPath)
     const pattern = sharedSymlinkExcludePattern(rawPath)
-    if (!pattern || seen.has(pattern)) {
+    if (!rel || !pattern || seen.has(pattern)) {
       continue
     }
-    const target = resolve(worktreePath, pattern.slice(1))
+    // Why: exclude patterns escape git metacharacters; filesystem resolve must
+    // use the unescaped relative path or `cache*` becomes `cache\*`.
+    const target = resolve(worktreePath, rel)
     try {
       // Why: only positively identified shared symlinks need exclude widening;
       // APFS clones / real dirs already match directory-only ignore rules.
