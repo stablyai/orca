@@ -6,6 +6,11 @@ import {
   buildRemovedSshTargetTombstone,
   readoptOrphanedWorkspacesForTarget
 } from './ssh-target-readoption'
+import {
+  getSshTargetSourceKey,
+  isSshTargetManagedBySource,
+  reconcileSshTargetsFromSource
+} from './ssh-target-source-reconciliation'
 
 export class SshConnectionStore {
   constructor(private store: Store) {}
@@ -91,8 +96,17 @@ export class SshConnectionStore {
     // the next ~/.ssh/config sync re-inserts it verbatim (the config entry still
     // exists on disk) and the host reappears. Manual targets need no tombstone —
     // sync never re-adds them.
-    if (target && isConfigManagedTarget(target)) {
-      const alias = target.configHost ?? target.label
+    if (
+      target &&
+      isSshTargetManagedBySource(
+        target,
+        { kind: 'ssh-config' },
+        {
+          adoptLegacySshConfigTargets: true
+        }
+      )
+    ) {
+      const alias = getSshTargetSourceKey(target)
       if (alias) {
         this.store.addDeletedSshConfigAlias(alias)
       }
@@ -116,7 +130,7 @@ export class SshConnectionStore {
   /**
    * Sync targets from ~/.ssh/config: insert new hosts, update existing
    * config-sourced ones in place (so a rotated port takes effect), never touch
-   * manual targets. Returns the inserted and updated targets.
+   * targets owned by another source. Returns the inserted and updated targets.
    */
   importFromSshConfig(options?: { reAdopt?: boolean }): SshTarget[] {
     const readoptions: SshRepoReadoption[] = []
@@ -126,85 +140,27 @@ export class SshConnectionStore {
     if (options?.reAdopt) {
       this.store.clearDeletedSshConfigAliases()
     }
-    const deletedAliases = new Set(this.store.getDeletedSshConfigAliases())
     const configHosts = loadUserSshConfig()
-    const existingTargets = this.store.getSshTargets()
-    // Map config-managed targets (and legacy targets that strongly look like
-    // prior imports) by their config alias so a repeat import reconciles instead
-    // of duplicating. Manual targets are excluded — their alias stays reserved
-    // and untouched.
-    const syncableByAlias = new Map<string, SshTarget>()
-    const manualAliases = new Set<string>()
-    for (const existing of existingTargets) {
-      const alias = existing.configHost ?? existing.label
-      if (!isConfigManagedTarget(existing)) {
-        manualAliases.add(alias)
-        continue
-      }
-      if (alias && !syncableByAlias.has(alias)) {
-        syncableByAlias.set(alias, existing)
-      }
-    }
-
     // Pass an empty exclusion set so the parser returns a candidate for every
     // config host (within-config de-duplication still applies); reconciliation
     // against existing targets happens here.
     const candidates = sshConfigHostsToTargets(configHosts, new Set())
+    const changes = reconcileSshTargetsFromSource({
+      source: { kind: 'ssh-config' },
+      existingTargets: this.store.getSshTargets(),
+      candidates,
+      deletedTargetKeys: new Set(this.store.getDeletedSshConfigAliases()),
+      adoptLegacySshConfigTargets: true
+    })
     const changed: SshTarget[] = []
-    // Guard against ever processing the same alias twice in one pass, so a
-    // duplicate candidate can never produce a duplicate target — independent of
-    // the parser's own within-config de-duplication.
-    const processedAliases = new Set<string>()
-
-    for (const candidate of candidates) {
-      const alias = candidate.configHost ?? candidate.label
-      if (manualAliases.has(alias)) {
-        // A manual target owns this alias — never clobber it.
-        continue
-      }
-      if (deletedAliases.has(alias)) {
-        // The user deleted this config host — stay deleted until they re-add it
-        // or re-adopt config explicitly.
-        continue
-      }
-      if (processedAliases.has(alias)) {
-        continue
-      }
-      processedAliases.add(alias)
-      const existing = syncableByAlias.get(alias)
-      if (existing) {
-        const nextFields = {
-          configHost: candidate.configHost,
-          host: candidate.host,
-          port: candidate.port,
-          username: candidate.username,
-          identityFile: candidate.identityFile,
-          identityAgent: candidate.identityAgent,
-          identitiesOnly: candidate.identitiesOnly,
-          gssapiAuthentication: candidate.gssapiAuthentication,
-          proxyCommand: candidate.proxyCommand,
-          jumpHost: candidate.jumpHost
-        }
-        // Skip the write (and the "synced" report) when nothing changed, so a
-        // repeat sync on every pane open is a no-op. A legacy target with no
-        // `source` is always rewritten once to stamp it as config-managed.
-        const isDirty =
-          existing.source !== 'ssh-config' ||
-          (Object.keys(nextFields) as (keyof typeof nextFields)[]).some(
-            (key) => existing[key] !== nextFields[key]
-          )
-        if (!isDirty) {
-          continue
-        }
-        const updated = this.store.updateSshTarget(existing.id, {
-          ...nextFields,
-          source: 'ssh-config'
-        })
+    for (const change of changes) {
+      if (change.kind === 'update') {
+        const updated = this.store.updateSshTarget(change.id, change.updates)
         if (updated) {
           changed.push(updated)
         }
       } else {
-        const inserted: SshTarget = { ...candidate, source: 'ssh-config' }
+        const inserted = change.target
         this.store.addSshTarget(inserted)
         // Why: a freshly-inserted config host may be one the user removed and is
         // now re-importing — re-adopt its orphaned workspaces. Updated-in-place
@@ -225,24 +181,4 @@ export function getRuntimeOwnedSshTargetId(runtimeId: string): string {
 
 export function isRuntimeOwnedSshTarget(target: SshTarget): boolean {
   return target.owner?.type === 'on-demand-runtime'
-}
-
-function isConfigManagedTarget(target: SshTarget): boolean {
-  // Why: a target is subject to config sync (and therefore needs a tombstone on
-  // delete) when it is explicitly config-sourced, or a legacy import that sync
-  // still adopts. Manual targets are excluded — sync never re-adds them.
-  return (
-    target.source === 'ssh-config' ||
-    (target.source === undefined && isLegacyConfigImportTarget(target))
-  )
-}
-
-function isLegacyConfigImportTarget(target: SshTarget): boolean {
-  const alias = target.configHost ?? target.label
-  // Why: legacy manual and imported targets both lack `source`. Only adopt the
-  // old import shape, where the SSH alias was kept as label/configHost while
-  // host stored the resolved HostName; otherwise preserve the user's target.
-  return Boolean(
-    alias && target.label === alias && target.configHost === alias && target.host !== alias
-  )
 }
