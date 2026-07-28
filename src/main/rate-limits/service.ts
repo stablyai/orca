@@ -205,6 +205,7 @@ export class RateLimitService {
   private minimaxFetchGeneration = 0
   private lastOpencodeConfigHash = ''
   private lastMiniMaxConfigHash = ''
+  private lastOllamaCloudCookie = ''
   private codexHomePathResolver: CodexHomePathResolver | null = null
   private codexFetchTarget: NormalizedCodexAccountSelectionTarget = {
     runtime: 'host',
@@ -1582,6 +1583,12 @@ export class RateLimitService {
     }
     const miniMaxGeneration = this.minimaxFetchGeneration
 
+    // Why: discard stale data on config change — it belongs to a different session.
+    const ollamaCloudConfigChanged = ollamaCloudCookie !== this.lastOllamaCloudCookie
+    if (ollamaCloudConfigChanged) {
+      this.lastOllamaCloudCookie = ollamaCloudCookie
+    }
+
     // Mark all providers fetching while keeping previous data visible (Codex is cleared separately on account change).
     this.updateState({
       ...previousState,
@@ -1597,7 +1604,9 @@ export class RateLimitService {
         ? this.withFetchingStatus(null, 'minimax')
         : this.withFetchingStatus(previousState.minimax, 'minimax'),
       grok: this.withFetchingStatus(previousState.grok, 'grok'),
-      ollamaCloud: this.withFetchingStatus(previousState.ollamaCloud, 'ollama-cloud')
+      ollamaCloud: ollamaCloudConfigChanged
+        ? this.withFetchingStatus(null, 'ollama-cloud')
+        : this.withFetchingStatus(previousState.ollamaCloud, 'ollama-cloud')
     })
 
     const missingWslCodexHome = codexHomePath
@@ -1615,42 +1624,46 @@ export class RateLimitService {
     const claudeFetchGated =
       !options?.force && this.shouldSkipAutomatedClaudeFetch(previousState.claude)
 
-    const [claudeResult, codexResult, geminiResult, opencodeGoResult, kimiResult, miniMaxResult, ollamaCloudResult] =
-      await Promise.allSettled([
-        claudeFetchGated
-          ? Promise.resolve(previousState.claude as ProviderRateLimits)
-          : fetchClaudeRateLimits({
-              authPreparation: claudeAuthPreparation,
-              allowPtyFallback: this.shouldAllowClaudePtyFallback(claudeAuthPreparation),
-              allowUsagePanelSupplement: this.shouldAllowClaudeUsagePanelSupplement(),
-              networkProxySettings: this.networkProxySettingsResolver?.(),
-              signal
-            }),
-        missingWslCodexHome ??
-          fetchCodexRateLimits({
-            codexHomePath,
-            allowPtyFallback: this.shouldAllowCodexPtyFallback(),
+    const [
+      claudeResult,
+      codexResult,
+      geminiResult,
+      opencodeGoResult,
+      kimiResult,
+      miniMaxResult,
+      ollamaCloudResult
+    ] = await Promise.allSettled([
+      claudeFetchGated
+        ? Promise.resolve(previousState.claude as ProviderRateLimits)
+        : fetchClaudeRateLimits({
+            authPreparation: claudeAuthPreparation,
+            allowPtyFallback: this.shouldAllowClaudePtyFallback(claudeAuthPreparation),
+            allowUsagePanelSupplement: this.shouldAllowClaudeUsagePanelSupplement(),
+            networkProxySettings: this.networkProxySettingsResolver?.(),
             signal
           }),
-        fetchGeminiRateLimits(geminiCliOAuthEnabled),
-        fetchOpenCodeGoRateLimits(
-          cookie,
-          workspaceIdOverride || undefined,
-          this.networkProxySettingsResolver?.()
-        ),
-        fetchKimiRateLimits(),
-        miniMaxConfigResult.error
-          ? Promise.resolve(this.getMiniMaxCredentialError(miniMaxConfigResult.error))
-          : fetchMiniMaxRateLimits({
-              cookie: miniMaxCookie,
-              groupId: miniMaxGroupId,
-              models: miniMaxModels
-            }),
-        fetchOllamaCloudRateLimits(
-          ollamaCloudCookie,
-          this.networkProxySettingsResolver?.()
-        )
-      ])
+      missingWslCodexHome ??
+        fetchCodexRateLimits({
+          codexHomePath,
+          allowPtyFallback: this.shouldAllowCodexPtyFallback(),
+          signal
+        }),
+      fetchGeminiRateLimits(geminiCliOAuthEnabled),
+      fetchOpenCodeGoRateLimits(
+        cookie,
+        workspaceIdOverride || undefined,
+        this.networkProxySettingsResolver?.()
+      ),
+      fetchKimiRateLimits(),
+      miniMaxConfigResult.error
+        ? Promise.resolve(this.getMiniMaxCredentialError(miniMaxConfigResult.error))
+        : fetchMiniMaxRateLimits({
+            cookie: miniMaxCookie,
+            groupId: miniMaxGroupId,
+            models: miniMaxModels
+          }),
+      fetchOllamaCloudRateLimits(ollamaCloudCookie, this.networkProxySettingsResolver?.())
+    ])
 
     if (signal.aborted) {
       return
@@ -1816,7 +1829,9 @@ export class RateLimitService {
           ? miniMax
           : this.applyStalePolicy(miniMax, previousState.minimax)
         : this.state.minimax,
-      ollamaCloud: this.applyStalePolicy(ollamaCloud, previousState.ollamaCloud)
+      ollamaCloud: ollamaCloudConfigChanged
+        ? ollamaCloud
+        : this.applyStalePolicy(ollamaCloud, previousState.ollamaCloud)
     })
 
     const grokResult = await grokResultPromise
