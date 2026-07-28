@@ -1163,15 +1163,27 @@ export class SshRelaySession {
       return
     }
     // Why: build the known set after listing so a spawn that completed mid-sweep counts as known.
-    const knownRelayPtyIds = new Set([
-      ...getPtyIdsForConnection(this.targetId).map((ptyId) =>
-        toRelaySshPtyId(this.targetId, ptyId)
-      ),
-      ...this.store
-        .getSshRemotePtyLeases(this.targetId)
-        .filter((lease) => lease.state !== 'terminated' && lease.state !== 'expired')
-        .map((lease) => lease.ptyId)
-    ])
+    // An incomplete known set could reap a PTY the app still owns, so any failure here must
+    // skip the whole sweep rather than proceed with partial knowledge.
+    let knownRelayPtyIds: Set<string>
+    try {
+      knownRelayPtyIds = new Set([
+        ...getPtyIdsForConnection(this.targetId).map((ptyId) =>
+          toRelaySshPtyId(this.targetId, ptyId)
+        ),
+        ...this.store
+          .getSshRemotePtyLeases(this.targetId)
+          .filter((lease) => lease.state !== 'terminated' && lease.state !== 'expired')
+          .map((lease) => lease.ptyId)
+      ])
+    } catch (err) {
+      console.warn(
+        `[ssh-relay-session] Orphaned PTY sweep skipped for ${this.targetId} (known-set build failed): ${
+          err instanceof Error ? err.message : String(err)
+        }`
+      )
+      return
+    }
     for (const session of sessions) {
       if (!shouldContinue()) {
         return

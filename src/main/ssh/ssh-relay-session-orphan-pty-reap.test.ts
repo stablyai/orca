@@ -245,6 +245,37 @@ describe('SshRelaySession orphaned relay PTY reaping', () => {
     })
   })
 
+  it('a known-set build failure skips the sweep instead of reaping with partial knowledge', async () => {
+    const { mockConn, mockStore, mockPortForward, getMainWindow } = createMockDeps()
+    const mockShutdown = vi.fn().mockResolvedValue(undefined)
+    vi.mocked(getSshPtyProvider).mockReturnValue({
+      attachForReconnect: vi.fn().mockResolvedValue(undefined),
+      listProcesses: vi.fn().mockResolvedValue([
+        // Would be reaped if the sweep ran with a partial known set.
+        {
+          id: 'ssh:target-1@@pty-9',
+          cwd: '/home/me',
+          title: 'shell',
+          paneKey: 'tab-b:leaf-b',
+          ageMs: 60_000
+        }
+      ]),
+      shutdown: mockShutdown,
+      dispose: vi.fn()
+    } as unknown as ReturnType<typeof getSshPtyProvider>)
+    // First call feeds reattachKnownPtys; the sweep's call returns an id owned by a
+    // different connection, which makes toRelaySshPtyId throw mid known-set build.
+    vi.mocked(getPtyIdsForConnection)
+      .mockReturnValueOnce([])
+      .mockReturnValue(['ssh:other-target@@pty-2'])
+
+    const session = new SshRelaySession('target-1', getMainWindow, mockStore, mockPortForward)
+    await session.establish(mockConn)
+
+    expect(session.getState()).toBe('ready')
+    expect(mockShutdown).not.toHaveBeenCalled()
+  })
+
   it('sweep failures do not block the session from becoming ready', async () => {
     const { mockConn, mockStore, mockPortForward, getMainWindow } = createMockDeps()
     vi.mocked(getSshPtyProvider).mockReturnValue({
