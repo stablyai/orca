@@ -2,6 +2,7 @@ import type { SimulatorDeviceRow } from './emulator-pane-types'
 
 // Raw shape returned by the unified `emulator.listDevices` RPC (iOS simulators + Android AVDs).
 export type RawEmulatorDevice = {
+  backend?: 'ios' | 'android'
   id: string
   name: string
   state: string
@@ -11,6 +12,7 @@ export type RawEmulatorDevice = {
 
 export function toSimulatorDeviceRows(raw: RawEmulatorDevice[]): SimulatorDeviceRow[] {
   return raw.map((device) => ({
+    backend: device.backend,
     name: device.name,
     udid: device.id,
     state: device.state === 'booted' ? 'Booted' : 'Shutdown',

@@ -9,7 +9,8 @@ import {
 import { Button } from '@/components/ui/button'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { cn } from '@/lib/utils'
-import type { SimulatorDeviceRow } from './emulator-pane-types'
+import { EmulatorDeviceActionsMenu } from './emulator-device-actions-menu'
+import type { EmulatorBiometricAction, SimulatorDeviceRow } from './emulator-pane-types'
 import { translate } from '@/i18n/i18n'
 
 type EmulatorPaneToolbarProps = {
@@ -21,8 +22,10 @@ type EmulatorPaneToolbarProps = {
   onSelectDevice: (udid: string) => void
   onAttach: () => void
   onShutdown: () => void
-  onHome: () => void
+  onButton: (name: string) => void
+  onBiometric: (action: EmulatorBiometricAction) => void
   onRotate: () => void
+  showDeviceActions: boolean
 }
 
 export function EmulatorPaneToolbar({
@@ -34,8 +37,10 @@ export function EmulatorPaneToolbar({
   onSelectDevice,
   onAttach,
   onShutdown,
-  onHome,
-  onRotate
+  onButton,
+  onBiometric,
+  onRotate,
+  showDeviceActions
 }: EmulatorPaneToolbarProps) {
   // Why: the toolbar chip describes Orca's preview/control stream, not the
   // lower-level CoreSimulator boot state.
@@ -114,7 +119,7 @@ export function EmulatorPaneToolbar({
             variant="secondary"
             size="icon-xs"
             className="size-7"
-            onClick={onHome}
+            onClick={() => onButton('home')}
             disabled={!isLive || loading}
             aria-label={translate(
               'auto.components.emulator.pane.emulator.pane.toolbar.e7a0d1897e',
@@ -128,6 +133,13 @@ export function EmulatorPaneToolbar({
           {translate('auto.components.emulator.pane.emulator.pane.toolbar.e7a0d1897e', 'Home')}
         </TooltipContent>
       </Tooltip>
+      {showDeviceActions ? (
+        <EmulatorDeviceActionsMenu
+          disabled={!isLive || loading}
+          onButton={onButton}
+          onBiometric={onBiometric}
+        />
+      ) : null}
       {isLive ? (
         <Tooltip>
           <TooltipTrigger asChild>

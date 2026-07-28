@@ -1,4 +1,7 @@
+export type EmulatorBiometricAction = 'enroll' | 'unenroll' | 'match' | 'nomatch'
+
 export type SimulatorDeviceRow = {
+  backend?: 'ios' | 'android'
   name: string
   udid: string
   state: string
