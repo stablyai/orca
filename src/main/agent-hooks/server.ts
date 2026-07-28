@@ -491,8 +491,9 @@ export class AgentHookServer {
   private closedAgentStatusTabIds = new Set<string>()
   private closedAgentStatusPaneKeys = new Set<string>()
   private connectionTimestampWatermarkById = new Map<string, number>()
-  // Why: one console line per runtime — a mis-attributing daemon fires on every hook of every session it hosts.
-  private warnedForeignCwdStatus = false
+  // Why: one warn and one telemetry event per runtime — a mis-attributing daemon fires on every
+  // hook of every session it hosts, and the per-session telemetry ceiling never refills.
+  private reportedForeignCwdStatus = false
   // Why: skip disk writes when the JSON exactly matches the last write; guards against re-firing trailing timers when nothing changed.
   private lastWrittenJson: string | null = null
 
@@ -780,9 +781,9 @@ export class AgentHookServer {
     if (!hookCwdContradictsWorktree(event.worktreeId, event.sourceCwd)) {
       return false
     }
-    track('agent_hook_unattributed', { reason: 'cwd_worktree_mismatch' })
-    if (!this.warnedForeignCwdStatus) {
-      this.warnedForeignCwdStatus = true
+    if (!this.reportedForeignCwdStatus) {
+      this.reportedForeignCwdStatus = true
+      track('agent_hook_unattributed', { reason: 'cwd_worktree_mismatch' })
       console.warn(
         '[agent-hooks] dropping status: reported worktree does not own the reporting session',
         { paneKey: event.paneKey, worktreeId: event.worktreeId, sourceCwd: event.sourceCwd }
@@ -1714,7 +1715,7 @@ export class AgentHookServer {
     this.lastStatusFilePath = null
     this.lastWrittenJson = null
     this.runtimeObservedStatusPaneKeys.clear()
-    this.warnedForeignCwdStatus = false
+    this.reportedForeignCwdStatus = false
     this.promptSentDedupeByPaneKey.clear()
     this.closedAgentStatusTabIds.clear()
     this.closedAgentStatusPaneKeys.clear()

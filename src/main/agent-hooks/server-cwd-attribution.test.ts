@@ -94,6 +94,29 @@ describe('AgentHookServer cwd attribution guard', () => {
     })
   })
 
+  it('reports a mis-attributing daemon once per runtime', () => {
+    // Why: the telemetry per-session ceiling never refills, so a daemon that mis-attributes
+    // every hook it hosts would otherwise silence every other event in the session.
+    const server = new AgentHookServer()
+    for (const prompt of ['first', 'second', 'third']) {
+      server.ingestRemote(
+        {
+          paneKey: AGENT_PANE,
+          tabId: 'tab-agent',
+          worktreeId: AGENT_WORKTREE,
+          sourceCwd: '/srv/other-project',
+          payload: { state: 'working', prompt }
+        },
+        'conn-1'
+      )
+    }
+
+    expect(server.getStatusSnapshot()).toEqual([])
+    expect(
+      trackMock.mock.calls.filter(([name]) => name === 'agent_hook_unattributed')
+    ).toHaveLength(1)
+  })
+
   it('keeps hooks that report no cwd, so sources without one stay attributed', () => {
     const server = new AgentHookServer()
     server.ingestRemote(
