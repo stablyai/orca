@@ -1,21 +1,9 @@
 import { describe, expect, it } from 'vitest'
-import { hookCwdContradictsWorktree, readHookPayloadCwd } from './agent-hook-cwd-attribution'
+import { hookCwdContradictsWorktree } from './agent-hook-cwd-attribution'
 import { FOLDER_WORKSPACE_INSTANCE_SEPARATOR } from './worktree-id'
 
 const REPO = 'repo-1'
 const WORKTREE = `${REPO}::/Users/dev/projects/api`
-
-describe('readHookPayloadCwd', () => {
-  it('reads the cwd variants agents report, and nothing else', () => {
-    expect(readHookPayloadCwd({ cwd: '/Users/dev/projects/api' })).toBe('/Users/dev/projects/api')
-    expect(readHookPayloadCwd({ workspaceRoot: '/srv/app' })).toBe('/srv/app')
-    expect(readHookPayloadCwd({ workspace_root: '/srv/app' })).toBe('/srv/app')
-    expect(readHookPayloadCwd({ cwd: '   ' })).toBeUndefined()
-    expect(readHookPayloadCwd({ cwd: 42 })).toBeUndefined()
-    expect(readHookPayloadCwd(null)).toBeUndefined()
-    expect(readHookPayloadCwd('/srv/app')).toBeUndefined()
-  })
-})
 
 describe('hookCwdContradictsWorktree', () => {
   it('accepts a session running at or under the reported worktree', () => {
@@ -42,8 +30,10 @@ describe('hookCwdContradictsWorktree', () => {
     expect(hookCwdContradictsWorktree(WORKTREE, '')).toBe(false)
     // Worktree ids without the `::` separator carry no path to compare.
     expect(hookCwdContradictsWorktree('onboarding-inline-terminal', '/Users/dev/x')).toBe(false)
-    // Relative cwd has no comparable root.
+    expect(hookCwdContradictsWorktree(`${REPO}::`, '/Users/dev/x')).toBe(false)
+    // Relative and untrimmed cwds have no comparable root.
     expect(hookCwdContradictsWorktree(WORKTREE, 'projects/agent')).toBe(false)
+    expect(hookCwdContradictsWorktree(WORKTREE, ' /Users/dev/projects/agent')).toBe(false)
   })
 
   it('ignores case and trailing separators when comparing', () => {
@@ -53,10 +43,27 @@ describe('hookCwdContradictsWorktree', () => {
     ).toBe(false)
   })
 
+  it('treats canonically equivalent non-ASCII paths as the same directory', () => {
+    // Why: the folder picker stores NFD on macOS while agents report cwd in NFC, so a
+    // byte comparison would drop every status from a non-ASCII workspace (#10832).
+    const folder = '/Users/dev/projects/한글'
+    expect(
+      hookCwdContradictsWorktree(
+        `${REPO}::${folder.normalize('NFD')}`,
+        `${folder.normalize('NFC')}/src`
+      )
+    ).toBe(false)
+  })
+
   it('compares Windows worktrees against Windows cwds', () => {
     const windowsWorktree = `${REPO}::C:\\Users\\dev\\api`
     expect(hookCwdContradictsWorktree(windowsWorktree, 'C:\\Users\\dev\\api\\src')).toBe(false)
     expect(hookCwdContradictsWorktree(windowsWorktree, 'C:/Users/dev/agent')).toBe(true)
+  })
+
+  it('treats a drive root as sitting above every path on that drive', () => {
+    expect(hookCwdContradictsWorktree(`${REPO}::C:\\Users\\dev`, 'C:\\..')).toBe(false)
+    expect(hookCwdContradictsWorktree(`${REPO}::C:\\`, 'C:\\Users\\dev')).toBe(false)
   })
 
   it('resolves dot segments so a path cannot pose as being inside the worktree', () => {
@@ -75,27 +82,26 @@ describe('hookCwdContradictsWorktree', () => {
     expect(hookCwdContradictsWorktree(WORKTREE, '/../../..')).toBe(false)
   })
 
-  it('keeps a fully collapsed drive root recognizable as Windows notation', () => {
-    // Why: if `C:\..\..` collapsed to a slashless `c:`, it would stop reading as a drive
-    // path and get compared against POSIX paths, which can only produce a false conflict.
-    expect(hookCwdContradictsWorktree(`${REPO}::C:\\..\\..`, '/Users/dev/projects/api')).toBe(false)
-    expect(hookCwdContradictsWorktree(WORKTREE, 'C:\\..\\..')).toBe(false)
-    // Within Windows notation the drive root is above every path on that drive.
-    expect(hookCwdContradictsWorktree(`${REPO}::C:\\Users\\dev`, 'C:\\..')).toBe(false)
-    expect(hookCwdContradictsWorktree(`${REPO}::C:\\`, 'C:\\Users\\dev')).toBe(false)
-  })
-
   it('refuses to judge across notations a single host can express two ways', () => {
-    // WSL reports the POSIX mount for a drive-rooted worktree, and UNC paths name the distro.
+    // WSL reports the POSIX mount for a drive-rooted worktree, and UNC names the same
+    // directory a third way — a mapped drive or a distro share.
     expect(hookCwdContradictsWorktree(`${REPO}::C:\\Users\\dev\\api`, '/mnt/c/Users/dev/api')).toBe(
       false
     )
+    expect(
+      hookCwdContradictsWorktree(
+        `${REPO}::C:\\Users\\dev\\api`,
+        '\\\\wsl.localhost\\Ubuntu\\mnt\\c\\Users\\dev\\api'
+      )
+    ).toBe(false)
     expect(
       hookCwdContradictsWorktree(`${REPO}::\\\\wsl$\\Ubuntu\\home\\dev\\api`, '/home/dev/api')
     ).toBe(false)
     expect(
       hookCwdContradictsWorktree(`${REPO}::/home/dev/api`, '\\\\wsl$\\Ubuntu\\home\\dev\\x')
     ).toBe(false)
+    expect(hookCwdContradictsWorktree(`${REPO}::C:\\..\\..`, '/Users/dev/projects/api')).toBe(false)
+    expect(hookCwdContradictsWorktree(WORKTREE, 'C:\\..\\..')).toBe(false)
   })
 
   it('compares the real folder path of a folder-workspace instance id', () => {

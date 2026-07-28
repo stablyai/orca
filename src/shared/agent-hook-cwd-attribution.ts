@@ -1,61 +1,12 @@
+import {
+  isPathInsideOrEqual,
+  isRuntimePathAbsolute,
+  isWindowsAbsolutePathLike,
+  resolveRuntimePath
+} from './cross-platform-path'
 import { splitWorktreeIdForFilesystem } from './worktree-id'
 
-const DRIVE_ROOTED = /^[a-z]:\//
-const CWD_PAYLOAD_KEYS = ['cwd', 'workspaceRoot', 'workspace_root'] as const
-
-/** Session cwd the agent reported in its own hook payload, for sources that expose one. */
-export function readHookPayloadCwd(hookPayload: unknown): string | undefined {
-  if (typeof hookPayload !== 'object' || hookPayload === null) {
-    return undefined
-  }
-  const record = hookPayload as Record<string, unknown>
-  for (const key of CWD_PAYLOAD_KEYS) {
-    const value = record[key]
-    if (typeof value === 'string' && value.trim().length > 0) {
-      return value.trim()
-    }
-  }
-  return undefined
-}
-
-/** Resolve `.` and `..` lexically so a path can't pose as living under another. */
-function collapseDotSegments(absolutePath: string): string {
-  const driveRoot = DRIVE_ROOTED.test(absolutePath) ? absolutePath.slice(0, 2) : ''
-  const segments: string[] = []
-  for (const segment of absolutePath.slice(driveRoot.length).split('/')) {
-    if (segment === '' || segment === '.') {
-      continue
-    }
-    if (segment === '..') {
-      // Why: `/..` is the root itself, so an over-popping prefix must not escape it.
-      segments.pop()
-      continue
-    }
-    segments.push(segment)
-  }
-  // Why: a collapsed drive root keeps its slash, else `c:` fails DRIVE_ROOTED and a
-  // Windows path would be compared against a POSIX one as if the notations matched.
-  return segments.length > 0
-    ? `${driveRoot}/${segments.join('/')}`
-    : driveRoot
-      ? `${driveRoot}/`
-      : '/'
-}
-
-/** Reduce a path to a comparable form, or null when it has no root this can compare. */
-function normalizeComparablePath(raw: string): string | null {
-  const lowered = raw.trim().replace(/\\/g, '/').toLowerCase()
-  // Why: UNC (`//wsl$/…`) and relative paths have no comparable root — unknown, not conflicting.
-  if (lowered.startsWith('//') || (!lowered.startsWith('/') && !DRIVE_ROOTED.test(lowered))) {
-    return null
-  }
-  return collapseDotSegments(lowered)
-}
-
-/** True when `inner` is `outer` itself or sits beneath it. */
-function isSameOrInside(inner: string, outer: string): boolean {
-  return inner === outer || inner.startsWith(outer.endsWith('/') ? outer : `${outer}/`)
-}
+const UNC_NOTATION = /^(?:\/\/|\\\\)/
 
 /**
  * True when the worktree a hook claims cannot own the session that sent it, judged
@@ -72,23 +23,33 @@ export function hookCwdContradictsWorktree(
   worktreeId: string | undefined,
   cwd: string | undefined
 ): boolean {
-  if (!worktreeId || !cwd) {
+  const worktreePath = worktreeId
+    ? splitWorktreeIdForFilesystem(worktreeId)?.worktreePath
+    : undefined
+  if (!worktreePath || !cwd) {
     return false
   }
-  const worktreePath = splitWorktreeIdForFilesystem(worktreeId)?.worktreePath
-  if (!worktreePath) {
+  // Why: a relative path has no root, so containment either way is unknowable.
+  if (!isRuntimePathAbsolute(worktreePath) || !isRuntimePathAbsolute(cwd)) {
     return false
   }
-  const workspace = normalizeComparablePath(worktreePath)
-  const session = normalizeComparablePath(cwd)
-  if (!workspace || !session) {
+  // Why: UNC aliases another notation — \\wsl$\Ubuntu\mnt\c\x is C:\x, and \\server\share
+  // is a mapped drive — so it can never disprove the other side.
+  if (UNC_NOTATION.test(worktreePath) || UNC_NOTATION.test(cwd)) {
     return false
   }
   // Why: a WSL session reports /mnt/c/… for a C:\… worktree; mixed notations aren't comparable.
-  if (DRIVE_ROOTED.test(workspace) !== DRIVE_ROOTED.test(session)) {
+  // Together with the UNC bail this leaves the guard inert across WSL, since translating
+  // either way needs the session's execution host, which the hook server doesn't know.
+  if (isWindowsAbsolutePathLike(worktreePath) !== isWindowsAbsolutePathLike(cwd)) {
     return false
   }
+  // Why: fold case even on POSIX, which normalizeRuntimePathForComparison deliberately
+  // won't. Its callers pick candidates, so a missed match costs them nothing; here a
+  // missed match drops a live status row, and macOS and Windows are case-insensitive.
+  const workspace = resolveRuntimePath(worktreePath.toLowerCase(), '.')
+  const session = resolveRuntimePath(cwd.toLowerCase(), '.')
   // Why: a session started in a subdirectory is normal, and so is a workspace nested
   // under the session root (folder workspaces); only fully disjoint paths are proof.
-  return !isSameOrInside(session, workspace) && !isSameOrInside(workspace, session)
+  return !isPathInsideOrEqual(workspace, session) && !isPathInsideOrEqual(session, workspace)
 }

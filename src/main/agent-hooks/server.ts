@@ -17,6 +17,7 @@ import {
   createHookListenerState,
   getEndpointFileName,
   hasPendingAgentResultText,
+  HOOK_CWD_MAX_LENGTH,
   HOOK_REQUEST_SLOWLORIS_MS,
   markClaudeLeadTurnInterrupted,
   markCodexLeadTurnInterrupted,
@@ -1573,8 +1574,8 @@ export class AgentHookServer {
       providerSessionOnly: envelope.providerSessionOnly === true ? true : undefined,
       isReplay: envelope.isReplay === true ? true : undefined,
       sourceCwd:
-        typeof envelope.sourceCwd === 'string' && envelope.sourceCwd.trim().length > 0
-          ? envelope.sourceCwd.trim()
+        typeof envelope.sourceCwd === 'string' && envelope.sourceCwd.length <= HOOK_CWD_MAX_LENGTH
+          ? envelope.sourceCwd.trim() || undefined
           : undefined,
       payload: normalizedPayload
     }
@@ -2034,7 +2035,13 @@ export class AgentHookServer {
       if (!isValidPaneKey(paneKey)) {
         continue
       }
-      const { promptInteractionKey: _promptInteractionKey, ...persistedPayload } = payload
+      // Why: transport-only fields the hydrate whitelist drops — persisting them would
+      // make hydration lossy and defeat the lastWrittenJson write dedupe.
+      const {
+        promptInteractionKey: _promptInteractionKey,
+        sourceCwd: _sourceCwd,
+        ...persistedPayload
+      } = payload
       entries[paneKey] = persistedPayload as EnrichedAgentHookEventPayload
     }
     const file: LastStatusFile = { version: LAST_STATUS_FILE_VERSION, entries }

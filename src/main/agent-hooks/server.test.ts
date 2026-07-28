@@ -6339,7 +6339,7 @@ describe('Last-status persistence', () => {
     }
   })
 
-  it('does not write prompt interaction keys to last-status.json', async () => {
+  it('does not write transport-only fields to last-status.json', async () => {
     const server = new AgentHookServer()
     await server.start({
       env: 'production',
@@ -6352,7 +6352,8 @@ describe('Last-status persistence', () => {
           hook_event_name: 'MessagePart',
           role: 'user',
           text: 'persist status only',
-          messageID: 'opencode-local-message-id'
+          messageID: 'opencode-local-message-id',
+          cwd: '/srv/session'
         }),
         '/hook/opencode'
       )
@@ -6360,6 +6361,9 @@ describe('Last-status persistence', () => {
       const file = JSON.parse(readFileSync(lastStatusPath(), 'utf8'))
       expect(file.entries[PANE].payload.prompt).toBe('persist status only')
       expect(file.entries[PANE].promptInteractionKey).toBeUndefined()
+      // Why: hydrate's whitelist drops both, so persisting them leaves the write dedupe
+      // comparing against bytes hydration can never reproduce.
+      expect(file.entries[PANE].sourceCwd).toBeUndefined()
     } finally {
       server.stop()
     }

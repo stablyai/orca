@@ -25,7 +25,6 @@ import {
   type ParsedAgentStatusPayload
 } from './agent-status-types'
 import { normalizeOptionalField } from './agent-status-field-normalization'
-import { readHookPayloadCwd } from './agent-hook-cwd-attribution'
 import { isAskUserQuestionTool } from './agent-question-answered-intent'
 import {
   claudeRosterHasWorkingSubagent,
@@ -298,7 +297,9 @@ export type AgentHookEventPayload = {
   providerSessionOnly?: boolean
   /** True when this event is a relay cache replay rather than a live hook. */
   isReplay?: boolean
-  /** Session cwd from the agent's own payload; cross-checks the env-derived pane attribution. */
+  /** Session cwd from the agent's own payload; cross-checks the env-derived pane attribution.
+   *  Whoever populates this must run `hookCwdContradictsWorktree` before applying the status —
+   *  an ingest path that carries the field but skips the guard re-opens the mis-attribution. */
   sourceCwd?: string
   payload: ParsedAgentStatusPayload
 }
@@ -841,7 +842,9 @@ const TRANSCRIPT_MAX_SCAN_BYTES = 4 * 1024 * 1024
 const EMPTY_TRANSCRIPT_REGION = Buffer.alloc(0)
 const AMP_THREAD_ID_MAX_LENGTH = 256
 const AMP_MAX_SCOPED_THREAD_CACHE_KEYS = 32
-const GROK_SESSION_CWD_MAX_LENGTH = 4096
+/** Keys agents use for the session cwd; Grok spells it two extra ways. */
+const HOOK_CWD_KEYS = ['cwd', 'workspaceRoot', 'workspace_root'] as const
+export const HOOK_CWD_MAX_LENGTH = 4096
 const GROK_HOME_ENVELOPE_MAX_LENGTH = 4096
 
 function extractAssistantTextFromLine(line: string): string | undefined {
@@ -1184,11 +1187,7 @@ function readGrokSessionMetadata(
   if (!sessionId || !isSafeGrokSessionId(sessionId)) {
     return undefined
   }
-  const cwd = readBoundedString(
-    hookPayload,
-    ['cwd', 'workspaceRoot', 'workspace_root'],
-    GROK_SESSION_CWD_MAX_LENGTH
-  )
+  const cwd = readBoundedString(hookPayload, HOOK_CWD_KEYS, HOOK_CWD_MAX_LENGTH)
   // Why: hook scripts report the effective per-PTY/remote Grok home; old scripts fall back to the runtime's for compatibility.
   const sessionsDir = grokHome
     ? join(grokHome, 'sessions')
@@ -4022,7 +4021,9 @@ export function normalizeHookPayload(
         toolAgentType: readString(hookPayloadRecord, 'agent_type'),
         ...(providerSession ? { providerSession } : {}),
         ...(providerSessionOnly ? { providerSessionOnly: true } : {}),
-        sourceCwd: readHookPayloadCwd(hookPayloadRecord),
+        sourceCwd:
+          readBoundedString(hookPayloadRecord, HOOK_CWD_KEYS, HOOK_CWD_MAX_LENGTH)?.trim() ||
+          undefined,
         payload: transportPayload
       }
     : null
