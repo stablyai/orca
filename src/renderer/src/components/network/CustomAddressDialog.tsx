@@ -57,10 +57,22 @@ export function CustomAddressDialog({
   useEffect(() => {
     if (open) {
       setValue(initialValue ?? '')
-      setSubmitting(false)
-      setConfirmationFailed(false)
     }
   }, [open, initialValue])
+
+  const close = (): void => {
+    setSubmitting(false)
+    setConfirmationFailed(false)
+    onOpenChange(false)
+  }
+
+  const handleOpenChange = (nextOpen: boolean): void => {
+    if (nextOpen) {
+      onOpenChange(true)
+    } else if (!submitting) {
+      close()
+    }
+  }
 
   const parsed = validate(value)
   // Why: only flag invalid input once the user has typed something — an empty
@@ -75,7 +87,7 @@ export function CustomAddressDialog({
     setConfirmationFailed(false)
     try {
       if ((await onConfirm(parsed.value)) !== false) {
-        onOpenChange(false)
+        close()
       } else {
         setConfirmationFailed(true)
       }
@@ -87,7 +99,7 @@ export function CustomAddressDialog({
   }
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
+    <Dialog open={open} onOpenChange={handleOpenChange}>
       <DialogContent className="sm:max-w-md">
         <DialogHeader>
           <DialogTitle>{copy.title}</DialogTitle>
@@ -124,12 +136,7 @@ export function CustomAddressDialog({
           ) : null}
         </div>
         <DialogFooter>
-          <Button
-            type="button"
-            variant="outline"
-            disabled={submitting}
-            onClick={() => onOpenChange(false)}
-          >
+          <Button type="button" variant="outline" disabled={submitting} onClick={close}>
             {copy.cancel}
           </Button>
           <Button type="button" disabled={!parsed.ok || submitting} onClick={() => void submit()}>
