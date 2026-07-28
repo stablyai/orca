@@ -245,4 +245,18 @@ describe('createTerminalTitleTracker transient-fact scanning suppression', () =>
 
     expect(events).toEqual([['finished', 130]])
   })
+
+  it('a handoff scan seed preserves a provisional 2031 subscribe', () => {
+    const { events, tracker } = createRecordingTracker()
+
+    tracker.setTransientFactScanningSuppressed(true)
+    tracker.setTransientFactScanningSuppressed(false)
+    tracker.handleChunk(`${ESC}[?`, {
+      titleScanData: '',
+      mode2031PendingSubscribe: true
+    })
+    tracker.handleChunk('25h')
+
+    expect(events).toEqual([['2031-subscribe']])
+  })
 })

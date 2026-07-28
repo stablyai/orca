@@ -3,7 +3,6 @@ import {
   applyTerminalScrollbackRowsToMountedPanes,
   clearQueuedInitialCwdAfterFirstPane,
   getPreviousVisibleForTerminalPane,
-  isPaneParserOwnedMode2031Observer,
   isTerminalPaneVisibilityResume,
   mapRestoredPaneTitlesByPaneId,
   resolvePaneLinkCwd,
@@ -14,48 +13,6 @@ import {
   splitPaneWithOneShotStartup,
   suppressIntentionalPaneCloseExit
 } from './use-terminal-pane-lifecycle'
-
-describe('isPaneParserOwnedMode2031Observer', () => {
-  const bindingFor = (
-    isHiddenDeliveryGateManagedPty?: () => boolean
-  ): { dispose: () => void; isHiddenDeliveryGateManagedPty?: () => boolean } =>
-    isHiddenDeliveryGateManagedPty
-      ? { dispose: () => {}, isHiddenDeliveryGateManagedPty }
-      : { dispose: () => {} }
-
-  it('lets the parser observe only gate-managed panes', () => {
-    // Gate-managed bytes can be withheld from xterm, so the parser is the only observer.
-    const bindings = new Map([[1, bindingFor(() => true)]])
-
-    expect(isPaneParserOwnedMode2031Observer(bindings, 1)).toBe(true)
-  })
-
-  it('keeps the parser out of panes the chunk scanner owns', () => {
-    // Why: pty-connection's scanner already wrote this pane's state; a second writer
-    // here would rewind it and re-answer a subscription fish already withdrew (#9993).
-    const bindings = new Map([[1, bindingFor(() => false)]])
-
-    expect(isPaneParserOwnedMode2031Observer(bindings, 1)).toBe(false)
-  })
-
-  it('treats an unbound pane and a predicate-less binding as scanner-owned', () => {
-    const bindings = new Map([[2, bindingFor()]])
-
-    expect(isPaneParserOwnedMode2031Observer(bindings, 1)).toBe(false)
-    expect(isPaneParserOwnedMode2031Observer(bindings, 2)).toBe(false)
-  })
-
-  it('re-reads the binding on every call so a PTY swap flips ownership', () => {
-    // The closure runs per CSI, and a pane's PTY (and its gate status) can change.
-    let gateManaged = false
-    const bindings = new Map([[1, bindingFor(() => gateManaged)]])
-    expect(isPaneParserOwnedMode2031Observer(bindings, 1)).toBe(false)
-
-    gateManaged = true
-
-    expect(isPaneParserOwnedMode2031Observer(bindings, 1)).toBe(true)
-  })
-})
 
 describe('resetTerminalKeyboardProtocolAfterInterrupt', () => {
   it('does not write to an xterm whose pipeline is certified dead', async () => {

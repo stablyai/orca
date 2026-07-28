@@ -7863,7 +7863,12 @@ export class OrcaRuntimeService {
    *  facts itself and the delivered bytes may be gapped — feeding them to
    *  main's transient scanners would mint phantom or duplicate facts. Title
    *  processing stays main-side either way. */
-  setPtyTransientFactDelegation(ptyId: string, delegated: boolean, scanSeedAnsi?: string): void {
+  setPtyTransientFactDelegation(
+    ptyId: string,
+    delegated: boolean,
+    scanSeedAnsi?: string,
+    mode2031PendingSubscribe?: true
+  ): void {
     const entry = this.getOrCreatePtyTitleTrackerEntry(ptyId)
     entry.tracker.setTransientFactScanningSuppressed(delegated)
     if (!delegated && scanSeedAnsi) {
@@ -7871,7 +7876,10 @@ export class OrcaRuntimeService {
       // incomplete escape at the handoff position — a sequence split across
       // the un-background toggle must not mint a phantom bell or lose its
       // fact. titleScanData:'' keeps titles out (they were never suppressed).
-      entry.tracker.handleChunk(scanSeedAnsi, { titleScanData: '' })
+      entry.tracker.handleChunk(scanSeedAnsi, {
+        titleScanData: '',
+        mode2031PendingSubscribe
+      })
     }
   }
 

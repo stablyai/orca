@@ -93,12 +93,30 @@ describe('DECSET 2031 replies follow the chunk-final state (#9993)', () => {
     expect(recorded.subscribes).toBe(0)
   })
 
-  it('defers only while the tail could still be 2031, not for any partial sequence', () => {
+  it('does not defer for a partial sequence that cannot become a private mode', () => {
     const recorded = trackerRecording()
 
-    // '\x1b[?25' (cursor hide) can never become 2031, so the subscribe that
-    // already landed in this chunk must still be answered immediately.
+    recorded.tracker.handleChunk(`${ESC}[?2031h drawing ${ESC}[25`)
+
+    expect(recorded.subscribes).toBe(1)
+  })
+
+  it('defers an unrelated private-mode prefix that can append 2031', () => {
+    const recorded = trackerRecording()
+
     recorded.tracker.handleChunk(`${ESC}[?2031h drawing ${ESC}[?25`)
+    expect(recorded.subscribes).toBe(0)
+    recorded.tracker.handleChunk(';2031l')
+
+    expect(recorded.subscribes).toBe(0)
+  })
+
+  it('answers a deferred subscribe when the ambiguous tail resolves to another mode', () => {
+    const recorded = trackerRecording()
+
+    recorded.tracker.handleChunk(`${ESC}[?2031h drawing ${ESC}[?20`)
+    expect(recorded.subscribes).toBe(0)
+    recorded.tracker.handleChunk('25h')
 
     expect(recorded.subscribes).toBe(1)
   })

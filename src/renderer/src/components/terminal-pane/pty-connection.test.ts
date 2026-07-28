@@ -9604,16 +9604,6 @@ describe('connectPanePty', () => {
       expect(paneLastThemeModeRef.current.get(1)).toBeUndefined()
     })
 
-    it('reports the gate-managed predicate on the binding for the xterm 2031 observer', async () => {
-      enableMainAuthority()
-      const deps = createDeps({ isVisibleRef: { current: false } })
-      const { binding } = await connectHiddenPane(deps)
-      const bindingWithPredicate = binding as typeof binding & {
-        isHiddenDeliveryGateManagedPty: () => boolean
-      }
-      expect(bindingWithPredicate.isHiddenDeliveryGateManagedPty()).toBe(true)
-    })
-
     it('leaves the chunk scanner silent on a gate-managed PTY', async () => {
       // Main's '2031-subscribe' fact already answers these; a chunk-boundary reply here
       // would answer the same subscribe a second time.
@@ -9668,13 +9658,7 @@ describe('connectPanePty', () => {
         terminalHiddenDeliveryGate: false
       } as StoreState['settings']
       const deps = createDeps({ isVisibleRef: { current: false } })
-      const { transport, dataCallback, binding } = await connectHiddenPane(deps)
-      // Why: the lifecycle's xterm CSI observer consults this predicate — kill switch off keeps the legacy xterm reply path.
-      expect(
-        (
-          binding as typeof binding & { isHiddenDeliveryGateManagedPty: () => boolean }
-        ).isHiddenDeliveryGateManagedPty()
-      ).toBe(false)
+      const { transport, dataCallback } = await connectHiddenPane(deps)
       const transportOptions = createdTransportOptions.at(-1) as {
         onPtySpawn?: (ptyId: string) => void
       }
@@ -10817,6 +10801,33 @@ describe('connectPanePty', () => {
       dispose()
     })
 
+    it('stays silent when the withdrawal is split across two chunks', async () => {
+      const { transport, emit, dispose } = await connectVisiblePane()
+      emit('\x1b[?2031h prompt \x1b[?20')
+      expect(replies(transport)).toEqual([])
+      emit('31l')
+      expect(replies(transport)).toEqual([])
+      dispose()
+    })
+
+    it('stays silent when an unrelated private mode appends a split withdrawal', async () => {
+      const { transport, emit, dispose } = await connectVisiblePane()
+      emit('\x1b[?2031h prompt \x1b[?25')
+      expect(replies(transport)).toEqual([])
+      emit(';2031l')
+      expect(replies(transport)).toEqual([])
+      dispose()
+    })
+
+    it('answers after an ambiguous tail resolves to another mode', async () => {
+      const { transport, emit, dispose } = await connectVisiblePane()
+      emit('\x1b[?2031h drawing \x1b[?20')
+      expect(replies(transport)).toEqual([])
+      emit('25h')
+      expect(replies(transport)).toEqual(['\x1b[?997;2n'])
+      dispose()
+    })
+
     // One fish prompt cycle, exactly as fish's tty_handoff.rs emits it.
     const FISH_PROMPT_HANDOFF = '\x1b[?2031h\x1b[0m~/orca \x1b[32m❯\x1b[0m \x1b[?2031l'
 
@@ -11463,10 +11474,11 @@ describe('connectPanePty', () => {
       getMainBufferSnapshot.mockClear()
 
       // Main hit the per-PTY pending cap and sent the droppedOutput sentinel: the stream has a gap, so repaint from the authoritative main-owned buffer.
-      capturedDataCallback.current?.('', { droppedOutput: true })
+      capturedDataCallback.current?.('\x1b[?2031h', { droppedOutput: true })
       await flushAsyncTicks(20)
 
       expect(getMainBufferSnapshot).toHaveBeenCalled()
+      expect(transport.sendInput).toHaveBeenCalledWith('\x1b[?997;1n')
       expect(pane.terminal.write).toHaveBeenCalledWith(
         expect.stringContaining('healed from snapshot'),
         expect.any(Function)

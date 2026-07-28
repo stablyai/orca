@@ -91,4 +91,34 @@ describe('parked-tab DECSET 2031 responder honors the chunk-final state (#9993)'
 
     expect(sendInput).toHaveBeenCalledTimes(1)
   })
+
+  it('does not reply when the withdrawal is split across two chunks', () => {
+    const { sendInput, feed } = startResponder()
+
+    feed(`${ESC}[?2031h prompt ${ESC}[?20`)
+    expect(sendInput).not.toHaveBeenCalled()
+    feed('31l')
+
+    expect(sendInput).not.toHaveBeenCalled()
+  })
+
+  it('does not reply when an unrelated private mode appends a split withdrawal', () => {
+    const { sendInput, feed } = startResponder()
+
+    feed(`${ESC}[?2031h prompt ${ESC}[?25`)
+    expect(sendInput).not.toHaveBeenCalled()
+    feed(';2031l')
+
+    expect(sendInput).not.toHaveBeenCalled()
+  })
+
+  it('replies after an ambiguous tail resolves to another mode', () => {
+    const { sendInput, feed } = startResponder()
+
+    feed(`${ESC}[?2031h drawing ${ESC}[?20`)
+    expect(sendInput).not.toHaveBeenCalled()
+    feed('25h')
+
+    expect(sendInput).toHaveBeenCalledTimes(1)
+  })
 })

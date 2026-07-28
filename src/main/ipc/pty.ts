@@ -25,6 +25,11 @@ import type {
 } from '../../shared/pty-renderer-delivery-health'
 import { extractHiddenStartupRendererQueryData } from '../../shared/terminal-reply-query-extraction'
 import {
+  INITIAL_MODE_2031_REPLY_SCAN_STATE,
+  scanMode2031ReplyDecision,
+  type Mode2031ReplyScanState
+} from '../../shared/terminal-color-scheme-protocol'
+import {
   type PtyMainDeliveryDiagnostics,
   type PtyPerPtyDeliveryDiagnostics,
   EMPTY_PTY_MAIN_DELIVERY_DIAGNOSTICS,
@@ -2400,6 +2405,29 @@ export function registerPtyHandlers(
     return extracted.statelessQueryData + extracted.statefulQueryData + extracted.oscColorQueryData
   }
 
+  function scanDroppedMode2031Data(
+    data: string,
+    previous: Mode2031ReplyScanState
+  ): { data: string; state: Mode2031ReplyScanState } {
+    const result = scanMode2031ReplyDecision(previous, data)
+    const decisionData =
+      result.decision === 'subscribed'
+        ? '\x1b[?2031h'
+        : result.decision === 'unsubscribed'
+          ? '\x1b[?2031l'
+          : ''
+    return { data: decisionData, state: result.state }
+  }
+
+  function getDroppedMode2031RendererData(pending: PendingPtyData): string {
+    const state = pending.droppedMode2031ScanState
+    if (!state) {
+      return pending.droppedMode2031Data ?? ''
+    }
+    const pendingSubscribe = state.pendingSubscribe ? '\x1b[?2031h' : ''
+    return (pending.droppedMode2031Data ?? '') + pendingSubscribe + state.tail
+  }
+
   function dropOversizedPendingPtyData(id: string, pending: PendingPtyData): PendingPtyData {
     const capChars = pendingDataCapChars()
     if (pending.droppedOutput === true || pending.data.length <= capChars) {
@@ -2420,10 +2448,13 @@ export function registerPtyHandlers(
       pendingOverflowMarkedPtys.add(id)
     }
     pendingDroppedChars += pending.data.length
+    const mode2031 = scanDroppedMode2031Data(pending.data, INITIAL_MODE_2031_REPLY_SCAN_STATE)
     // Why no trimmed content tail: a mid-stream gap would corrupt the pane; the droppedOutput sentinel repaints from the snapshot and realigns by sequence (only query bytes ride along).
     return {
       data: extractDroppedPtyQueryBytes(pending.data).slice(0, DROPPED_QUERY_SALVAGE_MAX_CHARS),
-      droppedOutput: true
+      droppedOutput: true,
+      droppedMode2031Data: mode2031.data,
+      droppedMode2031ScanState: mode2031.state
     }
   }
 
@@ -2439,11 +2470,21 @@ export function registerPtyHandlers(
   ): PendingPtyData {
     // Why stay dropped at O(1): once over the cap the restore sentinel supersedes interim bytes; queries still get carved out (bounded) so replies survive the whole episode.
     if (existing?.droppedOutput === true) {
-      if (existing.data.length >= DROPPED_QUERY_SALVAGE_MAX_CHARS) {
-        return existing
+      const mode2031 = scanDroppedMode2031Data(
+        data,
+        existing.droppedMode2031ScanState ?? INITIAL_MODE_2031_REPLY_SCAN_STATE
+      )
+      const remainingQueryCapacity = Math.max(
+        0,
+        DROPPED_QUERY_SALVAGE_MAX_CHARS - existing.data.length
+      )
+      const salvaged = extractDroppedPtyQueryBytes(data).slice(0, remainingQueryCapacity)
+      return {
+        ...existing,
+        data: existing.data + salvaged,
+        droppedMode2031Data: mode2031.data || existing.droppedMode2031Data,
+        droppedMode2031ScanState: mode2031.state
       }
-      const salvaged = extractDroppedPtyQueryBytes(data)
-      return salvaged ? { ...existing, data: existing.data + salvaged } : existing
     }
     const nextContainsBackgroundOutput =
       existing?.containsBackgroundOutput === true || containsBackgroundOutput
@@ -2561,7 +2602,13 @@ export function registerPtyHandlers(
           pendingData.remove(selection)
           updateProducerFlowControl(id)
           // Why droppedOutput sentinel: pending-cap drop means the pane must repaint from the snapshot, not continue a gapped stream (data = carved query bytes only).
-          if (!sendPtyDataToRenderer(id, { id, data: pending.data, droppedOutput: true })) {
+          if (
+            !sendPtyDataToRenderer(id, {
+              id,
+              data: pending.data + getDroppedMode2031RendererData(pending),
+              droppedOutput: true
+            })
+          ) {
             sendFailed = true
             break
           }
@@ -2787,7 +2834,8 @@ export function registerPtyHandlers(
           runtime?.setPtyTransientFactDelegation(
             payload.id,
             payload.background,
-            payload.scanSeedAnsi
+            payload.scanSeedAnsi,
+            payload.mode2031PendingSubscribe
           )
           return
         }
@@ -2868,7 +2916,7 @@ export function registerPtyHandlers(
         pending.droppedOutput === true &&
         !overflowMarkedBeforeAppend &&
         pendingOverflowMarkedPtys.has(payload.id)
-      const nextData = pending.data
+      const nextData = pending.data + getDroppedMode2031RendererData(pending)
       const isInteractiveOutput = shouldSendInteractiveOutputNow(
         payload.id,
         nextData,

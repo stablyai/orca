@@ -117,9 +117,10 @@ import { shouldUseShellReadyStartupDelivery } from '../../../../shared/codex-sta
 import { resolveSetupAgentSequenceLaunchCommand } from '../../../../shared/setup-agent-sequencing'
 import { getSystemPrefersDark } from '@/lib/terminal-theme'
 import {
+  INITIAL_MODE_2031_REPLY_SCAN_STATE,
   mode2031SequenceFor,
   resolveTerminalColorSchemeMode,
-  scanMode2031Sequences
+  scanMode2031ReplyDecision
 } from '../../../../shared/terminal-color-scheme-protocol'
 import { warnTerminalLifecycleAnomaly } from './terminal-lifecycle-diagnostics'
 import { subscribeToTerminalUserInput } from './terminal-user-input-signal'
@@ -656,11 +657,6 @@ type PanePtyBinding = IDisposable & {
   requestDroidReconfirmation: () => void
   reconcileIfSessionDead: (liveSessionIds: Set<string>, snapshotRequestedAt?: number) => void
   reconcileIfSessionMissing: (hasPty: HasPty, livenessRequestedAt?: number) => void
-  /** True when the hidden-delivery gate structurally manages the pane's
-   *  current PTY. The lifecycle's xterm CSI ?2031h observer consults this to
-   *  stay silent — main's '2031-subscribe' fact is the sole responder for
-   *  gate-managed PTYs. */
-  isHiddenDeliveryGateManagedPty: () => boolean
 }
 
 function isAgentTaskCompleteNotificationEnabled(): boolean {
@@ -5451,7 +5447,7 @@ export function connectPanePty(
     let foregroundImmediateBudgetWindowStart = 0
     let foregroundRewriteChunkEndedWithCarriageReturn = false
     let foregroundRewriteCsiScanTail = ''
-    let mode2031ScanTail = ''
+    let mode2031ReplyScanState = INITIAL_MODE_2031_REPLY_SCAN_STATE
     const shouldSnapshotHiddenCodexOutput = shouldKeepHiddenStartupRendererQueriesLive(paneStartup)
     let hiddenStartupRendererQueryPending = ''
     let hiddenRendererStateDirty = false
@@ -5784,13 +5780,13 @@ export function connectPanePty(
       if (isHiddenDeliveryGateManagedPty(transport.getPtyId())) {
         return
       }
-      const scan = scanMode2031Sequences(mode2031ScanTail, data)
-      mode2031ScanTail = scan.tail
-      if (scan.finalState === 'unsubscribed') {
+      const result = scanMode2031ReplyDecision(mode2031ReplyScanState, data)
+      mode2031ReplyScanState = result.state
+      if (result.decision === 'unsubscribed') {
         deps.paneMode2031Ref.current.delete(pane.id)
         deps.paneLastThemeModeRef.current.delete(pane.id)
       }
-      if (scan.finalState !== 'subscribed') {
+      if (result.decision !== 'subscribed') {
         return
       }
       const settings = useAppStore.getState().settings
@@ -6531,7 +6527,7 @@ export function connectPanePty(
       deps.paneLastThemeModeRef.current.delete(pane.id)
       // A partial CSI prefix belongs to the stream that produced it; carrying it into a
       // replacement PTY would splice two unrelated byte ranges into one sequence.
-      mode2031ScanTail = ''
+      mode2031ReplyScanState = INITIAL_MODE_2031_REPLY_SCAN_STATE
     }
 
     function pulseVisibleLocalPtySizeForTuiRepaint(ptyId: string): void {
@@ -7030,6 +7026,7 @@ export function connectPanePty(
       }
       observeStartupDraftPasteReadiness(data)
       resetHiddenOutputRestoreIfPtyChanged()
+      observeLiveMode2031Chunk(data)
       if (meta?.droppedOutput === true) {
         // Why gated (rc.7.perf loop): a visible pane's cap-drop during its own restore is self-caused backpressure; defer to one post-flood repaint instead of re-arming per sentinel.
         if (meta?.background !== true && isForegroundRestoreBackpressureContext()) {
@@ -7061,10 +7058,6 @@ export function connectPanePty(
       if (!foreground) {
         syncHiddenRendererPtyDelivery()
       }
-      // Why unconditional and this early: a mode-2031 query must be answered whether or not
-      // the chunk survives reconciliation, restore deferral, or the hidden-delivery skip —
-      // every one of those can drop bytes that xterm would otherwise have parsed (#9993).
-      observeLiveMode2031Chunk(data)
       // Post-restore reconciliation: drop chunks the snapshot covers, force a fresh restore for unmappable seq gaps; runs after byte observers, before any xterm write.
       const reconciliation = reconcileChunkAgainstRestoredSnapshot(data, meta)
       if (reconciliation.action === 'drop-duplicate') {
@@ -8227,9 +8220,6 @@ export function connectPanePty(
       agentCompletionCoordinator.startProcessTracking()
       // Why: the hidden-delivery gate must follow every pane visibility flip.
       syncHiddenRendererPtyDelivery()
-    },
-    isHiddenDeliveryGateManagedPty() {
-      return isHiddenDeliveryGateManagedPty(transport.getPtyId())
     },
     // Why: visible-resume size readback repairs dropped hidden resizes without refitting against xterm's transient hidden DOM fallback.
     noteVisibilityResume() {

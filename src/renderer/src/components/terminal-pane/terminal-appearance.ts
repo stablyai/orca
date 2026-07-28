@@ -1,4 +1,4 @@
-import type { IDisposable, IParser, ITheme } from '@xterm/xterm'
+import type { ITheme } from '@xterm/xterm'
 import type { PaneManager } from '@/lib/pane-manager/pane-manager'
 import type { GlobalSettings } from '../../../../shared/types'
 import { resolveTerminalFontWeights } from '../../../../shared/terminal-fonts'
@@ -9,7 +9,6 @@ import {
   resolveEffectiveTerminalAppearance
 } from '@/lib/terminal-theme'
 import { buildFontFamily } from './layout-serialization'
-import { guardParserHandler } from './terminal-parser-handler-guard'
 import { safeFit, safeFitAndThen } from '@/lib/pane-manager/pane-tree-ops'
 import {
   normalizeTerminalFastScrollSensitivity,
@@ -25,64 +24,6 @@ import { publishTerminalViewAttributes } from './terminal-view-attributes-publis
 import { normalizeTerminalLineHeight } from '../../../../shared/terminal-line-height-settings'
 import { maybePushMode2031Flip } from './terminal-mode-2031-replies'
 import { resolveTerminalMinimumContrastRatio } from '@/lib/terminal-contrast-correction'
-
-// Why Pick over a hand-rolled type: stays tied to xterm's canonical signature so upstream tightening surfaces here.
-type Mode2031Parser = Pick<IParser, 'registerCsiHandler'>
-
-type Mode2031HandlerDeps = {
-  paneId: number
-  parser: Mode2031Parser
-  isReplaying: () => boolean
-  paneMode2031: Map<number, boolean>
-  paneLastThemeMode: Map<number, 'dark' | 'light'>
-  /** True only for hidden-delivery-gate-managed PTYs, whose bytes may never reach this
-   *  parser. Everything else has its state owned by pty-connection's chunk scanner, and a
-   *  second writer here would rewind it: xterm parses on a later tick than the scanner, so
-   *  a queued handler for chunk N can re-subscribe after chunk N+1 already withdrew (#9993). */
-  shouldObserveInParser: () => boolean
-}
-
-// Why a pure function: lets tests drive a real xterm parser end-to-end against the "random characters on restart" guard.
-export function installMode2031Handlers(deps: Mode2031HandlerDeps): IDisposable[] {
-  const hasMode2031 = (params: (number | number[])[]): boolean =>
-    params.some((p) => (Array.isArray(p) ? p.includes(2031) : p === 2031))
-
-  // Why no reply from here: xterm dispatches CSI handlers mid-parse and batches
-  // several PTY chunks into one parse, so this layer cannot see a chunk boundary
-  // — and fish toggles 2031 on and off around every prompt, so a reply owed to
-  // one chunk gets cancelled by the next one's withdrawal, or never sent at all.
-  // The reply decision lives at the raw chunk boundary in pty-connection (#9993).
-
-  // Why return false: we only observe mode 2031; false lets xterm's built-in DEC handler still process compound sequences.
-  return [
-    deps.parser.registerCsiHandler(
-      { prefix: '?', final: 'h' },
-      guardParserHandler('csi-mode2031-subscribe', (params) => {
-        if (hasMode2031(params) && deps.shouldObserveInParser()) {
-          // Why gate on isReplaying: a restored buffer's replayed `?2031h` would leave the pane marked
-          // subscribed, so a later theme flip would push `?997;1n` into a fresh shell with no TUI, which
-          // echoes it as literal text.
-          if (deps.isReplaying()) {
-            return false
-          }
-          deps.paneMode2031.set(deps.paneId, true)
-        }
-        return false
-      })
-    ),
-    // Why no replay guard here: we only push CSI 997 on subscribe; unsubscribe just clears map entries, so replay is harmless.
-    deps.parser.registerCsiHandler(
-      { prefix: '?', final: 'l' },
-      guardParserHandler('csi-mode2031-unsubscribe', (params) => {
-        if (hasMode2031(params) && deps.shouldObserveInParser()) {
-          deps.paneMode2031.delete(deps.paneId)
-          deps.paneLastThemeMode.delete(deps.paneId)
-        }
-        return false
-      })
-    )
-  ]
-}
 
 export function hexToRgba(hex: string, alpha: number): string {
   let clean = hex.replace('#', '')

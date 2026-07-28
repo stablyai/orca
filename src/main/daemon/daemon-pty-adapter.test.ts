@@ -861,6 +861,46 @@ describe('DaemonPtyAdapter (IPtyProvider)', () => {
       }
     })
 
+    it('forwards a provisional subscribe with the foreground handoff marker', () => {
+      const current = new DaemonPtyAdapter({ socketPath, tokenPath, protocolVersion: 29 })
+      const forwarded: unknown[] = []
+      current.onBackgroundStreamEvent((payload) => forwarded.push(payload))
+      const listeners: ((event: unknown) => void)[] = []
+      onEventSpy = vi.spyOn(DaemonClient.prototype, 'onEvent').mockImplementation((listener) => {
+        listeners.push(listener)
+        return () => {}
+      })
+      try {
+        current['removeEventListener'] = null
+        current['setupEventRouting']()
+        for (const listener of listeners) {
+          listener({
+            type: 'event',
+            event: 'sessionBackgroundMarker',
+            sessionId: 'session-1',
+            payload: {
+              background: false,
+              scanSeedAnsi: '\x1b[?',
+              mode2031PendingSubscribe: true
+            }
+          })
+        }
+
+        expect(forwarded).toEqual([
+          {
+            id: 'session-1',
+            kind: 'backgroundMarker',
+            background: false,
+            scanSeedAnsi: '\x1b[?',
+            mode2031PendingSubscribe: true
+          }
+        ])
+      } finally {
+        current.dispose()
+        onEventSpy.mockRestore()
+      }
+    })
+
     it('forwards a v28 unsubscribe, which can only retire state main registered', () => {
       // Asymmetric on purpose: an unretractable subscribe is the hazard, a withdrawal
       // never is. A stale relay tracker on a preserved daemon must still be able to
@@ -964,6 +1004,50 @@ describe('DaemonPtyAdapter (IPtyProvider)', () => {
         ensureConnectedSpy.mockRestore()
       }
     })
+
+    it.each([
+      { protocolVersion: 28, clearsHint: true },
+      { protocolVersion: 29, clearsHint: false }
+    ])(
+      'uses protocol v$protocolVersion background authority before spawn',
+      async ({ protocolVersion, clearsHint }) => {
+        const ensureConnectedSpy = vi
+          .spyOn(DaemonClient.prototype, 'ensureConnected')
+          .mockResolvedValue()
+        const requestSpy = vi.spyOn(DaemonClient.prototype, 'request').mockResolvedValue({
+          isNew: true,
+          pid: null,
+          shellState: 'unsupported',
+          snapshot: null
+        } as never)
+        const notifySpy = vi.spyOn(DaemonClient.prototype, 'notify')
+        const target = new DaemonPtyAdapter({ socketPath, tokenPath, protocolVersion })
+        const sessionId = `spawn-v${protocolVersion}-session`
+        try {
+          await target.spawn({ sessionId, cols: 80, rows: 24 })
+
+          if (clearsHint) {
+            expect(notifySpy).toHaveBeenCalledWith('setSessionBackground', {
+              sessionId,
+              background: false
+            })
+            expect(notifySpy.mock.invocationCallOrder[0]).toBeLessThan(
+              requestSpy.mock.invocationCallOrder[0]
+            )
+          } else {
+            expect(notifySpy).not.toHaveBeenCalledWith(
+              'setSessionBackground',
+              expect.objectContaining({ sessionId })
+            )
+          }
+        } finally {
+          target.dispose()
+          notifySpy.mockRestore()
+          requestSpy.mockRestore()
+          ensureConnectedSpy.mockRestore()
+        }
+      }
+    )
 
     it('clears a preserved v28 background hint before attaching, so scan authority comes home', async () => {
       // The gate on setPtyBackgrounded only binds THIS process. Daemons outlive the desktop:

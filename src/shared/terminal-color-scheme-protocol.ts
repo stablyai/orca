@@ -31,6 +31,28 @@ export type Mode2031ScanResult = {
   tailMayResolveToMode2031: boolean
 }
 
+export type Mode2031ReplyScanState = {
+  tail: string
+  pendingSubscribe: boolean
+}
+
+export type Mode2031ReplyDecision = 'subscribed' | 'unsubscribed' | null
+
+export type Mode2031ReplyScanResult = {
+  decision: Mode2031ReplyDecision
+  state: Mode2031ReplyScanState
+}
+
+export const INITIAL_MODE_2031_REPLY_SCAN_STATE: Mode2031ReplyScanState = {
+  tail: '',
+  pendingSubscribe: false
+}
+
+const NO_MODE_2031_REPLY_DECISION: Mode2031ReplyScanResult = {
+  decision: null,
+  state: INITIAL_MODE_2031_REPLY_SCAN_STATE
+}
+
 const NO_MODE_2031_SEQUENCE: Mode2031ScanResult = {
   subscribe: false,
   unsubscribe: false,
@@ -71,6 +93,40 @@ export function scanMode2031Sequences(previousTail: string, data: string): Mode2
   return result
 }
 
+export function scanMode2031ReplyDecision(
+  previous: Mode2031ReplyScanState,
+  data: string
+): Mode2031ReplyScanResult {
+  if (
+    !previous.pendingSubscribe &&
+    !previous.tail &&
+    !data.includes('\x1b') &&
+    !data.includes('\x9b')
+  ) {
+    return NO_MODE_2031_REPLY_DECISION
+  }
+  const scan = scanMode2031Sequences(previous.tail, data)
+  let decision = scan.finalState
+  let pendingSubscribe = previous.pendingSubscribe
+
+  if (scan.finalState === 'unsubscribed') {
+    pendingSubscribe = false
+  } else if (scan.finalState === 'subscribed' || pendingSubscribe) {
+    if (scan.tailMayResolveToMode2031) {
+      decision = null
+      pendingSubscribe = true
+    } else {
+      decision = 'subscribed'
+      pendingSubscribe = false
+    }
+  }
+
+  return {
+    decision,
+    state: { tail: scan.tail, pendingSubscribe }
+  }
+}
+
 function hasMode2031(params: string): boolean {
   return params.split(';').some((param) => Number(param) === 2031)
 }
@@ -106,19 +162,6 @@ function isIncompletePrivateModeParams(params: string): boolean {
  * of answering a subscribe that the very next bytes withdraw (#9993).
  */
 function tailCouldStillBeMode2031(tail: string): boolean {
-  if (!tail) {
-    return false
-  }
-  // No parameters seen yet ('\x1b', '\x1b[', '\x9b'), so anything is still possible.
-  if (!tail.startsWith('\x1b[?') && !tail.startsWith('\x9b?')) {
-    return true
-  }
-  const params = tail.startsWith('\x1b[?') ? tail.slice(3) : tail.slice(2)
-  const segments = params.split(';')
-  // A already-complete 2031 in the list still decides the toggle once h/l lands.
-  if (segments.slice(0, -1).some((segment) => Number(segment) === 2031)) {
-    return true
-  }
-  // The trailing segment is mid-write: '20' can still become 2031, '1049' cannot.
-  return '2031'.startsWith(segments.at(-1) ?? '')
+  // Any retained private-mode prefix can still append `;2031` before its final byte.
+  return tail.length > 0
 }

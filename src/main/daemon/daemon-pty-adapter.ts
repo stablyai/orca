@@ -1931,6 +1931,9 @@ export class DaemonPtyAdapter implements IPtyProvider {
           background: event.payload.background,
           ...(event.payload.scanSeedAnsi !== undefined
             ? { scanSeedAnsi: event.payload.scanSeedAnsi }
+            : {}),
+          ...(event.payload.mode2031PendingSubscribe
+            ? { mode2031PendingSubscribe: true as const }
             : {})
         })
       } else if (event.event === 'dataGap') {

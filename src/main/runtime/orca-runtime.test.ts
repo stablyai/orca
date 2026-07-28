@@ -8295,6 +8295,17 @@ describe('OrcaRuntimeService', () => {
       expect(batches.flatMap((batch) => batch.facts)).toEqual([{ kind: '2031-subscribe' }])
     })
 
+    it('restores a provisional 2031 subscribe when daemon scan authority returns', () => {
+      const { runtime, batches } = createSideEffectRuntime()
+      syncSinglePty(runtime)
+
+      runtime.setPtyTransientFactDelegation('pty-1', true)
+      runtime.setPtyTransientFactDelegation('pty-1', false, '\x1b[?', true)
+      runtime.onPtyData('pty-1', '25h', 100)
+
+      expect(batches.flatMap((batch) => batch.facts)).toEqual([{ kind: '2031-subscribe' }])
+    })
+
     it('prefers the tracked title over the renderer snapshot lastTitle', async () => {
       const { runtime } = createSideEffectRuntime()
       const serializeBuffer = vi.fn().mockResolvedValue({

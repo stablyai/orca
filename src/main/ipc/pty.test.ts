@@ -10766,17 +10766,19 @@ describe('registerPtyHandlers', () => {
         vi.advanceTimersByTime(1)
       }
 
-      // Flood past the pending cap WITH an embedded DSR probe — the writing program blocks on the reply (bench DSR timeout).
-      mockProc.emitData(`${'y'.repeat(2 * 1024 * 1024)}\x1b[6n${'y'.repeat(1024 * 1024)}`)
-      // While latched, a later probe must also be carved out (bounded).
-      mockProc.emitData(`${'z'.repeat(32 * 1024)}\x1b[0c${'z'.repeat(32 * 1024)}`)
+      // Flood past the cap with a DSR probe and a mode-2031 withdrawal split at the chunk edge.
+      mockProc.emitData(
+        `${'y'.repeat(2 * 1024 * 1024)}\x1b[6n${'y'.repeat(1024 * 1024)}\x1b[?2031h prompt \x1b[?20`
+      )
+      // While latched, later queries and the withdrawal continuation must still be carved out.
+      mockProc.emitData(`31l${'z'.repeat(32 * 1024)}\x1b[0c${'z'.repeat(32 * 1024)}`)
 
       mainWindow.webContents.send.mockClear()
       ackData(null, { id: spawn.id, charCount: 512 * 1024 })
       vi.advanceTimersByTime(2)
       expect(mainWindow.webContents.send).toHaveBeenCalledWith('pty:data', {
         id: spawn.id,
-        data: '\x1b[6n\x1b[0c',
+        data: '\x1b[6n\x1b[0c\x1b[?2031l',
         droppedOutput: true
       })
     } finally {

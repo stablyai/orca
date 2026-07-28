@@ -65,7 +65,7 @@ import {
 import { resolveTerminalLayoutActiveLeafId } from './terminal-layout-leaf-ids'
 import { makePaneKey } from '../../../../shared/stable-pane-id'
 import { applyExpandedLayoutTo, restoreExpandedLayoutFrom } from './expand-collapse'
-import { applyTerminalAppearance, installMode2031Handlers } from './terminal-appearance'
+import { applyTerminalAppearance } from './terminal-appearance'
 import { createOsc52OscHandler } from './osc52-clipboard'
 import { showOsc52ClipboardBlockedToast } from './osc52-clipboard-blocked-toast'
 import { parseOsc7 } from './parse-osc7'
@@ -489,23 +489,6 @@ export function getPreviousVisibleForTerminalPane(args: {
   return args.previous.isVisible
 }
 
-/**
- * Whether xterm's CSI parser owns this pane's 2031 state. Only gate-managed PTYs
- * qualify: their bytes can be withheld from xterm, so the parser is the one place the
- * renderer sees the subscribe. Every other PTY is owned by pty-connection's chunk
- * scanner, and a second writer here would rewind it (#9993). An unbound pane, or a
- * binding predating the predicate, is scanner-owned.
- */
-export function isPaneParserOwnedMode2031Observer(
-  panePtyBindings: Map<number, IDisposable>,
-  paneId: number
-): boolean {
-  const binding = panePtyBindings.get(paneId) as
-    | (IDisposable & { isHiddenDeliveryGateManagedPty?: () => boolean })
-    | undefined
-  return binding?.isHiddenDeliveryGateManagedPty?.() === true
-}
-
 /** Wires mounted terminal panes to renderer state and terminal event handling. */
 export function useTerminalPaneLifecycle({
   tabId,
@@ -586,7 +569,6 @@ export function useTerminalPaneLifecycle({
   // Why: read settingsRef at fire time so toggling "copy on select" applies without recreating panes.
   const selectionDisposablesRef = useRef(new Map<number, IDisposable>())
   const selectionCaptureTimersRef = useRef(new Map<number, number>())
-  const mode2031DisposablesRef = useRef(new Map<number, IDisposable[]>())
   const osc52DisposablesRef = useRef(new Map<number, IDisposable>())
   const osc7DisposablesRef = useRef(new Map<number, IDisposable>())
   const mouseHideDisposablesRef = useRef(new Map<number, IDisposable>())
@@ -772,20 +754,6 @@ export function useTerminalPaneLifecycle({
     const manager = new PaneManager(container, {
       // `spawnHints.cwd` (from Split actions) lets the new PTY inherit the source pane's cwd — see docs/ssh-split-pane-inherit-cwd.md.
       onPaneCreated: (pane, spawnHints) => {
-        // Install mode 2031 handlers before PTY attach so the child's initial CSI ?2031h is captured.
-        const mode2031Disposables = installMode2031Handlers({
-          paneId: pane.id,
-          parser: pane.terminal.parser,
-          // Why only gate-managed PTYs: their bytes can be withheld from xterm, so the parser is
-          // the only place the renderer sees the subscribe. Every other PTY has its state owned
-          // by pty-connection's chunk scanner; a second writer here would rewind it (#9993).
-          shouldObserveInParser: () => isPaneParserOwnedMode2031Observer(panePtyBindings, pane.id),
-          isReplaying: () => isPaneReplaying(replayingPanesRef, pane.id),
-          paneMode2031: paneMode2031Ref.current,
-          paneLastThemeMode: paneLastThemeModeRef.current
-        })
-        mode2031DisposablesRef.current.set(pane.id, mode2031Disposables)
-
         // OSC 52 — TUI-initiated clipboard writes (Zellij/tmux/nvim/fzf/ssh).
         // Why: read settingsRef at fire time so mid-session gate toggles apply; return true in both paths so xterm doesn't fall through.
         const osc52Disposable = pane.terminal.parser.registerOscHandler(
@@ -1164,13 +1132,6 @@ export function useTerminalPaneLifecycle({
         if (selectionCaptureTimer !== undefined) {
           window.clearTimeout(selectionCaptureTimer)
           selectionCaptureTimersRef.current.delete(paneId)
-        }
-        const mode2031Disposables = mode2031DisposablesRef.current.get(paneId)
-        if (mode2031Disposables) {
-          for (const d of mode2031Disposables) {
-            d.dispose()
-          }
-          mode2031DisposablesRef.current.delete(paneId)
         }
         paneMode2031Ref.current.delete(paneId)
         paneKittyKeyboardModesRef.current.delete(paneId)
