@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "updatedAt": "2026-07-26",
+  "updatedAt": "2026-07-28",
   "policy": {
     "maturityLevels": [
       "experimental",
@@ -4758,6 +4758,147 @@
         "Push-on-idle orchestration message banners remain outside this dispatch-prompt gate."
       ],
       "demotionRule": "Demote or quarantine if the live harness flakes without a product bug or harness bug filed to the terminal-input owner."
+    },
+    {
+      "id": "orchestration.worker-terminal-delivery",
+      "title": "Started workers are visible without stealing focus and retain mailbox identity",
+      "maturity": "experimental",
+      "protection": "partial",
+      "owner": "orchestration",
+      "layer": "cli-runtime-renderer-contract",
+      "surfaces": [
+        "Run and Dispatch mailboxes",
+        "worker-start",
+        "terminal creation",
+        "terminal tab materialization",
+        "workspace re-entry"
+      ],
+      "platforms": [
+        "macos",
+        "linux",
+        "windows"
+      ],
+      "providers": [
+        "local",
+        "daemon",
+        "ssh",
+        "wsl",
+        "remote-runtime"
+      ],
+      "coveredPlatforms": [
+        "macos"
+      ],
+      "coveredProviders": [
+        "local",
+        "daemon",
+        "ssh"
+      ],
+      "coverageNotes": "Deterministic units cover local worker presentation, reveal-failure warnings, stable-pane Run/Dispatch routing, and the SSH in-process CLI fallback. An isolated macOS Electron journey launches a fake Codex worker through the real RPC path, tolerates spawn-time handle reminting, asserts the inactive tab in the DOM before navigation, checks Run delivery by pane identity, and proves workspace re-entry keeps one worker tab by both original tab ID and visible title. SSH, WSL, remote-runtime, Linux, and Windows remain live-test gaps; federated workers retain explicit background presentation.",
+      "motivatingLinks": [
+        "https://github.com/stablyai/orca/pull/11107#discussion_r3663321387"
+      ],
+      "invariant": "Starting a worker in the coordinator's current workspace must materialize one inactive terminal tab before worker-start returns, preserve coordinator focus, and remain exactly once after workspace re-entry. An exact existing target workspace must receive a discoverable tab without stealing coordinator focus; if renderer reveal fails, worker-start must expose that the live worker remains background-only. Run and Dispatch checks must resolve through the caller's stable pane identity when a terminal handle is reminted, while a live handle outranks mismatched pane metadata, explicit legacy terminal inspection remains handle-scoped, and remote or headless worker presentation remains background-only.",
+      "oracle": "Drive Run create, Task create, and worker-start through a production Electron runtime with a deterministic Codex fixture. Require the worker tab to be visible in the DOM with data-active=false while the coordinator tab stays active, send ACK to the Run, read it with a deliberately stale coordinator handle plus its stable pane key, switch workspaces away and back, and require exactly one worker tab by original ID and visible title. Unit tests separately assert local worker-start omits background presentation, reveal failures return an actionable warning without discarding the worker, reminted coordinators and workers retain mailbox routing, live handles outrank mismatched pane metadata, and explicit legacy terminal checks do not inherit the caller pane key locally or through the SSH fallback.",
+      "commands": [
+        "pnpm exec vitest run --config config/vitest.config.ts src/cli/handlers/orchestration.test.ts src/cli/handlers/orchestration-check-identity.test.ts src/cli/handlers/orchestration-worker-cli.test.ts src/main/runtime/rpc/methods/orchestration.test.ts src/main/ssh/ssh-remote-orca-cli.test.ts",
+        "pnpm run test:e2e -- tests/e2e/orchestration-worker-terminal-visibility.spec.ts --workers=1"
+      ],
+      "testFiles": [
+        "src/cli/handlers/orchestration.test.ts",
+        "src/cli/handlers/orchestration-check-identity.test.ts",
+        "src/cli/handlers/orchestration-worker-cli.test.ts",
+        "src/main/runtime/rpc/methods/orchestration.test.ts",
+        "src/main/ssh/ssh-remote-orca-cli.test.ts",
+        "tests/e2e/orchestration-worker-terminal-visibility.spec.ts"
+      ],
+      "assertionRefs": [
+        {
+          "file": "src/cli/handlers/orchestration-check-identity.test.ts",
+          "assertions": [
+            "implicit check carries the caller pane key with a potentially stale environment handle",
+            "explicit legacy terminal inspection does not inherit the caller pane key"
+          ]
+        },
+        {
+          "file": "src/cli/handlers/orchestration-worker-cli.test.ts",
+          "assertions": [
+            "worker-start prints an explicit warning when its live worker remains background-only"
+          ]
+        },
+        {
+          "file": "src/main/runtime/rpc/methods/orchestration.test.ts",
+          "assertions": [
+            "same-workspace worker creation uses visible inactive presentation",
+            "worker-start preserves and reports renderer reveal failures",
+            "Run delivery resolves through a stable coordinator pane after handle remint",
+            "Dispatch delivery resolves through a stable worker pane after handle remint",
+            "a live handle cannot be retargeted by mismatched pane metadata"
+          ]
+        },
+        {
+          "file": "src/main/ssh/ssh-remote-orca-cli.test.ts",
+          "assertions": [
+            "implicit SSH fallback checks retain stable pane identity",
+            "explicit legacy SSH inspection does not inherit the caller pane key"
+          ]
+        },
+        {
+          "file": "tests/e2e/orchestration-worker-terminal-visibility.spec.ts",
+          "assertions": [
+            "worker-start exposes one inactive worker tab before workspace navigation",
+            "the coordinator tab remains active",
+            "ACK delivery reaches a stable coordinator pane through a stale handle",
+            "workspace re-entry does not duplicate the worker tab under the same or a new tab ID"
+          ]
+        }
+      ],
+      "evidenceRuns": [
+        {
+          "date": "2026-07-28",
+          "runner": "local",
+          "platform": "macos",
+          "command": "pnpm exec vitest run --config config/vitest.config.ts src/cli/handlers/orchestration.test.ts src/cli/handlers/orchestration-check-identity.test.ts src/cli/handlers/orchestration-worker-cli.test.ts src/main/runtime/rpc/methods/orchestration.test.ts src/main/ssh/ssh-remote-orca-cli.test.ts",
+          "result": "passed",
+          "durationSeconds": 5.27,
+          "summary": "Five focused files passed with 216 tests, covering visible inactive local worker creation, reveal-failure warnings, stable-pane mailbox routing, live-handle precedence, and SSH fallback parity."
+        },
+        {
+          "date": "2026-07-28",
+          "runner": "local",
+          "platform": "macos",
+          "command": "pnpm run test:e2e -- tests/e2e/orchestration-worker-terminal-visibility.spec.ts --workers=1",
+          "result": "passed",
+          "durationSeconds": 11.5,
+          "summary": "The isolated Electron journey passed with a real Run and Task, deterministic Codex PTY, immediate inactive DOM tab, ACK delivery through a stale coordinator handle, and exactly one worker tab by original ID and management title after workspace re-entry."
+        }
+      ],
+      "runtimeBudget": {
+        "p95Seconds": 45,
+        "scope": "focused CLI/runtime units plus one isolated Electron worker-start journey"
+      },
+      "flakeHistory": {
+        "status": "unknown",
+        "evidence": "The deterministic units and isolated Electron journey pass locally; CI and soak history are not yet available."
+      },
+      "redGreenEvidence": {
+        "status": "partial",
+        "evidence": "The focused presentation and stale-handle tests failed against the pre-fix implementation, and the live incident plus Electron topology showed the worker PTY existed without an immediate tab. Saved intentional-break and CI artifacts are still needed."
+      },
+      "performanceBudget": {
+        "required": true,
+        "evidence": "Worker-start reuses the existing one-shot renderer reveal and adds no polling, provider listing, or output work. Check adds one optional pane-key field and reuses the existing Run scan or bounded active-Dispatch lookup; it adds no extra RPC, subprocess, timer, or renderer update. Federated and explicitly background terminals are unchanged."
+      },
+      "promotionCriteria": [
+        "Collect 100 consecutive passes or 14 days of stable CI history on macOS, Linux, and Windows.",
+        "Add live SSH and WSL exact-workspace worker-start evidence and a paired remote-runtime control.",
+        "Attach saved intentional-break artifacts for hidden local presentation and dropped stable-pane delivery."
+      ],
+      "knownGaps": [
+        "No live Linux, Windows, SSH, WSL, or paired remote-runtime run is attached.",
+        "The Electron journey uses a deterministic fake Codex CLI rather than a real account.",
+        "The gate does not cover terminal output recovery after app restart; it covers identity, discoverability, focus, and mailbox routing."
+      ],
+      "demotionRule": "Keep experimental or demote if the Electron journey flakes without a product or harness defect, if local worker-start can return before tab materialization without an explicit reveal warning, if focus moves to the worker, if workspace re-entry duplicates the tab, or if pane-stable delivery reads the wrong mailbox."
     },
     {
       "id": "terminal-render.windows-cjk-repaint",

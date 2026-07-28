@@ -13337,9 +13337,11 @@
           "d90981f766": "Tiempo",
           "6b914c5fbb": "Día",
           "233b8c94b6": "Cadencia",
-          "b08ccb4d06": "cada hora",
-          "8cc026fd73": "semanalmente",
-          "c3e39e17cf": "costumbre"
+          "55b2ef82a4": "Cada hora",
+          "f0202f3a89": "Diario",
+          "57e83307d0": "Días laborables",
+          "837d902bba": "Semanal",
+          "ddba78647e": "Cron personalizado"
         },
         "AutomationSessionField": {
           "f3c76dce51": "Reutilizar",

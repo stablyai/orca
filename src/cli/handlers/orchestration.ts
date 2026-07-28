@@ -582,6 +582,7 @@ export const ORCHESTRATION_HANDLERS: Record<string, CommandHandler> = {
       )
     }
     const timeoutMs = getOptionalPositiveIntegerValueFlag(flags, 'timeout-ms')
+    const explicitTerminal = getOptionalStringFlag(flags, 'terminal')
     const terminal = await resolveOrchestrationTerminalHandle(flags, cwd, client, 'terminal')
 
     // Why: Claude Code auto-backgrounds subprocesses silent ~2 min; emit JSON keepalives to stderr (stdout stays one payload). See §3.4.
@@ -600,6 +601,7 @@ export const ORCHESTRATION_HANDLERS: Record<string, CommandHandler> = {
     try {
       result = await callMutation<CheckResult>(client, flags, 'orchestration.check', {
         terminal,
+        terminalPaneKey: explicitTerminal ? undefined : process.env.ORCA_PANE_KEY || undefined,
         // Why: peek also sends unread:false so pre-peek runtimes degrade to non-consuming all mode instead of destructive mark-read.
         unread: flags.has('unread') ? true : peek ? false : undefined,
         peek: peek ? true : undefined,
@@ -822,6 +824,7 @@ export const ORCHESTRATION_HANDLERS: Record<string, CommandHandler> = {
       state: string
       failedStage?: string
       lastError?: string
+      warning?: string
       effects: unknown[]
       residualResources: unknown[]
     }>(client, flags, 'orchestration.workerStart', {
@@ -847,9 +850,10 @@ export const ORCHESTRATION_HANDLERS: Record<string, CommandHandler> = {
     }
     printResult(result, json, (worker) => {
       const base = `Worker ${worker.dispatchId} [${worker.state}] for ${worker.taskId}`
-      return worker.lastError
-        ? `${base}\n${worker.failedStage ?? 'start'}: ${worker.lastError}`
-        : base
+      if (worker.lastError) {
+        return `${base}\n${worker.failedStage ?? 'start'}: ${worker.lastError}`
+      }
+      return worker.warning ? `${base}\nWarning: ${worker.warning}` : base
     })
   },
 

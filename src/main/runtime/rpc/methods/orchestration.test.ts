@@ -322,6 +322,32 @@ describe('orchestration RPC methods', () => {
       })
     })
 
+    it('routes Dispatch mail by stable pane identity after worker handle remint', async () => {
+      setup()
+      const task = db.createTask({ spec: 'controlled worker after restart' })
+      const dispatch = db.createDispatchContext(
+        task.id,
+        'term_worker_before',
+        'tab_worker:leaf_worker'
+      )
+      db.insertMessage({
+        from: 'term_coord',
+        to: `dispatch:${dispatch.id}`,
+        subject: 'Continue after restart',
+        runId: activeRunId
+      })
+
+      const workerCheck = (await call('orchestration.check', {
+        terminal: 'term_worker_after',
+        terminalPaneKey: 'tab_worker:leaf_worker'
+      })) as { dispatchId: string; messages: { subject: string }[] }
+
+      expect(workerCheck).toMatchObject({
+        dispatchId: dispatch.id,
+        messages: [{ subject: 'Continue after restart' }]
+      })
+    })
+
     it('rejects hidden task-recipient retargeting', async () => {
       setup()
       await expect(
@@ -1041,6 +1067,56 @@ describe('orchestration RPC methods', () => {
       }
       expect(inboxA.messages.map((message) => message.subject)).toEqual(['A only'])
       expect(inboxB.messages.map((message) => message.subject)).toEqual(['B only'])
+    })
+
+    it('uses the stable pane identity when the coordinator handle was reminted', async () => {
+      setup()
+      db.insertMessage({
+        from: 'term_worker',
+        to: `run:${activeRunId}`,
+        subject: 'Completed after restart',
+        runId: activeRunId
+      })
+
+      const result = (await call('orchestration.check', {
+        terminal: 'term_stale_coord',
+        terminalPaneKey: coordinatorPaneKey
+      })) as { runId: string; messages: { subject: string }[] }
+
+      expect(result).toMatchObject({
+        runId: activeRunId,
+        messages: [{ subject: 'Completed after restart' }]
+      })
+    })
+
+    it('keeps a live handle authoritative over mismatched pane metadata', async () => {
+      setup()
+      const foreignRun = db.createRun({
+        objective: 'Foreign run',
+        coordinatorHandle: 'term_foreign',
+        coordinatorPaneKey: 'tab_foreign:leaf_foreign'
+      })
+      db.insertMessage({
+        from: 'term_worker',
+        to: `run:${activeRunId}`,
+        subject: 'Coordinator only',
+        runId: activeRunId
+      })
+      db.insertMessage({
+        from: 'term_foreign_worker',
+        to: `run:${foreignRun.id}`,
+        subject: 'Foreign only',
+        runId: foreignRun.id
+      })
+
+      const result = (await call('orchestration.check', {
+        terminal: 'term_coord',
+        terminalPaneKey: 'tab_foreign:leaf_foreign',
+        all: true
+      })) as { runId: string; messages: { subject: string }[] }
+
+      expect(result.runId).toBe(activeRunId)
+      expect(result.messages.map((message) => message.subject)).toEqual(['Coordinator only'])
     })
 
     it('returns formatted output with --format', async () => {
@@ -2071,10 +2147,50 @@ describe('orchestration RPC methods', () => {
       )
       expect(db.getTask(task.id)?.status).toBe('dispatched')
       expect(db.getWorkerDispatch(result.dispatchId)?.state).toBe('ready')
+      expect(runtime.createTerminal).toHaveBeenCalledWith('id:repo::worktree', {
+        command: 'codex',
+        title: `worker-${task.id}`
+      })
       expect(runtime.sendTerminalAgentPrompt).toHaveBeenCalledWith(
         'term_worker',
         expect.stringContaining('--dispatch-capability dcap_')
       )
+    })
+
+    it('surfaces a worker terminal reveal failure without discarding the live worker', async () => {
+      setup()
+      mockCurrentWorkerStart()
+      vi.mocked(runtime.createTerminal).mockResolvedValue({
+        handle: 'term_worker',
+        worktreeId: 'repo::worktree',
+        title: 'worker',
+        surface: 'background',
+        warning: 'Terminal term_worker is running but could not be revealed.'
+      })
+      const task = db.createTask({ spec: 'keep working if reveal fails' })
+
+      const result = (await call('orchestration.workerStart', {
+        task: task.id,
+        from: 'term_coord',
+        agent: 'codex'
+      })) as {
+        state: string
+        warning?: string
+        effects: { kind: string; surface?: string; warning?: string }[]
+      }
+
+      expect(result).toMatchObject({
+        state: 'ready',
+        warning: 'Terminal term_worker is running but could not be revealed.'
+      })
+      expect(result.effects).toContainEqual(
+        expect.objectContaining({
+          kind: 'terminal',
+          surface: 'background',
+          warning: 'Terminal term_worker is running but could not be revealed.'
+        })
+      )
+      expect(runtime.sendTerminalAgentPrompt).toHaveBeenCalled()
     })
 
     it('starts a fresh agent in an exact existing worktree without replaying setup', async () => {

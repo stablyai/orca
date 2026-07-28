@@ -97,6 +97,7 @@ const SendParams = z
 const CheckParams = z
   .object({
     terminal: OptionalString,
+    terminalPaneKey: OptionalString,
     unread: OptionalBoolean,
     peek: OptionalBoolean,
     // Why: `all` surfaces every message and skips mark-read; legacy encoding was the `{unread: false}` trick (design doc §3.2/§3.3).
@@ -238,6 +239,7 @@ function resolveRunScope(
   params: {
     runId?: string
     callerTerminalHandle?: string
+    callerPaneKey?: string
     requireCurrentConsumer: boolean
   }
 ): RunRow {
@@ -257,7 +259,7 @@ function resolveRunScope(
       orchestrationSkillRecoveryData()
     )
   }
-  const paneKey = runtime.getTerminalPaneKey(params.callerTerminalHandle)
+  const paneKey = params.callerPaneKey ?? runtime.getTerminalPaneKey(params.callerTerminalHandle)
   if (!paneKey) {
     throw new OrchestrationError(
       'stable_pane_required',
@@ -636,12 +638,14 @@ export const ORCHESTRATION_METHODS: RpcMethod[] = [
       const handle = params.terminal ?? 'unknown'
       const typeFilter = parseMessageTypes(params.types)
 
-      const paneKey = runtime.getTerminalPaneKey(handle)
+      // Why: a live runtime handle is authoritative; pane metadata is only the restart fallback.
+      const paneKey = runtime.getTerminalPaneKey(handle) ?? params.terminalPaneKey
       const boundRun = paneKey ? db.getCurrentRunForPane(paneKey) : undefined
       if (params.run || boundRun) {
         const run = resolveRunScope(runtime, {
           runId: params.run,
           callerTerminalHandle: handle,
+          callerPaneKey: paneKey ?? undefined,
           requireCurrentConsumer: true
         })
         const generation = run.consumer_generation
@@ -780,7 +784,7 @@ export const ORCHESTRATION_METHODS: RpcMethod[] = [
         remoteAttachment &&
         !db.isRemoteAttachmentProcessCurrent({
           dispatchId: remoteAttachment.dispatch_id,
-          paneKey,
+          paneKey: paneKey ?? null,
           processIncarnation: runtime.getTerminalProcessIncarnation(handle)
         })
       ) {
