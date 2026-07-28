@@ -173,14 +173,30 @@ describe('parseManualNetworkAddress', () => {
         ok: true,
         address: '2001:db8::4'
       })
+      expect(parseManualNetworkAddress('0:0:0:0:0:0:0:1')).toEqual({
+        ok: true,
+        address: '0:0:0:0:0:0:0:1'
+      })
       expect(parseManualNetworkAddress('[2001:db8::4]:7443')).toEqual({
         ok: true,
         address: '[2001:db8::4]:7443'
       })
+      expect(parseManualNetworkAddress('[0:0:0:0:0:0:0:1]:7443')).toEqual({
+        ok: true,
+        address: '[0:0:0:0:0:0:0:1]:7443'
+      })
     })
 
     it('rejects wildcard, malformed, and invalid-port IPv6 addresses', () => {
-      for (const bad of ['::', '[::]:8080', '[::1]:0', '[::1]:65536', '[::1]:']) {
+      for (const bad of [
+        '::',
+        '[::]:8080',
+        '0:0:0:0:0:0:0:0',
+        '[0:0:0:0:0:0:0:0]:8080',
+        '[::1]:0',
+        '[::1]:65536',
+        '[::1]:'
+      ]) {
         expect(parseManualNetworkAddress(bad).ok).toBe(false)
       }
     })
@@ -219,7 +235,8 @@ describe('parseManualNetworkAddress', () => {
         'wss://example.com/#fragment',
         'wss://example.com:0',
         'ws://0.0.0.0:8080',
-        'ws://[::]:8080'
+        'ws://[::]:8080',
+        'ws://[0:0:0:0:0:0:0:0]:8080'
       ]) {
         expect(parseManualNetworkAddress(bad).ok).toBe(false)
       }

@@ -90,13 +90,10 @@ function isValidPort(port: string): boolean {
 function isValidPairingUrl(value: string): boolean {
   try {
     const url = new URL(value)
-    const hostname = url.hostname.replace(/^\[|\]$/g, '').toLowerCase()
     const validShape =
       ['http:', 'https:', 'ws:', 'wss:'].includes(url.protocol) &&
-      hostname !== '' &&
-      hostname !== '*' &&
-      hostname !== '0.0.0.0' &&
-      hostname !== '::' &&
+      url.hostname !== '' &&
+      !isWildcardHostname(url.hostname) &&
       url.username === '' &&
       url.password === '' &&
       url.hash === '' &&
@@ -127,8 +124,13 @@ function isValidIpv6Override(value: string): boolean {
   }
   try {
     const url = new URL(`ws://[${hostname}]`)
-    return url.hostname.includes(':')
+    return url.hostname.includes(':') && !isWildcardHostname(url.hostname)
   } catch {
     return false
   }
+}
+
+function isWildcardHostname(hostname: string): boolean {
+  const normalized = hostname.replace(/^\[|\]$/g, '').toLowerCase()
+  return normalized === '*' || normalized === '0.0.0.0' || normalized === '::'
 }
