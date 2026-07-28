@@ -1,4 +1,22 @@
-import { Pencil, Trash2 } from 'lucide-react'
+import { useCallback, useEffect, useRef, useState } from 'react'
+import { Pencil, Trash2, GripVertical } from 'lucide-react'
+import {
+  DndContext,
+  closestCenter,
+  KeyboardSensor,
+  PointerSensor,
+  useSensor,
+  useSensors,
+  type DragEndEvent
+} from '@dnd-kit/core'
+import {
+  arrayMove,
+  SortableContext,
+  sortableKeyboardCoordinates,
+  useSortable,
+  verticalListSortingStrategy
+} from '@dnd-kit/sortable'
+import { CSS } from '@dnd-kit/utilities'
 import type {
   Repo,
   TerminalQuickCommand,
@@ -32,16 +50,53 @@ function QuickCommandRow({
   command,
   repoById,
   onEdit,
-  onRemove
+  onRemove,
+  isSortable
 }: {
   command: TerminalQuickCommand
   repoById: Map<string, Pick<Repo, 'displayName' | 'path' | 'badgeColor'>>
   onEdit: (command: TerminalQuickCommand) => void
   onRemove: (command: TerminalQuickCommand) => void
+  isSortable: boolean
 }): React.JSX.Element {
   const scope = getTerminalQuickCommandScope(command)
+  const {
+    attributes,
+    listeners,
+    setNodeRef,
+    transform,
+    transition,
+    isDragging
+  } = useSortable({ id: command.id, disabled: !isSortable })
+
+  const style = {
+    transform: CSS.Transform.toString(transform),
+    transition
+  }
+
   return (
-    <div className="flex items-center gap-3 rounded-md border border-border/60 bg-background px-3 py-2 shadow-xs">
+    <div
+      ref={setNodeRef}
+      style={style}
+      className={cn(
+        'flex items-center gap-3 rounded-md border border-border/60 bg-background px-3 py-2 shadow-xs',
+        isDragging && 'opacity-50'
+      )}
+    >
+      {isSortable ? (
+        <button
+          type="button"
+          {...attributes}
+          {...listeners}
+          className="shrink-0 cursor-grab text-muted-foreground hover:text-foreground active:cursor-grabbing"
+          aria-label={translate(
+            'auto.components.settings.QuickCommandsPane.drag-handle',
+            'Drag to reorder'
+          )}
+        >
+          <GripVertical className="size-4" />
+        </button>
+      ) : null}
       <div className="min-w-0 flex-1">
         <div className="flex min-w-0 items-center gap-2">
           <div className="truncate text-sm font-medium">
@@ -123,14 +178,85 @@ export function QuickCommandsList({
   visibleCommands,
   repoById,
   onEdit,
-  onRemove
+  onRemove,
+  onReorder
 }: {
   commands: TerminalQuickCommand[]
   visibleCommands: TerminalQuickCommand[]
   repoById: Map<string, Pick<Repo, 'displayName' | 'path' | 'badgeColor'>>
   onEdit: (command: TerminalQuickCommand) => void
   onRemove: (command: TerminalQuickCommand) => void
+  onReorder?: (orderedIds: string[]) => void
 }): React.JSX.Element {
+  const [focusedIndex, setFocusedIndex] = useState<number | null>(null)
+  const listRef = useRef<HTMLDivElement | null>(null)
+  const isSortable = Boolean(onReorder && visibleCommands.length > 1)
+
+  const sensors = useSensors(
+    useSensor(PointerSensor, {
+      activationConstraint: {
+        distance: 8
+      }
+    }),
+    useSensor(KeyboardSensor, {
+      coordinateGetter: sortableKeyboardCoordinates
+    })
+  )
+
+  const handleDragEnd = useCallback(
+    (event: DragEndEvent) => {
+      const { active, over } = event
+      if (!over || active.id === over.id || !onReorder) {
+        return
+      }
+      const oldIndex = visibleCommands.findIndex((cmd) => cmd.id === active.id)
+      const newIndex = visibleCommands.findIndex((cmd) => cmd.id === over.id)
+      if (oldIndex === -1 || newIndex === -1) {
+        return
+      }
+      const reordered = arrayMove(visibleCommands, oldIndex, newIndex)
+      onReorder(reordered.map((cmd) => cmd.id))
+    },
+    [onReorder, visibleCommands]
+  )
+
+  const handleKeyDown = useCallback(
+    (event: KeyboardEvent) => {
+      if (focusedIndex === null || !isSortable || !onReorder) {
+        return
+      }
+      const isMac = navigator.userAgent.includes('Mac')
+      const useAlt = !isMac
+      const useMeta = isMac
+      if (
+        ((useAlt && !event.altKey) || (useMeta && !event.metaKey)) ||
+        (event.key !== 'ArrowUp' && event.key !== 'ArrowDown')
+      ) {
+        return
+      }
+      event.preventDefault()
+      event.stopPropagation()
+      const direction = event.key === 'ArrowUp' ? -1 : 1
+      const newIndex = focusedIndex + direction
+      if (newIndex < 0 || newIndex >= visibleCommands.length) {
+        return
+      }
+      const reordered = arrayMove(visibleCommands, focusedIndex, newIndex)
+      onReorder(reordered.map((cmd) => cmd.id))
+      setFocusedIndex(newIndex)
+    },
+    [focusedIndex, isSortable, onReorder, visibleCommands]
+  )
+
+  useEffect(() => {
+    const list = listRef.current
+    if (!list) {
+      return
+    }
+    list.addEventListener('keydown', handleKeyDown, { capture: true })
+    return () => list.removeEventListener('keydown', handleKeyDown, { capture: true })
+  }, [handleKeyDown])
+
   return (
     <div className="overflow-hidden rounded-lg border border-border/50 bg-muted/20">
       {visibleCommands.length === 0 ? (
@@ -146,17 +272,27 @@ export function QuickCommandsList({
               )}
         </div>
       ) : (
-        <div className="max-h-[60vh] space-y-2 overflow-y-auto p-2 scrollbar-sleek">
-          {visibleCommands.map((command) => (
-            <QuickCommandRow
-              key={command.id}
-              command={command}
-              repoById={repoById}
-              onEdit={onEdit}
-              onRemove={onRemove}
-            />
-          ))}
-        </div>
+        <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
+          <SortableContext items={visibleCommands.map((cmd) => cmd.id)} strategy={verticalListSortingStrategy}>
+            <div ref={listRef} className="max-h-[60vh] space-y-2 overflow-y-auto p-2 scrollbar-sleek">
+              {visibleCommands.map((command, index) => (
+                <div
+                  key={command.id}
+                  onFocus={() => setFocusedIndex(index)}
+                  onBlur={() => setFocusedIndex(null)}
+                >
+                  <QuickCommandRow
+                    command={command}
+                    repoById={repoById}
+                    onEdit={onEdit}
+                    onRemove={onRemove}
+                    isSortable={isSortable}
+                  />
+                </div>
+              ))}
+            </div>
+          </SortableContext>
+        </DndContext>
       )}
     </div>
   )

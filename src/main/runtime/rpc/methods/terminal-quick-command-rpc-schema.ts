@@ -67,6 +67,12 @@ export const TerminalQuickCommandsUpdate = z
           type: z.literal('delete'),
           id: z.string().min(1).max(MAX_QUICK_COMMAND_ID_LENGTH)
         })
+        .strict(),
+      z
+        .object({
+          type: z.literal('reorder'),
+          orderedIds: z.array(z.string().min(1).max(MAX_QUICK_COMMAND_ID_LENGTH)).readonly()
+        })
         .strict()
     ])
   })

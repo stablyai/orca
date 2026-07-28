@@ -333,6 +333,25 @@ describe('terminal quick commands', () => {
     expect(supportsTerminalAgentQuickCommand('aider')).toBe(false)
     expect(supportsTerminalAgentQuickCommand('not-real')).toBe(false)
   })
+
+  it('applyTerminalQuickCommandMutation reorders commands with strict validation', () => {
+    const commands = [
+      { id: 'a', label: 'A', action: 'terminal-command' as const, command: 'echo a', appendEnter: true, scope: { type: 'global' as const } },
+      { id: 'b', label: 'B', action: 'terminal-command' as const, command: 'echo b', appendEnter: true, scope: { type: 'global' as const } },
+      { id: 'c', label: 'C', action: 'terminal-command' as const, command: 'echo c', appendEnter: true, scope: { type: 'global' as const } }
+    ]
+
+    const reordered = applyTerminalQuickCommandMutation(commands, {
+      type: 'reorder',
+      orderedIds: ['c', 'a', 'b']
+    })
+    expect(reordered).toEqual([commands[2], commands[0], commands[1]])
+
+    expect(applyTerminalQuickCommandMutation(commands, { type: 'reorder', orderedIds: ['a', 'b'] })).toBe(null)
+    expect(applyTerminalQuickCommandMutation(commands, { type: 'reorder', orderedIds: ['a', 'b', 'c', 'd'] })).toBe(null)
+    expect(applyTerminalQuickCommandMutation(commands, { type: 'reorder', orderedIds: ['a', 'a', 'b'] })).toBe(null)
+    expect(applyTerminalQuickCommandMutation(commands, { type: 'reorder', orderedIds: ['a', 'b', 'missing'] })).toBe(null)
+  })
 })
 
 describe('flattenTerminalQuickCommand', () => {
