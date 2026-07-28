@@ -17,6 +17,7 @@ import type {
   SourceControlLaunchActionId
 } from '../../../../shared/source-control-ai-actions'
 import type { SourceControlAiWriteTarget } from '../../../../shared/source-control-ai-recipe-save'
+import type { Repo } from '../../../../shared/types'
 import { SourceControlFixSplitButton } from './source-control-fix-split-button'
 
 export type SourceControlRecoveryKind = 'commit' | 'push'
@@ -35,6 +36,7 @@ type SourceControlRecoveryNoticeProps = {
   groupId: string | null
   connectionId?: string | null
   repoId?: string | null
+  repo?: Repo | null
   launchPlatform?: NodeJS.Platform
   sourceControlAiActionsVisible: boolean
   isLaunching: boolean
@@ -188,6 +190,7 @@ export function SourceControlRecoveryNotice({
   groupId,
   connectionId,
   repoId,
+  repo,
   launchPlatform,
   sourceControlAiActionsVisible,
   isLaunching,
@@ -242,6 +245,7 @@ export function SourceControlRecoveryNotice({
     groupId,
     connectionId,
     repoId,
+    repo,
     launchPlatform,
     prompt,
     isLaunching,

@@ -43,7 +43,7 @@ export function useSourceControlAgentActionDialog({
 }: SourceControlAgentActionDialogProps): UseSourceControlAgentActionDialogResult {
   const settings = useAppStore((state) => state.settings)
   const fallbackRepo = useRepoById(repoId ?? null)
-  const repo = scopedRepo ?? fallbackRepo
+  const repo = scopedRepo !== undefined ? scopedRepo : fallbackRepo
   const launchAgentScope = useMemo(
     () => resolveSourceControlLaunchAgentScope({ settings, repo, actionId }),
     [actionId, repo, settings]

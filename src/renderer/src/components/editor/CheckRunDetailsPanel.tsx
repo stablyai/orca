@@ -94,6 +94,7 @@ export function CheckRunDetailsPanel({
     disabledReason,
     isFixing,
     fixPrompt,
+    repo,
     repoId,
     connectionId,
     launchPlatform,
@@ -173,6 +174,7 @@ export function CheckRunDetailsPanel({
                 groupId={worktreeId}
                 connectionId={connectionId}
                 repoId={repoId}
+                repo={repo}
                 launchPlatform={launchPlatform}
                 prompt={fixPrompt}
                 isLaunching={loading || isFixing}

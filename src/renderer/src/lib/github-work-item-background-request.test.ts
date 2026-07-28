@@ -80,4 +80,42 @@ describe('resolvePreferredQuickAgentForGitHubWorkItem', () => {
       expect.objectContaining({ isRemote: true, platform: 'linux' })
     )
   })
+
+  it('treats runtime startup construction as remote', () => {
+    const runtimeRepo: Repo = { ...repo, executionHostId: 'runtime:env-1' }
+    const store = makeStore({
+      runtimeStatusByEnvironmentId: new Map([
+        [
+          'env-1',
+          {
+            status: {
+              runtimeId: 'env-1',
+              rendererGraphEpoch: 1,
+              graphStatus: 'ready',
+              authoritativeWindowId: null,
+              liveTabCount: 0,
+              liveLeafCount: 0,
+              hostPlatform: 'linux'
+            },
+            checkedAt: 1
+          }
+        ]
+      ])
+    })
+    const item = {
+      id: 'issue-42',
+      repoId: repo.id,
+      type: 'issue',
+      number: 42,
+      title: 'Fix runtime launch',
+      labels: [],
+      assignees: []
+    } as unknown as GitHubWorkItem
+
+    buildGitHubWorkItemStartupPlan({ agent: 'codex', item, repo: runtimeRepo, store })
+
+    expect(mocks.buildAgentStartupPlan).toHaveBeenLastCalledWith(
+      expect.objectContaining({ isRemote: true, platform: 'linux' })
+    )
+  })
 })

@@ -15,6 +15,7 @@ import { readSourceControlLaunchRecipeAgentId } from '@/lib/source-control-launc
 import { resolveSourceControlLaunchPlatform } from '@/lib/source-control-launch-platform'
 import { useAppStore } from '@/store'
 import { findWorktreeById } from '@/store/slices/worktree-helpers'
+import { findRepoForHost } from '@/store/slices/repo-host-identity'
 import { resolveSourceControlActionRecipe } from '../../../../shared/source-control-ai'
 import {
   saveSourceControlActionRecipe,
@@ -24,7 +25,8 @@ import type {
   SourceControlActionRecipe,
   SourceControlLaunchActionId
 } from '../../../../shared/source-control-ai-actions'
-import type { PRCheckDetail, PRCheckRunDetails } from '../../../../shared/types'
+import type { PRCheckDetail, PRCheckRunDetails, Repo } from '../../../../shared/types'
+import { getRepoExecutionHostId } from '../../../../shared/execution-host'
 import { translate } from '@/i18n/i18n'
 
 export {
@@ -105,6 +107,7 @@ export function useCheckRunDetailsFixWithAI(args: {
   disabledReason: string | undefined
   isFixing: boolean
   fixPrompt: string | null
+  repo: Repo | null
   repoId: string | null
   connectionId: string | null | undefined
   launchPlatform: NodeJS.Platform | undefined
@@ -160,6 +163,7 @@ export function useCheckRunDetailsFixWithAI(args: {
       }),
     [repo, settings]
   )
+  const repoExecutionHostId = repo ? getRepoExecutionHostId(repo) : undefined
   const saveLaunchActionDefault = useCallback(
     async (
       target: SourceControlAiWriteTarget,
@@ -172,9 +176,15 @@ export function useCheckRunDetailsFixWithAI(args: {
         throw new Error('Settings are not loaded.')
       }
       const latestRepo =
-        target.type === 'repo'
-          ? (state.repos.find((candidate) => candidate.id === target.repoId) ?? null)
+        target.type === 'repo' && repoExecutionHostId
+          ? findRepoForHost(state.repos, target.repoId, {
+              hostId: repoExecutionHostId,
+              settings: latestSettings
+            })
           : null
+      if (target.type === 'repo' && !latestRepo) {
+        throw new Error('Repository owner is no longer available.')
+      }
       const result = saveSourceControlActionRecipe({
         target,
         settings: latestSettings,
@@ -186,9 +196,9 @@ export function useCheckRunDetailsFixWithAI(args: {
         await updateSettings({ sourceControlAi: result.sourceControlAi })
         return
       }
-      await updateRepo(result.target.repoId, result.update)
+      await updateRepo(result.target.repoId, result.update, { hostId: repoExecutionHostId })
     },
-    [updateRepo, updateSettings]
+    [repoExecutionHostId, updateRepo, updateSettings]
   )
   const openSourceControlAiSettings = useCallback((): void => {
     openSourceControlAiSettingsTarget({
@@ -219,6 +229,7 @@ export function useCheckRunDetailsFixWithAI(args: {
     disabledReason,
     isFixing,
     fixPrompt,
+    repo,
     repoId: repo?.id ?? null,
     connectionId,
     launchPlatform,

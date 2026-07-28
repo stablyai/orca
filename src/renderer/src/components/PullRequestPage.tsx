@@ -5288,6 +5288,7 @@ function ChecksTab({
       baseCommandInput={fixChecksComposerPrompt ?? ''}
       connectionId={repo?.connectionId ?? null}
       repoId={targetRepoId}
+      repo={repo}
       promptDelivery="submit-after-ready"
       launchPlatform={fixChecksLaunchPlatform}
       launchSource="task_page"

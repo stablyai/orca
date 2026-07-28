@@ -561,6 +561,53 @@ describe('hosted review slice', () => {
     })
   })
 
+  it('keeps explicit local eligibility on local IPC while a runtime is focused', async () => {
+    mockApi.hostedReview.getCreationEligibility.mockResolvedValueOnce({
+      provider: 'github',
+      review: null,
+      canCreate: true,
+      blockedReason: null,
+      nextAction: null
+    })
+    const store = makeStore({
+      activeRuntimeEnvironmentId: 'env-focused'
+    } as AppState['settings'])
+
+    await store.getState().getHostedReviewCreationEligibility({
+      repoPath: '/repo',
+      repoId: 'repo-1',
+      executionHostId: 'local',
+      branch: 'feature/create-pr',
+      base: 'main'
+    })
+
+    expect(runtimeRpc.callRuntimeRpc).not.toHaveBeenCalled()
+    expect(mockApi.hostedReview.getCreationEligibility).toHaveBeenCalledWith(
+      expect.objectContaining({ repoId: 'repo-1', executionHostId: 'local' })
+    )
+  })
+
+  it('keeps explicit local creation on local IPC while a runtime is focused', async () => {
+    mockApi.hostedReview.create.mockResolvedValueOnce({ ok: true, number: 12 })
+    const store = makeStore({
+      activeRuntimeEnvironmentId: 'env-focused'
+    } as AppState['settings'])
+
+    await store.getState().createHostedReview('/repo', {
+      repoId: 'repo-1',
+      executionHostId: 'local',
+      provider: 'github',
+      base: 'main',
+      head: 'feature/create-pr',
+      title: 'Create PR'
+    })
+
+    expect(runtimeRpc.callRuntimeRpc).not.toHaveBeenCalled()
+    expect(mockApi.hostedReview.create).toHaveBeenCalledWith(
+      expect.objectContaining({ repoId: 'repo-1', executionHostId: 'local' })
+    )
+  })
+
   it('rejects a never-settling local eligibility probe after the timeout', async () => {
     vi.useFakeTimers()
     // A hung git/gh subprocess never resolves; the store must not wait forever.

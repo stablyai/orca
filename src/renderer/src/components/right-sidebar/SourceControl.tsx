@@ -211,6 +211,7 @@ import type {
   GitPushTarget,
   GitStatusEntry,
   GitUpstreamStatus,
+  Repo,
   SourceControlViewMode,
   TuiAgent
 } from '../../../../shared/types'
@@ -5783,6 +5784,7 @@ function SourceControlInner(): React.JSX.Element {
                 worktreeId={activeWorktreeId}
                 connectionId={activeConnectionId}
                 repoId={activeRepo?.id ?? null}
+                repo={activeRepo}
                 launchPlatform={activeSourceControlLaunchPlatform}
                 commitMessage={commitMessage}
                 commitError={commitError}
@@ -6413,6 +6415,7 @@ type CommitAreaProps = {
   groupId: string | null
   connectionId?: string | null
   repoId?: string | null
+  repo?: Repo | null
   launchPlatform?: NodeJS.Platform
   commitMessage: string
   commitError: string | null
@@ -6459,6 +6462,7 @@ export function CommitArea({
   groupId,
   connectionId,
   repoId,
+  repo,
   launchPlatform,
   commitMessage,
   commitError,
@@ -6802,6 +6806,7 @@ export function CommitArea({
           groupId={groupId}
           connectionId={connectionId}
           repoId={repoId}
+          repo={repo}
           launchPlatform={launchPlatform}
           sourceControlAiActionsVisible={sourceControlAiActionsVisible}
           isLaunching={isFixingCommitFailureWithAI}
@@ -6832,6 +6837,7 @@ export function CommitArea({
           groupId={groupId}
           connectionId={connectionId}
           repoId={repoId}
+          repo={repo}
           launchPlatform={launchPlatform}
           sourceControlAiActionsVisible={sourceControlAiActionsVisible}
           isLaunching={isFixingPushFailureWithAI}

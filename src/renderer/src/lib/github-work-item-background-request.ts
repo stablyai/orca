@@ -23,7 +23,11 @@ import { tuiAgentToAgentKind } from '@/lib/telemetry'
 import type { GitHubWorkItem, GlobalSettings, Repo, TuiAgent } from '../../../shared/types'
 import type { TaskSourceContext, WorkspaceRunContext } from '../../../shared/task-source-context'
 import type { AgentStartedTelemetry } from '@/lib/worktree-activation'
-import { getRepoExecutionHostId, parseExecutionHostId } from '../../../shared/execution-host'
+import {
+  getRepoExecutionHostId,
+  LOCAL_EXECUTION_HOST_ID,
+  parseExecutionHostId
+} from '../../../shared/execution-host'
 import { projectHostSetupProjectionFromRepos } from '../../../shared/project-host-setup-projection'
 import { resolveLocalWindowsAgentStartupShell } from '../../../shared/windows-terminal-shell'
 
@@ -189,9 +193,9 @@ export function buildGitHubWorkItemStartupPlan(args: {
   // Why: runtime-owned repos launch on their owner host, not on the client
   // desktop, so startup shell quoting must use the runtime platform.
   const platform = resolveGitHubWorkItemLaunchPlatform(store, repo)
-  // Why: SSH remotes deploy the CLI shim as plain `orca`, so the Linux-only
+  // Why: non-local hosts deploy the CLI shim as plain `orca`, so the Linux-only
   // `orca-ide` rename must not be applied for remote launches.
-  const isRemote = parseExecutionHostId(getRepoExecutionHostId(repo))?.kind === 'ssh'
+  const isRemote = getRepoExecutionHostId(repo) !== LOCAL_EXECUTION_HOST_ID
   const shell = resolveLocalWindowsAgentStartupShell({
     platform,
     isRemote,

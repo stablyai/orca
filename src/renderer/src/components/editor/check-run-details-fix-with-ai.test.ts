@@ -13,6 +13,7 @@ import {
   resolveHostedReviewForCheckRunDetailsFix,
   startCheckRunDetailsFixWithAI
 } from './check-run-details-fix-with-ai'
+import { resolveCheckRunDetailsFixRepo } from './check-run-details-fix-context'
 
 const startFixChecksAgent = vi.fn()
 
@@ -175,6 +176,21 @@ describe('check-run-details-fix-with-ai', () => {
       title: 'Fix CI',
       url: 'https://github.com/acme/widgets/pull/42'
     })
+  })
+
+  it('resolves the check fix repository from the worktree owner host', () => {
+    const localRepo = { ...fixtures.repo, path: '/local/repo', executionHostId: 'local' } as Repo
+    const runtimeRepo = {
+      ...fixtures.repo,
+      path: '/runtime/repo',
+      executionHostId: 'runtime:env-1'
+    } as Repo
+    storeState.repos = [localRepo, runtimeRepo]
+    storeState.worktreesByRepo = {
+      'repo-1': [{ ...fixtures.worktree, hostId: 'runtime:env-1' }]
+    }
+
+    expect(resolveCheckRunDetailsFixRepo(fixtures.worktree.id)).toBe(runtimeRepo)
   })
 
   it('requires a hosted review before launching an AI fix', () => {

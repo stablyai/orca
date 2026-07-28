@@ -248,8 +248,12 @@ function settingsForHostedReviewRepoOwner(
 
 function settingsForHostedReviewActionOwner(
   settings: AppState['settings'],
-  repo: Pick<Repo, 'connectionId' | 'executionHostId'> | undefined
+  repo: Pick<Repo, 'connectionId' | 'executionHostId'> | undefined,
+  requestedExecutionHostId?: ExecutionHostId
 ): AppState['settings'] {
+  if (requestedExecutionHostId) {
+    return settingsForHostedReviewRepoOwner(settings, repo)
+  }
   if (!repo?.executionHostId && !repo?.connectionId) {
     return settings
   }
@@ -320,7 +324,7 @@ export const createHostedReviewSlice: StateCreator<AppState, [], [], HostedRevie
     if (!repo && (args.repoId || args.executionHostId)) {
       throw new Error('No repository matches the requested execution host')
     }
-    const ownerSettings = settingsForHostedReviewActionOwner(settings, repo)
+    const ownerSettings = settingsForHostedReviewActionOwner(settings, repo, args.executionHostId)
     const target = getActiveRuntimeTarget(ownerSettings)
     if (target.kind === 'environment') {
       const {
@@ -363,7 +367,7 @@ export const createHostedReviewSlice: StateCreator<AppState, [], [], HostedRevie
     if (!repo && (input.repoId || input.executionHostId)) {
       throw new Error('No repository matches the requested execution host')
     }
-    const ownerSettings = settingsForHostedReviewActionOwner(settings, repo)
+    const ownerSettings = settingsForHostedReviewActionOwner(settings, repo, input.executionHostId)
     const target = getActiveRuntimeTarget(ownerSettings)
     const {
       repoId: inputRepoId,

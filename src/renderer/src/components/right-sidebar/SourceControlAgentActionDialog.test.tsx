@@ -233,6 +233,19 @@ describe('SourceControlAgentActionDialog', () => {
     expect(mocks.onOpenChange).toHaveBeenCalledWith(false)
     expect(container.textContent).not.toContain('Launch agent')
   })
+  it('fails closed when a host-scoped caller supplies no matching repo', async () => {
+    resetStore(
+      settingsWithGlobalRecipe({ agentId: 'claude', commandInputTemplate: '{basePrompt}' }),
+      [repoWithSavedRecipe()]
+    )
+
+    renderControlledDialog({ repoId: 'repo-1', repo: null })
+
+    await vi.waitFor(() => expect(mocks.ensureDetectedAgents).toHaveBeenCalledTimes(1))
+    await flushEffects()
+    expect(mocks.onStart).not.toHaveBeenCalled()
+    expect(container.textContent).toContain('Launch agent')
+  })
   it('renders the form and does not auto-start when the saved launch recipe mismatches', async () => {
     resetStore(
       settingsWithGlobalRecipe({ agentId: 'claude', commandInputTemplate: '{basePrompt}' })

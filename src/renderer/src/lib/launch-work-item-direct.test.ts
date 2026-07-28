@@ -234,7 +234,7 @@ describe('launchWorkItemDirect', () => {
     expect(mocks.ensureRuntimeDetectedAgents).toHaveBeenCalledWith('env-1')
     expect(mocks.ensureDetectedAgents).not.toHaveBeenCalled()
     expect(buildAgentDraftLaunchPlan).toHaveBeenCalledWith(
-      expect.objectContaining({ platform: 'linux' })
+      expect.objectContaining({ isRemote: true, platform: 'linux' })
     )
   })
 

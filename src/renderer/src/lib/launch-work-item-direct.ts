@@ -30,7 +30,7 @@ import {
 import type { LaunchWorkItemDirectArgs } from '@/lib/launch-work-item-direct-types'
 import { getSettingsForRepoRuntimeOwner } from '@/lib/repo-runtime-owner'
 import { findRepoForHost } from '@/store/slices/repo-host-identity'
-import { getRepoExecutionHostId } from '../../../shared/execution-host'
+import { getRepoExecutionHostId, LOCAL_EXECUTION_HOST_ID } from '../../../shared/execution-host'
 import {
   ensureWorkItemHostAgents,
   getCreatedWorkItemLaunchPlatform,
@@ -281,9 +281,9 @@ export async function launchWorkItemDirect(args: LaunchWorkItemDirectArgs): Prom
         promptDelivery,
         settings,
         launchPlatform,
-        // Why: SSH hosts run the plain `orca` shim, so the Linux-only `orca-ide`
+        // Why: non-local hosts run the plain `orca` shim, so the Linux-only `orca-ide`
         // rename must not be applied for remote launches.
-        isRemote: typeof launchConnectionId === 'string'
+        isRemote: repoExecutionHostId !== LOCAL_EXECUTION_HOST_ID
       }))
 
     const activation = activateAndRevealWorktree(worktreeId, {

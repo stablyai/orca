@@ -108,6 +108,7 @@ import { collectLeafIdsInOrder } from '@/components/terminal-pane/layout-seriali
 import { track } from '@/lib/telemetry'
 import { singlePaneLayoutSnapshot } from '@/store/slices/terminal-helpers'
 import { buildWorkspaceSessionPayload } from '@/lib/workspace-session'
+import { getRemoteWorkspaceTargetWorktreeIds } from '@/lib/remote-workspace-target-ownership'
 import { persistWorkspaceSessionByHost } from '@/lib/workspace-session-host-persistence'
 import { getLinearIssueWorkspaceName } from '../../../shared/workspace-name'
 import type { RuntimeClientEvent } from '../../../shared/runtime-client-events'
@@ -453,23 +454,9 @@ async function prepareRemoteWorkspaceTarget(targetId: string): Promise<boolean> 
   return true
 }
 
-function targetRepoIds(targetId: string): Set<string> {
-  return new Set(
-    useAppStore
-      .getState()
-      .repos.filter((repo) => repo.connectionId === targetId)
-      .map((repo) => repo.id)
-  )
-}
-
 function targetWorktreeIds(targetId: string): Set<string> {
-  const repoIds = targetRepoIds(targetId)
-  return new Set(
-    Object.values(useAppStore.getState().worktreesByRepo)
-      .flat()
-      .filter((worktree) => repoIds.has(worktree.repoId))
-      .map((worktree) => worktree.id)
-  )
+  const state = useAppStore.getState()
+  return getRemoteWorkspaceTargetWorktreeIds(targetId, state.repos, state.worktreesByRepo)
 }
 
 function mergeRemoteWorkspaceSession(
