@@ -43,6 +43,7 @@ type AgentHookHandlerDependencies = {
 // auto-installs managed hooks at app startup (see src/main/index.ts), so a
 // renderer-triggered remove would be silently reverted on the next launch
 // and mislead the user.
+/** Register main-process IPC handlers for agent-hook status and inference. */
 export function registerAgentHookHandlers(
   runtime?: AgentStatusRuntimeEnrichment,
   dependencies: AgentHookHandlerDependencies = {}
