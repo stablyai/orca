@@ -337,6 +337,19 @@ describe('registerTerminalPreviewHandlers', () => {
     expect(runtime.releaseRawView).toHaveBeenCalledTimes(1)
   })
 
+  it('degrades a failed cold-history read to an empty preview', async () => {
+    const runtime = makeRuntime()
+    runtime.serializeTerminalBuffer.mockResolvedValueOnce(null)
+    readColdRestoreMock.mockRejectedValueOnce(new Error('history unavailable'))
+    registerTerminalPreviewHandlers(runtime as never)
+
+    await expect(
+      handlers.get('terminalPreview:connect')!(eventFor(makeSender()), { ptyId: 'rebooted' })
+    ).resolves.toEqual({ snapshot: null, replay: [] })
+    expect(runtime.unsubscribe).toHaveBeenCalledTimes(1)
+    expect(runtime.releaseRawView).toHaveBeenCalledTimes(1)
+  })
+
   // Why: after a reboot the daemon and every PTY are gone, so nothing is
   // serializable until the worktree is reopened — the board would otherwise
   // report every agent as closed.

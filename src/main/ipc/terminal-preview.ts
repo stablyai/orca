@@ -157,7 +157,13 @@ export function registerTerminalPreviewHandlers(runtime: OrcaRuntimeService): vo
         // Why the same scrollbackRows the live path clamps to: history holds
         // whatever the session ever wrote, and this frame is not cached — every
         // reopen of the dialog would push the unclamped buffer over IPC.
-        const restored = await readColdRestoreTerminalSnapshot(ptyId, { scrollbackRows })
+        let restored: Awaited<ReturnType<typeof readColdRestoreTerminalSnapshot>> = null
+        try {
+          restored = await readColdRestoreTerminalSnapshot(ptyId, { scrollbackRows })
+        } catch {
+          // Best effort: a failed history read should look like an absent frame,
+          // never reject the preview IPC after its live subscription was released.
+        }
         if (!restored) {
           return { snapshot: null, replay: [] }
         }

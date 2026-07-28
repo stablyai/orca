@@ -76,9 +76,12 @@ describe('incremental terminal history restore', () => {
 
     const clamped = await reader.detectColdRestore(SESSION_ID, { scrollbackRows: 5 })
     expect(clamped).not.toBeNull()
-    const clampedAnsi = clamped!.scrollbackAnsi + clamped!.snapshotAnsi
-    expect(clampedAnsi).toContain('line-200')
-    expect(clampedAnsi).not.toContain('line-001')
+    // Normal-buffer cold restores intentionally put the same serialized frame
+    // in both fields, so inspect one field to assert the actual clamp boundary.
+    const retainedLines = clamped!.snapshotAnsi.match(/line-\d{3}/g) ?? []
+    expect(retainedLines).toEqual(
+      Array.from({ length: 28 }, (_, i) => `line-${String(i + 173).padStart(3, '0')}`)
+    )
 
     const unclamped = await reader.detectColdRestore(SESSION_ID)
     expect(unclamped!.scrollbackAnsi + unclamped!.snapshotAnsi).toContain('line-001')
