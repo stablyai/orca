@@ -234,15 +234,18 @@ export function applyGeneratedTabTitleUpdates(
     const existingGeneratedTitle = currentTab.generatedTitle?.trim()
     // Why: the title names the session that produced it; once that session is gone
     // (`/clear`, resume) it labels a finished conversation and must not outrank the new one.
+    const namesEndedSession = generatedTitleNamesEndedSession(currentTab, options?.sessionId)
     if (
       existingGeneratedTitle &&
-      !generatedTitleNamesEndedSession(currentTab, options?.sessionId) &&
+      !namesEndedSession &&
       options?.replaceExistingGeneratedTitle !== true
     ) {
       continue
     }
     const generatedTitle = deriveGeneratedTabTitle(prompt)
-    if (!generatedTitle || existingGeneratedTitle === generatedTitle) {
+    // Why: a new session whose first prompt derives the same text still has to re-stamp
+    // the owner, or every later turn keeps reading as stale and retitles the tab.
+    if (!generatedTitle || (existingGeneratedTitle === generatedTitle && !namesEndedSession)) {
       continue
     }
     // Why: keep the known owner when this ping carried no session id — overwriting it
