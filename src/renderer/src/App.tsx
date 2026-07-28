@@ -2192,7 +2192,7 @@ function App(): React.JSX.Element {
   return (
     <div
       ref={setAppRootNode}
-      className="flex flex-col h-dvh w-screen overflow-hidden"
+      className="app-layout"
       style={
         {
           '--collapsed-sidebar-header-width': `${collapsedSidebarHeaderWidth}px`,

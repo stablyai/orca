@@ -49,7 +49,6 @@ import { rectHasVisibleAreaOnAnyDisplay } from './window-bounds-validation'
 import { closeDashboardPopout } from './dashboard-popout-window'
 import { installPrivilegedWindowNavigationPolicy } from './privileged-window-navigation'
 import { isMacosTahoeOrNewer } from './macos-tahoe-release'
-import { reflowRendererViewport } from './renderer-viewport-reflow'
 import { registerPluginPanelNavigationGuard } from '../plugins/plugin-panel-navigation-guard'
 
 // Why: show/restore/resume can overlap before the size nudge resets; never capture the temporary width as the next baseline.
@@ -62,12 +61,9 @@ function forceRepaint(window: BrowserWindow): void {
     return
   }
   window.webContents.invalidate()
-  // Why: macOS 26 scene-backed windows deadlock the main thread on frame mutation, but invalidate
-  // alone never reflows the dvh root (STA-2383); emulation reflows without touching the frame.
-  // Runs before the maximized/fullscreen bail-out below, which only exists to protect setSize —
-  // emulation leaves those states intact, and a maximized window goes stale just the same.
+  // Why: macOS 26 scene-backed windows deadlock on frame mutation, and device emulation can
+  // strand the compositor after wake. The native shell no longer relies on dvh reflow.
   if (isMacosTahoeOrNewer()) {
-    reflowRendererViewport(window)
     return
   }
   if (window.isMaximized() || window.isFullScreen() || activeRepaintJiggles.has(window)) {
@@ -125,10 +121,8 @@ function installMacosVisibilityRepaint(window: BrowserWindow): void {
     }
   }
 
-  // Why (STA-2383): occlusion-uncover fires no restore/show, so the renderer relays its genuine
-  // hidden→visible reveal instead. Unlike a bare focus (every Cmd+Tab, window never hidden), this
-  // only fires when the window was actually occluded/throttled — exactly when the stale dvh layout
-  // stranded the bottom status bar off-screen — so the full repaint's size jiggle is warranted.
+  // Why: occlusion reveal can fire no restore/show, so preserve the renderer relay without
+  // trusting events from another window.
   const onRendererRevealed = (event: Electron.IpcMainEvent): void => {
     if (window.isDestroyed() || window.webContents.isDestroyed()) {
       return
@@ -142,7 +136,7 @@ function installMacosVisibilityRepaint(window: BrowserWindow): void {
 
   window.on('restore', repaintAfterVisibilityTransition)
   window.on('show', repaintAfterVisibilityTransition)
-  // Why: occlusion-uncover fires no restore/show, only focus; invalidate only — the setSize jiggle would SIGWINCH every terminal on Cmd+Tab. The renderer-reveal relay above covers the stale-layout recovery that invalidate alone misses.
+  // Why: occlusion-uncover can fire only focus; invalidate without resizing terminals on Cmd+Tab.
   window.on('focus', () => {
     if (!window.isDestroyed() && !window.webContents.isDestroyed()) {
       window.webContents.invalidate()
@@ -303,7 +297,8 @@ export function createMainWindow(
   setTrustedUIRendererWebContentsId(rendererWebContentsId)
 
   if (process.platform === 'darwin') {
-    // Why: throttle the main window while hidden (guests self-unthrottle); toggle only while visible or Chromium blanks the surface (electron#42378).
+    // Why: preserve hidden-window power savings; stable native sizing and frame-only invalidation
+    // make wake recovery independent of the throttled viewport.
     mainWindow.webContents.setBackgroundThrottling(true)
     installMacosVisibilityRepaint(mainWindow)
   }

@@ -450,10 +450,7 @@
     margin: 0;
     padding: 0;
     overflow: hidden;
-    /* Why: dvh tracks the visible viewport so the web app shell isn't taller
-       than the screen when a mobile browser's URL bar is shown (100vh = the
-       large viewport, which forces a ~40-100px scroll). In Electron there is
-       no browser chrome, so dvh resolves identically to the window height. */
+    /* Why: mobile browser chrome changes the visible viewport while open. */
     height: 100dvh;
     font-family: var(
       --app-font-family,
@@ -691,6 +688,14 @@
   height: 100dvh;
   width: 100vw;
   overflow: hidden;
+}
+
+/* Why: native windows have a stable content box and need no wake-time viewport reflow. */
+html.native-shell,
+html.native-shell body,
+html.native-shell #root,
+html.native-shell .app-layout {
+  height: 100%;
 }
 
 /* Tab-group split resize handle — wide hit area, visible center line. */
