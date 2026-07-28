@@ -94,6 +94,8 @@ describe('EditorPanelHeader', () => {
         onToggleMarkdownTableOfContents={vi.fn()}
         onToggleMarkdownFrontmatter={vi.fn()}
         onExportMarkdownToPdf={vi.fn()}
+        canReloadFromDisk={false}
+        onReloadFromDisk={vi.fn()}
       />
     )
 

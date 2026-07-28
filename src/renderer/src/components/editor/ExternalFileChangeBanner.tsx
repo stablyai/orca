@@ -20,6 +20,12 @@ import { trackExternalChangeConflictAction } from './editor-external-change-tele
 
 const RELOAD_UNDO_TOAST_DURATION_MS = 8_000
 
+// Why: diff surfaces are excluded because the reload rotates the Monaco model and drops its
+// undo stack, and read-only tabs (log live-tail) already follow the file on their own.
+export function canReloadTabFromDisk(file: OpenFile): boolean {
+  return file.mode === 'edit' && file.readOnly !== true
+}
+
 export function reloadTabContentFromDisk(
   file: OpenFile,
   reloadContent: (file: OpenFile) => void

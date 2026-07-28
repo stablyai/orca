@@ -23,6 +23,7 @@ vi.mock('@/lib/connection-context', () => ({
 }))
 
 import {
+  canReloadTabFromDisk,
   ExternalFileChangeBanner,
   keepTabEditsOverExternalChange,
   reloadTabContentFromDisk
@@ -227,5 +228,19 @@ describe('ExternalFileChangeBanner', () => {
     await Promise.resolve()
 
     expect(setLastKnownDiskSignature).not.toHaveBeenCalled()
+  })
+})
+
+describe('canReloadTabFromDisk', () => {
+  it('allows editable file tabs', () => {
+    expect(canReloadTabFromDisk({ ...file, mode: 'edit' } as OpenFile)).toBe(true)
+  })
+
+  it('rejects diff surfaces, whose reload rotates the Monaco model and drops its undo stack', () => {
+    expect(canReloadTabFromDisk({ ...file, mode: 'diff' } as OpenFile)).toBe(false)
+  })
+
+  it('rejects read-only tabs, which already follow the file', () => {
+    expect(canReloadTabFromDisk({ ...file, mode: 'edit', readOnly: true } as OpenFile)).toBe(false)
   })
 })

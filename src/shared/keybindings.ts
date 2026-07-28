@@ -89,6 +89,7 @@ export type KeybindingActionId =
   | 'editor.save'
   | 'editor.markdownPreview'
   | 'editor.toggleWordWrap'
+  | 'editor.reloadFromDisk'
   | 'editor.copyContext'
   | 'editor.previousChange'
   | 'editor.nextChange'
@@ -815,6 +816,16 @@ export const KEYBINDING_DEFINITIONS: readonly KeybindingDefinition[] = [
     searchKeywords: ['shortcut', 'editor', 'word wrap', 'wrap', 'long lines', 'soft wrap'],
     // Why: Alt+Z matches VS Code; bare Alt+letter is not AltGr, so it stays cross-platform (#9974).
     defaultBindings: platformBindings(['Alt+Z'])
+  },
+  {
+    id: 'editor.reloadFromDisk',
+    title: 'Reload from Disk',
+    group: 'Editors',
+    scope: 'editor',
+    searchKeywords: ['shortcut', 'editor', 'reload', 'refresh', 'revert', 'disk', 'external'],
+    // Why: unbound by default — Ctrl+R and Ctrl+Shift+R are already taken on Windows/Linux
+    // (see workspace.rename), so there is no safe cross-platform chord to claim.
+    defaultBindings: platformBindings([])
   },
   {
     id: 'editor.copyContext',

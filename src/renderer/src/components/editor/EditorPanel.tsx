@@ -16,6 +16,7 @@ import { useClosedEditorTabCleanup } from './useClosedEditorTabCleanup'
 import { useEditorCmdSaveRequest } from './useEditorCmdSaveRequest'
 import { useEditorPanelContentState } from './useEditorPanelContentState'
 import { useMarkdownPreviewShortcut } from './useMarkdownPreviewShortcut'
+import { useEditorReloadFromDiskShortcut } from './useEditorReloadFromDiskShortcut'
 import { useUntitledFileRename } from './useUntitledFileRename'
 import { extractFrontMatter } from './markdown-frontmatter'
 import {
@@ -130,6 +131,7 @@ function EditorPanelInner({
 
   useClosedEditorTabCleanup(openFiles)
   useMarkdownPreviewShortcut({ activeFile, panelRef, openMarkdownPreview })
+  useEditorReloadFromDiskShortcut({ activeFile, panelRef, reloadContent })
 
   const handleContentChangeForFile = useCallback(
     (file: typeof activeFile, content: string) => {

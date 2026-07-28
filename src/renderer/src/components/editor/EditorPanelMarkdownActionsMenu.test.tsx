@@ -11,6 +11,10 @@ const checkboxItems = vi.hoisted(() => ({
   }[]
 }))
 
+const menuItems = vi.hoisted(() => ({
+  list: [] as { label: string; onSelect?: () => void }[]
+}))
+
 vi.mock('@/components/ui/dropdown-menu', async () => {
   const React_ = await import('react')
   const passthrough = ({ children }: { children?: React.ReactNode }) =>
@@ -18,7 +22,19 @@ vi.mock('@/components/ui/dropdown-menu', async () => {
   return {
     DropdownMenu: passthrough,
     DropdownMenuContent: passthrough,
-    DropdownMenuItem: passthrough,
+    DropdownMenuItem: ({
+      children,
+      onSelect
+    }: {
+      children?: React.ReactNode
+      onSelect?: () => void
+    }) => {
+      const label = React_.Children.toArray(children)
+        .filter((child): child is string => typeof child === 'string')
+        .join('')
+      menuItems.list.push({ label, onSelect })
+      return React_.createElement(React_.Fragment, null, children)
+    },
     DropdownMenuSeparator: () => null,
     DropdownMenuTrigger: passthrough,
     DropdownMenuCheckboxItem: ({
@@ -44,6 +60,7 @@ vi.mock('@/i18n/i18n', () => ({ translate: (_key: string, fallback: string) => f
 describe('EditorPanelMarkdownActionsMenu', () => {
   beforeEach(() => {
     checkboxItems.list = []
+    menuItems.list = []
   })
 
   it('shows Word Wrap for normal file tabs using editorWordWrap (#9974)', () => {
@@ -59,10 +76,12 @@ describe('EditorPanelMarkdownActionsMenu', () => {
         canExportMarkdownToPdf: false,
         canShowMarkdownFrontmatterToggle: false,
         markdownFrontmatterVisible: false,
+        canReloadFromDisk: false,
         onToggleDiffWordWrap,
         onToggleEditorWordWrap,
         onToggleMarkdownFrontmatter: () => {},
-        onExportMarkdownToPdf: () => {}
+        onExportMarkdownToPdf: () => {},
+        onReloadFromDisk: () => {}
       })
     )
 
@@ -86,10 +105,12 @@ describe('EditorPanelMarkdownActionsMenu', () => {
         canExportMarkdownToPdf: false,
         canShowMarkdownFrontmatterToggle: false,
         markdownFrontmatterVisible: false,
+        canReloadFromDisk: false,
         onToggleDiffWordWrap,
         onToggleEditorWordWrap,
         onToggleMarkdownFrontmatter: () => {},
-        onExportMarkdownToPdf: () => {}
+        onExportMarkdownToPdf: () => {},
+        onReloadFromDisk: () => {}
       })
     )
 
@@ -98,5 +119,55 @@ describe('EditorPanelMarkdownActionsMenu', () => {
     checkboxItems.list[0]?.onCheckedChange?.(false)
     expect(onToggleDiffWordWrap).toHaveBeenCalledOnce()
     expect(onToggleEditorWordWrap).not.toHaveBeenCalled()
+  })
+
+  it('offers Reload from Disk when the tab can be reloaded', () => {
+    const onReloadFromDisk = vi.fn()
+    renderToStaticMarkup(
+      React.createElement(EditorPanelMarkdownActionsMenu, {
+        isMarkdown: true,
+        isDiffSurface: false,
+        diffWordWrap: false,
+        editorWordWrap: true,
+        shouldShowMarkdownExportAction: false,
+        canExportMarkdownToPdf: false,
+        canShowMarkdownFrontmatterToggle: false,
+        markdownFrontmatterVisible: false,
+        canReloadFromDisk: true,
+        onToggleDiffWordWrap: () => {},
+        onToggleEditorWordWrap: () => {},
+        onToggleMarkdownFrontmatter: () => {},
+        onExportMarkdownToPdf: () => {},
+        onReloadFromDisk
+      })
+    )
+
+    const reloadItem = menuItems.list.find((item) => item.label === 'Reload from Disk')
+    expect(reloadItem).toBeDefined()
+    reloadItem?.onSelect?.()
+    expect(onReloadFromDisk).toHaveBeenCalledOnce()
+  })
+
+  it('omits Reload from Disk on surfaces that cannot be reloaded', () => {
+    renderToStaticMarkup(
+      React.createElement(EditorPanelMarkdownActionsMenu, {
+        isMarkdown: true,
+        isDiffSurface: true,
+        diffWordWrap: false,
+        editorWordWrap: true,
+        shouldShowMarkdownExportAction: true,
+        canExportMarkdownToPdf: true,
+        canShowMarkdownFrontmatterToggle: false,
+        markdownFrontmatterVisible: false,
+        canReloadFromDisk: false,
+        onToggleDiffWordWrap: () => {},
+        onToggleEditorWordWrap: () => {},
+        onToggleMarkdownFrontmatter: () => {},
+        onExportMarkdownToPdf: () => {},
+        onReloadFromDisk: () => {}
+      })
+    )
+
+    expect(menuItems.list.map((item) => item.label)).not.toContain('Reload from Disk')
   })
 })

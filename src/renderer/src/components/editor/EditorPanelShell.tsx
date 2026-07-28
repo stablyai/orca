@@ -4,6 +4,7 @@ import { findWorktreeById } from '@/store/slices/worktree-helpers'
 import type { OpenFile } from '@/store/slices/editor'
 import { EditorContent } from './EditorContent'
 import { EditorPanelHeader } from './EditorPanelHeader'
+import { canReloadTabFromDisk, reloadTabContentFromDisk } from './ExternalFileChangeBanner'
 import { UntitledFileRenameDialog } from './UntitledFileRenameDialog'
 import type { getEditorPanelRenderModel } from './editor-panel-render-model'
 import type { DiffContent, FileContent } from './editor-panel-content-types'
@@ -127,6 +128,8 @@ export function EditorPanelShell({
           onToggleMarkdownTableOfContents={onToggleMarkdownTableOfContents}
           onToggleMarkdownFrontmatter={onToggleMarkdownFrontmatter}
           onExportMarkdownToPdf={onExportMarkdownToPdf}
+          canReloadFromDisk={canReloadTabFromDisk(activeFile)}
+          onReloadFromDisk={() => reloadTabContentFromDisk(activeFile, onReloadContent)}
         />
       )}
       <Suspense fallback={<EditorLoadingFallback />}>
