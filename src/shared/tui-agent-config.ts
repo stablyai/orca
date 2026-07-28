@@ -97,22 +97,12 @@ export const TUI_AGENT_CONFIG: Record<TuiAgent, TuiAgentConfig> = {
     promptInjectionMode: 'stdin-after-start'
   },
   trae: {
-    // Why: the TRAE CN CLI's own installer symlinks its `trae-cli` binary to
-    // three names — `trae-cli`, `traecli`, `trae-agent` — but the bare
-    // `trae-cli` name collides with the unrelated, more widely installed
-    // open-source `bytedance/trae-agent` (whose `pyproject.toml` registers
-    // that exact same console-script name). Detect/launch on `traecli`
-    // instead: still documented and installed by TRAE CN's own installer,
-    // but not a name the other project ships, so PATH detection can't
-    // false-positive onto it. `trae-agent` is dropped entirely — it's the
-    // other project's literal repo name, the highest-false-positive string
-    // available. `ta` was never included (too generic a 2-letter name).
+    // Why: two unrelated CLIs ship a `trae-cli` binary — this one and the open-source
+    // bytedance/trae-agent — so detect on `traecli`, an alias only this one installs.
     detectCmd: 'traecli',
     launchCmd: 'traecli',
     expectedProcess: 'traecli',
-    // Why: `traecli [prompt]` accepts the initial task as a positional argv,
-    // same contract as Claude/Codex — verified locally by running the real
-    // CLI end-to-end (it submits immediately on launch).
+    // Why: `traecli [prompt]` takes the task as a positional argv, same as Claude/Codex.
     promptInjectionMode: 'argv'
   },
   opencode: {

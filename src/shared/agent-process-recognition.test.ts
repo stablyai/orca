@@ -141,10 +141,7 @@ describe('agent process recognition', () => {
     })
     expect(isExpectedAgentProcess('/Users/dev/.local/bin/traecli', 'traecli')).toBe(true)
     expect(isRecognizedAgentType('traecli')).toBe(true)
-    // Why: `trae-cli` is also the console-script name of the unrelated,
-    // more widely installed open-source `bytedance/trae-agent` project.
-    // Detecting on it would false-positive onto that project's installs, so
-    // neither `trae-cli` nor its repo-name alias `trae-agent` count here.
+    // Why: `trae-cli` and `trae-agent` both name the unrelated open-source bytedance/trae-agent.
     expect(recognizeAgentProcess('trae-cli')).toBeNull()
     expect(recognizeAgentProcess('trae-agent')).toBeNull()
   })

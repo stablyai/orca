@@ -107,11 +107,9 @@ export const getAgentCatalog = createLocalizedCatalog((): AgentCatalogEntry[] =>
   {
     id: 'trae',
     label: translate('auto.lib.agent.catalog.060d152fb5', 'Trae'),
-    // Why: matches TUI_AGENT_CONFIG.trae.detectCmd — see the Why there for
-    // why this isn't the more commonly-referenced `trae-cli`.
+    // Why: matches TUI_AGENT_CONFIG.trae.detectCmd, not the ambiguous `trae-cli` — see the Why there.
     cmd: 'traecli',
-    // Why: bare `trae.cn` 404s on Google's favicon service; `www.trae.cn` is
-    // the product-root domain that actually resolves to the real mark.
+    // Why: bare `trae.cn` 404s on Google's favicon service.
     faviconDomain: 'www.trae.cn',
     homepageUrl: 'https://docs.trae.cn/cli_get-started-with-trae-cli'
   },
