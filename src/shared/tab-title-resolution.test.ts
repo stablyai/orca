@@ -11,7 +11,7 @@ describe('tab title resolution', () => {
     ).toBe('Claude working')
   })
 
-  it('places generated titles between manual and live titles when enabled', () => {
+  it('uses session titles without falling through to live OSC when enabled', () => {
     expect(
       resolveTerminalTabTitle(
         { customTitle: null, generatedTitle: 'Refactor auth', title: 'Claude working' },
@@ -24,6 +24,13 @@ describe('tab title resolution', () => {
         true
       )
     ).toBe('Payments')
+    expect(
+      resolveTerminalTabTitle(
+        { customTitle: null, generatedTitle: null, title: '⠋ Cursor Agent' },
+        true,
+        '⠋ Cursor Agent'
+      )
+    ).toBe('')
   })
 
   it('uses meaningful native OpenCode session titles before generated titles', () => {
@@ -46,6 +53,15 @@ describe('tab title resolution', () => {
         true
       )
     ).toBe('Refactor auth')
+  })
+
+  it('places generated session titles ahead of Cursor status OSC titles', () => {
+    expect(
+      resolveTerminalTabTitle(
+        { customTitle: null, generatedTitle: 'Fix intake flow', title: '⠋ Cursor Agent' },
+        true
+      )
+    ).toBe('Fix intake flow')
   })
 
   it('places quick command labels between manual and generated titles', () => {
