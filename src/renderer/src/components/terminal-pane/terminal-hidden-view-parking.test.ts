@@ -7,7 +7,6 @@ import {
   TERMINAL_TAB_HOT_RETAIN_MS,
   TERMINAL_WORKTREE_HOT_RETAIN_MS,
   TERMINAL_WORKTREE_PARK_DELAY_MS,
-  canManuallyParkTerminalWorktreeRenderers,
   canParkTerminalTabRenderer,
   canParkTerminalWorktreeRenderers,
   getTerminalTabColdParkRecheckDelayMs,
@@ -179,36 +178,6 @@ describe('canParkTerminalTabRenderer', () => {
     expect(
       canParkTerminalTabRenderer({ ...base, coldParkDelayMs: 100, nowMs: hiddenSinceMs + 100 })
     ).toBe(true)
-  })
-})
-
-describe('canManuallyParkTerminalWorktreeRenderers', () => {
-  const base = {
-    worktreeId: 'repo::/worktree',
-    terminalTabs: [{ id: 'tab-1', ptyId: 'repo::/worktree@@session-1' }],
-    pendingStartupByTabId: {},
-    parkingEnabled: true
-  }
-
-  it('bypasses visibility timing for snapshot-backed local terminals', () => {
-    expect(canManuallyParkTerminalWorktreeRenderers(base)).toBe(true)
-  })
-
-  it('preserves safety gates for empty, pending, remote, and disabled terminals', () => {
-    expect(canManuallyParkTerminalWorktreeRenderers({ ...base, terminalTabs: [] })).toBe(false)
-    expect(
-      canManuallyParkTerminalWorktreeRenderers({
-        ...base,
-        pendingStartupByTabId: { 'tab-1': ['echo', 'pending'] }
-      })
-    ).toBe(false)
-    expect(
-      canManuallyParkTerminalWorktreeRenderers({
-        ...base,
-        terminalTabs: [{ id: 'tab-1', ptyId: 'ssh:ssh-1@@pty-1' }]
-      })
-    ).toBe(false)
-    expect(canManuallyParkTerminalWorktreeRenderers({ ...base, parkingEnabled: false })).toBe(false)
   })
 })
 
