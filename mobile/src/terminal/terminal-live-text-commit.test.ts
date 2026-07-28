@@ -101,13 +101,16 @@ describe('terminal live accessory bytes decision', () => {
 })
 
 describe('terminal live accessory local edit text', () => {
-  it('Given backspace Then drops the last code point of the field text', () => {
+  it('Given backspace Then drops the last grapheme of the field text', () => {
     expect(
       getTerminalLiveAccessoryLocalEditText({ localEdit: 'backspace', fieldText: '한글' })
     ).toBe('한')
     expect(getTerminalLiveAccessoryLocalEditText({ localEdit: 'backspace', fieldText: '한' })).toBe(
       ''
     )
+    expect(
+      getTerminalLiveAccessoryLocalEditText({ localEdit: 'backspace', fieldText: 'a👍🏽' })
+    ).toBe('a')
   })
 
   it('Given forward delete Then keeps the field text unchanged', () => {

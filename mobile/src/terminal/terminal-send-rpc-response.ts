@@ -13,3 +13,21 @@ export function isTerminalSendRpcAccepted(response: RpcResponse): boolean {
   }
   return response.result.send.accepted === true
 }
+
+export function getTerminalInputQueueRpcOutcome(
+  response: RpcResponse,
+  expected: { readonly id: string; readonly sequence: number }
+): 'accepted' | 'rejected' | 'unacknowledged' {
+  if (!response.ok || !isRecord(response.result) || !isRecord(response.result.send)) {
+    return 'unacknowledged'
+  }
+  const acknowledgement = response.result.send.inputQueue
+  if (
+    !isRecord(acknowledgement) ||
+    acknowledgement.id !== expected.id ||
+    acknowledgement.sequence !== expected.sequence
+  ) {
+    return 'unacknowledged'
+  }
+  return response.result.send.accepted === true ? 'accepted' : 'rejected'
+}

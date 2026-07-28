@@ -602,6 +602,10 @@ export type RuntimeTerminalSend = {
   accepted: boolean
   bytesWritten: number
   refusedReason?: 'no-agent' | 'permission'
+  inputQueue?: {
+    id: string
+    sequence: number
+  }
 }
 
 export type RuntimeTerminalAgentStatusState = 'working' | 'permission' | 'idle' | null

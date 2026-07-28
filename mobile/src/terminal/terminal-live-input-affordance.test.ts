@@ -13,6 +13,10 @@ const commandInputStylesSource = readFileSync(
   new URL('../../app/h/[hostId]/session/mobile-session-command-input-styles.ts', import.meta.url),
   'utf8'
 )
+const liveInputCaptureSource = readFileSync(
+  new URL('./TerminalLiveInputCapture.tsx', import.meta.url),
+  'utf8'
+)
 
 function liveInputBarBlock(): string {
   const start = sessionRouteSource.indexOf('{liveInputEnabled ? (')
@@ -34,7 +38,8 @@ describe('terminal live input affordance', () => {
     )
     expect(block).toContain('pressed && styles.liveInputFocusTargetPressed')
     expect(block).toContain('!canSend && styles.liveInputFocusTargetDisabled')
-    expect(block).toContain('showSoftInputOnFocus')
+    expect(block).toContain('<TerminalLiveInputCapture')
+    expect(liveInputCaptureSource).toContain('showSoftInputOnFocus')
     expect(sessionRouteSource).toContain('focusTerminalLiveInputTarget(liveInputRef.current')
     expect(sessionRouteSource).toContain('keyboardHeight')
     expect(sessionRouteSource).toContain('scheduleTerminalLiveInputFocus(liveInputFocusTimerRef')

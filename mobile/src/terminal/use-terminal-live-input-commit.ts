@@ -1,5 +1,4 @@
 import { useCallback, useEffect, type RefObject } from 'react'
-import type { TextInput } from 'react-native'
 import { getTerminalLiveSpecialKeyDecision } from './terminal-live-text-commit'
 import { sendTerminalLiveControlAfterPendingFlush } from './terminal-live-control-send-order'
 import type { TerminalLiveAccessoryInput } from './terminal-live-accessory-input'
@@ -10,6 +9,7 @@ import {
   useTerminalLiveAccessoryInputCommit,
   type TerminalLiveAccessoryInputCommitResult
 } from './use-terminal-live-accessory-input-commit'
+import type { TerminalLiveInputCaptureHandle } from './terminal-live-input-capture-handle'
 
 type TerminalLiveInputKeyPressEvent = {
   readonly nativeEvent: {
@@ -23,7 +23,7 @@ type TerminalLiveInputCommitOptions<TTabType extends string> = {
   readonly activeSessionTabType: TTabType | null | undefined
   readonly activeSessionTabTypeRef: RefObject<TTabType | null>
   readonly connected: boolean
-  readonly liveInputRef: RefObject<TextInput | null>
+  readonly liveInputRef: RefObject<TerminalLiveInputCaptureHandle | null>
   readonly liveInputTerminalHandles: ReadonlySet<string>
   readonly liveInputTerminalHandlesRef: RefObject<Set<string>>
   readonly sendLiveTerminalInputRef: RefObject<TerminalLiveInputSender>

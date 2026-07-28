@@ -482,6 +482,7 @@ import type { AutomationService } from '../automations/service'
 import { RuntimeBrowserCommands } from './orca-runtime-browser'
 import { RemoteRuntimeTerminalCreateIdempotency } from './remote-runtime-terminal-create-idempotency'
 import { deriveRemoteRuntimeTerminalCreateHandle } from './remote-runtime-terminal-create-identity'
+import { TerminalInputQueueIdempotency } from './terminal-input-queue-idempotency'
 import {
   buildHeadlessTerminalSplitLayout,
   countTerminalLayoutLeaves
@@ -2659,6 +2660,7 @@ export class OrcaRuntimeService {
     Promise<RuntimeMobileSessionCreateTerminalResult>
   >()
   private readonly terminalCreateIdempotency = new RemoteRuntimeTerminalCreateIdempotency()
+  private readonly terminalInputQueueIdempotency = new TerminalInputQueueIdempotency()
   // Why: concurrent clients sleeping one host workspace must share one physical teardown.
   private terminalSleepByWorktreeId = new Map<string, Promise<RuntimeWorktreeTerminalSleepResult>>()
   private terminalMutationTailByWorktreeId = new Map<string, Promise<void>>()
@@ -15740,6 +15742,22 @@ export class OrcaRuntimeService {
       accepted: true,
       bytesWritten: Buffer.byteLength(payload, 'utf8')
     }
+  }
+
+  runTerminalInputQueueOperation<T>(
+    clientIdentity: string,
+    queueId: string,
+    sequence: number,
+    fingerprint: string,
+    operation: () => Promise<T>
+  ): Promise<T> {
+    return this.terminalInputQueueIdempotency.run(
+      clientIdentity,
+      queueId,
+      sequence,
+      fingerprint,
+      operation
+    )
   }
 
   async sendTerminalAgentPrompt(

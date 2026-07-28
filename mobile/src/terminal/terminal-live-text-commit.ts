@@ -1,5 +1,7 @@
 import { getTerminalLiveSpecialKeyBytes } from './terminal-live-input'
 
+const GRAPHEME_SEGMENTER = new Intl.Segmenter(undefined, { granularity: 'grapheme' })
+
 export type TerminalLiveSpecialKeyDecision =
   | { readonly kind: 'ignore' }
   | { readonly kind: 'local-edit' }
@@ -79,5 +81,6 @@ export function getTerminalLiveAccessoryLocalEditText({
     return fieldText
   }
 
-  return Array.from(fieldText).slice(0, -1).join('')
+  const graphemes = Array.from(GRAPHEME_SEGMENTER.segment(fieldText), ({ segment }) => segment)
+  return graphemes.slice(0, -1).join('')
 }

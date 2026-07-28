@@ -1,0 +1,9 @@
+{
+  "platforms": ["ios", "android"],
+  "apple": {
+    "modules": ["ExpoTerminalLiveInputModule"]
+  },
+  "android": {
+    "modules": ["expo.modules.terminalliveinput.ExpoTerminalLiveInputModule"]
+  }
+}

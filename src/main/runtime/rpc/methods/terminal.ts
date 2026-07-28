@@ -1,4 +1,5 @@
 /* oxlint-disable max-lines -- Why: terminal RPC methods are co-located for discoverability; splitting would scatter related handlers across files. */
+import { createHash } from 'node:crypto'
 import { z } from 'zod'
 import { randomUUID } from 'node:crypto'
 import {
@@ -72,6 +73,7 @@ import {
   type TerminalOutputSourceRange
 } from '../../../../shared/terminal-output-source-range'
 import type { RemoteTerminalSourceRangeReplacementReservation } from '../../remote-terminal-source-range-consumer'
+import { isTerminalInputQueueProtocolError } from '../../terminal-input-queue-idempotency'
 
 const REQUESTED_SNAPSHOT_BYTE_BUDGET = 2 * 1024 * 1024
 const TERMINAL_OUTPUT_FLUSH_MS = 5
@@ -874,6 +876,12 @@ const TerminalSend = TerminalHandle.extend({
   requireAgentStatus: z.enum(['sendable']).optional(),
   // Why: terminal-generated replies are valid input but must not transfer the shared terminal floor.
   inputKind: z.enum(['query-reply']).optional(),
+  inputQueue: z
+    .object({
+      id: z.string().min(1).max(128),
+      sequence: z.number().int().min(1).max(Number.MAX_SAFE_INTEGER)
+    })
+    .optional(),
   // Why: identifies the caller for the driver state machine; when absent (older clients) the server falls back to the most recent mobile actor (docs/mobile-presence-lock.md).
   client: z
     .object({
@@ -889,6 +897,26 @@ const TerminalSend = TerminalHandle.extend({
     .optional(),
   claimViewport: z.literal(true).optional()
 })
+
+function buildTerminalInputQueueFingerprint(params: z.infer<typeof TerminalSend>): string {
+  return createHash('sha256')
+    .update(
+      JSON.stringify([
+        params.terminal,
+        params.text ?? null,
+        params.enter === true,
+        params.interrupt === true,
+        params.requireAgentStatus ?? null,
+        params.inputKind ?? null,
+        params.client?.id ?? null,
+        params.client?.type ?? null,
+        params.viewport?.cols ?? null,
+        params.viewport?.rows ?? null,
+        params.claimViewport === true
+      ])
+    )
+    .digest('hex')
+}
 
 const TerminalViewport = z.object({
   cols: z.number().int().min(1).max(1000),
@@ -1193,6 +1221,16 @@ export const TERMINAL_METHODS: RpcAnyMethod[] = [
     handler: async (params, { runtime, clientId }) => {
       await assertTerminalSendTextWithinLimit(params.text)
       await assertTerminalSendTextWithinLimit(params.resolvedLaunchDraft?.text)
+      const inputQueueClientIdentity = clientId
+      if (
+        params.inputQueue &&
+        (params.inputKind !== undefined ||
+          params.client?.type !== 'mobile' ||
+          !inputQueueClientIdentity ||
+          params.client.id !== inputQueueClientIdentity)
+      ) {
+        throw new InvalidArgumentError('Invalid terminal input queue identity')
+      }
       const queryReplyClientId = clientId ?? params.client?.id
       if (
         params.inputKind === 'query-reply' &&
@@ -1329,23 +1367,37 @@ export const TERMINAL_METHODS: RpcAnyMethod[] = [
           : undefined
       let result
       try {
-        result = await runtime.sendTerminal(
-          params.terminal,
-          {
-            text: params.text,
-            enter: params.enter === true,
-            interrupt: params.interrupt === true
-          },
-          {
-            beforeWrite,
-            ...(reserveWrite ? { reserveWrite } : {}),
-            ...(params.inputKind !== 'query-reply' && mobileFloorClientId
-              ? { afterWrite: () => commitMobileInputFloorClaim(mobileFloorClaim) }
-              : {})
-          }
-        )
+        const send = () =>
+          runtime.sendTerminal(
+            params.terminal,
+            {
+              text: params.text,
+              enter: params.enter === true,
+              interrupt: params.interrupt === true
+            },
+            {
+              beforeWrite,
+              ...(reserveWrite ? { reserveWrite } : {}),
+              ...(params.inputKind !== 'query-reply' && mobileFloorClientId
+                ? { afterWrite: () => commitMobileInputFloorClaim(mobileFloorClaim) }
+                : {})
+            }
+          )
+        result =
+          params.inputQueue && inputQueueClientIdentity
+            ? await runtime.runTerminalInputQueueOperation(
+                inputQueueClientIdentity,
+                params.inputQueue.id,
+                params.inputQueue.sequence,
+                buildTerminalInputQueueFingerprint(params),
+                send
+              )
+            : await send()
       } catch (error) {
         mobileFloorClaim.current?.rollback()
+        if (isTerminalInputQueueProtocolError(error)) {
+          throw new InvalidArgumentError((error as Error).message)
+        }
         const refusedReason = getTerminalSendGuardRefusedReason(error)
         if (refusedReason) {
           return {
@@ -1380,7 +1432,9 @@ export const TERMINAL_METHODS: RpcAnyMethod[] = [
         runtime.notifyNativeChatLaunchDraftResolved(params.terminal, params.resolvedLaunchDraft)
       }
       // Why: deliberate mobile input takes the floor (drives `* → mobile{clientId}`); clientless sends fall back to the current mobile driver.
-      return { send: result }
+      return {
+        send: params.inputQueue ? { ...result, inputQueue: params.inputQueue } : result
+      }
     }
   }),
   defineMethod({

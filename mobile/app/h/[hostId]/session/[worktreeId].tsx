@@ -20,6 +20,7 @@ import {
   type ListRenderItem
 } from 'react-native'
 import * as Clipboard from 'expo-clipboard'
+import { isNativeTerminalLiveInputAvailable } from '@orca/expo-terminal-live-input'
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context'
 import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router'
 import AsyncStorage from '@react-native-async-storage/async-storage'
@@ -123,19 +124,23 @@ import {
 } from '../../../../src/terminal/terminal-live-input'
 import { dismissTerminalKeyboard } from '../../../../src/terminal/terminal-keyboard-dismiss'
 import type { TerminalLiveInputSender } from '../../../../src/terminal/terminal-live-input-sender'
+import type { TerminalLiveInputCaptureHandle } from '../../../../src/terminal/terminal-live-input-capture-handle'
 import { isTerminalSendRpcAccepted } from '../../../../src/terminal/terminal-send-rpc-response'
 import { sendMobileTerminalQueryReply } from '../../../../src/terminal/mobile-terminal-query-reply'
-import { TERMINAL_QUERY_REPLY_INPUT_RUNTIME_CAPABILITY } from '../../../../../src/shared/protocol-version'
+import {
+  TERMINAL_INPUT_QUEUE_RUNTIME_CAPABILITY,
+  TERMINAL_QUERY_REPLY_INPUT_RUNTIME_CAPABILITY
+} from '../../../../../src/shared/protocol-version'
 import { useTerminalLiveInputCommit } from '../../../../src/terminal/use-terminal-live-input-commit'
+import { useTerminalInputQueue } from '../../../../src/terminal/use-terminal-input-queue'
+import { useTerminalRevisionedInputCommit } from '../../../../src/terminal/use-terminal-revisioned-input-commit'
 import { resolveMobileTerminalInputGate } from '../../../../src/terminal/terminal-input-connection-gate'
 import {
   buildTerminalSendParams,
   TERMINAL_INPUT_SEND_OPTIONS
 } from '../../../../src/terminal/terminal-send-request'
-import {
-  getTerminalCommandKeyboardType,
-  getTerminalLiveInputKeyboardType
-} from '../../../../src/terminal/terminal-keyboard-type'
+import { getTerminalCommandKeyboardType } from '../../../../src/terminal/terminal-keyboard-type'
+import { TerminalLiveInputCapture } from '../../../../src/terminal/TerminalLiveInputCapture'
 import { normalizeTerminalTextInput } from '../../../../src/terminal/terminal-text-input-normalization'
 import {
   appendBufferedDictation,
@@ -910,6 +915,8 @@ export default function SessionScreen() {
   const [terminalLinkOpenMode, setTerminalLinkOpenMode] =
     useState<MobileTerminalLinkOpenMode>('orca-browser')
   const [liveInputCapture, setLiveInputCapture] = useState('')
+  const [inputQueueSupported, setInputQueueSupported] = useState<boolean | null>(null)
+  const [inputQueueClientId, setInputQueueClientId] = useState<string | null>(null)
   const {
     clearTerminalLiveInputDefault,
     defaultTerminalHandlesToLiveInput,
@@ -1014,10 +1021,15 @@ export default function SessionScreen() {
   const viewportRef = useRef<{ cols: number; rows: number } | null>(null)
   const viewportMeasuredRef = useRef(false)
   const terminalRefs = useRef<Map<string, TerminalWebViewHandle>>(new Map())
-  const liveInputRef = useRef<TextInput>(null)
+  const liveInputRef = useRef<TerminalLiveInputCaptureHandle>(null)
   const commandInputRef = useRef<TextInput>(null)
   const liveInputFocusTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const sendLiveTerminalInputRef = useRef<TerminalLiveInputSender>(async () => false)
+  const terminalInputQueueRef = useTerminalInputQueue({
+    client,
+    clientId: inputQueueClientId,
+    enabled: inputQueueSupported === true
+  })
   const sessionTabActionSheetKeyboardHideSubRef = useRef<ReturnType<
     typeof Keyboard.addListener
   > | null>(null)
@@ -1057,14 +1069,9 @@ export default function SessionScreen() {
   // Why: sidebar resizes change the terminal frame width without a window-dim change; track it so the refit hook re-fits (see terminal-viewport-refit.ts).
   const [terminalFrameWidth, setTerminalFrameWidth] = useState(0)
   const activeSessionTab = sessionTabs.find((tab) => tab.id === activeSessionTabId) ?? null
-  const {
-    clearPendingLiveInputCommit,
-    flushPendingLiveInputBeforeExternalSend,
-    handleLiveInputAccessoryBytes,
-    handleLiveInputChange,
-    handleLiveInputKeyPress,
-    handleLiveInputSubmit
-  } = useTerminalLiveInputCommit({
+  const revisionedLiveInputSupported =
+    inputQueueSupported === true && isNativeTerminalLiveInputAvailable()
+  const legacyLiveInputCommit = useTerminalLiveInputCommit({
     activeHandle,
     activeHandleRef,
     activeSessionTabType: activeSessionTab?.type,
@@ -1076,6 +1083,26 @@ export default function SessionScreen() {
     sendLiveTerminalInputRef,
     setLiveInputCapture
   })
+  const revisionedLiveInputCommit = useTerminalRevisionedInputCommit({
+    activeHandle,
+    activeHandleRef,
+    activeSessionTabType: activeSessionTab?.type,
+    activeSessionTabTypeRef,
+    liveInputRef,
+    liveInputTerminalHandles,
+    liveInputTerminalHandlesRef,
+    sendLiveTerminalInputRef,
+    setLiveInputCapture
+  })
+  const {
+    clearPendingLiveInputCommit,
+    flushPendingLiveInputBeforeExternalSend,
+    handleLiveInputAccessoryBytes,
+    handleLiveInputKeyPress,
+    handleLiveInputSubmit
+  } = revisionedLiveInputSupported ? revisionedLiveInputCommit : legacyLiveInputCommit
+  const { handleLiveInputChange } = legacyLiveInputCommit
+  const { handleTerminalEditorTransaction } = revisionedLiveInputCommit
   const { canCompose, canSend } = resolveMobileTerminalInputGate({
     connState,
     activeHandle,
@@ -2408,6 +2435,7 @@ export default function SessionScreen() {
       setAgentSessionHistorySupported(null)
       setQuickCommandsSupported(null)
       setShowQuickCommands(false)
+      setInputQueueSupported(null)
       hostQueryReplyInputSupportedRef.current = false
       return
     }
@@ -2417,6 +2445,7 @@ export default function SessionScreen() {
     setAgentSessionHistorySupported(null)
     setQuickCommandsSupported(null)
     setShowQuickCommands(false)
+    setInputQueueSupported(null)
     hostQueryReplyInputSupportedRef.current = false
     // Why: the probe retries — a relay→direct cutover or request timeout rejects
     // status.get without changing connState, which used to latch these hidden.
@@ -2424,6 +2453,7 @@ export default function SessionScreen() {
       setBrowserScreencastSupported(capabilities.includes('browser.screencast.v1'))
       setAgentSessionHistorySupported(capabilities.includes(MOBILE_AI_VAULT_CAPABILITY))
       setQuickCommandsSupported(supportsMobileQuickCommands(capabilities))
+      setInputQueueSupported(capabilities.includes(TERMINAL_INPUT_QUEUE_RUNTIME_CAPABILITY))
       // Why: hosts without this capability strip inputKind from terminal.send,
       // so a forwarded xterm reply would become floor-stealing shell input.
       hostQueryReplyInputSupportedRef.current = capabilities.includes(
@@ -2445,6 +2475,7 @@ export default function SessionScreen() {
       const host = hosts.find((h) => h.id === hostId)
       if (host) {
         deviceTokenRef.current = host.deviceToken
+        setInputQueueClientId(host.deviceToken)
         setHostEndpoint(host.endpoint)
       }
     })
@@ -3013,17 +3044,10 @@ export default function SessionScreen() {
     setInput('')
 
     try {
-      // Why: fail now and restore the text — a send parked across a reconnect would execute long after the tap.
-      await client.sendRequest(
-        'terminal.send',
-        buildTerminalSendParams({
-          terminal: activeHandle,
-          text,
-          enter: true,
-          deviceToken: deviceTokenRef.current
-        }),
-        TERMINAL_INPUT_SEND_OPTIONS
-      )
+      // Why: route composer submit through the live sender so revisioned queue identity applies when advertised.
+      if (!(await sendLiveTerminalInput(activeHandle, `${text}`))) {
+        throw new Error('Terminal input was not accepted')
+      }
     } catch {
       setInput(text)
     } finally {
@@ -3074,6 +3098,13 @@ export default function SessionScreen() {
       }
       // Why: live-mirror deltas queued behind a dying send drain into the connect
       // wait and replay stale bytes after reconnect (#6713's `YZZYecho …` corruption).
+      const inputQueue = terminalInputQueueRef.current
+      if (inputQueue) {
+        return inputQueue.enqueue(handle, text)
+      }
+      if (inputQueueSupported === true) {
+        return false
+      }
       return rpc
         .sendRequest(
           'terminal.send',
@@ -3087,7 +3118,7 @@ export default function SessionScreen() {
         )
         .then(isTerminalSendRpcAccepted, () => false)
     },
-    [showToast]
+    [inputQueueSupported, showToast, terminalInputQueueRef]
   )
   sendLiveTerminalInputRef.current = sendLiveTerminalInput
 
@@ -3339,24 +3370,14 @@ export default function SessionScreen() {
     const isActive =
       handle === activeHandleRef.current && activeSessionTabTypeRef.current === 'terminal'
     const isFresh = Date.now() - queued.lastUpdatedMs <= TERMINAL_GESTURE_INPUT_MAX_QUEUE_AGE_MS
-    const rpc = clientRef.current
-    if (!rpc || connStateRef.current !== 'connected' || !isActive || !isFresh) {
+    if (!clientRef.current || connStateRef.current !== 'connected' || !isActive || !isFresh) {
       return
     }
 
     terminalGestureInputInFlightRef.current.add(handle)
     try {
-      // Why: gesture arrows parked across a reconnect would move a TUI long after the swipe.
-      await rpc.sendRequest(
-        'terminal.send',
-        buildTerminalSendParams({
-          terminal: handle,
-          text: queued.bytes,
-          enter: false,
-          deviceToken: deviceTokenRef.current
-        }),
-        TERMINAL_INPUT_SEND_OPTIONS
-      )
+      // Why: gesture arrows go through the live sender (queue identity + reconnect safety).
+      await sendLiveTerminalInputRef.current(handle, queued.bytes)
     } catch {
       // Transient failure
     } finally {
@@ -5009,26 +5030,16 @@ export default function SessionScreen() {
                       onDictationPressOut={handleDictationPressOut}
                       onDictationCancel={cancelDictation}
                     />
-                    <TextInput
-                      ref={liveInputRef}
+                    <TerminalLiveInputCapture
+                      inputRef={liveInputRef}
+                      revisioned={revisionedLiveInputSupported}
                       style={styles.liveInputCapture}
                       value={liveInputCapture}
-                      onChangeText={handleLiveInputChange}
+                      onEditorTransaction={handleTerminalEditorTransaction}
+                      onLegacyChange={handleLiveInputChange}
                       onKeyPress={handleLiveInputKeyPress}
-                      onSubmitEditing={handleLiveInputSubmit}
-                      placeholder=""
-                      showSoftInputOnFocus
-                      autoCapitalize="none"
-                      autoCorrect={false}
-                      spellCheck={false}
-                      smartInsertDelete={false}
-                      // Why: iOS textContentType overrides autoComplete and can narrow the keyboard; keep IME switching available.
-                      autoComplete="off"
-                      keyboardType={getTerminalLiveInputKeyboardType(Platform.OS)}
-                      returnKeyType="default"
-                      blurOnSubmit={false}
+                      onSubmit={handleLiveInputSubmit}
                       editable={canSend}
-                      importantForAutofill="no"
                     />
                   </View>
                 ) : (
