@@ -549,8 +549,7 @@ export function RemoteFileBrowser({
     ]
   )
 
-  // Windows-host paths are drive-shaped (`M:\dev`); split with the matching
-  // separator and rebuild breadcrumb targets from the same shape.
+  // Preserve the separator shape when rebuilding drive breadcrumbs.
   const browseParts = splitBrowsePath(resolvedPath)
   const pathSegments = browseParts.segments
   const breadcrumbPathTo = useCallback(

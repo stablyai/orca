@@ -6,8 +6,7 @@ export type DriveListing = {
   entries: { name: string; isDirectory: boolean; isSymlink: boolean }[]
 }
 
-// Windows has no single filesystem root, so a host-root browse (`/`) must be
-// answered with the mounted drives or remote clients can never leave `C:\`.
+// Windows has no shared filesystem root, so `/` represents mounted drives.
 export function isServerDriveListRequest(
   pathValue: string,
   platform: NodeJS.Platform = process.platform
@@ -20,8 +19,7 @@ const DRIVE_LETTERS = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ'
 export async function listWindowsDrives(
   statPath: (p: string) => Promise<Stats> = stat
 ): Promise<DriveListing> {
-  // Entry names keep the trailing separator (`M:\`) — a bare `M:` is
-  // drive-relative on Windows and would resolve against that drive's cwd.
+  // Keep the separator because bare `M:` is drive-relative on Windows.
   const roots = await Promise.all(
     [...DRIVE_LETTERS].map(async (letter) => {
       const root = `${letter}:\\`

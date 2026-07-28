@@ -150,6 +150,39 @@ describe('registerSshBrowseHandler', () => {
     expect(script).toContain("Write-Output ($resolved -replace '\\\\', '/')")
   })
 
+  it('lists Windows drive roots when an SSH picker browses the host root', async () => {
+    const posixChannel = createMockChannel()
+    const windowsChannel = createMockChannel()
+    const exec = vi.fn().mockResolvedValueOnce(posixChannel).mockResolvedValueOnce(windowsChannel)
+    const getConnectionManager = () => ({
+      getConnection: () => ({ exec })
+    })
+    registerSshBrowseHandler(getConnectionManager as never)
+
+    const resultPromise = handler(null, { targetId: 'ssh-1', dirPath: '/' })
+    await Promise.resolve()
+    posixChannel.stderr.emit('data', Buffer.from('"exec" is not recognized'))
+    posixChannel.emit('exit', 1)
+    posixChannel.emit('close')
+    await vi.waitFor(() => {
+      expect(windowsChannel.listenerCount('close')).toBe(1)
+    })
+    windowsChannel.emit('data', Buffer.from('/\r\nC:\\/\r\nM:\\/\r\n'))
+    windowsChannel.emit('exit', 0)
+    windowsChannel.emit('close')
+
+    await expect(resultPromise).resolves.toEqual({
+      resolvedPath: '/',
+      entries: [
+        { name: 'C:\\', isDirectory: true },
+        { name: 'M:\\', isDirectory: true }
+      ]
+    })
+    const script = decodeEncodedCommand(exec.mock.calls[1]?.[0] ?? '')
+    expect(script).toContain('Get-PSDrive -PSProvider FileSystem')
+    expect(script).not.toContain('Set-Location')
+  })
+
   it('falls back for a non-English cmd.exe reject (exit 1, localized stderr)', async () => {
     // Regression: real Windows OpenSSH + cmd.exe forwards exit 1 (not 9009) with
     // localized stderr. The old 9009/English-string trigger silently missed this,

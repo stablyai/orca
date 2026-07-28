@@ -104,10 +104,7 @@ export type ParsedInput =
       invalid?: string
     }
 
-// Path mode triggers when the input contains `/`, is drive-anchored
-// (`M:\...`, for Windows hosts), or is one of the three base-marker literals
-// (`~`, `.`, `..`). The literal `..` rule is required because "contains /"
-// alone would keep bare `..` in filter mode.
+// Slashes, drive anchors, and standalone base markers enter path mode.
 export function isPathMode(raw: string): boolean {
   if (raw.includes('/')) {
     return true
@@ -151,8 +148,7 @@ export function parsePathInput(raw: string): ParsedInput {
   if (isDrivePath(raw)) {
     base = 'drive'
     driveRoot = driveRootOf(raw)
-    // Strip the `M:` anchor plus its separator; drive segments accept both
-    // separators because Windows users habitually type backslashes.
+    // Strip the drive anchor; segments accept either Windows separator.
     remainder = raw.slice(2).replace(/^[\\/]/, '')
   } else if (raw.startsWith('/')) {
     base = 'root'

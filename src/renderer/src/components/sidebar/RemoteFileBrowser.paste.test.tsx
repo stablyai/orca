@@ -98,6 +98,27 @@ describe('RemoteFileBrowser paste-sized input', () => {
     })
   })
 
+  it('navigates a typed Windows drive root and renders its breadcrumb', async () => {
+    const { container, input, root } = await renderRemoteFileBrowser()
+    browseDir.mockClear()
+
+    await changeInput(input, 'M:\\')
+    await advancePathResolveDebounce()
+
+    expect(browseDir).toHaveBeenCalledWith({ targetId: 'target-1', dirPath: 'M:\\' })
+    await act(async () => {
+      input.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }))
+      await flushPromises()
+    })
+    expect(
+      [...container.querySelectorAll('button')].some((button) => button.textContent === 'M:')
+    ).toBe(true)
+
+    await act(async () => {
+      root.unmount()
+    })
+  })
+
   it('does not parse or remotely resolve oversized slash-containing paste text', async () => {
     const { container, input, root } = await renderRemoteFileBrowser()
     const pastedSecretPathList = 'C:/Users/alice/project/secret-token-value.txt\n'.repeat(2_000)

@@ -77,6 +77,16 @@ function browseWithWindowsPowerShell(
   conn: SshBrowseConnection,
   dirPath: string
 ): Promise<{ entries: RemoteDirEntry[]; resolvedPath: string }> {
+  if (/^[\\/]+$/.test(dirPath.trim())) {
+    const script = [
+      "$ErrorActionPreference = 'Stop'",
+      '[Console]::OutputEncoding = [System.Text.Encoding]::UTF8',
+      "Write-Output '/'",
+      "Get-PSDrive -PSProvider FileSystem | Where-Object { $_.Name -match '^[A-Za-z]$' } | Sort-Object Name | ForEach-Object { Write-Output (($_.Name.ToUpperInvariant() + ':\\') + '/') }"
+    ].join('; ')
+    return runBrowseCommand(conn, powerShellCommand(script), { wrapCommand: false })
+  }
+
   const script = [
     "$ErrorActionPreference = 'Stop'",
     // Why: PowerShell 5.1 emits redirected stdout in the OEM code page; pin UTF-8 so non-ASCII names aren't mojibake.

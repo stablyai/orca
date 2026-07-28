@@ -15633,8 +15633,7 @@ export class OrcaRuntimeService {
   }
 
   async browseServerDir(pathValue: string): Promise<{ resolvedPath: string; entries: DirEntry[] }> {
-    // Why: `resolve('/')` on Windows silently lands on `C:\`, trapping remote
-    // pickers on the system drive; answer host-root browses with the drives.
+    // Windows resolves `/` to the current drive, so expose drive roots instead.
     if (isServerDriveListRequest(pathValue)) {
       return listWindowsDrives()
     }
