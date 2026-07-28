@@ -94,6 +94,7 @@ import {
 import { useWorkspaceSections } from '../../../src/worktree/use-workspace-sections'
 import { getMobileWorkspaceLineageGroupKey } from '../../../src/worktree/mobile-workspace-lineage'
 import { areWorktreeListsEqual } from '../../../src/worktree/worktree-list-snapshot'
+import { createWorktreeRemovalTracker } from '../../../src/worktree/worktree-removal'
 import { repoColor } from '../../../src/worktree/repo-color'
 import {
   WORKSPACE_GROUP_OPTIONS as GROUP_OPTIONS,
@@ -146,6 +147,7 @@ export function HostScreen({
   const repoMetadataFetchedAtRef = useRef(0)
   const newWorktreeModalRef = useRef<{ open: () => void }>(null)
   const newWorktreeModalVisibleRef = useRef(false)
+  const worktreeRemovalRef = useRef(createWorktreeRemovalTracker())
   const closeHostClient = useCloseHost()
   const forceReconnectHost = useForceReconnect()
   const [worktrees, setWorktrees] = useState<Worktree[]>(initialCache ?? [])
@@ -433,23 +435,21 @@ export function HostScreen({
         }
         if (response.ok) {
           const result = (response as RpcSuccess).result as { worktrees: Worktree[] }
+          // Why: a poll in flight when a delete lands still lists the deleted worktree; without this the row comes back.
+          const snapshot = worktreeRemovalRef.current.reconcile(result.worktrees)
           // Why: reuse the existing array on identical snapshots to keep SectionList/sort rebuilds off the tap path.
-          setWorktrees((current) =>
-            areWorktreeListsEqual(current, result.worktrees) ? current : result.worktrees
-          )
+          setWorktrees((current) => (areWorktreeListsEqual(current, snapshot) ? current : snapshot))
           setLastKnownWorktrees((current) =>
-            areWorktreeListsEqual(current, result.worktrees) ? current : result.worktrees
+            areWorktreeListsEqual(current, snapshot) ? current : snapshot
           )
           setWorktreesLoaded(true)
           // Why (#8498): overwrite the home-written cache with the confirmed snapshot so a reconnect/remount can't serve a stale list.
           if (hostId) {
-            setCachedWorktrees(hostId, result.worktrees)
+            setCachedWorktrees(hostId, snapshot)
           }
           // Drop the optimistic active override once the host reports it active, so later desktop changes win.
           setOptimisticActiveWorktreeId((pending) =>
-            pending && result.worktrees.some((w) => w.worktreeId === pending && w.isActive)
-              ? null
-              : pending
+            pending && snapshot.some((w) => w.worktreeId === pending && w.isActive) ? null : pending
           )
 
           // Clear optimistic sleep overrides once the server confirms inactive (liveTerminalCount === 0).
@@ -459,7 +459,7 @@ export function HostScreen({
             }
             const still = new Set<string>()
             for (const id of prev) {
-              const wt = result.worktrees.find((w) => w.worktreeId === id)
+              const wt = snapshot.find((w) => w.worktreeId === id)
               if (wt && wt.liveTerminalCount > 0) {
                 still.add(id)
               }
@@ -468,9 +468,7 @@ export function HostScreen({
           })
 
           // Sync pin state from server so desktop-initiated pins reflect without relying on stale AsyncStorage.
-          const serverPinned = new Set(
-            result.worktrees.filter((w) => w.isPinned).map((w) => w.worktreeId)
-          )
+          const serverPinned = new Set(snapshot.filter((w) => w.isPinned).map((w) => w.worktreeId))
           setPinnedIds((prev) => {
             if (serverPinned.size === prev.size && [...serverPinned].every((id) => prev.has(id))) {
               return prev
@@ -581,26 +579,17 @@ export function HostScreen({
       if (!client) {
         return
       }
-
-      const removeFromList = (list: Worktree[]) =>
-        list.filter((w) => w.worktreeId !== item.worktreeId)
-      setWorktrees(removeFromList)
-      setLastKnownWorktrees(removeFromList)
-
-      try {
-        const response = await client.sendRequest('worktree.rm', {
-          worktree: `id:${item.worktreeId}`,
-          force: true
-        })
-        if (!response.ok) {
-          setWorktrees((prev) => [...prev, item])
-          setLastKnownWorktrees((prev) => [...prev, item])
-        }
-        void fetchWorktrees()
-      } catch {
-        setWorktrees((prev) => [...prev, item])
-        setLastKnownWorktrees((prev) => [...prev, item])
-      }
+      await worktreeRemovalRef.current.remove({
+        worktree: item,
+        client,
+        updateWorktreeLists: (updater) => {
+          setWorktrees(updater)
+          setLastKnownWorktrees(updater)
+        },
+        refresh: () => void fetchWorktrees(),
+        // Why: a silently restored row is indistinguishable from "delete does nothing".
+        onFailure: (message) => Alert.alert('Could not delete workspace', message)
+      })
     },
     [client, fetchWorktrees]
   )
