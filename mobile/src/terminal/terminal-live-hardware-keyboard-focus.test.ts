@@ -38,6 +38,31 @@ describe('terminal live hardware keyboard focus', () => {
     ).toBe(false)
   })
 
+  // Silent focus would immediately cancel an explicit soft-keyboard request.
+  it('Given an explicit soft-keyboard request When auto-silent checked Then stands down', () => {
+    expect(
+      shouldAutoSilentFocusLiveInput({
+        liveInputEnabled: true,
+        canSend: true,
+        wantSoftKeyboard: true,
+        isFocused: false,
+        modalOpen: false
+      })
+    ).toBe(false)
+  })
+
+  it('Given a terminal that cannot send When auto-silent checked Then stands down', () => {
+    expect(
+      shouldAutoSilentFocusLiveInput({
+        liveInputEnabled: true,
+        canSend: false,
+        wantSoftKeyboard: false,
+        isFocused: false,
+        modalOpen: false
+      })
+    ).toBe(false)
+  })
+
   it('Given unfocused live terminal When auto-silent checked Then focuses silently', () => {
     expect(
       shouldAutoSilentFocusLiveInput({

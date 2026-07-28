@@ -15,6 +15,46 @@ describe('terminal live hardware key mapping', () => {
     ).toEqual({ kind: 'ignore' })
   })
 
+  // A special key proves the Meta guard rather than the printable-key fallback.
+  it('Given Command+ArrowLeft When mapped Then ignores so iPadOS keeps the shortcut', () => {
+    expect(
+      mapTerminalLiveHardwareKeyEvent(
+        {
+          key: 'ArrowLeft',
+          modifiers: { ctrl: false, alt: false, shift: false, meta: true },
+          repeat: false
+        },
+        { heldText: '', sentText: '' }
+      )
+    ).toEqual({ kind: 'ignore' })
+  })
+
+  it('Given Command+Shift+ArrowLeft When mapped Then ignores despite terminal modifiers', () => {
+    expect(
+      mapTerminalLiveHardwareKeyEvent(
+        {
+          key: 'ArrowLeft',
+          modifiers: { ctrl: false, alt: false, shift: true, meta: true },
+          repeat: false
+        },
+        { heldText: '', sentText: '' }
+      )
+    ).toEqual({ kind: 'ignore' })
+  })
+
+  it('Given Command+Backspace with field text When mapped Then leaves the field to the system', () => {
+    expect(
+      mapTerminalLiveHardwareKeyEvent(
+        {
+          key: 'Backspace',
+          modifiers: { ctrl: false, alt: false, shift: false, meta: true },
+          repeat: false
+        },
+        { heldText: '', sentText: 'ab' }
+      )
+    ).toEqual({ kind: 'ignore' })
+  })
+
   it('Given plain printable When mapped Then ignores so TextInput owns typing', () => {
     expect(
       mapTerminalLiveHardwareKeyEvent(
@@ -195,6 +235,59 @@ describe('terminal live hardware key mapping', () => {
         { heldText: '', sentText: '' }
       )
     ).toEqual({ kind: 'ignore' })
+  })
+
+  // Modified Enter proves the explicit guard instead of the byte lookup.
+  it('Given Ctrl+Enter When mapped Then still ignores so submit path owns CR', () => {
+    expect(
+      mapTerminalLiveHardwareKeyEvent(
+        {
+          key: 'Enter',
+          modifiers: { ctrl: true, alt: false, shift: false, meta: false },
+          repeat: false
+        },
+        { heldText: '', sentText: '' }
+      )
+    ).toEqual({ kind: 'ignore' })
+  })
+
+  it('Given Shift+Enter When mapped Then still ignores so submit path owns CR', () => {
+    expect(
+      mapTerminalLiveHardwareKeyEvent(
+        {
+          key: 'Enter',
+          modifiers: { ctrl: false, alt: false, shift: true, meta: false },
+          repeat: false
+        },
+        { heldText: '', sentText: '' }
+      )
+    ).toEqual({ kind: 'ignore' })
+  })
+
+  it('Given Shift+F5 When mapped Then sends the modified function sequence', () => {
+    expect(
+      mapTerminalLiveHardwareKeyEvent(
+        {
+          key: 'F5',
+          modifiers: { ctrl: false, alt: false, shift: true, meta: false },
+          repeat: false
+        },
+        { heldText: '', sentText: '' }
+      )
+    ).toEqual({ kind: 'send-bytes', bytes: '\x1b[15;2~' })
+  })
+
+  it('Given Ctrl+F5 When mapped Then sends the ctrl-modified function sequence', () => {
+    expect(
+      mapTerminalLiveHardwareKeyEvent(
+        {
+          key: 'F5',
+          modifiers: { ctrl: true, alt: false, shift: false, meta: false },
+          repeat: false
+        },
+        { heldText: '', sentText: '' }
+      )
+    ).toEqual({ kind: 'send-bytes', bytes: '\x1b[15;5~' })
   })
 
   it('Given Option+ArrowLeft When mapped Then sends alt-modified CSI left', () => {

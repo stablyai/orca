@@ -21,11 +21,16 @@ public class HardwareKeyboardCaptureView: ExpoView {
     return enabled
   }
 
+  // UIKit re-reads this invariant command set for every key event.
+  private static let terminalKeyCommands: [UIKeyCommand] = buildTerminalKeyCommands(
+    action: #selector(HardwareKeyboardCaptureView.handleKeyCommand(_:))
+  )
+
   public override var keyCommands: [UIKeyCommand]? {
     guard enabled else {
       return nil
     }
-    return Self.buildTerminalKeyCommands(action: #selector(handleKeyCommand(_:)))
+    return Self.terminalKeyCommands
   }
 
   @objc func handleKeyCommand(_ sender: UIKeyCommand) {

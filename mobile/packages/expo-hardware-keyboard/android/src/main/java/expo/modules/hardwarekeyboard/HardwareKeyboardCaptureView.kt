@@ -78,9 +78,13 @@ class HardwareKeyboardCaptureView(context: Context, appContext: AppContext) :
     return true
   }
 
+  // Shift and Caps Lock change case but do not indicate alternate-layout text.
   private fun producesAlternateLayoutText(event: KeyEvent): Boolean {
-    val metaWithoutCtrl = event.metaState and KeyEvent.META_CTRL_MASK.inv()
-    val alternateCharacter = event.getUnicodeChar(metaWithoutCtrl)
+    val altOnly = event.metaState and KeyEvent.META_ALT_MASK
+    if (altOnly == 0) {
+      return false
+    }
+    val alternateCharacter = event.getUnicodeChar(altOnly)
     val unmodifiedCharacter = event.getUnicodeChar(0)
     return alternateCharacter != 0 && alternateCharacter != unmodifiedCharacter
   }
