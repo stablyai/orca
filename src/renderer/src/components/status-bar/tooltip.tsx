@@ -4,7 +4,14 @@ import {
   formatResetDuration
 } from '../../../../shared/rate-limit-reset-format'
 import { AgentIcon } from '@/lib/agent-catalog'
-import { ClaudeIcon, GeminiIcon, MiniMaxIcon, OpenAIIcon, OpenCodeGoIcon } from './icons'
+import {
+  ClaudeIcon,
+  GeminiIcon,
+  MiniMaxIcon,
+  OpenAIIcon,
+  OpenCodeGoIcon,
+  OllamaCloudIcon
+} from './icons'
 import { translate } from '@/i18n/i18n'
 import {
   getProviderDisplayName,
@@ -83,6 +90,9 @@ export function ProviderIcon({ provider }: { provider: string }): React.JSX.Elem
   }
   if (provider === 'opencode-go') {
     return <OpenCodeGoIcon size={13} />
+  }
+  if (provider === 'ollama-cloud') {
+    return <OllamaCloudIcon size={13} />
   }
   if (provider === 'kimi') {
     return <AgentIcon agent="kimi" size={13} />

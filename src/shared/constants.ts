@@ -321,6 +321,7 @@ export function getDefaultSettings(homedir: string): GlobalSettings {
     defaultRepoSelection: null,
     defaultLinearTeamSelection: null,
     opencodeSessionCookie: '',
+    ollamaSessionCookie: '',
     opencodeWorkspaceId: '',
     minimaxGroupId: '',
     minimaxUsageModels: 'general',

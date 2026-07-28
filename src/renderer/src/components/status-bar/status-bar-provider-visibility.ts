@@ -6,6 +6,7 @@ export type UsageProviderSettings = Pick<
   | 'codexManagedAccounts'
   | 'claudeManagedAccounts'
   | 'opencodeSessionCookie'
+  | 'ollamaSessionCookie'
   | 'geminiCliOAuthEnabled'
 > & {
   // Why: Antigravity has no separate persisted usage credential in Orca. The
@@ -24,6 +25,7 @@ type UsageProviderSnapshots = {
   codex: ProviderRateLimits | null | undefined
   gemini: ProviderRateLimits | null | undefined
   opencodeGo: ProviderRateLimits | null | undefined
+  ollamaCloud: ProviderRateLimits | null | undefined
   kimi: ProviderRateLimits | null | undefined
   antigravity: ProviderRateLimits | null | undefined
   minimax: ProviderRateLimits | null | undefined
@@ -74,6 +76,7 @@ export function hasUsageProviderSettings(
     (settings?.claudeManagedAccounts?.length ?? 0) > 0 ||
     settings?.geminiCliOAuthEnabled === true ||
     Boolean(settings?.opencodeSessionCookie?.trim()) ||
+    Boolean(settings?.ollamaSessionCookie?.trim()) ||
     // Antigravity's durable signal requires geminiCliOAuthEnabled, so it is
     // already covered by the gemini term above.
     settings?.minimaxCookieConfigured === true ||
@@ -99,6 +102,9 @@ export function hasUsageProviderSettingsForProvider(
   }
   if (providerId === 'opencode-go') {
     return Boolean(settings.opencodeSessionCookie?.trim())
+  }
+  if (providerId === 'ollama-cloud') {
+    return Boolean(settings.ollamaSessionCookie?.trim())
   }
   if (providerId === 'antigravity') {
     // Why: the Antigravity snapshot mirrors the Gemini fetch, which stays
@@ -162,6 +168,7 @@ export function isUsageEmptyState(
     isProviderSnapshotPending(providers.codex) ||
     isProviderSnapshotPending(providers.gemini) ||
     isProviderSnapshotPending(providers.opencodeGo) ||
+    isProviderSnapshotPending(providers.ollamaCloud) ||
     isProviderSnapshotPending(providers.kimi) ||
     antigravitySnapshotPending ||
     isProviderSnapshotPending(providers.minimax) ||
@@ -175,6 +182,7 @@ export function isUsageEmptyState(
     !isProviderConfigured(providers.codex) &&
     !isProviderConfigured(providers.gemini) &&
     !isProviderConfigured(providers.opencodeGo) &&
+    !isProviderConfigured(providers.ollamaCloud) &&
     !isProviderConfigured(providers.kimi) &&
     !isProviderConfigured(providers.antigravity) &&
     !isProviderConfigured(providers.minimax) &&

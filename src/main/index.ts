@@ -2065,6 +2065,12 @@ app.whenReady().then(async () => {
       workspaceIdOverride: settings.opencodeWorkspaceId
     }
   })
+  rateLimits.setOllamaCloudConfigResolver(() => {
+    const settings = store!.getSettings()
+    return {
+      sessionCookie: settings.ollamaSessionCookie
+    }
+  })
   rateLimits.setMiniMaxConfigResolver(() => {
     const settings = store!.getSettings()
     return {

@@ -14,6 +14,8 @@ export function getUsageProviderAccountsSectionId(
       return 'accounts-gemini'
     case 'opencode-go':
       return 'accounts-opencode-go'
+    case 'ollama-cloud':
+      return 'accounts-ollama-cloud'
     case 'minimax':
       return 'accounts-minimax'
     case 'grok':

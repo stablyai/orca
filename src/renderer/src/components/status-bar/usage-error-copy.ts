@@ -14,6 +14,9 @@ export function getProviderDisplayName(provider: ProviderRateLimits['provider'])
   if (provider === 'opencode-go') {
     return 'OpenCode Go'
   }
+  if (provider === 'ollama-cloud') {
+    return 'Ollama Cloud'
+  }
   if (provider === 'kimi') {
     return 'Kimi'
   }
