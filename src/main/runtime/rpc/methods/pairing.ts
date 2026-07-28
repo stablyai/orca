@@ -12,6 +12,7 @@ import {
 import { RegisterDeviceKeyParamsSchema } from '../../../../shared/device-key-registration-contract'
 import { REGISTER_DEVICE_KEY_METHOD } from '../../../../shared/device-key-capability'
 import {
+  PairingCreateOfferParamsSchema,
   PairingGetEndpointsParamsSchema,
   PairingProvisionRelayParamsSchema
 } from '../../../../shared/mobile-relay-credential-contract'
@@ -22,7 +23,7 @@ export const PAIRING_METHODS = [
     permission: 'pairing-admin',
     params: PairingGetEndpointsParamsSchema,
     handler: async (params, ctx) => {
-      if (!ctx.pairing) {
+      if (!ctx.pairing?.getEndpoints) {
         throw new Error('pairing_context_unavailable')
       }
       return await ctx.pairing.getEndpoints(params)
@@ -33,10 +34,23 @@ export const PAIRING_METHODS = [
     permission: 'pairing-admin',
     params: PairingProvisionRelayParamsSchema,
     handler: async (params, ctx) => {
-      if (!ctx.pairing) {
+      if (!ctx.pairing?.provisionRelay) {
         throw new Error('pairing_context_unavailable')
       }
       return await ctx.pairing.provisionRelay(params)
+    }
+  }),
+  // Why: headless / already-running hosts mint grants without the Settings UI path.
+  // Must stay off MOBILE_RPC_METHOD_ALLOWLIST so phones cannot escalate to new runtime grants.
+  defineMethod({
+    name: 'pairing.createOffer',
+    permission: 'pairing-admin',
+    params: PairingCreateOfferParamsSchema,
+    handler: (params, ctx) => {
+      if (!ctx.pairing?.createOffer) {
+        throw new Error('pairing_context_unavailable')
+      }
+      return ctx.pairing.createOffer(params)
     }
   }),
   defineMethod({

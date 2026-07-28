@@ -253,7 +253,8 @@ export class RpcDispatcher {
           revalidateLegacyCoordinator: legacyCoordinator?.revalidate,
           orchestrationCompatibilityCallerAuthority:
             compatibility.orchestrationCompatibilityCallerAuthority,
-          orchestrationCompatibilityEvidence: request.orchestrationCompatibilityEvidence
+          orchestrationCompatibilityEvidence: request.orchestrationCompatibilityEvidence,
+          pairing: options?.pairing
         })
       )
     }
