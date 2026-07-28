@@ -1,20 +1,32 @@
 import { EventEmitter } from 'node:events'
 import { existsSync } from 'node:fs'
+import type * as NodeFs from 'node:fs'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 const {
   deleteKeychainMock,
   readKeychainMock,
   resolveCliCommandMock,
+  rmSyncMock,
   spawnMock,
   writeKeychainMock
 } = vi.hoisted(() => ({
   deleteKeychainMock: vi.fn(),
   readKeychainMock: vi.fn(),
   resolveCliCommandMock: vi.fn(),
+  rmSyncMock: vi.fn(),
   spawnMock: vi.fn(),
   writeKeychainMock: vi.fn()
 }))
+
+// Why: rmSync is the only step of cleanup that can actually reject (Windows
+// EBUSY on the temp dir); the Keychain steps swallow their own errors. Keep the
+// real implementation by default so the temp-dir assertions stay honest.
+vi.mock('node:fs', async (importOriginal) => {
+  const actual = await importOriginal<typeof NodeFs>()
+  rmSyncMock.mockImplementation(actual.rmSync)
+  return { ...actual, rmSync: rmSyncMock }
+})
 
 vi.mock('node:child_process', () => ({
   execFile: vi.fn(),
@@ -37,6 +49,20 @@ function successfulChild(): EventEmitter {
   const child = new EventEmitter()
   queueMicrotask(() => child.emit('exit', 0))
   return child
+}
+
+// Why: identify the handler under test by set difference, not by position —
+// `.at(-1)` picks up any listener a later registration appends (vitest installs
+// its own once-wrapped SIGINT teardown), which made assertions flake.
+function newSignalListener(
+  signal: NodeJS.Signals,
+  before: readonly unknown[]
+): (signal: NodeJS.Signals) => void {
+  const added = process.listeners(signal).filter((listener) => !before.includes(listener))
+  if (added.length !== 1) {
+    throw new Error(`Expected 1 new ${signal} listener, found ${added.length}`)
+  }
+  return added[0] as (signal: NodeJS.Signals) => void
 }
 
 function accountState(email: string) {
@@ -150,13 +176,13 @@ describe('account CLI handlers', () => {
       return child
     })
     const exitSpy = vi.spyOn(process, 'exit').mockImplementation((() => undefined) as never)
+    const listenersBefore = process.listeners('SIGINT')
 
     const pending = ACCOUNT_HANDLERS['account add'](context('codex')).catch(() => {})
     await vi.waitFor(() => expect(codexHome).not.toBe(''))
     expect(existsSync(codexHome)).toBe(true)
 
-    const onSignal = process.listeners('SIGINT').at(-1) as (signal: NodeJS.Signals) => void
-    onSignal('SIGINT')
+    newSignalListener('SIGINT', listenersBefore)('SIGINT')
 
     await vi.waitFor(() => expect(exitSpy).toHaveBeenCalledWith(130))
     expect(existsSync(codexHome)).toBe(false)
@@ -178,12 +204,12 @@ describe('account CLI handlers', () => {
       return child
     })
     const exitSpy = vi.spyOn(process, 'exit').mockImplementation((() => undefined) as never)
+    const listenersBefore = process.listeners('SIGHUP')
 
     const pending = ACCOUNT_HANDLERS['account add'](context('codex')).catch(() => {})
     await vi.waitFor(() => expect(codexHome).not.toBe(''))
 
-    const onSignal = process.listeners('SIGHUP').at(-1) as (signal: NodeJS.Signals) => void
-    onSignal('SIGHUP')
+    newSignalListener('SIGHUP', listenersBefore)('SIGHUP')
 
     await vi.waitFor(() => expect(exitSpy).toHaveBeenCalledWith(129))
     expect(existsSync(codexHome)).toBe(false)
@@ -212,12 +238,14 @@ describe('account CLI handlers', () => {
       return child
     })
     const exitSpy = vi.spyOn(process, 'exit').mockImplementation((() => undefined) as never)
+    const sigintBefore = process.listeners('SIGINT')
+    const sigtermBefore = process.listeners('SIGTERM')
 
     const pending = ACCOUNT_HANDLERS['account add'](context('claude')).catch(() => {})
     await vi.waitFor(() => expect(configDir).not.toBe(''))
 
-    const onSigint = process.listeners('SIGINT').at(-1) as (signal: NodeJS.Signals) => void
-    const onSigterm = process.listeners('SIGTERM').at(-1) as (signal: NodeJS.Signals) => void
+    const onSigint = newSignalListener('SIGINT', sigintBefore)
+    const onSigterm = newSignalListener('SIGTERM', sigtermBefore)
     // Why: `rawListeners` exposes the `once` wrapper, so this fails if the handler
     // is registered with `once` — where a second Ctrl-C falls through to Node's
     // default and kills the process mid-cleanup.
@@ -263,14 +291,14 @@ describe('account CLI handlers', () => {
     )
     const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {})
     const exitSpy = vi.spyOn(process, 'exit').mockImplementation((() => undefined) as never)
+    const listenersBefore = process.listeners('SIGINT')
 
     void ACCOUNT_HANDLERS['account add'](context('codex')).catch(() => {})
     await vi.waitFor(() =>
       expect(callMock).toHaveBeenCalledWith('accounts.addCodexFromHome', expect.anything())
     )
 
-    const onSignal = process.listeners('SIGINT').at(-1) as (signal: NodeJS.Signals) => void
-    onSignal('SIGINT')
+    newSignalListener('SIGINT', listenersBefore)('SIGINT')
 
     await vi.waitFor(() => expect(exitSpy).toHaveBeenCalledWith(130))
     expect(warnSpy).toHaveBeenCalledWith(expect.stringContaining('may still have been registered'))
@@ -291,15 +319,13 @@ describe('account CLI handlers', () => {
         })
     )
 
-    const listenersBefore = process.listeners('SIGINT').length
+    const listenersBefore = process.listeners('SIGINT')
 
     const pending = ACCOUNT_HANDLERS['account add'](context('claude'))
     await vi.waitFor(() => expect(deleteKeychainMock).toHaveBeenCalled())
 
     // Why: cleanup is still in flight here, so this add's guard must still be installed.
-    const armed = process.listeners('SIGINT')
-    expect(armed).toHaveLength(listenersBefore + 1)
-    const handler = armed.at(-1)
+    const handler = newSignalListener('SIGINT', listenersBefore)
 
     releaseKeychainDelete?.()
     await pending
@@ -349,6 +375,34 @@ describe('account CLI handlers', () => {
       expect(callMock).not.toHaveBeenCalled()
     }
   )
+
+  it('keeps the original add error when cleanup also fails', async () => {
+    // Why: cleanup runs in a `finally`, so an unguarded rejection there replaces
+    // the error that actually explains why the add failed.
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    rmSyncMock.mockImplementationOnce(() => {
+      throw new Error('EBUSY: resource busy or locked')
+    })
+    callMock.mockImplementation((method: string) =>
+      method === 'accounts.list'
+        ? Promise.resolve({
+            id: 'test',
+            ok: true,
+            result: { claude: accountState('c@e.com'), codex: accountState('x@e.com') },
+            _meta: { runtimeId: 'test-runtime' }
+          })
+        : Promise.reject(new Error('registration rejected by runtime'))
+    )
+
+    await expect(ACCOUNT_HANDLERS['account add'](context('codex'))).rejects.toThrow(
+      'registration rejected by runtime'
+    )
+    expect(warnSpy).toHaveBeenCalledWith(
+      expect.stringContaining('Failed to clean up the temporary login directory'),
+      expect.any(Error)
+    )
+    warnSpy.mockRestore()
+  })
 
   it('rejects `--agent` with no value instead of defaulting to Claude', async () => {
     // Why: the parser turns a valueless flag into boolean true, so a silent
