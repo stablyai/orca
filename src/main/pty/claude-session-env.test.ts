@@ -7,6 +7,7 @@ describe('stripInheritedClaudeSessionEnv', () => {
       CLAUDECODE: '1',
       CLAUDE_CODE_CHILD_SESSION: '1',
       CLAUDE_CODE_SESSION_ID: 'session-123',
+      CLAUDE_CODE_EXECPATH: '/usr/local/bin/claude',
       CLAUDE_CODE_ENTRYPOINT: 'cli',
       CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS: '1',
       PATH: '/usr/bin',
