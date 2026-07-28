@@ -160,4 +160,5 @@ export {
   subtractCodexUsage,
   tokenTotal
 } from './session-scanner-token-values'
+/** Convert unknown scanner failures using the shared error-message policy. */
 export { errorMessage } from '../../shared/error-message'
