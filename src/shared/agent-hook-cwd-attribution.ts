@@ -33,7 +33,13 @@ function collapseDotSegments(absolutePath: string): string {
     }
     segments.push(segment)
   }
-  return segments.length > 0 ? `${driveRoot}/${segments.join('/')}` : driveRoot || '/'
+  // Why: a collapsed drive root keeps its slash, else `c:` fails DRIVE_ROOTED and a
+  // Windows path would be compared against a POSIX one as if the notations matched.
+  return segments.length > 0
+    ? `${driveRoot}/${segments.join('/')}`
+    : driveRoot
+      ? `${driveRoot}/`
+      : '/'
 }
 
 /** Reduce a path to a comparable form, or null when it has no root this can compare. */
@@ -48,7 +54,7 @@ function normalizeComparablePath(raw: string): string | null {
 
 /** True when `inner` is `outer` itself or sits beneath it. */
 function isSameOrInside(inner: string, outer: string): boolean {
-  return inner === outer || inner.startsWith(outer === '/' ? '/' : `${outer}/`)
+  return inner === outer || inner.startsWith(outer.endsWith('/') ? outer : `${outer}/`)
 }
 
 /**

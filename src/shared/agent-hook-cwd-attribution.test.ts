@@ -75,6 +75,16 @@ describe('hookCwdContradictsWorktree', () => {
     expect(hookCwdContradictsWorktree(WORKTREE, '/../../..')).toBe(false)
   })
 
+  it('keeps a fully collapsed drive root recognizable as Windows notation', () => {
+    // Why: if `C:\..\..` collapsed to a slashless `c:`, it would stop reading as a drive
+    // path and get compared against POSIX paths, which can only produce a false conflict.
+    expect(hookCwdContradictsWorktree(`${REPO}::C:\\..\\..`, '/Users/dev/projects/api')).toBe(false)
+    expect(hookCwdContradictsWorktree(WORKTREE, 'C:\\..\\..')).toBe(false)
+    // Within Windows notation the drive root is above every path on that drive.
+    expect(hookCwdContradictsWorktree(`${REPO}::C:\\Users\\dev`, 'C:\\..')).toBe(false)
+    expect(hookCwdContradictsWorktree(`${REPO}::C:\\`, 'C:\\Users\\dev')).toBe(false)
+  })
+
   it('refuses to judge across notations a single host can express two ways', () => {
     // WSL reports the POSIX mount for a drive-rooted worktree, and UNC paths name the distro.
     expect(hookCwdContradictsWorktree(`${REPO}::C:\\Users\\dev\\api`, '/mnt/c/Users/dev/api')).toBe(
