@@ -12924,6 +12924,9 @@
           "bb7f599ee7": "Abrir configuración",
           "2d5b9fabf9": "Acceso al micrófono denegado. Conceda acceso en la configuración del sistema, luego reinicie Orca.",
           "5d2c3e7ae3": "No se detectó ninguna voz."
+        },
+        "DictationIndicator": {
+          "335e1bc6cb": "Detener dictado"
         }
       },
       "dashboard": {
