@@ -26,6 +26,7 @@ import { routeSshFilesystemWatchNotification } from './ssh-filesystem-watch-noti
 import type { WorkspaceSpaceDirectoryScanResult } from '../../shared/workspace-space-types'
 import { isWindowsRemoteHost, type RemoteHostPlatform } from '../ssh/ssh-remote-platform'
 import { SshFilesystemDirectoryReader } from './ssh-filesystem-directory-reader'
+import { requestSshMarkdownDocumentPaths } from './ssh-markdown-document-listing'
 const WORKSPACE_SPACE_SCAN_TIMEOUT_MS = 130_000
 
 export class SshFilesystemProvider implements IFilesystemProvider {
@@ -324,6 +325,8 @@ export class SshFilesystemProvider implements IFilesystemProvider {
       signal: options?.signal
     })) as string[]
   }
+
+  listMarkdownDocuments = (rootPath: string) => requestSshMarkdownDocumentPaths(this.mux, rootPath)
 
   async watch(
     rootPath: string,

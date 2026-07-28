@@ -114,6 +114,10 @@ vi.mock('electron', () => ({
 
 vi.mock('fs/promises', () => ({
   readdir: readdirMock,
+  // Why: markdown discovery streams directory entries via opendir instead of
+  // materializing them. `for await` accepts a plain array, so delegating keeps
+  // the readdir fixtures below as the single source of directory contents.
+  opendir: (dirPath: string) => readdirMock(dirPath, { withFileTypes: true }),
   readFile: readFileMock,
   writeFile: writeFileMock,
   stat: statMock,

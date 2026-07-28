@@ -82,7 +82,8 @@ export type GitResponseStreamMarker = {
 
 export const RelayErrorCode = {
   TooManyStreams: -33006,
-  StreamProtocolError: -33007
+  StreamProtocolError: -33007,
+  MarkdownDocumentListingCapacity: -33008
 } as const
 
 export type JsonRpcRequest = {

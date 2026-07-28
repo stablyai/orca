@@ -40,6 +40,20 @@ const ORDERED = /^\s*\d+[.)]\s+(.*)$/
 const HTML_BLOCK = /<(details|blockquote)\b[^>]*>([\s\S]*?)<\/\1>/i
 const SUMMARY = /<summary\b[^>]*>([\s\S]*?)<\/summary>/i
 
+export const COMMENT_MARKDOWN_LIMITS = {
+  sourceCodeUnits: 1024 * 1024,
+  lines: 10_000,
+  detailsDepth: 64,
+  tableColumns: 256,
+  tableRows: 2000,
+  tableCells: 50_000,
+  fallbackCodeUnits: 64 * 1024
+} as const
+
+const LIMIT_FALLBACK_SUFFIX = '\n\n[Comment preview truncated for safety]'
+
+class CommentMarkdownLimitError extends Error {}
+
 // Removes residual HTML tags from rendered text so stray <b>/<kbd>/<sub> etc. don't
 // show literally. Conservative: only matches `<tag ...>` / `</tag>` shapes, so a bare
 // "a < b" in prose is left alone.
@@ -48,9 +62,56 @@ export function stripHtmlTags(text: string): string {
 }
 
 export function parseMarkdownBlocks(content: string): MarkdownBlock[] {
+  if (!isCommentMarkdownWithinPreparseLimits(content)) {
+    return commentMarkdownLimitFallback(content)
+  }
   // Drop HTML comments and normalize <br> before block parsing.
   const cleaned = content.replace(/<!--[\s\S]*?-->/g, '').replace(/<br\s*\/?>/gi, '\n')
-  return parseSegment(cleaned)
+  if (!isCommentMarkdownWithinPreparseLimits(cleaned)) {
+    return commentMarkdownLimitFallback(content)
+  }
+  try {
+    return parseSegment(cleaned)
+  } catch (error) {
+    if (error instanceof CommentMarkdownLimitError) {
+      return commentMarkdownLimitFallback(content)
+    }
+    throw error
+  }
+}
+
+function isCommentMarkdownWithinPreparseLimits(content: string): boolean {
+  if (content.length > COMMENT_MARKDOWN_LIMITS.sourceCodeUnits) {
+    return false
+  }
+  let lines = 1
+  let detailsDepth = 0
+  const detailsPattern = /<\/?details\b/gi
+  for (let index = 0; index < content.length; index += 1) {
+    if (content.charCodeAt(index) !== 10) {
+      continue
+    }
+    lines += 1
+    if (lines > COMMENT_MARKDOWN_LIMITS.lines) {
+      return false
+    }
+  }
+  for (const match of content.matchAll(detailsPattern)) {
+    if (match[0][1] === '/') {
+      detailsDepth = Math.max(0, detailsDepth - 1)
+      continue
+    }
+    detailsDepth += 1
+    if (detailsDepth > COMMENT_MARKDOWN_LIMITS.detailsDepth) {
+      return false
+    }
+  }
+  return true
+}
+
+function commentMarkdownLimitFallback(content: string): MarkdownBlock[] {
+  const preview = content.slice(0, COMMENT_MARKDOWN_LIMITS.fallbackCodeUnits)
+  return [{ kind: 'paragraph', text: `${preview}${LIMIT_FALLBACK_SUFFIX}` }]
 }
 
 // Splits a segment at top-level <details>/<blockquote> regions (preserving order),
@@ -120,8 +181,17 @@ function parseLines(content: string): MarkdownBlock[] {
       const align = parseAlignRow(lines[i + 1])
       i += 2
       const rows: string[][] = []
+      let tableCells = headers.length
       while (i < lines.length && lines[i].includes('|') && lines[i].trim() !== '') {
-        rows.push(splitTableRow(lines[i]))
+        if (rows.length >= COMMENT_MARKDOWN_LIMITS.tableRows) {
+          throw new CommentMarkdownLimitError('Table row limit exceeded')
+        }
+        const row = splitTableRow(lines[i])
+        tableCells += row.length
+        if (tableCells > COMMENT_MARKDOWN_LIMITS.tableCells) {
+          throw new CommentMarkdownLimitError('Table cell limit exceeded')
+        }
+        rows.push(row)
         i += 1
       }
       blocks.push({ kind: 'table', headers, rows, align })
@@ -207,11 +277,17 @@ function splitTableRow(line: string): string[] {
       continue
     }
     if (ch === '|') {
+      if (cells.length >= COMMENT_MARKDOWN_LIMITS.tableColumns) {
+        throw new CommentMarkdownLimitError('Table column limit exceeded')
+      }
       cells.push(cell.trim())
       cell = ''
       continue
     }
     cell += ch
+  }
+  if (cells.length >= COMMENT_MARKDOWN_LIMITS.tableColumns) {
+    throw new CommentMarkdownLimitError('Table column limit exceeded')
   }
   cells.push(cell.trim())
   return cells

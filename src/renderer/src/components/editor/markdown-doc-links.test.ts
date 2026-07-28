@@ -71,6 +71,10 @@ describe('splitMarkdownDocLinkText', () => {
 })
 
 describe('resolveMarkdownDocLink', () => {
+  it('shares one immutable index for consumers of the same document snapshot', () => {
+    expect(createMarkdownDocumentIndex(documents)).toBe(createMarkdownDocumentIndex(documents))
+  })
+
   it('resolves basename links', () => {
     const result = resolveMarkdownDocLink('setup-guide', createMarkdownDocumentIndex(documents))
     expect(result.status).toBe('resolved')

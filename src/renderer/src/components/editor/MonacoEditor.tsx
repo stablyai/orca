@@ -27,7 +27,8 @@ import {
 import {
   clearMarkdownDocCompletionDocuments,
   ensureMarkdownDocCompletionProvider,
-  setMarkdownDocCompletionDocuments
+  setMarkdownDocCompletionDocuments,
+  setMarkdownDocCompletionRefill
 } from './monaco-markdown-doc-completions'
 import { MonacoGutterContextMenu } from './MonacoGutterContextMenu'
 import {
@@ -83,6 +84,7 @@ type MonacoEditorProps = {
   revealMatchLength?: number
   markdownDocuments?: MarkdownDocument[]
   worktreeId?: string
+  runtimeEnvironmentId?: string | null
   markdownAnnotationsEnabled?: boolean
   conflictDecorationsEnabled?: boolean
   readOnly?: boolean
@@ -109,6 +111,7 @@ export default function MonacoEditor({
   revealMatchLength,
   markdownDocuments,
   worktreeId,
+  runtimeEnvironmentId,
   markdownAnnotationsEnabled = false,
   conflictDecorationsEnabled = false,
   readOnly = false,
@@ -207,11 +210,27 @@ export default function MonacoEditor({
       return
     }
     if (language === 'markdown' && markdownDocuments) {
-      setMarkdownDocCompletionDocuments(modelKey, markdownDocuments)
+      // Why: retention limits can evict this snapshot while the editor stays mounted.
+      // Register the refill first so a completion request after eviction re-supplies
+      // rather than silently returning nothing.
+      setMarkdownDocCompletionRefill(modelKey, () =>
+        updateMarkdownCompletionDocumentsRef.current?.()
+      )
+      setMarkdownDocCompletionDocuments(
+        modelKey,
+        JSON.stringify([runtimeEnvironmentId ?? '', worktreeId ?? modelKey]),
+        markdownDocuments
+      )
     } else {
       clearMarkdownDocCompletionDocuments(modelKey)
     }
-  }, [language, markdownDocuments])
+  }, [language, markdownDocuments, runtimeEnvironmentId, worktreeId])
+  // Why: the refill outlives the closure that registered it, so it must reach the
+  // current props rather than the ones captured when the model was first stored.
+  const updateMarkdownCompletionDocumentsRef = useRef(updateMarkdownCompletionDocuments)
+  useEffect(() => {
+    updateMarkdownCompletionDocumentsRef.current = updateMarkdownCompletionDocuments
+  }, [updateMarkdownCompletionDocuments])
 
   const shouldShowMarkdownAnnotations =
     markdownAnnotationsEnabled && language === 'markdown' && Boolean(worktreeId)
