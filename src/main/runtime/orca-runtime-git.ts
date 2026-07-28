@@ -127,14 +127,16 @@ function normalizeRuntimeGitRelativePath(filePath: string): string {
   return relativePath
 }
 
-type RuntimeGitTarget = {
+export type RuntimeGitTarget = {
   worktree: ResolvedRuntimeGitWorktree
   repo?: Repo
   connectionId?: string
   localGitOptions?: GitRuntimeOptions
+  /** Set when a folder-workspace selector was rebased onto an owning child repo. */
+  rebasedRelativePath?: string
 }
 
-function localGitOptionsForTarget(target: RuntimeGitTarget): GitRuntimeOptions {
+export function localGitOptionsForTarget(target: RuntimeGitTarget): GitRuntimeOptions {
   return target.connectionId ? {} : (target.localGitOptions ?? {})
 }
 
@@ -158,8 +160,92 @@ function localTextGenerationTargetForTarget(
   }
 }
 
+/**
+ * Status for an already-resolved target. Exported so a folder workspace can fan
+ * out across its child repos without round-tripping each one back through
+ * selector resolution.
+ */
+export async function getRuntimeGitStatusForTarget(
+  target: RuntimeGitTarget,
+  options?: GitProviderStatusOptions
+): Promise<GitStatusResult> {
+  const provider = target.connectionId ? getSshGitProvider(target.connectionId) : null
+  if (target.connectionId) {
+    if (!provider) {
+      throw new Error(SSH_GIT_PROVIDER_UNAVAILABLE_MESSAGE)
+    }
+    return options
+      ? provider.getStatus(target.worktree.path, options)
+      : provider.getStatus(target.worktree.path)
+  }
+  const gitOptions = localGitOptionsForTarget(target)
+  // Why: Git can't ignore a shared symlink under a directory-only rule, so tell
+  // status which untracked entries are Orca's own artifacts (issue #10451).
+  const sharedLinkPaths = target.repo ? getWorktreeSharedLinkPaths(target.repo) : []
+  const sharedOptions = sharedLinkPaths.length > 0 ? { sharedLinkPaths } : {}
+  return options
+    ? getGitStatus(target.worktree.path, { ...options, ...gitOptions, ...sharedOptions })
+    : getGitStatus(target.worktree.path, { ...gitOptions, ...sharedOptions })
+}
+
+/**
+ * Commit for an already-resolved target. Exported for the same reason as
+ * `getRuntimeGitStatusForTarget` — a folder workspace commits each child repo
+ * it resolved itself.
+ */
+export async function commitRuntimeGitForTarget(
+  target: RuntimeGitTarget,
+  message: string
+): Promise<{ success: boolean; error?: string }> {
+  const provider = target.connectionId ? getSshGitProvider(target.connectionId) : null
+  if (target.connectionId) {
+    if (!provider) {
+      throw new Error(SSH_GIT_PROVIDER_UNAVAILABLE_MESSAGE)
+    }
+    return provider.commit(target.worktree.path, message)
+  }
+  return commitChanges(target.worktree.path, message, localGitOptionsForTarget(target))
+}
+
+/** Abort an in-progress merge or rebase for an already-resolved target. */
+export async function abortRuntimeGitForTarget(
+  target: RuntimeGitTarget,
+  operation: 'merge' | 'rebase'
+): Promise<void> {
+  const provider = target.connectionId ? getSshGitProvider(target.connectionId) : null
+  if (target.connectionId) {
+    if (!provider) {
+      throw new Error(SSH_GIT_PROVIDER_UNAVAILABLE_MESSAGE)
+    }
+    await (operation === 'merge'
+      ? provider.abortMerge(target.worktree.path)
+      : provider.abortRebase(target.worktree.path))
+    return
+  }
+  const gitOptions = localGitOptionsForTarget(target)
+  await (operation === 'merge'
+    ? abortMerge(target.worktree.path, gitOptions)
+    : abortRebase(target.worktree.path, gitOptions))
+}
+
+/** One resolved target plus the subset of the requested paths it owns, already rebased. */
+export type RuntimeGitTargetPathGroup = {
+  target: RuntimeGitTarget
+  relativePaths: string[]
+}
+
 export type RuntimeGitCommandHost = {
-  resolveRuntimeGitTarget(selector: string): Promise<RuntimeGitTarget>
+  resolveRuntimeGitTarget(selector: string, relativePath?: string): Promise<RuntimeGitTarget>
+  /**
+   * Group a batch of paths by the target that owns each one. A folder-workspace
+   * selector spans several child repos, so one bulk request can touch more than
+   * one repo. Hosts that omit this fall back to a single group, matching every
+   * selector that resolves to exactly one worktree.
+   */
+  resolveRuntimeGitTargetPathGroups?(
+    selector: string,
+    relativePaths: string[]
+  ): Promise<RuntimeGitTargetPathGroup[]>
   getRuntimeSettings(): GlobalSettings
   getCommitMessageAgentEnvironment?(): CommitMessageAgentEnvironmentResolvers | undefined
   /**
@@ -176,6 +262,22 @@ export type RuntimeGitCommandHost = {
 export class RuntimeGitCommands {
   constructor(private readonly host: RuntimeGitCommandHost) {}
 
+  private async resolveTargetPathGroups(
+    worktreeSelector: string,
+    filePaths: string[]
+  ): Promise<RuntimeGitTargetPathGroup[]> {
+    const relativePaths = filePaths.map((path) => normalizeRuntimeGitRelativePath(path))
+    const grouped = await this.host.resolveRuntimeGitTargetPathGroups?.(
+      worktreeSelector,
+      relativePaths
+    )
+    if (grouped) {
+      return grouped
+    }
+    const target = await this.host.resolveRuntimeGitTarget(worktreeSelector)
+    return [{ target, relativePaths }]
+  }
+
   private linkedIssueForTarget(target: RuntimeGitTarget): number | null | undefined {
     const live = this.host.getWorktreeLinkedIssue?.(target.worktree.id)
     // Why: `undefined` means the host could not answer, not "unlinked".
@@ -186,24 +288,10 @@ export class RuntimeGitCommands {
     worktreeSelector: string,
     options?: GitProviderStatusOptions
   ): Promise<GitStatusResult> {
-    const target = await this.host.resolveRuntimeGitTarget(worktreeSelector)
-    const provider = target.connectionId ? getSshGitProvider(target.connectionId) : null
-    if (target.connectionId) {
-      if (!provider) {
-        throw new Error(SSH_GIT_PROVIDER_UNAVAILABLE_MESSAGE)
-      }
-      return options
-        ? provider.getStatus(target.worktree.path, options)
-        : provider.getStatus(target.worktree.path)
-    }
-    const gitOptions = localGitOptionsForTarget(target)
-    // Why: Git can't ignore a shared symlink under a directory-only rule, so tell
-    // status which untracked entries are Orca's own artifacts (issue #10451).
-    const sharedLinkPaths = target.repo ? getWorktreeSharedLinkPaths(target.repo) : []
-    const sharedOptions = sharedLinkPaths.length > 0 ? { sharedLinkPaths } : {}
-    return options
-      ? getGitStatus(target.worktree.path, { ...options, ...gitOptions, ...sharedOptions })
-      : getGitStatus(target.worktree.path, { ...gitOptions, ...sharedOptions })
+    return getRuntimeGitStatusForTarget(
+      await this.host.resolveRuntimeGitTarget(worktreeSelector),
+      options
+    )
   }
 
   async getRuntimeGitSubmoduleStatus(
@@ -333,8 +421,9 @@ export class RuntimeGitCommands {
     staged: boolean,
     compareAgainstHead?: boolean
   ): Promise<GitDiffResult> {
-    const target = await this.host.resolveRuntimeGitTarget(worktreeSelector)
-    const relativePath = normalizeRuntimeGitRelativePath(filePath)
+    const requestedPath = normalizeRuntimeGitRelativePath(filePath)
+    const target = await this.host.resolveRuntimeGitTarget(worktreeSelector, requestedPath)
+    const relativePath = target.rebasedRelativePath ?? requestedPath
     const provider = target.connectionId ? getSshGitProvider(target.connectionId) : null
     if (target.connectionId) {
       if (!provider) {
@@ -843,8 +932,9 @@ export class RuntimeGitCommands {
   }
 
   async stageRuntimeGitPath(worktreeSelector: string, filePath: string): Promise<{ ok: true }> {
-    const target = await this.host.resolveRuntimeGitTarget(worktreeSelector)
-    const relativePath = normalizeRuntimeGitRelativePath(filePath)
+    const requestedPath = normalizeRuntimeGitRelativePath(filePath)
+    const target = await this.host.resolveRuntimeGitTarget(worktreeSelector, requestedPath)
+    const relativePath = target.rebasedRelativePath ?? requestedPath
     const provider = target.connectionId ? getSshGitProvider(target.connectionId) : null
     if (target.connectionId) {
       if (!provider) {
@@ -858,8 +948,9 @@ export class RuntimeGitCommands {
   }
 
   async unstageRuntimeGitPath(worktreeSelector: string, filePath: string): Promise<{ ok: true }> {
-    const target = await this.host.resolveRuntimeGitTarget(worktreeSelector)
-    const relativePath = normalizeRuntimeGitRelativePath(filePath)
+    const requestedPath = normalizeRuntimeGitRelativePath(filePath)
+    const target = await this.host.resolveRuntimeGitTarget(worktreeSelector, requestedPath)
+    const relativePath = target.rebasedRelativePath ?? requestedPath
     const provider = target.connectionId ? getSshGitProvider(target.connectionId) : null
     if (target.connectionId) {
       if (!provider) {
@@ -876,17 +967,18 @@ export class RuntimeGitCommands {
     worktreeSelector: string,
     filePaths: string[]
   ): Promise<{ ok: true }> {
-    const target = await this.host.resolveRuntimeGitTarget(worktreeSelector)
-    const relativePaths = filePaths.map((path) => normalizeRuntimeGitRelativePath(path))
-    const provider = target.connectionId ? getSshGitProvider(target.connectionId) : null
-    if (target.connectionId) {
-      if (!provider) {
-        throw new Error(SSH_GIT_PROVIDER_UNAVAILABLE_MESSAGE)
+    const groups = await this.resolveTargetPathGroups(worktreeSelector, filePaths)
+    for (const { target, relativePaths } of groups) {
+      const provider = target.connectionId ? getSshGitProvider(target.connectionId) : null
+      if (target.connectionId) {
+        if (!provider) {
+          throw new Error(SSH_GIT_PROVIDER_UNAVAILABLE_MESSAGE)
+        }
+        await provider.bulkStageFiles(target.worktree.path, relativePaths)
+        continue
       }
-      await provider.bulkStageFiles(target.worktree.path, relativePaths)
-      return { ok: true }
+      await bulkStageFiles(target.worktree.path, relativePaths, localGitOptionsForTarget(target))
     }
-    await bulkStageFiles(target.worktree.path, relativePaths, localGitOptionsForTarget(target))
     return { ok: true }
   }
 
@@ -894,17 +986,18 @@ export class RuntimeGitCommands {
     worktreeSelector: string,
     filePaths: string[]
   ): Promise<{ ok: true }> {
-    const target = await this.host.resolveRuntimeGitTarget(worktreeSelector)
-    const relativePaths = filePaths.map((path) => normalizeRuntimeGitRelativePath(path))
-    const provider = target.connectionId ? getSshGitProvider(target.connectionId) : null
-    if (target.connectionId) {
-      if (!provider) {
-        throw new Error(SSH_GIT_PROVIDER_UNAVAILABLE_MESSAGE)
+    const groups = await this.resolveTargetPathGroups(worktreeSelector, filePaths)
+    for (const { target, relativePaths } of groups) {
+      const provider = target.connectionId ? getSshGitProvider(target.connectionId) : null
+      if (target.connectionId) {
+        if (!provider) {
+          throw new Error(SSH_GIT_PROVIDER_UNAVAILABLE_MESSAGE)
+        }
+        await provider.bulkUnstageFiles(target.worktree.path, relativePaths)
+        continue
       }
-      await provider.bulkUnstageFiles(target.worktree.path, relativePaths)
-      return { ok: true }
+      await bulkUnstageFiles(target.worktree.path, relativePaths, localGitOptionsForTarget(target))
     }
-    await bulkUnstageFiles(target.worktree.path, relativePaths, localGitOptionsForTarget(target))
     return { ok: true }
   }
 
@@ -912,23 +1005,29 @@ export class RuntimeGitCommands {
     worktreeSelector: string,
     filePaths: string[]
   ): Promise<{ ok: true }> {
-    const target = await this.host.resolveRuntimeGitTarget(worktreeSelector)
-    const relativePaths = filePaths.map((path) => normalizeRuntimeGitRelativePath(path))
-    const provider = target.connectionId ? getSshGitProvider(target.connectionId) : null
-    if (target.connectionId) {
-      if (!provider) {
-        throw new Error(SSH_GIT_PROVIDER_UNAVAILABLE_MESSAGE)
+    const groups = await this.resolveTargetPathGroups(worktreeSelector, filePaths)
+    for (const { target, relativePaths } of groups) {
+      const provider = target.connectionId ? getSshGitProvider(target.connectionId) : null
+      if (target.connectionId) {
+        if (!provider) {
+          throw new Error(SSH_GIT_PROVIDER_UNAVAILABLE_MESSAGE)
+        }
+        await provider.bulkDiscardChanges(target.worktree.path, relativePaths)
+        continue
       }
-      await provider.bulkDiscardChanges(target.worktree.path, relativePaths)
-      return { ok: true }
+      await bulkDiscardChanges(
+        target.worktree.path,
+        relativePaths,
+        localGitOptionsForTarget(target)
+      )
     }
-    await bulkDiscardChanges(target.worktree.path, relativePaths, localGitOptionsForTarget(target))
     return { ok: true }
   }
 
   async discardRuntimeGitPath(worktreeSelector: string, filePath: string): Promise<{ ok: true }> {
-    const target = await this.host.resolveRuntimeGitTarget(worktreeSelector)
-    const relativePath = normalizeRuntimeGitRelativePath(filePath)
+    const requestedPath = normalizeRuntimeGitRelativePath(filePath)
+    const target = await this.host.resolveRuntimeGitTarget(worktreeSelector, requestedPath)
+    const relativePath = target.rebasedRelativePath ?? requestedPath
     const provider = target.connectionId ? getSshGitProvider(target.connectionId) : null
     if (target.connectionId) {
       if (!provider) {
