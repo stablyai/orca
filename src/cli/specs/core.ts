@@ -39,8 +39,17 @@ export const CORE_COMMAND_SPECS: CommandSpec[] = [
   {
     path: ['repo', 'add'],
     summary: 'Add a project to Orca by filesystem path',
-    usage: 'orca repo add --path <path> [--json]',
-    allowedFlags: [...GLOBAL_FLAGS, 'path']
+    usage: 'orca repo add --path <path> [--host <host-id>] [--json]',
+    allowedFlags: [...GLOBAL_FLAGS, 'path', 'host'],
+    notes: [
+      'Use --host ssh:<connectionId> (or the bare connectionId) to import a path on a connected SSH host.',
+      'Do not use --environment for SSH connectionIds; --environment selects a paired Orca server.'
+    ],
+    examples: [
+      'orca repo add --path ~/src/orca --json',
+      'orca repo add --path /home/me/orca --host ssh:ssh-123 --json',
+      'orca repo add --path /home/me/orca --host ssh-123 --json'
+    ]
   },
   {
     path: ['repo', 'show'],
