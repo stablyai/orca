@@ -57,8 +57,8 @@ vi.mock('@/lib/worktree-activation', () => ({
   ensureWorktreeHasInitialTerminal: vi.fn()
 }))
 
-vi.mock('@/lib/new-workspace-terminal-focus', () => ({
-  queueNewWorkspaceTerminalFocus: vi.fn()
+vi.mock('@/lib/workspace-activation-terminal-focus', () => ({
+  queueWorkspaceActivationTerminalFocus: vi.fn()
 }))
 
 vi.mock('@/lib/new-workspace', () => ({
@@ -80,7 +80,7 @@ import {
   activateAndRevealWorktree,
   ensureWorktreeHasInitialTerminal
 } from '@/lib/worktree-activation'
-import { queueNewWorkspaceTerminalFocus } from '@/lib/new-workspace-terminal-focus'
+import { queueWorkspaceActivationTerminalFocus } from '@/lib/workspace-activation-terminal-focus'
 import {
   beginBackgroundWorktreePreparation,
   continueBackgroundWorktreeCreation,
@@ -498,7 +498,7 @@ describe('staged background worktree creation', () => {
       undefined,
       { activateCreatedTabs: false }
     )
-    expect(queueNewWorkspaceTerminalFocus).not.toHaveBeenCalled()
+    expect(queueWorkspaceActivationTerminalFocus).not.toHaveBeenCalled()
     expect(store.removePendingWorktreeCreation).toHaveBeenCalledWith('creation-1', {
       cleanupVm: false
     })

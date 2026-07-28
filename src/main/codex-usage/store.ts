@@ -90,6 +90,30 @@ const MODEL_PRICING: Record<string, CodexModelPricing> = {
     inputTiers: [{ threshold: LONG_CONTEXT_THRESHOLD_TOKENS, price: 10 }],
     cachedInputTiers: [{ threshold: LONG_CONTEXT_THRESHOLD_TOKENS, price: 1 }],
     outputTiers: [{ threshold: LONG_CONTEXT_THRESHOLD_TOKENS, price: 45 }]
+  },
+  'gpt-5.6-sol': {
+    input: 5,
+    cachedInput: 0.5,
+    output: 30,
+    inputTiers: [{ threshold: LONG_CONTEXT_THRESHOLD_TOKENS, price: 10 }],
+    cachedInputTiers: [{ threshold: LONG_CONTEXT_THRESHOLD_TOKENS, price: 1 }],
+    outputTiers: [{ threshold: LONG_CONTEXT_THRESHOLD_TOKENS, price: 45 }]
+  },
+  'gpt-5.6-terra': {
+    input: 2.5,
+    cachedInput: 0.25,
+    output: 15,
+    inputTiers: [{ threshold: LONG_CONTEXT_THRESHOLD_TOKENS, price: 5 }],
+    cachedInputTiers: [{ threshold: LONG_CONTEXT_THRESHOLD_TOKENS, price: 0.5 }],
+    outputTiers: [{ threshold: LONG_CONTEXT_THRESHOLD_TOKENS, price: 22.5 }]
+  },
+  'gpt-5.6-luna': {
+    input: 1,
+    cachedInput: 0.1,
+    output: 6,
+    inputTiers: [{ threshold: LONG_CONTEXT_THRESHOLD_TOKENS, price: 2 }],
+    cachedInputTiers: [{ threshold: LONG_CONTEXT_THRESHOLD_TOKENS, price: 0.2 }],
+    outputTiers: [{ threshold: LONG_CONTEXT_THRESHOLD_TOKENS, price: 9 }]
   }
 }
 
@@ -227,6 +251,21 @@ function normalizeModelForPricing(model: string | null): string | null {
   }
   if (normalized === 'gpt-5.5' || normalized.startsWith('gpt-5.5-')) {
     return 'gpt-5.5'
+  }
+  if (normalized === 'gpt-5.6-sol' || normalized.startsWith('gpt-5.6-sol-')) {
+    return 'gpt-5.6-sol'
+  }
+  if (normalized === 'gpt-5.6-terra' || normalized.startsWith('gpt-5.6-terra-')) {
+    return 'gpt-5.6-terra'
+  }
+  if (normalized === 'gpt-5.6-luna' || normalized.startsWith('gpt-5.6-luna-')) {
+    return 'gpt-5.6-luna'
+  }
+  // Why: OpenAI routes the bare `gpt-5.6` alias to Sol. Match it exactly — a
+  // `gpt-5.6-` prefix match would swallow the tier IDs above and any future
+  // cheaper variant.
+  if (normalized === 'gpt-5.6') {
+    return 'gpt-5.6-sol'
   }
   return null
 }

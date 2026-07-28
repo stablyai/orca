@@ -1,13 +1,13 @@
 import type { SleepingAgentSessionRecord } from '../../../../shared/agent-session-resume'
 import type { AppState } from '../types'
 import {
-  getExecutionHostIdForWorktree,
   getRuntimeEnvironmentIdForWorktree,
   type WorktreeRuntimeOwnerState
 } from '@/lib/worktree-runtime-owner'
 import { parseRemoteRuntimePtyId } from '@/runtime/runtime-terminal-stream'
-import { resolveWorktreeOperationRouteResult } from '@/lib/worktree-operation-route'
-import { parseExecutionHostId } from '../../../../shared/execution-host'
+import { resolveTerminalHostOwnership } from '@/lib/terminal-worktree-route'
+import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../shared/constants'
+import { isEphemeralSetupTerminalWorktreeId } from '../../../../shared/ephemeral-setup-terminal-worktree-id'
 import { parseWorkspaceKey } from '../../../../shared/workspace-scope'
 
 export type TerminalTabCloseReason = 'user' | 'cleanup' | 'pty-exit'
@@ -111,32 +111,20 @@ function hasOwnerOutsideTargets(
   return false
 }
 
-function getProviderOwnership(
-  state: TerminalTabRetirementState,
+/** Worktree-id shape for diagnostics; raw ids embed absolute paths and must not be logged. */
+export function classifyTerminalRetirementWorktree(
   worktreeId: string | null
-): { kind: 'local-or-ssh' } | { kind: 'runtime'; environmentId: string } | { kind: 'unresolved' } {
+): 'floating' | 'ephemeral-setup' | 'folder-workspace' | 'worktree' | 'absent' {
   if (!worktreeId) {
-    return { kind: 'unresolved' }
+    return 'absent'
   }
-  if (parseWorkspaceKey(worktreeId)?.type === 'folder') {
-    const parsed = parseExecutionHostId(getExecutionHostIdForWorktree(state, worktreeId))
-    return parsed?.kind === 'runtime'
-      ? { kind: 'runtime', environmentId: parsed.environmentId }
-      : parsed?.kind === 'local' || parsed?.kind === 'ssh'
-        ? { kind: 'local-or-ssh' }
-        : { kind: 'unresolved' }
+  if (worktreeId === FLOATING_TERMINAL_WORKTREE_ID) {
+    return 'floating'
   }
-  const resolution = resolveWorktreeOperationRouteResult(state, worktreeId)
-  if (resolution.kind !== 'resolved') {
-    return { kind: 'unresolved' }
+  if (isEphemeralSetupTerminalWorktreeId(worktreeId)) {
+    return 'ephemeral-setup'
   }
-  if (resolution.route.runtimeEnvironmentId) {
-    return { kind: 'runtime', environmentId: resolution.route.runtimeEnvironmentId }
-  }
-  const parsed = parseExecutionHostId(resolution.route.executionHostId)
-  return parsed?.kind === 'local' || parsed?.kind === 'ssh'
-    ? { kind: 'local-or-ssh' }
-    : { kind: 'unresolved' }
+  return parseWorkspaceKey(worktreeId)?.type === 'folder' ? 'folder-workspace' : 'worktree'
 }
 
 export function isTerminalTabPresent(
@@ -188,7 +176,7 @@ export function buildTerminalTabRetirementPlans(
     const runtimeTerminals: TerminalTabRetirementPlan['runtimeTerminals'] = []
     const cleanupOnlyPtyIds: string[] = []
     const unroutablePtyIds: string[] = []
-    const providerOwnership = getProviderOwnership(state, worktreeId)
+    const providerOwnership = resolveTerminalHostOwnership(state, worktreeId, 'teardown')
 
     for (const ptyId of ptyIds) {
       const ownerIdentity = getTerminalPtyOwnershipIdentity(state, ptyId, worktreeId)

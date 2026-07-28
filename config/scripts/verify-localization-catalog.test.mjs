@@ -2,7 +2,7 @@ import { mkdirSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import path from 'node:path'
 
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 
 import { main as verifyLocalizationCatalog } from './verify-localization-catalog.mjs'
 
@@ -78,5 +78,35 @@ describe('verify-localization-catalog', () => {
 
     await expect(verifyLocalizationCatalog(root, { fix: true })).resolves.toBe(1)
     expect(readJson(path.join(localesDir, 'en.json'))).toEqual({})
+  })
+
+  it('reports partial plugin catalog gaps but rejects malformed interpolation', async () => {
+    const { root } = makeProject({
+      sourceText: 'export {}\n',
+      enCatalog: {
+        auto: { first: 'First {{name}}', second: 'Second' }
+      },
+      esCatalog: {
+        auto: { first: 'Primero {{name}}', second: 'Segundo' }
+      }
+    })
+    const pluginCatalogPath = path.join(root, 'plugin-locale.json')
+    writeJson(pluginCatalogPath, {
+      auto: { first: 'Primeiro {{wrongName}}', pluginOnly: 'Plugin only' }
+    })
+    const report = vi.spyOn(console, 'log').mockImplementation(() => undefined)
+
+    try {
+      await expect(
+        verifyLocalizationCatalog(root, {
+          fix: false,
+          pluginCatalogs: [pluginCatalogPath]
+        })
+      ).resolves.toBe(1)
+      expect(report).toHaveBeenCalledWith(expect.stringContaining('0/2 core keys'))
+      expect(report).toHaveBeenCalledWith(expect.stringContaining('interpolation mismatch'))
+    } finally {
+      report.mockRestore()
+    }
   })
 })

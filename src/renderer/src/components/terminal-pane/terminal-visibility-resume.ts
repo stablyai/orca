@@ -128,7 +128,6 @@ export function hideTerminalVisibility({
     captureViewportPositions(false)
   }
   if (!isWorktreeActive && (wasVisible || surfaceBecameHidden)) {
-    // Windows defers new contexts but retains live ones; other clients dispose.
     manager.suspendRendering()
     return { hiddenReason: 'surface', renderingSuspended: true }
   }
@@ -203,7 +202,6 @@ function requestLightTabBacklogRecovery(manager: PaneManager): void {
 }
 
 function resumeTerminalVisibilityBeforePaint(manager: PaneManager, isActive: boolean): void {
-  // Retained Windows surfaces reuse WebGL; disposed or pressure-lost surfaces reattach.
   manager.resumeRendering()
   manager.fitAllRevealedPanes()
   if (isActive) {

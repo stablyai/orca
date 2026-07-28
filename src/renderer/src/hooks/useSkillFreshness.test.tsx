@@ -25,7 +25,7 @@ function deferred<T>(): {
 }
 
 function inventory(scannedAt: number, eligibleUpdateNames: string[] = []): SkillFreshnessInventory {
-  return { schemaVersion: 1, installations: [], eligibleUpdateNames, scannedAt }
+  return { schemaVersion: 1, installations: [], eligibleUpdateNames, scanIssues: [], scannedAt }
 }
 
 let root: Root | null = null

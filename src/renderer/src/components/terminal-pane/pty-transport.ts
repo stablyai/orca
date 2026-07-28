@@ -18,6 +18,7 @@ import {
   ptyExitHandlers,
   ptyTeardownHandlers,
   ptyShutdownLifecycleHandlers,
+  ptyWriteUnavailableHandlers,
   ensurePtyDispatcher,
   getEagerPtyBufferHandle,
   isPtyDataHandlerShutdownPending
@@ -525,7 +526,11 @@ export function createIpcPtyTransport(opts: IpcPtyTransportOptions = {}): PtyTra
   // Why: a new pane can attach to the same ptyId before the old instance's detach() runs; track owned handlers so unregister never deletes the live one.
   const ownedDataAndReplayHandlers = new Map<
     string,
-    { data: (data: string, meta?: PtyDataMeta) => void; replay: (data: string) => void }
+    {
+      data: (data: string, meta?: PtyDataMeta) => void
+      replay: (data: string) => void
+      writeUnavailable: () => void
+    }
   >()
   const ownedExitHandlers = new Map<string, (code: number) => void>()
 
@@ -552,6 +557,9 @@ export function createIpcPtyTransport(opts: IpcPtyTransportOptions = {}): PtyTra
       }
       if (ptyReplayHandlers.get(id) === owned.replay) {
         ptyReplayHandlers.delete(id)
+      }
+      if (ptyWriteUnavailableHandlers.get(id) === owned.writeUnavailable) {
+        ptyWriteUnavailableHandlers.delete(id)
       }
     }
     ownedDataAndReplayHandlers.delete(id)
@@ -584,7 +592,20 @@ export function createIpcPtyTransport(opts: IpcPtyTransportOptions = {}): PtyTra
       )
     }
     ptyDataHandlers.set(id, dataHandler)
-    ownedDataAndReplayHandlers.set(id, { data: dataHandler, replay: replayHandler })
+    // Guard like the data/replay handlers: a transport that rebinds to a new id without
+    // detaching leaves this entry behind, and a fan-out for the stale id would otherwise
+    // remount a healthy pane.
+    const writeUnavailable = (): void => {
+      if (ptyId === id) {
+        storedCallbacks.onWriteUnavailable?.()
+      }
+    }
+    ptyWriteUnavailableHandlers.set(id, writeUnavailable)
+    ownedDataAndReplayHandlers.set(id, {
+      data: dataHandler,
+      replay: replayHandler,
+      writeUnavailable
+    })
     if (!isPtyDataHandlerShutdownPending(id)) {
       drainPreHandlerPtyData(id, dataHandler)
       drainRolledBackPtyShutdownData(id)
@@ -783,17 +804,26 @@ export function createIpcPtyTransport(opts: IpcPtyTransportOptions = {}): PtyTra
             sessionExpired: spawnResult.sessionExpired,
             coldRestore: spawnResult.coldRestore,
             replay: spawnResult.replay,
-            pendingEscapeTailAnsi: spawnResult.pendingEscapeTailAnsi
+            pendingEscapeTailAnsi: spawnResult.pendingEscapeTailAnsi,
+            // Why: the cold-restore path re-runs the launch command, so it needs the
+            // same "main declined the resume" signal the fresh-spawn path gets.
+            ...(spawnResult.agentResumeUnavailable ? { agentResumeUnavailable: true as const } : {})
           } satisfies PtyConnectResult
         }
-        if (resultLaunchAgent || spawnResult.launchConfig || spawnResult.startupCwdFallback) {
+        if (
+          resultLaunchAgent ||
+          spawnResult.launchConfig ||
+          spawnResult.startupCwdFallback ||
+          spawnResult.agentResumeUnavailable
+        ) {
           return {
             id: spawnResult.id,
             ...(resultLaunchAgent ? { launchAgent: resultLaunchAgent } : {}),
             ...(spawnResult.launchConfig ? { launchConfig: spawnResult.launchConfig } : {}),
             ...(spawnResult.startupCwdFallback
               ? { startupCwdFallback: spawnResult.startupCwdFallback }
-              : {})
+              : {}),
+            ...(spawnResult.agentResumeUnavailable ? { agentResumeUnavailable: true as const } : {})
           } satisfies PtyConnectResult
         }
         return spawnResult.id

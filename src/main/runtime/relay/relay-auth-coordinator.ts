@@ -1,5 +1,5 @@
 import type { RelayBrokerStatus } from './relay-session-broker'
-import { shouldRetryRelayConnectionError } from './relay-http-client'
+import { RelayHttpError, shouldRetryRelayConnectionError } from './relay-http-client'
 
 export type RelayAuthIdentity = {
   userId: string
@@ -183,13 +183,14 @@ export class RelayAuthCoordinator {
       if (this.isEpochCurrent(epoch)) {
         this.options.onStatus('offline')
         if (shouldRetryRelayConnectionError(error)) {
-          this.scheduleRetry(epoch, retryIdentityKey)
+          const retryAfterMs = error instanceof RelayHttpError ? (error.retryAfterMs ?? 0) : 0
+          this.scheduleRetry(epoch, retryIdentityKey, retryAfterMs)
         }
       }
     }
   }
 
-  private scheduleRetry(epoch: number, expectedIdentityKey?: string): void {
+  private scheduleRetry(epoch: number, expectedIdentityKey?: string, retryAfterMs = 0): void {
     if (this.retryTimer || !this.isEpochCurrent(epoch)) {
       return
     }
@@ -203,7 +204,7 @@ export class RelayAuthCoordinator {
     )
     this.retryAttempt++
     const random = this.options.random ?? Math.random
-    const delayMs = Math.floor(random() * (capMs + 1))
+    const delayMs = Math.max(Math.floor(random() * (capMs + 1)), retryAfterMs)
     this.retryTimer = setTimeout(() => {
       this.retryTimer = null
       if (this.isEpochCurrent(epoch)) {

@@ -20,12 +20,14 @@ import { getRemoteRuntimeRequestAdmissionEvidence } from './remote-runtime-prepa
 import { RemoteRuntimeSharedControlConnection } from './remote-runtime-shared-control-connection'
 import * as sharedControlProtocol from './remote-runtime-shared-control-protocol'
 import { isRuntimeSubscriptionReplayResponse } from './runtime-subscription-replay'
+import { SESSION_TAB_CLOSE_INTENT_RUNTIME_CAPABILITY } from './protocol-version'
 
 const TEST_PROJECT_PATH = path.join('tmp', 'project')
 
 type TestServer = {
   pairing: PairingOffer
   requests: { id: string; method: string; params?: unknown }[]
+  auths: unknown[]
   connectionCount: () => number
   flushDelayedResponses: () => void
 }
@@ -57,6 +59,11 @@ describe('RemoteRuntimeSharedControlConnection', () => {
     expect(first).toMatchObject({ ok: true, result: { method: 'worktree.ps' } })
     expect(second).toMatchObject({ ok: true, result: { method: 'session.tabs.listAll' } })
     expect(server.connectionCount()).toBe(1)
+    expect(server.auths).toContainEqual({
+      type: 'e2ee_auth',
+      deviceToken: 'device-token',
+      clientCapabilities: [SESSION_TAB_CLOSE_INTENT_RUNTIME_CAPABILITY]
+    })
     expect(server.requests.map((request) => request.method)).toEqual([
       'worktree.ps',
       'session.tabs.listAll'
@@ -667,6 +674,7 @@ async function createServer(
 ): Promise<TestServer> {
   const serverKeyPair = generateKeyPair()
   const requests: TestServer['requests'] = []
+  const auths: unknown[] = []
   const delayedResponses: (() => void)[] = []
   let connectionCount = 0
   let closedAfterFirstStreamingResponse = false
@@ -699,6 +707,7 @@ async function createServer(
         return
       }
       if (!authenticated) {
+        auths.push(JSON.parse(plaintext))
         authenticated = true
         sendEncrypted(ws, sharedKey, { type: 'e2ee_authenticated' })
         if (options.sendBinaryAfterAuth) {
@@ -742,6 +751,7 @@ async function createServer(
   return {
     pairing,
     requests,
+    auths,
     connectionCount: () => connectionCount,
     flushDelayedResponses: () => delayedResponses.splice(0).forEach((send) => send())
   }

@@ -1,6 +1,5 @@
 import { app, ipcMain, shell, type IpcMainInvokeEvent } from 'electron'
 import { networkInterfaces } from 'node:os'
-import QRCode from 'qrcode'
 import type { RuntimeAccessGrant } from '../../shared/runtime-access-grants'
 import type { MobilePairingConnectionMode } from '../../shared/mobile-pairing-connection-mode'
 import { isTailnetIPv4Address } from '../../shared/tailnet-address'
@@ -137,6 +136,9 @@ export function registerMobileHandlers(
         return { available: false as const }
       }
 
+      // Why dynamic: pairing is the only consumer, so launch should not parse
+      // the qrcode bundle for users who never pair a device.
+      const { default: QRCode } = await import('qrcode')
       const qrDataUrl = await QRCode.toDataURL(offer.pairingUrl, {
         errorCorrectionLevel: 'M',
         margin: 2,

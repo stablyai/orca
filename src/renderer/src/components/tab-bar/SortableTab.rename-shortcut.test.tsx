@@ -93,6 +93,9 @@ vi.mock('lucide-react', () => ({
   PanelBottomClose: function PanelBottomClose(props: Record<string, unknown>) {
     return { type: 'PanelBottomClose', props }
   },
+  PanelLeftClose: function PanelLeftClose(props: Record<string, unknown>) {
+    return { type: 'PanelLeftClose', props }
+  },
   PanelRightClose: function PanelRightClose(props: Record<string, unknown>) {
     return { type: 'PanelRightClose', props }
   },

@@ -111,6 +111,7 @@ import {
   type StoredWebRuntimeEnvironment
 } from './web-runtime-environment'
 import { parseWebPairingInput } from './web-pairing'
+import { copyClipboardTextViaExecCommand } from './web-clipboard-copy-fallback'
 import { WebRuntimeClient } from './web-runtime-client'
 import { RuntimeRpcCallQueuePool } from '../../../shared/runtime-rpc-call-queue'
 import {
@@ -2490,7 +2491,23 @@ function createWebUiApi(): NonNullable<Partial<PreloadApi>['ui']> {
     },
     writeClipboardText: async (text) => {
       await assertClipboardTextWriteWithinLimitWithYield(text)
-      await (navigator.clipboard?.writeText?.(text) ?? Promise.resolve())
+      const clipboard = navigator.clipboard
+      if (typeof clipboard?.writeText === 'function') {
+        try {
+          await clipboard.writeText(text)
+          return
+        } catch (error) {
+          // Why: secure-context writes can still be permission-gated; retry via
+          // execCommand while the user gesture's transient activation is live.
+          if (copyClipboardTextViaExecCommand(text)) {
+            return
+          }
+          throw error
+        }
+      }
+      if (!copyClipboardTextViaExecCommand(text)) {
+        throw new Error('Clipboard write is unavailable in this browser context')
+      }
     },
     writeSelectionClipboardText: () =>
       Promise.reject(new Error('Selection clipboard is unavailable in the web client')),
@@ -2790,8 +2807,16 @@ function createSkillsApi(): NonNullable<Partial<PreloadApi>['skills']> {
         schemaVersion: 1,
         installations: [],
         eligibleUpdateNames: [],
+        scanIssues: [],
         scannedAt: Date.now()
-      })
+      }),
+    // Why: with no local skill homes there is nothing to update, so the run rail
+    // reports a permanently idle state rather than spawning anything.
+    startUpdateRun: () => Promise.resolve({ started: false as const, reason: 'invalid-names' }),
+    cancelUpdateRun: () => Promise.resolve(),
+    acknowledgeUpdateRun: () => Promise.resolve(),
+    getUpdateRun: () => Promise.resolve({ state: 'idle' as const }),
+    onUpdateRun: () => () => {}
   }
 }
 
@@ -2875,7 +2900,14 @@ function createAccountsApi(): never {
     cancelPendingLogin: () => Promise.resolve(false),
     reauthenticate: () => Promise.resolve(empty),
     remove: () => Promise.resolve(empty),
-    select: () => Promise.resolve(empty)
+    select: () => Promise.resolve(empty),
+    // Why: launch accounts are recorded on the host that owns the PTY, which the
+    // web client never is — report no stale panes rather than reject the sweep.
+    listStalePanes: () => Promise.resolve([]),
+    // Why empty rather than absent: the same host owns both records, so a web
+    // client has no recorded lane to offer and every pane falls to derivation.
+    listRecordedPaneLanes: () => Promise.resolve({}),
+    forgetStalePanes: () => Promise.resolve()
   } as never
 }
 
@@ -3950,11 +3982,14 @@ function createEmptyMemorySnapshot(): MemorySnapshot {
     host: {
       totalMemory: 0,
       freeMemory: 0,
+      availableMemory: 0,
+      availableMemorySource: 'free-memory',
       usedMemory: 0,
       memoryUsagePercent: 0,
       cpuCoreCount: navigator.hardwareConcurrency || 1,
       loadAverage1m: 0
     },
+    processMemoryMetric: getBrowserPlatform() === 'win32' ? 'working-set' : 'rss',
     totalCpu: 0,
     totalMemory: 0,
     collectedAt: Date.now()

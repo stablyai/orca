@@ -1,5 +1,5 @@
 import React from 'react'
-import { CalendarClock, GitBranch, Moon, SquareTerminal } from 'lucide-react'
+import { CalendarClock, GitBranch, GitCommitHorizontal, Moon, SquareTerminal } from 'lucide-react'
 import { useAppStore } from '@/store'
 import { cn } from '@/lib/utils'
 import { translate } from '@/i18n/i18n'
@@ -15,6 +15,8 @@ const SidebarWorkspaceFilterSection = React.memo(function SidebarWorkspaceFilter
   )
   const hideCliCreatedWorkspaces = useAppStore((s) => s.hideCliCreatedWorkspaces)
   const setHideCliCreatedWorkspaces = useAppStore((s) => s.setHideCliCreatedWorkspaces)
+  const hideDetachedHeadWorkspaces = useAppStore((s) => s.hideDetachedHeadWorkspaces)
+  const setHideDetachedHeadWorkspaces = useAppStore((s) => s.setHideDetachedHeadWorkspaces)
 
   return (
     <>
@@ -58,6 +60,15 @@ const SidebarWorkspaceFilterSection = React.memo(function SidebarWorkspaceFilter
         )}
         checked={hideCliCreatedWorkspaces}
         onChange={setHideCliCreatedWorkspaces}
+      />
+      <FilterToggleRow
+        icon={<GitCommitHorizontal className="size-3.5" />}
+        label={translate(
+          'auto.components.sidebar.SidebarWorkspaceFilterSection.detachedHead',
+          'Hide detached HEAD'
+        )}
+        checked={hideDetachedHeadWorkspaces}
+        onChange={setHideDetachedHeadWorkspaces}
       />
     </>
   )

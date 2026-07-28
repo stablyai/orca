@@ -214,10 +214,6 @@ export class PaneManager {
 
   refreshAllPanes(): void {
     for (const pane of this.panes.values()) {
-      // Retained contexts repaint on resume without scaling recovery across hidden workspaces.
-      if (pane.webglAttachmentDeferred && pane.webglAddon) {
-        continue
-      }
       try {
         if (pane.terminal.rows > 0) {
           pane.terminal.refresh(0, pane.terminal.rows - 1)

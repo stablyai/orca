@@ -6,7 +6,7 @@ import {
   markComplexScriptOutput,
   resetTerminalWebglSuggestion
 } from './pane-webgl-renderer'
-import { attachLigatures, disposePane, openTerminal, setLigaturesEnabled } from './pane-lifecycle'
+import { attachLigatures, disposePane, openTerminal } from './pane-lifecycle'
 import { ensureArabicShapingJoinerForText } from './terminal-arabic-shaping-joiner'
 import {
   buildDefaultTerminalOptions,
@@ -430,32 +430,6 @@ describe('attachLigatures', () => {
     expect(pane.terminal.refresh).toHaveBeenCalledWith(0, 23)
     expect(pane.ligaturesAddon).not.toBeNull()
   })
-
-  it('defers a retained WebGL rebuild while enabling ligatures offscreen', () => {
-    const pane = createPane()
-    const retainedAddon = { dispose: vi.fn() } as never
-    pane.webglAddon = retainedAddon
-    pane.webglAttachmentDeferred = true
-
-    attachLigatures(pane)
-
-    expect(pane.webglAddon).toBe(retainedAddon)
-    expect(pane.webglRebuildDeferred).toBe(true)
-    expect(pane.terminal.refresh).not.toHaveBeenCalled()
-  })
-
-  it('defers a retained WebGL rebuild while disabling ligatures offscreen', () => {
-    const pane = createPane()
-    const retainedAddon = { dispose: vi.fn() } as never
-    pane.webglAddon = retainedAddon
-    pane.ligaturesAddon = { dispose: vi.fn() } as never
-    pane.webglAttachmentDeferred = true
-
-    setLigaturesEnabled(pane, false)
-
-    expect(pane.webglAddon).toBe(retainedAddon)
-    expect(pane.webglRebuildDeferred).toBe(true)
-  })
 })
 
 describe('openTerminal — addon and provider wiring', () => {
@@ -647,6 +621,30 @@ describe('openTerminal — addon and provider wiring', () => {
     disposePane(pane, new Map([[pane.id, pane]]))
     expect(disposeSpy).toHaveBeenCalledTimes(1)
     expect(pane.linkifierHoverResetDisposable).toBeNull()
+  })
+
+  it('installs the mouseleave linkifier hover reset and disposes it', () => {
+    const { pane } = createOpenTerminalHarness()
+    const addEventListener = vi.fn()
+    const removeEventListener = vi.fn()
+    const screen = {
+      addEventListener,
+      removeEventListener
+    } as unknown as HTMLElement
+    vi.mocked(pane.terminal.element!.querySelector).mockReturnValueOnce(screen)
+
+    openTerminal(pane)
+    const disposable = pane.linkifierMouseLeaveResetDisposable
+    expect(disposable?.dispose).toBeTypeOf('function')
+    expect(addEventListener).toHaveBeenCalledWith('mouseleave', expect.any(Function))
+    const mouseLeaveHandler = addEventListener.mock.calls.find(
+      ([eventName]) => eventName === 'mouseleave'
+    )?.[1]
+    expect(mouseLeaveHandler).toBeTypeOf('function')
+
+    disposePane(pane, new Map([[pane.id, pane]]))
+    expect(removeEventListener).toHaveBeenCalledWith('mouseleave', mouseLeaveHandler)
+    expect(pane.linkifierMouseLeaveResetDisposable).toBeNull()
   })
 
   // Why: the DOM renderer misrenders joined spans (per-character

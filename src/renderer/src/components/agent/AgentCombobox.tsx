@@ -69,6 +69,23 @@ type ItemRenderArgs = {
   label: string
 }
 
+function AgentIconLabel({
+  icon,
+  label
+}: {
+  icon: React.ReactNode
+  label: string
+}): React.JSX.Element {
+  return (
+    <span className="inline-flex min-w-0 flex-1 items-center gap-1.5">
+      <span className="inline-flex size-3.5 shrink-0 items-center justify-center [&_img]:size-3.5 [&_svg]:size-3.5!">
+        {icon}
+      </span>
+      <span className="truncate leading-none">{label}</span>
+    </span>
+  )
+}
+
 function renderItem({
   key,
   itemValue,
@@ -86,11 +103,10 @@ function renderItem({
       onSelect={onSelect}
       className="items-center gap-2 px-3 py-1.5"
     >
-      <Check className={cn('size-4 text-foreground', isChecked ? 'opacity-100' : 'opacity-0')} />
-      <span className="inline-flex min-w-0 flex-1 items-center gap-1.5">
-        {icon}
-        <span className="truncate">{label}</span>
-      </span>
+      <Check
+        className={cn('size-4 shrink-0 text-foreground', isChecked ? 'opacity-100' : 'opacity-0')}
+      />
+      <AgentIconLabel icon={icon} label={label} />
     </CommandItem>
   )
   if (!onSetDefault) {
@@ -268,7 +284,9 @@ export default function AgentCombobox({
   )
 
   return (
-    <div className="flex w-full items-center">
+    // Why: min-w-0 lets full-width form rows shrink; plain flex+items-center left the
+    // trigger free to overflow its dialog column and look misaligned with Project/Name.
+    <div className="min-w-0 w-full">
       <Popover open={open} onOpenChange={handleOpenChange}>
         <PopoverTrigger asChild>
           <Button
@@ -281,27 +299,28 @@ export default function AgentCombobox({
             className={cn(
               // Why: callers sometimes pass `min-w-0` for grid layouts, but
               // the compact trigger still needs room for "GitHub Copilot".
-              'h-8 justify-between px-3 text-xs font-normal',
+              // py-0 clears the default size's py-2 so icon+label center in h-8/h-9.
+              'h-8 justify-between px-3 py-0 text-xs font-normal',
               triggerClassName,
               !allowNarrowTrigger && TRIGGER_MIN_WIDTH_CLASS
             )}
             data-agent-combobox-root="true"
           >
             {selectedAgent ? (
-              <span className="inline-flex min-w-0 flex-1 items-center gap-1.5">
-                <AgentIcon agent={selectedAgent.id} />
-                <span className="truncate">{selectedAgent.label}</span>
-              </span>
+              <AgentIconLabel
+                icon={<AgentIcon agent={selectedAgent.id} size={14} />}
+                label={selectedAgent.label}
+              />
             ) : (
-              <span className="inline-flex min-w-0 flex-1 items-center gap-1.5">
-                <Terminal className="size-3.5" />
-                <span className="truncate">
-                  {emptyLabel ??
-                    translate('auto.components.agent.AgentCombobox.986f946354', 'Blank Terminal')}
-                </span>
-              </span>
+              <AgentIconLabel
+                icon={<Terminal className="size-3.5" />}
+                label={
+                  emptyLabel ??
+                  translate('auto.components.agent.AgentCombobox.986f946354', 'Blank Terminal')
+                }
+              />
             )}
-            <ChevronsUpDown className="size-3.5 opacity-50" />
+            <ChevronsUpDown className="size-3.5 shrink-0 opacity-50" />
           </Button>
         </PopoverTrigger>
         <PopoverContent

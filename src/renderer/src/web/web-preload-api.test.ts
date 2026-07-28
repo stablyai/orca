@@ -57,6 +57,42 @@ function installBrowserGlobals(userAgent = 'Linux'): {
   return { window: windowStub, storage }
 }
 
+function installExecCommandClipboardDocument(execCommandResult = true): {
+  appendChild: ReturnType<typeof vi.fn>
+  createElement: ReturnType<typeof vi.fn>
+  execCommand: ReturnType<typeof vi.fn>
+  setData: ReturnType<typeof vi.fn>
+} {
+  const listeners: ((event: unknown) => void)[] = []
+  const setData = vi.fn()
+  const createElement = vi.fn()
+  const appendChild = vi.fn()
+  const execCommand = vi.fn((command: string) => {
+    if (command === 'copy') {
+      for (const listener of listeners.slice()) {
+        listener({ clipboardData: { setData }, preventDefault: vi.fn() })
+      }
+    }
+    return execCommandResult
+  })
+  vi.stubGlobal('document', {
+    execCommand,
+    addEventListener: vi.fn((type: string, listener: (event: unknown) => void) => {
+      if (type === 'copy') {
+        listeners.push(listener)
+      }
+    }),
+    removeEventListener: vi.fn((type: string, listener: (event: unknown) => void) => {
+      if (type === 'copy') {
+        listeners.splice(listeners.indexOf(listener), 1)
+      }
+    }),
+    createElement,
+    body: { appendChild }
+  })
+  return { appendChild, createElement, execCommand, setData }
+}
+
 async function installApi(userAgent?: string): Promise<{
   api: PreloadApi
   storage: MemoryStorage
@@ -1229,6 +1265,62 @@ describe('web UI preload API', () => {
 
     await expect(globals.window.api.ui.writeClipboardText('copy me')).resolves.toBeUndefined()
     expect(writeText).toHaveBeenCalledWith('copy me')
+  })
+
+  it('copies through execCommand when navigator.clipboard is unavailable (insecure context)', async () => {
+    const globals = installBrowserGlobals('Linux')
+    vi.stubGlobal('navigator', { userAgent: 'Linux', hardwareConcurrency: 8 })
+    const clipboard = installExecCommandClipboardDocument()
+    const { installWebPreloadApi } = await import('./web-preload-api')
+    installWebPreloadApi()
+
+    await expect(globals.window.api.ui.writeClipboardText('copy me')).resolves.toBeUndefined()
+    expect(clipboard.setData).toHaveBeenCalledWith('text/plain', 'copy me')
+    expect(clipboard.execCommand).toHaveBeenCalledWith('copy')
+    expect(clipboard.createElement).not.toHaveBeenCalled()
+    expect(clipboard.appendChild).not.toHaveBeenCalled()
+  })
+
+  it('rejects instead of silently succeeding when no clipboard write path exists', async () => {
+    const globals = installBrowserGlobals('Linux')
+    vi.stubGlobal('navigator', { userAgent: 'Linux', hardwareConcurrency: 8 })
+    vi.stubGlobal('document', {
+      activeElement: null,
+      createElement: vi.fn(() => ({
+        value: '',
+        readOnly: false,
+        style: {} as Record<string, string>,
+        select: vi.fn(),
+        remove: vi.fn()
+      })),
+      execCommand: vi.fn().mockReturnValue(false),
+      body: { appendChild: vi.fn() }
+    })
+    const { installWebPreloadApi } = await import('./web-preload-api')
+    installWebPreloadApi()
+
+    await expect(globals.window.api.ui.writeClipboardText('copy me')).rejects.toThrow(
+      'Clipboard write is unavailable in this browser context'
+    )
+  })
+
+  it('falls back to execCommand when the browser clipboard write is permission-gated', async () => {
+    const globals = installBrowserGlobals('Linux')
+    const writeText = vi.fn().mockRejectedValue(new DOMException('denied', 'NotAllowedError'))
+    vi.stubGlobal('navigator', {
+      userAgent: 'Linux',
+      hardwareConcurrency: 8,
+      clipboard: { writeText }
+    })
+    const clipboard = installExecCommandClipboardDocument()
+    const { installWebPreloadApi } = await import('./web-preload-api')
+    installWebPreloadApi()
+
+    await expect(globals.window.api.ui.writeClipboardText('copy me')).resolves.toBeUndefined()
+    expect(writeText).toHaveBeenCalledWith('copy me')
+    expect(clipboard.setData).toHaveBeenCalledWith('text/plain', 'copy me')
+    expect(clipboard.createElement).not.toHaveBeenCalled()
+    expect(clipboard.appendChild).not.toHaveBeenCalled()
   })
 
   it('yields while reading accepted large browser clipboard text', async () => {

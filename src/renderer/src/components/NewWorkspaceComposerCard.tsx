@@ -1421,7 +1421,7 @@ export default function NewWorkspaceComposerCard({
           </div>
         </div>
 
-        <div className="space-y-1" data-contextual-tour-target="workspace-creation-agent">
+        <div className="min-w-0 space-y-1" data-contextual-tour-target="workspace-creation-agent">
           <div className="flex items-center justify-between gap-2">
             <label className="text-xs font-medium text-muted-foreground">
               {translate('auto.components.NewWorkspaceComposerCard.01d1e8f601', 'Agent')}
@@ -1459,7 +1459,9 @@ export default function NewWorkspaceComposerCard({
             onOpenManageAgents={onOpenAgentSettings}
             defaultAgent={defaultTuiAgent}
             onSetDefault={handleSetDefaultAgent}
-            triggerClassName="h-9 w-full border-input text-sm focus:border-ring focus:ring-[3px] focus:ring-ring/50"
+            // Why: match Project/Run-on — full-width form row, no 260px min that can overflow the dialog column.
+            allowNarrowTrigger
+            triggerClassName="h-9 w-full min-w-0 border-input text-sm focus:border-ring focus:ring-[3px] focus:ring-ring/50"
             onTriggerEnter={createDisabled ? undefined : onCreate}
           />
         </div>

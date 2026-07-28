@@ -55,6 +55,7 @@ function inventory(
       errorCategory: null
     })),
     eligibleUpdateNames,
+    scanIssues: [],
     scannedAt: 1
   }
 }

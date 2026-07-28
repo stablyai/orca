@@ -26,6 +26,12 @@ import {
 } from './activity-bar-buttons'
 import { getActiveChecksStatus } from './active-checks-status'
 import { getVisibleRightSidebarActivityItems } from './right-sidebar-activity-visibility'
+import { getPluginPanelActivityItems } from './plugin-panel-activity-items'
+import {
+  collectInstalledPluginTabKeys,
+  usePluginPanels,
+  usePluginPanelsStore
+} from '@/store/plugin-panels'
 import { useShortcutLabel } from '@/hooks/useShortcutLabel'
 import {
   RIGHT_SIDEBAR_HEADER_NO_DRAG_CLASS_NAME,
@@ -48,6 +54,7 @@ import {
   shouldRenderDesktopWindowChrome
 } from '@/lib/desktop-window-chrome'
 import { getRendererAppPlatform } from '@/lib/renderer-app-platform'
+import { useInstalledPluginRouteReconciliation } from './use-installed-plugin-route-reconciliation'
 
 const ACTIVITY_BAR_SIDE_WIDTH = 40
 
@@ -84,6 +91,19 @@ function RightSidebarInner(): React.JSX.Element {
   const isFolderWorkspace = activeWorkspaceScope?.type === 'folder'
   const isFolder = isFolderWorkspace || (activeRepo ? isFolderRepo(activeRepo) : false)
   const isSshRepo = Boolean(activeRepo?.connectionId)
+  const pluginSystemEnabled = useAppStore((s) => s.settings?.pluginSystemEnabled === true)
+  const pluginPanels = usePluginPanels()
+  const visiblePluginPanels = useMemo(
+    () => (pluginSystemEnabled ? pluginPanels : []),
+    [pluginPanels, pluginSystemEnabled]
+  )
+  const installedPlugins = usePluginPanelsStore((s) => s.plugins)
+  const pluginFetchStatus = usePluginPanelsStore((s) => s.fetchStatus)
+  const pluginPanelErrors = usePluginPanelsStore((s) => s.panelErrors)
+  const installedPluginTabKeys = useMemo(
+    () => collectInstalledPluginTabKeys(installedPlugins),
+    [installedPlugins]
+  )
 
   const activityItems = useMemo<ActivityBarItem[]>(
     () => [
@@ -136,9 +156,19 @@ function RightSidebarInner(): React.JSX.Element {
         title: translate('auto.components.right.sidebar.index.441733b630', 'Ports'),
         shortcut: portsShortcut === 'Unassigned' ? '' : portsShortcut,
         sshOnly: true
-      }
+      },
+      // Why: plugin panels append after the built-in tabs so core navigation
+      // keeps stable positions regardless of which plugins are installed.
+      ...getPluginPanelActivityItems(visiblePluginPanels, pluginPanelErrors)
     ],
-    [checksShortcut, explorerShortcut, portsShortcut, sourceControlShortcut]
+    [
+      checksShortcut,
+      explorerShortcut,
+      pluginPanelErrors,
+      visiblePluginPanels,
+      portsShortcut,
+      sourceControlShortcut
+    ]
   )
 
   const visibleItems = useMemo(
@@ -159,7 +189,12 @@ function RightSidebarInner(): React.JSX.Element {
   // worktree), render a visible fallback without overwriting the stored route.
   // Folder workspaces keep a session-local effective-tab memory so a PR Checks
   // row can open a child Checks tab without erasing the parent's overview tab.
-  const normalizedActiveTab = normalizeRightSidebarRoute(rightSidebarTab).rightSidebarTab
+  // Why: pass the installed-panel set so a persisted tab for an UNINSTALLED
+  // plugin drops to Explorer instead of surviving as a dead route.
+  const normalizedActiveTab = normalizeRightSidebarRoute(rightSidebarTab, undefined, {
+    installedPluginTabKeys:
+      pluginSystemEnabled && pluginFetchStatus === 'ready' ? installedPluginTabKeys : undefined
+  }).rightSidebarTab
   const rememberedFolderTab = activeFolderWorkspaceKey
     ? rememberedFolderTabByWorkspaceKeyRef.current[activeFolderWorkspaceKey]
     : null
@@ -173,6 +208,14 @@ function RightSidebarInner(): React.JSX.Element {
     visibleItems,
     activeFolderWorkspaceKey,
     rememberedFolderTab: requestedFolderTab ?? rememberedFolderTab
+  })
+
+  useInstalledPluginRouteReconciliation({
+    pluginSystemEnabled,
+    fetchStatus: pluginFetchStatus,
+    storedTab: rightSidebarTab,
+    normalizedTab: normalizedActiveTab,
+    setStoredTab: setRightSidebarTab
   })
 
   useEffect(() => {
