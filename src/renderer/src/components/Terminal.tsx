@@ -137,6 +137,10 @@ import { translate } from '@/i18n/i18n'
 import { getRuntimeEnvironmentIdForWorktree } from '@/lib/worktree-runtime-owner'
 import { getResolvedExecutionHostIdForWorktree } from '@/lib/resolved-worktree-execution-host'
 import { browserWorkspaceHasRemoteOwner } from '@/runtime/remote-browser-tab-ownership'
+import {
+  combineTerminalWorktreeParkIds,
+  useManualTerminalWorktreeParking
+} from './terminal-pane/use-manual-terminal-worktree-parking'
 
 const EditorPanel = lazy(() => import('./editor/EditorPanel'))
 
@@ -738,6 +742,15 @@ function Terminal(): React.JSX.Element | null {
   const [parkedTerminalWorktreeIds, setParkedTerminalWorktreeIds] = useState<ReadonlySet<string>>(
     () => new Set()
   )
+  const manuallyParkedTerminalWorktreeIds = useManualTerminalWorktreeParking({
+    activeView,
+    renderedActiveWorktreeId
+  })
+  const effectiveParkedTerminalWorktreeIds = useMemo(
+    () =>
+      combineTerminalWorktreeParkIds(parkedTerminalWorktreeIds, manuallyParkedTerminalWorktreeIds),
+    [manuallyParkedTerminalWorktreeIds, parkedTerminalWorktreeIds]
+  )
   // Tab restriction for targeted background mounts (wake/resume); a worktree absent from this map mounts all its tabs.
   const backgroundMountTabIdsByWorktreeRef = useRef(new Map<string, ReadonlySet<string>>())
   // Why: only cold-activation deferral (not targeted mounts, which share the map above) creates watcher coverage for every unmounted tab.
@@ -1055,9 +1068,9 @@ function Terminal(): React.JSX.Element | null {
   const coldWorktreePresentationTargets = useMemo(
     () =>
       activeView === 'terminal' && activeTabType === 'terminal'
-        ? parkedTerminalWorktreeIds
+        ? effectiveParkedTerminalWorktreeIds
         : new Set<string>(),
-    [activeTabType, activeView, parkedTerminalWorktreeIds]
+    [activeTabType, activeView, effectiveParkedTerminalWorktreeIds]
   )
   const {
     presentationByScope: worktreePresentationByScope,
@@ -1088,7 +1101,7 @@ function Terminal(): React.JSX.Element | null {
         const shouldMeasureHiddenWorktree =
           !isVisible && measurableBackgroundWorktreeIdsRef.current.has(workspace.id)
         const parked =
-          !isVisible && !shouldMeasureHiddenWorktree && parkedTerminalWorktreeIds.has(workspace.id)
+          !shouldMeasureHiddenWorktree && effectiveParkedTerminalWorktreeIds.has(workspace.id)
         if (parked) {
           for (const tab of tabs) {
             const activityTerminalPortal = findActivityTerminalPortal(activityTerminalPortals, {
@@ -1135,7 +1148,7 @@ function Terminal(): React.JSX.Element | null {
     backgroundMountRevision,
     getEffectiveLayoutForWorktree,
     groupsByWorktree,
-    parkedTerminalWorktreeIds,
+    effectiveParkedTerminalWorktreeIds,
     pendingStartupByTabId,
     renderedActiveWorktreeId,
     tabsByWorktree,
@@ -2107,9 +2120,7 @@ function Terminal(): React.JSX.Element | null {
               const shouldMeasureHiddenWorktree =
                 !isVisible && measurableBackgroundWorktreeIdsRef.current.has(workspace.id)
               const shouldColdParkTerminalPanes =
-                !isVisible &&
-                !shouldMeasureHiddenWorktree &&
-                parkedTerminalWorktreeIds.has(workspace.id)
+                !shouldMeasureHiddenWorktree && effectiveParkedTerminalWorktreeIds.has(workspace.id)
               return (
                 <WorktreeSplitSurface
                   key={`tab-groups-${workspace.id}`}
@@ -2159,9 +2170,8 @@ function Terminal(): React.JSX.Element | null {
                 const shouldMeasureHiddenWorktree =
                   !isVisible && measurableBackgroundWorktreeIdsRef.current.has(workspace.id)
                 const shouldColdParkTerminalPanes =
-                  !isVisible &&
                   !shouldMeasureHiddenWorktree &&
-                  parkedTerminalWorktreeIds.has(workspace.id)
+                  effectiveParkedTerminalWorktreeIds.has(workspace.id)
                 return (
                   <div
                     key={workspace.id}

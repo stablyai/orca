@@ -8,87 +8,55 @@ on:
       - reopened
       - ready_for_review
 
+concurrency:
+  group: pr-checks-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
 jobs:
-  verify:
+  static_analysis:
+    name: static analysis
     runs-on: ubuntu-latest
 
     steps:
       - name: Checkout
         uses: actions/checkout@v6
         with:
-          # Why: verify:skill-bundle-manifest now checks working-tree bytes
-          # against the committed skill ledger (advanced only at release cut) and
-          # no longer walks release tags, so a shallow checkout is sufficient.
           persist-credentials: false
 
-      - name: Install native build tools
-        run: sudo apt-get update && sudo apt-get install -y build-essential python3 zlib1g-dev zsh
-
-      - name: Setup Node.js
-        uses: actions/setup-node@v6
-        with:
-          node-version-file: package.json
-
-      - name: Setup pnpm
-        uses: pnpm/action-setup@v6
-        with:
-          run_install: false
-
-      # Why: pnpm's bundled node-gyp ships gyp_main.py without execute
-      # permission, which breaks native module builds (e.g. node-pty's
-      # postinstall) with "/bin/sh: gyp_main.py: Permission denied".
-      # Pin the fallback to the lockfile's node-gyp version so CI stays
-      # reproducible while forcing pnpm to bypass its broken bundled copy.
-      # Gate on runner.os == 'Linux' to match release.yml — the
-      # npm-global path layout this step assumes is POSIX-shaped, and the
-      # failure has only been observed on Linux runners. Today this job
-      # pins runs-on: ubuntu-latest so the guard is a no-op, but it
-      # prevents a silent break if a Windows/macOS matrix is added later.
-      - name: Use external node-gyp to avoid pnpm's bundled copy (Linux only)
-        if: runner.os == 'Linux'
-        run: |
-          npm install -g node-gyp@11.5.0
-          echo "npm_config_node_gyp=$(npm root -g)/node-gyp/bin/node-gyp.js" >> "$GITHUB_ENV"
-
-      - name: Prepare dependency install
-        run: |
-          if [ -e node_modules ]; then
-            ls -ld node_modules
-            rm -rf node_modules
-          fi
-
-      - name: Install dependencies
-        # Why: pnpm 10.24's frozen headless fast path can fail on fresh Ubuntu
-        # runners while creating the root node_modules. Use the normal resolver
-        # path, then verify package metadata stayed unchanged.
-        run: |
-          pnpm install --no-frozen-lockfile --prefer-frozen-lockfile=false
-          git diff --exit-code package.json pnpm-lock.yaml
+      - uses: ./.github/actions/install-node-dependencies
 
       - name: Lint
         run: pnpm exec oxlint --format github
 
+      - name: Check switch exhaustiveness
+        run: pnpm run lint:switch-exhaustiveness
+
       - name: Check styled scrollbars
         run: pnpm check:styled-scrollbars
+
+      - name: Check quadratic buffer concatenation
+        run: pnpm run check:quadratic-buffer-concat
 
       - name: Check reliability gate manifest
         run: pnpm run check:reliability-gates
 
-      # Why: oxlint fails any file over max-lines that is NOT suppressed, so this
-      # ratchet forbids ADDING a new suppression (inline disable or mobile max
-      # bump). Existing oversized files are grandfathered in
-      # config/max-lines-baseline.txt, which may only shrink — new bypasses fail
-      # here with a clear message instead of silently growing the debt.
-      - name: Enforce max-lines ratchet (no new bypasses)
+      - name: Enforce max-lines ratchet
         run: pnpm run check:max-lines-ratchet
 
-      # Why: the CLI embeds guide content while the skills CLI installs generated
-      # projections from the repository, so stale output would split those two truths.
       - name: Verify bundled skill guides
         run: pnpm run verify:bundled-skill-guides
 
       - name: Verify skill freshness manifest
         run: pnpm run verify:skill-bundle-manifest
+
+      - name: Verify localization catalog
+        run: pnpm run verify:localization-catalog
+
+      - name: Verify localization coverage
+        run: pnpm run verify:localization-coverage
 
       # Why: project-owned type declarations must live in .ts so tsc
       # actually checks them. TypeScript's skipLibCheck: true (inherited
@@ -113,55 +81,212 @@ jobs:
       - name: Verify macOS entitlements
         run: pnpm verify:macos-entitlements
 
-      - name: Typecheck
-        run: pnpm typecheck
+  typecheck:
+    runs-on: ubuntu-latest
 
-      # Why: real old Git diagnostics differ from mocked errors. Keep the
-      # fallback predicates executable across the baseline, transition, and
-      # current command shapes so a newly added flag cannot silently regress.
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+
+      - uses: ./.github/actions/install-node-dependencies
+
+      - run: pnpm typecheck
+
+  git_compatibility:
+    name: Git compatibility
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+
+      - uses: ./.github/actions/install-node-dependencies
+
       - name: Verify Git binary compatibility matrix
         run: |
-          archive="$RUNNER_TEMP/git-2.25.5.tar.gz"
-          source="$RUNNER_TEMP/git-2.25.5"
-          curl -fsSL https://www.kernel.org/pub/software/scm/git/git-2.25.5.tar.gz -o "$archive"
-          echo "41662c52fc16fec4963bfc41075e71f8ead6b5e386797eb6f9a1111ff95a8ddf  $archive" \
-            | sha256sum --check
-          mkdir -p "$source"
-          tar -xzf "$archive" -C "$source" --strip-components=1
-          make -C "$source" -j2 NO_GETTEXT=YesPlease NO_TCLTK=YesPlease NO_PYTHON=YesPlease git
-          ORCA_GIT_COMPAT_BINARY="$source/git" ORCA_GIT_COMPAT_VERSION="2.25.5" \
-            pnpm exec vitest run --config config/vitest.config.ts \
-            src/shared/git-binary-compatibility.test.ts
+          pids=()
+          (
+            archive="$RUNNER_TEMP/git-2.25.5.tar.gz"
+            source="$RUNNER_TEMP/git-2.25.5"
+            curl -fsSL https://www.kernel.org/pub/software/scm/git/git-2.25.5.tar.gz -o "$archive"
+            echo "41662c52fc16fec4963bfc41075e71f8ead6b5e386797eb6f9a1111ff95a8ddf  $archive" \
+              | sha256sum --check
+            mkdir -p "$source"
+            tar -xzf "$archive" -C "$source" --strip-components=1
+            make -C "$source" -j"$(nproc)" \
+              NO_GETTEXT=YesPlease NO_TCLTK=YesPlease NO_PYTHON=YesPlease git
+            ORCA_GIT_COMPAT_BINARY="$source/git" ORCA_GIT_COMPAT_VERSION="2.25.5" \
+              pnpm exec vitest run --config config/vitest.config.ts \
+              src/shared/git-binary-compatibility.test.ts
+          ) &
+          pids+=("$!")
 
           for spec in \
             "alpine/git:edge-2.38.1|2.38.1" \
             "alpine/git:v2.49.1|2.49.1"; do
-            image="${spec%%|*}"
-            version="${spec#*|}"
-            ORCA_GIT_COMPAT_IMAGE="$image" ORCA_GIT_COMPAT_VERSION="$version" \
-              pnpm exec vitest run --config config/vitest.config.ts \
-              src/shared/git-binary-compatibility.test.ts
+            (
+              image="${spec%%|*}"
+              version="${spec#*|}"
+              ORCA_GIT_COMPAT_IMAGE="$image" ORCA_GIT_COMPAT_VERSION="$version" \
+                pnpm exec vitest run --config config/vitest.config.ts \
+                src/shared/git-binary-compatibility.test.ts
+            ) &
+            pids+=("$!")
           done
 
-      # Why: postinstall rebuilds better-sqlite3 for Electron's ABI via
-      # @electron/rebuild, but vitest runs under system Node.js. Rebuild
-      # it for Node so orchestration tests can load the native module.
-      - name: Rebuild better-sqlite3 for Node
-        run: pnpm rebuild better-sqlite3
+          status=0
+          for pid in "${pids[@]}"; do
+            wait "$pid" || status=1
+          done
+          exit "$status"
 
-      # Why: install intentionally blocks Electron's package postinstall, but
-      # some unit tests import `electron` under Node and require path.txt.
+  shell_contracts:
+    name: shell contracts
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+
+      - name: Install zsh
+        run: sudo apt-get update && sudo apt-get install -y zsh
+
+      - uses: ./.github/actions/install-node-dependencies
+        with:
+          native-runtime: node
+
+      - name: Test real shell contracts
+        run: |
+          pnpm exec vitest run --config config/vitest.config.ts \
+            src/main/daemon/shell-ready.test.ts \
+            src/main/daemon/node-pty-fd-leak.test.ts \
+            src/main/providers/local-pty-shell-ready.test.ts \
+            src/main/providers/__tests__/shell-ready-framework-example.test.ts \
+            src/main/pty/omp-shell-wrapper.node-pty.test.ts \
+            src/shared/posix-command-path-lookup.test.ts
+
+  test:
+    name: tests ${{ matrix.shard }}/${{ strategy.job-total }}
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16]
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+
+      - uses: ./.github/actions/install-node-dependencies
+        with:
+          native-runtime: node
+
       - name: Install Electron package binary for tests
         run: node config/scripts/install-electron-package-binary.mjs
 
-      - name: Test
-        run: pnpm test
+      - name: Test shard
+        run: |
+          pnpm exec vitest run --config config/vitest.config.ts \
+            --exclude=src/main/daemon/shell-ready.test.ts \
+            --exclude=src/main/daemon/node-pty-fd-leak.test.ts \
+            --exclude=src/main/providers/local-pty-shell-ready.test.ts \
+            --exclude=src/main/providers/__tests__/shell-ready-framework-example.test.ts \
+            --exclude=src/main/pty/omp-shell-wrapper.node-pty.test.ts \
+            --exclude=src/shared/posix-command-path-lookup.test.ts \
+            --shard=${{ matrix.shard }}/${{ strategy.job-total }}
 
-      - name: Build unpacked app
-        run: pnpm build:unpack
+  package:
+    name: package
+    runs-on: ubuntu-latest
 
-      # Why: the packaged CLI runs outside Electron's asar integration, so
-      # bare runtime imports must be present in the package itself. Run from a
-      # temp copy so Node cannot mask missing package deps with repo node_modules.
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+
+      - name: Cache electron-builder downloads
+        uses: actions/cache@v5
+        with:
+          path: |
+            ~/.cache/electron
+            ~/.cache/electron-builder
+          key: electron-builder-linux-${{ hashFiles('pnpm-lock.yaml') }}
+          restore-keys: |
+            electron-builder-linux-
+
+      - uses: ./.github/actions/install-node-dependencies
+        with:
+          native-runtime: electron
+
+      - name: Build package inputs
+        run: |
+          status=0
+          pnpm run build:cli || status=1
+
+          scripts=(build:relay build:electron-vite:parallel)
+          pids=()
+          for script in "${scripts[@]}"; do
+            pnpm run "$script" &
+            pids+=("$!")
+          done
+
+          for pid in "${pids[@]}"; do
+            wait "$pid" || status=1
+          done
+          exit "$status"
+
+      - name: Project web client from renderer build
+        run: pnpm run build:web-from-renderer
+
+      - name: Build native components
+        run: pnpm run build:native
+
+      - name: Package unpacked app
+        env:
+          ORCA_REUSE_PREPARED_NATIVE_RUNTIME: '1'
+        run: pnpm exec electron-builder --config config/electron-builder.config.cjs --dir
+
       - name: Smoke packaged CLI
         run: node config/scripts/smoke-packaged-cli.mjs --app-dir=dist/linux-unpacked
+
+  verify:
+    if: always()
+    needs:
+      - static_analysis
+      - typecheck
+      - git_compatibility
+      - shell_contracts
+      - test
+      - package
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Require successful checks
+        env:
+          STATIC_ANALYSIS: ${{ needs.static_analysis.result }}
+          TYPECHECK: ${{ needs.typecheck.result }}
+          GIT_COMPATIBILITY: ${{ needs.git_compatibility.result }}
+          SHELL_CONTRACTS: ${{ needs.shell_contracts.result }}
+          TEST: ${{ needs.test.result }}
+          PACKAGE: ${{ needs.package.result }}
+        run: |
+          for result in \
+            "$STATIC_ANALYSIS" \
+            "$TYPECHECK" \
+            "$GIT_COMPATIBILITY" \
+            "$SHELL_CONTRACTS" \
+            "$TEST" \
+            "$PACKAGE"; do
+            if [ "$result" != "success" ]; then
+              exit 1
+            fi
+          done

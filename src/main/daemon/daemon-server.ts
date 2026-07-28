@@ -868,14 +868,20 @@ export class DaemonServer {
           return {}
         }
         // Reveal intentionally keeps the queued tail: main needs those bytes, and the normal flush/drain delivers them in order ahead of the marker.
-        const scanSeedAnsi = background ? '' : this.host.getPartialEscapeTailAnsi(sessionId)
+        const mode2031State = this.transientFactRelay.getMode2031ReplyScanState(sessionId)
+        const scanSeedAnsi = background
+          ? ''
+          : mode2031State.pendingSubscribe
+            ? mode2031State.tail
+            : this.host.getPartialEscapeTailAnsi(sessionId)
         this.streamDataBatcher.enqueueControlEvent(streamClientId, sessionId, {
           type: 'event',
           event: 'sessionBackgroundMarker',
           sessionId,
           payload: {
             background,
-            ...(scanSeedAnsi.length > 0 ? { scanSeedAnsi } : {})
+            ...(scanSeedAnsi.length > 0 ? { scanSeedAnsi } : {}),
+            ...(mode2031State.pendingSubscribe ? { mode2031PendingSubscribe: true as const } : {})
           }
         })
         return {}

@@ -18,7 +18,7 @@ vi.mock('@/store', () => ({
   }
 }))
 
-import { queueNewWorkspaceTerminalFocus } from './new-workspace-terminal-focus'
+import { queueWorkspaceActivationTerminalFocus } from './workspace-activation-terminal-focus'
 
 type FocusState = {
   activeWorktreeId: string | null
@@ -39,7 +39,7 @@ function flushFrame(): void {
   frame?.()
 }
 
-describe('queueNewWorkspaceTerminalFocus', () => {
+describe('queueWorkspaceActivationTerminalFocus', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     pendingFrame = null
@@ -58,7 +58,7 @@ describe('queueNewWorkspaceTerminalFocus', () => {
       activeTabId: 'tab-1'
     })
 
-    queueNewWorkspaceTerminalFocus('wt-1', { primaryTabId: 'tab-1' })
+    queueWorkspaceActivationTerminalFocus('wt-1', { primaryTabId: 'tab-1' })
 
     expect(focusRuntimeTerminalSurfaceMock).not.toHaveBeenCalled()
     flushFrame()
@@ -75,7 +75,7 @@ describe('queueNewWorkspaceTerminalFocus', () => {
       activeTabId: 'tab-adopted'
     })
 
-    queueNewWorkspaceTerminalFocus('wt-1', { primaryTabId: null })
+    queueWorkspaceActivationTerminalFocus('wt-1', { primaryTabId: null })
     flushFrame()
 
     expect(focusRuntimeTerminalSurfaceMock).toHaveBeenCalledWith('tab-adopted')
@@ -91,11 +91,49 @@ describe('queueNewWorkspaceTerminalFocus', () => {
       activeTabId: 'tab-1'
     })
 
-    queueNewWorkspaceTerminalFocus('wt-1', { primaryTabId: 'tab-1' })
+    queueWorkspaceActivationTerminalFocus('wt-1', { primaryTabId: 'tab-1' })
     flushFrame()
 
     expect(focusRuntimeTerminalSurfaceMock).toHaveBeenCalledWith('tab-1')
     expect(focusTerminalTabSurfaceMock).not.toHaveBeenCalled()
+  })
+
+  // Why: #9939 — the return value is what stops the palette from running its whole-document
+  // fallback, which would grab the worktree the user just left, now mounted but hidden.
+  it('reports that it claimed focus for a terminal destination', () => {
+    setFocusState({
+      activeWorktreeId: 'wt-1',
+      activeView: 'terminal',
+      activeTabType: 'terminal',
+      activeTabId: 'tab-adopted'
+    })
+
+    expect(queueWorkspaceActivationTerminalFocus('wt-1', { primaryTabId: null })).toBe(true)
+  })
+
+  it('declines a destination whose restored surface is not a terminal', () => {
+    setFocusState({
+      activeWorktreeId: 'wt-1',
+      activeView: 'terminal',
+      activeTabType: 'browser',
+      activeTabId: 'tab-adopted'
+    })
+
+    expect(queueWorkspaceActivationTerminalFocus('wt-1', { primaryTabId: null })).toBe(false)
+    flushFrame()
+    expect(focusRuntimeTerminalSurfaceMock).not.toHaveBeenCalled()
+    expect(focusTerminalTabSurfaceMock).not.toHaveBeenCalled()
+  })
+
+  it('declines a destination that has no terminal tab yet', () => {
+    setFocusState({
+      activeWorktreeId: 'wt-1',
+      activeView: 'terminal',
+      activeTabType: 'terminal',
+      activeTabId: null
+    })
+
+    expect(queueWorkspaceActivationTerminalFocus('wt-1', { primaryTabId: null })).toBe(false)
   })
 
   it('does not steal focus if the user leaves the created workspace first', () => {
@@ -107,7 +145,7 @@ describe('queueNewWorkspaceTerminalFocus', () => {
     }
     setFocusState(state)
 
-    queueNewWorkspaceTerminalFocus('wt-1', { primaryTabId: 'tab-1' })
+    queueWorkspaceActivationTerminalFocus('wt-1', { primaryTabId: 'tab-1' })
     state.activeWorktreeId = 'wt-2'
     flushFrame()
 

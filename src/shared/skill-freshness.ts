@@ -91,12 +91,41 @@ export type SkillFreshnessInventory = {
   scannedAt: number
 }
 
-export function buildTargetedSkillUpdateCommand(names: readonly string[]): string | null {
+export function canonicalizeSkillUpdateNames(names: readonly string[]): string[] | null {
   const canonicalNames = [...new Set(names)].sort((left, right) => left.localeCompare(right, 'en'))
-  // Why: names become editable shell input. Official manifests use this
-  // restricted package-name grammar so no entry can introduce shell syntax.
+  // Why: names reach a shell in the terminal fallback. Official manifests use
+  // this restricted package-name grammar so no entry can introduce shell syntax.
   if (canonicalNames.some((name) => !/^[a-z0-9][a-z0-9._-]*$/.test(name))) {
     return null
   }
-  return canonicalNames.length > 0 ? `npx skills update ${canonicalNames.join(' ')} --global` : null
+  return canonicalNames.length > 0 ? canonicalNames : null
 }
+
+export function buildTargetedSkillUpdateCommand(names: readonly string[]): string | null {
+  const canonicalNames = canonicalizeSkillUpdateNames(names)
+  return canonicalNames ? `npx skills update ${canonicalNames.join(' ')} --global` : null
+}
+
+// Why: `skills update` has no --json (that flag only exists on `list`), so the
+// run reports one indeterminate phase. Per-skill outcomes come from re-scanning
+// the inventory after exit, never from parsing stdout.
+export type SkillUpdateRun =
+  | { state: 'idle' }
+  // `stopping` covers the window between Stop and the process tree actually
+  // dying — the run is still `running` (that is what blocks a second writer),
+  // but the Stop affordance has already been spent.
+  | { state: 'running'; names: string[]; startedAt: number; output: string; stopping?: boolean }
+  | { state: 'success'; names: string[]; finishedAt: number; output: string }
+  | {
+      state: 'error'
+      names: string[]
+      finishedAt: number
+      output: string
+      message: string
+      /** Names still outdated after the run — the re-scan is the source of truth. */
+      failedNames: string[]
+    }
+
+export type SkillUpdateStartResult =
+  | { started: true }
+  | { started: false; reason: 'already-running' | 'invalid-names' | 'unsafe-command-path' }

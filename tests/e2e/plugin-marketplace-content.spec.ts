@@ -76,16 +76,10 @@ async function copyLaunchPlugin(
 
 async function configureFixtureGit(home: string, repositories: string): Promise<NodeJS.ProcessEnv> {
   const hooksDirectory = join(home, 'hooks')
-  const xdgConfigHome = join(home, 'xdg')
   const configPath = join(home, '.gitconfig')
-  await Promise.all([
-    mkdir(hooksDirectory, { recursive: true }),
-    mkdir(xdgConfigHome, { recursive: true })
-  ])
+  await mkdir(hooksDirectory, { recursive: true })
   const gitEnvironment: NodeJS.ProcessEnv = {
-    HOME: home,
-    USERPROFILE: home,
-    XDG_CONFIG_HOME: xdgConfigHome,
+    GIT_CONFIG_GLOBAL: configPath,
     GIT_CONFIG_NOSYSTEM: '1',
     GIT_TERMINAL_PROMPT: '0'
   }
@@ -184,10 +178,25 @@ async function installMarketplacePluginThroughUi(
 ): Promise<void> {
   const listing = page.locator(`[data-marketplace-plugin-key="${pluginKey}"]`)
   await expect(listing).toBeVisible()
-  await listing.getByRole('button', { name: 'Review' }).click()
+  await listing.getByRole('button', { name: 'Install' }).click()
   const preview = page.getByRole('dialog', { name: pluginName })
-  await expect(preview).toContainText(pluginKey)
+  await expect(preview).toContainText('Official · stablyai')
   await preview.getByRole('button', { name: 'Install plugin' }).click()
+  const consent = page.getByRole('dialog', { name: consentDialogName })
+  await expect(consent).toBeVisible()
+  await consent.getByRole('button', { name: 'Enable plugin' }).click()
+  await expect(consent).toBeHidden()
+}
+
+async function enableInstalledPluginThroughUi(
+  page: Page,
+  pluginKey: string,
+  consentDialogName: string
+): Promise<void> {
+  await page.getByRole('tab', { name: /^Installed/ }).click()
+  const plugin = page.locator(`[data-plugin-key="${pluginKey}"]`)
+  await expect(plugin).toBeVisible()
+  await plugin.getByRole('button', { name: 'Review & enable' }).click()
   const consent = page.getByRole('dialog', { name: consentDialogName })
   await expect(consent).toBeVisible()
   await consent.getByRole('button', { name: 'Enable plugin' }).click()
@@ -251,10 +260,9 @@ async function runMarketplaceJourney(page: Page): Promise<void> {
     'Multipass VM Recipes',
     'Review plugin content'
   )
-  await installMarketplacePluginThroughUi(
+  await enableInstalledPluginThroughUi(
     page,
     'stablyai.orca-navigation-shortcuts',
-    'Orca Navigation Shortcuts',
     'Review plugin content'
   )
 
@@ -266,11 +274,7 @@ async function runMarketplaceJourney(page: Page): Promise<void> {
 test('installs and applies official Phase 1 content from a fresh profile', async ({}, testInfo) => {
   test.setTimeout(180_000)
   const fixture = await createMarketplaceFixture()
-  const session = createRestartSession(testInfo as TestInfo, {
-    extraEnv: {
-      ...fixture.gitEnvironment
-    }
-  })
+  const session = createRestartSession(testInfo as TestInfo, fixture.gitEnvironment)
   let launched: Awaited<ReturnType<typeof session.launch>> | null = null
   try {
     launched = await session.launch()

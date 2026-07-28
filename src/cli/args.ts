@@ -1,4 +1,4 @@
-import { RuntimeClientError } from './runtime-client'
+import { RuntimeClientError } from './runtime/types'
 import { unknownCommandData, unknownFlagData } from './command-suggestion'
 
 export type ParsedArgs = {

@@ -1453,6 +1453,7 @@ describe('useIpcEvents updater integration', () => {
       setUpdateStatus: vi.fn(),
       fetchRepos: vi.fn(),
       fetchWorktrees: vi.fn(),
+      fetchWorktreeLineage: vi.fn(),
       setActiveView: vi.fn(),
       activeModal: null,
       closeModal: vi.fn(),
@@ -1471,6 +1472,7 @@ describe('useIpcEvents updater integration', () => {
       setSshConnectionState,
       setSshTargetLabels: vi.fn(),
       setSshTargetsMetadata,
+      setRemoteWorkspaceSyncStatus: vi.fn(),
       setPortForwards: vi.fn(),
       clearPortForwards: vi.fn(),
       setDetectedPorts: vi.fn(),
@@ -1489,6 +1491,7 @@ describe('useIpcEvents updater integration', () => {
           { id: 'tab-2', ptyId: null, worktreeId: 'wt-1', title: 'Terminal 2' }
         ]
       },
+      deferredSshSessionIdsByTabId: {},
       sshTargetLabels: new Map<string, string>([['conn-1', 'Remote']]),
       settings: {
         terminalFontSize: 13,

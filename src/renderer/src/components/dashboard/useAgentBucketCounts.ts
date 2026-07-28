@@ -56,7 +56,10 @@ export function useAgentBucketCounts(): AgentBucketCounts {
         ptyIdsByTabId,
         runtimePaneTitlesByTabId,
         // Counts do not render acknowledgement state, so avoid subscribing the sidebar to it.
-        acknowledgedAgentsByPaneKey: {}
+        acknowledgedAgentsByPaneKey: {},
+        // Same: counts never render a card's conversation name, so the
+        // generated-title gate is moot and the sidebar stays off settings.
+        settings: null
       },
       Date.now()
     )

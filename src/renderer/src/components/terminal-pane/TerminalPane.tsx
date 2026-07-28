@@ -1676,6 +1676,11 @@ export default function TerminalPane({
     ]
   )
 
+  // Why leaf bindings are a dep: a parked or deferred tab mounts with no
+  // transport, so a queued restart has no ptyId to match on the mount pass. The
+  // reconnected PTY rewrites this map when it binds — `ptyIdsByTabId` does not,
+  // because a restored id is already listed there before the pane ever mounts.
+  const panePtyLayoutBindings = savedLayout.ptyIdsByLeafId
   useEffect(() => {
     const manager = managerRef.current
     if (!manager) {
@@ -1692,7 +1697,12 @@ export default function TerminalPane({
         handleRestartCodexPane(pane.id)
       }
     }
-  }, [consumePendingCodexPaneRestart, handleRestartCodexPane, pendingCodexPaneRestartIds])
+  }, [
+    consumePendingCodexPaneRestart,
+    handleRestartCodexPane,
+    panePtyLayoutBindings,
+    pendingCodexPaneRestartIds
+  ])
 
   useTerminalFontZoom({ isActive, containerRef, managerRef, paneFontSizesRef, settingsRef })
 

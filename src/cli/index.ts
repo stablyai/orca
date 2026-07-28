@@ -11,7 +11,7 @@ import {
 import { dispatch } from './dispatch'
 import { reportCliError } from './format'
 import { printHelp } from './help'
-import { RuntimeClient } from './runtime-client'
+import type { RuntimeClient } from './runtime-client'
 import { COMMAND_SPECS } from './specs'
 
 export { COMMAND_SPECS } from './specs'
@@ -27,6 +27,15 @@ function shouldIgnoreRemoteSelection(commandPath: string[]): boolean {
     commandPath[0] === 'vm' ||
     commandPath[0] === 'agent-context'
   )
+}
+
+// Why: the RuntimeClient graph is 153 of the CLI's 199 eager modules (zod via
+// shared/pairing, ws + tweetnacl via websocket-transport). Loading it here
+// rather than at module scope means --help, `help <cmd>`, and command/flag
+// errors — which all return before this call — never pay for it. Awaited
+// before dispatch so `ctx.client` stays a synchronous getter.
+async function loadRuntimeClientClass(): Promise<typeof RuntimeClient> {
+  return (await import('./runtime-client.js')).RuntimeClient
 }
 
 // Why: the SSH relay bridge executes this CLI on the Orca host while the
@@ -74,6 +83,7 @@ export async function main(
     // lookup so users do not get misleading "Orca is not running" failures for
     // simple command typos or unsupported flags.
     validateCommandAndFlags(COMMAND_SPECS, parsed)
+    const RuntimeClientClass = await loadRuntimeClientClass()
     const ignoreRemoteSelection = shouldIgnoreRemoteSelection(parsed.commandPath)
     const pairingCode = ignoreRemoteSelection ? null : parsed.flags.get('pairing-code')
     const environmentSelector = ignoreRemoteSelection ? null : parsed.flags.get('environment')
@@ -86,7 +96,7 @@ export async function main(
       flags: parsed.flags,
       // Why: local-only handlers must not resolve runtime metadata just to dispatch.
       get client() {
-        client ??= new RuntimeClient(
+        client ??= new RuntimeClientClass(
           undefined,
           undefined,
           typeof pairingCode === 'string' ? pairingCode : ignoreRemoteSelection ? null : undefined,
@@ -111,7 +121,7 @@ async function runClaudeTeams(argv: string[], cwd: string): Promise<void> {
   try {
     // Why: everything after `orca claude-teams` belongs to Claude Code, not
     // Orca's own flag parser, so new Claude flags work without Orca changes.
-    const client = new RuntimeClient(undefined, undefined, null, null)
+    const client = new (await loadRuntimeClientClass())(undefined, undefined, null, null)
     await dispatch(['claude-teams'], {
       flags: new Map(),
       client,
@@ -127,7 +137,7 @@ async function runClaudeTeams(argv: string[], cwd: string): Promise<void> {
 
 async function runAgentTeamsTmuxShim(argv: string[]): Promise<void> {
   try {
-    const client = new RuntimeClient(undefined, 10_000)
+    const client = new (await loadRuntimeClientClass())(undefined, 10_000)
     const response = await client.call<{
       tmux: { stdout: string; stderr: string; exitCode: number }
     }>(

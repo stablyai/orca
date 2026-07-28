@@ -11,7 +11,7 @@ import { getDefaultUserDataPath, readMetadata } from './metadata'
 import { getCliStatus, resolveDesktopWindowStatus } from './status'
 import { sendRequest } from './transport'
 import { RuntimeClientError, RuntimeRpcFailureError, type RuntimeRpcSuccess } from './types'
-import { sendWebSocketRequest } from './websocket-transport'
+import type { sendWebSocketRequest } from './websocket-transport'
 import { markEnvironmentUsed, resolveEnvironmentPairingOffer } from './environments'
 import { describeRuntimeCompatBlock, evaluateRuntimeCompat } from '../../shared/protocol-compat'
 import {
@@ -28,6 +28,13 @@ import {
 // emit its terminal frame. The 10 s grace absorbs round-trip + one final
 // keepalive window. See design doc §3.1.
 const LONG_POLL_CLIENT_GRACE_MS = 10_000
+
+// Why: ws + tweetnacl + the remote-runtime frame stack only matter once a
+// request actually goes over a pairing offer, which local CLI calls never do.
+// Both call sites already await this, so deferring the load changes no ordering.
+async function loadSendWebSocketRequest(): Promise<typeof sendWebSocketRequest> {
+  return (await import('./websocket-transport.js')).sendWebSocketRequest
+}
 
 export class RuntimeClient {
   private readonly userDataPath: string
@@ -80,6 +87,7 @@ export class RuntimeClient {
       if (method !== 'status.get') {
         await this.ensureRemoteRuntimeCompatible(effectiveTimeoutMs)
       }
+      const sendWebSocketRequest = await loadSendWebSocketRequest()
       let response
       try {
         response = await sendWebSocketRequest<TResult>(
@@ -179,6 +187,7 @@ export class RuntimeClient {
     if (!this.remotePairing || this.remoteCompatChecked) {
       return
     }
+    const sendWebSocketRequest = await loadSendWebSocketRequest()
     const response = await sendWebSocketRequest<RuntimeStatus>(
       this.remotePairing,
       'status.get',

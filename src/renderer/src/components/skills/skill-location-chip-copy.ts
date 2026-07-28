@@ -1,10 +1,7 @@
-import type { SkillFreshnessGroupModel, SkillLocationChip } from './skill-freshness-grouping'
+import type { SkillLocationChip } from './skill-freshness-grouping'
 import { translate } from '@/i18n/i18n'
-import { Badge } from '@/components/ui/badge'
-import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
-import { skippedReason } from './skill-freshness-skipped-reason'
 
-function chipLabel(chip: SkillLocationChip): string {
+export function chipLabel(chip: SkillLocationChip): string {
   switch (chip) {
     case 'current':
       return translate('auto.components.skills.SkillFreshnessRow.chipCurrent', 'Current')
@@ -29,7 +26,7 @@ function chipLabel(chip: SkillLocationChip): string {
 
 // Why: chips describe only what a location *is*; the effect on the update
 // command lives in the per-skill sentence, so the two never say it twice.
-function chipTooltip(chip: SkillLocationChip): string {
+export function chipTooltip(chip: SkillLocationChip): string {
   switch (chip) {
     case 'current':
       return translate(
@@ -77,64 +74,4 @@ function chipTooltip(chip: SkillLocationChip): string {
         'This copy is managed by a plugin.'
       )
   }
-}
-
-export function SkillFreshnessGroup({
-  group
-}: {
-  group: SkillFreshnessGroupModel
-}): React.JSX.Element {
-  const isBlocked = group.status === 'cannot-update'
-  return (
-    <div className="space-y-2 py-3 first:pt-0 last:pb-0">
-      <div className="flex min-w-0 flex-wrap items-center gap-2">
-        <span className="text-sm font-medium text-foreground">{group.name}</span>
-        {isBlocked ? (
-          <Badge
-            variant="outline"
-            className="border-amber-600/50 text-amber-700 dark:border-amber-400/40 dark:text-amber-400"
-          >
-            {translate('auto.components.skills.SkillFreshnessRow.statusCantUpdate', 'Skipped')}
-          </Badge>
-        ) : (
-          <Badge variant="secondary">
-            {translate(
-              'auto.components.skills.SkillFreshnessRow.statusUpdateAvailable',
-              'Update available'
-            )}
-          </Badge>
-        )}
-      </div>
-      {isBlocked ? (
-        <p className="text-xs leading-5 text-muted-foreground">{skippedReason(group.locations)}</p>
-      ) : null}
-      <div className="flex flex-col gap-2">
-        {group.locations.map((location) => (
-          <div
-            key={location.id}
-            className="flex min-w-0 flex-wrap items-center gap-2 border-l-2 border-border/60 pl-3"
-          >
-            <span
-              className="truncate font-mono text-[11px] text-muted-foreground"
-              title={location.path}
-            >
-              {location.path}
-            </span>
-            {location.chip ? (
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <Badge variant="outline" className="cursor-help border-dashed">
-                    {chipLabel(location.chip)}
-                  </Badge>
-                </TooltipTrigger>
-                <TooltipContent className="max-w-xs text-pretty">
-                  {chipTooltip(location.chip)}
-                </TooltipContent>
-              </Tooltip>
-            ) : null}
-          </div>
-        ))}
-      </div>
-    </div>
-  )
 }

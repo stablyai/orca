@@ -1,6 +1,10 @@
+import { dirname } from 'node:path'
+
 export function getOrcaElectronLaunchArgs(mainPath: string, headful: boolean): string[] {
+  // Launch through package.json so app version and resource paths match a packaged app.
+  const appPath = dirname(dirname(dirname(mainPath)))
   if (headful || process.platform !== 'linux') {
-    return [mainPath]
+    return [appPath]
   }
 
   // Why: Ubuntu CI cannot run Electron's setuid chrome-sandbox (not root-owned
@@ -16,6 +20,6 @@ export function getOrcaElectronLaunchArgs(mainPath: string, headful: boolean): s
     '--disable-gpu-sandbox',
     '--disable-dev-shm-usage',
     '--in-process-gpu',
-    mainPath
+    appPath
   ]
 }

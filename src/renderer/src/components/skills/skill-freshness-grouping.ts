@@ -60,12 +60,19 @@ export function locationChip(installation: SkillFreshnessInstallation): SkillLoc
  * update disposition. Only skills with an out-of-date official copy are returned —
  * up-to-date, unrecognized-only, and unreadable-only skills have nothing to change
  * here, so they are omitted entirely.
+ *
+ * `alwaysIncludeNames` overrides that filter. A successful update makes every
+ * targeted skill current, which would otherwise drop its row the instant the
+ * re-scan lands — the dialog passes the running/finished run's names so the same
+ * rows stay put from "update available" through to the result.
  */
 export function groupSkillFreshness(
   installations: readonly SkillFreshnessInstallation[],
-  eligibleUpdateNames: readonly string[]
+  eligibleUpdateNames: readonly string[],
+  alwaysIncludeNames: readonly string[] = []
 ): SkillFreshnessGroupModel[] {
   const eligible = new Set(eligibleUpdateNames)
+  const pinned = new Set(alwaysIncludeNames)
   const byName = new Map<string, SkillFreshnessInstallation[]>()
   for (const installation of installations) {
     const entries = byName.get(installation.name) ?? []
@@ -74,7 +81,7 @@ export function groupSkillFreshness(
   }
   const groups: SkillFreshnessGroupModel[] = []
   for (const [name, entries] of byName) {
-    if (!entries.some((entry) => entry.status === 'outdated')) {
+    if (!pinned.has(name) && !entries.some((entry) => entry.status === 'outdated')) {
       continue
     }
     const locations = entries

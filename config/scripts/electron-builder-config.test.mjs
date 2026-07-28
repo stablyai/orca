@@ -19,6 +19,12 @@ const {
 } = require('../packaged-runtime-node-modules.cjs')
 
 describe('electron-builder config', () => {
+  it('keeps the packaged app identity aligned with local-build validation', () => {
+    expect(electronBuilderConfig.appId).toBe(
+      require('../../src/shared/local-build-compatibility-contract.json').appId
+    )
+  })
+
   it('excludes repo-only source trees from app.asar', () => {
     expect(electronBuilderConfig.files).toEqual(
       expect.arrayContaining([
@@ -167,6 +173,58 @@ describe('electron-builder config', () => {
         delete process.env.ORCA_LINUX_ARM64_RELEASE
       } else {
         process.env.ORCA_LINUX_ARM64_RELEASE = original
+      }
+      delete require.cache[configPath]
+      require('../electron-builder.config.cjs')
+    }
+  })
+
+  it('overrides packaged semver only for local macOS builds', () => {
+    const configPath = require.resolve('../electron-builder.config.cjs')
+    const original = process.env.ORCA_LOCAL_BUILD_VERSION
+    const originalMacRelease = process.env.ORCA_MAC_RELEASE
+    try {
+      delete require.cache[configPath]
+      delete process.env.ORCA_MAC_RELEASE
+      process.env.ORCA_LOCAL_BUILD_VERSION = '1.4.159-rc.0.local.123.abc'
+      expect(require('../electron-builder.config.cjs').extraMetadata).toEqual({
+        version: '1.4.159-rc.0.local.123.abc'
+      })
+    } finally {
+      if (originalMacRelease === undefined) {
+        delete process.env.ORCA_MAC_RELEASE
+      } else {
+        process.env.ORCA_MAC_RELEASE = originalMacRelease
+      }
+      if (original === undefined) {
+        delete process.env.ORCA_LOCAL_BUILD_VERSION
+      } else {
+        process.env.ORCA_LOCAL_BUILD_VERSION = original
+      }
+      delete require.cache[configPath]
+      require('../electron-builder.config.cjs')
+    }
+  })
+
+  it('never applies local semver to release packaging', () => {
+    const configPath = require.resolve('../electron-builder.config.cjs')
+    const originalLocalVersion = process.env.ORCA_LOCAL_BUILD_VERSION
+    const originalMacRelease = process.env.ORCA_MAC_RELEASE
+    try {
+      delete require.cache[configPath]
+      process.env.ORCA_LOCAL_BUILD_VERSION = '1.4.159-local.123.abc'
+      process.env.ORCA_MAC_RELEASE = '1'
+      expect(require('../electron-builder.config.cjs').extraMetadata).toBeUndefined()
+    } finally {
+      if (originalLocalVersion === undefined) {
+        delete process.env.ORCA_LOCAL_BUILD_VERSION
+      } else {
+        process.env.ORCA_LOCAL_BUILD_VERSION = originalLocalVersion
+      }
+      if (originalMacRelease === undefined) {
+        delete process.env.ORCA_MAC_RELEASE
+      } else {
+        process.env.ORCA_MAC_RELEASE = originalMacRelease
       }
       delete require.cache[configPath]
       require('../electron-builder.config.cjs')

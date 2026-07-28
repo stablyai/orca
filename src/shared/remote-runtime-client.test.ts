@@ -13,6 +13,7 @@ import {
 } from './e2ee-crypto'
 import { sendRemoteRuntimeRequest, subscribeRemoteRuntimeRequest } from './remote-runtime-client'
 import { MAX_TIMER_DELAY_MS } from './timer-delay'
+import { SESSION_TAB_CLOSE_INTENT_RUNTIME_CAPABILITY } from './protocol-version'
 
 const servers: WebSocketServer[] = []
 
@@ -65,6 +66,11 @@ describe('subscribeRemoteRuntimeRequest', () => {
         expect.objectContaining({ ok: true, result: { type: 'subscribed' } })
       )
     )
+    await expect(server.nextAuth).resolves.toEqual({
+      type: 'e2ee_auth',
+      deviceToken: 'device-token',
+      clientCapabilities: [SESSION_TAB_CLOSE_INTENT_RUNTIME_CAPABILITY]
+    })
     const bytes = new Uint8Array([1, 2, 3])
     expect(subscription.sendBinary(bytes)).toBe(true)
     await expect(server.nextBinary).resolves.toEqual(bytes)
@@ -300,11 +306,16 @@ async function createSubscriptionServer(
 ): Promise<{
   pairing: PairingOffer
   nextBinary: Promise<Uint8Array>
+  nextAuth: Promise<unknown>
 }> {
   const serverKeyPair = generateKeyPair()
   let resolveBinary: (bytes: Uint8Array) => void = () => {}
   const nextBinary = new Promise<Uint8Array>((resolve) => {
     resolveBinary = resolve
+  })
+  let resolveAuth: (auth: unknown) => void = () => {}
+  const nextAuth = new Promise<unknown>((resolve) => {
+    resolveAuth = resolve
   })
   const wss = new WebSocketServer({ port: 0, autoPong: options.disableAutoPong !== true })
   servers.push(wss)
@@ -341,6 +352,7 @@ async function createSubscriptionServer(
         return
       }
       if (!authenticated) {
+        resolveAuth(JSON.parse(plaintext))
         authenticated = true
         sendEncrypted(ws, sharedKey, { type: 'e2ee_authenticated' })
         return
@@ -379,7 +391,7 @@ async function createSubscriptionServer(
   if (!pairing) {
     throw new Error('Failed to create test pairing')
   }
-  return { pairing, nextBinary }
+  return { pairing, nextBinary, nextAuth }
 }
 
 function sendEncrypted(ws: WebSocket, sharedKey: Uint8Array, message: unknown): void {

@@ -3,7 +3,7 @@ import { focusTerminalTabSurface } from '@/lib/focus-terminal-tab-surface'
 import { focusRuntimeTerminalSurface } from '@/runtime/sync-runtime-graph'
 import type { ActivateAndRevealResult } from '@/lib/worktree-activation'
 
-function resolveCreatedWorkspaceTerminalTabId(
+function resolveActivatedWorkspaceTerminalTabId(
   worktreeId: string,
   activation: ActivateAndRevealResult | false
 ): string | null {
@@ -21,13 +21,15 @@ function resolveCreatedWorkspaceTerminalTabId(
   return state.activeTabId
 }
 
-export function queueNewWorkspaceTerminalFocus(
+// Why: returns false when the destination's restored surface is not a terminal, so callers can
+// fall back instead of focusing an unrelated worktree's mounted-but-hidden terminal (#9939).
+export function queueWorkspaceActivationTerminalFocus(
   worktreeId: string,
   activation: ActivateAndRevealResult | false
-): void {
-  const tabId = resolveCreatedWorkspaceTerminalTabId(worktreeId, activation)
+): boolean {
+  const tabId = resolveActivatedWorkspaceTerminalTabId(worktreeId, activation)
   if (!tabId) {
-    return
+    return false
   }
 
   requestAnimationFrame(() => {
@@ -48,4 +50,5 @@ export function queueNewWorkspaceTerminalFocus(
       focusTerminalTabSurface(tabId)
     }
   })
+  return true
 }

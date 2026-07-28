@@ -26,6 +26,8 @@ export function dashboardSnapshotInputsChanged(
     state.ptyIdsByTabId !== previousState.ptyIdsByTabId ||
     state.runtimePaneTitlesByTabId !== previousState.runtimePaneTitlesByTabId ||
     state.acknowledgedAgentsByPaneKey !== previousState.acknowledgedAgentsByPaneKey ||
+    // Why: tabAutoGenerateTitle decides whether cards may show generated names.
+    state.settings !== previousState.settings ||
     // Why: freshness can change a bucket without replacing any backing map.
     state.agentStatusEpoch !== previousState.agentStatusEpoch
   )

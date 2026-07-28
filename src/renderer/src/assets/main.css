@@ -2192,6 +2192,17 @@
   animation: update-card-enter 200ms ease-out both;
 }
 
+/* Why: `skills update` reports no parseable progress, so the skill-update bar is
+   deliberately indeterminate rather than a faked percentage. */
+@keyframes skill-update-slide {
+  from {
+    transform: translateX(-100%);
+  }
+  to {
+    transform: translateX(365%);
+  }
+}
+
 .animate-update-card-exit {
   animation: update-card-exit 150ms ease-in both;
 }
