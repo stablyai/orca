@@ -6,6 +6,11 @@ import {
   type StatusPillRuntime,
   type StatusPillWindowHandle
 } from './createStatusPillWindow'
+import {
+  computeStatusPillAttentionTransitions,
+  type StatusPillAttentionEntry,
+  type StatusPillAttentionTransition
+} from './status-pill-attention'
 import type { AgentStatusIpcPayload } from '../../../shared/agent-status-types'
 
 export type StatusPillCoordinatorOptions = {
@@ -21,6 +26,11 @@ export type StatusPillCoordinatorOptions = {
    *  can mount in tests without a live runtime; answer attempts return
    *  `send_failed` when absent. */
   runtime?: StatusPillRuntime
+  /** Fired once per batch when an agent newly enters a waiting/blocked state
+   *  with a live question (after cooldown). The main index turns this into a
+   *  dock bounce + tray attention + OS notification. Optional so tests can
+   *  exercise detection without Electron. */
+  onAttentionNeeded?: (transition: StatusPillAttentionTransition) => void
   /** Optional logger; defaults to console.warn. */
   warn?: (message: string, error?: unknown) => void
 }
@@ -33,18 +43,26 @@ export class StatusPillCoordinator {
   private readonly agentHookServer: AgentHookServer
   private readonly onFocusMainWindow: () => void
   private readonly onFocusPane: (target: StatusPillFocusTarget) => void
+  private readonly onAttentionNeeded?: (transition: StatusPillAttentionTransition) => void
   private readonly runtime?: StatusPillRuntime
   private readonly warn: (message: string, error?: unknown) => void
   private handle: StatusPillWindowHandle | null = null
   private unsubscribeSettings: (() => void) | null = null
   private unsubscribeStatus: (() => void) | null = null
   private destroyed = false
+  // Why: previous snapshot + per-pane cooldown drive attention detection so a
+  // pane only alerts when it *transitions* into a waiting/blocked state. Typed
+  // against the minimal structural entry so it accepts both the IPC snapshot
+  // and the raw hook status-change stream.
+  private prevSnapshot: StatusPillAttentionEntry[] = []
+  private readonly attentionCooldowns = new Map<string, number>()
 
   constructor(options: StatusPillCoordinatorOptions) {
     this.store = options.store
     this.agentHookServer = options.agentHookServer
     this.onFocusMainWindow = options.onFocusMainWindow
     this.onFocusPane = options.onFocusPane
+    this.onAttentionNeeded = options.onAttentionNeeded
     this.runtime = options.runtime
     this.warn = options.warn ?? defaultWarn
 
@@ -59,9 +77,10 @@ export class StatusPillCoordinator {
 
     // Why: tap the multi-listener status stream (not the single-owner
     // `setListener`) so the pill coexists with the main window's existing
-    // agent-status fanout.
-    this.unsubscribeStatus = this.agentHookServer.subscribeStatusChanges(() => {
+    // agent-status fanout, and to drive attention detection.
+    this.unsubscribeStatus = this.agentHookServer.subscribeStatusChanges((statuses) => {
       this.handle?.broadcastSnapshot()
+      this.detectAttention(statuses ?? [])
     })
 
     // Why: sync once on construction so a profile that already had the setting
@@ -70,20 +89,16 @@ export class StatusPillCoordinator {
     this.syncWithSettings()
   }
 
-  /** Whether the pill window is currently mounted. Exposed for diagnostics. */
   /** True when the pill window is currently mounted. Exposed for diagnostics. */
   isPillOpen(): boolean {
     return this.handle !== null && !this.handle.window.isDestroyed()
   }
 
-  /** Force the pill to recompute its summary from the current snapshot. Used
-   *  by callers that mutate agent state outside the hook server. */
   /** Force the pill to recompute its summary from the current snapshot. */
   refresh(): void {
     this.handle?.broadcastSnapshot()
   }
 
-  /** Final teardown: destroys the window, detaches all listeners. */
   /** Final teardown: destroys the window, detaches all listeners. Idempotent. */
   destroy(): void {
     if (this.destroyed) {
@@ -96,6 +111,36 @@ export class StatusPillCoordinator {
     this.unsubscribeSettings = null
     this.unsubscribeStatus?.()
     this.unsubscribeStatus = null
+  }
+
+  /** Compare the latest snapshot against the previous one and fire a single
+   *  per-batch attention alert when an agent newly needs the user. */
+  private detectAttention(next: StatusPillAttentionEntry[]): void {
+    const now = Date.now()
+    const transitions = this.onAttentionNeeded
+      ? computeStatusPillAttentionTransitions(this.prevSnapshot, next, now, this.attentionCooldowns)
+      : []
+    // Why: always advance the previous snapshot so a pane that stays waiting
+    // is treated as "already alerted" on the next tick (no repeated firing).
+    this.prevSnapshot = next
+    if (transitions.length === 0 || !this.onAttentionNeeded) {
+      return
+    }
+    for (const transition of transitions) {
+      this.attentionCooldowns.set(transition.paneKey, now)
+    }
+    const lead = transitions[0]
+    if (!lead || !this.handle || this.handle.window.isDestroyed()) {
+      return
+    }
+    // Why: nudge the pill renderer so it can run an attention animation even
+    // when the user is looking at another app.
+    try {
+      this.handle.window.webContents.send('statusPill:attentionPulse', { paneKey: lead.paneKey })
+    } catch {
+      // Best-effort; webContents mid-teardown.
+    }
+    this.onAttentionNeeded(lead)
   }
 
   private syncWithSettings(): void {
@@ -138,6 +183,9 @@ export class StatusPillCoordinator {
       },
       warn: this.warn
     })
+    // Why: seed the previous snapshot with the current state so panes already
+    // waiting when the pill opens don't all fire an alert at once.
+    this.prevSnapshot = getSnapshot()
   }
 
   private closePill(): void {

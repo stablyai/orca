@@ -5,7 +5,7 @@
 import { existsSync, statSync } from 'node:fs'
 import { isAbsolute, join } from 'node:path'
 import os from 'node:os'
-import { app, BrowserWindow, dialog, ipcMain, nativeTheme, type Tray } from 'electron'
+import { app, BrowserWindow, dialog, ipcMain, nativeTheme, Notification, type Tray } from 'electron'
 import { electronApp, is } from '@electron-toolkit/utils'
 import * as QRCode from 'qrcode'
 import {
@@ -243,6 +243,10 @@ let crashReports: CrashReportStore | null = null
 let unsubscribeAgentAwakeStatusChanges: (() => void) | null = null
 let unsubscribeSystemResumeBroadcast: (() => void) | null = null
 let statusPillCoordinator: StatusPillCoordinator | null = null
+// Why: Electron GCs Notification objects before the user can click them; hold
+// the pill's attention notifications until they close (mirrors the main
+// notifications module's retain-until-release pattern).
+const statusPillNotifications = new Set<Notification>()
 let watcherShutdownPromise: Promise<void> | null = null
 let watcherShutdownDone = false
 let automations: AutomationService | null = null
@@ -499,6 +503,37 @@ function focusExistingWindow(): void {
     openWindow: openMainWindow,
     warn: console.warn
   })
+}
+
+// Why: shared by the pill's row click + its OS-notification click so both land
+// on the exact agent pane. Mirrors the notification click handler in
+// src/main/ipc/notifications.ts (ui:activateWorktree + ui:focusTerminal).
+function focusAgentPane(target: { paneKey: string; worktreeId?: string | null }): void {
+  focusExistingWindow()
+  const win = mainWindow
+  if (!win || win.isDestroyed()) {
+    return
+  }
+  const { paneKey, worktreeId } = target
+  // Why: worktreeId is "repoId::worktreePath"; only switch worktree when the
+  // separator is present so we never hand the renderer an unparseable id.
+  if (typeof worktreeId === 'string' && worktreeId.includes('::')) {
+    win.webContents.send('ui:activateWorktree', {
+      repoId: getRepoIdFromWorktreeId(worktreeId),
+      worktreeId
+    })
+  }
+  const paneTarget = parsePaneKey(paneKey)
+  if (paneTarget) {
+    win.webContents.send('ui:focusTerminal', {
+      tabId: paneTarget.tabId,
+      worktreeId: worktreeId ?? undefined,
+      leafId: paneTarget.leafId,
+      ackPaneKeyOnSuccess: paneKey,
+      flashFocusedPane: true,
+      scrollToBottomIfOutputSinceLastView: true
+    })
+  }
 }
 
 function requestDesktopActivation(): void {
@@ -1869,32 +1904,53 @@ app.whenReady().then(async () => {
     // leaf. Sends ui:activateWorktree + ui:focusTerminal so the renderer
     // lands on the right tab + split pane (same contract the notification
     // click handler in src/main/ipc/notifications.ts uses).
-    onFocusPane: (target) => {
-      focusExistingWindow()
-      const win = mainWindow
-      if (!win || win.isDestroyed()) {
-        return
-      }
-      const { paneKey, worktreeId } = target
-      // Why: worktreeId is "repoId::worktreePath"; only switch worktree when
-      // the separator is present so we never hand the renderer an unparseable
-      // id (matches the notification click guard).
-      if (typeof worktreeId === 'string' && worktreeId.includes('::')) {
-        win.webContents.send('ui:activateWorktree', {
-          repoId: getRepoIdFromWorktreeId(worktreeId),
-          worktreeId
+    onFocusPane: focusAgentPane,
+    // Why: when an agent newly asks a question, grab the user's attention
+    // outside Orca: dock bounce on macOS, tray attention dot everywhere, and a
+    // native OS notification whose click jumps to that pane. Gated by the pill
+    // setting (detection only runs while the pill is enabled) + a per-pane
+    // cooldown inside the coordinator.
+    onAttentionNeeded: (transition) => {
+      try {
+        setTrayAttention(true)
+        if (process.platform === 'darwin' && app.dock) {
+          const bounceId = app.dock.bounce('informational')
+          // Why: cancel after a short window so the bounce does not persist
+          // until the app is activated (Electron's default).
+          setTimeout(() => {
+            try {
+              app.dock?.cancelBounce(bounceId)
+            } catch {
+              // Best-effort.
+            }
+          }, 4000)
+        }
+        const agentLabel = transition.agentType || 'Agent'
+        const body =
+          typeof transition.toolName === 'string' && transition.toolName.length > 0
+            ? `${agentLabel} · ${transition.toolName}`
+            : `${agentLabel} is waiting for you`
+        const notification = new Notification({
+          title: `${agentLabel} needs you`,
+          body,
+          silent: false
         })
-      }
-      const paneTarget = parsePaneKey(paneKey)
-      if (paneTarget) {
-        win.webContents.send('ui:focusTerminal', {
-          tabId: paneTarget.tabId,
-          worktreeId: worktreeId ?? undefined,
-          leafId: paneTarget.leafId,
-          ackPaneKeyOnSuccess: paneKey,
-          flashFocusedPane: true,
-          scrollToBottomIfOutputSinceLastView: true
+        // Why: Electron GC's Notification objects before the user can interact;
+        // hold it until close just like the notifications module does.
+        statusPillNotifications.add(notification)
+        notification.on('click', () => {
+          focusAgentPane({
+            paneKey: transition.paneKey,
+            worktreeId: transition.worktreeId ?? null
+          })
+          notification.close()
         })
+        notification.on('close', () => {
+          statusPillNotifications.delete(notification)
+        })
+        notification.show()
+      } catch (error) {
+        console.warn('[status-pill] attention notification failed', error)
       }
     },
     warn: console.warn
@@ -2476,6 +2532,14 @@ app.on('before-quit', () => {
   unsubscribeAgentAwakeStatusChanges = null
   statusPillCoordinator?.destroy()
   statusPillCoordinator = null
+  for (const notification of statusPillNotifications) {
+    try {
+      notification.close()
+    } catch {
+      // Best-effort during teardown.
+    }
+  }
+  statusPillNotifications.clear()
   agentAwakeService?.dispose()
   agentAwakeService = null
   // Why: PTY cleanup is deferred to will-quit so the renderer has a chance to

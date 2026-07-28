@@ -147,6 +147,10 @@ export type StatusPillPreloadApi = {
   /** Subscribe to full agent-row pushes (used by the expanded multi-agent
    *  panel). Returns an unsubscribe. */
   onAgentRows: (callback: (rows: StatusPillAgentRow[]) => void) => () => void
+  /** Subscribe to one-shot attention pokes main fires when an agent newly
+   *  asks a question (so the pill can run a stronger bounce animation even if
+   *  the user is in another app). Returns an unsubscribe. */
+  onAttentionPulse: (callback: () => void) => () => void
   /** Pull the current summary on initial mount before the first push arrives. */
   getSnapshot: () => Promise<StatusPillSummary>
   /** Pull the current agent rows for the expanded panel first paint. */

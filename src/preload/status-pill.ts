@@ -27,6 +27,15 @@ const api: StatusPillPreloadApi = {
       ipcRenderer.removeListener('statusPill:agentRows', listener)
     }
   },
+  onAttentionPulse: (callback: () => void): (() => void) => {
+    const listener = (): void => {
+      callback()
+    }
+    ipcRenderer.on('statusPill:attentionPulse', listener)
+    return () => {
+      ipcRenderer.removeListener('statusPill:attentionPulse', listener)
+    }
+  },
   getSnapshot: (): Promise<StatusPillSummary> => ipcRenderer.invoke('statusPill:getSnapshot'),
   getAgentRows: (): Promise<StatusPillAgentRow[]> => ipcRenderer.invoke('statusPill:getAgentRows'),
   fireClick: (): void => {

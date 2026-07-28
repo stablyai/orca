@@ -134,6 +134,28 @@ body {
   transition: none;
 }
 
+/* Why: one-shot bounce main triggers (via statusPill:attentionPulse) when an
+   agent newly asks a question, to draw the eye even when the user is in another
+   app. Disabled under prefers-reduced-motion (see the media query below). */
+.pill-attention {
+  animation: pill-attention 600ms cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+@keyframes pill-attention {
+  0% {
+    transform: scale(1);
+  }
+  30% {
+    transform: scale(1.08);
+  }
+  55% {
+    transform: scale(0.97);
+  }
+  100% {
+    transform: scale(1);
+  }
+}
+
 /* ── Indicator dot + halo ring ─────────────────────── */
 .indicator {
   position: relative;

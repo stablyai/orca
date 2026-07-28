@@ -13,6 +13,7 @@ import { EMPTY_STATUS_PILL_SUMMARY } from '../../shared/status-pill-preload-api'
 import { AgentRowView } from './agent-row'
 import { PendingQuestionCard } from './pending-question-card'
 import { buildPanelTitle, pickTone, type Tone } from './status-pill-formatters'
+import { usePillDrag } from './use-pill-drag'
 
 declare global {
   // oxlint-disable-next-line typescript-eslint/consistent-type-definitions -- declaration merging requires interface
@@ -34,6 +35,12 @@ function StatusPill(): React.JSX.Element {
   const [entered, setEntered] = useState(false)
   const [answeringPaneKey, setAnsweringPaneKey] = useState<string | null>(null)
   const [answerError, setAnswerError] = useState<string | null>(null)
+  const [attention, setAttention] = useState(false)
+  const attentionTimer = useRef<number | null>(null)
+  // Why: read inside the attention-pulse handler without depending on a
+  // re-subscribe when preferences change, so a question that lands while the
+  // effect is closed over stale prefs still honors reduced-motion.
+  const prefersReducedMotionRef = useRef(false)
 
   useEffect(() => {
     if (!api) {
@@ -49,6 +56,23 @@ function StatusPill(): React.JSX.Element {
       if (mounted) {
         setRows(next)
       }
+    })
+    // Why: main pokes this channel when an agent newly asks a question (after
+    // cooldown). Run a one-shot attention bounce so the user notices even when
+    // focused on another app; skip the animation under reduced-motion.
+    const unsubAttention = api.onAttentionPulse(() => {
+      if (!mounted || prefersReducedMotionRef.current) {
+        return
+      }
+      setAttention(true)
+      if (attentionTimer.current !== null) {
+        window.clearTimeout(attentionTimer.current)
+      }
+      attentionTimer.current = window.setTimeout(() => {
+        if (mounted) {
+          setAttention(false)
+        }
+      }, 1300)
     })
     void api.getSnapshot().then((snapshot) => {
       if (mounted) {
@@ -74,6 +98,11 @@ function StatusPill(): React.JSX.Element {
       mounted = false
       unsubSummary()
       unsubRows()
+      unsubAttention()
+      if (attentionTimer.current !== null) {
+        window.clearTimeout(attentionTimer.current)
+        attentionTimer.current = null
+      }
       window.cancelAnimationFrame(enterRaf)
     }
   }, [api])
@@ -82,6 +111,7 @@ function StatusPill(): React.JSX.Element {
     if (typeof window !== 'undefined' && window.matchMedia) {
       const mq = window.matchMedia('(prefers-reduced-motion: reduce)')
       const apply = (): void => {
+        prefersReducedMotionRef.current = mq.matches
         setPreferences((prev) => ({
           shouldUseDarkColors: prev?.shouldUseDarkColors ?? false,
           prefersReducedMotion: mq.matches
@@ -165,6 +195,7 @@ function StatusPill(): React.JSX.Element {
       <PillBody
         tone={tone}
         pulse={pulse}
+        attention={attention}
         summary={summary}
         onClick={() => window.api?.fireClick()}
         onContextMenu={(event) => {
@@ -198,16 +229,19 @@ function StatusPill(): React.JSX.Element {
 function PillBody({
   tone,
   pulse,
+  attention,
   summary,
   onClick,
   onContextMenu
 }: {
   tone: Tone
   pulse: boolean
+  attention: boolean
   summary: StatusPillSummary
   onClick: () => void
   onContextMenu: (event: React.MouseEvent) => void
 }): React.JSX.Element {
+  const drag = usePillDrag()
   // Why: keyboard activation (Enter / Space) so screen-reader and keyboard
   // users can focus the pill via Tab and trigger the click handler. The pill
   // div is `role="button"` so this matches the WAI-ARIA button pattern.
@@ -217,94 +251,24 @@ function PillBody({
       onClick()
     }
   }
-  const dragState = useRef<{
-    startScreenX: number
-    startScreenY: number
-    startWinX: number
-    startWinY: number
-    ready: boolean
-    moved: boolean
-  } | null>(null)
-  // Why: persists across the mouseup→click sequence so onClick can tell a real
-  // click apart from the tail of a drag and avoid focusing the main window
-  // right after the user repositioned the pill.
-  const didDragRef = useRef(false)
-  const [dragging, setDragging] = useState(false)
-
-  const onMouseDown = (event: React.MouseEvent<HTMLDivElement>): void => {
-    // Why: only the primary button starts a drag; the secondary button is the
-    // context menu and should not begin repositioning.
-    if (event.button !== 0) {
-      return
-    }
-    const api = window.api
-    if (!api) {
-      return
-    }
-    const state = {
-      startScreenX: event.screenX,
-      startScreenY: event.screenY,
-      startWinX: 0,
-      startWinY: 0,
-      ready: false,
-      moved: false
-    }
-    dragState.current = state
-    void api.getWindowPosition().then((pos) => {
-      // Why: only adopt the start origin if this pointer is still the active
-      // one — a later pointer down must not be overwritten by a stale resolve.
-      if (dragState.current === state) {
-        state.startWinX = pos.x
-        state.startWinY = pos.y
-        state.ready = true
-      }
-    })
-    const onMove = (ev: MouseEvent): void => {
-      const s = dragState.current
-      if (!s || !s.ready) {
-        return
-      }
-      const dx = ev.screenX - s.startScreenX
-      const dy = ev.screenY - s.startScreenY
-      // Why: ignore sub-pixel jitter so a static click never becomes a drag.
-      if (!s.moved) {
-        if (Math.hypot(dx, dy) < 4) {
-          return
-        }
-        s.moved = true
-        didDragRef.current = true
-        setDragging(true)
-      }
-      window.api?.setWindowPosition({ x: s.startWinX + dx, y: s.startWinY + dy })
-    }
-    const onUp = (): void => {
-      window.removeEventListener('mousemove', onMove)
-      window.removeEventListener('mouseup', onUp)
-      dragState.current = null
-      setDragging(false)
-    }
-    window.addEventListener('mousemove', onMove)
-    window.addEventListener('mouseup', onUp)
-  }
-
   const handleClick = (): void => {
-    if (didDragRef.current) {
-      didDragRef.current = false
+    if (drag.consumeClick()) {
       return
     }
     onClick()
   }
-
   return (
     <div
       role="button"
       tabIndex={0}
       aria-label="Orca agent status"
       onClick={handleClick}
-      onMouseDown={onMouseDown}
+      onMouseDown={drag.onMouseDown}
       onContextMenu={onContextMenu}
       onKeyDown={onKeyDown}
-      className={`pill pill-${tone} ${pulse ? 'pill-pulse' : ''} ${dragging ? 'pill-dragging' : ''}`}
+      className={`pill pill-${tone} ${pulse ? 'pill-pulse' : ''} ${
+        drag.dragging ? 'pill-dragging' : ''
+      } ${attention ? 'pill-attention' : ''}`}
     >
       <span className="indicator" aria-hidden="true">
         <span className="indicator-ring" />
