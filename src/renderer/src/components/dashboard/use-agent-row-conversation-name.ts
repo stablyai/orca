@@ -39,6 +39,12 @@ export function useAgentRowConversationName(agent: DashboardAgentRow): string | 
       ? undefined
       : getIndexedTab(s.tabsByWorktree[agent.tab.worktreeId], agent.tab.id)
   )
+  // Why: a split root means the tab holds more than one pane, so its live title
+  // belongs to whichever pane has focus. Selecting the boolean (not the layout)
+  // keeps this row subscribed to splits, not to every title frame.
+  const tabHasSplitPanes = useAppStore(
+    (s) => !cannotOwnTabName && s.terminalLayoutsByTabId[agent.tab.id]?.root?.type === 'split'
+  )
   // Why: synthetic and same-tab child rows do not own the parent tab's name.
   if (cannotOwnTabName) {
     return null
@@ -48,6 +54,6 @@ export function useAgentRowConversationName(agent: DashboardAgentRow): string | 
     liveTab ?? agent.tab,
     agent.agentType,
     generatedTitlesEnabled,
-    agent.entry.terminalTitle
+    tabHasSplitPanes
   )
 }

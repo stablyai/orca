@@ -114,7 +114,7 @@ export function getAgentRowConversationName(
   tab: ConversationNameTab,
   agentType: AgentType | null | undefined,
   generatedTitlesEnabled: boolean,
-  paneTitle?: string | null
+  tabHasSplitPanes = false
 ): string | null {
   const customTitle = tab.customTitle?.trim()
   if (customTitle) {
@@ -124,10 +124,12 @@ export function getAgentRowConversationName(
   if (quickCommandLabel) {
     return quickCommandLabel
   }
-  // Why: split panes share one tab, and `tab.title` deliberately tracks only the
-  // focused pane (pty-connection.ts) — without the row's own pane title every
-  // split row would show, and re-show on each click, the last-focused pane's name.
-  const liveTitle = paneTitle?.trim() || (tab.title?.trim() ?? '')
+  // Why: `tab.title` carries only the focused pane's live title (pty-connection
+  // keeps it that way so split agents don't make the tab flicker). In a split
+  // tab it names one pane and mislabels its siblings, and it flips as focus
+  // moves — so drop it there and let each row keep its own per-pane label. The
+  // tab-owned names above stay: the user gave those to the whole tab.
+  const liveTitle = tabHasSplitPanes ? '' : (tab.title?.trim() ?? '')
   if (isMeaningfulOpenCodeTerminalTitle(liveTitle)) {
     return liveTitle
   }
