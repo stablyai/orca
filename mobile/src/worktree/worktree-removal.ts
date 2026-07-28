@@ -51,6 +51,7 @@ export type WorktreeRemovalTracker = {
  */
 export function createWorktreeRemovalTracker(): WorktreeRemovalTracker {
   const pending = new Map<string, PendingRemoval>()
+  const inFlight = new Map<string, Promise<void>>()
   let snapshotGeneration = STALE_SNAPSHOT_GENERATION
 
   function beginSnapshot(): number {
@@ -62,11 +63,14 @@ export function createWorktreeRemovalTracker(): WorktreeRemovalTracker {
     if (pending.size === 0) {
       return snapshot
     }
+    const fresh = generation !== STALE_SNAPSHOT_GENERATION
     const reported = new Set(snapshot.map((entry) => entry.worktreeId))
     // Deleting the current entry mid-iteration is safe for a Map.
     for (const [worktreeId, removal] of pending) {
       const settled =
-        !reported.has(worktreeId) ||
+        // Why: the screen caches the reconciled list, so a replayed cache is missing the row
+        // it is being asked about — only a real read proves the host stopped reporting it.
+        (fresh && !reported.has(worktreeId)) ||
         (removal.authoritativeAfter !== null && generation > removal.authoritativeAfter) ||
         (removal.revealAt !== null && now >= removal.revealAt)
       if (settled) {
@@ -79,7 +83,7 @@ export function createWorktreeRemovalTracker(): WorktreeRemovalTracker {
     return snapshot.filter((entry) => !pending.has(entry.worktreeId))
   }
 
-  async function remove({
+  async function runRemoval({
     worktree,
     client,
     updateWorktreeLists,
@@ -125,6 +129,22 @@ export function createWorktreeRemovalTracker(): WorktreeRemovalTracker {
     } finally {
       refresh()
     }
+  }
+
+  // Why: the confirm button can double-fire before the sheet unmounts. Two rm's for one
+  // worktree let the loser's rollback undo the winner's delete, so share one attempt —
+  // the same coalescing the runtime does host-side.
+  function remove(args: RemoveWorktreeArgs): Promise<void> {
+    const { worktreeId } = args.worktree
+    const existing = inFlight.get(worktreeId)
+    if (existing) {
+      return existing
+    }
+    const attempt = runRemoval(args).finally(() => {
+      inFlight.delete(worktreeId)
+    })
+    inFlight.set(worktreeId, attempt)
+    return attempt
   }
 
   return { beginSnapshot, reconcile, remove }

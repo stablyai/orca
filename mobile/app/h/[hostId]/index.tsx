@@ -598,8 +598,13 @@ export function HostScreen({
           setLastKnownWorktrees(updater)
         },
         refresh: () => void fetchWorktrees(),
-        // Why: a silently restored row is indistinguishable from "delete does nothing".
-        onFailure: (message) => Alert.alert('Could not delete workspace', message)
+        // Why: a silently restored row is indistinguishable from "delete does nothing", and
+        // a slow delete can fail after the user has moved on, so name the workspace.
+        onFailure: (message) =>
+          Alert.alert(
+            'Could not delete workspace',
+            `"${item.displayName || item.repo}": ${message}`
+          )
       })
     },
     [client, fetchWorktrees, worktreeRemoval]

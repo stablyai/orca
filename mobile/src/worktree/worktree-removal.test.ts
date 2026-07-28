@@ -160,6 +160,32 @@ describe('worktree removal tracker', () => {
     expect(tracker.reconcile(cached, STALE_SNAPSHOT_GENERATION)).toHaveLength(0)
   })
 
+  it('does not let a cache written during the delete settle it', async () => {
+    const tracker = createWorktreeRemovalTracker()
+    let settle = (_: RpcResponse) => {}
+    const sendRequest = vi.fn().mockReturnValue(
+      new Promise<RpcResponse>((resolve) => {
+        settle = resolve
+      })
+    )
+    const removal = tracker.remove(removeArgs('wt-1', { client: { sendRequest } }))
+
+    // Why (regression): the screen caches the *reconciled* list, so remounting mid-delete
+    // replays a cache the row is already missing from. Treating that absence as the host
+    // confirming the delete dropped the pending state, and the next poll — with the host
+    // still mid-removal and still reporting the worktree — put the row back.
+    const cachedDuringDelete = [worktree('wt-2')]
+    tracker.reconcile(cachedDuringDelete, STALE_SNAPSHOT_GENERATION)
+
+    const stillRemoving = [worktree('wt-1'), worktree('wt-2')]
+    expect(
+      tracker.reconcile(stillRemoving, tracker.beginSnapshot()).map((entry) => entry.worktreeId)
+    ).toEqual(['wt-2'])
+
+    settle(success())
+    await removal
+  })
+
   it('keeps the row hidden for the grace period after an rm times out', async () => {
     const tracker = createWorktreeRemovalTracker()
     const lists = listHarness([worktree('wt-1')])
@@ -228,6 +254,51 @@ describe('worktree removal tracker', () => {
     expect(lists.ids).toEqual(['wt-1'])
     expect(onFailure).toHaveBeenCalledWith('worktree is locked')
     expect(tracker.reconcile([worktree('wt-1')], tracker.beginSnapshot())).toHaveLength(1)
+  })
+
+  it('coalesces a double-fired delete into one request', async () => {
+    const tracker = createWorktreeRemovalTracker()
+    const lists = listHarness([worktree('wt-1')])
+    const onFailure = vi.fn()
+    let settle = (_: RpcResponse) => {}
+    const sendRequest = vi.fn().mockReturnValue(
+      new Promise<RpcResponse>((resolve) => {
+        settle = resolve
+      })
+    )
+    const args = removeArgs('wt-1', {
+      client: { sendRequest },
+      updateWorktreeLists: lists.update,
+      onFailure
+    })
+
+    // Why (regression): the confirm button can fire twice before the sheet unmounts. The
+    // loser's rollback would otherwise re-add the row and drop the winner's pending state.
+    const first = tracker.remove(args)
+    const second = tracker.remove(args)
+    expect(second).toBe(first)
+
+    settle(failure('worktree is locked'))
+    await Promise.all([first, second])
+
+    expect(sendRequest).toHaveBeenCalledTimes(1)
+    expect(onFailure).toHaveBeenCalledTimes(1)
+    expect(lists.ids).toEqual(['wt-1'])
+  })
+
+  it('accepts a fresh delete once the previous attempt settled', async () => {
+    const tracker = createWorktreeRemovalTracker()
+    const lists = listHarness([worktree('wt-1')])
+
+    await tracker.remove(
+      removeArgs('wt-1', {
+        response: failure('worktree is locked'),
+        updateWorktreeLists: lists.update
+      })
+    )
+    await tracker.remove(removeArgs('wt-1', { updateWorktreeLists: lists.update }))
+
+    expect(lists.ids).toEqual([])
   })
 
   it('restores the row once, even if a poll already put it back', async () => {
