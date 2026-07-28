@@ -189,7 +189,9 @@ export function RuntimePairingGeneratorForm({
         </div>
       </div>
 
-      {generatedForLoopback && (webClientUrl || runtimePairingUrl) ? (
+      {/* Why: when the picker still sits on the address the link was minted for,
+          the hint above already carries this warning — don't stack a second one. */}
+      {generatedForLoopback && !selectionIsLoopback && (webClientUrl || runtimePairingUrl) ? (
         <p className="flex items-start gap-1.5 text-xs text-foreground">
           <AlertTriangle className="mt-0.5 size-3.5 shrink-0" />
           {translate(

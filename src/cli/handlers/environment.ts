@@ -62,7 +62,7 @@ function getOptionalStringFlag(flags: Map<string, string | boolean>, name: strin
   if (value === undefined) {
     return null
   }
-  if (typeof value !== 'string' || value.length === 0) {
+  if (typeof value !== 'string' || value.trim().length === 0) {
     throw new RuntimeClientError('invalid_argument', `--${name} requires a value`)
   }
   return value

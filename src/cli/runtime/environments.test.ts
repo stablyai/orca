@@ -117,6 +117,16 @@ describe('CLI runtime environments', () => {
       expect(() => addWithEndpoint('0.0.0.0')).toThrow(/Invalid --endpoint "0\.0\.0\.0"/)
     })
 
+    // Why: the endpoint resolver reads a blank advertised address as "none given"
+    // and falls back to loopback, so a blank override would quietly do the exact
+    // damage this flag exists to undo.
+    it.each(['', ' ', '\t'])(
+      'rejects a blank override rather than falling back to loopback',
+      (blank) => {
+        expect(() => addWithEndpoint(blank, 'ws://10.0.0.5:6768')).toThrow(/Invalid --endpoint/)
+      }
+    )
+
     it('leaves the advertised endpoint alone when omitted', () => {
       const userDataPath = mkdtempSync(join(tmpdir(), 'orca-env-store-'))
       addEnvironmentFromPairingCode(userDataPath, {
