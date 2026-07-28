@@ -542,6 +542,60 @@ async function readSynchronizedOutputLatch(page: Page, tabId: string): Promise<b
   }, tabId)
 }
 
+async function freezeMidFrameAndSwitchWorktree(
+  page: Page,
+  setup: StreamingTabSetup
+): Promise<string | null> {
+  return page.evaluate(
+    ({ currentWorktreeId, ptyId, tabId }) => {
+      const store = window.__store
+      if (!store) {
+        throw new Error('window.__store is unavailable')
+      }
+      const otherWorktree = Object.values(store.getState().worktreesByRepo)
+        .flat()
+        .find((worktree) => worktree.id !== currentWorktreeId)
+      if (!otherWorktree) {
+        return null
+      }
+
+      window.api.pty.write(ptyId, 'ORCA_FREEZE_MID_FRAME')
+      return new Promise<string>((resolve, reject) => {
+        const deadline = performance.now() + 5_000
+        const switchWhenLatched = (): void => {
+          const manager = window.__paneManagers?.get(tabId)
+          const pane = manager?.getActivePane?.() ?? manager?.getPanes?.()[0] ?? null
+          const synchronizedOutput = (
+            pane?.terminal as unknown as
+              | {
+                  _core?: {
+                    coreService?: { decPrivateModes?: { synchronizedOutput?: boolean } }
+                  }
+                }
+              | undefined
+          )?._core?.coreService?.decPrivateModes?.synchronizedOutput
+          if (synchronizedOutput === true) {
+            store.getState().setActiveWorktree(otherWorktree.id)
+            resolve(otherWorktree.id)
+            return
+          }
+          if (performance.now() >= deadline) {
+            reject(new Error('fixture did not leave a synchronized-output frame open'))
+            return
+          }
+          setTimeout(switchWhenLatched, 0)
+        }
+        switchWhenLatched()
+      })
+    },
+    {
+      currentWorktreeId: setup.worktreeId,
+      ptyId: setup.ptyId,
+      tabId: setup.tabId
+    }
+  )
+}
+
 async function streamWhileHidden(setup: StreamingTabSetup, minFrames: number): Promise<void> {
   const heartbeatBefore = heartbeatFrame(setup.heartbeatPath)
   await expect
@@ -739,25 +793,10 @@ test.describe('OpenCode alt-screen reveal artifacts (STA-2694)', () => {
     test.setTimeout(180_000)
     const setup = await startStreamingAltScreenTui(orcaPage, testInfo)
     try {
-      // Stop the TUI mid-bracket, then hide — the exact field sequence.
-      await sendToTerminal(orcaPage, setup.ptyId, 'ORCA_FREEZE_MID_FRAME').catch(() => {})
-      // Why poll instead of a fixed wait: xterm arms a 1s safety timeout that
-      // clears the latch on its own, so a longer sleep would sample after the
-      // watchdog fired and miss the very state under test.
-      await expect
-        .poll(() => readSynchronizedOutputLatch(orcaPage, setup.tabId), {
-          timeout: 5_000,
-          intervals: [50],
-          message: 'fixture did not leave a synchronized-output frame open'
-        })
-        .toBe(true)
-
-      const otherWorktreeId = await switchToOtherWorktree(orcaPage, setup.worktreeId)
+      // Switch in the renderer task that observes the latch; CI round trips can
+      // otherwise outlast xterm's one-second safety watchdog.
+      const otherWorktreeId = await freezeMidFrameAndSwitchWorktree(orcaPage, setup)
       test.skip(!otherWorktreeId, 'test session has a single worktree; cannot surface-hide')
-      // Why re-check here: the pane was still VISIBLE between the freeze and this
-      // switch, so refreshes reached bufferRows and armed xterm's 1s watchdog. If
-      // it fired before the hide, the pane is now unlatched and the final
-      // assertion would pass without the defect ever existing.
       expect(
         await readSynchronizedOutputLatch(orcaPage, setup.tabId),
         'the watchdog cleared the latch before the hide, so this run proves nothing'
