@@ -37,6 +37,25 @@ describe('getAgentRowConversationName', () => {
     expect(getAgentRowConversationName(tab, 'claude', false)).toBe('Investigate replay bug')
   })
 
+  it('prefers the row pane title over the focused-pane tab title', () => {
+    const tab = makeTab({ title: '✳ Redis cache strategy' })
+    expect(getAgentRowConversationName(tab, 'claude', false, '✳ Linear work log')).toBe(
+      'Linear work log'
+    )
+    // Empty/status-only pane titles fall back to the tab so single-pane rows are unchanged.
+    expect(getAgentRowConversationName(tab, 'claude', false, '  ')).toBe('Redis cache strategy')
+    expect(getAgentRowConversationName(tab, 'claude', false, undefined)).toBe(
+      'Redis cache strategy'
+    )
+  })
+
+  it('keeps tab-owned names ahead of the pane title', () => {
+    const tab = makeTab({ customTitle: 'Patient sync spike', title: '✳ Redis cache strategy' })
+    expect(getAgentRowConversationName(tab, 'claude', false, '✳ Linear work log')).toBe(
+      'Patient sync spike'
+    )
+  })
+
   it('strips leading status decoration from agent-set titles', () => {
     expect(
       getAgentRowConversationName(makeTab({ title: '✳ Fix patient intake flow' }), 'claude', false)

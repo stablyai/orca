@@ -44,5 +44,10 @@ export function useAgentRowConversationName(agent: DashboardAgentRow): string | 
     return null
   }
   // Why: retained row snapshots need a fallback after their live tab disappears.
-  return getAgentRowConversationName(liveTab ?? agent.tab, agent.agentType, generatedTitlesEnabled)
+  return getAgentRowConversationName(
+    liveTab ?? agent.tab,
+    agent.agentType,
+    generatedTitlesEnabled,
+    agent.entry.terminalTitle
+  )
 }

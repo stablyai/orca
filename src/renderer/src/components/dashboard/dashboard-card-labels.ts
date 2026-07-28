@@ -39,5 +39,12 @@ export function rowConversationName(
   ) {
     return undefined
   }
-  return getAgentRowConversationName(row.tab, row.agentType, generatedTitlesEnabled) ?? undefined
+  return (
+    getAgentRowConversationName(
+      row.tab,
+      row.agentType,
+      generatedTitlesEnabled,
+      row.entry.terminalTitle
+    ) ?? undefined
+  )
 }

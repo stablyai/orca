@@ -141,6 +141,28 @@ describe('useAgentRowConversationName', () => {
     expect(useAgentRowConversationName(makeAgent())).toBe('Renamed later')
   })
 
+  it('names split-pane rows from their own pane title, not the focused tab title', () => {
+    storeState.current = {
+      settings: {},
+      // Why: tab.title only tracks the focused pane, so both rows would otherwise
+      // relabel to whichever split was clicked last.
+      tabsByWorktree: {
+        'wt-1': [{ id: 'tab-1', worktreeId: 'wt-1', customTitle: null, title: '✳ Redis cache' }]
+      }
+    }
+    const paneA = makeAgent({
+      tab: { id: 'tab-1', worktreeId: 'wt-1', customTitle: null, title: '✳ Redis cache' },
+      entry: { prompt: 'p', terminalTitle: '✳ Linear work log' }
+    } as Partial<DashboardAgentRow>)
+    const paneB = makeAgent({
+      paneKey: 'tab-1:leaf-2',
+      tab: { id: 'tab-1', worktreeId: 'wt-1', customTitle: null, title: '✳ Redis cache' },
+      entry: { prompt: 'p', terminalTitle: '✳ Redis cache' }
+    } as Partial<DashboardAgentRow>)
+    expect(useAgentRowConversationName(paneA)).toBe('Linear work log')
+    expect(useAgentRowConversationName(paneB)).toBe('Redis cache')
+  })
+
   it('honors the generated-titles setting for generated names', () => {
     const agent = makeAgent({
       tab: { customTitle: null, title: '', generatedTitle: 'Fix intake flow' }
