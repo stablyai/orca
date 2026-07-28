@@ -1964,7 +1964,10 @@ describe('DaemonPtyAdapter (IPtyProvider)', () => {
       const adapterClass = DaemonPtyAdapter as unknown as { CHECKPOINT_INTERVAL_MS: number }
       const previousInterval = adapterClass.CHECKPOINT_INTERVAL_MS
       const setTimeoutSpy = vi.spyOn(globalThis, 'setTimeout')
-      adapterClass.CHECKPOINT_INTERVAL_MS = 10_000
+      // Why: the delay doubles as the identity of the checkpoint timer, so it must not collide
+      // with any other timer the live server arms during spawn (e.g. the handshake deadline).
+      const checkpointDelayMs = 10_007
+      adapterClass.CHECKPOINT_INTERVAL_MS = checkpointDelayMs
 
       try {
         historyAdapter = new DaemonPtyAdapter({ socketPath, tokenPath, historyPath: historyDir })
@@ -1975,10 +1978,14 @@ describe('DaemonPtyAdapter (IPtyProvider)', () => {
           sessionId: 'idle-checkpoint'
         })
 
-        expect(setTimeoutSpy.mock.calls.some(([, delay]) => delay === 10_000)).toBe(false)
+        expect(setTimeoutSpy.mock.calls.some(([, delay]) => delay === checkpointDelayMs)).toBe(
+          false
+        )
 
         lastSubprocess._simulateData('dirty after idle\r\n')
-        await waitFor(() => setTimeoutSpy.mock.calls.some(([, delay]) => delay === 10_000))
+        await waitFor(() =>
+          setTimeoutSpy.mock.calls.some(([, delay]) => delay === checkpointDelayMs)
+        )
       } finally {
         adapterClass.CHECKPOINT_INTERVAL_MS = previousInterval
         setTimeoutSpy.mockRestore()

@@ -14,6 +14,9 @@ export function encodeBoundedNdjson(msg: unknown, maxBytes: number): string {
 }
 
 export const NDJSON_MAX_LINE_BYTES = 16 * 1024 * 1024
+// Why: a handshake line is a fixed small record, so an unauthenticated peer gets a far
+// tighter ceiling than an established session's data lines.
+export const DAEMON_HANDSHAKE_MAX_LINE_BYTES = 64 * 1024
 export const NDJSON_MAX_STRUCTURAL_TOKENS = 1_000_000
 export const NDJSON_MAX_NESTING_DEPTH = 128
 

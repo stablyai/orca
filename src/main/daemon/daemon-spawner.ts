@@ -1,7 +1,8 @@
 import { createHash, randomUUID } from 'node:crypto'
-import { constants, copyFileSync, existsSync, readFileSync, renameSync, unlinkSync } from 'node:fs'
+import { constants, copyFileSync, existsSync, renameSync, unlinkSync } from 'node:fs'
 import { join } from 'node:path'
 import { PROTOCOL_VERSION } from './types'
+import { readDaemonControlFileText } from './daemon-control-file-reader'
 
 export type DaemonConnectionInfo = {
   socketPath: string
@@ -141,7 +142,7 @@ function claimAndUnlinkOwnedFile(
     return false
   }
   try {
-    if (ownsContent(readFileSync(claimedPath, 'utf8'))) {
+    if (ownsContent(readDaemonControlFileText(claimedPath))) {
       unlinkSync(claimedPath)
       return true
     }
