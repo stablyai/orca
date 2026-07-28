@@ -9,6 +9,9 @@ const {
   menuPopupMock,
   notificationMock,
   notificationShowMock,
+  nativeThemeMock,
+  nativeThemeOnMock,
+  nativeThemeRemoveListenerMock,
   powerMonitorOnMock,
   powerMonitorRemoveListenerMock,
   isMock,
@@ -16,6 +19,13 @@ const {
 } = vi.hoisted(() => {
   const menuPopupMock = vi.fn()
   const notificationShowMock = vi.fn()
+  const nativeThemeOnMock = vi.fn()
+  const nativeThemeRemoveListenerMock = vi.fn()
+  const nativeThemeMock = {
+    shouldUseDarkColors: false,
+    on: nativeThemeOnMock,
+    removeListener: nativeThemeRemoveListenerMock
+  }
   return {
     browserWindowMock: vi.fn(),
     openExternalMock: vi.fn(),
@@ -26,6 +36,9 @@ const {
       return { show: notificationShowMock }
     }),
     notificationShowMock,
+    nativeThemeMock,
+    nativeThemeOnMock,
+    nativeThemeRemoveListenerMock,
     powerMonitorOnMock: vi.fn(),
     powerMonitorRemoveListenerMock: vi.fn(),
     isMock: { dev: false },
@@ -39,7 +52,7 @@ vi.mock('electron', () => ({
   ipcMain: { on: vi.fn(), removeListener: vi.fn(), handle: vi.fn(), removeHandler: vi.fn() },
   Menu: { buildFromTemplate: buildFromTemplateMock },
   Notification: notificationMock,
-  nativeTheme: { shouldUseDarkColors: false },
+  nativeTheme: nativeThemeMock,
   powerMonitor: { on: powerMonitorOnMock, removeListener: powerMonitorRemoveListenerMock },
   screen: {
     getPrimaryDisplay: () => ({ workAreaSize: { width: 1440, height: 900 } })
@@ -93,6 +106,9 @@ describe('createMainWindow', () => {
     menuPopupMock.mockClear()
     notificationMock.mockClear()
     notificationShowMock.mockClear()
+    nativeThemeMock.shouldUseDarkColors = false
+    nativeThemeOnMock.mockReset()
+    nativeThemeRemoveListenerMock.mockReset()
     powerMonitorOnMock.mockReset()
     powerMonitorRemoveListenerMock.mockReset()
     isMock.dev = false
@@ -196,7 +212,7 @@ describe('createMainWindow', () => {
     } else if (process.platform === 'win32') {
       expect(browserWindowOptions).toMatchObject({
         titleBarStyle: 'hidden',
-        titleBarOverlay: { height: 36 }
+        titleBarOverlay: { color: '#ffffff', symbolColor: '#0a0a0a', height: 36 }
       })
     } else {
       // Linux: native frame is dropped so the renderer titlebar isn't stacked
@@ -267,13 +283,20 @@ describe('createMainWindow', () => {
   it('sets platform-specific titlebar and frame options for every desktop platform', () => {
     for (const [platform, expected] of [
       ['darwin', { titleBarStyle: 'hiddenInset', titleBarOverlay: undefined, frame: undefined }],
-      ['win32', { titleBarStyle: 'hidden', titleBarOverlay: { height: 36 }, frame: undefined }],
+      [
+        'win32',
+        {
+          titleBarStyle: 'hidden',
+          titleBarOverlay: { color: '#ffffff', symbolColor: '#0a0a0a', height: 36 },
+          frame: undefined
+        }
+      ],
       ['linux', { titleBarStyle: undefined, titleBarOverlay: undefined, frame: false }]
     ] satisfies [
       NodeJS.Platform,
       {
         titleBarStyle: string | undefined
-        titleBarOverlay: { height: number } | undefined
+        titleBarOverlay: { color: string; symbolColor: string; height: number } | undefined
         frame: boolean | undefined
       }
     ][]) {
@@ -2033,7 +2056,23 @@ describe('createMainWindow', () => {
         expect(browserWindowInstance.setWindowButtonPosition).not.toHaveBeenCalled()
       }
       if (platform === 'win32') {
-        expect(browserWindowInstance.setTitleBarOverlay).toHaveBeenCalledWith({ height: 43 })
+        expect(browserWindowInstance.setTitleBarOverlay).toHaveBeenCalledWith({
+          color: '#ffffff',
+          symbolColor: '#0a0a0a',
+          height: 43
+        })
+        const themeListener = nativeThemeOnMock.mock.calls.find(
+          ([event]) => event === 'updated'
+        )?.[1]
+        expect(themeListener).toBeTypeOf('function')
+        nativeThemeMock.shouldUseDarkColors = true
+        themeListener?.()
+        expect(browserWindowInstance.setTitleBarOverlay).toHaveBeenLastCalledWith({
+          color: '#0a0a0a',
+          symbolColor: '#fafafa',
+          height: 43
+        })
+        nativeThemeMock.shouldUseDarkColors = false
       } else {
         expect(browserWindowInstance.setTitleBarOverlay).not.toHaveBeenCalled()
       }
@@ -3330,13 +3369,19 @@ describe('createMainWindow', () => {
     })
 
     it('removes the powerMonitor resume listener when the window closes', () => {
-      const { windowHandlers } = setupResumeWindow()
-      createMainWindow(null)
-      const onResume = getPowerResumeListener()
+      withPlatform('win32', () => {
+        const { windowHandlers } = setupResumeWindow()
+        createMainWindow(null)
+        const onResume = getPowerResumeListener()
+        const onNativeThemeUpdated = nativeThemeOnMock.mock.calls.find(
+          ([event]) => event === 'updated'
+        )?.[1]
 
-      windowHandlers.closed()
+        windowHandlers.closed()
 
-      expect(powerMonitorRemoveListenerMock).toHaveBeenCalledWith('resume', onResume)
+        expect(powerMonitorRemoveListenerMock).toHaveBeenCalledWith('resume', onResume)
+        expect(nativeThemeRemoveListenerMock).toHaveBeenCalledWith('updated', onNativeThemeUpdated)
+      })
     })
   })
 

@@ -136,6 +136,19 @@ const TRAFFIC_LIGHT_X = 16
 const MIN_WIDTH = 600
 const MIN_HEIGHT = 400
 
+// Why: native WCO cannot read CSS variables; mirror --background/--foreground from main.css.
+function getWindowBackgroundColor(): string {
+  return nativeTheme.shouldUseDarkColors ? '#0a0a0a' : '#ffffff'
+}
+
+function getWindowsTitleBarOverlay(height: number): Electron.TitleBarOverlayOptions {
+  return {
+    color: getWindowBackgroundColor(),
+    symbolColor: nativeTheme.shouldUseDarkColors ? '#fafafa' : '#0a0a0a',
+    height
+  }
+}
+
 function syncWindowChrome(win: BrowserWindow, zoomFactor: number): void {
   if (win.isDestroyed()) {
     return
@@ -144,7 +157,7 @@ function syncWindowChrome(win: BrowserWindow, zoomFactor: number): void {
     const y = Math.round(TITLEBAR_CSS_CENTER * zoomFactor - TRAFFIC_LIGHT_RADIUS)
     win.setWindowButtonPosition({ x: TRAFFIC_LIGHT_X, y })
   } else if (process.platform === 'win32') {
-    win.setTitleBarOverlay({ height: Math.round(TITLEBAR_CSS_HEIGHT * zoomFactor) })
+    win.setTitleBarOverlay(getWindowsTitleBarOverlay(Math.round(TITLEBAR_CSS_HEIGHT * zoomFactor)))
   }
 }
 
@@ -242,7 +255,7 @@ export function createMainWindow(
     acceptFirstMouse: true,
     // Why: auto-hide the Windows/Linux menu bar to save a row (Alt reveals it); macOS uses the system menu bar anyway.
     autoHideMenuBar: true,
-    backgroundColor: nativeTheme.shouldUseDarkColors ? '#0a0a0a' : '#ffffff',
+    backgroundColor: getWindowBackgroundColor(),
     // Why: macOS 'hiddenInset' keeps native traffic lights in our custom titlebar; Windows 'hidden' removes the OS title bar so it doesn't double up.
     titleBarStyle:
       process.platform === 'darwin'
@@ -255,9 +268,7 @@ export function createMainWindow(
     // while letting Windows own min/max/close hit-testing and system behavior.
     ...(process.platform === 'win32'
       ? {
-          titleBarOverlay: {
-            height: TITLEBAR_CSS_HEIGHT
-          }
+          titleBarOverlay: getWindowsTitleBarOverlay(TITLEBAR_CSS_HEIGHT)
         }
       : {}),
     // Why: Linux ignores titleBarStyle 'hidden'; frame:false drops the native frame so we don't get a double title bar (renderer draws its own).
@@ -299,12 +310,21 @@ export function createMainWindow(
   }
   powerMonitor.on('resume', onSystemResume)
 
+  let windowChromeZoomFactor = 1
+  const onNativeThemeUpdated = (): void => {
+    syncWindowChrome(mainWindow, windowChromeZoomFactor)
+  }
+  if (process.platform === 'win32') {
+    nativeTheme.on('updated', onNativeThemeUpdated)
+  }
+
   mainWindow.webContents.on('dom-ready', () => {
     const level = store?.getUI().uiZoomLevel ?? 0
     mainWindow.webContents.setZoomLevel(level)
+    windowChromeZoomFactor = Math.pow(1.2, level)
     // Why: native window controls don't scale with webFrame zoom; keep their
     // platform chrome aligned with the restored CSS titlebar height.
-    syncWindowChrome(mainWindow, Math.pow(1.2, level))
+    syncWindowChrome(mainWindow, windowChromeZoomFactor)
   })
 
   // Why: macOS+Electron 41 re-emits ready-to-show on webview-guest creation; a one-shot guard stops re-running maximize() after resize (#591).
@@ -999,6 +1019,7 @@ export function createMainWindow(
   }
   const windowChromeChannel = 'ui:sync-window-chrome'
   const onSyncWindowChrome = (_event: Electron.IpcMainEvent, zoomFactor: number): void => {
+    windowChromeZoomFactor = zoomFactor
     syncWindowChrome(mainWindow, zoomFactor)
   }
   ipcMain.on(windowChromeChannel, onSyncWindowChrome)
@@ -1064,6 +1085,9 @@ export function createMainWindow(
     floatingTerminalInputFocused = false
     shortcutRecorderFocused = false
     clearRendererRecoveryTimer()
+    if (process.platform === 'win32') {
+      nativeTheme.removeListener('updated', onNativeThemeUpdated)
+    }
     ipcMain.removeListener(windowChromeChannel, onSyncWindowChrome)
     ipcMain.removeListener(minimizeChannel, onMinimize)
     ipcMain.removeListener(maximizeChannel, onMaximize)
