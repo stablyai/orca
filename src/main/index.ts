@@ -1589,7 +1589,37 @@ function openMainWindow(options: { revealOnDidFinishLoad?: boolean } = {}): Brow
         driveSyntheticTitleFromHook(paneKey, payload.state, profile)
       }
     }
-  )
+    const ipcPayload = buildAgentStatusIpcPayload(event, runtime ?? undefined)
+    if (providerSessionOnly) {
+      // Why: session_start just refreshes durable resume identity while Pi is idle; forward it without titles, telemetry, or status UI.
+      mainWindow?.webContents.send('agentStatus:set', ipcPayload)
+      return
+    }
+    maybeAutoRenameBranchOnFirstWorkFromHook({ paneKey, tabId, worktreeId, payload, isReplay })
+    mainWindow?.webContents.send('agentStatus:set', ipcPayload)
+    recordAgentStateCrashBreadcrumb(payload.agentType ?? 'unknown', payload.state)
+    // Why: native OSC titles miss some idle/permission frames, so inject hook-derived ones to keep the renderer title tracker in sync.
+    const profile = getSyntheticAgentTitleProfile(payload.agentType)
+    const launchConfig = runtime?.getAgentStatusLaunchConfigForPaneKey(paneKey, { launchToken })
+    const suppressSyntheticCodexAutoApprovalTitle =
+      payload.agentType === 'codex' && (payload.state === 'waiting' || payload.state === 'blocked')
+        ? shouldSuppressCodexPermissionSyntheticTitle({
+            agentType: payload.agentType,
+            state: payload.state,
+            hookEventName: event.hookEventName,
+            toolName: payload.toolName,
+            reviewer: ipcPayload.codexApprovalReviewer ?? 'unknown',
+            launchConfig
+          })
+        : false
+    if (
+      profile &&
+      shouldDriveSyntheticAgentTitleFromHook(payload.agentType, payload.state) &&
+      !suppressSyntheticCodexAutoApprovalTitle
+    ) {
+      driveSyntheticTitleFromHook(paneKey, payload.state, profile)
+    }
+  })
   agentHookServer.setPaneStatusClearListener((clear) => {
     if (mainWindow?.isDestroyed()) {
       return
@@ -2075,32 +2105,6 @@ function driveSyntheticTitleFromHook(
   sendSyntheticTitle(ptyId, `\x1b]0;${label}\x07${needsUserInput ? '\x07' : ''}`, {
     force: true
   })
-}
-
-function shouldSuppressCodexAutoApprovalSyntheticTitleFromHook(args: {
-  agentType: string | null | undefined
-  state: AgentStatusState
-  launchConfig:
-    | {
-        agentArgs?: string | null
-        agentEnv?: Record<string, string> | null
-      }
-    | null
-    | undefined
-}): boolean {
-  if (args.agentType !== 'codex' || (args.state !== 'waiting' && args.state !== 'blocked')) {
-    return false
-  }
-  if (!args.launchConfig) {
-    return false
-  }
-  return (
-    resolveTuiAgentPermissionMode({
-      agent: 'codex',
-      agentArgs: args.launchConfig.agentArgs,
-      agentEnv: args.launchConfig.agentEnv
-    }) === 'yolo'
-  )
 }
 
 void app.whenReady().then(async () => {

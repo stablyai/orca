@@ -19,6 +19,7 @@ vi.mock('@/store', () => ({
 const paneKey = 'tab-1:leaf-1'
 const launchToken = 'launch-token-1'
 const providerSession = { key: 'session_id' as const, id: 'codex-session-1' }
+const AUTO_REVIEW_ARGS = `-c 'approvals_reviewer="auto_review"' --ask-for-approval on-request`
 
 function seedTab(): void {
   testStore.setState({
@@ -81,6 +82,68 @@ describe('Codex auto-approval status suppression', () => {
         { paneKey, tabId: 'tab-1', launchToken }
       )
     ).toBe(true)
+  })
+
+  it('suppresses a hook-stamped auto-review PermissionRequest without renderer launch state', () => {
+    expect(
+      shouldSuppressCodexAutoApprovalStatus(
+        {
+          state: 'waiting',
+          prompt: 'implement notifications',
+          agentType: 'codex',
+          hookEventName: 'PermissionRequest',
+          codexApprovalReviewer: 'auto_review',
+          toolName: 'exec_command'
+        },
+        { paneKey, tabId: 'tab-1', launchToken }
+      )
+    ).toBe(true)
+  })
+
+  it('suppresses a launch-attributed auto-review PermissionRequest without hook reviewer', () => {
+    registerCodexLaunchConfig({ agentArgs: AUTO_REVIEW_ARGS, launchToken })
+
+    expect(
+      shouldSuppressCodexAutoApprovalStatus(
+        {
+          state: 'waiting',
+          prompt: 'implement notifications',
+          agentType: 'codex',
+          hookEventName: 'PermissionRequest',
+          toolName: 'exec_command'
+        },
+        { paneKey, tabId: 'tab-1', launchToken }
+      )
+    ).toBe(true)
+
+    expect(
+      shouldSuppressCodexAutoApprovalStatus(
+        {
+          state: 'waiting',
+          prompt: 'implement notifications',
+          agentType: 'codex',
+          hookEventName: 'PermissionRequest',
+          codexApprovalReviewer: 'user',
+          toolName: 'exec_command'
+        },
+        { paneKey, tabId: 'tab-1', launchToken }
+      )
+    ).toBe(false)
+  })
+
+  it('fails open when auto-review attribution lacks the PermissionRequest hook boundary', () => {
+    expect(
+      shouldSuppressCodexAutoApprovalStatus(
+        {
+          state: 'waiting',
+          prompt: 'implement notifications',
+          agentType: 'codex',
+          codexApprovalReviewer: 'auto_review',
+          toolName: 'exec_command'
+        },
+        { paneKey, tabId: 'tab-1', launchToken }
+      )
+    ).toBe(false)
   })
 
   it('preserves request_user_input question waits even under yolo attribution', () => {

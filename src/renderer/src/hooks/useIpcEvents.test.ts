@@ -4999,6 +4999,8 @@ describe('useIpcEvents agent status snapshot integration', () => {
     sessionBoundary?: boolean
     terminalHandle?: string
     launchToken?: string
+    hookEventName?: string
+    codexApprovalReviewer?: 'auto_review' | 'user'
     providerSession?: { key: 'session_id'; id: string }
     orchestration?: {
       taskId?: string
@@ -6574,7 +6576,7 @@ describe('useIpcEvents agent status snapshot integration', () => {
     )
   })
 
-  it('suppresses auto-approved Codex permission attention before status and title mutation', async () => {
+  it('consumes yolo and verified auto-review permission events before status or notification relays', async () => {
     const setAgentStatus = vi.fn()
     const updateTabTitle = vi.fn()
     const observeAgentHookCompletionForNotification = vi.fn()
@@ -6655,6 +6657,25 @@ describe('useIpcEvents agent status snapshot integration', () => {
     expect(setAgentStatus).not.toHaveBeenCalled()
     expect(updateTabTitle).not.toHaveBeenCalled()
     expect(observeAgentHookCompletionForNotification).not.toHaveBeenCalled()
+
+    onSetListenerRef.current({
+      paneKey: FUTURE_PANE_KEY,
+      tabId: 'tab-future',
+      worktreeId: 'wt-1',
+      state: 'waiting',
+      prompt: 'reviewer-owned permission',
+      agentType: 'codex',
+      launchToken: 'launch-restored',
+      hookEventName: 'PermissionRequest',
+      codexApprovalReviewer: 'auto_review',
+      toolName: 'exec_command',
+      receivedAt: 1_700_000_000_301,
+      stateStartedAt: 1_699_999_999_301
+    })
+
+    expect(setAgentStatus).not.toHaveBeenCalled()
+    expect(updateTabTitle).not.toHaveBeenCalled()
+    expect(observeAgentHookCompletionForNotification).not.toHaveBeenCalled()
   })
 
   it('keeps manual or missing-attribution Codex permission attention actionable', async () => {
@@ -6721,6 +6742,8 @@ describe('useIpcEvents agent status snapshot integration', () => {
       state: 'waiting',
       prompt: 'manual permission',
       agentType: 'codex',
+      hookEventName: 'PermissionRequest',
+      codexApprovalReviewer: 'user',
       receivedAt: 1_700_000_000_400,
       stateStartedAt: 1_699_999_999_400
     })
