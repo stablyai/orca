@@ -1312,7 +1312,7 @@ function getRuntimeTargetCachePrefix(
 /** Caller-owned host route. Surfaces that pick a host themselves (the Add
  *  Project dialog's Host selector) must pass it so the action does not fall back
  *  to the globally focused runtime. */
-type RuntimeRouteOptions = { runtimeEnvironmentId?: string | null }
+export type RuntimeRouteOptions = { runtimeEnvironmentId?: string | null }
 
 function getRuntimeRouteSettings(
   options: RuntimeRouteOptions | undefined,
@@ -1321,6 +1321,19 @@ function getRuntimeRouteSettings(
   return options && 'runtimeEnvironmentId' in options
     ? { activeRuntimeEnvironmentId: options.runtimeEnvironmentId ?? null }
     : fallbackSettings
+}
+
+function getConnectionScopedRuntimeTarget(
+  connectionId: string | null | undefined,
+  options: RuntimeRouteOptions | undefined,
+  fallbackSettings: GlobalSettings | null
+): ReturnType<typeof getActiveRuntimeTarget> {
+  // Why: SSH work rides local IPC with its connectionId, and the runtime RPCs have
+  // no field to carry that id. Letting a focused runtime capture an SSH-scoped
+  // request silently retargets it at the runtime's own filesystem.
+  return connectionId?.trim()
+    ? { kind: 'local' }
+    : getActiveRuntimeTarget(getRuntimeRouteSettings(options, fallbackSettings))
 }
 
 function folderWorkspaceUpdateInvalidatesPathStatus(
@@ -1558,7 +1571,7 @@ export type RepoSlice = {
     controls?: NestedRepoScanControls,
     options?: RuntimeRouteOptions
   ) => Promise<NestedRepoScanResult | null>
-  cancelNestedRepoScan: (scanId: string) => Promise<boolean>
+  cancelNestedRepoScan: (scanId: string, options?: RuntimeRouteOptions) => Promise<boolean>
   importNestedRepos: (
     args: {
       parentPath: string
@@ -2095,7 +2108,7 @@ export const createRepoSlice: StateCreator<AppState, [], [], RepoSlice> = (set, 
 
   scanNestedRepos: async (path, connectionId, controls, options) => {
     try {
-      const target = getActiveRuntimeTarget(getRuntimeRouteSettings(options, get().settings))
+      const target = getConnectionScopedRuntimeTarget(connectionId, options, get().settings)
       if (target.kind === 'local') {
         const unsubscribe =
           controls?.scanId && controls.onProgress
@@ -2132,9 +2145,11 @@ export const createRepoSlice: StateCreator<AppState, [], [], RepoSlice> = (set, 
     }
   },
 
-  cancelNestedRepoScan: async (scanId) => {
+  cancelNestedRepoScan: async (scanId, options) => {
     try {
-      const target = getActiveRuntimeTarget(get().settings)
+      // Why: only local scans stream and can be cancelled, so cancel must resolve
+      // the same host the scan was routed to, not whichever runtime holds focus.
+      const target = getActiveRuntimeTarget(getRuntimeRouteSettings(options, get().settings))
       if (target.kind !== 'local') {
         return false
       }
@@ -2147,7 +2162,7 @@ export const createRepoSlice: StateCreator<AppState, [], [], RepoSlice> = (set, 
 
   importNestedRepos: async (args, options) => {
     try {
-      const target = getActiveRuntimeTarget(getRuntimeRouteSettings(options, get().settings))
+      const target = getConnectionScopedRuntimeTarget(args.connectionId, options, get().settings)
       const result =
         target.kind === 'local'
           ? await window.api.projectGroups.importNested(args)

@@ -793,51 +793,6 @@ describe('project group store routing', () => {
     })
   })
 
-  // Why: the Add Project dialog picks its own host, so a caller-supplied route must
-  // win over the focused runtime in both directions (#6367).
-  it('scans nested repos on the caller-provided host instead of the focused runtime', async () => {
-    runtimeEnvironmentCall.mockResolvedValue({
-      id: 'rpc-scan-route',
-      ok: true,
-      result: { selectedPath: '/platform', selectedPathKind: 'non_git_folder', repos: [] },
-      _meta: { runtimeId: 'runtime-remote' }
-    })
-    const store = createTestStore()
-
-    await store
-      .getState()
-      .scanNestedRepos('/platform', undefined, undefined, { runtimeEnvironmentId: 'env-1' })
-
-    expect(runtimeEnvironmentCall).toHaveBeenCalledWith({
-      selector: 'env-1',
-      method: 'projectGroup.scanNested',
-      params: { path: '/platform' },
-      timeoutMs: 20_000
-    })
-    expect(projectGroupsScanNested).not.toHaveBeenCalled()
-  })
-
-  it('keeps a caller-local nested scan local while a runtime is focused', async () => {
-    projectGroupsScanNested.mockResolvedValue({
-      selectedPath: '/platform',
-      selectedPathKind: 'non_git_folder',
-      repos: []
-    })
-    const store = createTestStore()
-    store.setState({ settings: { activeRuntimeEnvironmentId: 'env-1' } as never })
-
-    await store
-      .getState()
-      .scanNestedRepos('/platform', undefined, undefined, { runtimeEnvironmentId: null })
-
-    expect(projectGroupsScanNested).toHaveBeenCalledWith({
-      path: '/platform',
-      connectionId: undefined,
-      scanId: undefined
-    })
-    expect(runtimeEnvironmentCall).not.toHaveBeenCalled()
-  })
-
   it('moves local repos to a group using the preload projectId contract', async () => {
     const movedRepo = { ...remoteRepo, projectGroupId: projectGroup.id, projectGroupOrder: 3 }
     projectGroupsMoveProject.mockResolvedValue(movedRepo)

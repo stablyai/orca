@@ -129,11 +129,8 @@ export function useAddRepoNestedImportFlow({
             mode
           },
           // Why: the scan ran on the host picked in the dialog, so the import must
-          // land there instead of on the globally focused runtime (#6367). SSH
-          // imports carry their own transport and keep the existing routing.
-          nestedConnectionId
-            ? undefined
-            : { runtimeEnvironmentId: activeRuntimeEnvironmentId?.trim() || null }
+          // land there instead of on the globally focused runtime (#6367).
+          { runtimeEnvironmentId: activeRuntimeEnvironmentId?.trim() || null }
         )
         track(
           'add_repo_nested_import_result',

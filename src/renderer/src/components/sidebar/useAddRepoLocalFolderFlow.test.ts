@@ -23,6 +23,10 @@ vi.mock('@/lib/telemetry', () => ({
   track: vi.fn()
 }))
 
+// Why: folder-picker paths belong to this client, so the flow pins them local
+// instead of inheriting whichever runtime happens to hold focus.
+const LOCAL_ROUTE = { runtimeEnvironmentId: null }
+
 function makeScan(
   path: string,
   overrides: Partial<NestedRepoScanResult> = {}
@@ -106,8 +110,8 @@ describe('useAddRepoLocalFolderFlow', () => {
 
     expect(pickFolders).toHaveBeenCalledTimes(1)
     expect(addRepoPath).toHaveBeenCalledTimes(2)
-    expect(addRepoPath).toHaveBeenNthCalledWith(1, '/projects/alpha')
-    expect(addRepoPath).toHaveBeenNthCalledWith(2, '/projects/beta')
+    expect(addRepoPath).toHaveBeenNthCalledWith(1, '/projects/alpha', 'git', LOCAL_ROUTE)
+    expect(addRepoPath).toHaveBeenNthCalledWith(2, '/projects/beta', 'git', LOCAL_ROUTE)
     expect(fetchWorktrees).toHaveBeenCalledWith('alpha', { requireAuthoritative: true })
     expect(fetchWorktrees).toHaveBeenCalledWith('beta', { requireAuthoritative: true })
     expect(onGitRepoReady).toHaveBeenCalledTimes(1)
@@ -146,7 +150,7 @@ describe('useAddRepoLocalFolderFlow', () => {
 
     expect(showNestedRepoReview).not.toHaveBeenCalled()
     expect(addRepoPath).toHaveBeenCalledTimes(1)
-    expect(addRepoPath).toHaveBeenCalledWith('/projects/later')
+    expect(addRepoPath).toHaveBeenCalledWith('/projects/later', 'git', LOCAL_ROUTE)
     expect(scanNestedRepos).toHaveBeenCalledTimes(2)
     expect(onGitRepoReady).toHaveBeenCalledWith('later', 'local_folder_picker')
   })
@@ -181,7 +185,7 @@ describe('useAddRepoLocalFolderFlow', () => {
 
     expect(showNestedRepoReview).not.toHaveBeenCalled()
     expect(addRepoPath).toHaveBeenCalledTimes(1)
-    expect(addRepoPath).toHaveBeenCalledWith('/projects/git')
+    expect(addRepoPath).toHaveBeenCalledWith('/projects/git', 'git', LOCAL_ROUTE)
     expect(onGitRepoReady).toHaveBeenCalledWith('git', 'local_folder_picker')
   })
 })

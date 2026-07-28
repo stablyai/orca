@@ -161,7 +161,7 @@ describe('useAddRepoNestedImportFlow open folder fallback', () => {
     )
   })
 
-  it('leaves SSH nested imports on their existing transport', async () => {
+  it('keeps the connection id on SSH nested imports', async () => {
     const importNestedRepos = vi.fn<AppState['importNestedRepos']>().mockResolvedValue(null)
     const { handleImportNestedRepos } = useTestAddRepoNestedImportFlow({
       nestedConnectionId: 'ssh-builder',
@@ -174,7 +174,7 @@ describe('useAddRepoNestedImportFlow open folder fallback', () => {
 
     expect(importNestedRepos).toHaveBeenCalledWith(
       expect.objectContaining({ connectionId: 'ssh-builder' }),
-      undefined
+      { runtimeEnvironmentId: null }
     )
   })
 

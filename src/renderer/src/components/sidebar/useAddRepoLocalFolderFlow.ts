@@ -9,8 +9,11 @@ import {
 } from '../../../../shared/nested-repo-telemetry'
 import type { AddRepoExistingWorkspaceSource } from '../../../../shared/telemetry-events'
 import type { NestedRepoScanResult, Repo } from '../../../../shared/types'
+import type { RuntimeRouteOptions } from '@/store/slices/repos'
 import { createNestedRepoScanId } from './add-repo-dialog-types'
 import { translate } from '@/i18n/i18n'
+
+const LOCAL_HOST_ROUTE: RuntimeRouteOptions = { runtimeEnvironmentId: null }
 
 type ShowNestedRepoReview = (args: {
   scan: NestedRepoScanResult
@@ -46,13 +49,18 @@ export function useAddRepoLocalFolderFlow({
   isOpen: boolean
   droppedLocalPath: string
   activeRuntimeEnvironmentId: string | null | undefined
-  addRepoPath: (path: string, kind?: 'git' | 'folder') => Promise<Repo | null>
+  addRepoPath: (
+    path: string,
+    kind?: 'git' | 'folder',
+    options?: RuntimeRouteOptions
+  ) => Promise<Repo | null>
   closeModal: () => void
   fetchWorktrees: (repoId: string, options?: { requireAuthoritative?: boolean }) => Promise<unknown>
   scanNestedRepos: (
     path: string,
     connectionId?: string,
-    controls?: { scanId?: string; onProgress?: (scan: NestedRepoScanResult) => void }
+    controls?: { scanId?: string; onProgress?: (scan: NestedRepoScanResult) => void },
+    options?: RuntimeRouteOptions
   ) => Promise<NestedRepoScanResult | null>
   setActiveNestedScanId: (scanId: string | null) => void
   setNestedScanInProgress: (inProgress: boolean) => void
@@ -100,28 +108,35 @@ export function useAddRepoLocalFolderFlow({
         const scanId = createNestedRepoScanId()
         setActiveNestedScanId(scanId)
         setNestedScanInProgress(true)
-        const scan = await scanNestedRepos(path, undefined, {
-          scanId,
-          onProgress: (progressScan) => {
-            if (
-              gen !== localAddGenRef.current ||
-              mode === 'batch' ||
-              progressScan.selectedPathKind !== 'non_git_folder' ||
-              progressScan.repos.length === 0
-            ) {
-              return
+        const scan = await scanNestedRepos(
+          path,
+          undefined,
+          {
+            scanId,
+            onProgress: (progressScan) => {
+              if (
+                gen !== localAddGenRef.current ||
+                mode === 'batch' ||
+                progressScan.selectedPathKind !== 'non_git_folder' ||
+                progressScan.repos.length === 0
+              ) {
+                return
+              }
+              showNestedRepoReview({
+                scan: progressScan,
+                selectedPath: path,
+                connectionId: null,
+                attemptId,
+                runtimeKind: 'local',
+                inProgress: true,
+                scanId
+              })
             }
-            showNestedRepoReview({
-              scan: progressScan,
-              selectedPath: path,
-              connectionId: null,
-              attemptId,
-              runtimeKind: 'local',
-              inProgress: true,
-              scanId
-            })
-          }
-        })
+          },
+          // Why: these paths come from the client's own folder picker, so they must
+          // stay on this machine even while a remote runtime holds focus (#6367).
+          LOCAL_HOST_ROUTE
+        )
         if (gen !== localAddGenRef.current) {
           return { status: 'cancelled' }
         }
@@ -153,7 +168,7 @@ export function useAddRepoLocalFolderFlow({
           return { status: 'paused' }
         }
         setAddProjectBusyLabel('Opening project...')
-        const repo = await addRepoPath(path)
+        const repo = await addRepoPath(path, 'git', LOCAL_HOST_ROUTE)
         if (gen !== localAddGenRef.current) {
           return { status: 'cancelled' }
         }

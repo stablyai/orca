@@ -9,6 +9,7 @@ import {
 } from '../../../../shared/nested-repo-telemetry'
 import type { AddRepoExistingWorkspaceSource } from '../../../../shared/telemetry-events'
 import type { NestedRepoScanResult, Repo } from '../../../../shared/types'
+import type { RuntimeRouteOptions } from '@/store/slices/repos'
 import { createNestedRepoScanId } from './add-repo-dialog-types'
 
 type ShowNestedRepoReview = (args: {
@@ -37,7 +38,7 @@ export function useAddRepoServerPathFlow({
   addRepoPath: (
     path: string,
     kind?: 'git' | 'folder',
-    options?: { runtimeEnvironmentId?: string | null }
+    options?: RuntimeRouteOptions
   ) => Promise<Repo | null>
   closeModal: () => void
   fetchWorktrees: (repoId: string, options?: { requireAuthoritative?: boolean }) => Promise<unknown>
@@ -48,7 +49,7 @@ export function useAddRepoServerPathFlow({
     path: string,
     connectionId?: string,
     controls?: { scanId?: string; onProgress?: (scan: NestedRepoScanResult) => void },
-    options?: { runtimeEnvironmentId?: string | null }
+    options?: RuntimeRouteOptions
   ) => Promise<NestedRepoScanResult | null>
   setActiveNestedScanId: (scanId: string | null) => void
   setNestedScanInProgress: (inProgress: boolean) => void
