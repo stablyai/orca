@@ -85,9 +85,15 @@ export default function PdfFind({
       setActiveMatch(evt.matchesCount.current)
       setTotalMatches(evt.matchesCount.total)
     }
+    // Why: pdf.js only emits 'updatefindmatchescount' while it scans pages for
+    // matches. Stepping to the next/previous hit rescans nothing, so the new
+    // position arrives on 'updatefindcontrolstate' — without it the counter
+    // freezes at whatever the initial scan reported (#11049).
     eventBus.on('updatefindmatchescount', handleMatchesCount)
+    eventBus.on('updatefindcontrolstate', handleMatchesCount)
     return () => {
       eventBus.off('updatefindmatchescount', handleMatchesCount)
+      eventBus.off('updatefindcontrolstate', handleMatchesCount)
     }
   }, [eventBusRef, isOpen])
 
