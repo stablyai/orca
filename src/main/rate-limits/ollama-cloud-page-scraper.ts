@@ -1,6 +1,6 @@
-// Why: the ollama.com/settings page renders usage data as plain HTML with
-// "X% used" text. We find the percentage values and disambiguate session vs
-// weekly by scanning the surrounding text for context keywords.
+// Why: ollama.com/settings renders usage as aria-label="Session usage X% used"
+// and aria-label="Weekly usage X% used". Match the full label for reliable
+// disambiguation instead of searching for bare percentages.
 
 type ParsedOllamaCloudUsage = {
   sessionPercent: number
@@ -11,29 +11,30 @@ type ParsedOllamaCloudUsage = {
 
 /**
  * Parses ollama.com/settings HTML for usage percentage data.
- * Looks for "X% used" patterns and disambiguates session vs weekly by
- * scanning the preceding text for context keywords.
+ * Matches aria-label="Session usage X% used" and aria-label="Weekly usage X% used".
+ * Both labels are always present for authenticated users; a missing label
+ * means the page structure changed and the scrape is invalid.
  */
 export function parseOllamaCloudFromPageText(text: string): ParsedOllamaCloudUsage | null {
   if (!text || text.length > 10_000_000) {
     return null
   }
 
-  // Why: ollama.com/settings renders usage as aria-label="Session usage X% used"
-  // and aria-label="Weekly usage X% used". Match the full label for reliable
-  // disambiguation instead of searching for bare percentages.
   const sessionRe = /aria-label="Session usage\s+(\d+(?:\.\d+)?)%\s*used"/i
   const weeklyRe = /aria-label="Weekly usage\s+(\d+(?:\.\d+)?)%\s*used"/i
 
   const sessionMatch = text.match(sessionRe)
   const weeklyMatch = text.match(weeklyRe)
 
-  if (!sessionMatch && !weeklyMatch) {
+  // Why: both labels are always present for any logged-in user. If one is
+  // missing the page structure changed — treat the scrape as invalid rather
+  // than fabricating a 0% reading for the unmatched metric.
+  if (!sessionMatch || !weeklyMatch) {
     return null
   }
 
-  const sessionPct = sessionMatch ? Number.parseFloat(sessionMatch[1]) : 0
-  const weeklyPct = weeklyMatch ? Number.parseFloat(weeklyMatch[1]) : 0
+  const sessionPct = Number.parseFloat(sessionMatch[1])
+  const weeklyPct = Number.parseFloat(weeklyMatch[1])
 
   if (!Number.isFinite(sessionPct) || !Number.isFinite(weeklyPct)) {
     return null
