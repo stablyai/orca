@@ -1772,7 +1772,6 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
     // (e.g. saving the setup toggle from this very composer) replaces selectedRepo — and thus the
     // memoized selectedRepoSettings — by reference; depending on the object would re-run this
     // effect, blank yamlHooks to null, and make the whole setup section vanish for a frame.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [
     commitHookCheckIfCurrent,
     enableIssueAutomation,
