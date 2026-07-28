@@ -6,10 +6,12 @@ import { pathToFileURL } from 'node:url'
 import { resolvePullRequestDiffBase } from './git-pull-request-diff-base.mjs'
 
 const SOURCE_FILE_PATTERN = /\.(?:[cm]?[jt]sx?)$/
-const OXLINT_SCANS = [
+export const OXLINT_SCANS = [
   {
+    // Why: no --config, so Oxlint keeps discovering nested configs. Pinning the root
+    // config would apply root rules to mobile/, whose .oxlintrc.json turns them off.
     label: 'code quality',
-    args: ['--config', '.oxlintrc.json', '--report-unused-disable-directives-severity', 'warn']
+    args: ['--report-unused-disable-directives-severity', 'warn']
   },
   {
     label: 'type-aware code quality',
