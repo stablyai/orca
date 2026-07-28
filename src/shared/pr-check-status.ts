@@ -42,8 +42,10 @@ function normalizeRollupCheck(raw: RawCheckRollup, index: number): PRCheckDetail
   const state = String(raw.state ?? '').toLowerCase()
   const conclusion = String(raw.conclusion ?? '').toLowerCase()
   const normalizedConclusion =
-    conclusion ||
-    (state === 'failure' || state === 'error' ? 'failure' : state === 'success' ? 'success' : '')
+    conclusion === 'error' || conclusion === 'startup_failure'
+      ? 'failure'
+      : conclusion ||
+        (state === 'failure' || state === 'error' ? 'failure' : state === 'success' ? 'success' : '')
   const isPending =
     status === 'queued' ||
     status === 'in_progress' ||
