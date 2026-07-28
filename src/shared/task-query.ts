@@ -1,5 +1,3 @@
-import type { TaskViewPresetId } from './types'
-
 export type GitHubTaskKind = 'issues' | 'prs'
 
 export type ParsedTaskQuery = {
@@ -76,12 +74,13 @@ export function parseTaskQuery(rawQuery: string): ParsedTaskQuery {
   let sawPRScope = false
   for (const { value: token, raw } of tokenizeSearchQueryWithRaw(rawQuery.trim())) {
     const normalized = token.toLowerCase()
-    if (normalized === 'is:issue') {
+    const isBareToken = raw === token
+    if (isBareToken && normalized === 'is:issue') {
       sawIssueScope = true
       query.scope = sawPRScope ? 'all' : 'issue'
       continue
     }
-    if (normalized === 'is:pr' || normalized === 'is:pull-request') {
+    if (isBareToken && (normalized === 'is:pr' || normalized === 'is:pull-request')) {
       sawPRScope = true
       query.scope = sawIssueScope ? 'all' : 'pr'
       continue
@@ -166,35 +165,22 @@ export function parseTaskQuery(rawQuery: string): ParsedTaskQuery {
   return query
 }
 
-export function getTaskPresetQuery(presetId: TaskViewPresetId | null): string {
-  switch (presetId) {
-    case 'all':
-    case 'issues':
-      return 'is:issue is:open'
-    case 'my-issues':
-      return 'assignee:@me is:issue is:open'
-    case 'prs':
-      return 'is:pr is:open'
-    case 'my-prs':
-      return 'author:@me is:pr is:open'
-    case 'review':
-      return 'review-requested:@me is:pr is:open'
-    case null:
-      return 'is:issue is:open'
+/** Return the explicit, unquoted GitHub work-item scope in a task query. */
+export function getExplicitTaskQueryScope(rawQuery: string): ParsedTaskQuery['scope'] | null {
+  let sawIssueScope = false
+  let sawPRScope = false
+  for (const { value, raw } of tokenizeSearchQueryWithRaw(rawQuery.trim())) {
+    if (raw !== value) {
+      continue
+    }
+    const normalized = value.toLowerCase()
+    sawIssueScope ||= normalized === 'is:issue'
+    sawPRScope ||= normalized === 'is:pr' || normalized === 'is:pull-request'
   }
-}
-
-export function scopeGitHubTaskSearch(query: string, kind: GitHubTaskKind): string {
-  const trimmed = query.trim()
-  if (!trimmed) {
-    return getTaskPresetQuery(kind === 'prs' ? 'prs' : 'issues')
+  if (sawIssueScope && sawPRScope) {
+    return 'all'
   }
-  if (/\bis:(?:issue|pr|pull-request)\b/i.test(trimmed)) {
-    return trimmed
-  }
-  const parsed = parseTaskQuery(trimmed)
-  const inferredKind = parsed.scope === 'pr' ? 'prs' : parsed.scope === 'issue' ? 'issues' : kind
-  return `${inferredKind === 'prs' ? 'is:pr' : 'is:issue'} ${trimmed}`
+  return sawIssueScope ? 'issue' : sawPRScope ? 'pr' : null
 }
 
 function quoteIfNeeded(value: string): string {

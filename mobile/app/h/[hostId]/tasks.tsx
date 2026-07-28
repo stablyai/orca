@@ -147,7 +147,8 @@ import {
   githubProjectHost,
   githubProjectIdentityKey as githubProjectKey
 } from '../../../../src/shared/github-project-identity'
-import { getTaskPresetQuery, scopeGitHubTaskSearch } from '../../../../src/shared/task-query'
+import { getTaskPresetQuery, scopeGitHubTaskSearch } from '../../../../src/shared/github-task-query'
+import { resolveMobileGitHubTaskKind } from '../../../src/tasks/mobile-github-task-kind'
 
 type RepoSummary = {
   id: string
@@ -901,18 +902,6 @@ function normalizeLinearFilter(value: unknown): LinearFilter {
   return value === 'assigned' || value === 'created' || value === 'completed' || value === 'all'
     ? value
     : 'all'
-}
-
-function githubKindFromQuery(query: string, fallbackPreset: GitHubPreset): GitHubTaskKind {
-  if (/\bis:(?:pr|pull-request)\b/i.test(query)) {
-    return 'prs'
-  }
-  if (/\bis:issue\b/i.test(query)) {
-    return 'issues'
-  }
-  return fallbackPreset === 'prs' || fallbackPreset === 'my-prs' || fallbackPreset === 'review'
-    ? 'prs'
-    : 'issues'
 }
 
 function projectRowType(row: GitHubProjectRow): 'issue' | 'pr' | null {
@@ -3029,7 +3018,7 @@ export default function MobileTasksScreen() {
         nextProvider === 'github' ? githubQuery : nextProvider === 'linear' ? nextLinearQuery : ''
       const nextAppliedQuery =
         nextProvider === 'github'
-          ? scopeGitHubTaskSearch(githubQuery, githubKindFromQuery(githubQuery, preset))
+          ? scopeGitHubTaskSearch(githubQuery, resolveMobileGitHubTaskKind(githubQuery, preset))
           : nextQuery
 
       setVisibleProviders(nextVisibleProviders)
@@ -3037,7 +3026,7 @@ export default function MobileTasksScreen() {
       setGithubMode(resume.githubMode === 'project' ? 'project' : 'items')
       setDefaultGitHubPreset(defaultPreset)
       setGithubPreset(preset)
-      setGithubKind(githubKindFromQuery(githubQuery, preset))
+      setGithubKind(resolveMobileGitHubTaskKind(githubQuery, preset))
       setLinearFilter(nextLinearFilter)
       setGithubProjectSettings(settings.githubProjects ?? EMPTY_GITHUB_PROJECT_SETTINGS)
       setQuery(nextQuery)
@@ -9789,7 +9778,7 @@ export default function MobileTasksScreen() {
               resume.githubItemsPreset === null
                 ? (resume.githubItemsQuery ?? '')
                 : getTaskPresetQuery(preset)
-            const nextKind = githubKindFromQuery(nextQuery, preset)
+            const nextKind = resolveMobileGitHubTaskKind(nextQuery, preset)
             setGithubPreset(preset)
             setGithubKind(nextKind)
             setQuery(nextQuery)

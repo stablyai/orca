@@ -20,7 +20,7 @@ import { createBrowserUuid } from '@/lib/browser-uuid'
 export { getLinkedWorkItemSuggestedName } from '../../../shared/workspace-name'
 export { getLinkedWorkItemWorkspaceName } from '../../../shared/workspace-name'
 export { getWorkspaceIntentName } from '../../../shared/workspace-name'
-export { getTaskPresetQuery } from '../../../shared/task-query'
+export { getTaskPresetQuery } from '../../../shared/github-task-query'
 export { PER_REPO_FETCH_LIMIT, CROSS_REPO_DISPLAY_LIMIT } from '../../../shared/work-items'
 
 export const CLIENT_PLATFORM: NodeJS.Platform = navigator.userAgent.includes('Windows')

@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
-import { getTaskPresetQuery, scopeGitHubTaskSearch } from '../../../src/shared/task-query'
+import { getTaskPresetQuery, scopeGitHubTaskSearch } from '../../../src/shared/github-task-query'
+import { resolveMobileGitHubTaskKind } from './mobile-github-task-kind'
 
 describe('mobile GitHub task query parity', () => {
   it.each([
@@ -13,10 +14,17 @@ describe('mobile GitHub task query parity', () => {
   })
 
   it.each([
-    ['is:issue bug', 'prs'],
-    ['is:pr bug', 'issues'],
-    ['is:pull-request bug', 'issues']
-  ] as const)('preserves the %s scope alias', (query, kind) => {
-    expect(scopeGitHubTaskSearch(query, kind)).toBe(query)
+    ['is:issue bug', 'prs', 'issues'],
+    ['is:pr bug', 'issues', 'prs'],
+    ['is:pull-request bug', 'issues', 'prs'],
+    ['review-requested:@me', 'issues', 'prs'],
+    ['"is:pull-request"', 'issues', 'issues'],
+    ['label:"is:issue"', 'prs', 'prs']
+  ] as const)('resolves %s from the mobile parser', (query, fallback, expected) => {
+    expect(resolveMobileGitHubTaskKind(query, fallback)).toBe(expected)
+  })
+
+  it('preserves explicit aliases when scoping the mobile query', () => {
+    expect(scopeGitHubTaskSearch('is:pull-request bug', 'issues')).toBe('is:pull-request bug')
   })
 })

@@ -124,12 +124,8 @@ import {
   getLinearStateMarkerStyle,
   getLinearStatePillStyle
 } from '@/components/linear-state-pill-style'
-import {
-  parseTaskQuery,
-  scopeGitHubTaskSearch,
-  stripRepoQualifiers,
-  withQualifier
-} from '../../../shared/task-query'
+import { scopeGitHubTaskSearch } from '../../../shared/github-task-query'
+import { parseTaskQuery, stripRepoQualifiers, withQualifier } from '../../../shared/task-query'
 import { githubProjectHost } from '../../../shared/github-project-identity'
 import {
   buildLinearTeamUrl,

@@ -1,9 +1,8 @@
 import { describe, expect, it } from 'vitest'
+import { getTaskPresetQuery, scopeGitHubTaskSearch } from './github-task-query'
 import {
-  getTaskPresetQuery,
   parseTaskQuery,
   serializeTaskQuery,
-  scopeGitHubTaskSearch,
   stripRepoQualifiers,
   tokenizeSearchQuery,
   withQualifier
@@ -29,6 +28,17 @@ describe('GitHub task queries', () => {
   ] as const)('preserves the %s scope alias', (query, kind) => {
     expect(scopeGitHubTaskSearch(query, kind)).toBe(query)
   })
+
+  it.each([
+    ['"is:issue"', 'prs', 'is:pr "is:issue"'],
+    ['label:"is:issue"', 'prs', 'is:pr label:"is:issue"'],
+    ["'is:pull-request'", 'issues', "is:issue 'is:pull-request'"]
+  ] as const)(
+    'does not treat quoted scope text in %s as an explicit scope',
+    (query, kind, expected) => {
+      expect(scopeGitHubTaskSearch(query, kind)).toBe(expected)
+    }
+  )
 
   it('infers pull requests from PR-only qualifiers', () => {
     expect(scopeGitHubTaskSearch('review-requested:@me', 'issues')).toBe(
@@ -85,6 +95,13 @@ describe('parseTaskQuery', () => {
     const parsed = parseTaskQuery('is:pull-request is:open')
     expect(parsed.scope).toBe('pr')
     expect(parsed.state).toBe('open')
+  })
+
+  it('keeps quoted scope text out of the parsed scope', () => {
+    const parsed = parseTaskQuery('"is:issue" label:"is:pr"')
+    expect(parsed.scope).toBe('all')
+    expect(parsed.labels).toEqual(['is:pr'])
+    expect(parsed.freeText).toBe('"is:issue"')
   })
 
   it('widens scope to all when both is:issue and is:pr are present', () => {
