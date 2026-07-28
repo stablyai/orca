@@ -15,6 +15,7 @@ const {
   getGiteaAuthStatusMock,
   resolveCliCommandsMock,
   isCommandOnLocalPathMock,
+  mergePersistedWindowsPathAsyncMock,
   mergePersistedWindowsPathMock
 } = vi.hoisted(() => ({
   handleMock: vi.fn(),
@@ -28,6 +29,7 @@ const {
   getGiteaAuthStatusMock: vi.fn(),
   resolveCliCommandsMock: vi.fn(),
   isCommandOnLocalPathMock: vi.fn(),
+  mergePersistedWindowsPathAsyncMock: vi.fn(),
   mergePersistedWindowsPathMock: vi.fn()
 }))
 
@@ -64,6 +66,7 @@ vi.mock('./command-path-resolver', () => ({
 }))
 
 vi.mock('../pty/windows-environment-path', () => ({
+  mergePersistedWindowsPathAsync: mergePersistedWindowsPathAsyncMock,
   mergePersistedWindowsPath: mergePersistedWindowsPathMock
 }))
 
@@ -122,6 +125,8 @@ describe('preflight', () => {
     getBitbucketAuthStatusMock.mockReset()
     getAzureDevOpsAuthStatusMock.mockReset()
     getGiteaAuthStatusMock.mockReset()
+    mergePersistedWindowsPathAsyncMock.mockReset()
+    mergePersistedWindowsPathAsyncMock.mockResolvedValue(undefined)
     mergePersistedWindowsPathMock.mockReset()
     // Why: existing tests should keep treating `which` as the only source
     // unless a case explicitly exercises the install-dir fallback.
@@ -438,11 +443,18 @@ describe('preflight', () => {
     expect(execFileAsyncMock).toHaveBeenCalledTimes(10)
   })
 
-  it('refreshes the persisted Windows Path before a forced host CLI preflight', async () => {
+  it('awaits the persisted Windows Path refresh before a forced host CLI preflight', async () => {
     Object.defineProperty(process, 'platform', {
       configurable: true,
       value: 'win32'
     })
+    let finishRefresh!: () => void
+    mergePersistedWindowsPathAsyncMock.mockImplementation(
+      () =>
+        new Promise<void>((resolve) => {
+          finishRefresh = resolve
+        })
+    )
     execFileAsyncMock
       .mockResolvedValueOnce({ stdout: 'git version 2.0.0\n' })
       .mockResolvedValueOnce({ stdout: 'gh version 2.0.0\n' })
@@ -450,11 +462,16 @@ describe('preflight', () => {
       .mockResolvedValueOnce({ stdout: 'github.com\n  - Active account: true\n' })
       .mockResolvedValueOnce({ stdout: 'Logged in to gitlab.com\n' })
 
-    await expect(runPreflightCheck(true)).resolves.toMatchObject({
+    const check = runPreflightCheck(true)
+    await Promise.resolve()
+
+    expect(execFileAsyncMock).not.toHaveBeenCalled()
+    finishRefresh()
+    await expect(check).resolves.toMatchObject({
       gh: { installed: true, authenticated: true }
     })
 
-    expect(mergePersistedWindowsPathMock).toHaveBeenNthCalledWith(1, process.env, {
+    expect(mergePersistedWindowsPathAsyncMock).toHaveBeenNthCalledWith(1, process.env, {
       forceRefresh: true
     })
   })
@@ -490,7 +507,7 @@ describe('preflight', () => {
       gh: { installed: true, authenticated: true }
     })
 
-    expect(mergePersistedWindowsPathMock).not.toHaveBeenCalled()
+    expect(mergePersistedWindowsPathAsyncMock).not.toHaveBeenCalled()
   })
 
   it('registers the preflight handler', async () => {

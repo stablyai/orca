@@ -33,7 +33,9 @@ export function getWhoamiExePath(): string {
 
 /** Absolute path because service-launched Electron can omit System32 from PATH. */
 export function getRegExePath(env: NodeJS.ProcessEnv = process.env): string {
-  return win32.join(env.SystemRoot ?? 'C:\\Windows', 'System32', 'reg.exe')
+  const systemRoot = env.SystemRoot?.trim()
+  const root = systemRoot && /^[a-z]:[\\/]/i.test(systemRoot) ? systemRoot : 'C:\\Windows'
+  return win32.join(root, 'System32', 'reg.exe')
 }
 
 /**

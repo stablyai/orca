@@ -3,16 +3,44 @@ import { join } from 'node:path'
 import { tmpdir } from 'node:os'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
-const { registryQueryMock } = vi.hoisted(() => ({ registryQueryMock: vi.fn() }))
-
-vi.mock('node:child_process', async (importOriginal) => ({
-  ...(await importOriginal<Record<string, unknown>>()),
-  execFileSync: registryQueryMock
+const { registryQueryAsyncMock, registryQuerySyncMock } = vi.hoisted(() => ({
+  registryQueryAsyncMock: vi.fn(),
+  registryQuerySyncMock: vi.fn()
 }))
+
+vi.mock('node:child_process', async (importOriginal) => {
+  const original = await importOriginal<Record<string, unknown>>()
+  const originalExecFile = original.execFile as (
+    command: string,
+    commandArgs: string[],
+    commandOptions: unknown,
+    commandCallback: (error: Error | null, stdout: string, stderr: string) => void
+  ) => unknown
+  const registryAwareExecFile = (
+    file: string,
+    args: string[],
+    options: unknown,
+    callback: (error: Error | null, stdout: string, stderr: string) => void
+  ): unknown => {
+    if (file.toLowerCase().endsWith('\\reg.exe')) {
+      return registryQueryAsyncMock(file, args, options, callback)
+    }
+    return originalExecFile(file, args, options, callback)
+  }
+  const customPromisify = Symbol.for('nodejs.util.promisify.custom')
+  Object.defineProperty(registryAwareExecFile, customPromisify, {
+    value: (originalExecFile as unknown as Record<symbol, unknown>)[customPromisify]
+  })
+  return {
+    ...original,
+    execFile: registryAwareExecFile,
+    execFileSync: registryQuerySyncMock
+  }
+})
 
 import {
   __resetPersistedWindowsPathCacheForTests,
-  mergePersistedWindowsPath
+  mergePersistedWindowsPathAsync
 } from '../pty/windows-environment-path'
 import { execLocalPreflightCommand } from './preflight-command-exec'
 
@@ -22,7 +50,8 @@ describe.runIf(process.platform === 'win32')('Windows preflight Path refresh rep
 
   afterEach(() => {
     process.env.Path = originalPath
-    registryQueryMock.mockReset()
+    registryQueryAsyncMock.mockReset()
+    registryQuerySyncMock.mockReset()
     __resetPersistedWindowsPathCacheForTests()
     for (const directory of fixtureDirs.splice(0)) {
       rmSync(directory, { recursive: true, force: true })
@@ -39,10 +68,22 @@ describe.runIf(process.platform === 'win32')('Windows preflight Path refresh rep
     )
 
     let persistedUserPath = ''
-    registryQueryMock.mockImplementation((_file, args: string[]) => {
+    registryQuerySyncMock.mockImplementation((_file, args: string[]) => {
       const value = String(args[1]).startsWith('HKCU') ? persistedUserPath : ''
       return `    Path    REG_SZ    ${value}\r\n`
     })
+    registryQueryAsyncMock.mockImplementation(
+      (
+        _file: string,
+        args: string[],
+        _options: unknown,
+        callback: (error: Error | null, stdout: string, stderr: string) => void
+      ) => {
+        const value = String(args[1]).startsWith('HKCU') ? persistedUserPath : ''
+        callback(null, `    Path    REG_SZ    ${value}\r\n`, '')
+        return {} as never
+      }
+    )
     __resetPersistedWindowsPathCacheForTests()
 
     await expect(execLocalPreflightCommand(command, ['/?'])).rejects.toMatchObject({
@@ -51,11 +92,12 @@ describe.runIf(process.platform === 'win32')('Windows preflight Path refresh rep
 
     persistedUserPath = directory
     const refreshOptions = { forceRefresh: true }
-    mergePersistedWindowsPath(process.env, refreshOptions)
+    await mergePersistedWindowsPathAsync(process.env, refreshOptions)
 
     await expect(execLocalPreflightCommand(command, ['/?'])).resolves.toMatchObject({
       stdout: expect.any(String)
     })
-    expect(registryQueryMock).toHaveBeenCalledTimes(4)
+    expect(registryQuerySyncMock).toHaveBeenCalledTimes(2)
+    expect(registryQueryAsyncMock).toHaveBeenCalledTimes(2)
   })
 })
