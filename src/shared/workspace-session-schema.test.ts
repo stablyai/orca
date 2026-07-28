@@ -243,6 +243,7 @@ describe('parseWorkspaceSession', () => {
               sessionId: 'session-1',
               title: 'Provider thread name'
             },
+            generatedTitleSessionId: 'session-a',
             customTitle: null,
             color: null,
             sortOrder: 0,
@@ -279,6 +280,8 @@ describe('parseWorkspaceSession', () => {
     if (result.ok) {
       expect(result.value.tabsByWorktree.wt[0].generatedTitle).toBe('Refactor auth')
       expect(result.value.tabsByWorktree.wt[0].aiVaultTitle?.title).toBe('Provider thread name')
+      // Why: dropped here, a restored title could never be retired by a later `/clear`.
+      expect(result.value.tabsByWorktree.wt[0].generatedTitleSessionId).toBe('session-a')
       expect(result.value.unifiedTabs?.wt[0].generatedLabel).toBe('Refactor auth')
       expect(result.value.unifiedTabs?.wt[0].aiVaultTitle?.title).toBe('Provider thread name')
     }

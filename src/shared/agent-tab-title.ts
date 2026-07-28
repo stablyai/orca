@@ -1,6 +1,25 @@
 export const GENERATED_TAB_TITLE_MAX_LENGTH = 40
 export const GENERATED_TAB_TITLE_SOURCE_SCAN_LIMIT = 512
 
+/**
+ * True when the tab's generated title came from a session the pane has left, so
+ * it names a finished conversation. Unknown on either side is not proof — keep it.
+ *
+ * Known limitation: `--resume`/`--continue` fork the session id for the SAME
+ * conversation, and nothing in the hook payload distinguishes a fork from a fresh
+ * `/clear`, so a resume retitles the tab once. TODO: compare against the fork
+ * lineage from the daemon roster (#9236) instead of plain id inequality.
+ */
+export function generatedTitleNamesEndedSession(
+  tab: { generatedTitleSessionId?: string | null },
+  liveSessionId: string | undefined
+): boolean {
+  const titleSessionId = tab.generatedTitleSessionId?.trim()
+  return (
+    Boolean(titleSessionId && liveSessionId?.trim()) && titleSessionId !== liveSessionId?.trim()
+  )
+}
+
 const LEADING_FILLER_PATTERNS: RegExp[] = [
   /^(?:can|could|would)\s+you(?:\s+please)?\s+/i,
   /^please(?:\s+|$)/i,

@@ -25,6 +25,7 @@ import {
   parseWorkspaceKey,
   worktreeWorkspaceKey
 } from '../../../../shared/workspace-scope'
+import { generatedTitleNamesEndedSession } from '../../../../shared/agent-tab-title'
 import { isDecorativeAgentTitleFrameChange } from '../../../../shared/agent-decorative-title-signature'
 import {
   isTerminalLeafId,
@@ -655,7 +656,7 @@ export type TerminalSlice = {
   setGeneratedTabTitleFromAgentPrompt: (
     paneKey: string,
     prompt: string,
-    options?: { replaceExistingGeneratedTitle?: boolean }
+    options?: { replaceExistingGeneratedTitle?: boolean; sessionId?: string }
   ) => void
   setGeneratedTabTitlesFromAgentPrompts: (updates: readonly GeneratedTabTitleUpdate[]) => void
   clearTabLaunchAgent: (tabId: string) => void
@@ -2027,7 +2028,14 @@ export const createTerminalSlice: StateCreator<AppState, [], [], TerminalSlice> 
       return
     }
     const existingGeneratedTitle = currentTab.generatedTitle?.trim()
-    if (existingGeneratedTitle && options?.replaceExistingGeneratedTitle !== true) {
+    // Why: the title names the session that produced it; once that session is gone
+    // (`/clear`, resume) it labels a finished conversation and must not outrank the new one.
+    const namesEndedSession = generatedTitleNamesEndedSession(currentTab, options?.sessionId)
+    if (
+      existingGeneratedTitle &&
+      !namesEndedSession &&
+      options?.replaceExistingGeneratedTitle !== true
+    ) {
       return
     }
     set((latestState) => {

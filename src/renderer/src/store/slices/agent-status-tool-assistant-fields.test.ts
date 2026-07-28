@@ -134,7 +134,11 @@ describe('agent status tool + assistant fields', () => {
     expect(entry.lastAssistantMessage).toBeUndefined()
     expect(store.getState().agentStatusEpoch).toBe(firstEpoch)
     expect(setGeneratedTabTitleFromAgentPrompt).toHaveBeenCalledTimes(1)
-    expect(setGeneratedTabTitleFromAgentPrompt).toHaveBeenLastCalledWith('tab-1:1', 'parent codex')
+    // No orchestration replace, and this payload carried no provider session.
+    expect(setGeneratedTabTitleFromAgentPrompt).toHaveBeenLastCalledWith('tab-1:1', 'parent codex', {
+      replaceExistingGeneratedTitle: false,
+      sessionId: undefined
+    })
   })
 
   it('does not let restored-unconfirmed identity suppress a live terminal status', () => {

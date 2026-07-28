@@ -340,4 +340,102 @@ Implement task B worker instructions for the next dispatch`,
     expect(tab.generatedTitle).toBeUndefined()
     expect(resolveTerminalTabTitle(tab, true)).toBe('Run tests')
   })
+
+  it('retitles the tab when /clear starts a new provider session in the same pane', () => {
+    vi.useFakeTimers()
+    const store = createTestStore()
+    const tabId = seedWorktree(store, true)
+    const paneKey = makePaneKey(tabId, LEAF_ID)
+
+    store
+      .getState()
+      .setAgentStatus(
+        paneKey,
+        { state: 'working', prompt: 'Upload the Kimi K3 model to GitHub', agentType: 'claude' },
+        undefined,
+        undefined,
+        undefined,
+        { providerSession: { key: 'session_id', id: 'session-a' } }
+      )
+    expect(store.getState().tabsByWorktree[WORKTREE_ID][0].generatedTitle).toBe(
+      'Upload the Kimi K3 model to GitHub'
+    )
+
+    // Same prompt stream, same session: the title stays put (no churn per turn).
+    store
+      .getState()
+      .setAgentStatus(
+        paneKey,
+        { state: 'working', prompt: 'Now add the download path too', agentType: 'claude' },
+        undefined,
+        undefined,
+        undefined,
+        { providerSession: { key: 'session_id', id: 'session-a' } }
+      )
+    expect(store.getState().tabsByWorktree[WORKTREE_ID][0].generatedTitle).toBe(
+      'Upload the Kimi K3 model to GitHub'
+    )
+
+    // `/clear` mints a new session id on the same pane.
+    store
+      .getState()
+      .setAgentStatus(
+        paneKey,
+        {
+          state: 'working',
+          prompt: 'Refactor the auth middleware to use JWT',
+          agentType: 'claude'
+        },
+        undefined,
+        undefined,
+        undefined,
+        { providerSession: { key: 'session_id', id: 'session-b' } }
+      )
+
+    const tab = store.getState().tabsByWorktree[WORKTREE_ID][0]
+    expect(tab.generatedTitle).toBe('Refactor the auth middleware to use JWT')
+    expect(tab.generatedTitleSessionId).toBe('session-b')
+    expect(store.getState().unifiedTabsByWorktree[WORKTREE_ID][0].generatedLabel).toBe(
+      'Refactor the auth middleware to use JWT'
+    )
+  })
+
+  it('keeps a user-set custom title when /clear starts a new provider session', () => {
+    vi.useFakeTimers()
+    const store = createTestStore()
+    const tabId = seedWorktree(store, true)
+    const paneKey = makePaneKey(tabId, LEAF_ID)
+
+    store
+      .getState()
+      .setAgentStatus(
+        paneKey,
+        { state: 'working', prompt: 'Upload the Kimi K3 model to GitHub', agentType: 'claude' },
+        undefined,
+        undefined,
+        undefined,
+        { providerSession: { key: 'session_id', id: 'session-a' } }
+      )
+    store.getState().setTabCustomTitle(tabId, 'My pinned name')
+
+    store
+      .getState()
+      .setAgentStatus(
+        paneKey,
+        {
+          state: 'working',
+          prompt: 'Refactor the auth middleware to use JWT',
+          agentType: 'claude'
+        },
+        undefined,
+        undefined,
+        undefined,
+        { providerSession: { key: 'session_id', id: 'session-b' } }
+      )
+
+    const tab = store.getState().tabsByWorktree[WORKTREE_ID][0]
+    expect(tab.customTitle).toBe('My pinned name')
+    expect(tab.generatedTitle).toBe('Upload the Kimi K3 model to GitHub')
+    expect(resolveTerminalTabTitle(tab, true)).toBe('My pinned name')
+  })
 })
