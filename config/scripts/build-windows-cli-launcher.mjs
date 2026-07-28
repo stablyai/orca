@@ -15,7 +15,12 @@ if (process.platform !== 'win32') {
 const repoRoot = resolve(import.meta.dirname, '../..')
 const target = readArg('--target') ?? 'orca'
 const outputPath = readArg('--output') ?? defaultOutputPath(repoRoot, target)
-const sourceFiles = sourceFilesForTarget(target, repoRoot)
+// Why: --source compiles an arbitrary file instead of a named target, so tests can build a
+// throwaway stub without --target silently rebuilding the launcher against the stub's name.
+const explicitSource = readArg('--source')
+const sourceFiles = explicitSource
+  ? [resolve(explicitSource)]
+  : sourceFilesForTarget(target, repoRoot)
 const compilerPath = findFrameworkCompiler(process.env)
 
 if (!compilerPath) {

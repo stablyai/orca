@@ -50,6 +50,49 @@ describe('claude agent teams tmux compat primitives', () => {
     expect(tmuxSendKeysText(['hello', 'Space', 'world'], true)).toBe('hello Space world')
   })
 
+  it('maps cursor and navigation keys to their terminal sequences', () => {
+    // Why: unmapped key names fall through as literal text, so `send-keys Left`
+    // used to type "Left" into the pane instead of moving the cursor.
+    expect(tmuxSendKeysText(['Up'], false)).toBe('\x1b[A')
+    expect(tmuxSendKeysText(['Down'], false)).toBe('\x1b[B')
+    expect(tmuxSendKeysText(['Right'], false)).toBe('\x1b[C')
+    expect(tmuxSendKeysText(['Left'], false)).toBe('\x1b[D')
+    expect(tmuxSendKeysText(['Home'], false)).toBe('\x1b[H')
+    expect(tmuxSendKeysText(['End'], false)).toBe('\x1b[F')
+    expect(tmuxSendKeysText(['PPage'], false)).toBe('\x1b[5~')
+    expect(tmuxSendKeysText(['NPage'], false)).toBe('\x1b[6~')
+    expect(tmuxSendKeysText(['IC'], false)).toBe('\x1b[2~')
+    expect(tmuxSendKeysText(['DC'], false)).toBe('\x1b[3~')
+    expect(tmuxSendKeysText(['BTab'], false)).toBe('\x1b[Z')
+  })
+
+  it('accepts the common aliases tmux allows for navigation keys', () => {
+    expect(tmuxSendKeysText(['PageUp'], false)).toBe('\x1b[5~')
+    expect(tmuxSendKeysText(['PageDown'], false)).toBe('\x1b[6~')
+    expect(tmuxSendKeysText(['Insert'], false)).toBe('\x1b[2~')
+    expect(tmuxSendKeysText(['Delete'], false)).toBe('\x1b[3~')
+  })
+
+  it('maps any C-<letter> chord to its control character', () => {
+    expect(tmuxSendKeysText(['C-a'], false)).toBe('\x01')
+    expect(tmuxSendKeysText(['C-e'], false)).toBe('\x05')
+    expect(tmuxSendKeysText(['C-u'], false)).toBe('\x15')
+    // Existing behavior must not regress.
+    expect(tmuxSendKeysText(['C-c'], false)).toBe('\x03')
+    expect(tmuxSendKeysText(['C-m'], false)).toBe('\r')
+    expect(tmuxSendKeysText(['C-i'], false)).toBe('\t')
+  })
+
+  it('still treats key names as literal text under -l', () => {
+    expect(tmuxSendKeysText(['Left', 'Up'], true)).toBe('Left Up')
+  })
+
+  it('keeps unknown key names as literal text', () => {
+    // Why: tmux passes through anything it does not recognize; swallowing it
+    // would silently drop teammate prompt words like "Home" mid-sentence.
+    expect(tmuxSendKeysText(['go', 'Nowhere'], false)).toBe('go Nowhere')
+  })
+
   it('only rewrites direct Claude launch commands', () => {
     expect(isDirectClaudeCommand("claude 'fix it'")).toBe(true)
     expect(isDirectClaudeCommand("echo ok; claude 'fix it'")).toBe(false)

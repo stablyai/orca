@@ -1,251 +1,239 @@
-// Integration tests for the tmux.exe shim on Windows.
+// Integration tests for the Windows tmux.exe shim.
 //
-// ## CI coverage decision
+// Scope: these run only on win32 (the shim is a Windows PE). On a windows-2022/latest CI
+// host they DO run; on ubuntu/macos they skip. They require the shim to be built first:
+//   pnpm run build:windows-shims
 //
-// These tests are skipped on all CI hosts (ubuntu, macos, windows-latest) because
-// two test scenarios require a full Orca installation:
-//   - "forwards argv to a direct executable" — needs Orca.exe adjacent to the stub exe
-//   - "tmux pane format strings arrive intact" — same constraint
-//
-// The three scenarios that run in CI:
-//   - "bare-name spawn reaches shim, not decoy"   (shell:false)
-//   - "shell:true also reaches the shim"
-//   - "returns 1 when shim bin does not exist"
-//
-// To add CI regression coverage for the argv-fidelity scenarios, a windows-2022 job
-// would need to install Orca first (e.g. download and run the installer) so that
-// `Orca.exe` is available next to the stub. That installation step is new
-// infrastructure and is not included in this PR.
-//
-// These tests are still useful to developers: run `pnpm run build:windows-shims`
-// before executing them.
+// Each test compiles its own throwaway target with `--source`, so nothing here depends on
+// an installed Orca.
 
-import { copyFileSync, existsSync, mkdtempSync, readFileSync, rmSync, unlinkSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
-import { join, resolve } from 'node:path'
+import { dirname, join, resolve } from 'node:path'
 import { spawnSync } from 'node:child_process'
 import { describe, expect, it } from 'vitest'
 
 const projectRoot = resolve(import.meta.dirname, '../..')
+const SHIM_PATH = resolve(projectRoot, 'native/windows-cli-launcher/.build/tmux.exe')
 
 function itWindows(name, test) {
   const runner = process.platform === 'win32' ? it : it.skip
-  runner(name, { timeout: 20_000 }, test)
+  runner(name, { timeout: 30_000 }, test)
 }
 
-// Path to the built tmux shim. Requires `pnpm run build:windows-shims` first.
-function tmuxShimPath() {
-  const devPath = resolve(projectRoot, 'native/windows-cli-launcher/.build/tmux.exe')
-  if (existsSync(devPath)) return devPath
-  return null
+function requireShim() {
+  if (!existsSync(SHIM_PATH)) {
+    throw new Error(`tmux.exe not found at ${SHIM_PATH} — run \`pnpm run build:windows-shims\` first`)
+  }
+  return SHIM_PATH
 }
 
-// Compile a C# source file to an exe using the build script, then return the path.
-function buildStubExe(stubRoot, stubName, sourceContent) {
-  const srcPath = join(stubRoot, `${stubName}.cs`)
-  const exePath = join(stubRoot, `${stubName}.exe`)
-  writeFileSync(srcPath, sourceContent, 'utf8')
-  const build = spawnSync(process.execPath, [
-    'config/scripts/build-windows-cli-launcher.mjs',
-    '--target', 'orca', '--output', exePath
-  ], { cwd: projectRoot, encoding: 'utf8' })
-  if (build.status !== 0) throw new Error(`stub build failed: ${build.stderr}`)
+// Why: --source compiles exactly this file; --target would rebuild the real launcher instead.
+function buildStub(root, name, source) {
+  const sourcePath = join(root, `${name}.cs`)
+  const exePath = join(root, `${name}.exe`)
+  writeFileSync(sourcePath, source, 'utf8')
+  const build = spawnSync(
+    process.execPath,
+    ['config/scripts/build-windows-cli-launcher.mjs', '--source', sourcePath, '--output', exePath],
+    { cwd: projectRoot, encoding: 'utf8' }
+  )
+  if (build.status !== 0) {
+    throw new Error(`stub build failed: ${build.stderr || build.stdout}`)
+  }
   return exePath
 }
 
-describe('tmux shim argv fidelity', () => {
-  describe('wins bare-name lookup against competing tmux', () => {
-    itWindows('bare-name spawn of tmux -V reaches Orca shim, not a decoy', () => {
-      const shimPath = tmuxShimPath()
-      if (!shimPath) {
-        throw new Error(
-          'tmux.exe not found at native/windows-cli-launcher/.build/tmux.exe — run `pnpm run build:windows-shims` first'
-        )
-      }
+// Records each received argument on its own line next to the executable, then exits 0.
+const RECORDER_SOURCE = [
+  'using System;',
+  'using System.IO;',
+  'using System.Reflection;',
+  'internal static class Recorder {',
+  '  private static int Main(string[] args) {',
+  '    string dir = Path.GetDirectoryName(Assembly.GetExecutingAssembly().Location);',
+  '    File.WriteAllLines(Path.Combine(dir, "received.txt"), args);',
+  '    return 0;',
+  '  }',
+  '}'
+].join('\n')
 
-      // Build a decoy that exits with code 99.
-      const decoyRoot = mkdtempSync(join(tmpdir(), 'orca-decoy-tmux-'))
-      try {
-        buildStubExe(decoyRoot, 'decoy', `
-using System;
-class Decoy {
-  static void Main() {
-    Console.Error.WriteLine("DECOY_WINS");
-    Environment.Exit(99);
+function exitCodeSource(code) {
+  return [
+    'using System;',
+    'internal static class Exiter {',
+    `  private static int Main(string[] args) { return ${code}; }`,
+    '}'
+  ].join('\n')
+}
+
+const DECOY_SOURCE = [
+  'using System;',
+  'internal static class Decoy {',
+  '  private static int Main(string[] args) {',
+  '    Console.Error.WriteLine("DECOY_WINS");',
+  '    return 99;',
+  '  }',
+  '}'
+].join('\n')
+
+function readReceived(exePath) {
+  const file = join(dirname(exePath), 'received.txt')
+  if (!existsSync(file)) {
+    return null
   }
-}`)
+  return readFileSync(file, 'utf8').split(/\r?\n/).filter((line) => line.length > 0)
+}
 
-        // Shim dir with the real shim first on PATH.
-        const shimDir = mkdtempSync(join(tmpdir(), 'orca-shim-precedence-'))
-        const shimBinDir = join(shimDir, 'bin')
-        const { mkdirSync } = require('node:fs')
-        mkdirSync(shimBinDir, { recursive: true })
-        copyFileSync(shimPath, join(shimBinDir, 'tmux.exe'))
+function withTempRoots(count, run) {
+  const roots = Array.from({ length: count }, () => mkdtempSync(join(tmpdir(), 'orca-tmux-shim-')))
+  try {
+    return run(...roots)
+  } finally {
+    for (const root of roots) {
+      rmSync(root, { recursive: true, force: true })
+    }
+  }
+}
 
-        // PATH: shim dir first, then decoy dir.
-        const pathWithShimFirst = `${shimBinDir};${decoyRoot}`
+describe('windows tmux shim', () => {
+  describe('PATH precedence over a competing tmux', () => {
+    for (const useShell of [false, true]) {
+      itWindows(`bare-name tmux resolves to the shim, not a decoy (shell: ${useShell})`, () => {
+        requireShim()
+        withTempRoots(3, (shimDir, decoyDir, recorderRoot) => {
+          const recorder = buildStub(recorderRoot, 'recorder', RECORDER_SOURCE)
+          buildStub(decoyDir, 'decoy', DECOY_SOURCE)
+          // The decoy has to be named tmux.exe to actually compete for the bare name.
+          mkdirSync(shimDir, { recursive: true })
+          writeFileSync(join(shimDir, 'tmux.exe'), readFileSync(SHIM_PATH))
+          writeFileSync(join(decoyDir, 'tmux.exe'), readFileSync(join(decoyDir, 'decoy.exe')))
 
-        // shell:false = bare-name spawn (exactly what Node's child_process.spawn('tmux') does).
-        const result = spawnSync('tmux', ['-V'], {
-          env: { ...process.env, PATH: pathWithShimFirst, ORCA_AGENT_TEAMS_SHIM_BIN: 'echo' },
-          shell: false,
+          const result = spawnSync('tmux', ['-V'], {
+            env: {
+              ...process.env,
+              PATH: `${shimDir};${decoyDir}`,
+              ORCA_AGENT_TEAMS_SHIM_BIN: recorder
+            },
+            shell: useShell,
+            encoding: 'utf8'
+          })
+
+          // Positive assertion: Orca's shim ran AND forwarded. A negative-only check
+          // would pass even if the shim were an empty program.
+          expect(readReceived(recorder)).toEqual(['agent-teams-tmux', '-V'])
+          expect(result.stderr ?? '').not.toContain('DECOY_WINS')
+          expect(result.status).toBe(0)
+        })
+      })
+    }
+  })
+
+  describe('argument fidelity', () => {
+    itWindows('forwards shell metacharacters to a direct executable byte-for-byte', () => {
+      const shim = requireShim()
+      withTempRoots(1, (root) => {
+        const recorder = buildStub(root, 'recorder', RECORDER_SOURCE)
+        const dangerous = [
+          'hello&world',
+          'a|b',
+          'out>file',
+          'caret^is^here',
+          'with spaces',
+          'quote"inside',
+          'trailing\\backslash'
+        ]
+
+        const result = spawnSync(shim, ['send-keys', '-t', '%1', ...dangerous], {
+          env: { ...process.env, ORCA_AGENT_TEAMS_SHIM_BIN: recorder },
           encoding: 'utf8'
         })
 
-        // If decoy won, stderr would contain DECOY_WINS and exit code would be 99.
-        expect(result.stderr).not.toContain('DECOY_WINS')
-        expect(result.status).not.toBe(99)
-      } finally {
-        rmSync(decoyRoot, { recursive: true, force: true })
-      }
+        expect(result.status, result.stderr).toBe(0)
+        expect(readReceived(recorder)).toEqual(['agent-teams-tmux', 'send-keys', '-t', '%1', ...dangerous])
+      })
     })
 
-    itWindows('shell: true also reaches the shim', () => {
-      const shimPath = tmuxShimPath()
-      if (!shimPath) {
-        throw new Error('tmux.exe not found — run `pnpm run build:windows-shims` first')
-      }
+    itWindows('tmux pane format strings survive the hop', () => {
+      // Regression: display-message with '#{pane_id}|#{session_name}' died when the
+      // batch shim let cmd.exe read the '|' as a pipe.
+      const shim = requireShim()
+      withTempRoots(1, (root) => {
+        const recorder = buildStub(root, 'recorder', RECORDER_SOURCE)
+        const paneFormat = '#{pane_id}|#{session_name}'
 
-      const decoyRoot = mkdtempSync(join(tmpdir(), 'orca-decoy-st-'))
-      try {
-        buildStubExe(decoyRoot, 'decoy', `
-using System;
-class Decoy {
-  static void Main() { Environment.Exit(99); }
-}`)
-
-        const shimDir = mkdtempSync(join(tmpdir(), 'orca-shim-st-'))
-        const shimBinDir = join(shimDir, 'bin')
-        const { mkdirSync } = require('node:fs')
-        mkdirSync(shimBinDir, { recursive: true })
-        copyFileSync(shimPath, join(shimBinDir, 'tmux.exe'))
-
-        const pathWithShimFirst = `${shimBinDir};${decoyRoot}`
-
-        const result = spawnSync('tmux', ['-V'], {
-          env: { ...process.env, PATH: pathWithShimFirst, ORCA_AGENT_TEAMS_SHIM_BIN: 'echo' },
-          shell: true,
+        const result = spawnSync(shim, ['display-message', '-p', paneFormat], {
+          env: { ...process.env, ORCA_AGENT_TEAMS_SHIM_BIN: recorder },
           encoding: 'utf8'
         })
 
-        expect(result.status).not.toBe(99)
-      } finally {
-        rmSync(decoyRoot, { recursive: true, force: true })
-      }
+        expect(result.status, result.stderr).toBe(0)
+        expect(readReceived(recorder)).toEqual([
+          'agent-teams-tmux',
+          'display-message',
+          '-p',
+          paneFormat
+        ])
+      })
+    })
+
+    itWindows('reaches a batch-file shim bin through cmd.exe', () => {
+      // The dev path resolves ORCA_AGENT_TEAMS_SHIM_BIN to orca-dev.cmd, which
+      // CreateProcess cannot launch directly.
+      const shim = requireShim()
+      withTempRoots(1, (root) => {
+        const marker = join(root, 'batch-received.txt')
+        const batchPath = join(root, 'shim-bin.cmd')
+        writeFileSync(batchPath, `@echo off\r\n>"${marker}" echo %1 %2\r\n`, 'utf8')
+
+        const result = spawnSync(shim, ['list-panes'], {
+          env: { ...process.env, ORCA_AGENT_TEAMS_SHIM_BIN: batchPath },
+          encoding: 'utf8'
+        })
+
+        expect(result.status, result.stderr).toBe(0)
+        expect(existsSync(marker), 'batch shim bin was never invoked').toBe(true)
+        expect(readFileSync(marker, 'utf8').trim()).toBe('agent-teams-tmux list-panes')
+      })
     })
   })
 
-  describe('returns child exit code', () => {
-    itWindows('returns 1 when ORCA_AGENT_TEAMS_SHIM_BIN does not exist', () => {
-      const shimPath = tmuxShimPath()
-      if (!shimPath) {
-        throw new Error('tmux.exe not found — run `pnpm run build:windows-shims` first')
-      }
-
-      const result = spawnSync(shimPath, ['agent-teams-tmux', '-V'], {
-        env: { ...process.env, ORCA_AGENT_TEAMS_SHIM_BIN: 'C:\\nonexistent\\orca.cmd' },
-        encoding: 'utf8'
-      })
-
-      // Should fail with exit code 1 and write a reason to stderr.
-      expect(result.status).toBe(1)
-      expect(result.stderr.length, 'stderr should contain a reason').toBeGreaterThan(0)
-    })
-
-    itWindows('forwards argv to a direct executable without cmd.exe re-parsing', () => {
-      // This tests the shim → direct-executable handoff without a batch file in between.
-      // When ORCA_AGENT_TEAMS_SHIM_BIN points to a compiled .exe (not .cmd), the shim
-      // uses UseShellExecute=false and argv reaches the target byte-for-byte.
-      const shimPath = tmuxShimPath()
-      if (!shimPath) {
-        throw new Error('tmux.exe not found — run `pnpm run build:windows-shims` first')
-      }
-
-      const stubRoot = mkdtempSync(join(tmpdir(), 'orca-shim-argv-direct-'))
-      try {
-        // Build a stub that logs what it received and exits 0.
-        const stubExe = buildStubExe(stubRoot, 'echo-args', `
-using System;
-using System.IO;
-class EchoArgs {
-  static void Main(string[] args) {
-    var logPath = Path.Combine(Path.GetDirectoryName(
-      System.Reflection.Assembly.GetExecutingAssembly().Location), "args.txt");
-    File.WriteAllText(logPath, string.Join("\\x00", args));
-  }
-}`)
-
-        const argsFile = join(stubRoot, 'args.txt')
-        if (existsSync(argsFile)) unlinkSync(argsFile)
-
-        // These arguments would be mangled by cmd.exe %* re-parsing in a .cmd batch file.
-        // When shim calls a direct .exe with UseShellExecute=false, they arrive intact.
-        const dangerousArgs = [
-          'hello&world', 'a|b', 'out>file', 'caret^is^here',
-          'pct%is%dangerous', 'with spaces', 'and    tabs\twere\tpreserved'
-        ]
-
-        const result = spawnSync(shimPath, ['agent-teams-tmux', 'send-keys', '-t', '0', ...dangerousArgs], {
-          env: { ...process.env, ORCA_AGENT_TEAMS_SHIM_BIN: stubExe },
-          cwd: stubRoot,
+  describe('exit codes', () => {
+    itWindows('propagates the target exit code', () => {
+      const shim = requireShim()
+      withTempRoots(1, (root) => {
+        const exiter = buildStub(root, 'exiter', exitCodeSource(42))
+        const result = spawnSync(shim, ['-V'], {
+          env: { ...process.env, ORCA_AGENT_TEAMS_SHIM_BIN: exiter },
           encoding: 'utf8'
         })
-
-        // Shim should return 0 when the forward succeeds.
-        expect(result.status, `shim exited non-zero: ${result.stderr}`).toBe(0)
-
-        // The stub should have received every argument byte-for-byte.
-        const echoed = existsSync(argsFile)
-          ? readFileSync(argsFile, 'utf8').split('\x00')
-          : []
-        expect(echoed).toEqual(dangerousArgs)
-      } finally {
-        rmSync(stubRoot, { recursive: true, force: true })
-      }
+        expect(result.status).toBe(42)
+      })
     })
 
-    itWindows('tmux pane format strings arrive intact through the direct executable path', () => {
-      // Regression test: display-message with '#{pane_id}|#{session_name}' failed when
-      // orca.cmd re-parsed '|' as a cmd.exe pipe operator via %*.
-      // With a direct .exe shim target, '|' arrives intact.
-      const shimPath = tmuxShimPath()
-      if (!shimPath) {
-        throw new Error('tmux.exe not found — run `pnpm run build:windows-shims` first')
-      }
+    itWindows('returns 1 with a reason when the shim bin does not exist', () => {
+      const shim = requireShim()
+      const result = spawnSync(shim, ['-V'], {
+        env: { ...process.env, ORCA_AGENT_TEAMS_SHIM_BIN: 'C:\\nonexistent\\orca.exe' },
+        encoding: 'utf8'
+      })
+      expect(result.status).toBe(1)
+      expect(result.stderr).toContain('Unable to start the Orca tmux shim')
+    })
 
-      const stubRoot = mkdtempSync(join(tmpdir(), 'orca-shim-pf-direct-'))
-      try {
-        const stubExe = buildStubExe(stubRoot, 'echo-pf', `
-using System;
-using System.IO;
-class EchoPf {
-  static void Main(string[] args) {
-    var logPath = Path.Combine(Path.GetDirectoryName(
-      System.Reflection.Assembly.GetExecutingAssembly().Location), "args.txt");
-    File.WriteAllText(logPath, string.Join("\\x00", args));
-  }
-}`)
-
-        const argsFile = join(stubRoot, 'args.txt')
-        if (existsSync(argsFile)) unlinkSync(argsFile)
-
-        const paneFormatArg = '#{pane_id}|#{session_name}'
-
-        const result = spawnSync(
-          shimPath,
-          ['agent-teams-tmux', 'display-message', '-p', paneFormatArg],
-          { env: { ...process.env, ORCA_AGENT_TEAMS_SHIM_BIN: stubExe }, cwd: stubRoot, encoding: 'utf8' }
-        )
-
-        expect(result.status, result.stderr).toBe(0)
-        const echoed = existsSync(argsFile) ? readFileSync(argsFile, 'utf8').split('\x00') : []
-        expect(echoed[0]).toBe('agent-teams-tmux')
-        expect(echoed[1]).toBe('display-message')
-        expect(echoed[2]).toBe('-p')
-        expect(echoed[3]).toBe(paneFormatArg)
-      } finally {
-        rmSync(stubRoot, { recursive: true, force: true })
-      }
+    itWindows('does not print a fake version sentinel', () => {
+      // The shim must stay transparent: `tmux -V` is answered by Orca's dispatcher,
+      // not fabricated here, or every pane call pollutes stderr.
+      const shim = requireShim()
+      withTempRoots(1, (root) => {
+        const recorder = buildStub(root, 'recorder', RECORDER_SOURCE)
+        const result = spawnSync(shim, ['send-keys', '-t', '%1', 'hello'], {
+          env: { ...process.env, ORCA_AGENT_TEAMS_SHIM_BIN: recorder },
+          encoding: 'utf8'
+        })
+        expect(result.stdout ?? '').not.toContain('tmux 3.4')
+        expect(result.stderr ?? '').not.toContain('tmux 3.4')
+      })
     })
   })
 })

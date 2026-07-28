@@ -26236,6 +26236,7 @@ export class OrcaRuntimeService {
     opts: {
       direction?: 'horizontal' | 'vertical'
       command?: string
+      cwd?: string
       env?: Record<string, string>
       envToDelete?: string[]
       activate?: boolean
@@ -26276,6 +26277,7 @@ export class OrcaRuntimeService {
     opts: {
       direction?: 'horizontal' | 'vertical'
       command?: string
+      cwd?: string
       env?: Record<string, string>
       envToDelete?: string[]
       activate?: boolean
@@ -26304,7 +26306,9 @@ export class OrcaRuntimeService {
     const result = await this.ptyController.spawn({
       cols: 120,
       rows: 40,
-      cwd: workspace.path,
+      // Why: an agent-teams teammate may belong to its own worktree, so honor an explicit
+      // cwd instead of always inheriting the splitting pane's workspace directory.
+      cwd: opts.cwd ?? workspace.path,
       command: opts.command,
       commandDelivery: 'provider',
       env: this.buildTerminalWorkspaceEnv(workspace, opts.env ?? {}, paneKey, parentTabId),

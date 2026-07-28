@@ -76,6 +76,23 @@ function getCmdShellArgStartupCommand(command?: string): string | null {
 }
 
 /**
+ * Prefixes the call operator when a startup command begins with a quoted path.
+ *
+ * Why: PowerShell parses a leading quoted token as a string expression rather than a
+ * command, so `'C:\...\claude.exe' --agent-id x` fails with "The '--' operator works only
+ * on variables or on properties". Callers that compose the command themselves already
+ * prefix `&`; ones relaying a command from an external tool — an agent-teams teammate
+ * launch, whose text comes from Claude Code — cannot know the pane's shell.
+ */
+function ensurePowerShellInvocable(startupCommand: string): string {
+  const trimmed = startupCommand.trimStart()
+  if (!trimmed.startsWith("'") && !trimmed.startsWith('"')) {
+    return startupCommand
+  }
+  return `& ${trimmed}`
+}
+
+/**
  * Builds the PowerShell -EncodedCommand payload for startup bootstrap.
  *
  * Short startup commands are appended to the bootstrap and marked as delivered;
@@ -101,7 +118,7 @@ function getPowerShellEncodedCommand(
     return { encodedCommand: encodePowerShellCommand(bootstrap) }
   }
 
-  const command = `${bootstrap}\n${startupCommand}`
+  const command = `${bootstrap}\n${ensurePowerShellInvocable(startupCommand)}`
   const encodedCommand = encodePowerShellCommand(command)
   // Why: -EncodedCommand expands UTF-16 text into base64; keep a conservative
   // margin under Windows CreateProcess' 32,767-character command line limit.

@@ -1,4 +1,14 @@
-import { chmod, copyFile, mkdir, readFile, rename, rm, stat, writeFile } from 'node:fs/promises'
+import {
+  chmod,
+  copyFile,
+  mkdir,
+  readFile,
+  rename,
+  rm,
+  stat,
+  utimes,
+  writeFile
+} from 'node:fs/promises'
 import { accessSync, constants, existsSync } from 'node:fs'
 import { homedir } from 'node:os'
 import { delimiter, dirname, join } from 'node:path'
@@ -8,6 +18,7 @@ import {
   isDirectClaudeCommand,
   type ClaudeAgentTeamsMode
 } from '../../shared/claude-agent-teams-tmux-compat'
+import { readEnvVar } from '../../shared/env-var-casing'
 import { getOrcaCliCommandNameForPlatform } from '../../shared/orca-cli-command-name'
 
 export type ClaudeAgentTeamsLaunchPlan = {
@@ -65,9 +76,12 @@ export function resolveClaudeAgentTeamsShimBin(
   if (bundled && isExecutableFile(bundled)) {
     return bundled
   }
+  // Why: a Windows-spawned caller sends `Path`, so env.PATH is undefined and both
+  // lookups silently miss before falling back to the bare command name.
+  const pathValue = readEnvVar(env, 'PATH')
   return (
-    findExecutableOnPath(process.platform === 'win32' ? 'orca-dev.cmd' : 'orca-dev', env.PATH) ??
-    findExecutableOnPath(getOrcaCliCommandNameForPlatform(process.platform), env.PATH) ??
+    findExecutableOnPath(process.platform === 'win32' ? 'orca-dev.cmd' : 'orca-dev', pathValue) ??
+    findExecutableOnPath(getOrcaCliCommandNameForPlatform(process.platform), pathValue) ??
     getOrcaCliCommandNameForPlatform(process.platform)
   )
 }
@@ -164,7 +178,7 @@ async function writeIfChanged(path: string, content: string): Promise<void> {
 }
 
 async function copyIfChanged(sourcePath: string, targetPath: string): Promise<boolean> {
-  let sourceStat: { size: number; mtimeMs: number }
+  let sourceStat: { size: number; mtimeMs: number; atimeMs: number }
   try {
     sourceStat = await stat(sourcePath)
   } catch {
@@ -184,6 +198,9 @@ async function copyIfChanged(sourcePath: string, targetPath: string): Promise<bo
   let renamed = false
   try {
     await copyFile(sourcePath, tmp)
+    // Why: copyFile preserves mtime on Windows but not on POSIX, so stamp it explicitly
+    // or the size+mtime check above re-copies on every launch.
+    await utimes(tmp, sourceStat.atimeMs / 1000, sourceStat.mtimeMs / 1000)
     await rename(tmp, targetPath)
     renamed = true
     return true
@@ -197,18 +214,14 @@ async function copyIfChanged(sourcePath: string, targetPath: string): Promise<bo
   }
 }
 
+// Why: Electron sets resourcesPath in dev runs too, so the packaged miss has to fall through
+// to the dev build or `pnpm run build:windows-shims` would never take effect.
 function resolveBundledTmuxShimPath(): string | null {
-  if (process.resourcesPath) {
-    const packaged = join(process.resourcesPath, 'bin', 'agent-teams', 'tmux.exe')
-    if (existsSync(packaged)) {
-      return packaged
-    }
-    // resourcesPath was set but the packaged shim is not there — do not fall back to dev
-    return null
-  }
-  const dev = join(process.cwd(), 'native', 'windows-cli-launcher', '.build', 'tmux.exe')
-  if (existsSync(dev)) {
-    return dev
-  }
-  return null
+  const candidates = [
+    process.resourcesPath
+      ? join(process.resourcesPath, 'bin', 'agent-teams', 'tmux.exe')
+      : null,
+    join(process.cwd(), 'native', 'windows-cli-launcher', '.build', 'tmux.exe')
+  ]
+  return candidates.find((candidate) => candidate !== null && existsSync(candidate)) ?? null
 }

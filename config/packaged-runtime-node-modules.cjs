@@ -8,7 +8,7 @@ const {
   rmSync
 } = require('node:fs')
 const { dirname, join, resolve } = require('node:path')
-const { builtinModules, createRequire } = require('node:module')
+const { builtinModules, createRequire, isBuiltin } = require('node:module')
 
 const projectDir = resolve(__dirname, '..')
 const requireFromProject = createRequire(join(projectDir, 'package.json'))
@@ -73,7 +73,11 @@ function isPackagedExternalSpecifier(specifier) {
     !specifier.startsWith('.') &&
     !specifier.startsWith('/') &&
     specifier !== 'electron' &&
-    !NODE_BUILTINS.has(specifier)
+    !NODE_BUILTINS.has(specifier) &&
+    // Why: prefix-only builtins (node:sqlite, node:test, node:sea) are absent from
+    // builtinModules on every Node version, so the set above misses them and they
+    // get reported as uncopied packages; isBuiltin resolves them correctly.
+    !isBuiltin(specifier)
   )
 }
 

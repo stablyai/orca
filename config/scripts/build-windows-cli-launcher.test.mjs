@@ -1,4 +1,12 @@
-import { copyFileSync, existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import {
+  copyFileSync,
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  rmSync,
+  writeFileSync
+} from 'node:fs'
 import { tmpdir } from 'node:os'
 import { dirname, join, resolve } from 'node:path'
 import { spawnSync } from 'node:child_process'
@@ -48,18 +56,20 @@ describe('Windows CLI launcher', () => {
       )
       expect(build.status, `${build.stdout}\n${build.stderr}`).toBe(0)
       expect(existsSync(tmuxOutputPath), 'tmux.exe should exist at the output path').toBe(true)
-      const stats = require('node:fs').statSync(tmuxOutputPath)
-      expect(stats.size, 'tmux.exe must be a non-empty PE file').toBeGreaterThan(0)
-      // Verify it is a Windows PE by checking the MZ header
-      const fd = require('node:fs').openSync(tmuxOutputPath, 'r')
-      const header = Buffer.alloc(2)
-      require('node:fs').readSync(fd, header, 0, 2, 0)
-      require('node:fs').closeSync(fd)
-      expect(header[0] === 0x4d && header[1] === 0x5a, 'must have MZ PE header').toBe(true)
-      // Verify it contains the tmux shim version sentinel (UTF-16 LE in .NET metadata)
-      const content = require('node:fs').readFileSync(tmuxOutputPath)
-      const utf16tmux34 = Buffer.from([0x74, 0x00, 0x6d, 0x00, 0x75, 0x00, 0x78, 0x00, 0x20, 0x00, 0x33, 0x00, 0x2e, 0x00, 0x34, 0x00])
-      expect(content.indexOf(utf16tmux34), 'tmux.exe must embed the tmux shim version sentinel').toBeGreaterThan(-1)
+      const content = readFileSync(tmuxOutputPath)
+      expect(content.length, 'tmux.exe must be a non-empty PE file').toBeGreaterThan(0)
+      expect(content.subarray(0, 2).toString('latin1'), 'must have MZ PE header').toBe('MZ')
+      // Why: the shim's only job is forwarding to this subcommand, so its presence in the
+      // .NET string metadata is what identifies the binary as the tmux target. It must not
+      // embed a version string — `tmux -V` is answered by Orca's dispatcher, not the shim.
+      expect(
+        content.indexOf(Buffer.from('agent-teams-tmux', 'utf16le')),
+        'tmux.exe must embed the agent-teams-tmux subcommand'
+      ).toBeGreaterThan(-1)
+      expect(
+        content.indexOf(Buffer.from('tmux 3.4', 'utf16le')),
+        'tmux.exe must not fabricate a version sentinel'
+      ).toBe(-1)
     } finally {
       rmSync(outputRoot, { recursive: true, force: true })
     }

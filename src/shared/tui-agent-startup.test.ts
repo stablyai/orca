@@ -490,7 +490,10 @@ describe('tui agent startup plans', () => {
       allowEmptyPromptLaunch: true
     })
 
-    expect(plan?.launchCommand).toBe('orca.cmd claude-teams')
+    // Why: Windows launches Claude directly rather than through the Orca CLI, because
+    // the CLI runs inside Electron-as-node whose stdin is not a TTY, leaving the Claude
+    // TUI alive but never interactive.
+    expect(plan?.launchCommand).toBe('claude --teammate-mode auto')
   })
 
   it('keeps the Linux orca-ide wrapper for local (non-remote) Claude Agent Teams', () => {

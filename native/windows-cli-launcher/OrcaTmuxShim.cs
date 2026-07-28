@@ -1,43 +1,25 @@
 using System;
 using System.Diagnostics;
-using System.IO;
 
 // Why: Windows CreateProcess appends .exe but not .cmd, so a bare-name spawn("tmux")
 // reaches the wrong multiplexer when psmux, git-for-Windows tmux, or another port is on PATH.
-// This shim forwards to Orca's agent-teams-tmux entry point and lets the CLI detection
-// find the correct pane backend by virtue of being on PATH before those alternatives.
+// Being an .exe on PATH ahead of those alternatives is the whole point of this shim.
 internal static class OrcaTmuxShim
 {
+    private const string Subcommand = "agent-teams-tmux";
+
     private static int Main(string[] args)
     {
         try
         {
             // Why: ORCA_AGENT_TEAMS_SHIM_BIN defaults to orca.cmd per the win32 CLI fallback name.
             string shimBin = Environment.GetEnvironmentVariable("ORCA_AGENT_TEAMS_SHIM_BIN");
-            if (string.IsNullOrEmpty(shimBin))
+            if (String.IsNullOrEmpty(shimBin))
             {
                 shimBin = "orca.cmd";
             }
 
-            // tmux 3.4 — version sentinel consumed by the build-script integration test.
-            // Do not change this string without updating the test.
-            Console.Error.WriteLine("tmux 3.4");
-
-            string[] forwardArgs = new string[1 + args.Length];
-            forwardArgs[0] = "agent-teams-tmux";
-            for (int i = 0; i < args.Length; i++)
-            {
-                forwardArgs[i + 1] = args[i];
-            }
-
-            ProcessStartInfo startInfo = new ProcessStartInfo
-            {
-                FileName = shimBin,
-                Arguments = WindowsCommandLine.Join(shimBin, forwardArgs),
-                UseShellExecute = false
-            };
-
-            using (Process child = Process.Start(startInfo))
+            using (Process child = Process.Start(BuildStartInfo(shimBin, args)))
             {
                 child.WaitForExit();
                 return child.ExitCode;
@@ -45,8 +27,51 @@ internal static class OrcaTmuxShim
         }
         catch (Exception error)
         {
-            Console.Error.WriteLine("Unable to start tmux shim: {0}", error.Message);
+            Console.Error.WriteLine("Unable to start the Orca tmux shim: {0}", error.Message);
             return 1;
         }
+    }
+
+    private static ProcessStartInfo BuildStartInfo(string shimBin, string[] args)
+    {
+        // Why: CreateProcess cannot execute a batch file, and the shim bin is orca.cmd or
+        // orca-dev.cmd on the dev path, so batch targets have to go through cmd.exe. Each
+        // argument is quoted so cmd cannot read & | < > as operators; %VAR% still expands
+        // there, which is why the packaged path resolves to orca.exe and runs direct.
+        if (IsBatchFile(shimBin))
+        {
+            return new ProcessStartInfo
+            {
+                FileName = "cmd.exe",
+                Arguments = "/s /c \"" + WindowsCommandLine.Join(shimBin, Prepend(Subcommand, args)) + "\"",
+                UseShellExecute = false
+            };
+        }
+
+        return new ProcessStartInfo
+        {
+            FileName = shimBin,
+            // Why: Arguments must exclude the program itself; FileName already supplies it.
+            // Including it shifts argv and the CLI stops recognizing agent-teams-tmux.
+            Arguments = WindowsCommandLine.Join(Subcommand, args),
+            UseShellExecute = false
+        };
+    }
+
+    private static bool IsBatchFile(string path)
+    {
+        return path.EndsWith(".cmd", StringComparison.OrdinalIgnoreCase)
+            || path.EndsWith(".bat", StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static string[] Prepend(string first, string[] rest)
+    {
+        string[] combined = new string[rest.Length + 1];
+        combined[0] = first;
+        for (int index = 0; index < rest.Length; index += 1)
+        {
+            combined[index + 1] = rest[index];
+        }
+        return combined;
     }
 }

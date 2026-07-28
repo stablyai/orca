@@ -58,12 +58,18 @@ export const TUI_AGENT_CONFIG: Record<TuiAgent, TuiAgentConfig> = {
     detectCmdAliases: ['orca-dev', 'orca-ide'],
     // Why: require Claude too so fresh installs (Orca shim always present) don't report Agent Teams without an agent CLI.
     detectRequiredCommands: ['claude'],
-    // Why: Windows/WSL use Claude's in-process Agent Teams fallback, not this Orca native-pane/tmux-shim wrapper.
-    detectUnsupportedRuntimes: ['win32', 'wsl'],
+    // Why: WSL uses Claude's in-process Agent Teams fallback — the tmux shim calls back
+    // into the host Orca process, which a WSL-side CLI cannot reach. Windows runs the
+    // native-pane shim like macOS/Linux.
+    detectUnsupportedRuntimes: ['wsl'],
     launchCmd: 'orca claude-teams',
     launchCmdByPlatform: {
       linux: `${getOrcaCliCommandNameForPlatform('linux')} claude-teams`,
-      win32: `${getOrcaCliCommandNameForPlatform('win32')} claude-teams`
+      // Why: on Windows the Orca CLI runs inside Electron-as-node, which exposes stdout
+      // as a TTY but not stdin, so a Claude TUI spawned from it never becomes interactive
+      // (process alive, no output). Launch Claude directly instead — the PTY path detects
+      // a direct Claude command and injects the same team env, with a real TTY attached.
+      win32: 'claude --teammate-mode auto'
     },
     expectedProcess: 'claude',
     promptInjectionMode: 'stdin-after-start'

@@ -194,6 +194,48 @@ describe('resolveWindowsShellLaunchArgs', () => {
     expect(command.trimEnd().endsWith(startupCommand)).toBe(true)
   })
 
+  it('makes a quoted-path startup command invocable in PowerShell', () => {
+    // Why: PowerShell parses a leading quoted token as a string expression, not a command,
+    // so `'C:\...\claude.exe' --agent-id x` fails with "The '--' operator works only on
+    // variables or on properties". Callers that build the command themselves prefix `&`;
+    // one relaying a command from an external tool cannot know the pane's shell.
+    const result = resolveWindowsShellLaunchArgs(
+      'powershell.exe',
+      'C:\\Users\\alice',
+      'C:\\Users\\alice',
+      undefined,
+      "'C:\\Users\\alice\\.local\\bin\\claude.exe' --agent-id arch-reviewer --teammate-mode auto"
+    )
+
+    const command = Buffer.from(result.shellArgs[3] ?? '', 'base64').toString('utf16le')
+    expect(
+      command
+        .trimEnd()
+        .endsWith(
+          "& 'C:\\Users\\alice\\.local\\bin\\claude.exe' --agent-id arch-reviewer --teammate-mode auto"
+        )
+    ).toBe(true)
+  })
+
+  it('does not add a call operator to a command that is already invocable', () => {
+    for (const startupCommand of [
+      "& 'C:\\tools\\claude.exe' --flag",
+      '. C:\\tools\\profile.ps1',
+      'claude --teammate-mode auto'
+    ]) {
+      const result = resolveWindowsShellLaunchArgs(
+        'powershell.exe',
+        'C:\\Users\\alice',
+        'C:\\Users\\alice',
+        undefined,
+        startupCommand
+      )
+      const command = Buffer.from(result.shellArgs[3] ?? '', 'base64').toString('utf16le')
+      expect(command.trimEnd().endsWith(startupCommand)).toBe(true)
+      expect(command).not.toContain(`& ${startupCommand}`)
+    }
+  })
+
   it('keeps large PowerShell startup commands on stdin delivery', () => {
     const result = resolveWindowsShellLaunchArgs(
       'powershell.exe',

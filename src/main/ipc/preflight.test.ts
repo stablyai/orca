@@ -621,7 +621,9 @@ describe('preflight', () => {
     await expect(detectInstalledAgents()).resolves.toEqual(['claude', 'claude-agent-teams'])
   })
 
-  it('does not report Claude Agent Teams on native Windows', async () => {
+  it('reports Claude Agent Teams on native Windows', async () => {
+    // Why: Windows runs the same native-pane tmux shim as macOS/Linux, so detection
+    // must report it; otherwise Settings shows it as "Available to install" forever.
     Object.defineProperty(process, 'platform', {
       configurable: true,
       value: 'win32'
@@ -639,7 +641,27 @@ describe('preflight', () => {
       throw new Error('not found')
     })
 
-    await expect(detectInstalledAgents()).resolves.toEqual(['claude'])
+    await expect(detectInstalledAgents()).resolves.toEqual(['claude', 'claude-agent-teams'])
+  })
+
+  it('does not report Claude Agent Teams on Windows without the Claude CLI', async () => {
+    // Why: the Orca shim is always present, so requiring claude too keeps fresh
+    // installs from advertising Agent Teams with no agent CLI behind it.
+    Object.defineProperty(process, 'platform', {
+      configurable: true,
+      value: 'win32'
+    })
+    execFileAsyncMock.mockImplementation(async (command, args) => {
+      if (command !== 'where') {
+        throw new Error(`unexpected command ${String(command)}`)
+      }
+      if (String(args[0]) === 'orca') {
+        return { stdout: '/mock/windows/programs/orca.cmd\n' }
+      }
+      throw new Error('not found')
+    })
+
+    await expect(detectInstalledAgents()).resolves.toEqual([])
   })
 
   it('detects agents via the install-dir resolver when which fails (stripped GUI PATH)', async () => {

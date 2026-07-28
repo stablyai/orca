@@ -4,9 +4,9 @@ import {
   tmuxSendKeysText,
   tmuxValue
 } from '../../shared/claude-agent-teams-tmux-compat'
+import { resolveTeammateLaunch } from './claude-agent-teams-teammate-launch'
 import {
   formatContext,
-  paneEnv,
   resolveSplitTarget,
   updateMainVerticalAfterSplit
 } from './claude-agent-teams-pane-layout'
@@ -113,10 +113,12 @@ export class ClaudeAgentTeamsTmuxDispatcher {
     const fakePaneId = `%${team.nextPaneNumber}`
     team.nextPaneNumber += 1
     const splitTarget = resolveSplitTarget(team, targetPane, parsed.flags.has('-h'))
+    const launch = resolveTeammateLaunch(parsed.positional.join(' '), team, fakePaneId)
     const split = await api.splitTerminal(splitTarget.pane.handle, {
       direction: splitTarget.direction,
-      command: parsed.positional.join(' ') || undefined,
-      env: paneEnv(team, fakePaneId),
+      command: launch.command,
+      cwd: launch.cwd ?? tmuxValue(parsed, '-c'),
+      env: launch.env,
       envToDelete: ['TERM_PROGRAM', 'ORCA_ATTRIBUTION_SHIM_DIR'],
       activate: false
     })
@@ -160,14 +162,16 @@ export class ClaudeAgentTeamsTmuxDispatcher {
     const origin =
       (pane.splitFromPane ? team.panes.get(pane.splitFromPane) : undefined) ??
       team.panes.get(team.leaderPane)!
+    const launch = resolveTeammateLaunch(command, team, pane.fakePaneId)
     // Why: create the replacement before destroying the placeholder so a failed
     // split leaves the fake pane id pointing at a still-live terminal; on cleanup
     // failure, discard the new split and keep the placeholder registered.
     const previousHandle = pane.handle
     const split = await api.splitTerminal(origin.handle, {
       direction: pane.splitDirection ?? 'horizontal',
-      command,
-      env: paneEnv(team, pane.fakePaneId),
+      command: launch.command,
+      cwd: launch.cwd ?? tmuxValue(parsed, '-c'),
+      env: launch.env,
       envToDelete: ['TERM_PROGRAM', 'ORCA_ATTRIBUTION_SHIM_DIR'],
       activate: false
     })

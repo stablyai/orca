@@ -35,6 +35,8 @@ export type AgentTeamsTerminalApi = {
     opts: {
       direction?: 'horizontal' | 'vertical'
       command?: string
+      /** Overrides the inherited workspace directory; used for a teammate's own worktree. */
+      cwd?: string
       env?: Record<string, string>
       envToDelete?: string[]
       activate?: boolean

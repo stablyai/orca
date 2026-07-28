@@ -7,7 +7,14 @@ function createServiceWithLeader(): {
   token: string
   leaderPane: string
   api: AgentTeamsTerminalApi
-  splitCalls: { handle: string; direction?: string; command?: string; envPane?: string }[]
+  splitCalls: {
+    handle: string
+    direction?: string
+    command?: string
+    cwd?: string
+    envPane?: string
+    envClaudecode?: string
+  }[]
 } {
   const service = new ClaudeAgentTeamsService()
   const launch = service.createLaunchEnv({
@@ -17,8 +24,14 @@ function createServiceWithLeader(): {
     shimBin: '/usr/bin/orca'
   })
   expect(launch.env.ORCA_AGENT_TEAMS_SHIM_DIR).toBe('/tmp/orca-shim')
-  const splitCalls: { handle: string; direction?: string; command?: string; envPane?: string }[] =
-    []
+  const splitCalls: {
+    handle: string
+    direction?: string
+    command?: string
+    cwd?: string
+    envPane?: string
+    envClaudecode?: string
+  }[] = []
   let splitCount = 0
   const api: AgentTeamsTerminalApi = {
     splitTerminal: vi.fn(async (handle, opts) => {
@@ -27,7 +40,9 @@ function createServiceWithLeader(): {
         handle,
         direction: opts.direction,
         command: opts.command,
-        envPane: opts.env?.TMUX_PANE
+        cwd: opts.cwd,
+        envPane: opts.env?.TMUX_PANE,
+        envClaudecode: opts.env?.CLAUDECODE
       })
       return { handle: `teammate-${splitCount}`, tabId: 'tab-1', paneRuntimeId: -1 }
     }),
@@ -174,10 +189,30 @@ describe('ClaudeAgentTeamsService', () => {
 
     // the placeholder terminal is closed and the pane is recreated, from the same
     // origin/direction, with the real teammate command.
+    //
+    // Why: the POSIX `cd … && env … <cmd>` string is decomposed into Orca's own spawn
+    // options rather than executed as shell syntax, so the pane's shell never has to
+    // understand `&&` or `env` — PowerShell does not.
     expect(api.closeTerminal).toHaveBeenCalledWith('teammate-1')
     expect(splitCalls).toEqual([
-      { handle: 'leader-handle', direction: 'vertical', command: 'cat', envPane: '%2' },
-      { handle: 'leader-handle', direction: 'vertical', command: teammateCommand, envPane: '%2' }
+      {
+        handle: 'leader-handle',
+        direction: 'vertical',
+        // Why: the `cat` holding command is dropped on Windows only, so derive the
+        // expectation rather than hard-coding one platform's answer.
+        command: process.platform === 'win32' ? undefined : 'cat',
+        cwd: undefined,
+        envPane: '%2',
+        envClaudecode: undefined
+      },
+      {
+        handle: 'leader-handle',
+        direction: 'vertical',
+        command: 'claude --agent-id a --teammate-mode auto',
+        cwd: '/repo',
+        envPane: '%2',
+        envClaudecode: '1'
+      }
     ])
 
     // the fake pane id is preserved and now backed by the relaunched terminal.
@@ -247,5 +282,37 @@ describe('ClaudeAgentTeamsService', () => {
         api
       )
     ).resolves.toMatchObject({ ok: false, exitCode: 1 })
+  })
+
+  it('keeps the inherited PATH when the caller sends Windows-cased Path', () => {
+    // Why: native Windows processes expose `Path`, so reading baseEnv.PATH dropped the
+    // inherited PATH and left the teammate with only the shim dir — `claude` then
+    // failed to spawn with ENOENT.
+    const service = new ClaudeAgentTeamsService()
+    const launch = service.createLaunchEnv({
+      leaderHandle: 'leader-handle',
+      baseEnv: { Path: 'C:\\Windows\\System32' },
+      shimDir: 'C:\\shim',
+      shimBin: 'C:\\orca.exe'
+    })
+
+    // Written back under the caller's own key so the child cannot end up with both.
+    expect(launch.env.Path).toContain('C:\\Windows\\System32')
+    expect(launch.env.Path).toContain('C:\\shim')
+    expect(launch.env.PATH).toBeUndefined()
+  })
+
+  it('still uses PATH when the caller sends POSIX-cased PATH', () => {
+    const service = new ClaudeAgentTeamsService()
+    const launch = service.createLaunchEnv({
+      leaderHandle: 'leader-handle',
+      baseEnv: { PATH: '/usr/bin' },
+      shimDir: '/tmp/orca-shim',
+      shimBin: '/usr/bin/orca'
+    })
+
+    expect(launch.env.PATH).toContain('/usr/bin')
+    expect(launch.env.PATH).toContain('/tmp/orca-shim')
+    expect(launch.env.Path).toBeUndefined()
   })
 })

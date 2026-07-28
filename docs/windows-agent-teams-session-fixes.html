@@ -1,0 +1,454 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Claude Agent Teams on Windows — every bug found and fixed</title>
+<style>
+  *, *::before, *::after { box-sizing: border-box; }
+  html { -webkit-text-size-adjust: 100%; }
+  body, h1, h2, h3, h4, p, ul, ol, li, table, figure, pre { margin: 0; padding: 0; }
+  ul, ol { list-style: none; }
+  table { border-collapse: collapse; }
+
+  :root {
+    --ground:#F1F3F6; --raised:#FFFFFF; --sunken:#E5E9EF;
+    --ink:#151A21; --ink-soft:#4A5563; --ink-faint:#737F8D;
+    --rule:#CFD6DF; --rule-soft:#E1E6EC;
+    --accent:#965D07; --accent-bright:#B0700C;
+    --verified:#1B6B43; --verified-bg:#E1EFE7;
+    --unverified:#97261F; --unverified-bg:#F6E3E1;
+    --flag:#7A4E9C; --flag-bg:#EEE6F4;
+    --display: ui-monospace, "Cascadia Mono", "SF Mono", "Segoe UI Mono", Menlo, Consolas, monospace;
+    --body: Charter, "Bitstream Charter", "Iowan Old Style", "Source Serif Pro", Georgia, serif;
+    --step--1:0.813rem; --step-0:1.0625rem; --step-1:1.25rem; --step-2:1.5rem; --step-4:2.5rem;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --ground:#12171F; --raised:#1A212B; --sunken:#0C1016;
+      --ink:#DFE5EC; --ink-soft:#A3AEBC; --ink-faint:#78848F;
+      --rule:#2C3644; --rule-soft:#222B37;
+      --accent:#E0A343; --accent-bright:#F0B65C;
+      --verified:#6FCB97; --verified-bg:#16281F;
+      --unverified:#E88A80; --unverified-bg:#2C1A18;
+      --flag:#C4A2E0; --flag-bg:#241C2E;
+    }
+  }
+  :root[data-theme="dark"] {
+    --ground:#12171F; --raised:#1A212B; --sunken:#0C1016;
+    --ink:#DFE5EC; --ink-soft:#A3AEBC; --ink-faint:#78848F;
+    --rule:#2C3644; --rule-soft:#222B37;
+    --accent:#E0A343; --accent-bright:#F0B65C;
+    --verified:#6FCB97; --verified-bg:#16281F;
+    --unverified:#E88A80; --unverified-bg:#2C1A18;
+    --flag:#C4A2E0; --flag-bg:#241C2E;
+  }
+  :root[data-theme="light"] {
+    --ground:#F1F3F6; --raised:#FFFFFF; --sunken:#E5E9EF;
+    --ink:#151A21; --ink-soft:#4A5563; --ink-faint:#737F8D;
+    --rule:#CFD6DF; --rule-soft:#E1E6EC;
+    --accent:#965D07; --accent-bright:#B0700C;
+    --verified:#1B6B43; --verified-bg:#E1EFE7;
+    --unverified:#97261F; --unverified-bg:#F6E3E1;
+    --flag:#7A4E9C; --flag-bg:#EEE6F4;
+  }
+
+  body { background:var(--ground); color:var(--ink); font-family:var(--body);
+    font-size:var(--step-0); line-height:1.65; -webkit-font-smoothing:antialiased; }
+  .page { max-width:74ch; margin-inline:auto;
+    padding: clamp(2rem,6vw,4.5rem) clamp(1.1rem,5vw,2rem) 6rem;
+    display:flex; flex-direction:column; gap:3rem; }
+
+  .kicker { font-family:var(--display); font-size:var(--step--1); letter-spacing:0.14em;
+    text-transform:uppercase; color:var(--accent); display:flex; align-items:center; gap:0.7rem; }
+  .kicker::after { content:""; flex:1; height:1px; background:var(--rule); }
+  h1 { font-family:var(--display); font-size:clamp(var(--step-2),5vw,var(--step-4));
+    line-height:1.14; font-weight:600; letter-spacing:-0.02em; text-wrap:balance; }
+  .meta { font-family:var(--display); font-size:var(--step--1); color:var(--ink-faint);
+    font-variant-numeric:tabular-nums; display:flex; flex-wrap:wrap; gap:0.4rem 1.1rem; }
+  header.masthead { display:flex; flex-direction:column; gap:1.05rem; }
+
+  .thesis { background:var(--raised); border:1px solid var(--rule); border-left:3px solid var(--accent);
+    padding:1.4rem 1.5rem; display:flex; flex-direction:column; gap:0.85rem; }
+  .thesis strong { color:var(--accent); font-weight:600; }
+
+  section { display:flex; flex-direction:column; gap:1.15rem; }
+  h2 { font-family:var(--display); font-size:var(--step-1); font-weight:600;
+    letter-spacing:-0.01em; text-wrap:balance; padding-bottom:0.6rem; border-bottom:1px solid var(--rule); }
+  h2 .grp { color:var(--ink-faint); font-weight:500; }
+  h3 { font-family:var(--display); font-size:var(--step-0); font-weight:600; text-wrap:balance; }
+  p { max-width:68ch; }
+
+  code { font-family:var(--display); font-size:0.88em; background:var(--sunken);
+    padding:0.12em 0.36em; border-radius:2px; overflow-wrap:break-word; }
+  .scroll { overflow-x:auto; border:1px solid var(--rule); background:var(--sunken); }
+  pre { font-family:var(--display); font-size:var(--step--1); line-height:1.6; padding:1rem 1.15rem; white-space:pre; }
+  pre code { background:none; padding:0; font-size:inherit; }
+
+  table { width:100%; font-size:var(--step--1); text-align:left; }
+  th, td { padding:0.6rem 0.85rem; border-bottom:1px solid var(--rule-soft); vertical-align:top; }
+  th { font-family:var(--display); font-weight:600; font-size:0.74rem; letter-spacing:0.09em;
+    text-transform:uppercase; color:var(--ink-faint); border-bottom:1px solid var(--rule); white-space:nowrap; }
+  tr:last-child td { border-bottom:none; }
+
+  .defect { border:1px solid var(--rule); background:var(--raised); padding:1.2rem 1.35rem;
+    display:flex; flex-direction:column; gap:0.85rem; }
+  .defect-head { display:flex; flex-wrap:wrap; align-items:baseline; gap:0.6rem; }
+  .num { font-family:var(--display); font-variant-numeric:tabular-nums; font-size:var(--step--1);
+    font-weight:600; color:var(--accent); border:1px solid var(--accent); border-radius:2px; padding:0.05em 0.4em; }
+  .anat { display:flex; flex-direction:column; gap:0.75rem; }
+  .anat > div { display:grid; grid-template-columns:4.4rem 1fr; gap:0.85rem; align-items:start; }
+  .lbl { font-family:var(--display); font-size:0.68rem; letter-spacing:0.09em; text-transform:uppercase;
+    color:var(--ink-faint); font-weight:600; padding-top:0.32em; }
+  @media (max-width:33rem) { .anat > div { grid-template-columns:1fr; gap:0.15rem; } .lbl { padding-top:0; } }
+
+  .chip { display:inline-block; font-family:var(--display); font-size:0.66rem; letter-spacing:0.08em;
+    text-transform:uppercase; font-weight:600; padding:0.16em 0.48em; border-radius:2px; white-space:nowrap; }
+  .chip-y { color:var(--verified); background:var(--verified-bg); }
+  .chip-n { color:var(--unverified); background:var(--unverified-bg); }
+  .chip-u { color:var(--flag); background:var(--flag-bg); }
+
+  ul.plain { display:flex; flex-direction:column; gap:0.5rem; padding-left:1.15rem; list-style:disc; }
+  ul.plain li { max-width:66ch; }
+
+  .answered { border:1px solid var(--verified); border-left-width:3px; background:var(--verified-bg);
+    padding:1.3rem 1.45rem; display:flex; flex-direction:column; gap:0.8rem; }
+  .answered h2 { border:none; padding:0; color:var(--verified); }
+  .callout { border:1px solid var(--unverified); border-left-width:3px; background:var(--unverified-bg);
+    padding:1.3rem 1.45rem; display:flex; flex-direction:column; gap:0.8rem; }
+  .callout h2 { border:none; padding:0; color:var(--unverified); }
+
+  footer { border-top:1px solid var(--rule); padding-top:1.3rem; font-family:var(--display);
+    font-size:var(--step--1); color:var(--ink-faint); display:flex; flex-direction:column;
+    gap:0.45rem; overflow-wrap:anywhere; }
+  @media (prefers-reduced-motion: reduce) { * { animation:none !important; transition:none !important; } }
+</style>
+</head>
+<body>
+<div class="page">
+
+  <header class="masthead">
+    <div class="kicker">Session fix ledger</div>
+    <h1>Claude Agent Teams on Windows — every bug found and fixed</h1>
+    <div class="meta"><span>2026-07-27 → 07-28</span><span>Orca 1.4.148-rc.1</span><span>Claude Code 2.1.220</span><span>16 defects</span></div>
+  </header>
+
+  <div class="thesis">
+    <p>Agent Teams didn't work on Windows because of three deliberate platform guards. Once those came out, <strong>sixteen more defects</strong> surfaced.</p>
+    <p><strong>Fifteen were POSIX assumptions</strong> in code that had never been executed on Windows — not poorly written, unexercised. <strong>The sixteenth was a deployment cache</strong> that quietly stopped the fifteenth fix from ever reaching the running process, and cost the most time of any of them.</p>
+  </div>
+
+  <section>
+    <h2>Why it happened</h2>
+    <p><strong>Root cause class 1 — unexercised platform (defects 1–15).</strong> Every assumption that is true on POSIX and false on Windows survived untested:</p>
+    <div class="scroll"><table>
+      <thead><tr><th>POSIX assumption</th><th>Windows reality</th></tr></thead>
+      <tbody>
+        <tr><td><code>process.env.PATH</code> exists</td><td>native processes expose <code>Path</code></td></tr>
+        <tr><td>a spawn finds any executable on PATH</td><td><code>CreateProcess</code> appends <code>.exe</code>, never <code>.cmd</code></td></tr>
+        <tr><td><code>copyFile</code> doesn't preserve mtime</td><td>on Windows it does</td></tr>
+        <tr><td>stdin is a TTY if stdout is</td><td>Electron-as-node breaks that pairing</td></tr>
+        <tr><td>env keys are case-sensitive</td><td>case-insensitive, so duplicates collide</td></tr>
+        <tr><td>the pane's shell understands <code>&amp;&amp;</code> and <code>env K=V</code></td><td>PowerShell understands neither</td></tr>
+        <tr><td><code>cat</code> holds a pane open</td><td>alias for <code>Get-Content</code>, which prompts</td></tr>
+        <tr><td>a quoted path is a command</td><td>in PowerShell it's a string expression</td></tr>
+      </tbody>
+    </table></div>
+    <p><strong>Root cause class 2 — a cache keyed on the wrong thing (defect 16).</strong> Not a Windows bug at all. Orca's PTY daemon refreshes only when the app <em>version string</em> changes. Every local rebuild carries the same version, so the daemon ran day-old code through every reinstall.</p>
+    <p>The starting misdiagnosis is worth recording. The theory was <em>"Orca needs tmux, Windows has none, so install psmux."</em> Orca never runs tmux on any platform — it <strong>impersonates</strong> one: <code>tmux -V</code> returns the hardcoded string <code>tmux 3.4</code>. So psmux could never have helped, and it proved an active hazard: its real <code>tmux.exe</code> wins a bare-name lookup a <code>.cmd</code> shim can't compete in.</p>
+    <h3>The original blocker</h3>
+    <div class="scroll"><table>
+      <thead><tr><th>Location</th><th>Effect</th></tr></thead>
+      <tbody>
+        <tr><td><code>claude-agent-teams-shim-env.ts:38</code></td><td>forced in-process, skipped shim setup</td></tr>
+        <tr><td><code>cli/handlers/core.ts:62</code></td><td><code>orca claude-teams</code> threw <code>unsupported_platform</code></td></tr>
+        <tr><td><code>orca-runtime.ts:19278</code></td><td>forced in-process in the launch config</td></tr>
+      </tbody>
+    </table></div>
+    <p>Removing them was correct. It was also roughly a fifth of the work.</p>
+  </section>
+
+  <section>
+    <h2>Group A <span class="grp">— platform assumptions</span></h2>
+
+    <div class="defect">
+      <div class="defect-head"><span class="num">15</span><h3>A quoted executable path is not a command</h3><span class="chip chip-u">user-reported</span><span class="chip chip-n">unverified</span></div>
+      <div class="anat">
+        <div><span class="lbl">Symptom</span><div><div class="scroll"><pre><code>At line:100 char:43
++ 'C:\Users\ECQ944\.local\bin\claude.exe' --agent-id arch-reviewer@sess ...
+Unexpected token 'agent-id' in expression or statement.
+The '--' operator works only on variables or on properties.</code></pre></div></div></div>
+        <div><span class="lbl">How</span><div><p>Once 13/14 removed the POSIX wrapper, the pane's command became a bare <code>'C:\…\claude.exe' --agent-id …</code>. On Windows that text is appended to an OSC 133 bootstrap and delivered via <code>-EncodedCommand</code>, so it is evaluated as <strong>PowerShell source</strong>. PowerShell reads a leading quoted token as a string literal, then chokes on <code>--</code>. The <code>line:100</code> is the tell — the bootstrap is ~99 lines.</p></div></div>
+        <div><span class="lbl">Why</span><div><p>Orca's own callers hand-write invocable commands (<code>&amp; 'codex' …</code>). Agent-teams structurally cannot: it relays text Claude composed for a POSIX shell.</p></div></div>
+        <div><span class="lbl">Fix</span><div><p><code>ensurePowerShellInvocable</code> prefixes <code>&amp;</code> when a command begins with a quoted token, applied where the command becomes PowerShell source — the only layer that knows the pane's shell. Guarded so <code>&amp; 'x'</code>, <code>. profile.ps1</code> and bare <code>claude …</code> are untouched.</p></div></div>
+      </div>
+    </div>
+
+    <div class="defect">
+      <div class="defect-head"><span class="num">13</span><h3>Claude's teammate command is POSIX shell</h3><span class="chip chip-u">user-reported</span><span class="chip chip-n">fix unobserved</span></div>
+      <div class="anat">
+        <div><span class="lbl">Symptom</span><div><div class="scroll"><pre><code>+ cd 'C:\...\kaizen-designer-agent' &amp;&amp; env CLAUDECODE=1 CL ...
+The token '&amp;&amp;' is not a valid statement separator in this version.</code></pre></div></div></div>
+        <div><span class="lbl">How</span><div><p>Claude hands the shim a POSIX shell string and the dispatcher passed it straight to <code>splitTerminal</code> as the pane's command. PowerShell 5.1 has no <code>&amp;&amp;</code>, and <code>env K=V cmd</code> isn't a command there.</p></div></div>
+        <div><span class="lbl">Why</span><div><p>On POSIX panes the shell interprets it correctly. A pre-existing test encoded the exact string and asserted it was forwarded <strong>verbatim</strong> — right on POSIX, wrong everywhere else.</p></div></div>
+        <div><span class="lbl">Fix</span><div>
+          <p>Decompose instead of translating, so <strong>no shell syntax is emitted at all</strong>: <code>cd</code> becomes a <code>cwd</code> option, <code>env K=V</code> merges into the existing <code>env</code> option, and the remainder is a bare command. That runs identically under PowerShell, cmd and Git Bash. <code>cwd</code> was threaded through the split so a teammate in another worktree starts in the right place — silently running an agent in the wrong repository is damaging, not cosmetic.</p>
+          <p><em>Why not translate:</em> I offered translation as the cheap option and withdrew it. The dispatcher cannot see the pane's shell at all — it's resolved in the daemon PTY layer — so translating is <em>more</em> plumbing than adding <code>cwd</code>, and there's no common syntax to target (<code>set K=V</code> vs <code>$env:K='V'</code>, <code>&amp;&amp;</code> vs <code>;</code>).</p>
+        </div></div>
+      </div>
+    </div>
+
+    <div class="defect">
+      <div class="defect-head"><span class="num">14</span><h3>The holding pane ran <code>cat</code></h3><span class="chip chip-u">user-reported</span><span class="chip chip-n">fix unobserved</span></div>
+      <div class="anat">
+        <div><span class="lbl">Symptom</span><div><div class="scroll"><pre><code>cmdlet Get-Content at command pipeline position 1
+Supply values for the following parameters:
+Path[0]:</code></pre></div></div></div>
+        <div><span class="lbl">How</span><div><p>Claude splits a placeholder pane running <code>cat</code>, then respawns it with the real command. On POSIX <code>cat</code> reads stdin and holds the pane quietly. In PowerShell it's an alias for <code>Get-Content</code>, which blocks prompting for a path.</p></div></div>
+        <div><span class="lbl">Fix</span><div><p>On Windows the placeholder starts as a plain shell with no command. It holds the pane just as well and is replaced moments later anyway.</p></div></div>
+      </div>
+    </div>
+
+    <div class="defect">
+      <div class="defect-head"><span class="num">11</span><h3><code>spawn claude ENOENT</code></h3><span class="chip chip-u">user-reported</span><span class="chip chip-y">verified fixed</span></div>
+      <div class="anat">
+        <div><span class="lbl">How</span><div><p>The teammate PATH was <code>[shimDir, args.baseEnv.PATH].filter(Boolean).join(';')</code>. A native Windows caller sends <code>Path</code>, so <code>baseEnv.PATH</code> was <code>undefined</code>, <code>filter(Boolean)</code> dropped it, and PATH became <strong>one directory</strong>.</p></div></div>
+        <div><span class="lbl">Why</span><div><p>POSIX shells and Git Bash both expose <code>PATH</code>, so every test and developer run saw the uppercase key.</p></div></div>
+        <div><span class="lbl">Fix</span><div>
+          <p>New <code>env-var-casing.ts</code>. Reads either casing, and writes back <em>under the caller's own key</em> — emitting <code>PATH</code> when the child already has <code>Path</code> leaves two keys with undefined precedence.</p>
+          <div class="scroll"><pre><code>before:  caller sends Path  ->  PATH had  1 entry  -> ENOENT
+after :  caller sends Path  ->  Path had 60 entries -> resolves</code></pre></div>
+        </div></div>
+      </div>
+    </div>
+
+    <div class="defect">
+      <div class="defect-head"><span class="num">12</span><h3>Claude launched but rendered nothing</h3><span class="chip chip-u">user-reported</span><span class="chip chip-n">fix inferred</span></div>
+      <div class="anat">
+        <div><span class="lbl">How</span><div>
+          <p>The Windows launch command was <code>orca.cmd claude-teams</code>, running the CLI <strong>inside Electron-as-node</strong>, which spawns Claude with <code>stdio: 'inherit'</code>. Measured in the same pane:</p>
+          <div class="scroll"><pre><code>node              stdout.isTTY: true   stdin.isTTY: true
+electron-as-node  stdout.isTTY: true   stdin.isTTY: FALSE</code></pre></div>
+          <p>Claude is an interactive TUI; with non-TTY stdin it can't enter raw-mode input. The process ran 20+ minutes silently.</p>
+        </div></div>
+        <div><span class="lbl">Fix</span><div><p>Windows launch command → <code>claude --teammate-mode auto</code>, launched directly by the PTY with a real TTY.</p></div></div>
+      </div>
+    </div>
+
+    <div class="defect">
+      <div class="defect-head"><span class="num">5</span><h3>Batch shim targets couldn't be launched</h3><span class="chip chip-y">verified fixed</span></div>
+      <div class="anat">
+        <div><span class="lbl">How</span><div><p><code>UseShellExecute = false</code> with a default target of <code>orca.cmd</code>. <code>CreateProcess</code> cannot execute a batch file, so any <code>.cmd</code> target — including the whole dev path — threw at startup.</p></div></div>
+        <div><span class="lbl">Fix</span><div><p>Batch targets route through <code>cmd.exe /s /c</code> with each argument quoted.</p></div></div>
+      </div>
+    </div>
+
+    <div class="defect">
+      <div class="defect-head"><span class="num">7</span><h3>Shim copy re-ran every launch, and would have gone red in CI</h3><span class="chip chip-y">verified fixed</span></div>
+      <div class="anat">
+        <div><span class="lbl">How</span><div><p><code>copyIfChanged</code> compared size and mtime, but <code>copyFile</code> preserves mtime on Windows and <strong>not</strong> on POSIX. The test passed locally and would have failed on the Linux CI that runs the suite.</p></div></div>
+        <div><span class="lbl">Fix</span><div><p>Stamp the target with <code>utimes</code> after copying.</p></div></div>
+      </div>
+    </div>
+
+    <div class="defect">
+      <div class="defect-head"><span class="num">8</span><h3><code>node:sqlite</code> blocked packaging entirely</h3><span class="chip chip-y">verified fixed</span></div>
+      <div class="anat">
+        <div><span class="lbl">How</span><div><p>The packaged-runtime verifier built its allowlist from <code>builtinModules</code>, which <strong>omits prefix-only builtins</strong> (<code>node:sqlite</code>, <code>node:test</code>, <code>node:sea</code>) on every Node version. The main bundle legitimately requires <code>node:sqlite</code>, so <code>afterPack</code> aborted.</p></div></div>
+        <div><span class="lbl">Fix</span><div><p>Also accept <code>isBuiltin(specifier)</code>. <strong>This one exists upstream</strong> — the file is byte-identical on <code>origin/main</code>, and no Node upgrade fixes it. Worth submitting separately.</p></div></div>
+      </div>
+    </div>
+
+    <div class="defect">
+      <div class="defect-head"><span class="num">9</span><h3><code>send-keys</code> typed key names as text</h3><span class="chip chip-y">verified fixed</span></div>
+      <div class="anat">
+        <div><span class="lbl">How</span><div><p>Only 15 keys were mapped. Arrows, <code>Home</code>, <code>End</code>, <code>PPage</code>/<code>NPage</code>, <code>IC</code>/<code>DC</code>, <code>BTab</code> and most chords fell through as <strong>literal text</strong> — <code>send-keys Left</code> typed "Left". I hit this directly: my keystroke landed as text in Claude's prompt.</p></div></div>
+        <div><span class="lbl">Fix</span><div><p>Named-key table plus a general chord rule using <code>charCode &amp; 0x1f</code>. The intuitive <code>- 96</code> is wrong for <code>C-[</code> — negative code point. <code>F1</code>–<code>F12</code> deferred.</p></div></div>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <h2>Group B <span class="grp">— test defects</span></h2>
+    <p>Worth dwelling on, because the suite was <strong>green while the feature was completely broken</strong>.</p>
+
+    <div class="defect">
+      <div class="defect-head"><span class="num">4</span><h3>The load-bearing acceptance test was vacuous</h3><span class="chip chip-y">verified fixed</span></div>
+      <div class="anat">
+        <div><span class="lbl">How</span><div>
+          <p>The entire justification for shipping a compiled <code>.exe</code> was "Orca must win the <code>tmux</code> lookup against a competing port." The test asserted only negatives:</p>
+          <div class="scroll"><pre><code>expect(result.stderr).not.toContain('DECOY_WINS')
+expect(result.status).not.toBe(99)</code></pre></div>
+          <p>…with the shim target set to <code>echo</code>, which isn't an executable. The shim errored and both assertions passed <strong>on the failure path</strong>. It would have passed for an empty program.</p>
+        </div></div>
+        <div><span class="lbl">Fix</span><div><p>Assert a positive — a recording stub must receive <code>['agent-teams-tmux', '-V']</code>.</p></div></div>
+      </div>
+    </div>
+
+    <div class="defect">
+      <div class="defect-head"><span class="num">3</span><h3>The integration tests compiled the wrong binary</h3><span class="chip chip-y">verified fixed</span></div>
+      <div class="anat">
+        <div><span class="lbl">How</span><div><p><code>buildStubExe</code> wrote a stub then built with <code>--target orca</code>, which compiles <code>OrcaCliLauncher.cs</code>. <strong>The stub was never used.</strong> The file's header blamed "needs a full Orca installation" — a misdiagnosis of its own bug, written into a comment.</p></div></div>
+        <div><span class="lbl">Fix</span><div><p>Added <code>--source &lt;path&gt;</code> to the build script.</p></div></div>
+      </div>
+    </div>
+
+    <div class="defect">
+      <div class="defect-head"><span class="num">2</span><h3>The shim fabricated a version string to satisfy a test</h3><span class="chip chip-y">verified fixed</span></div>
+      <div class="anat">
+        <div><span class="lbl">How</span><div><p><code>OrcaTmuxShim.cs</code> wrote <code>tmux 3.4</code> to stderr <strong>unconditionally on every invocation</strong>, commented <em>"version sentinel consumed by the build-script integration test."</em> Production behaviour altered to make a test pass — and a sentinel test would have passed with forwarding entirely broken.</p></div></div>
+        <div><span class="lbl">Fix</span><div><p>Removed. A build test now asserts the binary <strong>doesn't</strong> embed it, replacing one that asserted the opposite.</p></div></div>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <h2>Group C <span class="grp">— incomplete gating</span></h2>
+    <div class="defect">
+      <div class="defect-head"><span class="num">10</span><h3>A fourth <code>win32</code> gate</h3><span class="chip chip-u">user-reported</span><span class="chip chip-y">verified fixed</span></div>
+      <div class="anat">
+        <div><span class="lbl">How</span><div><p><code>tui-agent-config.ts</code> carried <code>detectUnsupportedRuntimes: ['win32','wsl']</code> — a <strong>different mechanism</strong> from the three original gates. Those control the launch plan; this controls whether the agent is <em>detected at all</em>, so Settings showed "Available to install" regardless.</p></div></div>
+        <div><span class="lbl">Why</span><div><p>I grepped the renderer for <code>claudeAgentTeamsMode</code>, got no hits, and reported "there is no settings UI on any platform." The UI is keyed on the agent id <code>claude-agent-teams</code>. Wrong search string, then a negative stated more confidently than the search supported.</p></div></div>
+        <div><span class="lbl">Fix</span><div><p><code>['wsl']</code>. WSL stays unsupported deliberately — the shim calls back into the host Orca process.</p></div></div>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <h2>Group D <span class="grp">— implementation slips</span></h2>
+    <div class="defect">
+      <div class="defect-head"><span class="num">1</span><h3>The shim never reached the dispatcher</h3><span class="chip chip-y">verified fixed</span></div>
+      <div class="anat">
+        <div><span class="lbl">How</span><div>
+          <div class="scroll"><pre><code>FileName  = shimBin
+Arguments = WindowsCommandLine.Join(shimBin, forwardArgs)   // program repeated</code></pre></div>
+          <p><code>Arguments</code> must exclude the program. The child got <code>argv[0] = &lt;path&gt;</code> while the CLI dispatches on <code>argv[0]</code>. <strong>Every forwarded tmux call failed silently.</strong></p>
+        </div></div>
+        <div><span class="lbl">Why</span><div><p>Copied from <code>OrcaCliLauncher</code>, where including <code>cliPath</code> <em>is</em> correct because there it genuinely is Electron's first argument.</p></div></div>
+        <div><span class="lbl">Fix</span><div><p><code>Join("agent-teams-tmux", args)</code>.</p></div></div>
+      </div>
+    </div>
+
+    <div class="defect">
+      <div class="defect-head"><span class="num">6</span><h3>The dev-build fallback was dead code</h3><span class="chip chip-y">verified fixed</span></div>
+      <div class="anat">
+        <div><span class="lbl">How</span><div><p><code>resolveBundledTmuxShimPath</code> returned <code>null</code> when <code>resourcesPath</code> was set but the packaged shim missing. Electron sets <code>resourcesPath</code> in dev too, so building the shim locally could never take effect — contradicting the workflow the test file told developers to follow.</p></div></div>
+        <div><span class="lbl">Fix</span><div><p>Try packaged, then dev.</p></div></div>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <h2>Group E <span class="grp">— deployment</span></h2>
+    <p>The one that isn't a Windows bug, and the one that cost the most time.</p>
+
+    <div class="defect">
+      <div class="defect-head"><span class="num">16</span><h3>The daemon never refreshes across same-version builds</h3><span class="chip chip-n">not fixed</span></div>
+      <div class="anat">
+        <div><span class="lbl">Symptom</span><div><p>Fix 15 was correct, present in <code>out/</code>, in the installer, and in the installed <code>app.asar</code> — and had <strong>no effect across three reinstall cycles</strong>.</p></div></div>
+        <div><span class="lbl">How</span><div>
+          <p>Orca runs PTYs in a separate long-lived daemon, materialised into a directory keyed only on the app version:</p>
+          <div class="scroll"><pre><code>%LOCALAPPDATA%\Orca\daemon-host\1.4.148-rc.1\
+  .materialized.json  {"version":"1.4.148-rc.1","completedAt":"2026-07-27T09:38:46.922Z", …}
+
+const existing = getRelocatedDaemonHost()   // version matches, files exist
+if (existing) return existing               // -> never re-copies</code></pre></div>
+          <p>No content check. Every build in this effort was stamped <code>1.4.148-rc.1</code>, so the daemon host stayed frozen at the 27 July copy:</p>
+          <div class="scroll"><table>
+            <thead><tr><th></th><th>chunk</th><th>built</th><th>has fix 15</th></tr></thead>
+            <tbody>
+              <tr><td>daemon (in use)</td><td><code>…-BrBGSYKg.js</code></td><td>27/07 17:38</td><td><strong>false</strong></td></tr>
+              <tr><td>installed app</td><td><code>…-Dd33jS70.js</code></td><td>28/07 10:20</td><td>true</td></tr>
+            </tbody>
+          </table></div>
+          <p>The daemon process (PID 22292, started 27/07 21:51:50) survived every reinstall.</p>
+        </div></div>
+        <div><span class="lbl">Why</span><div>
+          <p>Every obvious remedy fails, and fails <em>silently</em>:</p>
+          <ul class="plain">
+            <li><strong>Reinstalling</strong> doesn't touch the daemon host — the marker still matches.</li>
+            <li><strong>Deleting the directory</strong> fails while the daemon holds the <code>.exe</code>; the publish step is <code>rmSync(dest)</code> then <code>renameSync</code>, and the failure is caught and fail-opened.</li>
+            <li><strong>Killing the daemon alone</strong> doesn't help: on next launch the marker still matches, so materialisation short-circuits before doing any work.</li>
+          </ul>
+          <p>This masked only daemon-executed code — which matches the history exactly. Defects 10, 11, 12 and 13/14 live in the main process and took effect on reinstall; 15 lives in the daemon and did not.</p>
+        </div></div>
+        <div><span class="lbl">Fix</span><div>
+          <p>The marker was removed by hand locally; the daemon still needs stopping so the re-copy can publish. <strong>No code change made.</strong> The proper fix is keying materialisation on a content hash of the daemon sources — but that changes how every Orca installation decides to refresh, too broad to land as a side effect of a Windows bug hunt.</p>
+          <p>Arguably the more valuable fix is making a failed refresh <strong>observable</strong>: today "couldn't update" is indistinguishable from "already current", so the symptom surfaces far away as a daemon running old code while every artifact check passes.</p>
+        </div></div>
+      </div>
+    </div>
+  </section>
+
+  <div class="answered">
+    <h2>The question open all session — now answered</h2>
+    <p>For most of this session I could not make Claude spawn a teammate. It exposes no creation tool to the model and no slash command, and every prompt produced a <em>subagent</em>, a different feature. I recorded that the trigger might be unreachable and the whole effort possibly moot.</p>
+    <p><strong>It isn't.</strong> Defects 13 and 14 are Claude's <em>own teammate commands</em> failing inside panes the shim had already created. <code>split-window</code> was reached, the pane existed, the shim round-tripped. Claude invokes it correctly; only the command content was wrong.</p>
+    <p>The error was specific and instructive: repeated failure to trigger the feature through instrumentation was treated as evidence about the feature, when it was evidence about the instrumentation.</p>
+  </div>
+
+  <section>
+    <h2>Verified</h2>
+    <p>Confirmed against the running, installed build — checking the install, not the build output:</p>
+    <ul class="plain">
+      <li>installed <code>app.asar</code> contains every shipped fix, including the <code>cwd</code> override</li>
+      <li><code>tmux.exe</code> deployed to the user shim dir with matching size and mtime</li>
+      <li>caller sending <code>Path</code> yields a 60-entry PATH with <code>claude.exe</code> resolvable</li>
+      <li><code>preflight.detectAgents</code> returns <code>claude-agent-teams</code></li>
+      <li><code>orca claude-teams</code> spawns <code>claude --teammate-mode auto</code> — no ENOENT</li>
+      <li>the dispatcher drives real panes: <code>split-window</code>, <code>send-keys</code>, <code>capture-pane</code>, <code>kill-pane</code>, <code>respawn-pane</code></li>
+      <li><strong>Claude invokes the shim and creates teammate panes</strong></li>
+    </ul>
+  </section>
+
+  <div class="callout">
+    <h2>Not confirmed</h2>
+    <p><strong>Defect 15 working.</strong> Implemented, unit-tested, present in the installed app — but never observed running, because defect 16 blocked its deployment for the entire session.</p>
+    <p><strong>A teammate pane rendering and working.</strong> The outcome all of this exists for.</p>
+    <p><strong>A teammate launch on macOS or Linux.</strong> Decomposition now applies there too, where the string previously ran as shell syntax.</p>
+  </div>
+
+  <section>
+    <h2>Deliberately not fixed</h2>
+    <ul class="plain">
+      <li><strong>The same PATH-casing pattern</strong> in <code>terminal-attribution.ts</code> and <code>pty.ts:971/979</code>. Notably <code>pty.ts:533</code> already reads both casings — someone hit this before and fixed it narrowly. The attribution one affects <em>every</em> Orca terminal on Windows.</li>
+      <li><strong><code>F1</code>–<code>F12</code></strong> in <code>send-keys</code>.</li>
+      <li><strong>Process labelling</strong> — launching Claude directly makes recognition register plain "Claude". Believed cosmetic; unverified.</li>
+      <li><strong>Parser coverage is bounded by observation.</strong> Only shapes Claude has been seen to emit are recognised; a pipeline or second <code>&amp;&amp;</code> would fall through to passthrough and fail as before.</li>
+    </ul>
+  </section>
+
+  <section>
+    <h2>Process notes worth keeping</h2>
+    <p><strong>Five of these were found by the user, not by me</strong> — 10, 11, 12, 13/14 and 15 — each after I had reported the flow verified. Several had already appeared in my own session output and been read past: a probe returning a shim-dir-only PATH, and a pane producing no output that I dismissed as a test-harness artifact.</p>
+    <p><strong>Three of my verification methods passed while the system stayed broken</strong>, and each produced confidence that delayed the real diagnosis:</p>
+    <ul class="plain">
+      <li>Grepping the 115 MB asar <em>container</em> for a symbol → reported a present fix as "MISSING". Extraction is the correct method; a hit is trustworthy, a miss is not.</li>
+      <li>Grepping <code>daemon-entry.js</code> alone → concluded the daemon lacked the fix, when the code lived in a chunk that entry imports.</li>
+      <li>Verifying the installer, then the installed app, then declaring it fixed → <strong>never checking what the live process was executing.</strong> That is what cost three cycles.</li>
+    </ul>
+    <p>The generalisable rule: <strong>proving a component correct in isolation is not evidence that the user-facing path works.</strong> Verification has to reach the running process.</p>
+    <p>I was also wrong three times on diagnosis before measurement corrected me — assuming <code>node-gyp</code> didn't support VS 2026 (it did; the install had no C++ compiler), that Node 24 would fix the <code>node:sqlite</code> check (24.18 omits <code>sqlite</code> too), and that shell translation needed no API changes (it needs the pane's shell, which the dispatcher cannot see).</p>
+    <p>And once while fixing 13/14 I nearly reproduced defect 7 — reading <code>process.platform</code> inside the dispatcher, so the test would pass on Windows and fail on Linux CI. It's now a pure parameterised function with both branches asserted.</p>
+  </section>
+
+  <section>
+    <h2>Build obstacles <span class="grp">— not code defects</span></h2>
+    <ul class="plain">
+      <li><strong>No MSVC toolset.</strong> VS Build Tools 2026 installed <em>without</em> the C++ workload. Worked around by reusing the ABI-148 <code>windows-native-registry</code> binary from the installed app (Electron 43 → Node 24.18 → ABI 148, exact match). It lives in <code>node_modules</code> and dies on the next <code>pnpm install</code>.</li>
+      <li><strong>Packaging forces a native rebuild.</strong> The <code>beforeBuild</code> hook hardcodes <code>--force</code>. Temporarily removed per package, reverted after each one.</li>
+      <li><strong>Disk exhaustion.</strong> Two builds died on <code>ENOSPC</code>; one truncated a finished 165 MB installer to 64 MB. A package needs ~1 GB of working space; the machine was at 210 MB.</li>
+      <li><strong><code>max-lines</code> hit, not suppressed.</strong> The dispatcher reached 308 against a 300 limit. <code>AGENTS.md</code> forbids a disable, so the launch resolver was extracted into its own module — 295 lines, ratchet clean.</li>
+    </ul>
+  </section>
+
+  <footer>
+    <span>Defects 1–12 — docs/superpowers/specs/2026-07-27-windows-agent-teams-implementation-defects.md</span>
+    <span>Defects 13–14 — docs/superpowers/specs/2026-07-27-teammate-command-shell-decomposition.md</span>
+    <span>Original design (superseded in scope) — docs/superpowers/specs/2026-07-27-windows-agent-teams-native-panes-design.md</span>
+    <span>OpenSpec — openspec/changes/windows-agent-teams-implementation-defects/ and .../teammate-command-shell-decomposition/</span>
+  </footer>
+
+</div>
+</body>
+</html>

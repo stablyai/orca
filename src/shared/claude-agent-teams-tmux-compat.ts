@@ -135,35 +135,47 @@ export function tmuxSendKeysText(tokens: string[], literal: boolean): string {
   return result
 }
 
+// Why: tmux names these keys; unmapped names fall through as literal text, so a
+// missing entry types the key's name into the pane instead of moving the cursor.
+const TMUX_NAMED_KEYS = new Map<string, string>([
+  ['enter', '\r'],
+  ['kpenter', '\r'],
+  ['tab', '\t'],
+  ['space', ' '],
+  ['bspace', '\x7f'],
+  ['backspace', '\x7f'],
+  ['escape', '\x1b'],
+  ['esc', '\x1b'],
+  ['btab', '\x1b[Z'],
+  ['up', '\x1b[A'],
+  ['down', '\x1b[B'],
+  ['right', '\x1b[C'],
+  ['left', '\x1b[D'],
+  ['home', '\x1b[H'],
+  ['end', '\x1b[F'],
+  ['ppage', '\x1b[5~'],
+  ['pageup', '\x1b[5~'],
+  ['npage', '\x1b[6~'],
+  ['pagedown', '\x1b[6~'],
+  ['ic', '\x1b[2~'],
+  ['insert', '\x1b[2~'],
+  ['dc', '\x1b[3~'],
+  ['delete', '\x1b[3~']
+])
+
 function tmuxSpecialKeyText(token: string): string | null {
-  switch (token.toLowerCase()) {
-    case 'enter':
-    case 'c-m':
-    case 'kpenter':
-      return '\r'
-    case 'tab':
-    case 'c-i':
-      return '\t'
-    case 'space':
-      return ' '
-    case 'bspace':
-    case 'backspace':
-      return '\x7f'
-    case 'escape':
-    case 'esc':
-    case 'c-[':
-      return '\x1b'
-    case 'c-c':
-      return '\x03'
-    case 'c-d':
-      return '\x04'
-    case 'c-z':
-      return '\x1a'
-    case 'c-l':
-      return '\x0c'
-    default:
-      return null
+  const key = token.toLowerCase()
+  const named = TMUX_NAMED_KEYS.get(key)
+  if (named !== undefined) {
+    return named
   }
+  // Why: masking with 0x1f is the ASCII control-code rule and covers both the
+  // letters and the bracket chords (C-m is CR, C-i is TAB, C-[ is ESC).
+  const chord = /^c-([a-z[\\\]^_])$/.exec(key)
+  if (chord) {
+    return String.fromCharCode(chord[1]!.charCodeAt(0) & 0x1f)
+  }
+  return null
 }
 
 export function isDirectClaudeCommand(command: string | undefined): boolean {

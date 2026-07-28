@@ -119,10 +119,20 @@ describe('claude agent teams shim env', () => {
   describe('windows tmux.exe shim installation', () => {
     const originalPlatform = process.platform
     const originalResourcesPath = process.resourcesPath
+    const originalCwd = process.cwd
+
+    // Why: the dev candidate is resolved from cwd, so tests that assert "no shim found"
+    // must point cwd somewhere empty or the repo's own .build/tmux.exe satisfies it.
+    async function useEmptyCwd(): Promise<void> {
+      const emptyCwd = await mkdtemp(join(tmpdir(), 'orca-empty-cwd-'))
+      roots.push(emptyCwd)
+      setProcessProp('cwd', () => emptyCwd)
+    }
 
     afterEach(() => {
       setProcessProp('platform', originalPlatform)
       setProcessProp('resourcesPath', originalResourcesPath)
+      setProcessProp('cwd', originalCwd)
     })
 
     it('copies the bundled tmux shim into the shim dir', async () => {
@@ -147,6 +157,7 @@ describe('claude agent teams shim env', () => {
     it('tolerates a missing bundled shim', async () => {
       setProcessProp('platform', 'win32')
       setProcessProp('resourcesPath', '/nonexistent/path')
+      await useEmptyCwd()
       const root = await mkdtemp(join(tmpdir(), 'orca-agent-teams-shim-'))
       roots.push(root)
 
@@ -158,6 +169,27 @@ describe('claude agent teams shim env', () => {
       await expect(readFile(join(root, 'tmux.cmd'), 'utf8')).resolves.toContain('agent-teams-tmux')
       // tmux.exe should not exist
       await expect(stat(join(root, 'tmux.exe'))).rejects.toThrow()
+    })
+
+    it('falls back to the dev build when the packaged shim is absent', async () => {
+      // Why: Electron sets resourcesPath in dev too, so a packaged miss must not stop the
+      // lookup or `pnpm run build:windows-shims` would never take effect.
+      setProcessProp('platform', 'win32')
+      setProcessProp('resourcesPath', '/nonexistent/path')
+      const devCwd = await mkdtemp(join(tmpdir(), 'orca-dev-cwd-'))
+      roots.push(devCwd)
+      await mkdir(join(devCwd, 'native', 'windows-cli-launcher', '.build'), { recursive: true })
+      await writeFile(
+        join(devCwd, 'native', 'windows-cli-launcher', '.build', 'tmux.exe'),
+        'DEV-BUILD-BYTES'
+      )
+      setProcessProp('cwd', () => devCwd)
+      const root = await mkdtemp(join(tmpdir(), 'orca-agent-teams-shim-'))
+      roots.push(root)
+
+      await ensureClaudeAgentTeamsShimDir(root)
+
+      await expect(readFile(join(root, 'tmux.exe'), 'utf8')).resolves.toBe('DEV-BUILD-BYTES')
     })
 
     it('does not rewrite an unchanged shim', async () => {
