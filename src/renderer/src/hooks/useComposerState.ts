@@ -874,6 +874,7 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
     repoId: selectedRecipeRepoId,
     repoIsGit: selectedRepoIsGit,
     repoConnectionId: selectedRecipeRepoConnectionId,
+    repoExecutionHostId: selectedRepo ? getRepoExecutionHostId(selectedRepo) : null,
     projectGroupTarget: isProjectGroupTarget,
     initialRecipeId: initialEphemeralVmRecipeId
   })

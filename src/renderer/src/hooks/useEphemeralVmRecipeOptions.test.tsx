@@ -59,17 +59,20 @@ function installApi(listRecipes: ReturnType<typeof vi.fn>): {
 function Harness({
   repoId,
   initialRecipeId,
-  enabled = true
+  enabled = true,
+  repoExecutionHostId = 'local'
 }: {
   repoId: string
   initialRecipeId?: string
   enabled?: boolean
+  repoExecutionHostId?: 'local' | `runtime:${string}`
 }): React.JSX.Element {
   const state = useEphemeralVmRecipeOptions({
     enabled,
     repoId,
     repoIsGit: true,
     repoConnectionId: null,
+    repoExecutionHostId,
     projectGroupTarget: false,
     initialRecipeId
   })
@@ -78,6 +81,7 @@ function Harness({
       <span data-testid="repo">{repoId}</span>
       <span data-testid="recipes">{state.recipes.map((recipe) => recipe.id).join(',')}</span>
       <span data-testid="selected">{state.selectedRecipeId ?? 'none'}</span>
+      <span data-testid="error">{state.error ?? 'none'}</span>
     </div>
   )
 }
@@ -144,5 +148,23 @@ describe('useEphemeralVmRecipeOptions', () => {
     await render(<Harness repoId="repo-1" enabled={false} />)
 
     expect(listRecipes).not.toHaveBeenCalled()
+  })
+
+  it('does not send a paired-runtime repo id to local recipe discovery', async () => {
+    const listRecipes = vi.fn().mockResolvedValue({
+      status: 'error',
+      repoPath: null,
+      diagnostics: [],
+      recipes: [],
+      message: 'Repo not found: repo-runtime'
+    })
+    installApi(listRecipes)
+
+    const { container } = await render(
+      <Harness repoId="repo-runtime" repoExecutionHostId="runtime:windows-2" />
+    )
+
+    expect(listRecipes).not.toHaveBeenCalled()
+    expect(container.querySelector('[data-testid="error"]')?.textContent).toBe('none')
   })
 })
