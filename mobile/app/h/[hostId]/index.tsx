@@ -95,6 +95,10 @@ import { useWorkspaceSections } from '../../../src/worktree/use-workspace-sectio
 import { getMobileWorkspaceLineageGroupKey } from '../../../src/worktree/mobile-workspace-lineage'
 import { areWorktreeListsEqual } from '../../../src/worktree/worktree-list-snapshot'
 import {
+  canDeleteWorktreeFromMobile,
+  MAIN_WORKTREE_DELETE_HINT
+} from '../../../src/worktree/worktree-delete-availability'
+import {
   getWorktreeRemovalTracker,
   STALE_SNAPSHOT_GENERATION
 } from '../../../src/worktree/worktree-removal'
@@ -1356,6 +1360,12 @@ export function HostScreen({
                     {
                       label: 'Delete',
                       destructive: true,
+                      // Why: git refuses to remove the primary checkout, so offering it is a
+                      // dead button. Desktop routes these to project removal instead.
+                      disabled: !canDeleteWorktreeFromMobile(actionTarget),
+                      ...(canDeleteWorktreeFromMobile(actionTarget)
+                        ? {}
+                        : { hint: MAIN_WORKTREE_DELETE_HINT }),
                       onPress: () => setConfirmDelete(actionTarget)
                     }
                   ]
