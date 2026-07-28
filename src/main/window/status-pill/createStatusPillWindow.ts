@@ -46,6 +46,9 @@ export type CreateStatusPillWindowOptions = {
   /** Focus the Orca main window (reopening it if needed). Called when the user
    *  clicks the pill body. */
   onFocusMainWindow: () => void
+  /** Focus a specific agent pane in the main window. Called when the user
+   *  clicks a row in the expanded panel. */
+  onFocusPane: (target: { paneKey: string; worktreeId?: string | null }) => void
   /** Runtime, used to resolve paneKey → terminal handle and to write the
    *  answer bytes when the user answers a pending question from the pill. */
   runtime?: StatusPillRuntime
@@ -187,6 +190,7 @@ export function createStatusPillWindow(
   const detachIpc = attachStatusPillIpcListeners({
     window,
     onFocusMainWindow: options.onFocusMainWindow,
+    onFocusPane: options.onFocusPane,
     getSummary,
     getRows,
     runtime: options.runtime,

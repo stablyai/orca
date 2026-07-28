@@ -1,5 +1,6 @@
 import type { Store } from '../../persistence'
 import type { AgentHookServer } from '../../agent-hooks/server'
+import type { StatusPillFocusTarget } from '../../../shared/status-pill-preload-api'
 import {
   createStatusPillWindow,
   type StatusPillRuntime,
@@ -13,6 +14,9 @@ export type StatusPillCoordinatorOptions = {
   /** Focus the Orca main window (reopening it if needed). Called when the user
    *  clicks the pill body. */
   onFocusMainWindow: () => void
+  /** Focus a specific agent pane in the main window. Called when the user
+   *  clicks a row in the expanded panel. */
+  onFocusPane: (target: StatusPillFocusTarget) => void
   /** Runtime, used to write agent answers from the pill. Optional so the pill
    *  can mount in tests without a live runtime; answer attempts return
    *  `send_failed` when absent. */
@@ -28,6 +32,7 @@ export class StatusPillCoordinator {
   private readonly store: Store
   private readonly agentHookServer: AgentHookServer
   private readonly onFocusMainWindow: () => void
+  private readonly onFocusPane: (target: StatusPillFocusTarget) => void
   private readonly runtime?: StatusPillRuntime
   private readonly warn: (message: string, error?: unknown) => void
   private handle: StatusPillWindowHandle | null = null
@@ -39,6 +44,7 @@ export class StatusPillCoordinator {
     this.store = options.store
     this.agentHookServer = options.agentHookServer
     this.onFocusMainWindow = options.onFocusMainWindow
+    this.onFocusPane = options.onFocusPane
     this.runtime = options.runtime
     this.warn = options.warn ?? defaultWarn
 
@@ -121,6 +127,7 @@ export class StatusPillCoordinator {
     this.handle = createStatusPillWindow({
       getSnapshot,
       onFocusMainWindow: this.onFocusMainWindow,
+      onFocusPane: this.onFocusPane,
       runtime: this.runtime,
       warn: this.warn
     })

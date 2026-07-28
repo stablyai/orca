@@ -323,9 +323,18 @@ body {
   gap: 12px;
   padding: 10px 16px;
   position: relative;
+  cursor: pointer;
+  border-radius: 0;
   /* Why: stagger fade-in so the panel reveals like a list, not a single
      chunk. Keeps hover/focus transitions smooth too. */
   animation: row-in 220ms cubic-bezier(0.16, 1, 0.3, 1) both;
+  transition: background 120ms ease;
+}
+
+.agent-row:hover,
+.agent-row:focus-visible {
+  background: var(--chip-bg);
+  outline: none;
 }
 
 .agent-row + .agent-row::before {

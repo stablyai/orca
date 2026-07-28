@@ -179,6 +179,9 @@ function StatusPill(): React.JSX.Element {
           tone={tone}
           pulse={pulse}
           onAnswer={handleAnswer}
+          onFocusPane={(paneKey, worktreeId) =>
+            window.api?.focusPane({ paneKey, worktreeId: worktreeId ?? null })
+          }
           answeringPaneKey={answeringPaneKey}
           answerError={answerError}
         />
@@ -271,6 +274,7 @@ function AgentPanel({
   tone,
   pulse,
   onAnswer,
+  onFocusPane,
   answeringPaneKey,
   answerError
 }: {
@@ -279,6 +283,7 @@ function AgentPanel({
   tone: Tone
   pulse: boolean
   onAnswer: (paneKey: string, raw: string) => Promise<void>
+  onFocusPane: (paneKey: string, worktreeId?: string | null) => void
   answeringPaneKey: string | null
   answerError: string | null
 }): React.JSX.Element {
@@ -306,7 +311,12 @@ function AgentPanel({
       ) : null}
       <div className="agent-list">
         {rows.map((row, index) => (
-          <AgentRowView key={`${row.paneKey}-${row.receivedAt}`} row={row} index={index} />
+          <AgentRowView
+            key={`${row.paneKey}-${row.receivedAt}`}
+            row={row}
+            index={index}
+            onFocusPane={onFocusPane}
+          />
         ))}
       </div>
     </div>

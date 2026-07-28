@@ -1,4 +1,5 @@
 import type { AgentStatusIpcPayload, AgentStatusState } from '../../../shared/agent-status-types'
+import { splitWorktreeId } from '../../../shared/worktree-id'
 import {
   EMPTY_STATUS_PILL_SUMMARY,
   formatStatusPillAgentLabel,
@@ -202,6 +203,24 @@ function truncate(value: string, max: number): string {
   return `${value.slice(0, Math.max(0, max - 1)).trimEnd()}…`
 }
 
+/** Derive a short, human-readable label for a worktree id. The id is shaped
+ *  "repoId::worktreePath"; we show the path basename (e.g. "feat-auth") so the
+ *  pill row doesn't render the full opaque id. Returns null when the id is
+ *  absent or unparseable. */
+function worktreeDisplayName(worktreeId: string | undefined | null): string | null {
+  if (!worktreeId) {
+    return null
+  }
+  const parsed = splitWorktreeId(worktreeId)
+  if (!parsed) {
+    return null
+  }
+  // Why: worktreePath may use POSIX or Windows separators depending on host;
+  // split on both so the basename is correct cross-platform.
+  const segments = parsed.worktreePath.split(/[\\/]/).filter(Boolean)
+  return segments.at(-1) ?? null
+}
+
 /** Build the per-pane rows the expanded multi-agent panel renders. Same
  *  freshness window as the summary so the two views stay in sync. */
 export function computeStatusPillAgentRows(
@@ -232,7 +251,10 @@ export function computeStatusPillAgentRows(
       // main-window store. Keep these null here so the pill renderer can
       // render a generic fallback rather than guess.
       terminalName: null,
-      worktreeLabel: entry.worktreeId ?? null,
+      worktreeLabel: worktreeDisplayName(entry.worktreeId),
+      // Why: carry the structured worktree id so click-to-focus can switch
+      // the main window to this pane's worktree before focusing the leaf.
+      worktreeId: entry.worktreeId ?? null,
       receivedAt: entry.receivedAt ?? 0,
       tabId: entry.tabId ?? null,
       // Why: carry the raw interactive prompt envelope so the expanded panel

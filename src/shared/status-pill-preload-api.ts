@@ -14,6 +14,10 @@ export type StatusPillAgentRow = {
   toolName: string
   terminalName: string | null
   worktreeLabel: string | null
+  /** Structured worktree id (e.g. "repoId::worktreePath"). Used by
+   *  click-to-focus to switch the main window to the pane's worktree. May be
+   *  null for sessions without a worktree binding. */
+  worktreeId?: string | null
   receivedAt: number
   tabId: string | null
   /** Raw JSON envelope of an AskUserQuestion / permission request, when the
@@ -127,6 +131,15 @@ export function formatStatusPillAgentLabel(agentType: string): string {
     : agentType
 }
 
+export type StatusPillFocusTarget = {
+  /** Stable pane key of the agent terminal to focus. */
+  paneKey: string
+  /** Worktree the pane lives in, so the main window can switch to it before
+   *  focusing the terminal leaf. Optional — sessions without a worktree
+   *  binding still focus the pane within the active worktree. */
+  worktreeId?: string | null
+}
+
 export type StatusPillPreloadApi = {
   /** Subscribe to compact summary pushes from the main-process broadcaster.
    *  Returns an unsubscribe. */
@@ -144,6 +157,11 @@ export type StatusPillPreloadApi = {
   fireClick: () => void
   /** Notify main that the user opened the context menu (right-click). */
   fireContextMenu: () => void
+  /** Focus the exact agent terminal pane the user clicked in the expanded
+   *  panel. Main reopens/focuses the main window, switches to the pane's
+   *  worktree, and focuses the terminal leaf — mirroring the notification
+   *  click path. */
+  focusPane: (target: StatusPillFocusTarget) => void
   /** Resolve the initial theme + reduced-motion preferences for first paint. */
   getInitialPreferences: () => Promise<StatusPillPreferences>
   /** Send raw bytes (option number, label text, Escape, …) to the agent PTY

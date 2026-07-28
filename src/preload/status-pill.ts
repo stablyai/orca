@@ -2,6 +2,7 @@ import { contextBridge, ipcRenderer } from 'electron'
 import type {
   StatusPillAgentRow,
   StatusPillAnswerResult,
+  StatusPillFocusTarget,
   StatusPillPreferences,
   StatusPillPreloadApi,
   StatusPillSummary
@@ -33,6 +34,9 @@ const api: StatusPillPreloadApi = {
   },
   fireContextMenu: (): void => {
     ipcRenderer.send('statusPill:contextMenu')
+  },
+  focusPane: (target: StatusPillFocusTarget): void => {
+    ipcRenderer.send('statusPill:focusPane', target)
   },
   getInitialPreferences: (): Promise<StatusPillPreferences> =>
     ipcRenderer.invoke('statusPill:getInitialPreferences'),

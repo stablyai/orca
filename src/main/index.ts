@@ -153,6 +153,7 @@ import { rememberBranchRenameFailureOutput } from './agent-hooks/branch-rename-f
 import { renameWorktreeFolderOnFirstWork } from './agent-hooks/first-work-folder-rename'
 import { moveWorktree } from './git/worktree'
 import { getRepoIdFromWorktreeId } from '../shared/worktree-id'
+import { parsePaneKey } from '../shared/stable-pane-id'
 import { parseWorkspaceKey } from '../shared/workspace-scope'
 import { setMigrationUnsupportedPtyListener } from './agent-hooks/migration-unsupported-pty-state'
 import {
@@ -1863,6 +1864,39 @@ app.whenReady().then(async () => {
       }
     },
     onFocusMainWindow: () => focusExistingWindow(),
+    // Why: mirror the OS-notification click path — reopen/focus the main
+    // window, switch to the pane's worktree, then focus the exact terminal
+    // leaf. Sends ui:activateWorktree + ui:focusTerminal so the renderer
+    // lands on the right tab + split pane (same contract the notification
+    // click handler in src/main/ipc/notifications.ts uses).
+    onFocusPane: (target) => {
+      focusExistingWindow()
+      const win = mainWindow
+      if (!win || win.isDestroyed()) {
+        return
+      }
+      const { paneKey, worktreeId } = target
+      // Why: worktreeId is "repoId::worktreePath"; only switch worktree when
+      // the separator is present so we never hand the renderer an unparseable
+      // id (matches the notification click guard).
+      if (typeof worktreeId === 'string' && worktreeId.includes('::')) {
+        win.webContents.send('ui:activateWorktree', {
+          repoId: getRepoIdFromWorktreeId(worktreeId),
+          worktreeId
+        })
+      }
+      const paneTarget = parsePaneKey(paneKey)
+      if (paneTarget) {
+        win.webContents.send('ui:focusTerminal', {
+          tabId: paneTarget.tabId,
+          worktreeId: worktreeId ?? undefined,
+          leafId: paneTarget.leafId,
+          ackPaneKeyOnSuccess: paneKey,
+          flashFocusedPane: true,
+          scrollToBottomIfOutputSinceLastView: true
+        })
+      }
+    },
     warn: console.warn
   })
   // Why: telemetry must initialize before any IPC handler / renderer can

@@ -3,6 +3,7 @@ import type { BrowserWindow } from 'electron'
 import type {
   StatusPillAgentRow,
   StatusPillAnswerResult,
+  StatusPillFocusTarget,
   StatusPillPreferences,
   StatusPillSummary
 } from '../../../shared/status-pill-preload-api'
@@ -11,6 +12,10 @@ import type { StatusPillRuntime } from './createStatusPillWindow'
 export type StatusPillIpcArgs = {
   window: BrowserWindow
   onFocusMainWindow: () => void
+  /** Focus a specific agent pane in the main window (used by row clicks in the
+   *  expanded panel). The target is validated against the live rows before the
+   *  callback fires so a stale renderer cannot focus arbitrary panes. */
+  onFocusPane: (target: StatusPillFocusTarget) => void
   getSummary: () => StatusPillSummary
   getRows: () => StatusPillAgentRow[]
   runtime?: StatusPillRuntime
@@ -62,9 +67,30 @@ export function attachStatusPillIpcListeners(args: StatusPillIpcArgs): () => voi
   })
   const answerHandler = async (payload: unknown): Promise<StatusPillAnswerResult> =>
     answerAgentFromPill(payload, args)
+  // Why: validate the focus target against the live rows so a stale or
+  // compromised pill renderer cannot drive focus to a pane that no longer
+  // exists. Focus is less destructive than answering, but still scoped.
+  const focusPaneHandler = (payload: unknown): void => {
+    if (!payload || typeof payload !== 'object') {
+      return
+    }
+    const { paneKey, worktreeId } = payload as { paneKey?: unknown; worktreeId?: unknown }
+    if (typeof paneKey !== 'string' || paneKey.length === 0) {
+      return
+    }
+    const liveRow = args.getRows().find((row) => row.paneKey === paneKey)
+    if (!liveRow) {
+      return
+    }
+    args.onFocusPane({
+      paneKey,
+      worktreeId: typeof worktreeId === 'string' ? worktreeId : (liveRow.worktreeId ?? null)
+    })
+  }
 
   ipcMain.on('statusPill:click', clickHandler)
   ipcMain.on('statusPill:contextMenu', contextMenuHandler)
+  ipcMain.on('statusPill:focusPane', focusPaneHandler)
   ipcMain.handle('statusPill:getSnapshot', snapshotHandler)
   ipcMain.handle('statusPill:getAgentRows', rowsHandler)
   ipcMain.handle('statusPill:getInitialPreferences', prefsHandler)
@@ -73,6 +99,7 @@ export function attachStatusPillIpcListeners(args: StatusPillIpcArgs): () => voi
   return () => {
     ipcMain.removeListener('statusPill:click', clickHandler)
     ipcMain.removeListener('statusPill:contextMenu', contextMenuHandler)
+    ipcMain.removeListener('statusPill:focusPane', focusPaneHandler)
     ipcMain.removeHandler('statusPill:getSnapshot')
     ipcMain.removeHandler('statusPill:getAgentRows')
     ipcMain.removeHandler('statusPill:getInitialPreferences')
