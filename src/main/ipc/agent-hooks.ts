@@ -6,6 +6,7 @@ import type {
 } from '../../shared/agent-status-types'
 import type { AgentInterruptInferenceRequest } from '../../shared/agent-interrupt-intent'
 import type { AgentQuestionAnsweredInferenceRequest } from '../../shared/agent-question-answered-intent'
+import { errorMessage } from '../../shared/error-message'
 import { agentHookServer, isValidPaneKey } from '../agent-hooks/server'
 import { ampHookService } from '../amp/hook-service'
 import {
@@ -148,7 +149,7 @@ export function registerAgentHookHandlers(
         state: 'error',
         configPath: '',
         managedHooksPresent: false,
-        detail: err instanceof Error ? err.message : String(err)
+        detail: errorMessage(err)
       }
     }
   })
@@ -161,7 +162,7 @@ export function registerAgentHookHandlers(
         state: 'error',
         configPath: '',
         managedHooksPresent: false,
-        detail: err instanceof Error ? err.message : String(err)
+        detail: errorMessage(err)
       }
     }
   })
@@ -174,7 +175,7 @@ export function registerAgentHookHandlers(
         state: 'error',
         configPath: '',
         managedHooksPresent: false,
-        detail: err instanceof Error ? err.message : String(err)
+        detail: errorMessage(err)
       }
     }
   })
@@ -187,7 +188,7 @@ export function registerAgentHookHandlers(
         state: 'error',
         configPath: '',
         managedHooksPresent: false,
-        detail: err instanceof Error ? err.message : String(err)
+        detail: errorMessage(err)
       }
     }
   })
@@ -200,7 +201,7 @@ export function registerAgentHookHandlers(
         state: 'error',
         configPath: '',
         managedHooksPresent: false,
-        detail: err instanceof Error ? err.message : String(err)
+        detail: errorMessage(err)
       }
     }
   })
@@ -213,7 +214,7 @@ export function registerAgentHookHandlers(
         state: 'error',
         configPath: '',
         managedHooksPresent: false,
-        detail: err instanceof Error ? err.message : String(err)
+        detail: errorMessage(err)
       }
     }
   })
@@ -226,7 +227,7 @@ export function registerAgentHookHandlers(
         state: 'error',
         configPath: '',
         managedHooksPresent: false,
-        detail: err instanceof Error ? err.message : String(err)
+        detail: errorMessage(err)
       }
     }
   })
@@ -239,7 +240,7 @@ export function registerAgentHookHandlers(
         state: 'error',
         configPath: '',
         managedHooksPresent: false,
-        detail: err instanceof Error ? err.message : String(err)
+        detail: errorMessage(err)
       }
     }
   })
@@ -252,7 +253,7 @@ export function registerAgentHookHandlers(
         state: 'error',
         configPath: '',
         managedHooksPresent: false,
-        detail: err instanceof Error ? err.message : String(err)
+        detail: errorMessage(err)
       }
     }
   })
@@ -265,7 +266,7 @@ export function registerAgentHookHandlers(
         state: 'error',
         configPath: '',
         managedHooksPresent: false,
-        detail: err instanceof Error ? err.message : String(err)
+        detail: errorMessage(err)
       }
     }
   })
@@ -278,7 +279,7 @@ export function registerAgentHookHandlers(
         state: 'error',
         configPath: '',
         managedHooksPresent: false,
-        detail: err instanceof Error ? err.message : String(err)
+        detail: errorMessage(err)
       }
     }
   })
@@ -291,7 +292,7 @@ export function registerAgentHookHandlers(
         state: 'error',
         configPath: '',
         managedHooksPresent: false,
-        detail: err instanceof Error ? err.message : String(err)
+        detail: errorMessage(err)
       }
     }
   })
@@ -304,7 +305,7 @@ export function registerAgentHookHandlers(
         state: 'error',
         configPath: '',
         managedHooksPresent: false,
-        detail: err instanceof Error ? err.message : String(err)
+        detail: errorMessage(err)
       }
     }
   })
@@ -317,7 +318,7 @@ export function registerAgentHookHandlers(
         state: 'error',
         configPath: '',
         managedHooksPresent: false,
-        detail: err instanceof Error ? err.message : String(err)
+        detail: errorMessage(err)
       }
     }
   })

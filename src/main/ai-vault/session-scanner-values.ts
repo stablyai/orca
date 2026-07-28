@@ -151,10 +151,6 @@ export function clampPositiveInteger(value: number | undefined, fallback: number
   return typeof value === 'number' && Number.isInteger(value) && value > 0 ? value : fallback
 }
 
-export function errorMessage(err: unknown): string {
-  return err instanceof Error ? err.message : String(err)
-}
-
 export {
   addCodexUsage,
   claudeUsageTotal,
@@ -164,3 +160,4 @@ export {
   subtractCodexUsage,
   tokenTotal
 } from './session-scanner-token-values'
+export { errorMessage } from '../../shared/error-message'
