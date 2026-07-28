@@ -20,7 +20,6 @@ import {
   type CombinedDiffFileTreeMode
 } from './combined-diff-file-tree-model'
 import { CombinedDiffFileTreeRow, type CombinedDiffTreeNode } from './combined-diff-file-tree-row'
-import { COMBINED_DIFF_FILE_TREE_MIN_WIDTH } from '../../../../shared/combined-diff-file-tree-width'
 import { useCombinedDiffFileTreeResize } from './use-combined-diff-file-tree-resize'
 import { translate } from '@/i18n/i18n'
 
@@ -102,7 +101,7 @@ export function CombinedDiffFileTree({
   const [query, setQuery] = React.useState('')
   const [excludedExtensions, setExcludedExtensions] = React.useState<Set<string>>(() => new Set())
   const [includeViewed, setIncludeViewed] = React.useState(true)
-  const { handleResizeKeyDown, handleResizeStart, maxWidth, treeRef, width } =
+  const { handleResizeKeyDown, handleResizeStart, maxWidth, minWidth, treeRef, width } =
     useCombinedDiffFileTreeResize(collapsed)
   const toggleDirectory = React.useCallback((key: string) => {
     setCollapsedDirectoryKeys((prev) => {
@@ -360,7 +359,7 @@ export function CombinedDiffFileTree({
         )}
         aria-orientation="vertical"
         aria-valuemax={Math.round(maxWidth)}
-        aria-valuemin={COMBINED_DIFF_FILE_TREE_MIN_WIDTH}
+        aria-valuemin={Math.round(minWidth)}
         aria-valuenow={Math.round(width)}
         tabIndex={0}
         className="group absolute inset-y-0 right-0 z-30 w-1 cursor-col-resize outline-none focus-visible:ring-1 focus-visible:ring-ring"

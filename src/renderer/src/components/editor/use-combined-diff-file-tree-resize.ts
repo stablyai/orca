@@ -1,9 +1,8 @@
 import React, { useCallback, useEffect, useState } from 'react'
 import {
   clampCombinedDiffFileTreeWidth,
-  COMBINED_DIFF_FILE_TREE_MIN_WIDTH,
   COMBINED_DIFF_FILE_TREE_RESIZE_STEP,
-  computeMaxCombinedDiffFileTreeWidth
+  computeCombinedDiffFileTreeWidthBounds
 } from '../../../../shared/combined-diff-file-tree-width'
 import { useSidebarResize } from '@/hooks/useSidebarResize'
 import { useAppStore } from '@/store'
@@ -12,13 +11,14 @@ export function useCombinedDiffFileTreeResize(collapsed: boolean): {
   handleResizeKeyDown: (event: React.KeyboardEvent<HTMLDivElement>) => void
   handleResizeStart: (event: React.MouseEvent) => void
   maxWidth: number
+  minWidth: number
   treeRef: React.RefObject<HTMLElement | null>
   width: number
 } {
   const storedWidth = useAppStore((s) => s.combinedDiffFileTreeWidth)
   const setStoredWidth = useAppStore((s) => s.setCombinedDiffFileTreeWidth)
   const [containerWidth, setContainerWidth] = useState<number | null>(null)
-  const maxWidth = computeMaxCombinedDiffFileTreeWidth(containerWidth ?? 0)
+  const { maxWidth, minWidth } = computeCombinedDiffFileTreeWidthBounds(containerWidth ?? 0)
   // Why: the container clamp is render-only — a pane that is hidden (0px) or temporarily
   // narrowed must never write back and shrink the width the user chose.
   const width = clampCombinedDiffFileTreeWidth(storedWidth, containerWidth ?? undefined)
@@ -27,7 +27,7 @@ export function useCombinedDiffFileTreeResize(collapsed: boolean): {
     // invalidate useSidebarResize's layout effect or the re-expanded aside keeps no width.
     isOpen: !collapsed,
     width,
-    minWidth: COMBINED_DIFF_FILE_TREE_MIN_WIDTH,
+    minWidth,
     maxWidth,
     deltaSign: 1,
     setWidth: setStoredWidth
@@ -68,6 +68,7 @@ export function useCombinedDiffFileTreeResize(collapsed: boolean): {
     handleResizeKeyDown,
     handleResizeStart: onResizeStart,
     maxWidth,
+    minWidth,
     treeRef: containerRef,
     width
   }
