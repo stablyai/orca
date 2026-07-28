@@ -225,7 +225,8 @@ describe('createRemoteRuntimePtyTransport', () => {
     await vi.waitFor(() =>
       expect(latestSubscribePayload().capabilities).toEqual({
         ackOutput: 1,
-        desktopViewportClaims: 1
+        desktopViewportClaims: 1,
+        writeUnavailable: 1
       })
     )
     expect(runtimeSubscribe).toHaveBeenCalledWith(
@@ -242,6 +243,39 @@ describe('createRemoteRuntimePtyTransport', () => {
       client: { id: expect.stringMatching(/^desktop:tab-1:pane:1:/), type: 'desktop' },
       viewport: { cols: 120, rows: 40 }
     })
+  })
+
+  it('reports undeliverable input when the host says the stream write went nowhere', async () => {
+    const { createRemoteRuntimePtyTransport } = await import('./remote-runtime-pty-transport')
+    const onError = vi.fn()
+    const onWriteUnavailable = vi.fn()
+    const transport = createRemoteRuntimePtyTransport('env-1', {
+      worktreeId: 'wt-1',
+      tabId: 'tab-1',
+      leafId: 'pane:1'
+    })
+
+    transport.attach({
+      existingPtyId: 'remote:terminal-1',
+      cols: 120,
+      rows: 40,
+      callbacks: { onError, onWriteUnavailable }
+    })
+
+    await vi.waitFor(() => expect(subscriptionSendBinary).toHaveBeenCalled())
+    const streamId = latestSubscribePayload().streamId
+    subscriptionCallbacks?.onBinary?.(
+      encodeTerminalStreamFrame({
+        opcode: TerminalStreamOpcode.WriteUnavailable,
+        streamId,
+        seq: 1,
+        payload: encodeTerminalStreamJson({ reason: 'not_writable' })
+      })
+    )
+
+    await vi.waitFor(() => expect(onWriteUnavailable).toHaveBeenCalledTimes(1))
+    // Why: recovery owns this, not the fatal red banner.
+    expect(onError).not.toHaveBeenCalled()
   })
 
   it('does not report attachment health until the authoritative PTY snapshot arrives', async () => {

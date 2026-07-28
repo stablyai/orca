@@ -2639,6 +2639,8 @@ export class OrcaRuntimeService {
   // iterates them all. Listeners are cleaned up via subscriptionCleanups.
   private notificationListeners = new Set<(event: MobileNotificationEvent) => void>()
   private ptysById = new Map<string, RuntimePtyWorktreeRecord>()
+  // Why: single-flight per PTY so repeated subscribes to a never-observed pane don't spam mount requests.
+  private unobservedPtyAttachRequests = new Set<string>()
   private wslDistroByPtyId = new Map<string, string>()
   private titleObservationSequence = 0
   private headlessTerminals = new Map<string, RuntimeHeadlessTerminal>()
@@ -7772,6 +7774,8 @@ export class OrcaRuntimeService {
       pty.connected = true
       pty.disconnectedAt = null
       pty.lastOutputAt = at
+      // The output pipeline is proven; a later subscribe may request a fresh attach if it breaks again.
+      this.unobservedPtyAttachRequests.delete(ptyId)
       const normalized = normalizeTerminalChunk(data, pty.tailPendingAnsi)
       pty.tailPendingAnsi = normalized.pendingAnsi
       const nextTail = appendNormalizedToTailBuffer(
@@ -11169,6 +11173,7 @@ export class OrcaRuntimeService {
     this.remoteDesktopHostReclaimTargets.delete(ptyId)
     this.remoteDesktopViewerRevisions.delete(ptyId)
     this.disposeHeadlessTerminal(ptyId)
+    this.unobservedPtyAttachRequests.delete(ptyId)
     this.agentDetector?.onExit(ptyId)
     if (pty) {
       pty.connected = false
@@ -23432,6 +23437,32 @@ export class OrcaRuntimeService {
       this.graphSyncCallbacks.push(check)
       check()
     })
+  }
+
+  // Why: the daemon outlives the app, so after a host restart a session can be alive with its
+  // shell running while nothing is attached — output goes only to the daemon and every remote
+  // keystroke lands in a terminal no one can see. Mounting the owning tab rebuilds that pipeline.
+  requestHostPaneAttachForUnobservedPty(handle: string, ptyId: string): boolean {
+    const pty = this.ptysById.get(ptyId)
+    if (!pty || pty.lastOutputAt !== null) {
+      return false
+    }
+    if (this.ptyController?.hasRendererSerializer?.(ptyId) === true) {
+      return false
+    }
+    if (this.hasHeadlessTerminalState(ptyId)) {
+      return false
+    }
+    if (this.unobservedPtyAttachRequests.has(ptyId)) {
+      return false
+    }
+    this.unobservedPtyAttachRequests.add(ptyId)
+    const requested = this.requestRendererTerminalTabMount(handle)
+    if (!requested) {
+      // Headless host has no window to mount into; let a later subscribe retry.
+      this.unobservedPtyAttachRequests.delete(ptyId)
+    }
+    return requested
   }
 
   // Why: never-mounted tabs have no PTY or snapshot; synthetic handles need the ptyId to mount the exact owning tab.

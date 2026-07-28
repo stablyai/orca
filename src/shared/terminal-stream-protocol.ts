@@ -28,8 +28,14 @@ export enum TerminalStreamOpcode {
   // Why 14: Ack already occupies 13 on current clients; older runtimes ignore
   // this opcode and still receive the compatibility Resize frame behind it.
   ClaimViewport = 14,
-  OutputSpan = 15
+  OutputSpan = 15,
+  // Why gated: an unknown opcode fails decode and kills the whole multiplexed
+  // connection, so only send this to streams that declared writeUnavailable.
+  WriteUnavailable = 16
 }
+
+/** Why only this reason: unexpected send errors stay silent so a transient failure can't loop the client through remount recovery. */
+export type TerminalStreamWriteUnavailableReason = 'not_writable'
 
 export type TerminalStreamFrame = {
   opcode: TerminalStreamOpcode
@@ -116,6 +122,7 @@ function isTerminalStreamOpcode(value: number): value is TerminalStreamOpcode {
     value === TerminalStreamOpcode.Metadata ||
     value === TerminalStreamOpcode.Ack ||
     value === TerminalStreamOpcode.ClaimViewport ||
-    value === TerminalStreamOpcode.OutputSpan
+    value === TerminalStreamOpcode.OutputSpan ||
+    value === TerminalStreamOpcode.WriteUnavailable
   )
 }
