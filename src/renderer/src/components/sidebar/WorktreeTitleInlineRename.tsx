@@ -62,36 +62,42 @@ export function WorktreeTitleInlineRename({
   beginEditing = false,
   onBeginEditingConsumed
 }: WorktreeTitleInlineRenameProps): React.JSX.Element {
-  const editingRef = useRef(false)
+  // Why: the parent's editing callback is not idempotent (the hovercard defers its
+  // close on it), so remember what it was last told rather than firing on every call.
+  const notifiedEditingRef = useRef(false)
   const savingRef = useRef(false)
   const mountedRef = useRef(true)
-  const titleElementRef = useRef<HTMLSpanElement | null>(null)
   const titleResizeObserverRef = useRef<ResizeObserver | null>(null)
   const removeTitleResizeListenerRef = useRef<(() => void) | null>(null)
-  const [editing, setEditing] = useState(false)
-  const [value, setValue] = useState(displayName)
+  // Why: one editor state — a live draft, or null when closed. Nothing else can
+  // disagree about whether the editor is open.
+  const [draftTitle, setDraftTitle] = useState<string | null>(null)
   const [saving, setSaving] = useState(false)
   const [titleTruncated, setTitleTruncated] = useState(false)
+  const editing = draftTitle !== null
 
   const measureTitleTruncated = useCallback((element: HTMLSpanElement | null) => {
     const nextTruncated = element ? isWorktreeTitleTruncated(element) : false
     setTitleTruncated((current) => (current === nextTruncated ? current : nextTruncated))
   }, [])
 
-  const handleRootRef = useCallback(
+  // Why: rename can resolve after this inline title unmounts; whichever root is
+  // rendered owns that stale-write guard without a mount-only Effect.
+  const handleEditorRootRef = useCallback((node: HTMLSpanElement | null): void => {
+    mountedRef.current = node !== null
+  }, [])
+
+  const handleTitleRootRef = useCallback(
     (node: HTMLSpanElement | null): void => {
       titleResizeObserverRef.current?.disconnect()
       titleResizeObserverRef.current = null
       removeTitleResizeListenerRef.current?.()
       removeTitleResizeListenerRef.current = null
 
-      // Why: rename can resolve after this inline title unmounts; the rendered
-      // root owns that stale-write guard without a mount-only Effect.
       mountedRef.current = node !== null
-      titleElementRef.current = node
       // Why: wrapped titles render in full and never truncate, so skip the measure +
       // ResizeObserver entirely — for that mode it could only churn unused state.
-      if (!node || editingRef.current || wrapTitle) {
+      if (!node || wrapTitle) {
         measureTitleTruncated(null)
         return
       }
@@ -124,21 +130,27 @@ export function WorktreeTitleInlineRename({
   const savingInputClassName = editingPresentation === 'field' ? 'pr-6' : 'pr-4'
   const savingSpinnerClassName = editingPresentation === 'field' ? 'right-1.5' : 'right-0'
 
-  const setEditingMode = useCallback(
+  // Why: the parent card disables drag while renaming; an Effect leaves one draggable commit.
+  const notifyEditingChange = useCallback(
     (nextEditing: boolean) => {
-      if (editingRef.current === nextEditing) {
+      if (notifiedEditingRef.current === nextEditing) {
         return
       }
-      editingRef.current = nextEditing
-      if (nextEditing) {
-        measureTitleTruncated(null)
-      }
-      setEditing(nextEditing)
-      // Why: the parent card disables drag while renaming; an Effect leaves one draggable commit.
+      notifiedEditingRef.current = nextEditing
       onEditingChange?.(nextEditing)
     },
-    [measureTitleTruncated, onEditingChange]
+    [onEditingChange]
   )
+
+  const openEditor = useCallback(() => {
+    setDraftTitle(displayName)
+    notifyEditingChange(true)
+  }, [displayName, notifyEditingChange])
+
+  const closeEditor = useCallback(() => {
+    setDraftTitle(null)
+    notifyEditingChange(false)
+  }, [notifyEditingChange])
 
   const handleInputRef = useCallback((input: HTMLInputElement | null) => {
     if (!input) {
@@ -160,9 +172,8 @@ export function WorktreeTitleInlineRename({
     if (disabled || editing) {
       return
     }
-    setValue(displayName)
-    setEditingMode(true)
-  }, [beginEditing, disabled, editing, displayName, onBeginEditingConsumed, setEditingMode])
+    openEditor()
+  }, [beginEditing, disabled, editing, onBeginEditingConsumed, openEditor])
 
   const stopCardEvent = useCallback((event: React.SyntheticEvent) => {
     event.stopPropagation()
@@ -175,25 +186,19 @@ export function WorktreeTitleInlineRename({
       }
       event.preventDefault()
       event.stopPropagation()
-      setValue(displayName)
-      setEditingMode(true)
+      openEditor()
     },
-    [disabled, displayName, setEditingMode]
+    [disabled, openEditor]
   )
 
-  const cancelRename = useCallback(() => {
-    setValue(displayName)
-    setEditingMode(false)
-  }, [displayName, setEditingMode])
-
   const commitRename = useCallback(async () => {
-    if (savingRef.current) {
+    if (savingRef.current || draftTitle === null) {
       return
     }
 
-    const commit = getWorktreeTitleRenameCommit(displayName, value)
+    const commit = getWorktreeTitleRenameCommit(displayName, draftTitle)
     if (commit.kind === 'cancel') {
-      cancelRename()
+      closeEditor()
       return
     }
 
@@ -202,7 +207,7 @@ export function WorktreeTitleInlineRename({
     try {
       await onRename(commit.displayName)
       if (mountedRef.current) {
-        setEditingMode(false)
+        closeEditor()
       }
     } catch (err) {
       if (mountedRef.current) {
@@ -221,7 +226,7 @@ export function WorktreeTitleInlineRename({
         setSaving(false)
       }
     }
-  }, [cancelRename, displayName, onRename, setEditingMode, value])
+  }, [closeEditor, displayName, draftTitle, onRename])
 
   const handleKeyDown = useCallback(
     (event: React.KeyboardEvent<HTMLInputElement>) => {
@@ -236,10 +241,10 @@ export function WorktreeTitleInlineRename({
         void commitRename()
       } else if (event.key === 'Escape') {
         event.preventDefault()
-        cancelRename()
+        closeEditor()
       }
     },
-    [cancelRename, commitRename]
+    [closeEditor, commitRename]
   )
 
   if (editing) {
@@ -247,7 +252,7 @@ export function WorktreeTitleInlineRename({
       <span
         // Why: a title/unread change must not remount the open editor — the input ref would refocus and reselect mid-edit.
         key="editing"
-        ref={handleRootRef}
+        ref={handleEditorRootRef}
         className={cn(
           'relative grid min-w-0 truncate leading-tight text-foreground',
           showUnreadEmphasis ? 'font-semibold' : 'font-normal',
@@ -264,7 +269,7 @@ export function WorktreeTitleInlineRename({
         </span>
         <Input
           ref={handleInputRef}
-          value={value}
+          value={draftTitle}
           style={{ font: 'inherit' }}
           disabled={saving}
           spellCheck={false}
@@ -273,7 +278,7 @@ export function WorktreeTitleInlineRename({
             'Rename workspace'
           )}
           data-worktree-title-rename-input="true"
-          onChange={(event) => setValue(event.target.value)}
+          onChange={(event) => setDraftTitle(event.target.value)}
           onBlur={() => void commitRename()}
           onClick={stopCardEvent}
           onDoubleClick={stopCardEvent}
@@ -307,7 +312,7 @@ export function WorktreeTitleInlineRename({
   const title = (
     <span
       key={`title:${titleElementKey}`}
-      ref={handleRootRef}
+      ref={handleTitleRootRef}
       className={cn(
         'block min-w-0 leading-tight focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-worktree-sidebar-ring',
         wrapTitle ? 'break-words whitespace-normal' : 'truncate',
