@@ -104,6 +104,43 @@ const THIRTY_SECONDS_MS = 30 * 1000
 const FRIENDLY_MESSAGE = "Couldn't reach the update server. Try again in a few minutes."
 const RELEASE_NOT_READY_MESSAGE =
   "A newer release isn't available for this device yet. Check again later."
+const NOT_READY_DIAGNOSTIC = 'Latest release artifacts are not ready'
+
+type NotReadyProbe = {
+  assetStatus?: number
+  manifestStatus?: number
+  manifestText: string
+}
+
+function respondWithNotReadyRelease({
+  assetStatus,
+  manifestStatus = 200,
+  manifestText
+}: NotReadyProbe): void {
+  const atom = `<feed>${publishingIncident.atomTags
+    .map(
+      (tag) =>
+        `<entry><link rel="alternate" type="text/html" href="https://github.com/stablyai/orca/releases/tag/${tag}"/><title>${tag}</title></entry>`
+    )
+    .join('')}</feed>`
+  netFetchMock.mockImplementation((url: string, init?: { method?: string }) => {
+    if (url === 'https://github.com/stablyai/orca/releases.atom') {
+      return Promise.resolve({ ok: true, status: 200, text: () => Promise.resolve(atom) })
+    }
+    if (init?.method === 'HEAD' && assetStatus !== undefined) {
+      return Promise.resolve({
+        ok: assetStatus >= 200 && assetStatus < 300,
+        status: assetStatus,
+        text: () => Promise.resolve('')
+      })
+    }
+    return Promise.resolve({
+      ok: manifestStatus >= 200 && manifestStatus < 300,
+      status: manifestStatus,
+      text: () => Promise.resolve(manifestText)
+    })
+  })
+}
 
 function makeBenignCheckFailure(message: string): void {
   const error = new Error(message)
@@ -200,40 +237,45 @@ describe('updater check failure handling', () => {
     })
   })
 
-  it('maps the captured release incident into truthful artifact-readiness copy', async () => {
-    appMock.getVersion.mockReturnValue(publishingIncident.installedVersion)
-    const atom = `<feed>${publishingIncident.atomTags
-      .map(
-        (tag) =>
-          `<entry><link rel="alternate" type="text/html" href="https://github.com/stablyai/orca/releases/tag/${tag}"/><title>${tag}</title></entry>`
-      )
-      .join('')}</feed>`
-    netFetchMock.mockImplementation((url: string) =>
-      url === 'https://github.com/stablyai/orca/releases.atom'
-        ? Promise.resolve({ ok: true, status: 200, text: () => Promise.resolve(atom) })
-        : Promise.resolve({
-            ok: false,
-            status: publishingIncident.missingManifestStatus,
-            text: () => Promise.resolve('')
-          })
-    )
+  it.each([
+    {
+      caseName: 'manifest 404',
+      manifestStatus: publishingIncident.missingManifestStatus,
+      manifestText: ''
+    },
+    { caseName: 'malformed manifest', manifestText: 'files:\n  - url: [' },
+    { caseName: 'empty manifest', manifestText: 'version: 1.4.142\nfiles: []' },
+    {
+      assetStatus: publishingIncident.missingWindowsAssetStatus,
+      caseName: 'asset 404',
+      manifestText: 'version: 1.4.142\nfiles:\n  - url: orca-windows-setup.exe'
+    }
+  ])(
+    'maps $caseName into neutral artifact-readiness status and diagnostics',
+    async ({ assetStatus, manifestStatus, manifestText }) => {
+      appMock.getVersion.mockReturnValue(publishingIncident.installedVersion)
+      respondWithNotReadyRelease({ assetStatus, manifestStatus, manifestText })
+      const warnMock = vi.spyOn(console, 'warn').mockImplementation(() => undefined)
+      const sendMock = vi.fn()
+      const mainWindow = { webContents: { send: sendMock } }
+      const { setupAutoUpdater, checkForUpdatesFromMenu } = await import('./updater')
 
-    const sendMock = vi.fn()
-    const mainWindow = { webContents: { send: sendMock } }
-    const { setupAutoUpdater, checkForUpdatesFromMenu } = await import('./updater')
+      setupAutoUpdater(mainWindow as never, { getLastUpdateCheckAt: () => Date.now() })
+      checkForUpdatesFromMenu()
 
-    setupAutoUpdater(mainWindow as never, { getLastUpdateCheckAt: () => Date.now() })
-    checkForUpdatesFromMenu()
-
-    await vi.waitFor(() => {
-      expect(sendMock).toHaveBeenCalledWith('updater:status', {
-        state: 'error',
-        message: RELEASE_NOT_READY_MESSAGE,
-        userInitiated: true
+      await vi.waitFor(() => {
+        expect(sendMock).toHaveBeenCalledWith('updater:status', {
+          state: 'error',
+          message: RELEASE_NOT_READY_MESSAGE,
+          userInitiated: true
+        })
       })
-    })
-    expect(autoUpdaterMock.checkForUpdates).not.toHaveBeenCalled()
-  })
+      expect(warnMock).toHaveBeenCalledWith('[updater] benign check failure:', NOT_READY_DIAGNOSTIC)
+      expect(warnMock.mock.calls.flat().join(' ').toLowerCase()).not.toContain('publishing')
+      expect(autoUpdaterMock.checkForUpdates).not.toHaveBeenCalled()
+      warnMock.mockRestore()
+    }
+  )
 
   it('silently drops background benign failures to idle and waits for the hourly retry', async () => {
     vi.useFakeTimers()
@@ -264,26 +306,33 @@ describe('updater check failure handling', () => {
     expect(autoUpdaterMock.checkForUpdates).toHaveBeenCalledTimes(2)
   })
 
-  it('keeps background publishing failures idle and schedules the short retry', async () => {
+  it('keeps typed not-ready probes idle and schedules the short retry', async () => {
     vi.useFakeTimers()
-    makeBenignCheckFailure('Latest release assets are still publishing')
+    appMock.getVersion.mockReturnValue(publishingIncident.installedVersion)
+    respondWithNotReadyRelease({
+      manifestStatus: publishingIncident.missingManifestStatus,
+      manifestText: ''
+    })
 
     const sendMock = vi.fn()
     const mainWindow = { webContents: { send: sendMock } }
-    const { setupAutoUpdater, checkForUpdates } = await import('./updater')
+    const { setupAutoUpdater, checkForUpdates, getUpdateStatus } = await import('./updater')
 
     setupAutoUpdater(mainWindow as never, { getLastUpdateCheckAt: () => Date.now() })
     checkForUpdates()
-    await vi.advanceTimersByTimeAsync(0)
+    await vi.waitFor(() => {
+      expect(netFetchMock).toHaveBeenCalledTimes(2)
+    })
 
     const statuses = sendMock.mock.calls
       .filter(([channel]) => channel === 'updater:status')
       .map(([, status]) => status)
-    expect(statuses).toContainEqual({ state: 'idle' })
+    expect(getUpdateStatus()).toEqual({ state: 'idle' })
     expect(statuses).not.toContainEqual(expect.objectContaining({ state: 'error' }))
 
     await vi.advanceTimersByTimeAsync(ONE_HOUR_MS)
-    expect(autoUpdaterMock.checkForUpdates).toHaveBeenCalledTimes(2)
+    expect(netFetchMock).toHaveBeenCalledTimes(4)
+    expect(autoUpdaterMock.checkForUpdates).not.toHaveBeenCalled()
   })
 
   it('backs off consecutive failing background retries instead of re-checking hourly forever', async () => {
@@ -300,7 +349,7 @@ describe('updater check failure handling', () => {
     await vi.advanceTimersByTimeAsync(0)
     expect(autoUpdaterMock.checkForUpdates).toHaveBeenCalledTimes(1)
 
-    // First retry keeps the fast 1h cadence (release-publishing windows).
+    // First retry keeps the fast 1h cadence for transient release-readiness failures.
     await vi.advanceTimersByTimeAsync(ONE_HOUR_MS)
     expect(autoUpdaterMock.checkForUpdates).toHaveBeenCalledTimes(2)
 

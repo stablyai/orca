@@ -30,7 +30,6 @@ import {
   isBenignCheckFailure,
   isMissingUpdateManifestFailure,
   isPrereleaseVersion,
-  isReleaseAssetsPublishingFailure,
   statusesEqual
 } from './updater-fallback'
 import {
@@ -859,8 +858,8 @@ async function sendCheckFailureStatus(
   }
 
   const handleFailure = async (): Promise<void> => {
-    if (isBenignCheckFailure(message)) {
-      // Why: benign failures (publishing latest.yml, network blips) are transient — retry, and skip persisting the timestamp (would suppress the next startup check).
+    if (isBenignCheckFailure(message) || isRetryableReleaseFeedPreflightFailure(sourceError)) {
+      // Why: benign failures (incomplete latest.yml, network blips) are transient — retry, and skip persisting the timestamp (would suppress the next startup check).
       console.warn('[updater] benign check failure:', message)
       clearAvailableUpdateContext()
       scheduleAutomaticUpdateCheck(AUTO_UPDATE_RETRY_INTERVAL_MS)
@@ -873,7 +872,7 @@ async function sendCheckFailureStatus(
           true
         )
       } else {
-        if (shouldPreserveNudgeForReleaseProbe(message, sourceError)) {
+        if (isRetryableReleaseFeedPreflightFailure(sourceError)) {
           // Why: release probes can fail transiently; keep the campaign pending so the short retry can still show it.
           deferPendingUpdateNudgeUntilRetry()
         }
@@ -900,11 +899,10 @@ async function sendCheckFailureStatus(
   return pendingCheckFailurePromise
 }
 
-function shouldPreserveNudgeForReleaseProbe(message: string, sourceError: unknown): boolean {
+function isRetryableReleaseFeedPreflightFailure(sourceError: unknown): boolean {
   return (
-    isReleaseAssetsPublishingFailure(message) ||
-    (sourceError instanceof ReleaseFeedPreflightError &&
-      sourceError.reason === 'manifest-unavailable')
+    sourceError instanceof ReleaseFeedPreflightError &&
+    (sourceError.reason === 'release-not-ready' || sourceError.reason === 'manifest-unavailable')
   )
 }
 
@@ -1170,7 +1168,7 @@ async function pinDefaultReleaseFeed(
     throw new ReleaseFeedPreflightError(
       'release-not-ready',
       isPerfCheck ? 'perf' : includePrerelease ? 'prerelease' : 'default',
-      'Latest release assets are still publishing'
+      'Latest release artifacts are not ready'
     )
   } else if (
     releaseTagsResult.state === 'unavailable' &&
