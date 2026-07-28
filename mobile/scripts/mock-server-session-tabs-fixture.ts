@@ -13,12 +13,19 @@ const LEAF_ID = 'f47ac10b-58cc-4372-a567-0e02b2c3d479'
 // Surface ids are `${parentTabId}::${leafId}`, matching mobileTerminalSurfaceId.
 const SURFACE_TAB_ID = `${PARENT_TAB_ID}::${LEAF_ID}`
 
+function worktreeIdOf(selector: unknown): string {
+  if (typeof selector !== 'string') {
+    return 'mock'
+  }
+  return selector.startsWith('id:') ? selector.slice(3) : selector
+}
+
 /** One ready terminal tab bound to the `term-1` fixture. Mirrors the full
  *  `session.tabs.list` contract so mock-server repros of tab, split-pane, and
  *  pane-attribution bugs aren't shape-incomplete. */
 function createMockSessionTabs(worktree: unknown): RuntimeMobileSessionTabsResult {
   return {
-    worktree: typeof worktree === 'string' ? worktree : 'id:mock',
+    worktree: worktreeIdOf(worktree),
     publicationEpoch: PUBLICATION_EPOCH,
     snapshotVersion: 1,
     activeGroupId: GROUP_ID,
