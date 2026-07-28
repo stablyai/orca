@@ -335,6 +335,21 @@ describe('account CLI handlers', () => {
     }
   )
 
+  it.each(['environment', 'pairing-code'])(
+    'rejects --%s on `account list` instead of listing the local host',
+    async (flag) => {
+      // Why: listing is read-only, but answering with the LOCAL machine's accounts
+      // when the user named a remote host is the specific wrong answer they'd act on.
+      await expect(
+        ACCOUNT_HANDLERS['account list']({
+          ...context('claude'),
+          flags: new Map<string, string | boolean>([[flag, 'homelab']])
+        })
+      ).rejects.toThrow(`\`--${flag}\` does not retarget`)
+      expect(callMock).not.toHaveBeenCalled()
+    }
+  )
+
   it('rejects `--agent` with no value instead of defaulting to Claude', async () => {
     // Why: the parser turns a valueless flag into boolean true, so a silent
     // default would run a full OAuth login for the wrong provider.

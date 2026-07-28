@@ -247,6 +247,24 @@ async function addCodexAccount({ client, json }: HandlerContext): Promise<void> 
   )
 }
 
+/**
+ * Rejects the runtime-selector flags instead of ignoring them. shouldIgnoreRemoteSelection
+ * pins account commands to the local runtime, so honoring `--environment homelab`
+ * silently would target the laptop rather than the host the user named — the exact
+ * mistake this feature exists to avoid. A `--help` note does not reach someone who
+ * already typed the flag.
+ */
+function rejectRemoteSelectionFlags(ctx: HandlerContext, command: string): void {
+  for (const flag of ['environment', 'pairing-code']) {
+    if (ctx.flags.has(flag)) {
+      throw new RuntimeClientError(
+        'invalid_argument',
+        `\`--${flag}\` does not retarget \`${command}\`. Run it on the host whose accounts you want to manage.`
+      )
+    }
+  }
+}
+
 /** CLI handlers for `orca account add [--agent claude|codex]` and `orca account list`. */
 export const ACCOUNT_HANDLERS: Record<string, CommandHandler> = {
   'account add': async (ctx) => {
@@ -266,22 +284,15 @@ export const ACCOUNT_HANDLERS: Record<string, CommandHandler> = {
         `Unsupported --agent "${agent}". Use "claude" or "codex".`
       )
     }
-    // Why: shouldIgnoreRemoteSelection pins account commands to the local runtime,
-    // so honoring these silently would register the account on the wrong host.
-    for (const flag of ['environment', 'pairing-code']) {
-      if (ctx.flags.has(flag)) {
-        throw new RuntimeClientError(
-          'invalid_argument',
-          `\`--${flag}\` does not retarget \`orca account add\`. Run it on the host whose accounts you want to change.`
-        )
-      }
-    }
+    rejectRemoteSelectionFlags(ctx, 'orca account add')
     // Why: the login is a full interactive OAuth round trip. Fail before burning it
     // if the runtime that has to register the account is not reachable.
     await ctx.client.call('accounts.list', { refreshUsage: false })
     await (agent === 'claude' ? addClaudeAccount(ctx) : addCodexAccount(ctx))
   },
-  'account list': async ({ client, json }) => {
+  'account list': async (ctx) => {
+    rejectRemoteSelectionFlags(ctx, 'orca account list')
+    const { client, json } = ctx
     // Why: this command renders no usage numbers, so skip the forced provider
     // refresh — it is one serial network round-trip per managed account.
     const result = await client.call<AccountsListSnapshot>('accounts.list', {
