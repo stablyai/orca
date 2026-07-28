@@ -287,7 +287,7 @@ describe('RelayAgentHookServer', () => {
       expect(env.ORCA_AGENT_HOOK_PORT).toMatch(/^\d+$/)
       expect(env.ORCA_AGENT_HOOK_TOKEN).toBeTruthy()
       expect(env.ORCA_AGENT_HOOK_ENV).toBe('remote')
-      expect(env.ORCA_AGENT_HOOK_VERSION).toBe('1')
+      expect(env.ORCA_AGENT_HOOK_VERSION).toBe('2')
       expect(env.ORCA_AGENT_HOOK_ENDPOINT).toBeTruthy()
     } finally {
       server.stop()

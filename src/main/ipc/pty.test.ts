@@ -8410,6 +8410,36 @@ describe('registerPtyHandlers', () => {
     )
   })
 
+  it('overwrites inherited Codex reviewer ownership from the main-validated launch config', async () => {
+    const leafId = '22222222-2222-4222-8222-222222222222'
+    registerPtyHandlers(mainWindow as never)
+
+    await handlers.get('pty:spawn')!(mainWindowIpcEvent, {
+      cols: 80,
+      rows: 24,
+      cwd: '/repo',
+      command: 'codex',
+      tabId: 'tab-1',
+      leafId,
+      worktreeId: 'wt-1',
+      env: {
+        ORCA_PANE_KEY: `tab-1:${leafId}`,
+        ORCA_TAB_ID: 'tab-1',
+        ORCA_WORKTREE_ID: 'wt-1',
+        ORCA_CODEX_APPROVAL_REVIEWER: 'auto_review'
+      },
+      launchConfig: {
+        agentCommand: 'codex',
+        agentArgs: `-c 'approvals_reviewer="user"'`,
+        agentEnv: {}
+      },
+      launchAgent: 'codex'
+    })
+
+    const spawnOptions = spawnMock.mock.calls.at(-1)?.[2] as { env: Record<string, string> }
+    expect(spawnOptions.env.ORCA_CODEX_APPROVAL_REVIEWER).toBe('user')
+  })
+
   it('refreshes native Agent Teams env when captured teammate mode lives in launch args', async () => {
     const leafId = '11111111-1111-4111-8111-111111111111'
     const runtime = {
@@ -11011,6 +11041,12 @@ describe('registerPtyHandlers', () => {
         connectionId?: string
         tabId?: string
         leafId?: string
+        launchAgent?: string
+        launchConfig?: {
+          agentCommand: string
+          agentArgs: string
+          agentEnv: Record<string, string>
+        }
         persistHostSessionBinding?: boolean
       }): Promise<{ id: string }>
     }
@@ -11082,12 +11118,19 @@ describe('registerPtyHandlers', () => {
           FOO: 'bar',
           ORCA_PANE_KEY: makePaneKey('tab-remote', leafId),
           ORCA_TAB_ID: 'tab-remote',
-          ORCA_WORKTREE_ID: 'wt-remote'
+          ORCA_WORKTREE_ID: 'wt-remote',
+          ORCA_CODEX_APPROVAL_REVIEWER: 'user'
         },
         connectionId: 'ssh-runtime-env',
         worktreeId: 'wt-remote',
         tabId: 'tab-remote',
         leafId,
+        launchAgent: 'codex',
+        launchConfig: {
+          agentCommand: 'codex',
+          agentArgs: `-c 'approvals_reviewer="auto_review"'`,
+          agentEnv: {}
+        },
         persistHostSessionBinding: true
       })
 
@@ -11097,6 +11140,7 @@ describe('registerPtyHandlers', () => {
       expect(env?.ORCA_PANE_KEY).toBeUndefined()
       expect(env?.ORCA_TAB_ID).toBeUndefined()
       expect(env?.ORCA_WORKTREE_ID).toBeUndefined()
+      expect(env?.ORCA_CODEX_APPROVAL_REVIEWER).toBeUndefined()
       expect(spawnOptions.envToDelete ?? []).not.toContain('CODEX_HOME')
       expect(spawnOptions.envToDelete ?? []).not.toContain('ORCA_CODEX_HOME')
       expect(store.upsertSshRemotePtyLease).toHaveBeenCalledWith(

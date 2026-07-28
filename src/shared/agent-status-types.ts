@@ -3,6 +3,7 @@
 // a narrow interrupt fallback synthesizes a final `done` when an agent misses its cancellation hook.
 
 import type { AgentProviderSessionMetadata } from './agent-session-resume'
+import type { ExplicitCodexApprovalReviewer } from './codex-approval-reviewer'
 import {
   normalizeInteractivePromptField,
   normalizeOptionalField,
@@ -222,6 +223,10 @@ export function pickParsedAgentStatusPayload(
 export type AgentStatusIpcPayload = ParsedAgentStatusPayload & {
   paneKey: string
   launchToken?: string
+  /** Source hook event retained for renderer-side lifecycle policy. */
+  hookEventName?: string
+  /** Effective reviewer stamped at Codex launch, with live launch-config lookup as a compatibility fallback. */
+  codexApprovalReviewer?: ExplicitCodexApprovalReviewer
   terminalHandle?: string
   tabId?: string
   worktreeId?: string

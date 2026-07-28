@@ -50,6 +50,10 @@ import {
   type AgentStatusOrchestrationContext,
   type AgentStatusEntry
 } from '../../shared/agent-status-types'
+import {
+  ORCA_CODEX_APPROVAL_REVIEWER_ENV,
+  resolveCodexApprovalReviewer
+} from '../../shared/codex-approval-reviewer'
 import { indexAgentStatusRowsByPaneKey } from '../agent-hooks/agent-status-pane-index'
 import type { AgentHookAuthorityAttestation } from '../agent-hooks/server'
 import type {

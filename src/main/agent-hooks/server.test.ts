@@ -3328,7 +3328,7 @@ describe('AgentHookServer listener replay', () => {
           tabId: ' tab-3 ',
           worktreeId: ' wt-3 ',
           env: 'remote',
-          version: '1',
+          version: server.buildPtyEnv().ORCA_AGENT_HOOK_VERSION,
           payload: {
             state: 'done',
             prompt: oversizedPrompt,
@@ -6439,11 +6439,12 @@ describe('Endpoint file lifecycle', () => {
       const contents = readFileSync(filePath!, 'utf8')
       const expectedPort = server.buildPtyEnv().ORCA_AGENT_HOOK_PORT
       const expectedToken = server.buildPtyEnv().ORCA_AGENT_HOOK_TOKEN
+      const expectedVersion = server.buildPtyEnv().ORCA_AGENT_HOOK_VERSION
       const prefix = process.platform === 'win32' ? 'set ' : ''
       expect(contents).toContain(`${prefix}ORCA_AGENT_HOOK_PORT=${expectedPort}`)
       expect(contents).toContain(`${prefix}ORCA_AGENT_HOOK_TOKEN=${expectedToken}`)
       expect(contents).toContain(`${prefix}ORCA_AGENT_HOOK_ENV=development`)
-      expect(contents).toContain(`${prefix}ORCA_AGENT_HOOK_VERSION=1`)
+      expect(contents).toContain(`${prefix}ORCA_AGENT_HOOK_VERSION=${expectedVersion}`)
     } finally {
       server.stop()
     }
@@ -8334,12 +8335,23 @@ describe('AgentHookServer ingestRemote', () => {
         tabId: 'tab-1',
         worktreeId: 'wt-1',
         hookEventName: 'PermissionRequest',
+        codexApprovalReviewer: 'auto_review',
         toolAgentId: 'agent-subagent-a',
         toolAgentType: 'Review',
         payload: waiting
       },
       'conn-1'
     )
+    expect(server.getStatusSnapshot()).toEqual([
+      expect.objectContaining({
+        paneKey: PANE,
+        connectionId: 'conn-1',
+        hookEventName: 'PermissionRequest',
+        state: 'waiting',
+        agentType: 'claude'
+      })
+    ])
+    expect(server.getStatusSnapshot()[0]).not.toHaveProperty('codexApprovalReviewer')
     server.ingestRemote(
       {
         paneKey: PANE,
@@ -8358,6 +8370,7 @@ describe('AgentHookServer ingestRemote', () => {
       expect.objectContaining({
         paneKey: PANE,
         connectionId: 'conn-1',
+        hookEventName: 'PreToolUse',
         state: 'working',
         agentType: 'claude',
         toolName: 'Bash',

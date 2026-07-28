@@ -585,6 +585,46 @@ describe('SshRelaySession agent hooks over a fake relay transport', () => {
     ingestSpy.mockRestore()
   })
 
+  it('forwards Codex reviewer ownership into main ingest', async () => {
+    relay = createFakeRelay()
+    vi.mocked(deployAndLaunchRelay).mockResolvedValue({
+      transport: relay.transport,
+      platform: 'linux-x64'
+    })
+    const ingestSpy = vi.spyOn(agentHookServer, 'ingestRemote')
+
+    session = createSession('conn-hook-reviewer')
+    await session.establish({} as SshConnection)
+
+    relay.notifyAgentHook(
+      makeEnvelope({
+        codexApprovalReviewer: 'auto_review',
+        hookEventName: 'PermissionRequest',
+        payload: {
+          state: 'waiting',
+          prompt: 'run build',
+          agentType: 'codex',
+          toolName: 'exec_command'
+        }
+      })
+    )
+
+    await vi.waitFor(() =>
+      expect(ingestSpy).toHaveBeenCalledWith(
+        expect.objectContaining({
+          codexApprovalReviewer: 'auto_review',
+          hookEventName: 'PermissionRequest',
+          payload: expect.objectContaining({
+            state: 'waiting',
+            agentType: 'codex'
+          })
+        }),
+        'conn-hook-reviewer'
+      )
+    )
+    ingestSpy.mockRestore()
+  })
+
   it('tracks prompt sent from live SSH agent hooks but not replayed hooks', async () => {
     relay = createFakeRelay()
     vi.mocked(deployAndLaunchRelay).mockResolvedValue({

@@ -73,6 +73,8 @@ export type AgentHookRelayEnvelope = {
   paneKey: string
   /** Ephemeral Orca launch identity stamped into the PTY env for this process. */
   launchToken?: string
+  /** Reviewer ownership stamped into the Codex PTY environment at launch. */
+  codexApprovalReviewer?: ExplicitCodexApprovalReviewer
   tabId?: string
   worktreeId?: string
   /** Always `null` on the wire — relay does not know Orca's local connectionId. */

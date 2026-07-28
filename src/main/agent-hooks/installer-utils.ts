@@ -170,6 +170,9 @@ export function buildWindowsAgentHookPostCommand(
     '  --data-urlencode "paneKey=%ORCA_PANE_KEY%" ^',
     '  --data-urlencode "tabId=%ORCA_TAB_ID%" ^',
     '  --data-urlencode "launchToken=%ORCA_AGENT_LAUNCH_TOKEN%" ^',
+    ...(source === 'codex'
+      ? ['  --data-urlencode "codexApprovalReviewer=%ORCA_CODEX_APPROVAL_REVIEWER%" ^']
+      : []),
     '  --data-urlencode "worktreeId=%ORCA_WORKTREE_ID%" ^',
     '  --data-urlencode "env=%ORCA_AGENT_HOOK_ENV%" ^',
     '  --data-urlencode "version=%ORCA_AGENT_HOOK_VERSION%" ^',
@@ -189,6 +192,9 @@ export function buildWindowsAgentHookCurlPostCommand(source: AgentHookSource): s
     '--data-urlencode "paneKey=%ORCA_PANE_KEY%"',
     '--data-urlencode "tabId=%ORCA_TAB_ID%"',
     '--data-urlencode "launchToken=%ORCA_AGENT_LAUNCH_TOKEN%"',
+    ...(source === 'codex'
+      ? ['--data-urlencode "codexApprovalReviewer=%ORCA_CODEX_APPROVAL_REVIEWER%"']
+      : []),
     '--data-urlencode "worktreeId=%ORCA_WORKTREE_ID%"',
     '--data-urlencode "env=%ORCA_AGENT_HOOK_ENV%"',
     '--data-urlencode "version=%ORCA_AGENT_HOOK_VERSION%"',

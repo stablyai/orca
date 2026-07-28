@@ -126,6 +126,10 @@ import {
   requestKindSchema
 } from '../../shared/telemetry-events'
 import {
+  ORCA_CODEX_APPROVAL_REVIEWER_ENV,
+  resolveCodexApprovalReviewer
+} from '../../shared/codex-approval-reviewer'
+import {
   isTerminalInputTooLargeWithDeferredMeasurement,
   iterateTerminalInputChunks
 } from '../../shared/terminal-input'
@@ -973,7 +977,8 @@ function stripRemotePaneEnvWhenHooksDisabled(
     (!('ORCA_PANE_KEY' in env) &&
       !('ORCA_TAB_ID' in env) &&
       !('ORCA_WORKTREE_ID' in env) &&
-      !('ORCA_AGENT_LAUNCH_TOKEN' in env))
+      !('ORCA_AGENT_LAUNCH_TOKEN' in env) &&
+      !(ORCA_CODEX_APPROVAL_REVIEWER_ENV in env))
   ) {
     return env
   }
@@ -982,6 +987,7 @@ function stripRemotePaneEnvWhenHooksDisabled(
   delete stripped.ORCA_TAB_ID
   delete stripped.ORCA_WORKTREE_ID
   delete stripped.ORCA_AGENT_LAUNCH_TOKEN
+  delete stripped[ORCA_CODEX_APPROVAL_REVIEWER_ENV]
   return stripped
 }
 

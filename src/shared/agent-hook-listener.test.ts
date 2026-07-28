@@ -192,6 +192,38 @@ describe('shared agent-hook-listener', () => {
     }
   })
 
+  it('carries only validated reviewer ownership from Codex hooks', () => {
+    const event = normalizeHookPayload(
+      state,
+      'codex',
+      {
+        paneKey: PANE_KEY,
+        codexApprovalReviewer: 'auto_review',
+        payload: {
+          hook_event_name: 'PermissionRequest',
+          tool_name: 'exec_command'
+        }
+      },
+      'production'
+    )
+    expect(event?.codexApprovalReviewer).toBe('auto_review')
+
+    const invalid = normalizeHookPayload(
+      state,
+      'codex',
+      {
+        paneKey: PANE_KEY,
+        codexApprovalReviewer: 'guardian_subagent',
+        payload: {
+          hook_event_name: 'PermissionRequest',
+          tool_name: 'exec_command'
+        }
+      },
+      'production'
+    )
+    expect(invalid?.codexApprovalReviewer).toBeUndefined()
+  })
+
   it('normalizes Gemini BeforeTool to working with tool fields', () => {
     const event = normalizeHookPayload(
       state,

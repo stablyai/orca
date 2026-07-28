@@ -12583,8 +12583,9 @@ describe('OrcaRuntimeService', () => {
 
     const result = await runtime.createTerminal(`path:${TEST_WORKTREE_PATH}`, {
       command: 'codex',
+      launchAgent: 'codex',
       launchConfig: {
-        agentArgs: '--model gpt-5',
+        agentArgs: `--model gpt-5 -c 'approvals_reviewer="auto_review"'`,
         agentEnv: { CODEX_PROFILE: 'captured' }
       },
       title: 'worker'
@@ -12613,14 +12614,16 @@ describe('OrcaRuntimeService', () => {
     const spawnedLeafId = spawnedEnv.ORCA_PANE_KEY.slice(`${spawnedEnv.ORCA_TAB_ID}:`.length)
     expect(spawnedEnv.ORCA_WORKTREE_ID).toBe(TEST_WORKTREE_ID)
     expect(spawnedEnv.ORCA_AGENT_LAUNCH_TOKEN).toMatch(UUID_RE)
+    expect(spawnedEnv.ORCA_CODEX_APPROVAL_REVIEWER).toBe('auto_review')
     expect(revealTerminalSession).toHaveBeenCalledWith(TEST_WORKTREE_ID, {
       ptyId: 'pty-bg',
       title: 'worker',
       launchConfig: {
-        agentArgs: '--model gpt-5',
+        agentArgs: `--model gpt-5 -c 'approvals_reviewer="auto_review"'`,
         agentEnv: { CODEX_PROFILE: 'captured' }
       },
       launchToken: spawnedEnv.ORCA_AGENT_LAUNCH_TOKEN,
+      launchAgent: 'codex',
       activate: false,
       tabId: spawnedEnv.ORCA_TAB_ID,
       leafId: spawnedLeafId
