@@ -182,6 +182,7 @@ export function registerClipboardHandlers(
           openFile: (filePath) => open(filePath, 'r')
         })
       }
+      // encodeClipboardNativeImagePng already shrinks oversized screenshots under the cap.
       return png ? saveClipboardImageBufferForTarget(png, args, handlerOptions) : null
     }
   )
