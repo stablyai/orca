@@ -1,5 +1,5 @@
 import { execFile, execFileSync, type ExecFileOptionsWithStringEncoding } from 'node:child_process'
-import { delimiter, join } from 'node:path'
+import { delimiter, join, win32 } from 'node:path'
 import { existsSync } from 'node:fs'
 
 function execFileWithoutBlocking(
@@ -29,6 +29,11 @@ export function getIcaclsExePath(): string {
 /** Absolute path because service-launched Electron can omit System32 from PATH. */
 export function getWhoamiExePath(): string {
   return `${process.env.SystemRoot ?? 'C:\\Windows'}\\System32\\whoami.exe`
+}
+
+/** Absolute path because service-launched Electron can omit System32 from PATH. */
+export function getRegExePath(env: NodeJS.ProcessEnv = process.env): string {
+  return win32.join(env.SystemRoot ?? 'C:\\Windows', 'System32', 'reg.exe')
 }
 
 /**

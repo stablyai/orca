@@ -39,6 +39,10 @@ describe('readPersistedWindowsPathSegments', () => {
     })
 
     expect(segments).toEqual(['C:\\Windows\\System32', 'C:\\Tools', 'C:\\Users\\me\\bin'])
+    expect(execFileSync).toHaveBeenCalledTimes(2)
+    expect(
+      execFileSync.mock.calls.every(([command]) => command === 'C:\\Windows\\System32\\reg.exe')
+    ).toBe(true)
   })
 
   it('returns an empty list outside Windows', () => {
