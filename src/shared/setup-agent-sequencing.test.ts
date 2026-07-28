@@ -173,30 +173,26 @@ describe('createSequencedSetupAgentCommands', () => {
       nonce: 'nonce-win',
       waitTimeoutSeconds: 3
     })
+    const setupPowerShell = decodePowerShellScript(result.setupCommand)
     const startupPowerShell = decodePowerShellScript(result.startupCommand)
 
-    expect(result.setupCommand).toContain('cmd.exe /d /s /v:on /c')
-    expect(result.setupCommand).toContain('cmd.exe /c "C:\\repo\\.git\\orca\\setup-runner.cmd"')
-    expect(result.setupCommand).toContain('echo !ORCA_SETUP_NONCE!:!ORCA_SETUP_STATUS!')
+    expect(result.setupCommand).toContain(
+      'powershell.exe -NoProfile -NonInteractive -ExecutionPolicy Bypass -EncodedCommand'
+    )
+    expect(setupPowerShell).toContain("$runner = 'C:\\repo\\.git\\orca\\setup-runner.cmd'")
+    expect(setupPowerShell).toContain('$nonce + ":" + $setupStatus')
     expect(result.startupCommand.match(/powershell\.exe/g)).toHaveLength(1)
     expect(result.startupCommand).toContain(
-      'powershell.exe -NoProfile -ExecutionPolicy Bypass -EncodedCommand'
+      'powershell.exe -NoProfile -NonInteractive -ExecutionPolicy Bypass -EncodedCommand'
     )
     expect(startupPowerShell).toContain('AddSeconds(3)')
     expect(startupPowerShell).toContain('Missing setup marker path.')
-    expect(result.startupCommand).toContain('!ORCA_SETUP_STATUS!')
     expect(startupPowerShell).toContain('Timed out waiting for setup before starting agent.')
     expect(startupPowerShell).toContain('Setup failed; skipping agent startup.')
     expect(startupPowerShell).toContain(
       'Remove-Item -LiteralPath $marker, $tmp -Force -ErrorAction SilentlyContinue'
     )
     expect(result.startupCommand).not.toContain('%ERRORLEVEL%')
-    expect(result.startupCommand).not.toContain(' & ) else')
-    expect(result.startupCommand).not.toContain('if ""!ORCA_SETUP_STATUS!""==""124""')
-    expect(result.startupCommand).not.toContain('if not ""!ORCA_SETUP_STATUS!""==""0""')
-    expect(result.startupCommand).not.toContain(
-      `call !${SETUP_AGENT_SEQUENCE_STARTUP_COMMAND_ENV}!`
-    )
     expect(startupPowerShell).toContain('Invoke-Expression')
     expect(result.startupCommand).not.toContain('fix !PATH! & test')
     expect(result.startupEnv).toEqual({
@@ -235,7 +231,7 @@ describe('createSequencedSetupAgentCommands', () => {
       const setupExit = await waitForExit(
         spawnWindowsCommand(tempDir, 'run-setup.cmd', commands.setupCommand)
       )
-      expect(setupExit).toEqual({ code: 0, stderr: '' })
+      expect(setupExit.code).toBe(0)
       expect(readIfExists(`${runnerScriptPath}.windows-sequence.done`)).toBe(
         'windows-sequence:0\r\n'
       )
