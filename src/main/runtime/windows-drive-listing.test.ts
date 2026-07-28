@@ -30,6 +30,7 @@ describe('listWindowsDrives', () => {
   it('returns one directory entry per mounted drive, anchored at the host root', async () => {
     const result = await listWindowsDrives(statOnly(['C:\\', 'M:\\']))
     expect(result.resolvedPath).toBe('/')
+    expect(result.pathFlavor).toBe('win32')
     expect(result.entries).toEqual([
       { name: 'C:\\', isDirectory: true, isSymlink: false },
       { name: 'M:\\', isDirectory: true, isSymlink: false }
@@ -44,9 +45,20 @@ describe('listWindowsDrives', () => {
       if (p === 'D:\\') {
         return { isDirectory: () => false } as Stats
       }
-      throw new Error('EPERM')
+      throw Object.assign(new Error('EPERM'), { code: 'EPERM' })
     }
     const result = await listWindowsDrives(statPath)
     expect(result.entries.map((e) => e.name)).toEqual(['C:\\'])
+  })
+
+  it.each(['EIO', 'EMFILE'])('surfaces systemic %s failures', async (code) => {
+    const statPath = async (p: string): Promise<Stats> => {
+      if (p === 'D:\\') {
+        throw Object.assign(new Error(code), { code })
+      }
+      throw Object.assign(new Error('ENOENT'), { code: 'ENOENT' })
+    }
+
+    await expect(listWindowsDrives(statPath)).rejects.toMatchObject({ code })
   })
 })

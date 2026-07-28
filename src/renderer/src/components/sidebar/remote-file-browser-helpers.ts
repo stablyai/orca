@@ -1,6 +1,7 @@
 import { translate } from '@/i18n/i18n'
 import { shouldHandleTextControlPaste } from '@/lib/text-control-paste'
 import { isClipboardTextByteLengthOverLimit } from '../../../../shared/clipboard-text'
+import type { FilesystemPathFlavor } from '../../../../shared/types'
 import {
   driveRootOf,
   isDrivePath,
@@ -60,19 +61,23 @@ export function decideEscAction(filter: string): EscAction {
   return filter.length > 0 ? { type: 'clearFilter' } : { type: 'cancel' }
 }
 
-export function joinPath(resolvedPath: string, name: string): string {
+export function joinPath(
+  resolvedPath: string,
+  name: string,
+  pathFlavor: FilesystemPathFlavor = 'posix'
+): string {
   // Drive rows in a Windows host-root listing are already absolute (`M:\`).
-  if (resolvedPath === '/' && isDrivePath(name)) {
+  if (pathFlavor === 'win32' && resolvedPath === '/' && isDrivePath(name)) {
     return driveRootOf(name)
   }
-  if (isDrivePath(resolvedPath)) {
+  if (pathFlavor === 'win32' && isDrivePath(resolvedPath)) {
     return joinDrivePath(resolvedPath, name)
   }
   return resolvedPath === '/' ? `/${name}` : `${resolvedPath}/${name}`
 }
 
-export function parentPath(p: string): string {
-  if (isDrivePath(p)) {
+export function parentPath(p: string, pathFlavor: FilesystemPathFlavor = 'posix'): string {
+  if (pathFlavor === 'win32' && isDrivePath(p)) {
     return parentOfDrivePath(p)
   }
   if (p === '/' || p === '') {
@@ -105,11 +110,11 @@ export type ParsedInput =
     }
 
 // Slashes, drive anchors, and standalone base markers enter path mode.
-export function isPathMode(raw: string): boolean {
+export function isPathMode(raw: string, pathFlavor: FilesystemPathFlavor = 'posix'): boolean {
   if (raw.includes('/')) {
     return true
   }
-  if (isDrivePath(raw)) {
+  if (pathFlavor === 'win32' && isDrivePath(raw)) {
     return true
   }
   return raw === '~' || raw === '.' || raw === '..'
@@ -123,8 +128,11 @@ export function shouldDeferRemoteFileBrowserPasteResolve(text: string): boolean 
   return isRemoteFileBrowserPathResolveTextTooLarge(text)
 }
 
-export function parsePathInput(raw: string): ParsedInput {
-  if (!isPathMode(raw)) {
+export function parsePathInput(
+  raw: string,
+  pathFlavor: FilesystemPathFlavor = 'posix'
+): ParsedInput {
+  if (!isPathMode(raw, pathFlavor)) {
     // Filter mode preserves the raw text; trimming happens inside
     // `filterEntries` so leading/trailing spaces don't alter the input shown
     // back to the user.
@@ -145,7 +153,7 @@ export function parsePathInput(raw: string): ParsedInput {
   let base: 'root' | 'home' | 'cwd' | 'drive'
   let driveRoot: string | undefined
   let remainder: string
-  if (isDrivePath(raw)) {
+  if (pathFlavor === 'win32' && isDrivePath(raw)) {
     base = 'drive'
     driveRoot = driveRootOf(raw)
     // Strip the drive anchor; segments accept either Windows separator.

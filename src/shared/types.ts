@@ -3563,6 +3563,8 @@ export type PersistedState = {
 }
 
 // ─── Filesystem ─────────────────────────────────────────────
+export type FilesystemPathFlavor = 'posix' | 'win32'
+
 export type DirEntry = {
   name: string
   isDirectory: boolean

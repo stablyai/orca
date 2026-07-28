@@ -17,8 +17,11 @@ export function driveRootOf(p: string): string {
   return `${p[0].toUpperCase()}:\\`
 }
 
-export function splitBrowsePath(p: string): BrowsePathParts {
-  if (isDrivePath(p)) {
+export function splitBrowsePath(
+  p: string,
+  pathFlavor: FilesystemPathFlavor = 'posix'
+): BrowsePathParts {
+  if (pathFlavor === 'win32' && isDrivePath(p)) {
     return {
       kind: 'drive',
       driveRoot: driveRootOf(p),
@@ -38,7 +41,7 @@ export function parentOfDrivePath(p: string): string {
   if (isDriveRoot(p)) {
     return '/'
   }
-  const parts = splitBrowsePath(p)
+  const parts = splitBrowsePath(p, 'win32')
   if (parts.kind !== 'drive') {
     return p
   }
@@ -56,3 +59,4 @@ export function driveBreadcrumbPath(
   const kept = segments.slice(0, endIndex + 1)
   return kept.length === 0 ? driveRoot : `${driveRoot}${kept.join('\\')}`
 }
+import type { FilesystemPathFlavor } from '../../../../shared/types'

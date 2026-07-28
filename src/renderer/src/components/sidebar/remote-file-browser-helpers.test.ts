@@ -340,30 +340,37 @@ describe('resolveSegmentStep', () => {
 
 describe('Windows drive paths', () => {
   it('isPathMode triggers on drive-anchored input', () => {
-    expect(isPathMode('M:\\')).toBe(true)
-    expect(isPathMode('M:/')).toBe(true)
-    expect(isPathMode('m:')).toBe(true)
-    expect(isPathMode('M:\\dev')).toBe(true)
-    expect(isPathMode('M')).toBe(false)
-    expect(isPathMode('M:x')).toBe(false)
+    expect(isPathMode('M:\\', 'win32')).toBe(true)
+    expect(isPathMode('M:/', 'win32')).toBe(true)
+    expect(isPathMode('m:', 'win32')).toBe(true)
+    expect(isPathMode('M:\\dev', 'win32')).toBe(true)
+    expect(isPathMode('M', 'win32')).toBe(false)
+    expect(isPathMode('M:x', 'win32')).toBe(false)
+  })
+
+  it('keeps drive-shaped POSIX names in filter and child-path semantics', () => {
+    expect(isPathMode('M:\\', 'posix')).toBe(false)
+    expect(parsePathInput('M:\\', 'posix')).toEqual({ mode: 'filter', filter: 'M:\\' })
+    expect(joinPath('/', 'M:\\', 'posix')).toBe('/M:\\')
+    expect(parentPath('/M:\\', 'posix')).toBe('/')
   })
 
   it('parsePathInput anchors drive input at the normalized drive root', () => {
-    expect(parsePathInput('m:/dev/')).toEqual({
+    expect(parsePathInput('m:/dev/', 'win32')).toEqual({
       mode: 'path',
       base: 'drive',
       driveRoot: 'M:\\',
       committedSegments: ['dev'],
       trailingFilter: ''
     })
-    expect(parsePathInput('M:\\dev\\deb')).toEqual({
+    expect(parsePathInput('M:\\dev\\deb', 'win32')).toEqual({
       mode: 'path',
       base: 'drive',
       driveRoot: 'M:\\',
       committedSegments: ['dev'],
       trailingFilter: 'deb'
     })
-    expect(parsePathInput('M:')).toEqual({
+    expect(parsePathInput('M:', 'win32')).toEqual({
       mode: 'path',
       base: 'drive',
       driveRoot: 'M:\\',
@@ -374,7 +381,7 @@ describe('Windows drive paths', () => {
 
   it('parsePathInput rejects repeated separators in drive input, either kind', () => {
     for (const raw of ['M:\\dev\\\\x', 'M:/dev//x', 'M:\\dev\\/x']) {
-      const parsed = parsePathInput(raw)
+      const parsed = parsePathInput(raw, 'win32')
       expect(parsed.mode).toBe('path')
       if (parsed.mode === 'path') {
         expect(parsed.invalid).toMatch(/repeated separators/)
@@ -383,18 +390,18 @@ describe('Windows drive paths', () => {
   })
 
   it('joinPath treats drive rows in the host-root listing as absolute', () => {
-    expect(joinPath('/', 'M:\\')).toBe('M:\\')
-    expect(joinPath('/', 'usr')).toBe('/usr')
+    expect(joinPath('/', 'M:\\', 'win32')).toBe('M:\\')
+    expect(joinPath('/', 'usr', 'win32')).toBe('/usr')
   })
 
   it('joinPath appends with a backslash inside a drive', () => {
-    expect(joinPath('M:\\', 'dev')).toBe('M:\\dev')
-    expect(joinPath('M:\\dev', 'debox')).toBe('M:\\dev\\debox')
+    expect(joinPath('M:\\', 'dev', 'win32')).toBe('M:\\dev')
+    expect(joinPath('M:\\dev', 'debox', 'win32')).toBe('M:\\dev\\debox')
   })
 
   it('parentPath climbs drive paths and exits to the host root', () => {
-    expect(parentPath('M:\\dev\\debox')).toBe('M:\\dev')
-    expect(parentPath('M:\\dev')).toBe('M:\\')
-    expect(parentPath('M:\\')).toBe('/')
+    expect(parentPath('M:\\dev\\debox', 'win32')).toBe('M:\\dev')
+    expect(parentPath('M:\\dev', 'win32')).toBe('M:\\')
+    expect(parentPath('M:\\', 'win32')).toBe('/')
   })
 })

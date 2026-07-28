@@ -186,6 +186,7 @@ import type {
   WorkspaceCreateTelemetrySource,
   WorkspaceSessionState,
   DirEntry,
+  FilesystemPathFlavor,
   GitHubIssueUpdate,
   GitHubPullRequestStateUpdate,
   GitHubPRFile,
@@ -15632,7 +15633,11 @@ export class OrcaRuntimeService {
     return scanNestedRepos({ path, options: { timeoutMs: 15_000 } })
   }
 
-  async browseServerDir(pathValue: string): Promise<{ resolvedPath: string; entries: DirEntry[] }> {
+  async browseServerDir(pathValue: string): Promise<{
+    resolvedPath: string
+    entries: DirEntry[]
+    pathFlavor: FilesystemPathFlavor
+  }> {
     // Windows resolves `/` to the current drive, so expose drive roots instead.
     if (isServerDriveListRequest(pathValue)) {
       return listWindowsDrives()
@@ -15656,7 +15661,11 @@ export class OrcaRuntimeService {
       }
       return a.name.localeCompare(b.name)
     })
-    return { resolvedPath: dirPath, entries: mapped }
+    return {
+      resolvedPath: dirPath,
+      entries: mapped,
+      pathFlavor: process.platform === 'win32' ? 'win32' : 'posix'
+    }
   }
 
   async isGitAvailable(): Promise<boolean> {

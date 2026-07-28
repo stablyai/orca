@@ -6788,6 +6788,7 @@ describe('OrcaRuntimeService', () => {
       const result = await runtime.browseServerDir(tempRoot)
 
       expect(result.resolvedPath).toBe(tempRoot)
+      expect(result.pathFlavor).toBe(process.platform === 'win32' ? 'win32' : 'posix')
       expect(result.entries).toEqual([
         { name: 'alpha', isDirectory: true, isSymlink: false },
         { name: 'zeta', isDirectory: true, isSymlink: false },
@@ -6804,6 +6805,7 @@ describe('OrcaRuntimeService', () => {
     const result = await runtime.browseServerDir('/')
 
     expect(result.resolvedPath).toBe('/')
+    expect(result.pathFlavor).toBe('win32')
     expect(result.entries).toContainEqual({
       name: win32.parse(tmpdir()).root.toUpperCase(),
       isDirectory: true,

@@ -3122,7 +3122,7 @@ function createSshApi(): NonNullable<Partial<PreloadApi>['ssh']> {
     listDetectedPorts: () => Promise.resolve([]),
     onPortForwardsChanged: () => noopUnsubscribe,
     onDetectedPortsChanged: () => noopUnsubscribe,
-    browseDir: () => Promise.resolve({ entries: [], resolvedPath: '' }),
+    browseDir: () => Promise.resolve({ entries: [], resolvedPath: '', pathFlavor: 'posix' }),
     onCredentialRequest: () => noopUnsubscribe,
     onCredentialResolved: () => noopUnsubscribe,
     submitCredential: () => Promise.resolve()

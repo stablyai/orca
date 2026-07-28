@@ -41,12 +41,12 @@ describe('driveRootOf / isDriveRoot', () => {
 
 describe('splitBrowsePath', () => {
   it('splits drive paths on either separator', () => {
-    expect(splitBrowsePath('M:\\dev\\debox')).toEqual({
+    expect(splitBrowsePath('M:\\dev\\debox', 'win32')).toEqual({
       kind: 'drive',
       driveRoot: 'M:\\',
       segments: ['dev', 'debox']
     })
-    expect(splitBrowsePath('M:/dev')).toEqual({
+    expect(splitBrowsePath('M:/dev', 'win32')).toEqual({
       kind: 'drive',
       driveRoot: 'M:\\',
       segments: ['dev']
@@ -56,6 +56,10 @@ describe('splitBrowsePath', () => {
   it('keeps POSIX paths in the POSIX shape', () => {
     expect(splitBrowsePath('/home/user')).toEqual({ kind: 'posix', segments: ['home', 'user'] })
     expect(splitBrowsePath('/')).toEqual({ kind: 'posix', segments: [] })
+    expect(splitBrowsePath('M:\\dev', 'posix')).toEqual({
+      kind: 'posix',
+      segments: ['M:\\dev']
+    })
   })
 })
 
