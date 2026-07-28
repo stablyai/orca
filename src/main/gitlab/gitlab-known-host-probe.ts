@@ -32,13 +32,30 @@ export function rememberGlabKnownHost(
   connectionId?: string | null,
   localGitOptions: LocalGitExecOptions = {}
 ): void {
-  const normalizedHost = normalizeGitLabHost(host)
+  rememberGlabKnownHosts([host], connectionId, localGitOptions)
+}
+
+export function rememberGlabKnownHosts(
+  hosts: readonly string[],
+  connectionId?: string | null,
+  localGitOptions: LocalGitExecOptions = {}
+): void {
   const key = knownHostsExecutionKey(connectionId, localGitOptions)
   const cached = knownHostsCacheByExecutionContext.get(key) ?? DEFAULT_GITLAB_HOSTS
-  if (cached.map(normalizeGitLabHost).includes(normalizedHost)) {
+  const seen = new Set(cached.map(normalizeGitLabHost))
+  const additions: string[] = []
+  for (const host of hosts) {
+    const normalizedHost = normalizeGitLabHost(host)
+    if (seen.has(normalizedHost)) {
+      continue
+    }
+    seen.add(normalizedHost)
+    additions.push(normalizedHost)
+  }
+  if (additions.length === 0) {
     return
   }
-  knownHostsCacheByExecutionContext.set(key, [...cached, normalizedHost])
+  knownHostsCacheByExecutionContext.set(key, [...cached, ...additions])
 }
 
 export async function getGlabKnownHosts(

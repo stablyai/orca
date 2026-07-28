@@ -25,7 +25,7 @@ import {
   parseGlabAuthStatusHosts,
   resolveIssueSource
 } from './gl-utils'
-import { rememberGlabKnownHost } from './gitlab-known-host-probe'
+import { rememberGlabKnownHost, rememberGlabKnownHosts } from './gitlab-known-host-probe'
 import { registerSshGitProvider, unregisterSshGitProvider } from '../providers/ssh-git-dispatch'
 
 describe('gitlab project ref resolution', () => {
@@ -561,6 +561,31 @@ describe('getGlabKnownHosts', () => {
       'wsl.test'
     ])
     await expect(getGlabKnownHosts('conn-1')).resolves.toEqual(['gitlab.com', 'ssh.test'])
+  })
+
+  it('batch-normalizes and deduplicates hosts in first-seen order per execution context', async () => {
+    rememberGlabKnownHosts([' Native-B.test ', 'native-a.test', 'NATIVE-B.TEST'])
+    rememberGlabKnownHosts(['WSL-B.test', ' wsl-a.test ', 'wsl-b.test'], undefined, {
+      wslDistro: 'Ubuntu'
+    })
+    rememberGlabKnownHosts(['SSH-B.test', 'ssh-a.test', ' ssh-b.test '], 'conn-batch')
+
+    await expect(getGlabKnownHosts()).resolves.toEqual([
+      'gitlab.com',
+      'native-b.test',
+      'native-a.test'
+    ])
+    await expect(getGlabKnownHosts(undefined, { wslDistro: 'Ubuntu' })).resolves.toEqual([
+      'gitlab.com',
+      'wsl-b.test',
+      'wsl-a.test'
+    ])
+    await expect(getGlabKnownHosts('conn-batch')).resolves.toEqual([
+      'gitlab.com',
+      'ssh-b.test',
+      'ssh-a.test'
+    ])
+    expect(glabExecFileAsyncMock).not.toHaveBeenCalled()
   })
 
   it('recognizes a self-hosted host on a non-default port', async () => {
