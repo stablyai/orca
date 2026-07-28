@@ -195,6 +195,12 @@ function computeAgentLabel(title: string): string | null {
   if (titleHasAgentName(title, 'mimo')) {
     return 'MiMo Code'
   }
+  // Why: Qwen Code can use braille spinner prefixes while working; match the
+  // name token before Claude's generic spinner heuristic (keep in sync with
+  // agent-title-identity.ts).
+  if (titleHasAgentName(title, 'qwen')) {
+    return 'Qwen Code'
+  }
   if (titleHasAgentName(title, 'aider')) {
     return 'Aider'
   }
@@ -238,6 +244,7 @@ const TITLE_LABEL_TO_AGENT: Partial<Record<string, TerminalAgent>> = {
   OpenCode: 'opencode',
   'OpenCode 2': 'opencode2',
   'MiMo Code': 'mimo-code',
+  'Qwen Code': 'qwen-code',
   Aider: 'aider',
   Cursor: 'cursor',
   Droid: 'droid',

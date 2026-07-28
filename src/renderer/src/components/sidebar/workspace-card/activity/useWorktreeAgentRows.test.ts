@@ -210,4 +210,28 @@ describe('buildWorktreeAgentRows', () => {
 
     expect(rows.map((row) => [row.paneKey, row.state])).toEqual([[childPaneKey, 'done']])
   })
+
+  it('adds title-derived rows for hook-less Qwen Code panes', () => {
+    const rows = buildWorktreeAgentRows({
+      tabs: [makeTab('tab-1')],
+      entries: [],
+      retained: [],
+      runtimePaneTitlesByTabId: {
+        'tab-1': {
+          1: 'Qwen Code',
+          2: '⠋ Qwen Code'
+        }
+      },
+      ptyIdsByTabId: { 'tab-1': ['pty-left', 'pty-right'] },
+      terminalLayoutsByTabId: {
+        'tab-1': makeSplitPaneLayout(LEAF_ID_1, LEAF_ID_1_SECOND)
+      },
+      now: 2000
+    })
+
+    expect(rows.map((row) => [row.agentType, row.state, row.entry.lastAssistantMessage])).toEqual([
+      ['qwen-code', 'idle', 'Idle'],
+      ['qwen-code', 'working', 'Running']
+    ])
+  })
 })
