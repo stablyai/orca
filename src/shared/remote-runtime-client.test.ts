@@ -12,6 +12,8 @@ import {
   publicKeyToBase64
 } from './e2ee-crypto'
 import { sendRemoteRuntimeRequest, subscribeRemoteRuntimeRequest } from './remote-runtime-client'
+import { MAX_TIMER_DELAY_MS } from './timer-delay'
+import { SESSION_TAB_CLOSE_INTENT_RUNTIME_CAPABILITY } from './protocol-version'
 
 const servers: WebSocketServer[] = []
 
@@ -64,6 +66,11 @@ describe('subscribeRemoteRuntimeRequest', () => {
         expect.objectContaining({ ok: true, result: { type: 'subscribed' } })
       )
     )
+    await expect(server.nextAuth).resolves.toEqual({
+      type: 'e2ee_auth',
+      deviceToken: 'device-token',
+      clientCapabilities: [SESSION_TAB_CLOSE_INTENT_RUNTIME_CAPABILITY]
+    })
     const bytes = new Uint8Array([1, 2, 3])
     expect(subscription.sendBinary(bytes)).toBe(true)
     await expect(server.nextBinary).resolves.toEqual(bytes)
@@ -173,6 +180,15 @@ describe('subscribeRemoteRuntimeRequest', () => {
 })
 
 describe('sendRemoteRuntimeRequest', () => {
+  it.each([-1, 1.5, MAX_TIMER_DELAY_MS + 1, Number.MAX_SAFE_INTEGER + 1])(
+    'rejects invalid timer delay %s before reading pairing data',
+    async (timeoutMs) => {
+      await expect(
+        sendRemoteRuntimeRequest({} as PairingOffer, 'status.get', {}, timeoutMs)
+      ).rejects.toMatchObject({ code: 'invalid_argument' })
+    }
+  )
+
   it('includes WebSocket close details when one-shot admission is rejected', async () => {
     const server = await createClosingServer(1013, 'Maximum connections reached')
 
@@ -231,6 +247,35 @@ describe('sendRemoteRuntimeRequest', () => {
     })
   })
 
+  it('sends orchestration authentication fields in the admitted encrypted request', async () => {
+    let receivedRequest: Record<string, unknown> | null = null
+    const server = await createOneShotServer({
+      onRequest: (request) => {
+        receivedRequest = request
+      }
+    })
+
+    await sendRemoteRuntimeRequest(
+      server.pairing,
+      'orchestration.federationControl',
+      { dispatch: 'ctx_1' },
+      1000,
+      {
+        orchestrationCapability: 'capability',
+        orchestrationContractVersion: 1,
+        orchestrationRequestId: 'mutation_1'
+      }
+    )
+
+    expect(receivedRequest).toMatchObject({
+      method: 'orchestration.federationControl',
+      params: { dispatch: 'ctx_1' },
+      orchestrationCapability: 'capability',
+      orchestrationContractVersion: 1,
+      orchestrationRequestId: 'mutation_1'
+    })
+  })
+
   it('detaches one-shot socket listeners after a successful response', async () => {
     const offSpy = vi.spyOn(WebSocketClient.prototype, 'off')
     try {
@@ -261,11 +306,16 @@ async function createSubscriptionServer(
 ): Promise<{
   pairing: PairingOffer
   nextBinary: Promise<Uint8Array>
+  nextAuth: Promise<unknown>
 }> {
   const serverKeyPair = generateKeyPair()
   let resolveBinary: (bytes: Uint8Array) => void = () => {}
   const nextBinary = new Promise<Uint8Array>((resolve) => {
     resolveBinary = resolve
+  })
+  let resolveAuth: (auth: unknown) => void = () => {}
+  const nextAuth = new Promise<unknown>((resolve) => {
+    resolveAuth = resolve
   })
   const wss = new WebSocketServer({ port: 0, autoPong: options.disableAutoPong !== true })
   servers.push(wss)
@@ -302,6 +352,7 @@ async function createSubscriptionServer(
         return
       }
       if (!authenticated) {
+        resolveAuth(JSON.parse(plaintext))
         authenticated = true
         sendEncrypted(ws, sharedKey, { type: 'e2ee_authenticated' })
         return
@@ -340,7 +391,7 @@ async function createSubscriptionServer(
   if (!pairing) {
     throw new Error('Failed to create test pairing')
   }
-  return { pairing, nextBinary }
+  return { pairing, nextBinary, nextAuth }
 }
 
 function sendEncrypted(ws: WebSocket, sharedKey: Uint8Array, message: unknown): void {
@@ -377,6 +428,7 @@ async function createClosingServer(
 async function createOneShotServer(
   options: {
     response?: (requestId: string) => unknown
+    onRequest?: (request: Record<string, unknown>) => void
   } = {}
 ): Promise<{ pairing: PairingOffer }> {
   const serverKeyPair = generateKeyPair()
@@ -412,7 +464,8 @@ async function createOneShotServer(
         return
       }
 
-      const request = JSON.parse(plaintext) as { id: string }
+      const request = JSON.parse(plaintext) as { id: string } & Record<string, unknown>
+      options.onRequest?.(request)
       const key = sharedKey
       const keepalive = setInterval(() => {
         sendEncrypted(ws, key, { _keepalive: true })

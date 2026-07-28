@@ -4,12 +4,19 @@ import type { CSSProperties, ReactNode } from 'react'
 import { renderToStaticMarkup } from 'react-dom/server'
 import { tmpdir } from 'node:os'
 import { cleanup, render, waitFor } from '@testing-library/react'
-import { afterEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { getDefaultSettings } from '../../../../shared/constants'
 import type { GlobalSettings } from '../../../../shared/types'
 
 const mocks = vi.hoisted(() => ({
-  state: {} as Record<string, unknown>
+  state: {} as Record<string, unknown>,
+  // Stable callback identities so companion-board Effects only re-run on real state changes.
+  closeWorkspaceBoard: vi.fn(),
+  panel: {
+    workspaceBoardOpen: false,
+    workspaceBoardRenderedOpen: true,
+    workspaceBoardDragPreviewOpen: false
+  }
 }))
 
 vi.mock('@/store', () => ({
@@ -74,14 +81,12 @@ vi.mock('./useSidebarProjectDrop', () => ({
 
 vi.mock('./useWorkspaceBoardPanel', () => ({
   useWorkspaceBoardPanel: () => ({
-    workspaceBoardOpen: false,
-    workspaceBoardRenderedOpen: true,
-    workspaceBoardDragPreviewOpen: false,
+    ...mocks.panel,
     workspaceBoardMenuOpen: false,
     toggleWorkspaceBoard: vi.fn(),
     handleWorkspaceBoardOpenChange: vi.fn(),
     setWorkspaceBoardMenuOpen: vi.fn(),
-    closeWorkspaceBoard: vi.fn(),
+    closeWorkspaceBoard: mocks.closeWorkspaceBoard,
     previewWorkspaceBoardFromDrag: vi.fn(),
     solidifyWorkspaceBoardFromDrag: vi.fn(),
     cancelWorkspaceBoardDragPreview: vi.fn()
@@ -93,6 +98,8 @@ import Sidebar from './index'
 function setSidebarState(settings: GlobalSettings, statusBarVisible = true): void {
   mocks.state = {
     activeModal: null,
+    agentDashboardDrawerOpen: false,
+    setAgentDashboardDrawerOpen: vi.fn(),
     fetchAllWorktrees: vi.fn(),
     repos: [],
     setSidebarWidth: vi.fn(),
@@ -114,6 +121,15 @@ function sidebarElement(): ReactNode {
     <Sidebar worktreeScrollOffsetRef={{ current: 0 }} worktreeScrollAnchorRef={{ current: null }} />
   )
 }
+
+beforeEach(() => {
+  mocks.closeWorkspaceBoard.mockClear()
+  mocks.panel = {
+    workspaceBoardOpen: false,
+    workspaceBoardRenderedOpen: true,
+    workspaceBoardDragPreviewOpen: false
+  }
+})
 
 afterEach(cleanup)
 
@@ -201,5 +217,64 @@ describe('Sidebar', () => {
     }
     view.rerender(sidebarElement())
     await waitFor(() => expect(fetchAllWorktrees).toHaveBeenCalledTimes(1))
+  })
+
+  describe('companion board mutual exclusion', () => {
+    function renderWithDashboardOpen(): {
+      view: ReturnType<typeof render>
+      setAgentDashboardDrawerOpen: ReturnType<typeof vi.fn>
+    } {
+      setSidebarState(getDefaultSettings(tmpdir()))
+      const setAgentDashboardDrawerOpen = vi.fn()
+      mocks.state = { ...mocks.state, agentDashboardDrawerOpen: true, setAgentDashboardDrawerOpen }
+      mocks.panel = {
+        workspaceBoardOpen: false,
+        workspaceBoardRenderedOpen: false,
+        workspaceBoardDragPreviewOpen: false
+      }
+      return { view: render(sidebarElement()), setAgentDashboardDrawerOpen }
+    }
+
+    it('keeps the agent dashboard open while a worktree drag only previews the board', () => {
+      const { view, setAgentDashboardDrawerOpen } = renderWithDashboardOpen()
+
+      mocks.panel = {
+        workspaceBoardOpen: false,
+        workspaceBoardRenderedOpen: true,
+        workspaceBoardDragPreviewOpen: true
+      }
+      view.rerender(sidebarElement())
+
+      expect(setAgentDashboardDrawerOpen).not.toHaveBeenCalled()
+    })
+
+    it('closes the agent dashboard when the workspace board is actually opened', () => {
+      const { view, setAgentDashboardDrawerOpen } = renderWithDashboardOpen()
+
+      mocks.panel = {
+        workspaceBoardOpen: true,
+        workspaceBoardRenderedOpen: true,
+        workspaceBoardDragPreviewOpen: false
+      }
+      view.rerender(sidebarElement())
+
+      expect(setAgentDashboardDrawerOpen).toHaveBeenCalledWith(false)
+    })
+
+    it('closes the workspace board when the agent dashboard opens', () => {
+      setSidebarState(getDefaultSettings(tmpdir()))
+      mocks.panel = {
+        workspaceBoardOpen: true,
+        workspaceBoardRenderedOpen: true,
+        workspaceBoardDragPreviewOpen: false
+      }
+      const view = render(sidebarElement())
+      mocks.closeWorkspaceBoard.mockClear()
+
+      mocks.state = { ...mocks.state, agentDashboardDrawerOpen: true }
+      view.rerender(sidebarElement())
+
+      expect(mocks.closeWorkspaceBoard).toHaveBeenCalled()
+    })
   })
 })

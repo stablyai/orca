@@ -2814,7 +2814,7 @@
     "ko": "{{value0}} 메가바이트"
   },
   "auto.components.settings.TerminalPane.6e6480a7df": {
-    "ko": "terminal의 프로그램(tmux, Neovim, fzf, SSH)이 시스템 클립보드에 복사할 수 있게 합니다."
+    "ko": "terminal의 프로그램(Zellij, tmux, Neovim, fzf, Grok, SSH)이 시스템 클립보드에 복사할 수 있게 합니다."
   },
   "auto.components.settings.TerminalPane.8eefeaa3da": {
     "ko": "마우스를 따라 포커스 이동"

@@ -11,6 +11,7 @@ import { collectRendererMemoryProfileCounts } from './renderer-memory-profile'
 
 const RENDERER_MEMORY_SAMPLE_INTERVAL_MS = 60_000
 const BYTES_PER_MEGABYTE = 1024 * 1024
+const BYTES_PER_KILOBYTE = 1024
 // Why: one detailed breadcrumb per threshold names what grew before an OOM.
 const RENDERER_MEMORY_HIGHWATER_RATIOS = [0.6, 0.8] as const
 
@@ -20,6 +21,13 @@ type BrowserPerformanceMemory = {
   usedJSHeapSize?: number
   totalJSHeapSize?: number
   jsHeapSizeLimit?: number
+}
+
+/** Heap sizes in bytes, tagged with whether they are exact or Blink-quantized. */
+type HeapMetrics = BrowserPerformanceMemory & {
+  mallocedBytes?: number
+  blinkAllocatedBytes?: number
+  exact: boolean
 }
 
 let rendererCrashDiagnosticsInstalled = false
@@ -42,7 +50,7 @@ export function installRendererCrashDiagnostics(surface: RendererSurface = 'main
   window.addEventListener('error', recordRendererError)
   window.addEventListener('unhandledrejection', recordRendererUnhandledRejection)
 
-  if (getPerformanceMemory()) {
+  if (readHeapMetrics()) {
     recordRendererMemory('startup')
     rendererMemoryInterval = window.setInterval(
       () => recordRendererMemory('interval'),
@@ -108,7 +116,7 @@ function recordRendererUnhandledRejection(event: PromiseRejectionEvent): void {
 }
 
 function recordRendererMemory(reason: string): void {
-  const memory = getPerformanceMemory()
+  const memory = readHeapMetrics()
   if (!memory) {
     return
   }
@@ -121,6 +129,9 @@ function recordRendererMemory(reason: string): void {
       usedHeapMB: toMegabytes(memory.usedJSHeapSize),
       totalHeapMB: toMegabytes(memory.totalJSHeapSize),
       heapLimitMB: toMegabytes(memory.jsHeapSizeLimit),
+      heapSource: memory.exact ? 'v8' : 'quantized',
+      mallocedMB: toMegabytes(memory.mallocedBytes),
+      blinkAllocatedMB: toMegabytes(memory.blinkAllocatedBytes),
       browserWebviews: browserWebviews.browserWebviewCount,
       registeredBrowserGuests: browserWebviews.registeredBrowserGuestCount
     })
@@ -129,7 +140,7 @@ function recordRendererMemory(reason: string): void {
 }
 
 function recordRendererMemoryHighwater(
-  memory: BrowserPerformanceMemory,
+  memory: HeapMetrics,
   browserWebviews: BrowserWebviewMemoryProfile
 ): void {
   const used = memory.usedJSHeapSize
@@ -156,6 +167,9 @@ function recordRendererMemoryHighwater(
     usedHeapMB: toMegabytes(used),
     totalHeapMB: toMegabytes(memory.totalJSHeapSize),
     heapLimitMB: toMegabytes(limit),
+    heapSource: memory.exact ? 'v8' : 'quantized',
+    mallocedMB: toMegabytes(memory.mallocedBytes),
+    blinkAllocatedMB: toMegabytes(memory.blinkAllocatedBytes),
     domNodes: document.getElementsByTagName('*').length,
     terminalElements: document.querySelectorAll('.xterm').length,
     browserWebviews: browserWebviews.browserWebviewCount,
@@ -183,6 +197,36 @@ function getPerformanceMemory(): BrowserPerformanceMemory | undefined {
     return undefined
   }
   return (window.performance as Performance & { memory?: BrowserPerformanceMemory }).memory
+}
+
+/**
+ * Prefers V8's exact numbers; falls back to `performance.memory` only when the
+ * preload bridge is unavailable (older shell, or a surface without it).
+ *
+ * Both are normalized to bytes so callers and the emitted MB fields stay
+ * comparable with breadcrumbs recorded before this bridge existed.
+ */
+function readHeapMetrics(): HeapMetrics | undefined {
+  if (typeof window === 'undefined') {
+    return undefined
+  }
+  const exact = window.api?.crashReports?.readHeapStatistics?.()
+  if (exact) {
+    return {
+      usedJSHeapSize: exact.usedHeapKB * BYTES_PER_KILOBYTE,
+      totalJSHeapSize: exact.totalHeapKB * BYTES_PER_KILOBYTE,
+      jsHeapSizeLimit: exact.heapLimitKB * BYTES_PER_KILOBYTE,
+      mallocedBytes: exact.mallocedKB * BYTES_PER_KILOBYTE,
+      // Why guarded: undefined * 1024 is NaN, which would emit a junk field.
+      blinkAllocatedBytes:
+        exact.blinkAllocatedKB === undefined
+          ? undefined
+          : exact.blinkAllocatedKB * BYTES_PER_KILOBYTE,
+      exact: true
+    }
+  }
+  const fallback = getPerformanceMemory()
+  return fallback ? { ...fallback, exact: false } : undefined
 }
 
 function describeUnknownValue(

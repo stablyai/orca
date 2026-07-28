@@ -69,7 +69,7 @@ describe('moveWorktreeIdsWithinGroup', () => {
 
 describe('buildWorktreeDragPreviewOffsets', () => {
   it('slides intervening rows up while dragging a row down', () => {
-    const offsets = buildWorktreeDragPreviewOffsets({
+    const { offsets } = buildWorktreeDragPreviewOffsets({
       groupIds: ['a', 'b', 'c', 'd'],
       draggedIds: ['b'],
       dropIndex: 4,
@@ -88,7 +88,7 @@ describe('buildWorktreeDragPreviewOffsets', () => {
   })
 
   it('slides intervening rows down while dragging a row up', () => {
-    const offsets = buildWorktreeDragPreviewOffsets({
+    const { offsets } = buildWorktreeDragPreviewOffsets({
       groupIds: ['a', 'b', 'c'],
       draggedIds: ['c'],
       dropIndex: 0,
@@ -106,7 +106,7 @@ describe('buildWorktreeDragPreviewOffsets', () => {
   })
 
   it('returns no preview offsets for a no-op hover', () => {
-    const offsets = buildWorktreeDragPreviewOffsets({
+    const { offsets } = buildWorktreeDragPreviewOffsets({
       groupIds: ['a', 'b'],
       draggedIds: ['a'],
       dropIndex: 1,
@@ -120,7 +120,7 @@ describe('buildWorktreeDragPreviewOffsets', () => {
   })
 
   it('uses the dragged unit height when previewing variable-height rows', () => {
-    const offsets = buildWorktreeDragPreviewOffsets({
+    const { offsets } = buildWorktreeDragPreviewOffsets({
       groupIds: ['parent', 'sibling'],
       draggedIds: ['parent'],
       dropIndex: 2,
@@ -134,7 +134,7 @@ describe('buildWorktreeDragPreviewOffsets', () => {
   })
 
   it('uses the dragged unit height when previewing a short row above a tall row', () => {
-    const offsets = buildWorktreeDragPreviewOffsets({
+    const { offsets } = buildWorktreeDragPreviewOffsets({
       groupIds: ['parent', 'sibling'],
       draggedIds: ['sibling'],
       dropIndex: 0,
@@ -148,7 +148,7 @@ describe('buildWorktreeDragPreviewOffsets', () => {
   })
 
   it('reserves one card-height slot while previewing a multi-select batch', () => {
-    const offsets = buildWorktreeDragPreviewOffsets({
+    const { offsets } = buildWorktreeDragPreviewOffsets({
       groupIds: ['a', 'b', 'c', 'd', 'e'],
       draggedIds: ['b', 'c', 'd'],
       draggingWorktreeId: 'b',
@@ -170,7 +170,7 @@ describe('buildWorktreeDragPreviewOffsets', () => {
   })
 
   it('uses the grabbed selected card as the one preview placeholder', () => {
-    const offsets = buildWorktreeDragPreviewOffsets({
+    const { offsets } = buildWorktreeDragPreviewOffsets({
       groupIds: ['a', 'b', 'c', 'd', 'e'],
       draggedIds: ['b', 'c', 'd'],
       draggingWorktreeId: 'd',
@@ -188,7 +188,7 @@ describe('buildWorktreeDragPreviewOffsets', () => {
   })
 
   it('returns no preview offsets for a no-op multi-select hover', () => {
-    const offsets = buildWorktreeDragPreviewOffsets({
+    const { offsets } = buildWorktreeDragPreviewOffsets({
       groupIds: ['a', 'b', 'c', 'd', 'e'],
       draggedIds: ['b', 'c', 'd'],
       draggingWorktreeId: 'b',

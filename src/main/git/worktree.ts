@@ -1436,16 +1436,22 @@ async function resolveGitCommonDir(gitDir: string): Promise<string> {
 // `config.worktree`; later files override earlier ones, matching git's config precedence.
 async function isSparseCheckoutEnabled(gitDir: string): Promise<boolean> {
   const commonDir = await resolveGitCommonDir(gitDir)
-  const sharedFlag = await readCoreSparseCheckoutFlag(join(commonDir, 'config'))
-  const worktreeFlag = await readCoreSparseCheckoutFlag(join(gitDir, 'config.worktree'))
-  return worktreeFlag ?? sharedFlag ?? false
+  const sharedConfig = await readGitConfigText(join(commonDir, 'config'))
+  const sharedFlag = parseCoreSparseCheckoutFlag(sharedConfig)
+  // Git reads `config.worktree` only while extensions.worktreeConfig is on; without that gate a
+  // stale worktree config left behind by an earlier sparse checkout overrides the real repo value.
+  if (parseGitConfigFlag(sharedConfig, 'extensions', 'worktreeconfig') !== true) {
+    return sharedFlag ?? false
+  }
+  const worktreeConfig = await readGitConfigText(join(gitDir, 'config.worktree'))
+  return parseCoreSparseCheckoutFlag(worktreeConfig) ?? sharedFlag ?? false
 }
 
-async function readCoreSparseCheckoutFlag(configPath: string): Promise<boolean | undefined> {
+async function readGitConfigText(configPath: string): Promise<string> {
   try {
-    return parseCoreSparseCheckoutFlag(await readFile(configPath, 'utf-8'))
+    return await readFile(configPath, 'utf-8')
   } catch {
-    return undefined
+    return ''
   }
 }
 
@@ -1454,23 +1460,38 @@ async function readCoreSparseCheckoutFlag(configPath: string): Promise<boolean |
 // git-config parsing edge cases can be unit tested without touching the filesystem. Only the last
 // assignment wins, and a `[core "subsection"]` header is intentionally not treated as `[core]`.
 export function parseCoreSparseCheckoutFlag(configContent: string): boolean | undefined {
-  let inCoreSection = false
+  return parseGitConfigFlag(configContent, 'core', 'sparsecheckout')
+}
+
+// A section header may be followed on the same line by further headers and then one assignment
+// (`[core] sparseCheckout = true` is legal git config); the value runs to end of line, so at most
+// one assignment can share a line and the last header before it decides the section.
+const GIT_CONFIG_SECTION_HEADER = /^\[\s*([A-Za-z0-9.-]+)(\s+"(?:[^"\\]|\\.)*")?\s*\]/
+const GIT_CONFIG_ASSIGNMENT = /^([A-Za-z][A-Za-z0-9-]*)\s*(?:=\s*(.*))?$/
+
+// `section` and `key` must be lowercase: git config names are case-insensitive.
+function parseGitConfigFlag(
+  configContent: string,
+  section: string,
+  key: string
+): boolean | undefined {
+  let inSection = false
   let value: boolean | undefined
   for (const rawLine of configContent.split(/\r?\n/)) {
-    const line = stripGitConfigComment(rawLine).trim()
-    if (line.length === 0) {
+    let rest = stripGitConfigComment(rawLine).trim()
+    for (
+      let header = rest.match(GIT_CONFIG_SECTION_HEADER);
+      header;
+      header = rest.match(GIT_CONFIG_SECTION_HEADER)
+    ) {
+      inSection = header[1].toLowerCase() === section && header[2] === undefined
+      rest = rest.slice(header[0].length).trim()
+    }
+    if (!inSection || rest.length === 0) {
       continue
     }
-    const sectionHeader = line.match(/^\[\s*([A-Za-z0-9.-]+)(\s+"(?:[^"\\]|\\.)*")?\s*\]$/)
-    if (sectionHeader) {
-      inCoreSection = sectionHeader[1].toLowerCase() === 'core' && sectionHeader[2] === undefined
-      continue
-    }
-    if (!inCoreSection) {
-      continue
-    }
-    const assignment = line.match(/^([A-Za-z][A-Za-z0-9-]*)\s*(?:=\s*(.*))?$/)
-    if (!assignment || assignment[1].toLowerCase() !== 'sparsecheckout') {
+    const assignment = rest.match(GIT_CONFIG_ASSIGNMENT)
+    if (!assignment || assignment[1].toLowerCase() !== key) {
       continue
     }
     value = parseGitConfigBoolean(assignment[2])

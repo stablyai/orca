@@ -81,6 +81,9 @@ describe('renderer crash diagnostics', () => {
         usedHeapMB: 32,
         totalHeapMB: 64,
         heapLimitMB: 512,
+        // Why: without this tag a reader cannot tell an exact heap number from a
+        // Blink-quantized one, which is what made earlier bundles unanalyzable.
+        heapSource: 'quantized',
         browserWebviews: 4,
         registeredBrowserGuests: 3
       }
@@ -241,5 +244,118 @@ describe('renderer crash diagnostics', () => {
         (call) => (call[0] as { name: string }).name === 'renderer_memory_highwater'
       )
     ).toBe(false)
+  })
+
+  describe('exact V8 heap statistics', () => {
+    const KB = 1024
+    let readHeapStatistics: ReturnType<typeof vi.fn>
+
+    const stubHeap = (usedMB: number, limitMB = 512): void => {
+      readHeapStatistics.mockReturnValue({
+        usedHeapKB: usedMB * KB,
+        totalHeapKB: usedMB * KB * 2,
+        heapLimitKB: limitMB * KB,
+        mallocedKB: 3 * KB,
+        blinkAllocatedKB: 7 * KB
+      })
+    }
+
+    beforeEach(() => {
+      readHeapStatistics = vi.fn()
+      ;(window.api.crashReports as unknown as { readHeapStatistics: unknown }).readHeapStatistics =
+        readHeapStatistics
+    })
+
+    it('prefers exact statistics over performance.memory and labels the source', () => {
+      stubHeap(101)
+
+      diagnostics.installRendererCrashDiagnostics()
+
+      // Why: performance.memory still says 32MB here. Reporting 101 proves the
+      // exact reading wins rather than merely being recorded alongside.
+      expect(recordBreadcrumbMock).toHaveBeenCalledWith({
+        name: 'renderer_memory',
+        data: expect.objectContaining({
+          usedHeapMB: 101,
+          heapLimitMB: 512,
+          heapSource: 'v8',
+          mallocedMB: 3,
+          blinkAllocatedMB: 7
+        })
+      })
+    })
+
+    it('observes growth that performance.memory quantizes away', () => {
+      // Why: this is the whole point. Blink pins usedJSHeapSize to a bucket and
+      // caches it ~20min, so a real climb reports byte-identical values and a
+      // highwater threshold never fires. Exact stats must still cross it.
+      const quantized = (window.performance as unknown as { memory: Record<string, number> }).memory
+      quantized.usedJSHeapSize = 32 * 1024 * 1024
+      stubHeap(100)
+      vi.stubGlobal('document', {
+        getElementsByTagName: () => ({ length: 1 }),
+        querySelectorAll: () => ({ length: 0 })
+      })
+
+      diagnostics.installRendererCrashDiagnostics()
+      const highwaterCalls = (): unknown[] =>
+        recordBreadcrumbMock.mock.calls.filter(
+          (call) => (call[0] as { name: string }).name === 'renderer_memory_highwater'
+        )
+      expect(highwaterCalls()).toHaveLength(0)
+
+      stubHeap(400) // 78% of 512 — past the 60% threshold, still below 80%.
+      const tick = setIntervalMock.mock.calls[0][0] as () => void
+      tick()
+
+      expect(quantized.usedJSHeapSize).toBe(32 * 1024 * 1024)
+      expect(highwaterCalls()).toHaveLength(1)
+      expect(recordBreadcrumbMock).toHaveBeenCalledWith({
+        name: 'renderer_memory_highwater',
+        data: expect.objectContaining({ thresholdPct: 60, usedHeapMB: 400, heapSource: 'v8' })
+      })
+    })
+
+    it('omits the Blink field instead of emitting a junk value for it', () => {
+      // Why: `undefined * 1024` is NaN. The breadcrumb must carry no
+      // blinkAllocatedMB at all rather than a meaningless number.
+      readHeapStatistics.mockReturnValue({
+        usedHeapKB: 77 * KB,
+        totalHeapKB: 154 * KB,
+        heapLimitKB: 512 * KB,
+        mallocedKB: 3 * KB,
+        blinkAllocatedKB: undefined
+      })
+
+      diagnostics.installRendererCrashDiagnostics()
+
+      const call = recordBreadcrumbMock.mock.calls.find(
+        ([entry]) => (entry as { name: string }).name === 'renderer_memory'
+      )?.[0] as { data: Record<string, unknown> }
+      expect(call.data).toMatchObject({ usedHeapMB: 77, heapSource: 'v8', mallocedMB: 3 })
+      expect(call.data).not.toHaveProperty('blinkAllocatedMB')
+    })
+
+    it('falls back to performance.memory when the bridge returns null', () => {
+      readHeapStatistics.mockReturnValue(null)
+
+      diagnostics.installRendererCrashDiagnostics()
+
+      expect(recordBreadcrumbMock).toHaveBeenCalledWith({
+        name: 'renderer_memory',
+        data: expect.objectContaining({ usedHeapMB: 32, heapSource: 'quantized' })
+      })
+    })
+
+    it('samples on an older shell whose preload lacks the bridge', () => {
+      ;(window.api.crashReports as unknown as Record<string, unknown>).readHeapStatistics =
+        undefined
+
+      expect(() => diagnostics.installRendererCrashDiagnostics()).not.toThrow()
+      expect(recordBreadcrumbMock).toHaveBeenCalledWith({
+        name: 'renderer_memory',
+        data: expect.objectContaining({ usedHeapMB: 32, heapSource: 'quantized' })
+      })
+    })
   })
 })

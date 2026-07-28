@@ -102,6 +102,9 @@ function resolveCurrentEditorRoute(
   worktreeId: string,
   provenance: EditorFileOperationProvenance
 ): WorktreeOperationRoute | null {
+  if (worktreeId === FLOATING_TERMINAL_WORKTREE_ID) {
+    return { executionHostId: 'local', runtimeEnvironmentId: null }
+  }
   const explicitResolution = resolveExplicitWorktreeOperationRouteResult(state, worktreeId)
   if (explicitResolution.kind === 'resolved') {
     return explicitResolution.route
@@ -133,6 +136,7 @@ export function getEditorFileOperationContext(
   file: {
     worktreeId: string
     runtimeEnvironmentId?: string | null
+    externalSshTargetId?: string
     operationProvenance?: EditorFileOperationProvenance
   },
   worktreePath: string | null
@@ -166,6 +170,15 @@ export function getEditorFileOperationContext(
         )?.folderPath ?? null)
       : null)
   if (!host) {
+    throw new Error(OWNER_CHANGED_MESSAGE)
+  }
+  const externalSshTargetId = file.externalSshTargetId?.trim()
+  if (
+    externalSshTargetId &&
+    (host.kind !== 'ssh' ||
+      route.runtimeEnvironmentId !== null ||
+      host.targetId !== externalSshTargetId)
+  ) {
     throw new Error(OWNER_CHANGED_MESSAGE)
   }
   if (host?.kind === 'ssh' && provenance.expectedSshConnectionGeneration === undefined) {

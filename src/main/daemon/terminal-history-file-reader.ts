@@ -2,10 +2,6 @@ import {
   readNodeFileSyncWithinLimit,
   readNodeFileWithinLimit
 } from '../../shared/node-bounded-file-reader'
-import { assertJsonTextStructureWithinLimits } from '../../shared/json-text-structure-limit'
-
-export const TERMINAL_HISTORY_JSON_MAX_STRUCTURAL_TOKENS = 1_000_000
-export const TERMINAL_HISTORY_JSON_MAX_NESTING_DEPTH = 128
 
 export function readTerminalHistoryBuffer(filePath: string, maxBytes: number): Buffer {
   return readNodeFileSyncWithinLimit(filePath, maxBytes).buffer
@@ -15,17 +11,16 @@ export function readTerminalHistoryText(filePath: string, maxBytes: number): str
   return readTerminalHistoryBuffer(filePath, maxBytes).toString('utf8')
 }
 
+// Why no JSON structure pre-scan here: checkpoint.json and meta.json are our own
+// writer's output, not untrusted input — the byte cap still bounds the read and a
+// corrupt file fails JSON.parse into every caller's existing catch. Untrusted JSON
+// still goes through assertJsonTextStructureWithinLimits.
 export function readTerminalHistoryJson<T>(filePath: string, maxBytes: number): T {
-  const text = readTerminalHistoryText(filePath, maxBytes)
-  assertJsonTextStructureWithinLimits(text, {
-    structuralTokens: TERMINAL_HISTORY_JSON_MAX_STRUCTURAL_TOKENS,
-    nestingDepth: TERMINAL_HISTORY_JSON_MAX_NESTING_DEPTH
-  })
-  return JSON.parse(text) as T
+  return JSON.parse(readTerminalHistoryText(filePath, maxBytes)) as T
 }
 
 // Why: cold-restore payload reads must not block the main thread, but need the
-// same byte and JSON-structure bounds as the sync readers.
+// same byte bound as the sync readers.
 export async function readTerminalHistoryBufferAsync(
   filePath: string,
   maxBytes: number
@@ -44,10 +39,5 @@ export async function readTerminalHistoryJsonAsync<T>(
   filePath: string,
   maxBytes: number
 ): Promise<T> {
-  const text = await readTerminalHistoryTextAsync(filePath, maxBytes)
-  assertJsonTextStructureWithinLimits(text, {
-    structuralTokens: TERMINAL_HISTORY_JSON_MAX_STRUCTURAL_TOKENS,
-    nestingDepth: TERMINAL_HISTORY_JSON_MAX_NESTING_DEPTH
-  })
-  return JSON.parse(text) as T
+  return JSON.parse(await readTerminalHistoryTextAsync(filePath, maxBytes)) as T
 }

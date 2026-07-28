@@ -12,6 +12,7 @@ import {
   type JsonRpcResponse
 } from './protocol'
 import { ClientRequestAborts } from './client-request-aborts'
+import { MAX_TIMER_DELAY_MS, isSafeTimerDelayMs } from '../shared/timer-delay'
 
 export type RequestContext = {
   clientId: number
@@ -265,7 +266,7 @@ export class RelayDispatcher {
     method: string,
     params?: Record<string, unknown>,
     options?: { timeoutMs?: number }
-  ): Promise<unknown> {
+  ) {
     return this.requestClient(this.primaryClient.id, method, params, options)
   }
 
@@ -295,6 +296,12 @@ export class RelayDispatcher {
     if (this.disposed || !client || client.closed) {
       return Promise.reject(new Error('Relay client is not connected'))
     }
+    const timeoutMs = options?.timeoutMs ?? RELAY_TO_CLIENT_REQUEST_TIMEOUT_MS
+    if (!isSafeTimerDelayMs(timeoutMs)) {
+      return Promise.reject(
+        new Error(`Request timeout must be an integer between 0 and ${MAX_TIMER_DELAY_MS}ms`)
+      )
+    }
     const id = this.nextRequestId++
     const msg: JsonRpcRequest = {
       jsonrpc: '2.0',
@@ -302,7 +309,6 @@ export class RelayDispatcher {
       method,
       ...(params !== undefined ? { params } : {})
     }
-    const timeoutMs = options?.timeoutMs ?? RELAY_TO_CLIENT_REQUEST_TIMEOUT_MS
     return new Promise((resolve, reject) => {
       const timer = setTimeout(() => {
         this.pendingRelayRequests.delete(id)

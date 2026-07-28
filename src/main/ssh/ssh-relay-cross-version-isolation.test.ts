@@ -7,6 +7,7 @@
 // collapses to a shared dir passes every other unit test and re-introduces
 // the original "stale daemon serves new client" bug.
 
+import { EventEmitter } from 'node:events'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 vi.mock('electron', () => ({
@@ -61,24 +62,28 @@ function makeMockConnection(): SshConnection {
       stdout: { on: vi.fn() },
       close: vi.fn()
     }),
-    sftp: vi.fn().mockResolvedValue({
-      mkdir: vi.fn((_p: string, cb: (err: Error | null) => void) => cb(null)),
-      on: vi.fn(),
-      once: vi.fn(),
-      createWriteStream: vi.fn().mockReturnValue({
-        on: vi.fn((_event: string, cb: () => void) => {
-          if (_event === 'close') {
-            setTimeout(cb, 0)
-          }
-        }),
-        once: vi.fn((_event: string, cb: () => void) => {
-          if (_event === 'close') {
-            setTimeout(cb, 0)
-          }
-        }),
-        end: vi.fn()
-      }),
-      end: vi.fn()
+    // Why: production attaches and removes real SFTP/write-stream listeners, so the fake must be an emitter.
+    sftp: vi.fn().mockImplementation(() => {
+      const sftp = new EventEmitter()
+      return Promise.resolve(
+        Object.assign(sftp, {
+          mkdir: vi.fn((_p: string, cb: (err: Error | null) => void) => cb(null)),
+          // Shell home and SFTP start directory agree here, so no namespace redirect applies.
+          realpath: vi.fn((_p: string, cb: (err: Error | null, resolved: string) => void) =>
+            cb(null, '/home/u')
+          ),
+          lstat: vi.fn((_p: string, cb: (err: Error | null) => void) =>
+            cb(Object.assign(new Error('No such file'), { code: 2 }))
+          ),
+          createWriteStream: vi.fn().mockImplementation(() => {
+            const ws = new EventEmitter()
+            return Object.assign(ws, {
+              end: vi.fn(() => setTimeout(() => ws.emit('close'), 0))
+            })
+          }),
+          end: vi.fn(() => setTimeout(() => sftp.emit('close'), 0))
+        })
+      )
     })
   } as unknown as SshConnection
 }

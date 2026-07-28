@@ -22,6 +22,7 @@ describe('createIpcPtyTransport', () => {
   let onExit:
     | ((payload: { id: string; code: number; preserveRendererBinding?: boolean }) => void)
     | null = null
+  let onWriteUnavailable: ((payload: { id: string }) => void) | null = null
 
   function flushPtySideEffects(): Promise<void> {
     return new Promise((resolve) => setTimeout(resolve, 0))
@@ -32,6 +33,7 @@ describe('createIpcPtyTransport', () => {
     onData = null
     onReplay = null
     onExit = null
+    onWriteUnavailable = null
 
     ;(globalThis as { window: typeof window }).window = {
       ...originalWindow,
@@ -42,6 +44,10 @@ describe('createIpcPtyTransport', () => {
           spawn: vi.fn().mockResolvedValue({ id: 'pty-1' }),
           write: vi.fn(),
           writeAccepted: vi.fn().mockResolvedValue(true),
+          onWriteUnavailable: vi.fn((callback: (payload: { id: string }) => void) => {
+            onWriteUnavailable = callback
+            return () => {}
+          }),
           resize: vi.fn(),
           kill: vi.fn(),
           onData: vi.fn((callback: (payload: { id: string; data: string }) => void) => {
@@ -89,6 +95,18 @@ describe('createIpcPtyTransport', () => {
     transport.disconnect()
   })
 
+  it('routes a rejected daemon write to the owning transport recovery callback', async () => {
+    const { createIpcPtyTransport } = await import('./pty-transport')
+    const recovery = vi.fn()
+    const transport = createIpcPtyTransport({})
+    await transport.connect({ url: '', callbacks: { onWriteUnavailable: recovery } })
+
+    onWriteUnavailable?.({ id: 'pty-1' })
+
+    expect(recovery).toHaveBeenCalledOnce()
+    transport.disconnect()
+  })
+
   it('does not create a second kill authority when a mounted pane detaches', async () => {
     const { createIpcPtyTransport } = await import('./pty-transport')
     const kill = window.api.pty.kill as unknown as ReturnType<typeof vi.fn>
@@ -98,6 +116,21 @@ describe('createIpcPtyTransport', () => {
     transport.detach?.()
 
     expect(kill).not.toHaveBeenCalled()
+  })
+
+  it('retires an adopted PTY when recovery disconnects before a replacement spawn', async () => {
+    const { createIpcPtyTransport } = await import('./pty-transport')
+    const spawn = window.api.pty.spawn as unknown as ReturnType<typeof vi.fn>
+    const kill = window.api.pty.kill as unknown as ReturnType<typeof vi.fn>
+    spawn.mockResolvedValueOnce({ id: 'empty-reattach', isReattach: true })
+    const transport = createIpcPtyTransport({})
+
+    await transport.connect({ url: '', sessionId: 'empty-reattach', callbacks: {} })
+    transport.disconnect()
+
+    expect(kill).toHaveBeenCalledWith('empty-reattach')
+    expect(transport.getPtyId()).toBeNull()
+    expect(transport.isConnected()).toBe(false)
   })
 
   it('forwards requested environment deletions to the PTY spawn', async () => {
@@ -445,6 +478,30 @@ describe('createIpcPtyTransport', () => {
       startupCwdFallback: { kind: 'worktree', cwd: '/repo/app' }
     })
     transport.disconnect()
+  })
+
+  it('forwards the declined-resume signal on fresh and cold-restore spawns alike', async () => {
+    const { createIpcPtyTransport } = await import('./pty-transport')
+    const spawn = window.api.pty.spawn as unknown as ReturnType<typeof vi.fn>
+    spawn.mockResolvedValueOnce({ id: 'pty-1', agentResumeUnavailable: true })
+
+    const freshTransport = createIpcPtyTransport({})
+    await expect(freshTransport.connect({ url: '', callbacks: {} })).resolves.toEqual({
+      id: 'pty-1',
+      agentResumeUnavailable: true
+    })
+    freshTransport.disconnect()
+
+    spawn.mockResolvedValueOnce({
+      id: 'pty-2',
+      coldRestore: { scrollback: 'recovered', cwd: '/repo/app' },
+      agentResumeUnavailable: true
+    })
+    const coldTransport = createIpcPtyTransport({})
+    await expect(coldTransport.connect({ url: '', callbacks: {} })).resolves.toEqual(
+      expect.objectContaining({ id: 'pty-2', agentResumeUnavailable: true })
+    )
+    coldTransport.disconnect()
   })
 
   it('defers title side effects until after terminal data is delivered', async () => {
@@ -1389,6 +1446,7 @@ describe('createIpcPtyTransport', () => {
 
     expect(result).toEqual({
       id: 'pty-reattach',
+      isReattach: true,
       launchAgent: 'droid',
       snapshot: 'snapshot data',
       snapshotCols: 132,
@@ -1413,6 +1471,7 @@ describe('createIpcPtyTransport', () => {
 
     expect(result).toEqual({
       id: 'pty-unknown-launch-agent',
+      isReattach: true,
       snapshot: undefined,
       snapshotCols: undefined,
       snapshotRows: undefined,

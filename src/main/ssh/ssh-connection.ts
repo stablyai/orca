@@ -40,6 +40,10 @@ import {
   type SshConnectionCallbacks
 } from './ssh-connection-utils'
 import type { RemoteHostPlatform } from './ssh-remote-platform'
+import {
+  resolveSftpTransferPathIfMapped,
+  type SftpNamespacePathMapping
+} from './sftp-namespace-resolution'
 import type { FileUploadSession } from '../providers/types'
 import { isSshSessionLimitError } from './ssh-session-limit-error'
 import {
@@ -50,6 +54,8 @@ export type { SshConnectionCallbacks } from './ssh-connection-utils'
 
 type SshRemoteFileOptions = {
   hostPlatform?: RemoteHostPlatform
+  // Only uploadDirectory and writeFile honor this, and only on the non-Windows ssh2 branch.
+  sftpNamespace?: SftpNamespacePathMapping
 }
 
 // Upper bound on waiting for an aborted channel's open/close to settle before rejecting anyway.
@@ -423,15 +429,17 @@ export class SshConnection {
         sftp.on('error', swallowLateSftpError)
         sftp.once('close', () => sftp.removeListener('error', swallowLateSftpError))
         try {
-          const { uploadDirectory } = await import('./ssh-relay-deploy-helpers')
-          await raceSftpFileTransferWithAbort(
-            uploadDirectory(sftp, localDir, remoteDir),
-            linkedSignal.signal,
-            (onClose) => {
-              sftp.once('close', onClose)
-              endSftp()
-            }
-          )
+          // Why: resolve on the same session that transfers — a later session is not authoritative for this one's namespace.
+          const transfer = (async (): Promise<void> => {
+            const targetDir = await resolveSftpTransferPathIfMapped(sftp, remoteDir, options)
+            linkedSignal.signal.throwIfAborted()
+            const { uploadDirectory } = await import('./ssh-relay-deploy-helpers')
+            await uploadDirectory(sftp, localDir, targetDir)
+          })()
+          await raceSftpFileTransferWithAbort(transfer, linkedSignal.signal, (onClose) => {
+            sftp.once('close', onClose)
+            endSftp()
+          })
         } finally {
           endSftp()
         }
@@ -519,35 +527,13 @@ export class SshConnection {
         sftp.on('error', swallowLateSftpError)
         sftp.once('close', () => sftp.removeListener('error', swallowLateSftpError))
         try {
-          const write = new Promise<void>((resolve, reject) => {
-            const ws = sftp.createWriteStream(remotePath)
-            let settled = false
-            const cleanup = (): void => {
-              sftp.removeListener('error', onError)
-              ws.removeListener('close', onClose)
-              ws.removeListener('error', onError)
-            }
-            const onClose = (): void => {
-              if (settled) {
-                return
-              }
-              settled = true
-              cleanup()
-              resolve()
-            }
-            const onError = (err: Error): void => {
-              if (settled) {
-                return
-              }
-              settled = true
-              cleanup()
-              reject(err)
-            }
-            sftp.prependOnceListener('error', onError)
-            ws.once('close', onClose)
-            ws.once('error', onError)
-            ws.end(contents)
-          })
+          // Why: resolve on the same session that writes — a later session is not authoritative for this one's namespace.
+          const write = (async (): Promise<void> => {
+            const targetPath = await resolveSftpTransferPathIfMapped(sftp, remotePath, options)
+            linkedSignal.signal.throwIfAborted()
+            const { writeStringViaSftp } = await import('./sftp-upload')
+            await writeStringViaSftp(sftp, targetPath, contents)
+          })()
           await raceSftpFileTransferWithAbort(write, linkedSignal.signal, (onClose) => {
             sftp.once('close', onClose)
             endSftp()
@@ -1385,5 +1371,3 @@ export function shouldUseSystemSshTransport(
     resolved?.proxyJump != null
   )
 }
-
-export { SshConnectionManager } from './ssh-connection-manager'

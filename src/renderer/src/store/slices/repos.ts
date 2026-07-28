@@ -638,6 +638,20 @@ function projectWithCurrentSourceRepoIds(
     : { ...project, sourceRepoIds }
 }
 
+function getLocalHostRepoBadgeColor(
+  project: Project,
+  reposById: ReadonlyMap<string, readonly Repo[]>
+): string | null {
+  for (const repoId of project.sourceRepoIds) {
+    for (const repo of reposById.get(repoId) ?? []) {
+      if (getRepoExecutionHostId(repo) === LOCAL_EXECUTION_HOST_ID) {
+        return repo.badgeColor
+      }
+    }
+  }
+  return null
+}
+
 function mergePreviousProjectMetadata(
   previous: Project,
   current: Project,
@@ -645,6 +659,12 @@ function mergePreviousProjectMetadata(
   hostId: string
 ): Project {
   const project = mergeProjectCompatibilityProject(previous, current)
+  const sourceRepoIds = getMergedSourceRepoIdsForHostRefresh(previous, current, reposById, hostId)
+  const localBadgeColor = getLocalHostRepoBadgeColor({ ...project, sourceRepoIds }, reposById)
+  if (localBadgeColor !== null) {
+    // Why: badge color is per-host repo metadata; a remote host sharing the project must not repaint the color the user chose locally.
+    project.badgeColor = localBadgeColor
+  }
   if (hostId === LOCAL_EXECUTION_HOST_ID) {
     // Why: localWindowsRuntimePreference belongs to the local host; a local refresh that omits it is authoritative and clears stale renderer state.
     if ('localWindowsRuntimePreference' in current) {
@@ -663,7 +683,7 @@ function mergePreviousProjectMetadata(
   return {
     ...project,
     // Why: fetched project metadata can lag repo.list; track ownership to the reconciled repos so removed-host repos don't linger.
-    sourceRepoIds: getMergedSourceRepoIdsForHostRefresh(previous, current, reposById, hostId)
+    sourceRepoIds
   }
 }
 

@@ -1,4 +1,5 @@
 import type { DaemonPtyAdapter } from './daemon-pty-adapter'
+import { combineUnsubscribes } from './combine-unsubscribes'
 import type {
   IPtyProvider,
   PtyBackgroundStreamEvent,
@@ -8,6 +9,7 @@ import type {
   PtySpawnResult
 } from '../providers/types'
 import type { PtyIncarnationId } from '../../shared/pty-incarnation'
+import type { PtyProcessInspection } from '../providers/pty-process-inspection'
 
 export class DaemonPtyRouter implements IPtyProvider {
   private current: DaemonPtyAdapter
@@ -189,9 +191,7 @@ export class DaemonPtyRouter implements IPtyProvider {
     return this.adapterFor(id).getForegroundProcess(id)
   }
 
-  async inspectProcess(
-    id: string
-  ): Promise<{ foregroundProcess: string | null; hasChildProcesses: boolean }> {
+  async inspectProcess(id: string): Promise<PtyProcessInspection> {
     return this.adapterForInspection(id).inspectProcess(id)
   }
 
@@ -243,14 +243,17 @@ export class DaemonPtyRouter implements IPtyProvider {
   }
 
   onBackgroundStreamEvent(callback: (payload: PtyBackgroundStreamEvent) => void): () => void {
-    const unsubscribes = this.allAdapters().map((adapter) =>
-      adapter.onBackgroundStreamEvent(callback)
+    return combineUnsubscribes(
+      this.allAdapters().map((adapter) => adapter.onBackgroundStreamEvent(callback))
     )
-    return () => {
-      for (const unsubscribe of unsubscribes) {
-        unsubscribe()
-      }
-    }
+  }
+
+  // Why: main subscribes on the routed provider, so without this the dead-endpoint
+  // fan-out never reaches the renderer and only the written pane recovers (STA-2373).
+  onWriteUnavailable(callback: (payload: { id: string }) => void): () => void {
+    return combineUnsubscribes(
+      this.allAdapters().map((adapter) => adapter.onWriteUnavailable(callback))
+    )
   }
 
   onReplay(_callback: (payload: { id: string; data: string }) => void): () => void {

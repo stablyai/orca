@@ -121,13 +121,45 @@ describe('createEditorSlice right sidebar state', () => {
     )
 
     const request = store.getState().pendingEditorFocusRequest
-    expect(request).toMatchObject({ fileId: '/repo/README.md', worktreeId: 'wt-1' })
+    expect(request).toMatchObject({
+      fileId: '/repo/README.md',
+      worktreeId: 'wt-1',
+      viewStateId: expect.any(String),
+      expiresAt: expect.any(Number)
+    })
 
     store.getState().consumeEditorFocusRequest((request?.token ?? 0) + 1)
     expect(store.getState().pendingEditorFocusRequest).toBe(request)
 
     store.getState().consumeEditorFocusRequest(request?.token ?? 0)
     expect(store.getState().pendingEditorFocusRequest).toBeNull()
+  })
+
+  it('scopes the focus request to the unified tab that will render the file', () => {
+    const store = createEditorTabsStore()
+    const sourceTab = store.getState().createUnifiedTab('wt-1', 'terminal', { id: 'terminal-1' })
+    const targetGroupId = store.getState().createEmptySplitGroup('wt-1', sourceTab.groupId, 'right')
+    if (!targetGroupId) {
+      throw new Error('expected split group')
+    }
+
+    store.getState().openFile(
+      {
+        filePath: '/repo/README.md',
+        relativePath: 'README.md',
+        worktreeId: 'wt-1',
+        language: 'markdown',
+        mode: 'edit'
+      },
+      { focusEditor: true, targetGroupId }
+    )
+
+    const editorTab = store
+      .getState()
+      .unifiedTabsByWorktree['wt-1']?.find((tab) => tab.contentType === 'editor')
+    expect(editorTab?.groupId).toBe(targetGroupId)
+    // Why: the pane matches the handoff on its own tab id, so a drifting id silently drops it.
+    expect(store.getState().pendingEditorFocusRequest?.viewStateId).toBe(editorTab?.id)
   })
 
   it('does not record markdown-file-created when opening an existing markdown file', () => {
@@ -651,6 +683,62 @@ describe('createEditorSlice openDiff', () => {
 
     openFileWithReloadRequest()
     expect(store.getState().openFiles[0]?.fileContentReloadNonce).toBe(2)
+  })
+
+  it('rebinds an existing external tab when it is reopened from a new SSH host', () => {
+    const store = createEditorStore()
+    const file = {
+      filePath: '/tmp/ssh-preview.png',
+      relativePath: '/tmp/ssh-preview.png',
+      worktreeId: 'wt-1',
+      language: 'png',
+      mode: 'edit' as const
+    }
+
+    store.setState({
+      repos: [{ id: 'repo-1', path: '/repo', connectionId: 'ssh-1' }],
+      sshConnectionStates: new Map([
+        [
+          'ssh-1',
+          {
+            targetId: 'ssh-1',
+            status: 'connected',
+            error: null,
+            reconnectAttempt: 0,
+            connectionGeneration: 1
+          }
+        ]
+      ])
+    } as never)
+    store.getState().openFile({ ...file, externalSshTargetId: 'ssh-1' })
+
+    store.setState({
+      repos: [{ id: 'repo-1', path: '/repo', connectionId: 'ssh-2' }],
+      sshConnectionStates: new Map([
+        [
+          'ssh-2',
+          {
+            targetId: 'ssh-2',
+            status: 'connected',
+            error: null,
+            reconnectAttempt: 0,
+            connectionGeneration: 2
+          }
+        ]
+      ])
+    } as never)
+    store.getState().openFile({ ...file, externalSshTargetId: 'ssh-2' })
+
+    expect(store.getState().openFiles).toHaveLength(1)
+    expect(store.getState().openFiles[0]?.externalSshTargetId).toBe('ssh-2')
+    expect(store.getState().openFiles[0]?.operationProvenance).toEqual(
+      expect.objectContaining({
+        generation: expect.objectContaining({
+          route: { executionHostId: 'ssh:ssh-2', runtimeEnvironmentId: null }
+        }),
+        expectedSshConnectionGeneration: 2
+      })
+    )
   })
 
   it('does not bump fileContentReloadNonce when a dirty file is re-opened', () => {
@@ -1901,6 +1989,36 @@ describe('createEditorSlice markdown table of contents visibility', () => {
 })
 
 describe('createEditorSlice openMarkdownPreview', () => {
+  it('keeps external SSH ownership after the source edit tab closes', () => {
+    const store = createEditorStore()
+    store.getState().openFile({
+      filePath: '/tmp/notes.md',
+      relativePath: '/tmp/notes.md',
+      worktreeId: 'wt-1',
+      language: 'markdown',
+      mode: 'edit',
+      externalSshTargetId: 'ssh-1'
+    })
+
+    store.getState().openMarkdownPreview(
+      {
+        filePath: '/tmp/notes.md',
+        relativePath: '/tmp/notes.md',
+        worktreeId: 'wt-1',
+        language: 'markdown'
+      },
+      { sourceFileId: '/tmp/notes.md' }
+    )
+    store.getState().closeFile('/tmp/notes.md')
+
+    expect(store.getState().openFiles).toEqual([
+      expect.objectContaining({
+        id: 'markdown-preview::/tmp/notes.md',
+        externalSshTargetId: 'ssh-1'
+      })
+    ])
+  })
+
   it('opens markdown preview as a separate read-only tab', () => {
     const store = createEditorStore()
 
@@ -4940,5 +5058,31 @@ describe('read-only editor tabs (AI Vault View Log)', () => {
     )
     expect(restored?.pendingDiskBaselineVerification).toBeUndefined()
     expect(store.getState().editorDrafts[LOG_PATH]).toBeUndefined()
+  })
+
+  it('restores the SSH target that owns an external host file', () => {
+    const store = createEditorStore()
+    store.setState({
+      worktreesByRepo: { 'repo-1': [{ id: 'wt-1' }] },
+      folderWorkspaces: []
+    } as never)
+
+    store.getState().hydrateEditorSession({
+      openFilesByWorktree: {
+        'wt-1': [
+          {
+            filePath: '/tmp/ssh-preview.png',
+            relativePath: '/tmp/ssh-preview.png',
+            worktreeId: 'wt-1',
+            language: 'png',
+            externalSshTargetId: 'ssh-1'
+          }
+        ]
+      }
+    } as never)
+
+    expect(store.getState().openFiles[0]).toEqual(
+      expect.objectContaining({ externalSshTargetId: 'ssh-1' })
+    )
   })
 })

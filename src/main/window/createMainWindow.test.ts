@@ -42,7 +42,8 @@ vi.mock('electron', () => ({
   nativeTheme: { shouldUseDarkColors: false },
   powerMonitor: { on: powerMonitorOnMock, removeListener: powerMonitorRemoveListenerMock },
   screen: {
-    getPrimaryDisplay: () => ({ workAreaSize: { width: 1440, height: 900 } })
+    getPrimaryDisplay: () => ({ workAreaSize: { width: 1440, height: 900 } }),
+    getDisplayMatching: () => ({ scaleFactor: 2 })
   },
   shell: { openExternal: openExternalMock }
 }))
@@ -310,6 +311,59 @@ describe('createMainWindow', () => {
     }
   })
 
+  it('never requests macOS vibrancy or transparency when window blur is enabled (#8482)', () => {
+    for (const [platform, expected] of [
+      ['darwin', { backgroundMaterial: undefined }],
+      ['win32', { backgroundMaterial: 'acrylic' }],
+      ['linux', { backgroundMaterial: undefined }]
+    ] satisfies [NodeJS.Platform, { backgroundMaterial: string | undefined }][]) {
+      browserWindowMock.mockReset()
+      const webContents = {
+        on: vi.fn(),
+        setZoomLevel: vi.fn(),
+        setBackgroundThrottling: vi.fn(),
+        invalidate: vi.fn(),
+        setWindowOpenHandler: vi.fn(),
+        send: vi.fn(),
+        isDevToolsOpened: vi.fn(),
+        openDevTools: vi.fn(),
+        closeDevTools: vi.fn()
+      }
+      const browserWindowInstance = {
+        webContents,
+        on: vi.fn(),
+        isDestroyed: vi.fn(() => false),
+        isMaximized: vi.fn(() => false),
+        isFullScreen: vi.fn(() => false),
+        getSize: vi.fn(() => [1200, 800]),
+        getBounds: vi.fn(() => ({ x: 10, y: 20, width: 1000, height: 700 })),
+        setSize: vi.fn(),
+        setWindowButtonPosition: vi.fn(),
+        maximize: vi.fn(),
+        show: vi.fn(),
+        loadFile: vi.fn(),
+        loadURL: vi.fn()
+      }
+      browserWindowMock.mockImplementation(function () {
+        return browserWindowInstance
+      })
+
+      withPlatform(platform, () =>
+        createMainWindow({
+          getUI: () => ({}),
+          getSettings: () => ({ windowBackgroundBlur: true }),
+          updateUI: vi.fn()
+        } as never)
+      )
+
+      const browserWindowOptions = browserWindowMock.mock.calls[0]?.[0]
+      expect(browserWindowOptions.vibrancy).toBeUndefined()
+      expect(browserWindowOptions.transparent).toBeUndefined()
+      expect(browserWindowOptions.backgroundMaterial).toBe(expected.backgroundMaterial)
+      expect(browserWindowOptions.backgroundColor).toBe('#ffffff')
+    }
+  })
+
   it('keeps main-window background throttling enabled while repainting macOS visibility transitions', () => {
     vi.useFakeTimers()
     const windowHandlers = new Map<string, ((...args: any[]) => void)[]>()
@@ -481,7 +535,9 @@ describe('createMainWindow', () => {
       send: vi.fn(),
       isDevToolsOpened: vi.fn(),
       openDevTools: vi.fn(),
-      closeDevTools: vi.fn()
+      closeDevTools: vi.fn(),
+      enableDeviceEmulation: vi.fn(),
+      disableDeviceEmulation: vi.fn()
     }
     const browserWindowInstance = {
       webContents,
@@ -494,6 +550,8 @@ describe('createMainWindow', () => {
       isMaximized: vi.fn(() => false),
       isFullScreen: vi.fn(() => false),
       getSize: vi.fn(() => [1200, 800]),
+      getContentSize: vi.fn(() => [1200, 800]),
+      getBounds: vi.fn(() => ({ x: 0, y: 0, width: 1200, height: 840 })),
       setSize: vi.fn(),
       maximize: vi.fn(),
       show: vi.fn(),
@@ -513,6 +571,135 @@ describe('createMainWindow', () => {
     vi.advanceTimersByTime(300)
     expect(webContents.invalidate).toHaveBeenCalledTimes(2)
     expect(browserWindowInstance.setSize).not.toHaveBeenCalled()
+
+    // Why (STA-2383): invalidate repaints but never reflows, so Tahoe still has to recompute the
+    // dvh root — via the emulated viewport, which leaves the deadlock-prone frame untouched.
+    expect(webContents.enableDeviceEmulation).toHaveBeenCalledWith({
+      screenPosition: 'desktop',
+      screenSize: { width: 0, height: 0 },
+      deviceScaleFactor: 2.25,
+      viewSize: { width: 1200, height: 800 },
+      scale: 1
+    })
+    expect(webContents.disableDeviceEmulation).toHaveBeenCalled()
+    expect(browserWindowInstance.setSize).not.toHaveBeenCalled()
+  })
+
+  it('still reflows a maximized macOS 26 window, which the size nudge had to skip', () => {
+    vi.useFakeTimers()
+    macosTahoeMock.value = true
+    const windowHandlers = new Map<string, ((...args: any[]) => void)[]>()
+    const webContents = {
+      on: vi.fn(),
+      setZoomLevel: vi.fn(),
+      setBackgroundThrottling: vi.fn(),
+      invalidate: vi.fn(),
+      isDestroyed: vi.fn(() => false),
+      setWindowOpenHandler: vi.fn(),
+      send: vi.fn(),
+      isDevToolsOpened: vi.fn(),
+      openDevTools: vi.fn(),
+      closeDevTools: vi.fn(),
+      enableDeviceEmulation: vi.fn(),
+      disableDeviceEmulation: vi.fn()
+    }
+    const browserWindowInstance = {
+      webContents,
+      on: vi.fn((event: string, handler: (...args: any[]) => void) => {
+        const handlers = windowHandlers.get(event) ?? []
+        handlers.push(handler)
+        windowHandlers.set(event, handlers)
+      }),
+      isDestroyed: vi.fn(() => false),
+      // Why: the maximized/fullscreen bail-out only ever protected setSize from un-maximizing
+      // the window; emulation leaves the frame alone, so the reflow must still happen here.
+      isMaximized: vi.fn(() => true),
+      isFullScreen: vi.fn(() => true),
+      getSize: vi.fn(() => [1200, 800]),
+      getContentSize: vi.fn(() => [1200, 800]),
+      getBounds: vi.fn(() => ({ x: 0, y: 0, width: 1200, height: 840 })),
+      setSize: vi.fn(),
+      maximize: vi.fn(),
+      show: vi.fn(),
+      loadFile: vi.fn(),
+      loadURL: vi.fn()
+    }
+    browserWindowMock.mockImplementation(function () {
+      return browserWindowInstance
+    })
+
+    withPlatform('darwin', () => createMainWindow(null))
+
+    windowHandlers.get('show')?.[0]?.()
+    vi.advanceTimersByTime(300)
+
+    expect(webContents.enableDeviceEmulation).toHaveBeenCalled()
+    expect(webContents.disableDeviceEmulation).toHaveBeenCalled()
+    expect(browserWindowInstance.setSize).not.toHaveBeenCalled()
+  })
+
+  it('reflows without the size nudge when macOS 26 wakes from sleep', () => {
+    vi.useFakeTimers()
+    macosTahoeMock.value = true
+    const windowHandlers = new Map<string, ((...args: any[]) => void)[]>()
+    const webContents = {
+      on: vi.fn(),
+      setZoomLevel: vi.fn(),
+      setBackgroundThrottling: vi.fn(),
+      invalidate: vi.fn(),
+      isDestroyed: vi.fn(() => false),
+      setWindowOpenHandler: vi.fn(),
+      send: vi.fn(),
+      isDevToolsOpened: vi.fn(),
+      openDevTools: vi.fn(),
+      closeDevTools: vi.fn(),
+      enableDeviceEmulation: vi.fn(),
+      disableDeviceEmulation: vi.fn()
+    }
+    const browserWindowInstance = {
+      webContents,
+      on: vi.fn((event: string, handler: (...args: any[]) => void) => {
+        const handlers = windowHandlers.get(event) ?? []
+        handlers.push(handler)
+        windowHandlers.set(event, handlers)
+      }),
+      isDestroyed: vi.fn(() => false),
+      isMaximized: vi.fn(() => false),
+      isFullScreen: vi.fn(() => false),
+      getSize: vi.fn(() => [1200, 800]),
+      getContentSize: vi.fn(() => [1200, 800]),
+      getBounds: vi.fn(() => ({ x: 0, y: 0, width: 1200, height: 840 })),
+      setSize: vi.fn(),
+      maximize: vi.fn(),
+      show: vi.fn(),
+      loadFile: vi.fn(),
+      loadURL: vi.fn()
+    }
+    browserWindowMock.mockImplementation(function () {
+      return browserWindowInstance
+    })
+
+    withPlatform('darwin', () => createMainWindow(null))
+
+    // Why: 'resume' is the other AppKit dispatch context implicated in the 109-minute freeze,
+    // so it must take the frame-free path too — not just show/restore.
+    const resumeHandler = powerMonitorOnMock.mock.calls.find(
+      ([event]) => event === 'resume'
+    )?.[1] as (() => void) | undefined
+    expect(resumeHandler).toBeDefined()
+    resumeHandler?.()
+
+    expect(webContents.invalidate).toHaveBeenCalled()
+    vi.advanceTimersByTime(300)
+    expect(browserWindowInstance.setSize).not.toHaveBeenCalled()
+    expect(webContents.enableDeviceEmulation).toHaveBeenCalledWith({
+      screenPosition: 'desktop',
+      screenSize: { width: 0, height: 0 },
+      deviceScaleFactor: 2.25,
+      viewSize: { width: 1200, height: 800 },
+      scale: 1
+    })
+    expect(webContents.disableDeviceEmulation).toHaveBeenCalled()
   })
 
   it('supports all minus key variants for terminal zoom out', () => {

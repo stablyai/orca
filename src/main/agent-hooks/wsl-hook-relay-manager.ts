@@ -18,6 +18,7 @@ import {
 } from './wsl-hook-relay-deps'
 import { wireWslRelayLink } from './wsl-hook-relay-link'
 import { WslRelayRecovery } from './wsl-hook-relay-recovery'
+import { requestGuestOpenCodeOverlayDir } from './wsl-guest-plugin-install'
 import { SshChannelMultiplexer, type MultiplexerTransport } from '../ssh/ssh-channel-multiplexer'
 import { AGENT_HOOK_REQUEST_REPLAY_METHOD } from '../../shared/agent-hook-relay'
 import {
@@ -34,6 +35,7 @@ type DistroState = {
   mux?: SshChannelMultiplexer
   guestHome?: string
   guestEndpointFilePath?: string
+  opencodeOverlayDir?: string
   failures: number
   cooldownUntil: number
   connectedAt?: number
@@ -85,14 +87,22 @@ export class WslHookRelayManager {
     })
   }
 
+  private stateFor(distro: string | null): DistroState | undefined {
+    // Empty key never matches a real (non-empty) distro state.
+    return this.states.get(distroKey(distro ?? this.defaultDistro ?? ''))
+  }
+
   /** Guest endpoint file path once known; null before first connect
    *  (callers keep the /p-translated Windows endpoint path until then). */
   getGuestEndpointFilePath(distro: string | null): string | null {
-    const name = distro ?? this.defaultDistro
-    if (!name) {
-      return null
-    }
-    return this.states.get(distroKey(name))?.guestEndpointFilePath ?? null
+    return this.stateFor(distro)?.guestEndpointFilePath ?? null
+  }
+
+  /** Guest OpenCode config-overlay dir once the guest relay materializes it;
+   *  null before then (older bundle / relay not yet connected). Callers drop
+   *  OPENCODE_CONFIG_DIR while null so no Windows overlay path crosses into WSL. */
+  getOpenCodeOverlayDir(distro: string | null): string | null {
+    return this.stateFor(distro)?.opencodeOverlayDir ?? null
   }
 
   disposeAll(): void {
@@ -145,6 +155,9 @@ export class WslHookRelayManager {
       distro,
       phase: 'starting',
       failures: existing?.failures ?? 0,
+      // Why: instance-keyed and on the distro's persistent fs, so it outlives a relay
+      // crash — dropping it would blank status on panes spawned mid-relaunch.
+      opencodeOverlayDir: existing?.opencodeOverlayDir,
       cooldownUntil: 0
     }
     this.states.set(key, state)
@@ -169,7 +182,9 @@ export class WslHookRelayManager {
             { cooldownBaseMs: NO_NODE_COOLDOWN_MS }
           ),
         onFailure: (message) =>
-          this.markFailed(state, message, { cooldownBaseMs: FAILURE_COOLDOWN_BASE_MS }),
+          this.markFailed(state, message, {
+            cooldownBaseMs: FAILURE_COOLDOWN_BASE_MS
+          }),
         connect: (transport, child) => this.connect(state, transport, child, instanceKey)
       })
     } catch (err) {
@@ -267,6 +282,14 @@ export class WslHookRelayManager {
       installHooks: this.deps.installHooks,
       warn: this.deps.warn
     })
+    // Why: ship OpenCode's status plugin and record the guest overlay dir the
+    // PTY env points OPENCODE_CONFIG_DIR at; identity-guarded against teardown.
+    const overlay = await requestGuestOpenCodeOverlayDir(mux, this.deps, state.distro)
+    if (state.mux === mux && overlay.kind !== 'unavailable') {
+      // Clearing on 'none' matters: a rebuild that failed after wiping leaves the dir
+      // present but plugin-less, and advertising it would hide the user's own config.
+      state.opencodeOverlayDir = overlay.kind === 'dir' ? overlay.dir : undefined
+    }
   }
 
   private async maybeReinstallHooks(state: DistroState): Promise<void> {
@@ -281,6 +304,7 @@ export class WslHookRelayManager {
       return
     }
     try {
+      // Why: runInstallers also re-ships the plugin source so a mid-session Orca upgrade refreshes it.
       await this.runInstallers(state, mux, guestHome)
     } catch (err) {
       this.deps.warn(

@@ -96,7 +96,12 @@ describe('incremental terminal history restore', () => {
     const checkpoint = JSON.parse(JSON.stringify(snapshotOf(['base content\r\n'])))
     writeFileSync(
       sessionFile('checkpoint.json'),
-      JSON.stringify({ ...checkpoint, cwd: '/home/user', generation: 1 })
+      JSON.stringify({
+        ...checkpoint,
+        cwd: '/home/user',
+        generation: 1,
+        checkpointedAt: new Date().toISOString()
+      })
     )
 
     const restore = await reader.detectColdRestore(SESSION_ID)
@@ -109,7 +114,7 @@ describe('incremental terminal history restore', () => {
     const checkpoint = JSON.parse(JSON.stringify(snapshotOf(['old format base\r\n'])))
     writeFileSync(
       sessionFile('checkpoint.json'),
-      JSON.stringify({ ...checkpoint, cwd: '/home/user' })
+      JSON.stringify({ ...checkpoint, cwd: '/home/user', checkpointedAt: new Date().toISOString() })
     )
     writeFileSync(
       sessionFile('output.log'),
@@ -273,14 +278,16 @@ describe('incremental terminal history restore', () => {
     const firstReplay = reader.detectColdRestore(SESSION_ID)
     const secondReplay = reader.detectColdRestore(secondSessionId)
     try {
+      // Drain by yield because awaiting the session that loses the replay-slot race deadlocks.
       await vi.waitFor(() => expect(pendingYields).toHaveLength(1))
-
       pendingYields.shift()!()
-      expect((await firstReplay)?.scrollbackAnsi).toContain('😀second')
+
       await vi.waitFor(() => expect(pendingYields).toHaveLength(1))
-
       pendingYields.shift()!()
-      expect((await secondReplay)?.scrollbackAnsi).toContain('😀second')
+
+      for (const restore of await Promise.all([firstReplay, secondReplay])) {
+        expect(restore?.scrollbackAnsi).toContain('😀second')
+      }
       expect(pendingYields).toHaveLength(0)
     } finally {
       for (const resume of pendingYields.splice(0)) {

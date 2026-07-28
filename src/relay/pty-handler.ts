@@ -48,6 +48,7 @@ import {
   type PtyIngressEmission
 } from '../shared/pty-startup-ingress'
 import { resolvePtyOwnerBackend, type PtyOwnerBackend } from '../shared/pty-owner-backend'
+import { RecentPtyOutputBuffer } from '../main/runtime/recent-pty-output-buffer'
 import {
   agentSessionOwnerBindingsEqual,
   ClaimedAgentPtyOwnerRegistry
@@ -59,6 +60,17 @@ import {
   isAgentSessionSurfaceBinding,
   type AgentSessionOwnerBinding
 } from '../shared/agent-session-host-authority'
+
+// Why: only Linux compiles node-pty (no prebuilt), so the build-tools remedy is a closable setup gap
+// there and wrong advice anywhere node-pty ships one. The relay only sees an unloadable binding, never
+// why — a skipped compile and a later Node/ABI flip look identical here — so Linux hedges both causes.
+export function formatNodePtyUnavailableMessage(platform: NodeJS.Platform): string {
+  const remedy =
+    platform === 'linux'
+      ? "node-pty's native binding is not loadable on this host. If it is missing the C/C++ build tools needed to compile node-pty, install make, a C++ compiler, and python3 on the remote host, then reconnect. Otherwise reconnect to reinstall the relay's native modules, and check that the remote Node.js version and architecture match the installed binding."
+      : "node-pty's native binding failed to load on this host. Reconnect to reinstall the relay's native modules; if it persists, check that the remote Node.js version and architecture match the installed binding."
+  return `Remote terminals are unavailable: ${remedy}`
+}
 
 function isMissingNodePtyNativeBinding(error: unknown): boolean {
   return (
@@ -72,7 +84,9 @@ type ManagedPty = {
   incarnationId: string
   pty: IPty
   initialCwd: string
-  buffered: string
+  /** Why a chunk deque: rebuilding a rolling 100KB string per PTY chunk copied the
+   * whole window on every write once saturated. Readers are attach/adopt/revive only. */
+  buffered: RecentPtyOutputBuffer
   /** Timer for SIGKILL fallback after a graceful SIGTERM shutdown. */
   killTimer?: ReturnType<typeof setTimeout>
   /** True once disposeManagedPty has run; blocks double-dispose and makes post-dispose calls fail "not found" not silently. */
@@ -473,10 +487,7 @@ export class PtyHandler {
     if (data.length === 0) {
       return
     }
-    managed.buffered += data
-    if (managed.buffered.length > REPLAY_BUFFER_MAX) {
-      managed.buffered = managed.buffered.slice(-REPLAY_BUFFER_MAX)
-    }
+    managed.buffered.append(data)
   }
 
   private releaseStartupCommand(managed: ManagedPty): void {
@@ -723,11 +734,18 @@ export class PtyHandler {
 
   private flushPendingOutput(): void {
     this.outputFlushTimer = null
-    let writes = 0
-    for (const [id, pending] of Array.from(this.pendingOutputByPty.entries())) {
-      if (writes >= PTY_OUTPUT_FLUSH_MAX_WRITES) {
+    // Why batch before the first send: a re-entrant sink must read the values a whole-map snapshot
+    // would have frozen. Why the raw iterator: `for...of` would consume one entry past the limit.
+    const pendingEntries = this.pendingOutputByPty[Symbol.iterator]()
+    const batch: [string, PendingPtyOutput][] = []
+    while (batch.length < PTY_OUTPUT_FLUSH_MAX_WRITES) {
+      const next = pendingEntries.next()
+      if (next.done === true) {
         break
       }
+      batch.push(next.value)
+    }
+    for (const [id, pending] of batch) {
       this.pendingOutputByPty.delete(id)
       const chunk = pending.transformed
         ? pending.data
@@ -754,9 +772,8 @@ export class PtyHandler {
         ...(chunkRawLength === undefined ? {} : { rawLength: chunkRawLength }),
         ...(pending.transformed ? { transformed: true } : {})
       })
-      writes++
     }
-    if (this.pendingOutputByPty.size > 0 && writes > 0) {
+    if (this.pendingOutputByPty.size > 0 && batch.length > 0) {
       // Why: yield between slices of a large chunk so client input and control frames can interleave.
       this.scheduleOutputFlush(PTY_OUTPUT_DRAIN_CONTINUE_MS)
     }
@@ -963,13 +980,12 @@ export class PtyHandler {
         throw new Error('agent_session_exited_during_start')
       }
       managed.agentSessionOwners = this.agentSessionOwners.listForPty(managed.id)
+      const adoptedReplay = result.disposition === 'adopted' ? managed.buffered.read() : ''
       return {
         id: managed.id,
         incarnationId: managed.incarnationId,
         agentSessionEnsure: result,
-        ...(result.disposition === 'adopted' && managed.buffered
-          ? { replay: managed.buffered }
-          : {})
+        ...(adoptedReplay ? { replay: adoptedReplay } : {})
       }
     } catch (error) {
       if (!physicalSpawnCommitted) {
@@ -991,7 +1007,7 @@ export class PtyHandler {
   ): Promise<{ id: string; incarnationId: string }> {
     const pty = await this.loadPty()
     if (!pty) {
-      throw new Error('node-pty is not available on this remote host')
+      throw new Error(formatNodePtyUnavailableMessage(process.platform))
     }
 
     const cols = (params.cols as number) || 80
@@ -1072,7 +1088,7 @@ export class PtyHandler {
       // Why: Windows loads conpty.node only on first spawn, so handle that late binding failure here.
       if (isMissingNodePtyNativeBinding(error)) {
         this.invalidatePtyModuleAfterBindingFailure()
-        throw new Error('node-pty is not available on this remote host')
+        throw new Error(formatNodePtyUnavailableMessage(process.platform))
       }
       throw error
     }
@@ -1094,7 +1110,10 @@ export class PtyHandler {
       incarnationId: randomUUID(),
       pty: term,
       initialCwd: cwd,
-      buffered: '',
+      buffered: new RecentPtyOutputBuffer({
+        preserveChunkBoundaries: false,
+        limit: REPLAY_BUFFER_MAX
+      }),
       paneKey,
       tabId,
       ...(attachIdentity.paneKey || attachIdentity.tabId ? { attachIdentity } : {}),
@@ -1181,14 +1200,15 @@ export class PtyHandler {
 
     // Why: renderer hasn't registered replay handlers yet during spawn, so return to the caller instead of notifying too early.
     // Why: buffer intentionally NOT cleared after replay (client clears xterm first) so later restarts still replay full history.
-    if (managed.buffered) {
+    const replay = managed.buffered.read()
+    if (replay) {
       // Why: drop pending batched bytes already in the replay buffer so attach doesn't render them twice.
       this.pendingOutputByPty.delete(id)
       this.clearOutputFlushTimerIfIdle()
       if (params.suppressReplayNotification) {
-        return { incarnationId: managed.incarnationId, replay: managed.buffered }
+        return { incarnationId: managed.incarnationId, replay }
       }
-      this.dispatcher.notify('pty.replay', { id, data: managed.buffered })
+      this.dispatcher.notify('pty.replay', { id, data: replay })
     }
     return { incarnationId: managed.incarnationId }
   }
@@ -1535,7 +1555,10 @@ export class PtyHandler {
       incarnationId: randomUUID(),
       pty: term,
       initialCwd: entry.cwd,
-      buffered: '',
+      buffered: new RecentPtyOutputBuffer({
+        preserveChunkBoundaries: false,
+        limit: REPLAY_BUFFER_MAX
+      }),
       paneKey: entry.paneKey,
       tabId: entry.tabId,
       attachIdentity: entry.attachIdentity,

@@ -433,7 +433,7 @@ describe('Electron runtime package contract', () => {
     expect(afterInstallScript).not.toContain('chmod 0755 "$sandbox"')
   })
 
-  it('keeps release-cut version commits skill-independent and taggable on retries', () => {
+  it('advances only the skill release ledger in a taggable release-cut commit', () => {
     const releaseWorkflow = readFileSync(
       join(projectDir, '.github/workflows/release-cut.yml'),
       'utf8'
@@ -447,13 +447,30 @@ describe('Electron runtime package contract', () => {
     const bumpIndex = bumpStep.run.indexOf(
       'npm version "$VERSION" --no-git-tag-version --allow-same-version'
     )
-    const stageIndex = bumpStep.run.indexOf('git add package.json')
+    const generateIndex = bumpStep.run.indexOf(
+      'node config/scripts/generate-skill-bundle-manifest.mjs --release "$VERSION"'
+    )
+    const commands = bumpStep.run.replace(/^\s*#.*$/gm, '')
+    // Unanchored: a `git add` chained after `&&` stages just as effectively.
+    const stagedPaths = [...commands.matchAll(/\bgit add (.+)$/gm)].flatMap((match) =>
+      match[1].trim().split(/\s+/)
+    )
+    // Quotes trimmed and deduped: the index guard names the row a second time.
+    const mentioned = new Set(commands.match(/resources[/\\]skills[^\s'"]*/g))
     expect(checkoutStep.with['fetch-depth']).toBe(0)
     expect(bumpIndex).toBeGreaterThanOrEqual(0)
-    expect(stageIndex).toBeGreaterThan(bumpIndex)
-    // Why: version-only cuts must not mutate content-addressed skill artifacts.
-    expect(bumpStep.run).not.toContain('generate-skill-bundle-manifest')
-    expect(bumpStep.run).not.toContain('resources/skills')
+    // Why: the cut is the only point that advances the release ledger, so this
+    // tag's revision is never rebuilt later — it appends that row, nothing else.
+    expect(generateIndex).toBeGreaterThan(bumpIndex)
+    expect(bumpStep.run.indexOf('git add package.json')).toBeGreaterThan(generateIndex)
+    expect(stagedPaths).toEqual(['package.json', 'resources/skills/release-mapping.json'])
+    // Every distinct mention must be staged, so a copy, a redirect, or a path
+    // held in a variable cannot reach the content-addressed artifacts. Matched
+    // without a trailing slash so `dir="resources/skills"` still counts.
+    expect([...mentioned]).toEqual(stagedPaths.slice(1))
+    // Regeneration is banned job-wide by the generator suite. Here: `-a`, `-am`,
+    // and `--all` sweep unstaged artifacts in; `--allow-empty` below must not.
+    expect(commands).not.toMatch(/\bcommit\b[^\n]*(?:\s-[a-z]*a[a-z]*\b|\s--all\b)/)
     expect(bumpStep.run).toContain('git diff --cached --quiet')
     expect(bumpStep.run).toContain('git commit --allow-empty -m "$commit_message"')
   })
@@ -510,7 +527,7 @@ describe('Electron runtime package contract', () => {
   it('installs the Electron package binary in PR checks without changing native module ABI', () => {
     const prWorkflow = readFileSync(join(projectDir, '.github/workflows/pr.yml'), 'utf8')
     const parsedWorkflow = parse(prWorkflow)
-    const installStep = parsedWorkflow.jobs.verify.steps.find(
+    const installStep = parsedWorkflow.jobs.test.steps.find(
       (step) => step.name === 'Install Electron package binary for tests'
     )
 
@@ -520,7 +537,7 @@ describe('Electron runtime package contract', () => {
   it('smokes the packaged CLI from outside the checkout in PR checks', () => {
     const prWorkflow = readFileSync(join(projectDir, '.github/workflows/pr.yml'), 'utf8')
     const parsedWorkflow = parse(prWorkflow)
-    const smokeStep = parsedWorkflow.jobs.verify.steps.find(
+    const smokeStep = parsedWorkflow.jobs.package.steps.find(
       (step) => step.name === 'Smoke packaged CLI'
     )
 

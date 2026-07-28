@@ -1,5 +1,9 @@
 import { execFile } from 'node:child_process'
 import { terminateWindowsProcessTree, type WindowsTreeKiller } from './windows-process-tree-kill'
+import {
+  verifyWindowsTreeKillTarget,
+  type WindowsTreeKillTarget
+} from './windows-pty-root-identity'
 
 export const DESCENDANT_KILL_GRACE_MS = 2_000
 export const DESCENDANT_SNAPSHOT_TIMEOUT_MS = 1_000
@@ -200,7 +204,7 @@ type SnapshotDeps = {
  * signalled: once the root dies, surviving descendants reparent to pid 1 and
  * can no longer be found by a ppid walk. Resolves null (never rejects) on
  * Windows, ps failure, or timeout — callers then degrade to shell-only kill
- * on POSIX, or Windows `taskkill /T` via killWithDescendantSweep.
+ * on POSIX, or identity-gated Windows `taskkill /T` via killWithDescendantSweep.
  */
 export async function captureDescendantSnapshot(
   rootPid: number,
@@ -226,13 +230,16 @@ type KillSweepDeps = SnapshotDeps &
     ownsRoot?: () => boolean
     /** Injectable Windows tree killer (defaults to taskkill /T /F). */
     killWindowsTree?: WindowsTreeKiller
+    /** Injectable Windows root-identity probe (defaults to a live process query). */
+    verifyTreeKillTarget?: (rootPid: number) => Promise<WindowsTreeKillTarget>
   }
 
 /**
  * Standard agent-session kill sequencing.
  * - POSIX: snapshot the descendant tree, signal members, then killRoot.
- * - Windows: taskkill /T /F walks the ConPTY tree (shell → agent → MCP) so
- *   worktree teardown is not blocked by orphans holding the cwd handle.
+ * - Windows: taskkill /T /F walks the ConPTY tree only when the identity probe
+ *   returns `own` (and ownsRoot still holds). `unknown`/`foreign`/`absent` skip
+ *   tree kill; killRoot always runs. Detached children may survive probe failure.
  * Callers must not signal the root before this runs on POSIX — a dead root's
  * descendants reparent to pid 1 and become unfindable. Snapshot failure
  * degrades to killRoot alone on POSIX.
@@ -246,9 +253,18 @@ export async function killWithDescendantSweep(
   if (platform === 'win32') {
     try {
       if ((deps.ownsRoot?.() ?? true) && Number.isInteger(rootPid) && rootPid > 0) {
-        const killTree = deps.killWindowsTree ?? terminateWindowsProcessTree
-        // Why: taskkill may race an already-exited tree; never block killRoot on that.
-        await killTree(rootPid).catch(() => {})
+        // Why: ownsRoot() is JS state only, and node-pty's ConPTY exit watcher closes
+        // the last shell handle before it queues the JS exit callback — Windows may
+        // already have recycled this PID while the map still looks live. taskkill /T /F
+        // on a recycled PID force-kills an unrelated tree, so demand OS identity first.
+        const verify = deps.verifyTreeKillTarget ?? verifyWindowsTreeKillTarget
+        const target = await verify(rootPid).catch((): WindowsTreeKillTarget => 'unknown')
+        // Re-check ownership: the identity query awaits, so exit can land meanwhile.
+        if (target === 'own' && (deps.ownsRoot?.() ?? true)) {
+          const killTree = deps.killWindowsTree ?? terminateWindowsProcessTree
+          // Why: taskkill may race an already-exited tree; never block killRoot on that.
+          await killTree(rootPid).catch(() => {})
+        }
       }
     } finally {
       killRoot()

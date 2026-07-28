@@ -7,15 +7,54 @@ import { defineMethod, defineStreamingMethod, type RpcAnyMethod } from '../core'
 // registerSubscriptionCleanup's existing-key eviction path.
 let accountsSubscriptionSeq = 0
 
+const CodexResetTarget = z.discriminatedUnion('runtime', [
+  z.object({ runtime: z.literal('host'), wslDistro: z.null() }).strict(),
+  // Why: reset scope must identify one exact WSL distro; null means all slots only for selection.
+  z.object({ runtime: z.literal('wsl'), wslDistro: z.string().trim().min(1).max(255) }).strict()
+])
+
+const CodexSelectionTarget = z.discriminatedUnion('runtime', [
+  z.object({ runtime: z.literal('host'), wslDistro: z.null() }).strict(),
+  z
+    .object({
+      runtime: z.literal('wsl'),
+      // A null distro intentionally means all WSL selection slots.
+      wslDistro: z.string().trim().min(1).max(255).nullable()
+    })
+    .strict()
+])
+
 const SelectAccountParams = z.object({
   accountId: z
     .union([z.string().min(1, 'Missing accountId'), z.null()])
     .transform((v) => (v === null ? null : v))
 })
 
+const SelectCodexAccountForTargetParams = SelectAccountParams.extend({
+  target: CodexSelectionTarget
+})
+
 const RemoveAccountParams = z.object({
   accountId: z.string().min(1, 'Missing accountId')
 })
+
+const CodexResetExpectedScope = z
+  .object({
+    target: CodexResetTarget,
+    accountId: z.string().min(1, 'Missing accountId').max(512),
+    accountRevision: z.number().int().nonnegative().max(Number.MAX_SAFE_INTEGER),
+    offerRevision: z.string().startsWith('v1:', 'Invalid offerRevision').max(4_096)
+  })
+  .strict()
+
+const ConsumeCodexResetCreditParams = z
+  .object({
+    // Why: the phone owns the logical attempt key so a lost response can be
+    // retried without spending a finite earned credit twice.
+    idempotencyKey: z.uuid('Invalid idempotencyKey'),
+    expectedScope: CodexResetExpectedScope
+  })
+  .strict()
 
 const AccountsUnsubscribeParams = z.object({
   subscriptionId: z
@@ -51,6 +90,20 @@ export const ACCOUNT_METHODS: readonly RpcAnyMethod[] = [
     name: 'accounts.selectCodex',
     params: SelectAccountParams,
     handler: async (params, { runtime }) => runtime.selectCodexAccount(params.accountId)
+  }),
+  defineMethod({
+    // Why: old hosts silently strip unknown target fields from selectCodex.
+    // A distinct RPC makes version skew fail before it can clear the host slot.
+    name: 'accounts.selectCodexForTarget',
+    params: SelectCodexAccountForTargetParams,
+    handler: async (params, { runtime }) =>
+      runtime.selectCodexAccountForTarget(params.accountId, params.target)
+  }),
+  defineMethod({
+    name: 'accounts.consumeCodexResetCredit',
+    params: ConsumeCodexResetCreditParams,
+    handler: async (params, { runtime }) =>
+      runtime.consumeCodexRateLimitResetCredit(params.idempotencyKey, params.expectedScope)
   }),
   defineMethod({
     name: 'accounts.removeClaude',

@@ -1510,6 +1510,39 @@ describe('LocalPtyProvider', () => {
 
       expect(terminateDescendants).not.toHaveBeenCalled()
     })
+
+    it('win32 immediate shutdown of a plain shell taskkills the descendant tree', async () => {
+      Object.defineProperty(process, 'platform', { configurable: true, value: 'win32' })
+      const { id } = await provider.spawn({ cols: 80, rows: 24 })
+
+      await provider.shutdown(id, { immediate: true })
+
+      // Why: an orphaned pnpm/node child otherwise keeps the ConPTY console alive and holds
+      // the worktree cwd; the sweep taskkill /T /F clears the tree so removal can proceed.
+      expect(killWithDescendantSweepMock).toHaveBeenCalledWith(
+        mockProc.pid,
+        expect.any(Function),
+        expect.objectContaining({ ownsRoot: expect.any(Function) })
+      )
+    })
+
+    it('win32 graceful shutdown of a plain shell does not taskkill the tree', async () => {
+      Object.defineProperty(process, 'platform', { configurable: true, value: 'win32' })
+      const { id } = await provider.spawn({ cols: 80, rows: 24 })
+
+      await provider.shutdown(id, { immediate: false })
+
+      expect(killWithDescendantSweepMock).not.toHaveBeenCalled()
+    })
+
+    it('non-win32 immediate shutdown of a plain shell skips the tree kill', async () => {
+      // beforeEach pins platform to linux; POSIX force-kill already reaches the child pgroup.
+      const { id } = await provider.spawn({ cols: 80, rows: 24 })
+
+      await provider.shutdown(id, { immediate: true })
+
+      expect(killWithDescendantSweepMock).not.toHaveBeenCalled()
+    })
   })
 
   describe('hasChildProcesses', () => {

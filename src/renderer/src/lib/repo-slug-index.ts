@@ -15,8 +15,7 @@
 // process (`repoSlug` reads `.git/config`).
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useAppStore } from '@/store'
-import type { Repo } from '../../../shared/types'
-import type { GlobalSettings } from '../../../shared/types'
+import type { Repo, GlobalSettings } from '../../../shared/types'
 import { callRuntimeRpc, getActiveRuntimeTarget } from '@/runtime/runtime-rpc-client'
 import {
   clearRepoSlugCacheValues,

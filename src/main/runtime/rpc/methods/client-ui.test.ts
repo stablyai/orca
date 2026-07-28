@@ -397,6 +397,30 @@ describe('client UI RPC methods', () => {
     expect(response).toMatchObject({ ok: true, result: { ui: updated } })
   })
 
+  it('lets a paired client clear the OSC 52 default-on notice', async () => {
+    // Why pin this key: the update schema is strict, so an omitted field does not get
+    // stripped — it rejects the whole call. The renderer only logs that failure, so the
+    // one-shot notice would re-toast on every launch of every web/SSH/relay client.
+    const updated: PersistedUIState = {
+      ...getDefaultUIState(),
+      osc52ClipboardDefaultOnNoticePending: false
+    }
+    const runtime = {
+      getRuntimeId: () => 'test-runtime',
+      updateUIState: vi.fn(() => updated)
+    } as unknown as OrcaRuntimeService
+    const dispatcher = new RpcDispatcher({ runtime, methods: CLIENT_UI_METHODS })
+
+    const response = await dispatcher.dispatch(
+      makeRequest('ui.set', { osc52ClipboardDefaultOnNoticePending: false })
+    )
+
+    expect(response).toMatchObject({ ok: true })
+    expect(runtime.updateUIState).toHaveBeenCalledWith({
+      osc52ClipboardDefaultOnNoticePending: false
+    })
+  })
+
   it('accepts persisted literal UI arrays and nested UI state', async () => {
     const updated: PersistedUIState = {
       ...getDefaultUIState(),
@@ -413,7 +437,16 @@ describe('client UI RPC methods', () => {
         githubItemsQuery: 'is:open',
         githubProjectHiddenFieldIdsByView: {
           'project-1:view-1': ['field-1']
-        }
+        },
+        linearMode: 'projects',
+        linearContext: {
+          kind: 'project',
+          id: 'project-9',
+          workspaceId: 'workspace-1',
+          model: 'project'
+        },
+        jiraPreset: 'assigned',
+        jiraQuery: 'ENG'
       },
       workspaceCleanup: {
         dismissals: {
@@ -455,7 +488,16 @@ describe('client UI RPC methods', () => {
         githubItemsQuery: 'is:open',
         githubProjectHiddenFieldIdsByView: {
           'project-1:view-1': ['field-1']
-        }
+        },
+        linearMode: 'projects',
+        linearContext: {
+          kind: 'project',
+          id: 'project-9',
+          workspaceId: 'workspace-1',
+          model: 'project'
+        },
+        jiraPreset: 'assigned',
+        jiraQuery: 'ENG'
       },
       workspaceCleanup: {
         dismissals: {
@@ -484,6 +526,80 @@ describe('client UI RPC methods', () => {
       worktreeCardProperties: ['status', 'unread', 'branch', 'automation', 'inline-agents']
     })
     expect(response).toMatchObject({ ok: true, result: { ui: updated } })
+  })
+
+  // Why one case per field: the schema is strict, so a single unlisted key makes
+  // the dispatcher reject the ENTIRE ui.set payload with invalid_argument instead
+  // of stripping it. A combined payload would pass as soon as any one field were
+  // restored, hiding the rest of the drift.
+  it.each([
+    ['taskResumeState.linearMode', { taskResumeState: { linearMode: 'projects' } }],
+    [
+      'taskResumeState.linearContext',
+      {
+        taskResumeState: {
+          linearContext: { kind: 'project', id: 'project-9', workspaceId: 'workspace-1' }
+        }
+      }
+    ],
+    ['taskResumeState.jiraPreset', { taskResumeState: { jiraPreset: 'assigned' } }],
+    ['taskResumeState.jiraQuery', { taskResumeState: { jiraQuery: 'ENG' } }],
+    ['activeView', { activeView: 'tasks' }],
+    ['showDotfilesByWorktree', { showDotfilesByWorktree: { 'repo::/worktree': true } }],
+    ['setupGuideSidebarDismissed', { setupGuideSidebarDismissed: true }],
+    ['setupGuideBrowserMilestoneMigrated', { setupGuideBrowserMilestoneMigrated: true }],
+    [
+      'setupGuideBrowserMilestoneLegacyComplete',
+      { setupGuideBrowserMilestoneLegacyComplete: true }
+    ],
+    ['browserImportHintHidden', { browserImportHintHidden: true }],
+    ['mobileEmulatorTabIntroDismissed', { mobileEmulatorTabIntroDismissed: true }],
+    ['mobileEmulatorAgentSetupDismissed', { mobileEmulatorAgentSetupDismissed: true }]
+  ])('accepts %s, which the renderer persists through ui.set', async (_label, payload) => {
+    const runtime = {
+      getRuntimeId: () => 'test-runtime',
+      updateUIState: vi.fn(() => getDefaultUIState())
+    } as unknown as OrcaRuntimeService
+    const dispatcher = new RpcDispatcher({ runtime, methods: CLIENT_UI_METHODS })
+
+    const response = await dispatcher.dispatch(makeRequest('ui.set', payload))
+
+    expect(response).toMatchObject({ ok: true })
+    expect(runtime.updateUIState).toHaveBeenCalledWith(payload)
+  })
+
+  it('accepts the whole debounced App writer payload', async () => {
+    const runtime = {
+      getRuntimeId: () => 'test-runtime',
+      updateUIState: vi.fn(() => getDefaultUIState())
+    } as unknown as OrcaRuntimeService
+    const dispatcher = new RpcDispatcher({ runtime, methods: CLIENT_UI_METHODS })
+    // Mirrors App.tsx's 150ms writer: one unlisted key here dropped every other
+    // preference in the same call for paired web/SSH/relay clients.
+    const payload = {
+      sidebarWidth: 280,
+      rightSidebarOpen: true,
+      rightSidebarTab: 'explorer',
+      rightSidebarExplorerView: 'files',
+      rightSidebarWidth: 320,
+      markdownTocPanelWidth: 200,
+      groupBy: 'repo',
+      sortBy: 'smart',
+      projectOrderBy: 'manual',
+      showActiveOnly: false,
+      hideSleepingWorkspaces: false,
+      showSleepingWorkspaces: true,
+      hideDefaultBranchWorkspace: false,
+      hideAutomationGeneratedWorkspaces: false,
+      showDotfilesByWorktree: { 'repo::/worktree': true },
+      filterRepoIds: ['repo-1'],
+      acknowledgedAgentsByPaneKey: { 'pane-1': 123 }
+    }
+
+    const response = await dispatcher.dispatch(makeRequest('ui.set', payload))
+
+    expect(response).toMatchObject({ ok: true })
+    expect(runtime.updateUIState).toHaveBeenCalledWith(payload)
   })
 
   it('records a feature interaction through the runtime host', async () => {

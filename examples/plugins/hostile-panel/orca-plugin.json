@@ -1,0 +1,16 @@
+{
+  "manifestVersion": 1,
+  "id": "hostile-panel",
+  "publisher": "orca-samples",
+  "name": "Hostile Panel (security fixture)",
+  "version": "1.0.0",
+  "description": "Deliberately hostile panel used by the plugin containment tests: exfiltration, navigation, message floods, busy loops. Never grant it anything.",
+  "engines": { "orca": ">=1.4.0" },
+  "pluginApi": 1,
+  "contributes": {
+    "panels": [
+      { "id": "hostile", "title": "Hostile Fixture", "icon": "bug", "entry": "panel.html" }
+    ]
+  },
+  "capabilities": []
+}

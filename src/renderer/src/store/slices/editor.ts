@@ -215,6 +215,8 @@ export type OpenFile = {
   isDirty: boolean
   // Why: remote untitled cleanup must target the creating environment even if the user later switches runtime.
   runtimeEnvironmentId?: string | null
+  /** SSH target that owns an absolute path outside the worktree. */
+  externalSshTargetId?: string
   /** Host provenance captured when the tab opened; mutations reject replacement owners. */
   operationProvenance?: EditorFileOperationProvenance
   /** Why: preview tabs mirror a source file's live draft; storing its ID lets the preview follow unsaved edits without becoming editable. */
@@ -314,9 +316,13 @@ export type PendingEditorReveal = {
 export type PendingEditorFocusRequest = {
   fileId: string
   worktreeId: string
+  viewStateId: string
+  expiresAt: number
   token: number
 }
 
+// Why: allow slow SSH mounts without leaving an unrelated future remount armed indefinitely.
+const EDITOR_FOCUS_REQUEST_TTL_MS = 30_000
 let nextEditorFocusRequestToken = 0
 
 const pendingEditorLineRevealFrameIds = new Set<number>()
@@ -467,7 +473,12 @@ export type EditorSlice = {
   openMarkdownPreview: (
     file: Pick<
       OpenFile,
-      'filePath' | 'relativePath' | 'worktreeId' | 'language' | 'runtimeEnvironmentId'
+      | 'filePath'
+      | 'relativePath'
+      | 'worktreeId'
+      | 'language'
+      | 'runtimeEnvironmentId'
+      | 'externalSshTargetId'
     >,
     options?: { anchor?: string | null; targetGroupId?: string; sourceFileId?: string }
   ) => void
@@ -1653,21 +1664,11 @@ export const createEditorSlice: StateCreator<AppState, [], [], EditorSlice> = (s
         resolveEditorOpenTargetGroupId(s, worktreeId, options?.targetGroupId) ?? undefined
       editorItemTargetGroupId = targetGroupId
       const activeResult = buildEditorActiveResult(s, worktreeId, id)
-      // Why: the renderer may mount asynchronously after the opening control
-      // receives DOM focus, so carry the user's explicit focus handoff by file.
-      const focusRequestUpdate = options?.focusEditor
-        ? {
-            pendingEditorFocusRequest: {
-              fileId: id,
-              worktreeId,
-              token: ++nextEditorFocusRequestToken
-            }
-          }
-        : {}
-
       if (existing) {
         // If opening as non-preview, also pin the existing tab
         const updatedPreview = isPreview ? existing.isPreview : false
+        const nextExternalSshTargetId = file.externalSshTargetId ?? existing.externalSshTargetId
+        const refreshExternalSshProvenance = file.externalSshTargetId !== undefined
         const fileContentReloadNonce = shouldRequestExistingFileContentReload(
           existing,
           file.mode,
@@ -1689,9 +1690,11 @@ export const createEditorSlice: StateCreator<AppState, [], [], EditorSlice> = (s
           existing.relativePath !== file.relativePath ||
           existing.worktreeId !== file.worktreeId ||
           existing.runtimeEnvironmentId !== runtimeEnvironmentId ||
+          existing.externalSshTargetId !== nextExternalSshTargetId ||
+          refreshExternalSshProvenance ||
           existing.fileContentReloadNonce !== fileContentReloadNonce
         if (!needsExistingUpdate) {
-          return { ...activeResult, ...focusRequestUpdate }
+          return activeResult
         }
         // Why: `readOnly` is intentionally NOT in this override map — it's sticky, so `...f` preserves the tab's own read-only state.
         return {
@@ -1703,6 +1706,10 @@ export const createEditorSlice: StateCreator<AppState, [], [], EditorSlice> = (s
                   worktreeId: file.worktreeId,
                   language: file.language,
                   runtimeEnvironmentId,
+                  externalSshTargetId: nextExternalSshTargetId,
+                  operationProvenance: refreshExternalSshProvenance
+                    ? operationProvenance
+                    : f.operationProvenance,
                   mode: file.mode,
                   diffSource: file.diffSource,
                   branchCompare: file.branchCompare,
@@ -1719,8 +1726,7 @@ export const createEditorSlice: StateCreator<AppState, [], [], EditorSlice> = (s
                 }
               : f
           ),
-          ...activeResult,
-          ...focusRequestUpdate
+          ...activeResult
         }
       }
 
@@ -1798,8 +1804,7 @@ export const createEditorSlice: StateCreator<AppState, [], [], EditorSlice> = (s
             recentlyClosedEditorTabsByWorktree: nextRecentlyClosed,
             recentlyClosedTabKindsByWorktree: nextRecentlyClosedKinds,
             ...previewTabBarUpdate,
-            ...activeResult,
-            ...focusRequestUpdate
+            ...activeResult
           }
         }
       }
@@ -1839,11 +1844,10 @@ export const createEditorSlice: StateCreator<AppState, [], [], EditorSlice> = (s
           }
         ],
         ...tabBarUpdate,
-        ...activeResult,
-        ...focusRequestUpdate
+        ...activeResult
       }
     })
-    void openWorkspaceEditorItem(
+    const editorItemViewStateId = openWorkspaceEditorItem(
       get(),
       editorItemFileId,
       editorItemWorktreeId,
@@ -1852,6 +1856,17 @@ export const createEditorSlice: StateCreator<AppState, [], [], EditorSlice> = (s
       options?.preview ?? false,
       editorItemTargetGroupId
     )
+    if (options?.focusEditor) {
+      set({
+        pendingEditorFocusRequest: {
+          fileId: editorItemFileId,
+          worktreeId: editorItemWorktreeId,
+          viewStateId: editorItemViewStateId,
+          expiresAt: Date.now() + EDITOR_FOCUS_REQUEST_TTL_MS,
+          token: ++nextEditorFocusRequestToken
+        }
+      })
+    }
   },
 
   openNewMarkdownInActiveWorkspace: async (groupId) => {
@@ -1915,6 +1930,9 @@ export const createEditorSlice: StateCreator<AppState, [], [], EditorSlice> = (s
         ['edit']
       )
     const id = `markdown-preview::${sourceFileId}`
+    const externalSshTargetId =
+      file.externalSshTargetId ??
+      initialState.openFiles.find((openFile) => openFile.id === sourceFileId)?.externalSshTargetId
     const anchor = options?.anchor || undefined
     set((s) => {
       const existing = s.openFiles.find((openFile) => openFile.id === id)
@@ -1927,6 +1945,7 @@ export const createEditorSlice: StateCreator<AppState, [], [], EditorSlice> = (s
           existing.relativePath !== file.relativePath ||
           existing.filePath !== file.filePath ||
           existing.language !== file.language ||
+          existing.externalSshTargetId !== externalSshTargetId ||
           existing.markdownPreviewSourceFileId !== sourceFileId ||
           existing.markdownPreviewAnchor !== anchor ||
           existing.mode !== 'markdown-preview'
@@ -1941,6 +1960,7 @@ export const createEditorSlice: StateCreator<AppState, [], [], EditorSlice> = (s
                       worktreeId: file.worktreeId,
                       language: file.language,
                       runtimeEnvironmentId,
+                      externalSshTargetId,
                       markdownPreviewSourceFileId: sourceFileId,
                       markdownPreviewAnchor: anchor,
                       mode: 'markdown-preview' as const
@@ -1960,6 +1980,7 @@ export const createEditorSlice: StateCreator<AppState, [], [], EditorSlice> = (s
         language: file.language,
         isDirty: false,
         runtimeEnvironmentId,
+        externalSshTargetId,
         markdownPreviewSourceFileId: sourceFileId,
         markdownPreviewAnchor: anchor,
         mode: 'markdown-preview'
@@ -4504,6 +4525,7 @@ export const createEditorSlice: StateCreator<AppState, [], [], EditorSlice> = (s
             isDirty: !isReadOnly && pf.dirtyDraftContent !== undefined,
             isPreview: pf.isPreview,
             runtimeEnvironmentId: pf.runtimeEnvironmentId,
+            externalSshTargetId: pf.externalSshTargetId,
             ...(isReadOnly ? { readOnly: true } : {}),
             ...(isReadOnly && pf.liveTail === true ? { liveTail: true } : {}),
             lastKnownDiskSignature: isReadOnly ? undefined : pf.lastKnownDiskSignature,

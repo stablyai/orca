@@ -9,10 +9,21 @@ import type { DashboardCard } from '../../../../shared/dashboard-snapshot'
 import { AgentTerminalPreview } from './AgentTerminalPreview'
 import { translate } from '@/i18n/i18n'
 
+/** Routing payload for focusing an agent's pane in the main window. */
+export type AgentRevealArgs = {
+  repoId: string
+  worktreeId: string
+  tabId: string
+  leafId: string | null
+}
+
 type AgentTerminalDialogProps = {
   /** The agent shown in the dialog; null renders the dialog closed. */
   card: DashboardCard | null
   onOpenChange: (open: boolean) => void
+  /** Focus the agent's pane. The pop-out relays over IPC; the in-window host
+   *  activates the worktree/pane locally. */
+  onReveal: (args: AgentRevealArgs) => void
 }
 
 /**
@@ -24,19 +35,20 @@ type AgentTerminalDialogProps = {
  */
 export function AgentTerminalDialog({
   card,
-  onOpenChange
+  onOpenChange,
+  onReveal
 }: AgentTerminalDialogProps): React.JSX.Element {
   const reveal = useCallback(() => {
     if (!card) {
       return
     }
-    void window.api.dashboard.revealAgent({
+    onReveal({
       repoId: card.repoId,
       worktreeId: card.worktreeId,
       tabId: card.tabId,
       leafId: card.leafId
     })
-  }, [card])
+  }, [card, onReveal])
 
   return (
     <Dialog open={card !== null} onOpenChange={onOpenChange}>
@@ -67,7 +79,9 @@ export function AgentTerminalDialog({
           }}
         >
           <div className="flex items-center gap-1.5 px-2.5 py-2">
-            <AgentIcon agent={agentTypeToIconAgent(card.agentType)} size={13} />
+            <span className="inline-flex shrink-0">
+              <AgentIcon agent={agentTypeToIconAgent(card.agentType)} size={13} />
+            </span>
             <DialogTitle className="text-[12px] leading-normal font-semibold">
               {card.worktreeName}
             </DialogTitle>

@@ -578,7 +578,7 @@ describe('mobile endpoint supervisor', () => {
     supervisor.stop()
   })
 
-  it('waits for an external signal instead of polling a host-offline relay', async () => {
+  it('retries a host-offline relay without requiring an external signal', async () => {
     const logical = new FakeLogicalClient('disconnected', 'lan')
     const openRelay = vi.fn(() => new FakeRelaySession('disconnected', new RelayOuterError(4404)))
     const deps = dependencies({
@@ -591,13 +591,12 @@ describe('mobile endpoint supervisor', () => {
 
     expect(openRelay).toHaveBeenCalledOnce()
     logical.publishState('disconnected')
-    expect(vi.getTimerCount()).toBe(0)
-
-    supervisor.setForeground(true)
     expect(vi.getTimerCount()).toBe(1)
-    await vi.advanceTimersByTimeAsync(250)
+    await vi.advanceTimersByTimeAsync(9_999)
+    expect(openRelay).toHaveBeenCalledOnce()
+    await vi.advanceTimersByTimeAsync(1)
     expect(openRelay).toHaveBeenCalledTimes(2)
-    expect(vi.getTimerCount()).toBe(0)
+    expect(vi.getTimerCount()).toBe(1)
     supervisor.stop()
   })
 

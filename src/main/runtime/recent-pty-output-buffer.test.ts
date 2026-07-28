@@ -259,3 +259,31 @@ describe('RecentPtyOutputBuffer', () => {
     }
   })
 })
+
+describe('configurable limit', () => {
+  // Why: a hardcoded RECENT_PTY_OUTPUT_LIMIT left in one arithmetic branch silently
+  // under-retained for any caller passing a different limit (the relay passes 100KB).
+  it('retains exactly the configured limit across many chunks', () => {
+    const limit = 1000
+    const buffer = new RecentPtyOutputBuffer({ preserveChunkBoundaries: false, limit })
+    let reference = ''
+    for (let index = 0; index < 60; index += 1) {
+      const chunk = `c${index}-`.repeat(9)
+      buffer.append(chunk)
+      reference = (reference + chunk).slice(-limit)
+    }
+    expect(buffer.read().length).toBe(limit)
+    expect(buffer.read()).toBe(reference)
+  })
+
+  it('rejects a non-positive limit', () => {
+    expect(() => new RecentPtyOutputBuffer({ limit: 0 })).toThrow('positive integer')
+    expect(() => new RecentPtyOutputBuffer({ limit: -1 })).toThrow('positive integer')
+  })
+
+  it('defaults to RECENT_PTY_OUTPUT_LIMIT', () => {
+    const buffer = new RecentPtyOutputBuffer({ preserveChunkBoundaries: false })
+    buffer.append('z'.repeat(RECENT_PTY_OUTPUT_LIMIT * 2))
+    expect(buffer.read().length).toBe(RECENT_PTY_OUTPUT_LIMIT)
+  })
+})

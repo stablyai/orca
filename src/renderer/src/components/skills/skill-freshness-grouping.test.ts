@@ -73,6 +73,28 @@ describe('groupSkillFreshness', () => {
     ])
   })
 
+  it('blocks a skill whose only outdated copy is an unreachable duplicate', () => {
+    // Why: the global command reports "already up to date" here, so the group must
+    // read as skipped with the duplicate flagged rather than promising an update.
+    const groups = groupSkillFreshness(
+      [
+        placement('orchestration', { status: 'current' }),
+        placement('orchestration', {
+          rootId: 'home-factory',
+          unresolvedPath: '/home/.factory/skills/orchestration',
+          topology: 'independent-copy'
+        })
+      ],
+      []
+    )
+    expect(groups).toHaveLength(1)
+    expect(groups[0]?.status).toBe('cannot-update')
+    expect(groups[0]?.locations).toEqual([
+      { id: expect.any(String), path: '/home/.agents/skills/orchestration', chip: 'current' },
+      { id: expect.any(String), path: '/home/.factory/skills/orchestration', chip: 'duplicate' }
+    ])
+  })
+
   it('prefers a location status over its topology and maps every topology to a chip', () => {
     const chipFor = (overrides: Partial<SkillFreshnessInstallation>): string | null =>
       groupSkillFreshness(
@@ -94,5 +116,8 @@ describe('groupSkillFreshness', () => {
     expect(chipFor(at('g', { topology: 'repo-scope' }))).toBe('in-a-repo')
     expect(chipFor(at('h', { topology: 'plugin-cache' }))).toBe('plugin-cache')
     expect(chipFor(at('i', { status: 'current', topology: 'provider-alias' }))).toBe('current')
+    expect(chipFor(at('j', { status: 'unrecognized', topology: 'plugin-cache' }))).toBe(
+      'plugin-cache'
+    )
   })
 })

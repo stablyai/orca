@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "updatedAt": "2026-07-22",
+  "updatedAt": "2026-07-26",
   "policy": {
     "maturityLevels": [
       "experimental",
@@ -16,6 +16,233 @@
     }
   },
   "gates": [
+    {
+      "id": "mobile-relay.endpoint-recovery",
+      "title": "Mobile relay recovery retries offline hosts and races direct endpoints",
+      "maturity": "experimental",
+      "protection": "partial",
+      "owner": "mobile-runtime",
+      "layer": "shared-mobile-transport-contract",
+      "surfaces": [
+        "paired mobile reconnect",
+        "cloud relay host-offline recovery",
+        "LAN direct endpoint",
+        "Tailscale direct endpoint"
+      ],
+      "platforms": [
+        "ios",
+        "android",
+        "macos",
+        "linux",
+        "windows"
+      ],
+      "providers": [
+        "lan",
+        "tailscale",
+        "cloud-relay"
+      ],
+      "coveredPlatforms": [
+        "macos"
+      ],
+      "coveredProviders": [
+        "lan",
+        "tailscale",
+        "cloud-relay"
+      ],
+      "coverageNotes": "Deterministic TypeScript tests cover shared close-code policy, foreground retry timers, direct-winner cancellation, and concurrent LAN/Tailscale authentication. Physical iOS/Android radios, GFE, and production relay recovery remain live-test gaps.",
+      "motivatingLinks": [
+        "https://github.com/stablyai/orca-cloud/pull/96"
+      ],
+      "invariant": "A foregrounded paired phone must recover from relay HOST_OFFLINE without a foreground or network-change signal, while direct recovery must select the first authenticated configured LAN or Tailscale endpoint without serial timeout delays. Backgrounding, direct success, or stop must cancel pending work, and losing probes must close without affecting the winner.",
+      "oracle": "Inject deterministic relay close codes, random bytes, fake timers, and independently controlled direct clients. Require HOST_OFFLINE to replace any faster transport timer with one 5-15 second retry, require no retry before the selected delay, race all unique non-relay endpoints, select the first authenticated path, close every loser exactly once, and retain no retry after direct connectivity wins.",
+      "commands": [
+        "pnpm --dir mobile exec vitest run --root .. mobile/src/transport/mobile-direct-endpoint-probe.test.ts mobile/src/transport/mobile-relay-reconnect-controller.test.ts mobile/src/transport/mobile-endpoint-supervisor.test.ts",
+        "pnpm exec vitest run --config config/vitest.config.ts src/shared/mobile-relay-close-codes.test.ts --reporter=dot"
+      ],
+      "testFiles": [
+        "mobile/src/transport/mobile-direct-endpoint-probe.test.ts",
+        "mobile/src/transport/mobile-relay-reconnect-controller.test.ts",
+        "mobile/src/transport/mobile-endpoint-supervisor.test.ts",
+        "src/shared/mobile-relay-close-codes.test.ts"
+      ],
+      "assertionRefs": [
+        {
+          "file": "mobile/src/transport/mobile-direct-endpoint-probe.test.ts",
+          "assertions": [
+            "a reachable Tailscale endpoint authenticates without waiting for a stale primary LAN timeout",
+            "the stale direct candidate closes while the authenticated winner stays open"
+          ]
+        },
+        {
+          "file": "mobile/src/transport/mobile-relay-reconnect-controller.test.ts",
+          "assertions": [
+            "HOST_OFFLINE replaces a pending capacity retry with the bounded host-offline delay",
+            "direct connectivity cancels the pending relay retry"
+          ]
+        },
+        {
+          "file": "mobile/src/transport/mobile-endpoint-supervisor.test.ts",
+          "assertions": [
+            "a foregrounded supervisor retries HOST_OFFLINE without an external lifecycle signal"
+          ]
+        },
+        {
+          "file": "src/shared/mobile-relay-close-codes.test.ts",
+          "assertions": [
+            "HOST_OFFLINE maps to self-healing full-jitter recovery"
+          ]
+        }
+      ],
+      "evidenceRuns": [
+        {
+          "date": "2026-07-25",
+          "runner": "local",
+          "platform": "macos",
+          "command": "pnpm --dir mobile exec vitest run --root .. mobile/src/transport/mobile-direct-endpoint-probe.test.ts mobile/src/transport/mobile-relay-reconnect-controller.test.ts mobile/src/transport/mobile-endpoint-supervisor.test.ts",
+          "result": "passed",
+          "durationSeconds": 0.89,
+          "summary": "Three focused mobile transport files passed with 39 assertions."
+        },
+        {
+          "date": "2026-07-25",
+          "runner": "local",
+          "platform": "macos",
+          "command": "pnpm exec vitest run --config config/vitest.config.ts src/shared/mobile-relay-close-codes.test.ts --reporter=dot",
+          "result": "passed",
+          "durationSeconds": 0.19,
+          "summary": "The shared close-code contract passed with five assertions."
+        }
+      ],
+      "runtimeBudget": {
+        "p95Seconds": 5,
+        "scope": "focused shared and mobile transport unit tests"
+      },
+      "flakeHistory": {
+        "status": "unknown",
+        "evidence": "Two deterministic local runs exist; CI and soak history are not yet available."
+      },
+      "redGreenEvidence": {
+        "status": "complete",
+        "evidence": "The prior external-signal HOST_OFFLINE policy fails the retry oracle, and the prior serial direct probe fails the first-authenticated-endpoint timing oracle. Both pass with the candidate behavior."
+      },
+      "performanceBudget": {
+        "required": true,
+        "evidence": "All configured direct candidates start in one turn, the first authenticated candidate wins after 100 ms in the deterministic test, and every losing client is closed. A physical-device radio and battery budget is still required before promotion."
+      },
+      "promotionCriteria": [
+        "Collect 100 consecutive CI passes or 14 days of soak history.",
+        "Run paired iOS and Android recovery through production-like GFE HOST_OFFLINE responses.",
+        "Measure reconnect radio and battery impact for the 5-15 second foreground retry window."
+      ],
+      "knownGaps": [
+        "No physical iOS or Android device was exercised.",
+        "The deterministic transport seam does not measure production GFE, carrier NAT, DNS, TLS, or Cloud SQL latency.",
+        "Background-to-foreground recovery remains covered by existing supervisor tests but lacks a physical sleep/wake run."
+      ],
+      "demotionRule": "Keep experimental or demote if focused tests flake, HOST_OFFLINE can park indefinitely, direct probes serialize configured endpoints, loser cleanup leaks clients, or physical-device radio cost exceeds the measured budget."
+    },
+    {
+      "id": "desktop-relay.assignment-backpressure",
+      "title": "Desktop relay drain recovery cannot amplify a director outage",
+      "maturity": "experimental",
+      "protection": "partial",
+      "owner": "desktop-runtime",
+      "layer": "main-relay-state-machine",
+      "surfaces": [
+        "desktop relay drain recovery",
+        "director assignment overload",
+        "relay broker shutdown"
+      ],
+      "platforms": [
+        "macos",
+        "linux",
+        "windows"
+      ],
+      "providers": [
+        "cloud-relay"
+      ],
+      "coveredPlatforms": [
+        "macos"
+      ],
+      "coveredProviders": [
+        "cloud-relay"
+      ],
+      "coverageNotes": "Deterministic main-process tests cover duplicate drain notifications, full-jitter backoff, Retry-After during initial setup and drain recovery, successful recovery, and broker-close cleanup. Packaged desktop, mixed-version fleets, GFE, and production Cloud SQL remain live-test gaps.",
+      "motivatingLinks": [
+        "https://github.com/stablyai/orca-cloud/actions/runs/30223521062"
+      ],
+      "invariant": "One relay host may have at most one assignment attempt or retry timer per recovery path. Sustained director failure must increase the retry window up to five minutes, a bounded Retry-After must be respected during initial setup and drain recovery, shutdown must cancel pending work, and recovery must activate the authoritative assigned origin.",
+      "oracle": "Inject duplicate drain events, deterministic randomness, fake time, repeated assignment failures, a 30-second Retry-After during initial setup and drain recovery, broker close, and eventual director recovery. Count every assignment call, require 500 ms then 1,000 ms retry windows, reject duplicate fanout, require no pre-hint retry or post-close work, and prove the recovered cell becomes authoritative.",
+      "commands": [
+        "pnpm exec vitest run --config config/vitest.config.ts src/main/runtime/relay/relay-session-broker.test.ts src/main/runtime/relay/relay-http-client.test.ts src/main/runtime/relay/relay-auth-coordinator-recovery.test.ts --reporter=dot"
+      ],
+      "testFiles": [
+        "src/main/runtime/relay/relay-session-broker.test.ts",
+        "src/main/runtime/relay/relay-http-client.test.ts",
+        "src/main/runtime/relay/relay-auth-coordinator-recovery.test.ts"
+      ],
+      "assertionRefs": [
+        {
+          "file": "src/main/runtime/relay/relay-session-broker.test.ts",
+          "assertions": [
+            "duplicate drain notifications share one exponentially backed-off retry schedule",
+            "Retry-After suppresses early assignment requests",
+            "broker close prevents retry resurrection",
+            "a later successful assignment activates the new origin"
+          ]
+        },
+        {
+          "file": "src/main/runtime/relay/relay-http-client.test.ts",
+          "assertions": [
+            "assignment overload preserves a bounded Retry-After hint"
+          ]
+        },
+        {
+          "file": "src/main/runtime/relay/relay-auth-coordinator-recovery.test.ts",
+          "assertions": [
+            "initial relay setup does not retry before Retry-After expires"
+          ]
+        }
+      ],
+      "evidenceRuns": [
+        {
+          "date": "2026-07-26",
+          "runner": "local",
+          "platform": "macos",
+          "command": "pnpm exec vitest run --config config/vitest.config.ts src/main/runtime/relay/relay-session-broker.test.ts src/main/runtime/relay/relay-http-client.test.ts src/main/runtime/relay/relay-auth-coordinator-recovery.test.ts --reporter=dot",
+          "result": "passed",
+          "durationSeconds": 0.49,
+          "summary": "Three focused relay files passed with 25 assertions."
+        }
+      ],
+      "runtimeBudget": {
+        "p95Seconds": 5,
+        "scope": "focused desktop relay state-machine tests"
+      },
+      "flakeHistory": {
+        "status": "unknown",
+        "evidence": "One deterministic local run exists; CI and soak history are not yet available."
+      },
+      "redGreenEvidence": {
+        "status": "complete",
+        "evidence": "The prior fixed-delay implementation issued a duplicate assignment within 499 ms and ignored Retry-After, while the candidate passes the byte-identical timer and call-count oracle."
+      },
+      "performanceBudget": {
+        "required": true,
+        "evidence": "One host retains at most one assignment attempt or retry timer, retry windows grow to a five-minute cap, duplicate drain events add no calls, and close leaves no timer-driven work."
+      },
+      "promotionCriteria": [
+        "Collect 100 consecutive CI passes or 14 days of soak history.",
+        "Run a mixed-version load test with at least the incident-scale desktop population.",
+        "Verify production director request rate decays during an injected assignment outage."
+      ],
+      "knownGaps": [
+        "No packaged desktop or physical phone was exercised.",
+        "The deterministic seam does not measure production GFE, carrier NAT, DNS, TLS, or Cloud SQL behavior.",
+        "Legacy desktop versions remain dependent on server-side overload protection."
+      ],
+      "demotionRule": "Keep experimental or demote if assignment calls overlap, duplicate drain events bypass backoff, Retry-After is ignored, close resurrects work, or mixed-version request rate exceeds the reviewed director budget."
+    },
     {
       "id": "git-worktree.refresh-event-semantics",
       "title": "Index-only Git metadata cannot trigger structural worktree refresh fanout",
@@ -905,47 +1132,77 @@
     },
     {
       "id": "terminal-session.daemon-generation-reconnect-safety",
-      "title": "Reconnect lifecycle echoes cannot kill live daemon-generation terminals",
+      "title": "Negotiated close intent protects live daemon-generation terminals",
       "maturity": "experimental",
       "protection": "partial",
       "owner": "terminal-runtime",
-      "layer": "renderer-runtime-rpc-windows-daemon-contract",
+      "layer": "renderer-runtime-rpc-daemon-contract",
       "surfaces": [
         "runtime session reconnect",
         "legacy daemon adoption",
+        "mixed-version paired viewer close",
         "terminal lifecycle close",
         "app relaunch and profile reconnect"
       ],
       "platforms": ["macos", "linux", "windows"],
       "providers": ["daemon", "runtime", "ssh", "wsl"],
-      "coveredPlatforms": ["windows"],
+      "coveredPlatforms": ["linux", "macos", "windows"],
       "coveredProviders": ["daemon", "runtime"],
-      "coverageNotes": "Recorded native Windows evidence covers the v21/v22/v23/v24/v25 named-pipe matrix. The current harness additionally includes the v26 agent-authority boundary while retaining v24 clean-disconnect and v25 startup-ingress coverage; that six-generation Windows rerun remains to be collected. Deterministic host/renderer tests cover old servers, missing liveness, stale publications, reused claims, split parents, authenticated legacy and unattributed intent, cross-profile isolation, remote runtime clients, SSH-provider routing, and WSL boundaries. Docker is unavailable and WSL is not installed on this runner, so live SSH/WSL remain gaps.",
+      "coverageNotes": "Recorded native Windows evidence covers the v21/v22/v23/v24/v25 named-pipe matrix. The deterministic daemon harness covers capable and legacy paired-runtime request shapes against live v25/v26 PTYs in separate worktrees, plus an unrelated control. Host/renderer tests cover old servers, missing liveness, stale publications, reused claims, split parents, explicit user intent, cross-profile isolation, remote runtime clients, SSH-provider routing, and WSL boundaries. A headed host paired to a separate live client, headless serve parity, Linux, SSH, and WSL remain explicit gaps.",
       "motivatingLinks": [
         "https://github.com/stablyai/orca/issues/9749",
+        "https://github.com/stablyai/orca/issues/9949",
         "https://github.com/stablyai/orca/issues/8871",
         "https://github.com/stablyai/orca/issues/9138",
         "https://github.com/stablyai/orca/issues/9229"
       ],
-      "invariant": "Reconnect, replay, or lifecycle observations must never kill a live PTY. Destructive close requires explicit user intent; lifecycle close requires the exact observed publication, terminal, environment, and authoritative liveness, never signals a process, and leaves renderer-owned or partial-split retirement to its owner. Missing or incompatible evidence keeps and audits. Legacy daemon hello and warm reattachment remain non-destructive.",
-      "oracle": "Start six isolated native-Windows daemon generations on distinct versioned named pipes, let the production desktop scanner discover v21-v25 from a v26 client, attach live and stale-mirror canaries with exact root/descendant PID-start identities, reconnect and relaunch the production router path, issue repeated desktop and remote-profile lifecycle closes, and require every daemon, root, and descendant to remain alive with zero session-killed events. Unit contracts require unknown/stale/reused/cross-profile claims and live PTYs to refuse without kill or renderer-close calls, old servers to return method_not_found with no destructive fallback, authenticated legacy and explicit user closes to remain destructive, and dead whole-headless state to retire without signalling its retained PTY id.",
+      "invariant": "Reconnect, replay, or lifecycle observations from a viewer that negotiated explicit close intent must never kill a live PTY. A capable reasonless close must keep and republish; a legacy paired viewer must retain current-main behavior because its intentional close and cleanup echo are wire-identical. Lifecycle close requires the exact observed publication, terminal, environment, and authoritative liveness, never signals a process, and leaves renderer-owned or partial-split retirement to its owner. Legacy daemon hello and warm reattachment remain non-destructive.",
+      "oracle": "Start isolated v25 and v26 daemon generations with one capable-viewer PTY and one legacy-viewer PTY per generation in four target worktrees plus an unaddressed control PTY in a fifth worktree. Route them through the production desktop scanner, runtime, RPC dispatcher, renderer-close relay, and daemon router. First issue sequential reasonless closes from an authenticated capable connection and require refusal, snapshot republish, zero shutdown calls, exact process survival, and post-close I/O. Then issue the byte-identical requests without the negotiated capability and require current-main behavior: two ordered immediate shutdowns, session-killed events, and exact root/descendant death, while capable and control PTYs survive. An observer lists all targets before, between, and after while issuing zero closes. Unit contracts also require in-process reasonless refusal, legacy runtime/mobile compatibility, explicit user closes, encrypted client-auth advertisement, and old-server lifecycle calls never to fall back.",
       "commands": [
-        "pnpm exec vitest run --config config/vitest.config.ts src/main/runtime/orca-runtime.test.ts src/main/runtime/rpc/methods/session-tabs.test.ts src/main/runtime/rpc/methods/session-tabs-schemas.test.ts src/renderer/src/runtime/web-runtime-session.test.ts src/renderer/src/runtime/web-session-close-intent.test.ts src/renderer/src/runtime/web-session-tabs-sync.test.ts src/renderer/src/components/terminal/terminal-tab-actions.test.ts src/renderer/src/components/terminal/terminal-close-incarnation.test.ts src/renderer/src/components/terminal-pane/terminal-parked-tab-watchers.test.ts",
-        "pnpm exec playwright test tests/e2e/daemon-generation-reconnect-safety.spec.ts --config tests/playwright.config.ts --project electron-headless --workers=1"
+        "pnpm exec vitest run --config config/vitest.config.ts src/main/runtime/orca-runtime.test.ts src/main/runtime/remote-runtime-request-connection.integration.test.ts src/main/runtime/rpc/methods/session-tabs.test.ts src/main/runtime/rpc/methods/session-tabs-schemas.test.ts src/main/runtime/rpc/e2ee-channel.test.ts src/main/runtime/rpc/e2ee-channel-v2.test.ts src/main/runtime/rpc/mobile-socket-wiring.test.ts src/main/runtime/rpc/runtime-client-capabilities.test.ts src/shared/remote-runtime-client.test.ts src/shared/remote-runtime-request-connection.test.ts src/shared/remote-runtime-shared-control-connection.test.ts src/cli/runtime/websocket-transport.test.ts src/renderer/src/web/web-runtime-client.test.ts src/renderer/src/runtime/web-runtime-session.test.ts src/renderer/src/runtime/web-session-close-intent.test.ts src/renderer/src/runtime/web-session-tabs-sync.test.ts src/renderer/src/components/terminal/terminal-tab-actions.test.ts src/renderer/src/components/terminal/terminal-close-incarnation.test.ts src/renderer/src/components/terminal-pane/terminal-parked-tab-watchers.test.ts",
+        "pnpm exec playwright test tests/e2e/daemon-generation-reconnect-safety.spec.ts --config tests/playwright.config.ts --project electron-headless --workers=1",
+        "pnpm exec playwright test tests/e2e/daemon-generation-legacy-close-safety.spec.ts --config tests/playwright.config.ts --project electron-headless --workers=1"
       ],
       "testFiles": [
         "src/main/runtime/orca-runtime.test.ts",
+        "src/main/runtime/remote-runtime-request-connection.integration.test.ts",
         "src/main/runtime/rpc/methods/session-tabs.test.ts",
         "src/main/runtime/rpc/methods/session-tabs-schemas.test.ts",
+        "src/main/runtime/rpc/e2ee-channel.test.ts",
+        "src/main/runtime/rpc/e2ee-channel-v2.test.ts",
+        "src/main/runtime/rpc/mobile-socket-wiring.test.ts",
+        "src/main/runtime/rpc/runtime-client-capabilities.test.ts",
+        "src/shared/remote-runtime-client.test.ts",
+        "src/shared/remote-runtime-request-connection.test.ts",
+        "src/shared/remote-runtime-shared-control-connection.test.ts",
+        "src/cli/runtime/websocket-transport.test.ts",
+        "src/renderer/src/web/web-runtime-client.test.ts",
         "src/renderer/src/runtime/web-runtime-session.test.ts",
         "src/renderer/src/runtime/web-session-close-intent.test.ts",
         "src/renderer/src/runtime/web-session-tabs-sync.test.ts",
         "src/renderer/src/components/terminal/terminal-tab-actions.test.ts",
         "src/renderer/src/components/terminal/terminal-close-incarnation.test.ts",
         "src/renderer/src/components/terminal-pane/terminal-parked-tab-watchers.test.ts",
-        "tests/e2e/daemon-generation-reconnect-safety.spec.ts"
+        "tests/e2e/daemon-generation-reconnect-safety.spec.ts",
+        "tests/e2e/daemon-generation-legacy-close-safety.spec.ts"
       ],
       "assertionRefs": [
+        {
+          "file": "src/main/runtime/remote-runtime-request-connection.integration.test.ts",
+          "assertions": [
+            "the real encrypted WebSocket handshake binds close-intent capability through authenticated socket state and RPC context to reasonless-close refusal"
+          ]
+        },
+        {
+          "file": "tests/e2e/daemon-generation-legacy-close-safety.spec.ts",
+          "assertions": [
+            "one identified capable viewer and one legacy viewer issue byte-identical sequential reasonless closes while a third viewer lists every target before, between, and after but issues zero closes",
+            "capable v25/v26 PTY root/descendant incarnations in separate worktrees survive, answer post-close input, and produce zero shutdown calls and zero daemon session-killed events",
+            "legacy v25/v26 PTY root/descendant incarnations die through ordered immediate shutdown calls with one daemon session-killed event each, matching current-main behavior",
+            "an unaddressed fifth-worktree PTY root and descendant survive with zero kill events, excluding global fanout",
+            "the JSON reconstruction records request order, negotiated capabilities, viewer connection, worktree/tab/PTY ids, daemon PID/protocol, call site, and exact before/after process liveness"
+          ]
+        },
         {
           "file": "tests/e2e/daemon-generation-reconnect-safety.spec.ts",
           "assertions": [
@@ -955,11 +1212,70 @@
           ]
         },
         {
+          "file": "src/main/runtime/rpc/mobile-socket-wiring.test.ts",
+          "assertions": [
+            "the optional client capability is captured from legacy encrypted authentication and bound to the authenticated runtime-scoped socket identity"
+          ]
+        },
+        {
+          "file": "src/main/runtime/rpc/e2ee-channel.test.ts",
+          "assertions": [
+            "runtime capabilities are accepted only from encrypted authentication metadata, not the unauthenticated hello"
+          ]
+        },
+        {
+          "file": "src/main/runtime/rpc/e2ee-channel-v2.test.ts",
+          "assertions": [
+            "mobile E2EE v2 continues to reject additive runtime capability metadata"
+          ]
+        },
+        {
+          "file": "src/main/runtime/rpc/runtime-client-capabilities.test.ts",
+          "assertions": [
+            "the authenticated capability parser accepts only bounded string arrays and rejects malformed or oversized input"
+          ]
+        },
+        {
+          "file": "src/shared/remote-runtime-client.test.ts",
+          "assertions": [
+            "one-shot and subscription runtime clients remain compatible while sending encrypted client authentication"
+          ]
+        },
+        {
+          "file": "src/shared/remote-runtime-request-connection.test.ts",
+          "assertions": [
+            "the cached paired-desktop request connection advertises close-intent support in encrypted authentication while reusing one socket"
+          ]
+        },
+        {
+          "file": "src/shared/remote-runtime-shared-control-connection.test.ts",
+          "assertions": [
+            "the reconnecting shared-control client advertises close-intent support in encrypted authentication"
+          ]
+        },
+        {
+          "file": "src/cli/runtime/websocket-transport.test.ts",
+          "assertions": [
+            "updated paired runtime clients advertise close-intent support in encrypted auth fields ignored by legacy servers"
+          ]
+        },
+        {
+          "file": "src/renderer/src/web/web-runtime-client.test.ts",
+          "assertions": [
+            "the browser paired-runtime client advertises close-intent support inside encrypted authentication"
+          ]
+        },
+        {
           "file": "src/main/runtime/orca-runtime.test.ts",
           "assertions": [
             "live, unknown, stale, missing-intent, non-owner, and inventory-proven but not yet pane-bound lifecycle closes invoke neither PTY kill nor renderer close",
-            "dead whole-headless retirement removes stale state without signalling a retained PTY id",
-            "explicit and authenticated legacy user closes remain destructive"
+            "dead whole-headless retirement removes stale state without signalling a retained PTY id"
+          ]
+        },
+        {
+          "file": "src/main/runtime/rpc/methods/session-tabs.test.ts",
+          "assertions": [
+            "in-process and capable-runtime reasonless closes refuse while legacy runtime/mobile and explicit current user closes retain current-main destructive semantics"
           ]
         },
         {
@@ -984,6 +1300,15 @@
       ],
       "evidenceRuns": [
         {
+          "date": "2026-07-27",
+          "runner": "ci",
+          "platform": "linux",
+          "command": "pnpm exec playwright test tests/e2e/daemon-generation-legacy-close-safety.spec.ts --config tests/playwright.config.ts --project electron-headless --workers=1",
+          "result": "passed",
+          "durationSeconds": 5.1,
+          "summary": "Current-head capability-gated oracle passed in E2E run https://github.com/stablyai/orca/actions/runs/30250731941/job/89928386794: capable v25/v26 roots and descendants survived with snapshot republish and post-close I/O, byte-identical legacy closes retained current-main shutdown behavior, and the unrelated fifth-worktree control survived."
+        },
+        {
           "date": "2026-07-21",
           "runner": "local",
           "platform": "windows",
@@ -995,7 +1320,7 @@
       ],
       "runtimeBudget": {
         "p95Seconds": 180,
-        "scope": "isolated native-Windows five-generation production discovery/reconnect/relaunch plus bounded disposal failure and fresh E2E build"
+        "scope": "isolated native-Windows generation reconnect plus two-generation mixed-version close adjudication and fresh E2E build"
       },
       "flakeHistory": {
         "status": "unknown",
@@ -1003,11 +1328,11 @@
       },
       "redGreenEvidence": {
         "status": "complete",
-        "evidence": "The pre-fix native run kept daemon/client processes alive but emitted repeated real session-killed events in v21/v22/v23 and terminated every stale-mirror root and descendant. The fixed production-scanner run preserves every exact v21/v22/v23/v24/v25 process incarnation with zero kill events."
+        "evidence": "Current main and PR #10013 route both reasonless viewer sequences to immediate shutdown, while the prior global-refusal candidate incorrectly preserves the legacy sequence. The capability-gated candidate passed the combined GitHub oracle: capable v25/v26 PTYs survive and answer input, legacy PTYs retain current-main shutdown behavior, and the unrelated control survives. Existing Windows red/green evidence separately covers evidence-bearing lifecycle closes."
       },
       "performanceBudget": {
         "required": true,
-        "evidence": "Production adds no polling, subprocess, PowerShell/CIM, or process-per-session work. Concurrent lifecycle closes share one bounded host controller inventory, scan only addressed parent leaves, and reuse the environment/worktree client snapshot deduper. Test-only Windows inventory is capped at 5 seconds and 8 MiB per query; all waits and cleanup are bounded."
+        "evidence": "Production adds one bounded client-capability parse during the authenticated connection handshake and one constant-time membership branch per close. It adds no polling, subprocess, provider listing, retry, timer, or process-per-session work. Refusal reuses the existing single-worktree snapshot republish. Test-only inventory and cleanup are bounded."
       },
       "promotionCriteria": [
         "Collect 100 clean native-Windows runs over 14 days with zero unexplained flakes.",
@@ -1015,8 +1340,9 @@
         "Add live Linux SSH-relay and Windows WSL reconnect artifacts without weakening keep-on-unknown."
       ],
       "knownGaps": [
-        "The strongest proof is Electron-as-Node over native Windows, not a packaged UI-driven update journey.",
-        "Live macOS/Linux adoption and Linux SSH relay are not exercised because Docker is unavailable; Windows WSL reconnect is not exercised because WSL is not installed.",
+        "The strongest proof is Electron-as-Node over real daemon PTYs, not a packaged headed Orca host paired to a separate old client; that is the primary live E2E still required.",
+        "Headless orca serve parity, live Linux, Linux SSH relay, and Windows WSL reconnect are not exercised; Docker SSH would cover only the SSH provider and cannot substitute for paired Orca-server evidence.",
+        "A topology containing any pre-contract paired desktop viewer remains vulnerable to that viewer's stale reasonless close storm; preserving its intentional-close behavior makes this unavoidable until the viewer upgrades.",
         "Cross-profile daemon inventory and generation handoff/retirement remain the separate #9138/#9229 design.",
         "A dead split leaf stays with its authoritative owner rather than being remotely pruned."
       ],
@@ -6445,6 +6771,112 @@
         "Windows native runtime watches bypass this child path; WSL reservation/release is deterministic-contract tested but not live fault-injected, and SSH registration ownership is not live-relay fault-injected."
       ],
       "demotionRule": "Demote or quarantine if the fault harness flakes without a product or harness bug, if healthy operation exceeds one runtime watcher child, if total physical operation exceeds eight children including retiring generations, if quarantine children outlive their roots or repeat after fusing, if event delivery becomes unbounded, or if metadata/stat work returns to the serve process."
+    },
+    {
+      "id": "terminal-input.plugin-explicit-worktree-routing",
+      "title": "Plugin terminal input stays inside the freshly resolved worktree",
+      "maturity": "experimental",
+      "protection": "partial",
+      "owner": "plugin-platform",
+      "layer": "main-relay-contract",
+      "surfaces": [
+        "plugin host API terminal input",
+        "active worktree resolution",
+        "provider terminal inventory",
+        "relay capability enforcement"
+      ],
+      "platforms": [
+        "macos",
+        "linux",
+        "windows"
+      ],
+      "providers": [
+        "local",
+        "daemon",
+        "ssh",
+        "wsl",
+        "remote-runtime",
+        "mobile-relay"
+      ],
+      "coveredPlatforms": [
+        "macos"
+      ],
+      "coveredProviders": [
+        "local",
+        "ssh"
+      ],
+      "coverageNotes": "Deterministic macOS contract evidence covers opaque local- and SSH-shaped terminal ids, one bounded worktree listing, mismatch rejection, and the main/relay host-call adapter matrix. It does not launch a live PTY or provision a relay-hosted plugin.",
+      "motivatingLinks": [
+        "https://github.com/stablyai/orca/pull/8549"
+      ],
+      "invariant": "terminal.sendText accepts only an explicit provider-owned terminal id present in one bounded inventory of the worktree resolved immediately before the send; an absent id causes zero send calls, and relay callers cannot supply their own capability grants or transport classification.",
+      "oracle": "Resolve the active worktree once, list that worktree with the v0 terminal cap once, and assert zero sendTerminal calls for a mismatched opaque id versus exactly one send for matching local- and SSH-shaped ids; then run the same permission and schema cases through desktop-main and registered relay panel/worker adapters and compare error codes.",
+      "commands": [
+        "pnpm exec vitest run --config config/vitest.config.ts src/main/plugins/plugin-host-methods.test.ts src/main/plugins/plugin-host-conformance.test.ts"
+      ],
+      "testFiles": [
+        "src/main/plugins/plugin-host-methods.test.ts",
+        "src/main/plugins/plugin-host-conformance.test.ts"
+      ],
+      "assertionRefs": [
+        {
+          "file": "src/main/plugins/plugin-host-methods.test.ts",
+          "assertions": [
+            "a terminal outside the freshly resolved worktree performs one capped list and zero sends",
+            "matching local- and SSH-shaped opaque ids each perform one capped list and one exact send",
+            "workspace.readContext drops provider paths, path-bearing internal worktree ids, and terminal titles while capping its terminal projection"
+          ]
+        },
+        {
+          "file": "src/main/plugins/plugin-host-conformance.test.ts",
+          "assertions": [
+            "all 13 v0 methods succeed with the required consented capability through desktop-main and relay adapters",
+            "missing consent, missing capability, unknown method, malformed params, panel-forbidden access, malformed results, and mutation-audit failure return identical codes",
+            "malformed qualified keys, client-supplied grants, and client-supplied transport flags are rejected before host policy resolution"
+          ]
+        }
+      ],
+      "evidenceRuns": [
+        {
+          "date": "2026-07-10",
+          "runner": "local",
+          "platform": "macos",
+          "command": "pnpm exec vitest run --config config/vitest.config.ts src/main/plugins/plugin-host-methods.test.ts src/main/plugins/plugin-host-conformance.test.ts",
+          "result": "passed",
+          "durationSeconds": 0.18,
+          "summary": "2 files and 17 tests passed, covering the 13-method main/relay conformance matrix and exact terminal routing call counts."
+        }
+      ],
+      "runtimeBudget": {
+        "p95Seconds": 10,
+        "scope": "plugin host main/relay contract tests"
+      },
+      "flakeHistory": {
+        "status": "unknown",
+        "evidence": "The deterministic focused suite passed locally once and needs CI and soak history before promotion."
+      },
+      "redGreenEvidence": {
+        "status": "partial",
+        "evidence": "Exact mismatch/send counts and adapter error parity are asserted; intentional-break and saved CI evidence are still missing."
+      },
+      "performanceBudget": {
+        "required": true,
+        "evidence": "Each plugin send resolves once, performs exactly one list capped at 50 terminals, and performs at most one send. The path adds no polling, subprocesses, provider fanout, renderer work, or startup await."
+      },
+      "promotionCriteria": [
+        "Run for at least 100 consecutive passes or 14 days across required CI platforms.",
+        "Attach intentional-break evidence for the worktree membership check and relay transport binding.",
+        "Exercise live local and SSH provider terminals, including mismatch rejection and successful input echo.",
+        "Keep relay-hosted plugin provisioning behind a separate reviewed policy before replacing the fail-closed registration."
+      ],
+      "knownGaps": [
+        "Linux and Windows execution evidence is not recorded.",
+        "Daemon, WSL, remote-runtime, and mobile-relay providers have no live input evidence.",
+        "Local and SSH coverage is contract-level over opaque ids, not a live PTY input/echo run.",
+        "The bounded 50-terminal inventory intentionally rejects a target not present in the capped result; scale behavior above that cap needs a targeted membership API before expansion.",
+        "Relay-hosted plugin provisioning, consent persistence, workers, and audit services remain out of scope and the relay registration therefore denies every provisioned identity by default."
+      ],
+      "demotionRule": "Keep experimental or demote to protection none if the suite flakes, permits a mismatched terminal send, performs more than one inventory list per call, accepts client-supplied grants, or relay and desktop error codes diverge."
     }
   ]
 }

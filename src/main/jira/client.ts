@@ -21,6 +21,7 @@ import type {
   JiraSiteSelection,
   JiraViewer
 } from '../../shared/types'
+import { clearAttachmentImagesForSite } from './attachment-image-cache'
 
 // Why: Atlassian's XSRF filter rejects POST/PUT REST calls that carry a browser
 // User-Agent, failing them with "XSRF check failed" even under API-token auth.
@@ -457,6 +458,36 @@ export async function jiraRequest<T>(
   return (await response.json()) as T
 }
 
+export async function jiraRequestBinary(
+  client: JiraClientForSite,
+  pathOrUrl: string
+): Promise<{ data: ArrayBuffer; contentType: string }> {
+  const siteUrl = new URL(client.site.siteUrl)
+  const requestUrl = /^https?:\/\//i.test(pathOrUrl)
+    ? new URL(pathOrUrl)
+    : new URL(`${client.site.siteUrl}${pathOrUrl}`)
+  if (requestUrl.origin !== siteUrl.origin) {
+    // Why: attachment metadata is provider-controlled; never forward Jira
+    // credentials if a malformed response points at another origin.
+    throw new JiraApiError('Jira attachment URL must use the configured site origin.', null)
+  }
+  const headers = new Headers()
+  // Why: attachment content is binary; forcing JSON Accept/Content-Type can
+  // break downloads and confuses some Atlassian edge responses.
+  headers.set('Accept', '*/*')
+  headers.set('User-Agent', JIRA_API_USER_AGENT)
+  headers.set('Authorization', client.authorization)
+  const response = await jiraFetch(requestUrl.toString(), { headers })
+  if (!response.ok) {
+    throw new JiraApiError(await readJiraError(response), response.status)
+  }
+  const contentType = response.headers.get('content-type') || 'application/octet-stream'
+  return {
+    data: await response.arrayBuffer(),
+    contentType
+  }
+}
+
 export function getClients(selection?: JiraSiteSelection | null): JiraClientForSite[] {
   const file = getSiteFile()
   const selected = selection ?? file.selectedSiteId ?? file.activeSiteId
@@ -576,6 +607,9 @@ export function disconnect(siteId?: string): void {
   for (const id of ids) {
     deleteToken(id)
   }
+  // Why: drop cached attachment data URLs for disconnected sites so main does
+  // not retain multi-MB strings after logout.
+  clearAttachmentImagesForSite(siteId)
   writeSiteFile({
     version: 1,
     activeSiteId: file.activeSiteId,
@@ -625,6 +659,8 @@ export async function testConnection(
 
 export function clearToken(siteId: string): void {
   deleteToken(siteId)
+  // Why: auth failure removes the site; drop cached attachment data URLs too.
+  clearAttachmentImagesForSite(siteId)
   const file = getSiteFile()
   writeSiteFile({ ...file, sites: file.sites.filter((site) => site.id !== siteId) })
 }

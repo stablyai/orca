@@ -365,6 +365,20 @@ describe('renderer startup runtime routing', () => {
     expect(source).not.toContain("window.addEventListener('blur', handleBlur)")
   })
 
+  it('arms the OSC 52 default-on notice behind a statically mounted Toaster (#10567)', () => {
+    const source = readFileSync(join(process.cwd(), 'src/renderer/src/App.tsx'), 'utf8')
+
+    // Why pin the call site: the hook is the only caller, so deleting this line silences
+    // the migration notice on desktop with every unit suite still green.
+    expect(source).toContain('useOsc52ClipboardDefaultOnNotice(persistedUIReady)')
+    // Why pin the static import and the unconditional mount: sonner drops a toast enqueued
+    // before any Toaster subscribes, and never replays it — a lazy Toaster would burn the
+    // profile's one notice with its callbacks never firing, so it could never re-arm.
+    expect(source).toContain("import { Toaster } from '@/components/ui/sonner'")
+    expect(source).not.toContain("import('@/components/ui/sonner')")
+    expect(source).toContain('<Toaster closeButton')
+  })
+
   it('checkpoints activeView and all session snapshots through one beforeunload handler (#9002)', () => {
     const source = readFileSync(join(process.cwd(), 'src/renderer/src/App.tsx'), 'utf8')
     const checkpointStart = source.indexOf(

@@ -6,11 +6,19 @@ import type { SshConnection } from './ssh-connection'
 import type { RelayPlatform } from './relay-protocol'
 import type { MultiplexerTransport } from './ssh-channel-multiplexer'
 import {
-  uploadDirectory,
   waitForSentinel,
   execCommand,
   isUnconfirmedSshCommandTermination
 } from './ssh-relay-deploy-helpers'
+import { uploadRelayDirectory, writeRelayFile } from './ssh-relay-install-transfers'
+import {
+  createRelayInstallMarkerCommand,
+  createRelayInstallNamespace,
+  makeRelayInstallDirectoryCommand,
+  relayHomeRelativeDir,
+  relaySftpNamespaceMapping,
+  type RelayInstallNamespace
+} from './ssh-relay-install-namespace'
 import { resolveRemoteNodePath } from './ssh-remote-node-resolution'
 import {
   readLocalFullVersion,
@@ -32,11 +40,11 @@ import { createSshOperationAbortError, shellEscape } from './ssh-connection-util
 import {
   probeBuildToolchain,
   formatMissingToolchainError,
+  formatSkippedNodePtyWarning,
   shouldProbeBuildToolchainAfterNativeDepsFailure
 } from './ssh-relay-build-toolchain'
 import {
   commandWithNodePath,
-  makeRemoteDirectoryCommand,
   makeRemoteExecutableCommand,
   readRemoteHomeCommand,
   removeRemoteFileCommand
@@ -311,6 +319,9 @@ async function deployAndLaunchRelayAttempt(
   console.log(`[ssh-relay] Remote dir: ${remoteRelayDir}`)
   console.log(`[ssh-relay] Already installed at ${fullVersion}: ${alreadyInstalled}`)
 
+  // Why: derive the home-relative suffix once — recomputing it by stripping the shell home breaks on a split namespace.
+  const homeRelativeRelayDir = relayHomeRelativeDir(fullVersion)
+
   let ownsInstallLock = false
   let launchGcClaimToken: string | undefined
   if (alreadyInstalled) {
@@ -320,6 +331,7 @@ async function deployAndLaunchRelayAttempt(
       platform,
       hostPlatform,
       nodePath,
+      homeRelativeRelayDir,
       deploySignal
     )
     ownsInstallLock = launchFence.ownsInstallLock
@@ -336,9 +348,23 @@ async function deployAndLaunchRelayAttempt(
           signal: deploySignal
         }))
       ) {
+        const installNamespace = createInstallNamespaceIfSupported(
+          conn,
+          hostPlatform,
+          homeRelativeRelayDir
+        )
+
         onProgress?.('Uploading relay...')
         console.log('[ssh-relay] Uploading relay...')
-        await uploadRelay(conn, platform, remoteRelayDir, fullVersion, hostPlatform, deploySignal)
+        await uploadRelay(
+          conn,
+          platform,
+          remoteRelayDir,
+          fullVersion,
+          hostPlatform,
+          deploySignal,
+          installNamespace
+        )
         console.log('[ssh-relay] Upload complete')
 
         onProgress?.('Installing native dependencies...')
@@ -349,7 +375,9 @@ async function deployAndLaunchRelayAttempt(
           platform,
           hostPlatform,
           nodePath,
-          deploySignal
+          deploySignal,
+          [],
+          installNamespace
         )
         console.log('[ssh-relay] Native deps installed')
 
@@ -421,7 +449,8 @@ async function uploadRelay(
   remoteDir: string,
   fullVersion: string,
   hostPlatform: RemoteHostPlatform,
-  signal?: AbortSignal
+  signal?: AbortSignal,
+  namespace?: RelayInstallNamespace
 ): Promise<void> {
   const localRelayDir = getLocalRelayPath(platform)
   if (!localRelayDir || !existsSync(localRelayDir)) {
@@ -431,11 +460,20 @@ async function uploadRelay(
     )
   }
 
-  await execHostCommand(conn, hostPlatform, makeRemoteDirectoryCommand(hostPlatform, remoteDir), {
-    signal
-  })
+  // Why: the install-owner marker rides along with mkdir, so a standard install spends no extra exec channel on it.
+  await execHostCommand(
+    conn,
+    hostPlatform,
+    makeRelayInstallDirectoryCommand(hostPlatform, remoteDir, namespace),
+    { signal }
+  )
 
-  await uploadDirectoryForConnection(conn, localRelayDir, remoteDir, hostPlatform, signal)
+  await uploadRelayDirectory(conn, localRelayDir, remoteDir, hostPlatform, {
+    signal,
+    sftpNamespace: namespace
+      ? relaySftpNamespaceMapping(namespace, hostPlatform, remoteDir)
+      : undefined
+  })
 
   if (!isWindowsRemoteHost(hostPlatform)) {
     await execHostCommand(
@@ -447,60 +485,36 @@ async function uploadRelay(
   }
 
   // Why: write .version via SFTP not shell to avoid quoting content-hashed versions; the daemon reads it to validate the wire handshake.
-  await writeRemoteFile(
+  await writeRelayFile(
     conn,
     hostPlatform,
     joinRemotePath(hostPlatform, remoteDir, '.version'),
     fullVersion,
-    signal
+    {
+      signal,
+      sftpNamespace: namespace
+        ? relaySftpNamespaceMapping(namespace, hostPlatform, remoteDir, '.version')
+        : undefined
+    }
   )
 }
 
-async function uploadDirectoryForConnection(
-  conn: SshConnection,
-  localRelayDir: string,
-  remoteDir: string,
-  hostPlatform: RemoteHostPlatform,
-  signal?: AbortSignal
-): Promise<void> {
-  if (typeof conn.uploadDirectory === 'function') {
-    await conn.uploadDirectory(localRelayDir, remoteDir, { hostPlatform, signal })
-    return
-  }
-
-  const sftp = await conn.sftp()
-  try {
-    await uploadDirectory(sftp, localRelayDir, remoteDir)
-  } finally {
-    sftp.end()
-  }
-}
-
-async function writeRemoteFile(
+/**
+ * A marker is only meaningful where a split namespace can occur and where Orca
+ * owns the SFTP session: POSIX hosts reached over the bundled ssh2 transport.
+ */
+function createInstallNamespaceIfSupported(
   conn: SshConnection,
   hostPlatform: RemoteHostPlatform,
-  remotePath: string,
-  contents: string,
-  signal?: AbortSignal
-): Promise<void> {
-  if (typeof conn.writeFile === 'function') {
-    await conn.writeFile(remotePath, contents, { hostPlatform, signal })
-    return
+  homeRelativeRelayDir: string
+): RelayInstallNamespace | undefined {
+  if (isWindowsRemoteHost(hostPlatform)) {
+    return undefined
   }
-
-  const sftp = await conn.sftp()
-  try {
-    await new Promise<void>((resolve, reject) => {
-      const ws = sftp.createWriteStream(remotePath)
-      // .once: a late session 'error' after resolve/reject would otherwise be unhandled and crash main.
-      sftp.once('error', reject)
-      ws.once('close', resolve)
-      ws.once('error', reject)
-      ws.end(contents)
-    })
-  } finally {
-    sftp.end()
-  }
+  // A connection double without the transport accessor is an ssh2 connection.
+  const usesSystemSsh =
+    typeof conn.usesSystemSshTransport === 'function' ? conn.usesSystemSshTransport() : false
+  return usesSystemSsh ? undefined : createRelayInstallNamespace(homeRelativeRelayDir)
 }
 
 const NODE_PTY_VERSION = '1.1.0'
@@ -576,6 +590,7 @@ async function repairInstalledNativeDeps(
   platform: RelayPlatform,
   hostPlatform: RemoteHostPlatform,
   nodePath: string,
+  homeRelativeRelayDir: string,
   signal?: AbortSignal
 ): Promise<{ ownsInstallLock: boolean; gcClaimToken?: string }> {
   const initialProbe = await probeRequiredNativeDeps(
@@ -627,6 +642,14 @@ async function repairInstalledNativeDeps(
     // Why: older complete relay dirs predate @parcel/watcher; re-probe under the lock so only one reconnect mutates the dir.
     const probe = await probeRequiredNativeDeps(conn, remoteDir, hostPlatform, nodePath, signal)
     if (!probe.available) {
+      // Why: only stamp ownership once the locked recheck proves this connection is the one about to write.
+      const repairNamespace = await createRepairInstallMarker(
+        conn,
+        hostPlatform,
+        remoteDir,
+        homeRelativeRelayDir,
+        signal
+      )
       await installNativeDeps(
         conn,
         remoteDir,
@@ -634,7 +657,8 @@ async function repairInstalledNativeDeps(
         hostPlatform,
         nodePath,
         signal,
-        probe.missing
+        probe.missing,
+        repairNamespace
       )
       await finalizeInstall(conn, remoteDir, hostPlatform, { signal, releaseLock: false })
     }
@@ -649,6 +673,42 @@ async function repairInstalledNativeDeps(
       }`
     )
     return { ownsInstallLock: !terminationUnconfirmed }
+  }
+}
+
+/**
+ * Stamp this connection as the install owner during repair. Marker creation is
+ * best-effort: without it the writes simply keep using the shell path.
+ */
+async function createRepairInstallMarker(
+  conn: SshConnection,
+  hostPlatform: RemoteHostPlatform,
+  remoteDir: string,
+  homeRelativeRelayDir: string,
+  signal?: AbortSignal
+): Promise<RelayInstallNamespace | undefined> {
+  const namespace = createInstallNamespaceIfSupported(conn, hostPlatform, homeRelativeRelayDir)
+  if (!namespace) {
+    return undefined
+  }
+  try {
+    await execHostCommand(
+      conn,
+      hostPlatform,
+      createRelayInstallMarkerCommand(namespace, hostPlatform, remoteDir),
+      { signal }
+    )
+    return namespace
+  } catch (err) {
+    // Why: an unconfirmed termination still owes the caller its lock semantics; only a confirmed failure degrades to shell paths.
+    if (isUnconfirmedSshCommandTermination(err)) {
+      throw err
+    }
+    signal?.throwIfAborted()
+    console.warn(
+      `[ssh-relay] SFTP namespace marker unavailable at ${remoteDir}; retaining shell paths`
+    )
+    return undefined
   }
 }
 
@@ -689,26 +749,35 @@ async function installNativeDeps(
   hostPlatform: RemoteHostPlatform,
   nodePath: string,
   signal?: AbortSignal,
-  resetDeps: RelayNativeDepName[] = []
+  resetDeps: RelayNativeDepName[] = [],
+  namespace?: RelayInstallNamespace
 ): Promise<void> {
+  const writeRelayPackageJson = async (deps: Record<string, string>): Promise<void> => {
+    await writeRelayFile(
+      conn,
+      hostPlatform,
+      joinRemotePath(hostPlatform, remoteDir, 'package.json'),
+      `${JSON.stringify({
+        name: 'orca-relay',
+        version: '1.0.0',
+        private: true,
+        type: 'commonjs',
+        dependencies: deps,
+        allowScripts: RELAY_NATIVE_DEP_SCRIPT_ALLOWLIST
+      })}\n`,
+      {
+        signal,
+        sftpNamespace: namespace
+          ? relaySftpNamespaceMapping(namespace, hostPlatform, remoteDir, 'package.json')
+          : undefined
+      }
+    )
+  }
+
   // Why: node-pty's prebuild spawns `node` as a child, so node must be in PATH (commandWithNodePath) or it fails exit 127.
   // Why: npm init -y rejects '+' in content-hashed dir names, so write a fixed minimal package.json instead.
   // Why: type:commonjs pins module resolution against Node default flips or a remote ~/.npmrc type=module.
-  const pkgJson = `${JSON.stringify({
-    name: 'orca-relay',
-    version: '1.0.0',
-    private: true,
-    type: 'commonjs',
-    dependencies: RELAY_NATIVE_DEPS,
-    allowScripts: RELAY_NATIVE_DEP_SCRIPT_ALLOWLIST
-  })}\n`
-  await writeRemoteFile(
-    conn,
-    hostPlatform,
-    joinRemotePath(hostPlatform, remoteDir, 'package.json'),
-    pkgJson,
-    signal
-  )
+  await writeRelayPackageJson(RELAY_NATIVE_DEPS)
 
   try {
     const installArgs = Object.entries(RELAY_NATIVE_DEPS)
@@ -754,7 +823,46 @@ async function installNativeDeps(
     if (platform.startsWith('linux') && shouldProbeBuildToolchainAfterNativeDepsFailure(msg)) {
       const toolchain = await probeBuildToolchain(conn, hostPlatform, signal)
       if (toolchain?.toolchainMissing) {
-        throw new Error(formatMissingToolchainError(toolchain, msg))
+        // Why: node-pty is the only dep that needs a compiler, and it only backs terminals. Retry
+        // without it so files/git/editor still connect instead of failing the host outright; a
+        // missing native dep is already non-fatal below. Rethrow the actionable error if even that
+        // fails, so a host broken for some other reason still reports the toolchain gap.
+        console.warn(
+          `[ssh-relay][NPTY-SKIP-NO-TOOLCHAIN] ${remoteDir} (${platform}): ${formatSkippedNodePtyWarning(toolchain)}`
+        )
+        try {
+          await installNativeDepsWithoutNodePty(
+            conn,
+            remoteDir,
+            hostPlatform,
+            nodePath,
+            writeRelayPackageJson,
+            resetDeps,
+            signal
+          )
+        } catch (retryErr) {
+          if (isUnconfirmedSshCommandTermination(retryErr)) {
+            throw retryErr
+          }
+          signal?.throwIfAborted()
+          // The thrown toolchain message is built from the original error, so log the retry's own
+          // cause (registry, ENOSPC, EACCES) rather than losing it.
+          console.warn(
+            `[ssh-relay][NPTY-SKIP-RETRY-FAIL] node-pty-less reinstall failed at ${remoteDir} (${platform}): ${(retryErr as Error).message}`
+          )
+          throw new Error(formatMissingToolchainError(toolchain, msg), { cause: retryErr })
+        }
+        // Why: this early return skips the probe below, so verify the dep that does have a prebuilt —
+        // a @parcel/watcher that installs but can't load would leave file watching silently dead.
+        await warnIfWatcherUnloadableWithoutNodePty(
+          conn,
+          remoteDir,
+          platform,
+          hostPlatform,
+          nodePath,
+          signal
+        )
+        return
       }
     }
     throw err
@@ -830,6 +938,82 @@ function resetNativeDepsCommand(
     )
   }
   return commands.join('; ')
+}
+
+/**
+ * Reinstall the relay's native deps with node-pty dropped, for hosts that cannot compile it.
+ *
+ * Why: npm reconciles every dependency in package.json, not just the ones named on the command
+ * line, so node-pty has to leave the manifest too — naming only @parcel/watcher still rebuilds it.
+ */
+async function installNativeDepsWithoutNodePty(
+  conn: SshConnection,
+  remoteDir: string,
+  hostPlatform: RemoteHostPlatform,
+  nodePath: string,
+  writeRelayPackageJson: (deps: Record<string, string>) => Promise<void>,
+  resetDeps: RelayNativeDepName[],
+  signal?: AbortSignal
+): Promise<void> {
+  const deps = Object.fromEntries(
+    Object.entries(RELAY_NATIVE_DEPS).filter(([dep]) => dep !== 'node-pty')
+  )
+  await writeRelayPackageJson(deps)
+  const installArgs = Object.entries(deps)
+    .map(([dep, version]) => shellEscape(`${dep}@${version}`))
+    .join(' ')
+  // Why: the failed attempt leaves an unbuildable node-pty behind; clear it so npm prunes rather
+  // than rebuilds it. Keep the caller's resets too — a repair reconnect still needs them.
+  const resetCommand = resetNativeDepsCommand(hostPlatform, [
+    ...new Set<RelayNativeDepName>([...resetDeps, 'node-pty'])
+  ])
+  // Why: POSIX-only command shape (`;` chaining, `2>&1`) — safe because the only caller is gated on a
+  // linux platform. Widen that gate and this needs the Windows branch installNativeDeps already has.
+  await execHostCommand(
+    conn,
+    hostPlatform,
+    commandWithNodePath(
+      hostPlatform,
+      nodePath,
+      remoteDir,
+      `${resetCommand}; npm install --ignore-scripts=false --omit=dev --no-audit --no-fund ${installArgs} 2>&1`
+    ),
+    { timeoutMs: NATIVE_DEPS_COMMAND_TIMEOUT_MS, signal }
+  )
+}
+
+/**
+ * Report an unloadable @parcel/watcher after node-pty was skipped, without failing the connection.
+ *
+ * Why: node-pty is expected missing here, but a @parcel/watcher prebuilt that installs and still
+ * can't require() (glibc below the floor — docs/reference/linux-glibc-compatibility.md) means dead
+ * file watching. No rebuild: node-pty provably can't compile on this host, so it would only fail.
+ */
+async function warnIfWatcherUnloadableWithoutNodePty(
+  conn: SshConnection,
+  remoteDir: string,
+  platform: RelayPlatform,
+  hostPlatform: RemoteHostPlatform,
+  nodePath: string,
+  signal?: AbortSignal
+): Promise<void> {
+  try {
+    const probe = await probeInstalledNativeDeps(conn, remoteDir, hostPlatform, nodePath, signal)
+    if (probe.missing.includes('@parcel/watcher')) {
+      console.warn(
+        `[ssh-relay][WATCHER-MISSING-NPTY-SKIPPED] @parcel/watcher installed but require() failed at ${remoteDir} (${platform}); remote file watching is unavailable. stdout=${probe.output.trim().slice(-200)} stderr=${probe.stderr.trim().slice(-500)}`
+      )
+    }
+  } catch (err) {
+    if (isUnconfirmedSshCommandTermination(err)) {
+      throw err
+    }
+    signal?.throwIfAborted()
+    // Degraded-mode diagnostics must never cost the connection the retry just salvaged.
+    console.warn(
+      `[ssh-relay][WATCHER-PROBE-FAIL] native deps probe failed after skipping node-pty at ${remoteDir} (${platform}): ${(err as Error).message}`
+    )
+  }
 }
 
 async function rebuildNativeDeps(

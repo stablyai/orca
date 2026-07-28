@@ -12,6 +12,11 @@ import {
   parseGitHubRemoteIdentity,
   type LocalGitExecOptions
 } from './github-repository-identity'
+import {
+  effectiveGitHubRemoteHost,
+  gitHubSshConfigHostAlias
+} from './github-remote-identity-parsing'
+import { resolveSshConfigHostname } from './github-ssh-host-alias-resolution'
 import { parseWslPath } from '../wsl'
 
 export type GitHubEnterpriseRepoSlug = GitHubOwnerRepo & { host: string }
@@ -225,11 +230,32 @@ export async function getEnterpriseGitHubRepoSlugForRemote(
     return null
   }
   const identity = remoteUrl ? parseGitHubRemoteIdentity(remoteUrl) : null
-  if (!identity || identity.host === 'github.com') {
+  if (!identity) {
+    return null
+  }
+  // Why: GHES routing needs the effective host behind an SSH alias.
+  let effectiveHost = identity.host
+  const aliasHost = remoteUrl ? gitHubSshConfigHostAlias(remoteUrl) : null
+  if (aliasHost) {
+    const { hostname, resolved } = await resolveSshConfigHostname(aliasHost, context)
+    if (!resolved || !hostname) {
+      const authenticatedLiteralHost = await resolveAuthenticatedGitHubHost(
+        identity.host,
+        repoPath,
+        connectionId,
+        localGitOptions
+      )
+      return authenticatedLiteralHost
+        ? { owner: identity.owner, repo: identity.repo, host: authenticatedLiteralHost }
+        : undefined
+    }
+    effectiveHost = effectiveGitHubRemoteHost(identity.host, hostname)
+  }
+  if (effectiveHost === 'github.com') {
     return null
   }
   const authenticatedHost = await resolveAuthenticatedGitHubHost(
-    identity.host,
+    effectiveHost,
     repoPath,
     connectionId,
     localGitOptions

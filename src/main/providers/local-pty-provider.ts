@@ -1,7 +1,6 @@
 /* eslint-disable max-lines -- Why: splitting spawn() would scatter tightly coupled PTY lifecycle logic (scan → ready → write → exit) with no cleaner ownership seam. */
-import { basename, delimiter } from 'node:path'
+import { basename, delimiter, win32 as pathWin32 } from 'node:path'
 import { randomUUID } from 'node:crypto'
-import { win32 as pathWin32 } from 'node:path'
 import { resolveWindowsShellLaunchArgs } from './windows-shell-args'
 import {
   resolveEffectiveWindowsPowerShell,
@@ -1123,8 +1122,17 @@ export class LocalPtyProvider implements IPtyProvider {
       this.requestTrackedPtyShutdown(id, proc, operation.immediate)
     }
     if (ptyAgentSessionIds.has(id)) {
-      // Why: POSIX needs a pre-kill descendant snapshot; Windows uses taskkill /T so
-      // agent/MCP orphans cannot hold the worktree cwd after shell stop (#10004).
+      // Why: POSIX needs a pre-kill descendant snapshot; Windows tree-kills only when the
+      // identity probe returns `own` so agent/MCP orphans cannot hold the worktree cwd
+      // (#10004). `unknown`/`foreign`/`absent` skip taskkill and rely on root close alone.
+      await killWithDescendantSweep(proc.pid, signalRoot, {
+        ownsRoot: () => ptyProcesses.get(id) === proc
+      })
+    } else if (process.platform === 'win32' && operation.immediate) {
+      // Why: a plain shell's ConPTY teardown doesn't reap orphaned children (useConptyDll
+      // skips the console reap), so a live `pnpm i`/`node` keeps the ConPTY console alive and
+      // holds the worktree cwd. Tree kill runs only when the OS identity probe returns `own`;
+      // otherwise root close alone, and detached children may block physical stop (#10004).
       await killWithDescendantSweep(proc.pid, signalRoot, {
         ownsRoot: () => ptyProcesses.get(id) === proc
       })

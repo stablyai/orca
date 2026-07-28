@@ -643,9 +643,10 @@ describe('ghExecFileAsync WSL fallback', () => {
         callback(new Error('Wrong distro fallback'))
       })
 
-    await expect(
-      ghExecFileAsync(['auth', 'status'])
-    ).resolves.toEqual({ stdout: 'Logged in to github.com as override', stderr: '' })
+    await expect(ghExecFileAsync(['auth', 'status'])).resolves.toEqual({
+      stdout: 'Logged in to github.com as override',
+      stderr: ''
+    })
 
     expect(execFileMock).toHaveBeenCalledTimes(2)
     expect(execFileMock).toHaveBeenNthCalledWith(
@@ -672,9 +673,10 @@ describe('ghExecFileAsync WSL fallback', () => {
         callback(new Error('Wrong distro fallback'))
       })
 
-    await expect(
-      ghExecFileAsync(['auth', 'status'])
-    ).resolves.toEqual({ stdout: 'Logged in to github.com as default', stderr: '' })
+    await expect(ghExecFileAsync(['auth', 'status'])).resolves.toEqual({
+      stdout: 'Logged in to github.com as default',
+      stderr: ''
+    })
 
     expect(execFileMock).toHaveBeenCalledTimes(2)
     expect(execFileMock).toHaveBeenNthCalledWith(

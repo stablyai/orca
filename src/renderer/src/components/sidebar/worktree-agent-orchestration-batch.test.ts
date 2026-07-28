@@ -403,15 +403,22 @@ describe('selectRuntimeAgentOrchestrationBatch', () => {
     )
 
     expect(Object.keys(actual)).toEqual(Object.keys(expected))
-    const operationBudget = {
+    // Why the batch stays tighter: it knows which worktrees are on screen. The
+    // shared index covers all of them, so it saves per *card*, not per worktree.
+    expect(batched.counts()).toEqual({
       runtimeEnumerations: 1,
       runtimeValueReads: contextCount,
       contextVisits: contextCount,
       targetTabIdReads: 1,
       unrelatedTabIdReads: 0
-    }
-    expect(reference.counts()).toEqual(operationBudget)
-    expect(batched.counts()).toEqual(operationBudget)
+    })
+    expect(reference.counts()).toEqual({
+      runtimeEnumerations: 1,
+      runtimeValueReads: contextCount,
+      contextVisits: contextCount,
+      targetTabIdReads: 1,
+      unrelatedTabIdReads: tabCount - 1
+    })
   })
 
   it('collapses multi-worktree runtime scans and caches unchanged publications', () => {
@@ -478,10 +485,12 @@ describe('selectRuntimeAgentOrchestrationBatch', () => {
     }
     selectRuntimeAgentOrchestrationBatch(batched.state, requested)
 
+    // One enumeration for worktreeCount calls: the first builds the shared
+    // index, the rest are Map lookups. This used to scale with mounted cards.
     expect(reference.counts()).toEqual({
-      runtimeEnumerations: worktreeCount,
-      runtimeValueReads: worktreeCount * contextCount,
-      contextVisits: worktreeCount * contextCount,
+      runtimeEnumerations: 1,
+      runtimeValueReads: contextCount,
+      contextVisits: contextCount,
       tabIdReads: worktreeCount
     })
     expect(batched.counts()).toEqual({
@@ -513,6 +522,43 @@ describe('selectRuntimeAgentOrchestrationBatch', () => {
       )
     }
     expect(batched.counts()).toEqual({
+      runtimeEnumerations: 1,
+      runtimeValueReads: contextCount,
+      contextVisits: contextCount * (publicationCount + 1),
+      tabIdReads: worktreeCount
+    })
+
+    // Publications that change nothing the index reads cost nothing, however
+    // many cards call in.
+    const referenceBefore = reference.counts()
+    for (let publication = 0; publication < publicationCount; publication += 1) {
+      for (const worktreeId of requested) {
+        selectRuntimeAgentOrchestrationForWorktree(reference.state, worktreeId)
+      }
+    }
+    expect(reference.counts()).toEqual(referenceBefore)
+
+    // Why this is the honest claim: a real live-status ping replaces
+    // agentStatusByPaneKey, so the index does rebuild once per publication. What
+    // the shared index removes is the mounted-card multiplier, not the
+    // per-publication rebuild. Tab reads stay flat because tab membership is
+    // keyed on the tabs slice, which a live-status ping does not replace.
+    const churn = makeCountedState()
+    for (const worktreeId of requested) {
+      selectRuntimeAgentOrchestrationForWorktree(churn.state, worktreeId)
+    }
+    for (let publication = 0; publication < publicationCount; publication += 1) {
+      const published = {
+        ...churn.state,
+        agentStatusByPaneKey: {
+          [`unrelated-${publication}`]: makeEntry(`unrelated-${publication}`, 'elsewhere')
+        }
+      }
+      for (const worktreeId of requested) {
+        selectRuntimeAgentOrchestrationForWorktree(published, worktreeId)
+      }
+    }
+    expect(churn.counts()).toEqual({
       runtimeEnumerations: 1,
       runtimeValueReads: contextCount,
       contextVisits: contextCount * (publicationCount + 1),

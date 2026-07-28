@@ -257,7 +257,6 @@ const WorktreeCard = React.memo(function WorktreeCard({
   const projectGroups = useAppStore((s) => s.projectGroups)
   const newCardStyle = settings?.experimentalNewWorktreeCardStyle === true
   const compactCards = !newCardStyle && settings?.compactWorktreeCards === true
-  const activeSurfaceIsSecondary = isActiveSurface && activeSurfaceVariant === 'secondary'
   const handleEditIssue = useCallback(
     (e: React.MouseEvent) => {
       e.stopPropagation()
@@ -640,6 +639,7 @@ const WorktreeCard = React.memo(function WorktreeCard({
   const showLinearIssue = cardProps.includes('linear-issue')
   const showPR = cardProps.includes('pr')
   const showAutomation = cardProps.includes('automation')
+  const showCli = cardProps.includes('cli')
   const showComment = cardProps.includes('comment')
   const showPorts = cardProps.includes('ports')
   const shouldRefreshHostedReview = newCardStyle ? showStatus : showPR
@@ -1056,6 +1056,7 @@ const WorktreeCard = React.memo(function WorktreeCard({
   const metaLinearIssue = showLinearIssue ? hoverLinearIssue : null
   const metaReview = showPR ? hoverReview : null
   const metaAutomationProvenance = showAutomation ? worktree.automationProvenance : null
+  const metaCliProvenance = showCli ? worktree.cliProvenance : null
   const metaComment = showComment ? hoverComment : null
   const showInlineAgentList = cardProps.includes('inline-agents') && (newCardStyle || !compactCards)
   const compactInlineAgentRows = useWorktreeAgentRows(
@@ -1113,14 +1114,15 @@ const WorktreeCard = React.memo(function WorktreeCard({
     },
     [hoverReview, openTaskPage, repo]
   )
+  const hoverReviewProvider = hoverReview?.provider
   const hasExplicitLinkedReview =
-    (hoverReview?.provider === 'github' && worktree.linkedPR !== null) ||
-    (hoverReview?.provider === 'gitlab' && linkedGitLabMR !== null) ||
-    (hoverReview?.provider === 'bitbucket' && linkedBitbucketPR !== null) ||
-    (hoverReview?.provider === 'azure-devops' && linkedAzureDevOpsPR !== null) ||
-    (hoverReview?.provider === 'gitea' && linkedGiteaPR !== null)
+    (hoverReviewProvider === 'github' && worktree.linkedPR !== null) ||
+    (hoverReviewProvider === 'gitlab' && linkedGitLabMR !== null) ||
+    (hoverReviewProvider === 'bitbucket' && linkedBitbucketPR !== null) ||
+    (hoverReviewProvider === 'azure-devops' && linkedAzureDevOpsPR !== null) ||
+    (hoverReviewProvider === 'gitea' && linkedGiteaPR !== null)
   const handleUnlinkReview = useCallback(() => {
-    switch (hoverReview?.provider) {
+    switch (hoverReviewProvider) {
       case 'github':
         void updateWorktreeMeta(worktree.id, { linkedPR: null })
         return
@@ -1135,12 +1137,12 @@ const WorktreeCard = React.memo(function WorktreeCard({
         return
       case 'gitea':
         void updateWorktreeMeta(worktree.id, { linkedGiteaPR: null })
-        return
+        break
       case 'unsupported':
       case undefined:
         break
     }
-  }, [hoverReview?.provider, updateWorktreeMeta, worktree.id])
+  }, [hoverReviewProvider, updateWorktreeMeta, worktree.id])
   const handleOpenLinearIssueInOrca = useCallback(
     (e: React.MouseEvent) => {
       e.stopPropagation()
@@ -1156,7 +1158,8 @@ const WorktreeCard = React.memo(function WorktreeCard({
     linearIssue: metaLinearIssue,
     review: newCardStyle ? null : metaReview,
     comment: metaComment,
-    automationProvenance: metaAutomationProvenance
+    automationProvenance: metaAutomationProvenance,
+    cliProvenance: metaCliProvenance
   })
   const hasPorts = showPorts && workspacePorts.length > 0
   const cacheStartedAt = usePromptCacheCountdownStartedAt(worktree.id, showAggregateCacheTimer)
@@ -1228,7 +1231,8 @@ const WorktreeCard = React.memo(function WorktreeCard({
       linearIssue: hoverLinearIssue,
       review: hoverReview,
       comment: hoverComment,
-      automationProvenance: metaAutomationProvenance
+      automationProvenance: metaAutomationProvenance,
+      cliProvenance: metaCliProvenance
     }) ||
       workspacePorts.length > 0 ||
       hasHoverIdentity)
@@ -1245,6 +1249,7 @@ const WorktreeCard = React.memo(function WorktreeCard({
             review={metaReview}
             comment={metaComment}
             automationProvenance={metaAutomationProvenance}
+            cliProvenance={metaCliProvenance}
             automationHostId={worktree.hostId}
             branchName={showBranchIdentityHover ? branch : undefined}
             workspaceTitle={worktree.displayName}
@@ -1300,6 +1305,7 @@ const WorktreeCard = React.memo(function WorktreeCard({
             review={newCardStyle ? null : metaReview}
             comment={metaComment}
             automationProvenance={metaAutomationProvenance}
+            cliProvenance={metaCliProvenance}
             className="ml-0 pr-0"
           />
         )}
@@ -1313,6 +1319,7 @@ const WorktreeCard = React.memo(function WorktreeCard({
         review={metaReview}
         comment={metaComment}
         automationProvenance={metaAutomationProvenance}
+        cliProvenance={metaCliProvenance}
         automationHostId={worktree.hostId}
         detailsAfter={hasPorts ? <WorktreeCardPortsDetails ports={workspacePorts} /> : null}
         hoverControl={detailsHoverControl}
@@ -1806,6 +1813,7 @@ const WorktreeCard = React.memo(function WorktreeCard({
         review={hoverReview}
         comment={hoverComment}
         automationProvenance={metaAutomationProvenance}
+        cliProvenance={metaCliProvenance}
         automationHostId={worktree.hostId}
         branchName={hoverBranchName}
         workspaceTitle={hoverWorkspaceTitle}
@@ -1847,12 +1855,12 @@ const WorktreeCard = React.memo(function WorktreeCard({
         titleOnlyCard ? 'py-2' : 'pt-1.25 pb-1.5',
         flushSurface ? 'ml-1 w-[calc(100%-0.25rem)]' : 'ml-1',
         'rounded-lg',
+        // Why: the live data attribute updates before React state during navigation,
+        // so it must own the complete active style without stale utility classes.
         isLineageDropTarget
           ? 'border border-accent-foreground/20 bg-accent/80'
           : isActiveSurface
-            ? activeSurfaceIsSecondary
-              ? 'border border-sidebar-ring/25 bg-sidebar-accent/45 shadow-none ring-1 ring-sidebar-ring/15'
-              : 'bg-black/[0.08] shadow-[0_1px_2px_rgba(0,0,0,0.04)] border border-black/[0.015] dark:bg-white/[0.10] dark:border-border/40 dark:shadow-[0_1px_2px_rgba(0,0,0,0.03)]'
+            ? 'border border-transparent'
             : isMultiSelected
               ? 'border border-worktree-sidebar-ring/35 bg-worktree-sidebar-accent/70 ring-1 ring-worktree-sidebar-ring/30'
               : 'border border-transparent worktree-sidebar-card-hover',

@@ -5,6 +5,7 @@ import { getAzureDevOpsAuthStatus } from '../azure-devops/client'
 import { getBitbucketAuthStatus } from '../bitbucket/client'
 import { getGiteaAuthStatus } from '../gitea/client'
 import { _resetKnownHostsCache } from '../gitlab/gl-utils'
+import { mergePersistedWindowsPathAsync } from '../pty/windows-environment-path'
 import { getActiveMultiplexer } from './ssh'
 import { detectWslCommandsOnPath, type WslPreflightTarget } from './preflight-wsl-agent-detection'
 import { detectCommandsInInstallDirs } from './local-agent-install-dir-detection'
@@ -228,9 +229,14 @@ export async function runPreflightCheck(
   force = false,
   context?: PreflightRuntimeContext
 ): Promise<PreflightStatus> {
-  const cacheable = !getPreflightWslTarget(context)
+  const wslTarget = getPreflightWslTarget(context)
+  const cacheable = !wslTarget
   if (cacheable && cached && !force) {
     return cached
+  }
+
+  if (process.platform === 'win32' && !wslTarget) {
+    await mergePersistedWindowsPathAsync(process.env, { forceRefresh: force })
   }
 
   if (force) {

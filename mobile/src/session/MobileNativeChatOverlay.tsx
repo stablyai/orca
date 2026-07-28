@@ -14,6 +14,10 @@ type Props = {
   onMicPressIn: () => void
   onMicPressOut: () => void
   inputLockReason: MobileNativeChatInputLockReason | null
+  /** Latest send failure, rendered inline above the composer. */
+  sendErrorMessage: string | null
+  /** Drops that failure once a later send succeeds. */
+  onClearSendError: () => void
   keyboardInset: number
 }
 
@@ -28,6 +32,8 @@ export function MobileNativeChatOverlay({
   onMicPressIn,
   onMicPressOut,
   inputLockReason,
+  sendErrorMessage,
+  onClearSendError,
   keyboardInset
 }: Props): React.JSX.Element | null {
   if (!controller.showNativeChat) {
@@ -48,7 +54,7 @@ export function MobileNativeChatOverlay({
         onAnswerAsk={controller.handleNativeChatAnswerAsk}
         onCancelAsk={controller.handleNativeChatCancelAsk}
         question={controller.nativeChatQuestion}
-        onAnswerQuestion={controller.handleNativeChatSend}
+        onAnswerQuestion={controller.handleNativeChatQuestionAnswer}
         permission={controller.nativeChatPermission}
         onRespondPermission={controller.handleNativeChatRespondPermission}
         onOpenFile={controller.handleNativeChatOpenFile}
@@ -69,6 +75,8 @@ export function MobileNativeChatOverlay({
         onMicPressIn={onMicPressIn}
         onMicPressOut={onMicPressOut}
         inputLockReason={inputLockReason}
+        sendErrorMessage={sendErrorMessage}
+        onClearSendError={onClearSendError}
         filePaths={controller.nativeChatFilePaths}
         onNeedFiles={controller.loadNativeChatFiles}
         keyboardInset={keyboardInset}
