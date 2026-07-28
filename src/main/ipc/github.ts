@@ -241,7 +241,7 @@ function applyRepoToPRRefreshCandidate(
     repoId: repo.id,
     ...(localGitOptions ? { localGitOptions } : {}),
     connectionId: repoConnectionId(repo),
-    executionHostId: repo.executionHostId ?? null,
+    executionHostId: getRepoExecutionHostId(repo),
     connectionState: repo.connectionId ? 'connected' : 'unknown'
   }
 }

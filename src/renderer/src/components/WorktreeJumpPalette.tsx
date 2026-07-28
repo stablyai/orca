@@ -114,12 +114,12 @@ import { buildPluginQuickActions } from '@/components/cmd-j/plugin-quick-actions
 import { usePluginCommands } from '@/store/plugin-panels'
 import {
   getComposerEligibleRepos,
-  resolveComposerGitRepoId
+  getComposerWorktreePrefetchTarget
 } from '@/lib/new-workspace-composer-repo'
 import { lookupGitHubWorkItemForSource } from '@/lib/github-work-item-source-lookup'
 import type { SettingsNavTarget } from '@/lib/settings-navigation-types'
 import { getHostDisplayLabelOverrides } from '../../../shared/host-setting-overrides'
-import { isRuntimeOwnedSshTargetId } from '../../../shared/execution-host'
+import { isRuntimeOwnedSshTargetId, type ExecutionHostId } from '../../../shared/execution-host'
 import type { BrowserPage, BrowserWorkspace, Worktree } from '../../../shared/types'
 import { isGitRepoKind } from '../../../shared/repo-kind'
 import { buildTaskSourceContextFromRepo } from '../../../shared/task-source-context'
@@ -202,11 +202,11 @@ const CREATE_WORKSPACE_QUICK_ACTION_ITEM_ID = `quick-action:${CREATE_WORKSPACE_Q
 // Why: outlast the CommandDialog close animation (~150–200ms) so gated status maps stay live until fading rows are gone.
 const PALETTE_STATUS_INPUTS_LINGER_MS = 300
 
-function getComposerPrefetchRepoId(
+function getComposerPrefetchTarget(
   state: ReturnType<typeof useAppStore.getState>,
   initialRepoId?: string
-): string | null {
-  return resolveComposerGitRepoId({
+): { repoId: string; executionHostId: ExecutionHostId } | null {
+  return getComposerWorktreePrefetchTarget({
     eligibleRepos: getComposerEligibleRepos(state.repos),
     initialRepoId,
     activeRepoId: state.activeRepoId,
@@ -899,11 +899,13 @@ export default function WorktreeJumpPalette(): React.JSX.Element | null {
 
   const prefetchCreateWorkspaceBaseForComposer = useCallback((initialRepoId?: string): void => {
     const state = useAppStore.getState()
-    const repoIdForComposer = getComposerPrefetchRepoId(state, initialRepoId)
-    if (!repoIdForComposer) {
+    const target = getComposerPrefetchTarget(state, initialRepoId)
+    if (!target) {
       return
     }
-    void state.prefetchWorktreeCreateBase(repoIdForComposer)
+    void state.prefetchWorktreeCreateBase(target.repoId, undefined, {
+      executionHostId: target.executionHostId
+    })
   }, [])
 
   const openCreateWorkspaceAction = useCallback(() => {

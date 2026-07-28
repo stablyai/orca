@@ -193,7 +193,11 @@ export type WorktreeSlice = {
   removePendingWorktreeCreation: (creationId: string, options?: { cleanupVm?: boolean }) => void
   /** Point the content panel at a pending creation (or clear it with null). */
   setActivePendingWorktreeCreation: (creationId: string | null) => void
-  prefetchWorktreeCreateBase: (repoId: string, baseBranch?: string) => Promise<void>
+  prefetchWorktreeCreateBase: (
+    repoId: string,
+    baseBranch?: string,
+    options?: { executionHostId?: ExecutionHostId }
+  ) => Promise<void>
   removeWorktree: (
     worktreeId: string,
     force?: boolean,

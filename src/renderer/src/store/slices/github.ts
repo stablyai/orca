@@ -3084,7 +3084,7 @@ export const createGitHubSlice: StateCreator<AppState, [], [], GitHubSlice> = (s
                 fallbackPRNumber,
                 fallbackPRSource,
                 connectionId: repo?.connectionId ?? null,
-                executionHostId: repo?.executionHostId ?? null,
+                executionHostId: repo ? getRepoExecutionHostId(repo) : null,
                 cachedFetchedAt: cached?.fetchedAt ?? null,
                 cachedHasPR: cached?.data ? true : cached ? false : null,
                 cachedPRState: cached?.data?.state ?? null,

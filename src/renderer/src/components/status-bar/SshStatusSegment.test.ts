@@ -1,9 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
-import {
-  connectRuntimeHostForNavigation,
-  isConnectedRuntimeHostState,
-  runtimeStatusForOverall
-} from './SshStatusSegment'
+import { isConnectedRuntimeHostState, runtimeStatusForOverall } from './SshStatusSegment'
+import { connectRuntimeHostForNavigation } from './runtime-host-navigation-connect'
 
 describe('SshStatusSegment host status helpers', () => {
   it('counts connected remote servers as connected hosts', () => {
@@ -24,7 +21,10 @@ describe('SshStatusSegment host status helpers', () => {
 describe('connectRuntimeHostForNavigation', () => {
   it('loads the transient host catalog without writing Active Server', async () => {
     const refreshStatus = vi.fn().mockResolvedValue(true)
-    const fetchRepos = vi.fn().mockResolvedValue([{ id: 'repo-a' }, { id: 'repo-b' }])
+    const fetchRepos = vi.fn().mockResolvedValue([
+      { id: 'repo-a', executionHostId: 'runtime:windows-2' },
+      { id: 'repo-b', connectionId: 'legacy-ssh' }
+    ])
     const fetchWorktrees = vi.fn().mockResolvedValue(undefined)
     const fetchLineage = vi.fn().mockResolvedValue(undefined)
 
@@ -40,6 +40,12 @@ describe('connectRuntimeHostForNavigation', () => {
 
     expect(fetchRepos).toHaveBeenCalledWith('windows-2')
     expect(fetchWorktrees).toHaveBeenCalledTimes(2)
+    expect(fetchWorktrees).toHaveBeenNthCalledWith(1, 'repo-a', {
+      executionHostId: 'runtime:windows-2'
+    })
+    expect(fetchWorktrees).toHaveBeenNthCalledWith(2, 'repo-b', {
+      executionHostId: 'ssh:legacy-ssh'
+    })
     expect(fetchLineage).toHaveBeenCalledOnce()
   })
 

@@ -961,7 +961,7 @@ function persistPassiveWorktreeMetaForOwner(
 async function listDetectedWorktreesForRepo(
   settings: AppState['settings'],
   repoId: string,
-  options: BackgroundRuntimeRefreshOptions = {}
+  options: BackgroundRuntimeRefreshOptions & { executionHostId: ExecutionHostId }
 ): Promise<DetectedWorktreeListResult> {
   const target = getActiveRuntimeTarget(settings)
   if (target.kind === 'local') {
@@ -969,7 +969,7 @@ async function listDetectedWorktreesForRepo(
       listDetected?: typeof window.api.worktrees.listDetected
     }
     if (typeof worktreesApi.listDetected === 'function') {
-      return worktreesApi.listDetected({ repoId })
+      return worktreesApi.listDetected({ repoId, executionHostId: options.executionHostId })
     }
     const legacyWorktrees = await worktreesApi.list({ repoId })
     return toLegacyDetectedWorktreeResult(repoId, { worktrees: legacyWorktrees })
@@ -1050,6 +1050,7 @@ async function listDetectedWorktreesForRepoCoalesced(
   }
   // Why: startup/event fan-out can request the same repo/host refresh many times at once; share only the scan promise so state-merge semantics stay local.
   const refresh = listDetectedWorktreesForRepo(settings, repoId, {
+    executionHostId: options.executionHostId,
     reuseRecentCompatibilityFailure: options.reuseRecentCompatibilityFailure
   })
   detectedWorktreeRefreshesInFlight.set(key, refresh)
@@ -3037,12 +3038,17 @@ export const createWorktreeSlice: StateCreator<AppState, [], [], WorktreeSlice> 
     }))
   },
 
-  prefetchWorktreeCreateBase: async (repoId, baseBranch) => {
+  prefetchWorktreeCreateBase: async (repoId, baseBranch, options) => {
     try {
-      const target = getActiveRuntimeTarget(settingsForRepoOwner(get(), repoId))
+      const state = get()
+      const executionHostId = repoHostId(state, repoId, options?.executionHostId)
+      const target = getActiveRuntimeTarget(
+        settingsForRepoOwner(state, repoId, options?.executionHostId)
+      )
       if (target.kind === 'local') {
         await window.api.worktrees.prefetchCreateBase({
           repoId,
+          executionHostId,
           ...(baseBranch ? { baseBranch } : {})
         })
         return

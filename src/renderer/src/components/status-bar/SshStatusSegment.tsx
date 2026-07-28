@@ -20,6 +20,7 @@ import { isUserManagedRuntimeEnvironment } from '../../../../shared/runtime-envi
 import { RuntimeHostStatusRow, type RuntimeHostConnectionState } from './RuntimeHostStatusRow'
 import { SshTargetStatusRow } from './SshTargetStatusRow'
 import type { RemoteRuntimeSharedConnectionDiagnostics } from '../../../../shared/remote-runtime-shared-control-types'
+import { connectRuntimeHostForNavigation } from './runtime-host-navigation-connect'
 
 function isConnecting(status: SshConnectionStatus): boolean {
   return ['connecting', 'deploying-relay', 'reconnecting'].includes(status)
@@ -145,22 +146,6 @@ export function runtimeStatusForOverall(state: RuntimeHostConnectionState): Host
 
 export function isConnectedRuntimeHostState(state: RuntimeHostConnectionState): boolean {
   return state === 'connected'
-}
-
-export async function connectRuntimeHostForNavigation(args: {
-  environmentId: string
-  refreshStatus: (environmentId: string, timeoutMs: number) => Promise<boolean>
-  fetchRepos: (environmentId: string) => Promise<{ id: string }[]>
-  fetchWorktrees: (repoId: string) => Promise<unknown>
-  fetchLineage: () => Promise<unknown>
-}): Promise<boolean> {
-  if (!(await args.refreshStatus(args.environmentId, 5_000))) {
-    return false
-  }
-  const repos = await args.fetchRepos(args.environmentId)
-  await Promise.all(repos.map((repo) => args.fetchWorktrees(repo.id)))
-  await args.fetchLineage()
-  return true
 }
 
 export function SshStatusSegment({

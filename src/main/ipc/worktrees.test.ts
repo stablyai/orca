@@ -617,6 +617,35 @@ describe('registerWorktreeHandlers', () => {
     expect(addWorktreeMock).not.toHaveBeenCalled()
   })
 
+  it('prefetches the create base through the requested repo host', async () => {
+    const localRepo = {
+      id: 'repo-1',
+      path: '/workspace/local',
+      displayName: 'local',
+      badgeColor: '#000',
+      addedAt: 0
+    }
+    const sshRepo = {
+      id: 'repo-1',
+      path: '/workspace/ssh',
+      displayName: 'ssh',
+      badgeColor: '#000',
+      addedAt: 0,
+      connectionId: 'ssh-1'
+    }
+    store.getRepos.mockReturnValue([localRepo, sshRepo])
+    store.getRepo.mockReturnValue(localRepo)
+
+    await handlers['worktrees:prefetchCreateBase'](null, {
+      repoId: 'repo-1',
+      executionHostId: 'ssh:ssh-1',
+      baseBranch: 'main'
+    })
+
+    expect(getSshGitProviderMock).toHaveBeenCalledWith('ssh-1')
+    expect(runtimeStub.fetchRemoteWithCache).not.toHaveBeenCalled()
+  })
+
   it('prefetches origin for local branch bases containing slashes', async () => {
     runtimeStub.resolveRemoteTrackingBase.mockResolvedValue(null)
 
@@ -2433,6 +2462,53 @@ describe('registerWorktreeHandlers', () => {
       source: 'git',
       worktrees: [expect.objectContaining({ path: '/workspace/repo' })]
     })
+  })
+
+  it('routes detected worktree listings through the requested repo host', async () => {
+    const localRepo = {
+      id: 'repo-1',
+      path: '/workspace/local',
+      displayName: 'local',
+      badgeColor: '#000',
+      addedAt: 0,
+      executionHostId: 'local' as const
+    }
+    const sshRepo = {
+      id: 'repo-1',
+      path: '/workspace/ssh',
+      displayName: 'ssh',
+      badgeColor: '#000',
+      addedAt: 0,
+      connectionId: 'ssh-1'
+    }
+    const listSshWorktrees = vi.fn().mockResolvedValue([
+      {
+        path: '/workspace/ssh',
+        head: 'def456',
+        branch: 'refs/heads/main',
+        isBare: false,
+        isMainWorktree: true
+      }
+    ])
+    store.getRepos.mockReturnValue([localRepo, sshRepo])
+    store.getRepo.mockReturnValue(localRepo)
+    getSshGitProviderMock.mockReturnValue({ listWorktrees: listSshWorktrees })
+
+    const result = await handlers['worktrees:listDetected'](null, {
+      repoId: 'repo-1',
+      executionHostId: 'ssh:ssh-1'
+    })
+
+    expect(listSshWorktrees).toHaveBeenCalledWith('/workspace/ssh')
+    expect(listWorktreesMock).not.toHaveBeenCalled()
+    expect(result).toMatchObject({
+      authoritative: true,
+      worktrees: [expect.objectContaining({ path: '/workspace/ssh' })]
+    })
+
+    await expect(
+      handlers['worktrees:listDetected'](null, { repoId: 'repo-1' })
+    ).resolves.toMatchObject({ authoritative: false, worktrees: [] })
   })
 
   it('hydrates detected worktrees with instance-validated legacy lineage after an update', async () => {

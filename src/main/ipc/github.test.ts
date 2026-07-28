@@ -428,8 +428,7 @@ describe('registerGitHubHandlers', () => {
         displayName: 'repo',
         badgeColor: '#000',
         addedAt: 0,
-        connectionId: 'ssh-real',
-        executionHostId: 'ssh:ssh-real'
+        connectionId: 'ssh-real'
       }
     ]
     registerGitHubHandlers(store as never, stats as never)

@@ -1341,7 +1341,10 @@ export type PreloadApi = {
   }
   worktrees: {
     list: (args: { repoId: string }) => Promise<Worktree[]>
-    listDetected: (args: { repoId: string }) => Promise<DetectedWorktreeListResult>
+    listDetected: (args: {
+      repoId: string
+      executionHostId?: ExecutionHostId
+    }) => Promise<DetectedWorktreeListResult>
     listAll: () => Promise<Worktree[]>
     create: (args: CreateWorktreeArgs) => Promise<CreateWorktreeResult>
     /** Two-phase progress for a background `create`, correlated by `creationId`. The remote/runtime
@@ -1349,7 +1352,11 @@ export type PreloadApi = {
     onCreateProgress: (
       callback: (data: { creationId?: string; phase: 'fetching' | 'creating' }) => void
     ) => () => void
-    prefetchCreateBase: (args: { repoId: string; baseBranch?: string }) => Promise<void>
+    prefetchCreateBase: (args: {
+      repoId: string
+      executionHostId?: ExecutionHostId
+      baseBranch?: string
+    }) => Promise<void>
     resolvePrBase: (args: {
       repoId: string
       executionHostId?: ExecutionHostId

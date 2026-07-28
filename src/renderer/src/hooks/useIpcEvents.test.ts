@@ -1667,6 +1667,16 @@ describe('useIpcEvents updater integration', () => {
     expect(clearTabPtyId).not.toHaveBeenCalledWith('tab-2')
     expect(storeState.clearRemoteDetectedAgents).toHaveBeenCalledWith('conn-1')
 
+    storeState.fetchWorktrees.mockClear()
+    sshStateListenerRef.current({
+      targetId: 'conn-1',
+      state: { status: 'connected', error: null, reconnectAttempt: 0 }
+    })
+    await Promise.resolve()
+    expect(storeState.fetchWorktrees).toHaveBeenCalledWith('repo-1', {
+      executionHostId: 'ssh:conn-1'
+    })
+
     setSshConnectionState.mockClear()
     sshStateListenerRef.current({
       targetId: 'conn-removed',

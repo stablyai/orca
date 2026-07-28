@@ -804,6 +804,14 @@ describe('fetchWorktrees', () => {
     await Promise.all([localStarted, sshStarted])
 
     expect(mockApi.worktrees.listDetected).toHaveBeenCalledTimes(2)
+    expect(mockApi.worktrees.listDetected).toHaveBeenCalledWith({
+      repoId: 'repo1',
+      executionHostId: 'local'
+    })
+    expect(mockApi.worktrees.listDetected).toHaveBeenCalledWith({
+      repoId: 'repo1',
+      executionHostId: 'ssh:ssh-1'
+    })
 
     releaseLocal()
     releaseSsh()
@@ -1305,7 +1313,10 @@ describe('fetchWorktrees', () => {
 
     await store.getState().fetchWorktrees('same-repo', { forceLocalOwner: true })
 
-    expect(mockApi.worktrees.listDetected).toHaveBeenCalledWith({ repoId: 'same-repo' })
+    expect(mockApi.worktrees.listDetected).toHaveBeenCalledWith({
+      repoId: 'same-repo',
+      executionHostId: 'local'
+    })
     expect(runtimeEnvironmentCall).not.toHaveBeenCalled()
     expect(store.getState().worktreesByRepo['same-repo']).toEqual([remote, local])
     expect(store.getState().detectedWorktreesByRepo['same-repo']?.worktrees).toEqual(
@@ -1343,7 +1354,10 @@ describe('fetchWorktrees', () => {
 
     await store.getState().fetchWorktrees('repo-ssh', { forceLocalOwner: true })
 
-    expect(mockApi.worktrees.listDetected).toHaveBeenCalledWith({ repoId: 'repo-ssh' })
+    expect(mockApi.worktrees.listDetected).toHaveBeenCalledWith({
+      repoId: 'repo-ssh',
+      executionHostId: 'ssh:ssh-1'
+    })
     expect(runtimeEnvironmentCall).not.toHaveBeenCalled()
     // Why: SSH worktrees are fetched via local IPC but belong to the SSH host, so they carry the repo's ssh host id.
     expect(store.getState().worktreesByRepo['repo-ssh']).toEqual([
@@ -1385,7 +1399,10 @@ describe('fetchWorktrees', () => {
 
     await store.getState().fetchWorktrees('same-repo', { executionHostId: 'local' })
 
-    expect(mockApi.worktrees.listDetected).toHaveBeenCalledWith({ repoId: 'same-repo' })
+    expect(mockApi.worktrees.listDetected).toHaveBeenCalledWith({
+      repoId: 'same-repo',
+      executionHostId: 'local'
+    })
     expect(runtimeEnvironmentCall).not.toHaveBeenCalled()
     expect(store.getState().worktreesByRepo['same-repo']).toEqual([localWorktree])
   })
@@ -3113,12 +3130,34 @@ describe('createWorktree base status merge', () => {
 
   it('prefetches create base through desktop IPC on the local runtime target', async () => {
     const store = createTestStore()
+    store.setState({
+      repos: [
+        {
+          id: 'repo1',
+          path: '/local/repo1',
+          displayName: 'local',
+          badgeColor: '#000',
+          addedAt: 0
+        },
+        {
+          id: 'repo1',
+          path: '/remote/repo1',
+          displayName: 'ssh',
+          badgeColor: '#000',
+          addedAt: 0,
+          connectionId: 'ssh-1'
+        }
+      ]
+    } as Partial<AppState>)
 
-    await store.getState().prefetchWorktreeCreateBase('repo1', 'origin/main')
+    await store
+      .getState()
+      .prefetchWorktreeCreateBase('repo1', 'origin/main', { executionHostId: 'ssh:ssh-1' })
 
     expect(mockApi.worktrees.prefetchCreateBase).toHaveBeenCalledWith({
       repoId: 'repo1',
-      baseBranch: 'origin/main'
+      baseBranch: 'origin/main',
+      executionHostId: 'ssh:ssh-1'
     })
     expect(runtimeEnvironmentTransportCall).not.toHaveBeenCalled()
   })
@@ -6841,7 +6880,10 @@ describe('fetchAllWorktrees hydration-time purge (design §4.4)', () => {
         expect.objectContaining({ id: refreshedRemoteWorktree.id, hostId: 'runtime:env-1' })
       ])
     )
-    expect(mockApi.worktrees.listDetected).toHaveBeenCalledWith({ repoId: 'same-repo' })
+    expect(mockApi.worktrees.listDetected).toHaveBeenCalledWith({
+      repoId: 'same-repo',
+      executionHostId: 'local'
+    })
     expect(runtimeEnvironmentCall).toHaveBeenCalledWith({
       selector: 'env-1',
       method: 'worktree.detectedList',

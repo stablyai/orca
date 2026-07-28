@@ -1796,7 +1796,8 @@ describe('createGitHubSlice.fetchPRForBranch', () => {
         repoPath,
         branch,
         cacheKey: `ssh:ssh-1::repo-1::${branch}`,
-        connectionId: 'ssh-1'
+        connectionId: 'ssh-1',
+        executionHostId: 'ssh:ssh-1'
       })
     })
   })

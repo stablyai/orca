@@ -22,11 +22,13 @@ import { getVisibleWorktreeIds } from '@/components/sidebar/visible-worktrees'
 import { activateTabNumberShortcut } from '@/lib/tab-number-shortcuts'
 import { nextEditorFontZoomLevel, computeEditorFontSize } from '@/lib/editor-font-zoom'
 import type {
+  Repo,
   TerminalLayoutSnapshot,
   TerminalPaneLayoutNode,
   UpdateStatus,
   WorkspaceSessionState
 } from '../../../shared/types'
+import { getRepoExecutionHostId } from '../../../shared/execution-host'
 import type {
   RemoteWorkspacePatchResult,
   RemoteWorkspaceSnapshot
@@ -438,7 +440,13 @@ async function prepareRemoteWorkspaceTarget(targetId: string): Promise<boolean> 
     await store.fetchRepos()
     repos = useAppStore.getState().repos.filter((repo) => repo.connectionId === targetId)
   }
-  await Promise.all(repos.map((repo) => useAppStore.getState().fetchWorktrees(repo.id)))
+  await Promise.all(
+    repos.map((repo) =>
+      useAppStore
+        .getState()
+        .fetchWorktrees(repo.id, { executionHostId: getRepoExecutionHostId(repo) })
+    )
+  )
   await useAppStore.getState().fetchWorktreeLineage()
   return true
 }
@@ -811,7 +819,9 @@ export function getRuntimeProjectRefreshEnvironmentIds(args: {
   ]
 }
 
-async function refreshRuntimeProjectWorktrees(repos: readonly { id: string }[]): Promise<void> {
+async function refreshRuntimeProjectWorktrees(
+  repos: readonly Pick<Repo, 'id' | 'connectionId' | 'executionHostId'>[]
+): Promise<void> {
   let nextIndex = 0
   const failures: { repoId: string; error: unknown }[] = []
   const workerCount = Math.min(RUNTIME_PROJECT_REFRESH_CONCURRENCY, repos.length)
@@ -822,9 +832,12 @@ async function refreshRuntimeProjectWorktrees(repos: readonly { id: string }[]):
       while (nextIndex < repos.length) {
         const index = nextIndex
         nextIndex += 1
-        const repoId = repos[index].id
+        const repo = repos[index]
+        const repoId = repo.id
         try {
-          await useAppStore.getState().fetchWorktrees(repoId)
+          await useAppStore.getState().fetchWorktrees(repoId, {
+            executionHostId: getRepoExecutionHostId(repo)
+          })
         } catch (error) {
           failures.push({ repoId, error })
         }
@@ -2759,7 +2772,11 @@ export function useIpcEvents(): void {
       }
 
       if (state.status === 'connected') {
-        void Promise.all(remoteRepos.map((r) => store.fetchWorktrees(r.id))).then(async () => {
+        void Promise.all(
+          remoteRepos.map((repo) =>
+            store.fetchWorktrees(repo.id, { executionHostId: getRepoExecutionHostId(repo) })
+          )
+        ).then(async () => {
           await useAppStore.getState().fetchWorktreeLineage()
           // Why: panes that never spawned (no PTY provider at cold start) or whose deferred reattach never ran sit inert.
           // Bumping generation remounts TerminalPane so the deferred-connect gate reattaches or spawns fresh now that the provider exists.

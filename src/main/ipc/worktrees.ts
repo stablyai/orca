@@ -156,7 +156,13 @@ function getRepoForWorktreeRemoval(
     .filter((repo) => repo.id === repoId && (!hostId || getRepoExecutionHostId(repo) === hostId))
   // Why: deletion must never guess between host owners; legacy unscoped calls work only while the repo id has one unique owner.
   if (matches.length === 1) {
-    return matches[0]
+    const match = matches[0]
+    const legacyMatch = store.getRepo(repoId)
+    return legacyMatch &&
+      legacyMatch.path === match.path &&
+      getRepoExecutionHostId(legacyMatch) === getRepoExecutionHostId(match)
+      ? legacyMatch
+      : match
   }
   if (matches.length > 1) {
     return undefined
@@ -1138,8 +1144,11 @@ export function registerWorktreeHandlers(
 
   ipcMain.handle(
     'worktrees:listDetected',
-    async (_event, args: { repoId: string }): Promise<DetectedWorktreeListResult> => {
-      const repo = store.getRepo(args.repoId)
+    async (
+      _event,
+      args: { repoId: string; executionHostId?: ExecutionHostId }
+    ): Promise<DetectedWorktreeListResult> => {
+      const repo = getRepoForWorktreeRemoval(store, args.repoId, args.executionHostId)
       if (!repo) {
         return {
           repoId: args.repoId,
@@ -1216,8 +1225,11 @@ export function registerWorktreeHandlers(
 
   ipcMain.handle(
     'worktrees:prefetchCreateBase',
-    async (_event, args: { repoId: string; baseBranch?: string }): Promise<void> => {
-      const repo = store.getRepo(args.repoId)
+    async (
+      _event,
+      args: { repoId: string; executionHostId?: ExecutionHostId; baseBranch?: string }
+    ): Promise<void> => {
+      const repo = getRepoForWorktreeRemoval(store, args.repoId, args.executionHostId)
       if (!repo) {
         return
       }

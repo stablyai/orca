@@ -1840,13 +1840,16 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
     if (!repoId || !selectedRepoIsGit || !canPrefetchSelectedRepoWorkItems) {
       return
     }
-    void prefetchWorktreeCreateBase(repoId, baseBranch)
+    void prefetchWorktreeCreateBase(repoId, baseBranch, {
+      executionHostId: selectedRepoExecutionHostId ?? undefined
+    })
   }, [
     baseBranch,
     canPrefetchSelectedRepoWorkItems,
     prefetchSshConnectedGeneration,
     prefetchWorktreeCreateBase,
     repoId,
+    selectedRepoExecutionHostId,
     selectedRepoIsGit
   ])
   useEffect(() => {
