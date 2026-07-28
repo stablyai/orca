@@ -12,11 +12,14 @@ export function isNativeChatSupportedAgent(agent: string | null | undefined): bo
   return agent != null && NATIVE_CHAT_SUPPORTED_AGENTS.has(agent)
 }
 
-/** True when the agent renders Claude's multi-step AskUserQuestion — one question
- *  per step, each Enter advancing — so a multi-line answer must be paced per line.
- *  Other agents submit the whole answer with a single Enter. */
+/** True when the agent renders a digit-commit question selector that ignores
+ *  typed label text (pasting "Blue" + Enter commits the highlighted FIRST
+ *  option — STA-1860): Claude's AskUserQuestion and Codex 0.145's
+ *  request_user_input card both behave this way, so answers must be delivered
+ *  as per-option keystrokes. Other agents commit a pasted answer. */
 export function shouldStepNativeChatAskAnswer(agent: string | null | undefined): boolean {
-  return resolveNativeChatTranscriptAgent(agent) === 'claude'
+  const transcriptAgent = resolveNativeChatTranscriptAgent(agent)
+  return transcriptAgent === 'claude' || transcriptAgent === 'codex'
 }
 
 export function resolveNativeChatTranscriptAgent(

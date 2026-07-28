@@ -1,6 +1,8 @@
+// @vitest-environment happy-dom
+
 import { renderToStaticMarkup } from 'react-dom/server'
-import { Bot, Mic, Network } from 'lucide-react'
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { Bot, Mic, Network, Puzzle } from 'lucide-react'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { getDefaultSettings } from '../../../../shared/constants'
 import { SettingsSidebar } from './SettingsSidebar'
 import { TooltipProvider } from '../ui/tooltip'
@@ -68,6 +70,11 @@ function renderSidebar(
                 title: 'Computer Use',
                 icon: Bot,
                 installStatus: 'up-to-date'
+              },
+              {
+                id: 'plugins',
+                title: 'Plugins',
+                icon: Puzzle
               }
             ]
           },
@@ -99,6 +106,10 @@ describe('SettingsSidebar', () => {
   beforeEach(() => {
     mocks.useSettingsSetupGuideProgress.mockReset()
     mocks.useSettingsSetupGuideProgress.mockReturnValue(makeSetupGuideProgress())
+  })
+
+  afterEach(() => {
+    document.body.innerHTML = ''
   })
 
   it('applies left sidebar appearance styles to the settings navigation', () => {

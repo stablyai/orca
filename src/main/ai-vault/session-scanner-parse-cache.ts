@@ -97,6 +97,52 @@ export function resetSessionParseCacheForTests(): void {
   cache.clear()
 }
 
+// Persisted subset of a cache entry: the non-serializable `resume` parser
+// state is dropped (see session-parse-cache-persistence.ts).
+export type PersistedSessionParseCacheEntry = Omit<SessionParseCacheEntry, 'resume'>
+
+export function snapshotSessionParseCacheForPersistence(): [
+  string,
+  PersistedSessionParseCacheEntry
+][] {
+  return [...cache].map(([path, entry]): [string, PersistedSessionParseCacheEntry] => [
+    path,
+    {
+      mtimeMs: entry.mtimeMs,
+      sizeBytes: entry.sizeBytes,
+      platform: entry.platform,
+      session: entry.session
+    }
+  ])
+}
+
+// Seeded entries carry `resume: null`: after a restart an unchanged file is a
+// cache hit; a file that changed while the app was closed pays one full
+// (not incremental) re-parse.
+export function seedSessionParseCache(
+  entries: Iterable<[string, PersistedSessionParseCacheEntry]>
+): void {
+  const list = [...entries]
+  // Snapshot order is oldest→newest (LRU); an over-cap list keeps the newest
+  // tail rather than seeding the oldest entries and dropping the tail.
+  for (const [path, entry] of list.slice(Math.max(0, list.length - MAX_CACHE_ENTRIES))) {
+    if (cache.size >= MAX_CACHE_ENTRIES) {
+      return
+    }
+    // In-process entries are always fresher than persisted ones; never clobber.
+    if (cache.has(path)) {
+      continue
+    }
+    cache.set(path, {
+      mtimeMs: entry.mtimeMs,
+      sizeBytes: entry.sizeBytes,
+      platform: entry.platform,
+      session: entry.session,
+      resume: null
+    })
+  }
+}
+
 function storeEntry(path: string, entry: SessionParseCacheEntry): void {
   cache.delete(path)
   cache.set(path, entry)
@@ -265,12 +311,28 @@ async function consumeCompleteJsonlLines(args: {
 }): Promise<JsonlReadResult> {
   let consumedThrough = args.start
   let bytesRead = 0
-  let remainder: Buffer | null = null
+  // Why a piece list: re-joining the partial line with every chunk made one
+  // oversized record (a big tool result) cost O(record^2). Joining once, when a
+  // newline finally arrives, keeps it linear.
+  let remainderParts: Buffer[] = []
+  let remainderLength = 0
 
   const stream = createReadStream(args.path, { start: args.start })
   for await (const chunk of stream as AsyncIterable<Buffer>) {
     bytesRead += chunk.length
-    const data = remainder ? Buffer.concat([remainder, chunk]) : chunk
+    // Why check the chunk alone: the pieces held over are all mid-line, so none
+    // of them contains a newline.
+    if (!chunk.includes(NEWLINE_BYTE)) {
+      remainderParts.push(chunk)
+      remainderLength += chunk.length
+      continue
+    }
+    const data =
+      remainderLength > 0
+        ? Buffer.concat([...remainderParts, chunk], remainderLength + chunk.length)
+        : chunk
+    remainderParts = []
+    remainderLength = 0
     let lineStart = 0
     let newlineIndex = data.indexOf(NEWLINE_BYTE, lineStart)
     while (newlineIndex !== -1) {
@@ -283,13 +345,19 @@ async function consumeCompleteJsonlLines(args: {
       newlineIndex = data.indexOf(NEWLINE_BYTE, lineStart)
     }
     consumedThrough += lineStart
-    // Copy the tail so retaining it doesn't pin the whole chunk buffer.
-    remainder = lineStart < data.length ? Buffer.from(data.subarray(lineStart)) : null
+    if (lineStart < data.length) {
+      // Copy the tail so retaining it doesn't pin the whole chunk buffer.
+      remainderParts = [Buffer.from(data.subarray(lineStart))]
+      remainderLength = data.length - lineStart
+    }
   }
+
+  const trailingPartialLine =
+    remainderLength > 0 ? Buffer.concat(remainderParts, remainderLength).toString('utf-8') : null
 
   return {
     consumedThrough,
-    trailingPartialLine: remainder && remainder.length > 0 ? remainder.toString('utf-8') : null,
+    trailingPartialLine,
     bytesRead
   }
 }

@@ -1,4 +1,5 @@
 import type { PairingOffer } from '../../shared/pairing'
+import type { RuntimeOrchestrationEnvelope } from '../../shared/runtime-rpc-envelope'
 import {
   RemoteRuntimeClientError,
   sendRemoteRuntimeRequest
@@ -9,10 +10,11 @@ export async function sendWebSocketRequest<TResult>(
   pairing: PairingOffer,
   method: string,
   params: unknown,
-  timeoutMs: number
+  timeoutMs: number,
+  envelope?: RuntimeOrchestrationEnvelope
 ): Promise<RuntimeRpcResponse<TResult>> {
   try {
-    return await sendRemoteRuntimeRequest<TResult>(pairing, method, params, timeoutMs)
+    return await sendRemoteRuntimeRequest<TResult>(pairing, method, params, timeoutMs, envelope)
   } catch (error) {
     if (error instanceof RemoteRuntimeClientError) {
       throw new RuntimeClientError(error.code, error.message)

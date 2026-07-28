@@ -256,6 +256,15 @@ describe('mergeNativeChatLiveSession', () => {
         loading: true
       }).status
     ).toBe('working')
+    expect(
+      mergeNativeChatLiveSession({
+        sources: { transcript: [] },
+        sessionId: 'sess',
+        agent: 'claude',
+        hookState: 'working',
+        loading: true
+      }).status
+    ).toBe('loading')
 
     const errored = mergeNativeChatLiveSession({
       sources: { transcript: [] },

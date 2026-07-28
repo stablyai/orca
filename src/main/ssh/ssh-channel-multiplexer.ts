@@ -482,34 +482,28 @@ export class SshChannelMultiplexer {
     }
   }
 
-  // Why: one 5s interval owns BOTH the periodic keepalive send and the
-  // liveness/dead-link check. They used to be two separate 5s intervals that
-  // always fired back-to-back (keepalive created first); folding them into one
-  // tick — send first (as the keepalive timer did), then run the check (as the
-  // timeout timer did) — halves the per-connection timer count with identical
-  // behavior, including the #7773 wake-gap recovery below.
+  // Why: one 5s interval owns both the periodic keepalive and dead-link check,
+  // halving per-connection timers while preserving their send-then-check order.
   private startConnectionHealthTimer(): void {
     let lastTickAt = Date.now()
     this.connectionHealthTimer = setInterval(() => {
-      this.sendKeepAlive()
-
-      if (this.disposed) {
-        return
-      }
-
       const now = Date.now()
       const sinceLastTick = now - lastTickAt
       lastTickAt = now
       // Why: after sleep/App Nap the pre-pause keepalive looks stale on the
       // first post-wake tick, killing a healthy link (#7773). Reset staleness
-      // tracking, probe with a fresh keepalive, and let the NEXT full window
-      // make an honest liveness determination.
-      if (sinceLastTick > WAKE_GAP_MS) {
+      // before this tick's fresh probe, then allow the next full window.
+      const resumedAfterWake = sinceLastTick > WAKE_GAP_MS
+      if (resumedAfterWake) {
         this.lastReceivedAt = now
         for (const seq of this.unackedTimestamps.keys()) {
           this.unackedTimestamps.set(seq, now)
         }
-        this.sendKeepAlive()
+      }
+
+      this.sendKeepAlive()
+
+      if (this.disposed || resumedAfterWake) {
         return
       }
 

@@ -278,12 +278,22 @@ async function main() {
   const repoPath = ensureFixture(fixtureDir)
   console.log(`[fixture] userData=${fixtureDir} repo=${repoPath}`)
 
+  // Why: the jank probe needs a stable workload and must never scan or mutate
+  // a developer Codex profile while running against synthetic userData.
+  const isolatedHome = join(fixtureDir, 'home')
+  mkdirSync(isolatedHome, { recursive: true })
   const env = {
     ...process.env,
     ORCA_STARTUP_DIAGNOSTICS: '1',
     ORCA_MAIN_THREAD_DIAGNOSTICS: '1',
-    ORCA_E2E_USER_DATA_DIR: fixtureDir
+    ORCA_E2E_USER_DATA_DIR: fixtureDir,
+    HOME: isolatedHome,
+    USERPROFILE: isolatedHome,
+    ORCA_E2E_HOME_DIR: isolatedHome,
+    ORCA_CODEX_SYSTEM_DEFAULT_REAL_HOME: '0'
   }
+  delete env.CODEX_HOME
+  delete env.ORCA_CODEX_HOME
   if (args.headless) {
     env.ORCA_E2E_HEADLESS = '1'
     console.warn(

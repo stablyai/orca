@@ -190,6 +190,28 @@ describe('shouldDetachPaneTransportOnUnmount', () => {
       })
     ).toBe(false)
   })
+
+  it('detaches a removed automation pane after closeTab takes teardown authority', () => {
+    expect(
+      shouldDetachPaneTransportOnUnmount({
+        tabStillExists: false,
+        tabId: 'automation-tab',
+        ptyId: 'automation-pty',
+        worktreeTabs: [
+          {
+            id: 'unrelated-tab',
+            ptyId: 'unrelated-pty',
+            worktreeId: 'wt-1',
+            title: 'Terminal 1',
+            customTitle: null,
+            color: null,
+            sortOrder: 0,
+            createdAt: 1
+          }
+        ]
+      })
+    ).toBe(true)
+  })
 })
 
 describe('mapRestoredPaneTitlesByPaneId', () => {

@@ -51,6 +51,7 @@ function eligibleInventory(): SkillFreshnessInventory {
     schemaVersion: 1,
     installations: [placement()],
     eligibleUpdateNames: ['orca-cli'],
+    scanIssues: [],
     scannedAt: 1
   }
 }
@@ -154,6 +155,7 @@ describe('SkillFreshnessNudge', () => {
       schemaVersion: 1,
       installations: [placement({ status: 'current', observedPackageDigest: 'current' })],
       eligibleUpdateNames: [],
+      scanIssues: [],
       scannedAt: 2
     }
     await rerenderNudge()
@@ -212,6 +214,7 @@ describe('SkillFreshnessNudge', () => {
       schemaVersion: 1,
       installations: [placement(), placement({ id: 'repo-copy', topology: 'repo-scope' })],
       eligibleUpdateNames: [],
+      scanIssues: [],
       scannedAt: 1
     }
 

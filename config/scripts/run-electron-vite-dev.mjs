@@ -1,7 +1,6 @@
 import { execFileSync, spawn } from 'node:child_process'
 import { createHash } from 'node:crypto'
 import {
-  chmodSync,
   cpSync,
   existsSync,
   lstatSync,
@@ -17,6 +16,7 @@ import {
 import net from 'node:net'
 import { createRequire } from 'node:module'
 import path from 'node:path'
+import { prepareDevCliTerminalWrappers } from './dev-cli-terminal-wrapper.mjs'
 
 // Why: Electron-based hosts (e.g. Claude Code, VS Code) set
 // ELECTRON_RUN_AS_NODE=1 in their terminal environment. If this leaks into
@@ -314,35 +314,12 @@ function getDevUserDataPath() {
 }
 
 function prepareDevCliWrapper() {
-  const binDir = path.join(repoRoot, 'out', 'bin')
-  mkdirSync(binDir, { recursive: true })
   const userDataPath = getDevUserDataPath()
-  const userDataBinDir = path.join(userDataPath, 'cli', 'bin')
-  const cliPath = path.join(repoRoot, 'out', 'cli', 'index.js')
-  const electronBin = getElectronExecutable()
-
-  if (process.platform === 'win32') {
-    writeFileSync(
-      path.join(binDir, 'orca-dev.cmd'),
-      `@echo off\r\nset "ORCA_USER_DATA_PATH=${userDataPath}"\r\nset "ORCA_APP_EXECUTABLE=${electronBin}"\r\nset "ORCA_APP_EXECUTABLE_NEEDS_APP_ROOT=1"\r\nnode "${cliPath}" %*\r\n`,
-      'utf8'
-    )
-  } else {
-    const wrapperContent = `#!/usr/bin/env bash\nexport ORCA_USER_DATA_PATH=${JSON.stringify(userDataPath)}\nexport ORCA_APP_EXECUTABLE=${JSON.stringify(electronBin)}\nexport ORCA_APP_EXECUTABLE_NEEDS_APP_ROOT=1\nexec node ${JSON.stringify(cliPath)} "$@"\n`
-    const wrapperPath = path.join(binDir, 'orca-dev')
-    writeFileSync(wrapperPath, wrapperContent, 'utf8')
-    chmodSync(wrapperPath, 0o755)
-
-    mkdirSync(userDataBinDir, { recursive: true })
-    for (const commandName of ['orca-dev', 'orca']) {
-      const userDataWrapperPath = path.join(userDataBinDir, commandName)
-      // Why: dev Orca terminals prepend this directory to PATH; refreshing the
-      // `orca` alias prevents stale global/userData wrappers from hijacking
-      // Orca-owned commands such as `orca claude-teams`.
-      writeFileSync(userDataWrapperPath, wrapperContent, 'utf8')
-      chmodSync(userDataWrapperPath, 0o755)
-    }
-  }
+  const { binDir } = prepareDevCliTerminalWrappers({
+    repoRoot,
+    userDataPath,
+    electronExecutable: getElectronExecutable()
+  })
 
   process.env.PATH = `${binDir}${path.delimiter}${process.env.PATH ?? ''}`
   console.log(`[orca-dev] Prepared wrapper in ${binDir}`)

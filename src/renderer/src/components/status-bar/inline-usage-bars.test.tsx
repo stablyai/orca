@@ -71,6 +71,34 @@ describe('InlineUsageBars', () => {
     expect(markup).toContain('42% used Fable')
   })
 
+  it('derives the collapsed session label from resetsAt (#5399)', async () => {
+    const { InlineUsageBars } = await import('./StatusBar')
+
+    const limits = claudeLimits()
+    // ~1h 20m away; +5s buffer keeps the floor-based formatter at '1h 20m'
+    // across the few ms between snapshot and render.
+    limits.session!.resetsAt = Date.now() + 80 * 60_000 + 5_000
+
+    const markup = renderToStaticMarkup(<InlineUsageBars limits={limits} isFetching={false} />)
+
+    expect(markup).toContain('32% used 1h 20m')
+    expect(markup).not.toContain('32% used 5h')
+    // Non-session bars keep their fixed labels.
+    expect(markup).toContain('16% used wk')
+    expect(markup).toContain('42% used Fable')
+  })
+
+  it('shows "now" for an already-expired session reset', async () => {
+    const { InlineUsageBars } = await import('./StatusBar')
+
+    const limits = claudeLimits()
+    limits.session!.resetsAt = Date.now() - 1000
+
+    const markup = renderToStaticMarkup(<InlineUsageBars limits={limits} isFetching={false} />)
+
+    expect(markup).toContain('32% used now')
+  })
+
   it('shows remaining copy and remaining meter fill', async () => {
     mocks.usagePercentageDisplay = 'remaining'
     const { InlineUsageBars } = await import('./StatusBar')

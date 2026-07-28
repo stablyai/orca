@@ -15,11 +15,17 @@ export function settingsForProjectRowOwner(
   state: RepoOwnerState,
   owner: string,
   repo: string,
+  host?: string,
   fallbackSettings:
     | Pick<GlobalSettings, 'activeRuntimeEnvironmentId'>
     | null
     | undefined = state.settings
 ): Pick<GlobalSettings, 'activeRuntimeEnvironmentId'> | null | undefined {
-  const matchedRepo = lookupReposBySlugFromCache(state.repos, state.settings, `${owner}/${repo}`)[0]
+  const matchedRepo = lookupReposBySlugFromCache(
+    state.repos,
+    state.settings,
+    `${owner}/${repo}`,
+    host
+  )[0]
   return matchedRepo ? getSettingsForRepoRuntimeOwner(state, matchedRepo.id) : fallbackSettings
 }

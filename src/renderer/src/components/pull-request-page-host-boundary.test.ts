@@ -36,7 +36,8 @@ describe('PullRequestPage host boundaries', () => {
     )
     expect(section).toContain("'github.requestPRReviewers'")
     expect(section).toContain("'github.removePRReviewers'")
-    expect(section).toContain('{ repo: runtimeRepo, prNumber: item.number, reviewers: logins }')
+    expect(section).toContain('resolvePullRequestRepo(item, projectOrigin)')
+    expect(section.match(/prRepo: reviewRepo/g)).toHaveLength(4)
     expect(section).toContain('notifyWorkItemDetailsMutation(')
     expect(section).toContain('{ local: false }')
   })
@@ -48,7 +49,8 @@ describe('PullRequestPage host boundaries', () => {
     expect(section).toContain('getSettingsForRepoRuntimeOwner(s, item.repoId ?? repoId ?? null)')
     expect(section).toContain('getTaskSourceRuntimeSettings(sourceContext)')
     expect(section).toContain('useRepoLabels(')
-    expect(section).toContain('useRepoLabelsBySlug(slugOwner, slugRepo, sourceSettings)')
+    expect(section).toContain('useRepoLabelsBySlug(')
+    expect(section).toContain('projectOrigin?.host')
     expect(section).toContain('useRepoAssignees(')
     expect(section).toContain('useRepoAssigneesBySlug(')
     expect(section).toContain('sourceSettings')
@@ -230,7 +232,9 @@ describe('PullRequestPage host boundaries', () => {
     expect(source).toContain('options.local !== false')
     expect(source).toContain('notifyWorkItemMutated({')
     expect(commentContextSection).toContain('sourceContext?: TaskSourceContext | null')
-    expect(commentContextSection).toContain('sourceContext, prNumber')
+    expect(commentContextSection).toMatch(
+      /loadPRFileContents\(\{\s*repoPath,\s*repoId,\s*sourceContext,\s*prNumber,\s*prRepo,/
+    )
   })
 
   it('routes check actions through the PR source context', () => {
@@ -267,6 +271,8 @@ describe('PullRequestPage host boundaries', () => {
     expect(editHelperSection).toContain("'github.updatePRState'")
     expect(editHelperSection).toContain("'github.project.updateIssueBySlug'")
     expect(editHelperSection).toContain("'github.project.updatePullRequestBySlug'")
+    expect(editHelperSection).toContain('host: githubProjectHost(args.projectOrigin.host)')
+    expect(editHelperSection).toContain('host: githubProjectHost(targetSlug.host)')
     expect(editHelperSection).toContain('sourceContext?: TaskSourceContext | null')
     expect(editHelperSection).toContain("args.sourceContext?.provider === 'github'")
     expect(editHelperSection).toContain('getTaskSourceRuntimeSettings(args.sourceContext)')
@@ -298,6 +304,8 @@ describe('PullRequestPage host boundaries', () => {
     )
     expect(actionsSection).toContain("'github.mergePR'")
     expect(actionsSection).toContain("'github.setPRAutoMerge'")
+    expect(actionsSection).toContain('const prRepo = resolvePullRequestRepo(item, projectOrigin)')
+    expect(actionsSection).not.toContain('prRepo: item.prRepo ?? null')
     expect(actionsSection).toContain(
       'repo: getGitHubRuntimeRepoId(sourceContext, repoId ?? item.repoId)'
     )

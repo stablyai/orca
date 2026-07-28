@@ -666,6 +666,7 @@ export function useTerminalKeyboardShortcuts({
     keyboardScopeRef,
     managerRef,
     paneTransportsRef,
+    panePtyBindingsRef,
     paneCwdRef,
     fallbackCwd,
     expandedPaneIdRef,

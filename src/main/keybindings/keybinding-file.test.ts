@@ -92,6 +92,32 @@ describe('keybinding-file', () => {
     })
   })
 
+  it('preserves valid plugin overrides while rejecting malformed plugin action IDs', () => {
+    writeFileSync(
+      filePath,
+      JSON.stringify({
+        keybindings: {
+          'plugin:orca-samples.tasks/open': 'Mod+Shift+T',
+          'plugin:tasks/open': 'Mod+Alt+T'
+        }
+      }),
+      'utf8'
+    )
+
+    const snapshot = readKeybindingFile(filePath, 'linux')
+    expect(snapshot.overrides).toEqual({
+      'plugin:orca-samples.tasks/open': ['Mod+Shift+T']
+    })
+    expect(snapshot.diagnostics).toMatchObject([
+      { severity: 'warning', actionId: 'plugin:tasks/open' }
+    ])
+
+    writeKeybindingOverride(filePath, 'linux', 'plugin:orca-samples.tasks/open', [])
+    expect(readKeybindingFile(filePath, 'linux').overrides).toEqual({
+      'plugin:orca-samples.tasks/open': []
+    })
+  })
+
   it('ignores invalid, unknown, and conflicting manual edits', () => {
     writeFileSync(
       filePath,
@@ -365,6 +391,21 @@ describe('keybinding-file', () => {
       'worktree.quickOpen': ['Mod+Shift+P'],
       'tab.nextSameType': ['Mod+K'],
       'tab.nextAllTypes': ['Mod+Alt+BracketRight']
+    })
+  })
+
+  it('throws instead of freezing the seed when a legacy binding fails normalization', () => {
+    // A dropped pin must not be silent: the service catches the throw and keeps
+    // the cohort pending so a corrected build can retry the seed. Valid pins
+    // from the same batch are still written so users keep the good shortcuts.
+    expect(() =>
+      seedLegacyTabSwitchBindings(filePath, 'darwin', {
+        'tab.nextSameType': ['J'],
+        'tab.previousSameType': ['Mod+Shift+BracketLeft']
+      })
+    ).toThrow(/normalize/i)
+    expect(readKeybindingFile(filePath, 'darwin').platformOverrides.darwin).toEqual({
+      'tab.previousSameType': ['Mod+Shift+BracketLeft']
     })
   })
 

@@ -3,6 +3,7 @@ import { randomUUID } from 'node:crypto'
 import { mkdirSync, rmSync, writeFileSync } from 'node:fs'
 import path from 'node:path'
 import { test, expect } from './helpers/orca-app'
+import { runNodeScriptInTerminal } from './helpers/run-node-script-in-terminal'
 import {
   ensureTerminalVisible,
   getActiveWorktreeId,
@@ -205,7 +206,8 @@ async function writeHiddenSideEffectBurst(
 ): Promise<void> {
   const payload = `\x07\x1b]0;${title}\x07${marker}\n`
   const script = `process.stdout.write(${JSON.stringify(payload)}); setTimeout(() => process.exit(0), 30000)`
-  await sendToTerminal(page, ptyId, `node -e ${JSON.stringify(script)}\r`)
+  // Why: delivered via a temp file — `node -e` quoting is not PowerShell-safe (#8521).
+  await runNodeScriptInTerminal(page, ptyId, script, { prefix: 'orca-hidden-side-effect' })
 }
 
 test.describe('Hidden terminal TUI visual restore', () => {

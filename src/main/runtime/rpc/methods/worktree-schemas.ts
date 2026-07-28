@@ -3,6 +3,7 @@ import { isTuiAgent } from '../../../../shared/tui-agent-config'
 import type { TuiAgent } from '../../../../shared/types'
 import { workspaceSourceSchema } from '../../../../shared/telemetry-events'
 import { sleepingAgentLaunchConfigSchema } from '../../../../shared/workspace-session-sleeping-agents'
+import { RUNTIME_NAVIGATION_TARGETS } from '../../../../shared/runtime-navigation'
 import {
   OptionalBoolean,
   OptionalFiniteNumber,
@@ -26,6 +27,13 @@ const AutomationWorkspaceProvenanceRequest = z.object({
   automationRunId: z.string(),
   dispatchToken: z.string(),
   createRequestId: z.string()
+})
+
+// Why no dispatch token (unlike automation provenance): this is a descriptive
+// origin marker for sidebar filtering, not an authority grant. The host stamps
+// createdAt itself so a client clock can't skew sort order.
+const CliWorkspaceProvenanceRequest = z.object({
+  callerTerminalHandle: OptionalString
 })
 
 export const WorktreeListParams = z.object({
@@ -56,7 +64,8 @@ export const WorktreeSelector = z.object({
 })
 
 export const WorktreeActivate = WorktreeSelector.extend({
-  notifyClients: OptionalBoolean
+  notifyClients: OptionalBoolean,
+  navigation: z.enum(RUNTIME_NAVIGATION_TARGETS).optional()
 })
 
 export const WorktreeCreate = z
@@ -126,8 +135,9 @@ export const WorktreeCreate = z
       )
       .pipe(z.union([z.enum(['run', 'skip', 'inherit']), z.undefined()]))
       .optional(),
-    // Why: mobile clients pass a startup command (e.g. 'claude') so the first
-    // terminal pane launches the selected agent instead of an idle shell.
+    // Why: some clients (e.g. desktop) pass a pre-built launch command so the
+    // first terminal pane launches the selected agent instead of an idle shell.
+    // Clients that can't quote for the host shell send `startupAgent` instead.
     startupCommand: OptionalString,
     startupEnv: z.record(z.string(), z.string()).optional(),
     startupLaunchConfig: sleepingAgentLaunchConfigSchema,
@@ -146,7 +156,8 @@ export const WorktreeCreate = z
     // Why: mobile retries a create interrupted by a connection migration with the
     // same key so the host dedupes instead of spawning a duplicate worktree.
     clientMutationId: z.string().min(1).max(128).optional(),
-    automationProvenanceRequest: AutomationWorkspaceProvenanceRequest.optional()
+    automationProvenanceRequest: AutomationWorkspaceProvenanceRequest.optional(),
+    cliProvenanceRequest: CliWorkspaceProvenanceRequest.optional()
   })
   .superRefine((params, ctx) => {
     if ((params.parentWorkspace || params.parentWorktree) && params.noParent === true) {

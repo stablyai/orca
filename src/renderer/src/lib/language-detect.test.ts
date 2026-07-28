@@ -38,6 +38,10 @@ describe('detectLanguage', () => {
     expect(detectLanguage('C:\\rtl\\TOP.SV')).toBe('systemverilog')
   })
 
+  it('maps .proto files to the Monaco built-in proto language id, not the alias', () => {
+    expect(detectLanguage('api/v1/service.proto')).toBe('proto')
+  })
+
   it('maps .jsonl files to the dedicated jsonl language id (case-insensitive)', () => {
     expect(detectLanguage('/home/user/.claude/sessions/transcript.jsonl')).toBe('jsonl')
     expect(detectLanguage('C:\\Users\\alice\\.codex\\LOG.JSONL')).toBe('jsonl')

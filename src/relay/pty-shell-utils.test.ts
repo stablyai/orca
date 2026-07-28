@@ -1,13 +1,16 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
-const { execFileMock } = vi.hoisted(() => ({
-  execFileMock: vi.fn()
+const { execFileMock, execFileSyncMock } = vi.hoisted(() => ({
+  execFileMock: vi.fn(),
+  execFileSyncMock: vi.fn()
 }))
 
 vi.mock('child_process', () => ({
-  execFile: execFileMock
+  execFile: execFileMock,
+  execFileSync: execFileSyncMock
 }))
 
+import { resetWindowsProcessRowsSnapshotForTests } from '../main/providers/windows-foreground-process-rows'
 import { resetProcessTableSnapshotForTests } from '../shared/process-table-snapshot'
 import {
   getForegroundProcessName,
@@ -48,8 +51,11 @@ async function withProcessPlatform<T>(
 }
 
 beforeEach(() => {
+  vi.resetModules()
   execFileMock.mockReset()
+  execFileSyncMock.mockReset()
   resetProcessTableSnapshotForTests()
+  resetWindowsProcessRowsSnapshotForTests()
 })
 
 describe('isProcessAlive', () => {
@@ -95,9 +101,122 @@ describe('resolveWindowsDefaultShell', () => {
           SystemRoot: 'C:\\Windows',
           ComSpec: 'C:\\Windows\\System32\\cmd.exe'
         },
-        (path) => path === 'C:\\Tools\\pwsh.exe'
+        (path) => path === 'C:\\Tools\\pwsh.exe',
+        () => {
+          throw new Error('DefaultShell should not be read when SHELL wins')
+        }
       )
     ).toBe('C:\\Tools\\pwsh.exe')
+  })
+
+  it('uses an existing OpenSSH DefaultShell path', () => {
+    const powershell7 = 'C:\\Program Files\\PowerShell\\7\\pwsh.exe'
+
+    expect(
+      resolveWindowsDefaultShell(
+        {
+          SystemRoot: 'C:\\Windows',
+          ComSpec: 'C:\\Windows\\System32\\cmd.exe'
+        },
+        (path) => path === powershell7,
+        () => powershell7
+      )
+    ).toBe(powershell7)
+  })
+
+  it('reads and memoizes the OpenSSH DefaultShell registry value', async () => {
+    execFileSyncMock.mockReturnValue(
+      [
+        'HKEY_LOCAL_MACHINE\\SOFTWARE\\OpenSSH',
+        '    DefaultShell    REG_SZ    C:\\Program Files\\PowerShell\\7\\pwsh.exe'
+      ].join('\n')
+    )
+
+    const { readOpenSshDefaultShell } = await import('./pty-shell-utils')
+
+    expect(readOpenSshDefaultShell()).toBe('C:\\Program Files\\PowerShell\\7\\pwsh.exe')
+    expect(readOpenSshDefaultShell()).toBe('C:\\Program Files\\PowerShell\\7\\pwsh.exe')
+    expect(execFileSyncMock).toHaveBeenCalledTimes(1)
+    expect(execFileSyncMock).toHaveBeenCalledWith(
+      'reg.exe',
+      ['query', 'HKLM\\SOFTWARE\\OpenSSH', '/v', 'DefaultShell'],
+      { encoding: 'utf8', timeout: 3000, windowsHide: true }
+    )
+  })
+
+  it('treats malformed OpenSSH DefaultShell output as empty and preserves the fallback chain', async () => {
+    execFileSyncMock.mockReturnValue(
+      [
+        'HKEY_LOCAL_MACHINE\\SOFTWARE\\OpenSSH',
+        '    DefaultShellCommandOption    REG_SZ    /c'
+      ].join('\n')
+    )
+
+    const { readOpenSshDefaultShell } = await import('./pty-shell-utils')
+    const powershell = 'C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\powershell.exe'
+
+    expect(readOpenSshDefaultShell()).toBe('')
+    expect(
+      resolveWindowsDefaultShell(
+        {
+          SystemRoot: 'C:\\Windows',
+          ComSpec: 'C:\\Windows\\System32\\cmd.exe'
+        },
+        (path) => path === powershell || path === 'C:\\Windows\\System32\\cmd.exe',
+        readOpenSshDefaultShell
+      )
+    ).toBe(powershell)
+  })
+
+  it('treats reg.exe failures as empty and preserves the fallback chain', async () => {
+    execFileSyncMock.mockImplementation(() => {
+      throw new Error('reg.exe failed')
+    })
+
+    const { readOpenSshDefaultShell } = await import('./pty-shell-utils')
+    const powershell = 'C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\powershell.exe'
+
+    expect(readOpenSshDefaultShell()).toBe('')
+    expect(
+      resolveWindowsDefaultShell(
+        {
+          SystemRoot: 'C:\\Windows',
+          ComSpec: 'C:\\Windows\\System32\\cmd.exe'
+        },
+        (path) => path === powershell || path === 'C:\\Windows\\System32\\cmd.exe',
+        readOpenSshDefaultShell
+      )
+    ).toBe(powershell)
+  })
+
+  it('preserves the fallback chain for an invalid OpenSSH DefaultShell', () => {
+    const powershell = 'C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\powershell.exe'
+
+    expect(
+      resolveWindowsDefaultShell(
+        {
+          SystemRoot: 'C:\\Windows',
+          ComSpec: 'C:\\Windows\\System32\\cmd.exe'
+        },
+        (path) => path === powershell,
+        () => 'C:\\missing\\pwsh.exe'
+      )
+    ).toBe(powershell)
+  })
+
+  it('honors a deliberate OpenSSH PowerShell 5.1 DefaultShell value', () => {
+    const powershell = 'C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\powershell.exe'
+
+    expect(
+      resolveWindowsDefaultShell(
+        {
+          SystemRoot: 'C:\\Windows',
+          ComSpec: 'C:\\Windows\\System32\\cmd.exe'
+        },
+        (path) => path === powershell,
+        () => powershell
+      )
+    ).toBe(powershell)
   })
 
   it('prefers inbox PowerShell before ComSpec for an interactive Windows PTY', () => {
@@ -109,7 +228,8 @@ describe('resolveWindowsDefaultShell', () => {
           SystemRoot: 'C:\\Windows',
           ComSpec: 'C:\\Windows\\System32\\cmd.exe'
         },
-        (path) => path === powershell || path === 'C:\\Windows\\System32\\cmd.exe'
+        (path) => path === powershell || path === 'C:\\Windows\\System32\\cmd.exe',
+        () => ''
       )
     ).toBe(powershell)
   })
@@ -121,7 +241,8 @@ describe('resolveWindowsDefaultShell', () => {
           SystemRoot: 'C:\\Windows',
           ComSpec: 'C:\\Windows\\System32\\cmd.exe'
         },
-        (path) => path === 'C:\\Windows\\System32\\cmd.exe'
+        (path) => path === 'C:\\Windows\\System32\\cmd.exe',
+        () => ''
       )
     ).toBe('C:\\Windows\\System32\\cmd.exe')
   })
@@ -266,6 +387,94 @@ describe('getForegroundProcessName', () => {
       })
 
       await expect(getForegroundProcessName(100, 'node')).resolves.toBe('node')
+    })
+  })
+
+  // Why: OMP embeds Pi, but the outer process is the user-visible identity (#6364).
+  it('reports the outer omp wrapper over the wrapped pi child from a shell fallback', async () => {
+    await withProcessPlatform('linux', async () => {
+      mockExecFile((_command, args) => {
+        if (args[0] === '-axo') {
+          return {
+            stdout: ['100 99 Ss   bash -l', '101 100 S+   omp', '102 101 S+   pi'].join('\n')
+          }
+        }
+        return new Error('unexpected command')
+      })
+
+      await expect(getForegroundProcessName(100, 'bash')).resolves.toBe('omp')
+    })
+  })
+
+  it('rescans for the omp wrapper when node-pty reports the wrapped pi as foreground', async () => {
+    await withProcessPlatform('linux', async () => {
+      mockExecFile((_command, args) => {
+        if (args[0] === '-axo') {
+          return {
+            stdout: ['100 99 Ss   bash -l', '101 100 S+   omp', '102 101 S+   pi'].join('\n')
+          }
+        }
+        return new Error('unexpected command')
+      })
+
+      await expect(getForegroundProcessName(100, 'pi')).resolves.toBe('omp')
+    })
+  })
+
+  it('returns an outer omp fallback without a process-table scan', async () => {
+    mockExecFile(() => new Error('unexpected process-table scan'))
+
+    await expect(getForegroundProcessName(100, 'omp')).resolves.toBe('omp')
+    expect(execFileMock).not.toHaveBeenCalled()
+  })
+
+  it('rescans a Windows pi fallback for its outer omp wrapper', async () => {
+    await withProcessPlatform('win32', async () => {
+      mockExecFile((command) => {
+        if (command === 'powershell.exe') {
+          return {
+            stdout: JSON.stringify([
+              {
+                CommandLine: 'powershell.exe',
+                ExecutablePath: 'C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\powershell.exe',
+                Name: 'powershell.exe',
+                ParentProcessId: 99,
+                ProcessId: 100
+              },
+              {
+                CommandLine: 'omp.exe',
+                ExecutablePath: 'C:\\Tools\\omp.exe',
+                Name: 'omp.exe',
+                ParentProcessId: 100,
+                ProcessId: 101
+              },
+              {
+                CommandLine: 'pi.exe',
+                ExecutablePath: 'C:\\Tools\\pi.exe',
+                Name: 'pi.exe',
+                ParentProcessId: 101,
+                ProcessId: 102
+              }
+            ])
+          }
+        }
+        return new Error('unexpected command')
+      })
+
+      await expect(getForegroundProcessName(100, 'pi')).resolves.toBe('omp')
+    })
+  })
+
+  it('keeps a pi fallback as pi when no omp wrapper is in the tree', async () => {
+    await withProcessPlatform('linux', async () => {
+      mockExecFile((_command, args) => {
+        if (args[0] === '-axo') {
+          return { stdout: ['100 99 Ss   bash -l', '101 100 S+   pi'].join('\n') }
+        }
+        return new Error('unexpected command')
+      })
+
+      await expect(getForegroundProcessName(100, 'pi')).resolves.toBe('pi')
     })
   })
 

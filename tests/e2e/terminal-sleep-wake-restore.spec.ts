@@ -31,6 +31,12 @@ type SleepWakeTerminalDebug = {
   ptyIdsByLeafIdByTabId: Record<string, Record<string, string>>
 }
 
+type RemoteSleepOracle = {
+  terminalListTotalCount: number
+  worktreePsLiveTerminalCount: number
+  worktreePsHasAttachedPty: boolean
+}
+
 async function sleepWorktreeTerminals(page: Page, worktreeId: string): Promise<void> {
   await page.evaluate(async (id) => {
     const store = window.__store
@@ -53,6 +59,39 @@ async function readLivePtyCountForWorktree(page: Page, worktreeId: string): Prom
     const tabs = state.tabsByWorktree[id] ?? []
     return tabs.reduce((count, tab) => count + (state.ptyIdsByTabId[tab.id]?.length ?? 0), 0)
   }, worktreeId)
+}
+
+async function readRemoteSleepOracle(page: Page, worktreeId: string): Promise<RemoteSleepOracle> {
+  return (await page.evaluate(async (id) => {
+    const terminalList = await window.api.runtime.call({
+      method: 'terminal.list',
+      params: { worktree: `id:${id}`, requireFreshPtyLiveness: true }
+    })
+    if (!terminalList.ok) {
+      throw new Error(terminalList.error.message)
+    }
+    const worktreePs = await window.api.runtime.call({ method: 'worktree.ps' })
+    if (!worktreePs.ok) {
+      throw new Error(worktreePs.error.message)
+    }
+    const terminalListResult = terminalList.result as { totalCount: number }
+    const worktreePsResult = worktreePs.result as {
+      worktrees: {
+        worktreeId: string
+        liveTerminalCount: number
+        hasAttachedPty: boolean
+      }[]
+    }
+    const summary = worktreePsResult.worktrees.find((worktree) => worktree.worktreeId === id)
+    if (!summary) {
+      throw new Error(`worktree.ps omitted ${id}`)
+    }
+    return {
+      terminalListTotalCount: terminalListResult.totalCount,
+      worktreePsLiveTerminalCount: summary.liveTerminalCount,
+      worktreePsHasAttachedPty: summary.hasAttachedPty
+    }
+  }, worktreeId)) as RemoteSleepOracle
 }
 
 async function readSleepWakeTerminalDebug(
@@ -184,6 +223,16 @@ test.describe('Terminal sleep wake restore', () => {
           message: 'sleep did not release live PTYs for the background worktree'
         })
         .toBe(0)
+      await expect
+        .poll(() => readRemoteSleepOracle(orcaPage, secondWorktreeId), {
+          timeout: 10_000,
+          message: 'first sleep did not converge host terminal liveness and worktree projection'
+        })
+        .toEqual({
+          terminalListTotalCount: 0,
+          worktreePsLiveTerminalCount: 0,
+          worktreePsHasAttachedPty: false
+        })
 
       await switchToWorktree(orcaPage, secondWorktreeId)
       await ensureTerminalVisible(orcaPage)

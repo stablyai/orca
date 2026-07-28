@@ -13,12 +13,13 @@ const mocks = vi.hoisted(() => ({
   getAiVaultWslHomeDirs: vi.fn(),
   getSshFilesystemProvider: vi.fn(),
   getActiveSshAiVaultHostInfo: vi.fn(),
-  getActiveSshAiVaultHostInfos: vi.fn()
+  getActiveSshAiVaultHostInfos: vi.fn(),
+  ipcHandle: vi.fn()
 }))
 
 vi.mock('electron', () => ({
   app: { on: vi.fn() },
-  ipcMain: { handle: vi.fn() }
+  ipcMain: { handle: mocks.ipcHandle }
 }))
 
 vi.mock('../ai-vault/session-scanner', () => ({
@@ -205,6 +206,79 @@ describe('listAiVaultSessions host routing', () => {
     expect(mocks.scanRemoteAiVaultSessions).toHaveBeenCalledTimes(1)
   })
 })
+
+describe('prepareSessionResume IPC', () => {
+  it('awaits the host-local targeted resume preparation', async () => {
+    const prepareSessionResume = vi.fn().mockResolvedValue({ useRealCodexHome: true })
+    registerAiVaultHandlers({ prepareSessionResume })
+    const registration = mocks.ipcHandle.mock.calls.find(
+      ([channel]) => channel === 'aiVault:prepareSessionResume'
+    )
+    const handler = registration?.[1] as
+      | ((_event: unknown, args: unknown) => Promise<unknown>)
+      | undefined
+    const args = {
+      agent: 'codex',
+      filePath: '/managed/sessions/2026/07/20/rollout-a.jsonl',
+      codexHome: '/managed',
+      executionHostId: 'local'
+    }
+
+    await expect(handler?.({}, args)).resolves.toEqual({ useRealCodexHome: true })
+    expect(prepareSessionResume).toHaveBeenCalledWith(args)
+  })
+
+  it('prepares saved-runtime sessions on the transcript-owning runtime', async () => {
+    const prepareSessionResume = vi.fn()
+    const prepareRuntimeSessionResume = vi.fn().mockResolvedValue({ useRealCodexHome: true })
+    registerAiVaultHandlers({ prepareSessionResume, prepareRuntimeSessionResume })
+    const args = {
+      agent: 'codex' as const,
+      filePath: '/managed/sessions/2026/07/20/rollout-a.jsonl',
+      codexHome: '/managed',
+      executionHostId: 'runtime:env-123' as const
+    }
+
+    await expect(getPrepareSessionResumeHandler()({}, args)).resolves.toEqual({
+      useRealCodexHome: true
+    })
+    expect(prepareRuntimeSessionResume).toHaveBeenCalledWith('env-123', args)
+    expect(prepareSessionResume).not.toHaveBeenCalled()
+  })
+
+  it('preserves SSH session homes without reading their paths locally', async () => {
+    const prepareSessionResume = vi.fn()
+    const prepareRuntimeSessionResume = vi.fn()
+    registerAiVaultHandlers({ prepareSessionResume, prepareRuntimeSessionResume })
+
+    await expect(
+      getPrepareSessionResumeHandler()(
+        {},
+        {
+          agent: 'codex',
+          filePath: '/managed/sessions/2026/07/20/rollout-a.jsonl',
+          codexHome: '/managed',
+          executionHostId: 'ssh:dev-box'
+        }
+      )
+    ).resolves.toEqual({ useRealCodexHome: false })
+    expect(prepareSessionResume).not.toHaveBeenCalled()
+    expect(prepareRuntimeSessionResume).not.toHaveBeenCalled()
+  })
+})
+
+function getPrepareSessionResumeHandler(): (
+  event: unknown,
+  args: unknown
+) => Promise<{ useRealCodexHome: boolean }> {
+  const registration = mocks.ipcHandle.mock.calls.find(
+    ([channel]) => channel === 'aiVault:prepareSessionResume'
+  )
+  if (!registration) {
+    throw new Error('aiVault:prepareSessionResume was not registered')
+  }
+  return registration[1]
+}
 
 describe('listAiVaultSubagentSessions gating', () => {
   const claudeRoot = join(homedir(), '.claude', 'projects')

@@ -4,7 +4,7 @@
  * Why: owns the cold-park policy bookkeeping (hiddenSince tracking, recheck
  * timers, parked-set selection) and the parked byte-watcher reconciliation so
  * the overlay layer only consumes the final parked tab set when deciding to
- * render a slot as null. See docs/reference/terminal-hidden-view-parking.md.
+ * render a slot as null.
  */
 import { useEffect, useMemo, useRef, useState } from 'react'
 import type { TerminalTab } from '../../../../shared/types'
@@ -18,6 +18,10 @@ import {
   selectColdParkedTerminalTabs,
   type TerminalTabColdParkCandidate
 } from './terminal-hidden-view-parking'
+import {
+  recordParkVerdictFlips,
+  type ParkVerdictFlipRecord
+} from './terminal-park-verdict-flip-telemetry'
 import { getTerminalParkingPolicyOverrides } from './terminal-parking-e2e-overrides'
 import {
   canWatcherCoverParkedTerminalTab,
@@ -56,7 +60,10 @@ export function useTerminalTabColdParking(args: {
   /** Tabs cold activation keeps unmounted — parked-equivalent for watcher
    *  purposes. Targeted background restrictions intentionally stay bounded. */
   activationDeferredMountTabIds?: ReadonlySet<string> | null
-}): ReadonlySet<string> {
+}): {
+  parkedTerminalTabIds: ReadonlySet<string>
+  coldParkedTerminalTabIds: ReadonlySet<string>
+} {
   const {
     worktreeId,
     terminalTabs,
@@ -73,6 +80,7 @@ export function useTerminalTabColdParking(args: {
   )
   const terminalTabHiddenSinceRef = useRef(new Map<string, number>())
   const terminalTabParkingTimersRef = useRef(new Map<string, number>())
+  const parkVerdictRecordsRef = useRef(new Map<string, ParkVerdictFlipRecord>())
   const [terminalTabParkingRevision, setTerminalTabParkingRevision] = useState(0)
   const [coldParkedTerminalTabIds, setColdParkedTerminalTabIds] = useState<ReadonlySet<string>>(
     () => new Set()
@@ -240,6 +248,20 @@ export function useTerminalTabColdParking(args: {
     worktreeId
   ])
 
+  // Why: observation only — records whether the *rendered* park verdict churns,
+  // so a crash bundle can confirm or refute a park-flip update loop. Watching
+  // the pre-gate cold set instead would miss loops driven by coldParkTerminalPanes
+  // or the portal/measuring gates. Changes no verdict; see
+  // terminal-park-verdict-flip-telemetry.ts.
+  useEffect(() => {
+    recordParkVerdictFlips({
+      records: parkVerdictRecordsRef.current,
+      liveTabIds: new Set(terminalTabs.map((terminalTab) => terminalTab.id)),
+      nextParkedTabIds: parkedTerminalTabIds,
+      nowMs: Date.now()
+    })
+  }, [parkedTerminalTabIds, terminalTabs])
+
   // Why: runs in the same effect flush as the commit that parked/revealed the
   // panes — watcher disposal therefore lands before any PTY data IPC can
   // reach a freshly remounted pane, and watcher start lands after the parked
@@ -257,5 +279,5 @@ export function useTerminalTabColdParking(args: {
 
   useEffect(() => () => disposeParkedTerminalWatchersForWorktree(worktreeId), [worktreeId])
 
-  return parkedTerminalTabIds
+  return { parkedTerminalTabIds, coldParkedTerminalTabIds }
 }

@@ -11,7 +11,7 @@ const mocks = vi.hoisted(() => ({
   hostOptions: [] as SidebarHostOption[],
   storeState: {
     settings: { activeRuntimeEnvironmentId: null as string | null },
-    switchRuntimeEnvironment: vi.fn(),
+    setActiveRuntimeEnvironmentPreference: vi.fn(),
     setSshConnectionState: vi.fn(),
     sshConnectionStates: new Map(),
     runtimeEnvironments: [] as { id: string; name: string; source?: 'manual' | 'ephemeral-vm' }[]
@@ -98,7 +98,7 @@ describe('useAddRepoHostSelection', () => {
       }
     ]
     mocks.storeState.settings = { activeRuntimeEnvironmentId: null }
-    mocks.storeState.switchRuntimeEnvironment.mockResolvedValue(true)
+    mocks.storeState.setActiveRuntimeEnvironmentPreference.mockResolvedValue(true)
     mocks.storeState.sshConnectionStates = new Map()
     mocks.storeState.runtimeEnvironments = []
     mocks.sshConnect.mockReset()
@@ -124,7 +124,7 @@ describe('useAddRepoHostSelection', () => {
     expect(result.selectedSshTargetId).toBe('ssh-1')
   })
 
-  it('switches runtime before selecting a runtime host', async () => {
+  it('selects a runtime host without changing the durable active server', async () => {
     mocks.stateValues = ['local', false]
     const setStep = vi.fn()
     const { useAddRepoHostSelection } = await import('./use-add-repo-host-selection')
@@ -132,12 +132,12 @@ describe('useAddRepoHostSelection', () => {
     const result = useAddRepoHostSelection({ isOpen: true, setStep })
     await result.handleSelectAddProjectHost('runtime:env-1')
 
-    expect(mocks.storeState.switchRuntimeEnvironment).toHaveBeenCalledWith('env-1')
+    expect(mocks.storeState.setActiveRuntimeEnvironmentPreference).not.toHaveBeenCalled()
     expect(mocks.stateSetters[0]).toHaveBeenCalledWith('runtime:env-1')
     expect(setStep).toHaveBeenCalledWith('add')
   })
 
-  it('clears the active runtime before selecting a local or SSH host', async () => {
+  it('selects a local or SSH host without changing the durable active server', async () => {
     mocks.stateValues = ['runtime:env-1', false]
     mocks.storeState.settings = { activeRuntimeEnvironmentId: 'env-1' }
     const setStep = vi.fn()
@@ -146,7 +146,7 @@ describe('useAddRepoHostSelection', () => {
     const result = useAddRepoHostSelection({ isOpen: true, setStep })
     await result.handleSelectAddProjectHost('ssh:ssh-1')
 
-    expect(mocks.storeState.switchRuntimeEnvironment).toHaveBeenCalledWith(null)
+    expect(mocks.storeState.setActiveRuntimeEnvironmentPreference).not.toHaveBeenCalled()
     expect(mocks.stateSetters[0]).toHaveBeenCalledWith('ssh:ssh-1')
     expect(setStep).toHaveBeenCalledWith('add')
   })
@@ -177,7 +177,7 @@ describe('useAddRepoHostSelection', () => {
     const result = useAddRepoHostSelection({ isOpen: true, setStep })
     await result.handleSelectAddProjectHost('ssh:ssh-1')
 
-    expect(mocks.storeState.switchRuntimeEnvironment).not.toHaveBeenCalled()
+    expect(mocks.storeState.setActiveRuntimeEnvironmentPreference).not.toHaveBeenCalled()
     expect(mocks.stateSetters[0]).not.toHaveBeenCalledWith('ssh:ssh-1')
     expect(setStep).not.toHaveBeenCalled()
   })
@@ -249,7 +249,9 @@ describe('useAddRepoHostSelection', () => {
     expect(result.hostOptions.map((host) => host.id)).not.toContain('runtime:env-vm')
     expect(result.selectedHostId).toBe('local')
     await result.handleSelectAddProjectHost('runtime:env-vm')
-    expect(mocks.storeState.switchRuntimeEnvironment).not.toHaveBeenCalledWith('env-vm')
+    expect(mocks.storeState.setActiveRuntimeEnvironmentPreference).not.toHaveBeenCalledWith(
+      'env-vm'
+    )
     expect(setStep).not.toHaveBeenCalled()
   })
 })

@@ -15,31 +15,19 @@ import { shouldMountBackgroundWorktreeTab } from '../terminal/background-termina
 import { useNativeChatToggleShortcut } from '../native-chat/use-native-chat-toggle-shortcut'
 import { shouldDeferParkedPtyExitTabClose } from './terminal-parked-tab-watchers'
 import { useTerminalTabColdParking } from './use-terminal-tab-cold-parking'
-
-type TerminalOverlayAssignment = {
-  unifiedTabId: string
-  groupId: string
-  isActiveInGroup: boolean
-}
+import { useTerminalOverlayPresentation } from './use-terminal-overlay-presentation'
+import { buildTerminalOverlayAssignments } from './terminal-overlay-assignments'
+import {
+  FALLBACK_RECT_MIN_CHANGE_PX,
+  MIN_OVERLAY_FIT_HEIGHT_PX,
+  MIN_OVERLAY_FIT_WIDTH_PX,
+  shouldUseCssAnchorPositioning
+} from './terminal-overlay-positioning'
 
 const EMPTY_TERMINAL_TABS: readonly TerminalTab[] = []
 const EMPTY_UNIFIED_TABS: readonly Tab[] = []
 const EMPTY_GROUPS: readonly TabGroup[] = []
 const EMPTY_ACTIVITY_PORTALS: ActivityTerminalPortalTarget[] = []
-const HAS_CSS_ANCHOR_POSITIONING =
-  typeof CSS !== 'undefined' &&
-  CSS.supports('position-anchor', '--orca-terminal-overlay-probe') &&
-  CSS.supports('top', 'anchor(--orca-terminal-overlay-probe top)') &&
-  CSS.supports('width', 'anchor-size(--orca-terminal-overlay-probe width)')
-const MIN_OVERLAY_FIT_WIDTH_PX = 48
-const MIN_OVERLAY_FIT_HEIGHT_PX = 24
-
-function shouldUseCssAnchorPositioning(): boolean {
-  return (
-    HAS_CSS_ANCHOR_POSITIONING &&
-    (globalThis as { __ORCA_WEB_CLIENT__?: boolean }).__ORCA_WEB_CLIENT__ !== true
-  )
-}
 
 type MeasuredFallbackRect = {
   top: number
@@ -56,15 +44,18 @@ type TerminalOverlaySlotProps = {
   startupCwd: string | undefined
   groupId: string | undefined
   isWorktreeActive: boolean
+  isWorktreePresented: boolean
   isVisible: boolean
+  isPresented: boolean
   isActive: boolean
   activityTerminalPortal: ActivityTerminalPortalTarget | null
   onFocusOwningGroup: ((groupId: string) => void) | undefined
   consumeSuppressedPtyExit: (ptyId: string) => boolean
   leaveWorktreeIfEmpty: () => void
+  onInitialRenderSettled?: () => void
 }
 
-const TerminalOverlaySlot = memo(function TerminalOverlaySlot({
+export const TerminalOverlaySlot = memo(function TerminalOverlaySlot({
   terminalTabId,
   terminalGeneration,
   worktreeId,
@@ -72,12 +63,15 @@ const TerminalOverlaySlot = memo(function TerminalOverlaySlot({
   startupCwd,
   groupId,
   isWorktreeActive,
+  isWorktreePresented,
   isVisible,
+  isPresented,
   isActive,
   activityTerminalPortal,
   onFocusOwningGroup,
   consumeSuppressedPtyExit,
-  leaveWorktreeIfEmpty
+  leaveWorktreeIfEmpty,
+  onInitialRenderSettled
 }: TerminalOverlaySlotProps): React.JSX.Element {
   const anchorName = groupId !== undefined ? tabGroupBodyAnchorName(groupId) : undefined
   const overlayRef = useRef<HTMLDivElement | null>(null)
@@ -116,12 +110,22 @@ const TerminalOverlaySlot = memo(function TerminalOverlaySlot({
       }
       const parentRect = parent.getBoundingClientRect()
       const bodyRect = body.getBoundingClientRect()
-      setMeasuredFallbackRect({
+      const next: MeasuredFallbackRect = {
         top: bodyRect.top - parentRect.top,
         left: bodyRect.left - parentRect.left,
         width: bodyRect.width,
         height: bodyRect.height
-      })
+      }
+      // Why: ResizeObserver and xterm fit can otherwise amplify sub-pixel jitter forever.
+      setMeasuredFallbackRect((prev) =>
+        prev &&
+        Math.abs(prev.top - next.top) < FALLBACK_RECT_MIN_CHANGE_PX &&
+        Math.abs(prev.left - next.left) < FALLBACK_RECT_MIN_CHANGE_PX &&
+        Math.abs(prev.width - next.width) < FALLBACK_RECT_MIN_CHANGE_PX &&
+        Math.abs(prev.height - next.height) < FALLBACK_RECT_MIN_CHANGE_PX
+          ? prev
+          : next
+      )
     }
 
     updateRect()
@@ -176,6 +180,8 @@ const TerminalOverlaySlot = memo(function TerminalOverlaySlot({
     }
   }, [anchorName, isVisible, measuredFallbackRect])
 
+  const showPresentedTerminal = isPresented && (isWorktreeActive || isWorktreePresented)
+  const isInteractive = isVisible && isPresented && isWorktreePresented
   const style: React.CSSProperties = useMemo(
     () =>
       anchorName && shouldUseCssAnchorPositioning()
@@ -186,9 +192,10 @@ const TerminalOverlaySlot = memo(function TerminalOverlaySlot({
             left: `anchor(${anchorName} left)`,
             width: `anchor-size(${anchorName} width)`,
             height: `anchor-size(${anchorName} height)`,
-            display: isVisible || shouldMeasureHiddenStartup ? 'flex' : 'none',
-            opacity: isVisible ? 1 : 0,
-            pointerEvents: isVisible ? 'auto' : 'none'
+            display:
+              isVisible || showPresentedTerminal || shouldMeasureHiddenStartup ? 'flex' : 'none',
+            opacity: showPresentedTerminal ? 1 : 0,
+            pointerEvents: isInteractive ? 'auto' : 'none'
           }
         : anchorName
           ? {
@@ -200,9 +207,10 @@ const TerminalOverlaySlot = memo(function TerminalOverlaySlot({
               left: measuredFallbackRect?.left ?? 0,
               width: measuredFallbackRect?.width ?? '100%',
               height: measuredFallbackRect?.height ?? 'calc(100% - 32px)',
-              display: isVisible || shouldMeasureHiddenStartup ? 'flex' : 'none',
-              opacity: isVisible ? 1 : 0,
-              pointerEvents: isVisible ? 'auto' : 'none'
+              display:
+                isVisible || showPresentedTerminal || shouldMeasureHiddenStartup ? 'flex' : 'none',
+              opacity: showPresentedTerminal ? 1 : 0,
+              pointerEvents: isInteractive ? 'auto' : 'none'
             }
           : {
               position: 'absolute',
@@ -213,7 +221,14 @@ const TerminalOverlaySlot = memo(function TerminalOverlaySlot({
               display: 'none',
               pointerEvents: 'none'
             },
-    [anchorName, isVisible, measuredFallbackRect, shouldMeasureHiddenStartup]
+    [
+      anchorName,
+      isInteractive,
+      isVisible,
+      measuredFallbackRect,
+      shouldMeasureHiddenStartup,
+      showPresentedTerminal
+    ]
   )
   const focusGroup = useCallback(() => {
     if (groupId !== undefined && onFocusOwningGroup) {
@@ -227,12 +242,14 @@ const TerminalOverlaySlot = memo(function TerminalOverlaySlot({
       tabId={terminalTabId}
       worktreeId={worktreeId}
       cwd={startupCwd ?? worktreePath}
-      isActive={isActive || activityTerminalPortal?.active === true}
+      isActive={
+        (isActive && isPresented && isWorktreePresented) || activityTerminalPortal?.active === true
+      }
       // Why: split-group changes reparent TabGroupPanel subtrees. Keeping the
       // TerminalPane mounted here preserves alt-screen TUI state while this
       // flag still lets hidden tabs throttle rendering.
-      isVisible={isVisible || activityTerminalPortal !== null}
-      isWorktreeActive={isWorktreeActive || activityTerminalPortal !== null}
+      isVisible={isVisible || showPresentedTerminal || activityTerminalPortal !== null}
+      isWorktreeActive={isWorktreeActive || isWorktreePresented || activityTerminalPortal !== null}
       isolatedPaneKey={activityTerminalPortal?.paneKey ?? null}
       onPtyExit={(ptyId) => {
         if (consumeSuppressedPtyExit(ptyId)) {
@@ -246,6 +263,7 @@ const TerminalOverlaySlot = memo(function TerminalOverlaySlot({
         }
         closeTerminalTab(terminalTabId, {
           reason: 'pty-exit',
+          lifecyclePtyId: ptyId,
           onClosed: leaveWorktreeIfEmpty
         })
       }}
@@ -255,6 +273,7 @@ const TerminalOverlaySlot = memo(function TerminalOverlaySlot({
         // store.closeTab was the path that closed pinned terminals silently.
         closeTerminalTab(terminalTabId, { onClosed: leaveWorktreeIfEmpty })
       }}
+      onInitialRenderSettled={onInitialRenderSettled}
     />
   )
 
@@ -271,6 +290,9 @@ const TerminalOverlaySlot = memo(function TerminalOverlaySlot({
       ref={overlayRef}
       style={style}
       data-terminal-overlay-tab-id={terminalTabId}
+      data-terminal-overlay-presented={showPresentedTerminal ? 'true' : 'false'}
+      inert={!isInteractive}
+      aria-hidden={!isInteractive}
       onPointerDown={focusGroup}
       onFocusCapture={focusGroup}
     >
@@ -286,15 +308,18 @@ const TerminalPaneOverlayLayer = memo(function TerminalPaneOverlayLayer({
   worktreeId,
   worktreePath,
   isWorktreeActive,
+  isWorktreePresented = isWorktreeActive,
   coldParkTerminalPanes = false,
   shouldMeasureHiddenWorktree = false,
   activityTerminalPortals = EMPTY_ACTIVITY_PORTALS,
   backgroundMountTabIds = null,
-  activationDeferredMountTabIds = null
+  activationDeferredMountTabIds = null,
+  onInitialTerminalRenderSettled
 }: {
   worktreeId: string
   worktreePath: string
   isWorktreeActive: boolean
+  isWorktreePresented?: boolean
   coldParkTerminalPanes?: boolean
   shouldMeasureHiddenWorktree?: boolean
   activityTerminalPortals?: ActivityTerminalPortalTarget[]
@@ -304,6 +329,7 @@ const TerminalPaneOverlayLayer = memo(function TerminalPaneOverlayLayer({
   /** Only cold-activation deferred tabs receive immediate parked watcher
    *  coverage; targeted mounts keep their existing delayed parking policy. */
   activationDeferredMountTabIds?: ReadonlySet<string> | null
+  onInitialTerminalRenderSettled?: (tabId: string) => void
 }): React.JSX.Element | null {
   const { terminalTabs, unifiedTabs, groups, activeGroupId } = useAppStore(
     useShallow((state) => ({
@@ -341,30 +367,12 @@ const TerminalPaneOverlayLayer = memo(function TerminalPaneOverlayLayer({
     [focusGroup, worktreeId]
   )
 
-  const groupActiveTabById = useMemo(() => {
-    const lookup: Record<string, string | null | undefined> = {}
-    for (const group of groups) {
-      lookup[group.id] = group.activeTabId
-    }
-    return lookup
-  }, [groups])
+  const assignments = useMemo(
+    () => buildTerminalOverlayAssignments(groups, unifiedTabs),
+    [groups, unifiedTabs]
+  )
 
-  const assignments = useMemo(() => {
-    const entries = new Map<string, TerminalOverlayAssignment>()
-    for (const tab of unifiedTabs) {
-      if (tab.contentType !== 'terminal') {
-        continue
-      }
-      entries.set(tab.entityId, {
-        unifiedTabId: tab.id,
-        groupId: tab.groupId,
-        isActiveInGroup: groupActiveTabById[tab.groupId] === tab.id
-      })
-    }
-    return entries
-  }, [groupActiveTabById, unifiedTabs])
-
-  const parkedTerminalTabIds = useTerminalTabColdParking({
+  const { parkedTerminalTabIds, coldParkedTerminalTabIds } = useTerminalTabColdParking({
     worktreeId,
     terminalTabs,
     assignments,
@@ -374,6 +382,16 @@ const TerminalPaneOverlayLayer = memo(function TerminalPaneOverlayLayer({
     activityTerminalPortals,
     activationDeferredMountTabIds
   })
+  const { presentedTerminalTabIdByGroup: presentationByScope, handleInitialRenderSettled } =
+    useTerminalOverlayPresentation({
+      groups,
+      terminalTabs,
+      assignments,
+      coldParkedTerminalTabIds,
+      isWorktreeActive,
+      activeGroupId,
+      onInitialTerminalRenderSettled
+    })
 
   if (!worktreePath) {
     return null
@@ -389,6 +407,9 @@ const TerminalPaneOverlayLayer = memo(function TerminalPaneOverlayLayer({
           const assignment = assignments.get(terminalTab.id)
           const isVisible = Boolean(isWorktreeActive && assignment && assignment.isActiveInGroup)
           const isActive = Boolean(isVisible && assignment && assignment.groupId === activeGroupId)
+          const isPresented = Boolean(
+            assignment && presentationByScope.get(assignment.groupId) === terminalTab.id
+          )
           const activityTerminalPortal = findActivityTerminalPortal(activityTerminalPortals, {
             worktreeId,
             tabId: terminalTab.id
@@ -408,12 +429,15 @@ const TerminalPaneOverlayLayer = memo(function TerminalPaneOverlayLayer({
               startupCwd={terminalTab.startupCwd}
               groupId={assignment?.groupId}
               isWorktreeActive={isWorktreeActive}
+              isWorktreePresented={isWorktreePresented}
               isVisible={isVisible}
+              isPresented={isPresented}
               isActive={isActive}
               activityTerminalPortal={activityTerminalPortal}
               onFocusOwningGroup={focusOwningGroup}
               consumeSuppressedPtyExit={consumeSuppressedPtyExit}
               leaveWorktreeIfEmpty={leaveWorktreeIfEmpty}
+              onInitialRenderSettled={() => handleInitialRenderSettled(terminalTab.id)}
             />
           )
         })}

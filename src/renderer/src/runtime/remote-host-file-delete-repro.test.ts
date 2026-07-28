@@ -163,6 +163,7 @@ describe('issue #8135: deleting a remote SSH folder file', () => {
           projectGroupId: 'group-1'
         })
       ],
+      sshConnectionStates: new Map([[SSH_CONNECTION_ID, { connectionGeneration: 1 } as never]]),
       worktreesByRepo: {}
     })
 
@@ -181,6 +182,9 @@ describe('issue #8135: deleting a remote SSH folder file', () => {
       expect(fsDeletePath).toHaveBeenCalledWith({
         targetPath: REMOTE_PATH,
         connectionId: SSH_CONNECTION_ID,
+        expectedExecutionHostId: `ssh:${SSH_CONNECTION_ID}`,
+        expectedSshTargetId: SSH_CONNECTION_ID,
+        expectedSshConnectionGeneration: 1,
         recursive: false
       })
     })
@@ -271,7 +275,11 @@ describe('issue #8135: deleting a remote SSH folder file', () => {
     await act(async () => {
       result.current.requestDelete({
         ...localFile,
-        operationOwner: { kind: 'runtime', environmentId: 'env-1' }
+        operationOwner: {
+          kind: 'runtime',
+          environmentId: 'env-1',
+          executionHostId: 'runtime:env-1'
+        }
       })
     })
 
@@ -282,8 +290,10 @@ describe('issue #8135: deleting a remote SSH folder file', () => {
         params: {
           worktree: `id:${folderWorkspaceKey(FOLDER_WORKSPACE_ID)}`,
           relativePath: 'src/index.ts',
-          recursive: false
+          recursive: false,
+          expectedExecutionHostId: 'local'
         },
+        expectedEnvironmentPairingRevision: undefined,
         timeoutMs: 15_000
       })
     })

@@ -14,8 +14,11 @@ vi.mock('../ipc/runtime-environment-transport-routing', () => ({
   callRuntimeEnvironment: mocks.callRuntimeEnvironment
 }))
 
-const { getSavedRuntimeAiVaultHostInfos, scanRuntimeAiVaultSessions } =
-  await import('./runtime-session-scanner')
+const {
+  getSavedRuntimeAiVaultHostInfos,
+  prepareRuntimeAiVaultSessionResume,
+  scanRuntimeAiVaultSessions
+} = await import('./runtime-session-scanner')
 
 beforeEach(() => {
   vi.clearAllMocks()
@@ -107,6 +110,42 @@ describe('runtime AI Vault session scanner', () => {
         executionHostId: 'runtime:env-1'
       })
     ])
+  })
+
+  it('prepares a resume on the transcript-owning runtime', async () => {
+    mocks.callRuntimeEnvironment.mockResolvedValueOnce({
+      ok: true,
+      result: { useRealCodexHome: true }
+    })
+    const args = {
+      agent: 'codex' as const,
+      filePath: '/managed/sessions/2026/07/20/rollout-a.jsonl',
+      codexHome: '/managed',
+      executionHostId: 'runtime:env-1' as const
+    }
+
+    await expect(prepareRuntimeAiVaultSessionResume('/user-data', 'env-1', args)).resolves.toEqual({
+      useRealCodexHome: true
+    })
+    expect(mocks.callRuntimeEnvironment).toHaveBeenCalledWith(
+      '/user-data',
+      'env-1',
+      'aiVault.prepareSessionResume',
+      args
+    )
+  })
+
+  it('fails retryably when runtime preparation returns an invalid result', async () => {
+    mocks.callRuntimeEnvironment.mockResolvedValueOnce({ ok: true, result: {} })
+
+    await expect(
+      prepareRuntimeAiVaultSessionResume('/user-data', 'env-1', {
+        agent: 'codex',
+        filePath: '/managed/sessions/2026/07/20/rollout-a.jsonl',
+        codexHome: '/managed',
+        executionHostId: 'runtime:env-1'
+      })
+    ).rejects.toThrow('Invalid aiVault.prepareSessionResume response')
   })
 })
 

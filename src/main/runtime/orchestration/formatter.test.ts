@@ -5,6 +5,7 @@ import type { MessageRow } from './types'
 function makeMessage(overrides: Partial<MessageRow> = {}): MessageRow {
   return {
     id: 'msg_test1',
+    run_id: 'run_test',
     from_handle: 'term_abc123',
     to_handle: 'term_coord',
     subject: 'Auth API implementation complete',
@@ -74,6 +75,17 @@ describe('formatMessageBanner', () => {
     expect(banner).toContain(
       '[Reply: orca orchestration reply --id msg_xyz789 --from term_coord --body "..."]'
     )
+  })
+
+  it('marks legacy messages read-only without reply or acknowledgment affordances', () => {
+    const banner = formatMessageBanner(
+      makeMessage({ id: 'msg_legacy', run_id: 'run_legacy_local' })
+    )
+
+    expect(banner).toContain('[LEGACY READ-ONLY]')
+    expect(banner).toContain('[Inspection only: reply and acknowledgment are unavailable.]')
+    expect(banner).not.toContain('[Reply:')
+    expect(banner).not.toContain('orchestration reply')
   })
 
   it('ends with a separator line', () => {

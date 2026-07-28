@@ -3,6 +3,7 @@ import { randomUUID } from 'node:crypto'
 import { mkdirSync, rmSync, writeFileSync } from 'node:fs'
 import path from 'node:path'
 import { test, expect } from './helpers/orca-app'
+import { runNodeScriptInTerminal } from './helpers/run-node-script-in-terminal'
 import {
   ensureTerminalVisible,
   getActiveTabId,
@@ -180,6 +181,87 @@ async function activateTerminalTab(page: Page, tabId: string): Promise<void> {
     .toBe(tabId)
 }
 
+type TerminalPresentationFrame = {
+  previousPresented: boolean
+  targetPresented: boolean
+  targetBufferContainsMarker: boolean
+}
+
+async function startTerminalPresentationObservation(
+  page: Page,
+  previousTabId: string,
+  targetTabId: string,
+  targetMarker: string
+): Promise<void> {
+  await page.evaluate(
+    ({ previousTabId, targetTabId, targetMarker }) => {
+      const observedWindow = window as Window & {
+        __terminalPresentationFrames?: TerminalPresentationFrame[]
+        __terminalPresentationObservationDone?: boolean
+      }
+      const frames: TerminalPresentationFrame[] = []
+      observedWindow.__terminalPresentationFrames = frames
+      observedWindow.__terminalPresentationObservationDone = false
+      const findOverlay = (tabId: string): HTMLElement | null =>
+        document.querySelector<HTMLElement>(`[data-terminal-overlay-tab-id="${CSS.escape(tabId)}"]`)
+      const isPresented = (tabId: string): boolean => {
+        const overlay = findOverlay(tabId)
+        return (
+          overlay?.dataset.terminalOverlayPresented === 'true' &&
+          getComputedStyle(overlay).display !== 'none' &&
+          getComputedStyle(overlay).opacity !== '0'
+        )
+      }
+      const sample = (): void => {
+        const targetPane =
+          window.__paneManagers?.get(targetTabId)?.getActivePane?.() ??
+          window.__paneManagers?.get(targetTabId)?.getPanes?.()[0]
+        const frame = {
+          previousPresented: isPresented(previousTabId),
+          targetPresented: isPresented(targetTabId),
+          targetBufferContainsMarker:
+            targetPane?.serializeAddon?.serialize?.().includes(targetMarker) === true
+        }
+        frames.push(frame)
+        if (frame.targetPresented) {
+          observedWindow.__terminalPresentationObservationDone = true
+          return
+        }
+        requestAnimationFrame(sample)
+      }
+      sample()
+    },
+    { previousTabId, targetTabId, targetMarker }
+  )
+}
+
+async function readTerminalPresentationObservation(
+  page: Page
+): Promise<TerminalPresentationFrame[]> {
+  await expect
+    .poll(
+      () =>
+        page.evaluate(
+          () =>
+            (
+              window as Window & {
+                __terminalPresentationObservationDone?: boolean
+              }
+            ).__terminalPresentationObservationDone === true
+        ),
+      { timeout: 5_000, message: 'terminal presentation handoff did not settle' }
+    )
+    .toBe(true)
+  return page.evaluate(
+    () =>
+      (
+        window as Window & {
+          __terminalPresentationFrames?: TerminalPresentationFrame[]
+        }
+      ).__terminalPresentationFrames ?? []
+  )
+}
+
 async function createActiveTerminalTab(page: Page, worktreeId: string): Promise<string> {
   const tabId = await page.evaluate((worktreeId) => {
     const store = window.__store
@@ -310,6 +392,16 @@ test.describe('Terminal hidden view parking', () => {
       expect(tabBState.hasManager).toBe(true)
       expect(tabBState.paneCount).toBeGreaterThan(0)
 
+      const previouslyPresentedTabId = await getActiveTabId(orcaPage)
+      if (!previouslyPresentedTabId) {
+        throw new Error('parking reveal had no previously presented terminal tab')
+      }
+      await startTerminalPresentationObservation(
+        orcaPage,
+        previouslyPresentedTabId,
+        tabAId,
+        finalMarker
+      )
       await activateTerminalTab(orcaPage, tabAId)
       await waitForActiveTerminalManager(orcaPage, 30_000)
       const revealedSnapshot = await waitForPaneIdentitySnapshot(orcaPage, 1)
@@ -325,6 +417,20 @@ test.describe('Terminal hidden view parking', () => {
         })
         .toContain(finalMarker)
 
+      const presentationFrames = await readTerminalPresentationObservation(orcaPage)
+      const firstTargetFrame = presentationFrames.findIndex((frame) => frame.targetPresented)
+      expect(firstTargetFrame).toBeGreaterThan(0)
+      expect(
+        presentationFrames[firstTargetFrame]?.targetBufferContainsMarker,
+        JSON.stringify(presentationFrames)
+      ).toBe(true)
+      expect(
+        presentationFrames
+          .slice(0, firstTargetFrame)
+          .every((frame) => frame.previousPresented && !frame.targetPresented),
+        JSON.stringify(presentationFrames)
+      ).toBe(true)
+
       const content = await getTerminalContent(orcaPage, 12_000)
       expect(content).toContain(`Frame ${String(PARKED_FRAME_COUNT - 1).padStart(3, '0')}`)
       expect(content).toContain('╭')
@@ -336,7 +442,10 @@ test.describe('Terminal hidden view parking', () => {
       // proves the revealed terminal accepts input end-to-end, not just echo.
       const typedMarker = `PARKED_TYPED_OK_${runId}`
       const typedProbeScript = `console.log('PARKED_TYPED_OK_' + '${runId}')`
-      await sendToTerminal(orcaPage, tabAPtyId, `node -e ${JSON.stringify(typedProbeScript)}\r`)
+      // Why: delivered via a temp file — `node -e` quoting is not PowerShell-safe (#8521).
+      await runNodeScriptInTerminal(orcaPage, tabAPtyId, typedProbeScript, {
+        prefix: 'orca-parked-typed-probe'
+      })
       await expect
         .poll(() => getTerminalContent(orcaPage, 12_000), {
           timeout: 10_000,
@@ -374,7 +483,10 @@ test.describe('Terminal hidden view parking', () => {
     // before the store assertion lands.
     const payload = `\x1b]0;${parkedTitle}\x07\x07${marker}\n`
     const sideEffectScript = `process.stdout.write(${JSON.stringify(payload)}); setTimeout(() => process.exit(0), 30000)`
-    await sendToTerminal(orcaPage, tabAPtyId, `node -e ${JSON.stringify(sideEffectScript)}\r`)
+    // Why: delivered via a temp file — `node -e` quoting is not PowerShell-safe (#8521).
+    await runNodeScriptInTerminal(orcaPage, tabAPtyId, sideEffectScript, {
+      prefix: 'orca-parked-side-effect'
+    })
 
     await expect
       .poll(() => getTerminalTabTitle(orcaPage, worktreeId, tabAId), {

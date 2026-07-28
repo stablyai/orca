@@ -9,6 +9,8 @@ import { cancelDeferredScrollRestore } from './pane-scroll'
 import { activateOrcaTerminalUnicodeProvider } from '../../../../shared/terminal-unicode-provider'
 import { attachTerminalMouseWheelMultiplier } from './pane-terminal-mouse-wheel'
 import { attachTerminalScrollIntentTracking } from './terminal-scroll-intent-dom-tracking'
+import { installTerminalLinkifierHoverResetOnMouseLeave } from './terminal-linkifier-hover-reset-on-mouseleave'
+import { installTerminalLinkifierHoverResetOnWrite } from './terminal-linkifier-hover-reset-on-write'
 import { attachDomRendererFocusClassSync } from './pane-dom-focus-class-sync'
 import { attachWebgl, cancelPendingWebglRefresh, disposeWebgl } from './pane-webgl-renderer'
 import { configureLazyArabicShapingJoiner } from './terminal-arabic-shaping-joiner'
@@ -56,6 +58,12 @@ export function openTerminal(pane: ManagedPaneInternal): void {
     xtermContainer,
     pane.leafId
   )
+  // Why: a link streamed into a visible pane under a stationary pointer would
+  // otherwise stay un-underlined/un-clickable until the mouse crosses to a new
+  // line; invalidate the linkifier hover cache when output lands so the next
+  // pointer move re-linkifies it.
+  pane.linkifierHoverResetDisposable = installTerminalLinkifierHoverResetOnWrite(terminal)
+  pane.linkifierMouseLeaveResetDisposable = installTerminalLinkifierHoverResetOnMouseLeave(terminal)
 
   // Activate Orca's Unicode 11 width shim *before* any caller-driven write. CJK / emoji /
   // ZWJ codepoints get baked into the buffer at the active unicode version on
@@ -228,6 +236,10 @@ export function disposePane(
   pane.focusClassSyncCleanup = null
   pane.terminalScrollIntentDisposable?.dispose()
   pane.terminalScrollIntentDisposable = null
+  pane.linkifierHoverResetDisposable?.dispose()
+  pane.linkifierHoverResetDisposable = null
+  pane.linkifierMouseLeaveResetDisposable?.dispose()
+  pane.linkifierMouseLeaveResetDisposable = null
   // Deregister the RTL shaping joiner: terminal.dispose() below does not.
   try {
     pane.arabicShapingJoinerCleanup?.()

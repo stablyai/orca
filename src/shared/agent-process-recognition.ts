@@ -52,6 +52,7 @@ const NODE_PACKAGE_SCRIPT_ENTRYPOINTS: Record<string, readonly string[]> = {
   codex: ['node_modules/@openai/codex/'],
   gemini: ['node_modules/@google/gemini-cli/']
 }
+const CURSOR_AGENT_NODE_ENTRYPOINT_RE = /(?:^|\/)cursor-agent\/versions\/[^/]+\/index\.js$/
 const PYTHON_SCRIPT_ENTRYPOINT_DIRECTORIES = ['/bin/', '/scripts/', '/site-packages/']
 
 const PROCESS_TO_AGENT = new Map<string, TuiAgent>()
@@ -93,6 +94,11 @@ function agentForNormalizedProcess(normalized: string): TuiAgent | undefined {
     return PROCESS_TO_AGENT.get('grok')
   }
   return undefined
+}
+
+function recognizedAgentForProcess(normalized: string): RecognizedAgentProcess | null {
+  const agent = agentForNormalizedProcess(normalized)
+  return agent ? { agent, processName: normalized } : null
 }
 
 function tokenizeCommandLine(commandLine: string): string[] {
@@ -197,20 +203,21 @@ function comparablePath(token: string): string {
 }
 
 function recognizeNodeScriptEntrypoint(token: string): RecognizedAgentProcess | null {
+  const path = comparablePath(token)
+  // Why: Cursor's native Windows launcher runs a generic versioned index.js,
+  // so its install path is the only stable identity that avoids ordinary Node apps.
+  if (CURSOR_AGENT_NODE_ENTRYPOINT_RE.test(path)) {
+    return { agent: 'cursor', processName: 'cursor-agent' }
+  }
   const normalized = normalizeProcessName(token, { stripInterpreterScriptExtension: true })
   const markers = NODE_PACKAGE_SCRIPT_ENTRYPOINTS[normalized]
   if (!markers) {
     return null
   }
-  const path = comparablePath(token)
   if (!markers.some((marker) => path.includes(marker))) {
     return null
   }
-  const agent = agentForNormalizedProcess(normalized)
-  if (!agent) {
-    return null
-  }
-  return { agent, processName: normalized }
+  return recognizedAgentForProcess(normalized)
 }
 
 function recognizePythonModule(
@@ -220,11 +227,7 @@ function recognizePythonModule(
     return null
   }
   const normalized = moduleName.split('.', 1)[0]?.toLowerCase() ?? ''
-  const agent = agentForNormalizedProcess(normalized)
-  if (!agent) {
-    return null
-  }
-  return { agent, processName: normalized }
+  return recognizedAgentForProcess(normalized)
 }
 
 function recognizePythonScriptEntrypoint(token: string): RecognizedAgentProcess | null {
@@ -237,11 +240,7 @@ function recognizePythonScriptEntrypoint(token: string): RecognizedAgentProcess 
   }
   const basename = path.split('/').pop() ?? ''
   const normalized = basename.replace(PYTHON_SCRIPT_EXTENSION_RE, '')
-  const agent = agentForNormalizedProcess(normalized)
-  if (!agent) {
-    return null
-  }
-  return { agent, processName: normalized }
+  return recognizedAgentForProcess(normalized)
 }
 
 function recognizePythonEntrypoint(
@@ -274,11 +273,7 @@ export function recognizeAgentProcess(
   processName: string | null | undefined
 ): RecognizedAgentProcess | null {
   const normalized = normalizeProcessName(processName)
-  const agent = agentForNormalizedProcess(normalized)
-  if (!agent) {
-    return null
-  }
-  return { agent, processName: normalized }
+  return recognizedAgentForProcess(normalized)
 }
 
 export function recognizeAgentProcessFromCommandLine(

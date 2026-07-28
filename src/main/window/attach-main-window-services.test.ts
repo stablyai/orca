@@ -260,13 +260,17 @@ describe('attachMainWindowServices', () => {
       createRuntime() as never,
       undefined,
       undefined,
-      { onBeforeUpdateQuit }
+      { onBeforeUpdateQuit, updateInstallMode: 'supervised-headless-serve' }
     )
 
     // Deferred to first paint — must not be configured at attach time.
     expect(setupAutoUpdaterMock).not.toHaveBeenCalled()
     await fireReadyToShow(mainWindow)
     expect(setupAutoUpdaterMock).toHaveBeenCalledTimes(1)
+    expect(setupAutoUpdaterMock).toHaveBeenCalledWith(
+      mainWindow,
+      expect.objectContaining({ installMode: 'supervised-headless-serve' })
+    )
     await setupAutoUpdaterMock.mock.calls[0][1].onBeforeQuit()
 
     expect(onBeforeUpdateQuit).toHaveBeenCalledTimes(1)

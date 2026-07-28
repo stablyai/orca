@@ -1,8 +1,11 @@
 import { describe, expect, it } from 'vitest'
 import type { Terminal } from '@xterm/xterm'
-import { resetTerminalLinkifierHoverState } from './terminal-linkifier-hover-reset'
+import {
+  isTerminalLinkifierHoverActive,
+  resetTerminalLinkifierHoverState
+} from './terminal-linkifier-hover-reset'
 
-type FakeLinkifier = { _lastBufferCell?: unknown; _activeLine?: number }
+type FakeLinkifier = { _lastBufferCell?: unknown; _activeLine?: number; _currentLink?: unknown }
 
 function createTerminal(linkifier: FakeLinkifier | null | undefined, hasCore = true): Terminal {
   const core = hasCore ? { linkifier: linkifier ?? undefined } : undefined
@@ -29,5 +32,20 @@ describe('resetTerminalLinkifierHoverState', () => {
 
     expect('_lastBufferCell' in linkifier).toBe(false)
     expect('_activeLine' in linkifier).toBe(false)
+  })
+})
+
+describe('isTerminalLinkifierHoverActive', () => {
+  it('is true only while a link is currently hovered', () => {
+    expect(isTerminalLinkifierHoverActive(createTerminal({ _currentLink: { link: 'x' } }))).toBe(
+      true
+    )
+    expect(isTerminalLinkifierHoverActive(createTerminal({ _currentLink: undefined }))).toBe(false)
+    expect(isTerminalLinkifierHoverActive(createTerminal({}))).toBe(false)
+  })
+
+  it('degrades to false when linkifier internals are unavailable', () => {
+    expect(isTerminalLinkifierHoverActive(createTerminal(null))).toBe(false)
+    expect(isTerminalLinkifierHoverActive(createTerminal(undefined, false))).toBe(false)
   })
 })

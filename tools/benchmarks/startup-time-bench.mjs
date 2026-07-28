@@ -353,12 +353,22 @@ function writeGhShim(fixtureDir, ghHangMs) {
 }
 
 function buildLaunchEnvironment({ fixtureDir, githubRepos, ghShimDir }) {
+  // Why: keep Codex home work inside the benchmark fixture and keep the
+  // default-ON rollout from adding unrelated migration work to timings.
+  const isolatedHome = join(fixtureDir, 'home')
+  mkdirSync(isolatedHome, { recursive: true })
   const env = {
     ...process.env,
     ORCA_STARTUP_DIAGNOSTICS: '1',
     ORCA_E2E_USER_DATA_DIR: fixtureDir,
+    HOME: isolatedHome,
+    USERPROFILE: isolatedHome,
+    ORCA_E2E_HOME_DIR: isolatedHome,
+    ORCA_CODEX_SYSTEM_DEFAULT_REAL_HOME: '0',
     ORCA_E2E_HEADLESS: '1'
   }
+  delete env.CODEX_HOME
+  delete env.ORCA_CODEX_HOME
   if (ghShimDir) {
     env.PATH = `${ghShimDir}${delimiter}${env.PATH ?? ''}`
   }

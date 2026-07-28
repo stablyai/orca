@@ -25,9 +25,9 @@ import {
   Pencil,
   SlidersHorizontal,
   Trash,
-  X
+  X,
+  ExternalLink
 } from 'lucide-react'
-import { ExternalLink } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Checkbox } from '@/components/ui/checkbox'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
@@ -735,7 +735,7 @@ function CheckRunDetails({
                 {translate(
                   'auto.components.right.sidebar.checks.panel.content.fd46a70f1a',
                   'Started'
-                )}
+                )}{' '}
                 {startedAt}
               </span>
             )}
@@ -744,7 +744,7 @@ function CheckRunDetails({
                 {translate(
                   'auto.components.right.sidebar.checks.panel.content.00e1c1658a',
                   'Completed'
-                )}
+                )}{' '}
                 {completedAt}
               </span>
             )}

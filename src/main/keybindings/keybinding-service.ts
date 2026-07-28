@@ -42,7 +42,13 @@ export class KeybindingService {
     // instead of silently dropping the pin.
     if (options.legacyTabSwitchSeed?.isPending()) {
       try {
-        seedLegacyTabSwitchBindings(this.configPath, this.platform, LEGACY_TAB_SWITCH_BINDINGS)
+        // Why: the seed already read the file to build its snapshot — prime the
+        // lazy cache with it instead of re-reading on the first getSnapshot().
+        this.snapshot = seedLegacyTabSwitchBindings(
+          this.configPath,
+          this.platform,
+          LEGACY_TAB_SWITCH_BINDINGS
+        ).snapshot
         options.legacyTabSwitchSeed.markSeeded()
       } catch (error) {
         console.error('Failed to seed legacy tab-switch keybindings:', error)

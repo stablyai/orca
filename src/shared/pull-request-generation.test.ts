@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import {
   buildPullRequestFieldsPrompt,
+  GENERATED_PULL_REQUEST_JSON_STRUCTURE_LIMITS,
   parseGeneratedPullRequestFields,
   type PullRequestDraftContext
 } from './pull-request-generation'
@@ -92,5 +93,18 @@ describe('parseGeneratedPullRequestFields', () => {
       body: '- Add form',
       draft: false
     })
+  })
+
+  it('rejects excessive nesting before JSON.parse', () => {
+    const parseSpy = vi.spyOn(JSON, 'parse')
+    const depth = GENERATED_PULL_REQUEST_JSON_STRUCTURE_LIMITS.nestingDepth + 1
+    try {
+      expect(() =>
+        parseGeneratedPullRequestFields(`${'['.repeat(depth)}0${']'.repeat(depth)}`, context)
+      ).toThrow(/JSON nesting exceeds/)
+      expect(parseSpy).not.toHaveBeenCalled()
+    } finally {
+      parseSpy.mockRestore()
+    }
   })
 })

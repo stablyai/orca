@@ -17,6 +17,7 @@ const {
   listRepoWorktreesMock,
   getStatusMock,
   gitExecFileAsyncMock,
+  getLocalProjectWorktreeGitOptionsMock,
   getSshGitProviderMock,
   getSshPtyProviderMock,
   listRegisteredPtysMock
@@ -26,6 +27,7 @@ const {
   listRepoWorktreesMock: vi.fn(),
   getStatusMock: vi.fn(),
   gitExecFileAsyncMock: vi.fn(),
+  getLocalProjectWorktreeGitOptionsMock: vi.fn(),
   getSshGitProviderMock: vi.fn(),
   getSshPtyProviderMock: vi.fn(),
   listRegisteredPtysMock: vi.fn()
@@ -58,6 +60,10 @@ vi.mock('../git/runner', () => ({
 
 vi.mock('../providers/ssh-git-dispatch', () => ({
   getSshGitProvider: getSshGitProviderMock
+}))
+
+vi.mock('../project-runtime-git-options', () => ({
+  getLocalProjectWorktreeGitOptions: getLocalProjectWorktreeGitOptionsMock
 }))
 
 vi.mock('../memory/pty-registry', () => ({
@@ -154,6 +160,7 @@ describe('workspace cleanup scan', () => {
     listRepoWorktreesMock.mockReset()
     getStatusMock.mockReset()
     gitExecFileAsyncMock.mockReset()
+    getLocalProjectWorktreeGitOptionsMock.mockReset().mockReturnValue({})
     getSshGitProviderMock.mockReset()
     getSshPtyProviderMock.mockReset()
     listRegisteredPtysMock.mockReset()

@@ -31,7 +31,23 @@ import {
   release,
   type JiraClientForSite
 } from './client'
-import { adfToMarkdownText, textToAdf } from './adf-markdown'
+import {
+  adfToMarkdownText,
+  collectAdfMediaAttrs,
+  textToAdf,
+  type AdfToMarkdownOptions,
+  type JiraAdfMediaAttrs
+} from './adf-markdown'
+import {
+  extractAttachmentContentIdsFromHtml,
+  selectPreferredAttachmentIds,
+  warnIfMediaResolutionIncomplete
+} from './attachment-discovery'
+import {
+  createMediaMarkdownResolver,
+  loadIssueImageAttachments,
+  type MediaResolutionStats
+} from './attachment-images'
 
 const ISSUE_FIELDS = [
   'summary',
@@ -46,6 +62,10 @@ const ISSUE_FIELDS = [
   'created',
   'updated'
 ]
+
+// Why: detail reads need attachment metadata so inline ADF media can be resolved
+// to downloadable image content; list/search omit this for payload size.
+const ISSUE_DETAIL_FIELDS = [...ISSUE_FIELDS, 'attachment']
 
 type JiraRecord = Record<string, unknown>
 
@@ -314,7 +334,11 @@ function toBodyText(site: JiraSite, text: string): unknown {
   return site.authType === 'server' ? text : textToAdf(text)
 }
 
-export function mapJiraIssue(site: JiraSite, raw: JiraRecord): JiraIssue {
+export function mapJiraIssue(
+  site: JiraSite,
+  raw: JiraRecord,
+  adfOptions?: AdfToMarkdownOptions
+): JiraIssue {
   const fields = asRecord(raw.fields)
   const key = asString(raw.key)
   return {
@@ -323,7 +347,7 @@ export function mapJiraIssue(site: JiraSite, raw: JiraRecord): JiraIssue {
     siteId: site.id,
     siteName: site.displayName,
     title: asString(fields.summary, key || 'Untitled issue'),
-    description: adfToMarkdownText(fields.description),
+    description: adfToMarkdownText(fields.description, adfOptions),
     url: issueUrl(site, key),
     project: mapProject(fields.project, site),
     issueType: mapIssueType(fields.issuetype),
@@ -335,6 +359,97 @@ export function mapJiraIssue(site: JiraSite, raw: JiraRecord): JiraIssue {
     createdAt: asString(fields.created, new Date().toISOString()),
     updatedAt: asString(fields.updated, new Date().toISOString())
   }
+}
+
+type MediaRequest = {
+  attachmentField: unknown
+  preferredIds: string[]
+  needCount: number
+  fallbackRan: boolean
+  issueKey: string
+}
+
+/** Pooled: HTML/ADF selection only — no binary downloads. */
+function collectIssueMediaRequest(raw: JiraRecord): MediaRequest | undefined {
+  const fields = asRecord(raw.fields)
+  const renderedFields = asRecord(raw.renderedFields)
+  const htmlIds = extractAttachmentContentIdsFromHtml(
+    asString(renderedFields.description) || undefined
+  )
+  const mediaAttrs = collectAdfMediaAttrs(fields.description)
+  const selection = selectPreferredAttachmentIds({
+    renderedHtmlIds: htmlIds,
+    attachmentField: fields.attachment,
+    mediaAttrs
+  })
+  if (selection.needCount === 0 && selection.preferredIds.length === 0) {
+    return undefined
+  }
+  return {
+    attachmentField: fields.attachment,
+    preferredIds: selection.preferredIds,
+    needCount: selection.needCount,
+    fallbackRan: selection.fallbackRan,
+    issueKey: asString(raw.key)
+  }
+}
+
+type PreparedMedia = {
+  options: AdfToMarkdownOptions
+  stats: MediaResolutionStats
+  request: MediaRequest
+}
+
+/** Unpooled: binary downloads + resolver (outside the Jira API semaphore). */
+async function prepareMediaResolver(
+  client: JiraClientForSite,
+  request: MediaRequest
+): Promise<PreparedMedia | undefined> {
+  if (request.preferredIds.length === 0) {
+    warnIfMediaResolutionIncomplete({
+      siteId: client.site.id,
+      issueKey: request.issueKey,
+      needCount: request.needCount,
+      preferredIdCount: 0,
+      resolvedCount: 0,
+      fallbackRan: request.fallbackRan
+    })
+    return undefined
+  }
+  const images = await loadIssueImageAttachments(
+    client,
+    request.attachmentField,
+    request.preferredIds
+  )
+  if (images.length === 0) {
+    warnIfMediaResolutionIncomplete({
+      siteId: client.site.id,
+      issueKey: request.issueKey,
+      needCount: request.needCount,
+      preferredIdCount: request.preferredIds.length,
+      resolvedCount: 0,
+      fallbackRan: request.fallbackRan
+    })
+    return undefined
+  }
+  const stats: MediaResolutionStats = { attachmentResolvedCount: 0 }
+  const resolveMedia = createMediaMarkdownResolver(images, request.preferredIds, stats)
+  return {
+    options: { resolveMedia },
+    stats,
+    request
+  }
+}
+
+function flushMediaResolutionWarn(client: JiraClientForSite, prepared: PreparedMedia): void {
+  warnIfMediaResolutionIncomplete({
+    siteId: client.site.id,
+    issueKey: prepared.request.issueKey,
+    needCount: prepared.request.needCount,
+    preferredIdCount: prepared.request.preferredIds.length,
+    resolvedCount: prepared.stats.attachmentResolvedCount,
+    fallbackRan: prepared.request.fallbackRan
+  })
 }
 
 function sortAndLimitIssues(issues: JiraIssue[], limit: number): JiraIssue[] {
@@ -437,15 +552,22 @@ export async function getIssue(
 ): Promise<JiraIssue | null> {
   const entries = getClients(siteId)
   for (const entry of entries) {
-    await acquire()
+    let mediaRequest: MediaRequest | undefined
+    let issue: JiraRecord | undefined
+    let held = false
     try {
-      const issue = await jiraRequest<JiraRecord>(
+      await acquire()
+      held = true
+      const params = new URLSearchParams({
+        fields: ISSUE_DETAIL_FIELDS.join(','),
+        expand: 'renderedFields'
+      })
+      issue = await jiraRequest<JiraRecord>(
         entry,
-        `${apiBasePath(entry.site)}/issue/${encodeURIComponent(key)}?fields=${encodeURIComponent(
-          ISSUE_FIELDS.join(',')
-        )}`
+        `${apiBasePath(entry.site)}/issue/${encodeURIComponent(key)}?${params.toString()}`
       )
-      return mapJiraIssue(entry.site, issue)
+      // Why: keep only JSON under the pool; binary downloads fan out after release.
+      mediaRequest = collectIssueMediaRequest(issue)
     } catch (error) {
       if (isAuthError(error)) {
         clearToken(entry.site.id)
@@ -455,8 +577,27 @@ export async function getIssue(
       } else {
         console.warn('[jira] getIssue failed:', error)
       }
+      continue
     } finally {
-      release()
+      if (held) {
+        held = false
+        release()
+      }
+    }
+
+    try {
+      if (!issue) {
+        continue
+      }
+      const prepared = mediaRequest ? await prepareMediaResolver(entry, mediaRequest) : undefined
+      const mapped = mapJiraIssue(entry.site, issue, prepared?.options)
+      if (prepared) {
+        flushMediaResolutionWarn(entry, prepared)
+      }
+      return mapped
+    } catch (error) {
+      console.warn('[jira] getIssue media load failed:', error)
+      return mapJiraIssue(entry.site, issue)
     }
   }
   return null
@@ -597,13 +738,76 @@ export async function addIssueComment(
   }
 }
 
-function mapComment(raw: JiraRecord): JiraComment {
+function mapComment(raw: JiraRecord, adfOptions?: AdfToMarkdownOptions): JiraComment {
   return {
     id: asString(raw.id),
-    body: adfToMarkdownText(raw.body),
+    body: adfToMarkdownText(raw.body, adfOptions),
     createdAt: asString(raw.created, new Date().toISOString()),
     updatedAt: asString(raw.updated) || undefined,
     user: mapUser(raw.author)
+  }
+}
+
+/**
+ * Pooled comment media collect: attachment metadata JSON stays under the semaphore.
+ * Residual: Server/DC comment bodies are wiki markup, not ADF — this only fixes
+ * the lookup path; wiki `!filename!` is not rendered as media.
+ */
+async function collectCommentMediaRequest(
+  client: JiraClientForSite,
+  key: string,
+  comments: JiraRecord[]
+): Promise<MediaRequest | undefined> {
+  const htmlIds: string[] = []
+  const seen = new Set<string>()
+  const mediaAttrs: JiraAdfMediaAttrs[] = []
+  for (const comment of comments) {
+    for (const id of extractAttachmentContentIdsFromHtml(asString(comment.renderedBody))) {
+      if (!seen.has(id)) {
+        seen.add(id)
+        htmlIds.push(id)
+      }
+    }
+    mediaAttrs.push(...collectAdfMediaAttrs(comment.body))
+  }
+
+  const needingCount = mediaAttrs.filter(
+    (attrs) => !(attrs.url && /^https?:\/\//i.test(attrs.url))
+  ).length
+  // Why: selectPreferredAttachmentIds yields nothing without attachment-needing media, so
+  // HTML ids alone can never produce a download — skip the extra metadata request entirely.
+  if (needingCount === 0) {
+    return undefined
+  }
+
+  // Why: comment media usually references issue-level attachments; pull them once
+  // for the whole thread. Use apiBasePath so Server/DC does not 404 on /rest/api/3.
+  let attachmentField: unknown
+  try {
+    const issue = await jiraRequest<JiraRecord>(
+      client,
+      `${apiBasePath(client.site)}/issue/${encodeURIComponent(key)}?fields=attachment`
+    )
+    attachmentField = asRecord(issue.fields).attachment
+  } catch (error) {
+    console.warn('[jira] comment attachment lookup failed:', error)
+    return undefined
+  }
+
+  const selection = selectPreferredAttachmentIds({
+    renderedHtmlIds: htmlIds,
+    attachmentField,
+    mediaAttrs
+  })
+  if (selection.needCount === 0 && selection.preferredIds.length === 0) {
+    return undefined
+  }
+  return {
+    attachmentField,
+    preferredIds: selection.preferredIds,
+    needCount: selection.needCount,
+    fallbackRan: selection.fallbackRan,
+    issueKey: key
   }
 }
 
@@ -615,17 +819,23 @@ export async function getIssueComments(
   if (!entry) {
     return []
   }
-  await acquire()
+
+  let comments: JiraRecord[] = []
+  let mediaRequest: MediaRequest | undefined
+  let held = false
   try {
-    const comments = await fetchPagedRecords(entry, 'comments', (startAt, maxResults) => {
+    await acquire()
+    held = true
+    comments = await fetchPagedRecords(entry, 'comments', (startAt, maxResults) => {
       const params = new URLSearchParams({
         maxResults: String(maxResults),
         orderBy: 'created',
-        startAt: String(startAt)
+        startAt: String(startAt),
+        expand: 'renderedBody'
       })
       return `${apiBasePath(entry.site)}/issue/${encodeURIComponent(key)}/comment?${params.toString()}`
     })
-    return comments.map(mapComment)
+    mediaRequest = await collectCommentMediaRequest(entry, key, comments)
   } catch (error) {
     if (isAuthError(error)) {
       clearToken(entry.site.id)
@@ -634,7 +844,22 @@ export async function getIssueComments(
     console.warn('[jira] getIssueComments failed:', error)
     return []
   } finally {
-    release()
+    if (held) {
+      held = false
+      release()
+    }
+  }
+
+  try {
+    const prepared = mediaRequest ? await prepareMediaResolver(entry, mediaRequest) : undefined
+    const mapped = comments.map((comment) => mapComment(comment, prepared?.options))
+    if (prepared) {
+      flushMediaResolutionWarn(entry, prepared)
+    }
+    return mapped
+  } catch (error) {
+    console.warn('[jira] getIssueComments media load failed:', error)
+    return comments.map((comment) => mapComment(comment))
   }
 }
 

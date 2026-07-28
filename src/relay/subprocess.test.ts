@@ -146,7 +146,7 @@ describe('Subprocess: Relay entry point', () => {
 
     const failedId = relay.send('pty.spawn', { cols: 80, rows: 24 })
     const failed = await relay.waitForResponse(failedId)
-    expect(failed.error?.message).toContain('node-pty is not available')
+    expect(failed.error?.message).toContain('Remote terminals are unavailable')
 
     writeMockNodePty(tmpDir, WORKING_NODE_PTY_MODULE)
 
@@ -171,7 +171,7 @@ describe('Subprocess: Relay entry point', () => {
 
     const failedId = relay.send('pty.spawn', { cols: 80, rows: 24 })
     const failed = await relay.waitForResponse(failedId)
-    expect(failed.error?.message).toContain('node-pty is not available')
+    expect(failed.error?.message).toContain('Remote terminals are unavailable')
 
     writeMockNodePty(tmpDir, WORKING_NODE_PTY_MODULE, true)
     const repairedId = relay.send('pty.spawn', { cols: 80, rows: 24 })

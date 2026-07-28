@@ -2,18 +2,27 @@ import { describe, expect, it, vi } from 'vitest'
 import { DegradedDaemonPtyProvider } from './degraded-daemon-pty-provider'
 import type { DaemonPtyAdapter } from './daemon-pty-adapter'
 import type { IPtyProvider, PtySpawnOptions, PtySpawnResult } from '../providers/types'
+import type { PtyProcessInspection } from '../providers/pty-process-inspection'
 
 type ProviderMock = IPtyProvider & {
+  inspectProcess: (id: string) => Promise<PtyProcessInspection>
   emitData: (id: string, data: string, sequenceChars?: number) => void
   emitReplay: (id: string, data: string) => void
   emitExit: (id: string, code: number) => void
+  triggerWriteUnavailable: (id: string) => void
+  onWriteUnavailable: (callback: (payload: { id: string }) => void) => () => void
 }
 
-function createProvider(label: string, sessions: string[] = []): ProviderMock {
+function createProvider(
+  label: string,
+  sessions: string[] = [],
+  authoritativeOwnerListings = false
+): ProviderMock {
   const dataListeners: ((payload: { id: string; data: string; sequenceChars?: number }) => void)[] =
     []
   const replayListeners: ((payload: { id: string; data: string }) => void)[] = []
   const exitListeners: ((payload: { id: string; code: number }) => void)[] = []
+  const writeUnavailableListeners: ((payload: { id: string }) => void)[] = []
   return {
     spawn: vi.fn(async (opts: PtySpawnOptions): Promise<PtySpawnResult> => {
       const id = opts.sessionId ?? `${label}-new`
@@ -22,6 +31,7 @@ function createProvider(label: string, sessions: string[] = []): ProviderMock {
     }),
     attach: vi.fn(async () => {}),
     hasPty: vi.fn((id: string) => sessions.includes(id)),
+    providesAgentSessionOwnerListings: vi.fn(() => authoritativeOwnerListings),
     write: vi.fn(),
     resize: vi.fn(),
     shutdown: vi.fn(async (id: string) => {
@@ -37,6 +47,7 @@ function createProvider(label: string, sessions: string[] = []): ProviderMock {
     acknowledgeDataEvent: vi.fn(),
     hasChildProcesses: vi.fn(async () => false),
     getForegroundProcess: vi.fn(async () => null),
+    inspectProcess: vi.fn(async () => ({ foregroundProcess: null, hasChildProcesses: false })),
     confirmForegroundProcess: vi.fn(async () => `${label}-confirmed`),
     serialize: vi.fn(async () => '{}'),
     revive: vi.fn(async () => {}),
@@ -86,6 +97,20 @@ function createProvider(label: string, sessions: string[] = []): ProviderMock {
       for (const listener of exitListeners) {
         listener({ id, code })
       }
+    },
+    onWriteUnavailable: vi.fn((callback: (payload: { id: string }) => void) => {
+      writeUnavailableListeners.push(callback)
+      return () => {
+        const idx = writeUnavailableListeners.indexOf(callback)
+        if (idx !== -1) {
+          writeUnavailableListeners.splice(idx, 1)
+        }
+      }
+    }),
+    triggerWriteUnavailable: (id: string) => {
+      for (const listener of writeUnavailableListeners) {
+        listener({ id })
+      }
     }
   }
 }
@@ -95,7 +120,7 @@ function createDaemonAdapter(
   sessions: string[] = []
 ): DaemonPtyAdapter & ProviderMock {
   return {
-    ...createProvider(label, sessions),
+    ...createProvider(label, sessions, true),
     protocolVersion: 13,
     listSessions: vi.fn(async () => []),
     ackColdRestore: vi.fn(),
@@ -108,7 +133,68 @@ function createDaemonAdapter(
   } as unknown as DaemonPtyAdapter & ProviderMock
 }
 
+it('forwards dead-endpoint write-unavailable signals from the daemon adapters', () => {
+  // Why revert-sensitive: this provider is the live localProvider in degraded launch
+  // mode and main subscribes on it, so without forwarding the STA-2373 fan-out reaches
+  // no listener and sibling panes stay frozen.
+  const current = createDaemonAdapter('daemon')
+  const legacy = createDaemonAdapter('legacy')
+  const fallback = createProvider('fallback')
+  const provider = new DegradedDaemonPtyProvider({ current, legacy: [legacy], fallback })
+  const recovered: string[] = []
+
+  const unsubscribe = provider.onWriteUnavailable(({ id }) => recovered.push(id))
+  current.triggerWriteUnavailable('daemon-pane')
+  legacy.triggerWriteUnavailable('legacy-pane')
+  expect(recovered).toEqual(['daemon-pane', 'legacy-pane'])
+
+  unsubscribe()
+  current.triggerWriteUnavailable('after-unsubscribe')
+  expect(recovered).toEqual(['daemon-pane', 'legacy-pane'])
+})
+
+it('rejects completion inspection instead of borrowing the fallback provider', async () => {
+  const provider = new DegradedDaemonPtyProvider({
+    current: createDaemonAdapter('daemon'),
+    legacy: [],
+    fallback: createProvider('fallback')
+  })
+
+  await expect(provider.inspectProcess('unmapped-session')).rejects.toThrow('terminal_gone')
+})
+
+it('preserves unavailable inspection from an owning daemon', async () => {
+  const daemon = createDaemonAdapter('daemon', ['daemon-session'])
+  vi.mocked(daemon.inspectProcess).mockResolvedValue({
+    foregroundProcess: null,
+    hasChildProcesses: true,
+    unavailable: true
+  })
+  const provider = new DegradedDaemonPtyProvider({
+    current: daemon,
+    legacy: [],
+    fallback: createProvider('fallback')
+  })
+  await provider.discoverDaemonSessions()
+
+  await expect(provider.inspectProcess('daemon-session')).resolves.toEqual({
+    foregroundProcess: null,
+    hasChildProcesses: true,
+    unavailable: true
+  })
+})
+
 describe('DegradedDaemonPtyProvider', () => {
+  it('only delegates owner-listing authority to the provider that owns the id', async () => {
+    const current = createDaemonAdapter('daemon', ['daemon-session'])
+    const fallback = createProvider('fallback', [], true)
+    const provider = new DegradedDaemonPtyProvider({ current, legacy: [], fallback })
+    await provider.discoverDaemonSessions()
+
+    expect(provider.providesAgentSessionOwnerListings('daemon-session')).toBe(true)
+    expect(provider.providesAgentSessionOwnerListings('unknown-session')).toBe(false)
+  })
+
   it('routes fresh foreground confirmation to the session owner', async () => {
     const current = createDaemonAdapter('daemon', ['daemon-session'])
     const fallback = createProvider('fallback')

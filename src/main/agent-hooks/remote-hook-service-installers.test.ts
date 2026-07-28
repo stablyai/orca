@@ -7,33 +7,20 @@ vi.mock('electron', () => ({
   }
 }))
 
-import { CodexHookService } from '../codex/hook-service'
-import { DroidHookService } from '../droid/hook-service'
-import { CursorHookService } from '../cursor/hook-service'
-import { CommandCodeHookService } from '../command-code/hook-service'
-import { GeminiHookService } from '../gemini/hook-service'
-import { AntigravityHookService } from '../antigravity/hook-service'
-import { AmpHookService } from '../amp/hook-service'
-import { ClaudeHookService } from '../claude/hook-service'
-import { GrokHookService } from '../grok/hook-service'
-import { CopilotHookService } from '../copilot/hook-service'
-import { HermesHookService } from '../hermes/hook-service'
-import { DevinHookService } from '../devin/hook-service'
-import { KimiHookService } from '../kimi/hook-service'
+import { CodexHookService, codexHookService } from '../codex/hook-service'
+import { DroidHookService, droidHookService } from '../droid/hook-service'
+import { CursorHookService, cursorHookService } from '../cursor/hook-service'
+import { CommandCodeHookService, commandCodeHookService } from '../command-code/hook-service'
+import { GeminiHookService, geminiHookService } from '../gemini/hook-service'
+import { AntigravityHookService, antigravityHookService } from '../antigravity/hook-service'
+import { AmpHookService, ampHookService } from '../amp/hook-service'
+import { ClaudeHookService, claudeHookService } from '../claude/hook-service'
+import { GrokHookService, grokHookService } from '../grok/hook-service'
+import { CopilotHookService, copilotHookService } from '../copilot/hook-service'
+import { HermesHookService, hermesHookService } from '../hermes/hook-service'
+import { DevinHookService, devinHookService } from '../devin/hook-service'
+import { KimiHookService, kimiHookService } from '../kimi/hook-service'
 import { openClaudeHookService } from '../openclaude/hook-service'
-import { ampHookService } from '../amp/hook-service'
-import { antigravityHookService } from '../antigravity/hook-service'
-import { claudeHookService } from '../claude/hook-service'
-import { codexHookService } from '../codex/hook-service'
-import { copilotHookService } from '../copilot/hook-service'
-import { cursorHookService } from '../cursor/hook-service'
-import { droidHookService } from '../droid/hook-service'
-import { commandCodeHookService } from '../command-code/hook-service'
-import { geminiHookService } from '../gemini/hook-service'
-import { devinHookService } from '../devin/hook-service'
-import { grokHookService } from '../grok/hook-service'
-import { hermesHookService } from '../hermes/hook-service'
-import { kimiHookService } from '../kimi/hook-service'
 import { MANAGED_AGENT_HOOK_INSTALLERS } from './managed-agent-hook-controls'
 import {
   installRemoteManagedAgentHooks,
@@ -724,6 +711,35 @@ describe('remote hook service installers', () => {
     const byAgent = new Map(results.map((r) => [r.agent, r.state]))
     expect(byAgent.get('droid')).toBe('installed')
     expect(byAgent.get('copilot')).toBe('installed')
+  })
+
+  it('stops before the next installer when its relay request is cancelled', async () => {
+    const controller = new AbortController()
+    const claudeInstall = vi
+      .spyOn(claudeHookService, 'installRemote')
+      .mockImplementation(async () => {
+        controller.abort()
+        return {
+          agent: 'claude',
+          state: 'installed',
+          configPath: '/home/dev/.claude/settings.json',
+          managedHooksPresent: true,
+          detail: null
+        }
+      })
+    const openClaudeInstall = vi.spyOn(openClaudeHookService, 'installRemote')
+    try {
+      const { sftp } = createFakeSftp()
+
+      await expect(
+        installRemoteManagedAgentHooks(sftp, '/home/dev', { signal: controller.signal })
+      ).rejects.toMatchObject({ name: 'AbortError' })
+      expect(claudeInstall).toHaveBeenCalledTimes(1)
+      expect(openClaudeInstall).not.toHaveBeenCalled()
+    } finally {
+      claudeInstall.mockRestore()
+      openClaudeInstall.mockRestore()
+    }
   })
 
   it('installs remote Droid hooks into Factory settings.json (issue #7253)', async () => {

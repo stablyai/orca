@@ -14,6 +14,7 @@ type SshBackgroundStartupDeliveryOptions = {
 
 export type SshBackgroundStartupDelivery = {
   handleData(data: string): string
+  armFallback(ptyId: string): void
   schedule(ptyId: string): void
   clear(): void
 }
@@ -51,22 +52,28 @@ export function createSshBackgroundStartupDelivery(
     }
   }
 
+  const armFallback = (ptyId: string): void => {
+    lastPtyId = ptyId
+    if (!pendingCommand || fallbackTimer !== null) {
+      return
+    }
+    fallbackTimer = setTimeout(() => {
+      fallbackTimer = null
+      startupShellReady = true
+      schedule(ptyId)
+    }, SSH_SHELL_READY_STARTUP_FALLBACK_MS)
+  }
+
   const schedule = (ptyId: string): void => {
     lastPtyId = ptyId
     if (!pendingCommand) {
       return
     }
     if (!startupShellReady) {
-      if (fallbackTimer === null) {
-        // Why: hidden SSH sessions can use shells that cannot emit Orca's
-        // marker. Prefer readiness, but never drop the startup command forever.
-        fallbackTimer = setTimeout(() => {
-          fallbackTimer = null
-          markShellReady()
-        }, SSH_SHELL_READY_STARTUP_FALLBACK_MS)
-      }
+      armFallback(ptyId)
       return
     }
+    clearFallbackTimer()
     clearInjectTimer()
     injectTimer = setTimeout(() => {
       injectTimer = null
@@ -102,6 +109,7 @@ export function createSshBackgroundStartupDelivery(
       }
       return scanned.output
     },
+    armFallback,
     schedule,
     clear() {
       clearInjectTimer()

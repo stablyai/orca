@@ -1,5 +1,6 @@
 import { Import, Loader2, Trash2 } from 'lucide-react'
 import { toast } from 'sonner'
+import { emitBrowserCookieImportToast } from '@/lib/browser-cookie-import-toast'
 import type { BrowserCookieImportSummary, BrowserSessionProfile } from '../../../../shared/types'
 import { Button } from '../ui/button'
 import {
@@ -58,7 +59,8 @@ export function BrowserProfileRow({
       .importCookiesFromBrowser(profile.id, browserFamily, browserProfile)
     if (result.ok) {
       const browser = detectedBrowsers.find((b) => b.family === browserFamily)
-      toast.success(
+      emitBrowserCookieImportToast(
+        result.summary,
         browserProfile
           ? translate(
               'auto.components.settings.BrowserProfileRow.a3f8c2d1e0b4',
@@ -88,7 +90,8 @@ export function BrowserProfileRow({
   const handleImportFromFile = async (): Promise<void> => {
     const result = await useAppStore.getState().importCookiesToProfile(profile.id)
     if (result.ok) {
-      toast.success(
+      emitBrowserCookieImportToast(
+        result.summary,
         translate(
           'auto.components.settings.BrowserProfileRow.b4c167764d',
           'Imported {{value0}} cookies from file into {{value1}}.',

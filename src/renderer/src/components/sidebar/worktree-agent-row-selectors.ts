@@ -6,12 +6,18 @@ import type {
   MigrationUnsupportedPtyEntry
 } from '../../../../shared/agent-status-types'
 import { parsePaneKey } from '../../../../shared/stable-pane-id'
+import {
+  type LiveEntriesByWorktreeCache,
+  liveEntryWorktreeId,
+  patchLiveEntriesByWorktree,
+  recordLiveEntriesFullRebuild
+} from './worktree-agent-live-index-patch'
+import { selectWorktreeAgentOrchestration } from './worktree-agent-orchestration-index'
 import type { TerminalLayoutSnapshot } from '../../../../shared/types'
 
 const EMPTY_LIVE_ENTRIES: AgentStatusEntry[] = []
 const EMPTY_MIGRATION_UNSUPPORTED_ENTRIES: MigrationUnsupportedPtyEntry[] = []
 const EMPTY_RETAINED: RetainedAgentEntry[] = []
-const EMPTY_RUNTIME_AGENT_ORCHESTRATION: Record<string, AgentStatusOrchestrationContext> = {}
 // Why: selector unit tests often pass partial store mocks; production state
 // owns these maps, but missing mock maps should behave like empty slices.
 const EMPTY_RECORD = {}
@@ -27,12 +33,6 @@ type WorktreeAgentRowsState = Pick<
 type TabWorktreeIndexCache = {
   tabsByWorktree: WorktreeAgentRowsState['tabsByWorktree']
   tabIdToWorktreeId: Map<string, string>
-}
-
-type LiveEntriesByWorktreeCache = {
-  tabsByWorktree: WorktreeAgentRowsState['tabsByWorktree']
-  agentStatusByPaneKey: WorktreeAgentRowsState['agentStatusByPaneKey']
-  entriesByWorktree: Map<string, AgentStatusEntry[]>
 }
 
 type MigrationUnsupportedByWorktreeCache = {
@@ -51,7 +51,10 @@ let liveEntriesByWorktreeCache: LiveEntriesByWorktreeCache | null = null
 let migrationUnsupportedByWorktreeCache: MigrationUnsupportedByWorktreeCache | null = null
 let retainedEntriesByWorktreeCache: RetainedEntriesByWorktreeCache | null = null
 
-function reuseArrayIfEqual<T>(previous: T[] | undefined, next: T[]): T[] {
+// Why exported: WorktreeList reuses this exact-equality identity check to keep
+// derived arrays referentially stable across order-preserving epoch bumps so
+// memo'd cards can bail out of re-render.
+export function reuseArrayIfEqual<T>(previous: T[] | undefined, next: T[]): T[] {
   if (!previous || previous.length !== next.length) {
     return next
   }
@@ -90,16 +93,26 @@ function getLiveEntriesByWorktree(state: WorktreeAgentRowsState): Map<string, Ag
   }
 
   const tabIdToWorktreeId = getTabIdToWorktreeId(tabsByWorktree)
+  if (liveEntriesByWorktreeCache?.tabsByWorktree === tabsByWorktree) {
+    const patched = patchLiveEntriesByWorktree(
+      liveEntriesByWorktreeCache,
+      agentStatusByPaneKey,
+      tabIdToWorktreeId
+    )
+    if (patched) {
+      liveEntriesByWorktreeCache = {
+        tabsByWorktree,
+        agentStatusByPaneKey,
+        entriesByWorktree: patched
+      }
+      return patched
+    }
+  }
+  recordLiveEntriesFullRebuild()
   const previous = liveEntriesByWorktreeCache?.entriesByWorktree
   const entriesByWorktree = new Map<string, AgentStatusEntry[]>()
   for (const [paneKey, entry] of Object.entries(agentStatusByPaneKey)) {
-    const parsed = parsePaneKey(paneKey)
-    if (!parsed) {
-      continue
-    }
-    const tabWorktreeId = tabIdToWorktreeId.get(parsed.tabId)
-    // Why: keep early attributed child rows, but hide completed rows once their tab is gone.
-    const worktreeId = tabWorktreeId ?? (entry.state === 'done' ? undefined : entry.worktreeId)
+    const worktreeId = liveEntryWorktreeId(paneKey, entry, tabIdToWorktreeId)
     if (!worktreeId) {
       continue
     }
@@ -214,6 +227,10 @@ export function selectRetainedAgentEntriesForWorktree(
   return getRetainedEntriesByWorktree(state).get(worktreeId) ?? EMPTY_RETAINED
 }
 
+// Why: reads a shared worktree-keyed index instead of rescanning every
+// orchestration context. Zustand re-runs each mounted card's selector on every
+// publication, so the old per-card scan was O(cards x contexts) on unrelated
+// traffic; only the first card through a given store version now pays a build.
 export function selectRuntimeAgentOrchestrationForWorktree(
   state: Pick<
     AppState,
@@ -224,33 +241,7 @@ export function selectRuntimeAgentOrchestrationForWorktree(
   >,
   worktreeId: string
 ): Record<string, AgentStatusOrchestrationContext> {
-  const tabs = (state.tabsByWorktree ?? EMPTY_RECORD)[worktreeId] ?? []
-  const tabIds = new Set(tabs.map((tab) => tab.id))
-  const out: Record<string, AgentStatusOrchestrationContext> = {}
-  const runtimeAgentOrchestrationByPaneKey =
-    state.runtimeAgentOrchestrationByPaneKey ?? EMPTY_RECORD
-  const agentStatusByPaneKey = state.agentStatusByPaneKey ?? EMPTY_RECORD
-  const retainedAgentsByPaneKey = state.retainedAgentsByPaneKey ?? EMPTY_RECORD
-  for (const [paneKey, orchestration] of Object.entries(runtimeAgentOrchestrationByPaneKey)) {
-    const parsed = parsePaneKey(paneKey)
-    const parsedParent = orchestration.parentPaneKey
-      ? parsePaneKey(orchestration.parentPaneKey)
-      : null
-    const liveEntry = agentStatusByPaneKey[paneKey]
-    const retainedEntry = retainedAgentsByPaneKey[paneKey]
-    // Why: child agent terminals can be attributed to a worktree before their
-    // tab reaches this renderer, or after the row has been retained as done.
-    // The parent link must still reach that worktree card.
-    if (
-      (parsed && tabIds.has(parsed.tabId)) ||
-      (parsedParent && tabIds.has(parsedParent.tabId)) ||
-      liveEntry?.worktreeId === worktreeId ||
-      retainedEntry?.worktreeId === worktreeId
-    ) {
-      out[paneKey] = orchestration
-    }
-  }
-  return Object.keys(out).length > 0 ? out : EMPTY_RUNTIME_AGENT_ORCHESTRATION
+  return selectWorktreeAgentOrchestration(state, worktreeId)
 }
 
 export function selectTerminalLayoutsForWorktree(

@@ -3,6 +3,7 @@ import { createInterface } from 'node:readline'
 import type { AiVaultSession } from '../../shared/ai-vault-types'
 import { LOCAL_EXECUTION_HOST_ID, type ExecutionHostId } from '../../shared/execution-host'
 import { isKnownHarnessInjectedUserTurnText } from '../../shared/harness-injected-user-turns'
+import { normalizePromptField } from '../../shared/agent-status-field-normalization'
 import type {
   FileWithMtime,
   ResumableSessionParseState,
@@ -111,6 +112,14 @@ export function consumeClaudeSessionLine(state: ClaudeSessionParseState, line: s
       accumulator.queuedMessageCount++
     } else if (record.operation === 'remove' || record.operation === 'dequeue') {
       accumulator.queuedMessageCount = Math.max(0, accumulator.queuedMessageCount - 1)
+    }
+    return
+  }
+
+  if (record.type === 'last-prompt') {
+    const prompt = normalizePromptField(record.lastPrompt)
+    if (prompt) {
+      accumulator.lastUserPrompt = prompt
     }
     return
   }

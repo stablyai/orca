@@ -8,7 +8,7 @@ import {
   type WorktreeStartupPayload
 } from '@/lib/worktree-activation'
 import { ensureAgentStartupInTerminal } from '@/lib/new-workspace'
-import { queueNewWorkspaceTerminalFocus } from '@/lib/new-workspace-terminal-focus'
+import { queueWorkspaceActivationTerminalFocus } from '@/lib/workspace-activation-terminal-focus'
 import { getActiveRuntimeTarget } from '@/runtime/runtime-rpc-client'
 import {
   attachEphemeralVmRuntimeToWorkspace,
@@ -273,7 +273,7 @@ async function executeWorktreeCreation(
     })
   }
   if (shouldActivateOnCompletion && !preparedRequest.suppressTerminalFocusOnCompletion) {
-    queueNewWorkspaceTerminalFocus(worktree.id, activation)
+    queueWorkspaceActivationTerminalFocus(worktree.id, activation)
   }
 
   // Why: awaiting the note IPC before the swap would add a visible round-trip to

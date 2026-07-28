@@ -16,10 +16,12 @@ describe('deriveGeneratedTabTitle', () => {
     ).toBe('Refactor the auth middleware to use JWT')
   })
 
-  it('strips markup, links, emoji, and punctuation from generated titles', () => {
+  it('strips markup, links, emoji, and punctuation without promoting incidental markers', () => {
     expect(
-      deriveGeneratedTabTitle('Please fix `src/auth.ts`!!! https://example.com 🔥 then add tests')
-    ).toBe('Fix src auth')
+      deriveGeneratedTabTitle(
+        'Please fix auth note #1 with `src/auth.ts`!!! https://example.com 🔥'
+      )
+    ).toBe('Fix auth note 1 with src auth')
   })
 
   it('preserves non-ASCII title text while folding Unicode whitespace', () => {
@@ -28,48 +30,22 @@ describe('deriveGeneratedTabTitle', () => {
     )
   })
 
-  it('leads with the issue identifier and keeps the description after it', () => {
+  it('keeps useful text after common issue prefixes', () => {
     expect(deriveGeneratedTabTitle('Issue #2056: Opt-in generated tab titles for agents')).toBe(
-      'Issue 2056 - Opt in generated tab'
+      'Opt in generated tab titles for agents'
     )
-  })
-
-  it('recovers a PR number from a URL the pipeline strips, leading with it', () => {
-    expect(
-      deriveGeneratedTabTitle(
-        'Review this community PR https://github.com/EveryInc/plugin/pull/1094'
-      )
-    ).toBe('PR 1094 - Review this community')
-  })
-
-  it('leads with a GitLab MR identifier', () => {
-    expect(
-      deriveGeneratedTabTitle('fix https://gitlab.com/group/app/-/merge_requests/42 quickly')
-    ).toBe('MR 42 - Fix quickly')
   })
 
   it('strips a URL containing underscores intact', () => {
     expect(
       deriveGeneratedTabTitle('inspect https://gitlab.com/g/p/-/work_items/9 then report')
-    ).toBe('Issue 9 - Inspect then report')
+    ).toBe('Inspect then report')
   })
 
-  it('leads with the identifier for a URL wrapped in markdown emphasis, without leaking fragments', () => {
+  it('strips a URL wrapped in markdown emphasis without leaking fragments', () => {
     const title = deriveGeneratedTabTitle('Review _https://github.com/o/r/pull/5_ now')
-    expect(title).toBe('PR 5 - Review now')
+    expect(title).toBe('Review now')
     expect(title).not.toMatch(/https|pull/)
-  })
-
-  it('leads with a bare ticket key', () => {
-    expect(deriveGeneratedTabTitle('implement ENG-456 login flow')).toBe(
-      'ENG-456 - Implement login flow'
-    )
-  })
-
-  it('does not treat a cipher token as an identifier', () => {
-    expect(deriveGeneratedTabTitle('implement SHA-256 hashing in the signer')).toBe(
-      'Implement SHA 256 hashing in the signer'
-    )
   })
 
   it('bounds titles to the maximum length without adding punctuation', () => {
