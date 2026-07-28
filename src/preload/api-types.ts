@@ -73,6 +73,10 @@ import type { LinearIssueAttributeFilter } from '../shared/linear-issue-attribut
 import type { ProjectExecutionRuntimeResolution } from '../shared/project-execution-runtime'
 import type { StartupCommandDelivery } from '../shared/codex-startup-delivery'
 import type {
+  TerminalHostAppearance,
+  TerminalHostEmbedderEvent
+} from '../shared/terminal-host-bridge'
+import type {
   AgentProviderSessionMetadata,
   SleepingAgentLaunchConfig
 } from '../shared/agent-session-resume'
@@ -1435,6 +1439,9 @@ export type PreloadApi = {
     ) => () => void
   }
   pty: {
+    // Why a preload constant (not IPC): the terminal-process-isolation flag is an
+    // env var only main/preload can read; renderer branches on it synchronously.
+    processIsolationEnabled: boolean
     spawn: (opts: {
       cols: number
       rows: number
@@ -1627,6 +1634,11 @@ export type PreloadApi = {
     clearPendingPaneSerializer: (paneKey: string, gen: number) => Promise<void>
     reportRendererSerializerReady?: (ptyId: string) => Promise<void>
     management: PtyManagementApi
+  }
+  /** Bridge for the isolated terminal-host <webview> guest (guest-side surface). */
+  terminalHost: {
+    sendToEmbedder: (event: TerminalHostEmbedderEvent) => void
+    onAppearance: (callback: (appearance: TerminalHostAppearance) => void) => () => void
   }
   feedback: {
     submit: (args: {

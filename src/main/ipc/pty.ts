@@ -2360,6 +2360,43 @@ export function registerPtyHandlers(
     return writtenOff
   }
 
+  // Why (terminal process isolation): PTYs spawned by a trusted terminal-host
+  // webview render in that guest's own renderer process, so pty:data/pty:exit
+  // must target the guest webContents — mainWindow's dispatcher never sees them.
+  const isolatedPtyRenderers = new Map<string, Electron.WebContents>()
+
+  function adoptIsolatedPtyRenderer(
+    sender: Electron.WebContents | null | undefined,
+    id: string
+  ): boolean {
+    // Only webview guests hosted by the main window are isolated terminal renderers.
+    if (
+      !sender ||
+      sender === mainWindow.webContents ||
+      sender.hostWebContents !== mainWindow.webContents
+    ) {
+      return false
+    }
+    if (isolatedPtyRenderers.get(id) === sender) {
+      return true
+    }
+    isolatedPtyRenderers.set(id, sender)
+    sender.once('destroyed', () => {
+      if (isolatedPtyRenderers.get(id) === sender) {
+        isolatedPtyRenderers.delete(id)
+      }
+    })
+    return true
+  }
+
+  function getPtyRendererWebContents(id: string): Electron.WebContents {
+    const isolated = isolatedPtyRenderers.get(id)
+    if (isolated && !isolated.isDestroyed()) {
+      return isolated
+    }
+    return mainWindow.webContents
+  }
+
   function sendPtyDataToRenderer(id: string, payload: PtyDataPayload): boolean {
     const charCount = getPtyPayloadCharCount(payload)
     const accounting = rendererDeliveryAccountingByPty.get(id)
@@ -2378,7 +2415,7 @@ export function registerPtyHandlers(
     rendererInFlightTotalChars += charCount
     recordPtyRendererDeliveryPressure(id)
     try {
-      mainWindow.webContents.send('pty:data', payload)
+      getPtyRendererWebContents(id).send('pty:data', payload)
     } catch (error) {
       const current = rendererDeliveryAccountingByPty.get(id)
       if (current) {
@@ -2830,10 +2867,11 @@ export function registerPtyHandlers(
           schedulePendingDataAfterCreditReport(true)
         }
       }
-      mainWindow.webContents.send('pty:exit', {
+      getPtyRendererWebContents(payload.id).send('pty:exit', {
         ...payload,
         ...(reversibleStopOwnersByPtyId.has(payload.id) ? { preserveRendererBinding: true } : {})
       })
+      isolatedPtyRenderers.delete(payload.id)
     } finally {
       rendererExitingPtyIds.delete(payload.id)
     }
@@ -4373,7 +4411,7 @@ export function registerPtyHandlers(
   ipcMain.handle(
     'pty:spawn',
     async (
-      _event,
+      event,
       args: {
         cols: number
         rows: number
@@ -4798,6 +4836,7 @@ export function registerPtyHandlers(
       let result: PtySpawnResult
       let rejectedRegistrationCandidate: PtySpawnResult | null = null
       let pendingRegistrationPtyId: string | null = null
+      let pendingIsolatedPtyRendererId: string | null = null
       let preparedProvisionalExecutionContext = false
       let releaseWorktreeSpawn: (() => void) | undefined
       try {
@@ -4808,6 +4847,9 @@ export function registerPtyHandlers(
           }
           spawnTiming.mark('options')
           const expectedPtyId = effectiveSessionAppId ?? effectiveSessionId
+          if (expectedPtyId && adoptIsolatedPtyRenderer(event?.sender, expectedPtyId)) {
+            pendingIsolatedPtyRendererId = expectedPtyId
+          }
           if (expectedPtyId) {
             runtime?.beginPtyRegistration?.(expectedPtyId)
             pendingRegistrationPtyId = expectedPtyId
@@ -4823,6 +4865,13 @@ export function registerPtyHandlers(
             ? (runtime?.getPtyOutputSequence?.(expectedPtyId) ?? 0)
             : 0
           result = await provider.spawn(spawnOptions)
+          if (pendingIsolatedPtyRendererId && pendingIsolatedPtyRendererId !== result.id) {
+            if (isolatedPtyRenderers.get(pendingIsolatedPtyRendererId) === event?.sender) {
+              isolatedPtyRenderers.delete(pendingIsolatedPtyRendererId)
+            }
+            adoptIsolatedPtyRenderer(event?.sender, result.id)
+            pendingIsolatedPtyRendererId = result.id
+          }
           rejectedRegistrationCandidate = result
           if (pendingRegistrationPtyId !== result.id) {
             if (pendingRegistrationPtyId) {
@@ -4850,6 +4899,12 @@ export function registerPtyHandlers(
           )
           spawnTiming.mark('provider_spawn')
         } catch (err) {
+          if (
+            pendingIsolatedPtyRendererId &&
+            isolatedPtyRenderers.get(pendingIsolatedPtyRendererId) === event?.sender
+          ) {
+            isolatedPtyRenderers.delete(pendingIsolatedPtyRendererId)
+          }
           if ((isMintedSessionId || preparedProvisionalExecutionContext) && effectiveSessionAppId) {
             runtime?.preparePtyExecutionContext?.(effectiveSessionAppId, null, {
               resetIncarnation: true
@@ -5167,6 +5222,9 @@ export function registerPtyHandlers(
             })
           }
         }
+        // Why here (not a separate register IPC): binding at spawn closes the race
+        // where first output bytes race an out-of-band registration message.
+        adoptIsolatedPtyRenderer(event?.sender, result.id)
         const response = {
           ...result,
           ...(!result.isReattach && effectiveLaunchConfig
@@ -5314,6 +5372,24 @@ export function registerPtyHandlers(
     !mainWindow.isDestroyed() &&
     !(typeof mainWebContents.isDestroyed === 'function' && mainWebContents.isDestroyed())
 
+  // Why: an isolated terminal-host guest may write ONLY to the PTY it spawned
+  // (adopted at pty:spawn); any other guest/pty combination stays rejected.
+  const isPtyWriteEventFromOwningIsolatedRenderer = (
+    event: IpcMainEvent | IpcMainInvokeEvent,
+    ptyId: string
+  ): boolean => {
+    const isolated = isolatedPtyRenderers.get(ptyId)
+    return isolated !== undefined && event.sender === isolated && !isolated.isDestroyed()
+  }
+
+  const isAuthorizedPtyWriteEvent = (
+    event: IpcMainEvent | IpcMainInvokeEvent,
+    args: unknown
+  ): args is PtyWritePayload =>
+    isPtyWritePayload(args) &&
+    (isPtyWriteEventFromMainWindow(event, mainWindow.webContents) ||
+      isPtyWriteEventFromOwningIsolatedRenderer(event, args.id))
+
   const writePtyInput = (args: PtyWritePayload): boolean | Promise<boolean> => {
     // Why: mobile-presence-lock defense-in-depth — the renderer's onData guard can let one keystroke slip during the state-flip lag, so catch it server-side. See docs/mobile-presence-lock.md.
     if (runtime?.getDriver(args.id).kind === 'mobile') {
@@ -5364,7 +5440,7 @@ export function registerPtyHandlers(
   const hostViewportClaimTails = new Map<string, Promise<boolean>>()
 
   ipcMain.on('pty:write', (event, args: unknown) => {
-    if (!isPtyWriteEventFromMainWindow(event, mainWindow.webContents) || !isPtyWritePayload(args)) {
+    if (!isAuthorizedPtyWriteEvent(event, args)) {
       return
     }
     const claimTail = hostViewportClaimTails.get(args.id)
@@ -5375,7 +5451,7 @@ export function registerPtyHandlers(
     writePtyInput(args)
   })
   ipcMain.handle('pty:writeAccepted', (event, args: unknown): boolean | Promise<boolean> => {
-    if (!isPtyWriteEventFromMainWindow(event, mainWindow.webContents) || !isPtyWritePayload(args)) {
+    if (!isAuthorizedPtyWriteEvent(event, args)) {
       return false
     }
     const claimTail = hostViewportClaimTails.get(args.id)

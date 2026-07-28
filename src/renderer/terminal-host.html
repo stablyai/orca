@@ -1,0 +1,27 @@
+<!doctype html>
+<html>
+  <head>
+    <meta charset="UTF-8" />
+    <title>Orca Terminal Host</title>
+    <!-- CSP is relaxed during development; electron-vite injects a stricter policy for production builds -->
+    <style>
+      html,
+      body {
+        margin: 0;
+        padding: 0;
+        height: 100%;
+        overflow: hidden;
+        background: transparent;
+      }
+      #terminal {
+        height: 100%;
+        width: 100%;
+      }
+    </style>
+  </head>
+
+  <body>
+    <div id="terminal"></div>
+    <script type="module" src="/src/terminal-host/terminal-host-entry.ts"></script>
+  </body>
+</html>

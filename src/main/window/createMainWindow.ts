@@ -446,10 +446,46 @@ export function createMainWindow(
   // so register it with the window's other navigation policy.
   registerPluginPanelNavigationGuard(mainWindow.webContents)
 
+  // Why: the isolated terminal host is our own bundled page loaded from the same
+  // directory (and protocol) as the main renderer entry — anything else is untrusted.
+  const isTrustedTerminalHostSrc = (src: string): boolean => {
+    if (process.env.ORCA_TERMINAL_PROCESS_ISOLATION !== '1') {
+      return false
+    }
+    try {
+      const srcUrl = new URL(src)
+      const windowUrl = new URL(mainWindow.webContents.getURL())
+      const dirOf = (pathname: string): string => pathname.slice(0, pathname.lastIndexOf('/'))
+      return (
+        srcUrl.protocol === windowUrl.protocol &&
+        srcUrl.host === windowUrl.host &&
+        srcUrl.pathname.endsWith('/terminal-host.html') &&
+        dirOf(srcUrl.pathname) === dirOf(windowUrl.pathname)
+      )
+    } catch {
+      return false
+    }
+  }
+
   mainWindow.webContents.on('will-attach-webview', (event, webPreferences, params) => {
     const src = typeof params.src === 'string' ? params.src : ''
     const normalizedSrc = normalizeBrowserNavigationUrl(src)
     const partition = typeof webPreferences.partition === 'string' ? webPreferences.partition : ''
+
+    if (!partition && isTrustedTerminalHostSrc(src)) {
+      // Terminal-host guest is privileged on purpose: it gets the app preload so
+      // its xterm can drive the PTY IPC directly from its own renderer process.
+      // Main sets the preload path itself — attach params are never trusted for it.
+      webPreferences.preload = join(__dirname, '../preload/index.js')
+      delete (webPreferences as Record<string, unknown>).preloadURL
+      webPreferences.nodeIntegration = false
+      webPreferences.nodeIntegrationInSubFrames = false
+      webPreferences.contextIsolation = true
+      webPreferences.sandbox = true
+      webPreferences.webSecurity = true
+      webPreferences.allowRunningInsecureContent = false
+      return
+    }
 
     // Why: fail closed — deny any src or partition not in the registry allowlist so a renderer bug can't smuggle preload/Node into an unprivileged guest.
     if (!normalizedSrc || !browserSessionRegistry.isAllowedPartition(partition)) {
