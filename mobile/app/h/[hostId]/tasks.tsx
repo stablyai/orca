@@ -147,6 +147,7 @@ import {
   githubProjectHost,
   githubProjectIdentityKey as githubProjectKey
 } from '../../../../src/shared/github-project-identity'
+import { getTaskPresetQuery, scopeGitHubTaskSearch } from '../../../../src/shared/task-query'
 
 type RepoSummary = {
   id: string
@@ -882,22 +883,6 @@ function formatUpdatedAt(value: string): string {
   return `${Math.floor(hours / 24)}d`
 }
 
-function getTaskPresetQuery(preset: GitHubPreset): string {
-  switch (preset) {
-    case 'my-issues':
-      return 'assignee:@me is:issue is:open'
-    case 'prs':
-      return 'is:pr is:open'
-    case 'my-prs':
-      return 'author:@me is:pr is:open'
-    case 'review':
-      return 'review-requested:@me is:pr is:open'
-    case 'issues':
-    default:
-      return 'is:issue is:open'
-  }
-}
-
 function isTaskProvider(value: unknown): value is TaskProvider {
   return value === 'github' || value === 'gitlab' || value === 'linear'
 }
@@ -919,7 +904,7 @@ function normalizeLinearFilter(value: unknown): LinearFilter {
 }
 
 function githubKindFromQuery(query: string, fallbackPreset: GitHubPreset): GitHubTaskKind {
-  if (/\bis:pr\b/i.test(query)) {
+  if (/\bis:(?:pr|pull-request)\b/i.test(query)) {
     return 'prs'
   }
   if (/\bis:issue\b/i.test(query)) {
@@ -997,17 +982,6 @@ function projectRowStatusLabel(row: GitHubProjectRow): string {
     return 'Closed'
   }
   return 'Open'
-}
-
-function scopeGitHubTaskSearch(query: string, kind: GitHubTaskKind): string {
-  const trimmed = query.trim()
-  if (!trimmed) {
-    return getTaskPresetQuery(kind === 'prs' ? 'prs' : 'issues')
-  }
-  if (/\bis:(?:issue|pr)\b/i.test(trimmed)) {
-    return trimmed
-  }
-  return `${kind === 'prs' ? 'is:pr' : 'is:issue'} ${trimmed}`
 }
 
 function gitHubStatusLabel(item: GitHubWorkItem): string {

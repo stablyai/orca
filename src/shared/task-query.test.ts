@@ -1,11 +1,41 @@
 import { describe, expect, it } from 'vitest'
 import {
+  getTaskPresetQuery,
   parseTaskQuery,
   serializeTaskQuery,
+  scopeGitHubTaskSearch,
   stripRepoQualifiers,
   tokenizeSearchQuery,
   withQualifier
 } from './task-query'
+
+describe('GitHub task queries', () => {
+  it.each([
+    ['all', 'is:issue is:open'],
+    ['issues', 'is:issue is:open'],
+    ['my-issues', 'assignee:@me is:issue is:open'],
+    ['prs', 'is:pr is:open'],
+    ['my-prs', 'author:@me is:pr is:open'],
+    ['review', 'review-requested:@me is:pr is:open'],
+    [null, 'is:issue is:open']
+  ] as const)('maps %s to its preset query', (preset, expected) => {
+    expect(getTaskPresetQuery(preset)).toBe(expected)
+  })
+
+  it.each([
+    ['is:issue bug', 'prs'],
+    ['is:pr bug', 'issues'],
+    ['is:pull-request bug', 'issues']
+  ] as const)('preserves the %s scope alias', (query, kind) => {
+    expect(scopeGitHubTaskSearch(query, kind)).toBe(query)
+  })
+
+  it('infers pull requests from PR-only qualifiers', () => {
+    expect(scopeGitHubTaskSearch('review-requested:@me', 'issues')).toBe(
+      'is:pr review-requested:@me'
+    )
+  })
+})
 
 describe('tokenizeSearchQuery', () => {
   it('splits on whitespace', () => {

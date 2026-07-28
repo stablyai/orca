@@ -1,3 +1,7 @@
+import type { TaskViewPresetId } from './types'
+
+export type GitHubTaskKind = 'issues' | 'prs'
+
 export type ParsedTaskQuery = {
   scope: 'all' | 'issue' | 'pr'
   state: 'open' | 'closed' | 'all' | 'merged' | null
@@ -160,6 +164,37 @@ export function parseTaskQuery(rawQuery: string): ParsedTaskQuery {
   }
   query.freeText = freeTextTokens.join(' ').trim()
   return query
+}
+
+export function getTaskPresetQuery(presetId: TaskViewPresetId | null): string {
+  switch (presetId) {
+    case 'all':
+    case 'issues':
+      return 'is:issue is:open'
+    case 'my-issues':
+      return 'assignee:@me is:issue is:open'
+    case 'prs':
+      return 'is:pr is:open'
+    case 'my-prs':
+      return 'author:@me is:pr is:open'
+    case 'review':
+      return 'review-requested:@me is:pr is:open'
+    case null:
+      return 'is:issue is:open'
+  }
+}
+
+export function scopeGitHubTaskSearch(query: string, kind: GitHubTaskKind): string {
+  const trimmed = query.trim()
+  if (!trimmed) {
+    return getTaskPresetQuery(kind === 'prs' ? 'prs' : 'issues')
+  }
+  if (/\bis:(?:issue|pr|pull-request)\b/i.test(trimmed)) {
+    return trimmed
+  }
+  const parsed = parseTaskQuery(trimmed)
+  const inferredKind = parsed.scope === 'pr' ? 'prs' : parsed.scope === 'issue' ? 'issues' : kind
+  return `${inferredKind === 'prs' ? 'is:pr' : 'is:issue'} ${trimmed}`
 }
 
 function quoteIfNeeded(value: string): string {
