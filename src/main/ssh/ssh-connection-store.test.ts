@@ -311,6 +311,29 @@ describe('SshConnectionStore', () => {
       expect(result).toEqual([])
     })
 
+    it('never overwrites a custom-source target that owns the alias', () => {
+      mockStore.addSshTarget({
+        id: 'ssh-custom',
+        label: 'cluster',
+        configHost: 'cluster',
+        host: 'custom.example.com',
+        port: 22,
+        username: 'me',
+        source: 'custom',
+        sourceId: 'internal-devboxes'
+      })
+      loadUserSshConfigMock.mockReturnValue([{ host: 'cluster' }])
+      sshConfigHostsToTargetsMock.mockReturnValue([
+        candidate({ configHost: 'cluster', host: '10.0.0.9', port: 2222, username: 'dev' })
+      ])
+
+      const result = sshStore.importFromSshConfig()
+
+      expect(mockStore.updateSshTarget).not.toHaveBeenCalled()
+      expect(mockStore.addSshTarget).toHaveBeenCalledTimes(1)
+      expect(result).toEqual([])
+    })
+
     it('adopts a legacy unsourced target into config-sync', () => {
       mockStore.addSshTarget({
         id: 'ssh-legacy',

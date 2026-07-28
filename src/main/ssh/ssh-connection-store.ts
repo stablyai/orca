@@ -137,10 +137,7 @@ export class SshConnectionStore {
     const manualAliases = new Set<string>()
     for (const existing of existingTargets) {
       const alias = existing.configHost ?? existing.label
-      if (
-        existing.source === 'manual' ||
-        (existing.source === undefined && !isLegacyConfigImportTarget(existing))
-      ) {
+      if (!isConfigManagedTarget(existing)) {
         manualAliases.add(alias)
         continue
       }

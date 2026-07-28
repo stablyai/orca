@@ -34,6 +34,19 @@ describe('resolveVsCodeSshAuthority', () => {
     ).toEqual({ ok: true, authority: 'ada@builder.example.com' })
   })
 
+  it('treats custom-source targets as explicit connection details', () => {
+    expect(
+      resolveVsCodeSshAuthority(
+        createTarget({
+          source: 'custom',
+          sourceId: 'internal-devboxes',
+          configHost: 'inventory-alias',
+          host: 'builder.example.com'
+        })
+      )
+    ).toEqual({ ok: true, authority: 'ada@builder.example.com' })
+  })
+
   it.each(['', '   '])(
     'uses a host-only authority for a manual port-22 target without a username',
     (username) => {

@@ -1,3 +1,5 @@
+import { z } from 'zod'
+
 // ─── SSH Connection Types ───────────────────────────────────────────
 
 export const MIN_SSH_RELAY_GRACE_PERIOD_SECONDS = 60
@@ -6,6 +8,10 @@ export const LEGACY_DEFAULT_SSH_RELAY_GRACE_PERIOD_SECONDS = 3 * 60 * 60
 export const DEFAULT_BOUNDED_SSH_RELAY_GRACE_PERIOD_SECONDS = 24 * 60 * 60
 export const DEFAULT_SSH_RELAY_GRACE_PERIOD_SECONDS = 0
 export const SSH_RELAY_CONFIGURE_GRACE_TIME_METHOD = 'relay.configureGraceTime'
+export const SshTargetSourceSchema = z.enum(['ssh-config', 'manual', 'custom'])
+export const SshTargetSourceIdSchema = z.string().trim().min(1).max(256)
+
+export type SshTargetSource = z.infer<typeof SshTargetSourceSchema>
 
 export type SshTarget = {
   id: string
@@ -32,13 +38,12 @@ export type SshTarget = {
   proxyCommand?: string
   /** Jump host (ProxyJump), if any. */
   jumpHost?: string
-  /** Where this target came from. `ssh-config` targets are kept in sync with
-   *  `~/.ssh/config` on import — their config-derived fields (host, port,
-   *  username, jump host, identity, proxy) are refreshed on each import.
-   *  `manual` targets are never overwritten by import. Legacy persisted targets
-   *  predate this field (undefined) and are adopted into config-sync on next
-   *  import. */
-  source?: 'ssh-config' | 'manual'
+  /** Where this target came from. Managed sources refresh their own targets;
+   *  manual targets are never overwritten by import. Legacy persisted targets
+   *  predate this field and may be adopted into config sync. */
+  source?: SshTargetSource
+  /** Stable owner id for custom-source reconciliation. */
+  sourceId?: string
   /** Grace period in seconds before relay shuts down after disconnect.
    *  0 disables expiry. Default: 0 (until reset). Max: 604800 (7 days). */
   relayGracePeriodSeconds?: number

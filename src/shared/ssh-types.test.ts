@@ -1,5 +1,11 @@
 import { describe, expect, it } from 'vitest'
-import type { SshTarget, SshConnectionState, SshConnectionStatus } from './ssh-types'
+import {
+  SshTargetSourceIdSchema,
+  SshTargetSourceSchema,
+  type SshTarget,
+  type SshConnectionState,
+  type SshConnectionStatus
+} from './ssh-types'
 
 describe('SSH types', () => {
   it('SshTarget has required fields', () => {
@@ -12,6 +18,13 @@ describe('SSH types', () => {
     }
     expect(target.id).toBe('target-1')
     expect(target.host).toBe('myserver.com')
+  })
+
+  it('validates custom source identity', () => {
+    expect(SshTargetSourceSchema.parse('custom')).toBe('custom')
+    expect(SshTargetSourceIdSchema.parse(' internal-devboxes ')).toBe('internal-devboxes')
+    expect(SshTargetSourceSchema.safeParse('remote').success).toBe(false)
+    expect(SshTargetSourceIdSchema.safeParse('  ').success).toBe(false)
   })
 
   it('SshConnectionStatus covers all expected states', () => {

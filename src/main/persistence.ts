@@ -89,6 +89,8 @@ import {
 import { hardenExistingSecureFile } from '../shared/secure-file'
 import {
   LEGACY_DEFAULT_SSH_RELAY_GRACE_PERIOD_SECONDS,
+  SshTargetSourceIdSchema,
+  SshTargetSourceSchema,
   type RemovedSshTargetTombstone,
   type SshRemotePtyLease,
   type SshTarget
@@ -1108,18 +1110,23 @@ function backfillLegacyAutomationContexts(
   }
 }
 
-type LegacySshTarget = SshTarget & {
+type StoredSshTarget = Omit<SshTarget, 'source' | 'sourceId'> & {
+  source?: unknown
+  sourceId?: unknown
   remoteWorkspaceSyncEnabled?: unknown
   remoteWorkspaceSyncGracePeriodSeconds?: unknown
 }
 
 // Why: old targets predate configHost; default to label-based lookup so imported SSH aliases still resolve via ssh -G.
 function normalizeSshTarget(t: SshTarget): SshTarget {
-  const target = { ...(t as LegacySshTarget) }
+  const storedTarget = { ...(t as StoredSshTarget) }
+  const { source: storedSource, sourceId: storedSourceId, ...target } = storedTarget
   const legacySyncEnabled = target.remoteWorkspaceSyncEnabled
   const currentGracePeriodSeconds = target.relayGracePeriodSeconds
   const legacyGracePeriodSeconds = target.remoteWorkspaceSyncGracePeriodSeconds
   const systemSshConnectionReuse = target.systemSshConnectionReuse
+  const parsedSource = SshTargetSourceSchema.safeParse(storedSource)
+  const parsedSourceId = SshTargetSourceIdSchema.safeParse(storedSourceId)
   // Why: remote sync now follows the SSH relay lifecycle, so retired per-target sync/grace fields are dropped at disk load.
   delete target.remoteWorkspaceSyncEnabled
   delete target.remoteWorkspaceSyncGracePeriodSeconds
@@ -1134,6 +1141,21 @@ function normalizeSshTarget(t: SshTarget): SshTarget {
     ...target,
     configHost: target.configHost ?? target.label ?? target.host
   }
+  if (parsedSource.success) {
+    if (parsedSource.data === 'custom') {
+      normalized.source = parsedSourceId.success ? 'custom' : 'manual'
+    } else if (parsedSource.data === 'manual' && parsedSourceId.success) {
+      // Why: custom sources persist as manual so older builds cannot sync-clobber them.
+      normalized.source = 'custom'
+    } else {
+      normalized.source = parsedSource.data
+    }
+  } else if (storedSource !== undefined) {
+    normalized.source = 'manual'
+  }
+  if (normalized.source === 'custom' && parsedSourceId.success) {
+    normalized.sourceId = parsedSourceId.data
+  }
   // Why: old SSH form persisted 10800 even without a user choice; treat that legacy default as the new implicit default.
   if (
     relayGracePeriodSeconds !== undefined &&
@@ -1145,6 +1167,18 @@ function normalizeSshTarget(t: SshTarget): SshTarget {
     normalized.systemSshConnectionReuse = false
   }
   return normalized
+}
+
+function encodeSshTargetForCompatibility(target: SshTarget): SshTarget {
+  if (target.source !== 'custom') {
+    return target
+  }
+  const parsedSourceId = SshTargetSourceIdSchema.safeParse(target.sourceId)
+  if (!parsedSourceId.success) {
+    const { sourceId: _invalidSourceId, ...rest } = target
+    return { ...rest, source: 'manual' }
+  }
+  return { ...target, source: 'manual', sourceId: parsedSourceId.data }
 }
 
 // Why: strict whitelist rejects unknown/bad-typed keys; returns Partial so partial updates don't clobber valid persisted state.
@@ -3645,6 +3679,7 @@ export class Store {
     // Why: clone before encrypting secrets so in-memory this.state stays plaintext.
     const stateToSave = {
       ...this.getDurableState(),
+      sshTargets: this.state.sshTargets.map(encodeSshTargetForCompatibility),
       settings: {
         ...this.state.settings,
         opencodeSessionCookie: encryptToSentinel(this.state.settings.opencodeSessionCookie),
@@ -6240,13 +6275,24 @@ export class Store {
     if (!target) {
       return null
     }
-    const normalized = normalizeSshTarget({ ...target, ...updates })
+    const next = { ...target, ...updates }
+    if (
+      Object.hasOwn(updates, 'source') &&
+      updates.source !== 'custom' &&
+      !Object.hasOwn(updates, 'sourceId')
+    ) {
+      delete next.sourceId
+    }
+    const normalized = normalizeSshTarget(next)
     Object.assign(target, updates, normalized)
     if (!Object.hasOwn(normalized, 'relayGracePeriodSeconds')) {
       delete target.relayGracePeriodSeconds
     }
     if (!Object.hasOwn(normalized, 'systemSshConnectionReuse')) {
       delete target.systemSshConnectionReuse
+    }
+    if (!Object.hasOwn(normalized, 'sourceId')) {
+      delete target.sourceId
     }
     this.scheduleSave()
     return { ...target }

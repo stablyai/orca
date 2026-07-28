@@ -1509,6 +1509,75 @@ describe('Store', () => {
     expect(onDisk?.port).toBe(2222)
   })
 
+  it('round-trips custom SSH sources through a downgrade-safe persisted shape', async () => {
+    const store = await createStore()
+    store.addSshTarget({
+      id: 'ssh-custom-1',
+      label: 'Devbox',
+      host: 'devbox.example.com',
+      port: 22,
+      username: 'dev',
+      source: 'custom',
+      sourceId: ' internal-devboxes '
+    })
+
+    expect(store.getSshTarget('ssh-custom-1')).toMatchObject({
+      source: 'custom',
+      sourceId: 'internal-devboxes'
+    })
+
+    store.flush()
+    const persisted = readDataFile() as { sshTargets?: Record<string, unknown>[] }
+    expect(persisted.sshTargets?.[0]).toMatchObject({
+      source: 'manual',
+      sourceId: 'internal-devboxes'
+    })
+
+    const reloaded = await createStore()
+    expect(reloaded.getSshTarget('ssh-custom-1')).toMatchObject({
+      source: 'custom',
+      sourceId: 'internal-devboxes'
+    })
+  })
+
+  it('degrades malformed and future SSH sources to manual targets', async () => {
+    writeDataFile({
+      schemaVersion: 1,
+      repos: [],
+      worktreeMeta: {},
+      settings: {},
+      ui: {},
+      githubCache: { pr: {}, issue: {} },
+      workspaceSession: {},
+      sshTargets: [
+        {
+          id: 'ssh-missing-source-id',
+          label: 'Missing source',
+          host: 'missing.example.com',
+          port: 22,
+          username: 'dev',
+          source: 'custom'
+        },
+        {
+          id: 'ssh-future-source',
+          label: 'Future source',
+          host: 'future.example.com',
+          port: 22,
+          username: 'dev',
+          source: 'inventory-v2',
+          sourceId: 'future-source'
+        }
+      ]
+    })
+
+    const store = await createStore()
+
+    expect(store.getSshTarget('ssh-missing-source-id')?.source).toBe('manual')
+    expect(store.getSshTarget('ssh-future-source')?.source).toBe('manual')
+    expect(store.getSshTarget('ssh-missing-source-id')).not.toHaveProperty('sourceId')
+    expect(store.getSshTarget('ssh-future-source')).not.toHaveProperty('sourceId')
+  })
+
   it('persists only explicit SSH connection reuse opt-outs', async () => {
     const store = await createStore()
     store.addSshTarget({

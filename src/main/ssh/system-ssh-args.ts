@@ -167,11 +167,8 @@ function shouldUseOpenSshConfigHost(target: SshTarget): boolean {
 }
 
 export function isOpenSshConfigBackedTarget(target: SshTarget): boolean {
-  if (target.source === 'ssh-config') {
-    return true
-  }
-  if (target.source === 'manual') {
-    return false
+  if (target.source !== undefined) {
+    return target.source === 'ssh-config'
   }
   // Why: legacy imported aliases have a distinct configHost; manual targets
   // historically stored configHost=host and still need explicit -p/-i args.
