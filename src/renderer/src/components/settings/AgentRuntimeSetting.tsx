@@ -50,9 +50,11 @@ export function AgentRuntimeSetting({
       updateAgentRuntime({ localWindowsRuntimeDefault: { kind: 'windows-host' } })
       return
     }
-    updateAgentRuntime({
-      localWindowsRuntimeDefault: { kind: 'wsl', distro: nextWslDistro }
-    })
+    if (nextWslDistro) {
+      updateAgentRuntime({
+        localWindowsRuntimeDefault: { kind: 'wsl', distro: nextWslDistro }
+      })
+    }
   }
 
   return (
@@ -79,7 +81,7 @@ export function AgentRuntimeSetting({
                 {
                   value: 'wsl',
                   label: translate('auto.components.settings.AgentRuntimeSetting.wsl', 'WSL'),
-                  disabled: wslCapabilitiesLoading
+                  disabled: wslCapabilitiesLoading || !wslAvailable || !nextWslDistro
                 }
               ]}
             />

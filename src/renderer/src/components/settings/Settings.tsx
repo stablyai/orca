@@ -853,14 +853,14 @@ function Settings(): React.JSX.Element {
         neededSectionIds.has('accounts') ||
         needsRepoWindowsRuntimeCapabilities ||
         (runtimeTarget.kind === 'local' && needsLocalWindowsRuntimeCapabilities)))
-  // 原因：终端、账号和项目设置描述当前执行宿主，需保留环境级能力。
+  // Why: terminal, account, and repository settings describe the active execution host.
   const windowsTerminalCapabilities = useWindowsTerminalCapabilities(
     shouldLoadWindowsTerminalCapabilities,
     true,
     windowsTerminalCapabilityOwnerKey,
     runtimeTarget
   )
-  // 原因：全局 Agent 和项目默认运行时归本机所有，不能继承当前远程环境的能力。
+  // Why: global agent and project defaults belong to the desktop, not its active remote.
   const remoteViewLocalWindowsRuntimeCapabilities = useLocalWindowsTerminalCapabilities(
     needsLocalWindowsRuntimeCapabilities && runtimeTarget.kind === 'environment',
     true

@@ -267,7 +267,7 @@ export function useLocalWindowsTerminalCapabilities(
   enabled: boolean,
   forceRefreshOnMount = false
 ): WindowsTerminalCapabilities {
-  // 原因：本机全局设置的能力所有者不能随当前附加的远程运行环境切换。
+  // Why: desktop-owned defaults must not follow the active remote environment.
   return useWindowsTerminalCapabilities(enabled, forceRefreshOnMount, 'local', { kind: 'local' })
 }
 

@@ -38,9 +38,11 @@ export function DefaultWindowsProjectRuntimeSetting({
       void updateSettings({ localWindowsRuntimeDefault: { kind: 'windows-host' } })
       return
     }
-    void updateSettings({
-      localWindowsRuntimeDefault: { kind: 'wsl', distro: nextWslDistro }
-    })
+    if (nextWslDistro) {
+      void updateSettings({
+        localWindowsRuntimeDefault: { kind: 'wsl', distro: nextWslDistro }
+      })
+    }
   }
 
   return (
@@ -80,7 +82,7 @@ export function DefaultWindowsProjectRuntimeSetting({
                     'auto.components.settings.DefaultWindowsProjectRuntimeSetting.wsl',
                     'WSL'
                   ),
-                  disabled: wslCapabilitiesLoading
+                  disabled: wslCapabilitiesLoading || !wslAvailable || !nextWslDistro
                 }
               ]}
             />
