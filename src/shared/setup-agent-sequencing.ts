@@ -175,6 +175,7 @@ function buildWindowsSetupCommand(
   markerPath: string,
   nonce: string
 ): string {
+  // Why: delayed expansion keeps path metacharacters as data when cmd invokes the batch runner.
   const script = [
     `$runner = ${quotePowerShellString(runnerScriptPath)}`,
     `$marker = ${quotePowerShellString(markerPath)}`,
