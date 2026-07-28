@@ -47,6 +47,7 @@ const TUI_AGENT_KIND_BY_AGENT = {
   copilot: 'copilot',
   grok: 'grok',
   devin: 'devin',
+  'gajae-code': 'gajae-code',
   ante: 'ante'
 } satisfies Record<TuiAgent, ConcreteAgentKind>
 

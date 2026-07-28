@@ -39,6 +39,7 @@ export const TUI_AGENT_DISPLAY_NAMES: Record<TuiAgent, string> = {
   hermes: 'Hermes',
   openclaw: 'OpenClaw',
   copilot: 'GitHub Copilot',
+  'gajae-code': 'Gajae Code',
   grok: 'Grok'
 }
 

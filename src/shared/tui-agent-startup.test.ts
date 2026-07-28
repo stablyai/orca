@@ -135,6 +135,17 @@ describe('tui agent startup plans', () => {
 
     expect(plan?.launchCommand).toBe("codex '--version'")
   })
+  it('passes Gajae Code prompts as argv', () => {
+    const plan = buildAgentStartupPlan({
+      agent: 'gajae-code',
+      prompt: 'review the current diff',
+      cmdOverrides: {},
+      platform: 'linux'
+    })
+
+    expect(plan?.launchCommand).toBe("gjc 'review the current diff'")
+    expect(plan?.followupPrompt).toBeNull()
+  })
 
   it.each([
     { platform: 'linux' as const, shell: 'posix' as const },

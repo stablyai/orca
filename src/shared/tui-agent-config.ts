@@ -292,6 +292,14 @@ export const TUI_AGENT_CONFIG: Record<TuiAgent, TuiAgentConfig> = {
     expectedProcess: 'devin',
     // Why: `devin -- <prompt>` auto-submits immediately (docs.devin.ai/cli), so start the REPL with no argv prompt.
     promptInjectionMode: 'stdin-after-start'
+  },
+  'gajae-code': {
+    detectCmd: 'gjc',
+    launchCmd: 'gjc',
+    expectedProcess: 'gjc',
+    // Why: gjc accepts a positional prompt while preserving its interactive TUI,
+    // so argv delivery avoids the startup-input readiness race.
+    promptInjectionMode: 'argv'
   }
 }
 
