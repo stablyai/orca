@@ -1,7 +1,13 @@
-import { lstat, readdir, realpath } from 'node:fs/promises'
+import { lstat, opendir, realpath } from 'node:fs/promises'
 import { isAbsolute, join, relative, sep } from 'node:path'
 import type { FileUploadSession, IFilesystemProvider } from '../providers/types'
 import { assertSafeRemotePathSegment, type RemotePathFlavor } from '../ssh/ssh-remote-platform'
+import {
+  admitExternalImportTreeEntry,
+  assertExternalImportTreeDepth,
+  createExternalImportTreeBudget,
+  type ExternalImportTreeBudget
+} from './filesystem-external-import-limits'
 
 export async function captureLocalUploadRoot(
   sourcePath: string,
@@ -23,18 +29,47 @@ export async function preScanSshImportDirectory(
   dirPath: string,
   remotePathFlavor: RemotePathFlavor
 ): Promise<boolean> {
-  const entries = await readdir(dirPath, { withFileTypes: true })
-  for (const entry of entries) {
-    assertSafeRemotePathSegment(entry.name, remotePathFlavor)
-    if (entry.isSymbolicLink()) {
-      return true
-    }
-    if (entry.isDirectory()) {
-      const childPath = join(dirPath, entry.name)
-      if (await preScanSshImportDirectory(childPath, remotePathFlavor)) {
+  return preScanSshImportDirectoryWithinBudget(
+    dirPath,
+    remotePathFlavor,
+    createExternalImportTreeBudget(),
+    '',
+    0
+  )
+}
+
+async function preScanSshImportDirectoryWithinBudget(
+  dirPath: string,
+  remotePathFlavor: RemotePathFlavor,
+  budget: ExternalImportTreeBudget,
+  relativeDir: string,
+  depth: number
+): Promise<boolean> {
+  assertExternalImportTreeDepth(depth)
+  const directory = await opendir(dirPath)
+  try {
+    for await (const entry of directory) {
+      assertSafeRemotePathSegment(entry.name, remotePathFlavor)
+      const relativePath = relativeDir ? `${relativeDir}/${entry.name}` : entry.name
+      admitExternalImportTreeEntry(budget, relativePath, false)
+      if (entry.isSymbolicLink()) {
+        return true
+      }
+      if (
+        entry.isDirectory() &&
+        (await preScanSshImportDirectoryWithinBudget(
+          join(dirPath, entry.name),
+          remotePathFlavor,
+          budget,
+          relativePath,
+          depth + 1
+        ))
+      ) {
         return true
       }
     }
+  } finally {
+    await directory.close().catch(() => undefined)
   }
   return false
 }
@@ -48,37 +83,72 @@ export async function uploadSshImportDirectory(
   remotePathFlavor: RemotePathFlavor,
   assertCurrent?: () => void
 ): Promise<void> {
+  await uploadSshImportDirectoryWithinBudget(
+    provider,
+    uploadSession,
+    localDir,
+    remoteDir,
+    rootRealPath,
+    remotePathFlavor,
+    createExternalImportTreeBudget(),
+    '',
+    0,
+    assertCurrent
+  )
+}
+
+async function uploadSshImportDirectoryWithinBudget(
+  provider: IFilesystemProvider,
+  uploadSession: FileUploadSession,
+  localDir: string,
+  remoteDir: string,
+  rootRealPath: string,
+  remotePathFlavor: RemotePathFlavor,
+  budget: ExternalImportTreeBudget,
+  relativeDir: string,
+  depth: number,
+  assertCurrent?: () => void
+): Promise<void> {
+  assertExternalImportTreeDepth(depth)
   await assertLocalUploadPathInsideRoot(rootRealPath, localDir)
-  const entries = await readdir(localDir, { withFileTypes: true })
-  for (const entry of entries) {
-    assertSafeRemotePathSegment(entry.name, remotePathFlavor)
-    const localPath = join(localDir, entry.name)
-    const remotePath = `${remoteDir}/${entry.name}`
-    await assertLocalUploadPathInsideRoot(rootRealPath, localPath)
-    const statResult = await lstat(localPath)
+  const directory = await opendir(localDir)
+  try {
+    for await (const entry of directory) {
+      assertSafeRemotePathSegment(entry.name, remotePathFlavor)
+      const relativePath = relativeDir ? `${relativeDir}/${entry.name}` : entry.name
+      admitExternalImportTreeEntry(budget, relativePath, false)
+      const localPath = join(localDir, entry.name)
+      const remotePath = `${remoteDir}/${entry.name}`
+      await assertLocalUploadPathInsideRoot(rootRealPath, localPath)
+      const statResult = await lstat(localPath)
 
-    // Why: skip symlinks and special files even after the up-front pre-scan;
-    // this closes the TOCTOU gap if one is created during upload.
-    if (statResult.isSymbolicLink() || (!statResult.isFile() && !statResult.isDirectory())) {
-      continue
-    }
+      // Why: the up-front scan cannot prevent a source swap during upload.
+      if (statResult.isSymbolicLink() || (!statResult.isFile() && !statResult.isDirectory())) {
+        continue
+      }
 
-    if (statResult.isDirectory()) {
+      if (statResult.isDirectory()) {
+        assertCurrent?.()
+        await provider.createDirNoClobber(remotePath)
+        await uploadSshImportDirectoryWithinBudget(
+          provider,
+          uploadSession,
+          localPath,
+          remotePath,
+          rootRealPath,
+          remotePathFlavor,
+          budget,
+          relativePath,
+          depth + 1,
+          assertCurrent
+        )
+        continue
+      }
       assertCurrent?.()
-      await provider.createDirNoClobber(remotePath)
-      await uploadSshImportDirectory(
-        provider,
-        uploadSession,
-        localPath,
-        remotePath,
-        rootRealPath,
-        remotePathFlavor,
-        assertCurrent
-      )
-      continue
+      await uploadSession.uploadFile(localPath, remotePath, { exclusive: true })
     }
-    assertCurrent?.()
-    await uploadSession.uploadFile(localPath, remotePath, { exclusive: true })
+  } finally {
+    await directory.close().catch(() => undefined)
   }
 }
 
