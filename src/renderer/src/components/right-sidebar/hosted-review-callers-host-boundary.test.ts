@@ -113,8 +113,8 @@ describe('hosted-review caller host boundaries', () => {
       '../sidebar/use-worktree-issue-link.ts'
     ]) {
       const source = readSource(sourcePath)
-      expect(source, sourcePath).toContain('findRepoForWorktreeOwner')
-      expect(source, sourcePath).toContain('executionHostId')
+      expect(source).toContain('findRepoForWorktreeOwner')
+      expect(source).toContain('executionHostId')
     }
   })
 })

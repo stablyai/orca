@@ -1407,6 +1407,37 @@ describe('fetchWorktrees', () => {
     expect(store.getState().worktreesByRepo['same-repo']).toEqual([localWorktree])
   })
 
+  it('does not fall back to local when the requested repo host is missing', async () => {
+    const store = createTestStore()
+    const localWorktree = makeWorktree({
+      id: 'same-repo::/local/wt',
+      repoId: 'same-repo',
+      path: '/local/wt'
+    })
+    store.setState({
+      repos: [
+        {
+          id: 'same-repo',
+          path: '/local/repo',
+          displayName: 'Local',
+          badgeColor: '#000',
+          addedAt: 0,
+          executionHostId: 'local'
+        }
+      ],
+      worktreesByRepo: { 'same-repo': [localWorktree] }
+    } as Partial<AppState>)
+
+    const result = await store
+      .getState()
+      .fetchWorktrees('same-repo', { executionHostId: 'ssh:missing' })
+
+    expect(result).toBe(false)
+    expect(mockApi.worktrees.listDetected).not.toHaveBeenCalled()
+    expect(runtimeEnvironmentCall).not.toHaveBeenCalled()
+    expect(store.getState().worktreesByRepo['same-repo']).toEqual([localWorktree])
+  })
+
   it('stamps remote runtime worktrees with the owning repo runtime host', async () => {
     const store = createTestStore()
     // Why: a remote runtime returns worktrees from its own perspective, so their hostId arrives as the default "local".
@@ -3160,6 +3191,28 @@ describe('createWorktree base status merge', () => {
       executionHostId: 'ssh:ssh-1'
     })
     expect(runtimeEnvironmentTransportCall).not.toHaveBeenCalled()
+  })
+
+  it('does not prefetch locally when the requested repo host is missing', async () => {
+    const store = createTestStore()
+    store.setState({
+      repos: [
+        {
+          id: 'repo1',
+          path: '/local/repo1',
+          displayName: 'local',
+          badgeColor: '#000',
+          addedAt: 0
+        }
+      ]
+    } as Partial<AppState>)
+
+    await store
+      .getState()
+      .prefetchWorktreeCreateBase('repo1', 'origin/main', { executionHostId: 'ssh:missing' })
+
+    expect(mockApi.worktrees.prefetchCreateBase).not.toHaveBeenCalled()
+    expect(runtimeEnvironmentCall).not.toHaveBeenCalled()
   })
 
   it('prefetches create base through runtime RPC for remote runtime targets', async () => {

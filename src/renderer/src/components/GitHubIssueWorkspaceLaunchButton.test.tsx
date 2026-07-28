@@ -119,8 +119,8 @@ describe('GitHubIssueWorkspaceLaunchButton', () => {
         />
       </TooltipProvider>
     )
-    await act(() => resolveFirst([{ id: 'claude', label: 'Claude', cmd: 'claude' }]))
+    act(() => resolveFirst([{ id: 'claude', label: 'Claude', cmd: 'claude' }]))
 
-    expect(screen.queryByRole('menuitem', { name: 'Claude' })).toBeNull()
+    await waitFor(() => expect(screen.queryByRole('menuitem', { name: 'Claude' })).toBeNull())
   })
 })

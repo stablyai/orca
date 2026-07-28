@@ -402,13 +402,22 @@ function withRepoHostOwnership<
   } as T
 }
 
+function resolveRepoHostId(
+  state: Pick<AppState, 'repos' | 'settings'>,
+  repoId: string,
+  hostId?: ExecutionHostId | null
+): ExecutionHostId | null {
+  const repo = findRepoForHost(state.repos, repoId, { hostId, settings: state.settings })
+  // Why: an explicit missing owner must not silently route a same-ID request to local.
+  return repo ? getRepoExecutionHostId(repo) : hostId != null ? null : LOCAL_EXECUTION_HOST_ID
+}
+
 function repoHostId(
   state: Pick<AppState, 'repos' | 'settings'>,
   repoId: string,
   hostId?: ExecutionHostId | null
 ): ExecutionHostId {
-  const repo = findRepoForHost(state.repos, repoId, { hostId, settings: state.settings })
-  return repo ? getRepoExecutionHostId(repo) : LOCAL_EXECUTION_HOST_ID
+  return resolveRepoHostId(state, repoId, hostId) ?? LOCAL_EXECUTION_HOST_ID
 }
 
 function repoHasExecutionHost(
@@ -2439,7 +2448,10 @@ export const createWorktreeSlice: StateCreator<AppState, [], [], WorktreeSlice> 
         options?.forceLocalOwner === true && (hasLocalOwner || repoOwners.length === 0)
       const hostId = useLocalOwner
         ? LOCAL_EXECUTION_HOST_ID
-        : repoHostId(ownerState, repoId, options?.executionHostId)
+        : resolveRepoHostId(ownerState, repoId, options?.executionHostId)
+      if (!hostId) {
+        return false
+      }
       const ownerWasMissingAtStart = repoOwners.length === 0
       const setup = getProjectHostSetupForRepoHost(ownerState, repoId, hostId)
       const ownerSettings = settingsForRepoOwner(ownerState, repoId, hostId)
@@ -3041,7 +3053,10 @@ export const createWorktreeSlice: StateCreator<AppState, [], [], WorktreeSlice> 
   prefetchWorktreeCreateBase: async (repoId, baseBranch, options) => {
     try {
       const state = get()
-      const executionHostId = repoHostId(state, repoId, options?.executionHostId)
+      const executionHostId = resolveRepoHostId(state, repoId, options?.executionHostId)
+      if (!executionHostId) {
+        return
+      }
       const target = getActiveRuntimeTarget(
         settingsForRepoOwner(state, repoId, options?.executionHostId)
       )

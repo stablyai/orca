@@ -1,13 +1,9 @@
-import type {
-  GitHubRepositoryIdentity,
-  PRCheckDetail,
-  Repo,
-  Worktree
-} from '../../../../shared/types'
+import type { Repo, Worktree } from '../../../../shared/types'
 import type { HostedReviewInfo } from '../../../../shared/hosted-review'
 import { isFolderRepo } from '../../../../shared/repo-kind'
 import { getRepoExecutionHostId, type ExecutionHostId } from '../../../../shared/execution-host'
 import { findRepoForWorktreeOwner } from '@/store/slices/repo-host-identity'
+import type { AppState } from '@/store/types'
 import { getWorktreeGitIdentityDisplay } from '@/lib/worktree-git-identity-display'
 import { compareWorktreeDisplayName } from '@/lib/worktree-display-name-order'
 import {
@@ -32,14 +28,7 @@ type FetchHostedReview = (
   }
 ) => Promise<HostedReviewInfo | null>
 
-type FetchPRChecks = (
-  repoPath: string,
-  prNumber: number,
-  branch?: string,
-  headSha?: string,
-  prRepo?: GitHubRepositoryIdentity | null,
-  options?: { repoId?: string; executionHostId?: ExecutionHostId; force?: boolean }
-) => Promise<PRCheckDetail[]>
+type FetchPRChecks = AppState['fetchPRChecks']
 
 export type ParentPrChecksRefreshCandidate = {
   identity: string
