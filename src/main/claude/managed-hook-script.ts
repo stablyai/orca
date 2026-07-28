@@ -70,9 +70,7 @@ export function getManagedScript(
     '  --data-urlencode "worktreeId=${ORCA_WORKTREE_ID}" \\',
     '  --data-urlencode "env=${ORCA_AGENT_HOOK_ENV}" \\',
     '  --data-urlencode "version=${ORCA_AGENT_HOOK_VERSION}" \\',
-    // Why: identifies which CLAUDE_CONFIG_DIR flavor posted (path string only —
-    // never tokens). Empty for default installs and ignored by the server;
-    // pre-update scripts that omit the field behave identically.
+    // Why: identifies the CLAUDE_CONFIG_DIR flavor path, never tokens; empty defaults are ignored.
     '  --data-urlencode "configDir=${CLAUDE_CONFIG_DIR}" \\',
     '  --data-urlencode "payload@-" >/dev/null 2>&1 || true',
     'exit 0',
