@@ -79,15 +79,17 @@ export default function PdfFind({
     if (!eventBus || !isOpen) {
       return
     }
-    const handleMatchesCount = (evt: {
+    const updateMatchesCount = (evt: {
       matchesCount: { current: number; total: number }
     }): void => {
       setActiveMatch(evt.matchesCount.current)
       setTotalMatches(evt.matchesCount.total)
     }
-    eventBus.on('updatefindmatchescount', handleMatchesCount)
+    eventBus.on('updatefindmatchescount', updateMatchesCount)
+    eventBus.on('updatefindcontrolstate', updateMatchesCount)
     return () => {
-      eventBus.off('updatefindmatchescount', handleMatchesCount)
+      eventBus.off('updatefindmatchescount', updateMatchesCount)
+      eventBus.off('updatefindcontrolstate', updateMatchesCount)
     }
   }, [eventBusRef, isOpen])
 
