@@ -618,6 +618,9 @@ describe('SkillFreshnessUpdateDialog', () => {
       expect(container?.textContent).toContain(
         'Orca could not finish checking plugin-managed skills.'
       )
+      // Why: the headline alone would pass with the folder list gone, leaving the user
+      // told the scan stopped but never told where. Assert the diagnostic renders too.
+      expect(container?.textContent).toContain('/home/.codex/plugins/cache')
     }
   )
 
