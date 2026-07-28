@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { TERMINAL_TAB_PROVIDER_TEARDOWN_TIMEOUT_MS } from '../../../../shared/terminal-tab-close'
 
 const {
   activateWebRuntimeSessionTabMock,
@@ -178,6 +179,7 @@ describe('createNewTerminalTab', () => {
 describe('closeTerminalTab', () => {
   beforeEach(() => {
     vi.clearAllMocks()
+    closeWebRuntimeSessionTabMock.mockResolvedValue(true)
     isWebRuntimeSessionActiveMock.mockReturnValue(false)
     resolveHostSessionTabIdForWebSessionTabMock.mockReturnValue(null)
     isWebTerminalSurfaceTabIdMock.mockReturnValue(false)
@@ -570,7 +572,10 @@ describe('closeTerminalTab', () => {
     const { onConfirm } = requestPinnedTabCloseConfirm.mock.calls[0][0] as { onConfirm: () => void }
     onConfirm()
 
-    expect(closeTab).toHaveBeenCalledWith('pinned-entity-1', { reason: undefined })
+    expect(closeTab).toHaveBeenCalledWith(
+      'pinned-entity-1',
+      expect.objectContaining({ reason: undefined })
+    )
     expect(closeUnifiedTab).not.toHaveBeenCalled()
     expect(onClosed).toHaveBeenCalledTimes(1)
   })
@@ -718,6 +723,90 @@ describe('closeTerminalTab', () => {
     closeTerminalTab('tab-1')
 
     expect(closeTab).toHaveBeenCalledWith('tab-1')
+  })
+
+  it('forwards registered provider teardown to close completion', async () => {
+    let finishProviderTeardown!: () => void
+    const providerTeardown = new Promise<void>((resolve) => {
+      finishProviderTeardown = resolve
+    })
+    const closeTab = vi.fn(
+      (
+        _tabId: string,
+        options: { registerProviderTeardown?: (teardown: Promise<void>) => void }
+      ) => {
+        options.registerProviderTeardown?.(providerTeardown)
+      }
+    )
+    const onClosed = vi.fn()
+    getStateMock.mockReturnValue({
+      settings: { activeRuntimeEnvironmentId: null },
+      tabsByWorktree: {
+        'wt-1': [{ id: 'tab-1' }, { id: 'tab-2' }]
+      },
+      unifiedTabsByWorktree: {},
+      activeWorktreeId: 'wt-1',
+      activeTabId: 'tab-2',
+      openFiles: [],
+      browserTabsByWorktree: {},
+      closeTab,
+      setActiveTab: vi.fn()
+    })
+
+    closeTerminalTab('tab-1', {
+      onClosed,
+      providerTeardownTimeoutMs: TERMINAL_TAB_PROVIDER_TEARDOWN_TIMEOUT_MS
+    })
+
+    expect(onClosed).toHaveBeenCalledWith(providerTeardown)
+    finishProviderTeardown()
+    await providerTeardown
+  })
+
+  it('reuses provider teardown when a concurrent close finds the tab already retired', async () => {
+    let finishProviderTeardown!: () => void
+    const providerTeardown = new Promise<void>((resolve) => {
+      finishProviderTeardown = resolve
+    })
+    const closeTab = vi.fn(
+      (
+        _tabId: string,
+        options: { registerProviderTeardown?: (teardown: Promise<void>) => void }
+      ) => {
+        options.registerProviderTeardown?.(providerTeardown)
+      }
+    )
+    const presentState = {
+      settings: { activeRuntimeEnvironmentId: null },
+      tabsByWorktree: {
+        'wt-1': [{ id: 'tab-1' }, { id: 'tab-2' }]
+      },
+      unifiedTabsByWorktree: {},
+      activeWorktreeId: 'wt-1',
+      activeTabId: 'tab-2',
+      openFiles: [],
+      browserTabsByWorktree: {},
+      closeTab,
+      setActiveTab: vi.fn()
+    }
+    getStateMock.mockReturnValue(presentState)
+    const firstOnClosed = vi.fn()
+    const duplicateOnClosed = vi.fn()
+
+    closeTerminalTab('tab-1', {
+      onClosed: firstOnClosed,
+      providerTeardownTimeoutMs: TERMINAL_TAB_PROVIDER_TEARDOWN_TIMEOUT_MS
+    })
+    getStateMock.mockReturnValue({ ...presentState, tabsByWorktree: { 'wt-1': [] } })
+    closeTerminalTab('tab-1', {
+      onClosed: duplicateOnClosed,
+      providerTeardownTimeoutMs: TERMINAL_TAB_PROVIDER_TEARDOWN_TIMEOUT_MS
+    })
+
+    expect(firstOnClosed).toHaveBeenCalledWith(providerTeardown)
+    expect(duplicateOnClosed).toHaveBeenCalledWith(providerTeardown)
+    finishProviderTeardown()
+    await providerTeardown
   })
 })
 

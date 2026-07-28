@@ -252,13 +252,67 @@ function createPtyPhysicalExit(id: string): void {
   ptyPhysicalExits.set(id, new PhysicalExitTracker())
 }
 
-function waitForPtyPhysicalExit(id: string, physicalExit?: PhysicalExitTracker): Promise<void> {
+function remainingPtyShutdownMs(deadlineMs: number): number {
+  const remainingMs = deadlineMs - Date.now()
+  if (remainingMs <= 0) {
+    throw new Error('terminal_provider_teardown_timeout')
+  }
+  return remainingMs
+}
+
+function waitForLocalPtyShutdownDeadline<T>(pending: Promise<T>, deadlineMs?: number): Promise<T> {
+  if (deadlineMs === undefined) {
+    return pending
+  }
+  let remainingMs: number
+  try {
+    remainingMs = remainingPtyShutdownMs(deadlineMs)
+  } catch (error) {
+    return Promise.reject(error)
+  }
+  return new Promise<T>((resolve, reject) => {
+    let settled = false
+    const finish = (result: { value: T } | { error: unknown }): void => {
+      if (settled) {
+        return
+      }
+      settled = true
+      clearTimeout(timer)
+      if ('error' in result) {
+        reject(result.error)
+      } else {
+        resolve(result.value)
+      }
+    }
+    const timer = setTimeout(
+      () => finish({ error: new Error('terminal_provider_teardown_timeout') }),
+      remainingMs
+    )
+    timer.unref?.()
+    void pending.then(
+      (value) => finish({ value }),
+      (error: unknown) => finish({ error })
+    )
+  })
+}
+
+function waitForPtyPhysicalExit(
+  id: string,
+  physicalExit: PhysicalExitTracker | undefined,
+  deadlineMs?: number
+): Promise<void> {
   if (!physicalExit) {
     return Promise.reject(new Error(`PTY "${id}" exit tracking unavailable`))
   }
-  return physicalExit.waitForExit(
-    LOCAL_PTY_PHYSICAL_EXIT_TIMEOUT_MS,
-    () => new Error(`Timed out waiting for PTY process exit: ${id}`)
+  const remainingMs =
+    deadlineMs === undefined
+      ? LOCAL_PTY_PHYSICAL_EXIT_TIMEOUT_MS
+      : remainingPtyShutdownMs(deadlineMs)
+  const timeoutMs = Math.min(LOCAL_PTY_PHYSICAL_EXIT_TIMEOUT_MS, remainingMs)
+  return physicalExit.waitForExit(timeoutMs, () =>
+    deadlineMs !== undefined && remainingMs <= LOCAL_PTY_PHYSICAL_EXIT_TIMEOUT_MS
+      ? new Error('terminal_provider_teardown_timeout')
+      : new Error(`Timed out waiting for PTY process exit: ${id}`)
   )
 }
 
@@ -1071,8 +1125,14 @@ export class LocalPtyProvider implements IPtyProvider {
     return { cols: proc.cols, rows: proc.rows }
   }
 
-  async shutdown(id: string, opts: { immediate?: boolean; keepHistory?: boolean }): Promise<void> {
+  async shutdown(
+    id: string,
+    opts: { immediate?: boolean; keepHistory?: boolean; deadlineMs?: number }
+  ): Promise<void> {
     cancelPendingLocalPtySpawns(id)
+    if (opts.deadlineMs !== undefined) {
+      remainingPtyShutdownMs(opts.deadlineMs)
+    }
     const pending = ptyShutdownOperations.get(id)
     if (pending) {
       if (opts.immediate === true) {
@@ -1081,7 +1141,7 @@ export class LocalPtyProvider implements IPtyProvider {
           this.requestTrackedPtyShutdown(id, pending.proc, true)
         }
       }
-      await pending.promise
+      await waitForLocalPtyShutdownDeadline(pending.promise, opts.deadlineMs)
       return
     }
     const proc = ptyProcesses.get(id)
@@ -1094,7 +1154,7 @@ export class LocalPtyProvider implements IPtyProvider {
       rootSignalled: false,
       proc
     }
-    entry.promise = this.shutdownTrackedPty(id, proc, entry)
+    entry.promise = this.shutdownTrackedPty(id, proc, entry, opts.deadlineMs)
     ptyShutdownOperations.set(id, entry)
     try {
       await entry.promise
@@ -1108,7 +1168,8 @@ export class LocalPtyProvider implements IPtyProvider {
   private async shutdownTrackedPty(
     id: string,
     proc: pty.IPty,
-    operation: PtyShutdownOperation
+    operation: PtyShutdownOperation,
+    deadlineMs?: number
   ): Promise<void> {
     const physicalExit = ptyPhysicalExits.get(id)
     const signalRoot = (): void => {
@@ -1125,21 +1186,29 @@ export class LocalPtyProvider implements IPtyProvider {
       // Why: POSIX needs a pre-kill descendant snapshot; Windows tree-kills only when the
       // identity probe returns `own` so agent/MCP orphans cannot hold the worktree cwd
       // (#10004). `unknown`/`foreign`/`absent` skip taskkill and rely on root close alone.
-      await killWithDescendantSweep(proc.pid, signalRoot, {
-        ownsRoot: () => ptyProcesses.get(id) === proc
-      })
+      await waitForLocalPtyShutdownDeadline(
+        killWithDescendantSweep(proc.pid, signalRoot, {
+          ownsRoot: () => ptyProcesses.get(id) === proc,
+          ...(deadlineMs !== undefined ? { timeoutMs: remainingPtyShutdownMs(deadlineMs) } : {})
+        }),
+        deadlineMs
+      )
     } else if (process.platform === 'win32' && operation.immediate) {
       // Why: a plain shell's ConPTY teardown doesn't reap orphaned children (useConptyDll
       // skips the console reap), so a live `pnpm i`/`node` keeps the ConPTY console alive and
       // holds the worktree cwd. Tree kill runs only when the OS identity probe returns `own`;
       // otherwise root close alone, and detached children may block physical stop (#10004).
-      await killWithDescendantSweep(proc.pid, signalRoot, {
-        ownsRoot: () => ptyProcesses.get(id) === proc
-      })
+      await waitForLocalPtyShutdownDeadline(
+        killWithDescendantSweep(proc.pid, signalRoot, {
+          ownsRoot: () => ptyProcesses.get(id) === proc,
+          ...(deadlineMs !== undefined ? { timeoutMs: remainingPtyShutdownMs(deadlineMs) } : {})
+        }),
+        deadlineMs
+      )
     } else {
       signalRoot()
     }
-    await waitForPtyPhysicalExit(id, physicalExit)
+    await waitForPtyPhysicalExit(id, physicalExit, deadlineMs)
   }
 
   private requestTrackedPtyShutdown(id: string, proc: pty.IPty, immediate: boolean): void {

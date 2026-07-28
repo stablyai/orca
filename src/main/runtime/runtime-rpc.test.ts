@@ -4257,6 +4257,47 @@ describe('OrcaRuntimeRpcServer', () => {
       }
     })
 
+    it('emits keepalives while durable terminal tab close is in flight', async () => {
+      const userDataPath = mkdtempSync(join(tmpdir(), 'orca-runtime-rpc-'))
+      const runtime = new OrcaRuntimeService()
+      let finishClose!: () => void
+      vi.spyOn(runtime, 'closeTerminalTab').mockImplementation(
+        () =>
+          new Promise((resolve) => {
+            finishClose = () => resolve({ handle: 'term-1', tabId: 'tab-1', ptyKilled: true })
+          })
+      )
+      const server = new OrcaRuntimeRpcServer({
+        runtime,
+        userDataPath,
+        keepaliveIntervalMs: 30
+      })
+      await server.start()
+
+      try {
+        const metadata = readRuntimeMetadata(userDataPath)
+        const session = openFramedSession(metadata!.transports[0]!.endpoint, {
+          id: 'req_terminal_close_tab',
+          authToken: metadata!.authToken,
+          method: 'terminal.closeTab',
+          params: { terminal: 'term-1' }
+        })
+        await waitFor(() => session.frames.filter((frame) => frame._keepalive === true).length >= 2)
+        finishClose()
+        await session.done
+
+        expect(
+          session.frames.filter((frame) => frame._keepalive === true).length
+        ).toBeGreaterThanOrEqual(2)
+        expect(session.frames.find((frame) => frame.ok !== undefined)).toMatchObject({
+          id: 'req_terminal_close_tab',
+          ok: true
+        })
+      } finally {
+        await server.stop()
+      }
+    })
+
     it('releases terminal.wait long-poll slot when the client closes mid-wait', async () => {
       const userDataPath = mkdtempSync(join(tmpdir(), 'orca-runtime-rpc-'))
       const runtime = new OrcaRuntimeService()

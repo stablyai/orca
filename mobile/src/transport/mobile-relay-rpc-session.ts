@@ -3,6 +3,10 @@ import {
   type DeviceResumeConfirmed,
   type MobileRelayEndpoint
 } from '../../../src/shared/mobile-relay-credential-contract'
+import {
+  isTerminalTabCloseRpcMethod,
+  resolveTerminalTabCloseCallerTimeoutMs
+} from '../../../src/shared/terminal-tab-close'
 import { MobileRelayE2eeLink } from './mobile-relay-e2ee-link'
 import { MobileRelayRpcStreams } from './mobile-relay-rpc-streams'
 import { MobileE2EEAuthenticationError } from './mobile-e2ee-v2-physical-channel'
@@ -76,7 +80,14 @@ export function connectMobileRelayRpcSession(args: {
 
   const client: MobileRelayRpcSession = {
     async sendRequest(method, params, options) {
-      const budget = openRpcRequestBudget(options)
+      const timeoutMs = resolveTerminalTabCloseCallerTimeoutMs(
+        method,
+        options?.timeoutMs ?? requestTimeoutMs
+      )
+      const budget = openRpcRequestBudget({
+        ...options,
+        ...(isTerminalTabCloseRpcMethod(method) ? { timeoutMs, budgetSpansConnect: true } : {})
+      })
       await waitForConnected(budget.timeoutMs)
       return sendRpc(method, params, resolvePostConnectRequestTimeout(budget, requestTimeoutMs))
     },

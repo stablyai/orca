@@ -2,12 +2,17 @@ import type { RuntimeRpcResponse } from '../../../shared/runtime-rpc-envelope'
 import type { RuntimeStatus } from '../../../shared/runtime-types'
 import type { RuntimeCapability } from '../../../shared/protocol-version'
 import { withBrowserPaneUiRuntimeRpcSource } from '../../../shared/runtime-rpc-feature-interaction-source'
-import { assertRuntimeStatusCompatible } from './runtime-protocol-compat'
+import {
+  isTerminalTabCloseRpcMethod,
+  resolveTerminalTabCloseCallerTimeoutMs
+} from '../../../shared/terminal-tab-close'
+import * as runtimeProtocolCompat from './runtime-protocol-compat'
 import { createRuntimeRpcAbortError } from './abortable-runtime-environment-call'
 import { callRuntimeEnvironmentWithRevision } from './runtime-rpc-environment-call'
 import { RuntimeRpcCallError, unwrapRuntimeRpcResult } from './runtime-rpc-result'
 import { captureRuntimeEnvironmentRequestRevision } from './runtime-environment-revision'
 import type { RuntimeClientTarget } from './runtime-client-target'
+import type { RuntimeRpcCallOptions } from './runtime-rpc-call-options'
 
 export {
   getActiveRuntimeTarget,
@@ -43,14 +48,7 @@ export async function callRuntimeRpc<TResult>(
   target: RuntimeClientTarget,
   method: string,
   params?: unknown,
-  options: {
-    timeoutMs?: number
-    suppressFeatureInteraction?: boolean
-    reuseRecentCompatibilityFailure?: boolean
-    skipCompatibilityCheck?: boolean
-    signal?: AbortSignal
-    expectedEnvironmentPairingRevision?: number
-  } = {}
+  options: RuntimeRpcCallOptions = {}
 ): Promise<TResult> {
   const expectedEnvironmentPairingRevision =
     target.kind === 'environment'
@@ -59,6 +57,10 @@ export async function callRuntimeRpc<TResult>(
           options.expectedEnvironmentPairingRevision
         )
       : undefined
+  const timeoutMs = isTerminalTabCloseRpcMethod(method)
+    ? resolveTerminalTabCloseCallerTimeoutMs(method, options.timeoutMs ?? 0)
+    : options.timeoutMs
+  const deadlineMs = timeoutMs === undefined ? undefined : Date.now() + timeoutMs
   if (
     target.kind === 'environment' &&
     method !== 'status.get' &&
@@ -66,6 +68,8 @@ export async function callRuntimeRpc<TResult>(
   ) {
     await ensureRuntimeEnvironmentCompatible(target.environmentId, {
       ...options,
+      timeoutMs,
+      cachedCheckTimeoutMs: remainingRuntimeCallTimeoutMs(deadlineMs),
       expectedEnvironmentPairingRevision
     })
   }
@@ -82,24 +86,31 @@ export async function callRuntimeRpc<TResult>(
           environmentId: target.environmentId,
           method,
           params: nextParams,
-          timeoutMs: options.timeoutMs,
+          timeoutMs,
           signal: options.signal,
           expectedEnvironmentPairingRevision
         })
   return unwrapRuntimeRpcResult<TResult>(response as RuntimeRpcResponse<TResult>)
 }
 
+const remainingRuntimeCallTimeoutMs = (deadlineMs?: number) =>
+  deadlineMs === undefined ? undefined : Math.max(1, deadlineMs - Date.now())
+
 async function ensureRuntimeEnvironmentCompatible(
   environmentId: string,
   options: {
     timeoutMs?: number
+    cachedCheckTimeoutMs?: number
     reuseRecentCompatibilityFailure?: boolean
     expectedEnvironmentPairingRevision?: number
   } = {}
 ): Promise<void> {
   const cached = getCachedRuntimeCompatibilityCheck(environmentId, options)
   if (cached) {
-    await cached.check
+    await runtimeProtocolCompat.awaitCompatibilityCheckDeadline(
+      cached.check,
+      options.cachedCheckTimeoutMs
+    )
     return
   }
   const entry: RuntimeCompatibilityCacheEntry = {
@@ -119,7 +130,7 @@ async function ensureRuntimeEnvironmentCompatible(
     const status = unwrapRuntimeRpcResult<RuntimeStatus>(
       response as RuntimeRpcResponse<RuntimeStatus>
     )
-    assertRuntimeStatusCompatible(status)
+    runtimeProtocolCompat.assertRuntimeStatusCompatible(status)
     entry.status = status
     entry.statusCheckedAt = Date.now()
   })()
@@ -251,7 +262,7 @@ export async function getRuntimeEnvironmentStatus(
     const status = unwrapRuntimeRpcResult<RuntimeStatus>(
       response as RuntimeRpcResponse<RuntimeStatus>
     )
-    assertRuntimeStatusCompatible(status)
+    runtimeProtocolCompat.assertRuntimeStatusCompatible(status)
     entry.status = status
     entry.statusCheckedAt = Date.now()
     entry.provenCompatible = true
@@ -327,6 +338,4 @@ export async function assertRuntimeEnvironmentCapability(
   }
 }
 
-export function clearRuntimeCompatibilityCacheForTests(): void {
-  clearRuntimeCompatibilityCache()
-}
+export const clearRuntimeCompatibilityCacheForTests = clearRuntimeCompatibilityCache

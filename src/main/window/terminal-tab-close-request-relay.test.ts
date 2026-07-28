@@ -1,5 +1,9 @@
 import { EventEmitter } from 'node:events'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+import {
+  TERMINAL_TAB_CLOSE_RESPONSE_TIMEOUT_MS,
+  TERMINAL_TAB_PROVIDER_TEARDOWN_TIMEOUT_MS
+} from '../../shared/terminal-tab-close'
 
 const ipcEmitter = new EventEmitter()
 const ipcMainMock = {
@@ -15,6 +19,7 @@ vi.mock('electron', () => ({ ipcMain: ipcMainMock }))
 
 describe('requestTerminalTabCloseFromRenderer', () => {
   beforeEach(() => {
+    vi.useRealTimers()
     ipcEmitter.removeAllListeners()
     ipcMainMock.on.mockClear()
     ipcMainMock.removeListener.mockClear()
@@ -67,5 +72,35 @@ describe('requestTerminalTabCloseFromRenderer', () => {
     )
 
     await expect(pending).rejects.toThrow('terminal_tab_pinned')
+  })
+
+  it('reserves response margin after the provider deadline', async () => {
+    vi.useFakeTimers()
+    const { requestTerminalTabCloseFromRenderer } =
+      await import('./terminal-tab-close-request-relay')
+    const webContents = { isDestroyed: () => false, send: vi.fn() }
+    const pending = requestTerminalTabCloseFromRenderer(
+      { isDestroyed: () => false, webContents } as never,
+      'tab-slow-provider'
+    )
+    let outcome = 'pending'
+    void pending.then(
+      () => {
+        outcome = 'resolved'
+      },
+      (error: Error) => {
+        outcome = error.message
+      }
+    )
+
+    await vi.advanceTimersByTimeAsync(TERMINAL_TAB_PROVIDER_TEARDOWN_TIMEOUT_MS)
+    expect(outcome).toBe('pending')
+    await vi.advanceTimersByTimeAsync(
+      TERMINAL_TAB_CLOSE_RESPONSE_TIMEOUT_MS - TERMINAL_TAB_PROVIDER_TEARDOWN_TIMEOUT_MS - 1
+    )
+    expect(outcome).toBe('pending')
+    await vi.advanceTimersByTimeAsync(1)
+
+    await expect(pending).rejects.toThrow('terminal_tab_close_timeout')
   })
 })

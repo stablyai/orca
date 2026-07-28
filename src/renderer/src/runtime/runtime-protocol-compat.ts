@@ -16,6 +16,32 @@ export function isRuntimeCompatBlockError(error: unknown): boolean {
   return error instanceof Error && (error as { code?: string }).code === RUNTIME_COMPAT_BLOCK_CODE
 }
 
+export async function awaitCompatibilityCheckDeadline(
+  check: Promise<void>,
+  timeoutMs?: number
+): Promise<void> {
+  if (timeoutMs === undefined) {
+    await check
+    return
+  }
+  let timeout: ReturnType<typeof setTimeout> | null = null
+  try {
+    await Promise.race([
+      check,
+      new Promise<void>((_, reject) => {
+        timeout = setTimeout(
+          () => reject(new Error('Runtime compatibility check timed out')),
+          Math.max(1, timeoutMs)
+        )
+      })
+    ])
+  } finally {
+    if (timeout !== null) {
+      clearTimeout(timeout)
+    }
+  }
+}
+
 export function assertRuntimeStatusCompatible(status: RuntimeStatus): void {
   const verdict = evaluateRuntimeCompat({
     clientProtocolVersion: RUNTIME_PROTOCOL_VERSION,

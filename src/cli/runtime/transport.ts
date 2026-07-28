@@ -2,6 +2,7 @@ import { createConnection } from 'node:net'
 import { randomUUID } from 'node:crypto'
 import { findTransport, type RuntimeMetadata } from '../../shared/runtime-bootstrap'
 import type { RuntimeOrchestrationEnvelope } from '../../shared/runtime-rpc-envelope'
+import { isTerminalTabCloseRpcMethod } from '../../shared/terminal-tab-close'
 import { isKeepaliveFrame, RuntimeRpcEnvelopeSchema } from './envelope-schema'
 import { RuntimeClientError, type RuntimeRpcResponse } from './types'
 import { MAX_TIMER_DELAY_MS, isSafeTimerDelayMs } from '../../shared/timer-delay'
@@ -34,6 +35,7 @@ export async function sendRequest<TResult>(
     let buffer = ''
     let settled = false
     const requestId = randomUUID()
+    const refreshTimeoutOnKeepalive = !isTerminalTabCloseRpcMethod(method)
 
     const timeout = setTimeout(() => {
       if (settled) {
@@ -123,7 +125,9 @@ export async function sendRequest<TResult>(
         // Node 20+ via Electron and the standalone CLI targets the same
         // major). See §7 risk #9.
         if (isKeepaliveFrame(raw)) {
-          timeout.refresh()
+          if (refreshTimeoutOnKeepalive) {
+            timeout.refresh()
+          }
           newlineIndex = buffer.indexOf('\n')
           continue
         }
@@ -149,7 +153,9 @@ export async function sendRequest<TResult>(
         // Success|Failure shape here.
         const frame = parsed.data
         if ('_keepalive' in frame) {
-          timeout.refresh()
+          if (refreshTimeoutOnKeepalive) {
+            timeout.refresh()
+          }
           newlineIndex = buffer.indexOf('\n')
           continue
         }

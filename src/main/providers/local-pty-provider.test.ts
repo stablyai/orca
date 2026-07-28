@@ -1391,6 +1391,27 @@ describe('LocalPtyProvider', () => {
       }
     })
 
+    it('honors the caller deadline while waiting for physical exit', async () => {
+      vi.useFakeTimers()
+      try {
+        mockProc.kill = vi.fn()
+        const { id } = await provider.spawn({ cols: 80, rows: 24 })
+
+        const shutdown = provider.shutdown(id, {
+          immediate: true,
+          deadlineMs: Date.now() + 50
+        })
+        const rejected = expect(shutdown).rejects.toThrow('terminal_provider_teardown_timeout')
+        await vi.advanceTimersByTimeAsync(49)
+        expect(provider.hasPty(id)).toBe(true)
+        await vi.advanceTimersByTimeAsync(1)
+        await rejected
+        expect(provider.hasPty(id)).toBe(true)
+      } finally {
+        vi.useRealTimers()
+      }
+    })
+
     it('propagates kill failure without dropping the physical owner', async () => {
       mockProc.kill = vi.fn(() => {
         throw new Error('kill denied')

@@ -5,6 +5,7 @@ import {
 } from '../../../src/shared/browser-screencast-protocol'
 import { encodeTerminalStreamFrame, TerminalStreamOpcode } from './terminal-stream-protocol'
 import { isRpcDeliveryUnknown } from './rpc-delivery-ambiguity'
+import { TERMINAL_TAB_CLOSE_CALLER_TIMEOUT_MS } from '../../../src/shared/terminal-tab-close'
 
 const fakes = vi.hoisted(() => ({
   linkOptions: null as null | {
@@ -234,6 +235,78 @@ describe('mobile relay RPC session', () => {
         message: 'relay RPC timed out: terminal.send',
         unknown: true
       })
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('floors terminal close timeouts above the relay transport default', async () => {
+    const { session } = await authenticateSession()
+    vi.useFakeTimers()
+    try {
+      const pending = session.sendRequest('session.tabs.close', {})
+      const outcome = pending.catch((error: unknown) => (error as Error).message)
+      await vi.advanceTimersByTimeAsync(0)
+      await vi.advanceTimersByTimeAsync(TERMINAL_TAB_CLOSE_CALLER_TIMEOUT_MS - 1)
+      await expect(
+        Promise.race([outcome.then(() => 'settled'), Promise.resolve('pending')])
+      ).resolves.toBe('pending')
+
+      await vi.advanceTimersByTimeAsync(1)
+      await expect(outcome).resolves.toBe('relay RPC timed out: session.tabs.close')
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('shares the terminal close budget between relay connect and request', async () => {
+    vi.useFakeTimers()
+    try {
+      const session = openSession()
+      const pending = session.sendRequest('session.tabs.close', {})
+      const outcome = pending.catch(() => 'timed-out')
+      await vi.advanceTimersByTimeAsync(20_000)
+      fakes.linkOptions!.onHello({
+        type: 'relay-hello',
+        ok: true,
+        credentialKind: 'resume',
+        leaseExpiresAt: Date.now() + 60_000,
+        acceptedCredentialVersion: 3,
+        acceptedAs: 'current',
+        resumeExpiresAt: Date.now() + 300_000
+      })
+      fakes.linkOptions!.onAuthenticated()
+      await vi.advanceTimersByTimeAsync(0)
+      const confirmation = JSON.parse(fakes.sendText.mock.calls[0]![0] as string) as {
+        id: string
+      }
+      fakes.linkOptions!.onText(
+        JSON.stringify({
+          id: confirmation.id,
+          ok: true,
+          result: {
+            v: 1,
+            relay,
+            resumeConfirmation: {
+              v: 1,
+              reqId: 'confirm-1',
+              currentVersion: 3,
+              acceptedAs: 'current',
+              renewed: true,
+              resumeExpiresAt: Date.now() + 300_000
+            }
+          },
+          _meta: { runtimeId: 'runtime-1' }
+        })
+      )
+      await vi.advanceTimersByTimeAsync(TERMINAL_TAB_CLOSE_CALLER_TIMEOUT_MS - 20_001)
+      await expect(
+        Promise.race([outcome.then(() => 'settled'), Promise.resolve('pending')])
+      ).resolves.toBe('pending')
+
+      await vi.advanceTimersByTimeAsync(1)
+      expect(await Promise.race([outcome, Promise.resolve('pending')])).toBe('timed-out')
+      session.close()
     } finally {
       vi.useRealTimers()
     }

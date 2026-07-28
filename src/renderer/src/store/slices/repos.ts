@@ -67,7 +67,6 @@ import {
   getActiveRuntimeTarget
 } from '../../runtime/runtime-rpc-client'
 import { syncRuntimeGitForkDefaultBranch } from '../../runtime/runtime-git-client'
-import { toRuntimeWorktreeSelector } from '../../runtime/runtime-worktree-selector'
 import { buildDismissedOnboardingFolderAgentStartup } from '@/lib/onboarding-folder-agent-startup'
 import { markOnboardingProjectAdded } from '@/lib/onboarding-project-checklist'
 import { filterSetupScriptPromptDismissalsToValidRepos } from '@/lib/setup-script-prompt'
@@ -96,6 +95,11 @@ import {
   FolderWorkspaceUpdateCoordinator,
   type FolderWorkspaceUpdateTicket
 } from './folder-workspace-update-coordinator'
+import { retireRendererProjectTerminalsBeforeRemoval } from './project-terminal-retirement'
+import {
+  TERMINAL_TAB_CLOSE_CALLER_TIMEOUT_MS,
+  TERMINAL_TAB_PROVIDER_TEARDOWN_TIMEOUT_MS
+} from '../../../../shared/terminal-tab-close'
 
 const ERROR_TOAST_DURATION = 60_000
 const SAFE_AUTO_FORK_SYNC_COOLDOWN_MS = 10 * 60 * 1000
@@ -2944,15 +2948,20 @@ export const createRepoSlice: StateCreator<AppState, [], [], RepoSlice> = (set, 
         return
       }
       const ownerHostId = getRepoExecutionHostId(ownerRepo)
-      // Why: an SSH per-workspace-env's workspace is the repo's main worktree, so removal routes here; tear down its ephemeral runtime first so it doesn't leak.
+      // Why: derive the target from the owner's settings (via options.hostId) so an SSH host removal never routes repo.rm to the focused runtime.
+      const target = getActiveRuntimeTarget(settingsForRepoOwner(get(), projectId, options?.hostId))
+      const worktreeIds = getKnownRepoWorktreeIds(get(), projectId, ownerHostId)
+      const killedTabIds = await retireRendererProjectTerminalsBeforeRemoval(get(), worktreeIds, {
+        providerTeardownTimeoutMs: TERMINAL_TAB_PROVIDER_TEARDOWN_TIMEOUT_MS,
+        runtimeOwnsProviderTeardown: target.kind === 'environment'
+      })
+      // Why: provider exit must be proven while the SSH workspace still has routing authority.
       if (isRuntimeOwnedSshTargetId(ownerRepo.connectionId)) {
         await cleanupEphemeralVmRuntimesForDeleted({
-          workspaceIds: getKnownRepoWorktreeIds(get(), projectId, ownerHostId),
+          workspaceIds: worktreeIds,
           runtimeOwnedSshTargetIds: [ownerRepo.connectionId as string]
         })
       }
-      // Why: derive the target from the owner's settings (via options.hostId) so an SSH host removal never routes repo.rm to the focused runtime.
-      const target = getActiveRuntimeTarget(settingsForRepoOwner(get(), projectId, options?.hostId))
       // Why: repos:remove is id-only and would delete every host's row; scope local removal to the owning host so cross-host duplicates keep other rows.
       const idExistsOnOtherHost = get().repos.some(
         (repo) => repo.id === projectId && getRepoExecutionHostId(repo) !== ownerHostId
@@ -2961,7 +2970,12 @@ export const createRepoSlice: StateCreator<AppState, [], [], RepoSlice> = (set, 
         ? idExistsOnOtherHost
           ? window.api.repos.removeForHost({ repoId: projectId, hostId: ownerHostId })
           : window.api.repos.remove({ repoId: projectId })
-        : callRuntimeRpc(target, 'repo.rm', { repo: projectId }, { timeoutMs: 15_000 }))
+        : callRuntimeRpc(
+            target,
+            'repo.rm',
+            { repo: projectId },
+            { timeoutMs: TERMINAL_TAB_CLOSE_CALLER_TIMEOUT_MS }
+          ))
 
       get().clearOrcaHookTrustForRepo(projectId)
       const repoPath = get().repos.find((repo) =>
@@ -2970,33 +2984,6 @@ export const createRepoSlice: StateCreator<AppState, [], [], RepoSlice> = (set, 
       get().evictGitHubRepoCaches(projectId, repoPath)
       const { clearRepoSlugCacheEntry } = await import('../../lib/repo-slug-index')
       clearRepoSlugCacheEntry(projectId)
-
-      // Kill PTYs for all worktrees belonging to this repo
-      const worktreeIds = getKnownRepoWorktreeIds(get(), projectId, ownerHostId)
-      const killedTabIds = new Set<string>()
-      if (target.kind === 'environment') {
-        await Promise.allSettled(
-          worktreeIds.map((worktreeId) =>
-            callRuntimeRpc(
-              target,
-              'terminal.stop',
-              { worktree: toRuntimeWorktreeSelector(worktreeId) },
-              { timeoutMs: 15_000 }
-            )
-          )
-        )
-      }
-      for (const wId of worktreeIds) {
-        const tabs = get().tabsByWorktree[wId] ?? []
-        for (const tab of tabs) {
-          killedTabIds.add(tab.id)
-          for (const ptyId of get().ptyIdsByTabId[tab.id] ?? []) {
-            if (!ptyId.startsWith('remote:')) {
-              window.api.pty.kill(ptyId)
-            }
-          }
-        }
-      }
 
       // Why: use the canonical per-worktree purge to evict all worktree-scoped maps (hand-deletion leaked most); runs before the set() below so it still sees tabsByWorktree.
       get().purgeWorktreeTerminalState(worktreeIds)

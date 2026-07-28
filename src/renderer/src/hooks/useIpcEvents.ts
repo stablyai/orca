@@ -107,6 +107,7 @@ import { track } from '@/lib/telemetry'
 import { singlePaneLayoutSnapshot } from '@/store/slices/terminal-helpers'
 import { buildWorkspaceSessionPayload } from '@/lib/workspace-session'
 import { persistWorkspaceSessionByHost } from '@/lib/workspace-session-host-persistence'
+import { enqueueTerminalTabCloseSessionPersistence } from '@/lib/terminal-tab-close-session-persistence'
 import { getLinearIssueWorkspaceName } from '../../../shared/workspace-name'
 import type { RuntimeClientEvent } from '../../../shared/runtime-client-events'
 import { applyHostWorktreeTerminalSleepState } from '@/components/terminal-pane/pty-shutdown-exit-deferral'
@@ -143,6 +144,7 @@ import { closeTerminalTab } from '@/components/terminal/terminal-tab-actions'
 import { initialAgentTabViewModeProps } from '@/lib/native-chat-initial-view-mode'
 import { getConnectionIdFromState } from '@/lib/connection-context'
 import { isNativeChatTranscriptLocalReadable } from '@/lib/native-chat-transcript-readability'
+import { TERMINAL_TAB_PROVIDER_TEARDOWN_TIMEOUT_MS } from '../../../shared/terminal-tab-close'
 
 function getShortcutPlatform(): NodeJS.Platform {
   if (navigator.userAgent.includes('Mac')) {
@@ -2027,7 +2029,7 @@ export function useIpcEvents(): void {
     // Why: during an in-place renderer reload an older preload can linger; keep this listener additive at that seam.
     if (window.api.ui.onTerminalTabCloseRequest) {
       unsubs.push(
-        window.api.ui.onTerminalTabCloseRequest(({ requestId, tabId }) => {
+        window.api.ui.onTerminalTabCloseRequest(({ requestId, tabId, deadlineMs }) => {
           let responded = false
           const respond = (error?: string): void => {
             if (responded) {
@@ -2038,18 +2040,26 @@ export function useIpcEvents(): void {
           }
           closeTerminalTab(tabId, {
             rejectPinned: true,
+            providerTeardownTimeoutMs: TERMINAL_TAB_PROVIDER_TEARDOWN_TIMEOUT_MS,
+            providerTeardownDeadlineMs: deadlineMs,
             onCancel: () => respond('terminal_tab_pinned'),
-            onClosed: () => {
+            onClosed: (providerTeardown = Promise.resolve()) => {
               void (async () => {
+                await providerTeardown
                 const state = useAppStore.getState()
-                await persistWorkspaceSessionByHost(
-                  window.api.session,
-                  buildWorkspaceSessionPayload(state),
-                  state
+                const payload = buildWorkspaceSessionPayload(state)
+                // Why: host retirement fences recover a crash; this ordered retry queue moves the full snapshot flush off the acknowledgement wall.
+                const persistence = enqueueTerminalTabCloseSessionPersistence(() =>
+                  persistWorkspaceSessionByHost(window.api.session, payload, state)
                 )
                 respond()
+                await persistence
               })().catch((error: unknown) => {
-                respond(error instanceof Error ? error.message : 'terminal_tab_close_failed')
+                if (!responded) {
+                  respond(error instanceof Error ? error.message : 'terminal_tab_close_failed')
+                  return
+                }
+                console.error('[terminal-close] post-ack session persistence failed:', error)
               })
             }
           })

@@ -133,6 +133,21 @@ describe('createIpcPtyTransport', () => {
     expect(transport.isConnected()).toBe(false)
   })
 
+  it('observes best-effort PTY kill rejection during disconnect', async () => {
+    const { createIpcPtyTransport } = await import('./pty-transport')
+    const kill = window.api.pty.kill as unknown as ReturnType<typeof vi.fn>
+    const killPromise = Promise.reject(new Error('provider unavailable'))
+    void killPromise.then(undefined, () => {})
+    const catchSpy = vi.spyOn(killPromise, 'catch')
+    kill.mockReturnValueOnce(killPromise)
+    const transport = createIpcPtyTransport({})
+    await transport.connect({ url: '', callbacks: {} })
+
+    transport.disconnect()
+
+    expect(catchSpy).toHaveBeenCalledOnce()
+  })
+
   it('forwards requested environment deletions to the PTY spawn', async () => {
     const { createIpcPtyTransport } = await import('./pty-transport')
     const spawn = window.api.pty.spawn as unknown as ReturnType<typeof vi.fn>
@@ -1618,6 +1633,63 @@ describe('createIpcPtyTransport', () => {
     expect(killMock).toHaveBeenCalledWith('pty-late')
     expect(onPtySpawn).not.toHaveBeenCalled()
     expect(transport.getPtyId()).toBeNull()
+  })
+
+  it('joins a late fresh spawn to the acknowledged tab-close teardown', async () => {
+    const { createIpcPtyTransport } = await import('./pty-transport')
+    const { createTestStore, makeTab, makeWorktree, seedStore } =
+      await import('@/store/slices/store-test-helpers')
+    const spawnControls: { resolve: ((value: { id: string }) => void) | null } = { resolve: null }
+    const spawnPromise = new Promise<{ id: string }>((resolve) => {
+      spawnControls.resolve = resolve
+    })
+    const spawn = vi.fn().mockReturnValue(spawnPromise)
+    const kill = vi.fn().mockRejectedValue(new Error('terminal_provider_teardown_unavailable'))
+    ;(globalThis as { window: typeof window }).window = {
+      ...originalWindow,
+      api: {
+        ...originalWindow?.api,
+        pty: {
+          ...originalWindow?.api?.pty,
+          spawn,
+          write: vi.fn(),
+          resize: vi.fn(),
+          kill,
+          onData: vi.fn(() => () => {}),
+          onReplay: vi.fn(() => () => {}),
+          onExit: vi.fn(() => () => {})
+        }
+      }
+    } as unknown as typeof window
+    const store = createTestStore()
+    seedStore(store, {
+      worktreesByRepo: {
+        repo1: [makeWorktree({ id: 'wt-late', repoId: 'repo1', path: '/repo/late' })]
+      },
+      tabsByWorktree: {
+        'wt-late': [makeTab({ id: 'tab-late', worktreeId: 'wt-late' })]
+      }
+    })
+    const transport = createIpcPtyTransport({ tabId: 'tab-late' })
+    const connectPromise = transport.connect({ url: '', callbacks: {} })
+    let providerTeardown: Promise<void> | undefined
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+
+    store.getState().closeTab('tab-late', {
+      registerProviderTeardown: (teardown) => {
+        providerTeardown = teardown
+      }
+    })
+    transport.destroy?.()
+    spawnControls.resolve?.({ id: 'ssh:ssh-1@@pty-late' })
+
+    await connectPromise
+    await expect(providerTeardown).rejects.toThrow('terminal_tab_close_failed')
+    expect(kill).toHaveBeenCalledWith('ssh:ssh-1@@pty-late', {
+      timeoutMs: 35_000
+    })
+    expect(store.getState().ptyIdsByTabId['tab-late']).toBeUndefined()
+    warn.mockRestore()
   })
 
   it('unregisterPtyDataHandlers prevents final data burst from triggering notifications', async () => {

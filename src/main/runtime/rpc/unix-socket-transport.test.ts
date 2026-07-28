@@ -74,4 +74,35 @@ describe('UnixSocketTransport', () => {
     vi.advanceTimersByTime(500)
     expect(socket.writes).toHaveLength(1)
   })
+
+  it('aborts a stuck keepalive dispatch at its absolute deadline', () => {
+    const transport = new UnixSocketTransport({
+      endpoint: '/tmp/orca-runtime-rpc-deadline-test.sock',
+      kind: 'unix',
+      keepaliveIntervalMs: 100
+    })
+    const socket = new FakeSocket()
+    let aborted = false
+
+    transport.onMessage((_msg, _reply, context) => {
+      context?.signal.addEventListener('abort', () => {
+        aborted = true
+      })
+      context?.startKeepalive(Date.now() + 250)
+    })
+    ;(transport as unknown as UnixSocketTransportInternals).handleConnection(
+      socket as unknown as Socket
+    )
+    socket.emit('data', '{"id":"stuck-close","method":"terminal.closeTab"}\n')
+
+    vi.advanceTimersByTime(249)
+    expect(socket.writes).toHaveLength(2)
+    expect(aborted).toBe(false)
+
+    vi.advanceTimersByTime(1)
+    expect(aborted).toBe(true)
+    expect(socket.destroyed).toBe(true)
+    vi.advanceTimersByTime(500)
+    expect(socket.writes).toHaveLength(2)
+  })
 })

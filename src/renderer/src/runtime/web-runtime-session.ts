@@ -57,6 +57,7 @@ import { runRemoteAgentSessionLaunch } from './remote-agent-session-launch'
 import { translate } from '../i18n/i18n'
 import { getRuntimeEnvironmentRevision } from './runtime-environment-revision'
 import { parsePaneKey } from '../../../shared/stable-pane-id'
+import { TERMINAL_TAB_CLOSE_CALLER_TIMEOUT_MS } from '../../../shared/terminal-tab-close'
 
 export {
   HOST_TERMINAL_SURFACE_SEPARATOR,
@@ -704,6 +705,7 @@ export async function closeWebRuntimeSessionTab(args: {
   reason: RuntimeSessionTabCloseReason
   publicationEpoch?: string | null
   terminalHandle?: string | null
+  timeoutMs?: number
 }): Promise<boolean> {
   return callWebRuntimeSessionTabMethod('session.tabs.close', args)
 }
@@ -824,6 +826,7 @@ async function callWebRuntimeSessionTabMethod(
     reason?: RuntimeSessionTabCloseReason
     publicationEpoch?: string | null
     terminalHandle?: string | null
+    timeoutMs?: number
   }
 ): Promise<boolean> {
   const environmentId =
@@ -896,7 +899,7 @@ async function callWebRuntimeSessionTabMethod(
             ? { reason: args.reason }
             : {})
       },
-      timeoutMs: 15_000
+      timeoutMs: args.timeoutMs ?? (isClose ? TERMINAL_TAB_CLOSE_CALLER_TIMEOUT_MS : 15_000)
     })
     const result = unwrapRuntimeRpcResult(
       response as RuntimeRpcResponse<RuntimeMobileSessionTabCloseResult | undefined>
@@ -910,7 +913,7 @@ async function callWebRuntimeSessionTabMethod(
         const { acceptReplayedWebSessionTabsSnapshot } = await import('./web-session-tabs-sync')
         acceptReplayedWebSessionTabsSnapshot(environmentId, args.worktreeId)
       }
-      await refreshWebRuntimeSessionTabsSnapshot(environmentId, args.worktreeId, {
+      void refreshWebRuntimeSessionTabsSnapshot(environmentId, args.worktreeId, {
         expectedEnvironmentPairingRevision: intentOwner.pairingRevision
       })
     }

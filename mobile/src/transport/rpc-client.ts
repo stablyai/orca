@@ -32,6 +32,10 @@ import { markRpcDeliveryUnknown } from './rpc-delivery-ambiguity'
 import { openRpcRequestBudget, resolvePostConnectRequestTimeout } from './rpc-request-budget'
 import { isRpcResponse } from './rpc-response-shape'
 import { websocketPayloadToUint8 } from './websocket-payload-bytes'
+import {
+  isTerminalTabCloseRpcMethod,
+  resolveTerminalTabCloseCallerTimeoutMs
+} from '../../../src/shared/terminal-tab-close'
 
 type PendingRequest = {
   resolve: (response: RpcResponse) => void
@@ -997,10 +1001,19 @@ export function connect(
       params?: unknown,
       options?: SendRequestOptions
     ): Promise<RpcResponse> {
-      const budget = openRpcRequestBudget(options)
+      const methodTimeoutMs = resolveTerminalTabCloseCallerTimeoutMs(
+        method,
+        options?.timeoutMs ?? REQUEST_TIMEOUT_MS
+      )
+      const budget = openRpcRequestBudget({
+        ...options,
+        ...(isTerminalTabCloseRpcMethod(method)
+          ? { timeoutMs: methodTimeoutMs, budgetSpansConnect: true }
+          : {})
+      })
       const waitStart = budget.startedAt
       const wasConnected = state === 'connected'
-      await waitForConnected(options?.timeoutMs)
+      await waitForConnected(budget.timeoutMs)
       if (!wasConnected) {
         console.log('[net] sendRequest waited for connect', {
           method,
@@ -1010,17 +1023,18 @@ export function connect(
 
       return new Promise((resolve, reject) => {
         const id = nextId()
-        const timeoutMs = resolvePostConnectRequestTimeout(budget, REQUEST_TIMEOUT_MS)
+        const requestTimeoutMs =
+          resolvePostConnectRequestTimeout(budget, REQUEST_TIMEOUT_MS)
         const timeout = setTimeout(() => {
           pending.delete(id)
           console.log('[net] sendRequest TIMEOUT', {
             method,
-            timeoutMs,
+            timeoutMs: requestTimeoutMs,
             state
           })
           // Why: the frame was written 30s ago — the host may have processed it.
           reject(markRpcDeliveryUnknown(new Error(`Request timed out: ${method}`)))
-        }, timeoutMs)
+        }, requestTimeoutMs)
 
         pending.set(id, {
           resolve: (response) => {

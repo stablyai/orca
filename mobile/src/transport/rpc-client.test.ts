@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { connect } from './rpc-client'
 import { encodeTerminalStreamFrame, TerminalStreamOpcode } from './terminal-stream-protocol'
+import { TERMINAL_TAB_CLOSE_CALLER_TIMEOUT_MS } from '../../../src/shared/terminal-tab-close'
 
 vi.mock('./e2ee', () => ({
   generateKeyPair: () => ({
@@ -558,6 +559,52 @@ describe('mobile rpc-client connection timeout', () => {
     await vi.advanceTimersByTimeAsync(1)
     await expect(request).rejects.toThrow('Request timed out: speech.dictation.finish')
 
+    client.close()
+  })
+
+  it('floors terminal close request timeouts at the durable caller budget', async () => {
+    const client = connect('ws://desktop.invalid', 'token', 'server-key')
+    const socket = mockSockets[0]!
+    socket.open()
+    socket.receive(JSON.stringify({ type: 'e2ee_ready' }))
+    socket.receive('encrypted:{"type":"e2ee_authenticated"}')
+
+    const request = client.sendRequest('terminal.closeTab').catch((error: Error) => error.message)
+    await Promise.resolve()
+    await vi.advanceTimersByTimeAsync(20_000)
+    const probe = sentRequest(socket, 'status.get')
+    socket.receive(`encrypted:${JSON.stringify({ id: probe.id, ok: true, result: {} })}`)
+    await vi.advanceTimersByTimeAsync(TERMINAL_TAB_CLOSE_CALLER_TIMEOUT_MS - 20_001)
+    await expect(
+      Promise.race([request.then(() => 'settled'), Promise.resolve('pending')])
+    ).resolves.toBe('pending')
+
+    await vi.advanceTimersByTimeAsync(1)
+    await expect(request).resolves.toBe('Request timed out: terminal.closeTab')
+    client.close()
+  })
+
+  it('shares the terminal close budget between reconnect and request', async () => {
+    const client = connect('ws://desktop.invalid', 'token', 'server-key')
+    const socket = mockSockets[0]!
+    const request = client
+      .sendRequest('terminal.closeTab', {}, { timeoutMs: 123 })
+      .catch(() => 'timed-out')
+
+    await vi.advanceTimersByTimeAsync(10_000)
+    socket.open()
+    socket.receive(JSON.stringify({ type: 'e2ee_ready' }))
+    socket.receive('encrypted:{"type":"e2ee_authenticated"}')
+    await vi.advanceTimersByTimeAsync(20_000)
+    const probe = sentRequest(socket, 'status.get')
+    socket.receive(`encrypted:${JSON.stringify({ id: probe.id, ok: true, result: {} })}`)
+    await vi.advanceTimersByTimeAsync(TERMINAL_TAB_CLOSE_CALLER_TIMEOUT_MS - 30_001)
+    await expect(
+      Promise.race([request.then(() => 'settled'), Promise.resolve('pending')])
+    ).resolves.toBe('pending')
+
+    await vi.advanceTimersByTimeAsync(1)
+    expect(await Promise.race([request, Promise.resolve('pending')])).toBe('timed-out')
     client.close()
   })
 

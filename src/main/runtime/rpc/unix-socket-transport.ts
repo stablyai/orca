@@ -16,10 +16,7 @@ const DEFAULT_KEEPALIVE_INTERVAL_MS = 10_000
 export type UnixSocketTransportOptions = {
   endpoint: string
   kind: 'unix' | 'named-pipe'
-  // Why: how often to write `{"_keepalive":true}\n` frames while a dispatch
-  // is pending. Each write resets both the server-side idle timer and, once
-  // the client honours them, the client-side idle timer. Tests override this
-  // to avoid waiting 10 s for a frame.
+  // Keepalives preserve idle connections without extending durable-close deadlines.
   keepaliveIntervalMs?: number
 }
 
@@ -163,6 +160,7 @@ export class UnixSocketTransport implements RpcTransport {
   private dispatchMessage(socket: Socket, rawMessage: string, inflight: Set<() => void>): void {
     let replied = false
     let keepaliveTimer: NodeJS.Timeout | null = null
+    let keepaliveDeadlineTimer: NodeJS.Timeout | null = null
     // Why: each dispatch needs its own abort signal and keepalive timer
     // cleanup. Socket close runs every cleanup without touching sibling
     // dispatches that already replied on the same connection.
@@ -176,6 +174,10 @@ export class UnixSocketTransport implements RpcTransport {
       if (keepaliveTimer) {
         clearInterval(keepaliveTimer)
         keepaliveTimer = null
+      }
+      if (keepaliveDeadlineTimer) {
+        clearTimeout(keepaliveDeadlineTimer)
+        keepaliveDeadlineTimer = null
       }
       if (abort) {
         abortController.abort()
@@ -196,9 +198,21 @@ export class UnixSocketTransport implements RpcTransport {
       }
     }
 
-    const startKeepalive = (): void => {
+    const startKeepalive = (deadlineMs?: number): void => {
       if (keepaliveTimer || replied) {
         return
+      }
+      if (deadlineMs !== undefined) {
+        keepaliveDeadlineTimer = setTimeout(
+          () => {
+            cleanupDispatch(true)
+            socket.destroy()
+          },
+          Math.max(0, deadlineMs - Date.now())
+        )
+        if (typeof keepaliveDeadlineTimer.unref === 'function') {
+          keepaliveDeadlineTimer.unref()
+        }
       }
       keepaliveTimer = setInterval(() => {
         if (replied || socket.destroyed || !socket.writable) {

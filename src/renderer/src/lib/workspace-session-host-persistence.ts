@@ -235,8 +235,7 @@ export function patchWorkspaceSessionByHost(
 }
 
 /** Persist a fresh full snapshot to every owning host partition, then force the
- * main store to disk. Used by request/reply lifecycle operations whose success
- * receipt is a durability boundary rather than a debounced UI update. */
+ * main store to disk. Callers choose whether the flush is their response boundary. */
 export async function persistWorkspaceSessionByHost(
   api: DurableSessionApi,
   payload: WorkspaceSessionState,

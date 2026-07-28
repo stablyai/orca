@@ -16,6 +16,13 @@ import type { AgentStatusClearIpcPayload } from '../../../shared/agent-status-ty
 import type { TuiAgent } from '../../../shared/types'
 import { makePaneKey } from '../../../shared/stable-pane-id'
 import { YOLO_TUI_AGENT_ARGS } from '../../../shared/tui-agent-permissions'
+import {
+  createTestStore,
+  makeTab,
+  makeWorktree,
+  seedStore
+} from '@/store/slices/store-test-helpers'
+import { TERMINAL_TAB_PROVIDER_TEARDOWN_TIMEOUT_MS } from '../../../shared/terminal-tab-close'
 
 const { closeTerminalTabMock } = vi.hoisted(() => ({
   closeTerminalTabMock: vi.fn()
@@ -2956,7 +2963,9 @@ describe('useIpcEvents browser tab close routing', () => {
     replyTabClose = vi.fn(),
     terminalTabCloseRequestListenerRef,
     respondTerminalTabClose = vi.fn(),
-    persistWorkspaceSession = vi.fn().mockResolvedValue(undefined)
+    persistWorkspaceSession = vi.fn().mockResolvedValue(undefined),
+    ptyKill = vi.fn().mockResolvedValue(undefined),
+    useUnmockedTerminalClose = false
   }: {
     closeActiveTabListenerRef?: { current: CloseActiveTabListener | null }
     closeSessionTabListenerRef?: { current: CloseSessionTabListener | null }
@@ -2967,7 +2976,16 @@ describe('useIpcEvents browser tab close routing', () => {
     terminalTabCloseRequestListenerRef?: { current: TerminalTabCloseRequestListener | null }
     respondTerminalTabClose?: ReturnType<typeof vi.fn>
     persistWorkspaceSession?: ReturnType<typeof vi.fn>
+    ptyKill?: ReturnType<typeof vi.fn>
+    useUnmockedTerminalClose?: boolean
   }): Promise<void> {
+    if (useUnmockedTerminalClose) {
+      vi.doUnmock('@/components/terminal/terminal-tab-actions')
+    } else {
+      vi.doMock('@/components/terminal/terminal-tab-actions', () => ({
+        closeTerminalTab: closeTerminalTabMock
+      }))
+    }
     vi.doMock('react', async () => {
       const actual = await vi.importActual<typeof ReactModule>('react')
       return {
@@ -3173,6 +3191,7 @@ describe('useIpcEvents browser tab close routing', () => {
           onCredentialResolved: () => () => {}
         },
         runtime: {
+          call: vi.fn(),
           getTerminalFitOverrides: () => Promise.resolve([]),
           getTerminalDrivers: () => Promise.resolve([]),
           getBrowserDrivers: () => Promise.resolve([]),
@@ -3180,6 +3199,7 @@ describe('useIpcEvents browser tab close routing', () => {
           onTerminalDriverChanged: () => () => {},
           onBrowserDriverChanged: () => {}
         },
+        pty: { kill: ptyKill },
         agentStatus: { onSet: () => () => {} }
       }
     })
@@ -3257,8 +3277,12 @@ describe('useIpcEvents browser tab close routing', () => {
     expect(closeTerminalTabMock).toHaveBeenCalledWith('terminal-1')
   })
 
-  it('acknowledges whole-tab close only after the fresh session is durably persisted', async () => {
+  it('acknowledges whole-tab close after provider proof without waiting for persistence', async () => {
     const listenerRef: { current: TerminalTabCloseRequestListener | null } = { current: null }
+    let finishProviderTeardown!: () => void
+    const providerTeardown = new Promise<void>((resolve) => {
+      finishProviderTeardown = resolve
+    })
     let finishPersist!: () => void
     const persistWorkspaceSession = vi.fn(
       () =>
@@ -3267,8 +3291,9 @@ describe('useIpcEvents browser tab close routing', () => {
         })
     )
     const respondTerminalTabClose = vi.fn()
-    closeTerminalTabMock.mockImplementation((_tabId: string, options: { onClosed?: () => void }) =>
-      options.onClosed?.()
+    closeTerminalTabMock.mockImplementation(
+      (_tabId: string, options: { onClosed?: (providerTeardown: Promise<void>) => void }) =>
+        options.onClosed?.(providerTeardown)
     )
     await useIpcEventsForCloseRouting({
       getState: () => ({}),
@@ -3284,13 +3309,118 @@ describe('useIpcEvents browser tab close routing', () => {
       'terminal-1',
       expect.objectContaining({ rejectPinned: true })
     )
-    expect(persistWorkspaceSession).toHaveBeenCalledTimes(1)
+    expect(persistWorkspaceSession).not.toHaveBeenCalled()
     expect(respondTerminalTabClose).not.toHaveBeenCalled()
 
-    finishPersist()
+    finishProviderTeardown()
     await vi.waitFor(() =>
       expect(respondTerminalTabClose).toHaveBeenCalledWith({ requestId: 'close-1' })
     )
+    expect(persistWorkspaceSession).toHaveBeenCalledTimes(1)
+    expect(respondTerminalTabClose.mock.invocationCallOrder[0]).toBeLessThan(
+      persistWorkspaceSession.mock.invocationCallOrder[0]!
+    )
+
+    finishPersist()
+    await vi.waitFor(() => expect(persistWorkspaceSession).toHaveReturnedTimes(1))
+  })
+
+  it('rejects provider failure through the unmocked close chain without persisting', async () => {
+    const listenerRef: { current: TerminalTabCloseRequestListener | null } = { current: null }
+    const store = createTestStore()
+    seedStore(store, {
+      worktreesByRepo: {
+        repo1: [makeWorktree({ id: 'wt-1', repoId: 'repo1', path: '/repo/wt-1' })]
+      },
+      tabsByWorktree: {
+        'wt-1': [makeTab({ id: 'terminal-1', worktreeId: 'wt-1', ptyId: 'pty-1' })]
+      },
+      ptyIdsByTabId: { 'terminal-1': ['pty-1'] },
+      activeWorktreeId: 'wt-1',
+      activeTabId: 'terminal-1'
+    })
+    const ptyKill = vi.fn().mockRejectedValueOnce(new Error('provider unavailable'))
+    const persistWorkspaceSession = vi.fn().mockResolvedValue(undefined)
+    const respondTerminalTabClose = vi.fn()
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    await useIpcEventsForCloseRouting({
+      getState: store.getState,
+      terminalTabCloseRequestListenerRef: listenerRef,
+      respondTerminalTabClose,
+      persistWorkspaceSession,
+      ptyKill,
+      useUnmockedTerminalClose: true
+    })
+
+    listenerRef.current?.({ requestId: 'close-failed', tabId: 'terminal-1' })
+
+    await vi.waitFor(() =>
+      expect(respondTerminalTabClose).toHaveBeenCalledWith({
+        requestId: 'close-failed',
+        error: 'terminal_tab_close_failed'
+      })
+    )
+    expect(ptyKill).toHaveBeenCalledWith('pty-1', {
+      timeoutMs: TERMINAL_TAB_PROVIDER_TEARDOWN_TIMEOUT_MS
+    })
+    expect(store.getState().tabsByWorktree['wt-1']).toEqual([])
+    expect(persistWorkspaceSession).not.toHaveBeenCalled()
+
+    listenerRef.current?.({ requestId: 'close-retry', tabId: 'terminal-1' })
+    await vi.waitFor(() => expect(respondTerminalTabClose).toHaveBeenCalledTimes(2))
+    expect(respondTerminalTabClose).toHaveBeenLastCalledWith({ requestId: 'close-retry' })
+    expect(ptyKill).toHaveBeenCalledTimes(2)
+    expect(persistWorkspaceSession).toHaveBeenCalledTimes(1)
+    warn.mockRestore()
+  })
+
+  it('holds duplicate unmocked close acknowledgements on the same provider teardown', async () => {
+    const listenerRef: { current: TerminalTabCloseRequestListener | null } = { current: null }
+    const store = createTestStore()
+    seedStore(store, {
+      worktreesByRepo: {
+        repo1: [makeWorktree({ id: 'wt-1', repoId: 'repo1', path: '/repo/wt-1' })]
+      },
+      tabsByWorktree: {
+        'wt-1': [makeTab({ id: 'terminal-1', worktreeId: 'wt-1', ptyId: 'pty-1' })]
+      },
+      ptyIdsByTabId: { 'terminal-1': ['pty-1'] },
+      activeWorktreeId: 'wt-1',
+      activeTabId: 'terminal-1'
+    })
+    let finishProviderTeardown!: () => void
+    const ptyKill = vi.fn(
+      () =>
+        new Promise<void>((resolve) => {
+          finishProviderTeardown = resolve
+        })
+    )
+    const persistWorkspaceSession = vi.fn().mockResolvedValue(undefined)
+    const respondTerminalTabClose = vi.fn()
+    await useIpcEventsForCloseRouting({
+      getState: store.getState,
+      terminalTabCloseRequestListenerRef: listenerRef,
+      respondTerminalTabClose,
+      persistWorkspaceSession,
+      ptyKill,
+      useUnmockedTerminalClose: true
+    })
+
+    listenerRef.current?.({ requestId: 'close-first', tabId: 'terminal-1' })
+    listenerRef.current?.({ requestId: 'close-duplicate', tabId: 'terminal-1' })
+    await Promise.resolve()
+
+    expect(ptyKill).toHaveBeenCalledTimes(1)
+    expect(persistWorkspaceSession).not.toHaveBeenCalled()
+    expect(respondTerminalTabClose).not.toHaveBeenCalled()
+
+    finishProviderTeardown()
+    await vi.waitFor(() => expect(respondTerminalTabClose).toHaveBeenCalledTimes(2))
+    expect(persistWorkspaceSession).toHaveBeenCalledTimes(2)
+    expect(respondTerminalTabClose.mock.calls.map(([response]) => response)).toEqual([
+      { requestId: 'close-first' },
+      { requestId: 'close-duplicate' }
+    ])
   })
 
   it('rejects a pinned whole-tab close without persisting or reporting success', async () => {

@@ -108,6 +108,49 @@ describe.skipIf(process.platform === 'win32')('runtime transport', () => {
     })
   })
 
+  it('keeps terminal tab close timeouts absolute despite keepalive frames', async () => {
+    const userDataPath = mkdtempSync(join(tmpdir(), 'orca-runtime-transport-'))
+    const endpoint = join(userDataPath, 'runtime.sock')
+    const server = createServer((socket) => {
+      sockets.add(socket)
+      let keepalive: ReturnType<typeof setInterval> | null = null
+      let stopKeepalive: ReturnType<typeof setTimeout> | null = null
+      socket.once('close', () => {
+        sockets.delete(socket)
+        if (keepalive) {
+          clearInterval(keepalive)
+        }
+        if (stopKeepalive) {
+          clearTimeout(stopKeepalive)
+        }
+      })
+      socket.once('data', () => {
+        keepalive = setInterval(() => socket.write('{"_keepalive":true}\n'), 50)
+        stopKeepalive = setTimeout(() => {
+          if (keepalive) {
+            clearInterval(keepalive)
+            keepalive = null
+          }
+        }, 400)
+      })
+    })
+    servers.add(server)
+    await new Promise<void>((resolve) => server.listen(endpoint, resolve))
+    const metadata: RuntimeMetadata = {
+      runtimeId: 'runtime-1',
+      pid: 123,
+      transports: [{ kind: 'unix', endpoint }],
+      authToken: 'token',
+      startedAt: 1
+    }
+    const startedAt = Date.now()
+
+    await expect(sendRequest(metadata, 'terminal.closeTab', undefined, 200)).rejects.toMatchObject({
+      code: 'runtime_timeout'
+    })
+    expect(Date.now() - startedAt).toBeLessThan(350)
+  })
+
   it('rejects promptly when the runtime closes the socket before responding', async () => {
     const userDataPath = mkdtempSync(join(tmpdir(), 'orca-runtime-transport-'))
     const endpoint = join(userDataPath, 'runtime.sock')

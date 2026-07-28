@@ -128,6 +128,7 @@ import {
   assertClipboardImageDimensionsWithinLimit
 } from '../../../shared/clipboard-image'
 import { sanitizeWebRuntimeWorkspaceSession } from './web-workspace-session'
+import { TERMINAL_TAB_CLOSE_CALLER_TIMEOUT_MS } from '../../../shared/terminal-tab-close'
 import {
   normalizeFeatureInteractions,
   type FeatureInteractionId,
@@ -1416,7 +1417,7 @@ function createReposApi(): NonNullable<Partial<PreloadApi>['repos']> {
       return withRuntimeRepoMutationOwner(owned.result, owned.hostId)
     },
     remove: async ({ repoId }) => {
-      await callRuntimeResult('repo.rm', { repo: repoId })
+      await callRuntimeResult('repo.rm', { repo: repoId }, TERMINAL_TAB_CLOSE_CALLER_TIMEOUT_MS)
       invalidateRuntimeWorktreeCaches()
     },
     // Why: host-scoped forget targets a desktop-owned SSH host; a paired web client has one runtime and no ghost-host state.

@@ -1,5 +1,9 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { SleepingAgentSessionRecord } from '../../../../shared/agent-session-resume'
+import {
+  TERMINAL_TAB_CLOSE_ACK_MARGIN_MS,
+  TERMINAL_TAB_PROVIDER_TEARDOWN_TIMEOUT_MS
+} from '../../../../shared/terminal-tab-close'
 
 const mockKill = vi.fn().mockResolvedValue(undefined)
 const mockRuntimeCall = vi.fn().mockResolvedValue({
@@ -8,12 +12,17 @@ const mockRuntimeCall = vi.fn().mockResolvedValue({
   result: {},
   _meta: { runtimeId: 'local-runtime' }
 })
+const mockRuntimeEnvironmentCall = vi.fn()
+const mockRuntimeEnvironmentSubscribe = vi.fn()
 
 vi.stubGlobal('window', {
   api: {
     pty: { kill: mockKill },
     runtime: { call: mockRuntimeCall },
-    runtimeEnvironments: { call: vi.fn() }
+    runtimeEnvironments: {
+      call: mockRuntimeEnvironmentCall,
+      subscribe: mockRuntimeEnvironmentSubscribe
+    }
   }
 })
 
@@ -29,6 +38,7 @@ import {
   makeUnifiedTab,
   seedStore
 } from './store-test-helpers'
+import { replanTerminalTabRetirement } from './terminal-tab-retirement'
 
 function createRetirementStore() {
   const store = createTestStore()
@@ -64,6 +74,8 @@ describe('terminal tab retirement store boundary', () => {
       result: {},
       _meta: { runtimeId: 'local-runtime' }
     })
+    mockRuntimeEnvironmentCall.mockReset()
+    mockRuntimeEnvironmentSubscribe.mockReset()
     parkedWatchersByTabId.clear()
     capturedPanesByTabId.clear()
   })
@@ -120,6 +132,67 @@ describe('terminal tab retirement store boundary', () => {
     expect(capturedPanesByTabId.has('tab-1')).toBe(false)
   })
 
+  it('registers teardown that waits for every split PTY kill', async () => {
+    const store = createRetirementStore()
+    let finishSplitKill!: () => void
+    mockKill.mockImplementation((ptyId: string) =>
+      ptyId === 'pty-split'
+        ? new Promise<void>((resolve) => {
+            finishSplitKill = resolve
+          })
+        : Promise.resolve()
+    )
+    seedStore(store, {
+      tabsByWorktree: {
+        'wt-1': [makeTab({ id: 'tab-1', worktreeId: 'wt-1', ptyId: 'pty-primary' })]
+      },
+      ptyIdsByTabId: { 'tab-1': ['pty-primary', 'pty-split'] }
+    })
+    let providerTeardown: Promise<void> | undefined
+
+    store.getState().closeTab('tab-1', {
+      registerProviderTeardown: (teardown) => {
+        providerTeardown = teardown
+      }
+    })
+
+    expect(mockKill).toHaveBeenCalledTimes(2)
+    expect(providerTeardown).toBeDefined()
+    let teardownFinished = false
+    void providerTeardown!.then(() => {
+      teardownFinished = true
+    })
+    await Promise.resolve()
+    expect(teardownFinished).toBe(false)
+
+    finishSplitKill()
+    await providerTeardown
+    expect(teardownFinished).toBe(true)
+  })
+
+  it('rejects registered teardown when a provider kill fails', async () => {
+    const store = createRetirementStore()
+    mockKill.mockRejectedValueOnce(new Error('provider unavailable'))
+    seedStore(store, {
+      tabsByWorktree: {
+        'wt-1': [makeTab({ id: 'tab-1', worktreeId: 'wt-1', ptyId: 'pty-1' })]
+      },
+      ptyIdsByTabId: { 'tab-1': ['pty-1'] }
+    })
+    let providerTeardown: Promise<void> | undefined
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+
+    store.getState().closeTab('tab-1', {
+      registerProviderTeardown: (teardown) => {
+        providerTeardown = teardown
+      }
+    })
+
+    await expect(providerTeardown).rejects.toThrow('terminal_tab_close_failed')
+    expect(store.getState().tabsByWorktree['wt-1']).toEqual([])
+    warn.mockRestore()
+  })
+
   it('routes runtime handles to runtime close and preserves shared PTYs', async () => {
     const store = createRetirementStore()
     seedStore(store, {
@@ -145,6 +218,99 @@ describe('terminal tab retirement store boundary', () => {
     expect(mockKill).not.toHaveBeenCalled()
   })
 
+  it('uses provider-complete runtime close for registered teardown', async () => {
+    const store = createRetirementStore()
+    seedStore(store, {
+      tabsByWorktree: {
+        'wt-1': [makeTab({ id: 'tab-1', worktreeId: 'wt-1', ptyId: 'remote:terminal-1' })]
+      },
+      ptyIdsByTabId: { 'tab-1': ['remote:terminal-1'] }
+    })
+    let providerTeardown: Promise<void> | undefined
+
+    store.getState().closeTab('tab-1', {
+      registerProviderTeardown: (teardown) => {
+        providerTeardown = teardown
+      }
+    })
+    await providerTeardown
+
+    expect(mockRuntimeCall).toHaveBeenCalledWith({
+      method: 'terminal.closeProvider',
+      params: {
+        terminal: 'terminal-1',
+        timeoutMs: TERMINAL_TAB_PROVIDER_TEARDOWN_TIMEOUT_MS
+      }
+    })
+  })
+
+  it('fails closed when a legacy runtime cannot prove provider teardown', async () => {
+    const store = createRetirementStore()
+    seedStore(store, {
+      tabsByWorktree: {
+        'wt-1': [
+          makeTab({
+            id: 'tab-1',
+            worktreeId: 'wt-1',
+            ptyId: 'remote:legacy-runtime@@terminal-1'
+          })
+        ]
+      },
+      ptyIdsByTabId: { 'tab-1': ['remote:legacy-runtime@@terminal-1'] }
+    })
+    const responses = [
+      {
+        id: 'rpc-close-provider',
+        ok: false,
+        error: { code: 'method_not_found', message: 'Unknown method: terminal.closeProvider' },
+        _meta: { runtimeId: 'legacy-runtime' }
+      },
+      {
+        id: 'rpc-close',
+        ok: true,
+        result: { close: { ptyKilled: false } },
+        _meta: { runtimeId: 'legacy-runtime' }
+      },
+      {
+        id: 'rpc-wait',
+        ok: true,
+        result: {
+          wait: {
+            handle: 'terminal-1',
+            condition: 'exit',
+            satisfied: true,
+            status: 'exited',
+            exitCode: null
+          }
+        },
+        _meta: { runtimeId: 'legacy-runtime' }
+      }
+    ]
+    mockRuntimeEnvironmentSubscribe.mockImplementation(
+      (_request, callbacks: { onResponse: (response: (typeof responses)[number]) => void }) => {
+        const response = responses.shift()!
+        queueMicrotask(() => callbacks.onResponse(response))
+        return Promise.resolve({ unsubscribe: vi.fn() })
+      }
+    )
+    let providerTeardown: Promise<void> | undefined
+
+    store.getState().closeTab('tab-1', {
+      registerProviderTeardown: (teardown) => {
+        providerTeardown = teardown
+      }
+    })
+    await expect(providerTeardown).rejects.toThrow(
+      'terminal_provider_teardown_requires_runtime_upgrade'
+    )
+
+    expect(mockRuntimeEnvironmentSubscribe.mock.calls.map(([request]) => request.method)).toEqual([
+      'terminal.closeProvider'
+    ])
+    expect(mockRuntimeEnvironmentCall).not.toHaveBeenCalled()
+    expect(mockRuntimeCall).not.toHaveBeenCalled()
+  })
+
   it('preserves shared-owner snapshots while closing the source tab', async () => {
     const store = createRetirementStore()
     const snapshot = { snapshot: 'shared snapshot' }
@@ -167,6 +333,131 @@ describe('terminal tab retirement store boundary', () => {
     expect(mockKill).not.toHaveBeenCalled()
     expect(store.getState().pendingSnapshotByPtyId['pty-shared']).toBe(snapshot)
     expect(store.getState().pendingColdRestoreByPtyId['pty-shared']).toBe(coldRestore)
+  })
+
+  it('fails closed and preserves recovery snapshots for an unroutable live PTY', async () => {
+    const store = createRetirementStore()
+    const snapshot = { snapshot: 'unroutable snapshot' }
+    const coldRestore = { scrollback: 'unroutable scrollback', cwd: '/repo/wt-1' }
+    seedStore(store, {
+      tabsByWorktree: {
+        'wt-1': [makeTab({ id: 'tab-1', worktreeId: 'wt-1', ptyId: 'remote:' })]
+      },
+      ptyIdsByTabId: { 'tab-1': ['remote:'] },
+      pendingSnapshotByPtyId: { 'remote:': snapshot },
+      pendingColdRestoreByPtyId: { 'remote:': coldRestore }
+    })
+    let providerTeardown: Promise<void> | undefined
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+
+    store.getState().closeTab('tab-1', {
+      registerProviderTeardown: (teardown) => {
+        providerTeardown = teardown
+      }
+    })
+
+    await expect(providerTeardown).rejects.toThrow('terminal_tab_close_failed')
+    expect(store.getState().pendingSnapshotByPtyId['remote:']).toBe(snapshot)
+    expect(store.getState().pendingColdRestoreByPtyId['remote:']).toBe(coldRestore)
+    warn.mockRestore()
+  })
+
+  it('replans a failed unroutable teardown after its worktree route is repaired', async () => {
+    const store = createRetirementStore()
+    const worktreeId = 'missing-repo::/repo/repaired'
+    seedStore(store, {
+      worktreesByRepo: { repo1: [] },
+      tabsByWorktree: {
+        [worktreeId]: [makeTab({ id: 'tab-route-retry', worktreeId, ptyId: 'pty-route-retry' })]
+      },
+      ptyIdsByTabId: { 'tab-route-retry': ['pty-route-retry'] }
+    })
+    let providerTeardown: Promise<void> | undefined
+    let retryProviderTeardown: (() => Promise<void>) | undefined
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+
+    store.getState().closeTab('tab-route-retry', {
+      registerProviderTeardown: (teardown, retry) => {
+        providerTeardown = teardown
+        retryProviderTeardown = retry
+      }
+    })
+    await expect(providerTeardown).rejects.toThrow('terminal_tab_close_failed')
+    expect(mockKill).not.toHaveBeenCalled()
+
+    store.setState({
+      worktreesByRepo: {
+        repo1: [makeWorktree({ id: worktreeId, repoId: 'repo1', path: '/repo/repaired' })]
+      }
+    })
+    await expect(retryProviderTeardown?.()).resolves.toBeUndefined()
+
+    expect(mockKill).toHaveBeenCalledWith('pty-route-retry', {
+      timeoutMs: TERMINAL_TAB_PROVIDER_TEARDOWN_TIMEOUT_MS
+    })
+    warn.mockRestore()
+  })
+
+  it('recomputes the local provider timeout when a failed teardown is retried', async () => {
+    const now = vi.spyOn(Date, 'now').mockReturnValue(0)
+    const store = createRetirementStore()
+    mockKill.mockRejectedValueOnce(new Error('provider unavailable')).mockResolvedValue(undefined)
+    seedStore(store, {
+      tabsByWorktree: {
+        'wt-1': [makeTab({ id: 'tab-deadline', worktreeId: 'wt-1', ptyId: 'pty-deadline' })]
+      },
+      ptyIdsByTabId: { 'tab-deadline': ['pty-deadline'] }
+    })
+    let providerTeardown: Promise<void> | undefined
+    let retryProviderTeardown: (() => Promise<void>) | undefined
+    const deadlineMs = 50_000
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+
+    store.getState().closeTab('tab-deadline', {
+      providerTeardownDeadlineMs: deadlineMs,
+      registerProviderTeardown: (teardown, retry) => {
+        providerTeardown = teardown
+        retryProviderTeardown = retry
+      }
+    })
+    await expect(providerTeardown).rejects.toThrow('terminal_tab_close_failed')
+
+    now.mockReturnValue(30_000)
+    await expect(retryProviderTeardown?.()).resolves.toBeUndefined()
+    expect(mockKill.mock.calls.map(([, options]) => options?.timeoutMs)).toEqual([
+      TERMINAL_TAB_PROVIDER_TEARDOWN_TIMEOUT_MS,
+      deadlineMs - 30_000 - TERMINAL_TAB_CLOSE_ACK_MARGIN_MS
+    ])
+    now.mockRestore()
+    warn.mockRestore()
+  })
+
+  it('retains a prior kill set when a re-materialized tab has no current PTY ids', () => {
+    const store = createRetirementStore()
+    seedStore(store, {
+      tabsByWorktree: {
+        'wt-1': [
+          makeTab({ id: 'tab-replanned', worktreeId: 'wt-1', ptyId: null }),
+          makeTab({ id: 'tab-bystander', worktreeId: 'wt-1', ptyId: 'pty-prior' })
+        ]
+      },
+      ptyIdsByTabId: { 'tab-replanned': [], 'tab-bystander': ['pty-prior'] }
+    })
+
+    const replanned = replanTerminalTabRetirement(store.getState(), {
+      tabId: 'tab-replanned',
+      worktreeId: 'wt-1',
+      ptyIds: ['pty-prior'],
+      localOrSshPtyIds: ['pty-prior'],
+      runtimeTerminals: [],
+      cleanupOnlyPtyIds: [],
+      sharedPtyIds: [],
+      unroutablePtyIds: []
+    })
+
+    expect(replanned.ptyIds).toEqual(['pty-prior'])
+    expect(replanned.sharedPtyIds).toEqual(['pty-prior'])
+    expect(replanned.localOrSshPtyIds).toEqual([])
   })
 
   it('reconciles natural exit without issuing teardown or revoking resume authority', async () => {

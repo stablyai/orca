@@ -105,6 +105,7 @@ import {
 } from '../../shared/constants'
 import { advertisedUrlWatcher } from '../ports/advertised-url-watcher'
 import { makePaneKey } from '../../shared/stable-pane-id'
+import { TERMINAL_TAB_CLOSE_RESPONSE_TIMEOUT_MS } from '../../shared/terminal-tab-close'
 import { SETUP_AGENT_SEQUENCE_STARTUP_COMMAND_ENV } from '../../shared/setup-agent-sequencing'
 import type {
   AgentSessionExecutionClaim,
@@ -20460,6 +20461,7 @@ describe('OrcaRuntimeService', () => {
       spawn: vi.fn(),
       write: () => true,
       kill,
+      stopAndWait: async (ptyId) => (kill as unknown as (id: string) => boolean)(ptyId),
       getForegroundProcess: async () => null
     })
     runtime.setNotifier({
@@ -21738,6 +21740,7 @@ describe('OrcaRuntimeService', () => {
     runtime.setPtyController({
       write: () => true,
       kill,
+      stopAndWait: async (ptyId) => (kill as unknown as (id: string) => boolean)(ptyId),
       getForegroundProcess: async () => null,
       listProcesses: async () => []
     })
@@ -22242,6 +22245,7 @@ describe('OrcaRuntimeService', () => {
       spawn,
       write: () => true,
       kill,
+      stopAndWait: async () => true,
       getForegroundProcess: async () => null
     })
 
@@ -22267,6 +22271,47 @@ describe('OrcaRuntimeService', () => {
     })
     expect(kill).toHaveBeenCalledWith('laptop-created-pty')
     expect(closeTerminal).toHaveBeenCalledWith('laptop-tab')
+  })
+
+  it('waits for physical provider teardown before returning its close receipt', async () => {
+    const physicalExit = makeDeferred()
+    const kill = vi.fn(() => true)
+    const stopAndWait = vi.fn(async () => {
+      await physicalExit.promise
+      return true
+    })
+    const runtime = new OrcaRuntimeService(store)
+    runtime.setPtyController({
+      spawn: vi.fn().mockResolvedValue({ id: 'provider-owned-pty' }),
+      write: () => true,
+      kill,
+      stopAndWait,
+      getForegroundProcess: async () => null
+    })
+    const terminal = await runtime.createTerminal(`id:${TEST_WORKTREE_ID}`, {
+      tabId: 'provider-owned-tab',
+      leafId: HEADLESS_LEAF_ID
+    })
+
+    const pending = runtime.closeTerminalProvider(terminal.handle, { timeoutMs: 30_000 })
+    let settled = false
+    void pending.then(() => {
+      settled = true
+    })
+    await Promise.resolve()
+
+    expect(settled).toBe(false)
+    expect(kill).not.toHaveBeenCalled()
+    expect(stopAndWait).toHaveBeenCalledWith('provider-owned-pty', {
+      deadlineMs: expect.any(Number)
+    })
+
+    physicalExit.resolve()
+    await expect(pending).resolves.toEqual({
+      handle: terminal.handle,
+      tabId: 'provider-owned-tab',
+      ptyKilled: true
+    })
   })
 
   it('waits for renderer acknowledgement before returning a whole-tab close receipt', async () => {
@@ -22384,6 +22429,7 @@ describe('OrcaRuntimeService', () => {
       spawn,
       write: () => true,
       kill,
+      stopAndWait: async (ptyId) => (kill as unknown as (id: string) => boolean)(ptyId),
       getForegroundProcess: async () => null
     })
     runtime.syncWindowGraph(0, { tabs: [], leaves: [] })
@@ -24013,6 +24059,7 @@ describe('OrcaRuntimeService', () => {
     runtime.setPtyController({
       write: () => true,
       kill,
+      stopAndWait: async (ptyId) => (kill as unknown as (id: string) => boolean)(ptyId),
       getForegroundProcess: async () => null,
       listProcesses: async () => [{ id: persistedPtyId, cwd: TEST_WORKTREE_PATH, title: 'Remote' }]
     })
@@ -24023,6 +24070,95 @@ describe('OrcaRuntimeService', () => {
     expect(kill).toHaveBeenCalledWith(persistedPtyId)
     expect(getSession().tabsByWorktree[TEST_WORKTREE_ID]).toEqual([])
     expect(getSession().terminalLayoutsByTabId['host-tab']).toBeUndefined()
+  })
+
+  it('keeps headless state when physical PTY exit cannot be proven', async () => {
+    const persistedPtyId = 'ssh:ssh-1@@unproven-pty'
+    const { runtimeStore, getSession } = makeRuntimeStoreWithWorkspaceSession(
+      makeWorkspaceSessionWithHeadlessTerminal({
+        tabsByWorktree: {
+          [TEST_WORKTREE_ID]: [
+            {
+              id: 'host-tab',
+              ptyId: persistedPtyId,
+              worktreeId: TEST_WORKTREE_ID,
+              title: 'Remote Terminal',
+              customTitle: null,
+              color: null,
+              sortOrder: 0,
+              createdAt: 1
+            }
+          ]
+        },
+        terminalLayoutsByTabId: {
+          'host-tab': makeHeadlessTerminalLayout({ [HEADLESS_LEAF_ID]: persistedPtyId })
+        }
+      })
+    )
+    const kill = vi.fn(() => true)
+    const stopAndWait = vi.fn(async () => false)
+    const runtime = new OrcaRuntimeService(runtimeStore as never)
+    runtime.setPtyController({
+      write: () => true,
+      kill,
+      stopAndWait,
+      getForegroundProcess: async () => null,
+      listProcesses: async () => [{ id: persistedPtyId, cwd: TEST_WORKTREE_PATH, title: 'Remote' }]
+    })
+    runtime.syncWindowGraph(0, { tabs: [], leaves: [] })
+
+    await expect(
+      runtime.closeMobileSessionTab(`id:${TEST_WORKTREE_ID}`, 'host-tab')
+    ).rejects.toThrow('terminal_tab_close_failed')
+
+    expect(stopAndWait).toHaveBeenCalledWith(persistedPtyId, {
+      deadlineMs: expect.any(Number)
+    })
+    expect(kill).not.toHaveBeenCalled()
+    expect(getSession().tabsByWorktree[TEST_WORKTREE_ID]).toHaveLength(1)
+    expect(getSession().terminalLayoutsByTabId['host-tab']).toBeDefined()
+  })
+
+  it('keeps unknown-inventory local headless state when no kill id can be proven', async () => {
+    const persistedPtyId = 'unlisted-local-pty'
+    const { runtimeStore, getSession } = makeRuntimeStoreWithWorkspaceSession(
+      makeWorkspaceSessionWithHeadlessTerminal({
+        tabsByWorktree: {
+          [TEST_WORKTREE_ID]: [
+            {
+              id: 'host-tab',
+              ptyId: persistedPtyId,
+              worktreeId: TEST_WORKTREE_ID,
+              title: 'Unlisted Local Terminal',
+              customTitle: null,
+              color: null,
+              sortOrder: 0,
+              createdAt: 1
+            }
+          ]
+        },
+        terminalLayoutsByTabId: {
+          'host-tab': makeHeadlessTerminalLayout({ [HEADLESS_LEAF_ID]: persistedPtyId })
+        }
+      })
+    )
+    const stopAndWait = vi.fn(async () => true)
+    const runtime = new OrcaRuntimeService(runtimeStore as never)
+    runtime.setPtyController({
+      write: () => true,
+      kill: vi.fn(() => true),
+      stopAndWait,
+      getForegroundProcess: async () => null
+    })
+    runtime.syncWindowGraph(0, { tabs: [], leaves: [] })
+
+    await expect(
+      runtime.closeMobileSessionTab(`id:${TEST_WORKTREE_ID}`, 'host-tab')
+    ).rejects.toThrow('terminal_tab_close_failed')
+
+    expect(stopAndWait).not.toHaveBeenCalled()
+    expect(getSession().tabsByWorktree[TEST_WORKTREE_ID]).toHaveLength(1)
+    expect(getSession().terminalLayoutsByTabId['host-tab']).toBeDefined()
   })
 
   it('durably tears down a runtime-owned SSH headless tab when renderer cleanup fails', async () => {
@@ -24061,6 +24197,7 @@ describe('OrcaRuntimeService', () => {
     runtime.setPtyController({
       write: () => true,
       kill,
+      stopAndWait: async (ptyId) => (kill as unknown as (id: string) => boolean)(ptyId),
       getForegroundProcess: async () => null,
       listProcesses: async () => [{ id: persistedPtyId, cwd: TEST_WORKTREE_PATH, title: 'Remote' }]
     })
@@ -24116,6 +24253,7 @@ describe('OrcaRuntimeService', () => {
     runtime.setPtyController({
       write: () => true,
       kill,
+      stopAndWait: async (closedPtyId) => kill(closedPtyId),
       getForegroundProcess: async () => null,
       listProcesses: async () => []
     })
@@ -24235,6 +24373,223 @@ describe('OrcaRuntimeService', () => {
     expect(closeTerminalTab).toHaveBeenCalledWith('host-tab')
     expect(closeTerminal).not.toHaveBeenCalled()
     expect(kill).not.toHaveBeenCalled()
+    expect(getSession().tabsByWorktree[TEST_WORKTREE_ID]).toHaveLength(1)
+    expect(getSession().terminalLayoutsByTabId['host-tab']).toBeDefined()
+  })
+
+  it.each(['terminal_tab_close_failed', 'terminal_tab_close_timeout'])(
+    'retires host state after recovering renderer close error %s',
+    async (rendererCloseError) => {
+      const ptyId = 'serve-adopted-retry'
+      const { runtimeStore, getSession } = makeRuntimeStoreWithWorkspaceSession(
+        makeWorkspaceSessionWithHeadlessTerminal({
+          tabsByWorktree: {
+            [TEST_WORKTREE_ID]: [
+              {
+                id: 'host-tab',
+                ptyId,
+                worktreeId: TEST_WORKTREE_ID,
+                title: 'Adopted Terminal',
+                customTitle: null,
+                color: null,
+                sortOrder: 0,
+                createdAt: 1
+              }
+            ]
+          },
+          terminalLayoutsByTabId: {
+            'host-tab': makeHeadlessTerminalLayout({ [HEADLESS_LEAF_ID]: ptyId })
+          }
+        })
+      )
+      const flushOrThrow = vi.fn()
+      const stopAndWait = vi.fn(async () => true)
+      const closeTerminal = vi.fn()
+      const closeTerminalTab = vi.fn(async () => {
+        throw new Error(rendererCloseError)
+      })
+      const runtime = new OrcaRuntimeService({ ...runtimeStore, flushOrThrow } as never)
+      runtime.setPtyController({
+        write: () => true,
+        kill: vi.fn(() => true),
+        stopAndWait,
+        getForegroundProcess: async () => null,
+        listProcesses: async () => [{ id: ptyId, cwd: TEST_WORKTREE_PATH, title: 'Adopted' }]
+      })
+      runtime.setNotifier({ closeTerminal, closeTerminalTab } as never)
+      runtime.syncWindowGraph(1, {
+        tabs: [
+          {
+            tabId: 'host-tab',
+            worktreeId: TEST_WORKTREE_ID,
+            title: 'Adopted Terminal',
+            activeLeafId: HEADLESS_LEAF_ID,
+            layout: null
+          }
+        ],
+        leaves: [
+          {
+            tabId: 'host-tab',
+            worktreeId: TEST_WORKTREE_ID,
+            leafId: HEADLESS_LEAF_ID,
+            paneRuntimeId: 1,
+            ptyId
+          }
+        ]
+      })
+
+      await expect(
+        runtime.closeMobileSessionTab(`id:${TEST_WORKTREE_ID}`, 'host-tab')
+      ).resolves.toEqual({ closed: true })
+
+      expect(stopAndWait).toHaveBeenCalledWith(ptyId, { deadlineMs: expect.any(Number) })
+      expect(closeTerminal).toHaveBeenCalledWith('host-tab')
+      expect(flushOrThrow).toHaveBeenCalledTimes(1)
+      expect(getSession().tabsByWorktree[TEST_WORKTREE_ID]).toEqual([])
+      expect(getSession().terminalLayoutsByTabId['host-tab']).toBeUndefined()
+      expect((await runtime.listMobileSessionTabs(`id:${TEST_WORKTREE_ID}`)).tabs).toEqual([])
+    }
+  )
+
+  it('recovers an expired renderer timeout when the provider is already gone', async () => {
+    const ptyId = 'serve-timeout-exited'
+    const { runtimeStore, getSession } = makeRuntimeStoreWithWorkspaceSession(
+      makeWorkspaceSessionWithHeadlessTerminal({
+        tabsByWorktree: {
+          [TEST_WORKTREE_ID]: [
+            {
+              id: 'host-tab',
+              ptyId,
+              worktreeId: TEST_WORKTREE_ID,
+              title: 'Exited Terminal',
+              customTitle: null,
+              color: null,
+              sortOrder: 0,
+              createdAt: 1
+            }
+          ]
+        },
+        terminalLayoutsByTabId: {
+          'host-tab': makeHeadlessTerminalLayout({ [HEADLESS_LEAF_ID]: ptyId })
+        }
+      })
+    )
+    let now = 1_000
+    const dateNow = vi.spyOn(Date, 'now').mockImplementation(() => now)
+    const stopAndWait = vi.fn(async () => true)
+    const runtime = new OrcaRuntimeService(runtimeStore as never)
+    runtime.setPtyController({
+      write: () => true,
+      kill: vi.fn(() => true),
+      stopAndWait,
+      hasPty: () => false,
+      getForegroundProcess: async () => null,
+      listProcesses: async () => []
+    })
+    runtime.setNotifier({
+      closeTerminal: vi.fn(),
+      closeTerminalTab: vi.fn(async () => {
+        now += TERMINAL_TAB_CLOSE_RESPONSE_TIMEOUT_MS + 1
+        throw new Error('terminal_tab_close_timeout')
+      })
+    } as never)
+    runtime.syncWindowGraph(1, {
+      tabs: [
+        {
+          tabId: 'host-tab',
+          worktreeId: TEST_WORKTREE_ID,
+          title: 'Exited Terminal',
+          activeLeafId: HEADLESS_LEAF_ID,
+          layout: null
+        }
+      ],
+      leaves: [
+        {
+          tabId: 'host-tab',
+          worktreeId: TEST_WORKTREE_ID,
+          leafId: HEADLESS_LEAF_ID,
+          paneRuntimeId: 1,
+          ptyId
+        }
+      ]
+    })
+
+    try {
+      await expect(
+        runtime.closeMobileSessionTab(`id:${TEST_WORKTREE_ID}`, 'host-tab')
+      ).resolves.toEqual({ closed: true })
+    } finally {
+      dateNow.mockRestore()
+    }
+
+    expect(stopAndWait).not.toHaveBeenCalled()
+    expect(getSession().tabsByWorktree[TEST_WORKTREE_ID]).toEqual([])
+  })
+
+  it('fails closed when renderer close recovery has no authoritative PTY id', async () => {
+    const ptyId = 'unlisted-local-pty'
+    const { runtimeStore, getSession } = makeRuntimeStoreWithWorkspaceSession(
+      makeWorkspaceSessionWithHeadlessTerminal({
+        tabsByWorktree: {
+          [TEST_WORKTREE_ID]: [
+            {
+              id: 'host-tab',
+              ptyId,
+              worktreeId: TEST_WORKTREE_ID,
+              title: 'Unlisted Terminal',
+              customTitle: null,
+              color: null,
+              sortOrder: 0,
+              createdAt: 1
+            }
+          ]
+        },
+        terminalLayoutsByTabId: {
+          'host-tab': makeHeadlessTerminalLayout({ [HEADLESS_LEAF_ID]: ptyId })
+        }
+      })
+    )
+    const flushOrThrow = vi.fn()
+    const stopAndWait = vi.fn(async () => true)
+    const closeTerminalTab = vi.fn(async () => {
+      throw new Error('terminal_tab_close_failed')
+    })
+    const runtime = new OrcaRuntimeService({ ...runtimeStore, flushOrThrow } as never)
+    runtime.setPtyController({
+      write: () => true,
+      kill: vi.fn(() => true),
+      stopAndWait,
+      getForegroundProcess: async () => null,
+      listProcesses: async () => []
+    })
+    runtime.setNotifier({ closeTerminal: vi.fn(), closeTerminalTab } as never)
+    runtime.syncWindowGraph(1, {
+      tabs: [
+        {
+          tabId: 'host-tab',
+          worktreeId: TEST_WORKTREE_ID,
+          title: 'Unlisted Terminal',
+          activeLeafId: HEADLESS_LEAF_ID,
+          layout: null
+        }
+      ],
+      leaves: [
+        {
+          tabId: 'host-tab',
+          worktreeId: TEST_WORKTREE_ID,
+          leafId: HEADLESS_LEAF_ID,
+          paneRuntimeId: 1,
+          ptyId: null
+        }
+      ]
+    })
+
+    await expect(
+      runtime.closeMobileSessionTab(`id:${TEST_WORKTREE_ID}`, 'host-tab')
+    ).rejects.toThrow('terminal_tab_close_failed')
+
+    expect(stopAndWait).not.toHaveBeenCalled()
+    expect(flushOrThrow).not.toHaveBeenCalled()
     expect(getSession().tabsByWorktree[TEST_WORKTREE_ID]).toHaveLength(1)
     expect(getSession().terminalLayoutsByTabId['host-tab']).toBeDefined()
   })
@@ -24724,6 +25079,7 @@ describe('OrcaRuntimeService', () => {
     runtime.setPtyController({
       write: () => true,
       kill,
+      stopAndWait: async (ptyId) => (kill as unknown as (id: string) => boolean)(ptyId),
       getForegroundProcess: async () => null,
       listProcesses: async () => []
     })
@@ -24813,6 +25169,7 @@ describe('OrcaRuntimeService', () => {
     runtime.setPtyController({
       write: () => true,
       kill,
+      stopAndWait: async (ptyId) => (kill as unknown as (id: string) => boolean)(ptyId),
       getForegroundProcess: async () => null,
       listProcesses: async () => []
     })
@@ -24880,6 +25237,7 @@ describe('OrcaRuntimeService', () => {
     runtime.setPtyController({
       write: () => true,
       kill,
+      stopAndWait: async (ptyId) => (kill as unknown as (id: string) => boolean)(ptyId),
       getForegroundProcess: async () => null,
       listProcesses: async () => []
     })
@@ -24946,6 +25304,7 @@ describe('OrcaRuntimeService', () => {
     runtime.setPtyController({
       write: () => true,
       kill,
+      stopAndWait: async (ptyId) => (kill as unknown as (id: string) => boolean)(ptyId),
       getForegroundProcess: async () => null,
       listProcesses: async () => []
     })
@@ -25072,6 +25431,7 @@ describe('OrcaRuntimeService', () => {
     runtime.setPtyController({
       write: () => true,
       kill,
+      stopAndWait: async (ptyId) => (kill as unknown as (id: string) => boolean)(ptyId),
       getForegroundProcess: async () => null,
       listProcesses: async () => []
     })
@@ -25161,6 +25521,7 @@ describe('OrcaRuntimeService', () => {
       runtime.setPtyController({
         write: () => true,
         kill,
+        stopAndWait: async (ptyId) => (kill as unknown as (id: string) => boolean)(ptyId),
         getForegroundProcess: async () => null,
         listProcesses
       })
@@ -25444,6 +25805,7 @@ describe('OrcaRuntimeService', () => {
       runtime.setPtyController({
         write: () => true,
         kill,
+        stopAndWait: async (ptyId) => (kill as unknown as (id: string) => boolean)(ptyId),
         getForegroundProcess: async () => null,
         listProcesses: async () => []
       })
@@ -29044,6 +29406,79 @@ describe('OrcaRuntimeService', () => {
       'runtime_unavailable'
     )
     expect(killed).toBe(false)
+  })
+
+  it('keeps runtime repo identity when a project PTY cannot be physically stopped', async () => {
+    const removeProject = vi.fn()
+    const runtime = new OrcaRuntimeService({ ...store, removeProject } as never)
+    const stopAndWait = vi.fn().mockResolvedValue(false)
+    runtime.setPtyController({
+      write: () => true,
+      kill: () => true,
+      stopAndWait,
+      getForegroundProcess: async () => null,
+      listProcesses: async () => [
+        {
+          id: 'remote-project-pty',
+          worktreeId: TEST_WORKTREE_ID,
+          cwd: TEST_WORKTREE_PATH,
+          title: 'Claude'
+        }
+      ]
+    })
+
+    await expect(runtime.removeProject(TEST_REPO_ID)).rejects.toThrow(
+      'project_terminal_teardown_failed'
+    )
+
+    expect(stopAndWait).toHaveBeenCalledWith('remote-project-pty', {
+      deadlineMs: expect.any(Number)
+    })
+    expect(removeProject).not.toHaveBeenCalled()
+  })
+
+  it('joins an in-flight host spawn to project removal before deleting identity', async () => {
+    const spawnStarted = makeDeferred()
+    const spawnGate = makeDeferred()
+    const livePtyIds = new Set<string>()
+    const removeProject = vi.fn()
+    const stopAndWait = vi.fn(async (ptyId: string) => livePtyIds.delete(ptyId))
+    const runtime = new OrcaRuntimeService({ ...store, removeProject } as never)
+    runtime.setPtyController({
+      spawn: vi.fn(async () => {
+        spawnStarted.resolve()
+        await spawnGate.promise
+        livePtyIds.add('concurrent-project-pty')
+        return { id: 'concurrent-project-pty' }
+      }),
+      write: () => true,
+      kill: () => true,
+      stopAndWait,
+      getForegroundProcess: async () => null,
+      listProcesses: async () =>
+        [...livePtyIds].map((id) => ({
+          id,
+          worktreeId: TEST_WORKTREE_ID,
+          cwd: TEST_WORKTREE_PATH,
+          title: 'Codex'
+        }))
+    })
+
+    const create = runtime.createTerminal(`id:${TEST_WORKTREE_ID}`)
+    await spawnStarted.promise
+    const removal = runtime.removeProject(TEST_REPO_ID)
+    await Promise.resolve()
+    expect(removeProject).not.toHaveBeenCalled()
+
+    spawnGate.resolve()
+    await create
+    await expect(removal).resolves.toEqual({ removed: true })
+
+    expect(stopAndWait).toHaveBeenCalledWith('concurrent-project-pty', {
+      deadlineMs: expect.any(Number)
+    })
+    expect(livePtyIds).toEqual(new Set())
+    expect(removeProject).toHaveBeenCalledWith(TEST_REPO_ID)
   })
 
   it('awaits physical PTY stop when destructive teardown supplies shared dedupe', async () => {

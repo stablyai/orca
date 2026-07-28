@@ -44,6 +44,7 @@ import {
 } from '../../../../shared/agent-status-osc'
 import { extractIpcErrorMessage } from '@/lib/ipc-error'
 import { isTuiAgent } from '../../../../shared/tui-agent-config'
+import { beginPendingTerminalTabSpawn } from '@/store/slices/terminal-tab-pending-spawn'
 
 // Re-export public API so existing consumers keep working.
 export {
@@ -715,57 +716,70 @@ export function createIpcPtyTransport(opts: IpcPtyTransportOptions = {}): PtyTra
       }
 
       try {
+        const pendingFreshSpawn =
+          tabId && !admittedSessionId ? beginPendingTerminalTabSpawn(tabId) : null
         // Why: cwd fallback is only for fresh local spawns — reattach keeps the session's cwd and SSH transports resolve cwd on the remote host.
         const shouldSendLocalCwdFallback =
           cwdFallback === 'worktree' && !connectionId && !admittedSessionId
-        const result = await window.api.pty.spawn({
-          cols: options.cols ?? 80,
-          rows: options.rows ?? 24,
-          cwd,
-          ...(shouldSendLocalCwdFallback ? { cwdFallback } : {}),
-          env: options.env ?? env,
-          ...((options.envToDelete ?? envToDelete)
-            ? { envToDelete: options.envToDelete ?? envToDelete }
-            : {}),
-          command: options.command ?? command,
-          ...((options.launchConfig ?? launchConfig)
-            ? { launchConfig: options.launchConfig ?? launchConfig }
-            : {}),
-          ...((options.resumeProviderSession ?? resumeProviderSession)
-            ? {
-                resumeProviderSession: options.resumeProviderSession ?? resumeProviderSession
-              }
-            : {}),
-          ...((options.launchToken ?? launchToken)
-            ? { launchToken: options.launchToken ?? launchToken }
-            : {}),
-          ...((options.launchAgent ?? launchAgent)
-            ? { launchAgent: options.launchAgent ?? launchAgent }
-            : {}),
-          ...((options.startupCommandDelivery ?? startupCommandDelivery)
-            ? { startupCommandDelivery: options.startupCommandDelivery ?? startupCommandDelivery }
-            : {}),
-          ...(connectionId ? { connectionId } : {}),
-          ...(admittedSessionId ? { sessionId: admittedSessionId } : {}),
-          // Why: hidden-at-spawn mark must reach main before the PTY's first byte — ride the spawn IPC, not the visibility sync (terminal-query-authority.md).
-          ...(options.initiallyHidden ? { initiallyHidden: true } : {}),
-          worktreeId,
-          ...(tabId ? { tabId } : {}),
-          ...(leafId ? { leafId } : {}),
-          ...(shellOverride ? { shellOverride } : {}),
-          ...(projectRuntime ? { projectRuntime } : {}),
-          ...(terminalColorQueryReplies ? { terminalColorQueryReplies } : {}),
-          ...(telemetry ? { telemetry } : {})
-        })
+        let result: Awaited<ReturnType<typeof window.api.pty.spawn>>
+        try {
+          result = await window.api.pty.spawn({
+            cols: options.cols ?? 80,
+            rows: options.rows ?? 24,
+            cwd,
+            ...(shouldSendLocalCwdFallback ? { cwdFallback } : {}),
+            env: options.env ?? env,
+            ...((options.envToDelete ?? envToDelete)
+              ? { envToDelete: options.envToDelete ?? envToDelete }
+              : {}),
+            command: options.command ?? command,
+            ...((options.launchConfig ?? launchConfig)
+              ? { launchConfig: options.launchConfig ?? launchConfig }
+              : {}),
+            ...((options.resumeProviderSession ?? resumeProviderSession)
+              ? {
+                  resumeProviderSession: options.resumeProviderSession ?? resumeProviderSession
+                }
+              : {}),
+            ...((options.launchToken ?? launchToken)
+              ? { launchToken: options.launchToken ?? launchToken }
+              : {}),
+            ...((options.launchAgent ?? launchAgent)
+              ? { launchAgent: options.launchAgent ?? launchAgent }
+              : {}),
+            ...((options.startupCommandDelivery ?? startupCommandDelivery)
+              ? { startupCommandDelivery: options.startupCommandDelivery ?? startupCommandDelivery }
+              : {}),
+            ...(connectionId ? { connectionId } : {}),
+            ...(admittedSessionId ? { sessionId: admittedSessionId } : {}),
+            // Why: hidden-at-spawn mark must reach main before the PTY's first byte — ride the spawn IPC, not the visibility sync (terminal-query-authority.md).
+            ...(options.initiallyHidden ? { initiallyHidden: true } : {}),
+            worktreeId,
+            ...(tabId ? { tabId } : {}),
+            ...(leafId ? { leafId } : {}),
+            ...(shellOverride ? { shellOverride } : {}),
+            ...(projectRuntime ? { projectRuntime } : {}),
+            ...(terminalColorQueryReplies ? { terminalColorQueryReplies } : {}),
+            ...(telemetry ? { telemetry } : {})
+          })
+        } catch (error) {
+          pendingFreshSpawn?.settle(null)
+          throw error
+        }
         const spawnResult = result as PtyConnectResult & { isReattach?: boolean }
+        pendingFreshSpawn?.settle(spawnResult.id)
         const resultLaunchAgent = isTuiAgent(spawnResult.launchAgent)
           ? spawnResult.launchAgent
           : undefined
 
-        // Why: on destroy mid-connect, kill only a fresh spawn — killing a reattached session (owned by the tab lifecycle) loses a live shell.
+        // Why: an acknowledged close claims fresh spawns before they can bind, then owns their proven retirement.
+        if (pendingFreshSpawn?.isClaimed()) {
+          return
+        }
+        // Why: on destroy mid-connect, kill only an unclaimed fresh spawn — killing a reattached session loses a live shell.
         if (destroyed) {
           if (!options.sessionId) {
-            window.api.pty.kill(spawnResult.id)
+            void Promise.resolve(window.api.pty.kill(spawnResult.id)).catch(() => {})
           }
           return
         }
@@ -925,7 +939,7 @@ export function createIpcPtyTransport(opts: IpcPtyTransportOptions = {}): PtyTra
       inputWriteQueue.clear()
       if (ptyId) {
         const id = ptyId
-        window.api.pty.kill(id)
+        void Promise.resolve(window.api.pty.kill(id)).catch(() => {})
         connected = false
         ptyId = null
         unregisterPtyHandlers(id)

@@ -427,6 +427,37 @@ describe.skipIf(process.platform === 'win32')('RuntimeClient', () => {
     expect(response.result).toEqual({ satisfied: true })
   })
 
+  it('floors terminal tab close calls above a shorter client default', async () => {
+    const userDataPath = mkdtempSync(join(tmpdir(), 'orca-runtime-client-'))
+    const endpoint = join(userDataPath, 'runtime.sock')
+    const server = createServer((socket) => {
+      sockets.add(socket)
+      socket.once('close', () => sockets.delete(socket))
+      socket.once('data', (data) => {
+        const request = JSON.parse(String(data).trim()) as { id: string }
+        setTimeout(() => {
+          socket.write(
+            `${JSON.stringify({
+              id: request.id,
+              ok: true,
+              result: { closed: true },
+              _meta: { runtimeId: 'runtime-1' }
+            })}\n`
+          )
+        }, 20)
+      })
+    })
+    servers.add(server)
+    await new Promise<void>((resolve) => server.listen(endpoint, resolve))
+    writeMetadata(userDataPath, endpoint)
+
+    const client = new RuntimeClient(userDataPath, 5)
+
+    await expect(client.call('terminal.closeTab')).resolves.toMatchObject({
+      result: { closed: true }
+    })
+  })
+
   it('preserves structured runtime failures', async () => {
     const userDataPath = mkdtempSync(join(tmpdir(), 'orca-runtime-client-'))
     const endpoint = join(userDataPath, 'runtime.sock')

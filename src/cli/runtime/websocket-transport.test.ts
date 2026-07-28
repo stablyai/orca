@@ -192,6 +192,29 @@ describe('CLI remote WebSocket transport', () => {
       }
     })
   })
+
+  it('shares one timeout across remote compatibility preflight and request', async () => {
+    const runtime = await startTestRuntime('runtime-deadline', {
+      responseDelayMsByMethod: { 'status.get': 600, 'repo.list': 2_000 }
+    })
+    servers.push(runtime)
+    const client = new RuntimeClient(
+      '/tmp/unused',
+      1_000,
+      encodePairingOffer({
+        v: 2,
+        endpoint: runtime.endpoint,
+        deviceToken: runtime.deviceToken,
+        publicKeyB64: runtime.publicKeyB64
+      })
+    )
+    const startedAt = Date.now()
+
+    await expect(client.call('repo.list', undefined, { timeoutMs: 1_000 })).rejects.toMatchObject({
+      code: 'runtime_timeout'
+    })
+    expect(Date.now() - startedAt).toBeLessThan(1_400)
+  })
 })
 
 async function startTestRuntime(
@@ -207,6 +230,7 @@ async function startTestRuntime(
       reason: 'manual-service-update-required'
     }
     capabilities?: string[]
+    responseDelayMsByMethod?: Record<string, number>
   } = {}
 ): Promise<TestRuntime> {
   const serverKeyPair = generateKeyPair()
@@ -219,7 +243,7 @@ async function startTestRuntime(
     let sharedKey: Uint8Array | null = null
     let authenticated = false
 
-    ws.on('message', (data) => {
+    ws.on('message', async (data) => {
       const frame = data.toString()
       if (!sharedKey) {
         const hello = JSON.parse(frame) as Record<string, unknown> & {
@@ -284,6 +308,10 @@ async function startTestRuntime(
               error: { code: 'method_not_found', message: 'Unknown method' },
               _meta: { runtimeId }
             }
+      const responseDelayMs = statusOverrides.responseDelayMsByMethod?.[request.method] ?? 0
+      if (responseDelayMs > 0) {
+        await new Promise((resolve) => setTimeout(resolve, responseDelayMs))
+      }
       ws.send(encrypt(JSON.stringify(response), sharedKey))
     })
   })

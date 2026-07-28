@@ -5074,7 +5074,7 @@ describe('registerPtyHandlers', () => {
         expect(store.markSshRemotePtyLease).toHaveBeenCalledWith('ssh-1', 'relay-pty', 'terminated')
       })
 
-      it('runtime controller kill tombstones app-scoped SSH ids when ownership and provider are absent', async () => {
+      it('runtime controller kill fails closed for app-scoped SSH ids without a provider', async () => {
         const localShutdown = vi.fn()
         setLocalPtyProvider({
           spawn: vi.fn(),
@@ -5116,14 +5116,14 @@ describe('registerPtyHandlers', () => {
           kill: (ptyId: string) => boolean
         }
 
-        expect(controller.kill('ssh:ssh-1@@relay-pty')).toBe(true)
+        expect(controller.kill('ssh:ssh-1@@relay-pty')).toBe(false)
 
         expect(localShutdown).not.toHaveBeenCalled()
-        expect(store.markSshRemotePtyLease).toHaveBeenCalledWith('ssh-1', 'relay-pty', 'terminated')
-        expect(runtime.onPtyExit).toHaveBeenCalledWith('ssh:ssh-1@@relay-pty', -1, undefined)
+        expect(store.markSshRemotePtyLease).not.toHaveBeenCalled()
+        expect(runtime.onPtyExit).not.toHaveBeenCalled()
       })
 
-      it('marks a detached SSH lease terminated when runtime controller kill has no provider', async () => {
+      it('runtime controller kill preserves a detached SSH lease without a provider', async () => {
         const store = {
           markSshRemotePtyLease: vi.fn()
         }
@@ -5145,14 +5145,43 @@ describe('registerPtyHandlers', () => {
           kill: (ptyId: string) => boolean
         }
 
-        expect(controller.kill('remote-pty')).toBe(true)
+        expect(controller.kill('remote-pty')).toBe(false)
 
-        expect(store.markSshRemotePtyLease).toHaveBeenCalledWith(
-          'ssh-1',
-          'remote-pty',
-          'terminated'
+        expect(store.markSshRemotePtyLease).not.toHaveBeenCalled()
+        expect(runtime.onPtyExit).not.toHaveBeenCalled()
+      })
+
+      it('does not treat a detached SSH provider as physical stop proof', async () => {
+        const store = {
+          markSshRemotePtyLease: vi.fn()
+        }
+        const runtime = {
+          setPtyController: vi.fn(),
+          onPtyExit: vi.fn()
+        }
+        setPtyOwnership('remote-pty', 'ssh-1')
+        unregisterSshPtyProvider('ssh-1')
+        handlers.clear()
+        registerPtyHandlers(
+          mainWindow as never,
+          runtime as never,
+          undefined,
+          undefined,
+          undefined,
+          store as never
         )
-        expect(runtime.onPtyExit).toHaveBeenCalledWith('remote-pty', -1, undefined)
+        const controller = runtime.setPtyController.mock.calls[0]?.[0] as {
+          stopAndWait: (ptyId: string) => Promise<boolean>
+        }
+
+        try {
+          await expect(controller.stopAndWait('remote-pty')).resolves.toBe(false)
+        } finally {
+          deletePtyOwnership('remote-pty')
+        }
+
+        expect(store.markSshRemotePtyLease).not.toHaveBeenCalled()
+        expect(runtime.onPtyExit).not.toHaveBeenCalled()
       })
 
       it('preserves an SSH lease when runtime controller kill shutdown fails transiently', async () => {
@@ -5637,6 +5666,32 @@ describe('registerPtyHandlers', () => {
       daemonSessionId,
       expect.objectContaining({ immediate: true })
     )
+    expect(fallbackShutdown).not.toHaveBeenCalled()
+  })
+
+  it('bounds the renderer kill startup wait by its teardown timeout', async () => {
+    vi.useFakeTimers()
+    const awaitLocalPtyProviderStartup = vi.fn(() => new Promise<void>(() => {}))
+    const fallbackShutdown = vi.spyOn(getLocalPtyProvider(), 'shutdown')
+    registerPtyHandlers(
+      mainWindow as never,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      { awaitLocalPtyProviderStartup }
+    )
+
+    const pendingKill = handlers.get('pty:kill')!(null, {
+      id: 'daemon-session',
+      timeoutMs: 30_000
+    }) as Promise<void>
+    const rejection = expect(pendingKill).rejects.toThrow('terminal_provider_teardown_timeout')
+    await Promise.resolve()
+    await vi.advanceTimersByTimeAsync(30_000)
+
+    await rejection
     expect(fallbackShutdown).not.toHaveBeenCalled()
   })
 
@@ -6367,7 +6422,7 @@ describe('registerPtyHandlers', () => {
     expect(store.markSshRemotePtyLease).toHaveBeenCalledWith('ssh-1', 'relay-pty', 'terminated')
   })
 
-  it('tombstones app-scoped SSH PTY ids instead of falling back local when ownership and provider are absent', async () => {
+  it('fails closed for app-scoped SSH PTY ids without ownership or a provider', async () => {
     const localShutdown = vi.fn()
     setLocalPtyProvider({
       spawn: vi.fn(),
@@ -6401,13 +6456,15 @@ describe('registerPtyHandlers', () => {
       store as never
     )
 
-    await handlers.get('pty:kill')!(null, { id: 'ssh:ssh-1@@relay-pty' })
+    await expect(handlers.get('pty:kill')!(null, { id: 'ssh:ssh-1@@relay-pty' })).rejects.toThrow(
+      'terminal_provider_teardown_unavailable'
+    )
 
     expect(localShutdown).not.toHaveBeenCalled()
-    expect(store.markSshRemotePtyLease).toHaveBeenCalledWith('ssh-1', 'relay-pty', 'terminated')
+    expect(store.markSshRemotePtyLease).not.toHaveBeenCalled()
   })
 
-  it('ignores fire-and-forget IPC for detached SSH PTYs without a provider', async () => {
+  it('fails durable kill without tombstoning a detached SSH PTY', async () => {
     const store = {
       upsertSshRemotePtyLease: vi.fn(),
       persistPtyBinding: vi.fn(),
@@ -6470,8 +6527,10 @@ describe('registerPtyHandlers', () => {
       listenerFor('pty:signal')(null, { id: 'remote-pty', signal: 'SIGINT' })
     ).not.toThrow()
 
-    await expect(handlers.get('pty:kill')!(null, { id: 'remote-pty' })).resolves.toBeUndefined()
-    expect(store.markSshRemotePtyLease).toHaveBeenCalledWith('ssh-1', 'remote-pty', 'terminated')
+    await expect(handlers.get('pty:kill')!(null, { id: 'remote-pty' })).rejects.toThrow(
+      'terminal_provider_teardown_unavailable'
+    )
+    expect(store.markSshRemotePtyLease).not.toHaveBeenCalled()
   })
 
   it('returns idle process inspection results for detached SSH PTYs without a provider', async () => {

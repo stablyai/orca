@@ -28,6 +28,10 @@ import {
   type MobileSocketTransportMetadata
 } from './rpc/mobile-socket-wiring'
 import type { PairingRelay } from '../../shared/mobile-relay-pairing-offer'
+import {
+  isTerminalTabCloseRpcMethod,
+  TERMINAL_TAB_CLOSE_RESPONSE_TIMEOUT_MS
+} from '../../shared/terminal-tab-close'
 import type { MobilePairingConnectionMode } from '../../shared/mobile-pairing-connection-mode'
 import {
   RelayRevokeOutbox,
@@ -1076,14 +1080,17 @@ export class OrcaRuntimeRpcServer {
     if (rejection) {
       return this.buildError(request.id, 'runtime_busy', rejection)
     }
-    if (longPoll) {
-      // Why: arm keepalive only for long-polls; short RPCs never create the setInterval. See §3.1.
-      context?.startKeepalive()
+    const terminalTabClose = isTerminalTabCloseRpcMethod(request.method)
+    if (longPoll || terminalTabClose) {
+      // Why: durable closes can outlive the 30s socket idle ceiling while remaining finite.
+      context?.startKeepalive(
+        terminalTabClose ? Date.now() + TERMINAL_TAB_CLOSE_RESPONSE_TIMEOUT_MS : undefined
+      )
     }
 
     try {
       return await this.dispatcher.dispatch(request, {
-        signal: longPoll ? context?.signal : undefined
+        signal: longPoll || terminalTabClose ? context?.signal : undefined
       })
     } finally {
       this.releaseLongPoll(longPoll)

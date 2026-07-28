@@ -993,8 +993,12 @@ const api = {
       ipcRenderer.send('pty:terminalViewAttributes', attributes)
     },
 
-    kill: (id: string, opts?: { keepHistory?: boolean }): Promise<void> =>
-      ipcRenderer.invoke('pty:kill', { id, keepHistory: opts?.keepHistory ?? false }),
+    kill: (id: string, opts?: { keepHistory?: boolean; timeoutMs?: number }): Promise<void> =>
+      ipcRenderer.invoke('pty:kill', {
+        id,
+        keepHistory: opts?.keepHistory ?? false,
+        ...(opts?.timeoutMs !== undefined ? { timeoutMs: opts.timeoutMs } : {})
+      }),
 
     listSessions: (): Promise<PtyListedSession[]> => ipcRenderer.invoke('pty:listSessions'),
     getAuthoritativeBufferSnapshotCapabilities: (

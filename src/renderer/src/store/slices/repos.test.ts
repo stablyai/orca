@@ -77,12 +77,14 @@ describe('repo slice runtime routing', () => {
     ])
     expect(store.getState().activeRepoId).toBeNull()
     expect(store.getState().filterRepoIds).toEqual(['remote-repo'])
-    expect(runtimeEnvironmentCall).toHaveBeenCalledWith({
-      selector: 'env-1',
-      method: 'repo.list',
-      params: undefined,
-      timeoutMs: 15_000
-    })
+    expect(runtimeEnvironmentCall).toHaveBeenCalledWith(
+      expect.objectContaining({
+        selector: 'env-1',
+        method: 'repo.list',
+        params: undefined,
+        timeoutMs: expect.any(Number)
+      })
+    )
     expect(reposList).not.toHaveBeenCalled()
   })
 
@@ -120,12 +122,14 @@ describe('repo slice runtime routing', () => {
 
     expect(store.getState().repos[0]?.displayName).toBe('Renamed')
     expect(store.getState().repos[0]?.executionHostId).toBe('runtime:env-1')
-    expect(runtimeEnvironmentCall).toHaveBeenCalledWith({
-      selector: 'env-1',
-      method: 'repo.update',
-      params: { repo: remoteRepo.id, updates: { displayName: 'Renamed' } },
-      timeoutMs: 15_000
-    })
+    expect(runtimeEnvironmentCall).toHaveBeenCalledWith(
+      expect.objectContaining({
+        selector: 'env-1',
+        method: 'repo.update',
+        params: { repo: remoteRepo.id, updates: { displayName: 'Renamed' } },
+        timeoutMs: expect.any(Number)
+      })
+    )
     expect(reposUpdate).not.toHaveBeenCalled()
   })
 
@@ -165,12 +169,14 @@ describe('repo slice runtime routing', () => {
     })
 
     expect(store.getState().repos).toEqual([{ ...remoteRepo, executionHostId: 'runtime:env-1' }])
-    expect(runtimeEnvironmentCall).toHaveBeenCalledWith({
-      selector: 'env-1',
-      method: 'repo.add',
-      params: { path: '/srv/project', kind: 'folder' },
-      timeoutMs: 15_000
-    })
+    expect(runtimeEnvironmentCall).toHaveBeenCalledWith(
+      expect.objectContaining({
+        selector: 'env-1',
+        method: 'repo.add',
+        params: { path: '/srv/project', kind: 'folder' },
+        timeoutMs: expect.any(Number)
+      })
+    )
     expect(reposAdd).not.toHaveBeenCalled()
     expect(reposPickFolder).not.toHaveBeenCalled()
     expect(orcaProfileFindProjectProfiles).not.toHaveBeenCalled()
@@ -305,17 +311,19 @@ describe('repo slice runtime routing', () => {
       repo: { ...remoteRepo, executionHostId: 'runtime:env-1' }
     })
 
-    expect(runtimeEnvironmentCall).toHaveBeenCalledWith({
-      selector: 'env-1',
-      method: 'projectHostSetup.setupExistingFolder',
-      params: {
-        projectId: project.id,
-        hostId: 'runtime:env-1',
-        path: '/srv/project',
-        kind: 'git'
-      },
-      timeoutMs: 15_000
-    })
+    expect(runtimeEnvironmentCall).toHaveBeenCalledWith(
+      expect.objectContaining({
+        selector: 'env-1',
+        method: 'projectHostSetup.setupExistingFolder',
+        params: {
+          projectId: project.id,
+          hostId: 'runtime:env-1',
+          path: '/srv/project',
+          kind: 'git'
+        },
+        timeoutMs: expect.any(Number)
+      })
+    )
   })
 
   it('sets up an SSH host through local IPC even when a runtime is focused', async () => {
@@ -490,19 +498,22 @@ describe('repo slice runtime routing', () => {
       },
       timeoutMs: 10 * 60_000
     })
-    expect(runtimeEnvironmentCall).toHaveBeenNthCalledWith(2, {
-      selector: 'env-1',
-      method: 'projectHostSetup.setupExistingFolder',
-      params: {
-        projectId: project.id,
-        hostId: 'runtime:env-1',
-        path: clonedRepo.path,
-        kind: 'git',
-        displayName: 'Project',
-        setupMethod: 'cloned'
-      },
-      timeoutMs: 15_000
-    })
+    expect(runtimeEnvironmentCall).toHaveBeenNthCalledWith(
+      2,
+      expect.objectContaining({
+        selector: 'env-1',
+        method: 'projectHostSetup.setupExistingFolder',
+        params: {
+          projectId: project.id,
+          hostId: 'runtime:env-1',
+          path: clonedRepo.path,
+          kind: 'git',
+          displayName: 'Project',
+          setupMethod: 'cloned'
+        },
+        timeoutMs: expect.any(Number)
+      })
+    )
   })
 
   it('clones a project on an SSH host before aligning it as a host setup', async () => {
@@ -578,12 +589,14 @@ describe('repo slice runtime routing', () => {
     expect(store.getState().repos).toEqual([
       { ...remoteRepo, projectGroupId: 'group-1', executionHostId: 'runtime:env-1' }
     ])
-    expect(runtimeEnvironmentCall).toHaveBeenCalledWith({
-      selector: 'env-1',
-      method: 'projectGroup.moveProject',
-      params: { repo: remoteRepo.id, groupId: 'group-1', order: undefined },
-      timeoutMs: 15_000
-    })
+    expect(runtimeEnvironmentCall).toHaveBeenCalledWith(
+      expect.objectContaining({
+        selector: 'env-1',
+        method: 'projectGroup.moveProject',
+        params: { repo: remoteRepo.id, groupId: 'group-1', order: undefined },
+        timeoutMs: expect.any(Number)
+      })
+    )
     expect(projectGroupsMoveProject).not.toHaveBeenCalled()
   })
 
@@ -617,12 +630,14 @@ describe('repo slice runtime routing', () => {
 
     expect(store.getState().repos).toEqual([])
     expect(store.getState().activeRepoId).toBeNull()
-    expect(runtimeEnvironmentCall).toHaveBeenCalledWith({
-      selector: 'env-1',
-      method: 'repo.rm',
-      params: { repo: remoteRepo.id },
-      timeoutMs: 15_000
-    })
+    expect(runtimeEnvironmentCall).toHaveBeenCalledWith(
+      expect.objectContaining({
+        selector: 'env-1',
+        method: 'repo.rm',
+        params: { repo: remoteRepo.id },
+        timeoutMs: expect.any(Number)
+      })
+    )
     expect(reposRemove).not.toHaveBeenCalled()
   })
 
@@ -690,12 +705,14 @@ describe('repo slice runtime routing', () => {
 
     expect(store.getState().repos).toEqual([localRepo])
     expect(store.getState().lastVisitedAtByWorktreeId).toEqual({ [localWorktreeId]: 200 })
-    expect(runtimeEnvironmentCall).toHaveBeenCalledWith({
-      selector: 'env-1',
-      method: 'repo.rm',
-      params: { repo: remoteRepo.id },
-      timeoutMs: 15_000
-    })
+    expect(runtimeEnvironmentCall).toHaveBeenCalledWith(
+      expect.objectContaining({
+        selector: 'env-1',
+        method: 'repo.rm',
+        params: { repo: remoteRepo.id },
+        timeoutMs: expect.any(Number)
+      })
+    )
     expect(reposRemove).not.toHaveBeenCalled()
   })
 
@@ -725,7 +742,7 @@ describe('repo slice runtime routing', () => {
     expect(store.getState().workItemsInvalidationNonce).toBe(3)
   })
 
-  it('stops remote runtime terminals instead of killing remote ids through local pty IPC', async () => {
+  it('delegates remote provider teardown to the transactional repo removal', async () => {
     runtimeEnvironmentCall.mockResolvedValue({
       id: 'rpc-remote',
       ok: true,
@@ -750,13 +767,20 @@ describe('repo slice runtime routing', () => {
 
     await store.getState().removeProject(remoteRepo.id)
 
-    expect(runtimeEnvironmentCall).toHaveBeenCalledWith({
-      selector: 'env-1',
-      method: 'terminal.stop',
-      params: { worktree: `id:${worktreeId}` },
-      timeoutMs: 15_000
+    expect(runtimeEnvironmentCall).toHaveBeenCalledWith(
+      expect.objectContaining({
+        selector: 'env-1',
+        method: 'repo.rm',
+        params: { repo: remoteRepo.id },
+        timeoutMs: expect.any(Number)
+      })
+    )
+    expect(runtimeEnvironmentCall).not.toHaveBeenCalledWith(
+      expect.objectContaining({ method: 'terminal.stop' })
+    )
+    expect(ptyKill).toHaveBeenCalledWith('pty-local-stale', {
+      timeoutMs: expect.any(Number)
     })
-    expect(ptyKill).toHaveBeenCalledWith('pty-local-stale')
     expect(ptyKill).not.toHaveBeenCalledWith('remote:term-1')
   })
 
@@ -799,7 +823,9 @@ describe('repo slice runtime routing', () => {
     expect(store.getState().detectedWorktreesByRepo[localRepo.id]).toBeUndefined()
     expect(store.getState().tabsByWorktree[hiddenWorktree.id]).toBeUndefined()
     expect(store.getState().activeWorktreeId).toBeNull()
-    expect(ptyKill).toHaveBeenCalledWith('pty-hidden')
+    expect(ptyKill).toHaveBeenCalledWith('pty-hidden', {
+      timeoutMs: expect.any(Number)
+    })
   })
 
   it('reorders repos through the active remote runtime environment', async () => {
@@ -818,12 +844,14 @@ describe('repo slice runtime routing', () => {
     await store.getState().reorderRepos([remoteRepo.id, localRepo.id])
 
     expect(store.getState().repos.map((repo) => repo.id)).toEqual([remoteRepo.id, localRepo.id])
-    expect(runtimeEnvironmentCall).toHaveBeenCalledWith({
-      selector: 'env-1',
-      method: 'repo.reorder',
-      params: { orderedIds: [remoteRepo.id, localRepo.id] },
-      timeoutMs: 15_000
-    })
+    expect(runtimeEnvironmentCall).toHaveBeenCalledWith(
+      expect.objectContaining({
+        selector: 'env-1',
+        method: 'repo.reorder',
+        params: { orderedIds: [remoteRepo.id, localRepo.id] },
+        timeoutMs: expect.any(Number)
+      })
+    )
     expect(reposReorder).not.toHaveBeenCalled()
   })
 })

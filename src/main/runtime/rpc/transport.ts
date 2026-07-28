@@ -13,7 +13,7 @@
 // call it, so short RPCs pay no timer overhead. See design doc §3.1.
 export type RpcMessageContext = {
   signal: AbortSignal
-  startKeepalive: () => void
+  startKeepalive: (deadlineMs?: number) => void
 }
 
 export type RpcTransport = {

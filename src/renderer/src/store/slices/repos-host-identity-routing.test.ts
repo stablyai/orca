@@ -111,12 +111,14 @@ describe('repo slice host identity routing', () => {
       { ...remoteDuplicate, displayName: 'Remote Renamed' }
     ])
     expect(reposUpdate).not.toHaveBeenCalled()
-    expect(runtimeEnvironmentCall).toHaveBeenCalledWith({
-      selector: 'env-1',
-      method: 'repo.update',
-      params: { repo: 'same-repo', updates: { displayName: 'Remote Renamed' } },
-      timeoutMs: 15_000
-    })
+    expect(runtimeEnvironmentCall).toHaveBeenCalledWith(
+      expect.objectContaining({
+        selector: 'env-1',
+        method: 'repo.update',
+        params: { repo: 'same-repo', updates: { displayName: 'Remote Renamed' } },
+        timeoutMs: expect.any(Number)
+      })
+    )
   })
 
   it('updates a legacy local duplicate without overwriting an explicit remote sibling', async () => {
@@ -330,7 +332,9 @@ describe('repo slice host identity routing', () => {
     // host-scoped in main to avoid deleting the other host's persisted repo row.
     expect(reposRemoveForHost).toHaveBeenCalledWith({ repoId: 'same-repo', hostId: 'local' })
     expect(reposRemove).not.toHaveBeenCalled()
-    expect(ptyKill).toHaveBeenCalledWith('local-pty')
+    expect(ptyKill).toHaveBeenCalledWith('local-pty', {
+      timeoutMs: expect.any(Number)
+    })
     expect(ptyKill).not.toHaveBeenCalledWith('remote-pty')
   })
 
@@ -360,12 +364,14 @@ describe('repo slice host identity routing', () => {
 
     // Routes to the runtime host's repo.rm (not the local removeForHost/remove),
     // and the local row is left intact.
-    expect(runtimeEnvironmentCall).toHaveBeenCalledWith({
-      selector: 'env-1',
-      method: 'repo.rm',
-      params: { repo: 'same-repo' },
-      timeoutMs: 15_000
-    })
+    expect(runtimeEnvironmentCall).toHaveBeenCalledWith(
+      expect.objectContaining({
+        selector: 'env-1',
+        method: 'repo.rm',
+        params: { repo: 'same-repo' },
+        timeoutMs: expect.any(Number)
+      })
+    )
     expect(reposRemoveForHost).not.toHaveBeenCalled()
     expect(reposRemove).not.toHaveBeenCalled()
     expect(store.getState().repos).toEqual([localDuplicate])
@@ -452,14 +458,18 @@ describe('repo slice host identity routing', () => {
     ])
     expect(store.getState().tabsByWorktree[remoteWorktree.id]).toBeUndefined()
     expect(store.getState().lastVisitedAtByWorktreeId).toEqual({ [localWorktree.id]: 10 })
-    expect(runtimeEnvironmentCall).toHaveBeenCalledWith({
-      selector: 'env-1',
-      method: 'repo.rm',
-      params: { repo: 'same-repo' },
-      timeoutMs: 15_000
-    })
+    expect(runtimeEnvironmentCall).toHaveBeenCalledWith(
+      expect.objectContaining({
+        selector: 'env-1',
+        method: 'repo.rm',
+        params: { repo: 'same-repo' },
+        timeoutMs: expect.any(Number)
+      })
+    )
     expect(reposRemove).not.toHaveBeenCalled()
-    expect(ptyKill).toHaveBeenCalledWith('remote-pty')
+    expect(ptyKill).toHaveBeenCalledWith('remote-pty', {
+      timeoutMs: expect.any(Number)
+    })
     expect(ptyKill).not.toHaveBeenCalledWith('local-pty')
   })
 

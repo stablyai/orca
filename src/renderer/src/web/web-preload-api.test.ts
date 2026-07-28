@@ -5,6 +5,7 @@ import type { PreloadApi } from '../../../preload/api-types'
 import type { FeatureInteractionState } from '../../../shared/feature-interactions'
 import type { RuntimeRpcResponse } from '../../../shared/runtime-rpc-envelope'
 import type { TaskSourceContext } from '../../../shared/task-source-context'
+import { TERMINAL_TAB_CLOSE_CALLER_TIMEOUT_MS } from '../../../shared/terminal-tab-close'
 
 const TEST_COMMIT_OID = '0123456789abcdef0123456789abcdef01234567'
 
@@ -2358,6 +2359,40 @@ describe('web repos preload API', () => {
     await expect(
       api.repos.reorderForHost({ hostId: 'ssh:target', orderedIds: ['repo-1'] })
     ).rejects.toThrow('Host-scoped project reordering is unavailable in paired web clients.')
+  })
+
+  it('keeps paired project removal outside the provider teardown budget', async () => {
+    const calls: { method: string; timeoutMs?: number }[] = []
+    vi.doMock('./web-runtime-client', () => ({
+      WebRuntimeClient: class {
+        call(
+          method: string,
+          _params?: unknown,
+          options?: { timeoutMs?: number }
+        ): Promise<RuntimeRpcResponse<unknown>> {
+          calls.push({ method, timeoutMs: options?.timeoutMs })
+          return Promise.resolve({
+            id: method,
+            ok: true,
+            result: { removed: true },
+            _meta: { runtimeId: 'runtime-1' }
+          })
+        }
+
+        close(): void {}
+      }
+    }))
+    const globals = installBrowserGlobals('Linux')
+    writeStoredRuntimeEnvironment(globals.storage)
+    const { installWebPreloadApi } = await import('./web-preload-api')
+    installWebPreloadApi()
+
+    await globals.window.api.repos.remove({ repoId: 'repo-1' })
+
+    expect(calls).toContainEqual({
+      method: 'repo.rm',
+      timeoutMs: TERMINAL_TAB_CLOSE_CALLER_TIMEOUT_MS
+    })
   })
 
   it('attributes a server-local catalog to the paired runtime that returned it', async () => {

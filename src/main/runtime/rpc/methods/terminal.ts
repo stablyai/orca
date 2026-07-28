@@ -732,6 +732,10 @@ const TerminalHandle = z.object({
   terminal: requiredString('Missing terminal handle')
 })
 
+const TerminalProviderClose = TerminalHandle.extend({
+  timeoutMs: OptionalFiniteNumber
+})
+
 const TerminalFocus = TerminalHandle.extend({
   navigation: z.enum(['caller', 'host']).optional()
 })
@@ -1406,6 +1410,16 @@ export const TERMINAL_METHODS: RpcAnyMethod[] = [
     params: TerminalHandle,
     handler: async (params, { runtime }) => ({
       close: await runtime.closeTerminal(params.terminal)
+    })
+  }),
+  defineMethod({
+    name: 'terminal.closeProvider',
+    params: TerminalProviderClose,
+    handler: async (params, { runtime }) => ({
+      close: await runtime.closeTerminalProvider(
+        params.terminal,
+        params.timeoutMs === undefined ? {} : { timeoutMs: params.timeoutMs }
+      )
     })
   }),
   defineMethod({
