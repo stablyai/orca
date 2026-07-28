@@ -44,11 +44,13 @@ import type { UsagePercentageDisplay } from './usage-percentage-display'
 import type { StatusBarUsageMode } from './status-bar-usage-mode'
 import type { PersistedNativeChatSessionOptions } from './native-chat-session-options'
 import type { CodexResetCreditAttemptLedger } from './codex-reset-credit-attempt-ledger'
+import type { JiraSavedFilter } from './jira-saved-filters'
 
 // Re-exported for backward compat with renderer call sites that import
 // `WorkspaceCreateTelemetrySource` from '../../../shared/types'.
 export type { WorkspaceSource as WorkspaceCreateTelemetrySource } from './workspace-source'
 export type { TaskProvider } from './task-providers'
+export type { JiraSavedFilter } from './jira-saved-filters'
 export type {
   GitBranchChangeStatus,
   GitConflictKind,
@@ -3223,6 +3225,8 @@ export type TaskResumeState = {
   }
   jiraPreset?: 'assigned' | 'reported' | 'all' | 'done'
   jiraQuery?: string
+  jiraSavedFilters?: JiraSavedFilter[]
+  jiraActiveSavedFilterId?: string | null
 }
 
 export type RightSidebarTab =

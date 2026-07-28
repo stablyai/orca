@@ -160,6 +160,7 @@ import {
 } from '@/components/linear-project-view-surfaces'
 import JiraIssueWorkspace from '@/components/JiraIssueWorkspace'
 import { TaskPageJiraIssueList } from '@/components/task-page-jira-issue-list'
+import { TaskPageJiraSavedFilters } from '@/components/TaskPageJiraSavedFilters'
 import {
   getSingleJiraProjectScope,
   getTaskPageJiraStatusOrderScopeKey,
@@ -167,6 +168,12 @@ import {
 } from '@/components/task-page-jira-status-order'
 import { JiraIcon } from '@/components/icons/JiraIcon'
 import { cn } from '@/lib/utils'
+import { createBrowserUuid } from '@/lib/browser-uuid'
+import {
+  MAX_JIRA_SAVED_FILTERS,
+  normalizeJiraSavedFilters,
+  type JiraSavedFilter
+} from '../../../shared/jira-saved-filters'
 import {
   getLinkedWorkItemSuggestedName,
   getLinkedWorkItemWorkspaceName,
@@ -383,6 +390,7 @@ function isGitLabIssueFilter(
 const TASK_SEARCH_DEBOUNCE_MS = 300
 const LINEAR_ITEM_LIMIT = 36
 const JIRA_ITEM_LIMIT = 50
+const EMPTY_JIRA_SAVED_FILTERS: JiraSavedFilter[] = []
 const PR_CHECKS_EAGER_PREFETCH_LIMIT = 20
 
 const GITHUB_TASK_GRID_CLASS =
@@ -4527,7 +4535,9 @@ export default function TaskPage(): React.JSX.Element {
   const [jiraSearchInput, setJiraSearchInput] = useState('')
   const [appliedJiraSearch, setAppliedJiraSearch] = useState('')
   const [activeJiraPreset, setActiveJiraPreset] = useState<JiraPresetId>('assigned')
+  const [activeJiraSavedFilterId, setActiveJiraSavedFilterId] = useState<string | null>(null)
   const [jiraRefreshNonce, setJiraRefreshNonce] = useState(0)
+  const jiraSavedFilters = taskResumeState?.jiraSavedFilters ?? EMPTY_JIRA_SAVED_FILTERS
   const [jiraProjectStatusOrder, setJiraProjectStatusOrder] = useState<{
     order: JiraProjectStatusOrder
     scopeKey: string
@@ -4631,6 +4641,7 @@ export default function TaskPage(): React.JSX.Element {
     const jiraPreset = taskResumeState?.jiraPreset ?? 'assigned'
     const jiraQuery = taskResumeState?.jiraQuery ?? ''
     setActiveJiraPreset(jiraPreset)
+    setActiveJiraSavedFilterId(taskResumeState?.jiraActiveSavedFilterId ?? null)
     setJiraSearchInput(jiraQuery)
     setAppliedJiraSearch(jiraQuery)
 
@@ -7678,6 +7689,85 @@ export default function TaskPage(): React.JSX.Element {
     taskSource
   ])
 
+  const applyJiraSavedFilter = useCallback(
+    (filter: JiraSavedFilter) => {
+      setActiveJiraSavedFilterId(filter.id)
+      setJiraSearchInput(filter.jql)
+      setAppliedJiraSearch(filter.jql)
+      setTaskResumeState({
+        jiraSavedFilters,
+        jiraActiveSavedFilterId: filter.id,
+        jiraQuery: filter.jql
+      })
+      setJiraRefreshNonce((nonce) => nonce + 1)
+    },
+    [jiraSavedFilters, setTaskResumeState]
+  )
+
+  const createJiraSavedFilter = useCallback(
+    (draft: { name: string; jql: string }) => {
+      if (jiraSavedFilters.length >= MAX_JIRA_SAVED_FILTERS) {
+        return
+      }
+      const id = createBrowserUuid()
+      const filter = { id, name: draft.name, jql: draft.jql }
+      const nextFilters = normalizeJiraSavedFilters([...jiraSavedFilters, filter])
+      if (!nextFilters.some((candidate) => candidate.id === id)) {
+        return
+      }
+      setActiveJiraSavedFilterId(id)
+      setJiraSearchInput(filter.jql)
+      setAppliedJiraSearch(filter.jql)
+      setTaskResumeState({
+        jiraSavedFilters: nextFilters,
+        jiraActiveSavedFilterId: id,
+        jiraQuery: filter.jql
+      })
+      setJiraRefreshNonce((nonce) => nonce + 1)
+    },
+    [jiraSavedFilters, setTaskResumeState]
+  )
+
+  const updateJiraSavedFilter = useCallback(
+    (id: string, draft: { name: string; jql: string }) => {
+      const nextFilters = normalizeJiraSavedFilters(
+        jiraSavedFilters.map((filter) => (filter.id === id ? { ...filter, ...draft } : filter))
+      )
+      if (nextFilters.length !== jiraSavedFilters.length) {
+        return
+      }
+      const updated = nextFilters.find((filter) => filter.id === id)
+      if (!updated) {
+        return
+      }
+      if (activeJiraSavedFilterId === id) {
+        setJiraSearchInput(updated.jql)
+        setAppliedJiraSearch(updated.jql)
+        setTaskResumeState({ jiraSavedFilters: nextFilters, jiraQuery: updated.jql })
+        setJiraRefreshNonce((nonce) => nonce + 1)
+        return
+      }
+      setTaskResumeState({ jiraSavedFilters: nextFilters })
+    },
+    [activeJiraSavedFilterId, jiraSavedFilters, setTaskResumeState]
+  )
+
+  const deleteJiraSavedFilter = useCallback(
+    (id: string) => {
+      const nextFilters = jiraSavedFilters.filter((filter) => filter.id !== id)
+      if (activeJiraSavedFilterId === id) {
+        setActiveJiraSavedFilterId(null)
+        setTaskResumeState({
+          jiraSavedFilters: nextFilters,
+          jiraActiveSavedFilterId: null
+        })
+        return
+      }
+      setTaskResumeState({ jiraSavedFilters: nextFilters })
+    },
+    [activeJiraSavedFilterId, jiraSavedFilters, setTaskResumeState]
+  )
+
   useEffect(() => {
     if (!taskResumeApplied) {
       return
@@ -8716,7 +8806,10 @@ export default function TaskPage(): React.JSX.Element {
                     <div className="flex flex-wrap items-center justify-between gap-3">
                       <div className="flex flex-wrap gap-2">
                         {jiraPresets.map((preset) => {
-                          const active = !jiraSearchInput && activeJiraPreset === preset.id
+                          const active =
+                            !jiraSearchInput &&
+                            activeJiraSavedFilterId === null &&
+                            activeJiraPreset === preset.id
                           return (
                             <button
                               key={preset.id}
@@ -8725,7 +8818,12 @@ export default function TaskPage(): React.JSX.Element {
                                 setJiraSearchInput('')
                                 setAppliedJiraSearch('')
                                 setActiveJiraPreset(preset.id)
-                                setTaskResumeState({ jiraPreset: preset.id, jiraQuery: '' })
+                                setActiveJiraSavedFilterId(null)
+                                setTaskResumeState({
+                                  jiraPreset: preset.id,
+                                  jiraQuery: '',
+                                  jiraActiveSavedFilterId: null
+                                })
                                 setJiraRefreshNonce((n) => n + 1)
                               }}
                               className={cn(
@@ -8739,6 +8837,15 @@ export default function TaskPage(): React.JSX.Element {
                             </button>
                           )
                         })}
+                        <TaskPageJiraSavedFilters
+                          filters={jiraSavedFilters}
+                          activeFilterId={activeJiraSavedFilterId}
+                          currentJql={jiraSearchInput}
+                          onApply={applyJiraSavedFilter}
+                          onCreate={createJiraSavedFilter}
+                          onUpdate={updateJiraSavedFilter}
+                          onDelete={deleteJiraSavedFilter}
+                        />
                       </div>
                       <div className="flex shrink-0 items-center gap-2">
                         <Tooltip>
@@ -8813,7 +8920,14 @@ export default function TaskPage(): React.JSX.Element {
                         <Search className="pointer-events-none absolute left-2.5 top-1/2 size-3.5 -translate-y-1/2 text-muted-foreground" />
                         <Input
                           value={jiraSearchInput}
-                          onChange={(e) => setJiraSearchInput(e.target.value)}
+                          onChange={(e) => {
+                            const query = e.target.value
+                            setJiraSearchInput(query)
+                            if (!query.trim() && activeJiraSavedFilterId !== null) {
+                              setActiveJiraSavedFilterId(null)
+                              setTaskResumeState({ jiraActiveSavedFilterId: null })
+                            }
+                          }}
                           onKeyDown={(e) => {
                             if (e.key === 'Enter') {
                               if (
@@ -8848,7 +8962,11 @@ export default function TaskPage(): React.JSX.Element {
                             onClick={() => {
                               setJiraSearchInput('')
                               setAppliedJiraSearch('')
-                              setTaskResumeState({ jiraQuery: '' })
+                              setActiveJiraSavedFilterId(null)
+                              setTaskResumeState({
+                                jiraQuery: '',
+                                jiraActiveSavedFilterId: null
+                              })
                               setJiraRefreshNonce((n) => n + 1)
                             }}
                             className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground transition hover:text-foreground"
