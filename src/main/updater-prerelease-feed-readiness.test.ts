@@ -164,15 +164,15 @@ describe('fetchNewerReleaseTagsWithReadiness', () => {
     })
   })
 
-  it('preserves a verified last-good release when a newer manifest probe is unavailable', async () => {
+  it('reports an unavailable newest manifest instead of pinning an older release', async () => {
     respondWithAtom(['v1.4.28', 'v1.4.27'], [], [], ['v1.4.28'])
 
     const { fetchNewerReleaseTagsWithReadiness } = await import('./updater-prerelease-feed')
 
     await expect(fetchNewerReleaseTagsWithReadiness('1.4.26', 1)).resolves.toEqual({
       tags: [],
-      state: 'not-ready',
-      lastGoodTag: 'v1.4.27'
+      state: 'unavailable',
+      unavailableReason: 'manifest'
     })
   })
 

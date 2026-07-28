@@ -102,7 +102,8 @@ vi.mock('./updater-nudge', () => ({
 const ONE_HOUR_MS = 60 * 60 * 1000
 const THIRTY_SECONDS_MS = 30 * 1000
 const FRIENDLY_MESSAGE = "Couldn't reach the update server. Try again in a few minutes."
-const PUBLISHING_MESSAGE = 'A new release is still being published. Try again shortly.'
+const RELEASE_NOT_READY_MESSAGE =
+  "A newer release isn't available for this device yet. Check again later."
 
 function makeBenignCheckFailure(message: string): void {
   const error = new Error(message)
@@ -199,7 +200,7 @@ describe('updater check failure handling', () => {
     })
   })
 
-  it('maps the captured release incident through readiness into publishing copy', async () => {
+  it('maps the captured release incident into truthful artifact-readiness copy', async () => {
     appMock.getVersion.mockReturnValue(publishingIncident.installedVersion)
     const atom = `<feed>${publishingIncident.atomTags
       .map(
@@ -227,7 +228,7 @@ describe('updater check failure handling', () => {
     await vi.waitFor(() => {
       expect(sendMock).toHaveBeenCalledWith('updater:status', {
         state: 'error',
-        message: PUBLISHING_MESSAGE,
+        message: RELEASE_NOT_READY_MESSAGE,
         userInitiated: true
       })
     })

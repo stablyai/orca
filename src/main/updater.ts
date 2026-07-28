@@ -50,7 +50,7 @@ type CheckFailureSource = 'event' | 'promise' | 'fallback-promise'
 type MissingManifestPrereleaseFallbackResult = { userInitiated: boolean }
 type PrimaryEventSuppression = { failureKey: string; error: unknown }
 type UpdateCheckVariant = 'default' | 'prerelease' | 'perf'
-type ReleaseFeedPreflightFailure = 'manifest-unavailable' | 'release-publishing'
+type ReleaseFeedPreflightFailure = 'manifest-unavailable' | 'release-not-ready'
 // Why: expected preflight outcomes need typed context so UI routing never depends on matching error text.
 class ReleaseFeedPreflightError extends Error {
   constructor(
@@ -867,8 +867,8 @@ async function sendCheckFailureStatus(
       if (userInitiated) {
         // Why: a user click needs visible feedback (idle looks broken); distinguish incomplete releases from transport failures.
         sendErrorStatus(
-          isStableReleasePublishingFailure(sourceError)
-            ? 'A new release is still being published. Try again shortly.'
+          isStableReleaseNotReadyFailure(sourceError)
+            ? "A newer release isn't available for this device yet. Check again later."
             : "Couldn't reach the update server. Try again in a few minutes.",
           true
         )
@@ -908,10 +908,10 @@ function shouldPreserveNudgeForReleaseProbe(message: string, sourceError: unknow
   )
 }
 
-function isStableReleasePublishingFailure(sourceError: unknown): boolean {
+function isStableReleaseNotReadyFailure(sourceError: unknown): boolean {
   return (
     sourceError instanceof ReleaseFeedPreflightError &&
-    sourceError.reason === 'release-publishing' &&
+    sourceError.reason === 'release-not-ready' &&
     sourceError.releaseChannel === 'default'
   )
 }
@@ -1165,10 +1165,10 @@ async function pinDefaultReleaseFeed(
     }
     clearPublishingWindowLastGoodCheck()
     console.info(
-      `[updater] release feed deferred: current=${currentVersion} includePrerelease=${includePrerelease}; newest release assets are still publishing`
+      `[updater] release feed deferred: current=${currentVersion} includePrerelease=${includePrerelease}; newest release assets are not ready`
     )
     throw new ReleaseFeedPreflightError(
-      'release-publishing',
+      'release-not-ready',
       isPerfCheck ? 'perf' : includePrerelease ? 'prerelease' : 'default',
       'Latest release assets are still publishing'
     )

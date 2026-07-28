@@ -243,15 +243,19 @@ export async function fetchNewerReleaseTagsWithReadiness(
       readiness === 'ready' && compareVersions(version, currentVersion) > 0
   )
   if (primaryIndex === -1) {
+    if (manifestResults[0]?.readiness === 'unavailable') {
+      return { tags: [], state: 'unavailable', unavailableReason: 'manifest' }
+    }
     const lastGoodTag = manifestResults.find(({ readiness }) => readiness === 'ready')?.tag
     return lastGoodTag
       ? { tags: [], state: 'not-ready', lastGoodTag }
-      : manifestResults[0]?.readiness === 'unavailable'
-        ? { tags: [], state: 'unavailable', unavailableReason: 'manifest' }
-        : { tags: [], state: 'not-ready' }
+      : { tags: [], state: 'not-ready' }
   }
 
   if (primaryIndex > 0) {
+    if (manifestResults[0]?.readiness === 'unavailable') {
+      return { tags: [], state: 'unavailable', unavailableReason: 'manifest' }
+    }
     return { tags: [], state: 'not-ready', lastGoodTag: manifestResults[primaryIndex].tag }
   }
 
