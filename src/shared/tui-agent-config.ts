@@ -97,8 +97,8 @@ export const TUI_AGENT_CONFIG: Record<TuiAgent, TuiAgentConfig> = {
     promptInjectionMode: 'stdin-after-start'
   },
   trae: {
-    // Why: two unrelated CLIs ship a `trae-cli` binary — this one and the open-source
-    // bytedance/trae-agent — so detect on `traecli`, an alias only this one installs.
+    // Why: the unrelated open-source bytedance/trae-agent also installs a `trae-cli`
+    // binary, so detect TRAE CN's CLI on `traecli`, an alias only TRAE CN ships.
     detectCmd: 'traecli',
     launchCmd: 'traecli',
     expectedProcess: 'traecli',
