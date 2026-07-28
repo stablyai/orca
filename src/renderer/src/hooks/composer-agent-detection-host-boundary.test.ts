@@ -19,8 +19,13 @@ describe('composer agent detection host boundary', () => {
       /const selectedRepoExecutionHost = useMemo\(\s*\(\) => parseExecutionHostId\(selectedRepoExecutionHostId\)/
     )
     expect(SOURCE).toContain('ensureDetectedAgents(repoId ? { repoId } : undefined)')
-    expect(SOURCE).toContain('selectedRepoExecutionHostIdRef.current ?? undefined')
-    expect(SOURCE).toContain('readRuntimeIssueCommand(')
+    expect(SOURCE).toMatch(
+      /checkRuntimeHooks\([\s\S]*?targetRepoId,\n\s+selectedRepoExecutionHostId \?\? undefined/
+    )
+    expect(SOURCE).toContain(
+      'const selectedRepoExecutionHostIdRef = useRef(selectedRepoExecutionHostId)\n  useEffect(() => {\n    selectedRepoExecutionHostIdRef.current = selectedRepoExecutionHostId\n  }, [selectedRepoExecutionHostId])'
+    )
+    expect(SOURCE).toContain('readRuntimeIssueCommandForHost(')
     expect(
       SOURCE.match(
         /'(?:setup|issueCommand|vmRecipe)',\n\s+selectedRepoExecutionHostId \?\? undefined/g

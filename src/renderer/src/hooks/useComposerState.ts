@@ -165,7 +165,7 @@ import { joinPath } from '@/lib/path'
 import { importExternalPathsToRuntime } from '@/runtime/runtime-file-client'
 import {
   checkRuntimeHooks,
-  readRuntimeIssueCommand,
+  readRuntimeIssueCommand as readRuntimeIssueCommandForHost,
   type HookCheckResult
 } from '@/runtime/runtime-hooks-client'
 import {
@@ -1203,7 +1203,9 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
   const selectedRepoSettingsRef = useRef(selectedRepoSettings)
   selectedRepoSettingsRef.current = selectedRepoSettings
   const selectedRepoExecutionHostIdRef = useRef(selectedRepoExecutionHostId)
-  selectedRepoExecutionHostIdRef.current = selectedRepoExecutionHostId
+  useEffect(() => {
+    selectedRepoExecutionHostIdRef.current = selectedRepoExecutionHostId
+  }, [selectedRepoExecutionHostId])
 
   // Why: depend on the persisted policy *value*, not the selectedRepo object. Background repo
   // refetches (git polling) hand back a new repo reference with the same hookSettings; keying on
@@ -1349,20 +1351,32 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
     key: string
     promise: Promise<HookCheckResult>
   } | null>(null)
-  const loadHookCheckForRepo = useCallback((targetRepoId: string): Promise<HookCheckResult> => {
-    const key = `${selectedRepoExecutionHostIdRef.current ?? 'local'}:${targetRepoId}`
-    const existing = hookCheckRef.current
-    if (existing?.key === key) {
-      return existing.promise
-    }
-    const promise = checkRuntimeHooks(
-      selectedRepoSettingsRef.current,
-      targetRepoId,
-      selectedRepoExecutionHostIdRef.current ?? undefined
-    )
-    hookCheckRef.current = { key, promise }
-    return promise
-  }, [])
+  const loadHookCheckForRepo = useCallback(
+    (targetRepoId: string): Promise<HookCheckResult> => {
+      const key = `${selectedRepoExecutionHostId ?? 'local'}:${targetRepoId}`
+      const existing = hookCheckRef.current
+      if (existing?.key === key) {
+        return existing.promise
+      }
+      const promise = checkRuntimeHooks(
+        selectedRepoSettingsRef.current,
+        targetRepoId,
+        selectedRepoExecutionHostId ?? undefined
+      )
+      hookCheckRef.current = { key, promise }
+      return promise
+    },
+    [selectedRepoExecutionHostId]
+  )
+  const readRuntimeIssueCommand = useCallback(
+    (settingsSnapshot: typeof selectedRepoSettingsRef.current, targetRepoId: string) =>
+      readRuntimeIssueCommandForHost(
+        settingsSnapshot,
+        targetRepoId,
+        selectedRepoExecutionHostId ?? undefined
+      ),
+    [selectedRepoExecutionHostId]
+  )
   const commitHookCheckIfCurrent = useCallback(
     (targetRepoId: string, hooks: OrcaHooks | null): boolean => {
       if (repoIdRef.current !== targetRepoId) {
@@ -1747,11 +1761,7 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
       }
     }
 
-    void readRuntimeIssueCommand(
-      selectedRepoSettingsRef.current,
-      repoId,
-      selectedRepoExecutionHostId ?? undefined
-    )
+    void readRuntimeIssueCommand(selectedRepoSettingsRef.current, repoId)
       .then((result) => {
         if (!cancelled) {
           setIssueCommandTemplate(result.effectiveContent ?? '')
@@ -1772,12 +1782,12 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
     // (e.g. saving the setup toggle from this very composer) replaces selectedRepo — and thus the
     // memoized selectedRepoSettings — by reference; depending on the object would re-run this
     // effect, blank yamlHooks to null, and make the whole setup section vanish for a frame.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [
     commitHookCheckIfCurrent,
     enableIssueAutomation,
     loadHookCheckForRepo,
     repoId,
-    selectedRepoExecutionHostId,
     selectedRepoIsGit,
     runtimeEnvironmentId
   ])
