@@ -1,6 +1,11 @@
 import type { AutomationRun } from '../../shared/automations/history/automation-run'
 import type { ParsedAgentStatusPayload } from '../../shared/agent-status/contracts/agent-status-types'
+import type { AgentStatusIpcPayload } from '../../shared/agent-status/contracts/agent-status-ipc-payload'
 import { mainAgentDoneAt } from '../../shared/agent-status/lifecycle/main-agent-status'
+import {
+  createAutomationAgentSessionTracker,
+  noteAutomationAgentStatus
+} from '../../shared/automations/automation-agent-session-attribution'
 import {
   describeTerminalExitCause,
   type TerminalExitCause
@@ -23,7 +28,29 @@ type AutomationRunStatusRow = AgentTurnStatusRow &
       ParsedAgentStatusPayload,
       'mainAgent' | 'lastAssistantMessage' | 'lastAssistantMessageIsToolOutput'
     >
-  >
+  > &
+  Partial<Pick<AgentStatusIpcPayload, 'providerSession'>>
+
+/** Replay pane rows in time order. A nested session's done must not finish the run. */
+function sessionReplayAllowsCompletion(rows: readonly AutomationRunStatusRow[]): boolean {
+  const tracker = createAutomationAgentSessionTracker()
+  const ordered = rows
+    .filter((row) => !row.providerSessionOnly)
+    .slice()
+    .sort((left, right) => left.stateStartedAt - right.stateStartedAt)
+  let allowed = false
+  for (const row of ordered) {
+    if (
+      noteAutomationAgentStatus(tracker, {
+        state: row.state,
+        providerSession: row.providerSession
+      })
+    ) {
+      allowed = true
+    }
+  }
+  return allowed
+}
 
 export type AutomationRunAgentEvidence = {
   getAgentStatusRowsForPane(paneKey: string): readonly AutomationRunStatusRow[]
@@ -48,9 +75,10 @@ export function judgeIdleRun(
   runStartedAt: number,
   now: number
 ): IdleRunVerdict {
+  const rows = run.terminalPaneKey ? evidence.getAgentStatusRowsForPane(run.terminalPaneKey) : []
   const verdict = judgeIdleAgentTurn(
     {
-      rows: run.terminalPaneKey ? evidence.getAgentStatusRowsForPane(run.terminalPaneKey) : [],
+      rows,
       // Ignore completion evidence from before this run’s prompt.
       sentAt: run.dispatchedAt ?? runStartedAt,
       tail,
@@ -66,6 +94,12 @@ export function judgeIdleRun(
   }
   if (verdict.kind === 'completed' && verdict.interrupted) {
     return { kind: 'failed', ...automationRunFailure('agentInterrupted') }
+  }
+  if (verdict.kind === 'completed' && !sessionReplayAllowsCompletion(rows)) {
+    const substantive = rows.filter((row) => !row.providerSessionOnly)
+    if (substantive.length > 0) {
+      return { kind: 'wait' }
+    }
   }
   return verdict.kind === 'completed' ? { kind: 'completed' } : verdict
 }
@@ -89,9 +123,13 @@ export function judgeHeldRunTurn(
   ) {
     return null
   }
-  return done.some((row) => row.interrupted === true)
-    ? { kind: 'failed', ...automationRunFailure('agentInterrupted') }
-    : { kind: 'completed' }
+  if (done.some((row) => row.interrupted === true)) {
+    return { kind: 'failed', ...automationRunFailure('agentInterrupted') }
+  }
+  if (!sessionReplayAllowsCompletion(rows)) {
+    return null
+  }
+  return { kind: 'completed' }
 }
 
 export type RunAgentReply = { text: string; truncated: boolean }
