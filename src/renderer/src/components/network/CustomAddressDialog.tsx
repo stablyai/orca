@@ -35,10 +35,8 @@ type CustomAddressDialogProps = {
   onConfirm: (value: string) => void
 }
 
-// Why: shared single-field modal for entering a custom address/endpoint. The
-// grammar differs per surface (mobile takes IPv4/Tailscale; the server-share
-// form takes host / host:port / wss URLs), so validation and copy are injected
-// rather than baked in.
+// Why: surfaces inject their own grammar and copy; Mobile accepts IPv4/IPv6,
+// hostnames, and full HTTP(S)/WebSocket URLs.
 export function CustomAddressDialog({
   open,
   onOpenChange,
