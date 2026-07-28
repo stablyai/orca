@@ -10,12 +10,18 @@ import { resetWindowsTerminalCapabilitiesForTests } from '@/lib/windows-terminal
 
 const testState = vi.hoisted(() => ({
   settings: null as GlobalSettings | null,
-  sections: null as SettingsNavSection[] | null
+  sections: null as SettingsNavSection[] | null,
+  runtimeEnvironments: [] as { id: string; createdAt: number; pairingRevision?: number }[]
 }))
 
 vi.mock('@/store', () => ({
   useAppStore: (selector: (state: object) => unknown) =>
-    selector({ settings: testState.settings, repos: [] })
+    selector({
+      settings: testState.settings,
+      repos: [],
+      runtimeEnvironments: testState.runtimeEnvironments,
+      runtimeStatusByEnvironmentId: new Map()
+    })
 }))
 
 vi.mock('@/hooks/useLinearProviderConnected', () => ({
@@ -47,8 +53,9 @@ describe('settings navigation capability ownership', () => {
   beforeEach(() => {
     testState.settings = {
       ...getDefaultSettings('/tmp'),
-      activeRuntimeEnvironmentId: 'paired-a'
+      activeRuntimeEnvironmentId: null
     }
+    testState.runtimeEnvironments = [{ id: 'paired-a', createdAt: 1 }]
     testState.sections = null
     const container = document.createElement('div')
     document.body.appendChild(container)
@@ -107,8 +114,9 @@ describe('settings navigation capability ownership', () => {
 
     testState.settings = {
       ...testState.settings!,
-      activeRuntimeEnvironmentId: 'paired-b'
+      activeRuntimeEnvironmentId: null
     }
+    testState.runtimeEnvironments = [{ id: 'paired-b', createdAt: 2 }]
     await act(async () => {
       root.render(createElement(Probe))
       await Promise.resolve()

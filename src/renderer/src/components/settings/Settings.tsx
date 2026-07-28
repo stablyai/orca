@@ -77,11 +77,11 @@ import { isIntentionalAppRestartInProgress } from '@/lib/updater-beforeunload'
 import { registerWindowCloseGuard } from '../window-close-request-coordinator'
 import { checkRuntimeHooks } from '@/runtime/runtime-hooks-client'
 import {
-  getWindowsTerminalCapabilityOwnerKey,
   isWindowsTerminalCapabilityHost,
   useLocalWindowsTerminalCapabilities,
   useWindowsTerminalCapabilities
 } from '@/lib/windows-terminal-capabilities'
+import { useWindowsTerminalCapabilityOwnerKey } from '@/hooks/useWindowsTerminalCapabilityOwnerKey'
 import { getActiveRuntimeTarget } from '@/runtime/runtime-rpc-client'
 import { getShortcutPlatform } from '@/lib/shortcut-platform'
 import { keybindingMatchesAction } from '../../../../shared/keybindings'
@@ -836,7 +836,7 @@ function Settings(): React.JSX.Element {
       }),
     [activeSectionId, mountedSectionIds, navSections, settingsSearchQuery, visibleSectionIds]
   )
-  const windowsTerminalCapabilityOwnerKey = getWindowsTerminalCapabilityOwnerKey(
+  const windowsTerminalCapabilityOwnerKey = useWindowsTerminalCapabilityOwnerKey(
     settings?.activeRuntimeEnvironmentId
   )
   const runtimeTarget = useMemo(() => getActiveRuntimeTarget(settings), [settings])

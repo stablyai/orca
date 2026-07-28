@@ -77,10 +77,10 @@ import { getRepositoryPaneSearchEntries } from '@/components/settings/repository
 import { buildSettingsProjectList } from '@/components/settings/settings-project-list'
 import { isWebClientLocation } from '@/lib/web-client-location'
 import {
-  getWindowsTerminalCapabilityOwnerKey,
   isWindowsTerminalCapabilityHost,
   useWindowsTerminalCapabilities
 } from '@/lib/windows-terminal-capabilities'
+import { useWindowsTerminalCapabilityOwnerKey } from './useWindowsTerminalCapabilityOwnerKey'
 import { getActiveRuntimeTarget } from '@/runtime/runtime-rpc-client'
 import { useLinearProviderConnected } from '@/hooks/useLinearProviderConnected'
 import { translate } from '@/i18n/i18n'
@@ -626,7 +626,7 @@ export function useSettingsNavigationMetadata(): SettingsNavSection[] {
   const isWindows = isWindowsUserAgent()
   const isWebClient = isWebClientLocation()
   const isLinearConnected = useLinearProviderConnected()
-  const windowsTerminalCapabilityOwnerKey = getWindowsTerminalCapabilityOwnerKey(
+  const windowsTerminalCapabilityOwnerKey = useWindowsTerminalCapabilityOwnerKey(
     settings?.activeRuntimeEnvironmentId
   )
   const runtimeTarget = getActiveRuntimeTarget(settings)

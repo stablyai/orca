@@ -12,12 +12,18 @@ const testState = vi.hoisted(() => ({
   settings: null as GlobalSettings | null,
   updateSettings: vi.fn(),
   agentsPaneProps: null as ComponentProps<typeof AgentsPane> | null,
-  isWebClient: false
+  isWebClient: false,
+  runtimeEnvironments: [] as { id: string; createdAt: number; pairingRevision?: number }[]
 }))
 
 vi.mock('@/store', () => ({
   useAppStore: (selector: (state: object) => unknown) =>
-    selector({ settings: testState.settings, updateSettings: testState.updateSettings })
+    selector({
+      settings: testState.settings,
+      updateSettings: testState.updateSettings,
+      runtimeEnvironments: testState.runtimeEnvironments,
+      runtimeStatusByEnvironmentId: new Map()
+    })
 }))
 
 vi.mock('@/components/settings/AgentsPane', () => ({
@@ -92,6 +98,7 @@ describe('AgentSettingsDialog', () => {
     testState.updateSettings.mockReset()
     testState.agentsPaneProps = null
     testState.isWebClient = false
+    testState.runtimeEnvironments = []
     const container = document.createElement('div')
     document.body.appendChild(container)
     root = createRoot(container)
@@ -196,6 +203,8 @@ describe('AgentSettingsDialog', () => {
   ])('refreshes paired-server capabilities after re-pairing: $name', async (args) => {
     vi.stubGlobal('navigator', { userAgent: 'Macintosh' })
     testState.isWebClient = true
+    testState.settings = { ...testState.settings!, activeRuntimeEnvironmentId: null }
+    testState.runtimeEnvironments = [{ id: 'paired-a', createdAt: 1 }]
     const { localWslAvailable, localWslDistros, runtimeGetStatus } = installCapabilityTransports(
       args.firstPlatform
     )
@@ -215,8 +224,9 @@ describe('AgentSettingsDialog', () => {
 
     testState.settings = {
       ...testState.settings!,
-      activeRuntimeEnvironmentId: 'remote-b'
+      activeRuntimeEnvironmentId: null
     }
+    testState.runtimeEnvironments = [{ id: 'paired-b', createdAt: 2 }]
     localWslAvailable.mockResolvedValue(args.secondAvailable)
     localWslDistros.mockResolvedValue(args.secondDistros)
     runtimeGetStatus.mockResolvedValue({ hostPlatform: args.secondPlatform })
