@@ -308,7 +308,7 @@ export class BrowserManager {
           // white fallback. An opaque base lets Blink pick the canvas color per document scheme.
           .then(() =>
             guest.debugger.sendCommand('Emulation.setDefaultBackgroundColorOverride', {
-              color: { r: 255, g: 255, b: 255, a: 255 }
+              color: { r: 255, g: 255, b: 255, a: 1 }
             })
           )
           .catch(() => {})

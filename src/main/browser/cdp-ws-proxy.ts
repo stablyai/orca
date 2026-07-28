@@ -231,7 +231,7 @@ export class CdpWsProxy {
       })
       // Why: keep the opaque base background across proxy takeovers so dark-color-scheme documents stay readable.
       await this.webContents.debugger.sendCommand('Emulation.setDefaultBackgroundColorOverride', {
-        color: { r: 255, g: 255, b: 255, a: 255 }
+        color: { r: 255, g: 255, b: 255, a: 1 }
       })
     } catch {
       /* best-effort — page domain may not be ready yet */
