@@ -85,7 +85,11 @@ import {
   shouldSetDisplayName,
   mergeWorktree
 } from './worktree-logic'
-import { findCreatedWorktree } from './created-worktree-reconciliation'
+import {
+  findConfirmedCreatedWorktree,
+  findCreatedWorktree,
+  isAmbiguousSshWorktreeAddError
+} from './created-worktree-reconciliation'
 import type { BranchPrefixSettings } from '../../shared/branch-prefix'
 import { getRepoIdFromWorktreeId } from '../../shared/worktree-id'
 import { parseWorkspaceKey, worktreeWorkspaceKey } from '../../shared/workspace-scope'
@@ -1537,7 +1541,8 @@ export async function createRemoteWorktree(
   args: CreateWorktreeArgsWithSystemProvenance,
   repo: Repo,
   store: Store,
-  mainWindow: BrowserWindow
+  mainWindow: BrowserWindow,
+  onWorktreeCreateCommitted?: (worktree: { id: string; path: string; branch: string }) => void
 ): Promise<CreateWorktreeResult> {
   const timing = createWorktreeCreateTimingRecorder()
   const provider = requireSshGitProvider(repo.connectionId!)
@@ -1745,6 +1750,8 @@ export async function createRemoteWorktree(
     )
   }
 
+  let reconciledWorktrees: Awaited<ReturnType<typeof provider.listWorktrees>> | undefined
+  let committedPath = remotePath
   try {
     await timing.time('git_worktree_add', async () =>
       provider.addWorktree(
@@ -1767,7 +1774,28 @@ export async function createRemoteWorktree(
         `Older relay reported an authorization error; please reconnect to deploy the latest relay. (${err.message})`
       )
     }
-    throw err
+    if (!isAmbiguousSshWorktreeAddError(err)) {
+      throw err
+    }
+    try {
+      reconciledWorktrees = await provider.listWorktrees(repo.path)
+    } catch {
+      throw err
+    }
+    const reconciled = findConfirmedCreatedWorktree(reconciledWorktrees, remotePath, branchName)
+    if (!reconciled) {
+      throw err
+    }
+    committedPath = reconciled.path
+  }
+  try {
+    onWorktreeCreateCommitted?.({
+      id: `${repo.id}::${committedPath}`,
+      path: committedPath,
+      branch: branchName
+    })
+  } catch (error) {
+    console.warn('[worktree-create] physical-create observer failed:', error)
   }
   if (sparseDirectories.length > 0) {
     try {
@@ -1791,12 +1819,10 @@ export async function createRemoteWorktree(
   }
 
   // Re-list to get the created worktree info
-  const gitWorktrees = await timing.time('list_created_worktree', async () =>
-    provider.listWorktrees(repo.path)
-  )
-  const created = gitWorktrees.find(
-    (gw) => gw.branch?.endsWith(branchName) || gw.path.endsWith(effectiveSanitizedName)
-  )
+  const gitWorktrees =
+    reconciledWorktrees ??
+    (await timing.time('list_created_worktree', async () => provider.listWorktrees(repo.path)))
+  const created = findCreatedWorktree(gitWorktrees, remotePath, branchName)
   if (!created) {
     throw new Error('Worktree created but not found in listing')
   }

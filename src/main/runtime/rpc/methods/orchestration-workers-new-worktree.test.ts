@@ -73,7 +73,7 @@ describe('orchestration new-worktree workers', () => {
 
   afterEach(() => db.close())
 
-  async function startWorker(overrides: Record<string, unknown> = {}) {
+  async function startWorker(overrides: Record<string, unknown> = {}, signal?: AbortSignal) {
     const task = db.createTask({ spec: 'new-worktree task', runId })
     const method = ORCHESTRATION_METHODS.find(
       (candidate) => candidate.name === 'orchestration.workerStart'
@@ -89,7 +89,7 @@ describe('orchestration new-worktree workers', () => {
       agent: 'codex',
       ...overrides
     })
-    const result = await method.handler(params, { runtime })
+    const result = await method.handler(params, { runtime, signal })
     return { result, task }
   }
 
@@ -134,7 +134,11 @@ describe('orchestration new-worktree workers', () => {
         startupAgent: 'codex',
         awaitTerminalProvisioning: true,
         observeSetupCompletion: true,
-        lineage: expect.objectContaining({ noParent: true, parentWorktree: undefined })
+        lineage: expect.objectContaining({ noParent: true, parentWorktree: undefined }),
+        startupTerminalIdentity: expect.objectContaining({
+          agentSessionCreateOperationId: expect.stringMatching(/^[A-Za-z0-9_-]{43}$/),
+          preAllocatedHandle: expect.stringMatching(/^term_/)
+        })
       })
     )
     expect(result).toMatchObject({ state: 'ready' })
@@ -489,6 +493,163 @@ describe('orchestration new-worktree workers', () => {
       ])
     })
     expect(db.getTask(task.id)?.status).toBe('blocked')
+  })
+
+  it('keeps the startup terminal fenced when publication fails after spawn', async () => {
+    vi.spyOn(runtime, 'createManagedWorktree').mockImplementationOnce(async (options) => {
+      options.startupTerminalIdentity?.onPtySpawnCommitted?.()
+      throw new Error('post-spawn publication failed')
+    })
+
+    const { result, task } = await startWorker()
+
+    expect(result).toMatchObject({
+      state: 'outcome_unknown',
+      failedStage: 'worktree_create',
+      residualResources: expect.arrayContaining([
+        expect.objectContaining({
+          kind: 'terminal',
+          action: 'created_pending_receipt'
+        })
+      ])
+    })
+    expect(db.getTask(task.id)?.status).toBe('blocked')
+    expect(runtime.sendTerminalAgentPrompt).not.toHaveBeenCalled()
+  })
+
+  it('keeps the worktree fenced when post-create reconciliation fails', async () => {
+    vi.spyOn(runtime, 'createManagedWorktree').mockImplementationOnce(async (options) => {
+      options.onWorktreeCreateCommitted?.({
+        id: 'repo::created',
+        path: '/workspace/created',
+        branch: 'created'
+      })
+      throw new Error('post-create listing failed')
+    })
+
+    const { result, task } = await startWorker()
+
+    expect(result).toMatchObject({
+      state: 'outcome_unknown',
+      failedStage: 'worktree_create',
+      residualResources: expect.arrayContaining([
+        expect.objectContaining({
+          kind: 'worktree',
+          action: 'created_child',
+          id: 'repo::created'
+        })
+      ])
+    })
+    expect(db.getTask(task.id)?.status).toBe('blocked')
+    expect(runtime.sendTerminalAgentPrompt).not.toHaveBeenCalled()
+  })
+
+  it('records deterministic startup identity when SSH creation returns unknown', async () => {
+    vi.spyOn(runtime, 'createManagedWorktree').mockRejectedValueOnce(
+      Object.assign(new Error('execution_owner_unavailable'), {
+        agentSessionOperationOutcome: 'unknown'
+      })
+    )
+
+    const { result, task } = await startWorker()
+
+    expect(result).toMatchObject({
+      state: 'outcome_unknown',
+      failedStage: 'worktree_create',
+      residualResources: expect.arrayContaining([
+        expect.objectContaining({
+          kind: 'terminal',
+          action: 'created_pending_receipt'
+        })
+      ])
+    })
+    expect(db.getTask(task.id)?.status).toBe('blocked')
+  })
+
+  it('keeps the startup terminal fenced when post-create enumeration fails', async () => {
+    vi.spyOn(runtime, 'createManagedWorktree').mockImplementationOnce(async (options) => {
+      options.onWorktreeCreateCommitted?.({
+        id: 'repo::requested-path',
+        path: '/workspace/requested-path',
+        branch: 'created'
+      })
+      options.startupTerminalIdentity?.onPtySpawnCommitted?.()
+      return {
+        worktree: { id: 'repo::created', repoId: 'repo' },
+        startupTerminal: { spawned: true, handle: 'term_worker', surface: 'background' }
+      } as never
+    })
+    vi.mocked(runtime.listTerminals).mockRejectedValueOnce(new Error('terminal enumeration failed'))
+
+    const { result, task } = await startWorker()
+
+    expect(result).toMatchObject({
+      state: 'outcome_unknown',
+      failedStage: 'worktree_create',
+      residualResources: expect.arrayContaining([
+        expect.objectContaining({
+          kind: 'worktree',
+          id: 'repo::created'
+        }),
+        expect.objectContaining({
+          kind: 'terminal',
+          action: 'created_pending_receipt'
+        })
+      ])
+    })
+    expect(db.getTask(task.id)?.status).toBe('blocked')
+    expect(runtime.sendTerminalAgentPrompt).not.toHaveBeenCalled()
+  })
+
+  it('persists canonical worktree identity before later stage persistence can fail', async () => {
+    vi.spyOn(runtime, 'createManagedWorktree').mockImplementationOnce(async (options) => {
+      options.onWorktreeCreateCommitted?.({
+        id: 'repo::requested-path',
+        path: '/workspace/requested-path',
+        branch: 'created'
+      })
+      return {
+        worktree: { id: 'repo::canonical-path', repoId: 'repo' },
+        startupTerminal: { spawned: true, handle: 'term_worker', surface: 'background' }
+      } as never
+    })
+    const recordStage = db.recordWorkerStage.bind(db)
+    vi.spyOn(db, 'recordWorkerStage').mockImplementation((params) => {
+      if (params.stage === 'worktree_created') {
+        throw new Error('later stage persistence failed')
+      }
+      return recordStage(params)
+    })
+
+    const { result } = await startWorker()
+
+    expect(result).toMatchObject({
+      state: 'outcome_unknown',
+      residualResources: expect.arrayContaining([
+        expect.objectContaining({
+          kind: 'worktree',
+          id: 'repo::canonical-path'
+        })
+      ])
+    })
+  })
+
+  it('releases a cancelled provisioning wait as outcome unknown', async () => {
+    const controller = new AbortController()
+    vi.spyOn(runtime, 'createManagedWorktree').mockReturnValue(new Promise(() => undefined))
+
+    const pending = startWorker({ name: 'cancelled-create' }, controller.signal)
+    await vi.waitFor(() => expect(db.listTasks()).toHaveLength(1))
+    controller.abort()
+
+    await expect(pending).resolves.toMatchObject({
+      result: {
+        state: 'outcome_unknown',
+        failedStage: 'worktree_create'
+      }
+    })
+    expect(db.getTask(db.listTasks()[0]!.id)?.status).toBe('blocked')
+    expect(runtime.sendTerminalAgentPrompt).not.toHaveBeenCalled()
   })
 
   it('persists the retry request with the starting Dispatch before worktree effects', async () => {

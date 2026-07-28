@@ -1769,6 +1769,48 @@ Append new entries chronologically. Do not rewrite older entries except to corre
 - Next:
   - Push the rebased branch as `OrcaWin` and inspect replacement branch-head CI.
 
+### 2026-07-27 — Dispatch-readiness PR dogfood and terminal provisioning hardening
+
+- Changes:
+  - Required strict TUI readiness before direct, composed, or connected-server task input.
+  - Preserved deterministic terminal identity and an explicit unknown outcome when cancellation,
+    disconnect, or publication failure follows physical PTY spawn.
+  - Recorded late local and federated terminal receipts without moving an unknown Dispatch back to
+    a safe retry state.
+  - Applied the same spawn-commit fence to agent-first new-worktree startup terminals.
+  - Retained deterministic terminal residuals when SSH loses the create reply, isolated spawn
+    journaling failures from provider registration, and reconciled exact worktrees after
+    cancellation raced a committed `git worktree add`.
+  - Fenced the physical local and SSH worktree-add boundary through later metadata/listing
+    failures and preserved authenticated unknown-outcome residuals at the connected Run home.
+  - Limited SSH add reconciliation to ambiguous in-flight transport outcomes and required both
+    the requested path and exact branch before adopting a lost-reply result.
+  - Applied the same exact path-and-branch proof to local and WSL cancellation reconciliation.
+  - Required the Git runner's `AbortError` before local or WSL cancellation may reconcile; an
+    independently aborted caller cannot convert a deterministic Git failure into success.
+- Verification:
+  - Focused readiness, transport, provider, runtime, federation, and coordinator selection:
+    16 files and 1,573 tests passed.
+  - Real dev Electron blocked a Codex trust prompt without injecting the task and completed a
+    positive Codex worker through authenticated `worker_done`.
+  - Node typecheck, reliability manifest, max-lines ratchet, and `git diff --check` passed.
+- Findings:
+  - A deterministic handle prevents duplicate workers only when Orca also remembers that physical
+    spawn may have committed; post-spawn registration failure cannot be treated as no-effect.
+  - A failed journaling observer must not escape through the provider spawn boundary after the
+    physical PTY exists.
+  - Cancellation after `git worktree add` needs cancellation-independent reconciliation before
+    Orca can truthfully classify the outcome.
+  - A connected server may know the exact residual even when the home server did not observe the
+    mutation directly; authenticated evidence must survive that hop.
+  - Deterministic Git or relay failures cannot use post-error inventory as proof that this
+    operation created the exact checkout.
+  - Late receipts improve inspection, but never prove task input was delivered or permit automatic
+    retry.
+- Next:
+  - Run full lint and the final same-tree correctness, remote, and performance reviews before any
+    push or merge recommendation.
+
 ### Entry template
 
 ```text

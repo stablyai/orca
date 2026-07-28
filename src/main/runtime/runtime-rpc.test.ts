@@ -4332,6 +4332,146 @@ describe('OrcaRuntimeRpcServer', () => {
       }
     })
 
+    it('aborts injected dispatch readiness when the client closes', async () => {
+      const userDataPath = mkdtempSync(join(tmpdir(), 'orca-runtime-rpc-'))
+      const runtime = new OrcaRuntimeService()
+      const db = new OrchestrationDb(':memory:')
+      runtime.setOrchestrationDb(db)
+      const coordinatorPaneKey = 'tab_coord:aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa'
+      const workerPaneKey = 'tab_worker:bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb'
+      vi.spyOn(runtime, 'getTerminalPaneKey').mockImplementation((handle) =>
+        handle === 'term_coord' ? coordinatorPaneKey : workerPaneKey
+      )
+      vi.spyOn(runtime, 'getTerminalProcessIncarnation').mockReturnValue('runtime:test:1')
+      let detectionSignal: AbortSignal | undefined
+      vi.spyOn(runtime, 'isTerminalRunningAgent').mockImplementation((_handle, options) => {
+        detectionSignal = options?.signal
+        return new Promise((_resolve, reject) => {
+          options?.signal?.addEventListener('abort', () => reject(new Error('request_aborted')), {
+            once: true
+          })
+        })
+      })
+      const waitForTerminal = vi.spyOn(runtime, 'waitForTerminal')
+      const run = db.createRun({
+        objective: 'Dispatch disconnect test',
+        coordinatorHandle: 'term_coord',
+        coordinatorPaneKey
+      })
+      const task = db.createTask({ spec: 'Wait for readiness', runId: run.id })
+      const server = new OrcaRuntimeRpcServer({
+        runtime,
+        userDataPath,
+        keepaliveIntervalMs: 1_000,
+        longPollCap: 1
+      })
+      await server.start()
+
+      try {
+        const metadata = readRuntimeMetadata(userDataPath)
+        const session = openFramedSession(metadata!.transports[0]!.endpoint, {
+          id: 'req_dispatch_wait',
+          authToken: metadata!.authToken,
+          method: 'orchestration.dispatch',
+          orchestrationRequestId: 'op_dispatch_wait',
+          params: {
+            task: task.id,
+            run: run.id,
+            from: 'term_coord',
+            to: 'term_worker',
+            inject: true
+          }
+        })
+        await waitFor(() => server['activeLongPolls'] === 1 && detectionSignal !== undefined)
+
+        session.socket.destroy()
+        await session.done
+        await waitFor(() => server['activeLongPolls'] === 0)
+
+        expect(detectionSignal?.aborted).toBe(true)
+        expect(waitForTerminal).not.toHaveBeenCalled()
+        expect(db.getTask(task.id)?.status).toBe('ready')
+        expect(db.getDispatchContext(task.id)).toBeUndefined()
+      } finally {
+        db.close()
+        await server.stop()
+      }
+    })
+
+    it('aborts worker-start readiness when the client closes', async () => {
+      const userDataPath = mkdtempSync(join(tmpdir(), 'orca-runtime-rpc-'))
+      const runtime = new OrcaRuntimeService()
+      const db = new OrchestrationDb(':memory:')
+      runtime.setOrchestrationDb(db)
+      const coordinatorPaneKey = 'tab_coord:aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa'
+      const workerPaneKey = 'tab_worker:bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb'
+      vi.spyOn(runtime, 'getTerminalPaneKey').mockImplementation((handle) =>
+        handle === 'term_coord' ? coordinatorPaneKey : workerPaneKey
+      )
+      vi.spyOn(runtime, 'getTerminalProcessIncarnation').mockReturnValue('runtime:test:1')
+      vi.spyOn(runtime, 'showTerminal').mockImplementation(
+        async (handle) => ({ handle, worktreeId: 'repo::worktree', status: 'running' }) as never
+      )
+      vi.spyOn(runtime, 'showManagedWorktree').mockResolvedValue({
+        id: 'repo::worktree',
+        repoId: 'repo'
+      } as never)
+      let detectionSignal: AbortSignal | undefined
+      vi.spyOn(runtime, 'isTerminalRunningAgent').mockImplementation((_handle, options) => {
+        detectionSignal = options?.signal
+        return new Promise((_resolve, reject) => {
+          options?.signal?.addEventListener('abort', () => reject(new Error('request_aborted')), {
+            once: true
+          })
+        })
+      })
+      const run = db.createRun({
+        objective: 'Worker disconnect test',
+        coordinatorHandle: 'term_coord',
+        coordinatorPaneKey
+      })
+      const task = db.createTask({
+        spec: 'Wait for worker readiness',
+        runId: run.id
+      })
+      const server = new OrcaRuntimeRpcServer({
+        runtime,
+        userDataPath,
+        keepaliveIntervalMs: 1_000,
+        longPollCap: 1
+      })
+      await server.start()
+
+      try {
+        const metadata = readRuntimeMetadata(userDataPath)
+        const session = openFramedSession(metadata!.transports[0]!.endpoint, {
+          id: 'req_worker_start_wait',
+          authToken: metadata!.authToken,
+          method: 'orchestration.workerStart',
+          orchestrationRequestId: 'op_worker_start_wait',
+          params: {
+            task: task.id,
+            run: run.id,
+            from: 'term_coord',
+            worktree: 'current',
+            terminal: 'term_worker'
+          }
+        })
+        await waitFor(() => server['activeLongPolls'] === 1 && detectionSignal !== undefined)
+
+        session.socket.destroy()
+        await session.done
+        await waitFor(() => server['activeLongPolls'] === 0)
+
+        expect(detectionSignal?.aborted).toBe(true)
+        expect(db.getTask(task.id)?.status).toBe('ready')
+        expect(db.getDispatchContext(task.id)).toBeUndefined()
+      } finally {
+        db.close()
+        await server.stop()
+      }
+    })
+
     it('releases long-poll slot when client closes mid-wait', async () => {
       const userDataPath = mkdtempSync(join(tmpdir(), 'orca-runtime-rpc-'))
       const runtime = new OrcaRuntimeService()

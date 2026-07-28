@@ -826,7 +826,11 @@ export class LocalPtyProvider implements IPtyProvider {
         : undefined,
       windowsFallbackAttempts
     })
-    args.onPtySpawnCommitted?.()
+    try {
+      args.onPtySpawnCommitted?.()
+    } catch (error) {
+      console.warn('[pty] physical-spawn observer failed:', error)
+    }
     shellPath = spawnResult.shellPath
     // Why: a Windows fallback embeds its startup command in argv; honor the winning shell's delivery flag to avoid a double write.
     if (spawnResult.startupCommandDeliveredInShellArgs !== undefined) {

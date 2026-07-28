@@ -294,6 +294,28 @@ describe('sendRemoteRuntimeRequest', () => {
       offSpy.mockRestore()
     }
   })
+
+  it('closes an in-flight one-shot request when its caller aborts', async () => {
+    let markReceived: () => void = () => {}
+    const received = new Promise<void>((resolve) => {
+      markReceived = resolve
+    })
+    const server = await createOneShotServer({ onRequest: markReceived })
+    const controller = new AbortController()
+    const request = sendRemoteRuntimeRequest(
+      server.pairing,
+      'orchestration.federationAttachStart',
+      {},
+      5_000,
+      undefined,
+      controller.signal
+    )
+
+    await received
+    controller.abort()
+
+    await expect(request).rejects.toMatchObject({ code: 'request_aborted' })
+  })
 })
 
 async function createSubscriptionServer(

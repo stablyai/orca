@@ -84,7 +84,8 @@ export async function sendRemoteRuntimeRequest<TResult>(
   method: string,
   params: unknown,
   timeoutMs: number,
-  envelope?: RuntimeOrchestrationEnvelope
+  envelope?: RuntimeOrchestrationEnvelope,
+  signal?: AbortSignal
 ): Promise<RuntimeRpcResponse<TResult>> {
   if (!isSafeTimerDelayMs(timeoutMs)) {
     throw new RemoteRuntimeClientError(
@@ -119,8 +120,15 @@ export async function sendRemoteRuntimeRequest<TResult>(
     let state: HandshakeState = 'awaiting_ready'
     let settled = false
     let ws: WebSocket | null = null
+    const onAbort = (): void => {
+      finish({
+        ok: false,
+        error: new RemoteRuntimeClientError('request_aborted', 'Runtime request was cancelled.')
+      })
+    }
 
     const cleanupSocketListeners = (): void => {
+      signal?.removeEventListener('abort', onAbort)
       const socket = ws
       if (!socket) {
         return
@@ -179,6 +187,12 @@ export async function sendRemoteRuntimeRequest<TResult>(
         resolve(result.response)
       }
     }
+
+    if (signal?.aborted) {
+      onAbort()
+      return
+    }
+    signal?.addEventListener('abort', onAbort, { once: true })
 
     try {
       ws = new WebSocket(pairing.endpoint, { maxPayload: REMOTE_RUNTIME_MAX_WEBSOCKET_FRAME_BYTES })

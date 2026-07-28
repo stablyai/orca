@@ -165,4 +165,67 @@ describe('runtime RPC call queue', () => {
       queue.enqueue('runtime-b', 'status.get', async () => 'recovered', 10)
     ).resolves.toBe('recovered')
   })
+
+  it('rejects an aborted queued call without running it or retaining its capacity', async () => {
+    const queue = new RuntimeRpcCallQueuePool(1, 1, 1, 1, 10)
+    let releaseFirst: () => void = () => {}
+    const first = queue.enqueue('runtime-a', 'status.get', async () => {
+      await new Promise<void>((resolve) => {
+        releaseFirst = resolve
+      })
+    })
+    const controller = new AbortController()
+    const run = vi.fn(async () => 'cancelled')
+    const cancelled = queue.enqueue('runtime-a', 'status.get', run, 10, controller.signal)
+
+    controller.abort()
+    await expect(cancelled).rejects.toThrow('request_aborted')
+    expect(run).not.toHaveBeenCalled()
+    const replacement = queue.enqueue('runtime-a', 'status.get', async () => 'replacement', 10)
+    releaseFirst()
+    await expect(Promise.all([first, replacement])).resolves.toEqual([undefined, 'replacement'])
+  })
+
+  it('rejects a call whose signal is already aborted', async () => {
+    const queue = new RuntimeRpcCallQueuePool()
+    const controller = new AbortController()
+    const run = vi.fn(async () => 'unused')
+    controller.abort()
+
+    await expect(
+      queue.enqueue('runtime-a', 'status.get', run, 0, controller.signal)
+    ).rejects.toThrow('request_aborted')
+    expect(run).not.toHaveBeenCalled()
+  })
+
+  it('does not retain cancelled queue tombstones behind a stuck active call', async () => {
+    const queue = new RuntimeRpcCallQueuePool(1, 1, 2, 2)
+    const first = queue.enqueue(
+      'runtime-a',
+      'status.get',
+      async () => await new Promise<void>(() => undefined)
+    )
+    void first
+
+    for (let index = 0; index < 100; index += 1) {
+      const controller = new AbortController()
+      const queued = queue.enqueue(
+        'runtime-a',
+        'status.get',
+        async () => index,
+        0,
+        controller.signal
+      )
+      controller.abort()
+      await expect(queued).rejects.toThrow('request_aborted')
+    }
+
+    const internal = queue as unknown as {
+      queues: Map<string, { foreground: unknown[]; background: unknown[] }>
+    }
+    const retained = internal.queues.get('runtime-a')
+    expect(
+      (retained?.foreground.length ?? 0) + (retained?.background.length ?? 0)
+    ).toBeLessThanOrEqual(1)
+  })
 })

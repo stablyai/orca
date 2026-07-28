@@ -445,6 +445,28 @@ describe('LocalPtyProvider', () => {
       expect(committed).toHaveBeenCalledOnce()
     })
 
+    it('finishes PTY registration when the physical-spawn observer throws', async () => {
+      const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined)
+
+      try {
+        const result = await provider.spawn({
+          cols: 80,
+          rows: 24,
+          onPtySpawnCommitted: () => {
+            throw new Error('journal unavailable')
+          }
+        })
+
+        expect(provider.hasPty(result.id)).toBe(true)
+        expect(warn).toHaveBeenCalledWith(
+          '[pty] physical-spawn observer failed:',
+          expect.objectContaining({ message: 'journal unavailable' })
+        )
+      } finally {
+        warn.mockRestore()
+      }
+    })
+
     it('invokes buildSpawnEnv callback to customize environment', async () => {
       const buildSpawnEnv = vi.fn((_id: string, env: Record<string, string>) => {
         env.CUSTOM_VAR = 'custom-value'

@@ -116,7 +116,7 @@ export type PtySpawnOptions = {
 
 export type { PtyProcessInfo, PtySpawnResult }
 
-type PtyProbeOptions = { signal?: AbortSignal }
+export type PtyProbeOptions = { signal?: AbortSignal; deadlineMs?: number }
 
 export type IPtyProvider = {
   spawn(opts: PtySpawnOptions): Promise<PtySpawnResult>
@@ -192,7 +192,7 @@ export type IPtyProvider = {
   closeStartupQueryAuthority?: (id: string) => Promise<number> | number
   acknowledgeDataEvent(id: string, charCount: number): void
   hasChildProcesses(id: string): Promise<boolean>
-  getForegroundProcess(id: string): Promise<string | null>
+  getForegroundProcess(id: string, options?: PtyProbeOptions): Promise<string | null>
   /** Strong process evidence captured after the caller's command boundary. */
   confirmForegroundProcess?: (id: string) => Promise<string | null>
   serialize(ids: string[]): Promise<string>

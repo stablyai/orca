@@ -20,6 +20,12 @@ import type { OrcaRuntimeService } from '../../orca-runtime'
 import type { RunRow } from '../../orchestration/types'
 import { encodeFederatedControlMessage } from '../../orchestration/federation-control-message'
 import { ORCHESTRATION_FEDERATION_CONTROL_MAIL_PROTOCOL_VERSION } from '../../../../shared/protocol-version'
+import { ORCHESTRATION_DISPATCH_READY_TIMEOUT_MS } from '../../../../shared/orchestration-dispatch-readiness'
+import { isOrchestrationAgentPromptOutcomeUnknown } from '../../../../shared/orchestration-agent-prompt-outcome'
+import {
+  createOrchestrationAgentPromptGuard,
+  waitForOrchestrationAgentReady
+} from './orchestration-agent-prompt-readiness'
 
 const TASK_STATUSES: TaskStatus[] = [
   'pending',
@@ -1062,7 +1068,7 @@ export const ORCHESTRATION_METHODS: RpcMethod[] = [
   defineMethod({
     name: 'orchestration.dispatch',
     params: DispatchParams,
-    handler: async (params, { runtime }) => {
+    handler: async (params, { runtime, signal }) => {
       const db = runtime.getOrchestrationDb()
       const task = db.getTask(params.task)
       if (!task) {
@@ -1106,8 +1112,19 @@ export const ORCHESTRATION_METHODS: RpcMethod[] = [
       }
 
       // Why: injecting the preamble into a bare shell dumps it as shell commands (gibberish), so require a detected agent first.
+      let readinessDeadline: number | undefined
       if (params.inject) {
-        const hasAgent = await runtime.isTerminalRunningAgent(to)
+        readinessDeadline = Date.now() + ORCHESTRATION_DISPATCH_READY_TIMEOUT_MS
+        if (signal?.aborted) {
+          throw new Error('request_aborted')
+        }
+        const hasAgent = await runtime.isTerminalRunningAgent(to, {
+          signal,
+          deadlineMs: readinessDeadline
+        })
+        if (signal?.aborted) {
+          throw new Error('request_aborted')
+        }
         if (!hasAgent) {
           throw new Error(
             `Cannot dispatch --inject to terminal ${to}: no recognized agent detected. ` +
@@ -1115,6 +1132,10 @@ export const ORCHESTRATION_METHODS: RpcMethod[] = [
               'or dispatch without --inject and send the prompt manually.'
           )
         }
+        await waitForOrchestrationAgentReady(runtime, to, {
+          deadlineMs: readinessDeadline,
+          signal
+        })
       }
 
       const assigneePaneKey = runtime.getTerminalPaneKey(to) ?? undefined
@@ -1124,6 +1145,20 @@ export const ORCHESTRATION_METHODS: RpcMethod[] = [
           'stable_pane_required',
           `Terminal ${to} has no stable pane/process incarnation for lifecycle authority.`
         )
+      }
+      const promptGuard = params.inject
+        ? createOrchestrationAgentPromptGuard(
+            runtime,
+            to,
+            {
+              paneKey: assigneePaneKey as string,
+              processIncarnation: processIncarnation as string
+            },
+            { deadlineMs: readinessDeadline as number, signal }
+          )
+        : undefined
+      if (promptGuard) {
+        await promptGuard()
       }
 
       const ctx = db.createDispatchContext(params.task, to, assigneePaneKey)
@@ -1150,10 +1185,15 @@ export const ORCHESTRATION_METHODS: RpcMethod[] = [
       let injected = false
       if (params.inject) {
         try {
-          await runtime.sendTerminalAgentPrompt(to, preamble)
+          await runtime.sendTerminalAgentPrompt(to, preamble, { beforeWrite: promptGuard })
           injected = true
         } catch (err) {
-          db.failDispatch(ctx.id, err instanceof Error ? err.message : String(err))
+          const reason = err instanceof Error ? err.message : String(err)
+          if (isOrchestrationAgentPromptOutcomeUnknown(err)) {
+            db.markDispatchInputUnknown(ctx.id, reason)
+          } else {
+            db.failDispatchBeforeInput(ctx.id, reason)
+          }
           throw err
         }
       }

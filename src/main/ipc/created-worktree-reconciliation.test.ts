@@ -1,5 +1,32 @@
 import { describe, expect, it } from 'vitest'
-import { findCreatedWorktree } from './created-worktree-reconciliation'
+import {
+  findConfirmedCreatedWorktree,
+  findCreatedWorktree,
+  isAmbiguousSshWorktreeAddError
+} from './created-worktree-reconciliation'
+
+describe('isAmbiguousSshWorktreeAddError', () => {
+  it.each(['CONNECTION_LOST', 'DISPOSED'])('accepts an in-flight %s transport failure', (code) => {
+    expect(
+      isAmbiguousSshWorktreeAddError(Object.assign(new Error('transport lost'), { code }))
+    ).toBe(true)
+  })
+
+  it('accepts the SSH request timeout shape', () => {
+    expect(
+      isAmbiguousSshWorktreeAddError(new Error('Request "git.addWorktree" timed out after 30000ms'))
+    ).toBe(true)
+  })
+
+  it.each([
+    new Error('fatal: target already exists'),
+    new Error('Multiplexer disposed'),
+    Object.assign(new Error('git rejected the add'), { code: -32_000 }),
+    new Error('Request "git.listWorktrees" timed out after 30000ms')
+  ])('rejects deterministic or pre-acceptance failures', (error) => {
+    expect(isAmbiguousSshWorktreeAddError(error)).toBe(false)
+  })
+})
 
 describe('findCreatedWorktree', () => {
   it('prefers the direct path match', () => {
@@ -80,4 +107,54 @@ describe('findCreatedWorktree', () => {
       expect(findCreatedWorktree([created], requested, 'feature', os)).toBe(created)
     }
   )
+})
+
+describe('findConfirmedCreatedWorktree', () => {
+  it('requires both the requested path and exact branch', () => {
+    const created = {
+      path: '/home/user/worktrees/feature',
+      branch: 'refs/heads/user/feature'
+    }
+
+    expect(
+      findConfirmedCreatedWorktree(
+        [created],
+        '/home/user/worktrees/feature',
+        'user/feature',
+        'linux'
+      )
+    ).toBe(created)
+  })
+
+  it('rejects the same branch at an unrelated path', () => {
+    const unrelated = {
+      path: '/home/user/worktrees/other',
+      branch: 'refs/heads/user/feature'
+    }
+
+    expect(
+      findConfirmedCreatedWorktree(
+        [unrelated],
+        '/home/user/worktrees/feature',
+        'user/feature',
+        'linux'
+      )
+    ).toBeUndefined()
+  })
+
+  it('rejects an unrelated branch at the requested path', () => {
+    const unrelated = {
+      path: '/home/user/worktrees/feature',
+      branch: 'refs/heads/user/other'
+    }
+
+    expect(
+      findConfirmedCreatedWorktree(
+        [unrelated],
+        '/home/user/worktrees/feature',
+        'user/feature',
+        'linux'
+      )
+    ).toBeUndefined()
+  })
 })

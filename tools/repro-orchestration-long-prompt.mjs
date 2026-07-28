@@ -245,11 +245,31 @@ async function parentMain() {
       ],
       { cwd }
     )
+    const run = await callOrca(
+      cli,
+      [
+        'orchestration',
+        'run-create',
+        '--objective',
+        'Verify long orchestration prompt framing',
+        '--from',
+        coordinatorHandle
+      ],
+      { cwd }
+    )
+    const runId = readNested(run, ['run', 'id'])
+    if (!runId) {
+      throw new Error('Could not create orchestration Run')
+    }
     const task = await callOrca(
       cli,
       [
         'orchestration',
         'task-create',
+        '--run',
+        runId,
+        '--from',
+        coordinatorHandle,
         '--spec',
         spec,
         '--task-title',

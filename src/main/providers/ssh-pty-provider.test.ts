@@ -835,6 +835,29 @@ describe('SshPtyProvider', () => {
     expect(mux.request).toHaveBeenCalledWith('pty.getForegroundProcess', { id: 'pty-1' })
   })
 
+  it('bounds and cancels foreground-process probes', async () => {
+    mux.request.mockResolvedValue('codex')
+    const abort = new AbortController()
+    const now = vi.spyOn(Date, 'now').mockReturnValue(1_000)
+
+    try {
+      await expect(
+        provider.getForegroundProcess(scopedPty1, {
+          signal: abort.signal,
+          deadlineMs: 5_000
+        })
+      ).resolves.toBe('codex')
+    } finally {
+      now.mockRestore()
+    }
+
+    expect(mux.request).toHaveBeenCalledWith(
+      'pty.getForegroundProcess',
+      { id: 'pty-1' },
+      { signal: abort.signal, timeoutMs: 4_000 }
+    )
+  })
+
   it('preserves unavailable process inspection', async () => {
     const inspection = {
       foregroundProcess: null,

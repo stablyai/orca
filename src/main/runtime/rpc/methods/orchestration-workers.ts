@@ -1,16 +1,18 @@
 import { isTuiAgent } from '../../../../shared/tui-agent-config'
 import type { TuiAgent } from '../../../../shared/types'
-import { buildDispatchPreamble } from '../../orchestration/preamble'
 import { OrchestrationError } from '../../orchestration/orchestration-error'
 import { defineMethod, type RpcMethod } from '../core'
 import { startFederatedWorker } from './orchestration-federated-worker-start'
 import { assertOrchestrationWorktreeCreationSupported } from './orchestration-folder-worktree-placement'
 import { WorkerStartParams } from './orchestration-worker-start-schema'
 import {
+  appendReusedWorkerWorktreeEffects,
   createWorkerWorktree,
+  initialWorkerSetupReceipt,
   monitorWorkerSetup,
   type WorkerEffect,
-  type WorkerSetupReceipt
+  type WorkerSetupReceipt,
+  workerSetupSource
 } from './orchestration-worker-topology'
 import {
   persistGatedSetupSpawnFailure,
@@ -18,12 +20,26 @@ import {
   persistWorkerSetupWaitOutcome
 } from './orchestration-worker-setup-gate'
 import { failWorkerStartWithReceipt } from './orchestration-worker-start-receipt'
+import {
+  createOrchestrationAgentReadinessDeadline,
+  prepareOrchestrationAgentPrompt,
+  waitForOrchestrationProvisioning
+} from './orchestration-agent-prompt-readiness'
+import { deliverOrchestrationWorkerPrompt } from './orchestration-worker-prompt-delivery'
+import { createOrchestrationWorkerTerminalIdentity } from './orchestration-worker-terminal-identity'
+import { provisionWorkerTerminal } from './orchestration-worker-terminal-provisioning'
+import { finalizeWorkerDispatch } from './orchestration-worker-finalization'
 
 export const ORCHESTRATION_WORKER_START_METHODS: RpcMethod[] = [
   defineMethod({
     name: 'orchestration.workerStart',
     params: WorkerStartParams,
-    handler: async (params, { runtime, orchestrationMutation }) => {
+    handler: async (params, { runtime, orchestrationMutation, signal }) => {
+      const readiness = createOrchestrationAgentReadinessDeadline(
+        'orchestration.workerStart',
+        params,
+        signal
+      )
       const db = runtime.getOrchestrationDb()
       const coordinatorPane = runtime.getTerminalPaneKey(params.from)
       const run = coordinatorPane ? db.getCurrentRunForPane(coordinatorPane) : undefined
@@ -48,7 +64,9 @@ export const ORCHESTRATION_WORKER_START_METHODS: RpcMethod[] = [
           db,
           runId: run.id,
           task,
-          orchestrationMutation
+          orchestrationMutation,
+          signal: readiness.signal,
+          deadlineMs: readiness.deadlineMs
         })
       }
 
@@ -112,7 +130,12 @@ export const ORCHESTRATION_WORKER_START_METHODS: RpcMethod[] = [
             `Terminal ${params.terminal} does not belong to worktree ${resolvedWorktree?.id}.`
           )
         }
-        if (!(await runtime.isTerminalRunningAgent(params.terminal))) {
+        if (
+          !(await runtime.isTerminalRunningAgent(params.terminal, {
+            signal: readiness.signal,
+            deadlineMs: readiness.deadlineMs
+          }))
+        ) {
           throw new OrchestrationError(
             'agent_unconfigured',
             `Terminal ${params.terminal} is not running a recognized agent.`
@@ -130,11 +153,7 @@ export const ORCHESTRATION_WORKER_START_METHODS: RpcMethod[] = [
         agent: agent ?? null,
         timeoutMs: params.timeoutMs ?? 60_000,
         setup: createsWorktree ? (params.setup ?? 'run') : 'not_applicable',
-        setupSource: createsWorktree
-          ? params.setup
-            ? 'explicit_request'
-            : 'orchestration_default'
-          : 'existing_worktree'
+        setupSource: workerSetupSource(createsWorktree, Boolean(params.setup))
       }
       const started = db.createStartingWorkerDispatch({
         taskId: task.id,
@@ -144,57 +163,45 @@ export const ORCHESTRATION_WORKER_START_METHODS: RpcMethod[] = [
         mutationReceipt: orchestrationMutation
       })
       const effects: WorkerEffect[] = []
-      if (resolvedWorktree) {
-        effects.push(
-          { kind: 'worktree', action: 'reused', id: resolvedWorktree.id },
-          { kind: 'setup', action: 'not_applicable', state: 'not_applicable' }
-        )
-      }
+      const terminalIdentity = createOrchestrationWorkerTerminalIdentity(started.dispatch.id)
+      appendReusedWorkerWorktreeEffects(effects, resolvedWorktree?.id)
       let terminalHandle = params.terminal
       let failedStage = 'terminal_create'
-      let setupReceipt: WorkerSetupReceipt = {
-        requested: 'not_applicable',
-        effective: 'not_applicable',
-        source: 'existing_worktree',
-        hookFound: false,
-        startupPolicy: 'start-immediately',
-        state: 'not_applicable'
-      }
+      let setupReceipt: WorkerSetupReceipt = initialWorkerSetupReceipt(false)
       try {
         if (createsWorktree) {
           failedStage = 'worktree_create'
-          const created = await createWorkerWorktree({
-            runtime,
-            db,
-            dispatchId: started.dispatch.id,
-            requestedWorktree,
-            coordinatorWorktree,
-            params,
-            agent: agent as TuiAgent,
-            effects
-          })
+          const created = await waitForOrchestrationProvisioning(
+            createWorkerWorktree({
+              runtime,
+              db,
+              dispatchId: started.dispatch.id,
+              requestedWorktree,
+              coordinatorWorktree,
+              params,
+              agent: agent as TuiAgent,
+              effects,
+              signal: readiness.signal,
+              terminalIdentity
+            }),
+            readiness.signal
+          )
           resolvedWorktree = created.worktree
           terminalHandle = created.terminalHandle
           setupReceipt = created.setupReceipt
         } else if (!terminalHandle) {
-          db.recordWorkerStage({
+          const terminal = await provisionWorkerTerminal({
+            runtime,
+            db,
             dispatchId: started.dispatch.id,
-            stage: 'terminal_creating',
             worktreeId: resolvedWorktree!.id,
+            taskId: task.id,
+            agent: agent as TuiAgent,
+            signal: readiness.signal,
+            terminalIdentity,
             effects
           })
-          const terminal = await runtime.createTerminal(`id:${resolvedWorktree!.id}`, {
-            command: agent,
-            title: `worker-${task.id}`,
-            presentation: 'background'
-          })
           terminalHandle = terminal.handle
-          effects.push({
-            kind: 'terminal',
-            role: 'agent',
-            action: 'created',
-            id: terminal.handle
-          })
         } else {
           effects.push({
             kind: 'terminal',
@@ -221,55 +228,40 @@ export const ORCHESTRATION_WORKER_START_METHODS: RpcMethod[] = [
         persistWorkerReadinessStage(setupStage)
 
         failedStage = 'agent_readiness'
-        const wait = await runtime.waitForTerminal(terminalHandle, {
-          condition: 'tui-idle',
-          timeoutMs: params.timeoutMs ?? 60_000
-        })
-        persistWorkerSetupWaitOutcome({ ...setupStage, wait })
-        if (!wait.satisfied) {
-          if (setupReceipt.state === 'failed') {
-            failedStage = 'setup_wait'
+        const promptTarget = await prepareOrchestrationAgentPrompt(runtime, terminalHandle, {
+          deadlineMs: readiness.deadlineMs,
+          signal: readiness.signal,
+          onWaitResult: (wait) => {
+            persistWorkerSetupWaitOutcome({ ...setupStage, wait })
+            if (!wait.satisfied && setupReceipt.state === 'failed') {
+              failedStage = 'setup_wait'
+            }
           }
-          throw new Error(
-            wait.blockedReason
-              ? `Agent startup blocked: ${wait.blockedReason}`
-              : `Agent did not become ready (${wait.status}).`
-          )
-        }
-        const paneKey = runtime.getTerminalPaneKey(terminalHandle)
-        const processIncarnation = runtime.getTerminalProcessIncarnation(terminalHandle)
-        if (!paneKey || !processIncarnation) {
-          throw new Error('stable_pane_required')
-        }
+        })
         const capability = db.prepareStartingWorkerAuthority({
           dispatchId: started.dispatch.id,
           handle: terminalHandle,
-          paneKey,
-          processIncarnation,
+          paneKey: promptTarget.paneKey,
+          processIncarnation: promptTarget.processIncarnation,
           worktreeId: resolvedWorktree.id,
           effects,
           setupState: setupReceipt.state
         })
 
         failedStage = 'dispatch_input'
-        const preamble = buildDispatchPreamble({
+        await deliverOrchestrationWorkerPrompt({
+          runtime,
+          terminalHandle,
           taskId: task.id,
           dispatchId: started.dispatch.id,
           taskSpec: task.spec,
           coordinatorHandle: params.from,
-          workerHandle: terminalHandle,
           dispatchCapability: capability,
           devMode: params.devMode,
-          cliCommand: runtime.getTerminalOrchestrationCliCommand(terminalHandle)
+          beforeWrite: promptTarget.beforeWrite,
+          effects
         })
-        await runtime.sendTerminalAgentPrompt(terminalHandle, preamble)
-        effects.push({
-          kind: 'dispatch_input',
-          role: 'agent',
-          id: terminalHandle,
-          state: 'accepted'
-        })
-        const worker = db.markWorkerDispatchReady(started.dispatch.id, effects)
+        const worker = finalizeWorkerDispatch(db, started.dispatch.id, effects)
         monitorWorkerSetup({
           runtime,
           db,
@@ -285,7 +277,7 @@ export const ORCHESTRATION_WORKER_START_METHODS: RpcMethod[] = [
           state: worker.state,
           stage: worker.stage,
           setup: setupReceipt,
-          timeoutMs: params.timeoutMs ?? 60_000,
+          timeoutMs: readiness.timeoutMs,
           effects,
           residualResources: []
         }

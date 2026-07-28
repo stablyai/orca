@@ -17,15 +17,18 @@ export class RuntimeRpcCallQueueOverloadError extends Error {
 
 type QueuedRuntimeCall<T> = {
   background: boolean
+  cancelled: boolean
   retainedBytes: number
   run: () => Promise<T>
   resolve: (value: T) => void
   reject: (error: unknown) => void
+  removeAbortListener?: () => void
 }
 
 type RuntimeCallQueue = {
   active: number
   backgroundActive: number
+  queued: number
   foreground: QueuedRuntimeCall<unknown>[]
   foregroundHead: number
   background: QueuedRuntimeCall<unknown>[]
@@ -64,8 +67,12 @@ export class RuntimeRpcCallQueuePool {
     selector: string,
     method: string,
     run: () => Promise<T>,
-    retainedBytes = 0
+    retainedBytes = 0,
+    signal?: AbortSignal
   ): Promise<T> {
+    if (signal?.aborted) {
+      return Promise.reject(new Error('request_aborted'))
+    }
     if (this.queuedCallCount >= this.maxQueuedTotal) {
       return Promise.reject(new RuntimeRpcCallQueueOverloadError('global'))
     }
@@ -85,13 +92,37 @@ export class RuntimeRpcCallQueuePool {
     return new Promise<T>((resolve, reject) => {
       const call: QueuedRuntimeCall<T> = {
         background: isBackgroundRuntimeMethod(method),
+        cancelled: false,
         retainedBytes,
         run,
         resolve,
         reject
       }
       const targetQueue = call.background ? queue.background : queue.foreground
+      if (signal) {
+        const onAbort = (): void => {
+          if (call.cancelled) {
+            return
+          }
+          call.cancelled = true
+          const queuedIndex = targetQueue.indexOf(call as QueuedRuntimeCall<unknown>)
+          if (queuedIndex >= 0) {
+            targetQueue.splice(queuedIndex, 1)
+          }
+          queue.queued = Math.max(0, queue.queued - 1)
+          this.queuedCallCount = Math.max(0, this.queuedCallCount - 1)
+          this.retainedCallBytes = Math.max(0, this.retainedCallBytes - call.retainedBytes)
+          call.reject(new Error('request_aborted'))
+          this.pump(selector, queue)
+          if (queue.active === 0 && this.isEmpty(queue)) {
+            this.queues.delete(selector)
+          }
+        }
+        signal.addEventListener('abort', onAbort, { once: true })
+        call.removeAbortListener = () => signal.removeEventListener('abort', onAbort)
+      }
       targetQueue.push(call as QueuedRuntimeCall<unknown>)
+      queue.queued += 1
       this.queuedCallCount += 1
       this.retainedCallBytes += retainedBytes
       this.pump(selector, queue)
@@ -104,6 +135,7 @@ export class RuntimeRpcCallQueuePool {
       queue = {
         active: 0,
         backgroundActive: 0,
+        queued: 0,
         foreground: [],
         foregroundHead: 0,
         background: [],
@@ -124,6 +156,7 @@ export class RuntimeRpcCallQueuePool {
         break
       }
 
+      call.removeAbortListener?.()
       queue.active += 1
       if (call.background) {
         queue.backgroundActive += 1
@@ -154,25 +187,31 @@ export class RuntimeRpcCallQueuePool {
   }
 
   private takeForeground(queue: RuntimeCallQueue): QueuedRuntimeCall<unknown> | undefined {
-    if (queue.foregroundHead >= queue.foreground.length) {
-      return undefined
+    while (queue.foregroundHead < queue.foreground.length) {
+      const call = queue.foreground[queue.foregroundHead]
+      queue.foregroundHead += 1
+      this.compactForeground(queue)
+      if (!call.cancelled) {
+        queue.queued = Math.max(0, queue.queued - 1)
+        this.queuedCallCount = Math.max(0, this.queuedCallCount - 1)
+        return call
+      }
     }
-    const call = queue.foreground[queue.foregroundHead]
-    queue.foregroundHead += 1
-    this.queuedCallCount = Math.max(0, this.queuedCallCount - 1)
-    this.compactForeground(queue)
-    return call
+    return undefined
   }
 
   private takeBackground(queue: RuntimeCallQueue): QueuedRuntimeCall<unknown> | undefined {
-    if (queue.backgroundHead >= queue.background.length) {
-      return undefined
+    while (queue.backgroundHead < queue.background.length) {
+      const call = queue.background[queue.backgroundHead]
+      queue.backgroundHead += 1
+      this.compactBackground(queue)
+      if (!call.cancelled) {
+        queue.queued = Math.max(0, queue.queued - 1)
+        this.queuedCallCount = Math.max(0, this.queuedCallCount - 1)
+        return call
+      }
     }
-    const call = queue.background[queue.backgroundHead]
-    queue.backgroundHead += 1
-    this.queuedCallCount = Math.max(0, this.queuedCallCount - 1)
-    this.compactBackground(queue)
-    return call
+    return undefined
   }
 
   private compactForeground(queue: RuntimeCallQueue): void {
@@ -194,18 +233,10 @@ export class RuntimeRpcCallQueuePool {
   }
 
   private isEmpty(queue: RuntimeCallQueue): boolean {
-    return (
-      queue.foregroundHead >= queue.foreground.length &&
-      queue.backgroundHead >= queue.background.length
-    )
+    return this.queuedCount(queue) === 0
   }
 
   private queuedCount(queue: RuntimeCallQueue): number {
-    return (
-      queue.foreground.length -
-      queue.foregroundHead +
-      queue.background.length -
-      queue.backgroundHead
-    )
+    return queue.queued
   }
 }

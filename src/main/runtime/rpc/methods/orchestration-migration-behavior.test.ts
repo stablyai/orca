@@ -178,4 +178,101 @@ describe('orchestration migration behavior', () => {
     expect(db.getTask(task.id)?.status).toBe('ready')
     expect(db.getDispatchContext(task.id)).toBeUndefined()
   })
+
+  it('preserves authenticated remote residuals when connected-server start is unknown', async () => {
+    const { db, runtime } = createRuntime()
+    const run = db.createRun({
+      objective: 'unknown remote worker',
+      coordinatorHandle: 'term_coord',
+      coordinatorPaneKey: 'tab_coord:leaf_coord'
+    })
+    const task = db.createTask({ spec: 'remote work', runId: run.id })
+    vi.spyOn(runtime, 'resolveOrchestrationWorkerServer').mockReturnValue({
+      environmentId: 'environment_windows',
+      name: 'windows',
+      peerFingerprint: 'windows_peer'
+    })
+    vi.spyOn(runtime, 'callOrchestrationWorkerServer')
+      .mockResolvedValueOnce({
+        capabilities: [
+          ORCHESTRATION_CONTRACT_RUNTIME_CAPABILITY,
+          ORCHESTRATION_FEDERATION_RUNTIME_CAPABILITY
+        ]
+      })
+      .mockImplementationOnce(async (_selector, _method, params) => {
+        const dispatchId = (params as { dispatchId: string }).dispatchId
+        return {
+          dispatchId,
+          state: 'outcome_unknown',
+          runtimeEpoch: 'runtime_windows',
+          worktreeId: 'repo::worker',
+          terminalHandle: 'term_preallocated',
+          failedStage: 'terminal_create',
+          lastError: 'terminal create reply was lost',
+          setup: { state: 'not_applicable' },
+          effects: [
+            {
+              kind: 'terminal',
+              role: 'agent',
+              action: 'created_pending_receipt',
+              id: 'term_preallocated'
+            }
+          ],
+          residualResources: [
+            {
+              kind: 'terminal',
+              role: 'agent',
+              action: 'created_pending_receipt',
+              id: 'term_preallocated'
+            }
+          ]
+        }
+      })
+
+    const result = (await startFederatedWorker({
+      params: {
+        task: task.id,
+        from: 'term_coord',
+        on: 'windows',
+        worktree: 'id:repo::worker',
+        agent: 'codex'
+      },
+      runtime,
+      db,
+      runId: run.id,
+      task,
+      orchestrationMutation: {
+        callerFingerprint: 'caller',
+        requestId: 'remote_unknown',
+        method: 'orchestration.workerStart',
+        payloadHash: 'payload'
+      }
+    })) as {
+      dispatchId: string
+      state: string
+      effects: unknown[]
+      residualResources: unknown[]
+    }
+
+    expect(result).toMatchObject({
+      state: 'outcome_unknown',
+      effects: expect.arrayContaining([expect.objectContaining({ id: 'term_preallocated' })]),
+      residualResources: expect.arrayContaining([
+        expect.objectContaining({ id: 'term_preallocated' })
+      ])
+    })
+    expect(db.getWorkerDispatch(result.dispatchId)).toMatchObject({
+      state: 'start_unknown',
+      worktree_id: 'repo::worker',
+      agent_terminal_handle: 'term_preallocated'
+    })
+    expect(JSON.parse(db.getWorkerDispatch(result.dispatchId)!.residual_resources)).toEqual(
+      expect.arrayContaining([expect.objectContaining({ id: 'term_preallocated' })])
+    )
+    expect(db.getFederatedDispatch(result.dispatchId)).toMatchObject({
+      remote_runtime_epoch: 'runtime_windows',
+      remote_worktree_id: 'repo::worker',
+      remote_terminal_handle: 'term_preallocated'
+    })
+  })
 })

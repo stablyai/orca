@@ -4623,7 +4623,7 @@
     },
     {
       "id": "terminal-input.agent-prompt-injection",
-      "title": "Orchestration agent prompts arrive as bracketed paste before submit",
+      "title": "Orchestration agent prompts wait for readiness and arrive as bracketed paste",
       "maturity": "experimental",
       "protection": "partial",
       "owner": "terminal-input",
@@ -4631,6 +4631,7 @@
       "surfaces": [
         "terminal input",
         "agent prompt injection",
+        "agent readiness",
         "orchestration dispatch",
         "PTY writes",
         "bracketed paste"
@@ -4654,18 +4655,32 @@
       ],
       "coverageNotes": "Local macOS evidence covers the runtime PTY write contract and a live dev-runtime CLI repro. SSH, daemon, remote-runtime, Linux, and Windows remain provider/platform gaps; the product path stays provider-owned and does not add local filesystem or process assumptions.",
       "motivatingLinks": [
-        "https://github.com/stablyai/orca/issues/7226"
+        "https://github.com/stablyai/orca/issues/7226",
+        "https://github.com/stablyai/orca/issues/10728"
       ],
-      "invariant": "Injected orchestration task prompts for recognized agent CLIs must send the prompt body inside one bracketed-paste frame, sanitize embedded ESC bytes, preserve chunk boundaries without losing the frame, and send Enter only after the paste frame completes.",
-      "oracle": "Runtime tests assert the exact PTY write sequence and failure cleanup; orchestration tests assert dispatch/coordinator use the agent prompt path; the live CLI harness dispatches a 32KB task to a fake Codex-like TUI and requires marker present, bracketed paste present, zero unframed line breaks, and submit observed.",
+      "invariant": "Injected orchestration task prompts for recognized agent CLIs must require explicit ready evidence, create no authority or input while startup is blocked, stale, timed out, or disconnected, and send the prompt body inside one sanitized bracketed-paste frame before Enter.",
+      "oracle": "Runtime tests reject generic quiet-process readiness under the strict orchestration wait; orchestration tests assert no authority or input on blocked startup, deadline, disconnect, or target-identity change and recheck readiness at the final write boundary; PTY tests assert the exact framed write sequence and failure cleanup; the live CLI harness requires marker present, bracketed paste present, zero unframed line breaks, and submit observed.",
       "commands": [
         "pnpm exec vitest run --config config/vitest.config.ts src/shared/agent-prompt-injection.test.ts src/main/runtime/orca-runtime.test.ts src/main/runtime/rpc/methods/orchestration.test.ts src/main/runtime/orchestration/coordinator.test.ts",
+        "pnpm exec vitest run --config config/vitest.config.ts src/shared/agent-prompt-injection.test.ts src/shared/remote-runtime-client.test.ts src/shared/runtime-rpc-call-queue.test.ts src/cli/runtime/client-timeout-policy.test.ts src/main/providers/local-pty-provider.test.ts src/main/providers/ssh-pty-provider-agent-session-create-operation.test.ts src/main/ipc/created-worktree-reconciliation.test.ts src/main/ipc/worktrees.test.ts src/main/runtime/orca-runtime.test.ts src/main/runtime/rpc/methods/orchestration.test.ts src/main/runtime/rpc/methods/orchestration-federation.test.ts src/main/runtime/rpc/methods/orchestration-federation-readiness.test.ts src/main/runtime/rpc/methods/orchestration-migration-behavior.test.ts src/main/runtime/rpc/methods/orchestration-workers-new-worktree.test.ts src/main/runtime/runtime-rpc.test.ts src/main/runtime/orchestration/coordinator.test.ts",
         "node tools/repro-orchestration-long-prompt.mjs --cli out/bin/orca-dev --mode codex-like --size-kb 32 --timeout-ms 20000"
       ],
       "testFiles": [
         "src/shared/agent-prompt-injection.test.ts",
+        "src/shared/remote-runtime-client.test.ts",
+        "src/shared/runtime-rpc-call-queue.test.ts",
+        "src/cli/runtime/client-timeout-policy.test.ts",
+        "src/main/providers/local-pty-provider.test.ts",
+        "src/main/providers/ssh-pty-provider-agent-session-create-operation.test.ts",
+        "src/main/ipc/created-worktree-reconciliation.test.ts",
+        "src/main/ipc/worktrees.test.ts",
         "src/main/runtime/orca-runtime.test.ts",
         "src/main/runtime/rpc/methods/orchestration.test.ts",
+        "src/main/runtime/rpc/methods/orchestration-federation.test.ts",
+        "src/main/runtime/rpc/methods/orchestration-federation-readiness.test.ts",
+        "src/main/runtime/rpc/methods/orchestration-migration-behavior.test.ts",
+        "src/main/runtime/rpc/methods/orchestration-workers-new-worktree.test.ts",
+        "src/main/runtime/runtime-rpc.test.ts",
         "src/main/runtime/orchestration/coordinator.test.ts",
         "tools/repro-orchestration-long-prompt.mjs"
       ],
@@ -4680,11 +4695,62 @@
           ]
         },
         {
+          "file": "src/shared/remote-runtime-client.test.ts",
+          "assertions": [
+            "caller cancellation closes an in-flight connected-server request"
+          ]
+        },
+        {
+          "file": "src/shared/runtime-rpc-call-queue.test.ts",
+          "assertions": [
+            "caller cancellation removes queued connected-server work without retaining capacity"
+          ]
+        },
+        {
+          "file": "src/cli/runtime/client-timeout-policy.test.ts",
+          "assertions": [
+            "direct, local-worker, and federated readiness waits receive bounded client grace"
+          ]
+        },
+        {
+          "file": "src/main/providers/local-pty-provider.test.ts",
+          "assertions": [
+            "physical-spawn observer failure cannot bypass PTY registration"
+          ]
+        },
+        {
           "file": "src/main/runtime/orca-runtime.test.ts",
           "assertions": [
             "runtime writes bracketed paste before a delayed submit",
             "large prompt frames are chunked and reconstructed before submit",
-            "partial prompt write failure closes the paste frame and does not submit"
+            "partial prompt write failure closes the paste frame and does not submit",
+            "strict orchestration waits do not accept generic quiet-process fallback",
+            "new-worktree startup publication failure after physical spawn is operation unknown",
+            "a worktree committed during request cancellation is reconciled by exact path and branch",
+            "local and WSL cancellation recovery rejects wrong-path or wrong-branch inventory",
+            "local and WSL reconciliation requires the runner's AbortError rather than signal state alone",
+            "physical local worktree creation reports its exact commit before later listing can fail"
+          ]
+        },
+        {
+          "file": "src/main/providers/ssh-pty-provider-agent-session-create-operation.test.ts",
+          "assertions": [
+            "operation-owned SSH terminal creation reports lost acceptance as unknown and replayable"
+          ]
+        },
+        {
+          "file": "src/main/ipc/created-worktree-reconciliation.test.ts",
+          "assertions": [
+            "SSH add recovery accepts only ambiguous in-flight transport failures",
+            "confirmed recovery requires equivalent requested path and exact branch"
+          ]
+        },
+        {
+          "file": "src/main/ipc/worktrees.test.ts",
+          "assertions": [
+            "SSH worktree creation reports its exact physical commit before later listing can fail",
+            "lost SSH add replies recover only an exact path-and-branch match",
+            "deterministic add errors never adopt a listed worktree"
           ]
         },
         {
@@ -4692,7 +4758,51 @@
           "assertions": [
             "orchestration.dispatch uses the agent prompt path for injected preambles",
             "raw terminal.send is not called for injected task prompts",
-            "failed prompt injection rolls back the active dispatch"
+            "failed prompt injection rolls back the active dispatch",
+            "blocked startup, disconnect, deadline, and identity changes create no dispatch authority or input",
+            "prompt submission rechecks strict readiness at the final write boundary",
+            "cancelled current-worktree terminal creation returns promptly and records the late receipt",
+            "post-spawn terminal publication and receipt persistence failures remain blocked as outcome unknown"
+          ]
+        },
+        {
+          "file": "src/main/runtime/rpc/methods/orchestration-federation-readiness.test.ts",
+          "assertions": [
+            "unknown remote prompt delivery leaves the attachment blocked for explicit recovery",
+            "late federated provisioning receipts remain attached after the caller receives unknown",
+            "post-input finalization failure remains blocked as outcome unknown",
+            "federated terminal cancellation returns promptly and preserves late resource identity",
+            "federated post-spawn publication failure is operation unknown",
+            "federated SSH lost-reply outcomes retain deterministic terminal identity",
+            "federated post-create terminal enumeration failure remains outcome unknown"
+          ]
+        },
+        {
+          "file": "src/main/runtime/rpc/methods/orchestration-federation.test.ts",
+          "assertions": [
+            "connected-server workers accept input only after remote setup and readiness settle"
+          ]
+        },
+        {
+          "file": "src/main/runtime/rpc/methods/orchestration-migration-behavior.test.ts",
+          "assertions": [
+            "a connected-server unknown receipt preserves authenticated remote effects and residual resources at Run home"
+          ]
+        },
+        {
+          "file": "src/main/runtime/rpc/methods/orchestration-workers-new-worktree.test.ts",
+          "assertions": [
+            "cancelled provisioning releases its long-poll as outcome unknown without task input",
+            "new-worktree agent terminals receive deterministic SSH create identities",
+            "new-worktree SSH lost-reply outcomes retain deterministic terminal identity",
+            "new-worktree post-spawn publication and enumeration failures preserve the terminal fence"
+          ]
+        },
+        {
+          "file": "src/main/runtime/runtime-rpc.test.ts",
+          "assertions": [
+            "injected dispatches and worker starts use long-poll admission and keepalive behavior",
+            "client disconnect cancels blocked readiness without leaking the request slot"
           ]
         },
         {
@@ -4729,6 +4839,15 @@
           "result": "passed",
           "durationSeconds": 2.2,
           "summary": "Live dev-runtime repro passed: expectedSpecBytes=32830, hasSubmit=true, rawContainsMarker=true, hasBracketedPasteFrame=true, unframedLineBreaks=0, contractOk=true."
+        },
+        {
+          "date": "2026-07-27",
+          "runner": "local",
+          "platform": "macos",
+          "command": "pnpm exec vitest run --config config/vitest.config.ts src/shared/agent-prompt-injection.test.ts src/shared/remote-runtime-client.test.ts src/shared/runtime-rpc-call-queue.test.ts src/cli/runtime/client-timeout-policy.test.ts src/main/providers/local-pty-provider.test.ts src/main/providers/ssh-pty-provider-agent-session-create-operation.test.ts src/main/ipc/created-worktree-reconciliation.test.ts src/main/ipc/worktrees.test.ts src/main/runtime/orca-runtime.test.ts src/main/runtime/rpc/methods/orchestration.test.ts src/main/runtime/rpc/methods/orchestration-federation.test.ts src/main/runtime/rpc/methods/orchestration-federation-readiness.test.ts src/main/runtime/rpc/methods/orchestration-migration-behavior.test.ts src/main/runtime/rpc/methods/orchestration-workers-new-worktree.test.ts src/main/runtime/runtime-rpc.test.ts src/main/runtime/orchestration/coordinator.test.ts",
+          "result": "passed",
+          "durationSeconds": 11.62,
+          "summary": "16 test files passed, 1573 tests passed; covers strict readiness, partial-write and post-spawn unknown outcomes, PTY observer isolation, queue cancellation churn, physical local and SSH worktree commit fencing, AbortError-only local/WSL cancellation reconciliation with exact path-and-branch proof, transport-only SSH reconciliation with exact path-and-branch proof, deterministic SSH lost-reply residuals, authenticated connected-server unknown receipts, late terminal receipts, and long-poll admission."
         }
       ],
       "runtimeBudget": {
@@ -4745,7 +4864,7 @@
       },
       "performanceBudget": {
         "required": true,
-        "evidence": "Agent prompt dispatch remains O(prompt bytes), uses the existing 16KB terminal input chunking and one existing 500ms submit delay, and adds no polling, provider listing, subprocess churn, hidden-pane wakeups, or renderer work."
+        "evidence": "Agent prompt dispatch remains O(prompt bytes), uses existing 16KB input chunking, and admits at most 16 injected-dispatch waits. Readiness uses one bounded deadline, disables generic foreground quiescence, removes cancelled connected-server calls from admission queues, propagates cancellation through provisioning and SSH probes, and adds no provider listing, hidden-pane wakeup, or renderer work."
       },
       "promotionCriteria": [
         "Run the live harness in soak with a self-starting dev runtime or provider-contract fixture.",
@@ -4754,7 +4873,8 @@
       ],
       "knownGaps": [
         "Live harness command currently expects an already-running dev runtime and generated out/bin/orca-dev wrapper.",
-        "No Windows ConPTY, Linux PTY, SSH, daemon, or remote-runtime live evidence yet.",
+        "No physical Windows ConPTY/WSL, Linux PTY, Docker SSH, headed paired-server, or headless remote-runtime readiness artifact is attached yet.",
+        "Per-provider explicit-ready detection is deterministic but has not been exercised live for every installed agent CLI.",
         "Push-on-idle orchestration message banners remain outside this dispatch-prompt gate."
       ],
       "demotionRule": "Demote or quarantine if the live harness flakes without a product bug or harness bug filed to the terminal-input owner."

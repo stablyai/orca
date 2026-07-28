@@ -226,7 +226,8 @@ describe('orchestration federation', () => {
     expect(workerDb.listTasks()).toHaveLength(0)
     expect(workerRuntime.sendTerminalAgentPrompt).toHaveBeenCalledWith(
       'term_windows_worker',
-      expect.stringContaining(`Your task ID is: ${task.id}`)
+      expect.stringContaining(`Your task ID is: ${task.id}`),
+      expect.objectContaining({ beforeWrite: expect.any(Function) })
     )
   })
 

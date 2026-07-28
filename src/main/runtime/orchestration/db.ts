@@ -2179,17 +2179,24 @@ export class OrchestrationDb {
   updateFederatedDispatchResources(params: {
     dispatchId: string
     remoteRuntimeEpoch: string
-    worktreeId: string
-    terminalHandle: string
+    worktreeId?: string
+    terminalHandle?: string
   }): FederatedDispatchRow {
     this.db
       .prepare(
         `UPDATE federated_dispatches
-         SET remote_runtime_epoch = ?, remote_worktree_id = ?, remote_terminal_handle = ?,
+         SET remote_runtime_epoch = ?,
+             remote_worktree_id = COALESCE(?, remote_worktree_id),
+             remote_terminal_handle = COALESCE(?, remote_terminal_handle),
              updated_at = datetime('now')
          WHERE dispatch_id = ?`
       )
-      .run(params.remoteRuntimeEpoch, params.worktreeId, params.terminalHandle, params.dispatchId)
+      .run(
+        params.remoteRuntimeEpoch,
+        params.worktreeId ?? null,
+        params.terminalHandle ?? null,
+        params.dispatchId
+      )
     const row = this.getFederatedDispatch(params.dispatchId)
     if (!row) {
       throw new OrchestrationError(
@@ -3563,6 +3570,49 @@ export class OrchestrationDb {
     const taskStatus: TaskStatus = newStatus === 'circuit_broken' ? 'failed' : 'ready'
     this.db.prepare('UPDATE tasks SET status = ? WHERE id = ?').run(taskStatus, ctx.task_id)
 
+    return this.db.prepare('SELECT * FROM dispatch_contexts WHERE id = ?').get(ctxId) as
+      | DispatchContextRow
+      | undefined
+  }
+
+  failDispatchBeforeInput(ctxId: string, error: string): DispatchContextRow | undefined {
+    const ctx = this.db.prepare('SELECT * FROM dispatch_contexts WHERE id = ?').get(ctxId) as
+      | DispatchContextRow
+      | undefined
+    if (!ctx) {
+      return undefined
+    }
+    this.db
+      .prepare(
+        `UPDATE dispatch_contexts
+         SET status = 'failed', last_failure = ?,
+             capability_revoked_at = COALESCE(capability_revoked_at, datetime('now'))
+         WHERE id = ?`
+      )
+      .run(error, ctxId)
+    this.db.prepare("UPDATE tasks SET status = 'ready' WHERE id = ?").run(ctx.task_id)
+    return this.db.prepare('SELECT * FROM dispatch_contexts WHERE id = ?').get(ctxId) as
+      | DispatchContextRow
+      | undefined
+  }
+
+  markDispatchInputUnknown(ctxId: string, error: string): DispatchContextRow | undefined {
+    const ctx = this.db.prepare('SELECT * FROM dispatch_contexts WHERE id = ?').get(ctxId) as
+      | DispatchContextRow
+      | undefined
+    if (!ctx) {
+      return undefined
+    }
+    this.db
+      .prepare(
+        `UPDATE dispatch_contexts
+         SET status = 'failed', last_failure = ?, completed_at = datetime('now'),
+             capability_revoked_at = COALESCE(capability_revoked_at, datetime('now'))
+         WHERE id = ?`
+      )
+      .run(error, ctxId)
+    this.db.prepare("UPDATE tasks SET status = 'blocked' WHERE id = ?").run(ctx.task_id)
+    this.closeQuestionsForDispatch(ctxId)
     return this.db.prepare('SELECT * FROM dispatch_contexts WHERE id = ?').get(ctxId) as
       | DispatchContextRow
       | undefined

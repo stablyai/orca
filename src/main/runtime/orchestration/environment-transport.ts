@@ -17,7 +17,8 @@ export type OrchestrationEnvironmentTransport = {
     method: string,
     params: unknown,
     timeoutMs?: number,
-    envelope?: RuntimeOrchestrationEnvelope
+    envelope?: RuntimeOrchestrationEnvelope,
+    signal?: AbortSignal
   ): Promise<RuntimeRpcResponse<unknown>>
 }
 

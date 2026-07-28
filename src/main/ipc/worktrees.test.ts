@@ -253,6 +253,7 @@ vi.mock('./pty', () => ({
 
 import {
   __resetSshWorktreeCreateFetchCacheForTests,
+  createRemoteWorktree,
   notifyWorktreesChanged
 } from './worktree-remote'
 import { invalidateAuthorizedRootsCache, resolveRegisteredWorktreePath } from './filesystem-auth'
@@ -3856,6 +3857,231 @@ describe('registerWorktreeHandlers', () => {
       checkOnly: true
     })
     expect(result.localBaseRefUpdateSuggestion).toBeUndefined()
+  })
+
+  it('reports SSH worktree commit before post-create listing fails', async () => {
+    const repo = {
+      id: 'repo-ssh',
+      path: '/remote/repo',
+      displayName: 'ssh',
+      badgeColor: '#000',
+      addedAt: 0,
+      connectionId: 'conn-1',
+      worktreeBaseRef: 'origin/main'
+    }
+    const provider = {
+      exec: vi.fn().mockImplementation(async (args: string[]) => {
+        if (args[0] === 'remote') {
+          return { stdout: 'origin\n', stderr: '' }
+        }
+        return { stdout: '', stderr: '' }
+      }),
+      fetchRemoteTrackingRef: vi.fn().mockResolvedValue(undefined),
+      addWorktree: vi.fn().mockResolvedValue(undefined),
+      listWorktrees: vi.fn().mockRejectedValue(new Error('post-create listing failed'))
+    }
+    const mux = {
+      request: vi.fn().mockResolvedValue(undefined),
+      notify: vi.fn()
+    }
+    const committed = vi.fn()
+    getSshGitProviderMock.mockReturnValue(provider)
+    getActiveMultiplexerMock.mockReturnValue(mux)
+
+    await expect(
+      createRemoteWorktree(
+        { repoId: repo.id, name: 'commit-observer' },
+        repo,
+        store as never,
+        mainWindow as never,
+        committed
+      )
+    ).rejects.toThrow('post-create listing failed')
+
+    expect(committed).toHaveBeenCalledWith({
+      id: 'repo-ssh::/remote/repo-commit-observer',
+      path: '/remote/repo-commit-observer',
+      branch: 'commit-observer'
+    })
+  })
+
+  it('reconciles an SSH worktree when the add response is lost after commit', async () => {
+    const repo = {
+      id: 'repo-ssh',
+      path: '/remote/repo',
+      displayName: 'ssh',
+      badgeColor: '#000',
+      addedAt: 0,
+      connectionId: 'conn-1',
+      worktreeBaseRef: 'origin/main'
+    }
+    const created = {
+      path: '/remote/repo-lost-add-reply',
+      head: 'abc123',
+      branch: 'refs/heads/lost-add-reply',
+      isBare: false,
+      isMainWorktree: false
+    }
+    const provider = {
+      exec: vi.fn().mockImplementation(async (args: string[]) => {
+        if (args[0] === 'remote') {
+          return { stdout: 'origin\n', stderr: '' }
+        }
+        return { stdout: '', stderr: '' }
+      }),
+      fetchRemoteTrackingRef: vi.fn().mockResolvedValue(undefined),
+      addWorktree: vi
+        .fn()
+        .mockRejectedValue(
+          Object.assign(new Error('connection lost after commit'), { code: 'CONNECTION_LOST' })
+        ),
+      listWorktrees: vi.fn().mockResolvedValue([created])
+    }
+    const mux = {
+      request: vi.fn().mockResolvedValue(undefined),
+      notify: vi.fn()
+    }
+    const committed = vi.fn()
+    getSshGitProviderMock.mockReturnValue(provider)
+    getActiveMultiplexerMock.mockReturnValue(mux)
+    store.setWorktreeMeta.mockImplementation((_worktreeId, meta) => meta)
+
+    const result = await createRemoteWorktree(
+      { repoId: repo.id, name: 'lost-add-reply' },
+      repo,
+      store as never,
+      mainWindow as never,
+      committed
+    )
+
+    expect(committed).toHaveBeenCalledWith({
+      id: 'repo-ssh::/remote/repo-lost-add-reply',
+      path: '/remote/repo-lost-add-reply',
+      branch: 'lost-add-reply'
+    })
+    expect(result.worktree).toMatchObject({
+      id: 'repo-ssh::/remote/repo-lost-add-reply',
+      path: created.path
+    })
+    expect(provider.listWorktrees).toHaveBeenCalledOnce()
+  })
+
+  it.each([
+    [
+      'same branch at another path',
+      {
+        path: '/remote/unrelated',
+        head: 'abc123',
+        branch: 'refs/heads/lost-add-reply',
+        isBare: false,
+        isMainWorktree: false
+      }
+    ],
+    [
+      'another branch at the requested path',
+      {
+        path: '/remote/repo-lost-add-reply',
+        head: 'abc123',
+        branch: 'refs/heads/unrelated',
+        isBare: false,
+        isMainWorktree: false
+      }
+    ]
+  ])('does not adopt %s after an SSH add error', async (_case, listed) => {
+    const repo = {
+      id: 'repo-ssh',
+      path: '/remote/repo',
+      displayName: 'ssh',
+      badgeColor: '#000',
+      addedAt: 0,
+      connectionId: 'conn-1',
+      worktreeBaseRef: 'origin/main'
+    }
+    const addError = Object.assign(new Error('connection lost after commit'), {
+      code: 'CONNECTION_LOST'
+    })
+    const provider = {
+      exec: vi.fn().mockImplementation(async (args: string[]) => {
+        if (args[0] === 'remote') {
+          return { stdout: 'origin\n', stderr: '' }
+        }
+        return { stdout: '', stderr: '' }
+      }),
+      fetchRemoteTrackingRef: vi.fn().mockResolvedValue(undefined),
+      addWorktree: vi.fn().mockRejectedValue(addError),
+      listWorktrees: vi.fn().mockResolvedValue([listed])
+    }
+    const mux = {
+      request: vi.fn().mockResolvedValue(undefined),
+      notify: vi.fn()
+    }
+    const committed = vi.fn()
+    getSshGitProviderMock.mockReturnValue(provider)
+    getActiveMultiplexerMock.mockReturnValue(mux)
+
+    await expect(
+      createRemoteWorktree(
+        { repoId: repo.id, name: 'lost-add-reply' },
+        repo,
+        store as never,
+        mainWindow as never,
+        committed
+      )
+    ).rejects.toBe(addError)
+
+    expect(committed).not.toHaveBeenCalled()
+  })
+
+  it('does not adopt an exact SSH worktree after a deterministic add error', async () => {
+    const repo = {
+      id: 'repo-ssh',
+      path: '/remote/repo',
+      displayName: 'ssh',
+      badgeColor: '#000',
+      addedAt: 0,
+      connectionId: 'conn-1',
+      worktreeBaseRef: 'origin/main'
+    }
+    const addError = new Error('fatal: target already exists')
+    const provider = {
+      exec: vi.fn().mockImplementation(async (args: string[]) => {
+        if (args[0] === 'remote') {
+          return { stdout: 'origin\n', stderr: '' }
+        }
+        return { stdout: '', stderr: '' }
+      }),
+      fetchRemoteTrackingRef: vi.fn().mockResolvedValue(undefined),
+      addWorktree: vi.fn().mockRejectedValue(addError),
+      listWorktrees: vi.fn().mockResolvedValue([
+        {
+          path: '/remote/repo-lost-add-reply',
+          head: 'abc123',
+          branch: 'refs/heads/lost-add-reply',
+          isBare: false,
+          isMainWorktree: false
+        }
+      ])
+    }
+    const mux = {
+      request: vi.fn().mockResolvedValue(undefined),
+      notify: vi.fn()
+    }
+    const committed = vi.fn()
+    getSshGitProviderMock.mockReturnValue(provider)
+    getActiveMultiplexerMock.mockReturnValue(mux)
+
+    await expect(
+      createRemoteWorktree(
+        { repoId: repo.id, name: 'lost-add-reply' },
+        repo,
+        store as never,
+        mainWindow as never,
+        committed
+      )
+    ).rejects.toBe(addError)
+
+    expect(provider.listWorktrees).not.toHaveBeenCalled()
+    expect(committed).not.toHaveBeenCalled()
   })
 
   it('reads remote orca.yaml and returns a setup launch payload during SSH create', async () => {

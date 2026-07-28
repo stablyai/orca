@@ -2126,7 +2126,7 @@ app.whenReady().then(async () => {
         peerFingerprint: fingerprintOrchestrationPeer(pairing.publicKeyB64)
       }
     },
-    call: (selector, method, params, timeoutMs, envelope) =>
+    call: (selector, method, params, timeoutMs, envelope, signal) =>
       callRuntimeEnvironment(
         app.getPath('userData'),
         selector,
@@ -2134,7 +2134,8 @@ app.whenReady().then(async () => {
         params,
         timeoutMs,
         undefined,
-        envelope
+        envelope,
+        signal
       )
   }
   const runtimeService = new OrcaRuntimeService(store, stats, {

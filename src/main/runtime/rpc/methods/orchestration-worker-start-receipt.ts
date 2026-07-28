@@ -1,8 +1,27 @@
 import type { OrchestrationDb } from '../../orchestration/db'
-import {
-  isUnknownWorkerStartOutcome,
-  type WorkerSetupReceipt
-} from './orchestration-worker-topology'
+import type { WorkerSetupReceipt } from './orchestration-worker-topology'
+
+function isUnknownWorkerStartOutcome(error: unknown, stage: string): boolean {
+  if (
+    error &&
+    typeof error === 'object' &&
+    (error as { agentSessionOperationOutcome?: unknown }).agentSessionOperationOutcome === 'unknown'
+  ) {
+    return true
+  }
+  const code =
+    error && typeof error === 'object' && typeof (error as { code?: unknown }).code === 'string'
+      ? (error as { code: string }).code
+      : ''
+  if (code === 'operation_unknown') {
+    return true
+  }
+  if (stage !== 'worktree_create') {
+    return false
+  }
+  const message = error instanceof Error ? error.message : String(error)
+  return /connection|disconnect|timed?\s*out|runtime changed|outcome unknown/i.test(message)
+}
 
 export function failWorkerStartWithReceipt(args: {
   db: OrchestrationDb

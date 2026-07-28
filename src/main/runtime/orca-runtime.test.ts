@@ -3713,6 +3713,147 @@ describe('OrcaRuntimeService', () => {
     )
   })
 
+  it('reconciles a worktree committed as its create request is cancelled', async () => {
+    const runtime = new OrcaRuntimeService(store)
+    const controller = new AbortController()
+    const createdWorktree = {
+      path: '/tmp/workspaces/cancelled-after-add',
+      head: 'def',
+      branch: 'refs/heads/cancelled-after-add',
+      isBare: false,
+      isMainWorktree: false
+    }
+    computeWorktreePathMock.mockReturnValue(createdWorktree.path)
+    ensurePathWithinWorkspaceMock.mockReturnValue(createdWorktree.path)
+    vi.mocked(addWorktree).mockImplementationOnce(async () => {
+      controller.abort()
+      throw Object.assign(new Error('git command aborted'), { name: 'AbortError' })
+    })
+    vi.mocked(listWorktrees).mockResolvedValue([createdWorktree])
+
+    const result = await runtime.createManagedWorktree({
+      repoSelector: 'id:repo-1',
+      name: 'cancelled-after-add',
+      baseBranch: 'abc123',
+      signal: controller.signal
+    })
+
+    expect(result.worktree).toMatchObject({
+      path: createdWorktree.path,
+      branch: createdWorktree.branch
+    })
+  })
+
+  it.each([
+    [
+      'the requested path with another branch',
+      {
+        path: '/tmp/workspaces/cancelled-after-add',
+        head: 'def',
+        branch: 'refs/heads/unrelated',
+        isBare: false,
+        isMainWorktree: false
+      }
+    ],
+    [
+      'the requested branch at another path',
+      {
+        path: '/tmp/workspaces/unrelated',
+        head: 'def',
+        branch: 'refs/heads/cancelled-after-add',
+        isBare: false,
+        isMainWorktree: false
+      }
+    ]
+  ])('does not reconcile %s after create cancellation', async (_case, listedWorktree) => {
+    const runtime = new OrcaRuntimeService(store)
+    const controller = new AbortController()
+    const committed = vi.fn()
+    computeWorktreePathMock.mockReturnValue('/tmp/workspaces/cancelled-after-add')
+    ensurePathWithinWorkspaceMock.mockReturnValue('/tmp/workspaces/cancelled-after-add')
+    vi.mocked(addWorktree).mockImplementationOnce(async () => {
+      controller.abort()
+      throw Object.assign(new Error('git command aborted'), { name: 'AbortError' })
+    })
+    vi.mocked(listWorktrees).mockResolvedValue([listedWorktree])
+
+    await expect(
+      runtime.createManagedWorktree({
+        repoSelector: 'id:repo-1',
+        name: 'cancelled-after-add',
+        baseBranch: 'abc123',
+        signal: controller.signal,
+        onWorktreeCreateCommitted: committed
+      })
+    ).rejects.toMatchObject({ code: 'operation_unknown' })
+
+    expect(committed).not.toHaveBeenCalled()
+  })
+
+  it('does not reconcile a deterministic create error after independent cancellation', async () => {
+    const runtime = new OrcaRuntimeService(store)
+    const controller = new AbortController()
+    const committed = vi.fn()
+    const addError = new Error('fatal: target already exists')
+    const exactWorktree = {
+      path: '/tmp/workspaces/cancelled-after-add',
+      head: 'def',
+      branch: 'refs/heads/cancelled-after-add',
+      isBare: false,
+      isMainWorktree: false
+    }
+    computeWorktreePathMock.mockReturnValue(exactWorktree.path)
+    ensurePathWithinWorkspaceMock.mockReturnValue(exactWorktree.path)
+    vi.mocked(addWorktree).mockImplementationOnce(async () => {
+      controller.abort()
+      throw addError
+    })
+    vi.mocked(listWorktrees).mockResolvedValue([exactWorktree])
+
+    await expect(
+      runtime.createManagedWorktree({
+        repoSelector: 'id:repo-1',
+        name: 'cancelled-after-add',
+        baseBranch: 'abc123',
+        signal: controller.signal,
+        onWorktreeCreateCommitted: committed
+      })
+    ).rejects.toBe(addError)
+
+    expect(committed).not.toHaveBeenCalled()
+  })
+
+  it('reports physical worktree commit before post-create listing fails', async () => {
+    const runtime = new OrcaRuntimeService(store)
+    const committed = vi.fn()
+    const createdWorktree = {
+      path: '/tmp/workspaces/post-create-failure',
+      head: 'def',
+      branch: 'post-create-failure',
+      isBare: false,
+      isMainWorktree: false
+    }
+    computeWorktreePathMock.mockReturnValue(createdWorktree.path)
+    ensurePathWithinWorkspaceMock.mockReturnValue(createdWorktree.path)
+    vi.mocked(addWorktree).mockResolvedValueOnce({})
+    vi.mocked(listWorktrees).mockRejectedValueOnce(new Error('post-create listing failed'))
+
+    await expect(
+      runtime.createManagedWorktree({
+        repoSelector: 'id:repo-1',
+        name: 'post-create-failure',
+        baseBranch: 'abc123',
+        onWorktreeCreateCommitted: committed
+      })
+    ).rejects.toThrow('post-create listing failed')
+
+    expect(committed).toHaveBeenCalledWith({
+      id: 'repo-1::/tmp/workspaces/post-create-failure',
+      path: '/tmp/workspaces/post-create-failure',
+      branch: 'post-create-failure'
+    })
+  })
+
   it('creates additional workspace metadata for folder-mode repos through runtime create', async () => {
     const folderRepo = {
       id: 'folder-repo',
@@ -3816,6 +3957,54 @@ describe('OrcaRuntimeService', () => {
     expect(metaById[result.worktree.id]).toBeUndefined()
     expect(deleteWorktreeHistoryDirMock).toHaveBeenCalledWith(result.worktree.id)
     expect(notifier.worktreesChanged).toHaveBeenCalledWith('folder-repo')
+  })
+
+  it('reports unknown when folder-workspace startup publication fails after spawn', async () => {
+    const folderRepo = {
+      id: 'folder-repo',
+      path: '/workspace/folder',
+      displayName: 'Folder',
+      badgeColor: 'blue',
+      addedAt: 1,
+      kind: 'folder' as const
+    }
+    const metaById: Record<string, WorktreeMeta> = {}
+    const runtimeStore = {
+      ...store,
+      getRepos: () => [folderRepo],
+      getRepo: (id: string) => (id === folderRepo.id ? folderRepo : undefined),
+      getAllWorktreeMeta: () => metaById,
+      getWorktreeMeta: (worktreeId: string) => metaById[worktreeId],
+      setWorktreeMeta: (worktreeId: string, meta: Partial<WorktreeMeta>) => {
+        metaById[worktreeId] = { ...(metaById[worktreeId] ?? makeWorktreeMeta()), ...meta }
+        return metaById[worktreeId]
+      }
+    }
+    const runtime = new OrcaRuntimeService(runtimeStore as never)
+    runtime.setPtyController({
+      spawn: vi.fn(),
+      write: () => true,
+      kill: () => true,
+      getForegroundProcess: async () => null
+    })
+    vi.spyOn(runtime, 'createTerminal').mockImplementation(async (_selector, options) => {
+      options?.onPtySpawnCommitted?.()
+      throw new Error('post-spawn publication failed')
+    })
+
+    await expect(
+      runtime.createManagedWorktree({
+        repoSelector: 'id:folder-repo',
+        name: 'folder-session',
+        startupAgent: 'codex',
+        startupTerminalIdentity: {
+          agentSessionCreateOperationId: 'a'.repeat(43),
+          tabId: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',
+          leafId: 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb',
+          preAllocatedHandle: 'term_preallocated'
+        }
+      })
+    ).rejects.toMatchObject({ code: 'operation_unknown' })
   })
 
   it('refreshes runtime remote-tracking bases before creating local worktrees', async () => {
@@ -13529,6 +13718,71 @@ describe('OrcaRuntimeService', () => {
     }
   })
 
+  it('does not use quiet-process fallback for strict tui-idle waits', async () => {
+    vi.useFakeTimers()
+    try {
+      const getForegroundProcess = vi.fn().mockResolvedValue('codex')
+      const runtime = new OrcaRuntimeService(store)
+      runtime.setPtyController({
+        spawn: vi.fn().mockResolvedValue({ id: 'pty-bg' }),
+        write: () => true,
+        kill: () => true,
+        getForegroundProcess
+      })
+      const { handle } = await runtime.createTerminal(`path:${TEST_WORKTREE_PATH}`)
+      runtime.onPtyData('pty-bg', 'OpenAI Codex\n', Date.now())
+
+      const wait = runtime.waitForTerminal(handle, {
+        condition: 'tui-idle',
+        timeoutMs: 10_000,
+        strictTuiIdle: true
+      })
+      const timeout = expect(wait).rejects.toThrow('timeout')
+
+      await vi.advanceTimersByTimeAsync(11_000)
+
+      await timeout
+      expect(getForegroundProcess).not.toHaveBeenCalled()
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it.each(['Codex working', 'Codex waiting for permission'])(
+    'does not let retained ready text override strict %s status',
+    async (title) => {
+      vi.useFakeTimers()
+      try {
+        const runtime = new OrcaRuntimeService(store)
+        runtime.setPtyController({
+          spawn: vi.fn().mockResolvedValue({ id: 'pty-bg' }),
+          write: () => true,
+          kill: () => true,
+          getForegroundProcess: async () => null
+        })
+        const { handle } = await runtime.createTerminal(`path:${TEST_WORKTREE_PATH}`)
+        runtime.onPtyData(
+          'pty-bg',
+          ' >_ OpenAI Codex (v0.131.0)\n model: gpt-5.5\n directory: ~/orca\n',
+          Date.now()
+        )
+        runtime.onPtyData('pty-bg', `\x1b]0;${title}\x07`, Date.now())
+
+        const wait = runtime.waitForTerminal(handle, {
+          condition: 'tui-idle',
+          timeoutMs: 1_000,
+          strictTuiIdle: true
+        })
+        const timeout = expect(wait).rejects.toThrow('timeout')
+
+        await vi.advanceTimersByTimeAsync(2_000)
+        await timeout
+      } finally {
+        vi.useRealTimers()
+      }
+    }
+  )
+
   it('splits text and enter writes for background terminal handles', async () => {
     const writes: string[] = []
     const runtime = new OrcaRuntimeService(store)
@@ -13640,12 +13894,50 @@ describe('OrcaRuntimeService', () => {
       const prompt = 'x'.repeat(TERMINAL_INPUT_CHUNK_MAX_BYTES + 1)
 
       const sendPromise = runtime.sendTerminalAgentPrompt(handle, prompt)
-      const sendRejection = expect(sendPromise).rejects.toThrow('terminal_not_writable')
+      const sendRejection = expect(sendPromise).rejects.toMatchObject({
+        code: 'operation_unknown'
+      })
       await vi.runAllTimersAsync()
 
       await sendRejection
       expect(writes[0]).toContain(AGENT_PROMPT_BRACKETED_PASTE_START)
       expect(writes.at(-1)).toBe(AGENT_PROMPT_BRACKETED_PASTE_END)
+      expect(writes).not.toContain('\r')
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('reports unknown delivery when the final prompt guard fails after paste', async () => {
+    vi.useFakeTimers()
+    try {
+      const writes: string[] = []
+      const runtime = new OrcaRuntimeService(store)
+      runtime.setPtyController({
+        spawn: vi.fn().mockResolvedValue({ id: 'pty-bg' }),
+        write: (_ptyId, data) => {
+          writes.push(data)
+          return true
+        },
+        kill: () => true,
+        getForegroundProcess: async () => null
+      })
+      const { handle } = await runtime.createTerminal(`path:${TEST_WORKTREE_PATH}`)
+      let guardCalls = 0
+      const send = runtime.sendTerminalAgentPrompt(handle, 'review this', {
+        beforeWrite: () => {
+          guardCalls += 1
+          if (guardCalls === 2) {
+            throw new Error('terminal_handle_stale')
+          }
+        }
+      })
+      const rejection = expect(send).rejects.toMatchObject({ code: 'operation_unknown' })
+
+      await vi.runAllTimersAsync()
+      await rejection
+      expect(writes).toHaveLength(1)
+      expect(writes[0]).toContain('review this')
       expect(writes).not.toContain('\r')
     } finally {
       vi.useRealTimers()
@@ -17925,6 +18217,50 @@ describe('OrcaRuntimeService', () => {
     syncSinglePty(runtime, 'pty-bg', { paneTitle: 'bash' })
 
     await expect(runtime.isTerminalRunningAgent(handle)).resolves.toBe(false)
+  })
+
+  it('cancels a bounded foreground-process probe', async () => {
+    const abort = new AbortController()
+    const getForegroundProcess = vi.fn(
+      (
+        _ptyId: string,
+        options?: { signal?: AbortSignal; deadlineMs?: number }
+      ): Promise<string | null> =>
+        new Promise((_resolve, reject) => {
+          options?.signal?.addEventListener(
+            'abort',
+            () => reject(new Error('provider_probe_aborted')),
+            { once: true }
+          )
+        })
+    )
+    const runtime = new OrcaRuntimeService(store)
+    runtime.setPtyController({
+      spawn: vi.fn().mockResolvedValue({ id: 'pty-bg' }),
+      write: () => true,
+      kill: () => true,
+      getForegroundProcess
+    })
+    runtime.attachWindow(1)
+    runtime.syncWindowGraph(1, { tabs: [], leaves: [] })
+    const { handle } = await runtime.createTerminal(`path:${TEST_WORKTREE_PATH}`, {
+      command: 'bash',
+      title: 'bash'
+    })
+    syncSinglePty(runtime, 'pty-bg', { paneTitle: 'bash' })
+    const deadlineMs = Date.now() + 60_000
+
+    const result = runtime.isTerminalRunningAgent(handle, {
+      signal: abort.signal,
+      deadlineMs
+    })
+    abort.abort()
+
+    await expect(result).rejects.toThrow('request_aborted')
+    expect(getForegroundProcess).toHaveBeenCalledWith('pty-bg', {
+      signal: abort.signal,
+      deadlineMs
+    })
   })
 
   it('does not recognize unresolved wrapper foregrounds as running agents', async () => {

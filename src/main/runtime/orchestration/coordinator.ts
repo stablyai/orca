@@ -2,6 +2,7 @@
 import type { OrchestrationDb } from './db'
 import type { MessageRow, TaskRow, CoordinatorStatus } from './types'
 import { buildDispatchPreamble } from './preamble'
+import { isOrchestrationAgentPromptOutcomeUnknown } from '../../../shared/orchestration-agent-prompt-outcome'
 import { reconcileLifecycleMessage } from './lifecycle-reconciliation'
 
 export type CoordinatorRuntime = {
@@ -452,10 +453,10 @@ export class Coordinator {
     try {
       await this.runtime.sendTerminalAgentPrompt(targetHandle, preamble + gateContext)
     } catch (err) {
-      const updated = this.db.failDispatch(
-        dispatch.id,
-        err instanceof Error ? err.message : String(err)
-      )
+      const reason = err instanceof Error ? err.message : String(err)
+      const updated = isOrchestrationAgentPromptOutcomeUnknown(err)
+        ? this.db.markDispatchInputUnknown(dispatch.id, reason)
+        : this.db.failDispatch(dispatch.id, reason)
       if (updated?.status === 'circuit_broken') {
         this.state.failedTasks.push(task.id)
       }

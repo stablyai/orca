@@ -4195,10 +4195,16 @@ export function registerPtyHandlers(
       }
       return true
     },
-    getForegroundProcess: async (ptyId) => {
+    getForegroundProcess: async (ptyId, options) => {
       try {
-        return await getProviderForPty(ptyId).getForegroundProcess(ptyId)
-      } catch {
+        return await getProviderForPty(ptyId).getForegroundProcess(ptyId, options)
+      } catch (error) {
+        if (
+          options?.signal?.aborted ||
+          (options?.deadlineMs !== undefined && Date.now() >= options.deadlineMs)
+        ) {
+          throw error
+        }
         return null
       }
     },

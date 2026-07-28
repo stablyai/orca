@@ -64,6 +64,13 @@ export function isFederationResidualEffect(effect: FederationEffect): boolean {
 }
 
 export function isFederationEffectUnknown(error: unknown, stage: string): boolean {
+  if (
+    error &&
+    typeof error === 'object' &&
+    (error as { agentSessionOperationOutcome?: unknown }).agentSessionOperationOutcome === 'unknown'
+  ) {
+    return true
+  }
   const code =
     error && typeof error === 'object' && typeof (error as { code?: unknown }).code === 'string'
       ? (error as { code: string }).code

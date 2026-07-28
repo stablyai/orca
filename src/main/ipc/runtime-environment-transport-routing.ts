@@ -82,8 +82,12 @@ export async function callRuntimeEnvironment(
   params: unknown,
   timeoutMs?: number,
   expectedEnvironmentPairingRevision?: number,
-  envelope?: RuntimeOrchestrationEnvelope
+  envelope?: RuntimeOrchestrationEnvelope,
+  signal?: AbortSignal
 ): Promise<RuntimeRpcResponse<unknown>> {
+  if (signal?.aborted) {
+    throw new Error('request_aborted')
+  }
   const environment = resolveEnvironment(userDataPath, selector)
   // Why: connection failures reject (they don't resolve as ok:false), so the
   // Tailscale hint is applied to the thrown error here — wrapping the resolved
@@ -92,62 +96,83 @@ export async function callRuntimeEnvironment(
   // environment, so a re-pair between enqueue and dispatch can change it.
   let endpoint = getPreferredPairingOffer(environment).endpoint
   try {
-    return await enqueueRuntimeCall(environment.id, method, async () => {
-      const currentEnvironment = resolveEnvironment(userDataPath, environment.id)
-      const revisionFailure = runtimeEnvironmentRevisionFailure(
-        currentEnvironment,
-        expectedEnvironmentPairingRevision,
-        method
-      )
-      if (revisionFailure) {
-        return revisionFailure
-      }
-      const pairing = getPreferredPairingOffer(currentEnvironment)
-      endpoint = pairing.endpoint
-      const effectiveTimeoutMs = timeoutMs ?? DEFAULT_REMOTE_RUNTIME_TIMEOUT_MS
-      if (envelope) {
+    return await enqueueRuntimeCall(
+      environment.id,
+      method,
+      async () => {
+        if (signal?.aborted) {
+          throw new Error('request_aborted')
+        }
+        const currentEnvironment = resolveEnvironment(userDataPath, environment.id)
+        const revisionFailure = runtimeEnvironmentRevisionFailure(
+          currentEnvironment,
+          expectedEnvironmentPairingRevision,
+          method
+        )
+        if (revisionFailure) {
+          return revisionFailure
+        }
+        const pairing = getPreferredPairingOffer(currentEnvironment)
+        endpoint = pairing.endpoint
+        const effectiveTimeoutMs = timeoutMs ?? DEFAULT_REMOTE_RUNTIME_TIMEOUT_MS
+        if (envelope) {
+          const response = await sendRemoteRuntimeRequest(
+            pairing,
+            method,
+            params,
+            effectiveTimeoutMs,
+            envelope,
+            signal
+          )
+          markEnvironmentUsedFromResponse(userDataPath, currentEnvironment.id, response)
+          return response
+        }
+        if (shouldUseCachedRequestConnection(method)) {
+          const response = await sendRemoteRuntimeConnectionRequest(
+            currentEnvironment.id,
+            pairing,
+            method,
+            params,
+            effectiveTimeoutMs
+          )
+          markEnvironmentUsedFromResponse(userDataPath, currentEnvironment.id, response)
+          return response
+        }
+        if (
+          method !== 'status.get' &&
+          !shouldUseOneShotRequest(method) &&
+          (await supportsSharedControl(
+            userDataPath,
+            currentEnvironment,
+            pairing,
+            effectiveTimeoutMs
+          ))
+        ) {
+          const response = await sendRemoteRuntimeSharedControlRequest(
+            currentEnvironment.id,
+            pairing,
+            method,
+            params,
+            effectiveTimeoutMs
+          )
+          markEnvironmentUsedFromResponse(userDataPath, currentEnvironment.id, response)
+          return response
+        }
+        // Why: startup/control-plane RPCs use the proven one-shot path so repo
+        // hydration cannot be coupled to a stale terminal-control connection.
         const response = await sendRemoteRuntimeRequest(
           pairing,
           method,
           params,
           effectiveTimeoutMs,
-          envelope
+          undefined,
+          signal
         )
         markEnvironmentUsedFromResponse(userDataPath, currentEnvironment.id, response)
         return response
-      }
-      if (shouldUseCachedRequestConnection(method)) {
-        const response = await sendRemoteRuntimeConnectionRequest(
-          currentEnvironment.id,
-          pairing,
-          method,
-          params,
-          effectiveTimeoutMs
-        )
-        markEnvironmentUsedFromResponse(userDataPath, currentEnvironment.id, response)
-        return response
-      }
-      if (
-        method !== 'status.get' &&
-        !shouldUseOneShotRequest(method) &&
-        (await supportsSharedControl(userDataPath, currentEnvironment, pairing, effectiveTimeoutMs))
-      ) {
-        const response = await sendRemoteRuntimeSharedControlRequest(
-          currentEnvironment.id,
-          pairing,
-          method,
-          params,
-          effectiveTimeoutMs
-        )
-        markEnvironmentUsedFromResponse(userDataPath, currentEnvironment.id, response)
-        return response
-      }
-      // Why: startup/control-plane RPCs use the proven one-shot path so repo
-      // hydration cannot be coupled to a stale terminal-control connection.
-      const response = await sendRemoteRuntimeRequest(pairing, method, params, effectiveTimeoutMs)
-      markEnvironmentUsedFromResponse(userDataPath, currentEnvironment.id, response)
-      return response
-    })
+      },
+      signal
+    )
   } catch (error) {
     if (error instanceof Error) {
       error.message = withRemoteRuntimeTailscaleHint(error.message, endpoint)

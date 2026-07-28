@@ -68,7 +68,7 @@ describe('orchestration RPC methods', () => {
     return method
   }
 
-  async function call(name: string, params: Record<string, unknown>) {
+  async function call(name: string, params: Record<string, unknown>, callContext = ctx) {
     const method = findMethod(name)
     const scopedParams = { ...params }
     if (activeRunId) {
@@ -83,7 +83,7 @@ describe('orchestration RPC methods', () => {
       }
     }
     const parsed = method.params ? method.params.parse(scopedParams) : undefined
-    return method.handler(parsed, ctx)
+    return method.handler(parsed, callContext)
   }
 
   function makeRequest(method: string, params: Record<string, unknown>): RpcRequest {
@@ -1798,6 +1798,13 @@ describe('orchestration RPC methods', () => {
       vi.mocked(runtime.getTerminalPaneKey).mockImplementation((candidate) =>
         candidate === handle ? `tab_worker:${handle}` : coordinatorPaneKey
       )
+      vi.spyOn(runtime, 'waitForTerminal').mockResolvedValue({
+        handle,
+        condition: 'tui-idle',
+        status: 'running',
+        satisfied: true,
+        exitCode: null
+      })
     }
 
     it('dispatches a task to a terminal', async () => {
@@ -1863,6 +1870,30 @@ describe('orchestration RPC methods', () => {
       expect(db.getActiveDispatchForTerminal('term_a')).toBeUndefined()
     })
 
+    it('keeps repeated pre-input injection failures retryable', async () => {
+      setup()
+      provideInjectIdentity()
+      const task = db.createTask({ spec: 'work' })
+      vi.spyOn(runtime, 'isTerminalRunningAgent').mockResolvedValue(true)
+      vi.spyOn(runtime, 'sendTerminalAgentPrompt').mockRejectedValue(
+        new Error('terminal_not_writable')
+      )
+
+      for (let attempt = 0; attempt < 3; attempt += 1) {
+        await expect(
+          call('orchestration.dispatch', {
+            task: task.id,
+            to: 'term_a',
+            inject: true
+          })
+        ).rejects.toThrow('terminal_not_writable')
+      }
+
+      expect(db.getTask(task.id)?.status).toBe('ready')
+      expect(db.getDispatchContext(task.id)?.status).toBe('failed')
+      expect(db.getDispatchContext(task.id)?.failure_count).toBe(0)
+    })
+
     it('uses caller-provided dev mode for injected preamble', async () => {
       setup()
       provideInjectIdentity()
@@ -1883,7 +1914,8 @@ describe('orchestration RPC methods', () => {
 
       expect(send).toHaveBeenCalledWith(
         'term_a',
-        expect.stringContaining('orca-dev orchestration send')
+        expect.stringContaining('orca-dev orchestration send'),
+        expect.objectContaining({ beforeWrite: expect.any(Function) })
       )
     })
 
@@ -1924,9 +1956,303 @@ describe('orchestration RPC methods', () => {
 
       expect(agentPrompt).toHaveBeenCalledWith(
         'term_a',
-        expect.stringContaining('line one\nline two')
+        expect.stringContaining('line one\nline two'),
+        expect.objectContaining({ beforeWrite: expect.any(Function) })
       )
       expect(rawSend).not.toHaveBeenCalled()
+    })
+
+    it('waits for the agent TUI before injecting the preamble', async () => {
+      setup()
+      provideInjectIdentity()
+      const task = db.createTask({ spec: 'work' })
+      const abortController = new AbortController()
+      ctx = { runtime, signal: abortController.signal }
+      vi.spyOn(runtime, 'isTerminalRunningAgent').mockResolvedValue(true)
+      const send = vi.spyOn(runtime, 'sendTerminalAgentPrompt').mockResolvedValue({
+        handle: 'term_a',
+        accepted: true,
+        bytesWritten: 1
+      })
+
+      await call('orchestration.dispatch', {
+        task: task.id,
+        to: 'term_a',
+        inject: true
+      })
+
+      expect(runtime.isTerminalRunningAgent).toHaveBeenCalledWith('term_a', {
+        signal: abortController.signal,
+        deadlineMs: expect.any(Number)
+      })
+      expect(runtime.waitForTerminal).toHaveBeenCalledWith('term_a', {
+        condition: 'tui-idle',
+        timeoutMs: expect.any(Number),
+        signal: abortController.signal,
+        strictTuiIdle: true
+      })
+      expect(vi.mocked(runtime.waitForTerminal).mock.calls[0]?.[1]?.timeoutMs).toBeGreaterThan(0)
+      expect(vi.mocked(runtime.waitForTerminal).mock.calls[0]?.[1]?.timeoutMs).toBeLessThanOrEqual(
+        60_000
+      )
+      expect(vi.mocked(runtime.waitForTerminal).mock.invocationCallOrder[0]).toBeLessThan(
+        send.mock.invocationCallOrder[0]!
+      )
+    })
+
+    it('shares one readiness deadline across agent detection and TUI waiting', async () => {
+      setup()
+      provideInjectIdentity()
+      const task = db.createTask({ spec: 'work' })
+      vi.spyOn(runtime, 'isTerminalRunningAgent').mockResolvedValue(true)
+      vi.spyOn(runtime, 'sendTerminalAgentPrompt').mockResolvedValue({
+        handle: 'term_a',
+        accepted: true,
+        bytesWritten: 1
+      })
+      const now = vi
+        .spyOn(Date, 'now')
+        .mockReturnValueOnce(1_000)
+        .mockReturnValueOnce(31_000)
+        .mockReturnValue(31_000)
+
+      try {
+        await call('orchestration.dispatch', {
+          task: task.id,
+          to: 'term_a',
+          inject: true
+        })
+      } finally {
+        now.mockRestore()
+      }
+
+      expect(runtime.waitForTerminal).toHaveBeenCalledWith('term_a', {
+        condition: 'tui-idle',
+        timeoutMs: 30_000,
+        signal: undefined,
+        strictTuiIdle: true
+      })
+    })
+
+    it('keeps the task ready when the caller disconnects as readiness resolves', async () => {
+      setup()
+      provideInjectIdentity()
+      const task = db.createTask({ spec: 'work' })
+      const abortController = new AbortController()
+      ctx = { runtime, signal: abortController.signal }
+      vi.spyOn(runtime, 'isTerminalRunningAgent').mockResolvedValue(true)
+      vi.mocked(runtime.waitForTerminal).mockImplementationOnce(async () => {
+        abortController.abort()
+        return {
+          handle: 'term_a',
+          condition: 'tui-idle',
+          status: 'running',
+          satisfied: true,
+          exitCode: null
+        }
+      })
+      const send = vi.spyOn(runtime, 'sendTerminalAgentPrompt')
+
+      await expect(
+        call('orchestration.dispatch', {
+          task: task.id,
+          to: 'term_a',
+          inject: true
+        })
+      ).rejects.toThrow('request_aborted')
+
+      expect(db.getTask(task.id)?.status).toBe('ready')
+      expect(db.getDispatchContext(task.id)).toBeUndefined()
+      expect(send).not.toHaveBeenCalled()
+    })
+
+    it('keeps the task ready when readiness arrives after its deadline', async () => {
+      setup()
+      provideInjectIdentity()
+      const task = db.createTask({ spec: 'work' })
+      vi.spyOn(runtime, 'isTerminalRunningAgent').mockResolvedValue(true)
+      const now = vi
+        .spyOn(Date, 'now')
+        .mockReturnValueOnce(1_000)
+        .mockReturnValueOnce(1_000)
+        .mockReturnValueOnce(1_000)
+        .mockReturnValue(61_000)
+      const send = vi.spyOn(runtime, 'sendTerminalAgentPrompt')
+
+      try {
+        await expect(
+          call('orchestration.dispatch', {
+            task: task.id,
+            to: 'term_a',
+            inject: true
+          })
+        ).rejects.toThrow('Agent did not become ready (timeout).')
+      } finally {
+        now.mockRestore()
+      }
+
+      expect(db.getTask(task.id)?.status).toBe('ready')
+      expect(db.getDispatchContext(task.id)).toBeUndefined()
+      expect(send).not.toHaveBeenCalled()
+    })
+
+    it('fails before authority when the ready terminal identity changes', async () => {
+      setup()
+      provideInjectIdentity()
+      const task = db.createTask({ spec: 'work' })
+      vi.spyOn(runtime, 'isTerminalRunningAgent').mockResolvedValue(true)
+      let targetReads = 0
+      vi.mocked(runtime.getTerminalPaneKey).mockImplementation((handle) => {
+        if (handle !== 'term_a') {
+          return coordinatorPaneKey
+        }
+        targetReads += 1
+        return targetReads === 1 ? 'tab_worker:term_a' : 'tab_rebound:term_a'
+      })
+      const send = vi.spyOn(runtime, 'sendTerminalAgentPrompt')
+
+      await expect(
+        call('orchestration.dispatch', {
+          task: task.id,
+          to: 'term_a',
+          inject: true
+        })
+      ).rejects.toThrow('terminal_handle_stale')
+
+      expect(db.getTask(task.id)?.status).toBe('ready')
+      expect(db.getDispatchContext(task.id)).toBeUndefined()
+      expect(send).not.toHaveBeenCalled()
+    })
+
+    it('rechecks blocked state at the final prompt write boundary', async () => {
+      setup()
+      provideInjectIdentity()
+      const task = db.createTask({ spec: 'work' })
+      vi.spyOn(runtime, 'isTerminalRunningAgent').mockResolvedValue(true)
+      vi.mocked(runtime.waitForTerminal)
+        .mockResolvedValueOnce({
+          handle: 'term_a',
+          condition: 'tui-idle',
+          status: 'running',
+          satisfied: true,
+          exitCode: null
+        })
+        .mockResolvedValueOnce({
+          handle: 'term_a',
+          condition: 'tui-idle',
+          status: 'running',
+          satisfied: true,
+          exitCode: null
+        })
+        .mockResolvedValueOnce({
+          handle: 'term_a',
+          condition: 'tui-idle',
+          status: 'running',
+          satisfied: false,
+          exitCode: null,
+          blockedReason: 'codex-trust-workspace'
+        })
+      const send = vi
+        .spyOn(runtime, 'sendTerminalAgentPrompt')
+        .mockImplementation(async (handle, _prompt, options) => {
+          await options?.beforeWrite?.('pty-worker')
+          return { handle, accepted: true, bytesWritten: 1 }
+        })
+
+      await expect(
+        call('orchestration.dispatch', {
+          task: task.id,
+          to: 'term_a',
+          inject: true
+        })
+      ).rejects.toThrow('Agent startup blocked: codex-trust-workspace')
+
+      expect(db.getTask(task.id)?.status).toBe('ready')
+      expect(db.getActiveDispatchForTerminal('term_a')).toBeUndefined()
+      expect(send).toHaveBeenCalledOnce()
+    })
+
+    it('blocks retry when prompt bytes may already have been written', async () => {
+      setup()
+      provideInjectIdentity()
+      const task = db.createTask({ spec: 'work' })
+      vi.spyOn(runtime, 'isTerminalRunningAgent').mockResolvedValue(true)
+      const deliveryError = Object.assign(new Error('Agent prompt delivery outcome is unknown.'), {
+        code: 'operation_unknown'
+      })
+      vi.spyOn(runtime, 'sendTerminalAgentPrompt').mockRejectedValue(deliveryError)
+
+      await expect(
+        call('orchestration.dispatch', {
+          task: task.id,
+          to: 'term_a',
+          inject: true
+        })
+      ).rejects.toBe(deliveryError)
+
+      expect(db.getTask(task.id)?.status).toBe('blocked')
+      expect(db.getDispatchContext(task.id)).toMatchObject({
+        status: 'failed',
+        last_failure: 'Agent prompt delivery outcome is unknown.'
+      })
+      await expect(
+        call('orchestration.dispatch', {
+          task: task.id,
+          to: 'term_a',
+          inject: true
+        })
+      ).rejects.toThrow('only ready tasks can be dispatched')
+    })
+
+    it('keeps the task ready when the dispatch caller disconnects before the wait', async () => {
+      setup()
+      provideInjectIdentity()
+      const task = db.createTask({ spec: 'work' })
+      const abortController = new AbortController()
+      abortController.abort()
+      ctx = { runtime, signal: abortController.signal }
+      const detectAgent = vi.spyOn(runtime, 'isTerminalRunningAgent')
+
+      await expect(
+        call('orchestration.dispatch', {
+          task: task.id,
+          to: 'term_a',
+          inject: true
+        })
+      ).rejects.toThrow('request_aborted')
+
+      expect(detectAgent).not.toHaveBeenCalled()
+      expect(runtime.waitForTerminal).not.toHaveBeenCalled()
+      expect(db.getTask(task.id)?.status).toBe('ready')
+      expect(db.getDispatchContext(task.id)).toBeUndefined()
+    })
+
+    it('keeps the task ready when agent startup is blocked', async () => {
+      setup()
+      provideInjectIdentity()
+      const task = db.createTask({ spec: 'work' })
+      vi.spyOn(runtime, 'isTerminalRunningAgent').mockResolvedValue(true)
+      vi.mocked(runtime.waitForTerminal).mockResolvedValue({
+        handle: 'term_a',
+        condition: 'tui-idle',
+        status: 'running',
+        satisfied: false,
+        exitCode: null,
+        blockedReason: 'codex-trust-workspace'
+      })
+      const send = vi.spyOn(runtime, 'sendTerminalAgentPrompt')
+
+      await expect(
+        call('orchestration.dispatch', {
+          task: task.id,
+          to: 'term_a',
+          inject: true
+        })
+      ).rejects.toThrow('Agent startup blocked: codex-trust-workspace')
+
+      expect(db.getTask(task.id)?.status).toBe('ready')
+      expect(db.getDispatchContext(task.id)).toBeUndefined()
+      expect(send).not.toHaveBeenCalled()
     })
 
     it('rejects inject to terminal without recognized agent', async () => {
@@ -2065,7 +2391,8 @@ describe('orchestration RPC methods', () => {
       expect(db.getWorkerDispatch(result.dispatchId)?.state).toBe('ready')
       expect(runtime.sendTerminalAgentPrompt).toHaveBeenCalledWith(
         'term_worker',
-        expect.stringContaining('--dispatch-capability dcap_')
+        expect.stringContaining('--dispatch-capability dcap_'),
+        expect.objectContaining({ beforeWrite: expect.any(Function) })
       )
     })
 
@@ -2098,7 +2425,11 @@ describe('orchestration RPC methods', () => {
       )
       expect(runtime.createTerminal).toHaveBeenCalledWith(
         'id:repo::other',
-        expect.objectContaining({ command: 'codex' })
+        expect.objectContaining({
+          command: 'codex',
+          agentSessionCreateOperationId: expect.stringMatching(/^[A-Za-z0-9_-]{43}$/),
+          preAllocatedHandle: expect.stringMatching(/^term_/)
+        })
       )
       expect(createWorktree).not.toHaveBeenCalled()
     })
@@ -2168,6 +2499,133 @@ describe('orchestration RPC methods', () => {
       expect(runtime.sendTerminalAgentPrompt).not.toHaveBeenCalled()
     })
 
+    it('blocks recovery when SSH terminal creation has an unknown outcome', async () => {
+      setup()
+      mockCurrentWorkerStart()
+      vi.mocked(runtime.createTerminal).mockRejectedValueOnce(
+        Object.assign(new Error('client_disconnected'), {
+          agentSessionOperationOutcome: 'unknown'
+        })
+      )
+      const task = db.createTask({ spec: 'SSH terminal uncertainty' })
+
+      const result = (await call('orchestration.workerStart', {
+        task: task.id,
+        from: 'term_coord',
+        agent: 'codex'
+      })) as { state: string; failedStage: string; residualResources: unknown[] }
+
+      expect(result).toMatchObject({
+        state: 'outcome_unknown',
+        failedStage: 'terminal_create',
+        residualResources: expect.arrayContaining([
+          expect.objectContaining({ action: 'created_pending_receipt' })
+        ])
+      })
+      expect(db.getTask(task.id)?.status).toBe('blocked')
+      expect(runtime.sendTerminalAgentPrompt).not.toHaveBeenCalled()
+    })
+
+    it('returns unknown promptly and records a terminal that resolves after cancellation', async () => {
+      setup()
+      mockCurrentWorkerStart()
+      const controller = new AbortController()
+      let finishCreate!: (terminal: { handle: string; worktreeId: string; title: string }) => void
+      vi.mocked(runtime.createTerminal).mockImplementationOnce(
+        async () => await new Promise((resolve) => (finishCreate = resolve))
+      )
+      const task = db.createTask({ spec: 'cancelled current-worktree start' })
+
+      const pending = call(
+        'orchestration.workerStart',
+        {
+          task: task.id,
+          from: 'term_coord',
+          agent: 'codex'
+        },
+        { runtime, signal: controller.signal }
+      )
+      await vi.waitFor(() => expect(runtime.createTerminal).toHaveBeenCalledOnce())
+      controller.abort()
+      const result = (await pending) as { dispatchId: string; state: string }
+
+      expect(result.state).toBe('outcome_unknown')
+      expect(runtime.sendTerminalAgentPrompt).not.toHaveBeenCalled()
+      finishCreate({
+        handle: 'term_worker',
+        worktreeId: 'repo::worktree',
+        title: 'worker'
+      })
+      await vi.waitFor(() => {
+        expect(db.getWorkerDispatch(result.dispatchId)).toMatchObject({
+          state: 'start_unknown',
+          stage: 'terminal_created',
+          agent_terminal_handle: 'term_worker'
+        })
+      })
+    })
+
+    it('treats terminal publication failure after physical spawn as unknown', async () => {
+      setup()
+      mockCurrentWorkerStart()
+      vi.mocked(runtime.createTerminal).mockImplementationOnce(async (_selector, options) => {
+        options?.onPtySpawnCommitted?.()
+        throw new Error('post-spawn publication failed')
+      })
+      const task = db.createTask({ spec: 'post-spawn terminal failure' })
+
+      const result = (await call('orchestration.workerStart', {
+        task: task.id,
+        from: 'term_coord',
+        agent: 'codex'
+      })) as { state: string; residualResources: { action: string }[] }
+
+      expect(result).toMatchObject({
+        state: 'outcome_unknown',
+        residualResources: expect.arrayContaining([
+          expect.objectContaining({ action: 'created_pending_receipt' })
+        ])
+      })
+      expect(db.getTask(task.id)?.status).toBe('blocked')
+      expect(runtime.sendTerminalAgentPrompt).not.toHaveBeenCalled()
+    })
+
+    it('treats terminal receipt persistence failure after spawn as unknown', async () => {
+      setup()
+      mockCurrentWorkerStart()
+      const recordStage = db.recordWorkerStage.bind(db)
+      vi.spyOn(db, 'recordWorkerStage').mockImplementation((params) => {
+        if (params.stage === 'terminal_created') {
+          throw new Error('terminal receipt persistence failed')
+        }
+        return recordStage(params)
+      })
+      vi.mocked(runtime.createTerminal).mockImplementationOnce(async (_selector, options) => {
+        options?.onPtySpawnCommitted?.()
+        return {
+          handle: 'term_worker',
+          worktreeId: 'repo::worktree',
+          title: 'worker'
+        }
+      })
+      const task = db.createTask({ spec: 'terminal receipt failure' })
+
+      const result = (await call('orchestration.workerStart', {
+        task: task.id,
+        from: 'term_coord',
+        agent: 'codex'
+      })) as { state: string; residualResources: unknown[] }
+
+      expect(result).toMatchObject({
+        state: 'outcome_unknown',
+        residualResources: expect.arrayContaining([
+          expect.objectContaining({ action: 'created_pending_receipt' })
+        ])
+      })
+      expect(db.getTask(task.id)?.status).toBe('blocked')
+      expect(runtime.sendTerminalAgentPrompt).not.toHaveBeenCalled()
+    })
+
     it('preserves the exact attached terminal when task input is rejected', async () => {
       setup()
       mockCurrentWorkerStart()
@@ -2190,6 +2648,55 @@ describe('orchestration RPC methods', () => {
       expect(result.residualResources).toEqual(
         expect.arrayContaining([expect.objectContaining({ kind: 'terminal', id: 'term_worker' })])
       )
+    })
+
+    it('blocks worker-start recovery when prompt delivery is unknown', async () => {
+      setup()
+      mockCurrentWorkerStart()
+      vi.mocked(runtime.sendTerminalAgentPrompt).mockRejectedValueOnce(
+        Object.assign(new Error('prompt write failed after paste'), {
+          code: 'operation_unknown'
+        })
+      )
+      const task = db.createTask({ spec: 'unknown input outcome' })
+
+      const result = (await call('orchestration.workerStart', {
+        task: task.id,
+        from: 'term_coord',
+        agent: 'codex'
+      })) as { state: string; failedStage: string; nextCommands: string[] }
+
+      expect(result).toMatchObject({
+        state: 'outcome_unknown',
+        failedStage: 'dispatch_input',
+        nextCommands: expect.arrayContaining([
+          expect.stringContaining('worker-show'),
+          expect.stringContaining('worker-abandon')
+        ])
+      })
+      expect(db.getTask(task.id)?.status).toBe('blocked')
+    })
+
+    it('blocks recovery when finalization fails after prompt delivery', async () => {
+      setup()
+      mockCurrentWorkerStart()
+      vi.spyOn(db, 'markWorkerDispatchReady').mockImplementationOnce(() => {
+        throw new Error('database write failed')
+      })
+      const task = db.createTask({ spec: 'finalization uncertainty' })
+
+      const result = (await call('orchestration.workerStart', {
+        task: task.id,
+        from: 'term_coord',
+        agent: 'codex'
+      })) as { state: string; failedStage: string }
+
+      expect(result).toMatchObject({
+        state: 'outcome_unknown',
+        failedStage: 'dispatch_input'
+      })
+      expect(runtime.sendTerminalAgentPrompt).toHaveBeenCalledOnce()
+      expect(db.getTask(task.id)?.status).toBe('blocked')
     })
 
     it.each(['codex-update-prompt', 'codex-trust-workspace'] as const)(
