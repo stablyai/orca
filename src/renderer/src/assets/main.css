@@ -1164,11 +1164,11 @@
   background: color-mix(in srgb, var(--sidebar-accent) 40%, transparent);
 }
 
-/* Why: mixing into the concrete sidebar surface keeps selected contrast stable,
-   including when a custom translucent sidebar theme is active. */
+/* Why: the brighter border carries the selected state; a translucent wash keeps
+   card text legible instead of lifting the surface toward the foreground color. */
 [data-worktree-card-surface][data-worktree-card-active='primary'] {
   border-color: color-mix(in srgb, var(--worktree-sidebar-border) 40%, transparent);
-  background: color-mix(in srgb, var(--worktree-sidebar-foreground) 8%, var(--worktree-sidebar));
+  background: color-mix(in srgb, var(--worktree-sidebar-foreground) 8%, transparent);
   box-shadow: 0 1px 2px color-mix(in srgb, var(--worktree-sidebar-foreground) 4%, transparent);
 }
 
@@ -1178,7 +1178,7 @@
     var(--worktree-sidebar-foreground) 18%,
     var(--worktree-sidebar-border)
   );
-  background: color-mix(in srgb, var(--worktree-sidebar-foreground) 16%, var(--worktree-sidebar));
+  background: color-mix(in srgb, var(--worktree-sidebar-foreground) 10%, transparent);
   box-shadow: 0 1px 2px color-mix(in srgb, var(--worktree-sidebar-foreground) 3%, transparent);
 }
 
