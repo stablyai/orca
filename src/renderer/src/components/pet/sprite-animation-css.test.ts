@@ -5,7 +5,8 @@ const BASE = {
   keyframesId: 'kf',
   frameWidth: 100,
   scale: 1,
-  rowOffsetY: -200
+  rowOffsetY: -200,
+  speedMultiplier: 1
 }
 
 describe('buildSpriteAnimationCss', () => {
@@ -82,5 +83,27 @@ describe('buildSpriteAnimationCss', () => {
     })
     expect(keyframesCss).toContain('0% { background-position: 0px -200px; }')
     expect(keyframesCss).toContain('1% { background-position: -100px -200px; }')
+  })
+
+  it('속도 배수만큼 uniform 및 uneven animation duration을 줄인다', () => {
+    // Given / When
+    const uniform = buildSpriteAnimationCss({
+      ...BASE,
+      frames: 6,
+      fps: 6,
+      frameDurationsMs: undefined,
+      speedMultiplier: 1.25
+    })
+    const uneven = buildSpriteAnimationCss({
+      ...BASE,
+      frames: 2,
+      fps: 8,
+      frameDurationsMs: [1000, 2000],
+      speedMultiplier: 1.5
+    })
+
+    // Then
+    expect(uniform.animationCss).toBe('pet-kf 0.8s steps(6) infinite')
+    expect(uneven.animationCss).toBe('pet-kf 2s step-end infinite')
   })
 })

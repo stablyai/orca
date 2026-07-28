@@ -7,6 +7,7 @@ import { randomUUID } from 'node:crypto'
 import { basename, dirname, extname, isAbsolute, join, normalize, resolve, sep } from 'node:path'
 import { z } from 'zod'
 import type { CustomPet } from '../../shared/types'
+import { samplePetSystemCpuUsage } from '../pet-system-cpu-usage'
 import {
   applyCodexPetDefaults,
   readWebpDimensionsFromBuffer,
@@ -167,6 +168,11 @@ async function isSymlink(path: string): Promise<boolean> {
 }
 
 export function registerPetHandlers(): void {
+  ipcMain.handle(
+    'pet:getSystemCpuUsage',
+    async (): Promise<number | null> => samplePetSystemCpuUsage()
+  )
+
   ipcMain.handle('pet:import', async (event): Promise<CustomPet | null> => {
     const senderWindow =
       BrowserWindow.fromWebContents(event.sender) ?? BrowserWindow.getFocusedWindow()

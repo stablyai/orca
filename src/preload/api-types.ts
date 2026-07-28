@@ -2479,6 +2479,7 @@ export type PreloadApi = {
     onUpdateRun: (callback: (run: SkillUpdateRun) => void) => () => void
   }
   pet: {
+    getSystemCpuUsage: () => Promise<number | null>
     import: () => Promise<CustomPet | null>
     importPetBundle: () => Promise<CustomPet | null>
     read: (id: string, fileName: string, kind?: 'image' | 'bundle') => Promise<ArrayBuffer | null>
