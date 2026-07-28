@@ -101,7 +101,7 @@ export async function diagnoseAuth(): Promise<GitLabAuthDiagnostic> {
     })
     const output = `${stdout}\n${stderr}`
     const hosts = parseGlabAuthStatusHosts(output)
-    // Why: Settings 刷新认证后要推进 provider cache key，避免继续命中认证前的 null 结果。
+    // Why: refreshing auth must advance the provider cache key past a stale null result.
     for (const host of hosts) {
       rememberGlabKnownHost(host)
     }
