@@ -1,9 +1,12 @@
-import { Loader2, RefreshCw } from 'lucide-react'
+import { AlertTriangle, Loader2, RefreshCw } from 'lucide-react'
 import { Button } from '../ui/button'
 import { Label } from '../ui/label'
 import { Tooltip, TooltipContent, TooltipTrigger } from '../ui/tooltip'
 import { AddressPicker, type AddressOption } from '../network/AddressPicker'
-import { parseServerShareAddress } from '../../../../shared/network/server-share-address'
+import {
+  isLoopbackShareAddress,
+  parseServerShareAddress
+} from '../../../../shared/network/server-share-address'
 import { GeneratedUrlRow, UnavailableUrlRow } from './RuntimePairingGeneratedUrlRows'
 import { translate } from '@/i18n/i18n'
 
@@ -15,6 +18,7 @@ type RuntimePairingGeneratorFormProps = {
   isGeneratingPairing: boolean
   webClientUrl: string | null
   runtimePairingUrl: string | null
+  generatedAddress: string | null
   copiedTarget: 'web' | 'pairing' | null
   onSelectedAddressChange: (address: string) => void
   onRefreshNetworkInterfaces: () => void
@@ -30,12 +34,15 @@ export function RuntimePairingGeneratorForm({
   isGeneratingPairing,
   webClientUrl,
   runtimePairingUrl,
+  generatedAddress,
   copiedTarget,
   onSelectedAddressChange,
   onRefreshNetworkInterfaces,
   onGenerate,
   onCopy
 }: RuntimePairingGeneratorFormProps): React.JSX.Element {
+  const selectionIsLoopback = isLoopbackShareAddress(selectedAddress)
+  const generatedForLoopback = generatedAddress !== null && isLoopbackShareAddress(generatedAddress)
   const options: AddressOption[] = [
     {
       value: loopbackAddress,
@@ -147,12 +154,23 @@ export function RuntimePairingGeneratorForm({
             </Tooltip>
           </div>
         </div>
-        <p className="text-xs text-muted-foreground">
-          {translate(
-            'auto.components.settings.RuntimePairingUrlGenerator.279e0dcb57',
-            '127.0.0.1 only works on this computer. Use a LAN, Tailscale, or custom address for another device.'
-          )}
-        </p>
+        {selectionIsLoopback ? (
+          <p className="flex items-start gap-1.5 text-xs text-foreground">
+            <AlertTriangle className="mt-0.5 size-3.5 shrink-0" />
+            {translate(
+              'auto.components.settings.RuntimePairingUrlGenerator.279e0dcb57',
+              '127.0.0.1 only works on this computer. Use a LAN, Tailscale, or custom address for another device.'
+            )}
+          </p>
+        ) : (
+          <p className="text-xs text-muted-foreground">
+            {translate(
+              'auto.components.settings.RuntimePairingUrlGenerator.reachable-address-hint',
+              'The other device must be able to reach {{address}}.',
+              { address: selectedAddress }
+            )}
+          </p>
+        )}
         <div className="flex justify-end">
           <Button
             type="button"
@@ -170,6 +188,17 @@ export function RuntimePairingGeneratorForm({
           </Button>
         </div>
       </div>
+
+      {generatedForLoopback && (webClientUrl || runtimePairingUrl) ? (
+        <p className="flex items-start gap-1.5 text-xs text-foreground">
+          <AlertTriangle className="mt-0.5 size-3.5 shrink-0" />
+          {translate(
+            'auto.components.settings.RuntimePairingUrlGenerator.generated-loopback-warning',
+            'These links were generated for {{address}}, so only this computer can open them. Pick a reachable address above and generate again to pair another device.',
+            { address: generatedAddress ?? '' }
+          )}
+        </p>
+      ) : null}
 
       {webClientUrl ? (
         <GeneratedUrlRow

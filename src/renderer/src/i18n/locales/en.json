@@ -6718,7 +6718,9 @@
           "custom-description": "Advertise an address another device can reach — a LAN or Tailscale host, or a full ws(s):// URL.",
           "custom-hint": "Enter a host, host:port, or a ws(s):// URL.",
           "custom-cancel": "Cancel",
-          "custom-use": "Use address"
+          "custom-use": "Use address",
+          "reachable-address-hint": "The other device must be able to reach {{address}}.",
+          "generated-loopback-warning": "These links were generated for {{address}}, so only this computer can open them. Pick a reachable address above and generate again to pair another device."
         },
         "Settings": {
           "3bf149e873": "Project Settings > {{value0}}",

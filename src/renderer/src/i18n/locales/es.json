@@ -6658,7 +6658,9 @@
           "custom-description": "Anuncia una dirección que otro dispositivo pueda alcanzar: un host de LAN o Tailscale, o una URL ws(s):// completa.",
           "custom-hint": "Introduce un host, host:puerto o una URL ws(s)://.",
           "custom-cancel": "Cancelar",
-          "custom-use": "Usar dirección"
+          "custom-use": "Usar dirección",
+          "reachable-address-hint": "The other device must be able to reach {{address}}.",
+          "generated-loopback-warning": "These links were generated for {{address}}, so only this computer can open them. Pick a reachable address above and generate again to pair another device."
         },
         "Settings": {
           "3bf149e873": "Configuración del proyecto > {{value0}}",

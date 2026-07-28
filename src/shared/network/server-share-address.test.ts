@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { parseServerShareAddress } from './server-share-address'
+import { isLoopbackShareAddress, parseServerShareAddress } from './server-share-address'
 
 describe('parseServerShareAddress', () => {
   it('accepts a bare hostname or IP', () => {
@@ -33,5 +33,38 @@ describe('parseServerShareAddress', () => {
 
   it('rejects an out-of-range port', () => {
     expect(parseServerShareAddress('my-host:70000').ok).toBe(false)
+  })
+})
+
+describe('isLoopbackShareAddress', () => {
+  it('detects loopback hosts in every accepted address form', () => {
+    for (const address of [
+      '127.0.0.1',
+      '127.1.2.3',
+      '127.0.0.1:6768',
+      'localhost',
+      'LocalHost:6768',
+      '::1',
+      '[::1]',
+      'ws://127.0.0.1:6768',
+      'wss://localhost/runtime'
+    ]) {
+      expect(isLoopbackShareAddress(address), address).toBe(true)
+    }
+  })
+
+  it('leaves routable LAN, tailnet, and public addresses alone', () => {
+    for (const address of [
+      '192.168.1.50',
+      '100.64.0.2',
+      '10.0.0.5:6768',
+      'my-mac.tail-abcd.ts.net',
+      'ws://100.64.0.2:6768',
+      '128.0.0.1',
+      '27.0.0.1',
+      ''
+    ]) {
+      expect(isLoopbackShareAddress(address), address).toBe(false)
+    }
   })
 })
