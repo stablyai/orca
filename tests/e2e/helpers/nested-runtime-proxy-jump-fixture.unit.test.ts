@@ -5,7 +5,8 @@ import {
   type NestedRuntimeProxyJumpFixture
 } from './nested-runtime-proxy-jump-fixture'
 
-describe('nested runtime ProxyJump fixture', () => {
+// Why: the fixture writes a /bin/sh ssh wrapper and asserts its exec bit, neither of which exists on Windows.
+describe.skipIf(process.platform === 'win32')('nested runtime ProxyJump fixture', () => {
   let fixture: NestedRuntimeProxyJumpFixture | null = null
 
   afterEach(() => fixture?.dispose())

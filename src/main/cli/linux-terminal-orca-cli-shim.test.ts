@@ -26,7 +26,8 @@ afterEach(async () => {
   await Promise.all(created.splice(0).map((dir) => rm(dir, { recursive: true, force: true })))
 })
 
-describe('ensureLinuxTerminalOrcaCliShimDir', () => {
+// Why: the shim is only installed on Linux (ipc/pty.ts), and NTFS has no POSIX exec bit, so the mode assertions can never hold on Windows.
+describe.skipIf(process.platform === 'win32')('ensureLinuxTerminalOrcaCliShimDir', () => {
   it('writes an executable bare-orca shim that execs the bundled orca-ide launcher', async () => {
     const { userDataPath, resourcesPath } = await makeFixture()
 

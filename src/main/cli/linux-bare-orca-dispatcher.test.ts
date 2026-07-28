@@ -25,7 +25,8 @@ afterEach(async () => {
   await Promise.all(created.splice(0).map((dir) => rm(dir, { recursive: true, force: true })))
 })
 
-describe('installLinuxBareOrcaDispatcher', () => {
+// Why: the dispatcher is only installed on Linux (index.ts), and NTFS has no POSIX exec bit, so the mode assertions can never hold on Windows.
+describe.skipIf(process.platform === 'win32')('installLinuxBareOrcaDispatcher', () => {
   it('writes an executable bare-orca dispatcher that execs the bundled orca-ide launcher', async () => {
     const { homePath, resourcesPath } = await makeFixture()
 
