@@ -524,7 +524,9 @@ function listDeclaredFactories(): string[] {
   const names = roots
     .flatMap((root) => walkSources(root))
     .flatMap((file) => [
-      ...fs.readFileSync(file, 'utf8').matchAll(/export const (create[A-Za-z0-9]*Styles)\s*=/g)
+      ...fs
+        .readFileSync(file, 'utf8')
+        .matchAll(/export (?:const|function) (create[A-Za-z0-9]*Styles)\s*[:=(]/g)
     ])
     .map((match) => match[1])
   return [...new Set(names)].sort()

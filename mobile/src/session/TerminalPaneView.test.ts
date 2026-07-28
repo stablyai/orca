@@ -49,7 +49,7 @@ function lastTerminalThemeProp(): MobileTerminalTheme | undefined {
   const props = terminalWebViewRender.mock.calls.at(-1)?.[0] as {
     terminalTheme?: MobileTerminalTheme
   }
-  return props.terminalTheme
+  return props?.terminalTheme
 }
 
 describe('TerminalPaneView', () => {

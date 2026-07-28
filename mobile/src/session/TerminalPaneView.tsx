@@ -1,4 +1,4 @@
-import { useCallback } from 'react'
+import React, { useCallback } from 'react'
 import { StyleSheet, View } from 'react-native'
 import { TerminalWebView } from '../terminal/TerminalWebView'
 import type {

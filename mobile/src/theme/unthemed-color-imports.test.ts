@@ -36,7 +36,7 @@ const MODE_FIXED_FACTORY_LITERALS: Readonly<Record<string, string>> = {
 }
 
 const COLOUR_LITERAL = /#[0-9a-fA-F]{3,8}\b|\brgba?\([^)]*\)/g
-const FACTORY_DECL = /export const (create[A-Za-z0-9]*Styles)\s*=/g
+const FACTORY_DECL = /export (?:const|function) (create[A-Za-z0-9]*Styles)\s*[:=(]/g
 
 const MOBILE_ROOT = path.resolve(__dirname, '../..')
 // Matches any relative path ending in mobile-theme (…/theme/mobile-theme or ./mobile-theme).
@@ -103,11 +103,19 @@ function listFactoryLiterals(): string[] {
       // Why the slice bound: a factory that returns a spread instead of its
       // own StyleSheet.create must not adopt the NEXT factory's sheet.
       const nextIndex = declarations[i + 1]?.index ?? src.length
-      const body = sheetBodyAfter(src.slice(0, nextIndex), declaration.index)
-      if (!body) {
-        continue
+      const scope = src.slice(0, nextIndex)
+      const literals = new Set<string>()
+      for (let from = declaration.index; ; ) {
+        const body = sheetBodyAfter(scope, from)
+        if (!body) {
+          break
+        }
+        for (const literal of body.match(COLOUR_LITERAL) ?? []) {
+          literals.add(literal)
+        }
+        from = scope.indexOf(body, from) + body.length
       }
-      for (const literal of new Set(body.match(COLOUR_LITERAL) ?? [])) {
+      for (const literal of literals) {
         found.push(`${rel}#${declaration[1]}#${literal}`)
       }
     }
