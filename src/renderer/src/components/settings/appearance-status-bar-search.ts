@@ -4,6 +4,7 @@ import { translate } from '@/i18n/i18n'
 import { translateSearchKeyword } from './settings-search-keywords'
 import { getAntigravityStatusBarToggleSearchEntry } from './appearance-status-bar-antigravity-toggle-search'
 import { getGrokStatusBarToggleSearchEntry } from './appearance-status-bar-grok-toggle-search'
+import { getOllamaCloudStatusBarToggleSearchEntry } from './appearance-status-bar-ollama-cloud-toggle-search'
 
 export const getStatusBarToggles = createLocalizedCatalog(
   (): readonly {
@@ -101,6 +102,7 @@ export const getStatusBarToggles = createLocalizedCatalog(
       )
     },
     getAntigravityStatusBarToggleSearchEntry(),
+    getOllamaCloudStatusBarToggleSearchEntry(),
     {
       id: 'opencode-go',
       title: translate(

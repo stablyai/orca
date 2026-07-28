@@ -49,6 +49,7 @@ function recordStatusBarToggleInteraction(
     id === 'codex' ||
     id === 'gemini' ||
     id === 'opencode-go' ||
+    id === 'ollama-cloud' ||
     id === 'kimi' ||
     id === 'antigravity' ||
     id === 'minimax' ||
