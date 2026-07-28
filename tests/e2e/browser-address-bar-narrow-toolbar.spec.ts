@@ -19,10 +19,13 @@ import {
 } from './helpers/store'
 import { BROWSER_ADDRESS_BAR_MIN_INLINE_WIDTH } from '../../src/renderer/src/components/browser-pane/browser-address-bar-expansion'
 
-// Why: the left sidebar keeps its default 280px, so this leaves the browser
-// pane around 420px — narrow enough to squeeze the address bar away, wide
-// enough that the toolbar itself still renders its buttons.
-const NARROW_WINDOW_WIDTH = 700
+// Why: the toolbar must land in a band — squeezed enough that the inline field
+// collapses, roomy enough that the overlay itself has somewhere to go. Target
+// the middle of that band rather than a fixed window width, because how much
+// chrome flanks the pane (left sidebar, and a right sidebar that other startup
+// paths may re-open) varies between runs.
+const TARGET_TOOLBAR_WIDTH = 420
+const MIN_USABLE_TOOLBAR_WIDTH = BROWSER_ADDRESS_BAR_MIN_INLINE_WIDTH + 100
 const NARROW_WINDOW_HEIGHT = 800
 
 async function startDestinationServer(): Promise<{ url: string; close: () => Promise<void> }> {
@@ -52,35 +55,77 @@ async function createBlankBrowserTab(page: Page, worktreeId: string): Promise<vo
   await expect.poll(async () => getActiveTabType(page), { timeout: 10_000 }).toBe('browser')
 }
 
-async function closeRightSidebar(page: Page): Promise<void> {
-  await page.evaluate(() => {
-    window.__store?.getState().setRightSidebarOpen(false)
-  })
-}
-
-async function resizeWindow(electronApp: ElectronApplication): Promise<void> {
+async function setWindowWidth(electronApp: ElectronApplication, width: number): Promise<void> {
   await electronApp.evaluate(
-    ({ BrowserWindow }, { width, height }) => {
+    ({ BrowserWindow }, size) => {
       const window = BrowserWindow.getAllWindows()[0]
       if (!window) {
         throw new Error('No Electron window')
       }
-      window.setSize(width, height)
+      window.setSize(size.width, size.height)
     },
-    { width: NARROW_WINDOW_WIDTH, height: NARROW_WINDOW_HEIGHT }
+    { width: Math.round(width), height: NARROW_WINDOW_HEIGHT }
   )
+}
+
+function browserToolbar(page: Page): Locator {
+  return page.locator('[data-contextual-tour-target="browser-toolbar"]').first()
+}
+
+async function toolbarWidth(page: Page): Promise<number> {
+  return browserToolbar(page).evaluate((node) => Math.round(node.getBoundingClientRect().width))
 }
 
 function addressBarInput(page: Page): Locator {
   return page.locator('[data-orca-browser-address-bar="true"]')
 }
 
-async function blurAddressBar(page: Page): Promise<void> {
-  await addressBarInput(page).evaluate((node) => node.blur())
+function addressBarOverlay(page: Page): Locator {
+  return page.locator('[data-orca-browser-address-bar-overlay="true"]')
 }
 
 async function addressBarInputWidth(page: Page): Promise<number> {
   return addressBarInput(page).evaluate((node) => node.getBoundingClientRect().width)
+}
+
+/**
+ * Drive the app to the resting state this spec is about: a squeezed-but-usable
+ * toolbar whose address bar is collapsed and unfocused.
+ *
+ * Why one loop rather than three: both preconditions are actively fought by the
+ * app. Startup paths re-open the right sidebar (which alone leaves the pane
+ * ~70px, too narrow for the overlay to have anywhere to go), and BrowserPane
+ * re-focuses a blank tab's address bar across several animation frames plus the
+ * blank-url did-finish-load handler. Settling them separately just lets whichever
+ * settled first drift back while the next one runs, so re-assert all of them
+ * together until they hold at the same time. The interval must clear the 200ms
+ * blur-close timer in BrowserAddressBar for the collapse to register.
+ */
+async function settleToSqueezedRestingState(
+  page: Page,
+  electronApp: ElectronApplication
+): Promise<void> {
+  await expect
+    .poll(
+      async () => {
+        await page.evaluate(() => {
+          window.__store?.getState().setRightSidebarOpen(false)
+        })
+        const [innerWidth, toolbar] = await Promise.all([
+          page.evaluate(() => window.innerWidth),
+          toolbarWidth(page)
+        ])
+        // Chrome flanking the pane is everything the toolbar didn't get.
+        await setWindowWidth(electronApp, innerWidth - toolbar + TARGET_TOOLBAR_WIDTH)
+        await addressBarInput(page).evaluate((node) => node.blur())
+        return {
+          toolbar: (await toolbarWidth(page)) > MIN_USABLE_TOOLBAR_WIDTH,
+          collapsed: (await addressBarOverlay(page).count()) === 0
+        }
+      },
+      { timeout: 30_000, intervals: [300, 300, 300, 500, 500, 1000] }
+    )
+    .toEqual({ toolbar: true, collapsed: true })
 }
 
 test.describe('Browser address bar in a narrow toolbar', () => {
@@ -98,15 +143,9 @@ test.describe('Browser address bar in a narrow toolbar', () => {
     try {
       const worktreeId = (await getActiveWorktreeId(orcaPage))!
       await createBlankBrowserTab(orcaPage, worktreeId)
-      await closeRightSidebar(orcaPage)
-      await resizeWindow(electronApp)
+      await settleToSqueezedRestingState(orcaPage, electronApp)
 
-      // Why: a fresh blank tab auto-focuses the address bar, which already
-      // expands it. Blur first to observe the squeezed resting state.
-      await blurAddressBar(orcaPage)
-
-      const overlay = orcaPage.locator('[data-orca-browser-address-bar-overlay="true"]')
-      await expect(overlay).toHaveCount(0)
+      const overlay = addressBarOverlay(orcaPage)
       // The bug: the inline field is squeezed away entirely.
       await expect.poll(() => addressBarInputWidth(orcaPage), { timeout: 10_000 }).toBeLessThan(40)
 
