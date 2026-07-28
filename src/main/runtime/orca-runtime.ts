@@ -30023,11 +30023,23 @@ export class OrcaRuntimeService {
     const activeRun =
       dispatch.status === 'pending' || dispatch.status === 'dispatched'
         ? db?.getActiveCoordinatorRun?.()
+    // Why: coordinator_runs has no session/worktree scoping — it's a legacy
+    // singleton table that only tracks the most recently started run app-wide
+    // (#getActiveCoordinatorRun). With two orchestration flows running in
+    // different worktrees at once, blindly trusting it here would attribute
+    // one worktree's dispatch to another worktree's coordinator. Only use it
+    // when the coordinator's own terminal lives in this same worktree.
+    const handleWorktreeId = this.getWorktreeIdForTerminalHandle(handle)
+    const scopedActiveRun =
+      activeRun &&
+      handleWorktreeId &&
+      this.getWorktreeIdForTerminalHandle(activeRun.coordinator_handle) === handleWorktreeId
+        ? activeRun
         : undefined
     const parentTerminalHandle =
       task?.created_by_terminal_handle ??
-      (activeRun?.coordinator_handle && activeRun.coordinator_handle !== handle
-        ? activeRun.coordinator_handle
+      (scopedActiveRun?.coordinator_handle && scopedActiveRun.coordinator_handle !== handle
+        ? scopedActiveRun.coordinator_handle
         : undefined)
     const parentPaneKey = parentTerminalHandle
       ? this.getPaneKeyForTerminalHandle(parentTerminalHandle)
@@ -30041,8 +30053,10 @@ export class OrcaRuntimeService {
       ...(display.displayName ? { displayName: display.displayName } : {}),
       ...(parentTerminalHandle ? { parentTerminalHandle } : {}),
       ...(parentPaneKey ? { parentPaneKey } : {}),
-      ...(activeRun?.coordinator_handle ? { coordinatorHandle: activeRun.coordinator_handle } : {}),
-      ...(activeRun?.id ? { orchestrationRunId: activeRun.id } : {})
+      ...(scopedActiveRun?.coordinator_handle
+        ? { coordinatorHandle: scopedActiveRun.coordinator_handle }
+        : {}),
+      ...(scopedActiveRun?.id ? { orchestrationRunId: scopedActiveRun.id } : {})
     }
   }
 
@@ -30121,6 +30135,18 @@ export class OrcaRuntimeService {
       return null
     }
     return makePaneKey(record.tabId, record.leafId)
+  }
+
+  private getWorktreeIdForTerminalHandle(handle: string): string | null {
+    const livePty = this.getLivePtyForHandle(handle)
+    if (livePty?.pty.worktreeId) {
+      return livePty.pty.worktreeId
+    }
+    const record = this.handles.get(handle)
+    if (!record || record.runtimeId !== this.runtimeId) {
+      return null
+    }
+    return record.worktreeId ?? null
   }
 
   private setPtyManagementTitleFromObservedTitle(

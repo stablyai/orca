@@ -38023,6 +38023,91 @@ describe('OrcaRuntimeService', () => {
     })
   })
 
+  it('does not attribute a dispatch to an active coordinator run from a different worktree', () => {
+    const otherWorktreeId = `${TEST_REPO_ID}::/tmp/workspaces/other-session`
+    const runtimeStore = {
+      ...store,
+      getAllWorktreeMeta: () => ({
+        ...store.getAllWorktreeMeta(),
+        [otherWorktreeId]: store.getAllWorktreeMeta()[TEST_WORKTREE_ID]
+      }),
+      getWorktreeMeta: (worktreeId: string) =>
+        worktreeId === otherWorktreeId
+          ? store.getAllWorktreeMeta()[TEST_WORKTREE_ID]
+          : store.getWorktreeMeta(worktreeId)
+    }
+    const runtime = new OrcaRuntimeService(runtimeStore as never)
+    const workerLeafId = '66666666-6666-4666-8666-666666666666'
+    const otherCoordinatorLeafId = '99999999-9999-4999-8999-999999999999'
+    const workerPaneKey = makePaneKey('tab-worker', workerLeafId)
+    const workerHandle = runtime.preAllocateHandleForPty('pty-worker')
+    const otherCoordinatorHandle = runtime.preAllocateHandleForPty('pty-other-coordinator')
+    runtime.setOrchestrationDb({
+      getActiveDispatchForTerminal: vi.fn((handle: string) =>
+        handle === workerHandle
+          ? {
+              id: 'ctx-1',
+              task_id: 'task-1',
+              assignee_handle: workerHandle,
+              status: 'dispatched'
+            }
+          : undefined
+      ),
+      getLatestDispatchForTerminal: vi.fn(() => undefined),
+      // Why: reproduces a task dispatched without lineage capture — the code
+      // must not fall back to whichever coordinator run happens to be most
+      // recently active app-wide when it lives in a different worktree.
+      getTask: vi.fn(() => ({ id: 'task-1' })),
+      getActiveCoordinatorRun: vi.fn(() => ({
+        id: 'run-other',
+        coordinator_handle: otherCoordinatorHandle
+      }))
+    } as never)
+    runtime.attachWindow(1)
+
+    const result = runtime.syncWindowGraph(1, {
+      tabs: [
+        {
+          tabId: 'tab-worker',
+          worktreeId: TEST_WORKTREE_ID,
+          title: 'Claude Code',
+          activeLeafId: workerLeafId,
+          layout: null
+        },
+        {
+          tabId: 'tab-other-coordinator',
+          worktreeId: otherWorktreeId,
+          title: 'Codex',
+          activeLeafId: otherCoordinatorLeafId,
+          layout: null
+        }
+      ],
+      leaves: [
+        {
+          tabId: 'tab-worker',
+          worktreeId: TEST_WORKTREE_ID,
+          leafId: workerLeafId,
+          paneRuntimeId: 1,
+          ptyId: 'pty-worker',
+          paneTitle: null
+        },
+        {
+          tabId: 'tab-other-coordinator',
+          worktreeId: otherWorktreeId,
+          leafId: otherCoordinatorLeafId,
+          paneRuntimeId: 2,
+          ptyId: 'pty-other-coordinator',
+          paneTitle: null
+        }
+      ]
+    })
+
+    expect(result.agentOrchestrationByPaneKey?.[workerPaneKey]).toEqual({
+      taskId: 'task-1',
+      dispatchId: 'ctx-1'
+    })
+  })
+
   it('returns completed orchestration context for renderer-synced terminal leaves', () => {
     const runtime = new OrcaRuntimeService(store)
     const workerLeafId = '33333333-3333-4333-8333-333333333333'
