@@ -50,6 +50,7 @@ import type {
 import { assertClipboardTextWriteWithinLimitWithYield } from '../../shared/clipboard-text'
 import { normalizeBrowserNavigationUrl } from '../../shared/browser-url'
 import { iterateBrowserTextInsertionChunks } from './browser-text-insertion'
+import { captureAgentBrowserJsonAtProcessExit } from './agent-browser-windows-json-exit'
 
 // Why: must exceed agent-browser's internal timeouts (goto 30s, wait 60s) so the bridge never kills a command before its own timeout fires.
 const EXEC_TIMEOUT_MS = 90_000
@@ -2660,6 +2661,69 @@ export class AgentBrowserBridge {
     return new Promise<string>((resolve, reject) => {
       const session = this.sessions.get(sessionName)
       let child: ChildProcess | null = null
+      let finished = false
+      let detachWindowsExitCapture = (): void => {}
+      const finish = (error: Error | null, stdout: string, stderr: string): void => {
+        if (finished) {
+          return
+        }
+        finished = true
+        detachWindowsExitCapture()
+        if (session && session.activeProcess === child) {
+          session.activeProcess = null
+        }
+        if (child && this.cancelledProcesses.has(child)) {
+          this.cancelledProcesses.delete(child)
+          reject(new BrowserError('browser_tab_closed', 'Tab was closed while command was running'))
+          return
+        }
+
+        const liveSession = this.sessions.get(sessionName)
+
+        if (error && (error as NodeJS.ErrnoException & { killed?: boolean }).killed) {
+          if (execOptions?.timeoutError) {
+            reject(execOptions.timeoutError)
+            return
+          }
+          if (liveSession) {
+            liveSession.consecutiveTimeouts++
+            if (liveSession.consecutiveTimeouts >= CONSECUTIVE_TIMEOUT_LIMIT) {
+              // Why: 3 consecutive timeouts means the daemon is likely stuck — destroy and recreate
+              this.destroySession(sessionName)
+            }
+          }
+          reject(new BrowserError('browser_error', 'Browser command timed out'))
+          return
+        }
+
+        if (liveSession) {
+          liveSession.consecutiveTimeouts = 0
+        }
+
+        if (error) {
+          // Why: agent-browser exits non-zero on failure but still writes structured JSON to stdout — parse it for the real error.
+          if (stdout) {
+            try {
+              const parsed = JSON.parse(stdout)
+              if (parsed.error) {
+                const code = classifyErrorCode(parsed.error)
+                reject(
+                  this.createCommandError(sessionName, parsed.error, code, session?.webContentsId)
+                )
+                return
+              }
+            } catch {
+              // stdout not valid JSON — fall through to stderr/error.message
+            }
+          }
+          const message = stderr || error.message
+          const code = classifyErrorCode(message)
+          reject(this.createCommandError(sessionName, message, code, session?.webContentsId))
+          return
+        }
+
+        resolve(stdout)
+      }
       child = execFile(
         this.agentBrowserBin,
         args,
@@ -2671,65 +2735,13 @@ export class AgentBrowserBridge {
             ? { ...process.env, ...execOptions.envOverrides }
             : process.env
         },
-        (error, stdout, stderr) => {
-          if (session && session.activeProcess === child) {
-            session.activeProcess = null
-          }
-          if (child && this.cancelledProcesses.has(child)) {
-            this.cancelledProcesses.delete(child)
-            reject(
-              new BrowserError('browser_tab_closed', 'Tab was closed while command was running')
-            )
-            return
-          }
-
-          const liveSession = this.sessions.get(sessionName)
-
-          if (error && (error as NodeJS.ErrnoException & { killed?: boolean }).killed) {
-            if (execOptions?.timeoutError) {
-              reject(execOptions.timeoutError)
-              return
-            }
-            if (liveSession) {
-              liveSession.consecutiveTimeouts++
-              if (liveSession.consecutiveTimeouts >= CONSECUTIVE_TIMEOUT_LIMIT) {
-                // Why: 3 consecutive timeouts means the daemon is likely stuck — destroy and recreate
-                this.destroySession(sessionName)
-              }
-            }
-            reject(new BrowserError('browser_error', 'Browser command timed out'))
-            return
-          }
-
-          if (liveSession) {
-            liveSession.consecutiveTimeouts = 0
-          }
-
-          if (error) {
-            // Why: agent-browser exits non-zero on failure but still writes structured JSON to stdout — parse it for the real error.
-            if (stdout) {
-              try {
-                const parsed = JSON.parse(stdout)
-                if (parsed.error) {
-                  const code = classifyErrorCode(parsed.error)
-                  reject(
-                    this.createCommandError(sessionName, parsed.error, code, session?.webContentsId)
-                  )
-                  return
-                }
-              } catch {
-                // stdout not valid JSON — fall through to stderr/error.message
-              }
-            }
-            const message = stderr || error.message
-            const code = classifyErrorCode(message)
-            reject(this.createCommandError(sessionName, message, code, session?.webContentsId))
-            return
-          }
-
-          resolve(stdout)
-        }
+        finish
       )
+      if (!finished) {
+        detachWindowsExitCapture = captureAgentBrowserJsonAtProcessExit(child, (stdout) => {
+          finish(null, stdout, '')
+        })
+      }
       if (session) {
         session.activeProcess = child
       }

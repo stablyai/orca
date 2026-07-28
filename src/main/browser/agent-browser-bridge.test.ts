@@ -1,14 +1,22 @@
 /* eslint-disable max-lines */
+import { EventEmitter } from 'node:events'
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 
-const { execFileMock, webContentsFromIdMock, existsSyncMock, readFileSyncMock, stdinWrites } =
-  vi.hoisted(() => ({
-    execFileMock: vi.fn(),
-    webContentsFromIdMock: vi.fn(),
-    existsSyncMock: vi.fn(() => false),
-    readFileSyncMock: vi.fn(() => Buffer.from('')),
-    stdinWrites: [] as string[]
-  }))
+const {
+  execFileMock,
+  webContentsFromIdMock,
+  existsSyncMock,
+  readFileSyncMock,
+  platformMock,
+  stdinWrites
+} = vi.hoisted(() => ({
+  execFileMock: vi.fn(),
+  webContentsFromIdMock: vi.fn(),
+  existsSyncMock: vi.fn(() => false),
+  readFileSyncMock: vi.fn(() => Buffer.from('')),
+  platformMock: vi.fn(() => 'darwin'),
+  stdinWrites: [] as string[]
+}))
 
 vi.mock('child_process', () => ({ execFile: execFileMock }))
 vi.mock('fs', () => ({
@@ -18,7 +26,7 @@ vi.mock('fs', () => ({
   chmodSync: vi.fn(),
   constants: { X_OK: 1 }
 }))
-vi.mock('os', () => ({ platform: () => 'darwin', arch: () => 'arm64' }))
+vi.mock('os', () => ({ platform: platformMock, arch: () => 'arm64' }))
 vi.mock('electron', () => {
   return {
     app: { getPath: vi.fn(() => '/app'), getAppPath: vi.fn(() => '/project'), isPackaged: false },
@@ -307,6 +315,7 @@ describe('AgentBrowserBridge', () => {
     CdpWsProxyMock.instances.length = 0
     existsSyncMock.mockReturnValue(false)
     readFileSyncMock.mockReturnValue(Buffer.from(''))
+    platformMock.mockReturnValue('darwin')
     const wc = mockWebContents(100)
     webContentsFromIdMock.mockReturnValue(wc)
     bridge = new AgentBrowserBridge(mockBrowserManager())
@@ -434,6 +443,58 @@ describe('AgentBrowserBridge', () => {
     ).toBe('orca-tab-tab-b')
     expect(result).toEqual({ browserPageId: 'tab-b', snapshot: 'tree output' })
     expect(b.getActiveWebContentsId()).toBe(1)
+  })
+
+  it('returns large Windows snapshot output when a new page session keeps stdout open', async () => {
+    platformMock.mockReturnValue('win32')
+    const tabs = new Map([
+      ['tab-a', 1],
+      ['tab-b', 2]
+    ])
+    const wc1 = mockWebContents(1, 'https://a.com', 'A')
+    const wc2 = mockWebContents(2, 'https://b.com', 'B')
+    webContentsFromIdMock.mockImplementation((id: number) => (id === 1 ? wc1 : wc2))
+    const b = new AgentBrowserBridge(mockBrowserManager(tabs))
+    b.setActiveTab(1)
+    const snapshot = 'x'.repeat(256 * 1024)
+
+    execFileMock.mockImplementation(
+      (_bin: string, args: string[], _opts: unknown, cb: ExecFileCallback) => {
+        if (args.includes('close')) {
+          cb(null, JSON.stringify({ success: true, data: null }), '')
+          return { kill: vi.fn() }
+        }
+        const child = new EventEmitter() as EventEmitter & {
+          stdout: EventEmitter
+          stdin: { on: ReturnType<typeof vi.fn>; end: ReturnType<typeof vi.fn> }
+          kill: ReturnType<typeof vi.fn>
+        }
+        child.stdout = new EventEmitter()
+        child.stdin = { on: vi.fn(), end: vi.fn() }
+        child.kill = vi.fn()
+        const output = JSON.stringify({ success: true, data: { snapshot } })
+        queueMicrotask(() => {
+          const exitOffset = 128 * 1024
+          for (let offset = 0; offset < exitOffset; offset += 16 * 1024) {
+            child.stdout.emit('data', Buffer.from(output.slice(offset, offset + 16 * 1024)))
+          }
+          child.emit('exit', 0, null)
+          queueMicrotask(() => {
+            for (let offset = exitOffset; offset < output.length; offset += 16 * 1024) {
+              child.stdout.emit('data', Buffer.from(output.slice(offset, offset + 16 * 1024)))
+            }
+          })
+        })
+        return child
+      }
+    )
+
+    await expect(b.snapshot(undefined, 'tab-b')).resolves.toEqual({
+      browserPageId: 'tab-b',
+      snapshot
+    })
+    const args = execFileMock.mock.calls.at(-1)![1] as string[]
+    expect(args[args.indexOf('--session') + 1]).toBe('orca-tab-tab-b')
   })
 
   it('translates error response to BrowserError', async () => {
