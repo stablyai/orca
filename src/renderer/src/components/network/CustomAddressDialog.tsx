@@ -5,7 +5,8 @@ import {
   DialogDescription,
   DialogFooter,
   DialogHeader,
-  DialogTitle
+  DialogTitle,
+  DialogTrigger
 } from '@/components/ui/dialog'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -26,6 +27,7 @@ export type CustomAddressDialogCopy = {
 type CustomAddressDialogProps = {
   open: boolean
   onOpenChange: (open: boolean) => void
+  trigger?: React.ReactElement
   // Why: prefill from the current selection when it is already a custom value
   // so reopening to edit shows what is in use rather than a blank field.
   initialValue?: string
@@ -42,6 +44,7 @@ type CustomAddressDialogProps = {
 export function CustomAddressDialog({
   open,
   onOpenChange,
+  trigger,
   initialValue,
   validate,
   copy,
@@ -73,6 +76,7 @@ export function CustomAddressDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
+      {trigger ? <DialogTrigger asChild>{trigger}</DialogTrigger> : null}
       <DialogContent className="sm:max-w-md">
         <DialogHeader>
           <DialogTitle>{copy.title}</DialogTitle>

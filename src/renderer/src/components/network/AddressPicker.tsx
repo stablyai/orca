@@ -1,13 +1,7 @@
-import React, { useState } from 'react'
+import React, { useRef, useState } from 'react'
 import { Plus } from 'lucide-react'
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectSeparator,
-  SelectTrigger,
-  SelectValue
-} from '../ui/select'
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../ui/select'
+import { Button } from '../ui/button'
 import {
   CustomAddressDialog,
   type CustomAddressDialogCopy,
@@ -19,9 +13,16 @@ export type AddressOption = {
   label: string
 }
 
-// Why: a sentinel Select value for the footer action. It is never committed as
-// a real address; selecting it opens the custom-address dialog instead.
-const ADD_CUSTOM_VALUE = '__add_custom_address__'
+function getUniqueAddressOptions(options: readonly AddressOption[]): AddressOption[] {
+  const seenValues = new Set<string>()
+  return options.filter((option) => {
+    if (seenValues.has(option.value)) {
+      return false
+    }
+    seenValues.add(option.value)
+    return true
+  })
+}
 
 export type AddressPickerProps = {
   options: readonly AddressOption[]
@@ -42,10 +43,6 @@ export type AddressPickerProps = {
   id?: string
 }
 
-// Note (crash cluster C6, React #185 in settings): the throwing dispatch is in
-// @radix-ui/react-select's SelectItem unmount cleanup, not in our code — this
-// file holds no unmount-phase setState, so there is nothing here to guard.
-// Item churn here is derived from props only; re-audit if that stops holding.
 export function AddressPicker({
   options,
   value,
@@ -62,47 +59,51 @@ export function AddressPicker({
   id
 }: AddressPickerProps): React.JSX.Element {
   const [dialogOpen, setDialogOpen] = useState(false)
+  const dialogInitialValueRef = useRef<string | undefined>(undefined)
 
-  const isCustomSelection =
-    value !== undefined && value !== '' && !options.some((option) => option.value === value)
-
-  const handleValueChange = (next: string): void => {
-    if (next === ADD_CUSTOM_VALUE) {
-      setDialogOpen(true)
-      return
+  const uniqueOptions = getUniqueAddressOptions(options)
+  const customOption =
+    value !== undefined && value !== '' && !uniqueOptions.some((option) => option.value === value)
+      ? { value, label: formatCustomLabel(value) }
+      : undefined
+  const selectOptions = customOption ? [...uniqueOptions, customOption] : uniqueOptions
+  const handleDialogOpenChange = (open: boolean): void => {
+    if (open) {
+      dialogInitialValueRef.current = customOption?.value
     }
-    onValueChange(next)
+    setDialogOpen(open)
   }
 
   return (
     <>
-      <Select value={value ?? ''} onValueChange={handleValueChange} disabled={disabled}>
+      <Select value={value ?? ''} onValueChange={onValueChange} disabled={disabled}>
         <SelectTrigger id={id} size="sm" className={className} aria-label={triggerAriaLabel}>
           <SelectValue placeholder={placeholder} />
         </SelectTrigger>
         <SelectContent>
-          {options.map((option) => (
-            <SelectItem key={option.value} value={option.value}>
+          {selectOptions.map((option) => (
+            <SelectItem key={option.value} value={option.value} textValue={option.value}>
               {option.label}
             </SelectItem>
           ))}
-          {isCustomSelection ? (
-            <SelectItem value={value}>{formatCustomLabel(value)}</SelectItem>
-          ) : null}
-          {options.length > 0 || isCustomSelection ? <SelectSeparator /> : null}
-          <SelectItem
-            value={ADD_CUSTOM_VALUE}
-            className="text-muted-foreground focus:text-foreground"
-          >
-            <Plus className="size-3.5" />
-            {addCustomLabel}
-          </SelectItem>
         </SelectContent>
       </Select>
       <CustomAddressDialog
         open={dialogOpen}
-        onOpenChange={setDialogOpen}
-        initialValue={isCustomSelection ? value : undefined}
+        onOpenChange={handleDialogOpenChange}
+        trigger={
+          <Button
+            type="button"
+            variant="ghost"
+            size="sm"
+            disabled={disabled}
+            className="max-w-full text-muted-foreground"
+          >
+            <Plus className="size-3.5" />
+            <span className="min-w-0 truncate">{addCustomLabel}</span>
+          </Button>
+        }
+        initialValue={dialogInitialValueRef.current}
         validate={validateCustom}
         copy={customDialogCopy}
         inputId={customInputId}
