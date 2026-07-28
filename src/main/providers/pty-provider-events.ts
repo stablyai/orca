@@ -15,8 +15,15 @@ export type PtyTransientFact =
   | { kind: 'command-finished'; exitCode: number | null }
   | { kind: 'pr-link'; link: TerminalGitHubPRLink }
   | { kind: '2031-subscribe' }
+  | { kind: '2031-unsubscribe' }
 
 export type PtyBackgroundStreamEvent =
-  | { id: string; kind: 'backgroundMarker'; background: boolean; scanSeedAnsi?: string }
+  | {
+      id: string
+      kind: 'backgroundMarker'
+      background: boolean
+      scanSeedAnsi?: string
+      mode2031PendingSubscribe?: true
+    }
   | { id: string; kind: 'dataGap'; droppedChars: number; sequenceChars?: number }
   | { id: string; kind: 'transientFact'; fact: PtyTransientFact }

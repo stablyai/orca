@@ -6,7 +6,11 @@
  * OSC 9999 path (#7970) for agents that never emit OSC.
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import type { RuntimeMobileSessionTabsSnapshot } from '../../shared/runtime-types'
+import type {
+  RuntimeMobileSessionTabsResult,
+  RuntimeMobileSessionTabsSnapshot,
+  RuntimeMobileSessionTerminalClientTab
+} from '../../shared/runtime-types'
 import type { WorkspaceSessionState } from '../../shared/types'
 import type { AgentStatusIpcPayload } from '../../shared/agent-status-types'
 import { OrcaRuntimeService } from './orca-runtime'
@@ -82,7 +86,7 @@ function createRuntime(hookSnapshot: () => AgentStatusIpcPayload[]) {
     undefined,
     { getAgentStatusSnapshot: hookSnapshot }
   )
-  const events: RuntimeMobileSessionTabsSnapshot[] = []
+  const events: RuntimeMobileSessionTabsResult[] = []
   const unsubscribe = runtime.onMobileSessionTabsChanged((snapshot) => events.push(snapshot))
   const syncGraph = (): void => {
     runtime.syncWindowGraph(1, {
@@ -92,6 +96,13 @@ function createRuntime(hookSnapshot: () => AgentStatusIpcPayload[]) {
     })
   }
   return { runtime, events, syncGraph, unsubscribe }
+}
+
+function firstTerminalTab(
+  result: RuntimeMobileSessionTabsResult | undefined
+): RuntimeMobileSessionTerminalClientTab | undefined {
+  const tab = result?.tabs.find((t) => t.type === 'terminal')
+  return tab?.type === 'terminal' ? tab : undefined
 }
 
 describe('headless hook-only agent status over session.tabs', () => {
@@ -122,9 +133,7 @@ describe('headless hook-only agent status over session.tabs', () => {
     syncGraph()
     vi.advanceTimersByTime(60)
 
-    const terminal = events[0]?.tabs[0]
-    expect(terminal?.type).toBe('terminal')
-    expect(terminal).toMatchObject({
+    expect(firstTerminalTab(events[0])).toMatchObject({
       agentStatus: expect.objectContaining({
         state: 'working',
         agentType: 'opencode',
@@ -152,8 +161,7 @@ describe('headless hook-only agent status over session.tabs', () => {
     syncGraph()
     vi.advanceTimersByTime(60)
 
-    const terminal = events[0]?.tabs[0]
-    expect(terminal?.agentStatus).toBeUndefined()
+    expect(firstTerminalTab(events[0])?.agentStatus).toBeUndefined()
   })
 
   it('republishes session.tabs when touchMobileSessionSnapshotsForPty fires after a hook change', () => {
@@ -162,7 +170,7 @@ describe('headless hook-only agent status over session.tabs', () => {
 
     syncGraph()
     vi.advanceTimersByTime(60)
-    expect(events[0]?.tabs[0]?.agentStatus).toBeUndefined()
+    expect(firstTerminalTab(events[0])?.agentStatus).toBeUndefined()
 
     // Why: simulates the onAgentStatus listener resolving the pane PTY and republishing
     // after an HTTP hook POST lands in the agent-hook cache.
@@ -184,7 +192,7 @@ describe('headless hook-only agent status over session.tabs', () => {
     runtime.touchMobileSessionSnapshotsForPty(PTY)
     vi.advanceTimersByTime(120)
 
-    expect(events[0]?.tabs[0]).toMatchObject({
+    expect(firstTerminalTab(events[0])).toMatchObject({
       agentStatus: expect.objectContaining({ state: 'working', prompt: 'now working' })
     })
   })

@@ -44,8 +44,9 @@ import {
   removeSafeUntrackedDiscardTarget,
   removeSafeUntrackedDiscardTargets
 } from '../../shared/git-discard-path-safety'
+import { readBranchCompareHead } from '../../shared/git-branch-compare-head'
 import { resolveWorktreeAddBaseRef } from '../../shared/worktree-base-ref'
-import { hasWorktreeBaseCommitRef } from './worktree-base-ref-probe'
+import { resolveWorktreeBaseCommitOid } from './worktree-base-ref-probe'
 import { getLargeDiffRenderLimit } from '../../shared/large-diff-render-limit'
 import { InFlightPromiseDedupe, stableInFlightKey } from '../../shared/in-flight-promise-dedupe'
 import type { GitRuntimeOptions } from './git-runtime-options'
@@ -1244,21 +1245,29 @@ async function loadDiff(
   let modifiedDeleted = false
 
   try {
-    const leftBlob = staged
-      ? await readGitBlobAtOidPath(worktreePath, 'HEAD', filePath, options)
-      : compareAgainstHead
-        ? await readGitBlobAtOidPath(worktreePath, 'HEAD', filePath, options)
-        : await readUnstagedLeftBlob(worktreePath, filePath, options)
-    originalContent = leftBlob.content
-    originalIsBinary = leftBlob.isBinary
-
     if (staged) {
-      const rightBlob = await readGitBlobAtIndexPath(worktreePath, filePath, options)
+      // Why concurrent: HEAD and the index are independent `git show` spawns.
+      // Only this branch qualifies — the unstaged left read chains index→HEAD.
+      const [leftBlob, rightBlob] = await Promise.all([
+        readGitBlobAtOidPath(worktreePath, 'HEAD', filePath, options),
+        readGitBlobAtIndexPath(worktreePath, filePath, options)
+      ])
+      originalContent = leftBlob.content
+      originalIsBinary = leftBlob.isBinary
       modifiedContent = rightBlob.content
       modifiedIsBinary = rightBlob.isBinary
       modifiedDeleted = !rightBlob.exists
     } else {
-      const workingTreeBlob = await readWorkingTreeFile(path.join(worktreePath, filePath))
+      // The left chain (index→HEAD) is sequential within itself, but the working
+      // tree read is a plain fs read that does not depend on it.
+      const [leftBlob, workingTreeBlob] = await Promise.all([
+        compareAgainstHead
+          ? readGitBlobAtOidPath(worktreePath, 'HEAD', filePath, options)
+          : readUnstagedLeftBlob(worktreePath, filePath, options),
+        readWorkingTreeFile(path.join(worktreePath, filePath))
+      ])
+      originalContent = leftBlob.content
+      originalIsBinary = leftBlob.isBinary
       modifiedContent = workingTreeBlob.content
       modifiedIsBinary = workingTreeBlob.isBinary
       modifiedDeleted = !workingTreeBlob.exists
@@ -1296,29 +1305,44 @@ export async function getBranchCompare(
     status: 'loading'
   }
 
-  const compareRef = await resolveCompareRef(worktreePath, options)
+  // The base-ref probe peels to a commit. Only branch refs are guaranteed to store
+  // commits; remote-tracking refs may store annotated tags whose raw oid must be preserved.
+  const reusableProbedOidByRef = new Map<string, string>()
+  const { compareRef, headOidResult, baseOidResult } = await readBranchCompareHead({
+    readCompareRef: () => resolveCompareRef(worktreePath, options),
+    resolveBaseRef: () =>
+      // Why: short refs like "origin/main" can collide with a local branch; use the proven remote-tracking ref.
+      resolveWorktreeAddBaseRef(baseRef, async (qualifiedRef) => {
+        const oid = await resolveWorktreeBaseCommitOid(worktreePath, qualifiedRef, options)
+        if (oid !== null && qualifiedRef.startsWith('refs/heads/')) {
+          reusableProbedOidByRef.set(qualifiedRef, oid)
+        }
+        return oid !== null
+      }),
+    readHeadOid: () => resolveRefOid(worktreePath, 'HEAD', options),
+    readBaseOid: (ref) => {
+      const reusableOid = reusableProbedOidByRef.get(ref)
+      return reusableOid === undefined
+        ? resolveRefOid(worktreePath, ref, options)
+        : Promise.resolve(reusableOid)
+    }
+  })
   summary.compareRef = compareRef
-  // Why: short refs like "origin/main" can collide with a local branch; use the proven remote-tracking ref.
-  const resolvedBaseRef = await resolveWorktreeAddBaseRef(baseRef, (qualifiedRef) =>
-    hasWorktreeBaseCommitRef(worktreePath, qualifiedRef, options)
-  )
 
   let headOid = ''
   let baseOid = ''
-  try {
-    headOid = await resolveRefOid(worktreePath, 'HEAD', options)
+  if (headOidResult.ok) {
+    headOid = headOidResult.oid
     summary.headOid = headOid
-  } catch {
-    try {
-      baseOid = await resolveRefOid(worktreePath, resolvedBaseRef, options)
+  } else {
+    if (baseOidResult.ok) {
+      baseOid = baseOidResult.oid
       summary.baseOid = baseOid
       // Why: an unborn branch (new remote worktree) has no changes yet; a compare error would look broken.
       summary.changedFiles = 0
       summary.commitsAhead = 0
       summary.status = 'ready'
       return { summary, entries: [] }
-    } catch {
-      // Preserve the unborn-head message when even the base is unresolvable.
     }
     summary.status = 'unborn-head'
     summary.errorMessage =
@@ -1326,10 +1350,10 @@ export async function getBranchCompare(
     return { summary, entries: [] }
   }
 
-  try {
-    baseOid = await resolveRefOid(worktreePath, resolvedBaseRef, options)
+  if (baseOidResult.ok) {
+    baseOid = baseOidResult.oid
     summary.baseOid = baseOid
-  } catch {
+  } else {
     summary.status = 'invalid-base'
     summary.errorMessage = `Base ref ${baseRef} could not be resolved in this repository.`
     return { summary, entries: [] }
@@ -1397,8 +1421,12 @@ async function loadBranchDiff(
 ): Promise<GitDiffResult> {
   try {
     const leftPath = args.oldPath ?? args.filePath
-    const leftBlob = await readGitBlobAtOidPath(worktreePath, args.mergeBase, leftPath, options)
-    const rightBlob = await readGitBlobAtOidPath(worktreePath, args.headOid, args.filePath, options)
+    // Why concurrent: the two sides are independent `git show` spawns, so awaiting
+    // them in series doubles the latency of every diff the review panel opens.
+    const [leftBlob, rightBlob] = await Promise.all([
+      readGitBlobAtOidPath(worktreePath, args.mergeBase, leftPath, options),
+      readGitBlobAtOidPath(worktreePath, args.headOid, args.filePath, options)
+    ])
 
     return buildDiffResult(
       leftBlob.content,
@@ -1510,15 +1538,14 @@ async function loadCommitDiff(
 ): Promise<GitDiffResult> {
   try {
     const leftPath = args.oldPath ?? args.filePath
-    const leftBlob = args.parentOid
-      ? await readGitBlobAtOidPath(worktreePath, args.parentOid, leftPath, options)
-      : { content: '', isBinary: false }
-    const rightBlob = await readGitBlobAtOidPath(
-      worktreePath,
-      args.commitOid,
-      args.filePath,
-      options
-    )
+    // Why concurrent: the two sides are independent `git show` spawns. A root
+    // commit has no parent to read, so that side resolves without a spawn.
+    const [leftBlob, rightBlob] = await Promise.all([
+      args.parentOid
+        ? readGitBlobAtOidPath(worktreePath, args.parentOid, leftPath, options)
+        : Promise.resolve({ content: '', isBinary: false }),
+      readGitBlobAtOidPath(worktreePath, args.commitOid, args.filePath, options)
+    ])
 
     return buildDiffResult(
       leftBlob.content,

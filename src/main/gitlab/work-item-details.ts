@@ -10,6 +10,7 @@ import type {
   GitLabPipelineJob,
   GitLabWorkItem,
   GitLabWorkItemDetails,
+  IssueSourcePreference,
   MRComment
 } from '../../shared/types'
 import { mapIssueToWorkItem, mapMRToWorkItem } from './mappers'
@@ -24,7 +25,6 @@ import {
   type LocalGitExecOptions,
   type ProjectRef
 } from './gl-utils'
-import type { IssueSourcePreference } from '../../shared/types'
 
 function encodedProject(projectPath: string): string {
   return encodeURIComponent(projectPath)

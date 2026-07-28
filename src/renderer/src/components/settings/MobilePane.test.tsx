@@ -204,11 +204,11 @@ describe('MobilePane pairing connection mode', () => {
     await user.click(screen.getByRole('button', { name: 'Generate' }))
     await waitFor(() =>
       expect(screen.getByTestId('relay-degraded-notice')).toHaveTextContent(
-        'only works on your local network'
+        'only works on your LAN or Tailscale'
       )
     )
 
-    // Switching to Local network clears the mismatch along with the QR.
+    // Switching to LAN clears the mismatch along with the QR.
     await user.click(screen.getByRole('button', { name: 'choose-local' }))
     await waitFor(() =>
       expect(screen.queryByTestId('relay-degraded-notice')).not.toBeInTheDocument()
@@ -301,7 +301,7 @@ describe('MobilePane pairing connection mode', () => {
     await new Promise((resolve) => setTimeout(resolve, 10))
     expect(screen.getByTestId('loading')).toHaveTextContent('false')
 
-    // Switching to Local network re-enables Generate (no signed-in gate).
+    // Switching to LAN re-enables Generate (no signed-in gate).
     await user.click(screen.getByRole('button', { name: 'choose-local' }))
     expect(screen.getByRole('button', { name: 'Generate' })).toBeEnabled()
   })
@@ -314,7 +314,7 @@ describe('MobilePane pairing connection mode', () => {
     await waitFor(() => expect(getPairingQR).toHaveBeenCalledWith({ connectionMode: 'automatic' }))
     expect(screen.getByTestId('loading')).toHaveTextContent('true')
 
-    // Switch to Local network before the mint resolves; loading must clear so
+    // Switch to LAN before the mint resolves; loading must clear so
     // Generate can be used again for the new path.
     await user.click(screen.getByRole('button', { name: 'choose-local' }))
     await waitFor(() => expect(screen.getByTestId('loading')).toHaveTextContent('false'))
@@ -352,7 +352,7 @@ describe('MobilePane pairing connection mode', () => {
     await user.click(screen.getByRole('button', { name: 'Generate' }))
     await waitFor(() => expect(getPairingQR).toHaveBeenCalledWith({ connectionMode: 'automatic' }))
 
-    // Switch to Local network before the Relay mint resolves.
+    // Switch to LAN before the Relay mint resolves.
     await user.click(screen.getByRole('button', { name: 'choose-local' }))
 
     resolveQr?.({

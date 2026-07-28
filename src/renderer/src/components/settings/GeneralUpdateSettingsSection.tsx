@@ -168,20 +168,22 @@ export function GeneralUpdateSettingsSection(): React.JSX.Element {
                 'auto.components.settings.GeneralUpdateSettingsSection.8311da27ba',
                 'is available. Click "Install Update" to download and install it.'
               )}{' '}
-              <a
-                href={
-                  updateStatus.releaseUrl ??
-                  `https://github.com/stablyai/orca/releases/tag/v${updateStatus.version}`
-                }
-                target="_blank"
-                rel="noopener noreferrer"
-                className="underline hover:text-foreground"
-              >
-                {translate(
-                  'auto.components.settings.GeneralUpdateSettingsSection.8a52ca1d02',
-                  'Release notes'
-                )}
-              </a>
+              {updateStatus.source !== 'local' && (
+                <a
+                  href={
+                    updateStatus.releaseUrl ??
+                    `https://github.com/stablyai/orca/releases/tag/v${updateStatus.version}`
+                  }
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="underline hover:text-foreground"
+                >
+                  {translate(
+                    'auto.components.settings.GeneralUpdateSettingsSection.8a52ca1d02',
+                    'Release notes'
+                  )}
+                </a>
+              )}
             </>
           )}
           {updateStatus.state === 'not-available' &&
@@ -206,20 +208,22 @@ export function GeneralUpdateSettingsSection(): React.JSX.Element {
                 'auto.components.settings.GeneralUpdateSettingsSection.d89806cc89',
                 'is ready to install.'
               )}{' '}
-              <a
-                href={
-                  updateStatus.releaseUrl ??
-                  `https://github.com/stablyai/orca/releases/tag/v${updateStatus.version}`
-                }
-                target="_blank"
-                rel="noopener noreferrer"
-                className="underline hover:text-foreground"
-              >
-                {translate(
-                  'auto.components.settings.GeneralUpdateSettingsSection.8a52ca1d02',
-                  'Release notes'
-                )}
-              </a>
+              {updateStatus.source !== 'local' && (
+                <a
+                  href={
+                    updateStatus.releaseUrl ??
+                    `https://github.com/stablyai/orca/releases/tag/v${updateStatus.version}`
+                  }
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="underline hover:text-foreground"
+                >
+                  {translate(
+                    'auto.components.settings.GeneralUpdateSettingsSection.8a52ca1d02',
+                    'Release notes'
+                  )}
+                </a>
+              )}
             </>
           )}
           {updateStatus.state === 'error' &&

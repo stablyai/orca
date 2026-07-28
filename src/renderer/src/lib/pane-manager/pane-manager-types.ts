@@ -1,5 +1,4 @@
-import type { IDisposable, IMarker, Terminal } from '@xterm/xterm'
-import type { ITerminalOptions } from '@xterm/xterm'
+import type { IDisposable, IMarker, Terminal, ITerminalOptions } from '@xterm/xterm'
 import type { FitAddon } from '@xterm/addon-fit'
 import type { LigaturesAddon } from '@xterm/addon-ligatures'
 import type { SearchAddon } from '@xterm/addon-search'
@@ -145,6 +144,9 @@ export type ManagedPaneInternal = {
   // value means "currently disabled".
   ligaturesAddon: LigaturesAddon | null
   fitResizeObserver: ResizeObserver | null
+  // Why: fit-element pixel size at the last successful fit; the reveal fit compares
+  // against it to tell a real hidden-time resize from a transient cell-metric wobble.
+  lastFitClientSize?: { width: number; height: number }
   // Stored so disposePane() can cancel the first post-open fit if a pane closes before paint.
   pendingInitialFitRafId?: number | null
   // Stored so disposePane() can cancel the post-WebGL-teardown refresh frame.
@@ -166,6 +168,8 @@ export type ManagedPaneInternal = {
   // Stored so disposePane() can detach the streamed-output hover-cache reset
   // that keeps freshly printed links linkifiable without a scroll.
   linkifierHoverResetDisposable?: IDisposable | null
+  // Stored because mouseleave does not bubble from xterm's screen.
+  linkifierMouseLeaveResetDisposable?: IDisposable | null
   // Stored so disposePane() can deregister the joiner; terminal.dispose()
   // does not remove registered character joiners.
   arabicShapingJoinerCleanup?: (() => void) | null

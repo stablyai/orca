@@ -268,6 +268,91 @@ describe('attachEditorAutosaveController', () => {
     }
   })
 
+  it('saves runtime-owned folder workspace files through the folder root', async () => {
+    clearRuntimeCompatibilityCacheForTests()
+    const writeFile = vi.fn().mockResolvedValue(undefined)
+    const runtimeCall = vi.fn().mockResolvedValue({
+      ok: true,
+      result: {},
+      _meta: { runtimeId: 'runtime-env-1' }
+    })
+    const runtimeTransportCall = vi.fn((args: RuntimeEnvironmentCallRequest) => {
+      return (
+        createCompatibleRuntimeStatusResponseIfNeeded(args, 'runtime-env-1') ?? runtimeCall(args)
+      )
+    })
+    const eventTarget = new EventTarget()
+    vi.stubGlobal('window', {
+      addEventListener: eventTarget.addEventListener.bind(eventTarget),
+      removeEventListener: eventTarget.removeEventListener.bind(eventTarget),
+      dispatchEvent: eventTarget.dispatchEvent.bind(eventTarget),
+      setTimeout: globalThis.setTimeout.bind(globalThis),
+      clearTimeout: globalThis.clearTimeout.bind(globalThis),
+      api: {
+        fs: { writeFile },
+        runtimeEnvironments: { call: runtimeTransportCall }
+      }
+    } satisfies WindowStub)
+
+    const store = createEditorStore()
+    const workspaceId = 'folder-workspace-runtime'
+    const workspaceKey = folderWorkspaceKey(workspaceId)
+    store.setState({
+      settings: {
+        editorAutoSave: true,
+        editorAutoSaveDelayMs: 1000,
+        activeRuntimeEnvironmentId: 'env-2'
+      } as never,
+      worktreesByRepo: {},
+      folderWorkspaces: [
+        {
+          id: workspaceId,
+          projectGroupId: 'group-runtime',
+          folderPath: '/runtime/folder',
+          connectionId: null
+        } as never
+      ],
+      projectGroups: [
+        {
+          id: 'group-runtime',
+          connectionId: null,
+          executionHostId: 'runtime:env-1'
+        } as never
+      ]
+    })
+    store.getState().openFile({
+      filePath: '/runtime/folder/src/file.ts',
+      relativePath: 'src/file.ts',
+      worktreeId: workspaceKey,
+      language: 'typescript',
+      mode: 'edit'
+    })
+    store.getState().setEditorDraft('/runtime/folder/src/file.ts', 'edited')
+    store.getState().markFileDirty('/runtime/folder/src/file.ts', true)
+
+    const cleanup = attachEditorAutosaveController(store)
+    try {
+      await requestDirtyFileSave()
+
+      expect(runtimeCall).toHaveBeenCalledWith({
+        selector: 'env-1',
+        method: 'files.write',
+        expectedEnvironmentPairingRevision: undefined,
+        params: {
+          worktree: `id:${workspaceKey}`,
+          relativePath: 'src/file.ts',
+          content: 'edited',
+          expectedExecutionHostId: 'local'
+        },
+        timeoutMs: 15_000
+      })
+      expect(writeFile).not.toHaveBeenCalled()
+      expect(store.getState().openFiles[0]?.isDirty).toBe(false)
+    } finally {
+      cleanup()
+    }
+  })
+
   it('saves remote files through the owning runtime environment', async () => {
     clearRuntimeCompatibilityCacheForTests()
     const writeFile = vi.fn().mockResolvedValue(undefined)

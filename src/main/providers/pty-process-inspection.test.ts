@@ -25,6 +25,18 @@ describe('PTY provider process inspection', () => {
     expect(inspectProcess).toHaveBeenCalledExactlyOnceWith('pty-1')
   })
 
+  it('preserves an unavailable inspection result', async () => {
+    const inspection = {
+      foregroundProcess: null,
+      hasChildProcesses: true,
+      unavailable: true as const
+    }
+    const inspectProcess = vi.fn().mockResolvedValue(inspection)
+    const provider = { inspectProcess } as unknown as IPtyProvider
+
+    await expect(inspectPtyProviderProcess(provider, 'pty-1')).resolves.toEqual(inspection)
+  })
+
   it('falls back to the existing provider process APIs', async () => {
     const getForegroundProcess = vi.fn().mockResolvedValue('codex')
     const hasChildProcesses = vi.fn().mockResolvedValue(true)

@@ -28,9 +28,13 @@ on:
       - 'src/main/ipc/pty*.ts'
       - 'src/main/providers/**'
       - 'src/main/pty/**'
+      - 'src/main/pty-descendant-termination.ts'
+      - 'src/main/windows-process-tree-kill.ts'
+      - 'src/main/windows-pty-root-identity.ts'
       - 'src/preload/**'
       - 'src/renderer/src/components/terminal-pane/**'
       - 'src/renderer/src/lib/pane-manager/**'
+      - 'src/shared/process-table-snapshot.ts'
       - 'src/shared/pty-session-id-format.ts'
   workflow_dispatch:
     inputs:

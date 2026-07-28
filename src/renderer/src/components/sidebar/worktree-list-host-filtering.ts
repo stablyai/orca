@@ -1,11 +1,60 @@
 import {
+  ALL_EXECUTION_HOSTS_SCOPE,
   normalizeExecutionHostId,
   parseExecutionHostId,
   toSshExecutionHostId,
-  type ExecutionHostId
+  type ExecutionHostId,
+  type ExecutionHostScope
 } from '../../../../shared/execution-host'
 import type { FolderWorkspacePathStatusRequest } from '../../../../shared/folder-workspace-path-status'
 import type { FolderWorkspace, ProjectGroup } from '../../../../shared/types'
+
+/** null means "no host filter" — every host is visible. */
+export function getVisibleSidebarHostIdSet(
+  visibleWorkspaceHostIds: readonly ExecutionHostId[] | null | undefined,
+  workspaceHostScope: ExecutionHostScope
+): Set<ExecutionHostId> | null {
+  const visibleHostIds =
+    visibleWorkspaceHostIds ??
+    (workspaceHostScope === ALL_EXECUTION_HOSTS_SCOPE ? null : [workspaceHostScope])
+  return visibleHostIds ? new Set<ExecutionHostId>(visibleHostIds) : null
+}
+
+// Why shared: the sidebar render path and the Cmd+1–9 order must apply the same
+// host filtering, or the numbering drifts from the cards whenever a filter is on.
+export function filterProjectGroupsForVisibleHosts(
+  projectGroups: readonly ProjectGroup[],
+  visibleHostIdSet: ReadonlySet<ExecutionHostId> | null,
+  defaultHostId: ExecutionHostId
+): readonly ProjectGroup[] {
+  if (!visibleHostIdSet) {
+    return projectGroups
+  }
+  return projectGroups.filter((group) =>
+    visibleHostIdSet.has(getProjectGroupExecutionHostIdForRows(group, defaultHostId))
+  )
+}
+
+export function filterFolderWorkspacesForVisibleHosts(
+  folderWorkspaces: readonly FolderWorkspace[],
+  projectGroups: readonly ProjectGroup[],
+  visibleHostIdSet: ReadonlySet<ExecutionHostId> | null,
+  defaultHostId: ExecutionHostId
+): readonly FolderWorkspace[] {
+  if (!visibleHostIdSet) {
+    return folderWorkspaces
+  }
+  const projectGroupById = new Map(projectGroups.map((group) => [group.id, group]))
+  return folderWorkspaces.filter((folderWorkspace) =>
+    visibleHostIdSet.has(
+      getFolderWorkspaceExecutionHostIdForRows({
+        folderWorkspace,
+        projectGroup: projectGroupById.get(folderWorkspace.projectGroupId),
+        defaultHostId
+      })
+    )
+  )
+}
 
 export function getProjectGroupExecutionHostIdForRows(
   group: Pick<ProjectGroup, 'connectionId' | 'executionHostId'>,

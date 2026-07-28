@@ -5,7 +5,9 @@ import type {
   DashboardCardDotState,
   DashboardSnapshot
 } from '../../../../shared/dashboard-snapshot'
+import type { RepoIcon } from '../../../../shared/repo-icon'
 import { parsePaneKey } from '../../../../shared/stable-pane-id'
+import { getAgentRowConversationName } from '../../../../shared/agent-row-conversation-name'
 import { migrationUnsupportedToAgentStatusEntry } from '@/lib/migration-unsupported-agent-entry'
 import { applyAgentRowLineage } from './agent-row-lineage'
 import { lastEnteredDoneAt } from './agent-finished-timestamp'
@@ -18,6 +20,11 @@ import {
   selectRuntimeAgentOrchestrationForWorktree,
   selectTerminalLayoutsForWorktree
 } from '../sidebar/worktree-agent-row-selectors'
+import {
+  EMPTY_WORKTREE_AGENT_ORCHESTRATION,
+  releaseRuntimeAgentOrchestrationBatchCache,
+  selectRuntimeAgentOrchestrationBatch
+} from '../sidebar/worktree-agent-orchestration-batch'
 import {
   selectLivePtyIdsForWorktree,
   selectRuntimePaneTitlesForWorktree
@@ -38,6 +45,7 @@ export type DashboardSnapshotState = Pick<
   | 'ptyIdsByTabId'
   | 'runtimePaneTitlesByTabId'
   | 'acknowledgedAgentsByPaneKey'
+  | 'settings'
 >
 
 function bucketForState(state: DashboardAgentRow['state']): DashboardBucket {
@@ -65,6 +73,24 @@ function nonEmpty(value: string | undefined): string | undefined {
   return trimmed.length > 0 ? trimmed : undefined
 }
 
+/** Mirrors useAgentRowConversationName so the board and the sidebar label the
+ *  same agent with the same name. */
+function rowConversationName(
+  row: DashboardAgentRow,
+  generatedTitlesEnabled: boolean
+): string | undefined {
+  const parentPaneKey = row.entry.orchestration?.parentPaneKey
+  // Why: a child row rendered on its parent's tab does not own that tab's name.
+  if (
+    row.lineage?.depth === 1 &&
+    parentPaneKey !== undefined &&
+    parsePaneKey(parentPaneKey)?.tabId === row.tab.id
+  ) {
+    return undefined
+  }
+  return getAgentRowConversationName(row.tab, row.agentType, generatedTitlesEnabled) ?? undefined
+}
+
 /**
  * Derive the serializable dashboard snapshot from the live renderer store.
  * Reuses the exact per-worktree row machinery the sidebar uses
@@ -77,98 +103,126 @@ export function buildDashboardSnapshot(
   now: number
 ): DashboardSnapshot {
   const cards: DashboardCard[] = []
+  const repoIconsByRepoId: Record<string, RepoIcon | null> = {}
+  const generatedTitlesEnabled = state.settings?.tabAutoGenerateTitle === true
+  const activeWorktrees: {
+    repo: AppState['repos'][number]
+    worktree: AppState['worktreesByRepo'][string][number]
+  }[] = []
 
   for (const repo of state.repos ?? []) {
     for (const worktree of state.worktreesByRepo?.[repo.id] ?? []) {
-      if (worktree.isArchived) {
-        continue
-      }
-      const worktreeId = worktree.id
-      const liveEntries = selectLiveAgentStatusEntriesForWorktree(state, worktreeId)
-      const migrationUnsupported = selectMigrationUnsupportedEntriesForWorktree(state, worktreeId)
-      const entries =
-        migrationUnsupported.length > 0
-          ? [
-              ...liveEntries,
-              ...migrationUnsupported.flatMap((unsupported) => {
-                const entry = migrationUnsupportedToAgentStatusEntry(unsupported)
-                return entry ? [entry] : []
-              })
-            ]
-          : liveEntries
-      const terminalLayoutsByTabId = selectTerminalLayoutsForWorktree(state, worktreeId)
-
-      const rows = applyAgentRowLineage(
-        buildWorktreeAgentRows({
-          tabs: state.tabsByWorktree[worktreeId] ?? [],
-          entries,
-          retained: selectRetainedAgentEntriesForWorktree(state, worktreeId),
-          runtimePaneTitlesByTabId: selectRuntimePaneTitlesForWorktree(state, worktreeId),
-          ptyIdsByTabId: selectLivePtyIdsForWorktree(state, worktreeId),
-          terminalLayoutsByTabId,
-          runtimeAgentOrchestrationByPaneKey: selectRuntimeAgentOrchestrationForWorktree(
-            state,
-            worktreeId
-          ),
-          now
-        })
-      )
-
-      for (const row of rows) {
-        // Child rows have no pane of their own; the board lists top-level agents.
-        if (row.rowSource === 'subagent') {
-          continue
-        }
-        // Title-derived rows (a live pane read only from its terminal title, no
-        // agent-hook status) carry synthetic prompt/lastAssistantMessage — the
-        // agent LABEL and a status word like "Idle". They're marked by
-        // startedAt === 0, and must NOT be shown as real conversation.
-        const isTitleDerived = row.startedAt === 0
-        const routingPaneKey = row.activationPaneKey ?? row.paneKey
-        const parsed = parsePaneKey(routingPaneKey)
-        const tabId = parsed?.tabId ?? row.tab.id
-        const leafId = parsed?.leafId ?? null
-        const layoutPtyId =
-          (leafId ? terminalLayoutsByTabId[tabId]?.ptyIdsByLeafId?.[leafId] : undefined) ?? null
-        // Layout entries survive app restarts, but their PTYs may not (parked
-        // tabs keep the pre-restart id). Only advertise a pty the terminal
-        // preview can actually serialize — ptyIdsByTabId is the liveness truth.
-        const ptyId =
-          layoutPtyId && (state.ptyIdsByTabId?.[tabId] ?? []).includes(layoutPtyId)
-            ? layoutPtyId
-            : null
-        const dotState = row.state as DashboardCardDotState
-        const bucket = bucketForState(row.state)
-
-        cards.push({
-          paneKey: row.paneKey,
-          ptyId,
-          agentType: row.agentType,
-          bucket,
-          dotState,
-          task: isTitleDerived ? '' : rowTask(row),
-          repoId: repo.id,
-          worktreeId,
-          tabId,
-          leafId,
-          repoName: repo.displayName,
-          worktreeName: worktree.displayName,
-          lastUserMessage: isTitleDerived ? undefined : nonEmpty(row.entry.prompt),
-          lastAgentMessage: isTitleDerived ? undefined : nonEmpty(row.entry.lastAssistantMessage),
-          startedAt: row.startedAt,
-          finishedAt: lastEnteredDoneAt(row),
-          stateChangedAt: row.entry.stateStartedAt || row.startedAt,
-          // Same derivation as WorktreeCardAgents' unvisitedByPaneKey, so the
-          // board and the sidebar bold/mute the same agents at the same time.
-          unseen:
-            !isTitleDerived &&
-            (state.acknowledgedAgentsByPaneKey?.[row.paneKey] ?? 0) < row.entry.stateStartedAt,
-          askSummary:
-            bucket === 'attention' ? (row.entry.interactivePrompt ?? undefined) : undefined
-        })
+      if (!worktree.isArchived) {
+        activeWorktrees.push({ repo, worktree })
       }
     }
   }
+  let singletonOrchestration: ReturnType<typeof selectRuntimeAgentOrchestrationForWorktree> | null =
+    null
+  let orchestrationByWorktree: ReturnType<typeof selectRuntimeAgentOrchestrationBatch> | null = null
+  if (activeWorktrees.length >= 2) {
+    orchestrationByWorktree = selectRuntimeAgentOrchestrationBatch(
+      state,
+      activeWorktrees.map(({ worktree }) => worktree.id)
+    )
+  } else {
+    releaseRuntimeAgentOrchestrationBatchCache()
+    if (activeWorktrees.length === 1) {
+      singletonOrchestration = selectRuntimeAgentOrchestrationForWorktree(
+        state,
+        activeWorktrees[0].worktree.id
+      )
+    }
+  }
 
-  return { generatedAt: now, cards }
+  for (const { repo, worktree } of activeWorktrees) {
+    const worktreeId = worktree.id
+    const liveEntries = selectLiveAgentStatusEntriesForWorktree(state, worktreeId)
+    const migrationUnsupported = selectMigrationUnsupportedEntriesForWorktree(state, worktreeId)
+    const entries =
+      migrationUnsupported.length > 0
+        ? [
+            ...liveEntries,
+            ...migrationUnsupported.flatMap((unsupported) => {
+              const entry = migrationUnsupportedToAgentStatusEntry(unsupported)
+              return entry ? [entry] : []
+            })
+          ]
+        : liveEntries
+    const terminalLayoutsByTabId = selectTerminalLayoutsForWorktree(state, worktreeId)
+
+    const rows = applyAgentRowLineage(
+      buildWorktreeAgentRows({
+        tabs: state.tabsByWorktree[worktreeId] ?? [],
+        entries,
+        retained: selectRetainedAgentEntriesForWorktree(state, worktreeId),
+        runtimePaneTitlesByTabId: selectRuntimePaneTitlesForWorktree(state, worktreeId),
+        ptyIdsByTabId: selectLivePtyIdsForWorktree(state, worktreeId),
+        terminalLayoutsByTabId,
+        runtimeAgentOrchestrationByPaneKey:
+          singletonOrchestration ??
+          orchestrationByWorktree?.get(worktreeId) ??
+          EMPTY_WORKTREE_AGENT_ORCHESTRATION,
+        now
+      })
+    )
+
+    for (const row of rows) {
+      // Child rows have no pane of their own; the board lists top-level agents.
+      if (row.rowSource === 'subagent') {
+        continue
+      }
+      // Title-derived rows (a live pane read only from its terminal title, no
+      // agent-hook status) carry synthetic prompt/lastAssistantMessage — the
+      // agent LABEL and a status word like "Idle". They're marked by
+      // startedAt === 0, and must NOT be shown as real conversation.
+      const isTitleDerived = row.startedAt === 0
+      const routingPaneKey = row.activationPaneKey ?? row.paneKey
+      const parsed = parsePaneKey(routingPaneKey)
+      const tabId = parsed?.tabId ?? row.tab.id
+      const leafId = parsed?.leafId ?? null
+      const layoutPtyId =
+        (leafId ? terminalLayoutsByTabId[tabId]?.ptyIdsByLeafId?.[leafId] : undefined) ?? null
+      // Layout entries survive app restarts, but their PTYs may not (parked
+      // tabs keep the pre-restart id). Only advertise a pty the terminal
+      // preview can actually serialize — ptyIdsByTabId is the liveness truth.
+      const ptyId =
+        layoutPtyId && (state.ptyIdsByTabId?.[tabId] ?? []).includes(layoutPtyId)
+          ? layoutPtyId
+          : null
+      const dotState = row.state as DashboardCardDotState
+      const bucket = bucketForState(row.state)
+      // Only repos that actually contribute a card ship their icon.
+      repoIconsByRepoId[repo.id] = repo.repoIcon ?? null
+
+      cards.push({
+        paneKey: row.paneKey,
+        ptyId,
+        agentType: row.agentType,
+        bucket,
+        dotState,
+        task: isTitleDerived ? '' : rowTask(row),
+        repoId: repo.id,
+        worktreeId,
+        tabId,
+        leafId,
+        repoName: repo.displayName,
+        worktreeName: worktree.displayName,
+        lastUserMessage: isTitleDerived ? undefined : nonEmpty(row.entry.prompt),
+        lastAgentMessage: isTitleDerived ? undefined : nonEmpty(row.entry.lastAssistantMessage),
+        startedAt: row.startedAt,
+        finishedAt: lastEnteredDoneAt(row),
+        stateChangedAt: row.entry.stateStartedAt || row.startedAt,
+        // Same derivation as WorktreeCardAgents' unvisitedByPaneKey, so the
+        // board and the sidebar bold/mute the same agents at the same time.
+        unseen:
+          !isTitleDerived &&
+          (state.acknowledgedAgentsByPaneKey?.[row.paneKey] ?? 0) < row.entry.stateStartedAt,
+        askSummary: bucket === 'attention' ? (row.entry.interactivePrompt ?? undefined) : undefined,
+        conversationName: rowConversationName(row, generatedTitlesEnabled)
+      })
+    }
+  }
+
+  return { generatedAt: now, cards, repoIconsByRepoId }
 }

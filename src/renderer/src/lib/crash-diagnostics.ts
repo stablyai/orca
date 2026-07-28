@@ -2,11 +2,20 @@ import type {
   CrashReportBreadcrumbData,
   CrashReportDetailValue
 } from '../../../shared/crash-reporting'
-import { getBrowserWebviewMemoryProfile } from '../components/browser-pane/webview-registry'
+import {
+  getBrowserWebviewMemoryProfile,
+  type BrowserWebviewMemoryProfile
+} from '../components/browser-pane/webview-registry'
 import { recordRendererCrashBreadcrumb } from './crash-breadcrumb-recorder'
+import { collectRendererMemoryProfileCounts } from './renderer-memory-profile'
 
 const RENDERER_MEMORY_SAMPLE_INTERVAL_MS = 60_000
 const BYTES_PER_MEGABYTE = 1024 * 1024
+const BYTES_PER_KILOBYTE = 1024
+// Why: one detailed breadcrumb per threshold names what grew before an OOM.
+const RENDERER_MEMORY_HIGHWATER_RATIOS = [0.6, 0.8] as const
+
+type RendererSurface = 'main' | 'dashboard-popout'
 
 type BrowserPerformanceMemory = {
   usedJSHeapSize?: number
@@ -14,24 +23,34 @@ type BrowserPerformanceMemory = {
   jsHeapSizeLimit?: number
 }
 
+/** Heap sizes in bytes, tagged with whether they are exact or Blink-quantized. */
+type HeapMetrics = BrowserPerformanceMemory & {
+  mallocedBytes?: number
+  blinkAllocatedBytes?: number
+  exact: boolean
+}
+
 let rendererCrashDiagnosticsInstalled = false
 let rendererMemoryInterval: number | null = null
+let rendererSurface: RendererSurface = 'main'
+const emittedHighwaterRatios = new Set<number>()
 
 // Why re-exported from a leaf module: terminal modules and their e2e-visible
 // import chains need breadcrumb recording without this file's import.meta /
 // webview-registry baggage. See crash-breadcrumb-recorder.ts.
 export { recordRendererCrashBreadcrumb } from './crash-breadcrumb-recorder'
 
-export function installRendererCrashDiagnostics(): void {
+export function installRendererCrashDiagnostics(surface: RendererSurface = 'main'): void {
   if (rendererCrashDiagnosticsInstalled || typeof window === 'undefined') {
     return
   }
 
   rendererCrashDiagnosticsInstalled = true
+  rendererSurface = surface
   window.addEventListener('error', recordRendererError)
   window.addEventListener('unhandledrejection', recordRendererUnhandledRejection)
 
-  if (getPerformanceMemory()) {
+  if (readHeapMetrics()) {
     recordRendererMemory('startup')
     rendererMemoryInterval = window.setInterval(
       () => recordRendererMemory('interval'),
@@ -55,6 +74,8 @@ function disposeRendererCrashDiagnostics(): void {
     window.clearInterval(rendererMemoryInterval)
     rendererMemoryInterval = null
   }
+  emittedHighwaterRatios.clear()
+  rendererSurface = 'main'
 }
 
 if (typeof import.meta !== 'undefined' && import.meta.hot) {
@@ -95,7 +116,7 @@ function recordRendererUnhandledRejection(event: PromiseRejectionEvent): void {
 }
 
 function recordRendererMemory(reason: string): void {
-  const memory = getPerformanceMemory()
+  const memory = readHeapMetrics()
   if (!memory) {
     return
   }
@@ -108,10 +129,67 @@ function recordRendererMemory(reason: string): void {
       usedHeapMB: toMegabytes(memory.usedJSHeapSize),
       totalHeapMB: toMegabytes(memory.totalJSHeapSize),
       heapLimitMB: toMegabytes(memory.jsHeapSizeLimit),
+      heapSource: memory.exact ? 'v8' : 'quantized',
+      mallocedMB: toMegabytes(memory.mallocedBytes),
+      blinkAllocatedMB: toMegabytes(memory.blinkAllocatedBytes),
       browserWebviews: browserWebviews.browserWebviewCount,
       registeredBrowserGuests: browserWebviews.registeredBrowserGuestCount
     })
   )
+  recordRendererMemoryHighwater(memory, browserWebviews)
+}
+
+function recordRendererMemoryHighwater(
+  memory: HeapMetrics,
+  browserWebviews: BrowserWebviewMemoryProfile
+): void {
+  const used = memory.usedJSHeapSize
+  const limit = memory.jsHeapSizeLimit
+  // Why: NaN would satisfy `ratio < threshold` for nothing, emitting both
+  // levels spuriously and disarming the one-shot for the session.
+  if (!isFiniteHeapBytes(used) || !isFiniteHeapBytes(limit) || limit <= 0) {
+    return
+  }
+  const ratio = used / limit
+  let crossedThreshold = false
+  for (const threshold of RENDERER_MEMORY_HIGHWATER_RATIOS) {
+    if (ratio >= threshold && !emittedHighwaterRatios.has(threshold)) {
+      crossedThreshold = true
+      break
+    }
+  }
+  if (!crossedThreshold) {
+    return
+  }
+  // Why: a single sample can cross both thresholds; profile the large heap once.
+  const profile = compactBreadcrumbData({
+    rendererSurface,
+    usedHeapMB: toMegabytes(used),
+    totalHeapMB: toMegabytes(memory.totalJSHeapSize),
+    heapLimitMB: toMegabytes(limit),
+    heapSource: memory.exact ? 'v8' : 'quantized',
+    mallocedMB: toMegabytes(memory.mallocedBytes),
+    blinkAllocatedMB: toMegabytes(memory.blinkAllocatedBytes),
+    domNodes: document.getElementsByTagName('*').length,
+    terminalElements: document.querySelectorAll('.xterm').length,
+    browserWebviews: browserWebviews.browserWebviewCount,
+    registeredBrowserGuests: browserWebviews.registeredBrowserGuestCount,
+    ...collectRendererMemoryProfileCounts()
+  })
+  for (const threshold of RENDERER_MEMORY_HIGHWATER_RATIOS) {
+    if (ratio < threshold || emittedHighwaterRatios.has(threshold)) {
+      continue
+    }
+    emittedHighwaterRatios.add(threshold)
+    recordRendererCrashBreadcrumb('renderer_memory_highwater', {
+      ...profile,
+      thresholdPct: Math.round(threshold * 100)
+    })
+  }
+}
+
+function isFiniteHeapBytes(value: number | undefined): value is number {
+  return typeof value === 'number' && Number.isFinite(value)
 }
 
 function getPerformanceMemory(): BrowserPerformanceMemory | undefined {
@@ -119,6 +197,36 @@ function getPerformanceMemory(): BrowserPerformanceMemory | undefined {
     return undefined
   }
   return (window.performance as Performance & { memory?: BrowserPerformanceMemory }).memory
+}
+
+/**
+ * Prefers V8's exact numbers; falls back to `performance.memory` only when the
+ * preload bridge is unavailable (older shell, or a surface without it).
+ *
+ * Both are normalized to bytes so callers and the emitted MB fields stay
+ * comparable with breadcrumbs recorded before this bridge existed.
+ */
+function readHeapMetrics(): HeapMetrics | undefined {
+  if (typeof window === 'undefined') {
+    return undefined
+  }
+  const exact = window.api?.crashReports?.readHeapStatistics?.()
+  if (exact) {
+    return {
+      usedJSHeapSize: exact.usedHeapKB * BYTES_PER_KILOBYTE,
+      totalJSHeapSize: exact.totalHeapKB * BYTES_PER_KILOBYTE,
+      jsHeapSizeLimit: exact.heapLimitKB * BYTES_PER_KILOBYTE,
+      mallocedBytes: exact.mallocedKB * BYTES_PER_KILOBYTE,
+      // Why guarded: undefined * 1024 is NaN, which would emit a junk field.
+      blinkAllocatedBytes:
+        exact.blinkAllocatedKB === undefined
+          ? undefined
+          : exact.blinkAllocatedKB * BYTES_PER_KILOBYTE,
+      exact: true
+    }
+  }
+  const fallback = getPerformanceMemory()
+  return fallback ? { ...fallback, exact: false } : undefined
 }
 
 function describeUnknownValue(

@@ -77,6 +77,10 @@ import {
 } from '../../../shared/tui-agent-launch-defaults'
 import { normalizeAutoRenameBranchFromWorkDefaultOn } from '../../../shared/auto-rename-branch-from-work-settings'
 import { normalizeTerminalCursorStyleDefault } from '../../../shared/terminal-cursor-style-settings'
+import {
+  normalizeOsc52ClipboardDefaultOn,
+  osc52ClipboardDefaultOnOverridesPersistedOff
+} from '../../../shared/osc52-clipboard-settings'
 import { normalizeTerminalCustomThemes } from '../../../shared/terminal-custom-themes'
 import { normalizeUiLanguage } from '../../../shared/ui-language'
 import { normalizeUsagePercentageDisplay } from '../../../shared/usage-percentage-display'
@@ -107,6 +111,7 @@ import {
   type StoredWebRuntimeEnvironment
 } from './web-runtime-environment'
 import { parseWebPairingInput } from './web-pairing'
+import { copyClipboardTextViaExecCommand } from './web-clipboard-copy-fallback'
 import { WebRuntimeClient } from './web-runtime-client'
 import { RuntimeRpcCallQueuePool } from '../../../shared/runtime-rpc-call-queue'
 import {
@@ -673,7 +678,9 @@ function createWebPreloadApi(): Partial<PreloadApi> {
         Promise.resolve({
           ok: false,
           error: translate('auto.web.web.preload.api.fb290366b2', 'Unavailable on web.')
-        })
+        }),
+      // Why: no Electron process on web; the caller falls back to performance.memory.
+      readHeapStatistics: () => null
     },
     diagnostics: {
       getStatus: () =>
@@ -776,6 +783,12 @@ function createWebPreloadApi(): Partial<PreloadApi> {
     claudeAccounts: createAccountsApi(),
     cli: createCliApi(),
     agentHooks: createAgentHooksApi(),
+    // Why: the desktop derives this from the host filesystem, which the web
+    // client has no view of; reporting synced keeps the warning banner silent.
+    codexConfigSync: {
+      status: () =>
+        Promise.resolve({ state: 'synced', reason: null, systemConfigPath: '' } as const)
+    },
     developerPermissions: createDeveloperPermissionsApi(),
     computerUsePermissions: createComputerUsePermissionsApi(),
     updater: createUpdaterApi(),
@@ -1051,7 +1064,7 @@ function writeWebKeybindingAction(
   bindings: string[] | null
 ): KeybindingFileSnapshot {
   if (!isKeybindingActionId(actionId)) {
-    throw new Error(`Unknown keybinding action "${actionId}".`)
+    throw new Error(`Unknown keybinding action "${String(actionId)}".`)
   }
   const normalizedBindings =
     bindings === null ? null : normalizeKeybindingArrayForAction(actionId, bindings)
@@ -2389,6 +2402,7 @@ function createWebUiApi(): NonNullable<Partial<PreloadApi>['ui']> {
         const local = readLocalWebUIState()
         const next = {
           ...mergeWebUIState(local, result.ui),
+          osc52ClipboardDefaultOnNoticePending: mergeOsc52ClipboardNoticePending(local, result.ui),
           featureInteractions: mergeFeatureInteractionState(
             local.featureInteractions,
             result.ui.featureInteractions
@@ -2438,6 +2452,7 @@ function createWebUiApi(): NonNullable<Partial<PreloadApi>['ui']> {
         const local = readLocalWebUIState()
         const next = {
           ...mergeWebUIState(local, result.ui),
+          osc52ClipboardDefaultOnNoticePending: mergeOsc52ClipboardNoticePending(local, result.ui),
           featureInteractions: mergeFeatureInteractionState(
             local.featureInteractions,
             result.ui.featureInteractions
@@ -2476,7 +2491,23 @@ function createWebUiApi(): NonNullable<Partial<PreloadApi>['ui']> {
     },
     writeClipboardText: async (text) => {
       await assertClipboardTextWriteWithinLimitWithYield(text)
-      await (navigator.clipboard?.writeText?.(text) ?? Promise.resolve())
+      const clipboard = navigator.clipboard
+      if (typeof clipboard?.writeText === 'function') {
+        try {
+          await clipboard.writeText(text)
+          return
+        } catch (error) {
+          // Why: secure-context writes can still be permission-gated; retry via
+          // execCommand while the user gesture's transient activation is live.
+          if (copyClipboardTextViaExecCommand(text)) {
+            return
+          }
+          throw error
+        }
+      }
+      if (!copyClipboardTextViaExecCommand(text)) {
+        throw new Error('Clipboard write is unavailable in this browser context')
+      }
     },
     writeSelectionClipboardText: () =>
       Promise.reject(new Error('Selection clipboard is unavailable in the web client')),
@@ -2578,7 +2609,8 @@ function createWebUiApi(): NonNullable<Partial<PreloadApi>['ui']> {
     requestClose: () => {},
     popupMenu: () => {},
     onWindowCloseRequested: () => noopUnsubscribe,
-    confirmWindowClose: () => {}
+    confirmWindowClose: () => {},
+    notifyWindowRevealed: () => {}
   }
 }
 
@@ -2775,8 +2807,16 @@ function createSkillsApi(): NonNullable<Partial<PreloadApi>['skills']> {
         schemaVersion: 1,
         installations: [],
         eligibleUpdateNames: [],
+        scanIssues: [],
         scannedAt: Date.now()
-      })
+      }),
+    // Why: with no local skill homes there is nothing to update, so the run rail
+    // reports a permanently idle state rather than spawning anything.
+    startUpdateRun: () => Promise.resolve({ started: false as const, reason: 'invalid-names' }),
+    cancelUpdateRun: () => Promise.resolve(),
+    acknowledgeUpdateRun: () => Promise.resolve(),
+    getUpdateRun: () => Promise.resolve({ state: 'idle' as const }),
+    onUpdateRun: () => () => {}
   }
 }
 
@@ -2860,7 +2900,14 @@ function createAccountsApi(): never {
     cancelPendingLogin: () => Promise.resolve(false),
     reauthenticate: () => Promise.resolve(empty),
     remove: () => Promise.resolve(empty),
-    select: () => Promise.resolve(empty)
+    select: () => Promise.resolve(empty),
+    // Why: launch accounts are recorded on the host that owns the PTY, which the
+    // web client never is — report no stale panes rather than reject the sweep.
+    listStalePanes: () => Promise.resolve([]),
+    // Why empty rather than absent: the same host owns both records, so a web
+    // client has no recorded lane to offer and every pane falls to derivation.
+    listRecordedPaneLanes: () => Promise.resolve({}),
+    forgetStalePanes: () => Promise.resolve()
   } as never
 }
 
@@ -2980,6 +3027,7 @@ function createPtyApi(): NonNullable<Partial<PreloadApi>['pty']> {
     onReplay: () => noopUnsubscribe,
     onModelRestoreNeeded: () => noopUnsubscribe,
     onExit: () => noopUnsubscribe,
+    onSpawned: () => noopUnsubscribe,
     onSerializeBufferRequest: () => noopUnsubscribe,
     onClearBufferRequest: () => noopUnsubscribe,
     sendSerializedBuffer: () => {},
@@ -3336,6 +3384,7 @@ function getStoredSettings(): GlobalSettings {
     ...stored,
     ...normalizeAutoRenameBranchFromWorkDefaultOn(stored),
     ...normalizeTerminalCursorStyleDefault(stored),
+    ...normalizeOsc52ClipboardDefaultOn(stored),
     terminalCustomThemes: normalizeTerminalCustomThemes(stored.terminalCustomThemes),
     uiLanguage: normalizeUiLanguage(stored.uiLanguage)
   }
@@ -3347,6 +3396,11 @@ function getStoredSettings(): GlobalSettings {
       stored.terminalCursorStyle !== migratedStored.terminalCursorStyle ||
       stored.terminalCursorStyleDefaultedToBlock !==
         migratedStored.terminalCursorStyleDefaultedToBlock ||
+      // Kept even though the terminalCustomThemes reference compare below already forces
+      // this branch for every stored blob: no migration should rely on that accident.
+      stored.terminalAllowOsc52Clipboard !== migratedStored.terminalAllowOsc52Clipboard ||
+      stored.terminalAllowOsc52ClipboardDefaultedOnForAllUsers !==
+        migratedStored.terminalAllowOsc52ClipboardDefaultedOnForAllUsers ||
       stored.terminalCustomThemes !== migratedStored.terminalCustomThemes ||
       stored.uiLanguage !== migratedStored.uiLanguage)
   ) {
@@ -3354,6 +3408,14 @@ function getStoredSettings(): GlobalSettings {
       const parsed = JSON.parse(rawStoredSettings) as unknown
       if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
         writeJson(SETTINGS_STORAGE_KEY, migratedStored)
+        if (osc52ClipboardDefaultOnOverridesPersistedOff(stored)) {
+          // Why a raw merge, not readLocalWebUIState(): that path calls back into
+          // getStoredSettings(), and writing through it here would recurse.
+          writeJson(UI_STORAGE_KEY, {
+            ...readJson<Partial<PersistedUIState>>(UI_STORAGE_KEY, {}),
+            osc52ClipboardDefaultOnNoticePending: true
+          })
+        }
       }
     } catch {
       // Keep readJson's invalid-JSON fallback non-destructive.
@@ -3564,8 +3626,11 @@ function closeWebOnboarding(base: OnboardingState): OnboardingState {
 
 function readLocalWebUIState(): PersistedUIState {
   const defaults = getDefaultUIState()
-  const stored = readJson<Partial<PersistedUIState>>(UI_STORAGE_KEY, {})
+  // Why settings first: getStoredSettings() runs the OSC 52 migration, which writes the
+  // notice arm into UI_STORAGE_KEY. Reading before it would snapshot a pre-arm state that
+  // every caller then writes back, erasing the arm the stamp can never raise again.
   const storedSettings = getStoredSettings()
+  const stored = readJson<Partial<PersistedUIState>>(UI_STORAGE_KEY, {})
   const base = {
     ...defaults,
     // Why: mirror the main-process missing-property seed from legacy card layout mode when runtime ui.get is unavailable.
@@ -3647,6 +3712,19 @@ function mergeContextualTourSeenIds(
     merged.add(id)
   }
   return [...merged]
+}
+
+/** Why OR rather than let the host win: the web client migrates its own localStorage
+ *  settings, so an arm raised here has no counterpart on the host, and the plain spread
+ *  would drop it — flipping the opt-out in silence, which is what the notice exists to stop. */
+function mergeOsc52ClipboardNoticePending(
+  current: PersistedUIState,
+  incoming: PersistedUIState
+): boolean {
+  return (
+    current.osc52ClipboardDefaultOnNoticePending === true ||
+    incoming.osc52ClipboardDefaultOnNoticePending === true
+  )
 }
 
 function mergeSettings(
@@ -3904,11 +3982,14 @@ function createEmptyMemorySnapshot(): MemorySnapshot {
     host: {
       totalMemory: 0,
       freeMemory: 0,
+      availableMemory: 0,
+      availableMemorySource: 'free-memory',
       usedMemory: 0,
       memoryUsagePercent: 0,
       cpuCoreCount: navigator.hardwareConcurrency || 1,
       loadAverage1m: 0
     },
+    processMemoryMetric: getBrowserPlatform() === 'win32' ? 'working-set' : 'rss',
     totalCpu: 0,
     totalMemory: 0,
     collectedAt: Date.now()

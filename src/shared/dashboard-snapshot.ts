@@ -1,4 +1,5 @@
 import type { AgentType } from './agent-status-types'
+import type { RepoIcon } from './repo-icon'
 
 /**
  * Serializable contract for the pop-out agent dashboard. The main renderer owns
@@ -58,14 +59,26 @@ export type DashboardCard = {
   unseen: boolean
   /** Short summary of the pending question when bucket === 'attention'. */
   askSummary?: string
+  /** The tab's conversation name, resolved exactly as the sidebar's agent rows
+   *  resolve it. Undefined when no usable name exists (status-only titles). */
+  conversationName?: string
 }
 
 export type DashboardSnapshot = {
   generatedAt: number
   cards: DashboardCard[]
+  /** Icons for the repos the cards belong to. Keyed by repoId rather than
+   *  carried per card: image icons are data URLs up to 400KB, and the snapshot
+   *  is republished several times a second. Optional so a pop-out running
+   *  pre-upgrade code still accepts the payload. */
+  repoIconsByRepoId?: Record<string, RepoIcon | null>
 }
 
-export const EMPTY_DASHBOARD_SNAPSHOT: DashboardSnapshot = { generatedAt: 0, cards: [] }
+export const EMPTY_DASHBOARD_SNAPSHOT: DashboardSnapshot = {
+  generatedAt: 0,
+  cards: [],
+  repoIconsByRepoId: {}
+}
 
 /** Routing payload for click-to-focus: reveal this agent's pane in the main
  *  window. leafId is null when the pane could not be resolved (best-effort:

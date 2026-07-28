@@ -621,6 +621,24 @@ describe('tui agent startup plans', () => {
     })
   })
 
+  it('keeps an AI Vault OMP file locator separate from provider identity', () => {
+    const plan = buildAgentResumeStartupPlan({
+      agent: 'omp',
+      providerSession: { key: 'session_id', id: 'omp-session-1' },
+      cmdOverrides: {},
+      ompResumeFilePath: '/custom/root/project/session.jsonl',
+      platform: 'linux'
+    })
+
+    expect(plan?.launchCommand).toBe("omp '--resume' '/custom/root/project/session.jsonl'")
+    expect(plan?.launchConfig).toEqual({
+      agentCommand: 'omp',
+      agentArgs: '',
+      agentEnv: {},
+      ompResumeFilePath: '/custom/root/project/session.jsonl'
+    })
+  })
+
   it('appends shell-quoted CLI arguments before prompt delivery flags', () => {
     const plan = buildAgentStartupPlan({
       agent: 'claude',

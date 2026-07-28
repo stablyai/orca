@@ -100,6 +100,7 @@ import {
   getLockedWorktreeRemovalReason,
   isLockedWorktreeRemovalError
 } from '../../../../shared/worktree-removal'
+import { FolderWorkspaceActivityPersistence } from './folder-workspace-activity-persistence'
 export type { WorktreeSlice, WorktreeDeleteState } from './worktree-helpers'
 
 // Why: old runtime servers only have `worktree.list`; preserve the large-list UI hydration parity used before `worktree.detectedList` existed.
@@ -109,6 +110,7 @@ const WORKTREE_REMOVAL_AMBIGUOUS_ERROR =
 const ACTIVE_WORKTREE_TERMINAL_PREP_DELAY_MS = 300
 const ACTIVE_WORKTREE_TERMINAL_PREP_INPUT_QUIET_MS = 450
 const ACTIVE_WORKTREE_TERMINAL_PREP_IDLE_TIMEOUT_MS = 180
+const FOLDER_WORKSPACE_ACTIVITY_PERSIST_INTERVAL_MS = 1_000
 // Why: each repo's `git worktree list` is an independent main-process child; a higher ceiling cuts startup scan batches (#7225) while staying bounded against launching every git probe at once.
 export const WORKTREE_REFRESH_CONCURRENCY = 8
 const pendingActivationTerminalPrepCancels = new Map<string, () => void>()
@@ -116,6 +118,27 @@ const detachedHeadAutoDerivedDisplayNames = new Map<string, string>()
 const folderWorkspaceWorktreeCache = new WeakMap<FolderWorkspace, Worktree>()
 const hostedReviewPushTargetLookupsInFlight = new Set<string>()
 const detectedWorktreeRefreshesInFlight = new Map<string, Promise<DetectedWorktreeListResult>>()
+type WorktreeSliceGet = Parameters<StateCreator<AppState>>[1]
+const folderWorkspaceActivityPersistenceByStore = new WeakMap<
+  WorktreeSliceGet,
+  FolderWorkspaceActivityPersistence
+>()
+
+function getFolderWorkspaceActivityPersistence(
+  get: WorktreeSliceGet
+): FolderWorkspaceActivityPersistence {
+  const existing = folderWorkspaceActivityPersistenceByStore.get(get)
+  if (existing) {
+    return existing
+  }
+  const created = new FolderWorkspaceActivityPersistence((folderWorkspaceId, activityAt) => {
+    if (get().folderWorkspaces.some((workspace) => workspace.id === folderWorkspaceId)) {
+      void get().updateFolderWorkspace(folderWorkspaceId, { lastActivityAt: activityAt })
+    }
+  }, FOLDER_WORKSPACE_ACTIVITY_PERSIST_INTERVAL_MS)
+  folderWorkspaceActivityPersistenceByStore.set(get, created)
+  return created
+}
 
 type BackgroundRuntimeRefreshOptions = {
   reuseRecentCompatibilityFailure?: boolean
@@ -865,15 +888,71 @@ function settingsForKnownRepoOwner(
     : ({ activeRuntimeEnvironmentId: null } as AppState['settings'])
 }
 
-function settingsForWorktreeOwner(
-  state: Pick<AppState, 'repos' | 'settings' | 'worktreesByRepo' | 'detectedWorktreesByRepo'>,
+function trySettingsForWorktreeOwner(
+  state: Pick<
+    AppState,
+    | 'repos'
+    | 'settings'
+    | 'worktreesByRepo'
+    | 'detectedWorktreesByRepo'
+    | 'folderWorkspaces'
+    | 'projectGroups'
+    | 'restoredRuntimeHostIdByWorkspaceSessionKey'
+    | 'runtimeEnvironments'
+    | 'runtimeEnvironmentCatalogHydrated'
+    | 'removedRuntimeEnvironmentIds'
+  >,
   worktreeId: string
-) {
+): AppState['settings'] | null {
   const route = resolveWorktreeOperationRoute(state, worktreeId)
   if (!route) {
-    throw new Error(WORKTREE_REMOVAL_AMBIGUOUS_ERROR)
+    return null
   }
   return settingsForWorktreeOperationRoute(state.settings, route)
+}
+
+function settingsForWorktreeOwner(
+  state: Parameters<typeof trySettingsForWorktreeOwner>[0],
+  worktreeId: string
+) {
+  const settings = trySettingsForWorktreeOwner(state, worktreeId)
+  if (!settings) {
+    throw new Error(WORKTREE_REMOVAL_AMBIGUOUS_ERROR)
+  }
+  return settings
+}
+
+// Why: activity bumps fire on every PTY event, so an ambiguous workspace would warn continuously.
+// One line per workspace is enough to diagnose it (#10634).
+const ambiguousOwnerWarnedWorktreeIds = new Set<string>()
+
+function warnAmbiguousOwnerOnce(worktreeId: string, errorLabel: string): void {
+  if (ambiguousOwnerWarnedWorktreeIds.has(worktreeId)) {
+    return
+  }
+  ambiguousOwnerWarnedWorktreeIds.add(worktreeId)
+  console.warn(`Skipped ${errorLabel}: workspace identity is ambiguous across hosts`, worktreeId)
+}
+
+function persistPassiveWorktreeMetaForOwner(
+  get: WorktreeSliceGet,
+  worktreeId: string,
+  updates: Partial<WorktreeMeta>,
+  errorLabel: string
+): void {
+  const ownerSettings = trySettingsForWorktreeOwner(get(), worktreeId)
+  if (!ownerSettings) {
+    warnAmbiguousOwnerOnce(worktreeId, errorLabel)
+    return
+  }
+  void persistWorktreeMeta(ownerSettings, worktreeId, updates).catch((err) => {
+    if (isRuntimeSelectorNotFoundError(err)) {
+      void get().fetchWorktrees(getRepoIdFromWorktreeId(worktreeId))
+      return
+    }
+    console.error(`Failed to ${errorLabel}:`, err)
+    void get().fetchWorktrees(getRepoIdFromWorktreeId(worktreeId))
+  })
 }
 
 async function listDetectedWorktreesForRepo(
@@ -2155,6 +2234,9 @@ function buildWorktreePurgeState(s: AppState, worktreeIds: string[]): Partial<Ap
     canExpandPaneByTabId: omitByTabId(s.canExpandPaneByTabId),
     // Why: these per-tab/per-pty terminal+agent maps evict on the single removeWorktree teardown path; the bulk reconcile / remove-project / hydration-stale paths run no teardown, so without these each strands an entry per tab/pane of externally-removed worktrees.
     lastKnownRelayPtyIdByTabId: omitByTabId(s.lastKnownRelayPtyIdByTabId),
+    // Why: liveness-authoritative reconnect maps (orphan sweep reads them); drop purged tabs' entries here too so a re-materialized id can't inherit phantom liveness.
+    pendingReconnectPtyIdByTabId: omitByTabId(s.pendingReconnectPtyIdByTabId),
+    deferredSshSessionIdsByTabId: omitByTabId(s.deferredSshSessionIdsByTabId),
     pendingInitialCwdByTabId: omitByTabId(s.pendingInitialCwdByTabId),
     pendingIssueCommandSplitByTabId: omitByTabId(s.pendingIssueCommandSplitByTabId),
     pendingSetupSplitByTabId: omitByTabId(s.pendingSetupSplitByTabId),
@@ -2283,6 +2365,7 @@ export const createWorktreeSlice: StateCreator<AppState, [], [], WorktreeSlice> 
   everActivatedWorktreeIds: new Set<string>(),
   lastVisitedAtByWorktreeId: {},
   hasHydratedWorktreePurge: false,
+  startupWorktreeRefreshCompleted: false,
 
   fetchDetectedWorktrees: async (repoId) => {
     try {
@@ -2333,7 +2416,9 @@ export const createWorktreeSlice: StateCreator<AppState, [], [], WorktreeSlice> 
       // the local owner without redirecting runtime/SSH-only repos.
       const useLocalOwner =
         options?.forceLocalOwner === true && (hasLocalOwner || repoOwners.length === 0)
-      const hostId = useLocalOwner ? LOCAL_EXECUTION_HOST_ID : repoHostId(ownerState, repoId)
+      const hostId = useLocalOwner
+        ? LOCAL_EXECUTION_HOST_ID
+        : repoHostId(ownerState, repoId, options?.executionHostId)
       const ownerWasMissingAtStart = repoOwners.length === 0
       const setup = getProjectHostSetupForRepoHost(ownerState, repoId, hostId)
       const ownerSettings = settingsForRepoOwner(ownerState, repoId, hostId)
@@ -4062,8 +4147,38 @@ export const createWorktreeSlice: StateCreator<AppState, [], [], WorktreeSlice> 
 
   markWorktreeUnread: (worktreeId) => {
     // Why: attention dot stays until the user engages the worktree; cleared by pane interaction or activation.
-    let shouldPersist = false
     const now = Date.now()
+    const workspaceScope = parseWorkspaceKey(worktreeId)
+    if (workspaceScope?.type === 'folder') {
+      const folderWorkspaceId = workspaceScope.folderWorkspaceId
+      let shouldPersist = false
+      set((s) => {
+        const folderWorkspace = s.folderWorkspaces.find(
+          (workspace) => workspace.id === folderWorkspaceId
+        )
+        if (!folderWorkspace || folderWorkspace.isUnread) {
+          return s
+        }
+        shouldPersist = true
+        return {
+          folderWorkspaces: s.folderWorkspaces.map((workspace) =>
+            workspace.id === folderWorkspaceId
+              ? { ...workspace, isUnread: true, lastActivityAt: now }
+              : workspace
+          ),
+          sortEpoch: s.sortEpoch + 1
+        }
+      })
+      if (!shouldPersist) {
+        return
+      }
+      void get().updateFolderWorkspace(folderWorkspaceId, {
+        isUnread: true,
+        lastActivityAt: now
+      })
+      return
+    }
+    let shouldPersist = false
     set((s) => {
       const worktree = findKnownWorktreeById(s, worktreeId)
       if (!worktree || worktree.isUnread) {
@@ -4096,17 +4211,12 @@ export const createWorktreeSlice: StateCreator<AppState, [], [], WorktreeSlice> 
       return
     }
 
-    void persistWorktreeMeta(settingsForWorktreeOwner(get(), worktreeId), worktreeId, {
-      isUnread: true,
-      lastActivityAt: now
-    }).catch((err) => {
-      if (isRuntimeSelectorNotFoundError(err)) {
-        void get().fetchWorktrees(getRepoIdFromWorktreeId(worktreeId))
-        return
-      }
-      console.error('Failed to persist unread worktree state:', err)
-      void get().fetchWorktrees(getRepoIdFromWorktreeId(worktreeId))
-    })
+    persistPassiveWorktreeMetaForOwner(
+      get,
+      worktreeId,
+      { isUnread: true, lastActivityAt: now },
+      'persist unread worktree state'
+    )
   },
 
   observeTerminalGitHubPullRequestLink: (worktreeId, link) => {
@@ -4172,6 +4282,24 @@ export const createWorktreeSlice: StateCreator<AppState, [], [], WorktreeSlice> 
   },
 
   clearWorktreeUnread: (worktreeId) => {
+    const workspaceScope = parseWorkspaceKey(worktreeId)
+    if (workspaceScope?.type === 'folder') {
+      const folderWorkspaceId = workspaceScope.folderWorkspaceId
+      const folderWorkspace = get().folderWorkspaces.find(
+        (workspace) => workspace.id === folderWorkspaceId
+      )
+      if (!folderWorkspace?.isUnread) {
+        return
+      }
+      // Why: flip locally first — this runs per keystroke, so the guard above must dedupe before the IPC round-trip lands.
+      set((s) => ({
+        folderWorkspaces: s.folderWorkspaces.map((workspace) =>
+          workspace.id === folderWorkspaceId ? { ...workspace, isUnread: false } : workspace
+        )
+      }))
+      void get().updateFolderWorkspace(folderWorkspaceId, { isUnread: false })
+      return
+    }
     let shouldPersist = false
     set((s) => {
       const worktree = findKnownWorktreeById(s, worktreeId)
@@ -4202,20 +4330,41 @@ export const createWorktreeSlice: StateCreator<AppState, [], [], WorktreeSlice> 
       return
     }
 
-    void persistWorktreeMeta(settingsForWorktreeOwner(get(), worktreeId), worktreeId, {
-      isUnread: false
-    }).catch((err) => {
-      if (isRuntimeSelectorNotFoundError(err)) {
-        void get().fetchWorktrees(getRepoIdFromWorktreeId(worktreeId))
-        return
-      }
-      console.error('Failed to persist cleared unread worktree state:', err)
-      void get().fetchWorktrees(getRepoIdFromWorktreeId(worktreeId))
-    })
+    persistPassiveWorktreeMetaForOwner(
+      get,
+      worktreeId,
+      { isUnread: false },
+      'persist cleared unread worktree state'
+    )
   },
 
   bumpWorktreeActivity: (worktreeId) => {
     const now = Date.now()
+    const workspaceScope = parseWorkspaceKey(worktreeId)
+    if (workspaceScope?.type === 'folder') {
+      // Why: folder meta lives on the FolderWorkspace record — persistWorktreeMeta would write a
+      // worktreeMeta['folder:…'] row that folderWorkspaces:list never reads back (#10251).
+      const folderWorkspaceId = workspaceScope.folderWorkspaceId
+      let shouldPersist = false
+      set((s) => {
+        if (!s.folderWorkspaces.some((workspace) => workspace.id === folderWorkspaceId)) {
+          return s
+        }
+        shouldPersist = true
+        const isActive = s.activeWorktreeId === worktreeId
+        return {
+          folderWorkspaces: s.folderWorkspaces.map((workspace) =>
+            workspace.id === folderWorkspaceId ? { ...workspace, lastActivityAt: now } : workspace
+          ),
+          // Why: active-workspace PTY events are click side-effects, so they must not reorder it.
+          ...(isActive ? {} : { sortEpoch: s.sortEpoch + 1 })
+        }
+      })
+      if (shouldPersist) {
+        getFolderWorkspaceActivityPersistence(get).record(folderWorkspaceId, now)
+      }
+      return
+    }
     let shouldPersist = false
     set((s) => {
       const worktree = findKnownWorktreeById(s, worktreeId)
@@ -4253,7 +4402,12 @@ export const createWorktreeSlice: StateCreator<AppState, [], [], WorktreeSlice> 
       return
     }
 
-    void persistWorktreeMeta(settingsForWorktreeOwner(get(), worktreeId), worktreeId, {
+    const ownerSettings = trySettingsForWorktreeOwner(get(), worktreeId)
+    if (!ownerSettings) {
+      warnAmbiguousOwnerOnce(worktreeId, 'persist worktree activity timestamp')
+      return
+    }
+    void persistWorktreeMeta(ownerSettings, worktreeId, {
       lastActivityAt: now
     }).catch((err) => {
       if (isRuntimeSelectorNotFoundError(err)) {
@@ -4314,7 +4468,27 @@ export const createWorktreeSlice: StateCreator<AppState, [], [], WorktreeSlice> 
           changed = true
         }
       }
-      return changed ? { lastVisitedAtByWorktreeId: next } : {}
+      const patch: { lastVisitedAtByWorktreeId?: Record<string, number>; activeWorktreeId?: null } =
+        {}
+      if (changed) {
+        patch.lastVisitedAtByWorktreeId = next
+      }
+      // Why: the persisted active-worktree pointer is a `${repoId}::${path}` id
+      // that nothing else reconciles here. The main-process Store clears a stale
+      // pointer when a repo is removed (removeWorkspaceSessionOwner nulls
+      // activeWorktreeId), but the web client keeps it in localStorage and gets
+      // no such load-time GC — so a pointer to a worktree the server no longer
+      // reports lingers and can surface a phantom/duplicate workspace. Clear it
+      // once its repo is hydrated and the worktree is confirmed gone (defer while
+      // the repo is unhydrated, mirroring the timestamp rule above).
+      const activeId = s.activeWorktreeId
+      if (activeId) {
+        const activeRepoWorktreeIds = validIdsByRepo.get(getRepoIdFromWorktreeId(activeId))
+        if (activeRepoWorktreeIds && !activeRepoWorktreeIds.has(activeId)) {
+          patch.activeWorktreeId = null
+        }
+      }
+      return Object.keys(patch).length > 0 ? patch : {}
     })
   },
 
@@ -4373,6 +4547,7 @@ export const createWorktreeSlice: StateCreator<AppState, [], [], WorktreeSlice> 
   },
 
   setActiveWorktree: (worktreeId) => {
+    const workspaceScope = worktreeId ? parseWorkspaceKey(worktreeId) : null
     if (worktreeId && shouldDeferActivationTerminalPrep()) {
       markInputQuietSchedulerInput()
     }
@@ -4532,6 +4707,15 @@ export const createWorktreeSlice: StateCreator<AppState, [], [], WorktreeSlice> 
       const nextDetectedWorktrees = shouldClearUnread
         ? applyDetectedWorktreeUpdates(s.detectedWorktreesByRepo, worktreeId, metaUpdates)
         : s.detectedWorktreesByRepo
+      const nextFolderWorkspaces =
+        shouldClearUnread && workspaceScope?.type === 'folder'
+          ? s.folderWorkspaces.map((workspace) =>
+              workspace.id === workspaceScope.folderWorkspaceId
+                ? { ...workspace, isUnread: false }
+                : workspace
+            )
+          : s.folderWorkspaces
+      const nextActiveRepoId = workspaceScope?.type === 'folder' ? null : s.activeRepoId
       const tabsByWorktreeUpdate =
         allDead && worktreeId != null
           ? {
@@ -4564,15 +4748,20 @@ export const createWorktreeSlice: StateCreator<AppState, [], [], WorktreeSlice> 
         nextActiveTabTypeByWorktree !== s.activeTabTypeByWorktree ||
         nextEverActivated !== s.everActivatedWorktreeIds ||
         nextWorktrees !== s.worktreesByRepo ||
-        nextDetectedWorktrees !== s.detectedWorktreesByRepo
+        nextDetectedWorktrees !== s.detectedWorktreesByRepo ||
+        nextFolderWorkspaces !== s.folderWorkspaces ||
+        nextActiveRepoId !== s.activeRepoId
       if (!hasStateChange) {
         // Why: preserve the root Zustand reference on a no-op re-activation so session persistence/runtime sync don't fan out.
         return s
       }
 
       return {
+        activeRepoId: nextActiveRepoId,
         activeWorktreeId: worktreeId,
-        activeWorkspaceKey: worktreeWorkspaceKey(worktreeId),
+        activeWorkspaceKey: isWorkspaceKey(worktreeId)
+          ? worktreeId
+          : worktreeWorkspaceKey(worktreeId),
         activePendingCreationId: null,
         activeFileId,
         activeBrowserTabId,
@@ -4584,6 +4773,9 @@ export const createWorktreeSlice: StateCreator<AppState, [], [], WorktreeSlice> 
         ...(nextWorktrees !== s.worktreesByRepo ? { worktreesByRepo: nextWorktrees } : {}),
         ...(nextDetectedWorktrees !== s.detectedWorktreesByRepo
           ? { detectedWorktreesByRepo: nextDetectedWorktrees }
+          : {}),
+        ...(nextFolderWorkspaces !== s.folderWorkspaces
+          ? { folderWorkspaces: nextFolderWorkspaces }
           : {}),
         ...tabsByWorktreeUpdate
       }
@@ -4648,22 +4840,16 @@ export const createWorktreeSlice: StateCreator<AppState, [], [], WorktreeSlice> 
     }
 
     if (shouldClearUnread) {
-      const updates: Partial<WorktreeMeta> = {
-        isUnread: false
+      if (workspaceScope?.type === 'folder') {
+        void get().updateFolderWorkspace(workspaceScope.folderWorkspaceId, { isUnread: false })
+        return
       }
-
-      void persistWorktreeMeta(
-        settingsForWorktreeOwner(get(), worktreeId),
+      persistPassiveWorktreeMetaForOwner(
+        get,
         worktreeId,
-        updates
-      ).catch((err) => {
-        if (isRuntimeSelectorNotFoundError(err)) {
-          void get().fetchWorktrees(getRepoIdFromWorktreeId(worktreeId))
-          return
-        }
-        console.error('Failed to persist worktree activation state:', err)
-        void get().fetchWorktrees(getRepoIdFromWorktreeId(worktreeId))
-      })
+        { isUnread: false },
+        'persist worktree activation state'
+      )
     }
   },
 

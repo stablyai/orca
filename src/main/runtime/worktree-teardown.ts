@@ -2,7 +2,7 @@ import type { IPtyProvider } from '../providers/types'
 import type { OrcaRuntimeService } from './orca-runtime'
 import { listRegisteredPtys } from '../memory/pty-registry'
 import { isPathInsideOrEqual } from '../../shared/cross-platform-path'
-import { splitWorktreeIdForFilesystem } from '../../shared/worktree-id'
+import { splitWorktreeId, splitWorktreeIdForFilesystem } from '../../shared/worktree-id'
 import { mapWithConcurrency } from '../../shared/map-with-concurrency'
 
 // Why: normal inventories still coalesce into one process scan, while a stale
@@ -69,7 +69,6 @@ export async function killAllProcessesForWorktree(
   }
   const deadline = Date.now() + Math.max(1, deps.timeoutMs ?? WORKTREE_PROCESS_SWEEP_TIMEOUT_MS)
   const deadlineError = new Error(`Timed out waiting for physical PTY teardown: ${worktreeId}`)
-  const worktreePath = splitWorktreeIdForFilesystem(worktreeId)?.worktreePath
   const stopAttempts = new Map<string, Promise<boolean>>()
   const stopPty = (
     ptyId: string,
@@ -113,7 +112,6 @@ export async function killAllProcessesForWorktree(
     () =>
       sweepProviderByPrefix(
         worktreeId,
-        worktreePath,
         deps.localProvider,
         deadline,
         stopPty,
@@ -229,7 +227,6 @@ async function settleBeforeDeadline<T>(
 
 async function sweepProviderByPrefix(
   worktreeId: string,
-  worktreePath: string | undefined,
   provider: IPtyProvider,
   deadline: number,
   stopPty: (
@@ -240,6 +237,16 @@ async function sweepProviderByPrefix(
   failClosed = false
 ): Promise<number> {
   const prefix = `${worktreeId}@@`
+  // Why (#10252): the cwd fallback only proves ownership when the filesystem path
+  // is the *whole* worktree path. A folder-workspace instance strips its
+  // `::workspace:<uuid>` suffix to a checkout dir shared with sibling instances,
+  // so leave the fallback unset whenever stripping shortened the path — else
+  // deleting one instance would sweep the others.
+  const fullWorktreePath = splitWorktreeId(worktreeId)?.worktreePath
+  const cwdFallbackPath =
+    splitWorktreeIdForFilesystem(worktreeId)?.worktreePath === fullWorktreePath
+      ? fullWorktreePath
+      : undefined
   const rpcDeadline = teardownRpcDeadline(deadline)
   const sessions = failClosed
     ? await provider.listProcesses({ deadlineMs: rpcDeadline })
@@ -248,11 +255,11 @@ async function sweepProviderByPrefix(
     // Why: older daemon/relay process rows may omit cwd; their established ID
     // and authoritative worktree ownership must remain usable during teardown.
     const cwdOwned =
-      worktreePath !== undefined &&
+      cwdFallbackPath !== undefined &&
       session.worktreeId === undefined &&
       typeof session.cwd === 'string' &&
       session.cwd.length > 0 &&
-      isPathInsideOrEqual(worktreePath, session.cwd)
+      isPathInsideOrEqual(cwdFallbackPath, session.cwd)
     return session.id.startsWith(prefix) || session.worktreeId === worktreeId || cwdOwned
   })
   // Why: agent shutdown snapshots coalesce only when requests begin together;

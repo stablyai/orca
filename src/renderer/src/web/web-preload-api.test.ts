@@ -57,6 +57,42 @@ function installBrowserGlobals(userAgent = 'Linux'): {
   return { window: windowStub, storage }
 }
 
+function installExecCommandClipboardDocument(execCommandResult = true): {
+  appendChild: ReturnType<typeof vi.fn>
+  createElement: ReturnType<typeof vi.fn>
+  execCommand: ReturnType<typeof vi.fn>
+  setData: ReturnType<typeof vi.fn>
+} {
+  const listeners: ((event: unknown) => void)[] = []
+  const setData = vi.fn()
+  const createElement = vi.fn()
+  const appendChild = vi.fn()
+  const execCommand = vi.fn((command: string) => {
+    if (command === 'copy') {
+      for (const listener of listeners.slice()) {
+        listener({ clipboardData: { setData }, preventDefault: vi.fn() })
+      }
+    }
+    return execCommandResult
+  })
+  vi.stubGlobal('document', {
+    execCommand,
+    addEventListener: vi.fn((type: string, listener: (event: unknown) => void) => {
+      if (type === 'copy') {
+        listeners.push(listener)
+      }
+    }),
+    removeEventListener: vi.fn((type: string, listener: (event: unknown) => void) => {
+      if (type === 'copy') {
+        listeners.splice(listeners.indexOf(listener), 1)
+      }
+    }),
+    createElement,
+    body: { appendChild }
+  })
+  return { appendChild, createElement, execCommand, setData }
+}
+
 async function installApi(userAgent?: string): Promise<{
   api: PreloadApi
   storage: MemoryStorage
@@ -504,6 +540,96 @@ describe('web settings preload API', () => {
     const settings = await globals.window.api.settings.get()
     expect(settings.terminalCursorStyle).toBe('bar')
     expect(settings.terminalCursorStyleDefaultedToBlock).toBe(true)
+  })
+
+  it('migrates OSC 52 clipboard writes on for stored web settings once', async () => {
+    // Why: the web store is a second, independent settings store — the constants-level
+    // default flip only reaches profiles that never persisted the old `false` (#10567).
+    const globals = installBrowserGlobals('Linux')
+    globals.storage.setItem(
+      'orca.web.settings.v1',
+      JSON.stringify({ terminalAllowOsc52Clipboard: false })
+    )
+    const { installWebPreloadApi } = await import('./web-preload-api')
+    installWebPreloadApi()
+
+    const settings = await globals.window.api.settings.get()
+    const stored = JSON.parse(globals.storage.getItem('orca.web.settings.v1') ?? '{}') as {
+      terminalAllowOsc52Clipboard?: boolean
+      terminalAllowOsc52ClipboardDefaultedOnForAllUsers?: boolean
+    }
+
+    expect(settings.terminalAllowOsc52Clipboard).toBe(true)
+    expect(settings.terminalAllowOsc52ClipboardDefaultedOnForAllUsers).toBe(true)
+    expect(stored.terminalAllowOsc52Clipboard).toBe(true)
+    expect(stored.terminalAllowOsc52ClipboardDefaultedOnForAllUsers).toBe(true)
+  })
+
+  it('arms the OSC 52 notice in the web UI store when the flip overrides a persisted off', async () => {
+    const globals = installBrowserGlobals('Linux')
+    globals.storage.setItem(
+      'orca.web.settings.v1',
+      JSON.stringify({ terminalAllowOsc52Clipboard: false })
+    )
+    const { installWebPreloadApi } = await import('./web-preload-api')
+    installWebPreloadApi()
+
+    await globals.window.api.settings.get()
+    const storedUi = JSON.parse(globals.storage.getItem('orca.web.ui.v1') ?? '{}') as {
+      osc52ClipboardDefaultOnNoticePending?: boolean
+    }
+
+    expect(storedUi.osc52ClipboardDefaultOnNoticePending).toBe(true)
+  })
+
+  it('does not arm the OSC 52 notice for a web profile with no persisted value', async () => {
+    const globals = installBrowserGlobals('Linux')
+    globals.storage.setItem('orca.web.settings.v1', JSON.stringify({ terminalFontSize: 15 }))
+    const { installWebPreloadApi } = await import('./web-preload-api')
+    installWebPreloadApi()
+
+    await globals.window.api.settings.get()
+    const storedUi = JSON.parse(globals.storage.getItem('orca.web.ui.v1') ?? '{}') as {
+      osc52ClipboardDefaultOnNoticePending?: boolean
+    }
+
+    expect(storedUi.osc52ClipboardDefaultOnNoticePending).not.toBe(true)
+  })
+
+  it('arms the OSC 52 notice when ui.get is the read that runs the migration', async () => {
+    // Why seed after install: readLocalWebUIState must run the settings migration before it
+    // snapshots the UI blob, and only a ui.get that is itself the first settings read can
+    // show that. Reading first returns a pre-arm state every caller then writes back — and
+    // the stamp means nothing can raise the arm again. Another tab populating localStorage
+    // after this one loaded is the shape that reaches it.
+    const globals = installBrowserGlobals('Linux')
+    const { installWebPreloadApi } = await import('./web-preload-api')
+    installWebPreloadApi()
+    globals.storage.setItem(
+      'orca.web.settings.v1',
+      JSON.stringify({ terminalAllowOsc52Clipboard: false })
+    )
+
+    const ui = await globals.window.api.ui.get()
+
+    expect(ui.osc52ClipboardDefaultOnNoticePending).toBe(true)
+  })
+
+  it('preserves OSC 52 clipboard web opt-outs after migration', async () => {
+    const globals = installBrowserGlobals('Linux')
+    globals.storage.setItem(
+      'orca.web.settings.v1',
+      JSON.stringify({
+        terminalAllowOsc52Clipboard: false,
+        terminalAllowOsc52ClipboardDefaultedOnForAllUsers: true
+      })
+    )
+    const { installWebPreloadApi } = await import('./web-preload-api')
+    installWebPreloadApi()
+
+    const settings = await globals.window.api.settings.get()
+    expect(settings.terminalAllowOsc52Clipboard).toBe(false)
+    expect(settings.terminalAllowOsc52ClipboardDefaultedOnForAllUsers).toBe(true)
   })
 
   it('preserves first-work branch auto-rename web opt-outs after migration', async () => {
@@ -1139,6 +1265,62 @@ describe('web UI preload API', () => {
 
     await expect(globals.window.api.ui.writeClipboardText('copy me')).resolves.toBeUndefined()
     expect(writeText).toHaveBeenCalledWith('copy me')
+  })
+
+  it('copies through execCommand when navigator.clipboard is unavailable (insecure context)', async () => {
+    const globals = installBrowserGlobals('Linux')
+    vi.stubGlobal('navigator', { userAgent: 'Linux', hardwareConcurrency: 8 })
+    const clipboard = installExecCommandClipboardDocument()
+    const { installWebPreloadApi } = await import('./web-preload-api')
+    installWebPreloadApi()
+
+    await expect(globals.window.api.ui.writeClipboardText('copy me')).resolves.toBeUndefined()
+    expect(clipboard.setData).toHaveBeenCalledWith('text/plain', 'copy me')
+    expect(clipboard.execCommand).toHaveBeenCalledWith('copy')
+    expect(clipboard.createElement).not.toHaveBeenCalled()
+    expect(clipboard.appendChild).not.toHaveBeenCalled()
+  })
+
+  it('rejects instead of silently succeeding when no clipboard write path exists', async () => {
+    const globals = installBrowserGlobals('Linux')
+    vi.stubGlobal('navigator', { userAgent: 'Linux', hardwareConcurrency: 8 })
+    vi.stubGlobal('document', {
+      activeElement: null,
+      createElement: vi.fn(() => ({
+        value: '',
+        readOnly: false,
+        style: {} as Record<string, string>,
+        select: vi.fn(),
+        remove: vi.fn()
+      })),
+      execCommand: vi.fn().mockReturnValue(false),
+      body: { appendChild: vi.fn() }
+    })
+    const { installWebPreloadApi } = await import('./web-preload-api')
+    installWebPreloadApi()
+
+    await expect(globals.window.api.ui.writeClipboardText('copy me')).rejects.toThrow(
+      'Clipboard write is unavailable in this browser context'
+    )
+  })
+
+  it('falls back to execCommand when the browser clipboard write is permission-gated', async () => {
+    const globals = installBrowserGlobals('Linux')
+    const writeText = vi.fn().mockRejectedValue(new DOMException('denied', 'NotAllowedError'))
+    vi.stubGlobal('navigator', {
+      userAgent: 'Linux',
+      hardwareConcurrency: 8,
+      clipboard: { writeText }
+    })
+    const clipboard = installExecCommandClipboardDocument()
+    const { installWebPreloadApi } = await import('./web-preload-api')
+    installWebPreloadApi()
+
+    await expect(globals.window.api.ui.writeClipboardText('copy me')).resolves.toBeUndefined()
+    expect(writeText).toHaveBeenCalledWith('copy me')
+    expect(clipboard.setData).toHaveBeenCalledWith('text/plain', 'copy me')
+    expect(clipboard.createElement).not.toHaveBeenCalled()
+    expect(clipboard.appendChild).not.toHaveBeenCalled()
   })
 
   it('yields while reading accepted large browser clipboard text', async () => {
@@ -1848,6 +2030,70 @@ describe('web UI preload API', () => {
 
     expect(ui.contextualToursSeenIds).toEqual(['tasks', 'browser'])
     expect(stored.contextualToursSeenIds).toEqual(['tasks', 'browser'])
+  })
+
+  it('keeps the local OSC 52 notice armed when ui.get returns an unmigrated host', async () => {
+    vi.doMock('./web-runtime-client', () => ({
+      WebRuntimeClient: class {
+        call(method: string): Promise<RuntimeRpcResponse<unknown>> {
+          return Promise.resolve({
+            id: method,
+            ok: true,
+            // Why false: the host store always projects this key, so a plain spread
+            // would overwrite the arm the web client's own settings migration raised.
+            result: { ui: { osc52ClipboardDefaultOnNoticePending: false } },
+            _meta: { runtimeId: 'runtime-1' }
+          })
+        }
+
+        close(): void {}
+      }
+    }))
+
+    const globals = installBrowserGlobals('Linux')
+    writeStoredRuntimeEnvironment(globals.storage)
+    globals.storage.setItem(
+      'orca.web.ui.v1',
+      JSON.stringify({ osc52ClipboardDefaultOnNoticePending: true })
+    )
+    const { installWebPreloadApi } = await import('./web-preload-api')
+    installWebPreloadApi()
+
+    const ui = await globals.window.api.ui.get()
+    expect(ui.osc52ClipboardDefaultOnNoticePending).toBe(true)
+
+    await globals.window.api.ui.set({ osc52ClipboardDefaultOnNoticePending: false })
+    const cleared = await globals.window.api.ui.get()
+    expect(cleared.osc52ClipboardDefaultOnNoticePending).toBe(false)
+  })
+
+  it('keeps the local OSC 52 notice armed when recordFeatureInteraction returns an unmigrated host', async () => {
+    vi.doMock('./web-runtime-client', () => ({
+      WebRuntimeClient: class {
+        call(method: string): Promise<RuntimeRpcResponse<unknown>> {
+          return Promise.resolve({
+            id: method,
+            ok: true,
+            result: { ui: { osc52ClipboardDefaultOnNoticePending: false } },
+            _meta: { runtimeId: 'runtime-1' }
+          })
+        }
+
+        close(): void {}
+      }
+    }))
+
+    const globals = installBrowserGlobals('Linux')
+    writeStoredRuntimeEnvironment(globals.storage)
+    globals.storage.setItem(
+      'orca.web.ui.v1',
+      JSON.stringify({ osc52ClipboardDefaultOnNoticePending: true })
+    )
+    const { installWebPreloadApi } = await import('./web-preload-api')
+    installWebPreloadApi()
+
+    const ui = await globals.window.api.ui.recordFeatureInteraction('tasks')
+    expect(ui.osc52ClipboardDefaultOnNoticePending).toBe(true)
   })
 
   it('does not keep a local shadow copy of main-owned feature telemetry markers', async () => {

@@ -1,5 +1,5 @@
 import { ipcMain } from 'electron'
-import type { SshConnectionManager } from '../ssh/ssh-connection'
+import type { SshConnectionManager } from '../ssh/ssh-connection-manager'
 import type { SshExecOptions } from '../ssh/ssh-connection-utils'
 import { powerShellCommand, powerShellLiteral } from '../ssh/ssh-remote-powershell'
 

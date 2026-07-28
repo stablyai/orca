@@ -42,6 +42,7 @@ import {
 import type { TerminalLeafId } from '../../../../shared/stable-pane-id'
 import { registerLivePaneManager, unregisterLivePaneManager } from './pane-manager-registry'
 import { schedulePaneRevealPresent, schedulePaneRevealRepaint } from './pane-reveal-repaint'
+import { fitRevealedPane } from './pane-reveal-fit'
 import { PaneIdentityRegistry } from './pane-identity-registry'
 import {
   closeManagedPane,
@@ -193,8 +194,22 @@ export class PaneManager {
     return Array.from(this.panes.values()).map(toPublicPane)
   }
 
+  /** Why separate from getPanes: the census runs on the crash path, where
+   *  materializing every public pane view just to read `.length` is waste. */
+  getPaneCount(): number {
+    return this.panes.size
+  }
+
   fitAllPanes(): void {
     fitAllPanesInternal(this.panes)
+  }
+
+  // Why: a raw synchronous fit on reveal can apply a transient DOM<->WebGL
+  // cell-metric grid and reflow-garble diff-painting inline TUIs; see fitRevealedPane.
+  fitAllRevealedPanes(): void {
+    for (const pane of this.panes.values()) {
+      fitRevealedPane(pane)
+    }
   }
 
   refreshAllPanes(): void {

@@ -1,6 +1,6 @@
 import { ChevronLeft, ChevronRight, RefreshCw } from 'lucide-react-native'
 import type { MobileSessionTab } from '../../app/h/[hostId]/session/mobile-session-route-types'
-import { ActionSheetModal } from '../components/ActionSheetModal'
+import { ActionSheetModal, type ActionSheetAction } from '../components/ActionSheetModal'
 import { getMobileSessionTabTitle } from './mobile-terminal-tab-agent'
 
 type BrowserTab = Extract<MobileSessionTab, { type: 'browser' }>
@@ -13,8 +13,11 @@ export function MobileBrowserTabActionSheet(props: {
   onClose: () => void
   onNavigate: (target: BrowserTab, method: MobileBrowserNavigationMethod) => void
   onCloseTab: (target: BrowserTab) => void
+  /** Rendered after Close — receives the open tab's id so the session route's
+   *  bulk-close builder can resolve the anchor itself. */
+  bulkCloseActions?: (anchorTabId: string | undefined, dismiss: () => void) => ActionSheetAction[]
 }): React.JSX.Element {
-  const { target, onClose, onNavigate, onCloseTab } = props
+  const { target, onClose, onNavigate, onCloseTab, bulkCloseActions } = props
   return (
     <ActionSheetModal
       visible={target != null}
@@ -71,7 +74,8 @@ export function MobileBrowserTabActionSheet(props: {
               onCloseTab(current)
             }
           }
-        }
+        },
+        ...(bulkCloseActions?.(target?.id, onClose) ?? [])
       ]}
       onClose={onClose}
     />

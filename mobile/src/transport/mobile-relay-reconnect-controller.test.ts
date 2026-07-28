@@ -17,7 +17,7 @@ describe('relay reconnect controller', () => {
     vi.useRealTimers()
   })
 
-  it('keeps one retry timer and cancels it when recovery needs an external signal', () => {
+  it('keeps one retry timer when recovery changes from capacity to host offline', () => {
     const onRetry = vi.fn()
     const reconnect = createController(onRetry)
 
@@ -26,11 +26,12 @@ describe('relay reconnect controller', () => {
     expect(vi.getTimerCount()).toBe(1)
 
     reconnect.registerFailure(new RelayOuterError(4404))
-    expect(vi.getTimerCount()).toBe(0)
+    expect(vi.getTimerCount()).toBe(1)
     expect(reconnect.shouldDefer()).toBe(true)
-    expect(vi.getTimerCount()).toBe(0)
-    vi.runAllTimers()
+    vi.advanceTimersByTime(9_999)
     expect(onRetry).not.toHaveBeenCalled()
+    vi.advanceTimersByTime(1)
+    expect(onRetry).toHaveBeenCalledOnce()
   })
 
   it('drops a pending relay retry after direct connectivity wins', () => {

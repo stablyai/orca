@@ -473,6 +473,29 @@ describe('ai vault resume command runtime', () => {
     ).toBe("cd '/home/alice/repo' && CODEX_HOME='/home/alice/.codex' codex 'resume' 'session one'")
   })
 
+  it('converts WSL UNC OMP transcript paths before building Linux resume commands', () => {
+    const state = makeState({
+      worktreePath: '\\\\wsl.localhost\\Ubuntu\\home\\alice\\repo'
+    })
+
+    expect(
+      buildQueuedAiVaultResumeCommand({
+        state,
+        worktreeId: 'repo-1::worktree-1',
+        session: {
+          agent: 'omp',
+          sessionId: '019f27cd-4268-7000-96e7-62f42a55c144',
+          filePath:
+            '\\\\wsl.localhost\\Ubuntu\\home\\alice\\.omp\\agent\\sessions\\repo\\sess.jsonl',
+          cwd: '/home/alice/repo',
+          codexHome: null
+        }
+      })
+    ).toBe(
+      "cd '/home/alice/repo' && omp --resume '/home/alice/.omp/agent/sessions/repo/sess.jsonl'"
+    )
+  })
+
   it('deletes inherited Codex homes when resuming a real-home session', () => {
     const state = makeState({ worktreePath: '/home/alice/repo' })
 
