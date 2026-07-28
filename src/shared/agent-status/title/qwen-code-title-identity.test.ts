@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { formatAgentTypeLabel } from '../presentation/agent-type-label'
+import { getAgentLabel as getSharedAgentLabel } from './agent-title-identity'
 import { detectAgentStatusFromTitle } from './agent-title-status'
 import { getAgentLabel, resolveTerminalTitleAgentType } from './terminal-title-agent-type'
 
@@ -33,5 +34,12 @@ describe('Qwen Code title identity', () => {
 
   it("maps 'qwen-code' to 'Qwen Code'", () => {
     expect(formatAgentTypeLabel('qwen-code')).toBe('Qwen Code')
+  })
+
+  it('does not let a qwen mention reclassify another named agent title', () => {
+    expect(resolveTerminalTitleAgentType('Aider: compare qwen output')).toBe('aider')
+    expect(resolveTerminalTitleAgentType('⠋ Aider: compare qwen output')).toBe('aider')
+    expect(getAgentLabel('Aider: compare qwen output')).toBe('Aider')
+    expect(getSharedAgentLabel('Aider: compare qwen output')).toBe('Aider')
   })
 })

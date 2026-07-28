@@ -195,12 +195,6 @@ function computeAgentLabel(title: string): string | null {
   if (titleHasAgentName(title, 'mimo')) {
     return 'MiMo Code'
   }
-  // Why: Qwen Code can use braille spinner prefixes while working; match the
-  // name token before Claude's generic spinner heuristic (keep in sync with
-  // agent-title-identity.ts).
-  if (titleHasAgentName(title, 'qwen')) {
-    return 'Qwen Code'
-  }
   if (titleHasAgentName(title, 'aider')) {
     return 'Aider'
   }
@@ -215,6 +209,11 @@ function computeAgentLabel(title: string): string | null {
   // Match synthesized Hermes before Claude’s braille fallback.
   if (HERMES_AGENT_NAME_RE.test(title)) {
     return 'Hermes'
+  }
+  // Why: after other named agents so mixed titles keep the owner; still before
+  // Claude's braille fallback (keep in sync with agent-title-identity.ts).
+  if (titleHasAgentName(title, 'qwen')) {
+    return 'Qwen Code'
   }
   if (isClaudeAgent(title)) {
     return 'Claude Code'
