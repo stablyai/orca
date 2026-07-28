@@ -2,7 +2,7 @@
 name: orca-emulator
 description: >
   Control a mobile (iOS) emulator / simulator stream from inside Orca using the `orca` CLI.
-  Use for taps, gestures, typing, hardware buttons, camera injection, permissions, accessibility tree, and more — all while seeing the live view in Orca's emulator pane.
+  Use for taps, gestures, typing, hardware buttons, Face ID / Touch ID simulation, camera injection, permissions, accessibility tree, and more — all while seeing the live view in Orca's emulator pane.
   Prefer this over raw `npx serve-sim` or direct simctl when running agents inside Orca (the orca surface handles device scoping, helper lifecycle, and worktree context).
   Complements the orca-cli skill for terminals, worktrees, and the built-in browser.
 license: Apache-2.0

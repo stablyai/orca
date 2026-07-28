@@ -44,7 +44,7 @@ export const EMULATOR_COMMAND_SPECS: CommandSpec[] = [
   },
   {
     path: ['emulator', 'button'],
-    summary: 'Hardware button (home, side_button, etc.)',
+    summary: 'Hardware button (home, lock, side_button, siri, app_switcher)',
     usage: 'orca emulator button <name> [--device <id>] [--worktree <selector>] [--json]',
     allowedFlags: [...GLOBAL_FLAGS, 'device', 'emulator', 'worktree', 'name'],
     positionalArgs: ['name']

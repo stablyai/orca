@@ -2,7 +2,7 @@
 name: orca-emulator
 description: >
   Control a mobile (iOS) emulator / simulator stream from inside Orca using the `orca` CLI.
-  Use for taps, gestures, typing, hardware buttons, camera injection, permissions, accessibility tree, and more — all while seeing the live view in Orca's emulator pane.
+  Use for taps, gestures, typing, hardware buttons, Face ID / Touch ID simulation, camera injection, permissions, accessibility tree, and more — all while seeing the live view in Orca's emulator pane.
   Prefer this over raw `npx serve-sim` or direct simctl when running agents inside Orca (the orca surface handles device scoping, helper lifecycle, and worktree context).
   Complements the orca-cli skill for terminals, worktrees, and the built-in browser.
 license: Apache-2.0
@@ -29,6 +29,7 @@ shell-neutral for POSIX shells, PowerShell, and cmd.exe.
 ## When to use
 
 - The user/agent wants to **tap, swipe, drag, pinch, or press hardware buttons** on a running iOS simulator while seeing the live result in Orca.
+- You need to get past a **Face ID / Touch ID prompt** — Sign in with Apple, Apple Pay, an app unlock — which is otherwise impossible from inside the pane.
 - You want **camera injection** (placeholder, webcam, or file loop) for testing camera flows.
 - You need to **grant/revoke app permissions** (camera, photos, notifications, location, etc.) or read the **accessibility tree**.
 - Rotate the device, simulate memory warnings, toggle CoreAnimation debug overlays, etc.
@@ -95,7 +96,8 @@ Use `--json` for agent-friendly output. Commands are workspace-scoped by default
 | Single tap                 | `ORCA emulator tap <x> <y> [--device <id>]` | Normalized 0..1 coords. **Preferred over gesture for simple taps.** |
 | Multi-step gesture         | `ORCA emulator gesture '<json>'`            | See gestures reference (begin/move/end). Use tap for singles. |
 | Type text                  | `ORCA emulator type "text" [--device <id>]` | US ASCII only. Supports stdin/file via exec if needed. |
-| Hardware button            | `ORCA emulator button home [--device <id>]` | home, swipe_home, app_switcher, lock, siri, side_button. |
+| Hardware button            | `ORCA emulator button home [--device <id>]` | home, swipe_home, app_switcher, lock, siri, side_button (an alias for lock — the side button *is* the lock button). Unknown names now error instead of silently doing nothing. |
+| Face ID / Touch ID         | `ORCA emulator biometric enroll` then `ORCA emulator biometric match` | enroll / unenroll / match / nomatch. Add `--type touch` for Touch ID; the default is face. iOS only — Android errors with emulator_unsupported. |
 | Rotate device              | `ORCA emulator rotate landscape_left`       | Remembers orientation for subsequent gestures. |
 | Camera injection           | `ORCA emulator camera com.acme.App --webcam` | Or --file, placeholder. Hot-swap with switch. May (re)launch app. |
 | Permissions                | `ORCA emulator permissions grant camera com.acme.App` | grant/revoke/reset/list. See full subcommand help. |
@@ -111,10 +113,12 @@ Most support `--worktree <selector>` and explicit `--device <udid|name>` or `--e
 - All coords normalized 0..1 (top-left origin). Never pixels.
 - One "active" emulator per worktree for unqualified commands (like active browser tab). Discover ids with `list`, use explicit flags for multi-device or cross-worktree.
 - Type = US keyboard only. Unsupported chars error clearly.
+- `biometric match` only lands while an app is actually awaiting `LAContext` **and** biometry is enrolled. Orca can detect neither, and a no-op still exits 0 — enroll first, trigger the prompt, then match.
+- Button names are validated by Orca, not serve-sim (which accepts anything and exits 0). If a future serve-sim adds a name Orca does not know yet, reach it with `ORCA emulator exec --command "button <raw>"`.
 - Camera injection often requires (re)launching the target app bundle.
 - The visual pane and CLI share the same underlying stream/helper. Closing the pane can stop the stream (configurable).
 - Stale helpers / state are cleaned by Orca on quit, but agents should `kill` when done.
-- Private APIs under the hood (SimulatorKit etc.) — version sensitive (Xcode updates can affect).
+- Private APIs under the hood (SimulatorKit etc.) — version sensitive (Xcode updates can affect). Biometric simulation rides private BiometricKit notifications and carries the same caveat; enroll/unenroll read their state back and fail loudly, match/nomatch are best-effort.
 
 ## Targeting devices & worktrees
 
@@ -152,6 +156,8 @@ ORCA emulator attach "iPhone 16 Pro" --json
 ORCA emulator tap 0.5 0.8 --json
 ORCA emulator type "user@example.com" --json
 ORCA emulator button home --json
+ORCA emulator biometric enroll --json
+ORCA emulator biometric match --json
 ORCA emulator camera com.acme.MyApp --file /tmp/test.mp4 --json
 ORCA emulator permissions grant camera com.acme.MyApp --json
 ORCA emulator ax --json
