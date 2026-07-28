@@ -140,7 +140,7 @@ describe('buildAgentStartupPlan', () => {
         prompt: 'help me name this config',
         cmdOverrides: {},
         platform: 'linux'
-      }).launchCommand
+      })?.launchCommand
     ).toBe("traecli -- 'help me name this config'")
   })
 
