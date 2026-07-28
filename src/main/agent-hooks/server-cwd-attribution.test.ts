@@ -24,6 +24,25 @@ function buildBody(payload: Record<string, unknown>): Record<string, unknown> {
   }
 }
 
+/** Relay a hook for the agent pane from a session running somewhere else entirely. */
+function ingestForeign(server: AgentHookServer, prompt: string): void {
+  server.ingestRemote(
+    {
+      paneKey: AGENT_PANE,
+      tabId: 'tab-agent',
+      worktreeId: AGENT_WORKTREE,
+      // Why: the relay forwards cwd beside the payload — normalization strips it from the payload itself.
+      sourceCwd: '/srv/other-project',
+      payload: { state: 'working', prompt }
+    },
+    'conn-1'
+  )
+}
+
+function unattributedCallCount(): number {
+  return trackMock.mock.calls.filter(([name]) => name === 'agent_hook_unattributed').length
+}
+
 beforeEach(() => {
   trackMock.mockReset()
 })
@@ -76,17 +95,7 @@ describe('AgentHookServer cwd attribution guard', () => {
 
   it('drops a relayed hook whose session cwd belongs to another workspace', () => {
     const server = new AgentHookServer()
-    server.ingestRemote(
-      {
-        paneKey: AGENT_PANE,
-        tabId: 'tab-agent',
-        worktreeId: AGENT_WORKTREE,
-        // Why: the relay forwards cwd beside the payload — normalization strips it from the payload itself.
-        sourceCwd: '/srv/other-project',
-        payload: { state: 'working', prompt: 'foreign session' }
-      },
-      'conn-1'
-    )
+    ingestForeign(server, 'foreign session')
 
     expect(server.getStatusSnapshot()).toEqual([])
     expect(trackMock).toHaveBeenCalledWith('agent_hook_unattributed', {
@@ -99,22 +108,20 @@ describe('AgentHookServer cwd attribution guard', () => {
     // every hook it hosts would otherwise silence every other event in the session.
     const server = new AgentHookServer()
     for (const prompt of ['first', 'second', 'third']) {
-      server.ingestRemote(
-        {
-          paneKey: AGENT_PANE,
-          tabId: 'tab-agent',
-          worktreeId: AGENT_WORKTREE,
-          sourceCwd: '/srv/other-project',
-          payload: { state: 'working', prompt }
-        },
-        'conn-1'
-      )
+      ingestForeign(server, prompt)
     }
 
     expect(server.getStatusSnapshot()).toEqual([])
-    expect(
-      trackMock.mock.calls.filter(([name]) => name === 'agent_hook_unattributed')
-    ).toHaveLength(1)
+    expect(unattributedCallCount()).toBe(1)
+  })
+
+  it('reports again after a restart, so one runtime does not silence the next', () => {
+    const server = new AgentHookServer()
+    ingestForeign(server, 'before restart')
+    server.stop()
+    ingestForeign(server, 'after restart')
+
+    expect(unattributedCallCount()).toBe(2)
   })
 
   it('keeps hooks that report no cwd, so sources without one stay attributed', () => {
