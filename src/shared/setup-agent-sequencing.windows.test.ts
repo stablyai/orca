@@ -1,5 +1,5 @@
 import { spawn } from 'node:child_process'
-import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 import { tmpdir } from 'node:os'
 
@@ -88,6 +88,47 @@ describe.skipIf(process.platform !== 'win32')('Windows setup-agent sequencing', 
     expect(commands.setupCommand).not.toContain(startupCommand)
     expect(commands.startupCommand).not.toContain(startupCommand)
     expect(commands.startupEnv?.[SETUP_AGENT_SEQUENCE_STARTUP_COMMAND_ENV]).toBe(startupCommand)
+  })
+
+  it('propagates setup failure without launching the agent', async () => {
+    const tempDir = makeTempDir('failure path & metacharacters!')
+    const runnerScriptPath = join(tempDir, 'setup runner.cmd')
+    const startupScriptPath = join(tempDir, 'agent startup.cmd')
+    const startupLogPath = join(dirname(tempDir), 'agent-started.log')
+
+    writeFileSync(runnerScriptPath, '@echo off\r\nexit /b 37\r\n', 'utf8')
+    writeFileSync(
+      startupScriptPath,
+      `@echo off\r\necho started>"${startupLogPath}"\r\nexit /b 0\r\n`,
+      'utf8'
+    )
+    const commands = createSequencedSetupAgentCommands({
+      runnerScriptPath,
+      startupCommand: `cmd.exe /d /c "${startupScriptPath}"`,
+      platform: 'windows',
+      nonce: 'failed-windows-sequence',
+      waitTimeoutSeconds: 2
+    })
+
+    const setupExit = await waitForExit(
+      spawnWindowsCommand(dirname(tempDir), 'run failed setup.cmd', commands.setupCommand)
+    )
+    expect(setupExit.code).toBe(37)
+    expect(readFileSync(`${runnerScriptPath}.failed-windows-sequence.done`, 'utf8')).toBe(
+      'failed-windows-sequence:37\r\n'
+    )
+
+    const startupExit = await waitForExit(
+      spawnWindowsCommand(
+        dirname(tempDir),
+        'run blocked startup.cmd',
+        commands.startupCommand,
+        commands.startupEnv
+      )
+    )
+    expect(startupExit.code).toBe(37)
+    expect(startupExit.stderr).toContain('Setup failed; skipping agent startup.')
+    expect(existsSync(startupLogPath)).toBe(false)
   })
 })
 
