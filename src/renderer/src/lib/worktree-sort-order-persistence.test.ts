@@ -71,14 +71,20 @@ describe('persistWorktreeSortOrderByHost', () => {
     expect(localPersistSortOrder).toHaveBeenCalledWith({ orderedIds: ['local-repo::wt-a'] })
   })
 
-  it('handles best-effort persistence rejections from disconnected hosts', async () => {
+  it('reports best-effort persistence rejections so the caller can retry', async () => {
     runtimeCall.mockRejectedValueOnce(new Error('SSH disconnected'))
     localPersistSortOrder.mockRejectedValueOnce(new Error('local store unavailable'))
 
+    let persisted: boolean | undefined
     const unhandledRejections = await collectUnhandledRejections(() => {
-      persistWorktreeSortOrderByHost(state, ['runtime-repo::wt-b', 'local-repo::wt-a'])
+      void persistWorktreeSortOrderByHost(state, ['runtime-repo::wt-b', 'local-repo::wt-a']).then(
+        (result) => {
+          persisted = result
+        }
+      )
     })
 
     expect(unhandledRejections).toEqual([])
+    expect(persisted).toBe(false)
   })
 })
