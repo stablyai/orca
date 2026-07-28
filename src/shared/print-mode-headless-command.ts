@@ -19,6 +19,10 @@ function optionValue(tokens: readonly string[], index: number): string | null {
 // is only meaningful there — either means a headless run, not the interactive TUI Orca hosts.
 export function isPrintModeHeadlessOneShotCommand(tokens: readonly string[]): boolean {
   for (let index = 1; index < tokens.length; index += 1) {
+    // Why: `--` ends option parsing, so a prompt that reads like `--print` is still a prompt.
+    if (tokens[index] === '--') {
+      return false
+    }
     const name = optionName(tokens[index])
     if (PRINT_MODE_FLAGS.has(name)) {
       return true

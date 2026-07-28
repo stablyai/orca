@@ -103,7 +103,10 @@ export const TUI_AGENT_CONFIG: Record<TuiAgent, TuiAgentConfig> = {
     launchCmd: 'traecli',
     expectedProcess: 'traecli',
     // Why: `traecli [prompt]` takes the task as a positional argv, same as Claude/Codex.
-    promptInjectionMode: 'argv'
+    promptInjectionMode: 'argv',
+    // Why: separator so prompts starting with `help`/`config`/`-…` aren't parsed as a
+    // Trae subcommand or flag — `--` stops both in its Cobra parser.
+    argvPromptSeparator: '--'
   },
   opencode: {
     detectCmd: 'opencode',

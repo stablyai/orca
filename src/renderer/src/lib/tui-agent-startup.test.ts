@@ -115,7 +115,7 @@ describe('buildAgentStartupPlan', () => {
     })
   })
 
-  it('passes the prompt to Trae as a positional argv, same as Claude/Codex', () => {
+  it('passes the prompt to Trae as a positional argv behind a `--` separator', () => {
     expect(
       buildAgentStartupPlan({
         agent: 'trae',
@@ -125,11 +125,23 @@ describe('buildAgentStartupPlan', () => {
       })
     ).toEqual({
       agent: 'trae',
-      launchCommand: "traecli 'Summarize the failing tests'",
+      launchCommand: "traecli -- 'Summarize the failing tests'",
       expectedProcess: 'traecli',
       followupPrompt: null,
       launchConfig: emptyLaunchConfig('traecli')
     })
+  })
+
+  // Why: without the separator these dispatch to Trae's `help`/`config` subcommands instead.
+  it('keeps subcommand-shaped Trae prompts as the positional prompt', () => {
+    expect(
+      buildAgentStartupPlan({
+        agent: 'trae',
+        prompt: 'help me name this config',
+        cmdOverrides: {},
+        platform: 'linux'
+      }).launchCommand
+    ).toBe("traecli -- 'help me name this config'")
   })
 
   it('uses cursor-agent as the actual launch binary', () => {

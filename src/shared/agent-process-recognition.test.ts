@@ -159,6 +159,11 @@ describe('agent process recognition', () => {
       agent: 'trae',
       processName: 'traecli'
     })
+    // Why: past `--` nothing is a flag, so this is the interactive pane Orca itself launches.
+    expect(recognizeAgentProcessFromCommandLine('traecli -- "--print the release notes"')).toEqual({
+      agent: 'trae',
+      processName: 'traecli'
+    })
   })
 
   it('recognizes Mistral Vibe by its installed executable and legacy alias', () => {
