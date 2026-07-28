@@ -1,4 +1,5 @@
 import { describe, expect, it, vi, beforeEach, afterEach } from 'vitest'
+import { MAX_ACTIVE_RELAY_REQUESTS_PER_CLIENT } from './client-request-aborts'
 import { RelayDispatcher } from './dispatcher'
 import {
   encodeJsonRpcFrame,
@@ -116,6 +117,46 @@ describe('RelayDispatcher', () => {
     const resp = JSON.parse(decodeFirstFrame(errors[0]).payload.toString('utf-8'))
     expect(resp.error.message).toBe('boom')
     expect(resp.id).toBe(5)
+  })
+
+  it('rejects incoming request overflow without evicting active work', async () => {
+    expect(MAX_ACTIVE_RELAY_REQUESTS_PER_CLIENT).toBe(256)
+    const resolutions: ((value: unknown) => void)[] = []
+    const handler = vi.fn(
+      (_params, context) =>
+        new Promise((resolve) => {
+          resolutions.push(resolve)
+          context.signal?.addEventListener('abort', () => resolve(null), { once: true })
+        })
+    )
+    dispatcher.onRequest('slow.method', handler)
+
+    for (let id = 1; id <= 257; id += 1) {
+      dispatcher.feed(encodeJsonRpcFrame({ jsonrpc: '2.0', id, method: 'slow.method' }, id, 0))
+    }
+    await vi.advanceTimersByTimeAsync(0)
+
+    expect(handler).toHaveBeenCalledTimes(256)
+    const overflow = written
+      .map(decodeFirstFrame)
+      .filter((frame) => frame.type === MessageType.Regular)
+      .map(
+        (frame) =>
+          JSON.parse(frame.payload.toString('utf-8')) as {
+            id: number
+            error?: { message: string }
+          }
+      )
+      .find((response) => response.id === 257)
+    expect(overflow?.error?.message).toBe('Relay client active request limit of 256 reached')
+    expect(resolutions).toHaveLength(256)
+
+    resolutions[0]('done')
+    await vi.advanceTimersByTimeAsync(0)
+    dispatcher.feed(encodeJsonRpcFrame({ jsonrpc: '2.0', id: 258, method: 'slow.method' }, 258, 0))
+    await vi.advanceTimersByTimeAsync(0)
+
+    expect(handler).toHaveBeenCalledTimes(257)
   })
 
   it('sends method-not-found for unknown methods', async () => {

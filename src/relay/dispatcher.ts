@@ -11,7 +11,7 @@ import {
   type JsonRpcNotification,
   type JsonRpcResponse
 } from './protocol'
-import { ClientRequestAborts } from './client-request-aborts'
+import { ClientRequestAborts, RelayRequestAdmissionError } from './client-request-aborts'
 import { MAX_TIMER_DELAY_MS, isSafeTimerDelayMs } from '../shared/timer-delay'
 
 export type RequestContext = {
@@ -377,7 +377,7 @@ export class RelayDispatcher {
     if (frame.type === MessageType.Regular) {
       try {
         const msg = parseJsonRpcMessage(frame.payload)
-        this.handleMessage(client, msg)
+        this.handleMessage(client, msg, frame.payload.byteLength)
       } catch (err) {
         process.stderr.write(
           `[relay] Parse error: ${err instanceof Error ? err.message : String(err)}\n`
@@ -388,10 +388,11 @@ export class RelayDispatcher {
 
   private handleMessage(
     client: RelayClient,
-    msg: JsonRpcRequest | JsonRpcNotification | JsonRpcResponse
+    msg: JsonRpcRequest | JsonRpcNotification | JsonRpcResponse,
+    retainedBytes: number
   ): void {
     if ('id' in msg && 'method' in msg) {
-      void this.handleRequest(client, msg as JsonRpcRequest)
+      void this.handleRequest(client, msg as JsonRpcRequest, retainedBytes)
     } else if ('id' in msg && ('result' in msg || 'error' in msg)) {
       this.handleResponse(msg as JsonRpcResponse)
     } else if ('method' in msg && !('id' in msg)) {
@@ -416,7 +417,11 @@ export class RelayDispatcher {
     pending.resolve(msg.result)
   }
 
-  private async handleRequest(client: RelayClient, req: JsonRpcRequest): Promise<void> {
+  private async handleRequest(
+    client: RelayClient,
+    req: JsonRpcRequest,
+    retainedBytes: number
+  ): Promise<void> {
     const handler = this.requestHandlers.get(req.method)
     if (!handler) {
       this.sendResponse(client, req.id, undefined, {
@@ -428,10 +433,17 @@ export class RelayDispatcher {
 
     // Why: snapshot generation before the await to detect if the client disconnected mid-flight.
     const gen = client.generation
-    const { key: abortKey, controller: abortController } = this.requestAborts.create(
-      client.id,
-      req.id
-    )
+    let registration: ReturnType<ClientRequestAborts['create']>
+    try {
+      registration = this.requestAborts.create(client.id, req.id, retainedBytes)
+    } catch (error) {
+      if (error instanceof RelayRequestAdmissionError) {
+        this.sendResponse(client, req.id, undefined, { code: -32000, message: error.message })
+        return
+      }
+      throw error
+    }
+    const { key: abortKey, controller: abortController } = registration
     const context: RequestContext = {
       clientId: client.id,
       isStale: () =>
