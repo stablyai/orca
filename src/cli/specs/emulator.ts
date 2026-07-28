@@ -50,6 +50,14 @@ export const EMULATOR_COMMAND_SPECS: CommandSpec[] = [
     positionalArgs: ['name']
   },
   {
+    path: ['emulator', 'biometric'],
+    summary: 'Simulate Face ID / Touch ID (iOS only)',
+    usage:
+      'orca emulator biometric <enroll|unenroll|match|nomatch> [--type face|touch] [--device <id>] [--json]',
+    allowedFlags: [...GLOBAL_FLAGS, 'device', 'emulator', 'worktree', 'action', 'type'],
+    positionalArgs: ['action']
+  },
+  {
     path: ['emulator', 'rotate'],
     summary: 'Rotate device',
     usage: 'orca emulator rotate <orientation> [--device <id>] [--worktree <selector>] [--json]',

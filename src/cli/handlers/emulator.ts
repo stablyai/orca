@@ -1,4 +1,5 @@
 import type { CommandHandler } from '../dispatch'
+import { parseEmulatorBiometricRequest } from '../emulator-biometric-args'
 import { assertNormalizedCoordinate, parseEmulatorGesturePoints } from '../emulator-gesture-args'
 import { formatLogcat } from '../emulator-logcat-format'
 import { parseEmulatorPermissionRequest } from '../emulator-permissions-args'
@@ -199,6 +200,18 @@ export const EMULATOR_HANDLERS: Record<string, CommandHandler> = {
       worktree: target.worktree
     })
     printResult(res, json, () => `Launched ${packageName}`)
+  },
+  'emulator biometric': async ({ flags, client, cwd, json }) => {
+    const target = await getEmulatorCommandTarget(flags, cwd, client)
+    const request = parseEmulatorBiometricRequest(flags)
+    const res = await client.call('emulator.biometric', {
+      action: request.action,
+      type: request.type,
+      device: target.device,
+      emulator: target.emulator,
+      worktree: target.worktree
+    })
+    printResult(res, json, () => `Sent biometric ${request.action}`)
   },
   'emulator permissions': async ({ flags, client, cwd, json }) => {
     const target = await getEmulatorCommandTarget(flags, cwd, client)
