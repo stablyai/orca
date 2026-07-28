@@ -24,8 +24,12 @@ export function getSkillFreshnessDisplayStatus(
       continue
     }
     hasPlacement = true
+    // Why: 'newer-known' is recognized official content ahead of this build — the
+    // updater's own install or a newer release's bytes. There is nothing to fix and
+    // nothing to update to, so amber would send the user chasing a phantom edit.
     if (
       installation.status !== 'current' &&
+      installation.status !== 'newer-known' &&
       !(installation.status === 'unrecognized' && installation.topology === 'plugin-cache')
     ) {
       hasBlockedCopy = true

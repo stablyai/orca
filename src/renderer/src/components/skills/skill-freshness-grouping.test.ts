@@ -99,6 +99,14 @@ describe('groupSkillFreshness', () => {
     expect(groups[0]?.locations[0]?.chip).toBe('unrecognized')
   })
 
+  it('raises no row for a copy that is ahead of this build', () => {
+    // Why: 'newer-known' is recognized official content — the updater's own install
+    // or a newer release's bytes. The badge stays green for it, so a row here would
+    // recreate the badge/dialog disagreement #11128 removed, from the other side.
+    const groups = groupSkillFreshness([placement('orchestration', { status: 'newer-known' })], [])
+    expect(groups).toEqual([])
+  })
+
   it('groups a blocked skill and flags the culprit location, not the main copy', () => {
     const groups = groupSkillFreshness(
       [
