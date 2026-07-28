@@ -777,7 +777,7 @@ jobs:
             echo "## Release E2E Signal"
             echo ""
             echo "- Terminal rendering golden is release-blocking."
-            echo "- Full E2E is diagnostic/non-blocking release evidence."
+            echo "- Full E2E runs separately after publication and cannot change the release result."
             echo "- Terminal rendering release evidence is diagnostic/non-blocking."
             echo ""
             echo "Publishing behavior is controlled by the existing job dependencies; this summary does not change release gating."
@@ -806,15 +806,6 @@ jobs:
           fi
 
           node config/scripts/create-draft-release.mjs "$TAG"
-
-  # Why: tag-scoped E2E gives release visibility, but the suite is flaky enough
-  # that publish-release must not depend on it.
-  e2e:
-    needs: cut
-    if: needs.cut.outputs.should_release == 'true'
-    uses: ./.github/workflows/e2e.yml
-    with:
-      ref: refs/tags/${{ needs.cut.outputs.tag }}
 
   terminal-rendering-golden:
     needs: cut
@@ -1929,6 +1920,32 @@ jobs:
             --draft=false \
             --prerelease="$prerelease" \
             --repo "$GITHUB_REPOSITORY"
+
+  post-release-e2e:
+    needs:
+      - cut
+      - publish-release
+    if: ${{ needs.cut.outputs.tag != '' }}
+    runs-on: ubuntu-latest
+    permissions:
+      actions: write
+    steps:
+      - name: Dispatch tag-scoped E2E
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ needs.cut.outputs.tag }}
+        run: |
+          for attempt in 1 2 3; do
+            if gh workflow run e2e.yml \
+              --repo "$GITHUB_REPOSITORY" \
+              --ref "$TAG" \
+              --raw-field "ref=refs/tags/$TAG"; then
+              echo "Dispatched post-release E2E for $TAG."
+              exit 0
+            fi
+            [[ "$attempt" -eq 3 ]] || sleep "$((attempt * 5))"
+          done
+          echo "::warning::Failed to dispatch post-release E2E for $TAG after 3 attempts."
 
   homebrew-bump-published-rc-draft:
     needs:

@@ -1,5 +1,7 @@
 name: E2E
 
+run-name: E2E ${{ inputs.ref || github.ref }}
+
 on:
   workflow_call:
     inputs:
