@@ -13,8 +13,8 @@ vi.mock('node:child_process', () => ({
   spawn: childSpawnMock
 }))
 
-vi.mock('node:fs/promises', () => ({
-  readFile: readFileMock
+vi.mock('../integration-credential-file', () => ({
+  readIntegrationCredentialFileText: readFileMock
 }))
 
 vi.mock('../codex-cli/command', () => ({
@@ -207,6 +207,30 @@ describe('fetchCodexRateLimits', () => {
 
     rpcChild.emit('close')
     await resultPromise
+  })
+
+  it('drops the RPC run once one unterminated line exceeds 4 MiB', async () => {
+    // Literal ceiling: a peer that never emits a newline must not grow the pending buffer without
+    // limit. Asserted against 4 MiB directly so raising the constant fails rather than buffering more.
+    const rpcChild = makeRpcChild()
+    childSpawnMock.mockReturnValue(rpcChild)
+
+    const resultPromise = fetchCodexRateLimits({ allowPtyFallback: false })
+    await vi.advanceTimersByTimeAsync(0)
+
+    // 3 MiB is admitted; the second chunk crosses the ceiling with no newline in either.
+    rpcChild.stdout.emit('data', Buffer.alloc(3 * 1024 * 1024, 0x61))
+    rpcChild.stdout.emit('data', Buffer.alloc(2 * 1024 * 1024, 0x61))
+    await vi.advanceTimersByTimeAsync(0)
+
+    await expect(resultPromise).resolves.toMatchObject({
+      provider: 'codex',
+      session: null,
+      weekly: null,
+      status: 'error',
+      error: `RPC response exceeded ${4 * 1024 * 1024} byte line limit`
+    })
+    expect(rpcChild.kill).toHaveBeenCalledTimes(1)
   })
 
   it('spawns the PTY fallback in a bounded non-root cwd', async () => {
@@ -496,7 +520,7 @@ describe('fetchCodexRateLimits', () => {
         }
       ]
     })
-    expect(readFileMock).toHaveBeenCalledWith(join('/managed/codex-home', 'auth.json'), 'utf8')
+    expect(readFileMock).toHaveBeenCalledWith(join('/managed/codex-home', 'auth.json'))
     expect(fetch).toHaveBeenCalledWith(
       'https://chatgpt.com/backend-api/wham/rate-limit-reset-credits',
       expect.objectContaining({

@@ -1,3 +1,5 @@
+import { readFetchResponseJsonWithinLimit } from '../lib/fetch-response-body'
+
 // Why: a corrupt/hostile Retry-After must not gate usage refreshes for days.
 const MAX_RETRY_AFTER_MS = 24 * 60 * 60 * 1000
 
@@ -45,7 +47,7 @@ async function describeOAuthUsageError(res: Response): Promise<string> {
     return 'Claude usage is rate limited right now.'
   }
   try {
-    const data = (await res.json()) as { error?: { message?: string } }
+    const data = await readFetchResponseJsonWithinLimit<{ error?: { message?: string } }>(res)
     if (typeof data.error?.message === 'string' && data.error.message.trim()) {
       return data.error.message
     }

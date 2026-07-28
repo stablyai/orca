@@ -9,13 +9,19 @@ const { childSpawnMock, readFileMock, ptySpawnMock } = vi.hoisted(() => ({
 }))
 
 vi.mock('node:child_process', () => ({ spawn: childSpawnMock }))
-vi.mock('node:fs/promises', () => ({ readFile: readFileMock }))
+vi.mock('../integration-credential-file', () => ({
+  readIntegrationCredentialFileText: readFileMock
+}))
 vi.mock('node-pty', () => ({ spawn: ptySpawnMock }))
 vi.mock('./codex-auth-presence', () => ({
   probeCodexAuthPresence: vi.fn(async () => 'present')
 }))
 
 import { consumeCodexRateLimitResetCredit, fetchCodexRateLimits } from './codex-fetcher'
+import {
+  AuthFilesystemOperationLimitError,
+  MAX_AUTH_FILESYSTEM_REGISTRY_ENTRIES
+} from './auth-filesystem-operation'
 
 describe('Codex backend rate-limit requests', () => {
   beforeEach(() => {
@@ -113,7 +119,7 @@ describe('Codex backend rate-limit requests', () => {
     const second = fetchCodexRateLimits({ codexHomePath, signal: secondController.signal })
     await vi.advanceTimersByTimeAsync(0)
     expect(readFileMock).toHaveBeenCalledTimes(1)
-    expect(readFileMock).toHaveBeenCalledWith(expect.stringContaining('auth.json'), 'utf8')
+    expect(readFileMock).toHaveBeenCalledWith(expect.stringContaining('auth.json'))
 
     firstController.abort()
     secondController.abort()
@@ -154,7 +160,7 @@ describe('Codex backend rate-limit requests', () => {
     await vi.advanceTimersByTimeAsync(0)
     // Why: redeem is user-triggered, so it gets the longer redeem deadline.
     expect(timeout).toHaveBeenCalledWith(30_000)
-    expect(readFileMock).toHaveBeenCalledWith(join('/managed/deadline-home', 'auth.json'), 'utf8')
+    expect(readFileMock).toHaveBeenCalledWith(join('/managed/deadline-home', 'auth.json'))
 
     timeoutController.abort(deadlineError)
 
@@ -216,5 +222,60 @@ describe('Codex backend rate-limit requests', () => {
       })
     ).rejects.toThrow('Codex reset failed: HTTP 429')
     expect(cancelledBodies).toBe(1)
+  })
+
+  it('caps distinct stalled backend auth reads and recovers after one settles', async () => {
+    const authResolvers = new Map<string, (content: string) => void>()
+    readFileMock.mockImplementation(
+      (authPath: string) =>
+        new Promise<string>((resolve) => {
+          authResolvers.set(authPath, resolve)
+        })
+    )
+    vi.mocked(fetch).mockResolvedValue({
+      ok: true,
+      json: async () => ({ code: 'already_redeemed' })
+    } as Response)
+    const requests = Array.from({ length: MAX_AUTH_FILESYSTEM_REGISTRY_ENTRIES }, (_, index) =>
+      consumeCodexRateLimitResetCredit({
+        codexHomePath: `/managed/saturated-${index}`,
+        idempotencyKey: `saturated-${index}`
+      })
+    )
+    await vi.advanceTimersByTimeAsync(0)
+
+    expect(readFileMock).toHaveBeenCalledTimes(MAX_AUTH_FILESYSTEM_REGISTRY_ENTRIES)
+    await expect(
+      consumeCodexRateLimitResetCredit({
+        codexHomePath: '/managed/overflow',
+        idempotencyKey: 'overflow'
+      })
+    ).rejects.toBeInstanceOf(AuthFilesystemOperationLimitError)
+    expect(readFileMock).toHaveBeenCalledTimes(MAX_AUTH_FILESYSTEM_REGISTRY_ENTRIES)
+
+    const authJson = JSON.stringify({
+      tokens: { access_token: 'capacity-token', account_id: 'capacity-account' }
+    })
+    authResolvers.get(join('/managed/saturated-0', 'auth.json'))!(authJson)
+    await vi.advanceTimersByTimeAsync(0)
+    await expect(requests[0]).resolves.toBe('alreadyRedeemed')
+
+    const recovered = consumeCodexRateLimitResetCredit({
+      codexHomePath: '/managed/recovered',
+      idempotencyKey: 'recovered'
+    })
+    await vi.advanceTimersByTimeAsync(0)
+    expect(readFileMock).toHaveBeenCalledTimes(MAX_AUTH_FILESYSTEM_REGISTRY_ENTRIES + 1)
+    authResolvers.get(join('/managed/recovered', 'auth.json'))!(authJson)
+    await vi.advanceTimersByTimeAsync(0)
+    await expect(recovered).resolves.toBe('alreadyRedeemed')
+
+    for (let index = 1; index < MAX_AUTH_FILESYSTEM_REGISTRY_ENTRIES; index += 1) {
+      authResolvers.get(join(`/managed/saturated-${index}`, 'auth.json'))!(authJson)
+    }
+    await vi.advanceTimersByTimeAsync(0)
+    await expect(Promise.all(requests.slice(1))).resolves.toEqual(
+      Array.from({ length: MAX_AUTH_FILESYSTEM_REGISTRY_ENTRIES - 1 }, () => 'alreadyRedeemed')
+    )
   })
 })

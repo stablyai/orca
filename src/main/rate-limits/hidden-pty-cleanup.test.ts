@@ -2,6 +2,8 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import {
   cleanupHiddenRateLimitPty,
   getActiveHiddenRateLimitPtyCount,
+  HiddenRateLimitPtyCapacityError,
+  MAX_ACTIVE_HIDDEN_RATE_LIMIT_PTYS,
   registerHiddenRateLimitPty
 } from './hidden-pty-cleanup'
 
@@ -130,6 +132,33 @@ describe('cleanupHiddenRateLimitPty', () => {
 
     cleanupHiddenRateLimitPty(term, [registration], { kill: false })
 
+    expect(getActiveHiddenRateLimitPtyCount()).toBe(0)
+  })
+
+  it('caps active hidden PTYs, tears down overflow, and recovers after disposal', () => {
+    setPlatform('darwin')
+    // Literal ceiling: seeding relative to the constant would pass at any value.
+    expect(MAX_ACTIVE_HIDDEN_RATE_LIMIT_PTYS).toBe(16)
+    const registrations = Array.from({ length: 16 }, () =>
+      registerHiddenRateLimitPty({ kill: vi.fn(), destroy: vi.fn() })
+    )
+    expect(getActiveHiddenRateLimitPtyCount()).toBe(16)
+
+    const overflowKill = vi.fn()
+    const overflow = { kill: overflowKill, destroy: vi.fn() }
+    expect(() => registerHiddenRateLimitPty(overflow)).toThrow(HiddenRateLimitPtyCapacityError)
+    expect(overflowKill).toHaveBeenCalledOnce()
+    expect(overflow.destroy).toHaveBeenCalledOnce()
+    expect(getActiveHiddenRateLimitPtyCount()).toBe(16)
+
+    registrations[0]!.dispose()
+    const recovered = registerHiddenRateLimitPty({ kill: vi.fn(), destroy: vi.fn() })
+    expect(getActiveHiddenRateLimitPtyCount()).toBe(16)
+
+    for (const registration of registrations.slice(1)) {
+      registration.dispose()
+    }
+    recovered.dispose()
     expect(getActiveHiddenRateLimitPtyCount()).toBe(0)
   })
 })

@@ -23,12 +23,14 @@ vi.mock('./gemini-cli-oauth-extractor', () => ({
 }))
 
 vi.mock('node:fs/promises', () => ({
-  readFile: readFileMock,
   // Why: saveGeminiCredentials is exercised on the refresh path. The atomic
   // tmp+rename write has no observable side effect in these tests, so the
   // stubs just resolve.
   writeFile: vi.fn().mockResolvedValue(undefined),
   rename: vi.fn().mockResolvedValue(undefined)
+}))
+vi.mock('../integration-credential-file', () => ({
+  readIntegrationCredentialFileText: readFileMock
 }))
 
 vi.mock('electron', () => ({
