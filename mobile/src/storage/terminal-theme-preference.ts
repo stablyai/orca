@@ -25,6 +25,7 @@ const listeners = new Set<() => void>()
 let selection: MobileTerminalThemeSelection = DEFAULT_MOBILE_TERMINAL_THEME_SELECTION
 let loadPromise: Promise<MobileTerminalThemeSelection> | null = null
 let hydrated = false
+let pendingPatch: Partial<MobileTerminalThemeSelection> = {}
 
 export function getMobileTerminalThemeSelection(): MobileTerminalThemeSelection {
   return selection
@@ -72,11 +73,13 @@ async function readStoredSelection(): Promise<MobileTerminalThemeSelection> {
     return selection
   }
   hydrated = true
-  publish({
+  const loaded = {
     dark: readSlot(stored[0] ?? null),
     light: readSlot(stored[1] ?? null),
     useSeparateLightTheme: stored[2] !== 'false'
-  })
+  }
+  publish({ ...loaded, ...pendingPatch })
+  pendingPatch = {}
   return selection
 }
 
@@ -92,6 +95,7 @@ export async function saveMobileTerminalThemeSelection(
   patch: Partial<MobileTerminalThemeSelection>
 ): Promise<void> {
   if (!hydrated) {
+    pendingPatch = { ...pendingPatch, ...patch }
     // Why: the tap must not wait for the read, but merging onto the pre-load
     // default would erase the two slots this patch never touches.
     publish({ ...selection, ...patch })

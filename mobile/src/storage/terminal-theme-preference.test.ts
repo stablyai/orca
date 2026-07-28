@@ -197,6 +197,10 @@ describe('mobile terminal theme preference', () => {
   it('lets a choice made during an in-flight load win over storage', async () => {
     const store = await freshStore()
     const pending = deferred<string | null>()
+    const publishedDark: (string | null)[] = []
+    store.subscribeMobileTerminalThemeSelection(() => {
+      publishedDark.push(store.getMobileTerminalThemeSelection().dark)
+    })
     vi.mocked(store.storage.getItem).mockImplementation(async (key: string) =>
       key === 'orca:terminalThemeDark' ? pending.promise : null
     )
@@ -204,10 +208,12 @@ describe('mobile terminal theme preference', () => {
     const load = store.loadMobileTerminalThemeSelection()
     const write = store.saveMobileTerminalThemeSelection({ dark: 'Nord' })
     expect(store.getMobileTerminalThemeSelection().dark).toBe('Nord')
+    expect(publishedDark).toEqual(['Nord'])
     pending.resolve('Dracula')
     await Promise.all([load, write])
 
     expect(store.getMobileTerminalThemeSelection().dark).toBe('Nord')
+    expect(publishedDark).toEqual(['Nord'])
     expect(store.storage.setItem).toHaveBeenCalledWith('orca:terminalThemeDark', 'Nord')
   })
 
