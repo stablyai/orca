@@ -22,6 +22,8 @@ describe('release E2E dispatch contract', () => {
     expect(dispatchStep.run).toContain('gh workflow run e2e.yml')
     expect(dispatchStep.run).toContain('--ref "$TAG"')
     expect(dispatchStep.run).toContain('--raw-field "ref=refs/tags/$TAG"')
+    expect(dispatchStep.run).toContain('for attempt in 1 2 3')
+    expect(dispatchStep.run).toContain('[[ "$attempt" -eq 3 ]] || sleep')
     expect(dispatchStep.run).toContain('::warning::Failed to dispatch post-release E2E')
   })
 
