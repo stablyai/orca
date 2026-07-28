@@ -53,7 +53,7 @@ describe('RelayAgentHookServer', () => {
           worktreeId: 'wt-1',
           env: 'remote',
           version: '1',
-          payload: { hook_event_name: 'UserPromptSubmit', prompt: 'hi' }
+          payload: { hook_event_name: 'UserPromptSubmit', prompt: 'hi', cwd: '/srv/app' }
         })
       })
       expect(res.status).toBe(204)
@@ -65,6 +65,9 @@ describe('RelayAgentHookServer', () => {
       expect(envelope.connectionId).toBeNull()
       expect(envelope.payload.state).toBe('working')
       expect(envelope.payload.prompt).toBe('hi')
+      // Why: normalization strips cwd from the payload, so Orca can only re-check
+      // the remote pane attribution if the relay forwards it alongside.
+      expect(envelope.sourceCwd).toBe('/srv/app')
       // Why: the relay forwards body env/version so Orca's warn-once
       // protocol diagnostics and remote-location marker survive the wire.
       expect(envelope.env).toBe('remote')

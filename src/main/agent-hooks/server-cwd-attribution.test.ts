@@ -1,0 +1,114 @@
+import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { AgentHookServer } from './server'
+import { makePaneKey } from '../../shared/stable-pane-id'
+
+const { trackMock } = vi.hoisted(() => ({ trackMock: vi.fn() }))
+
+vi.mock('../telemetry/client', () => ({ track: trackMock }))
+vi.mock('../telemetry/cohort-classifier', () => ({ getCohortAtEmit: vi.fn() }))
+
+const AGENT_PANE = makePaneKey('tab-agent', '11111111-1111-4111-8111-111111111111')
+const AGENT_WORKTREE = 'repo-agent::/Users/dev/workspace/agent'
+
+// Why: reproduces the shared-daemon leak — a session running in one project posts the
+// pane identity it inherited from the pane that first spawned the agent daemon.
+function buildBody(payload: Record<string, unknown>): Record<string, unknown> {
+  return {
+    paneKey: AGENT_PANE,
+    tabId: 'tab-agent',
+    worktreeId: AGENT_WORKTREE,
+    env: 'production',
+    payload
+  }
+}
+
+beforeEach(() => {
+  trackMock.mockReset()
+})
+
+describe('AgentHookServer cwd attribution guard', () => {
+  it('drops an HTTP hook whose session cwd belongs to another workspace', async () => {
+    const server = new AgentHookServer()
+    await server.start({ env: 'production' })
+    try {
+      const env = server.buildPtyEnv()
+      const postHook = (payload: Record<string, unknown>): Promise<Response> =>
+        fetch(`http://127.0.0.1:${env.ORCA_AGENT_HOOK_PORT}/hook/claude`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'X-Orca-Agent-Hook-Token': env.ORCA_AGENT_HOOK_TOKEN
+          },
+          body: JSON.stringify(buildBody(payload))
+        })
+
+      await expect(
+        postHook({
+          hook_event_name: 'UserPromptSubmit',
+          prompt: 'own session',
+          cwd: '/Users/dev/workspace/agent'
+        })
+      ).resolves.toMatchObject({ status: 204 })
+      expect(server.getStatusSnapshot()).toEqual([
+        expect.objectContaining({ paneKey: AGENT_PANE, prompt: 'own session' })
+      ])
+
+      await expect(
+        postHook({
+          hook_event_name: 'UserPromptSubmit',
+          prompt: 'foreign session',
+          cwd: '/Users/dev/projects/api'
+        })
+      ).resolves.toMatchObject({ status: 204 })
+
+      expect(server.getStatusSnapshot()).toEqual([
+        expect.objectContaining({ paneKey: AGENT_PANE, prompt: 'own session' })
+      ])
+      expect(trackMock).toHaveBeenCalledWith('agent_hook_unattributed', {
+        reason: 'cwd_worktree_mismatch'
+      })
+    } finally {
+      server.stop()
+    }
+  })
+
+  it('drops a relayed hook whose session cwd belongs to another workspace', () => {
+    const server = new AgentHookServer()
+    server.ingestRemote(
+      {
+        paneKey: AGENT_PANE,
+        tabId: 'tab-agent',
+        worktreeId: AGENT_WORKTREE,
+        // Why: the relay forwards cwd beside the payload — normalization strips it from the payload itself.
+        sourceCwd: '/srv/other-project',
+        payload: { state: 'working', prompt: 'foreign session' }
+      },
+      'conn-1'
+    )
+
+    expect(server.getStatusSnapshot()).toEqual([])
+    expect(trackMock).toHaveBeenCalledWith('agent_hook_unattributed', {
+      reason: 'cwd_worktree_mismatch'
+    })
+  })
+
+  it('keeps hooks that report no cwd, so sources without one stay attributed', () => {
+    const server = new AgentHookServer()
+    server.ingestRemote(
+      {
+        paneKey: AGENT_PANE,
+        tabId: 'tab-agent',
+        worktreeId: AGENT_WORKTREE,
+        payload: { state: 'working', prompt: 'no cwd reported' }
+      },
+      'conn-1'
+    )
+
+    expect(server.getStatusSnapshot()).toEqual([
+      expect.objectContaining({ paneKey: AGENT_PANE, prompt: 'no cwd reported' })
+    ])
+    expect(trackMock).not.toHaveBeenCalledWith('agent_hook_unattributed', {
+      reason: 'cwd_worktree_mismatch'
+    })
+  })
+})

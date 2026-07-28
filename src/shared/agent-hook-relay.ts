@@ -90,6 +90,9 @@ export type AgentHookRelayEnvelope = {
   /** Forwarded verbatim from the agent CLI POST body. Lets Orca's warn-once
    *  protocol-version diagnostic fire on remote events the same as on local. */
   version?: string
+  /** Session cwd the remote agent reported, used to disprove a pane attribution
+   *  the PTY env got wrong. The normalized `payload` no longer carries it. */
+  sourceCwd?: string
   /** Pre-normalized status payload from the relay's `normalizeHookPayload`.
    *  Orca's `ingestRemote` validates it again at the SSH trust boundary. */
   payload: ParsedAgentStatusPayload

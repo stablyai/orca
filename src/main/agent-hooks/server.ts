@@ -9,6 +9,7 @@ import { track } from '../telemetry/client'
 import { getCohortAtEmit } from '../telemetry/cohort-classifier'
 import { AGENT_KIND_VALUES, type AgentKind } from '../../shared/telemetry-events'
 import { ORCA_HOOK_PROTOCOL_VERSION } from '../../shared/agent-hook-types'
+import { hookCwdContradictsWorktree } from '../../shared/agent-hook-cwd-attribution'
 import {
   clearAllListenerCaches,
   clearPaneCacheState,
@@ -489,6 +490,8 @@ export class AgentHookServer {
   private closedAgentStatusTabIds = new Set<string>()
   private closedAgentStatusPaneKeys = new Set<string>()
   private connectionTimestampWatermarkById = new Map<string, number>()
+  // Why: one console line per runtime — a mis-attributing daemon fires on every hook of every session it hosts.
+  private warnedForeignCwdStatus = false
   // Why: skip disk writes when the JSON exactly matches the last write; guards against re-firing trailing timers when nothing changed.
   private lastWrittenJson: string | null = null
 
@@ -769,6 +772,22 @@ export class AgentHookServer {
       return false
     }
     return this.closedAgentStatusTabIds.has(tabId)
+  }
+
+  /** Refuse a hook whose reported worktree is disproven by the session cwd it carries. */
+  private shouldSuppressForeignCwdStatus(event: AgentHookEventPayload): boolean {
+    if (!hookCwdContradictsWorktree(event.worktreeId, event.sourceCwd)) {
+      return false
+    }
+    track('agent_hook_unattributed', { reason: 'cwd_worktree_mismatch' })
+    if (!this.warnedForeignCwdStatus) {
+      this.warnedForeignCwdStatus = true
+      console.warn(
+        '[agent-hooks] dropping status: reported worktree does not own the reporting session',
+        { paneKey: event.paneKey, worktreeId: event.worktreeId, sourceCwd: event.sourceCwd }
+      )
+    }
+    return true
   }
 
   private markPaneClosedForAgentStatus(paneKey: string): void {
@@ -1442,6 +1461,7 @@ export class AgentHookServer {
       toolAgentType?: string
       providerSession?: unknown
       providerSessionOnly?: unknown
+      sourceCwd?: string
       isReplay?: boolean
       payload: unknown
     },
@@ -1552,7 +1572,14 @@ export class AgentHookServer {
       providerSession,
       providerSessionOnly: envelope.providerSessionOnly === true ? true : undefined,
       isReplay: envelope.isReplay === true ? true : undefined,
+      sourceCwd:
+        typeof envelope.sourceCwd === 'string' && envelope.sourceCwd.trim().length > 0
+          ? envelope.sourceCwd.trim()
+          : undefined,
       payload: normalizedPayload
+    }
+    if (this.shouldSuppressForeignCwdStatus(event)) {
+      return
     }
     this.applyNormalizedStatus(event)
   }
@@ -1624,7 +1651,11 @@ export class AgentHookServer {
         trackEmptyPaneKeyHook(body)
         const aliasedBody = this.normalizeHookBodyPaneKeyAlias(body)
         const normalized = normalizeHookPayload(this.state, source, aliasedBody, this.env)
-        if (normalized && !this.shouldSuppressClosedTabStatus(normalized.paneKey)) {
+        if (
+          normalized &&
+          !this.shouldSuppressClosedTabStatus(normalized.paneKey) &&
+          !this.shouldSuppressForeignCwdStatus(normalized)
+        ) {
           const enriched = this.applyNormalizedStatus(normalized)
           this.scheduleAssistantMessageRetry(source, aliasedBody, enriched)
         }
@@ -1682,6 +1713,7 @@ export class AgentHookServer {
     this.lastStatusFilePath = null
     this.lastWrittenJson = null
     this.runtimeObservedStatusPaneKeys.clear()
+    this.warnedForeignCwdStatus = false
     this.promptSentDedupeByPaneKey.clear()
     this.closedAgentStatusTabIds.clear()
     this.closedAgentStatusPaneKeys.clear()

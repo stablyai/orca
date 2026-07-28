@@ -25,6 +25,7 @@ import {
   type ParsedAgentStatusPayload
 } from './agent-status-types'
 import { normalizeOptionalField } from './agent-status-field-normalization'
+import { readHookPayloadCwd } from './agent-hook-cwd-attribution'
 import { isAskUserQuestionTool } from './agent-question-answered-intent'
 import {
   claudeRosterHasWorkingSubagent,
@@ -297,6 +298,8 @@ export type AgentHookEventPayload = {
   providerSessionOnly?: boolean
   /** True when this event is a relay cache replay rather than a live hook. */
   isReplay?: boolean
+  /** Session cwd from the agent's own payload; cross-checks the env-derived pane attribution. */
+  sourceCwd?: string
   payload: ParsedAgentStatusPayload
 }
 
@@ -4019,6 +4022,7 @@ export function normalizeHookPayload(
         toolAgentType: readString(hookPayloadRecord, 'agent_type'),
         ...(providerSession ? { providerSession } : {}),
         ...(providerSessionOnly ? { providerSessionOnly: true } : {}),
+        sourceCwd: readHookPayloadCwd(hookPayloadRecord),
         payload: transportPayload
       }
     : null

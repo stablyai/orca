@@ -714,7 +714,7 @@ const agentHookInstallFailedSchema = z
 
 // Why: regression signal for paneKey attribution — a hook event that can't route to a pane. See docs/cli-terminal-hook-pane-key.md.
 const agentHookUnattributedSchema = z
-  .object({ reason: z.enum(['empty_pane_key', 'unknown_tab_id']) })
+  .object({ reason: z.enum(['empty_pane_key', 'unknown_tab_id', 'cwd_worktree_mismatch']) })
   .strict()
 
 // ── Onboarding ──────────────────────────────────────────────────────────

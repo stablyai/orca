@@ -312,6 +312,7 @@ export class RelayAgentHookServer {
       isReplay: options.isReplay === true ? true : undefined,
       env,
       version,
+      sourceCwd: event.sourceCwd,
       payload: event.payload
     }
     this.forward(envelope)
