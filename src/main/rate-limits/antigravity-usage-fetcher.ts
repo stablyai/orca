@@ -96,9 +96,12 @@ export function aggregateAntigravityWindows(buckets: (RateLimitBucket & { bucket
   }
 
   const sessionBuckets = buckets.filter((b) => b.windowMinutes === 300)
-  const targetSession = (sessionBuckets.length > 0 ? sessionBuckets : buckets).reduce((worst, b) =>
-    b.usedPercent > worst.usedPercent ? b : worst
-  )
+  // Why: falling back to every bucket would surface a weekly (10080-minute)
+  // reading under the session window, so report nothing when no 5h bucket exists.
+  const targetSession =
+    sessionBuckets.length > 0
+      ? sessionBuckets.reduce((worst, b) => (b.usedPercent > worst.usedPercent ? b : worst))
+      : null
 
   const weeklyBuckets = buckets.filter((b) => b.windowMinutes === 10080)
   const targetWeekly =
@@ -106,12 +109,14 @@ export function aggregateAntigravityWindows(buckets: (RateLimitBucket & { bucket
       ? weeklyBuckets.reduce((worst, b) => (b.usedPercent > worst.usedPercent ? b : worst))
       : null
 
-  const session: RateLimitWindow = {
-    usedPercent: targetSession.usedPercent,
-    windowMinutes: targetSession.windowMinutes,
-    resetsAt: targetSession.resetsAt,
-    resetDescription: targetSession.resetDescription
-  }
+  const session: RateLimitWindow | null = targetSession
+    ? {
+        usedPercent: targetSession.usedPercent,
+        windowMinutes: targetSession.windowMinutes,
+        resetsAt: targetSession.resetsAt,
+        resetDescription: targetSession.resetDescription
+      }
+    : null
 
   const weekly: RateLimitWindow | null = targetWeekly
     ? {

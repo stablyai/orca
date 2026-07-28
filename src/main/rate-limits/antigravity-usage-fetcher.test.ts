@@ -6,7 +6,11 @@ import {
   ANTIGRAVITY_CLIENT_ID,
   ANTIGRAVITY_CLIENT_SECRET
 } from './antigravity-auth'
-import { parseQuotaResponse, fetchAntigravityRateLimits } from './antigravity-usage-fetcher'
+import {
+  parseQuotaResponse,
+  aggregateAntigravityWindows,
+  fetchAntigravityRateLimits
+} from './antigravity-usage-fetcher'
 
 const { readFileMock, netFetchMock } = vi.hoisted(() => ({
   readFileMock: vi.fn(),
@@ -86,6 +90,45 @@ describe('parseQuotaResponse', () => {
       usedPercent: 15,
       windowMinutes: 10080
     })
+  })
+})
+
+describe('aggregateAntigravityWindows', () => {
+  const bucket = (bucketId: string, windowMinutes: number, usedPercent: number) => ({
+    name: bucketId,
+    usedPercent,
+    windowMinutes,
+    resetsAt: 1_700_000_000_000,
+    resetDescription: null,
+    bucketId
+  })
+
+  it('reports no session window when only weekly buckets are present', () => {
+    const { session, weekly } = aggregateAntigravityWindows([
+      bucket('gemini-weekly', 10080, 42),
+      bucket('3p-weekly', 10080, 77)
+    ])
+
+    expect(session).toBeNull()
+    expect(weekly).toMatchObject({ usedPercent: 77, windowMinutes: 10080 })
+  })
+
+  it('picks the worst 5h bucket for session and the worst weekly for weekly', () => {
+    const { session, weekly } = aggregateAntigravityWindows([
+      bucket('gemini-5h', 300, 30),
+      bucket('3p-5h', 300, 65),
+      bucket('gemini-weekly', 10080, 12)
+    ])
+
+    expect(session).toMatchObject({ usedPercent: 65, windowMinutes: 300 })
+    expect(weekly).toMatchObject({ usedPercent: 12, windowMinutes: 10080 })
+  })
+
+  it('reports no weekly window when only session buckets are present', () => {
+    const { session, weekly } = aggregateAntigravityWindows([bucket('gemini-5h', 300, 8)])
+
+    expect(session).toMatchObject({ usedPercent: 8, windowMinutes: 300 })
+    expect(weekly).toBeNull()
   })
 })
 
