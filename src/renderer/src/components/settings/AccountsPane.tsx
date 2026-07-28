@@ -745,9 +745,29 @@ export function AccountsPane({
           action === `reauth:${nextActiveAccountId}`) ||
         (action.startsWith('remove:') && previousActiveAccountId !== nextActiveAccountId)
       if (shouldPromptRestart) {
+        // Why: `add` creates the managed home against the machine's own distro,
+        // so the slot it wrote is the created account's — not this row's, which
+        // may still say "WSL default". Found by diffing the roster rather than
+        // by the row's active id, which resolves to null once two distro slots
+        // are filled and would send the notice to the wrong lane.
+        const newAccounts =
+          action === 'adding'
+            ? next.accounts.filter(
+                (account) => !codexAccounts.accounts.some((prior) => prior.id === account.id)
+              )
+            : []
+        // Why exactly one: an unloaded prior roster makes every account look new,
+        // and picking one of those would aim the notice at an unrelated lane.
+        // Falling back to the row is the pre-existing behaviour, not a new risk.
+        const addedAccount = newAccounts.length === 1 ? newAccounts[0] : undefined
         void markLiveCodexSessionsForRestart({
           previousAccountLabel: getCodexAccountLabel(codexAccounts, previousActiveAccountId),
-          nextAccountLabel: getCodexAccountLabel(next, nextActiveAccountId)
+          nextAccountLabel: getCodexAccountLabel(next, nextActiveAccountId),
+          // Why: the mutation wrote this row's slot only, so panes on any other
+          // lane still launch under the account they already had.
+          target: addedAccount ? getProviderAccountRuntime(addedAccount) : actionRuntime,
+          // Why: clearing a distro-less WSL row nulls every distro slot at once.
+          clearsEveryWslDistro: action === 'select:system'
         })
       }
     } catch (error) {

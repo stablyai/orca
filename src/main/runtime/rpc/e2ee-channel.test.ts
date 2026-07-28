@@ -7,6 +7,7 @@ import {
   REMOTE_RUNTIME_MAX_OUTBOUND_JSON_BYTES
 } from '../../../shared/remote-runtime-memory-limits'
 import { REMOTE_RUNTIME_JSON_STRUCTURE_LIMITS } from '../../../shared/remote-runtime-request-frames'
+import { SESSION_TAB_CLOSE_INTENT_RUNTIME_CAPABILITY } from '../../../shared/protocol-version'
 
 function publicKeyToBase64(key: Uint8Array): string {
   return Buffer.from(key).toString('base64')
@@ -99,6 +100,35 @@ describe('E2EEChannel', () => {
 
       expect(ctx.onReady).not.toHaveBeenCalled()
       expect(JSON.parse(ctx.ws.sent[0]!)).toEqual({ type: 'e2ee_ready' })
+    })
+
+    it('binds runtime capabilities to encrypted authenticated metadata', () => {
+      const ctx = setup({
+        resolveAuthenticatedDevice: (token) =>
+          token === 'valid-token'
+            ? { deviceId: 'device-1', deviceToken: token, scope: 'runtime' }
+            : null
+      })
+      ctx.channel.handleRawMessage(
+        JSON.stringify({
+          type: 'e2ee_hello',
+          publicKeyB64: publicKeyToBase64(ctx.clientKeys.publicKey)
+        })
+      )
+      const sharedKey = deriveSharedKey(ctx.clientKeys.secretKey, ctx.serverKeys.publicKey)
+      ctx.channel.handleRawMessage(
+        encrypt(
+          JSON.stringify({
+            type: 'e2ee_auth',
+            deviceToken: 'valid-token',
+            clientCapabilities: [SESSION_TAB_CLOSE_INTENT_RUNTIME_CAPABILITY]
+          }),
+          sharedKey
+        )
+      )
+
+      expect(ctx.channel.clientCapabilities).toEqual([SESSION_TAB_CLOSE_INTENT_RUNTIME_CAPABILITY])
+      expect(ctx.onReady).toHaveBeenCalledOnce()
     })
 
     it('rejects invalid encrypted token', () => {

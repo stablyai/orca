@@ -77,6 +77,7 @@ export function attachDividerDrag(
   let prevInitialFlex = ''
   let nextInitialFlex = ''
   let activePointerId: number | null = null
+  let activePointerType: string | null = null
   let releasePtyResizeHold: { flush: () => void; cancel: () => void } | null = null
   let windowListenersAttached = false
   const flexScheduler = createDividerFlexFrameScheduler({
@@ -131,12 +132,14 @@ export function attachDividerDrag(
       removeWindowListeners()
       releasePointerCaptureIfHeld(activePointerId)
       activePointerId = null
+      activePointerType = null
       return
     }
 
     const pointerId = activePointerId
     dragging = false
     activePointerId = null
+    activePointerType = null
     removeWindowListeners()
 
     if (commitLayout) {
@@ -198,6 +201,7 @@ export function attachDividerDrag(
 
     divider.setPointerCapture(e.pointerId)
     activePointerId = e.pointerId
+    activePointerType = e.pointerType
     divider.classList.add('is-dragging')
     dragging = true
     didMove = false
@@ -220,9 +224,13 @@ export function attachDividerDrag(
 
   // Why: WSLg's RDP input path reports press/release as a `mouse` pointer but
   // streams motion as a `pen` pointer with a different pointerId, so a strict
-  // pointerId match drops every move. Any primary pointer continues the drag.
+  // pointerId match drops every move. A foreign primary pointer may take over
+  // only when neither end is touch: each pointer type has its own primary, so
+  // otherwise a stray finger hijacks a mouse/pen drag and a stray mouse hijacks
+  // a touch drag. Either drag still matches its own pointer by pointerId.
   const isActiveDragPointer = (e: PointerEvent): boolean =>
-    e.pointerId === activePointerId || e.isPrimary
+    e.pointerId === activePointerId ||
+    (e.isPrimary && e.pointerType !== 'touch' && activePointerType !== 'touch')
 
   const onPointerMove = (e: PointerEvent): void => {
     if (!dragging || !isActiveDragPointer(e) || !prevEl || !nextEl) {

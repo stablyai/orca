@@ -12,6 +12,9 @@ const mockOnDispatchRequested = vi.fn()
 const mockRendererReady = vi.fn()
 const mockFinalizeTerminalOwnership = vi.fn()
 const mockReleaseTerminalOwnership = vi.fn()
+const mockSshNeedsPassphrasePrompt = vi.fn()
+const mockSshGetState = vi.fn()
+const mockSshConnect = vi.fn()
 
 const setupLaunch = {
   runnerScriptPath: '/tmp/setup.sh',
@@ -25,15 +28,35 @@ const createdWorktree = {
   path: '/repo/worktree'
 }
 type TestWorktree = typeof createdWorktree
+type TestRepo = {
+  id: string
+  connectionId: string | null
+  executionHostId: string | null
+  path: string
+}
 
 const state = {
   activeView: 'terminal' as const,
   activeWorktreeId: 'wt-active',
   activeTabId: 'tab-active',
   activeTabType: 'terminal' as const,
-  repos: [{ id: 'repo-1', connectionId: null }],
+  repos: [{ id: 'repo-1', connectionId: null, executionHostId: null, path: '/repo' }] as TestRepo[],
+  folderWorkspaces: [] as {
+    id: string
+    projectGroupId: string
+    folderPath: string
+    connectionId: string | null
+  }[],
+  projectGroups: [] as {
+    id: string
+    connectionId: string | null
+    executionHostId?: string | null
+  }[],
+  worktreesByRepo: {} as Record<string, TestWorktree[]>,
+  detectedWorktreesByRepo: {},
   agentStatusByPaneKey: {},
   allWorktrees: vi.fn<() => TestWorktree[]>(() => []),
+  getKnownWorktreeById: vi.fn<(worktreeId: string) => TestWorktree | undefined>(() => undefined),
   createWorktree: mockCreateWorktree,
   subscribe: vi.fn(() => () => {}),
   setActiveView: vi.fn(),
@@ -146,9 +169,13 @@ describe('useAutomationDispatchEvents setup launch', () => {
     state.activeWorktreeId = 'wt-active'
     state.activeTabId = 'tab-active'
     state.activeTabType = 'terminal'
-    state.repos = [{ id: 'repo-1', connectionId: null }]
+    state.repos = [{ id: 'repo-1', connectionId: null, executionHostId: null, path: '/repo' }]
+    state.folderWorkspaces = []
+    state.projectGroups = []
+    state.worktreesByRepo = {}
     state.agentStatusByPaneKey = {}
     state.allWorktrees.mockReturnValue([])
+    state.getKnownWorktreeById.mockReturnValue(undefined)
     mockCreateWorktree.mockResolvedValue({ worktree: createdWorktree, setup: setupLaunch })
     mockLaunchWorktreeBackgroundTerminals.mockResolvedValue(undefined)
     mockLaunchAgentBackgroundSession.mockResolvedValue({
@@ -162,6 +189,9 @@ describe('useAutomationDispatchEvents setup launch', () => {
       }
     })
     mockOnDispatchRequested.mockReturnValue(() => {})
+    mockSshNeedsPassphrasePrompt.mockResolvedValue(false)
+    mockSshGetState.mockResolvedValue({ status: 'connected' })
+    mockSshConnect.mockResolvedValue({ status: 'connected' })
     vi.stubGlobal('window', {
       api: {
         automations: {
@@ -172,9 +202,9 @@ describe('useAutomationDispatchEvents setup launch', () => {
           listRuns: vi.fn().mockResolvedValue([])
         },
         ssh: {
-          needsPassphrasePrompt: vi.fn().mockResolvedValue(false),
-          getState: vi.fn().mockResolvedValue({ status: 'connected' }),
-          connect: vi.fn()
+          needsPassphrasePrompt: mockSshNeedsPassphrasePrompt,
+          getState: mockSshGetState,
+          connect: mockSshConnect
         }
       },
       dispatchEvent: vi.fn()
@@ -316,6 +346,145 @@ describe('useAutomationDispatchEvents setup launch', () => {
         worktreeId: 'wt-existing',
         prompt: 'run this'
       })
+    )
+  })
+
+  it('dispatches an existing SSH folder workspace on its resolved host', async () => {
+    const folderWorkspace = {
+      id: 'folder:fw-1',
+      repoId: 'folder-workspace:group-1',
+      displayName: 'SSH folder',
+      path: '/srv/project'
+    }
+    state.repos = [
+      {
+        id: 'repo-1',
+        connectionId: 'ssh-folder',
+        executionHostId: null,
+        path: '/srv/project/repo'
+      }
+    ]
+    state.folderWorkspaces = [
+      {
+        id: 'fw-1',
+        projectGroupId: 'group-1',
+        folderPath: '/srv/project',
+        connectionId: 'ssh-folder'
+      }
+    ]
+    state.projectGroups = [{ id: 'group-1', connectionId: 'ssh-folder' }]
+    state.getKnownWorktreeById.mockReturnValue(folderWorkspace)
+    mockSshGetState.mockResolvedValue({ status: 'disconnected' })
+
+    await registerAndDispatch(
+      makeAutomation({
+        workspaceMode: 'existing',
+        workspaceId: folderWorkspace.id,
+        setupDecision: 'skip',
+        runContext: { repoId: 'repo-1', hostId: 'ssh:ssh-folder' }
+      })
+    )
+
+    expect(state.allWorktrees).not.toHaveBeenCalled()
+    expect(mockSshConnect).toHaveBeenCalledWith({ targetId: 'ssh-folder' })
+    expect(mockLaunchAgentBackgroundSession).toHaveBeenCalledWith(
+      expect.objectContaining({
+        worktreeId: folderWorkspace.id,
+        prompt: 'run this'
+      })
+    )
+    expect(mockMarkDispatchResult).toHaveBeenCalledWith(
+      expect.objectContaining({
+        status: 'dispatched',
+        workspaceId: folderWorkspace.id,
+        workspaceDisplayName: folderWorkspace.displayName
+      })
+    )
+  })
+
+  it('dispatches a local folder workspace without SSH', async () => {
+    const folderWorkspace = {
+      id: 'folder:fw-local',
+      repoId: 'folder-workspace:group-local',
+      displayName: 'Local folder',
+      path: '/project'
+    }
+    state.folderWorkspaces = [
+      {
+        id: 'fw-local',
+        projectGroupId: 'group-local',
+        folderPath: '/project',
+        connectionId: null
+      }
+    ]
+    state.projectGroups = [{ id: 'group-local', connectionId: null }]
+    state.getKnownWorktreeById.mockReturnValue(folderWorkspace)
+
+    await registerAndDispatch(
+      makeAutomation({
+        workspaceMode: 'existing',
+        workspaceId: folderWorkspace.id,
+        runContext: { repoId: 'repo-1', hostId: 'local' }
+      })
+    )
+
+    expect(mockSshNeedsPassphrasePrompt).not.toHaveBeenCalled()
+    expect(mockLaunchAgentBackgroundSession).toHaveBeenCalledWith(
+      expect.objectContaining({ worktreeId: folderWorkspace.id })
+    )
+  })
+
+  it('skips a folder workspace owned by a different host', async () => {
+    const folderWorkspace = {
+      id: 'folder:fw-other',
+      repoId: 'folder-workspace:group-other',
+      displayName: 'Other host',
+      path: '/srv/other'
+    }
+    state.folderWorkspaces = [
+      {
+        id: 'fw-other',
+        projectGroupId: 'group-other',
+        folderPath: '/srv/other',
+        connectionId: 'ssh-other'
+      }
+    ]
+    state.projectGroups = [{ id: 'group-other', connectionId: 'ssh-other' }]
+    state.getKnownWorktreeById.mockReturnValue(folderWorkspace)
+
+    await registerAndDispatch(
+      makeAutomation({
+        workspaceMode: 'existing',
+        workspaceId: folderWorkspace.id,
+        runContext: { repoId: 'repo-1', hostId: 'local' }
+      })
+    )
+
+    expect(mockLaunchAgentBackgroundSession).not.toHaveBeenCalled()
+    expect(mockMarkDispatchResult).toHaveBeenCalledWith(
+      expect.objectContaining({ status: 'skipped_unavailable' })
+    )
+  })
+
+  it('keeps detected-only non-folder workspaces unavailable', async () => {
+    state.getKnownWorktreeById.mockReturnValue({
+      id: 'wt-detected',
+      repoId: 'repo-1',
+      displayName: 'Detected',
+      path: '/repo/detected'
+    })
+
+    await registerAndDispatch(
+      makeAutomation({
+        workspaceMode: 'existing',
+        workspaceId: 'wt-detected'
+      })
+    )
+
+    expect(state.getKnownWorktreeById).not.toHaveBeenCalled()
+    expect(mockLaunchAgentBackgroundSession).not.toHaveBeenCalled()
+    expect(mockMarkDispatchResult).toHaveBeenCalledWith(
+      expect.objectContaining({ status: 'skipped_unavailable' })
     )
   })
 

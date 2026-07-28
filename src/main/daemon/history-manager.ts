@@ -340,7 +340,7 @@ export class HistoryManager {
 
   private async waitForSessionMutations(sessionId: string): Promise<void> {
     while (this.pendingSessionMutations.has(sessionId)) {
-      await Promise.allSettled(this.pendingSessionMutations.get(sessionId) ?? [])
+      await Promise.allSettled(this.pendingSessionMutations.get(sessionId)!)
     }
   }
 }

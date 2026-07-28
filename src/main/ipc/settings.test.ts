@@ -384,6 +384,27 @@ describe('registerSettingsHandlers', () => {
     )
   })
 
+  it('does not accept plugin authority grants from generic renderer settings IPC', async () => {
+    store.getSettings.mockReturnValue({ pluginConsents: {}, disabledPlugins: [] })
+    store.updateSettings.mockReturnValue({ pluginConsents: {}, disabledPlugins: [] })
+    registerSettingsHandlers(store as never)
+
+    const handler = handleMock.mock.calls.find((call) => call[0] === 'settings:set')?.[1] as (
+      _event: unknown,
+      args: unknown
+    ) => Promise<unknown>
+
+    await handler(settingsInvokeEvent, {
+      pluginConsents: { 'orca-samples.demo': 'sha256-forged' },
+      disabledPlugins: ['orca-samples.demo']
+    })
+
+    expect(store.updateSettings).toHaveBeenCalledWith(
+      {},
+      { notifyListeners: true, originWebContentsId: 1 }
+    )
+  })
+
   it('normalizes terminal scrollback row updates and drops legacy byte updates', async () => {
     store.getSettings.mockReturnValue({ terminalScrollbackRows: 5_000 })
     store.updateSettings.mockReturnValue({ terminalScrollbackRows: 50_000 })

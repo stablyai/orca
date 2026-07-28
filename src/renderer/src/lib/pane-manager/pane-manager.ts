@@ -194,6 +194,12 @@ export class PaneManager {
     return Array.from(this.panes.values()).map(toPublicPane)
   }
 
+  /** Why separate from getPanes: the census runs on the crash path, where
+   *  materializing every public pane view just to read `.length` is waste. */
+  getPaneCount(): number {
+    return this.panes.size
+  }
+
   fitAllPanes(): void {
     fitAllPanesInternal(this.panes)
   }

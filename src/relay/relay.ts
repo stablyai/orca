@@ -52,6 +52,7 @@ import { relayLogLine } from './relay-diagnostic-log'
 import { remoteCliRequestTimeoutMs } from './remote-cli-timeout'
 import { shouldReadRemoteCliStdin } from './remote-cli-stdin'
 import { registerManagedHookInstaller } from './managed-hook-installer'
+import { registerRelayPluginHostCallHandlers } from './plugin-host-call-handler'
 
 const DEFAULT_GRACE_MS = DEFAULT_SSH_RELAY_GRACE_PERIOD_SECONDS * 1000
 const SOCK_NAME = 'relay.sock'
@@ -341,7 +342,7 @@ async function main(): Promise<void> {
   })
 
   process.on('unhandledRejection', (reason) => {
-    relayLogLine(`[relay] Unhandled rejection: ${reason}`)
+    relayLogLine(`[relay] Unhandled rejection: ${String(reason)}`)
   })
 
   // Why: guards writes after the stdin/SSH channel drops so keepalive/pty.data frames don't hit a dead pipe (EPIPE).
@@ -427,6 +428,14 @@ async function main(): Promise<void> {
 
   const _workspaceSessionHandler = new WorkspaceSessionHandler(dispatcher)
   void _workspaceSessionHandler
+
+  // Why: relay-hosted plugin provisioning is a later phase. Register the
+  // enforcement boundary now with no consented identities or runtime services.
+  registerRelayPluginHostCallHandlers(
+    dispatcher,
+    () => null,
+    () => ({ grantedCapabilities: null, services: null })
+  )
 
   dispatcher.onRequest('orca.cli', async (params, context) => {
     return await dispatcher.requestAnyClient('orca.cli', params, {

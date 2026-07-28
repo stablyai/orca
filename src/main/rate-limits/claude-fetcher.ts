@@ -20,14 +20,14 @@ import {
   readActiveClaudeKeychainCredentials,
   readActiveClaudeKeychainCredentialsStrict,
   readManagedClaudeKeychainCredentials,
-  writeActiveClaudeKeychainCredentials
+  writeActiveClaudeKeychainCredentials,
+  writeManagedClaudeKeychainCredentials
 } from '../claude-accounts/keychain'
 import {
   readClaudeManagedAuthFile,
   resolveOwnedClaudeManagedAuthPath,
   writeClaudeManagedAuthFile
 } from '../claude-accounts/managed-auth-path'
-import { writeManagedClaudeKeychainCredentials } from '../claude-accounts/keychain'
 import {
   isOauthTokenExpiring,
   refreshClaudeOauthCredentials

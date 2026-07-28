@@ -9,6 +9,8 @@ type ProviderMock = IPtyProvider & {
   emitData: (id: string, data: string, sequenceChars?: number) => void
   emitReplay: (id: string, data: string) => void
   emitExit: (id: string, code: number) => void
+  triggerWriteUnavailable: (id: string) => void
+  onWriteUnavailable: (callback: (payload: { id: string }) => void) => () => void
 }
 
 function createProvider(
@@ -20,6 +22,7 @@ function createProvider(
     []
   const replayListeners: ((payload: { id: string; data: string }) => void)[] = []
   const exitListeners: ((payload: { id: string; code: number }) => void)[] = []
+  const writeUnavailableListeners: ((payload: { id: string }) => void)[] = []
   return {
     spawn: vi.fn(async (opts: PtySpawnOptions): Promise<PtySpawnResult> => {
       const id = opts.sessionId ?? `${label}-new`
@@ -94,6 +97,20 @@ function createProvider(
       for (const listener of exitListeners) {
         listener({ id, code })
       }
+    },
+    onWriteUnavailable: vi.fn((callback: (payload: { id: string }) => void) => {
+      writeUnavailableListeners.push(callback)
+      return () => {
+        const idx = writeUnavailableListeners.indexOf(callback)
+        if (idx !== -1) {
+          writeUnavailableListeners.splice(idx, 1)
+        }
+      }
+    }),
+    triggerWriteUnavailable: (id: string) => {
+      for (const listener of writeUnavailableListeners) {
+        listener({ id })
+      }
     }
   }
 }
@@ -115,6 +132,26 @@ function createDaemonAdapter(
     fanoutSyntheticExits: vi.fn()
   } as unknown as DaemonPtyAdapter & ProviderMock
 }
+
+it('forwards dead-endpoint write-unavailable signals from the daemon adapters', () => {
+  // Why revert-sensitive: this provider is the live localProvider in degraded launch
+  // mode and main subscribes on it, so without forwarding the STA-2373 fan-out reaches
+  // no listener and sibling panes stay frozen.
+  const current = createDaemonAdapter('daemon')
+  const legacy = createDaemonAdapter('legacy')
+  const fallback = createProvider('fallback')
+  const provider = new DegradedDaemonPtyProvider({ current, legacy: [legacy], fallback })
+  const recovered: string[] = []
+
+  const unsubscribe = provider.onWriteUnavailable(({ id }) => recovered.push(id))
+  current.triggerWriteUnavailable('daemon-pane')
+  legacy.triggerWriteUnavailable('legacy-pane')
+  expect(recovered).toEqual(['daemon-pane', 'legacy-pane'])
+
+  unsubscribe()
+  current.triggerWriteUnavailable('after-unsubscribe')
+  expect(recovered).toEqual(['daemon-pane', 'legacy-pane'])
+})
 
 it('rejects completion inspection instead of borrowing the fallback provider', async () => {
   const provider = new DegradedDaemonPtyProvider({

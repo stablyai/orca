@@ -572,7 +572,7 @@ async function main() {
     if (options.output) {
       mkdirSync(path.dirname(path.resolve(options.output)), { recursive: true })
       writeFileSync(options.output, `${JSON.stringify(report, null, 2)}\n`)
-      console.log(`[idle-cpu] wrote ${options.output}`)
+      console.log(`[idle-cpu] wrote ${String(options.output)}`)
     }
     console.log(
       JSON.stringify(

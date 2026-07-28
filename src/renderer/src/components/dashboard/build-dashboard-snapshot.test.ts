@@ -114,6 +114,73 @@ describe('buildDashboardSnapshot', () => {
     expect(card.unseen).toBe(true)
   })
 
+  it('carries the tab conversation name and drops status-only titles', () => {
+    const named = buildDashboardSnapshot(
+      baseState({
+        agentStatusByPaneKey: { [PANE_KEY]: entry({}) },
+        tabsByWorktree: { w1: [{ ...tab(), customTitle: 'Sparse-checkout parser' }] }
+      }),
+      NOW
+    )
+    expect(named.cards[0].conversationName).toBe('Sparse-checkout parser')
+
+    // The fixture tab's title is the 'agent' placeholder — not a name.
+    const unnamed = buildDashboardSnapshot(
+      baseState({ agentStatusByPaneKey: { [PANE_KEY]: entry({}) } }),
+      NOW
+    )
+    expect(unnamed.cards[0].conversationName).toBeUndefined()
+  })
+
+  it('withholds generated titles until the setting enables them', () => {
+    const tabs = { w1: [{ ...tab(), generatedTitle: 'Fix the flaky pty test' }] }
+    const off = buildDashboardSnapshot(
+      baseState({ agentStatusByPaneKey: { [PANE_KEY]: entry({}) }, tabsByWorktree: tabs }),
+      NOW
+    )
+    expect(off.cards[0].conversationName).toBeUndefined()
+
+    const on = buildDashboardSnapshot(
+      baseState({
+        agentStatusByPaneKey: { [PANE_KEY]: entry({}) },
+        tabsByWorktree: tabs,
+        settings: { tabAutoGenerateTitle: true }
+      } as unknown as Partial<DashboardSnapshotState>),
+      NOW
+    )
+    expect(on.cards[0].conversationName).toBe('Fix the flaky pty test')
+  })
+
+  it('ships one icon per card-bearing repo, and none for repos without cards', () => {
+    const snapshot = buildDashboardSnapshot(
+      baseState({
+        repos: [
+          {
+            id: 'r1',
+            path: '/r1',
+            displayName: 'Repo One',
+            badgeColor: '#000',
+            repoIcon: { type: 'lucide', name: 'Rocket' }
+          },
+          { id: 'r2', path: '/r2', displayName: 'Repo Two', badgeColor: '#000' }
+        ],
+        worktreesByRepo: { r1: [worktree()], r2: [worktree('w2', 'wt-two')] },
+        agentStatusByPaneKey: { [PANE_KEY]: entry({}) }
+      } as unknown as Partial<DashboardSnapshotState>),
+      NOW
+    )
+    // r2 has a worktree but no agent card, so its icon never ships.
+    expect(snapshot.repoIconsByRepoId).toEqual({ r1: { type: 'lucide', name: 'Rocket' } })
+  })
+
+  it('records a null icon for a card-bearing repo that has none', () => {
+    const snapshot = buildDashboardSnapshot(
+      baseState({ agentStatusByPaneKey: { [PANE_KEY]: entry({}) } }),
+      NOW
+    )
+    expect(snapshot.repoIconsByRepoId).toEqual({ r1: null })
+  })
+
   it('nulls ptyId when the layout entry points at a dead pty', () => {
     const snapshot = buildDashboardSnapshot(
       baseState({

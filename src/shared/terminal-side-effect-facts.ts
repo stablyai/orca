@@ -32,6 +32,10 @@ export type TerminalSideEffectFact =
    *  the theme reply — the reply stays renderer-side because query authority
    *  belongs to the view (model/view contract invariant 6). */
   | { kind: '2031-subscribe' }
+  /** DECSET 2031 withdrawal observed in the byte stream. Gated views never see
+   *  these bytes, so without this fact their subscription registry goes stale
+   *  and a later theme flip pushes CSI 997 at a shell that already withdrew. */
+  | { kind: '2031-unsubscribe' }
 
 export type TerminalSideEffectBatch = {
   ptyId: string

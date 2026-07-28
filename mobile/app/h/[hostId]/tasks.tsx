@@ -106,11 +106,9 @@ import {
 } from '../../../src/tasks/setup-hook-trust'
 import { colors, radii, spacing, typography } from '../../../src/theme/mobile-theme'
 import { triggerMediumImpact } from '../../../src/platform/haptics'
-import type {
-  GitHubProjectSortDirection,
-  GitHubProjectTable as SharedGitHubProjectTable
-} from '../../../src/tasks/mobile-github-project-group-sort'
 import {
+  type GitHubProjectSortDirection,
+  type GitHubProjectTable as SharedGitHubProjectTable,
   groupRows,
   isIterationCurrent,
   sortRows,

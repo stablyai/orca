@@ -85,6 +85,11 @@ describe('useMobileNativeChatDrafts', () => {
     act(() => state?.setComposerText('from a'))
     const originA = state?.captureSendOrigin('from a')
     expect(originA).not.toBeNull()
+    act(() => {
+      if (originA) {
+        state?.clearDraftForSend(originA, 'from a')
+      }
+    })
 
     await switchTo('b')
     act(() => state?.setComposerText('from b'))
@@ -99,6 +104,99 @@ describe('useMobileNativeChatDrafts', () => {
     await switchTo('a')
     expect(state?.composerText).toBe('')
     expect(state?.pending.map((pending) => pending.text)).toEqual(['from a'])
+  })
+
+  it('clears the composer at send time, before the RPC settles', async () => {
+    await mount('a')
+    act(() => state?.setComposerText('ping'))
+    const origin = state?.captureSendOrigin('ping')
+    act(() => {
+      if (origin) {
+        state?.clearDraftForSend(origin, 'ping')
+      }
+    })
+    expect(state?.composerText).toBe('')
+  })
+
+  it('restores the text on a definite rejection', async () => {
+    await mount('a')
+    act(() => state?.setComposerText('ping'))
+    const origin = state?.captureSendOrigin('ping')
+    act(() => {
+      if (origin) {
+        state?.clearDraftForSend(origin, 'ping')
+        state?.restoreRejectedDraft(origin, 'ping')
+      }
+    })
+    expect(state?.composerText).toBe('ping')
+  })
+
+  it('does not clobber newer edits when restoring a rejected send', async () => {
+    await mount('a')
+    act(() => state?.setComposerText('ping'))
+    const origin = state?.captureSendOrigin('ping')
+    act(() => {
+      if (origin) {
+        state?.clearDraftForSend(origin, 'ping')
+      }
+    })
+    act(() => state?.setComposerText('newer edit'))
+    act(() => {
+      if (origin) {
+        state?.restoreRejectedDraft(origin, 'ping')
+      }
+    })
+    expect(state?.composerText).toBe('newer edit')
+  })
+
+  it('restores a rejected send onto its originating tab only', async () => {
+    await mount('a')
+    act(() => state?.setComposerText('from a'))
+    const originA = state?.captureSendOrigin('from a')
+    act(() => {
+      if (originA) {
+        state?.clearDraftForSend(originA, 'from a')
+      }
+    })
+
+    await switchTo('b')
+    act(() => {
+      if (originA) {
+        state?.restoreRejectedDraft(originA, 'from a')
+      }
+    })
+    expect(state?.composerText).toBe('')
+
+    await switchTo('a')
+    expect(state?.composerText).toBe('from a')
+  })
+
+  it('keeps the composer clear when the echo lands after the unconfirmed deadline', async () => {
+    vi.useFakeTimers()
+    try {
+      await mount('a')
+      act(() => state?.setComposerText('ping'))
+      const origin = state?.captureSendOrigin('ping')
+      act(() => {
+        if (origin) {
+          state?.clearDraftForSend(origin, 'ping')
+          state?.holdUnconfirmedSend(origin, 'ping', vi.fn())
+        }
+      })
+      expect(state?.composerText).toBe('')
+
+      // A relay drop can stall the transcript stream past the deadline; the
+      // delivered prompt must not reappear in the composer when it recovers.
+      act(() => vi.advanceTimersByTime(25_000))
+      await act(async () =>
+        renderer?.update(
+          createElement(Harness, { tabId: 'a', messages: [userTextMessage('m1', 'ping')] })
+        )
+      )
+      expect(state?.composerText).toBe('')
+    } finally {
+      vi.useRealTimers()
+    }
   })
 
   it('clears one pending per landed message so duplicate sends are not all dropped', async () => {
@@ -279,25 +377,24 @@ describe('useMobileNativeChatDrafts', () => {
     expect(state?.pending).toEqual([])
   })
 
-  it('does not erase newer edits when an older send settles', async () => {
+  it('does not erase newer edits when an older send clears', async () => {
     await mount('a')
     act(() => state?.setComposerText('submitted'))
     const origin = state?.captureSendOrigin('submitted')
     act(() => state?.setComposerText('new edit'))
     act(() => {
       if (origin) {
-        state?.acceptSend(origin, 'submitted')
+        state?.clearDraftForSend(origin, 'submitted')
       }
     })
 
     expect(state?.composerText).toBe('new edit')
   })
 
-  it('clears the draft when an unconfirmed send lands in the transcript', async () => {
+  it('stays quiet when an unconfirmed send lands in the transcript', async () => {
     vi.useFakeTimers()
     try {
       await mount('a')
-      act(() => state?.setComposerText('ping'))
       const origin = state?.captureSendOrigin('ping')
       const onUnconfirmed = vi.fn()
       act(() => {
@@ -305,14 +402,12 @@ describe('useMobileNativeChatDrafts', () => {
           state?.holdUnconfirmedSend(origin, 'ping', onUnconfirmed)
         }
       })
-      expect(state?.composerText).toBe('ping')
 
       await act(async () =>
         renderer?.update(
           createElement(Harness, { tabId: 'a', messages: [userTextMessage('m1', 'ping')] })
         )
       )
-      expect(state?.composerText).toBe('')
 
       act(() => vi.advanceTimersByTime(30_000))
       expect(onUnconfirmed).not.toHaveBeenCalled()
@@ -399,11 +494,10 @@ describe('useMobileNativeChatDrafts', () => {
     expect(state?.pending.map((pending) => pending.images)).toEqual([['file:///b.jpg']])
   })
 
-  it('clears immediately when the transcript echo beat the ambiguous RPC rejection', async () => {
+  it('registers no deadline when the transcript echo beat the ambiguous RPC rejection', async () => {
     vi.useFakeTimers()
     try {
       await mount('a')
-      act(() => state?.setComposerText('ping'))
       const origin = state?.captureSendOrigin('ping')
       const onUnconfirmed = vi.fn()
 
@@ -418,7 +512,6 @@ describe('useMobileNativeChatDrafts', () => {
         }
       })
 
-      expect(state?.composerText).toBe('')
       expect(vi.getTimerCount()).toBe(0)
       act(() => vi.advanceTimersByTime(30_000))
       expect(onUnconfirmed).not.toHaveBeenCalled()
@@ -427,11 +520,10 @@ describe('useMobileNativeChatDrafts', () => {
     }
   })
 
-  it('surfaces uncertainty and keeps the draft when no echo lands before the deadline', async () => {
+  it('surfaces uncertainty when no echo lands before the deadline', async () => {
     vi.useFakeTimers()
     try {
       await mount('a')
-      act(() => state?.setComposerText('ping'))
       const origin = state?.captureSendOrigin('ping')
       const onUnconfirmed = vi.fn()
       act(() => {
@@ -444,7 +536,6 @@ describe('useMobileNativeChatDrafts', () => {
       expect(onUnconfirmed).not.toHaveBeenCalled()
       act(() => vi.advanceTimersByTime(1))
       expect(onUnconfirmed).toHaveBeenCalledTimes(1)
-      expect(state?.composerText).toBe('ping')
     } finally {
       vi.useRealTimers()
     }
@@ -631,6 +722,7 @@ describe('useMobileNativeChatDrafts', () => {
     expect(origin).toMatchObject({ pendingKey: null })
     act(() => {
       if (origin) {
+        state?.clearDraftForSend(origin, 'start the session')
         state?.acceptSend(origin, 'start the session')
       }
     })

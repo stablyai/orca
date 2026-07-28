@@ -1,6 +1,9 @@
 import { z } from 'zod'
-import type { NativeChatBlock, NativeChatMessage } from '../../../../shared/native-chat-types'
-import type { AgentType } from '../../../../shared/native-chat-types'
+import type {
+  NativeChatBlock,
+  NativeChatMessage,
+  AgentType
+} from '../../../../shared/native-chat-types'
 import {
   readNativeChatTranscriptTail,
   subscribeNativeChatTranscript

@@ -80,7 +80,7 @@ vi.mock('@/components/ui/context-menu', () => ({
   )
 }))
 
-import {
+import SidebarNav, {
   getSetupGuideSidebarEntryReady,
   shouldShowAgentDashboardButton,
   shouldShowAgentsButton,
@@ -88,7 +88,6 @@ import {
   shouldShowMobileButton,
   shouldShowSetupGuideEntry
 } from './SidebarNav'
-import SidebarNav from './SidebarNav'
 
 function gitRepo(): Repo {
   return {

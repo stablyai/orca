@@ -9,28 +9,73 @@ import AsyncStorage from '@react-native-async-storage/async-storage'
 // notification we already delivered. The in-memory seen-set is a second guard
 // against double-delivery for events that arrive on both the live stream and a
 // replay (e.g. a brief liveness spell before a reap).
-const LAST_SEQ_STORAGE_KEY_PREFIX = 'orca:mobileNotificationsLastSeq:'
+// Why (#8591): a seq is meaningless without the counter it indexes — after a
+// desktop restart that counter is gone. The epoch names the counter's lifetime so
+// a reconnect can tell "nothing missed" from "different counter".
+//
+// Why ONE key holding both, rather than a key each: they are only meaningful as a
+// pair. Written separately, a process death between the two writes leaves an epoch
+// from one counter beside a seq from another — a pair that looks internally valid
+// on the next launch and is therefore trusted, silently cutting real notifications.
+// A single JSON value cannot tear that way.
+const WATERMARK_STORAGE_KEY_PREFIX = 'orca:mobileNotificationsWatermark:'
+// Pre-#8591 installs wrote the seq alone. Read once to migrate; never written.
+const LEGACY_SEQ_STORAGE_KEY_PREFIX = 'orca:mobileNotificationsLastSeq:'
 
-function lastSeqStorageKey(hostId: string): string {
-  return LAST_SEQ_STORAGE_KEY_PREFIX + encodeURIComponent(hostId)
+function watermarkStorageKey(hostId: string): string {
+  return WATERMARK_STORAGE_KEY_PREFIX + encodeURIComponent(hostId)
 }
 
-export async function loadLastSeenSeq(hostId: string): Promise<number> {
+// A null epoch means "the counter this seq came from is unknown" — a legacy
+// watermark, or nothing stored. It can never be assumed to be the live counter.
+export type PersistedWatermark = { seq: number; epoch: string | null }
+// `stored` is the record's existence, independent of its seq: it answers "has this
+// device ever been subscribed to this host", which is what a cold open needs to tell
+// a returning device from a first pairing. A seq of 0 is a real answer, not an absence.
+export type LoadedWatermark = PersistedWatermark & { stored: boolean }
+
+function coerceSeq(value: unknown): number {
+  const parsed = typeof value === 'number' ? value : Number(value)
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : 0
+}
+
+export async function loadWatermark(hostId: string): Promise<LoadedWatermark> {
   try {
-    const raw = await AsyncStorage.getItem(lastSeqStorageKey(hostId))
-    const parsed = raw == null ? 0 : Number(raw)
-    return Number.isFinite(parsed) && parsed > 0 ? parsed : 0
+    const raw = await AsyncStorage.getItem(watermarkStorageKey(hostId))
+    if (raw != null) {
+      const parsed = JSON.parse(raw) as { seq?: unknown; epoch?: unknown }
+      const epoch =
+        typeof parsed.epoch === 'string' && parsed.epoch.length > 0 ? parsed.epoch : null
+      return { seq: coerceSeq(parsed.seq), epoch, stored: true }
+    }
   } catch {
-    return 0
+    // Unreadable or malformed: fall through to the legacy key rather than throw.
+  }
+  try {
+    const legacy = await AsyncStorage.getItem(
+      LEGACY_SEQ_STORAGE_KEY_PREFIX + encodeURIComponent(hostId)
+    )
+    return { seq: coerceSeq(legacy), epoch: null, stored: legacy != null }
+  } catch {
+    return { seq: 0, epoch: null, stored: false }
   }
 }
 
-export async function saveLastSeenSeq(hostId: string, seq: number): Promise<void> {
-  if (!Number.isFinite(seq) || seq <= 0) {
-    return
-  }
+export async function clearWatermark(hostId: string): Promise<void> {
+  // Why both keys: loadWatermark falls back to the legacy one, so removing only the
+  // current key would let a re-paired host resurrect a pre-#8591 seq from a counter
+  // lifetime that is long gone — the exact stale cut this fix removes.
+  await Promise.all([
+    AsyncStorage.removeItem(watermarkStorageKey(hostId)).catch(() => {}),
+    AsyncStorage.removeItem(LEGACY_SEQ_STORAGE_KEY_PREFIX + encodeURIComponent(hostId)).catch(
+      () => {}
+    )
+  ])
+}
+
+export async function saveWatermark(hostId: string, watermark: PersistedWatermark): Promise<void> {
   try {
-    await AsyncStorage.setItem(lastSeqStorageKey(hostId), String(seq))
+    await AsyncStorage.setItem(watermarkStorageKey(hostId), JSON.stringify(watermark))
   } catch {
     // Why: persisting the watermark is best-effort. If it fails (or lags), the
     // stored value stays BELOW what we delivered, so a later cold start can
@@ -53,6 +98,7 @@ const RECENTLY_SEEN_CAP = 512
 export function createSeenNotificationGuard(): {
   has: (id: string) => boolean
   add: (id: string) => void
+  clear: () => void
 } {
   const seen = new Set<string>()
   return {
@@ -69,8 +115,222 @@ export function createSeenNotificationGuard(): {
           seen.delete(first)
         }
       }
+    },
+    clear(): void {
+      seen.clear()
     }
   }
+}
+
+// Why (#8591): app/index.tsx tears the notification subscription down on every
+// non-'connected' state and builds a fresh one on reconnect, so everything held
+// in the subscription closure — the ready counter, the delivered watermark, the
+// seen-set — is destroyed exactly when a reconnect needs it. Keeping it per host
+// at module scope is what makes the catch-up recognise a reconnect (instead of
+// mistaking it for a cold open) and keeps dedup effective across the teardown.
+export type HostNotificationSession = {
+  // Highest desktop seq delivered for this host in this app process. Outranks
+  // the persisted value, which lags because saveLastSeenSeq is fire-and-forget.
+  lastDeliveredSeq: number
+  // Counter lifetime lastDeliveredSeq belongs to; null until one is known. A
+  // mismatch on reconnect means the desktop restarted and the watermark is void.
+  lastDeliveredEpoch: string | null
+  seen: ReturnType<typeof createSeenNotificationGuard>
+  // False only until the host's first subscription reaches 'ready' — a true cold open.
+  connectedBefore: boolean
+  // Why (#8591): distinguishes "this device has delivered for this host before"
+  // from a first-ever pairing. Only the former may catch up on a cold open — a
+  // brand-new pairing fetching from seq 0 would push the desktop's whole buffer
+  // at someone who was never subscribed for any of it.
+  hadStoredWatermark: boolean
+  // Resolves once the persisted read has landed, so the first 'ready' can wait for
+  // it instead of deciding catch-up against an unread watermark.
+  watermarkSeeded: Promise<void> | null
+  // Tail of the per-host delivery chain; see enqueueHostDelivery.
+  deliveryTail: Promise<void>
+  // notificationIds with a show queued or in flight on that chain; see
+  // shouldQueueShowForNotificationId.
+  queuedShowIds: Set<string>
+}
+
+const sessionsByHost = new Map<string, HostNotificationSession>()
+
+export function getHostNotificationSession(hostId: string): HostNotificationSession {
+  let session = sessionsByHost.get(hostId)
+  if (!session) {
+    session = {
+      lastDeliveredSeq: 0,
+      lastDeliveredEpoch: null,
+      seen: createSeenNotificationGuard(),
+      connectedBefore: false,
+      hadStoredWatermark: false,
+      watermarkSeeded: null,
+      deliveryTail: Promise.resolve(),
+      queuedShowIds: new Set<string>()
+    }
+    sessionsByHost.set(hostId, session)
+  }
+  return session
+}
+
+/**
+ * Run `task` after every delivery already queued for this host, and return a
+ * promise for its completion.
+ *
+ * Why (#8591): the watermark is persisted by whichever delivery advances it, so
+ * replay and live delivery running concurrently can persist out of order. A live
+ * seq 11 handled while catch-up is still showing seq 6 writes watermark 11, and a
+ * process death before 7..10 are shown loses them permanently — the next launch
+ * asks the desktop for seq > 11. Serializing per host makes the watermark's
+ * monotonic advance mean "everything up to here was actually delivered".
+ *
+ * A rejected task does not break the chain: the tail swallows the failure so a
+ * single bad notification cannot wedge the host's queue forever.
+ */
+export function enqueueHostDelivery(
+  session: HostNotificationSession,
+  task: () => Promise<void>
+): Promise<void> {
+  const run = session.deliveryTail.then(task)
+  session.deliveryTail = run.catch(() => {})
+  return run
+}
+
+/**
+ * Claim a notificationId for a queued show, returning false if one is already
+ * queued or in flight for it.
+ *
+ * Why this exists (#8591): showLocalNotification deduped two same-id events by
+ * observing that the first was still pending when the second arrived. Serializing
+ * deliveries removed that overlap — the first now COMPLETES before the second
+ * starts, so the second reads no pending state and schedules a second banner for
+ * the same notification. The dedup has to happen where concurrency is still
+ * visible, which after serialization is enqueue time rather than delivery time.
+ *
+ * Only shows are tracked. A dismiss for the same id must still run: it is the
+ * mechanism that retires the notification the show created.
+ */
+export function shouldQueueShowForNotificationId(
+  session: HostNotificationSession,
+  notificationId: string | undefined
+): boolean {
+  if (notificationId == null) {
+    return true
+  }
+  if (session.queuedShowIds.has(notificationId)) {
+    return false
+  }
+  session.queuedShowIds.add(notificationId)
+  return true
+}
+
+/** Release the claim taken by shouldQueueShowForNotificationId once the show settles. */
+export function releaseQueuedShowNotificationId(
+  session: HostNotificationSession,
+  notificationId: string | undefined
+): void {
+  if (notificationId != null) {
+    session.queuedShowIds.delete(notificationId)
+  }
+}
+
+/** Test-only: drop per-host session state so each test starts from a cold open. */
+export function resetHostNotificationSessionsForTests(): void {
+  sessionsByHost.clear()
+}
+
+// Why (#8591): the desktop's seq counter restarts at 0 every launch, so a watermark
+// from a previous lifetime indexes a counter that no longer exists. Comparing it
+// against the fresh counter makes `lastSeenSeq >= seq` true for everything and
+// catch-up dies silently until the new process out-dispatches the old watermark.
+// Adopting the new epoch means dropping the watermark with it.
+export function adoptNotificationEpoch(
+  session: HostNotificationSession,
+  hostId: string,
+  epoch: string | undefined
+): void {
+  if (!epoch || epoch === session.lastDeliveredEpoch) {
+    return
+  }
+  // Why reset on a FIRST observation too (lastDeliveredEpoch === null): a seq seeded
+  // from a legacy store carries no epoch, so it cannot be shown to belong to this
+  // counter. Keeping it would let a pre-upgrade 57 cut the new counter's 1..57 —
+  // the exact #8591 failure, reached through the upgrade path instead of a restart.
+  session.lastDeliveredSeq = 0
+  // Why clear `seen`: its keys are seq-derived, and terminal-bell notifications have
+  // no notificationId at all (they key on `seq:N` alone). Across a restart the new
+  // counter re-issues those same low seqs, so a stale `seq:1` would silently drop
+  // the new counter's first bell. The dedup window belongs to one counter lifetime.
+  session.seen.clear()
+  session.lastDeliveredEpoch = epoch
+  void saveWatermark(hostId, { seq: 0, epoch })
+}
+
+// Why: seed the watermark lazily so subscribe() doesn't block on an AsyncStorage read.
+// Only the first subscription for a host needs it; later ones inherit the live value.
+/**
+ * Ms the persisted read may block catch-up and live delivery before they proceed
+ * without it. AsyncStorage normally answers in single-digit ms; a read that has
+ * not landed by now is assumed wedged.
+ *
+ * Why a bound at all (#8591): every delivery awaits this promise, so a read that
+ * never settles silently disables notifications for the host for the whole app
+ * lifetime — no error, no banner, nothing to see. Proceeding unseeded is strictly
+ * better: the watermark stays 0, so catch-up over-fetches and the seen-set
+ * de-duplicates, which costs a redundant request instead of every notification.
+ */
+const WATERMARK_SEED_TIMEOUT_MS = 3000
+
+function withTimeout(promise: Promise<void>, ms: number): Promise<void> {
+  return new Promise<void>((resolve) => {
+    const timer = setTimeout(resolve, ms)
+    void promise.then(
+      () => {
+        clearTimeout(timer)
+        resolve()
+      },
+      () => {
+        clearTimeout(timer)
+        resolve()
+      }
+    )
+  })
+}
+
+export function seedWatermarkFromStorage(session: HostNotificationSession, hostId: string): void {
+  if (session.watermarkSeeded) {
+    return
+  }
+  const seeded = loadWatermark(hostId).then(({ seq, epoch, stored }) => {
+    // Why the record's existence and not `seq > 0`: adoptNotificationEpoch persists
+    // `{seq: 0, epoch}` when it voids a watermark, so a device that HAS delivered for
+    // this host reloads as seq 0. Keying on the seq would read that as a first pairing
+    // and skip catch-up for the whole window the epoch change was meant to recover.
+    if (stored) {
+      session.hadStoredWatermark = true
+    }
+    // Why the epoch comparison: this read can land AFTER 'ready' already adopted a
+    // live epoch. If the stored watermark belongs to a different (older) counter,
+    // applying it here would silently reinstate exactly the stale cut this fixes.
+    // A null stored epoch is a legacy watermark of unknown provenance — it may only
+    // seed while no live epoch is known, and adopting one later resets it.
+    if (session.lastDeliveredEpoch === null || session.lastDeliveredEpoch === epoch) {
+      session.lastDeliveredSeq = Math.max(session.lastDeliveredSeq, seq)
+      if (session.lastDeliveredEpoch === null && epoch !== null) {
+        session.lastDeliveredEpoch = epoch
+      }
+    }
+  })
+  // The late seed still applies when it eventually lands; the timeout only stops it
+  // from holding delivery hostage. `seeded` never rejects into the awaiters.
+  session.watermarkSeeded = withTimeout(seeded, WATERMARK_SEED_TIMEOUT_MS)
+}
+
+// Why (#8591): sessions live at module scope so they survive the subscription
+// teardown a reconnect performs. Nothing else drops them, so a host that is removed
+// and re-paired would retain its session and up to 512 seen keys until app restart.
+export function forgetHostNotificationSession(hostId: string): void {
+  sessionsByHost.delete(hostId)
 }
 
 // Why: key for the replay dedup guard. Uses notificationId when present, but

@@ -106,7 +106,7 @@ vi.mock('../ssh/ssh-connection-store', () => ({
   }
 }))
 
-vi.mock('../ssh/ssh-connection', () => ({
+vi.mock('../ssh/ssh-connection-manager', () => ({
   SshConnectionManager: class MockSshConnectionManager {
     constructor(callbacks: unknown) {
       const manager = (mockNextConnectionManagers.shift() ??

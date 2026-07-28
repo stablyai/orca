@@ -1,8 +1,24 @@
+import { isBuiltin } from 'node:module'
 import { resolve } from 'node:path'
-import { defineConfig } from 'electron-vite'
+import { defineConfig, type UserConfig } from 'electron-vite'
 import react from '@vitejs/plugin-react'
 import tailwindcss from '@tailwindcss/vite'
 import { createPlainNodeEntryGuardPlugin } from './build-plugins/plain-node-entry-guard'
+import packageJson from './package.json' with { type: 'json' }
+
+const BUNDLED_MAIN_DEPENDENCIES = new Set(['@xterm/headless', '@xterm/addon-serialize'])
+const EXTERNAL_MAIN_DEPENDENCIES = Object.keys(packageJson.dependencies).filter(
+  (dependency) => !BUNDLED_MAIN_DEPENDENCIES.has(dependency)
+)
+
+function isExternalMainModule(source: string): boolean {
+  if (isBuiltin(source) || source === 'electron' || source.startsWith('electron/')) {
+    return true
+  }
+  return EXTERNAL_MAIN_DEPENDENCIES.some(
+    (dependency) => source === dependency || source.startsWith(`${dependency}/`)
+  )
+}
 
 // Why: the telemetry transport is gated by two compile-time constants that
 // only the official CI release workflow sets. Contributor / `pnpm dev` /
@@ -165,7 +181,7 @@ function createStartupDiagnosticsBootstrapPlugin() {
   }
 }
 
-export default defineConfig({
+export const electronViteConfig: UserConfig = {
   main: {
     build: {
       // Why: daemon-entry.js is asar-unpacked so child_process.fork() can
@@ -176,9 +192,13 @@ export default defineConfig({
         exclude: ['@xterm/headless', '@xterm/addon-serialize']
       },
       rollupOptions: {
+        // Why: native dependencies must resolve from packaged node_modules,
+        // while the unpacked daemon needs its pure-JS xterm graph bundled.
+        external: isExternalMainModule,
         input: {
           index: resolve('src/main/index.ts'),
           'daemon-entry': resolve('src/main/daemon/daemon-entry.ts'),
+          'plugin-host-entry': resolve('src/main/plugins/plugin-host-entry.ts'),
           'computer-sidecar': resolve('src/main/computer/sidecar-entry.ts'),
           'stt-worker': resolve('src/main/speech/stt-worker.ts'),
           'warp-theme-parser-worker': resolve('src/main/warp-themes/warp-theme-parser-worker.ts'),
@@ -199,6 +219,13 @@ export default defineConfig({
           'agent-hooks/managed-agent-hook-controls': resolve(
             'src/main/agent-hooks/managed-agent-hook-controls.ts'
           )
+        },
+        // Why: Rolldown's SSR default is ESM, but Electron and sidecar launchers
+        // consume these stable CommonJS paths.
+        output: {
+          format: 'cjs',
+          entryFileNames: '[name].js',
+          chunkFileNames: 'chunks/[name]-[hash].js'
         },
         plugins: [createStartupDiagnosticsBootstrapPlugin(), createPlainNodeEntryGuardPlugin()]
       }
@@ -241,17 +268,26 @@ export default defineConfig({
       format: 'es'
     },
     build: {
+      manifest: true,
+      modulePreload: { polyfill: true },
+      target: 'es2020',
       // Why: the pop-out dashboard is a second top-level window with its own
       // React root. It gets its own HTML entry so it can boot independently of
       // the main window while reusing the same preload/window.api. `index` must
       // stay listed — overriding input otherwise drops electron-vite's default
       // renderer entry.
       rollupOptions: {
+        // Why: shared chunks must never import an HTML entry whose module mounts
+        // a different React root.
+        preserveEntrySignatures: 'strict',
         input: {
           index: resolve('src/renderer/index.html'),
-          popout: resolve('src/renderer/popout.html')
+          popout: resolve('src/renderer/popout.html'),
+          web: resolve('src/renderer/web-index.html')
         }
       }
     }
   }
-})
+}
+
+export default defineConfig(electronViteConfig)

@@ -50,6 +50,7 @@ import { closeDashboardPopout } from './dashboard-popout-window'
 import { installPrivilegedWindowNavigationPolicy } from './privileged-window-navigation'
 import { isMacosTahoeOrNewer } from './macos-tahoe-release'
 import { reflowRendererViewport } from './renderer-viewport-reflow'
+import { registerPluginPanelNavigationGuard } from '../plugins/plugin-panel-navigation-guard'
 
 // Why: show/restore/resume can overlap before the size nudge resets; never capture the temporary width as the next baseline.
 const activeRepaintJiggles = new WeakSet<BrowserWindow>()
@@ -441,6 +442,9 @@ export function createMainWindow(
   })
 
   installPrivilegedWindowNavigationPolicy(mainWindow.webContents)
+  // Why: containment must be listening before any plugin panel frame is created,
+  // so register it with the window's other navigation policy.
+  registerPluginPanelNavigationGuard(mainWindow.webContents)
 
   mainWindow.webContents.on('will-attach-webview', (event, webPreferences, params) => {
     const src = typeof params.src === 'string' ? params.src : ''

@@ -56,6 +56,7 @@ function makeSnapshotWatchState(): DashboardSnapshotWatchState {
     ptyIdsByTabId: {},
     runtimePaneTitlesByTabId: {},
     acknowledgedAgentsByPaneKey: {},
+    settings: null,
     agentStatusEpoch: 0
   }
 }

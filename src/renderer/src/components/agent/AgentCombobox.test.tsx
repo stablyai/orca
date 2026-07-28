@@ -21,6 +21,46 @@ describe('AgentCombobox', () => {
     expect(markup).toContain('flex-1')
   })
 
+  it('centers the selected agent mark and label inside a full-width form trigger', () => {
+    const markup = renderToStaticMarkup(
+      <AgentCombobox
+        agents={AGENT_CATALOG}
+        value="codex"
+        onValueChange={vi.fn()}
+        allowNarrowTrigger
+        triggerClassName="h-9 w-full min-w-0"
+      />
+    )
+
+    expect(markup).toContain('Codex')
+    expect(markup).not.toContain('!min-w-[260px]')
+    expect(markup).toContain('min-w-0 w-full')
+    expect(markup).toContain('leading-none')
+    expect(markup).toContain('size-3.5 shrink-0')
+    expect(markup).not.toContain('translate-y')
+    // Why: React HTML-escapes `[`/`&` in class strings during static markup.
+    expect(markup).toContain('size-3.5!')
+  })
+
+  it('uses the same centered 14px layout for every agent mark', () => {
+    for (const agent of AGENT_CATALOG) {
+      const markup = renderToStaticMarkup(
+        <AgentCombobox
+          agents={AGENT_CATALOG}
+          value={agent.id}
+          onValueChange={vi.fn()}
+          allowNarrowTrigger
+        />
+      )
+
+      expect(markup).toContain(agent.label)
+      expect(markup).toContain('size-3.5 shrink-0')
+      expect(markup).not.toContain('translate-y')
+      expect(markup).toContain('width="14"')
+      expect(markup).toContain('height="14"')
+    }
+  })
+
   it('supports an Agent-only empty state without presenting a blank terminal', () => {
     const markup = renderToStaticMarkup(
       <AgentCombobox

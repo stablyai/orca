@@ -3,10 +3,11 @@ import { useEffect } from 'react'
 import { toast } from 'sonner'
 import { useAppStore } from '../store'
 import { shouldRetryPaneSpawnOnSshReconnect } from './ssh-reconnect-pane-retry'
+import { getTabIdsAwaitingHostHydrationRemount } from '@/lib/parked-terminal-host-hydration'
 import { applyWorktreeHeadIdentities } from './worktree-head-identity-apply'
 import { getWorktreeMapFromState, getRepoMapFromState } from '@/store/selectors'
 import { applyUIZoom } from '@/lib/ui-zoom'
-import { activateAndRevealWorktree } from '@/lib/worktree-activation'
+import { activateAndRevealWorktree, activateAndRevealWorkspace } from '@/lib/worktree-activation'
 import { buildLinearIssueLinkedWorkItem } from '@/lib/linear-linked-work-item'
 import { runWorktreeDelete } from '@/components/sidebar/delete-worktree-flow'
 import { runSleepWorktree } from '@/components/sidebar/sleep-worktree-flow'
@@ -15,7 +16,10 @@ import { OPEN_WORKSPACE_BOARD_EVENT } from '@/components/sidebar/useWorkspaceBoa
 import { SPLIT_TERMINAL_PANE_EVENT, CLOSE_TERMINAL_PANE_EVENT } from '@/constants/terminal'
 import { requestBackgroundTerminalWorktreeMount } from '@/components/terminal/background-terminal-worktree-mount'
 import { planMobileTerminalTabMount } from '@/lib/mobile-terminal-tab-mount'
-import { hasRegisteredRuntimeTerminalTab } from '@/runtime/sync-runtime-graph'
+import {
+  hasRegisteredRuntimeTerminalTab,
+  focusRuntimeTerminalSurface
+} from '@/runtime/sync-runtime-graph'
 import type { SplitTerminalPaneDetail, CloseTerminalPaneDetail } from '@/constants/terminal'
 import { getVisibleWorktreeIds } from '@/components/sidebar/visible-worktrees'
 import { activateTabNumberShortcut } from '@/lib/tab-number-shortcuts'
@@ -71,7 +75,6 @@ import { TOGGLE_FLOATING_TERMINAL_EVENT } from '@/lib/floating-terminal'
 import { TOGGLE_QUICK_COMMANDS_MENU_EVENT } from '@/lib/quick-commands-menu-events'
 import { focusTerminalTabSurface } from '@/lib/focus-terminal-tab-surface'
 import { activateTabAndFocusPane } from '@/lib/activate-tab-and-focus-pane'
-import { focusRuntimeTerminalSurface } from '@/runtime/sync-runtime-graph'
 import { getRuntimeEnvironmentConnectionGeneration } from '@/store/slices/runtime-status'
 import { getEnvironmentSshStateGeneration } from '@/store/slices/runtime-environment-ssh'
 import { getRuntimeEnvironmentRevision } from '@/runtime/runtime-environment-revision'
@@ -730,6 +733,14 @@ function isRuntimeEnvironmentActive(): boolean {
   return Boolean(useAppStore.getState().settings?.activeRuntimeEnvironmentId?.trim())
 }
 
+/** Remount panes that parked with no PTY while their owning host was unknown. */
+function remountTerminalTabsAwaitingHostHydration(): void {
+  const store = useAppStore.getState()
+  for (const tabId of getTabIdsAwaitingHostHydrationRemount(store)) {
+    store.remountTerminalTabForRecovery(tabId)
+  }
+}
+
 function getActiveRuntimeEnvironmentId(): string | null {
   return useAppStore.getState().settings?.activeRuntimeEnvironmentId?.trim() || null
 }
@@ -1126,12 +1137,13 @@ export function useIpcEvents(): void {
             await state.fetchReposForAllHosts()
             await state.fetchProjectGroupsForAllHosts()
             await state.fetchFolderWorkspacesForAllHosts()
+            remountTerminalTabsAwaitingHostHydration()
           })()
           return
         }
         void state.fetchProjectGroups()
         void state.fetchFolderWorkspaces()
-        void state.fetchRepos()
+        void state.fetchRepos().then(remountTerminalTabsAwaitingHostHydration)
       })
     )
 
@@ -1413,7 +1425,7 @@ export function useIpcEvents(): void {
         }
         const visibleIds = getVisibleWorktreeIds()
         if (index < visibleIds.length) {
-          activateAndRevealWorktree(visibleIds[index])
+          activateAndRevealWorkspace(visibleIds[index])
         }
       })
     )

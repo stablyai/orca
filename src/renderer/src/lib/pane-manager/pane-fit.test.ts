@@ -168,9 +168,16 @@ describe('safeFitAndThen unmeasurable-pane retry', () => {
     }
 
     expect(continuation).not.toHaveBeenCalled()
+    // Why census fields: main coalesces this crumb by name, so the pane count
+    // must ride on the payload — the burst multiplicity no longer carries it.
     expect(recordRendererCrashBreadcrumb).toHaveBeenCalledWith(
       'terminal_safe_fit_retry_exhausted',
-      { paneId: 7 }
+      {
+        paneId: 7,
+        leafId: '22222222-2222-4222-8222-222222222222',
+        livePanes: 0,
+        livePaneManagers: 0
+      }
     )
     await expect(handle.completion).resolves.toBe(false)
 

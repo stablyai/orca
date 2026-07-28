@@ -116,5 +116,8 @@ describe('groupSkillFreshness', () => {
     expect(chipFor(at('g', { topology: 'repo-scope' }))).toBe('in-a-repo')
     expect(chipFor(at('h', { topology: 'plugin-cache' }))).toBe('plugin-cache')
     expect(chipFor(at('i', { status: 'current', topology: 'provider-alias' }))).toBe('current')
+    expect(chipFor(at('j', { status: 'unrecognized', topology: 'plugin-cache' }))).toBe(
+      'plugin-cache'
+    )
   })
 })
