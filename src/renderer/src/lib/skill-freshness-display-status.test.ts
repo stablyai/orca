@@ -108,7 +108,11 @@ describe('getSkillFreshnessDisplayStatus', () => {
     ['entry-limit'],
     ['candidate-limit'],
     ['manifest-limit'],
-    ['issue-limit']
+    ['issue-limit'],
+    // Why: a vendor linking its skills out of the cache is a packaging choice, not a
+    // fault the user can clear — deleting the link only makes the package manager
+    // recreate it. Amber here is clean-on-main turned permanently amber.
+    ['outside-root']
   ] as const)('does not report attention for the %s traversal bound', (reason) => {
     // Why: these are Orca's own bounds. A large but healthy plugin cache would
     // otherwise pin every skill amber with nothing the user could do about it.
@@ -120,17 +124,16 @@ describe('getSkillFreshnessDisplayStatus', () => {
     ).toBe('up-to-date')
   })
 
-  it.each([['outside-root'], ['io-error']] as const)(
-    'reports needs attention for the %s scan fault',
-    (reason) => {
-      expect(
-        getSkillFreshnessDisplayStatus(
-          inventory([placement('current')], [], [scanIssue(reason)]),
-          SKILL_NAME
-        )
-      ).toBe('needs-attention')
-    }
-  )
+  // Why: the only reason left that is a fact about the user's own disk rather than a
+  // bound Orca chose, so the only one a person can actually clear.
+  it('reports needs attention for the io-error scan fault', () => {
+    expect(
+      getSkillFreshnessDisplayStatus(
+        inventory([placement('current')], [], [scanIssue('io-error')]),
+        SKILL_NAME
+      )
+    ).toBe('needs-attention')
+  })
 
   it('stays up to date beside another ecosystem’s same-name skill', () => {
     // Why: the copy belongs to another tool, so no user action exists to clear it.

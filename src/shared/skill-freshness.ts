@@ -101,13 +101,16 @@ export type SkillFreshnessScanIssue = {
   errorCode: string | null
 }
 
-// Why: a real read failure or an escaping path is a fact about the user's disk and
-// stays actionable. Orca's own traversal bounds are not — reporting them as attention
-// turns an ordinary large plugin cache into a permanent amber pill on every skill.
-const SKILL_SCAN_ATTENTION_REASONS = new Set<SkillFreshnessScanIssueReason>([
-  'outside-root',
-  'io-error'
-])
+// Why: a real read failure is a fact about the user's disk and stays actionable. Orca's
+// own traversal bounds are not — reporting them as attention turns an ordinary large
+// plugin cache into a permanent amber pill on every skill.
+//
+// 'outside-root' is deliberately NOT here. A plugin that links its skills out of the
+// cache (a content-addressed store, a dev-linked package) is a packaging choice by the
+// vendor, not a fault the user can clear: deleting the link only makes their package
+// manager recreate it. Flagging it turned an install that is clean on main into amber on
+// every installed skill. It is still listed in Details, like the other bounds.
+const SKILL_SCAN_ATTENTION_REASONS = new Set<SkillFreshnessScanIssueReason>(['io-error'])
 
 export function isSkillScanIssueNeedingAttention(issue: SkillFreshnessScanIssue): boolean {
   return SKILL_SCAN_ATTENTION_REASONS.has(issue.reason)
