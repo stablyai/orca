@@ -307,6 +307,7 @@ export function EditorContent({
       fileId={activeFile.id}
       filePath={activeFile.filePath}
       viewStateKey={editorViewStateKey}
+      viewStateId={viewStateScopeId}
       relativePath={activeFile.relativePath}
       content={editBuffers[activeFile.id] ?? fc.content}
       language={monacoLanguage}
@@ -386,9 +387,11 @@ export function EditorContent({
             <RichMarkdownErrorBoundary key={viewStateScopeId} fileId={activeFile.id}>
               <RichMarkdownEditor
                 fileId={activeFile.id}
+                viewStateId={viewStateScopeId}
                 content={editorContent}
                 filePath={activeFile.filePath}
                 worktreeId={activeFile.worktreeId}
+                externalSshTargetId={activeFile.externalSshTargetId}
                 runtimeEnvironmentId={activeFile.runtimeEnvironmentId}
                 scrollCacheKey={`${editorViewStateKey}:rich`}
                 onContentChange={onContentChangeWithFm}

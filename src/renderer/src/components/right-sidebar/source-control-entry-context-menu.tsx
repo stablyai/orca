@@ -14,6 +14,7 @@ import { useAppStore } from '@/store'
 import { OpenInApplicationIcon } from '@/lib/open-in-app-catalog'
 import { translate } from '@/i18n/i18n'
 import { getLocalFileManagerLabel } from '@/lib/local-file-manager-label'
+import { NO_OPEN_IN_APPLICATIONS } from '@/lib/open-in-application-selection'
 import {
   getOpenInEntryAvailability,
   getWorktreeOpenInEntries,
@@ -24,6 +25,7 @@ import {
 type SourceControlEntryContextMenuProps = {
   currentWorktreeId: string
   absolutePath?: string
+  relativePath?: string
   connectionId?: string | null
   onView?: () => void
   onRevealInExplorer: (worktreeId: string, absolutePath: string) => void
@@ -34,13 +36,16 @@ type SourceControlEntryContextMenuProps = {
 export function SourceControlEntryContextMenu({
   currentWorktreeId,
   absolutePath,
+  relativePath,
   connectionId,
   onView,
   onRevealInExplorer,
   onOpenChange,
   children
 }: SourceControlEntryContextMenuProps): React.JSX.Element {
-  const openInApplications = useAppStore((s) => s.settings?.openInApplications ?? [])
+  const openInApplications = useAppStore(
+    (s) => s.settings?.openInApplications ?? NO_OPEN_IN_APPLICATIONS
+  )
   const settings = useAppStore((s) => s.settings)
   const fileManagerLabel = getLocalFileManagerLabel()
   const openInEntries = React.useMemo(
@@ -54,6 +59,13 @@ export function SourceControlEntryContextMenu({
     }
     void window.api.ui.writeClipboardText(absolutePath)
   }, [absolutePath])
+
+  const handleCopyRelativePath = useCallback(() => {
+    if (!relativePath) {
+      return
+    }
+    void window.api.ui.writeClipboardText(relativePath)
+  }, [relativePath])
 
   const handleRevealInOrcaExplorer = useCallback(() => {
     if (!absolutePath) {
@@ -92,6 +104,13 @@ export function SourceControlEntryContextMenu({
         <ContextMenuItem onSelect={handleCopyPath} disabled={!absolutePath}>
           <Copy className="size-3.5" />
           {translate('auto.components.right.sidebar.FileExplorerRow.b5d436aa30', 'Copy Path')}
+        </ContextMenuItem>
+        <ContextMenuItem onSelect={handleCopyRelativePath} disabled={!relativePath}>
+          <Copy className="size-3.5" />
+          {translate(
+            'auto.components.right.sidebar.FileExplorerRow.66a29dde82',
+            'Copy Relative Path'
+          )}
         </ContextMenuItem>
         <ContextMenuSeparator />
         <ContextMenuSub>

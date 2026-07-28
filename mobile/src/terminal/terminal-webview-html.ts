@@ -726,7 +726,9 @@ ${TERMINAL_WEBGL_RECOVERY_JS}
       disableStdin: false,
       cursorBlink: false,
       cursorStyle: 'bar',
-      cursorInactiveStyle: 'none',
+      // Why: native TextInput owns mobile keyboard focus, so xterm stays inactive.
+      // Match its active bar while still honoring application cursor-hide sequences.
+      cursorInactiveStyle: 'bar',
       convertEol: false,
       allowProposedApi: true
     });

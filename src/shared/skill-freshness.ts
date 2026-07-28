@@ -84,19 +84,97 @@ export type SkillFreshnessInstallation = {
   errorCategory: string | null
 }
 
+export type SkillFreshnessScanIssueReason =
+  | 'depth-limit'
+  | 'entry-limit'
+  | 'candidate-limit'
+  | 'manifest-limit'
+  | 'outside-root'
+  | 'io-error'
+  | 'issue-limit'
+
+export type SkillFreshnessScanIssue = {
+  rootId: string
+  sourceLabel: string
+  path: string
+  reason: SkillFreshnessScanIssueReason
+  errorCode: string | null
+}
+
+// Why: a real read failure is a fact about the user's disk and stays actionable. Orca's
+// own traversal bounds are not — reporting them as attention turns an ordinary large
+// plugin cache into a permanent amber pill on every skill.
+//
+// 'outside-root' is deliberately NOT here. A plugin that links its skills out of the
+// cache (a content-addressed store, a dev-linked package) is a packaging choice by the
+// vendor, not a fault the user can clear: deleting the link only makes their package
+// manager recreate it. Flagging it turned an install that is clean on main into amber on
+// every installed skill. It is still listed in Details, like the other bounds.
+const SKILL_SCAN_ATTENTION_REASONS = new Set<SkillFreshnessScanIssueReason>(['io-error'])
+
+export function isSkillScanIssueNeedingAttention(issue: SkillFreshnessScanIssue): boolean {
+  return SKILL_SCAN_ATTENTION_REASONS.has(issue.reason)
+}
+
+// Why: these are the bounds that end the walk rather than skip one folder. They are
+// still not the user's to act on, so they raise no pill — but a scan that stopped
+// early cannot be reported as proof every copy is up to date.
+const SKILL_SCAN_TRUNCATING_REASONS = new Set<SkillFreshnessScanIssueReason>([
+  'entry-limit',
+  'candidate-limit'
+])
+
+export function isTruncatingSkillScanReason(reason: SkillFreshnessScanIssueReason): boolean {
+  return SKILL_SCAN_TRUNCATING_REASONS.has(reason)
+}
+
+export function isSkillScanIssueTruncatingScan(issue: SkillFreshnessScanIssue): boolean {
+  return isTruncatingSkillScanReason(issue.reason)
+}
+
 export type SkillFreshnessInventory = {
   schemaVersion: 1
   installations: SkillFreshnessInstallation[]
   eligibleUpdateNames: string[]
+  scanIssues: SkillFreshnessScanIssue[]
   scannedAt: number
 }
 
-export function buildTargetedSkillUpdateCommand(names: readonly string[]): string | null {
+export function canonicalizeSkillUpdateNames(names: readonly string[]): string[] | null {
   const canonicalNames = [...new Set(names)].sort((left, right) => left.localeCompare(right, 'en'))
-  // Why: names become editable shell input. Official manifests use this
-  // restricted package-name grammar so no entry can introduce shell syntax.
+  // Why: names reach a shell in the terminal fallback. Official manifests use
+  // this restricted package-name grammar so no entry can introduce shell syntax.
   if (canonicalNames.some((name) => !/^[a-z0-9][a-z0-9._-]*$/.test(name))) {
     return null
   }
-  return canonicalNames.length > 0 ? `npx skills update ${canonicalNames.join(' ')} --global` : null
+  return canonicalNames.length > 0 ? canonicalNames : null
 }
+
+export function buildTargetedSkillUpdateCommand(names: readonly string[]): string | null {
+  const canonicalNames = canonicalizeSkillUpdateNames(names)
+  return canonicalNames ? `npx skills update ${canonicalNames.join(' ')} --global` : null
+}
+
+// Why: `skills update` has no --json (that flag only exists on `list`), so the
+// run reports one indeterminate phase. Per-skill outcomes come from re-scanning
+// the inventory after exit, never from parsing stdout.
+export type SkillUpdateRun =
+  | { state: 'idle' }
+  // `stopping` covers the window between Stop and the process tree actually
+  // dying — the run is still `running` (that is what blocks a second writer),
+  // but the Stop affordance has already been spent.
+  | { state: 'running'; names: string[]; startedAt: number; output: string; stopping?: boolean }
+  | { state: 'success'; names: string[]; finishedAt: number; output: string }
+  | {
+      state: 'error'
+      names: string[]
+      finishedAt: number
+      output: string
+      message: string
+      /** Names still outdated after the run — the re-scan is the source of truth. */
+      failedNames: string[]
+    }
+
+export type SkillUpdateStartResult =
+  | { started: true }
+  | { started: false; reason: 'already-running' | 'invalid-names' | 'unsafe-command-path' }

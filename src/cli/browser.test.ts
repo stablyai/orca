@@ -293,7 +293,7 @@ describe('orca cli browser page targeting', () => {
   })
 })
 
-describe('orca cli browser tab profiles', () => {
+describe('orca cli browser profile management', () => {
   beforeEach(() => {
     callMock.mockReset()
   })

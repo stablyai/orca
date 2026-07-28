@@ -130,6 +130,23 @@
     'SF Mono', SFMono-Regular, ui-monospace, 'Cascadia Code', Menlo, Consolas, 'Liberation Mono',
     monospace;
   --radius: 0.625rem;
+  --orca-security-background: #fff;
+  --orca-security-foreground: #0a0a0a;
+  --orca-security-card: #fff;
+  --orca-security-card-foreground: #0a0a0a;
+  --orca-security-popover: #fff;
+  --orca-security-popover-foreground: #0a0a0a;
+  --orca-security-primary: #171717;
+  --orca-security-primary-foreground: #fafafa;
+  --orca-security-secondary: #f5f5f5;
+  --orca-security-secondary-foreground: #171717;
+  --orca-security-muted: #f5f5f5;
+  --orca-security-muted-foreground: #737373;
+  --orca-security-accent: #f5f5f5;
+  --orca-security-accent-foreground: #171717;
+  --orca-security-border: #e5e5e5;
+  --orca-security-input: #e5e5e5;
+  --orca-security-ring: #a1a1a1;
   --background: #fff;
   --editor-surface: #ffffff;
   --foreground: #0a0a0a;
@@ -216,6 +233,23 @@
 /* ── Dark Mode ───────────────────────────────────────── */
 
 .dark {
+  --orca-security-background: #0a0a0a;
+  --orca-security-foreground: #fafafa;
+  --orca-security-card: #171717;
+  --orca-security-card-foreground: #fafafa;
+  --orca-security-popover: #171717;
+  --orca-security-popover-foreground: #fafafa;
+  --orca-security-primary: #e5e5e5;
+  --orca-security-primary-foreground: #171717;
+  --orca-security-secondary: #262626;
+  --orca-security-secondary-foreground: #fafafa;
+  --orca-security-muted: #262626;
+  --orca-security-muted-foreground: #a1a1a1;
+  --orca-security-accent: #404040;
+  --orca-security-accent-foreground: #fafafa;
+  --orca-security-border: rgb(255 255 255 / 0.07);
+  --orca-security-input: rgb(255 255 255 / 0.15);
+  --orca-security-ring: #737373;
   --background: #0a0a0a;
   --editor-surface: #1e1e1e;
   --foreground: #fafafa;
@@ -299,6 +333,28 @@
   /* Brighter than terminal defaults so the always-visible line clears 3:1 on `--card`. */
   --tab-group-split-divider: #71717a;
   --tab-group-split-divider-strong: #a1a1aa;
+}
+
+.plugin-security-chrome {
+  /* Why: plugin themes may style the app, but provenance and consent must
+     retain host-owned contrast so a pack cannot disguise a trust decision. */
+  --background: var(--orca-security-background);
+  --foreground: var(--orca-security-foreground);
+  --card: var(--orca-security-card);
+  --card-foreground: var(--orca-security-card-foreground);
+  --popover: var(--orca-security-popover);
+  --popover-foreground: var(--orca-security-popover-foreground);
+  --primary: var(--orca-security-primary);
+  --primary-foreground: var(--orca-security-primary-foreground);
+  --secondary: var(--orca-security-secondary);
+  --secondary-foreground: var(--orca-security-secondary-foreground);
+  --muted: var(--orca-security-muted);
+  --muted-foreground: var(--orca-security-muted-foreground);
+  --accent: var(--orca-security-accent);
+  --accent-foreground: var(--orca-security-accent-foreground);
+  --border: var(--orca-security-border);
+  --input: var(--orca-security-input);
+  --ring: var(--orca-security-ring);
 }
 
 .linear-priority-bars {
@@ -1108,26 +1164,34 @@
   background: color-mix(in srgb, var(--sidebar-accent) 40%, transparent);
 }
 
+/* Why: the brighter border carries the selected state; a translucent wash keeps
+   card text legible instead of lifting the surface toward the foreground color. */
 [data-worktree-card-surface][data-worktree-card-active='primary'] {
-  border-color: color-mix(in srgb, var(--sidebar-border) 40%, transparent);
-  background: color-mix(in srgb, var(--sidebar-foreground) 8%, transparent);
-  box-shadow: 0 1px 2px color-mix(in srgb, var(--sidebar-foreground) 4%, transparent);
+  border-color: color-mix(in srgb, var(--worktree-sidebar-border) 40%, transparent);
+  background: color-mix(in srgb, var(--worktree-sidebar-foreground) 8%, transparent);
+  box-shadow: 0 1px 2px color-mix(in srgb, var(--worktree-sidebar-foreground) 4%, transparent);
 }
 
 .dark [data-worktree-card-surface][data-worktree-card-active='primary'] {
-  background: color-mix(in srgb, var(--sidebar-foreground) 10%, transparent);
-  box-shadow: 0 1px 2px color-mix(in srgb, var(--sidebar-foreground) 3%, transparent);
+  border-color: color-mix(
+    in srgb,
+    var(--worktree-sidebar-foreground) 18%,
+    var(--worktree-sidebar-border)
+  );
+  background: color-mix(in srgb, var(--worktree-sidebar-foreground) 10%, transparent);
+  box-shadow: 0 1px 2px color-mix(in srgb, var(--worktree-sidebar-foreground) 3%, transparent);
 }
 
 [data-worktree-card-surface][data-worktree-card-active='secondary'] {
   border-color: color-mix(in srgb, var(--sidebar-ring) 25%, transparent);
   background: color-mix(in srgb, var(--sidebar-accent) 45%, transparent);
-  box-shadow: none;
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--sidebar-ring) 15%, transparent);
 }
 
 .dark [data-worktree-card-surface][data-worktree-card-active='secondary'] {
   border-color: color-mix(in srgb, var(--sidebar-ring) 28%, transparent);
   background: color-mix(in srgb, var(--sidebar-accent) 34%, transparent);
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--sidebar-ring) 18%, transparent);
 }
 
 .worktree-agent-row-hover:hover {
@@ -2126,6 +2190,17 @@
 
 .animate-update-card-enter {
   animation: update-card-enter 200ms ease-out both;
+}
+
+/* Why: `skills update` reports no parseable progress, so the skill-update bar is
+   deliberately indeterminate rather than a faked percentage. */
+@keyframes skill-update-slide {
+  from {
+    transform: translateX(-100%);
+  }
+  to {
+    transform: translateX(365%);
+  }
 }
 
 .animate-update-card-exit {

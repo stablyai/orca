@@ -35,7 +35,12 @@ import { useAppStore } from '@/store'
 import type { AppState } from '@/store/types'
 import { useAllWorktrees, useRepoById, useRepoMap, useWorktreeMap } from '@/store/selectors'
 import { cn } from '@/lib/utils'
-import type { Repo, Worktree } from '../../../../shared/types'
+import type {
+  Repo,
+  Worktree,
+  WorkspaceStatus,
+  WorkspaceStatusDefinition
+} from '../../../../shared/types'
 import { runWorktreeBatchDelete, runWorktreeDelete } from './delete-worktree-flow'
 import { runSleepWorktrees } from './sleep-worktree-flow'
 import { activateAndRevealWorktree } from '@/lib/worktree-activation'
@@ -50,6 +55,7 @@ import { getWorkspaceStatus, getWorkspaceStatusVisualMeta } from './workspace-st
 import { WorktreeOpenInSubMenu } from './WorktreeOpenInMenu'
 import { ProjectGroupNameDialog } from './ProjectGroupNameDialog'
 import { WorktreeParentPickerPopover } from './WorktreeParentPickerPopover'
+import { WorktreeDeveloperMenu } from './WorktreeDeveloperMenu'
 import { getEligibleWorktreeParents } from './worktree-parent-candidates'
 import { isEventTargetInsideCurrentTarget } from './worktree-card-dom-events'
 import { translate } from '@/i18n/i18n'
@@ -65,6 +71,7 @@ type Props = {
   contentClassName?: string
   selectedWorktrees?: readonly Worktree[]
   onContextMenuSelect?: (event: React.MouseEvent<HTMLElement>) => readonly Worktree[]
+  onAssignWorkspaceStatus?: (worktreeIds: readonly string[], status: WorkspaceStatus) => void
   onOpenChange?: (open: boolean) => void
 }
 
@@ -95,6 +102,16 @@ const EMPTY_CYCLIC_LINEAGE_IDS: ReadonlySet<string> = new Set()
 // data. Extracted as a pure function so the stable-reference contract is unit-testable.
 export function selectMenuScopedMap<T>(menuOpen: boolean, live: T, empty: T): T {
   return menuOpen ? live : empty
+}
+
+// Why: the Developer submenu is hidden by default and revealed only by holding
+// Option/Alt at right-click. altKey is the same physical key on every platform
+// (Option on macOS, Alt on Windows/Linux), so no platform branch is needed.
+export function shouldRevealWorktreeDeveloperMenu(args: {
+  developerMenuRevealed: boolean
+  isMultiContext: boolean
+}): boolean {
+  return args.developerMenuRevealed && !args.isMultiContext
 }
 
 export function hasWorktreeParentLink(
@@ -278,12 +295,36 @@ function preserveDeleteSiblingPosition(scope: HTMLElement | null): () => void {
   }
 }
 
+export type WorkspaceStatusAssignmentPlan =
+  | { readonly kind: 'board-sync'; readonly worktreeIds: readonly string[] }
+  | { readonly kind: 'local-only'; readonly localWriteIds: readonly string[] }
+
+// Why: the context-menu "Move to Status" routes to the board's local-first +
+// Linear-sync path when the board wired a callback, else a local-only write of
+// only the status-changed worktrees. Extracted pure so the routing and the
+// no-op filter stay unit-testable without opening the Radix menu.
+export function planWorkspaceStatusAssignment(
+  worktrees: readonly Worktree[],
+  status: WorkspaceStatus,
+  workspaceStatuses: readonly WorkspaceStatusDefinition[],
+  boardSyncEnabled: boolean
+): WorkspaceStatusAssignmentPlan {
+  if (boardSyncEnabled) {
+    return { kind: 'board-sync', worktreeIds: worktrees.map((item) => item.id) }
+  }
+  const localWriteIds = worktrees
+    .filter((item) => getWorkspaceStatus(item, workspaceStatuses) !== status)
+    .map((item) => item.id)
+  return { kind: 'local-only', localWriteIds }
+}
+
 const WorktreeContextMenu = React.memo(function WorktreeContextMenu({
   worktree,
   children,
   contentClassName,
   selectedWorktrees,
   onContextMenuSelect,
+  onAssignWorkspaceStatus,
   onOpenChange
 }: Props) {
   const defaultSelectedWorktrees = useMemo(() => [worktree], [worktree])
@@ -300,6 +341,11 @@ const WorktreeContextMenu = React.memo(function WorktreeContextMenu({
   const repo = useRepoById(worktree.repoId)
   const deleteState = useAppStore((s) => s.deleteStateByWorktreeId[worktree.id])
   const [menuOpen, setMenuOpen] = useState(false)
+  // Why: the Developer submenu is a power-user affordance, so it is revealed by
+  // holding Option/Alt at right-click — captured at open time (like the Help
+  // menu's admin options) so the submenu can't appear or vanish mid-menu and
+  // shift the rows under the pointer.
+  const [developerMenuRevealed, setDeveloperMenuRevealed] = useState(false)
   const [menuPoint, setMenuPoint] = useState({ x: 0, y: 0 })
   const [contextWorktrees, setContextWorktrees] = useState<readonly Worktree[]>(
     effectiveSelectedWorktrees
@@ -432,6 +478,10 @@ const WorktreeContextMenu = React.memo(function WorktreeContextMenu({
   const setMenuOpenState = useCallback(
     (open: boolean) => {
       setMenuOpen(open)
+      if (!open) {
+        // Why: the reveal is per-open, so a later plain right-click can't inherit it.
+        setDeveloperMenuRevealed(false)
+      }
       onOpenChange?.(open)
     },
     [onOpenChange]
@@ -504,15 +554,29 @@ const WorktreeContextMenu = React.memo(function WorktreeContextMenu({
   const handleAssignWorkspaceStatus = useCallback(
     (status: string) => {
       setMenuOpenState(false)
+      const plan = planWorkspaceStatusAssignment(
+        activeContextWorktrees,
+        status,
+        workspaceStatuses,
+        Boolean(onAssignWorkspaceStatus)
+      )
+      if (plan.kind === 'board-sync') {
+        onAssignWorkspaceStatus?.(plan.worktreeIds, status)
+        return
+      }
+      // Why: outside the workspace board (e.g. the sidebar list) status changes
+      // are local-only; Linear sync is scoped to board moves like drag-and-drop.
       void Promise.all(
-        activeContextWorktrees.map((item) =>
-          getWorkspaceStatus(item, workspaceStatuses) === status
-            ? Promise.resolve()
-            : updateWorktreeMeta(item.id, { workspaceStatus: status })
-        )
+        plan.localWriteIds.map((id) => updateWorktreeMeta(id, { workspaceStatus: status }))
       )
     },
-    [activeContextWorktrees, setMenuOpenState, updateWorktreeMeta, workspaceStatuses]
+    [
+      activeContextWorktrees,
+      onAssignWorkspaceStatus,
+      setMenuOpenState,
+      updateWorktreeMeta,
+      workspaceStatuses
+    ]
   )
 
   const handleRename = useCallback(() => {
@@ -686,6 +750,7 @@ const WorktreeContextMenu = React.memo(function WorktreeContextMenu({
         event.preventDefault()
         contextMenuOpenedAtRef.current = Date.now()
         window.dispatchEvent(new Event(CLOSE_ALL_CONTEXT_MENUS_EVENT))
+        setDeveloperMenuRevealed(event.altKey)
         setContextWorktrees(onContextMenuSelect?.(event) ?? effectiveSelectedWorktrees)
         const bounds = event.currentTarget.getBoundingClientRect()
         setMenuPoint({ x: event.clientX - bounds.left, y: event.clientY - bounds.top })
@@ -880,6 +945,12 @@ const WorktreeContextMenu = React.memo(function WorktreeContextMenu({
             </>
           ) : null}
 
+          {shouldRevealWorktreeDeveloperMenu({ developerMenuRevealed, isMultiContext }) ? (
+            <>
+              <WorktreeDeveloperMenu worktreeId={worktree.id} disabled={isDeleting} />
+              <DropdownMenuSeparator />
+            </>
+          ) : null}
           <Tooltip>
             <TooltipTrigger asChild>
               <DropdownMenuItem

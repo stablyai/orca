@@ -121,7 +121,7 @@ describe('pane WebGL refresh lifecycle', () => {
     expect(pane.webglAddon).toBeNull()
   })
 
-  it('disposes WebGL when rendering is suspended', () => {
+  it('disposes WebGL whenever rendering is suspended', () => {
     const dispose = vi.fn()
     const pane = createPane({ webglAddon: { dispose } as never })
 

@@ -12,6 +12,30 @@ export type ProviderRateLimitScope = {
   description: string
 }
 
+/** Accounts-pane scope while a remote server owns the roster (#8186). */
+export function getRemoteAccountsPaneScope(serverName: string | null): ProviderAccountScope {
+  const name = serverName?.trim()
+  return {
+    // Why: the saved-server list is still empty on first paint, and the generic
+    // fallback is already a noun phrase — interpolating it would render
+    // "Remote server: the remote server".
+    label: name
+      ? translate(
+          'auto.components.settings.providerAccountScope.remoteServer',
+          'Remote server: {{value0}}',
+          { value0: name }
+        )
+      : translate(
+          'auto.components.settings.AccountsPane.accountScopeRemoteServerUnnamed',
+          'Remote server'
+        ),
+    description: translate(
+      'auto.components.settings.AccountsPane.remoteScopeLocalAccountsKept',
+      'Accounts managed on this desktop are unchanged. Switch the default runtime back to Local desktop to view them.'
+    )
+  }
+}
+
 export function getProviderAccountScope(
   settings: Pick<GlobalSettings, 'activeRuntimeEnvironmentId'> | null | undefined
 ): ProviderAccountScope {

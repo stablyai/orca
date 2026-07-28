@@ -2,10 +2,27 @@ import { isQuickOpenQueryTooLarge, prepareQuickOpenFiles } from '../quick-open-s
 import type { RuntimeFileListState } from '../quick-open-file-list'
 import { translate } from '@/i18n/i18n'
 import { findExistingFileMatches, isLikelyNewFileIntent } from './tab-create-entry-file-matches'
-import { validateNewTabEntryRelativePath } from './tab-create-entry-path-validation'
+import {
+  isTabEntryAbsolutePathLike,
+  type TabEntryLocalPlatform,
+  validateNewTabEntryAbsolutePath,
+  validateNewTabEntryRelativePath
+} from './tab-create-entry-path-validation'
 import { classifyExplicitUrl, classifyHostUrl } from './tab-create-entry-url-classification'
 
-export { validateNewTabEntryRelativePath } from './tab-create-entry-path-validation'
+export {
+  isTabEntryAbsolutePathLike,
+  validateNewTabEntryAbsolutePath,
+  validateNewTabEntryRelativePath
+} from './tab-create-entry-path-validation'
+
+export type TabEntryOptionsContext = {
+  allowAbsolutePaths?: boolean
+  localPlatform?: TabEntryLocalPlatform
+}
+
+export const TAB_ENTRY_ABSOLUTE_PATH_REMOTE_BLOCKED_MESSAGE =
+  'Absolute paths require a local workspace.'
 
 export type TabEntryClassification =
   | { kind: 'empty'; message: string }
@@ -17,6 +34,7 @@ export type TabEntryClassification =
     }
   | { kind: 'host-url'; url: string }
   | { kind: 'new-file'; relativePath: string }
+  | { kind: 'absolute-file'; filePath: string }
   | { kind: 'blocked'; message: string }
 
 export type TabEntryActionClassification = Exclude<
@@ -29,12 +47,26 @@ export type TabEntryOption = {
   id: string
 }
 
+function tabEntryActionOptionId(classification: TabEntryActionClassification): string {
+  switch (classification.kind) {
+    case 'existing-file':
+    case 'new-file':
+      return `${classification.kind}:${classification.relativePath}`
+    case 'absolute-file':
+      return `${classification.kind}:${classification.filePath}`
+    case 'explicit-url':
+    case 'host-url':
+      return `${classification.kind}:${classification.url}`
+  }
+}
+
 export function classifyTabEntryQuery(
   query: string,
-  fileList: RuntimeFileListState
+  fileList: RuntimeFileListState,
+  context: TabEntryOptionsContext = {}
 ): TabEntryClassification {
   return (
-    getTabEntryOptions(query, fileList, 1)[0]?.classification ?? {
+    getTabEntryOptions(query, fileList, 1, context)[0]?.classification ?? {
       kind: 'empty',
       message: translate(
         'auto.components.tab.bar.tab.create.entry.classifier.5553b283ce',
@@ -47,7 +79,8 @@ export function classifyTabEntryQuery(
 export function getTabEntryOptions(
   query: string,
   fileList: RuntimeFileListState,
-  limit = 4
+  limit = 4,
+  context: TabEntryOptionsContext = {}
 ): TabEntryOption[] {
   if (isQuickOpenQueryTooLarge(query)) {
     return [
@@ -78,6 +111,42 @@ export function getTabEntryOptions(
         }
       }
     ]
+  }
+
+  if (isTabEntryAbsolutePathLike(trimmed)) {
+    if (!context.allowAbsolutePaths) {
+      return [
+        {
+          id: 'absolute-path-blocked',
+          classification: {
+            kind: 'blocked',
+            message: translate(
+              'auto.components.tab.bar.tab.create.entry.classifier.absolutePathRemoteBlocked',
+              'Absolute paths require a local workspace.'
+            )
+          }
+        }
+      ]
+    }
+    try {
+      const filePath = validateNewTabEntryAbsolutePath(trimmed, context.localPlatform)
+      return [
+        {
+          id: `absolute-file:${filePath}`,
+          classification: { kind: 'absolute-file', filePath }
+        }
+      ]
+    } catch (error) {
+      return [
+        {
+          id: 'invalid-absolute-path',
+          classification: {
+            kind: 'blocked',
+            message: error instanceof Error ? error.message : String(error)
+          }
+        }
+      ]
+    }
   }
 
   const explicitUrl = classifyExplicitUrl(trimmed)
@@ -144,12 +213,7 @@ export function getTabEntryOptions(
 
   if (options.length > 0) {
     return options.slice(0, limit).map((classification) => ({
-      id:
-        classification.kind === 'existing-file'
-          ? `${classification.kind}:${classification.relativePath}`
-          : classification.kind === 'new-file'
-            ? `${classification.kind}:${classification.relativePath}`
-            : `${classification.kind}:${classification.url}`,
+      id: tabEntryActionOptionId(classification),
       classification
     }))
   }

@@ -131,6 +131,7 @@ function createTestStore() {
         repos: [],
         projectHostSetups: [],
         deleteProjectHostSetup: vi.fn().mockResolvedValue(null),
+        updateFolderWorkspace: vi.fn().mockResolvedValue(true),
         updateSettings: vi.fn().mockResolvedValue(undefined),
         openModal: vi.fn(),
         shutdownWorktreeTerminals: vi.fn().mockResolvedValue(undefined),
@@ -1348,6 +1349,45 @@ describe('fetchWorktrees', () => {
     expect(store.getState().worktreesByRepo['repo-ssh']).toEqual([
       { ...sshWorktree, hostId: 'ssh:ssh-1' }
     ])
+  })
+
+  it('fetches the requested host when duplicate repo ids exist', async () => {
+    const store = createTestStore()
+    const localWorktree = makeWorktree({
+      id: 'same-repo::/local/wt',
+      repoId: 'same-repo',
+      path: '/local/wt'
+    })
+    store.setState({
+      settings: { activeRuntimeEnvironmentId: 'env-1' } as never,
+      repos: [
+        {
+          id: 'same-repo',
+          path: '/local/repo',
+          displayName: 'Local',
+          badgeColor: '#000',
+          addedAt: 0,
+          executionHostId: 'local'
+        },
+        {
+          id: 'same-repo',
+          path: '/remote/repo',
+          displayName: 'Runtime',
+          badgeColor: '#111',
+          addedAt: 1,
+          executionHostId: 'runtime:env-1'
+        }
+      ]
+    } as Partial<AppState>)
+    mockApi.worktrees.listDetected.mockResolvedValueOnce(
+      makeDetectedResult('same-repo', [localWorktree])
+    )
+
+    await store.getState().fetchWorktrees('same-repo', { executionHostId: 'local' })
+
+    expect(mockApi.worktrees.listDetected).toHaveBeenCalledWith({ repoId: 'same-repo' })
+    expect(runtimeEnvironmentCall).not.toHaveBeenCalled()
+    expect(store.getState().worktreesByRepo['same-repo']).toEqual([localWorktree])
   })
 
   it('stamps remote runtime worktrees with the owning repo runtime host', async () => {
@@ -5679,6 +5719,107 @@ describe('worktree remote runtime mutations', () => {
     expect(mockApi.worktrees.updateMeta).not.toHaveBeenCalled()
   })
 
+  it('persists activity on the folder workspace record instead of failing on owner routing (#10251)', async () => {
+    const store = createTestStore()
+    const folderWorkspace = makeFolderWorkspace({ id: 'folder-local' })
+    const folderKey = folderWorkspaceKey(folderWorkspace.id)
+    store.setState({
+      folderWorkspaces: [folderWorkspace],
+      worktreesByRepo: { repo1: [] }
+    } as Partial<AppState>)
+    const sortEpochBefore = store.getState().sortEpoch
+
+    expect(() => store.getState().bumpWorktreeActivity(folderKey)).not.toThrow()
+    expect(store.getState().folderWorkspaces[0]?.lastActivityAt).toEqual(expect.any(Number))
+    expect(store.getState().sortEpoch).toBe(sortEpochBefore + 1)
+    await new Promise((resolve) => setTimeout(resolve, 0))
+
+    expect(runtimeEnvironmentCall).not.toHaveBeenCalled()
+    // Why: worktreeMeta['folder:…'] rows are write-only — folder meta must land on the FolderWorkspace record.
+    expect(mockApi.worktrees.updateMeta).not.toHaveBeenCalled()
+    expect(store.getState().updateFolderWorkspace).toHaveBeenCalledWith(
+      folderWorkspace.id,
+      expect.objectContaining({ lastActivityAt: expect.any(Number) })
+    )
+  })
+
+  it('skips the sort-epoch bump when the active folder workspace reports activity', async () => {
+    const store = createTestStore()
+    const folderWorkspace = makeFolderWorkspace({ id: 'folder-active' })
+    const folderKey = folderWorkspaceKey(folderWorkspace.id)
+    store.setState({
+      folderWorkspaces: [folderWorkspace],
+      activeWorktreeId: folderKey
+    } as Partial<AppState>)
+    const sortEpochBefore = store.getState().sortEpoch
+
+    store.getState().bumpWorktreeActivity(folderKey)
+    await new Promise((resolve) => setTimeout(resolve, 0))
+
+    expect(store.getState().updateFolderWorkspace).toHaveBeenCalledWith(
+      folderWorkspace.id,
+      expect.objectContaining({ lastActivityAt: expect.any(Number) })
+    )
+    expect(store.getState().sortEpoch).toBe(sortEpochBefore)
+  })
+
+  it('clears folder workspace unread on its record and dedupes repeat calls', async () => {
+    const store = createTestStore()
+    const folderWorkspace = makeFolderWorkspace({ id: 'folder-unread', isUnread: true })
+    const folderKey = folderWorkspaceKey(folderWorkspace.id)
+    store.setState({ folderWorkspaces: [folderWorkspace] } as Partial<AppState>)
+
+    store.getState().clearWorktreeUnread(folderKey)
+    store.getState().clearWorktreeUnread(folderKey)
+    await new Promise((resolve) => setTimeout(resolve, 0))
+
+    expect(store.getState().folderWorkspaces[0]?.isUnread).toBe(false)
+    expect(store.getState().updateFolderWorkspace).toHaveBeenCalledTimes(1)
+    expect(store.getState().updateFolderWorkspace).toHaveBeenCalledWith(folderWorkspace.id, {
+      isUnread: false
+    })
+    expect(mockApi.worktrees.updateMeta).not.toHaveBeenCalled()
+  })
+
+  it('marks a folder workspace unread on its record', async () => {
+    const store = createTestStore()
+    const folderWorkspace = makeFolderWorkspace({ id: 'folder-read' })
+    const folderKey = folderWorkspaceKey(folderWorkspace.id)
+    store.setState({ folderWorkspaces: [folderWorkspace] } as Partial<AppState>)
+
+    store.getState().markWorktreeUnread(folderKey)
+    expect(store.getState().folderWorkspaces[0]).toEqual(
+      expect.objectContaining({ isUnread: true, lastActivityAt: expect.any(Number) })
+    )
+    await new Promise((resolve) => setTimeout(resolve, 0))
+
+    expect(store.getState().updateFolderWorkspace).toHaveBeenCalledWith(
+      folderWorkspace.id,
+      expect.objectContaining({ isUnread: true, lastActivityAt: expect.any(Number) })
+    )
+    expect(mockApi.worktrees.updateMeta).not.toHaveBeenCalled()
+  })
+
+  it('clears a folder unread mark even when persistence has not settled yet', () => {
+    const store = createTestStore()
+    const folderWorkspace = makeFolderWorkspace({ id: 'folder-racing-unread' })
+    const folderKey = folderWorkspaceKey(folderWorkspace.id)
+    store.setState({ folderWorkspaces: [folderWorkspace] } as Partial<AppState>)
+
+    store.getState().markWorktreeUnread(folderKey)
+    store.getState().clearWorktreeUnread(folderKey)
+
+    expect(store.getState().folderWorkspaces[0]?.isUnread).toBe(false)
+    expect(store.getState().updateFolderWorkspace).toHaveBeenNthCalledWith(
+      1,
+      folderWorkspace.id,
+      expect.objectContaining({ isUnread: true })
+    )
+    expect(store.getState().updateFolderWorkspace).toHaveBeenNthCalledWith(2, folderWorkspace.id, {
+      isUnread: false
+    })
+  })
+
   it('persists activity for hidden detected worktrees', async () => {
     const store = createTestStore()
     const hidden = makeWorktree({
@@ -5915,6 +6056,140 @@ describe('worktree unread (show-until-interact)', () => {
         updates: expect.objectContaining({ isUnread: true })
       })
     )
+  })
+
+  it('routes multi-host project unread persistence by the worktree host (#10634)', () => {
+    const store = createTestStore()
+    const wt = makeWorktree({
+      id: 'repo-shared::/home/user/wt',
+      repoId: 'repo-shared',
+      path: '/home/user/wt',
+      hostId: 'ssh:ssh-1'
+    })
+    store.setState({
+      repos: [
+        { id: 'repo-shared', path: '/local', displayName: 'Local', badgeColor: '#000', addedAt: 0 },
+        {
+          id: 'repo-shared',
+          path: '/home/user/repo',
+          displayName: 'SSH',
+          badgeColor: '#111',
+          addedAt: 1,
+          connectionId: 'ssh-1'
+        }
+      ],
+      worktreesByRepo: { 'repo-shared': [wt] }
+    } as Partial<AppState>)
+
+    expect(() => store.getState().markWorktreeUnread(wt.id)).not.toThrow()
+
+    expect(store.getState().worktreesByRepo['repo-shared'][0].isUnread).toBe(true)
+    expect(mockApi.worktrees.updateMeta).toHaveBeenCalledWith(
+      expect.objectContaining({
+        worktreeId: wt.id,
+        updates: expect.objectContaining({ isUnread: true })
+      })
+    )
+  })
+
+  it('keeps unread state local instead of throwing for genuinely ambiguous owners (#10634)', () => {
+    const store = createTestStore()
+    const worktreeId = 'repo-shared::/same/path'
+    store.setState({
+      settings: { activeRuntimeEnvironmentId: 'hub-c' } as never,
+      worktreesByRepo: {
+        'repo-shared': [
+          makeWorktree({
+            id: worktreeId,
+            repoId: 'repo-shared',
+            hostId: 'ssh:ssh-a',
+            runtimeOwnerEnvironmentId: 'hub-a'
+          }),
+          makeWorktree({
+            id: worktreeId,
+            repoId: 'repo-shared',
+            hostId: 'ssh:ssh-b',
+            runtimeOwnerEnvironmentId: 'hub-b'
+          })
+        ]
+      }
+    } as Partial<AppState>)
+
+    expect(() => store.getState().markWorktreeUnread(worktreeId)).not.toThrow()
+
+    expect(store.getState().worktreesByRepo['repo-shared'][0].isUnread).toBe(true)
+    expect(mockApi.worktrees.updateMeta).not.toHaveBeenCalled()
+    expect(runtimeEnvironmentCall).not.toHaveBeenCalled()
+  })
+
+  it('never throws from any passive path for a genuinely ambiguous owner (#10634)', () => {
+    // Why every passive path, not just markWorktreeUnread: each one runs from a background
+    // notification, so any that still throws reproduces the uncaught renderer error.
+    const worktreeId = 'repo-shared::/same/path'
+    const ambiguousState = (): Partial<AppState> =>
+      ({
+        settings: { activeRuntimeEnvironmentId: 'hub-c' } as never,
+        worktreesByRepo: {
+          'repo-shared': [
+            makeWorktree({
+              id: worktreeId,
+              repoId: 'repo-shared',
+              hostId: 'ssh:ssh-a',
+              runtimeOwnerEnvironmentId: 'hub-a',
+              isUnread: true
+            }),
+            makeWorktree({
+              id: worktreeId,
+              repoId: 'repo-shared',
+              hostId: 'ssh:ssh-b',
+              runtimeOwnerEnvironmentId: 'hub-b',
+              isUnread: true
+            })
+          ]
+        }
+      }) as Partial<AppState>
+
+    for (const [label, run] of [
+      ['clearWorktreeUnread', (s: AppState) => s.clearWorktreeUnread(worktreeId)],
+      ['bumpWorktreeActivity', (s: AppState) => s.bumpWorktreeActivity(worktreeId)]
+    ] as const) {
+      const store = createTestStore()
+      store.setState(ambiguousState())
+      mockApi.worktrees.updateMeta.mockClear()
+
+      expect(() => run(store.getState()), `${label} threw for an ambiguous owner`).not.toThrow()
+      expect(
+        mockApi.worktrees.updateMeta,
+        `${label} persisted to a guessed host`
+      ).not.toHaveBeenCalled()
+    }
+  })
+
+  it('warns once per workspace rather than on every activity event (#10634)', () => {
+    // Why: activity bumps fire on every PTY event; an unbounded warn would flood the console.
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    try {
+      const worktreeId = 'repo-spam::/same/path'
+      const store = createTestStore()
+      store.setState({
+        settings: { activeRuntimeEnvironmentId: 'hub-c' } as never,
+        worktreesByRepo: {
+          'repo-spam': [
+            makeWorktree({ id: worktreeId, repoId: 'repo-spam', hostId: 'ssh:ssh-a' }),
+            makeWorktree({ id: worktreeId, repoId: 'repo-spam', hostId: 'ssh:ssh-b' })
+          ]
+        }
+      } as Partial<AppState>)
+
+      const before = warn.mock.calls.length
+      for (let i = 0; i < 5; i++) {
+        store.getState().bumpWorktreeActivity(worktreeId)
+      }
+
+      expect(warn.mock.calls.length - before).toBe(1)
+    } finally {
+      warn.mockRestore()
+    }
   })
 
   it('clearWorktreeUnread clears isUnread and persists the change', async () => {
@@ -7013,6 +7288,34 @@ describe('markWorktreeVisited', () => {
       'repo1::/a': 100,
       'ssh-repo::/b': 200
     })
+  })
+
+  it('pruneLastVisitedTimestamps clears a stale activeWorktreeId gone from a hydrated repo', () => {
+    const store = createTestStore()
+    const wt = makeWorktree({ id: 'repo1::/a', repoId: 'repo1', path: '/a' })
+    store.setState({
+      worktreesByRepo: { repo1: [wt] },
+      activeWorktreeId: 'repo1::/gone',
+      lastVisitedAtByWorktreeId: {}
+    } as Partial<AppState>)
+    store.getState().pruneLastVisitedTimestamps()
+    expect(store.getState().activeWorktreeId).toBeNull()
+  })
+
+  it('pruneLastVisitedTimestamps keeps a live activeWorktreeId and defers unhydrated repos', () => {
+    const store = createTestStore()
+    const wt = makeWorktree({ id: 'repo1::/a', repoId: 'repo1', path: '/a' })
+    store.setState({
+      worktreesByRepo: { repo1: [wt] },
+      activeWorktreeId: 'repo1::/a'
+    } as Partial<AppState>)
+    store.getState().pruneLastVisitedTimestamps()
+    expect(store.getState().activeWorktreeId).toBe('repo1::/a')
+
+    // A pointer into a not-yet-hydrated (e.g. SSH pre-connect) repo is deferred.
+    store.setState({ activeWorktreeId: 'ssh-repo::/b' } as Partial<AppState>)
+    store.getState().pruneLastVisitedTimestamps()
+    expect(store.getState().activeWorktreeId).toBe('ssh-repo::/b')
   })
 
   it('pruneLastVisitedTimestamps defers when the detected list is non-authoritative', () => {

@@ -1,21 +1,7 @@
 import { describe, expect, it } from 'vitest'
-import {
-  computeClearFilterActions,
-  computeVisibleFolderWorkspaces,
-  computeVisibleWorktreeIds,
-  isDefaultBranchWorkspace,
-  sidebarHasActiveFilters
-} from './visible-worktrees'
-import type {
-  FolderWorkspace,
-  ProjectGroup,
-  Repo,
-  TerminalTab,
-  Worktree,
-  WorktreeLineage
-} from '../../../../shared/types'
+import { computeVisibleWorktreeIds } from './visible-worktrees'
+import type { Repo, TerminalTab, Worktree, WorktreeLineage } from '../../../../shared/types'
 import { LOCAL_EXECUTION_HOST_ID } from '../../../../shared/execution-host'
-import { folderWorkspaceKey } from '../../../../shared/workspace-scope'
 
 function makeTab(id: string, worktreeId: string, ptyId: string | null): TerminalTab {
   return {
@@ -91,6 +77,8 @@ function visibleOptions(overrides: Partial<VisibleOptions> = {}): VisibleOptions
     worktreeIdsWithLiveAgent: new Set(),
     hideDefaultBranchWorkspace: false,
     hideAutomationGeneratedWorkspaces: false,
+    hideCliCreatedWorkspaces: false,
+    hideDetachedHeadWorkspaces: false,
     repoMap,
     workspaceHostScope: 'all',
     defaultHostId: LOCAL_EXECUTION_HOST_ID,
@@ -98,137 +86,6 @@ function visibleOptions(overrides: Partial<VisibleOptions> = {}): VisibleOptions
     ...overrides
   }
 }
-
-type FilterState = Parameters<typeof sidebarHasActiveFilters>[0]
-
-function filterState(overrides: Partial<FilterState> = {}): FilterState {
-  return {
-    showSleepingWorkspaces: true,
-    filterRepoIds: [],
-    hideDefaultBranchWorkspace: false,
-    hideAutomationGeneratedWorkspaces: false,
-    workspaceHostScope: 'all',
-    ...overrides
-  }
-}
-
-function makeFolderWorkspace(
-  id: string,
-  overrides: Partial<FolderWorkspace> = {}
-): FolderWorkspace {
-  return {
-    id,
-    projectGroupId: 'group-1',
-    name: id,
-    folderPath: `/tmp/${id}`,
-    linkedTask: null,
-    comment: '',
-    isArchived: false,
-    isUnread: false,
-    isPinned: false,
-    sortOrder: 0,
-    lastActivityAt: 0,
-    createdAt: 1,
-    updatedAt: 1,
-    ...overrides
-  }
-}
-
-describe('computeVisibleFolderWorkspaces', () => {
-  it('always drops archived folder workspaces, even with sleeping shown', () => {
-    const active = makeFolderWorkspace('fw-active')
-    const archived = makeFolderWorkspace('fw-archived', { isArchived: true })
-
-    expect(
-      computeVisibleFolderWorkspaces([active, archived], {
-        projectGroupById: new Map<string, ProjectGroup>(),
-        visibleHostIdSet: null,
-        defaultHostId: LOCAL_EXECUTION_HOST_ID,
-        showSleepingWorkspaces: true,
-        tabsByWorktree: {},
-        ptyIdsByTabId: {},
-        browserTabsByWorktree: null,
-        worktreeIdsWithLiveAgent: new Set<string>()
-      })
-    ).toEqual([active])
-  })
-
-  it('drops archived folder workspaces even when they have a live agent', () => {
-    const archived = makeFolderWorkspace('fw-archived-live', { isArchived: true })
-
-    expect(
-      computeVisibleFolderWorkspaces([archived], {
-        projectGroupById: new Map<string, ProjectGroup>(),
-        visibleHostIdSet: null,
-        defaultHostId: LOCAL_EXECUTION_HOST_ID,
-        showSleepingWorkspaces: false,
-        tabsByWorktree: {},
-        ptyIdsByTabId: {},
-        browserTabsByWorktree: null,
-        worktreeIdsWithLiveAgent: new Set([folderWorkspaceKey(archived.id)])
-      })
-    ).toEqual([])
-  })
-
-  it('hides sleeping folder workspaces when the filter is on', () => {
-    const awake = makeFolderWorkspace('fw-awake')
-    const asleep = makeFolderWorkspace('fw-asleep')
-    const opts: Parameters<typeof computeVisibleFolderWorkspaces>[1] = {
-      projectGroupById: new Map<string, ProjectGroup>(),
-      visibleHostIdSet: null,
-      defaultHostId: LOCAL_EXECUTION_HOST_ID,
-      showSleepingWorkspaces: false,
-      tabsByWorktree: {
-        [folderWorkspaceKey(awake.id)]: [
-          makeTab('tab-awake', folderWorkspaceKey(awake.id), 'pty-1')
-        ]
-      },
-      ptyIdsByTabId: { 'tab-awake': ['pty-1'] },
-      browserTabsByWorktree: null,
-      worktreeIdsWithLiveAgent: new Set<string>()
-    }
-
-    expect(computeVisibleFolderWorkspaces([awake, asleep], opts)).toEqual([awake])
-    expect(
-      computeVisibleFolderWorkspaces([awake, asleep], { ...opts, showSleepingWorkspaces: true })
-    ).toEqual([awake, asleep])
-  })
-
-  it('keeps folder workspaces with a live agent visible', () => {
-    const headless = makeFolderWorkspace('fw-headless')
-
-    expect(
-      computeVisibleFolderWorkspaces([headless], {
-        projectGroupById: new Map<string, ProjectGroup>(),
-        visibleHostIdSet: null,
-        defaultHostId: LOCAL_EXECUTION_HOST_ID,
-        showSleepingWorkspaces: false,
-        tabsByWorktree: {},
-        ptyIdsByTabId: {},
-        browserTabsByWorktree: null,
-        worktreeIdsWithLiveAgent: new Set([folderWorkspaceKey(headless.id)])
-      })
-    ).toEqual([headless])
-  })
-
-  it('applies the host scope filter via the owning project group connection', () => {
-    const localWorkspace = makeFolderWorkspace('fw-local')
-    const sshWorkspace = makeFolderWorkspace('fw-ssh', { connectionId: 'vm-1' })
-
-    expect(
-      computeVisibleFolderWorkspaces([localWorkspace, sshWorkspace], {
-        projectGroupById: new Map<string, ProjectGroup>(),
-        visibleHostIdSet: new Set([LOCAL_EXECUTION_HOST_ID]),
-        defaultHostId: LOCAL_EXECUTION_HOST_ID,
-        showSleepingWorkspaces: true,
-        tabsByWorktree: {},
-        ptyIdsByTabId: {},
-        browserTabsByWorktree: null,
-        worktreeIdsWithLiveAgent: new Set<string>()
-      })
-    ).toEqual([localWorkspace])
-  })
-})
 
 describe('computeVisibleWorktreeIds', () => {
   it('keeps browser-tab worktrees visible when sleeping workspaces are hidden', () => {
@@ -288,6 +145,97 @@ describe('computeVisibleWorktreeIds', () => {
     )
 
     expect(result).toEqual([manual.id])
+  })
+
+  it('hides CLI-created workspaces when the CLI filter is enabled', () => {
+    const manual = makeWorktree('manual')
+    const cliCreated = {
+      ...makeWorktree('cli-created'),
+      cliProvenance: {
+        kind: 'created-by-cli' as const,
+        createdAt: 123,
+        callerTerminalHandle: 'terminal-1',
+        startupAgent: 'claude' as const
+      }
+    }
+
+    const result = computeVisibleWorktreeIds(
+      { repo1: [manual, cliCreated] },
+      [manual.id, cliCreated.id],
+      visibleOptions({ hideCliCreatedWorkspaces: true })
+    )
+
+    expect(result).toEqual([manual.id])
+  })
+
+  it('keeps CLI-created workspaces visible while the CLI filter is off', () => {
+    const manual = makeWorktree('manual')
+    const cliCreated = {
+      ...makeWorktree('cli-created'),
+      cliProvenance: { kind: 'created-by-cli' as const, createdAt: 123 }
+    }
+
+    const result = computeVisibleWorktreeIds(
+      { repo1: [manual, cliCreated] },
+      [manual.id, cliCreated.id],
+      visibleOptions()
+    )
+
+    expect(result).toEqual([manual.id, cliCreated.id])
+  })
+
+  it('keeps workspaces without CLI provenance visible when the CLI filter is enabled', () => {
+    // Why: workspaces persisted before cliProvenance existed have no marker and
+    // must never be filtered as CLI-created.
+    const legacy = makeWorktree('legacy')
+
+    const result = computeVisibleWorktreeIds(
+      { repo1: [legacy] },
+      [legacy.id],
+      visibleOptions({ hideCliCreatedWorkspaces: true })
+    )
+
+    expect(result).toEqual([legacy.id])
+  })
+
+  it('hides detached-HEAD workspaces when the detached filter is enabled', () => {
+    const onBranch = makeWorktree('on-branch')
+    const detached = { ...makeWorktree('detached'), branch: '', head: 'deadbeefcafe' }
+
+    const result = computeVisibleWorktreeIds(
+      { repo1: [onBranch, detached] },
+      [onBranch.id, detached.id],
+      visibleOptions({ hideDetachedHeadWorkspaces: true })
+    )
+
+    expect(result).toEqual([onBranch.id])
+  })
+
+  it('keeps detached-HEAD workspaces visible while the detached filter is off', () => {
+    const onBranch = makeWorktree('on-branch')
+    const detached = { ...makeWorktree('detached'), branch: '', head: 'deadbeefcafe' }
+
+    const result = computeVisibleWorktreeIds(
+      { repo1: [onBranch, detached] },
+      [onBranch.id, detached.id],
+      visibleOptions()
+    )
+
+    expect(result).toEqual([onBranch.id, detached.id])
+  })
+
+  it('keeps headless workspaces visible when the detached filter is enabled', () => {
+    // Why: folder workspaces and SSH-synthesized rows carry an empty branch AND
+    // an empty head. Only a real head means a genuine detached checkout.
+    const folder = { ...makeWorktree('folder'), branch: '', head: '', isMainWorktree: true }
+
+    const result = computeVisibleWorktreeIds(
+      { repo1: [folder] },
+      [folder.id],
+      visibleOptions({ hideDetachedHeadWorkspaces: true })
+    )
+
+    expect(result).toEqual([folder.id])
   })
 
   it('does not treat slept wake-hint tabs as live surfaces', () => {
@@ -666,6 +614,15 @@ describe('computeVisibleWorktreeIds', () => {
       hostId: 'local'
     }
     expect(run(automationParent, { hideAutomationGeneratedWorkspaces: true })).toEqual([child.id])
+
+    const cliParent = makeWorktree('cli-parent')
+    cliParent.cliProvenance = { kind: 'created-by-cli', createdAt: 1 }
+    expect(run(cliParent, { hideCliCreatedWorkspaces: true })).toEqual([child.id])
+
+    const detachedParent = makeWorktree('detached-parent')
+    detachedParent.branch = ''
+    detachedParent.head = 'deadbeefcafe'
+    expect(run(detachedParent, { hideDetachedHeadWorkspaces: true })).toEqual([child.id])
   })
 
   it('includes inline lineage ancestors when send-target mode forces a filtered child visible', () => {
@@ -819,136 +776,5 @@ describe('computeVisibleWorktreeIds', () => {
     )
 
     expect(result).toEqual([child.id])
-  })
-})
-
-describe('isDefaultBranchWorkspace', () => {
-  it('returns true for a branch-backed main worktree', () => {
-    const main = makeWorktree('main')
-    main.isMainWorktree = true
-    expect(isDefaultBranchWorkspace(main)).toBe(true)
-  })
-
-  it('returns false for folder-mode main worktrees (empty branch)', () => {
-    const folder = makeWorktree('folder')
-    folder.isMainWorktree = true
-    folder.branch = ''
-    expect(isDefaultBranchWorkspace(folder)).toBe(false)
-  })
-
-  it('returns false for non-main worktrees even on the default branch', () => {
-    const feature = makeWorktree('feature')
-    expect(isDefaultBranchWorkspace(feature)).toBe(false)
-  })
-})
-
-describe('sidebarHasActiveFilters', () => {
-  it('returns false when no filters are active', () => {
-    expect(sidebarHasActiveFilters(filterState())).toBe(false)
-  })
-
-  it('returns true when only hideDefaultBranchWorkspace is active', () => {
-    // Why: regression guard for the empty-sidebar escape hatch. If hide is
-    // omitted from the filter union, a user whose only worktree is the
-    // default-branch row sees "No workspaces found" with no way back.
-    expect(sidebarHasActiveFilters(filterState({ hideDefaultBranchWorkspace: true }))).toBe(true)
-  })
-
-  it('returns true when only automation-created workspaces are hidden', () => {
-    expect(sidebarHasActiveFilters(filterState({ hideAutomationGeneratedWorkspaces: true }))).toBe(
-      true
-    )
-  })
-
-  it('returns true when sleeping workspaces are hidden', () => {
-    expect(sidebarHasActiveFilters(filterState({ showSleepingWorkspaces: false }))).toBe(true)
-  })
-
-  it('returns true when only filterRepoIds is non-empty', () => {
-    expect(sidebarHasActiveFilters(filterState({ filterRepoIds: ['repo1'] }))).toBe(true)
-  })
-
-  it('returns true when only host visibility is narrowed', () => {
-    expect(sidebarHasActiveFilters(filterState({ visibleWorkspaceHostIds: ['local'] }))).toBe(true)
-  })
-})
-
-describe('computeClearFilterActions', () => {
-  it('returns no-op actions when nothing is set', () => {
-    expect(computeClearFilterActions(filterState())).toEqual({
-      resetShowSleepingWorkspaces: false,
-      resetFilterRepoIds: false,
-      resetHideDefaultBranchWorkspace: false,
-      resetHideAutomationGeneratedWorkspaces: false,
-      resetVisibleWorkspaceHostIds: false
-    })
-  })
-
-  it('flags only hideDefaultBranchWorkspace for reset when it is the sole filter', () => {
-    // Why: verifies the empty-sidebar escape hatch actually clears the hide
-    // flag. A regression here would leave users stuck on "No workspaces found"
-    // because the only active filter would never clear.
-    expect(computeClearFilterActions(filterState({ hideDefaultBranchWorkspace: true }))).toEqual({
-      resetShowSleepingWorkspaces: false,
-      resetFilterRepoIds: false,
-      resetHideDefaultBranchWorkspace: true,
-      resetHideAutomationGeneratedWorkspaces: false,
-      resetVisibleWorkspaceHostIds: false
-    })
-  })
-
-  it('flags only hideAutomationGeneratedWorkspaces for reset when it is the sole filter', () => {
-    expect(
-      computeClearFilterActions(filterState({ hideAutomationGeneratedWorkspaces: true }))
-    ).toEqual({
-      resetShowSleepingWorkspaces: false,
-      resetFilterRepoIds: false,
-      resetHideDefaultBranchWorkspace: false,
-      resetHideAutomationGeneratedWorkspaces: true,
-      resetVisibleWorkspaceHostIds: false
-    })
-  })
-
-  it('does not flag hideDefaultBranchWorkspace when it is already off', () => {
-    // Why: avoids issuing a pointless IPC write on every Clear Filters click
-    // in the common case where hide was never on.
-    const actions = computeClearFilterActions(
-      filterState({
-        filterRepoIds: ['repo1']
-      })
-    )
-    expect(actions.resetHideDefaultBranchWorkspace).toBe(false)
-    expect(actions.resetShowSleepingWorkspaces).toBe(false)
-    expect(actions.resetFilterRepoIds).toBe(true)
-  })
-
-  it('flags legacy single-host scope for reset even without visible host ids', () => {
-    expect(computeClearFilterActions(filterState({ workspaceHostScope: 'ssh:host-1' }))).toEqual({
-      resetShowSleepingWorkspaces: false,
-      resetFilterRepoIds: false,
-      resetHideDefaultBranchWorkspace: false,
-      resetHideAutomationGeneratedWorkspaces: false,
-      resetVisibleWorkspaceHostIds: true
-    })
-  })
-
-  it('flags every active filter simultaneously', () => {
-    expect(
-      computeClearFilterActions(
-        filterState({
-          showSleepingWorkspaces: false,
-          filterRepoIds: ['repo1', 'repo2'],
-          hideDefaultBranchWorkspace: true,
-          hideAutomationGeneratedWorkspaces: true,
-          visibleWorkspaceHostIds: ['local']
-        })
-      )
-    ).toEqual({
-      resetShowSleepingWorkspaces: true,
-      resetFilterRepoIds: true,
-      resetHideDefaultBranchWorkspace: true,
-      resetHideAutomationGeneratedWorkspaces: true,
-      resetVisibleWorkspaceHostIds: true
-    })
   })
 })

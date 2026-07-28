@@ -154,6 +154,102 @@ describe('killAllProcessesForWorktree', () => {
     expect(result.providerStopped).toBe(0)
   })
 
+  it('does not path-sweep untagged siblings when deleting a folder-workspace instance', async () => {
+    // Regression for #10252: folder-workspace instances share one checkout dir,
+    // so splitWorktreeIdForFilesystem() strips the `::workspace:<uuid>` suffix
+    // down to the shared path. An untagged session under that shared path must
+    // NOT be swept — it may belong to a sibling workspace or another repo.
+    const deletedInstance =
+      'repo-1::/Users/dev/project::workspace:11111111-1111-1111-1111-111111111111'
+    const siblingInstance =
+      'repo-1::/Users/dev/project::workspace:22222222-2222-2222-2222-222222222222'
+    const localProvider = createProviderStub(async () => [
+      // Untagged session whose cwd is the shared checkout dir (sibling's live agent).
+      { id: 'floating-sibling', cwd: '/Users/dev/project', title: 'shell' },
+      // Properly tagged session owned by a sibling instance.
+      {
+        id: `${siblingInstance}@@sib00000`,
+        cwd: '/Users/dev/project',
+        title: 'shell',
+        worktreeId: siblingInstance
+      }
+    ])
+    listRegisteredPtysMock.mockReturnValue([])
+
+    const result = await killAllProcessesForWorktree(deletedInstance, {
+      localProvider,
+      requirePhysicalStop: true
+    })
+
+    expect(localProvider.shutdown).not.toHaveBeenCalled()
+    expect(result.providerStopped).toBe(0)
+  })
+
+  it('still tears down the deleted folder-workspace instance own sessions', async () => {
+    // The fix disables only the shared-path fallback; exact prefix and
+    // authoritative worktreeId matches for THIS instance must still fire.
+    const deletedInstance =
+      'repo-1::/Users/dev/project::workspace:11111111-1111-1111-1111-111111111111'
+    const localProvider = createProviderStub(async () => [
+      { id: `${deletedInstance}@@own00001`, cwd: '/Users/dev/project', title: 'shell' },
+      {
+        id: 'tagged-own',
+        cwd: '/Users/dev/project',
+        title: 'shell',
+        worktreeId: deletedInstance
+      }
+    ])
+    listRegisteredPtysMock.mockReturnValue([])
+
+    const result = await killAllProcessesForWorktree(deletedInstance, {
+      localProvider,
+      requirePhysicalStop: true
+    })
+
+    expect(localProvider.shutdown).toHaveBeenCalledWith(
+      `${deletedInstance}@@own00001`,
+      expect.objectContaining({ immediate: true })
+    )
+    expect(localProvider.shutdown).toHaveBeenCalledWith(
+      'tagged-own',
+      expect.objectContaining({ immediate: true })
+    )
+    expect(result.providerStopped).toBe(2)
+  })
+
+  it('kills only the deleted instance own sessions when siblings share the list', async () => {
+    // One provider list spanning all four quadrants: the deleted instance's own
+    // prefix + tagged sessions must die; the untagged and tagged sibling sessions
+    // on the shared checkout path must survive.
+    const deletedInstance =
+      'repo-1::/Users/dev/project::workspace:11111111-1111-1111-1111-111111111111'
+    const siblingInstance =
+      'repo-1::/Users/dev/project::workspace:22222222-2222-2222-2222-222222222222'
+    const localProvider = createProviderStub(async () => [
+      { id: `${deletedInstance}@@own00001`, cwd: '/Users/dev/project', title: 'shell' },
+      { id: 'own-tagged', cwd: '/Users/dev/project', title: 'shell', worktreeId: deletedInstance },
+      { id: 'floating-sibling', cwd: '/Users/dev/project', title: 'shell' },
+      {
+        id: `${siblingInstance}@@sib00000`,
+        cwd: '/Users/dev/project',
+        title: 'shell',
+        worktreeId: siblingInstance
+      }
+    ])
+    listRegisteredPtysMock.mockReturnValue([])
+
+    const result = await killAllProcessesForWorktree(deletedInstance, {
+      localProvider,
+      requirePhysicalStop: true
+    })
+
+    const killed = (localProvider.shutdown as unknown as ReturnType<typeof vi.fn>).mock.calls
+      .map((call) => call[0] as string)
+      .sort()
+    expect(killed).toEqual([`${deletedInstance}@@own00001`, 'own-tagged'].sort())
+    expect(result.providerStopped).toBe(2)
+  })
+
   it('uses authoritative remote worktree ownership without sweeping the local registry', async () => {
     const remoteProvider = createProviderStub(async () => [
       { id: 'pty-remote', cwd: '/remote/w1', title: 'shell', worktreeId: 'w1' },

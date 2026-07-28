@@ -39,7 +39,8 @@ vi.mock('@/store', () => ({
 }))
 
 vi.mock('@/lib/worktree-activation', () => ({
-  activateAndRevealWorktree: mocks.activateAndRevealWorktree
+  activateAndRevealWorktree: mocks.activateAndRevealWorktree,
+  activateAndRevealWorkspace: mocks.activateAndRevealWorktree
 }))
 
 vi.mock('@/lib/telemetry', () => ({

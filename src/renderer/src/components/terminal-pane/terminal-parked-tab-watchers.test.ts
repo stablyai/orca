@@ -764,6 +764,36 @@ describe('fallbackParkedPaneCandidates', () => {
     ).toEqual([{ ptyId: PTY_ID, paneId: 7, leafId: LEAF_ID, drivesTabTitle: true }])
   })
 
+  // Why: a tab that never mounted a pane persists a rootless layout. Walking
+  // only `root` yielded zero candidates, so watcher coverage refused it and a
+  // manual park could never succeed for a workspace the user had not visited.
+  it('resolves the single leaf of a rootless layout', () => {
+    expect(
+      fallbackParkedPaneCandidates({ id: TAB_ID, ptyId: PTY_ID }, {
+        terminalLayoutsByTabId: {
+          [TAB_ID]: {
+            root: null,
+            activeLeafId: LEAF_ID,
+            expandedLeafId: null,
+            ptyIdsByLeafId: { [LEAF_ID]: PTY_ID }
+          }
+        },
+        runtimePaneTitlesByTabId: {}
+      } as never)
+    ).toEqual([{ ptyId: PTY_ID, paneId: -1, leafId: LEAF_ID, drivesTabTitle: true }])
+  })
+
+  it('returns nothing for a rootless layout with no resolvable leaf', () => {
+    expect(
+      fallbackParkedPaneCandidates({ id: TAB_ID, ptyId: PTY_ID }, {
+        terminalLayoutsByTabId: {
+          [TAB_ID]: { root: null, activeLeafId: null, expandedLeafId: null }
+        },
+        runtimePaneTitlesByTabId: {}
+      } as never)
+    ).toEqual([])
+  })
+
   it('maps split leaves to layout PTYs with collision-free negative pane ids', () => {
     expect(
       fallbackParkedPaneCandidates({ id: TAB_ID, ptyId: PTY_ID }, {

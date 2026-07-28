@@ -44,7 +44,9 @@ const {
   localFallbackProvider,
   setLocalPtyProviderMock,
   unbindLocalProviderListenersMock,
-  rebindLocalProviderListenersMock
+  rebindLocalProviderListenersMock,
+  trackDaemonReplacedMock,
+  trackDaemonRetiredMock
 } = vi.hoisted(() => {
   const getPathMock = vi.fn(() => '/fake/userData')
   const getAppPathMock = vi.fn(() => '/fake/app')
@@ -147,6 +149,8 @@ const {
   const setLocalPtyProviderMock = vi.fn()
   const unbindLocalProviderListenersMock = vi.fn()
   const rebindLocalProviderListenersMock = vi.fn()
+  const trackDaemonReplacedMock = vi.fn()
+  const trackDaemonRetiredMock = vi.fn()
 
   return {
     getPathMock,
@@ -181,7 +185,9 @@ const {
     localFallbackProvider,
     setLocalPtyProviderMock,
     unbindLocalProviderListenersMock,
-    rebindLocalProviderListenersMock
+    rebindLocalProviderListenersMock,
+    trackDaemonReplacedMock,
+    trackDaemonRetiredMock
   }
 })
 
@@ -199,7 +205,7 @@ type MockAdapter = {
     socketPath: string
     tokenPath: string
     historyPath?: string
-    respawn?: () => Promise<void>
+    respawn?: (reason: 'daemon_died' | 'unhealthy_resolver') => Promise<void>
     protocolVersion?: number
   }
   getActiveSessionIds: ReturnType<typeof vi.fn>
@@ -251,6 +257,11 @@ vi.mock('./daemon-health', () => ({
 }))
 
 vi.mock('./client', () => ({ DaemonClient: daemonClientMock }))
+
+vi.mock('./daemon-lifecycle-event', () => ({
+  trackDaemonReplaced: trackDaemonReplacedMock,
+  trackDaemonRetired: trackDaemonRetiredMock
+}))
 
 vi.mock('./daemon-spawner', () => ({
   DaemonSpawner: class MockDaemonSpawner {
@@ -391,6 +402,8 @@ async function importFresh() {
   setLocalPtyProviderMock.mockClear()
   unbindLocalProviderListenersMock.mockClear()
   rebindLocalProviderListenersMock.mockClear()
+  trackDaemonReplacedMock.mockClear()
+  trackDaemonRetiredMock.mockClear()
   checkDaemonHealthMock.mockClear()
   checkDaemonHealthMock.mockResolvedValue('healthy')
   healthCheckDaemonMock.mockClear()
@@ -400,7 +413,10 @@ async function importFresh() {
   getDaemonLaunchIdentityMock.mockClear()
   isDaemonStaleForCurrentBundleMock.mockReset()
   isDaemonStaleForCurrentBundleMock.mockReturnValue(false)
-  killStaleDaemonMock.mockClear()
+  // mockReset (not mockClear) also drops an unconsumed *Once queue, so a test that bails early
+  // can't leak a queued false into the next test's confirmedReplacement gate.
+  killStaleDaemonMock.mockReset()
+  killStaleDaemonMock.mockResolvedValue(true)
   getAppPathMock.mockReset()
   getAppPathMock.mockReturnValue('/fake/app')
   forkMock.mockReset()
@@ -791,9 +807,19 @@ describe('daemon-init: runRestartDaemon (7-step sequence)', () => {
     // The replacement adapter's respawn closure must drive the *same* original spawner (see daemon-init.ts step 5).
     originalSpawner.resetHandle.mockClear()
     originalSpawner.ensureRunning.mockClear()
-    await replacementAdapter.options.respawn?.()
+    await replacementAdapter.options.respawn?.('daemon_died')
     expect(originalSpawner.resetHandle).toHaveBeenCalledTimes(1)
     expect(originalSpawner.ensureRunning).toHaveBeenCalledTimes(1)
+    // STA-2376: death → respawn retires, exactly once.
+    expect(trackDaemonRetiredMock).toHaveBeenCalledTimes(1)
+    expect(trackDaemonRetiredMock).toHaveBeenCalledWith('died_respawn')
+    trackDaemonRetiredMock.mockClear()
+    trackDaemonReplacedMock.mockClear()
+    // STA-2376: the resolver respawn attributes rather than emits — the launch it triggers reports it.
+    // Emitting here too would double-count, and would fire before the outcome is known.
+    await replacementAdapter.options.respawn?.('unhealthy_resolver')
+    expect(trackDaemonRetiredMock).not.toHaveBeenCalled()
+    expect(trackDaemonReplacedMock).not.toHaveBeenCalled()
     // Still only one spawner in the whole test — nobody new was constructed.
     expect(spawnerInstances).toHaveLength(1)
   })
@@ -820,6 +846,50 @@ describe('daemon-init: runRestartDaemon (7-step sequence)', () => {
     const rebindOrder = rebindLocalProviderListenersMock.mock.invocationCallOrder.at(-1) ?? -1
     const swapOrder = setLocalPtyProviderMock.mock.invocationCallOrder.at(-1) ?? -1
     expect(rebindOrder).toBeGreaterThan(swapOrder)
+  })
+
+  // STA-2376: a manual restart kills the daemon while the outgoing adapter is still live, so a pane
+  // respawning on its synthetic exit reaches the death path for a user action. That must not land in
+  // the crash bucket. Driven from inside the restart's ensureRunning so restartInFlight is genuinely
+  // set, rather than asserting the guard against a flag the test poked itself.
+  it('does not report a retirement for a death observed during a manual restart', async () => {
+    const mod = await importFresh()
+    await mod.initDaemonPtyProvider()
+    const outgoingRespawn = adapterInstances[0].options.respawn
+    trackDaemonRetiredMock.mockClear()
+
+    let respawnedMidRestart = false
+    ensureRunningOverrides.push(async () => {
+      await outgoingRespawn?.('daemon_died')
+      respawnedMidRestart = true
+      return { socketPath: '/fake/restarted-socket', tokenPath: '/fake/restarted-token' }
+    })
+
+    await mod.restartDaemon()
+
+    expect(respawnedMidRestart).toBe(true)
+    expect(trackDaemonRetiredMock).not.toHaveBeenCalled()
+
+    // The same closure still retires once the restart has settled, so the guard is scoped, not permanent.
+    await outgoingRespawn?.('daemon_died')
+    expect(trackDaemonRetiredMock).toHaveBeenCalledTimes(1)
+    expect(trackDaemonRetiredMock).toHaveBeenCalledWith('died_respawn')
+
+    // The restart installs its own adapter, whose closure is a second copy of the guard — and the one
+    // that actually runs in the field from the second restart onward, since the first adapter is gone.
+    const restartedRespawn = adapterInstances[1].options.respawn
+    trackDaemonRetiredMock.mockClear()
+    let respawnedMidSecondRestart = false
+    ensureRunningOverrides.push(async () => {
+      await restartedRespawn?.('daemon_died')
+      respawnedMidSecondRestart = true
+      return { socketPath: '/fake/restarted-socket-2', tokenPath: '/fake/restarted-token-2' }
+    })
+
+    await mod.restartDaemon()
+
+    expect(respawnedMidSecondRestart).toBe(true)
+    expect(trackDaemonRetiredMock).not.toHaveBeenCalled()
   })
 
   it('preserves legacy adapter instances by identity, drains outgoing router via disposeRouterOnly, and re-discovers legacy sessions on the new router', async () => {
@@ -1143,6 +1213,9 @@ describe('daemon-init: runRestartDaemon (7-step sequence)', () => {
       ]),
       expect.objectContaining({ cwd: '/fake/userData', detached: true })
     )
+    // STA-2376: different-app-path replacement, emitted exactly once.
+    expect(trackDaemonReplacedMock).toHaveBeenCalledTimes(1)
+    expect(trackDaemonReplacedMock).toHaveBeenCalledWith('different_app_path', 0)
   })
 
   it('holds a full adoption pair before a healthy launcher resolves', async () => {
@@ -1351,6 +1424,9 @@ describe('daemon-init: runRestartDaemon (7-step sequence)', () => {
       ]),
       expect.objectContaining({ cwd: '/fake/userData', detached: true })
     )
+    // STA-2376: the launcher is the sole emitter for a resolver replace, and fires exactly once.
+    expect(trackDaemonReplacedMock).toHaveBeenCalledTimes(1)
+    expect(trackDaemonReplacedMock).toHaveBeenCalledWith('unhealthy_resolver', 0)
   })
 
   it('preserves a resolver-unhealthy daemon when it owns live sessions', async () => {
@@ -1392,6 +1468,8 @@ describe('daemon-init: runRestartDaemon (7-step sequence)', () => {
     expect(getDaemonLaunchIdentityMock).not.toHaveBeenCalled()
     expect(killStaleDaemonMock).not.toHaveBeenCalled()
     expect(forkMock).not.toHaveBeenCalled()
+    // STA-2376: preserving a daemon is not a lifecycle transition — no event.
+    expect(trackDaemonReplacedMock).not.toHaveBeenCalled()
   })
 
   it('preserves a resolver-unhealthy daemon when live session state cannot be verified', async () => {
@@ -1477,6 +1555,180 @@ describe('daemon-init: runRestartDaemon (7-step sequence)', () => {
       ]),
       expect.objectContaining({ detached: true })
     )
+    // STA-2376: an unreachable daemon with no live sessions is replaced via the failed-health path, once.
+    expect(trackDaemonReplacedMock).toHaveBeenCalledTimes(1)
+    expect(trackDaemonReplacedMock).toHaveBeenCalledWith('failed_health_check', 0)
+  })
+
+  it('does not report a replacement when startup finds no daemon to remove', async () => {
+    const mod = await importFresh()
+    await mod.initDaemonPtyProvider()
+    checkDaemonHealthMock.mockResolvedValue('unreachable')
+    killStaleDaemonMock.mockResolvedValueOnce(false)
+    forkMock.mockImplementationOnce(() => {
+      throw new Error('stop after replacement decision')
+    })
+    const launcher = spawnerInstances[0].launcher as (
+      socketPath: string,
+      tokenPath: string
+    ) => Promise<{ shutdown(): Promise<void> }>
+
+    await expect(launcher('/fake/socket', '/fake/token')).rejects.toThrow(
+      'stop after replacement decision'
+    )
+
+    expect(trackDaemonReplacedMock).not.toHaveBeenCalled()
+  })
+
+  // STA-2376 regression: dropping the adapter's last authenticated client is enough to make an idle
+  // daemon self-retire, so by the time the launcher runs there is nothing to kill and its own
+  // confirmed-kill gate reports nothing. The attributed reason is what keeps the runtime resolver
+  // replacement on the wire — and keeps it off the failed_health_check bucket it would otherwise land in.
+  it('reports the runtime resolver replacement even after the daemon self-retired', async () => {
+    const mod = await importFresh()
+    await mod.initDaemonPtyProvider()
+    const adapterOptions = adapterInstances[0].options
+    trackDaemonReplacedMock.mockClear()
+
+    // The daemon is gone before the launcher looks: nothing answers, nothing left to kill.
+    checkDaemonHealthMock.mockResolvedValue('unreachable')
+    killStaleDaemonMock.mockResolvedValueOnce(false).mockResolvedValueOnce(false)
+    forkMock.mockImplementationOnce(() => {
+      throw new Error('stop after replacement decision')
+    })
+    const launcher = spawnerInstances[0].launcher as (
+      socketPath: string,
+      tokenPath: string
+    ) => Promise<{ shutdown(): Promise<void> }>
+
+    await adapterOptions.respawn?.('unhealthy_resolver')
+    expect(trackDaemonReplacedMock).not.toHaveBeenCalled()
+
+    await expect(launcher('/fake/socket', '/fake/token')).rejects.toThrow(
+      'stop after replacement decision'
+    )
+    expect(trackDaemonReplacedMock).toHaveBeenCalledTimes(1)
+    expect(trackDaemonReplacedMock).toHaveBeenCalledWith('unhealthy_resolver', 0)
+
+    // One-shot: a later unrelated launch must not inherit the attribution.
+    trackDaemonReplacedMock.mockClear()
+    forkMock.mockImplementationOnce(() => {
+      throw new Error('stop after replacement decision')
+    })
+    await expect(launcher('/fake/socket', '/fake/token')).rejects.toThrow(
+      'stop after replacement decision'
+    )
+    expect(trackDaemonReplacedMock).not.toHaveBeenCalled()
+  })
+
+  // STA-2376: the attribution covers the case the confirmed-kill gate cannot see; it must not
+  // overwrite a reason this launch proved against the daemon it actually removed. Otherwise a
+  // resolver that recovers mid-flight bills a real stale-bundle replacement to the resolver bucket.
+  it('prefers a proven replacement reason over the attributed one', async () => {
+    const mod = await importFresh()
+    await mod.initDaemonPtyProvider()
+    const adapterOptions = adapterInstances[0].options
+    trackDaemonReplacedMock.mockClear()
+
+    // Resolver recovered by the time the launcher looks, but the daemon is genuinely from another path.
+    getMacDaemonSystemResolverHealthMock.mockReturnValue('healthy')
+    getDaemonLaunchIdentityMock.mockReturnValueOnce('mismatch')
+    forkMock.mockImplementationOnce(() => {
+      throw new Error('stop after replacement decision')
+    })
+    const launcher = spawnerInstances[0].launcher as (
+      socketPath: string,
+      tokenPath: string
+    ) => Promise<{ shutdown(): Promise<void> }>
+
+    await adapterOptions.respawn?.('unhealthy_resolver')
+    await expect(launcher('/fake/socket', '/fake/token')).rejects.toThrow(
+      'stop after replacement decision'
+    )
+
+    expect(trackDaemonReplacedMock).toHaveBeenCalledTimes(1)
+    expect(trackDaemonReplacedMock).toHaveBeenCalledWith('different_app_path', 0)
+  })
+
+  // STA-2376: failed_health_check is the residual bucket, not an identification, so it must not
+  // absorb the attribution. The same dead login session that fails the resolver also fails the PTY
+  // spawn probe, and with zero live sessions that lands here instead of the degraded preserve —
+  // so this is the likely shape of the incident, not a corner case.
+  it('keeps the attributed reason when the launcher only reaches failed_health_check', async () => {
+    const mod = await importFresh()
+    await mod.initDaemonPtyProvider()
+    const adapterOptions = adapterInstances[0].options
+    trackDaemonReplacedMock.mockClear()
+
+    // Daemon survived the disconnect (non-alive sessions keep it non-idle) but fails the spawn probe.
+    checkDaemonHealthMock.mockResolvedValue('pty-spawn-unhealthy')
+    forkMock.mockImplementationOnce(() => {
+      throw new Error('stop after replacement decision')
+    })
+    const launcher = spawnerInstances[0].launcher as (
+      socketPath: string,
+      tokenPath: string
+    ) => Promise<{ shutdown(): Promise<void> }>
+
+    await adapterOptions.respawn?.('unhealthy_resolver')
+    await expect(launcher('/fake/socket', '/fake/token')).rejects.toThrow(
+      'stop after replacement decision'
+    )
+
+    expect(trackDaemonReplacedMock).toHaveBeenCalledTimes(1)
+    expect(trackDaemonReplacedMock).toHaveBeenCalledWith('unhealthy_resolver', 0)
+  })
+
+  // STA-2376: in the field the identified reasons confirm via cleanupDaemonForProtocol().cleaned, not
+  // via killStaleDaemon — the daemon is healthy, so cleanup shuts it down over RPC and unlinks its pid,
+  // leaving nothing for the kill to find. The other tests reach confirmedReplacement through the kill,
+  // so without this one the `.cleaned` half could be dropped and every identified reason would go
+  // silent in production with the suite still green.
+  it('reports a replacement confirmed by cleanup alone, with no stale daemon left to kill', async () => {
+    const mod = await importFresh()
+    await mod.initDaemonPtyProvider()
+    trackDaemonReplacedMock.mockClear()
+
+    getDaemonLaunchIdentityMock.mockReturnValueOnce('mismatch')
+    killStaleDaemonMock.mockResolvedValueOnce(false)
+    // The daemon answers cleanup's liveness probe, then the endpoint goes away so the self-shutdown
+    // wait succeeds and cleanup reports cleaned:true.
+    probeSocketExistsMock.mockReturnValue(true)
+    netConnectMock.mockImplementationOnce(() => {
+      const handlers: Record<string, (() => void)[]> = { connect: [], error: [] }
+      return {
+        on(event: string, cb: () => void) {
+          handlers[event]?.push(cb)
+          if (event === 'connect') {
+            queueMicrotask(() => cb())
+          }
+          return this
+        },
+        removeListener(event: string, cb: () => void) {
+          handlers[event] = handlers[event]?.filter((handler) => handler !== cb) ?? []
+          return this
+        },
+        destroy() {}
+      }
+    })
+    forkMock.mockImplementationOnce(() => {
+      throw new Error('stop after replacement decision')
+    })
+    const launcher = spawnerInstances[0].launcher as (
+      socketPath: string,
+      tokenPath: string
+    ) => Promise<{ shutdown(): Promise<void> }>
+
+    await expect(launcher('/fake/socket', '/fake/token')).rejects.toThrow(
+      'stop after replacement decision'
+    )
+
+    expect(killStaleDaemonMock).toHaveBeenCalled()
+    expect(trackDaemonReplacedMock).toHaveBeenCalledTimes(1)
+    expect(trackDaemonReplacedMock).toHaveBeenCalledWith('different_app_path', 0)
+
+    // beforeEach only mockClear()s this one, so hand it back rather than leaving later tests probing a live endpoint.
+    probeSocketExistsMock.mockReturnValue(false)
   })
 
   it('removes detached daemon startup listeners after readiness', async () => {
@@ -2160,6 +2412,64 @@ describe('daemon-init: runRestartDaemon (7-step sequence)', () => {
     expect(forkMock).toHaveBeenCalled()
   })
 
+  it('stays silent about replacing a daemon on a cold start, where there is none', async () => {
+    // Why: a first launch reaches the same replace fall-through (unreachable health,
+    // no socket, nothing to probe); announcing a replacement there reports killing a
+    // daemon that never existed, on the most common path there is.
+    const mod = await importFresh()
+    await mod.initDaemonPtyProvider()
+
+    // Both pre-spawn probes fail: nothing ever answers, so no session count is observed.
+    const unreachableClient = function MockDaemonClient() {
+      return {
+        ensureConnected: vi.fn(async () => {
+          throw new Error('connect ENOENT')
+        }),
+        request: vi.fn(),
+        disconnect: vi.fn()
+      }
+    }
+    daemonClientMock
+      .mockImplementationOnce(unreachableClient)
+      .mockImplementationOnce(unreachableClient)
+
+    const launcher = spawnerInstances[0].launcher as (
+      socketPath: string,
+      tokenPath: string
+    ) => Promise<{ shutdown(): Promise<void> }>
+    checkDaemonHealthMock.mockResolvedValueOnce('unreachable')
+    probeSocketExistsMock.mockReturnValue(false)
+    forkMock.mockImplementationOnce(() => ({
+      pid: 12345,
+      on(event: string, cb: (arg?: unknown) => void) {
+        if (event === 'message') {
+          queueMicrotask(() => cb({ type: 'ready', startedAtMs: 1_000_000 }))
+        }
+        return this
+      },
+      once() {
+        return this
+      },
+      off() {
+        return this
+      },
+      disconnect: vi.fn(),
+      unref: vi.fn()
+    }))
+
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    try {
+      await launcher('/fake/socket', '/fake/token')
+
+      expect(forkMock).toHaveBeenCalled()
+      expect(warnSpy).not.toHaveBeenCalledWith(
+        expect.stringContaining('Replacing daemon that failed the health check')
+      )
+    } finally {
+      warnSpy.mockRestore()
+    }
+  })
+
   // Why: net.connect stub whose 'connect' fires, so probeSocket() reports the pipe alive on every grace re-check.
   function stubAliveSocketConnect() {
     const handlers: Record<string, (() => void)[]> = { connect: [], error: [] }
@@ -2267,6 +2577,7 @@ describe('daemon-init: runRestartDaemon (7-step sequence)', () => {
 
     // Count only the launcher's own session-count probes.
     daemonClientMock.mockClear()
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {})
 
     try {
       await launcher('/fake/socket', '/fake/token')
@@ -2279,7 +2590,16 @@ describe('daemon-init: runRestartDaemon (7-step sequence)', () => {
       expect(forkMock).toHaveBeenCalled()
       // The launcher probes the full grace budget: 1 initial probe + WEDGED_DAEMON_GRACE_RETRIES retries.
       expect(daemonClientMock).toHaveBeenCalledTimes(3 + WEDGED_DAEMON_GRACE_RETRIES)
+      // Why: this replace path used to kill the daemon with no log, so a post-hoc
+      // reader could not tell it apart from an adoption; the verdict must be recorded.
+      expect(warnSpy).toHaveBeenCalledWith(
+        expect.stringContaining('Replacing daemon that failed the health check')
+      )
+      expect(warnSpy).toHaveBeenCalledWith(
+        expect.stringContaining(`graceRetries=${WEDGED_DAEMON_GRACE_RETRIES}`)
+      )
     } finally {
+      warnSpy.mockRestore()
       // Restore the answering default: clearAllMocks clears calls not impls, so the throwing impl would leak into later tests.
       daemonClientMock.mockImplementation(answeringDefault)
     }
@@ -2625,6 +2945,9 @@ describe('daemon-init: runRestartDaemon (7-step sequence)', () => {
       ]),
       expect.objectContaining({ detached: true })
     )
+    // STA-2376: stale-bundle replacement, emitted exactly once.
+    expect(trackDaemonReplacedMock).toHaveBeenCalledTimes(1)
+    expect(trackDaemonReplacedMock).toHaveBeenCalledWith('stale_bundle', 0)
   })
 
   it('preserves a packaged daemon that predates the current app bundle when it owns live sessions', async () => {

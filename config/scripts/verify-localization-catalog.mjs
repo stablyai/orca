@@ -385,15 +385,79 @@ function verifyLocaleParity(enCatalog, localeName, localeCatalog) {
 }
 
 function parseArgs(argv) {
-  return {
-    fix: argv.includes('--fix')
+  const pluginCatalogs = []
+  for (let index = 0; index < argv.length; index += 1) {
+    const argument = argv[index]
+    if (argument === '--plugin-catalog') {
+      const catalogPath = argv[index + 1]
+      if (!catalogPath || catalogPath.startsWith('--')) {
+        throw new Error('--plugin-catalog requires a JSON catalog path')
+      }
+      pluginCatalogs.push(catalogPath)
+      index += 1
+    } else if (argument.startsWith('--plugin-catalog=')) {
+      pluginCatalogs.push(argument.slice('--plugin-catalog='.length))
+    }
   }
+  return {
+    fix: argv.includes('--fix'),
+    pluginCatalogs
+  }
+}
+
+async function reportPluginCatalog(root, catalog, pluginCatalogPath) {
+  const resolvedPath = path.resolve(root, pluginCatalogPath)
+  let pluginCatalog
+  try {
+    pluginCatalog = JSON.parse(await fs.readFile(resolvedPath, 'utf8'))
+  } catch (error) {
+    console.error(
+      `Could not read plugin catalog ${normalizePath(root, resolvedPath)}: ${error instanceof Error ? error.message : String(error)}`
+    )
+    return 1
+  }
+  const { enEntries, localeEntries, missingInLocale, extraInLocale, interpolationMismatches } =
+    collectLocaleParityIssues(catalog, pluginCatalog)
+  const translated = enEntries.size - missingInLocale.length - interpolationMismatches.length
+  const coverage = enEntries.size === 0 ? 100 : (translated / enEntries.size) * 100
+  console.log(
+    `Plugin catalog ${normalizePath(root, resolvedPath)}: ${translated}/${enEntries.size} core keys (${coverage.toFixed(1)}% coverage), ${localeEntries.size} catalog entries.`
+  )
+  if (missingInLocale.length > 0) {
+    console.log(formatMissingKeys('missing', missingInLocale.slice(0, 20)))
+    if (missingInLocale.length > 20) {
+      console.log(`...and ${missingInLocale.length - 20} more missing keys`)
+    }
+  }
+  if (extraInLocale.length > 0) {
+    console.log(formatMissingKeys('extra', extraInLocale.slice(0, 20)))
+  }
+  if (interpolationMismatches.length > 0) {
+    console.log(formatMissingKeys('interpolation mismatch', interpolationMismatches.slice(0, 20)))
+  }
+  // Why: absent plugin translations safely fall back to English, but a present
+  // value with different variables can render broken or misleading UI.
+  return interpolationMismatches.length > 0 ? 1 : 0
 }
 
 export async function main(root = process.cwd(), options = parseArgs(process.argv.slice(2))) {
   const localesDir = path.join(root, LOCALES_RELATIVE_DIR)
   const catalogPath = path.join(localesDir, 'en.json')
   const catalog = JSON.parse(await fs.readFile(catalogPath, 'utf8'))
+  const pluginCatalogs = options.pluginCatalogs ?? []
+  if (pluginCatalogs.length > 0) {
+    if (options.fix) {
+      console.error('--fix cannot be combined with --plugin-catalog')
+      return 1
+    }
+    for (const pluginCatalogPath of pluginCatalogs) {
+      const result = await reportPluginCatalog(root, catalog, pluginCatalogPath)
+      if (result !== 0) {
+        return result
+      }
+    }
+    return 0
+  }
   let catalogKeys = new Set(flattenCatalogKeys(catalog))
   const sourceRoots = SOURCE_RELATIVE_ROOTS.map((sourceRoot) => path.join(root, sourceRoot))
   const references = []

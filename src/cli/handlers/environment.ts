@@ -1,8 +1,7 @@
 import type { CommandHandler } from '../dispatch'
 import { formatEnvironment, formatEnvironmentList, printResult } from '../format'
-import { getDefaultUserDataPath } from '../runtime-client'
+import { getDefaultUserDataPath, RuntimeClientError } from '../runtime-client'
 import type { RuntimeRpcSuccess } from '../runtime-client'
-import { RuntimeClientError } from '../runtime-client'
 import { redactRuntimeEnvironment } from '../../shared/runtime-environments'
 import {
   addEnvironmentFromPairingCode,

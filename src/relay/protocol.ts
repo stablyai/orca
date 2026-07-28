@@ -286,7 +286,7 @@ export function parseJsonRpcMessage(payload: Buffer): JsonRpcMessage {
   const text = payload.toString('utf-8')
   const msg = JSON.parse(text) as JsonRpcMessage
   if (msg.jsonrpc !== '2.0') {
-    throw new Error(`Invalid JSON-RPC version: ${(msg as Record<string, unknown>).jsonrpc}`)
+    throw new Error(`Invalid JSON-RPC version: ${String((msg as Record<string, unknown>).jsonrpc)}`)
   }
   return msg
 }

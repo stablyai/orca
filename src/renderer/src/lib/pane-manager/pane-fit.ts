@@ -50,7 +50,27 @@ function getProposedDimensions(pane: ManagedPane): { cols: number; rows: number 
   }
 }
 
-function canMeasurePaneForFit(pane: ManagedPane): boolean {
+// Why: measure the element FitAddon fits (the xterm host), not the outer .pane —
+// a title/banner can shrink the inner fittable area while the outer stays put.
+// Round to whole pixels so sub-pixel jitter never reads as a resize.
+export function readFitClientSize(pane: ManagedPane): { width: number; height: number } | null {
+  const element = (pane as ManagedPaneInternal).xtermContainer ?? pane.container
+  const measure = element?.getBoundingClientRect
+  if (typeof measure !== 'function') {
+    return null
+  }
+  const rect = measure.call(element)
+  return { width: Math.round(rect.width), height: Math.round(rect.height) }
+}
+
+function recordPaneFitClientSize(pane: ManagedPane): void {
+  const size = readFitClientSize(pane)
+  if (size && size.width > 0 && size.height > 0) {
+    ;(pane as ManagedPaneInternal).lastFitClientSize = size
+  }
+}
+
+export function canMeasurePaneForFit(pane: ManagedPane): boolean {
   const measure = pane.container?.getBoundingClientRect
   if (typeof measure === 'function') {
     const rect = measure.call(pane.container)
@@ -172,7 +192,7 @@ function settlePendingSafeFitContinuation(
   pending.resolve(completed)
 }
 
-function flushPendingSafeFitContinuations(pane: ManagedPane): void {
+export function flushPendingSafeFitContinuations(pane: ManagedPane): void {
   const operations = pendingSafeFitContinuations.get(pane)
   if (!operations) {
     return
@@ -194,6 +214,8 @@ function flushPendingSafeFitContinuations(pane: ManagedPane): void {
 export function safeFit(pane: ManagedPane): boolean {
   const completed = performSafeFit(pane)
   if (completed) {
+    // Why: baseline for the reveal fit to tell a real resize from a metric wobble.
+    recordPaneFitClientSize(pane)
     // Why: replay transactions may be waiting for renderer dimensions; any
     // successful ordinary fit is the event that makes their PTY grid authoritative.
     flushPendingSafeFitContinuations(pane)

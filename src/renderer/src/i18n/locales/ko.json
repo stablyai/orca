@@ -132,7 +132,8 @@
       "fe21e8f6f5": "돌아가기({{value0}})",
       "064bd07810": "돌아가기",
       "ce37cf5279": "사이드바 표시/숨기기({{value0}})",
-      "e4b9e7dff7": "사이드바 표시/숨기기"
+      "e4b9e7dff7": "사이드바 표시/숨기기",
+      "pluginCommandFailed": "Could not run the plugin command."
     },
     "web": {
       "WebConnect": {
@@ -612,6 +613,27 @@
             "triageFollowupsPrompt": "Use {{value0}} to triage the linked Linear issue — set priority and estimate — and create a parented follow-up ticket for the deferred cleanup."
           }
         }
+      },
+      "codex": {
+        "session": {
+          "restart": {
+            "4bd4a3a9c7": "System default",
+            "9f0b1c2d3e": "Codex account"
+          }
+        }
+      },
+      "browser": {
+        "cookie": {
+          "import": {
+            "toast": {
+              "restartFallbackUnavailableNone": "None of the {{value0}} cookies could be loaded, and the restart fallback was unavailable. The previous cookies for this profile were replaced. Try the import again.",
+              "restartFallbackUnavailablePartial": "Imported {{value0}} of {{value1}} cookies. The rest could not be loaded, and the restart fallback was unavailable. Try the import again."
+            }
+          }
+        }
+      },
+      "pluginCommandKeybindings": {
+        "group": "Plugins"
       }
     },
     "hooks": {
@@ -736,7 +758,9 @@
         "devSearchKeywordNotification": "notification",
         "projectHostsSummary": "호스트 {{value0}}개",
         "linearTitle": "Linear",
-        "linearDescription": "Give agents the skill to read and update your linked Linear tickets."
+        "linearDescription": "Give agents the skill to read and update your linked Linear tickets.",
+        "pluginsTitle": "Plugins",
+        "pluginsDescription": "Install and manage experimental Orca plugins."
       },
       "useAppMenuPaste": {
         "pasteTooLarge": "붙여넣기 내용이 너무 큽니다."
@@ -1871,7 +1895,12 @@
         "c9ff9b9ec2": "Check official releases",
         "a05992a26b": "The signature check couldn't run — usually because antivirus software blocked it. Retry the download, or get the installer from our official releases.",
         "5194358929": "Hide details",
-        "8bc9e17d8f": "Show details"
+        "8bc9e17d8f": "Show details",
+        "8cf17b10af": "Local Build Error",
+        "a4650b0dc4": "Could Not Use Local Build",
+        "b1e390250d": "Could not complete the local build switch.",
+        "d29740d175": "The selected build could not be used.",
+        "37d45c9ec1": "Choose Another Build"
       },
       "WorktreeJumpPalette": {
         "ac037cfac2": "이동",
@@ -1913,7 +1942,8 @@
         "workspaceTabMissing": "탭이 더 이상 존재하지 않습니다",
         "projectsGroupsHeader": "프로젝트 및 그룹",
         "projectBadge": "프로젝트",
-        "repoGroupBadge": "리포지토리 그룹"
+        "repoGroupBadge": "리포지토리 그룹",
+        "pluginCommandFailed": "Could not run the plugin command."
       },
       "github": {
         "pr": {
@@ -2646,8 +2676,17 @@
               "blocked": {
                 "toast": {
                   "97c98f1afe": "설정 열기",
-                  "7cf51f74fd": "SSH, tmux, Neovim, fzf 또는 Grok에서 복사하려면 Terminal 설정에서 TUI 클립보드 쓰기를 활성화하세요.",
+                  "7cf51f74fd": "SSH, Zellij, tmux, Neovim, fzf 또는 Grok에서 복사하려면 Terminal 설정에서 TUI 클립보드 쓰기를 활성화하세요.",
                   "89eaa3e80b": "Terminal 클립보드 쓰기가 차단되었습니다."
+                }
+              },
+              "default": {
+                "on": {
+                  "notice": {
+                    "title": "TUI 클립보드 쓰기가 이제 기본으로 켜져 있습니다",
+                    "description": "Zellij, tmux, Neovim 등 터미널 프로그램이 클립보드에 복사할 수 있습니다. Terminal 설정에서 끌 수 있습니다.",
+                    "action": "설정 열기"
+                  }
                 }
               }
             }
@@ -2703,6 +2742,13 @@
                         "copied": "터미널 ID를 복사했습니다",
                         "copy": {
                           "failed": "터미널 ID를 복사할 수 없습니다"
+                        }
+                      }
+                    },
+                    "pane": {
+                      "id": {
+                        "copy": {
+                          "failed": "Unable to copy pane ID"
                         }
                       }
                     }
@@ -2904,7 +2950,8 @@
                   "5a9c83c04b": "모든 파일, URL, agent를 엽니다...",
                   "90eb94dc48": "http:// 또는 https:// URL을 입력하세요.",
                   "5553b283ce": "URL 또는 파일 경로를 입력하세요.",
-                  "queryTooLarge": "검색 텍스트가 너무 큽니다."
+                  "queryTooLarge": "검색 텍스트가 너무 큽니다.",
+                  "absolutePathRemoteBlocked": "절대 경로에는 로컬 워크스페이스가 필요합니다."
                 }
               },
               "menu": {
@@ -3326,6 +3373,30 @@
             "updatedTooltip": "Remote Orca Server updates completed",
             "failedOne": "1 server update failed",
             "updatedOne": "1 server updated"
+          },
+          "resource": {
+            "memory": {
+              "metric": {
+                "workingSetDescription": "Summed working set (WS). Shared pages can appear in more than one process.",
+                "rssDescription": "Summed resident set size (RSS). Shared or aliased pages can appear in more than one process."
+              }
+            }
+          },
+          "SkillUpdateStatusSegment": {
+            "runningLabel": "Updating skills",
+            "runningOne": "Updating {{value0}}…",
+            "runningMany": "Updating {{value0}} skills…",
+            "runningAria": "Skills updating. Click to open details.",
+            "successLabel": "Skills updated",
+            "successOne": "Updated {{value0}}",
+            "successMany": "Updated {{value0}} skills",
+            "successAria": "Skills updated. Click to open details.",
+            "errorLabel": "Update failed",
+            "errorTooltip": "Skill update failed — click to see details",
+            "errorAria": "Skill update failed. Click to open details.",
+            "stoppingLabel": "Stopping update",
+            "stoppingTooltip": "Stopping the skill update…",
+            "stoppingAria": "Stopping the skill update. Click to open details."
           }
         }
       },
@@ -3656,7 +3727,8 @@
           "SourceControlActionVariableChips": {
             "1b77798d5f": "변수",
             "6b921a0ac2": "예",
-            "4bf6d88039": "(비어 있음)"
+            "4bf6d88039": "(비어 있음)",
+            "7377483644": "이 워크스페이스"
           }
         }
       },
@@ -3724,7 +3796,8 @@
           "skippedReasonInRepo": "This is a project skill, not a global one — Orca only updates your global skills, so it left this out of the update.",
           "skippedReasonPluginCache": "A plugin manages this skill, so Orca left it out of the update — update the plugin instead.",
           "skippedReasonExternalLink": "This copy is a shortcut pointing outside Orca’s skill folders, so Orca left it out of the update.",
-          "skippedReasonBrokenLink": "This copy is a shortcut to something that no longer exists, so Orca left it out — you can safely delete it."
+          "skippedReasonBrokenLink": "This copy is a shortcut to something that no longer exists, so Orca left it out — you can safely delete it.",
+          "skippedReasonDuplicate": "This is a separate copy, so the update won’t reach it — the command only refreshes the main copy. Remove this copy, then reinstall the skill so this location follows the main one."
         },
         "SkillFreshnessUpdateDialog": {
           "title": "스킬 업데이트",
@@ -3734,18 +3807,52 @@
           "updateMany": "스킬 {{value0}}개를 안전하게 업데이트할 수 있습니다",
           "success": "설치된 Orca 스킬이 모두 최신 상태입니다.",
           "attention": "일부 설치된 Orca 스킬은 자동으로 업데이트할 수 없습니다.",
-          "attentionDescription": "각 항목을 업데이트할 수 없는 이유는 업데이트 세부 정보를 열어 확인하세요.",
-          "details": "업데이트 세부 정보",
-          "terminalTitle": "Orca 스킬 업데이트",
-          "terminalDescription": "미리 입력된 명령을 검토한 후 Enter 키를 눌러 실행하세요.",
-          "terminalAria": "Orca 스킬 업데이트 터미널",
           "checkNow": "지금 확인",
-          "close": "닫기"
+          "close": "닫기",
+          "blockedOne": "1 skill can't be updated automatically.",
+          "blockedMany": "{{value0}} skills can't be updated automatically.",
+          "runningOne": "Updating 1 skill…",
+          "runningMany": "Updating {{value0}} skills…",
+          "runningDescription": "You can close this window — it keeps running in the background.",
+          "progressAria": "Updating skills",
+          "updatedOne": "Updated 1 skill",
+          "updatedMany": "Updated {{value0}} skills",
+          "updatedPartial": "Updated {{value0}} of {{value1}} skills",
+          "errorTitle": "The update didn't finish",
+          "retry": "Retry",
+          "copyCommand": "Copy command",
+          "copied": "Copied",
+          "showLog": "Show log",
+          "updating": "Updating…",
+          "updateActionOne": "Update 1 skill",
+          "updateActionMany": "Update {{value0}} skills",
+          "done": "Done",
+          "stop": "Stop",
+          "stopping": "Stopping…",
+          "stoppingHeadline": "Stopping the update…",
+          "scanIncomplete": "Orca가 플러그인으로 관리되는 스킬 확인을 완료하지 못했습니다.",
+          "scanDepthLimit": "이 폴더를 확인하기 전에 플러그인 검사 깊이 제한에 도달했습니다.",
+          "scanEntryLimit": "이 캐시의 나머지 항목을 확인하기 전에 플러그인 검사 항목 수 제한에 도달했습니다.",
+          "scanCandidateLimit": "안전하게 검사할 수 있는 수보다 많은 동명 스킬 폴더가 발견되었습니다.",
+          "scanManifestLimit": "안전한 제한을 초과한 플러그인 매니페스트를 건너뛰었습니다.",
+          "scanOutsideRoot": "플러그인 캐시 외부를 가리키는 플러그인 경로를 건너뛰었습니다.",
+          "scanIoErrorWithCode": "이 플러그인 경로를 읽지 못했습니다({{value0}}).",
+          "scanIoError": "이 플러그인 경로를 읽지 못했습니다.",
+          "scanIssueLimit": "건너뛴 플러그인 폴더가 너무 많아 개별적으로 표시할 수 없습니다."
         },
         "SkillFreshnessStatusPill": {
           "updateAvailable": "업데이트 가능",
           "upToDate": "최신 상태",
-          "installed": "설치됨"
+          "installed": "설치됨",
+          "details": "Details",
+          "needsAttention": "Needs attention"
+        },
+        "SkillUpdateResultRows": {
+          "stillOutdated": "Still out of date after the update ran."
+        },
+        "SkillUpdateRow": {
+          "oneLocation": "1 location",
+          "manyLocations": "{{value0}} locations"
         }
       },
       "sidebar": {
@@ -4053,7 +4160,9 @@
           "75405270ed": "필터 편집({{value0}} 활성)",
           "489d1c8c9f": "프로젝트 검색...",
           "ee240a39eb": "필터 편집",
-          "automationCreated": "자동화로 생성된 워크스페이스 숨기기"
+          "automationCreated": "자동화로 생성된 워크스페이스 숨기기",
+          "cliCreated": "Hide CLI-created",
+          "detachedHead": "Hide detached HEAD"
         },
         "SidebarHeader": {
           "92154beb7e": "새로운 워크스페이스",
@@ -4116,7 +4225,9 @@
           "c3fa13dc2e": "기본 브랜치 숨기기",
           "ed1611b65b": "슬립 중인 항목 숨기기",
           "82594419ba": "필터",
-          "automationCreated": "자동화로 생성된 워크스페이스 숨기기"
+          "automationCreated": "자동화로 생성된 워크스페이스 숨기기",
+          "cliCreated": "Hide CLI-created",
+          "detachedHead": "Hide detached HEAD"
         },
         "SidebarWorkspaceOptionsMenu": {
           "95c9754653": "Agent 활동 레이아웃",
@@ -4171,7 +4282,8 @@
           "65a9820bd1": "Agent 상태",
           "219ebf1961": "브랜치 이름",
           "automation": "자동화",
-          "folderPathIdentity": "브랜치 / 폴더 경로"
+          "folderPathIdentity": "브랜치 / 폴더 경로",
+          "cli": "Orca CLI"
         },
         "SshDisconnectedDialog": {
           "ca4a7892af": "연결 중...",
@@ -4292,7 +4404,12 @@
           "copyLinkSuccess": "{{value0}} 복사됨",
           "copyLinkFailure": "링크 복사 실패",
           "issueLinkLabel": "이슈 링크",
-          "reviewLinkLabel": "{{value0}} 링크"
+          "reviewLinkLabel": "{{value0}} 링크",
+          "cliHeader": "Orca CLI",
+          "cliCreatedFromAgent": "Created by an agent via `orca worktree create`",
+          "cliCreatedFromShell": "Created via `orca worktree create`",
+          "cliStartupAgent": "Started with {{value0}}",
+          "cliCreated": "Created by Orca CLI"
         },
         "WorktreeCardMetadataStatusBadges": {
           "fe188062a1": "상태: 열림",
@@ -4857,6 +4974,15 @@
           "cancel": "취소",
           "forget": "Orca에서 제거",
           "reconnectAndDelete": "재연결 후 삭제"
+        },
+        "MarkdownImageLightbox": {
+          "image": "Image",
+          "expand": "Expand image",
+          "close": "Close"
+        },
+        "WorktreeDeveloperMenu": {
+          "developer": "Developer",
+          "parkTerminal": "Park terminal"
         }
       },
       "shared": {
@@ -5024,11 +5150,17 @@
           "remoteServerFallback": "원격 서버",
           "loadAccountsFailed": "프로바이더 계정을 불러오지 못했습니다.",
           "remoteScopeAccounts": "{{value0}}에서 관리하는 계정을 표시하고 있습니다. 계정 추가나 재인증은 해당 서버에서 진행하세요.",
+          "accountScopePrefix": "계정 범위",
+          "accountScopeRemoteServerUnnamed": "원격 서버",
+          "remoteScopeLocalAccountsKept": "이 데스크탑에서 관리되는 계정은 그대로 유지됩니다. 기본 런타임을 로컬 데스크탑으로 다시 전환하면 확인할 수 있습니다.",
           "remoteScopeAuthContext": "각 계정은 {{value0}}에 자체 로그인 컨텍스트를 유지합니다.",
           "remoteEmptyClaudeAccounts": "{{value0}}에 관리되는 Claude 계정이 없습니다. 해당 서버의 시스템 기본 Claude 로그인을 사용하며, 계정 추가는 그 서버에서 진행하세요.",
           "remoteEmptyCodexAccounts": "{{value0}}에 관리되는 Codex 계정이 없습니다. 해당 서버의 시스템 기본 Codex 로그인을 사용하며, 계정 추가는 그 서버에서 진행하세요.",
           "codexSystemDefaultCustomProvider": "사용자 지정 제공업체 — 사용량을 추적하지 않습니다.",
-          "codexSystemDefaultNeedsSignIn": "{{value0}}에 대한 Codex 로그인을 찾을 수 없습니다."
+          "codexSystemDefaultNeedsSignIn": "{{value0}}에 대한 Codex 로그인을 찾을 수 없습니다.",
+          "codexConfigSyncMissingSource": "Codex is still using the settings it last synced because {{value0}} is missing. Restore that file to resume syncing.",
+          "codexConfigSyncBlankSource": "Codex is still using the settings it last synced because {{value0}} is empty. That is expected while a synced folder finishes downloading.",
+          "codexConfigSyncUnreadableSource": "Codex is still using the settings it last synced because {{value0}} could not be read. Check that file's permissions."
         },
         "AdvancedPane": {
           "40b29e0bf3": "다시 시작",
@@ -5468,7 +5600,7 @@
           "dfbc12c8c8": "USB 장치와 통신하는 하드웨어 디버깅 및 장치 도구입니다.",
           "bf51e4a542": "USB 장치",
           "f903bf20b5": "네트워크의 개발 서버를 검색하고 액세스합니다.",
-          "e7bb06007c": "로컬 네트워크",
+          "e7bb06007c": "LAN",
           "4a73f5217a": "다른 로컬 앱을 제어하는 ​​스크립트를 위한 Apple 이벤트.",
           "e119f0d66b": "자동화",
           "7ca17b62c8": "프로젝트, 워크트리 또는 심볼릭 링크된 파일이 macOS 보호 폴더에 닿을 때 권장됩니다.",
@@ -5524,9 +5656,14 @@
           },
           "agentDashboard": {
             "title": "Agent Dashboard",
-            "description": "Pop-out Kanban board for monitoring agents across worktrees.",
-            "copy": "Adds an Agent Dashboard entry to the left sidebar. Open it to monitor attention, working, and idle agents in a separate window and jump into their live terminals.",
-            "toggleLabel": "Toggle Agent Dashboard"
+            "description": "Kanban board for monitoring agents across worktrees, in-window or as a pop-out.",
+            "copy": "Adds an Agent Dashboard entry to the left sidebar. Open it to monitor attention, working, and idle agents and jump into their live terminals.",
+            "toggleLabel": "Toggle Agent Dashboard",
+            "modeLabel": "Open as",
+            "modeCopy": "Show the dashboard as an in-window board beside the sidebar or a separate pop-out window.",
+            "modeAriaLabel": "Agent Dashboard open mode",
+            "modeInWindow": "In-window",
+            "modePopout": "Pop-out"
           }
         },
         "FloatingWorkspacePane": {
@@ -5680,6 +5817,11 @@
           "d2f33670a9": "Ghostty에서 가져오기",
           "273e7e81fe": "구성",
           "1f744a72f4": "구성"
+        },
+        "BranchPrefixFeedback": {
+          "6c40c0908f": "접두사에는 공백이나 ~ ^ : ? * [ \\ 같은 특수 문자를 사용할 수 없습니다",
+          "64d70b156a": "브랜치 이름은 {{example}}(으)로 지정됩니다",
+          "808f9a726e": "접두사가 적용되지 않습니다"
         },
         "GitPane": {
           "d2eede4c54": "commits, PR 및 이슈에 Orca 속성을 추가합니다.",
@@ -5939,7 +6081,7 @@
           "668016be7a": "컴퓨터와 휴대폰에서.",
           "1dc87a7fbc": "Tailscale",
           "51d29927eb": "설치",
-          "9fc5d203ff": "Orca Mobile은 이 컴퓨터에 직접 연결됩니다. 동일한 로컬 네트워크가 아닌 곳에서 사용하려면 컴퓨터와 휴대폰을 동일한 개인 오버레이 네트워크에 놓은 다음 해당 네트워크 주소를 선택하여 QR 코드를 생성하세요.",
+          "9fc5d203ff": "Orca Mobile은 이 컴퓨터에 직접 연결됩니다. 동일한 LAN이 아닌 곳에서 사용하려면 컴퓨터와 휴대폰을 동일한 개인 오버레이 네트워크에 놓은 다음 해당 네트워크 주소를 선택하여 QR 코드를 생성하세요.",
           "39fad211d9": "tailnet을 사용하여 Wi-Fi 외부에서 연결",
           "a9db5d771d": "네트워크 인터페이스 새로 고침",
           "b2c384cfd6": "인터페이스를 찾을 수 없습니다.",
@@ -5970,7 +6112,7 @@
           "6436e56546": "모바일 페어링을 위한 QR 코드",
           "1b1b70279a": "아직 페어링된 기기가 없습니다.",
           "1592afcc7a": "아직 페어링된 기기가 없습니다. Orca 모바일 앱으로 QR 코드를 스캔하세요.",
-          "relayDegradedNotice": "Relay couldn’t be reached — this code only works on your local network. Regenerate to try again."
+          "relayDegradedNotice": "Relay에 연결할 수 없습니다 — 이 코드는 LAN 또는 Tailscale에서만 작동합니다. 다시 생성해 보세요."
         },
         "MobileSettingsPane": {
           "9a3c280e49": "GitHub 릴리스",
@@ -6284,6 +6426,7 @@
           "removeSetup": "제거",
           "hostSetupBlockedVersion": "Orca 서버 버전이 호환되지 않습니다.",
           "hostSetupMissingCapability": "프로젝트를 설정하려면 이 호스트의 Orca를 업데이트하세요.",
+          "hostSetupConnectionRequired": "프로젝트를 가져오거나 클론하기 전에 이 호스트에 연결하세요.",
           "setupProjectOnHost": "다른 호스트에 설정",
           "setupProjectOnHostHelp": "호스트를 선택한 뒤 기존 체크아웃을 가져오거나, repos를 클론하거나, 나중에 준비될 설정을 추적합니다.",
           "setupExistingFolder": "기존 폴더 가져오기",
@@ -6591,8 +6734,8 @@
           "4e11f87ca6": "표시 중",
           "fbb428db98": "선택됨:",
           "fac59213fc": "내장 테마 검색",
-          "cb330ef7f8": "{{value0}} 중",
-          "c822571b2e": "\"{{value0}}\"과(와) 일치",
+          "cb330ef7f8": "/{{value0}}",
+          "c822571b2e": " \"{{value0}}\"과(와) 일치",
           "3119c012a5": "문자열",
           "builtin_themes": "기본 제공",
           "imported_from": "{{value0}}에서 가져옴",
@@ -6639,7 +6782,8 @@
           "25b0004fbf": "Terminal 활성",
           "781cb74d22": "terminal 패널에서 실행됩니다.",
           "cb02e00202": "터미널",
-          "d8c988dab4": "~/.orca/keybindings.json"
+          "d8c988dab4": "~/.orca/keybindings.json",
+          "shortcutUnavailable": "Shortcut is no longer available."
         },
         "SourceControlAiActionRecipeDefaults": {
           "2576299196": "인수",
@@ -6909,9 +7053,9 @@
           "d23b43c5be": "설정 스크립트 위치",
           "34a0dfa06e": "새 워크스페이스를 만들 때 repos 설정 스크립트를 실행할 위치입니다.",
           "21f8da2078": "워크스페이스 설정 스크립트",
-          "6e6480a7df": "terminal의 프로그램(Grok, tmux, Neovim, fzf, SSH)이 시스템 클립보드에 복사할 수 있게 합니다.",
+          "6e6480a7df": "terminal의 프로그램(Zellij, tmux, Neovim, fzf, Grok, SSH)이 시스템 클립보드에 복사할 수 있게 합니다.",
           "3338dcf8c1": "TUI 클립보드 쓰기 허용(OSC 52)",
-          "69c64a479c": "Grok, tmux, Neovim 및 fzf가 PTY(SSH 포함)를 통해 시스템 클립보드에 복사하도록 합니다.",
+          "69c64a479c": "Zellij, tmux, Neovim, fzf 및 Grok이 PTY(SSH 포함)를 통해 시스템 클립보드에 복사하도록 합니다.",
           "4729c645fc": "terminal 선택 사항을 클립보드에 자동으로 복사합니다.",
           "902f5dee1f": "선택 시 복사",
           "9129b7e805": "terminal 패널에 마우스를 가리키면 클릭하지 않고도 활성화됩니다.",
@@ -7603,14 +7747,15 @@
         "developer": {
           "permissions": {
             "search": {
-              "3363889768": "로컬 네트워크, USB 및 블루투스",
+              "3363889768": "LAN, USB 및 블루투스",
               "6c82846f66": "장치",
               "11653d3f42": "mdns",
               "78a10b826f": "Bonjour",
               "e3fbc48083": "블루투스",
               "c4a4a02ea4": "USB",
               "fa3239cd42": "로컬 네트워크",
-              "acad3d4743": "terminal 세션에서 사용되는 장치 및 로컬 네트워크 도구를 허용합니다.",
+              "87620e6416": "LAN",
+              "acad3d4743": "terminal 세션에서 사용되는 장치 도구와 LAN 액세스를 허용합니다.",
               "3e0131e45d": "icloud",
               "ce07159ff5": "데스크탑",
               "a0c19119fb": "다운로드",
@@ -7714,7 +7859,7 @@
             },
             "agentDashboard": {
               "title": "Agent Dashboard",
-              "description": "Pop-out Kanban board for monitoring agents across worktrees."
+              "description": "Kanban board for monitoring agents across worktrees, in-window or as a pop-out."
             }
           }
         },
@@ -8548,7 +8693,6 @@
             "10f9fb6fea": "설정",
             "2ade3ea490": "구성",
             "fd752b3cac": "가져오기",
-            "82b63d07fe": "ghostty",
             "73e9422f19": "지원되는 Ghostty terminal 설정을 한 번만 가져옵니다.",
             "a979df0083": "Ghostty에서 가져오기",
             "4cec42dbf7": "국제",
@@ -9287,9 +9431,9 @@
           "anywhereTitle": "Orca Relay",
           "anywhereDescription": "휴대폰이 모바일 네트워크 또는 모든 Wi‑Fi에서 연결 가능합니다. 로그인이 필요합니다.",
           "signInRequired": "Orca Mobile Relay를 사용하려면 로그인하세요.",
-          "relayUnavailable": "이 빌드에서는 Orca Relay를 사용할 수 없습니다. 로컬 네트워크를 사용하세요.",
+          "relayUnavailable": "이 빌드에서는 Orca Relay를 사용할 수 없습니다. LAN을 사용하세요.",
           "signInAgain": "다시 로그인",
-          "localTitle": "로컬 네트워크"
+          "localTitle": "LAN"
         },
         "MobilePairingSetupSection": {
           "title": "휴대폰 페어링",
@@ -9386,6 +9530,256 @@
           "serviceManagerHelp": "Update Orca through the service manager that starts this server.",
           "unpackedHelp": "Development builds must be updated from their source checkout.",
           "legacyHelp": "Update this server manually once to enable remote updates."
+        },
+        "PluginConsentDialog": {
+          "workerTrust": "Background worker — runs its own process",
+          "instructionalTrust": "Instructional content — runs later under user or agent authority",
+          "declarativeTrust": "Declarative content — no plugin code",
+          "panelTrust": "Panel or host-integrated content — no worker process",
+          "trustShortWorker": "Worker",
+          "trustShortInstructional": "Instructional",
+          "trustShortPanel": "Panel",
+          "trustShortDeclarative": "Declarative",
+          "reviewTitle": "Review plugin",
+          "title": "Review permissions",
+          "mixedTitle": "Review access and content",
+          "instructionalTitle": "Review plugin content",
+          "subtitle": "{{value0}} v{{value1}} · {{value2}}",
+          "reconsent": "Permissions, the worker trust tier, or instructional content changed since you last reviewed this plugin. Review it again before it can run.",
+          "capabilities": "This plugin can",
+          "warning": "These permissions limit how the plugin uses Orca's API. Its worker still runs as a normal process on your computer with full access to your files, network, and other processes.",
+          "instructionalWarning": "This plugin has no worker process. Its instructional content can still cause actions when you or an agent use it. Review the instructions and commands below before enabling it.",
+          "panelWarning": "These permissions limit how the plugin uses Orca's API. This plugin has no background worker.",
+          "declarativeWarning": "This plugin contributes validated content only. It does not run a background worker or receive access to Orca's API.",
+          "keepDisabled": "Keep Disabled",
+          "enable": "Enable plugin",
+          "capability": {
+            "workspaceRead": "Read the name, branch, and terminal list of your focused worktree",
+            "terminalSend": "Type text into a terminal you can see (always a specific terminal)",
+            "notificationsShow": "Show desktop notifications labeled with the plugin name",
+            "storage": "Store data in the plugin's own storage folder",
+            "secrets": "Store and read secrets in the plugin's own encrypted vault",
+            "eventsSubscribe": "Get notified when worktrees are created or removed and when agent status changes",
+            "settingsOwn": "Read and change the plugin's own settings"
+          },
+          "decisionFailed": "Could not save the permission decision. Try again."
+        },
+        "PluginConsentProvenance": {
+          "official": "Official",
+          "bundled": "Bundled with Orca",
+          "local": "Local folder",
+          "community": "Community",
+          "source": "Source",
+          "sourceLabel": "Source",
+          "commit": "Pinned commit",
+          "localCommit": "Local folder — no commit",
+          "indexCommit": "Index commit"
+        },
+        "PluginDevelopmentSection": {
+          "saveFailed": "Could not save development plugin paths.",
+          "pathRequired": "Enter a plugin folder path.",
+          "title": "Development",
+          "help": "Load plugins directly from folders on this computer while you develop them. Dev plugins still require permission review. Workers run on this desktop host; SSH workspace actions route through Orca, so paths here are desktop paths.",
+          "remove": "Remove",
+          "pathLabel": "Development plugin folder path",
+          "placeholder": "/Users/you/plugins/my-plugin or C:\\Users\\you\\plugins\\my-plugin",
+          "add": "Add path"
+        },
+        "PluginInstallDialog": {
+          "localRequired": "Enter the plugin folder path.",
+          "gitUrlRequired": "Enter a repository URL.",
+          "gitUrlInvalid": "Use an HTTPS or SSH Git URL. Executable Git helper protocols are not allowed.",
+          "gitRefRequired": "Add an explicit #ref (tag or commit) so the install is pinned — for example #v0.1.0.",
+          "title": "Install plugin",
+          "description": "Installing copies the plugin into Orca and shows its permissions for review. No plugin code runs until you enable it.",
+          "source": "Install source",
+          "localTab": "Local folder",
+          "gitTab": "Git URL",
+          "localLabel": "Plugin folder path",
+          "localPlaceholder": "/Users/you/plugins/my-plugin or C:\\Users\\you\\plugins\\my-plugin",
+          "localHelp": "Full path to a folder containing orca-plugin.json on this computer. The path is used exactly as entered.",
+          "gitLabel": "Repository URL with #ref",
+          "gitPlaceholder": "https://git.example/acme/orca-notes#v0.1.0",
+          "gitHelp": "Append an explicit #ref — a tag or commit — so the install is pinned. Works with GitHub, GitLab, and any git host.",
+          "cancel": "Cancel",
+          "installing": "Installing…",
+          "install": "Install",
+          "installFailed": "Plugin installation failed. Check the source and try again."
+        },
+        "PluginKeybindingConsentPreview": {
+          "heading": "Keyboard shortcuts",
+          "worktree": "Runs only while a workspace is active.",
+          "global": "Runs in the app without requiring an active workspace.",
+          "shadows": "Replaces: {{value0}}"
+        },
+        "PluginMarketplaceBrowser": {
+          "loadFailed": "Could not load marketplace plugins.",
+          "refreshFailed": "Could not refresh marketplaces. Cached listings remain available.",
+          "previewFailed": "Could not prepare this plugin for review. Refresh the marketplace and try again.",
+          "installFailed": "Could not install this plugin. The reviewed source may have changed.",
+          "manageSources": "Manage sources",
+          "refreshing": "Refreshing…",
+          "refresh": "Refresh",
+          "noInstalledTitle": "No plugins installed",
+          "noInstalled": "Plugins you install appear here.",
+          "loading": "Loading marketplace plugins…",
+          "tryAgain": "Try again",
+          "noSourcesTitle": "No marketplaces configured",
+          "noSources": "Add an official, community, or private Git marketplace to browse plugins.",
+          "addSource": "Add marketplace",
+          "noResultsTitle": "No matching plugins",
+          "noResults": "No marketplace plugins match this search.",
+          "clearSearch": "Clear search",
+          "emptyTitle": "Nothing listed yet",
+          "empty": "The configured marketplaces do not list any plugins."
+        },
+        "PluginMarketplaceListingRow": {
+          "official": "Official",
+          "installed": "Installed",
+          "noDescription": "No description provided.",
+          "blocked": "Blocked by Orca's safety list: {{value0}}",
+          "blockedAction": "Blocked",
+          "checkUpdate": "Check for update",
+          "install": "Install"
+        },
+        "PluginMarketplacePreviewDialog": {
+          "languagePacksOne": "1 language pack",
+          "languagePacks": "{{value0}} language packs",
+          "commandsOne": "1 command",
+          "commands": "{{value0}} commands",
+          "keybindingsOne": "1 keyboard shortcut",
+          "keybindings": "{{value0}} keyboard shortcuts",
+          "vmRecipesOne": "1 VM recipe",
+          "vmRecipes": "{{value0}} VM recipes",
+          "panelsOne": "1 panel",
+          "panels": "{{value0}} panels",
+          "eventsOne": "1 event subscription",
+          "events": "{{value0}} event subscriptions",
+          "worker": "Background worker",
+          "versionLine": "v{{value0}} · {{value1}}",
+          "includes": "Includes",
+          "noContributions": "Manifest metadata only",
+          "capabilities": "Requested access",
+          "workerWarning": "Capabilities limit how this plugin uses Orca's API. Its worker still runs as a normal process on this computer with full access to your files, network, and other processes.",
+          "blocked": "Orca's safety list blocks this plugin: {{value0}}",
+          "current": "This exact plugin content is already installed.",
+          "close": "Close",
+          "cancel": "Cancel",
+          "update": "Update plugin",
+          "install": "Install plugin"
+        },
+        "PluginMarketplaceSourceDialog": {
+          "addFailed": "Could not add this marketplace. Check the Git URL, ref, and your Git credentials.",
+          "refreshFailed": "Could not refresh this marketplace. Its last valid cached index is still available.",
+          "removeFailed": "Could not remove this marketplace.",
+          "title": "Marketplace sources",
+          "description": "Marketplaces are pinned Git repositories. Orca uses your existing system Git credentials for private repositories.",
+          "urlLabel": "Git URL",
+          "urlDescription": "Use an HTTPS or SSH repository URL containing orca-marketplace.json.",
+          "urlPlaceholder": "https://git.example.com/team/plugins.git",
+          "refLabel": "Git ref",
+          "refDescription": "Choose a branch, tag, or commit. Every fetched index is recorded at an exact commit.",
+          "adding": "Adding…",
+          "add": "Add source",
+          "configured": "Configured sources",
+          "empty": "No marketplace sources configured.",
+          "official": "Official",
+          "owner": "Owner: {{value0}}",
+          "pinnedCommit": "Pinned at {{value0}}",
+          "stale": "Refresh failed. Browsing the last valid cached index.",
+          "refreshLabel": "Refresh {{value0}}",
+          "removeLabel": "Remove {{value0}}",
+          "done": "Done"
+        },
+        "PluginRemoveDialog": {
+          "title": "Remove plugin?",
+          "description": "This removes {{value0}} and its stored plugin data from this computer. You can install it again later.",
+          "cancel": "Cancel",
+          "remove": "Remove plugin"
+        },
+        "PluginRollbackDialog": {
+          "title": "Roll back plugin?",
+          "description": "This deactivates {{value0}} and restores its previous immutable version. If that version requests different access or instructional content, Orca will require another review.",
+          "cancel": "Cancel",
+          "confirm": "Roll back plugin"
+        },
+        "PluginsSettingsSection": {
+          "systemLabel": "Plugin system",
+          "systemDescription": "Discovers installed plugins and lets you enable them individually. Nothing runs until you review and enable it. Workers always run on this computer; SSH workspace actions route through Orca.",
+          "featureOff": "Turn on the plugin system to see and manage installed plugins. Anything already installed stays on disk and stays disabled while the system is off.",
+          "loading": "Loading plugins…",
+          "noInstalledResultsTitle": "No matching plugins",
+          "noInstalledResults": "No installed plugins match this search.",
+          "emptyTitle": "No plugins installed yet",
+          "empty": "Browse the All tab to install plugins from a marketplace.",
+          "loadFailed": "Could not load plugins.",
+          "settingsUpdateFailed": "Could not save plugin settings.",
+          "install": "Install plugin",
+          "title": "Plugins",
+          "experimental": "Experimental",
+          "description": "Install and manage Orca plugins. Plugins run on this computer, even for SSH workspaces.",
+          "logsFailed": "Could not load plugin logs.",
+          "rollbackFailed": "Could not roll back this plugin. A previous immutable version may not be available."
+        },
+        "PluginSettingsRow": {
+          "blocked": "Blocked",
+          "needsReview": "Needs review",
+          "restarting": "Restarting",
+          "invalid": "Invalid",
+          "error": "Error",
+          "disabled": "Disabled",
+          "running": "Running",
+          "enabled": "Enabled",
+          "loadingLogs": "Loading logs…",
+          "noLogs": "No log lines recorded.",
+          "logCount": "Last {{value0}} of up to 200 retained lines",
+          "reviewAndEnable": "Review & enable",
+          "official": "Official",
+          "dev": "Dev",
+          "bundled": "Bundled",
+          "noDescription": "No description provided.",
+          "killListMessage": "Orca's safety list disabled this plugin: {{value0}}",
+          "viewAdvisory": "View advisory",
+          "runtimeError": "The plugin stopped after an activation or worker error.",
+          "restartCount": " · {{value0}} restarts",
+          "moreActions": "More actions for {{value0}}",
+          "hideLogs": "Hide logs",
+          "viewLogs": "View logs",
+          "rollback": "Roll back",
+          "remove": "Remove",
+          "disableLabel": "Disable {{value0}}",
+          "enableLabel": "Enable {{value0}}",
+          "invalidPluginError": "The plugin manifest or installed files are invalid. Fix the plugin, then refresh."
+        },
+        "PluginVmRecipeConsentPreview": {
+          "create": "Create",
+          "suspend": "Suspend",
+          "resume": "Resume",
+          "destroy": "Destroy",
+          "heading": "VM recipe commands",
+          "commandLabel": "{{value0}} · {{value1}} command"
+        },
+        "pluginError": {
+          "installManifestMissing": "No readable orca-plugin.json was found. Choose the plugin's root folder.",
+          "installManifestInvalid": "orca-plugin.json is invalid. Ask the plugin author to fix the manifest.",
+          "incompatible": "This plugin requires a different Orca version.",
+          "installUnsafePath": "The plugin contains an unsafe file path or symlink and was not installed.",
+          "installLimit": "The plugin exceeds Orca's install size or file-count limits.",
+          "installGit": "Orca could not fetch the pinned Git revision. Check the URL, #ref, access, and system Git setup.",
+          "invalidManifestMissing": "The plugin root is missing orca-plugin.json. Add it, then refresh plugins.",
+          "invalidManifest": "orca-plugin.json is invalid. Fix it, then refresh plugins.",
+          "invalidArtifact": "A declared worker or panel file is missing or unsafe. Fix the plugin files, then refresh.",
+          "consentChanged": "The plugin changed while you were reviewing it. Close this dialog and review the updated permissions."
+        },
+        "plugins": {
+          "search": {
+            "title": "Plugins",
+            "description": "Install and manage experimental Orca plugins.",
+            "install": "install plugin",
+            "permissions": "plugin permissions",
+            "logs": "plugin logs",
+            "development": "development plugins"
+          }
         }
       },
       "right": {
@@ -9867,7 +10261,6 @@
             "b715ef615b": "{{value1}}보다 {{value0}} commits 앞서 있음",
             "c1a8f3e204": "{{value0}}보다 1 commit 뒤처짐",
             "d2b9g4f315": "{{value1}}보다 {{value0}} commits 뒤처짐",
-            "e9c2a5d416": "{{value0}}와 동일한 상태",
             "4b4a7de138": "브라우저에서 검토 페이지 열기",
             "createPrIntentCommitBlockedSummary": "커밋이 차단됨: {{value0}} 이슈를 수정한 후 PR 만들기를 다시 시도하세요.",
             "pushRecovery": {
@@ -9885,7 +10278,11 @@
               "834cb3f23d": "AI로 수정",
               "783a808870": "닫기"
             },
-            "97e7124eac": "Source Control을 새로 고칠 수 없습니다. 다시 시도하세요."
+            "97e7124eac": "Source Control을 새로 고칠 수 없습니다. 다시 시도하세요.",
+            "b8c2e1a904": "{{value0}} → {{value1}}",
+            "a4e93c21d7": "현재 브랜치: {{value0}}",
+            "c7d4e2f801": "베이스 ref 변경: {{value0}}",
+            "f3a1b8c204": "upstream"
           },
           "SourceControlAgentActionDialog": {
             "8e856842d1": "선택한 agent를 시작할 수 없습니다.",
@@ -10657,6 +11054,15 @@
                 }
               }
             }
+          },
+          "PluginPanel": {
+            "unavailable": "This plugin panel is no longer available.",
+            "loading": "Loading plugin panel...",
+            "unresponsive": "This plugin panel stopped responding and was suspended.",
+            "loadFailed": "The plugin panel could not be loaded."
+          },
+          "activityBar": {
+            "error": "Error"
           }
         }
       },
@@ -10975,16 +11381,25 @@
             "searchGitLab": "GitLab MR 및 이슈 검색",
             "searchBranches": "브랜치 검색",
             "searchLinear": "Linear 이슈 검색",
-            "workspaceName": "워크스페이스 이름"
+            "workspaceName": "워크스페이스 이름",
+            "emoji": "Emoji"
           },
           "ProjectHostSetupCombobox": {
             "empty": "이 프로젝트에 준비된 호스트가 없습니다.",
             "placeholder": "호스트 선택"
           },
           "ProjectCombobox": {
-            "search": "프로젝트 검색...",
             "empty": "검색과 일치하는 프로젝트가 없습니다.",
-            "addProject": "Add a new project"
+            "addProject": "Add a new project",
+            "label": "Project",
+            "browse": "Browse projects",
+            "listLabel": "Projects",
+            "noProjects": "No projects yet."
+          },
+          "RunTargetCombobox": {
+            "listLabel": "Run targets",
+            "label": "Run on",
+            "browse": "Browse run targets"
           }
         }
       },
@@ -11035,7 +11450,7 @@
             "preview": "미리 보기",
             "stable": "안정 버전"
           },
-          "relayDegradedNotice": "Relay couldn’t be reached — this code only works on your local network."
+          "relayDegradedNotice": "Relay에 연결할 수 없습니다 — 이 코드는 LAN 또는 Tailscale에서만 작동합니다."
         },
         "MobilePage": {
           "e17393c6a3": "휴대폰 미리보기",
@@ -11570,7 +11985,24 @@
             "orchestration": {
               "OrchestrationPage": {
                 "30b509a467": "하위 2개",
-                "862605d066": "2개의 하위 워크스페이스"
+                "862605d066": "2개의 하위 워크스페이스",
+                "coordinatorName": "인증 흐름 재설계",
+                "childPr1Name": "PR 1/2: users.sql 마이그레이션",
+                "childPr2Name": "PR 2/2: withSession 미들웨어"
+              },
+              "types": {
+                "coordinatorInitial": "인증 재작성을 2개의 PR로 분할 중…",
+                "codexInitial": "users 테이블 마이그레이션 작성 중…",
+                "claudeInitial": "withSession 미들웨어 스케치 중…",
+                "codexBeat1": "email_verified 컬럼 추가 중…",
+                "claudeBeat1": "withSession 미들웨어 연결 중…",
+                "coordinatorBeat1": "PR 1/2 준비 완료",
+                "coordinatorBeat2": "PR 2/2 준비 완료"
+              },
+              "steps": {
+                "name": "오케스트레이션",
+                "subtitle": "오케스트레이션",
+                "description": "에이전트가 Orca 워크스페이스를 관리하고 조정하여 더 큰 작업을 수행할 수 있도록 합니다."
               },
               "StatusesPage": {
                 "2f549fc0ba": "src/auth/session.test.ts",
@@ -12622,6 +13054,10 @@
                 "project": "프로젝트"
               }
             }
+          },
+          "pluginQuickActions": {
+            "description": "{{value0}} plugin command",
+            "keyword": "plugin command"
           }
         }
       },
@@ -12900,9 +13336,11 @@
           "d90981f766": "시간",
           "6b914c5fbb": "요일",
           "233b8c94b6": "반복 주기",
-          "b08ccb4d06": "매시간",
-          "8cc026fd73": "주간",
-          "c3e39e17cf": "custom"
+          "55b2ef82a4": "매시간",
+          "f0202f3a89": "매일",
+          "57e83307d0": "평일",
+          "837d902bba": "매주",
+          "ddba78647e": "사용자 지정 cron"
         },
         "AutomationSessionField": {
           "f3c76dce51": "재사용",
@@ -13245,6 +13683,11 @@
             "noPr": "PR 없음",
             "unavailable": "사용 불가"
           }
+        },
+        "pluginPanelBridgeHost": {
+          "actionsUnavailable": "Plugin actions are not available in this client.",
+          "messageTooLarge": "Message exceeds the size limit.",
+          "tooManyRequests": "Too many requests."
         }
       },
       "link": {
@@ -13552,6 +13995,21 @@
           "undo": "실행 취소",
           "widthOption": "{{value0}} px"
         }
+      },
+      "pluginCatalog": {
+        "PluginCatalogLayout": {
+          "title": "Plugins",
+          "filter": "Plugin filter",
+          "all": "All",
+          "installed": "Installed",
+          "searchLabel": "Search plugins",
+          "searchPlaceholder": "Search plugins, categories, or publishers"
+        }
+      },
+      "terminalPane": {
+        "useManualTerminalWorktreeParking": {
+          "cannotPark": "These terminals cannot be parked safely."
+        }
       }
     },
     "i18n": {
@@ -13705,7 +14163,16 @@
       "bar": {
         "SortableTabContextMenu": {
           "switchToTerminalView": "terminal 보기로 전환",
-          "switchToChatView": "채팅 보기로 전환"
+          "switchToChatView": "채팅 보기로 전환",
+          "closeTabsToLeft": "왼쪽으로 탭 닫기"
+        },
+        "BrowserTab": {
+          "closeOthers": "다른 탭 닫기",
+          "closeTabsToLeft": "왼쪽으로 탭 닫기"
+        },
+        "EditorFileTabContextMenu": {
+          "closeOthers": "다른 탭 닫기",
+          "closeTabsToLeft": "왼쪽으로 탭 닫기"
         }
       }
     },
@@ -13777,7 +14244,10 @@
       "closed": "No live terminal — this agent's pane has closed.",
       "focusWorktree": "Focus worktree",
       "close": "Close"
-    }
+    },
+    "close": "Close dashboard",
+    "settings": "Agent Dashboard settings",
+    "settingsTooltip": "Board settings"
   },
   "dashboard": {
     "sidebar": {

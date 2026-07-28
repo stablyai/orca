@@ -106,6 +106,121 @@ describe('setBrowserPageZoomLevel', () => {
     expect(setBrowserPageZoomLevel(webview, 1.26)).toBe(1.5)
     expect(webview.setZoomLevel).toHaveBeenCalledWith(1.5)
   })
+
+  it('restores the configured level when Chromium carries zoom across reloads', () => {
+    const webview = {
+      getZoomLevel: vi.fn(() => 0.5),
+      setZoomLevel: vi.fn()
+    }
+
+    expect(setBrowserPageZoomLevel(webview, 0)).toBe(0)
+    expect(setBrowserPageZoomLevel(webview, 0)).toBe(0)
+    expect(webview.setZoomLevel).toHaveBeenNthCalledWith(1, 0)
+    expect(webview.setZoomLevel).toHaveBeenNthCalledWith(2, 0)
+  })
+})
+
+/**
+ * Models BrowserPagePane's zoom wiring: each pane keeps its own level, dom-ready reasserts
+ * that level, and zooming also writes the shared `browserDefaultZoomLevel` setting.
+ */
+describe('browser pane zoom across reloads', () => {
+  function createPane(sharedSetting: { level: number }) {
+    // Chromium remembers zoom per origin and replays it on reload.
+    const originZoom = new Map<string, number>()
+    let url = 'https://a.example'
+    let live = 0
+    const webview = {
+      getZoomLevel: () => live,
+      setZoomLevel: (level: number) => {
+        live = level
+        originZoom.set(url, level)
+      }
+    }
+    let paneLevel = sharedSetting.level
+    webview.setZoomLevel(paneLevel)
+
+    return {
+      get level() {
+        return live
+      },
+      zoom(direction: 'in' | 'out' | 'reset') {
+        const next = applyBrowserPageZoom(webview, direction)
+        if (next !== null) {
+          paneLevel = next
+          sharedSetting.level = next
+        }
+      },
+      load(nextUrl = url) {
+        url = nextUrl
+        live = originZoom.get(url) ?? 0
+        setBrowserPageZoomLevel(webview, paneLevel)
+      }
+    }
+  }
+
+  it('reasserts the pane level after normal and hard reloads', () => {
+    const setting = { level: 0 }
+    const pane = createPane(setting)
+
+    // Chromium hands back a stale 150% for this origin on reload.
+    pane.load()
+    expect(pane.level).toBe(0)
+    pane.load()
+    expect(pane.level).toBe(0)
+  })
+
+  it('keeps an explicit non-default configured zoom across a reload', () => {
+    const setting = { level: 1.5 }
+    const pane = createPane(setting)
+    expect(pane.level).toBe(1.5)
+
+    pane.load()
+    expect(pane.level).toBe(1.5)
+  })
+
+  it('resets to 100% on reset even after zooming moved the shared setting', () => {
+    const setting = { level: 0 }
+    const pane = createPane(setting)
+
+    pane.zoom('in')
+    pane.zoom('in')
+    expect(pane.level).toBe(1)
+    expect(setting.level).toBe(1)
+
+    // Regression: resetting toward the shared setting would be a fixed point and never move.
+    pane.zoom('reset')
+    expect(pane.level).toBe(0)
+  })
+
+  it('does not adopt another tab zoom when reloading an untouched tab', () => {
+    const setting = { level: 0 }
+    const tabA = createPane(setting)
+    const tabB = createPane(setting)
+
+    tabB.zoom('in')
+    tabB.zoom('in')
+    expect(tabB.level).toBe(1)
+    expect(setting.level).toBe(1)
+    expect(tabA.level).toBe(0)
+
+    // Regression: reasserting the shared setting would silently zoom tab A to tab B's level.
+    tabA.load()
+    expect(tabA.level).toBe(0)
+  })
+
+  it('keeps a zoomed tab at its own level across reload and cross-origin navigation', () => {
+    const setting = { level: 0 }
+    const pane = createPane(setting)
+
+    pane.zoom('in')
+    expect(pane.level).toBe(0.5)
+
+    pane.load()
+    expect(pane.level).toBe(0.5)
+    pane.load('https://b.example')
+    expect(pane.level).toBe(0.5)
+  })
 })
 
 describe('getBrowserPageZoomIndicatorState', () => {

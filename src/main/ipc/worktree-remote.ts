@@ -8,6 +8,7 @@ import { randomUUID } from 'node:crypto'
 import type { Store } from '../persistence'
 import type {
   AutomationWorkspaceProvenance,
+  CliWorkspaceProvenance,
   CreateWorktreeArgs,
   CreateWorktreeResult,
   GitPushTarget,
@@ -27,7 +28,7 @@ import {
   resolveDefaultBaseRefViaExec,
   resolveDefaultBaseRefWithLocalGit
 } from '../git/repo'
-import { resolveLocalGitUsername } from '../git/git-username'
+import { resolveLocalGitUsername, getSshGitUsername } from '../git/git-username'
 import { hasCommitObjectViaGitExec } from '../git/commit-object-ref'
 import { resolveWorktreeCreateBase } from '../worktree-create-base'
 import { resolveWorktreeAddBaseRef } from '../../shared/worktree-base-ref'
@@ -37,8 +38,11 @@ import { validateGitPushTarget } from '../git/push-target-validation'
 import { assertGitPushTargetShape } from '../../shared/git-push-target-validation'
 import { gitExecFileAsync } from '../git/runner'
 import { parseGitHubOwnerRepo } from '../github/gh-utils'
-import type { OrcaRuntimeService } from '../runtime/orca-runtime'
-import type { RemoteFetchResult, RemoteTrackingBase } from '../runtime/orca-runtime'
+import type {
+  OrcaRuntimeService,
+  RemoteFetchResult,
+  RemoteTrackingBase
+} from '../runtime/orca-runtime'
 import { getProjectHostSetupWorktreeMeta } from '../../shared/project-host-setup-projection'
 import {
   buildPosixRunnerScript,
@@ -57,7 +61,6 @@ import { getSshFilesystemProvider } from '../providers/ssh-filesystem-dispatch'
 import type { SshGitProvider } from '../providers/ssh-git-provider'
 import { TUI_AGENT_CONFIG, isTuiAgent } from '../../shared/tui-agent-config'
 import { isWindowsAbsolutePathLike } from '../../shared/cross-platform-path'
-import { getSshGitUsername } from '../git/git-username'
 import { runWorktreeChangeInvalidators } from './worktree-change-invalidators'
 import {
   registerOptionalSshWorktreeCreateRoots,
@@ -66,11 +69,12 @@ import {
 
 type CreateWorktreeArgsWithSystemProvenance = CreateWorktreeArgs & {
   automationProvenance?: AutomationWorkspaceProvenance
+  cliProvenance?: CliWorkspaceProvenance
 }
 import {
   sanitizeWorktreeName,
   sanitizeWorktreeDisplayName,
-  computeBranchName,
+  computeValidatedBranchName,
   computeWorktreePath,
   computeRemoteWorktreePath,
   computeWorkspaceRoot,
@@ -79,9 +83,10 @@ import {
   getWorktreePathSettings,
   hasRepoWorktreeBasePath,
   shouldSetDisplayName,
-  mergeWorktree,
-  areWorktreePathsEqual
+  mergeWorktree
 } from './worktree-logic'
+import { findCreatedWorktree } from './created-worktree-reconciliation'
+import type { BranchPrefixSettings } from '../../shared/branch-prefix'
 import { getRepoIdFromWorktreeId } from '../../shared/worktree-id'
 import { parseWorkspaceKey, worktreeWorkspaceKey } from '../../shared/workspace-scope'
 import {
@@ -94,7 +99,9 @@ import {
   prepareWorktreePushTargetWithExec
 } from './worktree-push-target-setup'
 import { isENOENT, registerWorktreeRootsForRepo } from './filesystem-auth'
-import { createWorktreeLinkedPaths } from './worktree-symlinks'
+import { createWorktreeCopiedPaths, createWorktreeLinkedPaths } from './worktree-symlinks'
+import { formatWorktreeIncludeCopyWarning } from './worktree-include-copy-budget'
+import { resolveWorktreeIncludePaths } from '../git/worktree-include-file'
 import { normalizeSparseDirectories } from './sparse-checkout-directories'
 import { joinWorktreeRelativePath } from '../runtime/runtime-relative-paths'
 import type { IFilesystemProvider } from '../providers/types'
@@ -518,12 +525,12 @@ async function resolveCreateBranchName(
   repoPath: string,
   branchNameOverride: string | undefined,
   sanitizedName: string,
-  settings: { branchPrefix: string; branchPrefixCustom?: string },
+  settings: BranchPrefixSettings,
   username: string | null,
   gitOptions: { wslDistro?: string } = {}
 ): Promise<string> {
   if (!branchNameOverride) {
-    return computeBranchName(sanitizedName, settings, username)
+    return computeValidatedBranchName(sanitizedName, settings, username)
   }
   if (branchNameOverride.startsWith('-')) {
     throw new Error('Branch name must not start with "-"')
@@ -540,11 +547,11 @@ async function resolveCreateBranchNameSsh(
   repoPath: string,
   branchNameOverride: string | undefined,
   sanitizedName: string,
-  settings: { branchPrefix: string; branchPrefixCustom?: string },
+  settings: BranchPrefixSettings,
   username: string | null
 ): Promise<string> {
   if (!branchNameOverride) {
-    return computeBranchName(sanitizedName, settings, username)
+    return computeValidatedBranchName(sanitizedName, settings, username)
   }
   if (branchNameOverride.startsWith('-')) {
     throw new Error('Branch name must not start with "-"')
@@ -1820,6 +1827,7 @@ export async function createRemoteWorktree(
     orcaCreationSource: 'ssh',
     orcaCreationWorkspaceLayout: getWorktreeCreationLayout(repo, settings),
     ...(args.automationProvenance ? { automationProvenance: args.automationProvenance } : {}),
+    ...(args.cliProvenance ? { cliProvenance: args.cliProvenance } : {}),
     baseRef: metadataBaseRef,
     ...(checkoutExistingBranch ? { preserveBranchOnDelete: true } : {}),
     ...(configuredPushTarget ? { pushTarget: configuredPushTarget } : {}),
@@ -1864,7 +1872,7 @@ export async function createRemoteWorktree(
   })
   const workspaceLineage = recordWorkspaceLineageForCreatedWorktree(store, args, worktree, now)
 
-  // Why: shared/symlink paths are local-only; remote (SSH) support needs a new relay method + auth surface, so configured symlinkPaths are ignored here.
+  // Why: shared/symlink paths and `.worktreeinclude` copies are local-only; remote (SSH) support needs a new relay method + auth surface, so both are skipped here.
 
   let setup: CreateWorktreeResult['setup']
   let defaultTabs: CreateWorktreeResult['defaultTabs']
@@ -2378,7 +2386,8 @@ export async function createLocalWorktree(
       ? listWorktrees(repo.path, localWorktreeGitOptions)
       : listWorktrees(repo.path)
   )
-  const created = gitWorktrees.find((gw) => areWorktreePathsEqual(gw.path, worktreePath))
+  // Why: Git may canonicalize a symlinked create path; its exact branch identifies the listed row.
+  const created = findCreatedWorktree(gitWorktrees, worktreePath, branchName)
   if (!created) {
     throw new Error('Worktree created but not found in listing')
   }
@@ -2401,6 +2410,7 @@ export async function createLocalWorktree(
     orcaCreationSource: 'desktop',
     orcaCreationWorkspaceLayout: getWorktreeCreationLayout(repo, settings),
     ...(args.automationProvenance ? { automationProvenance: args.automationProvenance } : {}),
+    ...(args.cliProvenance ? { cliProvenance: args.cliProvenance } : {}),
     baseRef: metadataBaseRef,
     ...(checkoutExistingBranch ? { preserveBranchOnDelete: true } : {}),
     ...(configuredPushTarget ? { pushTarget: configuredPushTarget } : {}),
@@ -2455,6 +2465,26 @@ export async function createLocalWorktree(
   if (symlinkPaths.length > 0) {
     await timing.time('create_symlinks', async () => {
       await createWorktreeLinkedPaths(repo.path, created.path, symlinkPaths)
+    })
+  }
+
+  // Why: project-level `.worktreeinclude` travels with the repo (issue #7549); copy semantics
+  // (never symlink) so each worktree owns its files. Paths already linked above are skipped.
+  const includePaths = await timing.time('resolve_worktreeinclude', () =>
+    resolveWorktreeIncludePaths(repo.path, localWorktreeGitOptions)
+  )
+  let includeCopyWarning: string | undefined
+  if (includePaths.length > 0) {
+    await timing.time('copy_worktreeinclude', async () => {
+      const skippedIncludePaths = await createWorktreeCopiedPaths(
+        repo.path,
+        created.path,
+        includePaths
+      )
+      includeCopyWarning = formatWorktreeIncludeCopyWarning(skippedIncludePaths)
+      if (includeCopyWarning) {
+        console.warn(`[worktree-include] ${includeCopyWarning}`)
+      }
     })
   }
 
@@ -2528,7 +2558,11 @@ export async function createLocalWorktree(
       ? { localBaseRefUpdateSuggestion: addResult.localBaseRefUpdateSuggestion }
       : {}),
     ...(stagedStartup.startupTerminal ? { startupTerminal: stagedStartup.startupTerminal } : {}),
-    ...(stagedStartup.warning ? { warning: stagedStartup.warning } : {}),
+    ...(stagedStartup.warning
+      ? { warning: appendWorktreeCreateWarning(includeCopyWarning, stagedStartup.warning) }
+      : includeCopyWarning
+        ? { warning: includeCopyWarning }
+        : {}),
     timing: timing.finish()
   }
 }

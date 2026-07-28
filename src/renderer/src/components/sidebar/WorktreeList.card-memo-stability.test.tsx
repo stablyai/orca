@@ -18,6 +18,7 @@ const mockStore = vi.hoisted(() => ({
   state: {} as Record<string, unknown>,
   activateWorktreeFromSidebar: vi.fn(),
   activateAndRevealWorktree: vi.fn(),
+  activateAndRevealWorkspace: vi.fn(),
   openModal: vi.fn()
 }))
 
@@ -105,7 +106,8 @@ vi.mock('@/lib/sidebar-worktree-activation', () => ({
 }))
 
 vi.mock('@/lib/worktree-activation', () => ({
-  activateAndRevealWorktree: mockStore.activateAndRevealWorktree
+  activateAndRevealWorktree: mockStore.activateAndRevealWorktree,
+  activateAndRevealWorkspace: mockStore.activateAndRevealWorkspace
 }))
 
 vi.mock('@/runtime/runtime-rpc-client', () => ({
@@ -381,7 +383,7 @@ describe('WorktreeCard memo bail-out across epoch bumps', () => {
       sidebar?.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowDown', bubbles: true }))
     })
 
-    expect(mockStore.activateAndRevealWorktree).toHaveBeenCalledWith(
+    expect(mockStore.activateAndRevealWorkspace).toHaveBeenCalledWith(
       folderWorkspaceKey(folderWorkspace.id)
     )
   })

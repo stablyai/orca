@@ -381,12 +381,13 @@ export function useDiffCommentDecorator({
       const verticalPadding =
         Number.parseFloat(wrapperStyle.paddingTop) + Number.parseFloat(wrapperStyle.paddingBottom)
       // Monaco pins the zone node to its previous height (scrollHeight can't shrink), so measure the rendered card+padding to allow collapse.
-      const measured = Math.ceil(
-        (child?.getBoundingClientRect().height ?? entry.domNode.scrollHeight) + verticalPadding
-      )
-      if (measured <= 0) {
+      const childHeight = child?.getBoundingClientRect().height ?? 0
+      // React can commit while Monaco's zone is detached; preserve the safe
+      // initial estimate until the observer sees a measurable card.
+      if (childHeight <= 0) {
         return
       }
+      const measured = Math.ceil(childHeight + verticalPadding)
       if (entry.delegate.heightInPx === measured) {
         return
       }
@@ -447,6 +448,7 @@ export function useDiffCommentDecorator({
                 : undefined
             }
             onContentResize={() => resizeZone(comment.id)}
+            observeRenderedSize
             headerActions={
               worktreeId && comment.author === undefined ? (
                 <NotesSendMenu

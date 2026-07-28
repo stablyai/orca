@@ -7,6 +7,7 @@ import {
 } from 'react'
 import { useMobileSessionViewMode } from './use-mobile-session-view-mode'
 import type { RpcClient } from '../transport/rpc-client'
+import type { ConnectionState } from '../transport/types'
 import {
   parseAskFromStatus,
   type AskAnswerSelection,
@@ -17,13 +18,19 @@ import { detectAgentPermission } from './mobile-native-chat-permission'
 import { parseAgentQuestion } from './mobile-native-chat-question'
 import { openMobileNativeChatFile } from './mobile-native-chat-open-file'
 import { useMobileNativeChatPermissionSend } from './mobile-native-chat-permission-send'
-import { sendMobileNativeChatMessageWithOutcome } from './mobile-native-chat-send'
+import type { MobileNativeChatSendOutcome } from './mobile-native-chat-send'
 import { useMobileNativeChatAnswerSend } from './use-mobile-native-chat-answer-send'
-import { useMobileNativeChatDrafts } from './use-mobile-native-chat-drafts'
+import { useMobileNativeChatCancelAsk } from './use-mobile-native-chat-cancel-ask'
+import {
+  useMobileNativeChatDrafts,
+  type MobileNativeChatPendingMessage
+} from './use-mobile-native-chat-drafts'
 import { useMobileNativeChatFileSearch } from './use-mobile-native-chat-file-search'
+import { useMobileNativeChatMessageSend } from './use-mobile-native-chat-message-send'
 import { useMobileNativeChatSession } from './use-mobile-native-chat-session'
 import { useMobileNativeChatPrompts } from './use-mobile-native-chat-prompts'
 import { useMobileNativeChatStop } from './use-mobile-native-chat-stop'
+import { useNativeChatAcceptedAction } from './use-native-chat-action-outcomes'
 import { useThrottledLatestValue } from './use-throttled-latest-value'
 
 const NATIVE_CHAT_STREAM_THROTTLE_MS = 50
@@ -38,7 +45,7 @@ export type MobileNativeChatController = {
   nativeChatAgent: string | null
   chatComposerText: string
   setChatComposerText: Dispatch<SetStateAction<string>>
-  chatPending: Array<{ id: string; text: string }>
+  chatPending: MobileNativeChatPendingMessage[]
   nativeChatSession: ReturnType<typeof useMobileNativeChatSession>
   nativeChatAgentWorking: boolean
   nativeChatStreamingText?: string
@@ -55,7 +62,17 @@ export type MobileNativeChatController = {
   handleNativeChatStop: () => void
   nativeChatFilePaths: string[]
   loadNativeChatFiles: (query: string) => void
-  handleNativeChatSend: (text: string) => Promise<boolean>
+  handleNativeChatQuestionAnswer: (text: string) => Promise<boolean>
+  handleNativeChatSend: (text: string, images?: string[]) => Promise<boolean>
+  /** Outcome-preserving send: callers that pasted terminal input beforehand
+   *  (image sends) must see 'unknown' to heal a possibly-orphaned paste. Such a
+   *  caller passes its own `deadline` so the paste it already spent and this text
+   *  body share one budget instead of holding the composer for two. */
+  handleNativeChatSendWithOutcome: (
+    text: string,
+    images?: string[],
+    deadline?: number
+  ) => Promise<MobileNativeChatSendOutcome>
 }
 
 /** Owns mobile native-chat state and teardown outside the already dense session
@@ -70,7 +87,12 @@ export function useMobileNativeChatController(args: {
   deviceTokenRef: MutableRefObject<string | null>
   nativeChatTranscriptIsLocalReadable: boolean
   nativeChatInputLeaseReady: boolean
+  /** Live socket state; the lease collapses on disconnect but one render later. */
+  connState: ConnectionState
   onSendError: (message: string) => void
+  /** Retires a held failure banner. Any accepted chat write clears it — a delivered
+   *  answer or permission reply must not sit under a stale "not sent". */
+  onSendResolved: () => void
 }): MobileNativeChatController {
   const {
     client,
@@ -82,7 +104,9 @@ export function useMobileNativeChatController(args: {
     deviceTokenRef,
     nativeChatTranscriptIsLocalReadable,
     nativeChatInputLeaseReady,
-    onSendError
+    connState,
+    onSendError,
+    onSendResolved
   } = args
   const { isTabChatView, toggleTabChatView } = useMobileSessionViewMode({ hostId, worktreeId })
 
@@ -110,6 +134,8 @@ export function useMobileNativeChatController(args: {
     setComposerText: setChatComposerText,
     pending: chatPending,
     captureSendOrigin,
+    clearDraftForSend,
+    restoreRejectedDraft,
     acceptSend,
     holdUnconfirmedSend
   } = useMobileNativeChatDrafts({
@@ -153,10 +179,14 @@ export function useMobileNativeChatController(args: {
     [activeHandleRef, client, worktreeId]
   )
 
+  // Every chat write gates on both: the lease proves the input floor is ours, and
+  // `connState` collapses a render before the lease does on disconnect.
+  const inputSendable = nativeChatInputLeaseReady && connState === 'connected'
+
   const { answerAsk: handleNativeChatAnswerAsk, cancelPending: cancelNativeChatAnswer } =
     useMobileNativeChatAnswerSend({
       client,
-      enabled: nativeChatInputLeaseReady,
+      enabled: inputSendable,
       handleRef: activeHandleRef,
       deviceTokenRef,
       agentRef: activeChatAgentRef,
@@ -165,42 +195,18 @@ export function useMobileNativeChatController(args: {
       onSendError
     })
 
-  const handleNativeChatCancelAsk = useCallback(async (): Promise<boolean> => {
-    const handle = activeHandleRef.current
-    if (!client || !handle || !nativeChatInputLeaseReady) {
-      onSendError('Cancel not sent (disconnected)')
-      return false
-    }
-    cancelNativeChatAnswer()
-    const outcome = await sendMobileNativeChatMessageWithOutcome({
-      client,
-      terminal: handle,
-      text: String.fromCharCode(27),
-      enter: false,
-      ...(deviceTokenRef.current
-        ? { mobileClient: { id: deviceTokenRef.current, type: 'mobile' } }
-        : {})
-    })
-    if (outcome === 'unknown') {
-      // Why: the Escape may have landed (ack lost / path cutover) — a definite
-      // "not sent" would invite a second Escape into a changed prompt state.
-      onSendError('Cancel unconfirmed — check chat before retrying')
-    } else if (outcome === 'rejected') {
-      onSendError('Cancel not sent')
-    }
-    return outcome === 'accepted'
-  }, [
-    activeHandleRef,
-    cancelNativeChatAnswer,
+  const handleNativeChatCancelAsk = useMobileNativeChatCancelAsk({
     client,
+    enabled: inputSendable,
+    handleRef: activeHandleRef,
     deviceTokenRef,
-    nativeChatInputLeaseReady,
+    cancelPending: cancelNativeChatAnswer,
     onSendError
-  ])
+  })
 
   const handleNativeChatRespondPermission = useMobileNativeChatPermissionSend({
     client,
-    enabled: nativeChatInputLeaseReady,
+    enabled: inputSendable,
     handleRef: activeHandleRef,
     deviceTokenRef,
     onSendError
@@ -208,7 +214,7 @@ export function useMobileNativeChatController(args: {
 
   const handleNativeChatStop = useMobileNativeChatStop({
     client,
-    enabled: nativeChatInputLeaseReady,
+    enabled: inputSendable,
     handleRef: activeHandleRef,
     deviceTokenRef,
     streamIdentity,
@@ -221,48 +227,26 @@ export function useMobileNativeChatController(args: {
     worktreeId
   })
 
-  const handleNativeChatSend = useCallback(
-    async (text: string): Promise<boolean> => {
-      const handle = activeHandleRef.current
-      const origin = captureSendOrigin(text)
-      if (!client || !handle || !origin || !nativeChatInputLeaseReady) {
-        onSendError('Message not sent (disconnected)')
-        return false
-      }
-      const outcome = await sendMobileNativeChatMessageWithOutcome({
-        client,
-        terminal: handle,
-        text,
-        ...(deviceTokenRef.current
-          ? { mobileClient: { id: deviceTokenRef.current, type: 'mobile' } }
-          : {})
-      })
-      if (outcome === 'unknown') {
-        // Why: an ack-lost send usually WAS delivered (issue seen on cellular
-        // relay) — verify via the transcript echo instead of a false "not sent".
-        holdUnconfirmedSend(origin, text, () =>
-          onSendError('Delivery unconfirmed — check chat before retrying')
-        )
-        return true
-      }
-      if (outcome === 'rejected') {
-        onSendError('Message not sent')
-        return false
-      }
-      acceptSend(origin, text)
-      return true
-    },
-    [
-      acceptSend,
-      activeHandleRef,
-      captureSendOrigin,
-      client,
-      deviceTokenRef,
-      holdUnconfirmedSend,
-      nativeChatInputLeaseReady,
-      onSendError
-    ]
-  )
+  const {
+    send: handleNativeChatSend,
+    sendWithOutcome: handleNativeChatSendWithOutcome,
+    answerQuestion: handleNativeChatQuestionAnswer
+  } = useMobileNativeChatMessageSend({
+    client,
+    enabled: inputSendable,
+    handleRef: activeHandleRef,
+    deviceTokenRef,
+    captureSendOrigin,
+    clearDraftForSend,
+    restoreRejectedDraft,
+    acceptSend,
+    holdUnconfirmedSend,
+    onSendError
+  })
+  // Card actions retire the route's held failure banner too, not just sends.
+  const answerAsk = useNativeChatAcceptedAction(handleNativeChatAnswerAsk, onSendResolved)
+  const cancelAsk = useNativeChatAcceptedAction(handleNativeChatCancelAsk, onSendResolved)
+  const respond = useNativeChatAcceptedAction(handleNativeChatRespondPermission, onSendResolved)
 
   return {
     isTabChatView,
@@ -280,12 +264,14 @@ export function useMobileNativeChatController(args: {
     nativeChatQuestion,
     nativeChatAsk,
     handleNativeChatOpenFile,
-    handleNativeChatAnswerAsk,
-    handleNativeChatCancelAsk,
-    handleNativeChatRespondPermission,
+    handleNativeChatAnswerAsk: answerAsk,
+    handleNativeChatCancelAsk: cancelAsk,
+    handleNativeChatRespondPermission: respond,
     handleNativeChatStop,
     nativeChatFilePaths,
     loadNativeChatFiles,
-    handleNativeChatSend
+    handleNativeChatQuestionAnswer,
+    handleNativeChatSend,
+    handleNativeChatSendWithOutcome
   }
 }

@@ -9,7 +9,8 @@
  * never-reused key spaces.
  *
  * Tab-keyed (evicted via the doomed-tab set):
- *   lastKnownRelayPtyIdByTabId, pendingInitialCwdByTabId,
+ *   lastKnownRelayPtyIdByTabId, pendingReconnectPtyIdByTabId,
+ *   deferredSshSessionIdsByTabId, pendingInitialCwdByTabId,
  *   pendingIssueCommandSplitByTabId, pendingSetupSplitByTabId, pendingStartupByTabId
  * Pty-keyed (evicted via the doomed-pty set derived from live and durable bindings):
  *   codexRestartNoticeByPtyId, migrationUnsupportedByPtyId,
@@ -89,6 +90,8 @@ function seedMaps(store: ReturnType<typeof createTestStore>): void {
       }
     },
     lastKnownRelayPtyIdByTabId: { [TAB1]: PTY1, [TAB2]: PTY2 },
+    pendingReconnectPtyIdByTabId: { [TAB1]: PTY1, [TAB2]: PTY2 },
+    deferredSshSessionIdsByTabId: { [TAB1]: 'ssh-sess-1', [TAB2]: 'ssh-sess-2' },
     pendingInitialCwdByTabId: { [TAB1]: '/path/wt1', [TAB2]: '/path/wt2' },
     pendingIssueCommandSplitByTabId: {
       [TAB1]: { command: 'a' },
@@ -146,6 +149,8 @@ describe('bulk worktree purge evicts the per-tab/per-pty terminal maps it previo
 
     // Removed worktree's tab/pty: every map evicted.
     expect(s.lastKnownRelayPtyIdByTabId[TAB1]).toBeUndefined()
+    expect(s.pendingReconnectPtyIdByTabId[TAB1]).toBeUndefined()
+    expect(s.deferredSshSessionIdsByTabId[TAB1]).toBeUndefined()
     expect(s.pendingInitialCwdByTabId[TAB1]).toBeUndefined()
     expect(s.pendingIssueCommandSplitByTabId[TAB1]).toBeUndefined()
     expect(s.pendingSetupSplitByTabId[TAB1]).toBeUndefined()
@@ -161,6 +166,8 @@ describe('bulk worktree purge evicts the per-tab/per-pty terminal maps it previo
 
     // Surviving worktree's tab/pty: every entry retained (no over-eviction).
     expect(s.lastKnownRelayPtyIdByTabId[TAB2]).toBe(PTY2)
+    expect(s.pendingReconnectPtyIdByTabId[TAB2]).toBe(PTY2)
+    expect(s.deferredSshSessionIdsByTabId[TAB2]).toBe('ssh-sess-2')
     expect(s.pendingInitialCwdByTabId[TAB2]).toBe('/path/wt2')
     expect(s.pendingIssueCommandSplitByTabId[TAB2]).toEqual({ command: 'b' })
     expect(s.pendingSetupSplitByTabId[TAB2]).toEqual({ command: 'setup-b', direction: 'vertical' })

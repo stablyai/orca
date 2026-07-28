@@ -1,4 +1,5 @@
 import { recordRendererCrashBreadcrumb } from '@/lib/crash-breadcrumb-recorder'
+import { getLivePaneCensus } from './pane-manager-registry'
 import type { ManagedPane } from './pane-manager-types'
 
 const MAX_RETRY_FRAMES = 40
@@ -75,8 +76,17 @@ export function armPaneFitContinuationRetry(
     }
     state.attempts += 1
     if (state.attempts >= MAX_RETRY_FRAMES) {
+      // Why leafId + census: `pane.id` restarts at 1 per PaneManager and there
+      // is one manager per tab, so a burst of identical `paneId: 1` crumbs
+      // cannot distinguish one pane looping from N panes exhausting in
+      // lockstep. Both facts now travel on every crumb, so main can coalesce
+      // the burst without destroying its meaning.
+      const census = getLivePaneCensus()
       recordRendererCrashBreadcrumb('terminal_safe_fit_retry_exhausted', {
-        paneId: pane.id
+        paneId: pane.id,
+        leafId: pane.leafId,
+        livePanes: census.panes,
+        livePaneManagers: census.managers
       })
       clearPaneFitContinuationRetry(pane)
       state.onExhausted()

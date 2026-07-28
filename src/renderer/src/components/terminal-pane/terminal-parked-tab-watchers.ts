@@ -9,7 +9,10 @@ import { isTerminalLeafId } from '../../../../shared/stable-pane-id'
 import type { TerminalTab } from '../../../../shared/types'
 import { useAppStore } from '@/store'
 import { closeTerminalTab } from '../terminal/terminal-tab-actions'
-import { collectLeafIdsInOrder } from './terminal-layout-leaf-ids'
+import {
+  collectLeafIdsInOrder,
+  resolveRootlessTerminalLayoutLeafId
+} from './terminal-layout-leaf-ids'
 import { detachTerminalLayoutLeaf } from './terminal-layout-leaf-detach'
 import { subscribeToPtyExit } from './pty-dispatcher'
 import { discardPreHandlerPtyState } from './pty-pre-handler-buffer'
@@ -54,7 +57,14 @@ export function fallbackParkedPaneCandidates(
   state: ParkedPaneFallbackState
 ): ParkedTerminalPaneCapture[] {
   const layout = state.terminalLayoutsByTabId[tab.id]
-  const leafIds = collectLeafIdsInOrder(layout?.root)
+  // Why: a tab that never mounted a pane persists a rootless layout, so there is
+  // no root to walk. replayTerminalLayout resolves the single leaf for that same
+  // shape — match it here, or such a tab is permanently uncoverable and can
+  // never park.
+  const rootLeafIds = collectLeafIdsInOrder(layout?.root)
+  const rootlessLeafId = layout ? resolveRootlessTerminalLayoutLeafId(layout) : null
+  const leafIds =
+    rootLeafIds.length > 0 ? rootLeafIds : rootlessLeafId !== null ? [rootlessLeafId] : []
   if (leafIds.length === 0) {
     return []
   }

@@ -1,9 +1,10 @@
-import { readFile } from 'node:fs/promises'
+import { readNodeFileWithinLimit } from './node-bounded-file-reader'
 import { getProcessOutputFields, iterateProcessOutputLines } from './process-output-field-scanner'
 
 const GENERIC_LINUX_RIPGREP_INSTALL =
   'install ripgrep via your package manager (e.g. apt/dnf/pacman)'
 const OS_RELEASE_ID_LIKE_MAX_FIELDS = 16
+const MAX_OS_RELEASE_BYTES = 64 * 1024
 
 export async function detectInstallCommand(): Promise<string> {
   if (process.platform === 'darwin') {
@@ -11,7 +12,9 @@ export async function detectInstallCommand(): Promise<string> {
   }
   if (process.platform === 'linux') {
     try {
-      const osRelease = await readFile('/etc/os-release', 'utf-8')
+      const osRelease = (
+        await readNodeFileWithinLimit('/etc/os-release', MAX_OS_RELEASE_BYTES)
+      ).buffer.toString('utf8')
       return detectLinuxInstallCommandFromOsRelease(osRelease)
     } catch {
       /* fall through to generic guidance */

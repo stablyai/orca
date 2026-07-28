@@ -29,8 +29,7 @@ import {
   MIN_COMPATIBLE_RUNTIME_SERVER_VERSION,
   RUNTIME_PROTOCOL_VERSION
 } from '../../../shared/protocol-version'
-import type { GitHubWorkItem, SetupDecision } from '../../../shared/types'
-import type { Repo } from '../../../shared/types'
+import type { GitHubWorkItem, SetupDecision, Repo } from '../../../shared/types'
 import type { TaskSourceContext, WorkspaceRunContext } from '../../../shared/task-source-context'
 import { resolveGitHubWorkItemIdentity } from '@/lib/github-work-item-identity'
 
