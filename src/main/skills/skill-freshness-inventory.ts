@@ -17,7 +17,8 @@ import {
   type CandidateLstat
 } from './skill-freshness-placement-observation'
 import { scanKnownPluginSkillCandidates } from './skill-plugin-cache-scan'
-import { readGloballyUpdatableSkillNames } from './skill-update-registration'
+import { convergableSkillNames } from './skill-update-convergence'
+import { readGloballyUpdatableSkillLocks } from './skill-update-registration'
 
 export const MAXIMUM_REPOSITORY_SKILL_ROOTS = 128
 
@@ -42,9 +43,9 @@ export async function inventorySkillFreshness(args: {
   candidateLstat?: CandidateLstat
   stateHome?: string | null
 }): Promise<SkillFreshnessInventory> {
-  const [artifacts, globallyUpdatableNames] = await Promise.all([
+  const [artifacts, globalSkillLocks] = await Promise.all([
     loadSkillBundleArtifacts(args.resourceRoot),
-    readGloballyUpdatableSkillNames({ homeDir: args.homeDir, stateHome: args.stateHome })
+    readGloballyUpdatableSkillLocks({ homeDir: args.homeDir, stateHome: args.stateHome })
   ])
   const currentByName = new Map(artifacts.manifest.skills.map((skill) => [skill.name, skill]))
   const discoveryArgs = {
@@ -168,7 +169,10 @@ export async function inventorySkillFreshness(args: {
   return {
     schemaVersion: 1,
     installations,
-    eligibleUpdateNames: eligibleSkillUpdateNames(installations, globallyUpdatableNames),
+    eligibleUpdateNames: eligibleSkillUpdateNames(
+      installations,
+      convergableSkillNames(installations, globalSkillLocks, artifacts.knownSnapshots)
+    ),
     scanIssues,
     scannedAt: Date.now()
   }

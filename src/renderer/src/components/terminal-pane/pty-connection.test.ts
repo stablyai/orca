@@ -38,6 +38,20 @@ async function flushAsyncTicks(count = 6): Promise<void> {
   }
 }
 
+async function drainFakeTimerWork(limit = 20): Promise<void> {
+  await flushAsyncTicks(20)
+  if (!vi.isFakeTimers()) {
+    return
+  }
+  for (let iteration = 0; iteration < limit && vi.getTimerCount() > 0; iteration += 1) {
+    await vi.runOnlyPendingTimersAsync()
+    await flushAsyncTicks(20)
+  }
+  vi.clearAllTimers()
+  await flushAsyncTicks(20)
+  vi.clearAllTimers()
+}
+
 async function drainPendingTimeouts(pendingTimeouts: (() => void)[], limit = 100): Promise<void> {
   let iterations = 0
   while (pendingTimeouts.length > 0) {
@@ -941,8 +955,8 @@ describe('connectPanePty', () => {
   })
 
   afterEach(async () => {
-    // Why: drain in-flight foreground-confirm microtasks while this test still owns the store mock, so its async fallout can't leak into (and flake) the next test.
-    await flushAsyncTicks(20)
+    // Drain deferred confirmation work before the next test replaces its store mock.
+    await drainFakeTimerWork()
     vi.useRealTimers()
     vi.restoreAllMocks()
     if (originalRequestAnimationFrame) {

@@ -11986,7 +11986,24 @@
             "orchestration": {
               "OrchestrationPage": {
                 "30b509a467": "하위 2개",
-                "862605d066": "2개의 하위 워크스페이스"
+                "862605d066": "2개의 하위 워크스페이스",
+                "coordinatorName": "인증 흐름 재설계",
+                "childPr1Name": "PR 1/2: users.sql 마이그레이션",
+                "childPr2Name": "PR 2/2: withSession 미들웨어"
+              },
+              "types": {
+                "coordinatorInitial": "인증 재작성을 2개의 PR로 분할 중…",
+                "codexInitial": "users 테이블 마이그레이션 작성 중…",
+                "claudeInitial": "withSession 미들웨어 스케치 중…",
+                "codexBeat1": "email_verified 컬럼 추가 중…",
+                "claudeBeat1": "withSession 미들웨어 연결 중…",
+                "coordinatorBeat1": "PR 1/2 준비 완료",
+                "coordinatorBeat2": "PR 2/2 준비 완료"
+              },
+              "steps": {
+                "name": "오케스트레이션",
+                "subtitle": "오케스트레이션",
+                "description": "에이전트가 Orca 워크스페이스를 관리하고 조정하여 더 큰 작업을 수행할 수 있도록 합니다."
               },
               "StatusesPage": {
                 "2f549fc0ba": "src/auth/session.test.ts",

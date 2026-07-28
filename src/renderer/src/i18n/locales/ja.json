@@ -11792,10 +11792,10 @@
             "56a0271428": "隔離されたワークスペース",
             "ef737dcee1": "GitHub と Linear タスク",
             "ac51c061e2": "codex",
-            "47f16ecf34": "Ship several things at once. Each workspace keeps its branch, terminal, and agent activity together.",
-            "70aa182266": "Hand off a goal and walk away. A coordinator agent fans out and ships parallel PRs.",
-            "f10c14dd9d": "Skip the tab-switching. Pick from your GitHub or Linear backlog and start a workspace in one click.",
-            "5d6ee181b6": "Open any workspace to return to its terminal, then split panes for tests, logs, and agents."
+            "47f16ecf34": "複数の作業を同時に進めましょう。各ワークスペースはブランチ、ターミナル、エージェントの活動をまとめます。",
+            "70aa182266": "目標を任せて離れます。コーディネーターエージェントが作業を分担し、並列でPRを出します。",
+            "f10c14dd9d": "タブ切り替えは不要。GitHubまたは Linear のバックログから選んで、ワンクリックでワークスペースを開始します。",
+            "5d6ee181b6": "ワークスペースを開いてターミナルに戻り、テスト、ログ、エージェント用にペインを分割します。"
           },
           "FeatureWallBody": {
             "25ec5356d6": "設定"
@@ -11985,8 +11985,25 @@
           "agents": {
             "orchestration": {
               "OrchestrationPage": {
-                "30b509a467": "子供2人",
-                "862605d066": "2 つの子ワークスペース"
+                "30b509a467": "2 つの子ワークスペース",
+                "862605d066": "2 つの子ワークスペース",
+                "coordinatorName": "認証フローを再設計する",
+                "childPr1Name": "PR 1/2: users.sql を移行",
+                "childPr2Name": "PR 2/2: withSession ミドルウェア"
+              },
+              "types": {
+                "coordinatorInitial": "認証の書き換えを 2 つの PR に分割中…",
+                "codexInitial": "users テーブルの移行を記述中…",
+                "claudeInitial": "withSession ミドルウェアをスケッチ中…",
+                "codexBeat1": "email_verified カラムを追加中…",
+                "claudeBeat1": "withSession ミドルウェアを接続中…",
+                "coordinatorBeat1": "PR 1/2 準備完了",
+                "coordinatorBeat2": "PR 2/2 準備完了"
+              },
+              "steps": {
+                "name": "オーケストレーション",
+                "subtitle": "オーケストレーション",
+                "description": "エージェントが Orca ワークスペースを管理・調整し、より大きなタスクを実行できるようにします。"
               },
               "StatusesPage": {
                 "2f549fc0ba": "src/auth/session.test.ts",

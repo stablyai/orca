@@ -9,7 +9,10 @@ import { formatMessageBanner } from '../../orchestration/formatter'
 import { isGroupAddress, resolveGroupAddress } from '../../orchestration/groups'
 import { reconcileLifecycleMessage } from '../../orchestration/lifecycle-reconciliation'
 import { abbreviateOrchestrationTasks } from '../../../../shared/orchestration-task-summary'
-import { orchestrationSkillRecoveryData } from '../../../../shared/orchestration-rpc-contract'
+import {
+  ORCHESTRATION_LEGACY_RUN_ID,
+  orchestrationSkillRecoveryData
+} from '../../../../shared/orchestration-rpc-contract'
 import { clampOrchestrationAskTimeoutMs } from '../../../../shared/orchestration-ask-timeout'
 import { ORCHESTRATION_GATE_METHODS } from './orchestration-gates'
 import { ORCHESTRATION_RUN_METHODS } from './orchestration-runs'
@@ -899,6 +902,13 @@ export const ORCHESTRATION_METHODS: RpcMethod[] = [
       if (!original) {
         throw new Error(`Message not found: ${params.id}`)
       }
+      if (original.run_id === ORCHESTRATION_LEGACY_RUN_ID) {
+        throw new OrchestrationError(
+          'legacy_read_only',
+          'Legacy orchestration messages are inspect-only; no reply was applied.',
+          { effectsApplied: false }
+        )
+      }
 
       const question = db.getQuestion(params.id)
       if (question) {
@@ -943,7 +953,8 @@ export const ORCHESTRATION_METHODS: RpcMethod[] = [
         to: original.from_handle,
         subject: `Re: ${original.subject}`,
         body: params.body,
-        threadId: original.thread_id ?? original.id
+        threadId: original.thread_id ?? original.id,
+        runId: original.run_id
       })
 
       runtime.notifyMessageArrived(original.from_handle, reply.type)

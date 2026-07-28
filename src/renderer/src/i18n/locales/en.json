@@ -12009,7 +12009,24 @@
             "orchestration": {
               "OrchestrationPage": {
                 "30b509a467": "2 children",
-                "862605d066": "2 child workspaces"
+                "862605d066": "2 child workspaces",
+                "coordinatorName": "redesign auth flow",
+                "childPr1Name": "PR 1/2: migrate users.sql",
+                "childPr2Name": "PR 2/2: withSession middleware"
+              },
+              "types": {
+                "coordinatorInitial": "Splitting auth rewrite into 2 PRs…",
+                "codexInitial": "Writing the users table migration…",
+                "claudeInitial": "Sketching withSession middleware…",
+                "codexBeat1": "Adding the email_verified column…",
+                "claudeBeat1": "Wiring withSession middleware…",
+                "coordinatorBeat1": "PR 1/2 ready",
+                "coordinatorBeat2": "PR 2/2 ready"
+              },
+              "steps": {
+                "name": "Orchestration",
+                "subtitle": "Orchestration",
+                "description": "Enable agents to manage and coordinate Orca workspaces to execute larger tasks."
               },
               "StatusesPage": {
                 "2f549fc0ba": "src/auth/session.test.ts",

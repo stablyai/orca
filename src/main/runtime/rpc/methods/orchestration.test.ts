@@ -1529,17 +1529,25 @@ describe('orchestration RPC methods', () => {
   describe('orchestration.reply', () => {
     it('replies to a message', async () => {
       setup()
-      const original = db.insertMessage({ from: 'a', to: 'b', subject: 'question' })
+      const original = db.insertMessage({
+        from: 'a',
+        to: 'b',
+        subject: 'question',
+        runId: activeRunId
+      })
 
       const result = (await call('orchestration.reply', {
         id: original.id,
         body: 'answer',
         from: 'b'
-      })) as { message: { to_handle: string; subject: string; thread_id: string } }
+      })) as {
+        message: { to_handle: string; subject: string; thread_id: string; run_id: string }
+      }
 
       expect(result.message.to_handle).toBe('a')
       expect(result.message.subject).toBe('Re: question')
       expect(result.message.thread_id).toBe(original.id)
+      expect(result.message.run_id).toBe(activeRunId)
     })
 
     it('throws on nonexistent message', async () => {

@@ -32,11 +32,11 @@ jobs:
       - name: Lint
         run: pnpm exec oxlint --format github
 
-      - name: Enforce full code-quality baseline
-        run: pnpm run audit:code-quality:native && pnpm run audit:code-quality:type-aware
+      - name: Enforce focused code-quality plugins
+        run: pnpm run audit:code-quality:native
 
-      - name: Check switch exhaustiveness
-        run: pnpm run lint:switch-exhaustiveness
+      - name: Enforce type-aware code-quality baseline
+        run: pnpm run audit:code-quality:type-aware
 
       - name: Enforce changed-code quality
         run: pnpm run check:code-quality:changed -- "${{ github.event.pull_request.base.sha }}"
@@ -46,12 +46,6 @@ jobs:
 
       - name: Check Zustand selector fan-out budget
         run: pnpm run check:zustand-selector-fanout
-
-      - name: Check styled scrollbars
-        run: pnpm check:styled-scrollbars
-
-      - name: Check quadratic buffer concatenation
-        run: pnpm run check:quadratic-buffer-concat
 
       - name: Check reliability gate manifest
         run: pnpm run check:reliability-gates

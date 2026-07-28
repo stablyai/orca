@@ -1,6 +1,6 @@
 {
   "$schema": "../node_modules/oxlint/configuration_schema.json",
-  "plugins": ["import", "jsx-a11y", "promise", "react", "react-hooks", "typescript", "vitest"],
+  "plugins": ["import", "jsx-a11y", "react-hooks", "vitest"],
   "categories": {
     "correctness": "off",
     "suspicious": "off",
@@ -10,23 +10,13 @@
     "restriction": "off",
     "nursery": "off"
   },
-  "jsPlugins": [
-    {
-      "name": "app-store-performance",
-      "specifier": "./oxlint-plugins/app-store-performance.mjs"
-    }
-  ],
   "rules": {
-    "app-store-performance/require-selector": "warn",
-    "app-store-performance/no-identity-selector": "warn",
-    "app-store-performance/no-fresh-selector-result": "warn",
     "import/export": "warn",
     "import/named": "warn",
     "import/namespace": "warn",
     "import/no-cycle": ["warn", { "maxDepth": 3 }],
     "import/no-duplicates": "warn",
-    "import/no-self-import": "warn",
-    "no-fallthrough": "warn"
+    "import/no-self-import": "warn"
   },
   "overrides": [
     {

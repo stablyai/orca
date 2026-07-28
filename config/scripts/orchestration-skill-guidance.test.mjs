@@ -63,6 +63,18 @@ describe('orchestration skill guidance', () => {
     expect(migration).toContain('task-list --run run_legacy_local')
     expect(migration).toContain('Read-only inspection never consumes legacy mail')
     expect(migration).toContain('does not run a legacy scheduler, translate old writes, or drain')
+    expect(migration).toContain('does not cancel the prior assignment')
+    expect(migration).toContain('invalidate its worktree')
+    expect(migration).toContain('discard filesystem changes')
+    expect(migration).toContain('leave it as the only editor in that worktree')
+    expect(migration).toContain('observe it manually, read-only')
+    expect(migration).toContain('until it reaches a stable handoff point')
+    expect(migration).toContain('visible activity is a reason to keep observing')
+    expect(migration).toContain(
+      'Never launch a replacement editor in the same worktree while the legacy worker may still write there.'
+    )
+    expect(migration).toContain('if remaining work needs new lifecycle supervision')
+    expect(migration).not.toContain('restart the work using Run -> Task -> `worker-start`')
   })
 
   it('treats long-running worker waits as liveness checkpoints, not failures', () => {

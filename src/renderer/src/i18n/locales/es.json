@@ -11985,8 +11985,25 @@
           "agents": {
             "orchestration": {
               "OrchestrationPage": {
-                "30b509a467": "2 secundarios",
-                "862605d066": "2 workspaces secundarios"
+                "30b509a467": "2 workspaces secundarios",
+                "862605d066": "2 workspaces secundarios",
+                "coordinatorName": "rediseñar el flujo de autenticación",
+                "childPr1Name": "PR 1/2: migrar users.sql",
+                "childPr2Name": "PR 2/2: middleware withSession"
+              },
+              "types": {
+                "coordinatorInitial": "Dividiendo la reescritura de autenticación en 2 PRs…",
+                "codexInitial": "Escribiendo la migración de la tabla users…",
+                "claudeInitial": "Diseñando el middleware withSession…",
+                "codexBeat1": "Agregando la columna email_verified…",
+                "claudeBeat1": "Conectando el middleware withSession…",
+                "coordinatorBeat1": "PR 1/2 listo",
+                "coordinatorBeat2": "PR 2/2 listo"
+              },
+              "steps": {
+                "name": "Orquestación",
+                "subtitle": "Orquestación",
+                "description": "Permite que los agentes administren y coordinen los workspaces de Orca para ejecutar tareas más grandes."
               },
               "StatusesPage": {
                 "2f549fc0ba": "src/auth/session.test.ts",

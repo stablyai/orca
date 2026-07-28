@@ -31,6 +31,7 @@ import type {
   FederationRelayItemRow
 } from './types'
 import { buildOrchestrationTaskDisplayMetadata } from '../../../shared/orchestration-task-display'
+import { ORCHESTRATION_LEGACY_RUN_ID } from '../../../shared/orchestration-rpc-contract'
 import { parsePaneKey } from '../../../shared/stable-pane-id'
 import { OrchestrationError } from './orchestration-error'
 
@@ -140,7 +141,7 @@ function exposeQuestionTimestamps(question: QuestionRow): QuestionRow {
   }
 }
 
-export const LEGACY_RUN_ID = 'run_legacy_local'
+export const LEGACY_RUN_ID = ORCHESTRATION_LEGACY_RUN_ID
 
 // Schema versions: v2 'heartbeat'+last_heartbeat_at, v3 delivered_at, v4 task-creator terminal, v5 task_title/display_name, v6 pane identity, v7 lightweight Runs, v8 crash-safe Run deliveries, v9 durable question threads, v10 Dispatch capabilities, v11 durable mutation receipts, v12 composed worker state.
 const SCHEMA_VERSION = 17

@@ -9,12 +9,7 @@ const SOURCE_FILE_PATTERN = /\.(?:[cm]?[jt]sx?)$/
 const OXLINT_SCANS = [
   {
     label: 'code quality',
-    args: [
-      '--config',
-      'config/oxlint-code-quality.json',
-      '--report-unused-disable-directives-severity',
-      'warn'
-    ]
+    args: ['--config', '.oxlintrc.json', '--report-unused-disable-directives-severity', 'warn']
   },
   {
     label: 'type-aware code quality',

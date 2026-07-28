@@ -4,6 +4,7 @@ import {
   encodeTerminalStreamText
 } from '../../../shared/terminal-stream-protocol'
 import { TERMINAL_STREAM_CHUNK_BYTES } from '../../../shared/terminal-multiplex-flow-control'
+import { terminalStreamByteLength } from './terminal-stream-byte-length'
 
 export type TerminalOutputMeta = {
   seq?: number
@@ -18,12 +19,31 @@ export type TerminalOutputFrameChunk = {
   opcode?: TerminalStreamOpcode
 }
 
-// Why: UTF-8 length is never below UTF-16 length, so a code-unit count over the cap already proves the byte count is.
-function exceedsTerminalStreamChunkBytes(data: string): boolean {
-  return (
-    data.length > TERMINAL_STREAM_CHUNK_BYTES ||
-    Buffer.byteLength(data, 'utf8') > TERMINAL_STREAM_CHUNK_BYTES
-  )
+export const TERMINAL_STREAM_BYTE_PROBE_CODE_UNITS = 8 * 1024
+const MAX_UTF8_BYTES_PER_CODE_UNIT = 3
+
+export function exceedsTerminalStreamChunkBytes(data: string): boolean {
+  if (data.length > TERMINAL_STREAM_CHUNK_BYTES) {
+    return true
+  }
+  if (data.length * MAX_UTF8_BYTES_PER_CODE_UNIT <= TERMINAL_STREAM_CHUNK_BYTES) {
+    return false
+  }
+  let byteLength = 0
+  for (let start = 0; start < data.length; ) {
+    let end = Math.min(start + TERMINAL_STREAM_BYTE_PROBE_CODE_UNITS, data.length)
+    const high = data.charCodeAt(end - 1)
+    const low = data.charCodeAt(end)
+    if (end < data.length && high >= 0xd800 && high <= 0xdbff && low >= 0xdc00 && low <= 0xdfff) {
+      end -= 1
+    }
+    byteLength += terminalStreamByteLength(data.slice(start, end))
+    if (byteLength > TERMINAL_STREAM_CHUNK_BYTES) {
+      return true
+    }
+    start = end
+  }
+  return false
 }
 
 export function* iterateTerminalOutputFrameChunks(
