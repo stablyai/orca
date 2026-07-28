@@ -36,7 +36,8 @@ const RELAY_HOOKS_DIR = '.orca-relay'
 const OPENCODE_OVERLAY_SUBDIR = 'opencode-overlays'
 const PI_OVERLAY_SUBDIR_BY_KIND: Record<PiAgentKind, string> = {
   pi: 'pi-overlays',
-  omp: 'omp-overlays'
+  omp: 'omp-overlays',
+  senpi: 'senpi-overlays'
 }
 const OPENCODE_PLUGIN_FILE = 'orca-opencode-status.js'
 const PI_EXTENSION_FILE = 'orca-agent-status.ts'
@@ -56,7 +57,8 @@ function withOrcaManagedPiExtensionMarker(source: string): string {
 // are installed).
 const PI_AGENT_HOME_DIR_NAME: Record<PiAgentKind, string> = {
   pi: '.pi',
-  omp: '.omp'
+  omp: '.omp',
+  senpi: '.senpi'
 }
 
 function safeDirName(input: string): string {
@@ -77,6 +79,8 @@ export type PluginSources = {
   piExtensionSource?: string
   /** Source body of OMP's `orca-agent-status.ts` to drop into <overlay>/extensions/. */
   ompExtensionSource?: string
+  /** Source body of Senpi's `orca-agent-status.ts` to drop into <overlay>/extensions/. */
+  senpiExtensionSource?: string
 }
 
 export function getRelayPiStatusExtensionPath(agentDir: string): string {
@@ -93,7 +97,8 @@ export class PluginOverlayManager {
   private opencodePluginSource: string | null = null
   private piExtensionSources: Record<PiAgentKind, string | null> = {
     pi: null,
-    omp: null
+    omp: null,
+    senpi: null
   }
   private homeDir: string
   private opencodeRoot: string
@@ -105,7 +110,8 @@ export class PluginOverlayManager {
     this.opencodeRoot = join(home, RELAY_HOOKS_DIR, OPENCODE_OVERLAY_SUBDIR)
     this.piRoots = {
       pi: join(home, RELAY_HOOKS_DIR, PI_OVERLAY_SUBDIR_BY_KIND.pi),
-      omp: join(home, RELAY_HOOKS_DIR, PI_OVERLAY_SUBDIR_BY_KIND.omp)
+      omp: join(home, RELAY_HOOKS_DIR, PI_OVERLAY_SUBDIR_BY_KIND.omp),
+      senpi: join(home, RELAY_HOOKS_DIR, PI_OVERLAY_SUBDIR_BY_KIND.senpi)
     }
   }
 
@@ -126,6 +132,9 @@ export class PluginOverlayManager {
     if (typeof sources.ompExtensionSource === 'string') {
       this.piExtensionSources.omp = withOrcaManagedPiExtensionMarker(sources.ompExtensionSource)
     }
+    if (typeof sources.senpiExtensionSource === 'string') {
+      this.piExtensionSources.senpi = withOrcaManagedPiExtensionMarker(sources.senpiExtensionSource)
+    }
   }
 
   hasOpenCodeSource(): boolean {
@@ -136,7 +145,7 @@ export class PluginOverlayManager {
     if (kind) {
       return this.getPiExtensionSource(kind) !== null
     }
-    return this.piExtensionSources.pi !== null || this.piExtensionSources.omp !== null
+    return this.piExtensionSources.pi !== null || this.piExtensionSources.omp !== null || this.piExtensionSources.senpi !== null
   }
 
   private getPiExtensionSource(kind: PiAgentKind): string | null {

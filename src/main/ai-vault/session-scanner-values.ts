@@ -127,7 +127,7 @@ export function findOpenCodeStorageRoot(filePath: string): string | null {
 // <home>/<agentHomeDirName>/agent/sessions; accept any prefix of that path.
 export function normalizeAgentSessionsDir(
   rawValue: string,
-  agentHomeDirName: '.pi' | '.omp'
+  agentHomeDirName: '.pi' | '.omp' | '.senpi'
 ): string {
   const trimmed = rawValue.trim()
   if (!trimmed) {

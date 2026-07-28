@@ -509,11 +509,23 @@ async function main(): Promise<void> {
       const hasLaunchCommand =
         typeof launchCommandHint === 'string' && launchCommandHint.trim().length > 0
       const shouldPrepareOmpShadow = kind === 'omp' || !hasLaunchCommand
+      const shouldPrepareSenpiShadow = kind === 'senpi' || !hasLaunchCommand
       if (kind === 'pi') {
         const sourceDir = resolvePiSourceAgentDir(ctx.env, ctx.shell, 'pi')
         const dir = pluginOverlay.materializePi(overlayId, sourceDir, 'pi')
         if (dir) {
           env.ORCA_PI_SOURCE_AGENT_DIR = dir
+        }
+      }
+      if (shouldPrepareSenpiShadow) {
+        const sourceDir =
+          kind === 'senpi'
+            ? resolvePiSourceAgentDir(ctx.env, ctx.shell, 'senpi')
+            : ctx.env.ORCA_SENPI_SOURCE_AGENT_DIR
+        const dir = pluginOverlay.materializePi(overlayId, sourceDir, 'senpi')
+        if (dir) {
+          env.ORCA_SENPI_STATUS_EXTENSION = getRelayPiStatusExtensionPath(dir)
+          env.ORCA_SENPI_SOURCE_AGENT_DIR = dir
         }
       }
       if (shouldPrepareOmpShadow) {
@@ -555,19 +567,23 @@ async function main(): Promise<void> {
     const opencode = params.opencodePluginSource
     const pi = params.piExtensionSource
     const omp = params.ompExtensionSource
+    const senpi = params.senpiExtensionSource
     assertPluginSourceUnderByteCap('opencodePluginSource', opencode)
     assertPluginSourceUnderByteCap('piExtensionSource', pi)
     assertPluginSourceUnderByteCap('ompExtensionSource', omp)
+    assertPluginSourceUnderByteCap('senpiExtensionSource', senpi)
     pluginOverlay.setSources({
       opencodePluginSource: typeof opencode === 'string' ? opencode : undefined,
       piExtensionSource: typeof pi === 'string' ? pi : undefined,
-      ompExtensionSource: typeof omp === 'string' ? omp : undefined
+      ompExtensionSource: typeof omp === 'string' ? omp : undefined,
+      senpiExtensionSource: typeof senpi === 'string' ? senpi : undefined
     })
     return {
       installed: {
         opencode: pluginOverlay.hasOpenCodeSource(),
         pi: pluginOverlay.hasPiSource('pi'),
-        omp: pluginOverlay.hasPiSource('omp')
+        omp: pluginOverlay.hasPiSource('omp'),
+        senpi: pluginOverlay.hasPiSource('senpi')
       }
     }
   })

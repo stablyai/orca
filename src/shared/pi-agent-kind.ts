@@ -11,7 +11,7 @@ import { getCommandTokenPathBasename, getFirstCommandToken } from './command-tok
  * (otherwise switching agents in the same workspace silently shadows the
  * other agent's user extensions).
  */
-export type PiAgentKind = 'pi' | 'omp'
+export type PiAgentKind = 'pi' | 'omp' | 'senpi'
 
 /**
  * True when `agentType` names a Pi-compatible (goal/mission) kind. These agents
@@ -21,10 +21,11 @@ export type PiAgentKind = 'pi' | 'omp'
 export function isPiCompatibleAgentType(
   agentType: string | null | undefined
 ): agentType is PiAgentKind {
-  return agentType === 'pi' || agentType === 'omp'
+  return agentType === 'pi' || agentType === 'omp' || agentType === 'senpi'
 }
 
 const OMP_LAUNCH_CMD = TUI_AGENT_CONFIG.omp.launchCmd
+const SENPI_LAUNCH_CMD = TUI_AGENT_CONFIG.senpi.launchCmd
 
 // Why: regex carved to avoid matching `pi` inside `pip`, `mpi`, `api`,
 // `python`, or `omp` inside `comp`, `omp.sh` (acceptable - that's literally
@@ -48,6 +49,7 @@ function makeLaunchCmdRegex(launchCmd: string): RegExp {
 }
 
 const OMP_REGEX = makeLaunchCmdRegex(OMP_LAUNCH_CMD)
+const SENPI_REGEX = makeLaunchCmdRegex(SENPI_LAUNCH_CMD)
 
 /**
  * Identify the Pi-compatible agent kind a launch command targets.
@@ -62,6 +64,9 @@ const OMP_REGEX = makeLaunchCmdRegex(OMP_LAUNCH_CMD)
  * be substituted.
  */
 export function detectPiAgentKindFromCommand(command: string | undefined): PiAgentKind {
+  if (typeof command === 'string' && SENPI_REGEX.test(command)) {
+    return 'senpi'
+  }
   if (typeof command === 'string' && OMP_REGEX.test(command)) {
     return 'omp'
   }

@@ -1899,7 +1899,7 @@ function extractCopilotToolFields(
 function extractPiToolFields(
   eventName: unknown,
   hookPayload: Record<string, unknown>,
-  agentKind: 'pi' | 'omp'
+  agentKind: 'pi' | 'omp' | 'senpi'
 ): ToolSnapshot {
   if (
     eventName === 'tool_call' ||
@@ -1911,7 +1911,7 @@ function extractPiToolFields(
     const toolInput = deriveToolInputPreview(toolName, rawToolInput)
     // Why: OMP shares this extractor; only derive interactivePrompt for Pi so OMP ask_user_question metadata stays unchanged.
     const interactivePrompt =
-      agentKind === 'pi' && (eventName === 'tool_call' || eventName === 'tool_execution_start')
+      (agentKind === 'pi' || agentKind === 'senpi') && (eventName === 'tool_call' || eventName === 'tool_execution_start')
         ? deriveInteractivePrompt(toolName, rawToolInput, eventName)
         : undefined
     return toolUpdate(
@@ -2284,6 +2284,7 @@ function isNewTurnEvent(source: AgentHookSource, eventName: unknown): boolean {
       return eventName === 'beforeSubmitPrompt' || eventName === 'sessionStart'
     case 'pi':
     case 'omp':
+    case 'senpi':
       return eventName === 'before_agent_start'
     case 'droid':
       return eventName === 'UserPromptSubmit'
@@ -2378,6 +2379,7 @@ function extractToolFields(
       return extractCursorToolFields(eventName, hookPayload)
     case 'pi':
     case 'omp':
+    case 'senpi':
       return extractPiToolFields(eventName, hookPayload, source)
     case 'droid':
       return extractDroidToolFields(eventName, hookPayload)
@@ -3508,25 +3510,25 @@ function normalizeCopilotEvent(
 
 function normalizePiCompatibleEvent(
   state: HookListenerState,
-  agentType: 'pi' | 'omp',
+  agentType: 'pi' | 'omp' | 'senpi',
   eventName: unknown,
   promptText: string,
   paneKey: string,
   hookPayload: Record<string, unknown>
 ): ParsedAgentStatusPayload | null {
-  if (agentType === 'pi' && eventName === 'session_start') {
+  if ((agentType === 'pi' || agentType === 'senpi') && eventName === 'session_start') {
     // Why: Pi's session_start fires on TUI open/resume; discard stale turn details, no working row before user activity.
     clearPaneTurnCacheState(state, paneKey)
     return null
   }
 
   // Why: gate on the event's own tool_name (not a merged snapshot) so a stale cached ask_user_question can't re-enter blocked.
-  const isPiAskUserQuestion =
-    agentType === 'pi' &&
+  const isPiCompatibleAskUserQuestion =
+    (agentType === 'pi' || agentType === 'senpi') &&
     isAskUserQuestionTool(readString(hookPayload, 'tool_name')) &&
     (eventName === 'tool_call' || eventName === 'tool_execution_start')
 
-  const stateName = isPiAskUserQuestion
+  const stateName = isPiCompatibleAskUserQuestion
     ? 'blocked'
     : eventName === 'before_agent_start' ||
         eventName === 'agent_start' ||
@@ -3931,6 +3933,16 @@ export function normalizeHookPayload(
         hookPayloadRecord
       )
       break
+    case 'senpi':
+      payload = normalizePiCompatibleEvent(
+        state,
+        'senpi',
+        eventName,
+        promptText,
+        paneKey,
+        hookPayloadRecord
+      )
+      break
     case 'droid':
       payload = normalizeDroidEvent(state, eventName, promptText, paneKey, hookPayloadRecord)
       break
@@ -3986,12 +3998,12 @@ export function normalizeHookPayload(
       ? null
       : extractAgentProviderSession(source, hookPayloadRecord)
   const providerSessionOnly =
-    source === 'pi' && eventName === 'session_start' && providerSession !== null
+    (source === 'pi' || source === 'senpi') && eventName === 'session_start' && providerSession !== null
   // Why: Pi session_start carries resume identity while idle; providerSessionOnly makes receivers discard the placeholder row.
   const transportPayload =
     payload ??
     (providerSessionOnly
-      ? normalizeAgentStatusPayload({ state: 'done', prompt: '', agentType: 'pi' })
+      ? normalizeAgentStatusPayload({ state: 'done', prompt: '', agentType: source === 'senpi' ? 'senpi' : 'pi' })
       : null)
   return transportPayload
     ? {
@@ -4037,6 +4049,7 @@ export const HOOK_SOURCE_BY_PATHNAME: Readonly<Record<string, AgentHookSource>> 
   '/hook/cursor': 'cursor',
   '/hook/pi': 'pi',
   '/hook/omp': 'omp',
+  '/hook/senpi': 'senpi',
   '/hook/droid': 'droid',
   '/hook/command-code': 'command-code',
   '/hook/grok': 'grok',

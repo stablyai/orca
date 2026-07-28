@@ -43,7 +43,8 @@ type PiManagedExtensionEnv = {
 // guessing which agent a terminated pane launched.
 const OVERLAY_ROOT_DIR_NAME: Record<PiAgentKind, string> = {
   pi: 'pi-agent-overlays',
-  omp: 'omp-agent-overlays'
+  omp: 'omp-agent-overlays',
+  senpi: 'senpi-agent-overlays'
 }
 
 // Why: the managed extension target is chosen by which agent is being launched, NOT
@@ -53,7 +54,8 @@ const OVERLAY_ROOT_DIR_NAME: Record<PiAgentKind, string> = {
 // shadowed one in Orca's per-launch agent picker.
 const AGENT_HOME_DIR_NAME: Record<PiAgentKind, string> = {
   pi: '.pi',
-  omp: '.omp'
+  omp: '.omp',
+  senpi: '.senpi'
 }
 
 function getDefaultPiAgentDir(kind: PiAgentKind): string {
@@ -190,6 +192,11 @@ export class PiTitlebarExtensionService {
       env.ORCA_OMP_SOURCE_AGENT_DIR = installed.sourceAgentDir
       if (installed.statusExtensionPath) {
         env.ORCA_OMP_STATUS_EXTENSION = installed.statusExtensionPath
+      }
+    } else if (kind === 'senpi') {
+      env.ORCA_SENPI_SOURCE_AGENT_DIR = installed.sourceAgentDir
+      if (installed.statusExtensionPath) {
+        env.ORCA_SENPI_STATUS_EXTENSION = installed.statusExtensionPath
       }
     } else {
       env.ORCA_PI_SOURCE_AGENT_DIR = installed.sourceAgentDir

@@ -30,6 +30,7 @@ export type AiVaultScanOptions = {
   openclawLegacyStateDir?: string
   piSessionsDir?: string
   ompSessionsDir?: string
+  senpiSessionsDir?: string
   droidSessionsDir?: string
   droidProjectsDir?: string
   kimiSessionsDir?: string

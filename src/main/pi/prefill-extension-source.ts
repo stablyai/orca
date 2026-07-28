@@ -7,7 +7,8 @@ export const ORCA_PI_PREFILL_EXTENSION_FILE = 'orca-prefill.ts'
 // OMP PTY never honors a Pi draft (or vice versa).
 const PREFILL_ENV_VAR_BY_KIND: Record<PiAgentKind, string> = {
   pi: 'ORCA_PI_PREFILL',
-  omp: 'ORCA_OMP_PREFILL'
+  omp: 'ORCA_OMP_PREFILL',
+  senpi: 'ORCA_SENPI_PREFILL'
 }
 
 /** Pi's prefill env var. Exported for callers that need the literal name

@@ -47,6 +47,27 @@ export function OmpIcon({ size = 14 }: { size?: number }): React.JSX.Element {
   )
 }
 
+export function SenpiIcon({ size = 14 }: { size?: number }): React.JSX.Element {
+  // Why: senpi is a pi fork — reuse the π silhouette with a warm accent so the
+  // two are visually related but distinguishable in the agent picker.
+  return (
+    <svg
+      height={size}
+      width={size}
+      viewBox="0 0 800 800"
+      xmlns="http://www.w3.org/2000/svg"
+      className="text-current"
+    >
+      <path
+        fill="currentColor"
+        fillRule="evenodd"
+        d="M165.29 165.29 H517.36 V400 H400 V517.36 H282.65 V634.72 H165.29 Z M282.65 282.65 V400 H400 V282.65 Z"
+      />
+      <path fill="var(--accent)" d="M517.36 400 H634.72 V634.72 H517.36 Z" />
+    </svg>
+  )
+}
+
 export function KiloIcon({ size = 14 }: { size?: number }): React.JSX.Element {
   // SVG sourced from Kilo-Org/kilocode:packages/kilo-vscode/assets/icons/kilo-light.svg.
   // Why: the Google favicon for kilo.ai is black-on-black at small sizes and

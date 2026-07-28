@@ -13,7 +13,8 @@ export const RESUMABLE_TUI_AGENTS = [
   'droid',
   'grok',
   'devin',
-  'omp'
+  'omp',
+  'senpi'
 ] as const satisfies readonly TuiAgent[]
 
 export type ResumableTuiAgent = (typeof RESUMABLE_TUI_AGENTS)[number]
@@ -166,7 +167,7 @@ export function agentProviderSessionsEqual(
   return (
     left.key === right.key &&
     left.id === right.id &&
-    (agent !== 'pi' || left.transcriptPath === right.transcriptPath)
+    (agent !== 'pi' && agent !== 'senpi') || left.transcriptPath === right.transcriptPath
   )
 }
 
@@ -220,6 +221,14 @@ export function extractAgentProviderSession(
       const id = readSessionId(payload, ['session_id'])
       return id ? { key: 'session_id', id } : null
     }
+    // Why: senpi is a pi fork; same session_id + session_file contract.
+    case 'senpi': {
+      const id = readSessionId(payload, ['session_id'])
+      const providerSession = id
+        ? withTranscriptPath({ key: 'session_id', id }, payload, ['session_file'])
+        : null
+      return providerSession?.transcriptPath ? providerSession : null
+    }
     case 'amp':
     case 'cursor':
     case 'command-code':
@@ -261,6 +270,10 @@ export function getAgentResumeArgv(
     case 'omp':
       return providerSession.key === 'session_id'
         ? ['omp', '--resume', ompResumeFilePath?.trim() || id]
+        : null
+    case 'senpi':
+      return providerSession.key === 'session_id' && providerSession.transcriptPath
+        ? ['senpi', '--session', providerSession.transcriptPath]
         : null
   }
 }

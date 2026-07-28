@@ -127,6 +127,13 @@ export const TUI_AGENT_CONFIG: Record<TuiAgent, TuiAgentConfig> = {
     promptInjectionMode: 'argv',
     draftPromptEnvVar: 'ORCA_OMP_PREFILL'
   },
+  senpi: {
+    detectCmd: 'senpi',
+    launchCmd: 'senpi',
+    expectedProcess: 'senpi',
+    promptInjectionMode: 'argv',
+    draftPromptEnvVar: 'ORCA_SENPI_PREFILL'
+  },
   gemini: {
     detectCmd: 'gemini',
     launchCmd: 'gemini',

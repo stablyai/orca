@@ -13,6 +13,7 @@ export const AI_VAULT_AGENTS = [
   'hermes',
   'pi',
   'omp',
+  'senpi',
   'cursor',
   'gemini',
   'antigravity',
@@ -42,6 +43,7 @@ export const AI_VAULT_AGENT_LABELS = {
   hermes: 'Hermes',
   pi: 'Pi',
   omp: 'OMP',
+  senpi: 'Senpi',
   cursor: 'Cursor',
   gemini: 'Gemini',
   antigravity: 'Antigravity',
@@ -320,6 +322,7 @@ function buildAgentResumeInvocation(
       return `${baseCommand} rovodev run --restore ${sessionArg}`
     case 'opencode':
     case 'pi':
+    case 'senpi':
     // Why: Kimi Code resumes with `kimi --session <id>` (alias `-S`). Sessions
     // are work-dir-scoped, so the cwd prefix from buildAiVaultResumeCommand is
     // required — resuming from another directory is rejected by the CLI.

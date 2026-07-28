@@ -4,7 +4,7 @@ import type { PiAgentKind } from '../../shared/pi-agent-kind'
 // both are independently sizeable and the installed extension concatenates them.
 export function getPiAgentStatusHandlerSourceLines(kind: PiAgentKind): string[] {
   const sessionStartHandler =
-    kind === 'pi'
+    kind === 'pi' || kind === 'senpi'
       ? [
           "  pi.on('session_start', (event, ctx) => {",
           '    updateSessionMetadata(ctx)',

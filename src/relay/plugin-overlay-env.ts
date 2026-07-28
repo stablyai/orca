@@ -29,9 +29,24 @@ export function resolvePiSourceAgentDir(
   shell: string | undefined,
   kind: PiAgentKind
 ): string | undefined {
-  const sourceKey = kind === 'omp' ? 'ORCA_OMP_SOURCE_AGENT_DIR' : 'ORCA_PI_SOURCE_AGENT_DIR'
-  const overlayKey = kind === 'omp' ? 'ORCA_OMP_CODING_AGENT_DIR' : 'ORCA_PI_CODING_AGENT_DIR'
-  const otherOverlayKey = kind === 'omp' ? 'ORCA_PI_CODING_AGENT_DIR' : 'ORCA_OMP_CODING_AGENT_DIR'
+  const sourceKey =
+    kind === 'omp'
+      ? 'ORCA_OMP_SOURCE_AGENT_DIR'
+      : kind === 'senpi'
+        ? 'ORCA_SENPI_SOURCE_AGENT_DIR'
+        : 'ORCA_PI_SOURCE_AGENT_DIR'
+  const overlayKey =
+    kind === 'omp'
+      ? 'ORCA_OMP_CODING_AGENT_DIR'
+      : kind === 'senpi'
+        ? 'ORCA_SENPI_CODING_AGENT_DIR'
+        : 'ORCA_PI_CODING_AGENT_DIR'
+  const foreignOverlayKeys =
+    kind === 'omp'
+      ? ['ORCA_PI_CODING_AGENT_DIR', 'ORCA_SENPI_CODING_AGENT_DIR']
+      : kind === 'senpi'
+        ? ['ORCA_PI_CODING_AGENT_DIR', 'ORCA_OMP_CODING_AGENT_DIR']
+        : ['ORCA_OMP_CODING_AGENT_DIR', 'ORCA_SENPI_CODING_AGENT_DIR']
 
   const sourceDir = firstNonEmpty(env[sourceKey])
   if (sourceDir) {
@@ -49,7 +64,7 @@ export function resolvePiSourceAgentDir(
   if (
     env.PI_CODING_AGENT_DIR &&
     env.PI_CODING_AGENT_DIR !== env[overlayKey] &&
-    env.PI_CODING_AGENT_DIR !== env[otherOverlayKey]
+    !foreignOverlayKeys.some((key) => env.PI_CODING_AGENT_DIR === env[key])
   ) {
     return env.PI_CODING_AGENT_DIR
   }

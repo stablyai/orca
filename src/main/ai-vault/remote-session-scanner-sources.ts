@@ -93,6 +93,7 @@ export function remoteSessionSources(
     ),
     jsonlSource('pi', remoteHome, hostPlatform, remotePiSessionsSegments(), piParser),
     jsonlSource('omp', remoteHome, hostPlatform, remoteOmpSessionsSegments(), ompParser),
+    jsonlSource('senpi', remoteHome, hostPlatform, remoteSenpiSessionsSegments(), senpiParser),
     jsonlSource(
       'droid',
       remoteHome,
@@ -249,6 +250,15 @@ function ompParser(
   return parseMessageGraphSessionContent('omp', file, content, platform, options)
 }
 
+function senpiParser(
+  file: FileWithMtime,
+  content: string,
+  platform: NodeJS.Platform,
+  options: RemoteParserOptions
+): Promise<AiVaultSession | null> {
+  return parseMessageGraphSessionContent('senpi', file, content, platform, options)
+}
+
 function openClawParser(
   file: FileWithMtime,
   content: string,
@@ -268,4 +278,8 @@ function remotePiSessionsSegments(): string[] {
 
 function remoteOmpSessionsSegments(): string[] {
   return normalizeAgentSessionsDir('/.omp/agent/sessions', '.omp').split('/').filter(Boolean)
+}
+
+function remoteSenpiSessionsSegments(): string[] {
+  return normalizeAgentSessionsDir('/.senpi/agent/sessions', '.senpi').split('/').filter(Boolean)
 }

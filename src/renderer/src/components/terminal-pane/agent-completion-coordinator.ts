@@ -49,6 +49,8 @@ const PENDING_TITLE_TTL_MS = Math.max(2_000, INSPECTION_TIMEOUT_MS + 500)
 const PENDING_TITLE_MAX_TTL_MS = Math.max(30_000, PENDING_TITLE_TTL_MS)
 const COMPLETION_REPLAY_GUARD_MS = 1_000
 const HOOK_DONE_QUIET_MS = 1_500
+// Why: senpi subagent gaps between milestones exceed pi/omp's; longer window prevents false completion notifications.
+const SENPI_HOOK_DONE_QUIET_MS = 5_000
 // Why: under "Approve for me" Codex resumes almost immediately, so debounce the OS attention notification so a self-resolving pause raises no false banner (#8387).
 const CODEX_ATTENTION_QUIET_MS = 1_500
 
@@ -92,6 +94,8 @@ export function createAgentCompletionCoordinator(
   let pendingHookDoneTimer: ReturnType<typeof setTimeout> | null = null
   let pendingHookDoneTitle: string | null = null
   let pendingHookDonePayload: AgentCompletionStatusSnapshot | null = null
+  let pendingTitleQuietTimer: ReturnType<typeof setTimeout> | null = null
+  let pendingTitleQuietTitle: string | null = null
   let pendingCodexAttentionTimer: ReturnType<typeof setTimeout> | null = null
   let pendingProcessExitAgent: RecognizedAgentProcess | null = null
   let pendingTitleSequence = 0
@@ -136,6 +140,14 @@ export function createAgentCompletionCoordinator(
     }
     pendingHookDoneTitle = null
     pendingHookDonePayload = null
+  }
+
+  function clearPendingTitleQuiet(): void {
+    if (pendingTitleQuietTimer !== null) {
+      clearTimeout(pendingTitleQuietTimer)
+      pendingTitleQuietTimer = null
+    }
+    pendingTitleQuietTitle = null
   }
 
   function clearPendingCodexAttention(): void {
@@ -237,6 +249,9 @@ export function createAgentCompletionCoordinator(
     }
     if (/\bpi\b/.test(normalized) || normalized.includes('\u03c0')) {
       return 'pi'
+    }
+    if (/\bsenpi\b/.test(normalized)) {
+      return 'senpi'
     }
     return null
   }
@@ -376,7 +391,44 @@ export function createAgentCompletionCoordinator(
             : {})
         })
       }
-    }, HOOK_DONE_QUIET_MS)
+    }, hookCompletionAgentIdentity(payload) === 'senpi' ? SENPI_HOOK_DONE_QUIET_MS : HOOK_DONE_QUIET_MS)
+  }
+
+  // Why: pi-compatible agents flip title working→idle between milestones; quiet window prevents false title completions.
+  function scheduleTitleQuietCompletion(title: string): void {
+    pendingTitleQuietTitle = title
+    if (pendingTitleQuietTimer !== null) return
+    const agentIdentity = titleCompletionAgentIdentity(title)
+    const quietMs = agentIdentity === 'senpi' ? SENPI_HOOK_DONE_QUIET_MS : HOOK_DONE_QUIET_MS
+    pendingTitleQuietTimer = setTimeout(() => {
+      pendingTitleQuietTimer = null
+      const pending = pendingTitleQuietTitle
+      pendingTitleQuietTitle = null
+      if (!pending) return
+      markTitleCompletionNotified(pending)
+      dispatchCompletion('title', pending, {
+        completionIdentity: {
+          source: 'title',
+          identity: titleCompletionIdentity(pending),
+          agentIdentity: titleCompletionAgentIdentity(pending)
+        }
+      })
+    }, quietMs)
+  }
+
+  function dispatchTitleCompletion(title: string): void {
+    if (isPiCompatibleAgentType(titleCompletionAgentIdentity(title))) {
+      scheduleTitleQuietCompletion(title)
+      return
+    }
+    markTitleCompletionNotified(title)
+    dispatchCompletion('title', title, {
+      completionIdentity: {
+        source: 'title',
+        identity: titleCompletionIdentity(title),
+        agentIdentity: titleCompletionAgentIdentity(title)
+      }
+    })
   }
 
   function dropPendingTitle(): void {
@@ -395,14 +447,7 @@ export function createAgentCompletionCoordinator(
     }
     const title = pendingTitle.title
     dropPendingTitle()
-    markTitleCompletionNotified(title)
-    dispatchCompletion('title', title, {
-      completionIdentity: {
-        source: 'title',
-        identity: titleCompletionIdentity(title),
-        agentIdentity: titleCompletionAgentIdentity(title)
-      }
-    })
+    dispatchTitleCompletion(title)
   }
 
   function schedulePendingTitleExpiry(): void {
@@ -687,6 +732,7 @@ export function createAgentCompletionCoordinator(
   function recordTitleWorking(): boolean {
     // Why: hooks can report `done` before title tracking notices the next milestone, so the working title must cancel that provisional done.
     clearPendingHookDone()
+    clearPendingTitleQuiet()
     if (
       lastCompletionSource === 'hook' &&
       Date.now() - lastCompletionAt < COMPLETION_REPLAY_GUARD_MS
@@ -734,28 +780,14 @@ export function createAgentCompletionCoordinator(
         return
       }
       if (agentIdentityEstablished && hasAgentRunEvidence) {
-        markTitleCompletionNotified(title)
-        dispatchCompletion('title', title, {
-          completionIdentity: {
-            source: 'title',
-            identity: titleCompletionIdentity(title),
-            agentIdentity: titleCompletionAgentIdentity(title)
-          }
-        })
+        dispatchTitleCompletion(title)
       } else {
         holdTitleCompletionPending(title)
       }
     } else if (hadPendingTitle && status !== null && hasExplicitAgentIdentity) {
       // Why: a shell can briefly restore cwd between working and done; the later explicit agent completion is authoritative.
       dropPendingTitle()
-      markTitleCompletionNotified(title)
-      dispatchCompletion('title', title, {
-        completionIdentity: {
-          source: 'title',
-          identity: titleCompletionIdentity(title),
-          agentIdentity: titleCompletionAgentIdentity(title)
-        }
-      })
+      dispatchTitleCompletion(title)
     }
     lastTitleStatus = status
   }
@@ -765,14 +797,7 @@ export function createAgentCompletionCoordinator(
       establishAgentEvidence()
     }
     if (agentIdentityEstablished && hasAgentRunEvidence) {
-      markTitleCompletionNotified(title)
-      dispatchCompletion('title', title, {
-        completionIdentity: {
-          source: 'title',
-          identity: titleCompletionIdentity(title),
-          agentIdentity: titleCompletionAgentIdentity(title)
-        }
-      })
+      dispatchTitleCompletion(title)
     } else {
       holdTitleCompletionPending(title)
     }
@@ -784,6 +809,7 @@ export function createAgentCompletionCoordinator(
       // Why: a suppressed permission pause must still cancel a provisional 'done' so the quiet-window timer can't fire a false completion.
       if (isAttentionHookState(payload.state)) {
         clearPendingHookDone()
+        clearPendingTitleQuiet()
         clearPendingCodexAttention()
       }
       return
@@ -793,6 +819,7 @@ export function createAgentCompletionCoordinator(
     }
     if (payload.state === 'working') {
       clearPendingHookDone()
+      clearPendingTitleQuiet()
       // Why: resumed work cancels the debounced attention so a self-resolving pause never notifies.
       clearPendingCodexAttention()
       workingStatusObserved = true
@@ -881,6 +908,7 @@ export function createAgentCompletionCoordinator(
 
   function resetCompletionState(options: { requireFreshWorking?: boolean } = {}): void {
     clearPendingHookDone()
+    clearPendingTitleQuiet()
     clearPendingCodexAttention()
     dropPendingTitle()
     agentIdentityEstablished = false
@@ -902,6 +930,7 @@ export function createAgentCompletionCoordinator(
     disposed = true
     clearPollTimer()
     clearPendingHookDone()
+    clearPendingTitleQuiet()
     clearPendingCodexAttention()
     dropPendingTitle()
     // Why: module-scoped identity survives a live-stream remount; evict only on genuine teardown (isLive() false) so it can't leak per closed pane.
