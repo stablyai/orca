@@ -1,9 +1,11 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { gitExecFileAsync } from './git/runner'
+import { getRemoteVerboseRaw } from './git/git-remote-metadata'
 import { getSshGitProvider } from './providers/ssh-git-dispatch'
 import { probeGitRemoteIdentity } from './repo-git-remote-identity'
 
 vi.mock('./git/runner', () => ({ gitExecFileAsync: vi.fn() }))
+vi.mock('./git/git-remote-metadata', () => ({ getRemoteVerboseRaw: vi.fn() }))
 vi.mock('./providers/ssh-git-dispatch', () => ({ getSshGitProvider: vi.fn() }))
 
 const gitlabRemote = 'origin\tgit@gitlab.example.com:team/orca.git (fetch)\n'
@@ -14,7 +16,7 @@ beforeEach(() => {
 
 describe('probeGitRemoteIdentity', () => {
   it('resolves the canonical identity for a non-GitHub remote', async () => {
-    vi.mocked(gitExecFileAsync).mockResolvedValue({ stdout: gitlabRemote, stderr: '' })
+    vi.mocked(getRemoteVerboseRaw).mockResolvedValue(gitlabRemote)
 
     await expect(probeGitRemoteIdentity('/repos/orca')).resolves.toEqual({
       status: 'resolved',
@@ -27,7 +29,7 @@ describe('probeGitRemoteIdentity', () => {
   })
 
   it('settles on no-remote when git answers with nothing usable', async () => {
-    vi.mocked(gitExecFileAsync).mockResolvedValue({ stdout: '', stderr: '' })
+    vi.mocked(getRemoteVerboseRaw).mockResolvedValue('')
 
     await expect(probeGitRemoteIdentity('/repos/orca')).resolves.toEqual({ status: 'no-remote' })
   })
@@ -41,7 +43,7 @@ describe('probeGitRemoteIdentity', () => {
   })
 
   it('reports unavailable when the local git command fails', async () => {
-    vi.mocked(gitExecFileAsync).mockRejectedValue(new Error('not a git repository'))
+    vi.mocked(getRemoteVerboseRaw).mockRejectedValue(new Error('not a git repository'))
 
     await expect(probeGitRemoteIdentity('/repos/orca')).resolves.toEqual({ status: 'unavailable' })
   })

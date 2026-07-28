@@ -24,6 +24,7 @@ type RemoteReadCacheEntry = {
 
 const cache = new Map<string, RemoteReadCacheEntry>()
 const inFlight = new Map<string, Promise<string>>()
+const cacheWriteTokens = new Map<string, symbol>()
 
 function cacheKey(repoPath: string, op: RemoteReadOp): string {
   return `${repoPath}\0${op}`
@@ -74,15 +75,19 @@ async function cachedRemoteRead(
   // Why: register the probe synchronously — reading the signature is itself
   // async, so a concurrent caller must find this in-flight entry rather than
   // race past an `await` and spawn a duplicate.
+  const cacheWriteToken = Symbol(key)
+  cacheWriteTokens.set(key, cacheWriteToken)
   const probe = (async () => {
     const configSignature = await readLocalGitConfigSignature({ repoPath })
     const { stdout } = await gitExecFileAsync(args, { cwd: repoPath })
-    cache.set(key, {
-      value: stdout,
-      expiresAt: Date.now() + CACHE_TTL_MS,
-      ...(configSignature !== undefined ? { configSignature } : {})
-    })
-    prune(Date.now())
+    if (cacheWriteTokens.get(key) === cacheWriteToken) {
+      cache.set(key, {
+        value: stdout,
+        expiresAt: Date.now() + CACHE_TTL_MS,
+        ...(configSignature !== undefined ? { configSignature } : {})
+      })
+      prune(Date.now())
+    }
     return stdout
   })()
   inFlight.set(key, probe)
@@ -91,6 +96,9 @@ async function cachedRemoteRead(
   } finally {
     if (inFlight.get(key) === probe) {
       inFlight.delete(key)
+    }
+    if (cacheWriteTokens.get(key) === cacheWriteToken) {
+      cacheWriteTokens.delete(key)
     }
   }
 }
@@ -111,10 +119,12 @@ export function invalidateGitRemoteMetadata(repoPath: string): void {
     const key = cacheKey(repoPath, op)
     cache.delete(key)
     inFlight.delete(key)
+    cacheWriteTokens.delete(key)
   }
 }
 
 export function __resetGitRemoteMetadataCacheForTests(): void {
   cache.clear()
   inFlight.clear()
+  cacheWriteTokens.clear()
 }

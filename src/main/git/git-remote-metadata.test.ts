@@ -96,6 +96,26 @@ describe('git-remote-metadata', () => {
     expect(gitExecFileAsync).toHaveBeenCalledTimes(2)
   })
 
+  it('does not let an invalidated in-flight probe repopulate the cache', async () => {
+    let resolveStale!: (result: { stdout: string; stderr: string }) => void
+    const staleProbe = new Promise<{ stdout: string; stderr: string }>((resolve) => {
+      resolveStale = resolve
+    })
+    gitExecFileAsync
+      .mockReturnValueOnce(staleProbe)
+      .mockResolvedValueOnce({ stdout: 'fresh\n', stderr: '' })
+
+    const pendingStale = getRemoteListRaw('/repo')
+    await vi.waitFor(() => expect(gitExecFileAsync).toHaveBeenCalledTimes(1))
+    invalidateGitRemoteMetadata('/repo')
+
+    await expect(getRemoteListRaw('/repo')).resolves.toBe('fresh\n')
+    resolveStale({ stdout: 'stale\n', stderr: '' })
+    await expect(pendingStale).resolves.toBe('stale\n')
+    await expect(getRemoteListRaw('/repo')).resolves.toBe('fresh\n')
+    expect(gitExecFileAsync).toHaveBeenCalledTimes(2)
+  })
+
   it('caches on the TTL path when no signature is available (WSL/relay)', async () => {
     state.signature = undefined
     gitExecFileAsync.mockResolvedValue({ stdout: 'origin\n', stderr: '' })
