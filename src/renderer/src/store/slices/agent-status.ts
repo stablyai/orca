@@ -34,6 +34,7 @@ import {
   getRepoExecutionHostId,
   getWorktreeExecutionHostId
 } from '../../../../shared/execution-host'
+import { generatedTitleNamesEndedSession } from '../../../../shared/agent-tab-title'
 import { isExplicitAgentStatusFresh } from '@/lib/agent-status'
 import {
   getAgentRowGeneratedTitleText,
@@ -435,20 +436,36 @@ function getTabIdFromPaneKey(paneKey: string): string | null {
   return paneKey.slice(0, separator)
 }
 
+function tabTitleBlocksGeneration(
+  tab: TerminalTab | undefined,
+  liveSessionId: string | undefined
+): boolean {
+  if (!tab) {
+    return false
+  }
+  if (tab.customTitle?.trim() || tab.quickCommandLabel?.trim()) {
+    return true
+  }
+  // Why: a generated title naming an ended session no longer blocks the write, so the
+  // dispatch preamble still has to be parsed — otherwise its raw text becomes the title.
+  return Boolean(tab.generatedTitle?.trim()) && !generatedTitleNamesEndedSession(tab, liveSessionId)
+}
+
 /** True when auto-title generation would no-op without replace (custom/quick/generated). */
 function agentStatusTabAlreadyHasProtectedOrGeneratedTitle(
   state: AppState,
   tabId: string | null,
-  worktreeId?: string | null
+  worktreeId?: string | null,
+  liveSessionId?: string
 ): boolean {
   if (!tabId) {
     return false
   }
   const ownerTabs = worktreeId ? state.tabsByWorktree[worktreeId] : undefined
   if (ownerTabs) {
-    const tab = ownerTabs.find((candidate) => candidate.id === tabId)
-    return Boolean(
-      tab?.customTitle?.trim() || tab?.quickCommandLabel?.trim() || tab?.generatedTitle?.trim()
+    return tabTitleBlocksGeneration(
+      ownerTabs.find((candidate) => candidate.id === tabId),
+      liveSessionId
     )
   }
   for (const tabs of Object.values(state.tabsByWorktree)) {
@@ -456,9 +473,7 @@ function agentStatusTabAlreadyHasProtectedOrGeneratedTitle(
     if (!tab) {
       continue
     }
-    return Boolean(
-      tab.customTitle?.trim() || tab.quickCommandLabel?.trim() || tab.generatedTitle?.trim()
-    )
+    return tabTitleBlocksGeneration(tab, liveSessionId)
   }
   return false
 }
@@ -2561,7 +2576,8 @@ export const createAgentStatusSlice: StateCreator<AppState, [], [], AgentStatusS
             !agentStatusTabAlreadyHasProtectedOrGeneratedTitle(
               get(),
               entryForGeneratedTitle.tabId ?? getTabIdFromPaneKey(paneKey),
-              entryForGeneratedTitle.worktreeId
+              entryForGeneratedTitle.worktreeId,
+              titleSessionId
             ))
         const generatedTitlePrompt =
           liveIsDispatchPrompt && mayWriteGeneratedTitle

@@ -15,9 +15,8 @@ export function generatedTitleNamesEndedSession(
   liveSessionId: string | undefined
 ): boolean {
   const titleSessionId = tab.generatedTitleSessionId?.trim()
-  return (
-    Boolean(titleSessionId && liveSessionId?.trim()) && titleSessionId !== liveSessionId?.trim()
-  )
+  const liveId = liveSessionId?.trim()
+  return Boolean(titleSessionId && liveId) && titleSessionId !== liveId
 }
 
 const LEADING_FILLER_PATTERNS: RegExp[] = [

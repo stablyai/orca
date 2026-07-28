@@ -398,6 +398,54 @@ Implement task B worker instructions for the next dispatch`,
     )
   })
 
+  it('still parses the dispatch preamble when a new session retitles a worker tab', () => {
+    vi.useFakeTimers()
+    const store = createTestStore()
+    const tabId = seedWorktree(store, true)
+    const paneKey = makePaneKey(tabId, LEAF_ID)
+    const dispatchPrompt = (taskId: string, task: string): string =>
+      `You are working inside Orca, a multi-agent IDE. You are a dispatched worker.
+Your task ID is: ${taskId}
+
+=== TASK ===
+${task}`
+
+    store.getState().setAgentStatus(
+      paneKey,
+      {
+        state: 'working',
+        prompt: dispatchPrompt('task-a', 'Implement the alpha worker instructions'),
+        agentType: 'claude'
+      },
+      undefined,
+      undefined,
+      undefined,
+      { providerSession: { key: 'session_id', id: 'session-a' } }
+    )
+    expect(store.getState().tabsByWorktree[WORKTREE_ID][0].generatedTitle).toBe(
+      'Implement the alpha worker instructions'
+    )
+
+    // Sticky orchestration has expired, so nothing sets the replace flag. The session
+    // change alone opens the write — the preamble must still be parsed for the label.
+    store.getState().setAgentStatus(
+      paneKey,
+      {
+        state: 'working',
+        prompt: dispatchPrompt('task-b', 'Implement the beta worker instructions'),
+        agentType: 'claude'
+      },
+      undefined,
+      undefined,
+      undefined,
+      { providerSession: { key: 'session_id', id: 'session-b' } }
+    )
+
+    expect(store.getState().tabsByWorktree[WORKTREE_ID][0].generatedTitle).toBe(
+      'Implement the beta worker instructions'
+    )
+  })
+
   it('re-stamps the owning session when /clear derives the same title text', () => {
     vi.useFakeTimers()
     const store = createTestStore()
