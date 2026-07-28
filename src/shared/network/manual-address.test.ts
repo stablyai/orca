@@ -1,8 +1,16 @@
 import { describe, it, expect } from 'vitest'
+import { readFileSync } from 'node:fs'
+import { resolve } from 'node:path'
 import { parseManualNetworkAddress } from './manual-address'
-import { PAIRING_ENDPOINT_MAX_CHARACTERS } from '../mobile-relay-pairing-offer'
+import { PAIRING_ENDPOINT_MAX_CHARACTERS } from '../mobile-pairing-protocol-limits'
 
 describe('parseManualNetworkAddress', () => {
+  it('keeps renderer validation off the Zod schema import path', () => {
+    const source = readFileSync(resolve('src/shared/network/manual-address.ts'), 'utf8')
+    expect(source).not.toContain('mobile-relay-pairing-offer')
+    expect(source).not.toContain("from 'zod'")
+  })
+
   describe('IPv4', () => {
     it('accepts canonical IPv4', () => {
       expect(parseManualNetworkAddress('192.168.1.24')).toEqual({
@@ -193,12 +201,20 @@ describe('parseManualNetworkAddress', () => {
         '[::]:8080',
         '0:0:0:0:0:0:0:0',
         '[0:0:0:0:0:0:0:0]:8080',
+        '::ffff:0.0.0.0',
+        '[::ffff:0.0.0.0]:8080',
         '[::1]:0',
         '[::1]:65536',
         '[::1]:'
       ]) {
         expect(parseManualNetworkAddress(bad).ok).toBe(false)
       }
+    })
+
+    it('accepts reachable IPv4-mapped and native IPv6 controls', () => {
+      expect(parseManualNetworkAddress('::ffff:192.168.1.24').ok).toBe(true)
+      expect(parseManualNetworkAddress('[::ffff:192.168.1.24]:8080').ok).toBe(true)
+      expect(parseManualNetworkAddress('2001:db8::24').ok).toBe(true)
     })
   })
 
@@ -236,7 +252,8 @@ describe('parseManualNetworkAddress', () => {
         'wss://example.com:0',
         'ws://0.0.0.0:8080',
         'ws://[::]:8080',
-        'ws://[0:0:0:0:0:0:0:0]:8080'
+        'ws://[0:0:0:0:0:0:0:0]:8080',
+        'ws://[::ffff:0.0.0.0]:8080'
       ]) {
         expect(parseManualNetworkAddress(bad).ok).toBe(false)
       }

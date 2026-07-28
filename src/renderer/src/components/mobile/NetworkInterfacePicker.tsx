@@ -10,6 +10,7 @@ export type NetworkInterfacePickerProps = {
   networkInterfaces: readonly MobileNetworkInterface[]
   selectedAddress: string | undefined
   onSelectedAddressChange: (address: string) => void
+  beforeCustomAddressChange?: (address: string) => boolean | Promise<boolean>
   disabled?: boolean
   className?: string
   id?: string
@@ -19,6 +20,7 @@ export function NetworkInterfacePicker({
   networkInterfaces,
   selectedAddress,
   onSelectedAddressChange,
+  beforeCustomAddressChange,
   disabled = false,
   className,
   id
@@ -37,6 +39,7 @@ export function NetworkInterfacePicker({
       options={options}
       value={selectedAddress}
       onValueChange={onSelectedAddressChange}
+      beforeCustomConfirm={beforeCustomAddressChange}
       disabled={disabled}
       className={className}
       id={id}
@@ -83,7 +86,11 @@ export function NetworkInterfacePicker({
           'Enter an IPv4/IPv6 address, hostname, or full HTTP(S)/WebSocket URL. Ports are optional.'
         ),
         cancel: translate('auto.components.mobile.CustomNetworkAddressDialog.cancel', 'Cancel'),
-        confirm: translate('auto.components.mobile.CustomNetworkAddressDialog.use', 'Use address')
+        confirm: translate('auto.components.mobile.CustomNetworkAddressDialog.use', 'Use address'),
+        confirmationError: translate(
+          'auto.components.mobile.CustomNetworkAddressDialog.confirmationError',
+          'This address could not produce a scannable pairing code. Check the address and try again.'
+        )
       }}
     />
   )

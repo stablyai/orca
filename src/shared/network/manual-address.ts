@@ -1,4 +1,5 @@
-import { PAIRING_ENDPOINT_MAX_CHARACTERS } from '../mobile-relay-pairing-offer'
+import { PAIRING_ENDPOINT_MAX_CHARACTERS } from '../mobile-pairing-protocol-limits'
+import { isPairingWildcardHostname, normalizePairingUrl } from './pairing-url'
 
 // Why: pairing entry points must accept the same endpoint forms as the main process.
 const IPV4_OCTET = '(?:25[0-5]|2[0-4][0-9]|1[0-9][0-9]|[1-9]?[0-9])'
@@ -29,7 +30,7 @@ export function parseManualNetworkAddress(input: string): ParseManualAddressResu
     return { ok: false, error: ERROR_MESSAGE }
   }
   if (trimmed.includes('://')) {
-    return isValidPairingUrl(trimmed)
+    return normalizePairingUrl(trimmed)
       ? { ok: true, address: trimmed }
       : { ok: false, error: ERROR_MESSAGE }
   }
@@ -87,34 +88,6 @@ function isValidPort(port: string): boolean {
   return value >= MIN_PORT && value <= MAX_PORT
 }
 
-function isValidPairingUrl(value: string): boolean {
-  try {
-    const url = new URL(value)
-    const validShape =
-      ['http:', 'https:', 'ws:', 'wss:'].includes(url.protocol) &&
-      url.hostname !== '' &&
-      !isWildcardHostname(url.hostname) &&
-      url.username === '' &&
-      url.password === '' &&
-      url.hash === '' &&
-      url.port !== '0'
-    if (!validShape) {
-      return false
-    }
-    if (url.protocol === 'http:') {
-      url.protocol = 'ws:'
-    } else if (url.protocol === 'https:') {
-      url.protocol = 'wss:'
-    }
-    const normalized = url.toString()
-    const endpoint =
-      url.pathname === '/' && !url.search ? normalized.replace(/\/$/, '') : normalized
-    return endpoint.length <= PAIRING_ENDPOINT_MAX_CHARACTERS
-  } catch {
-    return false
-  }
-}
-
 function isValidIpv6Override(value: string): boolean {
   const bracketed = value.match(/^\[([^\]]+)\](?::(\d+))?$/)
   const hostname = bracketed?.[1] ?? value
@@ -124,13 +97,8 @@ function isValidIpv6Override(value: string): boolean {
   }
   try {
     const url = new URL(`ws://[${hostname}]`)
-    return url.hostname.includes(':') && !isWildcardHostname(url.hostname)
+    return url.hostname.includes(':') && !isPairingWildcardHostname(url.hostname)
   } catch {
     return false
   }
-}
-
-function isWildcardHostname(hostname: string): boolean {
-  const normalized = hostname.replace(/^\[|\]$/g, '').toLowerCase()
-  return normalized === '*' || normalized === '0.0.0.0' || normalized === '::'
 }

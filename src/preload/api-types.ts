@@ -3540,7 +3540,8 @@ export type PreloadApi = {
       | { available: false }
       | {
           available: true
-          qrDataUrl: string
+          qrDataUrl: string | null
+          qrError?: 'encoding_failed'
           pairingUrl: string
           endpoint: string
           deviceId: string

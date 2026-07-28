@@ -6199,7 +6199,8 @@
           "6436e56546": "QR Code for mobile pairing",
           "1b1b70279a": "No devices paired yet.",
           "1592afcc7a": "No devices paired yet. Scan the QR code with the Orca mobile app.",
-          "relayDegradedNotice": "Relay couldn’t be reached — this code only works on your LAN or Tailscale. Regenerate to try again."
+          "relayDegradedNotice": "Relay couldn’t be reached — this code only works on your LAN or Tailscale. Regenerate to try again.",
+          "pairingQrError": "This pairing code couldn’t be rendered as a QR code. Copy it into Orca Mobile instead."
         },
         "MobileSettingsPane": {
           "9a3c280e49": "GitHub Releases",
@@ -11485,7 +11486,8 @@
             "preview": "Preview",
             "stable": "Stable"
           },
-          "relayDegradedNotice": "Relay couldn’t be reached — this code only works on your LAN or Tailscale."
+          "relayDegradedNotice": "Relay couldn’t be reached — this code only works on your LAN or Tailscale.",
+          "pairingQrError": "This pairing code couldn’t be rendered as a QR code. Copy it into Orca Mobile instead."
         },
         "MobilePage": {
           "e17393c6a3": "Phone preview",
@@ -11607,7 +11609,8 @@
           "placeholder": "home.example.com:8443 or https://example.com/orca",
           "hint": "Enter an IPv4/IPv6 address, hostname, or full HTTP(S)/WebSocket URL. Ports are optional.",
           "cancel": "Cancel",
-          "use": "Use address"
+          "use": "Use address",
+          "confirmationError": "This address could not produce a scannable pairing code. Check the address and try again."
         },
         "NetworkInterfacePicker": {
           "trigger-label": "Network address to advertise",

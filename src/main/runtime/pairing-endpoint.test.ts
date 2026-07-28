@@ -1,10 +1,8 @@
 import { describe, expect, it } from 'vitest'
 import { resolveAdvertisedPairingEndpoint } from './pairing-endpoint'
-import {
-  PAIRING_ENDPOINT_MAX_CHARACTERS,
-  PAIRING_OFFER_VERSION,
-  PairingOfferSchema
-} from '../../shared/mobile-relay-pairing-offer'
+import { PAIRING_OFFER_VERSION, PairingOfferSchema } from '../../shared/mobile-relay-pairing-offer'
+import { PAIRING_ENDPOINT_MAX_CHARACTERS } from '../../shared/mobile-pairing-protocol-limits'
+import { parseManualNetworkAddress } from '../../shared/network/manual-address'
 
 describe('resolveAdvertisedPairingEndpoint', () => {
   const bound = 'ws://0.0.0.0:6768'
@@ -46,6 +44,9 @@ describe('resolveAdvertisedPairingEndpoint', () => {
     '0:0:0:0:0:0:0:0',
     '[0:0:0:0:0:0:0:0]:8080',
     'ws://[0:0:0:0:0:0:0:0]:8080',
+    '::ffff:0.0.0.0',
+    '[::ffff:0.0.0.0]:8080',
+    'ws://[::ffff:0.0.0.0]:8080',
     'ftp://proxy.example.test',
     'ws://user:secret@proxy.example.test',
     'ws://proxy.example.test/#fragment',
@@ -59,6 +60,24 @@ describe('resolveAdvertisedPairingEndpoint', () => {
       ok: false,
       reason: 'invalid_advertised_endpoint'
     })
+  })
+
+  it.each([
+    ['::ffff:192.168.1.24', 'ws://[::ffff:c0a8:118]:6768'],
+    ['[::ffff:192.168.1.24]:8080', 'ws://[::ffff:c0a8:118]:8080'],
+    ['2001:db8::24', 'ws://[2001:db8::24]:6768']
+  ])('accepts reachable mapped/native IPv6 control %s', (input, endpoint) => {
+    expect(resolveAdvertisedPairingEndpoint(bound, input)).toEqual({ ok: true, endpoint })
+  })
+
+  it.each([
+    ['ws://host.example.test.', true],
+    ['ws://0x7f.1:6768', true],
+    ['\u0000ws://host.example.test', false],
+    ['ws://host.example.test/path\u0001', false]
+  ])('keeps full-URL renderer/main acceptance aligned for %j', (input, accepted) => {
+    expect(parseManualNetworkAddress(input).ok).toBe(accepted)
+    expect(resolveAdvertisedPairingEndpoint(bound, input).ok).toBe(accepted)
   })
 
   it('matches the pairing-offer endpoint length boundary', () => {

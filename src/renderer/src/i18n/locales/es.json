@@ -6139,7 +6139,8 @@
           "6436e56546": "Código QR para emparejamiento móvil",
           "1b1b70279a": "Aún no hay dispositivos emparejados.",
           "1592afcc7a": "Aún no hay dispositivos emparejados. Escanea el código QR con la aplicación móvil de Orca.",
-          "relayDegradedNotice": "No se pudo contactar con Relay: este código solo funciona en tu LAN o Tailscale. Genera uno nuevo e inténtalo de nuevo."
+          "relayDegradedNotice": "No se pudo contactar con Relay: este código solo funciona en tu LAN o Tailscale. Genera uno nuevo e inténtalo de nuevo.",
+          "pairingQrError": "Este código de emparejamiento no se pudo representar como código QR. Cópialo en Orca Mobile."
         },
         "MobileSettingsPane": {
           "9a3c280e49": "GitHub Releases",
@@ -11462,7 +11463,8 @@
             "preview": "Vista previa",
             "stable": "Estable"
           },
-          "relayDegradedNotice": "No se pudo contactar con Relay: este código solo funciona en tu LAN o Tailscale."
+          "relayDegradedNotice": "No se pudo contactar con Relay: este código solo funciona en tu LAN o Tailscale.",
+          "pairingQrError": "Este código de emparejamiento no se pudo representar como código QR. Cópialo en Orca Mobile."
         },
         "MobilePage": {
           "e17393c6a3": "Vista previa del teléfono",
@@ -11584,7 +11586,8 @@
           "placeholder": "home.example.com:8443 o https://example.com/orca",
           "hint": "Introduce una dirección IPv4/IPv6, un nombre de host o una URL HTTP(S)/WebSocket completa. Los puertos son opcionales.",
           "cancel": "Cancelar",
-          "use": "Usar dirección"
+          "use": "Usar dirección",
+          "confirmationError": "Esta dirección no pudo generar un código de emparejamiento escaneable. Comprueba la dirección e inténtalo de nuevo."
         },
         "NetworkInterfacePicker": {
           "trigger-label": "Dirección de red para anunciar",

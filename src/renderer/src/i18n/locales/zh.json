@@ -6124,7 +6124,8 @@
           "6436e56546": "用于手机配对的二维码",
           "1b1b70279a": "尚未配对任何设备。",
           "1592afcc7a": "尚未配对任何设备。使用 Orca 手机应用程序扫描二维码。",
-          "relayDegradedNotice": "无法连接 Relay — 此二维码仅在局域网或 Tailscale 内可用。请重新生成后再试。"
+          "relayDegradedNotice": "无法连接 Relay — 此二维码仅在局域网或 Tailscale 内可用。请重新生成后再试。",
+          "pairingQrError": "无法将此配对码呈现为二维码。请改为将其复制到 Orca Mobile。"
         },
         "MobileSettingsPane": {
           "9a3c280e49": "GitHub 发布",
@@ -11462,7 +11463,8 @@
             "preview": "预览版",
             "stable": "稳定版"
           },
-          "relayDegradedNotice": "无法连接 Relay — 此二维码仅在局域网或 Tailscale 内可用。"
+          "relayDegradedNotice": "无法连接 Relay — 此二维码仅在局域网或 Tailscale 内可用。",
+          "pairingQrError": "无法将此配对码呈现为二维码。请改为将其复制到 Orca Mobile。"
         },
         "MobilePage": {
           "e17393c6a3": "手机预览",
@@ -11584,7 +11586,8 @@
           "placeholder": "home.example.com:8443 或 https://example.com/orca",
           "hint": "请输入 IPv4/IPv6 地址、主机名或完整的 HTTP(S)/WebSocket URL。端口可选。",
           "cancel": "取消",
-          "use": "使用地址"
+          "use": "使用地址",
+          "confirmationError": "此地址无法生成可扫描的配对码。请检查地址后重试。"
         },
         "NetworkInterfacePicker": {
           "trigger-label": "要公布的网络地址",
