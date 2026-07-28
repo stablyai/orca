@@ -88,7 +88,7 @@ export async function sendRequest<TResult>(
         )
       })
     })
-    socket.on('data', (chunk) => {
+    socket.on('data', (chunk: string) => {
       buffer += chunk
       // Why: the server may interleave `{"_keepalive":true}\n` frames with the
       // final success/failure frame to keep both idle timers alive during a

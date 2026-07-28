@@ -23,9 +23,9 @@ import type {
   Worktree,
   WorktreeLineage,
   WorkspaceLineage,
-  WorktreeLineageWarning
+  WorktreeLineageWarning,
+  TerminalPaneLayoutNode
 } from './types'
-import type { TerminalPaneLayoutNode } from './types'
 import type {
   RuntimeMarkdownReadTabResult,
   RuntimeMarkdownSaveTabResult

@@ -11382,16 +11382,25 @@
             "searchGitLab": "搜索 GitLab MR 和议题",
             "searchBranches": "搜索分支",
             "searchLinear": "搜索 Linear 议题",
-            "workspaceName": "工作区名称"
+            "workspaceName": "工作区名称",
+            "emoji": "Emoji"
           },
           "ProjectHostSetupCombobox": {
             "empty": "此项目没有已就绪的主机。",
             "placeholder": "选择主机"
           },
           "ProjectCombobox": {
-            "search": "搜索项目...",
             "empty": "没有匹配搜索的项目。",
-            "addProject": "Add a new project"
+            "addProject": "Add a new project",
+            "label": "Project",
+            "browse": "Browse projects",
+            "listLabel": "Projects",
+            "noProjects": "No projects yet."
+          },
+          "RunTargetCombobox": {
+            "listLabel": "Run targets",
+            "label": "Run on",
+            "browse": "Browse run targets"
           }
         }
       },

@@ -925,6 +925,35 @@ describe('registerWorktreeHandlers', () => {
     })
   })
 
+  it('keeps an emoji-only display name while using safe branch and path names', async () => {
+    listWorktreesMock.mockResolvedValue([
+      {
+        path: '/workspace/rocket',
+        head: 'abc123',
+        branch: 'rocket',
+        isBare: false,
+        isMainWorktree: false
+      }
+    ])
+
+    await handlers['worktrees:create'](null, {
+      repoId: 'repo-1',
+      name: '🚀'
+    })
+
+    expect(addWorktreeMock).toHaveBeenCalledWith(
+      '/workspace/repo',
+      '/workspace/rocket',
+      'rocket',
+      'origin/main',
+      false
+    )
+    expect(store.setWorktreeMeta).toHaveBeenCalledWith(
+      'repo-1::/workspace/rocket',
+      expect.objectContaining({ displayName: '🚀' })
+    )
+  })
+
   it('uses a repo-specific worktree base path when creating local worktrees', async () => {
     store.getRepo.mockReturnValue({
       id: 'repo-1',

@@ -25,7 +25,7 @@ export async function fetchGitLabMergeRequestHeadRef(
   options: { localGitExecOptions?: LocalGitExecOptions } = {}
 ): Promise<string> {
   if (!isValidReviewHeadNumber(mrIid)) {
-    throw new Error(`Invalid merge request iid: ${mrIid}`)
+    throw new Error(`Invalid merge request iid: ${String(mrIid)}`)
   }
   if (!isSafeReviewHeadFetchRemote(remote)) {
     throw new Error('Merge request fetch remote must not start with "-".')

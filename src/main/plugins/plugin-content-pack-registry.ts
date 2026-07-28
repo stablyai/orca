@@ -60,11 +60,10 @@ export class PluginContentPackRegistry {
     while (true) {
       const approveAtomically = (plugin: ValidDiscoveredPlugin): boolean =>
         approvedKeys.has(plugin.pluginKey) && !excluded.has(plugin.pluginKey)
-      await Promise.all([
-        this.languagePacks.reconcile(discovered, approveAtomically),
-        this.vmRecipes.reconcile(discovered, approveAtomically),
-        this.commands.reconcile(discovered, approveAtomically, keybindings)
-      ])
+      const languagePacks = this.languagePacks.reconcile(discovered, approveAtomically)
+      const vmRecipes = this.vmRecipes.reconcile(discovered, approveAtomically)
+      this.commands.reconcile(discovered, approveAtomically, keybindings)
+      await Promise.all([languagePacks, vmRecipes])
 
       let foundNewError = false
       for (const pluginKey of approvedKeys) {

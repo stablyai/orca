@@ -1064,7 +1064,7 @@ function writeWebKeybindingAction(
   bindings: string[] | null
 ): KeybindingFileSnapshot {
   if (!isKeybindingActionId(actionId)) {
-    throw new Error(`Unknown keybinding action "${actionId}".`)
+    throw new Error(`Unknown keybinding action "${String(actionId)}".`)
   }
   const normalizedBindings =
     bindings === null ? null : normalizeKeybindingArrayForAction(actionId, bindings)

@@ -596,7 +596,7 @@ async function importValidatedCookies(
           }
         }
         diag(
-          `  cookie.set FAILED: domain=${cookie.domain} name=${cookie.name} valLen=${val.length} badChar=${badInfo} err=${err}`
+          `  cookie.set FAILED: domain=${cookie.domain} name=${cookie.name} valLen=${val.length} badChar=${badInfo} err=${String(err)}`
         )
       }
     }
@@ -1019,7 +1019,7 @@ function getWindowsEncryptionKey(browser: DetectedBrowser): EncryptionKeyResult 
 
     return { key: Buffer.from(result, 'base64'), mode: 'aes-256-gcm' }
   } catch (err) {
-    diag(`  Windows DPAPI key extraction failed: ${err}`)
+    diag(`  Windows DPAPI key extraction failed: ${String(err)}`)
     return null
   }
 }
@@ -1339,7 +1339,7 @@ async function importCookiesFromFirefox(
     return importValidatedCookies(validated, rows.length, targetPartition)
   } catch (err) {
     rmSync(tmpDir, { recursive: true, force: true })
-    diag(`  Firefox import failed: ${err}`)
+    diag(`  Firefox import failed: ${String(err)}`)
     return {
       ok: false,
       reason: 'Could not import cookies from Firefox. Try closing Firefox first.'
@@ -1361,7 +1361,7 @@ async function importCookiesFromSafari(
   try {
     data = readFileSync(browser.cookiesPath)
   } catch (err) {
-    diag(`  Safari read failed: ${err}`)
+    diag(`  Safari read failed: ${String(err)}`)
     // Why: Safari's Cookies.binarycookies is in a sandbox container; reading it needs Full Disk Access.
     const isPermError =
       err instanceof Error && 'code' in err && (err as NodeJS.ErrnoException).code === 'EPERM'
@@ -1392,7 +1392,7 @@ async function importCookiesFromSafari(
 
     return importValidatedCookies(valid, cookies.length, targetPartition)
   } catch (err) {
-    diag(`  Safari import failed: ${err}`)
+    diag(`  Safari import failed: ${String(err)}`)
     return { ok: false, reason: 'Could not import cookies from Safari.' }
   }
 }
@@ -1480,7 +1480,7 @@ export async function importCookiesFromBrowser(
     } catch {
       /* best-effort */
     }
-    diag(`  Chromium snapshot failed: ${err}`)
+    diag(`  Chromium snapshot failed: ${String(err)}`)
     return {
       ok: false,
       reason: `Could not copy ${browser.label} cookies database. Try closing ${browser.label} first.`
@@ -1527,7 +1527,7 @@ export async function importCookiesFromBrowser(
         placeholders = targetCols.map(() => '?').join(', ')
         stagingDb.exec('DELETE FROM cookies')
       } catch (err) {
-        diag(`  staging database unusable, restart fallback disabled: ${err}`)
+        diag(`  staging database unusable, restart fallback disabled: ${String(err)}`)
         stagingAvailable = false
         targetColumnInfo = null
         colList = null
@@ -1807,7 +1807,7 @@ export async function importCookiesFromBrowser(
     } catch {
       /* may not exist yet */
     }
-    diag(`  SQLite import failed: ${err}`)
+    diag(`  SQLite import failed: ${String(err)}`)
     return {
       ok: false,
       reason: reasonWithDiagLog(
@@ -1818,7 +1818,7 @@ export async function importCookiesFromBrowser(
     try {
       sourceSnapshot.cleanup()
     } catch (err) {
-      diag(`  Chromium snapshot cleanup failed: ${err}`)
+      diag(`  Chromium snapshot cleanup failed: ${String(err)}`)
     }
   }
 }

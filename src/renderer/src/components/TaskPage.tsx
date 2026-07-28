@@ -45,6 +45,7 @@ import { getLocalPreflightContext, localPreflightContextKey } from '@/lib/local-
 import { getProviderRuntimeContextKey } from '@/lib/provider-runtime-context'
 import {
   getSettingsFocusedExecutionHostId,
+  getRepoExecutionHostId,
   LOCAL_EXECUTION_HOST_ID,
   normalizeExecutionHostId,
   parseExecutionHostId
@@ -183,7 +184,6 @@ import {
   readLinearBoardIssueDragData,
   writeLinearBoardIssueDragData
 } from '@/lib/linear-board-drag-payload'
-import { getRepoExecutionHostId } from '../../../shared/execution-host'
 import { projectHostSetupProjectionFromRepos } from '../../../shared/project-host-setup-projection'
 import { TASK_SOURCE_CONTEXT_RUNTIME_CAPABILITY } from '../../../shared/protocol-version'
 import {

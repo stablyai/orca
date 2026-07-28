@@ -11382,16 +11382,25 @@
             "searchGitLab": "GitLab MR 및 이슈 검색",
             "searchBranches": "브랜치 검색",
             "searchLinear": "Linear 이슈 검색",
-            "workspaceName": "워크스페이스 이름"
+            "workspaceName": "워크스페이스 이름",
+            "emoji": "Emoji"
           },
           "ProjectHostSetupCombobox": {
             "empty": "이 프로젝트에 준비된 호스트가 없습니다.",
             "placeholder": "호스트 선택"
           },
           "ProjectCombobox": {
-            "search": "프로젝트 검색...",
             "empty": "검색과 일치하는 프로젝트가 없습니다.",
-            "addProject": "Add a new project"
+            "addProject": "Add a new project",
+            "label": "Project",
+            "browse": "Browse projects",
+            "listLabel": "Projects",
+            "noProjects": "No projects yet."
+          },
+          "RunTargetCombobox": {
+            "listLabel": "Run targets",
+            "label": "Run on",
+            "browse": "Browse run targets"
           }
         }
       },

@@ -942,7 +942,7 @@ describe('connectPanePty', () => {
 
   afterEach(async () => {
     // Why: drain in-flight foreground-confirm microtasks while this test still owns the store mock, so its async fallout can't leak into (and flake) the next test.
-    await flushAsyncTicks()
+    await flushAsyncTicks(20)
     vi.useRealTimers()
     vi.restoreAllMocks()
     if (originalRequestAnimationFrame) {
