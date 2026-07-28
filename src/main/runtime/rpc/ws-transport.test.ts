@@ -101,16 +101,26 @@ describe('WebSocketTransport', () => {
     const withListen = transport as unknown as {
       tryListen(port: number, host?: string): Promise<void>
     }
+    const attemptedHosts: string[] = []
     const realTryListen = withListen.tryListen.bind(transport)
-    withListen.tryListen = (port: number, host?: string) =>
-      host === '::'
+    withListen.tryListen = (port: number, host?: string) => {
+      attemptedHosts.push(host ?? '')
+      return host === '::'
         ? Promise.reject(Object.assign(new Error('listen EAFNOSUPPORT'), { code: 'EAFNOSUPPORT' }))
         : realTryListen(port, host)
+    }
 
     await transport.start()
 
+    expect(attemptedHosts).toEqual(['::', '127.0.0.1'])
     expect(transport.resolvedHost).toBe('127.0.0.1')
     expect(transport.resolvedPort).toBeGreaterThan(0)
+  })
+
+  it('rejects an empty host candidate list', () => {
+    expect(() => new WebSocketTransport({ host: [], port: 0 })).toThrow(
+      'WebSocketTransport requires at least one host candidate'
+    )
   })
 
   it('arms heartbeat only while accepted connections exist', async () => {

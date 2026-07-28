@@ -76,7 +76,11 @@ export class WebSocketTransport implements RpcTransport {
     fallbackPort,
     preferPinnedPort
   }: WebSocketTransportOptions) {
-    this.hostCandidates = Array.isArray(host) ? host : [host]
+    const hostCandidates = Array.isArray(host) ? [...host] : [host]
+    if (hostCandidates.length === 0) {
+      throw new TypeError('WebSocketTransport requires at least one host candidate')
+    }
+    this.hostCandidates = hostCandidates
     this.port = port
     this.tlsCert = tlsCert
     this.tlsKey = tlsKey
@@ -129,10 +133,7 @@ export class WebSocketTransport implements RpcTransport {
 
   get resolvedHost(): string {
     const addr = this.httpServer?.address()
-    if (addr && typeof addr === 'object') {
-      return addr.address
-    }
-    return this.hostCandidates[0] ?? '127.0.0.1'
+    return addr && typeof addr === 'object' ? addr.address : (this.hostCandidates[0] ?? '127.0.0.1')
   }
 
   async start(): Promise<void> {
