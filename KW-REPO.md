@@ -1,7 +1,9 @@
 # kw-repo — 이 레포(포크)의 자산 취급
 
-> 포크 고유 문서. upstream(`stablyai/orca`)에는 없다. 루트에 둔 이유 = `notes/`가 이 레포에선
-> `.gitignore` 대상이라 커밋되지 않는다(2026-07-28 확인).
+> 포크 고유 문서. upstream(`stablyai/orca`)에는 없다.
+> 루트에 둔 이유 = `.gitignore`에 `/notes/`가 있어 **새 파일**은 `git add`가 거부된다
+> (기존 `notes/skill-*-design.md` 3개는 이미 추적 중이라 영향 없다 — ignore는 추적 중인
+> 파일엔 효력이 없다. 2026-07-28 확인).
 > 3-tier(git / kw-repo / 기기 로컬) 판정 정본 = `orca-system` 레포 `STRUCTURE.md`.
 
 ## 위치
