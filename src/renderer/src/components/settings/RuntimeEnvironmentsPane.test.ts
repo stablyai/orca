@@ -1,4 +1,9 @@
-import { describe, expect, it } from 'vitest'
+// @vitest-environment happy-dom
+
+import { act, createElement } from 'react'
+import { createRoot, type Root } from 'react-dom/client'
+import { afterEach, describe, expect, it, vi } from 'vitest'
+import { TooltipProvider } from '../ui/tooltip'
 import {
   MIN_COMPATIBLE_RUNTIME_SERVER_VERSION,
   PROJECT_HOST_SETUP_RUNTIME_CAPABILITY,
@@ -15,8 +20,16 @@ import {
   getRuntimeCapabilitiesSummary,
   getRuntimeServerConnectionState,
   isRuntimeEnvironmentRemovalBlocked,
+  RemoteServerUpdatesButton,
   type RuntimeHostDetails
 } from './RuntimeEnvironmentsPane'
+
+const roots: Root[] = []
+
+afterEach(() => {
+  roots.splice(0).forEach((root) => root.unmount())
+  document.body.replaceChildren()
+})
 
 function details(overrides: Partial<RuntimeHostDetails>): RuntimeHostDetails {
   return {
@@ -29,6 +42,42 @@ function details(overrides: Partial<RuntimeHostDetails>): RuntimeHostDetails {
 }
 
 describe('RuntimeEnvironmentsPane host details', () => {
+  it('keeps the pre-release hint reachable while remote checks are unavailable', async () => {
+    globalThis.IS_REACT_ACT_ENVIRONMENT = true
+    const onCheck = vi.fn()
+    const container = document.createElement('div')
+    document.body.appendChild(container)
+    const root = createRoot(container)
+    roots.push(root)
+
+    await act(async () => {
+      root.render(
+        createElement(
+          TooltipProvider,
+          undefined,
+          createElement(RemoteServerUpdatesButton, {
+            disabled: true,
+            checking: true,
+            running: false,
+            onCheck
+          })
+        )
+      )
+    })
+
+    const tooltipTrigger = container.querySelector<HTMLElement>(
+      '[data-testid="remote-server-update-check-tooltip-trigger"]'
+    )
+    const button = container.querySelector<HTMLButtonElement>('button')
+    expect(tooltipTrigger?.tabIndex).toBe(0)
+    expect(button?.disabled).toBe(true)
+
+    await act(async () => {
+      button?.click()
+    })
+    expect(onCheck).not.toHaveBeenCalled()
+  })
+
   it('summarizes loading, error, compatible, and blocked hosts', () => {
     expect(getHostDetailsSummary(undefined)).toBe('Checking…')
     expect(getHostDetailsSummary(details({ status: 'error', error: 'offline' }))).toBe(

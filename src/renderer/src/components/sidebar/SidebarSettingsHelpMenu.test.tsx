@@ -22,7 +22,7 @@ const mocks = vi.hoisted(() => ({
   }
 }))
 
-let updateStatus = { state: 'idle' } as const
+let updateStatus: { state: 'idle' | 'checking' | 'downloading' } = { state: 'idle' }
 const roots: Root[] = []
 
 vi.mock('@/store', () => ({
@@ -305,6 +305,23 @@ describe('SidebarSettingsHelpMenu', () => {
       includePrerelease: false,
       includePerfPrerelease: false
     })
+  })
+
+  it('keeps the update hint reachable while checking without allowing another check', async () => {
+    updateStatus = { state: 'checking' }
+    const container = await renderMenu()
+    const checkButton = findMenuItem(container, 'Check for Updates')
+    const tooltipTrigger = container.querySelector<HTMLElement>(
+      '[data-testid="update-check-tooltip-trigger"]'
+    )
+
+    expect(checkButton.disabled).toBe(true)
+    expect(tooltipTrigger?.tabIndex).toBe(0)
+
+    await act(async () => {
+      checkButton.click()
+    })
+    expect(mocks.updaterCheck).not.toHaveBeenCalled()
   })
 
   it('renders shortcut keys in the settings tooltip', () => {
