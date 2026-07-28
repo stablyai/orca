@@ -1,7 +1,8 @@
 import { describe, expect, it, vi, beforeEach, afterEach } from 'vitest'
 import type { WebSocket } from 'ws'
-import { E2EEChannel, sanitizeReportedDeviceName, type E2EEChannelOptions } from './e2ee-channel'
+import { E2EEChannel, type E2EEChannelOptions } from './e2ee-channel'
 import { generateKeyPair, deriveSharedKey, encrypt, decrypt, encryptBytes } from './e2ee-crypto'
+import { sanitizeReportedDeviceName } from './mobile-device-name'
 import {
   REMOTE_RUNTIME_MAX_OUTBOUND_BINARY_FRAME_BYTES,
   REMOTE_RUNTIME_MAX_OUTBOUND_JSON_BYTES

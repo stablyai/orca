@@ -18,29 +18,10 @@ import type { MobileE2EEOutboundMemoryBudget } from './mobile-e2ee-outbound-memo
 import { MobileE2EEDesktopOutboundOwner } from './mobile-e2ee-desktop-outbound-owner'
 import { parseRuntimeClientCapabilities } from './runtime-client-capabilities'
 import type { RuntimeCapability } from '../../../shared/protocol-version'
+import { sanitizeReportedDeviceName } from './mobile-device-name'
 
 const HANDSHAKE_TIMEOUT_MS = 10_000
 const MAX_CONSECUTIVE_DECRYPT_FAILURES = 5
-
-const MAX_REPORTED_DEVICE_NAME_LENGTH = 64
-
-export function sanitizeReportedDeviceName(raw: unknown): string | null {
-  if (typeof raw !== 'string') {
-    return null
-  }
-  const normalized = Array.from(raw)
-    .filter((character) => {
-      const codePoint = character.codePointAt(0)
-      return codePoint !== undefined && codePoint > 0x1f && codePoint !== 0x7f
-    })
-    .join('')
-    .replace(/\s+/g, ' ')
-    .trim()
-  // Why: String.slice counts UTF-16 code units and can leave a lone surrogate
-  // at the boundary; match the mobile sender's code-point limit.
-  const cleaned = Array.from(normalized).slice(0, MAX_REPORTED_DEVICE_NAME_LENGTH).join('')
-  return cleaned.length > 0 ? cleaned : null
-}
 
 export type E2EEChannelOptions = {
   serverSecretKey: Uint8Array

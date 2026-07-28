@@ -61,11 +61,7 @@ export function RpcClientProvider({ children }: { children: ReactNode }) {
   const primedHostsRef = useRef<Map<string, HostProfile>>(new Map())
 
   function notifyHostState(hostId: string, state: ConnectionState) {
-    const set = stateListenersRef.current.get(hostId)
-    if (!set) {
-      return
-    }
-    for (const listener of set) {
+    for (const listener of stateListenersRef.current.get(hostId) ?? []) {
       listener(state)
     }
   }
