@@ -66,7 +66,7 @@ describe('MobilePairingSetupSection', () => {
 
   it('describes address role when Anywhere is selected', () => {
     renderSection({ connectionMode: 'automatic' })
-    expect(screen.getByText(/faster direct path when nearby/i)).toBeVisible()
+    expect(screen.getByText(/Relay remains available as a fallback/i)).toBeVisible()
   })
 
   it('disables generate when sign-in is required', () => {
@@ -82,6 +82,15 @@ describe('MobilePairingSetupSection', () => {
     await user.click(screen.getByRole('combobox'))
     await user.click(screen.getByRole('option', { name: '192.168.1.24 (en0)' }))
     expect(onSelectedAddressChange).toHaveBeenCalledWith('192.168.1.24')
+  })
+
+  it('commits a secure public-tunnel endpoint', async () => {
+    const { user, onSelectedAddressChange } = renderSection()
+    await user.click(screen.getByRole('combobox'))
+    await user.click(screen.getByRole('option', { name: 'Add custom endpoint…' }))
+    await user.type(screen.getByLabelText('Address'), 'wss://orca.example.com')
+    await user.click(screen.getByRole('button', { name: 'Use address' }))
+    expect(onSelectedAddressChange).toHaveBeenCalledWith('wss://orca.example.com')
   })
 
   it('generates a pairing code', async () => {

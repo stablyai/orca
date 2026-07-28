@@ -15,12 +15,8 @@ import { useLocalSearchParams, useRouter } from 'expo-router'
 import { ChevronLeft } from 'lucide-react-native'
 import { colors, radii, spacing, typography } from '../../../src/theme/mobile-theme'
 import { loadHosts, updateHostNameAndEndpoint } from '../../../src/transport/host-store'
-import {
-  displayHostEndpoint,
-  endpointPort,
-  endpointScheme,
-  normalizeHostEndpoint
-} from '../../../src/transport/host-endpoint'
+import { displayHostEndpoint, normalizeHostEndpoint } from '../../../src/transport/host-endpoint'
+import { normalizeEditedHostEndpoint } from '../../../src/transport/host-endpoint-edit'
 import { useForceReconnect, usePrimeHosts } from '../../../src/transport/client-context'
 import type { HostProfile } from '../../../src/transport/types'
 
@@ -68,12 +64,10 @@ export default function EditHostScreen() {
     void load()
   }, [load])
 
-  const fallbackPort = host ? endpointPort(host.endpoint) : undefined
-  const fallbackScheme = host ? endpointScheme(host.endpoint) : 'ws'
-
   const normalizedEndpoint = useMemo(
-    () => normalizeHostEndpoint(address, { fallbackPort, fallbackScheme }),
-    [address, fallbackPort, fallbackScheme]
+    () =>
+      host ? normalizeEditedHostEndpoint(address, host.endpoint) : normalizeHostEndpoint(address),
+    [address, host]
   )
 
   const nameTrimmed = name.trim()
@@ -243,8 +237,8 @@ export default function EditHostScreen() {
               }}
             />
             <Text style={styles.hint}>
-              Accepts IP, host:port, or ws:// / wss://. Missing port defaults to the current port
-              (or 6768).
+              Accepts IP, host:port, or ws:// / wss://. Missing port keeps the current endpoint's
+              scheme and effective port.
             </Text>
 
             {normalizedEndpoint.ok ? (

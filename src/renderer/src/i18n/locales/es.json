@@ -9451,8 +9451,8 @@
           "overview": "Genera un código QR, luego escanéalo en Orca Mobile en Pair Desktop.",
           "step1Title": "Método de conexión",
           "step2Title": "Dirección de este ordenador",
-          "step2RelayDescription": "Se usa para una ruta directa más rápida cuando está cerca. Relay cubre el acceso remoto.",
-          "step2LocalDescription": "El teléfono debe poder alcanzar esta dirección por Wi‑Fi o Tailscale."
+          "step2RelayDescription": "El teléfono usa esta dirección para conectarse directamente por Wi‑Fi, Tailscale o un túnel WebSocket seguro. Relay sigue disponible como alternativa.",
+          "step2LocalDescription": "El teléfono debe poder alcanzar esta dirección por Wi‑Fi, Tailscale o un túnel WebSocket seguro."
         },
         "MobileRelayBetaAvailability": {
           "about": "Acerca de la beta de Orca Relay",
@@ -11574,18 +11574,18 @@
           }
         },
         "CustomNetworkAddressDialog": {
-          "title": "Dirección de red personalizada",
-          "description": "Anuncia una dirección que tu teléfono pueda alcanzar cuando no esté en la misma red Wi-Fi: por ejemplo, un nombre de host de Tailscale o una IP estática.",
+          "title": "Endpoint directo personalizado",
+          "description": "Anuncia una dirección IP, un nombre de host o un túnel WebSocket seguro al que pueda acceder tu teléfono.",
           "label": "Dirección",
-          "placeholder": "my-mac.ts.net, home.example.com o 192.168.1.50",
-          "hint": "Introduce una dirección IP o un nombre de host (un nombre MagicDNS de Tailscale, un dominio DDNS o un nombre de host de LAN), opcionalmente con :puerto.",
+          "placeholder": "wss://orca.example.com, my-mac.ts.net o 192.168.1.50",
+          "hint": "Introduce una dirección IP, un nombre de host, un :puerto opcional o un origen ws(s):// sin ruta.",
           "cancel": "Cancelar",
           "use": "Usar dirección"
         },
         "NetworkInterfacePicker": {
           "trigger-label": "Dirección de red para anunciar",
           "custom-option": "{{address}} (personalizada)",
-          "add-custom": "Añadir dirección personalizada…"
+          "add-custom": "Añadir endpoint personalizado…"
         },
         "WindowsFirewallNotice": {
           "repair-success": "Windows Firewall now allows Orca Mobile on private networks",

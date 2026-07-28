@@ -9451,8 +9451,8 @@
           "overview": "QR 코드를 생성한 후 Orca Mobile의 Pair Desktop에서 스캔하세요.",
           "step1Title": "연결 방식",
           "step2Title": "이 컴퓨터의 주소",
-          "step2RelayDescription": "가까운 곳에서는 빠른 직접 연결에 사용됩니다. 먼 거리에서는 Relay가 원격 액세스를 제공합니다.",
-          "step2LocalDescription": "휴대폰이 Wi‑Fi 또는 Tailscale을 통해 이 주소에 접근할 수 있어야 합니다."
+          "step2RelayDescription": "휴대폰은 이 주소를 사용해 Wi‑Fi, Tailscale 또는 안전한 WebSocket 터널을 통해 직접 연결합니다. Relay는 대체 연결로 계속 사용할 수 있습니다.",
+          "step2LocalDescription": "휴대폰이 Wi‑Fi, Tailscale 또는 안전한 WebSocket 터널을 통해 이 주소에 접근할 수 있어야 합니다."
         },
         "MobileRelayBetaAvailability": {
           "about": "Orca Relay 베타 정보",
@@ -11574,18 +11574,18 @@
           }
         },
         "CustomNetworkAddressDialog": {
-          "title": "사용자 지정 네트워크 주소",
-          "description": "같은 Wi-Fi에 있지 않을 때 휴대폰이 연결할 수 있는 주소를 알립니다. 예: Tailscale 호스트 이름 또는 고정 IP.",
+          "title": "사용자 지정 직접 연결 엔드포인트",
+          "description": "휴대폰이 연결할 수 있는 IP 주소, 호스트 이름 또는 안전한 WebSocket 터널을 지정합니다.",
           "label": "주소",
-          "placeholder": "my-mac.ts.net, home.example.com 또는 192.168.1.50",
-          "hint": "IP 주소 또는 호스트 이름(Tailscale MagicDNS 이름, DDNS 도메인 또는 LAN 호스트 이름)을 입력하세요. 필요하면 :포트를 붙일 수 있습니다.",
+          "placeholder": "wss://orca.example.com, my-mac.ts.net 또는 192.168.1.50",
+          "hint": "IP 주소, 호스트 이름, 선택적 :포트 또는 경로가 없는 ws(s):// 오리진을 입력하세요.",
           "cancel": "취소",
           "use": "주소 사용"
         },
         "NetworkInterfacePicker": {
           "trigger-label": "알릴 네트워크 주소",
           "custom-option": "{{address}} (사용자 지정)",
-          "add-custom": "사용자 지정 주소 추가…"
+          "add-custom": "사용자 지정 엔드포인트 추가…"
         },
         "WindowsFirewallNotice": {
           "repair-success": "이제 Windows 방화벽이 개인 네트워크에서 Orca Mobile을 허용합니다",

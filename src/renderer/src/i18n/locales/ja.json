@@ -9451,8 +9451,8 @@
           "overview": "QR コードを生成し、Orca Mobile の Pair Desktop でスキャンしてください。",
           "step1Title": "接続方法",
           "step2Title": "このコンピューターのアドレス",
-          "step2RelayDescription": "近くでは高速な直接接続に使用されます。Relay はリモートアクセスに対応します。",
-          "step2LocalDescription": "スマートフォンが Wi‑Fi または Tailscale でこのアドレスに到達できる必要があります。"
+          "step2RelayDescription": "スマートフォンはこのアドレスを使い、Wi‑Fi、Tailscale、または安全な WebSocket トンネル経由で直接接続します。Relay はフォールバックとして引き続き利用できます。",
+          "step2LocalDescription": "スマートフォンが Wi‑Fi、Tailscale、または安全な WebSocket トンネルでこのアドレスに到達できる必要があります。"
         },
         "MobileRelayBetaAvailability": {
           "about": "Orca Relay ベータについて",
@@ -11574,18 +11574,18 @@
           }
         },
         "CustomNetworkAddressDialog": {
-          "title": "カスタムネットワークアドレス",
-          "description": "同じ Wi-Fi に接続していないときにスマートフォンから到達できるアドレスを指定します。たとえば Tailscale のホスト名や静的 IP です。",
+          "title": "カスタム直接接続エンドポイント",
+          "description": "スマートフォンから到達できるIPアドレス、ホスト名、または安全なWebSocketトンネルを指定します。",
           "label": "アドレス",
-          "placeholder": "my-mac.ts.net、home.example.com、または 192.168.1.50",
-          "hint": "IP アドレスまたはホスト名（Tailscale の MagicDNS 名、DDNS ドメイン、LAN のホスト名など）を入力してください。必要に応じて :ポート を付けられます。",
+          "placeholder": "wss://orca.example.com、my-mac.ts.net、または192.168.1.50",
+          "hint": "IPアドレス、ホスト名、任意の:ポート、またはパスのないws(s)://オリジンを入力します。",
           "cancel": "キャンセル",
           "use": "アドレスを使用"
         },
         "NetworkInterfacePicker": {
           "trigger-label": "通知するネットワークアドレス",
           "custom-option": "{{address}}（カスタム）",
-          "add-custom": "カスタムアドレスを追加…"
+          "add-custom": "カスタムエンドポイントを追加…"
         },
         "WindowsFirewallNotice": {
           "repair-success": "Windows Firewall now allows Orca Mobile on private networks",
