@@ -403,6 +403,7 @@ describe('CdpWsProxy', () => {
     expect(getSendCommandMethods(mock)).toEqual([
       'Page.enable',
       'Page.addScriptToEvaluateOnNewDocument',
+      'Emulation.setDefaultBackgroundColorOverride',
       'Input.insertText'
     ])
     client.close()
@@ -422,6 +423,7 @@ describe('CdpWsProxy', () => {
     expect(getSendCommandMethods(mock)).toEqual([
       'Page.enable',
       'Page.addScriptToEvaluateOnNewDocument',
+      'Emulation.setDefaultBackgroundColorOverride',
       'Network.enable',
       'Page.enable',
       'Page.setLifecycleEventsEnabled',
@@ -443,6 +445,7 @@ describe('CdpWsProxy', () => {
     expect(getSendCommandMethods(mock)).toEqual([
       'Page.enable',
       'Page.addScriptToEvaluateOnNewDocument',
+      'Emulation.setDefaultBackgroundColorOverride',
       'Network.enable',
       'Page.enable',
       'Page.setLifecycleEventsEnabled'
@@ -462,7 +465,7 @@ describe('CdpWsProxy', () => {
       sessionId: 'iframe-session-123'
     })
 
-    expect(getSendCommandCalls(mock).slice(2)).toEqual([
+    expect(getSendCommandCalls(mock).slice(3)).toEqual([
       ['Network.enable', {}, 'iframe-session-123'],
       ['Page.enable', {}, 'iframe-session-123'],
       ['Page.setLifecycleEventsEnabled', { enabled: true }, 'iframe-session-123'],
@@ -481,7 +484,7 @@ describe('CdpWsProxy', () => {
       sessionId: 'iframe-session-123'
     })
 
-    expect(getSendCommandCalls(mock).slice(2)).toEqual([
+    expect(getSendCommandCalls(mock).slice(3)).toEqual([
       ['Network.enable', {}, 'iframe-session-123'],
       ['Page.enable', {}, 'iframe-session-123'],
       ['Page.setLifecycleEventsEnabled', { enabled: true }, 'iframe-session-123'],
@@ -565,6 +568,7 @@ describe('CdpWsProxy', () => {
     expect(getSendCommandMethods(mock)).toEqual([
       'Page.enable',
       'Page.addScriptToEvaluateOnNewDocument',
+      'Emulation.setDefaultBackgroundColorOverride',
       'Runtime.evaluate'
     ])
     client.close()

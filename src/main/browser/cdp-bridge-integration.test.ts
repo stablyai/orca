@@ -175,6 +175,8 @@ function createMockGuest(
         return {}
       case 'Page.addScriptToEvaluateOnNewDocument':
         return { identifier: 'mock-script-id' }
+      case 'Emulation.setDefaultBackgroundColorOverride':
+        return {}
       case 'Runtime.enable':
         return {}
       default:
