@@ -194,6 +194,9 @@ describe('EmulatorBridge helper ownership', () => {
     await expect(
       bridge.runCapability('install', { device: 'device-1' }, async () => 'unused')
     ).rejects.toMatchObject({ code: 'emulator_unsupported' })
+    await expect(
+      bridge.runCapability('biometric', { device: 'device-1' }, async () => 'used')
+    ).resolves.toBe('used')
   })
 
   it('kills the helper and shuts down the selected simulator', async () => {

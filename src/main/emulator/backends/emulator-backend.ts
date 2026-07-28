@@ -26,7 +26,11 @@ export type EmulatorBackendCapabilities = {
   permissions: boolean
   accessibilityTree: boolean
   logcat: boolean
+  biometric: boolean
 }
+
+export type EmulatorBiometryType = 'face' | 'touch'
+export type EmulatorBiometricAction = 'enroll' | 'unenroll' | 'match' | 'nomatch'
 
 export type BackendAvailability = {
   available: boolean
@@ -95,4 +99,9 @@ export type EmulatorBackend = {
     deviceId: string,
     options?: { lines?: number; filters?: readonly string[] }
   ): Promise<unknown>
+  biometric?(
+    deviceId: string,
+    action: EmulatorBiometricAction,
+    type?: EmulatorBiometryType
+  ): Promise<void>
 }

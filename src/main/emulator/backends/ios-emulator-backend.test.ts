@@ -12,7 +12,8 @@ const {
   shutdownSimulatorDeviceMock,
   sendEmulatorGestureSequenceMock,
   parseServeSimDetachedSessionMock,
-  netFetchMock
+  netFetchMock,
+  sendIosSimulatorBiometricEventMock
 } = vi.hoisted(() => ({
   ensureSimulatorBootedMock: vi.fn(async () => {}),
   execServeSimCommandMock: vi.fn(async (_executable?: unknown, _args?: string[]) => ({})),
@@ -23,7 +24,12 @@ const {
   shutdownSimulatorDeviceMock: vi.fn(async () => {}),
   sendEmulatorGestureSequenceMock: vi.fn(async () => {}),
   parseServeSimDetachedSessionMock: vi.fn(),
-  netFetchMock: vi.fn()
+  netFetchMock: vi.fn(),
+  sendIosSimulatorBiometricEventMock: vi.fn(async () => {})
+}))
+
+vi.mock('../ios-simulator-biometric', () => ({
+  sendIosSimulatorBiometricEvent: sendIosSimulatorBiometricEventMock
 }))
 
 vi.mock('electron', () => ({ net: { fetch: netFetchMock } }))
@@ -97,7 +103,8 @@ describe('IosEmulatorBackend', () => {
       launch: false,
       permissions: false,
       accessibilityTree: true,
-      logcat: false
+      logcat: false,
+      biometric: true
     })
   })
 
@@ -214,6 +221,24 @@ describe('IosEmulatorBackend', () => {
       code: 'emulator_error'
     })
     expect(execServeSimCommandMock).not.toHaveBeenCalled()
+  })
+
+  it('forwards biometric actions to the resolved udid', async () => {
+    const backend = new IosEmulatorBackend()
+    await backend.biometric('device-1', 'match')
+    await backend.biometric('device-1', 'enroll', 'touch')
+    expect(sendIosSimulatorBiometricEventMock).toHaveBeenNthCalledWith(
+      1,
+      'device-1',
+      'match',
+      undefined
+    )
+    expect(sendIosSimulatorBiometricEventMock).toHaveBeenNthCalledWith(
+      2,
+      'device-1',
+      'enroll',
+      'touch'
+    )
   })
 
   it('execs a raw command with the device appended as json', async () => {

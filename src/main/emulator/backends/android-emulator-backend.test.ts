@@ -67,7 +67,8 @@ describe('AndroidEmulatorBackend', () => {
       launch: true,
       permissions: true,
       accessibilityTree: true,
-      logcat: true
+      logcat: true,
+      biometric: false
     })
   })
 
