@@ -1,7 +1,10 @@
 import type { Dirent } from 'node:fs'
 import { opendir, realpath, stat } from 'node:fs/promises'
 import { basename, join } from 'node:path'
-import type { SkillFreshnessScanIssueReason } from '../../shared/skill-freshness'
+import {
+  isTruncatingSkillScanReason,
+  type SkillFreshnessScanIssueReason
+} from '../../shared/skill-freshness'
 import { declaredPluginSkillRoots, isWithinRoot } from './skill-plugin-manifest-roots'
 
 const MAXIMUM_PLUGIN_SCAN_DEPTH = 9
@@ -67,10 +70,13 @@ export async function scanKnownPluginSkillCandidates(
     if (issueKeys.has(key)) {
       return
     }
+    // Why: the bound that ended the walk is the one issue the dialog cannot do without
+    // — dropping it for display budget is what lets a truncated scan report all-clear.
+    const required = explainsCandidate || isTruncatingSkillScanReason(reason)
     // Why: this budget bounds what the dialog lists, not how far the scan reaches.
     // Ending the walk here would truncate coverage over a display limit — and since
     // Orca's own bounds no longer raise attention, it would do so silently.
-    if (!explainsCandidate && issues.length >= MAXIMUM_PLUGIN_SCAN_ISSUES) {
+    if (!required && issues.length >= MAXIMUM_PLUGIN_SCAN_ISSUES) {
       if (!issues.some((issue) => issue.reason === 'issue-limit')) {
         issues.push({
           path: rootPath,

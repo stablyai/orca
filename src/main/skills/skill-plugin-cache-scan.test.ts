@@ -451,6 +451,35 @@ describe('plugin skill candidate scan', () => {
     expect(result.issues.filter((issue) => issue.reason === 'issue-limit')).toHaveLength(1)
   })
 
+  it('reports the bound that ended the walk even with the issue budget spent', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'orca-plugin-truncating-issue-'))
+    temporaryDirectories.push(root)
+    await Promise.all(
+      Array.from({ length: 16 }, (_, index) =>
+        mkdir(
+          join(
+            root,
+            `deep-${index.toString().padStart(2, '0')}`,
+            ...Array.from({ length: 11 }, (_, level) => `level-${level}`)
+          ),
+          { recursive: true }
+        )
+      )
+    )
+    await Promise.all(
+      ['zz-one', 'zz-two'].map(async (vendor) => {
+        await mkdir(join(root, vendor, 'orca-cli'), { recursive: true })
+        await writeFile(join(root, vendor, 'orca-cli', 'SKILL.md'), '# Orca CLI\n')
+      })
+    )
+
+    const result = await scanKnownPluginSkillCandidates(root, new Set(['orca-cli']), 1)
+
+    // Why: losing this one to the display budget is what lets a scan that stopped early
+    // report all-clear — the bounds that merely skipped a folder say nothing about it.
+    expect(result.issues).toContainEqual({ path: root, reason: 'candidate-limit', errorCode: null })
+  })
+
   it('keeps scanning past the issue budget', async () => {
     const root = await mkdtemp(join(tmpdir(), 'orca-plugin-issue-budget-coverage-'))
     temporaryDirectories.push(root)

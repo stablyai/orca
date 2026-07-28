@@ -121,8 +121,12 @@ const SKILL_SCAN_TRUNCATING_REASONS = new Set<SkillFreshnessScanIssueReason>([
   'candidate-limit'
 ])
 
+export function isTruncatingSkillScanReason(reason: SkillFreshnessScanIssueReason): boolean {
+  return SKILL_SCAN_TRUNCATING_REASONS.has(reason)
+}
+
 export function isSkillScanIssueTruncatingScan(issue: SkillFreshnessScanIssue): boolean {
-  return SKILL_SCAN_TRUNCATING_REASONS.has(issue.reason)
+  return isTruncatingSkillScanReason(issue.reason)
 }
 
 export type SkillFreshnessInventory = {
