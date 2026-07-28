@@ -10,8 +10,10 @@ vi.mock('../telemetry/cohort-classifier', () => ({ getCohortAtEmit: vi.fn() }))
 const AGENT_PANE = makePaneKey('tab-agent', '11111111-1111-4111-8111-111111111111')
 const AGENT_WORKTREE = 'repo-agent::/Users/dev/workspace/agent'
 
-// Why: reproduces the shared-daemon leak — a session running in one project posts the
-// pane identity it inherited from the pane that first spawned the agent daemon.
+/**
+ * Hook body reproducing the shared-daemon leak: a session running in one project posts
+ * the pane identity it inherited from the pane that first spawned the agent daemon.
+ */
 function buildBody(payload: Record<string, unknown>): Record<string, unknown> {
   return {
     paneKey: AGENT_PANE,
