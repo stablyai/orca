@@ -1,9 +1,10 @@
-import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, truncateSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { getDefaultPersistedState } from '../../shared/constants'
 import type { PersistedState } from '../../shared/types'
+import { ORCA_PERSISTED_STATE_MAX_BYTES } from '../../shared/persisted-state-file-bounds'
 
 const {
   applyAgentStatusHooksEnabledMock,
@@ -45,9 +46,12 @@ vi.mock('../runtime-client', () => {
     }
   }
 
+  class RuntimeRpcFailureError extends Error {}
+
   return {
     RuntimeClient,
     RuntimeClientError,
+    RuntimeRpcFailureError,
     getDefaultUserDataPath: getDefaultUserDataPathMock
   }
 })
@@ -119,5 +123,17 @@ describe('agent hooks CLI handler', () => {
     await runAgentHooksOff(userDataPath)
 
     expect(readDataFile(userDataPath).settings.experimentalNewWorktreeCardStyle).toBe(true)
+  })
+
+  it('rejects an oversized sparse offline state file without replacing it', async () => {
+    const dataPath = join(userDataPath, 'orca-data.json')
+    writeFileSync(dataPath, '')
+    truncateSync(dataPath, ORCA_PERSISTED_STATE_MAX_BYTES + 1)
+
+    await runAgentHooksOff(userDataPath)
+
+    expect(process.exitCode).toBe(1)
+    expect(console.log).toHaveBeenCalledWith(expect.stringContaining('File too large'))
+    expect(readFileSync(dataPath).byteLength).toBe(ORCA_PERSISTED_STATE_MAX_BYTES + 1)
   })
 })
