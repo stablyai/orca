@@ -22,20 +22,6 @@ export function mapWithConcurrency<T, R>(
   ).then(() => results)
 }
 
-export function mapSettledWithConcurrency<T, R>(
-  items: readonly T[],
-  limit: number,
-  fn: (item: T, index: number) => Promise<R>
-): Promise<PromiseSettledResult<R>[]> {
-  return mapWithConcurrency(items, limit, async (item, index): Promise<PromiseSettledResult<R>> => {
-    try {
-      return { status: 'fulfilled', value: await fn(item, index) }
-    } catch (reason) {
-      return { status: 'rejected', reason }
-    }
-  })
-}
-
 export function forEachWithConcurrency<T>(
   items: readonly T[],
   limit: number,
