@@ -4,7 +4,7 @@ import { AddressPicker, type AddressOption } from '../network/AddressPicker'
 import { parseManualNetworkAddress } from '../../../../shared/network/manual-address'
 import type { MobileNetworkInterface } from '../settings/mobile-network-interface-selection'
 
-// 两个配对入口共用此选择器，因此自定义地址必须覆盖主进程支持的反向代理 URL。
+// Why: both pairing entry points must expose every endpoint form supported by the main process.
 
 export type NetworkInterfacePickerProps = {
   networkInterfaces: readonly MobileNetworkInterface[]
@@ -71,16 +71,16 @@ export function NetworkInterfacePicker({
         ),
         description: translate(
           'auto.components.mobile.CustomNetworkAddressDialog.description',
-          'Advertise an address your phone can reach — for example a Tailscale hostname, static IP, or reverse-proxy ws(s):// URL.'
+          'Advertise an address your phone can reach — for example a Tailscale hostname, IP address, or reverse-proxy URL.'
         ),
         inputLabel: translate('auto.components.mobile.CustomNetworkAddressDialog.label', 'Address'),
         placeholder: translate(
           'auto.components.mobile.CustomNetworkAddressDialog.placeholder',
-          'home.example.com:8443 or wss://example.com:443'
+          'home.example.com:8443 or https://example.com/orca'
         ),
         hint: translate(
           'auto.components.mobile.CustomNetworkAddressDialog.hint',
-          'Enter an IPv4 address, hostname, or full ws(s):// URL. Hosts and URLs may include a port.'
+          'Enter an IPv4/IPv6 address, hostname, or full HTTP(S)/WebSocket URL. Ports are optional.'
         ),
         cancel: translate('auto.components.mobile.CustomNetworkAddressDialog.cancel', 'Cancel'),
         confirm: translate('auto.components.mobile.CustomNetworkAddressDialog.use', 'Use address')

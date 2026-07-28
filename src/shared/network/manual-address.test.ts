@@ -14,8 +14,8 @@ describe('parseManualNetworkAddress', () => {
       })
     })
 
-    it('accepts boundary IPv4 values', () => {
-      expect(parseManualNetworkAddress('0.0.0.0').ok).toBe(true)
+    it('accepts the upper boundary and rejects the wildcard address', () => {
+      expect(parseManualNetworkAddress('0.0.0.0').ok).toBe(false)
       expect(parseManualNetworkAddress('255.255.255.255').ok).toBe(true)
     })
 
@@ -30,7 +30,7 @@ describe('parseManualNetworkAddress', () => {
       for (const bad of ['', '   ', '1.2.3', '1.2.3.4.5', '256.0.0.1']) {
         expect(parseManualNetworkAddress(bad)).toEqual({
           ok: false,
-          error: 'Enter an IPv4 address, hostname, or ws(s):// URL'
+          error: 'Enter an IPv4/IPv6 address, hostname, or HTTP(S)/WebSocket URL'
         })
       }
     })
@@ -38,9 +38,8 @@ describe('parseManualNetworkAddress', () => {
     it('rejects leading zeros in octets', () => {
       expect(parseManualNetworkAddress('01.02.03.04')).toEqual({
         ok: false,
-        error: 'Enter an IPv4 address, hostname, or ws(s):// URL'
+        error: 'Enter an IPv4/IPv6 address, hostname, or HTTP(S)/WebSocket URL'
       })
-      expect(parseManualNetworkAddress('0.0.0.0').ok).toBe(true)
     })
   })
 
@@ -161,13 +160,32 @@ describe('parseManualNetworkAddress', () => {
       expect(parseManualNetworkAddress(`example.com:${'0'.repeat(1000)}8080`).ok).toBe(false)
     })
 
-    it('rejects addresses with more than one colon (e.g. IPv6-shaped input)', () => {
+    it('rejects malformed addresses with more than one colon', () => {
       expect(parseManualNetworkAddress('example.com:80:90').ok).toBe(false)
-      expect(parseManualNetworkAddress('::1').ok).toBe(false)
     })
   })
 
-  describe('WebSocket URL', () => {
+  describe('IPv6', () => {
+    it('accepts bare and bracketed IPv6 addresses with optional ports', () => {
+      expect(parseManualNetworkAddress('::1')).toEqual({ ok: true, address: '::1' })
+      expect(parseManualNetworkAddress('2001:db8::4')).toEqual({
+        ok: true,
+        address: '2001:db8::4'
+      })
+      expect(parseManualNetworkAddress('[2001:db8::4]:7443')).toEqual({
+        ok: true,
+        address: '[2001:db8::4]:7443'
+      })
+    })
+
+    it('rejects wildcard, malformed, and invalid-port IPv6 addresses', () => {
+      for (const bad of ['::', '[::]:8080', '[::1]:0', '[::1]:65536', '[::1]:']) {
+        expect(parseManualNetworkAddress(bad).ok).toBe(false)
+      }
+    })
+  })
+
+  describe('full URL', () => {
     it('accepts ws:// and wss:// URLs with optional ports', () => {
       expect(parseManualNetworkAddress('wss://example.com')).toEqual({
         ok: true,
@@ -187,9 +205,14 @@ describe('parseManualNetworkAddress', () => {
       expect(parseManualNetworkAddress('wss://example.com/orca?route=runtime').ok).toBe(true)
     })
 
+    it('accepts HTTP URLs that the main process normalizes to WebSocket URLs', () => {
+      expect(parseManualNetworkAddress('http://example.com/orca').ok).toBe(true)
+      expect(parseManualNetworkAddress('https://example.com/orca?route=runtime').ok).toBe(true)
+    })
+
     it('rejects URLs the pairing endpoint cannot advertise', () => {
       for (const bad of [
-        'http://example.com',
+        'ftp://example.com',
         'wss://',
         'wss://user:secret@example.com',
         'wss://example.com/#fragment',

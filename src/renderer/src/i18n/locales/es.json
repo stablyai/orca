@@ -11579,10 +11579,10 @@
         },
         "CustomNetworkAddressDialog": {
           "title": "Dirección de red personalizada",
-          "description": "Anuncia una dirección a la que pueda acceder tu teléfono, por ejemplo, un nombre de host de Tailscale, una IP estática o una URL ws(s):// de proxy inverso.",
+          "description": "Anuncia una dirección a la que pueda acceder tu teléfono, por ejemplo, un nombre de host de Tailscale, una dirección IP o una URL de proxy inverso.",
           "label": "Dirección",
-          "placeholder": "home.example.com:8443 o wss://example.com:443",
-          "hint": "Introduce una dirección IPv4, un nombre de host o una URL ws(s):// completa. Los hosts y las URL pueden incluir un puerto.",
+          "placeholder": "home.example.com:8443 o https://example.com/orca",
+          "hint": "Introduce una dirección IPv4/IPv6, un nombre de host o una URL HTTP(S)/WebSocket completa. Los puertos son opcionales.",
           "cancel": "Cancelar",
           "use": "Usar dirección"
         },

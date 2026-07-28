@@ -1,4 +1,4 @@
-// 配对入口共用此校验，避免渲染进程与主进程接受不同的地址格式。
+// Why: pairing entry points must accept the same endpoint forms as the main process.
 const IPV4_OCTET = '(?:25[0-5]|2[0-4][0-9]|1[0-9][0-9]|[1-9]?[0-9])'
 const IPV4 = `(?:${IPV4_OCTET}\\.){3}${IPV4_OCTET}`
 const IPV4_REGEX = new RegExp(`^${IPV4}$`)
@@ -14,7 +14,7 @@ const HOSTNAME_REGEX = new RegExp(`^${HOSTNAME}$`, 'i')
 const HOSTNAME_MAX_LENGTH = 253
 const MIN_PORT = 1
 const MAX_PORT = 65535
-const ERROR_MESSAGE = 'Enter an IPv4 address, hostname, or ws(s):// URL'
+const ERROR_MESSAGE = 'Enter an IPv4/IPv6 address, hostname, or HTTP(S)/WebSocket URL'
 
 export type ParseManualAddressResult = { ok: true; address: string } | { ok: false; error: string }
 
@@ -26,10 +26,14 @@ export function parseManualNetworkAddress(input: string): ParseManualAddressResu
   if (/\s/.test(trimmed)) {
     return { ok: false, error: ERROR_MESSAGE }
   }
-  if (/^wss?:\/\//i.test(trimmed)) {
-    return isValidWebSocketUrl(trimmed)
+  if (trimmed.includes('://')) {
+    return isValidPairingUrl(trimmed)
       ? { ok: true, address: trimmed }
       : { ok: false, error: ERROR_MESSAGE }
+  }
+
+  if (isValidIpv6Override(trimmed)) {
+    return { ok: true, address: trimmed }
   }
 
   const { host, port } = splitHostPort(trimmed)
@@ -40,7 +44,7 @@ export function parseManualNetworkAddress(input: string): ParseManualAddressResu
     return { ok: false, error: ERROR_MESSAGE }
   }
 
-  if (IPV4_REGEX.test(host)) {
+  if (IPV4_REGEX.test(host) && host !== '0.0.0.0') {
     return { ok: true, address: trimmed }
   }
   // Why: reject a host whose last label is numeric — a bare `123`, a dotted
@@ -85,12 +89,12 @@ function isValidPort(port: string): boolean {
   return value >= MIN_PORT && value <= MAX_PORT
 }
 
-function isValidWebSocketUrl(value: string): boolean {
+function isValidPairingUrl(value: string): boolean {
   try {
     const url = new URL(value)
     const hostname = url.hostname.replace(/^\[|\]$/g, '').toLowerCase()
     return (
-      (url.protocol === 'ws:' || url.protocol === 'wss:') &&
+      ['http:', 'https:', 'ws:', 'wss:'].includes(url.protocol) &&
       hostname !== '' &&
       hostname !== '*' &&
       hostname !== '0.0.0.0' &&
@@ -100,6 +104,21 @@ function isValidWebSocketUrl(value: string): boolean {
       url.hash === '' &&
       url.port !== '0'
     )
+  } catch {
+    return false
+  }
+}
+
+function isValidIpv6Override(value: string): boolean {
+  const bracketed = value.match(/^\[([^\]]+)\](?::(\d+))?$/)
+  const hostname = bracketed?.[1] ?? value
+  const port = bracketed?.[2]
+  if ((!bracketed && !value.includes(':')) || hostname === '::' || (port && !isValidPort(port))) {
+    return false
+  }
+  try {
+    const url = new URL(`ws://[${hostname}]`)
+    return url.hostname.includes(':')
   } catch {
     return false
   }

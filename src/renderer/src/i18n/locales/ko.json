@@ -11579,10 +11579,10 @@
         },
         "CustomNetworkAddressDialog": {
           "title": "사용자 지정 네트워크 주소",
-          "description": "휴대폰에서 접근할 수 있는 주소를 지정하세요. 예: Tailscale 호스트 이름, 고정 IP 또는 리버스 프록시 ws(s):// URL.",
+          "description": "휴대폰에서 접근할 수 있는 주소를 지정하세요. 예: Tailscale 호스트 이름, IP 주소 또는 리버스 프록시 URL.",
           "label": "주소",
-          "placeholder": "home.example.com:8443 또는 wss://example.com:443",
-          "hint": "IPv4 주소, 호스트 이름 또는 전체 ws(s):// URL을 입력하세요. 호스트와 URL에 포트를 포함할 수 있습니다.",
+          "placeholder": "home.example.com:8443 또는 https://example.com/orca",
+          "hint": "IPv4/IPv6 주소, 호스트 이름 또는 전체 HTTP(S)/WebSocket URL을 입력하세요. 포트는 선택 사항입니다.",
           "cancel": "취소",
           "use": "주소 사용"
         },

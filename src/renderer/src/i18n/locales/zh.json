@@ -11579,10 +11579,10 @@
         },
         "CustomNetworkAddressDialog": {
           "title": "自定义网络地址",
-          "description": "公布一个手机可访问的地址，例如 Tailscale 主机名、静态 IP 或反向代理 ws(s):// URL。",
+          "description": "公布一个手机可访问的地址，例如 Tailscale 主机名、IP 地址或反向代理 URL。",
           "label": "地址",
-          "placeholder": "home.example.com:8443 或 wss://example.com:443",
-          "hint": "请输入 IPv4 地址、主机名或完整的 ws(s):// URL。主机和 URL 均可包含端口。",
+          "placeholder": "home.example.com:8443 或 https://example.com/orca",
+          "hint": "请输入 IPv4/IPv6 地址、主机名或完整的 HTTP(S)/WebSocket URL。端口可选。",
           "cancel": "取消",
           "use": "使用地址"
         },

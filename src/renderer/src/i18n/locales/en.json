@@ -11602,10 +11602,10 @@
         },
         "CustomNetworkAddressDialog": {
           "title": "Custom network address",
-          "description": "Advertise an address your phone can reach — for example a Tailscale hostname, static IP, or reverse-proxy ws(s):// URL.",
+          "description": "Advertise an address your phone can reach — for example a Tailscale hostname, IP address, or reverse-proxy URL.",
           "label": "Address",
-          "placeholder": "home.example.com:8443 or wss://example.com:443",
-          "hint": "Enter an IPv4 address, hostname, or full ws(s):// URL. Hosts and URLs may include a port.",
+          "placeholder": "home.example.com:8443 or https://example.com/orca",
+          "hint": "Enter an IPv4/IPv6 address, hostname, or full HTTP(S)/WebSocket URL. Ports are optional.",
           "cancel": "Cancel",
           "use": "Use address"
         },
