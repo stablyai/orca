@@ -6,14 +6,16 @@ import { parseWorkspaceKey } from '../../../shared/workspace-scope'
 import { toast } from 'sonner'
 import { translate } from '@/i18n/i18n'
 import type { ExecutionHostId } from '../../../shared/execution-host'
-
-let latestActivationRequest = 0
+import {
+  beginWorkspaceActivationIntent,
+  isCurrentWorkspaceActivationIntent
+} from './workspace-activation-intent'
 
 export async function activateWorktreeFromSidebar(
   worktreeId: string,
   executionHostId?: ExecutionHostId
 ): Promise<void> {
-  const activationRequest = ++latestActivationRequest
+  const activationIntent = beginWorkspaceActivationIntent()
   const workspaceScope = parseWorkspaceKey(worktreeId)
   if (workspaceScope?.type === 'folder') {
     if (executionHostId) {
@@ -31,16 +33,26 @@ export async function activateWorktreeFromSidebar(
       const runtime = await window.api.ephemeralVm.resumeWorkspace({ workspaceId: worktreeId })
       // Why: VM resume can take seconds. A later sidebar click owns navigation
       // AND the runtime-env refresh — a stale request must not mutate either.
-      if (activationRequest !== latestActivationRequest) {
+      if (!isCurrentWorkspaceActivationIntent(activationIntent)) {
         return
       }
       if (runtime?.runtimeEnvironmentId) {
         const store = (await import('@/store')).useAppStore
-        store.getState().setRuntimeEnvironments(await window.api.runtimeEnvironments.list())
+        if (!isCurrentWorkspaceActivationIntent(activationIntent)) {
+          return
+        }
+        const runtimeEnvironments = await window.api.runtimeEnvironments.list()
+        if (!isCurrentWorkspaceActivationIntent(activationIntent)) {
+          return
+        }
+        store.getState().setRuntimeEnvironments(runtimeEnvironments)
         await store.getState().refreshRuntimeEnvironmentStatus(runtime.runtimeEnvironmentId)
+        if (!isCurrentWorkspaceActivationIntent(activationIntent)) {
+          return
+        }
       }
     } catch (error) {
-      if (activationRequest !== latestActivationRequest) {
+      if (!isCurrentWorkspaceActivationIntent(activationIntent)) {
         return
       }
       toast.error(

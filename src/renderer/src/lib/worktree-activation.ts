@@ -58,6 +58,7 @@ import { seedNativeChatAppliedSessionOptions } from '@/components/native-chat/na
 import type { SessionOptionValue } from '../../../shared/native-chat-session-options'
 import type { ExecutionHostId } from '../../../shared/execution-host'
 import { findFolderWorkspaceOwner } from './folder-workspace-runtime-owner'
+import { beginWorkspaceActivationIntent } from './workspace-activation-intent
 
 /** Telemetry threaded from the launch site to `pty:spawn`; main fires `agent_started`
  *  only after the spawn succeeds. See telemetry-plan.md§Agent launch semantics. */
@@ -207,6 +208,7 @@ export function activateAndRevealFolderWorkspace(
     executionHostId?: ExecutionHostId
   }
 ): ActivateAndRevealResult | false {
+  beginWorkspaceActivationIntent()
   const state = useAppStore.getState()
   const folderWorkspaceOwner = findFolderWorkspaceOwner(
     state,
@@ -274,6 +276,7 @@ export function activateAndRevealWorktree(
     executionHostId?: ExecutionHostId
   }
 ): ActivateAndRevealResult | false {
+  beginWorkspaceActivationIntent()
   const state = useAppStore.getState()
   const wt = state.getKnownWorktreeById(worktreeId, opts?.executionHostId)
   if (!wt) {
