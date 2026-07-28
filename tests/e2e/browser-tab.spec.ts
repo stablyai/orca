@@ -97,7 +97,7 @@ async function switchToBrowserTab(
   )
 }
 
-async function startBrowserFormServer(): Promise<{
+async function startBrowserFormServer(host = '127.0.0.1'): Promise<{
   url: (label: string) => string
   close: () => Promise<void>
 }> {
@@ -113,10 +113,10 @@ async function startBrowserFormServer(): Promise<{
       </html>
     `)
   })
-  await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', resolve))
+  await new Promise<void>((resolve) => server.listen(0, host, resolve))
   const port = (server.address() as AddressInfo).port
   return {
-    url: (label: string) => `http://127.0.0.1:${port}/${encodeURIComponent(label)}`,
+    url: (label: string) => `http://${host}:${port}/${encodeURIComponent(label)}`,
     close: () => closeServer(server)
   }
 }
@@ -505,12 +505,64 @@ test.describe('Browser Tab', () => {
     }
   })
 
-  test('reloading one browser tab does not adopt another tab zoom', async ({ orcaPage }) => {
+  test('Cmd/Ctrl+0 resets a zoomed browser page to 100%', async ({ orcaPage }) => {
     const formServer = await startBrowserFormServer()
     try {
       const worktreeId = (await getActiveWorktreeId(orcaPage))!
-      const tabA = await createBrowserTab(orcaPage, worktreeId, formServer.url('Zoom A'), 'Zoom A')
-      const tabB = await createBrowserTab(orcaPage, worktreeId, formServer.url('Zoom B'), 'Zoom B')
+      const browserTab = await createBrowserTab(
+        orcaPage,
+        worktreeId,
+        formServer.url('Zoom reset'),
+        'Zoom Reset'
+      )
+      expect(browserTab?.id).toBeTruthy()
+      await expect
+        .poll(async () => readBrowserInputValue(orcaPage, browserTab!.id), { timeout: 5_000 })
+        .not.toBeNull()
+
+      await orcaPage.evaluate(
+        async ({ browserTabId, browserPageId, modifier }) => {
+          const slot = document.querySelector(`[data-browser-overlay-tab-id="${browserTabId}"]`)
+          const webview = slot?.querySelector('webview') as Electron.WebviewTag | null
+          if (!webview) {
+            throw new Error(`Missing webview for browser tab ${browserTabId}`)
+          }
+          window.dispatchEvent(
+            new CustomEvent('orca:browser-page-zoom', {
+              detail: { browserPageId, direction: 'in' }
+            })
+          )
+          await webview.sendInputEvent({ type: 'keyDown', keyCode: '0', modifiers: [modifier] })
+          await webview.sendInputEvent({ type: 'keyUp', keyCode: '0', modifiers: [modifier] })
+        },
+        {
+          browserTabId: browserTab!.id,
+          browserPageId: browserTab!.pageId ?? browserTab!.id,
+          modifier: process.platform === 'darwin' ? 'meta' : 'control'
+        }
+      )
+      await expect
+        .poll(() =>
+          orcaPage.evaluate((browserTabId) => {
+            const slot = document.querySelector(`[data-browser-overlay-tab-id="${browserTabId}"]`)
+            return (slot?.querySelector('webview') as Electron.WebviewTag | null)?.getZoomLevel()
+          }, browserTab!.id)
+        )
+        .toBe(0)
+    } finally {
+      await formServer.close()
+    }
+  })
+
+  test('reloading one browser tab does not adopt another tab zoom', async ({ orcaPage }) => {
+    const [formServerA, formServerB] = await Promise.all([
+      startBrowserFormServer(),
+      startBrowserFormServer('localhost')
+    ])
+    try {
+      const worktreeId = (await getActiveWorktreeId(orcaPage))!
+      const tabA = await createBrowserTab(orcaPage, worktreeId, formServerA.url('Zoom A'), 'Zoom A')
+      const tabB = await createBrowserTab(orcaPage, worktreeId, formServerB.url('Zoom B'), 'Zoom B')
       expect(tabA?.id).toBeTruthy()
       expect(tabB?.id).toBeTruthy()
       for (const tab of [tabA, tabB]) {
@@ -559,7 +611,7 @@ test.describe('Browser Tab', () => {
       // Regression: reasserting the shared default would drag tab A to tab B's zoom.
       expect(levels.reloadedA).toBe(0)
     } finally {
-      await formServer.close()
+      await Promise.all([formServerA.close(), formServerB.close()])
     }
   })
 
