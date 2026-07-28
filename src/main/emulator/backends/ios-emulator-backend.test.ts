@@ -198,6 +198,24 @@ describe('IosEmulatorBackend', () => {
     )
   })
 
+  it('presses the lock button for side_button', async () => {
+    const backend = new IosEmulatorBackend()
+    await backend.button('device-1', 'side_button')
+    expect(execServeSimCommandMock).toHaveBeenCalledWith(
+      EXECUTABLE,
+      ['button', 'lock', '-d', 'device-1'],
+      undefined
+    )
+  })
+
+  it('rejects an unknown button name without reaching serve-sim', async () => {
+    const backend = new IosEmulatorBackend()
+    await expect(backend.button('device-1', 'volume_up')).rejects.toMatchObject({
+      code: 'emulator_error'
+    })
+    expect(execServeSimCommandMock).not.toHaveBeenCalled()
+  })
+
   it('execs a raw command with the device appended as json', async () => {
     const backend = new IosEmulatorBackend()
     await backend.exec('device-1', 'ca-debug blended on')

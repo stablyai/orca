@@ -25,6 +25,7 @@ import { sendEmulatorGestureSequence, type EmulatorGesturePoint } from '../emula
 import { parseServeSimDetachedSession } from '../serve-sim-detached-session'
 import { requestServeSimAccessibilityTree } from '../serve-sim-accessibility-tree'
 import { hideNativeSimulatorApp } from '../simulator-app-visibility'
+import { resolveIosHardwareButton } from '../ios-simulator-hardware-buttons'
 import type {
   BackendAvailability,
   EmulatorBackend,
@@ -161,8 +162,9 @@ export class IosEmulatorBackend implements EmulatorBackend {
   }
 
   async button(deviceId: string, name: string): Promise<void> {
+    const button = resolveIosHardwareButton(name)
     const udid = await this.resolveDeviceId(deviceId)
-    await this.execServeSim(['button', name, '-d', udid])
+    await this.execServeSim(['button', button, '-d', udid])
   }
 
   async rotate(deviceId: string, orientation: string): Promise<void> {
