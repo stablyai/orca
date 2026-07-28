@@ -398,6 +398,68 @@ Implement task B worker instructions for the next dispatch`,
     )
   })
 
+  it('records the owning session for an orchestration-written label', () => {
+    vi.useFakeTimers()
+    const store = createTestStore()
+    const tabId = seedWorktree(store, true)
+    const paneKey = makePaneKey(tabId, LEAF_ID)
+    const dispatch = `You are working inside Orca, a multi-agent IDE. You are a dispatched worker.
+Your task ID is: task-1
+
+=== TASK ===
+Implement the alpha worker instructions`
+
+    // The first ping has no session id yet, so the title starts unowned.
+    store
+      .getState()
+      .setAgentStatus(paneKey, { state: 'working', prompt: dispatch, agentType: 'claude' })
+    // The session id is known now, but the title guard returns early, so it never lands.
+    store
+      .getState()
+      .setAgentStatus(
+        paneKey,
+        { state: 'working', prompt: dispatch, agentType: 'claude' },
+        undefined,
+        undefined,
+        undefined,
+        { providerSession: { key: 'session_id', id: 'session-a' } }
+      )
+    expect(store.getState().tabsByWorktree[WORKTREE_ID][0].generatedTitleSessionId).toBeFalsy()
+
+    // Orchestration replaces the label — and is the write that finally records an owner.
+    store.getState().setRuntimeAgentOrchestrationByPaneKey({
+      [paneKey]: {
+        taskId: 'task-1',
+        dispatchId: 'ctx-1',
+        taskTitle: 'Implement worker instructions',
+        displayName: 'Better worker label'
+      }
+    })
+    const labeled = store.getState().tabsByWorktree[WORKTREE_ID][0]
+    expect(labeled.generatedTitle).toBe('Better worker label')
+    expect(labeled.generatedTitleSessionId).toBe('session-a')
+
+    // Without that owner the `/clear` below could never retire the label.
+    store
+      .getState()
+      .setAgentStatus(
+        paneKey,
+        {
+          state: 'working',
+          prompt: 'Refactor the auth middleware to use JWT',
+          agentType: 'claude'
+        },
+        undefined,
+        undefined,
+        undefined,
+        { providerSession: { key: 'session_id', id: 'session-b' } }
+      )
+
+    expect(store.getState().tabsByWorktree[WORKTREE_ID][0].generatedTitle).toBe(
+      'Refactor the auth middleware to use JWT'
+    )
+  })
+
   it('still parses the dispatch preamble when a new session retitles a worker tab', () => {
     vi.useFakeTimers()
     const store = createTestStore()

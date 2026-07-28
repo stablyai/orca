@@ -1894,7 +1894,10 @@ export const createAgentStatusSlice: StateCreator<AppState, [], [], AgentStatusS
           entry.paneKey,
           getAgentRowGeneratedTitleText(entry),
           {
-            replaceExistingGeneratedTitle: true
+            replaceExistingGeneratedTitle: true,
+            // Why: this path also writes titles, so it has to record the owning session
+            // too — otherwise the label it writes can never be proven stale.
+            sessionId: entry.providerSession?.id
           }
         )
       }
