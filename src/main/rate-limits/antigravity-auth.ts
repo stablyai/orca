@@ -123,6 +123,12 @@ export async function readAntigravityCredentialsFromDisk(
       if (err && typeof err === 'object' && 'code' in err && err.code === 'ENOENT') {
         continue
       }
+      // Why: a corrupt or unreadable candidate must stay distinguishable from
+      // "no credentials on disk" — both otherwise return null from this loop.
+      console.debug('[rate-limits] failed to read/parse Antigravity credential file', {
+        candidatePath,
+        error: err instanceof Error ? err.message : String(err)
+      })
     }
   }
 

@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import {
   clearAntigravityAuthCache,
   parseAntigravityToken,
+  readAntigravityCredentialsFromDisk,
   ANTIGRAVITY_CLIENT_ID,
   ANTIGRAVITY_CLIENT_SECRET
 } from './antigravity-auth'
@@ -85,6 +86,43 @@ describe('parseQuotaResponse', () => {
       usedPercent: 15,
       windowMinutes: 10080
     })
+  })
+})
+
+describe('readAntigravityCredentialsFromDisk error visibility', () => {
+  beforeEach(() => {
+    clearAntigravityAuthCache()
+    readFileMock.mockReset()
+    netFetchMock.mockReset()
+  })
+
+  it('logs non-ENOENT failures and still falls through to a later candidate', async () => {
+    const debugSpy = vi.spyOn(console, 'debug').mockImplementation(() => {})
+    readFileMock
+      .mockRejectedValueOnce(Object.assign(new Error('permission denied'), { code: 'EACCES' }))
+      .mockResolvedValueOnce('{ not valid json')
+      .mockResolvedValueOnce(
+        JSON.stringify({ access_token: 'from-third-candidate', refresh_token: 'ref' })
+      )
+
+    const token = await readAntigravityCredentialsFromDisk('/home/test')
+
+    expect(token?.access_token).toBe('from-third-candidate')
+    expect(debugSpy).toHaveBeenCalledTimes(2)
+    expect(debugSpy.mock.calls[0][0]).toContain('failed to read/parse Antigravity credential file')
+    expect(debugSpy.mock.calls[0][1]).toMatchObject({ error: 'permission denied' })
+    debugSpy.mockRestore()
+  })
+
+  it('stays silent when every candidate is simply absent', async () => {
+    const debugSpy = vi.spyOn(console, 'debug').mockImplementation(() => {})
+    readFileMock.mockRejectedValue({ code: 'ENOENT' })
+
+    const token = await readAntigravityCredentialsFromDisk('/home/test')
+
+    expect(token).toBeNull()
+    expect(debugSpy).not.toHaveBeenCalled()
+    debugSpy.mockRestore()
   })
 })
 
