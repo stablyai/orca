@@ -263,7 +263,7 @@ describe('resolveTabAgentFromSignals', () => {
   it('uses OpenCode native session titles to replace stale Claude launch identity', () => {
     expect(
       resolveTabAgentFromSignals({
-        hasObservedAgentSignal: true,
+        hasObservedAgentSignal: false,
         isRemote: false,
         title: 'OC | Understand about the plugin',
         hookAgent: null,
@@ -571,6 +571,17 @@ describe('useTabAgent', () => {
 
     expect(latestHookAgent).toBe('codex')
     expect(getForegroundProcess).not.toHaveBeenCalled()
+  })
+
+  it('uses an OpenCode native title when stale Claude launch metadata has no hook signal', async () => {
+    await renderHookProbe({
+      ...baseTab,
+      title: 'OC | Greeting',
+      launchAgent: 'claude'
+    })
+
+    expect(latestHookAgent).toBe('opencode')
+    expect(clearTabLaunchAgent).not.toHaveBeenCalled()
   })
 
   it('does not clear launch identity while the live hook row persists at a shell title', async () => {

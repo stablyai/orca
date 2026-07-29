@@ -12,6 +12,7 @@ import {
 } from './tab-agent'
 import { resolveExplicitTerminalTitleAgentType } from '../../../shared/terminal-title-agent-type'
 import { resolveCompatibleAgentTypeForOwner } from '../../../shared/agent-title-owner'
+import { isOpenCodeNativeTitle } from '../../../shared/opencode-terminal-title'
 import { resolvePaneAgentOwner } from '../../../shared/pane-agent-owner'
 import type { TerminalTab, TuiAgent } from '../../../shared/types'
 
@@ -110,12 +111,12 @@ export function resolveTabAgentFromSignals(args: {
     owner
   )
   const priorIdentity = idleFocusedIdentity ?? launchAgent
-  // Why: a completed hook already proves activity, so it arms the reuse override without waiting for hasObservedAgentSignal (false for one mount commit).
+  // Why: completed hooks and OpenCode's native OSC title are direct runtime evidence, even without a live hook signal.
   const titleReclaimsReusedPane =
     priorIdentity !== null &&
     explicitTitleAgent !== null &&
     explicitTitleAgent !== priorIdentity &&
-    (args.hasObservedAgentSignal || hasCompletedHook)
+    (args.hasObservedAgentSignal || hasCompletedHook || isOpenCodeNativeTitle(args.title))
   const titleAgent = processProvesShell
     ? null
     : titleReclaimsReusedPane
