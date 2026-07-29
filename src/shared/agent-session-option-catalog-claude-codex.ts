@@ -118,6 +118,12 @@ const CODEX_EFFORT_CHOICES = [
 
 const CODEX_FAST_SERVICE_TIER_IDS = new Set(['priority', 'fast'])
 
+const CODEX_EFFORT_APPLY: CatalogOption['apply'] = {
+  launchArgs: (value) => ['-c', `model_reasoning_effort=${String(value)}`],
+  agentArgsOverride: hasCodexEffortOverride,
+  midSession: { kind: 'agent-picker', command: '/model' }
+}
+
 function codexEffort(includeExtraHigh: boolean): CatalogOption {
   return {
     id: 'effort',
@@ -130,11 +136,7 @@ function codexEffort(includeExtraHigh: boolean): CatalogOption {
         : CODEX_EFFORT_CHOICES.filter((choice) => choice.value !== 'xhigh'),
       defaultValue: 'medium'
     },
-    apply: {
-      launchArgs: (value) => ['-c', `model_reasoning_effort=${String(value)}`],
-      agentArgsOverride: hasCodexEffortOverride,
-      midSession: { kind: 'agent-picker', command: '/model' }
-    }
+    apply: CODEX_EFFORT_APPLY
   }
 }
 
@@ -154,11 +156,7 @@ function codexDiscoveredEffort(model: CommitMessageModelCapability): CatalogOpti
       choices: levels.map((level) => ({ value: level.id, label: level.label })),
       defaultValue
     },
-    apply: {
-      launchArgs: (value) => ['-c', `model_reasoning_effort=${String(value)}`],
-      agentArgsOverride: hasCodexEffortOverride,
-      midSession: { kind: 'agent-picker', command: '/model' }
-    }
+    apply: CODEX_EFFORT_APPLY
   }
 }
 
