@@ -332,4 +332,75 @@ describe('repo slice runtime folder fallback', () => {
     expect(added?.kind).toBe('folder')
     expect(added?.path).toBe('/local/non-git')
   })
+
+  it('skips remote catalogs when refreshing a local-pinned nested import while a remote server is focused (#11200)', async () => {
+    const localRepo: Repo = {
+      id: 'local-folder',
+      path: '/local/plain',
+      displayName: 'plain',
+      badgeColor: '#000',
+      addedAt: 1,
+      kind: 'folder'
+    }
+    const importNested = vi.fn().mockResolvedValue({ groupId: 'g-1', repoIds: [] })
+    const listEmpty = vi.fn().mockResolvedValue([])
+    const listGroups = vi.fn().mockResolvedValue([])
+    const listRepos = vi.fn().mockResolvedValue([])
+    vi.stubGlobal('window', {
+      api: {
+        repos: { list: listRepos },
+        projectGroups: { importNested, list: listGroups },
+        folderWorkspaces: { list: listEmpty },
+        runtimeEnvironments: { call: runtimeEnvironmentTransportCall, list: listEmpty }
+      }
+    })
+    runtimeEnvironmentCall.mockImplementation((request: RuntimeEnvironmentCallRequest) => ({
+      id: `rpc-${request.method}`,
+      ok: true,
+      result: { repos: [], groups: [], folderWorkspaces: [], projects: [], setups: [] },
+      _meta: { runtimeId: 'runtime-remote' }
+    }))
+    const store = createTestStore()
+    store.setState({
+      settings: { activeRuntimeEnvironmentId: 'env-1' } as never,
+      runtimeEnvironments: [{ id: 'env-1', name: 'Remote Mac' }] as never
+    })
+
+    const localGroup = {
+      id: 'local-group',
+      name: 'plain',
+      parentPath: '/local/plain',
+      parentGroupId: null,
+      createdFrom: 'manual',
+      tabOrder: 0,
+      isCollapsed: false,
+      color: null,
+      createdAt: 1,
+      updatedAt: 1
+    }
+    listGroups.mockResolvedValue([localGroup])
+    listRepos.mockResolvedValue([localRepo])
+
+    await store.getState().importNestedRepos({
+      parentPath: '/local/plain',
+      groupName: 'plain',
+      projectPaths: ['/local/plain/app'],
+      mode: 'group',
+      runtimeEnvironmentId: null
+    })
+
+    // Why: the post-import refresh must show what the pinned host imported, not
+    // the focused remote's catalog (which would drop it, or stall when down).
+    expect(store.getState().projectGroups.map((group) => group.id)).toContain('local-group')
+    expect(store.getState().repos.map((repo) => repo.id)).toContain('local-folder')
+    const runtimeMethods = runtimeEnvironmentCall.mock.calls.map(
+      (call) => (call[0] as RuntimeEnvironmentCallRequest).method
+    )
+    expect(runtimeMethods).not.toContain('projectGroup.importNested')
+    // Why: the landed local import must not wait on the focused remote's
+    // catalogs, which can spend a full connect timeout when it is unreachable.
+    expect(runtimeMethods).not.toContain('repo.list')
+    expect(runtimeMethods).not.toContain('projectGroup.list')
+    expect(runtimeMethods).not.toContain('folderWorkspace.list')
+  })
 })

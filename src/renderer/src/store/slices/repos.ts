@@ -2469,6 +2469,12 @@ export const createRepoSlice: StateCreator<AppState, [], [], RepoSlice> = (set, 
         await get().fetchProjectGroups()
         await get().fetchFolderWorkspaces()
         await get().fetchRepos()
+      } else if (target.kind === 'local') {
+        // Why: merge instead of replacing the focused host's catalogs, and skip
+        // remotes so a landed local import never waits on an unreachable one.
+        await get().fetchProjectGroupsForAllHosts({ remoteHosts: 'skip' })
+        await get().fetchFolderWorkspacesForAllHosts({ remoteHosts: 'skip' })
+        await get().fetchReposForAllHosts({ remoteHosts: 'skip' })
       } else {
         // Why: focused-host fetches replace the catalogs wholesale, so an import
         // routed off the focused host would be refreshed away; merge every host.
