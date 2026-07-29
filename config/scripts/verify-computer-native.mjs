@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 
 import { spawnSync } from 'node:child_process'
-import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 
@@ -45,6 +45,11 @@ const checks = [
         'print("import-ok")'
       ].join(';')
     ],
+    enabled: process.platform === 'linux'
+  },
+  {
+    name: 'Linux editable text value updates',
+    run: verifyLinuxEditableTextSetValue,
     enabled: process.platform === 'linux'
   },
   {
@@ -120,6 +125,51 @@ function hasCommand(command) {
     stdio: 'ignore'
   })
   return result.status === 0
+}
+
+function verifyLinuxEditableTextSetValue() {
+  const dir = mkdtempSync(join(tmpdir(), 'orca-computer-use-verify-'))
+  const giRepository = join(dir, 'gi', 'repository')
+  try {
+    mkdirSync(giRepository, { recursive: true })
+    writeFileSync(join(dir, 'gi', '__init__.py'), 'def require_version(*args):\n    return None\n')
+    writeFileSync(join(giRepository, '__init__.py'), '')
+    writeFileSync(
+      join(giRepository, 'Atspi.py'),
+      `${[
+        'class EditableText:',
+        '    @staticmethod',
+        '    def set_text_contents(editable, value):',
+        "        return value == 'updated value'"
+      ].join('\n')}\n`
+    )
+    const script = [
+      'import importlib.util',
+      'spec = importlib.util.spec_from_file_location("orca_linux", "native/computer-use-linux/runtime.py")',
+      'module = importlib.util.module_from_spec(spec)',
+      'spec.loader.exec_module(module)',
+      'class EditableNode:',
+      '    def get_editable_text_iface(self):',
+      '        return object()',
+      '    def get_value_iface(self):',
+      '        return None',
+      "assert module.set_value(EditableNode(), 'updated value') is True",
+      'print("editable-text-set-value-ok")'
+    ].join('\n')
+    const result = spawnSync('python3', ['-c', script], {
+      cwd: repoRoot,
+      env: { ...process.env, PYTHONDONTWRITEBYTECODE: '1', PYTHONPATH: dir },
+      encoding: 'utf8'
+    })
+    if (result.status === 0 && !result.error) {
+      process.stdout.write(result.stdout)
+      return true
+    }
+    process.stderr.write(result.stderr || result.stdout || result.error?.message || '')
+    return false
+  } finally {
+    rmSync(dir, { recursive: true, force: true })
+  }
 }
 
 function verifyMacOSHelperApp() {
