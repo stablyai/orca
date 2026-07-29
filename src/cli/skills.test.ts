@@ -42,30 +42,16 @@ vi.mock('./bundled-skill-guides.js', () => {
   }
 })
 
-vi.mock('./runtime-client', () => {
+vi.mock('./runtime-client', async () => {
+  // Why: re-export the REAL error classes rather than redefining them. format.ts
+  // narrows with `instanceof` against ./runtime/types, so a look-alike class
+  // here would make every CLI error fall through to the generic `runtime_error`
+  // shape — mirroring the barrel keeps the mock faithful to production.
+  const { RuntimeClientError, RuntimeRpcFailureError } = await import('./runtime/types.js')
+
   class RuntimeClient {
     constructor() {
       runtimeClientConstructorMock()
-    }
-  }
-
-  class RuntimeClientError extends Error {
-    readonly code: string
-    readonly data?: unknown
-
-    constructor(code: string, message: string, data?: unknown) {
-      super(message)
-      this.code = code
-      this.data = data
-    }
-  }
-
-  class RuntimeRpcFailureError extends RuntimeClientError {
-    readonly response: unknown
-
-    constructor(response: unknown) {
-      super('runtime_error', 'runtime_error')
-      this.response = response
     }
   }
 
