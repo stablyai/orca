@@ -429,6 +429,38 @@ describe('buildSections', () => {
     expect(sections[0]?.data.map((item) => item.worktreeId)).toEqual(['w-folder'])
   })
 
+  it('keeps empty project group headers when filters remove their worktrees', () => {
+    const sleeping = worktree({
+      worktreeId: 'w-sleeping',
+      repoId: 'repo-platform',
+      repo: 'platform',
+      hasHostSidebarActivity: false
+    })
+    const platform = { groupId: 'g-platform', groupName: 'Platform', tabOrder: 0 }
+    const empty = { groupId: 'g-empty', groupName: 'Empty', tabOrder: 1 }
+
+    const sections = buildSections(
+      [sleeping],
+      'manual',
+      { ...NO_FILTERS, hideSleeping: true },
+      '',
+      'projectGroup',
+      new Set(),
+      new Map(),
+      DEFAULT_MOBILE_WORKSPACE_STATUSES,
+      new Set(),
+      new Map([
+        ['repo-platform', platform],
+        [folderWorkspaceRepoId('g-empty'), empty]
+      ])
+    )
+
+    expect(withoutSectionListKeys(sections)).toEqual([
+      { key: 'project-group:g-platform', title: 'Platform', data: [] },
+      { key: 'project-group:g-empty', title: 'Empty', data: [] }
+    ])
+  })
+
   it('uses desktop display-name tie-breaks for equal persisted smart ranks', () => {
     const zed = worktree({ worktreeId: 'zed', displayName: 'Zed', sortOrder: 20, unread: true })
     const alpha = worktree({

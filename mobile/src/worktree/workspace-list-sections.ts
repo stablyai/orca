@@ -241,6 +241,15 @@ export function buildSections(
     // Why: mirror desktop's sidebar folders — one section per top-level project
     // group (nested subgroups collapse into their root), ungrouped repos last.
     const byGroup = new Map<string, { name: string; tabOrder: number; items: Worktree[] }>()
+    for (const bucket of projectGroupByRepoId.values()) {
+      if (bucket && !byGroup.has(`project-group:${bucket.groupId}`)) {
+        byGroup.set(`project-group:${bucket.groupId}`, {
+          name: bucket.groupName,
+          tabOrder: bucket.tabOrder,
+          items: []
+        })
+      }
+    }
     for (const w of canonicalGroupWorktrees) {
       const bucket = projectGroupByRepoId.get(w.repoId) ?? null
       const key = bucket ? `project-group:${bucket.groupId}` : UNGROUPED_PROJECT_GROUP_KEY
