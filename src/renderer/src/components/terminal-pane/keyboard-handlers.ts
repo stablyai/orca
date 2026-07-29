@@ -525,7 +525,7 @@ export function useTerminalKeyboardShortcuts({
         !e.shiftKey
 
       // Mouse-capturing TUIs own empty-selection copy; preserve verified clipboard writes.
-      if (action?.type === 'copySelection' || isMacNativeCopy) {
+      if (action?.type === 'copySelection' || (isMacNativeCopy && !action)) {
         const pane = manager.getActivePane() ?? manager.getPanes()[0]
         if (!pane) {
           return

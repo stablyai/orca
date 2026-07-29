@@ -3,6 +3,7 @@ import { afterEach, describe, it, expect, vi } from 'vitest'
 import { useEffect } from 'react'
 import type * as React from 'react'
 import { FIND_QUERY_MAX_BYTES } from '@/lib/find-query-bounds'
+import type { KeybindingOverrides } from '../../../../shared/keybindings'
 
 const { resetTerminalKeyboardProtocolAfterInterruptMock } = vi.hoisted(() => ({
   resetTerminalKeyboardProtocolAfterInterruptMock: vi.fn()
@@ -247,10 +248,11 @@ describe('useTerminalKeyboardShortcuts copy selection', () => {
     selection: string
     mouseTrackingMode: 'none' | 'normal' | 'drag' | 'any'
     altKey?: boolean
-    keybindings?: { 'terminal.copySelection': string[] }
+    keybindings?: KeybindingOverrides
     repeat?: boolean
     shiftKey?: boolean
   }): {
+    clearActivePane: ReturnType<typeof vi.fn>
     input: ReturnType<typeof vi.fn>
     writeClipboardText: ReturnType<typeof vi.fn>
     event: Pick<
@@ -264,6 +266,7 @@ describe('useTerminalKeyboardShortcuts copy selection', () => {
     dispose: () => void
   } {
     const listeners = new Map<string, EventListener>()
+    const clearActivePane = vi.fn()
     const input = vi.fn()
     const writeClipboardText = vi.fn(() => Promise.resolve())
     const pane = {
@@ -313,7 +316,7 @@ describe('useTerminalKeyboardShortcuts copy selection', () => {
       setSearchOpen: vi.fn(),
       onSearchSelectedText: vi.fn(),
       onRequestClosePane: vi.fn(),
-      onClearPaneScrollback: vi.fn(),
+      onClearPaneScrollback: clearActivePane,
       onSetTitle: vi.fn(),
       onClearPaneTitle: vi.fn(),
       searchOpenRef: { current: false },
@@ -339,6 +342,7 @@ describe('useTerminalKeyboardShortcuts copy selection', () => {
     onKeyDown?.(event as unknown as Event)
 
     return {
+      clearActivePane,
       input,
       writeClipboardText,
       event,
@@ -393,6 +397,38 @@ describe('useTerminalKeyboardShortcuts copy selection', () => {
     expect(harness.writeClipboardText).not.toHaveBeenCalled()
     expect(harness.event.preventDefault).not.toHaveBeenCalled()
     expect(harness.event.stopImmediatePropagation).not.toHaveBeenCalled()
+    harness.dispose()
+  })
+
+  it('ignores a repeated configured copy chord', () => {
+    const harness = installCopyShortcutHarness({
+      selection: '',
+      mouseTrackingMode: 'any',
+      altKey: true,
+      repeat: true,
+      keybindings: { 'terminal.copySelection': ['Mod+Alt+C'] }
+    })
+
+    expect(harness.input).not.toHaveBeenCalled()
+    expect(harness.writeClipboardText).not.toHaveBeenCalled()
+    expect(harness.event.preventDefault).not.toHaveBeenCalled()
+    expect(harness.event.stopImmediatePropagation).not.toHaveBeenCalled()
+    harness.dispose()
+  })
+
+  it('keeps another action rebound to macOS Cmd+C reachable', () => {
+    const harness = installCopyShortcutHarness({
+      selection: 'selected',
+      mouseTrackingMode: 'any',
+      keybindings: {
+        'terminal.copySelection': ['Mod+Shift+C'],
+        'terminal.clear': ['Mod+C']
+      }
+    })
+
+    expect(harness.clearActivePane).toHaveBeenCalledOnce()
+    expect(harness.writeClipboardText).not.toHaveBeenCalled()
+    expect(harness.input).not.toHaveBeenCalled()
     harness.dispose()
   })
 
