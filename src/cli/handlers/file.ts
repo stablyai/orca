@@ -61,7 +61,7 @@ async function resolveFilePath(
 
   let matchPath = path
   const wslDistro = process.env.WSL_DISTRO_NAME
-  if (wslDistro && path.startsWith('/')) {
+  if (wslDistro && path.startsWith('/') && !path.startsWith('//')) {
     matchPath = `//wsl.localhost/${wslDistro}${path}`
   }
 
