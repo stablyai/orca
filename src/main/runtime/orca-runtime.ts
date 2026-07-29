@@ -1557,6 +1557,10 @@ const RECENT_PTY_PATH_CANDIDATE_LIMIT = 1024
 const RECENT_PTY_PATH_CANDIDATE_MAX_BYTES = 4 * 1024
 const RECENT_PTY_PATH_CANDIDATE_TOTAL_BYTES = 64 * 1024
 const SSH_PANE_RECOVERY_GRACE_MS = 30_000
+// Why: the renderer resolves the mount against its own graph and can legitimately find nothing to
+// mount, which it reports by doing nothing. Retry after this long so a later subscribe gets another
+// attempt, while still coalescing the burst of subscribes a single reconnect produces.
+const UNOBSERVED_PTY_ATTACH_RETRY_MS = 10_000
 
 function isClientDisconnectedError(error: unknown): boolean {
   return error instanceof Error && error.message === 'client_disconnected'
@@ -2639,8 +2643,10 @@ export class OrcaRuntimeService {
   // iterates them all. Listeners are cleaned up via subscriptionCleanups.
   private notificationListeners = new Set<(event: MobileNotificationEvent) => void>()
   private ptysById = new Map<string, RuntimePtyWorktreeRecord>()
-  // Why: single-flight per PTY so repeated subscribes to a never-observed pane don't spam mount requests.
-  private unobservedPtyAttachRequests = new Set<string>()
+  // Why: single-flight per PTY so repeated subscribes to a never-observed pane don't spam mount
+  // requests. Holds the request time, not just the id — the renderer can drop the mount silently,
+  // and a permanent latch would leave the pane in exactly the state this attach exists to repair.
+  private unobservedPtyAttachRequests = new Map<string, number>()
   private wslDistroByPtyId = new Map<string, string>()
   private titleObservationSequence = 0
   private headlessTerminals = new Map<string, RuntimeHeadlessTerminal>()
@@ -23453,10 +23459,12 @@ export class OrcaRuntimeService {
     if (this.hasHeadlessTerminalState(ptyId)) {
       return false
     }
-    if (this.unobservedPtyAttachRequests.has(ptyId)) {
+    const requestedAt = this.unobservedPtyAttachRequests.get(ptyId)
+    const now = Date.now()
+    if (requestedAt !== undefined && now - requestedAt < UNOBSERVED_PTY_ATTACH_RETRY_MS) {
       return false
     }
-    this.unobservedPtyAttachRequests.add(ptyId)
+    this.unobservedPtyAttachRequests.set(ptyId, now)
     const requested = this.requestRendererTerminalTabMount(handle)
     if (!requested) {
       // Headless host has no window to mount into; let a later subscribe retry.

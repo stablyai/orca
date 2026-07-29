@@ -96,6 +96,31 @@ describe('host attach for unobserved PTYs', () => {
     expect(send).not.toHaveBeenCalled()
   })
 
+  // Why (regression): the renderer resolves the mount against its own graph and reports "nothing to
+  // mount" by doing nothing — a stale tab record, or a tab it already considers mounted. The host
+  // only knows webContents.send() succeeded, so a permanent latch would strand the pane in exactly
+  // the silent-input state this attach exists to repair, with no later subscribe able to retry.
+  it('retries the mount when the renderer silently dropped the earlier request', () => {
+    vi.useFakeTimers()
+    try {
+      const { runtime, send } = seedRuntime()
+
+      expect(runtime.requestHostPaneAttachForUnobservedPty('term_1', 'pty-1')).toBe(true)
+      expect(runtime.requestHostPaneAttachForUnobservedPty('term_1', 'pty-1')).toBe(false)
+
+      // Still coalescing the burst of subscribes one reconnect produces.
+      vi.advanceTimersByTime(9_000)
+      expect(runtime.requestHostPaneAttachForUnobservedPty('term_1', 'pty-1')).toBe(false)
+      expect(send).toHaveBeenCalledTimes(1)
+
+      vi.advanceTimersByTime(1_500)
+      expect(runtime.requestHostPaneAttachForUnobservedPty('term_1', 'pty-1')).toBe(true)
+      expect(send).toHaveBeenCalledTimes(2)
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
   // Why: a headless host has no window to mount into, so the request must stay retryable.
   it('does not consume the single-flight when no window can take the mount', () => {
     const { runtime, internals } = seedRuntime({ withWindow: false })
