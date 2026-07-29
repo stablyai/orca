@@ -127,3 +127,6 @@ src/renderer/src/i18n/locales/.es-catalog-cache.json
 
 # Bench result JSONs are working artifacts
 tools/benchmarks/results/terminal-pipeline-*.json
+
+.worktrees/
+worktrees/
