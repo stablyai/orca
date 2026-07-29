@@ -1,3 +1,4 @@
+/** Classifies Git status failures using both the primary message and stderr. */
 export function gitStatusErrorMeansNotRepository(error: unknown): boolean {
   const message =
     error instanceof Error

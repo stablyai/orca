@@ -3,19 +3,23 @@ import type { Repo, Worktree, WorktreeMeta } from '../shared/types'
 import { DEFAULT_WORKSPACE_STATUS_ID } from '../shared/workspace-statuses'
 import { FOLDER_WORKSPACE_INSTANCE_SEPARATOR } from '../shared/worktree-id'
 
+/** Builds the root workspace ID while preserving the repository path verbatim. */
 export function getFolderWorkspaceRootId(repo: Repo): string {
   return `${repo.id}::${repo.path}`
 }
 
+/** Builds a child workspace ID from the repository root and an opaque instance identity. */
 export function getFolderWorkspaceInstanceId(repo: Repo, instanceId: string): string {
   return `${getFolderWorkspaceRootId(repo)}${FOLDER_WORKSPACE_INSTANCE_SEPARATOR}${instanceId}`
 }
 
+/** Recovers the child identity, generating one when the ID has no encoded instance. */
 export function getFolderWorkspaceInstanceIdentity(repo: Repo, worktreeId: string): string {
   const prefix = `${getFolderWorkspaceRootId(repo)}${FOLDER_WORKSPACE_INSTANCE_SEPARATOR}`
   return worktreeId.startsWith(prefix) ? worktreeId.slice(prefix.length) : randomUUID()
 }
 
+/** Checks whether an ID is the repository root or one of its child workspaces. */
 export function isFolderWorkspaceIdForRepo(repo: Repo, worktreeId: string): boolean {
   const rootId = getFolderWorkspaceRootId(repo)
   return (
@@ -24,6 +28,7 @@ export function isFolderWorkspaceIdForRepo(repo: Repo, worktreeId: string): bool
   )
 }
 
+/** Projects persisted folder-workspace metadata onto its synthetic worktree representation. */
 export function mergeFolderWorkspace(repo: Repo, worktreeId: string, meta: WorktreeMeta): Worktree {
   return {
     id: worktreeId,
