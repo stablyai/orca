@@ -117,7 +117,17 @@ describe('orderQuickOpenByRecency', () => {
   })
 
   it('honours the limit across recents + rest', () => {
-    const result = orderQuickOpenByRecency(['b.ts', 'a.ts'], ['c.ts', 'd.ts', 'e.ts'], 3)
+    const result = orderQuickOpenByRecency(
+      ['b.ts', 'a.ts'],
+      ['a.ts', 'b.ts', 'c.ts', 'd.ts', 'e.ts'],
+      3
+    )
     expect(result).toEqual(['b.ts', 'a.ts', 'c.ts'])
+  })
+
+  it('drops recents missing from the live listing (e.g. deleted after close)', () => {
+    // gone.ts was recently closed then deleted; it must not surface or be openable.
+    const result = orderQuickOpenByRecency(['gone.ts', 'a.ts'], ['a.ts', 'b.ts'], 10)
+    expect(result).toEqual(['a.ts', 'b.ts'])
   })
 })

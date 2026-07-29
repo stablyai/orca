@@ -1,9 +1,12 @@
 /**
  * E2E: Quick Open (Cmd+P) seeds its empty-query order with recent files.
  *
- * Opens several editor files, closes one, then opens Quick Open with no query
- * and asserts the recently opened/closed files lead the list (instead of the
- * arbitrary file-listing walk order). Captures a screenshot for the PR demo.
+ * Drives the REAL tab MRU (via `activateTab`, the same store path a Ctrl+Tab
+ * switch takes) so the assertion exercises the true most-recently-used ordering
+ * rather than the newest-open-first fallback. The activation order is chosen so
+ * MRU diverges from open order: README is visited after package.json, so a
+ * fallback (reversed open order) would list package.json first — only genuine
+ * MRU puts README first. Captures a screenshot for the PR demo.
  */
 
 import { test, expect } from './helpers/orca-app'
@@ -21,18 +24,19 @@ test.describe('Quick Open recency', () => {
     await ensureTerminalVisible(orcaPage)
   })
 
-  test('empty-query Quick Open leads with recent open + closed files', async ({
+  test('empty-query Quick Open leads with true MRU order, then recently closed', async ({
     orcaPage
   }, testInfo) => {
     const worktreeId = (await getActiveWorktreeId(orcaPage))!
 
+    // Phase 1: open several editors and close one. tsconfig.json is opened last
+    // and stays the active file (excluded from the recents list).
     await orcaPage.evaluate((wtId) => {
       const store = window.__store!
       const state = store.getState()
-      const worktree = Object.values(state.worktreesByRepo)
+      const base = Object.values(state.worktreesByRepo)
         .flat()
-        .find((w) => w.id === wtId)
-      const base = worktree!.path
+        .find((w) => w.id === wtId)!.path
       const open = (rel: string, language: string): void =>
         state.openFile({
           filePath: `${base}/${rel}`,
@@ -45,18 +49,56 @@ test.describe('Quick Open recency', () => {
       open('package.json', 'json')
       open('CLAUDE.md', 'markdown')
       state.closeFile(`${base}/CLAUDE.md`)
-      open('src/index.ts', 'typescript')
+      open('tsconfig.json', 'json')
+    }, worktreeId)
+
+    // Phase 2: the editor tabs are materialized reactively — wait until all three
+    // open editors have a unified tab before driving the MRU.
+    await expect
+      .poll(
+        () =>
+          orcaPage.evaluate((wtId) => {
+            const tabs = window.__store!.getState().unifiedTabsByWorktree[wtId] ?? []
+            return tabs.filter((t) => t.contentType === 'editor').length
+          }, worktreeId),
+        { timeout: 5_000 }
+      )
+      .toBeGreaterThanOrEqual(3)
+
+    // Phase 3: replay real activations so recentTabIds reflects MRU. Activating
+    // package.json BEFORE README makes README the more-recently-used of the two,
+    // the opposite of open order. Re-activate tsconfig last to restore it active.
+    await orcaPage.evaluate((wtId) => {
+      const state = window.__store!.getState()
+      const fileIdByPath = new Map(
+        state.openFiles.filter((f) => f.worktreeId === wtId).map((f) => [f.relativePath, f.id])
+      )
+      const tabIdByEntityId = new Map(
+        (state.unifiedTabsByWorktree[wtId] ?? [])
+          .filter((t) => t.contentType === 'editor')
+          .map((t) => [t.entityId, t.id])
+      )
+      const activate = (rel: string): void => {
+        const tabId = tabIdByEntityId.get(fileIdByPath.get(rel)!)
+        if (tabId) {
+          state.activateTab(tabId)
+        }
+      }
+      activate('package.json')
+      activate('README.md')
+      activate('tsconfig.json')
       state.openModal('quick-open')
     }, worktreeId)
 
     const dialog = orcaPage.getByRole('dialog')
     await expect(dialog).toBeVisible({ timeout: 5_000 })
 
-    // The three most recent files (2 open + 1 closed) lead the empty-query list,
-    // in most-recent-first order; the active file (index.ts) is excluded.
+    // README leads package.json (proves MRU, not open-order fallback); the
+    // recently-closed CLAUDE.md follows the still-open files. Active tsconfig.json
+    // is excluded.
     const items = dialog.locator('[cmdk-item]')
-    await expect(items.nth(0)).toContainText('package.json')
-    await expect(items.nth(1)).toContainText('README.md')
+    await expect(items.nth(0)).toContainText('README.md')
+    await expect(items.nth(1)).toContainText('package.json')
     await expect(items.nth(2)).toContainText('CLAUDE.md')
 
     await testInfo.attach('quick-open-recency', {

@@ -107,8 +107,13 @@ export function orderQuickOpenByRecency(
   allPaths: readonly string[],
   limit: number
 ): string[] {
-  const recentSet = new Set(recentPaths)
-  const ordered: string[] = [...recentPaths]
+  // Why: a recently-closed file may have been deleted on disk since; keep only
+  // recents that still exist in the live listing so selecting one never opens a
+  // phantom path.
+  const allPathSet = new Set(allPaths)
+  const validRecents = recentPaths.filter((path) => allPathSet.has(path))
+  const recentSet = new Set(validRecents)
+  const ordered: string[] = [...validRecents]
   for (const path of allPaths) {
     if (ordered.length >= limit) {
       break
