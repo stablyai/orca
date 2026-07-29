@@ -16,6 +16,7 @@ import {
   deduplicateBuckets,
   deriveSessionSummary
 } from './gemini-bucket-formatting'
+import { fetchAntigravityRateLimitsViaPty } from './agy-pty-fetcher'
 
 const API_TIMEOUT_MS = 10_000
 const RETRIEVE_QUOTA_URL = 'https://cloudcode-pa.googleapis.com/v1internal:retrieveUserQuota'
@@ -216,8 +217,6 @@ async function fetchViaOauthCreds(
   }
   return result
 }
-
-import { fetchAntigravityRateLimitsViaPty } from './agy-pty-fetcher'
 
 export async function fetchAntigravityRateLimits(
   _geminiCliOAuthEnabled: boolean,

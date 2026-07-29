@@ -30,4 +30,10 @@ describe('agy-pty-status-parser', () => {
       resetDescription: 'Jul 30, 3:00 PM'
     })
   })
+
+  it('strips ANSI and PTY control sequences correctly', () => {
+    const ansiInput = '\x1b[31mFive hour limit\x1b[0m\r\n\x1b[32m19% used\x1b[0m'
+    const clean = stripPtyControlSequences(ansiInput)
+    expect(clean).toBe('Five hour limit\r\n19% used')
+  })
 })
