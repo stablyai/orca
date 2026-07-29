@@ -2511,6 +2511,10 @@ export type PreloadApi = {
     }) => Promise<ComputerUsePermissionSetupResult>
     reset: () => Promise<ComputerUsePermissionResetResult>
   }
+  osFileOpen: {
+    takePending: () => Promise<string[]>
+    onOpened: (listener: (filePath: string) => void) => () => void
+  }
   shell: {
     openPath: (path: string) => Promise<void>
     openInFileManager: (path: string) => Promise<ShellOpenLocalPathResult>

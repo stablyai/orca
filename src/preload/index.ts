@@ -2364,6 +2364,18 @@ const api = {
     reset: (): Promise<unknown> => ipcRenderer.invoke('computerUsePermissions:reset')
   },
 
+  osFileOpen: {
+    takePending: (): Promise<string[]> => ipcRenderer.invoke('osFileOpen:takePending'),
+
+    onOpened: (listener: (filePath: string) => void): (() => void) => {
+      const handler = (_event: unknown, filePath: string): void => listener(filePath)
+      ipcRenderer.on('osFileOpen:opened', handler)
+      return () => {
+        ipcRenderer.off('osFileOpen:opened', handler)
+      }
+    }
+  },
+
   shell: {
     openPath: (path: string): Promise<void> => ipcRenderer.invoke('shell:openPath', path),
 
