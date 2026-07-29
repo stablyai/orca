@@ -171,6 +171,11 @@ describe('orchestration skill agent coverage', () => {
         directoryPath: '/Users/test/.pi/agent/skills/orchestration'
       },
       {
+        agent: 'omp',
+        rootPath: '/Users/test/.omp/agent/skills',
+        directoryPath: '/Users/test/.omp/agent/skills/orchestration'
+      },
+      {
         agent: 'gemini',
         rootPath: '/Users/test/.gemini/skills',
         directoryPath: '/Users/test/.gemini/skills/orchestration'
@@ -317,6 +322,32 @@ describe('orchestration skill agent coverage', () => {
         [source('C:\\Users\\test\\.config\\opencode\\skills', 'opencode')]
       )
     ).toBe(true)
+  })
+
+  it('keeps Pi and OMP distinct despite sharing the <home>/agent/skills shape', () => {
+    const piInstall = [
+      skill({
+        providers: ['agent-skills'],
+        sourceKind: 'home',
+        rootPath: '/Users/test/.pi/agent/skills',
+        directoryPath: '/Users/test/.pi/agent/skills/orchestration'
+      })
+    ]
+    const ompInstall = [
+      skill({
+        providers: ['agent-skills'],
+        sourceKind: 'home',
+        rootPath: '/Users/test/.omp/agent/skills',
+        directoryPath: '/Users/test/.omp/agent/skills/orchestration'
+      })
+    ]
+
+    const piSources = [source('/Users/test/.pi/agent/skills', 'pi')]
+    const ompSources = [source('/Users/test/.omp/agent/skills', 'omp')]
+    expect(agentHasOrchestrationSkill('pi', piInstall, piSources)).toBe(true)
+    expect(agentHasOrchestrationSkill('omp', piInstall, piSources)).toBe(false)
+    expect(agentHasOrchestrationSkill('omp', ompInstall, ompSources)).toBe(true)
+    expect(agentHasOrchestrationSkill('pi', ompInstall, ompSources)).toBe(false)
   })
 
   it('keeps Gemini and Antigravity distinct despite sharing the ~/.gemini root', () => {
