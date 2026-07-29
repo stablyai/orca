@@ -25,6 +25,7 @@ describe('terminal.create RPC idempotency', () => {
         worktree: 'id:worktree-1',
         clientMutationId: 'mutation-1',
         command: 'pwsh',
+        placement: 'orchestration-grid',
         resumeProviderSession: {
           key: 'session_id',
           id: 'session-1',
@@ -50,6 +51,7 @@ describe('terminal.create RPC idempotency', () => {
       'id:worktree-1',
       expect.objectContaining({
         command: 'pwsh',
+        placement: 'orchestration-grid',
         preAllocatedHandle: 'term_stable',
         resumeProviderSession: {
           key: 'session_id',

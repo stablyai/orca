@@ -25968,6 +25968,7 @@ export class OrcaRuntimeService {
                 tabId,
                 leafId,
                 ptyId: result.id,
+                ...(result.incarnationId ? { incarnationId: result.incarnationId } : {}),
                 title: launchOpts.title ?? null,
                 startupCwd: cwd,
                 activate: presentation === 'focused',

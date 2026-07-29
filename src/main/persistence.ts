@@ -6825,6 +6825,7 @@ export class Store {
     tabId: string
     leafId: string
     ptyId: string
+    incarnationId?: string
     layout: TerminalLayoutSnapshot
     title?: string | null
     startupCwd?: string
@@ -6858,6 +6859,9 @@ export class Store {
       const next = cloneWorkspaceSessionState(previous)
       const tabs = [...(next.tabsByWorktree?.[args.worktreeId] ?? [])]
       const tab = tabs.find((candidate) => candidate.id === args.tabId)
+      const previousLayout = next.terminalLayoutsByTabId?.[args.tabId]
+      const terminalMembershipChanged =
+        !tab || !layoutContainsLeafId(previousLayout?.root, args.leafId)
       if (tab) {
         tab.ptyId = args.ptyId
       } else {
@@ -6886,6 +6890,28 @@ export class Store {
             ...args.layout.ptyIdsByLeafId,
             [args.leafId]: args.ptyId
           }
+        }
+      }
+      const paneKey = `${args.tabId}:${args.leafId}`
+      if (args.incarnationId) {
+        next.terminalPtyIncarnationsByPaneKey = {
+          ...next.terminalPtyIncarnationsByPaneKey,
+          [paneKey]: args.incarnationId
+        }
+        if (next.terminalSurfaceTombstonesByPaneKey?.[paneKey]) {
+          next.terminalSurfaceTombstonesByPaneKey = {
+            ...next.terminalSurfaceTombstonesByPaneKey
+          }
+          delete next.terminalSurfaceTombstonesByPaneKey[paneKey]
+        }
+      }
+      const currentTopologyRevision = next.terminalTopologyRevisionByRepoId?.[repoId] ?? 0
+      if (terminalMembershipChanged && currentTopologyRevision > 0) {
+        // Why: a committed grid append must fence stale orphan-adoption writes
+        // against the topology that existed before this new leaf.
+        next.terminalTopologyRevisionByRepoId = {
+          ...next.terminalTopologyRevisionByRepoId,
+          [repoId]: currentTopologyRevision + 1
         }
       }
       if (args.activate) {

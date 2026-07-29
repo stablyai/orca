@@ -463,10 +463,14 @@ function registerRuntimeWindowLifecycle(
             ...(opts.splitFromLeafId !== undefined
               ? { splitFromLeafId: opts.splitFromLeafId }
               : {}),
+            ...(opts.splitSourceLeafIds !== undefined
+              ? { splitSourceLeafIds: opts.splitSourceLeafIds }
+              : {}),
             ...(opts.splitDirection !== undefined ? { splitDirection: opts.splitDirection } : {}),
             ...(opts.splitTelemetrySource !== undefined
               ? { splitTelemetrySource: opts.splitTelemetrySource }
-              : {})
+              : {}),
+            ...(opts.placement !== undefined ? { placement: opts.placement } : {})
           })
         } catch (error) {
           // Why: a synchronous renderer dispatch failure cannot ever receive a

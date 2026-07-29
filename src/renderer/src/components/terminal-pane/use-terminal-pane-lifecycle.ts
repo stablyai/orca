@@ -2112,10 +2112,8 @@ export function useTerminalPaneLifecycle({
     persistLayoutSnapshot()
     scheduleRuntimeGraphSync()
 
-    // Why: CLI-driven splits go through splitPaneWithOneShotStartup so the
-    // startup command is delivered via the PTY connection path (which waits
-    // for shell readiness) instead of terminal.paste() which can lose input
-    // if the shell hasn't started reading stdin yet.
+    // Why: the same listener handles ordinary CLI splits and acknowledged grid
+    // appends so queued actions cannot drain into a non-transactional path.
     const onCliSplitPane = createTerminalPaneSplitEventHandler({
       tabId,
       getManager: () => managerRef.current,
@@ -2123,7 +2121,17 @@ export function useTerminalPaneLifecycle({
       getExpandedPaneId: () => expandedPaneIdRef.current,
       setExpandedPane,
       syncExpandedLayout,
-      publishCommittedSplit: scheduleRuntimeGraphSync
+      publishCommittedSplit: () => {
+        scheduleRuntimeGraphSync()
+        syncExpandedLayout()
+        syncCanExpandState()
+        syncPaneCount()
+        syncPaneLayoutRevision()
+        queueResizeAll(false)
+        if (shouldPersistLayout) {
+          persistLayoutSnapshot()
+        }
+      }
     })
     window.addEventListener(SPLIT_TERMINAL_PANE_EVENT, onCliSplitPane)
     // Why: queued runtime splits may drain only after this tab-specific listener

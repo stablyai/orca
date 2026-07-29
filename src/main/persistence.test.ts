@@ -9992,6 +9992,133 @@ describe('Store', () => {
     expect(store.getWorkspaceSession('ssh:ssh-grid').tabsByWorktree).toEqual({})
   })
 
+  it('rejects grid persistence into a host partition that does not own the worktree', async () => {
+    const store = await createStore()
+    const worktreeId = 'repo-grid::/remote/worktree'
+    store.setWorktreeMeta(worktreeId, {
+      displayName: 'Remote grid',
+      hostId: 'ssh:ssh-owner'
+    })
+
+    expect(() =>
+      store.persistOrchestrationGridPtyBinding({
+        hostId: 'ssh:ssh-other',
+        sshTargetId: 'ssh-other',
+        worktreeId,
+        tabId: 'grid-tab',
+        leafId: TEST_LEAF_1,
+        ptyId: 'ssh:ssh-other@@grid-pty',
+        layout: {
+          root: { type: 'leaf', leafId: TEST_LEAF_1 },
+          activeLeafId: TEST_LEAF_1,
+          expandedLeafId: null,
+          layoutMode: 'orchestration-grid'
+        }
+      })
+    ).toThrow('does not own the worktree')
+
+    expect(store.getWorkspaceSession('ssh:ssh-other').tabsByWorktree).toEqual({})
+    expect(store.getSshRemotePtyLeases()).toEqual([])
+  })
+
+  it('persists grid incarnation identity and advances an established topology revision', async () => {
+    const store = await createStore()
+    const paneKey = `grid-tab:${TEST_LEAF_2}`
+    store.setWorkspaceSession({
+      ...getDefaultWorkspaceSession(),
+      tabsByWorktree: {
+        wt1: [makeTerminalTab({ id: 'grid-tab', worktreeId: 'wt1', ptyId: 'pty-1' })]
+      },
+      terminalLayoutsByTabId: {
+        'grid-tab': {
+          root: { type: 'leaf', leafId: TEST_LEAF_1 },
+          activeLeafId: TEST_LEAF_1,
+          expandedLeafId: null,
+          layoutMode: 'orchestration-grid',
+          ptyIdsByLeafId: { [TEST_LEAF_1]: 'pty-1' }
+        }
+      },
+      terminalTopologyRevisionByRepoId: { wt1: 1 },
+      terminalSurfaceTombstonesByPaneKey: {
+        [paneKey]: {
+          worktreeId: 'wt1',
+          parentTabId: 'grid-tab',
+          leafId: TEST_LEAF_2,
+          ptyId: 'retired-pty',
+          incarnationId: 'retired-incarnation',
+          retiredAt: 1
+        }
+      }
+    })
+    const topologyRevisionBeforeAppend =
+      store.getWorkspaceSession().terminalTopologyRevisionByRepoId?.wt1 ?? 0
+
+    store.persistOrchestrationGridPtyBinding({
+      hostId: 'local',
+      worktreeId: 'wt1',
+      tabId: 'grid-tab',
+      leafId: TEST_LEAF_2,
+      ptyId: 'pty-2',
+      incarnationId: 'incarnation-grid-2',
+      layout: {
+        root: {
+          type: 'split',
+          direction: 'vertical',
+          first: { type: 'leaf', leafId: TEST_LEAF_1 },
+          second: { type: 'leaf', leafId: TEST_LEAF_2 }
+        },
+        activeLeafId: TEST_LEAF_1,
+        expandedLeafId: null,
+        layoutMode: 'orchestration-grid',
+        ptyIdsByLeafId: {
+          [TEST_LEAF_1]: 'pty-1',
+          [TEST_LEAF_2]: 'pty-2'
+        }
+      }
+    })
+
+    const session = store.getWorkspaceSession()
+    expect(session.terminalPtyIncarnationsByPaneKey?.[paneKey]).toBe('incarnation-grid-2')
+    expect(session.terminalSurfaceTombstonesByPaneKey?.[paneKey]).toBeUndefined()
+    expect(session.terminalTopologyRevisionByRepoId?.wt1).toBe(
+      topologyRevisionBeforeAppend + 1
+    )
+  })
+
+  it('re-arms persistence after a failed grid binding flush rolls back memory', async () => {
+    const store = await createStore()
+    const worktreeId = 'repo-grid::/remote/worktree'
+    store.setWorktreeMeta(worktreeId, {
+      displayName: 'Remote grid',
+      hostId: 'ssh:ssh-grid'
+    })
+    const scheduleSave = vi.spyOn(store as unknown as { scheduleSave: () => void }, 'scheduleSave')
+    scheduleSave.mockClear()
+    vi.spyOn(store, 'flushOrThrow').mockImplementationOnce(() => {
+      throw new Error('disk unavailable')
+    })
+
+    expect(() =>
+      store.persistOrchestrationGridPtyBinding({
+        hostId: 'ssh:ssh-grid',
+        sshTargetId: 'ssh-grid',
+        worktreeId,
+        tabId: 'grid-tab',
+        leafId: TEST_LEAF_1,
+        ptyId: 'ssh:ssh-grid@@grid-pty',
+        layout: {
+          root: { type: 'leaf', leafId: TEST_LEAF_1 },
+          activeLeafId: TEST_LEAF_1,
+          expandedLeafId: null,
+          layoutMode: 'orchestration-grid'
+        }
+      })
+    ).toThrow('disk unavailable')
+
+    expect(store.getWorkspaceSession('ssh:ssh-grid').tabsByWorktree).toEqual({})
+    expect(store.getSshRemotePtyLeases()).toEqual([])
+    expect(scheduleSave).toHaveBeenCalledOnce()
+  })
   it('preserves a sync-persisted UUID root when a stale empty layout write arrives', async () => {
     const store = await createStore()
     store.setWorkspaceSession({

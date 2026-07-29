@@ -948,6 +948,7 @@ describe('attachMainWindowServices', () => {
     })
           placement: 'orchestration-grid'
           splitFromLeafId: string
+          splitSourceLeafIds: string[]
           tabId: string
           leafId: string
         }
@@ -957,6 +958,7 @@ describe('attachMainWindowServices', () => {
       ptyId: 'pty-new',
       placement: 'orchestration-grid',
       splitFromLeafId: 'leaf-old',
+      splitSourceLeafIds: ['leaf-old', 'leaf-peer'],
       tabId: 'tab-grid',
       leafId: 'leaf-new'
     })
@@ -966,6 +968,10 @@ describe('attachMainWindowServices', () => {
     const createReplyHandler = onMock.mock.calls.find(
       ([channel]) => channel === 'terminal:tabCreateReply'
     )?.[1]
+    expect(createPayload).toMatchObject({
+      placement: 'orchestration-grid',
+      splitSourceLeafIds: ['leaf-old', 'leaf-peer']
+    })
     createReplyHandler?.(
       { sender: mainWindow.webContents },
       {

@@ -15410,6 +15410,7 @@ describe('OrcaRuntimeService', () => {
           runtime.noteTerminalSpawnCommand('pty-new', args.command)
           return {
             id: 'pty-new',
+            incarnationId: 'incarnation-grid-new',
             runtimeRegistration: {
               commit: () => {
                 staged.commit()
@@ -15545,6 +15546,7 @@ describe('OrcaRuntimeService', () => {
           tabId: 'tab-grid',
           leafId: newLeafId,
           ptyId: 'pty-new',
+          incarnationId: 'incarnation-grid-new',
           title: 'Worker 2',
           layout: expect.objectContaining({
             layoutMode: 'orchestration-grid',
