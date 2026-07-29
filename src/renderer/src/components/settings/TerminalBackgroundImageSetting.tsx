@@ -126,7 +126,7 @@ export function TerminalBackgroundImageSetting({
             />
           ) : null}
           {backgroundImage ? (
-            <Button variant="ghost" size="sm" onClick={handleClear}>
+            <Button variant="ghost" size="sm" disabled={picking} onClick={handleClear}>
               {translate(
                 'auto.components.settings.TerminalBackgroundImageSetting.e0e4a53d38',
                 'Remove'
