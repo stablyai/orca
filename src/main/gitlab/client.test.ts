@@ -77,6 +77,30 @@ describe('gitlab client — viewer & paste-URL lookup', () => {
       })
       await expect(getAuthenticatedViewer()).resolves.toBeNull()
     })
+
+    it('pins the lookup to the configured instance', async () => {
+      // Why: an unpinned `glab api user` would identify the user against
+      // whatever host glab infers from cwd/config.
+      glabExecFileAsyncMock.mockResolvedValueOnce({
+        stdout: JSON.stringify({ username: 'alice', email: null })
+      })
+
+      await getAuthenticatedViewer()
+
+      expect(glabExecFileAsyncMock).toHaveBeenCalledWith([
+        'api',
+        '--hostname',
+        'gitlab.com',
+        'user'
+      ])
+    })
+
+    it('fails closed without invoking glab when no instance is configured', async () => {
+      getGlabKnownHostsMock.mockResolvedValue([])
+
+      await expect(getAuthenticatedViewer()).resolves.toBeNull()
+      expect(glabExecFileAsyncMock).not.toHaveBeenCalled()
+    })
   })
 
   describe('getWorkItemByProjectRef', () => {
