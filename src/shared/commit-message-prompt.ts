@@ -135,12 +135,9 @@ export type TokenizeCustomCommandResult =
   | { ok: true; tokens: string[] }
   | { ok: false; error: string }
 
-// Why: deliberately POSIX-shell-style only for *grouping* (single + double
-// quotes, backslash escapes inside double quotes). We do NOT expand `$VAR`,
-// command substitution, backticks, globs, or `~`. The user's intent is
-// "spawn this exact CLI" — adding shell semantics on top would create
-// surprising behavior across platforms (especially Windows) and a security
-// surface we don't need.
+// Why: shell-style syntax is only for grouping. Backslashes escape grouping
+// syntax but otherwise stay literal so native Windows paths survive unchanged.
+// We do NOT expand `$VAR`, command substitution, backticks, globs, or `~`.
 export function tokenizeCustomCommandTemplate(template: string): TokenizeCustomCommandResult {
   const tokens: string[] = []
   let current = ''
@@ -151,7 +148,7 @@ export function tokenizeCustomCommandTemplate(template: string): TokenizeCustomC
   while (i < template.length) {
     const ch = template[i]
     if (quote) {
-      if (ch === '\\' && quote === '"' && i + 1 < template.length) {
+      if (ch === '\\' && quote === '"' && template[i + 1] === '"') {
         current += template[i + 1]
         i += 2
         continue
@@ -176,7 +173,11 @@ export function tokenizeCustomCommandTemplate(template: string): TokenizeCustomC
       continue
     }
 
-    if (ch === '\\' && i + 1 < template.length) {
+    if (
+      ch === '\\' &&
+      i + 1 < template.length &&
+      (template[i + 1] === '"' || template[i + 1] === "'" || /\s/.test(template[i + 1]))
+    ) {
       current += template[i + 1]
       inToken = true
       i += 2

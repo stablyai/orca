@@ -215,6 +215,27 @@ describe('planCommitMessageGeneration', () => {
     })
   })
 
+  it('keeps native Windows paths in preset agent command overrides', () => {
+    const result = planCommitMessageGeneration(
+      {
+        agentId: 'cursor',
+        model: 'gpt-5.2',
+        agentCommandOverride:
+          'C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\powershell.exe -NoProfile'
+      },
+      'PROMPT'
+    )
+
+    expect(result.ok).toBe(true)
+    if (!result.ok) {
+      return
+    }
+    expect(result.plan.binary).toBe(
+      'C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\powershell.exe'
+    )
+    expect(result.plan.args.slice(0, 4)).toEqual(['-NoProfile', '--print', '--mode', 'ask'])
+  })
+
   it.each([
     ['long option', '--model gpt-5.6-luna', ['--model', 'gpt-5.6-luna'], []],
     ['short option', '-m gpt-5.6-luna', ['-m', 'gpt-5.6-luna'], []],

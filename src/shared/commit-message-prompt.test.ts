@@ -268,6 +268,38 @@ describe('tokenizeCustomCommandTemplate', () => {
     expect(r).toEqual({ ok: true, tokens: ['claude', '--msg', 'she said "hi"'] })
   })
 
+  it('preserves native Windows path separators', () => {
+    const r = tokenizeCustomCommandTemplate(
+      'C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\powershell.exe -NoProfile'
+    )
+    expect(r).toEqual({
+      ok: true,
+      tokens: ['C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\powershell.exe', '-NoProfile']
+    })
+  })
+
+  it('preserves UNC path separators', () => {
+    const command = String.raw`\\server\share\agent.exe --print`
+    const r = tokenizeCustomCommandTemplate(command)
+    expect(r).toEqual({
+      ok: true,
+      tokens: [String.raw`\\server\share\agent.exe`, '--print']
+    })
+  })
+
+  it('preserves native Windows paths inside double quotes', () => {
+    const r = tokenizeCustomCommandTemplate('agent --file "C:\\Program Files\\Agent\\run.ps1"')
+    expect(r).toEqual({
+      ok: true,
+      tokens: ['agent', '--file', 'C:\\Program Files\\Agent\\run.ps1']
+    })
+  })
+
+  it('keeps backslash-escaped whitespace grouped', () => {
+    const r = tokenizeCustomCommandTemplate('agent hello\\ world')
+    expect(r).toEqual({ ok: true, tokens: ['agent', 'hello world'] })
+  })
+
   it('keeps adjacent quoted/unquoted regions in one token (a"b"c → abc)', () => {
     const r = tokenizeCustomCommandTemplate('foo a"b"c')
     expect(r).toEqual({ ok: true, tokens: ['foo', 'abc'] })
