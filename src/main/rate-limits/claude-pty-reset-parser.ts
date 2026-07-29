@@ -1,7 +1,7 @@
 import type { RateLimitWindow } from '../../shared/rate-limit-types'
 import { buildWallClockTimestamp } from './time-zone-wall-clock'
 
-const RESET_LINE_RE = /resets?\s+(?:at\s+|in\s+)?(.+)/i
+const RESET_LINE_RE = /(?:resets?|refreshes?)\s+(?:at\s+|in\s+)?(.+)/i
 const MONTH_PATTERN =
   'jan(?:uary)?|feb(?:ruary)?|mar(?:ch)?|apr(?:il)?|may|jun(?:e)?|jul(?:y)?|aug(?:ust)?|sep(?:t(?:ember)?)?|oct(?:ober)?|nov(?:ember)?|dec(?:ember)?'
 const MONTH_DAY_COMPACT_RE = new RegExp(

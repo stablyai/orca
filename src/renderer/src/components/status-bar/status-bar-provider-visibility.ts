@@ -101,10 +101,8 @@ export function hasUsageProviderSettingsForProvider(
     return Boolean(settings.opencodeSessionCookie?.trim())
   }
   if (providerId === 'antigravity') {
-    // Why: the Antigravity snapshot mirrors the Gemini fetch, which stays
-    // 'unavailable' until the user opts into Gemini CLI OAuth. Without that
-    // gate the default-on checked item would pin a permanently dead bar.
-    return settings.antigravityUsageConfigured === true && settings.geminiCliOAuthEnabled === true
+    // Why: Antigravity has its own PTY fetcher and should not be gated behind Gemini CLI OAuth.
+    return settings.antigravityUsageConfigured === true
   }
   if (providerId === 'minimax') {
     return settings.minimaxCookieConfigured === true
