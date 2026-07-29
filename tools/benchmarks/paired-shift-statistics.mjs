@@ -134,15 +134,31 @@ export function pairedDeltas(pairs, phaseName) {
   })
 }
 
+const DIRECTIONAL_VERDICTS = new Set(['improved', 'regressed'])
+
 /**
  * Phases the change under test cannot plausibly affect act as a noise floor: if
  * one of them shows a directional shift, the run measured the machine rather
  * than the change, and every other verdict in it is suspect.
+ *
+ * A control that no launch reached is not evidence of a quiet machine — it is a
+ * control that was never measured — so `unmeasured` is reported separately and
+ * `measured` is false when nothing usable came back. Only `improved`/`regressed`
+ * count as drift; `no-data` is the absence of a measurement, not a direction.
  */
 export function detectDrift(phaseSummaries, controlPhaseNames) {
   const controls = controlPhaseNames
     .filter((name) => phaseSummaries[name])
     .map((name) => ({ phase: name, ...phaseSummaries[name] }))
-  const drifting = controls.filter((control) => control.verdict !== 'inconclusive')
-  return { controls, drifting, detected: drifting.length > 0 }
+  const drifting = controls.filter((control) => DIRECTIONAL_VERDICTS.has(control.verdict))
+  const unmeasured = controlPhaseNames.filter(
+    (name) => !phaseSummaries[name] || phaseSummaries[name].verdict === 'no-data'
+  )
+  return {
+    controls,
+    drifting,
+    unmeasured,
+    measured: controls.some((control) => control.verdict !== 'no-data'),
+    detected: drifting.length > 0
+  }
 }

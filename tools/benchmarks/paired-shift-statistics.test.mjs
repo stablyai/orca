@@ -112,6 +112,7 @@ describe('detectDrift', () => {
   it('stays quiet when the control phases show no direction', () => {
     const drift = detectDrift(summaries, ['spawnToAppReady', 'appReadyToServices'])
     expect(drift.detected).toBe(false)
+    expect(drift.measured).toBe(true)
     expect(drift.controls).toHaveLength(2)
   })
 
@@ -124,7 +125,25 @@ describe('detectDrift', () => {
     expect(drift.drifting.map((control) => control.phase)).toEqual(['spawnToAppReady'])
   })
 
-  it('ignores control phases the run never produced', () => {
-    expect(detectDrift(summaries, ['aclGrantMs']).controls).toEqual([])
+  // Why: 'no-data' is the absence of a measurement, not a direction. Counting it
+  // as drift would mark every real verdict unproven whenever a platform-specific
+  // control phase (aclGrantMs off win32) simply never fired.
+  it('does not treat a control neither arm reached as drift', () => {
+    const drift = detectDrift({ ...summaries, aclGrantMs: { verdict: 'no-data', shift: null } }, [
+      'spawnToAppReady',
+      'aclGrantMs'
+    ])
+    expect(drift.detected).toBe(false)
+    expect(drift.unmeasured).toEqual(['aclGrantMs'])
+    expect(drift.measured).toBe(true)
+  })
+
+  it('reports control phases the run never produced as unmeasured, not as quiet', () => {
+    const drift = detectDrift(summaries, ['aclGrantMs'])
+    expect(drift.controls).toEqual([])
+    expect(drift.unmeasured).toEqual(['aclGrantMs'])
+    // The distinction that matters: no drift was found because none was looked for.
+    expect(drift.detected).toBe(false)
+    expect(drift.measured).toBe(false)
   })
 })
