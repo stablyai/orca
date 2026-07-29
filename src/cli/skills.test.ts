@@ -617,6 +617,7 @@ describe('orca skills CLI', () => {
     const child = createFakeChild()
     spawnMock.mockReturnValue(child)
     resolveCliCommandMock.mockReturnValue('/home/alice/.nvm/versions/node/v22/bin/npx')
+    vi.stubEnv('PATH', '/usr/bin')
     vi.spyOn(process.stderr, 'write').mockImplementation(() => true)
 
     const resultPromise = main(['skills', 'install', '--skill', 'alpha'], '/tmp/repo')
@@ -627,10 +628,9 @@ describe('orca skills CLI', () => {
     // Why: npx is an `env node` script, so an off-PATH npx exits 127 with no
     // 'error' event unless node ships alongside it on the child's PATH.
     const env = spawnMock.mock.calls[0]?.[2]?.env
-    expect(env?.PATH?.split(delimiter)[0]).toBe('/home/alice/.nvm/versions/node/v22/bin')
     // Why: the child still needs the inherited PATH and the rest of the parent
     // environment; replacing it outright breaks git, node, HOME and npm config.
-    expect(env?.PATH?.endsWith(process.env.PATH ?? '')).toBe(true)
+    expect(env?.PATH).toBe(`/home/alice/.nvm/versions/node/v22/bin${delimiter}/usr/bin`)
     expect(env?.HOME ?? env?.USERPROFILE).toBe(process.env.HOME ?? process.env.USERPROFILE)
   })
 
@@ -654,6 +654,7 @@ describe('orca skills CLI', () => {
     // Why: resolveCliCommand returns the bare name when it finds nothing, and
     // dirname('npx') is '.', which would run ./npx out of the caller's checkout.
     resolveCliCommandMock.mockReturnValue('npx')
+    vi.stubEnv('PATH', '/usr/bin')
     vi.spyOn(process.stderr, 'write').mockImplementation(() => true)
 
     const resultPromise = main(['skills', 'install', '--skill', 'alpha'], '/tmp/repo')
@@ -661,9 +662,9 @@ describe('orca skills CLI', () => {
     child.emit('exit', 0, null)
     await resultPromise
 
-    const entries = spawnMock.mock.calls[0]?.[2]?.env?.PATH?.split(delimiter) ?? []
-    expect(entries).not.toContain('.')
-    expect(entries).not.toContain('')
+    // Why: assert the constructed value, not the ambient one — a dev PATH with a
+    // trailing separator carries its own '' entry and would fake a failure here.
+    expect(spawnMock.mock.calls[0]?.[2]?.env?.PATH).toBe('/usr/bin')
   })
 
   it('accumulates a repeated --skill instead of keeping only the last one', async () => {
