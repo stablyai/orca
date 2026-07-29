@@ -81,7 +81,9 @@ describe('discoverSkillsForRuntimeTarget', () => {
     )
   })
 
-  it('drops a caller cwd and worktree id the server cannot use', async () => {
+  // Why: no caller can produce these yet, so the remote params must stay empty
+  // rather than shipping a client-host target the server would misread.
+  it('sends no target at all to a remote runtime', async () => {
     runtimeEnvironmentCall.mockResolvedValueOnce({
       id: 'skills',
       ok: true,

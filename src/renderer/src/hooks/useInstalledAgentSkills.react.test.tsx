@@ -345,25 +345,41 @@ describe('useInstalledAgentSkill', () => {
     expect(latestState?.installed).toBe(true)
   })
 
-  it('keeps loading instead of scanning the wrong host before the runtime catalog hydrates', async () => {
-    const discover = vi
-      .fn<(target?: SkillDiscoveryTarget) => Promise<SkillDiscoveryResult>>()
-      .mockResolvedValue(discoveryResult([]))
-    const call = vi.fn()
-    Object.defineProperty(window, 'api', {
-      configurable: true,
-      value: { skills: { discover }, runtimeEnvironments: { call } }
+  // Why: each hydration input is gated separately. Covering only the both-unset
+  // case would let either conjunct be deleted with every test still green.
+  for (const unhydrated of ['settings', 'runtime catalog'] as const) {
+    it(`keeps loading instead of scanning the wrong host before the ${unhydrated} hydrates`, async () => {
+      const discover = vi
+        .fn<(target?: SkillDiscoveryTarget) => Promise<SkillDiscoveryResult>>()
+        .mockResolvedValue(discoveryResult([]))
+      const call = vi.fn()
+      Object.defineProperty(window, 'api', {
+        configurable: true,
+        value: { skills: { discover }, runtimeEnvironments: { call } }
+      })
+      // Why: the other input is fully hydrated and names a remote owner, so a
+      // missing gate resolves to the local host and caches a client scan.
+      useAppStore.setState(
+        unhydrated === 'settings'
+          ? {
+              settings: null,
+              runtimeEnvironments: [{ id: 'env-1' }] as never,
+              runtimeEnvironmentCatalogHydrated: true
+            }
+          : {
+              settings: { activeRuntimeEnvironmentId: 'env-1' } as GlobalSettings,
+              runtimeEnvironments: [],
+              runtimeEnvironmentCatalogHydrated: false
+            }
+      )
+
+      await renderProbe()
+      await flushMicrotasks()
+
+      expect(discover).not.toHaveBeenCalled()
+      expect(call).not.toHaveBeenCalled()
+      expect(latestState?.loading).toBe(true)
+      expect(latestState?.installed).toBe(false)
     })
-    useAppStore.setState({ settings: null, runtimeEnvironmentCatalogHydrated: false })
-
-    await renderProbe()
-    await flushMicrotasks()
-
-    // Why: resolving to "local" here would cache a client scan and flash
-    // "Not installed" at a user whose skills live on the remote.
-    expect(discover).not.toHaveBeenCalled()
-    expect(call).not.toHaveBeenCalled()
-    expect(latestState?.loading).toBe(true)
-    expect(latestState?.installed).toBe(false)
-  })
+  }
 })

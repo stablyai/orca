@@ -230,6 +230,10 @@ export const createRuntimeStatusSlice: StateCreator<AppState, [], [], RuntimeSta
       environments = await window.api.runtimeEnvironments.list()
     } catch (err) {
       console.error('Failed to list runtime environments for status hydration:', err)
+      // Why: an unreadable catalog is settled, not pending. Surfaces that wait on
+      // hydration (skill discovery) would otherwise spin for the whole session,
+      // and "no reachable saved runtime" is what terminal routing already assumes.
+      set({ runtimeEnvironmentCatalogHydrated: true })
       return
     }
     get().setRuntimeEnvironments(environments)

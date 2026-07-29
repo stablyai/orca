@@ -1,8 +1,11 @@
 import { useMemo } from 'react'
-import { useShallow } from 'zustand/react/shallow'
 import { getSingleFocusedRuntimeEnvironmentId } from '@/lib/single-runtime-legacy-owner'
 import { getActiveRuntimeTarget, type RuntimeClientTarget } from '@/runtime/runtime-rpc-client'
 import { useAppStore } from '@/store'
+
+/** Distinguishes "not known yet" from "known to be the local host", without
+ *  colliding with an environment id that happens to be named the same. */
+const UNRESOLVED = Symbol('skill-discovery-runtime-unresolved')
 
 /**
  * Runtime that owns skill discovery, or `null` while the store still cannot say.
@@ -15,25 +18,21 @@ import { useAppStore } from '@/store'
  * again, just inverted. Scan and install must always name the same host.
  */
 export function useActiveSkillDiscoveryRuntimeTarget(): RuntimeClientTarget | null {
-  const owner = useAppStore(
-    useShallow((state) => ({
-      activeRuntimeEnvironmentId: state.settings?.activeRuntimeEnvironmentId ?? null,
-      catalogHydrated: state.runtimeEnvironmentCatalogHydrated,
-      runtimeEnvironments: state.runtimeEnvironments,
-      settingsHydrated: state.settings !== null
-    }))
-  )
-  return useMemo(() => {
-    // Why: falling back to "local" before hydration caches a client scan under the
+  // Why: select the resolved id (a string) rather than its inputs. Selecting
+  // `runtimeEnvironments` would churn identity every time a status refresh
+  // restores an equal-but-new array, re-firing every consumer's scan.
+  const environmentId = useAppStore((state) =>
+    // Why: resolving to "local" before hydration caches a client scan under the
     // local key and flashes "Not installed" at a user whose skills live remotely.
-    if (!owner.settingsHydrated || !owner.catalogHydrated) {
-      return null
-    }
-    return getActiveRuntimeTarget({
-      activeRuntimeEnvironmentId: getSingleFocusedRuntimeEnvironmentId({
-        settings: { activeRuntimeEnvironmentId: owner.activeRuntimeEnvironmentId },
-        runtimeEnvironments: owner.runtimeEnvironments
-      })
-    })
-  }, [owner])
+    state.settings === null || !state.runtimeEnvironmentCatalogHydrated
+      ? UNRESOLVED
+      : getSingleFocusedRuntimeEnvironmentId(state)
+  )
+  return useMemo(
+    () =>
+      environmentId === UNRESOLVED
+        ? null
+        : getActiveRuntimeTarget({ activeRuntimeEnvironmentId: environmentId }),
+    [environmentId]
+  )
 }

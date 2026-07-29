@@ -66,15 +66,17 @@ export function getSkillDiscoveryTargetKey(target: SkillDiscoveryTarget | undefi
 }
 
 // Why: a connected remote runtime scans its own disk. Sharing the local key
-// would keep showing the client's skills after switching environments.
+// would keep showing the client's skills after switching environments. The
+// caller's target is dropped for a remote scan (it describes the client's WSL /
+// project runtime), so it must not fragment the key either — otherwise the same
+// remote gets rescanned once per client-side target shape.
 export function getRuntimeScopedSkillDiscoveryKey(
   runtimeTarget: RuntimeClientTarget,
   target: SkillDiscoveryTarget | undefined
 ): string {
-  const base = getSkillDiscoveryTargetKey(target)
   return runtimeTarget.kind === 'environment'
-    ? `runtime:${runtimeTarget.environmentId}::${base}`
-    : base
+    ? `runtime:${runtimeTarget.environmentId}`
+    : getSkillDiscoveryTargetKey(target)
 }
 
 function startInstalledAgentSkillDiscovery(
