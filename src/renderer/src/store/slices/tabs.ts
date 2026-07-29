@@ -965,9 +965,15 @@ export const createTabsSlice: StateCreator<AppState, [], [], TabsSlice> = (set, 
         !nextTabs.some((item) => item.groupId === group.id) &&
         nextGroups.length > 0
       ) {
+        // Why prefer a populated group: nextGroups[0] can itself be an empty split, which would
+        // re-create the very empty strip this branch exists to avoid. Same policy as
+        // selectHydratedActiveGroupId.
+        const repointTarget =
+          nextGroups.find((candidate) => nextTabs.some((item) => item.groupId === candidate.id)) ??
+          nextGroups[0]
         nextActiveGroupIdByWorktree = {
           ...nextActiveGroupIdByWorktree,
-          [worktreeId]: nextGroups[0].id
+          [worktreeId]: repointTarget.id
         }
       }
       const shouldDeactivateWorktree =

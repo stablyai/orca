@@ -243,11 +243,16 @@ export function activateTerminalTab(tabId: string): void {
     Object.entries(s.tabsByWorktree).find(([, worktreeTabs]) =>
       worktreeTabs.some((tab) => tab.id === tabId)
     )?.[0] ?? null
+  // Why this stays a hard return: no owning worktree means the tab is in no strip at all, so
+  // there is nothing to select — distinct from an owner that exists but cannot be routed.
+  if (!owningWorktreeId) {
+    return
+  }
   // Why: same fail-closed shape as the close path — an unresolved owner must only skip the
   // host-directed activation, never the local selection the user just clicked.
   const worktreeRoute = resolveTerminalWorktreeRoute(s, owningWorktreeId)
   const runtimeEnvironmentId = worktreeRoute?.runtimeEnvironmentId ?? null
-  if (owningWorktreeId && isWebRuntimeSessionActive(runtimeEnvironmentId)) {
+  if (isWebRuntimeSessionActive(runtimeEnvironmentId)) {
     // Why: activation needs to update the host's active tab as well as the
     // local optimistic state, otherwise the next host snapshot snaps back.
     void activateWebRuntimeSessionTab({

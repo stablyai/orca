@@ -84,6 +84,37 @@ describe('closeUnifiedTab with a missing group record', () => {
     ])
   })
 
+  // Why: nextGroups[0] can be an empty split, which re-creates the empty strip this repoint exists
+  // to prevent.
+  it('repoints at a group that actually has tabs rather than the first empty split', () => {
+    const store = createTestStore()
+    seedWorktree(store)
+    store.setState({
+      unifiedTabsByWorktree: {
+        [WORKTREE_ID]: [
+          makeUnifiedTab({ id: 'tab-1', worktreeId: WORKTREE_ID, groupId: PHANTOM_GROUP_ID }),
+          makeUnifiedTab({ id: 'tab-2', worktreeId: WORKTREE_ID, groupId: 'group-populated' })
+        ]
+      },
+      groupsByWorktree: {
+        [WORKTREE_ID]: [
+          makeTabGroup({ id: 'group-empty', worktreeId: WORKTREE_ID, tabOrder: [] }),
+          makeTabGroup({
+            id: 'group-populated',
+            worktreeId: WORKTREE_ID,
+            activeTabId: 'tab-2',
+            tabOrder: ['tab-2']
+          })
+        ]
+      },
+      activeGroupIdByWorktree: { [WORKTREE_ID]: PHANTOM_GROUP_ID }
+    })
+
+    store.getState().closeUnifiedTab('tab-1')
+
+    expect(store.getState().activeGroupIdByWorktree[WORKTREE_ID]).toBe('group-populated')
+  })
+
   it('leaves a live group record untouched', () => {
     const store = createTestStore()
     seedWorktree(store)

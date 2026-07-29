@@ -131,4 +131,23 @@ describe('closing a terminal tab whose worktree owner cannot be resolved', () =>
     expect(setActiveTab).toHaveBeenCalledWith('tab-1')
     expect(setActiveTabType).toHaveBeenCalledWith('terminal')
   })
+
+  // Why: relaxing the route guard must not also relax the existence check. A tab in no worktree's
+  // strip has nothing to select, and activating it would point the app at a tab that renders nothing.
+  it('does not activate a tab that belongs to no worktree at all', () => {
+    const setActiveTab = vi.fn()
+    const setActiveTabType = vi.fn()
+    getStateMock.mockReturnValue(
+      unroutableOwnerState({
+        tabsByWorktree: { [WORKTREE_ID]: [{ id: 'tab-1' }] },
+        setActiveTab,
+        setActiveTabType
+      })
+    )
+
+    activateTerminalTab('tab-vanished')
+
+    expect(setActiveTab).not.toHaveBeenCalled()
+    expect(setActiveTabType).not.toHaveBeenCalled()
+  })
 })

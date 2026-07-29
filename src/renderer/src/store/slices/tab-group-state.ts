@@ -34,8 +34,14 @@ export function reconstructGroupForOrphanedTab(
     id: tab.groupId,
     worktreeId,
     activeTabId: tab.id,
+    // Why sorted, not backing-array order: reordering a tab rewrites `sortOrder` in place
+    // (applyTabOrderSortValues) without moving the array element, so the array stops matching
+    // visual order — and this tabOrder is what neighbor selection walks when the active tab closes.
     tabOrder: tabs
       .filter((candidate) => candidate.groupId === tab.groupId)
+      .toSorted(
+        (left, right) => left.sortOrder - right.sortOrder || left.createdAt - right.createdAt
+      )
       .map((candidate) => candidate.id)
   }
 }
