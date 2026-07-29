@@ -16,6 +16,8 @@ export type WorkerEffect = {
   hookFound?: boolean
   startupPolicy?: string
   terminalId?: string
+  surface?: 'visible' | 'background'
+  warning?: string
 }
 
 export type WorkerSetupReceipt = {
@@ -32,6 +34,28 @@ export type WorkerSetupReceipt = {
     | 'not_configured'
     | 'spawn_failed'
     | 'not_applicable'
+}
+
+export async function createExistingWorktreeWorkerTerminal(args: {
+  runtime: OrcaRuntimeService
+  worktreeId: string
+  agent: TuiAgent
+  taskId: string
+  effects: WorkerEffect[]
+}): Promise<{ handle: string; warning?: string }> {
+  const terminal = await args.runtime.createTerminal(`id:${args.worktreeId}`, {
+    command: args.agent,
+    title: `worker-${args.taskId}`
+  })
+  args.effects.push({
+    kind: 'terminal',
+    role: 'agent',
+    action: 'created',
+    id: terminal.handle,
+    surface: terminal.surface,
+    warning: terminal.warning
+  })
+  return { handle: terminal.handle, warning: terminal.warning }
 }
 
 export function applyWaitForSetupOutcome(

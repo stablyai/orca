@@ -696,6 +696,9 @@ export function createIpcPtyTransport(opts: IpcPtyTransportOptions = {}): PtyTra
       }
 
       if (options.sessionId && hasPreHandlerPtyExit(options.sessionId)) {
+        if (options.admitPtyId && !options.admitPtyId(options.sessionId)) {
+          return { id: options.sessionId } satisfies PtyConnectResult
+        }
         // Why: deliver the exited parked session's buffered final frame/exit before spawn, so the dead incarnation can't orphan a fresh shell reusing its id.
         ptyId = options.sessionId
         connected = true
@@ -761,13 +764,22 @@ export function createIpcPtyTransport(opts: IpcPtyTransportOptions = {}): PtyTra
         const resultLaunchAgent = isTuiAgent(spawnResult.launchAgent)
           ? spawnResult.launchAgent
           : undefined
+        const retireFreshSpawn = async (): Promise<void> => {
+          if (!spawnResult.isReattach && !spawnResult.coldRestore) {
+            await window.api.pty.kill(spawnResult.id)
+          }
+        }
 
         // Why: on destroy mid-connect, kill only a fresh spawn — killing a reattached session (owned by the tab lifecycle) loses a live shell.
         if (destroyed) {
-          if (!options.sessionId) {
-            window.api.pty.kill(spawnResult.id)
-          }
+          await retireFreshSpawn()
           return
+        }
+
+        if (options.admitPtyId && !options.admitPtyId(spawnResult.id)) {
+          // Why: a rejected session-expired fallback has no owner to retire its newly created process.
+          await retireFreshSpawn()
+          return spawnResult
         }
 
         ptyId = spawnResult.id
@@ -933,12 +945,16 @@ export function createIpcPtyTransport(opts: IpcPtyTransportOptions = {}): PtyTra
       }
     },
 
-    detach() {
+    detach(options) {
       clearAccumulatedState()
       inputWriteQueue.clear()
       if (ptyId) {
         // Why: on remount keep the exit observer alive so a shell dying in the gap still clears stale tab/leaf bindings before reattach.
-        unregisterPtyDataAndStatusHandlers(ptyId)
+        if (options?.preserveExitObserver === false) {
+          unregisterPtyHandlers(ptyId)
+        } else {
+          unregisterPtyDataAndStatusHandlers(ptyId)
+        }
       }
       connected = false
       ptyId = null

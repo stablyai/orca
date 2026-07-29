@@ -978,7 +978,10 @@ function scheduleAutomaticUpdateCheck(delayMs: number): void {
   }
   autoUpdateCheckTimer = setTimeout(() => {
     // Why: Orca runs for days, so keep the next background check scheduled in the main process rather than tying it to relaunches or renderer lifetime.
-    runBackgroundUpdateCheck()
+    if (!runBackgroundUpdateCheck()) {
+      // Why: a deferred check reaches no outcome handler, so re-arm here or one deferral ends automatic checks for the process lifetime.
+      scheduleAutomaticUpdateCheck(AUTO_UPDATE_CHECK_INTERVAL_MS)
+    }
   }, effectiveDelayMs)
 }
 
@@ -1212,18 +1215,19 @@ function retryPrereleaseFallbackAfterMissingManifest(
   return true
 }
 
+/** Returns false when the check was deferred instead of launched, so timer-driven callers can re-arm. */
 function runBackgroundUpdateCheck(
   nudgeId: string | null = getPersistedPendingUpdateNudgeId()
-): void {
+): boolean {
   if (activeUpdateSource === 'local' || localBuildSelectionInProgress) {
-    return
+    return false
   }
   if (backgroundCheckLaunchPending || currentStatus.state === 'checking') {
-    return
+    return false
   }
   if (!app.isPackaged || is.dev) {
     sendStatus({ state: 'not-available' })
-    return
+    return false
   }
   // Why: set the nudge marker before any events arrive so later checks can't inherit a stale campaign id; persisted id keeps a nudge card dismissable after relaunch.
   activeUpdateNudgeId = nudgeId
@@ -1255,6 +1259,7 @@ function runBackgroundUpdateCheck(
       }
       void sendCheckFailureStatus(String(err?.message ?? err), wasUserInitiated, 'promise', err)
     })
+  return true
 }
 
 export function checkForUpdates(): void {
@@ -1507,6 +1512,24 @@ export function dismissNudge(): void {
     _setDismissedUpdateNudgeId?.(pendingId)
     clearPendingUpdateNudge()
   }
+}
+
+/**
+ * The user closed an offered update without taking it. For a local build that ends the session:
+ * nothing will consume the local feed now, so release checks must stop being deferred.
+ */
+export function dismissAvailableUpdate(): void {
+  if (activeUpdateSource !== 'local' || localBuildSelectionInProgress) {
+    return
+  }
+  // Why: only an un-acted 'available' card is abandoned — 'downloading'/'downloaded' still need the local feed and allowDowngrade.
+  if (currentStatus.state !== 'available') {
+    return
+  }
+  clearAvailableUpdateContext()
+  restoreReleaseUpdateSource()
+  // Why: leaving the card's 'available' status behind would let a retry download the local version off the restored release feed.
+  sendStatus({ state: 'idle' })
 }
 
 export function setupAutoUpdater(

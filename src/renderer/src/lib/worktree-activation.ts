@@ -5,7 +5,6 @@ import type {
   SetupSplitDirection,
   Tab,
   TuiAgent,
-  Worktree,
   WorktreeDefaultTabsLaunch,
   WorktreeSetupLaunch
 } from '../../../shared/types'
@@ -19,10 +18,6 @@ import { shouldAutoCreateInitialTerminal } from '@/components/terminal/initial-t
 import { buildSetupRunnerCommand } from './setup-runner'
 import { createSequencedSetupAgentCommands } from '../../../shared/setup-agent-sequencing'
 import { getSetupRunnerCommandPlatformForPath } from '../../../shared/setup-runner-command'
-import { buildAgentStartupPlan } from './tui-agent-startup'
-import { getAgentLaunchPlatformForRepo } from '@/lib/agent-launch-platform'
-import { CLIENT_PLATFORM } from './new-workspace'
-import { tuiAgentToAgentKind } from './telemetry'
 import { agentKindToTuiAgent } from '../../../shared/agent-kind'
 import { useAppStore } from '@/store'
 import type { PendingSidebarWorktreeReveal } from '@/store/slices/ui'
@@ -42,15 +37,8 @@ import {
   setWorktreeNavActivator,
   setWorktreeNavViewActivator
 } from '@/store/slices/worktree-nav-history'
-import {
-  resolveTuiAgentLaunchArgs,
-  resolveTuiAgentLaunchEnv
-} from '../../../shared/tui-agent-launch-defaults'
-import { isTuiAgent } from '../../../shared/tui-agent-config'
-import { repoIsRemote } from '../../../shared/agent-launch-remote'
 import { resumeSleepingAgentSessionsForWorktree } from '@/lib/resume-sleeping-agent-session'
 import { queueHookCommandsForFirstWorktreeTab } from '@/lib/hook-command-delayed-delivery'
-import { getLocalProjectExecutionRuntimeContext } from '@/lib/local-preflight-context'
 import {
   getRuntimeEnvironmentIdForWorktree,
   type WorktreeRuntimeOwnerState
@@ -67,7 +55,6 @@ import { getConnectionId } from '@/lib/connection-context'
 import { isDetachedHeadWorkspace } from '@/components/sidebar/visible-worktrees'
 import { isNativeChatTranscriptLocalReadable } from '@/lib/native-chat-transcript-readability'
 import { seedNativeChatAppliedSessionOptions } from '@/components/native-chat/native-chat-session-option-cache'
-import { resolveNativeChatSessionOptionDefaults } from '../../../shared/native-chat-session-option-defaults'
 import type { SessionOptionValue } from '../../../shared/native-chat-session-options'
 
 /** Telemetry threaded from the launch site to `pty:spawn`; main fires `agent_started`
@@ -229,56 +216,6 @@ export function activateAndRevealFolderWorkspace(
   return { primaryTabId }
 }
 
-function buildCreatedAgentReopenStartup(worktree: Worktree): WorktreeStartupPayload | undefined {
-  const agent = worktree.createdWithAgent
-  if (!isTuiAgent(agent)) {
-    return undefined
-  }
-
-  const state = useAppStore.getState()
-  const repo = state.repos.find((entry) => entry.id === worktree.repoId)
-  const launchPlatform = repo
-    ? getAgentLaunchPlatformForRepo(
-        repo,
-        repo.connectionId ? undefined : getLocalProjectExecutionRuntimeContext(state, worktree.id)
-      )
-    : CLIENT_PLATFORM
-
-  const startupPlan = buildAgentStartupPlan({
-    agent,
-    prompt: '',
-    cmdOverrides: state.settings?.agentCmdOverrides ?? {},
-    agentArgs: resolveTuiAgentLaunchArgs(agent, state.settings?.agentDefaultArgs),
-    agentEnv: resolveTuiAgentLaunchEnv(agent, state.settings?.agentDefaultEnv),
-    sessionOptions: resolveNativeChatSessionOptionDefaults(
-      state.settings?.nativeChatSessionOptions,
-      agent
-    ),
-    platform: launchPlatform,
-    isRemote: repo ? repoIsRemote(repo) : false,
-    allowEmptyPromptLaunch: true
-  })
-  if (!startupPlan) {
-    return undefined
-  }
-
-  return {
-    command: startupPlan.launchCommand,
-    ...(startupPlan.env ? { env: startupPlan.env } : {}),
-    launchConfig: startupPlan.launchConfig,
-    launchAgent: agent,
-    ...(startupPlan.sessionOptions ? { sessionOptions: startupPlan.sessionOptions } : {}),
-    ...(startupPlan.startupCommandDelivery
-      ? { startupCommandDelivery: startupPlan.startupCommandDelivery }
-      : {}),
-    telemetry: {
-      agent_kind: tuiAgentToAgentKind(agent),
-      launch_source: 'sidebar',
-      request_kind: 'resume'
-    }
-  }
-}
-
 export function activateAndRevealWorktree(
   worktreeId: string,
   opts?: {
@@ -346,7 +283,7 @@ export function activateAndRevealWorktree(
   const primaryTabId = ensureWorktreeHasInitialTerminal(
     useAppStore.getState(),
     worktreeId,
-    opts?.startup ?? buildCreatedAgentReopenStartup(wt),
+    opts?.startup,
     opts?.setup,
     opts?.issueCommand,
     opts?.defaultTabs

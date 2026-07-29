@@ -24,6 +24,11 @@ import type { WorktreeForceDeleteReason } from '../../../../shared/worktree-remo
 import type { TerminalGitHubPRLink } from '../../../../shared/terminal-github-pr-link-detector'
 import type { ExecutionHostId } from '../../../../shared/execution-host'
 import type {
+  HostQualifiedDetectedWorktreeResult,
+  SshExecutionHostId
+} from '../../../../shared/detected-worktree-provider-contract'
+import type { DirectSshAuthority } from '../../../../shared/ssh-types'
+import type {
   PendingWorktreeCreation,
   WorktreeCreationPhase
 } from '@/lib/pending-worktree-creation'
@@ -37,6 +42,17 @@ export type WorktreeDeleteState = {
   canForceDelete: boolean
   forceDeleteReason: WorktreeForceDeleteReason | null
   lockReason?: string | null
+}
+
+export type WorktreeFetchOptions = {
+  requireAuthoritative?: boolean
+  executionHostId?: ExecutionHostId
+  forceLocalOwner?: boolean
+}
+
+export type DirectSshWorktreeFetchOptions = WorktreeFetchOptions & {
+  executionHostId: SshExecutionHostId
+  directSshAuthority: DirectSshAuthority
 }
 
 export type WorktreeMetaUpdateGuard = (worktree: Worktree | DetectedWorktree | undefined) => boolean
@@ -120,14 +136,13 @@ export type WorktreeSlice = {
   /** Startup owns the initial all-host refresh; sidebar repo-change refreshes stay gated until it finishes. */
   startupWorktreeRefreshCompleted: boolean
   fetchDetectedWorktrees: (repoId: string) => Promise<DetectedWorktreeListResult | null>
-  fetchWorktrees: (
-    repoId: string,
-    options?: {
-      requireAuthoritative?: boolean
-      executionHostId?: ExecutionHostId
-      forceLocalOwner?: boolean
-    }
-  ) => Promise<boolean>
+  fetchWorktrees: {
+    (
+      repoId: string,
+      options: DirectSshWorktreeFetchOptions
+    ): Promise<HostQualifiedDetectedWorktreeResult>
+    (repoId: string, options?: WorktreeFetchOptions): Promise<boolean>
+  }
   fetchAllWorktrees: (options?: { hydrationPurge?: 'allow' | 'defer' }) => Promise<void>
   fetchWorktreeLineage: (options?: { forceLocalOwner?: boolean }) => Promise<void>
   updateWorktreeLineage: (

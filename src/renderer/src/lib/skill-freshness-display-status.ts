@@ -1,6 +1,6 @@
 import {
+  isSkillCopyNeedingAttention,
   isSkillScanIssueNeedingAttention,
-  SUPPORTED_GLOBAL_SKILL_TOPOLOGIES,
   type SkillFreshnessInventory
 } from '../../../shared/skill-freshness'
 
@@ -24,8 +24,12 @@ export function getSkillFreshnessDisplayStatus(
       continue
     }
     hasPlacement = true
+    // Why: 'newer-known' is recognized official content ahead of this build — the
+    // updater's own install or a newer release's bytes. There is nothing to fix and
+    // nothing to update to, so amber would send the user chasing a phantom edit.
     if (
       installation.status !== 'current' &&
+      installation.status !== 'newer-known' &&
       !(installation.status === 'unrecognized' && installation.topology === 'plugin-cache')
     ) {
       hasBlockedCopy = true
@@ -63,15 +67,6 @@ export function hasSkillCopyNeedingAttention(
   return (
     (placements.length > 0 &&
       Boolean(inventory?.scanIssues.some(isSkillScanIssueNeedingAttention))) ||
-    placements.some(
-      (installation) =>
-        installation.status !== 'current' &&
-        !(installation.status === 'unrecognized' && installation.topology === 'plugin-cache') &&
-        // Why: an out-of-date copy the command converges is ordinary work, not a problem.
-        !(
-          SUPPORTED_GLOBAL_SKILL_TOPOLOGIES.has(installation.topology) &&
-          installation.status === 'outdated'
-        )
-    )
+    placements.some(isSkillCopyNeedingAttention)
   )
 }

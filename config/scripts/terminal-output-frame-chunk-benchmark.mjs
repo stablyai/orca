@@ -8,10 +8,8 @@
 // `chunk += part`. The gate in front of it (terminalStreamByteLengthExceeds) ran the
 // same per-code-point walk over the whole payload a second time.
 //
-// The fix: one charCodeAt scan computing the UTF-8 width inline with no per-code-point
-// string, chunk text taken as data.slice(chunkStart, end), and a gate of
-// `data.length > CHUNK || Buffer.byteLength(data, 'utf8') > CHUNK` -- sound because a
-// string's UTF-8 length is never below its UTF-16 length.
+// The fix: one charCodeAt scan computing UTF-8 width inline, slices for chunk text,
+// and bounded byte probes when UTF-16 length alone cannot prove fit or overflow.
 //
 // BOTH arms run the complete production path, encodeTerminalStreamText included, and
 // their emitted frames (base64 + seq + opcode) are compared before any timing, so an
@@ -48,11 +46,13 @@ nodeModule.registerHooks({
 })
 
 const ITERATIONS = Number(process.env.ORCA_FRAME_CHUNK_BENCH_ITERATIONS ?? '40')
+const GATE_ITERATIONS = Number(process.env.ORCA_FRAME_GATE_BENCH_ITERATIONS ?? '2000')
 const WARMUP = Number(process.env.ORCA_FRAME_CHUNK_BENCH_WARMUP ?? '8')
 const ROUNDS = Number(process.env.ORCA_FRAME_CHUNK_BENCH_ROUNDS ?? '6')
 
 for (const [name, value] of [
   ['ORCA_FRAME_CHUNK_BENCH_ITERATIONS', ITERATIONS],
+  ['ORCA_FRAME_GATE_BENCH_ITERATIONS', GATE_ITERATIONS],
   ['ORCA_FRAME_CHUNK_BENCH_WARMUP', WARMUP],
   ['ORCA_FRAME_CHUNK_BENCH_ROUNDS', ROUNDS]
 ]) {
@@ -73,12 +73,19 @@ const CLIPBOARD_SOURCE = readFileSync(
   'utf8'
 )
 
-// Why re-read the sources: this benchmark's claim is that the OLD arm paid a
-// measureClipboardTextByteLength call per code point and the NEW one pays a single
-// Buffer.byteLength gate. Match the CALL form, not a bare word -- a comment naming
-// the function would satisfy a substring check.
+// Match executable source markers so a stale benchmark fails instead of misleading.
 for (const [source, label, marker] of [
-  [CHUNK_SOURCE, 'terminal-output-frame-chunks.ts', "Buffer.byteLength(data, 'utf8')"],
+  [
+    CHUNK_SOURCE,
+    'terminal-output-frame-chunks.ts',
+    'export function exceedsTerminalStreamChunkBytes(data: string): boolean'
+  ],
+  [CHUNK_SOURCE, 'terminal-output-frame-chunks.ts', 'TERMINAL_STREAM_BYTE_PROBE_CODE_UNITS'],
+  [
+    CHUNK_SOURCE,
+    'terminal-output-frame-chunks.ts',
+    'terminalStreamByteLength(data.slice(start, end))'
+  ],
   [CHUNK_SOURCE, 'terminal-output-frame-chunks.ts', 'const text = data.slice(chunkStart, end)'],
   [CHUNK_SOURCE, 'terminal-output-frame-chunks.ts', 'data.charCodeAt(index + 1)'],
   [CLIPBOARD_SOURCE, 'clipboard-text.ts', 'export function measureClipboardTextByteLength('],
@@ -103,9 +110,16 @@ const { measureClipboardTextByteLength } = await import(
 const { TerminalStreamOpcode, encodeTerminalStreamJson, encodeTerminalStreamText } = await import(
   new URL('../../src/shared/terminal-stream-protocol.ts', import.meta.url).href
 )
-const { iterateTerminalOutputFrameChunks } = await import(
+const { exceedsTerminalStreamChunkBytes, iterateTerminalOutputFrameChunks } = await import(
   new URL('../../src/main/runtime/rpc/terminal-output-frame-chunks.ts', import.meta.url).href
 )
+
+function previousGate(data) {
+  return (
+    data.length > TERMINAL_STREAM_CHUNK_BYTES ||
+    Buffer.byteLength(data, 'utf8') > TERMINAL_STREAM_CHUNK_BYTES
+  )
+}
 
 // Pre-fix arm: the exact code that shipped, including the second full walk in the gate.
 function* iterateBefore(data, meta) {
@@ -261,6 +275,11 @@ const fixtures = [
     meta: (data) => ({ seq: 5_000_000, rawLength: data.length })
   },
   {
+    label: 'late-wide gate miss (3 chunks)',
+    data: `${'a'.repeat(16_000)}${'\u20ac'.repeat(32_000)}`,
+    meta: (data) => ({ seq: 5_000_000, rawLength: data.length })
+  },
+  {
     label: 'ascii 512KiB (snapshot chunking)',
     data: 'x'.repeat(512 * 1024),
     meta: () => undefined
@@ -309,6 +328,38 @@ function measureInterleaved(data, meta) {
   return { beforeMs: median(beforeSamples), afterMs: median(afterSamples) }
 }
 
+let gateChecksum = 0
+
+function drainGate(gate, data) {
+  gateChecksum = Math.imul(gateChecksum ^ (gate(data) ? 1 : 0), 16777619) >>> 0
+}
+
+function measureGateInterleaved(data) {
+  for (let index = 0; index < WARMUP * 10; index += 1) {
+    drainGate(previousGate, data)
+    drainGate(exceedsTerminalStreamChunkBytes, data)
+  }
+  const previousSamples = []
+  const boundedSamples = []
+  for (let round = 0; round < ROUNDS; round += 1) {
+    const run = (gate, samples) => {
+      const start = performance.now()
+      for (let index = 0; index < GATE_ITERATIONS; index += 1) {
+        drainGate(gate, data)
+      }
+      samples.push((performance.now() - start) / GATE_ITERATIONS)
+    }
+    if (round % 2 === 0) {
+      run(previousGate, previousSamples)
+      run(exceedsTerminalStreamChunkBytes, boundedSamples)
+    } else {
+      run(exceedsTerminalStreamChunkBytes, boundedSamples)
+      run(previousGate, previousSamples)
+    }
+  }
+  return { previousMs: median(previousSamples), boundedMs: median(boundedSamples) }
+}
+
 const pad = (value, width) => String(value).padStart(width)
 console.log('iterateTerminalOutputFrameChunks, per flushed batch. Lower is better.')
 console.log(
@@ -342,6 +393,39 @@ for (const fixture of fixtures) {
 console.log(
   `\nvalidated=${comparedFixtures} fixtures frame-identical before timing, checksum=${frameChecksum >>> 0}`
 )
+const gateFixtures = [
+  { label: 'ascii 4KiB fit proof', data: 'x'.repeat(4 * 1024) },
+  {
+    label: 'three-byte exact-cap fit proof',
+    data: '\u20ac'.repeat(TERMINAL_STREAM_CHUNK_BYTES / 3)
+  },
+  {
+    label: 'late-wide fit after probes',
+    data: `${'a'.repeat(16_000)}${'\u20ac'.repeat(11_000)}`
+  },
+  {
+    label: 'late-wide miss during probes',
+    data: `${'a'.repeat(16_000)}${'\u20ac'.repeat(32_000)}`
+  },
+  { label: 'ascii 64KiB overflow proof', data: 'x'.repeat(64 * 1024) }
+]
+
+console.log('\nTerminal frame-fit gate only. Lower is better.')
+console.log(
+  `${pad('fixture', 34)} ${pad('result', 8)} ${pad('whole scan', 12)} ${pad('bounded', 11)} ${pad('speedup', 9)}`
+)
+for (const fixture of gateFixtures) {
+  const previous = previousGate(fixture.data)
+  const bounded = exceedsTerminalStreamChunkBytes(fixture.data)
+  if (previous !== bounded) {
+    throw new Error(`gate result differs for ${fixture.label}`)
+  }
+  const { previousMs, boundedMs } = measureGateInterleaved(fixture.data)
+  console.log(
+    `${pad(fixture.label, 34)} ${pad(bounded ? 'miss' : 'fit', 8)} ${pad(`${(previousMs * 1000).toFixed(2)} us`, 12)} ${pad(`${(boundedMs * 1000).toFixed(2)} us`, 11)} ${pad(boundedMs > 0 ? `${(previousMs / boundedMs).toFixed(2)}x` : 'n/a', 9)}`
+  )
+}
+console.log(`gate fixtures=${gateFixtures.length}, checksum=${gateChecksum >>> 0}`)
 console.log(
   'Every byte of remote terminal output crosses this function; the batcher flushes at\nTERMINAL_OUTPUT_BATCH_MAX_BYTES (64 KiB) or every 5 ms, so a busy remote agent pane\nruns it tens of times a second per subscribed stream.'
 )

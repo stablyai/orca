@@ -31,8 +31,10 @@ import type {
   FederationRelayItemRow
 } from './types'
 import { buildOrchestrationTaskDisplayMetadata } from '../../../shared/orchestration-task-display'
+import { ORCHESTRATION_LEGACY_RUN_ID } from '../../../shared/orchestration-rpc-contract'
 import { parsePaneKey } from '../../../shared/stable-pane-id'
 import { OrchestrationError } from './orchestration-error'
+import { resolveOrchestrationMigrationStartVersion } from './orchestration-schema-version-skew'
 
 // Why: leaf UUID is the remint-stable pane identity (tab half changes on break-out); exact match covers legacy/unparseable keys.
 function isEquivalentPaneKey(a: string, b: string): boolean {
@@ -140,10 +142,10 @@ function exposeQuestionTimestamps(question: QuestionRow): QuestionRow {
   }
 }
 
-export const LEGACY_RUN_ID = 'run_legacy_local'
+export const LEGACY_RUN_ID = ORCHESTRATION_LEGACY_RUN_ID
 
-// Schema versions: v2 'heartbeat'+last_heartbeat_at, v3 delivered_at, v4 task-creator terminal, v5 task_title/display_name, v6 pane identity, v7 lightweight Runs, v8 crash-safe Run deliveries, v9 durable question threads, v10 Dispatch capabilities, v11 durable mutation receipts, v12 composed worker state.
-const SCHEMA_VERSION = 17
+// Schema versions: v2 'heartbeat'+last_heartbeat_at, v3 delivered_at, v4 task-creator terminal, v5 task_title/display_name, v6 pane identity, v7 lightweight Runs, v8 crash-safe Run deliveries, v9 durable question threads, v10 Dispatch capabilities, v11 durable mutation receipts, v12 composed worker state, v18 post-v6 version-skew repair.
+const SCHEMA_VERSION = 18
 
 function hardenOrchestrationDatabaseFiles(dbPath: string | ':memory:'): void {
   if (dbPath === ':memory:' || process.platform === 'win32') {
@@ -415,7 +417,12 @@ export class OrchestrationDb {
 
   // Why: CREATE TABLE IF NOT EXISTS won't alter existing DBs; migrate in a txn that bumps user_version only on success (atomic all-or-nothing).
   private migrate(): void {
-    const current = this.db.pragma('user_version', { simple: true }) as number
+    const storedVersion = this.db.pragma('user_version', { simple: true }) as number
+    const current = resolveOrchestrationMigrationStartVersion(
+      this.db,
+      storedVersion,
+      SCHEMA_VERSION
+    )
     if (current >= SCHEMA_VERSION) {
       return
     }

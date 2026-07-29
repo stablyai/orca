@@ -4,6 +4,7 @@
     "../electron.vite.config.*",
     "../build-plugins/**/*",
     "../src/main/**/*",
+    "../src/renderer/src/lib/skill-freshness-display-status.ts",
     "../src/preload/**/*",
     "../src/shared/**/*",
     "../src/relay/**/*",

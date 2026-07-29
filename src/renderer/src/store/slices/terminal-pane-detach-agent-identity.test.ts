@@ -103,7 +103,9 @@ describe('syncPaneDetachPtyOwnership agent identity', () => {
       tabId: targetTabId,
       providerSession: { key: 'session_id', id: 'session-1' }
     })
-    expect(state.retentionSuppressedPaneKeys[sourcePaneKey]).toBeUndefined()
+    // Why: detach plants a one-shot suppressor on the source key so the sidebar
+    // retention hook can't resurrect the migrated pane as an unclickable ghost row.
+    expect(state.retentionSuppressedPaneKeys[sourcePaneKey]).toBe(true)
     expect(state.paneForegroundAgentByPaneKey[siblingPaneKey]).toEqual({
       agent: 'antigravity',
       shellForeground: false

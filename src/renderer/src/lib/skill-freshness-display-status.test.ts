@@ -149,6 +149,25 @@ describe('getSkillFreshnessDisplayStatus', () => {
     )
   })
 
+  it('shows recognized-newer content as up to date instead of blaming the user', () => {
+    // Why: 'newer-known' is official content ahead of this build — the updater's own
+    // install or a newer release's bytes. Amber here sent users on a remove/reinstall
+    // loop that lands the same newer content (#11220's scan half).
+    const value = inventory([placement('newer-known')])
+
+    expect(getSkillFreshnessDisplayStatus(value, SKILL_NAME)).toBe('up-to-date')
+    expect(hasSkillCopyNeedingAttention(value, SKILL_NAME)).toBe(false)
+  })
+
+  it('still reports drift beside a newer-known copy', () => {
+    expect(
+      getSkillFreshnessDisplayStatus(
+        inventory([placement('newer-known'), placement('unrecognized', 1)]),
+        SKILL_NAME
+      )
+    ).toBe('needs-attention')
+  })
+
   it('still reports drift in our own copy when a plugin-managed one sits alongside', () => {
     expect(
       getSkillFreshnessDisplayStatus(
@@ -167,6 +186,14 @@ describe('getSkillFreshnessDisplayStatus', () => {
 })
 
 describe('hasSkillCopyNeedingAttention', () => {
+  it('raises no attention marker over a routine outdated copy the update converges', () => {
+    // Why: an out-of-date convergent copy is ordinary work for the update command.
+    // Amber on the review affordance there would cry wolf on every routine update.
+    expect(
+      hasSkillCopyNeedingAttention(inventory([placement('outdated')], [SKILL_NAME]), SKILL_NAME)
+    ).toBe(false)
+  })
+
   it('ignores a traversal bound but keeps a real scan fault', () => {
     expect(
       hasSkillCopyNeedingAttention(

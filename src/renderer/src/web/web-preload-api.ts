@@ -783,6 +783,7 @@ function createWebPreloadApi(): Partial<PreloadApi> {
     claudeAccounts: createAccountsApi(),
     cli: createCliApi(),
     agentHooks: createAgentHooksApi(),
+    macosTccPrompts: createMacosTccPromptsApi(),
     // Why: the desktop derives this from the host filesystem, which the web
     // client has no view of; reporting synced keeps the warning banner silent.
     codexConfigSync: {
@@ -2563,6 +2564,8 @@ function createWebUiApi(): NonNullable<Partial<PreloadApi>['ui']> {
     onZoomBrowserPage: () => noopUnsubscribe,
     onHardReloadBrowserPage: () => noopUnsubscribe,
     onCloseActiveTab: () => noopUnsubscribe,
+    onCloseFloatingItem: () => noopUnsubscribe,
+    onSelectFloatingIndex: () => noopUnsubscribe,
     onSwitchTab: () => noopUnsubscribe,
     onSwitchTabAcrossAllTypes: () => noopUnsubscribe,
     onSwitchRecentTab: () => noopUnsubscribe,
@@ -2599,7 +2602,7 @@ function createWebUiApi(): NonNullable<Partial<PreloadApi>['ui']> {
     syncTrafficLights: () => {},
     setMarkdownEditorFocused: () => {},
     setTerminalInputFocused: () => {},
-    setFloatingTerminalInputFocused: () => {},
+    setFloatingFocus: () => {},
     setShortcutRecorderFocused: () => {},
     onRichMarkdownContextCommand: () => noopUnsubscribe,
     onFullscreenChanged: () => noopUnsubscribe,
@@ -2752,6 +2755,17 @@ function createAgentHooksApi(): NonNullable<Partial<PreloadApi>['agentHooks']> {
     copilotStatus: () => status('copilot'),
     hermesStatus: () => status('hermes'),
     devinStatus: () => status('devin')
+  }
+}
+
+function createMacosTccPromptsApi(): NonNullable<Partial<PreloadApi>['macosTccPrompts']> {
+  // Why: TCC is a macOS-desktop concept; the web client has no log stream to watch.
+  return {
+    onThreshold: () => noopUnsubscribe,
+    consumePending: () => Promise.resolve(null),
+    acknowledgePending: () => Promise.resolve(),
+    releasePending: () => Promise.resolve(),
+    dismiss: () => Promise.resolve()
   }
 }
 
@@ -2919,6 +2933,7 @@ function createUpdaterApi(): NonNullable<Partial<PreloadApi>['updater']> {
     download: () => Promise.resolve(),
     quitAndInstall: () => Promise.resolve(),
     dismissNudge: () => Promise.resolve(),
+    dismissAvailableUpdate: () => Promise.resolve(),
     onStatus: () => noopUnsubscribe,
     onClearDismissal: () => noopUnsubscribe
   }

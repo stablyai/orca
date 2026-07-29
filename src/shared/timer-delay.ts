@@ -19,6 +19,12 @@ export function parsePositiveSafeIntegerText(raw: string): number | null {
   return exactValue === BigInt(value) ? value : null
 }
 
+// Why: mirrors the CLI's own `Number()` coercion for generic `--timeout-ms`
+// flags (cli/flags.ts getOptionalPositiveIntegerFlag). Text that coerces to an
+// exact integer — `1000.0`, `600000.000000000000001` — is the budget the CLI
+// will actually wait on, so rejecting it here would leave the caller's timer
+// shorter than the CLI's and cut the request short. Callers that need exact
+// text (orchestration ask) use parsePositiveSafeIntegerText instead.
 export function parsePositiveSafeIntegerNumericText(raw: string): number | null {
   const value = Number(raw)
   return Number.isSafeInteger(value) && value > 0 ? value : null

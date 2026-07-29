@@ -1,12 +1,14 @@
 import {
   PANEL_ACTION_RESULT_TYPE,
+  PANEL_CONTROL_MESSAGE_MAX_BYTES,
   looksLikePanelActionRequest,
-  looksLikePanelPong,
   parsePanelActionRequest,
+  readPanelPongId,
   type PluginPanelActionOutcome,
   type PluginPanelActionResultMessage
 } from '../../../../shared/plugins/plugin-panel-bridge'
 import {
+  createPanelControlMessageBudget,
   createPanelMessageBudget,
   structuredCloneMessageBytes,
   type PanelMessageBudget
@@ -39,6 +41,8 @@ export type PanelBridgeHostOptions = {
   onPong?: (pingId: number) => void
   /** Injectable for tests; defaults to the shared per-plugin budget. */
   budget?: PanelMessageBudget
+  /** Reserved liveness budget; defaults to the shared control-frame budget. */
+  controlBudget?: PanelMessageBudget
   now?: () => number
 }
 
@@ -65,6 +69,7 @@ export function createPanelBridgeMessageHandler(
   options: PanelBridgeHostOptions
 ): (event: MessageEvent) => void {
   const budget = options.budget ?? createPanelMessageBudget()
+  const controlBudget = options.controlBudget ?? createPanelControlMessageBudget()
   const now = options.now ?? (() => Date.now())
   return (event: MessageEvent): void => {
     const panelWindow = options.getPanelWindow()
@@ -82,6 +87,28 @@ export function createPanelBridgeMessageHandler(
       // Why: targetOrigin must be '*' — an opaque origin never matches a
       // concrete origin, so anything stricter would silently drop the reply.
       requestingWindow.postMessage(message, '*')
+    }
+    // A valid pong is the one frame the host must never lose: it takes a
+    // reserved lane so a panel saturating its data budget can still prove it
+    // is alive. Only schema-valid pongs qualify, so near-miss pong-shaped junk
+    // cannot drain the lane the real reply needs — it falls through to the
+    // data budget below like any other malformed frame.
+    const pongId = readPanelPongId(event.data)
+    if (pongId !== null) {
+      const timestamp = now()
+      // One walk, capped at the smaller lane bound, serves both budgets: a
+      // pong above that cap is refused here anyway.
+      const pongBytes = structuredCloneMessageBytes(
+        event.data,
+        controlBudget.maxBytes ?? PANEL_CONTROL_MESSAGE_MAX_BYTES
+      )
+      // Charged to both: the data budget still meters this traffic, while a
+      // refusal there cannot by itself silence liveness.
+      budget.admit(timestamp, pongBytes)
+      if (!controlBudget.admit(timestamp, pongBytes)) {
+        options.onPong?.(pongId)
+      }
+      return
     }
     // Budgets run before parsing: a flood of malformed junk must not buy
     // free schema-validation CPU either.
@@ -109,10 +136,6 @@ export function createPanelBridgeMessageHandler(
                 )
         })
       }
-      return
-    }
-    if (looksLikePanelPong(event.data)) {
-      options.onPong?.((event.data as { pingId: number }).pingId)
       return
     }
     if (!looksLikePanelActionRequest(event.data)) {

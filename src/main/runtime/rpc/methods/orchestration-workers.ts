@@ -7,6 +7,7 @@ import { startFederatedWorker } from './orchestration-federated-worker-start'
 import { assertOrchestrationWorktreeCreationSupported } from './orchestration-folder-worktree-placement'
 import { WorkerStartParams } from './orchestration-worker-start-schema'
 import {
+  createExistingWorktreeWorkerTerminal,
   createWorkerWorktree,
   monitorWorkerSetup,
   type WorkerEffect,
@@ -151,6 +152,7 @@ export const ORCHESTRATION_WORKER_START_METHODS: RpcMethod[] = [
         )
       }
       let terminalHandle = params.terminal
+      let terminalRevealWarning: string | undefined
       let failedStage = 'terminal_create'
       let setupReceipt: WorkerSetupReceipt = {
         requested: 'not_applicable',
@@ -183,18 +185,15 @@ export const ORCHESTRATION_WORKER_START_METHODS: RpcMethod[] = [
             worktreeId: resolvedWorktree!.id,
             effects
           })
-          const terminal = await runtime.createTerminal(`id:${resolvedWorktree!.id}`, {
-            command: agent,
-            title: `worker-${task.id}`,
-            presentation: 'background'
+          const terminal = await createExistingWorktreeWorkerTerminal({
+            runtime,
+            worktreeId: resolvedWorktree!.id,
+            agent: agent as TuiAgent,
+            taskId: task.id,
+            effects
           })
           terminalHandle = terminal.handle
-          effects.push({
-            kind: 'terminal',
-            role: 'agent',
-            action: 'created',
-            id: terminal.handle
-          })
+          terminalRevealWarning = terminal.warning
         } else {
           effects.push({
             kind: 'terminal',
@@ -287,7 +286,8 @@ export const ORCHESTRATION_WORKER_START_METHODS: RpcMethod[] = [
           setup: setupReceipt,
           timeoutMs: params.timeoutMs ?? 60_000,
           effects,
-          residualResources: []
+          residualResources: [],
+          ...(terminalRevealWarning ? { warning: terminalRevealWarning } : {})
         }
       } catch (error) {
         return failWorkerStartWithReceipt({

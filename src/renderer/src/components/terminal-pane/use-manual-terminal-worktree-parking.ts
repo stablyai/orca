@@ -2,13 +2,14 @@ import { useCallback, useEffect, useState } from 'react'
 import { toast } from 'sonner'
 import { useAppStore } from '@/store'
 import { translate } from '@/i18n/i18n'
+import { tabHasLivePty } from '@/lib/tab-has-live-pty'
 import {
   MANUAL_TERMINAL_WORKTREE_PARK_EVENT,
   takeAllPendingManualTerminalWorktreeParks,
   takePendingManualTerminalWorktreePark,
   type ManualTerminalWorktreeParkDetail
 } from '@/lib/manual-terminal-worktree-parking'
-import { canManuallyParkTerminalWorktreeRenderers } from './terminal-hidden-view-parking'
+import { canManuallyParkTerminalWorktreeRenderers } from './manual-terminal-worktree-park-eligibility'
 import { canWatcherCoverParkedTerminalTab } from './terminal-parked-tab-watchers'
 
 function addWorktreeId(current: ReadonlySet<string>, worktreeId: string): ReadonlySet<string> {
@@ -53,7 +54,8 @@ export function useManualTerminalWorktreeParking(args: {
         worktreeId,
         terminalTabs,
         pendingStartupByTabId: state.pendingStartupByTabId,
-        parkingEnabled: state.settings?.terminalHiddenViewParking !== false
+        parkingEnabled: state.settings?.terminalHiddenViewParking !== false,
+        hasLivePty: (tabId) => tabHasLivePty(state.ptyIdsByTabId, tabId)
       }) && terminalTabs.every((tab) => canWatcherCoverParkedTerminalTab(worktreeId, tab))
     if (!canPark) {
       toast.warning(

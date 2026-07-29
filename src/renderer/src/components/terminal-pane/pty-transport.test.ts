@@ -277,6 +277,109 @@ describe('createIpcPtyTransport', () => {
     expect(exitSeenByNewPane).toHaveBeenCalledWith(0)
   })
 
+  it('rejects a stale reattach before it can replace newer PTY handlers', async () => {
+    const { createIpcPtyTransport } = await import('./pty-transport')
+    const spawn = window.api.pty.spawn as unknown as ReturnType<typeof vi.fn>
+    let resolveStale!: (value: { id: string; isReattach: boolean }) => void
+    spawn.mockReturnValueOnce(
+      new Promise((resolve) => {
+        resolveStale = resolve
+      })
+    )
+    const staleData = vi.fn()
+    const staleExit = vi.fn()
+    const stalePane = createIpcPtyTransport({})
+    const staleConnect = stalePane.connect({
+      url: '',
+      sessionId: 'pty-1',
+      admitPtyId: () => false,
+      callbacks: { onData: staleData, onExit: staleExit }
+    })
+    const currentData = vi.fn()
+    const currentExit = vi.fn()
+    const currentPane = createIpcPtyTransport({})
+    currentPane.attach({
+      existingPtyId: 'pty-1',
+      callbacks: { onData: currentData, onExit: currentExit }
+    })
+
+    resolveStale({ id: 'pty-1', isReattach: true })
+    await staleConnect
+    onData?.({ id: 'pty-1', data: 'current output' })
+    onExit?.({ id: 'pty-1', code: 0 })
+
+    expect(currentData).toHaveBeenCalledWith('current output')
+    expect(currentExit).toHaveBeenCalledWith(0)
+    expect(staleData).not.toHaveBeenCalled()
+    expect(staleExit).not.toHaveBeenCalled()
+    expect(window.api.pty.kill).not.toHaveBeenCalled()
+  })
+
+  it('retires a rejected fresh fallback before it can publish PTY handlers', async () => {
+    const { createIpcPtyTransport } = await import('./pty-transport')
+    const spawn = window.api.pty.spawn as unknown as ReturnType<typeof vi.fn>
+    const kill = window.api.pty.kill as unknown as ReturnType<typeof vi.fn>
+    const onPtySpawn = vi.fn()
+    const onDataCallback = vi.fn()
+    const onExitCallback = vi.fn()
+    spawn.mockResolvedValueOnce({ id: 'pty-fresh-fallback', sessionExpired: true })
+    const transport = createIpcPtyTransport({ onPtySpawn })
+
+    const result = await transport.connect({
+      url: '',
+      sessionId: 'pty-missing',
+      admitPtyId: () => false,
+      callbacks: { onData: onDataCallback, onExit: onExitCallback }
+    })
+    onData?.({ id: 'pty-fresh-fallback', data: 'orphaned output' })
+    onExit?.({ id: 'pty-fresh-fallback', code: 0 })
+
+    expect(result).toEqual({ id: 'pty-fresh-fallback', sessionExpired: true })
+    expect(kill).toHaveBeenCalledExactlyOnceWith('pty-fresh-fallback')
+    expect(onPtySpawn).not.toHaveBeenCalled()
+    expect(onDataCallback).not.toHaveBeenCalled()
+    expect(onExitCallback).not.toHaveBeenCalled()
+    expect(transport.getPtyId()).toBeNull()
+    expect(transport.isConnected()).toBe(false)
+  })
+
+  it('surfaces rejected fresh fallback retirement without publishing PTY handlers', async () => {
+    const { createIpcPtyTransport } = await import('./pty-transport')
+    const spawn = window.api.pty.spawn as unknown as ReturnType<typeof vi.fn>
+    const kill = window.api.pty.kill as unknown as ReturnType<typeof vi.fn>
+    const onPtySpawn = vi.fn()
+    const onDataCallback = vi.fn()
+    const onExitCallback = vi.fn()
+    const onErrorCallback = vi.fn()
+    const retirementError = new Error('provider shutdown refused')
+    spawn.mockResolvedValueOnce({ id: 'pty-fresh-fallback', sessionExpired: true })
+    kill.mockRejectedValueOnce(retirementError)
+    const transport = createIpcPtyTransport({ onPtySpawn })
+
+    await expect(
+      transport.connect({
+        url: '',
+        sessionId: 'pty-missing',
+        admitPtyId: () => false,
+        callbacks: {
+          onData: onDataCallback,
+          onExit: onExitCallback,
+          onError: onErrorCallback
+        }
+      })
+    ).resolves.toBeUndefined()
+    onData?.({ id: 'pty-fresh-fallback', data: 'orphaned output' })
+    onExit?.({ id: 'pty-fresh-fallback', code: 0 })
+
+    expect(kill).toHaveBeenCalledExactlyOnceWith('pty-fresh-fallback')
+    expect(onPtySpawn).not.toHaveBeenCalled()
+    expect(onDataCallback).not.toHaveBeenCalled()
+    expect(onExitCallback).not.toHaveBeenCalled()
+    expect(onErrorCallback).toHaveBeenCalledExactlyOnceWith(retirementError.message)
+    expect(transport.getPtyId()).toBeNull()
+    expect(transport.isConnected()).toBe(false)
+  })
+
   it('buffers data across a normal detach-then-attach gap and drains it to the next pane', async () => {
     const { createIpcPtyTransport } = await import('./pty-transport')
     const receivedByNewPane = vi.fn()
@@ -461,6 +564,38 @@ describe('createIpcPtyTransport', () => {
     expect(onDisconnect).toHaveBeenCalledTimes(1)
     expect(onPtyExit).toHaveBeenCalledWith(sessionId)
     expect(transport.isConnected()).toBe(false)
+  })
+
+  it('rejects a buffered dead-session exit before publishing its final frame', async () => {
+    const { bufferPreHandlerPtyData, bufferPreHandlerPtyExit, clearPreHandlerPtyState } =
+      await import('./pty-pre-handler-buffer')
+    const { createIpcPtyTransport } = await import('./pty-transport')
+    const spawn = window.api.pty.spawn as unknown as ReturnType<typeof vi.fn>
+    const onDataCallback = vi.fn()
+    const onExitCallback = vi.fn()
+    const onDisconnect = vi.fn()
+    const onPtyExit = vi.fn()
+    const sessionId = 'stale-dead-parked-session'
+    bufferPreHandlerPtyData(sessionId, 'stale final output')
+    bufferPreHandlerPtyExit(sessionId, 17)
+
+    const transport = createIpcPtyTransport({ onPtyExit })
+    const result = await transport.connect({
+      url: '',
+      sessionId,
+      admitPtyId: () => false,
+      callbacks: { onData: onDataCallback, onExit: onExitCallback, onDisconnect }
+    })
+
+    expect(result).toEqual({ id: sessionId })
+    expect(spawn).not.toHaveBeenCalled()
+    expect(onDataCallback).not.toHaveBeenCalled()
+    expect(onExitCallback).not.toHaveBeenCalled()
+    expect(onDisconnect).not.toHaveBeenCalled()
+    expect(onPtyExit).not.toHaveBeenCalled()
+    expect(window.api.pty.kill).not.toHaveBeenCalled()
+    expect(transport.isConnected()).toBe(false)
+    clearPreHandlerPtyState(sessionId)
   })
 
   it('returns startup cwd fallback metadata to the connection layer', async () => {
@@ -1527,8 +1662,10 @@ describe('createIpcPtyTransport', () => {
 
   it('does not kill a pre-existing session when a reattach resolves after destroy', async () => {
     const { createIpcPtyTransport } = await import('./pty-transport')
-    const spawnControls: { resolve: ((value: { id: string }) => void) | null } = { resolve: null }
-    const spawnPromise = new Promise<{ id: string }>((resolve) => {
+    const spawnControls: {
+      resolve: ((value: { id: string; isReattach: true }) => void) | null
+    } = { resolve: null }
+    const spawnPromise = new Promise<{ id: string; isReattach: true }>((resolve) => {
       spawnControls.resolve = resolve
     })
     const spawnMock = vi.fn().mockReturnValue(spawnPromise)
@@ -1563,10 +1700,39 @@ describe('createIpcPtyTransport', () => {
     if (!spawnControls.resolve) {
       throw new Error('Expected spawn resolver to be captured')
     }
-    spawnControls.resolve({ id: 'pty-preexisting' })
+    spawnControls.resolve({ id: 'pty-preexisting', isReattach: true })
     await connectPromise
 
     expect(killMock).not.toHaveBeenCalledWith('pty-preexisting')
+  })
+
+  it('kills a fresh session fallback that resolves after the transport was destroyed', async () => {
+    const { createIpcPtyTransport } = await import('./pty-transport')
+    const spawnControls: {
+      resolve: ((value: { id: string; sessionExpired: true }) => void) | null
+    } = { resolve: null }
+    const spawnPromise = new Promise<{ id: string; sessionExpired: true }>((resolve) => {
+      spawnControls.resolve = resolve
+    })
+    const spawn = window.api.pty.spawn as unknown as ReturnType<typeof vi.fn>
+    const kill = window.api.pty.kill as unknown as ReturnType<typeof vi.fn>
+    spawn.mockReturnValueOnce(spawnPromise)
+    const transport = createIpcPtyTransport({})
+    const connectPromise = transport.connect({
+      url: '',
+      sessionId: 'pty-missing',
+      callbacks: {}
+    })
+
+    transport.destroy?.()
+    if (!spawnControls.resolve) {
+      throw new Error('Expected spawn resolver to be captured')
+    }
+    spawnControls.resolve({ id: 'pty-fresh-fallback', sessionExpired: true })
+    await connectPromise
+
+    expect(kill).toHaveBeenCalledExactlyOnceWith('pty-fresh-fallback')
+    expect(transport.getPtyId()).toBeNull()
   })
 
   it('kills a PTY that finishes spawning after the transport was destroyed', async () => {
@@ -2024,6 +2190,42 @@ describe('createIpcPtyTransport', () => {
 
     expect(onPtyExit).toHaveBeenCalledWith('pty-detached')
     expect(transport.getPtyId()).toBeNull()
+  })
+
+  it('drops the exit observer when abandoning an obsolete reattach without killing it', async () => {
+    const { createIpcPtyTransport } = await import('./pty-transport')
+    const onPtyExit = vi.fn()
+    const kill = window.api.pty.kill as unknown as ReturnType<typeof vi.fn>
+    const transport = createIpcPtyTransport({ onPtyExit })
+    const onDataCallback = vi.fn()
+    const onReplayData = vi.fn()
+    const onWriteUnavailableCallback = vi.fn()
+    const onExitCallback = vi.fn()
+    const onDisconnect = vi.fn()
+
+    transport.attach({
+      existingPtyId: 'pty-obsolete',
+      callbacks: {
+        onData: onDataCallback,
+        onReplayData,
+        onWriteUnavailable: onWriteUnavailableCallback,
+        onExit: onExitCallback,
+        onDisconnect
+      }
+    })
+    transport.detach?.({ preserveExitObserver: false })
+    onData?.({ id: 'pty-obsolete', data: 'stale data' })
+    onReplay?.({ id: 'pty-obsolete', data: 'stale replay' })
+    onWriteUnavailable?.({ id: 'pty-obsolete' })
+    onExit?.({ id: 'pty-obsolete', code: 0 })
+
+    expect(onDataCallback).not.toHaveBeenCalled()
+    expect(onReplayData).not.toHaveBeenCalled()
+    expect(onWriteUnavailableCallback).not.toHaveBeenCalled()
+    expect(onExitCallback).not.toHaveBeenCalled()
+    expect(onDisconnect).not.toHaveBeenCalled()
+    expect(onPtyExit).not.toHaveBeenCalled()
+    expect(kill).not.toHaveBeenCalled()
   })
 })
 

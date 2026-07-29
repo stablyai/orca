@@ -135,6 +135,28 @@ describe('runtime AI Vault session scanner', () => {
     )
   })
 
+  it('keeps a repinned account home instead of stripping it', async () => {
+    mocks.callRuntimeEnvironment.mockResolvedValueOnce({
+      ok: true,
+      result: {
+        useRealCodexHome: false,
+        substituteCodexHome: '/data/orca/codex-accounts/account-2/home'
+      }
+    })
+
+    await expect(
+      prepareRuntimeAiVaultSessionResume('/user-data', 'env-1', {
+        agent: 'codex',
+        filePath: '/managed/sessions/2026/07/20/rollout-a.jsonl',
+        codexHome: '/managed',
+        executionHostId: 'runtime:env-1'
+      })
+    ).resolves.toEqual({
+      useRealCodexHome: false,
+      substituteCodexHome: '/data/orca/codex-accounts/account-2/home'
+    })
+  })
+
   it('fails retryably when runtime preparation returns an invalid result', async () => {
     mocks.callRuntimeEnvironment.mockResolvedValueOnce({ ok: true, result: {} })
 

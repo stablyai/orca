@@ -1349,23 +1349,32 @@ export async function assertWorktreeCleanForRemoval(
       timeout: gitOptions.timeout ?? WORKTREE_REMOVAL_PREFLIGHT_TIMEOUT_MS
     }
   )
-  if (
-    useNullTerminatedStatus
-      ? hasOnlyIgnoredUntrackedStatus(stdout, ignoredUntrackedPaths)
-      : !stdout.trim()
-  ) {
+  // Why one parse feeds both: the clean verdict and the error text must never
+  // disagree about which entries block removal.
+  const blockingEntries = useNullTerminatedStatus
+    ? getBlockingUntrackedStatusEntries(stdout, ignoredUntrackedPaths)
+    : null
+  if (blockingEntries ? blockingEntries.length === 0 : !stdout.trim()) {
     return
   }
 
   const error = new Error('Worktree has uncommitted or untracked changes.')
-  ;(error as Error & { stdout?: string }).stdout = stdout
+  // Why not the raw stdout: `-z` output is NUL-delimited and `.trim()` leaves
+  // interior NULs, so attaching it verbatim put raw control bytes into the
+  // user-facing removal error — and listed the tolerated shared link, the one
+  // entry that is not the user's work and cannot be committed away.
+  ;(error as Error & { stdout?: string }).stdout = blockingEntries
+    ? blockingEntries.join('\n')
+    : stdout
   throw error
 }
 
-function hasOnlyIgnoredUntrackedStatus(
+/** The `git status --porcelain -z` entries that genuinely block removal:
+ *  everything except the untracked shared links the caller tolerates. */
+function getBlockingUntrackedStatusEntries(
   status: string,
   ignoredUntrackedPaths: readonly string[]
-): boolean {
+): string[] {
   const ignored = new Set(
     ignoredUntrackedPaths
       .map((entry) =>
@@ -1379,7 +1388,9 @@ function hasOnlyIgnoredUntrackedStatus(
   return status
     .split('\0')
     .filter(Boolean)
-    .every((entry) => entry.startsWith('?? ') && ignored.has(entry.slice(3).replace(/\\/g, '/')))
+    .filter(
+      (entry) => !(entry.startsWith('?? ') && ignored.has(entry.slice(3).replace(/\\/g, '/')))
+    )
 }
 
 function translateWorktreePath(

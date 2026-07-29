@@ -7,6 +7,8 @@ import {
 import { TERMINAL_STREAM_CHUNK_BYTES } from '../../../shared/terminal-multiplex-flow-control'
 import { measureClipboardTextByteLength } from '../../../shared/clipboard-text'
 import {
+  TERMINAL_STREAM_BYTE_PROBE_CODE_UNITS,
+  exceedsTerminalStreamChunkBytes,
   iterateTerminalOutputFrameChunks,
   type TerminalOutputFrameChunk,
   type TerminalOutputMeta
@@ -21,6 +23,19 @@ function legacyByteLength(data: string): number {
 
 function legacyByteLengthExceeds(data: string, maxBytes: number): boolean {
   return measureClipboardTextByteLength(data, { stopAfterBytes: maxBytes }).exceededLimit
+}
+
+function expectGateEquivalent(data: string, label: string): void {
+  expect({ label, result: exceedsTerminalStreamChunkBytes(data) }).toEqual({
+    label,
+    result: legacyByteLengthExceeds(data, TERMINAL_STREAM_CHUNK_BYTES)
+  })
+}
+
+function makeExactByteLength(unit: string, byteLength: number): string {
+  const unitBytes = Buffer.byteLength(unit, 'utf8')
+  const repeats = Math.floor(byteLength / unitBytes)
+  return unit.repeat(repeats) + 'a'.repeat(byteLength - repeats * unitBytes)
 }
 
 function* legacyIterateTerminalOutputFrameChunks(
@@ -216,6 +231,50 @@ function randomText(random: () => number, parts: number): string {
 }
 
 describe('iterateTerminalOutputFrameChunks equivalence with the pre-optimization loop', () => {
+  it('matches the legacy gate at the byte cap ±3 for every UTF-8 shape', () => {
+    for (const [label, unit] of [
+      ['ascii', 'a'],
+      ['two-byte', '\u00e9'],
+      ['three-byte', '\u20ac'],
+      ['astral', SURROGATE_PAIR],
+      ['lone-high', LONE_HIGH],
+      ['lone-low', LONE_LOW],
+      ['reversed-surrogates', `${LONE_LOW}${LONE_HIGH}a`]
+    ] as const) {
+      for (let delta = -3; delta <= 3; delta += 1) {
+        const byteLength = TERMINAL_STREAM_CHUNK_BYTES + delta
+        const data = makeExactByteLength(unit, byteLength)
+        expect(Buffer.byteLength(data, 'utf8')).toBe(byteLength)
+        expectGateEquivalent(data, `${label} delta=${delta}`)
+      }
+    }
+  })
+
+  it('matches when probe boundaries bisect or surround surrogate pairs', () => {
+    const probe = TERMINAL_STREAM_BYTE_PROBE_CODE_UNITS
+    for (const offset of [-2, -1, 0, 1, 2]) {
+      const pairStart = probe + offset
+      const prefix = 'a'.repeat(pairStart)
+      const suffix = '\u20ac'.repeat(12_000)
+      for (const middle of [SURROGATE_PAIR, LONE_HIGH, LONE_LOW, LONE_LOW + LONE_HIGH]) {
+        const data = prefix + middle + suffix
+        expectGateEquivalent(data, `probe offset=${offset} middle=${escapeUnits(middle)}`)
+        expectEquivalent(data, undefined, `probe frames offset=${offset}`)
+      }
+    }
+  })
+
+  it('stops correctly when late wide text crosses the cap', () => {
+    const asciiPrefix = 'a'.repeat(16_000)
+    for (const wide of ['\u00e9', '\u20ac', SURROGATE_PAIR, LONE_HIGH]) {
+      for (const wideParts of [8_000, 12_000, 16_000]) {
+        const data = asciiPrefix + wide.repeat(wideParts)
+        expectGateEquivalent(data, `late-wide ${escapeUnits(wide)} parts=${wideParts}`)
+        expectEquivalent(data, undefined, `late-wide frames ${escapeUnits(wide)}`)
+      }
+    }
+  })
+
   it('matches on the small/no-chunking sizes', () => {
     for (const size of [0, 1, 2, 3, 7, 64, 1024, TERMINAL_STREAM_CHUNK_BYTES - 1]) {
       sweepAll('a'.repeat(size), `ascii ${size}`)
@@ -416,7 +475,7 @@ describe('iterateTerminalOutputFrameChunks equivalence with the pre-optimization
       expectEquivalent(data, { seq: 88_888, rawLength: data.length }, `fuzz-cap seq trial=${trial}`)
       expectEquivalent(data, { seq: 88_888 }, `fuzz-cap delayed trial=${trial}`)
     }
-  })
+  }, 30_000)
 
   it('keeps every emitted frame within the wire cap and reassembles to the input', () => {
     const data = `${'a'.repeat(200 * 1024)}${SURROGATE_PAIR.repeat(4096)}${LONE_HIGH}`

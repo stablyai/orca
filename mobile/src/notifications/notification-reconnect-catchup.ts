@@ -135,6 +135,9 @@ export type HostNotificationSession = {
   // Counter lifetime lastDeliveredSeq belongs to; null until one is known. A
   // mismatch on reconnect means the desktop restarted and the watermark is void.
   lastDeliveredEpoch: string | null
+  // Highest seq known delivered CONTIGUOUSLY, frozen here while a catch-up is
+  // outstanding; null when none has failed. See quarantineCatchUpWatermark.
+  catchUpQuarantineSeq: number | null
   seen: ReturnType<typeof createSeenNotificationGuard>
   // False only until the host's first subscription reaches 'ready' — a true cold open.
   connectedBefore: boolean
@@ -161,6 +164,7 @@ export function getHostNotificationSession(hostId: string): HostNotificationSess
     session = {
       lastDeliveredSeq: 0,
       lastDeliveredEpoch: null,
+      catchUpQuarantineSeq: null,
       seen: createSeenNotificationGuard(),
       connectedBefore: false,
       hadStoredWatermark: false,
@@ -239,6 +243,55 @@ export function resetHostNotificationSessionsForTests(): void {
   sessionsByHost.clear()
 }
 
+/**
+ * Freeze the catch-up watermark at the last seq known delivered contiguously,
+ * after a catch-up that did not complete.
+ *
+ * Why: live delivery advances lastDeliveredSeq unconditionally, so an abandoned
+ * catch-up otherwise lets the NEXT one ask from above the range it gave up on —
+ * the desktop cuts by seq, so those notifications are never replayed and are
+ * gone. Lowest wins: an earlier failure's gap is still open.
+ */
+export function quarantineCatchUpWatermark(
+  session: HostNotificationSession,
+  hostId: string,
+  contiguousSeq: number
+): void {
+  session.catchUpQuarantineSeq =
+    session.catchUpQuarantineSeq == null
+      ? contiguousSeq
+      : Math.min(session.catchUpQuarantineSeq, contiguousSeq)
+  // Why re-persist: a live event delivered while the catch-up was still in flight
+  // already stored a seq above the gap. Clamping only later writes would leave that
+  // value on disk, so a restart still resumes past the abandoned range.
+  void saveWatermark(hostId, {
+    seq: catchUpWatermarkSeq(session),
+    epoch: session.lastDeliveredEpoch
+  })
+}
+
+/** Lift the quarantine once a catch-up completes, persisting what it held back. */
+export function resolveCatchUpQuarantine(session: HostNotificationSession, hostId: string): void {
+  if (session.catchUpQuarantineSeq == null) {
+    return
+  }
+  session.catchUpQuarantineSeq = null
+  void saveWatermark(hostId, {
+    seq: session.lastDeliveredSeq,
+    epoch: session.lastDeliveredEpoch
+  })
+}
+
+/**
+ * The seq a catch-up may ask from and the highest seq safe to persist — the live
+ * watermark, clamped to any open gap.
+ */
+export function catchUpWatermarkSeq(session: HostNotificationSession): number {
+  return session.catchUpQuarantineSeq == null
+    ? session.lastDeliveredSeq
+    : Math.min(session.catchUpQuarantineSeq, session.lastDeliveredSeq)
+}
+
 // Why (#8591): the desktop's seq counter restarts at 0 every launch, so a watermark
 // from a previous lifetime indexes a counter that no longer exists. Comparing it
 // against the fresh counter makes `lastSeenSeq >= seq` true for everything and
@@ -262,6 +315,8 @@ export function adoptNotificationEpoch(
   // counter re-issues those same low seqs, so a stale `seq:1` would silently drop
   // the new counter's first bell. The dedup window belongs to one counter lifetime.
   session.seen.clear()
+  // The quarantined gap indexed the dead counter; the watermark it guarded is gone too.
+  session.catchUpQuarantineSeq = null
   session.lastDeliveredEpoch = epoch
   void saveWatermark(hostId, { seq: 0, epoch })
 }

@@ -38,6 +38,7 @@ beforeEach(() => {
       updater: {
         check,
         dismissNudge: vi.fn(),
+        dismissAvailableUpdate: vi.fn().mockResolvedValue(undefined),
         download,
         quitAndInstall: vi.fn().mockResolvedValue(undefined)
       }

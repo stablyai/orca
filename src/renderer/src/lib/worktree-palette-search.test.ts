@@ -86,6 +86,23 @@ describe('worktree-palette-search', () => {
     ])
   })
 
+  it('finds an emoji-named workspace by its readable branch shortcode', () => {
+    const results = searchWorktrees(
+      [makeWorktree({ displayName: '🚀', branch: 'refs/heads/rocket' })],
+      'rocket',
+      repoMap,
+      null,
+      null
+    )
+
+    expect(results).toHaveLength(1)
+    expect(results[0]).toMatchObject({
+      worktreeId: 'wt-1',
+      matchedField: 'branch',
+      branchRange: { start: 0, end: 6 }
+    })
+  })
+
   it('rejects oversized pasted queries before reading worktree metadata', () => {
     const oversizedQuery = 'secret-worktree-palette-search'.repeat(WORKTREE_PALETTE_QUERY_MAX_BYTES)
     const worktree = {

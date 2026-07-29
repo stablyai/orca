@@ -140,6 +140,7 @@ import { useFolderWorkspaceComposerPathStatus } from '@/components/sidebar/folde
 import { submitFolderWorkspaceCreate } from '@/components/sidebar/folder-workspace-composer-submit'
 import { buildExecutionHostRegistry } from '../../../shared/execution-host-registry'
 import {
+  getRepoExecutionHostId,
   normalizeExecutionHostId,
   parseExecutionHostId,
   type ExecutionHostId
@@ -826,6 +827,7 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
     repoId: selectedRecipeRepoId,
     repoIsGit: selectedRepoIsGit,
     repoConnectionId: selectedRecipeRepoConnectionId,
+    repoExecutionHostId: selectedRepo ? getRepoExecutionHostId(selectedRepo) : null,
     projectGroupTarget: isProjectGroupTarget,
     initialRecipeId: initialEphemeralVmRecipeId
   })
@@ -3997,6 +3999,7 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
           note: trimmedNote,
           startupPlan,
           quickPrompt,
+          ...(quickDraftPrompt ? { launchDraftPrompt: quickDraftPrompt } : {}),
           quickTelemetry,
           ...(createMultiple ? { suppressTerminalFocusOnCompletion: true } : {})
         }

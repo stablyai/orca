@@ -4,7 +4,9 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { promisify } from 'node:util'
 import { afterEach, describe, expect, it } from 'vitest'
+import { isSkillScanIssueNeedingAttention } from '../../shared/skill-freshness'
 import {
+  MAXIMUM_PLUGIN_SCAN_ATTENTION_ISSUES,
   MAXIMUM_PLUGIN_SCAN_ISSUES,
   scanKnownPluginSkillCandidates
 } from './skill-plugin-cache-scan'
@@ -460,6 +462,73 @@ describe('plugin skill candidate scan', () => {
         errorCode: null
       })
       expect(result.issues.filter((issue) => issue.reason === 'issue-limit')).toHaveLength(1)
+    }
+  )
+
+  // Why: linking skills out of the cache is ordinary vendor packaging, so 'outside-root' is
+  // what fills the display budget on a real install — before any read failure is reached.
+  async function createCacheBehindSpentBudget(prefix: string, loopCount: number): Promise<string> {
+    const parent = await mkdtemp(join(tmpdir(), prefix))
+    temporaryDirectories.push(parent)
+    const root = join(parent, 'cache')
+    const outside = join(parent, 'outside')
+    await mkdir(outside, { recursive: true })
+    await mkdir(root, { recursive: true })
+    await Promise.all(
+      Array.from({ length: MAXIMUM_PLUGIN_SCAN_ISSUES }, (_, index) =>
+        symlink(outside, join(root, `aa-linked-${index.toString().padStart(2, '0')}`), 'dir')
+      )
+    )
+    // Sorts after the links, so these are read once the budget is already spent.
+    await Promise.all(
+      Array.from({ length: loopCount }, (_, index) => {
+        const name = `zz-loop-${index.toString().padStart(2, '0')}`
+        return symlink(name, join(root, name), 'dir')
+      })
+    )
+    return root
+  }
+
+  it.skipIf(process.platform === 'win32')(
+    'keeps a read failure that lands after the display budget is spent',
+    async () => {
+      const root = await createCacheBehindSpentBudget('orca-plugin-attention-eviction-', 1)
+
+      const result = await scanKnownPluginSkillCandidates(root, new Set(['orca-cli']))
+
+      // Why: a read failure is the only issue that can take the headline off "all up to
+      // date". Evicting it for display budget reports all-clear over a path that could be
+      // hiding a stale copy — the bounds that filled the budget say nothing about it.
+      expect(result.issues).toContainEqual({
+        path: join(root, 'zz-loop-00'),
+        reason: 'io-error',
+        errorCode: 'ELOOP'
+      })
+      const inventoryIssues = result.issues.map((issue) => ({
+        rootId: 'plugin-cache',
+        sourceLabel: 'Plugin cache',
+        ...issue
+      }))
+      expect(inventoryIssues.some(isSkillScanIssueNeedingAttention)).toBe(true)
+    }
+  )
+
+  it.skipIf(process.platform === 'win32')(
+    'bounds how many read failures outrank the display budget',
+    async () => {
+      const root = await createCacheBehindSpentBudget(
+        'orca-plugin-attention-bound-',
+        MAXIMUM_PLUGIN_SCAN_ATTENTION_ISSUES + 4
+      )
+
+      const result = await scanKnownPluginSkillCandidates(root, new Set(['orca-cli']))
+
+      // Why: outranking the budget is what makes this class unbounded, so a tree full of
+      // unreadable folders must not be able to pin one issue per folder in memory.
+      expect(result.issues.filter((issue) => issue.reason === 'io-error')).toHaveLength(
+        MAXIMUM_PLUGIN_SCAN_ATTENTION_ISSUES
+      )
+      expect(result.issues).toContainEqual({ path: root, reason: 'issue-limit', errorCode: null })
     }
   )
 
