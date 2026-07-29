@@ -68,6 +68,7 @@
     "../src/main/kimi/kimi-hook-config-toml.ts",
     "../src/main/openclaude/hook-service.ts",
     "../src/main/rolling-file-backup.ts",
+    "../src/main/runtime/pairing-endpoint.ts",
     "../src/main/runtime/runtime-metadata.ts",
     "../src/main/win32-utils.ts"
   ],

@@ -13,7 +13,11 @@ import type {
   KnownRuntimeEnvironment,
   PublicKnownRuntimeEnvironment
 } from '../../shared/runtime-environments'
-import type { PairingOffer } from '../../shared/pairing'
+import { parsePairingCode, type PairingOffer } from '../../shared/pairing'
+import {
+  INVALID_PAIRING_ENDPOINT_GUIDANCE,
+  resolveAdvertisedPairingEndpoint
+} from '../../main/runtime/pairing-endpoint'
 import { RuntimeClientError } from './types'
 
 export type EnvironmentAddResult = {
@@ -32,9 +36,49 @@ export { getEnvironmentStorePath, listEnvironments }
 
 export function addEnvironmentFromPairingCode(
   userDataPath: string,
-  args: { name: string; pairingCode: string; now?: number }
+  args: { name: string; pairingCode: string; now?: number; endpointAddress?: string }
 ): KnownRuntimeEnvironment {
-  return translateStoreError(() => addEnvironmentFromPairingCodeInStore(userDataPath, args))
+  const { endpointAddress, ...rest } = args
+  // Why: test provided-ness, not truthiness — an empty override must be rejected
+  // as invalid, never silently treated as "no override".
+  const endpoint =
+    endpointAddress === undefined
+      ? null
+      : resolveEndpointOverride(args.pairingCode, endpointAddress)
+  return translateStoreError(() =>
+    addEnvironmentFromPairingCodeInStore(userDataPath, {
+      ...rest,
+      ...(endpoint ? { endpoint } : {})
+    })
+  )
+}
+
+// Why: reuse the host's advertise grammar so --endpoint accepts the same hosts,
+// host:port, and ws(s):// forms the "Share this Orca server" address field does.
+function resolveEndpointOverride(pairingCode: string, address: string): string {
+  // Why: the resolver reads a blank advertised address as "none given" and falls
+  // back to loopback, which would silently downgrade a reachable offer here.
+  if (address.trim().length === 0) {
+    throw new RuntimeClientError(
+      'invalid_argument',
+      `Invalid --endpoint "${address}". ${INVALID_PAIRING_ENDPOINT_GUIDANCE}`
+    )
+  }
+  const offer = parsePairingCode(pairingCode)
+  if (!offer) {
+    throw new RuntimeClientError(
+      'invalid_argument',
+      'Invalid pairing code. Expected an orca://pair?... URL or bare pairing payload.'
+    )
+  }
+  const resolved = resolveAdvertisedPairingEndpoint(offer.endpoint, address)
+  if (!resolved.ok) {
+    throw new RuntimeClientError(
+      'invalid_argument',
+      `Invalid --endpoint "${address}". ${resolved.guidance}`
+    )
+  }
+  return resolved.endpoint
 }
 
 export function removeEnvironment(userDataPath: string, selector: string): KnownRuntimeEnvironment {

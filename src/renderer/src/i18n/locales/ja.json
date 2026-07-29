@@ -6693,7 +6693,9 @@
           "custom-description": "他のデバイスから到達できるアドレスを指定します。LAN や Tailscale のホスト、または完全な ws(s):// URL です。",
           "custom-hint": "ホスト、host:port、または ws(s):// URL を入力してください。",
           "custom-cancel": "キャンセル",
-          "custom-use": "アドレスを使用"
+          "custom-use": "アドレスを使用",
+          "reachable-address-hint": "The other device must be able to reach {{address}}.",
+          "generated-loopback-warning": "These links were generated for {{address}}, so only this computer can open them. Pick a reachable address above and generate again to pair another device."
         },
         "Settings": {
           "3bf149e873": "プロジェクト設定 > {{value0}}",

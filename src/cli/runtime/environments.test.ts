@@ -81,4 +81,62 @@ describe('CLI runtime environments', () => {
     )
     expect(listEnvironments(userDataPath)[0]?.id).toBe(first.id)
   })
+
+  describe('endpointAddress override', () => {
+    function addWithEndpoint(endpointAddress: string, offerEndpoint = 'ws://127.0.0.1:6768') {
+      const userDataPath = mkdtempSync(join(tmpdir(), 'orca-env-store-'))
+      addEnvironmentFromPairingCode(userDataPath, {
+        name: 'workstation',
+        pairingCode: pairingCode(offerEndpoint),
+        endpointAddress,
+        now: 100
+      })
+      return resolveEnvironmentPairingOffer(userDataPath, 'workstation')
+    }
+
+    it('keeps the port from the pairing code for a bare host', () => {
+      expect(addWithEndpoint('100.64.0.2').endpoint).toBe('ws://100.64.0.2:6768')
+    })
+
+    it('accepts host:port and full ws(s):// forms', () => {
+      expect(addWithEndpoint('desktop.tailnet.ts.net:7000').endpoint).toBe(
+        'ws://desktop.tailnet.ts.net:7000'
+      )
+      expect(addWithEndpoint('wss://desktop.example.com/runtime').endpoint).toBe(
+        'wss://desktop.example.com/runtime'
+      )
+    })
+
+    it('preserves the credentials the host issued', () => {
+      const offer = addWithEndpoint('100.64.0.2')
+      expect(offer.deviceToken).toBe('device-token')
+      expect(offer.publicKeyB64).toBe(Buffer.from(new Uint8Array(32).fill(1)).toString('base64'))
+    })
+
+    it('rejects an unreachable wildcard bind address', () => {
+      expect(() => addWithEndpoint('0.0.0.0')).toThrow(/Invalid --endpoint "0\.0\.0\.0"/)
+    })
+
+    // Why: the endpoint resolver reads a blank advertised address as "none given"
+    // and falls back to loopback, so a blank override would quietly do the exact
+    // damage this flag exists to undo.
+    it.each(['', ' ', '\t'])(
+      'rejects a blank override rather than falling back to loopback',
+      (blank) => {
+        expect(() => addWithEndpoint(blank, 'ws://10.0.0.5:6768')).toThrow(/Invalid --endpoint/)
+      }
+    )
+
+    it('leaves the advertised endpoint alone when omitted', () => {
+      const userDataPath = mkdtempSync(join(tmpdir(), 'orca-env-store-'))
+      addEnvironmentFromPairingCode(userDataPath, {
+        name: 'workstation',
+        pairingCode: pairingCode('ws://10.0.0.5:6768'),
+        now: 100
+      })
+      expect(resolveEnvironmentPairingOffer(userDataPath, 'workstation').endpoint).toBe(
+        'ws://10.0.0.5:6768'
+      )
+    })
+  })
 })

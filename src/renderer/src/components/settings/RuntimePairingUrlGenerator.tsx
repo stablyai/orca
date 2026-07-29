@@ -16,11 +16,15 @@ const runtimePairingUrlCache: {
   runtimePairingUrl: string | null
   webClientUrl: string | null
   runtimePairingDeviceId: string | null
+  generatedAddress: string | null
 } = {
   selectedAddress: LOOPBACK_ADDRESS,
   runtimePairingUrl: null,
   webClientUrl: null,
-  runtimePairingDeviceId: null
+  runtimePairingDeviceId: null,
+  // Why: the picker can move after generating, so the link warning tracks the
+  // address the displayed link was actually minted for.
+  generatedAddress: null
 }
 
 type RuntimePairingUrlGeneratorProps = {
@@ -46,6 +50,9 @@ export function RuntimePairingUrlGenerator({
   )
   const [runtimePairingDeviceId, setRuntimePairingDeviceId] = useState<string | null>(
     runtimePairingUrlCache.runtimePairingDeviceId
+  )
+  const [generatedAddress, setGeneratedAddress] = useState<string | null>(
+    runtimePairingUrlCache.generatedAddress
   )
   const [runtimeAccessGrants, setRuntimeAccessGrants] = useState<RuntimeAccessGrant[]>([])
   const [isLoadingAccessGrants, setIsLoadingAccessGrants] = useState(false)
@@ -165,10 +172,12 @@ export function RuntimePairingUrlGenerator({
     runtimePairingUrlCache.runtimePairingUrl = null
     runtimePairingUrlCache.webClientUrl = null
     runtimePairingUrlCache.runtimePairingDeviceId = null
+    runtimePairingUrlCache.generatedAddress = null
     if (mountedRef.current) {
       setRuntimePairingUrl(null)
       setWebClientUrl(null)
       setRuntimePairingDeviceId(null)
+      setGeneratedAddress(null)
     }
   }
 
@@ -194,10 +203,12 @@ export function RuntimePairingUrlGenerator({
       runtimePairingUrlCache.runtimePairingUrl = result.pairingUrl
       runtimePairingUrlCache.webClientUrl = result.webClientUrl
       runtimePairingUrlCache.runtimePairingDeviceId = result.deviceId
+      runtimePairingUrlCache.generatedAddress = selectedAddress
       if (mountedRef.current) {
         setRuntimePairingUrl(result.pairingUrl)
         setWebClientUrl(result.webClientUrl)
         setRuntimePairingDeviceId(result.deviceId)
+        setGeneratedAddress(selectedAddress)
       }
       await loadRuntimeAccessGrants()
       if (mountedRef.current) {
@@ -356,6 +367,7 @@ export function RuntimePairingUrlGenerator({
           isGeneratingPairing={isGeneratingPairing}
           webClientUrl={webClientUrl}
           runtimePairingUrl={runtimePairingUrl}
+          generatedAddress={generatedAddress}
           copiedTarget={copiedTarget}
           onSelectedAddressChange={updateSelectedAddress}
           onRefreshNetworkInterfaces={() => void loadNetworkInterfaces({ showToastOnError: true })}

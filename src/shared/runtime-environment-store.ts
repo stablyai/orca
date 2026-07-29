@@ -41,15 +41,25 @@ export function listEnvironments(userDataPath: string): KnownRuntimeEnvironment[
 
 export function addEnvironmentFromPairingCode(
   userDataPath: string,
-  args: { name: string; pairingCode: string; now?: number; source?: RuntimeEnvironmentSource }
+  args: {
+    name: string
+    pairingCode: string
+    now?: number
+    source?: RuntimeEnvironmentSource
+    /** Already-resolved ws(s):// URL replacing the offer's advertised endpoint. */
+    endpoint?: string
+  }
 ): KnownRuntimeEnvironment {
-  const offer = parsePairingCode(args.pairingCode)
-  if (!offer) {
+  const parsed = parsePairingCode(args.pairingCode)
+  if (!parsed) {
     throw new RuntimeEnvironmentStoreError(
       'invalid_argument',
       'Invalid pairing code. Expected an orca://pair?... URL or bare pairing payload.'
     )
   }
+  // Why: a host that advertised loopback mints an offer no other device can dial;
+  // the token stays valid, so let the caller redirect it instead of re-pairing.
+  const offer = args.endpoint ? { ...parsed, endpoint: args.endpoint } : parsed
   const store = readEnvironmentStore(userDataPath)
   const now = args.now ?? Date.now()
   const existing = store.environments.find((entry) => entry.name === args.name)

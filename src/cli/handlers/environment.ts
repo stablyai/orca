@@ -16,10 +16,12 @@ export const ENVIRONMENT_HANDLERS: Record<string, CommandHandler> = {
   'environment add': async ({ flags, json }) => {
     const name = getRequiredStringFlag(flags, 'name')
     const pairingCode = getRequiredStringFlag(flags, 'pairing-code')
+    const endpointAddress = getOptionalStringFlag(flags, 'endpoint')
     const environment = redactRuntimeEnvironment(
       addEnvironmentFromPairingCode(getDefaultUserDataPath(), {
         name,
-        pairingCode
+        pairingCode,
+        ...(endpointAddress ? { endpointAddress } : {})
       })
     )
     printResult(
@@ -52,6 +54,17 @@ export const ENVIRONMENT_HANDLERS: Record<string, CommandHandler> = {
         `Removed environment ${result.removed.name} (${result.removed.id}).`
     )
   }
+}
+
+function getOptionalStringFlag(flags: Map<string, string | boolean>, name: string): string | null {
+  const value = flags.get(name)
+  if (value === undefined) {
+    return null
+  }
+  if (typeof value !== 'string' || value.trim().length === 0) {
+    throw new RuntimeClientError('invalid_argument', `--${name} requires a value`)
+  }
+  return value
 }
 
 function getRequiredStringFlag(flags: Map<string, string | boolean>, name: string): string {

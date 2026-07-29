@@ -212,7 +212,7 @@ Common Commands:
   orca status [--json]
   orca diagnostics memory [--json]
   orca agent-context [--json]
-  orca environment add --name <name> --pairing-code <code> [--json]
+  orca environment add --name <name> --pairing-code <code> [--endpoint <host>] [--json]
   orca environment list [--json]
   orca environment show --environment <selector> [--json]
   orca environment rm --environment <selector> [--json]
@@ -505,6 +505,8 @@ export function formatFlagHelp(flag: string): string {
     'display-name': '--display-name <name>  Override the Orca display name',
     'element-index': '--element-index <n>   Element index from get-app-state',
     title: '--title <text>         Custom title for the terminal tab (omit to reset)',
+    endpoint:
+      '--endpoint <host>      Reachable host, host:port, or ws(s):// URL replacing the address advertised by the pairing code',
     enter: '--enter                Append Enter after sending text',
     force: '--force                Force worktree removal when supported',
     focus: '--focus                Reveal the created terminal session in Orca',
