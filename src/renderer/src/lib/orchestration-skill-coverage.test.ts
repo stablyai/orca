@@ -185,6 +185,32 @@ describe('orchestration skill agent coverage', () => {
     expect(agentHasOrchestrationSkill('gemini', antigravityInstall)).toBe(false)
   })
 
+  it('keeps Pi and OMP distinct despite sharing the agent/skills tail', () => {
+    const piInstall = [
+      skill({
+        providers: ['agent-skills'],
+        sourceKind: 'home',
+        rootPath: '/Users/test/.pi/agent/skills',
+        directoryPath: '/Users/test/.pi/agent/skills/orchestration'
+      })
+    ]
+    const ompInstall = [
+      skill({
+        providers: ['agent-skills'],
+        sourceKind: 'home',
+        rootPath: 'C:\\Users\\test\\.omp\\agent\\skills',
+        directoryPath: 'C:\\Users\\test\\.omp\\agent\\skills\\orchestration'
+      })
+    ]
+
+    // Why: `.pi/agent/skills` and `.omp/agent/skills` differ only in the leading
+    // segment, so dropping either anchor would cross-mark the other agent.
+    expect(agentHasOrchestrationSkill('pi', piInstall)).toBe(true)
+    expect(agentHasOrchestrationSkill('omp', piInstall)).toBe(false)
+    expect(agentHasOrchestrationSkill('omp', ompInstall)).toBe(true)
+    expect(agentHasOrchestrationSkill('pi', ompInstall)).toBe(false)
+  })
+
   it('marks Claude Agent Teams from ~/.claude/skills like Claude Code', () => {
     const skills = [
       skill({
