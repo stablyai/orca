@@ -43,6 +43,15 @@ export function useTerminalLiveHardwareKeyboard({
   const pendingSoftFocusNeedsBlurRef = useRef(false)
   const modalOpenRef = useRef(modalOpen)
   modalOpenRef.current = modalOpen
+  // Why: dropping the latch during render (not in an effect) keeps a modal from
+  // painting one frame with the soft keyboard still latched on.
+  const [modalOpenOnLastRender, setModalOpenOnLastRender] = useState(modalOpen)
+  if (modalOpen !== modalOpenOnLastRender) {
+    setModalOpenOnLastRender(modalOpen)
+    if (modalOpen) {
+      setWantSoftKeyboard(false)
+    }
+  }
 
   const decision = getTerminalLiveHardwareKeyboardFocusDecision({
     wantSoftKeyboard,
@@ -122,14 +131,13 @@ export function useTerminalLiveHardwareKeyboard({
     wantSoftKeyboard
   ])
 
-  // Modal/action-sheet open: cancel pending focus and clear soft latch; do not
-  // re-trigger silent focus when the modal later closes.
+  // Modal/action-sheet open: cancel pending focus and release the input; the soft
+  // latch itself is dropped during render above. Closing must not re-focus.
   useEffect(() => {
     if (!modalOpen) {
       return
     }
     clearTerminalLiveInputFocusTimer(liveInputFocusTimerRef)
-    setWantSoftKeyboard(false)
     liveInputRef.current?.blur()
   }, [liveInputFocusTimerRef, liveInputRef, modalOpen])
 

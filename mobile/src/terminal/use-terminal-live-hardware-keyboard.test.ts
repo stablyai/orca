@@ -85,6 +85,59 @@ describe('useTerminalLiveHardwareKeyboard soft focus latch', () => {
     expect(blur).not.toHaveBeenCalled()
   })
 
+  it('Given the soft latch is held When a modal opens and closes Then the latch stays dropped', () => {
+    const liveInputRef: RefObject<TextInput | null> = {
+      current: {
+        focus: vi.fn(),
+        blur: vi.fn(),
+        isFocused: vi.fn(() => false)
+      } as unknown as TextInput
+    }
+    const liveInputFocusTimerRef: TerminalLiveInputFocusTimerRef = { current: null }
+    let modalOpen = false
+    let api: ReturnType<typeof useTerminalLiveHardwareKeyboard> | null = null
+    let renderer: ReactTestRenderer | null = null
+
+    function Harness(): null {
+      api = useTerminalLiveHardwareKeyboard({
+        focusScopeKey: 'terminal-a',
+        liveInputEnabled: true,
+        canSend: true,
+        liveInputRef,
+        liveInputFocusTimerRef,
+        modalOpen,
+        handleLiveInputHardwareKey: () => {}
+      })
+      return null
+    }
+
+    const restore = suppressReactTestRendererDeprecationWarning()
+    try {
+      act(() => {
+        renderer = create(createElement(Harness))
+      })
+    } finally {
+      restore()
+    }
+    if (!renderer) {
+      throw new Error('hardware keyboard hook did not render')
+    }
+
+    act(() => {
+      api?.requestSoftKeyboardFocus()
+    })
+    expect(api?.showSoftInputOnFocus).toBe(true)
+
+    modalOpen = true
+    act(() => renderer?.update(createElement(Harness)))
+    expect(api?.showSoftInputOnFocus).toBe(false)
+
+    // Closing the modal must not resurrect the latch.
+    modalOpen = false
+    act(() => renderer?.update(createElement(Harness)))
+    expect(api?.showSoftInputOnFocus).toBe(false)
+  })
+
   it('Given a modal opens When it closes Then only a terminal switch restores silent focus', async () => {
     vi.useFakeTimers()
     const focus = vi.fn()
