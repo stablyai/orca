@@ -1421,10 +1421,10 @@ function resolveFolderLineageOwner(
   const group = groups[0]
   const hosts = new Set<ExecutionHostId>()
   if (folder.connectionId) {
-    hosts.add(`ssh:${encodeURIComponent(folder.connectionId)}`)
+    hosts.add(toSshExecutionHostId(folder.connectionId))
   }
   if (group.connectionId) {
-    hosts.add(`ssh:${encodeURIComponent(group.connectionId)}`)
+    hosts.add(toSshExecutionHostId(group.connectionId))
   }
   if (group.executionHostId) {
     const parsed = parseExecutionHostId(group.executionHostId)
