@@ -2530,9 +2530,12 @@ private enum KeyMap {
 }
 
 private final class AgentRuntime: NSObject, NSApplicationDelegate {
+    private static let unclaimedSessionDeadline: TimeInterval = 30
+
     private let socketPath: String
     private let token: String?
     private var listener: SocketListener?
+    private var unclaimedSessionTimeout: DispatchWorkItem?
 
     init(socketPath: String, token: String?) {
         self.socketPath = socketPath
@@ -2541,9 +2544,31 @@ private final class AgentRuntime: NSObject, NSApplicationDelegate {
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         do {
-            let listener = try SocketListener(socketPath: socketPath, token: token)
+            let timeout = DispatchWorkItem {
+                fputs("computer-use agent received no authenticated session before its deadline\n", stderr)
+                NSApp.terminate(nil)
+            }
+            unclaimedSessionTimeout = timeout
+            let listener = try SocketListener(
+                socketPath: socketPath,
+                token: token,
+                onSessionClaimed: {
+                    DispatchQueue.main.async {
+                        timeout.cancel()
+                    }
+                },
+                onSessionClosed: {
+                    DispatchQueue.main.async {
+                        NSApp.terminate(nil)
+                    }
+                }
+            )
             self.listener = listener
             listener.start()
+            DispatchQueue.main.asyncAfter(
+                deadline: .now() + Self.unclaimedSessionDeadline,
+                execute: timeout
+            )
         } catch {
             fputs("failed to start computer-use socket: \(error)\n", stderr)
             NSApp.terminate(nil)
@@ -2551,6 +2576,8 @@ private final class AgentRuntime: NSObject, NSApplicationDelegate {
     }
 
     func applicationWillTerminate(_ notification: Notification) {
+        unclaimedSessionTimeout?.cancel()
+        unclaimedSessionTimeout = nil
         listener?.stop()
     }
 }
@@ -3456,14 +3483,25 @@ private final class ButtonTarget: NSObject {
 private final class SocketListener: @unchecked Sendable {
     private let socketPath: String
     private let token: String?
+    private let onSessionClaimed: () -> Void
+    private let onSessionClosed: () -> Void
     private let provider = Provider()
     private let providerLock = NSLock()
+    private let sessionLock = NSLock()
+    private var sessionOwnership = AgentSessionOwnership()
     private var socketFd: Int32 = -1
     private var isStopped = false
 
-    init(socketPath: String, token: String?) throws {
+    init(
+        socketPath: String,
+        token: String?,
+        onSessionClaimed: @escaping () -> Void,
+        onSessionClosed: @escaping () -> Void
+    ) throws {
         self.socketPath = socketPath
         self.token = token
+        self.onSessionClaimed = onSessionClaimed
+        self.onSessionClosed = onSessionClosed
         try bindSocket()
     }
 
@@ -3545,7 +3583,15 @@ private final class SocketListener: @unchecked Sendable {
     }
 
     private func handleConnection(_ fd: Int32) {
-        defer { close(fd) }
+        defer {
+            sessionLock.lock()
+            let shouldTerminate = sessionOwnership.disconnect(fd)
+            sessionLock.unlock()
+            close(fd)
+            if shouldTerminate {
+                onSessionClosed()
+            }
+        }
         let authorizedPeer = peerProcessId(fd).map(isAuthorizedAgentPeer) == true
         let decoder = JSONDecoder()
         while let line = readLine(from: fd) {
@@ -3553,6 +3599,15 @@ private final class SocketListener: @unchecked Sendable {
                   let request = try? decoder.decode(Request.self, from: data)
             else {
                 continue
+            }
+            sessionLock.lock()
+            let claimed = sessionOwnership.registerConnection(
+                fd,
+                authenticated: isAuthenticated(request: request, authorizedPeer: authorizedPeer)
+            )
+            sessionLock.unlock()
+            if claimed {
+                onSessionClaimed()
             }
             let response = handleRequest(
                 provider: provider,
@@ -3563,6 +3618,11 @@ private final class SocketListener: @unchecked Sendable {
             )
             writeJSON(response, to: fd)
         }
+    }
+
+    private func isAuthenticated(request: Request, authorizedPeer: Bool) -> Bool {
+        guard let token else { return true }
+        return request.token == token && authorizedPeer
     }
 }
 
