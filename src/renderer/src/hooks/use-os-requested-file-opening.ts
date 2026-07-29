@@ -23,6 +23,10 @@ export async function pullPendingOsRequestedFiles(isCancelled: () => boolean): P
     return
   }
   for (const pendingPath of pendingPaths) {
+    // Why: cancellation mid-batch must stop remaining opens, not just gate the batch's start.
+    if (isCancelled()) {
+      return
+    }
     await openOsRequestedFileAndReportFailure(pendingPath)
   }
 }

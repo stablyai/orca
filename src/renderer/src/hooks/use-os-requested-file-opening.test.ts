@@ -49,4 +49,18 @@ describe('pullPendingOsRequestedFiles', () => {
     expect(openOsRequestedFileMock).toHaveBeenNthCalledWith(2, '/Users/x/projects/b.md')
     expect(openOsRequestedFileMock).toHaveBeenNthCalledWith(3, '/Users/x/projects/c.md')
   })
+
+  it('stops opening remaining paths once cancellation is reported mid-batch', async () => {
+    stubPendingPaths(['/Users/x/projects/a.md', '/Users/x/projects/b.md'])
+    let cancelled = false
+    openOsRequestedFileMock.mockImplementationOnce(async () => {
+      // Why: simulates unmount happening during the first path's async open.
+      cancelled = true
+    })
+
+    await pullPendingOsRequestedFiles(() => cancelled)
+
+    expect(openOsRequestedFileMock).toHaveBeenCalledTimes(1)
+    expect(openOsRequestedFileMock).toHaveBeenCalledWith('/Users/x/projects/a.md')
+  })
 })
