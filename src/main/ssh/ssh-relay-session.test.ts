@@ -63,7 +63,9 @@ vi.mock('../ipc/pty', () => ({
   getSshPtyProvider: vi.fn().mockReturnValue({
     dispose: vi.fn(),
     attach: vi.fn().mockResolvedValue(undefined),
-    attachForReconnect: vi.fn().mockResolvedValue({})
+    attachForReconnect: vi.fn().mockResolvedValue({}),
+    listProcesses: vi.fn().mockResolvedValue([]),
+    shutdown: vi.fn().mockResolvedValue(undefined)
   }),
   getPtyIdsForConnection: vi.fn().mockReturnValue([]),
   clearPtyOwnershipForConnection: vi.fn(),

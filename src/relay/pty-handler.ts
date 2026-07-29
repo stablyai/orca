@@ -111,6 +111,8 @@ type ManagedPty = {
   startupIngressIntent?: ReturnType<typeof parsePtyStartupIngressIntent>
   ownerBackend: PtyOwnerBackend
   agentSessionOwners?: AgentSessionOwnerBinding[]
+  /** Epoch ms when this PTY was wired (spawn or revive). */
+  startedAtMs?: number
 }
 
 type RelayAgentSessionCreateResult = {
@@ -245,6 +247,8 @@ type PtyProcessSummary = {
   worktreeId?: string
   terminalHandle?: string
   agentSessionOwners?: AgentSessionOwnerBinding[]
+  paneKey?: string
+  ageMs?: number
 }
 
 type SerializedPtyEntry = {
@@ -532,6 +536,8 @@ export class PtyHandler {
 
   /** Wire onData/onExit listeners for a managed PTY and store it. */
   private wireAndStore(managed: ManagedPty): void {
+    // Why: lets clients age-gate orphan reaping so an in-flight spawn is never mistaken for an orphan.
+    managed.startedAtMs ??= Date.now()
     managed.physicalExit = new PhysicalExitTracker()
     this.ptys.set(managed.id, managed)
     const emitIngressData = (emission: PtyIngressEmission): void => {
@@ -1440,7 +1446,10 @@ export class PtyHandler {
         ...(managed.terminalHandle ? { terminalHandle: managed.terminalHandle } : {}),
         ...(this.agentSessionOwners.listForPty(id).length
           ? { agentSessionOwners: this.agentSessionOwners.listForPty(id) }
-          : {})
+          : {}),
+        ...(managed.paneKey ? { paneKey: managed.paneKey } : {}),
+        // Why: report age computed on this host's clock so client/remote clock skew can't distort it.
+        ...(managed.startedAtMs !== undefined ? { ageMs: Date.now() - managed.startedAtMs } : {})
       })
     }
     return results
