@@ -3,6 +3,7 @@ import type { ExecutionHostId } from './execution-host'
 import type { RemovedSshTargetTombstone, SshRemotePtyLease, SshTarget } from './ssh-types'
 import type { Automation, AutomationExecutionTargetType, AutomationRun } from './automations-types'
 import type { WorkspaceSource } from './workspace-source'
+import type { ReleaseBuild, ReleaseChannel } from './release-channel'
 import type { GitHubProjectSettings } from './github-project-types'
 import type {
   AgentStatusState,
@@ -2373,9 +2374,12 @@ export type UpdateCheckOptions = {
   includePrerelease?: boolean
   includePerfPrerelease?: boolean
   localBuild?: boolean
+  /** Dev channel switching; `targetTag` pins an exact build, including older ones. */
+  channel?: ReleaseChannel
+  targetTag?: string
 }
 
-export type UpdateSource = 'local'
+export type UpdateSource = 'local' | 'hourly'
 
 export type UpdateStatus = (
   | { state: 'idle' }
@@ -2401,6 +2405,10 @@ export type UpdateStatus = (
   | { state: 'downloaded'; version: string; releaseUrl?: string; activeNudgeId?: string }
   | { state: 'error'; message: string; userInitiated?: boolean; activeNudgeId?: string }
 ) & { source?: UpdateSource }
+
+export type ReleaseBuildListResult =
+  | { ok: true; channel: ReleaseChannel; builds: ReleaseBuild[] }
+  | { ok: false; channel: ReleaseChannel; message: string }
 
 // ─── Settings ────────────────────────────────────────────────────────
 export type NotificationSettings = {
@@ -3377,6 +3385,8 @@ export type PersistedUIState = {
   statusBarUsageMode?: StatusBarUsageMode
   dismissedUpdateVersion: string | null
   lastUpdateCheckAt: number | null
+  /** Dev-only update channel override; absent means the build's own channel. */
+  releaseChannelOverride?: ReleaseChannel | null
   pendingUpdateNudgeId?: string | null
   dismissedUpdateNudgeId?: string | null
   /** Whether Orca already tried triggering the macOS notification permission dialog; prevents re-firing every launch. */

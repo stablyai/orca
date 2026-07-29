@@ -32,6 +32,7 @@ type UpdaterHandlerContext = {
   isQuitAndInstallHandoffActive: () => boolean
   hasInstallableDownloadedVersion: () => boolean
   isLocalBuildCheck: () => boolean
+  isPinnedBuildCheck: () => boolean
   shouldHandleUpdaterErrorEvent: () => boolean
   clearUpdateAvailableEventPending: (attemptId: number | null) => void
   isActiveUpdateCheckAttempt: (attemptId: number) => boolean
@@ -74,6 +75,7 @@ export function registerAutoUpdaterHandlers({
   isQuitAndInstallHandoffActive,
   hasInstallableDownloadedVersion,
   isLocalBuildCheck,
+  isPinnedBuildCheck,
   shouldHandleUpdaterErrorEvent,
   clearUpdateAvailableEventPending,
   isActiveUpdateCheckAttempt,
@@ -162,8 +164,12 @@ export function registerAutoUpdaterHandlers({
     const wasUserInitiated = missingManifestFallback?.userInitiated ?? getUserInitiatedCheck()
     setUserInitiatedCheck(false)
 
-    // Release checks remain newer-only; validated local builds may intentionally downgrade.
-    if (!isLocalBuildCheck() && compareVersions(info.version, app.getVersion()) <= 0) {
+    // Release checks remain newer-only; validated local builds and pinned dev jumps may intentionally downgrade.
+    if (
+      !isLocalBuildCheck() &&
+      !isPinnedBuildCheck() &&
+      compareVersions(info.version, app.getVersion()) <= 0
+    ) {
       clearAvailableUpdateContext()
       if (missingManifestFallback || publishingWindowLastGoodCheck) {
         // Why: a current-version fallback manifest means the primary is transiently missing; keep the short retry cadence.
@@ -182,9 +188,10 @@ export function registerAutoUpdaterHandlers({
     markUpdateAvailableEventPending(attemptId)
     void (async () => {
       try {
-        const changelog = isLocalBuildCheck()
-          ? null
-          : await fetchChangelog(info.version, app.getVersion()).catch(() => null)
+        const changelog =
+          isLocalBuildCheck() || isPinnedBuildCheck()
+            ? null
+            : await fetchChangelog(info.version, app.getVersion()).catch(() => null)
 
         // Why: async fetch may take seconds; bail if a newer event superseded this attempt to avoid a stale 'available' broadcast.
         if (!isActiveUpdateCheckAttempt(attemptId)) {
@@ -226,9 +233,12 @@ export function registerAutoUpdaterHandlers({
     const publishingWindowLastGoodCheck = getPublishingWindowLastGoodCheck()
     const wasUserInitiated = missingManifestFallback?.userInitiated ?? getUserInitiatedCheck()
     const localBuildCheck = isLocalBuildCheck()
+    // Why: an unpinned outcome must hand the feed back, else the pin blocks every
+    // later background check for the process lifetime.
+    const pinnedBuildCheck = isPinnedBuildCheck()
     setUserInitiatedCheck(false)
     clearAvailableUpdateContext()
-    if (!localBuildCheck) {
+    if (!localBuildCheck && !pinnedBuildCheck) {
       if (missingManifestFallback || publishingWindowLastGoodCheck) {
         // Why: last-good not-available is a transient release-transition outcome; keep the short retry, don't suppress for 24h.
         scheduleAutomaticUpdateCheck(AUTO_UPDATE_RETRY_INTERVAL_MS)
@@ -240,7 +250,7 @@ export function registerAutoUpdaterHandlers({
       }
     }
     sendStatus({ state: 'not-available', userInitiated: wasUserInitiated || undefined })
-    if (localBuildCheck) {
+    if (localBuildCheck || pinnedBuildCheck) {
       restoreReleaseUpdateSource()
     }
   })
@@ -256,8 +266,12 @@ export function registerAutoUpdaterHandlers({
 
   autoUpdater.on('update-downloaded', (info) => {
     clearBackgroundCheckLaunchPending()
-    // Release downloads remain newer-only; the local source was validated before checking.
-    if (!isLocalBuildCheck() && compareVersions(info.version, app.getVersion()) <= 0) {
+    // Release downloads remain newer-only; the local source was validated before checking, and a pinned jump is explicit.
+    if (
+      !isLocalBuildCheck() &&
+      !isPinnedBuildCheck() &&
+      compareVersions(info.version, app.getVersion()) <= 0
+    ) {
       clearAvailableUpdateContext()
       sendStatus({ state: 'not-available' })
       return
@@ -302,7 +316,7 @@ export function registerAutoUpdaterHandlers({
       return
     }
     sendErrorStatus(message, wasUserInitiated || undefined)
-    if (isLocalBuildCheck()) {
+    if (isLocalBuildCheck() || isPinnedBuildCheck()) {
       restoreReleaseUpdateSource()
     }
   })

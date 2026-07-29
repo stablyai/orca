@@ -1,0 +1,242 @@
+name: Hourly macOS Dev Build
+
+# Why: gives developers a signed macOS build of main every hour that the in-app
+# updater can install directly, without waiting for an RC cut.
+#
+# Deliberately narrow scope:
+#   - macOS only. Other platforms keep using RC/stable.
+#   - No tests, no lint, no e2e. This channel trades safety for latency; PR CI
+#     and release-cut remain the gates that matter.
+#   - Signed but NOT notarized. Squirrel.Mac validates the replacement bundle's
+#     signature, not its notarization, so in-place updates still work while the
+#     ~10min notary round trip is skipped 24x a day.
+#
+# Artifacts publish to stablyai/orca-hourly, never to stablyai/orca: the main
+# repo's releases atom feed exposes only its 10 newest entries, so 24 hourly
+# tags a day would evict every stable/RC entry and break updates for real users.
+
+on:
+  schedule:
+    # Top of every hour. Skipped automatically when main has not moved.
+    - cron: '0 * * * *'
+  workflow_dispatch:
+    inputs:
+      force:
+        description: Build even if main has not moved since the last hourly
+        required: false
+        default: false
+        type: boolean
+
+permissions:
+  contents: read
+
+concurrency:
+  group: hourly-mac-build
+  cancel-in-progress: false
+
+env:
+  HOURLY_REPO: stablyai/orca-hourly
+  # Keep ~3 days of history so a regression can be bisected across a weekend.
+  HOURLY_RETAIN_COUNT: 72
+
+jobs:
+  build-hourly-mac:
+    if: github.repository == 'stablyai/orca'
+    runs-on: blacksmith-6vcpu-macos-15
+    timeout-minutes: 60
+    env:
+      NODE_OPTIONS: --max-old-space-size=4096
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+        with:
+          ref: main
+          fetch-depth: 0
+
+      # Why: main is often idle overnight. Rebuilding an unchanged commit burns a
+      # runner hour and adds a redundant tag to the retention window.
+      - name: Check whether main moved since the last hourly
+        id: freshness
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.HOURLY_RELEASE_TOKEN }}
+          FORCED: ${{ github.event_name == 'workflow_dispatch' && inputs.force }}
+        run: |
+          set -euo pipefail
+          head_sha="$(git rev-parse HEAD)"
+          echo "head_sha=$head_sha" >>"$GITHUB_OUTPUT"
+          if [[ "$FORCED" == "true" ]]; then
+            echo "should_build=true" >>"$GITHUB_OUTPUT"
+            echo "Forced dispatch; building $head_sha."
+            exit 0
+          fi
+          # The previous hourly records its source commit in the release body.
+          last_body="$(gh release list --repo "$HOURLY_REPO" --limit 1 --json tagName \
+            --jq '.[0].tagName // empty' 2>/dev/null || true)"
+          if [[ -z "$last_body" ]]; then
+            echo "should_build=true" >>"$GITHUB_OUTPUT"
+            echo "No prior hourly release found; building $head_sha."
+            exit 0
+          fi
+          last_sha="$(gh release view "$last_body" --repo "$HOURLY_REPO" --json body \
+            --jq '.body | capture("commit `(?<sha>[0-9a-f]{7,40})`") | .sha' 2>/dev/null || true)"
+          if [[ -n "$last_sha" && "$head_sha" == "$last_sha"* ]]; then
+            echo "should_build=false" >>"$GITHUB_OUTPUT"
+            echo "main is unchanged since $last_body ($last_sha); skipping."
+          else
+            echo "should_build=true" >>"$GITHUB_OUTPUT"
+            echo "main moved to $head_sha (last hourly built $last_sha); building."
+          fi
+
+      - name: Setup pnpm
+        if: steps.freshness.outputs.should_build == 'true'
+        uses: pnpm/action-setup@v6
+        with:
+          run_install: false
+
+      - name: Setup Node.js
+        if: steps.freshness.outputs.should_build == 'true'
+        uses: actions/setup-node@v6
+        with:
+          node-version-file: package.json
+          cache: pnpm
+
+      - name: Cache electron-builder downloads
+        if: steps.freshness.outputs.should_build == 'true'
+        uses: actions/cache@v5
+        with:
+          path: |
+            ~/Library/Caches/electron
+            ~/Library/Caches/electron-builder
+          key: electron-builder-mac-${{ hashFiles('pnpm-lock.yaml') }}
+          restore-keys: |
+            electron-builder-mac-
+
+      - name: Install dependencies
+        if: steps.freshness.outputs.should_build == 'true'
+        uses: nick-fields/retry@v4
+        with:
+          timeout_minutes: 10
+          max_attempts: 3
+          retry_wait_seconds: 30
+          command: pnpm install --frozen-lockfile
+
+      # Why: signing is what makes an hourly installable over an existing Orca, so
+      # a missing cert must fail here rather than after a 20-minute build.
+      - name: Verify macOS signing environment
+        if: steps.freshness.outputs.should_build == 'true'
+        run: node config/scripts/verify-macos-release-env.mjs
+        env:
+          CSC_LINK: ${{ secrets.MAC_CERTS }}
+          CSC_KEY_PASSWORD: ${{ secrets.MAC_CERTS_PASSWORD }}
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+
+      - name: Compute hourly version
+        id: hourly
+        if: steps.freshness.outputs.should_build == 'true'
+        run: node config/scripts/hourly-build-version.mjs >>"$GITHUB_OUTPUT"
+
+      - name: Build app
+        if: steps.freshness.outputs.should_build == 'true'
+        run: pnpm build:release
+        env:
+          NODE_OPTIONS: --max-old-space-size=4096
+          # Why: hourly builds are not an official channel — telemetry's transport
+          # gate accepts only 'stable' or 'rc', so leaving this unset keeps them
+          # silent, which is correct for unvetted dev artifacts.
+          ORCA_DIAGNOSTICS_TOKEN_URL: https://www.onorca.dev/diagnostics/token
+
+      - name: Create hourly release
+        id: release
+        if: steps.freshness.outputs.should_build == 'true'
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.HOURLY_RELEASE_TOKEN }}
+          TAG: v${{ steps.hourly.outputs.version }}
+          SHA: ${{ steps.freshness.outputs.head_sha }}
+        run: |
+          set -euo pipefail
+          short_sha="${SHA:0:12}"
+          # Why: create the release up front so electron-builder uploads into a
+          # known tag rather than inferring one from package.json.
+          gh release create "$TAG" \
+            --repo "$HOURLY_REPO" \
+            --title "$TAG" \
+            --prerelease \
+            --notes "Automated hourly macOS dev build from commit \`$short_sha\`.
+
+          Built from [\`stablyai/orca@$short_sha\`](https://github.com/stablyai/orca/commit/$SHA).
+
+          **Unvetted.** No tests ran. Signed but not notarized — installable
+          through Orca's in-app updater, but a manual download will be
+          Gatekeeper-quarantined."
+          echo "tag=$TAG" >>"$GITHUB_OUTPUT"
+
+      - name: Publish hourly macOS artifacts
+        if: steps.freshness.outputs.should_build == 'true'
+        uses: nick-fields/retry@v4
+        with:
+          timeout_minutes: 45
+          max_attempts: 3
+          retry_wait_seconds: 30
+          command: node config/scripts/ensure-native-runtime.mjs --runtime=electron && ORCA_MAC_HOURLY=1 pnpm exec electron-builder --config config/electron-builder.config.cjs --mac --publish always
+        env:
+          # Why: electron-builder's github publisher targets the repo named in the
+          # config; the token must therefore carry write access to orca-hourly.
+          GH_TOKEN: ${{ secrets.HOURLY_RELEASE_TOKEN }}
+          ORCA_HOURLY_BUILD_VERSION: ${{ steps.hourly.outputs.version }}
+          ORCA_BUILD_COMMIT: ${{ steps.hourly.outputs.commit }}
+          CSC_LINK: ${{ secrets.MAC_CERTS }}
+          CSC_KEY_PASSWORD: ${{ secrets.MAC_CERTS_PASSWORD }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+
+      # Why: the updater resolves a tag, then fetches latest-mac.yml from it. A
+      # release missing that manifest is a tag the picker offers and the download
+      # 404s on, so fail loudly instead of leaving a broken entry.
+      - name: Verify update manifest published
+        if: steps.freshness.outputs.should_build == 'true'
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.HOURLY_RELEASE_TOKEN }}
+          TAG: ${{ steps.release.outputs.tag }}
+        run: |
+          set -euo pipefail
+          assets="$(gh release view "$TAG" --repo "$HOURLY_REPO" --json assets --jq '.assets[].name')"
+          echo "Published assets:"
+          echo "$assets"
+          for required in latest-mac.yml; do
+            if ! grep -qx "$required" <<<"$assets"; then
+              echo "::error::Hourly release $TAG is missing $required; the updater could not install it."
+              gh release delete "$TAG" --repo "$HOURLY_REPO" --yes --cleanup-tag
+              exit 1
+            fi
+          done
+          if ! grep -q '\.zip$' <<<"$assets"; then
+            echo "::error::Hourly release $TAG has no ZIP artifact for the updater to download."
+            gh release delete "$TAG" --repo "$HOURLY_REPO" --yes --cleanup-tag
+            exit 1
+          fi
+
+      - name: Prune old hourly releases
+        if: steps.freshness.outputs.should_build == 'true'
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.HOURLY_RELEASE_TOKEN }}
+        run: |
+          set -euo pipefail
+          # Why: --cleanup-tag so pruning does not leave orphan tags behind that
+          # keep showing up in tag lists with no release or assets attached.
+          stale="$(gh release list --repo "$HOURLY_REPO" --limit 200 --json tagName,createdAt \
+            --jq "sort_by(.createdAt) | reverse | .[${HOURLY_RETAIN_COUNT}:] | .[].tagName")"
+          if [[ -z "$stale" ]]; then
+            echo "Nothing to prune; at or under $HOURLY_RETAIN_COUNT retained builds."
+            exit 0
+          fi
+          while read -r tag; do
+            [[ -n "$tag" ]] || continue
+            echo "Pruning $tag"
+            gh release delete "$tag" --repo "$HOURLY_REPO" --yes --cleanup-tag || \
+              echo "::warning::Could not prune $tag"
+          done <<<"$stale"
