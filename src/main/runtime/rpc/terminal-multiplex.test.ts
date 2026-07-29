@@ -3093,9 +3093,60 @@ describe('terminal multiplex RPC', () => {
       expect(results).toContainEqual({
         type: 'error',
         streamId: 33,
-        message: 'terminal_stream_limit_exceeded'
+        message: 'terminal_stream_limit_exceeded',
+        active_stream_count: 32,
+        pending_pty_wait_count: 0,
+        max_stream_count: 32
       })
       expect(results).toContainEqual({ type: 'end', streamId: 33 })
+    })
+
+    harness.cleanups.get('terminal-multiplex:conn-desktop-first-paint')?.()
+    await harness.dispatchPromise
+  })
+
+  it('reports pending PTY waits when pending streams hit the multiplex slot cap', async () => {
+    const harness = startDesktopMultiplexSubscribe({
+      resolveLiveLeafForHandle: vi.fn().mockReturnValue({ ptyId: null }),
+      waitForLeafPtyId: vi.fn(
+        (_terminal, _timeout, signal) =>
+          new Promise<string>((_resolve, reject) => {
+            signal.addEventListener('abort', () => reject(new Error('aborted')), { once: true })
+          })
+      )
+    })
+    await vi.waitFor(() =>
+      expect(harness.messages.some((message) => JSON.parse(message).result?.type === 'ready')).toBe(
+        true
+      )
+    )
+    for (let streamId = 1; streamId <= 33; streamId += 1) {
+      harness.handlers.get(0)?.(
+        decodeTerminalStreamFrame(
+          encodeTerminalStreamFrame({
+            opcode: TerminalStreamOpcode.Subscribe,
+            streamId: 0,
+            seq: streamId,
+            payload: encodeTerminalStreamJson({
+              streamId,
+              terminal: `terminal-${streamId}`,
+              client: { id: 'desktop-1', type: 'desktop' },
+              capabilities: { ackOutput: 1 }
+            })
+          })
+        )!
+      )
+    }
+
+    await vi.waitFor(() => {
+      expect(harness.messages.map((message) => JSON.parse(message).result)).toContainEqual({
+        type: 'error',
+        streamId: 33,
+        message: 'terminal_stream_limit_exceeded',
+        active_stream_count: 0,
+        pending_pty_wait_count: 32,
+        max_stream_count: 32
+      })
     })
 
     harness.cleanups.get('terminal-multiplex:conn-desktop-first-paint')?.()

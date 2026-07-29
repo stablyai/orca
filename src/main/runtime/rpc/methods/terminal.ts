@@ -1550,9 +1550,13 @@ export const TERMINAL_METHODS: RpcAnyMethod[] = [
         }
         return true
       }
-      const sendStreamError = (streamId: number, message: string): void => {
+      const sendStreamError = (
+        streamId: number,
+        message: string,
+        diagnostics?: Record<string, number>
+      ): void => {
         sendFrame(streamId, TerminalStreamOpcode.Error, encodeTerminalStreamText(message))
-        emit({ type: 'error', streamId, message })
+        emit({ type: 'error', streamId, message, ...diagnostics })
       }
       const sendResizedFrame = (
         stream: TerminalMultiplexStream,
@@ -2072,7 +2076,11 @@ export const TERMINAL_METHODS: RpcAnyMethod[] = [
           streams.size + pendingPtyWaitControllers.size >=
           TERMINAL_MULTIPLEX_MAX_STREAMS_PER_CONNECTION
         ) {
-          sendStreamError(request.streamId, 'terminal_stream_limit_exceeded')
+          sendStreamError(request.streamId, 'terminal_stream_limit_exceeded', {
+            active_stream_count: streams.size,
+            pending_pty_wait_count: pendingPtyWaitControllers.size,
+            max_stream_count: TERMINAL_MULTIPLEX_MAX_STREAMS_PER_CONNECTION
+          })
           emit({ type: 'end', streamId: request.streamId })
           return
         }
