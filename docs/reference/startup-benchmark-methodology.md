@@ -54,6 +54,10 @@ The run ends with a **drift control** block. It reports the same statistics for 
 - [ ] Both arms differ only by the change under test (check `git diff --stat <baseline> -- src`).
 - [ ] The results JSON is attached to the PR; the interval can be recomputed from it.
 
+## Running it in CI
+
+`.github/workflows/startup-perf-ab.yml` runs the same comparison on a runner. It is dispatch-only on purpose: an A/B needs two refs somebody chose, so there is no daily number to trend. Give it a `baseline_ref` (usually the merge-base) and it builds both arms, runs the pairs under xvfb, and uploads the result JSON. A drifting run is reported as a workflow warning rather than a failure — the code is fine, the runner was not quiet.
+
 ## Next step
 
 The counterbalancing property is covered by `tools/benchmarks/interleaved-arm-schedule.test.mjs`, and the estimators by `tools/benchmarks/paired-shift-statistics.test.mjs`. Extend those rather than adjusting a threshold if a run looks wrong.
