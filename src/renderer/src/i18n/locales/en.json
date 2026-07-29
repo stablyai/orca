@@ -492,6 +492,15 @@
               "bf4f2a8a72": "Could not start the emulator. Check iOS or Android emulator setup and try another device."
             }
           }
+        },
+        "os": {
+          "requested": {
+            "file": {
+              "bdf34177f8": "Could not open the file: creating a workspace for its folder failed.",
+              "96019938b5": "Could not open the file.",
+              "8086cba22b": "Could not open the file: no project group was available for its folder."
+            }
+          }
         }
       },
       "orchestration": {

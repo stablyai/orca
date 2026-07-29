@@ -460,6 +460,15 @@
               "bf4f2a8a72": "无法启动模拟器。请检查 iOS 或 Android 模拟器设置，然后尝试其他设备。"
             }
           }
+        },
+        "os": {
+          "requested": {
+            "file": {
+              "bdf34177f8": "Could not open the file: creating a workspace for its folder failed.",
+              "96019938b5": "Could not open the file.",
+              "8086cba22b": "Could not open the file: no project group was available for its folder."
+            }
+          }
         }
       },
       "orchestration": {

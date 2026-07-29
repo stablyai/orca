@@ -460,6 +460,15 @@
               "bf4f2a8a72": "에뮬레이터를 시작할 수 없습니다. iOS 또는 Android 에뮬레이터 설정을 확인하고 다른 기기를 사용해 보세요."
             }
           }
+        },
+        "os": {
+          "requested": {
+            "file": {
+              "bdf34177f8": "Could not open the file: creating a workspace for its folder failed.",
+              "96019938b5": "Could not open the file.",
+              "8086cba22b": "Could not open the file: no project group was available for its folder."
+            }
+          }
         }
       },
       "orchestration": {
