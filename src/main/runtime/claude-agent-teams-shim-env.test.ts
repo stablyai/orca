@@ -13,8 +13,12 @@ function setProcessProp(key: string, value: unknown): void {
 }
 
 const roots: string[] = []
+// Why: several tests force process.platform; without restoring it the next test inherits
+// the last one's platform and the suite silently becomes order-dependent.
+const realPlatform = process.platform
 
 afterEach(async () => {
+  setProcessProp('platform', realPlatform)
   await Promise.all(roots.map((root) => rm(root, { recursive: true, force: true })))
   roots.length = 0
 })

@@ -2,7 +2,9 @@
 
 ### Requirement: A teammate pane is launched without emitting shell syntax
 
-Claude Code supplies a teammate's launch instruction as a POSIX shell string of the form `cd <dir> && env KEY=VALUE … <command>`. Orca SHALL decompose that into a working directory, environment assignments and a bare command, and supply each through its own spawn options. It SHALL NOT hand shell operators to the pane's shell, because only a POSIX shell can interpret them and a pane may be running PowerShell, cmd or a POSIX shell.
+Claude Code supplies a teammate's launch instruction as a POSIX shell string of the form `cd <dir> && env KEY=VALUE … <command>`. When an instruction matches that recognised shape, Orca SHALL decompose it into a working directory, environment assignments and a bare command, supply each through its own spawn options, and SHALL NOT hand the `&&` operator or the `env` prefix to the pane's shell — only a POSIX shell can interpret them, and a pane may be running PowerShell, cmd or a POSIX shell.
+
+The prohibition is scoped to recognised shapes. An instruction that does not match is passed through unchanged rather than rejected or rewritten, which is a deliberate fallback: Orca cannot know what an unrecognised instruction means, and guessing would break commands that work today. Such an instruction may therefore still contain shell syntax, and whether it runs depends on the pane's shell.
 
 #### Scenario: Full prefix present
 - **WHEN** the supplied instruction contains both a `cd` clause and an `env` clause
@@ -22,7 +24,7 @@ Claude Code supplies a teammate's launch instruction as a POSIX shell string of 
 
 #### Scenario: An unrecognised instruction
 - **WHEN** the instruction does not match the supported shape
-- **THEN** it is passed through unchanged, so only the shapes Claude actually emits are reinterpreted
+- **THEN** it is passed through unchanged — including any shell syntax it contains — so only the shapes Claude actually emits are reinterpreted
 
 ### Requirement: The command text survives decomposition verbatim
 

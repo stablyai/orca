@@ -22,7 +22,7 @@ The immediate cause was three deliberate `process.platform === 'win32'` guards f
 
 On macOS and Linux, Orca writes a private `tmux` script into `~/.orca/claude-agent-teams-bin/`, puts that directory first on `PATH`, and sets a **fabricated** `TMUX` value plus `TMUX_PANE`. Claude Code believes it is inside tmux and shells out to `tmux split-window`, `send-keys`, `capture-pane`. Orca intercepts every one and translates it into its own panes:
 
-```
+```text
 Claude Code  ──spawn("tmux", …)──▶  shim  ──▶  orca agent-teams-tmux  ──▶  RPC
                                                                             │
                         real Orca panes  ◀──  ClaudeAgentTeamsTmuxDispatcher
@@ -43,7 +43,7 @@ The giveaway: `tmux -V` returns the hardcoded string `tmux 3.4`. Nothing is exec
 
 Windows `CreateProcess` appends `.exe` and **never** `.cmd`. Orca's Windows shim was `tmux.cmd`, so a bare `spawn("tmux")` could not see it and instead found whatever tmux port was installed:
 
-```
+```text
 spawn("tmux", ["-V"], { shell: false })  ->  tmux 3.3.6   <- psmux wins
 spawn("tmux", ["-V"], { shell: true  })  ->  tmux 3.4     <- Orca's shim
 ```

@@ -47,9 +47,9 @@ Removing them was correct. It was also roughly a sixth of the work.
 
 **Symptom**
 
-```
+```text
 At line:100 char:43
-+ 'C:\Users\ECQ944\.local\bin\claude.exe' --agent-id arch-reviewer@sess ...
++ 'C:\Users\<username>\.local\bin\claude.exe' --agent-id arch-reviewer@sess ...
 Unexpected token 'agent-id' in expression or statement.
 The '--' operator works only on variables or on properties.
 ```
@@ -82,7 +82,7 @@ The '--' operator works only on variables or on properties.
 
 **Fix** — new `env-var-casing.ts`. Reads either casing, and writes back *under the caller's own key* — emitting `PATH` when the child already has `Path` leaves two keys with undefined precedence.
 
-```
+```text
 before:  caller sends Path  ->  PATH had  1 entry  -> ENOENT
 after :  caller sends Path  ->  Path had 60 entries -> resolves
 ```
@@ -202,7 +202,7 @@ This is the one that isn't a Windows bug, and the one that cost the most time.
 
 **How** — Orca runs PTYs in a separate long-lived daemon, materialised into a directory keyed only on the app version:
 
-```
+```text
 %LOCALAPPDATA%\Orca\daemon-host\1.4.148-rc.1\
   .materialized.json  {"version":"1.4.148-rc.1","completedAt":"2026-07-27T09:38:46.922Z", …}
 ```

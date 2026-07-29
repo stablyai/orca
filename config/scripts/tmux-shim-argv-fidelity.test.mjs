@@ -184,7 +184,8 @@ describe('windows tmux shim', () => {
       withTempRoots(1, (root) => {
         const marker = join(root, 'batch-received.txt')
         const batchPath = join(root, 'shim-bin.cmd')
-        writeFileSync(batchPath, `@echo off\r\n>"${marker}" echo %1 %2\r\n`, 'utf8')
+        // %~1 strips the quoting the cmd branch adds, matching how orca.cmd reads its own argv.
+        writeFileSync(batchPath, `@echo off\r\n>"${marker}" echo %~1 %~2\r\n`, 'utf8')
 
         const result = spawnSync(shim, ['list-panes'], {
           env: { ...process.env, ORCA_AGENT_TEAMS_SHIM_BIN: batchPath },
@@ -194,6 +195,60 @@ describe('windows tmux shim', () => {
         expect(result.status, result.stderr).toBe(0)
         expect(existsSync(marker), 'batch shim bin was never invoked').toBe(true)
         expect(readFileSync(marker, 'utf8').trim()).toBe('agent-teams-tmux list-panes')
+      })
+    })
+
+    itWindows('an embedded quote cannot start a new command on the batch path', () => {
+      // Regression: cmd.exe ignores CRT's \" escape, so a quote used to close cmd's quoted
+      // region and leave the following & | > as operators (BatBadBut / CVE-2024-24576).
+      const shim = requireShim()
+      withTempRoots(1, (root) => {
+        const recorder = buildStub(root, 'recorder', RECORDER_SOURCE)
+        const injected = join(root, 'injected.txt')
+        const batchPath = join(root, 'shim-bin.cmd')
+        writeFileSync(batchPath, `@echo off\r\n"${recorder}" %*\r\n`, 'utf8')
+
+        const hostile = [
+          `a"&echo owned>"${injected}`,
+          'quote"inside&other',
+          'plain&meta|pipe>redir',
+          'caret^here',
+          'trailing\\backslash',
+          '#{pane_id}|#{session_name}'
+        ]
+
+        const result = spawnSync(shim, ['send-keys', '-t', '%1', ...hostile], {
+          env: { ...process.env, ORCA_AGENT_TEAMS_SHIM_BIN: batchPath },
+          encoding: 'utf8'
+        })
+
+        expect(existsSync(injected), 'argument broke out and ran a second command').toBe(false)
+        expect(result.status, result.stderr).toBe(0)
+        expect(readReceived(recorder)).toEqual([
+          'agent-teams-tmux',
+          'send-keys',
+          '-t',
+          '%1',
+          ...hostile
+        ])
+      })
+    })
+
+    itWindows('refuses a line break on the batch path instead of splitting the command', () => {
+      // cmd ends the command at a newline and no quoting suppresses it, so the only safe
+      // answer is to refuse. Direct .exe targets forward line breaks fine.
+      const shim = requireShim()
+      withTempRoots(1, (root) => {
+        const batchPath = join(root, 'shim-bin.cmd')
+        writeFileSync(batchPath, '@echo off\r\nexit /b 0\r\n', 'utf8')
+
+        const result = spawnSync(shim, ['send-keys', '-t', '%1', 'first\r\nsecond'], {
+          env: { ...process.env, ORCA_AGENT_TEAMS_SHIM_BIN: batchPath },
+          encoding: 'utf8'
+        })
+
+        expect(result.status).toBe(1)
+        expect(result.stderr).toContain('line breaks')
       })
     })
   })

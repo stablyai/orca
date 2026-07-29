@@ -14,10 +14,15 @@ if (process.platform !== 'win32') {
 
 const repoRoot = resolve(import.meta.dirname, '../..')
 const target = readArg('--target') ?? 'orca'
-const outputPath = readArg('--output') ?? defaultOutputPath(repoRoot, target)
 // Why: --source compiles an arbitrary file instead of a named target, so tests can build a
 // throwaway stub without --target silently rebuilding the launcher against the stub's name.
 const explicitSource = readArg('--source')
+const explicitOutput = readArg('--output')
+// Why: without --output a stub would compile straight over the real orca.exe/tmux.exe.
+if (explicitSource && !explicitOutput) {
+  throw new Error('--source requires --output to avoid overwriting the target build output.')
+}
+const outputPath = explicitOutput ?? defaultOutputPath(repoRoot, target)
 const sourceFiles = explicitSource
   ? [resolve(explicitSource)]
   : sourceFilesForTarget(target, repoRoot)

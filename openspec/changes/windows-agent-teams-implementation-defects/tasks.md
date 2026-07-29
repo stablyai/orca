@@ -70,7 +70,8 @@ Files: `config/packaged-runtime-node-modules.cjs`.
 - [x] 8.4 Confirm detection reports the agent.
 - [x] 8.5 Confirm the dispatcher drives real panes end to end.
 - [ ] 8.6 Confirm a visible, interactive Claude TUI via the UI launch path. **Not yet done** — this is the fix from 5.3 and the reason the change is not complete.
-- [ ] 8.7 Confirm a teammate opens as its own Orca pane. **Blocked** — Claude Code 2.1.220 exposes no tool or slash command to create a teammate; every attempt yields a subagent. If this cannot be triggered, the remaining question is upstream.
+- [x] 8.7 Confirm Claude invokes the shim and a teammate pane is created. Observed indirectly but conclusively: the PowerShell parse errors behind defects 13, 14 and 15 came from Claude's own teammate commands running inside shim-created panes.
+- [ ] 8.8 Confirm the created teammate pane renders a working, interactive TUI. **Not yet done** — the fixes for 13/14/15 never reached the running daemon, so the outcome after them is unobserved. This is the outcome the change exists for.
 
 ## 9. Follow-ups not in this change
 

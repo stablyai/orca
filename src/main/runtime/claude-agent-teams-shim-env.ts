@@ -21,6 +21,14 @@ import {
 import { readEnvVar } from '../../shared/env-var-casing'
 import { getOrcaCliCommandNameForPlatform } from '../../shared/orca-cli-command-name'
 
+// Why: pid alone repeats across concurrent teammate launches and Date.now() is millisecond-resolution,
+// so two calls could pick the same tmp name and corrupt the shim mid-copy.
+let tmpSequence = 0
+function tmpPathFor(targetPath: string): string {
+  tmpSequence += 1
+  return `${targetPath}.${process.pid}.${tmpSequence}.tmp`
+}
+
 export type ClaudeAgentTeamsLaunchPlan = {
   command: string
   env: Record<string, string>
@@ -161,7 +169,7 @@ async function writeIfChanged(path: string, content: string): Promise<void> {
     // rewrite below
   }
   await mkdir(dirname(path), { recursive: true })
-  const tmp = `${path}.${process.pid}.${Date.now()}.tmp`
+  const tmp = tmpPathFor(path)
   let renamed = false
   try {
     await writeFile(tmp, content, 'utf8')
@@ -194,7 +202,7 @@ async function copyIfChanged(sourcePath: string, targetPath: string): Promise<bo
     // Target missing — copy below
   }
   await mkdir(dirname(targetPath), { recursive: true })
-  const tmp = `${targetPath}.${process.pid}.${Date.now()}.tmp`
+  const tmp = tmpPathFor(targetPath)
   let renamed = false
   try {
     await copyFile(sourcePath, tmp)

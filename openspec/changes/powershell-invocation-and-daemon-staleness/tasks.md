@@ -1,3 +1,9 @@
+> **Status: not verified end to end.** Tasks 2.8 and 2.9 are open — the refreshed daemon was never
+> relaunched and no teammate pane has been observed working. Unit tests and artifact inspection show
+> only that the build *can* behave correctly; they say nothing about the running PTY materialisation
+> path, which is precisely what masked this defect for three cycles. Treat the invocation fix as
+> unproven until a clean-daemon run succeeds.
+
 ## 1. Make a relayed startup command invocable under PowerShell
 
 Files: `src/main/providers/windows-shell-args.ts`, `src/main/providers/windows-shell-args.test.ts`.
@@ -29,7 +35,7 @@ Files: `src/main/daemon/daemon-host-relocation.ts` *(unchanged)*.
 
 - [ ] 3.1 Key materialisation on a content hash of the daemon sources, or add a build identifier to the marker, so two builds sharing a version are distinguished.
 - [ ] 3.2 Make a failed refresh observable instead of fail-open — the current catch makes "could not update" indistinguishable from "already current".
-- [ ] 3.3 Document a supported force-refresh path for local development until the above lands.
+- [x] 3.3 Document a supported force-refresh path for local development until the above lands. See the Deployment section of `proposal.md` for the exact marker path, the ordered commands, and why each single-step remedy fails.
 - [ ] 3.4 Consider upstreaming: the defect is not Windows-specific and not caused by the agent-teams work.
 
 ## 4. Follow-ups not in this change

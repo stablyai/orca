@@ -4,7 +4,7 @@ Orca impersonates tmux for Claude Agent Teams. Claude's pane backend calls `spli
 
 That string is POSIX shell:
 
-```
+```sh
 cd '<dir>' && env CLAUDECODE=1 CLAUDE_… claude --agent-id … --teammate-mode auto
 ```
 

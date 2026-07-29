@@ -35,15 +35,17 @@ internal static class OrcaTmuxShim
     private static ProcessStartInfo BuildStartInfo(string shimBin, string[] args)
     {
         // Why: CreateProcess cannot execute a batch file, and the shim bin is orca.cmd or
-        // orca-dev.cmd on the dev path, so batch targets have to go through cmd.exe. Each
-        // argument is quoted so cmd cannot read & | < > as operators; %VAR% still expands
-        // there, which is why the packaged path resolves to orca.exe and runs direct.
+        // orca-dev.cmd on the dev path, so batch targets have to go through cmd.exe. cmd parses
+        // the string itself, so it needs QuoteForCmd rather than the CRT quoting a direct .exe
+        // wants; %VAR% still expands there, which is why the packaged path resolves to orca.exe.
         if (IsBatchFile(shimBin))
         {
+            string[] batchArgs = Prepend(Subcommand, args);
+            RejectLineBreaks(batchArgs);
             return new ProcessStartInfo
             {
                 FileName = "cmd.exe",
-                Arguments = "/s /c \"" + WindowsCommandLine.Join(shimBin, Prepend(Subcommand, args)) + "\"",
+                Arguments = "/s /c \"" + WindowsCommandLine.Join(shimBin, batchArgs, true) + "\"",
                 UseShellExecute = false
             };
         }
@@ -56,6 +58,20 @@ internal static class OrcaTmuxShim
             Arguments = WindowsCommandLine.Join(Subcommand, args),
             UseShellExecute = false
         };
+    }
+
+    // Why: cmd ends the command at a line break and no quoting suppresses that, so a multi-line
+    // send-keys payload would run its tail as a separate command. Direct .exe targets are unaffected.
+    private static void RejectLineBreaks(string[] args)
+    {
+        foreach (string arg in args)
+        {
+            if (arg.IndexOf('\r') >= 0 || arg.IndexOf('\n') >= 0)
+            {
+                throw new ArgumentException(
+                    "arguments containing line breaks cannot be forwarded through a batch shim bin");
+            }
+        }
     }
 
     private static bool IsBatchFile(string path)

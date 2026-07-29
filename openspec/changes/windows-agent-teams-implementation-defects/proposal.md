@@ -59,4 +59,4 @@ The same PATH-casing pattern exists in `terminal-attribution.ts` and `pty.ts:971
 
 **Still unproven**
 
-Claude Code 2.1.220 exposes no tool or slash command to create a teammate, so a teammate opening as its own Orca pane has never been observed. Orca's half of the pipeline is verified end to end; the trigger is unreachable in this configuration.
+A teammate pane rendering a working, interactive TUI has never been observed. The trigger itself is not the obstacle: Claude invokes the shim and panes are created — the PowerShell failures recorded as defects 13, 14 and 15 were Claude's own teammate commands running inside those panes. What is unproven is the outcome after those fixes, which the daemon-staleness defect prevented from ever deploying.

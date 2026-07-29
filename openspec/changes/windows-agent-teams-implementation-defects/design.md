@@ -61,7 +61,7 @@ Evidence classes per `CLAUDE.md` §5.
 
 ## Risks / Trade-offs
 
-**The trigger may not exist.** Claude Code 2.1.220 exposes no tool and no slash command to create a teammate; every attempt produced a subagent, which is a different feature. Claude reports the vocabulary exists in its harness while no creation tool is exposed to it. So Orca's half is proven and the upstream half is unreachable in this configuration. If teammates never appear with everything here fixed, the remaining question is upstream — and none of these fixes are wasted, since each was a genuine defect on the path.
+**The trigger works; the rendered teammate is what remains unverified.** An earlier draft of this section concluded the trigger did not exist, because every deliberate attempt produced a subagent instead. That was wrong, and the evidence arrived from an unexpected direction: the PowerShell parse errors behind defects 13, 14 and 15 were Claude's *own* teammate commands failing inside panes the shim had already created. Claude does invoke the shim and panes are created. What has still never been seen is a teammate pane that renders a working, interactive TUI — the last defect in the chain blocked deployment of its own fix. The open question is therefore Orca-side and observational, not upstream.
 
 **The TTY fix is inferred, not observed.** The measurement is solid — `stdin.isTTY` false under Electron-as-node, true under node, in the same pane — and direct launches rendered their TUI every time. But "changing the launch command makes the TUI appear" has not been watched end to end through the UI. That is the first thing to confirm.
 

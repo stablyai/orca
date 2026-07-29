@@ -52,13 +52,27 @@ On Windows the agent SHALL be launched such that its standard input is a TTY. Th
 
 The compiled `tmux.exe` shim SHALL invoke the Orca CLI with the `agent-teams-tmux` subcommand as the first argument, followed by its own arguments byte-for-byte, and SHALL NOT include its target's program name among those arguments. It SHALL NOT emit any response of its own; `tmux -V` is answered by the dispatcher.
 
+Byte-for-byte fidelity is guaranteed for a **direct executable target**, which is what the packaged path resolves to. A **batch target** (`orca.cmd`, `orca-dev.cmd` — the dev path) must go through `cmd.exe`, which parses the command line a second time, so fidelity there is best-effort with two stated limits: `%VAR%` is expanded by cmd and cannot be suppressed, and an argument containing a line break is refused outright because cmd ends the command at a newline and no quoting prevents it. Everything else — including `&`, `|`, `<`, `>`, `^`, `(`, `)`, embedded quotes and spaces — SHALL arrive unchanged on both paths.
+
 #### Scenario: Subcommand dispatch
 - **WHEN** the shim is invoked with any tmux arguments
 - **THEN** the CLI receives `agent-teams-tmux` as its first argument and dispatches to the tmux compatibility handler
 
-#### Scenario: Arguments containing shell metacharacters
-- **WHEN** the shim is invoked with arguments containing `&`, `|`, `>`, `^`, `%`, quotes or embedded spaces
+#### Scenario: Arguments containing shell metacharacters, direct executable target
+- **WHEN** the shim is invoked against an `.exe` target with arguments containing `&`, `|`, `>`, `^`, `%`, quotes or embedded spaces
 - **THEN** each argument arrives unchanged and none is interpreted as a shell operator
+
+#### Scenario: An embedded quote cannot start a new command on the batch path
+- **WHEN** the shim is invoked against a `.cmd` target with an argument containing a double quote followed by `&` and a further command
+- **THEN** the quote arrives as a literal character, no second command runs, and the argument list is unchanged — CRT-style `\"` escaping is not sufficient here because `cmd.exe` does not honour it (BatBadBut, CVE-2024-24576)
+
+#### Scenario: A line break is refused on the batch path
+- **WHEN** the shim is invoked against a `.cmd` target with an argument containing a carriage return or newline
+- **THEN** the shim exits non-zero with a message naming line breaks, rather than letting `cmd.exe` execute the remainder as a separate command
+
+#### Scenario: Percent expansion on the batch path
+- **WHEN** the shim is invoked against a `.cmd` target with an argument containing `%VAR%`
+- **THEN** `cmd.exe` may expand it; this is an accepted limit of batch targets and the reason the packaged path resolves to `orca.exe` and runs it directly
 
 #### Scenario: No fabricated version response
 - **WHEN** the shim forwards any command

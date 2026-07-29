@@ -4,7 +4,7 @@ Two defects, causally linked. The second is the more consequential and is not Wi
 
 **A teammate command beginning with a quoted executable path never runs on Windows.** After the teammate-command decomposition removed the POSIX `cd … && env …` wrapper, the pane received a bare `'C:\…\claude.exe' --agent-id …`. On Windows that text is appended to an OSC 133 bootstrap and delivered via `-EncodedCommand`, so it is evaluated as PowerShell source — and PowerShell parses a leading quoted token as a string literal, then fails on the following `--`:
 
-```
+```text
 Unexpected token 'agent-id' in expression or statement.
 The '--' operator works only on variables or on properties.
 ```
@@ -42,7 +42,23 @@ That masking is why the first defect took three attempts to land, and it will si
 
 **Deployment**
 
-Any daemon-side change is invisible across same-version rebuilds. Until materialisation is content-aware, local Windows development needs an explicit refresh: stop the daemon, remove the marker, relaunch. Reinstalling is not sufficient, and neither is killing the daemon on its own.
+Any daemon-side change is invisible across same-version rebuilds. Reinstalling is not sufficient — the marker still matches — and neither is killing the daemon on its own, because the surviving marker short-circuits the re-copy on the next launch. Deleting the whole directory fails too: the running `.exe` is locked, `rmSync` throws, and the error is swallowed.
+
+Until materialisation is content-aware, local Windows development needs all three steps, in this order:
+
+```powershell
+# 1. Stop the app and the daemon; the marker is only consulted at launch.
+Get-Process Orca, orca-terminal-daemon -ErrorAction SilentlyContinue | Stop-Process -Force
+# 2. Remove the marker for the version being rebuilt (keep a copy — it is the only record of what was staged).
+$marker = "$env:LOCALAPPDATA\Orca\daemon-host\<version>\.materialized.json"
+Copy-Item $marker "$env:TEMP\orca-materialized-backup.json" -Force
+Remove-Item $marker -Force
+# 3. Relaunch Orca. readMarker() returns null, so the host is re-copied from the installed app.
+```
+
+`<version>` is the app version the build carries (`app.getVersion()`); each version gets its own sibling directory under `daemon-host\`. Removing the marker rather than the directory is what makes this work — the locked executable stays put and is overwritten by the staging rename.
+
+Verify the refresh actually happened before concluding anything about a daemon-side fix: compare the mtime of the chunk under `daemon-host\<version>\` against the installed copy. An artifact check on the installer or the app directory proves only that the build is *capable* of the behaviour, not that the running daemon has it.
 
 **Not addressed**
 

@@ -2,7 +2,7 @@
 
 Claude Code hands Orca's tmux shim a POSIX shell string for every teammate pane:
 
-```
+```sh
 cd '<dir>' && env CLAUDECODE=1 CLAUDE_… claude --agent-id … --teammate-mode auto
 ```
 
