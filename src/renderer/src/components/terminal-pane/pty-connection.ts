@@ -294,9 +294,13 @@ import {
   registerTerminalSideEffectFactConsumer
 } from './terminal-side-effect-facts-handler'
 import { isRendererHiddenPtyDeliveryGateEnabled } from './terminal-hidden-delivery-gate'
+import type { DirectSshPaneRetryAttempt } from '@/store/slices/direct-ssh-terminal-recovery'
+import { directSshAuthoritiesEqual } from '@/store/slices/direct-ssh-terminal-authority-ledger'
 
 const pendingSpawnByPaneKey = new Map<string, Promise<string | null>>()
 const SSH_SESSION_EXPIRED_ERROR = 'SSH_SESSION_EXPIRED'
+// Why: relay requests expire at 30s; leave one second for their fallback before re-arming locally.
+const DIRECT_SSH_PANE_RETRY_SETTLEMENT_TIMEOUT_MS = 31_000
 const REMOTE_PTY_ID_PREFIX = 'remote:'
 const PTY_CONNECT_DIAG_LIMIT = 200
 const COMMAND_CODE_OUTPUT_DONE_SETTLE_MS = 1500
@@ -1262,7 +1266,6 @@ export function connectPanePty(
   const clearRegisteredStartupLaunchConfig = (): void => {
     useAppStore.getState().clearAgentLaunchConfig(cacheKey)
   }
-  const pendingSpawnKey = cacheKey
   const neutralTerminalTitle = (): string => {
     const state = useAppStore.getState()
     const tab = (state.tabsByWorktree[deps.worktreeId] ?? []).find(
@@ -2839,8 +2842,18 @@ export function connectPanePty(
     deps.syncPanePtyLayoutBinding(pane.id, ptyId)
     notifyCodexPaneBoundForStaleSweep(ptyId)
     const tabPtyIds = useAppStore.getState().ptyIdsByTabId?.[deps.tabId] ?? []
-    if (options.updateTabPtyId !== 'if-missing' || !tabPtyIds.includes(ptyId)) {
-      if (options.replacePtyId) {
+    const directSshRetryAttemptId =
+      capturedDirectSshRetryPtyAccepted && directSshRetryAttempt
+        ? directSshRetryAttempt.attemptId
+        : undefined
+    if (
+      directSshRetryAttemptId ||
+      options.updateTabPtyId !== 'if-missing' ||
+      !tabPtyIds.includes(ptyId)
+    ) {
+      if (directSshRetryAttemptId) {
+        deps.updateTabPtyId(deps.tabId, ptyId, options.replacePtyId, directSshRetryAttemptId)
+      } else if (options.replacePtyId) {
         deps.updateTabPtyId(deps.tabId, ptyId, options.replacePtyId)
       } else {
         deps.updateTabPtyId(deps.tabId, ptyId)
@@ -2876,6 +2889,15 @@ export function connectPanePty(
   }
 
   const onPtySpawn = (ptyId: string): void => {
+    if (!claimCapturedDirectSshRetryPty(ptyId)) {
+      // Why: this callback proves a fresh process was created, so rejecting its obsolete lease must also retire it.
+      queueMicrotask(() => {
+        if (transport.getPtyId() === ptyId) {
+          transport.disconnect()
+        }
+      })
+      return
+    }
     // Why: record that this exact PTY was freshly spawned (not reattached), so a
     // newborn shell that dies before any interaction (e.g. failing direnv on a
     // just-created worktree) can be kept visible rather than tearing down the
@@ -2886,6 +2908,9 @@ export function connectPanePty(
     bindActivePanePty(ptyId, { seedInitialAgentStatus: true })
   }
   const onPtyRebind = (ptyId: string, replacedPtyId: string): void => {
+    if (!canAdoptCapturedDirectSshRetryPty(ptyId)) {
+      return
+    }
     // Why: provider handle rotation keeps the existing pane/session generation;
     // replace its stale store identity without fresh-spawn exit semantics.
     bindActivePanePty(ptyId, { replacePtyId: replacedPtyId })
@@ -3274,6 +3299,126 @@ export function connectPanePty(
     !terminalOwnerUnresolved && !connectionOwnerHydrating && runtimeEnvironmentId === null
       ? (worktreeConnectionId ?? null)
       : null
+  type DirectSshRetryLease = Pick<
+    DirectSshPaneRetryAttempt,
+    'attemptId' | 'authority' | 'tabGeneration'
+  >
+  const directSshRetryAttempt: DirectSshRetryLease | undefined = (() => {
+    const pendingAttempt = state.directSshPaneRetryByTabId?.[deps.tabId]
+    const liveBinding = state.directSshLivePtyBindingByTabId?.[deps.tabId]
+    const attempt =
+      pendingAttempt?.authority.targetId === connectionId &&
+      pendingAttempt.tabGeneration === (tab?.generation ?? 0)
+        ? pendingAttempt
+        : liveBinding?.authority.targetId === connectionId &&
+            liveBinding.tabGeneration === (tab?.generation ?? 0)
+          ? liveBinding
+          : undefined
+    return attempt
+  })()
+  const pendingSpawnKey = directSshRetryAttempt
+    ? JSON.stringify([cacheKey, directSshRetryAttempt.attemptId])
+    : cacheKey
+  let capturedDirectSshRetryPtyAccepted = false
+  let directSshPaneRetrySettlementCancelled = false
+  const directSshPaneRetrySettlementTimers = new Set<ReturnType<typeof setTimeout>>()
+  const directSshPaneRetryTimedPromises = new WeakSet<object>()
+  const capturedDirectSshRetryLeaseMatches = (): boolean => {
+    if (!directSshRetryAttempt) {
+      return true
+    }
+    const currentState = useAppStore.getState()
+    const currentConnection = currentState.sshConnectionStates.get(
+      directSshRetryAttempt.authority.targetId
+    )
+    const currentTab = (currentState.tabsByWorktree[deps.worktreeId] ?? []).find(
+      (candidate) => candidate.id === deps.tabId
+    )
+    if (
+      currentConnection?.providerEpoch !== directSshRetryAttempt.authority.providerEpoch ||
+      currentConnection.connectionGeneration !==
+        directSshRetryAttempt.authority.connectionGeneration ||
+      (currentTab?.generation ?? 0) !== directSshRetryAttempt.tabGeneration
+    ) {
+      return false
+    }
+    const pendingAttempt = currentState.directSshPaneRetryByTabId?.[deps.tabId]
+    const pendingMatches =
+      pendingAttempt?.attemptId === directSshRetryAttempt.attemptId &&
+      directSshAuthoritiesEqual(pendingAttempt.authority, directSshRetryAttempt.authority) &&
+      pendingAttempt.tabGeneration === directSshRetryAttempt.tabGeneration
+    const liveBinding = currentState.directSshLivePtyBindingByTabId?.[deps.tabId]
+    const liveBindingMatchesAttempt =
+      liveBinding?.attemptId === directSshRetryAttempt.attemptId &&
+      directSshAuthoritiesEqual(liveBinding.authority, directSshRetryAttempt.authority) &&
+      liveBinding.tabGeneration === directSshRetryAttempt.tabGeneration
+    return pendingMatches || liveBindingMatchesAttempt
+  }
+  const capturedDirectSshRetryStateMatches = (ptyId: string): boolean => {
+    if (!directSshRetryAttempt) {
+      return true
+    }
+    const currentConnection = useAppStore
+      .getState()
+      .sshConnectionStates.get(directSshRetryAttempt.authority.targetId)
+    return (
+      parseAppSshPtyId(ptyId)?.connectionId === directSshRetryAttempt.authority.targetId &&
+      currentConnection?.status === 'connected' &&
+      capturedDirectSshRetryLeaseMatches()
+    )
+  }
+  const claimCapturedDirectSshRetryPty = (ptyId: string): boolean => {
+    if (!capturedDirectSshRetryStateMatches(ptyId)) {
+      return false
+    }
+    capturedDirectSshRetryPtyAccepted = directSshRetryAttempt !== undefined
+    return true
+  }
+  const canAdoptCapturedDirectSshRetryPty = (ptyId: string): boolean => {
+    const canAdopt = capturedDirectSshRetryStateMatches(ptyId)
+    if (canAdopt && directSshRetryAttempt) {
+      capturedDirectSshRetryPtyAccepted = true
+    }
+    return canAdopt
+  }
+  const settleDirectSshPaneRetryAttempt = (
+    attempt: DirectSshRetryLease | undefined,
+    status: 'failed' | 'timed-out'
+  ): void => {
+    if (!attempt) {
+      return
+    }
+    useAppStore.getState().settleDirectSshPaneRetry?.({
+      status,
+      tabId: deps.tabId,
+      attemptId: attempt.attemptId,
+      authority: attempt.authority,
+      tabGeneration: attempt.tabGeneration
+    })
+  }
+  const armDirectSshPaneRetryTimeout = (
+    promise: Promise<unknown>,
+    attempt: DirectSshRetryLease | undefined
+  ): void => {
+    if (!attempt || disposed || directSshPaneRetryTimedPromises.has(promise)) {
+      return
+    }
+    directSshPaneRetryTimedPromises.add(promise)
+    const timer = setTimeout(() => {
+      directSshPaneRetrySettlementTimers.delete(timer)
+      if (directSshPaneRetrySettlementCancelled) {
+        return
+      }
+      settleDirectSshPaneRetryAttempt(attempt, 'timed-out')
+    }, DIRECT_SSH_PANE_RETRY_SETTLEMENT_TIMEOUT_MS)
+    directSshPaneRetrySettlementTimers.add(timer)
+    void promise
+      .finally(() => {
+        directSshPaneRetrySettlementTimers.delete(timer)
+        clearTimeout(timer)
+      })
+      .catch(() => {})
+  }
   const shellOverride = tab?.shellOverride
   // Why: a serve/remote-runtime pane has no SSH connectionId and a Linux cwd, so
   // the native-Windows ConPTY heuristic misfires on a Windows client and wrongly
@@ -4911,6 +5056,9 @@ export function connectPanePty(
               : typeof spawnedPtyId === 'string'
                 ? spawnedPtyId
                 : transport.getPtyId()
+          if (resolvedPtyId && !claimCapturedDirectSshRetryPty(resolvedPtyId)) {
+            return null
+          }
           if (spawnedPtyId && typeof spawnedPtyId === 'object' && 'id' in spawnedPtyId) {
             registerEffectiveLaunchConfig(spawnedPtyId.launchConfig, {
               ...(coldRestoreOverride ? { launchToken: coldRestoreOverride.launchToken } : {}),
@@ -4997,6 +5145,18 @@ export function connectPanePty(
             pendingSpawnByPaneKey.delete(pendingSpawnKey)
           }
         })
+      armDirectSshPaneRetryTimeout(trackedPromise, directSshRetryAttempt)
+      void trackedPromise.then((spawnedPtyId) => {
+        if (spawnedPtyId) {
+          return
+        }
+        queueMicrotask(() => {
+          if (disposed || transport.getPtyId() || pendingSpawnByPaneKey.has(pendingSpawnKey)) {
+            return
+          }
+          settleDirectSshPaneRetryAttempt(directSshRetryAttempt, 'failed')
+        })
+      })
       // Why: split panes in the same tab can spawn concurrently. Key by pane
       // as well as tab so a remount cannot attach to a sibling setup pane's PTY.
       pendingSpawnByPaneKey.set(pendingSpawnKey, trackedPromise)
@@ -7319,6 +7479,16 @@ export function connectPanePty(
       }
     }
 
+    const isCapturedDirectSshReattachCurrent = (ptyId: string): boolean =>
+      !directSshRetryAttempt || capturedDirectSshRetryStateMatches(ptyId)
+    const rejectObsoleteDirectSshReattach = (ptyId: string | null | undefined): boolean => {
+      if (!directSshRetryAttempt || (ptyId && claimCapturedDirectSshRetryPty(ptyId))) {
+        return false
+      }
+      transport.detach?.({ preserveExitObserver: false })
+      return true
+    }
+
     const handleReattachResult = async (
       result: PtyConnectResult | string | void,
       staleSessionId?: string | null,
@@ -7339,6 +7509,13 @@ export function connectPanePty(
         return true
       }
 
+      const retryPtyId =
+        connectResult?.id ??
+        (typeof result === 'string' ? result : (staleSessionId ?? transport.getPtyId()))
+      if (rejectObsoleteDirectSshReattach(retryPtyId)) {
+        // Why: an obsolete reattach must stop consuming frames without killing the durable PTY a newer lease may adopt.
+        return false
+      }
       const ptyId =
         connectResult?.id ?? (typeof result === 'string' ? result : transport.getPtyId())
       if (!ptyId) {
@@ -7425,7 +7602,11 @@ export function connectPanePty(
       syncHiddenRendererPtyDelivery()
       deps.syncPanePtyLayoutBinding(pane.id, ptyId)
       notifyCodexPaneBoundForStaleSweep(ptyId)
-      deps.updateTabPtyId(deps.tabId, ptyId)
+      if (capturedDirectSshRetryPtyAccepted && directSshRetryAttempt) {
+        deps.updateTabPtyId(deps.tabId, ptyId, undefined, directSshRetryAttempt.attemptId)
+      } else {
+        deps.updateTabPtyId(deps.tabId, ptyId)
+      }
       agentCompletionCoordinator.startProcessTracking()
       sampleVisiblePaneForegroundAgent()
 
@@ -7678,7 +7859,7 @@ export function connectPanePty(
             console.warn('[pty-connection] needsPassphrasePrompt probe failed:', err)
             // Why: on probe failure fall through to auto-connect rather than stranding the tab — a stuck tab is worse than a surprising prompt.
           }
-          if (disposed) {
+          if (disposed || !capturedDirectSshRetryLeaseMatches()) {
             return
           }
           if (needsPrompt) {
@@ -7743,7 +7924,7 @@ export function connectPanePty(
                   finish(currentOutcome)
                 }
               })
-              if (disposed) {
+              if (disposed || !capturedDirectSshRetryLeaseMatches()) {
                 return
               }
               if (outcome === 'cancelled') {
@@ -7758,11 +7939,11 @@ export function connectPanePty(
 
           // Why: wait for the shared SSH connection (multiple panes/tabs may need it) before PTY reattach, rather than returning early when it's in-flight.
           const connectResult = await waitForSshConnection(connectionId)
-          if (!connectResult.connected) {
-            reportError(`SSH connection failed: ${connectResult.error}`)
+          if (disposed || !capturedDirectSshRetryLeaseMatches()) {
             return
           }
-          if (disposed) {
+          if (!connectResult.connected) {
+            reportError(`SSH connection failed: ${connectResult.error}`)
             return
           }
           useAppStore.getState().removeDeferredSshReconnectTarget(connectionId)
@@ -7790,6 +7971,9 @@ export function connectPanePty(
                 expiredReattachError = true
                 return
               }
+              if (!isCapturedDirectSshReattachCurrent(pendingSessionId)) {
+                return
+              }
               reportError(message)
             })
             beginReattachLiveDataDeferral(outputCallbacks.generation)
@@ -7814,6 +7998,7 @@ export function connectPanePty(
                 : {}),
               ...(coldRestoreStartup?.agent ? { launchAgent: coldRestoreStartup.agent } : {}),
               ...(shouldDeclareHiddenAtSpawn() ? { initiallyHidden: true } : {}),
+              ...(directSshRetryAttempt ? { admitPtyId: claimCapturedDirectSshRetryPty } : {}),
               callbacks: outputCallbacks.callbacks
             })
             void Promise.resolve(reattachPromise)
@@ -7821,7 +8006,7 @@ export function connectPanePty(
               .finally(() => {
                 transportConnectInFlightSince = null
               })
-            void Promise.resolve(reattachPromise)
+            const trackedReattachPromise = Promise.resolve(reattachPromise)
               .then(async (result) => {
                 if (outputCallbacks.generation !== transportStreamGeneration) {
                   finishReattachLiveDataDeferral(false, outputCallbacks.generation)
@@ -7847,6 +8032,9 @@ export function connectPanePty(
                     void window.api.pty.clearPendingPaneSerializer(cacheKey, gen).catch(() => {})
                   }
                   if (disposed) {
+                    return
+                  }
+                  if (rejectObsoleteDirectSshReattach(pendingSessionId)) {
                     return
                   }
                   deps.clearExitedPanePtyLayoutBinding(pane.id, pendingSessionId)
@@ -7892,6 +8080,9 @@ export function connectPanePty(
                 if (disposed || outputCallbacks.generation !== transportStreamGeneration) {
                   return
                 }
+                if (rejectObsoleteDirectSshReattach(pendingSessionId)) {
+                  return
+                }
                 if (isSshSessionExpiredError(err)) {
                   deps.clearExitedPanePtyLayoutBinding(pane.id, pendingSessionId)
                   deps.clearTabPtyId(deps.tabId, pendingSessionId)
@@ -7904,6 +8095,7 @@ export function connectPanePty(
                   forceBlankRestoredViewport: true
                 })
               })
+            armDirectSshPaneRetryTimeout(trackedReattachPromise, directSshRetryAttempt)
           } else {
             startFreshColdRestoreAgentResume()
           }
@@ -8013,6 +8205,9 @@ export function connectPanePty(
           expiredReattachError = true
           return
         }
+        if (!isCapturedDirectSshReattachCurrent(deferredReattachSessionId)) {
+          return
+        }
         reportError(message)
       })
       beginReattachLiveDataDeferral(outputCallbacks.generation)
@@ -8035,6 +8230,7 @@ export function connectPanePty(
         ...(coldRestoreStartup?.launchToken ? { launchToken: coldRestoreStartup.launchToken } : {}),
         ...(coldRestoreStartup?.agent ? { launchAgent: coldRestoreStartup.agent } : {}),
         ...(shouldDeclareHiddenAtSpawn() ? { initiallyHidden: true } : {}),
+        ...(directSshRetryAttempt ? { admitPtyId: claimCapturedDirectSshRetryPty } : {}),
         callbacks: outputCallbacks.callbacks
       })
 
@@ -8043,7 +8239,7 @@ export function connectPanePty(
         .finally(() => {
           transportConnectInFlightSince = null
         })
-      void Promise.resolve(reattachPromise)
+      const trackedReattachPromise = Promise.resolve(reattachPromise)
         .then(async (result) => {
           if (outputCallbacks.generation !== transportStreamGeneration) {
             finishReattachLiveDataDeferral(false, outputCallbacks.generation)
@@ -8060,6 +8256,9 @@ export function connectPanePty(
               void window.api.pty.clearPendingPaneSerializer(cacheKey, gen).catch(() => {})
             }
             if (disposed) {
+              return
+            }
+            if (rejectObsoleteDirectSshReattach(deferredReattachSessionId)) {
               return
             }
             deps.clearExitedPanePtyLayoutBinding(pane.id, deferredReattachSessionId)
@@ -8105,6 +8304,9 @@ export function connectPanePty(
           if (outputCallbacks.generation !== transportStreamGeneration) {
             return
           }
+          if (rejectObsoleteDirectSshReattach(deferredReattachSessionId)) {
+            return
+          }
           warnTerminalLifecycleAnomaly('restored PTY reattach threw', {
             tabId: deps.tabId,
             worktreeId: deps.worktreeId,
@@ -8126,6 +8328,7 @@ export function connectPanePty(
             forceBlankRestoredViewport: true
           })
         })
+      armDirectSshPaneRetryTimeout(trackedReattachPromise, directSshRetryAttempt)
     } else if (detachedRemoteLeafPtyId || detachedLivePtyId || eagerLivePtyId) {
       // Why: mirrored web-leaf panes must attach to their exact remote PTY, not spawn a replacement host tab.
       // eagerLivePtyId covers a still-live background PTY (e.g. an automation agent) with a live eager buffer to adopt.
@@ -8162,6 +8365,7 @@ export function connectPanePty(
       const pendingSpawn = pendingSpawnByPaneKey.get(pendingSpawnKey)
       if (pendingSpawn) {
         recordPtyConnectDiagnostic(`pane=${pane.id} -> PENDING SPAWN`)
+        armDirectSshPaneRetryTimeout(pendingSpawn, directSshRetryAttempt)
         void pendingSpawn
           .then((spawnedPtyId) => {
             if (disposed) {
@@ -8183,6 +8387,9 @@ export function connectPanePty(
               } else {
                 startFreshSpawn()
               }
+              return
+            }
+            if (!canAdoptCapturedDirectSshRetryPty(spawnedPtyId)) {
               return
             }
             clearPaneMode2031State()
@@ -8366,6 +8573,11 @@ export function connectPanePty(
     reconcileIfSessionMissing,
     dispose() {
       disposed = true
+      directSshPaneRetrySettlementCancelled = true
+      for (const timer of directSshPaneRetrySettlementTimers) {
+        clearTimeout(timer)
+      }
+      directSshPaneRetrySettlementTimers.clear()
       // Why: a stalled xterm replay may never reach its finally; release live-frame credit when this renderer no longer owns the stream.
       for (const chunk of deferredReattachLiveData ?? []) {
         chunk.ackCredit?.()

@@ -19,6 +19,7 @@ import type * as UseNotificationDispatchModule from './use-notification-dispatch
 import { getEagerPtyBufferHandle } from './pty-dispatcher'
 import { makePaneKey } from '../../../../shared/stable-pane-id'
 import { toAppSshPtyId } from '../../../../shared/ssh-pty-id'
+import type { SshConnectionState } from '../../../../shared/ssh-types'
 import type { TerminalLayoutSnapshot, TuiAgent } from '../../../../shared/types'
 import { YOLO_TUI_AGENT_ARGS } from '../../../../shared/tui-agent-permissions'
 import { SETUP_AGENT_SEQUENCE_STARTUP_COMMAND_ENV } from '../../../../shared/setup-agent-sequencing'
@@ -131,6 +132,7 @@ type StoreState = {
       title?: string
       launchAgent?: string
       shellOverride?: string
+      generation?: number
     }[]
   >
   ptyIdsByTabId?: Record<string, string[]>
@@ -230,6 +232,33 @@ type StoreState = {
   markTerminalTabUnread: ReturnType<typeof vi.fn>
   markTerminalPaneUnread: ReturnType<typeof vi.fn>
   markAgentCompletionPaneUnread: ReturnType<typeof vi.fn>
+  directSshPaneRetryByTabId?: Record<
+    string,
+    {
+      attemptId: string
+      authority: {
+        targetId: string
+        providerEpoch: string
+        connectionGeneration: number
+      }
+      tabGeneration: number
+      startedAt: number
+    }
+  >
+  directSshLivePtyBindingByTabId?: Record<
+    string,
+    {
+      attemptId: string
+      authority: {
+        targetId: string
+        providerEpoch: string
+        connectionGeneration: number
+      }
+      tabGeneration: number
+      ptyId: string
+    }
+  >
+  settleDirectSshPaneRetry?: ReturnType<typeof vi.fn>
 }
 
 type WindowsShiftEnterPaneState = Parameters<typeof resolveWindowsShiftEnterEncodingForPane>[0]
@@ -267,6 +296,7 @@ type MockTransport = {
     ) => unknown
   }
   disconnect: ReturnType<typeof vi.fn>
+  detach?: ReturnType<typeof vi.fn>
   sendInput: ReturnType<typeof vi.fn>
   sendInputImmediate: ReturnType<typeof vi.fn>
   sendInputAccepted?: ReturnType<typeof vi.fn>
@@ -597,6 +627,35 @@ function createDeps(overrides: Record<string, unknown> = {}) {
   }
 }
 
+function createDirectSshSplitRetryCommit() {
+  return vi.fn(
+    (tabId: string, ptyId: string, _replacedPtyId?: string, directSshRetryAttemptId?: string) => {
+      const currentPtyIds = mockStoreState.ptyIdsByTabId?.[tabId] ?? []
+      mockStoreState.ptyIdsByTabId = {
+        ...mockStoreState.ptyIdsByTabId,
+        [tabId]: currentPtyIds.includes(ptyId) ? currentPtyIds : [...currentPtyIds, ptyId]
+      }
+      const pending = mockStoreState.directSshPaneRetryByTabId?.[tabId]
+      if (!pending || pending.attemptId !== directSshRetryAttemptId) {
+        return
+      }
+      const tab = mockStoreState.tabsByWorktree['wt-1'].find((candidate) => candidate.id === tabId)
+      if (tab && !tab.ptyId) {
+        tab.ptyId = ptyId
+      }
+      mockStoreState.directSshPaneRetryByTabId = {}
+      mockStoreState.directSshLivePtyBindingByTabId = {
+        [tabId]: {
+          attemptId: pending.attemptId,
+          authority: pending.authority,
+          tabGeneration: pending.tabGeneration,
+          ptyId: tab?.ptyId ?? ptyId
+        }
+      }
+    }
+  )
+}
+
 function setReattachPaneTitle(title: string): void {
   mockStoreState = {
     ...mockStoreState,
@@ -702,12 +761,18 @@ function keyEvent(overrides: Partial<KeyboardEvent>): KeyboardEvent {
   } as KeyboardEvent
 }
 
-function createDeferred<T>(): { promise: Promise<T>; resolve: (value: T) => void } {
+function createDeferred<T>(): {
+  promise: Promise<T>
+  resolve: (value: T) => void
+  reject: (reason?: unknown) => void
+} {
   let resolveDeferred!: (value: T) => void
-  const promise = new Promise<T>((resolve) => {
+  let rejectDeferred!: (reason?: unknown) => void
+  const promise = new Promise<T>((resolve, reject) => {
     resolveDeferred = resolve
+    rejectDeferred = reject
   })
-  return { promise, resolve: resolveDeferred }
+  return { promise, resolve: resolveDeferred, reject: rejectDeferred }
 }
 
 function createRect(width: number, height: number, left = 0, top = 0): DOMRect {
@@ -898,6 +963,7 @@ describe('connectPanePty', () => {
           needsPassphrasePrompt: vi.fn().mockResolvedValue(false)
         },
         pty: {
+          kill: vi.fn(),
           signal: vi.fn(),
           listSessions: vi.fn().mockResolvedValue([]),
           hasPty: vi.fn().mockResolvedValue(true),
@@ -999,6 +1065,1038 @@ describe('connectPanePty', () => {
     expect(logSpy).not.toHaveBeenCalledWith(expect.stringContaining('[pty-connect]'))
     logSpy.mockRestore()
   }, 30_000)
+
+  it.each(['rejects', 'resolves empty'] as const)(
+    'settles the exact direct SSH retry when its fresh spawn %s',
+    async (outcome) => {
+      const { connectPanePty } = await import('./pty-connection')
+      const transport = createMockTransport()
+      if (outcome === 'rejects') {
+        transport.connect.mockRejectedValueOnce(new Error('spawn failed'))
+      } else {
+        transport.connect.mockResolvedValueOnce(null)
+      }
+      transportFactoryQueue.push(transport)
+      const settleDirectSshPaneRetry = vi.fn()
+      const pendingRetry = {
+        attemptId: 'attempt-1',
+        authority: {
+          targetId: 'target-a',
+          providerEpoch: 'epoch-1',
+          connectionGeneration: 3
+        },
+        tabGeneration: 7,
+        startedAt: 1
+      }
+      mockStoreState = {
+        ...mockStoreState,
+        tabsByWorktree: { 'wt-1': [{ id: 'tab-1', ptyId: null, generation: 7 }] },
+        ptyIdsByTabId: { 'tab-1': [] },
+        repos: [{ id: 'repo1', connectionId: 'target-a', displayName: 'orca' }],
+        sshConnectionStates: new Map([
+          [
+            'target-a',
+            {
+              targetId: 'target-a',
+              status: 'connected',
+              providerEpoch: 'epoch-1',
+              connectionGeneration: 3
+            }
+          ]
+        ]),
+        directSshPaneRetryByTabId: { 'tab-1': pendingRetry },
+        settleDirectSshPaneRetry
+      }
+
+      connectPanePty(createPane(1) as never, createManager(1) as never, createDeps() as never)
+      await flushAsyncTicks(12)
+
+      expect(settleDirectSshPaneRetry).toHaveBeenCalledExactlyOnceWith({
+        status: 'failed',
+        tabId: 'tab-1',
+        attemptId: pendingRetry.attemptId,
+        authority: pendingRetry.authority,
+        tabGeneration: pendingRetry.tabGeneration
+      })
+    }
+  )
+
+  it('times out an exact direct SSH retry when a StrictMode-reused spawn stays pending', async () => {
+    vi.useFakeTimers({ toFake: ['setTimeout'] })
+    const { connectPanePty } = await import('./pty-connection')
+    const pendingSpawn = createDeferred<null>()
+    const firstTransport = createMockTransport()
+    firstTransport.connect.mockReturnValueOnce(pendingSpawn.promise)
+    const remountTransport = createMockTransport()
+    transportFactoryQueue.push(firstTransport, remountTransport)
+    const pendingRetry = {
+      attemptId: 'attempt-timeout',
+      authority: {
+        targetId: 'target-a',
+        providerEpoch: 'epoch-1',
+        connectionGeneration: 3
+      },
+      tabGeneration: 7,
+      startedAt: 1
+    }
+    const settleDirectSshPaneRetry = vi.fn(() => {
+      mockStoreState.directSshPaneRetryByTabId = {}
+    })
+    mockStoreState = {
+      ...mockStoreState,
+      tabsByWorktree: { 'wt-1': [{ id: 'tab-1', ptyId: null, generation: 7 }] },
+      ptyIdsByTabId: { 'tab-1': [] },
+      repos: [{ id: 'repo1', connectionId: 'target-a', displayName: 'orca' }],
+      sshConnectionStates: new Map([
+        [
+          'target-a',
+          {
+            targetId: 'target-a',
+            status: 'connected',
+            providerEpoch: 'epoch-1',
+            connectionGeneration: 3
+          }
+        ]
+      ]),
+      directSshPaneRetryByTabId: { 'tab-1': pendingRetry },
+      settleDirectSshPaneRetry
+    }
+
+    const firstBinding = connectPanePty(
+      createPane(1) as never,
+      createManager(1) as never,
+      createDeps() as never
+    )
+    await flushAsyncTicks()
+    firstBinding.dispose()
+    connectPanePty(createPane(1) as never, createManager(1) as never, createDeps() as never)
+    await flushAsyncTicks()
+
+    expect(firstTransport.connect).toHaveBeenCalledOnce()
+    expect(remountTransport.connect).not.toHaveBeenCalled()
+    await vi.advanceTimersByTimeAsync(30_999)
+    expect(settleDirectSshPaneRetry).not.toHaveBeenCalled()
+    await vi.advanceTimersByTimeAsync(1)
+    expect(settleDirectSshPaneRetry).toHaveBeenCalledExactlyOnceWith({
+      status: 'timed-out',
+      tabId: 'tab-1',
+      attemptId: pendingRetry.attemptId,
+      authority: pendingRetry.authority,
+      tabGeneration: pendingRetry.tabGeneration
+    })
+    expect(firstTransport.disconnect).not.toHaveBeenCalled()
+    expect(remountTransport.disconnect).not.toHaveBeenCalled()
+
+    pendingSpawn.resolve(null)
+    await flushAsyncTicks(12)
+  })
+
+  it('cancels exact retry settlement when a hung pane is intentionally disposed', async () => {
+    vi.useFakeTimers({ toFake: ['setTimeout'] })
+    const { connectPanePty } = await import('./pty-connection')
+    const pendingSpawn = createDeferred<null>()
+    const transport = createMockTransport()
+    transport.connect.mockReturnValueOnce(pendingSpawn.promise)
+    transportFactoryQueue.push(transport)
+    const pendingRetry = {
+      attemptId: 'attempt-disposed',
+      authority: {
+        targetId: 'target-a',
+        providerEpoch: 'epoch-1',
+        connectionGeneration: 3
+      },
+      tabGeneration: 7,
+      startedAt: 1
+    }
+    const settleDirectSshPaneRetry = vi.fn()
+    mockStoreState = {
+      ...mockStoreState,
+      tabsByWorktree: { 'wt-1': [{ id: 'tab-1', ptyId: null, generation: 7 }] },
+      ptyIdsByTabId: { 'tab-1': [] },
+      repos: [{ id: 'repo1', connectionId: 'target-a', displayName: 'orca' }],
+      sshConnectionStates: new Map([
+        [
+          'target-a',
+          {
+            targetId: 'target-a',
+            status: 'connected',
+            providerEpoch: 'epoch-1',
+            connectionGeneration: 3
+          }
+        ]
+      ]),
+      directSshPaneRetryByTabId: { 'tab-1': pendingRetry },
+      settleDirectSshPaneRetry
+    }
+
+    const binding = connectPanePty(
+      createPane(1) as never,
+      createManager(1) as never,
+      createDeps() as never
+    )
+    await flushAsyncTicks()
+    binding.dispose()
+    await vi.advanceTimersByTimeAsync(31_000)
+
+    expect(settleDirectSshPaneRetry).not.toHaveBeenCalled()
+
+    pendingSpawn.resolve(null)
+    await flushAsyncTicks(12)
+    expect(settleDirectSshPaneRetry).not.toHaveBeenCalled()
+  })
+
+  it('joins a successful pending spawn across a same-attempt StrictMode remount', async () => {
+    const { connectPanePty } = await import('./pty-connection')
+    const pendingSpawn = createDeferred<string>()
+    const firstTransport = createMockTransport()
+    firstTransport.connect.mockReturnValueOnce(pendingSpawn.promise)
+    const remountTransport = createMockTransport()
+    transportFactoryQueue.push(firstTransport, remountTransport)
+    const pendingRetry = {
+      attemptId: 'attempt-strict-mode',
+      authority: {
+        targetId: 'target-a',
+        providerEpoch: 'epoch-1',
+        connectionGeneration: 3
+      },
+      tabGeneration: 7,
+      startedAt: 1
+    }
+    mockStoreState = {
+      ...mockStoreState,
+      tabsByWorktree: { 'wt-1': [{ id: 'tab-1', ptyId: null, generation: 7 }] },
+      ptyIdsByTabId: { 'tab-1': [] },
+      repos: [{ id: 'repo1', connectionId: 'target-a', displayName: 'orca' }],
+      sshConnectionStates: new Map([
+        [
+          'target-a',
+          {
+            targetId: 'target-a',
+            status: 'connected',
+            providerEpoch: 'epoch-1',
+            connectionGeneration: 3
+          }
+        ]
+      ]),
+      directSshPaneRetryByTabId: { 'tab-1': pendingRetry },
+      settleDirectSshPaneRetry: vi.fn()
+    }
+    const remountDeps = createDeps()
+
+    const firstBinding = connectPanePty(
+      createPane(1) as never,
+      createManager(1) as never,
+      createDeps() as never
+    )
+    await flushAsyncTicks()
+    firstBinding.dispose()
+    connectPanePty(createPane(1) as never, createManager(1) as never, remountDeps as never)
+    await flushAsyncTicks()
+
+    expect(firstTransport.connect).toHaveBeenCalledOnce()
+    expect(remountTransport.connect).not.toHaveBeenCalled()
+
+    const spawnedPtyId = toAppSshPtyId('target-a', 'pty-strict-mode')
+    pendingSpawn.resolve(spawnedPtyId)
+    await flushAsyncTicks(12)
+
+    expect(remountTransport.attach).toHaveBeenCalledWith(
+      expect.objectContaining({ existingPtyId: spawnedPtyId })
+    )
+    expect(remountDeps.updateTabPtyId).toHaveBeenCalledWith(
+      'tab-1',
+      spawnedPtyId,
+      undefined,
+      pendingRetry.attemptId
+    )
+  })
+
+  it('commits every concurrent split-pane spawn under one exact retry attempt', async () => {
+    const { connectPanePty } = await import('./pty-connection')
+    const firstSpawn = createDeferred<string>()
+    const siblingSpawn = createDeferred<string>()
+    const firstTransport = createMockTransport()
+    const siblingTransport = createMockTransport()
+    firstTransport.connect.mockReturnValueOnce(firstSpawn.promise)
+    siblingTransport.connect.mockReturnValueOnce(siblingSpawn.promise)
+    transportFactoryQueue.push(firstTransport, siblingTransport)
+    const pendingRetry = {
+      attemptId: 'attempt-split-spawn',
+      authority: {
+        targetId: 'target-a',
+        providerEpoch: 'epoch-1',
+        connectionGeneration: 3
+      },
+      tabGeneration: 7,
+      startedAt: 1
+    }
+    const updateTabPtyId = createDirectSshSplitRetryCommit()
+    mockStoreState = {
+      ...mockStoreState,
+      tabsByWorktree: { 'wt-1': [{ id: 'tab-1', ptyId: null, generation: 7 }] },
+      ptyIdsByTabId: { 'tab-1': [] },
+      repos: [{ id: 'repo1', connectionId: 'target-a', displayName: 'orca' }],
+      sshConnectionStates: new Map([
+        [
+          'target-a',
+          {
+            targetId: 'target-a',
+            status: 'connected',
+            providerEpoch: 'epoch-1',
+            connectionGeneration: 3
+          }
+        ]
+      ]),
+      directSshPaneRetryByTabId: { 'tab-1': pendingRetry },
+      directSshLivePtyBindingByTabId: {},
+      settleDirectSshPaneRetry: vi.fn()
+    }
+    const manager = createManager(2)
+
+    connectPanePty(
+      createPane(1) as never,
+      manager as never,
+      createDeps({ updateTabPtyId }) as never
+    )
+    connectPanePty(
+      createPane(2) as never,
+      manager as never,
+      createDeps({ updateTabPtyId }) as never
+    )
+    await flushAsyncTicks()
+
+    const firstPtyId = toAppSshPtyId('target-a', 'pty-first')
+    const siblingPtyId = toAppSshPtyId('target-a', 'pty-sibling')
+    const firstOnPtySpawn = createdTransportOptions[0]?.onPtySpawn as
+      | ((ptyId: string) => void)
+      | undefined
+    const siblingOnPtySpawn = createdTransportOptions[1]?.onPtySpawn as
+      | ((ptyId: string) => void)
+      | undefined
+    firstOnPtySpawn?.(firstPtyId)
+    siblingOnPtySpawn?.(siblingPtyId)
+
+    expect(updateTabPtyId).toHaveBeenCalledWith(
+      'tab-1',
+      firstPtyId,
+      undefined,
+      pendingRetry.attemptId
+    )
+    expect(updateTabPtyId).toHaveBeenCalledWith(
+      'tab-1',
+      siblingPtyId,
+      undefined,
+      pendingRetry.attemptId
+    )
+    expect(mockStoreState.ptyIdsByTabId?.['tab-1']).toEqual([firstPtyId, siblingPtyId])
+
+    firstSpawn.resolve(firstPtyId)
+    siblingSpawn.resolve(siblingPtyId)
+    await flushAsyncTicks(12)
+  })
+
+  it('captures retained live authority when a sibling mounts after first success', async () => {
+    const { connectPanePty } = await import('./pty-connection')
+    const delayedSpawn = createDeferred<string>()
+    const transport = createMockTransport()
+    transport.connect.mockReturnValueOnce(delayedSpawn.promise)
+    transportFactoryQueue.push(transport)
+    const livePtyId = toAppSshPtyId('target-a', 'pty-live')
+    const siblingPtyId = toAppSshPtyId('target-a', 'pty-delayed-sibling')
+    const liveRetry = {
+      attemptId: 'attempt-live-sibling',
+      authority: {
+        targetId: 'target-a',
+        providerEpoch: 'epoch-1',
+        connectionGeneration: 3
+      },
+      tabGeneration: 7,
+      ptyId: livePtyId
+    }
+    mockStoreState = {
+      ...mockStoreState,
+      tabsByWorktree: { 'wt-1': [{ id: 'tab-1', ptyId: livePtyId, generation: 7 }] },
+      ptyIdsByTabId: { 'tab-1': [livePtyId] },
+      repos: [{ id: 'repo1', connectionId: 'target-a', displayName: 'orca' }],
+      sshConnectionStates: new Map([
+        [
+          'target-a',
+          {
+            targetId: 'target-a',
+            status: 'connected',
+            providerEpoch: 'epoch-1',
+            connectionGeneration: 3
+          }
+        ]
+      ]),
+      directSshPaneRetryByTabId: {},
+      directSshLivePtyBindingByTabId: { 'tab-1': liveRetry },
+      settleDirectSshPaneRetry: vi.fn()
+    }
+    const paneTransportsRef = {
+      current: new Map([[1, createMockTransport(livePtyId)]])
+    }
+    const deps = createDeps({ paneTransportsRef })
+
+    connectPanePty(createPane(2) as never, createManager(2) as never, deps as never)
+    await flushAsyncTicks()
+
+    const onPtySpawn = createdTransportOptions[0]?.onPtySpawn as
+      | ((ptyId: string) => void)
+      | undefined
+    onPtySpawn?.(siblingPtyId)
+
+    expect(deps.updateTabPtyId).toHaveBeenCalledWith(
+      'tab-1',
+      siblingPtyId,
+      undefined,
+      liveRetry.attemptId
+    )
+
+    delayedSpawn.resolve(siblingPtyId)
+    await flushAsyncTicks(12)
+  })
+
+  it('rejects a delayed live-lease sibling after direct SSH authority rotates', async () => {
+    const { connectPanePty } = await import('./pty-connection')
+    const delayedSpawn = createDeferred<string>()
+    const transport = createMockTransport()
+    const stalePtyId = toAppSshPtyId('target-a', 'pty-stale-live-sibling')
+    transport.getPtyId.mockReturnValue(stalePtyId)
+    transport.connect.mockReturnValueOnce(delayedSpawn.promise)
+    transportFactoryQueue.push(transport)
+    const livePtyId = toAppSshPtyId('target-a', 'pty-live')
+    const liveRetry = {
+      attemptId: 'attempt-live-stale',
+      authority: {
+        targetId: 'target-a',
+        providerEpoch: 'epoch-old',
+        connectionGeneration: 3
+      },
+      tabGeneration: 7,
+      ptyId: livePtyId
+    }
+    mockStoreState = {
+      ...mockStoreState,
+      tabsByWorktree: { 'wt-1': [{ id: 'tab-1', ptyId: livePtyId, generation: 7 }] },
+      ptyIdsByTabId: { 'tab-1': [livePtyId] },
+      repos: [{ id: 'repo1', connectionId: 'target-a', displayName: 'orca' }],
+      sshConnectionStates: new Map([
+        [
+          'target-a',
+          {
+            targetId: 'target-a',
+            status: 'connected',
+            providerEpoch: 'epoch-old',
+            connectionGeneration: 3
+          }
+        ]
+      ]),
+      directSshPaneRetryByTabId: {},
+      directSshLivePtyBindingByTabId: { 'tab-1': liveRetry },
+      settleDirectSshPaneRetry: vi.fn()
+    }
+    const paneTransportsRef = {
+      current: new Map([[1, createMockTransport(livePtyId)]])
+    }
+    const deps = createDeps({ paneTransportsRef })
+
+    connectPanePty(createPane(2) as never, createManager(2) as never, deps as never)
+    await flushAsyncTicks()
+    mockStoreState.sshConnectionStates = new Map([
+      [
+        'target-a',
+        {
+          targetId: 'target-a',
+          status: 'connected',
+          providerEpoch: 'epoch-new',
+          connectionGeneration: 4
+        }
+      ]
+    ])
+
+    const onPtySpawn = createdTransportOptions[0]?.onPtySpawn as
+      | ((ptyId: string) => void)
+      | undefined
+    onPtySpawn?.(stalePtyId)
+    await flushAsyncTicks()
+
+    expect(deps.updateTabPtyId).not.toHaveBeenCalled()
+    expect(transport.disconnect).toHaveBeenCalledOnce()
+
+    delayedSpawn.resolve(stalePtyId)
+    await flushAsyncTicks(12)
+  })
+
+  it('starts a new spawn and rejects a late callback after direct SSH authority rotates', async () => {
+    const { connectPanePty } = await import('./pty-connection')
+    const oldPendingSpawn = createDeferred<string>()
+    const oldTransport = createMockTransport()
+    let oldTransportPtyId: string | null = null
+    oldTransport.getPtyId.mockImplementation(() => oldTransportPtyId)
+    oldTransport.disconnect.mockImplementation(() => {
+      oldTransportPtyId = null
+    })
+    oldTransport.connect.mockReturnValueOnce(oldPendingSpawn.promise)
+    const newPendingSpawn = createDeferred<string>()
+    const newTransport = createMockTransport()
+    newTransport.connect.mockReturnValueOnce(newPendingSpawn.promise)
+    transportFactoryQueue.push(oldTransport, newTransport)
+    const oldRetry = {
+      attemptId: 'attempt-old',
+      authority: {
+        targetId: 'target-a',
+        providerEpoch: 'epoch-old',
+        connectionGeneration: 3
+      },
+      tabGeneration: 7,
+      startedAt: 1
+    }
+    const newRetry = {
+      attemptId: 'attempt-new',
+      authority: {
+        targetId: 'target-a',
+        providerEpoch: 'epoch-new',
+        connectionGeneration: 4
+      },
+      tabGeneration: 8,
+      startedAt: 2
+    }
+    mockStoreState = {
+      ...mockStoreState,
+      tabsByWorktree: { 'wt-1': [{ id: 'tab-1', ptyId: null, generation: 7 }] },
+      ptyIdsByTabId: { 'tab-1': [] },
+      repos: [{ id: 'repo1', connectionId: 'target-a', displayName: 'orca' }],
+      sshConnectionStates: new Map([
+        [
+          'target-a',
+          {
+            targetId: 'target-a',
+            status: 'connected',
+            providerEpoch: 'epoch-old',
+            connectionGeneration: 3
+          }
+        ]
+      ]),
+      directSshPaneRetryByTabId: { 'tab-1': oldRetry },
+      settleDirectSshPaneRetry: vi.fn()
+    }
+    const oldDeps = createDeps()
+
+    const oldBinding = connectPanePty(
+      createPane(1) as never,
+      createManager(1) as never,
+      oldDeps as never
+    )
+    await flushAsyncTicks()
+    oldBinding.dispose()
+    mockStoreState = {
+      ...mockStoreState,
+      tabsByWorktree: { 'wt-1': [{ id: 'tab-1', ptyId: null, generation: 8 }] },
+      sshConnectionStates: new Map([
+        [
+          'target-a',
+          {
+            targetId: 'target-a',
+            status: 'connected',
+            providerEpoch: 'epoch-new',
+            connectionGeneration: 4
+          }
+        ]
+      ]),
+      directSshPaneRetryByTabId: { 'tab-1': newRetry }
+    }
+    const newDeps = createDeps()
+
+    connectPanePty(createPane(1) as never, createManager(1) as never, newDeps as never)
+    await flushAsyncTicks()
+
+    expect(oldTransport.connect).toHaveBeenCalledOnce()
+    expect(newTransport.connect).toHaveBeenCalledOnce()
+
+    const oldPtyId = toAppSshPtyId('target-a', 'pty-old')
+    oldTransportPtyId = oldPtyId
+    const oldOnPtySpawn = createdTransportOptions[0]?.onPtySpawn as
+      | ((ptyId: string) => void)
+      | undefined
+    oldOnPtySpawn?.(oldPtyId)
+    oldPendingSpawn.resolve(oldPtyId)
+    await flushAsyncTicks(12)
+
+    expect(oldDeps.updateTabPtyId).not.toHaveBeenCalled()
+    expect(oldTransport.disconnect).toHaveBeenCalledOnce()
+    expect(mockStoreState.directSshPaneRetryByTabId).toEqual({ 'tab-1': newRetry })
+
+    const newPtyId = toAppSshPtyId('target-a', 'pty-new')
+    const newOnPtySpawn = createdTransportOptions[1]?.onPtySpawn as
+      | ((ptyId: string) => void)
+      | undefined
+    newOnPtySpawn?.(newPtyId)
+    newPendingSpawn.resolve(newPtyId)
+    await flushAsyncTicks(12)
+
+    expect(newDeps.updateTabPtyId).toHaveBeenCalledWith(
+      'tab-1',
+      newPtyId,
+      undefined,
+      newRetry.attemptId
+    )
+  })
+
+  it('times out an exact direct SSH retry when reattach stays pending', async () => {
+    vi.useFakeTimers({ toFake: ['setTimeout'] })
+    const { connectPanePty } = await import('./pty-connection')
+    const pendingReattach = createDeferred<null>()
+    const transport = createMockTransport()
+    transport.connect.mockReturnValueOnce(pendingReattach.promise).mockResolvedValueOnce(null)
+    transportFactoryQueue.push(transport)
+    const restoredPtyId = toAppSshPtyId('target-a', 'pty-restored')
+    const pendingRetry = {
+      attemptId: 'attempt-reattach-timeout',
+      authority: {
+        targetId: 'target-a',
+        providerEpoch: 'epoch-1',
+        connectionGeneration: 3
+      },
+      tabGeneration: 7,
+      startedAt: 1
+    }
+    const settleDirectSshPaneRetry = vi.fn(() => {
+      mockStoreState.directSshPaneRetryByTabId = {}
+    })
+    mockStoreState = {
+      ...mockStoreState,
+      tabsByWorktree: {
+        'wt-1': [{ id: 'tab-1', ptyId: restoredPtyId, generation: 7 }]
+      },
+      ptyIdsByTabId: { 'tab-1': [restoredPtyId] },
+      repos: [{ id: 'repo1', connectionId: 'target-a', displayName: 'orca' }],
+      sshConnectionStates: new Map([
+        [
+          'target-a',
+          {
+            targetId: 'target-a',
+            status: 'connected',
+            providerEpoch: 'epoch-1',
+            connectionGeneration: 3
+          }
+        ]
+      ]),
+      directSshPaneRetryByTabId: { 'tab-1': pendingRetry },
+      settleDirectSshPaneRetry
+    }
+
+    connectPanePty(
+      createPane(1) as never,
+      createManager(1) as never,
+      createDeps({
+        restoredLeafId: LEAF_1,
+        restoredPtyIdByLeafId: { [LEAF_1]: restoredPtyId }
+      }) as never
+    )
+    await flushAsyncTicks(12)
+
+    expect(transport.connect).toHaveBeenCalledWith(
+      expect.objectContaining({ sessionId: restoredPtyId })
+    )
+    await vi.advanceTimersByTimeAsync(31_000)
+    expect(settleDirectSshPaneRetry).toHaveBeenCalledExactlyOnceWith({
+      status: 'timed-out',
+      tabId: 'tab-1',
+      attemptId: pendingRetry.attemptId,
+      authority: pendingRetry.authority,
+      tabGeneration: pendingRetry.tabGeneration
+    })
+    expect(transport.disconnect).not.toHaveBeenCalled()
+
+    pendingReattach.resolve(null)
+    await flushAsyncTicks(12)
+  })
+
+  it('commits a successful direct SSH reattach with its exact retry lease', async () => {
+    const { connectPanePty } = await import('./pty-connection')
+    const restoredPtyId = toAppSshPtyId('target-a', 'pty-restored')
+    const transport = createMockTransport(restoredPtyId)
+    transportFactoryQueue.push(transport)
+    const pendingRetry = {
+      attemptId: 'attempt-reattach-success',
+      authority: {
+        targetId: 'target-a',
+        providerEpoch: 'epoch-1',
+        connectionGeneration: 3
+      },
+      tabGeneration: 7,
+      startedAt: 1
+    }
+    mockStoreState = {
+      ...mockStoreState,
+      tabsByWorktree: {
+        'wt-1': [{ id: 'tab-1', ptyId: restoredPtyId, generation: 7 }]
+      },
+      ptyIdsByTabId: { 'tab-1': [restoredPtyId] },
+      repos: [{ id: 'repo1', connectionId: 'target-a', displayName: 'orca' }],
+      sshConnectionStates: new Map([
+        [
+          'target-a',
+          {
+            targetId: 'target-a',
+            status: 'connected',
+            providerEpoch: 'epoch-1',
+            connectionGeneration: 3
+          }
+        ]
+      ]),
+      directSshPaneRetryByTabId: { 'tab-1': pendingRetry },
+      settleDirectSshPaneRetry: vi.fn()
+    }
+    const deps = createDeps()
+
+    connectPanePty(
+      createPane(1) as never,
+      createManager(1) as never,
+      createDeps({
+        ...deps,
+        restoredLeafId: LEAF_1,
+        restoredPtyIdByLeafId: { [LEAF_1]: restoredPtyId }
+      }) as never
+    )
+    await flushAsyncTicks(12)
+
+    expect(deps.updateTabPtyId).toHaveBeenCalledWith(
+      'tab-1',
+      restoredPtyId,
+      undefined,
+      pendingRetry.attemptId
+    )
+  })
+
+  it('rejects expired reattach state after its direct SSH retry lease is revoked', async () => {
+    const { connectPanePty } = await import('./pty-connection')
+    const restoredPtyId = toAppSshPtyId('target-a', 'pty-stale-reattach')
+    const pendingReattach = createDeferred<{
+      id: string
+      sessionExpired: true
+      launchAgent: 'codex'
+      launchConfig: { agentCommand: string; agentArgs: string; agentEnv: Record<string, string> }
+    }>()
+    const transport = createMockTransport(restoredPtyId)
+    transport.connect.mockReturnValueOnce(pendingReattach.promise)
+    transport.detach = vi.fn()
+    transportFactoryQueue.push(transport)
+    const pendingRetry = {
+      attemptId: 'attempt-stale-reattach',
+      authority: {
+        targetId: 'target-a',
+        providerEpoch: 'epoch-old',
+        connectionGeneration: 3
+      },
+      tabGeneration: 7,
+      startedAt: 1
+    }
+    const deps = createDeps()
+    mockStoreState = {
+      ...mockStoreState,
+      tabsByWorktree: {
+        'wt-1': [{ id: 'tab-1', ptyId: restoredPtyId, generation: 7 }]
+      },
+      ptyIdsByTabId: { 'tab-1': [restoredPtyId] },
+      repos: [{ id: 'repo1', connectionId: 'target-a', displayName: 'orca' }],
+      sshConnectionStates: new Map([
+        [
+          'target-a',
+          {
+            targetId: 'target-a',
+            status: 'connected',
+            providerEpoch: 'epoch-old',
+            connectionGeneration: 3
+          }
+        ]
+      ]),
+      directSshPaneRetryByTabId: { 'tab-1': pendingRetry },
+      settleDirectSshPaneRetry: vi.fn()
+    }
+
+    connectPanePty(
+      createPane(1) as never,
+      createManager(1) as never,
+      createDeps({
+        ...deps,
+        restoredLeafId: LEAF_1,
+        restoredPtyIdByLeafId: { [LEAF_1]: restoredPtyId }
+      }) as never
+    )
+    await flushAsyncTicks()
+    expect(transport.connect).toHaveBeenCalledWith(
+      expect.objectContaining({ admitPtyId: expect.any(Function) })
+    )
+    mockStoreState.sshConnectionStates = new Map([
+      [
+        'target-a',
+        {
+          targetId: 'target-a',
+          status: 'connected',
+          providerEpoch: 'epoch-new',
+          connectionGeneration: 4
+        }
+      ]
+    ])
+    mockStoreState.directSshPaneRetryByTabId = {}
+
+    pendingReattach.resolve({
+      id: restoredPtyId,
+      sessionExpired: true,
+      launchAgent: 'codex',
+      launchConfig: {
+        agentCommand: 'codex --profile stale',
+        agentArgs: '--profile stale',
+        agentEnv: {}
+      }
+    })
+    await flushAsyncTicks(12)
+
+    expect(transport.detach).toHaveBeenCalledExactlyOnceWith({ preserveExitObserver: false })
+    expect(transport.connect).toHaveBeenCalledTimes(1)
+    expect(transport.disconnect).not.toHaveBeenCalled()
+    expect(deps.clearExitedPanePtyLayoutBinding).not.toHaveBeenCalled()
+    expect(deps.syncPanePtyLayoutBinding).not.toHaveBeenCalledWith(1, null)
+    expect(deps.clearTabPtyId).not.toHaveBeenCalled()
+    expect(deps.updateTabPtyId).not.toHaveBeenCalled()
+    expect(mockStoreState.registerAgentLaunchConfig).not.toHaveBeenCalled()
+    expect(mockStoreState.setPaneForegroundAgent).not.toHaveBeenCalled()
+    expect(mockStoreState.tabsByWorktree['wt-1']).toEqual([
+      { id: 'tab-1', ptyId: restoredPtyId, generation: 7 }
+    ])
+    expect(window.api.pty.kill).not.toHaveBeenCalled()
+  })
+
+  it('rejects stale reattach errors after its exact retry lease is replaced', async () => {
+    const { connectPanePty } = await import('./pty-connection')
+    const restoredPtyId = toAppSshPtyId('target-a', 'pty-stale-empty-reattach')
+    const pendingReattach = createDeferred<void>()
+    const transport = createMockTransport(restoredPtyId)
+    transport.connect.mockImplementationOnce(
+      (options: { admitPtyId?: (ptyId: string) => boolean; callbacks?: ConnectCallbacks }) => {
+        expect(options.admitPtyId?.(restoredPtyId)).toBe(true)
+        return pendingReattach.promise
+      }
+    )
+    transport.detach = vi.fn()
+    transportFactoryQueue.push(transport)
+    const pendingRetry = {
+      attemptId: 'attempt-stale-empty-reattach',
+      authority: {
+        targetId: 'target-a',
+        providerEpoch: 'epoch-old',
+        connectionGeneration: 3
+      },
+      tabGeneration: 7,
+      startedAt: 1
+    }
+    const deps = createDeps()
+    mockStoreState = {
+      ...mockStoreState,
+      tabsByWorktree: {
+        'wt-1': [{ id: 'tab-1', ptyId: restoredPtyId, generation: 7 }]
+      },
+      ptyIdsByTabId: { 'tab-1': [restoredPtyId] },
+      repos: [{ id: 'repo1', connectionId: 'target-a', displayName: 'orca' }],
+      sshConnectionStates: new Map([
+        [
+          'target-a',
+          {
+            targetId: 'target-a',
+            status: 'connected',
+            providerEpoch: 'epoch-old',
+            connectionGeneration: 3
+          }
+        ]
+      ]),
+      directSshPaneRetryByTabId: { 'tab-1': pendingRetry },
+      settleDirectSshPaneRetry: vi.fn()
+    }
+
+    connectPanePty(
+      createPane(1) as never,
+      createManager(1) as never,
+      createDeps({
+        ...deps,
+        restoredLeafId: LEAF_1,
+        restoredPtyIdByLeafId: { [LEAF_1]: restoredPtyId }
+      }) as never
+    )
+    await flushAsyncTicks()
+    mockStoreState.directSshPaneRetryByTabId = {
+      'tab-1': { ...pendingRetry, attemptId: 'attempt-current-reattach' }
+    }
+
+    const connectOptions = transport.connect.mock.calls[0]?.[0] as {
+      callbacks?: ConnectCallbacks
+    }
+    connectOptions.callbacks?.onError?.('stale reattach failure')
+    connectOptions.callbacks?.onError?.('SSH_SESSION_EXPIRED: stale reattach')
+    pendingReattach.resolve()
+    await flushAsyncTicks(12)
+
+    expect(transport.detach).toHaveBeenCalledExactlyOnceWith({ preserveExitObserver: false })
+    expect(transport.connect).toHaveBeenCalledTimes(1)
+    expect(transport.disconnect).not.toHaveBeenCalled()
+    expect(deps.clearExitedPanePtyLayoutBinding).not.toHaveBeenCalled()
+    expect(deps.syncPanePtyLayoutBinding).not.toHaveBeenCalledWith(1, null)
+    expect(deps.clearTabPtyId).not.toHaveBeenCalled()
+    expect(deps.updateTabPtyId).not.toHaveBeenCalled()
+    expect(deps.onPtyErrorRef.current).not.toHaveBeenCalled()
+    expect(window.api.pty.kill).not.toHaveBeenCalled()
+  })
+
+  it('rejects a reattach failure after its direct SSH retry lease is revoked', async () => {
+    const { connectPanePty } = await import('./pty-connection')
+    const restoredPtyId = toAppSshPtyId('target-a', 'pty-stale-rejected-reattach')
+    const pendingReattach = createDeferred<void>()
+    const transport = createMockTransport(restoredPtyId)
+    transport.connect.mockImplementationOnce(
+      (options: { admitPtyId?: (ptyId: string) => boolean }) => {
+        expect(options.admitPtyId?.(restoredPtyId)).toBe(true)
+        return pendingReattach.promise
+      }
+    )
+    transport.detach = vi.fn()
+    transportFactoryQueue.push(transport)
+    const pendingRetry = {
+      attemptId: 'attempt-stale-rejected-reattach',
+      authority: {
+        targetId: 'target-a',
+        providerEpoch: 'epoch-old',
+        connectionGeneration: 3
+      },
+      tabGeneration: 7,
+      startedAt: 1
+    }
+    const deps = createDeps()
+    mockStoreState = {
+      ...mockStoreState,
+      tabsByWorktree: {
+        'wt-1': [{ id: 'tab-1', ptyId: restoredPtyId, generation: 7 }]
+      },
+      ptyIdsByTabId: { 'tab-1': [restoredPtyId] },
+      repos: [{ id: 'repo1', connectionId: 'target-a', displayName: 'orca' }],
+      sshConnectionStates: new Map([
+        [
+          'target-a',
+          {
+            targetId: 'target-a',
+            status: 'connected',
+            providerEpoch: 'epoch-old',
+            connectionGeneration: 3
+          }
+        ]
+      ]),
+      directSshPaneRetryByTabId: { 'tab-1': pendingRetry },
+      settleDirectSshPaneRetry: vi.fn()
+    }
+
+    connectPanePty(
+      createPane(1) as never,
+      createManager(1) as never,
+      createDeps({
+        ...deps,
+        restoredLeafId: LEAF_1,
+        restoredPtyIdByLeafId: { [LEAF_1]: restoredPtyId }
+      }) as never
+    )
+    await flushAsyncTicks()
+    mockStoreState.directSshPaneRetryByTabId = {}
+
+    pendingReattach.reject(new Error('stale reattach rejection'))
+    await flushAsyncTicks(12)
+
+    expect(transport.detach).toHaveBeenCalledExactlyOnceWith({ preserveExitObserver: false })
+    expect(transport.connect).toHaveBeenCalledTimes(1)
+    expect(transport.disconnect).not.toHaveBeenCalled()
+    expect(deps.clearExitedPanePtyLayoutBinding).not.toHaveBeenCalled()
+    expect(deps.syncPanePtyLayoutBinding).not.toHaveBeenCalledWith(1, null)
+    expect(deps.clearTabPtyId).not.toHaveBeenCalled()
+    expect(deps.updateTabPtyId).not.toHaveBeenCalled()
+    expect(deps.onPtyErrorRef.current).not.toHaveBeenCalled()
+    expect(window.api.pty.kill).not.toHaveBeenCalled()
+  })
+
+  it('commits every concurrent split-pane reattach under one exact retry attempt', async () => {
+    const { connectPanePty } = await import('./pty-connection')
+    const firstPtyId = toAppSshPtyId('target-a', 'pty-restored-first')
+    const siblingPtyId = toAppSshPtyId('target-a', 'pty-restored-sibling')
+    transportFactoryQueue.push(createMockTransport(firstPtyId), createMockTransport(siblingPtyId))
+    const pendingRetry = {
+      attemptId: 'attempt-split-reattach',
+      authority: {
+        targetId: 'target-a',
+        providerEpoch: 'epoch-1',
+        connectionGeneration: 3
+      },
+      tabGeneration: 7,
+      startedAt: 1
+    }
+    const updateTabPtyId = createDirectSshSplitRetryCommit()
+    const restoredPtyIdByLeafId = {
+      [LEAF_1]: firstPtyId,
+      [LEAF_2]: siblingPtyId
+    }
+    mockStoreState = {
+      ...mockStoreState,
+      tabsByWorktree: {
+        'wt-1': [{ id: 'tab-1', ptyId: firstPtyId, generation: 7 }]
+      },
+      ptyIdsByTabId: { 'tab-1': [firstPtyId, siblingPtyId] },
+      repos: [{ id: 'repo1', connectionId: 'target-a', displayName: 'orca' }],
+      sshConnectionStates: new Map([
+        [
+          'target-a',
+          {
+            targetId: 'target-a',
+            status: 'connected',
+            providerEpoch: 'epoch-1',
+            connectionGeneration: 3
+          }
+        ]
+      ]),
+      directSshPaneRetryByTabId: { 'tab-1': pendingRetry },
+      directSshLivePtyBindingByTabId: {},
+      settleDirectSshPaneRetry: vi.fn()
+    }
+    const manager = createManager(2)
+
+    connectPanePty(
+      createPane(1) as never,
+      manager as never,
+      createDeps({
+        restoredLeafId: LEAF_1,
+        restoredPtyIdByLeafId,
+        updateTabPtyId
+      }) as never
+    )
+    connectPanePty(
+      createPane(2) as never,
+      manager as never,
+      createDeps({
+        restoredLeafId: LEAF_2,
+        restoredPtyIdByLeafId,
+        updateTabPtyId
+      }) as never
+    )
+    await flushAsyncTicks(12)
+
+    expect(updateTabPtyId).toHaveBeenCalledWith(
+      'tab-1',
+      firstPtyId,
+      undefined,
+      pendingRetry.attemptId
+    )
+    expect(updateTabPtyId).toHaveBeenCalledWith(
+      'tab-1',
+      siblingPtyId,
+      undefined,
+      pendingRetry.attemptId
+    )
+  })
 
   // Why: hidden panes (orchestration workers, CLI terminal create) legitimately connect at 0×0 and refit when shown, so the zero-dimensions diagnostic must stay silent.
   it('does not surface the zero-dimensions diagnostic for a hidden pane', async () => {
@@ -18807,6 +19905,188 @@ describe('connectPanePty', () => {
     expect(deps.onPtyErrorRef.current).not.toHaveBeenCalled()
     expect(mockStoreState.removeDeferredSshSessionId).not.toHaveBeenCalled()
     expect(mockStoreState.removeDeferredSshReconnectTarget).not.toHaveBeenCalled()
+  })
+
+  it('abandons a deferred SSH retry replaced during the passphrase probe', async () => {
+    const { connectPanePty } = await import('./pty-connection')
+    const restoredPtyId = toAppSshPtyId('conn-1', 'saved-session')
+    const passphraseProbe = createDeferred<boolean>()
+    const transport = createMockTransport()
+    transportFactoryQueue.push(transport)
+    const pendingRetry = {
+      attemptId: 'attempt-passphrase-probe',
+      authority: {
+        targetId: 'conn-1',
+        providerEpoch: 'epoch-1',
+        connectionGeneration: 3
+      },
+      tabGeneration: 7,
+      startedAt: 1
+    }
+    mockStoreState = {
+      ...mockStoreState,
+      tabsByWorktree: {
+        'wt-1': [{ id: 'tab-1', ptyId: restoredPtyId, generation: 7 }]
+      },
+      repos: [{ id: 'repo1', connectionId: 'conn-1' }],
+      sshConnectionStates: new Map([
+        [
+          'conn-1',
+          {
+            status: 'disconnected',
+            providerEpoch: 'epoch-1',
+            connectionGeneration: 3
+          }
+        ]
+      ]),
+      deferredSshReconnectTargets: ['conn-1'],
+      deferredSshSessionIdsByTabId: { 'tab-1': restoredPtyId },
+      directSshPaneRetryByTabId: { 'tab-1': pendingRetry }
+    }
+    vi.mocked(window.api.ssh.needsPassphrasePrompt).mockReturnValue(passphraseProbe.promise)
+
+    const deps = createDeps()
+    connectPanePty(createPane(1) as never, createManager(1) as never, deps as never)
+    await flushAsyncTicks(3)
+    mockStoreState.directSshPaneRetryByTabId = {
+      'tab-1': { ...pendingRetry, attemptId: 'attempt-passphrase-probe-new' }
+    }
+
+    passphraseProbe.resolve(false)
+    await flushAsyncTicks(12)
+
+    expect(window.api.ssh.connect).not.toHaveBeenCalled()
+    expect(transport.connect).not.toHaveBeenCalled()
+    expect(deps.onPtyErrorRef.current).not.toHaveBeenCalled()
+    expect(mockStoreState.removeDeferredSshSessionId).not.toHaveBeenCalled()
+    expect(mockStoreState.removeDeferredSshReconnectTarget).not.toHaveBeenCalled()
+  })
+
+  it('drops a failed passphrase wait after its deferred SSH retry is replaced', async () => {
+    const { connectPanePty } = await import('./pty-connection')
+    const restoredPtyId = toAppSshPtyId('conn-1', 'saved-session')
+    const transport = createMockTransport()
+    transportFactoryQueue.push(transport)
+    const pendingRetry = {
+      attemptId: 'attempt-passphrase-wait',
+      authority: {
+        targetId: 'conn-1',
+        providerEpoch: 'epoch-1',
+        connectionGeneration: 3
+      },
+      tabGeneration: 7,
+      startedAt: 1
+    }
+    mockStoreState = {
+      ...mockStoreState,
+      tabsByWorktree: {
+        'wt-1': [{ id: 'tab-1', ptyId: restoredPtyId, generation: 7 }]
+      },
+      repos: [{ id: 'repo1', connectionId: 'conn-1' }],
+      sshConnectionStates: new Map([
+        [
+          'conn-1',
+          {
+            status: 'disconnected',
+            providerEpoch: 'epoch-1',
+            connectionGeneration: 3
+          }
+        ]
+      ]),
+      deferredSshReconnectTargets: ['conn-1'],
+      deferredSshSessionIdsByTabId: { 'tab-1': restoredPtyId },
+      directSshPaneRetryByTabId: { 'tab-1': pendingRetry }
+    }
+    vi.mocked(window.api.ssh.needsPassphrasePrompt).mockResolvedValue(true)
+
+    const deps = createDeps()
+    connectPanePty(createPane(1) as never, createManager(1) as never, deps as never)
+    await flushAsyncTicks(3)
+    mockStoreState.directSshPaneRetryByTabId = {
+      'tab-1': { ...pendingRetry, attemptId: 'attempt-passphrase-wait-new' }
+    }
+    mockStoreState.sshConnectionStates = new Map([
+      [
+        'conn-1',
+        {
+          status: 'auth-failed',
+          providerEpoch: 'epoch-1',
+          connectionGeneration: 3
+        }
+      ]
+    ])
+    notifyStoreSubscribers()
+    await flushAsyncTicks(12)
+
+    expect(deps.onPtyErrorRef.current).not.toHaveBeenCalled()
+    expect(window.api.ssh.connect).not.toHaveBeenCalled()
+    expect(transport.connect).not.toHaveBeenCalled()
+    expect(mockStoreState.removeDeferredSshSessionId).not.toHaveBeenCalled()
+    expect(mockStoreState.removeDeferredSshReconnectTarget).not.toHaveBeenCalled()
+  })
+
+  it('does not mutate deferred SSH reattach state after its connect wait lease is replaced', async () => {
+    const { connectPanePty } = await import('./pty-connection')
+    const restoredPtyId = toAppSshPtyId('conn-1', 'saved-session')
+    const sshConnect = createDeferred<SshConnectionState | null>()
+    const transport = createMockTransport()
+    transportFactoryQueue.push(transport)
+    const pendingRetry = {
+      attemptId: 'attempt-connect-wait',
+      authority: {
+        targetId: 'conn-1',
+        providerEpoch: 'epoch-1',
+        connectionGeneration: 3
+      },
+      tabGeneration: 7,
+      startedAt: 1
+    }
+    mockStoreState = {
+      ...mockStoreState,
+      tabsByWorktree: {
+        'wt-1': [{ id: 'tab-1', ptyId: restoredPtyId, generation: 7 }]
+      },
+      repos: [{ id: 'repo1', connectionId: 'conn-1' }],
+      sshConnectionStates: new Map([
+        [
+          'conn-1',
+          {
+            status: 'disconnected',
+            providerEpoch: 'epoch-1',
+            connectionGeneration: 3
+          }
+        ]
+      ]),
+      deferredSshReconnectTargets: ['conn-1'],
+      deferredSshSessionIdsByTabId: { 'tab-1': restoredPtyId },
+      directSshPaneRetryByTabId: { 'tab-1': pendingRetry }
+    }
+    vi.mocked(window.api.ssh.connect).mockReturnValue(sshConnect.promise)
+    const paneMode2031Ref = { current: new Map([[1, true]]) }
+    const paneLastThemeModeRef = { current: new Map([[1, true]]) }
+    const deps = createDeps({ paneMode2031Ref, paneLastThemeModeRef })
+
+    connectPanePty(createPane(1) as never, createManager(1) as never, deps as never)
+    await flushAsyncTicks(6)
+    mockStoreState.directSshPaneRetryByTabId = {
+      'tab-1': { ...pendingRetry, attemptId: 'attempt-connect-wait-new' }
+    }
+
+    sshConnect.resolve({
+      targetId: 'conn-1',
+      status: 'connected',
+      error: null,
+      reconnectAttempt: 0
+    })
+    await flushAsyncTicks(12)
+
+    expect(mockStoreState.removeDeferredSshReconnectTarget).not.toHaveBeenCalled()
+    expect(mockStoreState.removeDeferredSshSessionId).not.toHaveBeenCalled()
+    expect(window.api.pty.declarePendingPaneSerializer).not.toHaveBeenCalled()
+    expect(paneMode2031Ref.current.get(1)).toBe(true)
+    expect(paneLastThemeModeRef.current.get(1)).toBe(true)
+    expect(transport.connect).not.toHaveBeenCalled()
+    expect(deps.onPtyErrorRef.current).not.toHaveBeenCalled()
   })
 
   it('spawns a fresh PTY when a deferred SSH session expired', async () => {

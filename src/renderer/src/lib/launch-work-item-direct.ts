@@ -1,7 +1,6 @@
 import { toast } from 'sonner'
 import { useAppStore } from '@/store'
 import { planAgentCliArgsSuffix } from '@/lib/tui-agent-startup'
-import { TUI_AGENT_CONFIG } from '../../../shared/tui-agent-config'
 import { isTuiAgentEnabled, pickTuiAgent } from '../../../shared/tui-agent-selection'
 import { activateAndRevealWorktree } from '@/lib/worktree-activation'
 import { getWorkspaceIntentName, getWorkspaceSeedName } from '@/lib/new-workspace'
@@ -13,6 +12,7 @@ import {
   workspaceActivationErrorMessage
 } from '@/lib/launch-work-item-direct-messages'
 import { ensureHooksConfirmed } from '@/lib/ensure-hooks-confirmed'
+import { seedNativeChatLaunchDraftForAgentTab } from '@/lib/agent-launch-prompt-delivery'
 import { getConnectionId } from '@/lib/connection-context'
 import type { GitPushTarget, SetupDecision, TuiAgent } from '../../../shared/types'
 import { getLinearIssueWorkspaceName } from '../../../shared/workspace-name'
@@ -20,6 +20,7 @@ import { resolveGitHubWorkItemIdentity } from '@/lib/github-work-item-identity'
 import {
   buildDirectWorkItemAgentStartupPlan,
   buildDirectWorkItemStartupOpts,
+  markDirectWorkItemAgentTrusted,
   pasteDirectWorkItemDraftWhenAgentReady
 } from '@/lib/launch-work-item-direct-agent'
 import { getDirectWorkItemDraftContent } from '@/lib/launch-work-item-direct-draft'
@@ -255,23 +256,12 @@ export async function launchWorkItemDirect(args: LaunchWorkItemDirectArgs): Prom
         // Non-critical: activation still has the explicit startup below.
       })
     }
-    // Why: pre-write supported CLI trust artifacts so the first prompt is not consumed as menu input.
-    // Best-effort and preload-guarded for renderer/preload version skew.
-    if (effectiveAgent && worktreePath && window.api.agentTrust?.markTrusted) {
-      const preflight = TUI_AGENT_CONFIG[effectiveAgent].preflightTrust
-      if (preflight) {
-        try {
-          await window.api.agentTrust.markTrusted({
-            preset: preflight,
-            workspacePath: worktreePath,
-            ...(repo.connectionId ? { connectionId: repo.connectionId } : {})
-          })
-        } catch {
-          // Best-effort: continue with launch even if the trust write
-          // throws. The user can dismiss the trust menu manually.
-        }
-      }
-    }
+    // Why: pre-write trust artifacts so the first prompt is not consumed as menu input.
+    await markDirectWorkItemAgentTrusted({
+      agent: effectiveAgent,
+      workspacePath: worktreePath,
+      connectionId: repo.connectionId
+    })
 
     ;({ startupPlan, draftLaunchedNatively, startupPlanFailed } =
       buildDirectWorkItemAgentStartupPlan({
@@ -310,6 +300,17 @@ export async function launchWorkItemDirect(args: LaunchWorkItemDirectArgs): Prom
   if (startupPlanFailed) {
     toast.error(agentLaunchCommandErrorMessage())
     return false
+  }
+
+  // Why: draft delivery lands only in the TUI input buffer (argv prefill or
+  // startup-owned paste); seed the chat-composer copy so the work-item context
+  // isn't invisible in the GUI view.
+  if (promptDelivery === 'draft' && primaryTabId && effectiveAgent) {
+    seedNativeChatLaunchDraftForAgentTab({
+      tabId: primaryTabId,
+      agent: effectiveAgent,
+      text: draftContent
+    })
   }
 
   // Why: at this point the workspace is live and the agent (if any) has

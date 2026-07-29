@@ -27,7 +27,7 @@
         "kimiToggleDescription": "Muestra el uso de la suscripción de Kimi para el espacio de trabajo activo.",
         "minimaxToggleDescription": "Muestra el uso de la suscripción de MiniMax para el espacio de trabajo activo.",
         "sshToggleDescription": "Muestra hosts SSH configurados y hosts remotos de Orca cuando haya alguno disponible.",
-        "resourceUsageToggleDescription": "Muestra el Administrador de recursos. Haz clic para ver CPU, memoria, sesiones, controles del servicio en segundo plano y análisis de disco de los espacios de trabajo.",
+        "resourceUsageToggleDescription": "Muestra el Administrador de recursos. Haz clic para ver CPU, memoria, sesiones, controles del daemon y análisis de disco de los espacios de trabajo.",
         "portsToggleDescription": "Muestra los puertos activos de los espacios de trabajo. Haz clic para ver los puertos de cada espacio de trabajo y los puertos externos.",
         "antigravityToggleDescription": "Muestra el uso de suscripción de Antigravity para el espacio de trabajo activo.",
         "grokToggleDescription": "Muestra el uso de créditos de suscripción de Grok cuando has iniciado sesión con Grok CLI."
@@ -619,8 +619,8 @@
       "codex": {
         "session": {
           "restart": {
-            "4bd4a3a9c7": "System default",
-            "9f0b1c2d3e": "Codex account"
+            "4bd4a3a9c7": "Predeterminado del sistema",
+            "9f0b1c2d3e": "Cuenta de Codex"
           }
         }
       },
@@ -680,6 +680,7 @@
         "60428567b4": "Mostrar terminales locales no está disponible mientras haya un host remoto activo",
         "f8aaf2bde3": "Espacio de trabajo subido",
         "2fe88c2e06": "La sincronización del espacio de trabajo remoto no está disponible",
+        "workspaceChangedOnAnotherDevice": "El espacio de trabajo cambió en otro dispositivo",
         "2ec42e1c52": "Aún no hay espacio de trabajo remoto",
         "88214a785b": "La sincronización del espacio de trabajo esperó a que la sesión local terminara de cargarse y agotó el tiempo de espera",
         "4f78ba5885": "Espacio de trabajo sincronizado",
@@ -777,8 +778,8 @@
         "9263e75f49": "Codex está usando la cuenta anterior.",
         "a4c8e1b2f7": "Codex sigue conectado como {{value0}}",
         "d3e8a1f4b2": "Cuenta cambiada",
-        "9375620cc3": "Restart this session to use {{value0}}. It stays on the previous account until you do.",
-        "6133594b12": "Keep old account"
+        "9375620cc3": "Reinicia esta sesión para usar {{value0}}. Se mantiene en la cuenta anterior hasta que lo hagas.",
+        "6133594b12": "Mantener cuenta anterior"
       },
       "FirstLaunchBanner": {
         "b9e1b966c7": "Descartar aviso",
@@ -1891,18 +1892,18 @@
         "d5253b54af": "error",
         "7ffc08506e": "check",
         "522df222b9": "spinner",
-        "e944c2de43": "Update Verification Blocked",
-        "5b309b19f3": "Update Wasn't Installed",
-        "092f09fc14": "The installer's publisher doesn't match Orca, so we stopped the update. Don't install this download; check official releases for a corrected version.",
-        "c9ff9b9ec2": "Check official releases",
-        "a05992a26b": "The signature check couldn't run — usually because antivirus software blocked it. Retry the download, or get the installer from our official releases.",
-        "5194358929": "Hide details",
-        "8bc9e17d8f": "Show details",
-        "8cf17b10af": "Local Build Error",
-        "a4650b0dc4": "Could Not Use Local Build",
-        "b1e390250d": "Could not complete the local build switch.",
-        "d29740d175": "The selected build could not be used.",
-        "37d45c9ec1": "Choose Another Build"
+        "e944c2de43": "Verificación de actualización bloqueada",
+        "5b309b19f3": "La actualización no se instaló",
+        "092f09fc14": "El editor del instalador no coincide con Orca, así que detuvimos la actualización. No instales esta descarga; consulta las versiones oficiales para una versión corregida.",
+        "c9ff9b9ec2": "Verificar versiones oficiales",
+        "a05992a26b": "La verificación de firma no pudo ejecutarse — generalmente porque el software antivirus la bloqueó. Reintenta la descarga u obtén el instalador de nuestras versiones oficiales.",
+        "5194358929": "Ocultar detalles",
+        "8bc9e17d8f": "Mostrar detalles",
+        "8cf17b10af": "Error de compilación local",
+        "a4650b0dc4": "No se pudo usar la compilación local",
+        "b1e390250d": "No se pudo completar el cambio de compilación local.",
+        "d29740d175": "La compilación seleccionada no pudo ser usada.",
+        "37d45c9ec1": "Elegir otra compilación"
       },
       "WorktreeJumpPalette": {
         "ac037cfac2": "Mover",
@@ -3051,17 +3052,17 @@
             "298f4be7f2": "CPU",
             "2aa2de6cb9": "Nombre",
             "30ff2c3c31": "{{value0}} huérfano",
-            "6449a95c78": "Cuánta RAM física de esta máquina están usando los procesos que Orca rastrea.",
+            "6449a95c78": "Cuánta RAM física de esta máquina ocupan los procesos que Orca rastrea.",
             "e7ccce7e87": "de RAM del sistema",
             "9e2525c89f": "Memoria residente de Orca más los procesos bajo los terminales de cada worktree.",
             "1fedf94eae": "Carga de CPU combinada. Los valores superiores al 100% significan que más de un núcleo está trabajando a la vez.",
             "e7cf14ec78": "Sesiones de terminal no disponibles. La lista puede estar obsoleta.",
             "93b0de3c21": "Reiniciar",
             "f85af9cda6": "Las snapshots de recursos y las sesiones de terminal no están disponibles.",
-            "f8e0d794b4": "El servicio no responde",
+            "f8e0d794b4": "El daemon no responde",
             "bd19fd7a59": "Terminar todas las sesiones",
-            "c9382662bb": "Reiniciar servicio",
-            "59f178fe11": "{{value0}}, servicio inaccesible",
+            "c9382662bb": "Reiniciar daemon",
+            "59f178fe11": "{{value0}}, daemon inalcanzable",
             "21cacb16d1": "· remoto",
             "73a3fd68a9": "Contraer repositorio",
             "b12e31dfcb": "Expandir repositorio",
@@ -3076,13 +3077,13 @@
             "138b99bd80": "esta sesión",
             "888dad8c55": "Cargando…",
             "6d9793d4bc": "Administrador de recursos - Terminales",
-            "ca95d077db": "servicio inaccesible",
+            "ca95d077db": "daemon inalcanzable",
             "a82253b458": "Eliminar espacio de trabajo.",
             "946724a70a": "El espacio de trabajo principal no se puede eliminar.",
             "16bc3c998a": "Eliminar espacio de trabajo {{value0}}",
             "0f9e50eb07": "Otro",
             "d406915b78": "Renderer",
-            "81cd37af99": "Main",
+            "81cd37af99": "Principal",
             "fa6d36758d": "Terminar sesión {{value0}}",
             "b8f4a2c1d0e3": "{{value0}} huérfanos",
             "c7e3b1a0d9f2": "Terminar {{value0}} terminal huérfano",
@@ -3127,7 +3128,7 @@
             "75ded02687": "Administrar cuentas…",
             "ff0fbe9311": "Activo",
             "7657e3db9c": "Cuenta del Codex",
-            "38b5647724": "Servicio de uso de Codex",
+            "38b5647724": "Uso de Codex",
             "ba55303942": "Abrir detalles de Codex y cambiar de cuenta",
             "4dff061aab": "·",
             "2483c60695": "···",
@@ -3141,7 +3142,7 @@
             "c98ea88392": "Ninguna otra cuenta",
             "9332ba8684": "Cambiar a",
             "d450654fa2": "Cuenta de Claude",
-            "11e2354daf": "Servicio de uso de Claude",
+            "11e2354daf": "Uso de Claude",
             "3dd7ddfae1": "Abrir detalles de Claude y cambiar de cuenta",
             "59c6e7b4e0": "Las sesiones visibles se reinician ahora. Las demás se reinician cuando su worktree se activa.",
             "c676918adc": "Predeterminado del sistema",
@@ -3161,9 +3162,9 @@
             "5e5f9f5160": "1 reset de rate limit disponible",
             "5ecae9197c": "{{value0}} resets de rate limit disponibles",
             "25d8bbde69": "Aplicando reset…",
-            "e159fc1fd7": "Resetear ahora",
+            "e159fc1fd7": "Reiniciar ahora",
             "972a1ff497": "¿Restablecer límites de Codex?",
-            "6d1042aa6f": "Esto usa un crédito de reset de rate limit de Codex para la cuenta activa y restablece de inmediato las ventanas de uso elegibles.",
+            "6d1042aa6f": "Esto usa un crédito de reinicio de rate limit de Codex para la cuenta activa y reinicia de inmediato las ventanas de uso elegibles.",
             "f077f586db": "No volver a preguntar",
             "c0e972d726": "Cancelar",
             "06741a2f3d": "Abrir detalles de uso de MiniMax",
@@ -3176,10 +3177,10 @@
           },
           "StatusBarUsageEmptyCta": {
             "828c764a79": "Conectar una cuenta",
-            "caa0f39811": "Soporta:",
+            "caa0f39811": "Admite:",
             "97957ad3a3": "Conecta tus cuentas de proveedores de IA para ver su uso en tiempo real y cambiar fácilmente entre cuentas.",
             "9a542f46c7": "Ocultar de la barra de estado",
-            "84c3b15dca": "Límites de uso de Agents",
+            "84c3b15dca": "Límites de uso de agentes",
             "d663430cf9": "Configurar seguimiento de uso"
           },
           "UpdateStatusSegment": {
@@ -5672,15 +5673,15 @@
             "defaultViewNative": "Chat UI"
           },
           "agentDashboard": {
-            "title": "Agent Dashboard",
-            "description": "Kanban board for monitoring agents across worktrees, in-window or as a pop-out.",
-            "copy": "Adds an Agent Dashboard entry to the left sidebar. Open it to monitor attention, working, and idle agents and jump into their live terminals.",
-            "toggleLabel": "Toggle Agent Dashboard",
-            "modeLabel": "Open as",
-            "modeCopy": "Show the dashboard as an in-window board beside the sidebar or a separate pop-out window.",
-            "modeAriaLabel": "Agent Dashboard open mode",
-            "modeInWindow": "In-window",
-            "modePopout": "Pop-out"
+            "title": "Panel de agentes",
+            "description": "Tablero Kanban para monitorear agentes en diferentes worktrees, en ventana o como ventana emergente.",
+            "copy": "Agrega una entrada del Panel de agentes a la barra lateral izquierda. Ábrelo para monitorear agentes en atención, trabajando y en pausa, y saltar a sus terminales en vivo.",
+            "toggleLabel": "Alternar Panel de agentes",
+            "modeLabel": "Abrir como",
+            "modeCopy": "Muestra el tablero como un panel en ventana junto a la barra lateral o como una ventana emergente separada.",
+            "modeAriaLabel": "Modo de apertura del Panel de agentes",
+            "modeInWindow": "En ventana",
+            "modePopout": "Ventana emergente"
           }
         },
         "FloatingWorkspacePane": {
@@ -7875,8 +7876,8 @@
               "grok": "grok"
             },
             "agentDashboard": {
-              "title": "Agent Dashboard",
-              "description": "Kanban board for monitoring agents across worktrees, in-window or as a pop-out."
+              "title": "Panel de agentes",
+              "description": "Tablero Kanban para monitorear agentes en diferentes worktrees, en ventana o como ventana emergente."
             }
           }
         },
@@ -12300,7 +12301,7 @@
           "35cc27aeb2": "en Control de código fuente",
           "e3b9a6ce02": "más",
           "1da745c551": "Enviado",
-          "84898c548d": "Borrar ",
+          "84898c548d": "Borrar",
           "88b70d0ef5": "Copiar",
           "bb84b4c374": "Notas de IA",
           "948a5fd6c8": "Borrar notas",
@@ -14272,12 +14273,12 @@
       "close": "Close"
     },
     "close": "Close dashboard",
-    "settings": "Agent Dashboard settings",
-    "settingsTooltip": "Board settings"
+    "settings": "Configuración del Panel de agentes",
+    "settingsTooltip": "Configuración del tablero"
   },
   "dashboard": {
     "sidebar": {
-      "label": "Agent Dashboard"
+      "label": "Panel de agentes"
     }
   },
   "browser": {

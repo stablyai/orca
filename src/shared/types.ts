@@ -2099,6 +2099,13 @@ export type OrcaHooks = {
   defaultTabs?: OrcaDefaultTabTemplate[] // Terminal tabs to create once for a new worktree
   environmentRecipes?: OrcaVmRecipe[] // Project-scoped per-workspace environment recipes
   environmentRecipeDiagnostics?: OrcaVmRecipeDiagnostic[] // Non-fatal validation issues from environmentRecipes
+  worktree?: OrcaWorktreeDefaults // Project-scoped defaults applied when a worktree is created
+}
+
+export type OrcaWorktreeDefaults = {
+  // Why: shared (symlinked) rather than copied — large rebuildable dirs like
+  // node_modules should be one install serving every worktree.
+  sharedDirectories?: string[]
 }
 
 export type OrcaDefaultTabTemplate = {

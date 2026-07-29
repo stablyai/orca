@@ -50,7 +50,8 @@ export function resolveTerminalKeyboardShortcutAction(
   isKittyKeyboardActivePane: Parameters<typeof resolveTerminalShortcutAction>[7],
   layoutBaseCharacterForCode: Parameters<typeof resolveTerminalShortcutAction>[8],
   getWindowsShiftEnterEncoding: Parameters<typeof resolveTerminalShortcutAction>[9],
-  isWindowsTerminalHost: NonNullable<Parameters<typeof resolveTerminalShortcutAction>[10]>
+  isWindowsTerminalHost: NonNullable<Parameters<typeof resolveTerminalShortcutAction>[10]>,
+  terminalShortcutPolicy: Parameters<typeof resolveTerminalShortcutAction>[11] = 'orca-first'
 ): ReturnType<typeof resolveTerminalShortcutAction> {
   // Why: keep the host callback required at the production boundary so a
   // caller cannot silently fall back to client-OS byte routing.
@@ -65,7 +66,8 @@ export function resolveTerminalKeyboardShortcutAction(
     isKittyKeyboardActivePane,
     layoutBaseCharacterForCode,
     getWindowsShiftEnterEncoding,
-    isWindowsTerminalHost
+    isWindowsTerminalHost,
+    terminalShortcutPolicy
   )
 }
 
@@ -397,7 +399,8 @@ export function useTerminalKeyboardShortcuts({
         isKittyKeyboardActivePane,
         getLayoutBaseCharacterForCode,
         getActivePaneWindowsShiftEnterEncoding,
-        isActivePaneWindowsTerminalHost
+        isActivePaneWindowsTerminalHost,
+        terminalShortcutPolicy
       )
       if (!action) {
         return

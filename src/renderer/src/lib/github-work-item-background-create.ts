@@ -236,12 +236,13 @@ export async function createGitHubWorkItemWorkspaceInBackground(
       return { kind: 'fallback', reason: 'agent-unavailable' }
     }
     const launchStore = deps.getStore()
-    const { startupPlan, quickPrompt, quickTelemetry } = buildGitHubWorkItemStartupPlan({
-      agent,
-      item: args.item,
-      repo,
-      store: launchStore
-    })
+    const { startupPlan, quickPrompt, launchDraftPrompt, quickTelemetry } =
+      buildGitHubWorkItemStartupPlan({
+        agent,
+        item: args.item,
+        repo,
+        store: launchStore
+      })
     if (agent && !startupPlan) {
       deps.toastError(agentLaunchCommandErrorMessage())
       abandonStagedCreate(creationId, restoreView, deps)
@@ -310,6 +311,7 @@ export async function createGitHubWorkItemWorkspaceInBackground(
       ...(issueCommand ? { issueCommand } : {}),
       startupPlan,
       quickPrompt,
+      ...(launchDraftPrompt ? { launchDraftPrompt } : {}),
       quickTelemetry
     }
 

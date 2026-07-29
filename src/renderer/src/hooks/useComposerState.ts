@@ -4150,6 +4150,7 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
           note: trimmedNote,
           startupPlan,
           quickPrompt,
+          ...(quickDraftPrompt ? { launchDraftPrompt: quickDraftPrompt } : {}),
           quickTelemetry,
           ...(createMultiple ? { suppressTerminalFocusOnCompletion: true } : {})
         }

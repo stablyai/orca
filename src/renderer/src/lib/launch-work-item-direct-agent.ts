@@ -11,6 +11,7 @@ import type { SleepingAgentLaunchConfig } from '../../../shared/agent-session-re
 import type { LaunchSource } from '../../../shared/telemetry-events'
 import type { StartupCommandDelivery } from '../../../shared/codex-startup-delivery'
 import type { TuiAgent } from '../../../shared/types'
+import { TUI_AGENT_CONFIG } from '../../../shared/tui-agent-config'
 import {
   resolveTuiAgentLaunchArgs,
   resolveTuiAgentLaunchEnv
@@ -147,6 +148,29 @@ export function buildDirectWorkItemStartupOpts(
         : {}),
       ...(telemetry ? { telemetry } : {})
     }
+  }
+}
+
+export async function markDirectWorkItemAgentTrusted(args: {
+  agent: TuiAgent | null
+  workspacePath: string
+  connectionId?: string
+}): Promise<void> {
+  if (!args.agent || !args.workspacePath || !window.api.agentTrust?.markTrusted) {
+    return
+  }
+  const preset = TUI_AGENT_CONFIG[args.agent].preflightTrust
+  if (!preset) {
+    return
+  }
+  try {
+    await window.api.agentTrust.markTrusted({
+      preset,
+      workspacePath: args.workspacePath,
+      ...(args.connectionId ? { connectionId: args.connectionId } : {})
+    })
+  } catch {
+    // Best-effort: the user can dismiss the trust menu manually.
   }
 }
 

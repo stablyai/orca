@@ -39,7 +39,9 @@ const store = {
   setSidebarOpen: vi.fn(),
   createWorktree: vi.fn(() => new Promise(() => {})),
   setupProjectExistingFolder: vi.fn(),
-  refreshRuntimeEnvironmentStatus: vi.fn()
+  refreshRuntimeEnvironmentStatus: vi.fn(),
+  seedNativeChatLaunchDraft: vi.fn(),
+  tabsByWorktree: {} as Record<string, { id: string; launchAgent?: string }[]>
 }
 
 vi.mock('@/store', () => ({
@@ -97,6 +99,7 @@ beforeEach(() => {
   store.repos = []
   store.pendingWorktreeCreations = { 'creation-1': makePendingCreation(makeRequest()) }
   store.createWorktree.mockImplementation(() => new Promise(() => {}))
+  store.tabsByWorktree = {}
   vi.mocked(ensureWorktreeHasInitialTerminal).mockReturnValue('tab-1')
 })
 
@@ -646,6 +649,99 @@ describe('staged background worktree creation', () => {
       )
     )
     expect(ensureWorktreeHasInitialTerminal).not.toHaveBeenCalled()
+  })
+
+  it('seeds the chat-composer launch draft on completion for draft launches', async () => {
+    store.activeView = 'terminal'
+    store.activePendingCreationId = 'creation-1'
+    store.createWorktree.mockResolvedValueOnce({
+      worktree: { id: 'wt-1', repoId: 'repo-1', path: '/repo/wt-1' }
+    })
+    vi.mocked(activateAndRevealWorktree).mockReturnValueOnce({ primaryTabId: 'tab-1' })
+
+    const started = continueBackgroundWorktreeCreation(
+      'creation-1',
+      makeRequest({
+        agent: 'claude',
+        startupPlan: {
+          agent: 'claude',
+          launchCommand: 'claude --prefill x',
+          expectedProcess: 'claude',
+          followupPrompt: null,
+          launchConfig: { agentArgs: '', agentEnv: {} }
+        },
+        launchDraftPrompt: 'https://github.com/o/r/issues/12'
+      })
+    )
+
+    expect(started).toBe(true)
+    await vi.waitFor(() =>
+      expect(store.seedNativeChatLaunchDraft).toHaveBeenCalledWith({
+        tabId: 'tab-1',
+        agent: 'claude',
+        text: 'https://github.com/o/r/issues/12',
+        createdAt: expect.any(Number)
+      })
+    )
+  })
+
+  it('seeds the backend-spawned agent tab, not the worktree default terminal tab', async () => {
+    // Repo default tabs ("dev server", "logs", …) make activation's primaryTabId
+    // a tab that runs no agent; main's startup terminal is the agent's own tab.
+    store.activeView = 'terminal'
+    store.activePendingCreationId = 'creation-1'
+    store.tabsByWorktree = { 'wt-1': [{ id: 'dev-server' }, { id: 'agent-tab' }] }
+    store.createWorktree.mockResolvedValueOnce({
+      worktree: { id: 'wt-1', repoId: 'repo-1', path: '/repo/wt-1' },
+      startupTerminal: { tabId: 'agent-tab', spawned: true }
+    })
+    vi.mocked(activateAndRevealWorktree).mockReturnValueOnce({ primaryTabId: 'dev-server' })
+
+    continueBackgroundWorktreeCreation(
+      'creation-1',
+      makeRequest({
+        agent: 'claude',
+        startupPlan: {
+          agent: 'claude',
+          launchCommand: 'claude --prefill x',
+          expectedProcess: 'claude',
+          followupPrompt: null,
+          launchConfig: { agentArgs: '', agentEnv: {} }
+        },
+        launchDraftPrompt: 'https://github.com/o/r/issues/12'
+      })
+    )
+
+    await vi.waitFor(() => expect(store.seedNativeChatLaunchDraft).toHaveBeenCalled())
+    expect(store.seedNativeChatLaunchDraft).toHaveBeenCalledWith(
+      expect.objectContaining({ tabId: 'agent-tab' })
+    )
+  })
+
+  it('does not seed a launch draft without draft launch context', async () => {
+    store.activeView = 'terminal'
+    store.activePendingCreationId = 'creation-1'
+    store.createWorktree.mockResolvedValueOnce({
+      worktree: { id: 'wt-1', repoId: 'repo-1', path: '/repo/wt-1' }
+    })
+    vi.mocked(activateAndRevealWorktree).mockReturnValueOnce({ primaryTabId: 'tab-1' })
+
+    continueBackgroundWorktreeCreation(
+      'creation-1',
+      makeRequest({
+        agent: 'claude',
+        startupPlan: {
+          agent: 'claude',
+          launchCommand: 'claude',
+          expectedProcess: 'claude',
+          followupPrompt: null,
+          launchConfig: { agentArgs: '', agentEnv: {} }
+        }
+      })
+    )
+
+    await vi.waitFor(() => expect(activateAndRevealWorktree).toHaveBeenCalled())
+    expect(store.seedNativeChatLaunchDraft).not.toHaveBeenCalled()
   })
 
   it('toasts a staged create error after the user leaves the creation surface', async () => {

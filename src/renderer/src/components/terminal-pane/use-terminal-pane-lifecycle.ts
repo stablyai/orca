@@ -25,6 +25,7 @@ import { buildWindowsPtyCompatibilityOptions } from '@/lib/pane-manager/windows-
 import { buildTerminalKeyboardProtocolOptions } from '@/lib/pane-manager/terminal-keyboard-protocol'
 import { resolvePaneKeyboardProtocolAgent } from './terminal-keyboard-protocol-pane-agent'
 import { useAppStore } from '@/store'
+import type { DirectSshPaneRetryAttemptId } from '@/store/slices/direct-ssh-terminal-recovery'
 import {
   createFilePathLinkProvider,
   getTerminalFileOpenHint,
@@ -276,7 +277,12 @@ type UseTerminalPaneLifecycleDeps = {
   updateTabTitle: (tabId: string, title: string) => void
   setRuntimePaneTitle: (tabId: string, paneId: number, title: string) => void
   clearRuntimePaneTitle: (tabId: string, paneId: number) => void
-  updateTabPtyId: (tabId: string, ptyId: string, replacedPtyId?: string) => void
+  updateTabPtyId: (
+    tabId: string,
+    ptyId: string,
+    replacedPtyId?: string,
+    directSshRetryAttemptId?: DirectSshPaneRetryAttemptId
+  ) => void
   markWorktreeUnread: (worktreeId: string) => void
   markTerminalTabUnread: (tabId: string) => void
   markTerminalPaneUnread: (paneKey: string) => void

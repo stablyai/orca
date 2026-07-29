@@ -30,6 +30,18 @@ import type {
   PortForwardEntry,
   EnrichedDetectedPort
 } from '../shared/ssh-types'
+import {
+  admitSshConnectionStateForAuthorityReconciliation,
+  admitSshDetectedPorts
+} from '../shared/ssh-retained-payload-admission'
+import type {
+  HostRepoCatalogSnapshot,
+  ListReposForExecutionHostArgs
+} from '../shared/host-repo-catalog-contract'
+import type {
+  HostLineageSnapshot,
+  ListDesktopLineageForHostArgs
+} from '../shared/host-lineage-contract'
 import type {
   PluginPanelActionOutcome,
   PluginPanelEntry
@@ -591,6 +603,9 @@ const api = {
   repos: {
     list: () => ipcRenderer.invoke('repos:list'),
 
+    listForExecutionHost: (args: ListReposForExecutionHostArgs): Promise<HostRepoCatalogSnapshot> =>
+      ipcRenderer.invoke('repos:listForExecutionHost', args),
+
     add: (args) => ipcRenderer.invoke('repos:add', args),
 
     addRemote: (args) => ipcRenderer.invoke('repos:addRemote', args),
@@ -724,6 +739,8 @@ const api = {
 
     listDetected: (args) => ipcRenderer.invoke('worktrees:listDetected', args),
 
+    cancelListDetected: (args) => ipcRenderer.invoke('worktrees:cancelListDetected', args),
+
     listAll: () => ipcRenderer.invoke('worktrees:listAll'),
 
     create: (args) => ipcRenderer.invoke('worktrees:create', args),
@@ -755,6 +772,9 @@ const api = {
     updateMeta: (args) => ipcRenderer.invoke('worktrees:updateMeta', args),
 
     listLineage: () => ipcRenderer.invoke('worktrees:listLineage'),
+
+    listLineageForHost: (args: ListDesktopLineageForHostArgs): Promise<HostLineageSnapshot> =>
+      ipcRenderer.invoke('worktrees:listLineageForHost', args),
 
     updateLineage: (args) => ipcRenderer.invoke('worktrees:updateLineage', args),
 
@@ -3556,6 +3576,18 @@ const api = {
       ipcRenderer.on('ui:closeActiveTab', listener)
       return () => ipcRenderer.removeListener('ui:closeActiveTab', listener)
     },
+    onCloseFloatingItem: (callback: (payload: { sourceId: string }) => void): (() => void) => {
+      const listener = (_event: Electron.IpcRendererEvent, payload: { sourceId: string }) =>
+        callback(payload)
+      ipcRenderer.on('ui:closeFloatingItem', listener)
+      return () => ipcRenderer.removeListener('ui:closeFloatingItem', listener)
+    },
+    onSelectFloatingIndex: (callback: (payload: { index: number }) => void): (() => void) => {
+      const listener = (_event: Electron.IpcRendererEvent, payload: { index: number }) =>
+        callback(payload)
+      ipcRenderer.on('ui:selectFloatingIndex', listener)
+      return () => ipcRenderer.removeListener('ui:selectFloatingIndex', listener)
+    },
     onSwitchTab: (callback: (direction: 1 | -1) => void): (() => void) => {
       const listener = (_event: Electron.IpcRendererEvent, direction: 1 | -1) => callback(direction)
       ipcRenderer.on('ui:switchTab', listener)
@@ -3935,8 +3967,9 @@ const api = {
     setTerminalInputFocused: (focused: boolean): void => {
       ipcRenderer.send('ui:setTerminalInputFocused', focused)
     },
-    setFloatingTerminalInputFocused: (focused: boolean): void => {
-      ipcRenderer.send('ui:setFloatingTerminalInputFocused', focused)
+    // Why: one atomic payload so main's synchronous before-input-event never sees a torn terminal=true/panel=false state.
+    setFloatingFocus: (state: { panelFocused: boolean; terminalFocused: boolean }): void => {
+      ipcRenderer.send('ui:setFloatingFocus', state)
     },
     setShortcutRecorderFocused: (focused: boolean): void => {
       ipcRenderer.send('ui:setShortcutRecorderFocused', focused)
@@ -4306,8 +4339,10 @@ const api = {
     importConfig: (args?: { reAdopt?: boolean }): Promise<SshConfigImportResult> =>
       ipcRenderer.invoke('ssh:importConfig', args),
 
-    connect: (args: { targetId: string }): Promise<SshConnectionState | null> =>
-      ipcRenderer.invoke('ssh:connect', args),
+    connect: async (args: { targetId: string }): Promise<SshConnectionState | null> => {
+      const state: unknown = await ipcRenderer.invoke('ssh:connect', args)
+      return state ? admitSshConnectionStateForAuthorityReconciliation(state, args.targetId) : null
+    },
 
     disconnect: (args: { targetId: string }): Promise<void> =>
       ipcRenderer.invoke('ssh:disconnect', args),
@@ -4318,24 +4353,37 @@ const api = {
     resetRelay: (args: { targetId: string }): Promise<void> =>
       ipcRenderer.invoke('ssh:resetRelay', args),
 
-    getState: (args: { targetId: string }): Promise<SshConnectionState | null> =>
-      ipcRenderer.invoke('ssh:getState', args),
+    getState: async (args: { targetId: string }): Promise<SshConnectionState | null> => {
+      const state: unknown = await ipcRenderer.invoke('ssh:getState', args)
+      return state ? admitSshConnectionStateForAuthorityReconciliation(state, args.targetId) : null
+    },
 
     needsPassphrasePrompt: (args: { targetId: string }): Promise<boolean> =>
       ipcRenderer.invoke('ssh:needsPassphrasePrompt', args),
 
-    testConnection: (args: {
+    testConnection: async (args: {
       targetId: string
-    }): Promise<{ success: boolean; error?: string; state?: SshConnectionState }> =>
-      ipcRenderer.invoke('ssh:testConnection', args),
+    }): Promise<{ success: boolean; error?: string; state?: SshConnectionState }> => {
+      const result: { success: boolean; error?: string; state?: unknown } =
+        await ipcRenderer.invoke('ssh:testConnection', args)
+      const state = result.state
+        ? admitSshConnectionStateForAuthorityReconciliation(result.state, args.targetId)
+        : null
+      return { ...result, ...(state ? { state } : { state: undefined }) }
+    },
 
     onStateChanged: (
       callback: (data: { targetId: string; state: SshConnectionState }) => void
     ): (() => void) => {
       const listener = (
         _event: Electron.IpcRendererEvent,
-        data: { targetId: string; state: SshConnectionState }
-      ) => callback(data)
+        data: { targetId: string; state: unknown }
+      ): void => {
+        const state = admitSshConnectionStateForAuthorityReconciliation(data.state, data.targetId)
+        if (state) {
+          callback({ targetId: data.targetId, state })
+        }
+      }
       ipcRenderer.on('ssh:state-changed', listener)
       return () => ipcRenderer.removeListener('ssh:state-changed', listener)
     },
@@ -4363,8 +4411,8 @@ const api = {
     listPortForwards: (args?: { targetId?: string }): Promise<PortForwardEntry[]> =>
       ipcRenderer.invoke('ssh:listPortForwards', args),
 
-    listDetectedPorts: (args: { targetId: string }): Promise<EnrichedDetectedPort[]> =>
-      ipcRenderer.invoke('ssh:listDetectedPorts', args),
+    listDetectedPorts: async (args: { targetId: string }): Promise<EnrichedDetectedPort[]> =>
+      admitSshDetectedPorts(await ipcRenderer.invoke('ssh:listDetectedPorts', args)),
 
     onPortForwardsChanged: (
       callback: (data: { targetId: string; forwards: PortForwardEntry[] }) => void
@@ -4382,8 +4430,8 @@ const api = {
     ): (() => void) => {
       const handler = (
         _event: Electron.IpcRendererEvent,
-        data: { targetId: string; ports: EnrichedDetectedPort[] }
-      ) => callback(data)
+        data: { targetId: string; ports: unknown }
+      ) => callback({ targetId: data.targetId, ports: admitSshDetectedPorts(data.ports) })
       ipcRenderer.on('ssh:detected-ports-changed', handler)
       return () => ipcRenderer.removeListener('ssh:detected-ports-changed', handler)
     },

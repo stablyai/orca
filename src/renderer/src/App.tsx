@@ -75,8 +75,8 @@ import {
 } from '@/lib/floating-terminal'
 import {
   isFloatingWorkspacePanelFocused,
-  isFloatingWorkspacePanelShortcut,
   isFloatingWorkspaceTerminalInputTarget,
+  matchFloatingWorkspacePanelChord,
   shouldMinimizeFloatingWorkspacePanelOnCloseShortcut
 } from '@/lib/floating-workspace-terminal-actions'
 import { createFloatingWorkspaceTourInteractionSnapshot } from '@/lib/floating-workspace-tour-interaction-snapshot'
@@ -179,6 +179,7 @@ import {
   keybindingMatchesAction,
   type KeybindingActionId,
   type KeybindingContext,
+  type KeybindingMatchOptions,
   type PhysicalModifierToken
 } from '../../shared/keybindings'
 import { PLUGIN_COMMAND_ALIAS_ACTION_IDS } from '../../shared/plugins/plugin-command-actions'
@@ -407,8 +408,11 @@ function applyRemoteWorkspacePatchStatus(
     message:
       result.message ??
       (result.reason === 'stale-revision'
-        ? 'Workspace changed on another device'
-        : 'Remote workspace sync unavailable')
+        ? translate(
+            'auto.hooks.useIpcEvents.workspaceChangedOnAnotherDevice',
+            'Workspace changed on another device'
+          )
+        : translate('auto.hooks.useIpcEvents.2fe88c2e06', 'Remote workspace sync unavailable'))
   })
 }
 
@@ -1837,11 +1841,15 @@ function App(): React.JSX.Element {
       // Only short-circuit chords the floating panel itself claims; suppressing others here would silently no-op them when focus is in the panel.
       const floatingWorkspaceFocused = isFloatingWorkspacePanelFocused()
       if (floatingWorkspaceFocused) {
+        const floatingMatchOptions: KeybindingMatchOptions = { context, terminalShortcutPolicy }
         if (
-          isFloatingWorkspacePanelShortcut(input, shortcutPlatform, null, keybindings, {
-            context,
-            terminalShortcutPolicy
-          })
+          matchFloatingWorkspacePanelChord(
+            input,
+            shortcutPlatform,
+            null,
+            keybindings,
+            floatingMatchOptions
+          ) !== null
         ) {
           return
         }

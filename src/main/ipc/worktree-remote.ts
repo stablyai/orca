@@ -99,9 +99,14 @@ import {
   prepareWorktreePushTargetWithExec
 } from './worktree-push-target-setup'
 import { isENOENT, registerWorktreeRootsForRepo } from './filesystem-auth'
-import { createWorktreeCopiedPaths, createWorktreeLinkedPaths } from './worktree-symlinks'
+import {
+  createWorktreeCopiedPaths,
+  createWorktreeLinkedPaths,
+  createWorktreeSharedPaths
+} from './worktree-symlinks'
 import { formatWorktreeIncludeCopyWarning } from './worktree-include-copy-budget'
 import { resolveWorktreeIncludePaths } from '../git/worktree-include-file'
+import { resolveWorktreeSharedDirectories } from '../git/worktree-shared-directories'
 import { normalizeSparseDirectories } from './sparse-checkout-directories'
 import { joinWorktreeRelativePath } from '../runtime/runtime-relative-paths'
 import type { IFilesystemProvider } from '../providers/types'
@@ -1872,7 +1877,7 @@ export async function createRemoteWorktree(
   })
   const workspaceLineage = recordWorkspaceLineageForCreatedWorktree(store, args, worktree, now)
 
-  // Why: shared/symlink paths and `.worktreeinclude` copies are local-only; remote (SSH) support needs a new relay method + auth surface, so both are skipped here.
+  // Why: shared/symlink paths, `orca.yaml` shared directories, and `.worktreeinclude` copies are local-only; remote (SSH) support needs a new relay method + auth surface, so all are skipped here.
 
   let setup: CreateWorktreeResult['setup']
   let defaultTabs: CreateWorktreeResult['defaultTabs']
@@ -2465,6 +2470,17 @@ export async function createLocalWorktree(
   if (symlinkPaths.length > 0) {
     await timing.time('create_symlinks', async () => {
       await createWorktreeLinkedPaths(repo.path, created.path, symlinkPaths)
+    })
+  }
+
+  // Why: project-level `orca.yaml` shared directories add to (never replace) the per-user
+  // setting, so a repo's shared dirs reach every teammate (issue #10451).
+  const sharedDirectories = await timing.time('resolve_shared_directories', () =>
+    resolveWorktreeSharedDirectories(repo.path, localWorktreeGitOptions)
+  )
+  if (sharedDirectories.length > 0) {
+    await timing.time('create_shared_directories', async () => {
+      await createWorktreeSharedPaths(repo.path, created.path, sharedDirectories)
     })
   }
 

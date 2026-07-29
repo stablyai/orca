@@ -168,6 +168,70 @@ describe('registerHostedReviewHandlers', () => {
     )
   })
 
+  // Why: without this the dirty preflight counts Orca's own shared symlinks as
+  // user work and Create Review tells the user to commit a link they cannot
+  // commit (issue #10451). Nothing else asserts the handler supplies them.
+  it('passes the repo shared link paths through local review creation', async () => {
+    const localRepo = {
+      id: 'repo-local',
+      path: '/workspace/repo',
+      displayName: 'local',
+      badgeColor: '#000',
+      addedAt: 0,
+      symlinkPaths: ['node_modules']
+    }
+    store.getRepo.mockImplementation((repoId: string) =>
+      repoId === localRepo.id ? localRepo : null
+    )
+    store.getRepos.mockReturnValue([localRepo])
+    const resolvedWorktreePath = resolve('/workspace/feature')
+    resolveRegisteredWorktreePathMock.mockResolvedValue(resolvedWorktreePath)
+    listRepoWorktreesMock.mockResolvedValue([{ path: resolvedWorktreePath }])
+    createHostedReviewMock.mockResolvedValueOnce({ ok: true, number: 42, url: 'https://x/1' })
+
+    registerHostedReviewHandlers(store as never, stats as never)
+
+    await handlers['hostedReview:create'](null, {
+      repoPath: localRepo.path,
+      repoId: localRepo.id,
+      worktreePath: '/workspace/feature',
+      provider: 'github',
+      base: 'main',
+      head: 'feature/pr',
+      title: 'Feature PR'
+    })
+
+    expect(createHostedReviewMock).toHaveBeenCalledWith(
+      resolvedWorktreePath,
+      expect.anything(),
+      null,
+      { sharedLinkPaths: ['node_modules'] }
+    )
+  })
+
+  // Why: remote creation never materializes these links, and `repo.path` names a
+  // path on the remote host — resolving it locally would read a stranger's file.
+  it('does not resolve shared link paths for an SSH repo', async () => {
+    store.getRepo.mockImplementation((repoId: string) =>
+      repoId === repo.id ? { ...repo, symlinkPaths: ['node_modules'] } : null
+    )
+    createHostedReviewMock.mockResolvedValueOnce({ ok: true, number: 42, url: 'https://x/1' })
+
+    registerHostedReviewHandlers(store as never, stats as never)
+
+    await handlers['hostedReview:create'](null, {
+      repoPath,
+      repoId: repo.id,
+      worktreePath,
+      provider: 'github',
+      base: 'main',
+      head: 'feature/pr',
+      title: 'Feature PR'
+    })
+
+    expect(createHostedReviewMock).toHaveBeenCalledWith(worktreePath, expect.anything(), 'ssh-1')
+  })
+
   it('routes local WSL project review status through main-process runtime options', async () => {
     setPlatform('win32')
     const localRepo = {

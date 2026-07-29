@@ -77,7 +77,7 @@ export function mergeNativeChatLiveSession(input: NativeChatLiveMergeInput): Nat
 }
 
 /** Slack for comparing transcript timestamps to hook receipt times across hosts. */
-const LIFECYCLE_CLOCK_SKEW_SLACK_MS = 2_000
+export const LIFECYCLE_CLOCK_SKEW_SLACK_MS = 2_000
 
 function liveStatusOverride(
   hookState: AgentStatusState | null,

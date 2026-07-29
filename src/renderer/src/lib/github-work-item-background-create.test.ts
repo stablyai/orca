@@ -693,6 +693,7 @@ describe('createGitHubWorkItemWorkspaceInBackground', () => {
     expect(continueCall).toBeDefined()
     const request = continueCall?.[1] as WorktreeCreationRequest
     expect(request.startupPlan?.launchCommand).toBe('codex --prompt-file')
+    expect(request.launchDraftPrompt).toBe('https://github.com/stablyai/orca/issues/42')
     expect(request.startup?.command).toBe('codex --prompt-file')
     expect(buildAgentStartupPlan).not.toHaveBeenCalled()
   })

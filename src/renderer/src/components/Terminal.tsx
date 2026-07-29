@@ -120,6 +120,7 @@ import {
   createFloatingWorkspaceMarkdownTab,
   createFloatingWorkspaceTerminalTab,
   handleEmptyFloatingWorkspacePanelCloseShortcut,
+  isEventTargetInsideFloatingWorkspacePanel,
   isFloatingWorkspacePanelFocused,
   switchFloatingWorkspaceTab
 } from '@/lib/floating-workspace-terminal-actions'
@@ -1817,6 +1818,15 @@ function Terminal(): React.JSX.Element | null {
       // Cmd/Ctrl+W — close active editor/browser tab or terminal pane. Terminal close lives in keyboard-handlers.ts (split panes + confirm dialog).
       // Why: still preventDefault here so Electron doesn't run its default Cmd+W window-close.
       if (!e.repeat && matchShortcut('tab.close')) {
+        // The floating panel (L2) and its terminal pane handler (L3) own Cmd+W while the panel is
+        // focused. Guard on the event target too — during blur/IME churn activeElement is transiently
+        // body/null while a key still targets a floating xterm, and a main editor/browser being active
+        // would otherwise close the wrong (main) tab. Yield without preventDefault so L3 runs.
+        const floatingPanelOwnsEvent =
+          isEventTargetInsideFloatingWorkspacePanel(e.target) || floatingWorkspaceFocused
+        if (floatingPanelOwnsEvent) {
+          return
+        }
         const state = useAppStore.getState()
         if (state.activeTabType === 'terminal' && context === 'terminal') {
           return

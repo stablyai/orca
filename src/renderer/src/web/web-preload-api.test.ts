@@ -2657,6 +2657,57 @@ describe('web worktree preload API', () => {
     ])
   })
 
+  it('preserves runtime-routed detected-worktree host ownership in the compatibility shape', async () => {
+    vi.doMock('./web-runtime-client', () => ({
+      WebRuntimeClient: class {
+        call(): Promise<RuntimeRpcResponse<unknown>> {
+          return Promise.resolve({
+            id: 'detected-list',
+            ok: true,
+            result: {
+              repoId: 'repo-1',
+              authoritative: true,
+              source: 'git',
+              worktrees: [
+                { id: 'repo-1::/srv/repo', repoId: 'repo-1', path: '/srv/repo', hostId: 'local' },
+                {
+                  id: 'repo-1::/ssh/repo',
+                  repoId: 'repo-1',
+                  path: '/ssh/repo',
+                  hostId: 'ssh:hub-private-target'
+                }
+              ]
+            },
+            _meta: { runtimeId: 'runtime-1' }
+          })
+        }
+
+        close(): void {}
+      }
+    }))
+    const globals = installBrowserGlobals('Linux')
+    writeStoredRuntimeEnvironment(globals.storage, 'web-env-1')
+    const { installWebPreloadApi } = await import('./web-preload-api')
+    installWebPreloadApi()
+
+    await expect(
+      globals.window.api.worktrees.listDetected({ repoId: 'repo-1' })
+    ).resolves.toMatchObject({
+      repoId: 'repo-1',
+      authoritative: true,
+      worktrees: [
+        {
+          hostId: 'local',
+          runtimeOwnerEnvironmentId: 'web-env-1'
+        },
+        {
+          hostId: 'ssh:hub-private-target',
+          runtimeOwnerEnvironmentId: 'web-env-1'
+        }
+      ]
+    })
+  })
+
   it('falls back to legacy worktree.list when detectedList is unavailable', async () => {
     const runtimeCalls: { method: string; params: unknown }[] = []
     const worktree = {
@@ -2932,6 +2983,71 @@ describe('web worktree preload API', () => {
           pushTarget: null
         }
       }
+    ])
+  })
+})
+
+describe('web SSH preload API', () => {
+  beforeEach(() => {
+    vi.resetModules()
+  })
+
+  afterEach(() => {
+    vi.unstubAllGlobals()
+    vi.doUnmock('./web-runtime-client')
+  })
+
+  it('preserves full and partial authority states from the paired runtime', async () => {
+    const runtimeCalls: { method: string; params: unknown }[] = []
+    vi.doMock('./web-runtime-client', () => ({
+      WebRuntimeClient: class {
+        call(method: string, params?: unknown): Promise<RuntimeRpcResponse<unknown>> {
+          runtimeCalls.push({ method, params })
+          const state =
+            method === 'ssh.connect'
+              ? {
+                  targetId: 'ssh-1',
+                  status: 'connected',
+                  error: null,
+                  reconnectAttempt: 0,
+                  providerEpoch: 'web-provider-epoch',
+                  connectionGeneration: 23
+                }
+              : {
+                  targetId: 'ssh-1',
+                  status: 'connected',
+                  error: null,
+                  reconnectAttempt: 0,
+                  providerEpoch: 'partial-provider-epoch'
+                }
+          return Promise.resolve({
+            id: `call-${runtimeCalls.length}`,
+            ok: true,
+            result: { state },
+            _meta: { runtimeId: 'runtime-1' }
+          })
+        }
+
+        close(): void {}
+      }
+    }))
+
+    const globals = installBrowserGlobals('Linux')
+    writeStoredRuntimeEnvironment(globals.storage)
+    const { installWebPreloadApi } = await import('./web-preload-api')
+    installWebPreloadApi()
+
+    await expect(globals.window.api.ssh.connect({ targetId: 'ssh-1' })).resolves.toMatchObject({
+      providerEpoch: 'web-provider-epoch',
+      connectionGeneration: 23
+    })
+    const partial = await globals.window.api.ssh.getState({ targetId: 'ssh-1' })
+
+    expect(partial).toMatchObject({ providerEpoch: 'partial-provider-epoch' })
+    expect(partial).not.toHaveProperty('connectionGeneration')
+    expect(runtimeCalls).toEqual([
+      { method: 'ssh.connect', params: { targetId: 'ssh-1' } },
+      { method: 'ssh.getState', params: { targetId: 'ssh-1' } }
     ])
   })
 })

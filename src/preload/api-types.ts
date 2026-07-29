@@ -27,6 +27,20 @@ import type {
 import type { ReadClipboardTextOptions } from '../shared/clipboard-text'
 import type { AppIdentity } from '../shared/app-identity'
 import type {
+  HostQualifiedDetectedWorktreeResult,
+  LegacyDetectedWorktreeRequest,
+  ListDetectedWorktreesArgs,
+  ProviderRequestId
+} from '../shared/detected-worktree-provider-contract'
+import type {
+  HostRepoCatalogSnapshot,
+  ListReposForExecutionHostArgs
+} from '../shared/host-repo-catalog-contract'
+import type {
+  HostLineageSnapshot,
+  ListDesktopLineageForHostArgs
+} from '../shared/host-lineage-contract'
+import type {
   WriteTerminalRenderDesyncEvidenceArgs,
   WriteTerminalRenderDesyncEvidenceResult
 } from '../shared/terminal-render-desync-evidence'
@@ -1158,6 +1172,7 @@ export type PreloadApi = {
   }
   repos: {
     list: () => Promise<Repo[]>
+    listForExecutionHost?: (args: ListReposForExecutionHostArgs) => Promise<HostRepoCatalogSnapshot>
     // Why: error union matches the IPC handler's return shape; renderer callers branch on `'error' in result`.
     add: (args: {
       path: string
@@ -1343,10 +1358,13 @@ export type PreloadApi = {
   }
   worktrees: {
     list: (args: { repoId: string }) => Promise<Worktree[]>
-    listDetected: (args: {
-      repoId: string
-      executionHostId?: ExecutionHostId
-    }) => Promise<DetectedWorktreeListResult>
+    listDetected: {
+      (
+        args: ListDetectedWorktreesArgs
+      ): Promise<HostQualifiedDetectedWorktreeResult | DetectedWorktreeListResult>
+      (args: LegacyDetectedWorktreeRequest): Promise<DetectedWorktreeListResult>
+    }
+    cancelListDetected?: (args: { providerRequestId: ProviderRequestId }) => Promise<void>
     listAll: () => Promise<Worktree[]>
     create: (args: CreateWorktreeArgs) => Promise<CreateWorktreeResult>
     /** Two-phase progress for a background `create`, correlated by `creationId`. The remote/runtime
@@ -1401,6 +1419,7 @@ export type PreloadApi = {
       lineage: Record<string, WorktreeLineage>
       workspaceLineage?: Record<string, WorkspaceLineage>
     }>
+    listLineageForHost?: (args: ListDesktopLineageForHostArgs) => Promise<HostLineageSnapshot>
     updateLineage: (args: {
       worktreeId: string
       parentWorktreeId?: string
@@ -3080,6 +3099,8 @@ export type PreloadApi = {
     onZoomBrowserPage: (callback: (direction: 'in' | 'out' | 'reset') => void) => () => void
     onHardReloadBrowserPage: (callback: () => void) => () => void
     onCloseActiveTab: (callback: () => void) => () => void
+    onCloseFloatingItem: (callback: (payload: { sourceId: string }) => void) => () => void
+    onSelectFloatingIndex: (callback: (payload: { index: number }) => void) => () => void
     onSwitchTab: (callback: (direction: 1 | -1) => void) => () => void
     onSwitchTabAcrossAllTypes: (callback: (direction: 1 | -1) => void) => () => void
     onSwitchRecentTab: (callback: () => void) => () => void
@@ -3220,7 +3241,7 @@ export type PreloadApi = {
     syncTrafficLights: (zoomFactor: number) => void
     setMarkdownEditorFocused: (focused: boolean) => void
     setTerminalInputFocused: (focused: boolean) => void
-    setFloatingTerminalInputFocused: (focused: boolean) => void
+    setFloatingFocus: (state: { panelFocused: boolean; terminalFocused: boolean }) => void
     setShortcutRecorderFocused: (focused: boolean) => void
     onRichMarkdownContextCommand: (
       callback: (payload: RichMarkdownContextMenuCommandPayload) => void

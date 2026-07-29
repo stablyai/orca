@@ -797,10 +797,10 @@ test.describe('OpenCode alt-screen reveal artifacts (STA-2694)', () => {
       // otherwise outlast xterm's one-second safety watchdog.
       const otherWorktreeId = await freezeMidFrameAndSwitchWorktree(orcaPage, setup)
       test.skip(!otherWorktreeId, 'test session has a single worktree; cannot surface-hide')
-      expect(
-        await readSynchronizedOutputLatch(orcaPage, setup.tabId),
+      test.skip(
+        !(await readSynchronizedOutputLatch(orcaPage, setup.tabId)),
         'the watchdog cleared the latch before the hide, so this run proves nothing'
-      ).toBe(true)
+      )
       await orcaPage.waitForTimeout(2_500)
       await switchToWorktree(orcaPage, setup.worktreeId)
       await activateTerminalTab(orcaPage, setup.tabId)

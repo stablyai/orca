@@ -10,7 +10,7 @@ import {
   waitForActiveWorktree,
   waitForSessionReady
 } from './helpers/store'
-import { waitForActivePaneHookDescriptor } from './helpers/terminal'
+import { waitForActivePaneHookDescriptor, waitForActivePanePtyId } from './helpers/terminal'
 import { RuntimeClient } from '../../src/cli/runtime-client'
 import type { RuntimeTerminalListResult, RuntimeTerminalRead } from '../../src/shared/runtime-types'
 
@@ -66,6 +66,7 @@ test('worker-start materializes one inactive terminal tab before workspace re-en
   await ensureTerminalVisible(orcaPage)
   const coordinatorTabId = await getActiveTabId(orcaPage)
   expect(coordinatorTabId).toBeTruthy()
+  await waitForActivePanePtyId(orcaPage)
   const coordinatorPane = await waitForActivePaneHookDescriptor(orcaPage)
   const userDataDir = await electronApp.evaluate(({ app }) => app.getPath('userData'))
   const client = new RuntimeClient(userDataDir, 30_000, null, null)

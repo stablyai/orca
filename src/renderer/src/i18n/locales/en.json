@@ -703,6 +703,7 @@
         "60428567b4": "Local terminal reveal is unavailable while a remote runtime is active",
         "f8aaf2bde3": "Workspace uploaded",
         "2fe88c2e06": "Remote workspace sync unavailable",
+        "workspaceChangedOnAnotherDevice": "Workspace changed on another device",
         "2ec42e1c52": "No remote workspace yet",
         "88214a785b": "Workspace sync waited for local session hydration and timed out",
         "4f78ba5885": "Workspace synced",

@@ -482,7 +482,9 @@ export function createMainWindow(
   // Why: mirror markdown-editor focus so before-input-event skips Cmd/Ctrl+B while TipTap owns focus (docs/markdown-cmd-b-bold-design.md).
   let markdownEditorFocused = false
   let terminalInputFocused = false
+  // floatingTerminalInputFocused: textarea-only (terminal keybinding context). floatingPanelFocused: superset for routing ownership.
   let floatingTerminalInputFocused = false
+  let floatingPanelFocused = false
   let shortcutRecorderFocused = false
 
   const markdownFocusChannel = 'ui:setMarkdownEditorFocused'
@@ -503,15 +505,20 @@ export function createMainWindow(
     terminalInputFocused = focused === true
   }
   ipcMain.on(terminalInputFocusChannel, onTerminalInputFocused)
-  const floatingTerminalInputFocusChannel = 'ui:setFloatingTerminalInputFocused'
-  // Why: before-input-event runs before renderer keydown; mirror floating xterm focus so Ctrl+B/L reach SSH/tmux.
-  const onFloatingTerminalInputFocused = (event: Electron.IpcMainEvent, focused: unknown): void => {
+  const floatingFocusChannel = 'ui:setFloatingFocus'
+  // Why: one atomic payload for both bits so before-input-event never reads a torn terminal=true/panel=false state.
+  // terminalFocused drives the Ctrl+B/L terminal-context carve-out; panelFocused is the routing-ownership superset (panel ⊇ terminal).
+  const onFloatingFocus = (event: Electron.IpcMainEvent, state: unknown): void => {
     if (event.sender !== mainWindow.webContents) {
       return
     }
-    floatingTerminalInputFocused = focused === true
+    const payload = (state ?? {}) as { panelFocused?: unknown; terminalFocused?: unknown }
+    const terminal = payload.terminalFocused === true
+    floatingTerminalInputFocused = terminal
+    // Re-assert the invariant defensively in case a sender ever emits panel=false with terminal=true.
+    floatingPanelFocused = payload.panelFocused === true || terminal
   }
-  ipcMain.on(floatingTerminalInputFocusChannel, onFloatingTerminalInputFocused)
+  ipcMain.on(floatingFocusChannel, onFloatingFocus)
   const shortcutRecorderFocusChannel = 'ui:setShortcutRecorderFocused'
   // Why: the Settings recorder must receive app shortcuts to rebind them; before-input-event would otherwise consume the key first.
   const onShortcutRecorderFocused = (event: Electron.IpcMainEvent, focused: unknown): void => {
@@ -541,6 +548,7 @@ export function createMainWindow(
   }
   const resetFloatingTerminalInputFocus = (): void => {
     floatingTerminalInputFocused = false
+    floatingPanelFocused = false
   }
   const resetShortcutRecorderFocus = (): void => {
     shortcutRecorderFocused = false
@@ -707,6 +715,20 @@ export function createMainWindow(
       floatingTerminalInputFocused &&
       (action.type === 'toggleLeftSidebar' || action.type === 'toggleRightSidebar')
     ) {
+      return false
+    }
+
+    // While the floating panel owns the keyboard, yield indexed switch chords to the renderer
+    // so L2 selects a floating tab instead of switching the main workspace behind the panel.
+    if (
+      floatingPanelFocused &&
+      (action.type === 'jumpToWorktreeIndex' || action.type === 'jumpToTabIndex')
+    ) {
+      if (isAutoRepeat) {
+        // Contain held-key repeats in main — both renderer index paths skip e.repeat, so yielding a repeat would leak a raw key to xterm/DOM.
+        event.preventDefault()
+        return true
+      }
       return false
     }
 
@@ -1085,6 +1107,7 @@ export function createMainWindow(
     markdownEditorFocused = false
     terminalInputFocused = false
     floatingTerminalInputFocused = false
+    floatingPanelFocused = false
     shortcutRecorderFocused = false
     clearRendererRecoveryTimer()
     ipcMain.removeListener(trafficLightChannel, onSyncTrafficLights)
@@ -1098,7 +1121,7 @@ export function createMainWindow(
     ipcMain.removeListener(closeRequestReceivedChannel, onCloseRequestReceived)
     ipcMain.removeListener(markdownFocusChannel, onMarkdownEditorFocused)
     ipcMain.removeListener(terminalInputFocusChannel, onTerminalInputFocused)
-    ipcMain.removeListener(floatingTerminalInputFocusChannel, onFloatingTerminalInputFocused)
+    ipcMain.removeListener(floatingFocusChannel, onFloatingFocus)
     ipcMain.removeListener(shortcutRecorderFocusChannel, onShortcutRecorderFocused)
     // Why: powerMonitor is app-global; without this the resume relay leaks and fires against a destroyed webContents.
     powerMonitor.removeListener('resume', onSystemResume)

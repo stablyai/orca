@@ -3,6 +3,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 const mocks = vi.hoisted(() => ({
   pasteDraftWhenAgentReady: vi.fn(),
   seedNativeChatLaunchPrompt: vi.fn(),
+  seedNativeChatLaunchDraft: vi.fn(),
   markNativeChatLaunchPromptFailed: vi.fn()
 }))
 
@@ -14,12 +15,50 @@ vi.mock('@/store', () => ({
   useAppStore: {
     getState: () => ({
       seedNativeChatLaunchPrompt: mocks.seedNativeChatLaunchPrompt,
+      seedNativeChatLaunchDraft: mocks.seedNativeChatLaunchDraft,
       markNativeChatLaunchPromptFailed: mocks.markNativeChatLaunchPromptFailed
     })
   }
 }))
 
-import { deliverLaunchPromptToAgentTab } from './agent-launch-prompt-delivery'
+import {
+  deliverLaunchPromptToAgentTab,
+  seedNativeChatLaunchDraftForAgentTab
+} from './agent-launch-prompt-delivery'
+
+describe('seedNativeChatLaunchDraftForAgentTab', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+  })
+
+  it('rejects multi-line text at the helper, not just at the delivery caller', () => {
+    // Worktree-create and work-item launches seed through this helper directly
+    // (a Linear draft is always `Linked Linear issue: …\n<url>\n`), so the
+    // Ctrl+U kill-to-start-of-LINE constraint has to live here.
+    seedNativeChatLaunchDraftForAgentTab({
+      tabId: 'linear-tab',
+      agent: 'codex',
+      text: 'Linked Linear issue: STA-1234\nhttps://linear.app/o/issue/STA-1234\n'
+    })
+
+    expect(mocks.seedNativeChatLaunchDraft).not.toHaveBeenCalled()
+  })
+
+  it('seeds single-line text', () => {
+    seedNativeChatLaunchDraftForAgentTab({
+      tabId: 'issue-tab',
+      agent: 'codex',
+      text: 'https://github.com/o/r/issues/12'
+    })
+
+    expect(mocks.seedNativeChatLaunchDraft).toHaveBeenCalledWith({
+      tabId: 'issue-tab',
+      agent: 'codex',
+      text: 'https://github.com/o/r/issues/12',
+      createdAt: expect.any(Number)
+    })
+  })
+})
 
 describe('deliverLaunchPromptToAgentTab', () => {
   beforeEach(() => {
@@ -55,7 +94,7 @@ describe('deliverLaunchPromptToAgentTab', () => {
     })
   })
 
-  it('does not seed for drafts, unsupported agents, or empty content', async () => {
+  it('does not seed a launch prompt for drafts, unsupported agents, or empty content', async () => {
     await deliverLaunchPromptToAgentTab({
       tabId: 'draft-tab',
       agent: 'codex',
@@ -79,6 +118,82 @@ describe('deliverLaunchPromptToAgentTab', () => {
     })
 
     expect(mocks.seedNativeChatLaunchPrompt).not.toHaveBeenCalled()
+  })
+
+  it('seeds a native-chat launch draft for supported unsubmitted content', async () => {
+    await deliverLaunchPromptToAgentTab({
+      tabId: 'draft-tab',
+      agent: 'codex',
+      content: 'Review first',
+      submit: false,
+      forcePaste: false
+    })
+
+    expect(mocks.seedNativeChatLaunchDraft).toHaveBeenCalledWith({
+      tabId: 'draft-tab',
+      agent: 'codex',
+      text: 'Review first',
+      createdAt: expect.any(Number)
+    })
+    expect(mocks.seedNativeChatLaunchPrompt).not.toHaveBeenCalled()
+  })
+
+  it('does not seed a launch draft for multi-line content', async () => {
+    // The chat send pre-clears the TUI with Ctrl+U (kill-to-start-of-LINE), so a
+    // multi-line prefill (e.g. scraped session-fork context) would leave earlier
+    // lines behind to glue onto the next message.
+    await deliverLaunchPromptToAgentTab({
+      tabId: 'fork-tab',
+      agent: 'codex',
+      content: 'Forked from session\n\nhttps://example.test/context',
+      submit: false,
+      forcePaste: false
+    })
+
+    expect(mocks.seedNativeChatLaunchDraft).not.toHaveBeenCalled()
+  })
+
+  it('does not seed a launch draft for submitted, unsupported, or empty content', async () => {
+    await deliverLaunchPromptToAgentTab({
+      tabId: 'submit-tab',
+      agent: 'codex',
+      content: 'Fix failing checks',
+      submit: true,
+      forcePaste: true
+    })
+    await deliverLaunchPromptToAgentTab({
+      tabId: 'unsupported-tab',
+      agent: 'gemini',
+      content: 'Review first',
+      submit: false,
+      forcePaste: false
+    })
+    await deliverLaunchPromptToAgentTab({
+      tabId: 'empty-tab',
+      agent: 'claude',
+      content: '   ',
+      submit: false,
+      forcePaste: false
+    })
+
+    expect(mocks.seedNativeChatLaunchDraft).not.toHaveBeenCalled()
+  })
+
+  it('keeps the seeded launch draft when paste delivery fails', async () => {
+    // A paste timeout means the TUI never got the draft — the composer copy is
+    // then the only copy, so it must not be flagged or cleared.
+    mocks.pasteDraftWhenAgentReady.mockResolvedValue(false)
+
+    await deliverLaunchPromptToAgentTab({
+      tabId: 'draft-tab',
+      agent: 'codex',
+      content: 'Review first',
+      submit: false,
+      forcePaste: false
+    })
+
+    expect(mocks.seedNativeChatLaunchDraft).toHaveBeenCalled()
+    expect(mocks.markNativeChatLaunchPromptFailed).not.toHaveBeenCalled()
   })
 
   it('marks a seeded launch prompt failed when paste delivery returns false', async () => {

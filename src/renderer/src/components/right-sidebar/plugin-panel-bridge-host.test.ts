@@ -1,6 +1,9 @@
 import { describe, expect, it, vi } from 'vitest'
 import type { PluginPanelActionOutcome } from '../../../../shared/plugins/plugin-panel-bridge'
-import type { PanelMessageBudget } from '../../../../shared/plugins/plugin-panel-message-budget'
+import {
+  createPanelMessageBudget,
+  type PanelMessageBudget
+} from '../../../../shared/plugins/plugin-panel-message-budget'
 import { createPanelBridgeMessageHandler } from './plugin-panel-bridge-host'
 
 type FakePanelWindow = Window & { postMessage: ReturnType<typeof vi.fn> }
@@ -100,6 +103,58 @@ describe('createPanelBridgeMessageHandler', () => {
         requestId: 'req-1',
         ok: false,
         errorCode: 'invalid_request'
+      }),
+      '*'
+    )
+  })
+
+  it('refuses an oversized request without relaying it', () => {
+    const panelWindow = createFakePanelWindow()
+    const { handler, callPanelAction } = createHandler(panelWindow)
+
+    handler(
+      messageEvent(
+        {
+          ...VALID_DATA,
+          params: { padding: 'x'.repeat(128 * 1024) }
+        },
+        panelWindow
+      )
+    )
+
+    expect(callPanelAction).not.toHaveBeenCalled()
+    expect(panelWindow.postMessage).toHaveBeenCalledWith(
+      expect.objectContaining({
+        type: 'orca-panel-action-result',
+        requestId: 'req-1',
+        ok: false,
+        errorCode: 'invalid_request'
+      }),
+      '*'
+    )
+  })
+
+  it('refuses a valid request after malformed and pong traffic exhaust the budget', () => {
+    const panelWindow = createFakePanelWindow()
+    const callPanelAction = vi.fn()
+    const handler = createPanelBridgeMessageHandler({
+      sessionToken: SESSION_TOKEN,
+      getPanelWindow: () => panelWindow,
+      callPanelAction,
+      budget: createPanelMessageBudget({ maxMessages: 2 })
+    })
+
+    handler(messageEvent({ type: 'invalid-hostile-message' }, panelWindow))
+    handler(messageEvent({ type: 'orca-panel-pong', pingId: 7 }, panelWindow))
+    handler(messageEvent(VALID_DATA, panelWindow))
+
+    expect(callPanelAction).not.toHaveBeenCalled()
+    expect(panelWindow.postMessage).toHaveBeenCalledWith(
+      expect.objectContaining({
+        type: 'orca-panel-action-result',
+        requestId: 'req-1',
+        ok: false,
+        errorCode: 'rate_limited'
       }),
       '*'
     )

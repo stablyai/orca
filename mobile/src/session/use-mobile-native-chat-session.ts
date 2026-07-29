@@ -13,6 +13,12 @@ export type MobileNativeChatStatus = 'idle' | 'loading' | 'waiting-session' | 'r
 export type MobileNativeChatSession = {
   messages: NativeChatMessage[]
   status: MobileNativeChatStatus
+  /** True while `messages` cannot be trusted as this session's real history:
+   *  the read is in flight, OR the subscription effect has not yet caught up to
+   *  a just-changed agent/session, so `messages`/`status` still describe the
+   *  previous tab. Consumers that decide something from an empty transcript
+   *  (the launch-draft seed) must wait for this to clear. */
+  transcriptLoading: boolean
   error?: string
   /** True when an older page may exist (the last read filled the window). */
   hasMore: boolean
@@ -21,6 +27,9 @@ export type MobileNativeChatSession = {
   /** Grow the window to page in older history. */
   loadEarlier: () => void
 }
+
+// Stable empty reference so a not-yet-current read doesn't churn consumers.
+const EMPTY_MESSAGES: NativeChatMessage[] = []
 
 // Small first page for a fast first paint; grows by a page as the user scrolls.
 const INITIAL_LIMIT = 40
@@ -42,7 +51,33 @@ export function useMobileNativeChatSession(args: {
 }): MobileNativeChatSession {
   const { client, agent, sessionId, transcriptPath } = args
   const [messages, setMessages] = useState<NativeChatMessage[]>([])
-  const [status, setStatus] = useState<MobileNativeChatStatus>('idle')
+  const identity = `${agent ?? ''}\0${sessionId ?? ''}\0${transcriptPath ?? ''}`
+  // Pre-read status is a pure function of the props, so derive it rather than
+  // letting the effect write it a commit later.
+  const initialStatus: MobileNativeChatStatus =
+    !client || !agent ? 'idle' : !sessionId ? 'waiting-session' : 'loading'
+  // Only the settled outcome is genuinely async, and it is tagged with the
+  // identity it describes so a just-switched tab is never judged by the
+  // previous tab's transcript — the effect that clears `messages` is passive
+  // and lands a commit late.
+  const [read, setRead] = useState<{
+    client: RpcClient
+    identity: string
+    status: MobileNativeChatStatus
+  } | null>(null)
+  // Drop it the moment its subscription stops being the live one — identity and
+  // client are the effect's only inputs, so together they catch every re-run.
+  // Without this a toggle out of chat view and back (agent null, then the same
+  // identity again) would resurface a settled 'ready' over an emptied list.
+  let current = read
+  if (current !== null && (current.identity !== identity || current.client !== client)) {
+    current = null
+    setRead(null)
+  }
+  // A settled read only counts while the props still call for one: losing the
+  // client/agent/session means idle or waiting-session outranks it outright.
+  const settled = initialStatus === 'loading' ? current : null
+  const status = settled ? settled.status : initialStatus
   const [error, setError] = useState<string | undefined>(undefined)
   const [hasMore, setHasMore] = useState(false)
   const [loadingEarlier, setLoadingEarlier] = useState(false)
@@ -78,15 +113,11 @@ export function useMobileNativeChatSession(args: {
     setHasMore(false)
     beforeOffsetRef.current = null
     if (!client || !agent) {
-      setStatus('idle')
       return
     }
     if (!sessionId) {
-      setStatus('waiting-session')
       return
     }
-
-    setStatus('loading')
 
     const unsubscribe = client.subscribe(
       'nativeChat.subscribe',
@@ -121,7 +152,7 @@ export function useMobileNativeChatSession(args: {
           return
         }
         if (applied.kind === 'error') {
-          setStatus('error')
+          setRead({ client, identity, status: 'error' })
           setError(applied.error)
           return
         }
@@ -140,7 +171,7 @@ export function useMobileNativeChatSession(args: {
           setLoadingEarlier(false)
           beforeOffsetRef.current = null
         }
-        setStatus('ready')
+        setRead({ client, identity, status: 'ready' })
       }
     )
 
@@ -148,7 +179,7 @@ export function useMobileNativeChatSession(args: {
       cancelled = true
       unsubscribe()
     }
-  }, [client, agent, sessionId, transcriptPath, setList])
+  }, [client, agent, sessionId, transcriptPath, identity, setList])
 
   const loadEarlier = useCallback(() => {
     if (!client || !agent || !sessionId || loadingEarlierRef.current || !hasMore) {
@@ -215,5 +246,15 @@ export function useMobileNativeChatSession(args: {
     })()
   }, [client, agent, sessionId, transcriptPath, hasMore, setList])
 
-  return { messages, status, error, hasMore, loadingEarlier, loadEarlier }
+  return {
+    // Withheld until the settled read belongs to this identity: the effect that
+    // clears the previous tab's list is passive, so `messages` lags a commit.
+    messages: settled ? messages : EMPTY_MESSAGES,
+    status,
+    transcriptLoading: status === 'loading',
+    error,
+    hasMore,
+    loadingEarlier,
+    loadEarlier
+  }
 }

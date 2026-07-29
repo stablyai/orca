@@ -11,6 +11,7 @@ import {
 import {
   cleanupDockerSshRelayTarget,
   DOCKER_SSH_RELAY_REMOTE_REPO_PATH,
+  execDockerSshRelayTargetCommand,
   startDockerSshRelayTarget,
   type DockerSshRelayTarget
 } from './helpers/docker-ssh-relay-target'
@@ -273,15 +274,12 @@ test.describe('Docker SSH relay perf', () => {
       const runId = String(Date.now())
       // Large remote binaries: each read streams ~8MB of fs.streamChunk frames
       // over the same SSH channel that carries the pty echo.
-      const loadFiles = [
-        `${DOCKER_SSH_RELAY_REMOTE_REPO_PATH}/stream-load-a.png`,
-        `${DOCKER_SSH_RELAY_REMOTE_REPO_PATH}/stream-load-b.png`
-      ]
+      const loadFile = `/tmp/orca-relay-load-${runId}.png`
+      const loadFiles = [loadFile, loadFile]
       await execInTerminal(
         orcaPage,
         ptyId,
-        `dd if=/dev/urandom of=${shellQuote(loadFiles[0])} bs=1M count=8 status=none && ` +
-          `dd if=/dev/urandom of=${shellQuote(loadFiles[1])} bs=1M count=8 status=none && ` +
+        `dd if=/dev/urandom of=${shellQuote(loadFile)} bs=1M count=8 status=none && ` +
           `echo LOAD_FILES_READY_${runId}`
       )
       await waitForTerminalOutput(orcaPage, `LOAD_FILES_READY_${runId}`, 60_000, 80_000)
@@ -376,8 +374,16 @@ test.describe('Docker SSH relay perf', () => {
       await waitForActiveTerminalManager(orcaPage, 60_000)
       const afterPtyId = await waitForActivePanePtyId(orcaPage, 60_000)
       const afterMarker = `SSH_RECONNECT_AFTER_${Date.now()}`
-      await execInTerminal(orcaPage, afterPtyId, `printf ${shellQuote(afterMarker)}`)
+      const remoteProofPath = `/tmp/${afterMarker}`
+      await execInTerminal(
+        orcaPage,
+        afterPtyId,
+        `printf ${shellQuote(afterMarker)} | tee ${shellQuote(remoteProofPath)}`
+      )
       await waitForTerminalOutput(orcaPage, afterMarker, 20_000, 60_000)
+      expect(execDockerSshRelayTargetCommand(target, `cat ${shellQuote(remoteProofPath)}`)).toBe(
+        afterMarker
+      )
 
       testInfo.annotations.push({
         type: 'docker-ssh-reconnect',
