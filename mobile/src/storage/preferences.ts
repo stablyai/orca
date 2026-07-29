@@ -79,6 +79,37 @@ export async function saveTerminalAutocompleteEnabled(enabled: boolean): Promise
   await AsyncStorage.setItem(AUTOCOMPLETE_KEY, String(enabled))
 }
 
+const DIM_DIR_LISTING_SIZES_KEY = 'orca:terminalDimDirListingSizes'
+type DimDirListingSizesListener = (enabled: boolean) => void
+const dimDirListingSizesListeners = new Set<DimDirListingSizesListener>()
+
+// Why: agent directory listings trail spaceless size tokens (1.4K, 738B) that
+// crowd phone-width terminals; opt-in visual dim keeps the buffer intact.
+export async function loadTerminalDimDirListingSizes(): Promise<boolean> {
+  try {
+    const raw = await AsyncStorage.getItem(DIM_DIR_LISTING_SIZES_KEY)
+    return raw === 'true'
+  } catch {
+    return false
+  }
+}
+
+export async function saveTerminalDimDirListingSizes(enabled: boolean): Promise<void> {
+  await AsyncStorage.setItem(DIM_DIR_LISTING_SIZES_KEY, String(enabled))
+  for (const listener of dimDirListingSizesListeners) {
+    listener(enabled)
+  }
+}
+
+export function subscribeTerminalDimDirListingSizes(
+  listener: DimDirListingSizesListener
+): () => void {
+  dimDirListingSizesListeners.add(listener)
+  return () => {
+    dimDirListingSizesListeners.delete(listener)
+  }
+}
+
 const TERMINAL_LIVE_INPUT_DISABLED_PREFIX = 'orca:terminalLiveInputDisabled:'
 
 export type DisabledTerminalLiveInputHandlesPreference = {

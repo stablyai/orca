@@ -11,6 +11,7 @@ import { TERMINAL_WEBVIEW_THEME_JS } from './terminal-webview-theme-injected'
 import { TERMINAL_QUERY_REPLY_JS } from './terminal-webview-query-reply-injected'
 import { URL_TAP_WEBVIEW_JS } from './terminal-webview-url-tap'
 import { TERMINAL_WEBGL_RECOVERY_JS } from './terminal-webview-webgl-recovery-injected'
+import { TERMINAL_DIR_LISTING_SIZE_DIM_JS } from './terminal-dir-listing-size-dim-injected'
 
 const DEFAULT_TERMINAL_THEME: RuntimeMobileTerminalTheme['theme'] = {
   background: colors.terminalBg,
@@ -620,6 +621,7 @@ ${TERMINAL_WEBVIEW_THEME_JS}
     for (var i = 0; i < disposables.length; i++) {
       try { disposables[i] && disposables[i].dispose && disposables[i].dispose(); } catch (e) {}
     }
+    try { clearSizeDimDecorations(); } catch (e) {}
   }
 
   function extractMouseModeScanTail(input) {
@@ -655,6 +657,7 @@ ${TERMINAL_WEBVIEW_THEME_JS}
     term.write(next, function() {
       if (gen !== terminalGeneration) return;
       writesDraining = false;
+      scheduleSizeDimRefresh();
       pumpWrites(gen);
     });
   }
@@ -957,6 +960,10 @@ ${TERMINAL_WEBGL_RECOVERY_JS}
       applyFitScale('reset-zoom-msg');
     } else if (msg.type === 'set-theme') {
       applyTerminalTheme(msg.terminalTheme);
+      // Why: size-dim overlays use the active theme background; re-tint after theme swaps.
+      try { scheduleSizeDimRefresh(); } catch (e) {}
+    } else if (msg.type === 'set-dim-dir-listing-sizes') {
+      setDimDirListingSizes(!!msg.enabled);
     } else if (msg.type === 'cancel-select') {
       if (selMode === 'select') cancelSelect();
     } else if (msg.type === 'do-select-all') {
@@ -1105,7 +1112,10 @@ ${TERMINAL_WEBGL_RECOVERY_JS}
     disposeTermObservers();
     try { termObserverDisposables.push(term.onLineFeed(logFeedAndEvict)); } catch (e) {}
     try {
-      termObserverDisposables.push(term.onScroll(function() { updateScrollIndicator(false); }));
+      termObserverDisposables.push(term.onScroll(function() {
+        updateScrollIndicator(false);
+        scheduleSizeDimRefresh();
+      }));
     } catch (e) {}
     // Why: emit modes on every parsed write so RN's mirror stays current
     // without round-trip; covers \\x1b[?2004h/l and alt-screen toggles.
@@ -1444,6 +1454,7 @@ ${TERMINAL_WEBGL_RECOVERY_JS}
   // terminal-path-tap-injected.ts; mirrors the unit-tested terminal-path-tap.ts.
   ${TERMINAL_PATH_TAP_JS}
   ${URL_TAP_WEBVIEW_JS}
+  ${TERMINAL_DIR_LISTING_SIZE_DIM_JS}
 
   function seedWordSelection(col, absRow) {
     var line = getLineText(absRow);

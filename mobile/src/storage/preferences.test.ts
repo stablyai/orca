@@ -12,6 +12,7 @@ import {
   loadHostSidebarWidth,
   loadPushNotificationsEnabled,
   loadTerminalAutocompleteEnabled,
+  loadTerminalDimDirListingSizes,
   loadTerminalLinkOpenMode,
   readPushNotificationsPreference,
   readDisabledTerminalLiveInputHandlesPreference,
@@ -19,7 +20,9 @@ import {
   saveHostSidebarWidth,
   savePushNotificationsEnabled,
   saveTerminalAutocompleteEnabled,
-  saveTerminalLinkOpenMode
+  saveTerminalDimDirListingSizes,
+  saveTerminalLinkOpenMode,
+  subscribeTerminalDimDirListingSizes
 } from './preferences'
 import {
   loadDefaultSessionView,
@@ -349,6 +352,52 @@ describe('terminal autocomplete preference', () => {
     await saveTerminalAutocompleteEnabled(false)
 
     expect(AsyncStorage.setItem).toHaveBeenCalledWith('orca:terminalAutocompleteEnabled', 'false')
+  })
+})
+
+describe('terminal dim directory-listing sizes preference', () => {
+  beforeEach(() => {
+    vi.mocked(AsyncStorage.getItem).mockReset()
+    vi.mocked(AsyncStorage.setItem).mockReset()
+  })
+
+  it('defaults to disabled when unset', async () => {
+    vi.mocked(AsyncStorage.getItem).mockResolvedValue(null)
+
+    await expect(loadTerminalDimDirListingSizes()).resolves.toBe(false)
+    expect(AsyncStorage.getItem).toHaveBeenCalledWith('orca:terminalDimDirListingSizes')
+  })
+
+  it('loads enabled only from the persisted true value', async () => {
+    vi.mocked(AsyncStorage.getItem).mockResolvedValue('true')
+    await expect(loadTerminalDimDirListingSizes()).resolves.toBe(true)
+
+    vi.mocked(AsyncStorage.getItem).mockResolvedValue('false')
+    await expect(loadTerminalDimDirListingSizes()).resolves.toBe(false)
+  })
+
+  it('falls back to disabled when storage cannot be read', async () => {
+    vi.mocked(AsyncStorage.getItem).mockRejectedValue(new Error('storage unavailable'))
+    await expect(loadTerminalDimDirListingSizes()).resolves.toBe(false)
+  })
+
+  it('persists the selected value and notifies subscribers', async () => {
+    const seen: boolean[] = []
+    const unsubscribe = subscribeTerminalDimDirListingSizes((enabled) => {
+      seen.push(enabled)
+    })
+
+    await saveTerminalDimDirListingSizes(true)
+    expect(AsyncStorage.setItem).toHaveBeenCalledWith('orca:terminalDimDirListingSizes', 'true')
+    expect(seen).toEqual([true])
+
+    await saveTerminalDimDirListingSizes(false)
+    expect(AsyncStorage.setItem).toHaveBeenCalledWith('orca:terminalDimDirListingSizes', 'false')
+    expect(seen).toEqual([true, false])
+
+    unsubscribe()
+    await saveTerminalDimDirListingSizes(true)
+    expect(seen).toEqual([true, false])
   })
 })
 
