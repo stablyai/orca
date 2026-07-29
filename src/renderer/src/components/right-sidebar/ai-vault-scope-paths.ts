@@ -14,21 +14,33 @@ export function deriveAiVaultWorkspaceScopePaths(
     return []
   }
 
-  const paths: string[] = []
-  addAiVaultWorkspaceScopePath(paths, activeWorktree.path)
+  return collectWorkspaceScopePaths(activeWorktree, liveWorktrees).paths
+}
 
-  for (const priorWorktreeId of activeWorktree.priorWorktreeIds ?? []) {
+function collectWorkspaceScopePaths(
+  activeWorktree: Pick<Worktree, 'id' | 'path' | 'priorWorktreeIds' | 'repoId'>,
+  liveWorktrees: readonly Pick<Worktree, 'id' | 'path' | 'repoId'>[]
+): ScopePathAccumulator {
+  const accumulator = createScopePathAccumulator()
+  addAiVaultWorkspaceScopePath(accumulator, activeWorktree.path)
+
+  const priorWorktreeIds = activeWorktree.priorWorktreeIds ?? []
+  // Built once instead of rescanning every live worktree per prior id.
+  const worktreeIdByPath =
+    priorWorktreeIds.length > 0 ? buildWorktreeIdByComparisonPath(liveWorktrees) : null
+
+  for (const priorWorktreeId of priorWorktreeIds) {
     const parsed = splitWorktreeIdForFilesystem(priorWorktreeId)
     if (!parsed || parsed.repoId !== activeWorktree.repoId) {
       continue
     }
-    if (isAiVaultWorkspaceScopePathClaimed(parsed.worktreePath, activeWorktree, liveWorktrees)) {
+    if (isAiVaultWorkspaceScopePathClaimed(parsed.worktreePath, activeWorktree, worktreeIdByPath)) {
       continue
     }
-    addAiVaultWorkspaceScopePath(paths, parsed.worktreePath)
+    addAiVaultWorkspaceScopePath(accumulator, parsed.worktreePath)
   }
 
-  return paths
+  return accumulator
 }
 
 /**
@@ -48,10 +60,12 @@ export function deriveAiVaultScopeSessionPaths(
     projectHostSetupProjection?: ProjectHostSetupProjection
   } = {}
 ): string[] {
-  const paths = deriveAiVaultWorkspaceScopePaths(activeWorktree, liveWorktrees)
   if (!activeWorktree) {
-    return paths
+    return []
   }
+  // Carries the workspace pass's dedupe keys forward, so the project pass does
+  // not restart deduplication against a plain array.
+  const accumulator = collectWorkspaceScopePaths(activeWorktree, liveWorktrees)
   const setupsByRepoId = buildProjectSetupsByRepoId(options.projectHostSetupProjection)
   for (const worktree of liveWorktrees) {
     if (
@@ -61,15 +75,15 @@ export function deriveAiVaultScopeSessionPaths(
         (setup) => worktreeProjectKey(setup, setup) === options.activeProjectKey
       )
     ) {
-      addAiVaultWorkspaceScopePath(paths, worktree.path)
+      addAiVaultWorkspaceScopePath(accumulator, worktree.path)
     }
   }
   for (const setup of options.projectHostSetupProjection?.setups ?? []) {
     if (worktreeProjectKey(setup, setup) === options.activeProjectKey) {
-      addAiVaultWorkspaceScopePath(paths, setup.path)
+      addAiVaultWorkspaceScopePath(accumulator, setup.path)
     }
   }
-  return paths
+  return accumulator.paths
 }
 
 function buildProjectSetupsByRepoId(
@@ -95,34 +109,66 @@ function worktreeProjectKey(
   return entry.repoId ? `repo:${entry.repoId}` : null
 }
 
-function addAiVaultWorkspaceScopePath(paths: string[], pathValue: string): void {
+/**
+ * Paths plus their comparison keys.
+ *
+ * Why the key set: deduping by rescanning the accumulated paths re-normalized
+ * every accepted path on every insert, which is O(n^2) `normalize('NFC')` calls
+ * and cost ~190ms on a 1124-workspace profile — on the workspace-switch path,
+ * since these paths are derived from the active worktree.
+ */
+type ScopePathAccumulator = {
+  paths: string[]
+  comparisonKeys: Set<string>
+}
+
+function createScopePathAccumulator(): ScopePathAccumulator {
+  return { paths: [], comparisonKeys: new Set() }
+}
+
+function addAiVaultWorkspaceScopePath(accumulator: ScopePathAccumulator, pathValue: string): void {
   const trimmedPath = pathValue.trim()
   if (!trimmedPath || !isRuntimePathAbsolute(trimmedPath)) {
     return
   }
   const comparisonPath = normalizeRuntimePathForComparison(trimmedPath)
-  if (
-    paths.some((existingPath) => normalizeRuntimePathForComparison(existingPath) === comparisonPath)
-  ) {
+  if (accumulator.comparisonKeys.has(comparisonPath)) {
     return
   }
-  paths.push(trimmedPath)
+  accumulator.comparisonKeys.add(comparisonPath)
+  accumulator.paths.push(trimmedPath)
+}
+
+/** Comparison path → owning worktree id, so a claim check is one lookup. */
+function buildWorktreeIdByComparisonPath(
+  liveWorktrees: readonly Pick<Worktree, 'id' | 'path'>[]
+): Map<string, string> {
+  const worktreeIdByPath = new Map<string, string>()
+  for (const worktree of liveWorktrees) {
+    const trimmedPath = worktree.path.trim()
+    if (!trimmedPath || !isRuntimePathAbsolute(trimmedPath)) {
+      continue
+    }
+    // First writer wins, matching the previous `some()` short-circuit order.
+    const comparisonPath = normalizeRuntimePathForComparison(trimmedPath)
+    if (!worktreeIdByPath.has(comparisonPath)) {
+      worktreeIdByPath.set(comparisonPath, worktree.id)
+    }
+  }
+  return worktreeIdByPath
 }
 
 function isAiVaultWorkspaceScopePathClaimed(
   pathValue: string,
   activeWorktree: Pick<Worktree, 'id'>,
-  liveWorktrees: readonly Pick<Worktree, 'id' | 'path'>[]
+  worktreeIdByComparisonPath: Map<string, string> | null
 ): boolean {
   const trimmedPath = pathValue.trim()
-  if (!trimmedPath || !isRuntimePathAbsolute(trimmedPath)) {
+  if (!trimmedPath || !isRuntimePathAbsolute(trimmedPath) || !worktreeIdByComparisonPath) {
     return false
   }
   const comparisonPath = normalizeRuntimePathForComparison(trimmedPath)
   // AI Vault sessions are keyed by cwd only, so any live worktree now owning this path wins.
-  return liveWorktrees.some(
-    (worktree) =>
-      worktree.id !== activeWorktree.id &&
-      normalizeRuntimePathForComparison(worktree.path) === comparisonPath
-  )
+  const owningWorktreeId = worktreeIdByComparisonPath.get(comparisonPath)
+  return owningWorktreeId !== undefined && owningWorktreeId !== activeWorktree.id
 }
