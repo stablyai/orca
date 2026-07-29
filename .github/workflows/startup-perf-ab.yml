@@ -50,23 +50,31 @@ on:
         default: 'spawnToAppReady,appReadyToServices,servicesToI18n'
         type: string
 
+# The job only reads refs and uploads an artifact; it never writes to the repo.
+permissions:
+  contents: read
+
 jobs:
   startup-perf-ab:
     name: interleaved startup A/B
     runs-on: ubuntu-latest
-    timeout-minutes: 60
+    timeout-minutes: 90
     env:
       NODE_OPTIONS: --max-old-space-size=4096
-      ARMS_DIR: .bench-fixtures/arms
+      # Outside the repo: each arm is a full worktree with its own node_modules,
+      # not a stray untracked directory inside the checkout.
+      ARMS_DIR: ${{ runner.temp }}/orca-bench-arms
 
     steps:
       # Why: both arms are built from this checkout, so the baseline ref must be
-      # reachable — a shallow clone would fail to check it out.
+      # reachable — a shallow clone would fail to check it out. Credentials are
+      # not persisted: build scripts from a caller-chosen ref run in this job.
       - name: Checkout
         uses: actions/checkout@v6
         with:
           ref: ${{ inputs.candidate_ref || github.ref }}
           fetch-depth: 0
+          persist-credentials: false
 
       - name: Install native build tools and xvfb
         run: sudo apt-get update && sudo apt-get install -y build-essential python3 xvfb
@@ -91,9 +99,12 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
-      # Why: each arm gets its own out/ tree under the repo so Electron resolves
-      # node_modules upward. Rebuilding between launches would put compile output
-      # and disk-cache state into the timings, so both arms are built up front.
+      # Why: each arm is its own worktree with its own node_modules. Sharing one
+      # dependency root would let the arm installed second decide what both arms
+      # load at runtime, so a lockfile or externalized-module difference between
+      # the refs would be measured as if it were the change under test.
+      # Both arms are built up front — rebuilding between launches would put
+      # compile output and disk-cache state into the timings.
       - name: Build both arms
         env:
           BASELINE_REF: ${{ inputs.baseline_ref }}
@@ -101,22 +112,16 @@ jobs:
         run: |
           set -euo pipefail
           build_arm() {
-            local ref="$1" name="$2"
+            local ref="$1" name="$2" dir="$ARMS_DIR/$2"
             echo "::group::build $name ($ref)"
-            git checkout --detach "$ref"
-            # A ref with a different lockfile needs its own dependency tree.
-            pnpm install --frozen-lockfile
-            pnpm run build:electron-vite
-            mkdir -p "$ARMS_DIR/$name"
-            rm -rf "$ARMS_DIR/$name/out"
-            cp -r out "$ARMS_DIR/$name/out"
-            cp package.json "$ARMS_DIR/$name/package.json"
+            rm -rf "$dir"
+            git worktree add --detach "$dir" "$ref"
+            (cd "$dir" && pnpm install --frozen-lockfile && pnpm run build:electron-vite)
+            test -f "$dir/out/main/index.js"
             echo "::endgroup::"
           }
           build_arm "$BASELINE_REF" baseline
           build_arm "$CANDIDATE_REF" candidate
-          # Leave the tree on the candidate ref so the harness sources match it.
-          git checkout --detach "$CANDIDATE_REF"
 
       - name: Run interleaved startup A/B
         env:
@@ -142,9 +147,10 @@ jobs:
             --control-phases "$CONTROL_PHASES" \
             | tee startup-ab-output.txt
 
-      # Why: a drifting run is not a failed build — the code is fine, the runner
-      # was not quiet. Surface it as a warning so nobody quotes the phase table.
-      - name: Flag control-phase drift
+      # Why: an unusable run is not a failed build — the code is fine, the runner
+      # was not quiet (or the control phases never fired). Surface it as a
+      # warning, and suppress the phase table so nobody quotes it from the log.
+      - name: Report the measurement status
         if: always()
         run: |
           set -euo pipefail
@@ -153,11 +159,17 @@ jobs:
             echo "::warning::No A/B result file was produced."
             exit 0
           fi
-          if [ "$(node -p "require('./$result').driftDetected")" = "true" ]; then
-            echo "::warning::Control phases moved — this run measured the runner, not the change. Re-run before quoting any verdict."
-          fi
           node -e "
             const r = require('./$result')
+            if (r.measurementStatus === 'control-phase-drift') {
+              console.log('::warning::Control phases moved — this run measured the runner, not the change. Re-run before quoting any verdict.')
+            } else if (r.measurementStatus === 'controls-unmeasured') {
+              console.log(\`::warning::No control phase produced data (\${r.unmeasuredControlPhases.join(', ')}) — drift was never measured, so no verdict is attributable.\`)
+            }
+            if (r.measurementStatus !== 'attributable') {
+              console.log('Phase verdicts withheld: this run is unproven.')
+              process.exit(0)
+            }
             const rows = Object.entries(r.phaseSummaries)
               .filter(([, s]) => s.verdict === 'improved' || s.verdict === 'regressed')
             console.log(rows.length ? 'Phases with a verdict:' : 'No phase reached a verdict.')
