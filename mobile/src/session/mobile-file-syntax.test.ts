@@ -20,6 +20,39 @@ describe('mobile file syntax highlighting', () => {
     expect(resolveMobileSyntaxLanguage('Dockerfile')).toBe('plaintext')
   })
 
+  it('detects Terraform variable files and canonical Justfile names', () => {
+    expect(detectMobileFileLanguage('environments/production.tfvars')).toBe('hcl')
+    expect(detectMobileFileLanguage('C:\\repo\\terraform\\LOCAL.TFVARS')).toBe('hcl')
+    expect(detectMobileFileLanguage('justfile')).toBe('shell')
+    expect(detectMobileFileLanguage('C:\\repo\\Justfile')).toBe('shell')
+    expect(detectMobileFileLanguage('/home/user/project/.justfile')).toBe('shell')
+    expect(detectMobileFileLanguage('/home/user/project/.just')).toBe('shell')
+  })
+
+  it('uses available mobile grammars for Terraform variables and Justfiles', () => {
+    const tfvarsLanguage = resolveMobileSyntaxLanguage('environments/production.tfvars')
+    const justfileLanguage = resolveMobileSyntaxLanguage('Justfile')
+
+    expect(tfvarsLanguage).toBe('ini')
+    expect(justfileLanguage).toBe('bash')
+    expect(
+      highlightMobileCode('# environment\nregion = "us-east-1"', tfvarsLanguage)
+    ).toMatchObject({
+      highlighted: true,
+      segments: expect.arrayContaining([
+        { text: '# environment', kind: 'comment' },
+        { text: '"us-east-1"', kind: 'string' }
+      ])
+    })
+    expect(highlightMobileCode('# build\nbuild:\n  echo "ready"', justfileLanguage)).toMatchObject({
+      highlighted: true,
+      segments: expect.arrayContaining([
+        { text: '# build', kind: 'comment' },
+        { text: '"ready"', kind: 'string' }
+      ])
+    })
+  })
+
   it('emits semantic syntax segments for highlighted code', () => {
     const result = highlightMobileCode('const label: string = "Orca"', 'typescript')
 

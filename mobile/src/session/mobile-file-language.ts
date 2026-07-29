@@ -60,12 +60,17 @@ const EXT_TO_LANGUAGE: Record<string, string> = {
   '.lua': 'lua',
   '.r': 'r',
   '.R': 'r',
-  '.make': 'makefile'
+  '.make': 'makefile',
+  '.tfvars': 'hcl'
 }
 
 const FILENAME_TO_LANGUAGE: Record<string, string> = {
   Dockerfile: 'dockerfile',
   Makefile: 'makefile',
+  justfile: 'shell',
+  Justfile: 'shell',
+  '.justfile': 'shell',
+  '.just': 'shell',
   'CMakeLists.txt': 'cmake',
   '.gitignore': 'ini',
   '.gitattributes': 'ini',

@@ -40,6 +40,7 @@ const MAX_DIFF_HIGHLIGHT_SEGMENTS = 4_000
 const MAX_DIFF_LINE_HIGHLIGHT_SEGMENTS = 96
 
 const LANGUAGE_ALIASES: Record<string, string> = {
+  hcl: 'ini',
   javascriptreact: 'javascript',
   jsx: 'javascript',
   typescriptreact: 'typescript',

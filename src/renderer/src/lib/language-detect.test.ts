@@ -64,6 +64,18 @@ describe('detectLanguage', () => {
     expect(detectLanguage('analysis/MODEL.R')).toBe('r')
   })
 
+  it('maps Terraform variable files to the Monaco HCL language id', () => {
+    expect(detectLanguage('environments/production.tfvars')).toBe('hcl')
+    expect(detectLanguage('C:\\repo\\terraform\\LOCAL.TFVARS')).toBe('hcl')
+  })
+
+  it('maps canonical Justfile names to the supported shell language id', () => {
+    expect(detectLanguage('justfile')).toBe('shell')
+    expect(detectLanguage('C:\\repo\\Justfile')).toBe('shell')
+    expect(detectLanguage('/home/user/project/.justfile')).toBe('shell')
+    expect(detectLanguage('/home/user/project/.just')).toBe('shell')
+  })
+
   it('keeps .json/.jsonc on the built-in json language and unknown on plaintext', () => {
     expect(detectLanguage('config/settings.json')).toBe('json')
     expect(detectLanguage('config/tsconfig.jsonc')).toBe('json')
