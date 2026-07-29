@@ -42,10 +42,12 @@ describe('computeStatusPillPlacement', () => {
       display,
       platform: 'linux'
     })
-    expect(placement.x).toBe(Math.round((1920 - 320) / 2))
+    // Why: centering + dims use the WINDOW rect (capsule 320 + 2*18 padding),
+    // so the visible capsule ends up centered and the shadow halo has room.
+    expect(placement.x).toBe(Math.round((1920 - 356) / 2))
     expect(placement.y).toBe(8)
-    expect(placement.width).toBe(320)
-    expect(placement.height).toBe(32)
+    expect(placement.width).toBe(356)
+    expect(placement.height).toBe(72)
   })
 
   it('centers horizontally on Windows with an 8px top gap', () => {
@@ -56,7 +58,7 @@ describe('computeStatusPillPlacement', () => {
       display,
       platform: 'win32'
     })
-    expect(placement.x).toBe(Math.round((1920 - 320) / 2))
+    expect(placement.x).toBe(Math.round((1920 - 356) / 2))
     expect(placement.y).toBe(8)
   })
 
@@ -129,7 +131,7 @@ describe('computeStatusPillPlacement', () => {
       platform: 'linux',
       pinnedXOffset: 50000
     })
-    expect(placement.x).toBe(100 + 1000 - 320 - 8)
+    expect(placement.x).toBe(100 + 1000 - 356 - 8)
   })
 
   it('falls back to NaN-safe minX when pinnedXOffset is not finite', () => {
@@ -215,7 +217,7 @@ describe('computeStatusPillPlacementForPoint', () => {
       pillWidth: 320,
       pillHeight: 32
     })
-    expect(placement).toEqual({ x: 600, y: 80, width: 320, height: 32 })
+    expect(placement).toEqual({ x: 600, y: 80, width: 356, height: 72 })
   })
 
   it('clamps an off-right-edge point back into bounds', () => {
@@ -228,8 +230,9 @@ describe('computeStatusPillPlacementForPoint', () => {
       pillWidth: 320,
       pillHeight: 32
     })
-    // Why: the rightmost valid origin keeps the full pill width on screen.
-    expect(placement?.x).toBe(1920 - 320)
+    // Why: the rightmost valid origin keeps the full WINDOW (capsule + padding)
+    // on screen.
+    expect(placement?.x).toBe(1920 - 356)
     expect(placement?.y).toBe(4)
   })
 

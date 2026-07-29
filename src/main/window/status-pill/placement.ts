@@ -73,11 +73,22 @@ export function pickDisplayForCursor(
   return displays.find((d) => d.internal) ?? displays[0]
 }
 
-/** Compute the pill rectangle for a user-pinned position, clamped into the
- *  work area of the display that contains the point. If the point's display is
- *  gone (monitor unplugged), it falls back to the primary/internal display so
- *  the pill is never stranded off-screen. Returns null when there are no
- *  displays. */
+/** Window-level padding around the capsule so the box-shadow halo has room to
+ *  render outside the .pill body without being clipped by the BrowserWindow
+ *  bounds. Exported so the renderer can mirror the values in its own CSS
+ *  (the .pill-stack wrapper inset must match for the capsule to visually
+ *  center inside the window). */
+export const PILL_WINDOW_PADDING_X = 18
+export const PILL_WINDOW_PADDING_TOP = 6
+export const PILL_WINDOW_PADDING_BOTTOM = 34
+
+/** Compute the pill window's rectangle for a user-pinned position, clamped
+ *  into the work area of the display that contains the point. The `point` is
+ *  the desired window origin (what the drag persists via window.getPosition),
+ *  so the returned rectangle covers the full window (capsule + padding). If
+ *  the point's display is gone (monitor unplugged), it falls back to the
+ *  primary/internal display so the pill is never stranded off-screen. Returns
+ *  null when there are no displays. */
 export function computeStatusPillPlacementForPoint(input: {
   displays: Display[]
   point: { x: number; y: number }
@@ -88,27 +99,36 @@ export function computeStatusPillPlacementForPoint(input: {
   if (displays.length === 0) {
     return null
   }
+  // Why: the point is the window origin; clamp the full window rectangle
+  // (capsule + padding) so the capsule + shadow halo never leave the display.
+  const windowWidth = pillWidth + PILL_WINDOW_PADDING_X * 2
+  const windowHeight = pillHeight + PILL_WINDOW_PADDING_TOP + PILL_WINDOW_PADDING_BOTTOM
   // Why: pickDisplayForCursor already resolves "the display whose bounds
   // contain this point", with a sensible internal/first fallback, so we reuse
   // it for the pinned point.
   const display = pickDisplayForCursor(displays, point) ?? displays[0]
   const workArea = display.workArea
-  const x = clamp(point.x, workArea.x, workArea.x + Math.max(0, workArea.width - pillWidth))
-  const y = clamp(point.y, workArea.y, workArea.y + Math.max(0, workArea.height - pillHeight))
-  return { x, y, width: pillWidth, height: pillHeight }
+  const x = clamp(point.x, workArea.x, workArea.x + Math.max(0, workArea.width - windowWidth))
+  const y = clamp(point.y, workArea.y, workArea.y + Math.max(0, workArea.height - windowHeight))
+  return { x, y, width: windowWidth, height: windowHeight }
 }
 
-/** Compute the pill's screen rectangle for the chosen display + platform. */
+/** Compute the pill window's screen rectangle for the chosen display +
+ *  platform. The rectangle covers the *window* (capsule + padding), so the
+ *  capsule body is centered inside the returned bounds and the box-shadow halo
+ *  has room to render outside the capsule without being clipped. */
 export function computeStatusPillPlacement(input: StatusPillPlacementInput): StatusPillPlacement {
   const { pillWidth, pillHeight, display, platform, pinnedXOffset } = input
   const workArea = display.workArea
 
-  // Why: horizontal placement is either user-pinned (within bounds) or centered
-  // in the work area. Centering mirrors Vibe Island's notch anchor when the
-  // display has a notch and looks correct on plain top-center platforms too.
-  const centerX = workArea.x + Math.round((workArea.width - pillWidth) / 2)
+  // Why: window = capsule + horizontal padding, so the capsule stays centered
+  // and the shadow halo has room on each side. Centering uses the WINDOW width
+  // so the visible capsule ends up visually centered on the display.
+  const windowWidth = pillWidth + PILL_WINDOW_PADDING_X * 2
+  const windowHeight = pillHeight + PILL_WINDOW_PADDING_TOP + PILL_WINDOW_PADDING_BOTTOM
+  const centerX = workArea.x + Math.round((workArea.width - windowWidth) / 2)
   const minX = workArea.x + TOP_GAP_NO_NOTCH
-  const maxX = workArea.x + workArea.width - pillWidth - TOP_GAP_NO_NOTCH
+  const maxX = workArea.x + workArea.width - windowWidth - TOP_GAP_NO_NOTCH
   const resolvedX =
     typeof pinnedXOffset === 'number'
       ? clamp(pinnedXOffset, minX, maxX)
@@ -119,8 +139,8 @@ export function computeStatusPillPlacement(input: StatusPillPlacementInput): Sta
   return {
     x: resolvedX,
     y,
-    width: pillWidth,
-    height: pillHeight
+    width: windowWidth,
+    height: windowHeight
   }
 }
 

@@ -73,10 +73,16 @@ body {
 
 #root {
   height: 100%;
+  /* Why: padding mirrors the main-side PILL_WINDOW_PADDING_* constants so the
+     capsule visually centers inside the BrowserWindow with room for the
+     box-shadow halo. The .pill-stack measures itself via ResizeObserver
+     (content rect), so the renderer adds these paddings back when computing
+     the new window size. */
   display: flex;
   align-items: flex-start;
   justify-content: center;
-  padding: 0;
+  padding: 6px 18px 34px;
+  box-sizing: border-box;
 }
 
 /* ── Resting pill ───────────────────────────────────── */

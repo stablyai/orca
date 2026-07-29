@@ -1,6 +1,5 @@
 import { BrowserWindow, screen, type Display, type Rectangle } from 'electron'
 import { join } from 'node:path'
-import { is } from '@electron-toolkit/utils'
 import {
   computeStatusPillPlacement,
   computeStatusPillPlacementForPoint,
@@ -10,6 +9,11 @@ import {
 import { StatusPillBroadcaster, type StatusPillBroadcasterOptions } from './status-pill-broadcaster'
 import { computeStatusPillAgentRows, computeStatusPillSummary } from './status-pill-summary'
 import { attachStatusPillIpcListeners } from './status-pill-ipc'
+import {
+  attachDisplayListeners,
+  defaultStatusPillWarn,
+  loadPillEntry
+} from './status-pill-window-helpers'
 import type {
   StatusPillAgentRow,
   StatusPillAnswerResult,
@@ -38,7 +42,31 @@ export type StatusPillRuntime = {
  *  Writing middleware.ts"; tall enough that hover and click targets stay
  *  comfortable on a 4K display at 100% scaling. */
 const PILL_WIDTH = 320
-const PILL_HEIGHT = 32
+const PILL_HEIGHT = 34
+
+/** Window padding around the capsule so the box-shadow halo has room to render
+ *  outside the .pill body. Without this the shadow + the expanded panel get
+ *  clipped by the BrowserWindow bounds (the original 320x32 window truncated
+ *  both). Mirrored in the renderer (PILL_RENDERER_PADDING_*). */
+const PILL_PADDING_X = 18
+const PILL_PADDING_TOP = 6
+const PILL_PADDING_BOTTOM = 34
+
+/** Initial window dimensions (resting state). Width matches the capsule +
+ *  horizontal padding; height is capsule + top + bottom padding so the
+ *  downward shadow renders fully and the window can grow for the panel. */
+const PILL_WINDOW_WIDTH = PILL_WIDTH + PILL_PADDING_X * 2
+const PILL_WINDOW_HEIGHT = PILL_HEIGHT + PILL_PADDING_TOP + PILL_PADDING_BOTTOM
+
+export {
+  PILL_WIDTH,
+  PILL_HEIGHT,
+  PILL_PADDING_X,
+  PILL_PADDING_TOP,
+  PILL_PADDING_BOTTOM,
+  PILL_WINDOW_WIDTH,
+  PILL_WINDOW_HEIGHT
+}
 
 export type CreateStatusPillWindowOptions = {
   /** Pulls the current full agent-status snapshot. Used by the broadcaster
@@ -86,7 +114,7 @@ export type StatusPillWindowHandle = {
 export function createStatusPillWindow(
   options: CreateStatusPillWindowOptions
 ): StatusPillWindowHandle | null {
-  const warn = options.warn ?? defaultWarn
+  const warn = options.warn ?? defaultStatusPillWarn
   const getEntries = (): AgentStatusIpcPayload[] => options.getSnapshot()
   const getSummary = (): StatusPillSummary => computeStatusPillSummary(getEntries())
   const getRows = (): StatusPillAgentRow[] => computeStatusPillAgentRows(getEntries())
@@ -94,10 +122,12 @@ export function createStatusPillWindow(
   let window: BrowserWindow
   try {
     window = new BrowserWindow({
-      width: PILL_WIDTH,
-      height: PILL_HEIGHT,
+      width: PILL_WINDOW_WIDTH,
+      height: PILL_WINDOW_HEIGHT,
       frame: false,
-      resizable: false,
+      // Why: allow programmatic resize via setBounds when the expanded panel
+      // outgrows the resting window. Disables only user-driven resize.
+      resizable: true,
       minimizable: false,
       maximizable: false,
       fullscreenable: false,
@@ -156,6 +186,21 @@ export function createStatusPillWindow(
     window.setBackgroundColor('#00000000')
   } catch {
     // Best-effort; some Linux compositors reject this and Electron throws.
+  }
+
+  // Why: default to click-through so the transparent padding around the
+  // capsule passes mouse events to the apps behind the overlay. The renderer
+  // toggles this off via statusPill:setInteractive when the cursor enters the
+  // capsule/panel (interactive regions). forward:true keeps mouseMove events
+  // flowing so the renderer can detect mouseenter on its own elements.
+  try {
+    window.setIgnoreMouseEvents(true, { forward: true })
+  } catch {
+    try {
+      window.setIgnoreMouseEvents(true)
+    } catch {
+      // Best-effort; older Electron versions or headless/test environments.
+    }
   }
 
   // Why: 'screen-saver' level on Windows is the only one that clears the
@@ -346,59 +391,6 @@ export function createStatusPillWindow(
       display,
       platform: process.platform
     })
-  }
-}
-
-/** Load the pill HTML entry. Dev uses electron-vite's URL; prod uses the
- *  packaged file with a single retry to absorb a fresh-build flush race. */
-async function loadPillEntry(
-  window: BrowserWindow,
-  warn: (m: string, e?: unknown) => void
-): Promise<void> {
-  if (is.dev && process.env.ELECTRON_RENDERER_URL) {
-    await window.loadURL(`${process.env.ELECTRON_RENDERER_URL}/status-pill/`)
-    return
-  }
-  try {
-    await window.loadFile(join(__dirname, '../renderer/status-pill/index.html'))
-  } catch (error) {
-    warn('[status-pill] loadFile failed; retrying once after build flush', error)
-    // Why: a freshly rebuilt dev package can race the renderer file flush.
-    // Retry once after a short tick before giving up.
-    await new Promise((resolve) => setTimeout(resolve, 250))
-    await window.loadFile(join(__dirname, '../renderer/status-pill/index.html'))
-  }
-}
-
-function attachDisplayListeners(refresh: () => void): () => void {
-  const onMetrics = (): void => refresh()
-  const onAdded = (): void => refresh()
-  const onRemoved = (): void => refresh()
-  try {
-    screen.on('display-metrics-changed', onMetrics)
-    screen.on('display-added', onAdded)
-    screen.on('display-removed', onRemoved)
-  } catch {
-    // Best-effort; headless/test environments may not emit these.
-  }
-  return () => {
-    try {
-      screen.off('display-metrics-changed', onMetrics)
-      screen.off('display-added', onAdded)
-      screen.off('display-removed', onRemoved)
-    } catch {
-      // Best-effort.
-    }
-  }
-}
-
-function defaultWarn(message: string, error?: unknown): void {
-  // Why: keep the signature console-style so callers can substitute
-  // `(m, e) => console.warn(m, e)` in tests without adapter gymnastics.
-  if (error === undefined) {
-    console.warn(message)
-  } else {
-    console.warn(message, error)
   }
 }
 
