@@ -6,6 +6,7 @@ type ResolveCommandOptions = {
   pathEnv?: string | null
   platform?: NodeJS.Platform
   homePath?: string
+  env?: NodeJS.ProcessEnv
 }
 
 function getExecutableNames(platform: NodeJS.Platform, commandName: string): string[] {
@@ -85,11 +86,28 @@ function isRunnableCommand(platform: NodeJS.Platform, candidate: string): boolea
   }
 }
 
-function getBaseVersionManagerDirectories(platform: NodeJS.Platform, homePath: string): string[] {
+function getFnmDefaultDirectory(
+  platform: NodeJS.Platform,
+  homePath: string,
+  env: NodeJS.ProcessEnv
+): string {
+  if (platform !== 'win32') {
+    return join(homePath, '.fnm', 'aliases', 'default', 'bin')
+  }
+  const appData = env.APPDATA?.trim() || join(homePath, 'AppData', 'Roaming')
+  const fnmDir = env.FNM_DIR?.trim() || join(appData, 'fnm')
+  return join(fnmDir, 'aliases', 'default')
+}
+
+function getBaseVersionManagerDirectories(
+  platform: NodeJS.Platform,
+  homePath: string,
+  env: NodeJS.ProcessEnv
+): string[] {
   const directories = [
     join(homePath, '.volta', 'bin'),
     join(homePath, '.asdf', 'shims'),
-    join(homePath, '.fnm', 'aliases', 'default', 'bin'),
+    getFnmDefaultDirectory(platform, homePath, env),
     // Why: mise (formerly rtx) exposes managed tool binaries via a shims
     // directory, similar to asdf. Without this, users who installed node
     // or CLI tools through mise can't be found by the fallback probe.
@@ -139,9 +157,10 @@ function getNvmVersionDirectories(homePath: string): string[] {
 function getVersionManagerDirectories(
   platform: NodeJS.Platform,
   homePath: string,
-  executableNames: string[]
+  executableNames: string[],
+  env: NodeJS.ProcessEnv
 ): string[] {
-  const directories = getBaseVersionManagerDirectories(platform, homePath)
+  const directories = getBaseVersionManagerDirectories(platform, homePath, env)
 
   // Why: GUI-launched Electron apps do not inherit shell init from nvm, so
   // command resolution probes the newest installed Node versions explicitly.
@@ -162,8 +181,9 @@ export function resolveCliCommand(
   options: ResolveCommandOptions = {}
 ): string {
   const platform = options.platform ?? process.platform
+  const env = options.env ?? process.env
   const executableNames = getExecutableNames(platform, commandName)
-  const pathEnv = options.pathEnv ?? process.env.PATH ?? process.env.Path ?? null
+  const pathEnv = options.pathEnv ?? env.PATH ?? env.Path ?? null
   const pathCandidate = findFirstExecutable(platform, splitPath(pathEnv), executableNames)
   if (pathCandidate) {
     return pathCandidate
@@ -172,7 +192,7 @@ export function resolveCliCommand(
   const homePath = options.homePath ?? homedir()
   const versionManagerCandidate = findFirstExecutable(
     platform,
-    getVersionManagerDirectories(platform, homePath, executableNames),
+    getVersionManagerDirectories(platform, homePath, executableNames, env),
     executableNames
   )
   return versionManagerCandidate ?? commandName
@@ -183,14 +203,15 @@ export function resolveCliCommands(
   options: ResolveCommandOptions = {}
 ): Map<string, string> {
   const platform = options.platform ?? process.platform
-  const pathEnv = options.pathEnv ?? process.env.PATH ?? process.env.Path ?? null
+  const env = options.env ?? process.env
+  const pathEnv = options.pathEnv ?? env.PATH ?? env.Path ?? null
   const pathDirectories = splitPath(pathEnv)
   const homePath = options.homePath ?? homedir()
   // Why: agent detection probes many CLIs at once; compute expensive install
   // directories, especially nvm versions, once per detection pass.
   const installDirectories = [
     ...getNvmVersionDirectories(homePath),
-    ...getBaseVersionManagerDirectories(platform, homePath)
+    ...getBaseVersionManagerDirectories(platform, homePath, env)
   ]
   const resolved = new Map<string, string>()
 
@@ -221,6 +242,7 @@ export function resolveClaudeCommand(options: ResolveCommandOptions = {}): strin
 export function getVersionManagerBinPaths(options: ResolveCommandOptions = {}): string[] {
   const platform = options.platform ?? process.platform
   const homePath = options.homePath ?? homedir()
+  const env = options.env ?? process.env
   const nodeNames = getExecutableNames(platform, 'node')
-  return getVersionManagerDirectories(platform, homePath, nodeNames)
+  return getVersionManagerDirectories(platform, homePath, nodeNames, env)
 }
