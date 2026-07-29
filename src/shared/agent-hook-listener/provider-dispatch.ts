@@ -1,6 +1,10 @@
 import { normalizeCompatibleLifecycleEvent } from './providers/compatible-lifecycle-events'
 import { normalizeQoderEvent } from './providers/qoder-events'
-import type { AgentMainAgentStatus, ParsedAgentStatusPayload } from '../agent-status-types'
+import {
+  normalizeAgentStatusPayload,
+  type AgentMainAgentStatus,
+  type ParsedAgentStatusPayload
+} from '../agent-status-types'
 import type { AgentHookSource } from '../agent-hook-relay'
 import { readHostTurnSignals } from '../agent-hook-turn-end-timing'
 import type { AgentHookEventPayload } from './listener-event'
@@ -227,6 +231,12 @@ export function normalizeProviderEvent(input: {
     }
     case 'kiro':
       payload = normalizeKiroEvent(state, eventName, promptText, paneKey, hookPayload)
+      break
+    case 'trae':
+      // Why: managed Trae event schema is a follow-up; emit a done placeholder so session_id
+      // posts can still attach providerSession on the normal status path (not Pi-only).
+      payload = normalizeAgentStatusPayload({ state: 'done', prompt: '', agentType: 'trae' })
+      break
   }
 
   return {

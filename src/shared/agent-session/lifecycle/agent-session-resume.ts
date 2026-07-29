@@ -298,6 +298,11 @@ export function extractAgentProviderSession(
       const id = readSessionId(payload, ['conversation_id'])
       return id ? { key: 'conversation_id', id } : null
     }
+    // Why: Trae hooks (when installed) report the CLI resume id; same shape as grok/devin.
+    case 'trae': {
+      const id = readSessionId(payload, ['session_id', 'sessionId'])
+      return id ? { key: 'session_id', id } : null
+    }
     case 'amp':
     case 'command-code':
       return null

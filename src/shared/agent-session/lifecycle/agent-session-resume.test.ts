@@ -54,7 +54,9 @@ describe('agent session resume metadata', () => {
       'hermes',
       { session_id: '20261020_221305_5e3a1c' },
       { key: 'session_id', id: '20261020_221305_5e3a1c' }
-    ]
+    ],
+    ['trae', { session_id: 'trae-session' }, { key: 'session_id', id: 'trae-session' }],
+    ['trae', { sessionId: 'trae-camel' }, { key: 'session_id', id: 'trae-camel' }]
   ] as const)('extracts %s provider session ids', (source, payload, expected) => {
     expect(extractAgentProviderSession(source, payload)).toEqual(expected)
   })
