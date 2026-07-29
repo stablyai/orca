@@ -263,9 +263,14 @@ describe('tokenizeCustomCommandTemplate', () => {
     expect(r).toEqual({ ok: true, tokens: ['agent', '--json', '{"k":"v"}'] })
   })
 
-  it('honors backslash escapes inside double quotes', () => {
+  it('escapes double quotes inside double-quoted segments', () => {
     const r = tokenizeCustomCommandTemplate('claude --msg "she said \\"hi\\""')
     expect(r).toEqual({ ok: true, tokens: ['claude', '--msg', 'she said "hi"'] })
+  })
+
+  it('preserves consecutive backslashes inside double-quoted segments', () => {
+    const r = tokenizeCustomCommandTemplate(String.raw`agent --value "a\\b"`)
+    expect(r).toEqual({ ok: true, tokens: ['agent', '--value', String.raw`a\\b`] })
   })
 
   it('preserves native Windows path separators', () => {
