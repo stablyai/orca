@@ -20,8 +20,8 @@ export function findWorkspaceForFilePath(
     if (relativePath === null) {
       continue
     }
-    // Why: nested workspaces both match; the deepest root is the one the user thinks the file lives in.
-    if (!best || workspace.path.length > best.workspace.path.length) {
+    // Why: shorter relative path always means deeper root, immune to Unicode/encoding differences in root itself.
+    if (!best || relativePath.length < best.relativePath.length) {
       best = { workspace, relativePath }
     }
   }
