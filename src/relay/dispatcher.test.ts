@@ -88,7 +88,9 @@ describe('RelayDispatcher', () => {
 
   it('sends error response when handler throws', async () => {
     dispatcher.onRequest('fail.method', async () => {
-      throw new Error('boom')
+      throw Object.assign(new Error('boom'), {
+        data: { worktreeScanRootMissing: true }
+      })
     })
 
     const req: JsonRpcRequest = {
@@ -115,7 +117,86 @@ describe('RelayDispatcher', () => {
 
     const resp = JSON.parse(decodeFirstFrame(errors[0]).payload.toString('utf-8'))
     expect(resp.error.message).toBe('boom')
+    expect(resp.error.data).toEqual({ worktreeScanRootMissing: true })
     expect(resp.id).toBe(5)
+  })
+
+  it('notifies the client only after a tracked request settles', async () => {
+    let resolveHandler!: () => void
+    dispatcher.onRequest(
+      'tracked.method',
+      () =>
+        new Promise((resolve) => {
+          resolveHandler = () => resolve({ ok: true })
+        })
+    )
+    dispatcher.feed(
+      encodeJsonRpcFrame(
+        {
+          jsonrpc: '2.0',
+          id: 6,
+          method: 'tracked.method',
+          params: { __orcaSettlementToken: 'settlement-token' }
+        },
+        1,
+        0
+      )
+    )
+    await vi.advanceTimersByTimeAsync(0)
+    expect(written).toHaveLength(0)
+
+    resolveHandler()
+    await vi.advanceTimersByTimeAsync(0)
+    const messages = written.map((frame) =>
+      JSON.parse(decodeFirstFrame(frame).payload.toString('utf-8'))
+    )
+
+    expect(messages).toEqual([
+      expect.objectContaining({ id: 6, result: { ok: true } }),
+      {
+        jsonrpc: '2.0',
+        method: 'rpc.settled',
+        params: { token: 'settlement-token' }
+      }
+    ])
+  })
+
+  it('notifies settlement after a tracked request handles cancellation', async () => {
+    dispatcher.onRequest(
+      'tracked.method',
+      (_params, context) =>
+        new Promise((resolve) => {
+          context.signal?.addEventListener('abort', () => resolve(null), { once: true })
+        })
+    )
+    dispatcher.feed(
+      encodeJsonRpcFrame(
+        {
+          jsonrpc: '2.0',
+          id: 7,
+          method: 'tracked.method',
+          params: { __orcaSettlementToken: 'cancel-token' }
+        },
+        1,
+        0
+      )
+    )
+    await vi.advanceTimersByTimeAsync(0)
+    dispatcher.feed(
+      encodeJsonRpcFrame({ jsonrpc: '2.0', method: 'rpc.cancel', params: { id: 7 } }, 2, 0)
+    )
+    await vi.advanceTimersByTimeAsync(0)
+
+    const messages = written.map((frame) =>
+      JSON.parse(decodeFirstFrame(frame).payload.toString('utf-8'))
+    )
+    expect(messages).toEqual([
+      {
+        jsonrpc: '2.0',
+        method: 'rpc.settled',
+        params: { token: 'cancel-token' }
+      }
+    ])
   })
 
   it('sends method-not-found for unknown methods', async () => {

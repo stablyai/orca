@@ -40,13 +40,17 @@ const PRUNABLE_EXISTENCE_PROBE_CONCURRENCY = 8
  *  harmless backstop. The relay owns the filesystem, so a plain stat is
  *  authoritative. */
 export async function annotatePrunableWorktreesByExistence(
-  worktrees: Record<string, unknown>[]
+  worktrees: Record<string, unknown>[],
+  signal?: AbortSignal
 ): Promise<Record<string, unknown>[]> {
   const annotated = [...worktrees]
   let nextIndex = 0
 
   async function probeNext(): Promise<void> {
     while (nextIndex < worktrees.length) {
+      if (signal?.aborted) {
+        return
+      }
       const index = nextIndex
       nextIndex += 1
       const worktree = worktrees[index]
@@ -68,8 +72,13 @@ export async function annotatePrunableWorktreesByExistence(
       try {
         await stat(worktreePath)
       } catch (err) {
-        if ((err as NodeJS.ErrnoException | undefined)?.code === 'ENOENT') {
+        const code = (err as NodeJS.ErrnoException | undefined)?.code
+        if (code === 'ENOENT' || code === 'ENOTDIR') {
           annotated[index] = { ...worktree, prunable: true }
+        } else {
+          // Why: an unreadable path (EPERM, EIO, dead NFS mount) says nothing about whether the
+          // registration is stale. Leave the row unannotated instead of failing the whole graph.
+          console.warn(`[git-handler] prunable probe failed for ${worktreePath}:`, err)
         }
       }
     }
@@ -77,6 +86,11 @@ export async function annotatePrunableWorktreesByExistence(
 
   const workerCount = Math.min(PRUNABLE_EXISTENCE_PROBE_CONCURRENCY, worktrees.length)
   await Promise.all(Array.from({ length: workerCount }, () => probeNext()))
+  if (signal?.aborted) {
+    const error = new Error('Relay worktree scan was cancelled.')
+    error.name = 'AbortError'
+    throw error
+  }
   return annotated
 }
 

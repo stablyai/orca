@@ -66,6 +66,7 @@ function makeNotificationFrame(
 type MuxInternals = {
   notificationHandlers: unknown[]
   methodNotificationHandlers: Map<string, Set<unknown>>
+  trackedSettlementWaiters: Map<string, () => void>
   disposeHandlers: unknown[]
   lastReceivedAt: number
   unackedTimestamps: Map<number, number>
@@ -163,6 +164,77 @@ describe('SshChannelMultiplexer', () => {
         transport.dataCallbacks[0](encodeKeepAliveFrame(i + 1, 0))
       }
       await expect(promise).rejects.toThrow('timed out after 60000ms')
+    })
+
+    it('keeps tracked settlement separate from the RPC result', async () => {
+      const tracked = mux.requestTracked<{ ok: boolean }>('git.listWorktrees', {
+        repoPath: '/repo'
+      })
+      const requestFrame = transport.written[0]
+      const request = JSON.parse(
+        requestFrame
+          .subarray(HEADER_LENGTH, HEADER_LENGTH + requestFrame.readUInt32BE(9))
+          .toString()
+      )
+      let settled = false
+      void tracked.settled.then(() => {
+        settled = true
+      })
+
+      transport.dataCallbacks[0](makeResponseFrame(1, { ok: true }, 1))
+      await expect(tracked.result).resolves.toEqual({ ok: true })
+      expect(settled).toBe(false)
+
+      transport.dataCallbacks[0](
+        makeNotificationFrame('rpc.settled', { token: request.params.__orcaSettlementToken }, 2)
+      )
+      await tracked.settled
+      expect(settled).toBe(true)
+    })
+
+    it('retains tracked settlement after the result timeout', async () => {
+      const tracked = mux.requestTracked('git.listWorktrees', {}, { timeoutMs: 1_000 })
+      const resultExpectation = expect(tracked.result).rejects.toThrow('timed out')
+      const requestFrame = transport.written[0]
+      const request = JSON.parse(
+        requestFrame
+          .subarray(HEADER_LENGTH, HEADER_LENGTH + requestFrame.readUInt32BE(9))
+          .toString()
+      )
+      let settled = false
+      void tracked.settled.then(() => {
+        settled = true
+      })
+
+      await vi.advanceTimersByTimeAsync(1_000)
+      await resultExpectation
+      expect(settled).toBe(false)
+      transport.dataCallbacks[0](
+        makeNotificationFrame('rpc.settled', { token: request.params.__orcaSettlementToken }, 1)
+      )
+      await tracked.settled
+      expect(settled).toBe(true)
+    })
+
+    it('releases tracked settlement when the peer never sends rpc.settled', async () => {
+      // Why: relays older than rpc.settled answer the result and nothing else; without a
+      // bound the caller's scan permit would be held for the mux's lifetime.
+      const tracked = mux.requestTracked<{ ok: boolean }>('git.listWorktrees', {
+        repoPath: '/repo'
+      })
+      let settled = false
+      void tracked.settled.then(() => {
+        settled = true
+      })
+
+      transport.dataCallbacks[0](makeResponseFrame(1, { ok: true }, 1))
+      await expect(tracked.result).resolves.toEqual({ ok: true })
+      expect(settled).toBe(false)
+
+      await vi.advanceTimersByTimeAsync(5_000)
+      await tracked.settled
+      expect(settled).toBe(true)
+      expect(getMuxInternals(mux).trackedSettlementWaiters.size).toBe(0)
     })
 
     it('assigns unique request IDs', async () => {
@@ -432,6 +504,51 @@ describe('SshChannelMultiplexer', () => {
       mux.dispose()
 
       await expect(promise).rejects.toThrow('Multiplexer disposed')
+    })
+
+    it('does not claim remote settlement when a tracked connection is disposed', async () => {
+      const tracked = mux.requestTracked('git.listWorktrees')
+      const resultExpectation = expect(tracked.result).rejects.toThrow('Multiplexer disposed')
+      let settled = false
+      void tracked.settled.then(() => {
+        settled = true
+      })
+
+      mux.dispose()
+      await resultExpectation
+      await Promise.resolve()
+
+      expect(settled).toBe(false)
+      expect(getMuxInternals(mux).trackedSettlementWaiters.size).toBe(1)
+    })
+
+    it('releases tracked settlement shortly after a disposed connection', async () => {
+      // Why: a dropped SSH link must not strand the caller's scan permit — the desktop gate is
+      // process-wide, so enough stranded permits would freeze scanning for every host.
+      const tracked = mux.requestTracked('git.listWorktrees')
+      const resultExpectation = expect(tracked.result).rejects.toThrow('SSH connection lost')
+      let settled = false
+      void tracked.settled.then(() => {
+        settled = true
+      })
+
+      mux.dispose('connection_lost')
+      await resultExpectation
+
+      await vi.advanceTimersByTimeAsync(5_000)
+      await tracked.settled
+      expect(settled).toBe(true)
+      expect(getMuxInternals(mux).trackedSettlementWaiters.size).toBe(0)
+    })
+
+    it('returns settled ownership when a tracked request was never sent', async () => {
+      mux.dispose()
+
+      const tracked = mux.requestTracked('git.listWorktrees')
+
+      await expect(tracked.result).rejects.toThrow('Multiplexer disposed')
+      await expect(tracked.settled).resolves.toBeUndefined()
+      expect(getMuxInternals(mux).trackedSettlementWaiters.size).toBe(0)
     })
 
     it('throws on request after dispose', async () => {

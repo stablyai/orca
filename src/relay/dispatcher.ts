@@ -417,12 +417,27 @@ export class RelayDispatcher {
   }
 
   private async handleRequest(client: RelayClient, req: JsonRpcRequest): Promise<void> {
+    const settlementToken =
+      typeof req.params?.__orcaSettlementToken === 'string'
+        ? req.params.__orcaSettlementToken
+        : null
+    const sendSettled = (): void => {
+      if (settlementToken) {
+        this.sendFrame(client, {
+          jsonrpc: '2.0',
+          method: 'rpc.settled',
+          params: { token: settlementToken }
+        })
+      }
+    }
     const handler = this.requestHandlers.get(req.method)
     if (!handler) {
       this.sendResponse(client, req.id, undefined, {
         code: -32601,
         message: `Method not found: ${req.method}`
       })
+      // Why: an unimplemented method still owes settlement, or the client holds its scan permit.
+      sendSettled()
       return
     }
 
@@ -450,9 +465,11 @@ export class RelayDispatcher {
       }
       const message = err instanceof Error ? err.message : String(err)
       const code = (err as { code?: number }).code ?? -32000
-      this.sendResponse(client, req.id, undefined, { code, message })
+      const data = (err as { data?: unknown }).data
+      this.sendResponse(client, req.id, undefined, { code, message, data })
     } finally {
       this.requestAborts.delete(abortKey)
+      sendSettled()
     }
   }
 

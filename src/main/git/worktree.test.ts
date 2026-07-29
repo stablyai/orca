@@ -27,6 +27,7 @@ import {
   _resetWorktreeScanCacheForTests,
   listWorktreeGraph,
   listWorktrees,
+  listWorktreesStrict,
   moveWorktree,
   parseWorktreeList,
   removeWorktree,
@@ -36,6 +37,45 @@ import {
 
 beforeEach(() => {
   clearGitCapabilityStateForTests()
+})
+
+describe('listWorktreesStrict', () => {
+  afterEach(() => {
+    gitExecFileAsyncMock.mockReset()
+  })
+
+  it('keeps the porcelain graph when main-worktree normalization fails', async () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    gitExecFileAsyncMock
+      .mockResolvedValueOnce({
+        stdout: 'worktree /git-store/project.git\0HEAD abc\0branch refs/heads/main\0\0'
+      })
+      .mockRejectedValueOnce(new Error('rev-parse failed'))
+
+    // Why: normalization enriches separate-git-dir repos; losing it must not erase the repo.
+    await expect(listWorktreesStrict('/repo')).resolves.toMatchObject([
+      { path: '/git-store/project.git', isMainWorktree: true }
+    ])
+    warn.mockRestore()
+  })
+
+  it('propagates a cancelled normalization instead of degrading', async () => {
+    const controller = new AbortController()
+    gitExecFileAsyncMock
+      .mockResolvedValueOnce({
+        stdout: 'worktree /git-store/project.git\0HEAD abc\0branch refs/heads/main\0\0'
+      })
+      .mockImplementationOnce(async () => {
+        controller.abort()
+        throw Object.assign(new Error('cancelled'), { name: 'AbortError' })
+      })
+
+    await expect(listWorktreesStrict('/repo', { signal: controller.signal })).rejects.toMatchObject(
+      {
+        name: 'AbortError'
+      }
+    )
+  })
 })
 
 describe('listWorktrees in-flight sharing', () => {
@@ -154,7 +194,7 @@ describe('listWorktrees in-flight sharing', () => {
           scanResolvers.push((stdout) => resolve({ stdout }))
         })
       }
-      return Promise.resolve({ stdout: '' })
+      return Promise.resolve({ stdout: '/repo\n/repo\n' })
     })
 
     const staleScan = listWorktrees('/repo')

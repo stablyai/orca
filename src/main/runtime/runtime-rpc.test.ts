@@ -28,8 +28,9 @@ import { DeviceRegistry } from './device-registry'
 import { DEVICE_REGISTRY_FILENAME, E2EE_KEYPAIR_FILENAME } from './mobile-pairing-files'
 import { ORCHESTRATION_CONTRACT_VERSION } from '../../shared/protocol-version'
 
-vi.mock('../git/worktree', () => ({
-  listWorktrees: vi.fn().mockResolvedValue([
+vi.mock('../git/worktree', () => {
+  // Why: runtime worktree resolution reads the strict variant, so both must report the same graph.
+  const worktrees = [
     {
       path: '/tmp/worktree-a',
       head: 'abc',
@@ -37,9 +38,12 @@ vi.mock('../git/worktree', () => ({
       isBare: false,
       isMainWorktree: false
     }
-  ]),
-  listWorktreesStrict: vi.fn().mockResolvedValue([])
-}))
+  ]
+  return {
+    listWorktrees: vi.fn().mockResolvedValue(worktrees),
+    listWorktreesStrict: vi.fn().mockResolvedValue(worktrees)
+  }
+})
 
 async function sendRequest(
   endpoint: string,

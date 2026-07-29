@@ -41,6 +41,10 @@ import {
 } from '../../shared/wsl-login-shell-command'
 import { UNTRANSLATED_GIT_OUTPUT_ENV } from '../../shared/git-output-locale'
 import { endSubprocessStdin } from '../../shared/subprocess-stdin-write'
+import {
+  settleSubprocessTreeAfterExit as settleSpawnedCommandTreeAfterExit,
+  terminateSubprocessTreeAndWait as terminateSpawnedCommandTreeAndWait
+} from '../../shared/process-tree-settlement'
 // Re-exported for existing importers; lightweight consumers should import from './exec-error' to avoid this heavy module.
 import { extractExecError, parseRetryAfterMs } from './exec-error'
 export { extractExecError, parseRetryAfterMs }
@@ -269,6 +273,7 @@ type GitExecOptions = {
   signal?: AbortSignal
   wslDistro?: string
   useConfiguredSshCommandForNetwork?: boolean
+  settleProcessTree?: boolean
 }
 
 type CommandExecOptions = {
@@ -362,6 +367,7 @@ function killSpawnedCommandTree(child: ChildProcess): Promise<void> {
 type ExecFileCaptureOptions = Omit<ExecFileOptions, 'timeout'> & {
   timeout?: number
   stdin?: string
+  settleProcessTree?: boolean
 }
 
 function emptyExecFileOutput(options: ExecFileCaptureOptions): string | Buffer {
@@ -432,7 +438,10 @@ function execFileCapture(
         finish(abortError)
         return
       }
-      void killSpawnedCommandTree(child).then(() => {
+      const terminate = options.settleProcessTree
+        ? terminateSpawnedCommandTreeAndWait(child)
+        : killSpawnedCommandTree(child)
+      void terminate.then(() => {
         terminating = false
         finish(abortError)
       })
@@ -441,26 +450,41 @@ function execFileCapture(
     try {
       const spawnStartedAt = performance.now()
       // Why: our abort listener owns tree cleanup; Node's signal handler could kill wsl.exe before taskkill sees its children.
-      child = execFile(
-        command,
-        args,
-        {
-          cwd: options.cwd,
-          encoding: options.encoding,
-          maxBuffer: options.maxBuffer ?? DEFAULT_GIT_MAX_BUFFER,
-          env: options.env
-        },
-        (error, stdout, stderr) => {
-          if (terminating) {
-            return
-          }
+      const execOptions = {
+        cwd: options.cwd,
+        encoding: options.encoding,
+        maxBuffer: options.maxBuffer ?? DEFAULT_GIT_MAX_BUFFER,
+        env: options.env,
+        detached: options.settleProcessTree && process.platform !== 'win32'
+      } as ExecFileOptions
+      child = execFile(command, args, execOptions, (error, stdout, stderr) => {
+        if (terminating) {
+          return
+        }
+        const complete = (): void => {
           if (!error && stderr === undefined && isExecFileResultObject(stdout)) {
             finish(null, stdout.stdout, stdout.stderr)
             return
           }
           finish(error, stdout, stderr)
         }
-      )
+        if (options.settleProcessTree && child) {
+          // Why: a maxbuffer abort leaves the tree running, so it needs a kill; a natural
+          // exit only needs its group drained.
+          const overflowed =
+            !!error && (error as NodeJS.ErrnoException).code === 'ERR_CHILD_PROCESS_STDIO_MAXBUFFER'
+          terminating = true
+          const settle = overflowed
+            ? terminateSpawnedCommandTreeAndWait(child)
+            : settleSpawnedCommandTreeAfterExit(child)
+          void settle.then(() => {
+            terminating = false
+            complete()
+          })
+          return
+        }
+        complete()
+      })
       recordSubprocessSpawn(command, args, performance.now() - spawnStartedAt)
     } catch (error) {
       finish(error instanceof Error ? error : new Error(String(error)))
@@ -490,7 +514,10 @@ function execFileCapture(
           finish(timeoutError)
           return
         }
-        void killSpawnedCommandTree(child).then(() => {
+        const terminate = options.settleProcessTree
+          ? terminateSpawnedCommandTreeAndWait(child)
+          : killSpawnedCommandTree(child)
+        void terminate.then(() => {
           terminating = false
           finish(timeoutError)
         })
@@ -857,7 +884,8 @@ export async function gitExecFileAsync(
           stdin: options.stdin,
           // Why: never let a git read-path call block on an interactive prompt (issue #5308) — fail fast.
           env: policy.env,
-          signal: options.signal
+          signal: options.signal,
+          settleProcessTree: options.settleProcessTree
         })
       } catch (error) {
         if (options.useConfiguredSshCommandForNetwork && error && typeof error === 'object') {

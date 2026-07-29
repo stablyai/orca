@@ -4,6 +4,7 @@ import { SshGitProvider } from './ssh-git-provider'
 
 type MockMultiplexer = {
   request: ReturnType<typeof vi.fn>
+  requestTracked: ReturnType<typeof vi.fn>
   notify: ReturnType<typeof vi.fn>
   onNotification: ReturnType<typeof vi.fn>
   onNotificationByMethod: ReturnType<typeof vi.fn>
@@ -15,6 +16,7 @@ type MockMultiplexer = {
 function createMockMux(): MockMultiplexer {
   return {
     request: vi.fn().mockResolvedValue(undefined),
+    requestTracked: vi.fn(),
     notify: vi.fn(),
     onNotification: vi.fn(),
     onNotificationByMethod: vi.fn().mockReturnValue(vi.fn()),
@@ -1339,6 +1341,34 @@ describe('SshGitProvider', () => {
       { signal: controller.signal }
     )
     expect(result).toEqual(worktrees)
+  })
+
+  it('listWorktreesTracked preserves result and remote settlement promises', () => {
+    const tracked = {
+      result: Promise.resolve([]),
+      settled: Promise.resolve()
+    }
+    mux.requestTracked.mockReturnValue(tracked)
+
+    expect(provider.listWorktreesTracked('/home/user/repo')).toBe(tracked)
+    expect(mux.requestTracked).toHaveBeenCalledWith(
+      'git.listWorktrees',
+      { repoPath: '/home/user/repo' },
+      { signal: undefined }
+    )
+  })
+
+  it('listWorktreesTracked forwards the caller signal so the relay can cancel', () => {
+    const controller = new AbortController()
+    mux.requestTracked.mockReturnValue({ result: Promise.resolve([]), settled: Promise.resolve() })
+
+    provider.listWorktreesTracked('/home/user/repo', { signal: controller.signal })
+
+    expect(mux.requestTracked).toHaveBeenCalledWith(
+      'git.listWorktrees',
+      { repoPath: '/home/user/repo' },
+      { signal: controller.signal }
+    )
   })
 
   it('addWorktree sends git.addWorktree request', async () => {

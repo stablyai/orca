@@ -1,5 +1,12 @@
 import { execFile, type ChildProcess } from 'node:child_process'
 
+// Why: the settlement half is identical in the main bundle, so it lives in one
+// dependency-free module both bundles import instead of drifting in two copies.
+export {
+  terminateSubprocessTreeAndWait as terminateRelaySubprocessTreeAndWait,
+  settleSubprocessTreeAfterExit as settleRelaySubprocessTreeAfterExit
+} from '../shared/process-tree-settlement'
+
 // Why: Windows commands may run through wrappers, so killing only the direct
 // child can leave Git or an agent alive after cancellation.
 export function terminateRelaySubprocessTree(child: ChildProcess): void {

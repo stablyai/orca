@@ -17,7 +17,9 @@ const mocks = vi.hoisted(() => ({
 
 vi.mock('../git/worktree', async () => ({
   ...(await vi.importActual<typeof WorktreeModule>('../git/worktree')),
-  listWorktrees: mocks.listWorktrees
+  listWorktrees: mocks.listWorktrees,
+  // Why: runtime worktree resolution reads the strict variant, so both must report the same graph.
+  listWorktreesStrict: mocks.listWorktrees
 }))
 
 vi.mock('../git/status', async () => ({
