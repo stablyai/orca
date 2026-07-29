@@ -4,27 +4,11 @@ import { defaultProjectGroupNameForPath } from '@/components/sidebar/add-repo-di
 import { useAppStore } from '@/store'
 import { detectLanguage } from './language-detect'
 import { findLocalProjectGroupForOsRequestedFile } from './os-requested-file-project-group'
-import { findWorkspaceForFilePath, type WorkspaceCandidate } from './os-requested-file-workspace'
+import { collectLocalWorkspaceCandidates } from './os-requested-file-workspace-candidates'
+import { findWorkspaceForFilePath } from './os-requested-file-workspace'
 import { basename, dirname } from './path'
 import { activateAndRevealWorktree } from './worktree-activation'
 import { translate } from '@/i18n/i18n'
-
-function collectWorkspaceCandidates(): WorkspaceCandidate[] {
-  const state = useAppStore.getState()
-  const candidates: WorkspaceCandidate[] = []
-  for (const worktrees of Object.values(state.worktreesByRepo)) {
-    for (const worktree of worktrees) {
-      candidates.push({ id: worktree.id, path: worktree.path })
-    }
-  }
-  for (const folderWorkspace of state.folderWorkspaces) {
-    candidates.push({
-      id: folderWorkspaceToWorktree(folderWorkspace).id,
-      path: folderWorkspace.folderPath
-    })
-  }
-  return candidates
-}
 
 async function resolveProjectGroupId(filePath: string, folderPath: string): Promise<string | null> {
   const state = useAppStore.getState()
@@ -54,7 +38,10 @@ export function openOsRequestedFile(filePath: string): Promise<void> {
 }
 
 async function openOsRequestedFileSerially(filePath: string): Promise<void> {
-  const existing = findWorkspaceForFilePath(filePath, collectWorkspaceCandidates())
+  const existing = findWorkspaceForFilePath(
+    filePath,
+    collectLocalWorkspaceCandidates(useAppStore.getState())
+  )
   let worktreeId = existing?.workspace.id ?? null
   // Why: an empty relative path means the match was the workspace root itself, not a file in it.
   let relativePath = existing?.relativePath ?? ''
