@@ -108,7 +108,7 @@ export function installPreviewTerminalKeyHandler(args: {
       consumedClipboardKeys.add(keyIdentity)
       const selection = terminal.getSelection()
       if (firstKeydown && selection) {
-        void window.api.ui.writeClipboardText(selection).catch(() => undefined)
+        void window.api.ui.writeTerminalClipboardText(selection).catch(() => undefined)
       }
       return consumeEvent(event)
     }

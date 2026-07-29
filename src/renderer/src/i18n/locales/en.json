@@ -2720,6 +2720,12 @@
                     "action": "Open Setting"
                   }
                 }
+              },
+              "failed": {
+                "toast": {
+                  "62a0af2cb4": "Terminal clipboard copy could not be confirmed",
+                  "fdd3e7e977": "The terminal app requested a copy, but Orca could not confirm that it reached the system clipboard."
+                }
               }
             }
           },

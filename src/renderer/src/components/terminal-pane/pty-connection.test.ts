@@ -53,6 +53,18 @@ async function drainFakeTimerWork(limit = 20): Promise<void> {
   vi.clearAllTimers()
 }
 
+// Why: a reveal remount reads the still-live park watcher entry at connect time to
+// tell itself apart from an in-place reattach; the host disposes it a beat later.
+async function parkTabForReveal(tabId: string, ptyId: string): Promise<void> {
+  const { parkedWatchersByTabId } = await import('./terminal-parked-watcher-registry')
+  parkedWatchersByTabId.set(tabId, {
+    worktreeId: 'wt-1',
+    tabPtyId: ptyId,
+    paneIdByPtyId: new Map([[ptyId, 1]]),
+    disposersByPtyId: new Map([[ptyId, () => {}]])
+  })
+}
+
 async function drainPendingTimeouts(pendingTimeouts: (() => void)[], limit = 100): Promise<void> {
   let iterations = 0
   while (pendingTimeouts.length > 0) {
@@ -19857,6 +19869,89 @@ describe('connectPanePty', () => {
     expect(writes).toContain('restored-ssh-output')
     expect(writes).toContain(POST_REPLAY_REATTACH_RESET)
     expect(api.pty.signal).toHaveBeenCalledWith('leaf-session', 'SIGWINCH')
+  })
+
+  it('falls back to relay replay when the SSH model snapshot stalls', async () => {
+    const { connectPanePty } = await import('./pty-connection')
+    const { SSH_REATTACH_MODEL_SNAPSHOT_TIMEOUT_MS } = await import('./ssh-reattach-model-restore')
+    const sshPtyId = toAppSshPtyId('conn-1', 'relay-pty-1')
+    const transport = createMockTransport(sshPtyId)
+    transport.connect.mockImplementation(async () => {
+      transport.getPtyId.mockReturnValue(sshPtyId)
+      return { id: sshPtyId, isReattach: true, replay: 'relay-fallback-output' }
+    })
+    transportFactoryQueue.push(transport)
+    vi.mocked(window.api.pty.getMainBufferSnapshot).mockReturnValue(new Promise(() => {}))
+    // Why parked: only a reveal remount probes main's model — the pane reads the
+    // still-live park watcher entry at connect time to tell the two apart.
+    await parkTabForReveal('tab-1', sshPtyId)
+
+    mockStoreState = {
+      ...mockStoreState,
+      tabsByWorktree: { 'wt-1': [{ id: 'tab-1', ptyId: null }] },
+      repos: [{ id: 'repo1', connectionId: 'conn-1' }],
+      deferredSshReconnectTargets: ['conn-1'],
+      deferredSshSessionIdsByTabId: { 'tab-1': sshPtyId }
+    }
+
+    const pane = createPane(1)
+    const { writes } = captureCallbackTerminalWrites(pane)
+    const deps = createDeps({
+      restoredLeafId: LEAF_1,
+      restoredPtyIdByLeafId: { [LEAF_1]: sshPtyId }
+    })
+
+    connectPanePty(pane as never, createManager(1) as never, deps as never)
+    await flushAsyncTicks(20)
+
+    expect(window.api.pty.getMainBufferSnapshot).toHaveBeenCalledWith(sshPtyId, {
+      scrollbackRows: 5000
+    })
+    expect(writes).not.toContain('relay-fallback-output')
+
+    await new Promise((resolve) => setTimeout(resolve, SSH_REATTACH_MODEL_SNAPSHOT_TIMEOUT_MS + 25))
+    await flushAsyncTicks(20)
+
+    expect(writes).toContain('relay-fallback-output')
+    // Why: a stalled reveal must cost exactly one bounded probe — a re-probe
+    // would buy a second timeout window before the relay paint.
+    expect(window.api.pty.getMainBufferSnapshot).toHaveBeenCalledTimes(1)
+  })
+
+  // Why: the model probe exists to beat the relay's 100KiB tail on a park-reveal.
+  // An ordinary reattach (network reconnect, wake, reload) already holds that
+  // replay, so probing would only delay its paint by the timeout.
+  it('paints the relay replay without probing main when the reattach did not follow a park', async () => {
+    const { connectPanePty } = await import('./pty-connection')
+    const sshPtyId = toAppSshPtyId('conn-1', 'relay-pty-1')
+    const transport = createMockTransport(sshPtyId)
+    transport.connect.mockImplementation(async () => {
+      transport.getPtyId.mockReturnValue(sshPtyId)
+      return { id: sshPtyId, isReattach: true, replay: 'relay-reconnect-output' }
+    })
+    transportFactoryQueue.push(transport)
+    vi.mocked(window.api.pty.getMainBufferSnapshot).mockReturnValue(new Promise(() => {}))
+
+    mockStoreState = {
+      ...mockStoreState,
+      tabsByWorktree: { 'wt-1': [{ id: 'tab-1', ptyId: null }] },
+      repos: [{ id: 'repo1', connectionId: 'conn-1' }],
+      deferredSshReconnectTargets: ['conn-1'],
+      deferredSshSessionIdsByTabId: { 'tab-1': sshPtyId }
+    }
+
+    const pane = createPane(1)
+    const { writes } = captureCallbackTerminalWrites(pane)
+    const deps = createDeps({
+      restoredLeafId: LEAF_1,
+      restoredPtyIdByLeafId: { [LEAF_1]: sshPtyId }
+    })
+
+    connectPanePty(pane as never, createManager(1) as never, deps as never)
+    await flushAsyncTicks(20)
+
+    expect(window.api.pty.getMainBufferSnapshot).not.toHaveBeenCalled()
+    expect(writes).toContain('relay-reconnect-output')
   })
 
   it('does not auto-reconnect after a user cancels deferred SSH passphrase auth', async () => {

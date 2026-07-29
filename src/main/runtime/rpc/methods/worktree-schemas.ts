@@ -189,7 +189,10 @@ export const WorktreePrefetchCreateBase = z.object({
 })
 
 export const WorktreeSet = WorktreeSelector.extend({
-  displayName: OptionalString,
+  // Why: '' is the blanking contract — "fall back to the branch/folder name".
+  // OptionalString coerced it to undefined, so on remote/SSH hosts clearing the
+  // name was dropped here and the old name came back on the next refresh.
+  displayName: OptionalPlainString,
   // Why: empty comments are meaningful metadata updates, so use the plain
   // string parser instead of OptionalString's empty-as-undefined behavior.
   comment: OptionalPlainString,

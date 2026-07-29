@@ -489,6 +489,26 @@ export function installWebPreloadApi(): void {
   window.api = withFallback(createWebPreloadApi(), []) as PreloadApi
 }
 
+async function writeWebClipboardText(text: string): Promise<void> {
+  await assertClipboardTextWriteWithinLimitWithYield(text)
+  const clipboard = navigator.clipboard
+  if (typeof clipboard?.writeText === 'function') {
+    try {
+      await clipboard.writeText(text)
+      return
+    } catch (error) {
+      // Preserve the current user-activation turn for the synchronous fallback.
+      if (copyClipboardTextViaExecCommand(text)) {
+        return
+      }
+      throw error
+    }
+  }
+  if (!copyClipboardTextViaExecCommand(text)) {
+    throw new Error('Clipboard write is unavailable in this browser context')
+  }
+}
+
 function createWebPreloadApi(): Partial<PreloadApi> {
   const webOrcaProfileAuthStatus = () =>
     Promise.resolve({
@@ -2490,26 +2510,8 @@ function createWebUiApi(): NonNullable<Partial<PreloadApi>['ui']> {
       }
       return saveClipboardImageAsTempFileInRuntime(contentBase64, args)
     },
-    writeClipboardText: async (text) => {
-      await assertClipboardTextWriteWithinLimitWithYield(text)
-      const clipboard = navigator.clipboard
-      if (typeof clipboard?.writeText === 'function') {
-        try {
-          await clipboard.writeText(text)
-          return
-        } catch (error) {
-          // Why: secure-context writes can still be permission-gated; retry via
-          // execCommand while the user gesture's transient activation is live.
-          if (copyClipboardTextViaExecCommand(text)) {
-            return
-          }
-          throw error
-        }
-      }
-      if (!copyClipboardTextViaExecCommand(text)) {
-        throw new Error('Clipboard write is unavailable in this browser context')
-      }
-    },
+    writeClipboardText: writeWebClipboardText,
+    writeTerminalClipboardText: writeWebClipboardText,
     writeSelectionClipboardText: () =>
       Promise.reject(new Error('Selection clipboard is unavailable in the web client')),
     writeClipboardImage: () => Promise.resolve(),

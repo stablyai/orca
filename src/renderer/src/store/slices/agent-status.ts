@@ -1303,69 +1303,55 @@ export const createAgentStatusSlice: StateCreator<AppState, [], [], AgentStatusS
       const to = transfer.ownerPaneKey
       const targetTabId = getTabIdFromPaneKey(to) ?? undefined
       const targetLeafId = getLeafIdFromPaneKey(to) ?? undefined
-      set((s) => {
-        // Plant a one-shot suppressor on the source key so useRetainedAgentsSync —
-        // which only sees `from` vanish, not the migration — can't resurrect a ghost row.
-        const movedSuppressors = movePaneKeyedRecord(s.retentionSuppressedPaneKeys, from, to)
-        // Guard on fromWasLive: a suppressor is consumed only on a live→gone transition, else it leaks.
-        const fromWasLive = from in s.agentStatusByPaneKey
-        const retentionSuppressedPaneKeys: Record<string, true> =
-          fromWasLive && !(from in movedSuppressors)
-            ? { ...movedSuppressors, [from]: true }
-            : movedSuppressors
-        return {
-          agentStatusByPaneKey: movePaneKeyedRecord(s.agentStatusByPaneKey, from, to, (entry) => ({
+      set((s) => ({
+        agentStatusByPaneKey: movePaneKeyedRecord(s.agentStatusByPaneKey, from, to, (entry) => ({
+          ...entry,
+          paneKey: to,
+          tabId: targetTabId
+        })),
+        // Why: retention/sidebar consumers gate on the epoch; a moved live row is a
+        // pane-key change they must observe, not a silent remap.
+        ...(from in s.agentStatusByPaneKey
+          ? { agentStatusEpoch: s.agentStatusEpoch + 1, sortEpoch: s.sortEpoch + 1 }
+          : {}),
+        runtimeAgentOrchestrationByPaneKey: movePaneKeyedRecord(
+          s.runtimeAgentOrchestrationByPaneKey,
+          from,
+          to
+        ),
+        retainedAgentsByPaneKey: movePaneKeyedRecord(
+          s.retainedAgentsByPaneKey,
+          from,
+          to,
+          (retained) => ({
+            ...retained,
+            entry: { ...retained.entry, paneKey: to, tabId: targetTabId },
+            tab: targetTabId ? { ...retained.tab, id: targetTabId } : retained.tab
+          })
+        ),
+        sleepingAgentSessionsByPaneKey: movePaneKeyedRecord(
+          s.sleepingAgentSessionsByPaneKey,
+          from,
+          to,
+          (record) => ({ ...record, paneKey: to, tabId: targetTabId })
+        ),
+        agentLaunchConfigByPaneKey: movePaneKeyedRecord(
+          s.agentLaunchConfigByPaneKey,
+          from,
+          to,
+          (entry) => ({
             ...entry,
-            paneKey: to,
-            tabId: targetTabId
-          })),
-          runtimeAgentOrchestrationByPaneKey: movePaneKeyedRecord(
-            s.runtimeAgentOrchestrationByPaneKey,
-            from,
-            to
-          ),
-          retainedAgentsByPaneKey: movePaneKeyedRecord(
-            s.retainedAgentsByPaneKey,
-            from,
-            to,
-            (retained) => ({
-              ...retained,
-              entry: { ...retained.entry, paneKey: to, tabId: targetTabId },
-              tab: targetTabId ? { ...retained.tab, id: targetTabId } : retained.tab
-            })
-          ),
-          sleepingAgentSessionsByPaneKey: movePaneKeyedRecord(
-            s.sleepingAgentSessionsByPaneKey,
-            from,
-            to,
-            (record) => ({ ...record, paneKey: to, tabId: targetTabId })
-          ),
-          agentLaunchConfigByPaneKey: movePaneKeyedRecord(
-            s.agentLaunchConfigByPaneKey,
-            from,
-            to,
-            (entry) => ({
-              ...entry,
-              identity: { ...entry.identity, tabId: targetTabId, leafId: targetLeafId }
-            })
-          ),
-          acknowledgedAgentsByPaneKey: movePaneKeyedRecord(s.acknowledgedAgentsByPaneKey, from, to),
-          paneForegroundAgentByPaneKey: movePaneKeyedRecord(
-            s.paneForegroundAgentByPaneKey,
-            from,
-            to
-          ),
-          unreadTerminalPanes: movePaneKeyedRecord(s.unreadTerminalPanes, from, to),
-          unreadAgentCompletionPanes: movePaneKeyedRecord(s.unreadAgentCompletionPanes, from, to),
-          lastTerminalInputAtByPaneKey: movePaneKeyedRecord(
-            s.lastTerminalInputAtByPaneKey,
-            from,
-            to
-          ),
-          cacheTimerByKey: movePaneKeyedRecord(s.cacheTimerByKey, from, to),
-          retentionSuppressedPaneKeys
-        }
-      })
+            identity: { ...entry.identity, tabId: targetTabId, leafId: targetLeafId }
+          })
+        ),
+        acknowledgedAgentsByPaneKey: movePaneKeyedRecord(s.acknowledgedAgentsByPaneKey, from, to),
+        paneForegroundAgentByPaneKey: movePaneKeyedRecord(s.paneForegroundAgentByPaneKey, from, to),
+        unreadTerminalPanes: movePaneKeyedRecord(s.unreadTerminalPanes, from, to),
+        unreadAgentCompletionPanes: movePaneKeyedRecord(s.unreadAgentCompletionPanes, from, to),
+        lastTerminalInputAtByPaneKey: movePaneKeyedRecord(s.lastTerminalInputAtByPaneKey, from, to),
+        cacheTimerByKey: movePaneKeyedRecord(s.cacheTimerByKey, from, to),
+        retentionSuppressedPaneKeys: movePaneKeyedRecord(s.retentionSuppressedPaneKeys, from, to)
+      }))
       if (typeof window !== 'undefined') {
         window.api?.agentStatus?.transferPaneAuthority?.({
           fromPaneKey: from,

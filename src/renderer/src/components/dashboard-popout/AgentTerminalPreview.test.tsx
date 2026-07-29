@@ -153,6 +153,7 @@ describe('AgentTerminalPreview', () => {
   const connect = vi.fn()
   const readClipboardText = vi.fn(async () => 'clip-text')
   const writeClipboardText = vi.fn(async () => {})
+  const writeTerminalClipboardText = vi.fn(async () => {})
   let emitData: ((payload: unknown) => void) | null
   let emitAppMenuPaste: (() => void) | null
 
@@ -188,6 +189,7 @@ describe('AgentTerminalPreview', () => {
         ui: {
           readClipboardText,
           writeClipboardText,
+          writeTerminalClipboardText,
           onAppMenuPaste: (listener: () => void) => {
             emitAppMenuPaste = listener
             return vi.fn()
@@ -248,6 +250,7 @@ describe('AgentTerminalPreview', () => {
     )
     expect(handled).toBe(false)
     expect(writeClipboardText).not.toHaveBeenCalled()
+    expect(writeTerminalClipboardText).not.toHaveBeenCalled()
 
     // Unclaimed events still reach the chord handling.
     imeHarness.claimResult = false
@@ -255,7 +258,8 @@ describe('AgentTerminalPreview', () => {
       new KeyboardEvent('keydown', { key: 'C', code: 'KeyC', metaKey: true, shiftKey: true })
     )
     expect(copied).toBe(false)
-    expect(writeClipboardText).toHaveBeenCalledWith('selected text')
+    expect(writeTerminalClipboardText).toHaveBeenCalledWith('selected text')
+    expect(writeClipboardText).not.toHaveBeenCalled()
     expect(imeHarness.inputSourceTrackerRequests).toBe(1)
   })
 
@@ -316,7 +320,8 @@ describe('AgentTerminalPreview', () => {
     expect(handled).toBe(false)
     expect(keyupHandled).toBe(false)
     expect(keydown.defaultPrevented).toBe(true)
-    expect(writeClipboardText).toHaveBeenCalledWith('selected text')
+    expect(writeTerminalClipboardText).toHaveBeenCalledWith('selected text')
+    expect(writeClipboardText).not.toHaveBeenCalled()
   })
 
   it('keeps an empty copy chord from leaking terminal input', async () => {
@@ -329,7 +334,7 @@ describe('AgentTerminalPreview', () => {
       new KeyboardEvent('keydown', { key: 'C', code: 'KeyC', ctrlKey: true, shiftKey: true })
     )
     expect(handled).toBe(false)
-    expect(writeClipboardText).not.toHaveBeenCalled()
+    expect(writeTerminalClipboardText).not.toHaveBeenCalled()
   })
 
   it('pastes clipboard text on the app-menu paste signal while the preview owns focus', async () => {

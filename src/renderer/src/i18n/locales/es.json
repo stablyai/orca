@@ -2697,6 +2697,12 @@
                     "action": "Abrir ajuste"
                   }
                 }
+              },
+              "failed": {
+                "toast": {
+                  "62a0af2cb4": "No se pudo confirmar la copia del portapapeles del terminal",
+                  "fdd3e7e977": "La app del terminal solicitó una copia, pero Orca no pudo confirmar que llegara al portapapeles del sistema."
+                }
               }
             }
           },

@@ -5069,6 +5069,11 @@ export function registerPtyHandlers(
                 preferProviderIfExisting: true
               }
             )
+          } else if (typeof result.replay === 'string' && result.replay.length > 0) {
+            // Why: the relay reattach replay is the one restore main never ingests, so without
+            // this seed its model is a mere suffix of what the renderer painted — and a later
+            // park-reveal would outrank the fuller relay replay with that fragment.
+            runtime.seedHeadlessTerminal(result.id, result.replay)
           }
         }
         if (

@@ -14461,6 +14461,45 @@ describe('registerPtyHandlers', () => {
     )
   })
 
+  it('seeds the headless emulator from an SSH relay reattach replay', async () => {
+    setLocalPtyProvider({
+      spawn: vi.fn(async () => ({
+        id: 'pty-ssh-reattach',
+        isReattach: true,
+        replay: 'relay history\r\n'
+      })),
+      write: vi.fn(),
+      resize: vi.fn(),
+      kill: vi.fn(),
+      shutdown: vi.fn(),
+      onData: vi.fn(() => vi.fn()),
+      onExit: vi.fn(() => vi.fn()),
+      listProcesses: vi.fn(async () => []),
+      getForegroundProcess: vi.fn(async () => null)
+    } as never)
+    const runtime = {
+      setPtyController: vi.fn(),
+      noteTerminalSpawnCommand: vi.fn(),
+      seedHeadlessTerminal: vi.fn(),
+      onPtySpawned: vi.fn(),
+      onPtyData: vi.fn(),
+      onPtyExit: vi.fn(),
+      createPreAllocatedTerminalHandle: vi.fn(() => 'handle-ssh-reattach'),
+      registerPreAllocatedHandleForPty: vi.fn(),
+      preAllocateHandleForPty: vi.fn()
+    }
+    registerPtyHandlers(mainWindow as never, runtime as never)
+
+    await handlers.get('pty:spawn')!(null, { cols: 80, rows: 24 })
+
+    // Why: without this seed main's model would be a strict suffix of what the renderer painted, and a later park-reveal would restore the fragment.
+    expect(runtime.seedHeadlessTerminal).toHaveBeenCalledTimes(1)
+    expect(runtime.seedHeadlessTerminal).toHaveBeenCalledWith(
+      'pty-ssh-reattach',
+      'relay history\r\n'
+    )
+  })
+
   it('upgrades legacy numeric pane keys when the spawn metadata proves the stable leaf', async () => {
     registerPtyHandlers(mainWindow as never)
     const leafId = '11111111-1111-4111-8111-111111111111'
