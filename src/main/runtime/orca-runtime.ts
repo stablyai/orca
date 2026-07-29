@@ -425,6 +425,7 @@ import {
   isPathInsideOrEqual,
   normalizeRuntimePathForComparison
 } from '../../shared/cross-platform-path'
+import { findRuntimeWorkspaceFileOwner } from '../../shared/runtime-workspace-file-owner'
 import { resolveTerminalStartupCwd } from '../../shared/terminal-startup-cwd'
 import { isWslUncPath, parseWslUncPath } from '../../shared/wsl-paths'
 import {
@@ -8542,6 +8543,8 @@ export class OrcaRuntimeService {
     requireStore: () => this.requireStore(),
     resolveWorktreeSelector: (selector) => this.resolveWorktreeSelector(selector),
     resolveRuntimeFileTarget: (selector) => this.resolveRuntimeFileTarget(selector),
+    resolveKnownWorkspaceFileTarget: (absolutePath, connectionId) =>
+      this.resolveKnownWorkspaceFileTarget(absolutePath, connectionId),
     resolveTerminalCwd: (terminalHandle) => this.resolveTerminalCwd(terminalHandle),
     resolveTerminalContext: (terminalHandle) => this.resolveTerminalContext(terminalHandle),
     resolveTerminalFileUriHostname: (terminalHandle) =>
@@ -8857,6 +8860,60 @@ export class OrcaRuntimeService {
     const worktree = await this.resolveWorktreeSelector(worktreeSelector)
     const repo = store.getRepo(worktree.repoId)
     return { worktree, connectionId: repo?.connectionId ?? undefined }
+  }
+
+  private async resolveKnownWorkspaceFileTarget(
+    absolutePath: string,
+    connectionId: string | undefined
+  ): Promise<{
+    worktree: ResolvedWorktree
+    connectionId?: string
+    relativePath: string
+  } | null> {
+    const targets = new Map<string, { worktree: ResolvedWorktree; connectionId?: string }>()
+    for (const worktree of await this.listResolvedWorktrees()) {
+      if (!this.isRuntimeWorktreeVisible(worktree)) {
+        continue
+      }
+      const candidateConnectionId = this.store?.getRepo(worktree.repoId)?.connectionId ?? undefined
+      targets.set(worktree.id, {
+        worktree,
+        ...(candidateConnectionId ? { connectionId: candidateConnectionId } : {})
+      })
+    }
+    for (const folderWorkspace of this.store?.getFolderWorkspaces?.() ?? []) {
+      try {
+        const candidateConnectionId =
+          this.resolveFolderWorkspaceConnectionId(folderWorkspace) ?? undefined
+        const worktree = this.folderWorkspaceToResolvedWorktree(folderWorkspace)
+        targets.set(worktree.id, {
+          worktree,
+          ...(candidateConnectionId ? { connectionId: candidateConnectionId } : {})
+        })
+      } catch {
+        // An ambiguous folder workspace has no single filesystem authority.
+      }
+    }
+
+    const executionHostId = connectionId
+      ? toSshExecutionHostId(connectionId)
+      : LOCAL_EXECUTION_HOST_ID
+    const owner = findRuntimeWorkspaceFileOwner(
+      [...targets.values()].map((target) => ({
+        workspaceId: target.worktree.id,
+        rootPath: target.worktree.path,
+        executionHostId: target.connectionId
+          ? toSshExecutionHostId(target.connectionId)
+          : LOCAL_EXECUTION_HOST_ID
+      })),
+      absolutePath,
+      executionHostId
+    )
+    if (!owner) {
+      return null
+    }
+    const target = targets.get(owner.workspaceId)
+    return target ? { ...target, relativePath: owner.relativePath } : null
   }
 
   onMobileSessionTabsChanged(

@@ -144,6 +144,7 @@ function createRuntimeFileCommands(options?: {
   openFile?: ReturnType<typeof vi.fn>
   openDiff?: ReturnType<typeof vi.fn>
   resolveRuntimeFileTarget?: ReturnType<typeof vi.fn>
+  resolveKnownWorkspaceFileTarget?: ReturnType<typeof vi.fn>
   resolveRuntimeGitTarget?: ReturnType<typeof vi.fn>
   resolveTerminalCwd?: ReturnType<typeof vi.fn>
   resolveTerminalContext?: ReturnType<typeof vi.fn>
@@ -169,6 +170,9 @@ function createRuntimeFileCommands(options?: {
         worktree,
         connectionId: store.getRepo(worktree.repoId)?.connectionId
       })),
+    ...(options?.resolveKnownWorkspaceFileTarget
+      ? { resolveKnownWorkspaceFileTarget: options.resolveKnownWorkspaceFileTarget }
+      : {}),
     resolveTerminalCwd: options?.resolveTerminalCwd ?? vi.fn(() => path),
     resolveTerminalContext:
       options?.resolveTerminalContext ??
@@ -878,6 +882,50 @@ describe('RuntimeFileCommands', () => {
           provider: 'local',
           relativePath: 'src/index.ts',
           absolutePath: '/repo/src/index.ts'
+        }
+      })
+    })
+
+    it('resolves an absolute path through a known sibling workspace', async () => {
+      const sibling = {
+        id: 'wt-2',
+        repoId: 'repo-2',
+        path: '/sibling',
+        git: {
+          path: '/sibling',
+          head: '',
+          branch: '',
+          isBare: false,
+          isMainWorktree: true
+        }
+      }
+      const resolveKnownWorkspaceFileTarget = vi.fn(async () => ({
+        worktree: sibling,
+        relativePath: 'docs/readme.md'
+      }))
+      const { commands } = createRuntimeFileCommands({
+        path: '/repo',
+        resolveKnownWorkspaceFileTarget
+      })
+      statAsFile()
+
+      const result = await commands.resolveTerminalPath('id:wt-1', '/sibling/docs/readme.md')
+
+      expect(resolveKnownWorkspaceFileTarget).toHaveBeenCalledWith(
+        '/sibling/docs/readme.md',
+        undefined
+      )
+      expect(result).toEqual({
+        worktree: 'wt-2',
+        relativePath: 'docs/readme.md',
+        absolutePath: '/sibling/docs/readme.md',
+        exists: true,
+        isDirectory: false,
+        openTarget: {
+          kind: 'worktree-file',
+          provider: 'local',
+          relativePath: 'docs/readme.md',
+          absolutePath: '/sibling/docs/readme.md'
         }
       })
     })

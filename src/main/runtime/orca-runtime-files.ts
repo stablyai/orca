@@ -495,6 +495,10 @@ export type RuntimeFileCommandHost = {
   requireStore(): Store
   resolveWorktreeSelector(selector: string): Promise<ResolvedRuntimeFileWorktree>
   resolveRuntimeFileTarget(selector: string): Promise<ResolvedRuntimeFileTarget>
+  resolveKnownWorkspaceFileTarget?(
+    absolutePath: string,
+    connectionId: string | undefined
+  ): Promise<(ResolvedRuntimeFileTarget & { relativePath: string }) | null>
   resolveTerminalCwd?(terminalHandle: string): string | null | Promise<string | null>
   resolveTerminalContext?(
     terminalHandle: string
@@ -744,15 +748,26 @@ export class RuntimeFileCommands {
       terminalFileUriHostname
     })
     const relativePath = relativePathInsideRoot(worktree.path, absolutePath)
+    const knownWorkspaceTarget =
+      relativePath === null || relativePath === ''
+        ? await this.host.resolveKnownWorkspaceFileTarget?.(absolutePath, connectionId)
+        : null
+    const ownedWorktree = knownWorkspaceTarget?.worktree ?? worktree
+    const ownedConnectionId = knownWorkspaceTarget?.connectionId ?? connectionId
+    const ownedRelativePath = knownWorkspaceTarget?.relativePath ?? relativePath
 
     try {
-      if (relativePath !== null && relativePath !== '' && isSafeMobileRelativePath(relativePath)) {
-        const stats = connectionId
-          ? await this.statRemoteTerminalPath(absolutePath, connectionId)
+      if (
+        ownedRelativePath !== null &&
+        ownedRelativePath !== '' &&
+        isSafeMobileRelativePath(ownedRelativePath)
+      ) {
+        const stats = ownedConnectionId
+          ? await this.statRemoteTerminalPath(absolutePath, ownedConnectionId)
           : await stat(await resolveAuthorizedPath(absolutePath, store))
         return {
-          worktree: worktree.id,
-          relativePath,
+          worktree: ownedWorktree.id,
+          relativePath: ownedRelativePath,
           absolutePath,
           exists: true,
           isDirectory: stats.isDirectory(),
@@ -760,8 +775,8 @@ export class RuntimeFileCommands {
             ? undefined
             : {
                 kind: 'worktree-file',
-                provider: connectionId ? 'ssh' : 'local',
-                relativePath,
+                provider: ownedConnectionId ? 'ssh' : 'local',
+                relativePath: ownedRelativePath,
                 absolutePath
               }
         }
@@ -832,9 +847,14 @@ export class RuntimeFileCommands {
       // Report genuine not-found as missing; let transport/permission errors surface so remote taps aren't all reported missing.
       if (
         isENOENT(error) ||
-        (connectionId && RuntimeFileCommands.isRemoteNotFoundErrorMessage(error))
+        (ownedConnectionId && RuntimeFileCommands.isRemoteNotFoundErrorMessage(error))
       ) {
-        return { ...empty, relativePath, absolutePath }
+        return {
+          ...empty,
+          worktree: ownedWorktree.id,
+          relativePath: ownedRelativePath,
+          absolutePath
+        }
       }
       throw error
     }
