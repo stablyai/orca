@@ -158,6 +158,38 @@ function StatusPill(): React.JSX.Element {
     setAnswerError(null)
   }, [pendingKey])
 
+  // Why: the overlay window is click-through by default (setIgnoreMouseEvents
+  //  true, forward) so the transparent areas pass clicks to apps behind. To
+  //  capture clicks on the capsule/panel we toggle capture on while the cursor
+  //  is over them. mouseenter/mouseleave can't be used here: toggling capture
+  //  itself synthesizes enter/leave events and oscillates, dropping the click.
+  //  Instead, hit-test every forwarded mousemove against .pill-stack and only
+  //  flip when the result changes.
+  useEffect(() => {
+    if (!api) {
+      return
+    }
+    let current = false
+    const apply = (over: boolean): void => {
+      if (over === current) {
+        return
+      }
+      current = over
+      api.setInteractive(over)
+    }
+    const onMove = (event: MouseEvent): void => {
+      const target = event.target
+      apply(target instanceof Element && target.closest('.pill-stack') !== null)
+    }
+    const onLeave = (): void => apply(false)
+    document.addEventListener('mousemove', onMove)
+    document.addEventListener('mouseleave', onLeave)
+    return () => {
+      document.removeEventListener('mousemove', onMove)
+      document.removeEventListener('mouseleave', onLeave)
+    }
+  }, [api])
+
   useEffect(() => {
     const isDark = preferences?.shouldUseDarkColors ?? false
     document.documentElement.classList.toggle('dark', isDark)
@@ -189,17 +221,8 @@ function StatusPill(): React.JSX.Element {
   return (
     <div
       className={`pill-stack ${entered ? 'pill-enter' : ''}`}
-      onMouseEnter={() => {
-        setExpanded(true)
-        // Why: the window is click-through by default so transparent padding
-        // passes clicks through; capture events again while the cursor is over
-        // the interactive capsule/panel.
-        window.api?.setInteractive(true)
-      }}
-      onMouseLeave={() => {
-        setExpanded(false)
-        window.api?.setInteractive(false)
-      }}
+      onMouseEnter={() => setExpanded(true)}
+      onMouseLeave={() => setExpanded(false)}
     >
       <PillBody
         tone={tone}
