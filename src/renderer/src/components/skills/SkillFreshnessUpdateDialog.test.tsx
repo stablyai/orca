@@ -438,7 +438,7 @@ describe('SkillFreshnessUpdateDialog', () => {
     await openViaRequest()
 
     expect(container?.textContent).toContain(
-      'npx --yes skills add https://github.com/stablyai/orca --skill orchestration --global -y'
+      'npx skills add https://github.com/stablyai/orca --skill orchestration --global'
     )
   })
 

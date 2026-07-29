@@ -17,22 +17,21 @@ import {
 describe('agent feature skill commands', () => {
   it('builds a global install command by default', () => {
     expect(buildAgentFeatureSkillInstallCommand(['orca-cli'])).toBe(
-      'npx --yes skills add https://github.com/stablyai/orca --skill orca-cli --global -y'
+      'npx skills add https://github.com/stablyai/orca --skill orca-cli --global'
     )
   })
 
   it('drops --global when installing locally', () => {
     expect(buildAgentFeatureSkillInstallCommand(['orca-cli'], { global: false })).toBe(
-      'npx --yes skills add https://github.com/stablyai/orca --skill orca-cli -y'
+      'npx skills add https://github.com/stablyai/orca --skill orca-cli'
     )
   })
 
   it('repeats --skill per name for multi-skill installs', () => {
     expect(buildAgentFeatureSkillInstallCommand(['orca-cli', 'orchestration'])).toBe(
-      'npx --yes skills add https://github.com/stablyai/orca --skill orca-cli --skill orchestration --global -y'
+      'npx skills add https://github.com/stablyai/orca --skill orca-cli --skill orchestration --global'
     )
     expect(buildAgentFeatureSkillInstallArgs(['orca-cli', 'orchestration'])).toEqual([
-      '--yes',
       'skills',
       'add',
       'https://github.com/stablyai/orca',
@@ -40,44 +39,28 @@ describe('agent feature skill commands', () => {
       'orca-cli',
       '--skill',
       'orchestration',
-      '--global',
-      '-y'
+      '--global'
     ])
   })
 
-  it('makes every install command non-interactive, pasted or spawned', () => {
-    // Why: #9567 — a pasted install stalls on npm's fetch prompt and the skills
-    // agent picker just as a spawned one does, so neither flag is opt-in.
-    for (const command of [
-      buildAgentFeatureSkillInstallCommand(['orca-cli']),
-      ORCA_CLI_SKILL_INSTALL_COMMAND,
-      ORCA_CLI_ORCHESTRATION_SKILL_INSTALL_COMMAND
-    ]) {
-      expect(command.startsWith('npx --yes skills add ')).toBe(true)
-      expect(command.endsWith(' -y')).toBe(true)
-    }
+  it('keeps the copyable Settings commands interactive by default', () => {
+    // Why: -y skips the agent picker. A human pasting from Settings should still
+    // get it; only an unattended spawn opts in.
+    expect(buildAgentFeatureSkillInstallCommand(['orca-cli'])).not.toContain('-y')
+    expect(buildAgentFeatureSkillUpdateCommand('orca-cli')).not.toContain('-y')
+    expect(ORCA_CLI_SKILL_INSTALL_COMMAND).not.toContain('-y')
+    expect(ORCA_CLI_SKILL_UPDATE_COMMAND).not.toContain('-y')
   })
 
-  it('leaves the pasted update command parseable by the Windows reinstall rewrite', () => {
-    // Why: normalizeWindowsSkillUpdateCommand matches exactly
-    // `npx skills update <name> --global`; extra flags stop it matching and
-    // silently disable the native-Windows workaround.
-    const windowsRewrite = /^npx\s+skills\s+update\s+([A-Za-z0-9_-]+)\s+--global$/i
-    expect(ORCA_CLI_SKILL_UPDATE_COMMAND).toMatch(windowsRewrite)
-    expect(buildAgentFeatureSkillUpdateCommand('orca-cli')).toMatch(windowsRewrite)
-
-    // Why: the CLI spawns it with nothing able to answer, so it opts in.
-    expect(buildAgentFeatureSkillUpdateCommand(['orca-cli'], { yes: true })).toBe(
-      'npx --yes skills update orca-cli --global -y'
+  it('appends -y for an unattended run', () => {
+    expect(buildAgentFeatureSkillInstallCommand(['orca-cli'], { yes: true })).toBe(
+      'npx skills add https://github.com/stablyai/orca --skill orca-cli --global -y'
     )
-    expect(buildAgentFeatureSkillUpdateArgs(['orca-cli'], { global: false, yes: true })).toEqual([
-      '--yes',
-      'skills',
-      'update',
-      'orca-cli',
-      '--project',
-      '-y'
-    ])
+    expect(buildAgentFeatureSkillUpdateCommand(['orca-cli'], { global: false, yes: true })).toBe(
+      'npx skills update orca-cli --project -y'
+    )
+    expect(buildAgentFeatureSkillInstallArgs(['orca-cli'], { yes: true }).at(-1)).toBe('-y')
+    expect(buildAgentFeatureSkillUpdateArgs(['orca-cli'], { yes: true }).at(-1)).toBe('-y')
   })
 
   it('builds single-skill update commands', () => {

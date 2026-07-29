@@ -749,10 +749,10 @@ Settings would show you (adding `--global` unless `--local` is passed), then
 runs it and forwards its output and exit code. It requires `node`/`npx` on the
 host; it does not need a running Orca runtime.
 
-The command carries `npx --yes` and `-y`. Without them the `skills` CLI stops on
-npm's fetch prompt or its own agent picker and blocks forever on any allocated
-TTY — which includes a normal `ssh` session. Use `--dry-run` to see the exact
-command that will run.
+Unlike the command Settings shows, the spawned one adds `npx --yes` and `-y`.
+Without them the `skills` CLI opens an interactive agent picker and blocks
+forever on any allocated TTY — which includes a normal `ssh` session. Use
+`--dry-run` to see the exact command that will run.
 
 To refresh already-installed skills, `orca skills update` mirrors the same
 selection flags (`--skill`, `--all`, `--local`, `--dry-run`) and resolves to
@@ -766,9 +766,8 @@ orca skills update --skill orca-cli --dry-run             # print the npx comman
 
 `orca skills update` only refreshes skills that are already installed — it exits
 0 without doing anything for a skill that is missing, so install it first. More
-generally, a 0 exit means the `skills` CLI ran without erroring, not that every
-target was written — it exits 0 even when it reports `Failed to install N` for
-individual agent targets. Read its output to confirm what changed.
+generally, a 0 exit means the `skills` CLI ran without erroring, not that it
+wrote anything; read its output to confirm what changed.
 
 `--json` covers the skill listing and `--dry-run`. A real run streams the
 `skills` CLI's own non-JSON output and rejects `--json`.

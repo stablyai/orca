@@ -160,11 +160,13 @@ function buildNpxSkillsArgs(
   skillNames: string[],
   global: boolean
 ): string[] {
-  // Why: install already carries the non-interactive flags for every caller;
-  // update takes them only here, where nothing can answer a prompt.
-  return verb === 'install'
-    ? buildAgentFeatureSkillInstallArgs(skillNames, { global })
-    : buildAgentFeatureSkillUpdateArgs(skillNames, { global, yes: true })
+  const skillArgs =
+    verb === 'install'
+      ? buildAgentFeatureSkillInstallArgs(skillNames, { global, yes: true })
+      : buildAgentFeatureSkillUpdateArgs(skillNames, { global, yes: true })
+  // Why: a cold package cache makes bare `npx` prompt before it will fetch
+  // `skills`, which strands an unattended host just like the picker does.
+  return ['--yes', ...skillArgs]
 }
 
 /** Render the exact argv a real run spawns, so --dry-run can never drift from it. */
