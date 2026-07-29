@@ -1,53 +1,59 @@
+import path from 'node:path'
 import type { Page } from '@stablyai/playwright-test'
 import { test, expect } from './helpers/orca-app'
 import { waitForSessionReady } from './helpers/store'
 
+// Why: mirrors FLOATING_TERMINAL_WORKTREE_ID in src/shared/constants.ts.
+// E2E specs avoid importing renderer/shared modules into the Playwright runner.
 const FLOATING_WORKTREE_ID = 'global-floating-terminal'
 const OPEN_PANEL_SELECTOR = '[data-floating-terminal-panel][aria-hidden="false"]'
 const PANEL_SELECTOR = '[data-floating-terminal-panel]'
 
 async function seedFloatingMarkdownFile(
   page: Page
-): Promise<{ originalName: string; renamedName: string; tabId: string }> {
-  return page.evaluate(async (worktreeId) => {
-    const store = window.__store
-    if (!store) {
-      throw new Error('Store unavailable')
-    }
+): Promise<{ originalName: string; originalPath: string; renamedName: string; tabId: string }> {
+  const directory = await page.evaluate(() => window.api.app.getFloatingMarkdownDirectory())
+  const suffix = Date.now().toString(36)
+  const originalName = `floating-rename-${suffix}.md`
+  const renamedName = `floating-renamed-${suffix}.md`
+  const originalPath = path.join(directory, originalName)
+  const tabId = await page.evaluate(
+    async ({ filePath, originalName, worktreeId }) => {
+      const store = window.__store
+      if (!store) {
+        throw new Error('Store unavailable')
+      }
 
-    await store.getState().updateSettings({ floatingTerminalEnabled: true })
-    const directory = await window.api.app.getFloatingMarkdownDirectory()
-    const separator = directory.includes('\\') ? '\\' : '/'
-    const suffix = Date.now().toString(36)
-    const originalName = `floating-rename-${suffix}.md`
-    const renamedName = `floating-renamed-${suffix}.md`
-    const filePath = `${directory}${separator}${originalName}`
-    await window.api.fs.createFile({ filePath })
-    await window.api.fs.writeFile({ filePath, content: '# Floating rename\n' })
-    store.getState().openFile(
-      {
-        filePath,
-        relativePath: originalName,
-        worktreeId,
-        language: 'markdown',
-        mode: 'edit',
-        runtimeEnvironmentId: null
-      },
-      { preview: false, suppressActiveRuntimeFallback: true }
-    )
+      await store.getState().updateSettings({ floatingTerminalEnabled: true })
+      await window.api.fs.createFile({ filePath })
+      await window.api.fs.writeFile({ filePath, content: '# Floating rename\n' })
+      store.getState().openFile(
+        {
+          filePath,
+          relativePath: originalName,
+          worktreeId,
+          language: 'markdown',
+          mode: 'edit',
+          runtimeEnvironmentId: null
+        },
+        { preview: false, suppressActiveRuntimeFallback: true }
+      )
 
-    const state = store.getState()
-    const file = state.openFiles.find(
-      (candidate) => candidate.filePath === filePath && candidate.worktreeId === worktreeId
-    )
-    const tab = state.unifiedTabsByWorktree[worktreeId]?.find(
-      (candidate) => candidate.contentType === 'editor' && candidate.entityId === file?.id
-    )
-    if (!file || !tab) {
-      throw new Error('Floating Markdown tab unavailable')
-    }
-    return { originalName, renamedName, tabId: tab.id }
-  }, FLOATING_WORKTREE_ID)
+      const state = store.getState()
+      const file = state.openFiles.find(
+        (candidate) => candidate.filePath === filePath && candidate.worktreeId === worktreeId
+      )
+      const tab = state.unifiedTabsByWorktree[worktreeId]?.find(
+        (candidate) => candidate.contentType === 'editor' && candidate.entityId === file?.id
+      )
+      if (!file || !tab) {
+        throw new Error('Floating Markdown tab unavailable')
+      }
+      return tab.id
+    },
+    { filePath: originalPath, originalName, worktreeId: FLOATING_WORKTREE_ID }
+  )
+  return { originalName, originalPath, renamedName, tabId }
 }
 
 async function openFloatingPanel(page: Page): Promise<void> {
@@ -102,4 +108,9 @@ test('floating workspace Markdown rename updates the tab and file on disk', asyn
       )
     )
     .toContain('# Floating rename')
+  await expect
+    .poll(() =>
+      orcaPage.evaluate((filePath) => window.api.fs.pathExists({ filePath }), seeded.originalPath)
+    )
+    .toBe(false)
 })
