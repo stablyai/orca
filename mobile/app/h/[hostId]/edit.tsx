@@ -17,7 +17,7 @@ import { colors, radii, spacing, typography } from '../../../src/theme/mobile-th
 import { loadHosts, updateHostNameAndEndpoint } from '../../../src/transport/host-store'
 import {
   displayHostEndpoint,
-  endpointPort,
+  endpointPortOrSchemeDefault,
   endpointScheme,
   normalizeHostEndpoint
 } from '../../../src/transport/host-endpoint'
@@ -68,7 +68,9 @@ export default function EditHostScreen() {
     void load()
   }, [load])
 
-  const fallbackPort = host ? endpointPort(host.endpoint) : undefined
+  // Why: a wss host paired through a reverse proxy stores no explicit :443; reading only the
+  // written port would save it back as :6768 and strand the host.
+  const fallbackPort = host ? endpointPortOrSchemeDefault(host.endpoint) : undefined
   const fallbackScheme = host ? endpointScheme(host.endpoint) : 'ws'
 
   const normalizedEndpoint = useMemo(

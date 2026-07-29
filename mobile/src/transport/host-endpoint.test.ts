@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import {
   displayHostEndpoint,
   endpointPort,
+  endpointPortOrSchemeDefault,
   endpointScheme,
   normalizeHostEndpoint
 } from './host-endpoint'
@@ -48,6 +49,52 @@ describe('endpointScheme', () => {
 
   it('falls back to ws for a non-URL endpoint', () => {
     expect(endpointScheme('not-a-url')).toBe('ws')
+  })
+})
+
+describe('endpointPortOrSchemeDefault', () => {
+  it('reports the implicit :443 of a wss endpoint', () => {
+    expect(endpointPortOrSchemeDefault('wss://desk.example.com')).toBe('443')
+  })
+
+  it('keeps an explicitly written port', () => {
+    expect(endpointPortOrSchemeDefault('wss://desk.example.com:8443')).toBe('8443')
+    expect(endpointPortOrSchemeDefault('wss://desk.example.com:443')).toBe('443')
+    expect(endpointPortOrSchemeDefault('ws://192.168.1.10:6768')).toBe('6768')
+  })
+
+  it('leaves a bare ws host to the caller default instead of claiming :80', () => {
+    expect(endpointPortOrSchemeDefault('ws://192.168.1.10')).toBeUndefined()
+  })
+
+  it('reports nothing for a non-URL endpoint', () => {
+    expect(endpointPortOrSchemeDefault('not-a-url')).toBeUndefined()
+  })
+
+  // Why: this is the edit-host round trip. displayHostEndpoint drops the implicit port, so
+  // reading it back with endpointPort alone rewrote a reverse-proxied host to :6768 on save.
+  it('keeps a proxied wss host on :443 across a display/normalize round trip', () => {
+    const stored = 'wss://desk.example.com'
+    const shown = displayHostEndpoint(stored)
+
+    expect(
+      normalizeHostEndpoint(shown, {
+        fallbackPort: endpointPortOrSchemeDefault(stored),
+        fallbackScheme: endpointScheme(stored)
+      })
+    ).toEqual({ ok: true, endpoint: 'wss://desk.example.com:443' })
+  })
+
+  it('still lands a bare ws host on the LAN default across the same round trip', () => {
+    const stored = 'ws://192.168.1.10'
+    const shown = displayHostEndpoint(stored)
+
+    expect(
+      normalizeHostEndpoint(shown, {
+        fallbackPort: endpointPortOrSchemeDefault(stored),
+        fallbackScheme: endpointScheme(stored)
+      })
+    ).toEqual({ ok: true, endpoint: 'ws://192.168.1.10:6768' })
   })
 })
 
