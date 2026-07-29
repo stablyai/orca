@@ -54,8 +54,8 @@ const api: StatusPillPreloadApi = {
   setWindowPosition: (position: { x: number; y: number }): void => {
     ipcRenderer.send('statusPill:setWindowPosition', position)
   },
-  setInteractive: (interactive: boolean): void => {
-    ipcRenderer.send('statusPill:setInteractive', interactive)
+  resize: (width: number, height: number): void => {
+    ipcRenderer.send('statusPill:resize', { width, height })
   },
   answerQuestion: (paneKey: string, raw: string): Promise<StatusPillAnswerResult> =>
     ipcRenderer.invoke('statusPill:answerAgent', { paneKey, raw })

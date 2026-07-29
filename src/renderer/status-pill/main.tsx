@@ -12,8 +12,10 @@ import type {
 import { EMPTY_STATUS_PILL_SUMMARY } from '../../shared/status-pill-preload-api'
 import { AgentRowView } from './agent-row'
 import { PendingQuestionCard } from './pending-question-card'
+import { PillDot } from './pill-dot'
 import { buildPanelTitle, pickTone, type Tone } from './status-pill-formatters'
 import { usePillDrag } from './use-pill-drag'
+import { usePillResize } from './use-pill-resize'
 
 declare global {
   // oxlint-disable-next-line typescript-eslint/consistent-type-definitions -- declaration merging requires interface
@@ -32,11 +34,16 @@ function StatusPill(): React.JSX.Element {
   const [rows, setRows] = useState<StatusPillAgentRow[]>([])
   const [preferences, setPreferences] = useState<StatusPillPreferences | null>(null)
   const [expanded, setExpanded] = useState(false)
+  const [hovered, setHovered] = useState(false)
   const [entered, setEntered] = useState(false)
   const [answeringPaneKey, setAnsweringPaneKey] = useState<string | null>(null)
   const [answerError, setAnswerError] = useState<string | null>(null)
   const [attention, setAttention] = useState(false)
   const attentionTimer = useRef<number | null>(null)
+  // Why: keep a stable ref to the .pill-stack so the ResizeObserver can drive
+  // window resizing (dot -> bar -> panel) without re-creating the observer.
+  const stackRef = useRef<HTMLDivElement | null>(null)
+  usePillResize(window.api, stackRef)
   // Why: read inside the attention-pulse handler without depending on a
   // re-subscribe when preferences change, so a question that lands while the
   // effect is closed over stale prefs still honors reduced-motion.
@@ -158,38 +165,6 @@ function StatusPill(): React.JSX.Element {
     setAnswerError(null)
   }, [pendingKey])
 
-  // Why: the overlay window is click-through by default (setIgnoreMouseEvents
-  //  true, forward) so the transparent areas pass clicks to apps behind. To
-  //  capture clicks on the capsule/panel we toggle capture on while the cursor
-  //  is over them. mouseenter/mouseleave can't be used here: toggling capture
-  //  itself synthesizes enter/leave events and oscillates, dropping the click.
-  //  Instead, hit-test every forwarded mousemove against .pill-stack and only
-  //  flip when the result changes.
-  useEffect(() => {
-    if (!api) {
-      return
-    }
-    let current = false
-    const apply = (over: boolean): void => {
-      if (over === current) {
-        return
-      }
-      current = over
-      api.setInteractive(over)
-    }
-    const onMove = (event: MouseEvent): void => {
-      const target = event.target
-      apply(target instanceof Element && target.closest('.pill-stack') !== null)
-    }
-    const onLeave = (): void => apply(false)
-    document.addEventListener('mousemove', onMove)
-    document.addEventListener('mouseleave', onLeave)
-    return () => {
-      document.removeEventListener('mousemove', onMove)
-      document.removeEventListener('mouseleave', onLeave)
-    }
-  }, [api])
-
   useEffect(() => {
     const isDark = preferences?.shouldUseDarkColors ?? false
     document.documentElement.classList.toggle('dark', isDark)
@@ -218,37 +193,63 @@ function StatusPill(): React.JSX.Element {
     }
   }
 
+  const showBar = hovered || expanded
+  const showPanel = expanded && (summary.pendingQuestion !== undefined || rows.length > 0)
+
   return (
     <div
+      ref={stackRef}
       className={`pill-stack ${entered ? 'pill-enter' : ''}`}
-      onMouseEnter={() => setExpanded(true)}
-      onMouseLeave={() => setExpanded(false)}
+      onMouseEnter={() => setHovered(true)}
+      onMouseLeave={() => {
+        setHovered(false)
+        setExpanded(false)
+      }}
     >
-      <PillBody
-        tone={tone}
-        pulse={pulse}
-        attention={attention}
-        summary={summary}
-        onClick={() => window.api?.fireClick()}
-        onContextMenu={(event) => {
-          event.preventDefault()
-          window.api?.fireContextMenu()
-        }}
-      />
-      {expanded && (summary.pendingQuestion || rows.length > 0) ? (
-        <AgentPanel
-          summary={summary}
-          rows={rows}
+      {showBar ? (
+        <>
+          <PillBody
+            tone={tone}
+            pulse={pulse}
+            attention={attention}
+            summary={summary}
+            onClick={() => {
+              // Why: a click on the bar brings Orca forward AND unfolds the
+              // panel (the "click -> stack unfolds" mode).
+              window.api?.fireClick()
+              setExpanded(true)
+            }}
+            onContextMenu={(event) => {
+              event.preventDefault()
+              window.api?.fireContextMenu()
+            }}
+          />
+          {showPanel ? (
+            <AgentPanel
+              summary={summary}
+              rows={rows}
+              tone={tone}
+              pulse={pulse}
+              onAnswer={handleAnswer}
+              onFocusPane={(paneKey, worktreeId) =>
+                window.api?.focusPane({ paneKey, worktreeId: worktreeId ?? null })
+              }
+              answeringPaneKey={answeringPaneKey}
+              answerError={answerError}
+            />
+          ) : null}
+        </>
+      ) : (
+        <PillDot
           tone={tone}
           pulse={pulse}
-          onAnswer={handleAnswer}
-          onFocusPane={(paneKey, worktreeId) =>
-            window.api?.focusPane({ paneKey, worktreeId: worktreeId ?? null })
-          }
-          answeringPaneKey={answeringPaneKey}
-          answerError={answerError}
+          onClick={() => window.api?.fireClick()}
+          onContextMenu={(event) => {
+            event.preventDefault()
+            window.api?.fireContextMenu()
+          }}
         />
-      ) : null}
+      )}
       <StyleBaseline />
     </div>
   )

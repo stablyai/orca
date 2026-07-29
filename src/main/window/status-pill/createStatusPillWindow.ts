@@ -124,7 +124,7 @@ export function createStatusPillWindow(
       width: PILL_WINDOW_WIDTH,
       height: PILL_WINDOW_HEIGHT,
       frame: false,
-      resizable: false,
+      resizable: true,
       minimizable: false,
       maximizable: false,
       fullscreenable: false,
@@ -183,21 +183,6 @@ export function createStatusPillWindow(
     window.setBackgroundColor('#00000000')
   } catch {
     // Best-effort; some Linux compositors reject this and Electron throws.
-  }
-
-  // Why: default to click-through so the transparent padding around the
-  // capsule passes mouse events to the apps behind the overlay. The renderer
-  // toggles this off via statusPill:setInteractive when the cursor enters the
-  // capsule/panel (interactive regions). forward:true keeps mouseMove events
-  // flowing so the renderer can detect mouseenter on its own elements.
-  try {
-    window.setIgnoreMouseEvents(true, { forward: true })
-  } catch {
-    try {
-      window.setIgnoreMouseEvents(true)
-    } catch {
-      // Best-effort; older Electron versions or headless/test environments.
-    }
   }
 
   // Why: 'screen-saver' level on Windows is the only one that clears the
@@ -372,26 +357,16 @@ export function createStatusPillWindow(
     if (!display) {
       return null
     }
-    // Why: reuse placement only to resolve X (centered, or the user-pinned x
-    // clamped into the work area) + the window width. We deliberately IGNORE
-    // the helper's height: the window spans the full work-area height so the
-    // expanded panel can grow downward without ever needing a resize (which
-    // was unreliable on macOS). The bar renders at the window's top via the
-    // renderer's #root padding-top.
-    const base = computeStatusPillPlacement({
+    // Why: window = capsule + padding, sized to the resting bar. The renderer
+    // grows it via statusPill:resize when the panel unfolds. pinnedXOffset
+    // carries the user's dragged X (clamped into the work area).
+    return computeStatusPillPlacement({
       pillWidth: PILL_WIDTH,
       pillHeight: PILL_HEIGHT,
       display,
       platform: process.platform,
       pinnedXOffset: persisted?.x
     })
-    const workArea = display.workArea
-    return {
-      x: base.x,
-      y: workArea.y,
-      width: base.width,
-      height: workArea.height
-    }
   }
 }
 
