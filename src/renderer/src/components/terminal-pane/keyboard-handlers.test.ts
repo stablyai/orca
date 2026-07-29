@@ -248,9 +248,12 @@ describe('useTerminalKeyboardShortcuts copy selection', () => {
     selection: string
     mouseTrackingMode: 'none' | 'normal' | 'drag' | 'any'
     altKey?: boolean
+    ctrlKey?: boolean
     keybindings?: KeybindingOverrides
+    metaKey?: boolean
     repeat?: boolean
     shiftKey?: boolean
+    userAgent?: string
   }): {
     clearActivePane: ReturnType<typeof vi.fn>
     input: ReturnType<typeof vi.fn>
@@ -284,7 +287,9 @@ describe('useTerminalKeyboardShortcuts copy selection', () => {
       getPanes: vi.fn(() => [pane])
     }
 
-    vi.stubGlobal('navigator', { userAgent: 'Mozilla/5.0 (Macintosh)' })
+    vi.stubGlobal('navigator', {
+      userAgent: options.userAgent ?? 'Mozilla/5.0 (Macintosh)'
+    })
     vi.stubGlobal('HTMLElement', class HTMLElement {})
     vi.stubGlobal('window', {
       navigator: globalThis.navigator,
@@ -328,8 +333,8 @@ describe('useTerminalKeyboardShortcuts copy selection', () => {
     const event = {
       key: 'c',
       code: 'KeyC',
-      metaKey: true,
-      ctrlKey: false,
+      metaKey: options.metaKey ?? true,
+      ctrlKey: options.ctrlKey ?? false,
       altKey: options.altKey ?? false,
       shiftKey: options.shiftKey ?? false,
       repeat: options.repeat ?? false,
@@ -385,6 +390,30 @@ describe('useTerminalKeyboardShortcuts copy selection', () => {
     expect(harness.event.stopImmediatePropagation).toHaveBeenCalledOnce()
     harness.dispose()
   })
+
+  it.each([
+    ['Linux', 'normal'],
+    ['Windows', 'drag']
+  ] as const)(
+    'forwards the configured copy chord on %s in %s mouse-tracking mode',
+    (platform, mouseTrackingMode) => {
+      const harness = installCopyShortcutHarness({
+        selection: '',
+        mouseTrackingMode,
+        userAgent: `Mozilla/5.0 (${platform})`,
+        metaKey: false,
+        ctrlKey: true,
+        shiftKey: true,
+        keybindings: { 'terminal.copySelection': ['Mod+Shift+C'] }
+      })
+
+      expect(harness.input).toHaveBeenCalledWith('\x03')
+      expect(harness.writeClipboardText).not.toHaveBeenCalled()
+      expect(harness.event.preventDefault).toHaveBeenCalledOnce()
+      expect(harness.event.stopImmediatePropagation).toHaveBeenCalledOnce()
+      harness.dispose()
+    }
+  )
 
   it('ignores repeated macOS Cmd+C from a mouse-capturing TUI selection', () => {
     const harness = installCopyShortcutHarness({
