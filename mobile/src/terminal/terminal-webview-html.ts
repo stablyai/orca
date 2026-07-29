@@ -38,6 +38,13 @@ const DEFAULT_TERMINAL_THEME: RuntimeMobileTerminalTheme['theme'] = {
   brightWhite: '#c0caf5'
 }
 
+export const MOBILE_TERMINAL_CARET_OPTIONS = {
+  cursorBlink: false,
+  cursorStyle: 'bar',
+  showCursorImmediately: true,
+  cursorInactiveStyle: 'block'
+} as const
+
 // Why: TUI escape codes assume the desktop's cols/rows, so init xterm at those dims and fit the phone via a measured CSS scale() instead of resizing.
 export const XTERM_HTML = `<!DOCTYPE html>
 <html>
@@ -726,16 +733,12 @@ ${TERMINAL_WEBGL_RECOVERY_JS}
       // Why: xterm suppresses parser-generated query replies when disableStdin
       // is true. Native accepts only validated reply grammars from onData.
       disableStdin: false,
-      cursorBlink: false,
-      cursorStyle: 'block',
-      // Why: native TextInput owns focus, so xterm never gets the focus/keydown that
-      // flips isCursorInitialized. Without this, main-buffer TUIs (Claude Code) render
-      // no caret at all; alt-screen TUIs only escape via DECSET 1049.
-      showCursorImmediately: true,
-      // Why: mobile stays unfocused, so this — not cursorStyle — is what renders.
-      // 'bar' is dpr device px wide and vanishes under the fit scale(); 'block'
-      // inverts the whole cell. Application cursor-hide (DECTCEM) is still honored.
-      cursorInactiveStyle: 'block',
+      cursorBlink: ${MOBILE_TERMINAL_CARET_OPTIONS.cursorBlink},
+      cursorStyle: ${JSON.stringify(MOBILE_TERMINAL_CARET_OPTIONS.cursorStyle)},
+      // Native TextInput owns focus; initialize xterm's otherwise-gated main-buffer caret.
+      showCursorImmediately: ${MOBILE_TERMINAL_CARET_OPTIONS.showCursorImmediately},
+      // A full inactive cell remains visible under the terminal's phone-fit scale.
+      cursorInactiveStyle: ${JSON.stringify(MOBILE_TERMINAL_CARET_OPTIONS.cursorInactiveStyle)},
       convertEol: false,
       allowProposedApi: true
     });

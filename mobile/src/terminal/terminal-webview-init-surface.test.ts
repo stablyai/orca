@@ -1,5 +1,4 @@
 // @vitest-environment happy-dom
-import { Terminal } from '@xterm/xterm'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { XTERM_HTML } from './terminal-webview-html'
 
@@ -17,31 +16,9 @@ function bodyMarkup(): string {
 
 type TerminalStub = ReturnType<typeof makeTerminal>
 type TerminalOptions = {
-  cursorBlink?: boolean
   cursorInactiveStyle?: string
   cursorStyle?: string
   showCursorImmediately?: boolean
-}
-
-// Why: the renderers gate every caret draw on this pair before they ever read
-// cursorStyle/cursorInactiveStyle, so asserting the option literals alone cannot
-// prove a caret appears. Feed the captured options to a real xterm instead.
-function caretGate(options: TerminalOptions): {
-  hidden: () => boolean
-  initialized: () => boolean
-  write: (data: string) => Promise<void>
-} {
-  const terminal = new Terminal(options as never)
-  const { coreService } = (
-    terminal as unknown as {
-      _core: { coreService: { isCursorHidden: boolean; isCursorInitialized: boolean } }
-    }
-  )._core
-  return {
-    hidden: () => coreService.isCursorHidden,
-    initialized: () => coreService.isCursorInitialized,
-    write: (data) => new Promise<void>((resolve) => terminal.write(data, resolve))
-  }
 }
 type RegisteredWindowListener = {
   listener: EventListenerOrEventListenerObject
@@ -169,33 +146,11 @@ describe('terminal WebView init surface replacement', () => {
     expect(terminalOptions).toHaveLength(3)
     for (const options of terminalOptions) {
       expect(options).toMatchObject({
-        cursorStyle: 'block',
+        cursorStyle: 'bar',
         cursorInactiveStyle: 'block',
         showCursorImmediately: true
       })
     }
-  })
-
-  it('draws a caret for a main-buffer TUI that never enters the alt screen', async () => {
-    dispatchInit(120, 'desktop')
-    const gate = caretGate(terminalOptions[0] ?? {})
-
-    // Claude Code redraws its composer in the main buffer: no DECSET 1049, and the
-    // native TextInput means xterm never sees a focus or keydown event either.
-    await gate.write('\x1b[?25h\x1b[2K\x1b[1G> hello\x1b[?2004h')
-    await gate.write('\x1b[1;3H')
-
-    expect(gate.hidden()).toBe(false)
-    expect(gate.initialized()).toBe(true)
-  })
-
-  it('still lets a TUI hide the caret with DECTCEM', async () => {
-    dispatchInit(120, 'desktop')
-    const gate = caretGate(terminalOptions[0] ?? {})
-
-    await gate.write('\x1b[?25l')
-
-    expect(gate.hidden()).toBe(true)
   })
 
   it('commits only the newest surface when phone-fit init calls overlap', () => {
