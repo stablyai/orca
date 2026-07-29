@@ -1,10 +1,12 @@
+import { randomUUID } from 'node:crypto'
 import type { RuntimeMobileSessionTabsResult } from '../../src/shared/runtime-types'
 import type { RpcRequest, RpcResponse } from './mock-server-rpc-handlers'
 
 // Why: the client's snapshot-acceptance gate keys on the publisher epoch, so it
-// must stay stable for the process and change on restart like a real publisher.
+// must stay stable for the process and change on restart like a real publisher —
+// hence a uuid, not a clock read two restarts could land on.
 // The `mobile-local:` prefix is reserved for phone-local writes — never use it.
-const PUBLICATION_EPOCH = `mock-server:${Date.now().toString(36)}`
+const PUBLICATION_EPOCH = `mock-server:${randomUUID()}`
 const GROUP_ID = 'group-1'
 const PARENT_TAB_ID = 'tab-1'
 // The host only ever publishes terminal-layout UUIDs here; pane-key parsing
