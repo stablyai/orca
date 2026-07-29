@@ -727,10 +727,15 @@ ${TERMINAL_WEBGL_RECOVERY_JS}
       // is true. Native accepts only validated reply grammars from onData.
       disableStdin: false,
       cursorBlink: false,
-      cursorStyle: 'bar',
-      // Why: native TextInput owns mobile keyboard focus, so xterm stays inactive.
-      // Match its active bar while still honoring application cursor-hide sequences.
-      cursorInactiveStyle: 'bar',
+      cursorStyle: 'block',
+      // Why: native TextInput owns focus, so xterm never gets the focus/keydown that
+      // flips isCursorInitialized. Without this, main-buffer TUIs (Claude Code) render
+      // no caret at all; alt-screen TUIs only escape via DECSET 1049.
+      showCursorImmediately: true,
+      // Why: mobile stays unfocused, so this — not cursorStyle — is what renders.
+      // 'bar' is dpr device px wide and vanishes under the fit scale(); 'block'
+      // inverts the whole cell. Application cursor-hide (DECTCEM) is still honored.
+      cursorInactiveStyle: 'block',
       convertEol: false,
       allowProposedApi: true
     });
