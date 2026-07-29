@@ -26,6 +26,7 @@ import type { RelayBrokerStatus } from '../runtime/relay/relay-session-broker'
 import type { AgentBrowserBridge } from '../browser/agent-browser-bridge'
 import type { AgentHookProviderSessionIdentity } from '../agent-hooks/server'
 import type { EmulatorBridge } from '../emulator/emulator-bridge'
+import type { CodexMicroCoordinator } from '../codex-micro/coordinator'
 import type { GpuFallbackMarker, GpuFallbackEnvironment } from './gpu-fallback-marker'
 import type { createCodexSessionMigrationScheduler } from '../codex/codex-session-migration-scheduler'
 import type { getDevInstanceIdentity } from './dev-instance-identity'
@@ -128,6 +129,8 @@ export const mainProcessState = {
   desktopWindow: null as BrowserWindow | null,
   agentBrowserBridge: null as AgentBrowserBridge | null,
   emulatorBridge: null as EmulatorBridge | null,
+  codexMicroCoordinator: null as CodexMicroCoordinator | null,
+  unregisterCodexMicroIpc: null as (() => void) | null,
   tray: null as Tray | null
 }
 

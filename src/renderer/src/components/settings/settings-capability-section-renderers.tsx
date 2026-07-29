@@ -4,6 +4,7 @@ import { ComputerUsePane } from './ComputerUsePane'
 import { LinearAgentSkillPane } from './LinearAgentSkillPane'
 import { OrchestrationPane } from './OrchestrationPane'
 import { VoicePane } from './VoicePane'
+import { CodexMicroSettingsPane } from './codex-micro/CodexMicroSettingsPane'
 import { SettingsSection } from './SettingsSection'
 import { translate } from '@/i18n/i18n'
 import type { SettingsRenderContext } from './settings-render-context'
@@ -118,6 +119,24 @@ export function renderDesktopCapabilitySettingsSections(
         searchEntries={navigation.getSectionSearchEntries('computer-use')}
       >
         {view.isSectionMounted('computer-use') ? <ComputerUsePane /> : null}
+      </SettingsSection>
+
+      <SettingsSection
+        id="codex-micro"
+        title={translate('auto.components.settings.Settings.codexMicroTitle', 'Codex Micro')}
+        description={translate(
+          'auto.components.settings.Settings.codexMicroDescription',
+          'Use and customize the Work Louder Codex Micro controller.'
+        )}
+        badge={translate('auto.components.settings.codexMicro.experimental', 'Experimental')}
+        searchEntries={navigation.getSectionSearchEntries('codex-micro')}
+      >
+        {view.isSectionMounted('codex-micro') ? (
+          <CodexMicroSettingsPane
+            settings={model.settings}
+            updateSettings={model.updateSettings}
+          />
+        ) : null}
       </SettingsSection>
 
       <SettingsSection

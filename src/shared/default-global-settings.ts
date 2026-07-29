@@ -16,6 +16,7 @@ import {
 } from './left-sidebar-appearance'
 import { DEFAULT_SOURCE_CONTROL_GROUP_ORDER } from './source-control-group-order'
 import { DESKTOP_TERMINAL_SCROLLBACK_ROWS_DEFAULT } from './terminal-scrollback-policy'
+import { normalizeCodexMicroSettings } from './codex-micro-settings'
 
 export function buildDefaultSettings(args: {
   workspaceDir: string
@@ -254,6 +255,7 @@ export function buildDefaultSettings(args: {
       customAgentCommand: ''
     },
     sourceControlAi: getDefaultSourceControlAiSettings(),
-    voice: args.voice
+    voice: args.voice,
+    codexMicro: normalizeCodexMicroSettings(undefined)
   }
 }

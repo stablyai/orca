@@ -1,0 +1,155 @@
+{
+  "description": "Decoded v.oai.hid control events for every proven Codex Micro control, redacted from the 2026-07-28 USB captures.",
+  "events": [
+    {
+      "kind": "control",
+      "control": "AG00",
+      "action": 1
+    },
+    {
+      "kind": "control",
+      "control": "AG00",
+      "action": 0
+    },
+    {
+      "kind": "control",
+      "control": "AG01",
+      "action": 1
+    },
+    {
+      "kind": "control",
+      "control": "AG01",
+      "action": 0
+    },
+    {
+      "kind": "control",
+      "control": "AG02",
+      "action": 1
+    },
+    {
+      "kind": "control",
+      "control": "AG02",
+      "action": 0
+    },
+    {
+      "kind": "control",
+      "control": "AG03",
+      "action": 1
+    },
+    {
+      "kind": "control",
+      "control": "AG03",
+      "action": 0
+    },
+    {
+      "kind": "control",
+      "control": "AG04",
+      "action": 1
+    },
+    {
+      "kind": "control",
+      "control": "AG04",
+      "action": 0
+    },
+    {
+      "kind": "control",
+      "control": "AG05",
+      "action": 1
+    },
+    {
+      "kind": "control",
+      "control": "AG05",
+      "action": 0
+    },
+    {
+      "kind": "control",
+      "control": "ACT06",
+      "action": 1
+    },
+    {
+      "kind": "control",
+      "control": "ACT06",
+      "action": 0
+    },
+    {
+      "kind": "control",
+      "control": "ACT07",
+      "action": 1
+    },
+    {
+      "kind": "control",
+      "control": "ACT07",
+      "action": 0
+    },
+    {
+      "kind": "control",
+      "control": "ACT08",
+      "action": 1
+    },
+    {
+      "kind": "control",
+      "control": "ACT08",
+      "action": 0
+    },
+    {
+      "kind": "control",
+      "control": "ACT09",
+      "action": 1
+    },
+    {
+      "kind": "control",
+      "control": "ACT09",
+      "action": 0
+    },
+    {
+      "kind": "control",
+      "control": "ACT10",
+      "action": 1
+    },
+    {
+      "kind": "control",
+      "control": "ACT10",
+      "action": 0
+    },
+    {
+      "kind": "control",
+      "control": "ACT11",
+      "action": 1
+    },
+    {
+      "kind": "control",
+      "control": "ACT11",
+      "action": 0
+    },
+    {
+      "kind": "control",
+      "control": "ACT12",
+      "action": 1
+    },
+    {
+      "kind": "control",
+      "control": "ACT12",
+      "action": 0
+    },
+    {
+      "kind": "control",
+      "control": "ENC_CLK",
+      "action": 1
+    },
+    {
+      "kind": "control",
+      "control": "ENC_CLK",
+      "action": 0
+    },
+    {
+      "kind": "control",
+      "control": "ENC_CC",
+      "action": 2
+    },
+    {
+      "kind": "control",
+      "control": "ENC_CW",
+      "action": 2
+    }
+  ]
+}

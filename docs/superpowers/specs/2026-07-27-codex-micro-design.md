@@ -1,6 +1,6 @@
 # Codex Micro Full-Parity Support
 
-**Status:** Approved; hardware protocol discovery pending
+**Status:** Approved; USB capture discovery complete, Phase 1 implementation in verification
 
 **Date:** 2026-07-27
 
@@ -9,6 +9,10 @@
 Orca will add first-class Codex Micro support on macOS, Windows, and Linux. The integration separates hardware transport, Orca device behavior, and agent-provider control APIs. Orca owns the hardware transport while enabled, supports every tracked agent for status and navigation, and provides reliable controls for Codex, Claude, and Gemini before the Experimental preview ships.
 
 The user-facing behavior follows the official [Codex Micro documentation](https://learn.chatgpt.com/docs/features/codex-micro). Codex controls use version-matched [Codex App Server](https://learn.chatgpt.com/docs/app-server) schemas.
+
+## USB Capture Provenance
+
+Physical USB/HID discovery for firmware `v0.4.1` is complete. The redacted fixture lineage, captured Report 6 event/response shapes, interleaving case, and reversible runtime-output commands are documented in [`native/codex-micro/fixtures/PROVENANCE.md`](../../../native/codex-micro/fixtures/PROVENANCE.md). The bounded implementation and acceptance sequence is tracked in the [Phase 1 plan](../plans/2026-07-28-codex-micro-usb-phase-1.md).
 
 ## Goals
 

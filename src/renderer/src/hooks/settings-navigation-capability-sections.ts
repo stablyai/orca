@@ -10,12 +10,14 @@ import { getOrcaAccountSettingsSearchEntries } from '@/components/settings/orca-
 import { OrcaLogoSettingsIcon } from '@/components/settings/orca-logo-settings-icon'
 import { getOrchestrationPaneSearchEntries } from '@/components/settings/orchestration-search'
 import { getVoicePaneSearchEntries } from '@/components/settings/voice-pane-search'
+import { getCodexMicroSearchEntries } from '@/components/settings/codex-micro-search'
 import { translate } from '@/i18n/i18n'
 import type { SettingsNavSection } from '@/lib/settings-navigation-types'
 import {
   Blocks,
   Bot,
   CircleUserRound,
+  Cable,
   Mic,
   MousePointerClick,
   Network,
@@ -103,6 +105,21 @@ export function buildCapabilitySettingsSections({
             icon: MousePointerClick,
             searchEntries: getComputerUsePaneSearchEntries(),
             group: 'capabilities'
+          },
+          {
+            id: 'codex-micro',
+            title: translate(
+              'auto.hooks.useSettingsNavigationMetadata.codexMicroTitle',
+              'Codex Micro'
+            ),
+            description: translate(
+              'auto.hooks.useSettingsNavigationMetadata.codexMicroDescription',
+              'Use and customize the Work Louder Codex Micro controller.'
+            ),
+            icon: Cable,
+            searchEntries: getCodexMicroSearchEntries(),
+            group: 'capabilities',
+            badge: translate('auto.components.settings.codexMicro.experimental', 'Experimental')
           },
           {
             id: 'voice',

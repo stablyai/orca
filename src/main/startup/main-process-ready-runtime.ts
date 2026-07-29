@@ -33,6 +33,8 @@ import { initializeMainProcessAutomations } from './main-process-automations'
 import { initializeMainProcessPlugins } from './main-process-plugins'
 import { collectWorktreeTrashSweepRoots, sweepStaleWorktreeTrash } from '../worktree-trash'
 import { logStartupMilestone } from './startup-diagnostics'
+import { CodexMicroCoordinator } from '../codex-micro/coordinator'
+import { registerCodexMicroIpc } from '../codex-micro/ipc'
 
 export async function initializeReadyRuntimeServices(): Promise<void> {
   const store = state.store
@@ -41,6 +43,11 @@ export async function initializeReadyRuntimeServices(): Promise<void> {
   }
   initializeMainProcessObservers()
   initializeMainProcessAccountServices()
+  if (!state.isServeMode) {
+    state.codexMicroCoordinator = new CodexMicroCoordinator({ store })
+    state.unregisterCodexMicroIpc = registerCodexMicroIpc(state.codexMicroCoordinator)
+    state.codexMicroCoordinator.start()
+  }
   const runtime = initializeMainProcessRuntime()
   initializeMainProcessAutomations()
   configureRuntimeServices(runtime)

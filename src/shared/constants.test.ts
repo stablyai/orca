@@ -111,6 +111,16 @@ describe('getDefaultSettings', () => {
     expect(getDefaultSettings('/tmp').experimentalEphemeralVms).toBe(false)
   })
 
+  it('returns fresh Codex Micro settings and mappings for each default state', () => {
+    const first = getDefaultSettings('/tmp').codexMicro!
+    const second = getDefaultSettings('/tmp').codexMicro!
+
+    expect(first).not.toBe(second)
+    expect(first.mappings).not.toBe(second.mappings)
+    first.mappings.AG00 = 'worktree.navigateDown'
+    expect(second.mappings.AG00).toBe('worktree.navigateUp')
+  })
+
   it('keeps the agent dashboard popout disabled by default', () => {
     expect(getDefaultSettings('/tmp').experimentalAgentDashboardPopout).toBeUndefined()
     expect(getDefaultSettings('/tmp').experimentalAgentDashboardShowIdle).toBeUndefined()

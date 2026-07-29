@@ -18,6 +18,7 @@ import type {
   PhysicalModifierToken
 } from '../../../shared/keybindings'
 import { shortcutPlatform } from './app-window-chrome'
+import type { CodexMicroSettings } from '../../../shared/codex-micro-settings'
 
 type AppStoreState = ReturnType<typeof useAppStore.getState>
 
@@ -41,6 +42,7 @@ export type AppShortcutState = {
   activeView: AppStoreState['activeView']
   activeWorktreeId: AppStoreState['activeWorktreeId']
   actions: AppShortcutActions
+  codexMicroSettings?: CodexMicroSettings
   creationLayoutActive: boolean
   floatingTerminalEnabled: boolean
   floatingTerminalOpen: boolean

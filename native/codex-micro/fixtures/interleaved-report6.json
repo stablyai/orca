@@ -1,0 +1,30 @@
+{
+  "description": "Byte-level Report 6 reconstruction of the interleaved response/event case observed at 29.732654s in the directed 2026-07-28 ChatGPT capture (directed-analysis.json wire_interleaving_example). A v.oai.thstatus acknowledgement (id 547) is split across reports by an asynchronous AG00 press event. The parser must emit the complete AG00 event and must not reassemble the split acknowledgement into a value.",
+  "sourceRequestId": 547,
+  "sourceMethod": "v.oai.thstatus",
+  "reports": [
+    [
+      6, 2, 39, 123, 34, 114, 101, 115, 117, 108, 116, 34, 58, 123, 34, 111, 107, 34, 58, 49, 125,
+      44, 34, 105, 100, 34, 58, 53, 52, 55, 44, 34, 109, 101, 116, 104, 111, 100, 34, 58, 34, 118,
+      0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0
+    ],
+    [
+      6, 2, 42, 123, 34, 109, 34, 58, 34, 118, 46, 111, 97, 105, 46, 104, 105, 100, 34, 44, 34, 112,
+      34, 58, 123, 34, 107, 34, 58, 34, 65, 71, 48, 48, 34, 44, 34, 97, 99, 116, 34, 58, 49, 125,
+      125, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0
+    ],
+    [
+      6, 2, 15, 46, 111, 97, 105, 46, 116, 104, 115, 116, 97, 116, 117, 115, 34, 125, 0, 0, 0, 0, 0,
+      0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+      0, 0, 0, 0, 0, 0, 0, 0, 0, 0
+    ]
+  ],
+  "expectedEvents": [
+    {
+      "kind": "control",
+      "control": "AG00",
+      "action": 1
+    }
+  ],
+  "expectedResponseComplete": false
+}

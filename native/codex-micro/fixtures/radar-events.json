@@ -1,0 +1,95 @@
+{
+  "description": "Decoded v.oai.rad presence telemetry (normalized angle/distance), redacted from the 2026-07-28 USB capture.",
+  "events": [
+    {
+      "kind": "radar",
+      "angle": 0.780451,
+      "distance": 0.380998
+    },
+    {
+      "kind": "radar",
+      "angle": 0.764303,
+      "distance": 1
+    },
+    {
+      "kind": "radar",
+      "angle": 0.768293,
+      "distance": 0.757943
+    },
+    {
+      "kind": "radar",
+      "angle": 0,
+      "distance": 0
+    },
+    {
+      "kind": "radar",
+      "angle": 0.199645,
+      "distance": 0.162407
+    },
+    {
+      "kind": "radar",
+      "angle": 0.232868,
+      "distance": 0.917269
+    },
+    {
+      "kind": "radar",
+      "angle": 0.217911,
+      "distance": 1
+    },
+    {
+      "kind": "radar",
+      "angle": 0.214791,
+      "distance": 1
+    },
+    {
+      "kind": "radar",
+      "angle": 0.217688,
+      "distance": 1
+    },
+    {
+      "kind": "radar",
+      "angle": 0.232619,
+      "distance": 1
+    },
+    {
+      "kind": "radar",
+      "angle": 0.236006,
+      "distance": 1
+    },
+    {
+      "kind": "radar",
+      "angle": 0,
+      "distance": 0
+    },
+    {
+      "kind": "radar",
+      "angle": 0.463756,
+      "distance": 0.102218
+    },
+    {
+      "kind": "radar",
+      "angle": 0.491729,
+      "distance": 1
+    },
+    {
+      "kind": "radar",
+      "angle": 0,
+      "distance": 0
+    },
+    {
+      "kind": "radar",
+      "angle": 0.042614,
+      "distance": 0.059176
+    },
+    {
+      "kind": "radar",
+      "angle": 0.008348,
+      "distance": 1
+    },
+    {
+      "kind": "radar",
+      "angle": 0,
+      "distance": 0
+    }
+  ]
+}

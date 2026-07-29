@@ -1,0 +1,17 @@
+{
+  "description": "device.status responses observed in the directed 2026-07-28 capture. Serial number omitted.",
+  "known": {
+    "firmware": "v0.4.1",
+    "profile": 0,
+    "layer": 1,
+    "battery": 81,
+    "charging": true
+  },
+  "unknownFirmware": {
+    "firmware": "v0.9.9",
+    "profile": 0,
+    "layer": 0,
+    "battery": 50,
+    "charging": false
+  }
+}

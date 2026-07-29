@@ -371,7 +371,7 @@ Expected: missing component/metadata failures.
 
 **Produces:** A validated full snapshot containing ambient/key state plus six `thstatus` slots. It is converted only to captured `v.oai.rgbcfg`/`v.oai.thstatus` fields.
 
-- [ ] **RED:** Tests require known-firmware-only writes, six bounded slot IDs, 24-bit RGB integers, 0–100 brightness, unchanged-snapshot no-op, and no resend after an indeterminate ack.
+- [ ] **RED:** Tests require known-firmware-only writes, six bounded slot IDs, internal 24-bit RGB integers encoded to the captured `0xRRGGBB` wire strings, 0–100 brightness, unchanged-snapshot no-op, and no resend after an indeterminate ack.
 
 Run:
 

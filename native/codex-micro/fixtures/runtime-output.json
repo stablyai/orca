@@ -1,0 +1,107 @@
+{
+  "description": "Observed v.oai.rgbcfg / v.oai.thstatus commands and their acknowledgements from the directed 2026-07-28 ChatGPT capture. Wire keys are recorded as observed; names are not undocumented semantic guarantees.",
+  "rgbcfgOn": {
+    "method": "v.oai.rgbcfg",
+    "params": {
+      "ambient": {
+        "e": 1,
+        "b": 1,
+        "s": 0,
+        "m": 0,
+        "c": "0xffffff"
+      },
+      "keys": {
+        "e": 1,
+        "b": 1,
+        "s": 0,
+        "m": 0,
+        "c": "0xffffff"
+      }
+    }
+  },
+  "rgbcfgOff": {
+    "method": "v.oai.rgbcfg",
+    "params": {
+      "ambient": {
+        "e": 0,
+        "b": 0,
+        "s": 0,
+        "m": 0,
+        "c": "0x000000"
+      },
+      "keys": {
+        "e": 0,
+        "b": 0,
+        "s": 0,
+        "m": 0,
+        "c": "0x000000"
+      }
+    }
+  },
+  "thstatus": {
+    "method": "v.oai.thstatus",
+    "params": [
+      {
+        "id": 0,
+        "c": "0xffffff",
+        "b": 1,
+        "e": 1,
+        "s": 0,
+        "sk": 0,
+        "sa": 0
+      },
+      {
+        "id": 1,
+        "c": "0xffffff",
+        "b": 1,
+        "e": 4,
+        "s": 0.4,
+        "sk": 0,
+        "sa": 0
+      },
+      {
+        "id": 2,
+        "c": "0x000000",
+        "b": 0,
+        "e": 0,
+        "s": 0,
+        "sk": 0,
+        "sa": 0
+      },
+      {
+        "id": 3,
+        "c": "0x000000",
+        "b": 0,
+        "e": 0,
+        "s": 0,
+        "sk": 0,
+        "sa": 0
+      },
+      {
+        "id": 4,
+        "c": "0x000000",
+        "b": 0,
+        "e": 0,
+        "s": 0,
+        "sk": 0,
+        "sa": 0
+      },
+      {
+        "id": 5,
+        "c": "0x000000",
+        "b": 0,
+        "e": 0,
+        "s": 0,
+        "sk": 0,
+        "sa": 0
+      }
+    ]
+  },
+  "ack": {
+    "result": {
+      "ok": 1
+    },
+    "id": 547,
+    "method": "v.oai.thstatus"
+  }
+}

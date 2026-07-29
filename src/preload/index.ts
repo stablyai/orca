@@ -84,6 +84,7 @@ import { e2eApi } from './api/e2e-bridge'
 import { mobileApi } from './api/mobile-bridge'
 import { agentStatusApi } from './api/agent-status-bridge'
 import { speechApi } from './api/speech-bridge'
+import { codexMicroApi } from './api/codex-micro-bridge'
 
 installNativeFileDropHandlers()
 installBrowserFindListener()
@@ -181,7 +182,8 @@ const api = {
   e2e: e2eApi,
   mobile: mobileApi,
   agentStatus: agentStatusApi,
-  speech: speechApi
+  speech: speechApi,
+  codexMicro: codexMicroApi
 } satisfies PreloadApi
 
 if (process.contextIsolated) {

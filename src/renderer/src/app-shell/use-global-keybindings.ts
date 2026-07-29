@@ -31,6 +31,7 @@ import {
   toModifierDoubleTapEvent
 } from '../../../shared/modifier-double-tap-detector'
 import { shortcutPlatform } from './app-window-chrome'
+import { dispatchCodexMicroInput } from '@/lib/codex-micro-command-dispatch'
 import {
   createAppCommandHandlers,
   getKeybindingContext,
@@ -55,12 +56,14 @@ export function useGlobalKeybindings(args: {
   const actions = useAppShortcutActions()
   const keybindings = useAppStore((s) => s.keybindings)
   const terminalShortcutPolicy = useAppStore((s) => s.settings?.terminalShortcutPolicy)
+  const codexMicroSettings = useAppStore((s) => s.settings?.codexMicro)
   const pluginCommands = usePluginCommands()
 
   const shortcutState: AppShortcutState = {
     activeView: layout.activeView,
     activeWorktreeId: layout.activeWorktreeId,
     actions,
+    codexMicroSettings,
     creationLayoutActive: layout.creationLayoutActive,
     floatingTerminalEnabled: floatingWorkspace.enabled,
     floatingTerminalOpen: floatingWorkspace.open,
@@ -86,6 +89,12 @@ export function useGlobalKeybindings(args: {
     const unregisterAppCommandDispatcher = registerAppCommandDispatcher((actionId) =>
       (createAppCommandHandlers(shortcutStateRef.current).get(actionId) ?? (() => false))()
     )
+    const unsubscribeCodexMicroInput = window.api.codexMicro?.subscribeInput((event) => {
+      const deviceSettings = shortcutStateRef.current.codexMicroSettings
+      if (deviceSettings) {
+        dispatchCodexMicroInput(event, deviceSettings)
+      }
+    })
 
     const dispatchShortcutInput = (input: ShortcutDispatchInput): void => {
       const state = shortcutStateRef.current
@@ -316,6 +325,7 @@ export function useGlobalKeybindings(args: {
     window.addEventListener('keyup', onKeyUp, { capture: true })
     window.addEventListener('blur', onBlur)
     return () => {
+      unsubscribeCodexMicroInput?.()
       unregisterAppCommandDispatcher()
       window.removeEventListener('keydown', onKeyDown, { capture: true })
       window.removeEventListener('keyup', onKeyUp, { capture: true })

@@ -70,6 +70,10 @@ function installBeforeQuitHandler(): void {
       })
     }
     state.isQuitting = true
+    state.unregisterCodexMicroIpc?.()
+    state.unregisterCodexMicroIpc = null
+    state.codexMicroCoordinator?.dispose()
+    state.codexMicroCoordinator = null
     state.desktopRelayService?.fenceAndCloseNow()
     state.runtimeRpc?.setMobileRelayPairingProvider(null)
     state.unsubscribeAgentAwakeStatusChanges?.()
