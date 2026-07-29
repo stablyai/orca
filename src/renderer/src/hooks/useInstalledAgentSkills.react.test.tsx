@@ -112,7 +112,7 @@ afterEach(async () => {
   useAppStore.setState({
     settings: null,
     runtimeEnvironments: [],
-    runtimeEnvironmentCatalogHydrated: false
+    runtimeEnvironmentCatalogSettled: false
   })
   vi.restoreAllMocks()
   Reflect.deleteProperty(window, 'api')
@@ -138,7 +138,7 @@ function setRuntimeOwner(
   useAppStore.setState({
     settings: { activeRuntimeEnvironmentId: environmentId } as GlobalSettings,
     runtimeEnvironments: savedEnvironmentIds.map((id) => ({ id })) as never,
-    runtimeEnvironmentCatalogHydrated: true
+    runtimeEnvironmentCatalogSettled: true
   })
 }
 
@@ -345,41 +345,53 @@ describe('useInstalledAgentSkill', () => {
     expect(latestState?.installed).toBe(true)
   })
 
-  // Why: each hydration input is gated separately. Covering only the both-unset
-  // case would let either conjunct be deleted with every test still green.
-  for (const unhydrated of ['settings', 'runtime catalog'] as const) {
-    it(`keeps loading instead of scanning the wrong host before the ${unhydrated} hydrates`, async () => {
-      const discover = vi
-        .fn<(target?: SkillDiscoveryTarget) => Promise<SkillDiscoveryResult>>()
-        .mockResolvedValue(discoveryResult([]))
-      const call = vi.fn()
-      Object.defineProperty(window, 'api', {
-        configurable: true,
-        value: { skills: { discover }, runtimeEnvironments: { call } }
-      })
-      // Why: the other input is fully hydrated and names a remote owner, so a
-      // missing gate resolves to the local host and caches a client scan.
-      useAppStore.setState(
-        unhydrated === 'settings'
-          ? {
-              settings: null,
-              runtimeEnvironments: [{ id: 'env-1' }] as never,
-              runtimeEnvironmentCatalogHydrated: true
-            }
-          : {
-              settings: { activeRuntimeEnvironmentId: 'env-1' } as GlobalSettings,
-              runtimeEnvironments: [],
-              runtimeEnvironmentCatalogHydrated: false
-            }
-      )
-
-      await renderProbe()
-      await flushMicrotasks()
-
-      expect(discover).not.toHaveBeenCalled()
-      expect(call).not.toHaveBeenCalled()
-      expect(latestState?.loading).toBe(true)
-      expect(latestState?.installed).toBe(false)
+  it('keeps loading instead of scanning the wrong host before the catalog settles', async () => {
+    const discover = vi
+      .fn<(target?: SkillDiscoveryTarget) => Promise<SkillDiscoveryResult>>()
+      .mockResolvedValue(discoveryResult([]))
+    const call = vi.fn()
+    Object.defineProperty(window, 'api', {
+      configurable: true,
+      value: { skills: { discover }, runtimeEnvironments: { call } }
     })
-  }
+    // Why: a focused remote is already known here, so a missing gate resolves to
+    // the local host and caches a client scan under the local key.
+    useAppStore.setState({
+      settings: { activeRuntimeEnvironmentId: 'env-1' } as GlobalSettings,
+      runtimeEnvironments: [{ id: 'env-1' }] as never,
+      runtimeEnvironmentCatalogSettled: false
+    })
+
+    await renderProbe()
+    await flushMicrotasks()
+
+    expect(discover).not.toHaveBeenCalled()
+    expect(call).not.toHaveBeenCalled()
+    expect(latestState?.loading).toBe(true)
+    expect(latestState?.installed).toBe(false)
+  })
+
+  // Why: a failed catalog read must degrade to the local host, not strand every
+  // skill badge on a spinner with no retry affordance for the whole session.
+  it('falls back to the local host once an unreadable catalog settles', async () => {
+    const discover = vi
+      .fn<(target?: SkillDiscoveryTarget) => Promise<SkillDiscoveryResult>>()
+      .mockResolvedValue(discoveryResult([skill({ name: 'linear-tickets' })]))
+    Object.defineProperty(window, 'api', {
+      configurable: true,
+      value: { skills: { discover }, runtimeEnvironments: { call: vi.fn() } }
+    })
+    useAppStore.setState({
+      settings: null,
+      runtimeEnvironments: [],
+      runtimeEnvironmentCatalogSettled: true
+    })
+
+    await renderProbe()
+    await flushMicrotasks()
+
+    expect(discover).toHaveBeenCalledTimes(1)
+    expect(latestState?.loading).toBe(false)
+    expect(latestState?.installed).toBe(true)
+  })
 })

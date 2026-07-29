@@ -49,7 +49,7 @@ function setRuntimeOwner(environmentId: string | null): void {
   useAppStore.setState({
     settings: { activeRuntimeEnvironmentId: environmentId } as GlobalSettings,
     runtimeEnvironments: (environmentId ? [{ id: environmentId }] : []) as never,
-    runtimeEnvironmentCatalogHydrated: true
+    runtimeEnvironmentCatalogSettled: true
   })
 }
 
@@ -96,7 +96,7 @@ afterEach(async () => {
   useAppStore.setState({
     settings: null,
     runtimeEnvironments: [],
-    runtimeEnvironmentCatalogHydrated: false
+    runtimeEnvironmentCatalogSettled: false
   })
   vi.restoreAllMocks()
   Reflect.deleteProperty(window, 'api')
@@ -166,7 +166,7 @@ describe('SkillsPage', () => {
       configurable: true,
       value: { skills: { discover }, runtimeEnvironments: { call } }
     })
-    useAppStore.setState({ settings: null, runtimeEnvironmentCatalogHydrated: false })
+    useAppStore.setState({ runtimeEnvironmentCatalogSettled: false })
 
     await renderPage()
     await flushMicrotasks()

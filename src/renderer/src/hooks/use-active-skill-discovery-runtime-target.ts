@@ -22,11 +22,13 @@ export function useActiveSkillDiscoveryRuntimeTarget(): RuntimeClientTarget | nu
   // `runtimeEnvironments` would churn identity every time a status refresh
   // restores an equal-but-new array, re-firing every consumer's scan.
   const environmentId = useAppStore((state) =>
-    // Why: resolving to "local" before hydration caches a client scan under the
-    // local key and flashes "Not installed" at a user whose skills live remotely.
-    state.settings === null || !state.runtimeEnvironmentCatalogHydrated
-      ? UNRESOLVED
-      : getSingleFocusedRuntimeEnvironmentId(state)
+    // Why: resolving to "local" before the catalog settles caches a client scan
+    // under the local key and flashes "Not installed" at a user whose skills live
+    // remotely. Settled rather than hydrated, so a failed catalog read degrades to
+    // the local host instead of leaving every badge pending for the session.
+    state.runtimeEnvironmentCatalogSettled
+      ? getSingleFocusedRuntimeEnvironmentId(state)
+      : UNRESOLVED
   )
   return useMemo(
     () =>
