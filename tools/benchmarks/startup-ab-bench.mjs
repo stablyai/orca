@@ -18,7 +18,7 @@
  *   node tools/benchmarks/startup-ab-bench.mjs --label lazy-onboarding
  *     --baseline-app-dir <dir> --candidate-app-dir <dir>
  *     [--baseline-exe <path>] [--candidate-exe <path>]
- *     [--pairs 8] [--warmup 1] [--control-phases spawnToAppReady,...]
+ *     [--pairs 8] [--warmup 1] [--control-phases spawnToAppReady,...] [--keep-events]
  *     [--files 28000] [--state-profile none|restored-local-tabs]
  *     [--wait-for-event renderer-startup-hydration-done] [--timeout-ms 240000]
  *
@@ -49,9 +49,9 @@ import {
 } from './paired-shift-statistics.mjs'
 import {
   assertStateProfile,
-  FIXTURE_ARG_DEFAULTS,
-  FIXTURE_FLAG_SPEC,
-  parseFlags
+  parseFlags,
+  PROFILE_ARG_DEFAULTS,
+  PROFILE_FLAG_SPEC
 } from './startup-bench-arguments.mjs'
 import { derivePhases, runIteration } from './startup-launch-probe.mjs'
 import { prepareStartupFixture } from './startup-profile-fixture.mjs'
@@ -64,7 +64,7 @@ const scriptDir = import.meta.dirname
 const DEFAULT_CONTROL_PHASES = 'spawnToAppReady,appReadyToServices,servicesToI18n'
 
 const FLAG_SPEC = {
-  ...FIXTURE_FLAG_SPEC,
+  ...PROFILE_FLAG_SPEC,
   '--label': { key: 'label', type: 'string' },
   '--baseline-exe': { key: 'baselineExe', type: 'string' },
   '--candidate-exe': { key: 'candidateExe', type: 'string' },
@@ -73,7 +73,24 @@ const FLAG_SPEC = {
   '--pairs': { key: 'pairs', type: 'number' },
   '--warmup': { key: 'warmup', type: 'number' },
   '--control-phases': { key: 'controlPhases', type: 'string' },
-  '--settle-ms': { key: 'settleMs', type: 'number' }
+  '--settle-ms': { key: 'settleMs', type: 'number' },
+  '--keep-events': { key: 'keepEvents', type: 'boolean' }
+}
+
+/**
+ * Raw milestone lines are debugging detail and dominate the file size at
+ * realistic pair counts; the phases are what a verdict is recomputed from.
+ */
+function serialiseRuns(pairs, keepEvents) {
+  if (keepEvents) {
+    return pairs
+  }
+  return pairs.map((pair) => ({
+    index: pair.index,
+    firstArm: pair.firstArm,
+    baseline: { arm: 'baseline', outcome: pair.baseline.outcome, phases: pair.baseline.phases },
+    candidate: { arm: 'candidate', outcome: pair.candidate.outcome, phases: pair.candidate.phases }
+  }))
 }
 
 function resolveArm(name, exe, appDir) {
@@ -107,6 +124,25 @@ async function launchArm(arm, args, launchEnv) {
 }
 
 const settle = (ms) => new Promise((resolveSleep) => setTimeout(resolveSleep, ms))
+
+/**
+ * Discarded launches: the first launch of a session pays page-cache and
+ * fixture-walk costs no later launch repeats. `--warmup N` is N rounds, and a
+ * round warms *both* arms — warming only one leaves it with a cache advantage
+ * at the first measured pair, which is a bias the ABBA schedule cannot cancel.
+ * The order alternates so neither arm sits systematically closer to that pair.
+ */
+async function runWarmups(arms, args, launchEnv) {
+  for (let round = 0; round < args.warmup; round++) {
+    const order = round % 2 === 0 ? ['baseline', 'candidate'] : ['candidate', 'baseline']
+    for (const armName of order) {
+      process.stdout.write(`[ab] warmup ${round + 1}/${args.warmup} ${armName}… `)
+      const run = await launchArm(arms[armName], args, launchEnv)
+      console.log(`${run.outcome} (discarded)`)
+      await settle(args.settleMs)
+    }
+  }
+}
 
 async function runPairs(arms, args, launchEnv) {
   const schedule = buildAbbaSchedule(args.pairs)
@@ -164,17 +200,40 @@ function reportPhases(summaries, phaseNames) {
   }
 }
 
-function reportDrift(drift) {
+/**
+ * Whether the phase verdicts above may be quoted at all. Drift means the run
+ * measured the machine; unmeasured controls mean nothing checked whether it did.
+ */
+function resolveMeasurementStatus(drift) {
+  if (drift.detected) {
+    return 'control-phase-drift'
+  }
+  return drift.measured ? 'attributable' : 'controls-unmeasured'
+}
+
+function reportDrift(drift, measurementStatus) {
   console.log('\n[ab] drift control — phases the change should not touch:')
   for (const control of drift.controls) {
+    if (control.verdict === 'no-data') {
+      continue
+    }
     console.log(
       `  ${control.phase}: ${formatSignedMs(control.shift)} ${formatInterval(control.interval)} → ${control.verdict}`
     )
   }
-  if (drift.detected) {
+  for (const phase of drift.unmeasured) {
+    console.log(`  ${phase}: no data — no pair reached this phase in both arms`)
+  }
+  if (measurementStatus === 'control-phase-drift') {
     const names = drift.drifting.map((control) => control.phase).join(', ')
     console.log(
       `\n[ab] WARNING: control phase(s) moved (${names}). The machine was not stable across this run — treat every verdict above as unproven and re-run on an idle machine.`
+    )
+    return
+  }
+  if (measurementStatus === 'controls-unmeasured') {
+    console.log(
+      '\n[ab] WARNING: no control phase produced data, so drift was never measured — not found absent. Treat every verdict above as unproven and pass --control-phases this profile actually reaches.'
     )
     return
   }
@@ -183,7 +242,7 @@ function reportDrift(drift) {
 
 async function main() {
   const args = parseFlags(process.argv, FLAG_SPEC, {
-    ...FIXTURE_ARG_DEFAULTS,
+    ...PROFILE_ARG_DEFAULTS,
     label: 'ab',
     baselineExe: null,
     candidateExe: null,
@@ -192,7 +251,8 @@ async function main() {
     pairs: 8,
     warmup: 1,
     controlPhases: DEFAULT_CONTROL_PHASES,
-    settleMs: 1500
+    settleMs: 1500,
+    keepEvents: false
   })
   assertStateProfile(args.stateProfile)
   if (!isCounterbalanced(args.pairs)) {
@@ -206,20 +266,14 @@ async function main() {
 
   const { fixtureDir, launchEnv } = prepareStartupFixture(args)
 
-  // Discarded: the first launch of a session pays page-cache and fixture-walk
-  // costs no later launch repeats, and it would land entirely in one arm.
-  for (let i = 0; i < args.warmup; i++) {
-    process.stdout.write(`[ab] warmup ${i + 1}/${args.warmup}… `)
-    const run = await launchArm(arms.baseline, args, launchEnv)
-    console.log(`${run.outcome} (discarded)`)
-    await settle(args.settleMs)
-  }
+  await runWarmups(arms, args, launchEnv)
 
   const pairs = await runPairs(arms, args, launchEnv)
   const phaseNames = Object.keys(pairs[0]?.baseline?.phases ?? {})
   const summaries = summarisePhases(pairs, phaseNames)
   const controlPhaseNames = args.controlPhases.split(',').filter(Boolean)
   const drift = detectDrift(summaries, controlPhaseNames)
+  const measurementStatus = resolveMeasurementStatus(drift)
 
   const outPath = writeBenchmarkResults(join(scriptDir, 'results'), args.label, {
     label: args.label,
@@ -228,7 +282,11 @@ async function main() {
     pairs: args.pairs,
     warmup: args.warmup,
     controlPhases: controlPhaseNames,
+    // Anything other than 'attributable' means no phase verdict below may be
+    // quoted, whether because the machine moved or because nothing checked.
+    measurementStatus,
     driftDetected: drift.detected,
+    unmeasuredControlPhases: drift.unmeasured,
     fixtureDir: sanitizeLocalPath(fixtureDir),
     fixtureFiles: args.files,
     stateProfile: args.stateProfile,
@@ -240,7 +298,7 @@ async function main() {
       baseline: sanitizeLocalPath(arms.baseline.exe ?? arms.baseline.appDir),
       candidate: sanitizeLocalPath(arms.candidate.exe ?? arms.candidate.appDir)
     },
-    runs: pairs,
+    runs: serialiseRuns(pairs, args.keepEvents),
     phaseSummaries: summaries
   })
 
@@ -248,7 +306,7 @@ async function main() {
     `\n[ab] label=${args.label} — ${pairs.length} ABBA pairs (${pairs.length * 2} launches)`
   )
   reportPhases(summaries, phaseNames)
-  reportDrift(drift)
+  reportDrift(drift, measurementStatus)
   console.log(`\n[ab] results written to ${outPath}`)
 }
 
