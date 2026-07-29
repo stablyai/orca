@@ -9,6 +9,7 @@ import { useAppStore } from '@/store'
 import { getDiskBaselineSignature } from './diff-content-signature'
 import { getRuntimeFileReadScope, readRuntimeFileContent } from '@/runtime/runtime-file-client'
 import { settingsForRuntimeOwner } from '@/runtime/runtime-rpc-client'
+import { findRuntimeWorkspaceFileRoute } from '@/lib/runtime-workspace-file-route'
 import {
   getRuntimeGitBranchDiff,
   getRuntimeGitCommitDiff,
@@ -143,6 +144,8 @@ export function useEditorPanelContentState({
         const isLiveTailLogTab =
           restoredOpenFile?.readOnly === true && restoredOpenFile.liveTail === true
         let readConnectionId = connectionId
+        let readWorktreeId = worktreeId
+        let readRelativePath = restoredOpenFile?.relativePath ?? relativePath
         if (
           resolvedConnectionId === undefined &&
           !readSettings?.activeRuntimeEnvironmentId?.trim() &&
@@ -160,18 +163,27 @@ export function useEditorPanelContentState({
           const externalSshOwnerId =
             restoredOpenFile.externalSshTargetId?.trim() ||
             (isLiveTailLogTab ? undefined : connectionId)
-          if (!externalSshOwnerId && readSettings?.activeRuntimeEnvironmentId?.trim()) {
-            // Why: runtime file RPCs are worktree-scoped, so a client-local absolute
-            // path has no route into a remote runtime workspace.
-            throw new Error('External local files are not available for remote workspaces.')
-          }
           if (!externalSshOwnerId) {
-            // Why: client-local external tabs need their main-process path grant
-            // refreshed because that authorization is only held in memory.
-            await window.api.fs.authorizeExternalPath({ targetPath: filePath })
-            // Why: that grant covers the client path, so this read must stay off the
-            // worktree's SSH host.
-            readConnectionId = undefined
+            const runtimeEnvironmentId = readSettings?.activeRuntimeEnvironmentId?.trim()
+            if (runtimeEnvironmentId) {
+              const route = findRuntimeWorkspaceFileRoute(
+                useAppStore.getState(),
+                runtimeEnvironmentId,
+                filePath
+              )
+              if (!route) {
+                throw new Error('External local files are not available for remote workspaces.')
+              }
+              readWorktreeId = route.worktreeId
+              readRelativePath = route.relativePath
+            } else {
+              // Why: client-local external tabs need their main-process path grant
+              // refreshed because that authorization is only held in memory.
+              await window.api.fs.authorizeExternalPath({ targetPath: filePath })
+              // Why: that grant covers the client path, so this read must stay off the
+              // worktree's SSH host.
+              readConnectionId = undefined
+            }
           }
         }
         const readScope = getRuntimeFileReadScope(readSettings, readConnectionId)
@@ -186,8 +198,8 @@ export function useEditorPanelContentState({
           pending = readRuntimeFileContent({
             settings: readSettings,
             filePath,
-            relativePath: restoredOpenFile?.relativePath ?? relativePath,
-            worktreeId,
+            relativePath: readRelativePath,
+            worktreeId: readWorktreeId,
             connectionId: readConnectionId,
             expectedExternalSshTargetId: restoredOpenFile?.externalSshTargetId,
             includeLocalLogMetadata: isLiveTailLogTab
