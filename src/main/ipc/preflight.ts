@@ -1,10 +1,12 @@
 import { ipcMain } from 'electron'
-import type { PathSource, ShellHydrationFailureReason } from '../../shared/types'
+import type { PathSource, ShellHydrationFailureReason } from '../../shared/shell-path-hydration-types'
 import { hydrateShellPath, mergePathSegments } from '../startup/hydrate-shell-path'
 import { getAzureDevOpsAuthStatus } from '../azure-devops/client'
 import { getBitbucketAuthStatus } from '../bitbucket/client'
 import { getGiteaAuthStatus } from '../gitea/client'
 import { getConfiguredGitLabHost } from '../gitlab/gitlab-known-host-probe'
+import { redirectPortedHostnameToEnv } from '../git/glab-ported-hostname-env'
+import { buildLocalPreflightEnv } from './preflight-local-env'
 import { mergePersistedWindowsPathAsync } from '../pty/windows-environment-path'
 import { getActiveMultiplexer } from './ssh'
 import { detectWslCommandsOnPath, type WslPreflightTarget } from './preflight-wsl-agent-detection'
@@ -223,14 +225,18 @@ async function isGlabAuthenticated(
   gitlabHost: string,
   wslTarget?: WslPreflightTarget
 ): Promise<boolean> {
-  const args = ['auth', 'status', '--hostname', gitlabHost]
+  // Why: glab rejects `--hostname host:port`, so a ported instance has to ride
+  // GITLAB_HOST instead (plus WSLENV to survive the wsl.exe boundary).
+  const { args, options } = redirectPortedHostnameToEnv(
+    ['auth', 'status', '--hostname', gitlabHost],
+    { env: buildLocalPreflightEnv() }
+  )
   try {
     await (wslTarget
-      ? execCommandInWsl(
-          wslTarget,
-          `${shellQuote('glab')} auth status --hostname ${shellQuote(gitlabHost)}`
-        )
-      : execLocalPreflightCommand('glab', args))
+      ? execCommandInWsl(wslTarget, ['glab', ...args].map(shellQuote).join(' '), {
+          env: options.env
+        })
+      : execLocalPreflightCommand('glab', args, { env: options.env }))
     return true
   } catch (error) {
     const stdout = (error as { stdout?: string }).stdout ?? ''

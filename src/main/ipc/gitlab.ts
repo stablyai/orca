@@ -7,9 +7,9 @@ import type {
   GitLabIssueUpdate,
   GitLabMRInlineCommentInput,
   GitLabMRUpdate,
-  GitLabWorkItem,
-  Repo
-} from '../../shared/types'
+  GitLabWorkItem
+} from '../../shared/gitlab-types'
+import type { Repo } from '../../shared/repo-types'
 import { getRepoExecutionHostId } from '../../shared/execution-host'
 import type { TaskSourceContext } from '../../shared/task-source-context'
 import type { Store } from '../persistence'

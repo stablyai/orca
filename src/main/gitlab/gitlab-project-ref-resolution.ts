@@ -1,5 +1,5 @@
 import { gitExecFileAsync } from '../git/runner'
-import type { IssueSourcePreference } from '../../shared/types'
+import type { IssueSourcePreference } from '../../shared/repo-types'
 import { getSshGitProvider } from '../providers/ssh-git-dispatch'
 import { clearProjectRefInFlight, runProjectRefProbeOnce } from './project-ref-inflight'
 import type { LocalGitExecOptions } from './gitlab-known-host-probe'

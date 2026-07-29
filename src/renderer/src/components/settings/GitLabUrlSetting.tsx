@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import type { GlobalSettings } from '../../../../shared/types'
+import type { GlobalSettings } from '../../../../shared/global-settings-types'
 import { normalizeGitLabUrl } from '../../../../shared/gitlab-instance-url'
 import { translate } from '@/i18n/i18n'
 import { Input } from '../ui/input'
