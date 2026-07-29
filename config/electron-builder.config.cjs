@@ -311,6 +311,17 @@ module.exports = {
     // by ${isUpdated} inside so it never runs during an update's uninstallOldVersion.
     include: resolve(__dirname, 'nsis', 'daemon-host-uninstall.nsh')
   },
+  // Why: puts Orca in the OS "Open With" list for markdown without claiming the default handler.
+  fileAssociations: [
+    {
+      ext: ['md', 'markdown'],
+      name: 'Markdown File',
+      description: 'Markdown document',
+      role: 'Editor',
+      rank: 'Alternate',
+      mimeType: 'text/markdown'
+    }
+  ],
   mac: {
     icon: 'resources/build/icon.icns',
     entitlements: 'resources/build/entitlements.mac.plist',

@@ -62,6 +62,18 @@ describe('electron-builder config', () => {
     )
   })
 
+  it('declares a markdown file association for all platforms', () => {
+    const association = electronBuilderConfig.fileAssociations?.find((entry) =>
+      entry.ext?.includes('md')
+    )
+    expect(association).toBeTruthy()
+    expect(association.ext).toEqual(['md', 'markdown'])
+    expect(association.role).toBe('Editor')
+    // Why: Alternate keeps Orca out of the default-handler slot; it only joins the Open With list.
+    expect(association.rank).toBe('Alternate')
+    expect(association.mimeType).toBe('text/markdown')
+  })
+
   it('excludes repo-only source trees from app.asar', () => {
     expect(electronBuilderConfig.files).toEqual(
       expect.arrayContaining([
