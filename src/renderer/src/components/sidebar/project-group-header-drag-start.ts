@@ -10,6 +10,12 @@ import {
   isProjectGroupHeaderDragHandleTarget,
   type ProjectGroupHeaderDragSession
 } from './project-group-header-drag-contract'
+import {
+  encodeSidebarRootSlotKey,
+  measureSidebarRootSlotDragRects,
+  SIDEBAR_ROOT_SLOT_BUCKET,
+  type SidebarRootSlot
+} from './sidebar-root-slot-order'
 import type { ProjectGroup } from '../../../../shared/types'
 
 export function createProjectGroupHeaderDragSession(args: {
@@ -20,6 +26,7 @@ export function createProjectGroupHeaderDragSession(args: {
     ProjectGroupHeaderDragBucketKey,
     readonly string[]
   >
+  sidebarRootSlots: readonly SidebarRootSlot[]
   getScrollContainer: () => HTMLElement | null
 }): ProjectGroupHeaderDragSession | null {
   if (args.event.button !== 0) {
@@ -36,10 +43,17 @@ export function createProjectGroupHeaderDragSession(args: {
     return null
   }
   const bucketKey = getProjectGroupHeaderDragBucketKey(group, args.projectGroupById)
+  const usesRootSlotOrdering =
+    bucketKey === SIDEBAR_ROOT_SLOT_BUCKET && args.sidebarRootSlots.length > 1
   const sidebarProjectGroupHeaderIds =
     args.sidebarProjectGroupHeaderIdsByBucket.get(bucketKey) ?? []
-  // Why: a lone group in a parent bucket cannot move without reparenting.
-  if (sidebarProjectGroupHeaderIds.length <= 1) {
+  // Why: root can move against ungrouped projects; nested buckets still need 2+ groups.
+  if (usesRootSlotOrdering) {
+    // ok
+  } else if (sidebarProjectGroupHeaderIds.length <= 1) {
+    return null
+  }
+  if (usesRootSlotOrdering && args.sidebarRootSlots.length <= 1) {
     return null
   }
   const container = args.getScrollContainer()
@@ -47,14 +61,20 @@ export function createProjectGroupHeaderDragSession(args: {
     return null
   }
   const handleEl = args.event.currentTarget
+  const orderedRootSlots = usesRootSlotOrdering ? args.sidebarRootSlots : null
   // Why: defer pointer capture until the threshold so ordinary group header
   // clicks still toggle collapse through the row handler.
   return {
     groupId: args.groupId,
     bucketKey,
-    sidebarProjectGroupHeaderIds,
+    sidebarProjectGroupHeaderIds: usesRootSlotOrdering
+      ? orderedRootSlots!.map(encodeSidebarRootSlotKey)
+      : sidebarProjectGroupHeaderIds,
+    orderedRootSlots,
     pointerId: args.event.pointerId,
-    headerRects: measureProjectGroupHeaderDragRects(container, bucketKey),
+    headerRects: usesRootSlotOrdering
+      ? measureSidebarRootSlotDragRects(container)
+      : measureProjectGroupHeaderDragRects(container, bucketKey),
     handleEl,
     startX: args.event.clientX,
     startY: args.event.clientY,

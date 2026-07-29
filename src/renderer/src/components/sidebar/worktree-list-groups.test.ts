@@ -2421,6 +2421,129 @@ describe('project groups', () => {
     ])
   })
 
+  it('keeps ungrouped projects after every root group when projectGroupOrder is unset', () => {
+    const groupA: ProjectGroup = {
+      id: 'group-a',
+      name: 'A',
+      parentPath: null,
+      parentGroupId: null,
+      createdFrom: 'manual',
+      tabOrder: 0,
+      isCollapsed: false,
+      color: null,
+      createdAt: 1,
+      updatedAt: 1
+    }
+    const groupB: ProjectGroup = { ...groupA, id: 'group-b', name: 'B', tabOrder: 1 }
+    const ungroupedEarly: Repo = {
+      ...repo,
+      id: 'repo-early',
+      displayName: 'early',
+      projectGroupId: null
+    }
+    const ungroupedLate: Repo = {
+      ...repo,
+      id: 'repo-late',
+      displayName: 'late',
+      projectGroupId: null
+    }
+    const wtEarly: Worktree = {
+      ...worktree,
+      id: 'wt-early',
+      repoId: ungroupedEarly.id,
+      path: '/tmp/early'
+    }
+    const wtLate: Worktree = {
+      ...worktree,
+      id: 'wt-late',
+      repoId: ungroupedLate.id,
+      path: '/tmp/late'
+    }
+
+    const rows = buildRows(
+      'repo',
+      [wtLate, wtEarly],
+      new Map([
+        [ungroupedEarly.id, ungroupedEarly],
+        [ungroupedLate.id, ungroupedLate]
+      ]),
+      null,
+      new Set(),
+      new Map([
+        [ungroupedLate.id, 0],
+        [ungroupedEarly.id, 1]
+      ]),
+      undefined,
+      'manual',
+      {},
+      new Map([
+        [wtEarly.id, wtEarly],
+        [wtLate.id, wtLate]
+      ]),
+      false,
+      undefined,
+      [groupA, groupB]
+    )
+
+    expect(rows.filter((row) => row.type === 'header').map((row) => row.key)).toEqual([
+      'project-group:group-a',
+      'project-group:group-b',
+      'repo:repo-late',
+      'repo:repo-early'
+    ])
+  })
+
+  it('interleaves ungrouped projects with root groups when projectGroupOrder is set', () => {
+    const groupA: ProjectGroup = {
+      id: 'group-a',
+      name: 'A',
+      parentPath: null,
+      parentGroupId: null,
+      createdFrom: 'manual',
+      tabOrder: 0,
+      isCollapsed: false,
+      color: null,
+      createdAt: 1,
+      updatedAt: 1
+    }
+    const groupB: ProjectGroup = { ...groupA, id: 'group-b', name: 'B', tabOrder: 2 }
+    const ungrouped: Repo = {
+      ...repo,
+      id: 'repo-mid',
+      displayName: 'mid',
+      projectGroupId: null,
+      projectGroupOrder: 1
+    }
+    const wtMid: Worktree = {
+      ...worktree,
+      id: 'wt-mid',
+      repoId: ungrouped.id,
+      path: '/tmp/mid'
+    }
+
+    const rows = buildRows(
+      'repo',
+      [wtMid],
+      new Map([[ungrouped.id, ungrouped]]),
+      null,
+      new Set(),
+      undefined,
+      undefined,
+      'manual',
+      {},
+      new Map([[wtMid.id, wtMid]]),
+      false,
+      undefined,
+      [groupA, groupB]
+    )
+
+    expect(rows.filter((row) => row.type === 'header').map((row) => row.key)).toEqual([
+      'project-group:group-a',
+      'repo:repo-mid',
+      'project-group:group-b'
+    ])
+  })
+
   it('renders repos whose Project Group metadata is missing as top-level repo rows', () => {
     const group: ProjectGroup = {
       id: 'group-1',

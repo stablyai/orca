@@ -29,6 +29,7 @@ import {
   getEffectiveProjectGroupManualRank,
   UNGROUPED_PROJECT_GROUP_KEY
 } from '../../../../shared/project-groups'
+import { getSidebarRootSlotRank } from './sidebar-root-slot-order'
 import { cloneDefaultWorkspaceStatuses } from '../../../../shared/workspace-statuses'
 import type { AppState } from '../../store/types'
 import { getGitHubPRCacheKey, getLegacyGitHubPRCacheKey } from '../../store/slices/github-cache-key'
@@ -1453,10 +1454,6 @@ export function buildRows(
     groupByProjectGroupId.delete(projectGroup.id)
   }
 
-  for (const projectGroup of childGroupsByParentId.get(null) ?? []) {
-    appendProjectGroup(projectGroup, 0)
-  }
-
   const remainingRepoEntries = [...(groupByProjectGroupId.get(null) ?? [])]
   for (const [projectGroupId, entries] of groupByProjectGroupId) {
     if (projectGroupId === null || projectGroupsById.has(projectGroupId)) {
@@ -1466,10 +1463,69 @@ export function buildRows(
     // not fetched yet; missing metadata must not make those repos disappear.
     remainingRepoEntries.push(...entries)
   }
-  appendOrderedGroups(
-    withRepoSectionDisplayLabels(sortRepoEntriesWithinGroup(remainingRepoEntries)),
-    0
+
+  // Why: root is one ordered list of slots (group tabOrder + ungrouped
+  // projectGroupOrder). Explicit ranks interleave; unset projectGroupOrder
+  // sinks after every group for backward compatibility.
+  const rootGroups = childGroupsByParentId.get(null) ?? []
+  const maxRootGroupTabOrder = rootGroups.reduce(
+    (max, group) => Math.max(max, group.tabOrder),
+    Number.NEGATIVE_INFINITY
   )
+  // Why: disambiguate basenames across the full ungrouped set before splitting
+  // into interleaved root slots (single-entry labeling would keep duplicates).
+  const sortedUngroupedEntries = withRepoSectionDisplayLabels(
+    sortRepoEntriesWithinGroup(remainingRepoEntries)
+  )
+  type RootAppendSlot =
+    | { kind: 'group'; group: ProjectGroup; rank: number; secondary: number; name: string }
+    | {
+        kind: 'repo'
+        entry: OrderedGroupEntry
+        rank: number
+        secondary: number
+        name: string
+      }
+  const rootSlots: RootAppendSlot[] = rootGroups.map((group) => ({
+    kind: 'group',
+    group,
+    rank: getSidebarRootSlotRank({
+      kind: 'project-group',
+      tabOrder: group.tabOrder,
+      maxRootGroupTabOrder,
+      ungroupedFallbackIndex: 0
+    }),
+    secondary: 0,
+    name: group.name
+  }))
+  sortedUngroupedEntries.forEach((entry, ungroupedFallbackIndex) => {
+    const repo = entry[1].repo
+    rootSlots.push({
+      kind: 'repo',
+      entry,
+      rank: getSidebarRootSlotRank({
+        kind: 'repo',
+        projectGroupOrder: repo?.projectGroupOrder,
+        maxRootGroupTabOrder,
+        ungroupedFallbackIndex
+      }),
+      secondary: 1,
+      name: entry[1].label ?? entry[0]
+    })
+  })
+  rootSlots.sort(
+    (left, right) =>
+      left.rank - right.rank ||
+      left.secondary - right.secondary ||
+      left.name.localeCompare(right.name)
+  )
+  for (const slot of rootSlots) {
+    if (slot.kind === 'group') {
+      appendProjectGroup(slot.group, 0)
+      continue
+    }
+    appendOrderedGroups([slot.entry], 0)
+  }
 
   return result
 }

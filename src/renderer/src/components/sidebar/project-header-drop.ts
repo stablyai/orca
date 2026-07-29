@@ -1,6 +1,7 @@
 import { getEffectiveProjectGroupManualRank } from '../../../../shared/project-groups'
 import {
   computeWorktreeSidebarHeaderDropPreview,
+  type WorktreeSidebarHeaderDragRect,
   type WorktreeSidebarHeaderDropPreview
 } from './worktree-sidebar-header-drop-preview'
 import type { Row } from './worktree-list-groups'
@@ -196,7 +197,7 @@ export function computeProjectHeaderDropPreview(args: {
   pointerY: number
   containerTop: number
   scrollTop: number
-  rects: readonly ProjectHeaderDragRect[]
+  rects: readonly WorktreeSidebarHeaderDropPreviewRect[]
   sidebarRepoHeaderIds: readonly string[]
   contentBottom?: number
 }): ProjectHeaderDropPreview | null {
@@ -207,9 +208,19 @@ export function computeProjectHeaderDropPreview(args: {
     scrollTop: args.scrollTop,
     rects,
     headerCount: sidebarRepoHeaderIds.length,
-    getId: (rect) => rect.repoId,
+    getId: (rect) =>
+      'slotKey' in rect && typeof rect.slotKey === 'string'
+        ? rect.slotKey
+        : 'repoId' in rect && typeof rect.repoId === 'string'
+          ? rect.repoId
+          : String(rect.headerIndex),
     contentBottom: args.contentBottom
   })
+}
+
+type WorktreeSidebarHeaderDropPreviewRect = WorktreeSidebarHeaderDragRect & {
+  repoId?: string
+  slotKey?: string
 }
 
 export function applyAllRepoInsertAt(

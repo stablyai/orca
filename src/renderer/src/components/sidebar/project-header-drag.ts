@@ -1,10 +1,11 @@
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useRef, useState } from 'react'
 
 import {
   computeProjectHeaderDropPreview,
   measureProjectHeaderDragRects
 } from './project-header-drop'
 import { commitProjectHeaderDragDrop } from './project-header-drag-commit'
+import { measureSidebarRootSlotDragRects } from './sidebar-root-slot-order'
 import {
   INITIAL_REPO_DRAG_STATE,
   PROJECT_HEADER_DRAG_THRESHOLD_PX,
@@ -14,7 +15,7 @@ import {
   type UseRepoHeaderDragArgs
 } from './project-header-drag-contract'
 import { createProjectHeaderDragSession } from './project-header-drag-start'
-import { getWorktreeSidebarDragAutoscroll } from './worktree-sidebar-drag-autoscroll'
+import { useSidebarHeaderPointerDragSession } from './sidebar-header-pointer-drag-session'
 
 // Why pointer events instead of HTML5 DnD: rows are absolutely-positioned by
 // react-virtual and unmount/remount as scroll changes, so DnD enter/leave fire
@@ -24,10 +25,13 @@ import { getWorktreeSidebarDragAutoscroll } from './worktree-sidebar-drag-autosc
 export function useRepoHeaderDrag({
   orderedRepoIds,
   sidebarRepoHeaderIdsByBucket,
+  sidebarRootSlots,
   repoById,
+  projectGroupById,
   usesProjectGroupOrdering,
   onCommitRepoOrder,
   onCommitProjectGroupOrder,
+  onCommitProjectGroupTabOrder,
   getScrollContainer
 }: UseRepoHeaderDragArgs): RepoHeaderDragController {
   const [state, setState] = useState<RepoDragState>(INITIAL_REPO_DRAG_STATE)
@@ -38,18 +42,22 @@ export function useRepoHeaderDrag({
   orderedIdsRef.current = orderedRepoIds
   const sidebarRepoHeaderIdsByBucketRef = useRef(sidebarRepoHeaderIdsByBucket)
   sidebarRepoHeaderIdsByBucketRef.current = sidebarRepoHeaderIdsByBucket
+  const sidebarRootSlotsRef = useRef(sidebarRootSlots)
+  sidebarRootSlotsRef.current = sidebarRootSlots
   const repoByIdRef = useRef(repoById)
   repoByIdRef.current = repoById
+  const projectGroupByIdRef = useRef(projectGroupById)
+  projectGroupByIdRef.current = projectGroupById
   const usesProjectGroupOrderingRef = useRef(usesProjectGroupOrdering)
   usesProjectGroupOrderingRef.current = usesProjectGroupOrdering
   const onCommitRepoOrderRef = useRef(onCommitRepoOrder)
   onCommitRepoOrderRef.current = onCommitRepoOrder
   const onCommitProjectGroupOrderRef = useRef(onCommitProjectGroupOrder)
   onCommitProjectGroupOrderRef.current = onCommitProjectGroupOrder
+  const onCommitProjectGroupTabOrderRef = useRef(onCommitProjectGroupTabOrder)
+  onCommitProjectGroupTabOrderRef.current = onCommitProjectGroupTabOrder
   const getContainerRef = useRef(getScrollContainer)
   getContainerRef.current = getScrollContainer
-  const autoscrollLastFrameTimeRef = useRef<number | null>(null)
-  const autoscrollFrameIdRef = useRef<number | null>(null)
 
   const dragSessionRef = useRef<ProjectHeaderDragSession | null>(null)
   const clickSwallowTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
@@ -60,7 +68,9 @@ export function useRepoHeaderDrag({
     if (!container || !session) {
       return []
     }
-    const rects = measureProjectHeaderDragRects(container, session.bucketKey)
+    const rects = session.orderedRootSlots
+      ? measureSidebarRootSlotDragRects(container)
+      : measureProjectHeaderDragRects(container, session.bucketKey)
     session.headerRects = rects
     return rects
   }, [])
@@ -101,13 +111,24 @@ export function useRepoHeaderDrag({
     []
   )
 
-  const cancelAutoscroll = useCallback(() => {
-    if (autoscrollFrameIdRef.current !== null) {
-      window.cancelAnimationFrame(autoscrollFrameIdRef.current)
-      autoscrollFrameIdRef.current = null
-    }
-    autoscrollLastFrameTimeRef.current = null
-  }, [])
+  const endDragRef = useRef<(commit: boolean) => void>(() => {})
+  const { cancelAutoscroll, releasePointerCapture, armClickSwallow } =
+    useSidebarHeaderPointerDragSession({
+      sessionArmed,
+      dragSessionRef,
+      clickSwallowTimeoutRef,
+      getScrollContainer: () => getContainerRef.current(),
+      dragThresholdPx: PROJECT_HEADER_DRAG_THRESHOLD_PX,
+      isDragging: state.draggingRepoId !== null,
+      refreshHeaderRects,
+      onPromoted: (session) => {
+        setState({ draggingRepoId: session.repoId, dropIndex: null, dropIndicatorY: null })
+      },
+      onPointerMoveDrop: (session, clientY) => {
+        applyDrop(session.repoId, computeDrop(clientY))
+      },
+      endDrag: (commit) => endDragRef.current(commit)
+    })
 
   const endDrag = useCallback(
     (commit: boolean) => {
@@ -118,26 +139,9 @@ export function useRepoHeaderDrag({
         setSessionArmed(false)
         return
       }
-      try {
-        session.handleEl.releasePointerCapture(session.pointerId)
-      } catch {
-        // capture may already be released (pointercancel, element unmounted)
-      }
+      releasePointerCapture(session)
       if (session.promoted) {
-        const handleEl = session.handleEl
-        const swallow = (e: MouseEvent): void => {
-          const target = e.target as Node | null
-          if (target && handleEl.contains(target)) {
-            e.stopPropagation()
-            e.preventDefault()
-          }
-          window.removeEventListener('click', swallow, true)
-        }
-        window.addEventListener('click', swallow, true)
-        clickSwallowTimeoutRef.current = setTimeout(() => {
-          window.removeEventListener('click', swallow, true)
-          clickSwallowTimeoutRef.current = null
-        }, 0)
+        armClickSwallow(session)
       }
       const sidebarDropIndex =
         commit && session.promoted && latestDropIndexRef.current !== null
@@ -149,159 +153,21 @@ export function useRepoHeaderDrag({
       if (sidebarDropIndex === null) {
         return
       }
-
       commitProjectHeaderDragDrop({
         session,
         sidebarDropIndex,
         orderedRepoIds: orderedIdsRef.current,
         repoById: repoByIdRef.current,
+        projectGroupById: projectGroupByIdRef.current,
         usesProjectGroupOrdering: usesProjectGroupOrderingRef.current,
         onCommitRepoOrder: onCommitRepoOrderRef.current,
-        onCommitProjectGroupOrder: onCommitProjectGroupOrderRef.current
+        onCommitProjectGroupOrder: onCommitProjectGroupOrderRef.current,
+        onCommitProjectGroupTabOrder: onCommitProjectGroupTabOrderRef.current
       })
     },
-    [cancelAutoscroll]
+    [armClickSwallow, cancelAutoscroll, releasePointerCapture]
   )
-
-  const runAutoscrollFrame = useCallback(
-    (frameTime: number) => {
-      autoscrollFrameIdRef.current = null
-      const session = dragSessionRef.current
-      const container = getContainerRef.current()
-      if (!session?.promoted || !container) {
-        cancelAutoscroll()
-        return
-      }
-
-      const previousFrameTime = autoscrollLastFrameTimeRef.current ?? frameTime
-      autoscrollLastFrameTimeRef.current = frameTime
-      const autoscroll = getWorktreeSidebarDragAutoscroll({
-        point: { clientX: 0, clientY: session.latestPointerY },
-        containerRect: container.getBoundingClientRect(),
-        scrollTop: container.scrollTop,
-        scrollHeight: container.scrollHeight,
-        clientHeight: container.clientHeight,
-        elapsedMs: frameTime - previousFrameTime
-      })
-      if (autoscroll) {
-        container.scrollTop = autoscroll.scrollTop
-        refreshHeaderRects()
-      }
-
-      applyDrop(session.repoId, computeDrop(session.latestPointerY))
-
-      autoscrollFrameIdRef.current = window.requestAnimationFrame(runAutoscrollFrame)
-    },
-    [applyDrop, cancelAutoscroll, computeDrop, refreshHeaderRects]
-  )
-
-  const ensureAutoscroll = useCallback(() => {
-    if (autoscrollFrameIdRef.current !== null) {
-      return
-    }
-    autoscrollLastFrameTimeRef.current = null
-    autoscrollFrameIdRef.current = window.requestAnimationFrame(runAutoscrollFrame)
-  }, [runAutoscrollFrame])
-
-  useEffect(() => {
-    if (!sessionArmed) {
-      return
-    }
-    const onPointerMove = (e: PointerEvent): void => {
-      const session = dragSessionRef.current
-      if (!session || e.pointerId !== session.pointerId) {
-        return
-      }
-      session.latestPointerY = e.clientY
-      if (!session.promoted) {
-        const dx = e.clientX - session.startX
-        const dy = e.clientY - session.startY
-        if (
-          dx * dx + dy * dy <
-          PROJECT_HEADER_DRAG_THRESHOLD_PX * PROJECT_HEADER_DRAG_THRESHOLD_PX
-        ) {
-          return
-        }
-        session.promoted = true
-        // Why: setPointerCapture can throw if the element is detached. Check
-        // isConnected first to avoid the throw; the global pointer listeners
-        // still fire, so dragging keeps working even if capture fails.
-        if (session.handleEl.isConnected) {
-          try {
-            session.handleEl.setPointerCapture(session.pointerId)
-          } catch {
-            // Ignore capture failure; global listeners will handle the drag.
-          }
-        }
-        refreshHeaderRects()
-        setState({ draggingRepoId: session.repoId, dropIndex: null, dropIndicatorY: null })
-      }
-      refreshHeaderRects()
-      applyDrop(session.repoId, computeDrop(e.clientY))
-      ensureAutoscroll()
-    }
-    const onPointerUp = (e: PointerEvent): void => {
-      const session = dragSessionRef.current
-      if (!session || e.pointerId !== session.pointerId) {
-        return
-      }
-      endDrag(true)
-    }
-    const onPointerCancel = (e: PointerEvent): void => {
-      const session = dragSessionRef.current
-      if (!session || e.pointerId !== session.pointerId) {
-        return
-      }
-      endDrag(false)
-    }
-    const onKeyDown = (e: KeyboardEvent): void => {
-      if (e.key === 'Escape') {
-        endDrag(false)
-      }
-    }
-    const onBlur = (): void => endDrag(false)
-
-    window.addEventListener('pointermove', onPointerMove)
-    window.addEventListener('pointerup', onPointerUp)
-    window.addEventListener('pointercancel', onPointerCancel)
-    window.addEventListener('keydown', onKeyDown)
-    window.addEventListener('blur', onBlur)
-    return () => {
-      window.removeEventListener('pointermove', onPointerMove)
-      window.removeEventListener('pointerup', onPointerUp)
-      window.removeEventListener('pointercancel', onPointerCancel)
-      window.removeEventListener('keydown', onKeyDown)
-      window.removeEventListener('blur', onBlur)
-      cancelAutoscroll()
-      if (clickSwallowTimeoutRef.current !== null) {
-        clearTimeout(clickSwallowTimeoutRef.current)
-        clickSwallowTimeoutRef.current = null
-      }
-    }
-  }, [
-    applyDrop,
-    cancelAutoscroll,
-    computeDrop,
-    endDrag,
-    ensureAutoscroll,
-    refreshHeaderRects,
-    sessionArmed
-  ])
-
-  useEffect(() => {
-    if (state.draggingRepoId === null) {
-      return
-    }
-    const body = document.body
-    const prevCursor = body.style.cursor
-    const prevUserSelect = body.style.userSelect
-    body.style.cursor = 'grabbing'
-    body.style.userSelect = 'none'
-    return () => {
-      body.style.cursor = prevCursor
-      body.style.userSelect = prevUserSelect
-    }
-  }, [state.draggingRepoId])
+  endDragRef.current = endDrag
 
   const onHandlePointerDown = useCallback(
     (event: React.PointerEvent<HTMLElement>, repoId: string) => {
@@ -310,6 +176,8 @@ export function useRepoHeaderDrag({
         repoId,
         repoById: repoByIdRef.current,
         sidebarRepoHeaderIdsByBucket: sidebarRepoHeaderIdsByBucketRef.current,
+        sidebarRootSlots: sidebarRootSlotsRef.current,
+        usesProjectGroupOrdering: usesProjectGroupOrderingRef.current,
         getScrollContainer: getContainerRef.current
       })
       if (!session) {

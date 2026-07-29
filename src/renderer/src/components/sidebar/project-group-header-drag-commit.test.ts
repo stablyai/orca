@@ -3,7 +3,7 @@ import { describe, expect, it, vi } from 'vitest'
 
 import { commitProjectGroupHeaderDragDrop } from './project-group-header-drag-commit'
 import type { ProjectGroupHeaderDragSession } from './project-group-header-drag-contract'
-import type { ProjectGroup } from '../../../../shared/types'
+import type { ProjectGroup, Repo } from '../../../../shared/types'
 
 function group(id: string, overrides: Partial<ProjectGroup> = {}): ProjectGroup {
   return {
@@ -23,12 +23,14 @@ function group(id: string, overrides: Partial<ProjectGroup> = {}): ProjectGroup 
 
 function makeSession(
   groupId: string,
-  sidebarProjectGroupHeaderIds: readonly string[]
+  sidebarProjectGroupHeaderIds: readonly string[],
+  orderedRootSlots: ProjectGroupHeaderDragSession['orderedRootSlots'] = null
 ): ProjectGroupHeaderDragSession {
   return {
     groupId,
     bucketKey: 'root',
     sidebarProjectGroupHeaderIds,
+    orderedRootSlots,
     pointerId: 1,
     headerRects: [],
     handleEl: document.createElement('div'),
@@ -53,7 +55,9 @@ describe('commitProjectGroupHeaderDragDrop', () => {
       session: makeSession('c', ['a', 'b', 'c']),
       sidebarDropIndex: 0,
       projectGroupById,
-      onCommitProjectGroupTabOrder
+      repoById: new Map(),
+      onCommitProjectGroupTabOrder,
+      onCommitProjectGroupOrder: vi.fn()
     })
 
     expect(onCommitProjectGroupTabOrder.mock.calls).toEqual([
@@ -77,7 +81,9 @@ describe('commitProjectGroupHeaderDragDrop', () => {
       session: makeSession('sibling-b', ['sibling-a', 'sibling-b']),
       sidebarDropIndex: 0,
       projectGroupById,
-      onCommitProjectGroupTabOrder
+      repoById: new Map(),
+      onCommitProjectGroupTabOrder,
+      onCommitProjectGroupOrder: vi.fn()
     })
 
     expect(onCommitProjectGroupTabOrder.mock.calls).toEqual([
@@ -95,7 +101,9 @@ describe('commitProjectGroupHeaderDragDrop', () => {
       session: makeSession('b', ['a', 'b', 'c']),
       sidebarDropIndex: 2,
       projectGroupById,
-      onCommitProjectGroupTabOrder
+      repoById: new Map(),
+      onCommitProjectGroupTabOrder,
+      onCommitProjectGroupOrder: vi.fn()
     })
 
     expect(onCommitProjectGroupTabOrder).not.toHaveBeenCalled()
@@ -110,9 +118,104 @@ describe('commitProjectGroupHeaderDragDrop', () => {
       session: makeSession('c', ['a', 'b']),
       sidebarDropIndex: 0,
       projectGroupById,
-      onCommitProjectGroupTabOrder
+      repoById: new Map(),
+      onCommitProjectGroupTabOrder,
+      onCommitProjectGroupOrder: vi.fn()
     })
 
     expect(onCommitProjectGroupTabOrder).not.toHaveBeenCalled()
+  })
+
+  it('renumbers root groups and ungrouped projects together after a root drop', () => {
+    const onCommitProjectGroupTabOrder = vi.fn()
+    const onCommitProjectGroupOrder = vi.fn()
+    const groups = [group('group-a', { tabOrder: 0 }), group('group-b', { tabOrder: 1 })]
+    const repos: Repo[] = [
+      {
+        id: 'repo-x',
+        path: '/x',
+        displayName: 'x',
+        badgeColor: '#000',
+        addedAt: 0,
+        projectGroupId: null,
+        projectGroupOrder: 2
+      } as Repo
+    ]
+    const projectGroupById = new Map(groups.map((entry) => [entry.id, entry]))
+    const repoById = new Map(repos.map((repo) => [repo.id, repo]))
+    const orderedRootSlots = [
+      { kind: 'project-group' as const, id: 'group-a' },
+      { kind: 'project-group' as const, id: 'group-b' },
+      { kind: 'repo' as const, id: 'repo-x' }
+    ]
+
+    commitProjectGroupHeaderDragDrop({
+      session: makeSession(
+        'group-b',
+        orderedRootSlots.map((slot) =>
+          slot.kind === 'project-group' ? `project-group:${slot.id}` : `repo:${slot.id}`
+        ),
+        orderedRootSlots
+      ),
+      // Drop group-b before group-a → [group-b, group-a, repo-x]
+      sidebarDropIndex: 0,
+      projectGroupById,
+      repoById,
+      onCommitProjectGroupTabOrder,
+      onCommitProjectGroupOrder
+    })
+
+    expect(onCommitProjectGroupTabOrder.mock.calls).toEqual([
+      ['group-b', 0],
+      ['group-a', 1]
+    ])
+    // Why: repo-x stays at index 2 so its projectGroupOrder is already dense.
+    expect(onCommitProjectGroupOrder).not.toHaveBeenCalled()
+  })
+
+  it('writes projectGroupOrder when a root group drop changes an ungrouped slot index', () => {
+    const onCommitProjectGroupTabOrder = vi.fn()
+    const onCommitProjectGroupOrder = vi.fn()
+    const groups = [group('group-a', { tabOrder: 0 }), group('group-b', { tabOrder: 1 })]
+    const repos: Repo[] = [
+      {
+        id: 'repo-x',
+        path: '/x',
+        displayName: 'x',
+        badgeColor: '#000',
+        addedAt: 0,
+        projectGroupId: null,
+        projectGroupOrder: 2
+      } as Repo
+    ]
+    const projectGroupById = new Map(groups.map((entry) => [entry.id, entry]))
+    const repoById = new Map(repos.map((repo) => [repo.id, repo]))
+    const orderedRootSlots = [
+      { kind: 'project-group' as const, id: 'group-a' },
+      { kind: 'project-group' as const, id: 'group-b' },
+      { kind: 'repo' as const, id: 'repo-x' }
+    ]
+
+    commitProjectGroupHeaderDragDrop({
+      session: makeSession(
+        'group-a',
+        orderedRootSlots.map((slot) =>
+          slot.kind === 'project-group' ? `project-group:${slot.id}` : `repo:${slot.id}`
+        ),
+        orderedRootSlots
+      ),
+      // Drop group-a after repo-x → [group-b, repo-x, group-a]
+      sidebarDropIndex: 3,
+      projectGroupById,
+      repoById,
+      onCommitProjectGroupTabOrder,
+      onCommitProjectGroupOrder
+    })
+
+    expect(onCommitProjectGroupTabOrder.mock.calls).toEqual([
+      ['group-b', 0],
+      ['group-a', 2]
+    ])
+    expect(onCommitProjectGroupOrder).toHaveBeenCalledWith('repo-x', null, 1)
   })
 })

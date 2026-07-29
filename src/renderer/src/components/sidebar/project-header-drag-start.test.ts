@@ -39,6 +39,8 @@ describe('createProjectHeaderDragSession', () => {
       repoId: 'repo-a',
       repoById,
       sidebarRepoHeaderIdsByBucket,
+      sidebarRootSlots: [],
+      usesProjectGroupOrdering: false,
       getScrollContainer: () => scrollContainer
     })
 
@@ -69,6 +71,8 @@ describe('createProjectHeaderDragSession', () => {
       repoId: 'repo-a',
       repoById,
       sidebarRepoHeaderIdsByBucket,
+      sidebarRootSlots: [],
+      usesProjectGroupOrdering: false,
       getScrollContainer: () => scrollContainer
     })
 
@@ -100,6 +104,8 @@ describe('createProjectHeaderDragSession', () => {
       repoId: 'repo-a',
       repoById,
       sidebarRepoHeaderIdsByBucket,
+      sidebarRootSlots: [],
+      usesProjectGroupOrdering: false,
       getScrollContainer: () => scrollContainer
     })
 
@@ -132,6 +138,8 @@ describe('createProjectHeaderDragSession', () => {
       repoId: 'repo-a',
       repoById,
       sidebarRepoHeaderIdsByBucket,
+      sidebarRootSlots: [],
+      usesProjectGroupOrdering: false,
       getScrollContainer: () => scrollContainer
     })
 

@@ -1,3 +1,4 @@
+import type { SidebarRootSlot } from './sidebar-root-slot-order'
 import { estimateRenderRowSize, type RenderRow } from './worktree-list-virtual-rows'
 
 function getEstimatedRenderRowStarts(
@@ -62,11 +63,42 @@ function findProjectGroupSectionEndIndex(
   return rows.length
 }
 
+function findRootSlotRenderRowIndex(rows: readonly RenderRow[], slot: SidebarRootSlot): number {
+  if (slot.kind === 'repo') {
+    return findRepoHeaderRenderRowIndex(rows, slot.id)
+  }
+  return findProjectGroupHeaderRenderRowIndex(rows, slot.id)
+}
+
+function getNextRootSlotEndIndex(
+  rows: readonly RenderRow[],
+  sidebarRootSlots: readonly SidebarRootSlot[] | undefined,
+  slot: SidebarRootSlot,
+  fallbackStartIndex: number,
+  depth: number,
+  preferProjectGroupSectionEnd: boolean
+): number {
+  if (sidebarRootSlots && sidebarRootSlots.length > 0) {
+    const rootIndex = sidebarRootSlots.findIndex(
+      (candidate) => candidate.kind === slot.kind && candidate.id === slot.id
+    )
+    const nextSlot = rootIndex >= 0 ? sidebarRootSlots[rootIndex + 1] : undefined
+    if (nextSlot) {
+      return findRootSlotRenderRowIndex(rows, nextSlot)
+    }
+    return preferProjectGroupSectionEnd
+      ? findProjectGroupSectionEndIndex(rows, fallbackStartIndex, depth)
+      : findNextHeaderRenderRowIndex(rows, fallbackStartIndex)
+  }
+  return -1
+}
+
 export function getRepoHeaderSectionEndByRepoId(args: {
   rows: readonly RenderRow[]
   firstHeaderIndex: number
   sidebarRepoHeaderIdsByBucket: ReadonlyMap<string, readonly string[]>
   repoHeaderBucketByRepoId: ReadonlyMap<string, string>
+  sidebarRootSlots?: readonly SidebarRootSlot[]
 }): Map<string, number> {
   const rowStarts = getEstimatedRenderRowStarts(args.rows, args.firstHeaderIndex)
   const sectionEndByRepoId = new Map<string, number>()
@@ -77,12 +109,25 @@ export function getRepoHeaderSectionEndByRepoId(args: {
       continue
     }
     const bucketKey = args.repoHeaderBucketByRepoId.get(repoId)
-    const bucketRepoIds = bucketKey ? args.sidebarRepoHeaderIdsByBucket.get(bucketKey) : undefined
-    const bucketIndex = bucketRepoIds?.indexOf(repoId) ?? -1
-    const nextRepoId = bucketIndex >= 0 ? bucketRepoIds?.[bucketIndex + 1] : undefined
-    const endIndex = nextRepoId
-      ? findRepoHeaderRenderRowIndex(args.rows, nextRepoId)
-      : findNextHeaderRenderRowIndex(args.rows, index + 1)
+    const usesRootSlots = bucketKey === 'ungrouped' && (args.sidebarRootSlots?.length ?? 0) > 0
+    let endIndex = usesRootSlots
+      ? getNextRootSlotEndIndex(
+          args.rows,
+          args.sidebarRootSlots,
+          { kind: 'repo', id: repoId },
+          index + 1,
+          0,
+          false
+        )
+      : -1
+    if (endIndex < 0) {
+      const bucketRepoIds = bucketKey ? args.sidebarRepoHeaderIdsByBucket.get(bucketKey) : undefined
+      const bucketIndex = bucketRepoIds?.indexOf(repoId) ?? -1
+      const nextRepoId = bucketIndex >= 0 ? bucketRepoIds?.[bucketIndex + 1] : undefined
+      endIndex = nextRepoId
+        ? findRepoHeaderRenderRowIndex(args.rows, nextRepoId)
+        : findNextHeaderRenderRowIndex(args.rows, index + 1)
+    }
     sectionEndByRepoId.set(
       repoId,
       rowStarts[endIndex >= 0 ? endIndex : args.rows.length] ?? rowStarts[args.rows.length] ?? 0
@@ -96,6 +141,7 @@ export function getProjectGroupHeaderSectionEndByGroupId(args: {
   firstHeaderIndex: number
   sidebarProjectGroupHeaderIdsByBucket: ReadonlyMap<string, readonly string[]>
   projectGroupHeaderBucketByGroupId: ReadonlyMap<string, string>
+  sidebarRootSlots?: readonly SidebarRootSlot[]
 }): Map<string, number> {
   const rowStarts = getEstimatedRenderRowStarts(args.rows, args.firstHeaderIndex)
   const sectionEndByGroupId = new Map<string, number>()
@@ -113,15 +159,28 @@ export function getProjectGroupHeaderSectionEndByGroupId(args: {
       continue
     }
     const bucketKey = args.projectGroupHeaderBucketByGroupId.get(groupId)
-    const bucketGroupIds = bucketKey
-      ? args.sidebarProjectGroupHeaderIdsByBucket.get(bucketKey)
-      : undefined
-    const bucketIndex = bucketGroupIds?.indexOf(groupId) ?? -1
-    const nextGroupId = bucketIndex >= 0 ? bucketGroupIds?.[bucketIndex + 1] : undefined
     const depth = projectGroupHeader.row.projectGroupDepth ?? 0
-    const endIndex = nextGroupId
-      ? findProjectGroupHeaderRenderRowIndex(args.rows, nextGroupId)
-      : findProjectGroupSectionEndIndex(args.rows, index + 1, depth)
+    const usesRootSlots = bucketKey === 'root' && (args.sidebarRootSlots?.length ?? 0) > 0
+    let endIndex = usesRootSlots
+      ? getNextRootSlotEndIndex(
+          args.rows,
+          args.sidebarRootSlots,
+          { kind: 'project-group', id: groupId },
+          index + 1,
+          depth,
+          true
+        )
+      : -1
+    if (endIndex < 0) {
+      const bucketGroupIds = bucketKey
+        ? args.sidebarProjectGroupHeaderIdsByBucket.get(bucketKey)
+        : undefined
+      const bucketIndex = bucketGroupIds?.indexOf(groupId) ?? -1
+      const nextGroupId = bucketIndex >= 0 ? bucketGroupIds?.[bucketIndex + 1] : undefined
+      endIndex = nextGroupId
+        ? findProjectGroupHeaderRenderRowIndex(args.rows, nextGroupId)
+        : findProjectGroupSectionEndIndex(args.rows, index + 1, depth)
+    }
     sectionEndByGroupId.set(
       groupId,
       rowStarts[endIndex >= 0 ? endIndex : args.rows.length] ?? rowStarts[args.rows.length] ?? 0

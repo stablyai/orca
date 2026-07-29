@@ -6,19 +6,53 @@ import {
   mapSidebarRepoDropIndexToAllRepoInsertAt
 } from './project-header-drop'
 import type { ProjectHeaderDragSession } from './project-header-drag-contract'
-import type { Repo } from '../../../../shared/types'
+import {
+  applyRootSlotOrderUpdates,
+  getRootSlotOrderUpdatesForSidebarDrop
+} from './sidebar-root-slot-order'
+import type { ProjectGroup, Repo } from '../../../../shared/types'
 
 export function commitProjectHeaderDragDrop(args: {
   session: ProjectHeaderDragSession
   sidebarDropIndex: number
   orderedRepoIds: readonly string[]
   repoById: ReadonlyMap<string, Repo>
+  projectGroupById: ReadonlyMap<string, ProjectGroup>
   usesProjectGroupOrdering: boolean
   onCommitRepoOrder: (orderedIds: string[]) => void
   onCommitProjectGroupOrder: (repoId: string, projectGroupId: string | null, order: number) => void
+  onCommitProjectGroupTabOrder: (groupId: string, tabOrder: number) => void
 }): void {
   const draggedRepo = args.repoById.get(args.session.repoId)
   if (!draggedRepo) {
+    return
+  }
+
+  const orderedRootSlots = args.session.orderedRootSlots
+  if (orderedRootSlots && orderedRootSlots.length > 0) {
+    const sourceIndex = orderedRootSlots.findIndex(
+      (slot) => slot.kind === 'repo' && slot.id === args.session.repoId
+    )
+    // Why: both slots bordering the dragged header are visual no-ops.
+    if (
+      sourceIndex === -1 ||
+      args.sidebarDropIndex === sourceIndex ||
+      args.sidebarDropIndex === sourceIndex + 1
+    ) {
+      return
+    }
+    const updates = getRootSlotOrderUpdatesForSidebarDrop({
+      orderedRootSlots,
+      dragged: { kind: 'repo', id: args.session.repoId },
+      sidebarDropIndex: args.sidebarDropIndex,
+      projectGroupById: args.projectGroupById,
+      repoById: args.repoById
+    })
+    applyRootSlotOrderUpdates({
+      updates,
+      onCommitProjectGroupTabOrder: args.onCommitProjectGroupTabOrder,
+      onCommitProjectGroupOrder: args.onCommitProjectGroupOrder
+    })
     return
   }
 
