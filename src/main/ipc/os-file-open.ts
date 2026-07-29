@@ -2,12 +2,15 @@ import { ipcMain } from 'electron'
 import type { WebContents } from 'electron'
 import { filterExistingFiles, type OsFileOpenRequestQueue } from '../startup/os-file-open-requests'
 
-// Why: WebContents survives renderer reloads, so track per-sender binding to avoid stacking 'destroyed' listeners.
-const boundSenders = new WeakSet<WebContents>()
-
 export function registerOsFileOpenHandlers(queue: OsFileOpenRequestQueue): void {
+  // Why: per-registration state — WebContents survives reloads (dedupes 'destroyed' listeners),
+  // and the single deliver slot must stay with whoever last took it (a stale sender's teardown must not clobber a newer owner).
+  const boundSenders = new WeakSet<WebContents>()
+  let currentOwner: WebContents | null = null
+
   ipcMain.handle('osFileOpen:takePending', async (event): Promise<string[]> => {
     const sender = event.sender as WebContents
+    currentOwner = sender
     // Why: taking the batch is the renderer's readiness signal, so later arrivals push instead of buffering.
     queue.setDeliver((filePath) => {
       if (!sender.isDestroyed()) {
@@ -19,7 +22,10 @@ export function registerOsFileOpenHandlers(queue: OsFileOpenRequestQueue): void 
       const cleanup = (): void => {
         boundSenders.delete(sender)
         sender.removeListener('destroyed', cleanup)
-        queue.setDeliver(null)
+        if (currentOwner === sender) {
+          currentOwner = null
+          queue.setDeliver(null)
+        }
       }
       sender.once('destroyed', cleanup)
     }

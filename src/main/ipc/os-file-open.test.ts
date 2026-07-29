@@ -109,4 +109,51 @@ describe('registerOsFileOpenHandlers', () => {
 
     expect(sender.destroyedListenerCount()).toBe(1)
   })
+
+  it('switches delivery to the most recently registered sender, not the first', async () => {
+    const queue = createOsFileOpenRequestQueue()
+    registerOsFileOpenHandlers(queue)
+    const handler = getHandler('osFileOpen:takePending')
+
+    const senderA = createFakeSender()
+    const senderB = createFakeSender()
+    await handler({ sender: senderA })
+    await handler({ sender: senderB })
+
+    queue.enqueue('/Users/x/later.md')
+    expect(senderB.send).toHaveBeenCalledWith('osFileOpen:opened', '/Users/x/later.md')
+    expect(senderA.send).not.toHaveBeenCalled()
+  })
+
+  it('does not let a superseded sender clobber the current owner when destroyed', async () => {
+    const queue = createOsFileOpenRequestQueue()
+    registerOsFileOpenHandlers(queue)
+    const handler = getHandler('osFileOpen:takePending')
+
+    const senderA = createFakeSender()
+    const senderB = createFakeSender()
+    await handler({ sender: senderA })
+    await handler({ sender: senderB })
+    senderA.destroy()
+
+    queue.enqueue('/Users/x/later.md')
+    expect(senderB.send).toHaveBeenCalledWith('osFileOpen:opened', '/Users/x/later.md')
+  })
+
+  it('clears delivery and buffers into pending when the current owner is destroyed', async () => {
+    const queue = createOsFileOpenRequestQueue()
+    registerOsFileOpenHandlers(queue)
+    const handler = getHandler('osFileOpen:takePending')
+
+    const senderA = createFakeSender()
+    const senderB = createFakeSender()
+    await handler({ sender: senderA })
+    await handler({ sender: senderB })
+    senderB.destroy()
+
+    queue.enqueue('/Users/x/later.md')
+    expect(senderA.send).not.toHaveBeenCalled()
+    expect(senderB.send).not.toHaveBeenCalled()
+    expect(queue.drain()).toEqual(['/Users/x/later.md'])
+  })
 })
