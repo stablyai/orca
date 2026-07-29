@@ -340,7 +340,7 @@ body {
 
 .agent-list {
   padding: 6px 0 10px;
-  max-height: 360px;
+  max-height: 560px;
   overflow-y: auto;
 }
 
