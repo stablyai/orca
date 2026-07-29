@@ -7,6 +7,7 @@ const projectDir = path.resolve(import.meta.dirname, '../..')
 const scriptPath = import.meta.filename
 const insideSessionFlag = '--inside-session'
 const processStopTimeoutMs = 5_000
+const processKillTimeoutMs = 1_000
 
 function delay(milliseconds) {
   return new Promise((resolve) => setTimeout(resolve, milliseconds))
@@ -64,8 +65,15 @@ async function stopOwnedProcessGroup(processGroupId) {
       throw error
     }
   }
-  await delay(100)
-  return processGroupMembers(processGroupId)
+  const killDeadline = Date.now() + processKillTimeoutMs
+  do {
+    members = processGroupMembers(processGroupId)
+    if (members.length === 0) {
+      return []
+    }
+    await delay(100)
+  } while (Date.now() < killDeadline)
+  return members
 }
 
 function commandOutput(command, args) {

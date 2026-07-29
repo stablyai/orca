@@ -15,7 +15,15 @@ describe('terminal IME e2e workflow', () => {
       expect.arrayContaining([
         'config/patches/@xterm__xterm@6.1.0-beta.287.patch',
         'config/scripts/run-terminal-ibus-hangul-e2e.mjs',
-        'src/renderer/src/components/terminal-pane/terminal-ime-*.ts',
+        'src/renderer/src/components/terminal-pane/keyboard-handlers.ts',
+        'src/renderer/src/components/terminal-pane/keyboard-handlers-ime.test.tsx',
+        'src/renderer/src/components/terminal-pane/pty-connection.ts',
+        'src/renderer/src/components/terminal-pane/pty-connection.test.ts',
+        'src/renderer/src/components/terminal-pane/terminal-ime-*',
+        'src/renderer/src/components/terminal-pane/use-terminal-pane-lifecycle.ts',
+        'src/renderer/src/components/terminal-pane/xterm-bypass-policy.ts',
+        'src/renderer/src/components/terminal-pane/xterm-bypass-policy.test.ts',
+        'tests/e2e/korean-ime-terminal-shift-enter-commit.spec.ts',
         'tests/e2e/terminal-ibus-hangul-native.spec.ts',
         'tests/e2e/terminal-ime-*.ts'
       ])
@@ -34,6 +42,8 @@ describe('terminal IME e2e workflow', () => {
     expect(installRun).toContain('xfwm4')
     expect(installRun).toContain('xvfb')
     expect(installRun).toContain('dbus-x11')
+    expect(installRun).toContain('dconf-gsettings-backend')
+    expect(installRun).toContain('libglib2.0-bin')
   })
 
   it('runs deterministic boundaries before the real IBus suite', () => {
@@ -62,11 +72,22 @@ describe('terminal IME e2e workflow', () => {
     expect(runner).toContain("['initial-input-mode', 'hangul']")
     expect(runner).toContain("['hangul-keyboard', '2']")
     expect(runner).toContain("process.kill(-processGroupId, 'SIGTERM')")
+    expect(runner).toContain("process.kill(-processGroupId, 'SIGKILL')")
+    expect(runner).toContain('const killDeadline = Date.now() + processKillTimeoutMs')
     expect(runner).toMatch(
       /'test:e2e:headful',\s*'--workers=1',\s*'--',\s*'tests\/e2e\/terminal-ibus-hangul-native\.spec\.ts'/
     )
     expect(runner).not.toContain("'--replace'")
     expect(runner).not.toContain('killall')
     expect(runner).not.toContain('pkill')
+  })
+
+  it('bounds blocking native input commands', () => {
+    const nativeSpec = readFileSync(
+      join(projectDir, 'tests/e2e/terminal-ibus-hangul-native.spec.ts'),
+      'utf8'
+    )
+
+    expect(nativeSpec.match(/timeout: NATIVE_COMMAND_TIMEOUT_MS/g)).toHaveLength(3)
   })
 })

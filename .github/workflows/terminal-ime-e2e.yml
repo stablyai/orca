@@ -9,8 +9,16 @@ on:
       - 'config/scripts/terminal-ime-e2e-workflow.test.mjs'
       - 'package.json'
       - 'pnpm-lock.yaml'
-      - 'src/renderer/src/components/terminal-pane/terminal-ime-*.ts'
+      - 'src/renderer/src/components/terminal-pane/keyboard-handlers.ts'
+      - 'src/renderer/src/components/terminal-pane/keyboard-handlers-ime.test.tsx'
+      - 'src/renderer/src/components/terminal-pane/pty-connection.ts'
+      - 'src/renderer/src/components/terminal-pane/pty-connection.test.ts'
+      - 'src/renderer/src/components/terminal-pane/terminal-ime-*'
+      - 'src/renderer/src/components/terminal-pane/use-terminal-pane-lifecycle.ts'
+      - 'src/renderer/src/components/terminal-pane/xterm-bypass-policy.ts'
+      - 'src/renderer/src/components/terminal-pane/xterm-bypass-policy.test.ts'
       - 'tests/e2e/chinese-ime-chat-input-repro.spec.ts'
+      - 'tests/e2e/korean-ime-terminal-shift-enter-commit.spec.ts'
       - 'tests/e2e/terminal-ibus-hangul-native.spec.ts'
       - 'tests/e2e/terminal-ime-*.ts'
   workflow_dispatch:
@@ -38,8 +46,10 @@ jobs:
           sudo apt-get install -y
           build-essential
           dbus-x11
+          dconf-gsettings-backend
           ibus
           ibus-hangul
+          libglib2.0-bin
           python3
           xdotool
           xfwm4

@@ -131,7 +131,7 @@ test.describe('Terminal IME exact-byte forwarding', () => {
       (trace) => {
         const starts = trace.dom.filter((event) => event.type === 'compositionstart')
         expect(starts).toHaveLength(2)
-        expect(trace.onData).not.toContain('\x7f')
+        expect(trace.onData.join('')).not.toContain('\x7f')
       }
     )
   })

@@ -26,6 +26,7 @@ const DEFAULT_REPETITIONS = 30
 const MAX_REPETITIONS = 30
 const DEFAULT_KEY_DELAY_MS = 1
 const MAX_KEY_DELAY_MS = 100
+const NATIVE_COMMAND_TIMEOUT_MS = 10_000
 
 test.use({
   orcaAppExtraEnv: {
@@ -51,7 +52,7 @@ function nativeKeyDelayMs(): number {
 }
 
 function runXdotool(...args: string[]): void {
-  execFileSync('xdotool', args, { stdio: 'pipe' })
+  execFileSync('xdotool', args, { stdio: 'pipe', timeout: NATIVE_COMMAND_TIMEOUT_MS })
 }
 
 async function focusNativeTerminalWindow(page: Page): Promise<string> {
@@ -63,8 +64,14 @@ async function focusNativeTerminalWindow(page: Page): Promise<string> {
   await expect.poll(() => page.title(), { timeout: 5_000 }).toBe(title)
 
   runXdotool('search', '--onlyvisible', '--name', title, 'windowfocus', '--sync')
-  execFileSync('ibus', ['engine', 'hangul'], { stdio: 'pipe' })
-  const engine = execFileSync('ibus', ['engine'], { encoding: 'utf8' }).trim()
+  execFileSync('ibus', ['engine', 'hangul'], {
+    stdio: 'pipe',
+    timeout: NATIVE_COMMAND_TIMEOUT_MS
+  })
+  const engine = execFileSync('ibus', ['engine'], {
+    encoding: 'utf8',
+    timeout: NATIVE_COMMAND_TIMEOUT_MS
+  }).trim()
   expect(engine).toBe('hangul')
   return title
 }
