@@ -98,6 +98,7 @@ export type KeybindingActionId =
   | 'fileExplorer.redo'
   | 'fileExplorer.copyPath'
   | 'fileExplorer.copyRelativePath'
+  | 'fileExplorer.openInDefaultApp'
   | 'fileExplorer.delete'
   | 'settings.search'
   | 'terminal.copySelection'
@@ -911,6 +912,18 @@ export const KEYBINDING_DEFINITIONS: readonly KeybindingDefinition[] = [
     scope: 'fileExplorer',
     searchKeywords: ['shortcut', 'file explorer', 'copy', 'relative', 'path'],
     defaultBindings: platformBindings(['Mod+Alt+Shift+C'])
+  },
+  {
+    id: 'fileExplorer.openInDefaultApp',
+    title: 'Open file in default app',
+    group: 'File Explorer',
+    scope: 'fileExplorer',
+    searchKeywords: ['shortcut', 'file explorer', 'open', 'default', 'app'],
+    defaultBindings: {
+      darwin: ['Mod+ArrowDown'],
+      linux: [],
+      win32: []
+    }
   },
   {
     id: 'fileExplorer.delete',

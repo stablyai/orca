@@ -17,6 +17,7 @@ import { FileExplorerBackgroundMenu } from './FileExplorerBackgroundMenu'
 import { FileExplorerNameFilter } from './FileExplorerNameFilter'
 import { FileExplorerQueryStrip } from './FileExplorerQueryStrip'
 import { FileExplorerToolbar } from './FileExplorerToolbar'
+import { openFileInDefaultApp, shouldShowOpenInDefaultAppAction } from './FileExplorerRow'
 import { SearchFilters } from './SearchFilters'
 import { SearchQueryRow } from './SearchQueryRow'
 import { SearchResultsPane } from './SearchResultsPane'
@@ -47,10 +48,7 @@ import {
   buildAddProjectFromFolderModalData,
   canShowAddAsProjectAction
 } from './file-explorer-add-project-action'
-import {
-  isRenameHotspotTarget,
-  resolveDirToggleTiming
-} from './file-explorer-dir-toggle-timing'
+import { isRenameHotspotTarget, resolveDirToggleTiming } from './file-explorer-dir-toggle-timing'
 import type { TreeNode } from './file-explorer-types'
 import { useFileExplorerSelection } from './useFileExplorerSelection'
 import { useFileExplorerVisibleRowProjection } from './useFileExplorerVisibleRowProjection'
@@ -525,6 +523,21 @@ function FileExplorerFiles(): React.JSX.Element {
     },
     [cancelPendingDirToggle, startRename]
   )
+  const handleOpenInDefaultApp = useCallback(
+    (node: TreeNode) => {
+      if (
+        !shouldShowOpenInDefaultAppAction(
+          node,
+          activeRepo?.connectionId ?? null,
+          runtimeDownloadContext
+        )
+      ) {
+        return
+      }
+      void openFileInDefaultApp(node)
+    },
+    [activeRepo?.connectionId, runtimeDownloadContext]
+  )
   const scrollToIndex = useCallback(
     (index: number) => {
       virtualizer.scrollToIndex(index, { align: 'auto' })
@@ -544,6 +557,7 @@ function FileExplorerFiles(): React.JSX.Element {
     moveSelection,
     toggleDir: hasNameFilter ? handleToggleNameFilterDir : toggleDir,
     startRename: handleStartRename,
+    openInDefaultApp: handleOpenInDefaultApp,
     requestDelete,
     requestDeleteAll,
     scrollToIndex,

@@ -15,9 +15,11 @@ import {
   copyFileToOsClipboard,
   downloadRemoteFile,
   FileExplorerRow,
+  openFileInDefaultApp,
   shouldShowCollapseFolderAction,
   shouldShowFindInFolderAction,
   shouldShowCopyFileAction,
+  shouldShowOpenInDefaultAppAction,
   shouldShowOpenInTerminalAction,
   shouldShowRemoteDownloadAction,
   shouldShowViewFileAction
@@ -587,6 +589,27 @@ describe('FileExplorerRow collapse folder action', () => {
     expect(shouldShowViewFileAction(directoryNode)).toBe(false)
   })
 
+  it('shows default app open only for local desktop files', () => {
+    const runtimeContext = {
+      settings: { activeRuntimeEnvironmentId: 'runtime-1' },
+      worktreeId: 'wt-1',
+      worktreePath: '/repo'
+    }
+    const previous = (globalThis as { __ORCA_WEB_CLIENT__?: boolean }).__ORCA_WEB_CLIENT__
+    try {
+      expect(shouldShowOpenInDefaultAppAction(fileNode)).toBe(true)
+      expect(shouldShowOpenInDefaultAppAction(directoryNode)).toBe(false)
+      expect(shouldShowOpenInDefaultAppAction(fileNode, 'ssh-1')).toBe(false)
+      expect(shouldShowOpenInDefaultAppAction(fileNode, null, runtimeContext)).toBe(false)
+
+      ;(globalThis as { __ORCA_WEB_CLIENT__?: boolean }).__ORCA_WEB_CLIENT__ = true
+
+      expect(shouldShowOpenInDefaultAppAction(fileNode)).toBe(false)
+    } finally {
+      ;(globalThis as { __ORCA_WEB_CLIENT__?: boolean }).__ORCA_WEB_CLIENT__ = previous
+    }
+  })
+
   it('shows remote download only for desktop SSH rows and file-like Remote Host rows', () => {
     const runtimeContext = {
       settings: { activeRuntimeEnvironmentId: 'runtime-1' },
@@ -672,6 +695,33 @@ describe('FileExplorerRow collapse folder action', () => {
     await copyFileToOsClipboard(fileNode, 'ssh-1')
 
     expect(toastErrorMock).toHaveBeenCalledWith('Remote connection dropped')
+  })
+
+  it('opens a local file with the default app', async () => {
+    const openFilePath = vi.fn().mockResolvedValue(true)
+    ;(
+      globalThis as unknown as {
+        window: { api: { shell: { openFilePath: typeof openFilePath } } }
+      }
+    ).window = { api: { shell: { openFilePath } } }
+
+    await openFileInDefaultApp(fileNode)
+
+    expect(openFilePath).toHaveBeenCalledWith('/repo/src/index.ts')
+    expect(toastErrorMock).not.toHaveBeenCalled()
+  })
+
+  it('shows a failure toast when the default app launch fails', async () => {
+    const openFilePath = vi.fn().mockResolvedValue(false)
+    ;(
+      globalThis as unknown as {
+        window: { api: { shell: { openFilePath: typeof openFilePath } } }
+      }
+    ).window = { api: { shell: { openFilePath } } }
+
+    await openFileInDefaultApp(fileNode)
+
+    expect(toastErrorMock).toHaveBeenCalledWith("Could not open 'index.ts' in the default app.")
   })
 
   it('calls the preload download API and shows success only when not canceled', async () => {

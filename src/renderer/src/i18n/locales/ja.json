@@ -9924,7 +9924,9 @@
             "f9d7ca753d": "パスのコピー",
             "3161c4e425": "フォルダ",
             "e887fa4b2e": "ターミナルで開く",
-            "1d8e182c32": "ファイルを表示"
+            "1d8e182c32": "ファイルを表示",
+            "d40c3303f4": "Could not open '{{value0}}' in the default app.",
+            "288a8e8081": "Open in Default App"
           },
           "FileExplorerToolbar": {
             "d238264654": "Git で無視されたファイルを表示",

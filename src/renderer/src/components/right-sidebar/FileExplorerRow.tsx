@@ -2,6 +2,7 @@
 import React, { useCallback, useRef } from 'react'
 import { basename } from '@/lib/path'
 import {
+  AppWindow,
   ChevronRight,
   CircleSlash,
   Copy,
@@ -309,6 +310,19 @@ export function shouldShowViewFileAction(node: TreeNode): boolean {
   return !node.isDirectory
 }
 
+export function shouldShowOpenInDefaultAppAction(
+  node: TreeNode,
+  connectionId?: string | null,
+  runtimeDownloadContext?: RuntimeFileOperationArgs | null
+): boolean {
+  return (
+    !node.isDirectory &&
+    !connectionId &&
+    !runtimeDownloadContext &&
+    (globalThis as { __ORCA_WEB_CLIENT__?: boolean }).__ORCA_WEB_CLIENT__ !== true
+  )
+}
+
 export function shouldShowRemoteDownloadAction(
   node: TreeNode,
   connectionId?: string | null,
@@ -424,6 +438,22 @@ export async function copyFileToOsClipboard(
   }
 }
 
+export async function openFileInDefaultApp(node: TreeNode): Promise<void> {
+  const failureMessage = translate(
+    'auto.components.right.sidebar.FileExplorerRow.d40c3303f4',
+    "Could not open '{{value0}}' in the default app.",
+    { value0: node.name }
+  )
+  try {
+    const opened = await window.api.shell.openFilePath(node.path)
+    if (!opened) {
+      toast.error(failureMessage)
+    }
+  } catch (error) {
+    toast.error(extractIpcErrorMessage(error, failureMessage))
+  }
+}
+
 export function FileExplorerRow({
   node,
   isExpanded,
@@ -467,6 +497,7 @@ export function FileExplorerRow({
   const activeWorktreeId = useAppStore((s) => s.activeWorktreeId)
   const copyPathShortcutLabel = useShortcutLabel('fileExplorer.copyPath')
   const copyRelativePathShortcutLabel = useShortcutLabel('fileExplorer.copyRelativePath')
+  const openInDefaultAppShortcutLabel = useShortcutLabel('fileExplorer.openInDefaultApp')
   const findInFolderShortcutLabel = useShortcutLabel('sidebar.search.toggle')
   const FileIcon = getFileTypeIcon(node.relativePath || node.name)
   const rowDropDir = node.isDirectory ? node.path : targetDir
@@ -477,6 +508,11 @@ export function FileExplorerRow({
     supportsFolderDownload
   )
   const showCopyFileAction = shouldShowCopyFileAction(node, connectionId, selectionSize)
+  const showOpenInDefaultAppAction = shouldShowOpenInDefaultAppAction(
+    node,
+    connectionId,
+    runtimeDownloadContext
+  )
   const { setRowDragNode, handleDragOver, handleDragEnter, handleDragLeave, handleDrop } =
     useFileExplorerRowDrag({
       rowDropDir,
@@ -508,6 +544,24 @@ export function FileExplorerRow({
   const handleCopyFile = useCallback(() => {
     void copyFileToOsClipboard(node, connectionId)
   }, [connectionId, node])
+  const handleOpenInDefaultApp = useCallback(() => {
+    const state = useAppStore.getState()
+    const activeWorktree = Object.values(state.worktreesByRepo)
+      .flat()
+      .find((worktree) => worktree.id === activeWorktreeId)
+    const activeRepo = activeWorktree
+      ? state.repos.find((repo) => repo.id === activeWorktree.repoId)
+      : null
+    if (
+      isLocalPathOpenBlocked(state.settings, {
+        connectionId: activeRepo?.connectionId ?? null
+      })
+    ) {
+      showLocalPathOpenBlockedToast()
+      return
+    }
+    void openFileInDefaultApp(node)
+  }, [activeWorktreeId, node])
 
   return (
     <ContextMenu
@@ -745,6 +799,18 @@ export function FileExplorerRow({
           <ContextMenuItem onSelect={onViewFile}>
             <File />
             {translate('auto.components.right.sidebar.FileExplorerRow.1d8e182c32', 'View File')}
+          </ContextMenuItem>
+        )}
+        {showOpenInDefaultAppAction && (
+          <ContextMenuItem onSelect={handleOpenInDefaultApp}>
+            <AppWindow />
+            {translate(
+              'auto.components.right.sidebar.FileExplorerRow.288a8e8081',
+              'Open in Default App'
+            )}
+            {openInDefaultAppShortcutLabel !== 'Unassigned' ? (
+              <ContextMenuShortcut>{openInDefaultAppShortcutLabel}</ContextMenuShortcut>
+            ) : null}
           </ContextMenuItem>
         )}
         {!node.isDirectory && activeWorktreeId && (

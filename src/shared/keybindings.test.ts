@@ -1174,6 +1174,28 @@ describe('keybindings', () => {
     ).toBe(false)
   })
 
+  it('matches the macOS file explorer default-app shortcut without reserving it elsewhere', () => {
+    expect(getEffectiveKeybindingsForAction('fileExplorer.openInDefaultApp', 'darwin')).toEqual([
+      'Mod+ArrowDown'
+    ])
+    expect(getEffectiveKeybindingsForAction('fileExplorer.openInDefaultApp', 'linux')).toEqual([])
+    expect(getEffectiveKeybindingsForAction('fileExplorer.openInDefaultApp', 'win32')).toEqual([])
+    expect(
+      keybindingMatchesAction(
+        'fileExplorer.openInDefaultApp',
+        {
+          key: 'ArrowDown',
+          code: 'ArrowDown',
+          control: false,
+          meta: true,
+          alt: false,
+          shift: false
+        },
+        'darwin'
+      )
+    ).toBe(true)
+  })
+
   it('matches non-QWERTY shortcuts by the produced logical key', () => {
     const dvorakPhysicalW = {
       key: ',',
