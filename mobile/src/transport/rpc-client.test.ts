@@ -707,6 +707,29 @@ describe('mobile rpc-client connection timeout', () => {
       client.close()
     })
 
+    it('reconnects when the half-open socket omits its close callback', async () => {
+      const client = connect('ws://desktop.invalid', 'token', 'server-key')
+      const socket = mockSockets[0]!
+      openAndAuthenticate(socket)
+      socket.emitCloseOnClose = false
+
+      client.notifyForeground()
+      await vi.advanceTimersByTimeAsync(8_000)
+
+      expect(socket.close).toHaveBeenCalledTimes(1)
+      expect(client.getState()).toBe('reconnecting')
+
+      await vi.advanceTimersByTimeAsync(500)
+      expect(mockSockets).toHaveLength(2)
+      openAndAuthenticate(mockSockets[1]!)
+      expect(client.getState()).toBe('connected')
+
+      await vi.advanceTimersByTimeAsync(1_000)
+      expect(mockSockets).toHaveLength(2)
+
+      client.close()
+    })
+
     it('keeps a healthy connection when the foreground probe is answered', async () => {
       const { client, socket } = connectAuthenticated()
 

@@ -781,6 +781,10 @@ export function connect(
       // Why: stale probe timers must not close a replacement socket.
       if (probeWs === ws && probeWs.readyState === WebSocket.OPEN) {
         probeWs.close()
+        // Why: React Native can omit onclose for a wedged iOS transport.
+        if (probeWs === ws) {
+          handleSocketClosed(probeWs, { timedOut: true })
+        }
       }
     }, 8_000)
     pending.set(id, {
