@@ -70,8 +70,9 @@ const FLAG_SPEC = {
   '--candidate-exe': { key: 'candidateExe', type: 'string' },
   '--baseline-app-dir': { key: 'baselineAppDir', type: 'string' },
   '--candidate-app-dir': { key: 'candidateAppDir', type: 'string' },
-  '--pairs': { key: 'pairs', type: 'number' },
-  '--warmup': { key: 'warmup', type: 'number' },
+  // Positive and even is enforced by isCounterbalanced, which explains why.
+  '--pairs': { key: 'pairs', type: 'number', integer: true },
+  '--warmup': { key: 'warmup', type: 'number', integer: true },
   '--control-phases': { key: 'controlPhases', type: 'string' },
   '--settle-ms': { key: 'settleMs', type: 'number' },
   '--keep-events': { key: 'keepEvents', type: 'boolean' }

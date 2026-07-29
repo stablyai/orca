@@ -38,6 +38,19 @@ function killProcessTree(proc) {
   }
 }
 
+// Why: spawning detached takes the launch out of the terminal's process group,
+// so Ctrl-C during a 48-launch run would reach the harness but leave Electron
+// running. Reap the in-flight launch before exiting.
+let activeLaunch = null
+for (const signal of ['SIGINT', 'SIGTERM']) {
+  process.on(signal, () => {
+    if (activeLaunch) {
+      killProcessTree(activeLaunch)
+    }
+    process.exit(130)
+  })
+}
+
 export function parseStartupLine(line) {
   // Why: the main-thread churn probe (ORCA_MAIN_THREAD_DIAGNOSTICS=1) emits a
   // different prefix with a JSON payload. Its per-command spawn attribution
@@ -91,6 +104,7 @@ export function runIteration({ exe, appDir, timeoutMs, lingerMs, waitForEvent, l
       detached: process.platform !== 'win32',
       stdio: ['ignore', 'ignore', 'pipe']
     })
+    activeLaunch = child
     let finished = false
     let buffer = ''
     const recordLine = (line) => {
@@ -125,6 +139,7 @@ export function runIteration({ exe, appDir, timeoutMs, lingerMs, waitForEvent, l
       setTimeout(() => {
         flushBuffer()
         killProcessTree(child)
+        activeLaunch = null
         resolvePromise({ outcome, events })
       }, lingerMs)
     }

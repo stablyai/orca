@@ -15,12 +15,12 @@ import { STATE_PROFILES } from './startup-profile-fixture.mjs'
  * nothing.
  */
 export const PROFILE_FLAG_SPEC = {
-  '--files': { key: 'files', type: 'number' },
+  '--files': { key: 'files', type: 'number', integer: true },
   '--fixture-dir': { key: 'fixtureDir', type: 'string' },
-  '--timeout-ms': { key: 'timeoutMs', type: 'number' },
+  '--timeout-ms': { key: 'timeoutMs', type: 'number', min: 1 },
   '--state-profile': { key: 'stateProfile', type: 'string' },
-  '--session-tabs': { key: 'sessionTabs', type: 'number' },
-  '--github-repos': { key: 'githubRepos', type: 'number' },
+  '--session-tabs': { key: 'sessionTabs', type: 'number', integer: true },
+  '--github-repos': { key: 'githubRepos', type: 'number', integer: true },
   '--gh-hang-ms': { key: 'ghHangMs', type: 'number' },
   '--wait-for-event': { key: 'waitForEvent', type: 'string' },
   '--linger-ms': { key: 'lingerMs', type: 'number' }
@@ -44,7 +44,8 @@ export const PROFILE_ARG_DEFAULTS = {
 /** Only the single-arm bench repeats a launch itself; the A/B bench uses --pairs. */
 export const SINGLE_ARM_FLAG_SPEC = {
   ...PROFILE_FLAG_SPEC,
-  '--iterations': { key: 'iterations', type: 'number' }
+  // min 1: --iterations 0 would launch nothing and still write a result file.
+  '--iterations': { key: 'iterations', type: 'number', integer: true, min: 1 }
 }
 
 export const SINGLE_ARM_ARG_DEFAULTS = { ...PROFILE_ARG_DEFAULTS, iterations: 5 }
@@ -66,10 +67,15 @@ export function parseFlags(argv, spec, defaults) {
     }
     if (flag.type === 'number') {
       const value = Number(raw)
+      const min = flag.min ?? 0
       // Number('') is 0 and a negative parses fine, so an empty or negative
-      // value would silently become an empty run or an instant timeout.
-      if (raw.trim() === '' || !Number.isFinite(value) || value < 0) {
-        throw new Error(`${argv[i - 1]} expects a non-negative number, got: ${raw}`)
+      // value would silently become an empty run or an instant timeout. A
+      // fractional count is just as quiet: --iterations 1.5 runs twice.
+      if (raw.trim() === '' || !Number.isFinite(value) || value < min) {
+        throw new Error(`${argv[i - 1]} expects a number >= ${min}, got: ${raw}`)
+      }
+      if (flag.integer && !Number.isInteger(value)) {
+        throw new Error(`${argv[i - 1]} expects a whole number, got: ${raw}`)
       }
       args[flag.key] = value
     } else {
