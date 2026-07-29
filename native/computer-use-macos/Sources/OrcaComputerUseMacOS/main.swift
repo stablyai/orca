@@ -734,15 +734,23 @@ final class Provider {
         recoverWindow(snapshot.app)
         if let elementIndex = try optionalInteger(params, "elementIndex") {
             let record = try element(snapshot, elementIndex)
-            if count <= 1, let actionName = try performClickAction(record: record, mouseButton: button) {
-                return actionMetadata(path: "accessibility", actionName: actionName)
+            let point = center(record.localFrame, in: snapshot.windowBounds)
+            if count <= 1 {
+                if let point {
+                    PointerVisibility.move(to: point)
+                    PointerVisibility.indicateAction(at: point)
+                }
+                if let actionName = try performClickAction(record: record, mouseButton: button) {
+                    return actionMetadata(path: "accessibility", actionName: actionName)
+                }
             }
-            if let point = center(record.localFrame, in: snapshot.windowBounds) {
+            if let point {
                 try Input.click(
                     pid: snapshot.app.pid,
                     at: point,
                     button: mouseButton(button),
-                    count: count
+                    count: count,
+                    movePointer: count > 1
                 )
                 return actionMetadata(path: "synthetic", fallbackReason: "actionUnsupported")
             }
@@ -777,6 +785,10 @@ final class Provider {
         let action = record.actions.first { SnapshotRenderHeuristics.prettyAction($0).caseInsensitiveCompare(requested) == .orderedSame || $0.caseInsensitiveCompare(requested) == .orderedSame }
         guard let action else {
             throw ProviderError.coded("action_not_supported", "'\(requested)' is not a valid secondary action for element \(record.index)")
+        }
+        if let point = center(record.localFrame, in: snapshot.windowBounds) {
+            PointerVisibility.move(to: point)
+            PointerVisibility.indicateAction(at: point)
         }
         guard performAction(record.element, action) else {
             throw ProviderError.coded("accessibility_error", "AXUIElementPerformAction(\(action)) failed")
@@ -868,18 +880,31 @@ final class Provider {
         let pages = try positiveNumber(params["pages"]?.number, defaultValue: 1, name: "pages")
         if let elementIndex = try optionalInteger(params, "elementIndex") {
             let record = try element(snapshot, elementIndex)
+            let point = center(record.localFrame, in: snapshot.windowBounds)
+            if let point {
+                PointerVisibility.move(to: point)
+            }
             let action = "AXScroll\(direction.capitalized)ByPage"
             if pages.rounded() == pages, let pageCount = boundedInteger(pages, as: Int.self),
                record.actions.contains(action) {
+                if let point {
+                    PointerVisibility.indicateAction(at: point)
+                }
                 for _ in 0..<max(1, pageCount) {
                     _ = performAction(record.element, action)
                 }
                 return actionMetadata(path: "accessibility", actionName: action)
             }
-            guard let point = center(record.localFrame, in: snapshot.windowBounds) else {
+            guard let point else {
                 throw ProviderError.coded("element_not_found", "element \(record.index) has no scrollable frame")
             }
-            try Input.scroll(pid: snapshot.app.pid, at: point, direction: direction, pages: pages)
+            try Input.scroll(
+                pid: snapshot.app.pid,
+                at: point,
+                direction: direction,
+                pages: pages,
+                movePointer: false
+            )
             return actionMetadata(path: "synthetic", fallbackReason: "actionUnsupported")
         }
         let point = try coordinatePoint(params: params, xKey: "x", yKey: "y", snapshot: snapshot)
@@ -2132,7 +2157,10 @@ private struct WindowCapture {
         // Why: probing image APIs before TCC preflight can raise Screen
         // Recording prompts, even for --no-screenshot calls.
         if captureImage {
-            self.image = Self.captureImage(windowId: candidate.windowId, bounds: candidate.bounds)
+            self.image = Self.captureModelImage(
+                targetWindowId: candidate.windowId,
+                bounds: candidate.bounds
+            )
         } else {
             self.image = nil
         }
@@ -2183,21 +2211,37 @@ private struct WindowCapture {
         )
     }
 
-    private static func captureImage(windowId: CGWindowID, bounds: CGRect) -> CapturedImage? {
+    private static func captureModelImage(
+        targetWindowId: CGWindowID,
+        bounds: CGRect
+    ) -> CapturedImage? {
+        // Why: model images are limited to one explicit target window, which
+        // structurally excludes helper-owned overlays from both capture paths.
         if ProcessInfo.processInfo.environment["ORCA_COMPUTER_USE_SCK_SCREENSHOTS"] == "1",
-           let image = captureImageWithScreenCaptureKit(windowId: windowId, bounds: bounds) {
+           let image = captureImageWithScreenCaptureKit(
+               targetWindowId: targetWindowId,
+               bounds: bounds
+           ) {
             return CapturedImage(image: image, engine: "screenCaptureKit")
         }
-        if let image = CGWindowListCreateImage(.null, [.optionIncludingWindow], windowId, [.boundsIgnoreFraming, .bestResolution]) {
+        if let image = CGWindowListCreateImage(
+            .null,
+            [.optionIncludingWindow],
+            targetWindowId,
+            [.boundsIgnoreFraming, .bestResolution]
+        ) {
             return CapturedImage(image: image, engine: "cgWindowList")
         }
         return nil
     }
 
-    private static func captureImageWithScreenCaptureKit(windowId: CGWindowID, bounds: CGRect) -> CGImage? {
+    private static func captureImageWithScreenCaptureKit(
+        targetWindowId: CGWindowID,
+        bounds: CGRect
+    ) -> CGImage? {
         try? BlockingAsync.run(timeout: 3) {
             let content = try await SCShareableContent.current
-            guard let window = content.windows.first(where: { $0.windowID == windowId }) else {
+            guard let window = content.windows.first(where: { $0.windowID == targetWindowId }) else {
                 return nil
             }
             let filter = SCContentFilter(desktopIndependentWindow: window)
@@ -2282,10 +2326,20 @@ private func resizePng(_ image: CGImage, scale: CGFloat) -> BoundedPNG? {
 }
 
 private enum Input {
-    static func click(pid: pid_t, at point: CGPoint, button: MouseButton, count: Int) throws {
+    static func click(
+        pid: pid_t,
+        at point: CGPoint,
+        button: MouseButton,
+        count: Int,
+        movePointer: Bool = true
+    ) throws {
         guard let source = CGEventSource(stateID: .combinedSessionState) else {
             throw ProviderError.coded("accessibility_error", "failed to create event source")
         }
+        if movePointer {
+            PointerVisibility.move(to: point)
+        }
+        PointerVisibility.indicateAction(at: point)
         for _ in 0..<max(count, 1) {
             try mouse(.mouseMoved, source: source, point: point, button: button.cgButton, pid: pid)
             try mouse(button.downEvent, source: source, point: point, button: button.cgButton, pid: pid)
@@ -2293,7 +2347,13 @@ private enum Input {
         }
     }
 
-    static func scroll(pid: pid_t, at point: CGPoint, direction: String, pages: Double) throws {
+    static func scroll(
+        pid: pid_t,
+        at point: CGPoint,
+        direction: String,
+        pages: Double,
+        movePointer: Bool = true
+    ) throws {
         guard let delta = boundedInteger(max(1, (12 * pages).rounded()), as: Int32.self) else {
             throw ProviderError.coded("invalid_argument", "pages is out of range")
         }
@@ -2302,6 +2362,10 @@ private enum Input {
         guard let event = CGEvent(scrollWheelEvent2Source: nil, units: .line, wheelCount: 2, wheel1: wheel1, wheel2: wheel2, wheel3: 0) else {
             throw ProviderError.coded("accessibility_error", "failed to create scroll event")
         }
+        if movePointer {
+            PointerVisibility.move(to: point)
+        }
+        PointerVisibility.indicateAction(at: point)
         event.location = point
         event.postToPid(pid)
     }
@@ -2310,19 +2374,26 @@ private enum Input {
         guard let source = CGEventSource(stateID: .combinedSessionState) else {
             throw ProviderError.coded("accessibility_error", "failed to create event source")
         }
+        PointerVisibility.move(to: start)
         try mouse(.mouseMoved, source: source, point: start, button: .left, pid: pid)
+        PointerVisibility.press(at: start)
         try mouse(.leftMouseDown, source: source, point: start, button: .left, pid: pid)
-        for step in 1...10 {
-            let progress = CGFloat(step) / 10
+        let dragPlan = PointerVisibility.dragPlan(from: start, to: end)
+        for point in dragPlan.points {
+            PointerVisibility.followAction(
+                to: point,
+                delayMicroseconds: dragPlan.delayMicroseconds
+            )
             try mouse(
                 .leftMouseDragged,
                 source: source,
-                point: CGPoint(x: start.x + (end.x - start.x) * progress, y: start.y + (end.y - start.y) * progress),
+                point: point,
                 button: .left,
                 pid: pid
             )
         }
         try mouse(.leftMouseUp, source: source, point: end, button: .left, pid: pid)
+        PointerVisibility.release(at: end)
     }
 
     static func typeText(_ text: String, pid: pid_t) throws {
@@ -2335,8 +2406,8 @@ private enum Input {
             }
             down.keyboardSetUnicodeString(stringLength: 1, unicodeString: &char)
             up.keyboardSetUnicodeString(stringLength: 1, unicodeString: &char)
-            down.post(tap: .cghidEventTap)
-            up.post(tap: .cghidEventTap)
+            down.postToPid(pid)
+            up.postToPid(pid)
         }
     }
 
@@ -2389,7 +2460,7 @@ private enum Input {
             throw ProviderError.coded("accessibility_error", "failed to create key event")
         }
         event.flags = flags
-        event.post(tap: .cghidEventTap)
+        event.postToPid(pid)
     }
 }
 
@@ -2552,6 +2623,7 @@ private final class AgentRuntime: NSObject, NSApplicationDelegate {
 
     func applicationWillTerminate(_ notification: Notification) {
         listener?.stop()
+        PointerVisibility.shutdown()
     }
 }
 
@@ -3458,13 +3530,24 @@ private final class SocketListener: @unchecked Sendable {
     private let token: String?
     private let provider = Provider()
     private let providerLock = NSLock()
+    private let stateLock = NSLock()
+    private let ownershipState = AgentConnectionOwnershipState()
     private var socketFd: Int32 = -1
+    private var wakeReadFd: Int32 = -1
+    private var wakeWriteFd: Int32 = -1
     private var isStopped = false
 
     init(socketPath: String, token: String?) throws {
         self.socketPath = socketPath
         self.token = token
         try bindSocket()
+        do {
+            try createWakePipe()
+        } catch {
+            close(socketFd)
+            socketFd = -1
+            throw error
+        }
     }
 
     func start() {
@@ -3474,11 +3557,19 @@ private final class SocketListener: @unchecked Sendable {
     }
 
     func stop() {
-        isStopped = true
-        if socketFd >= 0 {
-            close(socketFd)
-            socketFd = -1
+        stateLock.lock()
+        if isStopped {
+            stateLock.unlock()
+            return
         }
+        isStopped = true
+        // Why: the accept thread exclusively owns the listener descriptor;
+        // a wake pipe avoids close-versus-accept descriptor reuse races.
+        if wakeWriteFd >= 0 {
+            var byte: UInt8 = 1
+            _ = write(wakeWriteFd, &byte, 1)
+        }
+        stateLock.unlock()
         // Why: the parent owns the private temp directory cleanup; the helper
         // must not unlink arbitrary caller-supplied paths on shutdown.
     }
@@ -3529,14 +3620,72 @@ private final class SocketListener: @unchecked Sendable {
         }
     }
 
+    private func createWakePipe() throws {
+        var descriptors = [Int32](repeating: -1, count: 2)
+        guard Darwin.pipe(&descriptors) == 0 else {
+            throw ProviderError.coded(
+                "accessibility_error",
+                "failed to create computer-use listener wake pipe"
+            )
+        }
+        wakeReadFd = descriptors[0]
+        wakeWriteFd = descriptors[1]
+    }
+
     private func acceptLoop() {
-        while !isStopped {
-            let fd = accept(socketFd, nil, nil)
+        stateLock.lock()
+        let listenerFd = socketFd
+        let listenerWakeReadFd = wakeReadFd
+        let listenerWakeWriteFd = wakeWriteFd
+        stateLock.unlock()
+        defer {
+            closeListenerDescriptors(
+                listenerFd: listenerFd,
+                wakeReadFd: listenerWakeReadFd,
+                wakeWriteFd: listenerWakeWriteFd
+            )
+        }
+
+        var descriptors = [
+            pollfd(fd: listenerFd, events: Int16(POLLIN), revents: 0),
+            pollfd(fd: listenerWakeReadFd, events: Int16(POLLIN), revents: 0),
+        ]
+        while true {
+            let pollResult = Darwin.poll(&descriptors, nfds_t(descriptors.count), -1)
+            if pollResult < 0 {
+                if errno == EINTR { continue }
+                if !stopped() {
+                    fputs("computer-use socket poll failed: \(String(cString: strerror(errno)))\n", stderr)
+                    DispatchQueue.main.async {
+                        NSApp.terminate(nil)
+                    }
+                }
+                return
+            }
+            if descriptors[1].revents & Int16(POLLIN) != 0 {
+                return
+            }
+            let listenerErrorEvents = Int16(POLLERR | POLLHUP | POLLNVAL)
+            if descriptors[0].revents & listenerErrorEvents != 0 {
+                if !stopped() {
+                    fputs("computer-use socket listener became unavailable\n", stderr)
+                    DispatchQueue.main.async {
+                        NSApp.terminate(nil)
+                    }
+                }
+                return
+            }
+            guard descriptors[0].revents & Int16(POLLIN) != 0 else { continue }
+            let fd = accept(listenerFd, nil, nil)
             if fd < 0 {
-                if !isStopped {
+                if !stopped() {
                     fputs("computer-use socket accept failed: \(String(cString: strerror(errno)))\n", stderr)
                 }
                 continue
+            }
+            if stopped() {
+                close(fd)
+                return
             }
             Thread.detachNewThread { [weak self] in
                 self?.handleConnection(fd)
@@ -3545,7 +3694,18 @@ private final class SocketListener: @unchecked Sendable {
     }
 
     private func handleConnection(_ fd: Int32) {
-        defer { close(fd) }
+        var ownerGeneration: UInt64?
+        defer {
+            close(fd)
+            if let ownerGeneration,
+               ownershipState.beginTermination(ifCurrent: ownerGeneration) {
+                // Why: the client starts a replacement helper after transport
+                // loss, so an authenticated connection is this process's owner.
+                DispatchQueue.main.async {
+                    NSApp.terminate(nil)
+                }
+            }
+        }
         let authorizedPeer = peerProcessId(fd).map(isAuthorizedAgentPeer) == true
         let decoder = JSONDecoder()
         while let line = readLine(from: fd) {
@@ -3553,6 +3713,14 @@ private final class SocketListener: @unchecked Sendable {
                   let request = try? decoder.decode(Request.self, from: data)
             else {
                 continue
+            }
+            if AgentConnectionOwnership.shouldClaim(
+                method: request.method,
+                requestToken: request.token,
+                expectedToken: token,
+                authorizedPeer: authorizedPeer
+            ) {
+                ownerGeneration = ownershipState.claim()
             }
             let response = handleRequest(
                 provider: provider,
@@ -3563,6 +3731,27 @@ private final class SocketListener: @unchecked Sendable {
             )
             writeJSON(response, to: fd)
         }
+    }
+
+    private func closeListenerDescriptors(
+        listenerFd: Int32,
+        wakeReadFd: Int32,
+        wakeWriteFd: Int32
+    ) {
+        stateLock.lock()
+        if socketFd == listenerFd { socketFd = -1 }
+        if self.wakeReadFd == wakeReadFd { self.wakeReadFd = -1 }
+        if self.wakeWriteFd == wakeWriteFd { self.wakeWriteFd = -1 }
+        stateLock.unlock()
+        if listenerFd >= 0 { close(listenerFd) }
+        if wakeReadFd >= 0 { close(wakeReadFd) }
+        if wakeWriteFd >= 0 { close(wakeWriteFd) }
+    }
+
+    private func stopped() -> Bool {
+        stateLock.lock()
+        defer { stateLock.unlock() }
+        return isStopped
     }
 }
 
@@ -3606,6 +3795,7 @@ private func isTrustedOrcaApplication(_ pid: pid_t) -> Bool {
     // Why: dev validation runs from per-worktree wrapper apps with stable
     // Orca-owned bundle ids; the sidecar peer check must still authorize them.
     return bundleId == "com.stablyai.orca" ||
+        bundleId == "com.stablyai.orca.dev" ||
         bundleId.hasPrefix("com.stablyai.orca.dev.") ||
         bundleId == "com.github.Electron"
 }
@@ -3650,6 +3840,12 @@ private func runAgent(socketPath: String, token: String?) {
     app.delegate = delegate
     // Why: SCK is reliable once this code runs as a signed app with a real TCC identity.
     setenv("ORCA_COMPUTER_USE_SCK_SCREENSHOTS", "1", 1)
+    // Why: the agent owns transient overlay UI but must never activate or
+    // acquire a Dock presence while it controls another application.
+    guard app.setActivationPolicy(.accessory) else {
+        fputs("failed to configure computer-use agent activation policy\n", stderr)
+        exit(1)
+    }
     app.run()
 }
 
