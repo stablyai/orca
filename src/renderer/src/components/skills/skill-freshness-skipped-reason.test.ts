@@ -32,7 +32,7 @@ describe('skippedReason', () => {
     const reason = skippedReason([row(null)], 'orchestration')
     expect(reason).toContain('reports the skill as already up to date')
     expect(reason).toContain(
-      'npx skills add https://github.com/stablyai/orca --skill orchestration --global'
+      'npx --yes skills add https://github.com/stablyai/orca --skill orchestration --global -y'
     )
   })
 

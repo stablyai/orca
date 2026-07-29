@@ -8,7 +8,7 @@ import { getOrchestrationUsageExamples } from '@/lib/orchestration-usage-example
 import { OrchestrationPane } from './OrchestrationPane'
 
 const INSTALL_COMMAND =
-  'npx skills add https://github.com/stablyai/orca --skill orchestration --global'
+  'npx --yes skills add https://github.com/stablyai/orca --skill orchestration --global -y'
 const UPDATE_COMMAND = INSTALL_COMMAND
 
 const mocks = vi.hoisted(() => ({

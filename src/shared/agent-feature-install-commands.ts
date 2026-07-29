@@ -8,42 +8,42 @@ export const ORCA_LINEAR_SKILL_NAME = 'orca-linear'
 export const LINEAR_TICKETS_SKILL_NAME = 'linear-tickets'
 export const LINEAR_AGENT_SKILL_NAMES = [ORCA_LINEAR_SKILL_NAME, LINEAR_TICKETS_SKILL_NAME] as const
 
-// Why: `yes` defaults to false so every Settings/onboarding string a human pastes
-// keeps its interactive prompts. Only an unattended spawn opts in.
-export type AgentFeatureSkillCommandOptions = { global?: boolean; yes?: boolean }
-
+/** Full `npx` argv, so a spawned run and a pasted string can never diverge. */
 export function buildAgentFeatureSkillInstallArgs(
   skillNames: readonly string[],
-  options: AgentFeatureSkillCommandOptions = {}
+  options: { global?: boolean } = {}
 ): string[] {
   if (skillNames.length === 0) {
     throw new Error('At least one skill name is required.')
   }
   const global = options.global ?? true
-  // Why: one flag per name remains compatible with both single-value and variadic parsers.
+  // Why: one flag per name. The variadic `--skill a b` form silently drops names
+  // the repo does not have — it exits 0 having installed only the matches.
   const skillArgs = skillNames.flatMap((name) => ['--skill', name])
+  // Why: both flags are load-bearing wherever this runs (#9567). `npx --yes`
+  // skips npm's fetch prompt on a cold cache; `skills … -y` skips the agent
+  // picker, which otherwise blocks forever on any TTY and on a pasted install.
   return [
+    '--yes',
     'skills',
     'add',
     ORCA_SKILLS_REPOSITORY_URL,
     ...skillArgs,
     ...(global ? ['--global'] : []),
-    // Why: without -y `skills add` opens an interactive agent picker and blocks
-    // forever on any TTY, which is every ssh session.
-    ...(options.yes ? ['-y'] : [])
+    '-y'
   ]
 }
 
 export function buildAgentFeatureSkillInstallCommand(
   skillNames: readonly string[],
-  options: AgentFeatureSkillCommandOptions = {}
+  options: { global?: boolean } = {}
 ): string {
   return `npx ${buildAgentFeatureSkillInstallArgs(skillNames, options).join(' ')}`
 }
 
 export function buildAgentFeatureSkillUpdateArgs(
   skillNames: string | readonly string[],
-  options: AgentFeatureSkillCommandOptions = {}
+  options: { global?: boolean; yes?: boolean } = {}
 ): string[] {
   const rawNames = typeof skillNames === 'string' ? [skillNames] : skillNames
   const names = rawNames.map((name) => name.trim()).filter((name) => name.length > 0)
@@ -51,18 +51,19 @@ export function buildAgentFeatureSkillUpdateArgs(
     throw new Error('A skill name is required.')
   }
   const global = options.global ?? true
-  return [
-    'skills',
-    'update',
-    ...names,
-    global ? '--global' : '--project',
-    ...(options.yes ? ['-y'] : [])
-  ]
+  const scope = global ? '--global' : '--project'
+  // Why: `yes` is opt-in here, unlike install, because the pasted update string
+  // must stay exactly `npx skills update <name> --global` —
+  // normalizeWindowsSkillUpdateCommand parses that shape to swap in a reinstall
+  // on native Windows, and the extra flags stop it matching.
+  return options.yes
+    ? ['--yes', 'skills', 'update', ...names, scope, '-y']
+    : ['skills', 'update', ...names, scope]
 }
 
 export function buildAgentFeatureSkillUpdateCommand(
   skillNames: string | readonly string[],
-  options: AgentFeatureSkillCommandOptions = {}
+  options: { global?: boolean; yes?: boolean } = {}
 ): string {
   return `npx ${buildAgentFeatureSkillUpdateArgs(skillNames, options).join(' ')}`
 }

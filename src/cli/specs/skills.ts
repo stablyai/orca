@@ -34,9 +34,8 @@ export const SKILL_COMMAND_SPECS: CommandSpec[] = [
     allowedFlags: [...GLOBAL_FLAGS, 'skill', 'all', 'local', 'dry-run'],
     notes: [
       'Reads the bundled skill registry locally without contacting the Orca runtime.',
-      'Resolves to the same `npx skills add <repo> --skill <name> ...` command used by ' +
-        'Orca Settings, plus the non-interactive flags an unattended host needs ' +
-        '(`npx --yes` and `-y`), then runs it and forwards its output and exit code.',
+      'Runs the same `npx --yes skills add <repo> --skill <name> ... -y` command Orca ' +
+        'Settings shows, then forwards its output and exit code.',
       'Installs globally (all projects, adds --global) by default. Use --local to install ' +
         'into the current project instead.',
       'Use --dry-run to print the resolved command without running it.',
@@ -60,7 +59,7 @@ export const SKILL_COMMAND_SPECS: CommandSpec[] = [
     notes: [
       'Reads the bundled skill registry locally without contacting the Orca runtime.',
       'Resolves to the same `npx skills update <names...>` command used by Orca Settings, ' +
-        'plus the non-interactive flags an unattended host needs (`npx --yes` and `-y`), ' +
+        'plus the non-interactive flags an unattended run needs (`npx --yes` and `-y`), ' +
         'then runs it and forwards its output and exit code.',
       'Updates the global install (all projects, adds --global) by default. Use --local to ' +
         'update the current project instead.',

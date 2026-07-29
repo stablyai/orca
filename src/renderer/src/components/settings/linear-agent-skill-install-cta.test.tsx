@@ -115,7 +115,7 @@ describe('LinearAgentSkillInstallCta', () => {
     expect(rendered.textContent).toContain('Not installed')
     expect(rendered.textContent).toContain('Let your agents read and edit Linear tasks.')
     expect(rendered.textContent).toContain(
-      'npx skills add https://github.com/stablyai/orca --skill orca-linear --global'
+      'npx --yes skills add https://github.com/stablyai/orca --skill orca-linear --global -y'
     )
   })
 
@@ -129,7 +129,7 @@ describe('LinearAgentSkillInstallCta', () => {
     })
 
     expect(mocks.clipboardWrite).toHaveBeenCalledWith(
-      'npx skills add https://github.com/stablyai/orca --skill orca-linear --global'
+      'npx --yes skills add https://github.com/stablyai/orca --skill orca-linear --global -y'
     )
     expect(mocks.toastSuccess).toHaveBeenCalled()
   })
