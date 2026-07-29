@@ -13,12 +13,14 @@ import {
   findAiVaultSessionLiveStateInIndex,
   findOriginalAiVaultSessionPaneInIndex
 } from './ai-vault-original-pane-index'
+import { buildAiVaultOrcaCustomTitleByProviderKey } from './ai-vault-orca-title-by-session'
 
 export function useAiVaultOriginalPaneActions(): {
   getOriginalPaneTarget: (
     session: AiVaultSession
   ) => ReturnType<typeof findOriginalAiVaultSessionPane>
   getSessionLiveState: (session: AiVaultSession) => AgentStatusState | null
+  orcaCustomTitleByProviderKey: ReadonlyMap<string, string>
   jumpToOriginalPane: (session: AiVaultSession) => void
   jumpToWorktree: (worktreeId: string) => void
 } {
@@ -35,6 +37,10 @@ export function useAiVaultOriginalPaneActions(): {
   // Build once on the first actual lookup, then share it across visible rows.
   const getOriginalPaneIndex = useMemo(
     () => createLazyAiVaultOriginalPaneIndex(originalPaneLookupState),
+    [originalPaneLookupState]
+  )
+  const orcaCustomTitleByProviderKey = useMemo(
+    () => buildAiVaultOrcaCustomTitleByProviderKey(originalPaneLookupState),
     [originalPaneLookupState]
   )
 
@@ -90,5 +96,11 @@ export function useAiVaultOriginalPaneActions(): {
     }
   }, [])
 
-  return { getOriginalPaneTarget, getSessionLiveState, jumpToOriginalPane, jumpToWorktree }
+  return {
+    getOriginalPaneTarget,
+    getSessionLiveState,
+    orcaCustomTitleByProviderKey,
+    jumpToOriginalPane,
+    jumpToWorktree
+  }
 }

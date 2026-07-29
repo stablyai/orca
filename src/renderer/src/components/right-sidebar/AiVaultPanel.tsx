@@ -61,8 +61,13 @@ export default function AiVaultPanel(): React.JSX.Element {
   const settings = useAppStore((s) => s.settings)
   const runtimeEnvironments = useAppStore((s) => s.runtimeEnvironments)
   const agentCmdOverrides = settings?.agentCmdOverrides
-  const { getOriginalPaneTarget, getSessionLiveState, jumpToOriginalPane, jumpToWorktree } =
-    useAiVaultOriginalPaneActions()
+  const {
+    getOriginalPaneTarget,
+    getSessionLiveState,
+    orcaCustomTitleByProviderKey,
+    jumpToOriginalPane,
+    jumpToWorktree
+  } = useAiVaultOriginalPaneActions()
   const [query, setQuery] = useState('')
   // Why: scope depends on current workspace/project availability, so only stable view options persist.
   const [scope, setScope] = useState<AiVaultScope>(DEFAULT_AI_VAULT_SCOPE)
@@ -158,7 +163,8 @@ export default function AiVaultPanel(): React.JSX.Element {
     activeWorktree: activeWorktree ?? null,
     activeWorktreeId: activeWorktreeId ?? activeWorktree?.id ?? null,
     targetState: resumeTargetState,
-    agentCmdOverrides
+    agentCmdOverrides,
+    orcaCustomTitleByProviderKey
   })
   const viewAdjustmentCount = countAiVaultViewAdjustments({
     agents,
@@ -203,13 +209,15 @@ export default function AiVaultPanel(): React.JSX.Element {
         activeProjectKey,
         sessionProjectById,
         projectLabelByKey,
-        hideEmptySessions
+        hideEmptySessions,
+        orcaCustomTitleByProviderKey
       }),
     [
       activeProjectKey,
       activeWorktreePaths,
       agents,
       hideEmptySessions,
+      orcaCustomTitleByProviderKey,
       projectLabelByKey,
       query,
       scope,
@@ -355,6 +363,7 @@ export default function AiVaultPanel(): React.JSX.Element {
         getSessionResumeActions={getSessionResumeActions}
         getOriginalPaneTarget={getOriginalPaneTarget}
         getSessionLiveState={getSessionLiveState}
+        orcaCustomTitleByProviderKey={orcaCustomTitleByProviderKey}
         getWorktreeInfo={(session) => sessionWorktreeById.get(session.id) ?? null}
         onToggleGroup={toggleGroup}
         onJumpToOriginalPane={jumpToOriginalPane}

@@ -32,6 +32,10 @@ import {
   VAULT_SESSION_ROW_HEIGHT
 } from './ai-vault-virtual-rows'
 import { canContinueAiVaultSessionInNewSession } from './ai-vault-session-continuation'
+import {
+  aiVaultProviderSessionKey,
+  resolveAiVaultSessionDisplayTitle
+} from '../../../../shared/ai-vault-session-display-title'
 
 const VAULT_ROW_OVERSCAN = 8
 const VAULT_EXPANDED_SESSION_ROW_ESTIMATED_HEIGHT = 420
@@ -51,6 +55,7 @@ export function AiVaultSessionVirtualList({
   buildResumeStartup,
   getOriginalPaneTarget,
   getSessionLiveState,
+  orcaCustomTitleByProviderKey,
   getWorktreeInfo,
   getSessionResumeState,
   getSessionResumeActions,
@@ -76,6 +81,7 @@ export function AiVaultSessionVirtualList({
   buildResumeStartup: (session: AiVaultSession, worktreeId?: string | null) => AiVaultResumeStartup
   getOriginalPaneTarget: (session: AiVaultSession) => AiVaultOriginalPaneTarget | null
   getSessionLiveState: (session: AiVaultSession) => AgentStatusState | null
+  orcaCustomTitleByProviderKey: ReadonlyMap<string, string>
   getWorktreeInfo: (session: AiVaultSession) => AiVaultSessionWorktreeInfo | null
   getSessionResumeState: (session: AiVaultSession) => AiVaultSessionResumeState
   getSessionResumeActions: (session: AiVaultSession) => AiVaultSessionResumeActions
@@ -204,6 +210,7 @@ export function AiVaultSessionVirtualList({
               buildResumeStartup={buildResumeStartup}
               getOriginalPaneTarget={getOriginalPaneTarget}
               getSessionLiveState={getSessionLiveState}
+              orcaCustomTitleByProviderKey={orcaCustomTitleByProviderKey}
               getWorktreeInfo={getWorktreeInfo}
               getSessionResumeState={getSessionResumeState}
               getSessionResumeActions={getSessionResumeActions}
@@ -239,6 +246,7 @@ function AiVaultVirtualRow({
   buildResumeStartup,
   getOriginalPaneTarget,
   getSessionLiveState,
+  orcaCustomTitleByProviderKey,
   getWorktreeInfo,
   getSessionResumeState,
   getSessionResumeActions,
@@ -266,6 +274,7 @@ function AiVaultVirtualRow({
   buildResumeStartup: (session: AiVaultSession, worktreeId?: string | null) => AiVaultResumeStartup
   getOriginalPaneTarget: (session: AiVaultSession) => AiVaultOriginalPaneTarget | null
   getSessionLiveState: (session: AiVaultSession) => AgentStatusState | null
+  orcaCustomTitleByProviderKey: ReadonlyMap<string, string>
   getWorktreeInfo: (session: AiVaultSession) => AiVaultSessionWorktreeInfo | null
   getSessionResumeState: (session: AiVaultSession) => AiVaultSessionResumeState
   getSessionResumeActions: (session: AiVaultSession) => AiVaultSessionResumeActions
@@ -336,6 +345,12 @@ function AiVaultVirtualRow({
       ) : (
         <VaultSessionRow
           session={row.session}
+          displayTitle={resolveAiVaultSessionDisplayTitle(
+            row.session.title,
+            orcaCustomTitleByProviderKey.get(
+              aiVaultProviderSessionKey(row.session.agent, row.session.sessionId)
+            )
+          )}
           liveState={getSessionLiveState(row.session)}
           resumeStartup={buildResumeStartup(row.session, resumeState?.worktreeId)}
           realHomeResumeStartup={buildResumeStartup(

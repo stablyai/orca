@@ -1,4 +1,5 @@
 import type { AgentSessionContinuationRequest } from '@/lib/agent-session-continuation'
+import { resolveAiVaultSessionDisplayTitle } from '../../../../shared/ai-vault-session-display-title'
 import type { AiVaultSession } from '../../../../shared/ai-vault-types'
 
 export function canContinueAiVaultSessionInNewSession(
@@ -15,13 +16,14 @@ export function prepareAiVaultSessionContinuation(args: {
   session: AiVaultSession
   targetWorktreeId: string
   targetWorkspacePath: string
+  orcaCustomTitle?: string | null
 }): AgentSessionContinuationRequest {
-  const { session, targetWorktreeId, targetWorkspacePath } = args
+  const { session, targetWorktreeId, targetWorkspacePath, orcaCustomTitle } = args
   return {
     source: {
       capturedText: previewTranscript(session),
       sourceAgent: session.agent,
-      sourceTitle: session.title,
+      sourceTitle: resolveAiVaultSessionDisplayTitle(session.title, orcaCustomTitle),
       sourceWorkingDirectory: session.cwd,
       transcriptPath: session.filePath.trim() || null,
       // Why: preview user entries can be tool results or injected skill text; only provider-authenticated prompts are safe hints.
