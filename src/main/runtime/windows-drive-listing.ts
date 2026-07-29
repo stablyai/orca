@@ -30,10 +30,10 @@ export async function listWindowsDrives(
         const stats = await statPath(root)
         return stats.isDirectory() ? root : null
       } catch (error) {
-        if (isExpectedUnavailableDriveError(error)) {
-          return null
+        if (!isExpectedUnavailableDriveError(error)) {
+          console.warn('[windows-drive-listing] Failed to stat drive', { root, error })
         }
-        throw error
+        return null
       }
     })
   )
