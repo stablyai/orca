@@ -30030,10 +30030,14 @@ export class OrcaRuntimeService {
     // one worktree's dispatch to another worktree's coordinator. Only use it
     // when the coordinator's own terminal lives in this same worktree.
     const handleWorktreeId = this.getWorktreeIdForTerminalHandle(handle)
+    const coordinatorWorktreeId = activeRun
+      ? this.getWorktreeIdForTerminalHandle(activeRun.coordinator_handle)
+      : null
     const scopedActiveRun =
       activeRun &&
       handleWorktreeId &&
-      this.getWorktreeIdForTerminalHandle(activeRun.coordinator_handle) === handleWorktreeId
+      coordinatorWorktreeId &&
+      runtimeWorktreeIdsEqual(coordinatorWorktreeId, handleWorktreeId)
         ? activeRun
         : undefined
     const parentTerminalHandle =
