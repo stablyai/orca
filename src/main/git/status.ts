@@ -38,14 +38,16 @@ import {
   gitStreamStdout
 } from './runner'
 import { StatusPorcelainParser } from '../../shared/git-status-porcelain-parser'
+import { findExistingWorktreeSymlinkPaths } from './worktree-symlink-detection'
 import { capGitStatusEntries, resolveGitStatusLimit } from '../../shared/git-status-limit'
 import { describeMaxBufferOverflowError, isMaxBufferOverflowError } from './max-buffer-overflow'
 import {
   removeSafeUntrackedDiscardTarget,
   removeSafeUntrackedDiscardTargets
 } from '../../shared/git-discard-path-safety'
+import { readBranchCompareHead } from '../../shared/git-branch-compare-head'
 import { resolveWorktreeAddBaseRef } from '../../shared/worktree-base-ref'
-import { hasWorktreeBaseCommitRef } from './worktree-base-ref-probe'
+import { resolveWorktreeBaseCommitOid } from './worktree-base-ref-probe'
 import { getLargeDiffRenderLimit } from '../../shared/large-diff-render-limit'
 import { InFlightPromiseDedupe, stableInFlightKey } from '../../shared/in-flight-promise-dedupe'
 import type { GitRuntimeOptions } from './git-runtime-options'
@@ -198,6 +200,12 @@ export type GetStatusOptions = GitRuntimeOptions & {
    */
   limit?: number
   bypassEffectiveUpstreamNegativeCache?: boolean
+  /** Paths Orca may have symlinked into this worktree (per-user shared paths
+   *  plus `orca.yaml` shared directories). Untracked entries that are one of
+   *  these *and* really symlinks are dropped: Git cannot ignore them when the
+   *  repo's rule is directory-only (`node_modules/`), but they are Orca's own
+   *  artifacts, not user work. */
+  sharedLinkPaths?: readonly string[]
 }
 
 /**
@@ -238,8 +246,42 @@ function getStatusReadKey(worktreePath: string, options: GetStatusOptions): stri
     options.includeIgnored === true,
     options.reuseLineStats === true,
     options.bypassEffectiveUpstreamNegativeCache === true,
-    limit
+    limit,
+    // Why: this changes which entries survive, so it must not share a cache slot.
+    (options.sharedLinkPaths ?? []).join('\u0001')
   ].join('\0')
+}
+
+/** Remove untracked entries that are shared symlinks Orca created.
+ *
+ *  Why this can't be left to Git: a directory-only ignore rule (`node_modules/`)
+ *  matches the primary checkout's real directory but never the worktree's
+ *  symlink, so Git reports it untracked forever — a phantom row in the diff and
+ *  a permanently "dirty" worktree.
+ *
+ *  Tight on both axes: an entry must be configured as shared *and* actually be a
+ *  symlink. A regular file the user created at a configured name still shows up,
+ *  and so does a symlink at a path nobody declared shared. Mutates `entries`. */
+async function dropSharedSymlinkUntrackedEntries(
+  worktreePath: string,
+  entries: GitStatusEntry[],
+  sharedLinkPaths: readonly string[]
+): Promise<void> {
+  // Why: a clean tree has no untracked entries, so this costs nothing on the
+  // common status-poll path — no syscall, no config read, no subprocess.
+  if (sharedLinkPaths.length === 0 || !entries.some((entry) => entry.area === 'untracked')) {
+    return
+  }
+  const sharedLinks = new Set(await findExistingWorktreeSymlinkPaths(worktreePath, sharedLinkPaths))
+  if (sharedLinks.size === 0) {
+    return
+  }
+  for (let index = entries.length - 1; index >= 0; index--) {
+    const entry = entries[index]
+    if (entry.area === 'untracked' && sharedLinks.has(entry.path)) {
+      entries.splice(index, 1)
+    }
+  }
 }
 
 async function runGetStatus(
@@ -313,6 +355,8 @@ async function runGetStatus(
       }
     }
   }
+
+  await dropSharedSymlinkUntrackedEntries(worktreePath, entries, options.sharedLinkPaths ?? [])
 
   if (statusSucceeded && !didHitLimit && shouldProbeEffectiveUpstreamStatus(branch, upstreamName)) {
     const branchName = getShortBranchName(branch)
@@ -1304,29 +1348,44 @@ export async function getBranchCompare(
     status: 'loading'
   }
 
-  const compareRef = await resolveCompareRef(worktreePath, options)
+  // The base-ref probe peels to a commit. Only branch refs are guaranteed to store
+  // commits; remote-tracking refs may store annotated tags whose raw oid must be preserved.
+  const reusableProbedOidByRef = new Map<string, string>()
+  const { compareRef, headOidResult, baseOidResult } = await readBranchCompareHead({
+    readCompareRef: () => resolveCompareRef(worktreePath, options),
+    resolveBaseRef: () =>
+      // Why: short refs like "origin/main" can collide with a local branch; use the proven remote-tracking ref.
+      resolveWorktreeAddBaseRef(baseRef, async (qualifiedRef) => {
+        const oid = await resolveWorktreeBaseCommitOid(worktreePath, qualifiedRef, options)
+        if (oid !== null && qualifiedRef.startsWith('refs/heads/')) {
+          reusableProbedOidByRef.set(qualifiedRef, oid)
+        }
+        return oid !== null
+      }),
+    readHeadOid: () => resolveRefOid(worktreePath, 'HEAD', options),
+    readBaseOid: (ref) => {
+      const reusableOid = reusableProbedOidByRef.get(ref)
+      return reusableOid === undefined
+        ? resolveRefOid(worktreePath, ref, options)
+        : Promise.resolve(reusableOid)
+    }
+  })
   summary.compareRef = compareRef
-  // Why: short refs like "origin/main" can collide with a local branch; use the proven remote-tracking ref.
-  const resolvedBaseRef = await resolveWorktreeAddBaseRef(baseRef, (qualifiedRef) =>
-    hasWorktreeBaseCommitRef(worktreePath, qualifiedRef, options)
-  )
 
   let headOid = ''
   let baseOid = ''
-  try {
-    headOid = await resolveRefOid(worktreePath, 'HEAD', options)
+  if (headOidResult.ok) {
+    headOid = headOidResult.oid
     summary.headOid = headOid
-  } catch {
-    try {
-      baseOid = await resolveRefOid(worktreePath, resolvedBaseRef, options)
+  } else {
+    if (baseOidResult.ok) {
+      baseOid = baseOidResult.oid
       summary.baseOid = baseOid
       // Why: an unborn branch (new remote worktree) has no changes yet; a compare error would look broken.
       summary.changedFiles = 0
       summary.commitsAhead = 0
       summary.status = 'ready'
       return { summary, entries: [] }
-    } catch {
-      // Preserve the unborn-head message when even the base is unresolvable.
     }
     summary.status = 'unborn-head'
     summary.errorMessage =
@@ -1334,10 +1393,10 @@ export async function getBranchCompare(
     return { summary, entries: [] }
   }
 
-  try {
-    baseOid = await resolveRefOid(worktreePath, resolvedBaseRef, options)
+  if (baseOidResult.ok) {
+    baseOid = baseOidResult.oid
     summary.baseOid = baseOid
-  } catch {
+  } else {
     summary.status = 'invalid-base'
     summary.errorMessage = `Base ref ${baseRef} could not be resolved in this repository.`
     return { summary, entries: [] }

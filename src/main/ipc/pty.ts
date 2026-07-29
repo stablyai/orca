@@ -25,6 +25,11 @@ import type {
 } from '../../shared/pty-renderer-delivery-health'
 import { extractHiddenStartupRendererQueryData } from '../../shared/terminal-reply-query-extraction'
 import {
+  INITIAL_MODE_2031_REPLY_SCAN_STATE,
+  scanMode2031ReplyDecision,
+  type Mode2031ReplyScanState
+} from '../../shared/terminal-color-scheme-protocol'
+import {
   type PtyMainDeliveryDiagnostics,
   type PtyPerPtyDeliveryDiagnostics,
   EMPTY_PTY_MAIN_DELIVERY_DIAGNOSTICS,
@@ -162,10 +167,22 @@ import { setTerminalViewAttributes } from '../runtime/terminal-view-attribute-st
 import { validateTerminalViewAttributes } from '../../shared/terminal-view-attributes'
 import type { PtyModelRestoreReason } from '../../shared/pty-model-restore-marker'
 import type { CodexAccountSelectionTarget } from '../codex-accounts/runtime-selection'
+import {
+  forgetCodexPaneAccount,
+  recordCodexPaneAccount
+} from '../codex/codex-pane-account-registry'
+import { resolveCodexPaneLaunchAccount } from '../codex/codex-pane-launch-account'
+import { getSystemCodexHomePath } from '../codex/codex-home-paths'
 import { isCodexSystemDefaultRealHomeEnabled } from '../codex/codex-real-home-flag'
+import type { CodexSessionResumePreparation } from '../codex/codex-session-resume-home'
+import { dropUnverifiedCodexResumeArgv } from '../codex/codex-unverified-resume-launch'
 import { isHostCodexHomeForWsl, isWslCodexHomeForHost } from '../pty/codex-home-wsl-env'
 import { buildConfiguredProxyEnv, type NetworkProxySettings } from '../../shared/network-proxy'
-import { resolveSetupAgentSequenceLaunchCommand } from '../../shared/setup-agent-sequencing'
+import {
+  resolveSetupAgentSequenceLaunchCommand,
+  SETUP_AGENT_SEQUENCE_STARTUP_COMMAND_ENV
+} from '../../shared/setup-agent-sequencing'
+import { dropAgentResumeArgvFromCommand } from '../../shared/agent-resume-argv-drop'
 import { parseWorkspaceKey } from '../../shared/workspace-scope'
 import { getStartupTerminalColorQueryReplyColors } from './terminal-startup-color-query-replies'
 import {
@@ -175,6 +192,7 @@ import {
 import { getSshFilesystemProvider } from '../providers/ssh-filesystem-dispatch'
 import { resolveLocalProjectRuntimeForWorktreeId } from '../local-project-runtime-resolution'
 import { isPtyIncarnationId } from '../../shared/pty-incarnation'
+import type { PtyListedSession } from '../../shared/pty-listed-session'
 
 // ─── Provider Registry ──────────────────────────────────────────────
 // Routes PTY operations by connectionId (null = local provider).
@@ -235,6 +253,13 @@ const AGENT_HOOK_RUNTIME_ENV_KEYS = [
   'ORCA_AGENT_HOOK_ENDPOINT',
   // Why: PR 2778 briefly exported this path; keep deleting stale inherited values so older PTYs can't leak the reverted path.
   'ORCA_CLAUDE_AGENT_STATUS_SETTINGS'
+] as const
+
+// Why: Orca never sets these, so an inherited value means a pty host launched from inside a Claude session — Claude reads it as a nested child and silently stops persisting the transcript.
+const CLAUDE_CHILD_SESSION_STAMP_ENV_KEYS = [
+  'CLAUDE_CODE_CHILD_SESSION',
+  'CLAUDE_CODE_SESSION_ID',
+  'CLAUDE_CODE_BRIDGE_SESSION_ID'
 ] as const
 
 export function getPtyIdForPaneKey(paneKey: string): string | undefined {
@@ -787,7 +812,7 @@ export type PrepareCodexSessionResume = (args: {
   target: CodexAccountSelectionTarget
   launchEnv?: NodeJS.ProcessEnv
   workspacePath?: string
-}) => Promise<{ codexHomePath: string | null } | null>
+}) => Promise<CodexSessionResumePreparation | null>
 type PrepareClaudeAuth = (
   target?: ClaudeAccountSelectionTarget
 ) => Promise<ClaudeRuntimeAuthPreparation>
@@ -818,6 +843,40 @@ function getCompatibleSelectedCodexHomePath(
   return wslInfo || (process.platform === 'win32' && isWslCodexHomeForHost(selectedCodexHomePath))
     ? null
     : selectedCodexHomePath
+}
+
+// Why: CODEX_HOME is fixed in a shell's environment at spawn and the daemon
+// keeps that shell alive across app restarts, so the launch account is the only
+// way to tell later that a pane still runs Codex as the previously selected
+// account. A reattach inherits that baked environment rather than choosing one,
+// so re-recording it under the current selection would erase the very evidence
+// that the pane is stale.
+function recordCodexPaneAccountForSpawn(args: {
+  ptyId: string | undefined
+  isDaemonHostSpawn: boolean
+  isReattach: boolean
+  pinnedByResume: boolean
+  launchCodexHomePath: string | null
+  target: CodexAccountSelectionTarget
+  settings: GlobalSettings | undefined
+}): void {
+  if (!args.ptyId || !args.isDaemonHostSpawn || args.isReattach) {
+    return
+  }
+  const record = args.settings
+    ? resolveCodexPaneLaunchAccount({
+        pinnedByResume: args.pinnedByResume,
+        launchCodexHomePath: args.launchCodexHomePath,
+        systemCodexHomePath: getSystemCodexHomePath(),
+        settings: args.settings,
+        target: args.target
+      })
+    : null
+  if (!record) {
+    forgetCodexPaneAccount(args.ptyId)
+    return
+  }
+  recordCodexPaneAccount(args.ptyId, record)
 }
 
 function readEnvWithProcessFallback(
@@ -901,14 +960,15 @@ function exposePiManagedExtensionEnv(
   }
 }
 
+// Why: variadic because a nested call per source made intermediate `string[] | undefined` collide with the parameter type.
 function mergePtyEnvDeletions(
   existingKeys: string[] | undefined,
-  additionalKeys: readonly string[]
+  ...additionalKeyGroups: readonly (readonly string[])[]
 ): string[] | undefined {
-  if (!existingKeys && additionalKeys.length === 0) {
+  if (!existingKeys && additionalKeyGroups.every((keys) => keys.length === 0)) {
     return undefined
   }
-  return Array.from(new Set([...(existingKeys ?? []), ...additionalKeys]))
+  return Array.from(new Set([...(existingKeys ?? []), ...additionalKeyGroups.flat()]))
 }
 
 function removeCodexHomeDeletionRequests(keys: string[] | undefined): string[] | undefined {
@@ -923,6 +983,15 @@ function getInheritedAgentHookEnvKeysToDelete(
   const env = spawnEnv ?? {}
   // Why: providers merge process.env after cleanup; delete stale hook keys without dropping fresh coordinates buildPtyHostEnv set.
   return AGENT_HOOK_RUNTIME_ENV_KEYS.filter((key) => env[key] === undefined)
+}
+
+function getInheritedClaudeSessionStampEnvKeysToDelete(
+  spawnEnv: Record<string, string> | undefined
+): string[] {
+  const env = spawnEnv ?? {}
+  // Why: strip only values inherited from the pty host; a caller that explicitly
+  // provides a stamp (deliberately spawning a nested Claude child) keeps it.
+  return CLAUDE_CHILD_SESSION_STAMP_ENV_KEYS.filter((key) => env[key] === undefined)
 }
 
 // Why: a nested terminal can inherit prior OpenCode/Pi/OMP overlay env; restore the user's recorded source dir, else strip only Orca-owned values.
@@ -1287,6 +1356,10 @@ export function clearProviderPtyState(
 ): void {
   if (!opts.preserveAgentSessionOwners) {
     agentSessionOwners.release(id)
+    // Why: the launch-account record outlives the app, so only a real teardown
+    // may drop it — a disconnect that can reconnect is not a death, and a reused
+    // id must never inherit a dead pane's Codex account.
+    forgetCodexPaneAccount(id)
   }
   // Why: OpenCode and Pi both allocate PTY-scoped runtime state outside the
   // node-pty process table. Centralizing provider cleanup avoids drift where a
@@ -2400,6 +2473,29 @@ export function registerPtyHandlers(
     return extracted.statelessQueryData + extracted.statefulQueryData + extracted.oscColorQueryData
   }
 
+  function scanDroppedMode2031Data(
+    data: string,
+    previous: Mode2031ReplyScanState
+  ): { data: string; state: Mode2031ReplyScanState } {
+    const result = scanMode2031ReplyDecision(previous, data)
+    const decisionData =
+      result.decision === 'subscribed'
+        ? '\x1b[?2031h'
+        : result.decision === 'unsubscribed'
+          ? '\x1b[?2031l'
+          : ''
+    return { data: decisionData, state: result.state }
+  }
+
+  function getDroppedMode2031RendererData(pending: PendingPtyData): string {
+    const state = pending.droppedMode2031ScanState
+    if (!state) {
+      return pending.droppedMode2031Data ?? ''
+    }
+    const pendingSubscribe = state.pendingSubscribe ? '\x1b[?2031h' : ''
+    return (pending.droppedMode2031Data ?? '') + pendingSubscribe + state.tail
+  }
+
   function dropOversizedPendingPtyData(id: string, pending: PendingPtyData): PendingPtyData {
     const capChars = pendingDataCapChars()
     if (pending.droppedOutput === true || pending.data.length <= capChars) {
@@ -2420,10 +2516,13 @@ export function registerPtyHandlers(
       pendingOverflowMarkedPtys.add(id)
     }
     pendingDroppedChars += pending.data.length
+    const mode2031 = scanDroppedMode2031Data(pending.data, INITIAL_MODE_2031_REPLY_SCAN_STATE)
     // Why no trimmed content tail: a mid-stream gap would corrupt the pane; the droppedOutput sentinel repaints from the snapshot and realigns by sequence (only query bytes ride along).
     return {
       data: extractDroppedPtyQueryBytes(pending.data).slice(0, DROPPED_QUERY_SALVAGE_MAX_CHARS),
-      droppedOutput: true
+      droppedOutput: true,
+      droppedMode2031Data: mode2031.data,
+      droppedMode2031ScanState: mode2031.state
     }
   }
 
@@ -2439,11 +2538,21 @@ export function registerPtyHandlers(
   ): PendingPtyData {
     // Why stay dropped at O(1): once over the cap the restore sentinel supersedes interim bytes; queries still get carved out (bounded) so replies survive the whole episode.
     if (existing?.droppedOutput === true) {
-      if (existing.data.length >= DROPPED_QUERY_SALVAGE_MAX_CHARS) {
-        return existing
+      const mode2031 = scanDroppedMode2031Data(
+        data,
+        existing.droppedMode2031ScanState ?? INITIAL_MODE_2031_REPLY_SCAN_STATE
+      )
+      const remainingQueryCapacity = Math.max(
+        0,
+        DROPPED_QUERY_SALVAGE_MAX_CHARS - existing.data.length
+      )
+      const salvaged = extractDroppedPtyQueryBytes(data).slice(0, remainingQueryCapacity)
+      return {
+        ...existing,
+        data: existing.data + salvaged,
+        droppedMode2031Data: mode2031.data || existing.droppedMode2031Data,
+        droppedMode2031ScanState: mode2031.state
       }
-      const salvaged = extractDroppedPtyQueryBytes(data)
-      return salvaged ? { ...existing, data: existing.data + salvaged } : existing
     }
     const nextContainsBackgroundOutput =
       existing?.containsBackgroundOutput === true || containsBackgroundOutput
@@ -2561,7 +2670,13 @@ export function registerPtyHandlers(
           pendingData.remove(selection)
           updateProducerFlowControl(id)
           // Why droppedOutput sentinel: pending-cap drop means the pane must repaint from the snapshot, not continue a gapped stream (data = carved query bytes only).
-          if (!sendPtyDataToRenderer(id, { id, data: pending.data, droppedOutput: true })) {
+          if (
+            !sendPtyDataToRenderer(id, {
+              id,
+              data: pending.data + getDroppedMode2031RendererData(pending),
+              droppedOutput: true
+            })
+          ) {
             sendFailed = true
             break
           }
@@ -2787,7 +2902,8 @@ export function registerPtyHandlers(
           runtime?.setPtyTransientFactDelegation(
             payload.id,
             payload.background,
-            payload.scanSeedAnsi
+            payload.scanSeedAnsi,
+            payload.mode2031PendingSubscribe
           )
           return
         }
@@ -2868,7 +2984,7 @@ export function registerPtyHandlers(
         pending.droppedOutput === true &&
         !overflowMarkedBeforeAppend &&
         pendingOverflowMarkedPtys.has(payload.id)
-      const nextData = pending.data
+      const nextData = pending.data + getDroppedMode2031RendererData(pending)
       const isInteractiveOutput = shouldSendInteractiveOutputNow(
         payload.id,
         nextData,
@@ -3126,7 +3242,10 @@ export function registerPtyHandlers(
     target: CodexAccountSelectionTarget
     launchEnv?: NodeJS.ProcessEnv
     workspacePath?: string
-  }): Promise<{ codexHomePath: string | null } | null> | null => {
+  }): {
+    providerSession: AgentProviderSessionMetadata
+    preparation: Promise<CodexSessionResumePreparation | null>
+  } | null => {
     if (args.connectionId || args.launchAgent !== 'codex' || !options?.prepareCodexSessionResume) {
       return null
     }
@@ -3134,12 +3253,88 @@ export function registerPtyHandlers(
     if (!providerSession) {
       return null
     }
-    return options.prepareCodexSessionResume({
+    return {
       providerSession,
-      target: args.target,
-      launchEnv: args.launchEnv,
-      workspacePath: args.workspacePath
+      preparation: options.prepareCodexSessionResume({
+        providerSession,
+        target: args.target,
+        launchEnv: args.launchEnv,
+        workspacePath: args.workspacePath
+      })
+    }
+  }
+
+  type CodexResumeLaunch = {
+    codexResumeHome: { codexHomePath: string } | null
+    command: string | undefined
+    notifyResumeUnavailable: boolean
+    droppedResumeArgv: boolean
+    providerSession: AgentProviderSessionMetadata | null
+  }
+
+  /** Kept separate from resolveCodexResumeLaunch so non-Codex spawns never await:
+   *  an extra tick reorders the pane-spawn reservation races this handler arbitrates. */
+  const noCodexResumeLaunch = (command: string | undefined): CodexResumeLaunch => ({
+    codexResumeHome: null,
+    command,
+    notifyResumeUnavailable: false,
+    droppedResumeArgv: false,
+    providerSession: null
+  })
+
+  /** The command a Codex launch actually runs: unchanged when provenance is verified,
+   *  stripped of `resume <id>` when it is not. */
+  const resolveCodexResumeLaunch = (
+    command: string | undefined,
+    preparation: NonNullable<ReturnType<typeof prepareCodexResumeHome>>
+  ): Promise<CodexResumeLaunch> =>
+    preparation.preparation.then((prepared) => {
+      const providerSession = preparation.providerSession
+      if (prepared?.outcome !== 'fresh') {
+        return {
+          codexResumeHome: prepared ?? null,
+          command,
+          notifyResumeUnavailable: false,
+          droppedResumeArgv: false,
+          providerSession
+        }
+      }
+      const dropped = dropUnverifiedCodexResumeArgv({
+        command,
+        providerSession,
+        claimedCodexProvenance: prepared.claimedCodexProvenance
+      })
+      return {
+        codexResumeHome: null,
+        command: dropped.command,
+        // Why: staying silent only makes sense for metadata that positively belongs to
+        // another agent; a resume with no transcript path at all still owes the user a notice.
+        notifyResumeUnavailable:
+          dropped.droppedResumeArgv &&
+          (prepared.claimedCodexProvenance || !providerSession.transcriptPath),
+        droppedResumeArgv: dropped.droppedResumeArgv,
+        providerSession
+      }
     })
+
+  /** Why: buildPtyHostEnv prefers ORCA_SEQUENCED_STARTUP_COMMAND over the launch command
+   *  and the sequenced wrapper `eval`s it, so a dropped resume argv has to go there too. */
+  const stripSequencedStartupResumeArgv = <T extends Record<string, string> | undefined>(
+    env: T,
+    launch: CodexResumeLaunch
+  ): T => {
+    const sequenced = env?.[SETUP_AGENT_SEQUENCE_STARTUP_COMMAND_ENV]
+    if (!env || !sequenced || !launch.droppedResumeArgv || !launch.providerSession) {
+      return env
+    }
+    const drop = dropAgentResumeArgvFromCommand({
+      command: sequenced,
+      agent: 'codex',
+      providerSession: launch.providerSession
+    })
+    return drop.status === 'dropped'
+      ? { ...env, [SETUP_AGENT_SEQUENCE_STARTUP_COMMAND_ENV]: drop.command }
+      : env
   }
 
   // Why: route through getProviderForPty() so CLI commands work for remote PTYs too; localProvider would silently fail for them.
@@ -3180,7 +3375,13 @@ export function registerPtyHandlers(
         launchEnv: args.env,
         workspacePath: cwd
       })
-      const codexResumeHome = codexResumePreparation ? await codexResumePreparation : null
+      const codexResumeLaunch = codexResumePreparation
+        ? await resolveCodexResumeLaunch(args.command, codexResumePreparation)
+        : noCodexResumeLaunch(args.command)
+      const codexResumeHome = codexResumeLaunch.codexResumeHome
+      // Why: the drop still applies here, but this controller's result has no field for
+      // notifyResumeUnavailable — runtime/relay panes start fresh without the notice.
+      const launchCommand = codexResumeLaunch.command
       const claudeAuth =
         isClaudeLaunch && prepareClaudeAuth ? await prepareClaudeAuth(codexSelectionTarget) : null
       if (isClaudeLaunch && isClaudeAuthSwitchInProgress()) {
@@ -3249,6 +3450,7 @@ export function registerPtyHandlers(
         ? { ...sshScopedEnv, ...claudeAuth.envPatch }
         : sshScopedEnv
       const requestedAgentTeamsPath = env?.ORCA_AGENT_TEAMS_TEAM_ID ? env.PATH : undefined
+      env = stripSequencedStartupResumeArgv(env, codexResumeLaunch)
       if (args.preAllocatedHandle) {
         env = { ...env, ORCA_TERMINAL_HANDLE: args.preAllocatedHandle }
       }
@@ -3286,7 +3488,7 @@ export function registerPtyHandlers(
           skipCodexHomeEnv,
           stripInheritedOrcaCodexHome,
           githubAttributionEnabled: getSettings?.()?.enableGitHubAttribution ?? false,
-          launchCommand: args.command,
+          launchCommand,
           launchAgent: isTuiAgent(args.launchAgent) ? args.launchAgent : undefined,
           shellPath: daemonShellOverride ?? process.env.COMSPEC,
           isWsl: shouldSkipCodexHomeEnvForWindowsShell(daemonShellOverride, cwd),
@@ -3327,8 +3529,11 @@ export function registerPtyHandlers(
         args.onPtySpawnCommitted?.()
       }
       spawnOptions.envToDelete = mergePtyEnvDeletions(
-        mergePtyEnvDeletions(authEnvToDelete, args.envToDelete ?? []),
-        isDaemonHostSpawn ? getInheritedAgentHookEnvKeysToDelete(env) : []
+        authEnvToDelete,
+        args.envToDelete ?? [],
+        isDaemonHostSpawn ? getInheritedAgentHookEnvKeysToDelete(env) : [],
+        // Why: ungated, unlike the agent-hook keys — the local provider and the relay host also spread their own process.env into every spawn.
+        getInheritedClaudeSessionStampEnvKeysToDelete(env)
       )
       if (skipCodexHomeEnv) {
         spawnOptions.envToDelete = mergePtyEnvDeletions(
@@ -3347,8 +3552,8 @@ export function registerPtyHandlers(
       }
       deleteRequestedEnvKeys(env, spawnOptions.envToDelete)
       promoteAgentTeamsShimPath(env, requestedAgentTeamsPath)
-      if (args.command !== undefined) {
-        spawnOptions.command = args.command
+      if (launchCommand !== undefined) {
+        spawnOptions.command = launchCommand
       }
       if (args.commandDelivery !== undefined) {
         spawnOptions.commandDelivery = args.commandDelivery
@@ -3679,6 +3884,15 @@ export function registerPtyHandlers(
         if (effectiveSessionAppId !== undefined && effectiveSessionAppId !== result.id) {
           ptySizes.delete(effectiveSessionAppId)
         }
+        recordCodexPaneAccountForSpawn({
+          ptyId: result.id,
+          isDaemonHostSpawn,
+          isReattach: result.isReattach === true,
+          pinnedByResume: Boolean(codexResumeHome),
+          launchCodexHomePath: selectedCodexHomePath,
+          target: codexSelectionTarget,
+          settings: getSettings?.()
+        })
         if (hostSessionBinding) {
           try {
             const binding = {
@@ -3742,7 +3956,7 @@ export function registerPtyHandlers(
           runtime?.cancelPendingPtyRegistration?.(result.id, result.incarnationId)
         }
         // Why: arms main's per-PTY Command Code output detector from the launch command (renderer startupCommand parity).
-        runtime?.noteTerminalSpawnCommand?.(result.id, args.command ?? null)
+        runtime?.noteTerminalSpawnCommand?.(result.id, launchCommand ?? null)
         if (isClaudeLaunch) {
           markClaudePtySpawned(result.id)
         }
@@ -4380,7 +4594,6 @@ export function registerPtyHandlers(
       // Why: SSH can strip ORCA_PANE_KEY when remote hooks are off; IPC tab/leaf metadata still names the pane.
       const reservationPaneKey = metadataPaneKey ?? validatedPaneKey
       const validatedLeafId = verifiedLeafId ?? metadataLeafId
-      let env: Record<string, string> | undefined = baseEnv
       const effectiveShellOverride = terminalRuntimeOptions.shellOverride
       const nativeWindowsConptySpawn = isNativeWindowsLocalPtySpawn({
         connectionId: args.connectionId,
@@ -4400,7 +4613,15 @@ export function registerPtyHandlers(
         launchEnv: baseEnv,
         workspacePath: cwd
       })
-      const codexResumeHome = codexResumePreparation ? await codexResumePreparation : null
+      const codexResumeLaunch = codexResumePreparation
+        ? await resolveCodexResumeLaunch(args.command, codexResumePreparation)
+        : noCodexResumeLaunch(args.command)
+      const codexResumeHome = codexResumeLaunch.codexResumeHome
+      const launchCommand = codexResumeLaunch.command
+      baseEnv = stripSequencedStartupResumeArgv(baseEnv, codexResumeLaunch)
+      // Why: declared after the strip so a local-provider spawn cannot capture the
+      // pre-strip env — only the daemon branch below re-derives this from baseEnv.
+      let env: Record<string, string> | undefined = baseEnv
       const selectedCodexHomePath = isDaemonHostSpawn
         ? getCompatibleSelectedCodexHomePath(
             codexSelectionTarget,
@@ -4444,7 +4665,7 @@ export function registerPtyHandlers(
             skipCodexHomeEnv,
             stripInheritedOrcaCodexHome,
             githubAttributionEnabled: getSettings?.()?.enableGitHubAttribution ?? false,
-            launchCommand: args.command,
+            launchCommand,
             launchAgent: isTuiAgent(args.launchAgent) ? args.launchAgent : undefined,
             shellPath: effectiveShellOverride ?? process.env.COMSPEC,
             isWsl: shouldSkipCodexHomeEnvForWindowsShell(effectiveShellOverride, cwd),
@@ -4472,16 +4693,12 @@ export function registerPtyHandlers(
         ? [...CLAUDE_AUTH_ENV_VARS, 'ANTHROPIC_CUSTOM_HEADERS']
         : undefined
       let combinedEnvToDelete = mergePtyEnvDeletions(
-        mergePtyEnvDeletions(
-          mergePtyEnvDeletions(
-            mergePtyEnvDeletions(
-              mergePtyEnvDeletions(envToDelete, args.envToDelete ?? []),
-              agentTeamsEnvToDelete ?? []
-            ),
-            isDaemonHostSpawn ? getInheritedAgentHookEnvKeysToDelete(spawnEnv) : []
-          ),
-          skipCodexHomeEnv ? CODEX_HOME_ENV_KEYS : []
-        ),
+        envToDelete,
+        args.envToDelete ?? [],
+        agentTeamsEnvToDelete ?? [],
+        isDaemonHostSpawn ? getInheritedAgentHookEnvKeysToDelete(spawnEnv) : [],
+        getInheritedClaudeSessionStampEnvKeysToDelete(spawnEnv),
+        skipCodexHomeEnv ? CODEX_HOME_ENV_KEYS : [],
         // Why: the persistent daemon compares its own merged CODEX_HOME pair;
         // main cannot safely decide ownership for a process it may not parent.
         stripInheritedOrcaCodexHome ? ['ORCA_CODEX_HOME'] : []
@@ -4504,8 +4721,8 @@ export function registerPtyHandlers(
       if (combinedEnvToDelete) {
         spawnOptions.envToDelete = combinedEnvToDelete
       }
-      if (args.command !== undefined) {
-        spawnOptions.command = args.command
+      if (launchCommand !== undefined) {
+        spawnOptions.command = launchCommand
       }
       if (args.commandDelivery !== undefined) {
         spawnOptions.commandDelivery = args.commandDelivery
@@ -4713,6 +4930,15 @@ export function registerPtyHandlers(
           daemon: isDaemonHostSpawn,
           reattach: result.isReattach ?? false
         })
+        recordCodexPaneAccountForSpawn({
+          ptyId: result.id,
+          isDaemonHostSpawn,
+          isReattach: result.isReattach === true,
+          pinnedByResume: Boolean(codexResumeHome),
+          launchCodexHomePath: selectedCodexHomePath,
+          target: codexSelectionTarget,
+          settings: getSettings?.()
+        })
         ptyOwnership.set(result.id, args.connectionId ?? null)
         if (result.incarnationId) {
           ptyIncarnationById.set(result.id, result.incarnationId)
@@ -4877,7 +5103,7 @@ export function registerPtyHandlers(
         // Why: arm main's per-PTY Command Code output detector from the launch command (startupCommand parity); banner detection covers PTYs without one.
         runtime?.noteTerminalSpawnCommand?.(
           result.id,
-          typeof args.command === 'string' ? args.command : null
+          typeof launchCommand === 'string' ? launchCommand : null
         )
         if (isClaudeLaunch) {
           markClaudePtySpawned(result.id)
@@ -4947,7 +5173,12 @@ export function registerPtyHandlers(
             ? { launchConfig: effectiveLaunchConfig }
             : {}),
           // Why: a daemon-retry race can surface isReattach even for a minted session id, and a reattach must never claim its cwd was remapped.
-          ...(startupCwdFallback && !result.isReattach ? { startupCwdFallback } : {})
+          ...(startupCwdFallback && !result.isReattach ? { startupCwdFallback } : {}),
+          // Why: the pane asked to resume and got a fresh session instead; only the
+          // renderer can say so, and a reattach never ran this launch command.
+          ...(codexResumeLaunch.notifyResumeUnavailable && !result.isReattach
+            ? { agentResumeUnavailable: true as const }
+            : {})
         }
         // Why: renderer tab state cannot reliably infer background and reattached PTYs in the daemon inventory.
         sendPtySpawnedToRenderer(result.id)
@@ -5506,33 +5737,37 @@ export function registerPtyHandlers(
     }
   })
 
-  ipcMain.handle(
-    'pty:listSessions',
-    async (): Promise<{ id: string; cwd: string; title: string }[]> => {
-      const deduped = new Map<string, { id: string; cwd: string; title: string }>()
-      const admission = new PtyProcessListAdmission()
-      await visitPtyProcessListingsInBatches(
-        registeredPtyProviders(),
-        ({ provider, connectionId }) =>
-          connectionId === null
-            ? provider.listProcesses()
-            : provider.listProcesses().catch(() => []),
-        ({ connectionId }, sessions) => {
-          for (const rawSession of sessions) {
-            const session = admission.admit(rawSession)
-            // Why: kill actions only send back the PTY id, so rebuild ownership while listing to keep reconnect-discovered remote sessions routed to their provider.
-            ptyOwnership.set(session.id, connectionId)
-            deduped.set(session.id, {
-              id: session.id,
-              cwd: session.cwd,
-              title: session.title
-            })
-          }
+  ipcMain.handle('pty:listSessions', async (): Promise<PtyListedSession[]> => {
+    const deduped = new Map<string, PtyListedSession>()
+    const admission = new PtyProcessListAdmission()
+    await visitPtyProcessListingsInBatches(
+      registeredPtyProviders(),
+      ({ provider, connectionId }) =>
+        connectionId === null ? provider.listProcesses() : provider.listProcesses().catch(() => []),
+      ({ provider, connectionId }, sessions) => {
+        for (const rawSession of sessions) {
+          const session = admission.admit(rawSession)
+          // Why: kill actions only send back the PTY id, so rebuild ownership while listing to keep reconnect-discovered remote sessions routed to their provider.
+          ptyOwnership.set(session.id, connectionId)
+          deduped.set(session.id, {
+            id: session.id,
+            cwd: session.cwd,
+            title: session.title,
+            // Why: the renderer's binding map is empty during restore, so ownership is the only
+            // liveness evidence it has. Absence is authoritative only from a provider that
+            // serializes claims — otherwise it is 'unknown', never 'absent' (#8459).
+            agentOwnership:
+              (session.agentSessionOwners?.length ?? 0) > 0
+                ? 'present'
+                : provider.providesAgentSessionOwnerListings?.(session.id) === true
+                  ? 'absent'
+                  : 'unknown'
+          })
         }
-      )
-      return Array.from(deduped.values())
-    }
-  )
+      }
+    )
+    return Array.from(deduped.values())
+  })
 
   ipcMain.on(
     'pty:getAuthoritativeBufferSnapshotCapabilitiesSync',

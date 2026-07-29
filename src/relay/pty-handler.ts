@@ -48,6 +48,7 @@ import {
   type PtyIngressEmission
 } from '../shared/pty-startup-ingress'
 import { resolvePtyOwnerBackend, type PtyOwnerBackend } from '../shared/pty-owner-backend'
+import { RecentPtyOutputBuffer } from '../main/runtime/recent-pty-output-buffer'
 import {
   agentSessionOwnerBindingsEqual,
   ClaimedAgentPtyOwnerRegistry
@@ -83,7 +84,9 @@ type ManagedPty = {
   incarnationId: string
   pty: IPty
   initialCwd: string
-  buffered: string
+  /** Why a chunk deque: rebuilding a rolling 100KB string per PTY chunk copied the
+   * whole window on every write once saturated. Readers are attach/adopt/revive only. */
+  buffered: RecentPtyOutputBuffer
   /** Timer for SIGKILL fallback after a graceful SIGTERM shutdown. */
   killTimer?: ReturnType<typeof setTimeout>
   /** True once disposeManagedPty has run; blocks double-dispose and makes post-dispose calls fail "not found" not silently. */
@@ -484,10 +487,7 @@ export class PtyHandler {
     if (data.length === 0) {
       return
     }
-    managed.buffered += data
-    if (managed.buffered.length > REPLAY_BUFFER_MAX) {
-      managed.buffered = managed.buffered.slice(-REPLAY_BUFFER_MAX)
-    }
+    managed.buffered.append(data)
   }
 
   private releaseStartupCommand(managed: ManagedPty): void {
@@ -980,13 +980,12 @@ export class PtyHandler {
         throw new Error('agent_session_exited_during_start')
       }
       managed.agentSessionOwners = this.agentSessionOwners.listForPty(managed.id)
+      const adoptedReplay = result.disposition === 'adopted' ? managed.buffered.read() : ''
       return {
         id: managed.id,
         incarnationId: managed.incarnationId,
         agentSessionEnsure: result,
-        ...(result.disposition === 'adopted' && managed.buffered
-          ? { replay: managed.buffered }
-          : {})
+        ...(adoptedReplay ? { replay: adoptedReplay } : {})
       }
     } catch (error) {
       if (!physicalSpawnCommitted) {
@@ -1111,7 +1110,10 @@ export class PtyHandler {
       incarnationId: randomUUID(),
       pty: term,
       initialCwd: cwd,
-      buffered: '',
+      buffered: new RecentPtyOutputBuffer({
+        preserveChunkBoundaries: false,
+        limit: REPLAY_BUFFER_MAX
+      }),
       paneKey,
       tabId,
       ...(attachIdentity.paneKey || attachIdentity.tabId ? { attachIdentity } : {}),
@@ -1198,14 +1200,15 @@ export class PtyHandler {
 
     // Why: renderer hasn't registered replay handlers yet during spawn, so return to the caller instead of notifying too early.
     // Why: buffer intentionally NOT cleared after replay (client clears xterm first) so later restarts still replay full history.
-    if (managed.buffered) {
+    const replay = managed.buffered.read()
+    if (replay) {
       // Why: drop pending batched bytes already in the replay buffer so attach doesn't render them twice.
       this.pendingOutputByPty.delete(id)
       this.clearOutputFlushTimerIfIdle()
       if (params.suppressReplayNotification) {
-        return { incarnationId: managed.incarnationId, replay: managed.buffered }
+        return { incarnationId: managed.incarnationId, replay }
       }
-      this.dispatcher.notify('pty.replay', { id, data: managed.buffered })
+      this.dispatcher.notify('pty.replay', { id, data: replay })
     }
     return { incarnationId: managed.incarnationId }
   }
@@ -1552,7 +1555,10 @@ export class PtyHandler {
       incarnationId: randomUUID(),
       pty: term,
       initialCwd: entry.cwd,
-      buffered: '',
+      buffered: new RecentPtyOutputBuffer({
+        preserveChunkBoundaries: false,
+        limit: REPLAY_BUFFER_MAX
+      }),
       paneKey: entry.paneKey,
       tabId: entry.tabId,
       attachIdentity: entry.attachIdentity,

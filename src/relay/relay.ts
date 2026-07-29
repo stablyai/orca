@@ -342,7 +342,7 @@ async function main(): Promise<void> {
   })
 
   process.on('unhandledRejection', (reason) => {
-    relayLogLine(`[relay] Unhandled rejection: ${reason}`)
+    relayLogLine(`[relay] Unhandled rejection: ${String(reason)}`)
   })
 
   // Why: guards writes after the stdin/SSH channel drops so keepalive/pty.data frames don't hit a dead pipe (EPIPE).

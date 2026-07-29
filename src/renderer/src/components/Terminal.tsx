@@ -120,6 +120,7 @@ import {
   createFloatingWorkspaceMarkdownTab,
   createFloatingWorkspaceTerminalTab,
   handleEmptyFloatingWorkspacePanelCloseShortcut,
+  isEventTargetInsideFloatingWorkspacePanel,
   isFloatingWorkspacePanelFocused,
   switchFloatingWorkspaceTab
 } from '@/lib/floating-workspace-terminal-actions'
@@ -137,6 +138,10 @@ import { translate } from '@/i18n/i18n'
 import { getRuntimeEnvironmentIdForWorktree } from '@/lib/worktree-runtime-owner'
 import { getResolvedExecutionHostIdForWorktree } from '@/lib/resolved-worktree-execution-host'
 import { browserWorkspaceHasRemoteOwner } from '@/runtime/remote-browser-tab-ownership'
+import {
+  combineTerminalWorktreeParkIds,
+  useManualTerminalWorktreeParking
+} from './terminal-pane/use-manual-terminal-worktree-parking'
 
 const EditorPanel = lazy(() => import('./editor/EditorPanel'))
 
@@ -738,6 +743,15 @@ function Terminal(): React.JSX.Element | null {
   const [parkedTerminalWorktreeIds, setParkedTerminalWorktreeIds] = useState<ReadonlySet<string>>(
     () => new Set()
   )
+  const manuallyParkedTerminalWorktreeIds = useManualTerminalWorktreeParking({
+    activeView,
+    renderedActiveWorktreeId
+  })
+  const effectiveParkedTerminalWorktreeIds = useMemo(
+    () =>
+      combineTerminalWorktreeParkIds(parkedTerminalWorktreeIds, manuallyParkedTerminalWorktreeIds),
+    [manuallyParkedTerminalWorktreeIds, parkedTerminalWorktreeIds]
+  )
   // Tab restriction for targeted background mounts (wake/resume); a worktree absent from this map mounts all its tabs.
   const backgroundMountTabIdsByWorktreeRef = useRef(new Map<string, ReadonlySet<string>>())
   // Why: only cold-activation deferral (not targeted mounts, which share the map above) creates watcher coverage for every unmounted tab.
@@ -1055,9 +1069,9 @@ function Terminal(): React.JSX.Element | null {
   const coldWorktreePresentationTargets = useMemo(
     () =>
       activeView === 'terminal' && activeTabType === 'terminal'
-        ? parkedTerminalWorktreeIds
+        ? effectiveParkedTerminalWorktreeIds
         : new Set<string>(),
-    [activeTabType, activeView, parkedTerminalWorktreeIds]
+    [activeTabType, activeView, effectiveParkedTerminalWorktreeIds]
   )
   const {
     presentationByScope: worktreePresentationByScope,
@@ -1088,7 +1102,9 @@ function Terminal(): React.JSX.Element | null {
         const shouldMeasureHiddenWorktree =
           !isVisible && measurableBackgroundWorktreeIdsRef.current.has(workspace.id)
         const parked =
-          !isVisible && !shouldMeasureHiddenWorktree && parkedTerminalWorktreeIds.has(workspace.id)
+          !isVisible &&
+          !shouldMeasureHiddenWorktree &&
+          effectiveParkedTerminalWorktreeIds.has(workspace.id)
         if (parked) {
           for (const tab of tabs) {
             const activityTerminalPortal = findActivityTerminalPortal(activityTerminalPortals, {
@@ -1135,7 +1151,7 @@ function Terminal(): React.JSX.Element | null {
     backgroundMountRevision,
     getEffectiveLayoutForWorktree,
     groupsByWorktree,
-    parkedTerminalWorktreeIds,
+    effectiveParkedTerminalWorktreeIds,
     pendingStartupByTabId,
     renderedActiveWorktreeId,
     tabsByWorktree,
@@ -1802,6 +1818,15 @@ function Terminal(): React.JSX.Element | null {
       // Cmd/Ctrl+W — close active editor/browser tab or terminal pane. Terminal close lives in keyboard-handlers.ts (split panes + confirm dialog).
       // Why: still preventDefault here so Electron doesn't run its default Cmd+W window-close.
       if (!e.repeat && matchShortcut('tab.close')) {
+        // The floating panel (L2) and its terminal pane handler (L3) own Cmd+W while the panel is
+        // focused. Guard on the event target too — during blur/IME churn activeElement is transiently
+        // body/null while a key still targets a floating xterm, and a main editor/browser being active
+        // would otherwise close the wrong (main) tab. Yield without preventDefault so L3 runs.
+        const floatingPanelOwnsEvent =
+          isEventTargetInsideFloatingWorkspacePanel(e.target) || floatingWorkspaceFocused
+        if (floatingPanelOwnsEvent) {
+          return
+        }
         const state = useAppStore.getState()
         if (state.activeTabType === 'terminal' && context === 'terminal') {
           return
@@ -2109,7 +2134,7 @@ function Terminal(): React.JSX.Element | null {
               const shouldColdParkTerminalPanes =
                 !isVisible &&
                 !shouldMeasureHiddenWorktree &&
-                parkedTerminalWorktreeIds.has(workspace.id)
+                effectiveParkedTerminalWorktreeIds.has(workspace.id)
               return (
                 <WorktreeSplitSurface
                   key={`tab-groups-${workspace.id}`}
@@ -2161,7 +2186,7 @@ function Terminal(): React.JSX.Element | null {
                 const shouldColdParkTerminalPanes =
                   !isVisible &&
                   !shouldMeasureHiddenWorktree &&
-                  parkedTerminalWorktreeIds.has(workspace.id)
+                  effectiveParkedTerminalWorktreeIds.has(workspace.id)
                 return (
                   <div
                     key={workspace.id}

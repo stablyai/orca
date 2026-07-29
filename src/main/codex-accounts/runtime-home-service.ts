@@ -37,9 +37,11 @@ import {
   getOrcaUserDataPath,
   getCodexSessionBackfillStateDirPath,
   getSystemCodexHomePath,
+  resolveOrcaManagedCodexHomePath,
   syncCodexGlobalInstructionsIntoManagedHome,
   syncSystemCodexResourcesIntoManagedHome
 } from '../codex/codex-home-paths'
+import { startCodexAccountSessionBridgeInBackground } from '../codex/codex-account-session-bridge'
 import { startSystemCodexSessionBridgeInBackground } from '../codex/codex-session-bridge'
 import {
   resolveHostCodexSessionSourceHome,
@@ -251,7 +253,31 @@ export class CodexRuntimeHomeService {
       runtimeHomePath: perAccountHome,
       systemHomePath: getSystemCodexHomePath()
     })
+    this.startSelfContainedSessionBridgeForLaunch(perAccountHome)
     return perAccountHome
+  }
+
+  // Why: Codex's own `/resume` picker only lists rollouts under the launch
+  // CODEX_HOME, so a self-contained account home starts out with no history at
+  // all. Hardlink every other Orca-visible home's rollouts in — after launch,
+  // since history trees can be large — so switching accounts no longer hides
+  // the user's conversations.
+  private startSelfContainedSessionBridgeForLaunch(perAccountHome: string): void {
+    void startCodexAccountSessionBridgeInBackground({
+      targetCodexHomePath: perAccountHome,
+      sourceCodexHomePaths: this.getSelfContainedSessionBridgeSourceHomes()
+    })
+  }
+
+  private getSelfContainedSessionBridgeSourceHomes(): string[] {
+    return [
+      // Why: history-only override lets custom-CODEX_HOME users bridge from the
+      // home they actually record sessions in; falls back to the real ~/.codex.
+      resolveHostCodexSessionSourceHome(this.store.getSettings()) ?? getSystemCodexHomePath(),
+      // Why: path only — a per-account install must not materialize the mirror.
+      resolveOrcaManagedCodexHomePath(),
+      ...this.getManagedHostAccountHomesForSessionDiscovery()
+    ]
   }
 
   // Why: the per-account home is both the launch CODEX_HOME and the credential
@@ -263,6 +289,9 @@ export class CodexRuntimeHomeService {
     if (perAccountHome && existsSync(join(perAccountHome, 'auth.json'))) {
       this.lastSyncedAccountId = account.id
       this.lastHostAccountUsedSelfContainedHome = true
+      // Why: selection runs well before the user restarts a pane, so history is
+      // already linked in by the time the newly launched Codex opens /resume.
+      this.startSelfContainedSessionBridgeForLaunch(perAccountHome)
       return
     }
     this.clearSelfContainedManagedSelection(account)

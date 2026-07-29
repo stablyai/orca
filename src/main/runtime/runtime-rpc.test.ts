@@ -11,7 +11,7 @@ import Database from '../sqlite/sync-database'
 import { OrcaRuntimeService } from './orca-runtime'
 import { OrchestrationDb } from './orchestration/db'
 import * as runtimeMetadataModule from './runtime-metadata'
-import { readRuntimeMetadata } from './runtime-metadata'
+import { readRuntimeMetadata, writeRuntimeMetadata } from './runtime-metadata'
 import { createRuntimeTransportMetadata, OrcaRuntimeRpcServer } from './runtime-rpc'
 import { parsePairingCode } from '../../shared/pairing'
 import { subscribeRemoteRuntimeRequest } from '../../shared/remote-runtime-client'
@@ -26,6 +26,7 @@ import {
 import { decrypt, deriveSharedKey, encrypt, generateKeyPair } from './rpc/e2ee-crypto'
 import { DeviceRegistry } from './device-registry'
 import { DEVICE_REGISTRY_FILENAME, E2EE_KEYPAIR_FILENAME } from './mobile-pairing-files'
+import { ORCHESTRATION_CONTRACT_VERSION } from '../../shared/protocol-version'
 
 vi.mock('../git/worktree', () => ({
   listWorktrees: vi.fn().mockResolvedValue([
@@ -49,7 +50,7 @@ async function sendRequest(
     let buffer = ''
     socket.setEncoding('utf8')
     socket.once('error', reject)
-    socket.on('data', (chunk) => {
+    socket.on('data', (chunk: string) => {
       buffer += chunk
       const newlineIndex = buffer.indexOf('\n')
       if (newlineIndex === -1) {
@@ -60,7 +61,7 @@ async function sendRequest(
       resolve(JSON.parse(message) as Record<string, unknown>)
     })
     socket.on('connect', () => {
-      socket.write(`${JSON.stringify(request)}\n`)
+      socket.write(`${JSON.stringify(withCurrentOrchestrationContract(request))}\n`)
     })
   })
 }
@@ -111,10 +112,18 @@ function openFramedSession(endpoint: string, request: Record<string, unknown>): 
       }
     })
     socket.on('connect', () => {
-      socket.write(`${JSON.stringify(request)}\n`)
+      socket.write(`${JSON.stringify(withCurrentOrchestrationContract(request))}\n`)
     })
   })
   return { socket, frames, done }
+}
+
+function withCurrentOrchestrationContract(
+  request: Record<string, unknown>
+): Record<string, unknown> {
+  return typeof request.method === 'string' && request.method.startsWith('orchestration.')
+    ? { ...request, orchestrationContractVersion: ORCHESTRATION_CONTRACT_VERSION }
+    : request
 }
 
 function sleep(ms: number): Promise<void> {
@@ -128,6 +137,18 @@ async function waitFor(predicate: () => boolean, timeoutMs = 2_000): Promise<voi
       throw new Error('timed out waiting for condition')
     }
     await sleep(20)
+  }
+}
+
+function seedSupervisedAskWorkers(db: OrchestrationDb, workerHandles: string[]): void {
+  const run = db.createRun({
+    objective: 'Exercise ask admission',
+    coordinatorHandle: 'term_coord',
+    coordinatorPaneKey: 'tab_coord:bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb'
+  })
+  for (const workerHandle of workerHandles) {
+    const task = db.createTask({ spec: 'Wait for coordinator input', runId: run.id })
+    db.createDispatchContext(task.id, workerHandle)
   }
 }
 
@@ -339,6 +360,81 @@ describe('OrcaRuntimeRpcServer', () => {
     expect(readRuntimeMetadata(userDataPath)).toMatchObject({
       runtimeId: runtime.getRuntimeId()
     })
+  })
+
+  it('reclaims runtime metadata clobbered by a second instance that has since died', async () => {
+    // Why: #7848 — a launch that slips past the single-instance lock republishes
+    // orca-runtime.json with its own pid, so the CLI reports stale_bootstrap
+    // against this still-serving runtime once that instance exits.
+    const userDataPath = mkdtempSync(join(tmpdir(), 'orca-runtime-rpc-'))
+    const runtime = new OrcaRuntimeService()
+    const server = new OrcaRuntimeRpcServer({ runtime, userDataPath })
+    await server.start()
+    const published = readRuntimeMetadata(userDataPath)
+
+    writeRuntimeMetadata(userDataPath, {
+      runtimeId: 'rt_second_instance',
+      pid: 99999999,
+      transports: [{ kind: 'unix', endpoint: join(userDataPath, 'o-99999999-rt2.sock') }],
+      authToken: 'second-instance-token',
+      startedAt: 1
+    })
+    server.checkRuntimeMetadataOwnership()
+
+    expect(readRuntimeMetadata(userDataPath)).toEqual(published)
+
+    await server.stop()
+  })
+
+  it('leaves runtime metadata owned by a live sibling runtime untouched', async () => {
+    const userDataPath = mkdtempSync(join(tmpdir(), 'orca-runtime-rpc-'))
+    // Why: a synthetic owned pid frees the always-alive process.pid to stand in for
+    // the sibling — Windows never assigns pid 1, so hardcoding it there reads as dead.
+    const server = new OrcaRuntimeRpcServer({
+      runtime: new OrcaRuntimeService(),
+      userDataPath,
+      pid: 4242
+    })
+    await server.start()
+
+    writeRuntimeMetadata(userDataPath, {
+      runtimeId: 'rt_live_sibling',
+      pid: process.pid,
+      transports: [{ kind: 'unix', endpoint: join(userDataPath, `o-${process.pid}-rt2.sock`) }],
+      authToken: 'sibling-token',
+      startedAt: 1
+    })
+    server.checkRuntimeMetadataOwnership()
+
+    expect(readRuntimeMetadata(userDataPath)).toMatchObject({ runtimeId: 'rt_live_sibling' })
+
+    await server.stop()
+  })
+
+  it('stops reclaiming runtime metadata after the server is stopped', async () => {
+    const userDataPath = mkdtempSync(join(tmpdir(), 'orca-runtime-rpc-'))
+    const server = new OrcaRuntimeRpcServer({ runtime: new OrcaRuntimeService(), userDataPath })
+    await server.start()
+    const watch = server['metadataOwnershipWatch']
+    if (!watch) {
+      throw new Error('start() must arm the metadata ownership watch')
+    }
+    // Why: the republish guard alone would keep this test green, so assert the timer teardown itself.
+    const watchStop = vi.spyOn(watch, 'stop')
+    await server.stop()
+
+    writeRuntimeMetadata(userDataPath, {
+      runtimeId: 'rt_second_instance',
+      pid: 99999999,
+      transports: [],
+      authToken: 'second-instance-token',
+      startedAt: 1
+    })
+    server.checkRuntimeMetadataOwnership()
+
+    expect(watchStop).toHaveBeenCalledTimes(1)
+    expect(server['metadataOwnershipWatch']).toBeNull()
+    expect(readRuntimeMetadata(userDataPath)).toMatchObject({ runtimeId: 'rt_second_instance' })
   })
 
   it('creates a pairing offer for the active WebSocket transport', async () => {
@@ -1285,12 +1381,14 @@ describe('OrcaRuntimeRpcServer', () => {
 
     try {
       const first = server['handleWebSocketMessage'](
-        JSON.stringify({
-          id: 'req_wait',
-          method: 'orchestration.check',
-          deviceToken: entry.token,
-          params: { terminal: 'term_wait', wait: true, timeoutMs: 10_000 }
-        }),
+        JSON.stringify(
+          withCurrentOrchestrationContract({
+            id: 'req_wait',
+            method: 'orchestration.check',
+            deviceToken: entry.token,
+            params: { terminal: 'term_wait', wait: true, timeoutMs: 10_000 }
+          })
+        ),
         (response) => replies.push(JSON.parse(response) as Record<string, unknown>),
         () => {},
         undefined,
@@ -1300,12 +1398,14 @@ describe('OrcaRuntimeRpcServer', () => {
       await waitFor(() => server['activeLongPolls'] === 1)
 
       await server['handleWebSocketMessage'](
-        JSON.stringify({
-          id: 'req_busy',
-          method: 'orchestration.check',
-          deviceToken: entry.token,
-          params: { terminal: 'term_busy', wait: true, timeoutMs: 10_000 }
-        }),
+        JSON.stringify(
+          withCurrentOrchestrationContract({
+            id: 'req_busy',
+            method: 'orchestration.check',
+            deviceToken: entry.token,
+            params: { terminal: 'term_busy', wait: true, timeoutMs: 10_000 }
+          })
+        ),
         (response) => replies.push(JSON.parse(response) as Record<string, unknown>),
         () => {},
         undefined,
@@ -1338,6 +1438,7 @@ describe('OrcaRuntimeRpcServer', () => {
     const runtime = new OrcaRuntimeService()
     const db = new OrchestrationDb(':memory:')
     runtime.setOrchestrationDb(db)
+    seedSupervisedAskWorkers(db, ['term_w0', 'term_w1', 'term_w2'])
     // Why: cap 4 → ask sub-cap 2, so the third ask must be shed while waits keep the other half.
     const server = new OrcaRuntimeRpcServer({
       runtime,
@@ -1358,7 +1459,9 @@ describe('OrcaRuntimeRpcServer', () => {
     }
     const dispatch = (id: string, method: string, params: unknown): Promise<void> =>
       server['handleWebSocketMessage'](
-        JSON.stringify({ id, method, deviceToken: entry.token, params }),
+        JSON.stringify(
+          withCurrentOrchestrationContract({ id, method, deviceToken: entry.token, params })
+        ),
         push,
         () => {},
         undefined,
@@ -3958,7 +4061,7 @@ describe('OrcaRuntimeRpcServer', () => {
       let buffer = ''
       socket.setEncoding('utf8')
       socket.once('error', reject)
-      socket.on('data', (chunk) => {
+      socket.on('data', (chunk: string) => {
         buffer += chunk
         const newlineIndex = buffer.indexOf('\n')
         if (newlineIndex === -1) {
@@ -4032,6 +4135,17 @@ describe('OrcaRuntimeRpcServer', () => {
       const runtime = new OrcaRuntimeService()
       const db = new OrchestrationDb(':memory:')
       runtime.setOrchestrationDb(db)
+      const askerPaneKey = 'tab_asker:aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa'
+      vi.spyOn(runtime, 'getTerminalPaneKey').mockImplementation((handle) =>
+        handle === 'term_asker' ? askerPaneKey : null
+      )
+      const run = db.createRun({
+        objective: 'Keepalive test',
+        coordinatorHandle: 'term_nobody',
+        coordinatorPaneKey: 'tab_coord:bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb'
+      })
+      const task = db.createTask({ spec: 'Wait for an answer', runId: run.id })
+      db.createDispatchContext(task.id, 'term_asker', askerPaneKey)
       const server = new OrcaRuntimeRpcServer({
         runtime,
         userDataPath,
@@ -4380,6 +4494,7 @@ describe('OrcaRuntimeRpcServer', () => {
       const runtime = new OrcaRuntimeService()
       const db = new OrchestrationDb(':memory:')
       runtime.setOrchestrationDb(db)
+      seedSupervisedAskWorkers(db, ['term_w0', 'term_w1', 'term_w2', 'term_w3'])
       // Why: cap 4 → ask sub-cap 2, so 4 concurrent asks can only take half the budget.
       const server = new OrcaRuntimeRpcServer({
         runtime,

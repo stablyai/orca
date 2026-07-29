@@ -1,5 +1,11 @@
 name: E2E
 
+run-name: E2E ${{ inputs.ref || github.ref }}
+
+# Why: checkout + artifact upload only; callers can only further restrict.
+permissions:
+  contents: read
+
 on:
   workflow_call:
     inputs:
@@ -76,7 +82,7 @@ jobs:
     name: e2e ${{ matrix.shard_name }}
     needs: build
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 30
     strategy:
       fail-fast: false
       matrix:

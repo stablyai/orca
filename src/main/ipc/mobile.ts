@@ -26,6 +26,10 @@ function isUsableIPv6Address(address: string): boolean {
   return !/^fe[89ab][0-9a-f]:/i.test(address)
 }
 
+function isProxyFakeIpIPv4Address(address: string): boolean {
+  return /^198\.(?:18|19)\./.test(address)
+}
+
 // Why: the WebSocket transport advertises 0.0.0.0 as its endpoint, which isn't
 // connectable from a mobile device. We enumerate all non-internal IPv4 and
 // (non-link-local) IPv6 addresses so the user can choose which one to advertise
@@ -44,6 +48,10 @@ function getNetworkInterfaces(): NetworkInterface[] {
         continue
       }
       if (addr.family === 'IPv4') {
+        // 198.18.0.0/15 proxy fake IPs are only routable inside the desktop proxy.
+        if (isProxyFakeIpIPv4Address(addr.address)) {
+          continue
+        }
         result.push({ name, address: addr.address })
       } else if (addr.family === 'IPv6' && isUsableIPv6Address(addr.address)) {
         result.push({ name, address: addr.address })

@@ -187,10 +187,13 @@ export function NativeChatComposerField({
               }
               placeholder={nativeChatComposerPlaceholder(hasPty, canSend)}
               // Why: coarse-pointer min-height follows the app's touch target convention.
-              // scrollbar-sleek keeps the overflow gutter from showing the heavy
-              // native scrollbar once the draft exceeds max-height.
+              // field-sizing:content grows the field with the draft; the 8lh cap (plus
+              // py-1) turns further growth into internal scrolling, and scrollbar-sleek
+              // keeps that gutter off the heavy native scrollbar. Both are layout-driven,
+              // so re-wrap on window/pane resize is handled without a measure pass.
               className={cn(
-                'scrollbar-sleek min-h-12 max-h-28 w-full resize-none bg-transparent px-2 py-1 text-sm outline-none pointer-coarse:min-h-14',
+                'scrollbar-sleek min-h-12 w-full resize-none bg-transparent px-2 py-1 text-sm outline-none pointer-coarse:min-h-14',
+                '[field-sizing:content] max-h-[calc(8lh+0.5rem)]',
                 'placeholder:text-muted-foreground/60 disabled:cursor-not-allowed disabled:opacity-50'
               )}
             />

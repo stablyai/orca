@@ -3,7 +3,13 @@
 import '@testing-library/jest-dom/vitest'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { act, cleanup, fireEvent, render, screen, within } from '@testing-library/react'
-import type { DashboardCard, DashboardSnapshot } from '../../../../shared/dashboard-snapshot'
+import type {
+  DashboardCard,
+  DashboardFilterOptions,
+  DashboardSnapshot
+} from '../../../../shared/dashboard-snapshot'
+import type { RepoIcon } from '../../../../shared/repo-icon'
+import { i18n } from '@/i18n/i18n'
 import { AgentKanbanBoard } from './AgentKanbanBoard'
 
 // Stub the card and dialog so the board test stays free of xterm / Radix
@@ -11,10 +17,12 @@ import { AgentKanbanBoard } from './AgentKanbanBoard'
 vi.mock('./AgentKanbanCard', () => ({
   AgentKanbanCard: ({
     card,
+    repoIcon,
     now,
     onOpenTerminal
   }: {
     card: DashboardCard
+    repoIcon?: RepoIcon | null
     now: number
     onOpenTerminal: (card: DashboardCard) => void
   }) => (
@@ -23,6 +31,7 @@ vi.mock('./AgentKanbanCard', () => ({
       data-bucket={card.bucket}
       data-unseen={card.unseen}
       data-now={now}
+      data-repo-icon={repoIcon === null ? 'none' : JSON.stringify(repoIcon)}
       onClick={() => onOpenTerminal(card)}
     >
       {card.worktreeName}
@@ -70,15 +79,23 @@ function card(overrides: Partial<DashboardCard>): DashboardCard {
   }
 }
 
-function renderBoard(cards: DashboardCard[]): void {
-  const snapshot: DashboardSnapshot = { generatedAt: 1, cards }
+function renderBoard(
+  cards: DashboardCard[],
+  options: {
+    showIdle?: boolean
+    repoIconsByRepoId?: Record<string, RepoIcon | null>
+    filterOptions?: DashboardFilterOptions
+  } = {}
+): void {
+  const snapshot: DashboardSnapshot = { generatedAt: 1, cards, ...options }
   render(<AgentKanbanBoard snapshot={snapshot} />)
 }
 
 const ackAgent = vi.fn(async () => {})
 
 describe('AgentKanbanBoard', () => {
-  beforeEach(() => {
+  beforeEach(async () => {
+    await i18n.changeLanguage('en')
     // The board relays seen-acks through the dashboard preload API.
     ;(window as unknown as { api: unknown }).api = { dashboard: { ackAgent } }
   })
@@ -89,29 +106,97 @@ describe('AgentKanbanBoard', () => {
     vi.restoreAllMocks()
   })
 
-  it('renders the three fixed columns in order', () => {
+  it('renders the three default columns in order', () => {
     renderBoard([])
-    const headers = screen.getAllByText(/Needs You|Working|Idle/)
-    expect(headers.map((h) => h.textContent)).toEqual(['Needs You', 'Working', 'Idle'])
+    const headers = screen.getAllByText(/Needs You|Working|Done/)
+    expect(headers.map((h) => h.textContent)).toEqual(['Needs You', 'Working', 'Done'])
   })
 
   it('places cards in their bucket column and counts them', () => {
     renderBoard([
       card({ bucket: 'attention', worktreeName: 'a1' }),
       card({ bucket: 'attention', worktreeName: 'a2' }),
-      card({ bucket: 'idle', worktreeName: 'i1' })
+      card({ bucket: 'done', worktreeName: 'd1' })
     ])
     const cards = screen.getAllByTestId('card')
     expect(cards).toHaveLength(3)
     expect(cards.filter((c) => c.dataset.bucket === 'attention')).toHaveLength(2)
-    expect(within(document.body).getByText('i1').dataset.bucket).toBe('idle')
+    expect(within(document.body).getByText('d1').dataset.bucket).toBe('done')
     expect(screen.getByText('3 total')).toBeTruthy()
+  })
+
+  it('leaves every column border neutral now that cards carry the state color', () => {
+    renderBoard([card({ bucket: 'attention' })])
+    for (const column of document.querySelectorAll('section')) {
+      expect(column.className).toContain('border-border/60')
+      expect(column.className).not.toContain('amber')
+    }
+  })
+
+  it('routes each card its own repo icon', () => {
+    renderBoard(
+      [
+        card({ repoId: 'r1', worktreeName: 'from-r1' }),
+        card({ repoId: 'r2', worktreeName: 'from-r2' }),
+        card({ repoId: 'r3', worktreeName: 'from-r3' })
+      ],
+      { repoIconsByRepoId: { r1: { type: 'lucide', name: 'Rocket' }, r2: null } }
+    )
+
+    expect(screen.getByText('from-r1').dataset.repoIcon).toBe('{"type":"lucide","name":"Rocket"}')
+    expect(screen.getByText('from-r2').dataset.repoIcon).toBe('none')
+    // Unknown repo → the card's own default glyph, never another repo's icon.
+    expect(screen.getByText('from-r3').dataset.repoIcon).toBe('none')
   })
 
   it('shows "None" for empty columns', () => {
     renderBoard([card({ bucket: 'working' })])
-    // attention and idle are empty → two "None" placeholders.
+    // attention and done are empty → two "None" placeholders.
     expect(screen.getAllByText('None')).toHaveLength(2)
+  })
+
+  it('shows the idle column only when enabled', () => {
+    renderBoard([card({ bucket: 'idle', worktreeName: 'quiet-agent' })], { showIdle: true })
+
+    expect(screen.getByText('Idle')).toBeInTheDocument()
+    expect(screen.getByText('quiet-agent')).toBeInTheDocument()
+  })
+
+  it('searches agent content and reports the visible result count', () => {
+    renderBoard([
+      card({ worktreeName: 'first', task: 'repair relay authentication' }),
+      card({ worktreeName: 'second', task: 'update dashboard layout' })
+    ])
+
+    fireEvent.change(screen.getByLabelText('Search agents'), { target: { value: 'relay' } })
+
+    expect(screen.getByText('first')).toBeInTheDocument()
+    expect(screen.queryByText('second')).not.toBeInTheDocument()
+    expect(screen.getByText('1 of 2 shown')).toBeInTheDocument()
+  })
+
+  it('localizes the new board status and filter controls', async () => {
+    await i18n.changeLanguage('ja')
+    renderBoard([card({ bucket: 'done' })])
+
+    expect(screen.getByText('完了')).toBeInTheDocument()
+    expect(screen.getByLabelText('エージェントを検索')).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: /^フィルター/ })).toBeInTheDocument()
+  })
+
+  it('offers store-derived project and status filters without cards', async () => {
+    renderBoard([], {
+      filterOptions: {
+        projects: [{ id: 'r1', label: 'Repo One' }],
+        workspaceStatuses: [{ id: 'planned', label: 'Planned', color: 'neutral' }]
+      }
+    })
+
+    fireEvent.pointerDown(screen.getByRole('button', { name: /^Filter/ }))
+
+    expect(await screen.findByText('Repo One')).toBeInTheDocument()
+    expect(screen.getByText('Planned')).toBeInTheDocument()
+    expect(screen.getByText('PR / MR status')).toBeInTheDocument()
   })
 
   it('orders cards in a column by most recent bucket entry first', () => {
@@ -166,14 +251,14 @@ describe('AgentKanbanBoard', () => {
   })
 
   it('keeps the terminal dialog open across bucket moves and card removal', () => {
-    const agent = card({ paneKey: 'pk-1', bucket: 'idle', worktreeName: 'wt1' })
+    const agent = card({ paneKey: 'pk-1', bucket: 'done', worktreeName: 'wt1' })
     const { rerender } = render(<AgentKanbanBoard snapshot={{ generatedAt: 1, cards: [agent] }} />)
     expect(screen.getByTestId('terminal-dialog').dataset.open).toBe('false')
 
     fireEvent.click(screen.getByTestId('card'))
     expect(screen.getByTestId('terminal-dialog').dataset.open).toBe('true')
 
-    // Sending a message flips the agent idle → working; the dialog must
+    // Sending a message flips the agent done → working; the dialog must
     // follow the card to its new bucket instead of closing.
     const moved = { ...agent, bucket: 'working' as const, dotState: 'working' as const }
     rerender(<AgentKanbanBoard snapshot={{ generatedAt: 2, cards: [moved] }} />)
@@ -188,7 +273,7 @@ describe('AgentKanbanBoard', () => {
   })
 
   it('relays a seen-ack when a dialog opens and when the open agent changes state', () => {
-    const agent = card({ paneKey: 'pk-ack', bucket: 'idle', unseen: true })
+    const agent = card({ paneKey: 'pk-ack', bucket: 'done', unseen: true })
     const { rerender } = render(<AgentKanbanBoard snapshot={{ generatedAt: 1, cards: [agent] }} />)
     // unseen comes straight from the snapshot (the shared ack map).
     expect(screen.getByTestId('card').dataset.unseen).toBe('true')

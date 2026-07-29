@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import type { SshConnectionState } from '../../../shared/ssh-types'
+import type { SshConnectionState, SshProviderEpoch } from '../../../shared/ssh-types'
 import { useAppStore } from '@/store'
 import {
   applyRuntimeEnvironmentSshStateChanged,
@@ -20,7 +20,14 @@ function connState(
   targetId: string,
   status: SshConnectionState['status'] = 'connected'
 ): SshConnectionState {
-  return { targetId, status, error: null, reconnectAttempt: 0 }
+  return {
+    targetId,
+    status,
+    error: null,
+    reconnectAttempt: 0,
+    providerEpoch: `${targetId}-provider-epoch` as SshProviderEpoch,
+    connectionGeneration: 7
+  }
 }
 
 type RpcResponses = {
@@ -84,6 +91,10 @@ describe('hydrateRuntimeEnvironmentSshState', () => {
     expect(bucket?.targetLabels.get('ssh-1')).toBe('devbox')
     expect(bucket?.removedTargetLabels.get('ssh-old')).toBe('retired box')
     expect(bucket?.connectionStates.get('ssh-1')?.status).toBe('connected')
+    expect(bucket?.connectionStates.get('ssh-1')).toMatchObject({
+      providerEpoch: 'ssh-1-provider-epoch',
+      connectionGeneration: 7
+    })
     // ssh-2 had no live state: absent, so reads fall back to 'disconnected'.
     expect(bucket?.connectionStates.has('ssh-2')).toBe(false)
     // Local maps stay untouched.
@@ -219,11 +230,34 @@ describe('applyRuntimeEnvironmentSshStateChanged', () => {
     applyRuntimeEnvironmentSshStateChanged(envId, 'ssh-1', connState('ssh-1', 'disconnected'))
 
     expect(
-      useAppStore.getState().sshStateByEnvironment.get(envId)?.connectionStates.get('ssh-1')?.status
-    ).toBe('disconnected')
+      useAppStore.getState().sshStateByEnvironment.get(envId)?.connectionStates.get('ssh-1')
+    ).toMatchObject({
+      status: 'disconnected',
+      providerEpoch: 'ssh-1-provider-epoch',
+      connectionGeneration: 7
+    })
     expect(callRuntimeRpcMock).not.toHaveBeenCalled()
     // Local map untouched.
     expect(useAppStore.getState().sshConnectionStates.size).toBe(0)
+  })
+
+  it('rejects partial authority before retaining a runtime-owned state', () => {
+    const envId = nextEnvId()
+    useAppStore
+      .getState()
+      .setEnvironmentSshTargetsMetadata(envId, [{ id: 'ssh-1', label: 'devbox' }])
+
+    applyRuntimeEnvironmentSshStateChanged(envId, 'ssh-1', {
+      targetId: 'ssh-1',
+      status: 'connected',
+      error: null,
+      reconnectAttempt: 0,
+      providerEpoch: 'partial-provider-epoch' as SshProviderEpoch
+    })
+
+    expect(
+      useAppStore.getState().sshStateByEnvironment.get(envId)?.connectionStates.has('ssh-1')
+    ).toBe(false)
   })
 
   it('does not touch another environment bucket or local state (no cross-pollution)', () => {
@@ -300,6 +334,12 @@ describe('connectRuntimeEnvironmentSshTarget', () => {
     expect(
       useAppStore.getState().sshStateByEnvironment.get(envId)?.connectionStates.get('ssh-1')?.status
     ).toBe('connected')
+    expect(
+      useAppStore.getState().sshStateByEnvironment.get(envId)?.connectionStates.get('ssh-1')
+    ).toMatchObject({
+      providerEpoch: 'ssh-1-provider-epoch',
+      connectionGeneration: 7
+    })
     expect(useAppStore.getState().sshConnectionStates.size).toBe(0)
   })
 

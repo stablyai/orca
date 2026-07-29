@@ -2,9 +2,15 @@ import type { DaemonPtyAdapter } from './daemon-pty-adapter'
 import { combineUnsubscribes } from './combine-unsubscribes'
 import { shutdownDegradedFallbackSessions } from './degraded-daemon-fallback-shutdown'
 import { inspectPtyProviderProcess } from '../providers/pty-process-inspection'
-import type { IPtyProvider, PtyBackgroundStreamEvent } from '../providers/types'
-import type { PtyDataEvent, PtyProviderBufferSnapshot } from '../providers/types'
-import type { PtyProcessInfo, PtySpawnOptions, PtySpawnResult } from '../providers/types'
+import type {
+  IPtyProvider,
+  PtyBackgroundStreamEvent,
+  PtyDataEvent,
+  PtyProviderBufferSnapshot,
+  PtyProcessInfo,
+  PtySpawnOptions,
+  PtySpawnResult
+} from '../providers/types'
 
 export class DegradedDaemonPtyProvider implements IPtyProvider {
   readonly routesFreshSpawnsToLocalProvider = true

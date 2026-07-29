@@ -8,6 +8,7 @@ import type {
   PairingGetEndpointsResult,
   PairingProvisionRelayParams
 } from '../../../shared/mobile-relay-credential-contract'
+import type { RuntimeCapability } from '../../../shared/protocol-version'
 
 export type PairingRpcContext = {
   getEndpoints(params: PairingGetEndpointsParams): Promise<PairingGetEndpointsResult>
@@ -44,6 +45,9 @@ export type RpcRequest = {
   authToken: string
   method: string
   params?: unknown
+  orchestrationCapability?: string
+  orchestrationContractVersion?: number
+  orchestrationRequestId?: string
 }
 
 export type RpcContext = {
@@ -60,6 +64,21 @@ export type RpcContext = {
   pairedDeviceId?: string
   // Why: lets handlers gate mobile payload truncation to phones only; undefined for in-process callers → treat as full-class (no clip).
   clientKind?: 'mobile' | 'runtime'
+  // Why: negotiation is bound to the authenticated socket, never asserted by a destructive request.
+  clientCapabilities?: readonly RuntimeCapability[]
+  // Why: Dispatch authority rides in the authenticated RPC envelope, never in user payload fields.
+  orchestrationCapability?: string
+  // Why: long-lived mutations such as ask can durably expose acceptance before their waiter settles.
+  recordMutationReceipt?: (receipt: unknown) => void
+  // Why: worker-start commits this identity with its starting Dispatch so crash recovery always has an inspectable operation.
+  orchestrationMutation?: {
+    callerFingerprint: string
+    requestId: string
+    method: string
+    payloadHash: string
+  }
+  // Why: federation pins the authenticated saved-environment caller without exposing its token to handlers or storage.
+  authenticatedCallerFingerprint?: string
   pairing?: PairingRpcContext
   // Why: mobile terminal traffic bypasses JSON streaming; undefined on Unix/socket and non-E2EE WebSocket paths.
   sendBinary?: (bytes: Uint8Array<ArrayBufferLike>) => boolean | void

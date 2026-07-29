@@ -1,4 +1,5 @@
 import type { AgentType } from './agent-status-types'
+import type { RepoIcon } from './repo-icon'
 
 /**
  * Serializable contract for the pop-out agent dashboard. The main renderer owns
@@ -7,19 +8,35 @@ import type { AgentType } from './agent-status-types'
  * Every field must be structured-clone-safe (no functions / class instances).
  */
 
-/** The three kanban columns. "Idle" is everything that isn't actively working
- *  and isn't blocking you — this includes explicitly-completed ('done') agents,
- *  which Orca only reports when a completion hook fires, so they're folded in
- *  rather than split into a separate, inconsistently-populated column. */
-export type DashboardBucket = 'attention' | 'working' | 'idle'
+/** Agent lifecycle columns; idle is optional while completed agents remain visible. */
+export type DashboardBucket = 'attention' | 'working' | 'done' | 'idle'
 
 /** Column order shared by producer and pop-out so they never drift. */
-export const DASHBOARD_BUCKET_ORDER: readonly DashboardBucket[] = ['attention', 'working', 'idle']
+export const DASHBOARD_BUCKET_ORDER: readonly DashboardBucket[] = [
+  'attention',
+  'working',
+  'done',
+  'idle'
+]
 
-/** Precise per-card state marker (drives AgentStateDot). Kept distinct from
- *  `bucket` so the "Needs You" column can still show amber (waiting/permission)
- *  vs red (blocked) dots. */
+/** Max length of a card's display labels. The producer truncates to this and
+ *  the main-process validator enforces it, so an unbounded name (a long
+ *  `terminal rename`, an OSC title) cannot cost the card its place on the board. */
+export const DASHBOARD_MAX_LABEL_LENGTH = 1_024
+
+/** Kept distinct from `bucket` so attention cards retain their precise dot state. */
 export type DashboardCardDotState = 'working' | 'blocked' | 'waiting' | 'done' | 'idle'
+
+export type DashboardCardReview = {
+  number: number
+  state: 'open' | 'closed' | 'merged' | 'draft'
+}
+
+export type DashboardCardSubagent = {
+  id: string
+  name: string
+  dotState: DashboardCardDotState
+}
 
 export type DashboardCard = {
   /** Stable identity for React keys. */
@@ -43,6 +60,13 @@ export type DashboardCard = {
   leafId: string | null
   repoName: string
   worktreeName: string
+  workspaceStatusId?: string
+  workspaceStatusLabel?: string
+  workspaceStatusColor?: string
+  /** True when the workspace links a review whose live state is not cached yet. */
+  hasReview?: boolean
+  review?: DashboardCardReview
+  subagents?: DashboardCardSubagent[]
   /** "Started … ago" display. */
   startedAt: number
   /** When the agent last entered `done`, or null if it never finished. Drives
@@ -58,14 +82,42 @@ export type DashboardCard = {
   unseen: boolean
   /** Short summary of the pending question when bucket === 'attention'. */
   askSummary?: string
+  /** The tab's conversation name, resolved exactly as the sidebar's agent rows
+   *  resolve it. Undefined when no usable name exists (status-only titles). */
+  conversationName?: string
+}
+
+export type DashboardFilterOption = {
+  id: string
+  label: string
+  color?: string
+}
+
+export type DashboardFilterOptions = {
+  projects: DashboardFilterOption[]
+  workspaceStatuses: DashboardFilterOption[]
 }
 
 export type DashboardSnapshot = {
   generatedAt: number
   cards: DashboardCard[]
+  showIdle?: boolean
+  /** Available filter dimensions are store-derived so zero-card projects and
+   *  statuses remain selectable. Optional for preload-version compatibility. */
+  filterOptions?: DashboardFilterOptions
+  /** Icons for the repos the cards belong to. Keyed by repoId rather than
+   *  carried per card: image icons are data URLs up to 400KB, and the snapshot
+   *  is republished several times a second. Optional so a pop-out running
+   *  pre-upgrade code still accepts the payload. */
+  repoIconsByRepoId?: Record<string, RepoIcon | null>
 }
 
-export const EMPTY_DASHBOARD_SNAPSHOT: DashboardSnapshot = { generatedAt: 0, cards: [] }
+export const EMPTY_DASHBOARD_SNAPSHOT: DashboardSnapshot = {
+  generatedAt: 0,
+  cards: [],
+  filterOptions: { projects: [], workspaceStatuses: [] },
+  repoIconsByRepoId: {}
+}
 
 /** Routing payload for click-to-focus: reveal this agent's pane in the main
  *  window. leafId is null when the pane could not be resolved (best-effort:

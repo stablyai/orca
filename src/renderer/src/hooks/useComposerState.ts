@@ -140,12 +140,13 @@ import { useFolderWorkspaceComposerPathStatus } from '@/components/sidebar/folde
 import { submitFolderWorkspaceCreate } from '@/components/sidebar/folder-workspace-composer-submit'
 import { buildExecutionHostRegistry } from '../../../shared/execution-host-registry'
 import {
+  getRepoExecutionHostId,
   normalizeExecutionHostId,
   parseExecutionHostId,
   type ExecutionHostId
 } from '../../../shared/execution-host'
 import { getHostDisplayLabelOverrides } from '../../../shared/host-setting-overrides'
-import { queueNewWorkspaceTerminalFocus } from '@/lib/new-workspace-terminal-focus'
+import { queueWorkspaceActivationTerminalFocus } from '@/lib/workspace-activation-terminal-focus'
 import { getSettingsForRepoRuntimeOwner } from '@/lib/repo-runtime-owner'
 import { getSuggestedCreatureName } from '@/components/sidebar/worktree-name-suggestions'
 import type { SmartWorkspaceNameSelection } from '@/components/new-workspace/SmartWorkspaceNameField'
@@ -826,6 +827,7 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
     repoId: selectedRecipeRepoId,
     repoIsGit: selectedRepoIsGit,
     repoConnectionId: selectedRecipeRepoConnectionId,
+    repoExecutionHostId: selectedRepo ? getRepoExecutionHostId(selectedRepo) : null,
     projectGroupTarget: isProjectGroupTarget,
     initialRecipeId: initialEphemeralVmRecipeId
   })
@@ -3560,7 +3562,7 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
         clearNewWorkspaceDraft()
       }
       onCreated?.()
-      queueNewWorkspaceTerminalFocus(worktree.id, activation)
+      queueWorkspaceActivationTerminalFocus(worktree.id, activation)
     } catch (error) {
       const formattedError = formatWorkspaceCreateError(error)
       setCreateError(formattedError)
@@ -3997,6 +3999,7 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
           note: trimmedNote,
           startupPlan,
           quickPrompt,
+          ...(quickDraftPrompt ? { launchDraftPrompt: quickDraftPrompt } : {}),
           quickTelemetry,
           ...(createMultiple ? { suppressTerminalFocusOnCompletion: true } : {})
         }

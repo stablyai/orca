@@ -6,7 +6,7 @@
 
 import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
-import { expect, test, type ElectronApplication, type TestInfo } from '@stablyai/playwright-test'
+import { expect, test, type TestInfo } from '@stablyai/playwright-test'
 import { fingerprintPluginConsent } from '../../src/shared/plugins/plugin-consent-fingerprint'
 import { pluginManifestSchema } from '../../src/shared/plugins/plugin-manifest'
 import { createRestartSession } from './helpers/orca-restart'
@@ -84,12 +84,11 @@ async function launchSample(
   testInfo: TestInfo
 ): Promise<StartupSample> {
   let output = ''
-  const attachLogs = (app: ElectronApplication): void => {
-    app.process().stderr?.on('data', (chunk: Buffer) => {
-      output += chunk.toString('utf8')
-    })
-  }
-  const launched = await session.launch(attachLogs)
+  const launched = await session.launch({
+    onStderr: (chunk) => {
+      output += chunk
+    }
+  })
   try {
     await expect
       .poll(
@@ -127,9 +126,7 @@ function median(values: readonly number[]): number {
 // oxlint-disable-next-line no-empty-pattern -- Playwright passes fixtures before testInfo.
 test('keeps real Electron launch stable with 20 approved inert plugins', async ({}, testInfo) => {
   test.setTimeout(240_000)
-  const session = createRestartSession(testInfo, {
-    extraEnv: { ORCA_STARTUP_DIAGNOSTICS: '1' }
-  })
+  const session = createRestartSession(testInfo, { ORCA_STARTUP_DIAGNOSTICS: '1' })
   const baseline: StartupSample[] = []
   const populated: StartupSample[] = []
   let markerPaths: string[] = []

@@ -100,7 +100,11 @@ import {
 import { listQuickOpenFiles } from './filesystem-list-files'
 import { registerFilesystemMutationHandlers } from './filesystem-mutations'
 import { searchWithGitGrep } from './filesystem-search-git'
-import { getLocalGitOptionsForRegisteredWorktree } from './local-worktree-runtime-options'
+import {
+  getLocalGitOptionsForRegisteredWorktree,
+  getLocalGitOptionsForRepo,
+  getLocalRepoForRegisteredWorktree
+} from './local-worktree-runtime-options'
 import { resolveSourceControlAiLinkedIssue } from './source-control-ai-linked-issue'
 import { listMarkdownDocuments, markdownDocumentsFromRelativePaths } from './markdown-documents'
 import { checkRgAvailable } from './rg-availability'
@@ -128,6 +132,7 @@ import { registerLocalLogTailHandlers } from './local-log-tail'
 import { localLogFileIdentity } from '../ai-vault/local-log-tail-reader'
 import { sanitizeLocalDownloadFilename } from '../local-download-filename'
 import { registerFilesystemDownloadFolderHandlers } from './filesystem-download-folder'
+import { getWorktreeSharedLinkPaths } from '../git/worktree-shared-directories'
 import { createSenderScopedRequestCancellations } from './sender-scoped-request-cancellation'
 
 // Why: Monaco degrades features on large files like VS Code, so a 5MB block would needlessly lock out ordinary JSON/log files.
@@ -1116,12 +1121,16 @@ export function registerFilesystemHandlers(
           return await provider.getStatus(args.worktreePath, options)
         }
         const worktreePath = await resolveRegisteredWorktreePath(args.worktreePath, store)
-        const gitOptions = getLocalGitOptionsForRegisteredWorktree(
-          store,
-          args.worktreePath,
-          worktreePath
-        )
-        return await getStatus(worktreePath, { ...options, ...gitOptions })
+        // Why: one registered-worktree lookup feeds both — status polls this
+        // handler, and the scan walks every repo's worktree meta.
+        const repo = getLocalRepoForRegisteredWorktree(store, args.worktreePath, worktreePath)
+        const gitOptions = getLocalGitOptionsForRepo(store, repo)
+        const sharedLinkPaths = repo ? getWorktreeSharedLinkPaths(repo) : []
+        return await getStatus(worktreePath, {
+          ...options,
+          ...gitOptions,
+          ...(sharedLinkPaths.length > 0 ? { sharedLinkPaths } : {})
+        })
       } finally {
         gitStatusCancellations.finish(event, args.requestToken, controller)
       }

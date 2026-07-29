@@ -1,3 +1,5 @@
+import type { Mode2031ReplyScanState } from '../../shared/terminal-color-scheme-protocol'
+
 export type PendingPtyData = {
   data: string
   startSeq?: number
@@ -5,6 +7,8 @@ export type PendingPtyData = {
   transformed?: true
   containsBackgroundOutput?: boolean
   droppedOutput?: true
+  droppedMode2031Data?: string
+  droppedMode2031ScanState?: Mode2031ReplyScanState
 }
 
 export type PtyPendingDataDrainDisposition = 'active' | 'background' | 'blocked'

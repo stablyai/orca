@@ -15,6 +15,7 @@ import {
   clearClaudeAnsweredQuestionWait,
   createHookListenerState,
   getEndpointFileName,
+  hasCodexTranscriptSubagents,
   hasPendingAgentResultText,
   HOOK_REQUEST_SLOWLORIS_MS,
   markClaudeLeadTurnInterrupted,
@@ -106,6 +107,7 @@ type PaneKeyAliasEntry = {
 const LAST_STATUS_FILE_NAME = 'last-status.json'
 const ASSISTANT_MESSAGE_RETRY_ATTEMPTS = 5
 const ASSISTANT_MESSAGE_RETRY_MS = 50
+const CODEX_SUBAGENT_POLL_MS = 1_000
 const INTERRUPTED_DONE_LATE_WORKING_SUPPRESSION_MS = 15_000
 
 // Why: starts at 2 — pre-merge v1 lacked receivedAt/stateStartedAt (never shipped); a mismatched version hydrates empty (treated as corrupt).
@@ -484,6 +486,7 @@ export class AgentHookServer {
   // Why: trailing-edge debounce timer, per-instance so test servers in one process don't share state.
   private statusPersistTimer: ReturnType<typeof setTimeout> | null = null
   private assistantMessageRetryTimers = new Map<string, ReturnType<typeof setTimeout>>()
+  private codexSubagentPollTimers = new Map<string, ReturnType<typeof setTimeout>>()
   private promptSentDedupeByPaneKey = new Map<string, AgentPromptSentDedupeEntry>()
   private promptSentHashSalt = randomBytes(16).toString('hex')
   private closedAgentStatusTabIds = new Set<string>()
@@ -1040,6 +1043,49 @@ export class AgentHookServer {
     this.assistantMessageRetryTimers.delete(paneKey)
   }
 
+  private clearCodexSubagentPoll(paneKey: string): void {
+    const timer = this.codexSubagentPollTimers.get(paneKey)
+    if (!timer) {
+      return
+    }
+    clearTimeout(timer)
+    this.codexSubagentPollTimers.delete(paneKey)
+  }
+
+  private scheduleCodexSubagentPoll(
+    source: AgentHookSource,
+    body: unknown,
+    original: EnrichedAgentHookEventPayload
+  ): void {
+    // Why: a nested non-codex CLI inherits ORCA_PANE_KEY, so clearing here would silently end a live codex poll.
+    if (source !== 'codex') {
+      return
+    }
+    this.clearCodexSubagentPoll(original.paneKey)
+    if (!hasCodexTranscriptSubagents(this.state, original.paneKey)) {
+      return
+    }
+    const timer = setTimeout(() => {
+      this.codexSubagentPollTimers.delete(original.paneKey)
+      const current = this.state.lastStatusByPaneKey.get(original.paneKey)
+      if (!this.server || current !== original) {
+        return
+      }
+      const normalized = normalizeHookPayload(this.state, source, body, this.env)
+      if (!normalized) {
+        return
+      }
+      const subagentsChanged =
+        JSON.stringify(normalized.payload.subagents) !== JSON.stringify(original.payload.subagents)
+      const next = subagentsChanged ? this.applyNormalizedStatus(normalized) : original
+      this.scheduleCodexSubagentPoll(source, body, next)
+    }, CODEX_SUBAGENT_POLL_MS)
+    this.codexSubagentPollTimers.set(original.paneKey, timer)
+    if (typeof timer.unref === 'function') {
+      timer.unref()
+    }
+  }
+
   private scheduleAssistantMessageRetry(
     source: AgentHookSource,
     body: unknown,
@@ -1264,6 +1310,7 @@ export class AgentHookServer {
       this.promptSentDedupeByPaneKey.set(toPaneKey, promptDedupe)
     }
     this.clearAssistantMessageRetry(previousOwnerPaneKey)
+    this.clearCodexSubagentPoll(previousOwnerPaneKey)
     // Why: the live process keeps posting the physical source key after detach; persist a chain-safe mapping to the current owner.
     this.legacyPaneKeyAliases.set(physicalPaneKey, {
       stablePaneKey: toPaneKey,
@@ -1296,6 +1343,7 @@ export class AgentHookServer {
     for (const key of paneKeys) {
       this.markPaneClosedForAgentStatus(key)
       this.clearAssistantMessageRetry(key)
+      this.clearCodexSubagentPoll(key)
       clearPaneCacheState(this.state, key)
       this.runtimeObservedStatusPaneKeys.delete(key)
       this.promptSentDedupeByPaneKey.delete(key)
@@ -1584,7 +1632,7 @@ export class AgentHookServer {
     if (this.lastStatusFilePath) {
       this.hydrateLastStatusFromDisk()
     }
-    this.server = createServer(async (req: IncomingMessage, res: ServerResponse) => {
+    const handleRequest = async (req: IncomingMessage, res: ServerResponse): Promise<void> => {
       if (req.method !== 'POST') {
         res.writeHead(404)
         res.end()
@@ -1627,6 +1675,7 @@ export class AgentHookServer {
         if (normalized && !this.shouldSuppressClosedTabStatus(normalized.paneKey)) {
           const enriched = this.applyNormalizedStatus(normalized)
           this.scheduleAssistantMessageRetry(source, aliasedBody, enriched)
+          this.scheduleCodexSubagentPoll(source, aliasedBody, enriched)
         }
 
         res.writeHead(204)
@@ -1636,6 +1685,10 @@ export class AgentHookServer {
         res.writeHead(204)
         res.end()
       }
+    }
+    // Why: node ignores a returned promise, so the handler must settle it itself; handleRequest never rejects.
+    this.server = createServer((req, res) => {
+      void handleRequest(req, res)
     })
 
     await new Promise<void>((resolve, reject) => {
@@ -1675,6 +1728,10 @@ export class AgentHookServer {
       clearTimeout(timer)
     }
     this.assistantMessageRetryTimers.clear()
+    for (const timer of this.codexSubagentPollTimers.values()) {
+      clearTimeout(timer)
+    }
+    this.codexSubagentPollTimers.clear()
     // Why: don't unlink the endpoint file — a stale file matches fail-open and avoids a TOCTOU race with a concurrent Orca.
     this.endpointDir = null
     this.endpointFilePathCache = null
@@ -1751,6 +1808,7 @@ export class AgentHookServer {
     }
     this.state.lastStatusByPaneKey.delete(resolvedPaneKey)
     this.clearAssistantMessageRetry(resolvedPaneKey)
+    this.clearCodexSubagentPoll(resolvedPaneKey)
     this.runtimeObservedStatusPaneKeys.delete(resolvedPaneKey)
     if (existing.payload.state === 'done') {
       this.promptSentDedupeByPaneKey.delete(resolvedPaneKey)
@@ -1816,6 +1874,7 @@ export class AgentHookServer {
         statusChanged = true
       }
       this.clearAssistantMessageRetry(paneKey)
+      this.clearCodexSubagentPoll(paneKey)
       clearPaneCacheState(this.state, paneKey)
       this.runtimeObservedStatusPaneKeys.delete(paneKey)
       this.promptSentDedupeByPaneKey.delete(paneKey)
@@ -1834,6 +1893,7 @@ export class AgentHookServer {
     // Why: only persist when a status entry was actually evicted; dropping prompt/tool caches doesn't change the file.
     const hadStatus = this.state.lastStatusByPaneKey.has(resolvedPaneKey)
     this.clearAssistantMessageRetry(resolvedPaneKey)
+    this.clearCodexSubagentPoll(resolvedPaneKey)
     clearPaneCacheState(this.state, resolvedPaneKey)
     this.promptSentDedupeByPaneKey.delete(resolvedPaneKey)
     let clearedAlias = false

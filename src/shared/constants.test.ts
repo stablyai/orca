@@ -97,6 +97,7 @@ describe('getDefaultSettings', () => {
 
   it('keeps the agent dashboard popout disabled by default', () => {
     expect(getDefaultSettings('/tmp').experimentalAgentDashboardPopout).toBe(false)
+    expect(getDefaultSettings('/tmp').experimentalAgentDashboardShowIdle).toBe(false)
   })
 
   it('routes fresh Codex profiles through the real-home rollout by default', () => {})

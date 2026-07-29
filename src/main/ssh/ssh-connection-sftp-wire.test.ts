@@ -160,7 +160,8 @@ function installSftpHandlers(sftp: SFTPWrapper, backingRoot: string, operations:
 async function startSftpWireServer(backingRoot: string): Promise<SftpWireServer> {
   const operations: string[] = []
   const connections = new Set<Connection>()
-  const hostKey = utils.generateKeyPairSync('ed25519').private
+  // Ed25519 keygen can produce an invalid 31-byte key; ECDSA points always start with 0x04.
+  const hostKey = utils.generateKeyPairSync('ecdsa', { bits: 256 }).private
   const server = new Ssh2Server({ hostKeys: [hostKey] }, (connection) => {
     connections.add(connection)
     connection.on('error', () => {})

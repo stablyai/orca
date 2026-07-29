@@ -1286,7 +1286,7 @@ export class RuntimeFileCommands {
     callback: (events: FsChangeEvent[]) => void,
     onTerminalError: (error: Error) => void = () => undefined,
     signal?: AbortSignal
-  ): Promise<() => void> {
+  ): Promise<() => Promise<void>> {
     const target = await this.resolveFileExplorerPath(worktreeSelector, '')
     const open = async (): Promise<{
       unsubscribe: () => Promise<void>

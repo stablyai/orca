@@ -1,4 +1,6 @@
 import type { CliStatusResult, RuntimeStatus } from '../../shared/runtime-types'
+import type { RuntimeOrchestrationEnvelope } from '../../shared/runtime-rpc-envelope'
+import { ORCHESTRATION_CONTRACT_VERSION } from '../../shared/protocol-version'
 import { RpcDispatcher } from '../runtime/rpc/dispatcher'
 import type { RpcResponse } from '../runtime/rpc/core'
 import type { OrcaRuntimeService } from '../runtime/orca-runtime'
@@ -18,6 +20,7 @@ import {
   requiredRemoteCliString,
   resolveRemoteCliHandle
 } from './ssh-remote-cli-args'
+import { buildRemoteCliError } from './ssh-remote-cli-error-response'
 import { getRemoteLinearHelp, tryDispatchRemoteLinearCli } from './ssh-remote-linear-cli'
 import {
   getRemoteOrchestrationPayload,
@@ -51,7 +54,7 @@ export async function runRemoteOrcaCli(
   if (interactiveMessage) {
     if (json) {
       return {
-        stdout: `${JSON.stringify(buildLocalError(interactiveMessage, 'unsupported_over_ssh'), null, 2)}\n`,
+        stdout: `${JSON.stringify(buildRemoteCliError(interactiveMessage, 'unsupported_over_ssh'), null, 2)}\n`,
         stderr: '',
         exitCode: 1
       }
@@ -117,7 +120,7 @@ async function runLegacyRemoteOrcaCli(
           : 'runtime_error'
     if (json) {
       return {
-        stdout: `${JSON.stringify(buildLocalError(message, code), null, 2)}\n`,
+        stdout: `${JSON.stringify(buildRemoteCliError(message, code), null, 2)}\n`,
         stderr: '',
         exitCode: 1
       }
@@ -167,23 +170,32 @@ async function dispatchRemoteCli(
       })
     case 'orchestration send': {
       const type = optionalRemoteCliString(parsed.flags, 'type')
-      return await call(dispatcher, 'orchestration.send', {
-        from: resolveRemoteOrchestrationSender(parsed.flags, env, type),
-        to: requiredRemoteCliString(parsed.flags, 'to'),
-        subject: requiredRemoteCliString(parsed.flags, 'subject'),
-        body: optionalRemoteCliString(parsed.flags, 'body'),
-        type,
-        priority: optionalRemoteCliString(parsed.flags, 'priority'),
-        threadId: optionalRemoteCliString(parsed.flags, 'thread-id'),
-        payload: getRemoteOrchestrationPayload(parsed.flags),
-        // Why: the legacy in-process bridge must preserve the same pane
-        // authority as the full host CLI passthrough.
-        senderPaneKey: env.ORCA_PANE_KEY || undefined
-      })
+      return await call(
+        dispatcher,
+        'orchestration.send',
+        {
+          from: resolveRemoteOrchestrationSender(parsed.flags, env, type),
+          to: optionalRemoteCliString(parsed.flags, 'to'),
+          subject: requiredRemoteCliString(parsed.flags, 'subject'),
+          body: optionalRemoteCliString(parsed.flags, 'body'),
+          type,
+          priority: optionalRemoteCliString(parsed.flags, 'priority'),
+          threadId: optionalRemoteCliString(parsed.flags, 'thread-id'),
+          payload: getRemoteOrchestrationPayload(parsed.flags),
+          // Why: the legacy in-process bridge must preserve the same pane
+          // authority as the full host CLI passthrough.
+          senderPaneKey: env.ORCA_PANE_KEY || undefined
+        },
+        {
+          orchestrationCapability: optionalRemoteCliString(parsed.flags, 'dispatch-capability'),
+          orchestrationRequestId: optionalRemoteCliString(parsed.flags, 'retry-request')
+        }
+      )
     }
     case 'orchestration check':
       return await call(dispatcher, 'orchestration.check', {
         terminal: resolveRemoteCliHandle(parsed.flags, env, 'terminal'),
+        terminalPaneKey: parsed.flags.has('terminal') ? undefined : env.ORCA_PANE_KEY || undefined,
         unread: parsed.flags.has('unread') ? true : undefined,
         all: parsed.flags.has('all') ? true : undefined,
         types: optionalRemoteCliString(parsed.flags, 'types'),
@@ -215,21 +227,18 @@ async function dispatchRemoteCli(
 async function call(
   dispatcher: RpcDispatcher,
   method: string,
-  params?: Record<string, unknown>
+  params?: Record<string, unknown>,
+  envelope?: RuntimeOrchestrationEnvelope
 ): Promise<RpcResponse> {
   return await dispatcher.dispatch({
     id: `remote-cli-${Date.now()}`,
     authToken: 'remote-cli',
     method,
-    params
+    params,
+    orchestrationCapability: envelope?.orchestrationCapability,
+    orchestrationContractVersion: method.startsWith('orchestration.')
+      ? ORCHESTRATION_CONTRACT_VERSION
+      : undefined,
+    orchestrationRequestId: envelope?.orchestrationRequestId
   })
-}
-
-function buildLocalError(message: string, code = 'runtime_error'): RpcResponse {
-  return {
-    id: 'remote-cli-local',
-    ok: false,
-    error: { code, message },
-    _meta: { runtimeId: 'unknown' }
-  }
 }
