@@ -57,7 +57,7 @@ export const jspMonarchLanguage: Monaco.languages.IMonarchLanguage = {
     // Covers `<% %>`, `<%= %>` and `<%! %>`; all three need the same Java tokens.
     jspScriptlet: [
       [/%>/, 'metatag', '@pop'],
-      [/\/\/[^\n]*/, 'comment'],
+      [/\/\/(?:(?!%>)[^\n])*/, 'comment'],
       [/\/\*/, 'comment', '@javaBlockComment'],
       [/"([^"\\]|\\.)*"/, 'string'],
       [/'([^'\\]|\\.)*'/, 'string'],
@@ -79,7 +79,7 @@ export const jspMonarchLanguage: Monaco.languages.IMonarchLanguage = {
 
     javaBlockComment: [
       [/\*\//, 'comment', '@pop'],
-      [/[^*]+/, 'comment'],
+      [/(?:(?!%>)[^*])+/, 'comment'],
       [/./, 'comment']
     ],
 

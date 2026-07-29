@@ -166,6 +166,13 @@ describe('registerJspLanguage', () => {
     expect(tokenFor('jspScriptlet', '% 2')).toBe('keyword.operator')
   })
 
+  it('does not let a comment swallow the scriptlet terminator', () => {
+    // A line comment before the terminator is valid JSP: the container
+    // finds the closing delimiter first, so the comment must stop there.
+    expect(matchLengthFor('jspScriptlet', '// done %>')).toBe(8)
+    expect(matchLengthFor('javaBlockComment', ' note %> */')).toBe(6)
+  })
+
   it('keeps scriptlet-looking text inert inside a JSP comment', () => {
     expect(tokenFor('jspComment', '<% still a comment --%>')).toBe('comment')
     expect(nextStateFor('jspComment', '<% still a comment --%>')).toBeUndefined()
