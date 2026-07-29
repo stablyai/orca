@@ -815,6 +815,9 @@
         "description": "Orca で実行中のエージェントやターミナルツールが保護されたファイルにアクセスしようとすると、macOS の権限メッセージが表示されることがあります。これらの確認を減らすには、設定でフルディスクアクセスを許可してください。",
         "openSettings": "設定を開く",
         "dismiss": "今後表示しない"
+      },
+      "useOsRequestedFileOpening": {
+        "b7f1c4a2d9": "Could not open the file."
       }
     },
     "components": {

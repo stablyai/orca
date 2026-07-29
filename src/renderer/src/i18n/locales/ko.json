@@ -815,6 +815,9 @@
         "description": "Orca에서 실행 중인 에이전트나 터미널 도구가 보호된 파일에 접근하려고 하면 macOS 권한 메시지가 표시될 수 있습니다. 이러한 요청을 줄이려면 설정에서 전체 디스크 접근 권한을 허용하세요.",
         "openSettings": "설정 열기",
         "dismiss": "다시 표시하지 않기"
+      },
+      "useOsRequestedFileOpening": {
+        "b7f1c4a2d9": "Could not open the file."
       }
     },
     "components": {

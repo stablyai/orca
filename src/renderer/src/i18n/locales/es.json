@@ -815,6 +815,9 @@
         "description": "Los mensajes de permisos de macOS pueden aparecer cuando un agente o una herramienta de terminal que se ejecuta en Orca intenta acceder a archivos protegidos. Concede acceso total al disco en Ajustes para reducir estos avisos.",
         "openSettings": "Abrir ajustes",
         "dismiss": "No volver a mostrar"
+      },
+      "useOsRequestedFileOpening": {
+        "b7f1c4a2d9": "Could not open the file."
       }
     },
     "components": {

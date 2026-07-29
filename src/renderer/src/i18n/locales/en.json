@@ -852,6 +852,9 @@
         "description": "Permission messages from macOS may appear when an agent or terminal tool running in Orca attempts to access protected files. Grant Full Disk Access in Settings to reduce these prompts.",
         "openSettings": "Open Settings",
         "dismiss": "Don't show again"
+      },
+      "useOsRequestedFileOpening": {
+        "b7f1c4a2d9": "Could not open the file."
       }
     },
     "components": {

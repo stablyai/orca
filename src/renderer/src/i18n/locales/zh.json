@@ -815,6 +815,9 @@
         "description": "当 Orca 中运行的代理或终端工具尝试访问受保护的文件时，macOS 可能会显示权限信息。请在“设置”中授予“完全磁盘访问权限”，以减少此类提示。",
         "openSettings": "打开设置",
         "dismiss": "不再显示"
+      },
+      "useOsRequestedFileOpening": {
+        "b7f1c4a2d9": "Could not open the file."
       }
     },
     "components": {
