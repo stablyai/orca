@@ -10026,13 +10026,21 @@ describe('Store', () => {
     const group = store.createProjectGroup({
       name: 'Remote platform',
       parentPath: '/remote/platform',
-      connectionId: 'ssh-folder',
       createdFrom: 'folder-scan'
     })
     const workspace = store.createFolderWorkspace({
       projectGroupId: group.id,
       name: 'Remote workers'
     })
+    store.addRepo(
+      makeRepo({
+        id: 'remote-folder-child',
+        path: '/remote/platform/api',
+        projectGroupId: group.id,
+        connectionId: 'ssh-folder'
+      })
+    )
+    expect(workspace.connectionId).toBeNull()
     const worktreeId = folderWorkspaceKey(workspace.id)
 
     store.persistOrchestrationGridPtyBinding({

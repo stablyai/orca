@@ -7614,13 +7614,11 @@ export class OrcaRuntimeService {
       // not retire canonical live members from the host-owned grid.
       root: stagedClone.root,
       activeLeafId:
-        acknowledgedClone.activeLeafId &&
-        stagedLeafIdSet.has(acknowledgedClone.activeLeafId)
+        acknowledgedClone.activeLeafId && stagedLeafIdSet.has(acknowledgedClone.activeLeafId)
           ? acknowledgedClone.activeLeafId
           : stagedClone.activeLeafId,
       expandedLeafId:
-        acknowledgedClone.expandedLeafId &&
-        stagedLeafIdSet.has(acknowledgedClone.expandedLeafId)
+        acknowledgedClone.expandedLeafId && stagedLeafIdSet.has(acknowledgedClone.expandedLeafId)
           ? acknowledgedClone.expandedLeafId
           : stagedClone.expandedLeafId,
       ptyIdsByLeafId: {
@@ -26042,39 +26040,48 @@ export class OrcaRuntimeService {
         }
         handle = pty ? this.issuePtyHandle(pty) : preAllocatedHandle
         if (pty && launchOpts.deferMobileSessionPublish !== true) {
-          this.publishPtyBackedMobileSessionTerminal(workspace.id, pty, {
-            tabId,
-            leafId,
-            title: launchOpts.title ?? null,
-            activate: presentation === 'focused',
-            // Why: explicit background presentation may carry legacy activate
-            // metadata from an already-owned renderer pane; don't select it on mobile.
-            selectIfNoActiveTab: presentation !== 'background',
-            ...(launchOpts.viewMode ? { viewMode: launchOpts.viewMode } : {}),
-            ...(cwd !== workspace.path ? { startupCwd: cwd } : {}),
-            ...(launchOpts.placement === 'orchestration-grid'
-              ? {
-                  orchestrationGrid: true,
-                  ...(orchestrationGridTarget && committedGridLayout
-                    ? { baseLayout: committedGridLayout }
-                    : {}),
-                  skipOrchestrationGridPersistence: gridPersistedAtomically
-                }
-              : {}),
-            ...(orchestrationGridTarget
-              ? {
-                  split: {
-                    splitFromLeafId: orchestrationGridTarget.sourceLeafId,
-                    direction:
-                      collectTerminalLayoutLeafIds(orchestrationGridTarget.layout.root).length %
-                        ORCHESTRATION_TERMINAL_GRID_MAX_COLUMNS ===
-                      0
-                        ? ('horizontal' as const)
-                        : ('vertical' as const)
+          try {
+            this.publishPtyBackedMobileSessionTerminal(workspace.id, pty, {
+              tabId,
+              leafId,
+              title: launchOpts.title ?? null,
+              activate: presentation === 'focused',
+              // Why: explicit background presentation may carry legacy activate
+              // metadata from an already-owned renderer pane; don't select it on mobile.
+              selectIfNoActiveTab: presentation !== 'background',
+              ...(launchOpts.viewMode ? { viewMode: launchOpts.viewMode } : {}),
+              ...(cwd !== workspace.path ? { startupCwd: cwd } : {}),
+              ...(launchOpts.placement === 'orchestration-grid'
+                ? {
+                    orchestrationGrid: true,
+                    ...(orchestrationGridTarget && committedGridLayout
+                      ? { baseLayout: committedGridLayout }
+                      : {}),
+                    skipOrchestrationGridPersistence: gridPersistedAtomically
                   }
-                }
-              : {})
-          })
+                : {}),
+              ...(orchestrationGridTarget
+                ? {
+                    split: {
+                      splitFromLeafId: orchestrationGridTarget.sourceLeafId,
+                      direction:
+                        collectTerminalLayoutLeafIds(orchestrationGridTarget.layout.root).length %
+                          ORCHESTRATION_TERMINAL_GRID_MAX_COLUMNS ===
+                        0
+                          ? ('horizontal' as const)
+                          : ('vertical' as const)
+                    }
+                  }
+                : {})
+            })
+          } catch (error) {
+            if (!gridPersistedAtomically) {
+              throw error
+            }
+            // Why: renderer and durable state already own this pane; a failed
+            // best-effort mobile projection must not kill its committed PTY.
+            console.warn('[terminal-create] failed to publish committed orchestration grid:', error)
+          }
         }
         result.runtimeRegistration?.complete()
       } catch (error) {

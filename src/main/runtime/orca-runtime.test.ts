@@ -15384,12 +15384,27 @@ describe('OrcaRuntimeService', () => {
   })
 
   it.each([
-    { rendererBacked: true, presentation: undefined, expectedSurface: 'visible' },
-    { rendererBacked: false, presentation: undefined, expectedSurface: 'visible' },
-    { rendererBacked: false, presentation: 'background' as const, expectedSurface: 'background' }
+    {
+      rendererBacked: true,
+      presentation: undefined,
+      expectedSurface: 'visible',
+      mobilePublishFails: false
+    },
+    {
+      rendererBacked: false,
+      presentation: undefined,
+      expectedSurface: 'visible',
+      mobilePublishFails: true
+    },
+    {
+      rendererBacked: false,
+      presentation: 'background' as const,
+      expectedSurface: 'background',
+      mobilePublishFails: false
+    }
   ] as const)(
     'commits $expectedSurface grid creates only after renderer attachment (rendererBacked=$rendererBacked)',
-    async ({ rendererBacked, presentation, expectedSurface }) => {
+    async ({ rendererBacked, presentation, expectedSurface, mobilePublishFails }) => {
       const oldLeafId = '11111111-1111-4111-8111-111111111111'
       const persistOrchestrationGridPtyBinding = vi.fn()
       const writes: { ptyId: string; data: string }[] = []
@@ -15397,6 +15412,19 @@ describe('OrcaRuntimeService', () => {
         ...store,
         persistOrchestrationGridPtyBinding
       } as never)
+      const mobilePublish = mobilePublishFails
+        ? vi
+            .spyOn(
+              runtime as unknown as { publishPtyBackedMobileSessionTerminal: () => void },
+              'publishPtyBackedMobileSessionTerminal'
+            )
+            .mockImplementation(() => {
+              throw new Error('mobile subscriber disconnected')
+            })
+        : null
+      const warn = mobilePublishFails
+        ? vi.spyOn(console, 'warn').mockImplementation(() => {})
+        : null
       const kill = vi.fn((_ptyId: string) => true)
       const registrationCommit = vi.fn()
       const registrationComplete = vi.fn()
@@ -15583,6 +15611,15 @@ describe('OrcaRuntimeService', () => {
         registrationComplete.mock.invocationCallOrder[0]!
       )
       expect(registrationAbort).not.toHaveBeenCalled()
+      if (mobilePublish) {
+        expect(mobilePublish).toHaveBeenCalledOnce()
+        expect(warn).toHaveBeenCalledWith(
+          '[terminal-create] failed to publish committed orchestration grid:',
+          expect.any(Error)
+        )
+        warn?.mockRestore()
+        mobilePublish.mockRestore()
+      }
       expect(webContents.send).not.toHaveBeenCalled()
       expect(writes).toEqual([{ ptyId: 'pty-new', data: 'hello' }])
     }

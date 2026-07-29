@@ -183,6 +183,7 @@ import {
   normalizeMobilePairingCustomAddresses
 } from '../shared/mobile-pairing-custom-address'
 import { normalizeOpenInApplications } from '../shared/open-in-applications'
+import { inferFolderWorkspacePathConnection } from './project-groups/folder-workspace-path-status'
 import { normalizeTerminalShortcutPolicy } from '../shared/keybindings'
 import { normalizeSourceControlGroupOrder } from '../shared/source-control-group-order'
 import { normalizeAppIconId } from '../shared/app-icon'
@@ -6859,11 +6860,24 @@ export class Store {
             (candidate) => candidate.id === workspaceScope.folderWorkspaceId
           )
         : undefined
-    const folderWorkspaceHostId = folderWorkspace
-      ? folderWorkspace.connectionId
-        ? toSshExecutionHostId(folderWorkspace.connectionId)
-        : LOCAL_EXECUTION_HOST_ID
+    const folderWorkspaceConnection = folderWorkspace
+      ? inferFolderWorkspacePathConnection({
+          folderPath: folderWorkspace.folderPath,
+          projectGroupId: folderWorkspace.projectGroupId,
+          connectionId: folderWorkspace.connectionId ?? null,
+          projectGroups: this.state.projectGroups ?? [],
+          repos: this.state.repos
+        })
       : null
+    if (folderWorkspaceConnection?.kind === 'ambiguous') {
+      throw new Error('folder_workspace_connection_ambiguous')
+    }
+    const folderWorkspaceHostId =
+      folderWorkspaceConnection?.kind === 'ssh'
+        ? toSshExecutionHostId(folderWorkspaceConnection.connectionId)
+        : folderWorkspaceConnection?.kind === 'local'
+          ? LOCAL_EXECUTION_HOST_ID
+          : null
     const persistedHostId =
       // Why: folder scopes own execution provenance directly and do not have
       // the repo or worktree-meta rows used by Git-backed worktrees.
