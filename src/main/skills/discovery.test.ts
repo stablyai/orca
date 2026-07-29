@@ -129,6 +129,27 @@ describe('skill discovery', () => {
     )
   })
 
+  it('keys every deduped root to an owning source so per-agent coverage resolves', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'orca-skills-'))
+    const home = join(root, 'home')
+    const claudeSkills = join(home, '.claude', 'skills')
+    await mkdir(join(claudeSkills, 'orchestration'), { recursive: true })
+    await writeFile(join(claudeSkills, 'orchestration', 'SKILL.md'), '# orchestration')
+    // `npx skills add --global` links a provider home onto an existing install.
+    await mkdir(join(home, '.grok'), { recursive: true })
+    await symlink(claudeSkills, join(home, '.grok', 'skills'), 'dir')
+
+    const result = await discoverSkills({ homeDir: home, repos: [], includeCwd: false })
+
+    const skill = result.skills.find((entry) => entry.name === 'orchestration')
+    // Why: renderer coverage looks each rootPath up in `sources` by path, so a
+    // root with no matching source silently drops that agent back to uncovered.
+    const owners = skill?.rootPaths
+      ?.map((rootPath) => result.sources.find((source) => source.path === rootPath))
+      .map((source) => source?.owner)
+    expect(owners?.slice().sort()).toEqual(['claude', 'grok'])
+  })
+
   it('does not add SSH-backed repository paths to local scan roots', () => {
     const roots = buildSkillDiscoverySources({
       homeDir: '/home/test',

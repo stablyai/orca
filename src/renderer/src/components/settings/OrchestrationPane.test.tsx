@@ -70,6 +70,17 @@ vi.mock('@/hooks/useInstalledAgentSkills', () => ({
         updatedAt: null
       }
     ],
+    sources: [
+      {
+        id: 'home-claude',
+        label: 'Claude home',
+        path: '/Users/test/.claude/skills',
+        sourceKind: 'home',
+        providers: ['claude'],
+        owner: 'claude',
+        exists: true
+      }
+    ],
     refresh: vi.fn()
   })
 }))
